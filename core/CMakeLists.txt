@@ -1,4 +1,4 @@
-# SynthyBoyVST - JUCE-free core library (engine interface, parameters, state, own engine) and its tests.
+# SynthyBoy - JUCE-free core library (engine interface, parameters, state, own engine) and its tests.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 

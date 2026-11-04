@@ -1,5 +1,5 @@
 /*
- * SynthyBoyVST - minimal 8-voice synthesizer (VST3 + CLAP): thin JUCE shell around synthyboy_core
+ * SynthyBoy - minimal 8-voice synthesizer (VST3 + CLAP): thin JUCE shell around synthyboy_core
  * Copyright (C) 2026 Safian Szabolcs
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *

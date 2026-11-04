@@ -1,4 +1,4 @@
-// SynthyBoyVST - core tests: real-time rule "no allocation in process()" (docs/ARCHITECTURE.md 3.7).
+// SynthyBoy - core tests: real-time rule "no allocation in process()" (docs/ARCHITECTURE.md 3.7).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

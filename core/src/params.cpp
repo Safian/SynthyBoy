@@ -1,4 +1,4 @@
-// SynthyBoyVST - core: parameter table, normalisation, display text.
+// SynthyBoy - core: parameter table, normalisation, display text.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

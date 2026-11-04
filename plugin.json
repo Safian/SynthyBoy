@@ -6,7 +6,7 @@
   "kind": "instrument",
   "license": "AGPL-3.0-or-later",
   "homepage": "https://github.com/Safian/SynthyBoy",
-  "clap_id": "com.safian.synthyboyvst",
+  "clap_id": "com.safian.synthyboy",
   "builds": {
     "linux-armv7":     { "status": "unbuilt", "url": "", "sha256": "", "size": 0 },
     "linux-aarch64":   { "status": "unbuilt", "url": "", "sha256": "", "size": 0 },

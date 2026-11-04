@@ -1,4 +1,4 @@
-// SynthyBoyVST - core: locale independent, allocation free number formatting and parsing.
+// SynthyBoy - core: locale independent, allocation free number formatting and parsing.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

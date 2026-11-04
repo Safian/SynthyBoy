@@ -1,4 +1,4 @@
-# SynthyBoyVST - core tests (own runner, registered with CTest).
+# SynthyBoy - core tests (own runner, registered with CTest).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 

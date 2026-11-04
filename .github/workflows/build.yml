@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PLUGIN: SynthyBoyVST
+  PLUGIN: SynthyBoy
   PLUGINVAL_VERSION: v1.0.4
   CLAP_VALIDATOR_VERSION: 0.4.1
 
@@ -201,7 +201,7 @@ jobs:
     name: linux-aarch64
     runs-on: ubuntu-24.04-arm
     env:
-      PLUGIN: SynthyBoyVST
+      PLUGIN: SynthyBoy
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 

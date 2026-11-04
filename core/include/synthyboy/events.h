@@ -1,4 +1,4 @@
-// SynthyBoyVST - core: sample-accurate input events.
+// SynthyBoy - core: sample-accurate input events.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

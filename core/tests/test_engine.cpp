@@ -1,4 +1,4 @@
-// SynthyBoyVST - core tests: own engine behaviour (silence, notes, determinism, block independence, pitch, stealing).
+// SynthyBoy - core tests: own engine behaviour (silence, notes, determinism, block independence, pitch, stealing).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

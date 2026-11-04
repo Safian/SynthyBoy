@@ -1,4 +1,4 @@
-// SynthyBoyVST - core tests: state save / load (round trip, determinism, hostile input).
+// SynthyBoy - core tests: state save / load (round trip, determinism, hostile input).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

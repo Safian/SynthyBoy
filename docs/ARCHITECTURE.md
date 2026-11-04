@@ -84,7 +84,7 @@ a top-level `NOTICE` that names Vital and its author.
      - Content is data authored by us (§2.3). Offline authoring tools may use Vital-derived code on a developer machine; the data
        they produce is ours, and no Vital-derived code ships in the iOS binary.
      Android: the same switch applies; whether it is used there is decided when the Android build exists.
-- **Trademark / name:** "SynthyBoy" is a working name. Before the first public release: search KVR, EUIPO, USPTO and the app stores for conflicts **(owner / not yet done)**. The CMake product name should be `SynthyBoy` (not `SynthyBoyVST`: "VST" is Steinberg's trademark, only the compatibility statement "VST is a registered trademark of Steinberg Media Technologies GmbH" is used). Steinberg's VST3 SDK 3.8 is MIT; no separate VST3 licence agreement is needed, the VST3 logo is not used.
+- **Trademark / name:** the product is called **SynthyBoy** (owner decision 2026-11-04; "VST" is Steinberg's trademark and not part of the name, only the compatibility statement "VST is a registered trademark of Steinberg Media Technologies GmbH" is used). Name screening and the open clearance steps are in [NAMING.md](NAMING.md) **(owner: official registers not yet searched)**. Steinberg's VST3 SDK 3.8 is MIT; no separate VST3 licence agreement is needed, the VST3 logo is not used.
 - **Trade dress:** the UI is original; it does not copy Vital's layout, colours or graphics.
 
 ### 2.3 Own factory content, free licence
@@ -256,7 +256,7 @@ Rules: the plugin never downloads anything; it **looks up** installed packs (loc
 ```
 { "schemaVersion": 1, "id": "com.safian.synthyboy", "name": "SynthyBoy", "version": "0.1.0",
   "kind": "instrument", "license": "AGPL-3.0-or-later", "homepage": "…", "min_host_version": "…",
-  "clap_id": "com.safian.synthyboyvst",   // must equal CLAP_ID in CMakeLists.txt (checked by scripts/check-manifest.py)
+  "clap_id": "com.safian.synthyboy",   // must equal CLAP_ID in CMakeLists.txt (checked by scripts/check-manifest.py)
   "builds": { "linux-armv7": {"status":"unbuilt","url":"…","sha256":"…","size":0}, "linux-aarch64": {…}, "linux-x86_64": {…},
               "macos-universal": {…}, "windows-x64": {…} },
   "static": { "ios": {"status":"planned","library":"libsynthyboy_static.a"}, "android": {…},
@@ -319,7 +319,7 @@ clap-validator: pin to a tag, built once and cached; it is blocking since its fi
 
 ## 11. Known open points
 
-- **(owner)** Name clearance for "SynthyBoy" and the product-name change `SynthyBoyVST` → `SynthyBoy` in CMake (waiting for the owner's confirmation; not renamed yet). iOS is decided: own engine (§2.2).
+- **(owner)** Trademark/name clearance for "SynthyBoy" (docs/NAMING.md). iOS is decided: own engine (§2.2).
 - Exact CPU of the MPC Key 61 and its available toolchain/sysroot (cross-compile target) – read from the device.
 - Whether `clap-juce-extensions` implements the extensions needed in §4.1 at the pinned commit.
 - Spike gaps carried over: GUI never opened in a DAW; `-G Xcode` configure fails (Ninja is the supported generator); Linux/Windows builds untested until the first CI run is recorded; CLAP wrapper on Linux supports X11 only.

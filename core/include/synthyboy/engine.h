@@ -1,4 +1,4 @@
-// SynthyBoyVST - core: engine interface (the replacement seam of docs/ARCHITECTURE.md 3.1).
+// SynthyBoy - core: engine interface (the replacement seam of docs/ARCHITECTURE.md 3.1).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

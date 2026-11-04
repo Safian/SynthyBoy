@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SynthyBoyVST - validates plugin.json against schema/plugin-manifest.schema.json (stdlib only) and against CMakeLists.txt.
+# SynthyBoy - validates plugin.json against schema/plugin-manifest.schema.json (stdlib only) and against CMakeLists.txt.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #

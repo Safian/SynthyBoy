@@ -1,4 +1,4 @@
-// SynthyBoyVST - core: quality tiers (platform scaling), see docs/ARCHITECTURE.md 3.6.
+// SynthyBoy - core: quality tiers (platform scaling), see docs/ARCHITECTURE.md 3.6.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

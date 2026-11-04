@@ -1,4 +1,4 @@
-# SynthyBoyVST - toolchain file: Linux ARMv7 hard-float (e.g. Akai MPC Key 61), cross compiled on an x86_64 Linux host.
+# SynthyBoy - toolchain file: Linux ARMv7 hard-float (e.g. Akai MPC Key 61), cross compiled on an x86_64 Linux host.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #

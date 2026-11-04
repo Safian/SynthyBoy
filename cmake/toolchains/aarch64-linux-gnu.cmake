@@ -1,4 +1,4 @@
-# SynthyBoyVST - toolchain file: Linux AArch64, cross compiled on an x86_64 Linux host.
+# SynthyBoy - toolchain file: Linux AArch64, cross compiled on an x86_64 Linux host.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #

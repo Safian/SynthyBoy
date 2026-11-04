@@ -1,4 +1,4 @@
-# SynthyBoyVST
+# SynthyBoy
 
 A minimal 8-voice polyphonic synthesizer, built as **VST3** and **CLAP** from a single JUCE code base.
 
@@ -19,18 +19,18 @@ A minimal 8-voice polyphonic synthesizer, built as **VST3** and **CLAP** from a 
 
 The editor is JUCE's generic parameter GUI (no custom UI yet).
 
-- VST3 category: `Instrument|Synth`; CLAP id `com.safian.synthyboyvst`, features `instrument`, `synthesizer`
+- VST3 category: `Instrument|Synth`; CLAP id `com.safian.synthyboy`, features `instrument`, `synthesizer`
 
 ## Formats
 
 | Format | Output (after build) |
 |--------|----------------------|
-| VST3   | `build/SynthyBoyVST_artefacts/Release/VST3/SynthyBoyVST.vst3` |
-| CLAP   | `build/SynthyBoyVST_artefacts/Release/CLAP/SynthyBoyVST.clap` |
+| VST3   | `build/SynthyBoy_artefacts/Release/VST3/SynthyBoy.vst3` |
+| CLAP   | `build/SynthyBoy_artefacts/Release/CLAP/SynthyBoy.clap` |
 
 Both come from the same sources: JUCE builds the VST3, and
 [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions) wraps the same
-`juce::AudioProcessor` into a CLAP (`SynthyBoyVST_CLAP` CMake target, created by `clap_juce_extensions_plugin(...)`).
+`juce::AudioProcessor` into a CLAP (`SynthyBoy_CLAP` CMake target, created by `clap_juce_extensions_plugin(...)`).
 
 ## Repository layout
 
@@ -91,7 +91,7 @@ cmake --build build --config Release --parallel
 
 ```sh
 ctest --test-dir build --output-on-failure                       # core tests (Windows: add -C Release)
-build/clap_smoke build/SynthyBoyVST_artefacts/Release/CLAP/SynthyBoyVST.clap
+build/clap_smoke build/SynthyBoy_artefacts/Release/CLAP/SynthyBoy.clap
 python3 -I scripts/check-manifest.py                             # plugin.json vs. schema and CMakeLists.txt
 ```
 

@@ -1,4 +1,4 @@
-// SynthyBoyVST - core tests: tiny test runner (no external framework).
+// SynthyBoy - core tests: tiny test runner (no external framework).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

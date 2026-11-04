@@ -1,4 +1,4 @@
-// SynthyBoyVST - own engine: the spike's 8-voice synth behind IEngine, without JUCE.
+// SynthyBoy - own engine: the spike's 8-voice synth behind IEngine, without JUCE.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

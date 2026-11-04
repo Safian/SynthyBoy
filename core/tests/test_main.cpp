@@ -1,4 +1,4 @@
-// SynthyBoyVST - core tests: main().
+// SynthyBoy - core tests: main().
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

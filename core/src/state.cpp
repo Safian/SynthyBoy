@@ -1,4 +1,4 @@
-// SynthyBoyVST - core: versioned state (deterministic JSON text) with a bounded hand-written parser.
+// SynthyBoy - core: versioned state (deterministic JSON text) with a bounded hand-written parser.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 

@@ -1,6 +1,6 @@
 # Third-party software
 
-SynthyBoyVST is licensed under AGPL-3.0-or-later. It is built against the following components;
+SynthyBoy is licensed under AGPL-3.0-or-later. It is built against the following components;
 nothing is vendored in this repository, everything is fetched at configure time by CMake
 `FetchContent` at the exact revisions below (see `CMakeLists.txt`).
 

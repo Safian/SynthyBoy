@@ -1,4 +1,4 @@
-// SynthyBoyVST - core tests: audio thread vs. parameter thread (meaningful under ThreadSanitizer).
+// SynthyBoy - core tests: audio thread vs. parameter thread (meaningful under ThreadSanitizer).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
