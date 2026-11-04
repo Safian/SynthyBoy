@@ -209,6 +209,27 @@ jobs:
       - name: Run tests (QEMU user mode)
         run: ctest --test-dir build-armv7 --output-on-failure
 
+      # Statically linked benchmark for the Akai MPC (see docs/MPC-BENCH-REQUEST.md): no dependency on the
+      # device's glibc/libstdc++. Only a smoke run under QEMU here; QEMU timings mean nothing.
+      - name: Static benchmark binary (ARMv7 hard-float)
+        run: |
+          cmake -S . -B build-armv7-bench -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/armv7-linux-gnueabihf.cmake \
+            -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON \
+            -DCMAKE_EXE_LINKER_FLAGS=-static
+          cmake --build build-armv7-bench --target synthyboy_bench --parallel
+          bin=build-armv7-bench/bench/synthyboy_bench
+          file "$bin"
+          arm-linux-gnueabihf-readelf -A "$bin" | grep -E "Tag_CPU_arch:|Tag_FP_arch|Tag_Advanced_SIMD"
+          qemu-arm "$bin" --engine own --seconds 1
+          mkdir -p dist-bench && cp "$bin" dist-bench/synthyboy_bench-armv7 && (cd dist-bench && sha256sum synthyboy_bench-armv7 | tee SHA256SUMS)
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: synthyboy-bench-armv7
+          path: dist-bench/*
+          if-no-files-found: error
+
   # Native Linux AArch64 build of everything on GitHub's arm runner (no pluginval here).
   linux-aarch64:
     name: linux-aarch64
