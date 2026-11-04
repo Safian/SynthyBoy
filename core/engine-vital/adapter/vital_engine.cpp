@@ -27,6 +27,7 @@
 
 #include "modulation_connection_processor.h"
 #include "sound_engine.h"
+#include "synth_oscillator.h"
 #include "synth_constants.h"
 #include "synth_parameters.h"
 #include "tuning.h"
@@ -326,6 +327,10 @@ private:
         if (tables == nullptr)
             tables = std::make_unique<vitaltables::WavetableSet>(); // the built-in wavetables: built once per engine object
 
+        // Every random generator of the engine (random LFOs, the noise sample, ...) is seeded from a counter: start it at 0 for this
+        // engine, after the one process-wide table that also takes a number, so that two engines of the same patch sound the same.
+        sbvital::RandomValues::instance();
+        sbvital::utils::RandomGenerator::next_seed_ = 0;
         engine = std::make_unique<sbvital::SoundEngine>();
         tuning = std::make_unique<Tuning>(); // default 12-tone equal temperament
         engine->setTuning (tuning.get());

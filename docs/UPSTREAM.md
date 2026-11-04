@@ -86,6 +86,12 @@ is the complete list; the table groups it.
 | `src/synthesis/framework/processor.h/.cpp` | added `Processor::reserveInputs (int count)` | appends `count` unconnected inputs, so that `plugNext` (which allocates when it finds no free input) never allocates when the modulation matrix wires a slot on the audio thread. The adapter reserves 64 per modulation destination |
 | `src/synthesis/framework/processor_router.h` | added `ProcessorRouter::reserveWorkspace (int capacity)` | grows the three work queues of the dependency search (`getDependencies`, called by every `connect`) once, so that wiring a slot does not have to grow them |
 
+| `src/synthesis/framework/utils.h/.cpp` (`RandomGenerator::next_seed_`) | `static int` -> `static thread_local int` | the counter gave every random generator of every engine its seed (`next_seed_++`, not atomic): a data race between engines built on different threads, and seeds that depended on how many generators earlier engines had made. The adapter sets the counter to 0 on the building thread before it constructs an engine (after the one process-wide table that also draws a number), so two engines of the same patch are identical, including the noise oscillator, random phase and random LFOs (`state_random_walk_saves_loads_and_renders_the_same`) |
+| `src/synthesis/framework/futils.h` (`tanh`) | input clamped to `[-10.0f, 10.0f]` in both `poly_float` and `mono_float` overloads | **bug fix**: rational polynomial approximation overflowed float32 ($x^{40} \to \infty/\infty = \text{NaN}$) when extreme values entered during multithreaded modulation / filter feedback; covered by `synthyboy_test_threads` |
+| `src/synthesis/lookups/lookup_table.h` (`cubicLookup`) | `boost` clamped to `[0.0f, resolution]`, `indices` clamped to `[0, resolution - 1]` | **bug fix**: Catmull-Rom parameter $t$ exited $[0.0f, 1.0f]$ on negative or out-of-range frequencies, leading to cubic extrapolation explosion; covered by `synthyboy_test_threads` |
+| `src/synthesis/filters/ladder_filter.cpp` | `stage_scales_` initialized in `hardReset()` and default fallback added to `setStageScales()` | **bug fix**: unhandled filter styles (e.g. `kShelving` = 5) left stage scale coefficients uninitialized / undefined; covered by `synthyboy_test_threads` |
+| `src/synthesis/modules/producers_module.cpp` | process remaining unprocessed oscillators when mutual FM/RM creates a dependency cycle | **bug fix**: mutually modulating oscillators (A modulates B and B modulates A) never became "ready" in the dependency loop and were skipped entirely, leaving uninitialized buffer contents; now processed using previous block's output |
+
 ### What the modulation matrix does on the audio thread (Phase 3 audit)
 
 Vital wires a slot with `SoundEngine::connectModulation` / `disconnectModulation`, called by its (not imported) `SynthBase` on the
@@ -111,9 +117,7 @@ the matrix is allocation free in the tests. This is not a proof: the rule is "no
   part, so the function subtracts zero and `WavetableCreator`'s `remove_all_dc_` has no effect. Not touched in this phase (no
   imported wavetable has a DC offset: the sine and saw used by the adapter are DC free); to be settled with the wavetable tools
   in Phase 3/4.
-* `utils::RandomGenerator` seeds each instance from a process-wide counter (`next_seed_++`, not atomic): two engines created at
-  the same time on different threads race on it, and random sequences depend on construction order. The adapter turns the random
-  phase off, and engines are created on one thread.
+* (Phase 3: fixed, see the table: the seed counter is thread local and reset by the adapter.)
 * The first note an engine plays differs slightly from all later ones (attack of the first note). The adapter plays two notes in
   `prepare()` so that the first note of the user is like every other.
 

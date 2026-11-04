@@ -37,8 +37,8 @@ namespace sbvital {
       ~OneDimLookup() { }
 
       force_inline poly_float cubicLookup(poly_float value) const {
-        poly_float boost = value * scale_;
-        poly_int indices = utils::clamp(utils::toInt(boost), 0, resolution);
+        poly_float boost = poly_float::max(poly_float::min(value * scale_, static_cast<float>(resolution)), 0.0f);
+        poly_int indices = utils::clamp(utils::toInt(boost), 0, static_cast<int>(resolution - 1));
         poly_float t = boost - utils::toFloat(indices);
 
         matrix interpolation_matrix = utils::getCatmullInterpolationMatrix(t);

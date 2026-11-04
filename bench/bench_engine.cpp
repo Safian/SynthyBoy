@@ -2,12 +2,15 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_bench [--engine own|vital] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S]
+//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S]
 //
 // K notes are held and retriggered every S seconds (default 1). The first second is rendered but not measured. Prints,
-// for the requested configuration and then once per quality tier (the voice count of the tier), the real-time factor
-// (audio seconds / seconds spent in process()), the mean, the 99th percentile and the worst block time. No assertions:
-// the numbers are for looking at, on the machine they were taken on (docs/PERFORMANCE.md).
+// for the requested configuration and then once per quality tier (the tier's quality: voices, unison, oversampling, ...), the
+// real-time factor (audio seconds / seconds spent in process()), the mean, the 99th percentile and the worst block time.
+// Patches: "default" = the table's defaults (one saw oscillator, filter 1, no effects); "heavy" = three oscillators with 7
+// unison voices, two filters in series, three LFOs, an envelope and a velocity routing in the modulation matrix, all nine effects.
+// The own engine ignores everything it does not implement, so its heavy patch is its default patch. No assertions: the numbers are
+// for looking at, on the machine they were taken on (docs/PERFORMANCE.md).
 
 #include <algorithm>
 #include <chrono>
@@ -20,6 +23,7 @@
 #include <vector>
 
 #include "synthyboy/engine.h"
+#include "synthyboy/modulation.h"
 
 using namespace synthyboy;
 
@@ -33,6 +37,7 @@ struct Options
     int voices = 8;
     double sampleRate = 48000.0;
     double retrigger = 1.0;
+    bool defaultPatch = true, heavyPatch = true;
 };
 
 struct Result
@@ -42,12 +47,76 @@ struct Result
     double meanMs = 0.0, p99Ms = 0.0, worstMs = 0.0;
 };
 
-Result run (const Options& o, int voices, int maxVoices, float waveform)
+void set (IEngine& engine, const char* key, float value)
+{
+    if (const auto* info = findParamByKey (key))
+        engine.setParam (info->id, value);
+    else
+        std::fprintf (stderr, "bench: unknown parameter %s\n", key);
+}
+
+void slot (IEngine& engine, int index, const char* sourceKey, const char* destinationKey, float amountPercent)
+{
+    const auto s = modSlotParams (index);
+    float source = 0.0f;
+    for (size_t k = 0; k < modSourceCount(); ++k)
+        if (std::strcmp (modSourceTable()[k].key, sourceKey) == 0)
+            source = static_cast<float> (k + 1);
+    const auto* destination = findParamByKey (destinationKey);
+    engine.setParam (paramTable()[s.source].id, source);
+    engine.setParam (paramTable()[s.destination].id, static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (destination->id)))));
+    engine.setParam (paramTable()[s.amount].id, amountPercent);
+}
+
+/** The heavy patch: 3 oscillators x 7 unison voices, 2 filters in series, 3 LFOs and an envelope in the matrix, all effects. */
+void heavyPatch (IEngine& engine)
+{
+    set (engine, "master.polyphony", 32.0f);
+    const float tables[] = { 1.0f, 2.0f, 5.0f }; // saw, square, saw to square
+    for (int i = 1; i <= 3; ++i)
+    {
+        const std::string k = "osc" + std::to_string (i) + ".";
+        set (engine, (k + "on").c_str(), 1.0f);
+        set (engine, (k + "wavetable").c_str(), tables[i - 1]);
+        set (engine, (k + "level").c_str(), 35.0f);
+        set (engine, (k + "unison.voices").c_str(), 7.0f);
+        set (engine, (k + "unison.detune").c_str(), 30.0f);
+        set (engine, (k + "transpose").c_str(), static_cast<float> ((i - 2) * 12));
+        set (engine, (k + "random_phase").c_str(), 100.0f);
+    }
+    set (engine, "osc1.morph.type", 1.0f);
+    set (engine, "filter1.model", 2.0f);
+    set (engine, "filter1.cutoff", 3000.0f);
+    set (engine, "filter1.resonance", 40.0f);
+    set (engine, "filter2.on", 1.0f);
+    set (engine, "filter2.model", 0.0f);
+    set (engine, "filter2.cutoff", 6000.0f);
+    set (engine, "filter.routing", 1.0f);
+    set (engine, "lfo1.sync", 0.0f);
+    set (engine, "lfo2.sync", 0.0f);
+    set (engine, "lfo3.sync", 0.0f);
+    set (engine, "lfo1.rate", 3.0f);
+    set (engine, "lfo2.rate", 0.7f);
+    set (engine, "lfo3.rate", 5.0f);
+    set (engine, "env2.attack", 300.0f);
+    slot (engine, 0, "lfo1", "filter1.cutoff", 30.0f);
+    slot (engine, 1, "lfo2", "osc1.frame", 50.0f);
+    slot (engine, 2, "lfo3", "osc2.pan", 40.0f);
+    slot (engine, 3, "env2", "filter2.cutoff", 40.0f);
+    slot (engine, 4, "velocity", "osc3.level", 30.0f);
+    for (const char* fx : { "chorus", "compressor", "delay", "distortion", "eq", "fxfilter", "flanger", "phaser", "reverb" })
+        set (engine, (std::string (fx) + ".on").c_str(), 1.0f);
+    set (engine, "distortion.drive", 6.0f);
+    set (engine, "eq.mid.gain", 4.0f);
+}
+
+Result run (const Options& o, int voices, const Quality& quality, bool heavy)
 {
     auto engine = createEngine (o.engine);
-    Quality quality;
-    quality.maxVoices = maxVoices;
-    engine->setParam (kParamOsc1Wavetable, waveform);
+    if (heavy)
+        heavyPatch (*engine);
+    else
+        set (*engine, "master.polyphony", 32.0f);
     engine->prepare (o.sampleRate, o.block, quality);
 
     std::vector<float> left (static_cast<size_t> (o.block)), right (static_cast<size_t> (o.block));
@@ -118,7 +187,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -136,6 +205,13 @@ int main (int argc, char** argv)
             if (v == "own") o.engine = EngineKind::own;
             else if (v == "vital") o.engine = EngineKind::vital;
             else usage ("unknown engine");
+        }
+        else if (a == "--patch")
+        {
+            const std::string v = next();
+            if (v == "default") o.heavyPatch = false;
+            else if (v == "heavy") o.defaultPatch = false;
+            else if (v != "both") usage ("unknown patch");
         }
         else if (a == "--seconds")   o.seconds = std::atof (next());
         else if (a == "--block")     o.block = std::atoi (next());
@@ -156,14 +232,19 @@ int main (int argc, char** argv)
 
     std::printf ("synthyboy_bench: engine %s, %.0f Hz, block %d, %.1f s per run, retrigger every %.1f s\n", engineName (o.engine), o.sampleRate,
                  o.block, o.seconds, o.retrigger);
-    for (const float waveform : { 1.0f, 0.0f })
+    for (const bool heavy : { false, true })
     {
-        std::printf ("%s\n", waveform > 0.5f ? "saw, cutoff 8 kHz (default patch):" : "sine:");
-        print ("requested", o, o.voices, run (o, o.voices, o.voices, waveform));
+        if ((heavy && ! o.heavyPatch) || (! heavy && ! o.defaultPatch))
+            continue;
+        std::printf ("%s:\n", heavy ? "heavy patch (3 oscillators x 7 unison voices, 2 filters, 3 LFOs + matrix, all effects)"
+                                     : "default patch (one saw oscillator, filter 12 kHz, no effects)");
+        Quality requested;
+        requested.maxVoices = o.voices;
+        print ("requested", o, o.voices, run (o, o.voices, requested, heavy));
         for (const Tier tier : { Tier::low, Tier::medium, Tier::high })
         {
-            const int n = qualityForTier (tier).maxVoices;
-            print (tier == Tier::low ? "tier low" : (tier == Tier::medium ? "tier medium" : "tier high"), o, n, run (o, n, n, waveform));
+            const Quality q = qualityForTier (tier);
+            print (tier == Tier::low ? "tier low" : (tier == Tier::medium ? "tier medium" : "tier high"), o, q.maxVoices, run (o, q.maxVoices, q, heavy));
         }
     }
     return 0;

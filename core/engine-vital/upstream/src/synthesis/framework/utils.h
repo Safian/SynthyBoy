@@ -47,7 +47,10 @@ namespace sbvital {
 
     class RandomGenerator {
       public:
-        static int next_seed_;
+        // Modified for SynthyBoy: thread local (was a plain static: a data race between engines built on different threads, and
+        // seeds that depended on how many generators any engine had made before). The adapter sets it to 0 before it builds an
+        // engine, so that an engine is the same on every build of it (docs/UPSTREAM.md).
+        static thread_local int next_seed_;
           
         RandomGenerator(mono_float min, mono_float max) : engine_(next_seed_++), distribution_(min, max) { }
         RandomGenerator(const RandomGenerator& other) :

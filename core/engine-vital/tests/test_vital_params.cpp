@@ -284,7 +284,7 @@ TEST (quality_tiers_cap_without_touching_the_parameters)
         const char* const fxControls[kNumFxSlots] = { "chorus_on", "compressor_on", "delay_on", "distortion_on", "eq_on", "filter_fx_on", "flanger_on",
                                                       "phaser_on", "reverb_on" };
         for (int i = 0; i < kNumFxSlots; ++i)
-            CHECK_EQ (static_cast<int> (vitalControlValue (*e, fxControls[i])), (q.fxMask >> i) & 1u);
+            CHECK_EQ (static_cast<int> (vitalControlValue (*e, fxControls[i])), static_cast<int> ((q.fxMask >> i) & 1u));
 
         // ... and the stored values are what the preset asked for
         CHECK_EQ (e->getParam (kParamMasterPolyphony), 32.0f);
@@ -489,4 +489,34 @@ TEST (morph_never_gives_nan)
                     if (! CHECK (finite))
                         std::printf ("    type %d amount %g spread %g key %d\n", type, static_cast<double> (amount), static_cast<double> (spread), key);
                 }
+}
+
+TEST (oscillators_that_modulate_each_other_stay_finite)
+{
+    // regression: osc 1 as FM / RM of osc 2 and osc 2 of osc 1 left both unprocessed (docs/UPSTREAM.md, producers_module.cpp): NaN from
+    // the first block on. Every combination of the four FM / RM types of the three oscillators, all three on.
+    auto e = createVitalEngine();
+    e->setParam (kParamMasterPolyphony, 8.0f);
+    e->prepare (kSampleRate, 128, Quality {});
+    std::vector<float> l (128), r (128);
+    bool finite = true;
+    for (int t1 = 0; t1 <= 10; t1 += 1)
+        for (int t2 = 7; t2 <= 10; ++t2)
+        {
+            for (int i = 1; i <= 3; ++i)
+                e->setParam (findParamByKey (("osc" + std::to_string (i) + ".on").c_str())->id, 1.0f);
+            e->setParam (findParamByKey ("osc1.warp.type")->id, static_cast<float> (t1));
+            e->setParam (findParamByKey ("osc2.warp.type")->id, static_cast<float> (t2));
+            e->setParam (findParamByKey ("osc3.warp.type")->id, static_cast<float> (7 + (t1 + t2) % 4));
+            e->setParam (findParamByKey ("osc2.transpose")->id, 24.0f);
+            const Event on = noteOn (0, 48);
+            for (int block = 0; block < 6; ++block)
+            {
+                e->process (block == 0 ? &on : nullptr, block == 0 ? 1 : 0, l.data(), r.data(), 128);
+                finite = finite && sbtest::allFinite (l) && sbtest::allFinite (r);
+            }
+            const Event off = sbtest::allNotesOff (0);
+            e->process (&off, 1, l.data(), r.data(), 128);
+        }
+    CHECK (finite);
 }

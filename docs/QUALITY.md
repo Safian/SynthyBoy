@@ -1,0 +1,120 @@
+# Audio quality gates
+
+What the test suite measures about the sound of the Vital-derived engine through SynthyBoy's own parameter model, the numbers it
+measured, and the tolerance of every assertion. The tests are `core/engine-vital/tests/test_vital_audio.cpp`
+(`synthyboy_test_vital_audio`, about 25 s in a release build, label `slow`), `test_vital_params.cpp` (converters, tiers, built-in tables,
+matrix wiring) and `core/tests/test_rt_alloc.cpp` (no allocation while patches, matrices and the quality change). Every number below
+was measured on the development laptop (Apple M5 Pro, clang 21, 48 kHz); the thresholds in the code are those numbers plus the margin
+named next to them. Nothing was loosened to make a test pass.
+
+## Parameter sweep (item a)
+
+Every one of the 880 parameters alone at minimum, default and maximum while four notes play (keys 41, 60, 67, 88; high tier), plus 20
+whole patches with every parameter random (both tiers): all output finite, **peak at most 4.0**. The engine ends in a hard clamp at
++-2.1, so the highest peak measured is 2.1 (master volume at +6 dB, and a few random patches); 4.0 is the documented ceiling that
+would expose a missing clamp. No allocation in `process()` in any of the 2 640 + 40 runs.
+
+*Defect found and fixed:* "Inharmonic Stretch" (spectral morph type 4) returned NaN from about 92 % amount on (and a NaN stays in
+the filters and effects for ever). Two defects in `spectral_morph.h`, see docs/UPSTREAM.md; regression test `morph_never_gives_nan`
+(330 combinations of type, amount, spread and register).
+
+## Tuning (item b)
+
+Oscillators 1, 2, 3 with Sine, Saw, Square and Triangle at keys 33, 57, 69 and 93, one unison voice, filter off: fundamental by FFT
+(0.8 s, 2^17 points, parabolic peak interpolation) against 440 * 2^((key - 69) / 12). **Worst error 0.010 cent** (oscillator 1, Saw,
+key 33). Limit 2 cents (432 checks). No warp mode was measured for pitch (a warp mode may shift the fundamental by design).
+
+## Alias budget (item c; docs/ARCHITECTURE.md 3.2)
+
+Metric: energy that is not within +-8 bins (5.9 Hz) of a harmonic k * f0 (k * f0 below Nyquist), relative to the total energy, 0.83 s of a
+held note at 48 kHz after 0.25 s, 4-term Blackman-Harris window (sidelobes below -92 dB), 2^16 points. Worst over the keys (every third key
+21 .. 120 for the plain shapes, ten keys 21 .. 120 for the morphs), filter off. The guard in the test is the measured worst case plus 3 dB.
+
+| Mode | high tier (2x oversampling) | low tier (1x) |
+|------|-----------------------------|---------------|
+| Saw | -35.5 dB (key 84) | -10.9 dB (key 120) |
+| Square | -34.3 dB (key 84) | -10.0 dB (key 120) |
+| Pulse 25 % | -36.0 dB (key 84) | -11.6 dB (key 120) |
+| Saw + Vocode (50 %) | -59.9 dB | -50.6 dB |
+| Saw + Formant Scale | -59.4 dB | -47.9 dB |
+| Saw + Harmonic Stretch | -64.8 dB | -48.3 dB |
+| Saw + Smear | -40.5 dB | -2.7 dB |
+| Saw + Random Amplitudes | -52.0 dB | -34.0 dB |
+| Saw + Low Pass | -67.4 dB | -10.9 dB |
+| Saw + High Pass | -30.7 dB | -16.2 dB |
+| Saw + Phase Disperse | -51.6 dB | -10.9 dB |
+| Saw + Time Skew | -51.6 dB | -10.9 dB |
+| Saw + Inharmonic Stretch, Shepard Tone | not a budget: the partials leave the harmonic series on purpose | |
+
+**Findings (reported, not hidden): the engine does not meet an alias bound of -60 dB.**
+
+* High tier: a plain Saw / Square / Pulse reaches **-35 dB** at some keys (key 84 = 1046 Hz is the worst of the 34 measured; the
+  per-key values go from -35 dB to below -90 dB, depending on where the first partial above Nyquist falls). The cause is visible in the
+  spectrum: the band limit of the wavetable lets partials up to about 26 kHz through, the 2x oversampling's halfband decimator
+  attenuates them only partly in its transition band, and they fold back to 22 .. 24 kHz (key 69: a line at 23.8 kHz, the 55th partial
+  of 440 Hz, -57 dB). The 80 dB below the fundamental that docs/ARCHITECTURE.md 3.2 states as the example target is not reached.
+* Low tier (1x): the table's band limit is not matched to a sample rate without oversampling: **-11 dB at the top octave** (key 120), -38 dB at key 66 rising to
+  -11 dB (every third key measured). This is the setting for the MPC; it is a property of the tier as the engine implements it.
+* The spectral morphs add content that is not harmonic of the fundamental (Smear, High Pass at -31 .. -41 dB on the high tier).
+* Not changed in Phase 3: the guard keeps the measured behaviour from getting worse; improving it (a steeper decimator, a lower band limit
+  per tier) is engine work for a later phase.
+
+## Filters (item d)
+
+Noise (the noise oscillator at 100 %) through filter 1, 1 s per measurement. RMS by cutoff 150 Hz .. 9.6 kHz (octave steps) rises
+monotonically for the five low-pass models (Analog 0.0084 .. 0.0613, Dirty 0.0113 .. 0.0729, Ladder 0.0091 .. 0.0625, Digital 0.0107 ..
+0.0830, Diode 0.0029 .. 0.0461); tolerance 3 % per step. Resonance 20 % -> 80 % raises the power in 0.8 .. 1.25 x the cutoff by +7.1 / +8.5 /
++6.2 / +12.3 / +7.2 dB (guard: more than 3 dB). Resonance 100 %, 2 s: finite, peak below 4.0, the late half not above 2x the early half
+(no blow-up). An LFO on the cutoff moves the spectral centroid by a factor of 5.1 (1.11 without; guards 1.5 and 1.15). The Formant filter
+does not follow the cutoff (it is steered by X / Y), Comb and Phaser move the centroid from 6.4 to 10.7 kHz and from 10.8 to 12.7 kHz over 200 .. 3200 Hz; all
+three are bounded (peak 0.23 .. 0.50).
+
+## Modulation matrix (item e)
+
+* LFO 1 (4 Hz sine) on the oscillator level (bipolar, 40 %): envelope max / min 2.42 (7.7 dB) against 1.016 without (guard: 2.0).
+* Envelope 2 (400 ms attack) on the cutoff: centroid 317 Hz at the start, 3247 Hz after the attack, 209 Hz without the slot (guard 1.5x).
+* Macro 1 on the level: +21.9 dB between macro 0 and 100 % (guard 3x). Velocity (engine velocity tracking off): loud / soft 2.71 with the slot, 1.000
+  without. Mod wheel event: 12.4x between 0 and 1 (guard 2x).
+* Slots that do nothing - no destination, no source, bypassed, amount 0 - give exactly the output of the unwired patch (difference 0, limit 1e-6).
+* A stereo slot modulates the two channels in opposite directions: correlation of the L / R envelopes -0.994 (mono slot +1.000).
+
+## Unison (item f)
+
+Saw, key 57, filter off. Seven voices (detune 25 %, spread 100 %, blend 80 %) against one: 79 % of the power stays within +-2 % of the
+fundamental (100 % for one voice; guard 90 %), L / R correlation 0.167 (1.0000 for one voice; guard 0.9), level -0.18 dB (guard +-3 dB).
+Detune 0 and spread 0: a copy of the single voice (residual 1.5e-7) at +9.03 dB (the engine's level scaling of 7 coherent voices);
+spread 0 with detune: L and R identical (difference 0).
+
+## Effects (item g)
+
+Reverb (mix 50 %, decay 2 s): RMS 0.0109 in 0.3 .. 0.8 s after the note off, exactly 0 without. Delay (free time, mono): echo of a noise burst at
+120.021 / 250.021 / 400.021 ms (limit +-1 ms). Compressor: peak -31.9 dB. EQ mid +12 dB at 1 kHz: +10.1 dB there, +0.1 dB at 6 .. 9 kHz. Chorus 10.3 dB, flanger 0.68
+dB, phaser 3.5 dB, distortion 8.4 dB mean spectral change (guard 0.5 dB). Effect order: distortion >> delay against delay >> distortion differ by 0.46 (relative
+RMS, guard 0.05); nine equal choices still make a valid order. All of it without allocation.
+
+## Voices (item h)
+
+Polyphony 4 with eight held notes: 4 voices. Stealing with two voices (60, 64, 67): the oldest note (60) is gone (0.0026 against 1800 for the others). All notes
+off ends in exact silence and 0 voices. Legato (one voice, 600 ms attack): the level after the second note is 1.002 of the level before, 0.017 without legato (it
+restarts the attack). Portamento 150 / 300 / 600 ms, linear slope, one voice: 90 % of the octave after 91.9 / 90.6 / 90.3 % of the set time (limit +-10 % of the
+time; the glide is linear in pitch and ends exactly at the set time). Pitch bend (range 2 / 7 / 12 / 24, bend +1 and -0.5): within 2 cents (limit 2 cents). **Sustain
+pedal: not exposed** (the event contract has no pedal; the engine has it).
+
+## Tiers (item i)
+
+20 notes held with a patch that asks for 32 voices and 16 unison voices on three oscillators: 8 voices sound on the low tier, 20 on the high tier, the stored parameters are
+unchanged. The same patch on the low and the high tier: spectral centroid within +-15 % (measured ratios 1.009, 0.986, 0.960 for Saw, Square, Formant Sweep).
+
+## State (item j)
+
+A random walk of 300 steps over the whole table, saved with `saveState`, loaded into a new `ParamValues`, played by a fresh engine: **bit identical** to the engine that
+played the original values, on both tiers, with the noise oscillator, random phase and random LFO stereo on, and another engine in between. This needed one change to the
+imported code: the seed counter of its random generators is thread local and `prepare()` starts it at 0 (docs/UPSTREAM.md); before it, two engines of the same patch
+sounded different.
+
+## Known behaviour that is not a defect but not obvious
+
+* The first note of an engine differs in its attack from the notes after it (docs/UPSTREAM.md); `reset()` does not return to the very first state (steady state
+  identical, the attack of the first note after a reset can differ by 0.2 on a 0.4 peak). The adapter plays two notes in `prepare()`.
+* A modulation amount of 100 % is a sweep of the destination's own range in the engine's scale (docs/PARAMETERS.md).
+* A slot that would close a loop in the engine's graph stays unwired (docs/UPSTREAM.md); the tests only assert that this never allocates.

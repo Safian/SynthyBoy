@@ -36,17 +36,17 @@ Both come from the same sources: JUCE builds the VST3, and
 
 | Path | Content |
 |------|---------|
-| `core/` | `synthyboy_core`: JUCE-free C++17 static library. `include/synthyboy/` public API (`IEngine`, `ParamInfo` table, state I/O, `Quality`, events), `src/` params/state/number formatting, `engine-own/` the engine (the spike's 8-voice synth ported off JUCE), `engine-vital/` the Vital-derived DSP and its adapter (the only place with Vital-derived code, see [Engines](#engines)), `tests/` unit, real-time (no allocation) and thread tests with an own tiny runner |
+| `core/` | `synthyboy_core`: JUCE-free C++17 static library. `include/synthyboy/` public API (`IEngine`, `ParamInfo` table, state I/O, `Quality`, events), `src/` the 880-entry parameter table, state format 2, number formatting, `engine-own/` the engine (the spike's 8-voice synth ported off JUCE), `engine-vital/` the Vital-derived DSP and its adapter (the only place with Vital-derived code, see [Engines](#engines)), `tests/` unit, real-time (no allocation) and thread tests with an own tiny runner |
 | `shell-juce/` | thin `juce::AudioProcessor`: parameter layout generated from the core table, MIDI/params to core events, state blob from the core |
 | `tests/clap-smoke/` | `clap_smoke`: loads the built `.clap`, checks parameter parity with the core table, audio, state round trip |
 | `cmake/toolchains/` | `armv7-linux-gnueabihf`, `aarch64-linux-gnu` cross toolchain files |
 | `plugin.json`, `schema/` | plugin manifest and its JSON schema (`scripts/check-manifest.py`) |
-| `bench/` | `synthyboy_bench`: real-time factor and block times of an engine |
-| `scripts/` | `build.sh`, `check-manifest.py`, `check-no-vital.sh` (the iOS rule) |
-| `docs/ARCHITECTURE.md`, `UPSTREAM.md`, `PERFORMANCE.md` | design and phase plan, record of the Vital take-over, benchmark numbers |
+| `bench/`, `tools/paramdump/` | `synthyboy_bench`: real-time factor and block times of a default and a heavy patch per tier; `synthyboy_paramdump`: the parameter table as JSON (`docs/params.json`) |
+| `scripts/` | `build.sh`, `check-manifest.py`, `check-no-vital.sh` (the iOS rule), `gen-params-doc.py` / `check-params-doc.sh` (docs/PARAMETERS.md and params.json) |
+| `docs/ARCHITECTURE.md`, `PARAMETERS.md`, `QUALITY.md`, `UPSTREAM.md`, `PERFORMANCE.md` | design and phase plan, the parameter reference (generated), audio quality gates and their measurements, record of the Vital take-over, benchmark numbers |
 
 CMake options: `SYNTHYBOY_BUILD_PLUGIN` (ON; OFF builds only the core, no JUCE download), `SYNTHYBOY_BUILD_TESTS` (ON),
-`SYNTHYBOY_WITH_VITAL` (ON; OFF leaves `core/engine-vital` out of the build completely, as for iOS), `SYNTHYBOY_SHELL_ENGINE` (`own` default | `vital`: the engine of the JUCE plugin).
+`SYNTHYBOY_WITH_VITAL` (ON; OFF leaves `core/engine-vital` out of the build completely, as for iOS), `SYNTHYBOY_SHELL_ENGINE` (`vital` by default when Vital is part of the build, else `own`: the engine of the JUCE plugin), `SYNTHYBOY_DEFAULT_TIER` (`high` | `medium` | `low`: the quality tier of the plugin).
 
 ## Engines
 
@@ -54,11 +54,12 @@ Two engines sit behind `synthyboy::IEngine` (`createEngine (EngineKind::own | En
 
 | Engine | Where | Built | Notes |
 |--------|-------|-------|-------|
-| `own` | `core/engine-own` | always | the spike's synth, original code; the only engine of the shipped plugin and the only one allowed on iOS |
-| `vital` | `core/engine-vital` | `SYNTHYBOY_WITH_VITAL=ON` (default) | DSP derived from [Vital](https://github.com/mtytel/vital) (commit 636ca0e, GPL-3.0-or-later, namespace `sbvital`) with an adapter that maps the three SynthyBoy parameters onto it; mapping and behaviour: [core/engine-vital/README.md](core/engine-vital/README.md), every change to the imported files: [docs/UPSTREAM.md](docs/UPSTREAM.md) |
+| `own` | `core/engine-own` | always | the spike's synth, original code, a documented subset of the parameters ([core/engine-own/README.md](core/engine-own/README.md)); the fallback of the plugin and the only engine allowed on iOS |
+| `vital` | `core/engine-vital` | `SYNTHYBOY_WITH_VITAL=ON` (default) | DSP derived from [Vital](https://github.com/mtytel/vital) (commit 636ca0e, GPL-3.0-or-later, namespace `sbvital`) with an adapter that maps all 880 SynthyBoy parameters onto it (3 wavetable oscillators with unison, spectral morph and warp, noise, 2 filters + FX filter, 6 envelopes, 8 LFOs, 4 random LFOs, 4 macros, a 64-slot modulation matrix, 9 effects, quality tiers); mapping and behaviour: [core/engine-vital/README.md](core/engine-vital/README.md), every change to the imported files: [docs/UPSTREAM.md](docs/UPSTREAM.md) |
 
-The JUCE plugin uses the own engine; `-DSYNTHYBOY_SHELL_ENGINE=vital` builds it with the Vital engine instead (configure error if
-`SYNTHYBOY_WITH_VITAL=OFF`). `build/bench/synthyboy_bench --engine own|vital` prints the real-time factor
+The parameters are our own table (keys like `osc1.unison.detune`, our units): [docs/PARAMETERS.md](docs/PARAMETERS.md), machine readable `docs/params.json`; what the engine does
+and what it is measured to do: [docs/QUALITY.md](docs/QUALITY.md). The JUCE plugin uses the Vital engine; `-DSYNTHYBOY_SHELL_ENGINE=own` builds it with the own
+engine (it is also the engine when `SYNTHYBOY_WITH_VITAL=OFF`; `vital` with Vital off is a configure error). `build/bench/synthyboy_bench --engine own|vital` prints the real-time factor
 ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)). The CI job `ios-vital-free` builds the core without Vital and checks the static
 library with `scripts/check-no-vital.sh`.
 
@@ -143,7 +144,7 @@ Copy the bundles to the usual plugin folders:
 - `manifest`: `plugin.json` against `schema/plugin-manifest.schema.json`.
 - `ios-vital-free`: `-DSYNTHYBOY_WITH_VITAL=OFF`, core build + tests, `scripts/check-no-vital.sh` on `libsynthyboy_core.a` (and its `--self-test`).
 
-All other jobs build and test the Vital engine too; `build` (Linux) also builds the plugin with `-DSYNTHYBOY_SHELL_ENGINE=vital` and runs `clap_smoke` on it, `linux-aarch64` prints benchmark numbers.
+All other jobs build and test the Vital engine too; `build` (Linux) also builds the plugin with `-DSYNTHYBOY_SHELL_ENGINE=own` and runs `clap_smoke` on it (the default plugin runs it too), checks that `docs/params.json` and `docs/PARAMETERS.md` are current, `linux-aarch64` prints benchmark numbers.
 
 First GitHub run 2026-11-04: Linux and macOS green; Windows failed only in the pluginval SHA-256 check (fixed).
 clap-validator found three real issues in the spike (Cutoff text round trip; parameter values changed on state load

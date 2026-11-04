@@ -95,6 +95,8 @@ channel, +-`master.bend_range` semitones; also feeds the "Pitch Wheel" source), 
 * `reset()` renders 100 silent pieces (12800 frames) so that Vital's smoothers sit on the current parameter values; the
   next render equals the first one up to about 1.3e-5 relative RMS (voice filters keep tiny residues), not bit for bit.
   Two freshly prepared instances render bit-identical output.
+* Determinism: the random generators of the engine (noise, random LFOs, random phase) are seeded from a counter that `prepare()` starts at 0 on its
+  thread (docs/UPSTREAM.md): two engines with the same parameters, prepared the same way, render the same bits.
 * Note offsets inside a piece are not sample accurate in Vital (the `sample` argument of `noteOn` does not delay the
   audio), which is why the adapter cuts the block at every event frame instead.
 

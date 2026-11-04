@@ -149,7 +149,7 @@ Baseline from Vital: analog (Sallen-Key-style), dirty, ladder, digital SVF, diod
 
 ### 3.5 Modulation and effects
 
-- **Mod matrix:** Vital's connection model (source → destination, amount, bipolar, stereo, power/curve, bypass, 64 slots). Sources: 3 envelopes (extra: 4–6 when quality allows), 4 LFOs with editable shapes (line generator), 2 random LFOs, 4 macros, velocity, note, key track, aftertouch, pitch wheel, mod wheel, lift, random per note. Matrix is addressed through `ParamInfo` (destinations are parameters) so Kick UI, CLAP per-note modulation and the file format see the same IDs.
+- **Mod matrix:** Vital's connection model (source → destination, amount, bipolar, stereo, power/curve, bypass, 64 slots), addressed through `ParamInfo`: each slot is seven parameters (`modNN.source` / `destination` / `amount` / `power` / `bipolar` / `stereo` / `bypass`), the source a stepped choice over core's `ModSource` table (28 sources: 6 envelopes, 8 LFOs with a built-in list of 12 shapes, 4 random LFOs, 4 macros, velocity, note, aftertouch, pitch wheel, mod wheel, random per note), the destination a stepped choice over every parameter flagged `kParamModulatable` (269), so Kick UI, CLAP and the state format see the same ids. Free-form LFO shapes, "lift" and "slide" sources are not exposed (docs/PARAMETERS.md). Wiring a slot on the audio thread allocates in the imported engine in three cases that the adapter removes (docs/UPSTREAM.md); a slot that would close a loop stays unwired.
 - **FX chain:** reorderable chain from Vital (chorus, compressor, delay, distortion, EQ, filter FX, flanger, phaser, reverb), with a per-effect CPU class so a tier can drop heavy effects (§3.6).
 - **Unison/voice:** voice manager with legato/portamento/voice stealing (oldest or lowest), polyphony 1–32 (tier-capped), note-id tracking for CLAP (§5).
 
@@ -213,25 +213,29 @@ One constexpr table in the core:
 
 ```
 struct ParamInfo {
-  uint32_t id;          // stable, appended only
-  const char* key;      // stable string key, e.g. "osc1.wt_frame"; used in files, never renamed
-  const char* name;     // display name
-  const char* group;    // "Osc 1", "Filter 1", ...  (→ CLAP module path, Kick page)
-  float min, max, def;
-  Scale scale;          // linear | exp | log | quadratic | cubic | stepped(enum)
-  Unit unit;            // none | dB | Hz | ms | % | semitone | cents | beats
-  Flags flags;          // automatable | modulatable | per_note | hidden | stepped
-  TextFn toText; ParseFn fromText;   // display strings, same everywhere
+  uint32_t id;          // == hashKey (key); stable, appended only
+  const char* key;      // lowercase dotted key, e.g. "osc1.unison.detune"; used in files, never renamed
+  const char* name;     // display name, unique in the table ("Osc 1 Unison Detune")
+  const char* group;    // hierarchy "Osc 1 / Unison" (-> CLAP module path, Kick page, JUCE parameter group)
+  float min, max, def, skew, interval;
+  Scale scale;          // linear | exp_skew | stepped(choice)
+  Unit unit;            // none | dB | Hz | ms | percent | semitone | cents | beats | degrees | voices
+  uint32_t flags;       // automatable | modulatable | per_note | hidden | stepped | engine_specific
+  const char* const* choices; uint16_t numChoices;  // names of a stepped parameter ...
+  ChoiceSet choiceSet;  // ... or: none | list | modSource | modDestination (names generated from core's tables)
+  uint8_t decimals;     // digits of the display text
+  uint16_t order;       // display order (table position)
 };
 ```
 
-From this table the build generates: the JUCE parameter layout, the CLAP `params` info, the Kick UI parameter list (JSON), the
-preset schema and the user manual's parameter chapter. Display-name/value text functions live in the core, so a hardware knob
+The table is our own design (core/src/param_table.cpp, 880 entries, constexpr, generated per group with macros; docs/PARAMETERS.md lists it by section). From it the build
+generates: the JUCE parameter layout (grouped), the CLAP `params` info, the Kick UI parameter list (`docs/params.json`, written by `synthyboy_paramdump`; CI checks that it is
+current), and the parameter chapter (docs/PARAMETERS.md, `scripts/gen-params-doc.py`); the preset schema follows in Phase 4. Display-name/value text functions live in the core, so a hardware knob
 and the plugin GUI show the same string.
 
 ### 5.2 State and preset format
 
-- **Versioned.** `{"format":"synthyboy-state","version":N, ...}`; loader accepts all older versions through explicit migrations; unknown *future* versions load what they can and warn (never crash).
+- **Versioned.** `{"format":"synthyboy-state","version":N, ...}` (N = 2 since Phase 3: all 880 parameters by key, deterministic text of about 25 KB, limit 1 MiB); loader accepts all older versions through explicit migrations (version 1: gain, waveform, cutoff -> `master.volume`, `osc1.wavetable`, `filter1.cutoff` + `filter1.on`, tested with the literal documents of the old code); unknown *future* versions load what they can and warn (never crash).
 - Parameters stored by **key** (string), not index; a renamed parameter has a migration alias.
 - Mod matrix stored as a list of `{source, destination key, amount, bipolar, stereo, power, bypass}`.
 - Wavetables referenced by **content id + SHA-256** (from a ContentPack) or **embedded** (custom, user-made; compressed). A reference to a missing wavetable falls back to the built-in sine/saw table and sets a `missing_content` flag the host can show ("Restore"); sound is produced either way.
@@ -293,7 +297,7 @@ Each phase ends with: green CI on all platforms in the matrix that exists at tha
 | **0 (done)** | Spike: 8-voice synth, VST3 + CLAP from one code base | merged to `main` after independent build/codesign check |
 | **1 Foundation** | Repo restructure into `core/` (`engine-own` = the spike engine ported off JUCE, `Engine` interface, `ParamInfo`, `StateIO`, `Quality`) and `shell-juce/` (thin adapter); manifest + schema; `SYNTHYBOY_WITH_VITAL` switch + empty `engine-vital/`; **CI for all targets** (§10): core tests on x86_64 with ASan/UBSan and TSan, Linux ARMv7 (cross + QEMU), Linux AArch64 (native arm runner), real-time allocation test, plugin builds as before; clap_smoke + validator stay green | all-platform CI green, JUCE-shell/core parity test, ARMv7/AArch64 core tests pass, state round trip incl. future-version and garbage input |
 | **2 Vital take-over** | Import (§2.1), JUCE removal, namespace, build on all targets, ARMv7 NEON fix, `Engine` over the imported DSP, generic UI | audio-equivalence golden tests vs. the imported code's own tests; benchmark numbers on x86_64/arm64; first measurement on MPC. **State:** import, JUCE removal, `sbvital`, NEON fix, `IEngine` adapter (`createEngine (EngineKind::vital)`, selectable in the JUCE shell with `SYNTHYBOY_SHELL_ENGINE=vital`, the own engine stays the default), the 35 ported Vital unit test classes, feature "golden" measurements, allocation/TSan/ASan/UBSan tests, `bench/` with numbers for macOS arm64 (`PERFORMANCE.md`) and the `ios-vital-free` CI job exist. **Open:** CI results of the new jobs (Windows/MSVC and Linux x86_64 not run locally), numbers on x86_64 and ARMv7/MPC hardware, first measurement on a phone. |
-| **3 Engine completion** | Oscillators + spectral warp, filters, mod matrix, FX, unison, quality tiers, voice management, state migration | alias/filter/tuning tests; sanitizers clean; tiers measured on device |
+| **3 Engine completion** | Oscillators + spectral warp, filters, mod matrix, FX, unison, quality tiers, voice management, state migration | alias/filter/tuning tests; sanitizers clean; tiers measured on device. **State (2026-11-04):** our own parameter table of 880 entries (docs/PARAMETERS.md, `docs/params.json`) with state format version 2 and migration of version 1; the Vital-derived engine implements all of it (3 wavetable oscillators with unison, spectral morph and warp, noise, 2 filters + FX filter with 8 models, 6 envelopes, 8 LFOs, 4 random LFOs, 4 macros, a 64-slot modulation matrix with source / destination / amount / curve / bipolar / stereo / bypass, 9 effects in a reorderable chain, portamento, legato, pitch bend range, mod wheel and aftertouch sources, 13 built-in wavetables and 12 LFO shapes generated by code); it is the default engine of the JUCE plugin, the own engine is the fallback and iOS engine (it implements a documented subset); quality tiers cap voices, unison, oversampling and interpolation and bypass heavy effects without touching parameters; audio quality gates (parameter sweep, tuning, alias budget, filters, matrix, unison, effects, voices, tiers, state) in docs/QUALITY.md, allocation audit of the matrix in docs/UPSTREAM.md, benchmark of a default and a heavy patch in docs/PERFORMANCE.md. **Open:** tiers measured on the MPC and on a phone, the alias level (about -35 dB on the high tier, not the 80 dB target of 3.2, docs/QUALITY.md), the sample oscillator, free-form LFO shapes, wavetable editor and import, content packs (Phase 4/5), real clap-validator on the new table (CI), Windows/MSVC and ARMv7 hardware runs. |
 | **4 Content & presets** | ContentPack format + tools, own factory wavetables and ≥100 own presets (CC0), preset discovery, missing-content behaviour tests | pack delete/restore test; licence lint passing |
 | **5 UI** | Own JUCE GUI, wavetable editor, spectrum, mod UI; `clap.gui`; remote-controls pages | DAW embedding checks (§8), UI screenshot tests |
 | **6 Native CLAP shell + static build** | Complete `shell-clap/`, `synthyboy_static` built with `SYNTHYBOY_WITH_VITAL=OFF` for iOS (own engine only; CI check that no Vital-derived object is linked), parity test green, iOS/Android build checks (library only) | static entry loads in a test host; manifest generated by CI; iOS Vital-free check green |
@@ -326,6 +330,6 @@ clap-validator: pin to a tag, built once and cached; it is blocking since its fi
 - **(owner)** Trademark/name clearance for "SynthyBoy" (docs/NAMING.md). iOS is decided: own engine (§2.2).
 - Exact CPU of the MPC Key 61 and its available toolchain/sysroot (cross-compile target) – read from the device.
 - Whether `clap-juce-extensions` implements the extensions needed in §4.1 at the pinned commit.
-- Vital engine in the shipped plugin: the JUCE shell keeps the own engine by default; switching the default needs the owner's decision after listening tests (level, velocity curve and release time differ, `core/engine-vital/README.md`) and the MPC measurement.
+- Vital engine in the shipped plugin: since Phase 3 it is the JUCE shell's default (own engine: `-DSYNTHYBOY_SHELL_ENGINE=own`, and when `SYNTHYBOY_WITH_VITAL=OFF`). The owner's listening tests (level, velocity curve and release time differ, `core/engine-vital/README.md`) and the MPC measurement are still open **(owner)**.
 - Upstream quirks recorded but not changed (`WaveFrame::removedDc`, the non-atomic seed counter): docs/UPSTREAM.md.
 - Spike gaps carried over: GUI never opened in a DAW; `-G Xcode` configure fails (Ninja is the supported generator); Linux/Windows builds untested until the first CI run is recorded; CLAP wrapper on Linux supports X11 only.

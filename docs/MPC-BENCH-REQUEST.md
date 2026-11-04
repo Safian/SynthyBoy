@@ -38,8 +38,10 @@ Any stop/restart of the stock software is the hardware session's / owner's decis
 ./synthyboy_bench-armv7 --engine vital --seconds 10 --block 64  --sr 48000
 ```
 
-Each run prints the configuration and one result per quality tier (Low 8 voices, Medium 16, High 32) for saw and sine:
-real-time factor, mean / p99 / worst block time in ms. Repeat each command 3 times (once right after boot, once warm) and
+Each run prints the configuration and, for two patches (the default patch and a heavy patch: 3 oscillators x 7 unison voices, two
+filters, LFOs and matrix routings, all effects; `--patch default` or `--patch heavy` runs only one), one result per quality tier
+(Low 8 voices, Medium 16, High 32): real-time factor, mean / p99 / worst block time in ms. A command now takes about 80 s of
+audio time per engine (8 runs of 10 s plus warm-up). Repeat each command 3 times (once right after boot, once warm) and
 send all raw outputs unedited.
 
 ## 4. Expected result / how to read it

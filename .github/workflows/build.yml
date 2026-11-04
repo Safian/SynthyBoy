@@ -178,11 +178,15 @@ jobs:
       - name: Build
         run: cmake --build build-san --parallel
 
+      # the audio quality gates (label `slow`, about 25 s native) run under ASan + UBSan; ThreadSanitizer skips them: that executable is single
+      # threaded (the thread test is what TSan is for) and would take minutes
       - name: Run tests
         env:
           UBSAN_OPTIONS: print_stacktrace=1
           TSAN_OPTIONS: halt_on_error=1
-        run: ctest --test-dir build-san --output-on-failure
+        run: |
+          if [ "${{ matrix.name }}" = "tsan" ]; then exclude="-LE slow"; else exclude=""; fi
+          ctest --test-dir build-san --output-on-failure $exclude
 
   # Linux ARMv7 hard-float (MPC Key 61 class): cross build of the core, tests run under QEMU user mode.
   # Timing is not measured here (QEMU); only correctness and the ABI of the produced binaries.
@@ -213,8 +217,10 @@ jobs:
           file "$bin"
           arm-linux-gnueabihf-readelf -A "$bin"
 
-      - name: Run tests (QEMU user mode)
-        run: ctest --test-dir build-armv7 --output-on-failure
+      # Only the fast subset under QEMU: the audio quality gates (label `slow`, about 25 s native, QEMU is 20 to 50 times slower, that is
+      # more than 10 minutes) run natively on x86_64 (build job, sanitizers) and AArch64 (linux-aarch64 job). Everything else runs here.
+      - name: Run tests (QEMU user mode, without the slow audio gates)
+        run: ctest --test-dir build-armv7 --output-on-failure -LE slow
 
       # Statically linked benchmark for the Akai MPC (see docs/MPC-BENCH-REQUEST.md): no dependency on the
       # device's glibc/libstdc++. Only a smoke run under QEMU here; QEMU timings mean nothing.

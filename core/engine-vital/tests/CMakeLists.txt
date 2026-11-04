@@ -13,6 +13,13 @@ synthyboy_add_test(synthyboy_test_vital_params test_vital_params.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_params PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
 
+synthyboy_add_test(synthyboy_test_vital_audio test_vital_audio.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_audio PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+# about 25 s in a release build: the audio quality gates (docs/QUALITY.md). CI runs them natively and under the sanitizers, and leaves them out
+# of the QEMU (ARMv7) and ThreadSanitizer jobs: `ctest -LE slow`.
+set_tests_properties(synthyboy_test_vital_audio PROPERTIES LABELS slow)
+
 # the ported unit tests of the Vital-derived DSP (tests/synthesis/**, translated from upstream's tests/synthesis)
 file(GLOB_RECURSE SBVITAL_PORTED_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/synthesis/*.cpp")
 synthyboy_add_test(synthyboy_test_vital_dsp test_vital_dsp.cpp ${SBVITAL_PORTED_TESTS}

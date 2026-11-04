@@ -90,6 +90,13 @@ namespace sbvital {
       index = (index + 1) % kNumOscillators;
     }
 
+    // Modified for SynthyBoy: oscillators that modulate each other (A is FM / RM of B and B of A) never become "ready" in the loop
+    // above and were not processed at all: their output buffers kept whatever they held (uninitialised memory at the start, NaN in
+    // the filters behind them). They are processed now, with the other oscillator's output of the previous block (docs/UPSTREAM.md).
+    for (int i = 0; i < kNumOscillators; ++i)
+      if (!processed[i])
+        getLocalProcessor(oscillators_[i])->process(num_samples);
+
     poly_float* filter1_output = output(kToFilter1)->buffer;
     poly_float* filter2_output = output(kToFilter2)->buffer;
     poly_float* raw_output = output(kRawOut)->buffer;

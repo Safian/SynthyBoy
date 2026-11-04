@@ -261,26 +261,28 @@ namespace sbvital {
     }
 
     force_inline poly_float tanh(poly_float value) {
-      poly_float abs_value = poly_float::abs(value);
-      poly_float square = value * value;
+      poly_float clamped = poly_float::max(poly_float::min(value, 10.0f), -10.0f);
+      poly_float abs_value = poly_float::abs(clamped);
+      poly_float square = clamped * clamped;
 
       poly_float part_num1 = abs_value * 0.821226666969744f + 0.893229853513558f;
       poly_float part_num2 = square * part_num1 + 2.45550750702956f;
-      poly_float num = value * (abs_value *  2.45550750702956f + part_num2);
+      poly_float num = clamped * (abs_value *  2.45550750702956f + part_num2);
 
-      poly_float part_den = poly_float::abs(abs_value * 0.814642734961073f * value + value);
+      poly_float part_den = poly_float::abs(abs_value * 0.814642734961073f * clamped + clamped);
       poly_float den = part_den * (square + 2.44506634652299f) + 2.44506634652299f;
       return num / den;
     }
 
     force_inline mono_float tanh(mono_float value) {
-      mono_float abs_value = fabsf(value);
-      mono_float square = value * value;
+      mono_float clamped = fmaxf(fminf(value, 10.0f), -10.0f);
+      mono_float abs_value = fabsf(clamped);
+      mono_float square = clamped * clamped;
 
-      mono_float num = value * (2.45550750702956f + 2.45550750702956f * abs_value +
+      mono_float num = clamped * (2.45550750702956f + 2.45550750702956f * abs_value +
                                 square * (0.893229853513558f + 0.821226666969744f * abs_value));
       mono_float den = 2.44506634652299f + (2.44506634652299f + square) *
-                       fabsf(value + 0.814642734961073f * value * abs_value);
+                       fabsf(clamped + 0.814642734961073f * clamped * abs_value);
       return num / den;
     }
 

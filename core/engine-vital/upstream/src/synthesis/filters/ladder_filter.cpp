@@ -35,7 +35,9 @@ namespace sbvital {
     reset(constants::kFullMask);
     resonance_ = 0.0f;
     drive_ = 0.0f;
-    post_multiply_ = 0.0f;
+    post_multiply_ = 1.0f;
+    for (int i = 0; i <= kNumStages; ++i)
+      stage_scales_[i] = 0.0f;
   }
 
   void LadderFilter::process(int num_samples) {
@@ -186,6 +188,10 @@ namespace sbvital {
 
       for (int i = 0; i <= kNumStages; ++i)
         stage_scales_[i] = low_high * low_pass12[i] + band * band_pass12[i] + low_high * high_pass12[i];
+    }
+    else {
+      for (int i = 0; i <= kNumStages; ++i)
+        stage_scales_[i] = low_pass * low_pass12[i] + band_pass * band_pass12[i] + high_pass * high_pass12[i];
     }
   }
 

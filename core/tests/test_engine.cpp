@@ -569,3 +569,36 @@ TEST (engine_quality_defaults)
             CHECK (z->activeVoices() >= 1 && z->activeVoices() <= 3);
     }
 }
+
+TEST (engine_set_quality_changes_the_voice_cap_while_playing)
+{
+    FOR_EACH_ENGINE (c)
+    {
+        auto e = makeEngine2 (c, qualityForTier (Tier::high));
+        std::vector<Event> burst;
+        for (int i = 0; i < 12; ++i)
+            burst.push_back (noteOn (0, 40 + 3 * i));
+        sbtest::render (*e, burst, 4800, 512);
+        CHECK_EQ (e->activeVoices(), 12);
+
+        // lowered to 3 voices: the next block takes it over; new notes steal within the cap, the surplus voices are released
+        Quality q = qualityForTier (Tier::high);
+        q.maxVoices = 3;
+        e->setQuality (q);
+        std::vector<Event> next;
+        for (int i = 0; i < 6; ++i)
+            next.push_back (noteOn (i, 60 + i));
+        sbtest::render (*e, next, 4800, 512);
+        sbtest::render (*e, {}, 48000, 512); // the released voices end (the longest release is 0.25 s, Vital's kill fade 50 ms)
+        std::printf ("    [%s] voices after the cap was lowered to 3: %d\n", c.name, e->activeVoices());
+        CHECK_EQ (e->activeVoices(), 3); // measured for both engines: the surplus voices are released, the three newest keep sounding
+        const int held = e->activeVoices();
+        // raised again: 12 voices fit once more
+        e->setQuality (qualityForTier (Tier::high));
+        std::vector<Event> again;
+        for (int i = 0; i < 12; ++i)
+            again.push_back (noteOn (i, 30 + 3 * i));
+        sbtest::render (*e, again, 4800, 512);
+        CHECK (e->activeVoices() >= std::min (12, held));
+    }
+}
