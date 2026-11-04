@@ -43,15 +43,27 @@ option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
 option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
 option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" ON)
 
-# Engine of the JUCE shell (the plugin that ships). "own" is the default and what has been shipped so far; "vital" needs
-# SYNTHYBOY_WITH_VITAL=ON.
-set(SYNTHYBOY_SHELL_ENGINE "own" CACHE STRING "Engine used by the JUCE plugin: own | vital")
+# Engine of the JUCE shell (the plugin that ships). The Vital-derived engine is the default whenever it is part of the build; "own"
+# is the fallback (and the engine of builds without Vital, e.g. iOS) and can be forced with -DSYNTHYBOY_SHELL_ENGINE=own.
+if(SYNTHYBOY_WITH_VITAL)
+    set(SYNTHYBOY_SHELL_ENGINE_DEFAULT "vital")
+else()
+    set(SYNTHYBOY_SHELL_ENGINE_DEFAULT "own")
+endif()
+set(SYNTHYBOY_SHELL_ENGINE "${SYNTHYBOY_SHELL_ENGINE_DEFAULT}" CACHE STRING "Engine used by the JUCE plugin: own | vital")
 set_property(CACHE SYNTHYBOY_SHELL_ENGINE PROPERTY STRINGS own vital)
 if(NOT SYNTHYBOY_SHELL_ENGINE STREQUAL "own" AND NOT SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
     message(FATAL_ERROR "SYNTHYBOY_SHELL_ENGINE must be 'own' or 'vital' (got '${SYNTHYBOY_SHELL_ENGINE}')")
 endif()
 if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital" AND NOT SYNTHYBOY_WITH_VITAL)
     message(FATAL_ERROR "SYNTHYBOY_SHELL_ENGINE=vital needs SYNTHYBOY_WITH_VITAL=ON (the Vital-derived engine is not part of this build)")
+endif()
+
+# Quality tier of the JUCE shell (docs/ARCHITECTURE.md 3.6): high on desktop. There is no user-visible parameter for it.
+set(SYNTHYBOY_DEFAULT_TIER "high" CACHE STRING "Quality tier of the JUCE plugin: low | medium | high")
+set_property(CACHE SYNTHYBOY_DEFAULT_TIER PROPERTY STRINGS low medium high)
+if(NOT SYNTHYBOY_DEFAULT_TIER MATCHES "^(low|medium|high)$")
+    message(FATAL_ERROR "SYNTHYBOY_DEFAULT_TIER must be low, medium or high (got '${SYNTHYBOY_DEFAULT_TIER}')")
 endif()
 
 include(CTest)
@@ -139,7 +151,8 @@ if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
 else()
     target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
 endif()
-message(STATUS "JUCE shell engine: ${SYNTHYBOY_SHELL_ENGINE}")
+target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER})
+message(STATUS "JUCE shell engine: ${SYNTHYBOY_SHELL_ENGINE}, tier: ${SYNTHYBOY_DEFAULT_TIER}")
 
 target_compile_definitions(SynthyBoy PUBLIC
     JUCE_WEB_BROWSER=0

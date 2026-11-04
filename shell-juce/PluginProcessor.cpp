@@ -20,10 +20,18 @@
 #include "PluginProcessor.h"
 
 #include <algorithm>
+#include <cmath>
+#include <functional>
+#include <map>
+#include <limits>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace
 {
-/** The engine the shell was configured with (CMake SYNTHYBOY_SHELL_ENGINE; own is the default). */
+/** The engine the shell was configured with (CMake SYNTHYBOY_SHELL_ENGINE: the Vital-derived engine whenever it is part of the
+    build, the own engine otherwise or on request). */
 std::unique_ptr<synthyboy::IEngine> createShellEngine()
 {
    #if SYNTHYBOY_SHELL_ENGINE_VITAL
@@ -44,34 +52,60 @@ SynthyBoyProcessor::SynthyBoyProcessor()
     {
         rawParams[i] = apvts.getRawParameterValue (table[i].key);
         engine->setParam (table[i].id, table[i].def);
+        sentToEngine[i] = std::numeric_limits<float>::quiet_NaN(); // the first block sends everything
     }
 }
+
+namespace
+{
+/** A node of the group tree built from the " / " hierarchy of ParamInfo::group. */
+struct GroupNode
+{
+    std::string name;
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
+    std::vector<std::unique_ptr<GroupNode>> children;
+
+    GroupNode* child (const std::string& childName)
+    {
+        for (auto& c : children)
+            if (c->name == childName)
+                return c.get();
+        children.push_back (std::make_unique<GroupNode>());
+        children.back()->name = childName;
+        return children.back().get();
+    }
+};
+} // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout SynthyBoyProcessor::createParameterLayout()
 {
     using namespace juce;
 
-    AudioProcessorValueTreeState::ParameterLayout layout;
     const auto* table = synthyboy::paramTable();
+
+    // Parameters are collected per group first (the groups are the CLAP "module" path and the sections of the generic editor).
+    // Every parameter stays visible: the generic editor shows the 64 modulation slots as 64 small sections.
+    GroupNode root;
 
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
     {
         const synthyboy::ParamInfo& info = table[i];
         const ParameterID id { info.key, 1 };
 
+        std::unique_ptr<RangedAudioParameter> parameter;
         if (info.scale == synthyboy::Scale::stepped)
         {
             StringArray choices;
             for (size_t k = 0; k < synthyboy::choiceCount (info); ++k)
                 choices.add (synthyboy::choiceName (info, k));
 
-            layout.add (std::make_unique<AudioParameterChoice> (id, info.name, choices, static_cast<int> (info.def)));
+            parameter = std::make_unique<AudioParameterChoice> (id, info.name, choices, static_cast<int> (info.def));
         }
         else
         {
             // display text comes from the core, so a hardware knob and the plugin GUI show the same string
             // (fixed precision: value -> text -> value -> text is stable, clap-validator param-conversions)
-            layout.add (std::make_unique<AudioParameterFloat> (
+            parameter = std::make_unique<AudioParameterFloat> (
                 id, info.name,
                 NormalisableRange<float> (info.min, info.max, info.interval, info.skew), info.def,
                 AudioParameterFloatAttributes().withLabel (synthyboy::unitLabel (info.unit))
@@ -86,10 +120,41 @@ juce::AudioProcessorValueTreeState::ParameterLayout SynthyBoyProcessor::createPa
                         float v = info.def;
                         synthyboy::textToValue (info, t.toRawUTF8(), v);
                         return v;
-                    })));
+                    }));
         }
+
+        // the group path "Osc 1 / Unison" -> node Osc 1 -> node Unison
+        GroupNode* node = &root;
+        const std::string path = info.group;
+        size_t pos = 0;
+        while (true)
+        {
+            const size_t next = path.find (" / ", pos);
+            node = node->child (path.substr (pos, next == std::string::npos ? std::string::npos : next - pos));
+            if (next == std::string::npos)
+                break;
+            pos = next + 3;
+        }
+        node->parameters.push_back (std::move (parameter));
     }
 
+    // JUCE wants the groups as finished objects: convert the tree bottom up (parameters before sub groups, as listed)
+    struct Builder
+    {
+        static std::unique_ptr<AudioProcessorParameterGroup> build (GroupNode& node, const std::string& path)
+        {
+            auto group = std::make_unique<AudioProcessorParameterGroup> (path, node.name, " | ");
+            for (auto& p : node.parameters)
+                group->addChild (std::move (p));
+            for (auto& c : node.children)
+                group->addChild (build (*c, path + "/" + c->name));
+            return group;
+        }
+    };
+
+    AudioProcessorValueTreeState::ParameterLayout layout;
+    for (auto& top : root.children)
+        layout.add (Builder::build (*top, top->name));
     return layout;
 }
 
@@ -99,9 +164,14 @@ void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     const auto* table = synthyboy::paramTable();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
-        engine->setParam (table[i].id, rawParams[i]->load());
+    {
+        const float v = rawParams[i]->load();
+        engine->setParam (table[i].id, v);
+        sentToEngine[i] = v;
+    }
 
-    engine->prepare (sampleRate, samplesPerBlock, synthyboy::Quality {});
+    // the quality tier of this build (CMake SYNTHYBOY_DEFAULT_TIER, high on desktop); a tier only caps, it never changes parameters
+    engine->prepare (sampleRate, samplesPerBlock, synthyboy::qualityForTier (synthyboy::kDefaultTier));
 }
 
 bool SynthyBoyProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -123,10 +193,18 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     for (int ch = 2; ch < numChannels; ++ch)
         buffer.clear (ch, 0, numSamples);
 
-    // parameters: read every value once per block
+    // parameters: one atomic load and one compare per parameter and block; the engine is told only about the ones that changed
+    // (no allocation, no lock: rawParams are the atomics of the JUCE parameters)
     const auto* table = synthyboy::paramTable();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
-        engine->setParam (table[i].id, rawParams[i]->load());
+    {
+        const float v = rawParams[i]->load (std::memory_order_relaxed);
+        if (! std::equal_to<float>() (v, sentToEngine[i])) // exact comparison on purpose; the NaN of the first block never equals
+        {
+            engine->setParam (table[i].id, v);
+            sentToEngine[i] = v;
+        }
+    }
 
     // MIDI -> sample accurate events (fixed capacity, overflow is dropped and counted)
     const int capacity = static_cast<int> (events.size());
@@ -162,6 +240,16 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         {
             e.type = synthyboy::Event::AllNotesOff;
         }
+        else if (message.isController() && message.getControllerNumber() == 1)
+        {
+            e.type = synthyboy::Event::ModWheel;
+            e.value = static_cast<float> (message.getControllerValue()) / 127.0f;
+        }
+        else if (message.isChannelPressure())
+        {
+            e.type = synthyboy::Event::Aftertouch;
+            e.value = static_cast<float> (message.getChannelPressureValue()) / 127.0f;
+        }
         else
         {
             continue;
@@ -177,9 +265,29 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                      numChannels > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
 }
 
+double SynthyBoyProcessor::getTailLengthSeconds() const
+{
+    // the longest release of the envelopes plus the tails of the effects that are on (from the current parameter values)
+    const auto value = [this] (const char* key)
+    {
+        const auto* info = synthyboy::findParamByKey (key);
+        const auto index = info != nullptr ? synthyboy::findParamIndex (info->id) : -1;
+        return index >= 0 && rawParams[static_cast<size_t> (index)] != nullptr ? static_cast<double> (rawParams[static_cast<size_t> (index)]->load()) : 0.0;
+    };
+    double release = 0.0;
+    for (int n = 1; n <= 6; ++n)
+        release = std::max (release, value (("env" + std::to_string (n) + ".release").c_str()) * 0.001);
+    double effects = 0.0;
+    if (value ("reverb.on") > 0.5)
+        effects = std::max (effects, value ("reverb.decay") * 0.001 + value ("reverb.predelay") * 0.001);
+    if (value ("delay.on") > 0.5)
+        effects = std::max (effects, 4.0 + 8.0 * std::abs (value ("delay.feedback")) * 0.01 * 4.0); // repeats fade with the feedback
+    return release + effects;
+}
+
 juce::AudioProcessorEditor* SynthyBoyProcessor::createEditor()
 {
-    // Generic parameter GUI - a custom editor is out of scope for this spike.
+    // Generic parameter GUI (the own GUI is Phase 5): one section per parameter group.
     return new juce::GenericAudioProcessorEditor (*this);
 }
 

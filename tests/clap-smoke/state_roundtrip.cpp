@@ -259,16 +259,50 @@ int main (int argc, char** argv)
         }
         if (quiet != 0.0f || ! finite) { std::printf ("FAIL audio: output without notes is not silent (peak %g)\n", (double) quiet); ++failures; }
 
+        // the default patch: a clean basic saw at -12 dB master, a gentle envelope, an open filter
         float loud = 0.0f;
         std::vector<float> right;
         auto out = processBlock (c, { noteOnEvent (69, 1.0) }, &right);
-        for (int i = 0; i < 8; ++i)
+        for (int i = 0; i < 12; ++i)
         {
             loud = std::max (loud, peakOf (out));
             finite = finite && allFinite (out) && allFinite (right);
             out = processBlock (c, {}, &right);
         }
-        if (! finite || loud <= 0.001f) { std::printf ("FAIL audio: note-on gives peak %g (finite: %d)\n", (double) loud, (int) finite); ++failures; }
+        std::printf ("default patch, A4 at full velocity: peak %.4f\n", (double) loud);
+        if (! finite || loud <= 0.02f || loud >= 0.9f) { std::printf ("FAIL audio: note-on gives peak %g (finite: %d), expected 0.02 .. 0.9\n", (double) loud, (int) finite); ++failures; }
+
+        // a note-off ends in exact silence within a second (release 200 ms)
+        std::vector<clap_event_note_t> off;
+        { clap_event_note_t e = noteOnEvent (69, 0.0); e.header.type = CLAP_EVENT_NOTE_OFF; off.push_back (e); }
+        processBlock (c, off);
+        float tail = 0.0f;
+        for (int i = 0; i < 100; ++i)
+        {
+            const float pk = peakOf (processBlock (c, {}));
+            tail = std::max (tail, i < 90 ? 0.0f : pk); // (90 blocks of 512 frames at 48 kHz are 0.96 s)
+        }
+        if (tail != 0.0f) { std::printf ("FAIL audio: still %g after one second of release\n", (double) tail); ++failures; }
+        destroyInstance (c);
+    }
+
+    // 0b2. every parameter at a random value at once (what the validator's param-fuzz does) while notes play: finite audio, no crash
+    {
+        Instance c;
+        if (! createInstance (factory, id, c)) { std::fprintf (stderr, "cannot create fuzz instance\n"); return 2; }
+        uint64_t rng = 0x9e3779b97f4a7c15ull;
+        const auto next = [&] { rng ^= rng >> 12; rng ^= rng << 25; rng ^= rng >> 27; return (double) ((rng * 0x2545f4914f6cdd1dull) >> 11) / 9007199254740992.0; };
+        bool finite = true;
+        for (int round = 0; round < 30; ++round)
+        {
+            std::vector<double> values;
+            for (auto& p : c.list)
+                values.push_back (p.info.min_value + next() * (p.info.max_value - p.info.min_value));
+            setValues (c, values);
+            const auto out = processBlock (c, { noteOnEvent ((int16_t) (36 + round * 2), 0.5 + 0.5 * next()) });
+            finite = finite && allFinite (out);
+        }
+        if (! finite) { std::printf ("FAIL fuzz: non-finite audio after random parameters\n"); ++failures; }
         destroyInstance (c);
     }
 

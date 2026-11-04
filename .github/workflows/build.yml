@@ -6,7 +6,7 @@
 # ASan/UBSan and TSan, core cross build + tests for Linux ARMv7 hard-float under QEMU, a native
 # Linux AArch64 build, the plugin manifest check, and the Vital-free static library check (iOS rule).
 # SYNTHYBOY_WITH_VITAL is ON by default, so every job except ios-vital-free builds and tests the Vital-derived engine
-# (core/engine-vital) as well; the shipped plugin still uses the own engine.
+# (core/engine-vital) as well; the shipped plugin uses it (the own engine is the fallback and the engine of Vital-free builds).
 #
 # First GitHub run (2026-11-04): Linux and macOS green incl. pluginval; Windows failed only in the
 # pluginval SHA-256 check (backslash prefix of Git-for-Windows sha256sum, fixed below).
@@ -74,7 +74,7 @@ jobs:
         if: runner.os == 'Windows'
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: CLAP smoke host (state / parameter round trip)
+      - name: CLAP smoke host (default engine, parameter parity, audio, state round trip)
         if: runner.os != 'Windows'
         run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
 
@@ -84,16 +84,17 @@ jobs:
         if: runner.os == 'Linux'
         run: scripts/check-params-doc.sh build/tools/paramdump/synthyboy_paramdump
 
-      # the same plugin with the Vital-derived engine (-DSYNTHYBOY_SHELL_ENGINE=vital); JUCE and clap-juce-extensions are
-      # reused from the first build. clap_smoke checks silence, then audio after a note-on, and the state round trip.
-      - name: Plugin with the Vital engine (CLAP smoke host)
+      # the same plugin with the own engine (-DSYNTHYBOY_SHELL_ENGINE=own, the fallback and the engine of Vital-free builds); JUCE and
+      # clap-juce-extensions are reused from the first build. clap_smoke checks parity of every parameter, silence, audio after a
+      # note-on, a fuzz of all parameters, the state round trip and the migration of the spike's state.
+      - name: Plugin with the own engine (CLAP smoke host)
         if: runner.os == 'Linux'
         run: |
-          cmake -S . -B build-vital -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_SHELL_ENGINE=vital -DSYNTHYBOY_BUILD_TESTS=OFF \
+          cmake -S . -B build-own -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_BUILD_TESTS=OFF \
             -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/build/_deps/juce-src" \
             -DFETCHCONTENT_SOURCE_DIR_CLAP-JUCE-EXTENSIONS="$PWD/build/_deps/clap-juce-extensions-src"
-          cmake --build build-vital --target SynthyBoy_CLAP clap_smoke --parallel
-          build-vital/clap_smoke "build-vital/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
+          cmake --build build-own --target SynthyBoy_CLAP clap_smoke --parallel
+          build-own/clap_smoke "build-own/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
 
       - name: Package
         run: |

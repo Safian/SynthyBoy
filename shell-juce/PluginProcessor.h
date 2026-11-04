@@ -30,8 +30,9 @@
 #include "synthyboy/state.h"
 
 /**
- * JUCE shell: owns no DSP. The parameter layout is generated from synthyboy::paramTable(), MIDI and parameter values
- * are converted into synthyboy::Event / IEngine::setParam each block, and the state blob is synthyboy::saveState().
+ * JUCE shell: owns no DSP. The parameter layout is generated from synthyboy::paramTable() (one JUCE parameter per entry, grouped
+ * by the " / " hierarchy of ParamInfo::group), MIDI and parameter values are converted into synthyboy::Event /
+ * IEngine::setParam each block (only the parameters whose value changed), and the state blob is synthyboy::saveState().
  */
 class SynthyBoyProcessor final : public juce::AudioProcessor
 {
@@ -54,7 +55,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.25; }
+    double getTailLengthSeconds() const override;
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -77,6 +78,7 @@ private:
 
     juce::AudioProcessorValueTreeState apvts;
     std::array<std::atomic<float>*, synthyboy::kMaxParams> rawParams {};
+    std::array<float, synthyboy::kMaxParams> sentToEngine {}; // audio thread: the value the engine has, for change detection
 
     std::unique_ptr<synthyboy::IEngine> engine;
     std::vector<synthyboy::Event> events;
