@@ -88,7 +88,7 @@ Copy the bundles to the usual plugin folders:
 `.github/workflows/build.yml` builds VST3 + CLAP on `ubuntu-latest`, `macos-latest` and `windows-latest`,
 uploads the plugins as artifacts, and runs [pluginval](https://github.com/Tracktion/pluginval)
 (release v1.0.4, SHA-256 checked) on the VST3 and
-[clap-validator](https://github.com/free-audio/clap-validator) (built from source, 0.4.1) on the CLAP.
+[clap-validator](https://github.com/free-audio/clap-validator) (built from source, 0.4.1; blocking) on the CLAP.
 First GitHub run 2026-11-04: Linux and macOS green; Windows failed only in the pluginval SHA-256 check (fixed).
 clap-validator found three real issues in the spike (Cutoff text round trip; parameter values changed on state load
 without `params.rescan`), fixed in `Source/PluginProcessor.cpp` and guarded by `tests/clap-smoke` (built as `clap_smoke`,
