@@ -4,8 +4,8 @@
 # Builds VST3 + CLAP on Linux, macOS and Windows, uploads the plugins as artifacts and runs
 # pluginval (VST3) and clap-validator (CLAP).
 #
-# NOTE: this workflow was only syntax-checked locally; it has not been executed on GitHub yet
-# (only the macOS arm64 steps were reproduced by hand, see README.md).
+# First GitHub run (2026-11-04): Linux and macOS green incl. pluginval; Windows failed only in the
+# pluginval SHA-256 check (backslash prefix of Git-for-Windows sha256sum, fixed below).
 
 name: build
 
@@ -87,6 +87,8 @@ jobs:
           mkdir -p "$tools"
           curl -fsSL -o "$tools/$asset" "https://github.com/Tracktion/pluginval/releases/download/${PLUGINVAL_VERSION}/${asset}"
           if command -v sha256sum >/dev/null; then actual=$(sha256sum "$tools/$asset" | cut -d' ' -f1); else actual=$(shasum -a 256 "$tools/$asset" | cut -d' ' -f1); fi
+          # Git-for-Windows sha256sum prefixes the hash with a backslash when the file name contains one
+          actual="${actual#\\}"
           [ "$actual" = "$sha" ] || { echo "SHA-256 mismatch for $asset: $actual"; exit 1; }
           (cd "$tools" && cmake -E tar xf "$asset")
           chmod +x "$tools/$exe" || true
