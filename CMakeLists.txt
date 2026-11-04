@@ -69,7 +69,38 @@ endif()
 include(CTest)
 enable_testing()
 
+include(FetchContent)
+
+# ---------------------------------------------------------------------------
+# Dependencies - exact versions are pinned (see THIRD_PARTY.md).
+# ---------------------------------------------------------------------------
+if(SYNTHYBOY_BUILD_PLUGIN)
+    # JUCE, used under its AGPL-3.0 option. 8.0.17-security is the newest 8.x release.
+    FetchContent_Declare(JUCE
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG        8.0.17-security
+        GIT_SHALLOW    TRUE)
+
+    # clap-juce-extensions (MIT). Pinned commit.
+    FetchContent_Declare(clap-juce-extensions
+        GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
+        GIT_TAG        7adee3a1bd4684d4caa5601100e364abccff4b4d
+        GIT_SUBMODULES_RECURSE TRUE)
+
+    FetchContent_MakeAvailable(JUCE clap-juce-extensions)
+    set(CLAP_INCLUDE_DIR "${clap-juce-extensions_SOURCE_DIR}/clap-libs/clap/include" CACHE INTERNAL "CLAP include dir")
+else()
+    # Plugin OFF: fetch lightweight CLAP headers only (for synthyboy_static and tests)
+    FetchContent_Declare(clap
+        GIT_REPOSITORY https://github.com/free-audio/clap.git
+        GIT_TAG        1.2.7
+        GIT_SHALLOW    TRUE)
+    FetchContent_MakeAvailable(clap)
+    set(CLAP_INCLUDE_DIR "${clap_SOURCE_DIR}/include" CACHE INTERNAL "CLAP include dir")
+endif()
+
 add_subdirectory(core)
+add_subdirectory(shell-clap)
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(bench)
     add_subdirectory(tools/paramdump)
@@ -78,27 +109,6 @@ endif()
 if(NOT SYNTHYBOY_BUILD_PLUGIN)
     return()
 endif()
-
-include(FetchContent)
-
-# ---------------------------------------------------------------------------
-# Dependencies - exact versions are pinned (see THIRD_PARTY.md).
-# ---------------------------------------------------------------------------
-
-# JUCE, used under its AGPL-3.0 option. 8.0.17-security is the newest 8.x release.
-FetchContent_Declare(JUCE
-    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        8.0.17-security
-    GIT_SHALLOW    TRUE)
-
-# clap-juce-extensions (MIT). The project does not publish recent tags (the newest one,
-# 0.26.0, dates from 2022), so a commit on its main branch is pinned instead.
-FetchContent_Declare(clap-juce-extensions
-    GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
-    GIT_TAG        7adee3a1bd4684d4caa5601100e364abccff4b4d
-    GIT_SUBMODULES_RECURSE TRUE)
-
-FetchContent_MakeAvailable(JUCE clap-juce-extensions)
 
 # ---------------------------------------------------------------------------
 # Plugin
@@ -176,7 +186,7 @@ target_link_libraries(SynthyBoy
 # ---------------------------------------------------------------------------
 if(NOT WIN32)
     add_executable(clap_smoke tests/clap-smoke/state_roundtrip.cpp)
-    target_include_directories(clap_smoke PRIVATE "${clap-juce-extensions_SOURCE_DIR}/clap-libs/clap/include")
+    target_include_directories(clap_smoke PRIVATE "${CLAP_INCLUDE_DIR}")
     target_link_libraries(clap_smoke PRIVATE synthyboy_core ${CMAKE_DL_LIBS})
     add_dependencies(clap_smoke SynthyBoy_CLAP)
 endif()

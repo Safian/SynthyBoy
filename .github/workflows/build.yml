@@ -302,8 +302,8 @@ jobs:
       - name: Core tests (ctest)
         run: ctest --test-dir build-novital --output-on-failure
 
-      - name: No Vital-derived object, symbol or string in libsynthyboy_core.a
-        run: scripts/check-no-vital.sh build-novital/core/libsynthyboy_core.a
+      - name: No Vital-derived object, symbol or string in static libraries (iOS rule)
+        run: scripts/check-no-vital.sh build-novital/core/libsynthyboy_core.a build-novital/shell-clap/libsynthyboy_static.a
 
       - name: The check fails on a library that contains Vital-derived code (self-test)
         run: scripts/check-no-vital.sh --self-test
