@@ -62,6 +62,10 @@ jobs:
           cmake -S . -B build -A x64
           cmake --build build --config Release --parallel
 
+      - name: CLAP smoke host (state / parameter round trip)
+        if: runner.os != 'Windows'
+        run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
+
       - name: Package
         run: |
           mkdir -p dist

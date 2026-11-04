@@ -52,7 +52,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout SynthyBoyProcessor::createPa
     layout.add (std::make_unique<AudioParameterFloat> (
         ids::gain, "Gain",
         NormalisableRange<float> (-60.0f, 6.0f, 0.1f, 2.5f), -12.0f,
-        AudioParameterFloatAttributes().withLabel ("dB")));
+        AudioParameterFloatAttributes().withLabel ("dB")
+            .withStringFromValueFunction ([] (float v, int) { return String (v, 1); })
+            .withValueFromStringFunction ([] (const String& t) { return t.getFloatValue(); })));
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ids::waveform, "Waveform", StringArray { "Sine", "Saw" }, 1));
@@ -60,7 +62,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout SynthyBoyProcessor::createPa
     layout.add (std::make_unique<AudioParameterFloat> (
         ids::cutoff, "Cutoff",
         NormalisableRange<float> (20.0f, 20000.0f, 0.0f, 0.3f), 8000.0f,
-        AudioParameterFloatAttributes().withLabel ("Hz")));
+        AudioParameterFloatAttributes().withLabel ("Hz")
+            // fixed precision so that value -> text -> value -> text is stable (clap-validator param-conversions)
+            .withStringFromValueFunction ([] (float v, int) { return String (v, 1); })
+            .withValueFromStringFunction ([] (const String& t) { return t.getFloatValue(); })));
 
     return layout;
 }
@@ -122,7 +127,13 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
+        {
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
+
+            // Values changed behind the host's back: the CLAP wrapper turns "program changed" into
+            // params.rescan(VALUES), VST3 into a restartComponent (clap-validator state-reproducibility).
+            updateHostDisplay (ChangeDetails().withProgramChanged (true));
+        }
 }
 
 // This creates new instances of the plugin (entry point used by the VST3 and CLAP wrappers).

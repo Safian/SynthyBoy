@@ -110,3 +110,14 @@ target_link_libraries(SynthyBoyVST
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# ---------------------------------------------------------------------------
+# CLAP smoke host: parameter text round trip + state reproducibility (see tests/clap-smoke).
+# Run: build/clap_smoke build/SynthyBoyVST_artefacts/Release/CLAP/SynthyBoyVST.clap
+# ---------------------------------------------------------------------------
+if(NOT WIN32)
+    add_executable(clap_smoke tests/clap-smoke/state_roundtrip.cpp)
+    target_include_directories(clap_smoke PRIVATE "${clap-juce-extensions_SOURCE_DIR}/clap-libs/clap/include")
+    target_link_libraries(clap_smoke PRIVATE ${CMAKE_DL_LIBS})
+    add_dependencies(clap_smoke SynthyBoyVST_CLAP)
+endif()
