@@ -314,7 +314,9 @@ namespace sbvital {
       poly_float distortion_inc = (voice_block.distortion - current_distortion) * sample_inc;
       current_distortion += distortion_inc * start;
 
-      const poly_float* modulation_buffer = voice_block.modulation_buffer + start;
+      const poly_float* modulation_buffer = voice_block.modulation_buffer;
+      if (modulation_buffer)
+        modulation_buffer += start; // the buffer is null when no distortion needs it (null + offset is undefined)
       const poly_float* phase_inc_buffer = voice_block.phase_inc_buffer + start;
       const poly_int* phase_buffer = voice_block.phase_buffer + start;
       int num_samples = voice_block.end_sample - start;
@@ -415,7 +417,9 @@ namespace sbvital {
       poly_float distortion_inc = (voice_block.distortion - current_distortion) * sample_inc;
       current_distortion += distortion_inc * start;
 
-      const poly_float* modulation_buffer = voice_block.modulation_buffer + start;
+      const poly_float* modulation_buffer = voice_block.modulation_buffer;
+      if (modulation_buffer)
+        modulation_buffer += start; // the buffer is null when no distortion needs it (null + offset is undefined)
       const poly_float* phase_inc_buffer = voice_block.phase_inc_buffer + start;
       const poly_int* phase_buffer = voice_block.phase_buffer + start;
       int num_samples = voice_block.end_sample - start;
@@ -581,8 +585,11 @@ namespace sbvital {
     for (int v = 0; v < kNumVoicesPerProcess; ++v) {
       if (reset_mask[v * 2]) {
         for (int i = 0; i < kNumPolyPhase; ++i) {
-          uint32_t random_phase_left = random_generator_.next() * random_amount[2 * v] * INT_MAX;
-          uint32_t random_phase_right = random_generator_.next() * random_amount[2 * v + 1] * INT_MAX;
+          // float -> uint32_t of a negative value is undefined: convert through int32_t (clamped), then wrap
+          float phase_left = random_generator_.next() * random_amount[2 * v] * INT_MAX;
+          float phase_right = random_generator_.next() * random_amount[2 * v + 1] * INT_MAX;
+          uint32_t random_phase_left = static_cast<uint32_t>(static_cast<int32_t>(std::max(-2147483520.0f, std::min(2147483520.0f, phase_left))));
+          uint32_t random_phase_right = static_cast<uint32_t>(static_cast<int32_t>(std::max(-2147483520.0f, std::min(2147483520.0f, phase_right))));
           phases_[i].set(2 * v, random_phase_left);
           phases_[i].set(2 * v + 1, random_phase_right);
 

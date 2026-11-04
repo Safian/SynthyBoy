@@ -459,6 +459,7 @@ namespace sbvital {
 
   void VoiceHandler::allSoundsOff() {
     pressed_notes_.clear();
+    last_played_note_ = -1.0f;
 
     for (Voice* voice : active_voices_) {
       voice->kill(0);

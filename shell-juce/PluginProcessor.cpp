@@ -21,10 +21,23 @@
 
 #include <algorithm>
 
+namespace
+{
+/** The engine the shell was configured with (CMake SYNTHYBOY_SHELL_ENGINE; own is the default). */
+std::unique_ptr<synthyboy::IEngine> createShellEngine()
+{
+   #if SYNTHYBOY_SHELL_ENGINE_VITAL
+    if (auto vital = synthyboy::createEngine (synthyboy::EngineKind::vital))
+        return vital;
+   #endif
+    return synthyboy::createOwnEngine();
+}
+} // namespace
+
 SynthyBoyProcessor::SynthyBoyProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "SynthyBoyState", createParameterLayout()),
-      engine (synthyboy::createOwnEngine())
+      engine (createShellEngine())
 {
     const auto* table = synthyboy::paramTable();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)

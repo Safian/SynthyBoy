@@ -124,16 +124,19 @@ namespace sbvital {
 
         forward_.transform((std::complex<float>*)data, buffer_.get());
 
-        int num_floats = size_ * 2;
-        memcpy(data, buffer_.get(), num_floats * sizeof(float));
-        data[size_] = data[1];
-        data[size_ + 1] = 0.0f;
+        // Output layout (as the other implementations): bins 0 .. size / 2 interleaved (re, im) from data[0] on, the
+        // Nyquist bin at data[size_], everything above cleared. The imaginary parts of DC and Nyquist are zero.
+        memcpy(data, buffer_.get(), (size_ + 2) * sizeof(float));
+        memset(data + size_ + 2, 0, (size_ - 2) * sizeof(float));
         data[1] = 0.0f;
+        data[size_ + 1] = 0.0f;
       }
 
       void transformRealInverse(float* data) {
+        // Half spectrum in, real part times 2 out: DC and Nyquist are counted once, so they get half weight. (The
+        // vDSP packed-layout handling this was copied from, data[1] = data[size_], dropped the Nyquist bin.)
         data[0] *= 0.5f;
-        data[1] = data[size_];
+        data[size_] *= 0.5f;
         inverse_.transform((std::complex<float>*)data, buffer_.get());
         int num_floats = size_ * 2;
 

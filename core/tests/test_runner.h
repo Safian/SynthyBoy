@@ -24,6 +24,7 @@ struct State
     Case* tail = nullptr;
     long checks = 0;
     long failures = 0;
+    const char* context = ""; // shown with every failure (e.g. the engine under test)
 };
 
 inline State& state()
@@ -51,10 +52,21 @@ inline bool check (bool ok, const char* expr, const char* file, int line)
     if (! ok)
     {
         ++state().failures;
-        std::printf ("    CHECK FAILED %s:%d: %s\n", file, line, expr);
+        if (state().context[0] != '\0')
+            std::printf ("    CHECK FAILED %s:%d: %s   [%s]\n", file, line, expr, state().context);
+        else
+            std::printf ("    CHECK FAILED %s:%d: %s\n", file, line, expr);
     }
     return ok;
 }
+
+/** Names the object under test for the failure messages of its scope. */
+struct Context
+{
+    explicit Context (const char* name) : previous (state().context) { state().context = name; }
+    ~Context() { state().context = previous; }
+    const char* previous;
+};
 } // namespace sbtest
 
 #define TEST(name)                                                              \

@@ -6,6 +6,17 @@ option) any later version (SPDX: AGPL-3.0-or-later). The full text is in the fil
 
 This product includes software developed by third parties:
 
+  * Vital (https://github.com/mtytel/vital), Copyright 2013-2019 Matt Tytel, GNU General Public License
+    version 3 or (at your option) any later version (GPL-3.0-or-later), commit 636ca0e (2022-04-20). Selected
+    source files of Vital's synthesis engine, wavetable model and parameter definitions are included, in part
+    modified, in core/engine-vital/upstream (namespace sbvital) and combined with the AGPL-3.0-or-later code of
+    this project (GPLv3 section 13). Not included: Vital's user interface, presets, wavetables, skins and
+    network code. "Vital" is named here as a factual statement of origin; this product is not made, endorsed or
+    supported by Vital Audio or Matt Tytel. Files and changes: docs/UPSTREAM.md.
+  * KISS FFT (https://github.com/mborgerding/kissfft), BSD-3-Clause, Copyright (c) 2003-2010 Mark Borgerding
+    (as shipped with Vital; core/engine-vital/upstream/third_party/kissfft).
+  * JSON for Modern C++ 3.1.2 (https://github.com/nlohmann/json), MIT licence, Copyright (c) 2013-2018 Niels
+    Lohmann (as shipped with Vital; core/engine-vital/upstream/third_party/json).
   * JUCE (https://juce.com), used under the terms of the GNU Affero General Public License v3
     (JUCE 8.0.17-security).
   * clap-juce-extensions (https://github.com/free-audio/clap-juce-extensions), MIT licence,

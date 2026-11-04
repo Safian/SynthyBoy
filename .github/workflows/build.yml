@@ -4,7 +4,9 @@
 # Builds VST3 + CLAP on Linux, macOS and Windows, runs the core tests (CTest), uploads the plugins as
 # artifacts and runs pluginval (VST3) and clap-validator (CLAP). Further jobs: core tests under
 # ASan/UBSan and TSan, core cross build + tests for Linux ARMv7 hard-float under QEMU, a native
-# Linux AArch64 build, and the plugin manifest check.
+# Linux AArch64 build, the plugin manifest check, and the Vital-free static library check (iOS rule).
+# SYNTHYBOY_WITH_VITAL is ON by default, so every job except ios-vital-free builds and tests the Vital-derived engine
+# (core/engine-vital) as well; the shipped plugin still uses the own engine.
 #
 # First GitHub run (2026-11-04): Linux and macOS green incl. pluginval; Windows failed only in the
 # pluginval SHA-256 check (backslash prefix of Git-for-Windows sha256sum, fixed below).
@@ -75,6 +77,17 @@ jobs:
       - name: CLAP smoke host (state / parameter round trip)
         if: runner.os != 'Windows'
         run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
+
+      # the same plugin with the Vital-derived engine (-DSYNTHYBOY_SHELL_ENGINE=vital); JUCE and clap-juce-extensions are
+      # reused from the first build. clap_smoke checks silence, then audio after a note-on, and the state round trip.
+      - name: Plugin with the Vital engine (CLAP smoke host)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B build-vital -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_SHELL_ENGINE=vital -DSYNTHYBOY_BUILD_TESTS=OFF \
+            -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/build/_deps/juce-src" \
+            -DFETCHCONTENT_SOURCE_DIR_CLAP-JUCE-EXTENSIONS="$PWD/build/_deps/clap-juce-extensions-src"
+          cmake --build build-vital --target SynthyBoy_CLAP clap_smoke --parallel
+          build-vital/clap_smoke "build-vital/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
 
       - name: Package
         run: |
@@ -222,3 +235,41 @@ jobs:
 
       - name: CLAP smoke host (state / parameter round trip)
         run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
+
+      # informational: prints the real-time factor and block times of the Vital engine on the runner's cores (shared
+      # cloud machine, not an MPC or phone number); nothing is asserted
+      - name: Benchmark (Vital engine, informational)
+        run: |
+          build/bench/synthyboy_bench --engine vital --seconds 5
+          build/bench/synthyboy_bench --engine own --seconds 5
+
+  # The iOS rule (docs/ARCHITECTURE.md 2.2): with SYNTHYBOY_WITH_VITAL=OFF nothing Vital-derived is built or linked. The
+  # core library is built without the engine-vital directory in the build at all, its tests run (own engine), and the
+  # static library is searched for objects, symbols and strings of the Vital-derived code. The script tests itself.
+  ios-vital-free:
+    name: Vital-free core library (iOS rule)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build
+
+      - name: Configure (SYNTHYBOY_WITH_VITAL=OFF)
+        run: |
+          cmake -S . -B build-novital -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF -DCMAKE_BUILD_TYPE=Release
+          test ! -e build-novital/core/engine-vital
+
+      - name: Build synthyboy_core and the tests
+        run: cmake --build build-novital --parallel
+
+      - name: Core tests (ctest)
+        run: ctest --test-dir build-novital --output-on-failure
+
+      - name: No Vital-derived object, symbol or string in libsynthyboy_core.a
+        run: scripts/check-no-vital.sh build-novital/core/libsynthyboy_core.a
+
+      - name: The check fails on a library that contains Vital-derived code (self-test)
+        run: scripts/check-no-vital.sh --self-test

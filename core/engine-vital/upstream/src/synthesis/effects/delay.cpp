@@ -69,7 +69,8 @@ namespace sbvital {
 
     poly_float target_frequency = input(kFrequency)->at(0);
 
-    Style style = static_cast<Style>(static_cast<int>(input(kStyle)->at(0)[0]));
+    // a value outside the enumerators is undefined behaviour for the enum: clamp the control first
+    Style style = static_cast<Style>(utils::iclamp(static_cast<int>(input(kStyle)->at(0)[0]), 0, kNumStyles - 1));
     if (style == kStereo || style == kPingPong || style == kMidPingPong)
       target_frequency = utils::maskLoad(target_frequency, input(kFrequencyAux)->at(0), constants::kRightMask);
 

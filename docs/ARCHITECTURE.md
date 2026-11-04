@@ -31,14 +31,15 @@ Options considered:
 |--------|---------|
 | GitHub fork tracking upstream | No. The public repo has one author and one commit line, is "updated on a delay after binary releases" and takes no pull requests (README). Last public commit is `636ca0e` (2022-04-20). There is nothing to track, and a fork would keep Vital's JUCE-6/Projucer build structure, UI and web-service code. |
 | Git submodule of `mtytel/vital` | No. We need to change the files (JUCE removal, namespace, ARMv7 fixes), and the repo ships `third_party/JUCE`, `firebase_cpp_sdk` and `VST_SDK` we must not pull in. |
-| **One-time source take-over into this repo** | **Chosen.** Selected directories are copied in a single, clearly labelled commit (`Import Vital 636ca0e: synthesis core`), recorded in `docs/UPSTREAM.md` (upstream commit, file list, what was dropped and why). Later changes are our own commits. If upstream publishes something worth having we cherry-pick by diff, with the same record. |
+| **One-time source take-over into this repo** | **Chosen.** Selected directories are copied in a single, clearly labelled commit (`Import Vital 636ca0e (pristine)`, byte-identical to upstream), recorded in `docs/UPSTREAM.md` (upstream commit, file list, what was dropped and why). Later changes are our own commits. If upstream publishes something worth having we cherry-pick by diff, with the same record. |
 
 What is taken (first import, from the `636ca0e` checkout, ~25 k lines under `src/synthesis` plus the
 wavetable model):
 
 - `src/synthesis/**` (framework, producers, filters, modulators, effects, modules, synth_engine, lookups, utilities)
 - `src/common/wavetable/**`, `src/common/line_generator.*`, `src/common/synth_parameters.*`, `synth_constants.h`, `synth_types.*`, `tuning.*`, `fourier_transform.h`
-- `third_party/kissfft` (BSD-3), `third_party/json` (MIT) – licences checked in `THIRD_PARTY.md` at import time **(unverified until then)**
+- `third_party/kissfft` (BSD-3), `third_party/json` (MIT) – licences verified from the file headers at import time and recorded in `THIRD_PARTY.md` and `UPSTREAM.md`
+- `src/interface/look_and_feel/synth_strings.h` – the one exception to "nothing from `src/interface`": a table of choice names (`std::string` constants, no GUI code) that `synth_parameters.cpp` includes (see `UPSTREAM.md`)
 
 What is **not** taken, and must not be:
 
@@ -56,9 +57,10 @@ a top-level `NOTICE` that names Vital and its author.
 - **GPLv3 → AGPLv3:** GPLv3 §13 explicitly permits linking/combining GPLv3 code with AGPLv3 code; the combined
   work is then governed by AGPLv3 for the combined parts, and Vital's GPLv3 text applies to its original files.
   The repo's `LICENSE` is AGPL-3.0; `NOTICE` and `THIRD_PARTY.md` state which files are GPL-3.0-derived.
-  Our "or-later" applies to our own contributions; Vital's files are "GPL-3.0" as published by upstream **(unverified: check
-  the headers of the imported files for "or later" wording before writing the SPDX line on them; if upstream says only
-  GPLv3, they stay `GPL-3.0-only` and the combined binary is still distributable under AGPL-3.0 through §13)**.
+  The header of every imported Vital file reads "GNU General Public License ... either version 3 of the License, or (at your
+  option) any later version" (checked for all of them at import), so they are **GPL-3.0-or-later**; the combined work is
+  AGPL-3.0-or-later. Imported files keep their header unchanged; files we changed add one line
+  (`// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026`), new files carry the SPDX line.
 - **JUCE** is used under its AGPLv3 option (pinned `8.0.17-security`). The commercial JUCE licence cannot be mixed in.
 - **Source offer:** AGPL §13 – anyone who gets the binary gets the source. Every release links to the matching tag;
   Kick (also AGPL) ships the same link in its About/Plugin-manager screen.
@@ -116,9 +118,9 @@ cmake/toolchains/      armv7-linux-gnueabihf, aarch64-linux-gnu, (ios, android l
 
 Take-over adaptations (all in the import's follow-up commits, each with a test):
 
-1. **JUCE removal from the core.** `src/synthesis` uses JUCE only for `JUCE_LEAK_DETECTOR` (≈70 occurrences), `Random` (14), `String` (4), `File` (2), plus `JuceHeader.h` inclusion in `common.h`. Replace with `<random>`/xorshift, `std::string`, no file access in the core (loading goes through the content API), and a project-local leak-detector macro (no-op in release).
-2. **Namespace** `vital` → `synthyboy` (mechanical), to avoid any confusion of the binary's symbols with Vital's own.
-3. **ARMv7 NEON.** `poly_values.h` has SSE2 and NEON paths already (Vital's Makefile also builds for ARM). The NEON path uses one A64-only intrinsic, `vdivq_f32` (line ~592); on ARMv7 it becomes `vrecpeq_f32` + two Newton–Raphson `vrecpsq_f32` steps. Compile flags for ARMv7 hard-float: `-mfpu=neon-vfpv4 -mfloat-abi=hard -mcpu=cortex-a?` (exact CPU of the MPC Key 61 to be read from the device, not guessed **(unverified)**). A scalar fallback path (`-DSYNTHYBOY_NO_SIMD`) exists for CI of exotic targets and for numerical cross-checks.
+1. **JUCE removal from the core (done).** `src/synthesis` used JUCE only for `JuceHeader.h` (standard headers), `JUCE_LEAK_DETECTOR` (112 uses, now a no-op macro in `compat/vital_compat.h`), `FloatVectorOperations::disableDenormalisedNumberSupport` (removed; the adapter sets flush-to-zero around `process()`), `Base64` for the JSON blobs, and `String`/`File`/`StringArray` in `Tuning` (file loading dropped, the line parsers kept on `std::string`). Its random numbers were `std::mt19937` already (no `juce::Random`). No file access remains in the core.
+2. **Namespace** `vital` → `sbvital` (mechanical, done), to avoid any confusion of the binary's symbols with Vital's own; the name differs from our own `synthyboy` namespace so that Vital-derived symbols are recognisable (`scripts/check-no-vital.sh` greps for `sbvital`, `Vital`, `vital::`).
+3. **ARMv7 NEON (done in code, GCC 12 `armv7-a -mfpu=neon` cross build and QEMU run; real ARMv7 hardware not yet).** `poly_values.h` has SSE2 and NEON paths (no scalar path: none was invented). The NEON path used one A64-only intrinsic, `vdivq_f32`; on ARMv7 it is `vrecpeq_f32` + two Newton–Raphson `vrecpsq_f32` steps (upstream already had that branch behind an undefined macro; the condition is now `!defined(__aarch64__)`). MSVC x64 is accepted as SSE2 (MSVC does not define `__SSE2__`). Compile flags for ARMv7 hard-float: `-mfpu=neon-vfpv4 -mfloat-abi=hard -mcpu=cortex-a?` (exact CPU of the MPC Key 61 to be read from the device, not guessed **(unverified)**); the toolchain file uses generic `armv7-a -mfpu=neon`.
 4. **Real-time audit:** Vital's constructor-time `new` is fine; wavetable loading/replacement, sample loading and preset load must hand the audio thread a pre-built object via lock-free swap (single-slot atomic pointer + deferred free on the message/worker thread). §3.7 describes the test.
 5. **Build** as plain CMake (the repo's), no Projucer.
 
@@ -290,7 +292,7 @@ Each phase ends with: green CI on all platforms in the matrix that exists at tha
 |-------|---------|---------------|
 | **0 (done)** | Spike: 8-voice synth, VST3 + CLAP from one code base | merged to `main` after independent build/codesign check |
 | **1 Foundation** | Repo restructure into `core/` (`engine-own` = the spike engine ported off JUCE, `Engine` interface, `ParamInfo`, `StateIO`, `Quality`) and `shell-juce/` (thin adapter); manifest + schema; `SYNTHYBOY_WITH_VITAL` switch + empty `engine-vital/`; **CI for all targets** (§10): core tests on x86_64 with ASan/UBSan and TSan, Linux ARMv7 (cross + QEMU), Linux AArch64 (native arm runner), real-time allocation test, plugin builds as before; clap_smoke + validator stay green | all-platform CI green, JUCE-shell/core parity test, ARMv7/AArch64 core tests pass, state round trip incl. future-version and garbage input |
-| **2 Vital take-over** | Import (§2.1), JUCE removal, namespace, build on all targets, ARMv7 NEON fix, `Engine` over the imported DSP, generic UI | audio-equivalence golden tests vs. the imported code's own tests; benchmark numbers on x86_64/arm64; first measurement on MPC |
+| **2 Vital take-over** | Import (§2.1), JUCE removal, namespace, build on all targets, ARMv7 NEON fix, `Engine` over the imported DSP, generic UI | audio-equivalence golden tests vs. the imported code's own tests; benchmark numbers on x86_64/arm64; first measurement on MPC. **State:** import, JUCE removal, `sbvital`, NEON fix, `IEngine` adapter (`createEngine (EngineKind::vital)`, selectable in the JUCE shell with `SYNTHYBOY_SHELL_ENGINE=vital`, the own engine stays the default), the 35 ported Vital unit test classes, feature "golden" measurements, allocation/TSan/ASan/UBSan tests, `bench/` with numbers for macOS arm64 (`PERFORMANCE.md`) and the `ios-vital-free` CI job exist. **Open:** CI results of the new jobs (Windows/MSVC and Linux x86_64 not run locally), numbers on x86_64 and ARMv7/MPC hardware, first measurement on a phone. |
 | **3 Engine completion** | Oscillators + spectral warp, filters, mod matrix, FX, unison, quality tiers, voice management, state migration | alias/filter/tuning tests; sanitizers clean; tiers measured on device |
 | **4 Content & presets** | ContentPack format + tools, own factory wavetables and ≥100 own presets (CC0), preset discovery, missing-content behaviour tests | pack delete/restore test; licence lint passing |
 | **5 UI** | Own JUCE GUI, wavetable editor, spectrum, mod UI; `clap.gui`; remote-controls pages | DAW embedding checks (§8), UI screenshot tests |
@@ -315,6 +317,8 @@ Target matrix, added in Phase 1 unless noted:
 | iOS | Xcode toolchain, static library of core + native shell only | compile check, no plugin run |
 | Android | NDK (arm64-v8a, armeabi-v7a), static library | compile check, no plugin run |
 
+Vital-derived code in CI: all jobs except `ios-vital-free` build and test it (`SYNTHYBOY_WITH_VITAL=ON` is the default): the shared engine tests run for both engines, the allocation test and the TSan thread test cover the Vital engine, the ported Vital unit tests and the adapter's measurements run on every target (ARMv7 under QEMU), and a Linux job builds the plugin with `-DSYNTHYBOY_SHELL_ENGINE=vital` and runs the CLAP smoke host on it. `ios-vital-free` configures `-DSYNTHYBOY_WITH_VITAL=OFF`, builds and tests the core and runs `scripts/check-no-vital.sh` on `libsynthyboy_core.a` (fails on any `sbvital`/`Vital`/`vital::` object, symbol or string; the script tests itself with `--self-test`).
+
 clap-validator: pin to a tag, built once and cached; it is blocking since its first green run (2026-11-04). Known validator-relevant requirements are designed in (stable ids, note-id/NOTE_END handling, state round-trip, `init` without GUI/IO).
 
 ## 11. Known open points
@@ -322,4 +326,6 @@ clap-validator: pin to a tag, built once and cached; it is blocking since its fi
 - **(owner)** Trademark/name clearance for "SynthyBoy" (docs/NAMING.md). iOS is decided: own engine (§2.2).
 - Exact CPU of the MPC Key 61 and its available toolchain/sysroot (cross-compile target) – read from the device.
 - Whether `clap-juce-extensions` implements the extensions needed in §4.1 at the pinned commit.
+- Vital engine in the shipped plugin: the JUCE shell keeps the own engine by default; switching the default needs the owner's decision after listening tests (level, velocity curve and release time differ, `core/engine-vital/README.md`) and the MPC measurement.
+- Upstream quirks recorded but not changed (`WaveFrame::removedDc`, the non-atomic seed counter): docs/UPSTREAM.md.
 - Spike gaps carried over: GUI never opened in a DAW; `-G Xcode` configure fails (Ninja is the supported generator); Linux/Windows builds untested until the first CI run is recorded; CLAP wrapper on Linux supports X11 only.

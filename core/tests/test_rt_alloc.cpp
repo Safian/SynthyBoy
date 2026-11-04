@@ -17,6 +17,7 @@
 #endif
 
 #include "synthyboy/engine.h"
+#include "test_engines.h"
 #include "test_runner.h"
 #include "test_util.h"
 
@@ -122,10 +123,14 @@ TEST (alloc_hook_counts_allocations)
 
 TEST (process_does_not_allocate)
 {
+    for (const sbtest::EngineCase& engineCase : sbtest::engineCases())
     for (const Tier tier : { Tier::low, Tier::medium, Tier::high })
     {
-        auto engine = createOwnEngine();
+        sbtest::Context context (engineCase.name);
+        auto engine = createEngine (engineCase.kind);
+        const auto beforePrepare = g_allocations.load();
         engine->prepare (48000.0, 256, qualityForTier (tier)); // allocation is allowed here
+        CHECK (g_allocations.load() > beforePrepare);          // ... and the hook does see the engine's allocations
 
         constexpr int blockSize = 256;
         constexpr int numBlocks = 375; // 2 s at 48 kHz
@@ -164,7 +169,7 @@ TEST (process_does_not_allocate)
         const auto after = g_allocations.load();
 
         if (! CHECK_EQ (after - before, 0ul))
-            std::printf ("    tier %d: %lu allocation(s) during process()\n", static_cast<int> (tier), after - before);
+            std::printf ("    %s, tier %d: %lu allocation(s) during process()\n", engineCase.name, static_cast<int> (tier), after - before);
         CHECK (finite);
         CHECK (maxActive > 0);
 

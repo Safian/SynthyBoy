@@ -275,7 +275,7 @@ namespace sbvital {
   }
 
   void SoundEngine::allNotesOff(int sample, int channel) {
-    voice_handler_->allNotesOff(channel);
+    voice_handler_->allNotesOff(sample, channel);
   }
 
   void SoundEngine::allNotesOffRange(int sample, int from_channel, int to_channel) {

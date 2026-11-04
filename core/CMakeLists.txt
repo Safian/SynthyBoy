@@ -4,6 +4,7 @@
 
 add_library(synthyboy_core STATIC
     src/number.cpp
+    src/engine_factory.cpp
     src/params.cpp
     src/state.cpp
     engine-own/own_engine.cpp)
@@ -27,12 +28,20 @@ endif()
 if(SYNTHYBOY_WITH_VITAL)
     message(STATUS "SYNTHYBOY_WITH_VITAL=ON: Vital-derived engine is built (core/engine-vital)")
     add_subdirectory(engine-vital)
+    # the adapter (our code, strict warnings like the rest of the core) is compiled into the core; the imported DSP is
+    # the separate static library
+    target_sources(synthyboy_core PRIVATE engine-vital/adapter/vital_engine.cpp)
+    target_include_directories(synthyboy_core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/engine-vital/adapter")
     target_link_libraries(synthyboy_core PRIVATE synthyboy_engine_vital)
     target_compile_definitions(synthyboy_core PUBLIC SYNTHYBOY_HAS_VITAL=1)
 else()
     message(STATUS "SYNTHYBOY_WITH_VITAL=OFF: own engine only")
+    target_compile_definitions(synthyboy_core PUBLIC SYNTHYBOY_HAS_VITAL=0)
 endif()
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)
+    if(SYNTHYBOY_WITH_VITAL)
+        add_subdirectory(engine-vital/tests)
+    endif()
 endif()

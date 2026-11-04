@@ -47,4 +47,22 @@ public:
 
 /** The engine written for this project (always built; the only engine on iOS). */
 std::unique_ptr<IEngine> createOwnEngine();
+
+enum class EngineKind
+{
+    own,  // engine-own: always available
+    vital // engine-vital: Vital-derived DSP, only when built with SYNTHYBOY_WITH_VITAL=ON (never on iOS)
+};
+
+/** True if the engine of this kind is part of this build. */
+bool isEngineAvailable (EngineKind kind) noexcept;
+
+/** Short stable name ("own", "vital"), for logs and command lines. */
+const char* engineName (EngineKind kind) noexcept;
+
+/**
+ * Creates an engine of the given kind. Returns nullptr if it is not part of this build (EngineKind::vital without
+ * Vital); if errorMessage is not null it then receives a static, human readable text (and nullptr otherwise).
+ */
+std::unique_ptr<IEngine> createEngine (EngineKind kind, const char** errorMessage = nullptr);
 } // namespace synthyboy

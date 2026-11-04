@@ -36,15 +36,31 @@ Both come from the same sources: JUCE builds the VST3, and
 
 | Path | Content |
 |------|---------|
-| `core/` | `synthyboy_core`: JUCE-free C++17 static library. `include/synthyboy/` public API (`IEngine`, `ParamInfo` table, state I/O, `Quality`, events), `src/` params/state/number formatting, `engine-own/` the engine (the spike's 8-voice synth ported off JUCE), `engine-vital/` reserved for Vital-derived code (empty), `tests/` unit, real-time (no allocation) and thread tests with an own tiny runner |
+| `core/` | `synthyboy_core`: JUCE-free C++17 static library. `include/synthyboy/` public API (`IEngine`, `ParamInfo` table, state I/O, `Quality`, events), `src/` params/state/number formatting, `engine-own/` the engine (the spike's 8-voice synth ported off JUCE), `engine-vital/` the Vital-derived DSP and its adapter (the only place with Vital-derived code, see [Engines](#engines)), `tests/` unit, real-time (no allocation) and thread tests with an own tiny runner |
 | `shell-juce/` | thin `juce::AudioProcessor`: parameter layout generated from the core table, MIDI/params to core events, state blob from the core |
 | `tests/clap-smoke/` | `clap_smoke`: loads the built `.clap`, checks parameter parity with the core table, audio, state round trip |
 | `cmake/toolchains/` | `armv7-linux-gnueabihf`, `aarch64-linux-gnu` cross toolchain files |
 | `plugin.json`, `schema/` | plugin manifest and its JSON schema (`scripts/check-manifest.py`) |
-| `docs/ARCHITECTURE.md` | design and phase plan |
+| `bench/` | `synthyboy_bench`: real-time factor and block times of an engine |
+| `scripts/` | `build.sh`, `check-manifest.py`, `check-no-vital.sh` (the iOS rule) |
+| `docs/ARCHITECTURE.md`, `UPSTREAM.md`, `PERFORMANCE.md` | design and phase plan, record of the Vital take-over, benchmark numbers |
 
 CMake options: `SYNTHYBOY_BUILD_PLUGIN` (ON; OFF builds only the core, no JUCE download), `SYNTHYBOY_BUILD_TESTS` (ON),
-`SYNTHYBOY_WITH_VITAL` (ON; no effect yet).
+`SYNTHYBOY_WITH_VITAL` (ON; OFF leaves `core/engine-vital` out of the build completely, as for iOS), `SYNTHYBOY_SHELL_ENGINE` (`own` default | `vital`: the engine of the JUCE plugin).
+
+## Engines
+
+Two engines sit behind `synthyboy::IEngine` (`createEngine (EngineKind::own | EngineKind::vital)`):
+
+| Engine | Where | Built | Notes |
+|--------|-------|-------|-------|
+| `own` | `core/engine-own` | always | the spike's synth, original code; the only engine of the shipped plugin and the only one allowed on iOS |
+| `vital` | `core/engine-vital` | `SYNTHYBOY_WITH_VITAL=ON` (default) | DSP derived from [Vital](https://github.com/mtytel/vital) (commit 636ca0e, GPL-3.0-or-later, namespace `sbvital`) with an adapter that maps the three SynthyBoy parameters onto it; mapping and behaviour: [core/engine-vital/README.md](core/engine-vital/README.md), every change to the imported files: [docs/UPSTREAM.md](docs/UPSTREAM.md) |
+
+The JUCE plugin uses the own engine; `-DSYNTHYBOY_SHELL_ENGINE=vital` builds it with the Vital engine instead (configure error if
+`SYNTHYBOY_WITH_VITAL=OFF`). `build/bench/synthyboy_bench --engine own|vital` prints the real-time factor
+([docs/PERFORMANCE.md](docs/PERFORMANCE.md)). The CI job `ios-vital-free` builds the core without Vital and checks the static
+library with `scripts/check-no-vital.sh`.
 
 ## Building
 
@@ -125,6 +141,9 @@ Copy the bundles to the usual plugin folders:
 - `core-armv7`: the core cross compiled for Linux ARMv7 hard-float, tests run under QEMU user mode (ABI/NEON attributes are printed).
 - `linux-aarch64`: full build, tests and `clap_smoke` on GitHub's native arm runner.
 - `manifest`: `plugin.json` against `schema/plugin-manifest.schema.json`.
+- `ios-vital-free`: `-DSYNTHYBOY_WITH_VITAL=OFF`, core build + tests, `scripts/check-no-vital.sh` on `libsynthyboy_core.a` (and its `--self-test`).
+
+All other jobs build and test the Vital engine too; `build` (Linux) also builds the plugin with `-DSYNTHYBOY_SHELL_ENGINE=vital` and runs `clap_smoke` on it, `linux-aarch64` prints benchmark numbers.
 
 First GitHub run 2026-11-04: Linux and macOS green; Windows failed only in the pluginval SHA-256 check (fixed).
 clap-validator found three real issues in the spike (Cutoff text round trip; parameter values changed on state load

@@ -10,14 +10,18 @@
 #include <vector>
 
 #include "synthyboy/engine.h"
+#include "test_engines.h"
 #include "test_runner.h"
 #include "test_util.h"
 
 using namespace synthyboy;
 
-TEST (set_param_from_other_threads_while_processing)
+namespace
 {
-    auto engine = createOwnEngine();
+void setParamFromOtherThreadsWhileProcessing (const sbtest::EngineCase& engineCase)
+{
+    sbtest::Context context (engineCase.name);
+    auto engine = createEngine (engineCase.kind);
     engine->prepare (48000.0, 128, Quality {});
 
     std::atomic<bool> done { false };
@@ -85,4 +89,11 @@ TEST (set_param_from_other_threads_while_processing)
         const float v = engine->getParam (info.id);
         CHECK (v >= info.min && v <= info.max);
     }
+}
+} // namespace
+
+TEST (set_param_from_other_threads_while_processing)
+{
+    for (const auto& engineCase : sbtest::engineCases())
+        setParamFromOtherThreadsWhileProcessing (engineCase);
 }

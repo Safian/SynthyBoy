@@ -16,6 +16,10 @@
  #endif
 #endif
 
+#if defined (_MSC_VER)
+ #include <intrin.h> // _BitScanReverse (utils::ilog2)
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <cassert>
