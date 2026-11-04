@@ -145,6 +145,24 @@ def main():
             if not str(build.get("url", "")).startswith("https://") or len(build.get("sha256", "")) != 64 or not build.get("size"):
                 errors.append("builds.%s: 'released' entries need an https url, a sha256 and a size" % name)
 
+    # --- validate declared content packs ---------------------------------------------------------
+    pack_schema_path = ROOT / "schema" / "contentpack.schema.json"
+    if pack_schema_path.exists():
+        pack_schema = json.loads(pack_schema_path.read_text(encoding="utf-8"))
+        for cp in manifest.get("contentPacks", []):
+            if not isinstance(cp, dict) or "path" not in cp:
+                continue
+            pack_dir = ROOT / cp["path"]
+            pack_manifest_file = pack_dir / "contentpack.json"
+            if not pack_manifest_file.exists():
+                errors.append("content pack %s: manifest %s does not exist" % (cp.get("id"), pack_manifest_file))
+                continue
+            try:
+                pack_manifest = json.loads(pack_manifest_file.read_text(encoding="utf-8"))
+                validate(pack_manifest, pack_schema, pack_schema, "contentpack(%s)" % cp.get("id"), errors)
+            except Exception as ex:
+                errors.append("content pack %s: failed to parse %s: %s" % (cp.get("id"), pack_manifest_file, ex))
+
     if errors:
         print("%s: %d problem(s)" % (manifest_path, len(errors)))
         for e in errors:

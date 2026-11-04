@@ -9,6 +9,9 @@ add_library(synthyboy_core STATIC
     src/param_table.cpp
     src/modulation.cpp
     src/state.cpp
+    src/sha256.cpp
+    src/preset.cpp
+    src/content_pack.cpp
     engine-own/own_engine.cpp)
 
 target_include_directories(synthyboy_core

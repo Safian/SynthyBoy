@@ -19,5 +19,16 @@
     "ios":     { "status": "planned", "library": "libsynthyboy_static.a" },
     "android": { "status": "planned", "library": "libsynthyboy_static.a" }
   },
-  "contentPacks": []
+  "contentPacks": [
+    {
+      "id": "com.safian.synthyboy.factory-presets",
+      "name": "Factory Presets",
+      "version": "1.0.0",
+      "kind": "presets",
+      "license": "CC0-1.0",
+      "required": false,
+      "recommended": true,
+      "path": "content/presets"
+    }
+  ]
 }

@@ -22,6 +22,7 @@ endfunction()
 
 synthyboy_add_test(synthyboy_test_params  test_params.cpp)
 synthyboy_add_test(synthyboy_test_state   test_state.cpp)
+synthyboy_add_test(synthyboy_test_preset  test_preset.cpp)
 synthyboy_add_test(synthyboy_test_engine  test_engine.cpp)
 synthyboy_add_test(synthyboy_test_rt      test_rt_alloc.cpp)   # replaces global operator new/delete
 synthyboy_add_test(synthyboy_test_threads test_threads.cpp)    # run under ThreadSanitizer in CI
