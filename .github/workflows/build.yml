@@ -103,10 +103,9 @@ jobs:
             "$tools/$exe" --strictness-level 5 --validate "$vst3"
           fi
 
-      # clap-validator is built from source (tagged release) with cargo; not verified locally,
-      # so a failure here does not fail the job yet.
+      # clap-validator is built from source (tagged release) with cargo. Blocking since the run
+      # where it reported 0 failed tests on Linux, macOS and Windows (2026-11-04).
       - name: clap-validator (CLAP)
-        continue-on-error: true
         run: |
           cargo install --locked --git https://github.com/free-audio/clap-validator --tag "${CLAP_VALIDATOR_VERSION}" clap-validator
           clap-validator validate "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
