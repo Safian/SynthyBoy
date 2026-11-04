@@ -66,7 +66,24 @@ a top-level `NOTICE` that names Vital and its author.
   1. Do not use the names "Vital", "Vital Audio", "Tytel", "Matt Tytel" to name or market our builds. We may state factually, in `NOTICE`/About, that the engine is derived from Vital.
   2. Do not connect to `vital.audio`, `account.vital.audio`, `store.vital.audio` from our builds. The plugin has **no network code at all**; downloads are done by the host (Kick) or the installer, never by the plugin.
   3. Do not distribute Vital's bundled presets.
-  4. **Do not distribute on the iOS App Store without paying for a GPLv3 exception** (`licensing@vital.audio`). **(owner)** This matters directly: the Kick iOS app will contain SynthyBoy statically. Options: (a) ask upstream for a licence exception for the iOS build, (b) replace the Vital-derived parts on iOS with an engine written from scratch behind the same `Engine` interface (§3.1), (c) ship SynthyBoy on desktop/MPC/Android only. The architecture keeps (b) open; the decision and the contact are the owner's. Until then nothing in the iOS CI target is released.
+  4. **Do not distribute on the iOS App Store without paying for a GPLv3 exception** (`licensing@vital.audio`).
+     **Owner decision (2026-11-04): own iOS engine.** No Vital-derived code goes into any iOS build (and into Android builds where
+     that is practical). iOS gets an engine written from scratch behind the same `Engine` interface (§3.1). To make that real and
+     auditable:
+     - Vital-derived code lives **only** in `core/engine-vital/` (+ its `third_party/`), selected by the CMake option
+       `SYNTHYBOY_WITH_VITAL` (default ON; **forced OFF** by the iOS toolchain/CI target; a CI job greps the iOS link line and the
+       static library's symbols for Vital-derived objects and fails if any is present).
+     - Everything outside `core/engine-vital/` (the `Engine` interface, `ParamInfo`, state/preset formats, content-pack code,
+       shells, UI, tools that ship in binaries) is **our own code with no Vital-derived content**. In particular the `ParamInfo`
+       table is authored by us and is *not* generated from Vital's parameter table; `engine-vital` contains an adapter that maps
+       our parameters onto Vital's internals.
+     - The own engine (`core/engine-own/`, always built) starts as the spike's engine, which is original code, and grows by
+       clean-room discipline: no copying from `engine-vital/`; the sound contract is the `ParamInfo` semantics plus golden/measurement
+       tests, not code similarity. It will not sound identical to the Vital engine, and presets must say which parameters are
+       engine-specific (a flag in `ParamInfo`).
+     - Content is data authored by us (§2.3). Offline authoring tools may use Vital-derived code on a developer machine; the data
+       they produce is ours, and no Vital-derived code ships in the iOS binary.
+     Android: the same switch applies; whether it is used there is decided when the Android build exists.
 - **Trademark / name:** "SynthyBoy" is a working name. Before the first public release: search KVR, EUIPO, USPTO and the app stores for conflicts **(owner / not yet done)**. The CMake product name should be `SynthyBoy` (not `SynthyBoyVST`: "VST" is Steinberg's trademark, only the compatibility statement "VST is a registered trademark of Steinberg Media Technologies GmbH" is used). Steinberg's VST3 SDK 3.8 is MIT; no separate VST3 licence agreement is needed, the VST3 logo is not used.
 - **Trade dress:** the UI is original; it does not copy Vital's layout, colours or graphics.
 
@@ -82,19 +99,20 @@ a top-level `NOTICE` that names Vital and its author.
 ### 3.1 Layering and the `Engine` interface
 
 ```
-core/            synthyboy_core   static lib, C++17, no JUCE, no OS API, no globals
-  engine/        Engine           process(), prepare(), noteOn/Off, setParam, modulation, quality
-  params/        ParamInfo table  stable ids, ranges, scaling, units, groups, flags
-  state/         StateIO          versioned state + preset (de)serialisation
-  content/       ContentPack API  wavetable/preset lookup, "missing" handling
-  dsp/           (from Vital)     oscillators, filters, envelopes, LFOs, effects, mod matrix
-shell-juce/      JUCE AudioProcessor → VST3 + CLAP (clap-juce-extensions), JUCE GUI
-shell-clap/      native CLAP entry on core only (headless; for MPC/mobile/static, §4)
-ui/              own GUI (JUCE Components, desktop), no DSP code
-tools/           wavetable generators, preset linter, manifest tool
+core/                  synthyboy_core   static lib, C++17, no JUCE, no OS API, no globals
+  include/synthyboy/   Engine interface, ParamInfo, StateIO, Quality, events (public API)
+  src/                 params, state (JSON, versioned), engine glue
+  engine-own/          our engine (spike engine → clean-room, always built; the only engine on iOS)
+  engine-vital/        Vital-derived DSP + adapter (optional: SYNTHYBOY_WITH_VITAL, OFF for iOS)
+  tests/               unit/RT tests (own tiny runner, no framework dependency)
+shell-juce/            JUCE AudioProcessor → VST3 + CLAP (clap-juce-extensions), JUCE GUI hook
+shell-clap/            native CLAP entry on core only (headless; for MPC/mobile/static) – Phase 6
+ui/                    own GUI (JUCE Components, desktop), no DSP code
+tools/                 wavetable generators, preset linter, manifest tool
+cmake/toolchains/      armv7-linux-gnueabihf, aarch64-linux-gnu, (ios, android later)
 ```
 
-`Engine` is the replacement seam: the Vital-derived DSP sits behind it. The shells and UI never include Vital headers.
+`Engine` is the replacement seam: both the Vital-derived DSP (`engine-vital`) and our own engine (`engine-own`) sit behind it. The shells and UI never include Vital headers.
 
 Take-over adaptations (all in the import's follow-up commits, each with a test):
 
@@ -271,12 +289,12 @@ Each phase ends with: green CI on all platforms in the matrix that exists at tha
 | Phase | Content | Exit criteria |
 |-------|---------|---------------|
 | **0 (done)** | Spike: 8-voice synth, VST3 + CLAP from one code base | merged to `main` after independent build/codesign check |
-| **1 Foundation** | Repo restructure into `core/`, `shell-juce/`, `shell-clap/` (skeleton), `ParamInfo`, `StateIO`, manifest + schema; **CI for all targets** (§10); sanitizers; real-time-alloc test; spike synth moved behind `Engine` | all-platform CI green, parity test, ARMv7/AArch64 core tests under QEMU |
+| **1 Foundation** | Repo restructure into `core/` (`engine-own` = the spike engine ported off JUCE, `Engine` interface, `ParamInfo`, `StateIO`, `Quality`) and `shell-juce/` (thin adapter); manifest + schema; `SYNTHYBOY_WITH_VITAL` switch + empty `engine-vital/`; **CI for all targets** (§10): core tests on x86_64 with ASan/UBSan and TSan, Linux ARMv7 (cross + QEMU), Linux AArch64 (native arm runner), real-time allocation test, plugin builds as before; clap_smoke + validator stay green | all-platform CI green, JUCE-shell/core parity test, ARMv7/AArch64 core tests pass, state round trip incl. future-version and garbage input |
 | **2 Vital take-over** | Import (§2.1), JUCE removal, namespace, build on all targets, ARMv7 NEON fix, `Engine` over the imported DSP, generic UI | audio-equivalence golden tests vs. the imported code's own tests; benchmark numbers on x86_64/arm64; first measurement on MPC |
 | **3 Engine completion** | Oscillators + spectral warp, filters, mod matrix, FX, unison, quality tiers, voice management, state migration | alias/filter/tuning tests; sanitizers clean; tiers measured on device |
 | **4 Content & presets** | ContentPack format + tools, own factory wavetables and ≥100 own presets (CC0), preset discovery, missing-content behaviour tests | pack delete/restore test; licence lint passing |
 | **5 UI** | Own JUCE GUI, wavetable editor, spectrum, mod UI; `clap.gui`; remote-controls pages | DAW embedding checks (§8), UI screenshot tests |
-| **6 Native CLAP shell + static build** | Complete `shell-clap/`, `synthyboy_static`, parity test green, iOS/Android build checks (library only) | static entry loads in a test host; manifest generated by CI |
+| **6 Native CLAP shell + static build** | Complete `shell-clap/`, `synthyboy_static` built with `SYNTHYBOY_WITH_VITAL=OFF` for iOS (own engine only; CI check that no Vital-derived object is linked), parity test green, iOS/Android build checks (library only) | static entry loads in a test host; manifest generated by CI; iOS Vital-free check green |
 | **7 Release** | Signed macOS (Developer ID + notarisation), Windows signing option, Linux/ARM tarballs, GitHub Releases, source tags, packs as separate assets, user manual | reproducible release job; checksums published |
 
 Kick-side integration (installer, Plugin-manager, signing/trust levels) comes from the Kick plan; this repo exposes only the manifest, packs and entry points.
@@ -301,7 +319,7 @@ clap-validator: pin to a tag, built once and cached; `continue-on-error` is remo
 
 ## 11. Known open points
 
-- **(owner)** iOS App Store and Vital's licensing statement (§2.2). Name clearance for "SynthyBoy".
+- **(owner)** Name clearance for "SynthyBoy" and the product-name change `SynthyBoyVST` → `SynthyBoy` in CMake (waiting for the owner's confirmation; not renamed yet). iOS is decided: own engine (§2.2).
 - Exact CPU of the MPC Key 61 and its available toolchain/sysroot (cross-compile target) – read from the device.
 - Whether `clap-juce-extensions` implements the extensions needed in §4.1 at the pinned commit.
 - Spike gaps carried over: GUI never opened in a DAW; `-G Xcode` configure fails (Ninja is the supported generator); Linux/Windows builds untested until the first CI run is recorded; CLAP wrapper on Linux supports X11 only.
