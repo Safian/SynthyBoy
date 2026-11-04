@@ -1,5 +1,5 @@
 /*
- * SynthyBoyVST - minimal 8-voice synthesizer (VST3 + CLAP)
+ * SynthyBoyVST - minimal 8-voice synthesizer (VST3 + CLAP): thin JUCE shell around synthyboy_core
  * Copyright (C) 2026 Safian Szabolcs
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
@@ -21,12 +21,23 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include "SynthyVoice.h"
+#include <array>
+#include <atomic>
+#include <memory>
+#include <vector>
 
+#include "synthyboy/engine.h"
+#include "synthyboy/state.h"
+
+/**
+ * JUCE shell: owns no DSP. The parameter layout is generated from synthyboy::paramTable(), MIDI and parameter values
+ * are converted into synthyboy::Event / IEngine::setParam each block, and the state blob is synthyboy::saveState().
+ */
 class SynthyBoyProcessor final : public juce::AudioProcessor
 {
 public:
-    static constexpr int numVoices = 8;
+    /** Capacity of the per-block event list (allocated in prepareToPlay); further events of a block are dropped and counted. */
+    static constexpr int maxEventsPerBlock = 1024;
 
     SynthyBoyProcessor();
     ~SynthyBoyProcessor() override = default;
@@ -55,17 +66,21 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }
+    uint32_t getDroppedEventCount() const noexcept { return droppedEvents.load(); }
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    juce::AudioProcessorValueTreeState apvts;
-    std::atomic<float>* gainParam     = nullptr;
-    std::atomic<float>* waveformParam = nullptr;
-    std::atomic<float>* cutoffParam   = nullptr;
+    synthyboy::ParamValues currentValues() const;
+    void applyValues (const synthyboy::ParamValues& values);
+    bool loadLegacyXml (const void* data, int sizeInBytes, synthyboy::ParamValues& values) const;
 
-    juce::Synthesiser synth;
-    juce::SmoothedValue<float> smoothedGain { 1.0f };
+    juce::AudioProcessorValueTreeState apvts;
+    std::array<std::atomic<float>*, synthyboy::kMaxParams> rawParams {};
+
+    std::unique_ptr<synthyboy::IEngine> engine;
+    std::vector<synthyboy::Event> events;
+    std::atomic<uint32_t> droppedEvents { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SynthyBoyProcessor)
 };

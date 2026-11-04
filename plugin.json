@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "com.safian.synthyboy",
+  "name": "SynthyBoy",
+  "version": "0.1.0",
+  "kind": "instrument",
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://github.com/Safian/SynthyBoy",
+  "clap_id": "com.safian.synthyboyvst",
+  "builds": {
+    "linux-armv7":     { "status": "unbuilt", "url": "", "sha256": "", "size": 0 },
+    "linux-aarch64":   { "status": "unbuilt", "url": "", "sha256": "", "size": 0 },
+    "linux-x86_64":    { "status": "unbuilt", "url": "", "sha256": "", "size": 0 },
+    "macos-universal": { "status": "unbuilt", "url": "", "sha256": "", "size": 0 },
+    "windows-x64":     { "status": "unbuilt", "url": "", "sha256": "", "size": 0 }
+  },
+  "static": {
+    "entry": "synthyboy_clap_get_entry",
+    "ios":     { "status": "planned", "library": "libsynthyboy_static.a" },
+    "android": { "status": "planned", "library": "libsynthyboy_static.a" }
+  },
+  "contentPacks": []
+}

@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Safian Szabolcs
 #
-# Builds VST3 + CLAP on Linux, macOS and Windows, uploads the plugins as artifacts and runs
-# pluginval (VST3) and clap-validator (CLAP).
+# Builds VST3 + CLAP on Linux, macOS and Windows, runs the core tests (CTest), uploads the plugins as
+# artifacts and runs pluginval (VST3) and clap-validator (CLAP). Further jobs: core tests under
+# ASan/UBSan and TSan, core cross build + tests for Linux ARMv7 hard-float under QEMU, a native
+# Linux AArch64 build, and the plugin manifest check.
 #
 # First GitHub run (2026-11-04): Linux and macOS green incl. pluginval; Windows failed only in the
 # pluginval SHA-256 check (backslash prefix of Git-for-Windows sha256sum, fixed below).
@@ -62,6 +64,14 @@ jobs:
           cmake -S . -B build -A x64
           cmake --build build --config Release --parallel
 
+      - name: Core tests (ctest)
+        if: runner.os != 'Windows'
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Core tests (ctest, Windows)
+        if: runner.os == 'Windows'
+        run: ctest --test-dir build -C Release --output-on-failure
+
       - name: CLAP smoke host (state / parameter round trip)
         if: runner.os != 'Windows'
         run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
@@ -109,3 +119,106 @@ jobs:
         run: |
           cargo install --locked --git https://github.com/free-audio/clap-validator --tag "${CLAP_VALIDATOR_VERSION}" clap-validator
           clap-validator validate "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
+
+  manifest:
+    name: plugin manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Validate plugin.json against schema/plugin-manifest.schema.json
+        run: python3 -I scripts/check-manifest.py
+
+  # The core (no JUCE) with sanitizers: ASan + UBSan, and TSan (audio thread vs. parameter thread).
+  core-sanitizers:
+    name: core tests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: asan-ubsan
+            flags: -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
+          - name: tsan
+            flags: -fsanitize=thread -fno-omit-frame-pointer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build
+          # the sanitizer runtimes need a lower ASLR entropy than the runner's default
+          sudo sysctl vm.mmap_rnd_bits=28 || true
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-san -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}"
+
+      - name: Build
+        run: cmake --build build-san --parallel
+
+      - name: Run tests
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1
+          TSAN_OPTIONS: halt_on_error=1
+        run: ctest --test-dir build-san --output-on-failure
+
+  # Linux ARMv7 hard-float (MPC Key 61 class): cross build of the core, tests run under QEMU user mode.
+  # Timing is not measured here (QEMU); only correctness and the ABI of the produced binaries.
+  core-armv7:
+    name: core tests (linux-armv7, qemu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf qemu-user
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-armv7 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/armv7-linux-gnueabihf.cmake \
+            -DSYNTHYBOY_BUILD_PLUGIN=OFF \
+            -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-arm;-L;/usr/arm-linux-gnueabihf"
+
+      - name: Build
+        run: cmake --build build-armv7 --parallel
+
+      - name: ABI of the produced binaries
+        run: |
+          bin=build-armv7/core/tests/synthyboy_test_engine
+          file "$bin"
+          arm-linux-gnueabihf-readelf -A "$bin"
+
+      - name: Run tests (QEMU user mode)
+        run: ctest --test-dir build-armv7 --output-on-failure
+
+  # Native Linux AArch64 build of everything on GitHub's arm runner (no pluginval here).
+  linux-aarch64:
+    name: linux-aarch64
+    runs-on: ubuntu-24.04-arm
+    env:
+      PLUGIN: SynthyBoyVST
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build pkg-config \
+            libasound2-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libfreetype-dev libfontconfig1-dev \
+            libgl1-mesa-dev
+
+      - name: Build
+        run: scripts/build.sh
+
+      - name: Core tests (ctest)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: CLAP smoke host (state / parameter round trip)
+        run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"

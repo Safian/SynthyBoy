@@ -1,4 +1,6 @@
 # SynthyBoyVST - minimal 8-voice synthesizer (VST3 + CLAP from one code base)
+# core/      JUCE-free static library synthyboy_core (engine interface, parameters, state, own engine) + tests
+# shell-juce/ thin JUCE AudioProcessor -> VST3 + CLAP
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
@@ -29,6 +31,25 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# What to build:
+#   SYNTHYBOY_BUILD_PLUGIN  VST3 + CLAP via JUCE (fetches JUCE and clap-juce-extensions); OFF builds only the core
+#                           (used by the ARMv7 / AArch64 cross builds and the sanitizer jobs)
+#   SYNTHYBOY_BUILD_TESTS   core unit / real-time / thread tests (CTest)
+#   SYNTHYBOY_WITH_VITAL    Vital-derived engine in core/engine-vital (docs/ARCHITECTURE.md 2.2); nothing is added yet,
+#                           OFF for iOS
+option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
+option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
+option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" ON)
+
+include(CTest)
+enable_testing()
+
+add_subdirectory(core)
+
+if(NOT SYNTHYBOY_BUILD_PLUGIN)
+    return()
 endif()
 
 include(FetchContent)
@@ -93,9 +114,10 @@ if(APPLE)
 endif()
 
 target_sources(SynthyBoyVST PRIVATE
-    Source/PluginProcessor.cpp
-    Source/PluginProcessor.h
-    Source/SynthyVoice.h)
+    shell-juce/PluginProcessor.cpp
+    shell-juce/PluginProcessor.h)
+
+target_include_directories(SynthyBoyVST PRIVATE shell-juce)
 
 target_compile_definitions(SynthyBoyVST PUBLIC
     JUCE_WEB_BROWSER=0
@@ -104,6 +126,7 @@ target_compile_definitions(SynthyBoyVST PUBLIC
 
 target_link_libraries(SynthyBoyVST
     PRIVATE
+        synthyboy_core
         juce::juce_audio_processors
         juce::juce_audio_plugin_client
     PUBLIC
@@ -112,12 +135,13 @@ target_link_libraries(SynthyBoyVST
         juce::juce_recommended_warning_flags)
 
 # ---------------------------------------------------------------------------
-# CLAP smoke host: parameter text round trip + state reproducibility (see tests/clap-smoke).
+# CLAP smoke host: parameter text round trip + state reproducibility + parity with core's parameter table +
+# audio (see tests/clap-smoke).
 # Run: build/clap_smoke build/SynthyBoyVST_artefacts/Release/CLAP/SynthyBoyVST.clap
 # ---------------------------------------------------------------------------
 if(NOT WIN32)
     add_executable(clap_smoke tests/clap-smoke/state_roundtrip.cpp)
     target_include_directories(clap_smoke PRIVATE "${clap-juce-extensions_SOURCE_DIR}/clap-libs/clap/include")
-    target_link_libraries(clap_smoke PRIVATE ${CMAKE_DL_LIBS})
+    target_link_libraries(clap_smoke PRIVATE synthyboy_core ${CMAKE_DL_LIBS})
     add_dependencies(clap_smoke SynthyBoyVST_CLAP)
 endif()

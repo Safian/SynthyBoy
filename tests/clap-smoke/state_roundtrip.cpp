@@ -1,15 +1,20 @@
-// SynthyBoyVST - CLAP smoke host: parameter text round trip + state reproducibility.
+// SynthyBoyVST - CLAP smoke host: parameter text round trip + state reproducibility + core parity + audio.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Mimics the clap-validator checks `param-conversions` and `state-reproducibility-*` without cargo:
+// Mimics the clap-validator checks `param-conversions` and `state-reproducibility-*` without cargo, checks that the
+// plugin's CLAP parameters (id, name, range, default) equal synthyboy_core's paramTable(), and renders audio through
+// process(): silence without notes, a non-silent finite signal after a note-on.
 //   state_roundtrip <path/to/Plugin.clap>
 // Exit code 0 = all checks passed.
 
 #include <clap/clap.h>
 
+#include "synthyboy/params.h"
+
 #include <dlfcn.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -104,6 +109,47 @@ void setValues (Instance& inst, const std::vector<double>& values)
     inst.plugin->process (inst.plugin, &p);
 }
 
+// one process() call with optional CLAP note events; returns the left output channel
+std::vector<float> processBlock (Instance& inst, const std::vector<clap_event_note_t>& notes, std::vector<float>* rightOut = nullptr)
+{
+    struct Events { const std::vector<clap_event_note_t>* ev; } events { &notes };
+    clap_input_events_t in { &events,
+        [] (const clap_input_events_t* l) { return (uint32_t) static_cast<Events*> (l->ctx)->ev->size(); },
+        [] (const clap_input_events_t* l, uint32_t i) -> const clap_event_header_t* { return &(*static_cast<Events*> (l->ctx)->ev)[i].header; } };
+    clap_output_events_t out { nullptr, [] (const clap_output_events_t*, const clap_event_header_t*) { return true; } };
+
+    std::vector<float> l (512, 0.0f), r (512, 0.0f);
+    float* ch[2] = { l.data(), r.data() };
+    clap_audio_buffer_t ab {}; ab.data32 = ch; ab.channel_count = 2;
+    clap_process_t p {};
+    p.frames_count = 512; p.audio_outputs = &ab; p.audio_outputs_count = 1;
+    p.in_events = &in; p.out_events = &out; p.steady_time = -1;
+    inst.plugin->process (inst.plugin, &p);
+    if (rightOut) *rightOut = r;
+    return l;
+}
+
+clap_event_note_t noteOnEvent (int16_t key, double velocity)
+{
+    clap_event_note_t e {};
+    e.header = { sizeof e, 0, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON, 0 };
+    e.note_id = 1; e.port_index = 0; e.channel = 0; e.key = key; e.velocity = velocity;
+    return e;
+}
+
+bool allFinite (const std::vector<float>& v)
+{
+    for (float x : v) if (! std::isfinite (x)) return false;
+    return true;
+}
+
+float peakOf (const std::vector<float>& v)
+{
+    float p = 0.0f;
+    for (float x : v) p = std::max (p, std::fabs (x));
+    return p;
+}
+
 std::vector<double> getValues (Instance& inst)
 {
     std::vector<double> v;
@@ -154,6 +200,98 @@ int main (int argc, char** argv)
     int failures = 0;
     Instance a;
     if (! createInstance (factory, id, a)) { std::fprintf (stderr, "cannot create instance\n"); return 2; }
+
+    // 0. the plugin's parameters are exactly core's parameter table (ids, names, ranges, defaults)
+    if (a.list.size() != synthyboy::paramCount())
+    { std::printf ("FAIL parity: plugin has %zu parameters, core table has %zu\n", a.list.size(), synthyboy::paramCount()); ++failures; }
+    for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+    {
+        const auto& core = synthyboy::paramTable()[i];
+        const clap_param_info_t* info = nullptr;
+        for (auto& p : a.list) if (p.info.id == core.id) info = &p.info;
+        if (! info) { std::printf ("FAIL parity: core parameter '%s' (id %u) is missing in the plugin\n", core.key, core.id); ++failures; continue; }
+
+        // clap-juce-extensions reports discrete parameters (choices) with their plain range and all others normalised
+        // to 0..1 (the plain<->normalised mapping is the JUCE NormalisableRange, equal to core's toNormalised/fromNormalised)
+        const bool discrete = core.scale == synthyboy::Scale::stepped;
+        const auto close = [] (double x, double y) { return std::fabs (x - y) <= 1e-4 * std::max (1.0, std::fabs (y)); };
+        const double expMin = discrete ? core.min : 0.0, expMax = discrete ? core.max : 1.0;
+        const double expDef = discrete ? core.def : synthyboy::toNormalised (core, core.def);
+        const auto toPlain = [&] (double clapValue) { return discrete ? (float) clapValue : synthyboy::fromNormalised (core, (float) clapValue); };
+
+        if (std::strcmp (info->name, core.name) != 0)
+        { std::printf ("FAIL parity %s: name '%s' vs core '%s'\n", core.key, info->name, core.name); ++failures; }
+        if (! close (info->min_value, expMin) || ! close (info->max_value, expMax) || ! close (info->default_value, expDef))
+        { std::printf ("FAIL parity %s: range/default %.7g..%.7g def %.7g vs core %.7g..%.7g def %.7g\n", core.key,
+                       info->min_value, info->max_value, info->default_value, expMin, expMax, expDef); ++failures; }
+        if (((info->flags & CLAP_PARAM_IS_AUTOMATABLE) != 0) != ((core.flags & synthyboy::kParamAutomatable) != 0))
+        { std::printf ("FAIL parity %s: automatable flag differs\n", core.key); ++failures; }
+        double v = 0.0;
+        if (! a.params->get_value (a.plugin, core.id, &v) || ! close (v, expDef))
+        { std::printf ("FAIL parity %s: initial value %.7g vs core default %.7g\n", core.key, v, expDef); ++failures; }
+
+        // display text of the plugin == core's text for the same plain value, over the whole range
+        for (int k = 0; k <= 10; ++k)
+        {
+            const double clapValue = discrete ? std::round (core.min + k / 10.0 * (core.max - core.min)) : k / 10.0;
+            char text[256] = {}, coreText[64] = {};
+            synthyboy::valueToText (core, toPlain (clapValue), coreText, sizeof coreText);
+            if (! a.params->value_to_text (a.plugin, core.id, clapValue, text, sizeof text) || std::strcmp (text, coreText) != 0)
+            { std::printf ("FAIL parity %s: text of %.7g is '%s', core says '%s'\n", core.key, clapValue, text, coreText); ++failures; }
+        }
+    }
+
+    // 0b. audio: silence without notes, sound after a note-on, always finite
+    {
+        Instance c;
+        if (! createInstance (factory, id, c)) { std::fprintf (stderr, "cannot create audio instance\n"); return 2; }
+        float quiet = 0.0f;
+        bool finite = true;
+        for (int i = 0; i < 4; ++i)
+        {
+            const auto out = processBlock (c, {});
+            quiet = std::max (quiet, peakOf (out));
+            finite = finite && allFinite (out);
+        }
+        if (quiet != 0.0f || ! finite) { std::printf ("FAIL audio: output without notes is not silent (peak %g)\n", (double) quiet); ++failures; }
+
+        float loud = 0.0f;
+        std::vector<float> right;
+        auto out = processBlock (c, { noteOnEvent (69, 1.0) }, &right);
+        for (int i = 0; i < 8; ++i)
+        {
+            loud = std::max (loud, peakOf (out));
+            finite = finite && allFinite (out) && allFinite (right);
+            out = processBlock (c, {}, &right);
+        }
+        if (! finite || loud <= 0.001f) { std::printf ("FAIL audio: note-on gives peak %g (finite: %d)\n", (double) loud, (int) finite); ++failures; }
+        destroyInstance (c);
+    }
+
+    // 0c. the spike's state blob (JUCE binary XML, tag SynthyBoyState) and garbage still load / are rejected without harm
+    {
+        const std::string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<SynthyBoyState><PARAM id=\"gain\" value=\"-6.0\"/>"
+                                "<PARAM id=\"waveform\" value=\"0.0\"/><PARAM id=\"cutoff\" value=\"1000.0\"/></SynthyBoyState>";
+        std::vector<char> blob (8 + xml.size() + 1, 0);
+        const uint32_t magic = 0x21324356u, len = (uint32_t) xml.size(); // little endian host assumed (macOS / Linux x86 / arm)
+        std::memcpy (blob.data(), &magic, 4);
+        std::memcpy (blob.data() + 4, &len, 4);
+        std::memcpy (blob.data() + 8, xml.c_str(), xml.size() + 1);
+
+        Instance c;
+        if (! createInstance (factory, id, c)) { std::fprintf (stderr, "cannot create legacy-state instance\n"); return 2; }
+        if (! loadState (c, blob)) { std::printf ("FAIL legacy state: load returned false\n"); ++failures; }
+        const auto got = getValues (c);
+        const double wantGain = synthyboy::toNormalised (*synthyboy::findParam (synthyboy::kParamGain), -6.0f);
+        const double wantCutoff = synthyboy::toNormalised (*synthyboy::findParam (synthyboy::kParamCutoff), 1000.0f);
+        if (got.size() != 3 || std::fabs (got[0] - wantGain) > 1e-4 || std::fabs (got[1] - 0.0) > 1e-6 || std::fabs (got[2] - wantCutoff) > 1e-4)
+        { std::printf ("FAIL legacy state: values %.5g %.5g %.5g, expected %.5g 0 %.5g\n", got.size() > 0 ? got[0] : -1, got.size() > 1 ? got[1] : -1, got.size() > 2 ? got[2] : -1, wantGain, wantCutoff); ++failures; }
+
+        const std::vector<char> garbage { 'n', 'o', 'p', 'e', '{', '"', 0, 1, 2 };
+        loadState (c, garbage); // result is not specified, the values must stay as they are
+        if (getValues (c) != got) { std::printf ("FAIL garbage state changed the parameters\n"); ++failures; }
+        destroyInstance (c);
+    }
 
     // 1. value <-> text round trip (validator: param-conversions)
     for (auto& p : a.list)

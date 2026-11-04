@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SynthyBoy plugin manifest (plugin.json)",
+  "description": "Describes the plugin for the host-side PluginManifest, see docs/ARCHITECTURE.md section 7. builds[*].url/sha256/size are filled in by the release job; entries that are not built yet have status 'unbuilt' and empty placeholders.",
+  "type": "object",
+  "required": ["schemaVersion", "id", "name", "version", "kind", "license", "clap_id", "builds", "static", "contentPacks"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "kind": { "type": "string", "enum": ["instrument", "effect"] },
+    "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]+$" },
+    "homepage": { "type": "string", "pattern": "^https://" },
+    "min_host_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "clap_id": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$" },
+    "builds": {
+      "type": "object",
+      "required": ["linux-armv7", "linux-aarch64", "linux-x86_64", "macos-universal", "windows-x64"],
+      "additionalProperties": false,
+      "properties": {
+        "linux-armv7": { "$ref": "#/$defs/build" },
+        "linux-aarch64": { "$ref": "#/$defs/build" },
+        "linux-x86_64": { "$ref": "#/$defs/build" },
+        "macos-universal": { "$ref": "#/$defs/build" },
+        "windows-x64": { "$ref": "#/$defs/build" }
+      }
+    },
+    "static": {
+      "type": "object",
+      "required": ["entry", "ios", "android"],
+      "additionalProperties": false,
+      "properties": {
+        "entry": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "ios": { "$ref": "#/$defs/staticBuild" },
+        "android": { "$ref": "#/$defs/staticBuild" }
+      }
+    },
+    "contentPacks": { "type": "array", "items": { "type": "object", "required": ["id"] } },
+    "signature": { "type": "object" }
+  },
+  "$defs": {
+    "build": {
+      "type": "object",
+      "required": ["status", "url", "sha256", "size"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["unbuilt", "released"] },
+        "url": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^([0-9a-f]{64})?$" },
+        "size": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "staticBuild": {
+      "type": "object",
+      "required": ["status", "library"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["planned", "available"] },
+        "library": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -256,10 +256,10 @@ Rules: the plugin never downloads anything; it **looks up** installed packs (loc
 ```
 { "schemaVersion": 1, "id": "com.safian.synthyboy", "name": "SynthyBoy", "version": "0.1.0",
   "kind": "instrument", "license": "AGPL-3.0-or-later", "homepage": "…", "min_host_version": "…",
-  "clap_id": "com.safian.synthyboy",
-  "builds": { "linux-armv7": {"url":"…","sha256":"…","size":0}, "linux-aarch64": {…}, "linux-x86_64": {…},
+  "clap_id": "com.safian.synthyboyvst",   // must equal CLAP_ID in CMakeLists.txt (checked by scripts/check-manifest.py)
+  "builds": { "linux-armv7": {"status":"unbuilt","url":"…","sha256":"…","size":0}, "linux-aarch64": {…}, "linux-x86_64": {…},
               "macos-universal": {…}, "windows-x64": {…} },
-  "static": { "ios": "libsynthyboy_static.a", "android": "libsynthyboy_static.a",
+  "static": { "ios": {"status":"planned","library":"libsynthyboy_static.a"}, "android": {…},
               "entry": "synthyboy_clap_get_entry" },
   "contentPacks": [ {…as §6, plus "url", "required": false, "recommended": true} ],
   "signature": {…} }
@@ -301,7 +301,7 @@ Kick-side integration (installer, Plugin-manager, signing/trust levels) comes fr
 
 ## 10. CI and validation
 
-Current workflow (`.github/workflows/build.yml`): Linux/macOS/Windows build, artifacts, pluginval 1.0.4 (SHA-256 pinned) on VST3, clap-validator 0.4.1 built from source (`continue-on-error`).
+Current workflow (`.github/workflows/build.yml`): Linux/macOS/Windows build + core tests (CTest), artifacts, pluginval 1.0.4 (SHA-256 pinned) on VST3, clap-validator 0.4.1 built from source (blocking); further jobs: core tests under ASan/UBSan and TSan, core ARMv7 hard-float cross build + tests under QEMU, native Linux AArch64 build, manifest check.
 
 Target matrix, added in Phase 1 unless noted:
 
@@ -315,7 +315,7 @@ Target matrix, added in Phase 1 unless noted:
 | iOS | Xcode toolchain, static library of core + native shell only | compile check, no plugin run |
 | Android | NDK (arm64-v8a, armeabi-v7a), static library | compile check, no plugin run |
 
-clap-validator: pin to a tag, built once and cached; `continue-on-error` is removed as soon as the first run is green and recorded. Known validator-relevant requirements are designed in (stable ids, note-id/NOTE_END handling, state round-trip, `init` without GUI/IO).
+clap-validator: pin to a tag, built once and cached; it is blocking since its first green run (2026-11-04). Known validator-relevant requirements are designed in (stable ids, note-id/NOTE_END handling, state round-trip, `init` without GUI/IO).
 
 ## 11. Known open points
 
