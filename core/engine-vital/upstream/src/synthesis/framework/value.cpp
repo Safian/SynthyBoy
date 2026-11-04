@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "value.h"
 
 #include "utils.h"
 
-namespace vital {
+namespace sbvital {
 
   Value::Value(poly_float value, bool control_rate) : Processor(kNumInputs, 1, control_rate), value_(value) {
     for (int i = 0; i < output()->buffer_size; ++i)
@@ -58,4 +59,4 @@ namespace vital {
 
     output()->buffer[0] = value_;
   }
-} // namespace vital
+} // namespace sbvital

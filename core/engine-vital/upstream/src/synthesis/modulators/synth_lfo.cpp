@@ -13,17 +13,19 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "synth_lfo.h"
 
 #include "common.h"
+#include "futils.h"
 #include "line_generator.h"
 #include "synth_constants.h"
 #include "utils.h"
 
 #include <cmath>
 
-namespace vital {
+namespace sbvital {
   SynthLfo::SynthLfo(LineGenerator* source) : Processor(kNumInputs, kNumOutputs), source_(source) {
     was_control_rate_ = true;
     sync_seconds_ = std::make_shared<double>();
@@ -445,4 +447,4 @@ namespace vital {
   void SynthLfo::correctToTime(double seconds) {
     *sync_seconds_ = seconds;
   }
-} // namespace vital
+} // namespace sbvital

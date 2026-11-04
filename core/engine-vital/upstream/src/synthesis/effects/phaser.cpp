@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "phaser.h"
 
@@ -21,7 +22,7 @@
 
 #include <climits>
 
-namespace vital {
+namespace sbvital {
 
   Phaser::Phaser() : ProcessorRouter(kNumInputs, kNumOutputs), mix_(0.0f),
                      mod_depth_(0.0f), phase_offset_(0.0f), phase_(0) {
@@ -100,4 +101,4 @@ namespace vital {
     poly_float offset = utils::getCycleOffsetFromSeconds(seconds, rate);
     phase_ = utils::toInt((offset - 0.5f) * UINT_MAX) + INT_MAX / 2;
   }
-} // namespace vital
+} // namespace sbvital

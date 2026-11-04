@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "random_lfo_module.h"
 
 #include "random_lfo.h"
 
-namespace vital {
+namespace sbvital {
 
   RandomLfoModule::RandomLfoModule(const std::string& prefix, const Output* beats_per_second) :
       SynthModule(kNumInputs, 1), prefix_(prefix), beats_per_second_(beats_per_second) {
@@ -44,4 +45,4 @@ namespace vital {
   void RandomLfoModule::correctToTime(double seconds) {
     lfo_->correctToTime(seconds);
   }
-} // namespace vital
+} // namespace sbvital

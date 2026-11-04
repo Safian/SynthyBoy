@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "sample_source.h"
 #include "futils.h"
@@ -20,7 +21,7 @@
 
 #include <thread>
 
-namespace vital {
+namespace sbvital {
 
   namespace {
     const std::string kDefaultName = "White Noise";
@@ -311,12 +312,12 @@ namespace vital {
     data["sample_rate"] = data_->sample_rate;
     std::unique_ptr<int16_t[]> pcm_data = std::make_unique<int16_t[]>(data_->length);
     utils::floatToPcmData(pcm_data.get(), data_->left_buffers[kUpsampleTimes].get(), data_->length);
-    String encoded = Base64::toBase64(pcm_data.get(), sizeof(int16_t) * data_->length);
-    data["samples"] = encoded.toStdString();
+    std::string encoded = sbcompat::toBase64(pcm_data.get(), sizeof(int16_t) * data_->length);
+    data["samples"] = encoded;
     if (data_->stereo) {
       utils::floatToPcmData(pcm_data.get(), data_->right_buffers[kUpsampleTimes].get(), data_->length);
-      String encoded_stereo = Base64::toBase64(pcm_data.get(), sizeof(int16_t) * data_->length);
-      data["samples_stereo"] = encoded_stereo.toStdString();
+      std::string encoded_stereo = sbcompat::toBase64(pcm_data.get(), sizeof(int16_t) * data_->length);
+      data["samples_stereo"] = encoded_stereo;
     }
     return data;
   }
@@ -329,20 +330,22 @@ namespace vital {
     int length = data["length"];
     int sample_rate = data["sample_rate"];
 
-    MemoryOutputStream decoded(length * sizeof(int16_t));
+    std::vector<unsigned char> decoded;
     std::string wave_data = data["samples"];
-    Base64::convertFromBase64(decoded, wave_data);
+    sbcompat::fromBase64(wave_data, decoded);
+    decoded.resize(length * sizeof(int16_t));
     std::unique_ptr<int16_t[]> pcm_data = std::make_unique<int16_t[]>(length);
-    memcpy(pcm_data.get(), decoded.getData(), length * sizeof(int16_t));
+    memcpy(pcm_data.get(), decoded.data(), length * sizeof(int16_t));
     std::unique_ptr<mono_float[]> buffer = std::make_unique<mono_float[]>(length);
     utils::pcmToFloatData(buffer.get(), pcm_data.get(), length);
 
     if (data.count("samples_stereo")) {
-      MemoryOutputStream decoded_stereo(length * sizeof(int16_t));
+      std::vector<unsigned char> decoded_stereo;
       std::string wave_data_stereo = data["samples_stereo"];
-      Base64::convertFromBase64(decoded_stereo, wave_data_stereo);
+      sbcompat::fromBase64(wave_data_stereo, decoded_stereo);
+      decoded_stereo.resize(length * sizeof(int16_t));
       std::unique_ptr<int16_t[]> pcm_data_stereo = std::make_unique<int16_t[]>(length);
-      memcpy(pcm_data_stereo.get(), decoded_stereo.getData(), length * sizeof(int16_t));
+      memcpy(pcm_data_stereo.get(), decoded_stereo.data(), length * sizeof(int16_t));
 
       std::unique_ptr<mono_float[]> buffer_stereo = std::make_unique<mono_float[]>(length);
       utils::pcmToFloatData(buffer_stereo.get(), pcm_data_stereo.get(), length);
@@ -523,4 +526,4 @@ namespace vital {
     transpose_quantize_ = quantize;
     return post_add + snapped;
   }
-} // namespace vital
+} // namespace sbvital

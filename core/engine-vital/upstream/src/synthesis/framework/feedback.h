@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
 #include "processor.h"
 #include "utils.h"
 
-namespace vital {
+namespace sbvital {
 
   class Feedback : public Processor {
     public:
@@ -45,9 +46,9 @@ namespace vital {
   };
 
   namespace cr {
-    class Feedback : public ::vital::Feedback {
+    class Feedback : public ::sbvital::Feedback {
       public:
-        Feedback() : ::vital::Feedback(true), last_value_(0.0f) { }
+        Feedback() : ::sbvital::Feedback(true), last_value_(0.0f) { }
 
         void process(int num_samples) override {
           last_value_ = input()->at(0);
@@ -68,5 +69,5 @@ namespace vital {
         poly_float last_value_;
     };
   } // namespace cr
-} // namespace vital
+} // namespace sbvital
 

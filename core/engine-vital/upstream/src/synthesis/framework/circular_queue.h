@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -20,7 +21,7 @@
 #include <cstddef>
 #include <memory>
 
-namespace vital {
+namespace sbvital {
 
   template<class T>
   class CircularQueue {
@@ -286,5 +287,5 @@ namespace vital {
       int start_;
       int end_;
   };
-} // namespace vital
+} // namespace sbvital
 

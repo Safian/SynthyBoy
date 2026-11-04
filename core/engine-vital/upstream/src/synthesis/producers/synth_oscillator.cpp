@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "synth_oscillator.h"
 
@@ -23,7 +24,7 @@
 
 #include <climits>
 
-namespace vital {
+namespace sbvital {
   namespace {
     constexpr int kNumVoicesPerProcess = poly_float::kSize / 2;
     constexpr int kWaveformBits = WaveFrame::kWaveformBits;
@@ -1511,4 +1512,4 @@ namespace vital {
     stereoBlend(audio_out, num_samples, reset_mask);
     levelOutput(output(kLevelled)->buffer, audio_out, num_samples, reset_mask);
   }
-} // namespace vital
+} // namespace sbvital

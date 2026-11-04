@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -21,7 +22,7 @@
 #include <map>
 #include <string>
 
-namespace vital {
+namespace sbvital {
 
   struct ValueDetails {
     enum ValueScale {
@@ -143,5 +144,5 @@ namespace vital {
     private:
       Parameters() { }
   };
-} // namespace vital
+} // namespace sbvital
 

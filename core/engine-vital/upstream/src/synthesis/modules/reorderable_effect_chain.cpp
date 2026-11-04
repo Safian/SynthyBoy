@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "reorderable_effect_chain.h"
 
@@ -27,7 +28,7 @@
 #include "reverb_module.h"
 #include "synth_strings.h"
 
-namespace vital {
+namespace sbvital {
 
   class FilterFxModule : public SynthModule {
     public:
@@ -64,7 +65,7 @@ namespace vital {
   };
 
   ReorderableEffectChain::ReorderableEffectChain(const Output* beats_per_second, const Output* keytrack) :
-      vital::SynthModule(kNumInputs, 1), equalizer_memory_(nullptr),
+      sbvital::SynthModule(kNumInputs, 1), equalizer_memory_(nullptr),
       beats_per_second_(beats_per_second), keytrack_(keytrack), last_order_(0.0f) {
     for (int i = 0; i < constants::kNumEffects; ++i) {
       SynthModule* effect_module = createEffectModule(i);
@@ -147,4 +148,4 @@ namespace vital {
     for (int i = 0; i < constants::kNumEffects; ++i)
       effects_[i]->correctToTime(seconds);
   }
-} // namespace vital
+} // namespace sbvital

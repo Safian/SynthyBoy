@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "line_generator.h"
 #include "poly_utils.h"
@@ -20,7 +21,7 @@
 
 LineGenerator::LineGenerator(int resolution) : points_(), powers_(), num_points_(2), resolution_(resolution),
                                                loop_(false), smooth_(false), linear_(true), render_count_(0) {
-  buffer_ = std::make_unique<vital::mono_float[]>(resolution + kExtraValues);
+  buffer_ = std::make_unique<sbvital::mono_float[]>(resolution + kExtraValues);
   initLinear();
 }
 
@@ -183,7 +184,7 @@ void LineGenerator::render() {
     if (smooth_)
       t = smoothTransition(t);
 
-    t = vital::utils::clamp(vital::futils::powerScale(t, current_power), 0.0f, 1.0f);
+    t = sbvital::utils::clamp(sbvital::futils::powerScale(t, current_power), 0.0f, 1.0f);
     
     float y = last_point.second + t * (current_point.second - last_point.second);
     buffer_[i + 1] = 1.0f - y;
@@ -213,9 +214,9 @@ void LineGenerator::render() {
 }
 
 float LineGenerator::valueAtPhase(float phase) {
-  float scaled_phase = vital::utils::clamp(phase, 0.0f, 1.0f) * resolution_;
+  float scaled_phase = sbvital::utils::clamp(phase, 0.0f, 1.0f) * resolution_;
   int index = scaled_phase;
-  return vital::utils::interpolate(buffer_[index + 1], buffer_[index + 2], scaled_phase - index);
+  return sbvital::utils::interpolate(buffer_[index + 1], buffer_[index + 2], scaled_phase - index);
 }
 
 void LineGenerator::checkLineIsLinear() {
@@ -239,7 +240,7 @@ float LineGenerator::getValueBetweenPoints(float x, int index_from, int index_to
   if (smooth_)
     t = smoothTransition(t);
 
-  t = vital::utils::clamp(vital::futils::powerScale(t, power), 0.0f, 1.0f);
+  t = sbvital::utils::clamp(sbvital::futils::powerScale(t, power), 0.0f, 1.0f);
   return t * (second.second - first.second) + first.second;
 }
 

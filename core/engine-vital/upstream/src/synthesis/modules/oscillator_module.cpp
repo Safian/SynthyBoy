@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "oscillator_module.h"
 
 #include "synth_oscillator.h"
 #include "wavetable.h"
 
-namespace vital {
+namespace sbvital {
 
   OscillatorModule::OscillatorModule(std::string prefix) :
       SynthModule(kNumInputs, kNumOutputs), prefix_(std::move(prefix)), on_(nullptr), distortion_type_(nullptr) {
@@ -111,4 +112,4 @@ namespace vital {
 
     *was_on_ = on;
   }
-} // namespace vital
+} // namespace sbvital

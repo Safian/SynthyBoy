@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "wavetable_keyframe.h"
 
@@ -20,7 +21,7 @@
 #include "wavetable_component.h"
 
 float WavetableKeyframe::linearTween(float point_from, float point_to, float t) {
-  return vital::utils::interpolate(point_from, point_to, t);
+  return sbvital::utils::interpolate(point_from, point_to, t);
 }
 
 float WavetableKeyframe::cubicTween(float point_prev, float point_from, float point_to, float point_next,

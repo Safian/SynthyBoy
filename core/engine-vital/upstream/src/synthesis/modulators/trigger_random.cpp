@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "trigger_random.h"
 
 #include <cstdlib>
 
-namespace vital {
+namespace sbvital {
 
   TriggerRandom::TriggerRandom() : Processor(1, 1, true), value_(0.0f), random_generator_(0.0f, 1.0f) { }
 
@@ -36,4 +37,4 @@ namespace vital {
 
     output()->buffer[0] = value_;
   }
-} // namespace vital
+} // namespace sbvital

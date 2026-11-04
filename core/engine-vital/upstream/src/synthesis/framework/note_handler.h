@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
 #include "common.h"
 
-namespace vital {
+namespace sbvital {
 
   class NoteHandler {
     public:
@@ -29,5 +30,5 @@ namespace vital {
       virtual void noteOn(int note, mono_float velocity, int sample, int channel) = 0;
       virtual void noteOff(int note, mono_float lift, int sample, int channel) = 0;
   };
-} // namespace vital
+} // namespace sbvital
 

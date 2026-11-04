@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
 #include "processor.h"
 
-namespace vital {
+namespace sbvital {
 
   class Value : public Processor {
     public:
@@ -43,13 +44,13 @@ namespace vital {
   };
 
   namespace cr {
-    class Value : public ::vital::Value {
+    class Value : public ::sbvital::Value {
       public:
-        Value(poly_float value = 0.0f) : ::vital::Value(value, true) { }
+        Value(poly_float value = 0.0f) : ::sbvital::Value(value, true) { }
         virtual Processor* clone() const override { return new Value(*this); }
 
         void process(int num_samples) override;
     };
   } // namespace cr
-} // namespace vital
+} // namespace sbvital
 

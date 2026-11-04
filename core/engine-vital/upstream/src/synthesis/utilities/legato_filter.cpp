@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "legato_filter.h"
 #include "utils.h"
 
-namespace vital {
+namespace sbvital {
 
   LegatoFilter::LegatoFilter() : Processor(kNumInputs, kNumOutputs, true), last_value_(kVoiceOff) { }
 
@@ -38,4 +39,4 @@ namespace vital {
     output(kRetrigger)->trigger(trigger_mask, trigger_value, trigger_offset);
     last_value_ = utils::maskLoad(last_value_, trigger_value, trigger_mask);
   }
-} // namespace vital
+} // namespace sbvital

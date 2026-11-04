@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "fir_halfband_decimator.h"
 #include "poly_utils.h"
 
-namespace vital {
+namespace sbvital {
   FirHalfbandDecimator::FirHalfbandDecimator() : Processor(kNumInputs, 1) {
     static const mono_float coefficients[kNumTaps] = {
       0.000088228877315364f,
@@ -117,4 +118,4 @@ namespace vital {
     for (int i = 0; i < kNumTaps / 2 - 1; ++i)
       memory_[i] = 0.0f;
   }
-} // namespace vital
+} // namespace sbvital

@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "sallen_key_filter.h"
 
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
 
   SallenKeyFilter::SallenKeyFilter() : Processor(SallenKeyFilter::kNumInputs, 1) {
     hardReset();
@@ -328,4 +329,4 @@ namespace vital {
     poly_float stage1_out = stage1_.tickBasic(stage1_input_, coefficient);
     stage2_.tickBasic(stage1_out, coefficient);
   }
-} // namespace vital
+} // namespace sbvital

@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "synth_parameters.h"
 
@@ -20,6 +21,7 @@
 #include "distortion.h"
 #include "digital_svf.h"
 #include "synth_constants.h"
+#include "operators.h"
 #include "random_lfo.h"
 #include "synth_lfo.h"
 #include "synth_oscillator.h"
@@ -30,7 +32,7 @@
 
 #include <cfloat>
 
-namespace vital {
+namespace sbvital {
 
   bool compareValueDetails(const ValueDetails* a, const ValueDetails* b) {
     if (a->version_added != b->version_added)
@@ -298,7 +300,7 @@ namespace vital {
       ValueDetails::kLinear, false, "%", "Compressor Attack", nullptr },
     { "compressor_release", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Compressor Release", nullptr },
-    { "compressor_enabled_bands", 0x000000, 0.0, vital::MultibandCompressor::kNumBandOptions - 1, 0.0, 0.0, 1.0,
+    { "compressor_enabled_bands", 0x000000, 0.0, sbvital::MultibandCompressor::kNumBandOptions - 1, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Compressor Enabled Bands", strings::kCompressorBandNames },
     { "compressor_mix", 0x000602, 0.0, 1.0, 1.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Compressor Mix", nullptr },
@@ -330,7 +332,7 @@ namespace vital {
       ValueDetails::kLinear, false, " dB", "EQ High Gain", nullptr },
     { "eq_high_resonance", 0x000000, 0.0, 1.0, 0.3163, 0.0, 100.0,
       ValueDetails::kQuadratic, false, "", "EQ High Resonance", nullptr },
-    { "effect_chain_order", 0x000000, 0.0, vital::utils::factorial(vital::kNumEffects) - 1, 0.0, 0.0, 1.0,
+    { "effect_chain_order", 0x000000, 0.0, sbvital::utils::factorial(sbvital::kNumEffects) - 1, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Effect Chain Order", nullptr },
     { "voice_priority", 0x000000, 0.0, VoiceHandler::kNumVoicePriorities - 1, VoiceHandler::kRoundRobin, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Voice Priority", strings::kVoicePriorityNames },
@@ -618,4 +620,4 @@ namespace vital {
 
   ValueDetailsLookup Parameters::lookup_;
 
-} // namespace vital
+} // namespace sbvital

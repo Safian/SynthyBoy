@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
 #include "common.h"
 
-namespace vital {
+namespace sbvital {
   struct matrix {
     poly_float row0, row1, row2, row3;
 
@@ -54,5 +55,5 @@ namespace vital {
       return poly_float::mulAdd(row012, row3, other.row3);
     }
   };
-} // namespace vital
+} // namespace sbvital
 

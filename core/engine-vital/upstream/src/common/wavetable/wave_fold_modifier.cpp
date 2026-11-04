@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "wave_fold_modifier.h"
 
@@ -37,11 +38,11 @@ void WaveFoldModifier::WaveFoldModifierKeyframe::interpolate(const WavetableKeyf
   wave_fold_boost_ = linearTween(from->wave_fold_boost_, to->wave_fold_boost_, t);
 }
 
-void WaveFoldModifier::WaveFoldModifierKeyframe::render(vital::WaveFrame* wave_frame) {
+void WaveFoldModifier::WaveFoldModifierKeyframe::render(sbvital::WaveFrame* wave_frame) {
   float max_value = std::max(1.0f, wave_frame->getMaxZeroOffset());
 
-  for (int i = 0; i < vital::WaveFrame::kWaveformSize; ++i) {
-    float value = vital::utils::clamp(wave_frame->time_domain[i] / max_value, -1.0f, 1.0f);
+  for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; ++i) {
+    float value = sbvital::utils::clamp(wave_frame->time_domain[i] / max_value, -1.0f, 1.0f);
     float adjusted_value = max_value * wave_fold_boost_ * asinf(value);
 
     wave_frame->time_domain[i] = sinf(adjusted_value);
@@ -66,7 +67,7 @@ WavetableKeyframe* WaveFoldModifier::createKeyframe(int position) {
   return keyframe;
 }
 
-void WaveFoldModifier::render(vital::WaveFrame* wave_frame, float position) {
+void WaveFoldModifier::render(sbvital::WaveFrame* wave_frame, float position) {
   interpolate(&compute_frame_, position);
   compute_frame_.render(wave_frame);
 }

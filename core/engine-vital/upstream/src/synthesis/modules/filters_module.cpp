@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "filters_module.h"
 #include "filter_module.h"
 
-namespace vital {
+namespace sbvital {
 
   FiltersModule::FiltersModule() : SynthModule(kNumInputs, 1), filter_1_(nullptr), filter_2_(nullptr),
                                    filter_1_filter_input_(nullptr), filter_2_filter_input_(nullptr) {
@@ -106,4 +107,4 @@ namespace vital {
     else
       processParallel(num_samples);
   }
-} // namespace vital
+} // namespace sbvital

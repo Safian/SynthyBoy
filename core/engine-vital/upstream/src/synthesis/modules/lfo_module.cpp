@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "lfo_module.h"
 
 #include "line_generator.h"
 #include "synth_lfo.h"
 
-namespace vital {
+namespace sbvital {
 
   LfoModule::LfoModule(const std::string& prefix, LineGenerator* line_generator, const Output* beats_per_second) :
       SynthModule(kNumInputs, kNumOutputs), prefix_(prefix), beats_per_second_(beats_per_second) {
@@ -64,4 +65,4 @@ namespace vital {
     Processor::setControlRate(control_rate);
     lfo_->setControlRate(control_rate);
   }
-} // namespace vital
+} // namespace sbvital

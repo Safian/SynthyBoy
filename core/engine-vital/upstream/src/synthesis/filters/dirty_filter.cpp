@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "dirty_filter.h"
 
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
 
   DirtyFilter::DirtyFilter() : Processor(DirtyFilter::kNumInputs, 1) {
     hardReset();
@@ -378,4 +379,4 @@ namespace vital {
 
     return loop_input * (1.0f / kSaturationBoost);
   }
-} // namespace vital
+} // namespace sbvital

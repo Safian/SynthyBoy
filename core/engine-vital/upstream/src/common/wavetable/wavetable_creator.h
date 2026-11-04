@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 #include "wave_frame.h"
 #include "wavetable_group.h"
 #include "file_source.h"
@@ -38,7 +39,7 @@ class WavetableCreator {
       kNumDragLoadStyles
     };
 
-    WavetableCreator(vital::Wavetable* wavetable) : wavetable_(wavetable),
+    WavetableCreator(sbvital::Wavetable* wavetable) : wavetable_(wavetable),
                                                     full_normalize_(true), remove_all_dc_(true) { }
   
     int getGroupIndex(WavetableGroup* group);
@@ -73,7 +74,7 @@ class WavetableCreator {
     json stateToJson();
     void jsonToState(json data);
 
-    vital::Wavetable* getWavetable() { return wavetable_; }
+    sbvital::Wavetable* getWavetable() { return wavetable_; }
 
   protected:
     void initFromSplicedAudioFile(const float* audio_buffer, int num_samples, int sample_rate,
@@ -82,12 +83,12 @@ class WavetableCreator {
     void initFromPitchedAudioFile(const float* audio_buffer, int num_samples, int sample_rate);
     void initFromLineGenerator(LineGenerator* line_generator);
 
-    vital::WaveFrame compute_frame_combine_;
-    vital::WaveFrame compute_frame_;
+    sbvital::WaveFrame compute_frame_combine_;
+    sbvital::WaveFrame compute_frame_;
     std::vector<std::unique_ptr<WavetableGroup>> groups_;
 
     std::string last_file_loaded_;
-    vital::Wavetable* wavetable_;
+    sbvital::Wavetable* wavetable_;
     bool full_normalize_;
     bool remove_all_dc_;
 

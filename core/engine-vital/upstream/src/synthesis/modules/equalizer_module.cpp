@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "equalizer_module.h"
 
 #include "digital_svf.h"
 #include "value.h"
 
-namespace vital {
+namespace sbvital {
 
   EqualizerModule::EqualizerModule() :
       SynthModule(0, 1),
@@ -27,7 +28,7 @@ namespace vital {
       high_pass_(nullptr), low_shelf_(nullptr),
       notch_(nullptr), band_shelf_(nullptr),
       low_pass_(nullptr), high_shelf_(nullptr) {
-    audio_memory_ = std::make_shared<vital::StereoMemory>(vital::kAudioMemorySamples);
+    audio_memory_ = std::make_shared<sbvital::StereoMemory>(sbvital::kAudioMemorySamples);
   }
 
   void EqualizerModule::init() {
@@ -156,4 +157,4 @@ namespace vital {
     for (int i = 0; i < num_samples; ++i)
       audio_memory_->push(output_buffer[i]);
   }
-} // namespace vital
+} // namespace sbvital

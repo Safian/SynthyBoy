@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "reverb_module.h"
 
 #include "reverb.h"
 
-namespace vital {
+namespace sbvital {
 
   ReverbModule::ReverbModule() : SynthModule(0, 1), reverb_(nullptr) { }
 
@@ -79,4 +80,4 @@ namespace vital {
     SynthModule::process(num_samples);
     reverb_->processWithInput(audio_in, num_samples);
   }
-} // namespace vital
+} // namespace sbvital

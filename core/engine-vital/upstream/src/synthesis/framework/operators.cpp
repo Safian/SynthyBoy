@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "operators.h"
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
 
   void Clamp::process(int num_samples) {
     VITAL_ASSERT(inputMatchesBufferSize());
@@ -342,4 +343,4 @@ namespace vital {
     poly_float result = utils::maskLoad(tempo_adjusted, input(kFrequency)->at(0), frequency_mask);
     output()->buffer[0] = utils::maskLoad(result, keytrack_frequency, keytrack_mask);
   }
-} // namespace vital
+} // namespace sbvital

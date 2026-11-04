@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "synth_constants.h"
 #include "fourier_transform.h"
 #include "futils.h"
 #include "wavetable.h"
 
-namespace vital {
+namespace sbvital {
   static constexpr int kNumHarmonics = WaveFrame::kWaveformSize / 2 + 1;
   static constexpr mono_float kMaxFormantShift = 1.0f;
   static constexpr mono_float kMaxEvenOddFormantShift = 2.0f;
@@ -475,4 +476,4 @@ namespace vital {
 
     transformAndWrapBuffer(transform, dest);
   }
-} // namespace vital
+} // namespace sbvital

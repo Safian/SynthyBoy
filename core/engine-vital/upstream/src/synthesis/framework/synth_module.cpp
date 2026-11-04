@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "synth_module.h"
 
@@ -20,7 +21,7 @@
 #include "smooth_value.h"
 #include "value_switch.h"
 
-namespace vital {
+namespace sbvital {
 
   Value* SynthModule::createBaseControl(std::string name, bool audio_rate, bool smooth_value) {
     mono_float default_value = Parameters::getDetails(name).default_value;
@@ -481,4 +482,4 @@ namespace vital {
   void SynthModule::addIdleMonoProcessor(Processor* processor) {
     getMonoRouter()->addIdleProcessor(processor);
   }
-} // namespace vital
+} // namespace sbvital

@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "utils.h"
 
-namespace vital {
+namespace sbvital {
 
   constexpr float kPcmScale = 32767.0f;
   constexpr float kComplexAmplitudePcmScale = 50.0f;
@@ -92,4 +93,4 @@ namespace vital {
       }
     }
   } // namespace utils
-} // namespace vital
+} // namespace sbvital

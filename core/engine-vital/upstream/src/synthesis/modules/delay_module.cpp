@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "delay_module.h"
 
 #include "delay.h"
 #include "memory.h"
 
-namespace vital {
+namespace sbvital {
 
   DelayModule::DelayModule(const Output* beats_per_second) : SynthModule(0, 1), beats_per_second_(beats_per_second) {
     int size = kMaxDelayTime * getSampleRate();
@@ -70,4 +71,4 @@ namespace vital {
     SynthModule::process(num_samples);
     delay_->processWithInput(audio_in, num_samples);
   }
-} // namespace vital
+} // namespace sbvital

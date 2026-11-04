@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "phase_modifier.h"
 #include "wave_frame.h"
@@ -43,15 +44,15 @@ void PhaseModifier::PhaseModifierKeyframe::interpolate(const WavetableKeyframe* 
   mix_ = linearTween(from->mix_, to->mix_, t);
 }
 
-void PhaseModifier::PhaseModifierKeyframe::render(vital::WaveFrame* wave_frame) {
+void PhaseModifier::PhaseModifierKeyframe::render(sbvital::WaveFrame* wave_frame) {
   std::complex<float> phase_shift = std::polar(1.0f, -phase_);
   if (phase_style_ == kHarmonic) {
-    for (int i = 0; i < vital::WaveFrame::kWaveformSize; ++i)
+    for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; ++i)
       wave_frame->frequency_domain[i] = multiplyAndMix(wave_frame->frequency_domain[i], phase_shift, mix_);
   }
   else if (phase_style_ == kHarmonicEvenOdd) {
     std::complex<float> odd_shift = 1.0f / phase_shift;
-    for (int i = 0; i < vital::WaveFrame::kWaveformSize; i += 2) {
+    for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; i += 2) {
       wave_frame->frequency_domain[i] = multiplyAndMix(wave_frame->frequency_domain[i], phase_shift, mix_);
       wave_frame->frequency_domain[i + 1] = multiplyAndMix(wave_frame->frequency_domain[i + 1], odd_shift, mix_);
     }
@@ -59,7 +60,7 @@ void PhaseModifier::PhaseModifierKeyframe::render(vital::WaveFrame* wave_frame) 
   else if (phase_style_ == kNormal) {
     std::complex<float> current_phase_shift = 1.0f;
 
-    for (int i = 0; i < vital::WaveFrame::kWaveformSize; ++i) {
+    for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; ++i) {
       wave_frame->frequency_domain[i] = multiplyAndMix(wave_frame->frequency_domain[i], current_phase_shift, mix_);
       current_phase_shift *= phase_shift;
     }
@@ -67,7 +68,7 @@ void PhaseModifier::PhaseModifierKeyframe::render(vital::WaveFrame* wave_frame) 
   else if (phase_style_ == kEvenOdd) {
     std::complex<float> current_phase_shift = 1.0f;
 
-    for (int i = 0; i < vital::WaveFrame::kWaveformSize; i += 2) {
+    for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; i += 2) {
       wave_frame->frequency_domain[i] = multiplyAndMix(wave_frame->frequency_domain[i], current_phase_shift, mix_);
       std::complex<float> odd_shift = 1.0f / (current_phase_shift * phase_shift);
       wave_frame->frequency_domain[i + 1] = multiplyAndMix(wave_frame->frequency_domain[i + 1], odd_shift, mix_);
@@ -75,7 +76,7 @@ void PhaseModifier::PhaseModifierKeyframe::render(vital::WaveFrame* wave_frame) 
     }
   }
   else if (phase_style_ == kClear) {
-    for (int i = 0; i < vital::WaveFrame::kWaveformSize; ++i)
+    for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; ++i)
       wave_frame->frequency_domain[i] = std::abs(wave_frame->frequency_domain[i]);
   }
   wave_frame->toTimeDomain();
@@ -100,7 +101,7 @@ WavetableKeyframe* PhaseModifier::createKeyframe(int position) {
   return keyframe;
 }
 
-void PhaseModifier::render(vital::WaveFrame* wave_frame, float position) {
+void PhaseModifier::render(sbvital::WaveFrame* wave_frame, float position) {
   compute_frame_.setPhaseStyle(phase_style_);
   interpolate(&compute_frame_, position);
   compute_frame_.render(wave_frame);

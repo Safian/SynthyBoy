@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
 #include "common.h"
 #include "poly_utils.h"
 
-namespace vital {
+namespace sbvital {
 
   template<mono_float(*function)(mono_float), size_t resolution>
   class OneDimLookup {
@@ -53,5 +54,5 @@ namespace vital {
 
       JUCE_LEAK_DETECTOR(OneDimLookup)
   };
-} // namespace vital
+} // namespace sbvital
 

@@ -13,16 +13,17 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 #include "wave_frame.h"
 #include "wavetable_component.h"
 
-namespace vital {
+namespace sbvital {
   class Wavetable;
-} // namespace vital
+} // namespace sbvital
 
 class WavetableGroup {
   public:
@@ -41,8 +42,8 @@ class WavetableGroup {
     int numComponents() const { return static_cast<int>(components_.size()); }
     WavetableComponent* getComponent(int index) const { return components_[index].get(); }
     bool isShepardTone();
-    void render(vital::WaveFrame* wave_frame, float position) const;
-    void renderTo(vital::Wavetable* wavetable);
+    void render(sbvital::WaveFrame* wave_frame, float position) const;
+    void renderTo(sbvital::Wavetable* wavetable);
     void loadDefaultGroup();
     int getLastKeyframePosition();
 
@@ -50,7 +51,7 @@ class WavetableGroup {
     void jsonToState(json data);
 
   protected:
-    vital::WaveFrame compute_frame_;
+    sbvital::WaveFrame compute_frame_;
     std::vector<std::unique_ptr<WavetableComponent>> components_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WavetableGroup)

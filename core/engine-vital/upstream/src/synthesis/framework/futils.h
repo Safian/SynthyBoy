@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -23,7 +24,7 @@
 
 // These are faster but less accurate versions of utility functions.
 
-namespace vital {
+namespace sbvital {
 
   namespace {
     constexpr mono_float kDbGainConversionMult = 6.02059991329f;
@@ -377,5 +378,5 @@ namespace vital {
       return utils::maskLoad(result, value, zero_mask);
     }
   } // namespace futils
-} // namespace vital
+} // namespace sbvital
 

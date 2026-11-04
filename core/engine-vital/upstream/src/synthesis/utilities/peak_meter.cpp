@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "peak_meter.h"
 #include "utils.h"
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
 
   namespace {
     constexpr mono_float kSampleDecay = 8096.0f;
@@ -66,4 +67,4 @@ namespace vital {
     output(kLevel)->buffer[0] = utils::maskLoad(prepped_rms, current_peak_, constants::kFirstMask);
     output(kMemoryPeak)->buffer[0] = remembered_peak_;
   }
-} // namespace vital
+} // namespace sbvital

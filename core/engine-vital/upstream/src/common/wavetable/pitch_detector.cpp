@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "pitch_detector.h"
 #include "synth_constants.h"
@@ -49,14 +50,14 @@ float PitchDetector::getPeriodError(float period) {
       float first_t = first_position - first_index;
       float first_from = signal_data_[first_index];
       float first_to = signal_data_[first_index + 1];
-      float first_value = vital::utils::interpolate(first_from, first_to, first_t);
+      float first_value = sbvital::utils::interpolate(first_from, first_to, first_t);
       total_from += first_value;
 
       int second_index = second_position;
       float second_t = second_position - second_index;
       float second_from = signal_data_[second_index];
       float second_to = signal_data_[second_index + 1];
-      float second_value = vital::utils::interpolate(second_from, second_to, second_t);
+      float second_value = sbvital::utils::interpolate(second_from, second_to, second_t);
       total_to += second_value;
 
       float delta = first_value - second_value;

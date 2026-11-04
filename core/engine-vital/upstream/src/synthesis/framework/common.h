@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 
 // Debugging.
 #if DEBUG
@@ -40,7 +41,7 @@
 
 #include "poly_values.h"
 
-namespace vital {
+namespace sbvital {
 
   typedef float mono_float;
 
@@ -79,5 +80,5 @@ namespace vital {
     kVoiceKill,
     kNumVoiceEvents
   };
-} // namespace vital
+} // namespace sbvital
 

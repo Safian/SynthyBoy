@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "diode_filter.h"
 
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
   DiodeFilter::DiodeFilter() : Processor(DiodeFilter::kNumInputs, 1) {
     hardReset();
   }
@@ -151,4 +152,4 @@ namespace vital {
     stage3_.tick((stage2_.getCurrentState() + stage4_.getNextSatState()) * 0.5f, coefficient);
     stage4_.tick(stage3_.getCurrentState(), coefficient);
   }
-} // namespace vital
+} // namespace sbvital

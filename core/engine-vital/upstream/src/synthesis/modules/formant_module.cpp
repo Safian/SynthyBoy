@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "formant_module.h"
 #include "vocal_tract.h"
 
-namespace vital {
+namespace sbvital {
 
   FormantModule::FormantModule(std::string prefix) :
     SynthModule(kNumInputs, 1), prefix_(std::move(prefix)),
@@ -93,4 +94,4 @@ namespace vital {
     last_style_ = new_style;
     reset(constants::kFullMask);
   }
-} // namespace vital
+} // namespace sbvital

@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 #include "common.h"
 #include "json/json.h"
 
@@ -29,7 +30,7 @@ class LineGenerator {
     static constexpr int kExtraValues = 3;
 
     static force_inline float smoothTransition(float t) {
-      return 0.5f * sinf((t - 0.5f) * vital::kPi) + 0.5f;
+      return 0.5f * sinf((t - 0.5f) * sbvital::kPi) + 0.5f;
     }
 
     LineGenerator(int resolution = kDefaultResolution);
@@ -70,8 +71,8 @@ class LineGenerator {
     force_inline int resolution() const { return resolution_; }
     force_inline bool linear() const { return linear_; }
     force_inline bool smooth() const { return smooth_; }
-    force_inline vital::mono_float* getBuffer() const { return buffer_.get() + 1; }
-    force_inline vital::mono_float* getCubicInterpolationBuffer() const { return buffer_.get(); }
+    force_inline sbvital::mono_float* getBuffer() const { return buffer_.get() + 1; }
+    force_inline sbvital::mono_float* getCubicInterpolationBuffer() const { return buffer_.get(); }
 
     force_inline std::pair<float, float> getPoint(int index) const {
       VITAL_ASSERT(index < kMaxPoints && index >= 0);
@@ -115,7 +116,7 @@ class LineGenerator {
     int num_points_;
     int resolution_;
 
-    std::unique_ptr<vital::mono_float[]> buffer_;
+    std::unique_ptr<sbvital::mono_float[]> buffer_;
     bool loop_;
     bool smooth_;
     bool linear_;

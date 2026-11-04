@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "phaser_filter.h"
 
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
   PhaserFilter::PhaserFilter(bool clean) : Processor(PhaserFilter::kNumInputs, 1) {
     clean_ = clean;
     hardReset();
@@ -71,4 +72,4 @@ namespace vital {
     else
       invert_mult_ = 1.0f;
   }
-} // namespace vital
+} // namespace sbvital

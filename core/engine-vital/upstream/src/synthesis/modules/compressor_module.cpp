@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "compressor_module.h"
 
 #include "compressor.h"
 
-namespace vital {
+namespace sbvital {
 
   CompressorModule::CompressorModule() : SynthModule(0, kNumOutputs), compressor_(nullptr) { }
 
@@ -104,4 +105,4 @@ namespace vital {
   void CompressorModule::hardReset() {
     compressor_->reset(constants::kFullMask);
   }
-} // namespace vital
+} // namespace sbvital

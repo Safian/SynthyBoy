@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 #include "pitch_detector.h"
 #include "wavetable_component.h"
 #include "wave_frame.h"
@@ -63,11 +64,11 @@ class FileSource : public WavetableComponent {
 
         float getNormalizationScale();
 
-        void render(vital::WaveFrame* wave_frame) override;
-        void renderWaveBlend(vital::WaveFrame* wave_frame);
-        void renderNoInterpolate(vital::WaveFrame* wave_frame);
-        void renderTimeInterpolate(vital::WaveFrame* wave_frame);
-        void renderFreqInterpolate(vital::WaveFrame* wave_frame);
+        void render(sbvital::WaveFrame* wave_frame) override;
+        void renderWaveBlend(sbvital::WaveFrame* wave_frame);
+        void renderNoInterpolate(sbvital::WaveFrame* wave_frame);
+        void renderTimeInterpolate(sbvital::WaveFrame* wave_frame);
+        void renderFreqInterpolate(sbvital::WaveFrame* wave_frame);
         json stateToJson() override;
         void jsonToState(json data) override;
 
@@ -123,7 +124,7 @@ class FileSource : public WavetableComponent {
     virtual ~FileSource() { }
 
     WavetableKeyframe* createKeyframe(int position) override;
-    void render(vital::WaveFrame* wave_frame, float position) override;
+    void render(sbvital::WaveFrame* wave_frame, float position) override;
     WavetableComponentFactory::ComponentType getType() override;
     json stateToJson() override;
     void jsonToState(json data) override;
@@ -142,7 +143,7 @@ class FileSource : public WavetableComponent {
     double getWindowSize() { return window_size_; }
   
     void loadBuffer(const float* buffer, int size, int sample_rate);
-    void detectPitch(int max_period = vital::WaveFrame::kWaveformSize);
+    void detectPitch(int max_period = sbvital::WaveFrame::kWaveformSize);
     void detectWaveEditTable();
 
     force_inline const float* getDataBuffer() {
@@ -158,7 +159,7 @@ class FileSource : public WavetableComponent {
     WaveSourceKeyframe interpolate_to_frame_;
 
     SampleBuffer sample_buffer_;
-    float overridden_phase_[vital::WaveFrame::kWaveformSize];
+    float overridden_phase_[sbvital::WaveFrame::kWaveformSize];
     FadeStyle fade_style_;
     PhaseStyle phase_style_;
     bool normalize_gain_;
@@ -166,7 +167,7 @@ class FileSource : public WavetableComponent {
     double window_size_;
 
     int random_seed_;
-    vital::utils::RandomGenerator random_generator_;
+    sbvital::utils::RandomGenerator random_generator_;
     PitchDetector pitch_detector_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FileSource)

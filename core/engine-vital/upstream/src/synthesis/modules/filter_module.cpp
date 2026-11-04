@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "filter_module.h"
 
@@ -26,7 +27,7 @@
 #include "sallen_key_filter.h"
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
 
   FilterModule::FilterModule(std::string prefix) :
       SynthModule(kNumInputs, 1), last_model_(-1), was_on_(false), 
@@ -241,4 +242,4 @@ namespace vital {
     mono_ = mono;
     formant_filter_->setMono(mono);
   }
-} // namespace vital
+} // namespace sbvital

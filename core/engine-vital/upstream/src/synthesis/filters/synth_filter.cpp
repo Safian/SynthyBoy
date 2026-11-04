@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "synth_filter.h"
 
@@ -25,7 +26,7 @@
 #include "phaser_filter.h"
 #include "sallen_key_filter.h"
 
-namespace vital {
+namespace sbvital {
 
   namespace {
     constexpr mono_float kMaxDriveGain = 36.0f;
@@ -72,4 +73,4 @@ namespace vital {
     }
   }
 
-} // namespace vital
+} // namespace sbvital

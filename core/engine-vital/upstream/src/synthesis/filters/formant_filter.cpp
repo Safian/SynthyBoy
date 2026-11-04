@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "formant_filter.h"
 
@@ -21,7 +22,7 @@
 #include "operators.h"
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
 
   namespace {
     struct FormantValues {
@@ -91,9 +92,9 @@ namespace vital {
     poly_float bilinearInterpolate(poly_float top_left, poly_float top_right,
                                    poly_float bot_left, poly_float bot_right,
                                    poly_float x, poly_float y) {
-      poly_float top = vital::utils::interpolate(top_left, top_right, x);
-      poly_float bot = vital::utils::interpolate(bot_left, bot_right, x);
-      return vital::utils::interpolate(bot, top, y);
+      poly_float top = sbvital::utils::interpolate(top_left, top_right, x);
+      poly_float bot = sbvital::utils::interpolate(bot_left, bot_right, x);
+      return sbvital::utils::interpolate(bot, top, y);
     }
 
     SynthFilter::FilterState interpolateFormants(const FormantValues& top_left,
@@ -188,7 +189,7 @@ namespace vital {
 
   void FormantFilter::setupFilter(const FilterState& filter_state) {
     int style = std::min(filter_state.style, FormantFilter::kNumFormantStyles - 1);
-    for (int i = 0; i < vital::kNumFormants; ++i) {
+    for (int i = 0; i < sbvital::kNumFormants; ++i) {
       FilterState formant_setting = interpolateFormants(formant_styles[style][kTopLeft][i],
                                                         formant_styles[style][kTopRight][i],
                                                         formant_styles[style][kBottomLeft][i],
@@ -196,7 +197,7 @@ namespace vital {
                                                         filter_state.interpolate_x,
                                                         filter_state.interpolate_y);
 
-      vital::DigitalSvf* formant = formant_manager_->getFormant(i);
+      sbvital::DigitalSvf* formant = formant_manager_->getFormant(i);
       formant_setting.midi_cutoff = utils::interpolate(formant_setting.midi_cutoff, kCenterMidi,
                                                        filter_state.pass_blend);
       formant_setting.midi_cutoff += filter_state.transpose;
@@ -214,4 +215,4 @@ namespace vital {
   void FormantFilter::hardReset() {
     getLocalProcessor(formant_manager_)->hardReset();
   }
-} // namespace vital
+} // namespace sbvital

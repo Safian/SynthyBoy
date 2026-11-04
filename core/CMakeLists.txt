@@ -22,9 +22,13 @@ else()
     target_compile_options(synthyboy_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Vital-derived code (docs/ARCHITECTURE.md 2.2) will live only in engine-vital/; nothing is added yet.
+# Vital-derived code (docs/ARCHITECTURE.md 2.2) lives only in engine-vital/; with SYNTHYBOY_WITH_VITAL=OFF
+# (iOS) nothing of it is added to the build.
 if(SYNTHYBOY_WITH_VITAL)
-    message(STATUS "SYNTHYBOY_WITH_VITAL=ON: engine-vital is empty in this phase, nothing added")
+    message(STATUS "SYNTHYBOY_WITH_VITAL=ON: Vital-derived engine is built (core/engine-vital)")
+    add_subdirectory(engine-vital)
+    target_link_libraries(synthyboy_core PRIVATE synthyboy_engine_vital)
+    target_compile_definitions(synthyboy_core PUBLIC SYNTHYBOY_HAS_VITAL=1)
 else()
     message(STATUS "SYNTHYBOY_WITH_VITAL=OFF: own engine only")
 endif()

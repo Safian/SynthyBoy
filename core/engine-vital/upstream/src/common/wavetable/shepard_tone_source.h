@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 #include "wave_source.h"
 
 class ShepardToneSource : public WaveSource {
@@ -24,7 +25,7 @@ class ShepardToneSource : public WaveSource {
     ShepardToneSource();
     virtual ~ShepardToneSource();
 
-    virtual void render(vital::WaveFrame* wave_frame, float position) override;
+    virtual void render(sbvital::WaveFrame* wave_frame, float position) override;
     virtual WavetableComponentFactory::ComponentType getType() override;
     virtual bool hasKeyframes() override { return false; }
 

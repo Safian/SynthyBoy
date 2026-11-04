@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "slew_limit_modifier.h"
 
@@ -39,14 +40,14 @@ void SlewLimitModifier::SlewLimitModifierKeyframe::interpolate(const WavetableKe
   slew_up_run_rise_ = linearTween(from->slew_up_run_rise_, to->slew_up_run_rise_, t);
 }
 
-void SlewLimitModifier::SlewLimitModifierKeyframe::render(vital::WaveFrame* wave_frame) {
-  float min_slew_limit = 1.0f / vital::WaveFrame::kWaveformSize;
-  float max_up_delta = (2.0f / vital::WaveFrame::kWaveformSize) / std::max(slew_up_run_rise_, min_slew_limit);
-  float max_down_delta = (2.0f / vital::WaveFrame::kWaveformSize) / std::max(slew_down_run_rise_, min_slew_limit);
+void SlewLimitModifier::SlewLimitModifierKeyframe::render(sbvital::WaveFrame* wave_frame) {
+  float min_slew_limit = 1.0f / sbvital::WaveFrame::kWaveformSize;
+  float max_up_delta = (2.0f / sbvital::WaveFrame::kWaveformSize) / std::max(slew_up_run_rise_, min_slew_limit);
+  float max_down_delta = (2.0f / sbvital::WaveFrame::kWaveformSize) / std::max(slew_down_run_rise_, min_slew_limit);
 
   float current_value = wave_frame->time_domain[0];
-  for (int i = 1; i < 2 * vital::WaveFrame::kWaveformSize; ++i) {
-    int index = i % vital::WaveFrame::kWaveformSize;
+  for (int i = 1; i < 2 * sbvital::WaveFrame::kWaveformSize; ++i) {
+    int index = i % sbvital::WaveFrame::kWaveformSize;
     float target_value = wave_frame->time_domain[index];
     float delta = target_value - current_value;
 
@@ -79,7 +80,7 @@ WavetableKeyframe* SlewLimitModifier::createKeyframe(int position) {
   return keyframe;
 }
 
-void SlewLimitModifier::render(vital::WaveFrame* wave_frame, float position) {
+void SlewLimitModifier::render(sbvital::WaveFrame* wave_frame, float position) {
   interpolate(&compute_frame_, position);
   compute_frame_.render(wave_frame);
 }

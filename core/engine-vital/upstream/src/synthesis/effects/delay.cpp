@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "delay.h"
 
 #include "futils.h"
 #include "memory.h"
 #include "synth_constants.h"
-namespace vital {
+namespace sbvital {
 
   namespace {
     force_inline poly_float saturate(poly_float value) {
@@ -376,4 +377,4 @@ namespace vital {
 
   template class Delay<StereoMemory>;
   template class Delay<Memory>;
-} // namespace vital
+} // namespace sbvital

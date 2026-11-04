@@ -13,19 +13,20 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 #include "wavetable_keyframe.h"
 #include "wavetable_component_factory.h"
 #include "json/json.h"
 
 using json = nlohmann::json;
 
-namespace vital {
+namespace sbvital {
   class WaveFrame;
-} // namespace vital
+} // namespace sbvital
 
 class WavetableComponent {
   public:
@@ -40,7 +41,7 @@ class WavetableComponent {
     virtual ~WavetableComponent() { }
 
     virtual WavetableKeyframe* createKeyframe(int position) = 0;
-    virtual void render(vital::WaveFrame* wave_frame, float position) = 0;
+    virtual void render(sbvital::WaveFrame* wave_frame, float position) = 0;
     virtual WavetableComponentFactory::ComponentType getType() = 0;
     virtual json stateToJson();
     virtual void jsonToState(json data);

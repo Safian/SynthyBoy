@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 #include "wavetable_component.h"
 
 class WaveFoldModifier : public WavetableComponent {
@@ -29,7 +30,7 @@ class WaveFoldModifier : public WavetableComponent {
         void copy(const WavetableKeyframe* keyframe) override;
         void interpolate(const WavetableKeyframe* from_keyframe,
                          const WavetableKeyframe* to_keyframe, float t) override;
-        void render(vital::WaveFrame* wave_frame) override;
+        void render(sbvital::WaveFrame* wave_frame) override;
         json stateToJson() override;
         void jsonToState(json data) override;
 
@@ -46,7 +47,7 @@ class WaveFoldModifier : public WavetableComponent {
     virtual ~WaveFoldModifier() { }
 
     virtual WavetableKeyframe* createKeyframe(int position) override;
-    virtual void render(vital::WaveFrame* wave_frame, float position) override;
+    virtual void render(sbvital::WaveFrame* wave_frame, float position) override;
     virtual WavetableComponentFactory::ComponentType getType() override;
 
     WaveFoldModifierKeyframe* getKeyframe(int index);

@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "wavetable_component.h"
 
 WavetableKeyframe* WavetableComponent::insertNewKeyframe(int position) {
-  VITAL_ASSERT(position >= 0 && position < vital::kNumOscillatorWaveFrames);
+  VITAL_ASSERT(position >= 0 && position < sbvital::kNumOscillatorWaveFrames);
 
   WavetableKeyframe* keyframe = createKeyframe(position);
   keyframe->setOwner(this);
@@ -129,6 +130,6 @@ int WavetableComponent::getLastKeyframePosition() {
   if (keyframes_.size() == 0)
     return 0;
   if (!hasKeyframes())
-    return vital::kNumOscillatorWaveFrames - 1;
+    return sbvital::kNumOscillatorWaveFrames - 1;
   return keyframes_[keyframes_.size() - 1]->position();
 }

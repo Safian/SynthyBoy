@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "envelope.h"
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
 
   Envelope::Envelope() :
       Processor(kNumInputs, kNumOutputs), current_value_(0.0f),
@@ -253,4 +254,4 @@ namespace vital {
     sustain_ = sustain_end;
     output(kPhase)->buffer[0] = poly_state_ + position_;
   }
-} // namespace vital
+} // namespace sbvital

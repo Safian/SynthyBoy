@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -25,7 +26,7 @@
 #include <map>
 #include <list>
 
-namespace vital {
+namespace sbvital {
 
   struct VoiceState {
     VoiceState() : event(kInvalid), midi_note(0), tuned_note(0.0f), last_note(0.0f), velocity(0.0f),
@@ -487,5 +488,5 @@ namespace vital {
 
       JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VoiceHandler)
   };
-} // namespace vital
+} // namespace sbvital
 

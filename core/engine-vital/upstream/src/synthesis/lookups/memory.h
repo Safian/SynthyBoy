@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -23,7 +24,7 @@
 
 #include "poly_utils.h"
 
-namespace vital {
+namespace sbvital {
 
   template<size_t kChannels>
   class MemoryTemplate {
@@ -152,5 +153,5 @@ namespace vital {
         return interpolation_matrix.multiplyAndSumRows(value_matrix);
       }
   };
-} // namespace vital
+} // namespace sbvital
 

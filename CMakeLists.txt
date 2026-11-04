@@ -37,8 +37,8 @@ endif()
 #   SYNTHYBOY_BUILD_PLUGIN  VST3 + CLAP via JUCE (fetches JUCE and clap-juce-extensions); OFF builds only the core
 #                           (used by the ARMv7 / AArch64 cross builds and the sanitizer jobs)
 #   SYNTHYBOY_BUILD_TESTS   core unit / real-time / thread tests (CTest)
-#   SYNTHYBOY_WITH_VITAL    Vital-derived engine in core/engine-vital (docs/ARCHITECTURE.md 2.2); nothing is added yet,
-#                           OFF for iOS
+#   SYNTHYBOY_WITH_VITAL    Vital-derived engine in core/engine-vital (docs/ARCHITECTURE.md 2.2); OFF for iOS (nothing
+#                           of core/engine-vital is then added to the build)
 option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
 option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
 option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" ON)

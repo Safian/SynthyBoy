@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "wave_line_source.h"
 
@@ -23,7 +24,7 @@
 #include "wavetable_component_factory.h"
 
 WaveLineSource::WaveLineSourceKeyframe::WaveLineSourceKeyframe() :
-    line_generator_(vital::WaveFrame::kWaveformSize) {
+    line_generator_(sbvital::WaveFrame::kWaveformSize) {
   pull_power_ = 0.0f;
 }
 
@@ -47,7 +48,7 @@ void WaveLineSource::WaveLineSourceKeyframe::interpolate(const WavetableKeyframe
   VITAL_ASSERT(from->getNumPoints() == to->getNumPoints());
 
   float relative_power = from->getPullPower() - to->getPullPower();
-  float adjusted_t = vital::futils::powerScale(t, relative_power);
+  float adjusted_t = sbvital::futils::powerScale(t, relative_power);
 
   const LineGenerator* from_generator = from->getLineGenerator();
   const LineGenerator* to_generator = to->getLineGenerator();
@@ -66,10 +67,10 @@ void WaveLineSource::WaveLineSourceKeyframe::interpolate(const WavetableKeyframe
   }
 }
 
-void WaveLineSource::WaveLineSourceKeyframe::render(vital::WaveFrame* wave_frame) {
+void WaveLineSource::WaveLineSourceKeyframe::render(sbvital::WaveFrame* wave_frame) {
   line_generator_.render();
-  memcpy(wave_frame->time_domain, line_generator_.getBuffer(), vital::WaveFrame::kWaveformSize * sizeof(float));
-  for (int i = 0; i < vital::WaveFrame::kWaveformSize; ++i)
+  memcpy(wave_frame->time_domain, line_generator_.getBuffer(), sbvital::WaveFrame::kWaveformSize * sizeof(float));
+  for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; ++i)
     wave_frame->time_domain[i] = wave_frame->time_domain[i] * 2.0f - 1.0f;
   wave_frame->toFrequencyDomain();
 }
@@ -96,7 +97,7 @@ WavetableKeyframe* WaveLineSource::createKeyframe(int position) {
   return keyframe;
 }
 
-void WaveLineSource::render(vital::WaveFrame* wave_frame, float position) {
+void WaveLineSource::render(sbvital::WaveFrame* wave_frame, float position) {
   interpolate(&compute_frame_, position);
   compute_frame_.render(wave_frame);
 }

@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "processor_router.h"
 
@@ -22,7 +23,7 @@
 #include <algorithm>
 #include <vector>
 
-namespace vital {
+namespace sbvital {
 
   ProcessorRouter::ProcessorRouter(int num_inputs, int num_outputs, bool control_rate) :
       Processor(num_inputs, num_outputs, control_rate),
@@ -425,4 +426,4 @@ namespace vital {
 
     dependencies_->removeAll(context);
   }
-} // namespace vital
+} // namespace sbvital

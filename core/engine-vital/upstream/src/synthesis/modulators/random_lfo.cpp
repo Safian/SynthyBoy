@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "random_lfo.h"
 
@@ -33,7 +34,7 @@ namespace {
   constexpr float kLorenzScale = 1.0f / kLorenzSize;
 }
 
-namespace vital {
+namespace sbvital {
   RandomLfo::RandomLfo() : Processor(kNumInputs, 1), random_generator_(-1.0f, 1.0f) {
     last_sync_ = std::make_shared<double>();
     sync_seconds_ = std::make_shared<double>();
@@ -257,4 +258,4 @@ namespace vital {
   void RandomLfo::correctToTime(double seconds) {
     *sync_seconds_ = seconds;
   }
-} // namespace vital
+} // namespace sbvital

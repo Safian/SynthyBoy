@@ -13,11 +13,12 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "modulation_connection_processor.h"
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
 
   ModulationConnectionProcessor::ModulationConnectionProcessor(int index) :
       SynthModule(kNumInputs, kNumOutputs), index_(index), polyphonic_(true), current_value_(nullptr),
@@ -284,4 +285,4 @@ namespace vital {
     output(kModulationOutput)->buffer[0] = raw_modulation * (*destination_scale_);
     VITAL_ASSERT(utils::isFinite(output()->buffer[0]));
   }
-} // namespace vital
+} // namespace sbvital

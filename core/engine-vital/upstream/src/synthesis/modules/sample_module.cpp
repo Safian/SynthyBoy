@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "sample_module.h"
 
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
 
   SampleModule::SampleModule() : SynthModule(kNumInputs, kNumOutputs), on_(nullptr) {
     sampler_ = new SampleSource();
@@ -69,4 +70,4 @@ namespace vital {
 
     *was_on_ = on;
   }
-} // namespace vital
+} // namespace sbvital

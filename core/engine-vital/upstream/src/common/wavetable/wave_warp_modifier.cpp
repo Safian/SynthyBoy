@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "wave_warp_modifier.h"
 
@@ -59,26 +60,26 @@ void WaveWarpModifier::WaveWarpModifierKeyframe::interpolate(const WavetableKeyf
   vertical_power_ = linearTween(from->vertical_power_, to->vertical_power_, t);
 }
 
-void WaveWarpModifier::WaveWarpModifierKeyframe::render(vital::WaveFrame* wave_frame) {
-  for (int i = 0; i < vital::WaveFrame::kWaveformSize; ++i)
+void WaveWarpModifier::WaveWarpModifierKeyframe::render(sbvital::WaveFrame* wave_frame) {
+  for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; ++i)
     wave_frame->frequency_domain[i] = wave_frame->time_domain[i];
 
-  for (int i = 0; i < vital::WaveFrame::kWaveformSize; ++i) {
-    float horizontal = i / (vital::WaveFrame::kWaveformSize - 1.0f);
+  for (int i = 0; i < sbvital::WaveFrame::kWaveformSize; ++i) {
+    float horizontal = i / (sbvital::WaveFrame::kWaveformSize - 1.0f);
     float warped_horizontal = 0.0f;
     if (horizontal_asymmetric_)
       warped_horizontal = highResPowerScale(horizontal, horizontal_power_);
     else
       warped_horizontal = 0.5f * highResPowerScale(2.0f * horizontal - 1.0f, horizontal_power_) + 0.5f;
 
-    float float_index = (vital::WaveFrame::kWaveformSize - 1) * warped_horizontal;
+    float float_index = (sbvital::WaveFrame::kWaveformSize - 1) * warped_horizontal;
     int index = float_index;
-    index = vital::utils::iclamp(index, 0, vital::WaveFrame::kWaveformSize - 2);
+    index = sbvital::utils::iclamp(index, 0, sbvital::WaveFrame::kWaveformSize - 2);
 
     float vertical_from = wave_frame->frequency_domain[index].real();
     float vertical_to = wave_frame->frequency_domain[index + 1].real();
     float vertical = linearTween(vertical_from, vertical_to, float_index - index);
-    vertical = vital::utils::clamp(vertical, -1.0f, 1.0f);
+    vertical = sbvital::utils::clamp(vertical, -1.0f, 1.0f);
     if (vertical_asymmetric_)
       wave_frame->time_domain[i] = 2.0f * highResPowerScale(0.5f * vertical + 0.5f, vertical_power_) - 1.0f;
     else
@@ -106,7 +107,7 @@ WavetableKeyframe* WaveWarpModifier::createKeyframe(int position) {
   return keyframe;
 }
 
-void WaveWarpModifier::render(vital::WaveFrame* wave_frame, float position) {
+void WaveWarpModifier::render(sbvital::WaveFrame* wave_frame, float position) {
   interpolate(&compute_frame_, position);
   compute_frame_.setHorizontalAsymmetric(horizontal_asymmetric_);
   compute_frame_.setVerticalAsymmetric(vertical_asymmetric_);

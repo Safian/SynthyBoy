@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "digital_svf.h"
 
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
   const DigitalSvf::SvfCoefficientLookup DigitalSvf::svf_coefficient_lookup_;
 
   DigitalSvf::DigitalSvf() : Processor(DigitalSvf::kNumInputs, 1),
@@ -431,4 +432,4 @@ namespace vital {
     drive_ = 0.0f;
     post_multiply_ = 0.0f;
   }
-} // namespace vital
+} // namespace sbvital

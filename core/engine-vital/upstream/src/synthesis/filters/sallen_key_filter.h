@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -20,7 +21,7 @@
 #include "processor.h"
 #include "synth_filter.h"
 
-namespace vital {
+namespace sbvital {
 
   class SallenKeyFilter : public Processor, public SynthFilter {
     public:
@@ -103,5 +104,5 @@ namespace vital {
 
       JUCE_LEAK_DETECTOR(SallenKeyFilter)
   };
-} // namespace vital
+} // namespace sbvital
 

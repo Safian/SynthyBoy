@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "iir_halfband_decimator.h"
 
-namespace vital {
+namespace sbvital {
   poly_float IirHalfbandDecimator::kTaps9[kNumTaps9] = {
     { 0.167135116548925f, 0.0413554705262319f },
     { 0.742130012538075f, 0.3878932830211427f },
@@ -69,4 +70,4 @@ namespace vital {
       out_memory_[i] = 0.0f;
     }
   }
-} // namespace vital
+} // namespace sbvital

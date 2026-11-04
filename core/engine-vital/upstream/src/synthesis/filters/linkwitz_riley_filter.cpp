@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "linkwitz_riley_filter.h"
 
-namespace vital {
+namespace sbvital {
 
   LinkwitzRileyFilter::LinkwitzRileyFilter(mono_float cutoff) : Processor(kNumInputs, kNumOutputs) {
     cutoff_ = cutoff;
@@ -133,4 +134,4 @@ namespace vital {
       past_out_2b_[i] = utils::maskLoad(past_out_2b_[i], 0.0f, reset_mask);
     }
   }
-} // namespace vital
+} // namespace sbvital

@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "phaser_module.h"
 
 #include "phaser.h"
 
-namespace vital {
+namespace sbvital {
 
   PhaserModule::PhaserModule(const Output* beats_per_second) :
       SynthModule(0, kNumOutputs), beats_per_second_(beats_per_second), phaser_(nullptr) { }
@@ -79,4 +80,4 @@ namespace vital {
     SynthModule::process(num_samples);
     phaser_->processWithInput(audio_in, num_samples);
   }
-} // namespace vital
+} // namespace sbvital

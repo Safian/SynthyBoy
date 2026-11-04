@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -20,7 +21,7 @@
 
 #include <string>
 
-namespace vital {
+namespace sbvital {
 
   constexpr int kNumLfos = 8;
   constexpr int kNumOscillators = 3;
@@ -51,7 +52,7 @@ namespace vital {
 
   const std::string kPresetExtension = "vital";
   const std::string kWavetableExtension = "vitaltable";
-  const std::string kWavetableExtensionsList = "*." + vital::kWavetableExtension + ";*.wav;*.flac";
+  const std::string kWavetableExtensionsList = "*." + sbvital::kWavetableExtension + ";*.wav;*.flac";
   const std::string kSampleExtensionsList = "*.wav;*.flac";
   const std::string kSkinExtension = "vitalskin";
   const std::string kLfoExtension = "vitallfo";
@@ -69,30 +70,30 @@ namespace vital {
 
     static SourceDestination toggleFilter1(SourceDestination current_destination, bool on) {
       if (on) {
-        if (current_destination == vital::constants::kFilter2)
-          return vital::constants::kDualFilters;
+        if (current_destination == sbvital::constants::kFilter2)
+          return sbvital::constants::kDualFilters;
         else
-          return vital::constants::kFilter1;
+          return sbvital::constants::kFilter1;
       }
-      else if (current_destination == vital::constants::kDualFilters)
-        return vital::constants::kFilter2;
-      else if (current_destination == vital::constants::kFilter1)
-        return vital::constants::kEffects;
+      else if (current_destination == sbvital::constants::kDualFilters)
+        return sbvital::constants::kFilter2;
+      else if (current_destination == sbvital::constants::kFilter1)
+        return sbvital::constants::kEffects;
 
       return current_destination;
     }
 
     static SourceDestination toggleFilter2(SourceDestination current_destination, bool on) {
       if (on) {
-        if (current_destination == vital::constants::kFilter1)
-          return vital::constants::kDualFilters;
+        if (current_destination == sbvital::constants::kFilter1)
+          return sbvital::constants::kDualFilters;
         else
-          return vital::constants::kFilter2;
+          return sbvital::constants::kFilter2;
       }
-      else if (current_destination == vital::constants::kDualFilters)
-        return vital::constants::kFilter1;
-      else if (current_destination == vital::constants::kFilter2)
-        return vital::constants::kEffects;
+      else if (current_destination == sbvital::constants::kDualFilters)
+        return sbvital::constants::kFilter1;
+      else if (current_destination == sbvital::constants::kFilter2)
+        return sbvital::constants::kEffects;
 
       return current_destination;
     }
@@ -130,7 +131,7 @@ namespace vital {
     };
 
     constexpr int kNumSyncedFrequencyRatios = 13;
-    constexpr vital::mono_float kSyncedFrequencyRatios[kNumSyncedFrequencyRatios] = {
+    constexpr sbvital::mono_float kSyncedFrequencyRatios[kNumSyncedFrequencyRatios] = {
       0.0f,
       1.0f / 128.0f,
       1.0f / 64.0f,
@@ -169,4 +170,4 @@ namespace vital {
     const cr::Value kValueSqrt2(kSqrt2);
     const cr::Value kValueNegOne(-1.0f);
   } // namespace constants
-} // namespace vital
+} // namespace sbvital

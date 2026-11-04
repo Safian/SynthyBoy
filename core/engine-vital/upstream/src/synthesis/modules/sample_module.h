@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
 #include "synth_module.h"
 #include "sample_source.h"
 
-namespace vital {
+namespace sbvital {
   class SampleModule : public SynthModule {
     public:
       enum {
@@ -52,5 +53,5 @@ namespace vital {
 
       JUCE_LEAK_DETECTOR(SampleModule)
   };
-} // namespace vital
+} // namespace sbvital
 

@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "envelope_module.h"
 
 #include "envelope.h"
 
-namespace vital {
+namespace sbvital {
 
   EnvelopeModule::EnvelopeModule(const std::string& prefix, bool force_audio_rate) :
       SynthModule(kNumInputs, kNumOutputs), prefix_(prefix), force_audio_rate_(force_audio_rate) {
@@ -54,4 +55,4 @@ namespace vital {
     envelope_->plug(decay_power, Envelope::kDecayPower);
     envelope_->plug(release_power, Envelope::kReleasePower);
   }
-} // namespace vital
+} // namespace sbvital

@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "frequency_filter_modifier.h"
 
@@ -68,8 +69,8 @@ void FrequencyFilterModifier::FrequencyFilterModifierKeyframe::interpolate(const
   cutoff_ = linearTween(from->cutoff_, to->cutoff_, t);
 }
 
-void FrequencyFilterModifier::FrequencyFilterModifierKeyframe::render(vital::WaveFrame* wave_frame) {
-  for (int i = 0; i < vital::WaveFrame::kNumRealComplex; ++i)
+void FrequencyFilterModifier::FrequencyFilterModifierKeyframe::render(sbvital::WaveFrame* wave_frame) {
+  for (int i = 0; i < sbvital::WaveFrame::kNumRealComplex; ++i)
     wave_frame->frequency_domain[i] *= getMultiplier(i);
 
   wave_frame->toTimeDomain();
@@ -97,15 +98,15 @@ float FrequencyFilterModifier::FrequencyFilterModifierKeyframe::getMultiplier(fl
   float cutoff_index = std::pow(2.0f, cutoff_);
   float cutoff_delta = index - cutoff_index;
 
-  float slope = 1.0f / vital::utils::interpolate(1.0f, kMaxSlopeReach, shape_ * shape_);
-  float power = vital::utils::interpolate(kMinPower, kMaxPower, shape_);
+  float slope = 1.0f / sbvital::utils::interpolate(1.0f, kMaxSlopeReach, shape_ * shape_);
+  float power = sbvital::utils::interpolate(kMinPower, kMaxPower, shape_);
 
   if (style_ == kLowPass)
-    return vital::utils::clamp(1.0f - slope * cutoff_delta, 0.0f, 1.0f);
+    return sbvital::utils::clamp(1.0f - slope * cutoff_delta, 0.0f, 1.0f);
   if (style_ == kBandPass)
-    return vital::utils::clamp(1.0f - fabsf(slope * cutoff_delta), 0.0f, 1.0f);
+    return sbvital::utils::clamp(1.0f - fabsf(slope * cutoff_delta), 0.0f, 1.0f);
   if (style_ == kHighPass)
-    return vital::utils::clamp(1.0f + slope * cutoff_delta, 0.0f, 1.0f);
+    return sbvital::utils::clamp(1.0f + slope * cutoff_delta, 0.0f, 1.0f);
   if (style_ == kComb)
     return combWave(index / (cutoff_index * 2.0f), power);
 
@@ -118,7 +119,7 @@ WavetableKeyframe* FrequencyFilterModifier::createKeyframe(int position) {
   return keyframe;
 }
 
-void FrequencyFilterModifier::render(vital::WaveFrame* wave_frame, float position) {
+void FrequencyFilterModifier::render(sbvital::WaveFrame* wave_frame, float position) {
   interpolate(&compute_frame_, position);
   compute_frame_.setStyle(style_);
   compute_frame_.setNormalize(normalize_);

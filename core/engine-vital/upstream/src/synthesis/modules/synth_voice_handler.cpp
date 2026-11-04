@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "synth_voice_handler.h"
 
@@ -29,7 +30,7 @@
 #include "value_switch.h"
 #include "modulation_connection_processor.h"
 
-namespace vital {
+namespace sbvital {
 
   SynthVoiceHandler::SynthVoiceHandler(Output* beats_per_second) :
       VoiceHandler(0, kMaxPolyphony), producers_(nullptr), beats_per_second_(beats_per_second),
@@ -76,7 +77,7 @@ namespace vital {
 
     setVoiceKiller(amplitude_->output());
 
-    for (int i = 0; i < vital::kMaxModulationConnections; ++i) {
+    for (int i = 0; i < sbvital::kMaxModulationConnections; ++i) {
       ModulationConnectionProcessor* processor = modulation_bank_.atIndex(i)->modulation_processor.get();
 
       processor->plug(reset(), ModulationConnectionProcessor::kReset);
@@ -122,7 +123,7 @@ namespace vital {
 
     std::string modulation_source_prefix = "modulation_source_";
     std::string modulation_amount_prefix = "modulation_amount_";
-    for (int i = 0; i < vital::kMaxModulationConnections; ++i) {
+    for (int i = 0; i < sbvital::kMaxModulationConnections; ++i) {
       ModulationConnectionProcessor* processor = modulation_bank_.atIndex(i)->modulation_processor.get();
       std::string number = std::to_string(i + 1);
       Output* source_output = processor->output(ModulationConnectionProcessor::kModulationSource);
@@ -133,7 +134,7 @@ namespace vital {
   }
 
   void SynthVoiceHandler::prepareDestroy() {
-    for (int i = 0; i < vital::kMaxModulationConnections; ++i) {
+    for (int i = 0; i < sbvital::kMaxModulationConnections; ++i) {
       ModulationConnectionProcessor* processor = modulation_bank_.atIndex(i)->modulation_processor.get();
       removeProcessor(processor);
     }
@@ -403,4 +404,4 @@ namespace vital {
   output_map& SynthVoiceHandler::getPolyModulations() {
     return poly_readouts_;
   }
-} // namespace vital
+} // namespace sbvital

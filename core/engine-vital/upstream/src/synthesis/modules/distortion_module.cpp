@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "distortion_module.h"
 
 #include "distortion.h"
 #include "digital_svf.h"
 
-namespace vital {
+namespace sbvital {
 
   DistortionModule::DistortionModule() :
       SynthModule(0, 1), distortion_(nullptr), filter_(nullptr), mix_(0.0f) { }
@@ -86,4 +87,4 @@ namespace vital {
       audio_out[i] = utils::interpolate(audio_in[i], audio_out[i], current_mix);
     }
   }
-} // namespace vital
+} // namespace sbvital

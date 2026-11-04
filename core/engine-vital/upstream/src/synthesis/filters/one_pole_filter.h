@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -20,7 +21,7 @@
 #include "synth_constants.h"
 #include "utils.h"
 
-namespace vital {
+namespace sbvital {
 
   template <poly_float (*saturate)(poly_float) = utils::pass<poly_float>>
   class OnePoleFilter {
@@ -68,7 +69,7 @@ namespace vital {
       force_inline poly_float getNextState() { return filter_state_; }
 
       static force_inline poly_float computeCoefficient(poly_float cutoff_frequency, int sample_rate) {
-        poly_float delta_phase = cutoff_frequency * (vital::kPi / sample_rate);
+        poly_float delta_phase = cutoff_frequency * (sbvital::kPi / sample_rate);
         return utils::tan(delta_phase / (delta_phase + 1.0f));
       }
 
@@ -77,5 +78,5 @@ namespace vital {
       poly_float filter_state_;
       poly_float sat_filter_state_;
   };
-} // namespace vital
+} // namespace sbvital
 

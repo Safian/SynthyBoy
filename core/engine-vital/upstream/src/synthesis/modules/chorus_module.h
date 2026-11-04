@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
 #include "synth_module.h"
 #include "delay.h"
 
-namespace vital {
+namespace sbvital {
   class ChorusModule : public SynthModule {
     public:
       static constexpr mono_float kMaxChorusModulation = 0.03f;
@@ -62,5 +63,5 @@ namespace vital {
 
       JUCE_LEAK_DETECTOR(ChorusModule) 
   };
-} // namespace vital
+} // namespace sbvital
 

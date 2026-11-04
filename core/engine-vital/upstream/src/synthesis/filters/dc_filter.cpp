@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "dc_filter.h"
 
-namespace vital {
+namespace sbvital {
 
   DcFilter::DcFilter() : Processor(DcFilter::kNumInputs, 1) {
     coefficient_ = 0.0f;
@@ -53,4 +54,4 @@ namespace vital {
     past_in_ = utils::maskLoad(past_in_, 0.0f, reset_mask);
     past_out_ = utils::maskLoad(past_in_, 0.0f, reset_mask);
   }
-} // namespace vital
+} // namespace sbvital

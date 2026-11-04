@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -23,7 +24,7 @@
 class LineGenerator;
 class Tuning;
 
-namespace vital {
+namespace sbvital {
   class Decimator;
   class PeakMeter;
   class Sample;
@@ -116,5 +117,5 @@ namespace vital {
 
       JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SoundEngine)
   };
-} // namespace vital
+} // namespace sbvital
 

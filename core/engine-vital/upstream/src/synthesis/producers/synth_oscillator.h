@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -22,7 +23,7 @@
 #include "wave_frame.h"
 #include "wavetable.h"
 
-namespace vital {
+namespace sbvital {
 
   class FourierTransform;
   class Wavetable;
@@ -200,9 +201,9 @@ namespace vital {
       static void runSpectralMorph(SpectralMorph morph_type, float morph_amount,
                                    const Wavetable::WavetableData* wavetable_data,
                                    int wavetable_index, poly_float* dest, FourierTransform* transform);
-      static vital::poly_int adjustPhase(DistortionType distortion_type, poly_int phase,
+      static sbvital::poly_int adjustPhase(DistortionType distortion_type, poly_int phase,
                                          poly_float distortion_amount, poly_int distortion_phase);
-      static vital::poly_float getPhaseWindow(DistortionType distortion_type, poly_int phase,
+      static sbvital::poly_float getPhaseWindow(DistortionType distortion_type, poly_int phase,
                                               poly_int distorted_phase);
       static poly_float interpolate(const mono_float* buffers, const poly_int indices);
       static bool usesDistortionPhase(DistortionType distortion_type);
@@ -317,5 +318,5 @@ namespace vital {
 
       JUCE_LEAK_DETECTOR(SynthOscillator)
   };
-} // namespace vital
+} // namespace sbvital
 

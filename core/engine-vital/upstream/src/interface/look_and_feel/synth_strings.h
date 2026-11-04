@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -187,7 +188,7 @@ namespace strings {
     "1/64",
   };
 
-  const std::string kStereoModeNames[vital::StereoEncoder::kNumStereoModes] = {
+  const std::string kStereoModeNames[sbvital::StereoEncoder::kNumStereoModes] = {
     "SPREAD",
     "ROTATE"
   };
@@ -265,7 +266,7 @@ namespace strings {
     "High Pass"
   };
 
-  const std::string kDestinationNames[vital::constants::kNumSourceDestinations + vital::constants::kNumEffects] = {
+  const std::string kDestinationNames[sbvital::constants::kNumSourceDestinations + sbvital::constants::kNumEffects] = {
     "FILTER 1",
     "FILTER 2",
     "FILTER 1+2",
@@ -282,7 +283,7 @@ namespace strings {
     "REVERB",
   };
 
-  const std::string kDestinationMenuNames[vital::constants::kNumSourceDestinations + vital::constants::kNumEffects] = {
+  const std::string kDestinationMenuNames[sbvital::constants::kNumSourceDestinations + sbvital::constants::kNumEffects] = {
     "Filter 1",
     "Filter 2",
     "Filter 1+2",

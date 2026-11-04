@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "formant_manager.h"
 
 #include "digital_svf.h"
 #include "operators.h"
 
-namespace vital {
+namespace sbvital {
 
   FormantManager::FormantManager(int num_formants) : ProcessorRouter(0, 1) {
     for (int i = 0; i < num_formants; ++i) {
@@ -51,4 +52,4 @@ namespace vital {
     for (DigitalSvf* formant : formants_)
       getLocalProcessor(formant)->hardReset();
   }
-} // namespace vital
+} // namespace sbvital

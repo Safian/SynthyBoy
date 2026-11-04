@@ -13,10 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 
 #include "common.h"
 #include "json/json.h"
@@ -25,21 +26,16 @@ using json = nlohmann::json;
 
 class Tuning {
   public:
-    static constexpr int kTuningSize = 2 * vital::kMidiSize;
-    static constexpr int kTuningCenter = vital::kMidiSize;
-    static Tuning getTuningForFile(File file);
-
-    static String allFileExtensions();
-    static int noteToMidiKey(const String& note);
+    static constexpr int kTuningSize = 2 * sbvital::kMidiSize;
+    static constexpr int kTuningCenter = sbvital::kMidiSize;
+    static int noteToMidiKey(const std::string& note);
 
     Tuning();
-    Tuning(File file);
 
     void loadScale(std::vector<float> scale);
-    void loadFile(File file);
     void setConstantTuning(float note);
     void setDefaultTuning();
-    vital::mono_float convertMidiNote(int note) const;
+    sbvital::mono_float convertMidiNote(int note) const;
     void setStartMidiNote(int start_midi_note) { scale_start_midi_note_ = start_midi_note; }
     void setReferenceNote(int reference_note) { reference_midi_note_ = reference_note; }
     void setReferenceFrequency(float frequency);
@@ -61,18 +57,18 @@ class Tuning {
 
     json stateToJson() const;
     void jsonToState(const json& data);
-    void loadScalaFile(const StringArray& scala_lines);
+    // The text of the files, line by line (reading the files is the caller's job).
+    void loadScalaFile(const std::vector<std::string>& scala_lines);
+    void loadKeyboardMapFile(const std::vector<std::string>& kbm_lines);
+    void loadTunFile(const std::vector<std::string>& tun_lines);
 
   private:
-    void loadScalaFile(File scala_file);
-    void loadKeyboardMapFile(File kbm_file);
-    void loadTunFile(File tun_file);
 
     int scale_start_midi_note_;
     float reference_midi_note_;
     std::vector<float> scale_;
     std::vector<int> keyboard_mapping_;
-    vital::mono_float tuning_[kTuningSize];
+    sbvital::mono_float tuning_[kTuningSize];
     std::string tuning_name_;
     std::string mapping_name_;
     bool default_;

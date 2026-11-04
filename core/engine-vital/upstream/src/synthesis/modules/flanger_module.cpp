@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "flanger_module.h"
 
@@ -20,7 +21,7 @@
 #include "memory.h"
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
 
   FlangerModule::FlangerModule(const Output* beats_per_second) :
       SynthModule(0, kNumOutputs), beats_per_second_(beats_per_second),
@@ -80,4 +81,4 @@ namespace vital {
   void FlangerModule::correctToTime(double seconds) {
     phase_ = utils::getCycleOffsetFromSeconds(seconds, frequency_->buffer[0]);
   }
-} // namespace vital
+} // namespace sbvital

@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "distortion.h"
 
@@ -20,7 +21,7 @@
 
 #include <climits>
 
-namespace vital {
+namespace sbvital {
 
   namespace {
     force_inline poly_float linearFold(poly_float value, poly_float drive) {
@@ -177,4 +178,4 @@ namespace vital {
     VITAL_ASSERT(inputMatchesBufferSize(kAudio));
     processWithInput(input(kAudio)->source->buffer, num_samples);
   }
-} // namespace vital
+} // namespace sbvital

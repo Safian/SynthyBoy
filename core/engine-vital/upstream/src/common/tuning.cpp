@@ -13,15 +13,17 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "tuning.h"
 
 #include "utils.h"
 
+#include <cctype>
+#include <locale>
+#include <sstream>
+
 namespace {
-  constexpr char kScalaFileExtension[] = ".scl";
-  constexpr char kKeyboardMapExtension[] = ".kbm";
-  constexpr char kTunFileExtension[] = ".tun";
   constexpr int kDefaultMidiReference = 60;
   constexpr char kScalaKbmComment = '!';
   constexpr char kTunComment = ';';
@@ -48,66 +50,121 @@ namespace {
     kExactTuning
   };
 
-  String extractFirstToken(const String& source) {
-    StringArray tokens;
-    tokens.addTokens(source, false);
-    return tokens[0];
+  // Minimal std::string equivalents of the string calls the parsers used.
+  std::string trim(const std::string& s) {
+    size_t begin = 0;
+    size_t end = s.size();
+    while (begin < end && std::isspace(static_cast<unsigned char>(s[begin])))
+      ++begin;
+    while (end > begin && std::isspace(static_cast<unsigned char>(s[end - 1])))
+      --end;
+    return s.substr(begin, end - begin);
   }
 
-  float readCentsToTranspose(const String& cents) {
-    return cents.getFloatValue() / vital::kCentsPerNote;
+  std::string toLower(std::string s) {
+    for (char& c : s)
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
   }
 
-  float readRatioToTranspose(const String& ratio) {
-    StringArray tokens;
-    tokens.addTokens(ratio, "/", "");
-    float value = tokens[0].getIntValue();
+  std::vector<std::string> splitTokens(const std::string& source, const char* delimiters) {
+    std::vector<std::string> tokens;
+    std::string current;
+    for (char c : source) {
+      if (std::strchr(delimiters, c) != nullptr) {
+        if (!current.empty())
+          tokens.push_back(current);
+        current.clear();
+      }
+      else
+        current.push_back(c);
+    }
+    if (!current.empty())
+      tokens.push_back(current);
+    return tokens;
+  }
+
+  std::string tokenAt(const std::vector<std::string>& tokens, size_t index) {
+    return index < tokens.size() ? tokens[index] : std::string();
+  }
+
+  int getIntValue(const std::string& s) {
+    std::istringstream stream(s);
+    stream.imbue(std::locale::classic());
+    int value = 0;
+    stream >> value;
+    return value;
+  }
+
+  float getFloatValue(const std::string& s) {
+    std::istringstream stream(s);
+    stream.imbue(std::locale::classic());
+    float value = 0.0f;
+    stream >> value;
+    return std::isfinite(value) ? value : 0.0f;
+  }
+
+  std::string upToFirstOccurrenceOf(const std::string& s, char c) {
+    size_t position = s.find(c);
+    return position == std::string::npos ? s : s.substr(0, position);
+  }
+
+  std::string fromLastOccurrenceOf(const std::string& s, char c) {
+    size_t position = s.rfind(c);
+    return position == std::string::npos ? s : s.substr(position + 1);
+  }
+
+  std::string extractFirstToken(const std::string& source) {
+    return tokenAt(splitTokens(source, " \t\r\n"), 0);
+  }
+
+  float readCentsToTranspose(const std::string& cents) {
+    return getFloatValue(cents) / sbvital::kCentsPerNote;
+  }
+
+  float readRatioToTranspose(const std::string& ratio) {
+    std::vector<std::string> tokens = splitTokens(ratio, "/");
+    float value = getIntValue(tokenAt(tokens, 0));
 
     if (tokens.size() == 2)
-      value /= tokens[1].getIntValue();
+      value /= getIntValue(tokens[1]);
 
-    return vital::utils::ratioToMidiTranspose(value);
+    return sbvital::utils::ratioToMidiTranspose(value);
   }
 
-  String readTunSection(const String& line) {
-    return line.substring(1, line.length() - 1).toLowerCase();
+  std::string readTunSection(const std::string& line) {
+    return toLower(line.substr(1, line.size() - 2));
   }
 
-  bool isBaseFrequencyAssignment(const String& line) {
-    return line.upToFirstOccurrenceOf("=", false, true).toLowerCase().trim() == "basefreq";
+  bool isBaseFrequencyAssignment(const std::string& line) {
+    return trim(toLower(upToFirstOccurrenceOf(line, '='))) == "basefreq";
   }
 
-  int getNoteAssignmentIndex(const String& line) {
-    String variable = line.upToFirstOccurrenceOf("=", false, true);
-    StringArray tokens;
-    tokens.addTokens(variable, false);
-    if (tokens.size() <= 1 || tokens[0].toLowerCase() != "note")
+  int getNoteAssignmentIndex(const std::string& line) {
+    std::string variable = upToFirstOccurrenceOf(line, '=');
+    std::vector<std::string> tokens = splitTokens(variable, " \t\r\n");
+    if (tokens.size() <= 1 || toLower(tokens[0]) != "note")
       return -1;
-    int index = tokens[1].getIntValue();
-    if (index < 0 || index >= vital::kMidiSize)
+    int index = getIntValue(tokens[1]);
+    if (index < 0 || index >= sbvital::kMidiSize)
       return -1;
     return index;
   }
 
-  float getAssignmentValue(const String& line) {
-    String value = line.fromLastOccurrenceOf("=", false, true).trim();
-    return value.getFloatValue();
+  float getAssignmentValue(const std::string& line) {
+    std::string value = trim(fromLastOccurrenceOf(line, '='));
+    return getFloatValue(value);
   }
 }
 
-String Tuning::allFileExtensions() {
-  return String("*") + kScalaFileExtension + String(";") +
-         String("*") + kKeyboardMapExtension + String(";") +
-         String("*") + kTunFileExtension;
-}
-
-int Tuning::noteToMidiKey(const String& note_text) {
+int Tuning::noteToMidiKey(const std::string& note_text) {
   constexpr int kNotesInScale = 7;
   constexpr int kOctaveStart = -1;
   constexpr int kScale[kNotesInScale] = { -3, -1, 0, 2, 4, 5, 7 };
 
-  String text = note_text.toLowerCase().removeCharacters(" ");
-  if (note_text.length() < 2)
+  std::string text = toLower(note_text);
+  text.erase(std::remove(text.begin(), text.end(), ' '), text.end());
+  if (note_text.size() < 2)
     return -1;
 
   char note_in_scale = text[0] - 'a';
@@ -115,59 +172,43 @@ int Tuning::noteToMidiKey(const String& note_text) {
     return -1;
 
   int offset = kScale[note_in_scale];
-  text = text.substring(1);
+  text = text.substr(1);
   if (text[0] == '#') {
-    text = text.substring(1);
+    text = text.substr(1);
     offset++;
   }
   else if (text[0] == 'b') {
-    text = text.substring(1);
+    text = text.substr(1);
     offset--;
   }
 
-  if (text.length() == 0)
+  if (text.size() == 0)
     return -1;
 
   bool negative = false;
   if (text[0] == '-') {
-    text = text.substring(1);
+    text = text.substr(1);
     negative = true;
-    if (text.length() == 0)
+    if (text.size() == 0)
       return -1;
   }
   int octave = text[0] - '0';
   if (negative)
     octave = -octave;
   octave = octave - kOctaveStart;
-  return vital::kNotesPerOctave * octave + offset;
+  return sbvital::kNotesPerOctave * octave + offset;
 }
 
-Tuning Tuning::getTuningForFile(File file) {
-  return Tuning(file);
-}
-
-void Tuning::loadFile(File file) {
-  String extension = file.getFileExtension().toLowerCase();
-  if (extension == String(kScalaFileExtension))
-    loadScalaFile(file);
-  else if (extension == String(kTunFileExtension))
-    loadTunFile(file);
-  else if (extension == String(kKeyboardMapExtension))
-    loadKeyboardMapFile(file);
-
-  default_ = false;
-}
-
-void Tuning::loadScalaFile(const StringArray& scala_lines) {
+void Tuning::loadScalaFile(const std::vector<std::string>& scala_lines) {
   ScalaReadingState state = kDescription;
 
   int scale_length = 1;
   std::vector<float> scale;
   scale.push_back(0.0f);
 
-  for (const String& line : scala_lines) {
-    String trimmed_line = line.trim();
-    if (trimmed_line.length() > 0 && trimmed_line[0] == kScalaKbmComment)
+  for (const std::string& line : scala_lines) {
+    std::string trimmed_line = trim(line);
+    if (trimmed_line.size() > 0 && trimmed_line[0] == kScalaKbmComment)
       continue;
 
     if (scale.size() >= scale_length + 1)
@@ -178,12 +219,12 @@ void Tuning::loadScalaFile(const StringArray& scala_lines) {
         state = kScaleLength;
         break;
       case kScaleLength:
-        scale_length = extractFirstToken(trimmed_line).getIntValue();
+        scale_length = getIntValue(extractFirstToken(trimmed_line));
         state = kScaleRatios;
         break;
       case kScaleRatios: {
-        String tuning = extractFirstToken(trimmed_line);
-        if (tuning.contains("."))
+        std::string tuning = extractFirstToken(trimmed_line);
+        if (tuning.find('.') != std::string::npos)
           scale.push_back(readCentsToTranspose(tuning));
         else
           scale.push_back(readRatioToTranspose(tuning));
@@ -202,18 +243,8 @@ void Tuning::loadScalaFile(const StringArray& scala_lines) {
   default_ = false;
 }
 
-void Tuning::loadScalaFile(File scala_file) {
-  StringArray lines;
-  scala_file.readLines(lines);
-  loadScalaFile(lines);
-  tuning_name_ = scala_file.getFileNameWithoutExtension().toStdString();
-}
-
-void Tuning::loadKeyboardMapFile(File kbm_file) {
+void Tuning::loadKeyboardMapFile(const std::vector<std::string>& lines) {
   static constexpr int kHeaderSize = 7;
-
-  StringArray lines;
-  kbm_file.readLines(lines);
 
   float header_data[kHeaderSize];
   memset(header_data, 0, kHeaderSize * sizeof(float));
@@ -222,15 +253,15 @@ void Tuning::loadKeyboardMapFile(File kbm_file) {
   int last_scale_value = 0;
   keyboard_mapping_.clear();
 
-  for (const String& line : lines) {
-    String trimmed_line = line.trim();
-    if (trimmed_line.length() > 0 && trimmed_line[0] == kScalaKbmComment)
+  for (const std::string& line : lines) {
+    std::string trimmed_line = trim(line);
+    if (trimmed_line.size() > 0 && trimmed_line[0] == kScalaKbmComment)
       continue;
 
     if (header_position >= kHeaderSize) {
-      String token = extractFirstToken(trimmed_line);
-      if (token.toLowerCase()[0] != 'x')
-        last_scale_value = token.getIntValue();
+      std::string token = extractFirstToken(trimmed_line);
+      if (toLower(token)[0] != 'x')
+        last_scale_value = getIntValue(token);
      
       keyboard_mapping_.push_back(last_scale_value);
 
@@ -238,7 +269,7 @@ void Tuning::loadKeyboardMapFile(File kbm_file) {
         break;
     }
     else {
-      header_data[header_position] = extractFirstToken(trimmed_line).getFloatValue();
+      header_data[header_position] = getFloatValue(extractFirstToken(trimmed_line));
       if (header_position == kMapSizePosition)
         map_size = header_data[header_position];
       header_position++;
@@ -248,30 +279,26 @@ void Tuning::loadKeyboardMapFile(File kbm_file) {
   setStartMidiNote(header_data[kMidiMapMiddlePosition]);
   setReferenceNoteFrequency(header_data[kReferenceNotePosition], header_data[kReferenceFrequencyPosition]);
   loadScale(scale_);
-
-  mapping_name_ = kbm_file.getFileNameWithoutExtension().toStdString();
 }
 
-void Tuning::loadTunFile(File tun_file) {
+void Tuning::loadTunFile(const std::vector<std::string>& lines) {
   keyboard_mapping_.clear();
 
   TunReadingState state = kScanningForSection;
-  StringArray lines;
-  tun_file.readLines(lines);
 
   int last_read_note = 0;
-  float base_frequency = vital::kMidi0Frequency;
+  float base_frequency = sbvital::kMidi0Frequency;
   std::vector<float> scale;
-  for (int i = 0; i < vital::kMidiSize; ++i)
+  for (int i = 0; i < sbvital::kMidiSize; ++i)
     scale.push_back(i);
 
-  for (const String& line : lines) {
-    String trimmed_line = line.trim();
-    if (trimmed_line.length() == 0 || trimmed_line[0] == kTunComment)
+  for (const std::string& line : lines) {
+    std::string trimmed_line = trim(line);
+    if (trimmed_line.size() == 0 || trimmed_line[0] == kTunComment)
       continue;
 
     if (trimmed_line[0] == '[') {
-      String section = readTunSection(trimmed_line);
+      std::string section = readTunSection(trimmed_line);
       if (section == "tuning")
         state = kTuning;
       else if (section == "exact tuning")
@@ -286,7 +313,7 @@ void Tuning::loadTunFile(File tun_file) {
         int index = getNoteAssignmentIndex(trimmed_line);
         last_read_note = std::max(last_read_note, index);
         if (index >= 0)
-          scale[index] = getAssignmentValue(trimmed_line) / vital::kCentsPerNote;
+          scale[index] = getAssignmentValue(trimmed_line) / sbvital::kCentsPerNote;
       }
     }
   }
@@ -296,7 +323,6 @@ void Tuning::loadTunFile(File tun_file) {
   loadScale(scale);
   setStartMidiNote(0);
   setReferenceFrequency(base_frequency);
-  tuning_name_ = tun_file.getFileNameWithoutExtension().toStdString();
 }
 
 Tuning::Tuning() : default_(true) {
@@ -304,10 +330,6 @@ Tuning::Tuning() : default_(true) {
   reference_midi_note_ = 0;
 
   setDefaultTuning();
-}
-
-Tuning::Tuning(File file) : Tuning() {
-  loadFile(file);
 }
 
 void Tuning::loadScale(std::vector<float> scale) {
@@ -352,7 +374,7 @@ void Tuning::setDefaultTuning() {
     tuning_[i] = i - kTuningCenter;
 
   scale_.clear();
-  for (int i = 0; i <= vital::kNotesPerOctave; ++i)
+  for (int i = 0; i <= sbvital::kNotesPerOctave; ++i)
     scale_.push_back(i);
 
   keyboard_mapping_.clear();
@@ -362,7 +384,7 @@ void Tuning::setDefaultTuning() {
   mapping_name_ = "";
 }
 
-vital::mono_float Tuning::convertMidiNote(int note) const {
+sbvital::mono_float Tuning::convertMidiNote(int note) const {
   int scale_offset = note - scale_start_midi_note_;
   return tuning_[kTuningCenter + scale_offset] + scale_start_midi_note_ + reference_midi_note_;
 }
@@ -372,11 +394,11 @@ void Tuning::setReferenceFrequency(float frequency) {
 }
 
 void Tuning::setReferenceNoteFrequency(int midi_note, float frequency) {
-  reference_midi_note_ = vital::utils::frequencyToMidiNote(frequency) - midi_note;
+  reference_midi_note_ = sbvital::utils::frequencyToMidiNote(frequency) - midi_note;
 }
 
 void Tuning::setReferenceRatio(float ratio) {
-  reference_midi_note_ = vital::utils::ratioToMidiTranspose(ratio);
+  reference_midi_note_ = sbvital::utils::ratioToMidiTranspose(ratio);
 }
 
 json Tuning::stateToJson() const {

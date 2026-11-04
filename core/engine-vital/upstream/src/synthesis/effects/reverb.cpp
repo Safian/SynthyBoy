@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "reverb.h"
 
@@ -20,7 +21,7 @@
 #include "memory.h"
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
   static constexpr float kMaxChorusDrift = 2500.0f;
   static constexpr float kMinDecayTime = 0.1f;
   static constexpr float kMaxDecayTime = 100.0f;
@@ -391,4 +392,4 @@ namespace vital {
         feedback_memories_[n][i] = 0.0f;
     }
   }
-} // namespace vital
+} // namespace sbvital

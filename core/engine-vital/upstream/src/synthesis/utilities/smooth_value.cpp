@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "smooth_value.h"
 
@@ -20,7 +21,7 @@
 
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
 
   SmoothValue::SmoothValue(mono_float value) : Value(value), current_value_(value) { }
 
@@ -73,4 +74,4 @@ namespace vital {
       output()->buffer[0] = current_value_;
     }
   } // namespace cr
-} // namespace vital
+} // namespace sbvital

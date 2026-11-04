@@ -13,13 +13,14 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "portamento_slope.h"
 
 #include "utils.h"
 #include "futils.h"
 
-namespace vital {
+namespace sbvital {
   PortamentoSlope::PortamentoSlope() : Processor(kNumInputs, 1, true), position_(0.0f) { }
 
   void PortamentoSlope::processBypass(int start) {
@@ -62,4 +63,4 @@ namespace vital {
     poly_float adjusted_position = futils::powerScale(position_, power);
     output()->buffer[0] = utils::interpolate(source, target, adjusted_position);
   }
-} // namespace vital
+} // namespace sbvital

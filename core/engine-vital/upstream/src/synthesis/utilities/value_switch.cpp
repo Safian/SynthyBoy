@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "value_switch.h"
 
 #include "utils.h"
 
-namespace vital {
+namespace sbvital {
 
   ValueSwitch::ValueSwitch(mono_float value) : cr::Value(value) {
     while (numOutputs() < kNumOutputs)
@@ -54,4 +55,4 @@ namespace vital {
     for (Processor* processor : processors_)
       processor->enable(enable_processors);
   }
-} // namespace vital
+} // namespace sbvital

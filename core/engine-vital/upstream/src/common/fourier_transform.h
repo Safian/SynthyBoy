@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
-#include "JuceHeader.h"
+#include "vital_compat.h"
 
-namespace vital {
+namespace sbvital {
   #if INTEL_IPP
 
   #include "ipps.h"
@@ -62,22 +63,7 @@ namespace vital {
       JUCE_LEAK_DETECTOR(FourierTransform)
   };
 
-  #elif JUCE_MODULE_AVAILABLE_juce_dsp
-
-  class FourierTransform {
-    public:
-      FourierTransform(int bits) : fft_(bits) { }
-
-      void transformRealForward(float* data) { fft_.performRealOnlyForwardTransform(data, true); }
-      void transformRealInverse(float* data) { fft_.performRealOnlyInverseTransform(data); }
-
-    private:
-      dsp::FFT fft_;
-
-      JUCE_LEAK_DETECTOR(FourierTransform)
-  };
-
-  #elif __APPLE__
+  #elif __APPLE__ && defined(SBVITAL_USE_ACCELERATE)
   #define VIMAGE_H
   #include <Accelerate/Accelerate.h>
 
@@ -184,4 +170,4 @@ namespace vital {
       FourierTransform fourier_transform_;
   };
 
-} // namespace vital
+} // namespace sbvital

@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -23,7 +24,7 @@
 #if VITAL_AVX2
   #define VITAL_AVX2 1
   static_assert(false, "AVX2 is not supported yet.");
-#elif __SSE2__
+#elif __SSE2__ || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2) // MSVC does not define __SSE2__
   #define VITAL_SSE2 1
 #elif defined(__ARM_NEON__) || defined(__ARM_NEON)
   #define VITAL_NEON 1
@@ -47,7 +48,7 @@
 #endif
 #endif
 
-namespace vital {
+namespace sbvital {
   struct poly_int {
 #if VITAL_AVX2
     static constexpr size_t kSize = 8;
@@ -583,7 +584,7 @@ namespace vital {
 #elif VITAL_SSE2
       return _mm_div_ps(one, two);
 #elif VITAL_NEON
-#if defined(NEON_ARM32)
+#if !defined(__aarch64__) // vdivq_f32 exists on AArch64 only; ARMv7 uses a Newton-Raphson reciprocal
       simd_type reciprocal = vrecpeq_f32(two);
       reciprocal = vmulq_f32(vrecpsq_f32(two, reciprocal), reciprocal);
       reciprocal = vmulq_f32(vrecpsq_f32(two, reciprocal), reciprocal);
@@ -970,5 +971,5 @@ namespace vital {
       return sum(value);
     }
   };
-} // namespace vital
+} // namespace sbvital
 

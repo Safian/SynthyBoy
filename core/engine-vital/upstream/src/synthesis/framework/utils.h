@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -23,7 +24,7 @@
 #include <cstdlib>
 #include <random>
 
-namespace vital {
+namespace sbvital {
 
   namespace utils {
     constexpr mono_float kDbGainConversionMult = 20.0f;
@@ -241,5 +242,5 @@ namespace vital {
     void pcmToFloatData(float* float_data, const int16_t* pcm_data, int size);
     void pcmToComplexData(std::complex<float>* complex_data, const int16_t* pcm_data, int size);
   } // namespace utils
-} // namespace vital
+} // namespace sbvital
 

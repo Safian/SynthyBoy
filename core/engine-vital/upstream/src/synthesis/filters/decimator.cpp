@@ -13,12 +13,13 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #include "decimator.h"
 
 #include "iir_halfband_decimator.h"
 
-namespace vital {
+namespace sbvital {
   Decimator::Decimator(int max_stages) : ProcessorRouter(kNumInputs, 1), max_stages_(max_stages) {
     num_stages_ = -1;
     for (int i = 0; i < max_stages_; ++i) {
@@ -85,4 +86,4 @@ namespace vital {
 
     ProcessorRouter::process(num_samples);
   }
-} // namespace vital
+} // namespace sbvital

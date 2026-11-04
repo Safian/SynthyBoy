@@ -13,6 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with vital.  If not, see <http://www.gnu.org/licenses/>.
  */
+// Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
 #pragma once
 
@@ -20,7 +21,7 @@
 #include "lookup_table.h"
 #include "synth_constants.h"
 
-namespace vital {
+namespace sbvital {
 
   class Processor;
 
@@ -28,7 +29,7 @@ namespace vital {
     public:
       static force_inline mono_float computeOnePoleFilterCoefficient(mono_float frequency_ratio) {
         static constexpr float kMaxRads = 0.499f * kPi;
-        mono_float scaled = frequency_ratio * vital::kPi;
+        mono_float scaled = frequency_ratio * sbvital::kPi;
         return std::tan(std::min(kMaxRads, scaled / (scaled + 1.0f)));
       }
 
@@ -97,5 +98,5 @@ namespace vital {
 
       JUCE_LEAK_DETECTOR(SynthFilter)
   };
-} // namespace vital
+} // namespace sbvital
 
