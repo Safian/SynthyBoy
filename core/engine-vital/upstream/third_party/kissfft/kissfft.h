@@ -326,7 +326,7 @@ class kissfft
                 ) const
         {
             const cpx_t * twiddles = &_twiddles[0];
-            cpx_t scratchbuf[p];
+            std::vector<cpx_t> scratchbuf(p); // MSVC has no variable length arrays (SynthyBoy); only the generic radix reaches this
 
             for ( std::size_t u=0; u<m; ++u ) {
                 std::size_t k = u;
