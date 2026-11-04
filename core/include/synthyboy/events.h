@@ -14,8 +14,10 @@ struct Event
     {
         NoteOn,      // key, channel, value = velocity 0..1, noteId
         NoteOff,     // key, channel (noteId optional)
-        PitchBend,   // channel, value = bend -1..1 (full range = +-2 semitones)
-        AllNotesOff  // channel (< 0: all channels); voices release normally
+        PitchBend,   // channel, value = bend -1..1 (full range = master.bend_range semitones, 2 by default)
+        AllNotesOff, // channel (< 0: all channels); voices release normally
+        ModWheel,    // channel, value = 0..1 (MIDI CC 1); the "Mod Wheel" modulation source
+        Aftertouch   // channel, value = 0..1 (channel pressure); the "Aftertouch" modulation source
     };
 
     int32_t frame = 0;   // 0 .. numFrames - 1, position inside the block

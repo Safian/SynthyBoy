@@ -6,6 +6,8 @@ add_library(synthyboy_core STATIC
     src/number.cpp
     src/engine_factory.cpp
     src/params.cpp
+    src/param_table.cpp
+    src/modulation.cpp
     src/state.cpp
     engine-own/own_engine.cpp)
 

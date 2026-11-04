@@ -138,13 +138,14 @@ public:
         kill();
     }
 
-    void start (int newKey, int newChannel, int newNoteId, float velocity, float bendSemitones, uint32_t newAge) noexcept
+    void start (int newKey, int newChannel, int newNoteId, float velocity, float bendSemitones, uint32_t newAge,
+                float offsetSemitones = 0.0f) noexcept
     {
         key = newKey;
         channel = newChannel;
         noteId = newNoteId;
         age = newAge;
-        baseFrequency = 440.0 * std::pow (2.0, static_cast<double> (newKey - 69) / 12.0);
+        baseFrequency = 440.0 * std::pow (2.0, (static_cast<double> (newKey - 69) + static_cast<double> (offsetSemitones)) / 12.0);
         level = velocity * 0.3f; // headroom for 8 voices
         phase = 0.0;
         filterState1 = 0.0f;

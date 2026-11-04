@@ -60,6 +60,7 @@ enable_testing()
 add_subdirectory(core)
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(bench)
+    add_subdirectory(tools/paramdump)
 endif()
 
 if(NOT SYNTHYBOY_BUILD_PLUGIN)

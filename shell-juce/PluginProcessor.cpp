@@ -209,16 +209,11 @@ bool SynthyBoyProcessor::loadLegacyXml (const void* data, int sizeInBytes, synth
 
     for (auto* child : xml->getChildIterator())
     {
-        if (! child->hasTagName ("PARAM"))
+        if (! child->hasTagName ("PARAM") || ! child->hasAttribute ("value"))
             continue;
 
-        const auto* info = synthyboy::findParamByKey (child->getStringAttribute ("id").toRawUTF8());
-        if (info == nullptr || ! child->hasAttribute ("value"))
-            continue;
-
-        const auto index = static_cast<size_t> (synthyboy::findParamIndex (info->id));
-        const double v = std::clamp (child->getDoubleAttribute ("value"), static_cast<double> (info->min), static_cast<double> (info->max));
-        values.plain[index] = synthyboy::constrainValue (*info, static_cast<float> (v));
+        // the three parameters of the spike (gain, waveform, cutoff) go through the migration of state format version 1
+        synthyboy::migrateLegacyParam (child->getStringAttribute ("id").toRawUTF8(), child->getDoubleAttribute ("value"), values);
     }
     return true;
 }

@@ -14,6 +14,10 @@ namespace number
     (truncated to cap - 1). 9 significant digits are enough to round-trip every float. */
 size_t formatG9 (float value, char* buf, size_t cap) noexcept;
 
+/** "%.<decimals>f" of a float (decimals 0..6), exactly rounded (half to even), locale independent. A result of zero has
+    no sign. */
+size_t formatFixed (float value, int decimals, char* buf, size_t cap) noexcept;
+
 /** "%.1f" of a float, exactly rounded (half to even), locale independent. A result of zero has no sign. */
 size_t formatFixed1 (float value, char* buf, size_t cap) noexcept;
 

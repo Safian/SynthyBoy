@@ -269,24 +269,29 @@ size_t formatG9 (float value, char* buf, size_t cap) noexcept
     return emit (w.text, w.n, buf, cap);
 }
 
-size_t formatFixed1 (float value, char* buf, size_t cap) noexcept
+size_t formatFixed (float value, int decimals, char* buf, size_t cap) noexcept
 {
+    if (decimals < 0)
+        decimals = 0;
+    if (decimals > 6)
+        decimals = 6;
+
     Decimal d;
     toDecimal (value, d);
 
     if (d.len > 0)
     {
-        const int keep = d.pointExp + 2; // digits down to the first decimal place
+        const int keep = d.pointExp + 1 + decimals; // digits down to the last wanted decimal place
         if (keep >= 1)
         {
             roundSignificant (d, keep);
         }
-        else if (keep == 0) // 0.0X: rounds to 0.1 above the tie, to 0.0 on the tie (even)
+        else if (keep == 0) // 0.0..0X: rounds up to one unit of the last place above the tie, to zero on the tie (even)
         {
             const bool up = d.digits[0] > '5' || (d.digits[0] == '5' && d.len > 1);
             d.len = up ? 1 : 0;
             d.digits[0] = '1';
-            d.pointExp = up ? -1 : 0;
+            d.pointExp = up ? -decimals : 0;
         }
         else
         {
@@ -300,9 +305,18 @@ size_t formatFixed1 (float value, char* buf, size_t cap) noexcept
         w.put ('-');
     for (int e = d.pointExp > 0 ? d.pointExp : 0; e >= 0; --e)
         w.put (d.len > 0 ? w.digit (d, e) : '0');
-    w.put ('.');
-    w.put (d.len > 0 ? w.digit (d, -1) : '0');
+    if (decimals > 0)
+    {
+        w.put ('.');
+        for (int k = 1; k <= decimals; ++k)
+            w.put (d.len > 0 ? w.digit (d, -k) : '0');
+    }
     return emit (w.text, w.n, buf, cap);
+}
+
+size_t formatFixed1 (float value, char* buf, size_t cap) noexcept
+{
+    return formatFixed (value, 1, buf, cap);
 }
 
 bool parseDecimal (const char* begin, const char* end, bool strictJson, double& value, const char*& next) noexcept

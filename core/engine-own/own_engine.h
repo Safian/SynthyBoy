@@ -66,9 +66,11 @@ public:
     OwnEngine();
 
     void prepare (double sampleRate, int maxBlockFrames, const Quality& quality) override;
+    void setQuality (const Quality& newQuality) noexcept override;
     void reset() override;
     void setParam (uint32_t id, float plain) noexcept override;
     float getParam (uint32_t id) const noexcept override;
+    bool supportsParam (uint32_t id) const noexcept override;
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
 
@@ -83,6 +85,7 @@ private:
     static float gainFromDb (float db) noexcept;
 
     std::array<std::atomic<float>, kMaxParams> params;
+    std::atomic<int> voiceCap { 8 };
     std::atomic<int> activeCount { 0 };
 
     std::vector<Voice> voices;
@@ -92,6 +95,8 @@ private:
     uint32_t noteCounter = 0;
     float bendSemitones[numChannels] = {};
     Waveform waveform = Waveform::saw;
+    float bendRange = 2.0f;
+    float noteOffsetSemitones = 0.0f;
     float filterCoeff = 1.0f;
 };
 } // namespace own

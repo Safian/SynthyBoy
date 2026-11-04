@@ -211,9 +211,11 @@ int main (int argc, char** argv)
         for (auto& p : a.list) if (p.info.id == core.id) info = &p.info;
         if (! info) { std::printf ("FAIL parity: core parameter '%s' (id %u) is missing in the plugin\n", core.key, core.id); ++failures; continue; }
 
-        // clap-juce-extensions reports discrete parameters (choices) with their plain range and all others normalised
-        // to 0..1 (the plain<->normalised mapping is the JUCE NormalisableRange, equal to core's toNormalised/fromNormalised)
-        const bool discrete = core.scale == synthyboy::Scale::stepped;
+        // clap-juce-extensions (CLAP_USE_JUCE_PARAMETER_RANGES=OFF, its default) reports EVERY parameter normalised to 0..1,
+        // choices included (a choice of N names is the grid k / (N - 1)); the plain<->normalised mapping is the JUCE
+        // NormalisableRange, equal to core's toNormalised/fromNormalised. Only two-state choices get CLAP_PARAM_IS_STEPPED
+        // (the wrapper sets it for JUCE "boolean" parameters only).
+        const bool discrete = false;
         const auto close = [] (double x, double y) { return std::fabs (x - y) <= 1e-4 * std::max (1.0, std::fabs (y)); };
         const double expMin = discrete ? core.min : 0.0, expMax = discrete ? core.max : 1.0;
         const double expDef = discrete ? core.def : synthyboy::toNormalised (core, core.def);
@@ -233,7 +235,9 @@ int main (int argc, char** argv)
         // display text of the plugin == core's text for the same plain value, over the whole range
         for (int k = 0; k <= 10; ++k)
         {
-            const double clapValue = discrete ? std::round (core.min + k / 10.0 * (core.max - core.min)) : k / 10.0;
+            // choices: points of their own grid (k / 10 of the range can fall exactly between two choices, where rounding is
+            // a matter of the last float bit)
+            const double clapValue = core.scale == synthyboy::Scale::stepped ? std::round (k / 10.0 * core.max) / core.max : k / 10.0;
             char text[256] = {}, coreText[64] = {};
             synthyboy::valueToText (core, toPlain (clapValue), coreText, sizeof coreText);
             if (! a.params->value_to_text (a.plugin, core.id, clapValue, text, sizeof text) || std::strcmp (text, coreText) != 0)
@@ -282,10 +286,16 @@ int main (int argc, char** argv)
         if (! createInstance (factory, id, c)) { std::fprintf (stderr, "cannot create legacy-state instance\n"); return 2; }
         if (! loadState (c, blob)) { std::printf ("FAIL legacy state: load returned false\n"); ++failures; }
         const auto got = getValues (c);
-        const double wantGain = synthyboy::toNormalised (*synthyboy::findParam (synthyboy::kParamGain), -6.0f);
-        const double wantCutoff = synthyboy::toNormalised (*synthyboy::findParam (synthyboy::kParamCutoff), 1000.0f);
-        if (got.size() != 3 || std::fabs (got[0] - wantGain) > 1e-4 || std::fabs (got[1] - 0.0) > 1e-6 || std::fabs (got[2] - wantCutoff) > 1e-4)
-        { std::printf ("FAIL legacy state: values %.5g %.5g %.5g, expected %.5g 0 %.5g\n", got.size() > 0 ? got[0] : -1, got.size() > 1 ? got[1] : -1, got.size() > 2 ? got[2] : -1, wantGain, wantCutoff); ++failures; }
+        // gain -> master.volume (dB), waveform -> osc1.wavetable (0 = Sine), cutoff -> filter1.cutoff (Hz), and filter1.on = 1
+        const auto valueOf = [&] (uint32_t id) { for (size_t i = 0; i < c.list.size(); ++i) if (c.list[i].info.id == id) return got[i]; return -1.0e9; };
+        const auto plainOf = [&] (uint32_t id) { const auto* info = synthyboy::findParam (id); const double v = valueOf (id);
+                                                 return info->scale == synthyboy::Scale::stepped ? v : (double) synthyboy::fromNormalised (*info, (float) v); };
+        const double wantGain = -6.0, wantCutoff = 1000.0;
+        if (std::fabs (plainOf (synthyboy::kParamMasterVolume) - wantGain) > 0.01 || plainOf (synthyboy::kParamOsc1Wavetable) != 0.0
+            || std::fabs (plainOf (synthyboy::kParamFilter1Cutoff) - wantCutoff) > 0.5 || plainOf (synthyboy::kParamFilter1On) != 1.0)
+        { std::printf ("FAIL legacy state: master.volume %.5g osc1.wavetable %.5g filter1.cutoff %.5g filter1.on %.5g, expected %.5g 0 %.5g 1\n",
+                       plainOf (synthyboy::kParamMasterVolume), plainOf (synthyboy::kParamOsc1Wavetable), plainOf (synthyboy::kParamFilter1Cutoff),
+                       plainOf (synthyboy::kParamFilter1On), wantGain, wantCutoff); ++failures; }
 
         const std::vector<char> garbage { 'n', 'o', 'p', 'e', '{', '"', 0, 1, 2 };
         loadState (c, garbage); // result is not specified, the values must stay as they are

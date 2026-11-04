@@ -1,6 +1,9 @@
 // SynthyBoy - core: parameter table (single source for plugin params, state I/O and UI), see docs/ARCHITECTURE.md 5.1.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// The table is our own design of a synthesizer feature set (docs/ARCHITECTURE.md 2.2): our keys, names, units and ranges.
+// It is constexpr, lives in core/src/param_table.cpp and is described for humans in docs/PARAMETERS.md (generated).
 #pragma once
 
 #include <cstddef>
@@ -27,40 +30,70 @@ enum class Unit : uint8_t
     percent,
     semitone,
     cents,
-    beats
+    beats,
+    degrees,
+    voices
 };
 
 enum ParamFlags : uint32_t
 {
     kParamAutomatable    = 1u << 0,
-    kParamModulatable    = 1u << 1,
+    kParamModulatable    = 1u << 1, // can be the destination of a modulation matrix slot (listed in the destination choice)
     kParamPerNote        = 1u << 2,
     kParamHidden         = 1u << 3,
     kParamStepped        = 1u << 4,
-    kParamEngineSpecific = 1u << 5 // meaning/range depends on the engine (own vs. Vital-derived)
+    kParamEngineSpecific = 1u << 5  // meaning/range depends on the engine
+};
+
+/** Where the names of a stepped parameter come from. */
+enum class ChoiceSet : uint8_t
+{
+    none,           // continuous parameter
+    list,           // ParamInfo::choices
+    modSource,      // 0 = none, then the table of modulation.h (modSourceTable)
+    modDestination  // 0 = none, then every parameter flagged kParamModulatable, in table order
 };
 
 struct ParamInfo
 {
     uint32_t id;         // == hashKey (key); stable, never reused or reordered, new ids only appended
-    const char* key;     // stable string key, used in state files, never renamed
-    const char* name;    // display name
-    const char* group;   // section ("Master", "Filter", ...)
+    const char* key;     // stable string key ("osc1.level"), used in state files, never renamed
+    const char* name;    // display name, unique in the table ("Osc 1 Level")
+    const char* group;   // section hierarchy, levels separated by " / " ("Osc 1 / Unison")
     float min, max, def; // plain values
     float skew;          // used by Scale::exp_skew
     float interval;      // snap grid of the plain value, 0 = continuous
     Scale scale;
     Unit unit;
     uint32_t flags;
+    const char* const* choices; // ChoiceSet::list: numChoices names
+    uint16_t numChoices;        // ChoiceSet::list: number of names (the range is 0 .. numChoices - 1)
+    ChoiceSet choiceSet;
+    uint8_t decimals;           // decimals of the display text of a continuous parameter
+    uint16_t order;             // display order (position in the table; set when the table is built)
 };
 
 /** Upper bound of the table size; fixed-size containers (ParamValues, engine) are sized with it. */
-constexpr size_t kMaxParams = 64;
+constexpr size_t kMaxParams = 1024;
 
-/** Parameter ids of the current table (== hashKey of the keys). */
-constexpr uint32_t kParamGain     = hashKey ("gain");
-constexpr uint32_t kParamWaveform = hashKey ("waveform");
-constexpr uint32_t kParamCutoff   = hashKey ("cutoff");
+/** Ids of the parameters the engines and tests address by name (== hashKey of the keys, see core/src/param_table.cpp). */
+constexpr uint32_t kParamMasterVolume   = hashKey ("master.volume");
+constexpr uint32_t kParamMasterPolyphony = hashKey ("master.polyphony");
+constexpr uint32_t kParamMasterBendRange = hashKey ("master.bend_range");
+constexpr uint32_t kParamMasterTranspose = hashKey ("master.transpose");
+constexpr uint32_t kParamMasterTune      = hashKey ("master.tune");
+constexpr uint32_t kParamOsc1Wavetable   = hashKey ("osc1.wavetable");
+constexpr uint32_t kParamFilter1On       = hashKey ("filter1.on");
+constexpr uint32_t kParamFilter1Cutoff   = hashKey ("filter1.cutoff");
+
+/** The built-in wavetables of oscillator 1..3 (choice names of oscN.wavetable); index 0 = Sine, 1 = Saw. */
+constexpr int kNumBuiltinWavetables = 13;
+constexpr int kWavetableSine = 0;
+constexpr int kWavetableSaw  = 1;
+/** The built-in LFO shapes (choice names of lfoN.shape). */
+constexpr int kNumLfoShapes = 12;
+/** Number of effect slots of the FX chain (fx.order.1 .. fx.order.9). */
+constexpr int kNumFxSlots = 9;
 
 /** The table, in stable order (state files and UIs list parameters in this order). */
 const ParamInfo* paramTable() noexcept;
@@ -78,15 +111,15 @@ float fromNormalised (const ParamInfo& info, float normalised) noexcept;
 /** Clamp to [min, max] and snap to the interval; NaN becomes the default. */
 float constrainValue (const ParamInfo& info, float plain) noexcept;
 
-/** Display text: fixed one decimal for continuous parameters, the choice name for stepped ones. Always zero-terminated
-    (if cap > 0), returns the length written (without the terminator). No allocation, locale independent. */
+/** Display text: ParamInfo::decimals decimals for continuous parameters, the choice name for stepped ones. Always
+    zero-terminated (if cap > 0), returns the length written (without the terminator). No allocation, locale independent. */
 size_t valueToText (const ParamInfo& info, float plain, char* buf, size_t cap) noexcept;
 
 /** Parses text produced by valueToText (or a plain number, trailing unit text is ignored; choice names are matched
     case-insensitively). The result is clamped into the range. Returns false if nothing usable was found. */
 bool textToValue (const ParamInfo& info, const char* text, float& plain) noexcept;
 
-/** Choice names of a stepped parameter (nullptr/0 for continuous ones). */
+/** Choice names of a stepped parameter (0 / nullptr for continuous ones). Valid for every ChoiceSet. */
 size_t choiceCount (const ParamInfo& info) noexcept;
 const char* choiceName (const ParamInfo& info, size_t index) noexcept;
 

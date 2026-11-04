@@ -24,8 +24,16 @@ public:
     virtual ~IEngine() = default;
 
     /** The only call that may allocate (voice pool etc.). Parameter values are kept. maxBlockFrames is a hint; process()
-        accepts any block size. */
+        accepts any block size. The quality is capped to the limits of quality.h. */
     virtual void prepare (double sampleRate, int maxBlockFrames, const Quality& quality) = 0;
+
+    /**
+     * Changes the quality while playing: a lock-free hand-off (any thread, no allocation), the audio thread takes it over
+     * at the start of its next block. maxVoices, maxUnison, interpolation and fxMask take effect then (a voice that is
+     * above a lowered cap is released, not cut); the OVERSAMPLING of the quality takes effect with the next prepare() only
+     * (it resizes the engine's buffers). Parameter values are never touched.
+     */
+    virtual void setQuality (const Quality& quality) noexcept = 0;
 
     /** Silences all voices and snaps smoothers to the current parameter values. */
     virtual void reset() = 0;
@@ -33,6 +41,10 @@ public:
     /** Sets a parameter (plain value, constrained to the parameter's range); unknown ids and NaN are ignored. */
     virtual void setParam (uint32_t id, float plain) noexcept = 0;
     virtual float getParam (uint32_t id) const noexcept = 0;
+
+    /** True if the engine acts on this parameter. The value of every parameter of the table is stored and read back by every
+        engine, the others are simply ignored (the own engine implements a subset: core/engine-own/README.md). */
+    virtual bool supportsParam (uint32_t id) const noexcept = 0;
 
     /**
      * Renders numFrames of audio, overwriting left and right (right may be null for a mono output; before prepare()

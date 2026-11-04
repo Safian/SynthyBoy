@@ -86,9 +86,9 @@ struct Held
 Held renderHeld (int key, float waveform, float cutoff, float gain = -12.0f, float velocity = 1.0f)
 {
     auto e = createVitalEngine();
-    e->setParam (kParamWaveform, waveform);
-    e->setParam (kParamCutoff, cutoff);
-    e->setParam (kParamGain, gain);
+    e->setParam (kParamOsc1Wavetable, waveform);
+    e->setParam (kParamFilter1Cutoff, cutoff);
+    e->setParam (kParamMasterVolume, gain);
     e->prepare (kSampleRate, 256, Quality {});
     const auto out = sbtest::render (*e, { noteOn (0, key, velocity) }, 48000, 256);
     return { out.left, out.right };

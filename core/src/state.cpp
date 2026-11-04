@@ -24,17 +24,59 @@ struct Parsed
     double value[kMaxParams] = {};
     bool has[kMaxParams] = {};
     int version = 0;
+
+    /** The three keys of format version 1 ("gain", "waveform", "cutoff"), collected whatever the version says (the key
+        order of a document is free); only a version 1 document is migrated from them. */
+    double legacyValue[3] = {};
+    bool legacyHas[3] = {};
 };
 
-/** Hook for older document versions: a migration upgrades `Parsed` from version `from` to `from + 1`
-    (rename keys, rescale values, ...). Empty for version 1; later versions append entries here. */
-using MigrateFn = void (*) (Parsed&);
+constexpr const char* kLegacyKeys[3] = { "gain", "waveform", "cutoff" };
+
+int legacyIndex (const char* key) noexcept
+{
+    for (int i = 0; i < 3; ++i)
+        if (std::strcmp (key, kLegacyKeys[i]) == 0)
+            return i;
+    return -1;
+}
+
+void setParsed (Parsed& p, uint32_t id, double v) noexcept
+{
+    const int i = findParamIndex (id);
+    if (i >= 0)
+    {
+        p.value[i] = v;
+        p.has[i] = true;
+    }
+}
+
+/** Version 1 -> 2. The three parameters of version 1 became:
+      gain     (dB, -60..6)        -> master.volume  (dB, -60..6): the same unit and range, the value is carried over unchanged
+      waveform (0 Sine, 1 Saw)     -> osc1.wavetable (index 0 = Sine, 1 = Saw: the first two built-in wavetables, same indices)
+      cutoff   (Hz, 20..20000)     -> filter1.cutoff (Hz, 20..20000, same value) and filter1.on = 1 (the old filter was always on) */
+void migrateV1ToV2 (Parsed& p) noexcept
+{
+    if (p.legacyHas[0])
+        setParsed (p, kParamMasterVolume, p.legacyValue[0]);
+    if (p.legacyHas[1])
+        setParsed (p, kParamOsc1Wavetable, p.legacyValue[1] < 0.5 ? 0.0 : 1.0); // v1 knew two values; anything else is the saw
+    if (p.legacyHas[2])
+    {
+        setParsed (p, kParamFilter1Cutoff, p.legacyValue[2]);
+        setParsed (p, kParamFilter1On, 1.0);
+    }
+}
+
+/** A migration upgrades `Parsed` from version `from` to `from + 1` (rename keys, rescale values, ...). Later versions
+    append entries here. */
+using MigrateFn = void (*) (Parsed&) noexcept;
 struct Migration
 {
     int from;
     MigrateFn apply;
 };
-constexpr std::array<Migration, 0> kMigrations {};
+constexpr std::array<Migration, 1> kMigrations { { { 1, migrateV1ToV2 } } };
 
 void migrate (Parsed& parsed) noexcept
 {
@@ -327,17 +369,30 @@ private:
             skipWs();
 
             int index = -1;
+            int legacy = -1;
             if (! truncated)
+            {
                 if (const auto* info = findParamByKey (key))
                     index = findParamIndex (info->id);
+                else
+                    legacy = legacyIndex (key);
+            }
 
-            if (index >= 0 && p < end && (*p == '-' || (*p >= '0' && *p <= '9')))
+            if ((index >= 0 || legacy >= 0) && p < end && (*p == '-' || (*p >= '0' && *p <= '9')))
             {
                 double v = 0.0;
                 if (! parseNumber (v))
                     return false;
-                out.value[index] = v; // duplicate keys: the last one wins
-                out.has[index] = true;
+                if (index >= 0)
+                {
+                    out.value[index] = v; // duplicate keys: the last one wins
+                    out.has[index] = true;
+                }
+                else
+                {
+                    out.legacyValue[legacy] = v;
+                    out.legacyHas[legacy] = true;
+                }
             }
             else if (! skipValue (2))
             {
@@ -365,7 +420,7 @@ ParamValues ParamValues::defaults() noexcept
 std::string saveState (const ParamValues& values)
 {
     std::string s;
-    s.reserve (160);
+    s.reserve (32 + paramCount() * 28);
     s += "{\"format\":\"";
     s += kFormatName;
     s += "\",\"version\":";
@@ -389,6 +444,27 @@ std::string saveState (const ParamValues& values)
     return s;
 }
 
+namespace
+{
+int applyParsed (const Parsed& parsed, ParamValues& inOut) noexcept
+{
+    int applied = 0;
+    const auto* table = paramTable();
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        if (! parsed.has[i])
+            continue;
+        const auto& info = table[i];
+        const double lo = static_cast<double> (info.min);
+        const double hi = static_cast<double> (info.max);
+        const double v = parsed.value[i];
+        inOut.plain[i] = constrainValue (info, static_cast<float> (v < lo ? lo : (v > hi ? hi : v)));
+        ++applied;
+    }
+    return applied;
+}
+} // namespace
+
 LoadResult loadState (const void* data, size_t size, ParamValues& inOut) noexcept
 {
     LoadResult result;
@@ -410,21 +486,23 @@ LoadResult loadState (const void* data, size_t size, ParamValues& inOut) noexcep
 
     result.version = parsed.version;
     migrate (parsed);
-
-    const auto* table = paramTable();
-    for (size_t i = 0; i < paramCount(); ++i)
-    {
-        if (! parsed.has[i])
-            continue;
-        const auto& info = table[i];
-        const double lo = static_cast<double> (info.min);
-        const double hi = static_cast<double> (info.max);
-        const double v = parsed.value[i];
-        inOut.plain[i] = constrainValue (info, static_cast<float> (v < lo ? lo : (v > hi ? hi : v)));
-        ++result.applied;
-    }
-
+    result.applied = applyParsed (parsed, inOut);
     result.status = parsed.version > kStateVersion ? LoadStatus::newer_version : LoadStatus::ok;
     return result;
+}
+
+int migrateLegacyParam (const char* key, double value, ParamValues& inOut) noexcept
+{
+    if (key == nullptr || std::isnan (value))
+        return 0;
+    const int li = legacyIndex (key);
+    if (li < 0)
+        return 0;
+
+    Parsed parsed;
+    parsed.legacyValue[li] = value;
+    parsed.legacyHas[li] = true;
+    migrateV1ToV2 (parsed);
+    return applyParsed (parsed, inOut);
 }
 } // namespace synthyboy

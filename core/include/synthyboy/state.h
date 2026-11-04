@@ -10,7 +10,7 @@
 
 namespace synthyboy
 {
-constexpr int kStateVersion = 1;
+constexpr int kStateVersion = 2;
 
 /** Largest accepted state document. */
 constexpr size_t kMaxStateBytes = 1u << 20;
@@ -39,12 +39,18 @@ struct LoadResult
     int version = 0; // version found in the document (0 if none)
 };
 
-/** Deterministic text: {"format":"synthyboy-state","version":1,"params":{"gain":-12,...}}, parameters in table order,
+/** Deterministic text: {"format":"synthyboy-state","version":2,"params":{"master.volume":-12,...}}, parameters in table order,
     floats as "%.9g" (locale independent), no white space. Allocates: not for the audio thread. */
 std::string saveState (const ParamValues& values);
 
 /** Parses a state document into inOut. Bounded (kMaxStateBytes, small nesting), never reads outside [data, data+size),
     never throws, never allocates. Unknown keys are ignored, missing parameters keep their value in inOut, values are
-    clamped to the range and snapped (stepped/interval). On `invalid` and `empty` inOut is left unchanged. */
+    clamped to the range and snapped (stepped/interval). On `invalid` and `empty` inOut is left unchanged. A version 1
+    document (the three keys gain, waveform, cutoff) is migrated, see core/src/state.cpp (migrateV1ToV2); `applied`
+    counts the parameters of version 2 that were set (a v1 cutoff sets filter1.cutoff and filter1.on). */
 LoadResult loadState (const void* data, size_t size, ParamValues& inOut) noexcept;
+
+/** The migration of one parameter of format version 1 ("gain", "waveform", "cutoff"), for state of older shells that is not
+    a state document (the spike's XML blob). Returns the number of version 2 parameters set (0 for an unknown key). */
+int migrateLegacyParam (const char* key, double value, ParamValues& inOut) noexcept;
 } // namespace synthyboy

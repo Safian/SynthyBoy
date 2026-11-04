@@ -130,7 +130,7 @@ TEST (engine_note_on_off_and_tail)
         for (const float waveform : { 0.0f, 1.0f })
         {
             auto e = makeEngine2 (c);
-            e->setParam (kParamWaveform, waveform);
+            e->setParam (kParamOsc1Wavetable, waveform);
             const int total = 48000;
             const int offAt = 12000;
             const auto out = sbtest::render (*e, { noteOn (0, 69, 1.0f), noteOff (offAt, 69) }, total, 256);
@@ -197,8 +197,8 @@ TEST (engine_determinism_two_instances_bit_identical)
         auto b = createEngine (c.kind);
         for (auto* e : { a.get(), b.get() })
         {
-            e->setParam (kParamCutoff, 1234.0f);
-            e->setParam (kParamGain, -3.0f);
+            e->setParam (kParamFilter1Cutoff, 1234.0f);
+            e->setParam (kParamMasterVolume, -3.0f);
             e->prepare (kSampleRate, 512, Quality {});
         }
         const auto ra = sbtest::render (*a, ev, 60000, 480);
@@ -247,14 +247,14 @@ TEST (engine_block_size_independence)
             for (const float waveform : { 0.0f, 1.0f })
             {
                 auto reference = makeEngine2 (c);
-                reference->setParam (kParamWaveform, waveform);
+                reference->setParam (kParamOsc1Wavetable, waveform);
                 const auto ref = sbtest::render (*reference, ev, 4096, 4096);
                 CHECK (sbtest::peak (ref.left) > 0.01f);
 
                 for (const int block : { 1, 7, 64, 512 })
                 {
                     auto e = makeEngine2 (c);
-                    e->setParam (kParamWaveform, waveform);
+                    e->setParam (kParamOsc1Wavetable, waveform);
                     const auto out = sbtest::render (*e, ev, 4096, block);
                     CHECK (sbtest::allFinite (out.left));
                     const double tolerance = withBends ? (waveform == 0.0f ? c.bentBlockTolerance : -1.0) : c.blockTolerance;
@@ -300,8 +300,8 @@ TEST (engine_pitch)
         for (const auto& k : cases)
         {
             auto e = makeEngine2 (c);
-            e->setParam (kParamWaveform, k.waveform);
-            e->setParam (kParamCutoff, 12000.0f);
+            e->setParam (kParamOsc1Wavetable, k.waveform);
+            e->setParam (kParamFilter1Cutoff, 12000.0f);
             std::vector<Event> ev = { sbtest::pitchBend (0, k.bend), noteOn (0, k.key) };
             const auto out = sbtest::render (*e, ev, 48000, 512);
             const double hz = measureFrequency (out.left, 12000, 48000, kSampleRate);
@@ -318,7 +318,7 @@ TEST (engine_pitch_at_other_sample_rate)
     FOR_EACH_ENGINE (c)
     {
         auto e = makeEngine2 (c, Quality {}, 44100.0);
-        e->setParam (kParamWaveform, 0.0f);
+        e->setParam (kParamOsc1Wavetable, 0.0f);
         const auto out = sbtest::render (*e, { noteOn (0, 69) }, 44100, 441);
         CHECK_NEAR (measureFrequency (out.left, 11000, 44100, 44100.0), 440.0, 0.5);
     }
@@ -331,8 +331,8 @@ TEST (engine_pitch_at_many_sample_rates)
         for (const double sr : { 22050.0, 32000.0, 88200.0, 96000.0, 192000.0 })
         {
             auto e = makeEngine2 (c, Quality {}, sr);
-            e->setParam (kParamWaveform, 0.0f);
-            e->setParam (kParamCutoff, 10000.0f);
+            e->setParam (kParamOsc1Wavetable, 0.0f);
+            e->setParam (kParamFilter1Cutoff, 10000.0f);
             const int total = static_cast<int> (sr);
             const auto out = sbtest::render (*e, { noteOn (0, 69) }, total, 480);
             CHECK (sbtest::allFinite (out.left) && sbtest::peak (out.left) > 0.02f);
@@ -350,16 +350,16 @@ TEST (engine_cutoff_and_gain_have_effect)
     {
         auto dark = makeEngine2 (c);
         auto bright = makeEngine2 (c);
-        dark->setParam (kParamCutoff, 100.0f);
-        bright->setParam (kParamCutoff, 18000.0f);
+        dark->setParam (kParamFilter1Cutoff, 100.0f);
+        bright->setParam (kParamFilter1Cutoff, 18000.0f);
         const auto d = sbtest::render (*dark, { noteOn (0, 69) }, 24000, 512);
         const auto b = sbtest::render (*bright, { noteOn (0, 69) }, 24000, 512);
         CHECK (sbtest::peak (d.left, 12000) < 0.5f * sbtest::peak (b.left, 12000));
 
         auto quiet = makeEngine2 (c);
         auto loud = makeEngine2 (c);
-        quiet->setParam (kParamGain, -30.0f);
-        loud->setParam (kParamGain, 0.0f);
+        quiet->setParam (kParamMasterVolume, -30.0f);
+        loud->setParam (kParamMasterVolume, 0.0f);
         const auto q = sbtest::render (*quiet, { noteOn (0, 69) }, 24000, 512);
         const auto l = sbtest::render (*loud, { noteOn (0, 69) }, 24000, 512);
         CHECK_NEAR (sbtest::peak (l.left, 12000) / sbtest::peak (q.left, 12000), std::pow (10.0, 30.0 / 20.0), 0.05 * std::pow (10.0, 30.0 / 20.0));
@@ -371,10 +371,10 @@ TEST (engine_gain_changes_are_smoothed)
     FOR_EACH_ENGINE (c)
     {
         auto e = makeEngine2 (c);
-        e->setParam (kParamWaveform, 0.0f);
-        e->setParam (kParamGain, -60.0f);
+        e->setParam (kParamOsc1Wavetable, 0.0f);
+        e->setParam (kParamMasterVolume, -60.0f);
         sbtest::render (*e, { noteOn (0, 69) }, 4800, 512);
-        e->setParam (kParamGain, 6.0f);
+        e->setParam (kParamMasterVolume, 6.0f);
         const auto out = sbtest::render (*e, {}, 4800, 4800);
         // a ramp, not a jump: the first sample is far below the final level, the end of the block is at full level
         const float final = sbtest::peak (out.left, 2000, 4800);
@@ -391,24 +391,24 @@ TEST (engine_params)
     FOR_EACH_ENGINE (c)
     {
         auto e = createEngine (c.kind);
-        CHECK_EQ (e->getParam (kParamGain), -12.0f);
-        CHECK_EQ (e->getParam (kParamWaveform), 1.0f);
-        CHECK_EQ (e->getParam (kParamCutoff), 8000.0f);
-        e->setParam (kParamCutoff, 1.0e9f);
-        CHECK_EQ (e->getParam (kParamCutoff), 20000.0f);
-        e->setParam (kParamWaveform, 0.2f);
-        CHECK_EQ (e->getParam (kParamWaveform), 0.0f);
-        e->setParam (kParamGain, std::nanf (""));
-        CHECK (std::isfinite (e->getParam (kParamGain)));
-        e->setParam (kParamGain, -3.0f);
-        e->setParam (kParamGain, std::nanf (""));
-        CHECK_EQ (e->getParam (kParamGain), -3.0f); // NaN ignored
+        CHECK_EQ (e->getParam (kParamMasterVolume), -12.0f);
+        CHECK_EQ (e->getParam (kParamOsc1Wavetable), 1.0f);
+        CHECK_EQ (e->getParam (kParamFilter1Cutoff), 12000.0f);
+        e->setParam (kParamFilter1Cutoff, 1.0e9f);
+        CHECK_EQ (e->getParam (kParamFilter1Cutoff), 20000.0f);
+        e->setParam (kParamOsc1Wavetable, 0.2f);
+        CHECK_EQ (e->getParam (kParamOsc1Wavetable), 0.0f);
+        e->setParam (kParamMasterVolume, std::nanf (""));
+        CHECK (std::isfinite (e->getParam (kParamMasterVolume)));
+        e->setParam (kParamMasterVolume, -3.0f);
+        e->setParam (kParamMasterVolume, std::nanf (""));
+        CHECK_EQ (e->getParam (kParamMasterVolume), -3.0f); // NaN ignored
         e->setParam (12345u, 1.0f);                 // unknown id ignored
         CHECK_EQ (e->getParam (12345u), 0.0f);
 
         // parameters survive prepare()
         e->prepare (kSampleRate, 512, Quality {});
-        CHECK_EQ (e->getParam (kParamGain), -3.0f);
+        CHECK_EQ (e->getParam (kParamMasterVolume), -3.0f);
     }
 }
 
@@ -532,6 +532,18 @@ TEST (engine_quality_defaults)
     CHECK_EQ (qualityForTier (Tier::low).maxVoices, 8);
     CHECK_EQ (qualityForTier (Tier::medium).maxVoices, 16);
     CHECK_EQ (qualityForTier (Tier::high).maxVoices, kMaxVoices);
+    // tiers (ARCHITECTURE 3.6): only caps and bypasses
+    const Quality low = qualityForTier (Tier::low), medium = qualityForTier (Tier::medium), high = qualityForTier (Tier::high);
+    CHECK_EQ (low.maxUnison, 4);
+    CHECK_EQ (medium.maxUnison, 8);
+    CHECK_EQ (high.maxUnison, kMaxUnisonVoices);
+    CHECK_EQ (low.oversampling, 1);
+    CHECK_EQ (medium.oversampling, 2);
+    CHECK_EQ (high.oversampling, 2);
+    CHECK (low.interpolation == Interpolation::linear && medium.interpolation == Interpolation::linear
+           && high.interpolation == Interpolation::spectral);
+    CHECK (high.fxMask == kFxAll && medium.fxMask == kFxAll);
+    CHECK ((low.fxMask & kFxReverb) == 0 && (low.fxMask & kFxFlanger) == 0 && (low.fxMask & kFxDelay) != 0);
 
     FOR_EACH_ENGINE (c)
     {

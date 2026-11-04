@@ -47,7 +47,7 @@ Result run (const Options& o, int voices, int maxVoices, float waveform)
     auto engine = createEngine (o.engine);
     Quality quality;
     quality.maxVoices = maxVoices;
-    engine->setParam (kParamWaveform, waveform);
+    engine->setParam (kParamOsc1Wavetable, waveform);
     engine->prepare (o.sampleRate, o.block, quality);
 
     std::vector<float> left (static_cast<size_t> (o.block)), right (static_cast<size_t> (o.block));

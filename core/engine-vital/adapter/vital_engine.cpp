@@ -199,6 +199,13 @@ public:
         activeCount.store (engine->getNumActiveVoices(), std::memory_order_relaxed);
     }
 
+    bool supportsParam (uint32_t id) const noexcept override
+    {
+        return id == kParamMasterVolume || id == kParamFilter1Cutoff || id == kParamOsc1Wavetable;
+    }
+
+    void setQuality (const Quality&) noexcept override {}
+
     int activeVoices() const noexcept override
     {
         return activeCount.load (std::memory_order_relaxed);
@@ -378,9 +385,9 @@ private:
 
     void applyParams (bool force) noexcept
     {
-        const float gain = readParam (kParamGain);
-        const float cutoff = readParam (kParamCutoff);
-        const float waveform = readParam (kParamWaveform);
+        const float gain = readParam (kParamMasterVolume);
+        const float cutoff = readParam (kParamFilter1Cutoff);
+        const float waveform = readParam (kParamOsc1Wavetable);
 
         if (force || gain != applied.gain)
         {
@@ -434,6 +441,9 @@ private:
                 engine->setPitchWheel (bend * kBendSemitones / kVitalLocalBendRange, channel);
                 break;
             }
+            case Event::ModWheel:
+            case Event::Aftertouch:
+                break;
             case Event::AllNotesOff:
                 if (e.channel < 0)
                     engine->allNotesOff (0);

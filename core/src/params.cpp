@@ -8,22 +8,12 @@
 #include <cstring>
 
 #include "number.h"
+#include "synthyboy/modulation.h"
 
 namespace synthyboy
 {
 namespace
 {
-constexpr ParamInfo kParams[] = {
-    { hashKey ("gain"),     "gain",     "Gain",     "Master",     -60.0f,    6.0f,   -12.0f, 2.5f, 0.1f, Scale::exp_skew, Unit::dB, kParamAutomatable },
-    { hashKey ("waveform"), "waveform", "Waveform", "Oscillator",   0.0f,    1.0f,     1.0f, 1.0f, 1.0f, Scale::stepped,  Unit::none, kParamAutomatable | kParamStepped },
-    { hashKey ("cutoff"),   "cutoff",   "Cutoff",   "Filter",      20.0f, 20000.0f, 8000.0f, 0.3f, 0.0f, Scale::exp_skew, Unit::Hz, kParamAutomatable }
-};
-
-constexpr size_t kParamCount = sizeof (kParams) / sizeof (kParams[0]);
-static_assert (kParamCount <= kMaxParams, "parameter table larger than kMaxParams");
-
-constexpr const char* kWaveformChoices[] = { "Sine", "Saw" };
-
 float clamp01 (float v) noexcept
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
@@ -56,32 +46,71 @@ bool isSpace (char c) noexcept
 {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
-} // namespace
 
-const ParamInfo* paramTable() noexcept { return kParams; }
-size_t paramCount() noexcept { return kParamCount; }
+/** id -> table index, sorted by id; built on first use (a fixed array, no allocation). Engines and shells touch it
+    during construction, so the audio thread never pays for the first call. */
+struct IdIndex
+{
+    uint32_t id[kMaxParams];
+    uint16_t index[kMaxParams];
+    size_t count = 0;
+
+    IdIndex()
+    {
+        const auto* table = paramTable();
+        count = paramCount();
+        for (size_t i = 0; i < count; ++i)
+        {
+            // insertion sort (the table is built once, n is a few hundred)
+            size_t j = i;
+            while (j > 0 && id[j - 1] > table[i].id)
+            {
+                id[j] = id[j - 1];
+                index[j] = index[j - 1];
+                --j;
+            }
+            id[j] = table[i].id;
+            index[j] = static_cast<uint16_t> (i);
+        }
+    }
+};
+
+const IdIndex& idIndex() noexcept
+{
+    static const IdIndex lookup;
+    return lookup;
+}
+} // namespace
 
 const ParamInfo* findParam (uint32_t id) noexcept
 {
     const int i = findParamIndex (id);
-    return i < 0 ? nullptr : &kParams[i];
+    return i < 0 ? nullptr : &paramTable()[i];
 }
 
 int findParamIndex (uint32_t id) noexcept
 {
-    for (size_t i = 0; i < kParamCount; ++i)
-        if (kParams[i].id == id)
-            return static_cast<int> (i);
-    return -1;
+    const auto& lookup = idIndex();
+    size_t lo = 0, hi = lookup.count;
+    while (lo < hi)
+    {
+        const size_t mid = (lo + hi) / 2;
+        if (lookup.id[mid] < id)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo < lookup.count && lookup.id[lo] == id ? static_cast<int> (lookup.index[lo]) : -1;
 }
 
 const ParamInfo* findParamByKey (const char* key) noexcept
 {
     if (key == nullptr)
         return nullptr;
-    for (const auto& p : kParams)
-        if (std::strcmp (p.key, key) == 0)
-            return &p;
+    const auto* table = paramTable();
+    for (size_t i = 0; i < paramCount(); ++i)
+        if (std::strcmp (table[i].key, key) == 0)
+            return &table[i];
     return nullptr;
 }
 
@@ -110,12 +139,37 @@ float constrainValue (const ParamInfo& info, float plain) noexcept
 
 size_t choiceCount (const ParamInfo& info) noexcept
 {
-    return info.id == kParamWaveform ? sizeof (kWaveformChoices) / sizeof (kWaveformChoices[0]) : 0;
+    switch (info.choiceSet)
+    {
+        case ChoiceSet::list:           return info.numChoices;
+        case ChoiceSet::modSource:      return 1 + modSourceCount();
+        case ChoiceSet::modDestination: return 1 + modDestinationCount();
+        case ChoiceSet::none:           break;
+    }
+    return 0;
 }
 
 const char* choiceName (const ParamInfo& info, size_t index) noexcept
 {
-    return index < choiceCount (info) ? kWaveformChoices[index] : nullptr;
+    switch (info.choiceSet)
+    {
+        case ChoiceSet::list:
+            return index < info.numChoices ? info.choices[index] : nullptr;
+        case ChoiceSet::modSource:
+            if (index == 0)
+                return "None";
+            return index <= modSourceCount() ? modSourceTable()[index - 1].name : nullptr;
+        case ChoiceSet::modDestination:
+        {
+            if (index == 0)
+                return "None";
+            const int p = modDestinationParamIndex (index);
+            return p >= 0 ? paramTable()[p].name : nullptr;
+        }
+        case ChoiceSet::none:
+            break;
+    }
+    return nullptr;
 }
 
 const char* unitLabel (Unit unit) noexcept
@@ -130,6 +184,8 @@ const char* unitLabel (Unit unit) noexcept
         case Unit::semitone: return "st";
         case Unit::cents:    return "ct";
         case Unit::beats:    return "beats";
+        case Unit::degrees:  return "deg";
+        case Unit::voices:   return "v";
     }
     return "";
 }
@@ -155,7 +211,7 @@ size_t valueToText (const ParamInfo& info, float plain, char* buf, size_t cap) n
 
     if (! std::isfinite (plain))
         plain = info.def;
-    return number::formatFixed1 (clampRange (info, plain), buf, cap);
+    return number::formatFixed (clampRange (info, plain), info.decimals, buf, cap);
 }
 
 bool textToValue (const ParamInfo& info, const char* text, float& plain) noexcept

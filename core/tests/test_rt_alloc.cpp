@@ -156,10 +156,10 @@ TEST (process_does_not_allocate)
                 events[n++] = sbtest::allNotesOff (200);
 
             // parameter changes from the "UI thread" (here: the same thread) between blocks
-            engine->setParam (kParamGain, -40.0f + static_cast<float> (rng.uniform()) * 40.0f);
-            engine->setParam (kParamCutoff, 100.0f + static_cast<float> (rng.uniform()) * 10000.0f);
-            engine->setParam (kParamWaveform, (block / 25) % 2 == 0 ? 0.0f : 1.0f);
-            (void) engine->getParam (kParamGain);
+            engine->setParam (kParamMasterVolume, -40.0f + static_cast<float> (rng.uniform()) * 40.0f);
+            engine->setParam (kParamFilter1Cutoff, 100.0f + static_cast<float> (rng.uniform()) * 10000.0f);
+            engine->setParam (kParamOsc1Wavetable, (block / 25) % 2 == 0 ? 0.0f : 1.0f);
+            (void) engine->getParam (kParamMasterVolume);
 
             engine->process (events, n, left, right, blockSize);
             for (int i = 0; i < blockSize; ++i)

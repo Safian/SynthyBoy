@@ -49,12 +49,26 @@ float OwnEngine::getParam (uint32_t id) const noexcept
     return readParam (id);
 }
 
+bool OwnEngine::supportsParam (uint32_t id) const noexcept
+{
+    // the subset this engine implements (core/engine-own/README.md)
+    return id == kParamMasterVolume || id == kParamMasterBendRange || id == kParamMasterTranspose || id == kParamMasterTune
+        || id == kParamOsc1Wavetable || id == kParamFilter1On || id == kParamFilter1Cutoff;
+}
+
+void OwnEngine::setQuality (const Quality& newQuality) noexcept
+{
+    // the own engine only uses the voice cap (it has no unison, oversampling, wavetable interpolation or effects)
+    voiceCap.store (std::clamp (newQuality.maxVoices, 1, kMaxVoices), std::memory_order_relaxed);
+}
+
 void OwnEngine::prepare (double newSampleRate, int /*maxBlockFrames*/, const Quality& quality)
 {
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
 
     const int numVoices = std::clamp (quality.maxVoices, 1, kMaxVoices);
-    voices.assign (static_cast<size_t> (numVoices), Voice());
+    voiceCap.store (numVoices, std::memory_order_relaxed);
+    voices.assign (static_cast<size_t> (kMaxVoices), Voice());
     for (auto& v : voices)
         v.prepare (sampleRate);
 
@@ -70,7 +84,7 @@ void OwnEngine::reset()
     for (auto& b : bendSemitones)
         b = 0.0f;
     noteCounter = 0;
-    smoothedGain.setCurrentAndTarget (gainFromDb (readParam (kParamGain)));
+    smoothedGain.setCurrentAndTarget (gainFromDb (readParam (kParamMasterVolume)));
     activeCount.store (0, std::memory_order_relaxed);
 }
 
@@ -83,24 +97,27 @@ void OwnEngine::noteOn (const Event& e) noexcept
     // hitting a key that still rings: let the old note fade out first (as the spike's juce::Synthesiser did)
     noteOff (e.key, channel);
 
+    // the pool has kMaxVoices voices, at most voiceCap of them sound (a lowered cap releases the surplus lazily: a new note
+    // takes a free voice below the cap, else steals the oldest one)
+    const size_t cap = static_cast<size_t> (std::clamp (voiceCap.load (std::memory_order_relaxed), 1, kMaxVoices));
     Voice* chosen = nullptr;
-    for (auto& v : voices)
-        if (! v.isActive())
+    for (size_t i = 0; i < cap; ++i)
+        if (! voices[i].isActive())
         {
-            chosen = &v;
+            chosen = &voices[i];
             break;
         }
 
     if (chosen == nullptr) // steal the oldest voice
     {
         chosen = &voices.front();
-        for (auto& v : voices)
-            if (v.getAge() < chosen->getAge())
-                chosen = &v;
+        for (size_t i = 0; i < cap; ++i)
+            if (voices[i].getAge() < chosen->getAge())
+                chosen = &voices[i];
     }
 
     const float velocity = std::isnan (e.value) ? 0.0f : std::clamp (e.value, 0.0f, 1.0f);
-    chosen->start (e.key, channel, e.noteId, velocity, bendSemitones[channel], noteCounter++);
+    chosen->start (e.key, channel, e.noteId, velocity, bendSemitones[channel], noteCounter++, noteOffsetSemitones);
 }
 
 void OwnEngine::noteOff (int key, int channel) noexcept
@@ -123,7 +140,7 @@ void OwnEngine::handleEvent (const Event& e) noexcept
         case Event::PitchBend:
         {
             const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
-            const float bend = std::isnan (e.value) ? 0.0f : std::clamp (e.value, -1.0f, 1.0f) * 2.0f;
+            const float bend = std::isnan (e.value) ? 0.0f : std::clamp (e.value, -1.0f, 1.0f) * bendRange;
             bendSemitones[channel] = bend;
             for (auto& v : voices)
                 if (v.isActive() && v.getChannel() == channel)
@@ -134,6 +151,9 @@ void OwnEngine::handleEvent (const Event& e) noexcept
             for (auto& v : voices)
                 if (e.channel < 0 || v.getChannel() == e.channel)
                     v.release();
+            break;
+        case Event::ModWheel:   // no modulation in this engine
+        case Event::Aftertouch:
             break;
     }
 }
@@ -154,10 +174,21 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     if (prepared)
     {
         // parameters are read once per block
-        waveform = readParam (kParamWaveform) < 0.5f ? Waveform::sine : Waveform::saw;
-        const double fc = std::clamp (static_cast<double> (readParam (kParamCutoff)), 20.0, std::max (20.0, 0.45 * sampleRate));
-        filterCoeff = static_cast<float> (1.0 - std::exp (-kTwoPi * fc / sampleRate));
-        smoothedGain.setTarget (gainFromDb (readParam (kParamGain)));
+        // the sine and the saw are the first two built-in wavetables; every other entry plays the saw in this engine
+        waveform = readParam (kParamOsc1Wavetable) < 0.5f ? Waveform::sine : Waveform::saw;
+        const double fc = std::clamp (static_cast<double> (readParam (kParamFilter1Cutoff)), 20.0, std::max (20.0, 0.45 * sampleRate));
+        filterCoeff = readParam (kParamFilter1On) < 0.5f ? 1.0f // filter off: the one-pole follows its input exactly
+                                                         : static_cast<float> (1.0 - std::exp (-kTwoPi * fc / sampleRate));
+        smoothedGain.setTarget (gainFromDb (readParam (kParamMasterVolume)));
+        bendRange = readParam (kParamMasterBendRange);
+        noteOffsetSemitones = readParam (kParamMasterTranspose) + readParam (kParamMasterTune) * 0.01f;
+        if (voiceCap.load (std::memory_order_relaxed) < kMaxVoices)
+        {
+            // a lowered cap: voices above it are released (they fade out), they are not cut
+            const size_t cap = static_cast<size_t> (std::clamp (voiceCap.load (std::memory_order_relaxed), 1, kMaxVoices));
+            for (size_t i = cap; i < voices.size(); ++i)
+                voices[i].release();
+        }
 
         int pos = 0;
         for (int i = 0; i < numEvents; ++i)

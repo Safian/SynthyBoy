@@ -78,6 +78,12 @@ jobs:
         if: runner.os != 'Windows'
         run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"
 
+      # docs/params.json (machine readable table, read by Kick's UI) and docs/PARAMETERS.md are generated from the parameter table
+      # (synthyboy_paramdump + scripts/gen-params-doc.py); the committed files must equal the regenerated ones
+      - name: Parameter documentation is up to date (docs/params.json, docs/PARAMETERS.md)
+        if: runner.os == 'Linux'
+        run: scripts/check-params-doc.sh build/tools/paramdump/synthyboy_paramdump
+
       # the same plugin with the Vital-derived engine (-DSYNTHYBOY_SHELL_ENGINE=vital); JUCE and clap-juce-extensions are
       # reused from the first build. clap_smoke checks silence, then audio after a note-on, and the state round trip.
       - name: Plugin with the Vital engine (CLAP smoke host)
