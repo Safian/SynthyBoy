@@ -17,6 +17,7 @@
 #endif
 
 #include "synthyboy/engine.h"
+#include "synthyboy/modulation.h"
 #include "test_engines.h"
 #include "test_runner.h"
 #include "test_util.h"
@@ -178,5 +179,67 @@ TEST (process_does_not_allocate)
         engine->reset();
         engine->process (events, 2, left, right, blockSize);
         CHECK_EQ (g_allocations.load() - beforeReset, 0ul);
+    }
+}
+
+// Whole patches that change while the engine plays: random parameters of every kind (a few per block), the modulation matrix
+// wired and rewired, the quality handed over, notes and bends. Nothing may allocate in process().
+TEST (process_does_not_allocate_while_patches_change)
+{
+    for (const sbtest::EngineCase& engineCase : sbtest::engineCases())
+    for (const Tier tier : { Tier::low, Tier::high })
+    {
+        sbtest::Context context (engineCase.name);
+        auto engine = createEngine (engineCase.kind);
+        engine->setParam (kParamMasterPolyphony, 32.0f);
+        engine->prepare (48000.0, 128, qualityForTier (tier));
+
+        constexpr int blockSize = 128;
+        static float left[blockSize], right[blockSize];
+        sbtest::Rng rng (tier == Tier::low ? 11 : 12);
+        const size_t numParams = paramCount();
+        Event events[8];
+        bool finite = true;
+        unsigned long allocations = 0;
+
+        for (int block = 0; block < 1500; ++block)
+        {
+            // parameters first: they are the "UI thread" of this test (allocation here is not counted)
+            for (int k = 0; k < 6; ++k)
+            {
+                const auto& info = paramTable()[rng.u32() % numParams];
+                engine->setParam (info.id, info.min + static_cast<float> (rng.uniform()) * (info.max - info.min));
+            }
+            for (int k = 0; k < 3; ++k) // the matrix: slots get a source, a destination, an amount
+            {
+                const auto slot = modSlotParams (static_cast<int> (rng.u32() % kNumModSlots));
+                engine->setParam (paramTable()[slot.source].id, static_cast<float> (rng.u32() % (1 + modSourceCount())));
+                engine->setParam (paramTable()[slot.destination].id, static_cast<float> (rng.u32() % (1 + modDestinationCount())));
+                engine->setParam (paramTable()[slot.amount].id, -100.0f + 200.0f * static_cast<float> (rng.uniform()));
+            }
+            if (block % 100 == 50)
+            {
+                Quality q = qualityForTier (rng.u32() % 2 == 0 ? Tier::low : Tier::high);
+                q.maxVoices = 1 + static_cast<int> (rng.u32() % 32);
+                engine->setQuality (q);
+            }
+
+            int n = 0;
+            if (block % 2 == 0)
+                events[n++] = sbtest::noteOn (static_cast<int> (rng.u32() % 100), 30 + static_cast<int> (rng.u32() % 60), 0.3f + 0.7f * static_cast<float> (rng.uniform()));
+            if (block % 3 == 0)
+                events[n++] = sbtest::noteOff (120, 30 + static_cast<int> (rng.u32() % 60));
+            std::stable_sort (events, events + n, [] (const Event& a, const Event& b) { return a.frame < b.frame; });
+
+            const auto before = g_allocations.load();
+            engine->process (events, n, left, right, blockSize);
+            allocations += g_allocations.load() - before;
+            for (int i = 0; i < blockSize; ++i)
+                finite = finite && std::isfinite (left[i]) && std::isfinite (right[i]);
+        }
+
+        if (! CHECK_EQ (allocations, 0ul))
+            std::printf ("    %s, tier %d: %lu allocation(s) during process()\n", engineCase.name, static_cast<int> (tier), allocations);
+        CHECK (finite);
     }
 }

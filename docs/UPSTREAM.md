@@ -81,6 +81,22 @@ is the complete list; the table groups it.
 | `src/synthesis/framework/voice_handler.cpp` | `allSoundsOff()` also resets `last_played_note_` to -1 | after all-sounds-off no previous note exists; without it the first note after a reset glides from the last note of the previous run (portamento minimum is 1 ms), so `reset()` could not reproduce a fresh engine |
 | `src/synthesis/producers/synth_oscillator.cpp` | (a) `modulation_buffer + start` only if the buffer is not null (two places); (b) the random start phases `float * INT_MAX` -> `uint32_t` go through a clamped `int32_t` | UBSan: null pointer plus offset; negative float to unsigned is undefined (the oscillator's random phase) |
 | `src/synthesis/effects/delay.cpp` | the `Style` enum is built from the control value clamped to `0 .. kNumStyles - 1` | UBSan: a value outside the enumerators is undefined (hit by the ported input-bounds test with a control value of 100000) |
+| `src/synthesis/producers/spectral_morph.h` (`inharmonicScaleMorph`) | (a) the loop over the stretched partials stops at `dest_index >= last_harmonic` (was `> 2 * last_harmonic`); (b) `log2` of the harmonic index is taken of `max (index, 1)` | **bug fixes (Phase 3, found by the parameter sweep with random patches: NaN output at "Inharmonic Stretch" >= about 92 %)**. (a) partials stretched past the last harmonic were written up to `4 * last_harmonic` floats behind the start of the spectrum, over the table of shifted indices that lives behind it in the same buffer; (b) harmonic 0 gave `log2 (0) = -127`, `pow (mult, -12.7)` = -inf for large `mult`, an inf in that table, and the inverse transform returned NaN for some values of `mult`. Covered by `morph_never_gives_nan` in `synthyboy_test_vital_params`. |
+| `src/synthesis/lookups/wavetable.h` | added `Wavetable::useExternalData (WavetableData*)` | lets the audio thread point an oscillator at a pre-built table (the adapter's 13 built-in tables) between two blocks without allocating or waiting for a lock: the oscillator already re-reads `current_data_` and its version number at the start of every block |
+| `src/synthesis/framework/processor.h/.cpp` | added `Processor::reserveInputs (int count)` | appends `count` unconnected inputs, so that `plugNext` (which allocates when it finds no free input) never allocates when the modulation matrix wires a slot on the audio thread. The adapter reserves 64 per modulation destination |
+| `src/synthesis/framework/processor_router.h` | added `ProcessorRouter::reserveWorkspace (int capacity)` | grows the three work queues of the dependency search (`getDependencies`, called by every `connect`) once, so that wiring a slot does not have to grow them |
+
+### What the modulation matrix does on the audio thread (Phase 3 audit)
+
+Vital wires a slot with `SoundEngine::connectModulation` / `disconnectModulation`, called by its (not imported) `SynthBase` on the
+audio thread between blocks. Checked with a counting `operator new` (random sources, destinations and amounts, 3000 blocks, 10 seeds, then
+`process_does_not_allocate_while_patches_change`): the only allocations were (1) `Processor::plugNext` creating an input when the
+destination has no free one (fixed by `reserveInputs`), (2) the growth of the dependency queues in `ProcessorRouter::getDependencies`
+(fixed by `reserveWorkspace`), (3) `ProcessorRouter::connect` creating a `Feedback` node when the connection closes a loop (a source that
+depends on the destination). (3) cannot be pre-allocated (map nodes, vectors in several routers), so the adapter makes the engine's own
+loop check (`isDownstream`) first and leaves such a slot unwired; it is tried again whenever the matrix changes. With these three measures
+the matrix is allocation free in the tests. This is not a proof: the rule is "no allocation observed", not "none possible".
+
 
 ### Dropped functions, summary
 

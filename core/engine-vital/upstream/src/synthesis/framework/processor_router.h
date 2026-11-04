@@ -54,6 +54,13 @@ namespace sbvital {
       void connect(Processor* destination, const Output* source, int index);
       void disconnect(const Processor* destination, const Output* source);
       bool isDownstream(const Processor* first, const Processor* second) const;
+      // Modified for SynthyBoy: grows the work queues of the dependency search to capacity entries now, so that connecting
+      // processors later (on the audio thread) does not have to grow them.
+      void reserveWorkspace(int capacity) {
+        dependencies_->reserve(capacity);
+        dependencies_visited_->reserve(capacity);
+        dependency_inputs_->reserve(capacity);
+      }
       bool areOrdered(const Processor* first, const Processor* second) const;
 
       virtual bool isPolyphonic(const Processor* processor) const;

@@ -32,7 +32,8 @@ if(SYNTHYBOY_WITH_VITAL)
     add_subdirectory(engine-vital)
     # the adapter (our code, strict warnings like the rest of the core) is compiled into the core; the imported DSP is
     # the separate static library
-    target_sources(synthyboy_core PRIVATE engine-vital/adapter/vital_engine.cpp)
+    target_sources(synthyboy_core PRIVATE engine-vital/adapter/vital_engine.cpp engine-vital/adapter/vital_bindings.cpp
+                                          engine-vital/adapter/vital_tables.cpp)
     target_include_directories(synthyboy_core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/engine-vital/adapter")
     target_link_libraries(synthyboy_core PRIVATE synthyboy_engine_vital)
     target_compile_definitions(synthyboy_core PUBLIC SYNTHYBOY_HAS_VITAL=1)

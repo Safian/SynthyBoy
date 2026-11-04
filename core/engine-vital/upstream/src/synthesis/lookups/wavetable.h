@@ -122,6 +122,9 @@ namespace sbvital {
         return active_audio_data_.load()->version;
       }
 
+      // Modified for SynthyBoy: points the table at data that someone else owns (a pre-built table), without waiting for the
+      // audio thread or allocating. For the audio thread, between two blocks (it is the only reader).
+      void useExternalData(WavetableData* data) { current_data_ = data; }
       void loadWaveFrame(const WaveFrame* wave_frame);
       void loadWaveFrame(const WaveFrame* wave_frame, int to_index);
       void postProcess(float max_span);

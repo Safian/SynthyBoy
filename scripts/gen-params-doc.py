@@ -127,7 +127,9 @@ def main():
     w("")
     w("Modulation: parameters marked *mod* can be the destination of a modulation slot. A slot's amount (-100 .. 100 %) is a "
       "fraction of the destination's range **in the engine's own scale** (for the filter cutoff that is the whole keyboard range "
-      "in semitones, not Hz).")
+      "in semitones, not Hz). A slot whose wiring would close a loop (its source depends on its destination, for example one LFO "
+      "modulating the rate of another that modulates the first) stays unwired, because the engine would have to allocate on the audio "
+      "thread to build it.")
     w("")
     for top in order:
         w("### %s" % top)

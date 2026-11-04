@@ -395,7 +395,9 @@ namespace sbvital {
     poly_float offset(0.0f, 2.0f, 1.0f, 3.0f);
     for (int i = 0; i <= kMaxPolyIndex / 2; ++i) {
       poly_float index = offset + i * 4;
-      poly_float octave = futils::log2(index);
+      // Modified for SynthyBoy: log2 (0) is -127 and pow (mult, -12.7) overflows to -inf for harmonic 0; that inf sat in the
+      // table behind the spectrum and, depending on mult, turned the whole inverse transform into NaN (docs/UPSTREAM.md)
+      poly_float octave = futils::log2(utils::max(index, 1.0f));
       poly_float power = octave * (1.0f / (Wavetable::kFrequencyBins - 1.0f));
       poly_float shift = futils::pow(mult, power);
       poly_float shifted_index = utils::max(1.0f, shift * (index - 1.0f) + 1.0f);
@@ -418,7 +420,11 @@ namespace sbvital {
       int index = 2 * processed_index;
       float shifted_index = index_data[index];
       int dest_index = shifted_index;
-      if (dest_index > 2 * last_harmonic)
+      // Modified for SynthyBoy: the stretched partial lands on harmonic dest_index (and the next one), so it must stay below
+      // last_harmonic. The original compared against 2 * last_harmonic: partials were then written past the end of the
+      // spectrum (2 * dest_index floats from wave_start), into the table of shifted indices behind it, and the table (which
+      // is still being read) turned into garbage and NaN at large amounts (docs/UPSTREAM.md, "inharmonic stretch").
+      if (dest_index >= last_harmonic)
         break;
       VITAL_ASSERT(dest_index >= 0 && dest_index <= kNumHarmonics * 2);
 

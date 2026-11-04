@@ -52,7 +52,7 @@ struct Quality
     int maxVoices = 8;                                      // polyphony cap, 1 .. kMaxVoices
     int maxUnison = kMaxUnisonVoices;                       // cap of oscN.unison.voices, 1 .. kMaxUnisonVoices
     int oversampling = 2;                                   // 1 or 2
-    Interpolation interpolation = Interpolation::spectral;  // wavetable frame interpolation
+    Interpolation interpolation = Interpolation::linear;    // wavetable frame interpolation
     uint32_t fxMask = kFxAll;                               // effects that may be active
 };
 

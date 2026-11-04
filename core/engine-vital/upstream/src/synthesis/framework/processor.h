@@ -232,6 +232,9 @@ namespace sbvital {
       // Attaches an output to the first available input in this processor.
       void plugNext(const Output* source);
       void plugNext(const Processor* source);
+      // Modified for SynthyBoy: appends count unconnected inputs (and the capacity for them), so that up to count later plugNext()
+      // calls reuse them instead of allocating (the modulation matrix wires connections on the audio thread).
+      void reserveInputs(int count);
 
       // Use an existing input as our input.
       void useInput(Input* input);

@@ -125,6 +125,18 @@ namespace sbvital {
     plugNext(source->output());
   }
 
+  void Processor::reserveInputs(int count) {
+    owned_inputs_.reserve(owned_inputs_.size() + count);
+    inputs_->reserve(inputs_->size() + count);
+    for (int i = 0; i < count; ++i) {
+      std::shared_ptr<Input> input = std::make_shared<Input>();
+      input->source = &Processor::null_source_;
+      owned_inputs_.push_back(input);
+      registerInput(input.get());
+    }
+    numInputsChanged();
+  }
+
   void Processor::useInput(Input* input) {
     useInput(input, 0);
   }

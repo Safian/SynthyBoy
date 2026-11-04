@@ -45,7 +45,7 @@ A clean, basic saw patch: oscillator 1 on (built-in Saw, one voice, centred, lev
 
 ## Parameters by section
 
-Modulation: parameters marked *mod* can be the destination of a modulation slot. A slot's amount (-100 .. 100 %) is a fraction of the destination's range **in the engine's own scale** (for the filter cutoff that is the whole keyboard range in semitones, not Hz).
+Modulation: parameters marked *mod* can be the destination of a modulation slot. A slot's amount (-100 .. 100 %) is a fraction of the destination's range **in the engine's own scale** (for the filter cutoff that is the whole keyboard range in semitones, not Hz). A slot whose wiring would close a loop (its source depends on its destination, for example one LFO modulating the rate of another that modulates the first) stays unwired, because the engine would have to allocate on the audio thread to build it.
 
 ### Master
 
@@ -608,7 +608,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `flanger.on` | Flanger On | 0 Off, 1 On | Off | FX / Flanger |  |  |
 | `flanger.mix` | Flanger Mix | 0 .. 100 % | 50 % | FX / Flanger | mod |  |
 | `flanger.feedback` | Flanger Feedback | -100 .. 100 % | 50 % | FX / Flanger | mod |  |
-| `flanger.rate` | Flanger Rate | 0.0299999993 .. 4 Hz (skew 0.300000012) | 0.25 Hz | FX / Flanger | mod |  |
+| `flanger.rate` | Flanger Rate | 0.0399999991 .. 4 Hz (skew 0.300000012) | 0.25 Hz | FX / Flanger | mod |  |
 | `flanger.sync` | Flanger Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet | Free (Hz) | FX / Flanger |  |  |
 | `flanger.division` | Flanger Division | 11 choices: 0 Freeze, 1 32 bars, 2 16 bars, ... , 10 1/16 note | 1/4 note | FX / Flanger |  |  |
 | `flanger.depth` | Flanger Depth | 0 .. 100 % | 50 % | FX / Flanger | mod |  |
@@ -617,7 +617,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `phaser.on` | Phaser On | 0 Off, 1 On | Off | FX / Phaser |  |  |
 | `phaser.mix` | Phaser Mix | 0 .. 100 % | 50 % | FX / Phaser | mod |  |
 | `phaser.feedback` | Phaser Feedback | 0 .. 100 % | 50 % | FX / Phaser | mod |  |
-| `phaser.rate` | Phaser Rate | 0.0299999993 .. 4 Hz (skew 0.300000012) | 0.119999997 Hz | FX / Phaser | mod |  |
+| `phaser.rate` | Phaser Rate | 0.0399999991 .. 4 Hz (skew 0.300000012) | 0.119999997 Hz | FX / Phaser | mod |  |
 | `phaser.sync` | Phaser Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet | Free (Hz) | FX / Phaser |  |  |
 | `phaser.division` | Phaser Division | 11 choices: 0 Freeze, 1 32 bars, 2 16 bars, ... , 10 1/16 note | 1/4 note | FX / Phaser |  |  |
 | `phaser.depth` | Phaser Depth | 0 .. 48 st | 24 st | FX / Phaser | mod |  |
@@ -629,11 +629,11 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `reverb.size` | Reverb Size | 0 .. 100 % | 50 % | FX / Reverb | mod |  |
 | `reverb.decay` | Reverb Decay | 20 .. 30000 ms (skew 0.300000012) | 1500 ms | FX / Reverb | mod |  |
 | `reverb.predelay` | Reverb Pre-delay | 0 .. 300 ms | 0 ms | FX / Reverb | mod |  |
-| `reverb.pre_low_cut` | Reverb Pre Low Cut | 20 .. 13000 Hz (skew 0.300000012) | 20 Hz | FX / Reverb | mod |  |
-| `reverb.pre_high_cut` | Reverb Pre High Cut | 20 .. 13000 Hz (skew 0.300000012) | 8000 Hz | FX / Reverb | mod |  |
-| `reverb.low_shelf_cutoff` | Reverb Low Shelf Cutoff | 20 .. 13000 Hz (skew 0.300000012) | 100 Hz | FX / Reverb | mod |  |
+| `reverb.pre_low_cut` | Reverb Pre Low Cut | 20 .. 12000 Hz (skew 0.300000012) | 20 Hz | FX / Reverb | mod |  |
+| `reverb.pre_high_cut` | Reverb Pre High Cut | 20 .. 12000 Hz (skew 0.300000012) | 8000 Hz | FX / Reverb | mod |  |
+| `reverb.low_shelf_cutoff` | Reverb Low Shelf Cutoff | 20 .. 12000 Hz (skew 0.300000012) | 100 Hz | FX / Reverb | mod |  |
 | `reverb.low_shelf_gain` | Reverb Low Shelf Gain | -6 .. 0 dB | 0 dB | FX / Reverb | mod |  |
-| `reverb.high_shelf_cutoff` | Reverb High Shelf Cutoff | 20 .. 13000 Hz (skew 0.300000012) | 1400 Hz | FX / Reverb | mod |  |
+| `reverb.high_shelf_cutoff` | Reverb High Shelf Cutoff | 20 .. 12000 Hz (skew 0.300000012) | 1400 Hz | FX / Reverb | mod |  |
 | `reverb.high_shelf_gain` | Reverb High Shelf Gain | -6 .. 0 dB | -1 dB | FX / Reverb | mod |  |
 | `reverb.chorus_amount` | Reverb Chorus Amount | 0 .. 100 % | 20 % | FX / Reverb | mod |  |
 | `reverb.chorus_rate` | Reverb Chorus Rate | 0.00999999978 .. 8 Hz (skew 0.300000012) | 0.25 Hz | FX / Reverb | mod |  |

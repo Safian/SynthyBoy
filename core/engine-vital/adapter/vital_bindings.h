@@ -1,0 +1,85 @@
+// SynthyBoy - engine-vital adapter: the table that maps our parameters onto the controls of the Vital-derived engine.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This header is Vital-free (control names are strings); the table is built by buildBindings() and used by the engine at
+// prepare() and by the tests (every conversion is tested on its own: core/engine-vital/tests/test_vital_bindings.cpp).
+#pragma once
+
+#include <cstddef>
+#include <string>
+#include <vector>
+
+namespace synthyboy
+{
+/** How our plain value becomes the value of the engine's control. One converter per kind (formulas in vital_bindings.cpp). */
+enum class Conv
+{
+    linear,       // plain * a + b
+    sqrtScaled,   // sqrt (plain * a): the "quadratic" controls (level, resonance of an EQ band, detune)
+    quarticMs,    // (plain / 1000) ^ (1/4): the envelope times (the engine shows seconds = control ^ 4)
+    log2Ms,       // max (a, log2 (plain / 1000)): a time in ms as the log2 of seconds, a = the floor ("off")
+    log2Hz,       // log2 (plain): a frequency in Hz as its log2
+    log2PeriodMs, // log2 (1000 / plain): a delay time in ms as the log2 of its frequency
+    noteFromHz,   // 12 * log2 (plain / 8.1757989): a frequency in Hz as a MIDI note number (the engine's cutoff scale)
+    index,        // plain + b: a choice, offset by b (the list of the control starts at b)
+    indexMap,     // map[plain]: a choice whose engine index differs
+    volumeDb      // dB -> the engine's master volume (shown dB = sqrt (control) - 80), -60 dB and below is silence
+};
+
+/** What the quality tier may cap or bypass in the converted value. */
+enum class Cap
+{
+    none,
+    voices,   // min (value, Quality::maxVoices)
+    unison,   // min (value, Quality::maxUnison)
+    fx        // value is an on/off switch of effect number capArg: off if the tier bypasses it
+};
+
+struct Binding
+{
+    size_t param = 0;        // index into paramTable()
+    std::string control;     // name of the engine's control
+    Conv conv = Conv::linear;
+    double a = 1.0, b = 0.0;
+    const int* map = nullptr; // Conv::indexMap
+    Cap cap = Cap::none;
+    int capArg = 0;
+};
+
+/** The table: one entry per parameter that maps onto exactly one control. Parameters without an entry are the special ones
+    (isSpecialParam). Built once; no engine needed. */
+const std::vector<Binding>& vitalBindings();
+
+/** Parameters the adapter handles itself instead of through one control: the oscillator wavetables, the LFO shapes, the filter
+    routing, the order of the effects, the source and destination of the modulation slots, the pitch bend range. */
+bool isSpecialParam (size_t paramIndex);
+
+/** The raw (not clamped) value of the control for a plain value. sampleRate limits the cutoffs of the filters. */
+double convertParam (const Binding& binding, double plain, double sampleRate);
+
+/** Order of the effects from the nine choices fx.order.1 .. fx.order.9 (duplicates and out-of-range choices are resolved
+    deterministically: a position whose effect is already placed takes the lowest effect that is still free). */
+void resolveFxOrder (const float* choices, int* order);
+
+/** What the engine's control is: min, max and default as the engine defines them (the tests compare against these). */
+struct ControlRange
+{
+    bool exists = false;
+    double min = 0.0, max = 0.0, def = 0.0;
+};
+ControlRange vitalControlRange (const std::string& control);
+
+/** The conversion of one parameter, for diagnostics and tests: control name and raw value (bound = false for special parameters). */
+struct Conversion
+{
+    bool bound = false;
+    std::string control;
+    double raw = 0.0;
+    ControlRange range;
+};
+Conversion vitalConvert (size_t paramIndex, double plain, double sampleRate = 48000.0);
+
+/** The control that a modulation destination of the matrix drives (the first binding of the parameter), "" if none. */
+std::string vitalControlOf (size_t paramIndex);
+} // namespace synthyboy
