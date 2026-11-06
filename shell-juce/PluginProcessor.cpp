@@ -305,7 +305,20 @@ void SynthyBoyProcessor::applyValues (const synthyboy::ParamValues& values)
     const auto* table = synthyboy::paramTable();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
         if (auto* parameter = apvts.getParameter (table[i].key))
+        {
             parameter->setValueNotifyingHost (parameter->convertTo0to1 (values.plain[i]));
+
+            // The normalised round trip (plain -> 0..1 -> plain) drifts in the last float bits (-12 -> -11.9999981),
+            // which makes the saved state differ from the loaded one. Store the exact value in the raw atomic; skipped when
+            // the round trip landed somewhere genuinely different (e.g. stepped or clamped parameters).
+            if (rawParams[i] != nullptr)
+            {
+                const float exact = values.plain[i];
+                const float stored = rawParams[i]->load();
+                if (std::abs (stored - exact) <= 1.0e-4f * std::max (1.0f, std::abs (exact)))
+                    rawParams[i]->store (exact);
+            }
+        }
 }
 
 bool SynthyBoyProcessor::loadLegacyXml (const void* data, int sizeInBytes, synthyboy::ParamValues& values) const
