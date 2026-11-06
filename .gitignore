@@ -13,3 +13,4 @@ dist/
 *.swp
 compile_commands.json
 CMakeUserPresets.json
+docs/ui-design/_manuals/
