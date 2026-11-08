@@ -107,6 +107,11 @@ constexpr int kNumFxSlots = 16;
 constexpr int kNumLegacyFxSlots = 9;
 /** distortion.type entries 0 .. 5 are the ones of state version 2; 6 .. 13 were appended in block B17. */
 constexpr int kNumLegacyDistortionTypes = 6;
+/** oscN.warp.type / oscN.warp2.type entries 0 .. 10 are the Vital modes of state version 2; 11 .. 51 were appended in block B21
+    (Serum 2 warp modes: 11 Sync Var .. 51 AM from the second other oscillator, 13-new-keys.md 4.22). */
+constexpr int kNumLegacyWarpTypes = 11;
+/** Number of entries of the warp lists after block B21. */
+constexpr int kNumWarpTypes = 52;
 
 /** The table, in stable order (state files and UIs list parameters in this order). */
 const ParamInfo* paramTable() noexcept;

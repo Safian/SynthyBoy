@@ -383,6 +383,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc3_warp2", "Osc 3 Warp 2", "Osc", { "osc3.warp2.type", "osc3.warp2.amount", "osc3.warp2.phase", "osc3.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 80: Mixer Routing (Osc)
     { "mix_routing", "Mixer Routing", "Osc", { "osc1.filter_blend", "osc2.filter_blend", "osc3.filter_blend", "noise.filter_blend", "filter1.destination", "filter2.destination", "direct.level", "main.fx_bypass" }, 8, nullptr, 0 },
+    { "mix_env1", "Mixer ENV 1 Buttons", "Osc", { "osc1.env1", "osc2.env1", "osc3.env1", "sub.env1", "noise.env1", "filter1.env1", "filter2.env1" }, 7, nullptr, 0 },
     // Page 80: Mixer Buses (Osc)
     { "mix_bus", "Mixer Buses", "Osc", { "bus1.level", "bus1.destination", "bus1.fx_bypass", "bus2.level", "bus2.destination", "bus2.fx_bypass", nullptr, nullptr }, 6, nullptr, 0 },
     // Page 81: Mixer Osc Sends (Osc)

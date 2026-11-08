@@ -20,6 +20,7 @@
 #include "number.h"
 #include "sha256.h"
 #include "synthyboy/modulation.h"
+#include "synthyboy/params.h"
 #include "synthyboy/tuning.h"
 #include "synthyboy/wavetable_render.h"
 #include "vital_content.h"
@@ -39,6 +40,7 @@ int legacyChoiceMax (const char* key)
     if (k.rfind ("rlfo", 0) == 0 && endsWith (".style")) return 3;
     if (k.rfind ("osc", 0) == 0 && endsWith (".wavetable")) return 12;
     if ((k.rfind ("osc", 0) == 0 || k.rfind ("noise", 0) == 0) && endsWith (".destination")) return 4;
+    if (k.rfind ("osc", 0) == 0 && (endsWith (".warp.type") || endsWith (".warp2.type"))) return kNumLegacyWarpTypes - 1; // B21 appended 11 .. 51
     return -1;
 }
 

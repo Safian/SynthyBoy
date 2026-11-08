@@ -38,6 +38,8 @@ namespace sbvital {
         kDirect,   // SynthyBoy: to the direct output (the filters whose destination is Direct out)
         kBus1,     // the bus sends of the two filters, summed
         kBus2,
+        kMainFree,  // SynthyBoy B21: the filters to Main / Direct whose ENV 1 button is off (not multiplied by the amplitude envelope)
+        kDirectFree,
         kNumOutputs
       };
 

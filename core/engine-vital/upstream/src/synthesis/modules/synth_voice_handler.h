@@ -65,7 +65,7 @@ namespace sbvital {
       Sample* getSample() { return producers_->getSample(); }
       LineGenerator* getLfoSource(int index) { return &lfo_sources_[index]; }
       SynthLfo* getLfo(int index);   // SynthyBoy
-      Output* getDirectOutput() { return getAccumulatedOutput(direct_output_->output()); }
+      Output* getDirectOutput() { return getAccumulatedOutput(direct_final_->output()); }
       Output* getBus1Output() { return getAccumulatedOutput(bus1_output_->output()); }   // SynthyBoy: the bus sends, summed over the voices
       Output* getBus2Output() { return getAccumulatedOutput(bus2_output_->output()); }
 
@@ -131,6 +131,11 @@ namespace sbvital {
 
       Multiply* output_;
       Multiply* direct_output_;
+      // SynthyBoy B21: the Main / Direct channels whose ENV 1 button is off join the (enveloped) outputs after the amplitude envelope
+      Add* main_final_;
+      Add* direct_final_;
+      Processor* control_amplitude_;
+      Processor* keep_alive_;
       Multiply* bus1_output_;
       Multiply* bus2_output_;
       Output num_voices_;

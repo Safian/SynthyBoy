@@ -24,7 +24,20 @@ namespace synthyboy
 namespace
 {
 constexpr double kMidi0Hz = 8.1757989156437073;
-constexpr int kWarpMap[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11 }; // our warp types -> the engine's (9 and 12 would use the sample)
+// our warp types -> the engine's (9 and 12 would use the sample). From 11 on (block B21, 13-new-keys.md 4.22) the engine's enum continues
+// after kRmSample (12): our 11 is the engine's 13, and so on in the same order
+constexpr int makeWarpMap (int index) { return index < 11 ? (index < 9 ? index : index + 1) : index + 2; }
+struct WarpMapTable
+{
+    int values[kNumWarpTypes];
+    constexpr WarpMapTable() : values()
+    {
+        for (int i = 0; i < kNumWarpTypes; ++i)
+            values[i] = makeWarpMap (i);
+    }
+};
+constexpr WarpMapTable kWarpMapTable;
+constexpr const int* kWarpMap = kWarpMapTable.values;
 
 struct Builder
 {
@@ -137,6 +150,7 @@ std::vector<Binding> build()
         b.percent (k + "warp2.spread", c + "warp2_spread", 0.005);
         b.add (k + "phase", c + "phase", Conv::linear, 1.0 / 360.0);
         b.percent (k + "random_phase", c + "random_phase");
+        b.choice (k + "env1", c + "env1"); // B21: the ENV 1 button of the Main / Direct channel
         b.choice (k + "destination", c + "destination"); // 5 Filter blend and 6 None (WP5) are the engine's destinations 5 and 6
         b.percent (k + "filter_blend", c + "filter_blend");
         b.percent (k + "bus1_send", c + "bus1_send");
@@ -175,6 +189,7 @@ std::vector<Binding> build()
     b.add ("noise.level", "sample_level", Conv::sqrtScaled, 0.01);
     b.percent ("noise.pan", "sample_pan");
     b.choice ("noise.destination", "sample_destination");
+    b.choice ("noise.env1", "sample_env1");
     b.percent ("noise.filter_blend", "sample_filter_blend");
     b.percent ("noise.bus1_send", "sample_bus1_send");
     b.percent ("noise.bus2_send", "sample_bus2_send");
@@ -193,6 +208,7 @@ std::vector<Binding> build()
     b.add ("sub.level", "sub_level", Conv::sqrtScaled, 0.01);
     b.percent ("sub.pan", "sub_pan");
     b.choice ("sub.destination", "sub_destination");
+    b.choice ("sub.env1", "sub_env1");
     b.choice ("sub.mono", "sub_mono");
     b.percent ("sub.filter_blend", "sub_filter_blend");
     b.percent ("sub.bus1_send", "sub_bus1_send");
@@ -222,6 +238,7 @@ std::vector<Binding> build()
         if (! fx)
         {
             b.choice (k + "destination", c + "destination"); // WP5: effects only, direct out, none
+            b.choice (k + "env1", c + "env1");           // B21: the ENV 1 button
             b.percent (k + "bus1_send", c + "bus1_send");
             b.percent (k + "bus2_send", c + "bus2_send");
         }

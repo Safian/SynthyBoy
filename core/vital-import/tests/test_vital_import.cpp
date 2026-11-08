@@ -1812,3 +1812,19 @@ TEST (vi_single_cycle_shortcut_needs_the_same_waveform)
         CHECK_EQ (val (shifted, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
     }
 }
+
+// Block B21 (13-new-keys.md 4.22): the warp lists grew to 52 entries; an imported Vital choice stays in the eleven modes Vital has
+TEST (vi_warp_choices_stay_in_the_vital_range)
+{
+    for (const char* key : { "osc1.warp.type", "osc2.warp.type", "osc3.warp.type", "osc1.warp2.type", "osc3.warp2.type" })
+        CHECK_EQ (legacyChoiceMax (key), 10);
+    CHECK_EQ (legacyChoiceMax ("osc1.warp.amount"), -1);
+    CHECK_EQ (legacyChoiceMax ("osc1.morph.type"), -1);
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        const ParamInfo& p = paramTable()[i];
+        const size_t n = std::strlen (p.key);
+        if (n > 10 && std::strcmp (p.key + n - 10, ".warp.type") == 0)
+            CHECK (legacyChoiceMax (p.key) < static_cast<int> (p.numChoices) - 1);
+    }
+}
