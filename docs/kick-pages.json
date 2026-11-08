@@ -2039,7 +2039,7 @@
         {"key": "master.mpe.bend_range", "shortLabel": "MPE Bend", "widget": "knob"},
         {"key": "curve.velocity.legato", "shortLabel": "Vel Legato", "widget": "stepped"},
         {"key": "curve.note.legato", "shortLabel": "Note Legat", "widget": "stepped"},
-        null,
+        {"key": "voice.phase_legato", "shortLabel": "Voice Phas", "widget": "stepped"},
         null,
         null,
         null
@@ -2694,6 +2694,69 @@
         {"key": "flanger.level", "shortLabel": "Level", "widget": "bipolar_knob"},
         {"key": "phaser.level", "shortLabel": "Level", "widget": "bipolar_knob"},
         {"key": "reverb.level", "shortLabel": "Level", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "osc1_pitch_uni",
+      "section": "Osc",
+      "title": "Osc 1 Pitch & Unison",
+      "knobs": [
+        {"key": "osc1.pitch_mode", "shortLabel": "Pitch Mode", "widget": "stepped"},
+        {"key": "osc1.pitch_coarse", "shortLabel": "Pitch Coar", "widget": "bipolar_knob"},
+        {"key": "osc1.pitch_track", "shortLabel": "Pitch Trac", "widget": "stepped"},
+        {"key": "osc1.fixed_pitch", "shortLabel": "Fixed Pitc", "widget": "knob"},
+        {"key": "osc1.unison.mode", "shortLabel": "Unison Mod", "widget": "stepped"},
+        {"key": "osc1.unison.range", "shortLabel": "Unison Ran", "widget": "knob"},
+        {"key": "osc1.unison.blend_shape", "shortLabel": "Unison Ble", "widget": "bipolar_knob"},
+        {"key": "osc1.unison.stack_repeat", "shortLabel": "Unison Sta", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc1.pitch_bend_track",
+        "osc1.transpose_snap",
+        "osc1.phase_legato",
+        "osc1.phase_memory"
+      ]
+    },
+    {
+      "id": "osc2_pitch_uni",
+      "section": "Osc",
+      "title": "Osc 2 Pitch & Unison",
+      "knobs": [
+        {"key": "osc2.pitch_mode", "shortLabel": "Pitch Mode", "widget": "stepped"},
+        {"key": "osc2.pitch_coarse", "shortLabel": "Pitch Coar", "widget": "bipolar_knob"},
+        {"key": "osc2.pitch_track", "shortLabel": "Pitch Trac", "widget": "stepped"},
+        {"key": "osc2.fixed_pitch", "shortLabel": "Fixed Pitc", "widget": "knob"},
+        {"key": "osc2.unison.mode", "shortLabel": "Unison Mod", "widget": "stepped"},
+        {"key": "osc2.unison.range", "shortLabel": "Unison Ran", "widget": "knob"},
+        {"key": "osc2.unison.blend_shape", "shortLabel": "Unison Ble", "widget": "bipolar_knob"},
+        {"key": "osc2.unison.stack_repeat", "shortLabel": "Unison Sta", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc2.pitch_bend_track",
+        "osc2.transpose_snap",
+        "osc2.phase_legato",
+        "osc2.phase_memory"
+      ]
+    },
+    {
+      "id": "osc3_pitch_uni",
+      "section": "Osc",
+      "title": "Osc 3 Pitch & Unison",
+      "knobs": [
+        {"key": "osc3.pitch_mode", "shortLabel": "Pitch Mode", "widget": "stepped"},
+        {"key": "osc3.pitch_coarse", "shortLabel": "Pitch Coar", "widget": "bipolar_knob"},
+        {"key": "osc3.pitch_track", "shortLabel": "Pitch Trac", "widget": "stepped"},
+        {"key": "osc3.fixed_pitch", "shortLabel": "Fixed Pitc", "widget": "knob"},
+        {"key": "osc3.unison.mode", "shortLabel": "Unison Mod", "widget": "stepped"},
+        {"key": "osc3.unison.range", "shortLabel": "Unison Ran", "widget": "knob"},
+        {"key": "osc3.unison.blend_shape", "shortLabel": "Unison Ble", "widget": "bipolar_knob"},
+        {"key": "osc3.unison.stack_repeat", "shortLabel": "Unison Sta", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc3.pitch_bend_track",
+        "osc3.transpose_snap",
+        "osc3.phase_legato",
+        "osc3.phase_memory"
       ]
     }
   ]

@@ -44,4 +44,40 @@ private:
     juce::Point<float> downPos;
     bool dragging = false;
 };
+
+// Row 02-10: Transpose snap keyboard (12 semitones, Global Snap bit, Clear button)
+class TransposeSnapControl final : public ParamControl
+{
+public:
+    TransposeSnapControl (UiContext& context, const std::string& key, const juce::String& labelOverride = {});
+
+    juce::Point<int> preferredSize() const override;
+    bool spansRow() const noexcept override { return true; }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+
+    static constexpr int kNumNotes = 12; // C through B
+    static constexpr int kGlobalSnapBit = 0x1000;
+
+    juce::Rectangle<int> noteBounds (int semitone) const;
+    juce::Rectangle<int> clearBounds() const;
+    juce::Rectangle<int> globalBounds() const;
+
+    bool isKeyActive (int semitone) const;
+    bool isGlobalActive() const;
+    void toggleKey (int semitone);
+    void toggleGlobal();
+    void clear();
+
+    int rawMask() const;
+    void setMask (int mask);
+
+private:
+    enum class Hit { none, note, clear, global };
+    Hit hitAt (juce::Point<int> p, int& noteIndex) const;
+
+    Hit downHit = Hit::none;
+    int downNote = -1;
+};
 } // namespace synthyboy::ui

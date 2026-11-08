@@ -49,6 +49,9 @@ namespace sbvital {
       oscillators_[i]->useInput(input(kFold1 + i), OscillatorModule::kFold);
       oscillators_[i]->useInput(input(kNotePressed), OscillatorModule::kNotePressed);
       oscillators_[i]->useInput(input(kActiveVoices), OscillatorModule::kActiveVoices);
+      oscillators_[i]->useInput(input(kRawMidi), OscillatorModule::kRawMidi);
+      oscillators_[i]->useInput(input(kVoicePhaseLegato), OscillatorModule::kVoicePhaseLegato);
+      oscillators_[i]->useInput(input(kNoteCount), OscillatorModule::kNoteCount);
     }
 
     sample_destination_ = createBaseControl("sample_destination");

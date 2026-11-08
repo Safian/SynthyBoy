@@ -663,6 +663,7 @@ namespace sbvital {
     fourier_transform_ = std::make_shared<FourierTransform>(kWaveformBits);
     phase_inc_buffer_ = std::make_shared<Output>();
     phase_buffer_ = std::make_shared<PhaseBuffer>();
+    legato_state_ = std::make_shared<PhaseLegatoState>();
     voice_block_.phase_inc_buffer = phase_inc_buffer_->buffer;
     voice_block_.phase_buffer = phase_buffer_->buffer;
     RandomValues::instance();
@@ -677,24 +678,51 @@ namespace sbvital {
     poly_float random_amount = input(kRandomPhase)->at(0);
     last_quantize_ratio_ = utils::maskLoad(last_quantize_ratio_, 1.0f, reset_mask);
 
+    bool phase_legato_active = false;
+    if (input(kPhaseLegato) && poly_float::notEqual(input(kPhaseLegato)->at(0), 0.0f).anyMask())
+      phase_legato_active = true;
+    if (input(kVoicePhaseLegato) && poly_float::notEqual(input(kVoicePhaseLegato)->at(0), 0.0f).anyMask())
+      phase_legato_active = true;
+
+    bool is_legato = false;
+    if (input(kNoteCount) && poly_float::greaterThan(input(kNoteCount)->at(0), 1.0f).anyMask())
+      is_legato = true;
+
+    int mem_mode = input(kPhaseMemory) ? static_cast<int>(std::round(input(kPhaseMemory)->at(0)[0])) : 0;
+
     for (int v = 0; v < kNumVoicesPerProcess; ++v) {
       if (reset_mask[v * 2]) {
-        for (int i = 0; i < kNumPolyPhase; ++i) {
-          // float -> uint32_t of a negative value is undefined: convert through int32_t (clamped), then wrap
-          float phase_left = random_generator_.next() * random_amount[2 * v] * INT_MAX;
-          float phase_right = random_generator_.next() * random_amount[2 * v + 1] * INT_MAX;
-          uint32_t random_phase_left = static_cast<uint32_t>(static_cast<int32_t>(std::max(-2147483520.0f, std::min(2147483520.0f, phase_left))));
-          uint32_t random_phase_right = static_cast<uint32_t>(static_cast<int32_t>(std::max(-2147483520.0f, std::min(2147483520.0f, phase_right))));
-          phases_[i].set(2 * v, random_phase_left);
-          phases_[i].set(2 * v + 1, random_phase_right);
-
-          int buffer_index = i * poly_float::kSize + 2 * v;
-          last_buffers_[buffer_index] = wave_buffers_[buffer_index];
-          last_buffers_[buffer_index + 1] = wave_buffers_[buffer_index + 1];
+        const bool follow = phase_legato_active && is_legato && legato_state_->valid;
+        if (follow && mem_mode == 2) {
+          // Per Voice: the voice resumes its own free running phases (no reset)
         }
+        else {
+          for (int i = 0; i < kNumPolyPhase; ++i) {
+            // float -> uint32_t of a negative value is undefined: convert through int32_t (clamped), then wrap
+            float phase_left = random_generator_.next() * random_amount[2 * v] * INT_MAX;
+            float phase_right = random_generator_.next() * random_amount[2 * v + 1] * INT_MAX;
+            uint32_t random_phase_left = static_cast<uint32_t>(static_cast<int32_t>(std::max(-2147483520.0f, std::min(2147483520.0f, phase_left))));
+            uint32_t random_phase_right = static_cast<uint32_t>(static_cast<int32_t>(std::max(-2147483520.0f, std::min(2147483520.0f, phase_right))));
+            phases_[i].set(2 * v, random_phase_left);
+            phases_[i].set(2 * v + 1, random_phase_right);
 
-        if (unison_ < active_oscillators_)
-          phases_[0].set(v * 2, phases_[0][v * 2 + 1]);
+            int buffer_index = i * poly_float::kSize + 2 * v;
+            last_buffers_[buffer_index] = wave_buffers_[buffer_index];
+            last_buffers_[buffer_index + 1] = wave_buffers_[buffer_index + 1];
+          }
+
+          if (unison_ < active_oscillators_)
+            phases_[0].set(v * 2, phases_[0][v * 2 + 1]);
+
+          if (follow) {
+            // All Voices (0): every unison phase follows the voice that rendered last; Contiguous (1): the centre phase only
+            const int count = mem_mode == 0 ? kNumPolyPhase : 1;
+            for (int i = 0; i < count; ++i) {
+              phases_[i].set(2 * v, legato_state_->left[i]);
+              phases_[i].set(2 * v + 1, legato_state_->right[i]);
+            }
+          }
+        }
       }
     }
 
@@ -717,6 +745,9 @@ namespace sbvital {
     int stack_style = std::roundf(input(kStackStyle)->at(0)[0]);
     const mono_float* stack_settings = kStackMultipliers[stack_style];
 
+    int unison_mode = input(kUnisonMode) ? static_cast<int>(std::round(input(kUnisonMode)->at(0)[0])) : 0;
+    int stack_repeat = input(kUnisonStackRepeat) ? static_cast<int>(std::round(input(kUnisonStackRepeat)->at(0)[0])) : 0;
+
     mono_float divisor = utils::max(1.0f, unison_ - 1.0f);
     int bump = (unison_ % 2 == 0) ? 1 : 0;
 
@@ -724,12 +755,38 @@ namespace sbvital {
     int num_updates = active_oscillators_ / 2;
     for (int i = 0; i < num_updates; ++i) {
       mono_float t = (2 * i + bump) / divisor;
+
+      // Detune law (A84): Linear (0), Super (1), Exp (2), Inv (3), Random (4)
+      if (unison_mode == 1) { // Super: cubic distribution clustered near center
+        t = t * t * t;
+      }
+      else if (unison_mode == 2) { // Exp: exponential distribution
+        t = (std::exp(2.0f * t) - 1.0f) / (std::exp(2.0f) - 1.0f);
+      }
+      else if (unison_mode == 3) { // Inv: inverse/concave distribution
+        float inv_t = 1.0f - t;
+        t = 1.0f - inv_t * inv_t * inv_t;
+      }
+      else if (unison_mode == 4) { // Random: deterministic per-voice pseudo-random detune
+        uint32_t h = static_cast<uint32_t>(i * 1664525u + 1013904223u);
+        h ^= h >> 16;
+        h *= 0x85ebca6bu;
+        h ^= h >> 13;
+        t = static_cast<float>(h & 0xFFFF) / 65535.0f;
+      }
+
       poly_float adjusted_t = futils::powerScale(t, power);
       poly_float oscillator_cents = adjusted_t * cents;
 
       poly_float up_ratio = utils::centsToRatio(oscillator_cents);
       poly_float down_ratio = poly_float(1.0f) / up_ratio;
-      detunings_[i] = utils::maskLoad(up_ratio, down_ratio, sharp_flat_mask) * stack_settings[i];
+
+      mono_float stack_mult = stack_settings[i];
+      if (stack_repeat > 0 && stack_mult != 1.0f) {
+        stack_mult = std::pow(stack_mult, static_cast<float>(stack_repeat + 1));
+      }
+
+      detunings_[i] = utils::maskLoad(up_ratio, down_ratio, sharp_flat_mask) * stack_mult;
       from_phase_inc_mults_[i] = phase_inc_mults_[i];
       phase_inc_mults_[i] = detunings_[i];
 
@@ -828,6 +885,13 @@ namespace sbvital {
     poly_float detuned_blend = -blend + 1.0f;
     detuned_blend *= detuned_blend;
     poly_float detuned = utils::interpolate(kDetunedHighAmplitude, 0.0f, detuned_blend);
+
+    // Unison Blend Shape (A85): -1.0 .. 1.0 (from -100% .. 100%)
+    if (input(kUnisonBlendShape)) {
+      poly_float shape = input(kUnisonBlendShape)->at(0);
+      center = center * (poly_float(1.0f) - shape * 0.5f);
+      detuned = detuned * (poly_float(1.0f) + shape * 0.5f);
+    }
 
     int half_oscillators = active_oscillators_ / 2;
     poly_float square_sums = center * center + detuned * detuned * (half_oscillators - 1);
@@ -1467,8 +1531,58 @@ namespace sbvital {
     bool midi_track = poly_float::notEqual(input(kMidiTrack)->at(0), 0.0f).anyMask();
     poly_float current_midi = midi_note_;
     midi_note_ = kNoMidiTrackDefault;
-    if (midi_track)
-      midi_note_ = input(kMidiNote)->at(0) + input(kFoldNote)->at(0);
+
+    bool bend_track = input(kPitchBendTrack) ? poly_float::notEqual(input(kPitchBendTrack)->at(0), 0.0f).anyMask() : true;
+    poly_float raw_note = input(kRawMidiNote) ? input(kRawMidiNote)->at(0) : input(kMidiNote)->at(0);
+    poly_float bend_offset = input(kMidiNote)->at(0) - raw_note;
+
+    if (midi_track) {
+      poly_float note_in = bend_track ? input(kMidiNote)->at(0) : raw_note;
+      midi_note_ = note_in + input(kFoldNote)->at(0);
+    } else {
+      poly_float fixed_p = input(kFixedPitch) ? input(kFixedPitch)->at(0) : poly_float(kNoMidiTrackDefault);
+      midi_note_ = bend_track ? (fixed_p + bend_offset) : fixed_p;
+    }
+
+    int pitch_mode = input(kPitchMode) ? static_cast<int>(std::round(input(kPitchMode)->at(0)[0])) : 0;
+    poly_float coarse = input(kPitchCoarse) ? input(kPitchCoarse)->at(0) : poly_float(0.0f);
+    poly_float coarse_semitones = 0.0f;
+    if (pitch_mode == 0) {
+      coarse_semitones = coarse;
+    }
+    else if (pitch_mode == 1) { // Harmonics: multiplier = 1 + floor(coarse)
+      for (int v = 0; v < poly_float::kSize; ++v) {
+        float c = coarse[v];
+        float h = std::max(1.0f, 1.0f + std::floor(c));
+        coarse_semitones.set(v, 12.0f * std::log2(h));
+      }
+    }
+    else if (pitch_mode == 2) { // Ratio: multiplier = 1 + coarse if >= 0, else 1 / (1 - coarse)
+      for (int v = 0; v < poly_float::kSize; ++v) {
+        float c = coarse[v];
+        float r = c >= 0.0f ? (1.0f + c) : (1.0f / (1.0f - c));
+        coarse_semitones.set(v, 12.0f * std::log2(std::max(1.0e-6f, r)));
+      }
+    }
+    else if (pitch_mode == 3) { // Step (MTS-ESP / tuning seam)
+      for (int v = 0; v < poly_float::kSize; ++v) {
+        int step = static_cast<int>(std::round(coarse[v]));
+        const mono_float* note_table = *note_table_;
+        if (note_table != nullptr) {
+          int k = static_cast<int>(std::round(current_midi[v]));
+          int target_k = std::clamp(k + step, 0, 127);
+          int k_clamped = std::clamp(k, 0, 127);
+          float target_n = note_table[target_k];
+          float base_n = note_table[k_clamped];
+          if (!std::isnan(target_n) && !std::isnan(base_n))
+            coarse_semitones.set(v, target_n - base_n);
+          else
+            coarse_semitones.set(v, static_cast<float>(step));
+        } else {
+          coarse_semitones.set(v, static_cast<float>(step));
+        }
+      }
+    }
 
     float sample_inc = 1.0f / num_samples;
     current_midi = utils::maskLoad(current_midi, midi_note_, reset_mask);
@@ -1480,7 +1594,7 @@ namespace sbvital {
     const poly_float* tune_buffer = input(kTune)->source->buffer;
     const poly_float* phase_buffer = input(kPhase)->source->buffer;
 
-    poly_float base_midi = current_midi + transpose_buffer[0] + tune_buffer[0];
+    poly_float base_midi = current_midi + transpose_buffer[0] + tune_buffer[0] + coarse_semitones;
     poly_float base_frequency = utils::midiNoteToFrequency(base_midi);
 
     poly_float sample_rate_scale = kPhaseMult / getSampleRate();
@@ -1496,7 +1610,7 @@ namespace sbvital {
 
       current_midi += delta_midi;
 
-      poly_float midi = snapTranspose(current_midi, transpose_buffer[i], snap_buffer) + tune_buffer[i];
+      poly_float midi = snapTranspose(current_midi, transpose_buffer[i], snap_buffer) + tune_buffer[i] + coarse_semitones;
       poly_float frequency = base_frequency * futils::midiOffsetToRatio(midi - base_midi);
       poly_mask zero_mask = poly_int::lessThan(i, trigger_sample) & reset_mask;
       poly_float result = (frequency * sample_rate_scale) & ~zero_mask;
@@ -1687,6 +1801,16 @@ namespace sbvital {
     }
     else
       phases_[0] = center_phase;
+
+    // Phase legato: publish the phases of the voice that rendered last (voice 1 of the pair when both play)
+    const int writer = active_voice_mask[2] ? 1 : (active_voice_mask[0] ? 0 : -1);
+    if (writer >= 0) {
+      for (int i = 0; i < kNumPolyPhase; ++i) {
+        legato_state_->left[i] = phases_[i][2 * writer];
+        legato_state_->right[i] = phases_[i][2 * writer + 1];
+      }
+      legato_state_->valid = true;
+    }
   }
 
   void SynthOscillator::processBlend(int num_samples, poly_mask reset_mask) {

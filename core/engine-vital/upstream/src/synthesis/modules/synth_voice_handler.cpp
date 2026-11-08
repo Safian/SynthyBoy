@@ -172,12 +172,22 @@ namespace sbvital {
     producers_->plug(note_count(), ProducersModule::kNoteCount);
     producers_->plug(active_mask(), ProducersModule::kActiveVoices);
     producers_->plug(note_pressed(), ProducersModule::kNotePressed);
+    // SynthyBoy Block B14:
+    producers_->plug(current_midi_note_, ProducersModule::kRawMidi);
+    Value* voice_phase_legato = createBaseControl("voice_phase_legato");
+    producers_->plug(voice_phase_legato, ProducersModule::kVoicePhaseLegato);
     for (int i = 0; i < 3; ++i) {
       producers_->plug(osc_mute(i), ProducersModule::kMute1 + i);
       producers_->plug(osc_fold(i), ProducersModule::kFold1 + i);
     }
     addSubmodule(producers_);
     addProcessor(producers_);
+  }
+
+  void SynthVoiceHandler::setNoteTable(const mono_float* table) {
+    VoiceHandler::setNoteTable(table);
+    if (producers_)
+      producers_->setNoteTable(table);
   }
 
   void SynthVoiceHandler::createModulators() {

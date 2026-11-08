@@ -91,6 +91,10 @@ constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H
                                          "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
 constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
 constexpr const char* const kRemapSlots[] = { "Remap 1", "Remap 2", "Remap 3", "Remap 4" };
+constexpr const char* const kPitchModes[] = { "Semitones", "Harmonics", "Ratio", "Step" };
+constexpr const char* const kUnisonModes[] = { "Linear", "Super", "Exp", "Inv", "Random" };
+constexpr const char* const kUnisonStackRepeats[] = { "1x", "2x", "3x" };
+constexpr const char* const kPhaseMemories[] = { "All Voices", "Contiguous", "Per Voice" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -351,6 +355,20 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
 #define SB_FXLEVEL(KEY, NAME) cont (KEY ".level", NAME " Level", "FX / " NAME, -24.0f, 12.0f, 0.0f, Unit::dB, kMod)
 
 #define SB_FXRACK(KEY, NAME) pick (KEY ".rack", NAME " Rack", "FX / Racks", kRacks, 0)
+
+#define SB_OSC_PITCH_UNI(N)                                                                                                                      \
+    pick ("osc" #N ".pitch_mode", "Osc " #N " Pitch Mode", "Oscillator " #N, kPitchModes, 0),                                                   \
+    cont ("osc" #N ".pitch_coarse", "Osc " #N " Pitch Coarse", "Oscillator " #N, -48.0f, 48.0f, 0.0f, Unit::semitone, kMod, 2),               \
+    onOff ("osc" #N ".pitch_track", "Osc " #N " Pitch Tracking", "Oscillator " #N, true),                                                       \
+    onOff ("osc" #N ".pitch_bend_track", "Osc " #N " Pitch Bend Tracking", "Oscillator " #N, true),                                             \
+    cont ("osc" #N ".fixed_pitch", "Osc " #N " Fixed Pitch", "Oscillator " #N, 0.0f, 127.0f, 48.0f, Unit::none, kMod, 1),                         \
+    whole ("osc" #N ".transpose_snap", "Osc " #N " Transpose Snap", "Oscillator " #N, 0.0f, 8191.0f, 0.0f, Unit::none, kAuto),                 \
+    pick ("osc" #N ".unison.mode", "Osc " #N " Unison Mode", "Oscillator " #N, kUnisonModes, 0),                                                \
+    cont ("osc" #N ".unison.range", "Osc " #N " Unison Range", "Oscillator " #N, 0.0f, 48.0f, 2.0f, Unit::semitone, kMod, 1),                  \
+    SB_PCT_RANGE ("osc" #N ".unison.blend_shape", "Osc " #N " Unison Blend Shape", "Osc " #N, -100.0f, 100.0f, 0.0f, kMod),                    \
+    pick ("osc" #N ".unison.stack_repeat", "Osc " #N " Unison Stack Repeat", "Osc " #N, kUnisonStackRepeats, 0),                                \
+    onOff ("osc" #N ".phase_legato", "Osc " #N " Phase Legato", "Oscillator " #N, false),                                                       \
+    pick ("osc" #N ".phase_memory", "Osc " #N " Phase Memory", "Oscillator " #N, kPhaseMemories, 0)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // the table
@@ -675,11 +693,17 @@ constexpr ParamInfo kRaw[] = {
     onOff ("filter1.clean_mode", "Filter 1 Clean Mode", "Filter 1", false),
     onOff ("filter2.clean_mode", "Filter 2 Clean Mode", "Filter 2", false),
     onOff ("fxfilter.clean_mode", "FX Filter Clean Mode", "FX Filter", false),
+
+    // --- B14: Pitch modes, CRS, snap, unison, phase legato (G25-G27, G31, G32) -----------------------------
+    SB_OSC_PITCH_UNI (1),
+    SB_OSC_PITCH_UNI (2),
+    SB_OSC_PITCH_UNI (3),
+    onOff ("voice.phase_legato", "Voice Phase Legato", "Master / Voicing", false),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1507, "880 keys of state version 2 plus the 604 keys appended in version 3 plus the 23 of block B16");
+static_assert (kCount == 1544, "880 keys of state version 2 plus the 664 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14)");
 
 struct Table
 {

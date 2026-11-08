@@ -37,6 +37,9 @@ namespace sbvital {
         kFold2,
         kFold3,
         kNotePressed,  // SynthyBoy: 1 while the key of the voice is held
+        // SynthyBoy Block B14:
+        kRawMidi,
+        kVoicePhaseLegato,
         kNumInputs
       };
 
@@ -80,6 +83,10 @@ namespace sbvital {
       Output* samplePhaseOutput() { return sampler_->getPhaseOutput(); }
       void setFilter1On(const Value* on) { filter1_on_ = on; }
       void setFilter2On(const Value* on) { filter2_on_ = on; }
+      void setNoteTable(const mono_float* table) {
+        for (int i = 0; i < kNumOscillators; ++i)
+          oscillators_[i]->oscillator()->setNoteTable(table);
+      }
 
     protected:
       void routeSource(int source, const poly_float* buffer, int destination, int num_samples, bool filter1_on, bool filter2_on,
