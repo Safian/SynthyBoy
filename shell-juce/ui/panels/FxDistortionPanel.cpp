@@ -210,7 +210,7 @@ public:
     {
         return {
             "distortion.drive", "distortion.mix", "distortion.filter_cutoff", "distortion.filter_resonance",
-            "distortion.on", "distortion.type", "distortion.filter_order", "distortion.filter_blend", "distortion.rack"
+            "distortion.on", "distortion.type", "distortion.filter_order", "distortion.filter_blend", "distortion.level", "distortion.rack"
         };
     }
 
@@ -230,6 +230,7 @@ public:
         addMoreControl ("distortion.type");
         addMoreControl ("distortion.filter_order");
         addMoreControl ("distortion.filter_blend");
+        addMoreControl ("distortion.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("distortion.rack");
     }
 
