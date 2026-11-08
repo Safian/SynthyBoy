@@ -64,12 +64,19 @@ private:
     juce::String statusMessage;
 };
 
+/** Editor-wide view state that panels share (which tab of a tabbed page is shown). Message thread. */
+struct ViewState
+{
+    int lfoTab = 0; // LfoTabsPanel: 0..9 = LFO 1..10, 10..13 = random LFO 1..4
+};
+
 /** What a control or panel gets: the host, the theme, the assign controller. Lives as long as the editor. */
 struct UiContext
 {
     UiHost& host;
     Theme& theme;
     ModAssignController& assign;
+    std::shared_ptr<ViewState> view = std::make_shared<ViewState>();
 
     juce::AudioProcessorValueTreeState& apvts() const { return host.parameters(); }
 };

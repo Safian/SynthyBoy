@@ -1,0 +1,779 @@
+// SynthyBoy - UI: free-form LFO shape editor (see LfoShapeEditor.h).
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include "LfoShapeEditor.h"
+
+#include <algorithm>
+#include <cmath>
+#include <functional>
+#include <string>
+
+#include "../ParamHandle.h"
+#include "synthyboy/params.h"
+
+namespace synthyboy::ui
+{
+namespace
+{
+constexpr int kDrawColumns = 32;
+constexpr int kSnapColumns = 16;
+constexpr int kSnapRows = 8;
+constexpr size_t kMinPoints = 2;
+constexpr float kMaxPower = static_cast<float> (kMaxPointPower);
+constexpr float kTwoPi = 6.28318530717958647692f;
+
+const char* const kPresetNames[kNumLfoShapes] = { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Pulse 25%",
+                                                  "Steps Up", "Steps Down", "Random Steps", "Exp Up", "Exp Down", "Half Sine" };
+
+shapes::ShapeData toShapeData (const ContentLfoShape& s)
+{
+    shapes::ShapeData d;
+    d.numPoints = std::min<size_t> (s.points.size(), shapes::ShapeData::kMaxPoints);
+    for (size_t i = 0; i < d.numPoints; ++i)
+    {
+        d.points[i].x = s.points[i].x;
+        d.points[i].y = s.points[i].y;
+        d.points[i].curve = s.points[i].power;
+        d.points[i].smooth = s.smooth;
+    }
+    d.sanitize();
+    return d;
+}
+
+bool sameShape (const ContentLfoShape& a, const ContentLfoShape& b)
+{
+    return a.lfo == b.lfo && a.smooth == b.smooth && a.loopPoint == b.loopPoint && a.points.size() == b.points.size()
+        && std::equal (a.points.begin(), a.points.end(), b.points.begin());
+}
+
+float snapTo (float v, int divisions) noexcept
+{
+    const auto d = static_cast<float> (divisions);
+    return std::round (v * d) / d;
+}
+
+/** Fills `s.points` with n + 1 samples of f over x in 0..1 (y in 0..1). */
+void sampled (ContentLfoShape& s, int n, const std::function<float (float)>& f)
+{
+    for (int i = 0; i <= n; ++i)
+    {
+        const float x = static_cast<float> (i) / static_cast<float> (n);
+        s.points.emplace_back (x, juce::jlimit (0.0f, 1.0f, f (x)));
+    }
+}
+} // namespace
+
+const char* lfoShapePresetName (int builtInShape)
+{
+    return kPresetNames[juce::jlimit (0, kNumLfoShapes - 1, builtInShape)];
+}
+
+ContentLfoShape lfoShapePreset (int lfo, int builtInShape)
+{
+    ContentLfoShape s;
+    s.lfo = lfo;
+    s.name = "Custom";
+    auto add = [&s] (float x, float y, float power = 0.0f) { s.points.emplace_back (x, y, power); };
+
+    switch (builtInShape)
+    {
+        case 0:  sampled (s, 32, [] (float x) { return 0.5f + 0.5f * std::sin (kTwoPi * x); }); break;
+        case 1:  add (0.0f, 0.0f); add (0.5f, 1.0f); add (1.0f, 0.0f); break;
+        case 2:  add (0.0f, 0.0f); add (1.0f, 1.0f); break;
+        case 3:  add (0.0f, 1.0f); add (1.0f, 0.0f); break;
+        case 4:  add (0.0f, 1.0f); add (0.5f, 1.0f); add (0.5f, 0.0f); add (1.0f, 0.0f); break;
+        case 5:  add (0.0f, 1.0f); add (0.25f, 1.0f); add (0.25f, 0.0f); add (1.0f, 0.0f); break;
+        case 6:
+        case 7:
+            for (int i = 0; i < 4; ++i)
+            {
+                const float level = static_cast<float> (builtInShape == 6 ? i : 3 - i) / 3.0f;
+                add (static_cast<float> (i) / 4.0f, level);
+                add (static_cast<float> (i + 1) / 4.0f, level);
+            }
+            break;
+        case 8:
+        {
+            static constexpr float steps[8] = { 0.4f, -0.7f, 0.9f, -0.2f, -0.9f, 0.6f, 0.1f, -0.5f };
+            for (int i = 0; i < 8; ++i)
+            {
+                add (static_cast<float> (i) / 8.0f, 0.5f + 0.5f * steps[i]);
+                add (static_cast<float> (i + 1) / 8.0f, 0.5f + 0.5f * steps[i]);
+            }
+            break;
+        }
+        case 9:  add (0.0f, 0.0f, 5.0f); add (1.0f, 1.0f); break;   // power 5: (e^(5x) - 1) / (e^5 - 1), the built-in
+        case 10: add (0.0f, 1.0f, -5.0f); add (1.0f, 0.0f); break;
+        case 11: sampled (s, 16, [] (float x) { return std::sin (3.14159265358979f * x); }); break;
+        default: add (0.0f, 0.5f); add (1.0f, 0.5f); break;
+    }
+    return s;
+}
+
+bool copyLfoSettings (UiContext& ctx, bool random, int from, int to)
+{
+    const int count = random ? 4 : kMaxContentLfoShapes;
+    if (from == to || from < 1 || to < 1 || from > count || to > count)
+        return false;
+
+    const std::string base = random ? "rlfo" : "lfo";
+    const std::string src = base + std::to_string (from) + ".";
+    const std::string dst = base + std::to_string (to) + ".";
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        const std::string key = paramTable()[i].key;
+        if (key.compare (0, src.size(), src) != 0)
+            continue;
+        ParamHandle source (ctx, key);
+        ParamHandle target (ctx, dst + key.substr (src.size()));
+        if (source.valid() && target.valid())
+            target.setPlainComplete (source.plain());
+    }
+
+    if (! random)
+    {
+        auto content = ctx.host.content();
+        const auto find = [&content] (int n) { return std::find_if (content.lfoShapes.begin(), content.lfoShapes.end(), [n] (const ContentLfoShape& l) { return l.lfo == n; }); };
+        const auto source = find (from);
+        ContentLfoShape copy;
+        const bool hasSource = source != content.lfoShapes.end();
+        if (hasSource)
+        {
+            copy = *source;
+            copy.lfo = to;
+        }
+        const auto target = find (to);
+        if (target != content.lfoShapes.end())
+            content.lfoShapes.erase (target);
+        if (hasSource)
+            content.lfoShapes.push_back (std::move (copy));
+        ctx.host.setContent (content);
+    }
+    return true;
+}
+
+// ---- LfoShapeEditor ---------------------------------------------------------------------------------------------------------------
+
+LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context), lfo (lfoIndex)
+{
+    current = lfoShapePreset (lfo, 1);
+    buttons = { &pointBtn, &drawBtn, &snapBtn, &smoothBtn, &addBtn, &deleteBtn, &undoBtn, &redoBtn, &presetBtn };
+    for (auto* b : buttons)
+        addAndMakeVisible (*b);
+
+    pointBtn.setClickingTogglesState (false);
+    drawBtn.setClickingTogglesState (false);
+    snapBtn.setClickingTogglesState (false);
+    smoothBtn.setClickingTogglesState (false);
+    pointBtn.onClick = [this] { setDrawTool (false); };
+    drawBtn.onClick = [this] { setDrawTool (true); };
+    snapBtn.onClick = [this] { setSnap (! snap); };
+    smoothBtn.onClick = [this] { setSmooth (! current.smooth); };
+    addBtn.onClick = [this]
+    {
+        // the middle of the widest gap, on the curve
+        float bestX = 0.5f, bestGap = -1.0f;
+        for (size_t i = 0; i + 1 < current.points.size(); ++i)
+        {
+            const float gap = current.points[i + 1].x - current.points[i].x;
+            if (gap > bestGap)
+            {
+                bestGap = gap;
+                bestX = 0.5f * (current.points[i].x + current.points[i + 1].x);
+            }
+        }
+        addPointAt (bestX, evaluateAt (bestX));
+    };
+    deleteBtn.onClick = [this] { deleteSelected(); };
+    undoBtn.onClick = [this] { undo(); };
+    redoBtn.onClick = [this] { redo(); };
+    presetBtn.onClick = [this]
+    {
+        juce::PopupMenu menu;
+        for (int i = 0; i < kNumLfoShapes; ++i)
+            menu.addItem (i + 1, lfoShapePresetName (i));
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetBtn).withMinimumWidth (ctx.theme.ipx (160.0f)),
+                            [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
+                            {
+                                if (safe != nullptr && result > 0)
+                                    safe->applyPreset (result - 1);
+                            });
+    };
+    updateButtons();
+}
+
+LfoShapeEditor::~LfoShapeEditor()
+{
+    stopTimer();
+    if (dirty)
+        commitNow();
+}
+
+void LfoShapeEditor::setActive (bool shouldBeActive, int startFrom)
+{
+    if (shouldBeActive == active)
+        return;
+    active = shouldBeActive;
+    if (! active)
+    {
+        stopTimer();
+        if (dirty)
+            commitNow();
+        return;
+    }
+
+    undoStack.clear();
+    redoStack.clear();
+    selected = -1;
+    const auto content = ctx.host.content();
+    const auto it = std::find_if (content.lfoShapes.begin(), content.lfoShapes.end(), [this] (const ContentLfoShape& l) { return l.lfo == lfo; });
+    if (it != content.lfoShapes.end() && it->points.size() >= kMinPoints)
+    {
+        current = *it;
+    }
+    else
+    {
+        current = lfoShapePreset (lfo, startFrom);
+        dirty = true;
+    }
+    cacheValid = false;
+    if (dirty)
+        commitNow();
+    updateButtons();
+    repaint();
+    idleTicks = 0;
+    startTimerHz (30);
+}
+
+void LfoShapeEditor::reloadFromHost()
+{
+    if (drag != Drag::none)
+        return;
+    const auto content = ctx.host.content();
+    const auto it = std::find_if (content.lfoShapes.begin(), content.lfoShapes.end(), [this] (const ContentLfoShape& l) { return l.lfo == lfo; });
+    if (it == content.lfoShapes.end() || it->points.size() < kMinPoints || sameShape (*it, current))
+        return;
+    current = *it; // changed behind our back (preset load, copy from another LFO): the old history no longer applies
+    undoStack.clear();
+    redoStack.clear();
+    selected = -1;
+    cacheValid = false;
+    updateButtons();
+    repaint();
+}
+
+void LfoShapeEditor::timerCallback()
+{
+    if (dirty)
+    {
+        commitNow();
+        return;
+    }
+    if (drag == Drag::none && ++idleTicks >= 8)
+    {
+        idleTicks = 0;
+        reloadFromHost();
+    }
+}
+
+void LfoShapeEditor::commitNow()
+{
+    dirty = false;
+    auto content = ctx.host.content();
+    const auto it = std::find_if (content.lfoShapes.begin(), content.lfoShapes.end(), [this] (const ContentLfoShape& l) { return l.lfo == lfo; });
+    if (it != content.lfoShapes.end())
+        *it = current;
+    else
+        content.lfoShapes.push_back (current);
+    ctx.host.setContent (content);
+}
+
+void LfoShapeEditor::pushUndo()
+{
+    if (drag != Drag::none) // a gesture records its start state once, on mouse up
+        return;
+    undoStack.push_back (current);
+    if (undoStack.size() > 100)
+        undoStack.erase (undoStack.begin());
+    redoStack.clear();
+}
+
+void LfoShapeEditor::touched()
+{
+    cacheValid = false;
+    dirty = true;
+    gestureChanged = true;
+    updateButtons();
+    repaint();
+}
+
+void LfoShapeEditor::undo()
+{
+    if (undoStack.empty())
+        return;
+    redoStack.push_back (current);
+    current = undoStack.back();
+    undoStack.pop_back();
+    selected = -1;
+    touched();
+}
+
+void LfoShapeEditor::redo()
+{
+    if (redoStack.empty())
+        return;
+    undoStack.push_back (current);
+    current = redoStack.back();
+    redoStack.pop_back();
+    selected = -1;
+    touched();
+}
+
+bool LfoShapeEditor::addPointAt (float x, float y)
+{
+    if (current.points.size() >= static_cast<size_t> (kMaxLfoShapePoints))
+        return false;
+    x = juce::jlimit (0.0f, 1.0f, x);
+    y = juce::jlimit (0.0f, 1.0f, y);
+    // after the last point with x <= the new one (a step keeps its two points in order), never before the first / after the last
+    size_t at = 1;
+    while (at + 1 < current.points.size() && current.points[at].x <= x)
+        ++at;
+    pushUndo();
+    current.points.insert (current.points.begin() + static_cast<std::ptrdiff_t> (at), ContentPoint (x, y, 0.0f));
+    if (current.loopPoint >= static_cast<int> (at))
+        ++current.loopPoint;
+    selected = static_cast<int> (at);
+    touched();
+    return true;
+}
+
+bool LfoShapeEditor::deletePoint (int index)
+{
+    const int n = static_cast<int> (current.points.size());
+    if (index <= 0 || index >= n - 1 || n <= static_cast<int> (kMinPoints))
+        return false; // the two end points stay
+    pushUndo();
+    current.points.erase (current.points.begin() + index);
+    if (current.loopPoint == index)
+        current.loopPoint = -1;
+    else if (current.loopPoint > index)
+        --current.loopPoint;
+    selected = -1;
+    touched();
+    return true;
+}
+
+bool LfoShapeEditor::movePoint (int index, float x, float y)
+{
+    const int n = static_cast<int> (current.points.size());
+    if (index < 0 || index >= n)
+        return false;
+    auto& p = current.points[static_cast<size_t> (index)];
+    if (index == 0)
+        x = 0.0f;
+    else if (index == n - 1)
+        x = 1.0f;
+    else
+        x = juce::jlimit (current.points[static_cast<size_t> (index) - 1].x, current.points[static_cast<size_t> (index) + 1].x, x);
+    y = juce::jlimit (0.0f, 1.0f, y);
+    if (juce::exactlyEqual (p.x, x) && juce::exactlyEqual (p.y, y))
+        return false;
+    pushUndo();
+    p.x = x;
+    p.y = y;
+    touched();
+    return true;
+}
+
+bool LfoShapeEditor::setSegmentPower (int segment, float power)
+{
+    if (segment < 0 || segment + 1 >= static_cast<int> (current.points.size()))
+        return false;
+    power = juce::jlimit (-kMaxPower, kMaxPower, power);
+    auto& p = current.points[static_cast<size_t> (segment)];
+    if (juce::exactlyEqual (p.power, power))
+        return false;
+    pushUndo();
+    p.power = power;
+    touched();
+    return true;
+}
+
+void LfoShapeEditor::applyPreset (int builtInShape)
+{
+    pushUndo();
+    current = lfoShapePreset (lfo, builtInShape);
+    selected = -1;
+    touched();
+}
+
+void LfoShapeEditor::setSmooth (bool shouldSmooth)
+{
+    if (current.smooth == shouldSmooth)
+        return;
+    pushUndo();
+    current.smooth = shouldSmooth;
+    touched();
+}
+
+void LfoShapeEditor::setSnap (bool shouldSnap)
+{
+    snap = shouldSnap;
+    updateButtons();
+}
+
+void LfoShapeEditor::setDrawTool (bool shouldDraw)
+{
+    drawTool = shouldDraw;
+    updateButtons();
+}
+
+void LfoShapeEditor::updateButtons()
+{
+    const int n = static_cast<int> (current.points.size());
+    pointBtn.setToggleState (! drawTool, juce::dontSendNotification);
+    drawBtn.setToggleState (drawTool, juce::dontSendNotification);
+    snapBtn.setToggleState (snap, juce::dontSendNotification);
+    smoothBtn.setToggleState (current.smooth, juce::dontSendNotification);
+    undoBtn.setEnabled (canUndo());
+    redoBtn.setEnabled (canRedo());
+    deleteBtn.setEnabled (selected > 0 && selected < n - 1);
+    addBtn.setEnabled (n < kMaxLfoShapePoints);
+}
+
+// ---- geometry ----------------------------------------------------------------------------------------------------------------------
+
+float LfoShapeEditor::toX (float x) const noexcept { return plot.getX() + x * plot.getWidth(); }
+float LfoShapeEditor::toY (float y) const noexcept { return plot.getBottom() - y * plot.getHeight(); }
+float LfoShapeEditor::fromX (float px) const noexcept { return plot.getWidth() > 0.0f ? juce::jlimit (0.0f, 1.0f, (px - plot.getX()) / plot.getWidth()) : 0.0f; }
+float LfoShapeEditor::fromY (float py) const noexcept { return plot.getHeight() > 0.0f ? juce::jlimit (0.0f, 1.0f, (plot.getBottom() - py) / plot.getHeight()) : 0.0f; }
+
+float LfoShapeEditor::evaluateAt (float x) const
+{
+    if (! cacheValid)
+    {
+        cache = toShapeData (current);
+        cacheValid = true;
+    }
+    return cache.evaluate (juce::jlimit (0.0f, 1.0f, x));
+}
+
+juce::Point<float> LfoShapeEditor::pointPosition (int index) const
+{
+    const auto& p = current.points[static_cast<size_t> (juce::jlimit (0, static_cast<int> (current.points.size()) - 1, index))];
+    return { toX (p.x), toY (p.y) };
+}
+
+juce::Point<float> LfoShapeEditor::handlePosition (int segment) const
+{
+    const auto& a = current.points[static_cast<size_t> (segment)];
+    const auto& b = current.points[static_cast<size_t> (segment) + 1];
+    const float xm = 0.5f * (a.x + b.x);
+    return { toX (xm), toY (evaluateAt (xm)) };
+}
+
+int LfoShapeEditor::hitPoint (juce::Point<float> p) const
+{
+    const float radius = static_cast<float> (ctx.theme.touch()) * 0.5f;
+    int best = -1;
+    float bestD = radius;
+    for (int i = 0; i < static_cast<int> (current.points.size()); ++i)
+    {
+        const float d = pointPosition (i).getDistanceFrom (p);
+        if (d <= bestD)
+        {
+            bestD = d;
+            best = i;
+        }
+    }
+    return best;
+}
+
+int LfoShapeEditor::hitHandle (juce::Point<float> p) const
+{
+    const float radius = static_cast<float> (ctx.theme.touch()) * 0.5f;
+    for (int i = 0; i + 1 < static_cast<int> (current.points.size()); ++i)
+    {
+        const auto& a = current.points[static_cast<size_t> (i)];
+        const auto& b = current.points[static_cast<size_t> (i) + 1];
+        if ((b.x - a.x) * plot.getWidth() < radius)
+            continue; // too narrow to carry a handle
+        if (handlePosition (i).getDistanceFrom (p) <= radius)
+            return i;
+    }
+    return -1;
+}
+
+int LfoShapeEditor::barHeight (int width, bool layout)
+{
+    const auto& t = ctx.theme;
+    const auto font = t.valueFont();
+    int x = 0, y = 0;
+    for (auto* b : buttons)
+    {
+        const int w = juce::jmax (t.touch(), juce::roundToInt (Theme::textWidth (font, b->getButtonText())) + 2 * t.gap());
+        if (x > 0 && x + w > width)
+        {
+            x = 0;
+            y += t.touch() + t.gap();
+        }
+        if (layout)
+            b->setBounds (x, y, w, t.touch());
+        x += w + t.gap();
+    }
+    return y + t.touch();
+}
+
+int LfoShapeEditor::preferredHeight (int width) const
+{
+    const auto& t = ctx.theme;
+    return const_cast<LfoShapeEditor*> (this)->barHeight (width, false) + t.gap() + t.ipx (170.0f);
+}
+
+void LfoShapeEditor::resized()
+{
+    const auto& t = ctx.theme;
+    const int bar = barHeight (getWidth(), true);
+    plot = getLocalBounds().toFloat().withTrimmedTop (static_cast<float> (bar + t.gap())).reduced (static_cast<float> (t.gap()), static_cast<float> (t.gap()));
+    cacheValid = false;
+}
+
+// ---- painting ----------------------------------------------------------------------------------------------------------------------
+
+void LfoShapeEditor::paint (juce::Graphics& g)
+{
+    const auto& t = ctx.theme;
+    const auto& c = t.colours;
+    const auto frame = plot.expanded (static_cast<float> (t.gap()) * 0.5f);
+    g.setColour (c.panelRaised);
+    g.fillRoundedRectangle (frame, t.px (6.0f));
+    g.setColour (c.outline);
+    g.drawRoundedRectangle (frame, t.px (6.0f), 1.0f);
+    if (plot.getWidth() < 8.0f || plot.getHeight() < 8.0f || current.points.size() < kMinPoints)
+        return;
+
+    // grid: the snap grid (16 x 8), the centre line brighter
+    g.setColour (c.outline.withAlpha (0.45f));
+    for (int i = 1; i < kSnapColumns; ++i)
+        g.drawVerticalLine (juce::roundToInt (toX (static_cast<float> (i) / static_cast<float> (kSnapColumns))), plot.getY(), plot.getBottom());
+    for (int i = 1; i < kSnapRows; ++i)
+        g.drawHorizontalLine (juce::roundToInt (toY (static_cast<float> (i) / static_cast<float> (kSnapRows))), plot.getX(), plot.getRight());
+    g.setColour (c.outline);
+    g.drawHorizontalLine (juce::roundToInt (toY (0.5f)), plot.getX(), plot.getRight());
+
+    // the curve, evaluated by the engine's own shape code
+    constexpr int steps = 256;
+    juce::Path path;
+    for (int i = 0; i <= steps; ++i)
+    {
+        const float x = static_cast<float> (i) / static_cast<float> (steps);
+        const float px = toX (x), py = toY (evaluateAt (x));
+        if (i == 0)
+            path.startNewSubPath (px, py);
+        else
+            path.lineTo (px, py);
+    }
+    g.setColour (c.accent);
+    g.strokePath (path, juce::PathStrokeType (t.px (2.0f)));
+
+    // curve handles (diamonds) and points
+    if (! drawTool)
+    {
+        const float hr = t.px (5.0f);
+        for (int i = 0; i + 1 < static_cast<int> (current.points.size()); ++i)
+        {
+            const auto& a = current.points[static_cast<size_t> (i)];
+            const auto& b = current.points[static_cast<size_t> (i) + 1];
+            if ((b.x - a.x) * plot.getWidth() < static_cast<float> (t.touch()) * 0.5f)
+                continue;
+            const auto h = handlePosition (i);
+            juce::Path d;
+            d.addPolygon (h, 4, hr * 1.3f, 0.0f);
+            g.setColour (! juce::exactlyEqual (a.power, 0.0f) ? c.mod : c.textDim);
+            g.fillPath (d);
+        }
+        for (int i = 0; i < static_cast<int> (current.points.size()); ++i)
+        {
+            const auto pos = pointPosition (i);
+            const float r = t.px (i == selected ? 8.0f : 6.0f);
+            g.setColour (i == selected ? c.warn : c.text);
+            g.fillEllipse (pos.x - r, pos.y - r, 2.0f * r, 2.0f * r);
+            g.setColour (c.panelRaised);
+            g.drawEllipse (pos.x - r, pos.y - r, 2.0f * r, 2.0f * r, 1.0f);
+        }
+    }
+
+    g.setColour (c.textDim);
+    g.setFont (t.labelFont());
+    g.drawText (juce::String (static_cast<int> (current.points.size())) + " points" + (drawTool ? "  |  Draw" : ""),
+                plot.reduced (t.px (6.0f), t.px (2.0f)), juce::Justification::bottomRight, false);
+}
+
+// ---- gestures ----------------------------------------------------------------------------------------------------------------------
+
+void LfoShapeEditor::drawAt (juce::Point<float> p)
+{
+    const float x = fromX (p.x);
+    float y = fromY (p.y);
+    if (snap)
+        y = snapTo (y, kSnapRows);
+    const int column = juce::jlimit (0, kDrawColumns, juce::roundToInt (x * static_cast<float> (kDrawColumns)));
+
+    if (lastDrawColumn < 0)
+    {
+        // the first touch turns the shape into a 32 column grid sampled from the current shape; painting then sets columns
+        ContentLfoShape grid;
+        grid.lfo = lfo;
+        grid.name = current.name;
+        grid.smooth = false;
+        for (int i = 0; i <= kDrawColumns; ++i)
+        {
+            const float gx = static_cast<float> (i) / static_cast<float> (kDrawColumns);
+            grid.points.emplace_back (gx, juce::jlimit (0.0f, 1.0f, evaluateAt (gx)), 0.0f);
+        }
+        current = std::move (grid);
+        selected = -1;
+        lastDrawColumn = column;
+        lastDrawY = y;
+    }
+
+    const int from = std::min (lastDrawColumn, column), to = std::max (lastDrawColumn, column);
+    for (int i = from; i <= to; ++i)
+    {
+        const float f = to == from ? 1.0f : static_cast<float> (i - lastDrawColumn) / static_cast<float> (column - lastDrawColumn);
+        current.points[static_cast<size_t> (i)].y = juce::jlimit (0.0f, 1.0f, lastDrawY + (y - lastDrawY) * f);
+    }
+    lastDrawColumn = column;
+    lastDrawY = y;
+    touched();
+}
+
+void LfoShapeEditor::mouseDown (const juce::MouseEvent& e)
+{
+    gestureStart = current;
+    gestureChanged = false;
+    dragIndex = -1;
+    drag = Drag::none;
+    if (! getLocalBounds().toFloat().contains (e.position))
+        return;
+
+    if (drawTool)
+    {
+        if (plot.expanded (static_cast<float> (ctx.theme.gap())).contains (e.position))
+        {
+            drag = Drag::draw;
+            lastDrawColumn = -1;
+            drawAt (e.position);
+        }
+        return;
+    }
+
+    if (const int i = hitPoint (e.position); i >= 0)
+    {
+        drag = Drag::point;
+        dragIndex = i;
+        selected = i;
+        updateButtons();
+        repaint();
+        return;
+    }
+    if (const int s = hitHandle (e.position); s >= 0)
+    {
+        drag = Drag::handle;
+        dragIndex = s;
+        dragStartPower = current.points[static_cast<size_t> (s)].power;
+        return;
+    }
+    if (selected >= 0)
+    {
+        selected = -1;
+        updateButtons();
+        repaint();
+    }
+}
+
+void LfoShapeEditor::mouseDrag (const juce::MouseEvent& e)
+{
+    switch (drag)
+    {
+        case Drag::point:
+        {
+            float x = fromX (e.position.x), y = fromY (e.position.y);
+            if (snap)
+            {
+                x = snapTo (x, kSnapColumns);
+                y = snapTo (y, kSnapRows);
+            }
+            movePoint (dragIndex, x, y);
+            break;
+        }
+        case Drag::handle:
+        {
+            const auto& a = current.points[static_cast<size_t> (dragIndex)];
+            const auto& b = current.points[static_cast<size_t> (dragIndex) + 1];
+            // dragging the diamond up bends the curve above the straight line, whatever the direction of the segment
+            const float up = -(e.position.y - e.getMouseDownPosition().toFloat().y);
+            const float perPixel = kMaxPower / juce::jmax (1.0f, plot.getHeight() * 0.5f);
+            const float sign = b.y >= a.y ? -1.0f : 1.0f;
+            setSegmentPower (dragIndex, dragStartPower + sign * up * perPixel);
+            break;
+        }
+        case Drag::draw:
+            drawAt (e.position);
+            break;
+        case Drag::none:
+            break;
+    }
+}
+
+void LfoShapeEditor::mouseUp (const juce::MouseEvent&)
+{
+    if (drag == Drag::none)
+        return;
+    drag = Drag::none;
+    lastDrawColumn = -1;
+    if (gestureChanged)
+    {
+        undoStack.push_back (gestureStart);
+        if (undoStack.size() > 100)
+            undoStack.erase (undoStack.begin());
+        redoStack.clear();
+        updateButtons();
+        commitNow();
+    }
+    gestureChanged = false;
+}
+
+void LfoShapeEditor::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    if (drawTool || plot.getWidth() < 8.0f)
+        return;
+    // the second press of the double click opened a gesture on the point; the edits below are discrete undo steps of their own
+    drag = Drag::none;
+    gestureChanged = false;
+    if (const int i = hitPoint (e.position); i >= 0)
+    {
+        deletePoint (i);
+        commitNow();
+        return;
+    }
+    if (const int s = hitHandle (e.position); s >= 0)
+    {
+        setSegmentPower (s, 0.0f);
+        commitNow();
+        return;
+    }
+    if (plot.expanded (static_cast<float> (ctx.theme.gap())).contains (e.position))
+    {
+        float x = fromX (e.position.x), y = fromY (e.position.y);
+        if (snap)
+        {
+            x = snapTo (x, kSnapColumns);
+            y = snapTo (y, kSnapRows);
+        }
+        addPointAt (x, y);
+        commitNow();
+    }
+}
+} // namespace synthyboy::ui

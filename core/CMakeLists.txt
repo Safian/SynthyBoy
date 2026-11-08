@@ -55,7 +55,7 @@ add_subdirectory(filters-serum)
 add_subdirectory(wavetable-edit)
 add_subdirectory(shapes)
 # the custom LFO shapes and the velocity / note curves of engine-vital are evaluated with the shapes package
-target_link_libraries(synthyboy_core PRIVATE synthyboy_shapes)
+target_link_libraries(synthyboy_core PUBLIC synthyboy_shapes) # PUBLIC: the GUI previews custom LFO shapes with the same evaluator
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)

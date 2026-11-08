@@ -368,7 +368,7 @@ void SynthyBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
     std::string text;
     {
         const std::lock_guard<std::mutex> lock (contentMutex);
-        text = synthyboy::saveState (currentValues(), content);
+        text = synthyboy::saveState (currentValues(), patchContent);
     }
     destData.replaceAll (text.data(), text.size());
 }
@@ -393,14 +393,36 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
     {
         // a loaded document is a whole patch; the legacy XML of the spike has no content (loadedContent is empty then)
         const std::lock_guard<std::mutex> lock (contentMutex);
-        content = std::move (loadedContent);
+        patchContent = std::move (loadedContent);
         if (engine != nullptr)
-            engine->setContent (content); // message thread: allocates, handed to the audio thread lock free
+            engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
     }
 
     // Values changed behind the host's back: the CLAP wrapper turns "program changed" into
     // params.rescan(VALUES), VST3 into a restartComponent (clap-validator state-reproducibility).
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
+}
+
+synthyboy::StateContent SynthyBoyProcessor::content() const
+{
+    const std::lock_guard<std::mutex> lock (contentMutex);
+    return patchContent;
+}
+
+bool SynthyBoyProcessor::setContent (const synthyboy::StateContent& newContent)
+{
+    if (! synthyboy::validateContent (newContent))
+        return false;
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        if (newContent == patchContent)
+            return true;
+        patchContent = newContent;
+        if (engine != nullptr)
+            engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
+    }
+    updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    return true;
 }
 
 void SynthyBoyProcessor::injectMidiMessage (const juce::MidiMessage& msg)

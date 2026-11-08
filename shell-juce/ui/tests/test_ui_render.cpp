@@ -12,6 +12,7 @@
 #include "PluginProcessor.h"
 #include "ui/Editor.h"
 #include "ui/Sheet.h"
+#include "ui/panels/LfoTabsPanel.h"
 #include "test_runner.h"
 
 using namespace synthyboy;
@@ -160,7 +161,7 @@ TEST (uir_panel_registry_contract)
         CHECK (panel->title().isNotEmpty());
 
         const auto keys = panel->keys();
-        CHECK (! keys.empty());
+        CHECK (! keys.empty() || dynamic_cast<LfoTabsPanel*> (panel.get()) != nullptr); // the LFO tab chip row is navigation, it has no key
         CHECK_EQ (keys.size(), panel->controls().size());
         for (size_t i = 0; i < keys.size() && i < panel->controls().size(); ++i)
         {
@@ -467,7 +468,10 @@ TEST (uir_editor_layout_touch_targets_and_modes)
     editor->pageTabs().select (Page::glb);
     CHECK (! editor->panelHost().visiblePanels().empty());
     editor->setSize (1024, 768);
-    CHECK_EQ (editor->panelHost().visiblePanels().size(), editor->panelHost().allPanels().size());
+    size_t foldedAway = 0; // panels a tab chip row folds away (the LFOs that are not selected)
+    for (const auto& p : editor->panelHost().allPanels())
+        foldedAway += p->hiddenInLayout() ? 1u : 0u;
+    CHECK_EQ (editor->panelHost().visiblePanels().size() + foldedAway, editor->panelHost().allPanels().size());
 
     // UI scale keeps the 44 point minimum and the dark / light switch repaints without trouble
     editor->setUiScale (1.5f);

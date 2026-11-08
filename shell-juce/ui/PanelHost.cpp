@@ -126,7 +126,7 @@ void PanelHost::layoutPanels()
     std::vector<int> colHeight (static_cast<size_t> (columns), gap);
     for (size_t i = 0; i < panels.size(); ++i)
     {
-        const bool shown = layoutMode == LayoutMode::wide || panelPages[i] == currentPage;
+        const bool shown = (layoutMode == LayoutMode::wide || panelPages[i] == currentPage) && ! panels[i]->hiddenInLayout();
         panels[i]->setVisible (shown);
         if (! shown)
             continue;
