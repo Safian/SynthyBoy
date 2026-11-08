@@ -277,11 +277,114 @@ assert len(presets) == 100, f"Expected 100 presets, got {len(presets)}"
 FIRST_HUNDRED = [p[0] for p in presets]
 
 
+# ---------------------------------------------------------------------------------------------------------------------------
+# Macro wiring (docs/ui-design/09-kick-integration.md 2.3, decision Q29): every preset routes macro.1 .. macro.4 to the destinations
+# of its category through the mod matrix (source macroN, amount in percent of the destination range, unipolar, power 0). The macros
+# stay at their default 0, so the sound at the default positions is the sound without the wiring. Macros 5 .. 8 are wired
+# sparingly, only where the preset has something for them to open (unison, a second oscillator, noise, a filter).
+# ---------------------------------------------------------------------------------------------------------------------------
+CATEGORY_MACROS = {
+    "Bass": {
+        1: [("filter1.cutoff", 45), ("filter2.cutoff", 45)],
+        2: [("filter1.drive", 50), ("distortion.drive", 35), ("osc1.warp.amount", 25)],
+        3: [("env2.decay", 40), ("lfo1.rate", 30)],
+        4: [("osc1.unison.detune", 25), ("chorus.mix", 35)],
+    },
+    "Lead": {
+        1: [("filter1.cutoff", 50), ("osc1.morph.amount", 30)],
+        2: [("osc1.warp.amount", 45), ("osc1.frame", 50)],
+        3: [("osc1.unison.detune", 30), ("osc2.unison.detune", 30)],
+        4: [("delay.mix", 35), ("reverb.mix", 30)],
+    },
+    "Pad": {
+        1: [("filter1.cutoff", 55), ("filter1.resonance", 15)],
+        2: [("osc1.frame", 60), ("osc2.frame", 60)],
+        3: [("lfo1.rate", 25), ("env1.attack", -30), ("env1.release", 35)],
+        4: [("reverb.mix", 40), ("reverb.decay", 30), ("chorus.mix", 30)],
+    },
+    "Pluck": {
+        1: [("filter1.cutoff", 50), ("env2.decay", 45)],
+        2: [("env1.decay", 50), ("env1.release", 40)],
+        3: [("osc1.morph.amount", 40), ("noise.level", 25)],
+        4: [("delay.mix", 40), ("reverb.mix", 30)],
+    },
+    "Keys": {
+        1: [("filter1.cutoff", 40), ("osc1.warp.amount", 30)],
+        2: [("lfo1.rate", 35), ("phaser.mix", 40)],
+        3: [("env1.release", 45), ("env1.decay", 35)],
+        4: [("chorus.mix", 35), ("reverb.mix", 25)],
+    },
+    "FX": {
+        1: [("filter1.cutoff", 70), ("fxfilter.cutoff", 70)],
+        2: [("rlfo1.rate", 60), ("lfo1.rate", 60)],
+        3: [("distortion.drive", 55), ("osc1.warp.amount", 50)],
+        4: [("reverb.mix", 50), ("delay.feedback", 40)],
+    },
+}
+
+
+def macro_assignments(category: str, vals: dict) -> list:
+    """[(macro number, destination key, amount)] for a preset whose resolved values are `vals`."""
+    out = []
+    for macro, targets in CATEGORY_MACROS[category].items():
+        out += [(macro, key, amount) for key, amount in targets]
+    if vals["osc1.unison.voices"] > 1:
+        out.append((5, "osc1.unison.spread", 40))
+    if vals["osc2.on"] and vals["osc2.unison.voices"] > 1:
+        out.append((5, "osc2.unison.spread", 40))
+    if vals["filter1.on"] and category != "Pad":
+        out.append((6, "filter1.resonance", 30))
+    if vals["osc2.on"]:
+        out += [(7, "osc2.unison.detune", 25), (7, "osc2.warp.amount", 30)]
+    if vals["noise.on"]:
+        out.append((8, "noise.level", 35))
+    return out
+
+
+# A macro that opens an effect is only worth wiring if the effect is in the signal path: where the preset leaves the effect off, it is
+# switched on with its mix at 0 (a dry pass, the same sound at the macro default) and the macro also opens the mix.
+EFFECT_OF_TARGET = {
+    "chorus.mix": "chorus", "delay.mix": "delay", "delay.feedback": "delay", "reverb.mix": "reverb", "reverb.decay": "reverb",
+    "phaser.mix": "phaser", "distortion.drive": "distortion", "fxfilter.cutoff": "fxfilter",
+}
+EXTRA_MIX_AMOUNT = {"delay": 40, "reverb": 40, "distortion": 100, "fxfilter": 70}
+
+
+def with_macros(category: str, ov: dict) -> dict:
+    """`ov` plus the macro wiring in the mod slots after the highest one `ov` already uses."""
+    vals = dict(default_values)
+    vals.update({k: float(v) for k, v in ov.items() if k in param_info})
+    used = [int(k[3:5]) for k in ov if k.startswith("mod") and k[3:5].isdigit()]
+    slot = max(used, default=0) + 1
+    out = dict(ov)
+    assignments = macro_assignments(category, vals)
+    routed = set((m, k) for m, k, _ in assignments)
+    for macro, key, amount in list(assignments):
+        fx = EFFECT_OF_TARGET.get(key)
+        if fx is None or vals[fx + ".on"]:
+            continue
+        out[fx + ".on"] = 1
+        if (fx + ".mix") not in ov:
+            out[fx + ".mix"] = 0
+        if not key.endswith(".mix") and (macro, fx + ".mix") not in routed:
+            assignments.append((macro, fx + ".mix", EXTRA_MIX_AMOUNT[fx]))
+            routed.add((macro, fx + ".mix"))
+    for macro, key, amount in assignments:
+        if slot > NUM_MOD_SLOTS:
+            raise ValueError("out of mod slots")
+        p = f"mod{slot:02d}."
+        out[p + "source"] = mod_source[f"macro{macro}"]
+        out[p + "destination"] = mod_destination[key]
+        out[p + "amount"] = amount
+        slot += 1
+    return out
+
+
 def build_all():
     """All presets as (name, category, meta, document text), in a fixed order."""
     out = []
     for name, category, tags, desc, ov in presets:
-        meta, doc = make_preset(name, category, tags, desc, ov, strict=False)
+        meta, doc = make_preset(name, category, tags, desc, with_macros(category, ov), strict=False)
         out.append((name, category, meta, doc))
     return out
 
