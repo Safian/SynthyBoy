@@ -2049,8 +2049,8 @@
         {"key": "curve.velocity.legato", "shortLabel": "Vel Legato", "widget": "stepped"},
         {"key": "curve.note.legato", "shortLabel": "Note Legat", "widget": "stepped"},
         {"key": "voice.phase_legato", "shortLabel": "Voice Phas", "widget": "stepped"},
-        null,
-        null,
+        {"key": "master.stereo_routing", "shortLabel": "Stereo Rou", "widget": "knob"},
+        {"key": "master.voice_override", "shortLabel": "Voice Over", "widget": "stepped"},
         null
       ]
     },
