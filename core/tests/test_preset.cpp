@@ -86,6 +86,26 @@ TEST (preset_save_load_round_trip)
     CHECK_NEAR (loadedValues.plain[onIdx], 1.0f, 0.01);
 }
 
+TEST (preset_empty_author_rule)
+{
+    PresetMeta meta;
+    meta.name = "Test Author Rule";
+    meta.author = "";
+    ParamValues values = ParamValues::defaults();
+
+    // Default savePreset fills author with "Safian Szabolcs"
+    const std::string defaultJson = savePreset (meta, values);
+    PresetMeta readDefault;
+    CHECK (readPresetMeta (defaultJson.data(), defaultJson.size(), readDefault));
+    CHECK_EQ (readDefault.author, "Safian Szabolcs");
+
+    // Overload with allowEmptyAuthor = true keeps empty author empty
+    const std::string emptyAuthorJson = savePreset (meta, values, StateContent {}, true);
+    PresetMeta readEmpty;
+    CHECK (readPresetMeta (emptyAuthorJson.data(), emptyAuthorJson.size(), readEmpty));
+    CHECK_EQ (readEmpty.author, "");
+}
+
 TEST (preset_backward_compatibility_with_raw_state)
 {
     // A raw synthyboy-state document loaded via loadPreset should parse cleanly and produce Init default metadata

@@ -1352,4 +1352,95 @@ ImportResult importVitalLfoFile (const void* data, size_t size, const ImportOpti
 {
     return standalone (data, size, options, false);
 }
+
+std::string serializeImportedPreset (const ImportResult& result, const PresetMeta& finalMeta, const ContentRefs& contentRefs)
+{
+    if (result.status != ImportStatus::ok)
+        return {};
+
+    StateContent content;
+    for (const auto& iw : result.wavetables)
+    {
+        ContentWavetable cw;
+        cw.osc = iw.osc;
+        cw.ref.sha256 = iw.sha256;
+        cw.ref.name = iw.name;
+        cw.author = iw.author;
+        cw.frames = iw.numFrames;
+        if (const auto* ref = contentRefs.findWavetable (iw.osc))
+        {
+            cw.ref.pack = ref->pack;
+            cw.ref.file = ref->file;
+        }
+        content.wavetables.push_back (std::move (cw));
+    }
+
+    for (const auto& is : result.lfoShapes)
+    {
+        ContentLfoShape cls;
+        cls.lfo = is.lfo;
+        cls.name = is.name;
+        cls.smooth = is.smooth;
+        cls.loopPoint = -1;
+        for (const auto& pt : is.points)
+        {
+            ContentPoint cp;
+            cp.x = pt[0];
+            cp.y = pt[1];
+            cp.power = std::max (-20.0f, std::min (20.0f, pt[2]));
+            cls.points.push_back (cp);
+        }
+        content.lfoShapes.push_back (std::move (cls));
+    }
+
+    std::string s = savePreset (finalMeta, result.values, content, true);
+    if (s.empty() || s.back() != '}')
+        return {};
+
+    s.pop_back();
+
+    s += ",\"import\":{\"source\":{";
+    s += "\"format\":\"vital\"";
+    s += ",\"version\":";
+    jsonEscape (result.report.vitalVersion, s);
+    s += ",\"sha256\":";
+    jsonEscape (result.sourceSha256, s);
+    s += ",\"preset_name\":";
+    jsonEscape (finalMeta.name.empty() ? result.meta.name : finalMeta.name, s);
+    s += ",\"comments\":";
+    jsonEscape (finalMeta.description.empty() ? result.meta.description : finalMeta.description, s);
+    s += ",\"macro_names\":[";
+    for (int i = 0; i < 4; ++i)
+    {
+        if (i > 0)
+            s += ',';
+        jsonEscape (result.macroNames[i], s);
+    }
+    s += "]},\"approximated\":[";
+
+    std::vector<std::string> approxKeys;
+    for (const auto& it : result.report.items)
+    {
+        if (it.kind == ItemKind::approximated && ! it.ourKey.empty())
+        {
+            if (std::find (approxKeys.begin(), approxKeys.end(), it.ourKey) == approxKeys.end())
+            {
+                if (approxKeys.size() < 64)
+                    approxKeys.push_back (it.ourKey);
+            }
+        }
+    }
+    for (size_t i = 0; i < approxKeys.size(); ++i)
+    {
+        if (i > 0)
+            s += ',';
+        jsonEscape (approxKeys[i], s);
+    }
+    s += "]}}";
+
+    if (s.size() > (1u << 20))
+        return {};
+
+    return s;
+}
 } // namespace synthyboy

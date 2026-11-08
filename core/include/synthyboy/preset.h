@@ -41,6 +41,9 @@ std::string savePreset (const PresetMeta& meta, const ParamValues& values);
 /** The same with the \`content\` section of state version 3 (custom LFO shapes, content references, ...) inside the state object. */
 std::string savePreset (const PresetMeta& meta, const ParamValues& values, const StateContent& content);
 
+/** Overload that allows keeping an empty author empty (when allowEmptyAuthor is true). */
+std::string savePreset (const PresetMeta& meta, const ParamValues& values, const StateContent& content, bool allowEmptyAuthor);
+
 /** Reads only the preset metadata from a .sbpreset document without loading parameter state or allocating engine structures.
     Returns true if metadata was found and valid. */
 bool readPresetMeta (const void* data, size_t size, PresetMeta& metaOut) noexcept;
