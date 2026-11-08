@@ -58,9 +58,13 @@ namespace sbvital {
       output_map& getPolyModulations() override;
       ModulationConnectionBank& getModulationBank() { return modulation_bank_; }
       Wavetable* getWavetable(int index) { return producers_->getWavetable(index); }
+      SampleOscShared* getSampleShared(int index) { return producers_->getSampleShared(index); }
+      struct FilterCurveShared* getFilterCurve(int filter);
       Sample* getSample() { return producers_->getSample(); }
       LineGenerator* getLfoSource(int index) { return &lfo_sources_[index]; }
       Output* getDirectOutput() { return getAccumulatedOutput(direct_output_->output()); }
+      Output* getBus1Output() { return getAccumulatedOutput(bus1_output_->output()); }   // SynthyBoy: the bus sends, summed over the voices
+      Output* getBus2Output() { return getAccumulatedOutput(bus2_output_->output()); }
 
       Output* note_retrigger() { return &note_retriggered_; }
 
@@ -119,6 +123,8 @@ namespace sbvital {
 
       Multiply* output_;
       Multiply* direct_output_;
+      Multiply* bus1_output_;
+      Multiply* bus2_output_;
       Output num_voices_;
 
       output_map poly_readouts_;

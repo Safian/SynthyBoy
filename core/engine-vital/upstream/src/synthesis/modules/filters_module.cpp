@@ -20,7 +20,7 @@
 
 namespace sbvital {
 
-  FiltersModule::FiltersModule() : SynthModule(kNumInputs, 1), filter_1_(nullptr), filter_2_(nullptr),
+  FiltersModule::FiltersModule() : SynthModule(kNumInputs, kNumOutputs), filter_1_(nullptr), filter_2_(nullptr),
                                    filter_1_filter_input_(nullptr), filter_2_filter_input_(nullptr) {
     filter_1_input_ = std::make_shared<Output>();
     filter_2_input_ = std::make_shared<Output>();
@@ -99,12 +99,61 @@ namespace sbvital {
     utils::copyBuffer(output()->buffer, filter_1_->output()->buffer, num_samples);
   }
 
+  // SynthyBoy: destination of each filter (effects only, direct out, none) and the bus sends. In series the filter that feeds the other
+  // one has no destination of its own (its output goes into the other filter); a send always taps the filter's own output.
+  void FiltersModule::route(int num_samples, int mode) {
+    const int destination1 = static_cast<int>(filter_1_->getDestinationValue()->value());
+    const int destination2 = static_cast<int>(filter_2_->getDestinationValue()->value());
+    poly_float* direct = output(kDirect)->buffer;
+    utils::zeroBuffer(direct, num_samples);
+
+    if (destination1 != 0 || destination2 != 0) {
+      poly_float* main_out = output(kOutput)->buffer;
+      const poly_float* f1 = filter_1_->output()->buffer;
+      const poly_float* f2 = filter_2_->output()->buffer;
+      utils::zeroBuffer(main_out, num_samples);
+      const bool use1 = mode != 1;  // mode: 0 parallel, 1 series 1 -> 2, 2 series 2 -> 1
+      const bool use2 = mode != 2;
+      for (int i = 0; i < num_samples; ++i) {
+        if (use1) {
+          if (destination1 == 0)
+            main_out[i] += f1[i];
+          else if (destination1 == 1)
+            direct[i] += f1[i];
+        }
+        if (use2) {
+          if (destination2 == 0)
+            main_out[i] += f2[i];
+          else if (destination2 == 1)
+            direct[i] += f2[i];
+        }
+      }
+    }
+
+    poly_float* bus1 = output(kBus1)->buffer;
+    poly_float* bus2 = output(kBus2)->buffer;
+    const poly_float* a1 = filter_1_->output(FilterModule::kBus1Send)->buffer;
+    const poly_float* a2 = filter_1_->output(FilterModule::kBus2Send)->buffer;
+    const poly_float* b1 = filter_2_->output(FilterModule::kBus1Send)->buffer;
+    const poly_float* b2 = filter_2_->output(FilterModule::kBus2Send)->buffer;
+    for (int i = 0; i < num_samples; ++i) {
+      bus1[i] = a1[i] + b1[i];
+      bus2[i] = a2[i] + b2[i];
+    }
+  }
+
   void FiltersModule::process(int num_samples) {
-    if (filter_1_filter_input_->value() && filter_1_->getOnValue()->value())
+    int mode = 0;
+    if (filter_1_filter_input_->value() && filter_1_->getOnValue()->value()) {
       processSerialBackward(num_samples);
-    else if (filter_2_filter_input_->value() && filter_2_->getOnValue()->value())
+      mode = 2;
+    }
+    else if (filter_2_filter_input_->value() && filter_2_->getOnValue()->value()) {
       processSerialForward(num_samples);
+      mode = 1;
+    }
     else
       processParallel(num_samples);
+    route(num_samples, mode);
   }
 } // namespace sbvital

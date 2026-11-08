@@ -23,13 +23,16 @@
 namespace sbvital {
 
   OscillatorModule::OscillatorModule(std::string prefix) :
-      SynthModule(kNumInputs, kNumOutputs), prefix_(std::move(prefix)), on_(nullptr), distortion_type_(nullptr) {
+      SynthModule(kNumInputs, kNumOutputs), prefix_(std::move(prefix)), on_(nullptr), oscillator_(nullptr),
+      sample_oscillator_(nullptr), distortion_type_(nullptr), distortion2_type_(nullptr), type_(nullptr) {
     wavetable_ = std::make_shared<Wavetable>(kNumOscillatorWaveFrames);
     was_on_ = std::make_shared<bool>(true);
+    sample_shared_ = std::make_shared<SampleOscShared>();
   }
 
   void OscillatorModule::init() {
     oscillator_ = new SynthOscillator(wavetable_.get());
+    sample_oscillator_ = new SampleOscillator(sample_shared_.get());
 
     createBaseControl(prefix_ + "_view_2d");
     on_ = createBaseControl(prefix_ + "_on");
@@ -62,6 +65,15 @@ namespace sbvital {
     Output* spectral_morph_spread = createPolyModControl(prefix_ + "_spectral_morph_spread");
     Value* spectral_morph_type = createBaseControl(prefix_ + "_spectral_morph_type");
     Output* spectral_morph_amount = createPolyModControl(prefix_ + "_spectral_morph_amount");
+    // SynthyBoy: the second warp slot, the oscillator type and the modulatable controls of the sample oscillator
+    distortion2_type_ = createBaseControl(prefix_ + "_warp2_type");
+    Output* warp2_amount = createPolyModControl(prefix_ + "_warp2_amount");
+    Output* warp2_phase = createPolyModControl(prefix_ + "_warp2_phase");
+    Output* warp2_spread = createPolyModControl(prefix_ + "_warp2_spread");
+    type_ = createBaseControl(prefix_ + "_type");
+    Output* sample_scan = createPolyModControl(prefix_ + "_sample_scan");
+    Output* sample_uni_start = createPolyModControl(prefix_ + "_sample_uni_start");
+    Output* sample_uni_span = createPolyModControl(prefix_ + "_sample_uni_span");
 
     oscillator_->useInput(input(kReset), SynthOscillator::kReset);
     oscillator_->useInput(input(kRetrigger), SynthOscillator::kRetrigger);
@@ -94,15 +106,57 @@ namespace sbvital {
     oscillator_->plug(spectral_morph_spread, SynthOscillator::kUnisonSpectralMorphSpread);
     oscillator_->plug(spectral_morph_type, SynthOscillator::kSpectralMorphType);
     oscillator_->plug(spectral_morph_amount, SynthOscillator::kSpectralMorphAmount);
+    oscillator_->plug(distortion2_type_, SynthOscillator::kWarp2Type);
+    oscillator_->plug(warp2_amount, SynthOscillator::kWarp2Amount);
+    oscillator_->plug(warp2_phase, SynthOscillator::kWarp2Phase);
+    oscillator_->plug(warp2_spread, SynthOscillator::kWarp2Spread);
     oscillator_->useOutput(output(kRaw), SynthOscillator::kRaw);
     oscillator_->useOutput(output(kLevelled), SynthOscillator::kLevelled);
 
+    // the sample oscillator shares the controls and the outputs of the wavetable oscillator
+    SampleOscillator* so = sample_oscillator_;
+    so->useInput(input(kReset), SampleOscillator::kReset);
+    so->useInput(input(kActiveVoices), SampleOscillator::kActiveVoices);
+    so->useInput(input(kMidi), SampleOscillator::kMidiNote);
+    so->useInput(input(kFold), SampleOscillator::kFoldNote);
+    so->useInput(input(kNotePressed), SampleOscillator::kNotePressed);
+    so->plug(transpose, SampleOscillator::kTranspose);
+    so->plug(tune, SampleOscillator::kTune);
+    so->plug(amplitude, SampleOscillator::kAmplitude);
+    so->plug(pan, SampleOscillator::kPan);
+    so->plug(unison_voices, SampleOscillator::kUnisonVoices);
+    so->plug(unison_detune, SampleOscillator::kUnisonDetune);
+    so->plug(detune_power, SampleOscillator::kDetunePower);
+    so->plug(detune_range, SampleOscillator::kDetuneRange);
+    so->plug(phase, SampleOscillator::kPhase);
+    so->plug(rand_phase, SampleOscillator::kRandomPhase);
+    so->plug(blend, SampleOscillator::kBlend);
+    so->plug(stereo_spread, SampleOscillator::kStereoSpread);
+    so->plug(sample_scan, SampleOscillator::kScan);
+    so->plug(sample_uni_start, SampleOscillator::kUniStart);
+    so->plug(sample_uni_span, SampleOscillator::kUniSpan);
+    so->plug(distortion_type_, SampleOscillator::kWarpType);
+    so->plug(distortion_amount, SampleOscillator::kWarpAmount);
+    so->plug(distortion2_type_, SampleOscillator::kWarp2Type);
+    so->plug(warp2_amount, SampleOscillator::kWarp2Amount);
+    so->useOutput(output(kRaw), SampleOscillator::kRaw);
+    so->useOutput(output(kLevelled), SampleOscillator::kLevelled);
+
     addProcessor(oscillator_);
+    addProcessor(sample_oscillator_);
+    sample_oscillator_->enable(false);
     SynthModule::init();
   }
 
   void OscillatorModule::process(int num_samples) {
     bool on = on_->value();
+
+    // SynthyBoy: exactly one of the two oscillator types runs (both write the module's outputs)
+    const bool sample = type_ != nullptr && type_->value() > 0.5f;
+    if (sample != (! getLocalProcessor(oscillator_)->enabled())) {
+      getLocalProcessor(oscillator_)->enable(! sample);
+      getLocalProcessor(sample_oscillator_)->enable(sample);
+    }
 
     if (on)
       SynthModule::process(num_samples);

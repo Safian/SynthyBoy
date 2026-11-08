@@ -29,6 +29,8 @@ namespace sbvital {
   class LadderFilter;
   class PhaserFilter;
   class SallenKeyFilter;
+  class SerumFilterBank;      // SynthyBoy: the filter models of state version 3
+  class StereoCutoffOffset;
 
   class FilterModule : public SynthModule {
     public:
@@ -38,6 +40,13 @@ namespace sbvital {
         kKeytrack,
         kMidi,
         kNumInputs
+      };
+
+      enum {
+        kOutput,
+        kBus1Send,   // SynthyBoy: the output of the filter times its bus 1 send (docs/ui-design/13-new-keys.md 4.10)
+        kBus2Send,
+        kNumOutputs
       };
 
       FilterModule(std::string prefix = "");
@@ -57,6 +66,8 @@ namespace sbvital {
       }
 
       const Value* getOnValue() { return on_; }
+      const Value* getDestinationValue() { return destination_; }
+      struct FilterCurveShared* curveShared();   // SynthyBoy: the drawn curve of the PZ SVF
 
     protected:
       void setModel(int new_model);
@@ -68,6 +79,11 @@ namespace sbvital {
       bool mono_;
 
       Value* on_;
+      Value* destination_ = nullptr;     // SynthyBoy: 0 effects only, 1 direct out, 2 none (the two voice filters only)
+      Output* bus1_send_ = nullptr;
+      Output* bus2_send_ = nullptr;
+      poly_float bus1_gain_ = 0.0f;
+      poly_float bus2_gain_ = 0.0f;
       Value* filter_model_;
       poly_float mix_;
 
@@ -81,6 +97,10 @@ namespace sbvital {
       LadderFilter* ladder_filter_;
       PhaserFilter* phaser_filter_;
       SallenKeyFilter* sallen_key_filter_;
+      SerumFilterBank* serum_filter_ = nullptr;
+      StereoCutoffOffset* cutoff_offset_ = nullptr;
+      Output* level_ = nullptr;
+      poly_float level_gain_ = 1.0f;
 
       JUCE_LEAK_DETECTOR(FilterModule)
   };

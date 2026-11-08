@@ -1,6 +1,6 @@
 # New parameter keys for the owner-decided engine extensions – specification
 
-Status: SPEC (2026-11-08); WP0 (table, state, content section, EngineCaps) implemented on the same day, see `WP0-REPORT.md` (corrections found while implementing are marked **[WP0 fix]**); WP1, WP2, WP3 implemented, see `WP123-REPORT.md` (assumptions A29-A37 there). Source decisions: `12-decisions.md` (Q2, Q6, Q8, Q9, Q13, Q14, Q15, Q16, Q17, Q18, Q19, Q22, Q23, Q24, Q26, Q27), gaps G01-G84 of `10-coverage-matrix.md` §3, design files 01-09 and 11. Where a design file is silent the text says **ASSUMPTION** (collected in §12).
+Status: SPEC (2026-11-08); WP0 (table, state, content section, EngineCaps) implemented on the same day, see `WP0-REPORT.md` (corrections found while implementing are marked **[WP0 fix]**); WP1, WP2, WP3 implemented, see `WP123-REPORT.md` (assumptions A29-A37 there); WP4 to WP8 implemented, see `WP48-REPORT.md` (assumptions A38-A44 below). Source decisions: `12-decisions.md` (Q2, Q6, Q8, Q9, Q13, Q14, Q15, Q16, Q17, Q18, Q19, Q22, Q23, Q24, Q26, Q27), gaps G01-G84 of `10-coverage-matrix.md` §3, design files 01-09 and 11. Where a design file is silent the text says **ASSUMPTION** (collected in §12).
 
 Verified baseline (read from the repo on 2026-11-08):
 
@@ -175,7 +175,7 @@ Layout per oscillator, osc 1 = 1267..1297, osc 2 = 1298..1328, osc 3 = 1329..135
 |-----|------|------|-------|--------:|------|-------|----|-----|------|
 | `oscN.type` | `Osc N Type` | choice | 0 `Wavetable`, 1 `Sample` (append later: `Multisample`, `Granular`, `Spectral`; G19, G21, G22 stay GAP) | 0 | - | - | V, X (10 ms crossfade) | no | `oscN_type_map` |
 
-With type `Sample`, `oscN.wavetable`, `frame`, `frame_spread` and `morph.*` are ignored (UI dims them); `on`, `level`, `pan`, `transpose`, `tune`, `phase` (start phase), `random_phase` (Serum RAND, Vital `sample_random_phase`), `destination`, `unison.*`, `warp.*`, `warp2.*` and the new mixer keys (§4.10) apply. The Vital sampler "pitch" is `oscN.transpose` / `oscN.tune` (no new key). **ASSUMPTION A12**: the Vital import (11 §1.2.3) maps a custom `settings.sample` to the first oscillator with `on = 0` (type `Sample`) and reports it; `noise.*` stays the built-in white noise. **Open DSP question (not a key question):** how `warp.*` / `warp2.*` act on a sample voice (phase-domain warp on the read position vs. none); the keys exist either way. WP4 must decide it before shipping.
+With type `Sample`, `oscN.wavetable`, `frame`, `frame_spread` and `morph.*` are ignored (UI dims them); `on`, `level`, `pan`, `transpose`, `tune`, `phase` (start phase), `random_phase` (Serum RAND, Vital `sample_random_phase`), `destination`, `unison.*`, `warp.*`, `warp2.*` and the new mixer keys (§4.10) apply. The Vital sampler "pitch" is `oscN.transpose` / `oscN.tune` (no new key). **ASSUMPTION A12**: the Vital import (11 §1.2.3) maps a custom `settings.sample` to the first oscillator with `on = 0` (type `Sample`) and reports it; `noise.*` stays the built-in white noise. **Warp on a sample voice (decided in WP4, A38):** a sample has no cycle, so the phase domain warps (Sync, Formant, Bend, Squeeze, Pulse Width) are inert on a sample; Quantize reduces the resolution of the output, FM (osc A / B) modulates the read speed, RM (osc A / B) multiplies the output, in both slots.
 
 **Sample block** (prefix `oscN.sample.`, group `Osc N / Sample`; the sample itself is `content.samples[]` §5, never in the key list):
 
@@ -538,3 +538,10 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A26 | Samples are references, never embedded |
 | A27 | `.tun` converted to scl + kbm text at load |
 | A28 | PZ SVF stores a drawable magnitude curve, up to 16 points |
+| A38 | Warp on a sample voice: Quantize, FM and RM act, the phase domain warps are inert (4.9) |
+| A39 | Sample `scan` is varispeed (pitch follows speed); Normalize uses the peak of the whole file; `loop_link` is an editor action without DSP effect; `loop_relative` makes the loop points fractions of the playback region |
+| A40 | Auto slices: onset detection of the file (2 ms RMS envelope, rise against the previous 20 ms, minimum distance 20 ms) filtered by `slice_threshold`; in slice mode the key picks the slice (`key - slice_root`) and the pitch is the recorded one |
+| A41 | DIRECT passes `master.volume` as in version 2 (R5 wins over the A16 wording "skips master.volume"); it skips every rack and is scaled by `direct.level` |
+| A42 | A bypassed splitter band is removed from the sum (the package's meaning) |
+| A43 | `PZ SVF` without curve data runs the package's pole / zero SVF (the "flat" fallback of 5 is for a missing reference); with a curve the voice filter is a cascade of bells fitted to it, the cutoff shifts the curve (1 kHz = as drawn) |
+| A44 | Convolve re-partitions its impulse on a builder thread when size, minimum phase, attack, decay, damping or gain change (an audible change follows after the build); tier low bypasses Hyper / Dimension, Bode and Convolve |

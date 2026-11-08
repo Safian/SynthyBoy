@@ -25,12 +25,13 @@
 #include "ladder_filter.h"
 #include "phaser_filter.h"
 #include "sallen_key_filter.h"
+#include "serum_filter_bank.h"
 #include "synth_constants.h"
 
 namespace sbvital {
 
   FilterModule::FilterModule(std::string prefix) :
-      SynthModule(kNumInputs, 1), last_model_(-1), was_on_(false), 
+      SynthModule(kNumInputs, kNumOutputs), last_model_(-1), was_on_(false), 
       prefix_(std::move(prefix)), create_on_value_(true), mono_(false),
       on_(nullptr), filter_model_(nullptr), mix_(0.0f), filter_mix_(nullptr),
       comb_filter_(nullptr), digital_svf_(nullptr), dirty_filter_(nullptr),
@@ -44,6 +45,8 @@ namespace sbvital {
     phaser_filter_ = new PhaserFilter(false);
     sallen_key_filter_ = new SallenKeyFilter();
     formant_filter_ = new FormantModule(prefix_);
+    serum_filter_ = new SerumFilterBank();
+    cutoff_offset_ = new StereoCutoffOffset();
 
     addSubmodule(comb_filter_);
     addSubmodule(formant_filter_);
@@ -56,6 +59,9 @@ namespace sbvital {
     addProcessor(ladder_filter_);
     addProcessor(phaser_filter_);
     addProcessor(sallen_key_filter_);
+    addProcessor(serum_filter_);
+    addProcessor(cutoff_offset_);
+    serum_filter_->enable(false);
   }
 
   void FilterModule::init() {
@@ -64,7 +70,15 @@ namespace sbvital {
     current_keytrack->useInput(input(kKeytrack), 0);
     current_keytrack->plug(keytrack_amount, 1);
 
-    Output* midi_cutoff = createModControl(prefix_ + "_cutoff", true, true, current_keytrack->output());
+    Output* base_cutoff = createModControl(prefix_ + "_cutoff", true, true, current_keytrack->output());
+    // SynthyBoy (docs/ui-design/13-new-keys.md 4.11): var is the fourth knob of the new models, pan offsets the cutoff of the two channels in
+    // opposite directions, level trims the output of the filter
+    Output* var = createModControl(prefix_ + "_var");
+    Output* pan = createModControl(prefix_ + "_pan");
+    level_ = createModControl(prefix_ + "_level");
+    cutoff_offset_->plug(base_cutoff, StereoCutoffOffset::kCutoff);
+    cutoff_offset_->plug(pan, StereoCutoffOffset::kPan);
+    Output* midi_cutoff = cutoff_offset_->output();
     Output* resonance = createModControl(prefix_ + "_resonance");
     Output* drive = createModControl(prefix_ + "_drive");
     Output* blend = createModControl(prefix_ + "_blend");
@@ -75,6 +89,11 @@ namespace sbvital {
     filter_model_ = createBaseControl(prefix_ + "_model");
 
     filter_mix_ = createModControl(prefix_ + "_mix");
+    if (prefix_ != "filter_fx") { // the two voice filters have a destination and sends to the buses
+      destination_ = createBaseControl(prefix_ + "_destination");
+      bus1_send_ = createModControl(prefix_ + "_bus1_send");
+      bus2_send_ = createModControl(prefix_ + "_bus2_send");
+    }
 
     comb_filter_->useInput(input(kAudio), CombModule::kAudio);
     comb_filter_->plug(filter_style, CombModule::kStyle);
@@ -147,6 +166,17 @@ namespace sbvital {
     sallen_key_filter_->plug(drive, SallenKeyFilter::kDriveGain);
     sallen_key_filter_->useOutput(output());
 
+    serum_filter_->useInput(input(kAudio), SerumFilterBank::kAudio);
+    serum_filter_->useInput(input(kReset), SerumFilterBank::kReset);
+    serum_filter_->plug(midi_cutoff, SerumFilterBank::kMidiCutoff);
+    serum_filter_->plug(resonance, SerumFilterBank::kResonance);
+    serum_filter_->plug(drive, SerumFilterBank::kDrive);
+    serum_filter_->plug(blend, SerumFilterBank::kBlend);
+    serum_filter_->plug(var, SerumFilterBank::kVar);
+    serum_filter_->plug(filter_model_, SerumFilterBank::kModel);
+    serum_filter_->plug(filter_style, SerumFilterBank::kStyle);
+    serum_filter_->useOutput(output());
+
     comb_filter_->enable(false);
     digital_svf_->enable(false);
     diode_filter_->enable(false);
@@ -160,6 +190,10 @@ namespace sbvital {
     SynthModule::init();
   }
 
+  FilterCurveShared* FilterModule::curveShared() {
+    return serum_filter_->curve();
+  }
+
   void FilterModule::hardReset() {
     comb_filter_->hardReset();
     digital_svf_->hardReset();
@@ -169,6 +203,7 @@ namespace sbvital {
     ladder_filter_->hardReset();
     phaser_filter_->hardReset();
     sallen_key_filter_->hardReset();
+    serum_filter_->hardReset();
   }
 
   Output* FilterModule::createModControl(std::string name, bool audio_rate, bool smooth_value,
@@ -187,6 +222,7 @@ namespace sbvital {
     ladder_filter_->enable(new_model == constants::kLadder);
     phaser_filter_->enable(new_model == constants::kPhase);
     sallen_key_filter_->enable(new_model == constants::kAnalog);
+    serum_filter_->enable(new_model >= SerumFilterBank::kFirstModel);
 
     if (new_model == last_model_)
       return;
@@ -208,6 +244,8 @@ namespace sbvital {
       to_reset = ladder_filter_;
     else if (new_model == constants::kPhase)
       to_reset = phaser_filter_;
+    else if (new_model >= SerumFilterBank::kFirstModel)
+      to_reset = serum_filter_;
 
     if (to_reset)
       getLocalProcessor(to_reset)->hardReset();
@@ -233,9 +271,52 @@ namespace sbvital {
         current_mix += delta_mix;
         audio_out[i] = utils::interpolate(audio_in[i], audio_out[i], current_mix);
       }
+
+      // SynthyBoy: the output level of the filter (-60 dB = silence), ramped over the block; 0 dB leaves the signal untouched
+      {
+        poly_float db = level_->buffer[0];
+        poly_float target;
+        for (int lane = 0; lane < static_cast<int>(poly_float::kSize); ++lane)
+          target.set(lane, db[lane] <= -59.9f ? 0.0f : std::pow(10.0f, db[lane] * 0.05f));
+        poly_float current_gain = utils::maskLoad(level_gain_, target, getResetMask(kReset));
+        level_gain_ = target;
+        if (poly_float::notEqual(current_gain, 1.0f).anyMask() || poly_float::notEqual(target, 1.0f).anyMask()) {
+          poly_float delta_gain = (target - current_gain) * (1.0f / num_samples);
+          for (int i = 0; i < num_samples; ++i) {
+            current_gain += delta_gain;
+            audio_out[i] *= current_gain;
+          }
+        }
+      }
+
+      // SynthyBoy: the bus sends tap the output of the filter (after its mix, pan and level)
+      if (bus1_send_ != nullptr) {
+        poly_mask reset_mask = getResetMask(kReset);
+        poly_float send1 = utils::clamp(bus1_send_->buffer[0], 0.0f, 1.0f);
+        poly_float send2 = utils::clamp(bus2_send_->buffer[0], 0.0f, 1.0f);
+        poly_float current1 = utils::maskLoad(bus1_gain_, send1, reset_mask);
+        poly_float current2 = utils::maskLoad(bus2_gain_, send2, reset_mask);
+        bus1_gain_ = send1;
+        bus2_gain_ = send2;
+        poly_float delta1 = (send1 - current1) * (1.0f / num_samples);
+        poly_float delta2 = (send2 - current2) * (1.0f / num_samples);
+        poly_float* bus1 = output(kBus1Send)->buffer;
+        poly_float* bus2 = output(kBus2Send)->buffer;
+        for (int i = 0; i < num_samples; ++i) {
+          current1 += delta1;
+          current2 += delta2;
+          bus1[i] = audio_out[i] * current1;
+          bus2[i] = audio_out[i] * current2;
+        }
+      }
     }
-    else
+    else {
       utils::zeroBuffer(output()->buffer, num_samples);
+      if (bus1_send_ != nullptr) {
+        utils::zeroBuffer(output(kBus1Send)->buffer, num_samples);
+        utils::zeroBuffer(output(kBus2Send)->buffer, num_samples);
+      }
+    }
   }
 
   void FilterModule::setMono(bool mono) {

@@ -19,6 +19,7 @@
 
 #include "synth_module.h"
 #include "synth_oscillator.h"
+#include "sample_oscillator.h"
 
 namespace sbvital {
   class Wavetable;
@@ -31,6 +32,7 @@ namespace sbvital {
         kMidi,
         kActiveVoices,
         kFold,
+        kNotePressed,  // SynthyBoy: 1 while the key of the voice is held (sample loop exit on release)
         kNumInputs
       };
 
@@ -49,8 +51,14 @@ namespace sbvital {
 
       Wavetable* getWavetable() { return wavetable_.get(); }
       force_inline SynthOscillator* oscillator() { return oscillator_; }
+      force_inline SampleOscillator* sampleOscillator() { return sample_oscillator_; }
+      SampleOscShared* sampleShared() { return sample_shared_.get(); }
       SynthOscillator::DistortionType getDistortionType() {
         int val = distortion_type_->value();
+        return static_cast<SynthOscillator::DistortionType>(val);
+      }
+      SynthOscillator::DistortionType getDistortionType2() {
+        int val = distortion2_type_->value();
         return static_cast<SynthOscillator::DistortionType>(val);
       }
 
@@ -58,10 +66,14 @@ namespace sbvital {
       std::string prefix_;
       std::shared_ptr<Wavetable> wavetable_;
       std::shared_ptr<bool> was_on_;
+      std::shared_ptr<SampleOscShared> sample_shared_;
 
       Value* on_;
       SynthOscillator* oscillator_;
+      SampleOscillator* sample_oscillator_;
       Value* distortion_type_;
+      Value* distortion2_type_;
+      Value* type_;
 
       JUCE_LEAK_DETECTOR(OscillatorModule)
   };

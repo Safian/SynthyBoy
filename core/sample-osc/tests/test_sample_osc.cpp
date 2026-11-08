@@ -7,6 +7,7 @@
 #include "synthyboy/sampleosc/sample_voice.h"
 #include "synthyboy/sampleosc/wav_reader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -391,7 +392,7 @@ TEST (sampleosc_loop_continuity_no_click)
     std::vector<float> outLeft (kTotal, 0.0f);
     constexpr int kBlock = 128;
     for (int s = 0; s < kTotal; s += kBlock)
-        voice.process (outLeft.data() + s, nullptr, kBlock);
+        voice.process (outLeft.data() + s, nullptr, std::min (kBlock, kTotal - s)); // (the last block must not run past the buffer: AddressSanitizer)
 
     // Inspect consecutive steps after anti-click fade-in (sample 300 onwards)
     float maxStep = 0.0f;

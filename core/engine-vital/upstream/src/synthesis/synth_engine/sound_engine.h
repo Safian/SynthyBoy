@@ -36,6 +36,8 @@ namespace sbvital {
   class ValueSwitch;
   class WaveFrame;
   class Wavetable;
+  struct SampleOscShared;
+  struct FilterCurveShared;
 
   class SoundEngine : public SynthModule, public NoteHandler {
     public:
@@ -91,6 +93,9 @@ namespace sbvital {
       void setChannelSlide(int channel, mono_float value, int sample);
       void setChannelRangeSlide(int from_channel, int to_channel, mono_float value, int sample);
       Wavetable* getWavetable(int index);
+      SampleOscShared* getSampleShared(int index);
+      SynthModule* getEffectModule(int index);   // SynthyBoy: the module of the effect chain (0 .. 15)
+      FilterCurveShared* getFilterCurve(int index);   // 0 filter 1, 1 filter 2, 2 the FX filter
       Sample* getSample();
       LineGenerator* getLfoSource(int index);
 

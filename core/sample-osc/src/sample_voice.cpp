@@ -220,7 +220,7 @@ const SincTables& SincTables::instance() noexcept
 
 void SampleVoice::prepare (double hostSampleRate, int /*maxBlockFrames*/) noexcept
 {
-    hostSampleRate_ = (hostSampleRate >= 22050.0 && hostSampleRate <= 192000.0) ? hostSampleRate : 44100.0;
+    hostSampleRate_ = (hostSampleRate >= 22050.0 && hostSampleRate <= 768000.0) ? hostSampleRate : 44100.0;
     SincTables::instance(); // warm up table
     reset();
 }
@@ -238,6 +238,8 @@ void SampleVoice::reset() noexcept
     unisonStartOffset_ = 0.0f;
     unisonPan_ = 0.0f;
     unisonLevel_ = 1.0f;
+    semitoneOffset_ = std::numeric_limits<float>::quiet_NaN();
+    speed_ = 1.0;
 }
 
 void SampleVoice::noteOn (int midiKey, float velocity, const SampleView* sample, const SampleOscParams& params) noexcept
@@ -322,6 +324,49 @@ void SampleVoice::setUnisonLevel (float level) noexcept
     unisonLevel_ = std::max (0.0f, std::min (4.0f, level));
 }
 
+void SampleVoice::setSemitoneOffset (float semitones) noexcept
+{
+    semitoneOffset_ = std::isfinite (semitones) ? std::max (-120.0f, std::min (120.0f, semitones))
+                                                : std::numeric_limits<float>::quiet_NaN();
+    updatePitchRatio();
+}
+
+void SampleVoice::setSpeedMultiplier (double speed) noexcept
+{
+    speed_ = std::isfinite (speed) ? std::max (-64.0, std::min (64.0, speed)) : 1.0;
+}
+
+void SampleVoice::releaseLoop() noexcept
+{
+    params_.loopMode = LoopMode::none;
+}
+
+void SampleVoice::seekFraction (double fraction) noexcept
+{
+    if (sample_ == nullptr || ! sample_->isValid())
+        return;
+    const auto numFrames = static_cast<double> (sample_->numFrames);
+    const double a = std::max (0.0, std::min (1.0, static_cast<double> (params_.startOffset))) * (numFrames - 1.0);
+    const double b = std::max (0.0, std::min (1.0, static_cast<double> (params_.endOffset))) * (numFrames - 1.0);
+    const double lo = std::min (a, b), hi = std::max (a, b);
+    fraction = std::max (0.0, std::min (1.0, fraction));
+    playhead_ = direction_ >= 0.0 ? lo + fraction * (hi - lo) : hi - fraction * (hi - lo);
+}
+
+void SampleVoice::processModulated (float* outLeft, float* outRight, int numFrames, const float* rateMod) noexcept
+{
+    if (outLeft == nullptr || numFrames <= 0)
+        return;
+    for (int i = 0; i < numFrames; ++i)
+    {
+        float l = 0.0f, r = 0.0f;
+        renderFrame (l, r, rateMod != nullptr ? static_cast<double> (rateMod[i]) : 1.0);
+        outLeft[i] = l;
+        if (outRight != nullptr)
+            outRight[i] = r;
+    }
+}
+
 void SampleVoice::updatePitchRatio() noexcept
 {
     if (sample_ == nullptr || ! sample_->isValid() || hostSampleRate_ <= 0.0)
@@ -330,11 +375,17 @@ void SampleVoice::updatePitchRatio() noexcept
         return;
     }
 
-    const float playedKey = params_.pitchTracking ? static_cast<float> (midiKey_)
-                                                  : static_cast<float> (params_.rootKey);
-    const float semitones = (playedKey - static_cast<float> (params_.rootKey))
-                          + params_.tune
-                          + ((params_.fine + sample_->fineTuneCents) / 100.0f);
+    float semitones;
+    if (std::isnan (semitoneOffset_))
+    {
+        const float playedKey = params_.pitchTracking ? static_cast<float> (midiKey_)
+                                                      : static_cast<float> (params_.rootKey);
+        semitones = (playedKey - static_cast<float> (params_.rootKey))
+                  + params_.tune
+                  + ((params_.fine + sample_->fineTuneCents) / 100.0f);
+    }
+    else
+        semitones = semitoneOffset_ + (params_.fine + sample_->fineTuneCents) / 100.0f;
 
     const double speedFromPitch = std::pow (2.0, static_cast<double> (semitones) / 12.0);
     const double speedFromSampleRate = sample_->sampleRate / hostSampleRate_;
@@ -343,6 +394,11 @@ void SampleVoice::updatePitchRatio() noexcept
 }
 
 void SampleVoice::renderFrame (float& outL, float& outR) noexcept
+{
+    renderFrame (outL, outR, 1.0);
+}
+
+void SampleVoice::renderFrame (float& outL, float& outR, double rateMult) noexcept
 {
     if (! active_ || sample_ == nullptr || ! sample_->isValid())
     {
@@ -378,7 +434,8 @@ void SampleVoice::renderFrame (float& outL, float& outR) noexcept
     float sL = 0.0f;
     float sR = 0.0f;
 
-    const double xLen = (params_.loopMode == LoopMode::forward && lLen > 2.0)
+    const LoopMode mode = params_.loopMode == LoopMode::tailed ? LoopMode::forward : params_.loopMode;
+    const double xLen = (mode == LoopMode::forward && lLen > 2.0)
         ? std::max (0.0, std::min (0.49 * lLen, static_cast<double> (params_.loopCrossfade) * lLen))
         : 0.0;
 
@@ -407,7 +464,13 @@ void SampleVoice::renderFrame (float& outL, float& outR) noexcept
     const float theta = (pan + 1.0f) * static_cast<float> (kPi * 0.25);
     const float gainL = std::cos (theta);
     const float gainR = std::sin (theta);
-    const float totalGain = std::max (0.0f, params_.level) * std::max (0.0f, unisonLevel_) * velocity_ * antiClickGain_;
+    float edge = 1.0f;
+    if (params_.edgeFadeMs > 0.0f)
+    {
+        const double fadeFrames = std::max (1.0, static_cast<double> (params_.edgeFadeMs) * 0.001 * sample_->sampleRate);
+        edge = static_cast<float> (std::max (0.0, std::min (1.0, std::min ((playhead_ - boundLo) / fadeFrames, (boundHi - playhead_) / fadeFrames))));
+    }
+    const float totalGain = std::max (0.0f, params_.level) * std::max (0.0f, unisonLevel_) * velocity_ * antiClickGain_ * edge;
 
     outL = sanitizeFloat (sL * gainL * totalGain);
     outR = sanitizeFloat (sR * gainR * totalGain);
@@ -431,23 +494,25 @@ void SampleVoice::renderFrame (float& outL, float& outR) noexcept
     }
 
     // Advance playhead
-    const double step = pitchRatio_ * direction_;
+    const double step = pitchRatio_ * speed_ * rateMult * direction_;
     playhead_ += step;
+    const double dir = step >= 0.0 ? 1.0 : -1.0; // the effective direction (the scan can run the head backwards)
 
     // Looping / boundary state machine
-    switch (params_.loopMode)
+    switch (mode)
     {
         case LoopMode::none:
         {
-            if (direction_ > 0.0 && playhead_ >= boundHi)
+            if (dir > 0.0 && playhead_ >= boundHi)
                 active_ = false;
-            else if (direction_ < 0.0 && playhead_ <= boundLo)
+            else if (dir < 0.0 && playhead_ <= boundLo)
                 active_ = false;
             break;
         }
+        case LoopMode::tailed: // handled as forward above
         case LoopMode::forward:
         {
-            if (direction_ > 0.0 && playhead_ >= lEnd)
+            if (dir > 0.0 && playhead_ >= lEnd)
             {
                 if (lLen > 1.0)
                 {
@@ -460,7 +525,7 @@ void SampleVoice::renderFrame (float& outL, float& outR) noexcept
                     active_ = false;
                 }
             }
-            else if (direction_ < 0.0 && playhead_ <= lStart)
+            else if (dir < 0.0 && playhead_ <= lStart)
             {
                 if (lLen > 1.0)
                     playhead_ = lEnd - (lStart - playhead_);
@@ -471,30 +536,30 @@ void SampleVoice::renderFrame (float& outL, float& outR) noexcept
         }
         case LoopMode::pingPong:
         {
-            if (direction_ > 0.0 && playhead_ >= lEnd)
+            if (dir > 0.0 && playhead_ >= lEnd)
             {
                 playhead_ = lEnd - (playhead_ - lEnd);
-                direction_ = -1.0;
+                direction_ = -direction_;
             }
-            else if (direction_ < 0.0 && playhead_ <= lStart)
+            else if (dir < 0.0 && playhead_ <= lStart)
             {
                 playhead_ = lStart + (lStart - playhead_);
-                direction_ = 1.0;
+                direction_ = -direction_;
             }
             break;
         }
         case LoopMode::reverse:
         {
-            if (direction_ < 0.0 && playhead_ <= lStart)
+            if (dir < 0.0 && playhead_ <= lStart)
             {
                 if (lLen > 1.0)
                     playhead_ = lEnd - (lStart - playhead_);
                 else
                     active_ = false;
             }
-            else if (direction_ > 0.0 && playhead_ >= lEnd)
+            else if (dir > 0.0 && playhead_ >= lEnd)
             {
-                direction_ = -1.0;
+                direction_ = -direction_;
             }
             break;
         }

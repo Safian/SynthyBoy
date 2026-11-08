@@ -33,6 +33,14 @@ namespace sbvital {
         kNumInputs
       };
 
+      enum {
+        kOutput,   // to the effects (the sum of the filters whose destination is Effects only)
+        kDirect,   // SynthyBoy: to the direct output (the filters whose destination is Direct out)
+        kBus1,     // the bus sends of the two filters, summed
+        kBus2,
+        kNumOutputs
+      };
+
       FiltersModule();
       virtual ~FiltersModule() { }
 
@@ -40,10 +48,12 @@ namespace sbvital {
       void processParallel(int num_samples);
       void processSerialForward(int num_samples);
       void processSerialBackward(int num_samples);
+      void route(int num_samples, int mode);
 
       void init() override;
       Processor* clone() const override { return new FiltersModule(*this); }
 
+      FilterCurveShared* curveShared(int filter) { return (filter == 0 ? filter_1_ : filter_2_)->curveShared(); }
       const Value* getFilter1OnValue() const { return filter_1_->getOnValue(); }
       const Value* getFilter2OnValue() const { return filter_2_->getOnValue(); }
 

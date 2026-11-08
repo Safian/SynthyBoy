@@ -36,6 +36,11 @@ private:
     std::vector<std::unique_ptr<sbvital::Wavetable>> tables;
 };
 
+/** A wavetable from user frames (the `Preset table` of oscN.wavetable, docs/ui-design/13-new-keys.md C1): numFrames (1 .. 256) frames of
+    2048 samples, frame after frame. The version number makes an oscillator that is switched to it notice the change. Allocates: not for
+    the audio thread. */
+std::unique_ptr<sbvital::Wavetable> buildUserWavetable (const float* frames, int numFrames, int version);
+
 /** Sets an LFO's line to the built-in shape (0 .. kNumLfoShapes - 1) and renders it. No allocation. */
 void applyLfoShape (LineGenerator& line, int shape) noexcept;
 

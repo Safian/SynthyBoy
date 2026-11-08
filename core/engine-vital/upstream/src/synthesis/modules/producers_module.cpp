@@ -47,10 +47,20 @@ namespace sbvital {
       map_warp_[i] = createBaseControl("osc_" + number + "_map_warp");
       oscillators_[i]->useInput(input(kMidi), OscillatorModule::kMidi);
       oscillators_[i]->useInput(input(kFold1 + i), OscillatorModule::kFold);
+      oscillators_[i]->useInput(input(kNotePressed), OscillatorModule::kNotePressed);
       oscillators_[i]->useInput(input(kActiveVoices), OscillatorModule::kActiveVoices);
     }
 
     sample_destination_ = createBaseControl("sample_destination");
+    for (int i = 0; i <= kNumOscillators; ++i) {
+      const std::string prefix = i < kNumOscillators ? "osc_" + std::to_string(i + 1) + "_" : "sample_";
+      filter_blend_[i] = createPolyModControl(prefix + "filter_blend");
+      bus1_send_[i] = createPolyModControl(prefix + "bus1_send");
+      bus2_send_[i] = createPolyModControl(prefix + "bus2_send");
+      last_blend_[i] = 0.0f;
+      last_send1_[i] = 0.0f;
+      last_send2_[i] = 0.0f;
+    }
     sampler_->useInput(input(kReset), SampleModule::kReset);
     sampler_->useInput(input(kNoteCount), SampleModule::kNoteCount);
     sampler_->useInput(input(kMidi), SampleModule::kMidi);
@@ -62,6 +72,9 @@ namespace sbvital {
       oscillators_[i]->oscillator()->setFirstOscillatorOutput(oscillators_[index1]->output(OscillatorModule::kRaw));
       oscillators_[i]->oscillator()->setSecondOscillatorOutput(oscillators_[index2]->output(OscillatorModule::kRaw));
       oscillators_[i]->oscillator()->setSampleOutput(sampler_->output(SampleModule::kRaw));
+      oscillators_[i]->sampleOscillator()->setFirstOscillatorOutput(oscillators_[index1]->output(OscillatorModule::kRaw));
+      oscillators_[i]->sampleOscillator()->setSecondOscillatorOutput(oscillators_[index2]->output(OscillatorModule::kRaw));
+      oscillators_[i]->sampleOscillator()->setSampleOutput(sampler_->output(SampleModule::kRaw));
     }
   }
 
@@ -89,10 +102,14 @@ namespace sbvital {
 
     getLocalProcessor(sampler_)->process(num_samples);
 
-    SynthOscillator::DistortionType distortion_types[kNumOscillators];
+    // SynthyBoy: an oscillator waits for the sources of both of its warp slots
+    bool needs_first[kNumOscillators], needs_second[kNumOscillators];
     bool processed[kNumOscillators];
     for (int i = 0; i < kNumOscillators; ++i) {
-      distortion_types[i] = oscillators_[i]->getDistortionType();
+      SynthOscillator::DistortionType type1 = oscillators_[i]->getDistortionType();
+      SynthOscillator::DistortionType type2 = oscillators_[i]->getDistortionType2();
+      needs_first[i] = SynthOscillator::isFirstModulation(type1) || SynthOscillator::isFirstModulation(type2);
+      needs_second[i] = SynthOscillator::isSecondModulation(type1) || SynthOscillator::isSecondModulation(type2);
       processed[i] = false;
     }
    
@@ -102,8 +119,8 @@ namespace sbvital {
       OscillatorModule* module = oscillators_[index];
       int first_source = getFirstModulationIndex(index);
       int second_source = getSecondModulationIndex(index);
-      if ((!SynthOscillator::isFirstModulation(distortion_types[index]) || processed[first_source]) &&
-          (!SynthOscillator::isSecondModulation(distortion_types[index]) || processed[second_source]) &&
+      if ((!needs_first[index] || processed[first_source]) &&
+          (!needs_second[index] || processed[second_source]) &&
           !processed[index]) {
         num_processed++;
         processed[index] = true;
@@ -130,18 +147,52 @@ namespace sbvital {
     utils::zeroBuffer(filter2_output, num_samples);
     utils::zeroBuffer(raw_output, num_samples);
     utils::zeroBuffer(direct_output, num_samples);
+    utils::zeroBuffer(output(kBus1Out)->buffer, num_samples);
+    utils::zeroBuffer(output(kBus2Out)->buffer, num_samples);
 
     bool filter1_on = isFilter1On();
     bool filter2_on = isFilter2On();
 
     for (int i = 0; i < kNumOscillators; ++i) {
       const poly_float* buffer = oscillators_[i]->output(OscillatorModule::kLevelled)->buffer;
+      routeSource(i, buffer, static_cast<int>(oscillator_destinations_[i]->value()), num_samples, filter1_on, filter2_on,
+                  filter1_output, filter2_output, raw_output, direct_output);
+    }
 
-      int destination = oscillator_destinations_[i]->value();
-      bool raw = destination == constants::kEffects;
-      bool filter1 = destination == constants::kFilter1 || destination == constants::kDualFilters;
-      bool filter2 = destination == constants::kFilter2 || destination == constants::kDualFilters;
-      bool direct_out = destination == constants::kDirectOut;
+    const poly_float* sample = sampler_->output(SampleModule::kLevelled)->buffer;
+    routeSource(kNumOscillators, sample, static_cast<int>(sample_destination_->value()), num_samples, filter1_on, filter2_on,
+                filter1_output, filter2_output, raw_output, direct_output);
+  }
+
+  // SynthyBoy: the mixer graph of one source (docs/ui-design/13-new-keys.md 4.10). Destinations 0 to 4 are the engine's own and add
+  // exactly as before; 5 splits the source between the two filters with an equal-power law (filter blend), 6 sends it nowhere. The bus
+  // sends tap the source after its level and pan, whatever the destination is.
+  void ProducersModule::routeSource(int source, const poly_float* buffer, int destination, int num_samples, bool filter1_on, bool filter2_on,
+                                    poly_float* filter1_output, poly_float* filter2_output, poly_float* raw_output, poly_float* direct_output) {
+    bool raw = destination == constants::kEffects;
+    bool filter1 = destination == constants::kFilter1 || destination == constants::kDualFilters;
+    bool filter2 = destination == constants::kFilter2 || destination == constants::kDualFilters;
+    bool direct_out = destination == constants::kDirectOut;
+    if (destination == kDestinationFilterBlend) {
+      const poly_float blend = utils::clamp(filter_blend_[source]->buffer[0], 0.0f, 1.0f);
+      poly_float current = last_blend_[source];
+      const poly_float step = (blend - current) * (1.0f / num_samples);
+      last_blend_[source] = blend;
+      for (int i = 0; i < num_samples; ++i) {
+        current += step;
+        const poly_float g1 = futils::equalPowerFadeInverse(current); // cos (blend pi / 2)
+        const poly_float g2 = futils::equalPowerFade(current);        // sin (blend pi / 2)
+        const poly_float x = buffer[i];
+        filter1_output[i] += x * g1;
+        filter2_output[i] += x * g2;
+        // a switched off filter lets its share through to the effects, as for the engine's own filter destinations
+        if (!filter1_on)
+          raw_output[i] += x * g1;
+        if (!filter2_on)
+          raw_output[i] += x * g2;
+      }
+    }
+    else {
       if (raw || (!filter2 && filter1 && !filter1_on) ||
                  (!filter1 && filter2 && !filter2_on) ||
                  (filter1 && filter2 && !filter1_on && !filter2_on)) {
@@ -155,23 +206,20 @@ namespace sbvital {
         utils::addBuffers(direct_output, direct_output, buffer, num_samples);
     }
 
-    const poly_float* sample = sampler_->output(SampleModule::kLevelled)->buffer;
-
-    int sample_destination = sample_destination_->value();
-    bool sample_raw = sample_destination == constants::kEffects;
-    bool filter1_sample = sample_destination == constants::kFilter1 || sample_destination == constants::kDualFilters;
-    bool filter2_sample = sample_destination == constants::kFilter2 || sample_destination == constants::kDualFilters;
-    bool sample_direct_out = sample_destination == constants::kDirectOut;
-    if (sample_raw || (!filter2_sample && filter1_sample && !filter1_on) ||
-                      (!filter1_sample && filter2_sample && !filter2_on) ||
-                      (filter1_sample && filter2_sample && !filter1_on && !filter2_on)) {
-      utils::addBuffers(raw_output, raw_output, sample, num_samples);
+    // bus sends (a linear gain, 100 % = unity), ramped over the block
+    for (int bus = 0; bus < 2; ++bus) {
+      poly_float* last = bus == 0 ? &last_send1_[source] : &last_send2_[source];
+      const poly_float send = utils::clamp((bus == 0 ? bus1_send_[source] : bus2_send_[source])->buffer[0], 0.0f, 1.0f);
+      if (!(send.sum() > 0.0f) && !(last->sum() > 0.0f))
+        continue;
+      poly_float* out = output(bus == 0 ? kBus1Out : kBus2Out)->buffer;
+      poly_float current = *last;
+      const poly_float step = (send - current) * (1.0f / num_samples);
+      *last = send;
+      for (int i = 0; i < num_samples; ++i) {
+        current += step;
+        out[i] += buffer[i] * current;
+      }
     }
-    if (filter1_sample)
-      utils::addBuffers(filter1_output, filter1_output, sample, num_samples);
-    if (filter2_sample)
-      utils::addBuffers(filter2_output, filter2_output, sample, num_samples);
-    if (sample_direct_out)
-      utils::addBuffers(direct_output, direct_output, sample, num_samples);
   }
 } // namespace sbvital

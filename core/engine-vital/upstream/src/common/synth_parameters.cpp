@@ -452,6 +452,12 @@ namespace sbvital {
       ValueDetails::kLinear, false, " semitones", "Comb Blend Offset", nullptr },
     { "keytrack", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Key Track", nullptr },
+    { "var", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Var", nullptr },
+    { "pan", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Pan", nullptr },
+    { "level", 0x000000, -60.0, 12.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "dB", "Level", nullptr },
     { "formant_x", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Formant X", nullptr },
     { "formant_y", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
@@ -535,6 +541,23 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Destination", strings::kDestinationNames },
     { "view_2d", 0x000402, 0.0, 2.0, 1.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "View 2D", strings::kOffOnNames },
+    // SynthyBoy (docs/ui-design/13-new-keys.md 4.9): the oscillator type, the modulatable sample controls and the second warp slot
+    { "type", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Type", nullptr },
+    { "sample_scan", 0x000000, -1.0, 1.0, 1.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Sample Scan", nullptr },
+    { "sample_uni_start", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Sample Unison Start", nullptr },
+    { "sample_uni_span", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Sample Unison Span", nullptr },
+    { "warp2_type", 0x000000, 0.0, SynthOscillator::kNumDistortionTypes - 1, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Warp 2 Type", strings::kPhaseDistortionNames },
+    { "warp2_amount", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Warp 2 Amount", nullptr },
+    { "warp2_phase", 0x000000, 0.0, 1.0, 0.5, 0.0, 360.0,
+      ValueDetails::kLinear, false, "", "Warp 2 Phase", nullptr },
+    { "warp2_spread", 0x000000, -0.5, 0.5, 0.0, 0.0, 200.0,
+      ValueDetails::kLinear, false, "%", "Warp 2 Spread", nullptr },
   };
 
   const ValueDetails ValueDetailsLookup::mod_parameter_list[] = {
@@ -601,11 +624,89 @@ namespace sbvital {
         kModulationIdPrefix, kModulationNamePrefix, kNewModulationVersion);
     }
 
+    // SynthyBoy: the 14 filter models and 6 styles appended in state version 3 (docs/ui-design/13-new-keys.md 3)
+    for (const char* filter : { "filter_1", "filter_2", "filter_fx" }) {
+      details_lookup_[std::string(filter) + "_model"].max = 21.0f;
+      details_lookup_[std::string(filter) + "_style"].max = 11.0f;
+    }
     details_lookup_["osc_1_on"].default_value = 1.0f;
     details_lookup_["osc_2_destination"].default_value = 1.0f;
     details_lookup_["osc_3_destination"].default_value = 3.0f;
     details_lookup_["filter_1_osc1_input"].default_value = 1.0f;
     details_lookup_["filter_2_osc2_input"].default_value = 1.0f;
+
+    // SynthyBoy (docs/ui-design/13-new-keys.md 4.10 and 4.12): the mixer graph (filter blend, sends, buses, DIRECT), the 16 effect
+    // modules with their racks and order. Added programmatically: the names follow one pattern.
+    auto add = [this](const std::string& name, mono_float min, mono_float max, mono_float def,
+                      ValueDetails::ValueScale scale = ValueDetails::kLinear, mono_float multiply = 1.0f,
+                      const char* units = "") {
+      ValueDetails details;
+      details.name = name;
+      details.version_added = 0;
+      details.min = min;
+      details.max = max;
+      details.default_value = def;
+      details.display_multiply = multiply;
+      details.value_scale = scale;
+      details.display_units = units;
+      details.display_name = name;
+      details.local_description = name;
+      details_lookup_[name] = details;
+      details_list_.push_back(&details_lookup_[name]);
+    };
+    for (int osc = 1; osc <= kNumOscillators; ++osc) {
+      const std::string prefix = "osc_" + std::to_string(osc) + "_";
+      add(prefix + "filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+      add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+      add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    }
+    add("sample_filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sample_bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sample_bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    for (int filter = 1; filter <= kNumFilters; ++filter) {
+      const std::string prefix = "filter_" + std::to_string(filter) + "_";
+      add(prefix + "destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
+      add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+      add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    }
+    add("bus1_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
+    add("bus2_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
+    add("direct_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
+    add("bus1_destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
+    add("bus2_destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
+    add("bus1_fx_bypass", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    add("bus2_fx_bypass", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    add("main_fx_bypass", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    static const char* const kModuleNames[16] = { "chorus", "compressor", "delay", "distortion", "eq", "filter_fx", "flanger", "phaser", "reverb",
+                                                  "hyperdim", "utility", "bode", "convolve", "splitter_lh", "splitter_lmh", "splitter_ms" };
+    // the parameters of the Serum modules: the value of the control is the value of the key in its own unit (Hz, %, ms, dB, choice index)
+    struct SerumParameter { const char* name; mono_float min, max, def; };
+    static const SerumParameter kSerumParameters[] = {
+      { "hyperdim_rate", 0.05f, 10.0f, 0.5f }, { "hyperdim_unison", 0, 7, 4 }, { "hyperdim_detune", 0, 100, 50 }, { "hyperdim_retrig", 0, 1, 0 },
+      { "hyperdim_mix", 0, 100, 50 }, { "hyperdim_dim_size", 0, 100, 50 }, { "hyperdim_dim_mix", 0, 100, 0 }, { "hyperdim_level", -24, 12, 0 },
+      { "utility_polarity_l", 0, 1, 0 }, { "utility_polarity_r", 0, 1, 0 }, { "utility_lpf", 20, 20000, 20000 }, { "utility_hpf", 20, 20000, 20 },
+      { "utility_mono_bass", 0, 1, 0 }, { "utility_mono_freq", 20, 500, 120 }, { "utility_width", 0, 200, 100 }, { "utility_pan", -100, 100, 0 },
+      { "utility_mix", 0, 100, 100 }, { "utility_level", -24, 12, 0 },
+      { "bode_mono_input", 0, 1, 0 }, { "bode_shift", 0, 100, 0 }, { "bode_range", 1, 5000, 100 }, { "bode_dir", -100, 100, 100 },
+      { "bode_width", 0, 100, 100 }, { "bode_delay", 1, 2000, 100 }, { "bode_sync", 0, 3, 0 }, { "bode_division", 0, 8, 5 }, { "bode_feed", 0, 100, 0 },
+      { "bode_balance", -100, 100, 0 }, { "bode_blur", 0, 100, 0 }, { "bode_retrig", 0, 1, 0 }, { "bode_mix", 0, 100, 50 }, { "bode_level", -24, 12, 0 },
+      { "convolve_ir", 0, 1, 0 }, { "convolve_size", 0, 100, 50 }, { "convolve_tone", -100, 100, 0 }, { "convolve_phi_min", 0, 1, 0 },
+      { "convolve_predelay", 0, 500, 0 }, { "convolve_sync", 0, 3, 0 }, { "convolve_division", 0, 8, 5 }, { "convolve_attack", 0, 2000, 0 },
+      { "convolve_decay", 0, 100, 100 }, { "convolve_damp", 0, 100, 0 }, { "convolve_ir_gain", -24, 24, 0 }, { "convolve_mix", 0, 100, 30 },
+      { "convolve_level", -24, 12, 0 },
+      { "splitter_lh_freq", 20, 20000, 500 }, { "splitter_lh_low_bypass", 0, 1, 0 }, { "splitter_lh_high_bypass", 0, 1, 0 }, { "splitter_lh_level", -24, 12, 0 },
+      { "splitter_lmh_freq_low", 20, 20000, 200 }, { "splitter_lmh_freq_high", 20, 20000, 3000 }, { "splitter_lmh_low_bypass", 0, 1, 0 },
+      { "splitter_lmh_mid_bypass", 0, 1, 0 }, { "splitter_lmh_high_bypass", 0, 1, 0 }, { "splitter_lmh_level", -24, 12, 0 },
+      { "splitter_ms_mid_bypass", 0, 1, 0 }, { "splitter_ms_side_bypass", 0, 1, 0 }, { "splitter_ms_level", -24, 12, 0 },
+    };
+    for (const SerumParameter& parameter : kSerumParameters)
+      add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.max - parameter.min <= 8.0f && parameter.min == 0.0f && parameter.max == std::floor(parameter.max) && parameter.max <= 8.0f ? ValueDetails::kIndexed : ValueDetails::kLinear);
+    for (int module = 0; module < 16; ++module) {
+      add("fx_order_" + std::to_string(module + 1), 0.0, 15.0, static_cast<mono_float>(module), ValueDetails::kIndexed);
+      add(std::string(kModuleNames[module]) + "_rack", 0.0, 9.0, 0.0, ValueDetails::kIndexed);
+      if (module >= 9)
+        add(std::string(kModuleNames[module]) + "_on", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    }
 
     std::sort(details_list_.begin(), details_list_.end(), compareValueDetails);
   }

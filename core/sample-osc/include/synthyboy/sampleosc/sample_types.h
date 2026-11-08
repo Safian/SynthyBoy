@@ -29,7 +29,8 @@ enum class LoopMode : uint8_t
     none = 0,     // One-shot: play from start to end and stop
     forward = 1,  // Fwd Loop: loops forward between loopStart and loopEnd
     pingPong = 2, // Fwd/Rwd Loop: alternates forward and backward between loopStart and loopEnd
-    reverse = 3   // Rev Loop: loops backward repeatedly
+    reverse = 3,  // Rev Loop: loops backward repeatedly
+    tailed = 4    // Tailed: loops forward while held; releaseLoop () plays on past the loop end to the end of the region
 };
 
 /** Interpolation quality tiers. */
@@ -55,6 +56,8 @@ struct SampleOscParams
     float loopEnd = 1.0f;            // Normalized loop end [0.0, 1.0]
     float loopCrossfade = 0.0f;      // Normalized crossfade amount [0.0, 1.0] relative to loop length
     bool reverse = false;            // Reverse playback direction
+
+    float edgeFadeMs = 0.0f;         // linear fade in/out over this many milliseconds (of the file) at both ends of the playback region
 
     QualityTier quality = QualityTier::high;
 

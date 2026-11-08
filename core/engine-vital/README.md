@@ -134,3 +134,20 @@ kCapEnvBeats | kCapCurves | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCa
 rewired every block, quality changes), takes no locks (the imported code has none) and throws nothing. Parameter changes are atomics,
 copied into Vital's controls at the start of a block on the audio thread. The global singletons of the imported code
 (`PredefinedWaveFrames`, `FFT<bits>`) and the first-use tables are initialised in `prepare()`.
+
+
+## State version 3, WP4 to WP8 (report: docs/ui-design/WP48-REPORT.md)
+
+`capabilities ()` additionally reports `kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras |
+kCapFilterModels | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters | kCapReverbForce` (all 26 bits). Tests:
+`tests/test_wp4.cpp` .. `test_wp7.cpp` (WP8 is in `test_wp7.cpp`).
+
+| Area | How it is done |
+|------|----------------|
+| Content (`IEngine::setContentStore`, `setContent`) | referenced wavetables, samples and the impulse are read through an `IContentStore` on the message thread and decoded there: user wavetables become Vital wavetables, samples `sampleosc::SampleData` (mip levels, onsets for the auto slices), the impulse goes to the Convolve builder. The audio thread takes the snapshot over without a lock and retires the replaced one only after it has pointed the wavetables and sample oscillators at the new one |
+| `oscN.type` = Sample | `producers/sample_oscillator.*`: one `sampleosc::SampleVoice` per unison voice of the two voices of a processor instance, the same inputs and outputs as the wavetable oscillator; warp: Quantize, FM and RM act, the phase domain warps are inert on a sample |
+| Warp slot 2 | `SynthOscillator`: a run-time second stage after slot 1 in `processDetuned` / `processCenter`, skipped when None |
+| Mixer graph | `ProducersModule::routeSource` (filter blend, None, sends), `FiltersModule::route` (filter destinations and sends), buses and DIRECT in the effect chain |
+| Effect chain | 16 modules, `fx_order_N` controls (a permutation), a rack per module, `runRack ()` processes the effects of a rack in the order of the chain, splitters run their band racks; DIRECT passes `master.volume` as in version 2 |
+| Filters | `modules/serum_filter_bank.*` (models 8 .. 21 with core/filters-serum), `var`, `pan` (cutoff offset +-12 semitones in opposite directions), `level`; the PZ SVF curve is a cascade of bells fitted on the message thread |
+| Serum FX | `modules/serum_fx_modules.*`; Convolve re-partitions its impulse on a builder thread (the only thread of the engine) |

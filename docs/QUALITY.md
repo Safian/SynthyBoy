@@ -118,3 +118,12 @@ sounded different.
   identical, the attack of the first note after a reset can differ by 0.2 on a 0.4 peak). The adapter plays two notes in `prepare()`.
 * A modulation amount of 100 % is a sweep of the destination's own range in the engine's scale (docs/PARAMETERS.md).
 * A slot that would close a loop in the engine's graph stays unwired (docs/UPSTREAM.md); the tests only assert that this never allocates.
+
+
+## Tiers and the modules of state version 3 (WP4 to WP8)
+
+* `Quality::fxMask` has one bit per effect module (bits 9 .. 15: Hyper / Dimension, Utility, Bode, Convolve, the three splitters). **Tier low bypasses Hyper / Dimension, Bode and Convolve** (in addition to the reverb and the flanger); medium and high run all modules. `reverb.force_enable` puts the reverb back on a tier that masks it (`effectiveFxMask ()`); the other masked effects stay off.
+* Sample oscillator: the interpolation follows the tier (4 taps on low = oversampling 1, 8 taps on medium, 16 taps with mip blending on high), `maxUnison` caps the unison voices of a sample too. No other bypass.
+* Serum filter models: four scalar filters per voice pair and filter slot; no bypass on any tier. Memory: about 180 KB per filter at 96 kHz (136 voice filters about 25 MB).
+* Racks, buses and DIRECT: a silent bus without enabled effects costs one scan of the block.
+* Measured by the new tests (not a performance claim, docs/PERFORMANCE.md has the numbers): no allocation in `process ()` with the sample oscillator, user tables, the 37 filter types, buses, racks, the Serum modules and content replacement under a counting `operator new` (`test_rt_alloc.cpp`).

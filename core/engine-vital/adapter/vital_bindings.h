@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "synthyboy/params.h"
+
 namespace synthyboy
 {
 /** How our plain value becomes the value of the engine's control. One converter per kind (formulas in vital_bindings.cpp). */
@@ -49,6 +51,7 @@ struct Binding
     int capArg = 0;
     int gateParam = -1;       // the binding writes its control only while parameter gateParam (a choice) equals gateValue: the millisecond and
     int gateValue = 0;        // the beat keys of an envelope time share one engine control (envN.units picks which one is live)
+    int frameOsc = 0;         // 1..3: the binding is the frame position (or spread) of that oscillator: the scale follows the frame count of its table
     int maxIndex = -1;        // Conv::index: the highest choice the engine implements (-1: no limit); choices appended to the list in
                               // state version 3 (a new filter model, ...) are stored but act like the last implemented one
 };
@@ -68,7 +71,7 @@ double convertParam (const Binding& binding, double plain, double sampleRate, do
 
 /** Order of the effects from the nine choices fx.order.1 .. fx.order.9 (duplicates and out-of-range choices are resolved
     deterministically: a position whose effect is already placed takes the lowest effect that is still free). */
-void resolveFxOrder (const float* choices, int* order);
+void resolveFxOrder (const float* choices, int* order, int count = kNumLegacyFxSlots);
 
 /** What the engine's control is: min, max and default as the engine defines them (the tests compare against these). */
 struct ControlRange
