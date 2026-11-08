@@ -100,7 +100,7 @@ juce::Component::SafePointer<Toast>& toastSlot()
 }
 } // namespace
 
-Toast::Toast (juce::Component& parent, const juce::String& text, int milliseconds) : host (&parent), message (text)
+Toast::Toast (UiContext& context, juce::Component& parent, const juce::String& text, int milliseconds) : ctx (context), host (&parent), message (text)
 {
     setInterceptsMouseClicks (false, false);
     parent.addAndMakeVisible (this);
@@ -118,14 +118,14 @@ Toast::~Toast()
         host->removeComponentListener (this);
 }
 
-void Toast::show (juce::Component& anchor, const juce::String& text, int milliseconds)
+void Toast::show (UiContext& context, juce::Component& anchor, const juce::String& text, int milliseconds)
 {
     auto* top = anchor.getTopLevelComponent();
     if (top == nullptr)
         return;
     if (auto* old = toastSlot().getComponent())
         delete old;
-    toastSlot() = new Toast (*top, text, milliseconds);
+    toastSlot() = new Toast (context, *top, text, milliseconds);
 }
 
 Toast* Toast::current()
@@ -135,12 +135,15 @@ Toast* Toast::current()
 
 void Toast::paint (juce::Graphics& g)
 {
+    const auto& t = ctx.theme;
     const auto r = getLocalBounds().toFloat().reduced (1.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.85f));
-    g.fillRoundedRectangle (r, 10.0f);
-    g.setColour (juce::Colours::white);
-    g.setFont (16.0f);
-    g.drawFittedText (message, getLocalBounds().reduced (12, 4), juce::Justification::centred, 2);
+    g.setColour (t.colours.panelRaised.withAlpha (0.95f));
+    g.fillRoundedRectangle (r, t.px (10.0f));
+    g.setColour (t.colours.accent);
+    g.drawRoundedRectangle (r, t.px (10.0f), t.px (1.5f));
+    g.setColour (t.colours.text);
+    g.setFont (t.valueFont());
+    g.drawFittedText (message, getLocalBounds().reduced (t.ipx (12.0f), t.ipx (4.0f)), juce::Justification::centred, 2);
 }
 
 void Toast::timerCallback()

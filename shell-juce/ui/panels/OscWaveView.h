@@ -184,7 +184,7 @@ public:
     juce::Rectangle<float> stripBounds (int strip) const;
     static constexpr int kNumStrips = 8;
     /** The header of a strip (its name at the foot: tap = power, long-press = module sheet, drag onto another strip = swap / copy) and the
-        pan band above it (drag sideways = the strip's pan). */
+        pan band at the top of the strip (drag sideways = the strip's pan). */
     juce::Rectangle<float> nameBounds (int strip) const;
     juce::Rectangle<float> panBounds (int strip) const;
     /** The module the strip stands for ("osc1" .. "osc3", "filter1", "filter2"); empty for NOISE and the buses. */

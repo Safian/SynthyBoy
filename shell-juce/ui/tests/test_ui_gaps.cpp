@@ -1476,7 +1476,7 @@ TEST (uig_mixer_strip_header_sheet_swap_copy_and_pan)
     CHECK (mix->dropOnStrip (4, 5, false, false)); // F1 <-> F2
     CHECK (approx (rig.param ("filter1.cutoff"), 400.0f, 4.0f) && approx (rig.param ("filter2.cutoff"), 100.0f, 4.0f));
 
-    // pan: a sideways drag in the band above the header (O1 O2 O3 NOISE F1 F2 have a pan key, the buses do not)
+    // pan: a sideways drag in the band at the top of the strip (O1 O2 O3 NOISE F1 F2 have a pan key, the buses do not)
     CHECK (mix->hasPan (0) && mix->hasPan (3) && mix->hasPan (5) && ! mix->hasPan (6) && ! mix->hasPan (7));
     rig.setParam ("osc3.pan", 0.0f);
     const auto band = mix->panBounds (2);
@@ -1874,6 +1874,163 @@ TEST (uig_fx_chain_slot_power_reorder_and_bypass_alternatives)
     view->setSelectedSlot (3);
     view->moveSelectedSlot (-1);
     CHECK_EQ (view->chainOrder()[2], order[0]);
+}
+
+// ---- screenshots of the changed screens (phone 390x844, tablet 1024x768) -> /tmp/ui-shots/gaps/ --------------------------------------------
+
+TEST (uig_screenshots_of_the_changed_screens)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        {
+            // oscillator page: the chip row, the OCT / SEM control and the grouped warp list behind More
+            Rig rig (Page::osc, sz.w, sz.h);
+            rig.setParam ("osc1.on", 1.0f);
+            rig.setParam ("osc2.on", 0.0f);
+            rig.setParam ("osc1.transpose", 7.0f);
+            if (auto* p = rig.panelTitled ("Oscillator 1"))
+                p->setMoreExpanded (true);
+            rig.shot ("osc-chips-oct-sem-" + n, sz.w, sz.h, true, Page::osc);
+
+            // sample view: zoomed, slices, loop pair, the loupe above the finger
+            rig.setParam ("osc1.type", 1.0f);
+            rig.setParam ("osc1.sample.slice_mode", 2.0f);
+            rig.setParam ("osc1.sample.loop_start", 30.0f);
+            rig.setParam ("osc1.sample.loop_end", 60.0f);
+            giveSample (rig, 1, { 0.0f, 0.18f, 0.37f, 0.55f, 0.8f });
+            if (auto* p = rig.panelTitled ("Oscillator 1"))
+                p->setMoreExpanded (false);
+            if (auto* view = rig.oscView (1))
+            {
+                view->refreshSliceCache();
+                view->zoomSampleAt (view->waveArea().getCentreX(), 1.6f);
+                const float y = view->waveArea().getCentreY();
+                const float x = view->sampleNormToX (0.37f);
+                view->mouseDown (mouse (*view, { x, y }, { x, y }, false));
+                view->mouseDrag (mouse (*view, { x + 14.0f, y }, { x, y }, true));
+                rig.shot ("sample-zoom-slices-loupe-" + n, sz.w, sz.h, false, Page::osc);
+                view->mouseUp (mouse (*view, { x + 14.0f, y }, { x, y }, true));
+                rig.setParam ("osc1.sample.slice_mode", 1.0f);
+                rig.setParam ("osc1.sample.slice_threshold", 35.0f);
+                rig.shot ("sample-threshold-line-" + n, sz.w, sz.h, false, Page::osc);
+            }
+        }
+        {
+            Rig rig (Page::mix, sz.w, sz.h);
+            rig.shot ("mixer-strip-headers-pan-" + n, sz.w, sz.h, false, Page::mix);
+        }
+        {
+            // wavetable: 3D view tilted and zoomed
+            Rig rig (Page::osc, sz.w, sz.h);
+            WavetablePanel panel (rig.editor->context());
+            panel.build();
+            panel.setBounds (0, 0, sz.w, panel.preferredHeight (sz.w));
+            if (auto* v = panel.visual())
+            {
+                v->setViewMode (WavetableView::ViewMode::mode3D);
+                TouchTracker::Gesture pan;
+                pan.kind = TouchTracker::Kind::pan;
+                pan.dy = static_cast<float> (v->getHeight()) * 0.2f;
+                pan.dx = static_cast<float> (v->getWidth()) * 0.15f;
+                v->handleTouchGesture (pan);
+                const auto file = shotDir().getChildFile ("wavetable-3d-tilt-" + n + ".png");
+                CHECK (writePng (panel.createComponentSnapshot (panel.getLocalBounds(), true, 1.0f), file));
+                std::printf ("    [UI SHOT] %s\n", file.getFullPathName().toRawUTF8());
+            }
+
+            // the editor sheet: zoomed canvas, the spectrum with the NUDGE toggle, the thumbnail reorder cursor
+            WavetableEditorSheet sheet (rig.editor->context(), makeTable (8));
+            sheet.setSize (sz.w, sz.h);
+            sheet.zoomWave (0.3f, 3.0f);
+            sheet.setCurrentFrame (2);
+            {
+                const auto file = shotDir().getChildFile ("wt-editor-canvas-zoom-" + n + ".png");
+                CHECK (writePng (sheet.createComponentSnapshot (sheet.getLocalBounds(), true, 1.0f), file));
+                std::printf ("    [UI SHOT] %s\n", file.getFullPathName().toRawUTF8());
+            }
+            if (auto* strip = sheet.thumbnailsComponent())
+            {
+                const auto& t = rig.editor->theme();
+                const int step = juce::jmax (t.touch(), t.ipx (56)) + t.ipx (4);
+                const float y = static_cast<float> (strip->getHeight()) * 0.5f;
+                strip->mouseDown (mouse (*strip, { static_cast<float> (t.gap() + step / 2), y }, { static_cast<float> (t.gap() + step / 2), y }, false));
+                sheet.thumbnailLongPress()->fire();
+                strip->mouseDrag (mouse (*strip, { static_cast<float> (t.gap() + 3 * step), y }, { static_cast<float> (t.gap() + step / 2), y }, true));
+                sheet.setMode (WavetableEditorSheet::Mode::spectrum);
+                sheet.setNudgeAllPhases (true);
+                const auto file = shotDir().getChildFile ("wt-editor-spectrum-nudge-reorder-" + n + ".png");
+                CHECK (writePng (sheet.createComponentSnapshot (sheet.getLocalBounds(), true, 1.0f), file));
+                std::printf ("    [UI SHOT] %s\n", file.getFullPathName().toRawUTF8());
+                strip->mouseUp (mouse (*strip, { static_cast<float> (t.gap() + 3 * step), y }, { static_cast<float> (t.gap() + step / 2), y }, true));
+            }
+        }
+        {
+            // LFO shape editor with the Brush tool, a marquee selection and the selected point bar
+            Rig rig (Page::lfo, sz.w, sz.h);
+            if (auto* ed = customEditor (rig))
+            {
+                ed->applyPreset (0);
+                ed->setGrid (8, 4);
+                ed->setTool (LfoShapeEditor::Tool::brush);
+                ed->setBrush (1);
+                drag (*ed, plotPos (*ed, 0.07f, 0.8f), plotPos (*ed, 0.45f, 0.4f));
+                ed->setTool (LfoShapeEditor::Tool::point);
+                ed->selectInRect (juce::Rectangle<float> (plotPos (*ed, 0.0f, 1.0f), plotPos (*ed, 0.6f, 0.0f)));
+                ed->loopHere();
+                rig.shot ("lfo-brush-marquee-pointbar-" + n, sz.w, sz.h, true, Page::lfo);
+            }
+        }
+        {
+            Rig rig (Page::env, sz.w, sz.h);
+            if (auto* env = dynamic_cast<EnvelopePanel*> (rig.panelTitled ("Envelope 1 (Amp)")))
+            {
+                env->curveView().setZoomLocked (false);
+                env->curveView().setZoom (3.0f);
+            }
+            rig.shot ("env-tabs-magnifier-" + n, sz.w, sz.h, false, Page::env);
+        }
+        {
+            Rig rig (Page::glb, sz.w, sz.h);
+            rig.proc.setRateAndBufferSizeDetails (48000.0, 512);
+            rig.proc.prepareToPlay (48000.0, 512);
+            juce::AudioBuffer<float> buffer (2, 512);
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::noteOn (1, 57, 0.9f), 0);
+            for (int block = 0; block < 12; ++block)
+            {
+                buffer.clear();
+                rig.proc.processBlock (buffer, midi);
+                midi.clear();
+            }
+            rig.shot ("glb-scope-voices-" + n, sz.w, sz.h, true, Page::glb);
+            if (auto* sp = dynamic_cast<GlbScopePanel*> (rig.anyPanelTitled ("Scope")))
+            {
+                sp->scope().setMode (ScopeView::Mode::fft);
+                rig.shot ("glb-scope-fft-" + n, sz.w, sz.h, true, Page::glb);
+            }
+        }
+        {
+            Rig rig (Page::fx, sz.w, sz.h);
+            if (auto* view = rig.find<FxChainView>())
+            {
+                const auto from = view->slotBounds (1).getCentre() + juce::Point<float> (6.0f, 0.0f);
+                view->mouseDown (mouse (*view, from, from, false));
+                view->longPress().fire();
+                view->mouseDrag (mouse (*view, view->slotBounds (4).getCentre(), from, true));
+            }
+            rig.shot ("fx-chain-armed-reorder-" + n, sz.w, sz.h, false, Page::fx);
+        }
+        {
+            Rig rig (Page::mod, sz.w, sz.h);
+            assignBySource (rig, 7, "filter1.cutoff", 40.0f);
+            assignBySource (rig, 8, "filter1.resonance", -30.0f);
+            if (auto* reorder = dynamic_cast<SlotReorder*> (rig.panelTitled ("Modulation Matrix")))
+                reorder->refreshRows();
+            rig.shot ("mod-matrix-row-handles-" + n, sz.w, sz.h, false, Page::mod);
+        }
+    }
 }
 
 TEST (uig_zz_shutdown)

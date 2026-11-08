@@ -1234,8 +1234,9 @@ juce::Rectangle<float> OscMixConsoleView::nameBounds (int strip) const
 
 juce::Rectangle<float> OscMixConsoleView::panBounds (int strip) const
 {
-    const auto name = nameBounds (strip);
-    return { name.getX(), name.getY() - ctx.theme.px (24.0f), name.getWidth(), ctx.theme.px (24.0f) };
+    // the top of the strip: the level bar grows from the foot, so the top stays free for a sideways drag
+    const auto col = stripBounds (strip);
+    return { col.getX(), col.getY(), col.getWidth(), ctx.theme.px (24.0f) };
 }
 
 const char* OscMixConsoleView::stripModulePrefix (int strip) noexcept
@@ -1477,7 +1478,7 @@ void OscMixConsoleView::paint (juce::Graphics& g)
         g.setColour (ch.on ? c.accent.withAlpha (0.75f) : c.textDim.withAlpha (0.3f));
         g.fillRect (col.getX() + t.px (3.0f), barY, col.getWidth() - t.px (6.0f), barH);
 
-        // Pan band: a thin track over the foot of the level bar, the dot is the pan
+        // Pan band: a thin track at the top of the strip, the dot is the pan
         if (hasPan (i))
         {
             const auto pb = panBounds (i).reduced (t.px (6.0f), 0.0f);

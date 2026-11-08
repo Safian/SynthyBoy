@@ -149,7 +149,7 @@ public:
         applyValues (ctx, ParamValues::defaults());
         ctx.host.setContent (StateContent {});
         ctx.assign.refresh();
-        Toast::show (*this, "Preset initialised");
+        Toast::show (ctx, *this, "Preset initialised");
         repaint();
     }
 
@@ -158,7 +158,7 @@ public:
         for (int i = 0; i < 64; ++i)
             clearSlot (ctx.assign.matrix(), i);
         ctx.assign.refresh();
-        Toast::show (*this, "All modulations cleared");
+        Toast::show (ctx, *this, "All modulations cleared");
         repaint();
     }
 
@@ -174,13 +174,13 @@ public:
         auto content = ctx.host.content();
         content.lfoShapes.clear();
         ctx.host.setContent (content);
-        Toast::show (*this, "LFOs initialised");
+        Toast::show (ctx, *this, "LFOs initialised");
         repaint();
     }
 
     void doRevert()
     {
-        Toast::show (*this, ctx.host.revertToSaved() ? "Reverted to the saved patch" : "Nothing saved to revert to");
+        Toast::show (ctx, *this, ctx.host.revertToSaved() ? "Reverted to the saved patch" : "Nothing saved to revert to");
         repaint();
     }
 

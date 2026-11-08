@@ -107,18 +107,19 @@ private:
 class Toast final : public juce::Component, private juce::Timer, private juce::ComponentListener
 {
 public:
-    static void show (juce::Component& anchor, const juce::String& text, int milliseconds = 1800);
+    static void show (UiContext& context, juce::Component& anchor, const juce::String& text, int milliseconds = 1800);
     /** The toast that is up now, null if none. */
     static Toast* current();
     const juce::String& text() const noexcept { return message; }
     void paint (juce::Graphics&) override;
 
 private:
-    Toast (juce::Component& parent, const juce::String& text, int milliseconds);
+    Toast (UiContext& context, juce::Component& parent, const juce::String& text, int milliseconds);
     ~Toast() override;
     void timerCallback() override;
     void componentBeingDeleted (juce::Component&) override;
 
+    UiContext& ctx;
     juce::Component::SafePointer<juce::Component> host;
     juce::String message;
 };
