@@ -78,7 +78,7 @@ struct VitalImportLimits
 };
 
 /** What the running engine can represent. Both false in this build of the table: see the note at the top. */
-struct EngineCaps
+struct ImportCaps
 {
     bool customWavetables = false;
     bool customLfoShapes = false;
@@ -88,7 +88,7 @@ struct EngineCaps
 struct ImportOptions
 {
     VitalImportLimits limits;
-    EngineCaps caps;
+    ImportCaps caps;
     bool renderWavetables = true;
     std::function<bool()> cancel;                                   // polled between components; true = cancel
     std::function<void(int percent, const char* step)> progress;    // optional

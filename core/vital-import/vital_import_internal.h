@@ -10,6 +10,9 @@
 
 namespace synthyboy
 {
+/** Last valid index of a choice list before the state-v3 appends (13-new-keys.md section 3), or -1 when the key has none. */
+int legacyChoiceMax (const char* key);
+
 namespace vitalimport
 {
 /** Conversion of the row: OUR value -> the value in the file (the importer applies the inverse). */

@@ -26,6 +26,21 @@
 
 namespace synthyboy
 {
+
+// Last valid index of a choice list before the WP0 appends, or -1 when the key's list has no appended entries.
+int legacyChoiceMax (const char* key)
+{
+    const std::string k (key);
+    const auto endsWith = [&k] (const char* suffix) { const std::string s (suffix); return k.size() >= s.size() && k.compare (k.size() - s.size(), s.size(), s) == 0; };
+    if ((k.rfind ("filter", 0) == 0 || k.rfind ("fxfilter", 0) == 0) && endsWith (".style")) return 5;
+    if ((k.rfind ("filter", 0) == 0 || k.rfind ("fxfilter", 0) == 0) && endsWith (".model")) return 7;
+    if (k.rfind ("lfo", 0) == 0 && endsWith (".shape")) return 11;
+    if (k.rfind ("rlfo", 0) == 0 && endsWith (".style")) return 3;
+    if (k.rfind ("osc", 0) == 0 && endsWith (".wavetable")) return 12;
+    if ((k.rfind ("osc", 0) == 0 || k.rfind ("noise", 0) == 0) && endsWith (".destination")) return 4;
+    return -1;
+}
+
 namespace vitalimport
 {
 std::string cleanText (const std::string& in, size_t maxBytes, bool newlineToSpace, bool* cut)
@@ -980,13 +995,21 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             want = fromFile (row, x, std::strcmp (pinfo.key, "master.portamento.time") == 0, unmappable);
             if (unmappable) { remapped = true; reason = Reason::enumRemapped; }
         }
+        // Choice lists that got values appended (13-new-keys.md section 3): a Vital file only knows the original range, so
+        // an out-of-range index must clamp to the original last entry, never land on a new Serum-only entry.
+        bool legacyCapped = false;
+        if (const int legacyMax = legacyChoiceMax (pinfo.key); legacyMax >= 0 && want > legacyMax)
+        {
+            want = legacyMax;
+            legacyCapped = true;
+        }
         if (pinfo.interval > 0.0f)
             want = std::floor (want / pinfo.interval + 0.5) * pinfo.interval;
         const float got = constrainValue (pinfo, static_cast<float> (std::max (-1.0e30, std::min (1.0e30, want))));
         V.plain[info.param] = got;
         const bool clamped = (pinfo.flags & kParamStepped) != 0 ? std::fabs (want - got) > 0.5
                                                                : std::fabs (want - got) > 1.0e-4 * (pinfo.max - pinfo.min);
-        if (remapped || clamped)
+        if (remapped || clamped || legacyCapped)
         {
             const bool audibleOff = info.kind == RowKind::warp && reason == Reason::enumRemapped;
             (void) audibleOff;

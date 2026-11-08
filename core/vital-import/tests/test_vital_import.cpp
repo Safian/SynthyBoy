@@ -60,7 +60,7 @@ bool hasReason (const ImportResult& r, Reason reason)
 
 bool valuesInRange (const ImportResult& r)
 {
-    for (size_t i = 0; i < paramCount(); ++i)
+    for (size_t i = 0; i < kNumKeysV2; ++i)
     {
         const float v = r.values.plain[i];
         if (! std::isfinite (v) || constrainValue (paramTable()[i], v) != v)
@@ -114,7 +114,7 @@ TEST (vi_table_vs_params)
     }
     // 730 + 22 specials + 128 mod source / destination = 880: nothing missing, nothing extra
     size_t special = 0, modSrcDst = 0;
-    for (size_t i = 0; i < paramCount(); ++i)
+    for (size_t i = 0; i < kNumKeysV2; ++i)
     {
         const std::string k = paramTable()[i].key;
         if (keys.count (k) != 0)
@@ -129,9 +129,9 @@ TEST (vi_table_vs_params)
     }
     CHECK_EQ (special, static_cast<size_t> (22));
     CHECK_EQ (modSrcDst, static_cast<size_t> (128));
-    CHECK_EQ (paramCount(), static_cast<size_t> (880));
+    CHECK_EQ (kNumKeysV2, static_cast<size_t> (880));
     size_t modulatable = 0;
-    for (size_t i = 0; i < paramCount(); ++i)
+    for (size_t i = 0; i < kNumKeysV2; ++i)
         if ((paramTable()[i].flags & kParamModulatable) != 0)
         {
             ++modulatable;
@@ -181,7 +181,7 @@ TEST (vi_fixture_default_patch_round_trip)
     CHECK (r.status == ImportStatus::ok);
     const ParamValues d = ParamValues::defaults();
     int bad = 0;
-    for (size_t i = 0; i < paramCount(); ++i)
+    for (size_t i = 0; i < kNumKeysV2; ++i)
         if (std::fabs (r.values.plain[i] - d.plain[i]) > 1e-4 * (paramTable()[i].max - paramTable()[i].min) + 1e-5)
         {
             ++bad;
@@ -209,7 +209,7 @@ TEST (vi_round_trip_random_patches)
     for (int iter = 0; iter < 150; ++iter)
     {
         ParamValues v = ParamValues::defaults();
-        for (size_t i = 0; i < paramCount(); ++i)
+        for (size_t i = 0; i < kNumKeysV2; ++i)
         {
             const ParamInfo& p = paramTable()[i];
             if (isSpecialKey (p.key))
@@ -217,6 +217,8 @@ TEST (vi_round_trip_random_patches)
             float x = p.min + static_cast<float> (rng.uniform()) * (p.max - p.min);
             if ((p.flags & kParamStepped) != 0)
                 x = std::floor (x + 0.5f);
+            if (const int lm = legacyChoiceMax (p.key); lm >= 0 && x > static_cast<float> (lm))
+                x = static_cast<float> (lm);
             x = constrainValue (p, x);
             if (std::strcmp (p.key, "master.portamento.time") == 0 && x < 2.0f)
                 x = 0.0f; // below 1 ms the file's floor means "off"
@@ -229,8 +231,8 @@ TEST (vi_round_trip_random_patches)
         std::vector<std::pair<int, int>> chosen; // source choice, destination choice
         for (int s = 0; s < k; ++s)
         {
-            const int src = 1 + static_cast<int> (rng.u32() % kNumModSources);
-            const int dst = 1 + static_cast<int> (rng.u32() % modDestinationCount());
+            const int src = 1 + static_cast<int> (rng.u32() % kNumModSourcesV2);
+            const int dst = 1 + static_cast<int> (rng.u32() % 269u);
             f.mods.emplace_back (vitalSourceName (modSourceTable()[src - 1].key), controlOfKey (paramTable()[modDestinationParamIndex (static_cast<size_t> (dst))].key));
             const ModSlotParams sp = modSlotParams (s);
             v.plain[sp.source] = static_cast<float> (src);
@@ -261,7 +263,7 @@ TEST (vi_round_trip_random_patches)
         CHECK (r.status == ImportStatus::ok);
         if (r.status != ImportStatus::ok)
             return;
-        for (size_t i = 0; i < paramCount(); ++i)
+        for (size_t i = 0; i < kNumKeysV2; ++i)
         {
             const ParamInfo& p = paramTable()[i];
             if (std::fabs (r.values.plain[i] - v.plain[i]) > 2e-4 * (p.max - p.min) + 2e-5 * std::fabs (v.plain[i]))
@@ -474,9 +476,9 @@ TEST (vi_fixture_mod_matrix)
 {
     // 64 connections: every source, bipolar / stereo / bypass / power, unsupported source and destination, a duplicate pair
     Fixture f = sbfx::defaultPatch();
-    for (int s = 0; s < kNumModSources; ++s)
+    for (int s = 0; s < kNumModSourcesV2; ++s)
         f.mods.emplace_back (vitalSourceName (modSourceTable()[s].key), "filter_1_cutoff");
-    f.mods.emplace_back ("lift", "filter_1_cutoff");            // 29: unsupported source
+    f.mods.emplace_back ("bogus_source", "filter_1_cutoff");            // 29: unsupported source
     f.mods.emplace_back ("lfo_1", "sub_level");                 // 30: no such destination
     f.mods.emplace_back ("lfo_1", "osc_1_detune_range");        // 31: not a key of ours
     f.mods.emplace_back ("env_1", "osc_1_level");               // 32
@@ -492,7 +494,7 @@ TEST (vi_fixture_mod_matrix)
     f.set ("modulation_64_amount", -1.0);
     const auto r = run (f);
     CHECK (r.status == ImportStatus::ok);
-    for (int s = 0; s < kNumModSources; ++s)
+    for (int s = 0; s < kNumModSourcesV2; ++s)
     {
         const ModSlotParams sp = modSlotParams (s);
         CHECK_EQ (r.values.plain[sp.source], static_cast<float> (s + 1));
@@ -539,7 +541,7 @@ TEST (vi_fixture_mod_matrix)
     // every one of the 269 destinations resolves, in groups of 64 connections
     size_t resolved = 0;
     std::vector<size_t> dests;
-    for (size_t c = 1; c <= modDestinationCount(); ++c)
+    for (size_t c = 1; c <= static_cast<size_t> (269); ++c)
         dests.push_back (c);
     for (size_t base = 0; base < dests.size(); base += 64)
     {
@@ -910,7 +912,7 @@ TEST (vi_fixture_sample_sub_metadata)
     ParamValues v2;
     const auto lr = loadPreset (text.data(), text.size(), m2, v2);
     CHECK (lr.status == LoadStatus::ok);
-    for (size_t i = 0; i < paramCount(); ++i)
+    for (size_t i = 0; i < kNumKeysV2; ++i)
         CHECK_NEAR (v2.plain[i], r.values.plain[i], 1e-4 * std::fabs (r.values.plain[i]) + 1e-5);
     f.name = "../../x";
     CHECK_EQ (run (f).meta.name, std::string ("../../x"));
@@ -1011,7 +1013,7 @@ TEST (vi_limits_and_hostile_input)
     {
         Fixture f = sbfx::defaultPatch();
         for (int i = 0; i < 200; ++i)
-            f.mods.emplace_back ("lift", "volume");
+            f.mods.emplace_back ("bogus_source", "volume");
         o.limits.maxReportItems = 10;
         const auto r = run (f, o);
         CHECK (r.status == ImportStatus::ok);
@@ -1117,7 +1119,7 @@ TEST (vi_report_json_and_determinism)
     using namespace sbfx;
     Fixture f = defaultPatch();
     f.set ("filter_1_cutoff", 135);
-    f.mods.emplace_back ("lift", "volume");
+    f.mods.emplace_back ("bogus_source", "volume");
     f.name = "Quote \" and \\ and \n newline";
     const auto a = run (f), b = run (f);
     CHECK_EQ (a.report.toJson(), b.report.toJson());
