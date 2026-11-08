@@ -50,6 +50,7 @@ endif()
 
 add_subdirectory(tuning)
 add_subdirectory(formula)
+add_subdirectory(filters-serum)
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)
