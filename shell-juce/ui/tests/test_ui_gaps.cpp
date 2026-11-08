@@ -13,6 +13,8 @@
 #include "PluginProcessor.h"
 #include "ui/Editor.h"
 #include "ui/ModuleSheet.h"
+#include "ui/panels/EnvelopePanel.h"
+#include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/OscTabsPanel.h"
 #include "ui/panels/OscWaveView.h"
 #include "ui/panels/TransposeControl.h"
@@ -1109,6 +1111,305 @@ TEST (uig_wavetable_3d_view_tilt_pinch)
     view->setViewMode (WavetableView::ViewMode::mode2D);
     view->handleTouchGesture (pinch);
     CHECK (approx (view->zoom(), 1.0f));
+}
+
+// ---- LFO shape editor tools -----------------------------------------------------------------------------------------------------------
+
+namespace
+{
+const ContentLfoShape* shapeOf (const StateContent& c, int lfo)
+{
+    for (const auto& l : c.lfoShapes)
+        if (l.lfo == lfo)
+            return &l;
+    return nullptr;
+}
+
+LfoShapeEditor* customEditor (Rig& rig)
+{
+    rig.setParam ("lfo1.shape", 12.0f); // Custom
+    return rig.find<LfoShapeEditor>();
+}
+
+juce::Point<float> plotPos (LfoShapeEditor& ed, float x, float y)
+{
+    const auto plot = ed.plotBounds();
+    return { plot.getX() + x * plot.getWidth(), plot.getBottom() - y * plot.getHeight() };
+}
+} // namespace
+
+TEST (uig_lfo_steps_tool_draws_one_step_per_grid_column)
+{
+    Rig rig (Page::lfo);
+    auto* ed = customEditor (rig);
+    CHECK (ed != nullptr);
+    if (ed == nullptr)
+        return;
+    CHECK (ed->barButton ("Steps") != nullptr && ed->barButton ("Brush") != nullptr);
+    ed->setGrid (8, 4);
+    CHECK_EQ (ed->gridColumns(), 8);
+    CHECK_EQ (ed->gridRows(), 4);
+    ed->setTool (LfoShapeEditor::Tool::steps);
+    CHECK (ed->tool() == LfoShapeEditor::Tool::steps);
+
+    // drag from column 1 to column 4 at 80 %, flat levels at the grid: columns 1..4 are 0.8, a stepped shape of 2 points per column
+    drag (*ed, plotPos (*ed, 1.5f / 8.0f, 0.8f), plotPos (*ed, 4.5f / 8.0f, 0.8f));
+    const auto shape = ed->shape();
+    CHECK_EQ (shape.points.size(), static_cast<size_t> (16));
+    for (size_t i = 0; i < shape.points.size(); i += 2)
+        CHECK (approx (shape.points[i].y, shape.points[i + 1].y, 1e-5f)); // each column is flat
+    CHECK (approx (shape.points[2].y, 0.8f, 0.03f) && approx (shape.points[8].y, 0.8f, 0.03f));
+    CHECK (std::abs (shape.points[0].y - 0.8f) > 0.05f || std::abs (shape.points[14].y - 0.8f) > 0.05f); // the other columns kept their level
+    CHECK (std::is_sorted (shape.points.begin(), shape.points.end(), [] (const ContentPoint& a, const ContentPoint& b) { return a.x < b.x; }));
+    CHECK (validateContent (rig.proc.content()));
+    CHECK (ed->canUndo()); // one drag = one undo step
+    ed->undo();
+    CHECK (ed->shape().points.size() != static_cast<size_t> (16));
+
+    // with Snap the level lands on the row grid (4 rows: 0.25 steps)
+    ed->setSnap (true);
+    drag (*ed, plotPos (*ed, 0.5f / 8.0f, 0.62f), plotPos (*ed, 0.5f / 8.0f, 0.62f) + juce::Point<float> (1.0f, 0.0f));
+    CHECK (approx (ed->shape().points[0].y, 0.5f, 1e-4f));
+    ed->setSnap (false);
+}
+
+TEST (uig_lfo_brush_tool_paints_the_chosen_brush)
+{
+    Rig rig (Page::lfo);
+    auto* ed = customEditor (rig);
+    CHECK (ed != nullptr);
+    if (ed == nullptr)
+        return;
+    CHECK_EQ (LfoShapeEditor::kNumBrushes, 5);
+    CHECK (std::string (LfoShapeEditor::brushName (0)) == "Step" && std::string (LfoShapeEditor::brushName (4)) == "Tri");
+    ed->setGrid (4, 8);
+    ed->setTool (LfoShapeEditor::Tool::brush);
+
+    struct Expect { int brush; size_t pointsPerCell; };
+    for (const auto& ex : { Expect { 0, 2 }, Expect { 1, 5 }, Expect { 2, 2 }, Expect { 3, 2 }, Expect { 4, 3 } })
+    {
+        ed->setBrush (ex.brush);
+        CHECK (ed->barButton (LfoShapeEditor::brushName (ex.brush)) != nullptr); // the picker shows the brush
+        drag (*ed, plotPos (*ed, 0.1f, 0.9f), plotPos (*ed, 0.9f, 0.9f));
+        CHECK_EQ (ed->shape().points.size(), 4 * ex.pointsPerCell);
+        CHECK (validateContent (rig.proc.content()));
+    }
+
+    // Down: each cell falls from the level to 0; Up rises; Tri peaks in the middle; Half is a bump that is 0 at the cell borders
+    ed->setBrush (2);
+    drag (*ed, plotPos (*ed, 0.1f, 0.8f), plotPos (*ed, 0.2f, 0.8f));
+    CHECK (approx (ed->shape().points[0].y, 0.8f, 0.03f) && approx (ed->shape().points[1].y, 0.0f, 1e-4f));
+    ed->setBrush (4);
+    drag (*ed, plotPos (*ed, 0.6f, 0.7f), plotPos (*ed, 0.65f, 0.7f));
+    const auto& pts = ed->shape().points;
+    bool foundPeak = false;
+    for (size_t i = 0; i + 2 < pts.size(); ++i)
+        if (approx (pts[i].y, 0.0f, 1e-4f) && pts[i + 1].y > 0.6f && approx (pts[i + 2].y, 0.0f, 1e-4f))
+            foundPeak = true;
+    CHECK (foundPeak);
+}
+
+TEST (uig_lfo_marquee_select_and_proportional_move)
+{
+    Rig rig (Page::lfo);
+    auto* ed = customEditor (rig);
+    CHECK (ed != nullptr);
+    if (ed == nullptr)
+        return;
+    ed->applyPreset (0); // sine: 33 points
+    const size_t n = ed->shape().points.size();
+    CHECK_EQ (n, static_cast<size_t> (33));
+
+    // hold still on the empty plot (the long press), then drag a rectangle around the points of the left half
+    const auto from = plotPos (*ed, 0.02f, 0.02f); // below the curve at the start: empty
+    const auto to = plotPos (*ed, 0.52f, 1.0f);
+    ed->mouseDown (mouse (*ed, from, from, false));
+    CHECK (ed->longPress().pending());
+    ed->longPress().fire();
+    CHECK (ed->marqueeActive());
+    ed->mouseDrag (mouse (*ed, to, from, true));
+    ed->mouseUp (mouse (*ed, to, from, true));
+    CHECK (! ed->marqueeActive());
+    CHECK (ed->selection().size() >= 15 && ed->selection().size() <= 18);
+    for (const int i : ed->selection())
+        CHECK (ed->shape().points[static_cast<size_t> (i)].x <= 0.53f);
+
+    // a plain drag of one selected point moves them all by the same amount
+    const auto before = ed->shape();
+    const int anchor = ed->selection()[ed->selection().size() / 2];
+    const auto a = ed->pointPosition (anchor);
+    drag (*ed, a, a + juce::Point<float> (0.0f, -ed->plotBounds().getHeight() * 0.10f));
+    int moved = 0;
+    for (const int i : ed->selection())
+    {
+        const float d = ed->shape().points[static_cast<size_t> (i)].y - before.points[static_cast<size_t> (i)].y;
+        if (d > 0.02f)
+            ++moved;
+        CHECK (d >= -1e-6f);
+    }
+    CHECK (moved >= static_cast<int> (ed->selection().size()) / 2); // the ones clamped at the top stay
+    // the points outside did not move
+    CHECK (approx (ed->shape().points[n - 1].y, before.points[n - 1].y, 1e-5f));
+    CHECK (ed->canUndo());
+    ed->undo();
+    CHECK (ed->selectInRect (juce::Rectangle<float> (from, to))); // undo drops the selection: select again
+
+    // Prop: the rainbow falloff - the finger's point moves fully, the ends of the selection hardly
+    ed->setProportional (true);
+    CHECK (ed->proportional());
+    const auto base = ed->shape();
+    CHECK (ed->moveSelection (anchor, 0.0f, -0.2f));
+    const float dAnchor = base.points[static_cast<size_t> (anchor)].y - ed->shape().points[static_cast<size_t> (anchor)].y;
+    const int lastSel = ed->selection().back();
+    const float dEnd = std::abs (base.points[static_cast<size_t> (lastSel)].y - ed->shape().points[static_cast<size_t> (lastSel)].y);
+    CHECK (approx (dAnchor, 0.2f, 0.01f));
+    CHECK (dEnd < 0.05f);
+    // x never crosses a neighbour
+    for (size_t i = 1; i < n; ++i)
+        CHECK (ed->shape().points[i].x >= ed->shape().points[i - 1].x);
+    ed->undo();
+    ed->setProportional (false);
+
+    // a tap on empty space drops the selection
+    tap (*ed, plotPos (*ed, 0.2f, 0.02f));
+    CHECK (ed->selection().empty());
+}
+
+TEST (uig_lfo_selected_point_bar_loop_start_segment_fields_grid_all_curves)
+{
+    Rig rig (Page::lfo);
+    auto* ed = customEditor (rig);
+    CHECK (ed != nullptr);
+    if (ed == nullptr)
+        return;
+    ed->applyPreset (1); // triangle (0,0) (0.5,1) (1,0)
+
+    // nothing selected: the point bar is off
+    CHECK (! ed->xFieldEditor().isEnabled() && ! ed->barButton ("Loop here")->isEnabled() && ! ed->barButton ("Start here")->isEnabled());
+    const auto mid = ed->pointPosition (1);
+    tap (*ed, mid);
+    CHECK_EQ (ed->selectedPoint(), 1);
+    CHECK (ed->xFieldEditor().isEnabled() && ed->barButton ("Loop here")->isEnabled() && ed->barButton ("Segment")->isEnabled());
+    CHECK (ed->xFieldEditor().getText().getFloatValue() > 49.0f && ed->xFieldEditor().getText().getFloatValue() < 51.0f);
+    CHECK (ed->yFieldEditor().getText().getFloatValue() > 99.0f);
+
+    // numeric X / Y: the alternative of the point drag
+    CHECK (ed->applyFieldText (true, "30"));
+    CHECK (approx (ed->shape().points[1].x, 0.30f, 1e-4f));
+    CHECK (ed->applyFieldText (false, "55.5"));
+    CHECK (approx (ed->shape().points[1].y, 0.555f, 1e-4f));
+    CHECK (! ed->applyFieldText (true, "140"));
+    CHECK (! ed->applyFieldText (true, "abc"));
+    ed->xFieldEditor().setText ("45", juce::dontSendNotification);
+    ed->xFieldEditor().onReturnKey();
+    CHECK (approx (ed->shape().points[1].x, 0.45f, 1e-4f));
+    CHECK (approx (shapeOf (rig.proc.content(), 1)->points[1].x, 0.45f, 1e-4f)); // reached the host
+
+    // Loop here toggles the loop point and it is saved in the content
+    CHECK_EQ (ed->loopPoint(), -1);
+    ed->barButton ("Loop here")->onClick();
+    CHECK_EQ (ed->loopPoint(), 1);
+    CHECK_EQ (shapeOf (rig.proc.content(), 1)->loopPoint, 1);
+    CHECK (validateContent (rig.proc.content()));
+    ed->barButton ("Loop here")->onClick();
+    CHECK_EQ (ed->loopPoint(), -1);
+    ed->loopHere();
+
+    // Start here sets the LFO phase marker to the x of the point
+    CHECK (ed->startHere());
+    CHECK (approx (rig.param ("lfo1.phase"), 0.45f * 360.0f, 1.0f));
+
+    // Segment shape menu entries: the segment that starts at the selected point
+    CHECK (ed->setSegmentShape (1));
+    CHECK (ed->shape().points[1].power > 0.0f);
+    CHECK (ed->setSegmentShape (4));
+    CHECK (ed->shape().points[1].power < 0.0f);
+    CHECK (ed->setSegmentShape (0));
+    CHECK (approx (ed->shape().points[1].power, 0.0f, 1e-6f));
+
+    // All curves: one handle bends every segment
+    CHECK (ed->setSegmentPower (0, 2.0f));
+    ed->setAllCurves (true);
+    const auto startPowers = std::vector<float> { ed->shape().points[0].power, ed->shape().points[1].power };
+    const auto handle = ed->handlePosition (1);
+    drag (*ed, handle, handle + juce::Point<float> (0.0f, -25.0f));
+    CHECK (! approx (ed->shape().points[0].power, startPowers[0], 1e-4f));
+    CHECK (! approx (ed->shape().points[1].power, startPowers[1], 1e-4f));
+    ed->setAllCurves (false);
+
+    // grid fields and steppers
+    ed->barButton ("+")->onClick(); // the first "+" is the columns stepper
+    CHECK_EQ (ed->gridColumns(), 17);
+    CHECK_EQ (ed->gridRows(), 8);
+    ed->setGrid (0, 99);
+    CHECK (ed->gridColumns() == 1 && ed->gridRows() == 32);
+    ed->setGrid (16, 8);
+
+    // every button of the bar is a 44 point target
+    for (const char* text : { "Point", "Draw", "Steps", "Brush", "Snap", "Smooth", "Prop", "All curves", "Add", "Delete", "Undo", "Redo", "Presets",
+                              "Loop here", "Start here", "Segment" })
+    {
+        auto* b = ed->barButton (text);
+        CHECK (b != nullptr && b->getHeight() >= rig.editor->theme().touch() && b->getWidth() >= rig.editor->theme().touch());
+    }
+}
+
+// ---- envelope tabs ----------------------------------------------------------------------------------------------------------------------
+
+TEST (uig_envelope_tabs_select_long_press_and_drop_on_a_control)
+{
+    Rig rig (Page::env);
+    CHECK (rig.panelTitled ("Envelope 1 (Amp)") != nullptr);
+    CHECK (rig.panelTitled ("Envelope 2") == nullptr);
+    auto* env1 = dynamic_cast<EnvelopePanel*> (rig.panelTitled ("Envelope 1 (Amp)"));
+    CHECK (env1 != nullptr);
+    if (env1 == nullptr)
+        return;
+
+    // tap E3: that envelope is the one shown
+    auto* tab3 = env1->tabButton (3);
+    CHECK (tab3 != nullptr && tab3->getWidth() >= rig.editor->theme().touch() && tab3->getHeight() >= rig.editor->theme().touch());
+    tab3->onClick();
+    CHECK_EQ (rig.editor->context().view->envTab, 2);
+    CHECK (rig.panelTitled ("Envelope 3") != nullptr && rig.panelTitled ("Envelope 1 (Amp)") == nullptr);
+    env1->selectEnvelope (1);
+    CHECK (rig.panelTitled ("Envelope 1 (Amp)") != nullptr);
+
+    // a long press opens the destination list (and the release after it is no tap)
+    env1 = dynamic_cast<EnvelopePanel*> (rig.panelTitled ("Envelope 1 (Amp)"));
+    tab3 = env1->tabButton (3);
+    const auto c = tab3->getLocalBounds().getCentre().toFloat();
+    tab3->mouseDown (mouse (*tab3, c, c, false));
+    CHECK (tab3->longPress().pending());
+    tab3->longPress().fire(); // the 400 ms timer: ModSourceChip::showAssignmentsFor (menu, async)
+    juce::PopupMenu::dismissAllActiveMenus();
+    tab3->mouseUp (mouse (*tab3, c, c, false));
+    CHECK (tab3->consumeSuppressedClick());
+    CHECK_EQ (rig.editor->context().view->envTab, 0); // unchanged
+
+    // drag the tab onto a modulatable knob of another panel: the assignment is made at 50 %
+    rig.editor->panelHost().setPage (Page::flt);
+    auto* cutoff = rig.find<ParamKnob> ([] (ParamKnob& k) { return k.key() == "filter1.cutoff"; });
+    CHECK (cutoff != nullptr);
+    if (cutoff == nullptr)
+        return;
+    env1->tabButton (2)->mouseDown (mouse (*env1->tabButton (2), { 10, 10 }, { 10, 10 }, false));
+    CHECK (env1->dropSourceOn (2, cutoff));
+    const auto entries = rig.editor->context().assign.snapshot().entriesForSource (2);
+    bool found = false;
+    for (const auto& [dest, e] : entries)
+        if (std::string (paramTable()[static_cast<size_t> (dest)].key) == "filter1.cutoff")
+            found = e.amount > 0.0f;
+    CHECK (found);
+    CHECK (rig.editor->context().assign.flow().armedSource() == 0); // assign mode is left
+    env1->tabButton (2)->mouseUp (mouse (*env1->tabButton (2), { 10, 10 }, { 10, 10 }, false));
+
+    // dropped on nothing or on a non-modulatable control: no assignment, mode left
+    CHECK (! env1->dropSourceOn (2, nullptr));
+    auto* onKey = rig.find<ParamToggle> ([] (ParamToggle& k) { return k.key() == "filter1.on"; });
+    if (onKey != nullptr)
+        CHECK (! env1->dropSourceOn (2, onKey));
+    CHECK (rig.editor->context().assign.flow().armedSource() == 0);
 }
 
 TEST (uig_zz_shutdown)
