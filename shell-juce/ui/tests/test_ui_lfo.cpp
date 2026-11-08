@@ -602,6 +602,262 @@ TEST (uil_zz_screenshots)
     }
 }
 
+// ---- point modulation of the custom shape (audit row 05-22) ----
+
+namespace
+{
+juce::File pointModShotDir()
+{
+    const auto env = juce::SystemStats::getEnvironmentVariable ("SYNTHYBOY_UI_SHOTS_DIR", {});
+    return juce::File (env.isNotEmpty() ? env : juce::String ("/tmp/ui-shots")).getChildFile ("pointmod");
+}
+
+/** A rig whose LFO 1 is a custom flat shape (two points at 50 %), routed to the level of oscillator 1 at +100 %. */
+struct PointModRig
+{
+    Rig rig;
+    LfoShapeEditor* ed = nullptr;
+
+    PointModRig()
+    {
+        rig.setParam ("lfo1.shape", 12);
+        ed = findEditor (*rig.editor);
+        CHECK (ed != nullptr);
+        if (ed == nullptr)
+            return;
+        ed->applyPreset (99); // flat centre line: the LFO output is 0 until a point is modulated
+        ed->commitNow();
+        auto& assign = rig.editor->context().assign;
+        assign.tapSource (pointModSourceChoice ("lfo1"));
+        const int dest = resolveKey ("osc1.level").index;
+        auto& flow = assign.flow();
+        CHECK (flow.isTarget (dest));
+        CHECK (flow.beginDrag (dest) == AssignFlow::BeginResult::ok);
+        flow.setAmount (100.0f);
+        flow.endDrag();
+        assign.exitAssignMode();
+        assign.refresh();
+        rig.setParam ("lfo1.rate", 1.0f);
+    }
+
+    float render()
+    {
+        rig.proc.setRateAndBufferSizeDetails (48000.0, 512);
+        rig.proc.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 57, 0.9f), 0);
+        double sum = 0.0;
+        for (int block = 0; block < 40; ++block)
+        {
+            buffer.clear();
+            rig.proc.processBlock (buffer, midi);
+            midi.clear();
+            if (block >= 8)
+                for (int i = 0; i < buffer.getNumSamples(); ++i)
+                    sum += static_cast<double> (buffer.getSample (0, i)) * static_cast<double> (buffer.getSample (0, i));
+        }
+        return static_cast<float> (std::sqrt (sum / (32.0 * 512.0)));
+    }
+
+    /** Arms `source` and drags point `index` by (dx, dy) pixels like a finger. */
+    void modulateByDrag (int index, const char* source, float dx, float dy)
+    {
+        auto& assign = rig.editor->context().assign;
+        assign.tapSource (pointModSourceChoice (source));
+        const auto from = ed->pointPosition (index);
+        drag (*ed, from, from + juce::Point<float> (dx, dy));
+        assign.exitAssignMode();
+    }
+};
+} // namespace
+
+TEST (uil_point_mod_drag_with_an_armed_source_writes_mod_y_and_mod_x_and_undoes)
+{
+    PointModRig m;
+    auto* ed = m.ed;
+    if (ed == nullptr)
+        return;
+    ed->applyPreset (1); // triangle: (0,0) (0.5,1) (1,0)
+    ed->commitNow();
+    const auto before = ed->shape();
+
+    // no source armed: the same drag moves the point and writes no modulation
+    {
+        const auto p = ed->pointPosition (1);
+        drag (*ed, p, p + juce::Point<float> (0.0f, 20.0f));
+        CHECK (! ed->shape().points[1].modY.present && ed->shape().points[1].y < before.points[1].y);
+        ed->undo();
+        CHECK (ed->shape().points[1] == before.points[1]);
+    }
+
+    // armed: a vertical drag on the middle point sets Y, the point stays where it is
+    m.modulateByDrag (1, "velocity", 0.0f, -ed->plotBounds().getHeight() * 0.25f);
+    {
+        const auto& pt = ed->shape().points[1];
+        CHECK (pt.modY.present && pt.modY.source == "velocity");
+        CHECK (pt.modY.amount > 0.2f && pt.modY.amount < 0.3f); // a quarter of the plot up = depth 0.25 (the bar follows the finger)
+        CHECK (! pt.modX.present);
+        CHECK_NEAR (pt.x, before.points[1].x, 1e-9);
+        CHECK_NEAR (pt.y, before.points[1].y, 1e-9);
+        const auto content = m.rig.proc.content();
+        const auto* s = shapeOf (content, 1);
+        CHECK (s != nullptr && s->points[1].modY.present && s->points[1].modY.source == "velocity"); // reached the host
+        CHECK (validateContent (m.rig.proc.content()));
+    }
+
+    // a sideways drag with another source sets X and leaves Y alone
+    m.modulateByDrag (1, "macro1", -ed->plotBounds().getWidth() * 0.1f, 2.0f);
+    {
+        const auto& pt = ed->shape().points[1];
+        CHECK (pt.modX.present && pt.modX.source == "macro1");
+        CHECK (pt.modX.amount < -0.07f && pt.modX.amount > -0.13f);
+        CHECK (pt.modY.present && pt.modY.source == "velocity");
+    }
+
+    // end points take Y only: a sideways drag of the first point never writes X
+    m.modulateByDrag (0, "env2", 40.0f, 0.0f);
+    CHECK (! ed->shape().points[0].modX.present);
+
+    // a tap with a source armed gives Y that source at 50 %
+    {
+        auto& assign = m.rig.editor->context().assign;
+        assign.tapSource (pointModSourceChoice ("mod_wheel"));
+        const auto p = ed->pointPosition (2);
+        ed->mouseDown (mouse (*ed, p, p, false));
+        ed->mouseUp (mouse (*ed, p, p, false));
+        assign.exitAssignMode();
+        CHECK (ed->shape().points[2].modY.present && ed->shape().points[2].modY.source == "mod_wheel");
+        CHECK_NEAR (ed->shape().points[2].modY.amount, 0.5, 1e-6);
+    }
+
+    // one drag / tap = one undo step; undo walks back through all of them, redo forward again
+    ed->undo();
+    CHECK (! ed->shape().points[2].modY.present);
+    ed->undo();
+    CHECK (! ed->shape().points[0].modY.present && ed->shape().points[1].modX.present);
+    ed->undo();
+    CHECK (! ed->shape().points[1].modX.present && ed->shape().points[1].modY.present);
+    ed->undo();
+    CHECK (ed->shape().points == before.points);
+    ed->commitNow();
+    {
+        const auto content = m.rig.proc.content();
+        CHECK (! shapeOf (content, 1)->points[1].modY.present);
+    }
+    ed->redo();
+    CHECK (ed->shape().points[1].modY.present);
+}
+
+TEST (uil_point_mod_sheet_actions_bypass_restore_and_remove)
+{
+    PointModRig m;
+    auto* ed = m.ed;
+    if (ed == nullptr)
+        return;
+    ed->applyPreset (1);
+    CHECK (ed->assignPointMod (1, PointAxis::y, pointModSourceChoice ("env2"), 0.6f));
+    CHECK (ed->assignPointMod (1, PointAxis::x, pointModSourceChoice ("lfo2"), -0.3f));
+    CHECK (! ed->assignPointMod (0, PointAxis::x, pointModSourceChoice ("lfo2"), 0.3f)); // end point
+    CHECK (! ed->assignPointMod (1, PointAxis::y, 0, 0.3f) && ! ed->assignPointMod (9, PointAxis::y, 1, 0.3f));
+
+    // a held press on a point arms the long press that opens the sheet (the menu itself needs a display and is not shown here)
+    const auto p = ed->pointPosition (1);
+    ed->mouseDown (mouse (*ed, p, p, false));
+    CHECK (ed->longPress().pending());
+    ed->mouseUp (mouse (*ed, p, p, false));
+    CHECK (! ed->longPress().pending());
+
+    CHECK (ed->bypassPointMod (1, PointAxis::y, true));
+    CHECK (ed->pointModBypassed (1, PointAxis::y) && ! ed->pointModBypassed (1, PointAxis::x));
+    CHECK (ed->shape().points[1].modY.present && ed->shape().points[1].modY.source == "env2");
+    CHECK_NEAR (ed->shape().points[1].modY.amount, 0.0, 1e-9);
+    CHECK (! ed->bypassPointMod (1, PointAxis::y, true)); // already bypassed
+    CHECK (ed->bypassPointMod (1, PointAxis::y, false));
+    CHECK_NEAR (ed->shape().points[1].modY.amount, 0.6, 1e-6);
+
+    CHECK (ed->clearPointMod (1, PointAxis::x));
+    CHECK (! ed->shape().points[1].modX.present);
+    CHECK (! ed->clearPointMod (1, PointAxis::x));
+    CHECK (! shapeOf (m.rig.proc.content(), 1)->points[1].modX.present);
+
+    // deleting the point takes its modulation along; undo brings it back
+    CHECK (ed->deletePoint (1));
+    CHECK_EQ (ed->shape().points.size(), static_cast<size_t> (2));
+    ed->undo();
+    CHECK (ed->shape().points[1].modY.present && ed->shape().points[1].modY.source == "env2");
+    ed->undo(); // the remove of X
+    CHECK (ed->shape().points[1].modX.present);
+}
+
+TEST (uil_point_mod_reaches_the_engine_the_render_differs)
+{
+    float plain = 0.0f, modulated = 0.0f, bypassed = 0.0f;
+    {
+        PointModRig m;
+        plain = m.render();
+    }
+    {
+        PointModRig m;
+        m.modulateByDrag (0, "velocity", 0.0f, -m.ed->plotBounds().getHeight() * 0.4f);
+        m.modulateByDrag (1, "velocity", 0.0f, -m.ed->plotBounds().getHeight() * 0.4f);
+        CHECK (m.ed->shape().points[0].modY.present && m.ed->shape().points[1].modY.present);
+        const auto content = m.rig.proc.content();
+        const auto* s = shapeOf (content, 1);
+        CHECK (s != nullptr && s->points[0].modY.present && s->points[1].modY.present);
+        modulated = m.render();
+    }
+    {
+        PointModRig m;
+        m.modulateByDrag (0, "velocity", 0.0f, -m.ed->plotBounds().getHeight() * 0.4f);
+        m.modulateByDrag (1, "velocity", 0.0f, -m.ed->plotBounds().getHeight() * 0.4f);
+        CHECK (m.ed->bypassPointMod (0, PointAxis::y, true) && m.ed->bypassPointMod (1, PointAxis::y, true));
+        bypassed = m.render();
+    }
+    std::printf ("    [POINT MOD] rms plain %.5f, modulated %.5f, bypassed %.5f\n", static_cast<double> (plain), static_cast<double> (modulated),
+                 static_cast<double> (bypassed));
+    CHECK (plain > 1.0e-4f);
+    CHECK (std::abs (modulated - plain) > 0.002f * plain);
+    CHECK_NEAR (bypassed, plain, 1.0e-6); // bypassed = the same sound as without
+}
+
+TEST (uil_point_mod_screenshots)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        PointModRig m;
+        m.rig.editor->setSize (sz.w, sz.h);
+        m.rig.editor->panelHost().setPage (Page::lfo);
+        auto* ed = m.ed;
+        if (ed == nullptr)
+            return;
+        ed->applyPreset (1);
+        ed->assignPointMod (1, PointAxis::y, pointModSourceChoice ("velocity"), 0.45f);
+        ed->assignPointMod (1, PointAxis::x, pointModSourceChoice ("macro1"), -0.2f);
+        ed->assignPointMod (2, PointAxis::y, pointModSourceChoice ("env2"), 0.3f);
+        ed->bypassPointMod (2, PointAxis::y, true);
+        ed->assignPointMod (0, PointAxis::y, pointModSourceChoice ("lfo2"), -0.35f);
+        ed->addPointAt (0.25f, 0.5f);
+        const juce::String n = sz.name;
+        auto snap = [&] (const juce::String& name)
+        {
+            m.rig.editor->setSize (sz.w, sz.h);
+            if (sz.w < 1000)
+                m.rig.editor->setSize (sz.w, sz.h + m.rig.editor->panelHost().contentHeight());
+            CHECK (writePng (m.rig.editor->createComponentSnapshot (m.rig.editor->getLocalBounds(), true, 1.0f),
+                             pointModShotDir().getChildFile (name + ".png")));
+            m.rig.editor->setSize (sz.w, sz.h);
+        };
+        ed->selectInRect (juce::Rectangle<float> (ed->pointPosition (1), ed->pointPosition (1)).expanded (4.0f));
+        snap ("pointmod-assigned-" + n);
+        // a source armed: dashed target rings on the free points
+        m.rig.editor->context().assign.tapSource (pointModSourceChoice ("velocity"));
+        snap ("pointmod-armed-targets-" + n);
+        m.rig.editor->context().assign.exitAssignMode();
+    }
+}
+
 TEST (uil_zz_shutdown)
 {
     delete juceInitLfo;

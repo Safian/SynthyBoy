@@ -8,11 +8,13 @@
 #pragma once
 
 #include <array>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "ControlModel.h"
+#include "synthyboy/content_state.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/state.h"
 
@@ -122,6 +124,31 @@ void setSlotBypass (ModMatrixAccess& matrix, int slot, bool bypass);
 /** Swaps everything the two slots hold (source, destination, amount, curve, polarity, stereo, bypass, aux source / invert / curve / output):
     "reorder the matrix" (design 06 row handle). Slots are 0-based. False for equal or out of range slots. One gesture per parameter. */
 bool swapModSlots (ModMatrixAccess& matrix, int slotA, int slotB);
+// ---- Point modulation of a custom LFO shape (content.lfo_shapes[].points[].mod_x / mod_y; docs/ui-design/05 row 05-22) -----------------
+// Stored exactly as the data model defines: {present, source key, amount -1..1} per axis, one source per axis. There is no bypass field, so
+// a bypassed modulation is "present with amount 0" (the engine adds nothing); the editor remembers the amount to restore.
+
+enum class PointAxis { x, y };
+
+inline ContentModRef& pointModOf (ContentPoint& p, PointAxis a) noexcept { return a == PointAxis::x ? p.modX : p.modY; }
+inline const ContentModRef& pointModOf (const ContentPoint& p, PointAxis a) noexcept { return a == PointAxis::x ? p.modX : p.modY; }
+
+/** The end points of a shape stay at x = 0 and x = 1 (the engine ignores mod_x there), so only Y can be modulated on them. */
+bool canModulatePointAxis (size_t index, size_t pointCount, PointAxis axis) noexcept;
+/** Source key of a choice value 1..kNumModSources (empty for anything else) and back (0 for an unknown key). */
+const char* pointModSourceKey (int sourceChoice) noexcept;
+int pointModSourceChoice (const std::string& key) noexcept;
+/** Sets the modulation of one axis (replacing whatever source it had); the amount is clamped to -1..1. False for a bad source or axis. */
+bool setPointMod (ContentPoint& p, size_t index, size_t pointCount, PointAxis axis, int sourceChoice, float amount) noexcept;
+/** Removes it; false when there was none. */
+bool removePointMod (ContentPoint& p, PointAxis axis) noexcept;
+/** Present and not bypassed. */
+bool pointModActive (const ContentPoint& p, PointAxis axis) noexcept;
+/** A drag of `deltaPx` (positive = more) over a plot that is `rangePx` wide / high: the depth bar follows the finger (the whole plot = 1.0). */
+float pointModDragAmount (float startAmount, float deltaPx, float rangePx) noexcept;
+/** The axis a drag from the point means: the larger of |dx|, |dy| wins (Y when equal or when X is not allowed). */
+PointAxis pointModDragAxis (float dx, float dy, bool xAllowed) noexcept;
+
 /** The macro (1..8) a source choice stands for (19..22 = macro 1..4, 29..32 = macro 5..8), 0 for anything else. */
 int macroOfSourceChoice (int sourceChoice) noexcept;
 

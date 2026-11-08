@@ -221,6 +221,15 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
     rowsField.setTooltip ("Grid rows");
     press.onLongPress = [this]
     {
+        // held still on a point: its modulation sheet (nothing has changed yet, or the press would have been cancelled by the slop)
+        if (pendingSheet >= 0 && ! gestureChanged && (drag == Drag::point || drag == Drag::pointMod || drag == Drag::selection))
+        {
+            const int index = pendingSheet;
+            pendingSheet = -1;
+            drag = Drag::none;
+            showPointSheet (index);
+            return;
+        }
         // held still on the empty plot: a marquee rectangle
         if (drag == Drag::none && tool_ == Tool::point && pendingMarquee)
         {
@@ -324,6 +333,11 @@ void LfoShapeEditor::reloadFromHost()
 
 void LfoShapeEditor::timerCallback()
 {
+    if (const int armed = armedSource(); armed != lastArmed)
+    {
+        lastArmed = armed;
+        repaint(); // the target rings of the point modulation
+    }
     if (dirty)
     {
         commitNow();
@@ -885,6 +899,7 @@ void LfoShapeEditor::paint (juce::Graphics& g)
             g.setColour (! juce::exactlyEqual (a.power, 0.0f) ? c.mod : c.textDim);
             g.fillPath (d);
         }
+        paintPointModulation (g);
         for (int i = 0; i < static_cast<int> (current.points.size()); ++i)
         {
             const auto pos = pointPosition (i);
@@ -1023,6 +1038,8 @@ void LfoShapeEditor::mouseDown (const juce::MouseEvent& e)
     dragIndex = -1;
     drag = Drag::none;
     pendingMarquee = false;
+    pendingSheet = -1;
+    modAxisChosen = false;
     if (! getLocalBounds().toFloat().contains (e.position))
         return;
 
@@ -1050,7 +1067,16 @@ void LfoShapeEditor::mouseDown (const juce::MouseEvent& e)
     if (const int i = hitPoint (e.position); i >= 0)
     {
         const bool partOfSelection = multi.size() > 1 && std::find (multi.begin(), multi.end(), i) != multi.end();
-        if (partOfSelection)
+        pendingSheet = i;
+        press.press (e.position);
+        if (armedSource() > 0)
+        {
+            // a source is armed: this press sets its depth on the point instead of moving it
+            drag = Drag::pointMod;
+            dragIndex = i;
+            selectOnly (i);
+        }
+        else if (partOfSelection)
         {
             drag = Drag::selection;
             dragIndex = i;
@@ -1095,10 +1121,29 @@ void LfoShapeEditor::mouseDown (const juce::MouseEvent& e)
 
 void LfoShapeEditor::mouseDrag (const juce::MouseEvent& e)
 {
-    if (pendingMarquee)
+    if (pendingMarquee || pendingSheet >= 0)
         press.moved (e.position);
     switch (drag)
     {
+        case Drag::pointMod:
+        {
+            const auto delta = e.position - e.getMouseDownPosition().toFloat();
+            const auto n = current.points.size();
+            if (! modAxisChosen)
+            {
+                if (delta.getDistanceFromOrigin() < static_cast<float> (ctx.theme.px (6.0f)))
+                    break;
+                modAxis = pointModDragAxis (delta.x, delta.y, canModulatePointAxis (static_cast<size_t> (dragIndex), n, PointAxis::x));
+                modAxisChosen = true;
+                const auto& m = pointModOf (gestureStart.points[static_cast<size_t> (dragIndex)], modAxis);
+                modStartDepth = m.present && pointModSourceChoice (m.source) == armedSource() ? m.amount : 0.0f;
+            }
+            const float depth = modAxis == PointAxis::x ? pointModDragAmount (modStartDepth, delta.x, plot.getWidth())
+                                                         : pointModDragAmount (modStartDepth, -delta.y, plot.getHeight());
+            setPointMod (current.points[static_cast<size_t> (dragIndex)], static_cast<size_t> (dragIndex), n, modAxis, armedSource(), depth);
+            touched();
+            break;
+        }
         case Drag::point:
         {
             float x = fromX (e.position.x), y = fromY (e.position.y);
@@ -1159,6 +1204,17 @@ void LfoShapeEditor::mouseUp (const juce::MouseEvent&)
 {
     press.cancel();
     pendingMarquee = false;
+    pendingSheet = -1;
+    if (drag == Drag::pointMod && ! modAxisChosen)
+    {
+        // a tap with a source armed: Y gets the source at 50 % unless that source is already on it
+        const auto i = static_cast<size_t> (dragIndex);
+        const auto& m = current.points[i].modY;
+        if (! (m.present && pointModSourceChoice (m.source) == armedSource()))
+            if (setPointMod (current.points[i], i, current.points.size(), PointAxis::y, armedSource(), 0.5f))
+                touched();
+    }
+    modAxisChosen = false;
     if (drag == Drag::marquee)
     {
         drag = Drag::none;
@@ -1189,8 +1245,11 @@ void LfoShapeEditor::mouseDoubleClick (const juce::MouseEvent& e)
     // the second press of the double click opened a gesture on the point; the edits below are discrete undo steps of their own
     press.cancel();
     pendingMarquee = false;
+    pendingSheet = -1;
     drag = Drag::none;
     gestureChanged = false;
+    if (armedSource() > 0)
+        return; // the point modulation targets are armed: a double tap neither adds nor deletes
     if (const int i = hitPoint (e.position); i >= 0)
     {
         deletePoint (i);
@@ -1213,6 +1272,197 @@ void LfoShapeEditor::mouseDoubleClick (const juce::MouseEvent& e)
         }
         addPointAt (x, y);
         commitNow();
+    }
+}
+
+// ---- point modulation (row 05-22) --------------------------------------------------------------------------------------------------
+
+int LfoShapeEditor::armedSource() const { return ctx.assign.flow().armedSource(); }
+
+float& LfoShapeEditor::memoFor (int index, PointAxis axis)
+{
+    if (depthMemo.size() != current.points.size())
+        depthMemo.assign (current.points.size(), { 0.0f, 0.0f });
+    return depthMemo[static_cast<size_t> (index)][axis == PointAxis::x ? 0 : 1];
+}
+
+bool LfoShapeEditor::assignPointMod (int index, PointAxis axis, int sourceChoice, float depth)
+{
+    if (index < 0 || index >= static_cast<int> (current.points.size()))
+        return false;
+    auto next = current.points[static_cast<size_t> (index)];
+    if (! setPointMod (next, static_cast<size_t> (index), current.points.size(), axis, sourceChoice, depth))
+        return false;
+    if (next == current.points[static_cast<size_t> (index)])
+        return false;
+    pushUndo();
+    current.points[static_cast<size_t> (index)] = next;
+    touched();
+    commitNow();
+    return true;
+}
+
+bool LfoShapeEditor::clearPointMod (int index, PointAxis axis)
+{
+    if (index < 0 || index >= static_cast<int> (current.points.size()) || ! pointModOf (current.points[static_cast<size_t> (index)], axis).present)
+        return false;
+    pushUndo();
+    removePointMod (current.points[static_cast<size_t> (index)], axis);
+    touched();
+    commitNow();
+    return true;
+}
+
+bool LfoShapeEditor::pointModBypassed (int index, PointAxis axis) const
+{
+    if (index < 0 || index >= static_cast<int> (current.points.size()))
+        return false;
+    const auto& pt = current.points[static_cast<size_t> (index)];
+    return pointModOf (pt, axis).present && ! pointModActive (pt, axis);
+}
+
+bool LfoShapeEditor::bypassPointMod (int index, PointAxis axis, bool bypass)
+{
+    if (index < 0 || index >= static_cast<int> (current.points.size()))
+        return false;
+    auto& m = pointModOf (current.points[static_cast<size_t> (index)], axis);
+    if (! m.present || pointModBypassed (index, axis) == bypass)
+        return false;
+    pushUndo();
+    float& memo = memoFor (index, axis);
+    if (bypass)
+    {
+        memo = m.amount;
+        m.amount = 0.0f;
+    }
+    else
+    {
+        m.amount = std::abs (memo) > 0.0f ? memo : 0.5f;
+    }
+    touched();
+    commitNow();
+    return true;
+}
+
+void LfoShapeEditor::showPointSheet (int index)
+{
+    const int n = static_cast<int> (current.points.size());
+    if (index < 0 || index >= n)
+        return;
+    selectOnly (index);
+    updateButtons();
+    repaint();
+
+    const auto& p = current.points[static_cast<size_t> (index)];
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Point " + juce::String (index + 1) + " modulation");
+    for (const auto axis : { PointAxis::x, PointAxis::y })
+    {
+        if (! canModulatePointAxis (static_cast<size_t> (index), static_cast<size_t> (n), axis))
+            continue;
+        const int base = axis == PointAxis::x ? 100 : 200;
+        const juce::String name = axis == PointAxis::x ? "X" : "Y";
+        const auto& m = pointModOf (p, axis);
+        const int sourceNow = m.present ? pointModSourceChoice (m.source) : 0;
+
+        juce::PopupMenu sources;
+        for (int s = 1; s <= kNumModSources; ++s)
+            sources.addItem (base + 10 + s, juce::String (modSourceTable()[s - 1].name), true, s == sourceNow);
+        menu.addSubMenu (m.present ? name + ": " + juce::String (modSourceTable()[juce::jmax (1, sourceNow) - 1].name) + " "
+                                         + juce::String (juce::roundToInt (m.amount * 100.0f)) + "%"
+                                   : "Modulate " + name,
+                         sources);
+        if (m.present)
+        {
+            menu.addItem (base + 1, "Bypass " + name, true, pointModBypassed (index, axis));
+            menu.addItem (base + 0, "Remove " + name);
+        }
+    }
+    const auto at = pointPosition (index);
+    menu.showMenuAsync (juce::PopupMenu::Options()
+                            .withTargetScreenArea (localAreaToGlobal (juce::Rectangle<float> (at, at).expanded (ctx.theme.px (8.0f)).toNearestInt()))
+                            .withMinimumWidth (ctx.theme.ipx (180.0f)),
+                        [safe = juce::Component::SafePointer<LfoShapeEditor> (this), index] (int result)
+                        {
+                            if (safe == nullptr || result <= 0)
+                                return;
+                            const auto axis = result >= 200 ? PointAxis::y : PointAxis::x;
+                            const int what = result % 100;
+                            if (what == 0)
+                                safe->clearPointMod (index, axis);
+                            else if (what == 1)
+                                safe->bypassPointMod (index, axis, ! safe->pointModBypassed (index, axis));
+                            else if (what > 10 && index < static_cast<int> (safe->current.points.size()))
+                            {
+                                const auto& m = pointModOf (safe->current.points[static_cast<size_t> (index)], axis);
+                                safe->assignPointMod (index, axis, what - 10, m.present && std::abs (m.amount) > 0.0f ? m.amount : 0.5f);
+                            }
+                        });
+}
+
+void LfoShapeEditor::paintPointModulation (juce::Graphics& g)
+{
+    const auto& t = ctx.theme;
+    const auto& c = t.colours;
+    const bool armed = armedSource() > 0;
+    for (int i = 0; i < static_cast<int> (current.points.size()); ++i)
+    {
+        const auto& pt = current.points[static_cast<size_t> (i)];
+        const auto pos = pointPosition (i);
+        const float r = t.px (11.0f);
+        bool any = false;
+        for (const auto axis : { PointAxis::x, PointAxis::y })
+        {
+            const auto& m = pointModOf (pt, axis);
+            if (! m.present)
+                continue;
+            any = true;
+            const bool live = pointModActive (pt, axis);
+            const auto colour = ! live ? c.modIdle : m.amount >= 0.0f ? c.mod : c.modNegative;
+            g.setColour (colour.withAlpha (live ? 0.75f : 0.5f));
+            // the swing of the source: from the point to point + depth (clamped to the plot), as a bar
+            if (axis == PointAxis::y)
+            {
+                const float to = juce::jlimit (plot.getY(), plot.getBottom(), toY (pt.y + m.amount));
+                g.fillRoundedRectangle (juce::Rectangle<float> (pos.x - t.px (2.5f), juce::jmin (pos.y, to), t.px (5.0f), juce::jmax (t.px (2.0f), std::abs (to - pos.y))), t.px (2.0f));
+            }
+            else
+            {
+                const float to = juce::jlimit (plot.getX(), plot.getRight(), toX (pt.x + m.amount));
+                g.fillRoundedRectangle (juce::Rectangle<float> (juce::jmin (pos.x, to), pos.y - t.px (2.5f), juce::jmax (t.px (2.0f), std::abs (to - pos.x)), t.px (5.0f)), t.px (2.0f));
+            }
+        }
+        if (any)
+        {
+            const bool live = pointModActive (pt, PointAxis::x) || pointModActive (pt, PointAxis::y);
+            g.setColour (live ? c.mod : c.modIdle);
+            g.drawEllipse (pos.x - r, pos.y - r, 2.0f * r, 2.0f * r, t.px (2.0f));
+            if (i == selected)
+            {
+                g.setFont (t.labelFont());
+                for (const auto axis : { PointAxis::x, PointAxis::y })
+                {
+                    const auto& m = pointModOf (pt, axis);
+                    if (! m.present)
+                        continue;
+                    const int choice = pointModSourceChoice (m.source);
+                    g.drawText ((axis == PointAxis::x ? "X " : "Y ") + juce::String (choice > 0 ? modSourceTable()[choice - 1].name : "?") + " "
+                                    + juce::String (juce::roundToInt (m.amount * 100.0f)) + "%",
+                                juce::Rectangle<float> (pos.x + r + t.px (2.0f), pos.y + (axis == PointAxis::x ? -t.px (14.0f) : 0.0f), t.px (110.0f), t.px (14.0f)).toNearestInt(),
+                                juce::Justification::centredLeft, false);
+                }
+            }
+        }
+        else if (armed)
+        {
+            // a target for the armed source
+            juce::Path ring, dashed;
+            ring.addEllipse (pos.x - r, pos.y - r, 2.0f * r, 2.0f * r);
+            const float dashes[] = { t.px (3.0f), t.px (3.0f) };
+            juce::PathStrokeType (t.px (1.5f)).createDashedStroke (dashed, ring, dashes, 2);
+            g.setColour (c.mod.withAlpha (0.7f));
+            g.fillPath (dashed);
+        }
     }
 }
 } // namespace synthyboy::ui

@@ -573,3 +573,63 @@ TEST (uim_warp_picture_and_cpu_level)
     CHECK_EQ (cpuLevel (0.8f), 2);
     CHECK_EQ (cpuLevel (3.0f), 2);
 }
+
+// ---- point modulation of a custom LFO shape (row 05-22) ----
+
+TEST (uim_point_mod_set_remove_and_limits)
+{
+    ContentPoint p (0.4f, 0.5f);
+    const int velocity = pointModSourceChoice ("velocity");
+    CHECK (velocity > 0);
+    CHECK_EQ (std::string (pointModSourceKey (velocity)), std::string ("velocity"));
+    CHECK_EQ (pointModSourceChoice ("nope"), 0);
+    CHECK (std::string (pointModSourceKey (0)).empty() && std::string (pointModSourceKey (kNumModSources + 1)).empty());
+
+    // X needs an inner point; Y works everywhere; a bad source or index is refused and writes nothing
+    CHECK (canModulatePointAxis (1, 3, PointAxis::x) && canModulatePointAxis (1, 3, PointAxis::y));
+    CHECK (! canModulatePointAxis (0, 3, PointAxis::x) && canModulatePointAxis (0, 3, PointAxis::y));
+    CHECK (! canModulatePointAxis (2, 3, PointAxis::x) && ! canModulatePointAxis (3, 3, PointAxis::y));
+    CHECK (! setPointMod (p, 0, 3, PointAxis::x, velocity, 0.5f));
+    CHECK (! setPointMod (p, 1, 3, PointAxis::y, 0, 0.5f));
+    CHECK (! p.modX.present && ! p.modY.present);
+
+    CHECK (setPointMod (p, 1, 3, PointAxis::y, velocity, 7.0f)); // clamped to the data model range
+    CHECK (p.modY.present && p.modY.source == "velocity");
+    CHECK_NEAR (p.modY.amount, 1.0, 1e-6);
+    CHECK (setPointMod (p, 1, 3, PointAxis::y, pointModSourceChoice ("env2"), -0.25f)); // one source per axis: replaced
+    CHECK (p.modY.source == "env2");
+    CHECK_NEAR (p.modY.amount, -0.25, 1e-6);
+    CHECK (pointModActive (p, PointAxis::y) && ! pointModActive (p, PointAxis::x));
+    CHECK (setPointMod (p, 1, 3, PointAxis::y, pointModSourceChoice ("env2"), 0.0f));
+    CHECK (p.modY.present && ! pointModActive (p, PointAxis::y)); // depth 0 = bypassed, still stored
+
+    CHECK (removePointMod (p, PointAxis::y));
+    CHECK (! p.modY.present && p.modY.source.empty());
+    CHECK (! removePointMod (p, PointAxis::y));
+
+    // every source key of the table is a valid mod_x / mod_y of the data model
+    for (int i = 1; i <= kNumModSources; ++i)
+    {
+        StateContent content;
+        ContentLfoShape s;
+        s.lfo = 1;
+        s.points = { ContentPoint (0.0f, 0.0f), ContentPoint (0.5f, 0.5f), ContentPoint (1.0f, 1.0f) };
+        CHECK (setPointMod (s.points[1], 1, 3, PointAxis::x, i, 0.5f));
+        CHECK (setPointMod (s.points[1], 1, 3, PointAxis::y, i, -0.5f));
+        content.lfoShapes.push_back (s);
+        CHECK (validateContent (content));
+    }
+}
+
+TEST (uim_point_mod_drag_amount_and_axis)
+{
+    // the bar follows the finger (the whole plot = 1.0); the larger movement picks the axis; X only where it is allowed
+    CHECK_NEAR (pointModDragAmount (0.0f, 100.0f, 100.0f), 1.0, 1e-6);
+    CHECK_NEAR (pointModDragAmount (0.0f, 50.0f, 100.0f), 0.5, 1e-6);
+    CHECK_NEAR (pointModDragAmount (0.5f, -100.0f, 100.0f), -0.5, 1e-6);
+    CHECK_NEAR (pointModDragAmount (0.9f, 500.0f, 100.0f), 1.0, 1e-6);
+    CHECK (pointModDragAxis (30.0f, 5.0f, true) == PointAxis::x);
+    CHECK (pointModDragAxis (5.0f, -30.0f, true) == PointAxis::y);
+    CHECK (pointModDragAxis (30.0f, 5.0f, false) == PointAxis::y);
+    CHECK (pointModDragAxis (10.0f, 10.0f, true) == PointAxis::y);
+}

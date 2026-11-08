@@ -663,4 +663,62 @@ bool ScaleInfo::isRoot (int scaleKey, int scaleType, int midiNote) noexcept
     const int pitchClass = ((midiNote % 12) - (scaleKey % 12) + 12) % 12;
     return pitchClass == 0;
 }
+// ---- Point modulation ---------------------------------------------------------------------------------------------------------------
+
+bool canModulatePointAxis (size_t index, size_t pointCount, PointAxis axis) noexcept
+{
+    if (index >= pointCount)
+        return false;
+    return axis == PointAxis::y || (index > 0 && index + 1 < pointCount);
+}
+
+const char* pointModSourceKey (int sourceChoice) noexcept
+{
+    return sourceChoice >= 1 && sourceChoice <= kNumModSources ? modSourceTable()[sourceChoice - 1].key : "";
+}
+
+int pointModSourceChoice (const std::string& key) noexcept
+{
+    for (int i = 0; i < kNumModSources; ++i)
+        if (key == modSourceTable()[i].key)
+            return i + 1;
+    return 0;
+}
+
+bool setPointMod (ContentPoint& p, size_t index, size_t pointCount, PointAxis axis, int sourceChoice, float amount) noexcept
+{
+    if (sourceChoice < 1 || sourceChoice > kNumModSources || ! canModulatePointAxis (index, pointCount, axis))
+        return false;
+    auto& m = pointModOf (p, axis);
+    m.present = true;
+    m.source = pointModSourceKey (sourceChoice);
+    m.amount = std::clamp (amount, -static_cast<float> (kMaxPointModAmount), static_cast<float> (kMaxPointModAmount));
+    return true;
+}
+
+bool removePointMod (ContentPoint& p, PointAxis axis) noexcept
+{
+    auto& m = pointModOf (p, axis);
+    if (! m.present)
+        return false;
+    m = {};
+    return true;
+}
+
+bool pointModActive (const ContentPoint& p, PointAxis axis) noexcept
+{
+    const auto& m = pointModOf (p, axis);
+    return m.present && std::abs (m.amount) > 0.0f;
+}
+
+float pointModDragAmount (float startAmount, float deltaPx, float rangePx) noexcept
+{
+    const float swing = 1.0f / std::max (1.0f, rangePx);
+    return std::clamp (startAmount + deltaPx * swing, -static_cast<float> (kMaxPointModAmount), static_cast<float> (kMaxPointModAmount));
+}
+
+PointAxis pointModDragAxis (float dx, float dy, bool xAllowed) noexcept
+{
+    return xAllowed && std::abs (dx) > std::abs (dy) ? PointAxis::x : PointAxis::y;
+}
 } // namespace synthyboy::ui
