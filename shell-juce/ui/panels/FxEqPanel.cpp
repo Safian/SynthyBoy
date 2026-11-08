@@ -185,7 +185,49 @@ public:
         }
     }
 
+    /** Pinch on a node = its resonance (design 08 section 3); a two-finger scroll / wheel does the same on a desktop. The band is the one
+        being dragged, else the node nearest to the pointer. */
+    void mouseMagnify (const juce::MouseEvent& e, float scaleFactor) override
+    {
+        scaleResonance (bandFor (e.position), scaleFactor);
+    }
+
+    void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
+    {
+        scaleResonance (bandFor (e.position), std::pow (1.5f, wheel.deltaY * 2.0f));
+    }
+
 private:
+    int bandFor (juce::Point<float> pos) const
+    {
+        if (draggingBand >= 0)
+            return draggingBand;
+        const auto& t = ctx.theme;
+        const auto area = getLocalBounds().toFloat().reduced (t.px (8.0f)).withTrimmedTop (t.px (16.0f));
+        int best = 0;
+        float bestDist = 1e9f;
+        for (int b = 0; b < 3; ++b)
+        {
+            const float x = area.getX() + area.getWidth() * fxFreqToNorm (bandData[static_cast<size_t> (b)].cutoff->plain());
+            const float d = std::abs (pos.x - x);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = b;
+            }
+        }
+        return best;
+    }
+
+    void scaleResonance (int b, float factor)
+    {
+        auto& res = *band (b).res;
+        if (! res.valid() || ! (factor > 0.0f))
+            return;
+        res.setPlainComplete (juce::jlimit (res.info().min, res.info().max, res.plain() * factor));
+        repaint();
+    }
+
     void updateBandFromMouse (juce::Point<float> pos, juce::Rectangle<float> area)
     {
         const float normX = juce::jlimit (0.0f, 1.0f, (pos.x - area.getX()) / area.getWidth());
@@ -210,6 +252,7 @@ private:
         std::unique_ptr<ParamHandle> res;
     };
     BandParams& band (int i) { return bandData[static_cast<size_t> (i)]; }
+    const BandParams& band (int i) const { return bandData[static_cast<size_t> (i)]; }
 
     std::array<BandParams, 3> bandData;
     int draggingBand = -1;

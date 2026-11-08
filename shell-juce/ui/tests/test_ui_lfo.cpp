@@ -10,8 +10,10 @@
 
 #include "PluginProcessor.h"
 #include "ui/Editor.h"
+#include "ui/panels/EnvCurveView.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/LfoTabsPanel.h"
+#include "ui/panels/OscWaveView.h"
 #include "test_runner.h"
 
 using namespace synthyboy;
@@ -77,17 +79,17 @@ struct Rig
         return nullptr;
     }
 
-    void shot (const juce::String& name, int w, int h, bool whole = false)
+    void shot (const juce::String& name, int w, int h, bool whole = false, Page page = Page::lfo)
     {
         editor->setSize (w, h);
-        editor->panelHost().setPage (Page::lfo); // the wide layout scrolls to the first LFO tile
+        editor->panelHost().setPage (page); // the wide layout scrolls to the first LFO tile
         if (whole && w < 1000)
             editor->setSize (w, h + editor->panelHost().contentHeight());
         const auto file = shotDir().getChildFile (name + ".png");
         CHECK (writePng (editor->createComponentSnapshot (editor->getLocalBounds(), true, 1.0f), file));
         std::printf ("    [UI SHOT] %s\n", file.getFullPathName().toRawUTF8());
         editor->setSize (w, h);
-        editor->panelHost().setPage (Page::lfo);
+        editor->panelHost().setPage (page);
     }
 };
 
@@ -417,6 +419,128 @@ TEST (uil_custom_shape_survives_the_host_state_and_other_changes_reload)
     }
 }
 
+// ---- gestures added by the gesture audit (docs/ui-design/UI-GESTURE-AUDIT.md) ----
+
+template <typename T>
+T* findChildOfType (juce::Component& c)
+{
+    if (auto* hit = dynamic_cast<T*> (&c))
+        return hit;
+    for (auto* child : c.getChildren())
+        if (auto* hit = findChildOfType<T> (*child))
+            return hit;
+    return nullptr;
+}
+
+TEST (uil_mix_console_strip_drag_is_the_level_and_the_name_tap_is_the_power)
+{
+    Rig rig;
+    rig.editor->panelHost().setPage (Page::mix);
+    rig.editor->pageTabs().select (Page::mix, false);
+    auto* console = findChildOfType<OscMixConsoleView> (*rig.editor);
+    CHECK (console != nullptr);
+    if (console == nullptr)
+        return;
+    CHECK (console->getWidth() > 0 && console->getHeight() > 0);
+
+    rig.setParam ("osc1.level", 20.0f);
+    const float before = rig.param ("osc1.level");
+    const auto strip = console->stripBounds (0);
+    const juce::Point<float> from (strip.getCentreX(), strip.getY() + strip.getHeight() * 0.5f);
+    drag (*console, from, from + juce::Point<float> (0.0f, -strip.getHeight() * 0.3f));
+    CHECK (rig.param ("osc1.level") > before); // dragging up raises osc1.level
+
+    const float powerBefore = rig.param ("osc1.on");
+    const juce::Point<float> name (strip.getCentreX(), strip.getBottom() - 4.0f);
+    console->mouseDown (mouse (*console, name, name, false));
+    console->mouseUp (mouse (*console, name, name, false));
+    CHECK (! juce::exactlyEqual (rig.param ("osc1.on"), powerBefore));
+    const juce::Point<float> f1 (console->stripBounds (4).getCentreX(), console->stripBounds (4).getBottom() - 4.0f);
+    const float f1Level = rig.param ("filter1.level");
+    console->mouseDown (mouse (*console, f1, f1, false));
+    console->mouseUp (mouse (*console, f1, f1, false));
+    CHECK (juce::exactlyEqual (rig.param ("filter1.level"), f1Level)); // a tap on a filter strip's foot changes nothing
+}
+
+TEST (uil_envelope_zoom_only_while_unlocked_and_eq_pinch_sets_the_resonance)
+{
+    Rig rig;
+    rig.editor->panelHost().setPage (Page::env);
+    auto* env = findChildOfType<EnvCurveView> (*rig.editor);
+    CHECK (env != nullptr);
+    if (env != nullptr)
+    {
+        CHECK (env->isZoomLocked());
+        env->mouseMagnify (mouse (*env, { 5.0f, 5.0f }, { 5.0f, 5.0f }, false), 2.0f);
+        CHECK_EQ (env->zoom(), 1.0f); // locked: the graph always fits
+        env->setZoomLocked (false);
+        env->mouseMagnify (mouse (*env, { 5.0f, 5.0f }, { 5.0f, 5.0f }, false), 2.0f);
+        CHECK_EQ (env->zoom(), 2.0f);
+        juce::MouseWheelDetails wheel;
+        wheel.deltaX = 0.0f;
+        wheel.deltaY = -0.5f;
+        wheel.isReversed = false;
+        wheel.isSmooth = false;
+        wheel.isInertial = false;
+        env->mouseWheelMove (mouse (*env, { 5.0f, 5.0f }, { 5.0f, 5.0f }, false), wheel);
+        CHECK (env->zoom() < 2.0f);
+        env->mouseMagnify (mouse (*env, { 5.0f, 5.0f }, { 5.0f, 5.0f }, false), 0.01f);
+        CHECK_EQ (env->zoom(), 1.0f); // never zooms out beyond "fits"
+        env->setZoomLocked (true);
+        CHECK_EQ (env->zoom(), 1.0f);
+    }
+
+    rig.editor->panelHost().setPage (Page::fx);
+    Panel* eq = nullptr;
+    for (const auto& p : rig.editor->panelHost().allPanels())
+        if (p->title() == "Equalizer")
+            eq = p.get();
+    CHECK (eq != nullptr);
+    if (eq == nullptr)
+        return;
+    juce::Component* view = nullptr;
+    for (auto* child : eq->getChildren())
+        if (dynamic_cast<juce::Button*> (child) == nullptr && dynamic_cast<ParamControl*> (child) == nullptr && child->getWidth() > 50 && view == nullptr)
+            view = child;
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+    const auto sum = [&rig] { return rig.param ("eq.low.resonance") + rig.param ("eq.mid.resonance") + rig.param ("eq.high.resonance"); };
+    const float before = sum();
+    const juce::Point<float> p (static_cast<float> (view->getWidth()) * 0.5f, static_cast<float> (view->getHeight()) * 0.5f);
+    view->mouseMagnify (mouse (*view, p, p, false), 1.5f);
+    CHECK (sum() > before);
+}
+
+TEST (uil_mono_pill_toggles_the_polyphony)
+{
+    Rig rig;
+    rig.editor->panelHost().setPage (Page::glb);
+    Panel* porta = nullptr;
+    for (const auto& p : rig.editor->panelHost().allPanels())
+        if (p->title() == "Portamento / Legato")
+            porta = p.get();
+    CHECK (porta != nullptr);
+    if (porta == nullptr)
+        return;
+    juce::TextButton* mono = nullptr;
+    for (auto* child : porta->getChildren())
+        if (auto* b = dynamic_cast<juce::TextButton*> (child); b != nullptr && b->getButtonText() == "MONO")
+            mono = b;
+    CHECK (mono != nullptr);
+    if (mono == nullptr)
+        return;
+    CHECK (mono->getWidth() >= rig.editor->theme().touch() && mono->getHeight() >= rig.editor->theme().touch());
+
+    rig.setParam ("master.polyphony", 12);
+    mono->onClick();
+    CHECK_EQ (rig.param ("master.polyphony"), 1.0f);
+    CHECK (mono->getToggleState());
+    mono->onClick();
+    CHECK_EQ (rig.param ("master.polyphony"), 12.0f); // back to the voice count it had
+    CHECK (! mono->getToggleState());
+}
+
 TEST (uil_zz_screenshots)
 {
     struct Size { int w, h; const char* name; };
@@ -448,6 +572,18 @@ TEST (uil_zz_screenshots)
             ed->setSmooth (false);
         }
         rig.shot ("lfo-shape-editor-" + n, sz.w, sz.h, true);
+
+        // the other pages the audit touched: mixer console strips, envelope (unlocked zoom), equalizer (resonance by pinch), portamento + MONO
+        rig.editor->pageTabs().select (Page::mix, false);
+        rig.shot ("mix-console-strips-" + n, sz.w, sz.h, false, Page::mix);
+        rig.editor->pageTabs().select (Page::env, false);
+        rig.shot ("env-" + n, sz.w, sz.h, false, Page::env);
+        rig.editor->pageTabs().select (Page::fx, false);
+        rig.shot ("fx-eq-" + n, sz.w, sz.h, true, Page::fx);
+        rig.editor->pageTabs().select (Page::glb, false);
+        rig.shot ("glb-portamento-mono-" + n, sz.w, sz.h, true, Page::glb);
+        rig.editor->pageTabs().select (Page::lfo, false);
+        rig.editor->panelHost().setPage (Page::lfo);
 
         // a drag of a chip in flight: highlight on the drop target and the hint
         if (auto* tabs = rig.tabs())

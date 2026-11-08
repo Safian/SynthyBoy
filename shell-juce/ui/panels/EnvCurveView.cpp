@@ -71,8 +71,28 @@ void EnvCurveView::setZoomLocked (bool locked)
     if (zoomLocked != locked)
     {
         zoomLocked = locked;
+        if (locked)
+            timeZoom = 1.0f; // locked = the graph fits the display again (design 05 section 2.1)
         repaint();
     }
+}
+
+void EnvCurveView::zoomBy (float factor)
+{
+    if (zoomLocked)
+        return;
+    timeZoom = juce::jlimit (kMinTimeZoom, kMaxTimeZoom, timeZoom * factor);
+    repaint();
+}
+
+void EnvCurveView::mouseMagnify (const juce::MouseEvent&, float scaleFactor)
+{
+    zoomBy (scaleFactor); // pinch while the zoom lock is off (design 05 section 3)
+}
+
+void EnvCurveView::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    zoomBy (std::pow (1.5f, wheel.deltaY * 2.0f)); // two-finger scroll / wheel = the same zoom on a desktop
 }
 
 EnvCurveView::EnvValues EnvCurveView::readCurrentValues() const
@@ -245,7 +265,7 @@ juce::Point<float> EnvCurveView::getNodePosition (HitNode node) const
     const auto area = plotArea();
     const auto v = readCurrentValues();
     const float tHoldVisual = juce::jmax (40.0f, (v.delay + v.attack + v.hold + v.decay + v.release) * 0.12f);
-    const float totalTime = juce::jmax (200.0f, v.delay + v.attack + v.hold + v.decay + tHoldVisual + v.release);
+    const float totalTime = juce::jmax (200.0f, v.delay + v.attack + v.hold + v.decay + tHoldVisual + v.release) / displayZoom();
 
     const float t1 = v.delay;
     const float t2 = t1 + v.attack;
@@ -333,7 +353,7 @@ void EnvCurveView::paint (juce::Graphics& g)
 
     const auto v = readCurrentValues();
     const float tHoldVisual = juce::jmax (40.0f, (v.delay + v.attack + v.hold + v.decay + v.release) * 0.12f);
-    const float totalTime = juce::jmax (200.0f, v.delay + v.attack + v.hold + v.decay + tHoldVisual + v.release);
+    const float totalTime = juce::jmax (200.0f, v.delay + v.attack + v.hold + v.decay + tHoldVisual + v.release) / displayZoom();
 
     // Horizontal grid lines
     g.setColour (c.outline.withAlpha (0.15f));
@@ -375,7 +395,7 @@ void EnvCurveView::paint (juce::Graphics& g)
     if (envIdx > 1)
     {
         const auto env1 = readEnv1Values();
-        const float totalTimeEnv1 = juce::jmax (200.0f, env1.delay + env1.attack + env1.hold + env1.decay + tHoldVisual + env1.release);
+        const float totalTimeEnv1 = juce::jmax (200.0f, env1.delay + env1.attack + env1.hold + env1.decay + tHoldVisual + env1.release) / displayZoom();
         const auto pathEnv1 = buildPath (env1, area, totalTimeEnv1);
         g.setColour (c.textDim.withAlpha (0.28f));
         g.strokePath (pathEnv1, juce::PathStrokeType (t.px (1.5f), juce::PathStrokeType::curved, juce::PathStrokeType::rounded));

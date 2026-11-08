@@ -796,9 +796,62 @@ void OscMixConsoleView::resized()
     routingButton.setBounds (x, y, juce::jmax (touchH, t.ipx (76.0f)), touchH);
 }
 
+juce::Rectangle<float> OscMixConsoleView::stripBounds (int strip) const
+{
+    // the same geometry as paint (): header, body, master faders on the right
+    const auto& t = ctx.theme;
+    const auto r = getLocalBounds().toFloat().reduced (t.px (1.0f));
+    const float headerH = static_cast<float> (t.touch() + t.gap());
+    const auto body = r.withTrimmedTop (headerH).reduced (t.px (6.0f), t.px (4.0f));
+    const float masterWidth = static_cast<float> (t.touch() * 2 + t.gap());
+    const auto stripsArea = body.withTrimmedRight (masterWidth);
+    const float stripW = (stripsArea.getWidth() - static_cast<float> (kNumStrips - 1) * t.px (3.0f)) / static_cast<float> (kNumStrips);
+    const float x = stripsArea.getX() + static_cast<float> (strip) * (stripW + t.px (3.0f));
+    return { x, stripsArea.getY(), stripW, stripsArea.getHeight() };
+}
+
+int OscMixConsoleView::stripAt (juce::Point<float> p) const
+{
+    for (int i = 0; i < kNumStrips; ++i)
+        if (stripBounds (i).contains (p))
+            return i;
+    return -1;
+}
+
+ParamHandle& OscMixConsoleView::stripLevel (int strip)
+{
+    ParamHandle* levels[] = { &o1Level, &o2Level, &o3Level, &noiseLevel, &f1Level, &f2Level, &b1Level, &b2Level };
+    return *levels[juce::jlimit (0, kNumStrips - 1, strip)];
+}
+
+ParamHandle* OscMixConsoleView::stripPower (int strip)
+{
+    ParamHandle* power[] = { &o1On, &o2On, &o3On, &noiseOn };
+    return strip >= 0 && strip < 4 ? power[strip] : nullptr;
+}
+
 void OscMixConsoleView::mouseDown (const juce::MouseEvent& e)
 {
     dragStartPos = e.position;
+    stripNameTap = false;
+    activeStrip = stripAt (e.position);
+    if (activeStrip >= 0)
+    {
+        // design 02 section 3: drag a strip = its level, tap its header (here: the name at the foot) = its power
+        const auto col = stripBounds (activeStrip);
+        auto& level = stripLevel (activeStrip);
+        activeFader = FaderTarget::strip;
+        if (stripPower (activeStrip) != nullptr && e.position.y > col.getBottom() - static_cast<float> (ctx.theme.touch()))
+        {
+            stripNameTap = true;
+        }
+        else if (level.valid())
+        {
+            level.beginGesture();
+            dragStartNorm = level.normalised();
+        }
+        return;
+    }
     const float w = static_cast<float> (getWidth());
     // Direct manipulation on the rightmost two master faders: Main and Direct
     const float mainFaderLeft = w - static_cast<float> (ctx.theme.touch() * 2);
@@ -833,6 +886,16 @@ void OscMixConsoleView::mouseDrag (const juce::MouseEvent& e)
     if (activeFader == FaderTarget::none)
         return;
 
+    if (activeFader == FaderTarget::strip)
+    {
+        if (! stripNameTap && stripLevel (activeStrip).valid())
+        {
+            const float colH = juce::jmax (1.0f, stripBounds (activeStrip).getHeight() * 0.7f);
+            stripLevel (activeStrip).setNormalised (juce::jlimit (0.0f, 1.0f, dragStartNorm - (e.position.y - dragStartPos.y) / colH));
+        }
+        return;
+    }
+
     const float h = static_cast<float> (juce::jmax (1, getHeight()));
     const float dy = e.position.y - dragStartPos.y;
     const float newNorm = juce::jlimit (0.0f, 1.0f, dragStartNorm - dy / h);
@@ -843,13 +906,28 @@ void OscMixConsoleView::mouseDrag (const juce::MouseEvent& e)
         directLevelHandle.setNormalised (newNorm);
 }
 
-void OscMixConsoleView::mouseUp (const juce::MouseEvent&)
+void OscMixConsoleView::mouseUp (const juce::MouseEvent& e)
 {
-    if (activeFader == FaderTarget::main && masterVolumeHandle.valid())
+    if (activeFader == FaderTarget::strip)
+    {
+        if (stripNameTap)
+        {
+            if (auto* power = stripPower (activeStrip); power != nullptr && power->valid() && e.getDistanceFromDragStart() < 6)
+                power->setPlainComplete (power->plain() >= 0.5f ? 0.0f : 1.0f);
+        }
+        else if (stripLevel (activeStrip).valid())
+        {
+            stripLevel (activeStrip).endGesture();
+        }
+        repaint();
+    }
+    else if (activeFader == FaderTarget::main && masterVolumeHandle.valid())
         masterVolumeHandle.endGesture();
     else if (activeFader == FaderTarget::direct && directLevelHandle.valid())
         directLevelHandle.endGesture();
     activeFader = FaderTarget::none;
+    activeStrip = -1;
+    stripNameTap = false;
 }
 
 void OscMixConsoleView::paint (juce::Graphics& g)
