@@ -78,6 +78,8 @@ namespace sbvital {
         return enabled_modulation_processors_;
       }
 
+      void setNoteTable(const mono_float* table) override;
+
     private:
       void createNoteArticulation();
       void createProducers();

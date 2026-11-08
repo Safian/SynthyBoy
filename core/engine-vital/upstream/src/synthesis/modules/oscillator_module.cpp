@@ -77,6 +77,16 @@ namespace sbvital {
     Output* sample_scan = createPolyModControl(prefix_ + "_sample_scan");
     Output* sample_uni_start = createPolyModControl(prefix_ + "_sample_uni_start");
     Output* sample_uni_span = createPolyModControl(prefix_ + "_sample_uni_span");
+    // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
+    Value* pitch_mode = createBaseControl(prefix_ + "_pitch_mode");
+    Output* pitch_coarse = createPolyModControl(prefix_ + "_pitch_coarse");
+    Output* fixed_pitch = createPolyModControl(prefix_ + "_fixed_pitch");
+    Value* pitch_bend_track = createBaseControl(prefix_ + "_pitch_bend_track");
+    Value* unison_mode = createBaseControl(prefix_ + "_unison_mode");
+    Output* unison_blend_shape = createPolyModControl(prefix_ + "_unison_blend_shape");
+    Value* unison_stack_repeat = createBaseControl(prefix_ + "_unison_stack_repeat");
+    Value* phase_legato = createBaseControl(prefix_ + "_phase_legato");
+    Value* phase_memory = createBaseControl(prefix_ + "_phase_memory");
 
     oscillator_->useInput(input(kReset), SynthOscillator::kReset);
     oscillator_->useInput(input(kRetrigger), SynthOscillator::kRetrigger);
@@ -113,6 +123,19 @@ namespace sbvital {
     oscillator_->plug(warp2_amount, SynthOscillator::kWarp2Amount);
     oscillator_->plug(warp2_phase, SynthOscillator::kWarp2Phase);
     oscillator_->plug(warp2_spread, SynthOscillator::kWarp2Spread);
+    // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
+    oscillator_->plug(pitch_mode, SynthOscillator::kPitchMode);
+    oscillator_->plug(pitch_coarse, SynthOscillator::kPitchCoarse);
+    oscillator_->plug(fixed_pitch, SynthOscillator::kFixedPitch);
+    oscillator_->plug(pitch_bend_track, SynthOscillator::kPitchBendTrack);
+    oscillator_->plug(unison_mode, SynthOscillator::kUnisonMode);
+    oscillator_->plug(unison_blend_shape, SynthOscillator::kUnisonBlendShape);
+    oscillator_->plug(unison_stack_repeat, SynthOscillator::kUnisonStackRepeat);
+    oscillator_->plug(phase_legato, SynthOscillator::kPhaseLegato);
+    oscillator_->plug(phase_memory, SynthOscillator::kPhaseMemory);
+    oscillator_->useInput(input(kRawMidi), SynthOscillator::kRawMidiNote);
+    oscillator_->useInput(input(kVoicePhaseLegato), SynthOscillator::kVoicePhaseLegato);
+    oscillator_->useInput(input(kNoteCount), SynthOscillator::kNoteCount);
     oscillator_->useOutput(output(kRaw), SynthOscillator::kRaw);
     oscillator_->useOutput(output(kLevelled), SynthOscillator::kLevelled);
 

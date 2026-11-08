@@ -33,6 +33,10 @@ namespace sbvital {
         kActiveVoices,
         kFold,
         kNotePressed,  // SynthyBoy: 1 while the key of the voice is held (sample loop exit on release)
+        // SynthyBoy Block B14: Pitch and unison modes, phase legato
+        kRawMidi,
+        kVoicePhaseLegato,
+        kNoteCount,
         kNumInputs
       };
 

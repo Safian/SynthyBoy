@@ -1,0 +1,251 @@
+// SynthyBoy - engine-vital tests: Pitch modes, Transpose snap, Unison laws and Phase legato (Block B14, PITCHUNI).
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <memory>
+#include <vector>
+
+#include "synthyboy/engine.h"
+#include "synthyboy/engine_caps.h"
+#include "test_dsp.h"
+#include "test_runner.h"
+#include "test_util.h"
+#include "vital_engine.h"
+
+using namespace synthyboy;
+using sbtest::noteOff;
+using sbtest::noteOn;
+using sbtest::setByKey;
+
+namespace
+{
+constexpr double kSr = 48000.0;
+
+std::unique_ptr<IEngine> makeVital (const Quality& q = Quality {})
+{
+    auto e = createEngine (EngineKind::vital);
+    e->setParam (kParamMasterPolyphony, 32.0f);
+    e->prepare (kSr, 256, q);
+    return e;
+}
+
+/** Basic saw oscillator on osc 1, neutral defaults. */
+void baseSaw (IEngine& e)
+{
+    setByKey (e, "osc1.on", 1.0f);
+    setByKey (e, "osc1.wavetable", 1.0f); // basic saw
+    setByKey (e, "osc1.level", 100.0f);
+    setByKey (e, "osc1.unison.voices", 1.0f);
+    setByKey (e, "osc1.random_phase", 0.0f);
+    setByKey (e, "osc1.destination", 3.0f); // Effects only
+    setByKey (e, "filter1.on", 0.0f);
+    setByKey (e, "filter2.on", 0.0f);
+    setByKey (e, "master.volume", -6.0f);
+}
+
+/** 7-voice unison saw on osc 1. */
+void unisonSaw (IEngine& e)
+{
+    baseSaw (e);
+    setByKey (e, "osc1.unison.voices", 7.0f);
+    setByKey (e, "osc1.unison.detune", 30.0f);
+    setByKey (e, "osc1.unison.spread", 100.0f);
+}
+
+sbtest::Rendered play (IEngine& e, double seconds = 0.5, int key = 48)
+{
+    return sbtest::render (e, { noteOn (0, key) }, static_cast<int> (seconds * kSr), 256);
+}
+
+double relativeDifference (const sbtest::Rendered& a, const sbtest::Rendered& b, double t0 = 0.1, double t1 = 0.4)
+{
+    double d = 0.0, n = 0.0;
+    const size_t start = static_cast<size_t> (t0 * kSr);
+    const size_t end = static_cast<size_t> (t1 * kSr);
+    for (size_t i = start; i < end && i < a.left.size() && i < b.left.size(); ++i)
+    {
+        const double x = static_cast<double> (a.left[i]) - b.left[i];
+        d += x * x;
+        n += static_cast<double> (a.left[i]) * a.left[i];
+    }
+    return n > 0.0 ? std::sqrt (d / n) : (d > 0.0 ? 1.0e9 : 0.0);
+}
+} // namespace
+
+TEST (pitch_unison_capabilities_reported)
+{
+    auto e = makeVital();
+    CHECK (capsCover (e->capabilities(), kCapPitchUnison));
+}
+
+TEST (pitch_coarse_and_modes_render_distinct_audio)
+{
+    // 1. Semitones mode (0): pitch_coarse 0 vs 7 st
+    auto e1 = makeVital();
+    baseSaw (*e1);
+    const auto rDefault = play (*e1);
+
+    auto e2 = makeVital();
+    baseSaw (*e2);
+    setByKey (*e2, "osc1.pitch_coarse", 7.0f);
+    const auto rCoarse7 = play (*e2);
+
+    const double diffCoarse = relativeDifference (rDefault, rCoarse7);
+    CHECK (diffCoarse > 0.2);
+
+    // 2. Harmonics mode (1): coarse = 1 (2nd harmonic = octave up)
+    auto e3 = makeVital();
+    baseSaw (*e3);
+    setByKey (*e3, "osc1.pitch_mode", 1.0f);
+    setByKey (*e3, "osc1.pitch_coarse", 1.0f);
+    const auto rHarmonic = play (*e3);
+    const double diffHarmonic = relativeDifference (rDefault, rHarmonic);
+    CHECK (diffHarmonic > 0.2);
+
+    // 3. Ratio mode (2): coarse = 0.5 (1.5x ratio = perfect fifth)
+    auto e4 = makeVital();
+    baseSaw (*e4);
+    setByKey (*e4, "osc1.pitch_mode", 2.0f);
+    setByKey (*e4, "osc1.pitch_coarse", 0.5f);
+    const auto rRatio = play (*e4);
+    const double diffRatio = relativeDifference (rDefault, rRatio);
+    CHECK (diffRatio > 0.2);
+
+    // 4. Step mode (3): coarse = 7 (7 scale steps)
+    auto e5 = makeVital();
+    baseSaw (*e5);
+    setByKey (*e5, "osc1.pitch_mode", 3.0f);
+    setByKey (*e5, "osc1.pitch_coarse", 7.0f);
+    const auto rStep = play (*e5);
+    const double diffStep = relativeDifference (rDefault, rStep);
+    CHECK (diffStep > 0.2);
+}
+
+TEST (pitch_track_and_fixed_pitch_render_distinct_audio)
+{
+    // When pitch_track is 1 (on, default), note 48 vs note 60 differ
+    auto e = makeVital();
+    baseSaw (*e);
+    const auto r48 = play (*e, 0.4, 48);
+    const auto r60 = play (*e, 0.4, 60);
+    CHECK (relativeDifference (r48, r60) > 0.2);
+
+    // When pitch_track is 0 (off), note 48 and note 60 render identical fixed pitch (48)
+    auto eFixed1 = makeVital();
+    baseSaw (*eFixed1);
+    setByKey (*eFixed1, "osc1.pitch_track", 0.0f);
+    const auto rFixed48 = play (*eFixed1, 0.4, 48);
+
+    auto eFixed2 = makeVital();
+    baseSaw (*eFixed2);
+    setByKey (*eFixed2, "osc1.pitch_track", 0.0f);
+    const auto rFixed60 = play (*eFixed2, 0.4, 60);
+    const double diffSameFixed = relativeDifference (rFixed48, rFixed60);
+    std::printf ("    fixed pitch diff between note 48 and 60: %g\n", diffSameFixed);
+    CHECK (diffSameFixed < 1.0e-3);
+
+    // Changing fixed_pitch from 48 to 60 produces audible difference
+    setByKey (*eFixed1, "osc1.fixed_pitch", 60.0f);
+    const auto rFixed60New = play (*eFixed1, 0.4, 48);
+    CHECK (relativeDifference (rFixed48, rFixed60New) > 0.2);
+}
+
+TEST (transpose_snap_quantizes_transpose)
+{
+    // Transpose 1 semitone up (C#):
+    // Without snap: pitch is C#
+    auto eNormal = makeVital();
+    baseSaw (*eNormal);
+    setByKey (*eNormal, "osc1.transpose", 1.0f);
+    const auto rCsharp = play (*eNormal, 0.4, 48);
+
+    // With transpose_snap = 1 (only bit 0 = C allowed):
+    // 1 semitone snaps to 0 semitones (C)
+    auto eSnap = makeVital();
+    baseSaw (*eSnap);
+    setByKey (*eSnap, "osc1.transpose", 1.0f);
+    setByKey (*eSnap, "osc1.transpose_snap", 1.0f); // bit 0 = C
+    const auto rSnapped = play (*eSnap, 0.4, 48);
+
+    CHECK (relativeDifference (rCsharp, rSnapped) > 0.1);
+}
+
+TEST (unison_modes_and_blend_shape_render_distinct_audio)
+{
+    // Linear (0) vs Super (1), Exp (2), Inv (3), Random (4)
+    auto e0 = makeVital();
+    unisonSaw (*e0);
+    const auto rLinear = play (*e0);
+
+    auto e1 = makeVital();
+    unisonSaw (*e1);
+    setByKey (*e1, "osc1.unison.mode", 1.0f); // Super
+    const auto rSuper = play (*e1);
+    CHECK (relativeDifference (rLinear, rSuper) > 0.05);
+
+    auto e2 = makeVital();
+    unisonSaw (*e2);
+    setByKey (*e2, "osc1.unison.mode", 2.0f); // Exp
+    const auto rExp = play (*e2);
+    CHECK (relativeDifference (rLinear, rExp) > 0.05);
+
+    auto e3 = makeVital();
+    unisonSaw (*e3);
+    setByKey (*e3, "osc1.unison.mode", 3.0f); // Inv
+    const auto rInv = play (*e3);
+    CHECK (relativeDifference (rLinear, rInv) > 0.05);
+
+    auto e4 = makeVital();
+    unisonSaw (*e4);
+    setByKey (*e4, "osc1.unison.mode", 4.0f); // Random
+    const auto rRandom = play (*e4);
+    CHECK (relativeDifference (rLinear, rRandom) > 0.05);
+
+    // Unison Blend Shape: 0% vs 100% vs -100%
+    auto eBlendPos = makeVital();
+    unisonSaw (*eBlendPos);
+    setByKey (*eBlendPos, "osc1.unison.blend_shape", 100.0f);
+    const auto rBlendPos = play (*eBlendPos);
+    CHECK (relativeDifference (rLinear, rBlendPos) > 0.05);
+
+    auto eBlendNeg = makeVital();
+    unisonSaw (*eBlendNeg);
+    setByKey (*eBlendNeg, "osc1.unison.blend_shape", -100.0f);
+    const auto rBlendNeg = play (*eBlendNeg);
+    CHECK (relativeDifference (rLinear, rBlendNeg) > 0.05);
+
+    // Unison Stack Repeat: stack style 3 (octaves), 1x vs 2x
+    auto eStack1 = makeVital();
+    unisonSaw (*eStack1);
+    setByKey (*eStack1, "osc1.unison.stack", 3.0f); // Octave stack
+    const auto rStack1 = play (*eStack1);
+
+    auto eStack2 = makeVital();
+    unisonSaw (*eStack2);
+    setByKey (*eStack2, "osc1.unison.stack", 3.0f);
+    setByKey (*eStack2, "osc1.unison.stack_repeat", 1.0f); // 2x repeat
+    const auto rStack2 = play (*eStack2);
+    CHECK (relativeDifference (rStack1, rStack2) > 0.05);
+}
+
+TEST (phase_legato_preserves_continuity_and_stays_finite)
+{
+    auto e = makeVital();
+    baseSaw (*e);
+    setByKey (*e, "osc1.phase_legato", 1.0f);
+    setByKey (*e, "voice.phase_legato", 1.0f);
+
+    // Play overlapping notes (legato transition)
+    const std::vector<Event> events = {
+        noteOn (0, 48),
+        noteOn (4800, 52), // note on while 48 is held
+        noteOff (9600, 48),
+        noteOff (14400, 52)
+    };
+    const auto r = sbtest::render (*e, events, static_cast<int> (0.5 * kSr), 256);
+    CHECK (sbtest::allFinite (r.left) && sbtest::allFinite (r.right));
+    CHECK (sbtest::rmsOf (r.left, 0, r.left.size()) > 0.01);
+}

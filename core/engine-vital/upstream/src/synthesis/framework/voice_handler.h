@@ -298,7 +298,7 @@ namespace sbvital {
       void setTuning(const Tuning* tuning) { tuning_ = tuning; }
       // The tuned note (MIDI note, fractional) of each of the 128 keys; takes precedence over the Tuning object. Read at note on.
       // nullptr = the equal tempered keys. The table is owned by the caller and only changed between two process() calls.
-      void setNoteTable(const mono_float* table) { note_table_ = table; }
+      virtual void setNoteTable(const mono_float* table) { note_table_ = table; }
       // Moves the sounding voices to the tuned notes of `table` (live tuning): the difference to the table they started with is
       // added to their pitch.
       void retuneVoices(const mono_float* table);

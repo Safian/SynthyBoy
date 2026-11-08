@@ -94,6 +94,19 @@ namespace sbvital {
         kWarp2Amount,
         kWarp2Phase,
         kWarp2Spread,
+        // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
+        kPitchMode,
+        kPitchCoarse,
+        kFixedPitch,
+        kPitchBendTrack,
+        kRawMidiNote,
+        kUnisonMode,
+        kUnisonBlendShape,
+        kUnisonStackRepeat,
+        kPhaseLegato,
+        kPhaseMemory,
+        kVoicePhaseLegato,
+        kNoteCount,
         kNumInputs
       };
 
@@ -234,6 +247,7 @@ namespace sbvital {
       void setFirstOscillatorOutput(Output* oscillator) { first_mod_oscillator_ = oscillator; }
       void setSecondOscillatorOutput(Output* oscillator) { second_mod_oscillator_ = oscillator; }
       void setSampleOutput(Output* sample) { sample_ = sample; }
+      void setNoteTable(const mono_float* table) { note_table_ = table; }
 
       virtual void setOversampleAmount(int oversample) override {
         Processor::setOversampleAmount(oversample);
@@ -332,6 +346,8 @@ namespace sbvital {
       std::shared_ptr<FourierTransform> fourier_transform_;
       std::shared_ptr<Output> phase_inc_buffer_;
       std::shared_ptr<PhaseBuffer> phase_buffer_;
+      const mono_float* note_table_ = nullptr;
+      poly_int last_running_phase_[kNumPolyPhase] = {};
 
       JUCE_LEAK_DETECTOR(SynthOscillator)
   };

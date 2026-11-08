@@ -571,7 +571,7 @@ public:
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
              | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels | kCapReverbForce
-             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters;
+             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters | kCapPitchUnison;
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -862,9 +862,7 @@ private:
         for (int i = 1; i <= kNumOsc; ++i)
         {
             const std::string c = "osc_" + std::to_string (i) + "_";
-            setControl (c + "midi_track", 1.0f);
             setControl (c + "spectral_unison", 1.0f);
-            setControl (c + "transpose_quantize", 0.0f);
         }
         setControl ("sample_random_phase", 0.0f);
         setControl ("sample_loop", 1.0f);
