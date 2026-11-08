@@ -77,6 +77,9 @@ namespace sbvital {
         kWarpAmount,
         kWarp2Type,
         kWarp2Amount,
+        kRawMidiNote,      // the note without the bend (pitch bend tracking, Serum 2 manual p.36)
+        kMidiTrack,        // oscN.pitch_track: 0 = the recorded pitch, whatever the key
+        kPitchBendTrack,   // oscN.pitch_bend_track: 1 = the bend still moves an oscillator whose pitch tracking is off
         kNumInputs
       };
 
@@ -93,6 +96,9 @@ namespace sbvital {
 
       void process(int num_samples) override;
       Processor* clone() const override { return new SampleOscillator(*this); }
+
+      /** The sample follows the key: the sample's own keytrack switch and the pitch tracking of the oscillator (Serum 2 manual p.35) are on. */
+      bool tracksPitch(int lane) const { return shared_->keytrack && input(kMidiTrack)->at(0)[lane] > 0.5f; }
 
       void setFirstOscillatorOutput(Output* oscillator) { first_mod_oscillator_ = oscillator; }
       void setSecondOscillatorOutput(Output* oscillator) { second_mod_oscillator_ = oscillator; }

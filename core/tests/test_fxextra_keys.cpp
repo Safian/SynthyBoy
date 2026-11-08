@@ -89,10 +89,14 @@ TEST (b17_choice_lists_and_names)
     const auto& type = byKey ("distortion.type");
     CHECK_EQ (choiceCount (type), static_cast<size_t> (14));
     const char* const names[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample", "Tube", "Diode 1", "Diode 2",
-                                  "Zero square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
+                                  "Zero-Square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
     for (size_t i = 0; i < 14; ++i)
         CHECK (std::strcmp (choiceName (type, i), names[i]) == 0);
     CHECK_EQ (kNumLegacyDistortionTypes, 6);
+    // Serum 2 manual p.166: the delay mode Tap->Delay is appended to the Vital styles
+    CHECK_EQ (choiceCount (byKey ("delay.style")), static_cast<size_t> (5));
+    CHECK (std::strcmp (choiceName (byKey ("delay.style"), 4), "Tap->Delay") == 0);
+    CHECK (std::strcmp (choiceName (byKey ("delay.style"), 3), "Mid ping pong") == 0);
     CHECK_EQ (choiceCount (byKey ("reverb.type")), static_cast<size_t> (6));
     CHECK (std::strcmp (choiceName (byKey ("reverb.type"), 0), "Vital") == 0);
     CHECK (std::strcmp (choiceName (byKey ("reverb.type"), 5), "Basin") == 0);

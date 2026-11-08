@@ -57,6 +57,7 @@ namespace sbvital {
         kStereo,
         kPingPong,
         kMidPingPong,
+        kTapDelay,      // SynthyBoy (Serum 2 manual p.166): TAP-> DELAY, both delays mono and in series: a tap on the left time, then the right delay
         kNumStyles,
         kClampedDampened,
         kClampedUnfiltered,
@@ -110,6 +111,11 @@ namespace sbvital {
                            poly_float current_low_coefficient, poly_float current_high_coefficient,
                            poly_float current_wet, poly_float current_dry);
 
+      void processTapDelay(const poly_float* audio_in, int num_samples,
+                           poly_float current_period, poly_float current_feedback, poly_float current_filter_gain,
+                           poly_float current_low_coefficient, poly_float current_high_coefficient,
+                           poly_float current_wet, poly_float current_dry);
+
       void processMonoPingPong(const poly_float* audio_in, int num_samples,
                                poly_float current_period, poly_float current_feedback, poly_float current_filter_gain,
                                poly_float current_low_coefficient, poly_float current_high_coefficient,
@@ -130,6 +136,10 @@ namespace sbvital {
                             poly_float wet, poly_float dry);
 
       poly_float tickPingPong(poly_float audio_in, poly_float period, poly_float feedback,
+                              poly_float filter_gain, poly_float low_coefficient, poly_float high_coefficient,
+                              poly_float wet, poly_float dry);
+
+      poly_float tickTapDelay(poly_float audio_in, poly_float period, poly_float feedback,
                               poly_float filter_gain, poly_float low_coefficient, poly_float high_coefficient,
                               poly_float wet, poly_float dry);
 

@@ -782,8 +782,18 @@ namespace sbvital {
       poly_float down_ratio = poly_float(1.0f) / up_ratio;
 
       mono_float stack_mult = stack_settings[i];
-      if (stack_repeat > 0 && stack_mult != 1.0f) {
-        stack_mult = std::pow(stack_mult, static_cast<float>(stack_repeat + 1));
+      // Serum 2 manual p.47: STACK "12 (1-3x)" distributes the voices between the original pitch and octave transpositions up to 1-3 octaves
+      // higher, "12+7 (1-3x)" between the original pitch, the fifth and the octaves. Here: Octaves (style 3) and Power Chord (style 5), the
+      // repeat 1x / 2x / 3x is the number of octaves. 1x is the table above; the other stack styles ignore the repeat.
+      if (stack_repeat > 0 && (stack_style == 3 || stack_style == 5)) {
+        const int octaves = stack_repeat + 1;
+        if (stack_style == 3) {
+          stack_mult = std::ldexp(1.0f, i % (octaves + 1));
+        }
+        else {
+          const int step = i % (2 * octaves + 1);
+          stack_mult = std::ldexp((step & 1) ? kFifthMult : 1.0f, step / 2);
+        }
       }
 
       detunings_[i] = utils::maskLoad(up_ratio, down_ratio, sharp_flat_mask) * stack_mult;
@@ -1532,7 +1542,8 @@ namespace sbvital {
     poly_float current_midi = midi_note_;
     midi_note_ = kNoMidiTrackDefault;
 
-    bool bend_track = input(kPitchBendTrack) ? poly_float::notEqual(input(kPitchBendTrack)->at(0), 0.0f).anyMask() : true;
+    // Serum 2 manual p.36: wavetable oscillators always track the pitch bend, also with pitch tracking off (the switch is for the sample types)
+    const bool bend_track = true;
     poly_float raw_note = input(kRawMidiNote) ? input(kRawMidiNote)->at(0) : input(kMidiNote)->at(0);
     poly_float bend_offset = input(kMidiNote)->at(0) - raw_note;
 

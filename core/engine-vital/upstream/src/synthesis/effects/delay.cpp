@@ -73,7 +73,7 @@ namespace sbvital {
 
     // a value outside the enumerators is undefined behaviour for the enum: clamp the control first
     Style style = static_cast<Style>(utils::iclamp(static_cast<int>(input(kStyle)->at(0)[0]), 0, kNumStyles - 1));
-    if (style == kStereo || style == kPingPong || style == kMidPingPong)
+    if (style == kStereo || style == kPingPong || style == kMidPingPong || style == kTapDelay)
       target_frequency = utils::maskLoad(target_frequency, input(kFrequencyAux)->at(0), constants::kRightMask);
 
     poly_float decay = futils::exp_half(num_samples / (kDelayHalfLife * getSampleRate()));
@@ -125,6 +125,10 @@ namespace sbvital {
       case kPingPong:
         processMonoPingPong(audio_in, num_samples, current_period, current_feedback, current_filter_gain,
                             current_low_coefficient, current_high_coefficient, current_wet, current_dry);
+        break;
+      case kTapDelay:
+        processTapDelay(audio_in, num_samples, current_period, current_feedback, current_filter_gain,
+                        current_low_coefficient, current_high_coefficient, current_wet, current_dry);
         break;
       case kMidPingPong:
         processPingPong(audio_in, num_samples, current_period, current_feedback, current_filter_gain,
@@ -313,6 +317,38 @@ namespace sbvital {
   }
 
   template<class MemoryType>
+  void Delay<MemoryType>::processTapDelay(const poly_float* audio_in, int num_samples,
+                                              poly_float current_period, poly_float current_feedback,
+                                              poly_float current_filter_gain,
+                                              poly_float current_low_coefficient, poly_float current_high_coefficient,
+                                              poly_float current_wet, poly_float current_dry) {
+    mono_float tick_increment = 1.0f / num_samples;
+    poly_float delta_wet = (wet_ - current_wet) * tick_increment;
+    poly_float delta_dry = (dry_ - current_dry) * tick_increment;
+    poly_float delta_feedback = (feedback_ - current_feedback) * tick_increment;
+    poly_float delta_period = (period_ - current_period) * tick_increment;
+    poly_float delta_filter_gain = (filter_gain_ - current_filter_gain) * tick_increment;
+    poly_float delta_low_coefficient = (low_coefficient_ - current_low_coefficient) * tick_increment;
+    poly_float delta_high_coefficient = (high_coefficient_ - current_high_coefficient) * tick_increment;
+
+    poly_float* dest = output()->buffer;
+
+    for (int i = 0; i < num_samples; ++i) {
+      current_feedback += delta_feedback;
+      current_wet += delta_wet;
+      current_dry += delta_dry;
+      current_filter_gain += delta_filter_gain;
+      current_low_coefficient += delta_low_coefficient;
+      current_high_coefficient += delta_high_coefficient;
+
+      dest[i] = tickTapDelay(audio_in[i], current_period, current_feedback, current_filter_gain,
+                                 current_low_coefficient, current_high_coefficient, current_wet, current_dry);
+
+      current_period += delta_period;
+    }
+  }
+
+  template<class MemoryType>
   force_inline poly_float Delay<MemoryType>::tickCleanUnfiltered(poly_float audio_in, poly_float period,
                                                                  poly_float feedback,
                                                                  poly_float wet, poly_float dry) {
@@ -365,6 +401,26 @@ namespace sbvital {
     poly_float second_pass_result = high_pass_.tickBasic(low_pass_result, high_coefficient);
     memory_->push(low_pass_result - second_pass_result);
     return dry * audio_in + wet * read;
+  }
+
+  // TAP-> DELAY (Serum 2 manual p.166): both delays mono and in series. The left lane of the memory is the tap (the mono input, read at the left
+  // time, no feedback), the right lane is the delay that gets the tap as its input and feeds itself back. The output is the sum of both, on both
+  // channels.
+  template<class MemoryType>
+  force_inline poly_float Delay<MemoryType>::tickTapDelay(poly_float audio_in, poly_float period, poly_float feedback,
+                                                          poly_float filter_gain, poly_float low_coefficient,
+                                                          poly_float high_coefficient,
+                                                          poly_float wet, poly_float dry) {
+    poly_float read = readMemory(period);
+    poly_float mono_in = (audio_in + utils::swapStereo(audio_in)) * (1.0f / kSqrt2) & constants::kLeftMask;
+    poly_float tap_to_right = utils::swapStereo(read & constants::kLeftMask);
+    poly_float repeat = read & constants::kRightMask;
+    poly_float right_in = saturateLarge(tap_to_right + repeat * feedback) & constants::kRightMask;
+    poly_float write_raw_value = mono_in + right_in;
+    poly_float low_pass_result = low_pass_.tickBasic(write_raw_value * filter_gain, low_coefficient);
+    poly_float second_pass_result = high_pass_.tickBasic(low_pass_result, high_coefficient);
+    memory_->push(low_pass_result - second_pass_result);
+    return dry * audio_in + wet * (read + utils::swapStereo(read));
   }
 
   template<class MemoryType>

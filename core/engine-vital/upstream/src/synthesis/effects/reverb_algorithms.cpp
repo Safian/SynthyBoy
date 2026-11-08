@@ -37,11 +37,11 @@ namespace sbvital {
     constexpr float kHallLines[8] = { 41.7f, 53.9f, 61.3f, 71.1f, 79.7f, 89.9f, 101.3f, 113.9f };
     constexpr float kHallAllpass[8] = { 4.3f, 5.1f, 6.7f, 7.9f, 9.1f, 10.9f, 12.7f, 14.3f };
     constexpr float kHallInput[4] = { 5.3f, 7.9f, 11.3f, 13.7f };
-    // Nitrous: short and dense
-    constexpr float kNitrousLines[8] = { 17.3f, 21.1f, 23.9f, 27.7f, 31.3f, 34.9f, 39.1f, 43.7f };
-    constexpr float kNitrousAllpass[8] = { 2.3f, 3.1f, 3.7f, 4.3f, 5.3f, 6.1f, 7.1f, 8.3f };
-    constexpr float kNitrousInput[4] = { 2.9f, 4.1f, 5.7f, 7.3f };
-    // Basin: the size of the rooms in metres
+    // Basin: short and dense
+    constexpr float kBasinLines[8] = { 17.3f, 21.1f, 23.9f, 27.7f, 31.3f, 34.9f, 39.1f, 43.7f };
+    constexpr float kBasinAllpass[8] = { 2.3f, 3.1f, 3.7f, 4.3f, 5.3f, 6.1f, 7.1f, 8.3f };
+    constexpr float kBasinInput[4] = { 2.9f, 4.1f, 5.7f, 7.3f };
+    // Nitrous: the size of the rooms in metres (MODE)
     constexpr float kRoomSize[5][3] = {
       { 24.0f, 32.0f, 18.0f },   // Space
       { 6.3f, 4.1f, 3.0f },      // Marble
@@ -196,7 +196,7 @@ namespace sbvital {
   void ReverbAlgorithms::configure(const Settings& settings) {
     if (sample_rate_ == 0)
       return;
-    const bool changed = ! configured_ || settings.type != settings_.type || (settings.type == kBasin && settings.room != settings_.room);
+    const bool changed = ! configured_ || settings.type != settings_.type || (settings.type == kNitrous && settings.room != settings_.room);
     settings_ = settings;
     tune();
     if (changed) {
@@ -253,21 +253,21 @@ namespace sbvital {
       return;
     }
 
-    // the network: Hall, Nitrous, Basin
+    // the network: Hall, Basin (short, dense, bright), Nitrous (the modes of a room)
     for (int k = 0; k < 4; ++k)
       input_ms_[k] = kHallInput[k];
     float modulation_seconds = 0.0012f;
-    if (s.type == kNitrous) {
+    if (s.type == kBasin) {
       for (int i = 0; i < kLines; ++i) {
-        base_delay_[i] = kNitrousLines[i] * 0.001f;
-        line_allpass_delay_[i] = std::max(2, static_cast<int>(kNitrousAllpass[i] * 0.001f * rate));
+        base_delay_[i] = kBasinLines[i] * 0.001f;
+        line_allpass_delay_[i] = std::max(2, static_cast<int>(kBasinAllpass[i] * 0.001f * rate));
       }
       for (int k = 0; k < 4; ++k)
-        input_ms_[k] = kNitrousInput[k];
+        input_ms_[k] = kBasinInput[k];
       modulation_seconds = 0.0024f;
       er_level_ = 0.25f;
       output_scale_ = 1.1f;
-    } else if (s.type == kBasin) {
+    } else if (s.type == kNitrous) {
       const float* d = kRoomSize[std::min(std::max(s.room, 0), kNumRooms - 1)];
       const float a2 = d[0] * d[0], b2 = d[1] * d[1], c2 = d[2] * d[2];
       const float paths[kLines] = { 2.0f * d[0], 2.0f * d[1], 2.0f * d[2], 2.0f * std::sqrt(a2 + b2), 2.0f * std::sqrt(a2 + c2),
@@ -300,14 +300,14 @@ namespace sbvital {
       output_right_[i] = 0.5f * sign(i, 1);
     }
     for (int k = 0; k < 4; ++k)
-      input_allpass_coefficient_[k] = (s.type == kNitrous ? 0.55f : 0.3f) + 0.4f * a;
+      input_allpass_coefficient_[k] = (s.type == kBasin ? 0.55f : 0.3f) + 0.4f * a;
     line_allpass_coefficient_ = 0.2f + 0.5f * b;
     depth_samples_ = s.mod_depth * modulation_seconds * rate;
 
-    // the damping of the type: Nitrous and Marble stay bright, Space is darker
-    if (s.type == kNitrous)
+    // the damping of the type: Basin and Marble stay bright, Space is darker
+    if (s.type == kBasin)
       settings_.high_amplitude = 1.0f - (1.0f - s.high_amplitude) * 0.35f;
-    else if (s.type == kBasin)
+    else if (s.type == kNitrous)
       settings_.high_amplitude = 1.0f - (1.0f - s.high_amplitude) * kRoomBrightness[std::min(std::max(s.room, 0), kNumRooms - 1)];
   }
 

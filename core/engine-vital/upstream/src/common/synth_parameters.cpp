@@ -72,7 +72,7 @@ namespace sbvital {
       ValueDetails::kExponential, true, " secs", "Delay Frequency 2", nullptr },
     { "delay_on", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Delay Switch", strings::kOffOnNames },
-    { "delay_style", 0x000000, 0.0, 3.0, 0.0, 0.0, 1.0,
+    { "delay_style", 0x000000, 0.0, 4.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Delay Style", strings::kDelayStyleNames },
     { "delay_filter_cutoff", 0x000000, 8.0, 136.0, 60.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Delay Filter Cutoff", nullptr },
@@ -178,8 +178,8 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Sub Transpose", nullptr },
     { "sub_transpose_quantize", 0x000000, 0.0, 8191.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Sub Transpose Quantize", nullptr },
-    { "sub_tune", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
-      ValueDetails::kLinear, false, "", "Sub Tune", nullptr },
+    { "sub_tune", 0x000000, -48.0, 48.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, " st", "Sub Coarse", nullptr },
     { "sub_level", 0x000000, 0.0, 1.0, 0.70710678119, 0.0, 1.0,
       ValueDetails::kQuadratic, false, "", "Sub Level", nullptr },
     { "sub_pan", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
@@ -567,7 +567,7 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Pitch Mode", nullptr },
     { "pitch_coarse", 0x000000, -48.0, 48.0, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Pitch Coarse", nullptr },
-    { "fixed_pitch", 0x000000, 0.0, 127.0, 48.0, 0.0, 1.0,
+    { "fixed_pitch", 0x000000, 0.0, 127.0, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Fixed Pitch", nullptr },
     { "pitch_bend_track", 0x000000, 0.0, 1.0, 1.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Pitch Bend Track", strings::kOffOnNames },
@@ -690,11 +690,11 @@ namespace sbvital {
     add("sub_on", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
     add("sub_waveform", 0.0, 5.0, 0.0, ValueDetails::kIndexed);
     add("sub_octave", -4.0, 4.0, -1.0, ValueDetails::kLinear);
-    add("sub_tune", -100.0, 100.0, 0.0, ValueDetails::kLinear, 1.0, "cents");
+    add("sub_tune", -48.0, 48.0, 0.0, ValueDetails::kLinear, 1.0, "semitones"); // CRS: continuous semitones (Serum 2 manual p.124)
     add("sub_level", 0.0, 1.0, 0.70710678119, ValueDetails::kQuadratic);
     add("sub_pan", -1.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
-    add("sub_destination", 0.0, 6.0, 0.0, ValueDetails::kIndexed);
-    add("sub_mono", 0.0, 1.0, 1.0, ValueDetails::kIndexed);
+    add("sub_destination", 0.0, 6.0, 3.0, ValueDetails::kIndexed); // Effects only = the MAIN of Serum (manual p.145: SUB routes to MAIN by default)
+    add("sub_mono", 0.0, 1.0, 0.0, ValueDetails::kIndexed); // off: the manual describes no mono sub, it follows every voice
     add("sub_filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sub_bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sub_bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");

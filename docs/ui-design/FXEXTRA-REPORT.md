@@ -35,7 +35,7 @@ Full `ctest -j6`: 46 of 46 suites pass (Release, Apple clang arm64, no compiler 
 
 ## Assumptions and open questions (also in 13-new-keys.md 12 and 14-morning-questions.md)
 
-* The Serum manual is not in the repository: every definition is ours (A140). In particular: Tap->Delay as a UI tap tempo (A147), DEPTH 2 as a right-channel depth offset (A151), DIFF A / B as input / loop diffusion (A155), the five reverb designs (A152, they are not copies of Serum's reverbs: level and character need a listening pass), the eight distortion curves (A148).
+* (Updated by MANUALCHECK: the manual was read afterwards, see 13-new-keys.md 4.19; the corrections are A147, A150, A151, A153, A155.) Originally the Serum manual was not available: every definition was ours (A140). In particular: Tap->Delay as a UI tap tempo (A147), DEPTH 2 as a right-channel depth offset (A151), DIFF A / B as input / loop diffusion (A155), the five reverb designs (A152, they are not copies of Serum's reverbs: level and character need a listening pass), the eight distortion curves (A148).
 * The compressor crossovers of the engine are 120 Hz / 2500 Hz, not the 150 Hz / 3 kHz of design 08 (A143); the band labels now show the real values.
 * `limit_latency_comp` On (default) reports 72 samples (48 kHz) as plugin latency while the limit is on; hosts that cannot change latency live will pick it up at the next transport start.
 * Switching the reverb type, the room, or the limit mode clears the state of the module (stepped change, a short click is possible).

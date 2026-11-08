@@ -108,12 +108,24 @@ namespace sbvital {
       out[i] = in[i] + offset;
   }
 
-  void CleanDriveGate::process(int num_samples) {
-    const poly_float drive = input(kDrive)->at(0);
-    const poly_float gated = input(kClean)->at(0)[0] > 0.5f ? poly_float(0.0f) : drive;
+  void CleanInputGain::process(int num_samples) {
+    const poly_float* in = input(kAudio)->source->buffer;
     poly_float* out = output()->buffer;
-    for (int i = 0; i < num_samples; ++i)
-      out[i] = gated;
+    const int model = static_cast<int>(std::lround(input(kModel)->at(0)[0]));
+    const bool active = input(kClean)->at(0)[0] > 0.5f && model != constants::kComb && model != constants::kFormant;
+    const mono_float target = active ? std::pow(10.0f, -kCleanDb * 0.05f) : 1.0f;
+    if (gain_ == 1.0f && target == 1.0f) {
+      for (int i = 0; i < num_samples; ++i)
+        out[i] = in[i];
+      return;
+    }
+    const mono_float delta = (target - gain_) / static_cast<mono_float>(num_samples);
+    mono_float gain = gain_;
+    for (int i = 0; i < num_samples; ++i) {
+      gain += delta;
+      out[i] = in[i] * gain;
+    }
+    gain_ = target;
   }
 
   int SerumFilterBank::filterTypeOf(int model, int style) {

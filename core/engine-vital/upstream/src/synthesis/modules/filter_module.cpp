@@ -82,17 +82,20 @@ namespace sbvital {
     Output* resonance = createModControl(prefix_ + "_resonance");
     drive_ = createModControl(prefix_ + "_drive");
     clean_mode_ = createBaseControl(prefix_ + "_clean_mode");
-    CleanDriveGate* clean_gate = new CleanDriveGate();
-    clean_gate->plug(drive_, CleanDriveGate::kDrive);
-    clean_gate->plug(clean_mode_, CleanDriveGate::kClean);
-    addProcessor(clean_gate);
-    Output* drive = clean_gate->output(); // what the models see: 0 in Clean Mode
+    Output* drive = drive_;
     Output* blend = createModControl(prefix_ + "_blend");
     Output* blend_transpose = createModControl(prefix_ + "_blend_transpose");
     if (create_on_value_)
       on_ = createBaseControl(prefix_ + "_on");
     Value* filter_style = createBaseControl(prefix_ + "_style");
     filter_model_ = createBaseControl(prefix_ + "_model");
+    // SynthyBoy: Clean Mode (Serum 2 manual p.142): the models see their input at -24 dB (the +24 dB follow after them in process())
+    CleanInputGain* clean_input = new CleanInputGain();
+    clean_input->useInput(input(kAudio), CleanInputGain::kAudio);
+    clean_input->plug(clean_mode_, CleanInputGain::kClean);
+    clean_input->plug(filter_model_, CleanInputGain::kModel);
+    addProcessor(clean_input);
+    Output* filter_audio = clean_input->output();
 
     filter_mix_ = createModControl(prefix_ + "_mix");
     if (prefix_ != "filter_fx") { // the two voice filters have a destination and sends to the buses
@@ -111,7 +114,7 @@ namespace sbvital {
     comb_filter_->plug(resonance, CombModule::kResonance);
     comb_filter_->useOutput(output());
 
-    digital_svf_->useInput(input(kAudio), DigitalSvf::kAudio);
+    digital_svf_->plug(filter_audio, DigitalSvf::kAudio);
     digital_svf_->plug(filter_style, DigitalSvf::kStyle);
     digital_svf_->plug(blend, DigitalSvf::kPassBlend);
     digital_svf_->useInput(input(kReset), DigitalSvf::kReset);
@@ -120,7 +123,7 @@ namespace sbvital {
     digital_svf_->plug(drive, DigitalSvf::kDriveGain);
     digital_svf_->useOutput(output());
 
-    diode_filter_->useInput(input(kAudio), DiodeFilter::kAudio);
+    diode_filter_->plug(filter_audio, DiodeFilter::kAudio);
     diode_filter_->useInput(input(kReset), DiodeFilter::kReset);
     diode_filter_->plug(resonance, DiodeFilter::kResonance);
     diode_filter_->plug(filter_style, DiodeFilter::kStyle);
@@ -129,7 +132,7 @@ namespace sbvital {
     diode_filter_->plug(drive, DiodeFilter::kDriveGain);
     diode_filter_->useOutput(output());
 
-    dirty_filter_->useInput(input(kAudio), DirtyFilter::kAudio);
+    dirty_filter_->plug(filter_audio, DirtyFilter::kAudio);
     dirty_filter_->useInput(input(kReset), DirtyFilter::kReset);
     dirty_filter_->plug(resonance, DirtyFilter::kResonance);
     dirty_filter_->plug(filter_style, DirtyFilter::kStyle);
@@ -144,7 +147,7 @@ namespace sbvital {
     formant_filter_->plug(filter_style, FormantModule::kStyle);
     formant_filter_->useOutput(output());
 
-    ladder_filter_->useInput(input(kAudio), LadderFilter::kAudio);
+    ladder_filter_->plug(filter_audio, LadderFilter::kAudio);
     ladder_filter_->useInput(input(kReset), LadderFilter::kReset);
     ladder_filter_->plug(resonance, LadderFilter::kResonance);
     ladder_filter_->plug(filter_style, LadderFilter::kStyle);
@@ -153,7 +156,7 @@ namespace sbvital {
     ladder_filter_->plug(drive, LadderFilter::kDriveGain);
     ladder_filter_->useOutput(output());
 
-    phaser_filter_->useInput(input(kAudio), PhaserFilter::kAudio);
+    phaser_filter_->plug(filter_audio, PhaserFilter::kAudio);
     phaser_filter_->useInput(input(kReset), PhaserFilter::kReset);
     phaser_filter_->plug(resonance, PhaserFilter::kResonance);
     phaser_filter_->plug(filter_style, PhaserFilter::kStyle);
@@ -164,7 +167,7 @@ namespace sbvital {
     phaser_filter_->useOutput(output());
 
     sallen_key_filter_->plug(filter_style, SallenKeyFilter::kStyle);
-    sallen_key_filter_->useInput(input(kAudio), SallenKeyFilter::kAudio);
+    sallen_key_filter_->plug(filter_audio, SallenKeyFilter::kAudio);
     sallen_key_filter_->plug(blend, SallenKeyFilter::kPassBlend);
     sallen_key_filter_->useInput(input(kReset), SallenKeyFilter::kReset);
     sallen_key_filter_->plug(midi_cutoff, SallenKeyFilter::kMidiCutoff);
@@ -172,7 +175,7 @@ namespace sbvital {
     sallen_key_filter_->plug(drive, SallenKeyFilter::kDriveGain);
     sallen_key_filter_->useOutput(output());
 
-    serum_filter_->useInput(input(kAudio), SerumFilterBank::kAudio);
+    serum_filter_->plug(filter_audio, SerumFilterBank::kAudio);
     serum_filter_->useInput(input(kReset), SerumFilterBank::kReset);
     serum_filter_->plug(midi_cutoff, SerumFilterBank::kMidiCutoff);
     serum_filter_->plug(resonance, SerumFilterBank::kResonance);
@@ -274,17 +277,12 @@ namespace sbvital {
       poly_float* audio_out = output()->buffer;
       const poly_float* audio_in = input(kAudio)->source->buffer;
 
-      // SynthyBoy: Clean Mode. The models ran without drive (CleanDriveGate); the drive in dB is a plain linear gain on the wet signal instead,
-      // so it can neither saturate nor be compensated away. Comb and Formant have no drive. Ramped over the block; off leaves the signal untouched.
+      // SynthyBoy: Clean Mode (Serum 2 manual p.142): the models saw their input at -24 dB (CleanInputGain), here comes the +24 dB boost after
+      // the filter. Comb and Formant have no drive stage and ignore the switch. Ramped over the block; off leaves the signal untouched.
       {
         const int model = last_model_;
         const bool clean = clean_mode_->value() > 0.5f && model != constants::kComb && model != constants::kFormant;
-        poly_float target = 1.0f;
-        if (clean) {
-          poly_float db = drive_->buffer[0];
-          for (int lane = 0; lane < static_cast<int>(poly_float::kSize); ++lane)
-            target.set(lane, std::pow(10.0f, db[lane] * 0.05f));
-        }
+        poly_float target = clean ? poly_float(std::pow(10.0f, CleanInputGain::kCleanDb * 0.05f)) : poly_float(1.0f);
         poly_float current_gain = utils::maskLoad(clean_gain_, target, getResetMask(kReset));
         clean_gain_ = target;
         if (poly_float::notEqual(current_gain, 1.0f).anyMask() || poly_float::notEqual(target, 1.0f).anyMask()) {

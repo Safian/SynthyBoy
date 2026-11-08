@@ -154,6 +154,9 @@ namespace sbvital {
     so->plug(unison_detune, SampleOscillator::kUnisonDetune);
     so->plug(detune_power, SampleOscillator::kDetunePower);
     so->plug(detune_range, SampleOscillator::kDetuneRange);
+    so->useInput(input(kRawMidi), SampleOscillator::kRawMidiNote);
+    so->plug(midi_track, SampleOscillator::kMidiTrack);
+    so->plug(pitch_bend_track, SampleOscillator::kPitchBendTrack);
     so->plug(phase, SampleOscillator::kPhase);
     so->plug(rand_phase, SampleOscillator::kRandomPhase);
     so->plug(blend, SampleOscillator::kBlend);

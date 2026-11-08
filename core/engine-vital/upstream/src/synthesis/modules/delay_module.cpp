@@ -58,6 +58,16 @@ namespace sbvital {
     delay_->plug(filter_spread, StereoDelay::kFilterSpread);
 
     SynthModule::init();
+
+    // Serum 2 manual p.166: one BPM / MS switch for both delay times. The right time had its own switch (delay_aux_sync, never written by the
+    // adapter, always on tempo) so delay.time2 had no effect in Free mode; it now follows delay_sync.
+    control_map controls = getControls();
+    auto sync = controls.find("delay_sync");
+    auto aux_sync = controls.find("delay_aux_sync");
+    if (sync != controls.end() && aux_sync != controls.end()) {
+      sync_ = sync->second;
+      aux_sync_ = aux_sync->second;
+    }
   }
 
   void DelayModule::setSampleRate(int sample_rate) {
@@ -72,6 +82,8 @@ namespace sbvital {
   }
   
   void DelayModule::processWithInput(const poly_float* audio_in, int num_samples) {
+    if (sync_ && aux_sync_)
+      aux_sync_->set(sync_->value());
     SynthModule::process(num_samples);
     delay_->processWithInput(audio_in, num_samples);
   }

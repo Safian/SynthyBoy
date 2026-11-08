@@ -2851,7 +2851,7 @@
         {"key": "sub.on", "shortLabel": "Sub On", "widget": "toggle"},
         {"key": "sub.waveform", "shortLabel": "Sub Wavefo", "widget": "stepped"},
         {"key": "sub.octave", "shortLabel": "Sub Octave", "widget": "bipolar_knob"},
-        {"key": "sub.tune", "shortLabel": "Sub Tune", "widget": "bipolar_knob"},
+        {"key": "sub.tune", "shortLabel": "Sub Coarse", "widget": "bipolar_knob"},
         {"key": "sub.level", "shortLabel": "Sub Level", "widget": "knob"},
         {"key": "sub.pan", "shortLabel": "Sub Pan", "widget": "bipolar_knob"},
         {"key": "sub.destination", "shortLabel": "Sub Destin", "widget": "stepped"},

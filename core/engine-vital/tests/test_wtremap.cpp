@@ -329,16 +329,19 @@ TEST (fx_level_is_a_modulation_destination)
     CHECK (dbOf (closed / open) < -15.0);
 }
 
-TEST (clean_mode_makes_the_drive_a_linear_gain_after_the_filter)
+TEST (clean_mode_feeds_the_filter_24_db_down_and_boosts_24_db_after_it)
 {
+    // Serum 2 manual p.142 / p.171: "the filter pre-gain stage the filter input -24 dB (with a +24 dB boost post-filter). This reduces saturation
+    // and input drive in the filter models."
     for (const char* filter : { "filter1", "fxfilter" })
     {
         const std::string f = filter;
         const bool fx = f == "fxfilter";
-        const auto render = [&] (float drive, float clean, float model)
+        const auto render = [&] (float drive, float clean, float model, float level)
         {
             auto e = makeVital();
             base (*e, 100.0f);
+            setByKey (*e, "osc1.level", level);
             setByKey (*e, "osc1.destination", fx ? 3.0f : 0.0f);
             setByKey (*e, (f + ".on").c_str(), 1.0f);
             setByKey (*e, (f + ".model").c_str(), model);
@@ -349,25 +352,24 @@ TEST (clean_mode_makes_the_drive_a_linear_gain_after_the_filter)
             setByKey (*e, (f + ".clean_mode").c_str(), clean);
             return play (*e);
         };
-        const auto driven = render (12.0f, 0.0f, 0.0f), clean = render (12.0f, 1.0f, 0.0f);
+        // a hot signal with drive saturates the filter; the clean mode takes the saturation away
+        const auto driven = render (12.0f, 0.0f, 0.0f, 100.0f), clean = render (12.0f, 1.0f, 0.0f, 100.0f);
         const double difference = relativeDifference (driven, clean);
         std::printf ("    %s: clean on vs off at 12 dB drive: relative difference %.3f\n", filter, difference);
-        CHECK (difference > 0.2); // the audible difference between clean mode off and on
+        CHECK (difference > 0.05); // the audible difference between clean mode off and on
 
-        // clean: linear. The same filter at no drive, scaled by the drive in dB, is the output
-        const auto cleanZero = render (0.0f, 1.0f, 0.0f);
-        const double gain = rms (clean) / rms (cleanZero);
-        CHECK_NEAR (dbOf (gain), 12.0, 0.3);
-        double worst = 0.0;
-        const double k = std::pow (10.0, 12.0 / 20.0);
-        for (size_t i = static_cast<size_t> (0.25 * kSr); i < static_cast<size_t> (0.65 * kSr); ++i)
-            worst = std::max (worst, static_cast<double> (std::fabs (clean.left[i] - k * cleanZero.left[i])));
-        CHECK (worst < 0.01 * k * rms (cleanZero) * 3.0);
+        // a quiet signal stays in the linear range: -24 dB in and +24 dB out cancel, on and off are the same sound
+        const auto quietOff = render (0.0f, 0.0f, 0.0f, 1.0f), quietOn = render (0.0f, 1.0f, 0.0f, 1.0f);
+        const double quiet = relativeDifference (quietOff, quietOn);
+        std::printf ("    %s: clean on vs off for a quiet signal: relative difference %.4f\n", filter, quiet);
+        CHECK (quiet < 0.05);
 
-        // no drive: nothing to make clean
-        CHECK (relativeDifference (render (0.0f, 0.0f, 0.0f), cleanZero) < 1.0e-6);
+        // the clean output is a plain multiple of the off output in the linear range, so the level is the same (not +drive dB)
+        const double level = dbOf (rms (quietOn) / rms (quietOff));
+        std::printf ("    %s: clean on / off level for a quiet signal: %.2f dB\n", filter, level);
+        CHECK_NEAR (level, 0.0, 0.5);
 
-        // the comb filter has no drive: the switch does nothing
-        CHECK (relativeDifference (render (12.0f, 0.0f, 6.0f), render (12.0f, 1.0f, 6.0f)) < 1.0e-6);
+        // the comb filter has no drive stage: the switch does nothing
+        CHECK (relativeDifference (render (12.0f, 0.0f, 6.0f, 100.0f), render (12.0f, 1.0f, 6.0f, 100.0f)) < 1.0e-6);
     }
 }

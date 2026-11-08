@@ -222,6 +222,14 @@ TEST (choice_lists_are_append_only)
     CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (442));
     CHECK_EQ (byKey ("mod64.destination").max, 441.0f);
 
+    // MANUALCHECK: the delay mode Tap->Delay of Serum 2 (manual p.166) is appended to the four Vital styles
+    {
+        const auto n = namesOf ("delay.style");
+        CHECK_EQ (n.size(), static_cast<size_t> (5));
+        CHECK (head (n, 4) == std::vector<std::string> ({ "Mono", "Stereo", "Ping pong", "Mid ping pong" }));
+        CHECK (n[4] == "Tap->Delay");
+    }
+
     // lists that stay unchanged
     CHECK_EQ (namesOf ("lfo1.sync").size(), static_cast<size_t> (5));
     CHECK_EQ (namesOf ("osc1.warp.type").size(), static_cast<size_t> (11));
@@ -341,7 +349,7 @@ TEST (new_key_defaults_are_neutral)
     CHECK_EQ (byKey ("osc1.pitch_coarse").def, 0.0f);
     CHECK_EQ (byKey ("osc1.pitch_track").def, 1.0f);
     CHECK_EQ (byKey ("osc1.pitch_bend_track").def, 1.0f);
-    CHECK_EQ (byKey ("osc1.fixed_pitch").def, 48.0f);
+    CHECK_EQ (byKey ("osc1.fixed_pitch").def, 0.0f); // MANUALCHECK: a wavetable oscillator without pitch tracking plays MIDI note 0 (manual p.35)
     CHECK_EQ (byKey ("osc1.transpose_snap").def, 0.0f);
     CHECK_EQ (byKey ("osc1.unison.mode").def, 0.0f);
     CHECK_EQ (byKey ("osc1.unison.range").def, 2.0f);

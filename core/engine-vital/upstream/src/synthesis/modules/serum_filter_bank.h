@@ -35,15 +35,21 @@ namespace sbvital {
       Processor* clone() const override { return new StereoCutoffOffset(*this); }
   };
 
-  /** Clean Mode (docs/ui-design/13-new-keys.md 4.15): the drive that the filter models see is 0 while the clean switch is on (the drive is then
-      a linear gain after the filter, FilterModule), else the drive itself. */
-  class CleanDriveGate : public Processor {
+  /** Clean Mode (docs/ui-design/13-new-keys.md 4.15, Serum 2 manual p.142): "the filter pre-gain stage the filter input -24 dB (with a +24 dB
+      boost post-filter)". This processor is the pre-gain: it copies the audio, scaled by -24 dB while the clean switch is on and the model is
+      not Comb / Formant (they have no drive stage); off it is the identity. The gain is ramped over the block. FilterModule applies the +24 dB. */
+  class CleanInputGain : public Processor {
     public:
-      enum { kDrive, kClean, kNumInputs };
+      enum { kAudio, kClean, kModel, kNumInputs };
 
-      CleanDriveGate() : Processor(kNumInputs, 1) { }
+      static constexpr mono_float kCleanDb = 24.0f;
+
+      CleanInputGain() : Processor(kNumInputs, 1), gain_(1.0f) { }
       void process(int num_samples) override;
-      Processor* clone() const override { return new CleanDriveGate(*this); }
+      Processor* clone() const override { return new CleanInputGain(*this); }
+
+    private:
+      mono_float gain_;
   };
 
   class SerumFilterBank : public Processor {

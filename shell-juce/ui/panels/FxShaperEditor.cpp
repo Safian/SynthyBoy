@@ -43,8 +43,8 @@ ShaperCurveEditor::ShaperCurveEditor (UiContext& context) : ctx (context)
         addAndMakeVisible (*b);
         buttons.push_back (std::move (b));
     };
-    add ("A", "Curve A (both polarities; the positive half for X-Shaper (Asym))", [this] { setCurve (0); });
-    add ("B", "Curve B (the negative half of X-Shaper (Asym))", [this] { setCurve (1); });
+    add ("A", "Waveshaper A (the DRIVE knob at 0 %)", [this] { setCurve (0); });
+    add ("B", "Waveshaper B (the DRIVE knob at 100 %)", [this] { setCurve (1); });
     add ("Add", "Add a point in the largest gap", [this]
         {
             float bestGap = 0.0f, at = 0.5f;
@@ -76,8 +76,6 @@ ShaperCurveEditor::~ShaperCurveEditor()
 void ShaperCurveEditor::setCurve (int newWhich)
 {
     newWhich = newWhich != 0 ? 1 : 0;
-    if (newWhich == 1 && ! asym)
-        return;
     if (newWhich == which)
         return;
     if (dirty)
@@ -89,11 +87,7 @@ void ShaperCurveEditor::setCurve (int newWhich)
 
 void ShaperCurveEditor::setAsymmetric (bool isAsymmetric)
 {
-    asym = isAsymmetric;
-    if (auto* b = button ("B"))
-        b->setAlpha (asym ? 1.0f : 0.4f);
-    if (! asym && which == 1)
-        setCurve (0);
+    asym = isAsymmetric; // (both waveshapers exist for both types: the drive morphs from A to B, Serum 2 manual p.169)
     repaint();
 }
 
@@ -344,8 +338,14 @@ void ShaperCurveEditor::paint (juce::Graphics& g)
     g.setColour (t.colours.textDim);
     g.drawText ("in", juce::Rectangle<float> (plot.getRight() - t.px (24.0f), plot.getBottom() + t.px (1.0f), t.px (24.0f), t.px (11.0f)), juce::Justification::centredRight, false);
     g.drawText ("out", juce::Rectangle<float> (frame.getX() + t.px (2.0f), plot.getY() - t.px (6.0f), t.px (22.0f), t.px (11.0f)), juce::Justification::centredLeft, false);
-    g.drawText (asym ? (which == 0 ? "A: positive half" : "B: negative half") : "A: both halves",
-                juce::Rectangle<float> (plot.getX() + t.px (6.0f), plot.getY() + t.px (2.0f), t.px (140.0f), t.px (12.0f)), juce::Justification::centredLeft, false);
+    g.drawText (juce::String (which == 0 ? "A (drive 0 %)" : "B (drive 100 %)") + (asym ? ": -1 .. 1, centre = silence" : ": magnitude"),
+                juce::Rectangle<float> (plot.getX() + t.px (6.0f), plot.getY() + t.px (2.0f), t.px (200.0f), t.px (12.0f)), juce::Justification::centredLeft, false);
+    if (asym) // the signed graph: the middle of both axes is silence
+    {
+        g.setColour (t.colours.textDim.withAlpha (0.7f));
+        g.drawHorizontalLine (juce::roundToInt (plot.getCentreY()), plot.getX(), plot.getRight());
+        g.drawVerticalLine (juce::roundToInt (plot.getCentreX()), plot.getY(), plot.getBottom());
+    }
 
     // the curve, as the engine bakes it
     juce::Path path;

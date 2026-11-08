@@ -40,7 +40,7 @@ namespace sbvital {
   }
 
   poly_float Phaser::totalDepth() const {
-    return input(kModDepth)->at(0) + (input(kModDepth2)->at(0) & constants::kRightMask);
+    return input(kModDepth)->at(0);
   }
 
   void Phaser::hardReset() {
@@ -83,6 +83,8 @@ namespace sbvital {
       cutoff_.buffer[i] = center_buffer[i] + modulation * current_mod_depth;
     }
 
+    // SynthyBoy: DEPTH 2 is the offset between the stages (Serum 2 manual p.174)
+    phaser_filter_->setStageSpread(input(kModDepth2)->at(0));
     phaser_filter_->processWithInput(audio_in, num_samples);
 
     phase_ += utils::toInt((tick_delta * num_samples) * UINT_MAX);

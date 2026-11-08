@@ -100,7 +100,7 @@ namespace sbvital {
 
     SampleOscParams params;
     params.rootKey = sh.root;
-    params.pitchTracking = sh.keytrack && ! slot.sliced;
+    params.pitchTracking = tracksPitch(lane) && ! slot.sliced;
     params.loopMode = loopModeOf(sh.loop_mode);
     params.startOffset = slot.region_lo;
     params.endOffset = slot.region_hi;
@@ -215,8 +215,10 @@ namespace sbvital {
     const float transpose = input(kTranspose)->at(0)[lane];
     const float tune = input(kTune)->at(0)[lane];
     float semitones = transpose + tune;
-    if (sh.keytrack && ! slot.sliced)
+    if (tracksPitch(lane) && ! slot.sliced)
       semitones += input(kMidiNote)->at(0)[lane] + input(kFoldNote)->at(0)[lane] - static_cast<float>(sh.root);
+    else if (input(kPitchBendTrack)->at(0)[0] > 0.5f && ! slot.sliced)
+      semitones += input(kMidiNote)->at(0)[lane] - input(kRawMidiNote)->at(0)[lane]; // pitch tracking off: the bend still moves the sample
 
     // scan: the speed of the read head (A13): scan x range, sign flipped by Reverse, tempo lock and length-to-BPM
     static const float kRange[4] = { 1.0f, 2.0f, 4.0f, 8.0f };

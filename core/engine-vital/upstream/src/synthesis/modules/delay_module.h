@@ -47,6 +47,8 @@ namespace sbvital {
     protected:
       const Output* beats_per_second_;
       StereoDelay* delay_;
+      Value* sync_ = nullptr;      // delay_sync; delay_aux_sync follows it
+      Value* aux_sync_ = nullptr;
 
       JUCE_LEAK_DETECTOR(DelayModule)
   };

@@ -160,20 +160,33 @@ namespace sbvital {
     }
   }
 
+  // The X-Shaper types (Serum 2 manual p.169): a dual crossfading waveshaper. DRIVE is not a gain but the morph between the drawn graphs A (0 %)
+  // and B (100 %); the input is used as it is. X-Shaper is symmetric: the graph maps the input magnitude to the output magnitude (lower left =
+  // silence, top right = 0 dB), the sign of the input is kept. X-Shaper (Asym) is asymmetric: the graph spans the whole signed range (input
+  // -1 .. 1 on the x axis, output -1 .. 1 on the y axis, the middle of the graph is silence), so the two polarities are shaped differently.
   void Distortion::processXShaper(int num_samples, const poly_float* audio_in, const poly_float* drive,
                                   poly_float* audio_out, bool asym_curve) {
+    const auto read = [] (const float* curve, float position) {
+      const float scaled = std::min(std::max(position, 0.0f), 1.0f) * (kShaperSize - 1);
+      const int index = std::min(static_cast<int>(scaled), kShaperSize - 2);
+      return curve[index] + (curve[index + 1] - curve[index]) * (scaled - index);
+    };
     for (int i = 0; i < num_samples; ++i) {
-      poly_float scaled = audio_in[i] * driveDbScale(drive[i]);
       float result[poly_float::kSize];
+      poly_float in_i = audio_in[i], drive_i = drive[i];
       for (size_t lane = 0; lane < poly_float::kSize; ++lane) {
-        const float v = scaled[lane];
-        const float magnitude = std::min(std::fabs(v), 1.0f);
-        const float position = magnitude * (kShaperSize - 1);
-        const int index = std::min(static_cast<int>(position), kShaperSize - 2);
-        const float t = position - index;
-        const float* curve = (asym_curve && v < 0.0f) ? shaper_b_ : shaper_a_;
-        const float shaped = curve[index] + (curve[index + 1] - curve[index]) * t;
-        result[lane] = v < 0.0f ? -shaped : shaped;
+        const float v = in_i[lane];
+        const float morph = std::min(std::max((drive_i[lane] - kMinDrive) / (kMaxDrive - kMinDrive), 0.0f), 1.0f);
+        if (asym_curve) {
+          const float position = std::min(std::max(v, -1.0f), 1.0f) * 0.5f + 0.5f;
+          const float a = read(shaper_a_, position), b = read(shaper_b_, position);
+          result[lane] = (a + (b - a) * morph) * 2.0f - 1.0f;
+        } else {
+          const float magnitude = std::min(std::fabs(v), 1.0f);
+          const float a = read(shaper_a_, magnitude), b = read(shaper_b_, magnitude);
+          const float shaped = a + (b - a) * morph;
+          result[lane] = v < 0.0f ? -shaped : shaped;
+        }
       }
       audio_out[i] = utils::toPolyFloatFromUnaligned(result);
       VITAL_ASSERT(utils::isContained(audio_out[i]));

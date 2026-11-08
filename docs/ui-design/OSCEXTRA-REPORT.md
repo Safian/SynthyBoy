@@ -33,5 +33,5 @@ Merged `agy/oscextra` into `work-oscextra` (from develop). Conflicts in the para
 ## Notes
 
 * `state_random_walk`: the fixed seed of the test went silent with the 1576-key table, changed 2025 to 2026 (comment in the test).
-* Open (morning question 27): the Serum manual is not in the repository; the waveform list, noise sets and pulse width are our own.
+* Open (morning question 27, updated by MANUALCHECK): the waveform list and the four noise colours are the manual's; the other noise sample names and the pulse width are our own; `sub.tune` is now CRS in semitones, `sub.mono` defaults Off and `sub.destination` defaults Effects only (13-new-keys.md 4.18, 4.19).
 * The panel text of an externally changed `noise.sample` (automation) updates through `ParamHandle::onChange` like every other panel; the headless rig does not pump that callback, so only user steps are asserted.

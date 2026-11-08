@@ -43,6 +43,6 @@ A120 position domain and law; A121 slot / content change at the next block; A122
 
 1. **Merge:** every parallel block appends to the table end and bumps `kCount`, `kNumModDestinations`, `kKickPageCount`, the cap bits (26..28 here), `docs/params.json`, `PARAMETERS.md`, `kick-pages.json` and the 112 presets; on conflict regenerate the generated files (`check-params-doc.sh --update`, `paramdump --kick-pages`, `gen-factory-presets.py`) and re-number B16 behind the other blocks (positions in `test_new_keys.cpp`, destinations 404..411 follow the table order).
 2. G69 in the mod matrix (a drawn curve and RISE / FALL per `modNN` slot) is not built: the task defined G69 as the wavetable position remap; row 18 of `14-morning-questions.md`.
-3. Clean Mode follows 04 section 1.1 ("-24 dB pre, +24 dB post"), not a quality / anti-alias toggle (our drive is 0..20 dB): row 19. The Serum manual page is not in the repository.
+3. Clean Mode: (corrected by MANUALCHECK) Serum 2 manual p.142 confirms "-24 dB pre, +24 dB post"; it is implemented as the filter input -24 dB and output +24 dB with the drive still acting inside the models (row 19, 13-new-keys.md A125).
 4. The remap curve is not shown on the 3D wavetable view (the graph only); the unison frame spread is not remapped (A123).
 5. `kNumFxSlots`-style own-engine: engine-own implements none of B16 (unchanged policy, morning question 11).

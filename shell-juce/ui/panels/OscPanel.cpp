@@ -103,6 +103,44 @@ public:
                     choice->setGroups (warpTypeGroups()); // Basic / Alt / FM / RM, the groups without a mode greyed
             }
         }
+
+        // what the Serum 2 manual ties to other controls (p.35-36, p.47): the fixed pitch is the pitch of a wavetable oscillator with pitch tracking off,
+        // the pitch bend switch is for the sample types with pitch tracking off, the stack repeat (1-3x) belongs to the Octaves / Power Chord stacks
+        const std::string o = "osc" + std::to_string (OscIndex);
+        for (const char* suffix : { ".pitch_track", ".type", ".unison.stack" })
+        {
+            auto handle = std::make_unique<ParamHandle> (ctx, o + suffix);
+            handle->onChange = [this] { updateControlDimming(); };
+            dimHandles.push_back (std::move (handle));
+        }
+        updateControlDimming();
+    }
+
+    void updateControlDimming()
+    {
+        const auto choiceOf = [] (ParamHandle& h)
+        {
+            // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
+            return h.valid() ? juce::roundToInt (h.info().min + h.normalised() * (h.info().max - h.info().min)) : 0;
+        };
+        if (dimHandles.size() < 3)
+            return;
+        const bool tracking = choiceOf (*dimHandles[0]) != 0;
+        const int type = choiceOf (*dimHandles[1]);
+        const int stack = choiceOf (*dimHandles[2]);
+        const std::string o = "osc" + std::to_string (OscIndex);
+        for (const auto& c : controls())
+        {
+            const auto& key = c->key();
+            bool applies = true;
+            if (key == o + ".fixed_pitch")
+                applies = ! tracking && type == 0;
+            else if (key == o + ".pitch_bend_track")
+                applies = ! tracking && type == 1;
+            else if (key == o + ".unison.stack_repeat")
+                applies = stack == 3 || stack == 5;
+            c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
+        }
     }
 
     int preferredHeight (int width) const override
@@ -141,6 +179,7 @@ public:
 private:
     OscWaveView waveView;
     ParamHandle onHandle;
+    std::vector<std::unique_ptr<ParamHandle>> dimHandles;
 };
 
 class Osc1Panel final : public OscPanelBase<1> { using OscPanelBase<1>::OscPanelBase; };

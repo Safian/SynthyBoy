@@ -61,8 +61,9 @@ namespace sbvital {
         kNumTypes
       };
 
-      /** The two drawn transfer curves of the X-Shaper types: output magnitude against input magnitude (0..1), kShaperSize points each.
-          Curve A shapes both polarities (odd symmetric) in kXShaper and the positive half in kXShaperAsym, curve B the negative half. */
+      /** The two drawn transfer curves A and B of the X-Shaper types, kShaperSize points each over x = 0..1, y = 0..1; the drive morphs from A
+          to B. kXShaper reads x as the input magnitude and y as the output magnitude (odd symmetric), kXShaperAsym reads x as the signed input
+          (-1 .. 1) and y as the signed output (-1 .. 1), 0.5 = silence (Serum 2 manual p.169). */
       static constexpr int kShaperSize = 513;
 
       static force_inline poly_float driveDbScale(poly_float db) {

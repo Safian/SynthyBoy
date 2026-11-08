@@ -4,8 +4,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // The curves are CONTENT, not parameters (content.curves.shaper_a / shaper_b): read and written through UiHost::content () / setContent ().
-// x = input magnitude, y = output magnitude (both 0..1); X-Shaper uses curve A for both polarities, X-Shaper (Asym) uses A for the positive and B for the
-// negative half. The curve is drawn with the engine's own evaluator (core/shapes), so the display is what the distortion bakes.
+// Two waveshapers A and B; the DRIVE knob morphs from A (0 %) to B (100 %) (Serum 2 manual p.169). X-Shaper: x = input magnitude, y = output magnitude
+// (both 0..1, odd symmetric); X-Shaper (Asym): x = the signed input (-1 .. 1 over the plot), y = the signed output (the middle of the graph is silence).
+// The curve is drawn with the engine's own evaluator (core/shapes), so the display is what the distortion bakes.
 //
 // Gestures: drag a point (the end points move vertically only), double-tap empty plot = add a point, double-tap a point = delete it, drag the diamond in
 // the middle of a segment = bend (power) of that segment (double-tap = straight). Buttons (the non-gesture alternatives, 44 point high): A / B, Add,
@@ -33,7 +34,7 @@ public:
     /** 0 = curve A, 1 = curve B. */
     void setCurve (int which);
     int curve() const noexcept { return which; }
-    /** Curve B only exists for X-Shaper (Asym): its tab is dimmed otherwise. */
+    /** X-Shaper (Asym) reads the plot as a signed graph (the centre lines are drawn); both curves exist for both types. */
     void setAsymmetric (bool isAsymmetric);
     bool asymmetric() const noexcept { return asym; }
     /** Re-reads the points of the shown curve from the host (preset load). Ignored while a gesture is open. */

@@ -233,6 +233,22 @@ TEST (unison_modes_and_blend_shape_render_distinct_audio)
     setByKey (*eStack2, "osc1.unison.stack_repeat", 1.0f); // 2x repeat
     const auto rStack2 = play (*eStack2);
     CHECK (relativeDifference (rStack1, rStack2) > 0.05);
+
+    // Serum 2 manual p.47: "12 (1-3x)" / "12+7 (1-3x)": the repeat is the number of octaves above the original pitch (1x / 2x / 3x), for the
+    // Octaves (3) and Power Chord (5) stacks; the other stacks ignore it
+    const auto stacked = [&] (float style, float repeat)
+    {
+        auto e = makeVital();
+        unisonSaw (*e);
+        setByKey (*e, "osc1.unison.voices", 16.0f); // eight voice pairs: the 3x stack has seven steps
+        setByKey (*e, "osc1.unison.stack", style);
+        setByKey (*e, "osc1.unison.stack_repeat", repeat);
+        return play (*e);
+    };
+    CHECK (relativeDifference (stacked (3.0f, 1.0f), stacked (3.0f, 2.0f)) > 0.05);
+    CHECK (relativeDifference (stacked (5.0f, 0.0f), stacked (5.0f, 1.0f)) > 0.05);
+    CHECK (relativeDifference (stacked (5.0f, 1.0f), stacked (5.0f, 2.0f)) > 0.05);
+    CHECK (relativeDifference (stacked (1.0f, 0.0f), stacked (1.0f, 2.0f)) < 1.0e-6); // Center Drop 12: no repeat
 }
 
 TEST (pitch_bend_tracking_off_ignores_the_wheel)
@@ -249,14 +265,15 @@ TEST (pitch_bend_tracking_off_ignores_the_wheel)
     const auto tracked = renderBend ([] (IEngine&) {}, bent);
     const auto untracked = renderBend ([] (IEngine& e) { setByKey (e, "osc1.pitch_bend_track", 0.0f); }, bent);
     CHECK (relativeDifference (none, tracked) > 0.2);   // On (default): the wheel moves the pitch
-    CHECK (relativeDifference (none, untracked) < 1.0e-3); // Off: the oscillator ignores the wheel
+    // Serum 2 manual p.36: a wavetable oscillator always follows the wheel, the switch is for the sample types (test_wp4.cpp)
+    CHECK (relativeDifference (tracked, untracked) < 1.0e-3);
 
     // a fixed pitch oscillator: wheel tracking on / off
     const auto fixedBent = renderBend ([] (IEngine& e) { setByKey (e, "osc1.pitch_track", 0.0f); }, bent);
     const auto fixedFlat = renderBend ([] (IEngine& e) { setByKey (e, "osc1.pitch_track", 0.0f); setByKey (e, "osc1.pitch_bend_track", 0.0f); }, bent);
     const auto fixedNone = renderBend ([] (IEngine& e) { setByKey (e, "osc1.pitch_track", 0.0f); }, { noteOn (0, 48) });
     CHECK (relativeDifference (fixedNone, fixedBent) > 0.2);
-    CHECK (relativeDifference (fixedNone, fixedFlat) < 1.0e-3);
+    CHECK (relativeDifference (fixedBent, fixedFlat) < 1.0e-3); // the wavetable oscillator ignores the switch
 }
 
 TEST (step_mode_follows_the_active_tuning)

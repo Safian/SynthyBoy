@@ -44,6 +44,7 @@ namespace strings {
     "Stereo",
     "Ping Pong",
     "Mid Ping Pong",
+    "Tap->Delay",
   };
 
   const std::string kCompressorBandNames[] = {

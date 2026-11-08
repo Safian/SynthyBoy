@@ -59,11 +59,13 @@ constexpr const char* const kDivisions[] = { "Freeze", "32 bars", "16 bars", "8 
 constexpr const char* const kLfoSyncTypes[] = { "Retrigger", "Free-run", "Envelope", "Sustain envelope", "Loop at point", "Loop and hold" };
 constexpr const char* const kRandomSyncTypes[] = { "Retrigger", "Free-run" };
 constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Sine interpolate", "Lorenz attractor", "Rossler attractor" };
-constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong" };
+constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong",
+                                                // appended (Serum 2 manual p.166): both delays mono and in series
+                                                "Tap->Delay" };
 constexpr const char* const kCompressorBands[] = { "Multiband", "Low band", "High band", "Single band" };
 constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample",
                                                    // appended in B17 (13-new-keys.md 4.17, G75)
-                                                   "Tube", "Diode 1", "Diode 2", "Zero square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
+                                                   "Tube", "Diode 1", "Diode 2", "Zero-Square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
 constexpr const char* const kDistortionFilterOrder[] = { "None", "Pre", "Post" };
 constexpr const char* const kEqLowModes[] = { "Shelf", "High pass" };
 constexpr const char* const kEqBandModes[] = { "Peak", "Notch" };
@@ -94,7 +96,7 @@ constexpr const char* const kBusDestinations[] = { "Main", "Direct", "Other bus"
 constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H low", "Splitter L/H high", "Splitter L/M/H low",
                                          "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
 constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
-constexpr const char* const kRemapSlots[] = { "Remap 1", "Remap 2", "Remap 3", "Remap 4" };
+constexpr const char* const kRemapSlots[] = { "Curve 1", "Curve 2", "Curve 3", "Curve 4" }; // (not Serum's warp modes Remap 1-4, 13-new-keys.md 4.14)
 constexpr const char* const kPitchModes[] = { "Semitones", "Harmonics", "Ratio", "Step" };
 constexpr const char* const kUnisonModes[] = { "Linear", "Super", "Exp", "Inv", "Random" };
 constexpr const char* const kUnisonStackRepeats[] = { "1x", "2x", "3x" };
@@ -368,7 +370,7 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("osc" #N ".pitch_coarse", "Osc " #N " Pitch Coarse", "Oscillator " #N, -48.0f, 48.0f, 0.0f, Unit::semitone, kMod, 2),               \
     onOff ("osc" #N ".pitch_track", "Osc " #N " Pitch Tracking", "Oscillator " #N, true),                                                       \
     onOff ("osc" #N ".pitch_bend_track", "Osc " #N " Pitch Bend Tracking", "Oscillator " #N, true),                                             \
-    cont ("osc" #N ".fixed_pitch", "Osc " #N " Fixed Pitch", "Oscillator " #N, 0.0f, 127.0f, 48.0f, Unit::none, kMod, 1),                         \
+    cont ("osc" #N ".fixed_pitch", "Osc " #N " Fixed Pitch", "Oscillator " #N, 0.0f, 127.0f, 0.0f, Unit::none, kMod, 1),                         \
     whole ("osc" #N ".transpose_snap", "Osc " #N " Transpose Snap", "Oscillator " #N, 0.0f, 8191.0f, 0.0f, Unit::none, kAuto),                 \
     pick ("osc" #N ".unison.mode", "Osc " #N " Unison Mode", "Oscillator " #N, kUnisonModes, 0),                                                \
     cont ("osc" #N ".unison.range", "Osc " #N " Unison Range", "Oscillator " #N, 0.0f, 48.0f, 2.0f, Unit::semitone, kMod, 1),                  \
@@ -727,11 +729,11 @@ constexpr ParamInfo kRaw[] = {
     onOff ("sub.on", "Sub On", "Sub", false),
     pick ("sub.waveform", "Sub Waveform", "Sub", kSubWaveforms, 0),
     whole ("sub.octave", "Sub Octave", "Sub", -4.0f, 4.0f, -1.0f, Unit::none, kMod),
-    cont ("sub.tune", "Sub Tune", "Sub", -100.0f, 100.0f, 0.0f, Unit::cents, kMod),
+    cont ("sub.tune", "Sub Coarse", "Sub", -48.0f, 48.0f, 0.0f, Unit::semitone, kMod),
     SB_PCT ("sub.level", "Sub Level", "Sub", 50.0f, kMod),
     SB_PCT_RANGE ("sub.pan", "Sub Pan", "Sub", -100.0f, 100.0f, 0.0f, kMod),
-    pick ("sub.destination", "Sub Destination", "Sub", kOscDestinations, 0),
-    onOff ("sub.mono", "Sub Mono", "Sub", true),
+    pick ("sub.destination", "Sub Destination", "Sub", kOscDestinations, 3),
+    onOff ("sub.mono", "Sub Mono", "Sub", false),
     SB_PCT ("sub.filter_blend", "Sub Filter Blend", "Sub", 0.0f, kMod),
     SB_SENDS ("sub", "Sub", "Sub"),
 

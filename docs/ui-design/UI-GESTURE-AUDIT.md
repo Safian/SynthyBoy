@@ -192,3 +192,12 @@ LFO tab chips + drag-to-copy, sync-mode dimming, the free-form shape editor (05-
 - **NOT DONE with a hard reason (0)**: none (02-28 closed with OSCEXTRA procedural noise sample sets). 05-22 is implemented since the engine plays point modulation per voice.
 - **GAP in the design / engine, left as the task says (4)**: 02-14, 02-24, 02-25, 02-26 (02-27 closed with OSCEXTRA sub oscillator).
 - **partial (0)**: none.
+
+## MANUALCHECK changes (docs/ui-design/MANUALCHECK-REPORT.md)
+
+| Row | Change |
+|-----|--------|
+| 08 reverb | controls the type does not have are dimmed per the Serum 2 manual p.175-177 (ER SIZE and DIFF B: Vintage; DIFF A: Vintage and Nitrous; MODE (room): Nitrous): `FxReverbPanel.cpp:251` (`updateDimming`), test `fx_extras_reverb_dims_what_the_algorithm_does_not_use` |
+| 08 distortion | X-Shaper editor: A and B always selectable (the drive morphs A to B), X-Shaper (Asym) draws the signed graph with centre lines: `FxShaperEditor.cpp:88` (`setAsymmetric`), `:343`; test `fx_extras_xshaper_editor_edits_the_content` |
+| 08 delay | the TAP button is a shell tap tempo; Serum's Tap->Delay is the style menu entry `Tap->Delay`: `FxDelayPanel.cpp:168` |
+| 02 pitch | `fixed_pitch`, `pitch_bend_track` and `unison.stack_repeat` are dimmed unless they apply (tracking off on a wavetable / sample oscillator, Octaves or Power Chord stack): `OscPanel.cpp:119` (`updateControlDimming`) |

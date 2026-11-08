@@ -241,8 +241,8 @@ public:
         addMoreControl ("reverb.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("reverb.rack");
 
-        // the algorithm decides which controls apply (G77): ER size, the two diffusions and the room belong to the new algorithms, the
-        // room to Basin only; the width acts on every type
+        // the algorithm decides which controls apply (Serum 2 manual p.175-177): ER SIZE, DIFF A / DIFF B belong to Vintage (DIFF A is the
+        // DIFFUSION of Nitrous), MODE (room) to Nitrous only; the width acts on every type
         typeHandle = std::make_unique<ParamHandle> (ctx, "reverb.type");
         typeHandle->onChange = [this] { updateDimming(); };
         updateDimming();
@@ -258,10 +258,12 @@ public:
         {
             const auto& key = c->key();
             bool applies = true;
-            if (key == "reverb.er_size" || key == "reverb.diff_a" || key == "reverb.diff_b")
-                applies = type != 0;
+            if (key == "reverb.er_size" || key == "reverb.diff_b")
+                applies = type == 3;
+            else if (key == "reverb.diff_a")
+                applies = type == 3 || type == 4;
             else if (key == "reverb.room")
-                applies = type == 5;
+                applies = type == 4;
             c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
         }
     }

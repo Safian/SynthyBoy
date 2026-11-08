@@ -293,8 +293,8 @@ TEST (delay_hq_and_offset)
     setByKey (*e, "delay.hq", 0.0f);
 
     // the offset multiplies the time of the right channel
-    setByKey (*e, "delay.time", 200.0f);
-    setByKey (*e, "delay.time2", 200.0f);
+    setByKey (*e, "delay.time", 203.0f);   // (not a multiple of the period of the note: 200 and 300 ms are whole periods of 220 Hz)
+    setByKey (*e, "delay.time2", 203.0f);
     const auto level = play (*e, 1.0, 57);
     setByKey (*e, "delay.offset", 1.5f);
     const auto shifted = play (*e, 1.0, 57);
@@ -302,6 +302,45 @@ TEST (delay_hq_and_offset)
     CHECK (relativeDifference (level.left, shifted.left, 0.3, 0.9) < 1.0e-3);        // the left channel is untouched
     CHECK (relativeDifference (level.right, shifted.right, 0.3, 0.9) > 0.2);         // the right one moves
     CHECK_NEAR (rms (shifted.right, 0.3, 0.9), rms (level.right, 0.3, 0.9), 0.3 * rms (level.right, 0.3, 0.9) + 1.0e-4);
+}
+
+TEST (delay_tap_delay_mode_taps_once_then_repeats_on_the_right_time)
+{
+    // Serum 2 manual p.166: TAP-> DELAY sets both delays to mono and in series: the left signal fires once with no feedback (the tap), followed by
+    // the right signal operating as a typical delay (feedback applied there)
+    auto e = makeVital();
+    base (*e);
+    setByKey (*e, "delay.on", 1.0f);
+    setByKey (*e, "delay.mix", 100.0f);
+    setByKey (*e, "delay.feedback", 60.0f);
+    setByKey (*e, "delay.sync", 0.0f);
+    setByKey (*e, "delay.time", 100.0f);
+    setByKey (*e, "delay.time2", 150.0f);
+    setByKey (*e, "delay.filter_cutoff", 20000.0f);
+    setByKey (*e, "delay.filter_spread", 0.0f);
+    setByKey (*e, "delay.style", 4.0f);
+    const auto render = [&] {
+        e->reset();
+        return sbtest::render (*e, { noteOn (0, 57), noteOff (static_cast<int> (0.03 * kSr), 57) }, static_cast<int> (1.2 * kSr), 256);
+    };
+    const auto r = render();
+    CHECK (finite (r));
+    CHECK (relativeDifference (r.left, r.right, 0.0, 1.2) < 1.0e-6); // mono
+    const auto at = [&] (double from, double to) { return rms (r.left, from, to); };
+    const double tap = at (0.105, 0.125);          // the tap at the left time
+    const double none = at (0.04, 0.09);           // nothing before it (the dry signal is off)
+    const double first = at (0.255, 0.275);        // the right delay: tap + 150 ms
+    const double between = at (0.19, 0.24);        // the tap does not repeat at 200 ms
+    const double second = at (0.405, 0.425);       // feedback: tap + 300 ms
+    std::printf ("    tap delay: before %g, tap %g, between %g, repeat 1 %g, repeat 2 %g\n", none, tap, between, first, second);
+    CHECK (tap > 20.0 * none && tap > 0.01);
+    CHECK (first > 5.0 * between && first > 0.01);   // (the tail of the tap reaches into the gap)
+    CHECK (second > 0.2 * first);                    // the right delay feeds itself back
+    CHECK (second < first);
+    // not the stereo style
+    setByKey (*e, "delay.style", 1.0f);
+    const auto stereo = render();
+    CHECK (relativeDifference (r.left, stereo.left, 0.0, 1.2) > 0.3);
 }
 
 TEST (distortion_types_extras)
@@ -370,30 +409,50 @@ TEST (distortion_xshaper_uses_the_drawn_curves)
     (void) clipLinear;
     setByKey (*e, "distortion.drive", 0.0f);
 
+    // X-Shaper (Serum 2 manual p.169): the DRIVE is the morph between the graphs A (-30 dB = 0 %) and B (+30 dB = 100 %), not a gain
     StateContent content;
-    content.shaperA = { ContentPoint (0.0f, 0.0f), ContentPoint (1.0f, 0.25f) };
+    content.shaperA = { ContentPoint (0.0f, 0.0f), ContentPoint (1.0f, 0.25f) }; // B stays the identity
     e->setContent (content);
     setByKey (*e, "distortion.type", 12.0f);
+    setByKey (*e, "distortion.drive", -30.0f);
     const auto quarter = play (*e);
     CHECK (finite (quarter));
     CHECK_NEAR (peak (quarter.left), 0.25 * peak (identity.left), 0.05 * peak (identity.left));
     CHECK_NEAR (rms (quarter.left), 0.25 * rms (identity.left), 0.05 * rms (identity.left));
+    setByKey (*e, "distortion.drive", 30.0f);
+    CHECK_NEAR (peak (play (*e).left), peak (identity.left), 0.02 * peak (identity.left));
+    setByKey (*e, "distortion.drive", 0.0f); // half way: (0.25 + 1) / 2 of the identity
+    CHECK_NEAR (peak (play (*e).left), 0.625 * peak (identity.left), 0.05 * peak (identity.left));
 
-    // X-Shaper (Asym): the positive half is curve A, the negative half curve B
-    content.shaperB = { ContentPoint (0.0f, 0.0f), ContentPoint (1.0f, 1.0f) };
-    e->setContent (content);
-    setByKey (*e, "distortion.type", 13.0f);
-    const auto asym = play (*e);
-    CHECK (finite (asym));
-    double positive = 0.0, negative = 0.0;
-    for (size_t i = static_cast<size_t> (0.3 * kSr); i < static_cast<size_t> (0.7 * kSr); ++i)
+    // X-Shaper (Asym): the graph spans -1 .. 1 on both axes (the middle is silence); A takes the negative half down to a quarter, B is the identity.
+    // (The asymmetric types pass a DC blocker, so the reference is the Asym type without any content.)
+    const auto polarity = [] (const sbtest::Rendered& r)
     {
-        positive = std::max (positive, static_cast<double> (asym.left[i]));
-        negative = std::min (negative, static_cast<double> (asym.left[i]));
-    }
-    // (a plain saw has the same positive and negative peak, so the curves decide)
-    CHECK (positive < 0.45 * (-negative) + 1.0e-3);
-    CHECK (-negative > 0.5 * peak (identity.left));
+        double positive = 0.0, negative = 0.0;
+        for (size_t i = static_cast<size_t> (0.3 * kSr); i < static_cast<size_t> (0.7 * kSr); ++i)
+        {
+            positive = std::max (positive, static_cast<double> (r.left[i]));
+            negative = std::min (negative, static_cast<double> (r.left[i]));
+        }
+        return std::pair<double, double> { positive, -negative };
+    };
+    e->setContent (StateContent {});
+    setByKey (*e, "distortion.type", 13.0f);
+    setByKey (*e, "distortion.drive", -30.0f);
+    const auto reference = polarity (play (*e));
+    content.shaperA = { ContentPoint (0.0f, 0.375f), ContentPoint (0.5f, 0.5f), ContentPoint (1.0f, 1.0f) };
+    content.shaperB = {};
+    e->setContent (content);
+    const auto asymA = play (*e);
+    CHECK (finite (asymA));
+    const auto cut = polarity (asymA);
+    std::printf ("    asym: identity %g / %g, graph A %g / %g\n", reference.first, reference.second, cut.first, cut.second);
+    CHECK (cut.second < 0.75 * reference.second);   // the negative half is shaped down
+    CHECK (cut.first > 0.6 * reference.first);      // the positive half is still there
+    setByKey (*e, "distortion.drive", 30.0f); // B: the identity brings the negative half back
+    const auto back = polarity (play (*e));
+    CHECK_NEAR (back.second, reference.second, 0.03 * reference.second);
+    CHECK_NEAR (back.first, reference.first, 0.03 * reference.first);
 
     // removing the content restores the identity
     e->setContent (StateContent {});
@@ -401,14 +460,16 @@ TEST (distortion_xshaper_uses_the_drawn_curves)
     CHECK_NEAR (peak (play (*e).left), peak (identity.left), 0.01 * peak (identity.left));
 }
 
-TEST (phaser_depth2_moves_the_right_channel_only)
+TEST (phaser_depth2_offsets_the_stages)
 {
+    // Serum 2 manual p.174: DEPTH 2 is "the offset between phaser stages": the all-pass stages are spread over depth 2 semitones around the
+    // cutoff (0 = every stage at the same cutoff, as before). Both channels get the same spread.
     auto e = makeVital();
     base (*e);
     setByKey (*e, "phaser.on", 1.0f);
     setByKey (*e, "phaser.mix", 100.0f);
     setByKey (*e, "phaser.blend", 100.0f);
-    setByKey (*e, "phaser.depth", 0.0f); // the left channel does not sweep (the LFO phase of the phaser runs free, so this makes the test exact)
+    setByKey (*e, "phaser.depth", 0.0f);
     setByKey (*e, "phaser.rate", 1.0f);
     setByKey (*e, "phaser.phase_offset", 0.0f);
     setByKey (*e, "phaser.feedback", 70.0f);
@@ -418,15 +479,13 @@ TEST (phaser_depth2_moves_the_right_channel_only)
     setByKey (*e, "phaser.depth2", 24.0f);
     const auto on = play (*e, 1.2, 50);
     CHECK (finite (on));
-    CHECK (relativeDifference (off.left, on.left, 0.3, 1.1) < 1.0e-4);     // the left channel is the one of the depth
-    CHECK (relativeDifference (off.right, on.right, 0.3, 1.1) > 0.05);     // the right channel sweeps by depth + depth 2
-    CHECK (relativeDifference (on.left, on.right, 0.3, 1.1) > 0.05);
+    CHECK (relativeDifference (off.left, on.left, 0.3, 1.1) > 0.05);
+    CHECK (relativeDifference (off.right, on.right, 0.3, 1.1) > 0.05);
+    CHECK (relativeDifference (on.left, on.right, 0.3, 1.1) < 1.0e-6); // no right-channel-only offset any more
     setByKey (*e, "phaser.depth2", -24.0f);
     const auto minus = play (*e, 1.2, 50);
     CHECK (finite (minus));
-    CHECK (relativeDifference (off.left, minus.left, 0.3, 1.1) < 1.0e-4);
-    CHECK (relativeDifference (off.right, minus.right, 0.3, 1.1) > 0.05);
-    // with a depth the depth 2 is added to it: the right channel of depth 12 + depth 2 12 is the one of depth 24 (same phase of the LFO run)
+    CHECK (relativeDifference (off.left, minus.left, 0.3, 1.1) > 0.05);
 }
 
 TEST (reverb_algorithms)
@@ -475,8 +534,8 @@ TEST (reverb_algorithms)
     CHECK (rms (longHall.left, 2.4, 3.0) > 3.0 * rms (shortHall.left, 2.4, 3.0) + 1.0e-6);
     setByKey (*e, "reverb.decay", 1500.0f);
 
-    // the room modes of the Basin differ from each other
-    setByKey (*e, "reverb.type", 5.0f);
+    // the MODE (room) of the Nitrous differs from room to room (Serum 2 manual p.177)
+    setByKey (*e, "reverb.type", 4.0f);
     std::vector<sbtest::Rendered> rooms;
     for (int room = 0; room < 5; ++room)
     {
@@ -494,6 +553,12 @@ TEST (reverb_algorithms)
     const auto hallA = render();
     setByKey (*e, "reverb.room", 3.0f);
     CHECK (relativeDifference (hallA.left, render().left) < 1.0e-6);
+    // ... and for the Basin
+    setByKey (*e, "reverb.type", 5.0f);
+    setByKey (*e, "reverb.room", 0.0f);
+    const auto basinA = render();
+    setByKey (*e, "reverb.room", 3.0f);
+    CHECK (relativeDifference (basinA.left, render().left) < 1.0e-6);
 
     // ER size, the two diffusions and the width act on the algorithms
     const auto neutral = render();

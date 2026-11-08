@@ -323,14 +323,16 @@ TEST (sub_osc_octave_and_tune_set_the_pitch)
         e.set ("sub.octave", octave);
         e.set ("sub.tune", tune);
         const auto r = e.play (0.7, 60);
-        return sbtest::peakFrequency (spectrumOf (r.left), kFft, kSr, base * std::pow (2.0, octave));
+        return sbtest::peakFrequency (spectrumOf (r.left), kFft, kSr, base * std::pow (2.0, octave + tune / 12.0));
     };
     CHECK (std::fabs (pitchOf (0.0f, 0.0f) / base - 1.0) < 0.003);
     CHECK (std::fabs (pitchOf (-1.0f, 0.0f) / (base * 0.5) - 1.0) < 0.003);
     CHECK (std::fabs (pitchOf (1.0f, 0.0f) / (base * 2.0) - 1.0) < 0.003);
     CHECK (std::fabs (pitchOf (-2.0f, 0.0f) / (base * 0.25) - 1.0) < 0.003);
-    CHECK (std::fabs (pitchOf (0.0f, 50.0f) / (base * std::pow (2.0, 50.0 / 1200.0)) - 1.0) < 0.003);
-    CHECK (std::fabs (pitchOf (0.0f, -100.0f) / (base * std::pow (2.0, -100.0 / 1200.0)) - 1.0) < 0.003);
+    // sub.tune is the CRS control of the manual (p.124): continuous semitones
+    CHECK (std::fabs (pitchOf (0.0f, 7.0f) / (base * std::pow (2.0, 7.0 / 12.0)) - 1.0) < 0.003);
+    CHECK (std::fabs (pitchOf (0.0f, 0.5f) / (base * std::pow (2.0, 0.5 / 12.0)) - 1.0) < 0.003);
+    CHECK (std::fabs (pitchOf (0.0f, -12.0f) / (base * 0.5) - 1.0) < 0.003);
 }
 
 TEST (sub_osc_pan_and_destination)
@@ -631,7 +633,7 @@ TEST (every_modulatable_key_of_the_block_follows_the_matrix)
     // macro 1 at 0 -> 100 %, routed to the key at 100 %: the render must change (a moved level, pan, pitch, blend, send or phase)
     struct Case { const char* key; float amount; int note; };
     const Case cases[] = {
-        { "sub.octave", 25.0f, 60 },  { "sub.tune", 100.0f, 60 },   { "sub.level", 100.0f, 60 }, { "sub.pan", 100.0f, 60 },
+        { "sub.octave", 25.0f, 60 },  { "sub.tune", 25.0f, 60 },   { "sub.level", 100.0f, 60 }, { "sub.pan", 100.0f, 60 },
         { "sub.filter_blend", 100.0f, 69 }, { "sub.bus1_send", 100.0f, 60 }, { "sub.bus2_send", 100.0f, 60 },
         { "noise.pitch", 25.0f, 60 }, { "noise.fine", 100.0f, 60 }, { "noise.phase", 100.0f, 60 },
     };

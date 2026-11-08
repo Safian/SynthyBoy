@@ -151,7 +151,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.bus1_send` | Osc 1 Bus 1 Send | 0 .. 100 % | 0 % | Osc 1 | mod |  |
 | `osc1.bus2_send` | Osc 1 Bus 2 Send | 0 .. 100 % | 0 % | Osc 1 | mod |  |
 | `osc1.remap.on` | Osc 1 Remap On | 0 Off, 1 On | Off | Osc 1 / Remap |  |  |
-| `osc1.remap.slot` | Osc 1 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 1 / Remap |  |  |
+| `osc1.remap.slot` | Osc 1 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 1 / Remap |  |  |
 | `osc1.remap.rise` | Osc 1 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
 | `osc1.remap.fall` | Osc 1 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
 | `osc1.unison.blend_shape` | Osc 1 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 1 | mod |  |
@@ -226,7 +226,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.bus1_send` | Osc 2 Bus 1 Send | 0 .. 100 % | 0 % | Osc 2 | mod |  |
 | `osc2.bus2_send` | Osc 2 Bus 2 Send | 0 .. 100 % | 0 % | Osc 2 | mod |  |
 | `osc2.remap.on` | Osc 2 Remap On | 0 Off, 1 On | Off | Osc 2 / Remap |  |  |
-| `osc2.remap.slot` | Osc 2 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 2 / Remap |  |  |
+| `osc2.remap.slot` | Osc 2 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 2 / Remap |  |  |
 | `osc2.remap.rise` | Osc 2 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
 | `osc2.remap.fall` | Osc 2 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
 | `osc2.unison.blend_shape` | Osc 2 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 2 | mod |  |
@@ -301,7 +301,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.bus1_send` | Osc 3 Bus 1 Send | 0 .. 100 % | 0 % | Osc 3 | mod |  |
 | `osc3.bus2_send` | Osc 3 Bus 2 Send | 0 .. 100 % | 0 % | Osc 3 | mod |  |
 | `osc3.remap.on` | Osc 3 Remap On | 0 Off, 1 On | Off | Osc 3 / Remap |  |  |
-| `osc3.remap.slot` | Osc 3 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 3 / Remap |  |  |
+| `osc3.remap.slot` | Osc 3 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 3 / Remap |  |  |
 | `osc3.remap.rise` | Osc 3 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
 | `osc3.remap.fall` | Osc 3 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
 | `osc3.unison.blend_shape` | Osc 3 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 3 | mod |  |
@@ -840,7 +840,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `delay.sync` | Delay Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet | Tempo | FX / Delay |  |  |
 | `delay.division` | Delay Division | 9 choices: 0 4 bars, 1 2 bars, 2 1 bar, ... , 8 1/64 note | 1/8 note | FX / Delay |  |  |
 | `delay.division2` | Delay Division 2 | 9 choices: 0 4 bars, 1 2 bars, 2 1 bar, ... , 8 1/64 note | 1/8 note | FX / Delay |  |  |
-| `delay.style` | Delay Style | 0 Mono, 1 Stereo, 2 Ping pong, 3 Mid ping pong | Stereo | FX / Delay |  |  |
+| `delay.style` | Delay Style | 0 Mono, 1 Stereo, 2 Ping pong, 3 Mid ping pong, 4 Tap->Delay | Stereo | FX / Delay |  |  |
 | `delay.filter_cutoff` | Delay Filter Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 260 Hz | FX / Delay | mod |  |
 | `delay.filter_spread` | Delay Filter Spread | 0 .. 100 % | 100 % | FX / Delay | mod |  |
 | `distortion.on` | Distortion On | 0 Off, 1 On | Off | FX / Distortion |  |  |
@@ -1071,7 +1071,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc1.pitch_coarse` | Osc 1 Pitch Coarse | -48 .. 48 st | 0 st | Oscillator 1 | mod |  |
 | `osc1.pitch_track` | Osc 1 Pitch Tracking | 0 Off, 1 On | On | Oscillator 1 |  |  |
 | `osc1.pitch_bend_track` | Osc 1 Pitch Bend Tracking | 0 Off, 1 On | On | Oscillator 1 |  |  |
-| `osc1.fixed_pitch` | Osc 1 Fixed Pitch | 0 .. 127 | 48 | Oscillator 1 | mod |  |
+| `osc1.fixed_pitch` | Osc 1 Fixed Pitch | 0 .. 127 | 0 | Oscillator 1 | mod |  |
 | `osc1.transpose_snap` | Osc 1 Transpose Snap | 0 .. 8191 (steps of 1) | 0 | Oscillator 1 |  |  |
 | `osc1.unison.mode` | Osc 1 Unison Mode | 0 Linear, 1 Super, 2 Exp, 3 Inv, 4 Random | Linear | Oscillator 1 |  |  |
 | `osc1.unison.range` | Osc 1 Unison Range | 0 .. 48 st | 2 st | Oscillator 1 | mod |  |
@@ -1086,7 +1086,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc2.pitch_coarse` | Osc 2 Pitch Coarse | -48 .. 48 st | 0 st | Oscillator 2 | mod |  |
 | `osc2.pitch_track` | Osc 2 Pitch Tracking | 0 Off, 1 On | On | Oscillator 2 |  |  |
 | `osc2.pitch_bend_track` | Osc 2 Pitch Bend Tracking | 0 Off, 1 On | On | Oscillator 2 |  |  |
-| `osc2.fixed_pitch` | Osc 2 Fixed Pitch | 0 .. 127 | 48 | Oscillator 2 | mod |  |
+| `osc2.fixed_pitch` | Osc 2 Fixed Pitch | 0 .. 127 | 0 | Oscillator 2 | mod |  |
 | `osc2.transpose_snap` | Osc 2 Transpose Snap | 0 .. 8191 (steps of 1) | 0 | Oscillator 2 |  |  |
 | `osc2.unison.mode` | Osc 2 Unison Mode | 0 Linear, 1 Super, 2 Exp, 3 Inv, 4 Random | Linear | Oscillator 2 |  |  |
 | `osc2.unison.range` | Osc 2 Unison Range | 0 .. 48 st | 2 st | Oscillator 2 | mod |  |
@@ -1101,7 +1101,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc3.pitch_coarse` | Osc 3 Pitch Coarse | -48 .. 48 st | 0 st | Oscillator 3 | mod |  |
 | `osc3.pitch_track` | Osc 3 Pitch Tracking | 0 Off, 1 On | On | Oscillator 3 |  |  |
 | `osc3.pitch_bend_track` | Osc 3 Pitch Bend Tracking | 0 Off, 1 On | On | Oscillator 3 |  |  |
-| `osc3.fixed_pitch` | Osc 3 Fixed Pitch | 0 .. 127 | 48 | Oscillator 3 | mod |  |
+| `osc3.fixed_pitch` | Osc 3 Fixed Pitch | 0 .. 127 | 0 | Oscillator 3 | mod |  |
 | `osc3.transpose_snap` | Osc 3 Transpose Snap | 0 .. 8191 (steps of 1) | 0 | Oscillator 3 |  |  |
 | `osc3.unison.mode` | Osc 3 Unison Mode | 0 Linear, 1 Super, 2 Exp, 3 Inv, 4 Random | Linear | Oscillator 3 |  |  |
 | `osc3.unison.range` | Osc 3 Unison Range | 0 .. 48 st | 2 st | Oscillator 3 | mod |  |
@@ -1115,11 +1115,11 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `sub.on` | Sub On | 0 Off, 1 On | Off | Sub |  |  |
 | `sub.waveform` | Sub Waveform | 0 Sine, 1 Rounded Rect, 2 Triangle, 3 Saw, 4 Square, 5 Pulse | Sine | Sub |  |  |
 | `sub.octave` | Sub Octave | -4 .. 4 (steps of 1) | -1 | Sub | mod |  |
-| `sub.tune` | Sub Tune | -100 .. 100 ct | 0 ct | Sub | mod |  |
+| `sub.tune` | Sub Coarse | -48 .. 48 st | 0 st | Sub | mod |  |
 | `sub.level` | Sub Level | 0 .. 100 % | 50 % | Sub | mod |  |
 | `sub.pan` | Sub Pan | -100 .. 100 % | 0 % | Sub | mod |  |
-| `sub.destination` | Sub Destination | 7 choices: 0 Filter 1, 1 Filter 2, 2 Filters 1+2, ... , 6 None | Filter 1 | Sub |  |  |
-| `sub.mono` | Sub Mono | 0 Off, 1 On | On | Sub |  |  |
+| `sub.destination` | Sub Destination | 7 choices: 0 Filter 1, 1 Filter 2, 2 Filters 1+2, ... , 6 None | Effects only | Sub |  |  |
+| `sub.mono` | Sub Mono | 0 Off, 1 On | Off | Sub |  |  |
 | `sub.filter_blend` | Sub Filter Blend | 0 .. 100 % | 0 % | Sub | mod |  |
 | `sub.bus1_send` | Sub Bus 1 Send | 0 .. 100 % | 0 % | Sub | mod |  |
 | `sub.bus2_send` | Sub Bus 2 Send | 0 .. 100 % | 0 % | Sub | mod |  |
@@ -1607,7 +1607,7 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 430 | `reverb.diff_a` | Reverb Diffusion A |
 | 431 | `reverb.diff_b` | Reverb Diffusion B |
 | 432 | `sub.octave` | Sub Octave |
-| 433 | `sub.tune` | Sub Tune |
+| 433 | `sub.tune` | Sub Coarse |
 | 434 | `sub.level` | Sub Level |
 | 435 | `sub.pan` | Sub Pan |
 | 436 | `sub.filter_blend` | Sub Filter Blend |

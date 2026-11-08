@@ -5,8 +5,8 @@
 //            branches with a modulated all-pass, a delay, a damping filter and a second all-pass each, fourteen output taps
 //   Hall     eight-line feedback delay network (Hadamard feedback matrix), long lines, an all-pass in every line, early reflections
 //   Vintage  eight parallel feedback combs and four series all-passes per channel (Schroeder / Moorer), darker output
-//   Nitrous  the same network with short, dense lines, a bright damping and strong modulation
-//   Basin    the network with the line lengths of the modes of a room: Space, Marble, Rectangle, Hexagon or Box
+//   Nitrous  the network with the line lengths of the modes of a room: MODE = Space, Marble, Rectangle, Hexagon or Box (Serum 2 manual p.177)
+//   Basin    the same network with short, dense lines, a bright damping and strong modulation
 // All of them are mono in, stereo out, sample-rate independent, have no allocation in process() and use the same damping shelves, size,
 // decay (T60), diffusion, early reflection size and modulation controls of the Vital reverb.
 #pragma once

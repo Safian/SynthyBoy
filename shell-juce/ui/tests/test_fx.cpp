@@ -554,8 +554,10 @@ TEST (fx_extras_xshaper_editor_edits_the_content)
     doubleTapOn (*editor, editor->handlePosition (0)); // straight again
     CHECK_NEAR (editor->points()[0].power, 0.0f, 1e-6);
 
-    // the curve B exists for X-Shaper (Asym) only
+    // both waveshapers exist for both types (the drive morphs from A to B, Serum 2 manual p.169); X-Shaper (Asym) draws the signed graph
     editor->setCurve (1);
+    CHECK_EQ (editor->curve(), 1);
+    editor->setCurve (0);
     CHECK_EQ (editor->curve(), 0);
     setParamPlain (f, "distortion.type", 13.0f);
     CHECK (editor->asymmetric());
@@ -605,11 +607,16 @@ TEST (fx_extras_reverb_dims_what_the_algorithm_does_not_use)
     };
     CHECK (alpha ("reverb.er_size") < 0.9f && alpha ("reverb.diff_a") < 0.9f && alpha ("reverb.room") < 0.9f); // type Vital
     CHECK (alpha ("reverb.width") > 0.99f);
-    setParamPlain (f, "reverb.type", 2.0f); // Hall
-    CHECK (alpha ("reverb.er_size") > 0.99f && alpha ("reverb.diff_b") > 0.99f);
+    setParamPlain (f, "reverb.type", 2.0f); // Hall: none of the Vintage / Nitrous controls
+    CHECK (alpha ("reverb.er_size") < 0.9f && alpha ("reverb.diff_b") < 0.9f && alpha ("reverb.room") < 0.9f);
+    setParamPlain (f, "reverb.type", 3.0f); // Vintage: ER SIZE, DIFF A, DIFF B (Serum 2 manual p.176)
+    CHECK (alpha ("reverb.er_size") > 0.99f && alpha ("reverb.diff_a") > 0.99f && alpha ("reverb.diff_b") > 0.99f);
     CHECK (alpha ("reverb.room") < 0.9f);
+    setParamPlain (f, "reverb.type", 4.0f); // Nitrous: MODE (room) and DIFFUSION (= diff_a)
+    CHECK (alpha ("reverb.room") > 0.99f && alpha ("reverb.diff_a") > 0.99f);
+    CHECK (alpha ("reverb.er_size") < 0.9f && alpha ("reverb.diff_b") < 0.9f);
     setParamPlain (f, "reverb.type", 5.0f); // Basin
-    CHECK (alpha ("reverb.room") > 0.99f);
+    CHECK (alpha ("reverb.room") < 0.9f);
 }
 
 TEST (fx_extras_phaser_depth2_is_a_more_control_and_draws_a_second_curve)

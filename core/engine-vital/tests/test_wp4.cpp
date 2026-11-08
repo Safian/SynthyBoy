@@ -515,3 +515,29 @@ TEST (user_wavetable_of_257_frames_keeps_every_frame)
     e->process (nullptr, 0, l.data(), r.data(), 64);
     CHECK_NEAR (vitalControlValue (*e, "osc_1_wave_frame"), 128.0, 1e-3);
 }
+
+TEST (sample_oscillator_follows_the_pitch_tracking_and_the_pitch_bend_switch)
+{
+    // Serum 2 manual p.35-36: pitch tracking off plays the recorded pitch whatever the key; the pitch bend tracking switch decides whether the
+    // wheel still moves such a sample oscillator (it is on by default)
+    Content c;
+    c.sample (sine (440.0, 1.0));
+    const auto render = [&] (float pitchTrack, float bendTrack, int key, bool bend, double guess)
+    {
+        auto e = makeVital();
+        c.apply (*e);
+        sampleOsc (*e);
+        setByKey (*e, "osc1.pitch_track", pitchTrack);
+        setByKey (*e, "osc1.pitch_bend_track", bendTrack);
+        const double got = pitchOf (play (*e, key, 1.0, bend ? std::vector<Event> { sbtest::pitchBend (2400, 1.0f) } : std::vector<Event> {}), guess);
+        std::printf ("    track %g bendtrack %g key %d bend %d: %g Hz\n", pitchTrack, bendTrack, key, bend ? 1 : 0, got);
+        return got;
+    };
+    const double bent = 440.0 * std::pow (2.0, 2.0 / 12.0);
+    CHECK_NEAR (render (1.0f, 1.0f, 81, false, 880.0), 880.0, 4.0);       // tracking on: an octave up
+    CHECK_NEAR (render (0.0f, 1.0f, 81, false, 440.0), 440.0, 2.0);       // tracking off: the recorded pitch
+    CHECK_NEAR (render (0.0f, 1.0f, 57, false, 440.0), 440.0, 2.0);
+    CHECK_NEAR (render (0.0f, 1.0f, 81, true, bent), bent, 4.0);         // the wheel still moves it
+    CHECK_NEAR (render (0.0f, 0.0f, 81, true, 440.0), 440.0, 2.0);        // bend tracking off: it stays
+    CHECK_NEAR (render (1.0f, 0.0f, 69, true, bent), bent, 4.0);         // a tracking oscillator always follows the wheel
+}

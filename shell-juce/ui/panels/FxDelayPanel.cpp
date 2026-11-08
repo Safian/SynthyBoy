@@ -165,7 +165,8 @@ private:
     bool showFftOverlay = false;
 };
 
-/** The row under the echo view: TAP (Tap->Delay, G74: the interval of the taps becomes the delay time) and the snap points of delay.offset. */
+/** The row under the echo view: TAP (a tap tempo of this shell, not Serum's TAP-> DELAY, which is the style `delay.style` = Tap->Delay: the interval of
+    the taps becomes the delay time) and the snap points of delay.offset (Trip 1.333, Dot 1.5, Serum 2 manual p.166). */
 class FxDelayTools final : public juce::Component
 {
 public:
@@ -176,7 +177,7 @@ public:
           offsetHandle (context, "delay.offset")
     {
         tapButton.setButtonText ("TAP");
-        tapButton.setTooltip ("Tap the tempo: sets Free sync and both delay times to the interval of the last taps");
+        tapButton.setTooltip ("Tap tempo (a shell helper): sets Free sync and both delay times to the interval of the last taps. The Serum TAP-> DELAY mode is the Style menu.");
         tapButton.onClick = [this] { tap (juce::Time::getMillisecondCounterHiRes()); };
         addAndMakeVisible (tapButton);
         static const char* const names[3] = { "x1", "x4/3", "x3/2" };
