@@ -46,7 +46,7 @@ Table 1603 keys (+7), `kNumModDestinations` unchanged (520: no modulatable key),
 
 ## Gates (run at the end)
 
-`cmake --build build -j10` (no compiler warning in our sources; the linker's "ignoring duplicate libraries" note only); `ctest -j8` of the whole tree: see the last paragraph of the task answer (the final run after the last commit); `scripts/check-params-doc.sh` up to date; `gen-factory-presets.py --check` up to date; `paramdump --kick-pages` equals `docs/kick-pages.json`. `state_random_walk` (the fixed seed 2030 of `test_vital_audio.cpp`) needed no change. No sanitizer run: the audio buffers keep their layout (new outputs of the same size, the state is plain members).
+`cmake --build build -j10` (no compiler warning in our sources; the linker's "ignoring duplicate libraries" note only); `ctest -j8 --timeout 900` of the whole tree after the last code change: **56 / 56 passed** (including `synthyboy_test_vital_warpenv` 12 cases, `synthyboy_test_ui_gaps`, `synthyboy_test_rt`, `synthyboy_test_threads`, `synthyboy_test_keys`, `synthyboy_test_vital_audio`, `synthyboy_preset_sanity`); `scripts/check-params-doc.sh` up to date; `gen-factory-presets.py --check` up to date; `paramdump --kick-pages` equals `docs/kick-pages.json`. `state_random_walk` (the fixed seed 2030 of `test_vital_audio.cpp`) needed no change. No sanitizer run: the audio buffers keep their layout (new outputs of the same size, the state is plain members).
 
 ## Open / for the lead
 
