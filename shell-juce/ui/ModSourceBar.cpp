@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ModSourceBar.h"
 
+#include "panels/ModLogic.h"
+
 namespace synthyboy::ui
 {
 ModSourceChip::ModSourceChip (UiContext& context, int source) : ctx (context), sourceChoice (source)
@@ -59,10 +61,34 @@ void ModSourceChip::paint (juce::Graphics& g)
     }
 }
 
+bool ModSourceChip::swapMacroSources (UiContext& context, int sourceA, int sourceB)
+{
+    const int a = macroOfSourceChoice (sourceA), b = macroOfSourceChoice (sourceB);
+    if (a == 0 || b == 0 || a == b)
+        return false;
+    auto& m = context.assign.matrix();
+    modSwapMacros (m, a, b, [&m] (int p) { return m.get (p); }, [&m] (int p, float v) { m.set (p, v); });
+    context.assign.refresh();
+    context.assign.sendChangeMessage();
+    return true;
+}
+
+void ModSourceChip::mouseDrag (const juce::MouseEvent& e)
+{
+    if (macroOfSourceChoice (sourceChoice) == 0)
+        return;
+    if (! dragging && e.getDistanceFromDragStart() > ctx.theme.ipx (12.0f))
+    {
+        dragging = true;
+        stopTimer(); // a move is no long-press
+    }
+}
+
 void ModSourceChip::mouseDown (const juce::MouseEvent& e)
 {
     pressed = true;
     consumed = false;
+    dragging = false;
     if (e.mods.isPopupMenu())
     {
         consumed = true;
@@ -78,6 +104,14 @@ void ModSourceChip::mouseUp (const juce::MouseEvent& e)
     if (! pressed)
         return;
     pressed = false;
+    if (dragging)
+    {
+        dragging = false;
+        if (auto* row = getParentComponent())
+            if (auto* other = dynamic_cast<ModSourceChip*> (row->getComponentAt (row->getLocalPoint (this, e.getPosition()))); other != nullptr && other != this)
+                swapMacroSources (ctx, sourceChoice, other->sourceChoice);
+        return;
+    }
     if (! consumed && getLocalBounds().contains (e.getPosition()))
         ctx.assign.tapSource (sourceChoice);
 }

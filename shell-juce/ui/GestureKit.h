@@ -102,6 +102,27 @@ private:
     juce::Point<float> downPos;
 };
 
+/** A short confirmation at the bottom of the editor ("Preset initialised"): added to the top level component of the anchor, removes itself
+    after a moment (or with its parent). One at a time. */
+class Toast final : public juce::Component, private juce::Timer, private juce::ComponentListener
+{
+public:
+    static void show (juce::Component& anchor, const juce::String& text, int milliseconds = 1800);
+    /** The toast that is up now, null if none. */
+    static Toast* current();
+    const juce::String& text() const noexcept { return message; }
+    void paint (juce::Graphics&) override;
+
+private:
+    Toast (juce::Component& parent, const juce::String& text, int milliseconds);
+    ~Toast() override;
+    void timerCallback() override;
+    void componentBeingDeleted (juce::Component&) override;
+
+    juce::Component::SafePointer<juce::Component> host;
+    juce::String message;
+};
+
 /** The "..." button of a module header: the visible alternative to the header long-press (design 01: opens the same module sheet). */
 class ModuleMenuButton final : public juce::TextButton
 {

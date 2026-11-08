@@ -422,9 +422,29 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
             engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
     }
 
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        savedValues = currentValues();
+        savedContent = patchContent;
+    }
+
     // Values changed behind the host's back: the CLAP wrapper turns "program changed" into
     // params.rescan(VALUES), VST3 into a restartComponent (clap-validator state-reproducibility).
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
+}
+
+bool SynthyBoyProcessor::revertToSaved()
+{
+    synthyboy::ParamValues values;
+    synthyboy::StateContent content;
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        values = savedValues;
+        content = savedContent;
+    }
+    applyValues (values);
+    setContent (content);
+    return true;
 }
 
 int SynthyBoyProcessor::copyScope (float* dest, int maxSamples) const

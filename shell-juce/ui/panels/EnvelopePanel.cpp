@@ -92,6 +92,20 @@ void EnvelopePanel::build()
     };
     tabRow.addAndMakeVisible (zoomLockButton);
 
+    // the magnifier: time zoom 1 .. 16 (log), only while the lock is off; a pinch moves it too
+    magnifier.setRange (static_cast<double> (EnvCurveView::minZoom()), static_cast<double> (EnvCurveView::maxZoom()), 0.01);
+    magnifier.setSkewFactorFromMidPoint (4.0);
+    magnifier.setValue (1.0, juce::dontSendNotification);
+    magnifier.setEnabled (! visual->isZoomLocked());
+    magnifier.setTooltip ("Magnifier: zoom the time axis (unlock first)");
+    magnifier.onValueChange = [this] { visual->setZoom (static_cast<float> (magnifier.getValue())); };
+    visual->onZoomChanged = [this]
+    {
+        magnifier.setValue (static_cast<double> (visual->zoom()), juce::dontSendNotification);
+        magnifier.setEnabled (! visual->isZoomLocked());
+    };
+    tabRow.addAndMakeVisible (magnifier);
+
     addAndMakeVisible (tabRow);
     updateTabBadges();
 }
@@ -217,13 +231,13 @@ void SourceTabButton::mouseUp (const juce::MouseEvent& e)
 int EnvelopePanel::tabsPerRow (int width) const
 {
     const auto& t = ctx.theme;
-    return juce::jlimit (1, 7, (width + t.gap()) / (t.touch() + t.gap()));
+    return juce::jlimit (1, 8, (width + t.gap()) / (t.touch() + t.gap()));
 }
 
 int EnvelopePanel::tabRowHeight (int width) const
 {
     const auto& t = ctx.theme;
-    const int rows = (7 + tabsPerRow (width) - 1) / tabsPerRow (width);
+    const int rows = (8 + tabsPerRow (width) - 1) / tabsPerRow (width);
     return rows * t.touch() + (rows - 1) * t.gap();
 }
 
@@ -248,17 +262,18 @@ void EnvelopePanel::resized()
     const int tabH = tabRowHeight (fullArea.getWidth());
     tabRow.setBounds (fullArea.getX(), fullArea.getY(), fullArea.getWidth(), tabH);
 
-    // E1..E6 and Lock are 7 cells of at least a touch target; they wrap into as many rows as the width needs
-    juce::Component* cells[7];
+    // E1..E6, Lock and the magnifier are 8 cells of at least a touch target; they wrap into as many rows as the width needs
+    juce::Component* cells[8];
     for (size_t i = 0; i < 6; ++i)
         cells[i] = tabButtons[i].get();
     cells[6] = &zoomLockButton;
+    cells[7] = &magnifier;
     const int perRow = tabsPerRow (fullArea.getWidth());
-    const int rows = (7 + perRow - 1) / perRow;
-    const int rowLength = (7 + rows - 1) / rows;
+    const int rows = (8 + perRow - 1) / perRow;
+    const int rowLength = (8 + rows - 1) / rows;
     for (int row = 0; row < rows; ++row)
     {
-        const int inRow = juce::jmin (rowLength, 7 - row * rowLength);
+        const int inRow = juce::jmin (rowLength, 8 - row * rowLength);
         const int cellW = juce::jmax (1, (fullArea.getWidth() - (inRow - 1) * gap) / inRow);
         for (int i = 0; i < inRow; ++i)
             cells[row * rowLength + i]->setBounds (i * (cellW + gap), row * (t.touch() + gap), cellW, t.touch());

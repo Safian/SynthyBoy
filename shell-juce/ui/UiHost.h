@@ -50,6 +50,10 @@ public:
         fails validateContent () or the host keeps no content. Message thread. */
     virtual bool setContent (const StateContent& /*newContent*/) { return false; }
 
+    /** "Revert to saved" (design 07): the parameters and content go back to what the host last loaded (setStateInformation, or the defaults of a
+        new instance). False when the host keeps no such snapshot. Message thread. */
+    virtual bool revertToSaved() { return false; }
+
     /** Sounding voices (released ones that still fade out included) after the last audio block: IEngine::activeVoices (). 0 without an engine. */
     virtual int activeVoiceCount() const noexcept { return 0; }
     /** Load of the audio callback: the time process () needed for the last blocks as a fraction of the time the blocks last (smoothed;

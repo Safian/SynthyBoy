@@ -244,6 +244,49 @@ void clearSlot (ModMatrixAccess& matrix, int slot)
         }
 }
 
+bool swapModSlots (ModMatrixAccess& matrix, int slotA, int slotB)
+{
+    if (slotA == slotB || slotA < 0 || slotB < 0 || slotA >= kNumModSlots || slotB >= kNumModSlots)
+        return false;
+    char a[8], b[8];
+    std::snprintf (a, sizeof a, "mod%02d.", slotA + 1);
+    std::snprintf (b, sizeof b, "mod%02d.", slotB + 1);
+    const auto* table = paramTable();
+    const std::string_view prefixA (a);
+    // an unused slot has source or destination unset: write the sources last when filling, first when emptying, so the engine never sees a
+    // half moved slot (the same order clearSlot uses)
+    std::vector<std::pair<int, int>> pairs; // (index in A, index in B)
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        const std::string_view key (table[i].key);
+        if (key.rfind (prefixA, 0) != 0)
+            continue;
+        const auto other = resolveKey (std::string (b) + std::string (key.substr (prefixA.size())));
+        if (other.valid())
+            pairs.emplace_back (static_cast<int> (i), other.index);
+    }
+    for (const auto& [ia, ib] : pairs)
+    {
+        const float va = matrix.get (ia), vb = matrix.get (ib);
+        matrix.beginGesture (ia);
+        matrix.set (ia, vb);
+        matrix.endGesture (ia);
+        matrix.beginGesture (ib);
+        matrix.set (ib, va);
+        matrix.endGesture (ib);
+    }
+    return ! pairs.empty();
+}
+
+int macroOfSourceChoice (int sourceChoice) noexcept
+{
+    if (sourceChoice >= 19 && sourceChoice <= 22)
+        return sourceChoice - 18;
+    if (sourceChoice >= 29 && sourceChoice <= 32)
+        return sourceChoice - 28 + 4;
+    return 0;
+}
+
 void setSlotBypass (ModMatrixAccess& matrix, int slot, bool bypass)
 {
     if (slot < 0 || slot >= kNumModSlots)

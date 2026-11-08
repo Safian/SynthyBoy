@@ -182,6 +182,52 @@ void ParamDragControl::hideBubble()
     }
 }
 
+juce::Rectangle<int> ParamDragControl::modulatorBadgeBounds() const
+{
+    if (ring == nullptr || modulatorCount() == 0)
+        return {};
+    // the badge is drawn at the top left of the ring; the hit area is a little larger than the drawn dot
+    const int size = ctx.theme.ipx (26.0f);
+    return juce::Rectangle<int> (ring->getX(), ring->getY(), size, size).getIntersection (getLocalBounds());
+}
+
+int ParamDragControl::modulatorCount() const
+{
+    return handle.valid() ? static_cast<int> (ctx.assign.snapshot().entriesFor (handle.index()).size()) : 0;
+}
+
+bool ParamDragControl::selectModulator (int slot)
+{
+    if (! handle.valid())
+        return false;
+    for (const auto& e : ctx.assign.snapshot().entriesFor (handle.index()))
+        if (e.slot == slot)
+        {
+            if (ctx.assign.flow().armedSource() != e.source)
+                ctx.assign.tapSource (e.source);
+            return ctx.assign.flow().armedSource() == e.source;
+        }
+    return false;
+}
+
+void ParamDragControl::showModulatorList()
+{
+    const auto entries = ctx.assign.snapshot().entriesFor (handle.index());
+    if (entries.empty())
+        return;
+    badgeMenuShown = true;
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Modulators of " + juce::String (handle.info().name));
+    for (const auto& e : entries)
+        menu.addItem (e.slot + 1, juce::String (modSourceTable()[e.source - 1].name) + "   " + juce::String (juce::roundToInt (e.amount)) + " %");
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                        [safe = juce::Component::SafePointer<ParamDragControl> (this)] (int result)
+                        {
+                            if (result > 0 && safe != nullptr)
+                                safe->selectModulator (result - 1);
+                        });
+}
+
 void ParamDragControl::mouseDown (const juce::MouseEvent& e)
 {
     if (! handle.valid())
@@ -192,6 +238,9 @@ void ParamDragControl::mouseDown (const juce::MouseEvent& e)
         showSheet();
         return;
     }
+    badgePress = ctx.assign.flow().phase() == AssignFlow::Phase::idle && modulatorBadgeBounds().contains (e.getPosition());
+    if (badgePress)
+        return;
 
     pressed = true;
     dragging = false;
@@ -203,6 +252,8 @@ void ParamDragControl::mouseDown (const juce::MouseEvent& e)
 
 void ParamDragControl::mouseDrag (const juce::MouseEvent& e)
 {
+    if (badgePress)
+        return;
     if (! pressed || ! handle.valid())
         return;
 
@@ -248,6 +299,13 @@ void ParamDragControl::mouseUp (const juce::MouseEvent& e)
 {
     cancelLongPress();
     hideBubble();
+    if (badgePress)
+    {
+        badgePress = false;
+        if (modulatorBadgeBounds().contains (e.getPosition()))
+            showModulatorList();
+        return;
+    }
     if (! pressed)
         return;
     pressed = false;

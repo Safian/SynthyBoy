@@ -76,6 +76,8 @@ public:
     void resized() override;
 
     EnvCurveView& curveView() noexcept { return *visual; }
+    /** The magnifier slider next to Lock: the visible alternative of the pinch (enabled while the zoom lock is off). */
+    juce::Slider& magnifierSlider() noexcept { return magnifier; }
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
@@ -90,6 +92,7 @@ private:
     juce::Component tabRow;
     std::array<std::unique_ptr<SourceTabButton>, 6> tabButtons;
     juce::TextButton zoomLockButton { "Lock" };
+    juce::Slider magnifier { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
 };
 
 } // namespace synthyboy::ui

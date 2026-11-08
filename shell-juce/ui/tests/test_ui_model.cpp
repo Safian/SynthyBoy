@@ -537,3 +537,39 @@ TEST (uim_parsers)
     CHECK (parseNumber ("12.5", d) && d == 12.5);
     CHECK (! parseNumber ("inf", d));
 }
+
+TEST (uim_warp_picture_and_cpu_level)
+{
+    const auto saw = [] (float ph) { return 1.0f - 2.0f * ph; };
+    for (int phaseStep = 0; phaseStep < 16; ++phaseStep)
+    {
+        const float ph = static_cast<float> (phaseStep) / 16.0f;
+        CHECK_NEAR (warpedValue (0, 0.8f, ph, saw), saw (ph), 1e-6);  // None
+        CHECK_NEAR (warpedValue (3, 0.0f, ph, saw), saw (ph), 1e-6);  // amount 0
+    }
+    // every mode with an amount really changes the picture (11 choices of oscN.warp.type, 10 modes)
+    for (int type = 1; type <= 10; ++type)
+    {
+        float maxDiff = 0.0f;
+        for (int i = 0; i < 128; ++i)
+        {
+            const float ph = static_cast<float> (i) / 128.0f;
+            const float w = warpedValue (type, 0.7f, ph, saw);
+            CHECK (std::isfinite (w));
+            CHECK (std::fabs (w) <= 1.0001f);
+            maxDiff = std::max (maxDiff, std::fabs (w - saw (ph)));
+        }
+        CHECK (maxDiff > 0.02f);
+    }
+    // a few exact ones: Sync doubles the speed at amount 1/3, Quantize holds the value inside a step, Formant is silent after the squeezed cycle
+    CHECK_NEAR (warpedValue (1, 1.0f / 3.0f, 0.25f, saw), saw (0.5f), 1e-5);
+    CHECK_NEAR (warpedValue (3, 1.0f, 0.5f, saw), warpedValue (3, 1.0f, 0.5f + 0.01f, saw), 1e-5);
+    CHECK_NEAR (warpedValue (2, 1.0f, 0.9f, saw), 0.0, 1e-6);
+    CHECK_NEAR (warpedValue (9, 1.0f, 0.125f, [] (float) { return 1.0f; }), 1.0, 1e-5); // RM: sin (2 pi 2 / 8) = 1
+
+    CHECK_EQ (cpuLevel (0.0f), 0);
+    CHECK_EQ (cpuLevel (0.499f), 0);
+    CHECK_EQ (cpuLevel (0.5f), 1);
+    CHECK_EQ (cpuLevel (0.8f), 2);
+    CHECK_EQ (cpuLevel (3.0f), 2);
+}

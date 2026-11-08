@@ -9,73 +9,43 @@
 
 namespace synthyboy::ui
 {
-// Helper: evaluate sample point in [0, 1] for a given wavetable choice and frame
+// Helper: evaluate sample point in [0, 1] for a given wavetable choice and frame; the warp is the picture of its mode (warpedValue)
 static float evalWave (float phase, int wtChoice, float frame, float warpAmount, int warpType)
 {
-    // phase in [0, 1)
-    phase = phase - std::floor (phase);
-
-    // Apply warp
-    if (warpAmount > 0.001f)
+    return warpedValue (warpType, warpAmount, phase, [wtChoice, frame] (float ph)
     {
-        switch (warpType)
+        const float twoPi = 6.28318530718f;
+        const float theta = ph * twoPi;
+
+        float y0 = 0.0f;
+        switch (wtChoice % 4)
         {
-            case 1: // Sync
-            {
-                const float factor = 1.0f + warpAmount * 3.0f;
-                phase = phase * factor;
-                phase = phase - std::floor (phase);
+            case 0: // Sine
+                y0 = std::sin (theta);
                 break;
-            }
-            case 2: // Bend
-            {
-                const float p = phase - 0.5f;
-                const float s = (warpAmount > 0.5f) ? (1.0f + (warpAmount - 0.5f) * 2.0f) : (1.0f - (0.5f - warpAmount) * 1.5f);
-                phase = juce::jlimit (0.0f, 1.0f, 0.5f + p * s);
+            case 1: // Triangle
+                y0 = (ph < 0.25f) ? (4.0f * ph) : ((ph < 0.75f) ? (2.0f - 4.0f * ph) : (-4.0f + 4.0f * ph));
                 break;
-            }
-            case 3: // Pulse / PWM
-            {
-                const float pw = 0.5f + (warpAmount - 0.5f) * 0.8f;
-                phase = (phase < pw) ? (phase / (2.0f * pw)) : (0.5f + (phase - pw) / (2.0f * (1.0f - pw)));
+            case 2: // Saw
+                y0 = 1.0f - 2.0f * ph;
                 break;
-            }
+            case 3: // Square
+                y0 = (ph < 0.5f) ? 0.9f : -0.9f;
+                break;
             default:
                 break;
         }
-    }
 
-    const float twoPi = 6.28318530718f;
-    const float theta = phase * twoPi;
-
-    float y0 = 0.0f;
-    switch (wtChoice % 4)
-    {
-        case 0: // Sine
-            y0 = std::sin (theta);
-            break;
-        case 1: // Triangle
-            y0 = (phase < 0.25f) ? (4.0f * phase) : ((phase < 0.75f) ? (2.0f - 4.0f * phase) : (-4.0f + 4.0f * phase));
-            break;
-        case 2: // Saw
-            y0 = 1.0f - 2.0f * phase;
-            break;
-        case 3: // Square
-            y0 = (phase < 0.5f) ? 0.9f : -0.9f;
-            break;
-        default:
-            break;
-    }
-
-    // Add frame harmonics if wtChoice >= 4 or frame > 0
-    if (wtChoice >= 4 || frame > 0.01f)
-    {
-        const float harm2 = std::sin (2.0f * theta) * 0.5f * frame;
-        const float harm3 = std::sin (3.0f * theta) * 0.25f * frame;
-        const float harm4 = std::sin (4.0f * theta) * 0.125f * (wtChoice >= 4 ? 0.6f : frame);
-        y0 = (y0 + harm2 + harm3 + harm4) / (1.0f + 0.5f * frame + 0.25f * frame);
-    }
-    return juce::jlimit (-1.0f, 1.0f, y0);
+        // Add frame harmonics if wtChoice >= 4 or frame > 0
+        if (wtChoice >= 4 || frame > 0.01f)
+        {
+            const float harm2 = std::sin (2.0f * theta) * 0.5f * frame;
+            const float harm3 = std::sin (3.0f * theta) * 0.25f * frame;
+            const float harm4 = std::sin (4.0f * theta) * 0.125f * (wtChoice >= 4 ? 0.6f : frame);
+            y0 = (y0 + harm2 + harm3 + harm4) / (1.0f + 0.5f * frame + 0.25f * frame);
+        }
+        return juce::jlimit (-1.0f, 1.0f, y0);
+    });
 }
 
 // ---- OscWaveView ------------------------------------------------------------------------------------------------------------------

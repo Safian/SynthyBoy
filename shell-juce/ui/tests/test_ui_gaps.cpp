@@ -14,7 +14,10 @@
 #include "ui/Editor.h"
 #include "ui/ModuleSheet.h"
 #include "ui/panels/EnvelopePanel.h"
+#include "ui/ModSourceBar.h"
+#include "ui/panels/FxChainView.h"
 #include "ui/panels/GlbScopePanel.h"
+#include "ui/panels/ModMatrixReorder.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/OscTabsPanel.h"
 #include "ui/panels/OscWaveView.h"
@@ -1583,6 +1586,294 @@ TEST (uig_voice_badge_cpu_pill_and_scope)
         rig.setParam ("osc1.unison.voices", 6.0f);
         CHECK (! view->unisonCapped());
     }
+}
+
+// ---- modulation, global, effects ------------------------------------------------------------------------------------------------------
+
+namespace
+{
+/** One assignment through the touch flow, as a user would make it: arm the source, drag the control, release. Returns the slot. */
+int assignBySource (Rig& rig, int source, const char* destKey, float percent)
+{
+    auto& assign = rig.editor->context().assign;
+    assign.tapSource (source);
+    auto& flow = assign.flow();
+    const int index = resolveKey (destKey).index;
+    CHECK (flow.isTarget (index));
+    CHECK (flow.beginDrag (index) == AssignFlow::BeginResult::ok);
+    const int slot = flow.activeSlot();
+    flow.setAmount (percent);
+    flow.endDrag();
+    assign.exitAssignMode();
+    assign.refresh();
+    return slot;
+}
+} // namespace
+
+TEST (uig_mod_swap_slots_model_and_matrix_row_handle)
+{
+    Rig rig (Page::mod);
+    const int s0 = assignBySource (rig, 7, "filter1.cutoff", 40.0f);
+    const int s1 = assignBySource (rig, 8, "filter1.resonance", -30.0f);
+    CHECK (s0 >= 0 && s1 >= 0 && s0 != s1);
+
+    // the model: a swap exchanges everything the two slots hold
+    auto& m = rig.editor->context().assign.matrix();
+    const float srcA = m.get (modSlotParams (s0).source), srcB = m.get (modSlotParams (s1).source);
+    const float amtA = m.get (modSlotParams (s0).amount), amtB = m.get (modSlotParams (s1).amount);
+    CHECK (swapModSlots (m, s0, s1));
+    CHECK (approx (m.get (modSlotParams (s0).source), srcB) && approx (m.get (modSlotParams (s1).source), srcA));
+    CHECK (approx (m.get (modSlotParams (s0).amount), amtB) && approx (m.get (modSlotParams (s1).amount), amtA));
+    CHECK (swapModSlots (m, s0, s1)); // and back
+    CHECK (approx (m.get (modSlotParams (s0).source), srcA) && approx (m.get (modSlotParams (s0).amount), amtA));
+    CHECK (! swapModSlots (m, 3, 3) && ! swapModSlots (m, -1, 2) && ! swapModSlots (m, 0, kNumModSlots));
+
+    auto* panel = rig.panelTitled ("Modulation Matrix");
+    auto* reorder = dynamic_cast<SlotReorder*> (panel);
+    CHECK (panel != nullptr && reorder != nullptr);
+    if (reorder == nullptr)
+        return;
+    reorder->refreshRows();
+    CHECK (reorder->slotRowShown (s0) && reorder->slotRowShown (s1));
+    CHECK (reorder->slotHandleBounds (s0).getWidth() >= rig.editor->theme().touch());
+
+    // the menu route (Move down) ...
+    CHECK_EQ (reorder->moveSlot (s0, +1), s1);
+    CHECK (approx (m.get (modSlotParams (s1).source), srcA));
+    CHECK_EQ (reorder->moveSlot (s0, -1), -1); // nothing above the first shown slot
+    CHECK_EQ (reorder->moveSlot (s1, +1), -1); // nothing below the last shown slot
+    CHECK_EQ (reorder->moveSlot (s1, -1), s0);
+    CHECK (approx (m.get (modSlotParams (s0).source), srcA));
+
+    // ... and the drag on the handle: pull the first row down past the second
+    auto* row = reorder->slotRowComponent (s0);
+    CHECK (row != nullptr);
+    if (row == nullptr)
+        return;
+    const auto handle = reorder->slotHandleBounds (s0).getCentre().toFloat();
+    drag (*row, handle, handle + juce::Point<float> (0.0f, static_cast<float> (row->getHeight())));
+    CHECK (approx (m.get (modSlotParams (s1).source), srcA));
+    CHECK (approx (m.get (modSlotParams (s0).source), srcB));
+    CHECK (! reorder->rowMenuWasShown()); // a drag is no tap
+
+    // a tap on the handle opens the row menu (the non-gesture alternative of the drag)
+    row = reorder->slotRowComponent (s0);
+    tap (*row, reorder->slotHandleBounds (s0).getCentre().toFloat());
+    CHECK (reorder->rowMenuWasShown());
+    juce::PopupMenu::dismissAllActiveMenus();
+}
+
+TEST (uig_macro_chips_swap_by_drag)
+{
+    Rig rig (Page::mod);
+    rig.editor->setSourceBarOpen (true);
+    rig.setParam ("macro.1", 30.0f);
+    rig.setParam ("macro.2", 70.0f);
+    auto* a = rig.editor->sourceBar().chipFor (19);
+    auto* b = rig.editor->sourceBar().chipFor (20);
+    CHECK (a != nullptr && b != nullptr);
+    if (a == nullptr || b == nullptr)
+        return;
+    CHECK (macroOfSourceChoice (19) == 1 && macroOfSourceChoice (22) == 4 && macroOfSourceChoice (29) == 5 && macroOfSourceChoice (32) == 8
+           && macroOfSourceChoice (7) == 0 && macroOfSourceChoice (23) == 0);
+
+    const auto from = a->getLocalBounds().getCentre().toFloat();
+    const auto to = a->getLocalPoint (b, b->getLocalBounds().getCentre()).toFloat();
+    a->mouseDown (mouse (*a, from, from, false));
+    a->mouseDrag (mouse (*a, to, from, true));
+    CHECK (a->isDragging());
+    a->mouseUp (mouse (*a, to, from, true));
+    CHECK (approx (rig.param ("macro.1"), 70.0f, 0.5f) && approx (rig.param ("macro.2"), 30.0f, 0.5f));
+    CHECK (! rig.editor->context().assign.flow().armedSource()); // a drag does not arm the chip
+
+    // a tap still arms; a non-macro chip never swaps
+    tap (*a, from);
+    CHECK_EQ (rig.editor->context().assign.flow().armedSource(), 19);
+    rig.editor->context().assign.exitAssignMode();
+    CHECK (! ModSourceChip::swapMacroSources (rig.editor->context(), 19, 7));
+    CHECK (! ModSourceChip::swapMacroSources (rig.editor->context(), 19, 19));
+    CHECK (ModSourceChip::swapMacroSources (rig.editor->context(), 29, 32)); // macros 5 and 8
+}
+
+TEST (uig_depth_halo_badge_is_a_target)
+{
+    Rig rig (Page::flt);
+    const int slot = assignBySource (rig, 7, "filter1.cutoff", 40.0f);
+    auto* knob = rig.find<ParamKnob> ([] (ParamKnob& k) { return k.key() == "filter1.cutoff"; });
+    CHECK (knob != nullptr);
+    if (knob == nullptr)
+        return;
+    CHECK_EQ (knob->modulatorCount(), 1);
+    const auto badge = knob->modulatorBadgeBounds();
+    CHECK (! badge.isEmpty());
+    CHECK (knob->getLocalBounds().contains (badge));
+
+    // a tap on the badge lists the modulators; a press elsewhere is still the knob drag
+    const auto centre = badge.getCentre().toFloat();
+    tap (*knob, centre);
+    CHECK (knob->modulatorListShown());
+    juce::PopupMenu::dismissAllActiveMenus();
+    const float before = rig.param ("filter1.cutoff");
+    drag (*knob, centre, centre + juce::Point<float> (0.0f, -30.0f)); // starts on the badge: no value change
+    CHECK (approx (rig.param ("filter1.cutoff"), before, 1.0f));
+
+    // choosing the modulator arms its source: the next drag on the knob sets the depth of exactly that slot
+    CHECK (knob->selectModulator (slot));
+    CHECK_EQ (rig.editor->context().assign.flow().armedSource(), 7);
+    const auto m = knob->getLocalBounds().getCentre().toFloat();
+    drag (*knob, m, m + juce::Point<float> (0.0f, -40.0f));
+    CHECK (rig.param (("mod" + std::string (slot < 9 ? "0" : "") + std::to_string (slot + 1) + ".amount").c_str()) > 40.5f);
+    CHECK (approx (rig.param ("filter1.cutoff"), before, 1.0f)); // the value itself did not move
+    CHECK (! knob->selectModulator (63));
+    rig.editor->context().assign.exitAssignMode();
+}
+
+TEST (uig_settings_buttons_act_and_confirm_with_a_toast)
+{
+    Rig rig (Page::glb);
+    const auto button = [&rig] (const char* text)
+    {
+        return rig.find<juce::TextButton> ([text] (juce::TextButton& b) { return b.getButtonText() == text; });
+    };
+    auto* initPreset = button ("Init Preset");
+    auto* initMods = button ("Init Mods");
+    auto* initLfos = button ("Init LFOs");
+    auto* revert = button ("Revert Saved");
+    CHECK (initPreset != nullptr && initMods != nullptr && initLfos != nullptr && revert != nullptr);
+    if (initPreset == nullptr || initMods == nullptr || initLfos == nullptr || revert == nullptr)
+        return;
+
+    // Init Mods
+    assignBySource (rig, 7, "filter1.cutoff", 40.0f);
+    CHECK (rig.editor->context().assign.snapshot().destinationCount (7) > 0);
+    initMods->onClick();
+    rig.editor->context().assign.refresh();
+    CHECK_EQ (rig.editor->context().assign.snapshot().destinationCount (7), 0);
+    CHECK (Toast::current() != nullptr && Toast::current()->text() == "All modulations cleared");
+
+    // Init LFOs: parameters and custom shapes
+    rig.setParam ("lfo2.rate", 12.0f);
+    rig.setParam ("rlfo1.rate", 9.0f);
+    {
+        auto c = rig.proc.content();
+        ContentLfoShape s;
+        s.lfo = 2;
+        s.points = { ContentPoint (0.0f, 0.0f), ContentPoint (1.0f, 1.0f) };
+        c.lfoShapes.push_back (s);
+        CHECK (rig.proc.setContent (c));
+    }
+    initLfos->onClick();
+    CHECK (std::abs (rig.param ("lfo2.rate") - 12.0f) > 0.01f);
+    CHECK (std::abs (rig.param ("rlfo1.rate") - 9.0f) > 0.01f);
+    CHECK (rig.proc.content().lfoShapes.empty());
+    CHECK (Toast::current()->text() == "LFOs initialised");
+
+    // Init Preset: every parameter back to its default, the content empty
+    rig.setParam ("osc1.tune", 33.0f);
+    rig.setParam ("filter1.cutoff", 123.0f);
+    rig.setParam ("reverb.on", 1.0f);
+    initPreset->onClick();
+    CHECK (std::abs (rig.param ("osc1.tune")) < 0.01f);
+    CHECK (std::abs (rig.param ("filter1.cutoff") - 12000.0f) < 5.0f);
+    CHECK (approx (rig.param ("reverb.on"), ParamValues::defaults().plain[static_cast<size_t> (resolveKey ("reverb.on").index)]));
+    CHECK (Toast::current()->text() == "Preset initialised");
+
+    // Revert Saved goes back to what the host loaded last
+    rig.setParam ("osc2.tune", 20.0f);
+    juce::MemoryBlock state;
+    rig.proc.getStateInformation (state);
+    rig.proc.setStateInformation (state.getData(), static_cast<int> (state.getSize())); // the "load": this is the saved patch now
+    rig.setParam ("osc2.tune", -40.0f);
+    CHECK (approx (rig.param ("osc2.tune"), -40.0f, 0.5f));
+    revert->onClick();
+    CHECK (approx (rig.param ("osc2.tune"), 20.0f, 0.5f));
+    CHECK (Toast::current()->text() == "Reverted to the saved patch");
+    CHECK (Toast::current()->getWidth() > 100);
+}
+
+TEST (uig_fx_chain_slot_power_reorder_and_bypass_alternatives)
+{
+    Rig rig (Page::fx);
+    auto* view = rig.find<FxChainView>();
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+    for (auto* b : { &view->powerToggleButton(), &view->bypassAllToggleButton() })
+        CHECK (b->getHeight() >= rig.editor->theme().touch() && b->getWidth() >= rig.editor->theme().touch());
+
+    const auto centreOf = [view] (int slot) { return view->slotBounds (slot).getCentre(); };
+    const auto dotOf = [view, &rig] (int slot)
+    {
+        const auto r = view->slotBounds (slot);
+        return juce::Point<float> (r.getX() + rig.editor->theme().px (6.0f), r.getCentreY());
+    };
+
+    // double tap on a slot toggles its effect (design 08-02), a tap on the dot does too
+    const bool before2 = view->slotIsOn (2);
+    doubleTap (*view, centreOf (2));
+    CHECK (view->slotIsOn (2) != before2);
+    doubleTap (*view, centreOf (2));
+    CHECK_EQ (view->slotIsOn (2), before2);
+    const bool before3 = view->slotIsOn (3);
+    tap (*view, dotOf (3));
+    CHECK (view->slotIsOn (3) != before3);
+    tap (*view, dotOf (3));
+
+    // [ON] is the visible alternative: it follows the selected slot
+    view->setSelectedSlot (4);
+    const bool before4 = view->slotIsOn (4);
+    CHECK (view->powerToggleButton().getButtonText() == (before4 ? "ON" : "OFF"));
+    view->powerToggleButton().onClick();
+    CHECK (view->slotIsOn (4) != before4);
+    CHECK (view->powerToggleButton().getButtonText() == (view->slotIsOn (4) ? "ON" : "OFF"));
+
+    // Opt/Alt on the dot: every effect at once (bypass), again: restored
+    for (int i = 0; i < 16; ++i)
+        if (view->slotIsOn (i) == false)
+            view->toggleSlotPower (i);
+    tap (*view, dotOf (3));  // plain: one effect off
+    CHECK (! view->slotIsOn (3));
+    tap (*view, dotOf (3));
+    const auto altTap = [&] (juce::Point<float> p)
+    {
+        const auto mods = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::altModifier);
+        view->mouseDown (mouse (*view, p, p, false, 1, mods));
+        view->mouseUp (mouse (*view, p, p, false, 1, mods));
+    };
+    altTap (dotOf (5));
+    int on = 0;
+    for (int i = 0; i < 16; ++i)
+        on += view->slotIsOn (i) ? 1 : 0;
+    CHECK_EQ (on, 0);
+    altTap (dotOf (5));
+    on = 0;
+    for (int i = 0; i < 16; ++i)
+        on += view->slotIsOn (i) ? 1 : 0;
+    CHECK_EQ (on, 16);
+
+    // reorder needs the hold: a quick drag does nothing, hold + drag moves the slot, the yellow drop line shows while it is armed
+    const auto order = view->chainOrder();
+    view->mouseDown (mouse (*view, centreOf (0), centreOf (0), false));
+    view->mouseDrag (mouse (*view, centreOf (3), centreOf (0), true));
+    view->mouseUp (mouse (*view, centreOf (3), centreOf (0), true));
+    CHECK (view->chainOrder() == order);
+    const auto from = centreOf (0) + juce::Point<float> (6.0f, 0.0f); // away from the dot
+    const auto to = centreOf (3);
+    view->mouseDown (mouse (*view, from, from, false));
+    CHECK (view->longPress().pending());
+    view->longPress().fire();
+    CHECK (view->reorderIsArmed());
+    view->mouseDrag (mouse (*view, to, from, true));
+    view->mouseUp (mouse (*view, to, from, true));
+    const auto moved = view->chainOrder();
+    CHECK_EQ (moved[3], order[0]);
+    CHECK_EQ (moved[0], order[1]);
+    CHECK (! view->reorderIsArmed());
+
+    // the buttons are the alternative: Move Left / Right act on the selected slot
+    view->setSelectedSlot (3);
+    view->moveSelectedSlot (-1);
+    CHECK_EQ (view->chainOrder()[2], order[0]);
 }
 
 TEST (uig_zz_shutdown)

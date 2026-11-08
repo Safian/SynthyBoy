@@ -84,6 +84,7 @@ public:
     float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
     float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
     void injectMidiMessage (const juce::MidiMessage& msg) override;
+    bool revertToSaved() override;
     int activeVoiceCount() const noexcept override { return voiceCount.load (std::memory_order_relaxed); }
     float cpuLoad() const noexcept override { return cpu.load (std::memory_order_relaxed); }
     int copyScope (float* dest, int maxSamples) const override;
@@ -110,6 +111,10 @@ private:
     // (docs/ui-design/13-new-keys.md A25); no engine reads it yet. Message thread only, the mutex covers hosts that do not.
     mutable std::mutex contentMutex;
     synthyboy::StateContent patchContent;
+
+    // what the host loaded last (or the defaults): "Revert to saved". Message thread, the content mutex covers hosts that do not.
+    synthyboy::ParamValues savedValues = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent savedContent;
 
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction

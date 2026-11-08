@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "../Panel.h"
 #include "ModLogic.h"
+#include "ModMatrixReorder.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -21,11 +22,14 @@ class ModSlotRow final : public juce::Component
 public:
     ModSlotRow (UiContext& context, int slotIndex,
                 const std::function<void()>& onSlotChanged,
-                const std::function<void(int)>& onSelectCurveSlot)
+                const std::function<void(int)>& onSelectCurveSlot,
+                const std::function<int (int, int)>& onMoveSlot)
         : ctx (context), slot (slotIndex),
-          notifyChanged (onSlotChanged), selectCurveSlot (onSelectCurveSlot)
+          notifyChanged (onSlotChanged), selectCurveSlot (onSelectCurveSlot), moveSlotCb (onMoveSlot)
     {
         slotLabel.setText (juce::String::formatted ("#%02d", slot + 1), juce::dontSendNotification);
+        slotLabel.setInterceptsMouseClicks (false, false); // the label is the handle: the row takes its presses
+        slotLabel.setTooltip ("Drag up / down to reorder, tap for the row menu");
         slotLabel.setFont (ctx.theme.font (ctx.theme.px (12.0f), true));
         slotLabel.setColour (juce::Label::textColourId, ctx.theme.colours.textDim);
         addAndMakeVisible (slotLabel);
@@ -160,6 +164,66 @@ public:
 
     bool isActive() const noexcept { return active; }
 
+    int handleWidth() const { return juce::jmax (ctx.theme.touch(), ctx.theme.ipx (44.0f)); }
+    juce::Rectangle<int> handleBounds() const { return { 0, 0, handleWidth() + ctx.theme.ipx (2.0f), getHeight() }; }
+    bool menuShown() const noexcept { return menuWasShown; }
+
+    // the handle: a drag moves the content of the row past its neighbours, a tap opens the row menu (Move up / Move down)
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        handleDown = handleBounds().contains (e.getPosition());
+        handleMoved = false;
+        dragSlot = slot;
+        anchorY = e.position.y;
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (! handleDown || ! moveSlotCb)
+            return;
+        const float rowH = static_cast<float> (juce::jmax (1, getHeight()));
+        const float dy = e.position.y - anchorY;
+        if (std::abs (dy) >= rowH * 0.6f)
+        {
+            const int dir = dy > 0.0f ? 1 : -1;
+            const int moved = moveSlotCb (dragSlot, dir);
+            if (moved >= 0)
+            {
+                dragSlot = moved; // the finger keeps the content it picked up
+                handleMoved = true;
+            }
+            anchorY += static_cast<float> (dir) * rowH;
+        }
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        const bool tap = handleDown && ! handleMoved && e.getDistanceFromDragStart() < ctx.theme.ipx (8.0f);
+        handleDown = false;
+        if (tap)
+            showRowMenu();
+    }
+
+    void showRowMenu()
+    {
+        menuWasShown = true;
+        juce::PopupMenu menu;
+        menu.addItem (1, "Move up");
+        menu.addItem (2, "Move down");
+        menu.addSeparator();
+        menu.addItem (3, "Remove");
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                            [safe = juce::Component::SafePointer<ModSlotRow> (this)] (int result)
+                            {
+                                if (safe == nullptr || result <= 0)
+                                    return;
+                                if (result == 3)
+                                    safe->clearThisSlot();
+                                else if (safe->moveSlotCb)
+                                    safe->moveSlotCb (safe->slot, result == 1 ? -1 : +1);
+                            });
+    }
+
     bool matchesSearch (const juce::String& text) const
     {
         if (text.isEmpty()) return true;
@@ -170,7 +234,7 @@ public:
     void resized() override
     {
         auto r = getLocalBounds().reduced (ctx.theme.ipx (2.0f), ctx.theme.ipx (2.0f));
-        slotLabel.setBounds (r.removeFromLeft (ctx.theme.ipx (32.0f)));
+        slotLabel.setBounds (r.removeFromLeft (handleWidth()));
         bypassButton.setBounds (r.removeFromLeft (ctx.theme.ipx (36.0f)));
         r.removeFromLeft (ctx.theme.ipx (4.0f));
 
@@ -364,6 +428,10 @@ private:
     int slot = 0;
     std::function<void()> notifyChanged;
     std::function<void(int)> selectCurveSlot;
+    std::function<int (int, int)> moveSlotCb;
+    bool handleDown = false, handleMoved = false, menuWasShown = false;
+    int dragSlot = 0;
+    float anchorY = 0.0f;
     bool active = false;
     bool bypassed = false;
     bool updating = false;
@@ -390,6 +458,7 @@ public:
 } // namespace
 
 class ModMatrixPanel final : public Panel,
+                             public SlotReorder,
                              private juce::Timer
 {
 public:
@@ -494,7 +563,8 @@ public:
         {
             auto row = std::make_unique<ModSlotRow> (ctx, i,
                 [this] { updateStatus(); },
-                [] (int) {});
+                [] (int) {},
+                [this] (int from, int direction) { return moveSlot (from, direction); });
             container.addAndMakeVisible (*row);
             container.rows.push_back (std::move (row));
         }
@@ -511,6 +581,50 @@ public:
     int preferredHeight (int width) const override
     {
         return ctx.theme.ipx (width < 600 ? 520.0f : 580.0f);
+    }
+
+    // ---- SlotReorder ----
+    int moveSlot (int slot, int direction) override
+    {
+        if (slot < 0 || slot >= kNumModSlots || direction == 0)
+            return -1;
+        const int step = direction < 0 ? -1 : 1;
+        int other = slot + step;
+        while (other >= 0 && other < kNumModSlots && ! container.rows[static_cast<size_t> (other)]->isVisible())
+            other += step;
+        if (other < 0 || other >= kNumModSlots || ! swapModSlots (ctx.assign.matrix(), slot, other))
+            return -1;
+        ctx.assign.refresh();
+        for (auto& r : container.rows)
+            r->refresh();
+        layoutSlotRows();
+        return other;
+    }
+    juce::Component* slotRowComponent (int slot) override
+    {
+        return slot >= 0 && slot < kNumModSlots ? container.rows[static_cast<size_t> (slot)].get() : nullptr;
+    }
+    juce::Rectangle<int> slotHandleBounds (int slot) override
+    {
+        return slot >= 0 && slot < kNumModSlots ? container.rows[static_cast<size_t> (slot)]->handleBounds() : juce::Rectangle<int>();
+    }
+    bool slotRowShown (int slot) override
+    {
+        return slot >= 0 && slot < kNumModSlots && container.rows[static_cast<size_t> (slot)]->isVisible();
+    }
+    void refreshRows() override
+    {
+        for (auto& r : container.rows)
+            r->refresh();
+        layoutSlotRows();
+        updateStatus();
+    }
+    bool rowMenuWasShown() const override
+    {
+        for (const auto& r : container.rows)
+            if (r->menuShown())
+                return true;
+        return false;
     }
 
     void resized() override

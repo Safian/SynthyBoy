@@ -94,6 +94,66 @@ float lineToThreshold (float lineFraction) noexcept
     return (1.0f - std::min (1.0f, std::max (0.0f, lineFraction))) * 100.0f;
 }
 
+// ---- warp picture -------------------------------------------------------------------------------------------------------------------
+
+float warpedValue (int type, float amount, float phase, const std::function<float (float)>& wave)
+{
+    constexpr float twoPi = 6.28318530718f;
+    phase -= std::floor (phase);
+    amount = std::min (1.0f, std::max (0.0f, amount));
+    if (type <= 0 || amount <= 0.0005f)
+        return wave (phase);
+    switch (type)
+    {
+        case 1: // Sync: the cycle restarts faster
+        {
+            const float p = phase * (1.0f + amount * 3.0f);
+            return wave (p - std::floor (p));
+        }
+        case 2: // Formant: the cycle is squeezed into the first part and faded with a Hann window, the rest is silent
+        {
+            const float f = 1.0f + amount * 4.0f;
+            const float p = phase * f;
+            if (p >= 1.0f)
+                return 0.0f;
+            return wave (p) * (0.5f - 0.5f * std::cos (twoPi * p));
+        }
+        case 3: // Quantize: the phase moves in steps
+        {
+            const float steps = std::max (2.0f, 64.0f - amount * 62.0f);
+            return wave (std::floor (phase * steps) / steps);
+        }
+        case 4: // Bend: the middle of the cycle is pushed to one side (< 0.5 early, > 0.5 late)
+        {
+            const float p = phase - 0.5f;
+            const float s = amount > 0.5f ? 1.0f + (amount - 0.5f) * 2.0f : 1.0f - (0.5f - amount) * 1.5f;
+            return wave (std::min (1.0f, std::max (0.0f, 0.5f + p * s)));
+        }
+        case 5: // Squeeze: the phase is bent towards the end of the cycle
+            return wave (std::pow (phase, 1.0f + amount * 3.0f));
+        case 6: // Pulse: the pulse width moves away from 50 %
+        {
+            const float pw = 0.5f + (amount - 0.5f) * 0.8f;
+            return wave (phase < pw ? phase / (2.0f * pw) : 0.5f + (phase - pw) / (2.0f * (1.0f - pw)));
+        }
+        case 7:
+        case 8: // FM from Osc 2 / Osc 3
+        {
+            const float ratio = type == 7 ? 2.0f : 3.0f;
+            const float p = phase + amount * 0.25f * std::sin (twoPi * ratio * phase);
+            return wave (p - std::floor (p));
+        }
+        case 9:
+        case 10: // RM from Osc 2 / Osc 3: the cycle times the other oscillator, mixed in with the amount
+        {
+            const float ratio = type == 9 ? 2.0f : 3.0f;
+            return wave (phase) * (1.0f - amount + amount * std::sin (twoPi * ratio * phase));
+        }
+        default: break;
+    }
+    return wave (phase);
+}
+
 // ---- CPU colour ---------------------------------------------------------------------------------------------------------------------
 
 int cpuLevel (float load) noexcept

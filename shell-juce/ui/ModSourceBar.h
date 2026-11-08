@@ -26,9 +26,13 @@ public:
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
     void showAssignments();
     /** The long-press list of a source (bypass / remove destinations, module operations) for any anchor: the envelope and LFO tabs use it. */
     static void showAssignmentsFor (UiContext& context, int sourceChoice, juce::Component& anchor);
+    /** Drag a macro chip onto another macro chip: the two macros swap (value and assignments, design 06). Returns true if they did. */
+    static bool swapMacroSources (UiContext& context, int sourceA, int sourceB);
+    bool isDragging() const noexcept { return dragging; }
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override { repaint(); }
@@ -37,7 +41,7 @@ private:
     UiContext& ctx;
     int sourceChoice;
     bool available = true;
-    bool pressed = false, consumed = false;
+    bool pressed = false, consumed = false, dragging = false;
 };
 
 /** The source drawer: a Done button, the status line and the scrolling row of chips for all sources of the mod matrix. */

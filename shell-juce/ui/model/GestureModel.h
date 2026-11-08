@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -53,6 +54,14 @@ bool moveSlice (std::vector<float>& slices, int index, float pos);
     above the bottom of the waveform area is 1 - threshold: 100 % = line at the bottom (all onsets), 0 % = at the top. */
 float thresholdToLine (float percent) noexcept;
 float lineToThreshold (float lineFraction) noexcept;
+
+// ---- warp picture -------------------------------------------------------------------------------------------------------------------
+
+/** The warp picture (design 02 row "Warp mode picture"): the value at `phase` (0..1) of the cycle `wave` after the warp `type`
+    (`oscN.warp.type` choice 0 None, 1 Sync, 2 Formant, 3 Quantize, 4 Bend, 5 Squeeze, 6 Pulse, 7 / 8 FM from Osc 2 / 3, 9 / 10 RM from
+    Osc 2 / 3) at `amount` 0..1. A drawing of the idea of each mode, not the engine's DSP: the other oscillator of FM / RM is a sine at
+    twice / three times the frequency. type 0 and amount 0 return the cycle unchanged. */
+float warpedValue (int type, float amount, float phase, const std::function<float (float)>& wave);
 
 // ---- CPU colour ---------------------------------------------------------------------------------------------------------------------
 

@@ -85,6 +85,14 @@ public:
     /** Mouse-less entry points for the tests and for hardware encoders: a full gesture on the control. */
     void nudgeNormalised (float delta);
 
+    /** The count badge of the depth halo is a hit target: tap = the list of the modulators on this control; choosing one arms its source,
+        so the next drag on this control sets that modulator's depth (design 06). */
+    juce::Rectangle<int> modulatorBadgeBounds() const;
+    int modulatorCount() const;
+    /** Arms the source of the modulator in `slot` (what the list entry does). False if that slot does not modulate this control. */
+    bool selectModulator (int slot);
+    bool modulatorListShown() const noexcept { return badgeMenuShown; }
+
 protected:
     virtual bool isHorizontal() const noexcept { return false; }
     virtual float pixelsForFullRange() const;
@@ -109,7 +117,8 @@ private:
     juce::Point<float> downPos, lastPos;
     juce::uint32 lastTapMs = 0;
     juce::Point<float> lastTapPos;
-    bool pressed = false, dragging = false, assignDrag = false;
+    bool pressed = false, dragging = false, assignDrag = false, badgePress = false, badgeMenuShown = false;
+    void showModulatorList();
     FineZone zone = FineZone::normal;
 };
 

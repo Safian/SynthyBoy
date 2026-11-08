@@ -119,6 +119,11 @@ private:
     or bypass it. `slot` is 0-based. */
 void clearSlot (ModMatrixAccess& matrix, int slot);
 void setSlotBypass (ModMatrixAccess& matrix, int slot, bool bypass);
+/** Swaps everything the two slots hold (source, destination, amount, curve, polarity, stereo, bypass, aux source / invert / curve / output):
+    "reorder the matrix" (design 06 row handle). Slots are 0-based. False for equal or out of range slots. One gesture per parameter. */
+bool swapModSlots (ModMatrixAccess& matrix, int slotA, int slotB);
+/** The macro (1..8) a source choice stands for (19..22 = macro 1..4, 29..32 = macro 5..8), 0 for anything else. */
+int macroOfSourceChoice (int sourceChoice) noexcept;
 
 // ---- A/B compare (decision Q4: two ParamValues snapshots) -----------------------------------------------------------------------
 

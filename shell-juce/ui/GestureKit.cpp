@@ -89,6 +89,74 @@ void TwoFingerInput::magnify (juce::Point<float> centre, float scaleFactor)
     inject (g);
 }
 
+// ---- Toast --------------------------------------------------------------------------------------------------------------------------
+
+namespace
+{
+juce::Component::SafePointer<Toast>& toastSlot()
+{
+    static juce::Component::SafePointer<Toast> slot;
+    return slot;
+}
+} // namespace
+
+Toast::Toast (juce::Component& parent, const juce::String& text, int milliseconds) : host (&parent), message (text)
+{
+    setInterceptsMouseClicks (false, false);
+    parent.addAndMakeVisible (this);
+    parent.addComponentListener (this);
+    const int w = juce::jmin (parent.getWidth() - 20, 320);
+    setBounds (juce::Rectangle<int> (parent.getWidth() / 2 - w / 2, parent.getHeight() - 150, w, 44).constrainedWithin (parent.getLocalBounds()));
+    toFront (false);
+    startTimer (milliseconds);
+}
+
+Toast::~Toast()
+{
+    stopTimer();
+    if (host != nullptr)
+        host->removeComponentListener (this);
+}
+
+void Toast::show (juce::Component& anchor, const juce::String& text, int milliseconds)
+{
+    auto* top = anchor.getTopLevelComponent();
+    if (top == nullptr)
+        return;
+    if (auto* old = toastSlot().getComponent())
+        delete old;
+    toastSlot() = new Toast (*top, text, milliseconds);
+}
+
+Toast* Toast::current()
+{
+    return toastSlot().getComponent();
+}
+
+void Toast::paint (juce::Graphics& g)
+{
+    const auto r = getLocalBounds().toFloat().reduced (1.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.85f));
+    g.fillRoundedRectangle (r, 10.0f);
+    g.setColour (juce::Colours::white);
+    g.setFont (16.0f);
+    g.drawFittedText (message, getLocalBounds().reduced (12, 4), juce::Justification::centred, 2);
+}
+
+void Toast::timerCallback()
+{
+    stopTimer();
+    if (host != nullptr)
+        host->removeChildComponent (this);
+    delete this;
+}
+
+void Toast::componentBeingDeleted (juce::Component&)
+{
+    host = nullptr; // the editor goes first: nothing to remove from
+    delete this;
+}
+
 // ---- ModuleMenuButton ---------------------------------------------------------------------------------------------------------------
 
 ModuleMenuButton::ModuleMenuButton (UiContext& context, std::string prefix)
