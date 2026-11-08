@@ -526,6 +526,27 @@ Semantics (**ASSUMPTIONS A60..A63, A67, A68**): `sub.waveform` selects one of 6 
 
 Semantics (**ASSUMPTIONS A64..A66, A69**): `noise.sample` selects from built-in procedurally generated noise buffers (no external audio files needed). `noise.pitch` and `noise.fine` vary playback speed / pitch. `noise.keytrack` adjusts pitch relative to MIDI note C4 (note 60). `noise.phase` offsets sample start; when `noise.random_phase` is On, start phase is randomized per note-on. `noise.loop` controls looping vs one-shot playback (one-shot: silent after the sample end, no held value). All wire into the existing `noise.level`, `noise.pan`, `noise.destination`, `noise.filter_blend`, `noise.bus1_send`, `noise.bus2_send`.
 
+### 4.19 B20 – Mod amount destinations, mod curves, stereo source, stereo routing & voice override (G1-G6) – positions 1576..1577 [2] – area 05 / 06 / 01
+
+Added by the mod-amount work package (MODAMT-REPORT.md) as trailing block B20 (R2: appended at the end of `kRaw[]`).
+
+**Master Voicing Extras (`master.*`, group `Master / Voicing`, G5) [2]:**
+
+| Key | Name | Type | Range | Default | Unit | Curve | Sc | Mod | Kick |
+|-----|------|------|-------|--------:|------|-------|----|-----|------|
+| `master.stereo_routing` | `Master Stereo Routing` | cont | 0 .. 100 | 100 | % | lin | V, S | y | `master_voicing` |
+| `master.voice_override` | `Master Voice Override` | choice (`kVoiceOverrides`, 2) | Kill / Steal | Kill | - | - | V, X | no | `master_voicing` |
+
+Semantics (**ASSUMPTIONS A240..A248**):
+- `master.stereo_routing` (position 1576, destination choice 442): controls stereo spread / stereo routing width (0..100%). Modulatable.
+- `master.voice_override` (position 1577): selects voice stealing policy when voice limit is reached (Kill = 0, Steal = 1).
+- **Modulation of modulation amounts (G1)**: modulation slots 1..64 amount parameters are added as modulation destinations `mod01.amount` .. `mod64.amount` (choices 443..506). Direct self-modulation and cyclic modulation loops are detected and rejected to ensure deterministic, feedback-free evaluation.
+- **Per-connection modulation curve (G2)**: custom curves per matrix connection stored in additive state `content.mod_curves[]` (up to 64 curves, up to 100 points `{x, y, power}` matching LFO shape format). Applied to source value before amount.
+- **Modulation of portamento time and polyphony (G3)**: destination choice 507 modulates `master.portamento.time`; choice 508 modulates `master.polyphony` (dynamic voice count modulation).
+- **Modulation source `stereo` (G4)**: choice 39 (0-based index 38), bipolar per-voice left/right channel sign source (+1 left, -1 right).
+- **Oscillator transpose quantize (G6)**: Vital's `osc_N_transpose_quantize` imported into `oscN.transpose_snap` (Block B14, 0..8191 scale bitmask).
+- **Engine capability bit**: `kCapModAmount` = `1ull << 37`.
+
 ## 5. State that is not in the key list (additive `content` section, state version 3)
 
 Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatable, not modulatable) and are written to both the `.sbpreset` and the host state document (ASSUMPTION A25: the plugin state IS the preset; otherwise custom shapes would be lost when a DAW project reloads). **[WP0 fix]** The section sits INSIDE the state object (`{"format":"synthyboy-state","version":3,"params":{..},"content":{..}}`), so the host blob and the `.sbpreset` (whose `state` member is that object) share one writer and one parser; 11 C3 / `serializeImportedPreset` must write it there, not as a sibling of `state`. `loadState ()` stays allocation-free and skips the section (`LoadResult::content = ignored`); `loadStateWithContent ()` / `loadPreset (.., StateContent&)` parse it into `StateContent` (`content_state.h`, allocates, not for the audio thread). A value outside the caps or ranges drops the whole section (`LoadResult::content = rejected`, parameters still apply); only malformed JSON invalidates the document. Maximum nesting is 7 inside the section (`kMaxDepth` = 8 holds). Extra rules fixed by WP0: strings <= 255 bytes without control characters, pack / file are relative paths (no `..`, no `\`, no `:`, not absolute), sha256 empty or 64 lower case hex digits, LFO shape y in 0..1, point `power` in -20..20, point modulation `amount` in -1..1 and `source` a key of §2, tuning text may carry `\n \r \t` only, every list ascending in x.
@@ -536,6 +557,7 @@ Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatab
 | `content.samples[]` | `{osc 1..3, pack, file, sha256, name, sample_rate, frames, channels, slices:[0..1,...]}` (**ASSUMPTION A26**: samples are referenced like tables, never embedded: audio would break the 1 MiB limit; "embed in preset" G04 is not decided) | 3 entries, <= 128 slices | `oscN.type = Sample` |
 | `content.lfo_shapes[]` | `{lfo 1..10, name, smooth, loop_point?, points:[{x, y, power, mod_x?:{source, amount}, mod_y?:{source, amount}}]}`; `source` is a mod-source key of §2 / the table; `mod_*` is the point modulation of G65 | <= 128 points per shape (Vital line generator: 100) -> ~4 KB per shape, 40 KB worst case | `lfoN.shape = Custom` |
 | `content.curves` | `{velocity:{points}, note:{points}}`, points `{x, y, power}`, default identity `[(0,0),(1,1)]` | <= 64 points each | sources `velocity`, `note` |
+| `content.mod_curves[]` | `{slot: 1..64, points:[{x, y, power}]}` | <= 64 entries, <= 100 points per curve | mod connection curve (`line_mapping` in Vital / Serum per-slot curve) |
 | `content.tuning` | `{scl: text, kbm: text or null}` (a `.tun` is converted to the same pair at load, **ASSUMPTION A27**) | scl <= 64 KiB, kbm <= 4 KiB | `master.tuning.scale = User file` |
 | `content.impulses[]` | `{pack, file, sha256, name}` | 1 entry | `convolve.ir = Preset IR` |
 | `content.remaps[]` | `{osc 1..3, slot 1..4, name, points:[{x, y, power}]}` (B16, A120): the drawn wavetable position remap of an oscillator slot; no point modulation | <= 12 entries, <= 64 points each | `oscN.remap.slot` |
@@ -756,3 +778,12 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A67 | B18 is placed after B17: positions 1558..1575, destination choices 432..441 (renumbered from the draft "B13" at 404..413) |
 | A68 | Capability bits 35 (`kCapSubOsc`) and 36 (`kCapNoiseExtras`); each is set because `test_oscextra.cpp` renders every key off and on |
 | A69 | UI: Sub panel (picker row of six >= 44 pt segments, level / pan pad, four knobs, rest behind More) and Noise panel (`<` name `>` row, nine item menu, level / pan / pitch / fine knobs, rest behind More), both on the oscillator page |
+| A240 | Modulating another modulation's amount (`modNN.amount` as destination, choices 443..506). Self-modulation (`modK` modulating `modK.amount`) and cyclic dependency chains (`modA` -> `modB.amount` -> `modA.amount`) are detected before evaluation and treated as neutral (amount modulation ignored, connection evaluated with base amount) to prevent infinite recursion and undefined feedback behavior. |
+| A241 | Modulation curves (`line_mapping` in Vital / Serum per-slot curve) are stored in additive `content.mod_curves[]` (up to 64 curves, up to 100 points per curve, format matching LFO shape points `{x, y, power}` with power in -20..20, x in 0..1 ascending, y in 0..1). A curve is applied to the source value before scaling by the modulation amount. When no custom curve is defined for a slot or the curve is empty/flat, standard linear response is used. |
+| A242 | Destination list indexing: To maintain 100% backward compatibility and prevent shifting of destination indices for the first 880 keys and existing blocks B01-B18, non-parameter modulatable destinations (`modNN.amount`, `master.portamento.time`, `master.polyphony`) are appended in `DestinationLists` after all table-modulatable parameters. `master.stereo_routing` is placed in `kRaw[]` with `kMod` at position 1576, giving destination choice 442. Choices 443..506 are `mod01.amount` .. `mod64.amount`, choice 507 is `master.portamento.time`, and choice 508 is `master.polyphony`. Total destinations = 508 (choiceCount = 509). |
+| A243 | `stereo` modulation source (choice 39, 0-based index 38): per-voice left/right channel sign source (+1.0 for left channel / left ear, -1.0 for right channel / right ear). In mono voice evaluation it evaluates to 0.0. |
+| A244 | `master.stereo_routing` (key `master.stereo_routing`, group `Master / Voicing`, G5): 0..100%, default 100%, continuous, `kMod`. Controls stereo spread / stereo panning width across the voice processing chain. |
+| A245 | `master.voice_override` (key `master.voice_override`, group `Master / Voicing`, G5): choice Kill (0) / Steal (1), default Kill (0), `kAuto`. Sets voice stealing policy when voice limit is reached. |
+| A246 | `master.portamento.time` (destination 507) and `master.polyphony` (destination 508) modulation: bound in engine adapter to Vital's `"portamento_time"` and `"polyphony"` modulation destinations. Polyphony modulation dynamically modulates the active polyphony count (e.g. macro turning a polyphonic preset into mono). |
+| A247 | `osc_N_transpose_quantize` (G6): Vital's integer transpose quantize bitmask (12 bits for 12 semitones in scale) is imported directly into SynthyBoy's `oscN.transpose_snap` (Block B14, positions 1512, 1524, 1536), which uses the exact same 0..8191 bitmask representation. |
+| A248 | Capability bit `kCapModAmount` = `1ull << 37`: set on `sbvital` engine adapter to indicate support for mod amount modulation, mod curves, stereo source, stereo routing / voice override, and portamento/polyphony modulation. |

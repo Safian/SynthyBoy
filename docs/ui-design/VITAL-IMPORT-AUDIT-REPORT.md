@@ -187,17 +187,25 @@ raise the LFO 1 -> filter cutoff / osc 3 level / osc 1 warp connections whose ow
 
 ## 8. Remaining true gaps (proposed change for each)
 
-| # | Gap | In the 35 files | Proposed change |
-|---|---|---|---|
-| G1 | **Modulation of a modulation amount** (`X -> modulation_N_amount`) | 52 connections, 17 presets (macros 27, mod wheel 13, envelopes 8, velocity 3, note 1); decides the sound of Hanging Gardens | 64 new destinations `modNN.amount` (appended to the `modNN.destination` list, choices 404 .. 467, state v3 append rule of doc 13) flagged modulatable, and binding of the engine control `modulation_N_amount` as a modulation target in the adapter (the Vital engine supports it); importer: remove the "not modulatable" drop for them |
-| G2 | **Curve of a modulation** (`line_mapping`) | 26 connections, 11 presets | per-slot custom curve like the LFO shape content (`content.mod_curves[]`, <= 100 points) + the engine's line map of the connection (the same `LineGenerator` as the LFO shapes) in the adapter; until then the curve is replaced by the linear map (reported) |
-| G3 | Modulation of `portamento_time`, `polyphony`, `stereo_routing` | 3 + 2 + 1 | make `master.portamento.time` modulatable; `polyphony` modulation is a Vital oddity (Nostalgia: macro 4 at -1 turns the preset mono): needs `master.polyphony` modulatable in the voice handler |
-| G4 | Modulation source `stereo` (and `lift`, `slide`, `note_in_octave` are already in the list) | 1 connection | source choice 39 `stereo` (+-1 per channel) in the adapter's mod source table |
-| G5 | `stereo_routing`, `voice_override` | 5 + 1 presets | keys `master.stereo_routing` (percent), `master.voice_override` (Kill / Steal) and bindings of the two engine controls |
-| G6 | `osc_N_transpose_quantize` | 1 preset (2 oscillators) | key `oscN.transpose_quantize` (int, 0 .. 8191) and the binding |
-| G7 | Sample as a 4th source | 5 presets lose their sample (Primal Hunger, Gentle Driven EP, Cloudgazer, Edge of Space, Time Spiral) | `noise.type` (Noise / Sample) with the sample keys of `oscN`, or a 4th sample voice; the importer then maps `sample_*` 1:1 and never needs a free oscillator. Also the Vital warp 'from sample' (9, 12) becomes mappable (1 file) |
-| G8 | Stored `mod_wheel` position (23 files non-zero) | | only if an A/B shows that Vital applies it: initial CC1 for the shell, no key |
-| G9 | Single-frame `Init` / phase shifted `Sine` are stored instead of a built-in | 36 + 3 of 43 single-frame tables | not an importer bug (section 9). Cheap exact option: one appended built-in `Saw down` (= Vital's Init waveform) in the 13 + 1 table list |
+G1 through G6 were implemented in work package `mod-amount` (Block B20, MODAMT-REPORT.md):
+- **G1 (Resolved)**: Modulating another modulation's amount (`mod01.amount` .. `mod64.amount`, destination choices 443..506). Self-modulation and cyclic dependencies detected and rejected. Tested with audible diff and cycle checks.
+- **G2 (Resolved)**: Per-connection modulation curve (`content.mod_curves[]`, up to 100 points). Evaluated via LineGenerator prior to scaling by amount. 31 line_mappings imported across 35 presets.
+- **G3 (Resolved)**: Modulation of `master.portamento.time` (choice 507), `master.polyphony` (choice 508), and `master.stereo_routing` (choice 442) wired in engine adapter.
+- **G4 (Resolved)**: Modulation source `stereo` (choice 39, +-1 per channel).
+- **G5 (Resolved)**: Keys `master.stereo_routing` (pos 1576, 0..100%, kMod) and `master.voice_override` (pos 1577, Kill/Steal, kAuto) added and bound.
+- **G6 (Resolved)**: `osc_N_transpose_quantize` mapped to `oscN.transpose_snap` (Block B14, 0..8191 bitmask).
+
+| # | Gap | In the 35 files | Status | Implementation |
+|---|---|---|---|---|
+| G1 | **Modulation of a modulation amount** (`X -> modulation_N_amount`) | 52 connections, 17 presets | RESOLVED (B20) | 64 new destinations `modNN.amount` (choices 443..506), engine adapter mono mod target, cycle detection |
+| G2 | **Curve of a modulation** (`line_mapping`) | 26 connections, 11 presets | RESOLVED (B20) | `content.mod_curves[]` (<= 100 points), `LineGenerator` evaluation, UI curve panel |
+| G3 | Modulation of `portamento_time`, `polyphony`, `stereo_routing` | 3 + 2 + 1 | RESOLVED (B20) | Destination choices 507, 508, 442 bound to engine controls |
+| G4 | Modulation source `stereo` | 1 connection | RESOLVED (B20) | Source choice 39 `stereo` (+-1 per channel sign source) |
+| G5 | `stereo_routing`, `voice_override` | 5 + 1 presets | RESOLVED (B20) | Keys `master.stereo_routing` (1576) and `master.voice_override` (1577) in B20 |
+| G6 | `osc_N_transpose_quantize` | 1 preset (2 oscillators) | RESOLVED (B20) | Mapped to `oscN.transpose_snap` (0..8191 bitmask) |
+| G7 | Sample as a 4th source | 5 presets lose their sample (Primal Hunger, Gentle Driven EP, Cloudgazer, Edge of Space, Time Spiral) | open | `noise.type` (Noise / Sample) with the sample keys of `oscN`, or a 4th sample voice |
+| G8 | Stored `mod_wheel` position (23 files non-zero) | | open | only if an A/B shows that Vital applies it: initial CC1 for the shell, no key |
+| G9 | Single-frame `Init` / phase shifted `Sine` are stored instead of a built-in | 36 + 3 of 43 single-frame tables | open | Cheap exact option: one appended built-in `Saw down` in the table list |
 
 ## 9. Built-in shortcut (`matchBuiltinSingleCycle`)
 
