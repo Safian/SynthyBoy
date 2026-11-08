@@ -64,6 +64,8 @@ Quality tiers (`Quality`, core/include/synthyboy/quality.h) cap the converted va
 bypasses it, `smooth_interpolation` of the oscillators follows `Quality::interpolation`. `setQuality()` is a lock-free hand-off
 (atomics), taken over at the start of the next block; `Quality::oversampling` is applied by `prepare()` only (it sizes the buffers).
 
+**Determinism and latency.** `Quality::realtime` false (the default; offline renders, tests, bounces) makes the Convolve rebuild deterministic: the block that posts a rebuild, or follows a new impulse / sample rate, waits for the builder thread and takes the result over in that block, so a render equals itself bit for bit. `true` (the plugin shells in live playback) never waits. `IEngine::latencySamples()` reports Bode's Hilbert latency at the host rate; the engine delays every other path (voices into Main, buses, Direct, the bands of a splitter) so the output is the output without Bode, late by exactly that value.
+
 ### The modulation matrix on the audio thread
 
 The 64 slots are the engine's 64 connection processors. A slot with a source and a destination is wired by the audio thread at the start
