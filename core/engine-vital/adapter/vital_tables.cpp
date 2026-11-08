@@ -9,6 +9,7 @@
 #include <complex>
 #include <cstring>
 
+#include "synth_constants.h"
 #include "wave_frame.h"
 
 namespace synthyboy
@@ -191,7 +192,7 @@ WavetableSet::WavetableSet()
 
 std::unique_ptr<sbvital::Wavetable> buildUserWavetable (const float* frames, int numFrames, int version)
 {
-    numFrames = std::max (1, std::min (256, numFrames));
+    numFrames = std::max (1, std::min (sbvital::kNumOscillatorWaveFrames, numFrames)); // a Vital table has up to 257 frames (positions 0 .. 256)
     auto wavetable = std::make_unique<sbvital::Wavetable> (numFrames);
     wavetable->setNumFrames (numFrames);
     auto frame = std::make_unique<sbvital::WaveFrame>();

@@ -97,9 +97,11 @@ enum class ImportStatus : uint8_t { ok, notVital, malformed, tooLarge, cancelled
 struct ImportedWavetable
 {
     int osc = 0;                // 1..3, 0 for a stand-alone .vitaltable
-    std::string name, author, sha256; // sha256 of the rendered 16 bit frames
+    std::string name, author, sha256; // sha256 of the stored file (wavBytes): the identity in the content pack and the reference of the state
     int numFrames = 0;          // <= 257
     std::vector<int16_t> frames; // numFrames * 2048
+    std::vector<uint8_t> wavBytes; // the stored file: RIFF/WAVE, 16-bit mono PCM, numFrames * 2048 samples (the format of the content store,
+                                   // docs/ARCHITECTURE.md 5.2: a length that is a multiple of 2048 is that many frames)
 };
 
 struct ImportedLfoShape

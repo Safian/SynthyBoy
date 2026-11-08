@@ -492,3 +492,26 @@ TEST (oscillator_type_change_under_a_sounding_note_crossfades_in_10_ms)
         CHECK (stepAfter < 2.5f * slope + peak / 200.0f);
     }
 }
+
+TEST (user_wavetable_of_257_frames_keeps_every_frame)
+{
+    // regression: a Vital table has up to 257 frames (keyframe positions 0 .. 256); the engine used to cut a longer table at 256 frames, so the
+    // frame position of an imported 257 frame table (osc_N_wave_frame up to 256) was one frame short and the last frame never played
+    Content c;
+    std::vector<float> frames;
+    for (int f = 0; f < 257; ++f)
+        for (int n = 0; n < 2048; ++n)
+            frames.push_back (0.5f * static_cast<float> (std::sin (2.0 * kPi * (1 + f % 7) * n / 2048.0)));
+    c.table (frames);
+    c.state.wavetables.back().frames = 257;
+    auto e = makeVital();
+    c.apply (*e);
+    setByKey (*e, "osc1.wavetable", 13.0f);
+    setByKey (*e, "osc1.frame", 100.0f);
+    std::vector<float> l (64), r (64);
+    e->process (nullptr, 0, l.data(), r.data(), 64);
+    CHECK_NEAR (vitalControlValue (*e, "osc_1_wave_frame"), 256.0, 1e-3);
+    setByKey (*e, "osc1.frame", 50.0f);
+    e->process (nullptr, 0, l.data(), r.data(), 64);
+    CHECK_NEAR (vitalControlValue (*e, "osc_1_wave_frame"), 128.0, 1e-3);
+}

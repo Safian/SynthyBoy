@@ -269,8 +269,10 @@ bool parseWavetable (const Doc& doc, int node, ParsedWavetable& out, ContentNote
                 ? static_cast<wtrender::Interpolation> (static_cast<int> (clampd (std::floor (v + 0.5), 0.0, 2.0))) : wtrender::Interpolation::linear;
             c.frequencyInterpolation = c.type == wtrender::ComponentType::waveSource && boolField (doc, -1, cn, "interpolation", false);
             c.normalize = boolField (doc, -1, cn, "normalize", true);
-            c.normalizeGain = boolField (doc, -1, cn, "normalize_gain", true);
-            c.normalizeMult = static_cast<float> (clampd (numField (doc, -1, cn, "normalize_mult", 1.0), 0.0, 16.0));
+            // both are JSON booleans (true / false) in a .vital file; reading normalize_mult as a number made `false` a gain of 0 and every
+            // table built from an audio file silent. A file without normalize_mult normalises (Vital's loader default).
+            c.normalizeGain = boolField (doc, -1, cn, "normalize_gain", false);
+            c.normalizeMult = boolField (doc, -1, cn, "normalize_mult", true);
             c.windowSize = static_cast<int> (clampd (numField (doc, -1, cn, "window_size", 2048.0), 2.0, 1048576.0));
             c.fadeStyle = static_cast<int> (clampd (std::floor (numField (doc, -1, cn, "fade_style", 0.0) + 0.5), 0.0, 3.0));
             c.phaseStyle = static_cast<int> (clampd (std::floor (numField (doc, -1, cn, "phase_style", 0.0) + 0.5), 0.0, 2.0));
@@ -559,9 +561,18 @@ bool UserWavetableStore::addWavetable (const ImportedWavetable& wt, std::string&
 {
     packOut = info_.id.empty() ? "user.imported-vital" : info_.id;
 
+    // the file is a 16-bit mono WAV, the only wavetable format the content store reads (docs/ARCHITECTURE.md 5.2); a table that only
+    // carries its frames gets its file made here, and the hash of the file bytes is its identity either way
+    std::vector<uint8_t> wav = wt.wavBytes;
+    if (wav.empty())
+        wav = vitalimport::createWav16 (wt.frames.data(), nullptr, wt.frames.size(), 44100, 1);
+    if (wav.empty())
+        return false;
+    const std::string sha = Sha256::hashBufferHex (wav.data(), wav.size());
+
     for (const auto& f : info_.files)
     {
-        if (f.sha256 == wt.sha256)
+        if (f.sha256 == sha)
         {
             fileOut = f.path;
             return true;
@@ -579,8 +590,7 @@ bool UserWavetableStore::addWavetable (const ImportedWavetable& wt, std::string&
     if (safeName.empty())
         safeName = "table";
 
-    const std::string shortHash = wt.sha256.size() >= 12 ? wt.sha256.substr (0, 12) : wt.sha256;
-    const std::string relPath = "tables/" + safeName + "_" + shortHash + ".sbwt";
+    const std::string relPath = "tables/" + safeName + "_" + sha.substr (0, 12) + ".wav";
 
     std::filesystem::path full = std::filesystem::path (packDir_) / relPath;
     std::error_code ec;
@@ -590,16 +600,15 @@ bool UserWavetableStore::addWavetable (const ImportedWavetable& wt, std::string&
     if (! out)
         return false;
 
-    const size_t byteSize = wt.frames.size() * sizeof (int16_t);
-    out.write (reinterpret_cast<const char*> (wt.frames.data()), static_cast<std::streamsize> (byteSize));
+    out.write (reinterpret_cast<const char*> (wav.data()), static_cast<std::streamsize> (wav.size()));
     out.close();
     if (! out.good())
         return false;
 
     ContentPackFile cpf;
     cpf.path = relPath;
-    cpf.sha256 = wt.sha256;
-    cpf.size = byteSize;
+    cpf.sha256 = sha;
+    cpf.size = wav.size();
     info_.files.push_back (std::move (cpf));
 
     writeContentPackManifest (packDir_, info_);

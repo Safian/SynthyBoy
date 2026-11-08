@@ -454,12 +454,22 @@ void addContentNotes (Ctx& c, const ContentNotes& notes, const std::string& wher
         c.item (ItemKind::approximated, Reason::typeMismatch, "content", where, std::to_string (notes.badFields), "", "", "content_field_dropped");
 }
 
+constexpr int kWavetableFileSampleRate = 44100; // nominal: the engine reads the samples as cycles, never as time
+
 std::vector<int16_t> toInt16 (const std::vector<float>& frames)
 {
     std::vector<int16_t> out (frames.size());
     for (size_t i = 0; i < frames.size(); ++i)
         out[i] = static_cast<int16_t> (std::lround (std::max (-1.0f, std::min (1.0f, frames[i])) * 32767.0f));
     return out;
+}
+
+/** The stored file of a table is a 16-bit mono WAV (the only format the content store reads: docs/ARCHITECTURE.md 5.2); its SHA-256 is
+    the identity in the pack and the hash of the reference in the state (IContentStore::readFile checks it against the file bytes). */
+void finishWavetableFile (ImportedWavetable& iw)
+{
+    iw.wavBytes = createWav16 (iw.frames.data(), nullptr, iw.frames.size(), kWavetableFileSampleRate, 1);
+    iw.sha256 = Sha256::hashBufferHex (iw.wavBytes.data(), iw.wavBytes.size());
 }
 
 wtrender::Status renderParsed (Ctx& c, const ParsedWavetable& pw, wtrender::Result& result)
@@ -578,6 +588,55 @@ bool looksLikeVitalPreset (const void* data, size_t size) noexcept
 // ---------------------------------------------------------------------------------------------------------------------
 namespace
 {
+/** A setting that is neither a row of the table nor one of the known unmappable controls (a member of a newer Vital, or of a tool that writes
+    its own). Every key of `settings` must end up in one of the four classes, so each gets an item; `dropped` only when the value changes
+    what the preset sounds like (and it is not the default), `ignored` otherwise. */
+void reportUnknownSetting (Ctx& c, const std::string& name, int node)
+{
+    double v = 0.0;
+    bool mismatch = false;
+    const bool isNumber = c.number (node, v, mismatch);
+    const std::string text = isNumber ? num (v) : std::string();
+    const std::string shown = cleanText (name, 96, true);
+    const auto number = [&c] (const std::string& control, double fallback)
+    {
+        double x = fallback;
+        bool mm = false;
+        return c.number (c.member (control.c_str()), x, mm) ? x : fallback;
+    };
+
+    // Vital 1.5: the phase of the spectral morph of oscillator N (default 0.5); our morph has no phase key and neither has the engine
+    int osc = 0;
+    if (name.size() > 6 && name.compare (0, 4, "osc_") == 0 && name[4] >= '1' && name[4] <= '3' && name.compare (5, std::string::npos, "_spectral_morph_phase") == 0)
+        osc = name[4] - '0';
+    if (osc > 0)
+    {
+        const std::string p = "osc_" + std::to_string (osc) + "_";
+        const bool audible = number (p + "on", osc == 1 ? 1.0 : 0.0) != 0.0 && number (p + "spectral_morph_type", 0.0) != 0.0
+                             && number (p + "spectral_morph_amount", 0.0) != 0.0 && std::fabs (v - 0.5) > 1.0e-6;
+        c.item (audible ? ItemKind::dropped : ItemKind::ignored, Reason::noEngineEquivalent, "osc" + std::to_string (osc), shown, text, "", "",
+                audible ? "morph_phase_not_supported" : "morph_phase_default_or_unused");
+        return;
+    }
+    // Vital 1.5: the user warp shapes (one per oscillator) matter only when a warp type above the 13 built-in ones selects them
+    if (name == "custom_warps")
+    {
+        bool selected = false;
+        for (int n = 1; n <= 3; ++n)
+            selected = selected || (number ("osc_" + std::to_string (n) + "_on", n == 1 ? 1.0 : 0.0) != 0.0 && number ("osc_" + std::to_string (n) + "_distortion_type", 0.0) > 12.5);
+        c.item (selected ? ItemKind::dropped : ItemKind::ignored, Reason::noEngineEquivalent, "osc", shown, "", "", "",
+                selected ? "custom_warp_selected" : "custom_warps_unused");
+        return;
+    }
+    // Vital 1.5: the seed of each random LFO; the engine seeds them itself, the sequence of a random LFO is not reproducible by definition
+    if (name == "random_values")
+    {
+        c.item (ItemKind::ignored, Reason::noEngineEquivalent, "rlfo", shown, "", "", "", "random_lfo_seed");
+        return;
+    }
+    c.item (ItemKind::ignored, Reason::noEngineEquivalent, "meta", shown, text, "", "", "unknown_setting");
+}
+
 ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char* fallbackName)
 {
     ImportResult& res = c.res;
@@ -634,6 +693,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
         ++rep.vitalUnknownKeys;
         if (res.unknownKeys.size() < 32)
             res.unknownKeys.push_back (cleanText (name, 96, true));
+        reportUnknownSetting (c, name, m);
     }
 
     // ---- top level metadata and version -------------------------------------------------------------------------------------
@@ -763,7 +823,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                 iw.author = pw.author;
                 iw.numFrames = r.numFrames;
                 iw.frames = toInt16 (r.frames);
-                iw.sha256 = Sha256::hashBufferHex (iw.frames.data(), iw.frames.size() * sizeof (int16_t));
+                finishWavetableFile (iw);
                 res.wavetables.push_back (std::move (iw));
             }
             else
@@ -1290,12 +1350,47 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                                   "mpe_enabled", "bypass", "beats_per_minute", "view_spectrogram", "pitch_wheel", "mod_wheel", "compressor_low_band_unused",
                                   "filter_fx_filter_input" })
         {
-            if (sampleMappedOsc > 0 && std::strncmp (name, "sample_", 7) == 0)
-                continue;
             double v;
             bool m;
+            if (sampleMappedOsc > 0 && std::strncmp (name, "sample_", 7) == 0)
+            {
+                // consumed by the oscillator the sample was mapped to (osc N: random phase, transpose, tune, keytrack, loop mode)
+                if (c.number (c.member (name), v, m))
+                {
+                    if (std::strcmp (name, "sample_transpose_quantize") == 0)
+                    {
+                        if (v == 0.0)
+                            c.item (ItemKind::ignored, Reason::noEngineEquivalent, "osc" + std::to_string (sampleMappedOsc), name, num (v), "", "", "engine_fixed_value");
+                    }
+                    else
+                    {
+                        ++rep.numImported;
+                        rep.imported.push_back ({ 0xFFFF, static_cast<float> (v), static_cast<float> (v) });
+                    }
+                }
+                continue;
+            }
+            if (std::strcmp (name, "mpe_enabled") == 0 && c.number (c.member (name), v, m))
+            {
+                // the one switch of this list that has a key: MPE on / off
+                if (const ParamInfo* mpe = findParamByKey ("master.mpe.on"))
+                {
+                    V.plain[static_cast<size_t> (findParamIndex (mpe->id))] = constrainValue (*mpe, v != 0.0 ? 1.0f : 0.0f);
+                    ++rep.numImported;
+                    rep.imported.push_back ({ 0xFFFF, static_cast<float> (v), v != 0.0 ? 1.0f : 0.0f });
+                    continue;
+                }
+            }
             if (c.number (c.member (name), v, m))
-                c.item (ItemKind::ignored, Reason::noEngineEquivalent, std::strncmp (name, "sub_", 4) == 0 ? "sub" : "voice", name, num (v), "", "", "not_part_of_our_model");
+            {
+                // A value other than Vital's default changes how the preset sounds (the stereo width of the voices, how voices are stolen),
+                // so it is a dropped setting; the default is just the engine's own behaviour.
+                static const struct { const char* name; double vitalDefault; } kBehaviour[] = { { "stereo_routing", 1.0 }, { "stereo_mode", 0.0 }, { "voice_override", 0.0 }, { "voice_priority", 4.0 } };
+                bool changes = false;
+                for (const auto& b : kBehaviour)
+                    changes = changes || (std::strcmp (name, b.name) == 0 && std::fabs (v - b.vitalDefault) > 1.0e-6);
+                c.item (changes ? ItemKind::dropped : ItemKind::ignored, Reason::noEngineEquivalent, std::strncmp (name, "sub_", 4) == 0 ? "sub" : "voice", name, num (v), "", "", changes ? "no_engine_equivalent" : "not_part_of_our_model");
+            }
         }
         for (const char* f : { "filter_1_", "filter_2_", "filter_fx_" })
             for (const char* t : { "osc1_input", "osc2_input", "osc3_input", "sample_input" })
@@ -1437,7 +1532,7 @@ ImportResult standalone (const void* data, size_t size, const ImportOptions& opt
             iw.author = pw.author;
             iw.numFrames = r.numFrames;
             iw.frames = toInt16 (r.frames);
-            iw.sha256 = Sha256::hashBufferHex (iw.frames.data(), iw.frames.size() * sizeof (int16_t));
+            finishWavetableFile (iw);
             res.wavetables.push_back (std::move (iw));
         }
         else

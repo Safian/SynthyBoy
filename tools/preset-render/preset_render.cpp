@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity]
-//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000]
+//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR]
 //
 // Per preset and tier (a fresh engine each, the state loaded the way the shell loads it: every parameter, then the content):
 //   single   one note (C1 for the category Bass, else C3), velocity 0.8, held 1.5 s, then released until the output is silent
@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/engine_caps.h"
 #include "synthyboy/params.h"
@@ -59,6 +60,8 @@ struct Options
     std::string wavDir;
     std::string filter;
     double sampleRate = 48000.0;
+    const IContentStore* contentStore = nullptr;
+    std::string contentDir; // root of the content packs the presets reference (<root>/<pack>/<file>); default: PRESETS/content when it exists
 };
 
 struct Loaded
@@ -89,6 +92,8 @@ std::unique_ptr<IEngine> makeEngine (const Options& o, const Quality& q, const L
     if (engine == nullptr)
         return engine;
     engine->prepare (o.sampleRate, kBlock, q);
+    // without the store a "Preset table" falls back to the saw and a "Sample" to silence: imported presets would not be rendered as they sound
+    engine->setContentStore (o.contentStore);
     for (size_t i = 0; i < paramCount(); ++i)
         engine->setParam (paramTable()[i].id, p.values.plain[i]);
     engine->setContent (p.content);
@@ -266,6 +271,7 @@ int main (int argc, char** argv)
         else if (a == "--wav") o.wavDir = next();
         else if (a == "--filter") o.filter = next();
         else if (a == "--sr") o.sampleRate = std::atof (next().c_str());
+        else if (a == "--content-dir") o.contentDir = next();
         else
         {
             std::fprintf (stderr, "preset-render: unknown argument %s\n", a.c_str());
@@ -275,8 +281,19 @@ int main (int argc, char** argv)
     if (o.presets.empty() || ! isEngineAvailable (o.engine))
     {
         std::fprintf (stderr, "usage: synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity] "
-                              "[--wav OUTDIR] [--filter TEXT] [--sr 48000]  (the engine must be built in)\n");
+                              "[--wav OUTDIR] [--filter TEXT] [--sr 48000] [--content-dir DIR]  (the engine must be built in)\n");
         return 2;
+    }
+
+    std::unique_ptr<DirectoryContentStore> contentStore;
+    {
+        std::error_code cec;
+        const std::filesystem::path root = o.contentDir.empty() ? std::filesystem::path (o.presets) / "content" : std::filesystem::path (o.contentDir);
+        if (std::filesystem::is_directory (root, cec))
+        {
+            contentStore = std::make_unique<DirectoryContentStore> (root.string());
+            o.contentStore = contentStore.get();
+        }
     }
 
     std::vector<std::filesystem::path> files;
