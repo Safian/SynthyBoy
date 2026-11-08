@@ -465,7 +465,7 @@ Left out because no decision names them (not silently dropped; the owner can add
 
 ## 9. Kick pages (09 §5 has 61 pages)
 
-New pages: 42 -> **103 pages** (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
+New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107) (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
 
 | Page id(s) | Section | Keys (<= 8) | New pages |
 |------------|---------|-------------|----------:|
@@ -482,6 +482,7 @@ New pages: 42 -> **103 pages** (one `clap.remote-controls` page = at most 8 keys
 | `fx_rack_1`, `fx_rack_2` | FX | the 16 `<fx>.rack` | 2 |
 | `fx_hyperdim_1/2`, `fx_utility_1/2`, `fx_bode_1/2`, `fx_convolve_1/2`, `fx_splitter_lh`, `fx_splitter_lmh`, `fx_splitter_ms` | FX | §4.12 | 11 |
 | `mod_slot_1_aux` .. `mod_slot_4_aux` | Matrix | `modNN.aux_*` (4 keys) | 4 |
+| `osc1_remap`, `osc2_remap`, `osc3_remap`, `fx_levels` (B16, WTREMAP; the Clean Mode keys join `filter1_extra`, `filter2_extra`, `fx_filter_extra`) | Osc / FX | `oscN.remap.on/slot/rise/fall`; the eight `<fx>.level` | 4 |
 | More sheets (no page) | - | `lfoN` (3 keys x10), `envN` (7 keys x6), `fx_reverb_1` (`reverb.force_enable`), Matrix view (`mod05`..`mod64` aux, 240 keys) | 0 |
 | **Total** | | | **42** |
 

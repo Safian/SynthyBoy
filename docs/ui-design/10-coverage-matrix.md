@@ -408,7 +408,7 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 
 | ID | GAP | Files | Engine would need |
 |----|-----|-------|-------------------|
-| G54 | Drive Clean Mode (filters and FX filter) | 04 §1.1, 08 §1.2 | pre / post gain mode flag |
+| G54 | Drive Clean Mode (filters and FX filter) | 04 §1.1, 08 §1.2 | pre / post gain mode flag (**built, WTREMAP B16: `filterN.clean_mode`, 13 §4.15**) |
 | G55 | Filter pan (L / R cutoff offset) and level | 04 §1.1, 08 §1.2 | two parameters per filter |
 | G56 | Keytrack follows oscillator pitch incl. portamento | 04 §1.1 | key-follow source choice |
 | G57 | Drawable PZ SVF filter | 04 §1.1 | new filter + pole / zero state |
@@ -428,7 +428,7 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | G66 | VELO / NOTE custom curve graphs (+ legato option) | 05 §1.4, 06 §1 | curve state for the two sources |
 | G67 | Mod sources Lift, Slide, Oct Note, Pressure / Poly AT, Stereo, Note-On Rand 2 / discrete, Active Voices, Voice Index, Voice Mod | 05 §1.4, 06 §1, 11 §1.2.7 | new `modSources` choices + events |
 | G68 | Matrix AUX SOURCE (+ INV, AUX CRV, OUTPUT) | 06 §1, §2.2 | per-slot aux fields |
-| G69 | Per-slot editable remap curve, RISE / FALL slew | 01 §1.4, 06 §1 | curve state per slot |
+| G69 | Per-slot editable remap curve, RISE / FALL slew | 01 §1.4, 06 §1 | curve state per slot (**wavetable position part built, WTREMAP B16: `oscN.remap.*`, `content.remaps`, 13 §4.14; the mod matrix part is open, 14 row 18**) |
 
 ### 3.6 Effects
 
@@ -436,7 +436,7 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 |----|-----|-------|-------------------|
 | G70 | Parallel FX racks MAIN / BUS 1 / BUS 2 | 08 §1.1 | bus routing (see G39) |
 | G71 | Dynamic module instancing (add / remove / duplicate) | 08 §1.1 | variable effect graph |
-| G72 | Per-module output LEVEL trim | 08 §1.1, §1.2 | one parameter per effect |
+| G72 | Per-module output LEVEL trim | 08 §1.1, §1.2 | one parameter per effect (**built, WTREMAP B16: `<fx>.level` of the eight Vital effects, 13 §4.14**) |
 | G73 | Compressor limit mode, adjustable crossovers | 08 §1.2 | limiter + crossover parameters |
 | G74 | Delay Tap->Delay, HQ, scalar offset | 08 §1.2 | delay modes |
 | G75 | Distortion X-Shaper (custom graphs), Tube / Diode / Rectify, filter key track | 08 §1.2 | waveshaper types + graph state |
