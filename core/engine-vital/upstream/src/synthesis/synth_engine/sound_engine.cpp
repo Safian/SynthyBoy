@@ -217,6 +217,22 @@ namespace sbvital {
     voice_handler_->setTuning(tuning);
   }
 
+  void SoundEngine::setNoteTable(const mono_float* table) { voice_handler_->setNoteTable(table); }
+  void SoundEngine::retuneVoices(const mono_float* table) { voice_handler_->retuneVoices(table); }
+  void SoundEngine::setNotePitchBend(int note, int channel, mono_float semitones) {
+    voice_handler_->setNotePitchBend(note, channel, semitones);
+  }
+  void SoundEngine::setNotePressure(int note, int channel, mono_float pressure) {
+    voice_handler_->setNotePressure(note, channel, pressure);
+  }
+  void SoundEngine::setNoteSlide(int note, int channel, mono_float slide) {
+    voice_handler_->setNoteSlide(note, channel, slide);
+  }
+  void SoundEngine::setChannelPitchBend(int channel, mono_float semitones) {
+    voice_handler_->setChannelPitchBend(channel, semitones);
+  }
+  SynthVoiceHandler* SoundEngine::voiceHandler() { return voice_handler_; }
+
   void SoundEngine::checkOversampling() {
     int oversampling = oversampling_->value();
     int oversampling_amount = 1 << oversampling;

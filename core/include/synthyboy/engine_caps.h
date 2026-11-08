@@ -47,6 +47,9 @@ enum EngineCaps : EngineCapsMask
     kCapReverbForce      = 1ull << 25, // WP8
 };
 
+/** Every defined bit (for tests and for masking a capability word read from somewhere else). */
+constexpr EngineCapsMask kCapAllKnown = (1ull << 26) - 1;
+
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;
 

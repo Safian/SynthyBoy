@@ -372,3 +372,97 @@ TEST (native_clap_audio_render_and_state)
     plugin->deactivate (plugin);
     plugin->destroy (plugin);
 }
+
+// WP1 of docs/ui-design/13-new-keys.md: the shell turns CLAP_EVENT_MIDI (CC 64), the note-off velocity, CLAP note expressions and the
+// transport into engine events. Audible proof: with the pedal down a released note keeps sounding until the pedal is lifted.
+TEST (native_clap_sustain_pedal_note_expression_and_transport)
+{
+    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
+    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    const clap_plugin_t* plugin = factory->create_plugin (factory, &s_mockHost, "com.safian.synthyboy");
+    CHECK (plugin != nullptr && plugin->init (plugin));
+    CHECK (plugin->activate (plugin, 48000.0, 32, 512));
+    CHECK (plugin->start_processing (plugin));
+
+    std::vector<float> bufL (512, 0.0f), bufR (512, 0.0f);
+    float* channelData[2] = { bufL.data(), bufR.data() };
+    clap_audio_buffer_t audioOut {};
+    audioOut.data32 = channelData;
+    audioOut.channel_count = 2;
+    clap_event_transport_t transport {};
+    transport.flags = CLAP_TRANSPORT_HAS_TEMPO | CLAP_TRANSPORT_IS_PLAYING | CLAP_TRANSPORT_HAS_BEATS_TIMELINE;
+    transport.tempo = 90.0;
+    clap_process_t proc {};
+    proc.frames_count = 512;
+    proc.transport = &transport;
+    proc.audio_outputs = &audioOut;
+    proc.audio_outputs_count = 1;
+
+    const auto run = [&] (const std::vector<clap_event_header_t*>& events, int blocks) -> float
+    {
+        SimpleEvents list;
+        list.events = events;
+        clap_input_events_t in = list.inEvents();
+        double sum = 0.0;
+        for (int b = 0; b < blocks; ++b)
+        {
+            proc.in_events = b == 0 ? &in : nullptr;
+            plugin->process (plugin, &proc);
+            for (size_t i = 0; i < 512; ++i)
+                sum += static_cast<double> (bufL[i]) * bufL[i];
+        }
+        return static_cast<float> (std::sqrt (sum / (512.0 * blocks)));
+    };
+
+    clap_event_midi_t pedal {};
+    pedal.header.size = sizeof pedal;
+    pedal.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+    pedal.header.type = CLAP_EVENT_MIDI;
+    pedal.data[0] = 0xB0;
+    pedal.data[1] = 64;
+    pedal.data[2] = 127;
+
+    clap_event_note_t on {};
+    on.header.size = sizeof on;
+    on.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+    on.header.type = CLAP_EVENT_NOTE_ON;
+    on.note_id = 5;
+    on.key = 69;
+    on.velocity = 0.9;
+    clap_event_note_t off = on;
+    off.header.type = CLAP_EVENT_NOTE_OFF;
+    off.velocity = 0.7;
+    clap_event_note_t offLater = off;
+    offLater.header.time = 100;
+
+    run ({ &pedal.header, &on.header, &offLater.header }, 1);
+    const float held = run ({}, 400); // about 4 s later (the default patch releases in well under a second)
+    CHECK (held > 0.005f);
+
+    clap_event_note_expression_t bend {};
+    bend.header.size = sizeof bend;
+    bend.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+    bend.header.type = CLAP_EVENT_NOTE_EXPRESSION;
+    bend.expression_id = CLAP_NOTE_EXPRESSION_TUNING;
+    bend.note_id = 5;
+    bend.key = -1;
+    bend.channel = -1;
+    bend.port_index = -1;
+    bend.value = 12.0;
+    run ({ &bend.header }, 1);
+    CHECK (run ({}, 40) > 0.005f); // still sounding, now an octave up
+
+    pedal.data[2] = 0; // pedal up: the held note is released
+    run ({ &pedal.header }, 1);
+    run ({}, 100); // the release tail
+    CHECK (run ({}, 100) < 1e-4f);
+
+    // the same without a pedal: the note-off ends the note
+    run ({ &on.header, &off.header }, 1);
+    run ({}, 100);
+    CHECK (run ({}, 100) < 1e-4f);
+
+    plugin->stop_processing (plugin);
+    plugin->deactivate (plugin);
+    plugin->destroy (plugin);
+}

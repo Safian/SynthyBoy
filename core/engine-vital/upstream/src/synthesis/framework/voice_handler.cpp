@@ -103,6 +103,7 @@ namespace sbvital {
     lift_.owner = &voice_router_;
     aftertouch_.owner = &voice_router_;
     slide_.owner = &voice_router_;
+    poly_aftertouch_.owner = &voice_router_;
     active_mask_.owner = &voice_router_;
     mod_wheel_.owner = &voice_router_;
     pitch_wheel_.owner = &voice_router_;
@@ -199,6 +200,7 @@ namespace sbvital {
 
       aftertouch_.trigger_value = utils::maskLoad(aftertouch_.trigger_value, voice->aftertouch(), mask);
       slide_.trigger_value = utils::maskLoad(slide_.trigger_value, voice->slide(), mask);
+      poly_aftertouch_.trigger_value = utils::maskLoad(poly_aftertouch_.trigger_value, voice->polyPressure(), mask);
 
       bool dead = voice->key_state() == Voice::kDead;
       poly_float active_value = dead ? 0.0f : 1.0f;
@@ -214,7 +216,8 @@ namespace sbvital {
       pitch_wheel_percent_.trigger_value = utils::maskLoad(pitch_wheel_percent_.trigger_value,
                                                            pitch_wheel_percent, mask);
 
-      mono_float local_pitch_bend = voice->state().local_pitch_bend * kLocalPitchBendRange;
+      mono_float local_pitch_bend = voice->state().local_pitch_bend * kLocalPitchBendRange +
+                                    voice->state().note_bend + voice->state().tuning_delta;
       local_pitch_bend_.trigger_value = utils::maskLoad(local_pitch_bend_.trigger_value, local_pitch_bend, mask);
     }
   }
@@ -656,7 +659,9 @@ namespace sbvital {
       return;
 
     mono_float tuned_note = note;
-    if (tuning_)
+    if (note_table_)
+      tuned_note = note_table_[note & 127];
+    else if (tuning_)
       tuned_note = tuning_->convertMidiNote(note);
 
     poly_float last_note = tuned_note;
@@ -707,7 +712,9 @@ namespace sbvital {
             mono_float old_note = getNote(old_note_value);
             int old_channel = getChannel(old_note_value);
             mono_float tuned_note = old_note;
-            if (tuning_)
+            if (note_table_)
+              tuned_note = note_table_[static_cast<int>(old_note) & 127];
+            else if (tuning_)
               tuned_note = tuning_->convertMidiNote(old_note);
 
             total_notes_++;
@@ -756,6 +763,42 @@ namespace sbvital {
     for (Voice* voice : active_voices_) {
       if (voice->state().channel == channel && voice->held())
         voice->setSlide(slide, sample);
+    }
+  }
+
+  void VoiceHandler::retuneVoices(const mono_float* table) {
+    for (Voice* voice : active_voices_)
+      voice->setTuningDelta(table[voice->state().midi_note & 127] - voice->state().tuned_note);
+  }
+
+  void VoiceHandler::setNotePitchBend(int note, int channel, mono_float semitones) {
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && (note < 0 || voice->state().midi_note == note))
+        voice->setNoteBend(semitones);
+    }
+  }
+
+  void VoiceHandler::setNotePressure(int note, int channel, mono_float pressure) {
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && (note < 0 || voice->state().midi_note == note))
+        voice->setPolyPressure(pressure);
+    }
+  }
+
+  void VoiceHandler::setNoteSlide(int note, int channel, mono_float slide) {
+    if (note < 0)
+      slide_values_[channel] = slide;
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && (note < 0 || voice->state().midi_note == note))
+        voice->setSlide(slide, 0);
+    }
+  }
+
+  void VoiceHandler::setChannelPitchBend(int channel, mono_float semitones) {
+    pitch_wheel_values_[channel] = semitones / kLocalPitchBendRange;
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && voice->held())
+        voice->setLocalPitchBend(pitch_wheel_values_[channel]);
     }
   }
 

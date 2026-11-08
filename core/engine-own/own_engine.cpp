@@ -69,6 +69,7 @@ void OwnEngine::prepare (double newSampleRate, int /*maxBlockFrames*/, const Qua
     const int numVoices = std::clamp (quality.maxVoices, 1, kMaxVoices);
     voiceCap.store (numVoices, std::memory_order_relaxed);
     voices.assign (static_cast<size_t> (kMaxVoices), Voice());
+    sustainPending.assign (static_cast<size_t> (kMaxVoices), static_cast<uint8_t> (0));
     for (auto& v : voices)
         v.prepare (sampleRate);
 
@@ -83,6 +84,9 @@ void OwnEngine::reset()
         v.kill();
     for (auto& b : bendSemitones)
         b = 0.0f;
+    for (auto& d : sustainDown)
+        d = false;
+    std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
     noteCounter = 0;
     smoothedGain.setCurrentAndTarget (gainFromDb (readParam (kParamMasterVolume)));
     activeCount.store (0, std::memory_order_relaxed);
@@ -124,7 +128,27 @@ void OwnEngine::noteOff (int key, int channel) noexcept
 {
     for (auto& v : voices)
         if (v.isHeld() && v.getKey() == key && v.getChannel() == channel)
-            v.release();
+        {
+            if (sustainDown[channel])
+                sustainPending[static_cast<size_t> (&v - voices.data())] = 1; // the pedal keeps the note until it is lifted
+            else
+                v.release();
+        }
+}
+
+void OwnEngine::setSustain (int channel, bool down) noexcept
+{
+    const int first = channel < 0 ? 0 : channel, last = channel < 0 ? numChannels - 1 : channel;
+    for (int c = first; c <= last; ++c)
+        sustainDown[c] = down;
+    if (down)
+        return;
+    for (size_t i = 0; i < voices.size(); ++i)
+        if (sustainPending[i] != 0 && (channel < 0 || voices[i].getChannel() == channel))
+        {
+            sustainPending[i] = 0;
+            voices[i].release();
+        }
 }
 
 void OwnEngine::handleEvent (const Event& e) noexcept
@@ -151,6 +175,21 @@ void OwnEngine::handleEvent (const Event& e) noexcept
             for (auto& v : voices)
                 if (e.channel < 0 || v.getChannel() == e.channel)
                     v.release();
+            std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
+            break;
+        case Event::SustainPedal:
+            setSustain (e.channel < 0 ? -1 : std::clamp<int> (e.channel, 0, numChannels - 1), e.value >= 0.5f);
+            break;
+        case Event::NoteExpression:
+            // the only expression this engine can use: the per-note pitch (semitones on top of the channel bend); pressure and slide have
+            // no destination without a modulation matrix
+            if (e.expression == Event::Tuning && std::isfinite (e.value))
+            {
+                const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
+                for (auto& v : voices)
+                    if (v.isActive() && v.getChannel() == channel && (e.key < 0 || v.getKey() == e.key))
+                        v.setBend (bendSemitones[channel] + std::clamp (e.value, -96.0f, 96.0f));
+            }
             break;
         case Event::ModWheel:   // no modulation in this engine
         case Event::Aftertouch:

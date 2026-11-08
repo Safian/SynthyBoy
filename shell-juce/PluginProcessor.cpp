@@ -19,6 +19,8 @@
 
 #include "PluginProcessor.h"
 
+#include "synthyboy/midi_events.h"
+
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -217,48 +219,31 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
         const auto message = metadata.getMessage();
         synthyboy::Event e;
-        e.frame = std::clamp (metadata.samplePosition, 0, numSamples - 1);
-        e.channel = static_cast<int16_t> (std::clamp (message.getChannel() - 1, 0, 15));
-
-        if (message.isNoteOn())
-        {
-            e.type = synthyboy::Event::NoteOn;
-            e.key = static_cast<int16_t> (message.getNoteNumber());
-            e.value = message.getFloatVelocity();
-        }
-        else if (message.isNoteOff())
-        {
-            e.type = synthyboy::Event::NoteOff;
-            e.key = static_cast<int16_t> (message.getNoteNumber());
-        }
-        else if (message.isPitchWheel())
-        {
-            e.type = synthyboy::Event::PitchBend;
-            e.value = (static_cast<float> (message.getPitchWheelValue()) - 8192.0f) / 8192.0f;
-        }
-        else if (message.isAllNotesOff() || message.isAllSoundOff())
-        {
-            e.type = synthyboy::Event::AllNotesOff;
-        }
-        else if (message.isController() && message.getControllerNumber() == 1)
-        {
-            e.type = synthyboy::Event::ModWheel;
-            e.value = static_cast<float> (message.getControllerValue()) / 127.0f;
-        }
-        else if (message.isChannelPressure())
-        {
-            e.type = synthyboy::Event::Aftertouch;
-            e.value = static_cast<float> (message.getChannelPressureValue()) / 127.0f;
-        }
-        else
-        {
+        // note on/off (with release velocity), pitch bend, mod wheel, CC 64 sustain pedal, CC 74 slide, channel and poly pressure,
+        // all notes off: core/include/synthyboy/midi_events.h (shared with the CLAP shell)
+        if (! synthyboy::translateMidiMessage (message.getRawData(), message.getRawDataSize(),
+                                               std::clamp (metadata.samplePosition, 0, numSamples - 1), e))
             continue;
-        }
 
         if (numEvents < capacity)
             events[static_cast<size_t> (numEvents++)] = e;
         else
             droppedEvents.fetch_add (1);
+    }
+
+    {
+        // host transport (tempo sync, beat units, LFO HOST mode)
+        synthyboy::TransportInfo transport;
+        if (auto* playHead = getPlayHead())
+            if (const auto position = playHead->getPosition())
+            {
+                if (const auto bpm = position->getBpm())
+                    transport.bpm = *bpm > 0.0 ? *bpm : 120.0;
+                if (const auto ppq = position->getPpqPosition())
+                    transport.songPosBeats = *ppq;
+                transport.playing = position->getIsPlaying();
+            }
+        engine->setTransport (transport);
     }
 
     engine->process (events.data(), numEvents, buffer.getWritePointer (0),
@@ -370,6 +355,8 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
         // a loaded document is a whole patch; the legacy XML of the spike has no content (loadedContent is empty then)
         const std::lock_guard<std::mutex> lock (contentMutex);
         content = std::move (loadedContent);
+        if (engine != nullptr)
+            engine->setContent (content); // message thread: allocates, handed to the audio thread lock free
     }
 
     // Values changed behind the host's back: the CLAP wrapper turns "program changed" into

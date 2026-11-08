@@ -204,6 +204,7 @@ namespace sbvital {
     data_->mod_sources["aftertouch"] = aftertouch();
     data_->mod_sources["velocity"] = velocity();
     data_->mod_sources["slide"] = slide();
+    data_->mod_sources["poly_aftertouch"] = poly_aftertouch();
     data_->mod_sources["lift"] = lift();
     data_->mod_sources["mod_wheel"] = mod_wheel();
     data_->mod_sources["pitch_wheel"] = pitch_wheel_percent();
@@ -213,6 +214,7 @@ namespace sbvital {
     createStatusOutput("aftertouch" ,aftertouch());
     createStatusOutput("velocity", velocity());
     createStatusOutput("slide", slide());
+    createStatusOutput("poly_aftertouch", poly_aftertouch());
     createStatusOutput("lift", lift());
     createStatusOutput("mod_wheel", mod_wheel());
     createStatusOutput("pitch_wheel", pitch_wheel_percent());

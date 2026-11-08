@@ -225,6 +225,8 @@ public:
         activeCount.store (engine->getNumActiveVoices(), std::memory_order_relaxed);
     }
 
+    EngineCapsMask capabilities() const noexcept override { return kCapEventContract; }
+
     int activeVoices() const noexcept override
     {
         return activeCount.load (std::memory_order_relaxed);
@@ -719,11 +721,30 @@ private:
                 // hitting a key that still rings lets the old note fade out first (as the own engine does)
                 engine->noteOff (e.key, 0.0f, 0, channel);
                 engine->noteOn (e.key, velocity, 0, channel);
+                rememberNoteId (e.noteId, e.key, channel);
                 break;
             }
             case Event::NoteOff:
                 if (e.key >= 0 && e.key <= 127)
-                    engine->noteOff (e.key, 0.0f, 0, channel);
+                    // the release velocity is the "Lift" source (0 = the host did not send one)
+                    engine->noteOff (e.key, std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f), 0, channel);
+                break;
+            case Event::SustainPedal:
+                // pedal down keeps released notes sounding until it is lifted (the engine's own sustain handling)
+                if (e.channel < 0)
+                {
+                    if (e.value >= 0.5f)
+                        engine->sustainOnRange (0, numChannels - 1);
+                    else
+                        engine->sustainOffRange (0, 0, numChannels - 1);
+                }
+                else if (e.value >= 0.5f)
+                    engine->sustainOn (channel);
+                else
+                    engine->sustainOff (0, channel);
+                break;
+            case Event::NoteExpression:
+                handleExpression (e, channel);
                 break;
             case Event::PitchBend:
             {
@@ -750,6 +771,36 @@ private:
         }
     }
 
+    /** Host note ids -> (key, channel): CLAP addresses a note expression by id (the key may be a wildcard). A small ring of the last notes. */
+    void rememberNoteId (int32_t id, int key, int channel) noexcept
+    {
+        if (id < 0)
+            return;
+        noteIds[static_cast<size_t> (noteIdNext)] = { id, key, channel };
+        noteIdNext = (noteIdNext + 1) % kNoteIdSlots;
+    }
+
+    void handleExpression (const Event& e, int channel) noexcept
+    {
+        int key = e.key < 0 ? -1 : std::min<int> (e.key, 127);
+        if (e.noteId >= 0)
+            for (const NoteIdSlot& slot : noteIds)
+                if (slot.id == e.noteId)
+                {
+                    key = slot.key;
+                    channel = slot.channel;
+                    break;
+                }
+        if (! std::isfinite (e.value))
+            return;
+        switch (e.expression)
+        {
+            case Event::Tuning:     engine->setNotePitchBend (key, channel, clampf (e.value, -96.0f, 96.0f)); break;
+            case Event::Pressure:   engine->setNotePressure (key, channel, clampf (e.value, 0.0f, 1.0f)); break;
+            case Event::Brightness: engine->setNoteSlide (key, channel, clampf (e.value, 0.0f, 1.0f)); break;
+        }
+    }
+
     /** Vital's output is interleaved poly_float: lanes 0 and 1 are left and right. */
     void writeOutput (float* left, float* right, int n) const noexcept
     {
@@ -773,6 +824,15 @@ private:
     // ---- state ----------------------------------------------------------------------------------------------------
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> activeCount { 0 };
+
+    struct NoteIdSlot
+    {
+        int32_t id = -1;
+        int key = -1, channel = 0;
+    };
+    static constexpr int kNoteIdSlots = 64;
+    std::array<NoteIdSlot, kNoteIdSlots> noteIds {};
+    int noteIdNext = 0;
 
     std::atomic<int> qVoices { 8 }, qUnison { 16 }, qOversampling { 2 }, qInterpolation { 1 };
     std::atomic<uint32_t> qFxMask { kFxAll };

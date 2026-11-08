@@ -73,6 +73,7 @@ public:
     bool supportsParam (uint32_t id) const noexcept override;
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
+    EngineCapsMask capabilities() const noexcept override { return kCapEventContract; } // sustain pedal and per-note tuning (README)
 
 private:
     static constexpr int numChannels = 16;
@@ -80,6 +81,7 @@ private:
     void handleEvent (const Event& e) noexcept;
     void noteOn (const Event& e) noexcept;
     void noteOff (int key, int channel) noexcept;
+    void setSustain (int channel, bool down) noexcept;
     void renderVoices (float* out, int numFrames) noexcept;
     float readParam (uint32_t id) const noexcept;
     static float gainFromDb (float db) noexcept;
@@ -89,6 +91,8 @@ private:
     std::atomic<int> activeCount { 0 };
 
     std::vector<Voice> voices;
+    std::vector<uint8_t> sustainPending; // per voice: released by its key while the pedal was down
+    bool sustainDown[numChannels] = {};
     LinearSmoother smoothedGain;
     double sampleRate = 0.0;
     bool prepared = false;
