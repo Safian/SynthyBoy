@@ -102,15 +102,23 @@ a top-level `NOTICE` that names Vital and its author.
 
 ```
 core/                  synthyboy_core   static lib, C++17, no JUCE, no OS API, no globals
-  include/synthyboy/   Engine interface, ParamInfo, StateIO, Quality, events (public API)
-  src/                 params, state (JSON, versioned), engine glue
-  engine-own/          our engine (spike engine → clean-room, always built; the only engine on iOS)
+  include/synthyboy/   Engine interface, ParamInfo, StateIO, Quality, events, EngineCaps, ContentStore (public API)
+  src/                 params (1484 keys), state (JSON, versioned, v3), content section, content store, engine glue
+  engine-own/          our engine (spike engine; always built; the only engine on iOS)
   engine-vital/        Vital-derived DSP + adapter (optional: SYNTHYBOY_WITH_VITAL, OFF for iOS)
-  tests/               unit/RT tests (own tiny runner, no framework dependency)
-shell-juce/            JUCE AudioProcessor → VST3 + CLAP (clap-juce-extensions), JUCE GUI hook
-shell-clap/            native CLAP entry on core only (headless; for MPC/mobile/static) – Phase 6
-ui/                    own GUI (JUCE Components, desktop), no DSP code
-tools/                 wavetable generators, preset linter, manifest tool
+  tuning/              .scl / .kbm / .tun parsers, 128-key table, the MTS-ESP seam (ITuningSource; the library is not linked)
+  formula/             wavetable formula compiler (bytecode) and frame renderer (grammar: formula/GRAMMAR.md)
+  shapes/              custom LFO shapes and the velocity / note curves (point lists, baked tables)
+  wavetable-edit/      wavetable data model, drawing / spectral tools, undo, audio / image import, WAV export (UI-free)
+  wavetable-render/    clean-room renderer for the ten Vital component types (used by the importer)
+  vital-import/        .vital preset / .vitaltable / .vitallfo importer (730-row control table)
+  sample-osc/          sample oscillator DSP and the WAV reader (loop modes, slices, scan, unison)
+  filters-serum/       the ~35 additional filter types (real DSP, names final after listening)
+  fx-serum-a/, fx-serum-b/   Hyper / Dimension, Utility, splitters; Bode (frequency shifter), Convolve (partitioned FFT)
+  tests/               unit/RT/thread/fuzz tests (own tiny runner, no framework dependency)
+shell-juce/            JUCE AudioProcessor -> VST3 + CLAP (clap-juce-extensions); ui/ = the editor (section 8)
+shell-clap/            native CLAP entry on core only (headless; for MPC/mobile/static)
+bench/, tools/         synthyboy_bench; tools/paramdump (docs/params.json); tools/preset-render (factory preset gate)
 cmake/toolchains/      armv7-linux-gnueabihf, aarch64-linux-gnu, (ios, android later)
 ```
 
@@ -138,10 +146,10 @@ Serum-class additions (each a phase item in §9, none a stopgap):
 
 ### 3.3 Wavetable editor
 
-- **Data model** (core, UI-free): `WavetableGroup` → `Component`s with keyframes, exactly the model imported from Vital (`src/common/wavetable`). It produces the render-ready table through a function the content tools also use, so editor and offline generator cannot diverge.
-- **Editor UI** (desktop, §8): frame list, waveform view, spectrum view (amplitude + phase), draw tools, per-frame spectral edit, morph between keyframes, import (wav, optionally image-to-spectrum later), preview with the oscillator.
-- **Mobile/MPC:** no editor; wavetable selection and a small set of macros via Kick UI; custom wavetables are loaded (not edited) as part of presets (§5).
-- Wavetables are **content**, stored in ContentPacks (§6) as compact `.sbwt` files (header + 16-bit or float frames + SHA-256); the engine can also synthesise the built-in minimum set (sine, saw, square, triangle) so it always makes sound with zero content installed.
+- **Data model** (core, UI-free, `core/wavetable-edit`): `Wavetable` of up to 256 frames x 2048 samples with the drawing and spectral tools, morph between keyframes, undo (a stack of states), audio import (by frame size, pitch detection, FFT 256 .. 2048), image import, WAV export; the formula renderer (`core/formula`) feeds it. The renderer of the ten Vital component types (`core/wavetable-render`, clean room) builds the tables of imported presets, so editor, importer and offline generator share one code path.
+- **Editor UI** (`shell-juce/ui`, §8): wavetable view and editor sheet with the tool strip, 44 pt touch targets, undo / redo through the core stack; frame list, waveform and spectrum views, draw tools, per-frame spectral edit, import and preview.
+- **Mobile/MPC: the full editor is available there too** (owner decision Q7, `docs/ui-design/12-decisions.md`; this resolves the former "no editor on mobile" rule). The editor is part of the shared UI kit (touch-first, §8); the core package has no UI and no platform API, so every shell can host it. Custom wavetables are user content in the content store (below and §6), not embedded in the state.
+- Wavetables are **content**, stored in ContentPacks / the user store (§6) and referenced by content id + SHA-256 from the state's `content` section (Q8). The file format today is **WAV** (a length that is a multiple of 2048 is that many frames, anything else is one cycle resampled to 2048); the `.sbwt` container planned earlier does not exist. The engine also synthesises the 13 built-in tables (Sine .. Bell Partials) so it always makes sound with zero content installed; a missing reference plays the saw.
 
 ### 3.4 Filters
 
@@ -174,6 +182,14 @@ Numbers in the Low/Medium columns are **targets, not claims**: nothing is promis
 - ThreadSanitizer and AddressSanitizer/UBSan builds of the core tests in CI (Linux x86_64).
 - Determinism test: same preset + same notes → bit-identical output on repeated runs, and within a tolerance across SIMD/scalar paths.
 - Denormals: handled in the shell (`ScopedNoDenormals` / MXCSR / FPSCR flags) and by the core's own flush where recursion exists.
+
+### 3.8 Engines and capability bits
+
+Two engines sit behind `IEngine` (`createEngine (EngineKind::own | vital)`). Since state version 3 the parameter table is larger than what an engine can play, so an engine reports what it implements: `IEngine::capabilities ()` returns an `EngineCapsMask` (`core/include/synthyboy/engine_caps.h`, 26 bits, one per area of the work packages: event contract, macros 5 .. 8, LFO 9 / 10, extra mod sources, aux source, LFO options, envelope beat units, curves, custom LFO shapes, key / scale, tuning, MPE, oscillator mapping, sample oscillator, user wavetable, second warp slot, mixer graph (buses, DIRECT), FX racks, filter extras, filter models, the new effects, reverb force). `requiredCaps (paramIndex)` / `requiredCapsForValue` say which bits a key or a choice entry needs; `supportsParam` is false and the UI dims the control while a bit is missing. **A bit is set only together with a test that renders the key off and on and asserts a measurable difference.** The Vital-derived engine sets all bits; `engine-own` (the only engine on iOS) sets the event contract only, accepts and stores every other key and ignores it. Per-bit tests: `docs/ui-design/WP123-REPORT.md`, `WP48-REPORT.md`.
+
+- **Caps of a tier** (`Quality`): voices, unison, oversampling, interpolation, `fxMask` (bits 0 .. 15, one per effect module; tier low bypasses reverb, flanger, Hyper / Dimension, Bode, Convolve), and `realtime` (default false = offline, deterministic: the audio block that posts a Convolve rebuild waits for the builder thread and takes the result over in that very block; true = live, the audio thread never waits). The shells set it from the host (live playback true, an offline bounce false). Tier numbers: section 3.6, `docs/QUALITY.md`.
+- **Content store** (`content_store.h`): `IContentStore::readFile (ContentFileRef, bytes)` checks the SHA-256 of a reference; `MemoryContentStore` (tests, static builds) and `DirectoryContentStore` (`<root>/<pack>/<file>`). `IEngine::setContent (StateContent)` / `setContentStore ()` run on the message thread: the files are decoded there into a snapshot that the audio thread takes over through an atomic pointer without a lock; retired snapshots are freed by the message thread only (tested under the counting `operator new` and ThreadSanitizer).
+- **State version 3** (section 5.2): the `content` section is additive and bounded (caps in `content_state.h`, `validateContent`); a section outside the caps is dropped as a whole (`LoadResult::content = rejected`) while the parameters still apply; `loadState ()` stays allocation-free and skips the section, `loadStateWithContent ()` allocates for it.
 
 ## 4. Plugin shells and formats
 
@@ -228,7 +244,7 @@ struct ParamInfo {
 };
 ```
 
-The table is our own design (core/src/param_table.cpp, 880 entries, constexpr, generated per group with macros; docs/PARAMETERS.md lists it by section). From it the build
+The table is our own design (core/src/param_table.cpp, 1484 entries since state version 3, 880 of them in state version 2 and unchanged in id, position and sound; constexpr, generated per group with macros; docs/PARAMETERS.md lists it by section). From it the build
 generates: the JUCE parameter layout (grouped), the CLAP `params` info, the Kick UI parameter list (`docs/params.json`, written by `synthyboy_paramdump`; CI checks that it is
 current), and the parameter chapter (docs/PARAMETERS.md, `scripts/gen-params-doc.py`); the preset schema follows in Phase 4. Display-name/value text functions live in the core, so a hardware knob
 and the plugin GUI show the same string.
@@ -254,6 +270,10 @@ A **ContentPack** is a directory/zip with `contentpack.json` + data files, descr
 ```
 
 Rules: the plugin never downloads anything; it **looks up** installed packs (location from the host via the CLAP preset-discovery/`state` context or a standard per-platform folder; Kick passes the path explicitly in the static case) and **tolerates absence** (built-in minimal wavetables, built-in "Init" preset, `missing_content` flag). Delete / restore is a file operation owned by the host. Packs are versioned independently from the plugin; the loader checks `requires_plugin` and `schemaVersion` and ignores incompatible packs with a log message rather than failing. A pack is verified by SHA-256 before use (the host verifies the signature; the plugin only checks hashes of what it loads). Factory content is built from `content/` sources in this repo by `tools/`, in CI, into release assets (GitHub assets are limited to 2 GiB each; packs are separate from binaries).
+
+### 6.1 Content store and user content
+
+Content that is not a parameter is addressed by **pack id + file + SHA-256** (`ContentFileRef`), never embedded in the state (Q8): wavetables (WAV), samples, impulse responses for Convolve, filter curves, a tuning file; short things (custom LFO shapes as point lists, curves, a scale up to 64 KiB) live inline in the `content` section of the state. A preset shared with a user is packaged together with the tables it references (a ContentPack). The factory pack `content/presets` (100 presets, `contentpack.json` with SHA-256 per file) is verified by `verifyContentPack`. Tuning: the `.scl` / `.kbm` text is stored inline; MTS-ESP is a seam only (`ITuningSource`, `master.tuning.mts_esp`): no MTS-ESP code is linked (THIRD_PARTY.md).
 
 ## 7. Manifest and loading ("download-ready")
 
@@ -288,6 +308,20 @@ Both go through the same CLAP entry, so Kick's Plugin-manager, state, content pa
 
 Open GUI risk to verify in Phase 2: embedded-GUI behaviour in Reaper/Bitwig (CLAP), Reaper/Ableton (VST3), plus Linux Wayland (documented as unsupported by the wrapper).
 
+### 8.1 UI kit (`shell-juce/ui`, state 2026-11-08)
+
+The editor replaces JUCE's generic editor (`SYNTHYBOY_GENERIC_UI=1` brings it back). It is one touch-first layout for phone, tablet and desktop; guide for panel authors: `shell-juce/ui/README.md`; reports `docs/ui-design/UI-KIT-REPORT.md`, `UI-PANELS-REPORT.md`.
+
+| Layer | Content |
+|-------|---------|
+| View-model (no JUCE, unit tested) | key resolution, display text with units, cap dimming, drag zones, double-tap / long-press rules, layout modes, pages; the assign-by-touch state machine on the `modNN` slots, A/B snapshots |
+| Theme | one LookAndFeel, dark / light, 44 pt minimum for every interactive control at every UI scale; **no literal colours outside `Theme` (a test greps for them)** |
+| Controls | knob, slider, choice, toggle, long-press sheet; mod ring (purple depth ring, bipolar, bypass dashed), value bubble with the fine-zone ladder; parameters bound by key, one drag = one host gesture |
+| Panels | self-registering (`SYNTHYBOY_REGISTER_PANEL`), laid out in 1 / 2 / 3 columns by width; at most four primary controls, the rest behind "More"; **every parameter key has a control** (`synthyboy_test_ui_panels`) |
+| Strip | preset prev / next + name, A/B, MOD, menu, 8 macros, mini keyboard + octave |
+
+Decisions: double-tap resets, long-press (400 ms) or right-click opens the sheet with the exact value (Q3); A/B = two `ParamValues` snapshots in the processor (Q4); 8 macros (Q2); a control whose capability bit is missing dims itself with a tooltip. Not in the kit yet (listed in the reports, nothing hidden): undo / redo of parameter edits, pitch / mod wheel strips, MAIN meter, oscilloscope, help mode, LFO tab chips and shape editing tools, persistence of UI size / theme. Tests: `synthyboy_test_ui_model`, `synthyboy_test_ui_render`, `synthyboy_test_ui_panels`, `synthyboy_test_glb`, `synthyboy_test_fx` (headless Components on the real processor; phone 390x844 and tablet 1024x768 screenshots go to `$SYNTHYBOY_UI_SCREENSHOT_DIR`).
+
 ## 9. Phases
 
 Each phase ends with: green CI on all platforms in the matrix that exists at that point, pluginval strictness 5 and clap-validator passing, the artifacts installable, `docs/` updated. Phases are not shortcuts of one another; later phases add scope.
@@ -299,7 +333,7 @@ Each phase ends with: green CI on all platforms in the matrix that exists at tha
 | **2 Vital take-over** | Import (§2.1), JUCE removal, namespace, build on all targets, ARMv7 NEON fix, `Engine` over the imported DSP, generic UI | audio-equivalence golden tests vs. the imported code's own tests; benchmark numbers on x86_64/arm64; first measurement on MPC. **State:** import, JUCE removal, `sbvital`, NEON fix, `IEngine` adapter (`createEngine (EngineKind::vital)`, selectable in the JUCE shell with `SYNTHYBOY_SHELL_ENGINE=vital`, the own engine stays the default), the 35 ported Vital unit test classes, feature "golden" measurements, allocation/TSan/ASan/UBSan tests, `bench/` with numbers for macOS arm64 (`PERFORMANCE.md`) and the `ios-vital-free` CI job exist. **Open:** CI results of the new jobs (Windows/MSVC and Linux x86_64 not run locally), numbers on x86_64 and ARMv7/MPC hardware, first measurement on a phone. |
 | **3 Engine completion (done)** | Oscillators + spectral warp, filters, mod matrix, FX, unison, quality tiers, voice management, state migration | alias/filter/tuning tests; sanitizers clean; tiers measured on device. **State (2026-11-04):** our own parameter table of 880 entries (docs/PARAMETERS.md, `docs/params.json`) with state format version 2 and migration of version 1; the Vital-derived engine implements all of it (3 wavetable oscillators with unison, spectral morph and warp, noise, 2 filters + FX filter with 8 models, 6 envelopes, 8 LFOs, 4 random LFOs, 4 macros, a 64-slot modulation matrix with source / destination / amount / curve / bipolar / stereo / bypass, 9 effects in a reorderable chain, portamento, legato, pitch bend range, mod wheel and aftertouch sources, 13 built-in wavetables and 12 LFO shapes generated by code); it is the default engine of the JUCE plugin, the own engine is the fallback and iOS engine (it implements a documented subset); quality tiers cap voices, unison, oversampling and interpolation and bypass heavy effects without touching parameters; audio quality gates (parameter sweep, tuning, alias budget, filters, matrix, unison, effects, voices, tiers, state) in docs/QUALITY.md, allocation audit of the matrix in docs/UPSTREAM.md, benchmark of a default and a heavy patch in docs/PERFORMANCE.md, multithread stability fixes in Vital DSP (futils tanh clamp, lookup_table Catmull-Rom clamp, ladder filter style fallback). |
 | **4 Content & presets (done)** | ContentPack format + tools, own factory wavetables and ≥100 own presets (CC0), preset discovery, missing-content behaviour tests | pack delete/restore test; licence lint passing. **State (2026-11-04):** `schema/contentpack.schema.json`, `core/include/synthyboy/preset.h` (.sbpreset format version 1 with metadata and version 2 state, fast metadata parser without DSP/engine overhead, directory scanner), `core/include/synthyboy/content_pack.h` (manifest parser, pack verification with self-contained SHA-256, ContentRegistry with missing-content tracking), 100 factory presets generated under CC0-1.0 across Bass, Lead, Pad, Pluck, Keys, FX with verified SHA-256 hashes in `content/presets/contentpack.json`, manifest check and full unit tests in `synthyboy_test_preset`. |
-| **5 UI** | Own JUCE GUI, wavetable editor, spectrum, mod UI; `clap.gui`; remote-controls pages | DAW embedding checks (§8), UI screenshot tests |
+| **5 UI (in progress)** | Own JUCE GUI, wavetable editor, spectrum, mod UI; `clap.gui`; remote-controls pages | DAW embedding checks (§8), UI screenshot tests. **State (2026-11-08):** UI kit, all panels (osc, mix, filters, envelopes, LFOs, modulation, effects, global, wavetable editor sheet) with a control for every one of the 1484 keys, headless GUI tests with phone / tablet screenshots; DAW embedding, real touch hardware and Windows / Linux editor runs not verified |
 | **6 Native CLAP shell + static build (done)** | Complete `shell-clap/`, `synthyboy_static` built with `SYNTHYBOY_WITH_VITAL=OFF` for iOS (own engine only; CI check that no Vital-derived object is linked), parity test green, iOS/Android build checks (library only) | static entry loads in a test host; manifest generated by CI; iOS Vital-free check green. **State (2026-11-04):** `shell-clap/` implementation (zero JUCE dependencies, pure C++17 + CLAP 1.2.7 headers), exports `synthyboy_clap_get_entry` and `clap_entry`, full parameter mapping, stereo audio-ports, note-ports, state save/load, voice info, sample-accurate event handling; `synthyboy_static` target; comprehensive unit and parity tests in `synthyboy_test_shell_clap` (11,998 checks passing); iOS Vital-free static library check verified clean for both `libsynthyboy_core.a` and `libsynthyboy_static.a`. |
 | **7 Release** | Signed macOS (Developer ID + notarisation), Windows signing option, Linux/ARM tarballs, GitHub Releases, source tags, packs as separate assets, user manual | reproducible release job; checksums published |
 
@@ -307,7 +341,7 @@ Kick-side integration (installer, Plugin-manager, signing/trust levels) comes fr
 
 ## 10. CI and validation
 
-Current workflow (`.github/workflows/build.yml`): Linux/macOS/Windows build + core tests (CTest), artifacts, pluginval 1.0.4 (SHA-256 pinned) on VST3, clap-validator 0.4.1 built from source (blocking); further jobs: core tests under ASan/UBSan and TSan, core ARMv7 hard-float cross build + tests under QEMU, native Linux AArch64 build, manifest check.
+Current workflow (`.github/workflows/build.yml`): Linux/macOS/Windows build + core tests (CTest, including the GUI tests with real Components and no display), artifacts, pluginval 1.0.4 (SHA-256 pinned) on VST3, clap-validator 0.4.1 built from source (blocking); further jobs: core tests under ASan/UBSan and TSan (including `synthyboy_fuzz_smoke` and, under ASan, the factory preset gate `synthyboy_preset_sanity`), the GUI tests under ASan/UBSan (`ui-sanitizers`), core ARMv7 hard-float cross build + tests under QEMU, native Linux AArch64 build, manifest check. Findings and numbers of the sanitizer / fuzz / preset sweep: `docs/ui-design/SWEEP-REPORT.md`.
 
 Target matrix, added in Phase 1 unless noted:
 

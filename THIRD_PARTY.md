@@ -20,7 +20,7 @@ file list, the changes and what was not taken).
 | Component | Revision | Licence (as used here) | Files |
 |-----------|----------|------------------------|-------|
 | Vital (Matt Tytel) | commit `636ca0e` (2022-04-20), https://github.com/mtytel/vital | GPL-3.0-or-later (every imported file's header: "version 3 ... or (at your option) any later version"); the combined work is AGPL-3.0-or-later via GPLv3 section 13 | `core/engine-vital/upstream/src/synthesis/**` (143 files after removing `effects_engine`), `src/common/wavetable/**`, `src/common/{synth_constants.h, synth_types.*, synth_parameters.*, line_generator.*, tuning.*, fourier_transform.h}`, `src/interface/look_and_feel/synth_strings.h` (string table only), licence text `LICENSE-GPL-3.0`; translated tests in `core/engine-vital/tests/synthesis/**` |
-| KISS FFT | as shipped in Vital 636ca0e | BSD-3-Clause | `core/engine-vital/upstream/third_party/kissfft/{kissfft.h, COPYING, LICENSES/}` |
+| KISS FFT | as shipped in Vital 636ca0e | BSD-3-Clause | `core/engine-vital/upstream/third_party/kissfft/{kissfft.h, COPYING, LICENSES/}` (the VLA of the original is replaced for MSVC, see docs/UPSTREAM.md) |
 | JSON for Modern C++ (nlohmann/json) | 3.1.2, as shipped in Vital 636ca0e | MIT | `core/engine-vital/upstream/third_party/json/json.h` |
 
 Vital's presets, wavetables, skins, tunings, fonts, icons, GUI and network code are not included and must not be added.
@@ -29,6 +29,23 @@ JUCE itself bundles further third-party code inside its modules (for example Har
 `juce_graphics`, libpng and libjpeg image codecs, FLAC in `juce_audio_formats`); their licences are
 listed in JUCE's own `LICENSE.md` and the respective module directories, and are not repeated here.
 The pinned JUCE version is built from source; nothing of it is copied into this repository.
+
+## Our own code (no third-party source)
+
+These packages are written for this project (AGPL-3.0-or-later, headers say so) and contain no third-party source. Where an algorithm is a published method, the
+implementation is ours; the manuals of other products were used as a description of features, not copied (each package REPORT says so).
+
+| Path | Content |
+|------|---------|
+| `core/tuning/` | `.scl`, `.kbm`, `.tun` parsers, 128-key table, the `ITuningSource` seam for MTS-ESP (the library is not linked, see below) |
+| `core/formula/` | formula compiler (bytecode) and frame renderer; grammar written for this project (`GRAMMAR.md`) |
+| `core/shapes/` | custom LFO shapes, velocity / note curves |
+| `core/wavetable-edit/`, `core/wavetable-render/` | wavetable data model and tools, clean-room renderer of the ten Vital component types |
+| `core/vital-import/` | `.vital` / `.vitaltable` / `.vitallfo` importer (own JSON reader, see the next section for the control-name table) |
+| `core/sample-osc/` | sample oscillator DSP and WAV reader |
+| `core/filters-serum/`, `core/fx-serum-a/`, `core/fx-serum-b/` | additional filter types and effects; `fx-serum-b` has its own radix-2 FFT (`fft.cpp`) and partitioned convolution |
+| `core/src/sha256.cpp` | SHA-256 (RFC 6234), own implementation |
+| `core/tests/fuzz_smoke.cpp`, `tools/preset-render/` | fuzz smoke test and the factory preset render gate |
 
 ## Vital preset file format (interoperability data)
 

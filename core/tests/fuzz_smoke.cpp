@@ -12,6 +12,7 @@
 //
 // Seeds: the factory presets (content/presets), a state of defaults, a synthesised Vital preset, small valid documents of every format.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>

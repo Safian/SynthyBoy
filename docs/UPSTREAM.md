@@ -19,7 +19,7 @@ All below `core/engine-vital/upstream/`:
 
 | Path | Files | Lines | Content |
 |------|-------|-------|---------|
-| `src/synthesis/**` | 147 | 24 952 | framework, producers, filters, modulators, effects, effects_engine (removed again, see below), modules, synth_engine, lookups, utilities |
+| `src/synthesis/**` | 147 (149 today: 4 files of `effects_engine/` removed, 6 files of our own added) | 24 952 | framework, producers, filters, modulators, effects, effects_engine (removed again, see below), modules, synth_engine, lookups, utilities |
 | `src/common/wavetable/**` | 32 | 3 764 | wavetable data model (`WavetableCreator`, components, keyframes, modifiers) |
 | `src/common/{synth_constants.h, synth_types.*, synth_parameters.*, line_generator.*, tuning.*, fourier_transform.h}` | 10 | 1 773 | shared types, Vital's parameter definitions (used by the imported modules via `getDetails`) |
 | `src/interface/look_and_feel/synth_strings.h` | 1 | 332 | **single exception**, see below |
@@ -56,7 +56,14 @@ Every changed file carries `// Modified for SynthyBoy (AGPL-3.0-or-later combine
 header, which is otherwise untouched. The diff against the pristine import commit (`git diff 26daf58 -- core/engine-vital/upstream`)
 is the complete list; the table groups it.
 
-### Mechanical, all imported files under `upstream/src` (185 files)
+### State of the file counts (checked 2026-11-08 against `git diff 26daf58 HEAD -- core/engine-vital/upstream`)
+
+190 files were imported under `upstream/src` (147 synthesis, 32 wavetable, 10 common, `synth_strings.h`); today there are 192: 4 removed (`effects_engine/`),
+6 new files of our own in the fork (`sample_oscillator.h/.cpp`, `serum_filter_bank.h/.cpp`, `serum_fx_modules.h/.cpp`; they carry no Vital header), 186 imported files modified
+(the 185 of the mechanical changes below plus the later functional ones), and `wavetable_component_factory.cpp` unmodified. The new files do not exist upstream; they are
+listed in "Functional changes" and are the only files under `upstream/` that are our code.
+
+### Mechanical, all imported files under `upstream/src` (185 files at the time of the import)
 
 | Change | Reason |
 |--------|--------|

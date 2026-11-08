@@ -127,3 +127,34 @@ sounded different.
 * Serum filter models: four scalar filters per voice pair and filter slot; no bypass on any tier. Memory: about 180 KB per filter at 96 kHz (136 voice filters about 25 MB).
 * Racks, buses and DIRECT: a silent bus without enabled effects costs one scan of the block.
 * Measured by the new tests (not a performance claim, docs/PERFORMANCE.md has the numbers): no allocation in `process ()` with the sample oscillator, user tables, the 37 filter types, buses, racks, the Serum modules and content replacement under a counting `operator new` (`test_rt_alloc.cpp`).
+
+### Tier table of the modules of state version 3
+
+What each tier does with the new modules (`qualityForTier`, `core/include/synthyboy/quality.h`; the tier only caps or bypasses, it never changes stored values).
+"bypassed" means the module is switched off by `Quality::fxMask` and costs nothing.
+
+| Module | low (MPC class) | medium (phone) | high (desktop) | Test |
+|--------|-----------------|----------------|----------------|------|
+| Voices / unison per oscillator | 8 / 4 | 16 / 8 | 32 / 16 | `test_vital_params` (tiers) |
+| Oversampling, wavetable interpolation | 1x, linear | 2x, linear | 2x, spectral | alias table above |
+| Sample oscillator | 4-tap, oversampling 1 | 8-tap | 16-tap with mip blending | `test_wp4` |
+| Serum filter models (37 types) | runs | runs | runs | `test_wp7`, `synthyboy_test_filters_serum` |
+| Buses, DIRECT, FX racks | runs | runs | runs | `test_wp7` |
+| Reverb, flanger | bypassed | runs | runs | `test_vital_audio` (tiers) |
+| Hyper / Dimension | bypassed | runs | runs | `test_wp7`, `synthyboy_test_fx_serum_a` |
+| Bode (frequency shifter) | bypassed | runs | runs | `test_wp7`, `synthyboy_test_fx_serum_b` |
+| Convolve (partitioned FFT) | bypassed | runs | runs | `test_wp7`, `synthyboy_test_fx_serum_b` |
+| Utility, splitters | runs | runs | runs | `test_wp7` |
+| Tuning, key scale, MPE, curves, custom LFO shapes, oscillator mapping | no tier dependence | | | `test_wp123` |
+
+Measured behaviour of the tiers on the 100 factory presets (below) is identical between low, medium and high to within 2.2 dB in the peak of any
+preset: the factory presets use one oscillator, one filter and at most the unison voices the low tier allows, so the caps do not bite.
+
+## Sanitizer, fuzz and factory preset gates (2026-11-08)
+
+* ASan + UBSan over every core test, the GUI tests (plugin build) and `synthyboy_fuzz_smoke`; ThreadSanitizer over every test except the `slow` audio gates (the
+  thread tests, the Convolve builder thread with `Quality::realtime` on and off, the content hand-over). Findings and fixes: `docs/ui-design/SWEEP-REPORT.md`.
+* `synthyboy_fuzz_smoke` (fixed seeds, 5 s under ASan + UBSan; `SYNTHYBOY_FUZZ_SCALE=N` multiplies the iterations): state / preset loaders, content pack manifest, Vital import,
+  SCL / KBM / TUN, formula compiler and renderer, three WAV readers, garbled state through both engines. Clean at 20x.
+* `synthyboy_preset_sanity` (label `slow`, about 50 s native): every factory preset at every tier renders finite, is not silent (peak of a single note at least -60 dBFS),
+  stays below +3 dBFS with a four-note chord at velocity 1.0, and its tail ends (below -90 dBFS for 250 ms within 12 s of the note off). Numbers: SWEEP-REPORT.
