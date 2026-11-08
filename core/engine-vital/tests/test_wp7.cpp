@@ -282,6 +282,65 @@ TEST (convolve_uses_the_impulse_of_the_content_and_rebuilds_when_the_size_change
     CHECK (rms (stretched.left, 0.6, 0.7) > 0.005);
 }
 
+TEST (convolve_rebuild_is_deterministic_offline_and_does_not_wait_in_realtime_mode)
+{
+    std::vector<float> ir (static_cast<size_t> (0.151 * kSr), 0.0f);
+    ir[static_cast<size_t> (0.05 * kSr)] = 0.9f;
+    ir[static_cast<size_t> (0.15 * kSr)] = 0.5f;
+    MemoryContentStore store;
+    store.add ("test", "ir.wav", wav16 (ir));
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "test";
+    ref.file = "ir.wav";
+    ref.name = "click";
+    content.impulses.push_back (ref);
+
+    // the size changes between blocks (a rebuild each time) with no pause for the builder thread: two runs must be bit identical
+    const auto run = [&]
+    {
+        auto e = makeVital();
+        e->setContentStore (&store);
+        e->setContent (content);
+        base (*e);
+        setByKey (*e, "convolve.on", 1.0f);
+        setByKey (*e, "convolve.ir", 1.0f);
+        setByKey (*e, "convolve.mix", 100.0f);
+        sbtest::Rendered all;
+        for (int part = 0; part < 6; ++part)
+        {
+            setByKey (*e, "convolve.size", 10.0f + 15.0f * static_cast<float> (part));
+            const auto r = sbtest::render (*e, part == 0 ? std::vector<Event> { noteOn (0, 57) } : std::vector<Event> {}, 4800, 256);
+            all.left.insert (all.left.end(), r.left.begin(), r.left.end());
+            all.right.insert (all.right.end(), r.right.begin(), r.right.end());
+        }
+        return all;
+    };
+    const auto a = run(), b = run();
+    CHECK (a.left == b.left && a.right == b.right);
+    CHECK (rms (a.left, 0.0, 0.1) > 0.001);
+
+    // realtime mode: the audio thread must not wait for the builder (a block with a pending rebuild returns at once)
+    Quality live;
+    live.realtime = true;
+    auto e = makeVital (live);
+    e->setContentStore (&store);
+    e->setContent (content);
+    base (*e);
+    setByKey (*e, "convolve.on", 1.0f);
+    setByKey (*e, "convolve.ir", 1.0f);
+    sbtest::render (*e, {}, 256, 256);
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < 20; ++i)
+    {
+        setByKey (*e, "convolve.size", 10.0f + 4.0f * static_cast<float> (i));
+        sbtest::render (*e, { noteOn (0, 57) }, 256, 256);
+    }
+    const auto ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
+    std::printf ("    realtime mode: 20 blocks with a rebuild each took %.1f ms\n", ms);
+    CHECK (ms < 1000.0);
+}
+
 TEST (splitters_are_transparent_and_host_the_effects_of_their_bands)
 {
     auto e = makeVital();

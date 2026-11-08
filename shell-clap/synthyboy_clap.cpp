@@ -70,6 +70,7 @@ struct SynthyBoyClap
         : host (h), values (ParamValues::defaults()), quality (qualityForTier (Tier::high))
     {
         events.reserve (256);
+        quality.realtime = true; // live: the audio thread never waits for the engine's helper thread (Quality::realtime)
 #if SYNTHYBOY_HAS_VITAL
         engine = createEngine (EngineKind::vital);
 #else

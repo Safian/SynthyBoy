@@ -23,6 +23,9 @@ namespace sbvital {
   /** Creates the module with the index (ReorderableEffectChain::kHyperDimension .. kSplitterMs). beats_per_second and note_counter outlive it. */
   SynthModule* createSerumModule(int index, const Output* beats_per_second, const int* note_counter);
 
+  /** Deterministic (false) or realtime (true) handover of rebuilt convolvers, see ConvolveModule::setRealtime. */
+  void setConvolveRealtime(SynthModule* convolve, bool realtime);
+
   /** Gives the Convolve module its impulse response (message thread; the audio thread never touches the pointer). */
   void setConvolveImpulse(SynthModule* convolve, std::shared_ptr<const ImpulseData> impulse);
 } // namespace sbvital

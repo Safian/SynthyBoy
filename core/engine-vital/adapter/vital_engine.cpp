@@ -117,7 +117,6 @@ float clampf (float v, float lo, float hi) noexcept
 constexpr int kWorkQueueCapacity = 4096;            // entries of the dependency search queues of a router (a pointer each)
 constexpr int kNumOsc = 3;
 constexpr int kNumLfo = 10;
-constexpr int kNumEnv = 6;
 constexpr int kNumMacro = 8;
 constexpr int kBakedPoints = 2048; // LineGenerator::kDefaultResolution
 
@@ -720,6 +719,9 @@ private:
         qOversampling.store (q.oversampling >= 2 ? 2 : 1, std::memory_order_relaxed);
         qInterpolation.store (q.interpolation == Interpolation::spectral ? 1 : 0, std::memory_order_relaxed);
         qFxMask.store (q.fxMask & kFxAll, std::memory_order_relaxed);
+        qRealtime.store (q.realtime, std::memory_order_relaxed);
+        if (engine != nullptr) // an atomic flag of the module; takes effect at once
+            sbvital::setConvolveRealtime (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), q.realtime);
         qGeneration.fetch_add (1, std::memory_order_release);
     }
 
@@ -797,6 +799,7 @@ private:
             const std::lock_guard<std::mutex> lock (snapshotMutex);
             sbvital::setConvolveImpulse (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), impulse);
         }
+        sbvital::setConvolveRealtime (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), qRealtime.load (std::memory_order_relaxed));
         engine->setSampleRate (static_cast<int> (std::lround (sampleRate)));
         engine->setBpm (120.0f);
         controlMap = engine->getControls();
@@ -1878,6 +1881,7 @@ private:
 
     std::atomic<int> qVoices { 8 }, qUnison { 16 }, qOversampling { 2 }, qInterpolation { 1 };
     std::atomic<uint32_t> qFxMask { kFxAll };
+    std::atomic<bool> qRealtime { false };
     std::atomic<uint32_t> qGeneration { 0 };
 
     // audio thread (and prepare) only

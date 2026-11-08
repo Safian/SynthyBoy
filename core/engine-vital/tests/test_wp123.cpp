@@ -572,7 +572,7 @@ TEST (custom_lfo_shapes_and_point_modulation)
         StateContent content;
         ContentLfoShape shape;
         shape.lfo = 1;
-        shape.points = { { 0.0f, y, 0.0f, {}, {} }, { 1.0f, y, 0.0f, {}, {} } };
+        shape.points = { { 0.0f, y, 0.0f }, { 1.0f, y, 0.0f } };
         if (withMod)
         {
             shape.points[0].modY = { true, "macro1", 1.0f };
@@ -624,7 +624,7 @@ TEST (custom_lfo_shapes_and_point_modulation)
         StateContent content;
         ContentLfoShape shape;
         shape.lfo = 1;
-        shape.points = { { 0.0f, 0.0f, 0.0f, {}, {} }, { 1.0f, 0.0f, 0.0f, {}, {} } };
+        shape.points = { { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } };
         shape.points[0].modY = { true, "macro1", 1.0f };
         shape.points[1].modY = { true, "macro1", 1.0f };
         content.lfoShapes.push_back (shape);
@@ -985,7 +985,7 @@ TEST (set_content_from_another_thread_while_the_engine_plays)
         StateContent c;
         ContentLfoShape shape;
         shape.lfo = 1;
-        shape.points = { { 0.0f, height, 0.0f, {}, {} }, { 1.0f, height, 0.0f, {}, {} } };
+        shape.points = { { 0.0f, height, 0.0f }, { 1.0f, height, 0.0f } };
         c.lfoShapes.push_back (shape);
         c.velocityCurve = { { 0.0f, 0.0f, 0.0f }, { 1.0f, height, 0.0f } };
         c.tuning.present = true;
