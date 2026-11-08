@@ -8,11 +8,13 @@
 // own LFO value.
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <memory>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "alloc_hook.h"
@@ -450,4 +452,20 @@ TEST (mono_envelope_modes_are_deterministic_and_do_not_allocate)
     const auto a = play(), b = play();
     CHECK (a.left == b.left);
     CHECK (sbtest::allFinite (a.left));
+}
+
+TEST (content_written_on_another_thread_while_the_voices_bake_their_tables)
+{
+    auto e = makeVital();
+    setByKey (*e, "env2.attack", 50.0f);
+    std::atomic<bool> stop { false };
+    std::thread writer ([&]
+    {
+        for (int i = 0; ! stop.load(); ++i)
+            e->setContent (i % 2 == 0 ? constantShape (0.0f, "env2", 1.0f) : constantShape (0.1f, "velocity", 0.8f));
+    });
+    const auto out = render (*e, { noteOn (0, 60, 0.5f), noteOn (frames (0.1), 67, 0.9f), noteOn (frames (0.2), 72, 0.3f) }, frames (0.8));
+    stop.store(true);
+    writer.join();
+    CHECK (sbtest::allFinite (out.left));
 }
