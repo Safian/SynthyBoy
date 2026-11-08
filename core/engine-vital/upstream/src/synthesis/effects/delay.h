@@ -47,6 +47,8 @@ namespace sbvital {
         kStyle,
         kFilterCutoff,
         kFilterSpread,
+        kHighQuality,   // SynthyBoy (13-new-keys.md 4.14, G74): 1 = 8-point interpolation of the delay read
+        kOffset,        // SynthyBoy: scalar on the right delay time (0 = not plugged: 1)
         kNumInputs
       };
 
@@ -137,6 +139,12 @@ namespace sbvital {
 
     protected:
       Delay() : Processor(0, 0) { }
+
+      force_inline poly_float readMemory(poly_float period) const {
+        return high_quality_ ? memory_->getHighQuality(period) : memory_->get(period);
+      }
+
+      bool high_quality_ = false;
 
       std::unique_ptr<MemoryType> memory_;
       poly_float last_frequency_;

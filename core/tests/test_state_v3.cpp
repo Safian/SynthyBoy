@@ -139,6 +139,8 @@ StateContent fullContent()
 
     c.velocityCurve = { point (0.0f, 0.0f), point (0.5f, 0.8f, 2.0f), point (1.0f, 1.0f) };
     c.noteCurve = { point (0.0f, 0.1f), point (1.0f, 0.9f) };
+    c.shaperA = { point (0.0f, 0.0f), point (0.4f, 0.7f, -1.5f), point (1.0f, 0.9f) }; // B17: the X-Shaper curves
+    c.shaperB = { point (0.0f, 0.0f), point (1.0f, 1.0f) };
     c.tuning.present = true;
     c.tuning.scl = "! test.scl\n12 tone\n 12\n!\n 100.0\n 200.0\n 300.0\n 400.0\n 500.0\n 600.0\n 700.0\n 800.0\n 900.0\n 1000.0\n 1100.0\n 2/1\n";
     c.tuning.hasKbm = true;

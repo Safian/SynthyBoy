@@ -59,7 +59,9 @@ constexpr const char* const kRandomSyncTypes[] = { "Retrigger", "Free-run" };
 constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Sine interpolate", "Lorenz attractor", "Rossler attractor" };
 constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong" };
 constexpr const char* const kCompressorBands[] = { "Multiband", "Low band", "High band", "Single band" };
-constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample" };
+constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample",
+                                                   // appended in B17 (13-new-keys.md 4.14, G75)
+                                                   "Tube", "Diode 1", "Diode 2", "Zero square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
 constexpr const char* const kDistortionFilterOrder[] = { "None", "Pre", "Post" };
 constexpr const char* const kEqLowModes[] = { "Shelf", "High pass" };
 constexpr const char* const kEqBandModes[] = { "Peak", "Notch" };
@@ -90,6 +92,9 @@ constexpr const char* const kBusDestinations[] = { "Main", "Direct", "Other bus"
 constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H low", "Splitter L/H high", "Splitter L/M/H low",
                                          "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
 constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
+// B17: reverb algorithms and room modes (13-new-keys.md 4.14, G77)
+constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
+constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -655,11 +660,27 @@ constexpr ParamInfo kRaw[] = {
     onOff ("splitter_ms.mid_bypass", "Splitter M/S Mid Bypass", "FX / Splitter M/S", false),
     onOff ("splitter_ms.side_bypass", "Splitter M/S Side Bypass", "FX / Splitter M/S", false),
     cont ("splitter_ms.level", "Splitter M/S Level", "FX / Splitter M/S", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+
+    // --- B17: compressor / delay / distortion / phaser / reverb extras (1484..1497) ------------------------------------------------------
+    onOff ("compressor.limit", "Compressor Limit", "FX / Compressor", false),
+    onOff ("compressor.limit_latency_comp", "Compressor Limiter Latency Comp", "FX / Compressor", true),
+    cont ("compressor.crossover_low", "Compressor Low Crossover", "FX / Compressor", 20.0f, 1000.0f, 120.0f, Unit::Hz, kMod, 0, 0.4f),
+    cont ("compressor.crossover_high", "Compressor High Crossover", "FX / Compressor", 200.0f, 16000.0f, 2500.0f, Unit::Hz, kMod, 0, 0.4f),
+    onOff ("delay.hq", "Delay High Quality", "FX / Delay", false),
+    cont ("delay.offset", "Delay Offset", "FX / Delay", 0.25f, 4.0f, 1.0f, Unit::none, kMod, 3, 0.5f),
+    SB_PCT_RANGE ("distortion.filter_keytrack", "Distortion Filter Key Track", "FX / Distortion", -100.0f, 100.0f, 0.0f, kMod),
+    cont ("phaser.depth2", "Phaser Depth 2", "FX / Phaser", -48.0f, 48.0f, 0.0f, Unit::semitone, kMod),
+    pick ("reverb.type", "Reverb Type", "FX / Reverb", kReverbTypes, 0),
+    pick ("reverb.room", "Reverb Room", "FX / Reverb", kReverbRooms, 2),
+    SB_PCT_RANGE ("reverb.width", "Reverb Width", "FX / Reverb", 0.0f, 200.0f, 100.0f, kMod),
+    SB_PCT ("reverb.er_size", "Reverb ER Size", "FX / Reverb", 50.0f, kAuto),
+    SB_PCT ("reverb.diff_a", "Reverb Diffusion A", "FX / Reverb", 70.0f, kMod),
+    SB_PCT ("reverb.diff_b", "Reverb Diffusion B", "FX / Reverb", 60.0f, kMod),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1484, "880 keys of state version 2 plus the 604 keys appended in version 3");
+static_assert (kCount == 1498, "880 keys of state version 2, the 604 keys appended in version 3 and the 14 keys of B17");
 
 struct Table
 {

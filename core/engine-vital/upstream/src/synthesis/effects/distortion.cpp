@@ -19,7 +19,9 @@
 
 #include "synth_constants.h"
 
+#include <algorithm>
 #include <climits>
+#include <cmath>
 
 namespace sbvital {
 
@@ -46,6 +48,44 @@ namespace sbvital {
 
     force_inline poly_float bitCrush(poly_float value, poly_float drive) {
       return utils::round(value / drive) * drive;
+    }
+
+    // SynthyBoy appended types (13-new-keys.md 4.14)
+    force_inline poly_float tube(poly_float value, poly_float drive) {
+      constexpr mono_float kBias = 0.3f;
+      return futils::tanh(value * drive + kBias) - std::tanh(kBias);
+    }
+
+    force_inline poly_float diode1(poly_float value, poly_float drive) {
+      poly_float v = value * drive;
+      poly_float positive = utils::max(v, 0.0f);
+      poly_float negative = utils::min(v, 0.0f);
+      return (poly_float(1.0f) - futils::exp(positive * -1.0f)) - (poly_float(1.0f) - futils::exp(negative * 2.0f)) * 0.5f;
+    }
+
+    force_inline poly_float diode2(poly_float value, poly_float drive) {
+      poly_float v = value * drive;
+      poly_float positive = utils::max(v, 0.0f);
+      poly_float negative = utils::min(v, 0.0f);
+      return futils::exp(negative) - futils::exp(positive * -1.0f);
+    }
+
+    force_inline poly_float zeroSquare(poly_float value, poly_float drive) {
+      return futils::tanh(value * drive * 32.0f);
+    }
+
+    force_inline poly_float asym(poly_float value, poly_float drive) {
+      poly_float v = value * drive;
+      return futils::tanh(utils::max(v, 0.0f)) + utils::max(utils::min(v, 0.0f), -0.5f);
+    }
+
+    force_inline poly_float rectify(poly_float value, poly_float drive) {
+      return poly_float::abs(utils::clamp(value * drive, -1.0f, 1.0f));
+    }
+
+    force_inline bool isAsymmetric(int type) {
+      return type == Distortion::kTube || type == Distortion::kDiode1 || type == Distortion::kAsym ||
+             type == Distortion::kRectify || type == Distortion::kXShaperAsym;
     }
 
     force_inline int compactAudio(poly_float* audio_out, const poly_float* audio_in, int num_samples) {
@@ -90,13 +130,70 @@ namespace sbvital {
         return bitCrush(value, drive);
       case kDownSample:
         return bitCrush(value, poly_float(1.001f) - poly_float(kPeriodScale) / drive);
+      case kTube:
+        return tube(value, drive);
+      case kDiode1:
+        return diode1(value, drive);
+      case kDiode2:
+        return diode2(value, drive);
+      case kZeroSquare:
+        return zeroSquare(value, drive);
+      case kAsym:
+        return asym(value, drive);
+      case kRectify:
+        return rectify(value, drive);
       default:
         return value;
     }
   }
 
   Distortion::Distortion() : Processor(kNumInputs, kNumOutputs),
-                             last_distorted_value_(0.0f), current_samples_(0.0f), type_(kNumTypes) { }
+                             last_distorted_value_(0.0f), current_samples_(0.0f), dc_in_(0.0f), dc_out_(0.0f), type_(kNumTypes) {
+    setShaperCurves(nullptr, nullptr);
+  }
+
+  void Distortion::setShaperCurves(const float* curve_a, const float* curve_b) {
+    for (int i = 0; i < kShaperSize; ++i) {
+      const float identity = static_cast<float>(i) / (kShaperSize - 1);
+      shaper_a_[i] = curve_a != nullptr ? curve_a[i] : identity;
+      shaper_b_[i] = curve_b != nullptr ? curve_b[i] : identity;
+    }
+  }
+
+  void Distortion::processXShaper(int num_samples, const poly_float* audio_in, const poly_float* drive,
+                                  poly_float* audio_out, bool asym_curve) {
+    for (int i = 0; i < num_samples; ++i) {
+      poly_float scaled = audio_in[i] * driveDbScale(drive[i]);
+      float result[poly_float::kSize];
+      for (size_t lane = 0; lane < poly_float::kSize; ++lane) {
+        const float v = scaled[lane];
+        const float magnitude = std::min(std::fabs(v), 1.0f);
+        const float position = magnitude * (kShaperSize - 1);
+        const int index = std::min(static_cast<int>(position), kShaperSize - 2);
+        const float t = position - index;
+        const float* curve = (asym_curve && v < 0.0f) ? shaper_b_ : shaper_a_;
+        const float shaped = curve[index] + (curve[index + 1] - curve[index]) * t;
+        result[lane] = v < 0.0f ? -shaped : shaped;
+      }
+      audio_out[i] = utils::toPolyFloatFromUnaligned(result);
+      VITAL_ASSERT(utils::isContained(audio_out[i]));
+    }
+  }
+
+  void Distortion::removeDc(int num_samples, poly_float* audio) {
+    const mono_float coefficient = 1.0f - 2.0f * kPi * 10.0f / getSampleRate();
+    poly_float in_1 = dc_in_;
+    poly_float out_1 = dc_out_;
+    for (int i = 0; i < num_samples; ++i) {
+      poly_float x = audio[i] & constants::kFirstMask;
+      poly_float y = x - in_1 + out_1 * coefficient;
+      in_1 = x;
+      out_1 = y;
+      audio[i] = y + utils::swapVoices(y);
+    }
+    dc_in_ = in_1;
+    dc_out_ = out_1;
+  }
 
   template<poly_float(*distort)(poly_float, poly_float), poly_float(*scale)(poly_float)>
   void Distortion::processTimeInvariant(int num_samples, const poly_float* audio_in, const poly_float* drive,
@@ -145,6 +242,8 @@ namespace sbvital {
       type_ = type;
       last_distorted_value_ = 0.0f;
       current_samples_ = 0.0f;
+      dc_in_ = 0.0f;
+      dc_out_ = 0.0f;
     }
 
     switch(type) {
@@ -166,12 +265,36 @@ namespace sbvital {
       case kDownSample:
         processDownSample(compact_samples, audio_out, drive_out, audio_out);
         break;
+      case kTube:
+        processTimeInvariant<tube, driveDbScale>(compact_samples, audio_out, drive_out, audio_out);
+        break;
+      case kDiode1:
+        processTimeInvariant<diode1, driveDbScale>(compact_samples, audio_out, drive_out, audio_out);
+        break;
+      case kDiode2:
+        processTimeInvariant<diode2, driveDbScale>(compact_samples, audio_out, drive_out, audio_out);
+        break;
+      case kZeroSquare:
+        processTimeInvariant<zeroSquare, driveDbScale>(compact_samples, audio_out, drive_out, audio_out);
+        break;
+      case kAsym:
+        processTimeInvariant<asym, driveDbScale>(compact_samples, audio_out, drive_out, audio_out);
+        break;
+      case kRectify:
+        processTimeInvariant<rectify, driveDbScale>(compact_samples, audio_out, drive_out, audio_out);
+        break;
+      case kXShaper:
+      case kXShaperAsym:
+        processXShaper(compact_samples, audio_out, drive_out, audio_out, type == kXShaperAsym);
+        break;
       default:
         utils::copyBuffer(audio_out, audio_in, num_samples);
         return;
     }
 
     expandAudio(audio_out, audio_out, num_samples);
+    if (isAsymmetric(type))
+      removeDc(num_samples, audio_out);
   }
 
   void Distortion::process(int num_samples) {

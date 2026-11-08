@@ -411,7 +411,17 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 102: Mod Matrix Slot 3 Aux (Matrix)
     { "mod_slot_3_aux", "Mod Matrix Slot 3 Aux", "Matrix", { "mod03.aux_source", "mod03.aux_inv", "mod03.aux_power", "mod03.aux_output", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 103: Mod Matrix Slot 4 Aux (Matrix)
-    { "mod_slot_4_aux", "Mod Matrix Slot 4 Aux", "Matrix", { "mod04.aux_source", "mod04.aux_inv", "mod04.aux_power", "mod04.aux_output", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 }
+    { "mod_slot_4_aux", "Mod Matrix Slot 4 Aux", "Matrix", { "mod04.aux_source", "mod04.aux_inv", "mod04.aux_power", "mod04.aux_output", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
+    // Page 104: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.14)
+    { "fx_comp_limit", "Compressor Limit & Crossovers", "FX", { "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high", "compressor.mix", "compressor.attack", "compressor.release", "compressor.on" }, 8, nullptr, 0 },
+    // Page 105: Delay Quality & Offset (FX)
+    { "fx_delay_3", "Delay Quality & Offset", "FX", { "delay.hq", "delay.offset", "delay.time", "delay.time2", "delay.sync", "delay.feedback", "delay.mix", "delay.on" }, 8, nullptr, 0 },
+    // Page 106: Distortion Key Track (FX)
+    { "fx_distortion_2", "Distortion Key Track", "FX", { "distortion.type", "distortion.filter_keytrack", "distortion.filter_order", "distortion.filter_cutoff", "distortion.drive", "distortion.mix", "distortion.on", nullptr }, 7, nullptr, 0 },
+    // Page 107: Phaser Depth 2 (FX)
+    { "fx_phaser_3", "Phaser Depth 2", "FX", { "phaser.depth2", "phaser.depth", "phaser.center", "phaser.rate", "phaser.feedback", "phaser.mix", "phaser.on", nullptr }, 7, nullptr, 0 },
+    // Page 108: Reverb Algorithm (FX)
+    { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, nullptr, 0 }
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

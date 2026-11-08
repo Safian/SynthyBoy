@@ -19,11 +19,16 @@
 
 #include "distortion.h"
 #include "digital_svf.h"
+#include "operators.h"
 
 namespace sbvital {
 
-  DistortionModule::DistortionModule() :
-      SynthModule(0, 1), distortion_(nullptr), filter_(nullptr), mix_(0.0f) { }
+  DistortionModule::DistortionModule(const Output* keytrack) :
+      SynthModule(0, 1), distortion_(nullptr), filter_(nullptr), mix_(0.0f), keytrack_(keytrack) { }
+
+  void DistortionModule::setShaperCurves(const float* curve_a, const float* curve_b) {
+    distortion_->setShaperCurves(curve_a, curve_b);
+  }
 
   DistortionModule::~DistortionModule() {
   }
@@ -41,7 +46,17 @@ namespace sbvital {
     distortion_->plug(distortion_drive, Distortion::kDrive);
 
     filter_order_ = createBaseControl("distortion_filter_order");
-    Output* midi_cutoff = createMonoModControl("distortion_filter_cutoff", true, true);
+    // SynthyBoy (13-new-keys.md 4.14, G75): the key track of the filter, like the one of the FX filter
+    Output* keytrack_amount = createMonoModControl("distortion_filter_keytrack");
+    cr::Multiply* current_keytrack = nullptr;
+    if (keytrack_ != nullptr) {
+      current_keytrack = new cr::Multiply();
+      current_keytrack->plug(keytrack_, 0);
+      current_keytrack->plug(keytrack_amount, 1);
+      addProcessor(current_keytrack);
+    }
+    Output* midi_cutoff = createMonoModControl("distortion_filter_cutoff", true, true,
+                                               current_keytrack != nullptr ? current_keytrack->output() : nullptr);
     Output* resonance = createMonoModControl("distortion_filter_resonance");
     Output* blend = createMonoModControl("distortion_filter_blend");
 

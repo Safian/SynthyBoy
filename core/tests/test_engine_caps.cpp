@@ -51,7 +51,15 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
         if ((valueOnly & b) == 0 && ! CHECK ((all & b) != 0))
             std::printf ("    bit %s has no key\n", capName (b));
     }
-    CHECK_EQ (all >> 26, static_cast<EngineCapsMask> (0));
+    // block B17: its five bits sit apart from the work package bits
+    for (const EngineCapsMask b : { kCapFxCompressorLimit, kCapFxDelayExtras, kCapFxDistortionExtras, kCapFxPhaserDepth2, kCapFxReverbAlgos })
+    {
+        CHECK (std::strlen (capName (b)) > 0);
+        if (! CHECK ((all & b) != 0))
+            std::printf ("    bit %s has no key\n", capName (b));
+    }
+    CHECK_EQ (all & ~kCapAllKnown, static_cast<EngineCapsMask> (0));
+    CHECK_EQ (all >> 26 & ~(kCapFxExtrasAll >> 26), static_cast<EngineCapsMask> (0));
 
     struct Case { const char* key; EngineCapsMask caps; };
     const Case cases[] = {
@@ -85,6 +93,14 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
         { "bode.shift", kCapFxBode },
         { "convolve.ir", kCapFxConvolve },
         { "splitter_lmh.freq_low", kCapFxSplitters },
+        { "compressor.limit", kCapFxCompressorLimit },
+        { "compressor.crossover_high", kCapFxCompressorLimit },
+        { "delay.hq", kCapFxDelayExtras },
+        { "delay.offset", kCapFxDelayExtras },
+        { "distortion.filter_keytrack", kCapFxDistortionExtras },
+        { "phaser.depth2", kCapFxPhaserDepth2 },
+        { "reverb.type", kCapFxReverbAlgos },
+        { "reverb.diff_b", kCapFxReverbAlgos },
     };
     for (const auto& c : cases)
         if (! CHECK_EQ (requiredCaps (positionOf (c.key)), c.caps))
@@ -113,6 +129,11 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (need ("mod09.destination", 269.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("mod09.destination", 270.0f), static_cast<EngineCapsMask> (kCapMacros58));
     CHECK_EQ (need ("mod09.destination", 403.0f), static_cast<EngineCapsMask> (kCapFxSplitters));
+    CHECK_EQ (need ("mod09.destination", 404.0f), static_cast<EngineCapsMask> (kCapFxCompressorLimit)); // compressor.crossover_low
+    CHECK_EQ (need ("mod09.destination", 411.0f), static_cast<EngineCapsMask> (kCapFxReverbAlgos));   // reverb.diff_b
+    CHECK_EQ (need ("distortion.type", 5.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("distortion.type", 6.0f), static_cast<EngineCapsMask> (kCapFxDistortionExtras));
+    CHECK_EQ (need ("distortion.type", 13.0f), static_cast<EngineCapsMask> (kCapFxDistortionExtras));
     CHECK_EQ (need ("master.volume", 5.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("macro.5", 50.0f), static_cast<EngineCapsMask> (kCapMacros58));
     CHECK (capsCover (kCapMacros58 | kCapLfo910, kCapLfo910) && ! capsCover (kCapMacros58, kCapMacros58 | kCapLfo910));

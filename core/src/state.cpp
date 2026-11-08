@@ -718,6 +718,8 @@ private:
                     h = true;
                     if (std::strcmp (k, "velocity") == 0) return readCurve (c.velocityCurve, vd);
                     if (std::strcmp (k, "note") == 0) return readCurve (c.noteCurve, vd);
+                    if (std::strcmp (k, "shaper_a") == 0) return readCurve (c.shaperA, vd);
+                    if (std::strcmp (k, "shaper_b") == 0) return readCurve (c.shaperB, vd);
                     h = false;
                     return true;
                 });
@@ -1073,7 +1075,7 @@ void putContent (std::string& s, const StateContent& c)
         }
         s += ']';
     }
-    if (! c.velocityCurve.empty() || ! c.noteCurve.empty())
+    if (! c.velocityCurve.empty() || ! c.noteCurve.empty() || ! c.shaperA.empty() || ! c.shaperB.empty())
     {
         section ("curves");
         s += '{';
@@ -1092,6 +1094,8 @@ void putContent (std::string& s, const StateContent& c)
         };
         curve ("velocity", c.velocityCurve);
         curve ("note", c.noteCurve);
+        curve ("shaper_a", c.shaperA);
+        curve ("shaper_b", c.shaperB);
         s += '}';
     }
     if (c.tuning.present)

@@ -376,6 +376,22 @@ std::vector<Binding> build()
     b.add ("reverb.chorus_amount", "reverb_chorus_amount", Conv::sqrtScaled, 0.01);
     b.add ("reverb.chorus_rate", "reverb_chorus_frequency", Conv::log2Hz);
 
+    // --- block B17 (docs/ui-design/13-new-keys.md 4.14): compressor / delay / distortion / phaser / reverb extras ---------------------------------
+    b.choice ("compressor.limit", "compressor_limit");
+    b.choice ("compressor.limit_latency_comp", "compressor_limit_latency_comp");
+    b.add ("compressor.crossover_low", "compressor_crossover_low", Conv::linear);
+    b.add ("compressor.crossover_high", "compressor_crossover_high", Conv::linear);
+    b.choice ("delay.hq", "delay_hq");
+    b.add ("delay.offset", "delay_offset", Conv::linear);
+    b.percent ("distortion.filter_keytrack", "distortion_filter_keytrack");
+    b.add ("phaser.depth2", "phaser_depth2", Conv::linear);
+    b.choice ("reverb.type", "reverb_type");
+    b.choice ("reverb.room", "reverb_room");
+    b.percent ("reverb.width", "reverb_width");
+    b.percent ("reverb.er_size", "reverb_er_size");
+    b.percent ("reverb.diff_a", "reverb_diff_a");
+    b.percent ("reverb.diff_b", "reverb_diff_b");
+
     // --- the Serum modules (WP7): every key is the control of the same name in its own unit ------------------------------------------
     struct Module { const char* key; int slot; std::initializer_list<const char*> params; };
     const Module modules[] = {

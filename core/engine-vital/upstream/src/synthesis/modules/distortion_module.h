@@ -27,8 +27,12 @@ namespace sbvital {
 
   class DistortionModule : public SynthModule {
     public:
-      DistortionModule();
+      /** `keytrack` (the note of the last key relative to C4, may be null): SynthyBoy's distortion.filter_keytrack scales it onto the filter cutoff. */
+      DistortionModule(const Output* keytrack = nullptr);
       virtual ~DistortionModule();
+
+      /** The two drawn X-Shaper curves (Distortion::kShaperSize floats each; null = identity). Audio thread, between blocks. */
+      void setShaperCurves(const float* curve_a, const float* curve_b);
 
       virtual void init() override;
       virtual void setSampleRate(int sample_rate) override;
@@ -41,6 +45,7 @@ namespace sbvital {
       DigitalSvf* filter_;
       Output* distortion_mix_;
       poly_float mix_;
+      const Output* keytrack_;
 
       JUCE_LEAK_DETECTOR(DistortionModule)
   };

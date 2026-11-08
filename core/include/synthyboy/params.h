@@ -105,6 +105,8 @@ constexpr int kLfoShapeCustom = 12;
 constexpr int kNumFxSlots = 16;
 /** The effect slots and modules of state version 2 (the nine Vital-style effects); the engines implement these only. */
 constexpr int kNumLegacyFxSlots = 9;
+/** distortion.type entries 0 .. 5 are the ones of state version 2; 6 .. 13 were appended in block B17. */
+constexpr int kNumLegacyDistortionTypes = 6;
 
 /** The table, in stable order (state files and UIs list parameters in this order). */
 const ParamInfo* paramTable() noexcept;

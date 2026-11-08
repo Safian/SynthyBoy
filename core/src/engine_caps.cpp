@@ -87,6 +87,18 @@ EngineCapsMask classify (const char* key) noexcept
 
     if (startsWith (key, "fx.order."))
         return kCapFxRacks;
+    // block B17 (before the module prefixes of the version 2 effects)
+    if (std::strcmp (key, "compressor.limit") == 0 || std::strcmp (key, "compressor.limit_latency_comp") == 0
+        || endsWith (key, "compressor.crossover_low") || endsWith (key, "compressor.crossover_high"))
+        return kCapFxCompressorLimit;
+    if (std::strcmp (key, "delay.hq") == 0 || std::strcmp (key, "delay.offset") == 0)
+        return kCapFxDelayExtras;
+    if (std::strcmp (key, "distortion.filter_keytrack") == 0)
+        return kCapFxDistortionExtras;
+    if (std::strcmp (key, "phaser.depth2") == 0)
+        return kCapFxPhaserDepth2;
+    if (std::strcmp (key, "reverb.force_enable") != 0 && startsWith (key, "reverb."))
+        return kCapFxReverbAlgos;
     if (startsWith (key, "reverb."))
         return kCapReverbForce;
     if (startsWith (key, "hyperdim."))
@@ -164,6 +176,9 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         caps |= kCapMixerGraph;
     else if (startsWith (key, "fx.order.") && v >= kNumLegacyFxSlots)
         caps |= kCapFxRacks;
+    else if (std::strcmp (key, "distortion.type") == 0 && v >= kNumLegacyDistortionTypes)
+        caps |= kCapFxDistortionExtras;
+
     return caps;
 }
 
@@ -197,6 +212,11 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapFxConvolve:       return "fx_convolve";
         case kCapFxSplitters:      return "fx_splitters";
         case kCapReverbForce:      return "reverb_force";
+        case kCapFxCompressorLimit: return "fx_compressor_limit";
+        case kCapFxDelayExtras:    return "fx_delay_extras";
+        case kCapFxDistortionExtras: return "fx_distortion_extras";
+        case kCapFxPhaserDepth2:   return "fx_phaser_depth2";
+        case kCapFxReverbAlgos:    return "fx_reverb_algos";
         case kCapNone:             break;
     }
     return "";

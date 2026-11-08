@@ -43,6 +43,14 @@ namespace sbvital {
       void processWithInput(const poly_float* audio_in, int num_samples) override;
 
       void computeCoefficients();
+      /** SynthyBoy: a new crossover frequency (compressor.crossover_low / high); the coefficients are only recomputed when it changed. */
+      void setCutoff(mono_float cutoff) {
+        if (cutoff != cutoff_) {
+          cutoff_ = cutoff;
+          computeCoefficients();
+        }
+      }
+      mono_float cutoff() const { return cutoff_; }
       void setSampleRate(int sample_rate) override;
       void setOversampleAmount(int oversample_amount) override;
       void reset(poly_mask reset_mask) override;

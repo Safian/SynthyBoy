@@ -88,7 +88,7 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Delay Tempo 2", strings::kSyncedFrequencyNames },
     { "distortion_on", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Distortion Switch", strings::kOffOnNames },
-    { "distortion_type", 0x000000, 0.0, 5.0, 0.0, 0.0, 1.0,
+    { "distortion_type", 0x000000, 0.0, Distortion::kNumTypes - 1, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Distortion Type", strings::kDistortionTypeNames },
     { "distortion_drive", 0x000000, Distortion::kMinDrive, Distortion::kMaxDrive, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, " dB", "Distortion Drive", nullptr },
@@ -701,6 +701,19 @@ namespace sbvital {
     };
     for (const SerumParameter& parameter : kSerumParameters)
       add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.max - parameter.min <= 8.0f && parameter.min == 0.0f && parameter.max == std::floor(parameter.max) && parameter.max <= 8.0f ? ValueDetails::kIndexed : ValueDetails::kLinear);
+    // block B17 (docs/ui-design/13-new-keys.md 4.14): the extras of the compressor, delay, distortion, phaser and reverb, in the unit of the key
+    struct ExtraParameter { const char* name; mono_float min, max, def; ValueDetails::ValueScale scale; };
+    static const ExtraParameter kExtraParameters[] = {
+      { "compressor_limit", 0, 1, 0, ValueDetails::kIndexed }, { "compressor_limit_latency_comp", 0, 1, 1, ValueDetails::kIndexed },
+      { "compressor_crossover_low", 20, 1000, 120, ValueDetails::kLinear }, { "compressor_crossover_high", 200, 16000, 2500, ValueDetails::kLinear },
+      { "delay_hq", 0, 1, 0, ValueDetails::kIndexed }, { "delay_offset", 0.25f, 4, 1, ValueDetails::kLinear },
+      { "distortion_filter_keytrack", -1, 1, 0, ValueDetails::kLinear }, { "phaser_depth2", -48, 48, 0, ValueDetails::kLinear },
+      { "reverb_type", 0, 5, 0, ValueDetails::kIndexed }, { "reverb_room", 0, 4, 2, ValueDetails::kIndexed },
+      { "reverb_width", 0, 2, 1, ValueDetails::kLinear }, { "reverb_er_size", 0, 1, 0.5f, ValueDetails::kLinear },
+      { "reverb_diff_a", 0, 1, 0.7f, ValueDetails::kLinear }, { "reverb_diff_b", 0, 1, 0.6f, ValueDetails::kLinear },
+    };
+    for (const ExtraParameter& parameter : kExtraParameters)
+      add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.scale);
     for (int module = 0; module < 16; ++module) {
       add("fx_order_" + std::to_string(module + 1), 0.0, 15.0, static_cast<mono_float>(module), ValueDetails::kIndexed);
       add(std::string(kModuleNames[module]) + "_rack", 0.0, 9.0, 0.0, ValueDetails::kIndexed);

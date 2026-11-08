@@ -132,6 +132,14 @@ namespace strings {
     "Sine Fold",
     "Bit Crush",
     "Down Sample",
+    "Tube",
+    "Diode 1",
+    "Diode 2",
+    "Zero Square",
+    "Asym",
+    "Rectify",
+    "X-Shaper",
+    "X-Shaper (Asym)",
   };
 
   const std::string kDistortionFilterOrderNames[] = {

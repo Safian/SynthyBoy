@@ -2635,6 +2635,81 @@
         null,
         null
       ]
+    },
+    {
+      "id": "fx_comp_limit",
+      "section": "FX",
+      "title": "Compressor Limit & Crossovers",
+      "knobs": [
+        {"key": "compressor.limit", "shortLabel": "Limit", "widget": "stepped"},
+        {"key": "compressor.limit_latency_comp", "shortLabel": "Limiter La", "widget": "stepped"},
+        {"key": "compressor.crossover_low", "shortLabel": "Low Crosso", "widget": "knob"},
+        {"key": "compressor.crossover_high", "shortLabel": "High Cross", "widget": "knob"},
+        {"key": "compressor.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "compressor.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "compressor.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "compressor.on", "shortLabel": "On", "widget": "toggle"}
+      ]
+    },
+    {
+      "id": "fx_delay_3",
+      "section": "FX",
+      "title": "Delay Quality & Offset",
+      "knobs": [
+        {"key": "delay.hq", "shortLabel": "High Quali", "widget": "stepped"},
+        {"key": "delay.offset", "shortLabel": "Offset", "widget": "knob"},
+        {"key": "delay.time", "shortLabel": "Time", "widget": "knob"},
+        {"key": "delay.time2", "shortLabel": "Time 2", "widget": "knob"},
+        {"key": "delay.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "delay.feedback", "shortLabel": "Feedback", "widget": "bipolar_knob"},
+        {"key": "delay.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "delay.on", "shortLabel": "On", "widget": "toggle"}
+      ]
+    },
+    {
+      "id": "fx_distortion_2",
+      "section": "FX",
+      "title": "Distortion Key Track",
+      "knobs": [
+        {"key": "distortion.type", "shortLabel": "Type", "widget": "stepped"},
+        {"key": "distortion.filter_keytrack", "shortLabel": "Filter Key", "widget": "bipolar_knob"},
+        {"key": "distortion.filter_order", "shortLabel": "Filt Order", "widget": "stepped"},
+        {"key": "distortion.filter_cutoff", "shortLabel": "Filt Cut", "widget": "knob"},
+        {"key": "distortion.drive", "shortLabel": "Drive", "widget": "bipolar_knob"},
+        {"key": "distortion.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "distortion.on", "shortLabel": "On", "widget": "toggle"},
+        null
+      ]
+    },
+    {
+      "id": "fx_phaser_3",
+      "section": "FX",
+      "title": "Phaser Depth 2",
+      "knobs": [
+        {"key": "phaser.depth2", "shortLabel": "Depth 2", "widget": "bipolar_knob"},
+        {"key": "phaser.depth", "shortLabel": "Depth", "widget": "knob"},
+        {"key": "phaser.center", "shortLabel": "Center", "widget": "knob"},
+        {"key": "phaser.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "phaser.feedback", "shortLabel": "Feedback", "widget": "knob"},
+        {"key": "phaser.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "phaser.on", "shortLabel": "On", "widget": "toggle"},
+        null
+      ]
+    },
+    {
+      "id": "fx_reverb_3",
+      "section": "FX",
+      "title": "Reverb Algorithm",
+      "knobs": [
+        {"key": "reverb.type", "shortLabel": "Type", "widget": "stepped"},
+        {"key": "reverb.room", "shortLabel": "Room", "widget": "stepped"},
+        {"key": "reverb.width", "shortLabel": "Width", "widget": "knob"},
+        {"key": "reverb.er_size", "shortLabel": "ER Size", "widget": "knob"},
+        {"key": "reverb.diff_a", "shortLabel": "Diffusion ", "widget": "knob"},
+        {"key": "reverb.diff_b", "shortLabel": "Diffusion ", "widget": "knob"},
+        {"key": "reverb.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "reverb.on", "shortLabel": "On", "widget": "toggle"}
+      ]
     }
   ]
 }

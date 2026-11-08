@@ -65,6 +65,39 @@ namespace sbvital {
         VITAL_ASSERT(utils::isFinite(sample));
       }
 
+      /** SynthyBoy (13-new-keys.md 4.14, delay.hq): the value `past` samples ago (3 .. size - 5), read with an 8-point Lagrange interpolator
+          instead of the 4-point Catmull-Rom of get (): flat up to near Nyquist for fractional and modulated delay times. One lane per channel. */
+      force_inline poly_float getHighQuality(poly_float past) const {
+        constexpr int kPoints = 8;
+        float result[poly_float::kSize] = {};
+        for (size_t c = 0; c < kChannels; ++c) {
+          const float delay = std::min(std::max(past[c], 3.0f), static_cast<float>(size_) - 5.0f);
+          const int whole = static_cast<int>(delay);
+          const float t = delay - static_cast<float>(whole);
+          // nodes at the delays whole + 4 - k, k = 0 .. 7, i.e. offsets 4 .. -3 from `whole`
+          float factors[kPoints];
+          for (int k = 0; k < kPoints; ++k) {
+            float numerator = 1.0f, denominator = 1.0f;
+            const float node = static_cast<float>(4 - k);
+            for (int j = 0; j < kPoints; ++j) {
+              if (j == k)
+                continue;
+              const float other = static_cast<float>(4 - j);
+              numerator *= t - other;
+              denominator *= node - other;
+            }
+            factors[k] = numerator / denominator;
+          }
+          const unsigned base = (offset_ - static_cast<unsigned>(whole) - 4u) & bitmask_;
+          const mono_float* buffer = buffers_[c];
+          float sum = 0.0f;
+          for (int k = 0; k < kPoints; ++k)
+            sum += factors[k] * buffer[base + static_cast<unsigned>(k)];
+          result[c] = sum;
+        }
+        return utils::toPolyFloatFromUnaligned(result);
+      }
+
       void clearMemory(int num, poly_mask clear_mask) {
         int start = (offset_ - (num + kExtraInterpolationValues)) & bitmask_;
         int end = (offset_ + kExtraInterpolationValues) & bitmask_;

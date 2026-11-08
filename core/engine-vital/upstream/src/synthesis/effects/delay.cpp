@@ -17,6 +17,8 @@
 
 #include "delay.h"
 
+#include <cmath>
+
 #include "futils.h"
 #include "memory.h"
 #include "synth_constants.h"
@@ -83,6 +85,10 @@ namespace sbvital {
     feedback_ = utils::clamp(input(kFeedback)->at(0), -1.0f, 1.0f);
 
     poly_float samples = poly_float(getSampleRate()) / last_frequency_;
+    high_quality_ = input(kHighQuality)->at(0)[0] > 0.5f;
+    mono_float offset = input(kOffset)->at(0)[0];
+    if (offset > 0.0f && std::fabs(offset - 1.0f) > 1.0e-6f)
+      samples = utils::maskLoad(samples, samples * utils::clamp(offset, 0.25f, 4.0f), constants::kRightMask);
     if (style == kMidPingPong)
       samples += utils::swapStereo(samples) & constants::kLeftMask;
     if (style == kPingPong) {
@@ -310,7 +316,7 @@ namespace sbvital {
   force_inline poly_float Delay<MemoryType>::tickCleanUnfiltered(poly_float audio_in, poly_float period,
                                                                  poly_float feedback,
                                                                  poly_float wet, poly_float dry) {
-    poly_float read = memory_->get(period);
+    poly_float read = readMemory(period);
     memory_->push(audio_in + read * feedback);
     return dry * audio_in + wet * read;
   }
@@ -319,7 +325,7 @@ namespace sbvital {
   force_inline poly_float Delay<MemoryType>::tickUnfiltered(poly_float audio_in, poly_float period,
                                                             poly_float feedback,
                                                             poly_float wet, poly_float dry) {
-    poly_float read = memory_->get(period);
+    poly_float read = readMemory(period);
     memory_->push(saturate(audio_in + read * feedback));
     return dry * audio_in + wet * read;
   }
@@ -329,7 +335,7 @@ namespace sbvital {
                                                   poly_float filter_gain, poly_float low_coefficient,
                                                   poly_float high_coefficient,
                                                   poly_float wet, poly_float dry) {
-    poly_float read = memory_->get(period);
+    poly_float read = readMemory(period);
     poly_float write_raw_value = saturateLarge(audio_in + read * feedback);
     poly_float low_pass_result = low_pass_.tickBasic(write_raw_value * filter_gain, low_coefficient);
     poly_float second_pass_result = high_pass_.tickBasic(low_pass_result, high_coefficient);
@@ -341,7 +347,7 @@ namespace sbvital {
   force_inline poly_float Delay<MemoryType>::tickDamped(poly_float audio_in, poly_float period,
                                                         poly_float feedback, poly_float low_coefficient,
                                                         poly_float wet, poly_float dry) {
-    poly_float read = memory_->get(period);
+    poly_float read = readMemory(period);
     poly_float write_raw_value = saturateLarge(audio_in + read * feedback);
     poly_float low_pass_result = low_pass_.tickBasic(write_raw_value, low_coefficient);
     memory_->push(low_pass_result);
@@ -353,7 +359,7 @@ namespace sbvital {
                                                           poly_float filter_gain, poly_float low_coefficient,
                                                           poly_float high_coefficient,
                                                           poly_float wet, poly_float dry) {
-    poly_float read = memory_->get(period);
+    poly_float read = readMemory(period);
     poly_float write_raw_value = utils::swapStereo(saturateLarge(audio_in + read * feedback));
     poly_float low_pass_result = low_pass_.tickBasic(write_raw_value * filter_gain, low_coefficient);
     poly_float second_pass_result = high_pass_.tickBasic(low_pass_result, high_coefficient);
@@ -367,7 +373,7 @@ namespace sbvital {
                                                               poly_float filter_gain, poly_float low_coefficient,
                                                               poly_float high_coefficient,
                                                               poly_float wet, poly_float dry) {
-    poly_float read = memory_->get(period);
+    poly_float read = readMemory(period);
     poly_float mono_in = (audio_in + utils::swapStereo(audio_in)) * (1.0f / kSqrt2) & constants::kLeftMask;
     poly_float write_raw_value = utils::swapStereo(saturateLarge(mono_in + read * feedback));
     poly_float low_pass_result = low_pass_.tickBasic(write_raw_value * filter_gain, low_coefficient);

@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1484 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**1498 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -37,7 +37,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Random LFO 4 | 8 |
 | Macros | 8 |
 | Mod Matrix | 704 |
-| FX | 194 |
+| FX | 208 |
 | LFO 9 | 16 |
 | LFO 10 | 16 |
 | Mixer | 8 |
@@ -741,7 +741,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..38 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..403 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..411 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 |  |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -811,7 +811,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `delay.filter_cutoff` | Delay Filter Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 260 Hz | FX / Delay | mod |  |
 | `delay.filter_spread` | Delay Filter Spread | 0 .. 100 % | 100 % | FX / Delay | mod |  |
 | `distortion.on` | Distortion On | 0 Off, 1 On | Off | FX / Distortion |  |  |
-| `distortion.type` | Distortion Type | 0 Soft clip, 1 Hard clip, 2 Linear fold, 3 Sine fold, 4 Bit crush, 5 Down sample | Soft clip | FX / Distortion |  |  |
+| `distortion.type` | Distortion Type | 14 choices: 0 Soft clip, 1 Hard clip, 2 Linear fold, ... , 13 X-Shaper (Asym) | Soft clip | FX / Distortion |  |  |
 | `distortion.drive` | Distortion Drive | -30 .. 30 dB | 0 dB | FX / Distortion | mod |  |
 | `distortion.mix` | Distortion Mix | 0 .. 100 % | 100 % | FX / Distortion | mod |  |
 | `distortion.filter_order` | Distortion Filter Order | 0 None, 1 Pre, 2 Post | None | FX / Distortion |  |  |
@@ -952,6 +952,20 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `splitter_ms.mid_bypass` | Splitter M/S Mid Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  |  |
 | `splitter_ms.side_bypass` | Splitter M/S Side Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  |  |
 | `splitter_ms.level` | Splitter M/S Level | -24 .. 12 dB | 0 dB | FX / Splitter M/S | mod |  |
+| `compressor.limit` | Compressor Limit | 0 Off, 1 On | Off | FX / Compressor |  |  |
+| `compressor.limit_latency_comp` | Compressor Limiter Latency Comp | 0 Off, 1 On | On | FX / Compressor |  |  |
+| `compressor.crossover_low` | Compressor Low Crossover | 20 .. 1000 Hz (skew 0.400000006) | 120 Hz | FX / Compressor | mod |  |
+| `compressor.crossover_high` | Compressor High Crossover | 200 .. 16000 Hz (skew 0.400000006) | 2500 Hz | FX / Compressor | mod |  |
+| `delay.hq` | Delay High Quality | 0 Off, 1 On | Off | FX / Delay |  |  |
+| `delay.offset` | Delay Offset | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod |  |
+| `distortion.filter_keytrack` | Distortion Filter Key Track | -100 .. 100 % | 0 % | FX / Distortion | mod |  |
+| `phaser.depth2` | Phaser Depth 2 | -48 .. 48 st | 0 st | FX / Phaser | mod |  |
+| `reverb.type` | Reverb Type | 0 Vital, 1 Plate, 2 Hall, 3 Vintage, 4 Nitrous, 5 Basin | Vital | FX / Reverb |  |  |
+| `reverb.room` | Reverb Room | 0 Space, 1 Marble, 2 Rectangle, 3 Hexagon, 4 Box | Rectangle | FX / Reverb |  |  |
+| `reverb.width` | Reverb Width | 0 .. 200 % | 100 % | FX / Reverb | mod |  |
+| `reverb.er_size` | Reverb ER Size | 0 .. 100 % | 50 % | FX / Reverb |  |  |
+| `reverb.diff_a` | Reverb Diffusion A | 0 .. 100 % | 70 % | FX / Reverb | mod |  |
+| `reverb.diff_b` | Reverb Diffusion B | 0 .. 100 % | 60 % | FX / Reverb | mod |  |
 
 ### LFO 9
 
@@ -1462,6 +1476,14 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 401 | `splitter_lmh.freq_high` | Splitter L/M/H High Split Frequency |
 | 402 | `splitter_lmh.level` | Splitter L/M/H Level |
 | 403 | `splitter_ms.level` | Splitter M/S Level |
+| 404 | `compressor.crossover_low` | Compressor Low Crossover |
+| 405 | `compressor.crossover_high` | Compressor High Crossover |
+| 406 | `delay.offset` | Delay Offset |
+| 407 | `distortion.filter_keytrack` | Distortion Filter Key Track |
+| 408 | `phaser.depth2` | Phaser Depth 2 |
+| 409 | `reverb.width` | Reverb Width |
+| 410 | `reverb.diff_a` | Reverb Diffusion A |
+| 411 | `reverb.diff_b` | Reverb Diffusion B |
 
 ## Built-in wavetables and LFO shapes
 

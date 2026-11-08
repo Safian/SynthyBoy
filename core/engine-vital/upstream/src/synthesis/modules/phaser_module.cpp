@@ -42,6 +42,7 @@ namespace sbvital {
     Output* phaser_mod_depth = createMonoModControl("phaser_mod_depth");
     Output* phaser_phase_offset = createMonoModControl("phaser_phase_offset");
     Output* phaser_blend = createMonoModControl("phaser_blend");
+    Output* phaser_mod_depth_2 = createMonoModControl("phaser_depth2");
 
     phaser_->plug(phaser_frequency, Phaser::kRate);
     phaser_->plug(phaser_wet, Phaser::kMix);
@@ -50,6 +51,7 @@ namespace sbvital {
     phaser_->plug(phaser_mod_depth, Phaser::kModDepth);
     phaser_->plug(phaser_phase_offset, Phaser::kPhaseOffset);
     phaser_->plug(phaser_blend, Phaser::kBlend);
+    phaser_->plug(phaser_mod_depth_2, Phaser::kModDepth2);
     phaser_->init();
 
     SynthModule::init();

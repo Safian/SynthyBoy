@@ -17,6 +17,8 @@
 
 #include "reverb.h"
 
+#include <cmath>
+
 #include "futils.h"
 #include "memory.h"
 #include "synth_constants.h"
@@ -51,6 +53,7 @@ namespace sbvital {
     setupBuffersForSampleRate(kDefaultSampleRate);
 
     memory_ = std::make_unique<StereoMemory>(kMaxSampleRate);
+    algorithms_ = std::make_unique<ReverbAlgorithms>();
 
     for (int i = 0; i < kNetworkContainers; ++i)
       decays_[i] = 0.0f;
@@ -91,7 +94,22 @@ namespace sbvital {
     processWithInput(input(kAudio)->source->buffer, num_samples);
   }
 
+  poly_float Reverb::applyWidth(poly_float wet, poly_float width) const {
+    // mid / side on the (left, right, left, right) frame: the side of the right lane is the negative of the left one
+    const poly_float other = utils::swapStereo(wet);
+    return (wet + other) * 0.5f + (wet - other) * 0.5f * width;
+  }
+
   void Reverb::processWithInput(const poly_float* audio_in, int num_samples) {
+    const int type = utils::iclamp(static_cast<int>(input(kType)->at(0)[0]), 0, ReverbAlgorithms::kNumTypes - 1);
+    if (type != ReverbAlgorithms::kVital) {
+      processAlgorithm(audio_in, num_samples, type);
+      return;
+    }
+    const bool width_plugged = input(kStereoWidth)->source->owner != nullptr;
+    const poly_float width = utils::clamp(input(kStereoWidth)->at(0), 0.0f, 2.0f);
+    const bool apply_width = width_plugged && std::fabs(width[0] - 1.0f) > 1.0e-5f;
+
     for (int i = 0; i < kNetworkSize; ++i)
       wrapFeedbackBuffer(feedback_memories_[i].get());
 
@@ -344,7 +362,10 @@ namespace sbvital {
                 feed_forward3 * current_decay3 + feed_forward4 * current_decay4) * 0.125f;
 
       memory_->push(total + utils::swapVoices(total));
-      audio_out[i] = current_wet * memory_->get(current_sample_delay) + current_dry * input;
+      poly_float wet_sample = memory_->get(current_sample_delay);
+      if (apply_width)
+        wet_sample = applyWidth(wet_sample, width);
+      audio_out[i] = current_wet * wet_sample + current_dry * input;
 
       current_delay_increment += delta_delay_increment;
       current_sample_delay += current_delay_increment;
@@ -362,14 +383,97 @@ namespace sbvital {
   void Reverb::setSampleRate(int sample_rate) {
     Processor::setSampleRate(sample_rate);
     setupBuffersForSampleRate(getSampleRate());
+    algorithms_->prepare(getSampleRate());
   }
 
   void Reverb::setOversampleAmount(int oversample_amount) {
     Processor::setOversampleAmount(oversample_amount);
     setupBuffersForSampleRate(getSampleRate());
+    algorithms_->prepare(getSampleRate());
+  }
+
+  // The algorithms of ReverbAlgorithms (type != 0): the same pre filters, damping shelves, size, decay, pre-delay and chorus controls, the
+  // delay of the wet signal and the mix as the network above; the width acts on the wet signal of every type.
+  void Reverb::processAlgorithm(const poly_float* audio_in, int num_samples, int type) {
+    poly_float* audio_out = output()->buffer;
+    const mono_float tick_increment = 1.0f / num_samples;
+    const int sample_rate = getSampleRate();
+
+    poly_float current_dry = dry_;
+    poly_float current_wet = wet_;
+    poly_float wet_in = utils::clamp(input(kWet)->at(0), 0.0f, 1.0f);
+    wet_ = futils::equalPowerFade(wet_in);
+    dry_ = futils::equalPowerFadeInverse(wet_in);
+    poly_float delta_wet = (wet_ - current_wet) * tick_increment;
+    poly_float delta_dry = (dry_ - current_dry) * tick_increment;
+
+    const poly_float low_pre_coefficient = OnePoleFilter<>::computeCoefficient(
+        utils::midiNoteToFrequency(utils::clamp(input(kPreLowCutoff)->at(0), 0.0f, 130.0f)), sample_rate);
+    const poly_float high_pre_coefficient = OnePoleFilter<>::computeCoefficient(
+        utils::midiNoteToFrequency(utils::clamp(input(kPreHighCutoff)->at(0), 0.0f, 130.0f)), sample_rate);
+
+    ReverbAlgorithms::Settings settings;
+    settings.type = type;
+    settings.room = utils::iclamp(static_cast<int>(input(kRoom)->at(0)[0]), 0, ReverbAlgorithms::kNumRooms - 1);
+    settings.size = utils::clamp(input(kSize)->at(0)[0], 0.0f, 1.0f);
+    settings.decay_seconds = utils::clamp(input(kDecayTime)->at(0)[0], kMinDecayTime, kMaxDecayTime);
+    settings.diff_a = utils::clamp(input(kDiffA)->at(0)[0], 0.0f, 1.0f);
+    settings.diff_b = utils::clamp(input(kDiffB)->at(0)[0], 0.0f, 1.0f);
+    settings.er_size = utils::clamp(input(kErSize)->at(0)[0], 0.0f, 1.0f);
+    settings.mod_depth = utils::clamp(input(kChorusAmount)->at(0)[0], 0.0f, 1.0f);
+    settings.mod_hz = utils::clamp(input(kChorusFrequency)->at(0)[0], 0.0f, kMaxChorusFrequency);
+    settings.high_coefficient = OnePoleFilter<>::computeCoefficient(
+        utils::midiNoteToFrequency(utils::clamp(input(kHighCutoff)->at(0), 0.0f, 130.0f)), sample_rate)[0];
+    settings.high_amplitude = utils::dbToMagnitude(utils::clamp(input(kHighGain)->at(0), -24.0f, 0.0f))[0];
+    settings.low_coefficient = OnePoleFilter<>::computeCoefficient(
+        utils::midiNoteToFrequency(utils::clamp(input(kLowCutoff)->at(0), 0.0f, 130.0f)), sample_rate)[0];
+    settings.low_amplitude = (poly_float(1.0f) - utils::dbToMagnitude(utils::clamp(input(kLowGain)->at(0), -24.0f, 0.0f)))[0];
+    algorithms_->configure(settings);
+
+    const bool width_plugged = input(kStereoWidth)->source->owner != nullptr;
+    const poly_float width = utils::clamp(input(kStereoWidth)->at(0), 0.0f, 2.0f);
+    const bool apply_width = width_plugged && std::fabs(width[0] - 1.0f) > 1.0e-5f;
+
+    // the delay of the wet signal, as in the network: the sample delay glides towards the pre-delay
+    poly_float current_sample_delay = sample_delay_;
+    poly_float current_delay_increment = sample_delay_increment_;
+    poly_float end_target = current_sample_delay + current_delay_increment * num_samples;
+    poly_float target_delay = utils::clamp(input(kDelay)->at(0) * getSampleRate(), kMinDelay, kMaxSampleRate);
+    target_delay = utils::interpolate(sample_delay_, target_delay, kSampleDelayMultiplier);
+    poly_float makeup_delay = target_delay - end_target;
+    poly_float delta_delay_increment = makeup_delay / (0.5f * num_samples * num_samples) * kSampleIncrementMultiplier;
+
+    for (int i = 0; i < num_samples; ++i) {
+      poly_float dry_input = audio_in[i] & constants::kFirstMask;
+      dry_input += utils::swapVoices(dry_input);
+      poly_float filtered_input = high_pre_filter_.tickBasic(dry_input, high_pre_coefficient);
+      filtered_input = low_pre_filter_.tickBasic(dry_input, low_pre_coefficient) - filtered_input;
+
+      float left = 0.0f, right = 0.0f;
+      algorithms_->process(0.5f * (filtered_input[0] + filtered_input[1]), left, right);
+      float frame[poly_float::kSize];
+      for (size_t lane = 0; lane < poly_float::kSize; ++lane)
+        frame[lane] = (lane & 1) == 0 ? left : right;
+      memory_->push(utils::toPolyFloatFromUnaligned(frame));
+
+      poly_float wet_sample = memory_->get(current_sample_delay);
+      if (apply_width)
+        wet_sample = applyWidth(wet_sample, width);
+      audio_out[i] = current_wet * wet_sample + current_dry * dry_input;
+
+      current_delay_increment += delta_delay_increment;
+      current_sample_delay += current_delay_increment;
+      current_sample_delay = utils::clamp(current_sample_delay, kMinDelay, kMaxSampleRate);
+      current_dry += delta_dry;
+      current_wet += delta_wet;
+    }
+
+    sample_delay_increment_ = current_delay_increment;
+    sample_delay_ = current_sample_delay;
   }
 
   void Reverb::hardReset() {
+    algorithms_->reset();
     wet_ = 0.0f;
     dry_ = 0.0f;
     low_pre_filter_.reset(constants::kFullMask);

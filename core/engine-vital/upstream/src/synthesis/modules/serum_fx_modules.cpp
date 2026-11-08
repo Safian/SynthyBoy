@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "serum_fx_modules.h"
+#include "compressor_module.h"
 
 #include <algorithm>
 #include <atomic>
@@ -597,6 +598,8 @@ namespace sbvital {
   int serumModuleLatency(const SynthModule* module) {
     if (const auto* bode = dynamic_cast<const BodeModule*>(module))
       return bode->latency();
+    if (const auto* compressor = dynamic_cast<const CompressorModule*>(module))
+      return compressor->latency();
     return 0;   // Hyper / Dimension, Utility, Convolve (zero latency partitioned convolution) and the crossovers (LR4, all-pass compensated)
   }
 

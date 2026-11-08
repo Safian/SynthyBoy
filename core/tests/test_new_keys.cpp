@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (1484));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604);
+    CHECK_EQ (paramCount(), static_cast<size_t> (1498));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 14); // 14: block B17 (fx-extras)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
     CHECK_EQ (kNumModSources, 38);
-    CHECK_EQ (kNumModDestinations, 404);
+    CHECK_EQ (kNumModDestinations, 412);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (38));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (403));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (411));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (403));
-    CHECK_EQ (newModulatable, static_cast<size_t> (134));
+    CHECK_EQ (modulatable, static_cast<size_t> (411));
+    CHECK_EQ (newModulatable, static_cast<size_t> (142)); // 134 + 8 of B17
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (1484));
+    CHECK_EQ (ids.size(), static_cast<size_t> (1498));
 }
 
 TEST (append_positions_golden)
@@ -208,8 +208,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (39));
         CHECK_EQ (byKey (key).max, 38.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (404));
-    CHECK_EQ (byKey ("mod64.destination").max, 403.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (412));
+    CHECK_EQ (byKey ("mod64.destination").max, 411.0f);
 
     // lists that stay unchanged
     CHECK_EQ (namesOf ("lfo1.sync").size(), static_cast<size_t> (5));
@@ -272,7 +272,7 @@ TEST (destination_numbers_of_version_2_do_not_move)
     CHECK_EQ (destinationOf ("mod01.aux_output"), 0);
     CHECK_EQ (destinationOf ("bus1.destination"), 0);
 
-    // every choice 1..403 names a modulatable parameter, in strictly increasing table order
+    // every choice 1..411 names a modulatable parameter, in strictly increasing table order
     int previous = -1;
     for (size_t c = 1; c <= modDestinationCount(); ++c)
     {

@@ -18,9 +18,13 @@
 #include "compressor.h"
 #include "futils.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace sbvital {
-  
+
   namespace {
+    constexpr int kLimiterRing = LookaheadLimiter::kMaxLookahead;   // a power of two
     constexpr mono_float kRmsTime = 0.025f;
     constexpr mono_float kMaxExpandMult = 32.0f;
     constexpr mono_float kLowAttackMs = 2.8f;
@@ -37,9 +41,96 @@ namespace sbvital {
     constexpr mono_float kMinSampleEnvelope = 5.0f;
   } // namespace
 
+  LookaheadLimiter::LookaheadLimiter() : lookahead_(0), levels_(0), write_(0), sum_(1.0f), previous_gain_(1.0f), x1_(0.0f), x2_(0.0f),
+                                          x3_(0.0f), ring_mask_(kLimiterRing - 1), since_exact_sum_(0) {
+    input_ring_.assign(kLimiterRing, poly_float(0.0f));
+    need_ring_.assign(kLimiterRing, poly_float(1.0f));
+    smooth_ring_.assign(kLimiterRing, poly_float(1.0f));
+    for (int j = 0; j < kMaxLevels; ++j)
+      level_ring_[j].assign(static_cast<size_t>(1) << j, poly_float(1.0f));
+  }
+
+  void LookaheadLimiter::setSampleRate(int sample_rate) {
+    int lookahead = static_cast<int>(std::lround(kLookaheadMs * 0.001f * sample_rate));
+    lookahead = std::max(1, std::min(lookahead, kMaxLookahead - 2));
+    if (lookahead == lookahead_)
+      return;
+    lookahead_ = lookahead;
+    levels_ = 0;
+    while ((1 << levels_) < lookahead_ + 1)
+      ++levels_;
+    reset();
+  }
+
+  void LookaheadLimiter::reset() {
+    std::fill(input_ring_.begin(), input_ring_.end(), poly_float(0.0f));
+    std::fill(need_ring_.begin(), need_ring_.end(), poly_float(1.0f));
+    std::fill(smooth_ring_.begin(), smooth_ring_.end(), poly_float(1.0f));
+    for (int j = 0; j < kMaxLevels; ++j)
+      std::fill(level_ring_[j].begin(), level_ring_[j].end(), poly_float(1.0f));
+    write_ = 0;
+    sum_ = poly_float(static_cast<mono_float>(lookahead_ + 1));
+    previous_gain_ = 1.0f;
+    x1_ = x2_ = x3_ = 0.0f;
+    since_exact_sum_ = 0;
+  }
+
+  void LookaheadLimiter::process(const poly_float* audio_in, int num_samples, poly_float ceiling, poly_float release,
+                                 poly_float* audio_out, poly_float* delayed) {
+    const int taps = lookahead_ + 1;
+    const mono_float tap_scale = 1.0f / taps;
+    for (int i = 0; i < num_samples; ++i) {
+      const poly_float x = audio_in[i];
+
+      // the gain this sample needs: its own peak and the estimated peak between the two samples before it
+      const poly_float mid = ((x2_ + x1_) * 9.0f - (x3_ + x)) * (1.0f / 16.0f);
+      poly_float peak = utils::max(poly_float::abs(x), poly_float::abs(mid));
+      peak = utils::max(peak, utils::swapStereo(peak));
+      const poly_float need = utils::min(poly_float(1.0f), ceiling / utils::max(peak, 1.0e-9f));
+      x3_ = x2_;
+      x2_ = x1_;
+      x1_ = x;
+
+      // the minimum of the last 2^levels needs, with dyadic levels
+      poly_float window_min = need;
+      for (int j = 0; j < levels_; ++j) {
+        poly_float& slot = level_ring_[j][static_cast<size_t>(write_) & ((static_cast<size_t>(1) << j) - 1)];
+        const poly_float old = slot;
+        slot = window_min;
+        window_min = utils::min(window_min, old);
+      }
+
+      // box smoothing of the minimum over `taps` samples (running sum, recomputed exactly once per `taps` samples)
+      const poly_float oldest = smooth_ring_[static_cast<size_t>(write_ - taps) & ring_mask_];
+      sum_ = sum_ + window_min - oldest;
+      smooth_ring_[static_cast<size_t>(write_) & ring_mask_] = window_min;
+      input_ring_[static_cast<size_t>(write_) & ring_mask_] = x;
+      need_ring_[static_cast<size_t>(write_) & ring_mask_] = need;
+      if (++since_exact_sum_ >= taps) {
+        since_exact_sum_ = 0;
+        poly_float exact = 0.0f;
+        for (int k = 0; k < taps; ++k)
+          exact += smooth_ring_[static_cast<size_t>(write_ - k) & ring_mask_];
+        sum_ = exact;
+      }
+
+      const size_t out_index = static_cast<size_t>(write_ - lookahead_) & ring_mask_;
+      const poly_float delayed_sample = input_ring_[out_index];
+      poly_float gain = utils::min(sum_ * tap_scale, need_ring_[out_index]);
+      const poly_float climb = previous_gain_ + (poly_float(1.0f) - previous_gain_) * release;
+      gain = utils::min(utils::min(gain, climb), 1.0f);
+      previous_gain_ = gain;
+      audio_out[i] = delayed_sample * gain;
+      delayed[i] = delayed_sample;
+      ++write_;
+    }
+  }
+
   Compressor::Compressor(mono_float base_attack_ms_first, mono_float base_release_ms_first,
                          mono_float base_attack_ms_second, mono_float base_release_ms_second) :
       Processor(kNumInputs, kNumOutputs), input_mean_squared_(0.0f) {
+    limited_.assign(kMaxBufferSize * kMaxOversample, poly_float(0.0f));
+    delayed_.assign(kMaxBufferSize * kMaxOversample, poly_float(0.0f));
     base_attack_ms_ = utils::maskLoad(poly_float(base_attack_ms_second), base_attack_ms_first, constants::kFirstMask);
     poly_float second_release = base_release_ms_second;
     base_release_ms_ = utils::maskLoad(second_release, base_release_ms_first, constants::kFirstMask);
@@ -52,11 +143,71 @@ namespace sbvital {
   }
 
   void Compressor::processWithInput(const poly_float* audio_in, int num_samples) {
-    processRms(audio_in, num_samples);
+    if (limit_)
+      processLimit(audio_in, num_samples);
+    else
+      processRms(audio_in, num_samples);
 
     input_mean_squared_ = computeMeanSquared(audio_in, num_samples, input_mean_squared_);
     output_mean_squared_ = computeMeanSquared(output(kAudioOut)->buffer, num_samples, output_mean_squared_);
-    scaleOutput(audio_in, num_samples);
+    scaleOutput(limit_ ? delayed_.data() : audio_in, num_samples);
+  }
+
+  void Compressor::setLimit(bool limit) {
+    if (limit == limit_)
+      return;
+    limit_ = limit;
+    limiter_.setSampleRate(getSampleRate());
+    limiter_.reset();
+    high_enveloped_mean_squared_ = 0.0f;
+    low_enveloped_mean_squared_ = 0.0f;
+  }
+
+  void Compressor::setSampleRate(int sample_rate) {
+    Processor::setSampleRate(sample_rate);
+    limiter_.setSampleRate(getSampleRate());
+  }
+
+  void Compressor::setOversampleAmount(int oversample) {
+    Processor::setOversampleAmount(oversample);
+    limiter_.setSampleRate(getSampleRate());
+  }
+
+  // Limit mode (G73): the upper stage is a look-ahead limiter at the upper threshold, the lower (upward) stage is the one of processRms.
+  void Compressor::processLimit(const poly_float* audio_in, int num_samples) {
+    poly_float* audio_out = output(kAudioOut)->buffer;
+
+    mono_float samples_per_ms = (1.0f * getSampleRate()) / kMsPerSec;
+    poly_float attack_mult = base_attack_ms_ * samples_per_ms;
+    poly_float release_mult = base_release_ms_ * samples_per_ms;
+    poly_float attack_exponent = utils::clamp(input(kAttack)->at(0), 0.0f, 1.0f) * 8.0f - 4.0f;
+    poly_float release_exponent = utils::clamp(input(kRelease)->at(0), 0.0f, 1.0f) * 8.0f - 4.0f;
+    poly_float envelope_attack_samples = utils::max(futils::exp(attack_exponent) * attack_mult, kMinSampleEnvelope);
+    poly_float envelope_release_samples = utils::max(futils::exp(release_exponent) * release_mult, kMinSampleEnvelope);
+    poly_float attack_scale = poly_float(1.0f) / (envelope_attack_samples + 1.0f);
+    poly_float release_scale = poly_float(1.0f) / (envelope_release_samples + 1.0f);
+
+    poly_float ceiling = futils::dbToMagnitude(utils::clamp(input(kUpperThreshold)->at(0), kMinThreshold, kMaxThreshold));
+    poly_float lower_threshold = utils::clamp(input(kLowerThreshold)->at(0), kMinThreshold, kMaxThreshold);
+    lower_threshold = futils::dbToMagnitude(lower_threshold);
+    lower_threshold *= lower_threshold;
+    poly_float lower_ratio = utils::clamp(input(kLowerRatio)->at(0), -1.0f, 1.0f) * 0.5f;
+
+    limiter_.process(audio_in, num_samples, ceiling, release_scale, limited_.data(), delayed_.data());
+
+    poly_float low_enveloped_mean_squared = low_enveloped_mean_squared_;
+    for (int i = 0; i < num_samples; ++i) {
+      poly_float sample_squared = audio_in[i] * audio_in[i];
+      poly_mask low_attack_mask = poly_float::greaterThan(sample_squared, low_enveloped_mean_squared);
+      poly_float low_samples = utils::maskLoad(envelope_release_samples, envelope_attack_samples, low_attack_mask);
+      poly_float low_scale = utils::maskLoad(release_scale, attack_scale, low_attack_mask);
+      low_enveloped_mean_squared = (sample_squared + low_enveloped_mean_squared * low_samples) * low_scale;
+      low_enveloped_mean_squared = utils::min(low_enveloped_mean_squared, lower_threshold);
+      poly_float lower_mult = futils::pow(lower_threshold / low_enveloped_mean_squared, lower_ratio);
+      audio_out[i] = limited_[i] * utils::clamp(lower_mult, 0.0f, kMaxExpandMult);
+      VITAL_ASSERT(utils::isContained(audio_out[i]));
+    }
+    low_enveloped_mean_squared_ = low_enveloped_mean_squared;
   }
 
   void Compressor::processRms(const poly_float* audio_in, int num_samples) {
@@ -149,6 +300,7 @@ namespace sbvital {
 
     high_enveloped_mean_squared_ = 0.0f;
     low_enveloped_mean_squared_ = 0.0f;
+    limiter_.reset();
   }
 
   poly_float Compressor::computeMeanSquared(const poly_float* audio_in, int num_samples, poly_float mean_squared) {
@@ -165,11 +317,12 @@ namespace sbvital {
   }
 
   MultibandCompressor::MultibandCompressor() :
-      Processor(kNumInputs, kNumOutputs), low_band_filter_(120.0f), band_high_filter_(2500.0f),
+      Processor(kNumInputs, kNumOutputs), low_band_filter_(kDefaultLowCrossover), band_high_filter_(kDefaultHighCrossover),
       low_band_compressor_(kLowAttackMs, kLowReleaseMs, kBandAttackMs, kBandReleaseMs),
       band_high_compressor_(kBandAttackMs, kBandReleaseMs, kHighAttackMs, kHighReleaseMs) {
     was_low_enabled_ = false;
     was_high_enabled_ = false;
+    was_limit_ = false;
 
     low_band_compressor_.plug(&low_band_upper_threshold_, Compressor::kUpperThreshold);
     low_band_compressor_.plug(&low_band_lower_threshold_, Compressor::kLowerThreshold);
@@ -293,6 +446,25 @@ namespace sbvital {
                                                       input(kLowOutputGain)->at(0), constants::kFirstMask);
     band_high_output_gain_.buffer[0] = utils::maskLoad(input(kHighOutputGain)->at(0),
                                                        input(kBandOutputGain)->at(0), constants::kFirstMask);
+
+    // SynthyBoy (13-new-keys.md 4.14): adjustable crossovers (0 = control not plugged: the fixed ones of the original engine) and limit mode
+    const mono_float low_crossover_in = input(kLowCrossover)->at(0)[0];
+    const mono_float high_crossover_in = input(kHighCrossover)->at(0)[0];
+    mono_float low_crossover = low_crossover_in > 0.0f ? utils::clamp(low_crossover_in, 20.0f, 1000.0f) : kDefaultLowCrossover;
+    mono_float high_crossover = high_crossover_in > 0.0f ? utils::clamp(high_crossover_in, 200.0f, 16000.0f) : kDefaultHighCrossover;
+    high_crossover = std::max(high_crossover, low_crossover * 1.25f);
+    high_crossover = std::min(high_crossover, 0.45f * getSampleRate());
+    low_band_filter_.setCutoff(low_crossover);
+    band_high_filter_.setCutoff(high_crossover);
+
+    const bool limit = input(kLimit)->at(0)[0] > 0.5f;
+    if (limit != was_limit_) {
+      was_limit_ = limit;
+      low_band_filter_.reset(constants::kFullMask);
+      band_high_filter_.reset(constants::kFullMask);
+    }
+    low_band_compressor_.setLimit(limit);
+    band_high_compressor_.setLimit(limit);
 
     if (low_enabled != was_low_enabled_ || high_enabled != was_high_enabled_) {
       low_band_filter_.reset(constants::kFullMask);

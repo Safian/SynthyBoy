@@ -39,9 +39,13 @@ namespace sbvital {
     ProcessorRouter::init();
   }
 
+  poly_float Phaser::totalDepth() const {
+    return input(kModDepth)->at(0) + (input(kModDepth2)->at(0) & constants::kRightMask);
+  }
+
   void Phaser::hardReset() {
     phaser_filter_->reset(constants::kFullMask);
-    mod_depth_ = input(kModDepth)->at(0);
+    mod_depth_ = totalDepth();
     phase_offset_ = input(kPhaseOffset)->at(0);
   }
 
@@ -64,7 +68,7 @@ namespace sbvital {
     poly_int delta_phase_offset = utils::toInt(delta_spread * INT_MAX);
 
     poly_float current_mod_depth = mod_depth_;
-    mod_depth_ = input(kModDepth)->at(0);
+    mod_depth_ = totalDepth();
     poly_float delta_depth = (mod_depth_ - current_mod_depth) * tick_inc;
 
     const poly_float* center_buffer = input(kCenter)->source->buffer;

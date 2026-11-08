@@ -104,13 +104,16 @@ struct StateContent
     std::vector<ContentSample> samples;
     std::vector<ContentLfoShape> lfoShapes;
     std::vector<ContentPoint> velocityCurve, noteCurve; // empty = the identity [(0,0),(1,1)]
+    /** The two drawn transfer curves of distortion.type X-Shaper / X-Shaper (Asym) (13-new-keys.md 4.14, G75): input magnitude (x) against
+        output magnitude (y), both 0..1, the curve shape of the velocity curve. Empty = the identity [(0,0),(1,1)]. */
+    std::vector<ContentPoint> shaperA, shaperB;
     ContentTuning tuning;
     std::vector<ContentFileRef> impulses;
     std::vector<ContentFilterCurve> filterCurves;
 
     bool empty() const noexcept
     {
-        return wavetables.empty() && samples.empty() && lfoShapes.empty() && velocityCurve.empty() && noteCurve.empty() && ! tuning.present
+        return wavetables.empty() && samples.empty() && lfoShapes.empty() && velocityCurve.empty() && noteCurve.empty() && shaperA.empty() && shaperB.empty() && ! tuning.present
             && impulses.empty() && filterCurves.empty();
     }
     void clear() noexcept { *this = StateContent {}; }

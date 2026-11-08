@@ -61,6 +61,15 @@ namespace sbvital {
 
     Output* compressor_mix = createMonoModControl("compressor_mix");
 
+    // SynthyBoy (13-new-keys.md 4.14, G73): limit mode, its latency compensation and the two crossovers
+    Value* compressor_limit = createBaseControl("compressor_limit");
+    limit_latency_comp_ = createBaseControl("compressor_limit_latency_comp");
+    Output* compressor_crossover_low = createMonoModControl("compressor_crossover_low");
+    Output* compressor_crossover_high = createMonoModControl("compressor_crossover_high");
+    compressor_->plug(compressor_limit, MultibandCompressor::kLimit);
+    compressor_->plug(compressor_crossover_low, MultibandCompressor::kLowCrossover);
+    compressor_->plug(compressor_crossover_high, MultibandCompressor::kHighCrossover);
+
     compressor_->plug(compressor_mix, MultibandCompressor::kMix);
     compressor_->plug(compressor_attack, MultibandCompressor::kAttack);
     compressor_->plug(compressor_release, MultibandCompressor::kRelease);
@@ -100,6 +109,12 @@ namespace sbvital {
     SynthModule::enable(enable);
     if (!enable)
       compressor_->reset(constants::kFullMask);
+  }
+
+  int CompressorModule::latency() const {
+    if (limit_latency_comp_ == nullptr || limit_latency_comp_->value() < 0.5f)
+      return 0;
+    return compressor_->limiterLatency();
   }
 
   void CompressorModule::hardReset() {

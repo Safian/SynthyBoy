@@ -150,7 +150,7 @@ namespace sbvital {
       case constants::kDelay:
         return new DelayModule(beats_per_second_);
       case constants::kDistortion:
-        return new DistortionModule();
+        return new DistortionModule(keytrack_);
       case constants::kEq: {
         EqualizerModule* eq = new EqualizerModule();
         equalizer_memory_ = eq->getAudioMemory();

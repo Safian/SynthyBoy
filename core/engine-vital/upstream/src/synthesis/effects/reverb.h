@@ -20,6 +20,7 @@
 #include "memory.h"
 #include "processor.h"
 #include "one_pole_filter.h"
+#include "reverb_algorithms.h"
 
 namespace sbvital {
 
@@ -60,6 +61,12 @@ namespace sbvital {
         kSize,
         kDelay,
         kWet,
+        // SynthyBoy (docs/ui-design/13-new-keys.md 4.14, G77); type 0 is the network of this class
+        kType,
+        kRoom,
+        kErSize,
+        kDiffA,
+        kDiffB,
         kNumInputs
       };
 
@@ -107,6 +114,10 @@ namespace sbvital {
       virtual Processor* clone() const override { VITAL_ASSERT(false); return nullptr; }
 
     private:
+      void processAlgorithm(const poly_float* audio_in, int num_samples, int type);
+      poly_float applyWidth(poly_float wet, poly_float width) const;
+
+      std::unique_ptr<ReverbAlgorithms> algorithms_;
       std::unique_ptr<StereoMemory> memory_;
 
       std::unique_ptr<poly_float[]> allpass_lookups_[kNetworkContainers];

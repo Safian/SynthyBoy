@@ -49,8 +49,21 @@ namespace sbvital {
         kSinFold,
         kBitCrush,
         kDownSample,
+        // SynthyBoy (docs/ui-design/13-new-keys.md 4.14, G75): appended types
+        kTube,
+        kDiode1,
+        kDiode2,
+        kZeroSquare,
+        kAsym,
+        kRectify,
+        kXShaper,
+        kXShaperAsym,
         kNumTypes
       };
+
+      /** The two drawn transfer curves of the X-Shaper types: output magnitude against input magnitude (0..1), kShaperSize points each.
+          Curve A shapes both polarities (odd symmetric) in kXShaper and the positive half in kXShaperAsym, curve B the negative half. */
+      static constexpr int kShaperSize = 513;
 
       static force_inline poly_float driveDbScale(poly_float db) {
         return futils::dbToMagnitude(utils::clamp(db, kMinDrive, kMaxDrive));
@@ -100,10 +113,20 @@ namespace sbvital {
       void processDownSample(int num_samples, const poly_float* audio_in, const poly_float* drive,
                              poly_float* audio_out);
 
+      void processXShaper(int num_samples, const poly_float* audio_in, const poly_float* drive, poly_float* audio_out, bool asym);
+
+      /** Copies the two curves (kShaperSize floats each; null = identity). Called on the audio thread, between blocks. */
+      void setShaperCurves(const float* curve_a, const float* curve_b);
+
     private:
+      void removeDc(int num_samples, poly_float* audio);
+
       poly_float last_distorted_value_;
       poly_float current_samples_;
+      poly_float dc_in_, dc_out_;
       int type_;
+      float shaper_a_[kShaperSize];
+      float shaper_b_[kShaperSize];
 
       JUCE_LEAK_DETECTOR(Distortion)
   };

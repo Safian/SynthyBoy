@@ -36,6 +36,7 @@ namespace sbvital {
         kModDepth,
         kPhaseOffset,
         kBlend,
+        kModDepth2,   // SynthyBoy (13-new-keys.md 4.14, G76): semitones added to the depth of the right channel
         kNumInputs
       };
 
@@ -60,6 +61,8 @@ namespace sbvital {
       }
 
     private:
+      poly_float totalDepth() const;
+
       Output cutoff_;
       PhaserFilter* phaser_filter_;
       poly_float mix_;

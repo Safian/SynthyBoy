@@ -27,6 +27,8 @@
  #include <xmmintrin.h>
 #endif
 
+#include "distortion.h"
+#include "distortion_module.h"
 #include "modulation_connection_processor.h"
 #include "sample_oscillator.h"
 #include "serum_filter_bank.h"
@@ -230,6 +232,8 @@ struct Snapshot
     std::array<sbvital::FilterCurveShared, 3> filterCurve;        // PZ SVF curves of filter 1, filter 2 and the FX filter (content.filter_curves)
     bool hasVelocity = false, hasNote = false;
     std::array<float, kBakedPoints> velocityTable {}, noteTable {};
+    std::array<std::array<float, sbvital::Distortion::kShaperSize>, 2> shaperTable {}; // X-Shaper curves A and B (content.curves.shaper_a / shaper_b)
+    std::array<bool, 2> hasShaper { { false, false } };
     std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
     std::atomic<bool> retired { false };                 // the audio thread has replaced it
 };
@@ -401,6 +405,12 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
         curve.bake (s->noteTable.data(), kBakedPoints);
         s->hasNote = true;
     }
+    for (int which = 0; which < 2; ++which)
+        if (buildShape (which == 0 ? content.shaperA : content.shaperB, false, curve))
+        {
+            curve.bake (s->shaperTable[static_cast<size_t> (which)].data(), sbvital::Distortion::kShaperSize);
+            s->hasShaper[static_cast<size_t> (which)] = true;
+        }
 
     // the four tuning scales (master.tuning.scale): 12-TET, Pythagorean, just intonation (5-limit), the user file
     identityNotes (s->scaleNotes[0]);
@@ -571,7 +581,8 @@ public:
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
              | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels | kCapReverbForce
-             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters;
+             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters
+             | kCapFxExtrasAll; // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -788,6 +799,8 @@ private:
             curveShared[static_cast<size_t> (i)] = engine->getFilterCurve (i);
             appliedCurveId[static_cast<size_t> (i)] = ~0u;
         }
+        distortionModule = dynamic_cast<sbvital::DistortionModule*> (engine->getEffectModule (3)); // constants::kDistortion
+        appliedShaperId = ~0u;
 
         {
             const std::lock_guard<std::mutex> lock (snapshotMutex);
@@ -1099,6 +1112,7 @@ private:
         applySpecials();
         applySamples();
         applyFilterCurves();
+        applyShaperCurves();
         if (retireAfterApply != nullptr) // nothing references the replaced snapshot any more
         {
             retireAfterApply->retired.store (true, std::memory_order_release);
@@ -1160,6 +1174,16 @@ private:
             else
                 sh->num_bells = 0;
         }
+    }
+
+    /** The X-Shaper curves of the content, handed to the distortion (a copy of two small tables when the content changed). */
+    void applyShaperCurves() noexcept
+    {
+        if (distortionModule == nullptr || appliedShaperId == snapshotId)
+            return;
+        appliedShaperId = snapshotId;
+        const bool a = activeSnapshot != nullptr && activeSnapshot->hasShaper[0], b = activeSnapshot != nullptr && activeSnapshot->hasShaper[1];
+        distortionModule->setShaperCurves (a ? activeSnapshot->shaperTable[0].data() : nullptr, b ? activeSnapshot->shaperTable[1].data() : nullptr);
     }
 
     /** The settings and the sample of every oscillator slot, handed to the sample oscillators (they read them on this thread). */
@@ -2002,6 +2026,8 @@ private:
     std::array<sbvital::SampleOscShared*, kNumOsc> sampleShared {};
     std::array<sbvital::FilterCurveShared*, 3> curveShared {};
     std::array<uint32_t, 3> appliedCurveId { { ~0u, ~0u, ~0u } };
+    sbvital::DistortionModule* distortionModule = nullptr;
+    uint32_t appliedShaperId = ~0u;
     std::array<uint64_t, kNumOsc> appliedSliceKey {};
     std::array<int, kNumLfo> appliedShape {};
     static constexpr size_t kMaxPointMods = 256;
