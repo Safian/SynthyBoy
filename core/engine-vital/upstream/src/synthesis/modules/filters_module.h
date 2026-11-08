@@ -53,6 +53,7 @@ namespace sbvital {
       void init() override;
       Processor* clone() const override { return new FiltersModule(*this); }
 
+      FilterCurveShared* curveShared(int filter) { return (filter == 0 ? filter_1_ : filter_2_)->curveShared(); }
       const Value* getFilter1OnValue() const { return filter_1_->getOnValue(); }
       const Value* getFilter2OnValue() const { return filter_2_->getOnValue(); }
 

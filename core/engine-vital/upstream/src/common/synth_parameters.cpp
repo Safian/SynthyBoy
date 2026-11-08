@@ -452,6 +452,12 @@ namespace sbvital {
       ValueDetails::kLinear, false, " semitones", "Comb Blend Offset", nullptr },
     { "keytrack", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Key Track", nullptr },
+    { "var", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Var", nullptr },
+    { "pan", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Pan", nullptr },
+    { "level", 0x000000, -60.0, 12.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "dB", "Level", nullptr },
     { "formant_x", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Formant X", nullptr },
     { "formant_y", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
@@ -618,6 +624,11 @@ namespace sbvital {
         kModulationIdPrefix, kModulationNamePrefix, kNewModulationVersion);
     }
 
+    // SynthyBoy: the 14 filter models and 6 styles appended in state version 3 (docs/ui-design/13-new-keys.md 3)
+    for (const char* filter : { "filter_1", "filter_2", "filter_fx" }) {
+      details_lookup_[std::string(filter) + "_model"].max = 21.0f;
+      details_lookup_[std::string(filter) + "_style"].max = 11.0f;
+    }
     details_lookup_["osc_1_on"].default_value = 1.0f;
     details_lookup_["osc_2_destination"].default_value = 1.0f;
     details_lookup_["osc_3_destination"].default_value = 3.0f;

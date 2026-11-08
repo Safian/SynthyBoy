@@ -59,6 +59,7 @@ namespace sbvital {
       ModulationConnectionBank& getModulationBank() { return modulation_bank_; }
       Wavetable* getWavetable(int index) { return producers_->getWavetable(index); }
       SampleOscShared* getSampleShared(int index) { return producers_->getSampleShared(index); }
+      struct FilterCurveShared* getFilterCurve(int filter);
       Sample* getSample() { return producers_->getSample(); }
       LineGenerator* getLfoSource(int index) { return &lfo_sources_[index]; }
       Output* getDirectOutput() { return getAccumulatedOutput(direct_output_->output()); }

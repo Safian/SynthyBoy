@@ -182,8 +182,9 @@ std::vector<Binding> build()
         }
         b.choice (k + "model", c + "model");
         b.choice (k + "style", c + "style");
-        b.limit (k + "model", 7);  // the 14 models appended in state version 3 are not implemented yet
-        b.limit (k + "style", 5);
+        b.percent (k + "var", c + "var");    // WP6: the fourth knob of the models of state version 3
+        b.percent (k + "pan", c + "pan");
+        b.add (k + "level", c + "level", Conv::linear);
         b.hzNote (k + "cutoff", c + "cutoff");
         b.percent (k + "resonance", c + "resonance");
         b.add (k + "drive", c + "drive", Conv::linear);

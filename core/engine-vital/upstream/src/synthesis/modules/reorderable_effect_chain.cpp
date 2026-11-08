@@ -59,6 +59,8 @@ namespace sbvital {
         SynthModule::setOversampleAmount(oversampling);
       }
 
+      FilterModule* filter() { return filter_; }
+
     private:
       FilterModule* filter_;
       Output input_;
@@ -129,6 +131,10 @@ namespace sbvital {
       bus_mix_[b].assign(size, poly_float(0.0f));
       bus_out_[b].assign(size, poly_float(0.0f));
     }
+  }
+
+  FilterCurveShared* ReorderableEffectChain::filterFxCurve() {
+    return static_cast<FilterFxModule*>(effects_[constants::kFilterFx])->filter()->curveShared();
   }
 
   SynthModule* ReorderableEffectChain::createEffectModule(int index) {

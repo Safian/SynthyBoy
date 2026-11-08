@@ -72,6 +72,7 @@ namespace sbvital {
       SynthModule* getEffect(constants::Effect effect) { return effects_[effect]; }
       SynthModule* getModule(int index) { return effects_[index]; }
       const StereoMemory* getEqualizerMemory() { return equalizer_memory_; }
+      struct FilterCurveShared* filterFxCurve();
 
       /** The rack an effect is assigned to, as the chain uses it (a splitter never sits in a band rack). */
       int rackOf(int module) const;

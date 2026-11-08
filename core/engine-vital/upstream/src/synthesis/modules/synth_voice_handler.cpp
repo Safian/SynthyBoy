@@ -250,6 +250,10 @@ namespace sbvital {
     createStatusOutput("pitch_wheel", pitch_wheel_percent());
   }
 
+  FilterCurveShared* SynthVoiceHandler::getFilterCurve(int filter) {
+    return filters_module_->curveShared(filter);
+  }
+
   void SynthVoiceHandler::createFilters(Output* keytrack) {
     filters_module_ = new FiltersModule();
     addSubmodule(filters_module_);

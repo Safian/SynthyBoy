@@ -29,6 +29,8 @@ namespace sbvital {
   class LadderFilter;
   class PhaserFilter;
   class SallenKeyFilter;
+  class SerumFilterBank;      // SynthyBoy: the filter models of state version 3
+  class StereoCutoffOffset;
 
   class FilterModule : public SynthModule {
     public:
@@ -65,6 +67,7 @@ namespace sbvital {
 
       const Value* getOnValue() { return on_; }
       const Value* getDestinationValue() { return destination_; }
+      struct FilterCurveShared* curveShared();   // SynthyBoy: the drawn curve of the PZ SVF
 
     protected:
       void setModel(int new_model);
@@ -94,6 +97,10 @@ namespace sbvital {
       LadderFilter* ladder_filter_;
       PhaserFilter* phaser_filter_;
       SallenKeyFilter* sallen_key_filter_;
+      SerumFilterBank* serum_filter_ = nullptr;
+      StereoCutoffOffset* cutoff_offset_ = nullptr;
+      Output* level_ = nullptr;
+      poly_float level_gain_ = 1.0f;
 
       JUCE_LEAK_DETECTOR(FilterModule)
   };

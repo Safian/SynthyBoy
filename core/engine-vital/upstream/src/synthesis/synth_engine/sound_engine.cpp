@@ -388,6 +388,10 @@ namespace sbvital {
     return voice_handler_->getSampleShared(index);
   }
 
+  FilterCurveShared* SoundEngine::getFilterCurve(int index) {
+    return index >= 2 ? effect_chain_->filterFxCurve() : voice_handler_->getFilterCurve(index);
+  }
+
   Sample* SoundEngine::getSample() {
     return voice_handler_->getSample();
   }

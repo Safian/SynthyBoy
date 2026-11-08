@@ -29,6 +29,7 @@
 
 #include "modulation_connection_processor.h"
 #include "sample_oscillator.h"
+#include "serum_filter_bank.h"
 #include "sound_engine.h"
 #include "synth_lfo.h"
 #include "synth_oscillator.h"
@@ -232,6 +233,7 @@ struct Snapshot
     std::array<std::unique_ptr<sbvital::Wavetable>, 3> userTable; // oscN.wavetable = Preset table (content.wavetables)
     std::array<int, 3> userFrames {};
     std::array<SampleEntry, 3> sample;                            // oscN.type = Sample (content.samples)
+    std::array<sbvital::FilterCurveShared, 3> filterCurve;        // PZ SVF curves of filter 1, filter 2 and the FX filter (content.filter_curves)
     bool hasVelocity = false, hasNote = false;
     std::array<float, kBakedPoints> velocityTable {}, noteTable {};
     std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
@@ -359,6 +361,21 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
             if (c.points[i].modY.present)
                 l.mods.push_back ({ static_cast<int> (i), false, sourceKind (c.points[i].modY.source), c.points[i].modY.amount });
         }
+    }
+
+    for (const ContentFilterCurve& c : content.filterCurves)
+    {
+        const int slot = c.filter == "filter1" ? 0 : (c.filter == "filter2" ? 1 : (c.filter == "fxfilter" ? 2 : -1));
+        if (slot < 0 || c.points.empty())
+            continue;
+        float x[kMaxFilterCurvePoints], y[kMaxFilterCurvePoints];
+        const int n = std::min (static_cast<int> (c.points.size()), kMaxFilterCurvePoints);
+        for (int i = 0; i < n; ++i)
+        {
+            x[i] = c.points[static_cast<size_t> (i)].x;
+            y[i] = c.points[static_cast<size_t> (i)].y;
+        }
+        s->filterCurve[static_cast<size_t> (slot)].fit (x, y, n);
     }
 
     shapes::ShapeData curve;
@@ -536,7 +553,7 @@ public:
         // a bit is set only for an area that has a test rendering the key on and off (core/engine-vital/tests/test_wp123.cpp,
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
-             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks;
+             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels;
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -735,6 +752,11 @@ private:
             if (sbvital::Wavetable* wavetable = engine->getWavetable (i))
                 wavetable->useExternalData (tables->data (kWavetableSaw));
             sampleShared[static_cast<size_t> (i)] = engine->getSampleShared (i);
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            curveShared[static_cast<size_t> (i)] = engine->getFilterCurve (i);
+            appliedCurveId[static_cast<size_t> (i)] = ~0u;
         }
 
         engine->setSampleRate (static_cast<int> (std::lround (sampleRate)));
@@ -1029,6 +1051,7 @@ private:
 
         applySpecials();
         applySamples();
+        applyFilterCurves();
         if (retireAfterApply != nullptr) // nothing references the replaced snapshot any more
         {
             retireAfterApply->retired.store (true, std::memory_order_release);
@@ -1073,6 +1096,22 @@ private:
                     if (idx >= 0)
                         applied[static_cast<size_t> (idx)] = std::numeric_limits<float>::quiet_NaN(); // the frame scale changed: convert again
             }
+        }
+    }
+
+    /** The drawn curves of the PZ SVF of the content, handed to the filters (a copy of a few hundred bytes when the content changed). */
+    void applyFilterCurves() noexcept
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            sbvital::FilterCurveShared* sh = curveShared[static_cast<size_t> (i)];
+            if (sh == nullptr || appliedCurveId[static_cast<size_t> (i)] == snapshotId)
+                continue;
+            appliedCurveId[static_cast<size_t> (i)] = snapshotId;
+            if (activeSnapshot != nullptr)
+                *sh = activeSnapshot->filterCurve[static_cast<size_t> (i)];
+            else
+                sh->num_bells = 0;
         }
     }
 
@@ -1809,6 +1848,8 @@ private:
            kSpScanLock, kSpScanToBpm, kSpLengthBeats, kSpCount };
     std::array<std::array<int, kSpCount>, kNumOsc> sampleParams {};
     std::array<sbvital::SampleOscShared*, kNumOsc> sampleShared {};
+    std::array<sbvital::FilterCurveShared*, 3> curveShared {};
+    std::array<uint32_t, 3> appliedCurveId { { ~0u, ~0u, ~0u } };
     std::array<uint64_t, kNumOsc> appliedSliceKey {};
     std::array<int, kNumLfo> appliedShape {};
     static constexpr size_t kMaxPointMods = 256;

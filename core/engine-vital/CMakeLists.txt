@@ -49,5 +49,6 @@ else()
     target_compile_options(synthyboy_engine_vital PRIVATE -w)
 endif()
 
-# The sample oscillator type (producers/sample_oscillator.cpp, our code in the fork) renders with the standalone core/sample-osc package.
-target_link_libraries(synthyboy_engine_vital PUBLIC synthyboy_sampleosc)
+# The sample oscillator type (producers/sample_oscillator.cpp) renders with the standalone core/sample-osc package, the filter models of state
+# version 3 (modules/serum_filter_bank.cpp) with core/filters-serum: our code in the fork, not Vital's.
+target_link_libraries(synthyboy_engine_vital PUBLIC synthyboy_sampleosc synthyboy_filters_serum)
