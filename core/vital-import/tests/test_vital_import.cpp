@@ -1525,3 +1525,22 @@ TEST (user_sample_store_and_round_trip)
 
     std::filesystem::remove_all (tempDir, ec);
 }
+
+// Real Vital files carry all 64 modulation slots; the unused ones have an empty source and destination. They must not show up in
+// the report (they were reported as dropped and made every real preset "degraded").
+TEST (vi_unused_mod_slots_are_not_reported)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.mods.emplace_back ("lfo_1", "filter_1_cutoff");
+    for (int i = 1; i < 64; ++i)
+        f.mods.emplace_back ("", "");
+    f.set ("modulation_1_amount", 0.5);
+
+    const auto r = run (f, ImportOptions());
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.report.numDropped, 0);
+    CHECK (r.report.fidelity != Fidelity::degraded);
+    for (const auto& it : r.report.items)
+        CHECK (it.vitalName.compare (0, 12, "modulations[") != 0 || it.vitalName == "modulations[0]");
+}

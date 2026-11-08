@@ -960,6 +960,10 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             const std::string dst = cleanText (c.doc.text (c.doc.nodes[static_cast<size_t> (dn)].str), 96, true);
             slotSource[i] = src;
             slotDestination[i] = dst;
+            // Vital always writes all 64 slots; an unused one has an empty source and destination. It carries no information, so it
+            // is neither dropped nor ignored (reporting it as dropped made every real preset "degraded").
+            if (src.empty() && dst.empty())
+                continue;
 
             // source: the Vital name -> our source key
             std::string ours;

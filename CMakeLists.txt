@@ -105,6 +105,7 @@ if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(bench)
     add_subdirectory(tools/paramdump)
     add_subdirectory(tools/preset-render)
+    add_subdirectory(tools/vital-import)
 endif()
 
 if(NOT SYNTHYBOY_BUILD_PLUGIN)
