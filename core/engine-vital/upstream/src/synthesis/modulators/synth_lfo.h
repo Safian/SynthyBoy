@@ -20,7 +20,36 @@
 #include "processor.h"
 #include "line_generator.h"
 
+#include <cstdint>
+#include <memory>
+
 namespace sbvital {
+
+  // SynthyBoy: point modulation of a custom shape, per voice. The shape and the baking are the adapter's (core/shapes); the LFO owns
+  // one baked table per voice of its voice pair and bakes it again only when a source it depends on has moved.
+  class LfoPointModulation {
+    public:
+      static constexpr int kMaxSources = 40;      // >= synthyboy::kNumModSources (checked by the adapter)
+      static constexpr int kMaxResolution = 2048;
+
+      virtual ~LfoPointModulation() { }
+
+      // Bit s: the value of source s is read by bake () (a voice source through input kPointSource0 + s, a global one from LfoPointState).
+      virtual uint64_t sources() const noexcept = 0;
+      // Writes `resolution` values of the shape with the point modulation of values[s] applied. Real-time safe.
+      virtual void bake(const float* values, int resolution, float* table) const noexcept = 0;
+  };
+
+  // Shared by an LFO and all its voice clones. Written by the audio thread between blocks only.
+  struct LfoPointState {
+    const LfoPointModulation* modulation = nullptr;   // null: the LFO reads its one shared table
+    uint32_t generation = 0;                          // changes with the modulation / the resolution: baked tables are stale
+    int resolution = LfoPointModulation::kMaxResolution;
+    uint64_t global_mask = 0;                         // sources whose value is the same for every voice (global_values)
+    float global_values[LfoPointModulation::kMaxSources] = {};
+    std::shared_ptr<int> budget;                      // tables that may still be baked in this chunk (shared by every LFO)
+    int force_after = 4;                              // a table that waited this many chunks is baked regardless of the budget
+  };
 
   class SynthLfo : public Processor {
     public:
@@ -38,7 +67,8 @@ namespace sbvital {
         kNoteCount,
         kDirection,  // SynthyBoy: 0 forward, 1 reverse, 2 ping pong (the shape is read backwards / forth and back within one cycle)
         kHostLock,   // SynthyBoy: 1 = the phase is anchored to the sync clock (the host transport) on every block, not only at a note on
-        kNumInputs
+        kPointSource0,                                    // SynthyBoy: source s of a point modulation = input kPointSource0 + s
+        kNumInputs = kPointSource0 + LfoPointModulation::kMaxSources
       };
 
       enum {
@@ -93,12 +123,18 @@ namespace sbvital {
       force_inline poly_float getValueAtPhase(mono_float* buffer, poly_float resolution,
                                               poly_int max_index, poly_float phase) {
         phase = applyDirection(phase);
+        // SynthyBoy: with a per-voice point modulation every voice reads its own table (and its own resolution)
+        if (voice_mode_) {
+          resolution = lane_resolution_;
+          max_index = lane_max_index_;
+        }
         poly_float boost = utils::clamp(phase * resolution, 0.0f, resolution);
         poly_int indices = utils::clamp(utils::toInt(boost), 0, max_index);
         poly_float t = boost - utils::toFloat(indices);
 
         matrix interpolation_matrix = utils::getCatmullInterpolationMatrix(t);
-        matrix value_matrix = utils::getValueMatrix(buffer, indices);
+        matrix value_matrix = voice_mode_ ? utils::getValueMatrix(lane_buffers_, indices) :
+                                            utils::getValueMatrix(buffer, indices);
         value_matrix.transpose();
 
         return interpolation_matrix.multiplyAndSumRows(value_matrix);
@@ -122,7 +158,12 @@ namespace sbvital {
       void process(int num_samples) override;
       void correctToTime(double seconds);
 
+      // SynthyBoy: the state shared with the voice clones (the adapter sets the modulation, the global values and the budget)
+      LfoPointState* pointState() { return point_state_.get(); }
+      static constexpr int kPointVoices = 2;   // voices of one voice pair (poly_float lanes / 2)
+
     protected:
+      void updatePointTables();
       void processTrigger();
       void processControlRate(int num_samples);
 
@@ -149,6 +190,18 @@ namespace sbvital {
       LineGenerator* source_;
 
       std::shared_ptr<double> sync_seconds_;
+
+      // SynthyBoy: per-voice point modulation
+      std::shared_ptr<LfoPointState> point_state_;
+      bool voice_mode_ = false;
+      const mono_float* lane_buffers_[4] = {};
+      poly_float lane_resolution_;
+      poly_int lane_max_index_;
+      uint32_t voice_generation_[kPointVoices] = {};
+      bool voice_baked_[kPointVoices] = {};
+      int voice_waited_[kPointVoices] = {};
+      float voice_values_[kPointVoices][LfoPointModulation::kMaxSources] = {};
+      mono_float voice_tables_[kPointVoices][LfoPointModulation::kMaxResolution + LineGenerator::kExtraValues] = {};
 
       JUCE_LEAK_DETECTOR(SynthLfo)
   };

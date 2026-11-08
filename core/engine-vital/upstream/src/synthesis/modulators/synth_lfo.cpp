@@ -30,8 +30,81 @@ namespace sbvital {
     was_control_rate_ = true;
     sync_seconds_ = std::make_shared<double>();
     *sync_seconds_ = 0;
+    point_state_ = std::make_shared<LfoPointState>();
 
     trigger_sample_ = 0;
+  }
+
+  // SynthyBoy: bakes the table of every voice of the pair whose point modulation sources have moved (budgeted), and points the four
+  // lanes at them. A voice without a usable table (nothing baked yet, or none within the budget) reads the shared table.
+  void SynthLfo::updatePointTables() {
+    static_assert(poly_float::kSize == 4, "per-voice LFO tables assume two voices per poly_float");
+    LfoPointState& state = *point_state_;
+    voice_mode_ = false;
+    if (state.modulation == nullptr)
+      return;
+
+    const uint64_t used = state.modulation->sources();
+    const mono_float* shared_table = source_->getCubicInterpolationBuffer();
+    const int shared_resolution = source_->resolution();
+    const int resolution = state.resolution;
+    const mono_float* buffers[kPointVoices];
+    int resolutions[kPointVoices];
+
+    for (int v = 0; v < kPointVoices; ++v) {
+      float values[LfoPointModulation::kMaxSources] = {};
+      bool changed = !voice_baked_[v] || voice_generation_[v] != state.generation;
+      for (int s = 0; s < LfoPointModulation::kMaxSources; ++s) {
+        if (((used >> s) & 1) == 0)
+          continue;
+        float raw = ((state.global_mask >> s) & 1) ? state.global_values[s] : input(kPointSource0 + s)->at(0)[2 * v];
+        if (!(raw > -1.0e4f && raw < 1.0e4f))
+          raw = 0.0f;
+        // 1/4096 steps: the table is baked again only for a change a listener cannot hear, and the result does not depend on rounding noise
+        values[s] = std::round(raw * 4096.0f) * (1.0f / 4096.0f);
+        if (values[s] != voice_values_[v][s])
+          changed = true;
+      }
+
+      if (changed) {
+        int* budget = state.budget.get();
+        const bool allowed = (budget != nullptr && *budget > 0) || voice_waited_[v] >= state.force_after;
+        if (allowed) {
+          if (budget != nullptr && *budget > 0)
+            --(*budget);
+          mono_float* table = voice_tables_[v];
+          state.modulation->bake(values, resolution, table + 1);
+          table[0] = table[1];
+          table[resolution + 1] = table[resolution];
+          table[resolution + 2] = table[resolution];
+          for (int s = 0; s < LfoPointModulation::kMaxSources; ++s)
+            voice_values_[v][s] = values[s];
+          voice_baked_[v] = true;
+          voice_generation_[v] = state.generation;
+          voice_waited_[v] = 0;
+        }
+        else
+          ++voice_waited_[v];
+      }
+      else
+        voice_waited_[v] = 0;
+
+      if (voice_baked_[v] && voice_generation_[v] == state.generation) {
+        buffers[v] = voice_tables_[v];
+        resolutions[v] = resolution;
+      }
+      else {
+        buffers[v] = shared_table;
+        resolutions[v] = shared_resolution;
+      }
+    }
+
+    for (int lane = 0; lane < 4; ++lane)
+      lane_buffers_[lane] = buffers[lane / 2];
+    lane_resolution_ = poly_float(static_cast<float>(resolutions[0]), static_cast<float>(resolutions[0]),
+                                  static_cast<float>(resolutions[1]), static_cast<float>(resolutions[1]));
+    lane_max_index_ = poly_int(resolutions[0] - 1, resolutions[0] - 1, resolutions[1] - 1, resolutions[1] - 1);
+    voice_mode_ = true;
   }
 
   force_inline void SynthLfo::processTrigger() {
@@ -445,6 +518,7 @@ namespace sbvital {
       audio_rate_state_ = control_rate_state_;
     was_control_rate_ = control_rate;
 
+    updatePointTables();
     processTrigger();
 
     if (!control_rate)

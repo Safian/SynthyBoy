@@ -396,6 +396,10 @@ namespace sbvital {
     return VoiceHandler::shouldAccumulate(output);
   }
 
+  SynthLfo* SynthVoiceHandler::getLfo(int index) {
+    return lfos_[index]->lfo();
+  }
+
   void SynthVoiceHandler::correctLfoToTime(int index, double seconds) {
     if (index >= 0 && index < kNumLfos)
       lfos_[index]->correctToTime(seconds);

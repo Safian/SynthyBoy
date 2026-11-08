@@ -32,6 +32,7 @@ namespace sbvital {
   class LegatoFilter;
   class LineMap;
   class LfoModule;
+  class SynthLfo;
   class EnvelopeModule;
   class RandomLfoModule;
   class TriggerRandom;
@@ -62,6 +63,7 @@ namespace sbvital {
       struct FilterCurveShared* getFilterCurve(int filter);
       Sample* getSample() { return producers_->getSample(); }
       LineGenerator* getLfoSource(int index) { return &lfo_sources_[index]; }
+      SynthLfo* getLfo(int index);   // SynthyBoy
       Output* getDirectOutput() { return getAccumulatedOutput(direct_output_->output()); }
       Output* getBus1Output() { return getAccumulatedOutput(bus1_output_->output()); }   // SynthyBoy: the bus sends, summed over the voices
       Output* getBus2Output() { return getAccumulatedOutput(bus2_output_->output()); }

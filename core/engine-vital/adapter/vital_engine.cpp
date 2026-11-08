@@ -40,6 +40,7 @@
 #include "utils.h"
 #include "value_switch.h"
 #include "vital_bindings.h"
+#include "vital_point_mod.h"
 #include "vital_tables.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
@@ -202,19 +203,12 @@ int conformedNote (int note, int key, int type) noexcept
 }
 
 // ---- content (setContent): everything the audio thread needs from the `content` section, built on the message thread ---------------
-struct PointMod
-{
-    int point = 0;
-    bool isX = false;
-    int source = 0; // sourceKind ()
-    float amount = 0.0f;
-};
-
 struct LfoCustom
 {
     bool present = false;
     shapes::ShapeData shape;
     std::vector<PointMod> mods;
+    std::unique_ptr<CustomShapeModulation> point; // null without a point modulation
 };
 
 /** A sample of the content (oscN.type = Sample), decoded on the message thread. */
@@ -239,18 +233,6 @@ struct Snapshot
     std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
     std::atomic<bool> retired { false };                 // the audio thread has replaced it
 };
-
-/** The sources a point modulation can read in the engine (the global ones; the per-voice sources have no meaning for a table shared by all
-    voices): 1..8 macros, 9 mod wheel, 10 pitch wheel (-1..1), 11 channel pressure; 0: not supported (the modulation is ignored). */
-int sourceKind (const std::string& key) noexcept
-{
-    if (key.size() == 6 && key.compare (0, 5, "macro") == 0 && key[5] >= '1' && key[5] <= '8')
-        return key[5] - '0';
-    if (key == "mod_wheel") return 9;
-    if (key == "pitch_wheel") return 10;
-    if (key == "aftertouch") return 11;
-    return 0;
-}
 
 bool buildShape (const std::vector<ContentPoint>& points, bool smooth, shapes::ShapeData& out) noexcept
 {
@@ -385,10 +367,12 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
         for (size_t i = 0; i < c.points.size() && i < l.shape.numPoints; ++i)
         {
             if (c.points[i].modX.present && i > 0 && i + 1 < l.shape.numPoints) // the end points stay at 0 and 1
-                l.mods.push_back ({ static_cast<int> (i), true, sourceKind (c.points[i].modX.source), c.points[i].modX.amount });
+                l.mods.push_back ({ static_cast<int> (i), true, sourceIndexOf (c.points[i].modX.source), c.points[i].modX.amount });
             if (c.points[i].modY.present)
-                l.mods.push_back ({ static_cast<int> (i), false, sourceKind (c.points[i].modY.source), c.points[i].modY.amount });
+                l.mods.push_back ({ static_cast<int> (i), false, sourceIndexOf (c.points[i].modY.source), c.points[i].modY.amount });
         }
+        if (! l.mods.empty())
+            l.point = std::make_unique<CustomShapeModulation> (l.shape, l.mods);
     }
 
     for (const ContentFilterCurve& c : content.filterCurves)
@@ -564,6 +548,7 @@ public:
 
             updateClocks (pos);
             slewTune (end - pos);
+            *pointBudget = pointTablesPerChunk();
             engine->process (end - pos);
             clockSeconds += static_cast<double> (end - pos) / sampleRate;
             writeOutput (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
@@ -835,7 +820,12 @@ private:
         resolveBindings();
         resolveModulation();
         for (int i = 0; i < kNumLfo; ++i)
+        {
             lfoLines[static_cast<size_t> (i)] = engine->getLfoSource (i);
+            lfoProcessors[static_cast<size_t> (i)] = engine->getLfo (i);
+            lfoStates[static_cast<size_t> (i)] = lfoProcessors[static_cast<size_t> (i)]->pointState();
+            lfoStates[static_cast<size_t> (i)]->budget = pointBudget;
+        }
 
         takeSnapshot();
         applyParams (true);
@@ -1254,7 +1244,8 @@ private:
                 shape = 0; // "Custom" without a point list in the content: the documented fallback is the sine
             if (custom != nullptr)
             {
-                // the point list of content.lfo_shapes, baked into the LFO's table; re-baked when a point modulation source moved
+                // the point list of content.lfo_shapes, baked into the LFO's shared table with the global sources (macros, mod wheel, pitch
+                // wheel, channel pressure; the per-voice sources count as 0 there); re-baked when one of them moved
                 bool rebake = appliedShape[static_cast<size_t> (i)] != kLfoShapeCustom || appliedCustomId[static_cast<size_t> (i)] != snapshotId;
                 for (size_t m = 0; m < custom->mods.size() && m < kMaxPointMods; ++m)
                 {
@@ -1270,11 +1261,16 @@ private:
                 }
                 appliedShape[static_cast<size_t> (i)] = kLfoShapeCustom;
                 appliedCustomId[static_cast<size_t> (i)] = snapshotId;
+                applyPointModulation (i, custom->point.get());
             }
-            else if (shape != appliedShape[static_cast<size_t> (i)])
+            else
             {
-                appliedShape[static_cast<size_t> (i)] = shape;
-                vitaltables::applyLfoShape (*lfoLines[static_cast<size_t> (i)], shape);
+                if (shape != appliedShape[static_cast<size_t> (i)])
+                {
+                    appliedShape[static_cast<size_t> (i)] = shape;
+                    vitaltables::applyLfoShape (*lfoLines[static_cast<size_t> (i)], shape);
+                }
+                applyPointModulation (i, nullptr);
             }
         }
 
@@ -1336,12 +1332,14 @@ private:
         ++matrixGeneration;  // the curves: every velocity / note slot takes its table again
     }
 
-    float modValue (int kind) const noexcept
+    /** The value of a source that is the same for every voice (globalKindOf () != 0), 0 for a source that differs per voice or is unknown. */
+    float modValue (int source) const noexcept
     {
+        const int kind = source >= 0 ? globalKindOf (source) : 0;
         if (kind >= 1 && kind <= kNumMacro)
         {
             // the macro as the matrix sees it (the knob plus its modulation, as of the last block), else the knob
-            const sbvital::Output* out = sourceOutput[static_cast<size_t> (kSourceMacro1 + kind - 1)];
+            const sbvital::Output* out = sourceOutput[static_cast<size_t> (kind <= 4 ? kSourceMacro1 + kind - 1 : kSourceMacro5 + kind - 5)];
             if (out != nullptr)
                 return out->buffer[0][0];
             const int p = macroParam[static_cast<size_t> (kind - 1)];
@@ -1360,25 +1358,82 @@ private:
     void bakeCustomShape (int i, const LfoCustom& custom) noexcept
     {
         shapes::ShapeData shape = custom.shape;
-        for (const PointMod& m : custom.mods)
-        {
-            const float v = modValue (m.source) * m.amount;
-            shapes::Point& point = shape.points[static_cast<size_t> (m.point)];
-            if (m.isX)
-            {
-                const float low = shape.points[static_cast<size_t> (m.point - 1)].x;
-                const float high = custom.shape.points[static_cast<size_t> (m.point + 1)].x;
-                point.x = std::clamp (point.x + v, low, high);
-            }
-            else
-                point.y = std::clamp (point.y + v, 0.0f, 1.0f);
-        }
+        float values[kPointSources] = {};
+        for (int s = 0; s < kNumModSources; ++s)
+            values[s] = modValue (s);
+        if (custom.point != nullptr)
+            custom.point->apply (values, shape);
         LineGenerator& line = *lfoLines[static_cast<size_t> (i)];
         shape.bake (line.getBuffer(), kBakedPoints);
         float* full = line.getCubicInterpolationBuffer(); // [0] and the two values behind the table, as LineGenerator::render () leaves them
         full[0] = full[1];
         full[kBakedPoints + 1] = full[kBakedPoints];
         full[kBakedPoints + 2] = full[kBakedPoints];
+    }
+
+    /** Tables of the per-voice point modulation that the LFOs may bake in one chunk (the tier): the cost of a chunk is bounded, a table that
+        has to wait is baked after `force_after` chunks at the latest. */
+    int pointTablesPerChunk() const noexcept
+    {
+        return quality.maxVoices <= 8 ? 4 : (quality.maxVoices <= 16 ? 8 : 16);
+    }
+
+    /** The per-voice point modulation of LFO i (null: none). The LFO bakes a table per voice from the sources it reads; this plugs those
+        sources into the LFO (a source that depends on the LFO would close a loop: it stays unplugged, as for a matrix slot), hands over the
+        global ones (macros, wheels) and sets the resolution / budget of the tier. */
+    void applyPointModulation (int i, const CustomShapeModulation* point) noexcept
+    {
+        const size_t k = static_cast<size_t> (i);
+        sbvital::LfoPointState* state = lfoStates[k];
+        sbvital::SynthLfo* lfo = lfoProcessors[k];
+        if (state == nullptr || lfo == nullptr)
+            return;
+        const bool voices = point != nullptr && point->voiceSources() != 0;
+        const CustomShapeModulation* mod = voices ? point : nullptr;
+        // the tier: 8 voices or fewer (low) bake 512 points and 4 tables per chunk, up to 16 voices 2048 and 8, more 2048 and 16
+        const int resolution = quality.maxVoices <= 8 ? CustomShapeModulation::kLowResolution : CustomShapeModulation::kHighResolution;
+        if (state->modulation != mod || state->resolution != resolution || appliedPointSnapshot[k] != snapshotId)
+        {
+            state->modulation = mod;
+            state->resolution = resolution;
+            ++state->generation;
+            appliedPointSnapshot[k] = snapshotId;
+        }
+        if (mod != nullptr)
+        {
+            state->global_mask = mod->globalSources();
+            for (int s = 0; s < kPointSources; ++s)
+                if (((state->global_mask >> s) & 1) != 0)
+                    state->global_values[s] = modValue (s);
+        }
+
+        const uint64_t wanted = mod != nullptr ? mod->voiceSources() : 0;
+        if (wanted == pointPlugged[k] || (wanted == pointWanted[k] && pointTriedGeneration[k] == matrixGeneration))
+            return; // done, or a source was left unplugged (loop) and nothing has changed since
+        pointWanted[k] = wanted;
+        pointTriedGeneration[k] = matrixGeneration;
+        for (int s = 0; s < kNumModSources; ++s)
+        {
+            const uint64_t bit = 1ull << s;
+            const sbvital::Output* out = sourceOutput[static_cast<size_t> (s)];
+            if (out == nullptr)
+                continue;
+            if ((pointPlugged[k] & bit) != 0 && (wanted & bit) == 0)
+            {
+                lfo->unplug (out);
+                pointPlugged[k] &= ~bit;
+            }
+            else if ((pointPlugged[k] & bit) == 0 && (wanted & bit) != 0)
+            {
+                // a source that depends on this LFO would close a loop (the engine would allocate a feedback node)
+                const sbvital::ProcessorRouter* router = lfo->router();
+                if (router != nullptr && router->isDownstream (lfo, out->owner))
+                    continue;
+                lfo->plug (out, sbvital::SynthLfo::kPointSource0 + s);
+                out->owner->enable (true);
+                pointPlugged[k] |= bit;
+            }
+        }
     }
 
     /** mono / host switches of the LFOs: both are the engine's "Sync" mode (the phase comes from a clock shared by all voices); host locks
@@ -1911,6 +1966,13 @@ private:
     std::array<int, kNumLfo> appliedShape {};
     static constexpr size_t kMaxPointMods = 256;
     std::array<uint32_t, kNumLfo> appliedCustomId {};
+    std::array<sbvital::LfoPointState*, kNumLfo> lfoStates {};   // the point modulation state of every LFO (shared with its voice clones)
+    std::array<sbvital::SynthLfo*, kNumLfo> lfoProcessors {};
+    std::array<uint64_t, kNumLfo> pointPlugged {};               // sources plugged into the LFO's point modulation inputs
+    std::array<uint32_t, kNumLfo> pointTriedGeneration {};
+    std::array<uint64_t, kNumLfo> pointWanted {};
+    std::array<uint32_t, kNumLfo> appliedPointSnapshot {};
+    std::shared_ptr<int> pointBudget = std::make_shared<int> (0); // tables the voices' LFOs may still bake in this chunk
     std::array<std::array<float, kMaxPointMods>, kNumLfo> appliedModValues {};
     std::array<std::array<int, 6>, kNumOsc> appliedMap {};
     std::array<float, kNumFxSlots> appliedChoices {};
@@ -1962,6 +2024,7 @@ private:
     static constexpr int kNumConform = 128;
     static constexpr int kSourceVelocity = 23, kSourceNote = 24; // modulation source choices
     static constexpr int kSourceMacro1 = 18;                     // index of "macro1" in sourceOutput
+    static constexpr int kSourceMacro5 = 28;                     // index of "macro5"
     std::array<int8_t, kNumConform> conform {};
     int conformKey = -1, conformType = -1;
     std::array<float, 128> noteTable {};
