@@ -371,11 +371,11 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 82: Mixer Filter Sends (Osc)
     { "mix_sends_filter", "Mixer Filter Sends", "Osc", { "filter1.bus1_send", "filter1.bus2_send", "filter2.bus1_send", "filter2.bus2_send", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 83: Filter 1 Extra (Filter)
-    { "filter1_extra", "Filter 1 Extra", "Filter", { "filter1.var", "filter1.pan", "filter1.level", nullptr, nullptr, nullptr, nullptr, nullptr }, 3, nullptr, 0 },
+    { "filter1_extra", "Filter 1 Extra", "Filter", { "filter1.var", "filter1.pan", "filter1.level", "filter1.clean_mode", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 84: Filter 2 Extra (Filter)
-    { "filter2_extra", "Filter 2 Extra", "Filter", { "filter2.var", "filter2.pan", "filter2.level", nullptr, nullptr, nullptr, nullptr, nullptr }, 3, nullptr, 0 },
+    { "filter2_extra", "Filter 2 Extra", "Filter", { "filter2.var", "filter2.pan", "filter2.level", "filter2.clean_mode", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 85: FX Filter Extra (FX)
-    { "fx_filter_extra", "FX Filter Extra", "FX", { "fxfilter.var", "fxfilter.pan", "fxfilter.level", nullptr, nullptr, nullptr, nullptr, nullptr }, 3, nullptr, 0 },
+    { "fx_filter_extra", "FX Filter Extra", "FX", { "fxfilter.var", "fxfilter.pan", "fxfilter.level", "fxfilter.clean_mode", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 86: FX Chain Order 10–16 (FX)
     { "fx_order_2", "FX Chain Order 10–16", "FX", { "fx.order.10", "fx.order.11", "fx.order.12", "fx.order.13", "fx.order.14", "fx.order.15", "fx.order.16", nullptr }, 7, nullptr, 0 },
     // Page 87: FX Racks 1–8 (FX)
@@ -412,15 +412,20 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "mod_slot_3_aux", "Mod Matrix Slot 3 Aux", "Matrix", { "mod03.aux_source", "mod03.aux_inv", "mod03.aux_power", "mod03.aux_output", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 103: Mod Matrix Slot 4 Aux (Matrix)
     { "mod_slot_4_aux", "Mod Matrix Slot 4 Aux", "Matrix", { "mod04.aux_source", "mod04.aux_inv", "mod04.aux_power", "mod04.aux_output", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
-    // Page 104: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.14)
+    // Pages 104-106: Osc 1..3 Remap (Osc), 107: FX Levels (FX) (block B16, WTREMAP)
+    { "osc1_remap", "Osc 1 Remap", "Osc", { "osc1.remap.on", "osc1.remap.slot", "osc1.remap.rise", "osc1.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
+    { "osc2_remap", "Osc 2 Remap", "Osc", { "osc2.remap.on", "osc2.remap.slot", "osc2.remap.rise", "osc2.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
+    { "osc3_remap", "Osc 3 Remap", "Osc", { "osc3.remap.on", "osc3.remap.slot", "osc3.remap.rise", "osc3.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
+    { "fx_levels", "FX Levels", "FX", { "chorus.level", "compressor.level", "delay.level", "distortion.level", "eq.level", "flanger.level", "phaser.level", "reverb.level" }, 8, nullptr, 0 },
+    // Page 108: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.16)
     { "fx_comp_limit", "Compressor Limit & Crossovers", "FX", { "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high", "compressor.mix", "compressor.attack", "compressor.release", "compressor.on" }, 8, nullptr, 0 },
-    // Page 105: Delay Quality & Offset (FX)
+    // Page 109: Delay Quality & Offset (FX)
     { "fx_delay_3", "Delay Quality & Offset", "FX", { "delay.hq", "delay.offset", "delay.time", "delay.time2", "delay.sync", "delay.feedback", "delay.mix", "delay.on" }, 8, nullptr, 0 },
-    // Page 106: Distortion Key Track (FX)
+    // Page 110: Distortion Key Track (FX)
     { "fx_distortion_2", "Distortion Key Track", "FX", { "distortion.type", "distortion.filter_keytrack", "distortion.filter_order", "distortion.filter_cutoff", "distortion.drive", "distortion.mix", "distortion.on", nullptr }, 7, nullptr, 0 },
-    // Page 107: Phaser Depth 2 (FX)
+    // Page 111: Phaser Depth 2 (FX)
     { "fx_phaser_3", "Phaser Depth 2", "FX", { "phaser.depth2", "phaser.depth", "phaser.center", "phaser.rate", "phaser.feedback", "phaser.mix", "phaser.on", nullptr }, 7, nullptr, 0 },
-    // Page 108: Reverb Algorithm (FX)
+    // Page 112: Reverb Algorithm (FX)
     { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, nullptr, 0 }
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };

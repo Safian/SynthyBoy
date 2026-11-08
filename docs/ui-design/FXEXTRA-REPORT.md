@@ -1,6 +1,6 @@
 # FXEXTRA report: block B17, the compressor / delay / distortion / phaser / reverb extras (G73-G77)
 
-Branch `worktree-agent-add5cc2768f21382a` (worktree of `develop`). Spec: `13-new-keys.md` 4.14 (assumptions A140-A158). Key block name **B17**.
+Branch `worktree-agent-add5cc2768f21382a` (worktree of `develop`). Spec: `13-new-keys.md` 4.16 (assumptions A140-A158). Key block name **B17**.
 
 ## What was built
 
@@ -18,7 +18,7 @@ The new keys are at the end of `kRaw[]` (positions 1484 .. 1497, ids = `hashKey`
 
 ## Files
 
-* Spec and docs: `docs/ui-design/13-new-keys.md` (4.14, section 5 addition, section 7 totals, A140-A158), `14-morning-questions.md` (rows 18-20), `UI-GESTURE-AUDIT.md` (rows 08-10 .. 08-14), this file.
+* Spec and docs: `docs/ui-design/13-new-keys.md` (4.16, section 5 addition, section 7 totals, A140-A158), `14-morning-questions.md` (rows 18-20), `UI-GESTURE-AUDIT.md` (rows 08-10 .. 08-14), this file.
 * Core: `core/src/param_table.cpp` (B17 block, appended `kDistortionTypes`, `kReverbTypes`, `kReverbRooms`), `core/include/synthyboy/{params,modulation,engine_caps,content_state,kick_pages}.h`, `core/src/{engine_caps,content_state,state,kick_pages}.cpp`.
 * Engine (Vital adapter): `core/engine-vital/upstream/src/synthesis/effects/{compressor,delay,distortion,phaser,reverb}.{h,cpp}`, `reverb_algorithms.{h,cpp}` (new), `filters/linkwitz_riley_filter.h`, `lookups/memory.h`, `modules/{compressor,delay,distortion,phaser,reverb}_module.*`, `reorderable_effect_chain.cpp`, `serum_fx_modules.cpp`, `common/synth_parameters.cpp`, `interface/look_and_feel/synth_strings.h`, adapter `vital_bindings.cpp`, `vital_engine.cpp`. `engine-own` is untouched.
 * UI: `shell-juce/ui/model/FxModel.{h,cpp}` (pure: tap tempo, offset snap, crossover scrub, curve edit operations and presets), `panels/FxShaperEditor.{h,cpp}` (new), `FxCompressorPanel.cpp`, `FxDelayPanel.cpp`, `FxDistortionPanel.cpp`, `FxPhaserPanel.cpp`, `FxReverbPanel.cpp`.

@@ -147,7 +147,10 @@ bool operator== (const StateContent& a, const StateContent& b) noexcept
         && sameVector (a.filterCurves, b.filterCurves, [] (const ContentFilterCurve& x, const ContentFilterCurve& y)
                        { return x.filter == y.filter
                              && sameVector (x.points, y.points, [] (const ContentFilterCurvePoint& p, const ContentFilterCurvePoint& q)
-                                            { return p.x == q.x && p.y == q.y; }); });
+                                            { return p.x == q.x && p.y == q.y; }); })
+        && sameVector (a.remaps, b.remaps, [] (const ContentRemap& x, const ContentRemap& y)
+                       { return x.osc == y.osc && x.slot == y.slot && x.name == y.name
+                             && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); });
 }
 
 bool validateContent (const StateContent& c) noexcept
@@ -235,6 +238,14 @@ bool validateContent (const StateContent& c) noexcept
                 previous = p.x;
             }
         }
+
+        if (c.remaps.size() > static_cast<size_t> (kMaxContentRemaps))
+            return false;
+        std::set<int> remapKeys;
+        for (const auto& r : c.remaps)
+            if (r.osc < 1 || r.osc > 3 || r.slot < 1 || r.slot > kNumRemapSlots || ! remapKeys.insert (r.osc * 10 + r.slot).second
+                || ! plainString (r.name, kMaxContentStringBytes) || ! pointsOk (r.points, kMaxRemapPoints, false, true))
+                return false;
         return true;
     }
     catch (...)

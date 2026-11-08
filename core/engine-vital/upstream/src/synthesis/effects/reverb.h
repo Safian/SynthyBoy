@@ -61,7 +61,7 @@ namespace sbvital {
         kSize,
         kDelay,
         kWet,
-        // SynthyBoy (docs/ui-design/13-new-keys.md 4.14, G77); type 0 is the network of this class
+        // SynthyBoy (docs/ui-design/13-new-keys.md 4.16, G77); type 0 is the network of this class
         kType,
         kRoom,
         kErSize,

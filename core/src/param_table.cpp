@@ -60,7 +60,7 @@ constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Si
 constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong" };
 constexpr const char* const kCompressorBands[] = { "Multiband", "Low band", "High band", "Single band" };
 constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample",
-                                                   // appended in B17 (13-new-keys.md 4.14, G75)
+                                                   // appended in B17 (13-new-keys.md 4.16, G75)
                                                    "Tube", "Diode 1", "Diode 2", "Zero square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
 constexpr const char* const kDistortionFilterOrder[] = { "None", "Pre", "Post" };
 constexpr const char* const kEqLowModes[] = { "Shelf", "High pass" };
@@ -92,7 +92,8 @@ constexpr const char* const kBusDestinations[] = { "Main", "Direct", "Other bus"
 constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H low", "Splitter L/H high", "Splitter L/M/H low",
                                          "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
 constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
-// B17: reverb algorithms and room modes (13-new-keys.md 4.14, G77)
+constexpr const char* const kRemapSlots[] = { "Remap 1", "Remap 2", "Remap 3", "Remap 4" };
+// B17: reverb algorithms and room modes (13-new-keys.md 4.16, G77)
 constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
 constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
 
@@ -343,6 +344,16 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     SB_PCT (KEY ".var", NAME " Var", GROUP, 50.0f, kMod),                                                                                        \
     SB_PCT_RANGE (KEY ".pan", NAME " Pan", GROUP, -100.0f, 100.0f, 0.0f, kMod),                                                                  \
     cont (KEY ".level", NAME " Level", GROUP, -60.0f, 12.0f, 0.0f, Unit::dB, kMod)
+
+// B16: the wavetable position remap of one oscillator (13-new-keys.md 4.14): on, the preset slot, RISE and FALL
+#define SB_REMAP(N)                                                                                                                              \
+    onOff ("osc" #N ".remap.on", "Osc " #N " Remap On", "Osc " #N " / Remap", false),                                                            \
+    pick ("osc" #N ".remap.slot", "Osc " #N " Remap Slot", "Osc " #N " / Remap", kRemapSlots, 0),                                                \
+    cont ("osc" #N ".remap.rise", "Osc " #N " Remap Rise", "Osc " #N " / Remap", 0.0f, 2000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f),                \
+    cont ("osc" #N ".remap.fall", "Osc " #N " Remap Fall", "Osc " #N " / Remap", 0.0f, 2000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f)
+
+// B16: the output LEVEL trim of one of the Vital effects (G72)
+#define SB_FXLEVEL(KEY, NAME) cont (KEY ".level", NAME " Level", "FX / " NAME, -24.0f, 12.0f, 0.0f, Unit::dB, kMod)
 
 #define SB_FXRACK(KEY, NAME) pick (KEY ".rack", NAME " Rack", "FX / Racks", kRacks, 0)
 
@@ -661,7 +672,16 @@ constexpr ParamInfo kRaw[] = {
     onOff ("splitter_ms.side_bypass", "Splitter M/S Side Bypass", "FX / Splitter M/S", false),
     cont ("splitter_ms.level", "Splitter M/S Level", "FX / Splitter M/S", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
 
-    // --- B17: compressor / delay / distortion / phaser / reverb extras (1484..1497) ------------------------------------------------------
+    // --- B16: wavetable remap with RISE / FALL (G69), per-module FX level (G72), Clean Mode (G54) (positions 1484..1506) ---------------------
+    SB_REMAP (1), SB_REMAP (2), SB_REMAP (3),
+    SB_FXLEVEL ("chorus", "Chorus"), SB_FXLEVEL ("compressor", "Compressor"), SB_FXLEVEL ("delay", "Delay"),
+    SB_FXLEVEL ("distortion", "Distortion"), SB_FXLEVEL ("eq", "EQ"), SB_FXLEVEL ("flanger", "Flanger"), SB_FXLEVEL ("phaser", "Phaser"),
+    SB_FXLEVEL ("reverb", "Reverb"),
+    onOff ("filter1.clean_mode", "Filter 1 Clean Mode", "Filter 1", false),
+    onOff ("filter2.clean_mode", "Filter 2 Clean Mode", "Filter 2", false),
+    onOff ("fxfilter.clean_mode", "FX Filter Clean Mode", "FX Filter", false),
+
+    // --- B17: compressor / delay / distortion / phaser / reverb extras (1507..1520) ------------------------------------------------------
     onOff ("compressor.limit", "Compressor Limit", "FX / Compressor", false),
     onOff ("compressor.limit_latency_comp", "Compressor Limiter Latency Comp", "FX / Compressor", true),
     cont ("compressor.crossover_low", "Compressor Low Crossover", "FX / Compressor", 20.0f, 1000.0f, 120.0f, Unit::Hz, kMod, 0, 0.4f),
@@ -680,7 +700,7 @@ constexpr ParamInfo kRaw[] = {
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1498, "880 keys of state version 2, the 604 keys appended in version 3 and the 14 keys of B17");
+static_assert (kCount == 1521, "880 keys of state version 2, the 604 of version 3, the 23 of block B16 and the 14 of block B17");
 
 struct Table
 {

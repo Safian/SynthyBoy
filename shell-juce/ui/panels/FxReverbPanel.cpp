@@ -206,7 +206,7 @@ public:
             "reverb.on", "reverb.pre_low_cut", "reverb.pre_high_cut",
             "reverb.low_shelf_cutoff", "reverb.low_shelf_gain", "reverb.high_shelf_cutoff", "reverb.high_shelf_gain",
             "reverb.chorus_amount", "reverb.chorus_rate", "reverb.force_enable",
-            "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.rack"
+            "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.level", "reverb.rack"
         };
     }
 
@@ -238,6 +238,7 @@ public:
         addMoreControl ("reverb.er_size");
         addMoreControl ("reverb.diff_a");
         addMoreControl ("reverb.diff_b");
+        addMoreControl ("reverb.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("reverb.rack");
 
         // the algorithm decides which controls apply (G77): ER size, the two diffusions and the room belong to the new algorithms, the

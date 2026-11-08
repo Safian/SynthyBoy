@@ -132,7 +132,7 @@ public:
     {
         return {
             "flanger.rate", "flanger.depth", "flanger.feedback", "flanger.mix",
-            "flanger.on", "flanger.sync", "flanger.division", "flanger.center", "flanger.phase_offset", "flanger.rack"
+            "flanger.on", "flanger.sync", "flanger.division", "flanger.center", "flanger.phase_offset", "flanger.level", "flanger.rack"
         };
     }
 
@@ -153,6 +153,7 @@ public:
         addMoreControl ("flanger.division");
         addMoreControl ("flanger.center");
         addMoreControl ("flanger.phase_offset");
+        addMoreControl ("flanger.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("flanger.rack");
     }
 

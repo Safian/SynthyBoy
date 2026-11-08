@@ -1,5 +1,5 @@
 // SynthyBoy - engine-vital tests: block B17 (compressor limit mode and crossovers, delay HQ and offset, distortion types and key track and
-// X-Shaper curves, phaser depth 2, reverb algorithms) of docs/ui-design/13-new-keys.md 4.14.
+// X-Shaper curves, phaser depth 2, reverb algorithms) of docs/ui-design/13-new-keys.md 4.16.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

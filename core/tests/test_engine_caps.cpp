@@ -44,7 +44,7 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
     // every defined bit has a name and is used by some key; five need no key: the event contract, and four that gate values of
     // lists (appended_choice_values_need_a_capability)
     const EngineCapsMask valueOnly = kCapEventContract | kCapModSourcesExtra | kCapCustomLfoShape | kCapUserWavetable | kCapFilterModels;
-    for (int bit = 0; bit < 26; ++bit)
+    for (int bit = 0; bit < 29; ++bit)
     {
         const EngineCapsMask b = 1ull << bit;
         CHECK (std::strlen (capName (b)) > 0);
@@ -59,11 +59,17 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
             std::printf ("    bit %s has no key\n", capName (b));
     }
     CHECK_EQ (all & ~kCapAllKnown, static_cast<EngineCapsMask> (0));
-    CHECK_EQ (all >> 26 & ~(kCapFxExtrasAll >> 26), static_cast<EngineCapsMask> (0));
+    CHECK_EQ (all >> 29 & ~(kCapFxExtrasAll >> 29), static_cast<EngineCapsMask> (0));
 
     struct Case { const char* key; EngineCapsMask caps; };
     const Case cases[] = {
         { "macro.7", kCapMacros58 },
+        { "osc2.remap.slot", kCapWtRemap },
+        { "osc3.remap.fall", kCapWtRemap },
+        { "chorus.level", kCapFxLevel },
+        { "reverb.level", kCapFxLevel },
+        { "filter2.clean_mode", kCapCleanMode },
+        { "fxfilter.clean_mode", kCapCleanMode },
         { "lfo9.rate", kCapLfo910 },
         { "lfo10.mono", kCapLfo910 | kCapLfoOptions },
         { "lfo3.direction", kCapLfoOptions },
@@ -129,8 +135,8 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (need ("mod09.destination", 269.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("mod09.destination", 270.0f), static_cast<EngineCapsMask> (kCapMacros58));
     CHECK_EQ (need ("mod09.destination", 403.0f), static_cast<EngineCapsMask> (kCapFxSplitters));
-    CHECK_EQ (need ("mod09.destination", 404.0f), static_cast<EngineCapsMask> (kCapFxCompressorLimit)); // compressor.crossover_low
-    CHECK_EQ (need ("mod09.destination", 411.0f), static_cast<EngineCapsMask> (kCapFxReverbAlgos));   // reverb.diff_b
+    CHECK_EQ (need ("mod09.destination", 412.0f), static_cast<EngineCapsMask> (kCapFxCompressorLimit)); // compressor.crossover_low
+    CHECK_EQ (need ("mod09.destination", 419.0f), static_cast<EngineCapsMask> (kCapFxReverbAlgos));   // reverb.diff_b
     CHECK_EQ (need ("distortion.type", 5.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("distortion.type", 6.0f), static_cast<EngineCapsMask> (kCapFxDistortionExtras));
     CHECK_EQ (need ("distortion.type", 13.0f), static_cast<EngineCapsMask> (kCapFxDistortionExtras));

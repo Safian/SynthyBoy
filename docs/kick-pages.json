@@ -2329,7 +2329,7 @@
         {"key": "filter1.var", "shortLabel": "Var", "widget": "knob"},
         {"key": "filter1.pan", "shortLabel": "Pan", "widget": "bipolar_knob"},
         {"key": "filter1.level", "shortLabel": "Level", "widget": "bipolar_knob"},
-        null,
+        {"key": "filter1.clean_mode", "shortLabel": "Clean Mode", "widget": "stepped"},
         null,
         null,
         null,
@@ -2344,7 +2344,7 @@
         {"key": "filter2.var", "shortLabel": "Var", "widget": "knob"},
         {"key": "filter2.pan", "shortLabel": "Pan", "widget": "bipolar_knob"},
         {"key": "filter2.level", "shortLabel": "Level", "widget": "bipolar_knob"},
-        null,
+        {"key": "filter2.clean_mode", "shortLabel": "Clean Mode", "widget": "stepped"},
         null,
         null,
         null,
@@ -2359,7 +2359,7 @@
         {"key": "fxfilter.var", "shortLabel": "Var", "widget": "knob"},
         {"key": "fxfilter.pan", "shortLabel": "Pan", "widget": "bipolar_knob"},
         {"key": "fxfilter.level", "shortLabel": "Level", "widget": "bipolar_knob"},
-        null,
+        {"key": "fxfilter.clean_mode", "shortLabel": "Clean Mode", "widget": "stepped"},
         null,
         null,
         null,
@@ -2634,6 +2634,66 @@
         null,
         null,
         null
+      ]
+    },
+    {
+      "id": "osc1_remap",
+      "section": "Osc",
+      "title": "Osc 1 Remap",
+      "knobs": [
+        {"key": "osc1.remap.on", "shortLabel": "Remap On", "widget": "toggle"},
+        {"key": "osc1.remap.slot", "shortLabel": "Remap Slot", "widget": "stepped"},
+        {"key": "osc1.remap.rise", "shortLabel": "Remap Rise", "widget": "knob"},
+        {"key": "osc1.remap.fall", "shortLabel": "Remap Fall", "widget": "knob"},
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "osc2_remap",
+      "section": "Osc",
+      "title": "Osc 2 Remap",
+      "knobs": [
+        {"key": "osc2.remap.on", "shortLabel": "Remap On", "widget": "toggle"},
+        {"key": "osc2.remap.slot", "shortLabel": "Remap Slot", "widget": "stepped"},
+        {"key": "osc2.remap.rise", "shortLabel": "Remap Rise", "widget": "knob"},
+        {"key": "osc2.remap.fall", "shortLabel": "Remap Fall", "widget": "knob"},
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "osc3_remap",
+      "section": "Osc",
+      "title": "Osc 3 Remap",
+      "knobs": [
+        {"key": "osc3.remap.on", "shortLabel": "Remap On", "widget": "toggle"},
+        {"key": "osc3.remap.slot", "shortLabel": "Remap Slot", "widget": "stepped"},
+        {"key": "osc3.remap.rise", "shortLabel": "Remap Rise", "widget": "knob"},
+        {"key": "osc3.remap.fall", "shortLabel": "Remap Fall", "widget": "knob"},
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "fx_levels",
+      "section": "FX",
+      "title": "FX Levels",
+      "knobs": [
+        {"key": "chorus.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "compressor.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "delay.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "distortion.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "eq.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "flanger.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "phaser.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "reverb.level", "shortLabel": "Level", "widget": "bipolar_knob"}
       ]
     },
     {

@@ -49,7 +49,7 @@ namespace sbvital {
         kSinFold,
         kBitCrush,
         kDownSample,
-        // SynthyBoy (docs/ui-design/13-new-keys.md 4.14, G75): appended types
+        // SynthyBoy (docs/ui-design/13-new-keys.md 4.16, G75): appended types
         kTube,
         kDiode1,
         kDiode2,

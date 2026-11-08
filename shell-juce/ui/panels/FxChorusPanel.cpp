@@ -138,7 +138,7 @@ public:
         return {
             "chorus.rate", "chorus.depth", "chorus.feedback", "chorus.mix",
             "chorus.on", "chorus.sync", "chorus.division", "chorus.delay1", "chorus.delay2",
-            "chorus.voices", "chorus.filter_cutoff", "chorus.filter_spread", "chorus.rack"
+            "chorus.voices", "chorus.filter_cutoff", "chorus.filter_spread", "chorus.level", "chorus.rack"
         };
     }
 
@@ -162,6 +162,7 @@ public:
         addMoreControl ("chorus.voices");
         addMoreControl ("chorus.filter_cutoff");
         addMoreControl ("chorus.filter_spread");
+        addMoreControl ("chorus.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("chorus.rack");
     }
 

@@ -458,6 +458,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "%", "Pan", nullptr },
     { "level", 0x000000, -60.0, 12.0, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "dB", "Level", nullptr },
+    { "clean_mode", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Clean Mode", strings::kOffOnNames },
     { "formant_x", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Formant X", nullptr },
     { "formant_y", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
@@ -669,6 +671,8 @@ namespace sbvital {
       add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
       add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     }
+    for (const char* name : { "chorus", "compressor", "delay", "distortion", "eq", "flanger", "phaser", "reverb" })
+      add(std::string(name) + "_level", -24.0, 12.0, 0.0, ValueDetails::kLinear, 1.0, "dB");   // SynthyBoy: the LEVEL trim of the nine Vital effects (the FX filter has filter_fx_level)
     add("bus1_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
     add("bus2_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
     add("direct_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
@@ -701,7 +705,7 @@ namespace sbvital {
     };
     for (const SerumParameter& parameter : kSerumParameters)
       add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.max - parameter.min <= 8.0f && parameter.min == 0.0f && parameter.max == std::floor(parameter.max) && parameter.max <= 8.0f ? ValueDetails::kIndexed : ValueDetails::kLinear);
-    // block B17 (docs/ui-design/13-new-keys.md 4.14): the extras of the compressor, delay, distortion, phaser and reverb, in the unit of the key
+    // block B17 (docs/ui-design/13-new-keys.md 4.16): the extras of the compressor, delay, distortion, phaser and reverb, in the unit of the key
     struct ExtraParameter { const char* name; mono_float min, max, def; ValueDetails::ValueScale scale; };
     static const ExtraParameter kExtraParameters[] = {
       { "compressor_limit", 0, 1, 0, ValueDetails::kIndexed }, { "compressor_limit_latency_comp", 0, 1, 1, ValueDetails::kIndexed },

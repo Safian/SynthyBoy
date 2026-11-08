@@ -271,7 +271,7 @@ public:
             "eq.low.cutoff", "eq.low.gain", "eq.mid.cutoff", "eq.mid.gain",
             "eq.on", "eq.low.mode", "eq.low.resonance",
             "eq.mid.mode", "eq.mid.resonance",
-            "eq.high.mode", "eq.high.cutoff", "eq.high.gain", "eq.high.resonance", "eq.rack"
+            "eq.high.mode", "eq.high.cutoff", "eq.high.gain", "eq.high.resonance", "eq.level", "eq.rack"
         };
     }
 
@@ -296,6 +296,7 @@ public:
         addMoreControl ("eq.high.cutoff");
         addMoreControl ("eq.high.gain");
         addMoreControl ("eq.high.resonance");
+        addMoreControl ("eq.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("eq.rack");
     }
 

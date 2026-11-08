@@ -80,7 +80,13 @@ namespace sbvital {
     cutoff_offset_->plug(pan, StereoCutoffOffset::kPan);
     Output* midi_cutoff = cutoff_offset_->output();
     Output* resonance = createModControl(prefix_ + "_resonance");
-    Output* drive = createModControl(prefix_ + "_drive");
+    drive_ = createModControl(prefix_ + "_drive");
+    clean_mode_ = createBaseControl(prefix_ + "_clean_mode");
+    CleanDriveGate* clean_gate = new CleanDriveGate();
+    clean_gate->plug(drive_, CleanDriveGate::kDrive);
+    clean_gate->plug(clean_mode_, CleanDriveGate::kClean);
+    addProcessor(clean_gate);
+    Output* drive = clean_gate->output(); // what the models see: 0 in Clean Mode
     Output* blend = createModControl(prefix_ + "_blend");
     Output* blend_transpose = createModControl(prefix_ + "_blend_transpose");
     if (create_on_value_)
@@ -267,6 +273,29 @@ namespace sbvital {
 
       poly_float* audio_out = output()->buffer;
       const poly_float* audio_in = input(kAudio)->source->buffer;
+
+      // SynthyBoy: Clean Mode. The models ran without drive (CleanDriveGate); the drive in dB is a plain linear gain on the wet signal instead,
+      // so it can neither saturate nor be compensated away. Comb and Formant have no drive. Ramped over the block; off leaves the signal untouched.
+      {
+        const int model = last_model_;
+        const bool clean = clean_mode_->value() > 0.5f && model != constants::kComb && model != constants::kFormant;
+        poly_float target = 1.0f;
+        if (clean) {
+          poly_float db = drive_->buffer[0];
+          for (int lane = 0; lane < static_cast<int>(poly_float::kSize); ++lane)
+            target.set(lane, std::pow(10.0f, db[lane] * 0.05f));
+        }
+        poly_float current_gain = utils::maskLoad(clean_gain_, target, getResetMask(kReset));
+        clean_gain_ = target;
+        if (poly_float::notEqual(current_gain, 1.0f).anyMask() || poly_float::notEqual(target, 1.0f).anyMask()) {
+          poly_float delta_gain = (target - current_gain) * (1.0f / num_samples);
+          for (int i = 0; i < num_samples; ++i) {
+            current_gain += delta_gain;
+            audio_out[i] *= current_gain;
+          }
+        }
+      }
+
       for (int i = 0; i < num_samples; ++i) {
         current_mix += delta_mix;
         audio_out[i] = utils::interpolate(audio_in[i], audio_out[i], current_mix);

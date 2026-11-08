@@ -244,7 +244,7 @@ public:
         return {
             "delay.time", "delay.time2", "delay.feedback", "delay.mix",
             "delay.on", "delay.style", "delay.sync", "delay.division", "delay.division2",
-            "delay.filter_cutoff", "delay.filter_spread", "delay.hq", "delay.offset", "delay.rack"
+            "delay.filter_cutoff", "delay.filter_spread", "delay.hq", "delay.offset", "delay.level", "delay.rack"
         };
     }
 
@@ -269,6 +269,7 @@ public:
         addMoreControl ("delay.filter_spread");
         addMoreControl ("delay.hq");
         addMoreControl ("delay.offset");
+        addMoreControl ("delay.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("delay.rack");
         tools = std::make_unique<FxDelayTools> (ctx);
         addAndMakeVisible (*tools);

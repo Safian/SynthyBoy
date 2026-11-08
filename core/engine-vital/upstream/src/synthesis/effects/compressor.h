@@ -25,7 +25,7 @@
 
 namespace sbvital {
 
-  /** A look-ahead peak limiter (SynthyBoy, docs/ui-design/13-new-keys.md 4.14, G73): the signal is delayed by the look-ahead, the gain
+  /** A look-ahead peak limiter (SynthyBoy, docs/ui-design/13-new-keys.md 4.16, G73): the signal is delayed by the look-ahead, the gain
       is the box-smoothed minimum of the gain each sample needs, so the gain is at its required value when the peak leaves the delay.
       Stereo linked (the two channels of a pair share the gain); the peak includes a mid point estimate between two samples. */
   class LookaheadLimiter {

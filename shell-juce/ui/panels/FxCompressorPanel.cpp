@@ -247,7 +247,7 @@ public:
             "compressor.mid.lower_threshold", "compressor.mid.upper_threshold", "compressor.mid.lower_ratio", "compressor.mid.upper_ratio",
             "compressor.high.lower_threshold", "compressor.high.upper_threshold", "compressor.high.lower_ratio", "compressor.high.upper_ratio", "compressor.high.gain",
             "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high",
-            "compressor.rack"
+            "compressor.level", "compressor.rack"
         };
     }
 
@@ -283,6 +283,7 @@ public:
         addMoreControl ("compressor.limit_latency_comp");
         addMoreControl ("compressor.crossover_low");
         addMoreControl ("compressor.crossover_high");
+        addMoreControl ("compressor.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("compressor.rack");
     }
 

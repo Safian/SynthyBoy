@@ -211,7 +211,7 @@ public:
     {
         return {
             "distortion.drive", "distortion.mix", "distortion.filter_cutoff", "distortion.filter_resonance",
-            "distortion.on", "distortion.type", "distortion.filter_order", "distortion.filter_blend", "distortion.filter_keytrack", "distortion.rack"
+            "distortion.on", "distortion.type", "distortion.filter_order", "distortion.filter_blend", "distortion.filter_keytrack", "distortion.level", "distortion.rack"
         };
     }
 
@@ -232,6 +232,7 @@ public:
         addMoreControl ("distortion.filter_order");
         addMoreControl ("distortion.filter_blend");
         addMoreControl ("distortion.filter_keytrack");
+        addMoreControl ("distortion.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("distortion.rack");
 
         // X-Shaper (G75): the transfer curves are drawn in an editor that appears for the two X-Shaper types

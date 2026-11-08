@@ -47,7 +47,7 @@ namespace sbvital {
       virtual void hardReset() override;
       virtual Processor* clone() const override { return new CompressorModule(*this); }
 
-      /** SynthyBoy (13-new-keys.md 4.14, G73): the latency of the limit mode in samples of the chain when compressor.limit_latency_comp is on
+      /** SynthyBoy (13-new-keys.md 4.16, G73): the latency of the limit mode in samples of the chain when compressor.limit_latency_comp is on
           (the chain then delays its other paths by it and reports it to the host), 0 otherwise. */
       int latency() const;
 

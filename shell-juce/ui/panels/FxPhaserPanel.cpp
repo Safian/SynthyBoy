@@ -137,7 +137,7 @@ public:
     {
         return {
             "phaser.rate", "phaser.depth", "phaser.center", "phaser.mix",
-            "phaser.on", "phaser.sync", "phaser.division", "phaser.feedback", "phaser.blend", "phaser.phase_offset", "phaser.depth2", "phaser.rack"
+            "phaser.on", "phaser.sync", "phaser.division", "phaser.feedback", "phaser.blend", "phaser.phase_offset", "phaser.depth2", "phaser.level", "phaser.rack"
         };
     }
 
@@ -160,6 +160,7 @@ public:
         addMoreControl ("phaser.blend");
         addMoreControl ("phaser.phase_offset");
         addMoreControl ("phaser.depth2");
+        addMoreControl ("phaser.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("phaser.rack");
     }
 

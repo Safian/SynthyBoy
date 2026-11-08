@@ -24,6 +24,9 @@ constexpr int kMaxCurvePoints = 64;              // per velocity / note curve
 constexpr int kMaxContentImpulses = 1;           // convolve.ir = Preset IR
 constexpr int kMaxContentFilterCurves = 3;       // filter1, filter2, fxfilter (filterN.model = PZ SVF)
 constexpr int kMaxFilterCurvePoints = 16;
+constexpr int kMaxContentRemaps = 12;            // 3 oscillators x 4 slots (oscN.remap.slot)
+constexpr int kNumRemapSlots = 4;
+constexpr int kMaxRemapPoints = 64;
 constexpr size_t kMaxTuningSclBytes = 64 * 1024;
 constexpr size_t kMaxTuningKbmBytes = 4 * 1024;
 constexpr double kMaxPointModAmount = 1.0;       // |amount| of the point modulation of a custom LFO point
@@ -78,6 +81,16 @@ struct ContentLfoShape
     std::vector<ContentPoint> points;
 };
 
+/** A drawn remap curve of the wavetable position of one oscillator (G69, 13-new-keys.md 4.14): input position 0..1 (frame / last frame) to
+    output position 0..1. `slot` is the Remap 1..4 preset of oscN.remap.slot; a slot without an entry is the identity. */
+struct ContentRemap
+{
+    int osc = 0;  // 1..3
+    int slot = 0; // 1..4
+    std::string name;
+    std::vector<ContentPoint> points; // 2 .. kMaxRemapPoints, ascending x in 0..1 (the engine clamps the ends)
+};
+
 struct ContentFilterCurvePoint
 {
     float x = 0.0f; // log frequency 0..1
@@ -104,17 +117,18 @@ struct StateContent
     std::vector<ContentSample> samples;
     std::vector<ContentLfoShape> lfoShapes;
     std::vector<ContentPoint> velocityCurve, noteCurve; // empty = the identity [(0,0),(1,1)]
-    /** The two drawn transfer curves of distortion.type X-Shaper / X-Shaper (Asym) (13-new-keys.md 4.14, G75): input magnitude (x) against
+    /** The two drawn transfer curves of distortion.type X-Shaper / X-Shaper (Asym) (13-new-keys.md 4.16, G75): input magnitude (x) against
         output magnitude (y), both 0..1, the curve shape of the velocity curve. Empty = the identity [(0,0),(1,1)]. */
     std::vector<ContentPoint> shaperA, shaperB;
     ContentTuning tuning;
     std::vector<ContentFileRef> impulses;
     std::vector<ContentFilterCurve> filterCurves;
+    std::vector<ContentRemap> remaps;
 
     bool empty() const noexcept
     {
-        return wavetables.empty() && samples.empty() && lfoShapes.empty() && velocityCurve.empty() && noteCurve.empty() && shaperA.empty() && shaperB.empty() && ! tuning.present
-            && impulses.empty() && filterCurves.empty();
+        return wavetables.empty() && samples.empty() && lfoShapes.empty() && velocityCurve.empty() && noteCurve.empty() && shaperA.empty() && shaperB.empty()
+            && ! tuning.present && impulses.empty() && filterCurves.empty() && remaps.empty();
     }
     void clear() noexcept { *this = StateContent {}; }
 };

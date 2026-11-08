@@ -82,8 +82,8 @@ struct Component
     Interpolation interpolationStyle = Interpolation::linear; // between keyframes
     bool frequencyInterpolation = false;                      // Wave Source: interpolate spectra instead of samples
     bool normalize = true;                                    // Frequency Filter
-    bool normalizeGain = true;                                // Audio File Source
-    float normalizeMult = 1.0f;                               // Audio File Source
+    bool normalizeGain = false;                               // Audio File Source: with normalizeMult, a frame below full scale is raised to it (else only lowered)
+    bool normalizeMult = true;                                // Audio File Source: normalise every frame so that its peak is not above 1 (both are JSON booleans)
     int windowSize = 2048;                                    // Audio File Source: default of a keyframe without its own
     int fadeStyle = 0;                                        // Audio File Source: 0 wave blend, 1 none, 2 time, 3 frequency
     int phaseStyle = 0;                                       // Audio File Source: 0 none, 1 clear, 2 vocode

@@ -108,6 +108,14 @@ namespace sbvital {
       out[i] = in[i] + offset;
   }
 
+  void CleanDriveGate::process(int num_samples) {
+    const poly_float drive = input(kDrive)->at(0);
+    const poly_float gated = input(kClean)->at(0)[0] > 0.5f ? poly_float(0.0f) : drive;
+    poly_float* out = output()->buffer;
+    for (int i = 0; i < num_samples; ++i)
+      out[i] = gated;
+  }
+
   int SerumFilterBank::filterTypeOf(int model, int style) {
     const int index = std::max(0, std::min(13, model - kFirstModel));
     const ModelTypes& m = kModels[index];

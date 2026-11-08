@@ -1,4 +1,4 @@
-// SynthyBoy - UI view-model: the pure parts of the FX extras of block B17 (docs/ui-design/13-new-keys.md 4.14): the tap tempo of the delay,
+// SynthyBoy - UI view-model: the pure parts of the FX extras of block B17 (docs/ui-design/13-new-keys.md 4.16): the tap tempo of the delay,
 // the offset snap points, the edit operations of the X-Shaper transfer curves and the crossover scrubbing of the compressor.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

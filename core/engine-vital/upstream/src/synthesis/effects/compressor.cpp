@@ -447,7 +447,7 @@ namespace sbvital {
     band_high_output_gain_.buffer[0] = utils::maskLoad(input(kHighOutputGain)->at(0),
                                                        input(kBandOutputGain)->at(0), constants::kFirstMask);
 
-    // SynthyBoy (13-new-keys.md 4.14): adjustable crossovers (0 = control not plugged: the fixed ones of the original engine) and limit mode
+    // SynthyBoy (13-new-keys.md 4.16): adjustable crossovers (0 = control not plugged: the fixed ones of the original engine) and limit mode
     const mono_float low_crossover_in = input(kLowCrossover)->at(0)[0];
     const mono_float high_crossover_in = input(kHighCrossover)->at(0)[0];
     mono_float low_crossover = low_crossover_in > 0.0f ? utils::clamp(low_crossover_in, 20.0f, 1000.0f) : kDefaultLowCrossover;

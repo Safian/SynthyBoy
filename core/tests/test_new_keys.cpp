@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (1498));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 14); // 14: block B17 (fx-extras)
+    CHECK_EQ (paramCount(), static_cast<size_t> (1521));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 14); // 23: block B16 (WTREMAP), 14: block B17 (fx-extras)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
     CHECK_EQ (kNumModSources, 38);
-    CHECK_EQ (kNumModDestinations, 412);
+    CHECK_EQ (kNumModDestinations, 420);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (38));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (411));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (419));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (411));
-    CHECK_EQ (newModulatable, static_cast<size_t> (142)); // 134 + 8 of B17
+    CHECK_EQ (modulatable, static_cast<size_t> (419));
+    CHECK_EQ (newModulatable, static_cast<size_t> (150)); // 134 + the 8 FX levels of B16 + 8 of B17
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (1498));
+    CHECK_EQ (ids.size(), static_cast<size_t> (1521));
 }
 
 TEST (append_positions_golden)
@@ -126,6 +126,10 @@ TEST (append_positions_golden)
         { "fx.order.10", 1395 }, { "fx.order.16", 1401 }, { "chorus.rack", 1402 }, { "splitter_ms.rack", 1417 },
         { "reverb.force_enable", 1418 }, { "hyperdim.on", 1419 }, { "utility.on", 1428 }, { "bode.on", 1439 },
         { "convolve.on", 1454 }, { "splitter_lh.on", 1468 }, { "splitter_ms.level", 1483 },
+        // B16 (WTREMAP): wavetable remap, FX levels, Clean Mode
+        { "osc1.remap.on", 1484 }, { "osc3.remap.fall", 1495 }, { "chorus.level", 1496 }, { "reverb.level", 1503 },
+        { "filter1.clean_mode", 1504 }, { "fxfilter.clean_mode", 1506 },
+        { "compressor.limit", 1507 }, { "reverb.diff_b", 1520 }, // B17
     };
     for (const auto& e : expected)
         if (! CHECK_EQ (positionOf (e.key), e.position))
@@ -208,8 +212,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (39));
         CHECK_EQ (byKey (key).max, 38.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (412));
-    CHECK_EQ (byKey ("mod64.destination").max, 411.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (420));
+    CHECK_EQ (byKey ("mod64.destination").max, 419.0f);
 
     // lists that stay unchanged
     CHECK_EQ (namesOf ("lfo1.sync").size(), static_cast<size_t> (5));
@@ -261,6 +265,8 @@ TEST (destination_numbers_of_version_2_do_not_move)
         { "osc1.filter_blend", 338, "direct.level", 356 },
         { "filter1.var", 357, "fxfilter.level", 365 },
         { "hyperdim.rate", 366, "splitter_ms.level", 403 },
+        { "chorus.level", 404, "reverb.level", 411 }, // B16: the FX levels
+        { "compressor.crossover_low", 412, "reverb.diff_b", 419 }, // B17
     };
     for (const auto& r : ranges)
     {
@@ -272,7 +278,7 @@ TEST (destination_numbers_of_version_2_do_not_move)
     CHECK_EQ (destinationOf ("mod01.aux_output"), 0);
     CHECK_EQ (destinationOf ("bus1.destination"), 0);
 
-    // every choice 1..411 names a modulatable parameter, in strictly increasing table order
+    // every choice 1..419 names a modulatable parameter, in strictly increasing table order
     int previous = -1;
     for (size_t c = 1; c <= modDestinationCount(); ++c)
     {

@@ -35,6 +35,17 @@ namespace sbvital {
       Processor* clone() const override { return new StereoCutoffOffset(*this); }
   };
 
+  /** Clean Mode (docs/ui-design/13-new-keys.md 4.15): the drive that the filter models see is 0 while the clean switch is on (the drive is then
+      a linear gain after the filter, FilterModule), else the drive itself. */
+  class CleanDriveGate : public Processor {
+    public:
+      enum { kDrive, kClean, kNumInputs };
+
+      CleanDriveGate() : Processor(kNumInputs, 1) { }
+      void process(int num_samples) override;
+      Processor* clone() const override { return new CleanDriveGate(*this); }
+  };
+
   class SerumFilterBank : public Processor {
     public:
       enum {

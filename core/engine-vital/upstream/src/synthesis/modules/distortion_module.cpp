@@ -46,7 +46,7 @@ namespace sbvital {
     distortion_->plug(distortion_drive, Distortion::kDrive);
 
     filter_order_ = createBaseControl("distortion_filter_order");
-    // SynthyBoy (13-new-keys.md 4.14, G75): the key track of the filter, like the one of the FX filter
+    // SynthyBoy (13-new-keys.md 4.16, G75): the key track of the filter, like the one of the FX filter
     Output* keytrack_amount = createMonoModControl("distortion_filter_keytrack");
     cr::Multiply* current_keytrack = nullptr;
     if (keytrack_ != nullptr) {
