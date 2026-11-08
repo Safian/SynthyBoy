@@ -19,3 +19,11 @@ endif()
 add_test(NAME synthyboy_preset_sanity
          COMMAND synthyboy_preset_render --presets "${PROJECT_SOURCE_DIR}/content/presets" --summary-only)
 set_tests_properties(synthyboy_preset_sanity PROPERTIES LABELS slow TIMEOUT 1500)
+
+# The shipped factory presets are exactly what scripts/gen-factory-presets.py generates (docs/params.json -> state v3, deterministic).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME synthyboy_factory_presets_reproducible
+             COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/scripts/gen-factory-presets.py"
+                     --check --out "${PROJECT_SOURCE_DIR}/content/presets")
+endif()

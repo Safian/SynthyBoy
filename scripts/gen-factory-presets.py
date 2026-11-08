@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
-# SynthyBoy - factory presets generator (100 CC0 presets + contentpack.json, Phase 4).
+# SynthyBoy - factory presets generator (factory presets + contentpack.json).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
+#
+#   gen-factory-presets.py [--out DIR] [--check]
+#
+# Writes every factory preset as a .sbpreset (preset format 1) holding a state of version 3 with all keys of docs/params.json
+# explicit (table order, %.9g text exactly like formatG9), and the content pack manifest. Deterministic: the same inputs give the
+# same bytes (no clock, no randomness, no dict-order dependence). --check writes nothing and exits 1 if DIR (default
+# content/presets) differs from what the script generates.
+#
+# Inputs: docs/params.json (the key table), scripts/factory-preset-levels.json (master.volume per preset, written by
+# scripts/tune-preset-levels.py), the sound data below.
 
+import argparse
 import hashlib
 import json
 import os
@@ -11,13 +22,32 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 PARAMS_JSON_PATH = os.path.join(ROOT_DIR, "docs", "params.json")
-OUTPUT_DIR = os.path.join(ROOT_DIR, "content", "presets")
+LEVELS_PATH = os.path.join(SCRIPT_DIR, "factory-preset-levels.json")
+DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "content", "presets")
 
 with open(PARAMS_JSON_PATH, "r", encoding="utf-8") as f:
-    params_data = json.load(f)["params"]
+    _doc = json.load(f)
 
+STATE_VERSION = int(_doc["stateVersion"])
+assert STATE_VERSION == 3, "this generator writes state version 3"
+params_data = _doc["params"]
 param_table_keys = [p["key"] for p in params_data]
+param_info = {p["key"]: p for p in params_data}
 default_values = {p["key"]: float(p["default"]) for p in params_data}
+mod_destination = {d["key"]: int(d["choice"]) for d in _doc["modDestinations"]}
+mod_source = {s["key"]: int(s["choice"]) for s in _doc["modSources"]}
+NUM_MOD_SLOTS = 64
+
+# Keys the first hundred presets name but that are not in the table (an old spelling: "fx.reverb.on" for "reverb.on", ...). The
+# original generator silently dropped them, so the shipped sounds have these effects off; they stay dropped (a sound change is the
+# owner's call). New presets may not use them.
+IGNORED_LEGACY_KEYS = frozenset([
+    "fx.distortion.on", "fx.distortion.drive", "noise.volume", "osc2.volume", "fx.delay.on", "fx.reverb.on",
+    "master.portamento", "fx.chorus.on", "fx.chorus.wet", "fx.reverb.wet",
+])
+
+CATEGORIES = ("Bass", "Lead", "Pad", "Pluck", "Keys", "FX")
+
 
 def format_g9(val: float) -> str:
     # Same as formatG9 in C++ number.cpp
@@ -28,9 +58,52 @@ def format_g9(val: float) -> str:
         s = s.rstrip("0").rstrip(".")
     return s
 
-def make_preset(name: str, category: str, tags: str, description: str, overrides: dict) -> tuple:
+
+def check_value(key: str, value: float) -> None:
+    info = param_info[key]
+    if not (float(info["min"]) <= value <= float(info["max"])):
+        raise ValueError(f"{key}={value} outside [{info['min']}, {info['max']}]")
+    if info.get("interval", 0) and info["interval"] >= 1 and value != round(value):
+        raise ValueError(f"{key}={value} is not on its integer grid")
+
+
+def point_text(p) -> str:
+    return '{"x":%s,"y":%s,"power":%s}' % (format_g9(p[0]), format_g9(p[1]), format_g9(p[2] if len(p) > 2 else 0.0))
+
+
+def content_text(content) -> str:
+    """The `content` section of the state (only custom LFO shapes are produced here; same writer as C++ putContent)."""
+    if not content:
+        return ""
+    parts = []
+    shapes = content.get("lfo_shapes", [])
+    if shapes:
+        items = []
+        for s in shapes:
+            item = '{"lfo":%d,"name":%s,"smooth":%s' % (s["lfo"], json.dumps(s["name"]), "true" if s.get("smooth") else "false")
+            if s.get("loop_point", -1) >= 0:
+                item += ',"loop_point":%d' % s["loop_point"]
+            item += ',"points":[' + ",".join(point_text(p) for p in s["points"]) + "]}"
+            items.append(item)
+        parts.append('"lfo_shapes":[' + ",".join(items) + "]")
+    return ',"content":{' + ",".join(parts) + "}" if parts else ""
+
+
+def make_preset(name: str, category: str, tags: str, description: str, overrides: dict, content=None, strict: bool = True) -> tuple:
+    assert category in CATEGORIES, category
     vals = dict(default_values)
-    vals.update(overrides)
+    for k, v in overrides.items():
+        if k not in param_info:
+            if not strict and k in IGNORED_LEGACY_KEYS:
+                continue
+            raise KeyError(f"{name}: unknown key {k}")
+        v = float(v)
+        if not strict:
+            # the first hundred: a few values lie outside their range; the state loader clamps them, so the clamped value is the sound
+            info = param_info[k]
+            v = min(max(v, float(info["min"])), float(info["max"]))
+        check_value(k, v)
+        vals[k] = v
 
     meta = {
         "name": name,
@@ -41,12 +114,10 @@ def make_preset(name: str, category: str, tags: str, description: str, overrides
         "description": description
     }
 
-    params_parts = []
-    for k in param_table_keys:
-        params_parts.append(f'"{k}":{format_g9(vals[k])}')
-    params_str = ",".join(params_parts)
-
-    state_json = f'{{"format":"synthyboy-state","version":2,"params":{{{params_str}}}}}'
+    params_str = ",".join(f'"{k}":{format_g9(vals[k])}' for k in param_table_keys)
+    state_json = f'{{"format":"synthyboy-state","version":{STATE_VERSION},"params":{{{params_str}}}}}'
+    if content:
+        state_json = state_json[:-1] + content_text(content) + "}"
 
     doc = (
         f'{{"format":"synthyboy-preset","version":1,'
@@ -57,6 +128,11 @@ def make_preset(name: str, category: str, tags: str, description: str, overrides
     )
     return meta, doc
 
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# The sound data of the first hundred presets (unchanged since Phase 4; the two hand-fixes of the SWEEP report, FM Digital Lead
+# and Pulse Width Bass, are part of this data).
+# ---------------------------------------------------------------------------------------------------------------------------
 # Define 100 presets
 presets = []
 
@@ -196,50 +272,78 @@ fx_names = [
 for name, tags, desc, ov in fx_names:
     presets.append((name, "FX", tags, desc, ov))
 
-print(f"Total presets to generate: {len(presets)}")
+
 assert len(presets) == 100, f"Expected 100 presets, got {len(presets)}"
+FIRST_HUNDRED = [p[0] for p in presets]
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-pack_files = []
+def build_all():
+    """All presets as (name, category, meta, document text), in a fixed order."""
+    out = []
+    for name, category, tags, desc, ov in presets:
+        meta, doc = make_preset(name, category, tags, desc, ov, strict=False)
+        out.append((name, category, meta, doc))
+    return out
 
-for i, (name, category, tags, desc, ov) in enumerate(presets):
-    meta, doc = make_preset(name, category, tags, desc, ov)
-    cat_dir = os.path.join(OUTPUT_DIR, category)
-    os.makedirs(cat_dir, exist_ok=True)
-    slug = name.lower().replace(" ", "_").replace("-", "_")
-    fname = f"{slug}.sbpreset"
-    rel_path = f"{category}/{fname}"
-    full_path = os.path.join(cat_dir, fname)
 
-    data_bytes = doc.encode("utf-8")
-    with open(full_path, "wb") as f:
-        f.write(data_bytes)
+def file_name(name: str) -> str:
+    return name.lower().replace(" ", "_").replace("-", "_") + ".sbpreset"
 
-    h = hashlib.sha256(data_bytes).hexdigest()
-    pack_files.append({
-        "path": rel_path,
-        "sha256": h,
-        "size": len(data_bytes)
-    })
 
-# Write contentpack.json
-pack_manifest = {
-    "schemaVersion": 1,
-    "id": "com.safian.synthyboy.factory-presets",
-    "name": "Factory Presets",
-    "version": "1.0.0",
-    "license": "CC0-1.0",
-    "attribution": "Safian Szabolcs",
-    "kind": "presets",
-    "requires_plugin": ">=0.1.0",
-    "description": "100 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
-    "files": pack_files
-}
+def manifest_text(entries) -> str:
+    pack_files = []
+    for name, category, meta, doc in entries:
+        data = doc.encode("utf-8")
+        pack_files.append({"path": f"{category}/{file_name(name)}", "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)})
+    pack_manifest = {
+        "schemaVersion": 1,
+        "id": "com.safian.synthyboy.factory-presets",
+        "name": "Factory Presets",
+        "version": "1.0.0",
+        "license": "CC0-1.0",
+        "attribution": "Safian Szabolcs",
+        "kind": "presets",
+        "requires_plugin": ">=0.1.0",
+        "description": f"{len(entries)} factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+        "files": pack_files
+    }
+    return json.dumps(pack_manifest, indent=2)
 
-manifest_path = os.path.join(OUTPUT_DIR, "contentpack.json")
-with open(manifest_path, "w", encoding="utf-8") as f:
-    json.dump(pack_manifest, f, indent=2)
 
-print(f"Generated 100 presets in {OUTPUT_DIR}")
-print(f"Written manifest to {manifest_path}")
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=DEFAULT_OUTPUT_DIR)
+    ap.add_argument("--check", action="store_true")
+    args = ap.parse_args()
+
+    entries = build_all()
+    files = {f"{category}/{file_name(name)}": doc.encode("utf-8") for name, category, meta, doc in entries}
+    files["contentpack.json"] = manifest_text(entries).encode("utf-8")
+
+    if args.check:
+        bad = []
+        for rel, data in files.items():
+            path = os.path.join(args.out, rel)
+            if not os.path.isfile(path) or open(path, "rb").read() != data:
+                bad.append(rel)
+        for cat in CATEGORIES:
+            d = os.path.join(args.out, cat)
+            if os.path.isdir(d):
+                bad += [f"{cat}/{n} (not generated)" for n in sorted(os.listdir(d)) if f"{cat}/{n}" not in files]
+        if bad:
+            print("factory presets differ from the generator:", *bad, sep="\n  ")
+            return 1
+        print(f"factory presets up to date ({len(entries)} presets)")
+        return 0
+
+    for rel, data in files.items():
+        path = os.path.join(args.out, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+    print(f"Generated {len(entries)} presets in {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
