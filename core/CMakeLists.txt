@@ -65,3 +65,4 @@ add_subdirectory(vital-import)
 add_subdirectory(fx-serum-a)
 add_subdirectory(fx-serum-b)
 
+add_subdirectory(sample-osc)
