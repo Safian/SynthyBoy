@@ -24,6 +24,9 @@ Palette darkPalette()
     p.modNegative  = juce::Colour (0xffc084fc); // lighter, negative depth
     p.modIdle      = juce::Colour (0xff6b7186);
     p.warn         = juce::Colour (0xfff5a524);
+    p.danger       = juce::Colour (0xffe5484d);
+    p.ok           = juce::Colour (0xff44cc44);
+    p.onMod        = juce::Colour (0xffffffff);
     p.keyWhite     = juce::Colour (0xffeceff6);
     p.keyBlack     = juce::Colour (0xff1a1c24);
     p.keyDown      = juce::Colour (0xff4fd1c5);
@@ -47,6 +50,9 @@ Palette lightPalette()
     p.modNegative  = juce::Colour (0xffb26cf5);
     p.modIdle      = juce::Colour (0xff8a90a4);
     p.warn         = juce::Colour (0xffc77700);
+    p.danger       = juce::Colour (0xffc62828);
+    p.ok           = juce::Colour (0xff2e9e2e);
+    p.onMod        = juce::Colour (0xffffffff);
     p.keyWhite     = juce::Colour (0xfffbfbfd);
     p.keyBlack     = juce::Colour (0xff2a2d38);
     p.keyDown      = juce::Colour (0xff0f8f84);

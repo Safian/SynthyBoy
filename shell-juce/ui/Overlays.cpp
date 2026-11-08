@@ -111,7 +111,7 @@ void ModRing::paint (juce::Graphics& g)
         const juce::Rectangle<float> badge (bounds.getX(), bounds.getY(), d, d);
         g.setColour (c.mod);
         g.fillEllipse (badge);
-        g.setColour (juce::Colours::white);
+        g.setColour (c.onMod);
         g.setFont (theme.font (d * 0.72f, true));
         g.drawText (juce::String (static_cast<int> (current.entries.size())), badge.toNearestInt(), juce::Justification::centred, false);
     }

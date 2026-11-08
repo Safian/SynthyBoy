@@ -137,12 +137,25 @@ void EnvelopePanel::scrollToEnvelope (int targetEnv)
     }
 }
 
+int EnvelopePanel::tabsPerRow (int width) const
+{
+    const auto& t = ctx.theme;
+    return juce::jlimit (1, 7, (width + t.gap()) / (t.touch() + t.gap()));
+}
+
+int EnvelopePanel::tabRowHeight (int width) const
+{
+    const auto& t = ctx.theme;
+    const int rows = (7 + tabsPerRow (width) - 1) / tabsPerRow (width);
+    return rows * t.touch() + (rows - 1) * t.gap();
+}
+
 int EnvelopePanel::preferredHeight (int width) const
 {
     const auto& t = ctx.theme;
-    const int tabH = t.touch();
-    const int visualH = t.ipx (160.0f);
     const int gap = t.gap();
+    const int tabH = tabRowHeight (width - 2 * gap);
+    const int visualH = t.ipx (160.0f);
     const juce::Rectangle<int> controlsArea (0, 0, width - 2 * gap, 100000);
     const int controlsH = const_cast<EnvelopePanel*> (this)->layoutControls (controlsArea, true);
 
@@ -155,16 +168,24 @@ void EnvelopePanel::resized()
     const int gap = t.gap();
     const auto fullArea = contentArea();
 
-    const int tabH = t.touch();
+    const int tabH = tabRowHeight (fullArea.getWidth());
     tabRow.setBounds (fullArea.getX(), fullArea.getY(), fullArea.getWidth(), tabH);
 
-    // Layout buttons within tabRow
-    const int lockW = juce::jmax (t.touch(), t.ipx (54.0f));
-    const int tabsW = fullArea.getWidth() - lockW - gap;
-    const int perTabW = juce::jmax (1, (tabsW - 5 * gap) / 6);
-    for (int i = 0; i < 6; ++i)
-        tabButtons[static_cast<size_t> (i)]->setBounds (i * (perTabW + gap), 0, perTabW, tabH);
-    zoomLockButton.setBounds (fullArea.getWidth() - lockW, 0, lockW, tabH);
+    // E1..E6 and Lock are 7 cells of at least a touch target; they wrap into as many rows as the width needs
+    juce::Component* cells[7];
+    for (size_t i = 0; i < 6; ++i)
+        cells[i] = tabButtons[i].get();
+    cells[6] = &zoomLockButton;
+    const int perRow = tabsPerRow (fullArea.getWidth());
+    const int rows = (7 + perRow - 1) / perRow;
+    const int rowLength = (7 + rows - 1) / rows;
+    for (int row = 0; row < rows; ++row)
+    {
+        const int inRow = juce::jmin (rowLength, 7 - row * rowLength);
+        const int cellW = juce::jmax (1, (fullArea.getWidth() - (inRow - 1) * gap) / inRow);
+        for (int i = 0; i < inRow; ++i)
+            cells[row * rowLength + i]->setBounds (i * (cellW + gap), row * (t.touch() + gap), cellW, t.touch());
+    }
 
     const int visualH = t.ipx (160.0f);
     if (visual != nullptr)

@@ -20,6 +20,9 @@ struct Palette
     juce::Colour track;                 // empty part of a knob / slider track
     juce::Colour mod, modNegative, modIdle; // purple depth ring (+), lighter ring (-), thin ring of inactive assignments
     juce::Colour warn;                  // amber: tier-limited, matrix full
+    juce::Colour danger;                // red: output clipping
+    juce::Colour ok;                    // green: real / keyframe data, confirmations
+    juce::Colour onMod;                 // text and badges on top of the mod colour (armed assign chip)
     juce::Colour keyWhite, keyBlack, keyDown;
 };
 

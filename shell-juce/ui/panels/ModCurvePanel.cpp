@@ -133,7 +133,7 @@ public:
 
         g.setColour (t.colours.accent);
         g.fillEllipse (ballX - ballR, ballY - ballR, ballR * 2.0f, ballR * 2.0f);
-        g.setColour (juce::Colours::white);
+        g.setColour (t.colours.text);
         g.drawEllipse (ballX - ballR, ballY - ballR, ballR * 2.0f, ballR * 2.0f, 1.0f);
 
         // Control handle at center
@@ -143,7 +143,7 @@ public:
         const float handleR = t.px (6.0f);
         g.setColour (t.colours.accentDim);
         g.fillEllipse (handleX - handleR, handleY - handleR, handleR * 2.0f, handleR * 2.0f);
-        g.setColour (juce::Colours::white);
+        g.setColour (t.colours.text);
         g.drawEllipse (handleX - handleR, handleY - handleR, handleR * 2.0f, handleR * 2.0f, 1.0f);
     }
 
@@ -288,7 +288,7 @@ public:
         gapBadge.setText ("GAP", juce::dontSendNotification);
         gapBadge.setJustificationType (juce::Justification::centred);
         gapBadge.setColour (juce::Label::backgroundColourId, ctx.theme.colours.warn);
-        gapBadge.setColour (juce::Label::textColourId, juce::Colours::black);
+        gapBadge.setColour (juce::Label::textColourId, ctx.theme.colours.textOnAccent);
         gapBadge.setFont (ctx.theme.font (ctx.theme.px (9.0f), true));
         gapBadge.setTooltip ("Free-form multi-point remap curve is an engine GAP feature.");
         addAndMakeVisible (gapBadge);
@@ -299,13 +299,21 @@ public:
         updateRoutingDisplay();
     }
 
-    int preferredHeight (int /*width*/) const override
+    /** One bar: [<] slot [>] .. [GAP] [free draw] [power mode] routing. Narrower than that the right group drops to a second bar. */
+    bool twoBars (int innerWidth) const
+    {
+        const auto& t = ctx.theme;
+        return innerWidth < 2 * t.touch() + t.ipx (70.0f) + 3 * t.gap() + t.ipx (34.0f) + 2 * t.touch() + t.ipx (78.0f) + t.ipx (74.0f) + t.ipx (60.0f);
+    }
+
+    int preferredHeight (int width) const override
     {
         const int touch = ctx.theme.touch();
         const int gap = ctx.theme.gap();
+        const int bars = twoBars (width - 4 * gap) ? 2 : 1;
         const int visualH = ctx.theme.ipx (160.0f);
         const int controlsH = isMoreExpanded() ? ctx.theme.ipx (140.0f) : ctx.theme.ipx (70.0f);
-        return headerHeight() + touch + gap + visualH + gap + controlsH + gap;
+        return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + controlsH + gap;
     }
 
     void resized() override
@@ -315,20 +323,35 @@ public:
         const int gap = ctx.theme.gap();
 
         auto topBar = area.removeFromTop (h);
-        prevSlotButton.setBounds (topBar.removeFromLeft (ctx.theme.ipx (32.0f)));
+        const bool two = twoBars (area.getWidth());
+        juce::Rectangle<int> secondBar;
+        if (two)
+        {
+            area.removeFromTop (gap);
+            secondBar = area.removeFromTop (h);
+        }
+        prevSlotButton.setBounds (topBar.removeFromLeft (h));
         topBar.removeFromLeft (ctx.theme.ipx (2.0f));
         slotLabel.setBounds (topBar.removeFromLeft (ctx.theme.ipx (70.0f)));
         topBar.removeFromLeft (ctx.theme.ipx (2.0f));
-        nextSlotButton.setBounds (topBar.removeFromLeft (ctx.theme.ipx (32.0f)));
+        nextSlotButton.setBounds (topBar.removeFromLeft (h));
         topBar.removeFromLeft (gap);
 
-        gapBadge.setBounds (topBar.removeFromRight (ctx.theme.ipx (34.0f)));
-        topBar.removeFromRight (ctx.theme.ipx (2.0f));
-        freeDrawButton.setBounds (topBar.removeFromRight (ctx.theme.ipx (74.0f)));
-        topBar.removeFromRight (ctx.theme.ipx (2.0f));
-        powerModeButton.setBounds (topBar.removeFromRight (ctx.theme.ipx (78.0f)));
-        topBar.removeFromRight (gap);
-        routingLabel.setBounds (topBar);
+        auto& right = two ? secondBar : topBar;
+        if (! two)
+        {
+            gapBadge.setBounds (right.removeFromRight (ctx.theme.ipx (34.0f)));
+            right.removeFromRight (ctx.theme.ipx (2.0f));
+        }
+        else
+        {
+            gapBadge.setBounds (topBar.removeFromRight (ctx.theme.ipx (34.0f)));
+        }
+        freeDrawButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (74.0f))));
+        right.removeFromRight (ctx.theme.ipx (2.0f));
+        powerModeButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (78.0f))));
+        right.removeFromRight (gap);
+        routingLabel.setBounds (right);
 
         area.removeFromTop (gap);
         const int visualH = ctx.theme.ipx (160.0f);

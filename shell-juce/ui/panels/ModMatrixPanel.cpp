@@ -89,7 +89,7 @@ public:
         loopBadge.setText ("LOOP!", juce::dontSendNotification);
         loopBadge.setJustificationType (juce::Justification::centred);
         loopBadge.setColour (juce::Label::backgroundColourId, ctx.theme.colours.warn);
-        loopBadge.setColour (juce::Label::textColourId, juce::Colours::black);
+        loopBadge.setColour (juce::Label::textColourId, ctx.theme.colours.textOnAccent);
         loopBadge.setFont (ctx.theme.font (ctx.theme.px (10.0f), true));
         loopBadge.setVisible (false);
         addAndMakeVisible (loopBadge);

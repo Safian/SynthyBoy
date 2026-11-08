@@ -363,7 +363,7 @@ public:
         scopeAllBtn.setClickingTogglesState (true);
         scopeAllBtn.setRadioGroupId (101);
 
-        searchBox.setTextToShowWhenEmpty ("Search process commands...", juce::Colours::grey);
+        searchBox.setTextToShowWhenEmpty ("Search process commands...", owner.ctx.theme.colours.textDim);
         searchBox.onTextChange = [this] { updateFilteredList(); };
 
         addAndMakeVisible (scopeSingleBtn);
@@ -555,7 +555,7 @@ public:
             if (owner.applyFormula (formulaInput.getText().toStdString(), &err))
             {
                 statusLabel.setText ("Formula applied successfully", juce::dontSendNotification);
-                statusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
+                statusLabel.setColour (juce::Label::textColourId, owner.ctx.theme.colours.ok);
             }
             else
             {
@@ -655,7 +655,7 @@ private:
         {
             statusLabel.setText (f.isMultiFrame() ? "Valid multi-frame formula (uses y/z)" : "Valid single-frame formula",
                                  juce::dontSendNotification);
-            statusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
+            statusLabel.setColour (juce::Label::textColourId, owner.ctx.theme.colours.ok);
         }
         else
         {

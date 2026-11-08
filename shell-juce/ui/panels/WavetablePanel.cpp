@@ -405,7 +405,7 @@ void WavetableView::paint (juce::Graphics& g)
         // Phase marker line
         const float phaseDeg = handlePhase.valid() ? handlePhase.plain() : 0.0f;
         const float phaseX = canvasArea.getX() + (phaseDeg / 360.0f) * canvasArea.getWidth();
-        g.setColour (juce::Colours::yellow.withAlpha (0.8f));
+        g.setColour (t.colours.warn.withAlpha (0.8f));
         g.drawVerticalLine (juce::roundToInt (phaseX), canvasArea.getY(), canvasArea.getBottom());
 
         // Random phase shaded band
@@ -413,7 +413,7 @@ void WavetableView::paint (juce::Graphics& g)
         if (randPhase > 1.0f)
         {
             const float bandW = (randPhase / 100.0f) * canvasArea.getWidth() * 0.5f;
-            g.setColour (juce::Colours::yellow.withAlpha (0.15f));
+            g.setColour (t.colours.warn.withAlpha (0.15f));
             g.fillRect (phaseX - bandW * 0.5f, canvasArea.getY(), bandW, canvasArea.getHeight());
         }
     }
@@ -454,7 +454,7 @@ void WavetableView::paint (juce::Graphics& g)
             else if (isKeyframe)
             {
                 // Real / keyframe: bright green
-                g.setColour (juce::Colour (0xff44cc44).withAlpha (0.8f));
+                g.setColour (t.colours.ok.withAlpha (0.8f));
                 g.strokePath (p, juce::PathStrokeType (1.2f));
             }
             else

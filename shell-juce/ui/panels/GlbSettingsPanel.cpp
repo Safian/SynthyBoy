@@ -90,31 +90,58 @@ public:
     {
         const auto& t = ctx.theme;
         const auto bounds = getLocalBounds().reduced (t.gap());
-        const int touchH = t.touch();
-        const int gap = t.gap();
 
-        // Row 1: 4 Init/Revert buttons
-        const int row1BtnW = juce::jmax (touchH * 2, (bounds.getWidth() - 3 * gap) / 4);
-        auto r1 = bounds.withHeight (touchH);
-        initPresetBtn.setBounds (r1.removeFromLeft (row1BtnW));
-        r1.removeFromLeft (gap);
-        initModsBtn.setBounds (r1.removeFromLeft (row1BtnW));
-        r1.removeFromLeft (gap);
-        initLfosBtn.setBounds (r1.removeFromLeft (row1BtnW));
-        r1.removeFromLeft (gap);
-        revertBtn.setBounds (r1.removeFromLeft (row1BtnW));
+        // Row group 1: Init / Revert buttons, row group 2: UI preferences. Each wraps into as many rows as the width needs,
+        // every button at least two touch targets wide.
+        juce::TextButton* const initRow[] = { &initPresetBtn, &initModsBtn, &initLfosBtn, &revertBtn };
+        juce::TextButton* const prefRow[] = { &doubleTapBtn, &freqUnitsBtn, &silenceOnStopBtn };
+        auto area = bounds;
+        layoutGrid (area, initRow, 4);
+        layoutGrid (area, prefRow, 3);
+    }
 
-        // Row 2: 3 UI preferences buttons
-        const int row2BtnW = juce::jmax (touchH * 2, (bounds.getWidth() - 2 * gap) / 3);
-        auto r2 = bounds.withTrimmedTop (touchH + gap).withHeight (touchH);
-        doubleTapBtn.setBounds (r2.removeFromLeft (row2BtnW));
-        r2.removeFromLeft (gap);
-        freqUnitsBtn.setBounds (r2.removeFromLeft (row2BtnW));
-        r2.removeFromLeft (gap);
-        silenceOnStopBtn.setBounds (r2.removeFromLeft (row2BtnW));
+    /** Height this view needs at `viewWidth`: the button rows plus the build info line. */
+    int requiredHeight (int viewWidth) const
+    {
+        const auto& t = ctx.theme;
+        const int inner = viewWidth - 2 * t.gap();
+        const int rows = rowsFor (4, inner) + rowsFor (3, inner);
+        return 2 * t.gap() + rows * t.touch() + rows * t.gap() + t.ipx (24.0f);
     }
 
 private:
+    int columnsFor (int count, int width) const
+    {
+        const auto& t = ctx.theme;
+        return juce::jlimit (1, count, (width + t.gap()) / (t.touch() * 2 + t.gap()));
+    }
+
+    int rowsFor (int count, int width) const
+    {
+        const int cols = columnsFor (count, width);
+        return (count + cols - 1) / cols;
+    }
+
+    void layoutGrid (juce::Rectangle<int>& area, juce::TextButton* const* buttons, int count)
+    {
+        const auto& t = ctx.theme;
+        const int cols = columnsFor (count, area.getWidth());
+        const int rows = (count + cols - 1) / cols;
+        const int perRow = (count + rows - 1) / rows;
+        for (int row = 0; row < rows; ++row)
+        {
+            auto rowArea = area.removeFromTop (t.touch());
+            area.removeFromTop (t.gap());
+            const int inRow = juce::jmin (perRow, count - row * perRow);
+            const int w = (rowArea.getWidth() - (inRow - 1) * t.gap()) / inRow;
+            for (int i = 0; i < inRow; ++i)
+            {
+                buttons[row * perRow + i]->setBounds (rowArea.removeFromLeft (w));
+                rowArea.removeFromLeft (t.gap());
+            }
+        }
+    }
+
     void doInitPreset()
     {
         volHandle.resetToDefault();
@@ -197,7 +224,7 @@ public:
     int preferredHeight (int width) const override
     {
         const auto& t = ctx.theme;
-        const int visualH = t.ipx (140.0f);
+        const int visualH = settingsView.requiredHeight (width - 2 * t.gap());
         const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
         return headerHeight() + 2 * t.gap() + visualH + t.gap()
              + const_cast<GlbSettingsPanel*> (this)->layoutControls (area, true);
@@ -206,7 +233,7 @@ public:
     void resized() override
     {
         auto area = contentArea();
-        const int visualH = ctx.theme.ipx (140.0f);
+        const int visualH = settingsView.requiredHeight (area.getWidth());
         settingsView.setBounds (area.removeFromTop (visualH));
         area.removeFromTop (ctx.theme.gap());
         layoutControls (area, false);

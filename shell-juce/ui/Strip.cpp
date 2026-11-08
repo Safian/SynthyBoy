@@ -60,8 +60,8 @@ void StereoMeter::paint (juce::Graphics& g)
         {
             const float barH = track.getHeight() * norm;
             const juce::Rectangle<float> bar (x, track.getBottom() - barH, chW, barH);
-            const juce::Colour barCol = norm > 0.91f ? juce::Colours::red
-                                      : (norm > 0.82f ? juce::Colours::orange : c.accent);
+            const juce::Colour barCol = norm > 0.91f ? c.danger
+                                      : (norm > 0.82f ? c.warn : c.accent);
             g.setColour (barCol);
             g.fillRoundedRectangle (bar, t.px (2.0f));
         }
