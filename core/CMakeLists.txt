@@ -52,6 +52,7 @@ add_subdirectory(tuning)
 add_subdirectory(formula)
 add_subdirectory(filters-serum)
 add_subdirectory(wavetable-edit)
+add_subdirectory(shapes)
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)
