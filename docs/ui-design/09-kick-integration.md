@@ -76,7 +76,7 @@ Kick reads `kick-pages.json` alongside `docs/params.json`. Each page has a stabl
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
           "section": {
-            "enum": ["Performance", "Master", "Osc", "Filter", "Env", "LFO", "FX", "Matrix"]
+            "enum": ["Perf", "Master", "Osc", "Filter", "Env", "LFO", "FX", "Matrix"]
           },
           "title": { "type": "string", "maxLength": 24 },
           "knobs": {

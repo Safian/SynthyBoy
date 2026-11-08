@@ -1,0 +1,1645 @@
+{
+  "format": "synthyboy-kick-pages",
+  "version": 1,
+  "pluginId": "com.safian.synthyboy",
+  "macroDefaults": {
+    "Bass": [
+      {
+        "macroKey": "macro.1",
+        "label": "Cutoff",
+        "targets": [
+          {"destination": "filter1.cutoff", "amount": 45, "bipolar": false},
+          {"destination": "filter2.cutoff", "amount": 45, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.2",
+        "label": "Drive & Bite",
+        "targets": [
+          {"destination": "filter1.drive", "amount": 50, "bipolar": false},
+          {"destination": "distortion.drive", "amount": 35, "bipolar": false},
+          {"destination": "osc1.warp.amount", "amount": 25, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.3",
+        "label": "Env/Wobble",
+        "targets": [
+          {"destination": "env2.decay", "amount": 40, "bipolar": false},
+          {"destination": "lfo1.rate", "amount": 30, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.4",
+        "label": "Width & FX",
+        "targets": [
+          {"destination": "osc1.unison.detune", "amount": 25, "bipolar": false},
+          {"destination": "chorus.mix", "amount": 35, "bipolar": false}
+        ]
+      }
+    ],
+    "Lead": [
+      {
+        "macroKey": "macro.1",
+        "label": "Brightness",
+        "targets": [
+          {"destination": "filter1.cutoff", "amount": 50, "bipolar": false},
+          {"destination": "osc1.morph.amount", "amount": 30, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.2",
+        "label": "Timbre",
+        "targets": [
+          {"destination": "osc1.warp.amount", "amount": 45, "bipolar": false},
+          {"destination": "osc1.frame", "amount": 50, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.3",
+        "label": "Detune/Glide",
+        "targets": [
+          {"destination": "osc1.unison.detune", "amount": 30, "bipolar": false},
+          {"destination": "osc2.unison.detune", "amount": 30, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.4",
+        "label": "Space",
+        "targets": [
+          {"destination": "delay.mix", "amount": 35, "bipolar": false},
+          {"destination": "reverb.mix", "amount": 30, "bipolar": false}
+        ]
+      }
+    ],
+    "Pad": [
+      {
+        "macroKey": "macro.1",
+        "label": "Warmth",
+        "targets": [
+          {"destination": "filter1.cutoff", "amount": 55, "bipolar": false},
+          {"destination": "filter1.resonance", "amount": 15, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.2",
+        "label": "Morph",
+        "targets": [
+          {"destination": "osc1.frame", "amount": 60, "bipolar": false},
+          {"destination": "osc2.frame", "amount": 60, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.3",
+        "label": "Slow Motion",
+        "targets": [
+          {"destination": "lfo1.rate", "amount": 25, "bipolar": false},
+          {"destination": "env1.attack", "amount": -30, "bipolar": false},
+          {"destination": "env1.release", "amount": 35, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.4",
+        "label": "Lush Space",
+        "targets": [
+          {"destination": "reverb.mix", "amount": 40, "bipolar": false},
+          {"destination": "reverb.decay", "amount": 30, "bipolar": false},
+          {"destination": "chorus.mix", "amount": 30, "bipolar": false}
+        ]
+      }
+    ],
+    "Pluck": [
+      {
+        "macroKey": "macro.1",
+        "label": "Pluck Open",
+        "targets": [
+          {"destination": "filter1.cutoff", "amount": 50, "bipolar": false},
+          {"destination": "env2.decay", "amount": 45, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.2",
+        "label": "Length",
+        "targets": [
+          {"destination": "env1.decay", "amount": 50, "bipolar": false},
+          {"destination": "env1.release", "amount": 40, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.3",
+        "label": "Harmonics",
+        "targets": [
+          {"destination": "osc1.morph.amount", "amount": 40, "bipolar": false},
+          {"destination": "noise.level", "amount": 25, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.4",
+        "label": "Echo & Hall",
+        "targets": [
+          {"destination": "delay.mix", "amount": 40, "bipolar": false},
+          {"destination": "reverb.mix", "amount": 30, "bipolar": false}
+        ]
+      }
+    ],
+    "Keys": [
+      {
+        "macroKey": "macro.1",
+        "label": "Tone/Bell",
+        "targets": [
+          {"destination": "filter1.cutoff", "amount": 40, "bipolar": false},
+          {"destination": "osc1.warp.amount", "amount": 30, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.2",
+        "label": "Tremolo",
+        "targets": [
+          {"destination": "lfo1.rate", "amount": 35, "bipolar": false},
+          {"destination": "phaser.mix", "amount": 40, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.3",
+        "label": "Release",
+        "targets": [
+          {"destination": "env1.release", "amount": 45, "bipolar": false},
+          {"destination": "env1.decay", "amount": 35, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.4",
+        "label": "Room/Chorus",
+        "targets": [
+          {"destination": "chorus.mix", "amount": 35, "bipolar": false},
+          {"destination": "reverb.mix", "amount": 25, "bipolar": false}
+        ]
+      }
+    ],
+    "FX": [
+      {
+        "macroKey": "macro.1",
+        "label": "Sweep/Freq",
+        "targets": [
+          {"destination": "filter1.cutoff", "amount": 70, "bipolar": false},
+          {"destination": "fxfilter.cutoff", "amount": 70, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.2",
+        "label": "Chaos/Rate",
+        "targets": [
+          {"destination": "rlfo1.rate", "amount": 60, "bipolar": false},
+          {"destination": "lfo1.rate", "amount": 60, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.3",
+        "label": "Crush & Fold",
+        "targets": [
+          {"destination": "distortion.drive", "amount": 55, "bipolar": false},
+          {"destination": "osc1.warp.amount", "amount": 50, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.4",
+        "label": "Wash",
+        "targets": [
+          {"destination": "reverb.mix", "amount": 50, "bipolar": false},
+          {"destination": "delay.feedback", "amount": 40, "bipolar": false}
+        ]
+      }
+    ],
+    "Init": [
+      {
+        "macroKey": "macro.1",
+        "label": "Cutoff",
+        "targets": [
+          {"destination": "filter1.cutoff", "amount": 50, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.2",
+        "label": "Resonance",
+        "targets": [
+          {"destination": "filter1.resonance", "amount": 40, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.3",
+        "label": "Wavetable",
+        "targets": [
+          {"destination": "osc1.frame", "amount": 100, "bipolar": false}
+        ]
+      },
+      {
+        "macroKey": "macro.4",
+        "label": "Space",
+        "targets": [
+          {"destination": "reverb.mix", "amount": 35, "bipolar": false}
+        ]
+      }
+    ]
+  },
+  "pages": [
+    {
+      "id": "macros",
+      "section": "Perf",
+      "title": "Macros & Performance",
+      "knobs": [
+        {"key": "macro.1", "shortLabel": "Macro 1", "widget": "knob"},
+        {"key": "macro.2", "shortLabel": "Macro 2", "widget": "knob"},
+        {"key": "macro.3", "shortLabel": "Macro 3", "widget": "knob"},
+        {"key": "macro.4", "shortLabel": "Macro 4", "widget": "knob"},
+        {"key": "master.volume", "shortLabel": "Volume", "widget": "bipolar_knob"},
+        {"key": "filter1.cutoff", "shortLabel": "Cutoff", "widget": "knob"},
+        {"key": "filter1.resonance", "shortLabel": "Resonance", "widget": "knob"},
+        {"key": "env1.release", "shortLabel": "Release", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "master_voicing",
+      "section": "Master",
+      "title": "Master & Voicing",
+      "knobs": [
+        {"key": "master.volume", "shortLabel": "Volume", "widget": "bipolar_knob"},
+        {"key": "master.transpose", "shortLabel": "Transpose", "widget": "bipolar_knob"},
+        {"key": "master.tune", "shortLabel": "Tune", "widget": "bipolar_knob"},
+        {"key": "master.polyphony", "shortLabel": "Polyphony", "widget": "knob"},
+        {"key": "master.legato", "shortLabel": "Legato", "widget": "stepped"},
+        {"key": "master.bend_range", "shortLabel": "Pitch Bend", "widget": "knob"},
+        {"key": "master.velocity_track", "shortLabel": "Velocity T", "widget": "bipolar_knob"},
+        {"key": "master.portamento.time", "shortLabel": "Porta Time", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "master_porta",
+      "section": "Master",
+      "title": "Portamento & Glide",
+      "knobs": [
+        {"key": "master.portamento.time", "shortLabel": "Porta Time", "widget": "knob"},
+        {"key": "master.portamento.slope", "shortLabel": "Porta Slp", "widget": "bipolar_knob"},
+        {"key": "master.portamento.always", "shortLabel": "Porta Alw", "widget": "stepped"},
+        {"key": "master.portamento.scaled", "shortLabel": "Portamento", "widget": "stepped"},
+        {"key": "master.legato", "shortLabel": "Legato", "widget": "stepped"},
+        {"key": "master.polyphony", "shortLabel": "Polyphony", "widget": "knob"},
+        {"key": "master.bend_range", "shortLabel": "Pitch Bend", "widget": "knob"},
+        {"key": "master.volume", "shortLabel": "Volume", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "osc1_main",
+      "section": "Osc",
+      "title": "Osc 1 Main",
+      "knobs": [
+        {"key": "osc1.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "osc1.wavetable", "shortLabel": "Wavetable", "widget": "stepped"},
+        {"key": "osc1.frame", "shortLabel": "Frame", "widget": "knob"},
+        {"key": "osc1.level", "shortLabel": "Level", "widget": "knob"},
+        {"key": "osc1.pan", "shortLabel": "Pan", "widget": "bipolar_knob"},
+        {"key": "osc1.transpose", "shortLabel": "Transpose", "widget": "bipolar_knob"},
+        {"key": "osc1.tune", "shortLabel": "Tune", "widget": "bipolar_knob"},
+        {"key": "osc1.destination", "shortLabel": "Dest", "widget": "stepped"}
+      ]
+    },
+    {
+      "id": "osc1_unison",
+      "section": "Osc",
+      "title": "Osc 1 Unison & Phase",
+      "knobs": [
+        {"key": "osc1.unison.voices", "shortLabel": "Voices", "widget": "knob"},
+        {"key": "osc1.unison.detune", "shortLabel": "Detune", "widget": "knob"},
+        {"key": "osc1.unison.spread", "shortLabel": "Unison Ste", "widget": "knob"},
+        {"key": "osc1.unison.blend", "shortLabel": "Blend", "widget": "knob"},
+        {"key": "osc1.unison.stack", "shortLabel": "Stack", "widget": "stepped"},
+        {"key": "osc1.unison.detune_curve", "shortLabel": "Det Curve", "widget": "bipolar_knob"},
+        {"key": "osc1.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "osc1.random_phase", "shortLabel": "Rand Phase", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "osc1_shaping",
+      "section": "Osc",
+      "title": "Osc 1 Morph & Warp",
+      "knobs": [
+        {"key": "osc1.morph.type", "shortLabel": "Morph Type", "widget": "stepped"},
+        {"key": "osc1.morph.amount", "shortLabel": "Morph Amt", "widget": "knob"},
+        {"key": "osc1.morph.spread", "shortLabel": "Morph Spd", "widget": "bipolar_knob"},
+        {"key": "osc1.warp.type", "shortLabel": "Warp Type", "widget": "stepped"},
+        {"key": "osc1.warp.amount", "shortLabel": "Warp Amt", "widget": "knob"},
+        {"key": "osc1.warp.phase", "shortLabel": "Warp Phase", "widget": "knob"},
+        {"key": "osc1.warp.spread", "shortLabel": "Warp Spd", "widget": "bipolar_knob"},
+        {"key": "osc1.frame_spread", "shortLabel": "Unison Fra", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "osc2_main",
+      "section": "Osc",
+      "title": "Osc 2 Main",
+      "knobs": [
+        {"key": "osc2.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "osc2.wavetable", "shortLabel": "Wavetable", "widget": "stepped"},
+        {"key": "osc2.frame", "shortLabel": "Frame", "widget": "knob"},
+        {"key": "osc2.level", "shortLabel": "Level", "widget": "knob"},
+        {"key": "osc2.pan", "shortLabel": "Pan", "widget": "bipolar_knob"},
+        {"key": "osc2.transpose", "shortLabel": "Transpose", "widget": "bipolar_knob"},
+        {"key": "osc2.tune", "shortLabel": "Tune", "widget": "bipolar_knob"},
+        {"key": "osc2.destination", "shortLabel": "Dest", "widget": "stepped"}
+      ]
+    },
+    {
+      "id": "osc2_unison",
+      "section": "Osc",
+      "title": "Osc 2 Unison & Phase",
+      "knobs": [
+        {"key": "osc2.unison.voices", "shortLabel": "Voices", "widget": "knob"},
+        {"key": "osc2.unison.detune", "shortLabel": "Detune", "widget": "knob"},
+        {"key": "osc2.unison.spread", "shortLabel": "Unison Ste", "widget": "knob"},
+        {"key": "osc2.unison.blend", "shortLabel": "Blend", "widget": "knob"},
+        {"key": "osc2.unison.stack", "shortLabel": "Stack", "widget": "stepped"},
+        {"key": "osc2.unison.detune_curve", "shortLabel": "Det Curve", "widget": "bipolar_knob"},
+        {"key": "osc2.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "osc2.random_phase", "shortLabel": "Rand Phase", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "osc2_shaping",
+      "section": "Osc",
+      "title": "Osc 2 Morph & Warp",
+      "knobs": [
+        {"key": "osc2.morph.type", "shortLabel": "Morph Type", "widget": "stepped"},
+        {"key": "osc2.morph.amount", "shortLabel": "Morph Amt", "widget": "knob"},
+        {"key": "osc2.morph.spread", "shortLabel": "Morph Spd", "widget": "bipolar_knob"},
+        {"key": "osc2.warp.type", "shortLabel": "Warp Type", "widget": "stepped"},
+        {"key": "osc2.warp.amount", "shortLabel": "Warp Amt", "widget": "knob"},
+        {"key": "osc2.warp.phase", "shortLabel": "Warp Phase", "widget": "knob"},
+        {"key": "osc2.warp.spread", "shortLabel": "Warp Spd", "widget": "bipolar_knob"},
+        {"key": "osc2.frame_spread", "shortLabel": "Unison Fra", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "osc3_main",
+      "section": "Osc",
+      "title": "Osc 3 Main",
+      "knobs": [
+        {"key": "osc3.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "osc3.wavetable", "shortLabel": "Wavetable", "widget": "stepped"},
+        {"key": "osc3.frame", "shortLabel": "Frame", "widget": "knob"},
+        {"key": "osc3.level", "shortLabel": "Level", "widget": "knob"},
+        {"key": "osc3.pan", "shortLabel": "Pan", "widget": "bipolar_knob"},
+        {"key": "osc3.transpose", "shortLabel": "Transpose", "widget": "bipolar_knob"},
+        {"key": "osc3.tune", "shortLabel": "Tune", "widget": "bipolar_knob"},
+        {"key": "osc3.destination", "shortLabel": "Dest", "widget": "stepped"}
+      ]
+    },
+    {
+      "id": "osc3_unison",
+      "section": "Osc",
+      "title": "Osc 3 Unison & Phase",
+      "knobs": [
+        {"key": "osc3.unison.voices", "shortLabel": "Voices", "widget": "knob"},
+        {"key": "osc3.unison.detune", "shortLabel": "Detune", "widget": "knob"},
+        {"key": "osc3.unison.spread", "shortLabel": "Unison Ste", "widget": "knob"},
+        {"key": "osc3.unison.blend", "shortLabel": "Blend", "widget": "knob"},
+        {"key": "osc3.unison.stack", "shortLabel": "Stack", "widget": "stepped"},
+        {"key": "osc3.unison.detune_curve", "shortLabel": "Det Curve", "widget": "bipolar_knob"},
+        {"key": "osc3.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "osc3.random_phase", "shortLabel": "Rand Phase", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "osc3_shaping",
+      "section": "Osc",
+      "title": "Osc 3 Morph & Warp",
+      "knobs": [
+        {"key": "osc3.morph.type", "shortLabel": "Morph Type", "widget": "stepped"},
+        {"key": "osc3.morph.amount", "shortLabel": "Morph Amt", "widget": "knob"},
+        {"key": "osc3.morph.spread", "shortLabel": "Morph Spd", "widget": "bipolar_knob"},
+        {"key": "osc3.warp.type", "shortLabel": "Warp Type", "widget": "stepped"},
+        {"key": "osc3.warp.amount", "shortLabel": "Warp Amt", "widget": "knob"},
+        {"key": "osc3.warp.phase", "shortLabel": "Warp Phase", "widget": "knob"},
+        {"key": "osc3.warp.spread", "shortLabel": "Warp Spd", "widget": "bipolar_knob"},
+        {"key": "osc3.frame_spread", "shortLabel": "Unison Fra", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "noise",
+      "section": "Osc",
+      "title": "Noise & Osc Mix",
+      "knobs": [
+        {"key": "noise.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "noise.level", "shortLabel": "Level", "widget": "knob"},
+        {"key": "noise.pan", "shortLabel": "Pan", "widget": "bipolar_knob"},
+        {"key": "noise.destination", "shortLabel": "Dest", "widget": "stepped"},
+        {"key": "filter.routing", "shortLabel": "Routing", "widget": "stepped"},
+        {"key": "osc1.level", "shortLabel": "Level", "widget": "knob"},
+        {"key": "osc2.level", "shortLabel": "Level", "widget": "knob"},
+        {"key": "osc3.level", "shortLabel": "Level", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "filter1_main",
+      "section": "Filter",
+      "title": "Filter 1 Main",
+      "knobs": [
+        {"key": "filter1.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "filter1.model", "shortLabel": "Model", "widget": "stepped"},
+        {"key": "filter1.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "filter1.cutoff", "shortLabel": "Cutoff", "widget": "knob"},
+        {"key": "filter1.resonance", "shortLabel": "Resonance", "widget": "knob"},
+        {"key": "filter1.drive", "shortLabel": "Drive", "widget": "knob"},
+        {"key": "filter1.blend", "shortLabel": "Blend", "widget": "knob"},
+        {"key": "filter1.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "filter1_model",
+      "section": "Filter",
+      "title": "Filter 1 Key & Formant",
+      "knobs": [
+        {"key": "filter1.keytrack", "shortLabel": "Key Tracki", "widget": "bipolar_knob"},
+        {"key": "filter1.comb_offset", "shortLabel": "Comb Blend", "widget": "knob"},
+        {"key": "filter1.formant.x", "shortLabel": "Formant X", "widget": "knob"},
+        {"key": "filter1.formant.y", "shortLabel": "Formant Y", "widget": "knob"},
+        {"key": "filter1.formant.resonance", "shortLabel": "Fmt Reso", "widget": "knob"},
+        {"key": "filter1.formant.spread", "shortLabel": "Fmt Spread", "widget": "bipolar_knob"},
+        {"key": "filter1.formant.transpose", "shortLabel": "Fmt Trans", "widget": "bipolar_knob"},
+        {"key": "filter.routing", "shortLabel": "Routing", "widget": "stepped"}
+      ]
+    },
+    {
+      "id": "filter2_main",
+      "section": "Filter",
+      "title": "Filter 2 Main",
+      "knobs": [
+        {"key": "filter2.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "filter2.model", "shortLabel": "Model", "widget": "stepped"},
+        {"key": "filter2.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "filter2.cutoff", "shortLabel": "Cutoff", "widget": "knob"},
+        {"key": "filter2.resonance", "shortLabel": "Resonance", "widget": "knob"},
+        {"key": "filter2.drive", "shortLabel": "Drive", "widget": "knob"},
+        {"key": "filter2.blend", "shortLabel": "Blend", "widget": "knob"},
+        {"key": "filter2.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "filter2_model",
+      "section": "Filter",
+      "title": "Filter 2 Key & Formant",
+      "knobs": [
+        {"key": "filter2.keytrack", "shortLabel": "Key Tracki", "widget": "bipolar_knob"},
+        {"key": "filter2.comb_offset", "shortLabel": "Comb Blend", "widget": "knob"},
+        {"key": "filter2.formant.x", "shortLabel": "Formant X", "widget": "knob"},
+        {"key": "filter2.formant.y", "shortLabel": "Formant Y", "widget": "knob"},
+        {"key": "filter2.formant.resonance", "shortLabel": "Fmt Reso", "widget": "knob"},
+        {"key": "filter2.formant.spread", "shortLabel": "Fmt Spread", "widget": "bipolar_knob"},
+        {"key": "filter2.formant.transpose", "shortLabel": "Fmt Trans", "widget": "bipolar_knob"},
+        {"key": "filter.routing", "shortLabel": "Routing", "widget": "stepped"}
+      ]
+    },
+    {
+      "id": "env1",
+      "section": "Env",
+      "title": "Envelope 1 (Amp)",
+      "knobs": [
+        {"key": "env1.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "env1.hold", "shortLabel": "Hold", "widget": "knob"},
+        {"key": "env1.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "env1.sustain", "shortLabel": "Sustain", "widget": "knob"},
+        {"key": "env1.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "env1.delay", "shortLabel": "Delay", "widget": "knob"},
+        {"key": "env1.attack_curve", "shortLabel": "Atk Curve", "widget": "bipolar_knob"},
+        {"key": "env1.decay_curve", "shortLabel": "Dec Curve", "widget": "bipolar_knob"}
+      ],
+      "moreKeys": [
+        "env1.release_curve"
+      ]
+    },
+    {
+      "id": "env2",
+      "section": "Env",
+      "title": "Envelope 2",
+      "knobs": [
+        {"key": "env2.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "env2.hold", "shortLabel": "Hold", "widget": "knob"},
+        {"key": "env2.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "env2.sustain", "shortLabel": "Sustain", "widget": "knob"},
+        {"key": "env2.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "env2.delay", "shortLabel": "Delay", "widget": "knob"},
+        {"key": "env2.attack_curve", "shortLabel": "Atk Curve", "widget": "bipolar_knob"},
+        {"key": "env2.decay_curve", "shortLabel": "Dec Curve", "widget": "bipolar_knob"}
+      ],
+      "moreKeys": [
+        "env2.release_curve"
+      ]
+    },
+    {
+      "id": "env3",
+      "section": "Env",
+      "title": "Envelope 3",
+      "knobs": [
+        {"key": "env3.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "env3.hold", "shortLabel": "Hold", "widget": "knob"},
+        {"key": "env3.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "env3.sustain", "shortLabel": "Sustain", "widget": "knob"},
+        {"key": "env3.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "env3.delay", "shortLabel": "Delay", "widget": "knob"},
+        {"key": "env3.attack_curve", "shortLabel": "Atk Curve", "widget": "bipolar_knob"},
+        {"key": "env3.decay_curve", "shortLabel": "Dec Curve", "widget": "bipolar_knob"}
+      ],
+      "moreKeys": [
+        "env3.release_curve"
+      ]
+    },
+    {
+      "id": "env4",
+      "section": "Env",
+      "title": "Envelope 4",
+      "knobs": [
+        {"key": "env4.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "env4.hold", "shortLabel": "Hold", "widget": "knob"},
+        {"key": "env4.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "env4.sustain", "shortLabel": "Sustain", "widget": "knob"},
+        {"key": "env4.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "env4.delay", "shortLabel": "Delay", "widget": "knob"},
+        {"key": "env4.attack_curve", "shortLabel": "Atk Curve", "widget": "bipolar_knob"},
+        {"key": "env4.decay_curve", "shortLabel": "Dec Curve", "widget": "bipolar_knob"}
+      ],
+      "moreKeys": [
+        "env4.release_curve"
+      ]
+    },
+    {
+      "id": "env5",
+      "section": "Env",
+      "title": "Envelope 5",
+      "knobs": [
+        {"key": "env5.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "env5.hold", "shortLabel": "Hold", "widget": "knob"},
+        {"key": "env5.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "env5.sustain", "shortLabel": "Sustain", "widget": "knob"},
+        {"key": "env5.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "env5.delay", "shortLabel": "Delay", "widget": "knob"},
+        {"key": "env5.attack_curve", "shortLabel": "Atk Curve", "widget": "bipolar_knob"},
+        {"key": "env5.decay_curve", "shortLabel": "Dec Curve", "widget": "bipolar_knob"}
+      ],
+      "moreKeys": [
+        "env5.release_curve"
+      ]
+    },
+    {
+      "id": "env6",
+      "section": "Env",
+      "title": "Envelope 6",
+      "knobs": [
+        {"key": "env6.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "env6.hold", "shortLabel": "Hold", "widget": "knob"},
+        {"key": "env6.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "env6.sustain", "shortLabel": "Sustain", "widget": "knob"},
+        {"key": "env6.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "env6.delay", "shortLabel": "Delay", "widget": "knob"},
+        {"key": "env6.attack_curve", "shortLabel": "Atk Curve", "widget": "bipolar_knob"},
+        {"key": "env6.decay_curve", "shortLabel": "Dec Curve", "widget": "bipolar_knob"}
+      ],
+      "moreKeys": [
+        "env6.release_curve"
+      ]
+    },
+    {
+      "id": "lfo1",
+      "section": "LFO",
+      "title": "LFO 1",
+      "knobs": [
+        {"key": "lfo1.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo1.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo1.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo1.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo1.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo1.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo1.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo1.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo1.smooth",
+        "lfo1.smooth_time",
+        "lfo1.stereo",
+        "lfo1.keytrack_transpose",
+        "lfo1.keytrack_tune"
+      ]
+    },
+    {
+      "id": "lfo2",
+      "section": "LFO",
+      "title": "LFO 2",
+      "knobs": [
+        {"key": "lfo2.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo2.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo2.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo2.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo2.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo2.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo2.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo2.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo2.smooth",
+        "lfo2.smooth_time",
+        "lfo2.stereo",
+        "lfo2.keytrack_transpose",
+        "lfo2.keytrack_tune"
+      ]
+    },
+    {
+      "id": "lfo3",
+      "section": "LFO",
+      "title": "LFO 3",
+      "knobs": [
+        {"key": "lfo3.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo3.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo3.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo3.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo3.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo3.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo3.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo3.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo3.smooth",
+        "lfo3.smooth_time",
+        "lfo3.stereo",
+        "lfo3.keytrack_transpose",
+        "lfo3.keytrack_tune"
+      ]
+    },
+    {
+      "id": "lfo4",
+      "section": "LFO",
+      "title": "LFO 4",
+      "knobs": [
+        {"key": "lfo4.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo4.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo4.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo4.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo4.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo4.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo4.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo4.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo4.smooth",
+        "lfo4.smooth_time",
+        "lfo4.stereo",
+        "lfo4.keytrack_transpose",
+        "lfo4.keytrack_tune"
+      ]
+    },
+    {
+      "id": "lfo5",
+      "section": "LFO",
+      "title": "LFO 5",
+      "knobs": [
+        {"key": "lfo5.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo5.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo5.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo5.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo5.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo5.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo5.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo5.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo5.smooth",
+        "lfo5.smooth_time",
+        "lfo5.stereo",
+        "lfo5.keytrack_transpose",
+        "lfo5.keytrack_tune"
+      ]
+    },
+    {
+      "id": "lfo6",
+      "section": "LFO",
+      "title": "LFO 6",
+      "knobs": [
+        {"key": "lfo6.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo6.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo6.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo6.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo6.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo6.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo6.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo6.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo6.smooth",
+        "lfo6.smooth_time",
+        "lfo6.stereo",
+        "lfo6.keytrack_transpose",
+        "lfo6.keytrack_tune"
+      ]
+    },
+    {
+      "id": "lfo7",
+      "section": "LFO",
+      "title": "LFO 7",
+      "knobs": [
+        {"key": "lfo7.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo7.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo7.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo7.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo7.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo7.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo7.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo7.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo7.smooth",
+        "lfo7.smooth_time",
+        "lfo7.stereo",
+        "lfo7.keytrack_transpose",
+        "lfo7.keytrack_tune"
+      ]
+    },
+    {
+      "id": "lfo8",
+      "section": "LFO",
+      "title": "LFO 8",
+      "knobs": [
+        {"key": "lfo8.shape", "shortLabel": "Shape", "widget": "stepped"},
+        {"key": "lfo8.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "lfo8.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "lfo8.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "lfo8.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "lfo8.phase", "shortLabel": "Phase", "widget": "knob"},
+        {"key": "lfo8.fade_in", "shortLabel": "Fade In", "widget": "knob"},
+        {"key": "lfo8.delay", "shortLabel": "Delay", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "lfo8.smooth",
+        "lfo8.smooth_time",
+        "lfo8.stereo",
+        "lfo8.keytrack_transpose",
+        "lfo8.keytrack_tune"
+      ]
+    },
+    {
+      "id": "rlfo1",
+      "section": "LFO",
+      "title": "Random LFO 1",
+      "knobs": [
+        {"key": "rlfo1.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "rlfo1.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "rlfo1.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "rlfo1.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "rlfo1.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "rlfo1.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "rlfo1.keytrack_transpose", "shortLabel": "Key Follow", "widget": "bipolar_knob"},
+        {"key": "rlfo1.keytrack_tune", "shortLabel": "Key Follow", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "rlfo2",
+      "section": "LFO",
+      "title": "Random LFO 2",
+      "knobs": [
+        {"key": "rlfo2.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "rlfo2.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "rlfo2.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "rlfo2.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "rlfo2.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "rlfo2.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "rlfo2.keytrack_transpose", "shortLabel": "Key Follow", "widget": "bipolar_knob"},
+        {"key": "rlfo2.keytrack_tune", "shortLabel": "Key Follow", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "rlfo3",
+      "section": "LFO",
+      "title": "Random LFO 3",
+      "knobs": [
+        {"key": "rlfo3.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "rlfo3.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "rlfo3.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "rlfo3.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "rlfo3.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "rlfo3.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "rlfo3.keytrack_transpose", "shortLabel": "Key Follow", "widget": "bipolar_knob"},
+        {"key": "rlfo3.keytrack_tune", "shortLabel": "Key Follow", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "rlfo4",
+      "section": "LFO",
+      "title": "Random LFO 4",
+      "knobs": [
+        {"key": "rlfo4.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "rlfo4.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "rlfo4.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "rlfo4.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "rlfo4.sync_type", "shortLabel": "Trigger", "widget": "stepped"},
+        {"key": "rlfo4.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "rlfo4.keytrack_transpose", "shortLabel": "Key Follow", "widget": "bipolar_knob"},
+        {"key": "rlfo4.keytrack_tune", "shortLabel": "Key Follow", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "fx_order_1",
+      "section": "FX",
+      "title": "FX Chain Order 1–8",
+      "knobs": [
+        {"key": "fx.order.1", "shortLabel": "Order 1", "widget": "stepped"},
+        {"key": "fx.order.2", "shortLabel": "Order 2", "widget": "stepped"},
+        {"key": "fx.order.3", "shortLabel": "Order 3", "widget": "stepped"},
+        {"key": "fx.order.4", "shortLabel": "Order 4", "widget": "stepped"},
+        {"key": "fx.order.5", "shortLabel": "Order 5", "widget": "stepped"},
+        {"key": "fx.order.6", "shortLabel": "Order 6", "widget": "stepped"},
+        {"key": "fx.order.7", "shortLabel": "Order 7", "widget": "stepped"},
+        {"key": "fx.order.8", "shortLabel": "Order 8", "widget": "stepped"}
+      ]
+    },
+    {
+      "id": "fx_switches",
+      "section": "FX",
+      "title": "FX Order 9 & Switches",
+      "knobs": [
+        {"key": "fx.order.9", "shortLabel": "Order 9", "widget": "stepped"},
+        {"key": "fxfilter.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "distortion.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "compressor.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "eq.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "chorus.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "delay.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "reverb.on", "shortLabel": "On", "widget": "toggle"}
+      ]
+    },
+    {
+      "id": "fx_chorus_1",
+      "section": "FX",
+      "title": "Chorus Main",
+      "knobs": [
+        {"key": "chorus.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "chorus.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "chorus.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "chorus.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "chorus.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "chorus.depth", "shortLabel": "Depth", "widget": "knob"},
+        {"key": "chorus.feedback", "shortLabel": "Feedback", "widget": "bipolar_knob"},
+        {"key": "chorus.voices", "shortLabel": "Voices", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_chorus_2",
+      "section": "FX",
+      "title": "Chorus Delays & Filter",
+      "knobs": [
+        {"key": "chorus.delay1", "shortLabel": "Delay 1", "widget": "knob"},
+        {"key": "chorus.delay2", "shortLabel": "Delay 2", "widget": "knob"},
+        {"key": "chorus.filter_cutoff", "shortLabel": "Filt Cut", "widget": "knob"},
+        {"key": "chorus.filter_spread", "shortLabel": "Filter Spr", "widget": "knob"},
+        {"key": "chorus.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "chorus.depth", "shortLabel": "Depth", "widget": "knob"},
+        {"key": "chorus.feedback", "shortLabel": "Feedback", "widget": "bipolar_knob"},
+        {"key": "chorus.on", "shortLabel": "On", "widget": "toggle"}
+      ]
+    },
+    {
+      "id": "fx_comp_main",
+      "section": "FX",
+      "title": "Compressor Main & Gain",
+      "knobs": [
+        {"key": "compressor.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "compressor.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "compressor.bands", "shortLabel": "Bands", "widget": "stepped"},
+        {"key": "compressor.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "compressor.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "compressor.low.gain", "shortLabel": "Low Gain", "widget": "bipolar_knob"},
+        {"key": "compressor.mid.gain", "shortLabel": "Mid Gain", "widget": "bipolar_knob"},
+        {"key": "compressor.high.gain", "shortLabel": "High Gain", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "fx_comp_low",
+      "section": "FX",
+      "title": "Compressor Low Band",
+      "knobs": [
+        {"key": "compressor.low.lower_threshold", "shortLabel": "Low Lower ", "widget": "bipolar_knob"},
+        {"key": "compressor.low.upper_threshold", "shortLabel": "Low Upper ", "widget": "bipolar_knob"},
+        {"key": "compressor.low.lower_ratio", "shortLabel": "Low Lower ", "widget": "bipolar_knob"},
+        {"key": "compressor.low.upper_ratio", "shortLabel": "Low Upper ", "widget": "knob"},
+        {"key": "compressor.low.gain", "shortLabel": "Low Gain", "widget": "bipolar_knob"},
+        {"key": "compressor.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "compressor.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "compressor.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_comp_mid",
+      "section": "FX",
+      "title": "Compressor Mid Band",
+      "knobs": [
+        {"key": "compressor.mid.lower_threshold", "shortLabel": "Mid Lower ", "widget": "bipolar_knob"},
+        {"key": "compressor.mid.upper_threshold", "shortLabel": "Mid Upper ", "widget": "bipolar_knob"},
+        {"key": "compressor.mid.lower_ratio", "shortLabel": "Mid Lower ", "widget": "bipolar_knob"},
+        {"key": "compressor.mid.upper_ratio", "shortLabel": "Mid Upper ", "widget": "knob"},
+        {"key": "compressor.mid.gain", "shortLabel": "Mid Gain", "widget": "bipolar_knob"},
+        {"key": "compressor.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "compressor.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "compressor.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_comp_high",
+      "section": "FX",
+      "title": "Compressor High Band",
+      "knobs": [
+        {"key": "compressor.high.lower_threshold", "shortLabel": "High Lower", "widget": "bipolar_knob"},
+        {"key": "compressor.high.upper_threshold", "shortLabel": "High Upper", "widget": "bipolar_knob"},
+        {"key": "compressor.high.lower_ratio", "shortLabel": "High Lower", "widget": "bipolar_knob"},
+        {"key": "compressor.high.upper_ratio", "shortLabel": "High Upper", "widget": "knob"},
+        {"key": "compressor.high.gain", "shortLabel": "High Gain", "widget": "bipolar_knob"},
+        {"key": "compressor.attack", "shortLabel": "Attack", "widget": "knob"},
+        {"key": "compressor.release", "shortLabel": "Release", "widget": "knob"},
+        {"key": "compressor.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_delay_1",
+      "section": "FX",
+      "title": "Delay Main",
+      "knobs": [
+        {"key": "delay.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "delay.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "delay.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "delay.feedback", "shortLabel": "Feedback", "widget": "bipolar_knob"},
+        {"key": "delay.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "delay.time", "shortLabel": "Time", "widget": "knob"},
+        {"key": "delay.time2", "shortLabel": "Time 2", "widget": "knob"},
+        {"key": "delay.division", "shortLabel": "Division", "widget": "stepped"}
+      ]
+    },
+    {
+      "id": "fx_delay_2",
+      "section": "FX",
+      "title": "Delay Filter & Div 2",
+      "knobs": [
+        {"key": "delay.division2", "shortLabel": "Division 2", "widget": "stepped"},
+        {"key": "delay.filter_cutoff", "shortLabel": "Filt Cut", "widget": "knob"},
+        {"key": "delay.filter_spread", "shortLabel": "Filter Spr", "widget": "knob"},
+        {"key": "delay.feedback", "shortLabel": "Feedback", "widget": "bipolar_knob"},
+        {"key": "delay.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "delay.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "delay.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "delay.on", "shortLabel": "On", "widget": "toggle"}
+      ]
+    },
+    {
+      "id": "fx_distortion",
+      "section": "FX",
+      "title": "Distortion",
+      "knobs": [
+        {"key": "distortion.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "distortion.type", "shortLabel": "Type", "widget": "stepped"},
+        {"key": "distortion.drive", "shortLabel": "Drive", "widget": "bipolar_knob"},
+        {"key": "distortion.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "distortion.filter_order", "shortLabel": "Filt Order", "widget": "stepped"},
+        {"key": "distortion.filter_cutoff", "shortLabel": "Filt Cut", "widget": "knob"},
+        {"key": "distortion.filter_resonance", "shortLabel": "Filt Reso", "widget": "knob"},
+        {"key": "distortion.filter_blend", "shortLabel": "Filt Blend", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_eq_low_mid",
+      "section": "FX",
+      "title": "EQ Low & Mid",
+      "knobs": [
+        {"key": "eq.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "eq.low.mode", "shortLabel": "Low Mode", "widget": "stepped"},
+        {"key": "eq.low.cutoff", "shortLabel": "Low Cutoff", "widget": "knob"},
+        {"key": "eq.low.gain", "shortLabel": "Low Gain", "widget": "bipolar_knob"},
+        {"key": "eq.low.resonance", "shortLabel": "Low Resona", "widget": "knob"},
+        {"key": "eq.mid.mode", "shortLabel": "Mid Mode", "widget": "stepped"},
+        {"key": "eq.mid.cutoff", "shortLabel": "Mid Cutoff", "widget": "knob"},
+        {"key": "eq.mid.gain", "shortLabel": "Mid Gain", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "fx_eq_high",
+      "section": "FX",
+      "title": "EQ Mid Q & High",
+      "knobs": [
+        {"key": "eq.mid.resonance", "shortLabel": "Mid Resona", "widget": "knob"},
+        {"key": "eq.high.mode", "shortLabel": "High Mode", "widget": "stepped"},
+        {"key": "eq.high.cutoff", "shortLabel": "High Cutof", "widget": "knob"},
+        {"key": "eq.high.gain", "shortLabel": "High Gain", "widget": "bipolar_knob"},
+        {"key": "eq.high.resonance", "shortLabel": "High Reson", "widget": "knob"},
+        {"key": "eq.low.gain", "shortLabel": "Low Gain", "widget": "bipolar_knob"},
+        {"key": "eq.mid.gain", "shortLabel": "Mid Gain", "widget": "bipolar_knob"},
+        {"key": "eq.on", "shortLabel": "On", "widget": "toggle"}
+      ]
+    },
+    {
+      "id": "fx_filter_1",
+      "section": "FX",
+      "title": "FX Filter Main",
+      "knobs": [
+        {"key": "fxfilter.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "fxfilter.model", "shortLabel": "Model", "widget": "stepped"},
+        {"key": "fxfilter.style", "shortLabel": "Style", "widget": "stepped"},
+        {"key": "fxfilter.cutoff", "shortLabel": "Cutoff", "widget": "knob"},
+        {"key": "fxfilter.resonance", "shortLabel": "Resonance", "widget": "knob"},
+        {"key": "fxfilter.drive", "shortLabel": "Drive", "widget": "knob"},
+        {"key": "fxfilter.blend", "shortLabel": "Blend", "widget": "knob"},
+        {"key": "fxfilter.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_filter_2",
+      "section": "FX",
+      "title": "FX Filter Formant/Comb",
+      "knobs": [
+        {"key": "fxfilter.keytrack", "shortLabel": "Key Tracki", "widget": "bipolar_knob"},
+        {"key": "fxfilter.comb_offset", "shortLabel": "Comb Blend", "widget": "knob"},
+        {"key": "fxfilter.formant.x", "shortLabel": "Formant X", "widget": "knob"},
+        {"key": "fxfilter.formant.y", "shortLabel": "Formant Y", "widget": "knob"},
+        {"key": "fxfilter.formant.resonance", "shortLabel": "Fmt Reso", "widget": "knob"},
+        {"key": "fxfilter.formant.spread", "shortLabel": "Fmt Spread", "widget": "bipolar_knob"},
+        {"key": "fxfilter.formant.transpose", "shortLabel": "Fmt Trans", "widget": "bipolar_knob"},
+        {"key": "fxfilter.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_flanger",
+      "section": "FX",
+      "title": "Flanger",
+      "knobs": [
+        {"key": "flanger.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "flanger.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "flanger.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "flanger.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "flanger.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "flanger.depth", "shortLabel": "Depth", "widget": "knob"},
+        {"key": "flanger.feedback", "shortLabel": "Feedback", "widget": "bipolar_knob"},
+        {"key": "flanger.center", "shortLabel": "Center", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_phaser_1",
+      "section": "FX",
+      "title": "Phaser & Flanger Phase",
+      "knobs": [
+        {"key": "phaser.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "phaser.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "phaser.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "phaser.sync", "shortLabel": "Sync", "widget": "stepped"},
+        {"key": "phaser.division", "shortLabel": "Division", "widget": "stepped"},
+        {"key": "phaser.depth", "shortLabel": "Depth", "widget": "knob"},
+        {"key": "phaser.feedback", "shortLabel": "Feedback", "widget": "knob"},
+        {"key": "flanger.phase_offset", "shortLabel": "Phase Off", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_phaser_2",
+      "section": "FX",
+      "title": "Phaser Tone & Stereo",
+      "knobs": [
+        {"key": "phaser.center", "shortLabel": "Center", "widget": "knob"},
+        {"key": "phaser.blend", "shortLabel": "Blend", "widget": "knob"},
+        {"key": "phaser.phase_offset", "shortLabel": "Phase Off", "widget": "knob"},
+        {"key": "phaser.depth", "shortLabel": "Depth", "widget": "knob"},
+        {"key": "phaser.feedback", "shortLabel": "Feedback", "widget": "knob"},
+        {"key": "phaser.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "phaser.rate", "shortLabel": "Rate", "widget": "knob"},
+        {"key": "phaser.on", "shortLabel": "On", "widget": "toggle"}
+      ]
+    },
+    {
+      "id": "fx_reverb_1",
+      "section": "FX",
+      "title": "Reverb Space & Cuts",
+      "knobs": [
+        {"key": "reverb.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "reverb.mix", "shortLabel": "Mix", "widget": "knob"},
+        {"key": "reverb.size", "shortLabel": "Size", "widget": "knob"},
+        {"key": "reverb.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "reverb.predelay", "shortLabel": "Pre-delay", "widget": "knob"},
+        {"key": "reverb.pre_low_cut", "shortLabel": "Pre Low", "widget": "knob"},
+        {"key": "reverb.pre_high_cut", "shortLabel": "Pre High", "widget": "knob"},
+        {"key": "reverb.chorus_amount", "shortLabel": "Chor Amt", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "fx_reverb_2",
+      "section": "FX",
+      "title": "Reverb Damping & Chorus",
+      "knobs": [
+        {"key": "reverb.low_shelf_cutoff", "shortLabel": "Low Cut", "widget": "knob"},
+        {"key": "reverb.low_shelf_gain", "shortLabel": "Low Gain", "widget": "bipolar_knob"},
+        {"key": "reverb.high_shelf_cutoff", "shortLabel": "High Cut", "widget": "knob"},
+        {"key": "reverb.high_shelf_gain", "shortLabel": "High Gain", "widget": "bipolar_knob"},
+        {"key": "reverb.chorus_amount", "shortLabel": "Chor Amt", "widget": "knob"},
+        {"key": "reverb.chorus_rate", "shortLabel": "Chor Rate", "widget": "knob"},
+        {"key": "reverb.decay", "shortLabel": "Decay", "widget": "knob"},
+        {"key": "reverb.mix", "shortLabel": "Mix", "widget": "knob"}
+      ]
+    },
+    {
+      "id": "mod_slot_1",
+      "section": "Matrix",
+      "title": "Mod Matrix Slot 1",
+      "knobs": [
+        {"key": "mod01.source", "shortLabel": "Source", "widget": "stepped"},
+        {"key": "mod01.destination", "shortLabel": "Dest", "widget": "stepped"},
+        {"key": "mod01.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod01.power", "shortLabel": "Curve", "widget": "bipolar_knob"},
+        {"key": "mod01.bipolar", "shortLabel": "Bipolar", "widget": "stepped"},
+        {"key": "mod01.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "mod01.bypass", "shortLabel": "Bypass", "widget": "toggle"},
+        null
+      ]
+    },
+    {
+      "id": "mod_slot_2",
+      "section": "Matrix",
+      "title": "Mod Matrix Slot 2",
+      "knobs": [
+        {"key": "mod02.source", "shortLabel": "Source", "widget": "stepped"},
+        {"key": "mod02.destination", "shortLabel": "Dest", "widget": "stepped"},
+        {"key": "mod02.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod02.power", "shortLabel": "Curve", "widget": "bipolar_knob"},
+        {"key": "mod02.bipolar", "shortLabel": "Bipolar", "widget": "stepped"},
+        {"key": "mod02.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "mod02.bypass", "shortLabel": "Bypass", "widget": "toggle"},
+        null
+      ]
+    },
+    {
+      "id": "mod_slot_3",
+      "section": "Matrix",
+      "title": "Mod Matrix Slot 3",
+      "knobs": [
+        {"key": "mod03.source", "shortLabel": "Source", "widget": "stepped"},
+        {"key": "mod03.destination", "shortLabel": "Dest", "widget": "stepped"},
+        {"key": "mod03.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod03.power", "shortLabel": "Curve", "widget": "bipolar_knob"},
+        {"key": "mod03.bipolar", "shortLabel": "Bipolar", "widget": "stepped"},
+        {"key": "mod03.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "mod03.bypass", "shortLabel": "Bypass", "widget": "toggle"},
+        null
+      ]
+    },
+    {
+      "id": "mod_slot_4",
+      "section": "Matrix",
+      "title": "Mod Matrix Slot 4",
+      "knobs": [
+        {"key": "mod04.source", "shortLabel": "Source", "widget": "stepped"},
+        {"key": "mod04.destination", "shortLabel": "Dest", "widget": "stepped"},
+        {"key": "mod04.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod04.power", "shortLabel": "Curve", "widget": "bipolar_knob"},
+        {"key": "mod04.bipolar", "shortLabel": "Bipolar", "widget": "stepped"},
+        {"key": "mod04.stereo", "shortLabel": "Stereo", "widget": "stepped"},
+        {"key": "mod04.bypass", "shortLabel": "Bypass", "widget": "toggle"},
+        null
+      ]
+    },
+    {
+      "id": "mod_amounts_1_8",
+      "section": "Matrix",
+      "title": "Mod Amounts 1–8",
+      "knobs": [
+        {"key": "mod01.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod02.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod03.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod04.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod05.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod06.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod07.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod08.amount", "shortLabel": "Amount", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "mod_amounts_9_16",
+      "section": "Matrix",
+      "title": "Mod Amounts 9–16",
+      "knobs": [
+        {"key": "mod09.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod10.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod11.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod12.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod13.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod14.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod15.amount", "shortLabel": "Amount", "widget": "bipolar_knob"},
+        {"key": "mod16.amount", "shortLabel": "Amount", "widget": "bipolar_knob"}
+      ],
+      "moreKeys": [
+        "mod05.source",
+        "mod05.destination",
+        "mod05.power",
+        "mod05.bipolar",
+        "mod05.stereo",
+        "mod05.bypass",
+        "mod06.source",
+        "mod06.destination",
+        "mod06.power",
+        "mod06.bipolar",
+        "mod06.stereo",
+        "mod06.bypass",
+        "mod07.source",
+        "mod07.destination",
+        "mod07.power",
+        "mod07.bipolar",
+        "mod07.stereo",
+        "mod07.bypass",
+        "mod08.source",
+        "mod08.destination",
+        "mod08.power",
+        "mod08.bipolar",
+        "mod08.stereo",
+        "mod08.bypass",
+        "mod09.source",
+        "mod09.destination",
+        "mod09.power",
+        "mod09.bipolar",
+        "mod09.stereo",
+        "mod09.bypass",
+        "mod10.source",
+        "mod10.destination",
+        "mod10.power",
+        "mod10.bipolar",
+        "mod10.stereo",
+        "mod10.bypass",
+        "mod11.source",
+        "mod11.destination",
+        "mod11.power",
+        "mod11.bipolar",
+        "mod11.stereo",
+        "mod11.bypass",
+        "mod12.source",
+        "mod12.destination",
+        "mod12.power",
+        "mod12.bipolar",
+        "mod12.stereo",
+        "mod12.bypass",
+        "mod13.source",
+        "mod13.destination",
+        "mod13.power",
+        "mod13.bipolar",
+        "mod13.stereo",
+        "mod13.bypass",
+        "mod14.source",
+        "mod14.destination",
+        "mod14.power",
+        "mod14.bipolar",
+        "mod14.stereo",
+        "mod14.bypass",
+        "mod15.source",
+        "mod15.destination",
+        "mod15.power",
+        "mod15.bipolar",
+        "mod15.stereo",
+        "mod15.bypass",
+        "mod16.source",
+        "mod16.destination",
+        "mod16.power",
+        "mod16.bipolar",
+        "mod16.stereo",
+        "mod16.bypass",
+        "mod17.source",
+        "mod17.destination",
+        "mod17.amount",
+        "mod17.power",
+        "mod17.bipolar",
+        "mod17.stereo",
+        "mod17.bypass",
+        "mod18.source",
+        "mod18.destination",
+        "mod18.amount",
+        "mod18.power",
+        "mod18.bipolar",
+        "mod18.stereo",
+        "mod18.bypass",
+        "mod19.source",
+        "mod19.destination",
+        "mod19.amount",
+        "mod19.power",
+        "mod19.bipolar",
+        "mod19.stereo",
+        "mod19.bypass",
+        "mod20.source",
+        "mod20.destination",
+        "mod20.amount",
+        "mod20.power",
+        "mod20.bipolar",
+        "mod20.stereo",
+        "mod20.bypass",
+        "mod21.source",
+        "mod21.destination",
+        "mod21.amount",
+        "mod21.power",
+        "mod21.bipolar",
+        "mod21.stereo",
+        "mod21.bypass",
+        "mod22.source",
+        "mod22.destination",
+        "mod22.amount",
+        "mod22.power",
+        "mod22.bipolar",
+        "mod22.stereo",
+        "mod22.bypass",
+        "mod23.source",
+        "mod23.destination",
+        "mod23.amount",
+        "mod23.power",
+        "mod23.bipolar",
+        "mod23.stereo",
+        "mod23.bypass",
+        "mod24.source",
+        "mod24.destination",
+        "mod24.amount",
+        "mod24.power",
+        "mod24.bipolar",
+        "mod24.stereo",
+        "mod24.bypass",
+        "mod25.source",
+        "mod25.destination",
+        "mod25.amount",
+        "mod25.power",
+        "mod25.bipolar",
+        "mod25.stereo",
+        "mod25.bypass",
+        "mod26.source",
+        "mod26.destination",
+        "mod26.amount",
+        "mod26.power",
+        "mod26.bipolar",
+        "mod26.stereo",
+        "mod26.bypass",
+        "mod27.source",
+        "mod27.destination",
+        "mod27.amount",
+        "mod27.power",
+        "mod27.bipolar",
+        "mod27.stereo",
+        "mod27.bypass",
+        "mod28.source",
+        "mod28.destination",
+        "mod28.amount",
+        "mod28.power",
+        "mod28.bipolar",
+        "mod28.stereo",
+        "mod28.bypass",
+        "mod29.source",
+        "mod29.destination",
+        "mod29.amount",
+        "mod29.power",
+        "mod29.bipolar",
+        "mod29.stereo",
+        "mod29.bypass",
+        "mod30.source",
+        "mod30.destination",
+        "mod30.amount",
+        "mod30.power",
+        "mod30.bipolar",
+        "mod30.stereo",
+        "mod30.bypass",
+        "mod31.source",
+        "mod31.destination",
+        "mod31.amount",
+        "mod31.power",
+        "mod31.bipolar",
+        "mod31.stereo",
+        "mod31.bypass",
+        "mod32.source",
+        "mod32.destination",
+        "mod32.amount",
+        "mod32.power",
+        "mod32.bipolar",
+        "mod32.stereo",
+        "mod32.bypass",
+        "mod33.source",
+        "mod33.destination",
+        "mod33.amount",
+        "mod33.power",
+        "mod33.bipolar",
+        "mod33.stereo",
+        "mod33.bypass",
+        "mod34.source",
+        "mod34.destination",
+        "mod34.amount",
+        "mod34.power",
+        "mod34.bipolar",
+        "mod34.stereo",
+        "mod34.bypass",
+        "mod35.source",
+        "mod35.destination",
+        "mod35.amount",
+        "mod35.power",
+        "mod35.bipolar",
+        "mod35.stereo",
+        "mod35.bypass",
+        "mod36.source",
+        "mod36.destination",
+        "mod36.amount",
+        "mod36.power",
+        "mod36.bipolar",
+        "mod36.stereo",
+        "mod36.bypass",
+        "mod37.source",
+        "mod37.destination",
+        "mod37.amount",
+        "mod37.power",
+        "mod37.bipolar",
+        "mod37.stereo",
+        "mod37.bypass",
+        "mod38.source",
+        "mod38.destination",
+        "mod38.amount",
+        "mod38.power",
+        "mod38.bipolar",
+        "mod38.stereo",
+        "mod38.bypass",
+        "mod39.source",
+        "mod39.destination",
+        "mod39.amount",
+        "mod39.power",
+        "mod39.bipolar",
+        "mod39.stereo",
+        "mod39.bypass",
+        "mod40.source",
+        "mod40.destination",
+        "mod40.amount",
+        "mod40.power",
+        "mod40.bipolar",
+        "mod40.stereo",
+        "mod40.bypass",
+        "mod41.source",
+        "mod41.destination",
+        "mod41.amount",
+        "mod41.power",
+        "mod41.bipolar",
+        "mod41.stereo",
+        "mod41.bypass",
+        "mod42.source",
+        "mod42.destination",
+        "mod42.amount",
+        "mod42.power",
+        "mod42.bipolar",
+        "mod42.stereo",
+        "mod42.bypass",
+        "mod43.source",
+        "mod43.destination",
+        "mod43.amount",
+        "mod43.power",
+        "mod43.bipolar",
+        "mod43.stereo",
+        "mod43.bypass",
+        "mod44.source",
+        "mod44.destination",
+        "mod44.amount",
+        "mod44.power",
+        "mod44.bipolar",
+        "mod44.stereo",
+        "mod44.bypass",
+        "mod45.source",
+        "mod45.destination",
+        "mod45.amount",
+        "mod45.power",
+        "mod45.bipolar",
+        "mod45.stereo",
+        "mod45.bypass",
+        "mod46.source",
+        "mod46.destination",
+        "mod46.amount",
+        "mod46.power",
+        "mod46.bipolar",
+        "mod46.stereo",
+        "mod46.bypass",
+        "mod47.source",
+        "mod47.destination",
+        "mod47.amount",
+        "mod47.power",
+        "mod47.bipolar",
+        "mod47.stereo",
+        "mod47.bypass",
+        "mod48.source",
+        "mod48.destination",
+        "mod48.amount",
+        "mod48.power",
+        "mod48.bipolar",
+        "mod48.stereo",
+        "mod48.bypass",
+        "mod49.source",
+        "mod49.destination",
+        "mod49.amount",
+        "mod49.power",
+        "mod49.bipolar",
+        "mod49.stereo",
+        "mod49.bypass",
+        "mod50.source",
+        "mod50.destination",
+        "mod50.amount",
+        "mod50.power",
+        "mod50.bipolar",
+        "mod50.stereo",
+        "mod50.bypass",
+        "mod51.source",
+        "mod51.destination",
+        "mod51.amount",
+        "mod51.power",
+        "mod51.bipolar",
+        "mod51.stereo",
+        "mod51.bypass",
+        "mod52.source",
+        "mod52.destination",
+        "mod52.amount",
+        "mod52.power",
+        "mod52.bipolar",
+        "mod52.stereo",
+        "mod52.bypass",
+        "mod53.source",
+        "mod53.destination",
+        "mod53.amount",
+        "mod53.power",
+        "mod53.bipolar",
+        "mod53.stereo",
+        "mod53.bypass",
+        "mod54.source",
+        "mod54.destination",
+        "mod54.amount",
+        "mod54.power",
+        "mod54.bipolar",
+        "mod54.stereo",
+        "mod54.bypass",
+        "mod55.source",
+        "mod55.destination",
+        "mod55.amount",
+        "mod55.power",
+        "mod55.bipolar",
+        "mod55.stereo",
+        "mod55.bypass",
+        "mod56.source",
+        "mod56.destination",
+        "mod56.amount",
+        "mod56.power",
+        "mod56.bipolar",
+        "mod56.stereo",
+        "mod56.bypass",
+        "mod57.source",
+        "mod57.destination",
+        "mod57.amount",
+        "mod57.power",
+        "mod57.bipolar",
+        "mod57.stereo",
+        "mod57.bypass",
+        "mod58.source",
+        "mod58.destination",
+        "mod58.amount",
+        "mod58.power",
+        "mod58.bipolar",
+        "mod58.stereo",
+        "mod58.bypass",
+        "mod59.source",
+        "mod59.destination",
+        "mod59.amount",
+        "mod59.power",
+        "mod59.bipolar",
+        "mod59.stereo",
+        "mod59.bypass",
+        "mod60.source",
+        "mod60.destination",
+        "mod60.amount",
+        "mod60.power",
+        "mod60.bipolar",
+        "mod60.stereo",
+        "mod60.bypass",
+        "mod61.source",
+        "mod61.destination",
+        "mod61.amount",
+        "mod61.power",
+        "mod61.bipolar",
+        "mod61.stereo",
+        "mod61.bypass",
+        "mod62.source",
+        "mod62.destination",
+        "mod62.amount",
+        "mod62.power",
+        "mod62.bipolar",
+        "mod62.stereo",
+        "mod62.bypass",
+        "mod63.source",
+        "mod63.destination",
+        "mod63.amount",
+        "mod63.power",
+        "mod63.bipolar",
+        "mod63.stereo",
+        "mod63.bypass",
+        "mod64.source",
+        "mod64.destination",
+        "mod64.amount",
+        "mod64.power",
+        "mod64.bipolar",
+        "mod64.stereo",
+        "mod64.bypass"
+      ]
+    }
+  ]
+}

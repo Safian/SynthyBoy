@@ -17,3 +17,6 @@ endif()
 # is up to date, is the CI step "parameter documentation is up to date").
 add_test(NAME synthyboy_paramdump COMMAND synthyboy_paramdump)
 set_tests_properties(synthyboy_paramdump PROPERTIES PASS_REGULAR_EXPRESSION "^\\{\"format\":\"synthyboy-params\"")
+
+add_test(NAME synthyboy_paramdump_kick_pages COMMAND synthyboy_paramdump --kick-pages)
+set_tests_properties(synthyboy_paramdump_kick_pages PROPERTIES PASS_REGULAR_EXPRESSION "\"format\": \"synthyboy-kick-pages\"")
