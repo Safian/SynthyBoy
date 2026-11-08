@@ -43,7 +43,7 @@ namespace sbvital {
     Output* reverb_size = createMonoModControl("reverb_size");
     Output* reverb_delay = createMonoModControl("reverb_delay");
     Output* reverb_wet = createMonoModControl("reverb_dry_wet");
-    // SynthyBoy (13-new-keys.md 4.16, G77)
+    // SynthyBoy (13-new-keys.md 4.17, G77)
     Value* reverb_type = createBaseControl("reverb_type");
     Value* reverb_room = createBaseControl("reverb_room");
     Output* reverb_width = createMonoModControl("reverb_width");

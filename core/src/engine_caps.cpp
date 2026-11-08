@@ -75,6 +75,12 @@ EngineCapsMask classify (const char* key) noexcept
 
     if (startsWith (key, "osc"))
     {
+        if (std::strstr (key, ".pitch_") != nullptr || std::strstr (key, ".fixed_pitch") != nullptr
+            || std::strstr (key, ".transpose_snap") != nullptr || std::strstr (key, ".unison.mode") != nullptr
+            || std::strstr (key, ".unison.range") != nullptr || std::strstr (key, ".unison.blend_shape") != nullptr
+            || std::strstr (key, ".unison.stack_repeat") != nullptr || std::strstr (key, ".phase_legato") != nullptr
+            || std::strstr (key, ".phase_memory") != nullptr)
+            return kCapPitchUnison;
         if (std::strstr (key, ".map.") != nullptr)
             return kCapOscMapping;
         if (std::strstr (key, ".warp2.") != nullptr)
@@ -83,6 +89,8 @@ EngineCapsMask classify (const char* key) noexcept
             return kCapMixerGraph;
         return kCapSampleOsc; // oscN.type, oscN.sample.*
     }
+    if (std::strcmp (key, "voice.phase_legato") == 0)
+        return kCapPitchUnison;
     if (startsWith (key, "noise."))
         return kCapMixerGraph; // filter_blend, bus sends
 
@@ -225,6 +233,7 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapWtRemap:          return "wt_remap";
         case kCapFxLevel:          return "fx_level";
         case kCapCleanMode:        return "clean_mode";
+        case kCapPitchUnison:      return "pitch_unison";
         case kCapFxCompressorLimit: return "fx_compressor_limit";
         case kCapFxDelayExtras:    return "fx_delay_extras";
         case kCapFxDistortionExtras: return "fx_distortion_extras";

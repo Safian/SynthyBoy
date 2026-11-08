@@ -1,4 +1,4 @@
-// SynthyBoy - core tests: block B17 (compressor, delay, distortion, phaser, reverb extras; docs/ui-design/13-new-keys.md 4.16): the 14 keys,
+// SynthyBoy - core tests: block B17 (compressor, delay, distortion, phaser, reverb extras; docs/ui-design/13-new-keys.md 4.17): the 14 keys,
 // their positions, neutral defaults, destination numbers, the appended distortion types, the Kick pages and the X-Shaper curves of the
 // content section.
 // Copyright (C) 2026 Safian Szabolcs
@@ -55,8 +55,8 @@ const Key kKeys[] = {
 
 TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
 {
-    int position = 1507;
-    int destination = 412;
+    int position = 1544;
+    int destination = 424;
     for (const Key& k : kKeys)
     {
         const auto& p = byKey (k.key);
@@ -75,11 +75,11 @@ TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
         CHECK (requiredCaps (static_cast<size_t> (position)) != kCapNone);
         ++position;
     }
-    CHECK_EQ (position, 1521);
-    CHECK_EQ (destination, 420);
-    CHECK_EQ (static_cast<int> (paramCount()), 1521);
-    CHECK_EQ (modDestinationParamIndex (412), 1509);
-    CHECK_EQ (modDestinationParamIndex (419), 1520);
+    CHECK_EQ (position, 1558);
+    CHECK_EQ (destination, 432);
+    CHECK_EQ (static_cast<int> (paramCount()), 1558);
+    CHECK_EQ (modDestinationParamIndex (424), 1546);
+    CHECK_EQ (modDestinationParamIndex (431), 1557);
     CHECK_EQ (positionOf ("splitter_ms.level"), 1483); // B12 is unchanged
     CHECK_EQ (positionOf ("fxfilter.clean_mode"), 1506); // B16 is unchanged
 }
@@ -103,7 +103,7 @@ TEST (b17_choice_lists_and_names)
 
 TEST (b17_kick_pages_reach_every_key)
 {
-    CHECK_EQ (kickPageCount(), static_cast<size_t> (112));
+    CHECK_EQ (kickPageCount(), static_cast<size_t> (115));
     const Page* pages = kickPageTable();
     for (const Key& k : kKeys)
     {

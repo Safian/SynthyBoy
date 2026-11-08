@@ -361,7 +361,7 @@ Kick `fx_convolve_1` (on, ir, size, tone, phi_min, predelay, sync, division), `f
 | `splitter_ms.mid_bypass` / `side_bypass` (2) | `Splitter M/S Mid Bypass` ... | bool | Off/On | Off | - | - | no | same |
 | `splitter_ms.level` | `Splitter M/S Level` | float | -24 .. 12 | 0 | dB | lin | y | same |
 
-5 + 7 + 4 = 16 keys. Crossovers are linear-phase-compensated Linkwitz-Riley 24 dB (**ASSUMPTION A24**, not in the manual; summing all unbypassed bands with no effects must be transparent within 0.1 dB, to be tested). FX scope for all of B12: `G` (the FX run on the summed output; modulation of FX parameters uses the existing "sum output" rule of 08), smoothing `S` for continuous keys, `X` for switches. Group of the order / rack / force keys: `FX / Order`, `FX / Racks`, `FX / Reverb`. Not added here: per-module output LEVEL trim on the nine Vital effects (G72). Compressor limit / crossovers (G73), delay Tap / HQ / offset (G74), the distortion types and X-Shaper (G75), phaser DEPTH 2 (G76) and the reverb algorithms (G77) were added later as block B17 (4.16).
+5 + 7 + 4 = 16 keys. Crossovers are linear-phase-compensated Linkwitz-Riley 24 dB (**ASSUMPTION A24**, not in the manual; summing all unbypassed bands with no effects must be transparent within 0.1 dB, to be tested). FX scope for all of B12: `G` (the FX run on the summed output; modulation of FX parameters uses the existing "sum output" rule of 08), smoothing `S` for continuous keys, `X` for switches. Group of the order / rack / force keys: `FX / Order`, `FX / Racks`, `FX / Reverb`. Not added here: per-module output LEVEL trim on the nine Vital effects (G72). Compressor limit / crossovers (G73), delay Tap / HQ / offset (G74), the distortion types and X-Shaper (G75), phaser DEPTH 2 (G76) and the reverb algorithms (G77) were added later as block B17 (4.17).
 
 ### 4.14 B16 – Wavetable position remap with RISE / FALL (G69) and per-module FX LEVEL (G72) – positions 1484..1503 [20] – area 02 / 08
 
@@ -403,6 +403,30 @@ Group `FX / <Module>`. **A124**: the trim is applied to the output of the module
 
 **A126** The capability bits are the next free ones of develop `629805b`: `kCapWtRemap` (26), `kCapFxLevel` (27), `kCapCleanMode` (28); the lead renumbers when the other blocks merge. **A127** the new blocks share the table end with other workers' blocks; the positions above are those of this branch (1484..1506), `kNumModDestinations` 412.
 
+### 4.16 B14 – Pitch modes, CRS coarse, pitch tracking, transpose snap, unison laws & range, phase legato (G25-G27, G31, G32) – positions 1507..1543 [37] – area 02 / 07
+
+12 keys per oscillator (N = 1..3) + 1 global voice key = 37 keys.
+
+| Key | Name | Type | Range | Default | Unit | Curve | Sc | Mod | Kick |
+|-----|------|------|-------|---------|------|-------|----|----:|------|
+| `oscN.pitch_mode` (x3) | `Osc N Pitch Mode` | choice | Semitones / Harmonics / Ratio / Step | Semitones | - | - | V | no | `oscN_pitch_uni` |
+| `oscN.pitch_coarse` (x3) | `Osc N Pitch Coarse` | float | -48 .. 48 | 0 | st | lin | V | y | same |
+| `oscN.pitch_track` (x3) | `Osc N Pitch Tracking` | bool | Off/On | On | - | - | V | no | same |
+| `oscN.pitch_bend_track` (x3) | `Osc N Pitch Bend Tracking` | bool | Off/On | On | - | - | V | no | `more:` |
+| `oscN.fixed_pitch` (x3) | `Osc N Fixed Pitch` | float | 0 .. 127 | 48 | - | lin | V | y | `oscN_pitch_uni` |
+| `oscN.transpose_snap` (x3) | `Osc N Transpose Snap` | int | 0 .. 8191 | 0 | - | lin | V | no | `more:` |
+| `oscN.unison.mode` (x3) | `Osc N Unison Mode` | choice | Linear / Super / Exp / Inv / Random | Linear | - | - | V | no | `oscN_pitch_uni` |
+| `oscN.unison.range` (x3) | `Osc N Unison Range` | float | 0 .. 48 | 2 | st | lin | V | y | same |
+| `oscN.unison.blend_shape` (x3) | `Osc N Unison Blend Shape` | float | -100 .. 100 | 0 | % | lin | V | y | same |
+| `oscN.unison.stack_repeat` (x3) | `Osc N Unison Stack Repeat` | choice | 1x / 2x / 3x | 1x | - | - | V | no | same |
+| `oscN.phase_legato` (x3) | `Osc N Phase Legato` | bool | Off/On | Off | - | - | V | no | `more:` |
+| `oscN.phase_memory` (x3) | `Osc N Phase Memory` | choice | All Voices / Contiguous / Per Voice | All Voices | - | - | V | no | `more:` |
+| `voice.phase_legato` | `Voice Phase Legato` | bool | Off/On | Off | - | - | G | no | `master_expression` |
+
+Order inside B14: `osc1` (12 keys), `osc2` (12 keys), `osc3` (12 keys), `voice.phase_legato` (1 key).
+
+Block B14 follows block B16 in the table (merge order of the lead): the 12 modulatable keys are destination choices 412..423 (`oscN.pitch_coarse`, `oscN.fixed_pitch`, `oscN.unison.range`, `oscN.unison.blend_shape`, N = 1..3, in table order).
+
 ### 4.13 Choices made by WP0 where this file was silent
 
 * **Order inside a block** (the destination numbers of §2 only depend on the counts, the order fixes the table positions): B03 is LFO-major (`lfo1.mono`, `lfo1.direction`, `lfo1.host`, `lfo2.mono` ...); B10 lists `osc1..3.filter_blend`, `noise.filter_blend`, then the sends source by source (`osc1.bus1_send`, `osc1.bus2_send`, `osc2.bus1_send` ... `noise.*`, `filter1.*`, `filter2.*`), `filter1.destination`, `filter2.destination`, `bus1.level`, `bus2.level`, `bus1.destination`, `bus2.destination`, `bus1.fx_bypass`, `bus2.fx_bypass`, `direct.level`, `main.fx_bypass`; B11 is filter-major (`filter1.var/pan/level`, `filter2.*`, `fxfilter.*`); B12 follows the row order of §4.12 (the 16 `<fx>.rack` keys in the order of the module list). `tests/test_new_keys.cpp` freezes the positions.
@@ -411,7 +435,7 @@ Group `FX / <Module>`. **A124**: the trim is applied to the output of the module
 * **Constants added to `params.h` / `modulation.h`:** `kNumKeysV2` = 880, `kNumLegacyFxSlots` = 9 (the effect slots the engines implement; `kNumFxSlots` = 16 is the table), `kNumModSourcesV2` = 28.
 * **Engines:** an engine implements the version 2 keys only until `IEngine::capabilities ()` (engine_caps.h) says more; a stored value beyond what the engine implements acts like the last implemented one (filter model / style, `rlfoN.style`, oscillator destination), `Preset table` plays the saw and `Custom` the sine (§5 fallbacks).
 
-### 4.16 B17 – Compressor, delay, distortion, phaser and reverb extras (G73-G77) – positions 1507..1520 [14] – area 08
+### 4.17 B17 – Compressor, delay, distortion, phaser and reverb extras (G73-G77) – positions 1507..1520 [14] – area 08
 
 Added by the fx-extras work package (FXEXTRA-REPORT.md), after block B16, as its own trailing block (R2: appended at the end of `kRaw[]`). The rows G73-G77 of `10-coverage-matrix.md` name the features only ("limit mode, adjustable crossovers", "Tap->Delay, HQ, scalar offset", "X-Shaper, Tube / Diode / Rectify, filter key track", "DEPTH 2", "Plate / Hall / Vintage / Nitrous + room modes"); the Serum manual is not in the repository, so the definitions below are this file's own (assumptions A140-A159). The per-module `LEVEL` trim (G72) is not part of B17.
 
@@ -483,7 +507,7 @@ Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatab
 
 Missing content at load: the existing fallback and `missing_content` flag (ARCHITECTURE 5.2): `Preset table` -> built-in Saw, `Sample` -> silent oscillator, `Custom` LFO -> `Sine`, `User file` tuning -> 12-TET, `Preset IR` -> bypass, `PZ SVF` -> flat.
 
-**B17 addition (4.16):** `content.curves` may also hold `shaper_a` and `shaper_b`, each `{"points":[{"x","y","power"}, ...]}` with the rules of the velocity curve (2 to 64 points, ascending x in 0..1, y in 0..1, |power| <= 20; absent or empty = the identity). They are the transfer curves of `distortion.type` X-Shaper and X-Shaper (Asym). The section stays part of state version 3 (additive, no version bump); an older reader ignores the two members.
+**B17 addition (4.17):** `content.curves` may also hold `shaper_a` and `shaper_b`, each `{"points":[{"x","y","power"}, ...]}` with the rules of the velocity curve (2 to 64 points, ascending x in 0..1, y in 0..1, |power| <= 20; absent or empty = the identity). They are the transfer curves of `distortion.type` X-Shaper and X-Shaper (Asym). The section stays part of state version 3 (additive, no version bump); an older reader ignores the two members.
 
 ## 6. Contract changes without keys
 
@@ -512,18 +536,19 @@ Missing content at load: the existing fallback and `missing_content` flag (ARCHI
 | B11 | filter var / pan / level (x3) | 9 | 1386..1394 | 9 | 357-365 |
 | B12 | fx order, racks, new FX, reverb force | 89 | 1395..1483 | 38 | 366-403 |
 | B16 | wavetable remap x3, FX levels x8, Clean Mode x3 (WTREMAP) | 23 | 1484..1506 | 8 | 404-411 |
-| B17 | compressor limit / crossovers, delay hq / offset, distortion key track, phaser depth 2, reverb type / room / width / ER / diffusion | 14 | 1507..1520 | 8 | 412-419 |
-| **Total** | | **641** | 880..1520 | **150** | 270..419 |
+| B14 | pitch modes, CRS, snap, unison, phase legato (PITCHUNI) | 37 | 1507..1543 | 12 | 412-423 |
+| B17 | compressor limit / crossovers, delay hq / offset, distortion key track, phaser depth 2, reverb type / room / width / ER / diffusion | 14 | 1544..1557 | 8 | 424-431 |
+| **Total** | | **678** | 880..1557 | **162** | 270..431 |
 
-Resulting table: 880 + 604 = **1484 keys**, 269 + 134 = **403 modulatable** keys, destination choice size **404**, mod sources **38**, positions 0..1483. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
+Resulting table: 880 + 664 = **1544 keys**, 269 + 154 = **423 modulatable** keys, destination choice size **424**, mod sources **38**, positions 0..1543. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
 
 ## 8. Decided items deliberately NOT specified as keys, and undecided GAPs left out
 
-Left out because no decision names them (not silently dropped; the owner can add them as another block): Sub oscillator (G23), per-slot remap curve and RISE / FALL of the mod matrix slots (G69 matrix part; the wavetable position part is B16), CRS / pitch modes / pitch tracking (G25-G27), Phase Legato (G31), unison laws / range (G32), warp modes G34-G37, noise colours (G38), ENV 1 toggle on channels (G39), voice steal / same-note (G12), poly legato (G13), separate bend up / down (G14), stereo spread (G15), LFO swing (G16), per-voice control (G17, Q25 proposed), 4x / no smoothing (G18), Multisample / Granular / Spectral (G19, G21, G22), dynamic effect instancing (G71), compressor / delay / distortion / reverb / phaser extras (G73-G77), Save as Default (G02), lock (G08), MIDI learn (G07: shell table, not a key). Q3, Q4 (A/B snapshots), Q7, Q31, Q32, Q33, Q14 need no key.
+Left out because no decision names them (not silently dropped; the owner can add them as another block): Sub oscillator (G23), per-slot remap curve and RISE / FALL of the mod matrix slots (G69 matrix part; the wavetable position part is B16), warp modes G34-G37, noise colours (G38), ENV 1 toggle on channels (G39), voice steal / same-note (G12), poly legato (G13), separate bend up / down (G14), stereo spread (G15), LFO swing (G16), per-voice control (G17, Q25 proposed), 4x / no smoothing (G18), Multisample / Granular / Spectral (G19, G21, G22), dynamic effect instancing (G71), compressor / delay / distortion / reverb / phaser extras (G73-G77), Save as Default (G02), lock (G08), MIDI learn (G07: shell table, not a key). Q3, Q4 (A/B snapshots), Q7, Q31, Q32, Q33, Q14 need no key.
 
 ## 9. Kick pages (09 §5 has 61 pages)
 
-New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107) (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
+New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107, B14 adds 3 more: 110) (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
 
 | Page id(s) | Section | Keys (<= 8) | New pages |
 |------------|---------|-------------|----------:|
@@ -655,6 +680,14 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A125 | Clean Mode: drive becomes a linear post-filter gain, the filter runs without drive; Comb / Formant ignore it |
 | A126 | Capability bits 26..28 for the three B16 areas |
 | A127 | B16 positions 1484..1506, destinations 404..411 on this branch; the lead renumbers at merge |
+| A80 | `oscN.pitch_mode` (G26): 4 choices: Semitones (0), Harmonics (1), Ratio (2), Step (3). Semitones mode performs standard semitonic pitch transposition. Harmonics mode multiplies pitch by an integer harmonic index (1 + floor(coarse)). Ratio mode multiplies frequency by ratio 1 + coarse (or 1/(1-coarse) when negative). Step mode steps through the scale degrees of the active tuning / MTS-ESP dynamic tuning seam. Default Semitones (0). |
+| A81 | `oscN.pitch_coarse` (G25): coarse pitch, key range -48 .. 48, modulatable, default 0. Semitones: semitones. Harmonics: multiplier 1 + floor(coarse) (values below 0 give 1). Ratio: multiplier 1 + coarse (1 / (1 - coarse) when negative). Step: key steps of the active tuning (the tuned note table, so 24-EDO moves 50 cents a step). |
+| A82 | `oscN.pitch_track` & `oscN.fixed_pitch` (G27): `pitch_track` toggle (default on / true). When off, oscillator runs at fixed pitch `oscN.fixed_pitch` (default 48 = C3, matching Vital's `kNoMidiTrackDefault`). `oscN.pitch_bend_track` (default on / true) controls whether pitch bend affects fixed-pitch oscillators. |
+| A83 | `oscN.transpose_snap` (Row 02-10): Transpose snap keyboard quantizing transpose to selected pitch classes. 13-bit value (0..8191, default 0 = Off): bits 0..11 select pitch classes C through B; bit 12 (0x1000) selects Global Snap. Uses Vital's built-in `snapTranspose` engine algorithm. |
+| A84 | `oscN.unison.mode` (G32): 5 detune laws: Linear (0), Super (1), Exp (2), Inv (3), Random (4). Linear matches standard Vital detune. Super applies a cubic distribution clustered near the center. Exp applies an exponential distribution. Inv scoops the center voices outward. Random applies a deterministic per-voice pseudo-random detune. Default Linear (0). |
+| A85 | `oscN.unison.range` & `oscN.unison.blend_shape` & `oscN.unison.stack_repeat` (G32): `unison.range` sets maximum detune span (0..48 semitones, default 2.0 st, `kMod`). `unison.blend_shape` controls detuned vs center voice level distribution (-100..100%, default 0.0%, `kMod`). `unison.stack_repeat` sets interval repetition for stack styles (1x, 2x, 3x, default 1x = 0). |
+| A86 | `oscN.phase_legato`, `oscN.phase_memory`, `voice.phase_legato` (G31): either switch on and another key held when a note starts: the new voice takes the phases of the voice that rendered last (state shared by all voice pairs of the oscillator; it is one block old). `phase_memory`: All Voices (0) every unison phase follows, Contiguous (1) only the centre phase follows (the detuned ones restart), Per Voice (2) the voice keeps its own free running phases. Defaults off / All Voices. |
+| A87 | B14 sits behind B16: positions 1507..1543, destinations 412..423, capability bit `kCapPitchUnison` = 1 << 29 (A126 lists 26..28 for B16) |
 | A140 | G73-G77 are defined by this file (B17); the Serum manual is not in the repository, so every definition below is ours |
 | A141 | Limit mode: peak limiter, 1.5 ms look-ahead, stereo linked, ceiling = the band's upper threshold, estimated inter-sample peak; the upward stage is kept |
 | A142 | `limit_latency_comp` On reports the look-ahead as chain latency and delays the other paths; Off does not; the dry signal of the compressor mix is always aligned |
@@ -663,7 +696,7 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A145 | Delay HQ: 8-point Lagrange read |
 | A146 | `delay.offset` multiplies the right delay time (all styles), range 0.25 .. 4 |
 | A147 | Tap->Delay is a UI tap-tempo action (writes Free sync and the two times), not a key |
-| A148 | Distortion types 6-11 as defined in 4.16; asymmetric types have a 10 Hz DC blocker |
+| A148 | Distortion types 6-11 as defined in 4.17; asymmetric types have a 10 Hz DC blocker |
 | A149 | Distortion filter key track uses the last-key note like the FX filter |
 | A150 | X-Shaper curves: odd symmetric from A; Asym: A positive, B negative; stored in `content.curves.shaper_a / shaper_b`, 513-point tables |
 | A151 | Phaser DEPTH 2 is a right-channel offset of the depth in semitones |
@@ -672,5 +705,5 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A154 | ER SIZE scales six early reflections per channel (level fixed per type) |
 | A155 | DIFF A = input diffusion, DIFF B = diffusion in the loops (Serum's DIFF A/B and DIFFUSION are mapped onto these two; FEEDBACK is the decay) |
 | A156 | `reverb.width` is mid / side width of the wet signal for all types |
-| A157 | Five cap bits 29-33 for B17, apart from the WP bits |
-| A158 | UI of B17 as listed in 4.16 |
+| A157 | Five cap bits 30-34 for B17, apart from the WP bits |
+| A158 | UI of B17 as listed in 4.17 |

@@ -1,4 +1,4 @@
-// SynthyBoy (AGPL-3.0-or-later combined work), 2026: the reverb algorithms of docs/ui-design/13-new-keys.md 4.16 (G77).
+// SynthyBoy (AGPL-3.0-or-later combined work), 2026: the reverb algorithms of docs/ui-design/13-new-keys.md 4.17 (G77).
 //
 // Five reverbs next to the feedback delay network of the Vital reverb (type 0, which stays in reverb.cpp):
 //   Plate    after Dattorro's plate (J. Dattorro, "Effect Design, Part 1", JAES 1997): four input all-passes into a figure-of-eight tank of two

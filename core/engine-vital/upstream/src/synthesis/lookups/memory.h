@@ -65,7 +65,7 @@ namespace sbvital {
         VITAL_ASSERT(utils::isFinite(sample));
       }
 
-      /** SynthyBoy (13-new-keys.md 4.16, delay.hq): the value `past` samples ago (3 .. size - 5), read with an 8-point Lagrange interpolator
+      /** SynthyBoy (13-new-keys.md 4.17, delay.hq): the value `past` samples ago (3 .. size - 5), read with an 8-point Lagrange interpolator
           instead of the 4-point Catmull-Rom of get (): flat up to near Nyquist for fractional and modulated delay times. One lane per channel. */
       force_inline poly_float getHighQuality(poly_float past) const {
         constexpr int kPoints = 8;

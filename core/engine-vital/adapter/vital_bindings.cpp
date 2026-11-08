@@ -100,6 +100,7 @@ std::vector<Binding> build()
     b.add ("master.portamento.slope", "portamento_slope", Conv::linear);
     b.choice ("master.portamento.always", "portamento_force");
     b.choice ("master.portamento.scaled", "portamento_scale");
+    b.choice ("voice.phase_legato", "voice_phase_legato");
 
     // --- oscillators ----------------------------------------------------------------------------------------------
     for (int n = 1; n <= 3; ++n)
@@ -142,6 +143,20 @@ std::vector<Binding> build()
         b.percent (k + "warp.amount", c + "distortion_amount");
         b.add (k + "warp.phase", c + "distortion_phase", Conv::linear, 1.0 / 360.0);
         b.percent (k + "warp.spread", c + "distortion_spread", 0.005);
+
+        // Block B14: Pitch and unison modes, transpose snap, phase legato
+        b.choice (k + "pitch_mode", c + "pitch_mode");
+        b.add (k + "pitch_coarse", c + "pitch_coarse", Conv::linear);
+        b.choice (k + "pitch_track", c + "midi_track");
+        b.add (k + "fixed_pitch", c + "fixed_pitch", Conv::linear);
+        b.choice (k + "pitch_bend_track", c + "pitch_bend_track");
+        b.add (k + "transpose_snap", c + "transpose_quantize", Conv::linear);
+        b.choice (k + "unison.mode", c + "unison_mode");
+        b.add (k + "unison.range", c + "detune_range", Conv::linear);
+        b.percent (k + "unison.blend_shape", c + "unison_blend_shape");
+        b.choice (k + "unison.stack_repeat", c + "unison_stack_repeat");
+        b.choice (k + "phase_legato", c + "phase_legato");
+        b.choice (k + "phase_memory", c + "phase_memory");
     }
 
     // --- noise (the engine's built-in white noise sample) ------------------------------------------------------------
@@ -381,7 +396,7 @@ std::vector<Binding> build()
     for (const char* fx : { "chorus", "compressor", "delay", "distortion", "eq", "flanger", "phaser", "reverb" })
         b.add (std::string (fx) + ".level", std::string (fx) + "_level", Conv::linear);
 
-    // --- block B17 (docs/ui-design/13-new-keys.md 4.16): compressor / delay / distortion / phaser / reverb extras ---------------------------------
+    // --- block B17 (docs/ui-design/13-new-keys.md 4.17): compressor / delay / distortion / phaser / reverb extras ---------------------------------
     b.choice ("compressor.limit", "compressor_limit");
     b.choice ("compressor.limit_latency_comp", "compressor_limit_latency_comp");
     b.add ("compressor.crossover_low", "compressor_crossover_low", Conv::linear);

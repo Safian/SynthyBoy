@@ -60,7 +60,7 @@ constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Si
 constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong" };
 constexpr const char* const kCompressorBands[] = { "Multiband", "Low band", "High band", "Single band" };
 constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample",
-                                                   // appended in B17 (13-new-keys.md 4.16, G75)
+                                                   // appended in B17 (13-new-keys.md 4.17, G75)
                                                    "Tube", "Diode 1", "Diode 2", "Zero square", "Asym", "Rectify", "X-Shaper", "X-Shaper (Asym)" };
 constexpr const char* const kDistortionFilterOrder[] = { "None", "Pre", "Post" };
 constexpr const char* const kEqLowModes[] = { "Shelf", "High pass" };
@@ -93,7 +93,11 @@ constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H
                                          "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
 constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
 constexpr const char* const kRemapSlots[] = { "Remap 1", "Remap 2", "Remap 3", "Remap 4" };
-// B17: reverb algorithms and room modes (13-new-keys.md 4.16, G77)
+constexpr const char* const kPitchModes[] = { "Semitones", "Harmonics", "Ratio", "Step" };
+constexpr const char* const kUnisonModes[] = { "Linear", "Super", "Exp", "Inv", "Random" };
+constexpr const char* const kUnisonStackRepeats[] = { "1x", "2x", "3x" };
+constexpr const char* const kPhaseMemories[] = { "All Voices", "Contiguous", "Per Voice" };
+// B17: reverb algorithms and room modes (13-new-keys.md 4.17, G77)
 constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
 constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
 
@@ -356,6 +360,20 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
 #define SB_FXLEVEL(KEY, NAME) cont (KEY ".level", NAME " Level", "FX / " NAME, -24.0f, 12.0f, 0.0f, Unit::dB, kMod)
 
 #define SB_FXRACK(KEY, NAME) pick (KEY ".rack", NAME " Rack", "FX / Racks", kRacks, 0)
+
+#define SB_OSC_PITCH_UNI(N)                                                                                                                      \
+    pick ("osc" #N ".pitch_mode", "Osc " #N " Pitch Mode", "Oscillator " #N, kPitchModes, 0),                                                   \
+    cont ("osc" #N ".pitch_coarse", "Osc " #N " Pitch Coarse", "Oscillator " #N, -48.0f, 48.0f, 0.0f, Unit::semitone, kMod, 2),               \
+    onOff ("osc" #N ".pitch_track", "Osc " #N " Pitch Tracking", "Oscillator " #N, true),                                                       \
+    onOff ("osc" #N ".pitch_bend_track", "Osc " #N " Pitch Bend Tracking", "Oscillator " #N, true),                                             \
+    cont ("osc" #N ".fixed_pitch", "Osc " #N " Fixed Pitch", "Oscillator " #N, 0.0f, 127.0f, 48.0f, Unit::none, kMod, 1),                         \
+    whole ("osc" #N ".transpose_snap", "Osc " #N " Transpose Snap", "Oscillator " #N, 0.0f, 8191.0f, 0.0f, Unit::none, kAuto),                 \
+    pick ("osc" #N ".unison.mode", "Osc " #N " Unison Mode", "Oscillator " #N, kUnisonModes, 0),                                                \
+    cont ("osc" #N ".unison.range", "Osc " #N " Unison Range", "Oscillator " #N, 0.0f, 48.0f, 2.0f, Unit::semitone, kMod, 1),                  \
+    SB_PCT_RANGE ("osc" #N ".unison.blend_shape", "Osc " #N " Unison Blend Shape", "Osc " #N, -100.0f, 100.0f, 0.0f, kMod),                    \
+    pick ("osc" #N ".unison.stack_repeat", "Osc " #N " Unison Stack Repeat", "Osc " #N, kUnisonStackRepeats, 0),                                \
+    onOff ("osc" #N ".phase_legato", "Osc " #N " Phase Legato", "Oscillator " #N, false),                                                       \
+    pick ("osc" #N ".phase_memory", "Osc " #N " Phase Memory", "Oscillator " #N, kPhaseMemories, 0)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // the table
@@ -681,7 +699,12 @@ constexpr ParamInfo kRaw[] = {
     onOff ("filter2.clean_mode", "Filter 2 Clean Mode", "Filter 2", false),
     onOff ("fxfilter.clean_mode", "FX Filter Clean Mode", "FX Filter", false),
 
-    // --- B17: compressor / delay / distortion / phaser / reverb extras (1507..1520) ------------------------------------------------------
+    // --- B14: Pitch modes, CRS, snap, unison, phase legato (G25-G27, G31, G32) -----------------------------
+    SB_OSC_PITCH_UNI (1),
+    SB_OSC_PITCH_UNI (2),
+    SB_OSC_PITCH_UNI (3),
+    onOff ("voice.phase_legato", "Voice Phase Legato", "Master / Voicing", false),
+    // --- B17: compressor / delay / distortion / phaser / reverb extras (1544..1557) ------------------------------------------------------
     onOff ("compressor.limit", "Compressor Limit", "FX / Compressor", false),
     onOff ("compressor.limit_latency_comp", "Compressor Limiter Latency Comp", "FX / Compressor", true),
     cont ("compressor.crossover_low", "Compressor Low Crossover", "FX / Compressor", 20.0f, 1000.0f, 120.0f, Unit::Hz, kMod, 0, 0.4f),
@@ -700,7 +723,7 @@ constexpr ParamInfo kRaw[] = {
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1521, "880 keys of state version 2, the 604 of version 3, the 23 of block B16 and the 14 of block B17");
+static_assert (kCount == 1558, "880 keys of state version 2 plus the 678 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17)");
 
 struct Table
 {

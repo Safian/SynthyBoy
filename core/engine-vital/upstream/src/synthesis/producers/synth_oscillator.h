@@ -94,6 +94,19 @@ namespace sbvital {
         kWarp2Amount,
         kWarp2Phase,
         kWarp2Spread,
+        // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
+        kPitchMode,
+        kPitchCoarse,
+        kFixedPitch,
+        kPitchBendTrack,
+        kRawMidiNote,
+        kUnisonMode,
+        kUnisonBlendShape,
+        kUnisonStackRepeat,
+        kPhaseLegato,
+        kPhaseMemory,
+        kVoicePhaseLegato,
+        kNoteCount,
         kNumInputs
       };
 
@@ -234,6 +247,8 @@ namespace sbvital {
       void setFirstOscillatorOutput(Output* oscillator) { first_mod_oscillator_ = oscillator; }
       void setSecondOscillatorOutput(Output* oscillator) { second_mod_oscillator_ = oscillator; }
       void setSampleOutput(Output* sample) { sample_ = sample; }
+      // Shared with the clones (one per voice pair): the voice handler sets the table on the original once
+      void setNoteTable(const mono_float* table) { *note_table_ = table; }
 
       virtual void setOversampleAmount(int oversample) override {
         Processor::setOversampleAmount(oversample);
@@ -338,6 +353,15 @@ namespace sbvital {
       std::shared_ptr<FourierTransform> fourier_transform_;
       std::shared_ptr<Output> phase_inc_buffer_;
       std::shared_ptr<PhaseBuffer> phase_buffer_;
+      std::shared_ptr<const mono_float*> note_table_ = std::make_shared<const mono_float*>(nullptr);
+      // Phase legato (A86): the phases of the voice that rendered last, shared by all the voice pairs (clones) of this oscillator.
+      // Every clone runs on the audio thread, so no synchronisation is needed.
+      struct PhaseLegatoState {
+        bool valid = false;
+        uint32_t left[kNumPolyPhase] = {};
+        uint32_t right[kNumPolyPhase] = {};
+      };
+      std::shared_ptr<PhaseLegatoState> legato_state_;
 
       JUCE_LEAK_DETECTOR(SynthOscillator)
   };

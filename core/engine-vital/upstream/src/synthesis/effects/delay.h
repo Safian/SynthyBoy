@@ -47,7 +47,7 @@ namespace sbvital {
         kStyle,
         kFilterCutoff,
         kFilterSpread,
-        kHighQuality,   // SynthyBoy (13-new-keys.md 4.16, G74): 1 = 8-point interpolation of the delay read
+        kHighQuality,   // SynthyBoy (13-new-keys.md 4.17, G74): 1 = 8-point interpolation of the delay read
         kOffset,        // SynthyBoy: scalar on the right delay time (0 = not plugged: 1)
         kNumInputs
       };

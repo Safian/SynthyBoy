@@ -68,7 +68,7 @@ inline size_t choicesInV2 (const synthyboy::ParamInfo& p)
     else if (key.compare (0, 9, "fx.order.") == 0)
         n -= 7;
     else if (key == "distortion.type")
-        n -= 8; // block B17 (13-new-keys.md 4.16): Tube .. X-Shaper (Asym)
+        n -= 8; // block B17 (13-new-keys.md 4.17): Tube .. X-Shaper (Asym)
 #endif
     return n;
 }

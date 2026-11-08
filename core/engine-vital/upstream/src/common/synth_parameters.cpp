@@ -104,6 +104,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Distortion Filter Blend", nullptr },
     { "legato", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Legato", strings::kOffOnNames },
+    { "voice_phase_legato", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Voice Phase Legato", strings::kOffOnNames },
     { "macro_control_1", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Macro 1", nullptr },
     { "macro_control_2", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
@@ -560,6 +562,25 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Warp 2 Phase", nullptr },
     { "warp2_spread", 0x000000, -0.5, 0.5, 0.0, 0.0, 200.0,
       ValueDetails::kLinear, false, "%", "Warp 2 Spread", nullptr },
+    // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
+    { "pitch_mode", 0x000000, 0.0, 3.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Pitch Mode", nullptr },
+    { "pitch_coarse", 0x000000, -48.0, 48.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "", "Pitch Coarse", nullptr },
+    { "fixed_pitch", 0x000000, 0.0, 127.0, 48.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "", "Fixed Pitch", nullptr },
+    { "pitch_bend_track", 0x000000, 0.0, 1.0, 1.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Pitch Bend Track", strings::kOffOnNames },
+    { "unison_mode", 0x000000, 0.0, 4.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Unison Mode", nullptr },
+    { "unison_blend_shape", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Unison Blend Shape", nullptr },
+    { "unison_stack_repeat", 0x000000, 0.0, 2.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Unison Stack Repeat", nullptr },
+    { "phase_legato", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Phase Legato", strings::kOffOnNames },
+    { "phase_memory", 0x000000, 0.0, 2.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Phase Memory", nullptr },
   };
 
   const ValueDetails ValueDetailsLookup::mod_parameter_list[] = {
@@ -705,7 +726,7 @@ namespace sbvital {
     };
     for (const SerumParameter& parameter : kSerumParameters)
       add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.max - parameter.min <= 8.0f && parameter.min == 0.0f && parameter.max == std::floor(parameter.max) && parameter.max <= 8.0f ? ValueDetails::kIndexed : ValueDetails::kLinear);
-    // block B17 (docs/ui-design/13-new-keys.md 4.16): the extras of the compressor, delay, distortion, phaser and reverb, in the unit of the key
+    // block B17 (docs/ui-design/13-new-keys.md 4.17): the extras of the compressor, delay, distortion, phaser and reverb, in the unit of the key
     struct ExtraParameter { const char* name; mono_float min, max, def; ValueDetails::ValueScale scale; };
     static const ExtraParameter kExtraParameters[] = {
       { "compressor_limit", 0, 1, 0, ValueDetails::kIndexed }, { "compressor_limit_latency_comp", 0, 1, 1, ValueDetails::kIndexed },

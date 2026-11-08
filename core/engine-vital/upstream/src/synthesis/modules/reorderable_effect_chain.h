@@ -143,7 +143,7 @@ namespace sbvital {
       Value* main_fx_bypass_;
       Output* bus_level_[2];
       Output* direct_level_;
-      // SynthyBoy (docs/ui-design/13-new-keys.md 4.16): the output LEVEL trim of the nine Vital effects (the Serum modules have their own,
+      // SynthyBoy (docs/ui-design/13-new-keys.md 4.17): the output LEVEL trim of the nine Vital effects (the Serum modules have their own,
       // the FX filter has filter_fx_level); null where the module has none
       Output* level_controls_[kNumModules] = {};
       float last_level_gain_[kNumModules] = {};

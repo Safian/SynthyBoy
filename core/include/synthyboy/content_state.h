@@ -117,7 +117,7 @@ struct StateContent
     std::vector<ContentSample> samples;
     std::vector<ContentLfoShape> lfoShapes;
     std::vector<ContentPoint> velocityCurve, noteCurve; // empty = the identity [(0,0),(1,1)]
-    /** The two drawn transfer curves of distortion.type X-Shaper / X-Shaper (Asym) (13-new-keys.md 4.16, G75): input magnitude (x) against
+    /** The two drawn transfer curves of distortion.type X-Shaper / X-Shaper (Asym) (13-new-keys.md 4.17, G75): input magnitude (x) against
         output magnitude (y), both 0..1, the curve shape of the velocity curve. Empty = the identity [(0,0),(1,1)]. */
     std::vector<ContentPoint> shaperA, shaperB;
     ContentTuning tuning;

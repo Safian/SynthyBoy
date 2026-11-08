@@ -50,7 +50,7 @@ namespace sbvital {
       return utils::round(value / drive) * drive;
     }
 
-    // SynthyBoy appended types (13-new-keys.md 4.16)
+    // SynthyBoy appended types (13-new-keys.md 4.17)
     force_inline poly_float tube(poly_float value, poly_float drive) {
       constexpr mono_float kBias = 0.3f;
       return futils::tanh(value * drive + kBias) - std::tanh(kBias);

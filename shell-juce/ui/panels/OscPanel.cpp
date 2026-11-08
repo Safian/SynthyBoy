@@ -77,7 +77,12 @@ public:
             o + ".sample.slice_play", o + ".sample.slice_root", o + ".sample.scan",
             o + ".sample.scan_range", o + ".sample.scan_reverse", o + ".sample.scan_lock_tempo",
             o + ".sample.scan_to_bpm", o + ".sample.length_beats", o + ".sample.uni_start",
-            o + ".sample.uni_span"
+            o + ".sample.uni_span",
+            // Block B14: Pitch & unison modes, transpose snap, phase legato (76 keys total)
+            o + ".pitch_mode", o + ".pitch_coarse", o + ".pitch_track", o + ".fixed_pitch",
+            o + ".pitch_bend_track", o + ".transpose_snap",
+            o + ".unison.mode", o + ".unison.range", o + ".unison.blend_shape", o + ".unison.stack_repeat",
+            o + ".phase_legato", o + ".phase_memory"
         };
     }
 
@@ -90,6 +95,8 @@ public:
                 addControl (all[i]);
             else if (all[i] == "osc" + std::to_string (OscIndex) + ".transpose")
                 addMoreControl (std::make_unique<TransposeControl> (ctx, all[i])); // OCT segments + SEM wheel
+            else if (all[i] == "osc" + std::to_string (OscIndex) + ".transpose_snap")
+                addMoreControl (std::make_unique<TransposeSnapControl> (ctx, all[i])); // Row 02-10 Transpose snap keyboard
             else if (auto& control = addMoreControl (all[i]); all[i] == "osc" + std::to_string (OscIndex) + ".warp.type")
             {
                 if (auto* choice = dynamic_cast<ParamChoice*> (&control))

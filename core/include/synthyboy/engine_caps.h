@@ -48,19 +48,20 @@ enum EngineCaps : EngineCapsMask
     kCapWtRemap          = 1ull << 26, // WTREMAP: oscN.remap.* (content.remaps), the frame position remap with RISE / FALL (G69)
     kCapFxLevel          = 1ull << 27, // WTREMAP: <fx>.level of chorus, compressor, delay, distortion, eq, flanger, phaser, reverb (G72)
     kCapCleanMode        = 1ull << 28, // WTREMAP: filterN.clean_mode, fxfilter.clean_mode (G54)
-    // block B17 (fx-extras, 13-new-keys.md 4.16); bits 29 .. 33 follow the B16 bits
-    kCapFxCompressorLimit = 1ull << 29, // G73: compressor.limit / limit_latency_comp / crossover_low / crossover_high
-    kCapFxDelayExtras     = 1ull << 30, // G74: delay.hq, delay.offset
-    kCapFxDistortionExtras = 1ull << 31, // G75: distortion.type 6 .. 13, distortion.filter_keytrack, content.curves.shaper_a / shaper_b
-    kCapFxPhaserDepth2    = 1ull << 32, // G76: phaser.depth2
-    kCapFxReverbAlgos     = 1ull << 33, // G77: reverb.type, room, width, er_size, diff_a, diff_b
+    kCapPitchUnison      = 1ull << 29, // B14: pitch modes, CRS, snap, unison laws/range, phase legato
+    // block B17 (fx-extras, 13-new-keys.md 4.17); bits 30 .. 34 follow the B14 bit
+    kCapFxCompressorLimit = 1ull << 30, // G73: compressor.limit / limit_latency_comp / crossover_low / crossover_high
+    kCapFxDelayExtras     = 1ull << 31, // G74: delay.hq, delay.offset
+    kCapFxDistortionExtras = 1ull << 32, // G75: distortion.type 6 .. 13, distortion.filter_keytrack, content.curves.shaper_a / shaper_b
+    kCapFxPhaserDepth2    = 1ull << 33, // G76: phaser.depth2
+    kCapFxReverbAlgos     = 1ull << 34, // G77: reverb.type, room, width, er_size, diff_a, diff_b
 };
 
 /** The bits of block B17. */
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = ((1ull << 29) - 1) | kCapFxExtrasAll;
+constexpr EngineCapsMask kCapAllKnown = ((1ull << 30) - 1) | kCapFxExtrasAll;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

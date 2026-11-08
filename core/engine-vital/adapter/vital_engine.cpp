@@ -599,6 +599,7 @@ public:
              | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels | kCapReverbForce
              | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters
              | kCapWtRemap | kCapFxLevel | kCapCleanMode // VERIFY: the three B16 bits stay only if the on / off renders of test_wtremap.cpp differ
+             | kCapPitchUnison
              | kCapFxExtrasAll; // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
     }
 
@@ -892,9 +893,7 @@ private:
         for (int i = 1; i <= kNumOsc; ++i)
         {
             const std::string c = "osc_" + std::to_string (i) + "_";
-            setControl (c + "midi_track", 1.0f);
             setControl (c + "spectral_unison", 1.0f);
-            setControl (c + "transpose_quantize", 0.0f);
         }
         setControl ("sample_random_phase", 0.0f);
         setControl ("sample_loop", 1.0f);

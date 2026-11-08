@@ -90,6 +90,16 @@ constexpr const char* s_more_osc3_sample_2[] = {
     "osc3.sample.slice_mode", "osc3.sample.slice_threshold", "osc3.sample.slice_play", "osc3.sample.slice_root"
 };
 
+constexpr const char* s_more_osc1_pitch_uni[] = {
+    "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory"
+};
+constexpr const char* s_more_osc2_pitch_uni[] = {
+    "osc2.pitch_bend_track", "osc2.transpose_snap", "osc2.phase_legato", "osc2.phase_memory"
+};
+constexpr const char* s_more_osc3_pitch_uni[] = {
+    "osc3.pitch_bend_track", "osc3.transpose_snap", "osc3.phase_legato", "osc3.phase_memory"
+};
+
 constexpr const char* s_more_reverb1[] = {
     "reverb.force_enable"
 };
@@ -337,7 +347,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 65: Scale & Tuning (Master)
     { "master_scale_tuning", "Scale & Tuning", "Master", { "master.scale.key", "master.scale.type", "master.scale.mode", "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only", nullptr }, 7, nullptr, 0 },
     // Page 66: Expression & MPE (Master)
-    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
+    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", "voice.phase_legato", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
     // Page 67: Osc 1 Type & Mapping (Osc)
     { "osc1_type_map", "Osc 1 Type & Mapping", "Osc", { "osc1.type", "osc1.map.key_low", "osc1.map.key_high", "osc1.map.vel_low", "osc1.map.vel_high", "osc1.map.key_fold", "osc1.map.key_warp", nullptr }, 7, nullptr, 0 },
     // Page 68: Osc 2 Type & Mapping (Osc)
@@ -417,15 +427,21 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc2_remap", "Osc 2 Remap", "Osc", { "osc2.remap.on", "osc2.remap.slot", "osc2.remap.rise", "osc2.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     { "osc3_remap", "Osc 3 Remap", "Osc", { "osc3.remap.on", "osc3.remap.slot", "osc3.remap.rise", "osc3.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     { "fx_levels", "FX Levels", "FX", { "chorus.level", "compressor.level", "delay.level", "distortion.level", "eq.level", "flanger.level", "phaser.level", "reverb.level" }, 8, nullptr, 0 },
-    // Page 108: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.16)
+    // Page 104: Osc 1 Pitch & Unison (Osc)
+    { "osc1_pitch_uni", "Osc 1 Pitch & Unison", "Osc", { "osc1.pitch_mode", "osc1.pitch_coarse", "osc1.pitch_track", "osc1.fixed_pitch", "osc1.unison.mode", "osc1.unison.range", "osc1.unison.blend_shape", "osc1.unison.stack_repeat" }, 8, s_more_osc1_pitch_uni, 4 },
+    // Page 105: Osc 2 Pitch & Unison (Osc)
+    { "osc2_pitch_uni", "Osc 2 Pitch & Unison", "Osc", { "osc2.pitch_mode", "osc2.pitch_coarse", "osc2.pitch_track", "osc2.fixed_pitch", "osc2.unison.mode", "osc2.unison.range", "osc2.unison.blend_shape", "osc2.unison.stack_repeat" }, 8, s_more_osc2_pitch_uni, 4 },
+    // Page 106: Osc 3 Pitch & Unison (Osc)
+    { "osc3_pitch_uni", "Osc 3 Pitch & Unison", "Osc", { "osc3.pitch_mode", "osc3.pitch_coarse", "osc3.pitch_track", "osc3.fixed_pitch", "osc3.unison.mode", "osc3.unison.range", "osc3.unison.blend_shape", "osc3.unison.stack_repeat" }, 8, s_more_osc3_pitch_uni, 4 },
+    // Page 110: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.17)
     { "fx_comp_limit", "Compressor Limit & Crossovers", "FX", { "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high", "compressor.mix", "compressor.attack", "compressor.release", "compressor.on" }, 8, nullptr, 0 },
-    // Page 109: Delay Quality & Offset (FX)
+    // Page 111: Delay Quality & Offset (FX)
     { "fx_delay_3", "Delay Quality & Offset", "FX", { "delay.hq", "delay.offset", "delay.time", "delay.time2", "delay.sync", "delay.feedback", "delay.mix", "delay.on" }, 8, nullptr, 0 },
-    // Page 110: Distortion Key Track (FX)
+    // Page 112: Distortion Key Track (FX)
     { "fx_distortion_2", "Distortion Key Track", "FX", { "distortion.type", "distortion.filter_keytrack", "distortion.filter_order", "distortion.filter_cutoff", "distortion.drive", "distortion.mix", "distortion.on", nullptr }, 7, nullptr, 0 },
-    // Page 111: Phaser Depth 2 (FX)
+    // Page 113: Phaser Depth 2 (FX)
     { "fx_phaser_3", "Phaser Depth 2", "FX", { "phaser.depth2", "phaser.depth", "phaser.center", "phaser.rate", "phaser.feedback", "phaser.mix", "phaser.on", nullptr }, 7, nullptr, 0 },
-    // Page 112: Reverb Algorithm (FX)
+    // Page 114: Reverb Algorithm (FX)
     { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, nullptr, 0 }
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };

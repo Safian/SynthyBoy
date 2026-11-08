@@ -1,5 +1,5 @@
 // SynthyBoy - UI: editor of the two X-Shaper transfer curves of the distortion (distortion.type = X-Shaper / X-Shaper (Asym); docs/ui-design/13-new-keys.md
-// 4.16, G75).
+// 4.17, G75).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //

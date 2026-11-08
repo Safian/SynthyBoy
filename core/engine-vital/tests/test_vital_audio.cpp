@@ -1240,7 +1240,7 @@ TEST (state_random_walk_saves_loads_and_renders_the_same)
     // saveState, loaded into a fresh engine: both render the same notes bit for bit. The engines are prepared with the same
     // quality and their random generators are seeded from a counter that prepare() resets (docs/UPSTREAM.md), so random LFOs, the noise
     // and the random phase are reproducible too.
-    sbtest::Rng rng (2024);
+    sbtest::Rng rng (2025); // (a seed that leaves the random walk audible with the 1558-key table; 2024 drew a silent patch after B17)
     ParamValues walk = ParamValues::defaults();
     for (int step = 0; step < 300; ++step)
         for (int k = 0; k < 12; ++k)

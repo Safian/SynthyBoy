@@ -4,14 +4,14 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1521 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**1558 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
-| Master | 22 |
-| Osc 1 | 68 |
-| Osc 2 | 68 |
-| Osc 3 | 68 |
+| Master | 23 |
+| Osc 1 | 70 |
+| Osc 2 | 70 |
+| Osc 3 | 70 |
 | Noise | 7 |
 | Filter 1 | 22 |
 | Filter 2 | 22 |
@@ -41,6 +41,9 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | LFO 9 | 16 |
 | LFO 10 | 16 |
 | Mixer | 8 |
+| Oscillator 1 | 10 |
+| Oscillator 2 | 10 |
+| Oscillator 3 | 10 |
 
 ## Default patch
 
@@ -76,6 +79,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `master.tuning.mts_note_on_only` | Tuning MTS-ESP Note-On Only | 0 Off, 1 On | Off | Master / Tuning |  |  |
 | `master.mpe.on` | MPE On | 0 Off, 1 On | Off | Master / MPE |  |  |
 | `master.mpe.bend_range` | MPE Pitch Bend Range | 1 .. 96 st (steps of 1) | 48 st | Master / MPE |  |  |
+| `voice.phase_legato` | Voice Phase Legato | 0 Off, 1 On | Off | Master / Voicing |  |  |
 
 ### Osc 1
 
@@ -149,6 +153,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.remap.slot` | Osc 1 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 1 / Remap |  |  |
 | `osc1.remap.rise` | Osc 1 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
 | `osc1.remap.fall` | Osc 1 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
+| `osc1.unison.blend_shape` | Osc 1 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 1 | mod |  |
+| `osc1.unison.stack_repeat` | Osc 1 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 1 |  |  |
 
 ### Osc 2
 
@@ -222,6 +228,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.remap.slot` | Osc 2 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 2 / Remap |  |  |
 | `osc2.remap.rise` | Osc 2 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
 | `osc2.remap.fall` | Osc 2 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
+| `osc2.unison.blend_shape` | Osc 2 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 2 | mod |  |
+| `osc2.unison.stack_repeat` | Osc 2 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 2 |  |  |
 
 ### Osc 3
 
@@ -295,6 +303,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.remap.slot` | Osc 3 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 3 / Remap |  |  |
 | `osc3.remap.rise` | Osc 3 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
 | `osc3.remap.fall` | Osc 3 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
+| `osc3.unison.blend_shape` | Osc 3 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 3 | mod |  |
+| `osc3.unison.stack_repeat` | Osc 3 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 3 |  |  |
 
 ### Noise
 
@@ -756,7 +766,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..38 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..419 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..431 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 |  |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -1044,6 +1054,51 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `bus2.fx_bypass` | Bus 2 FX Bypass | 0 Off, 1 On | Off | Mixer / Bus 2 |  |  |
 | `direct.level` | Direct Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer | mod |  |
 | `main.fx_bypass` | Main FX Bypass | 0 Off, 1 On | Off | Mixer |  |  |
+
+### Oscillator 1
+
+| Key | Name | Range | Default | Group | Mod | Own engine |
+|-----|------|-------|---------|-------|-----|------------|
+| `osc1.pitch_mode` | Osc 1 Pitch Mode | 0 Semitones, 1 Harmonics, 2 Ratio, 3 Step | Semitones | Oscillator 1 |  |  |
+| `osc1.pitch_coarse` | Osc 1 Pitch Coarse | -48 .. 48 st | 0 st | Oscillator 1 | mod |  |
+| `osc1.pitch_track` | Osc 1 Pitch Tracking | 0 Off, 1 On | On | Oscillator 1 |  |  |
+| `osc1.pitch_bend_track` | Osc 1 Pitch Bend Tracking | 0 Off, 1 On | On | Oscillator 1 |  |  |
+| `osc1.fixed_pitch` | Osc 1 Fixed Pitch | 0 .. 127 | 48 | Oscillator 1 | mod |  |
+| `osc1.transpose_snap` | Osc 1 Transpose Snap | 0 .. 8191 (steps of 1) | 0 | Oscillator 1 |  |  |
+| `osc1.unison.mode` | Osc 1 Unison Mode | 0 Linear, 1 Super, 2 Exp, 3 Inv, 4 Random | Linear | Oscillator 1 |  |  |
+| `osc1.unison.range` | Osc 1 Unison Range | 0 .. 48 st | 2 st | Oscillator 1 | mod |  |
+| `osc1.phase_legato` | Osc 1 Phase Legato | 0 Off, 1 On | Off | Oscillator 1 |  |  |
+| `osc1.phase_memory` | Osc 1 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 1 |  |  |
+
+### Oscillator 2
+
+| Key | Name | Range | Default | Group | Mod | Own engine |
+|-----|------|-------|---------|-------|-----|------------|
+| `osc2.pitch_mode` | Osc 2 Pitch Mode | 0 Semitones, 1 Harmonics, 2 Ratio, 3 Step | Semitones | Oscillator 2 |  |  |
+| `osc2.pitch_coarse` | Osc 2 Pitch Coarse | -48 .. 48 st | 0 st | Oscillator 2 | mod |  |
+| `osc2.pitch_track` | Osc 2 Pitch Tracking | 0 Off, 1 On | On | Oscillator 2 |  |  |
+| `osc2.pitch_bend_track` | Osc 2 Pitch Bend Tracking | 0 Off, 1 On | On | Oscillator 2 |  |  |
+| `osc2.fixed_pitch` | Osc 2 Fixed Pitch | 0 .. 127 | 48 | Oscillator 2 | mod |  |
+| `osc2.transpose_snap` | Osc 2 Transpose Snap | 0 .. 8191 (steps of 1) | 0 | Oscillator 2 |  |  |
+| `osc2.unison.mode` | Osc 2 Unison Mode | 0 Linear, 1 Super, 2 Exp, 3 Inv, 4 Random | Linear | Oscillator 2 |  |  |
+| `osc2.unison.range` | Osc 2 Unison Range | 0 .. 48 st | 2 st | Oscillator 2 | mod |  |
+| `osc2.phase_legato` | Osc 2 Phase Legato | 0 Off, 1 On | Off | Oscillator 2 |  |  |
+| `osc2.phase_memory` | Osc 2 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 2 |  |  |
+
+### Oscillator 3
+
+| Key | Name | Range | Default | Group | Mod | Own engine |
+|-----|------|-------|---------|-------|-----|------------|
+| `osc3.pitch_mode` | Osc 3 Pitch Mode | 0 Semitones, 1 Harmonics, 2 Ratio, 3 Step | Semitones | Oscillator 3 |  |  |
+| `osc3.pitch_coarse` | Osc 3 Pitch Coarse | -48 .. 48 st | 0 st | Oscillator 3 | mod |  |
+| `osc3.pitch_track` | Osc 3 Pitch Tracking | 0 Off, 1 On | On | Oscillator 3 |  |  |
+| `osc3.pitch_bend_track` | Osc 3 Pitch Bend Tracking | 0 Off, 1 On | On | Oscillator 3 |  |  |
+| `osc3.fixed_pitch` | Osc 3 Fixed Pitch | 0 .. 127 | 48 | Oscillator 3 | mod |  |
+| `osc3.transpose_snap` | Osc 3 Transpose Snap | 0 .. 8191 (steps of 1) | 0 | Oscillator 3 |  |  |
+| `osc3.unison.mode` | Osc 3 Unison Mode | 0 Linear, 1 Super, 2 Exp, 3 Inv, 4 Random | Linear | Oscillator 3 |  |  |
+| `osc3.unison.range` | Osc 3 Unison Range | 0 .. 48 st | 2 st | Oscillator 3 | mod |  |
+| `osc3.phase_legato` | Osc 3 Phase Legato | 0 Off, 1 On | Off | Oscillator 3 |  |  |
+| `osc3.phase_memory` | Osc 3 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 3 |  |  |
 
 ## Modulation sources
 
@@ -1507,14 +1562,26 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 409 | `flanger.level` | Flanger Level |
 | 410 | `phaser.level` | Phaser Level |
 | 411 | `reverb.level` | Reverb Level |
-| 412 | `compressor.crossover_low` | Compressor Low Crossover |
-| 413 | `compressor.crossover_high` | Compressor High Crossover |
-| 414 | `delay.offset` | Delay Offset |
-| 415 | `distortion.filter_keytrack` | Distortion Filter Key Track |
-| 416 | `phaser.depth2` | Phaser Depth 2 |
-| 417 | `reverb.width` | Reverb Width |
-| 418 | `reverb.diff_a` | Reverb Diffusion A |
-| 419 | `reverb.diff_b` | Reverb Diffusion B |
+| 412 | `osc1.pitch_coarse` | Osc 1 Pitch Coarse |
+| 413 | `osc1.fixed_pitch` | Osc 1 Fixed Pitch |
+| 414 | `osc1.unison.range` | Osc 1 Unison Range |
+| 415 | `osc1.unison.blend_shape` | Osc 1 Unison Blend Shape |
+| 416 | `osc2.pitch_coarse` | Osc 2 Pitch Coarse |
+| 417 | `osc2.fixed_pitch` | Osc 2 Fixed Pitch |
+| 418 | `osc2.unison.range` | Osc 2 Unison Range |
+| 419 | `osc2.unison.blend_shape` | Osc 2 Unison Blend Shape |
+| 420 | `osc3.pitch_coarse` | Osc 3 Pitch Coarse |
+| 421 | `osc3.fixed_pitch` | Osc 3 Fixed Pitch |
+| 422 | `osc3.unison.range` | Osc 3 Unison Range |
+| 423 | `osc3.unison.blend_shape` | Osc 3 Unison Blend Shape |
+| 424 | `compressor.crossover_low` | Compressor Low Crossover |
+| 425 | `compressor.crossover_high` | Compressor High Crossover |
+| 426 | `delay.offset` | Delay Offset |
+| 427 | `distortion.filter_keytrack` | Distortion Filter Key Track |
+| 428 | `phaser.depth2` | Phaser Depth 2 |
+| 429 | `reverb.width` | Reverb Width |
+| 430 | `reverb.diff_a` | Reverb Diffusion A |
+| 431 | `reverb.diff_b` | Reverb Diffusion B |
 
 ## Built-in wavetables and LFO shapes
 

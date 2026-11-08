@@ -36,7 +36,7 @@ namespace sbvital {
         kModDepth,
         kPhaseOffset,
         kBlend,
-        kModDepth2,   // SynthyBoy (13-new-keys.md 4.16, G76): semitones added to the depth of the right channel
+        kModDepth2,   // SynthyBoy (13-new-keys.md 4.17, G76): semitones added to the depth of the right channel
         kNumInputs
       };
 

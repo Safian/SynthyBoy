@@ -61,7 +61,7 @@ namespace sbvital {
 
     Output* compressor_mix = createMonoModControl("compressor_mix");
 
-    // SynthyBoy (13-new-keys.md 4.16, G73): limit mode, its latency compensation and the two crossovers
+    // SynthyBoy (13-new-keys.md 4.17, G73): limit mode, its latency compensation and the two crossovers
     Value* compressor_limit = createBaseControl("compressor_limit");
     limit_latency_comp_ = createBaseControl("compressor_limit_latency_comp");
     Output* compressor_crossover_low = createMonoModControl("compressor_crossover_low");
