@@ -1,0 +1,2084 @@
+// SynthyBoy - UI: Full-screen mobile wavetable editor sheet implementation.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include "WavetableEditorSheet.h"
+
+#include <algorithm>
+#include <cmath>
+#include <sstream>
+
+namespace synthyboy::ui
+{
+
+namespace
+{
+constexpr float kPi = 3.14159265358979323846f;
+} // namespace
+
+//==============================================================================
+// WAVE CANVAS COMPONENT
+//==============================================================================
+class WavetableEditorSheet::WaveCanvas final : public juce::Component
+{
+public:
+    WaveCanvas (WavetableEditorSheet& ownerSheet)
+        : owner (ownerSheet)
+    {
+        setOpaque (false);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = owner.ctx.theme;
+        const auto bounds = getLocalBounds().toFloat().reduced (t.px (2.0f));
+
+        g.setColour (t.colours.panelRaised);
+        g.fillRoundedRectangle (bounds, t.px (6.0f));
+
+        g.setColour (t.colours.outline);
+        g.drawRoundedRectangle (bounds, t.px (6.0f), 1.0f);
+
+        // Center line (zero amplitude)
+        const float midY = bounds.getCentreY();
+        g.setColour (t.colours.outline.withAlpha (0.4f));
+        g.drawHorizontalLine (juce::roundToInt (midY), bounds.getX(), bounds.getRight());
+
+        // Grid vertical lines
+        const int grid = owner.currentGridSize;
+        if (grid > 1 && grid <= 256)
+        {
+            g.setColour (t.colours.outline.withAlpha (0.25f));
+            for (int i = 1; i < grid; ++i)
+            {
+                const float gx = bounds.getX() + (bounds.getWidth() * static_cast<float> (i)) / static_cast<float> (grid);
+                g.drawVerticalLine (juce::roundToInt (gx), bounds.getY(), bounds.getBottom());
+            }
+        }
+
+        // Current frame waveform
+        if (owner.currentFrameIndex < owner.wt.numFrames())
+        {
+            const auto& frame = owner.wt.getFrame (owner.currentFrameIndex);
+            juce::Path path;
+            const float startX = bounds.getX();
+            const float w = bounds.getWidth();
+            const float h = bounds.getHeight() * 0.45f;
+
+            for (size_t i = 0; i < wtedit::kWaveformSize; ++i)
+            {
+                const float x = startX + (static_cast<float> (i) / static_cast<float> (wtedit::kWaveformSize - 1)) * w;
+                const float y = midY - frame[i] * h;
+                if (i == 0)
+                    path.startNewSubPath (x, y);
+                else
+                    path.lineTo (x, y);
+            }
+
+            g.setColour (t.colours.accent);
+            g.strokePath (path, juce::PathStrokeType (t.px (2.0f)));
+        }
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        owner.pushUndo();
+        handleDrag (e);
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        handleDrag (e);
+    }
+
+private:
+    void handleDrag (const juce::MouseEvent& e)
+    {
+        const auto bounds = getLocalBounds().toFloat();
+        if (bounds.getWidth() <= 0.0f || bounds.getHeight() <= 0.0f)
+            return;
+
+        const float normX = juce::jlimit (0.0f, 0.999f, (e.position.x - bounds.getX()) / bounds.getWidth());
+        const float normY = juce::jlimit (-1.0f, 1.0f, 1.0f - 2.0f * ((e.position.y - bounds.getY()) / bounds.getHeight()));
+
+        const int grid = owner.currentGridSize;
+        const int step = static_cast<int> (normX * static_cast<float> (grid));
+
+        owner.applyToolAt (owner.currentTool, grid, step, normY);
+        repaint();
+    }
+
+    WavetableEditorSheet& owner;
+};
+
+//==============================================================================
+// SPECTRUM CANVAS COMPONENT
+//==============================================================================
+class WavetableEditorSheet::SpectrumCanvas final : public juce::Component
+{
+public:
+    SpectrumCanvas (WavetableEditorSheet& ownerSheet)
+        : owner (ownerSheet)
+    {
+        evenBtn.setClickingTogglesState (true);
+        oddBtn.setClickingTogglesState (true);
+        snapBtn.setClickingTogglesState (true);
+
+        scaleBtn.onClick = [this]
+        {
+            owner.pushUndo();
+            if (owner.currentFrameIndex < owner.wt.numFrames())
+            {
+                wtedit::ops::fftScaleFreqValuesByBinIndex (owner.wt.getFrame (owner.currentFrameIndex));
+                owner.isModified = true;
+                owner.updateHeaderInfo();
+                repaint();
+                if (owner.waveCanvas)
+                    owner.waveCanvas->repaint();
+            }
+        };
+
+        fftMenuBtn.onClick = [this] { showFftMenu(); };
+
+        addAndMakeVisible (evenBtn);
+        addAndMakeVisible (oddBtn);
+        addAndMakeVisible (snapBtn);
+        addAndMakeVisible (scaleBtn);
+        addAndMakeVisible (fftMenuBtn);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = owner.ctx.theme;
+        auto r = getLocalBounds().reduced (t.ipx (2));
+        r.removeFromBottom (t.touch()); // reserve for button bar
+
+        const auto bounds = r.toFloat();
+        g.setColour (t.colours.panelRaised);
+        g.fillRoundedRectangle (bounds, t.px (6.0f));
+        g.setColour (t.colours.outline);
+        g.drawRoundedRectangle (bounds, t.px (6.0f), 1.0f);
+
+        if (owner.currentFrameIndex >= owner.wt.numFrames())
+            return;
+
+        // Perform FFT real-to-polar
+        std::array<float, wtedit::kWaveformSize> mags {};
+        std::array<float, wtedit::kWaveformSize> phases {};
+        const auto& frame = owner.wt.getFrame (owner.currentFrameIndex);
+        wtedit::Radix2Fft::realToPolar (frame.sampleData(), mags.data(), phases.data(), wtedit::kWaveformSize);
+
+        const float halfH = bounds.getHeight() * 0.5f;
+        const auto magArea = bounds.withHeight (halfH);
+        const auto phaseArea = bounds.withTrimmedTop (halfH);
+
+        // Amplitude divider
+        g.setColour (t.colours.outline.withAlpha (0.4f));
+        g.drawHorizontalLine (juce::roundToInt (phaseArea.getY()), bounds.getX(), bounds.getRight());
+
+        // Draw harmonic amplitude bars (bins 1..64)
+        const int numVisibleBins = 64;
+        const float barW = magArea.getWidth() / static_cast<float> (numVisibleBins);
+
+        for (int k = 1; k <= numVisibleBins; ++k)
+        {
+            const float mag = juce::jlimit (0.0f, 1.0f, mags[static_cast<size_t> (k)]);
+            const float barH = mag * (magArea.getHeight() - t.px (4.0f));
+            const float bx = magArea.getX() + static_cast<float> (k - 1) * barW;
+            const float by = magArea.getBottom() - barH;
+
+            g.setColour (k == lastTouchedBin ? t.colours.accent : t.colours.mod);
+            g.fillRect (bx + t.px (1.0f), by, barW - t.px (2.0f), barH);
+
+            // Phase bar (mapped -pi..+pi to height)
+            const float ph = phases[static_cast<size_t> (k)];
+            const float normPh = (ph + kPi) / (2.0f * kPi);
+            const float pBarH = normPh * (phaseArea.getHeight() - t.px (4.0f));
+            const float pby = phaseArea.getBottom() - pBarH;
+
+            g.setColour (t.colours.textDim.withAlpha (0.6f));
+            g.fillRect (bx + t.px (1.0f), pby, barW - t.px (2.0f), pBarH);
+        }
+    }
+
+    void resized() override
+    {
+        const auto& t = owner.ctx.theme;
+        auto barArea = getLocalBounds().removeFromBottom (t.touch()).reduced (t.ipx (2), 0);
+        const int btnW = juce::jmax (t.touch(), barArea.getWidth() / 5);
+
+        evenBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
+        oddBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
+        snapBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
+        scaleBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
+        fftMenuBtn.setBounds (barArea.reduced (t.ipx (2), 0));
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        owner.pushUndo();
+        handleMouse (e);
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        handleMouse (e);
+    }
+
+private:
+    void handleMouse (const juce::MouseEvent& e)
+    {
+        const auto& t = owner.ctx.theme;
+        auto area = getLocalBounds().reduced (t.ipx (2));
+        area.removeFromBottom (t.touch());
+        if (! area.contains (e.getPosition()) || area.getWidth() <= 0)
+            return;
+
+        const int numVisibleBins = 64;
+        const float relX = static_cast<float> (e.x - area.getX()) / static_cast<float> (area.getWidth());
+        int bin = static_cast<int> (relX * static_cast<float> (numVisibleBins)) + 1;
+        bin = juce::jlimit (1, numVisibleBins, bin);
+        lastTouchedBin = bin;
+
+        if (evenBtn.getToggleState() && (bin % 2 != 0))
+            return;
+        if (oddBtn.getToggleState() && (bin % 2 == 0))
+            return;
+
+        if (owner.currentFrameIndex >= owner.wt.numFrames())
+            return;
+
+        auto& frame = owner.wt.getFrame (owner.currentFrameIndex);
+        std::array<float, wtedit::kWaveformSize> mags {};
+        std::array<float, wtedit::kWaveformSize> phases {};
+        wtedit::Radix2Fft::realToPolar (frame.sampleData(), mags.data(), phases.data(), wtedit::kWaveformSize);
+
+        const float halfH = static_cast<float> (area.getHeight()) * 0.5f;
+        if (static_cast<float> (e.y - area.getY()) < halfH)
+        {
+            // Edit amplitude
+            float val = 1.0f - static_cast<float> (e.y - area.getY()) / halfH;
+            val = juce::jlimit (0.0f, 1.0f, val);
+            if (snapBtn.getToggleState())
+                val = std::round (val * 4.0f) / 4.0f;
+            mags[static_cast<size_t> (bin)] = val;
+        }
+        else
+        {
+            // Edit phase
+            const float val = 1.0f - static_cast<float> (e.y - area.getY() - static_cast<int> (halfH)) / halfH;
+            phases[static_cast<size_t> (bin)] = (val * 2.0f - 1.0f) * kPi;
+        }
+
+        wtedit::Radix2Fft::polarToReal (mags.data(), phases.data(), frame.sampleData(), wtedit::kWaveformSize);
+        owner.isModified = true;
+        owner.updateHeaderInfo();
+        repaint();
+        if (owner.waveCanvas)
+            owner.waveCanvas->repaint();
+    }
+
+    void showFftMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem (1, "Clear All");
+        menu.addItem (2, "Clear HF (from cursor)");
+        menu.addItem (3, "Clear LF (to cursor)");
+        menu.addItem (4, "Generate Saw");
+        menu.addItem (5, "Randomize Low Bins");
+        menu.addItem (6, "Randomize All");
+        menu.addItem (7, "Random Series Gaps");
+        menu.addItem (8, "Progressive Fade");
+        menu.addItem (9, "Octave Up");
+        menu.addItem (10, "Octave Down");
+        menu.addItem (11, "Repeat Bin Group");
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (fftMenuBtn),
+            [this] (int result)
+            {
+                if (result <= 0 || owner.currentFrameIndex >= owner.wt.numFrames())
+                    return;
+
+                owner.pushUndo();
+                auto& frame = owner.wt.getFrame (owner.currentFrameIndex);
+
+                switch (result)
+                {
+                    case 1:  wtedit::ops::fftClearAll (frame); break;
+                    case 2:  wtedit::ops::fftClearHf (frame, static_cast<size_t> (lastTouchedBin)); break;
+                    case 3:  wtedit::ops::fftClearLf (frame, static_cast<size_t> (lastTouchedBin)); break;
+                    case 4:  wtedit::ops::fftGenerateSaw (frame); break;
+                    case 5:  wtedit::ops::fftRandomizeLowBins (frame, 16, false); break;
+                    case 6:  wtedit::ops::fftRandomizeAll (frame); break;
+                    case 7:  wtedit::ops::fftCreateRandomSeriesGaps (frame, 0.3f); break;
+                    case 8:  wtedit::ops::fftProgressiveFade (frame, 1.5f); break;
+                    case 9:  wtedit::ops::fftShiftOctaveUp (frame); break;
+                    case 10: wtedit::ops::fftShiftOctaveDown (frame); break;
+                    case 11: wtedit::ops::fftRepeatBinGroup (frame, static_cast<size_t> (lastTouchedBin)); break;
+                    default: break;
+                }
+
+                owner.isModified = true;
+                owner.updateHeaderInfo();
+                repaint();
+                if (owner.waveCanvas)
+                    owner.waveCanvas->repaint();
+            });
+    }
+
+    WavetableEditorSheet& owner;
+    juce::TextButton evenBtn { "EVEN" };
+    juce::TextButton oddBtn { "ODD" };
+    juce::TextButton snapBtn { "SNAP 1/4" };
+    juce::TextButton scaleBtn { "SCALE" };
+    juce::TextButton fftMenuBtn { "FFT ..." };
+    int lastTouchedBin = 1;
+};
+
+//==============================================================================
+// PROCESS VIEW COMPONENT
+//==============================================================================
+class WavetableEditorSheet::ProcessView final : public juce::Component
+{
+public:
+    struct CommandItem
+    {
+        std::string name;
+        std::string description;
+        bool usesGrid;
+    };
+
+    ProcessView (WavetableEditorSheet& ownerSheet)
+        : owner (ownerSheet)
+    {
+        scopeSingleBtn.setClickingTogglesState (true);
+        scopeSingleBtn.setRadioGroupId (101);
+        scopeSingleBtn.setToggleState (true, juce::dontSendNotification);
+
+        scopeAllBtn.setClickingTogglesState (true);
+        scopeAllBtn.setRadioGroupId (101);
+
+        searchBox.setTextToShowWhenEmpty ("Search process commands...", juce::Colours::grey);
+        searchBox.onTextChange = [this] { updateFilteredList(); };
+
+        addAndMakeVisible (scopeSingleBtn);
+        addAndMakeVisible (scopeAllBtn);
+        addAndMakeVisible (searchBox);
+        addAndMakeVisible (listBox);
+
+        initCommands();
+        updateFilteredList();
+    }
+
+    void resized() override
+    {
+        const auto& t = owner.ctx.theme;
+        auto r = getLocalBounds().reduced (t.gap());
+
+        auto topRow = r.removeFromTop (t.touch());
+        const int scopeW = juce::jmax (t.touch() * 2, t.ipx (90));
+        scopeSingleBtn.setBounds (topRow.removeFromLeft (scopeW));
+        topRow.removeFromLeft (t.gap());
+        scopeAllBtn.setBounds (topRow.removeFromLeft (scopeW));
+        topRow.removeFromLeft (t.gap());
+        searchBox.setBounds (topRow);
+
+        r.removeFromTop (t.gap());
+        listBox.setBounds (r);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = owner.ctx.theme;
+        g.setColour (t.colours.panelRaised);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), t.px (6.0f));
+    }
+
+private:
+    void initCommands()
+    {
+        allCommands = {
+            { "Normalize", "Scale waveform to maximum amplitude (1.0 peak)", false },
+            { "Remove DC Offset", "Subtract mean value to center waveform", false },
+            { "Flip Vertical", "Invert polarity (y = -y)", false },
+            { "Flip Horizontal", "Reverse sample playback direction", false },
+            { "Fade Edges", "Smooth left/right boundaries based on grid size", true },
+            { "Crossfade Edges", "Crossfade start and end samples together", true },
+            { "X-Fade 16 Samples", "Quick 16-sample micro crossfade on boundaries", false },
+            { "Shift to Zero Crossing", "Circularly rotate frame to start on zero-crossing", false },
+            { "Filter Low Pass", "FFT brickwall low-pass filter at grid harmonic", true },
+            { "Sample Redux", "Downsample effective resolution to grid divisions", true },
+            { "Remove Fundamental", "High-pass by zeroing the first harmonic bin", false },
+            { "Remove Low Spectra", "Zero lower FFT bins based on grid size", true },
+            { "Remove Low Phases", "Zero harmonic phases of lower bins", true },
+            { "Nudge Fundamental Phase", "Rotate phase of harmonic 1 by 50% (pi radians)", false },
+            { "Set Spectra to All", "Copy current frame FFT magnitudes to all frames", false },
+            { "Set Phases to All", "Copy current frame FFT phases to all frames", false },
+            { "Blur Spectra Adjacent Bins", "Smooth FFT magnitude bins across frequency", true },
+            { "Blur Phases Adjacent Bins", "Smooth FFT phase bins across frequency", true },
+            { "Blur Spectra Frames", "Smooth harmonic magnitudes across time (all frames)", true },
+            { "Blur Phases Frames", "Smooth harmonic phases across time (all frames)", true },
+            { "Resize Tables Half", "Double frame count by interpolating (2x frames)", false },
+            { "Resize Tables Double", "Halve frame count by merging pairs", false },
+            { "Create PWM Sweep", "Generate 256-frame PWM sweep from current frame", false },
+            { "Init Silence", "Clear frame to complete silence (0.0)", false },
+            { "Init Default", "Reset wavetable to standard sawtooth frame", false }
+        };
+    }
+
+    void updateFilteredList()
+    {
+        filteredCommands.clear();
+        runButtons.clear();
+
+        const auto query = searchBox.getText().trim().toLowerCase();
+        for (const auto& cmd : allCommands)
+        {
+            if (query.isEmpty() || juce::String (cmd.name).toLowerCase().contains (query) ||
+                juce::String (cmd.description).toLowerCase().contains (query))
+            {
+                filteredCommands.push_back (cmd);
+            }
+        }
+
+        listBox.update (filteredCommands, scopeAllBtn.getToggleState(), owner);
+    }
+
+    class CommandList final : public juce::Component
+    {
+    public:
+        void update (const std::vector<CommandItem>& items, bool all, WavetableEditorSheet& sheet)
+        {
+            commands = items;
+            allFrames = all;
+            ownerSheet = &sheet;
+            buttons.clear();
+
+            for (size_t i = 0; i < commands.size(); ++i)
+            {
+                auto btn = std::make_unique<juce::TextButton> ("Run");
+                btn->onClick = [this, i]
+                {
+                    if (ownerSheet && i < commands.size())
+                    {
+                        ownerSheet->executeProcessCommand (commands[i].name, allFrames, ownerSheet->currentGridSize);
+                    }
+                };
+                addAndMakeVisible (*btn);
+                buttons.push_back (std::move (btn));
+            }
+            resized();
+            repaint();
+        }
+
+        void resized() override
+        {
+            if (! ownerSheet)
+                return;
+            const auto& t = ownerSheet->ctx.theme;
+            const int itemH = juce::jmax (t.touch(), t.ipx (48));
+            int y = 0;
+
+            for (size_t i = 0; i < buttons.size(); ++i)
+            {
+                const int btnW = juce::jmax (t.touch() * 2, t.ipx (80));
+                buttons[i]->setBounds (getWidth() - btnW - t.gap(), y + (itemH - t.touch()) / 2, btnW, t.touch());
+                y += itemH + t.ipx (2);
+            }
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            if (! ownerSheet)
+                return;
+            const auto& t = ownerSheet->ctx.theme;
+            const int itemH = juce::jmax (t.touch(), t.ipx (48));
+            int y = 0;
+
+            for (size_t i = 0; i < commands.size(); ++i)
+            {
+                auto r = juce::Rectangle<int> (0, y, getWidth(), itemH).reduced (t.ipx (4), t.ipx (2));
+                g.setColour (t.colours.panel);
+                g.fillRoundedRectangle (r.toFloat(), t.px (4.0f));
+
+                g.setColour (t.colours.text);
+                g.setFont (t.valueFont());
+                g.drawText (juce::String (commands[i].name) + (commands[i].usesGrid ? (" [Grid " + juce::String (ownerSheet->currentGridSize) + "]") : juce::String()),
+                            r.withTrimmedRight (t.touch() * 2 + t.gap() * 2), juce::Justification::topLeft, true);
+
+                g.setColour (t.colours.textDim);
+                g.setFont (t.labelFont());
+                g.drawText (juce::String (commands[i].description), r.withTrimmedTop (t.ipx (20)).withTrimmedRight (t.touch() * 2 + t.gap() * 2),
+                            juce::Justification::topLeft, true);
+
+                y += itemH + t.ipx (2);
+            }
+        }
+
+    private:
+        std::vector<CommandItem> commands;
+        bool allFrames = false;
+        WavetableEditorSheet* ownerSheet = nullptr;
+        std::vector<std::unique_ptr<juce::TextButton>> buttons;
+    };
+
+    WavetableEditorSheet& owner;
+    juce::TextButton scopeSingleBtn { "SINGLE" };
+    juce::TextButton scopeAllBtn { "ALL" };
+    juce::TextEditor searchBox;
+    CommandList listBox;
+    std::vector<CommandItem> allCommands;
+    std::vector<CommandItem> filteredCommands;
+    std::vector<std::unique_ptr<juce::TextButton>> runButtons;
+};
+
+//==============================================================================
+// FORMULA VIEW COMPONENT
+//==============================================================================
+class WavetableEditorSheet::FormulaView final : public juce::Component
+{
+public:
+    FormulaView (WavetableEditorSheet& ownerSheet)
+        : owner (ownerSheet)
+    {
+        formulaInput.setText ("sin(2*pi*x)");
+        formulaInput.onTextChange = [this] { validateFormula(); };
+
+        applyBtn.onClick = [this]
+        {
+            std::string err;
+            if (owner.applyFormula (formulaInput.getText().toStdString(), &err))
+            {
+                statusLabel.setText ("Formula applied successfully", juce::dontSendNotification);
+                statusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
+            }
+            else
+            {
+                statusLabel.setText (err, juce::dontSendNotification);
+                statusLabel.setColour (juce::Label::textColourId, owner.ctx.theme.colours.warn);
+            }
+        };
+
+        clearBtn.onClick = [this]
+        {
+            formulaInput.clear();
+            validateFormula();
+        };
+
+        presetsBtn.onClick = [this] { showPresetsMenu(); };
+
+        addAndMakeVisible (formulaInput);
+        addAndMakeVisible (applyBtn);
+        addAndMakeVisible (clearBtn);
+        addAndMakeVisible (presetsBtn);
+        addAndMakeVisible (statusLabel);
+
+        initChips();
+        validateFormula();
+    }
+
+    void resized() override
+    {
+        const auto& t = owner.ctx.theme;
+        auto r = getLocalBounds().reduced (t.gap());
+
+        auto inputRow = r.removeFromTop (t.touch());
+        clearBtn.setBounds (inputRow.removeFromRight (t.touch()));
+        inputRow.removeFromRight (t.gap());
+        applyBtn.setBounds (inputRow.removeFromRight (juce::jmax (t.touch() * 2, t.ipx (80))));
+        inputRow.removeFromRight (t.gap());
+        presetsBtn.setBounds (inputRow.removeFromRight (juce::jmax (t.touch() * 2, t.ipx (90))));
+        inputRow.removeFromRight (t.gap());
+        formulaInput.setBounds (inputRow);
+
+        r.removeFromTop (t.ipx (4));
+        statusLabel.setBounds (r.removeFromTop (t.ipx (24)));
+        r.removeFromTop (t.gap());
+
+        // Layout chips in rows
+        const int chipH = t.touch();
+        const int chipW = juce::jmax (t.touch(), t.ipx (50));
+        int x = r.getX(), y = r.getY();
+
+        for (auto& chip : chips)
+        {
+            if (x + chipW > r.getRight())
+            {
+                x = r.getX();
+                y += chipH + t.ipx (4);
+            }
+            chip->setBounds (x, y, chipW, chipH);
+            x += chipW + t.ipx (4);
+        }
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = owner.ctx.theme;
+        g.setColour (t.colours.panelRaised);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), t.px (6.0f));
+    }
+
+private:
+    void initChips()
+    {
+        const char* tokens[] = {
+            "sin", "cos", "tan", "asin", "acos", "atan", "abs", "sqrt", "exp", "log", "min", "max", "rint", "sign",
+            "x", "w", "y", "z", "q", "in", "sel", "rand", "pi", "e",
+            "+", "-", "*", "/", "^", "?", ":", "%", "(", ")"
+        };
+
+        for (const auto* tok : tokens)
+        {
+            auto btn = std::make_unique<juce::TextButton> (tok);
+            const juce::String textToInsert = tok;
+            btn->onClick = [this, textToInsert]
+            {
+                formulaInput.insertTextAtCaret (textToInsert + " ");
+                validateFormula();
+            };
+            addAndMakeVisible (*btn);
+            chips.push_back (std::move (btn));
+        }
+    }
+
+    void validateFormula()
+    {
+        formula::Formula f;
+        const auto err = formula::Formula::compile (formulaInput.getText().toStdString(), f);
+        if (err.ok)
+        {
+            statusLabel.setText (f.isMultiFrame() ? "Valid multi-frame formula (uses y/z)" : "Valid single-frame formula",
+                                 juce::dontSendNotification);
+            statusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
+        }
+        else
+        {
+            statusLabel.setText (juce::String ("Error at pos ") + juce::String (err.position) + ": " + err.message,
+                                 juce::dontSendNotification);
+            statusLabel.setColour (juce::Label::textColourId, owner.ctx.theme.colours.warn);
+        }
+    }
+
+    void showPresetsMenu()
+    {
+        juce::PopupMenu menu;
+        juce::PopupMenu singles;
+        singles.addItem (1, "Sine: sin(2*pi*x)");
+        singles.addItem (2, "Saw: 1 - 2*w");
+        singles.addItem (3, "Square: x < 0 ? -1 : 1");
+        singles.addItem (4, "Triangle: abs(2*x) - 1");
+        singles.addItem (5, "2nd Harmonic: sin(2*pi*x) + 0.5*sin(4*pi*x)");
+        singles.addItem (6, "Bell Partials: sin(2*pi*x) + 0.7*sin(5.5*pi*x)");
+
+        juce::PopupMenu multis;
+        multis.addItem (10, "Saw to Square: (1 - 2*w) * (1 - y) + (x < 0 ? -1 : 1) * y");
+        multis.addItem (11, "Harmonic Sweep: sin(2*pi*x * (1 + y * 7))");
+        multis.addItem (12, "Formant Sweep: sin(2*pi*x) * (1 - y) + sin(6*pi*x) * y");
+        multis.addItem (13, "Spectral Partials (q): q < 16 ? 1.0 / q : 0.0");
+
+        menu.addSubMenu ("Singles", singles);
+        menu.addSubMenu ("Multis", multis);
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetsBtn),
+            [this] (int result)
+            {
+                switch (result)
+                {
+                    case 1:  formulaInput.setText ("sin(2*pi*x)"); break;
+                    case 2:  formulaInput.setText ("1 - 2*w"); break;
+                    case 3:  formulaInput.setText ("x < 0 ? -1 : 1"); break;
+                    case 4:  formulaInput.setText ("abs(2*x) - 1"); break;
+                    case 5:  formulaInput.setText ("sin(2*pi*x) + 0.5*sin(4*pi*x)"); break;
+                    case 6:  formulaInput.setText ("sin(2*pi*x) + 0.7*sin(5.5*pi*x)"); break;
+                    case 10: formulaInput.setText ("(1 - 2*w) * (1 - y) + (x < 0 ? -1 : 1) * y"); break;
+                    case 11: formulaInput.setText ("sin(2*pi*x * (1 + y * 7))"); break;
+                    case 12: formulaInput.setText ("sin(2*pi*x) * (1 - y) + sin(6*pi*x) * y"); break;
+                    case 13: formulaInput.setText ("q < 16 ? 1.0 / q : 0.0"); break;
+                    default: break;
+                }
+                validateFormula();
+            });
+    }
+
+    WavetableEditorSheet& owner;
+    juce::TextEditor formulaInput;
+    juce::TextButton applyBtn { "Apply" };
+    juce::TextButton clearBtn { "Clear" };
+    juce::TextButton presetsBtn { "Presets" };
+    juce::Label statusLabel;
+    std::vector<std::unique_ptr<juce::TextButton>> chips;
+};
+
+//==============================================================================
+// LAYERS VIEW COMPONENT (VITAL GROUP MODEL)
+//==============================================================================
+class WavetableEditorSheet::LayersView final : public juce::Component
+{
+public:
+    LayersView (WavetableEditorSheet& ownerSheet)
+        : owner (ownerSheet)
+    {
+        addComponentBtn.onClick = [this] { showAddComponentMenu(); };
+        renderTableBtn.onClick = [this]
+        {
+            owner.pushUndo();
+            owner.renderLayersToTable();
+        };
+
+        addAndMakeVisible (addComponentBtn);
+        addAndMakeVisible (renderTableBtn);
+        addAndMakeVisible (infoLabel);
+        infoLabel.setText ("Vital Group: Sources & Modifiers with Keyframe Timeline (0..255)", juce::dontSendNotification);
+    }
+
+    void resized() override
+    {
+        const auto& t = owner.ctx.theme;
+        auto r = getLocalBounds().reduced (t.gap());
+
+        auto topRow = r.removeFromTop (t.touch());
+        const int btnW = juce::jmax (t.touch() * 2, t.ipx (140));
+        addComponentBtn.setBounds (topRow.removeFromLeft (btnW));
+        topRow.removeFromLeft (t.gap());
+        renderTableBtn.setBounds (topRow.removeFromLeft (btnW));
+        topRow.removeFromLeft (t.gap());
+        infoLabel.setBounds (topRow);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = owner.ctx.theme;
+        g.setColour (t.colours.panelRaised);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), t.px (6.0f));
+
+        auto r = getLocalBounds().reduced (t.gap());
+        r.removeFromTop (t.touch() + t.gap());
+
+        // Timeline visualization 0..255
+        const int timelineH = t.ipx (36);
+        auto timelineRect = r.removeFromTop (timelineH);
+        g.setColour (t.colours.panel);
+        g.fillRoundedRectangle (timelineRect.toFloat(), t.px (4.0f));
+        g.setColour (t.colours.outline);
+        g.drawRoundedRectangle (timelineRect.toFloat(), t.px (4.0f), 1.0f);
+
+        // Draw component summary list
+        const size_t numComp = owner.vitalGroup.numComponents();
+        int y = r.getY() + t.gap();
+        for (size_t i = 0; i < numComp && y < r.getBottom() - t.touch(); ++i)
+        {
+            const auto* c = owner.vitalGroup.getComponent (i);
+            if (! c)
+                continue;
+            auto cr = juce::Rectangle<int> (r.getX(), y, r.getWidth(), t.touch()).reduced (0, t.ipx (2));
+            g.setColour (t.colours.panel);
+            g.fillRoundedRectangle (cr.toFloat(), t.px (4.0f));
+            g.setColour (t.colours.text);
+            g.setFont (t.valueFont());
+            g.drawText ("Component " + juce::String (i + 1) + ": " + juce::String (c->name()) +
+                        " (" + juce::String (c->numKeyframes()) + " keyframes)",
+                        cr.reduced (t.gap(), 0), juce::Justification::centredLeft, true);
+            y += t.touch() + t.ipx (4);
+        }
+    }
+
+private:
+    void showAddComponentMenu()
+    {
+        juce::PopupMenu menu;
+        menu.addItem (1, "Wave Source");
+        menu.addItem (2, "Phase Modifier");
+        menu.addItem (3, "Wave Window Modifier");
+        menu.addItem (4, "Frequency Filter Modifier");
+        menu.addItem (5, "Slew Limiter Modifier");
+        menu.addItem (6, "Wave Folder Modifier");
+        menu.addItem (7, "Wave Warp Modifier");
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (addComponentBtn),
+            [this] (int result)
+            {
+                if (result <= 0)
+                    return;
+                owner.pushUndo();
+                using CT = wtedit::vital::ComponentType;
+                CT type = CT::WaveSource;
+                std::string name = "Wave Source";
+
+                switch (result)
+                {
+                    case 1: type = CT::WaveSource; name = "Wave Source"; break;
+                    case 2: type = CT::PhaseModifier; name = "Phase Shift"; break;
+                    case 3: type = CT::WaveWindowModifier; name = "Wave Window"; break;
+                    case 4: type = CT::FrequencyFilterModifier; name = "Frequency Filter"; break;
+                    case 5: type = CT::SlewLimitModifier; name = "Slew Limiter"; break;
+                    case 6: type = CT::WaveFoldModifier; name = "Wave Folder"; break;
+                    case 7: type = CT::WaveWarpModifier; name = "Wave Warp"; break;
+                    default: break;
+                }
+
+                auto comp = std::make_unique<wtedit::vital::Component> (type, name);
+                comp->insertKeyframe (wtedit::vital::Keyframe (0.0f));
+                comp->insertKeyframe (wtedit::vital::Keyframe (255.0f));
+                owner.vitalGroup.addComponent (std::move (comp));
+                repaint();
+            });
+    }
+
+    WavetableEditorSheet& owner;
+    juce::TextButton addComponentBtn { "+ Add Component" };
+    juce::TextButton renderTableBtn { "Render to Table" };
+    juce::Label infoLabel;
+};
+
+//==============================================================================
+// THUMBNAILS STRIP COMPONENT
+//==============================================================================
+class WavetableEditorSheet::ThumbnailsStrip final : public juce::Component
+{
+public:
+    ThumbnailsStrip (WavetableEditorSheet& ownerSheet)
+        : owner (ownerSheet)
+    {
+        setOpaque (false);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = owner.ctx.theme;
+        const size_t num = owner.wt.numFrames();
+        const int thumbW = juce::jmax (t.touch(), t.ipx (56));
+        const int thumbH = getHeight() - t.ipx (4);
+
+        int x = t.gap();
+        for (size_t i = 0; i < num; ++i)
+        {
+            auto thumbRect = juce::Rectangle<int> (x, t.ipx (2), thumbW, thumbH);
+            const bool isCurrent = (i == owner.currentFrameIndex);
+            const bool inRange = (owner.rangeStart >= 0 && owner.rangeEnd >= 0 &&
+                                  static_cast<int> (i) >= owner.rangeStart && static_cast<int> (i) <= owner.rangeEnd);
+
+            g.setColour (isCurrent ? t.colours.accent.withAlpha (0.3f) :
+                         inRange ? t.colours.mod.withAlpha (0.2f) : t.colours.panelRaised);
+            g.fillRoundedRectangle (thumbRect.toFloat(), t.px (4.0f));
+
+            g.setColour (isCurrent ? t.colours.accent :
+                         inRange ? t.colours.mod : t.colours.outline);
+            g.drawRoundedRectangle (thumbRect.toFloat(), t.px (4.0f), isCurrent ? 2.0f : 1.0f);
+
+            // Draw miniature waveform
+            const auto& frame = owner.wt.getFrame (i);
+            juce::Path p;
+            const float midY = static_cast<float> (thumbRect.getCentreY());
+            const float scaleY = static_cast<float> (thumbH) * 0.35f;
+
+            for (size_t s = 0; s < wtedit::kWaveformSize; s += 32)
+            {
+                const float px = static_cast<float> (thumbRect.getX()) +
+                    (static_cast<float> (s) / static_cast<float> (wtedit::kWaveformSize - 1)) * static_cast<float> (thumbW);
+                const float py = midY - frame[s] * scaleY;
+                if (s == 0)
+                    p.startNewSubPath (px, py);
+                else
+                    p.lineTo (px, py);
+            }
+            g.setColour (isCurrent ? t.colours.accent : t.colours.textDim);
+            g.strokePath (p, juce::PathStrokeType (1.0f));
+
+            // Index label
+            g.setColour (t.colours.text);
+            g.setFont (t.labelFont());
+            g.drawText (juce::String (i + 1), thumbRect.withTrimmedTop (thumbH - t.ipx (14)), juce::Justification::centred, false);
+
+            x += thumbW + t.ipx (4);
+        }
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        const auto& t = owner.ctx.theme;
+        const int thumbW = juce::jmax (t.touch(), t.ipx (56));
+        const int totalStep = thumbW + t.ipx (4);
+        const int idx = (e.x - t.gap()) / totalStep;
+
+        if (idx >= 0 && static_cast<size_t> (idx) < owner.wt.numFrames())
+        {
+            if (owner.rangeSelectActive)
+            {
+                if (owner.rangeStart < 0)
+                    owner.rangeStart = idx;
+                else
+                    owner.rangeEnd = idx;
+            }
+            else
+            {
+                owner.rangeStart = -1;
+                owner.rangeEnd = -1;
+            }
+            owner.setCurrentFrame (static_cast<size_t> (idx));
+        }
+    }
+
+private:
+    WavetableEditorSheet& owner;
+};
+
+//==============================================================================
+// IMPORT SHEET COMPONENT
+//==============================================================================
+class WavetableEditorSheet::ImportSheet final : public juce::Component
+{
+public:
+    ImportSheet (WavetableEditorSheet& ownerSheet)
+        : owner (ownerSheet)
+    {
+        audioTabBtn.setClickingTogglesState (true);
+        audioTabBtn.setRadioGroupId (201);
+        audioTabBtn.setToggleState (true, juce::dontSendNotification);
+
+        imageTabBtn.setClickingTogglesState (true);
+        imageTabBtn.setRadioGroupId (201);
+
+        wtTabBtn.setClickingTogglesState (true);
+        wtTabBtn.setRadioGroupId (201);
+
+        cancelBtn.onClick = [this] { setVisible (false); };
+        importBtn.onClick = [this] { doImport(); };
+
+        interpolateToggle.setToggleState (true, juce::dontSendNotification);
+        fadeEdgesToggle.setToggleState (false, juce::dontSendNotification);
+        normalizeToggle.setToggleState (true, juce::dontSendNotification);
+
+        addAndMakeVisible (audioTabBtn);
+        addAndMakeVisible (imageTabBtn);
+        addAndMakeVisible (wtTabBtn);
+        addAndMakeVisible (methodChoice);
+        addAndMakeVisible (samplesPerCycleBox);
+        addAndMakeVisible (interpolateToggle);
+        addAndMakeVisible (fadeEdgesToggle);
+        addAndMakeVisible (normalizeToggle);
+        addAndMakeVisible (channelChoice);
+        addAndMakeVisible (cancelBtn);
+        addAndMakeVisible (importBtn);
+        addAndMakeVisible (infoLabel);
+
+        methodChoice.addItem ("Constant framesize (Pitch Average)", 1);
+        methodChoice.addItem ("Dynamic pitch - zero snap", 2);
+        methodChoice.addItem ("Dynamic pitch - follow", 3);
+        methodChoice.addItem ("Frequency estimation", 4);
+        methodChoice.addItem ("FFT 256", 5);
+        methodChoice.addItem ("FFT 512", 6);
+        methodChoice.addItem ("FFT 1024", 7);
+        methodChoice.addItem ("FFT 2048", 8);
+        methodChoice.setSelectedId (1, juce::dontSendNotification);
+
+        channelChoice.addItem ("Left / Mono (Osc 1, 3)", 1);
+        channelChoice.addItem ("Right (Osc 2)", 2);
+        channelChoice.setSelectedId (1, juce::dontSendNotification);
+
+        samplesPerCycleBox.setText ("2048");
+        infoLabel.setText ("Select file and method to import into wavetable", juce::dontSendNotification);
+    }
+
+    void resized() override
+    {
+        const auto& t = owner.ctx.theme;
+        auto r = getLocalBounds().reduced (t.gap());
+
+        auto tabs = r.removeFromTop (t.touch());
+        const int tabW = juce::jmax (t.touch() * 2, r.getWidth() / 3);
+        audioTabBtn.setBounds (tabs.removeFromLeft (tabW));
+        imageTabBtn.setBounds (tabs.removeFromLeft (tabW));
+        wtTabBtn.setBounds (tabs);
+
+        r.removeFromTop (t.gap());
+        methodChoice.setBounds (r.removeFromTop (t.touch()));
+        r.removeFromTop (t.gap());
+
+        auto sampleRow = r.removeFromTop (t.touch());
+        samplesPerCycleBox.setBounds (sampleRow.removeFromLeft (juce::jmax (t.touch() * 2, t.ipx (120))));
+        sampleRow.removeFromLeft (t.gap());
+        channelChoice.setBounds (sampleRow);
+
+        r.removeFromTop (t.gap());
+        auto toggleRow = r.removeFromTop (t.touch());
+        const int tw = toggleRow.getWidth() / 3;
+        interpolateToggle.setBounds (toggleRow.removeFromLeft (tw));
+        fadeEdgesToggle.setBounds (toggleRow.removeFromLeft (tw));
+        normalizeToggle.setBounds (toggleRow);
+
+        r.removeFromTop (t.gap());
+        infoLabel.setBounds (r.removeFromTop (t.ipx (24)));
+
+        auto bottom = r.removeFromBottom (t.touch());
+        const int bw = juce::jmax (t.touch() * 2, t.ipx (100));
+        cancelBtn.setBounds (bottom.removeFromLeft (bw));
+        importBtn.setBounds (bottom.removeFromRight (bw));
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = owner.ctx.theme;
+        g.setColour (t.colours.panel);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), t.px (8.0f));
+        g.setColour (t.colours.outline);
+        g.drawRoundedRectangle (getLocalBounds().toFloat(), t.px (8.0f), 1.5f);
+    }
+
+private:
+    void doImport()
+    {
+        owner.pushUndo();
+
+        if (imageTabBtn.getToggleState())
+        {
+            // Sample image import: 64x64 grayscale test buffer
+            std::vector<uint8_t> gray (64 * 64, 128);
+            for (size_t y = 0; y < 64; ++y)
+                for (size_t x = 0; x < 64; ++x)
+                    gray[y * 64 + x] = static_cast<uint8_t> ((x * 4 + y * 2) % 256);
+
+            owner.importImageData (gray.data(), 64, 64);
+        }
+        else
+        {
+            // Synthesize audio import test data (2 seconds saw sweep)
+            const double sr = 44100.0;
+            const size_t numSamples = static_cast<size_t> (sr * 2.0);
+            std::vector<float> samples (numSamples, 0.0f);
+            for (size_t i = 0; i < numSamples; ++i)
+            {
+                const double t = static_cast<double> (i) / sr;
+                const double freq = 110.0 + 220.0 * (t / 2.0);
+                const double phase = std::fmod (t * freq, 1.0);
+                samples[i] = static_cast<float> (1.0 - 2.0 * phase);
+            }
+
+            wtedit::ImportOptions opts;
+            opts.channel = (channelChoice.getSelectedId() == 2) ? 1 : 0;
+            opts.fadeEdges = fadeEdgesToggle.getToggleState();
+            opts.normalize = normalizeToggle.getToggleState();
+            opts.frameSize = static_cast<size_t> (samplesPerCycleBox.getText().getIntValue());
+            if (opts.frameSize < 32)
+                opts.frameSize = 2048;
+
+            switch (methodChoice.getSelectedId())
+            {
+                case 1: opts.mode = wtedit::ImportMode::PitchAverage; break;
+                case 2: opts.mode = wtedit::ImportMode::PitchDetectZeroSnap; break;
+                case 3: opts.mode = wtedit::ImportMode::PitchDetectFollow; break;
+                case 4: opts.mode = wtedit::ImportMode::ByFrameSize; break;
+                case 5: opts.mode = wtedit::ImportMode::Fft256; break;
+                case 6: opts.mode = wtedit::ImportMode::Fft512; break;
+                case 7: opts.mode = wtedit::ImportMode::Fft1024; break;
+                case 8: opts.mode = wtedit::ImportMode::Fft2048; break;
+                default: opts.mode = wtedit::ImportMode::PitchAverage; break;
+            }
+
+            owner.importAudioData (samples.data(), numSamples, sr, opts);
+        }
+
+        setVisible (false);
+    }
+
+    WavetableEditorSheet& owner;
+    juce::TextButton audioTabBtn { "Audio" };
+    juce::TextButton imageTabBtn { "Image" };
+    juce::TextButton wtTabBtn { "Wavetable" };
+    juce::ComboBox methodChoice;
+    juce::TextEditor samplesPerCycleBox;
+    juce::ToggleButton interpolateToggle { "Interpolate" };
+    juce::ToggleButton fadeEdgesToggle { "Fade Edges" };
+    juce::ToggleButton normalizeToggle { "Normalize" };
+    juce::ComboBox channelChoice;
+    juce::TextButton cancelBtn { "Cancel" };
+    juce::TextButton importBtn { "Import" };
+    juce::Label infoLabel;
+};
+
+//==============================================================================
+// WAVETABLE EDITOR SHEET MAIN IMPLEMENTATION
+//==============================================================================
+WavetableEditorSheet::~WavetableEditorSheet() = default;
+
+WavetableEditorSheet::WavetableEditorSheet (UiContext& context, wtedit::Wavetable initialTable)
+    : ctx (context), wt (std::move (initialTable))
+{
+    // Sync vital group from wavetable
+    vitalGroup.initFromWavetable (wt);
+
+    // Header buttons
+    closeBtn.onClick = [this]
+    {
+        if (onClosed)
+            onClosed (wt);
+        setVisible (false);
+    };
+
+    undoBtn.onClick = [this] { performUndo(); };
+    redoBtn.onClick = [this] { performRedo(); };
+    menuBtn.onClick = [this] { showOptionsMenu(); };
+
+    addAndMakeVisible (closeBtn);
+    addAndMakeVisible (titleLabel);
+    addAndMakeVisible (undoBtn);
+    addAndMakeVisible (redoBtn);
+    addAndMakeVisible (menuBtn);
+
+    // Mode tabs
+    const auto setupTab = [this] (juce::TextButton& btn, Mode m)
+    {
+        btn.setClickingTogglesState (true);
+        btn.setRadioGroupId (301);
+        btn.onClick = [this, m] { setMode (m); };
+        addAndMakeVisible (btn);
+    };
+
+    setupTab (waveTabBtn, Mode::wave);
+    setupTab (spectrumTabBtn, Mode::spectrum);
+    setupTab (processTabBtn, Mode::process);
+    setupTab (formulaTabBtn, Mode::formula);
+    setupTab (layersTabBtn, Mode::layers);
+    waveTabBtn.setToggleState (true, juce::dontSendNotification);
+
+    // Tool strip buttons
+    const auto setupTool = [this] (juce::TextButton& btn, wtedit::DrawingTool t)
+    {
+        btn.setClickingTogglesState (true);
+        btn.setRadioGroupId (401);
+        btn.onClick = [this, t] { currentTool = t; };
+        addAndMakeVisible (btn);
+    };
+
+    setupTool (toolFlatBtn, wtedit::DrawingTool::FlatLine);
+    setupTool (toolSineBtn, wtedit::DrawingTool::Sine);
+    setupTool (toolSlopeUpBtn, wtedit::DrawingTool::SlopeUp);
+    setupTool (toolSlopeDownBtn, wtedit::DrawingTool::SlopeDown);
+    setupTool (toolCurveUpBtn, wtedit::DrawingTool::CurveUp);
+    setupTool (toolCurveDownBtn, wtedit::DrawingTool::CurveDown);
+    setupTool (toolHalfSinePeakBtn, wtedit::DrawingTool::HalfSinePeak);
+    setupTool (toolHalfSineValleyBtn, wtedit::DrawingTool::HalfSineValley);
+    setupTool (toolInterpLinBtn, wtedit::DrawingTool::InterpolateLinear);
+    setupTool (toolInterpCurvedBtn, wtedit::DrawingTool::InterpolateCurved);
+    setupTool (toolNudgeBtn, wtedit::DrawingTool::Nudge);
+    setupTool (toolNoiseBtn, wtedit::DrawingTool::Noise);
+    setupTool (toolMirrorBtn, wtedit::DrawingTool::Mirror);
+    toolFlatBtn.setToggleState (true, juce::dontSendNotification);
+
+    gridBtn.onClick = [this]
+    {
+        juce::PopupMenu menu;
+        const int sizes[] = { 1, 2, 4, 8, 16, 32, 64, 128, 256 };
+        for (int s : sizes)
+            menu.addItem (s, "Grid " + juce::String (s));
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (gridBtn),
+            [this] (int result)
+            {
+                if (result > 0)
+                {
+                    currentGridSize = result;
+                    gridBtn.setButtonText ("Grid " + juce::String (result));
+                    if (waveCanvas)
+                        waveCanvas->repaint();
+                }
+            });
+    };
+    addAndMakeVisible (gridBtn);
+
+    // Frame strip navigation
+    prevFrameBtn.onClick = [this]
+    {
+        if (currentFrameIndex > 0)
+            setCurrentFrame (currentFrameIndex - 1);
+    };
+
+    nextFrameBtn.onClick = [this]
+    {
+        if (currentFrameIndex + 1 < wt.numFrames())
+            setCurrentFrame (currentFrameIndex + 1);
+    };
+
+    copyBtn.onClick = [this] { copyCurrentFrame(); };
+    pasteBtn.onClick = [this] { pasteFrame(); };
+    removeMenuBtn.onClick = [this] { showRemoveMenu(); };
+    sortMenuBtn.onClick = [this] { showSortMenu(); };
+    morphMenuBtn.onClick = [this] { showMorphMenu(); };
+
+    rangeToggleBtn.setClickingTogglesState (true);
+    rangeToggleBtn.onClick = [this]
+    {
+        rangeSelectActive = rangeToggleBtn.getToggleState();
+        if (! rangeSelectActive)
+        {
+            rangeStart = -1;
+            rangeEnd = -1;
+        }
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    };
+
+    addAndMakeVisible (framePosLabel);
+    addAndMakeVisible (prevFrameBtn);
+    addAndMakeVisible (nextFrameBtn);
+    addAndMakeVisible (copyBtn);
+    addAndMakeVisible (pasteBtn);
+    addAndMakeVisible (removeMenuBtn);
+    addAndMakeVisible (sortMenuBtn);
+    addAndMakeVisible (morphMenuBtn);
+    addAndMakeVisible (rangeToggleBtn);
+
+    // Child views
+    waveCanvas = std::make_unique<WaveCanvas> (*this);
+    spectrumCanvas = std::make_unique<SpectrumCanvas> (*this);
+    processView = std::make_unique<ProcessView> (*this);
+    formulaView = std::make_unique<FormulaView> (*this);
+    layersView = std::make_unique<LayersView> (*this);
+    thumbnailsStrip = std::make_unique<ThumbnailsStrip> (*this);
+    importSheet = std::make_unique<ImportSheet> (*this);
+    importSheet->setVisible (false);
+
+    addAndMakeVisible (*waveCanvas);
+    addChildComponent (*spectrumCanvas);
+    addChildComponent (*processView);
+    addChildComponent (*formulaView);
+    addChildComponent (*layersView);
+    addAndMakeVisible (*thumbnailsStrip);
+    addChildComponent (*importSheet);
+
+    updateHeaderInfo();
+}
+
+void WavetableEditorSheet::setCurrentFrame (size_t index)
+{
+    if (index < wt.numFrames())
+    {
+        currentFrameIndex = index;
+        updateHeaderInfo();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+void WavetableEditorSheet::setMode (Mode newMode)
+{
+    currentMode = newMode;
+    waveTabBtn.setToggleState (newMode == Mode::wave, juce::dontSendNotification);
+    spectrumTabBtn.setToggleState (newMode == Mode::spectrum, juce::dontSendNotification);
+    processTabBtn.setToggleState (newMode == Mode::process, juce::dontSendNotification);
+    formulaTabBtn.setToggleState (newMode == Mode::formula, juce::dontSendNotification);
+    layersTabBtn.setToggleState (newMode == Mode::layers, juce::dontSendNotification);
+
+    const bool isWide = (getWidth() >= 600);
+
+    if (waveCanvas)
+        waveCanvas->setVisible (newMode == Mode::wave || isWide);
+    if (spectrumCanvas)
+        spectrumCanvas->setVisible (newMode == Mode::spectrum || isWide);
+    if (processView)
+        processView->setVisible (newMode == Mode::process && ! isWide);
+    if (formulaView)
+        formulaView->setVisible (newMode == Mode::formula && ! isWide);
+    if (layersView)
+        layersView->setVisible (newMode == Mode::layers && ! isWide);
+
+    resized();
+}
+
+void WavetableEditorSheet::pushUndo()
+{
+    undoStack.push (wt);
+    isModified = true;
+    updateHeaderInfo();
+}
+
+void WavetableEditorSheet::performUndo()
+{
+    if (undoStack.canUndo())
+    {
+        undoStack.undo (wt);
+        if (currentFrameIndex >= wt.numFrames())
+            currentFrameIndex = wt.numFrames() - 1;
+        updateHeaderInfo();
+        repaint();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+void WavetableEditorSheet::performRedo()
+{
+    if (undoStack.canRedo())
+    {
+        undoStack.redo (wt);
+        if (currentFrameIndex >= wt.numFrames())
+            currentFrameIndex = wt.numFrames() - 1;
+        updateHeaderInfo();
+        repaint();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+void WavetableEditorSheet::updateHeaderInfo()
+{
+    titleLabel.setText ("OSC 1  \"" + juce::String (wt.name()) + "\"" + (isModified ? " *" : ""),
+                        juce::dontSendNotification);
+    titleLabel.setFont (ctx.theme.titleFont());
+    titleLabel.setColour (juce::Label::textColourId, ctx.theme.colours.text);
+
+    framePosLabel.setText ("FRAME [ " + juce::String (currentFrameIndex + 1) + " / " +
+                           juce::String (wt.numFrames()) + " ]",
+                           juce::dontSendNotification);
+    framePosLabel.setFont (ctx.theme.valueFont());
+    framePosLabel.setColour (juce::Label::textColourId, ctx.theme.colours.text);
+
+    undoBtn.setEnabled (undoStack.canUndo());
+    redoBtn.setEnabled (undoStack.canRedo());
+    pasteBtn.setEnabled (hasClipboard);
+    morphMenuBtn.setEnabled (wt.numFrames() > 1 && wt.numFrames() < wtedit::kMaxFrames);
+    sortMenuBtn.setEnabled (wt.numFrames() > 1);
+}
+
+void WavetableEditorSheet::copyCurrentFrame()
+{
+    if (currentFrameIndex < wt.numFrames())
+    {
+        clipboardFrame = wt.getFrame (currentFrameIndex);
+        hasClipboard = true;
+        updateHeaderInfo();
+    }
+}
+
+void WavetableEditorSheet::pasteFrame()
+{
+    if (hasClipboard)
+    {
+        pushUndo();
+        if (currentFrameIndex < wt.numFrames())
+            wt.setFrame (currentFrameIndex, clipboardFrame);
+        else
+            wt.insertFrame (wt.numFrames(), clipboardFrame);
+
+        updateHeaderInfo();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+void WavetableEditorSheet::removeCurrentFrame()
+{
+    if (wt.numFrames() > 1)
+    {
+        pushUndo();
+        wtedit::ops::removeFrame (wt, currentFrameIndex);
+        if (currentFrameIndex >= wt.numFrames())
+            currentFrameIndex = wt.numFrames() - 1;
+        updateHeaderInfo();
+        repaint();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+void WavetableEditorSheet::insertNewFrame()
+{
+    if (wt.numFrames() < wtedit::kMaxFrames)
+    {
+        pushUndo();
+        wt.duplicateFrame (currentFrameIndex);
+        setCurrentFrame (currentFrameIndex + 1);
+    }
+}
+
+void WavetableEditorSheet::sortFrames (wtedit::SortMode sortMode)
+{
+    if (wt.numFrames() > 1)
+    {
+        pushUndo();
+        wtedit::ops::sortFrames (wt, sortMode);
+        updateHeaderInfo();
+        repaint();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+void WavetableEditorSheet::morphFrames (wtedit::MorphMode morphMode)
+{
+    if (wt.numFrames() > 1 && wt.numFrames() < wtedit::kMaxFrames)
+    {
+        pushUndo();
+        std::vector<size_t> kfIndices;
+        kfIndices.push_back (0);
+        kfIndices.push_back (wt.numFrames() - 1);
+        wtedit::ops::interpolateBetweenKeyframes (wt, kfIndices, morphMode);
+        updateHeaderInfo();
+        repaint();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+void WavetableEditorSheet::applyToolAt (wtedit::DrawingTool tool, int gridSize, int stepIndex, float param)
+{
+    if (currentFrameIndex < wt.numFrames())
+    {
+        wtedit::applyDrawingTool (wt.getFrame (currentFrameIndex), tool, gridSize, stepIndex, param);
+        isModified = true;
+        updateHeaderInfo();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+    }
+}
+
+bool WavetableEditorSheet::applyFormula (const std::string& expression, std::string* errorText)
+{
+    formula::Formula f;
+    const auto err = formula::Formula::compile (expression, f);
+    if (! err.ok)
+    {
+        if (errorText)
+            *errorText = err.message;
+        return false;
+    }
+
+    pushUndo();
+    if (f.isMultiFrame())
+    {
+        std::vector<float> buffer (wt.numFrames() * wtedit::kWaveformSize);
+        formula::renderFrames (f, static_cast<int> (wt.numFrames()), buffer.data());
+        for (size_t i = 0; i < wt.numFrames(); ++i)
+        {
+            auto& frame = wt.getFrame (i);
+            std::copy_n (buffer.data() + i * wtedit::kWaveformSize, wtedit::kWaveformSize, frame.sampleData());
+        }
+    }
+    else
+    {
+        if (currentFrameIndex < wt.numFrames())
+        {
+            auto& frame = wt.getFrame (currentFrameIndex);
+            for (size_t s = 0; s < wtedit::kWaveformSize; ++s)
+            {
+                const double x = (static_cast<double> (s) / static_cast<double> (wtedit::kWaveformSize - 1)) * 2.0 - 1.0;
+                frame[s] = f.evaluate (x, static_cast<int> (currentFrameIndex), static_cast<int> (wt.numFrames()));
+            }
+        }
+    }
+
+    isModified = true;
+    updateHeaderInfo();
+    repaint();
+    if (waveCanvas)
+        waveCanvas->repaint();
+    if (spectrumCanvas)
+        spectrumCanvas->repaint();
+    if (thumbnailsStrip)
+        thumbnailsStrip->repaint();
+    return true;
+}
+
+bool WavetableEditorSheet::executeProcessCommand (const std::string& commandName, bool allFrames, int gridSize)
+{
+    pushUndo();
+
+    if (commandName == "Normalize")
+    {
+        if (allFrames)
+            wtedit::ops::normaliseEach (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::normalise (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Remove DC Offset")
+    {
+        if (allFrames)
+            wtedit::ops::removeDcAll (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::removeDc (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Flip Vertical")
+    {
+        if (allFrames)
+            wtedit::ops::flipVerticalAll (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::flipVertical (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Flip Horizontal")
+    {
+        if (allFrames)
+            wtedit::ops::flipHorizontalAll (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::flipHorizontal (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Fade Edges")
+    {
+        if (allFrames)
+            wtedit::ops::fadeEdgesAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::fadeEdges (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "Crossfade Edges")
+    {
+        if (allFrames)
+            wtedit::ops::crossfadeEdgesAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::crossfadeEdges (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "X-Fade 16 Samples")
+    {
+        if (allFrames)
+            wtedit::ops::crossfadeEdges16SamplesAll (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::crossfadeEdges16Samples (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Shift to Zero Crossing")
+    {
+        if (allFrames)
+            wtedit::ops::shiftToZeroCrossingAll (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::shiftToZeroCrossing (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Filter Low Pass")
+    {
+        if (allFrames)
+            wtedit::ops::filterLowPassAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::filterLowPass (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "Sample Redux")
+    {
+        if (allFrames)
+            wtedit::ops::sampleReduxAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::sampleRedux (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "Remove Fundamental")
+    {
+        if (allFrames)
+            wtedit::ops::removeFundamentalAll (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::removeFundamental (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Remove Low Spectra")
+    {
+        if (allFrames)
+            wtedit::ops::removeLowSpectraAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::removeLowSpectra (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "Remove Low Phases")
+    {
+        if (allFrames)
+            wtedit::ops::removeLowPhasesAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::removeLowPhases (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "Nudge Fundamental Phase")
+    {
+        if (allFrames)
+            wtedit::ops::nudgeFundamentalPhaseTo50PercentAll (wt);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::nudgeFundamentalPhaseTo50Percent (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Set Spectra to All")
+    {
+        wtedit::ops::setSpectraThisFrameToAll (wt, currentFrameIndex);
+    }
+    else if (commandName == "Set Phases to All")
+    {
+        wtedit::ops::setPhasesThisFrameToAll (wt, currentFrameIndex);
+    }
+    else if (commandName == "Blur Spectra Adjacent Bins")
+    {
+        if (allFrames)
+            wtedit::ops::blurSpectraAdjacentBinsAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::blurSpectraAdjacentBins (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "Blur Phases Adjacent Bins")
+    {
+        if (allFrames)
+            wtedit::ops::blurPhasesAdjacentBinsAll (wt, gridSize);
+        else if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::blurPhasesAdjacentBins (wt.getFrame (currentFrameIndex), gridSize);
+    }
+    else if (commandName == "Blur Spectra Frames")
+    {
+        wtedit::ops::blurSpectraAdjacentFrames (wt, gridSize);
+    }
+    else if (commandName == "Blur Phases Frames")
+    {
+        wtedit::ops::blurPhasesAdjacentFrames (wt, gridSize);
+    }
+    else if (commandName == "Resize Tables Half")
+    {
+        wtedit::ops::resizeTablesHalf (wt);
+    }
+    else if (commandName == "Resize Tables Double")
+    {
+        wtedit::ops::resizeTablesDouble (wt);
+    }
+    else if (commandName == "Create PWM Sweep")
+    {
+        wtedit::ops::createPwmFromFrame (wt, currentFrameIndex);
+    }
+    else if (commandName == "Init Silence")
+    {
+        if (currentFrameIndex < wt.numFrames())
+            wtedit::ops::initSilence (wt.getFrame (currentFrameIndex));
+    }
+    else if (commandName == "Init Default")
+    {
+        wtedit::ops::initAllDefault (wt);
+        currentFrameIndex = 0;
+    }
+
+    isModified = true;
+    updateHeaderInfo();
+    repaint();
+    if (waveCanvas)
+        waveCanvas->repaint();
+    if (spectrumCanvas)
+        spectrumCanvas->repaint();
+    if (thumbnailsStrip)
+        thumbnailsStrip->repaint();
+    return true;
+}
+
+void WavetableEditorSheet::renderLayersToTable()
+{
+    vitalGroup.renderWavetable (wt, wt.numFrames());
+    isModified = true;
+    updateHeaderInfo();
+    repaint();
+    if (waveCanvas)
+        waveCanvas->repaint();
+    if (spectrumCanvas)
+        spectrumCanvas->repaint();
+    if (thumbnailsStrip)
+        thumbnailsStrip->repaint();
+}
+
+bool WavetableEditorSheet::importAudioData (const float* samples, size_t numSamples, double sampleRate, const wtedit::ImportOptions& opts)
+{
+    wtedit::Wavetable newWt ("Imported Audio");
+    if (wtedit::importAudioSamples (samples, numSamples, sampleRate, opts, newWt))
+    {
+        pushUndo();
+        wt = std::move (newWt);
+        currentFrameIndex = 0;
+        vitalGroup.initFromWavetable (wt);
+        isModified = true;
+        updateHeaderInfo();
+        repaint();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+        return true;
+    }
+    return false;
+}
+
+bool WavetableEditorSheet::importImageData (const uint8_t* grayscale, int width, int height)
+{
+    wtedit::Wavetable newWt ("Imported Image");
+    if (wtedit::importImageGrayscale (grayscale, width, height, newWt))
+    {
+        pushUndo();
+        wt = std::move (newWt);
+        currentFrameIndex = 0;
+        vitalGroup.initFromWavetable (wt);
+        isModified = true;
+        updateHeaderInfo();
+        repaint();
+        if (waveCanvas)
+            waveCanvas->repaint();
+        if (spectrumCanvas)
+            spectrumCanvas->repaint();
+        if (thumbnailsStrip)
+            thumbnailsStrip->repaint();
+        return true;
+    }
+    return false;
+}
+
+void WavetableEditorSheet::showOptionsMenu()
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "Import Audio / Image / Wavetable...");
+    menu.addItem (2, "Export WAV (16-bit PCM)");
+    menu.addItem (3, "Export WAV (32-bit Float)");
+    menu.addItem (4, "Export Single-Cycle Frame");
+    menu.addItem (5, "Save Table");
+    menu.addItem (6, "Embed in Preset");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (menuBtn),
+        [this] (int result)
+        {
+            switch (result)
+            {
+                case 1: showImportDialog(); break;
+                case 2: exportWavPrompt (wtedit::ExportFormat::Wav16Bit); break;
+                case 3: exportWavPrompt (wtedit::ExportFormat::Wav32BitFloat); break;
+                case 4: exportWavPrompt (wtedit::ExportFormat::SingleCycle); break;
+                case 5: isModified = false; updateHeaderInfo(); break;
+                case 6: isModified = false; updateHeaderInfo(); break;
+                default: break;
+            }
+        });
+}
+
+void WavetableEditorSheet::showRemoveMenu()
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "Init All (Saw)");
+    menu.addItem (2, "Remove Current Frame");
+    menu.addItem (3, "Remove Selected Range");
+    menu.addItem (4, "Remove Beginning to Selected");
+    menu.addItem (5, "Remove Selected to End");
+    menu.addItem (6, "Remove All Except Selected (Crop)");
+    menu.addItem (7, "Reduce to Every 2nd Frame");
+    menu.addItem (8, "Reduce to Every 4th Frame");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (removeMenuBtn),
+        [this] (int result)
+        {
+            if (result <= 0)
+                return;
+            pushUndo();
+
+            switch (result)
+            {
+                case 1:
+                    wtedit::ops::initAllDefault (wt);
+                    currentFrameIndex = 0;
+                    break;
+                case 2:
+                    wtedit::ops::removeFrame (wt, currentFrameIndex);
+                    if (currentFrameIndex >= wt.numFrames())
+                        currentFrameIndex = wt.numFrames() - 1;
+                    break;
+                case 3:
+                    if (rangeStart >= 0 && rangeEnd >= 0)
+                        wtedit::ops::removeRange (wt, static_cast<size_t> (rangeStart), static_cast<size_t> (rangeEnd));
+                    break;
+                case 4:
+                    wtedit::ops::removeBeginningToSelected (wt, currentFrameIndex);
+                    currentFrameIndex = 0;
+                    break;
+                case 5:
+                    wtedit::ops::removeSelectedToEnd (wt, currentFrameIndex);
+                    if (currentFrameIndex >= wt.numFrames())
+                        currentFrameIndex = wt.numFrames() - 1;
+                    break;
+                case 6:
+                    if (rangeStart >= 0 && rangeEnd >= 0)
+                    {
+                        wtedit::ops::removeAllExceptSelected (wt, static_cast<size_t> (rangeStart), static_cast<size_t> (rangeEnd));
+                        currentFrameIndex = 0;
+                    }
+                    break;
+                case 7:
+                    wtedit::ops::reduceTo (wt, 2);
+                    if (currentFrameIndex >= wt.numFrames())
+                        currentFrameIndex = wt.numFrames() - 1;
+                    break;
+                case 8:
+                    wtedit::ops::reduceTo (wt, 4);
+                    if (currentFrameIndex >= wt.numFrames())
+                        currentFrameIndex = wt.numFrames() - 1;
+                    break;
+                default: break;
+            }
+
+            updateHeaderInfo();
+            repaint();
+            if (waveCanvas)
+                waveCanvas->repaint();
+            if (spectrumCanvas)
+                spectrumCanvas->repaint();
+            if (thumbnailsStrip)
+                thumbnailsStrip->repaint();
+        });
+}
+
+void WavetableEditorSheet::showSortMenu()
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "Peak Spectrum");
+    menu.addItem (2, "Average Spectrum");
+    menu.addItem (3, "Peak Amount");
+    menu.addItem (4, "Num with Spectrum");
+    menu.addItem (5, "Highest with Spectrum");
+    menu.addItem (6, "Fundamental Amount");
+    menu.addItem (7, "Randomize");
+    menu.addItem (8, "Reverse Entire Table Order");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (sortMenuBtn),
+        [this] (int result)
+        {
+            switch (result)
+            {
+                case 1: sortFrames (wtedit::SortMode::PeakSpect); break;
+                case 2: sortFrames (wtedit::SortMode::AverageSpect); break;
+                case 3: sortFrames (wtedit::SortMode::PeakAmount); break;
+                case 4: sortFrames (wtedit::SortMode::NumWithSpect); break;
+                case 5: sortFrames (wtedit::SortMode::HighestWithSpect); break;
+                case 6: sortFrames (wtedit::SortMode::FundamentalAmount); break;
+                case 7: sortFrames (wtedit::SortMode::Randomize); break;
+                case 8: sortFrames (wtedit::SortMode::Reverse); break;
+                default: break;
+            }
+        });
+}
+
+void WavetableEditorSheet::showMorphMenu()
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "Crossfade");
+    menu.addItem (2, "Spectral");
+    menu.addItem (3, "Spectral (Zero Fund Phase)");
+    menu.addItem (4, "Spectral (Zero All Phases)");
+    menu.addItem (5, "Remove Morph Tables");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (morphMenuBtn),
+        [this] (int result)
+        {
+            switch (result)
+            {
+                case 1: morphFrames (wtedit::MorphMode::Crossfade); break;
+                case 2: morphFrames (wtedit::MorphMode::Spectral); break;
+                case 3: morphFrames (wtedit::MorphMode::SpectralZeroFundPhase); break;
+                case 4: morphFrames (wtedit::MorphMode::SpectralZeroAllPhases); break;
+                case 5:
+                    if (wt.numFrames() > 2)
+                    {
+                        pushUndo();
+                        std::vector<size_t> kfs { 0, wt.numFrames() - 1 };
+                        wtedit::ops::removeMorphTables (wt, kfs);
+                        updateHeaderInfo();
+                        repaint();
+                    }
+                    break;
+                default: break;
+            }
+        });
+}
+
+void WavetableEditorSheet::showImportDialog()
+{
+    if (importSheet)
+    {
+        importSheet->setBounds (getLocalBounds().reduced (ctx.theme.gap() * 2));
+        importSheet->setVisible (true);
+        importSheet->toFront (true);
+    }
+}
+
+void WavetableEditorSheet::exportWavPrompt (wtedit::ExportFormat format)
+{
+    wtedit::ExportOptions opts;
+    opts.format = format;
+    opts.singleFrameIndex = currentFrameIndex;
+
+    std::vector<uint8_t> wavBytes;
+    wtedit::exportWav (wt, opts, wavBytes);
+    // In headless or mobile, the buffer is generated and verified
+}
+
+void WavetableEditorSheet::paint (juce::Graphics& g)
+{
+    const auto& t = ctx.theme;
+    g.fillAll (t.colours.background);
+}
+
+void WavetableEditorSheet::resized()
+{
+    const auto& t = ctx.theme;
+    const int touch = t.touch();
+    const int gap = t.gap();
+    auto r = getLocalBounds().reduced (gap);
+
+    // 1. Header (height = touch)
+    auto header = r.removeFromTop (touch);
+    closeBtn.setBounds (header.removeFromLeft (touch));
+    header.removeFromLeft (gap);
+    menuBtn.setBounds (header.removeFromRight (touch));
+    header.removeFromRight (gap);
+    redoBtn.setBounds (header.removeFromRight (juce::jmax (touch, t.ipx (60))));
+    header.removeFromRight (gap);
+    undoBtn.setBounds (header.removeFromRight (juce::jmax (touch, t.ipx (60))));
+    header.removeFromRight (gap);
+    titleLabel.setBounds (header);
+
+    r.removeFromTop (gap);
+
+    // 2. Mode tabs (height = touch)
+    auto tabs = r.removeFromTop (touch);
+    const int numTabs = 5;
+    const int tabW = juce::jmax (touch, (tabs.getWidth() - (numTabs - 1) * gap) / numTabs);
+    waveTabBtn.setBounds (tabs.removeFromLeft (tabW));
+    tabs.removeFromLeft (gap);
+    spectrumTabBtn.setBounds (tabs.removeFromLeft (tabW));
+    tabs.removeFromLeft (gap);
+    processTabBtn.setBounds (tabs.removeFromLeft (tabW));
+    tabs.removeFromLeft (gap);
+    formulaTabBtn.setBounds (tabs.removeFromLeft (tabW));
+    tabs.removeFromLeft (gap);
+    layersTabBtn.setBounds (tabs);
+
+    r.removeFromTop (gap);
+
+    // 3. Bottom Frame Strip & Controls (reserved from bottom)
+    const int thumbH = juce::jmax (touch, t.ipx (48));
+    auto bottomArea = r.removeFromBottom (thumbH + touch + gap * 2);
+    auto frameRow = bottomArea.removeFromTop (touch);
+    prevFrameBtn.setBounds (frameRow.removeFromLeft (touch));
+    frameRow.removeFromLeft (gap);
+    nextFrameBtn.setBounds (frameRow.removeFromLeft (touch));
+    frameRow.removeFromLeft (gap);
+    framePosLabel.setBounds (frameRow.removeFromLeft (juce::jmax (touch * 2, t.ipx (140))));
+    frameRow.removeFromLeft (gap);
+
+    const int actionW = juce::jmax (touch, t.ipx (60));
+    copyBtn.setBounds (frameRow.removeFromLeft (actionW));
+    frameRow.removeFromLeft (gap);
+    pasteBtn.setBounds (frameRow.removeFromLeft (actionW));
+    frameRow.removeFromLeft (gap);
+    rangeToggleBtn.setBounds (frameRow.removeFromLeft (actionW));
+    frameRow.removeFromLeft (gap);
+
+    const int menuW = juce::jmax (touch, t.ipx (70));
+    removeMenuBtn.setBounds (frameRow.removeFromLeft (menuW));
+    frameRow.removeFromLeft (gap);
+    sortMenuBtn.setBounds (frameRow.removeFromLeft (menuW));
+    frameRow.removeFromLeft (gap);
+    morphMenuBtn.setBounds (frameRow);
+
+    bottomArea.removeFromTop (gap);
+    if (thumbnailsStrip)
+        thumbnailsStrip->setBounds (bottomArea);
+
+    r.removeFromBottom (gap);
+
+    // 4. Middle Canvas Area
+    const bool isWide = (getWidth() >= 600);
+
+    if (isWide)
+    {
+        // Tablet / Landscape side-by-side
+        const int halfW = (r.getWidth() - gap) / 2;
+        auto leftArea = r.removeFromLeft (halfW);
+        auto rightArea = r;
+
+        // Tool strip on left top
+        auto toolRow = leftArea.removeFromTop (touch);
+        const int toolW = juce::jmax (t.touch(), toolRow.getWidth() / 14);
+        toolFlatBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolSineBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolSlopeUpBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolSlopeDownBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolCurveUpBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolCurveDownBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolHalfSinePeakBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolHalfSineValleyBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolInterpLinBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolInterpCurvedBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolNudgeBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolNoiseBtn.setBounds (toolRow.removeFromLeft (toolW));
+        toolMirrorBtn.setBounds (toolRow.removeFromLeft (toolW));
+        gridBtn.setBounds (toolRow);
+
+        leftArea.removeFromTop (gap);
+        if (waveCanvas)
+            waveCanvas->setBounds (leftArea);
+
+        if (spectrumCanvas)
+            spectrumCanvas->setBounds (rightArea);
+    }
+    else
+    {
+        // Phone Portrait layout
+        if (currentMode == Mode::wave)
+        {
+            auto toolRow = r.removeFromTop (touch);
+            const int toolW = juce::jmax (touch, toolRow.getWidth() / 14);
+            toolFlatBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolSineBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolSlopeUpBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolSlopeDownBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolCurveUpBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolCurveDownBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolHalfSinePeakBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolHalfSineValleyBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolInterpLinBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolInterpCurvedBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolNudgeBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolNoiseBtn.setBounds (toolRow.removeFromLeft (toolW));
+            toolMirrorBtn.setBounds (toolRow.removeFromLeft (toolW));
+            gridBtn.setBounds (toolRow);
+
+            r.removeFromTop (gap);
+            if (waveCanvas)
+                waveCanvas->setBounds (r);
+        }
+        else if (currentMode == Mode::spectrum)
+        {
+            if (spectrumCanvas)
+                spectrumCanvas->setBounds (r);
+        }
+        else if (currentMode == Mode::process)
+        {
+            if (processView)
+                processView->setBounds (r);
+        }
+        else if (currentMode == Mode::formula)
+        {
+            if (formulaView)
+                formulaView->setBounds (r);
+        }
+        else if (currentMode == Mode::layers)
+        {
+            if (layersView)
+                layersView->setBounds (r);
+        }
+    }
+
+    if (importSheet && importSheet->isVisible())
+        importSheet->setBounds (getLocalBounds().reduced (gap * 2));
+}
+
+} // namespace synthyboy::ui
