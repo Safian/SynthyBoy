@@ -1408,3 +1408,120 @@ TEST (vi_import_serialize_load_round_trip)
 
     std::filesystem::remove_all (tempDir, ec);
 }
+
+TEST (vi_fixture_sample_imported_to_osc)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    // Default patch has osc_1_on = 1, osc_2_on = 0, osc_3_on = 0
+    f.set ("sample_on", 1);
+    f.set ("sample_level", 0.8);
+    f.set ("sample_pan", -0.5);
+    f.set ("sample_destination", 2);
+    f.set ("sample_transpose", 7);
+    f.set ("sample_tune", 0.2);
+    f.set ("sample_random_phase", 1);
+    f.set ("sample_keytrack", 1);
+    f.set ("sample_loop", 1);
+    f.set ("sample_bounce", 1);
+    f.set ("sample_transpose_quantize", 0);
+    f.sample = "{\"name\":\"My Sample\",\"length\":100,\"sample_rate\":48000,\"samples\":\"AAAA\"}";
+
+    ImportOptions o;
+    o.caps.sampleOsc = true;
+    auto r = run (f, o);
+
+    CHECK_EQ (r.status, ImportStatus::ok);
+    CHECK_EQ (val (r, "noise.on"), 0.0f);
+    CHECK_EQ (val (r, "osc2.type"), 1.0f); // 1 = Sample
+    CHECK_EQ (val (r, "osc2.on"), 1.0f);
+    CHECK_NEAR (val (r, "osc2.level"), 64.0f, 1e-3f); // 0.8^2 * 100
+    CHECK_NEAR (val (r, "osc2.pan"), -50.0f, 1e-3f);
+    CHECK_EQ (val (r, "osc2.destination"), 2.0f);
+    CHECK_EQ (val (r, "osc2.transpose"), 7.0f);
+    CHECK_NEAR (val (r, "osc2.tune"), 20.0f, 1e-3f);
+    CHECK_EQ (val (r, "osc2.random_phase"), 100.0f);
+    CHECK_EQ (val (r, "osc2.sample.keytrack"), 1.0f);
+    CHECK_EQ (val (r, "osc2.sample.loop_mode"), 3.0f); // Forward/reverse loop
+
+    CHECK_EQ (r.samples.size(), static_cast<size_t> (1));
+    CHECK_EQ (r.samples[0].osc, 2);
+    CHECK_EQ (r.samples[0].name, std::string ("My Sample"));
+    CHECK_EQ (r.samples[0].sampleRate, 48000);
+    CHECK (! r.samples[0].wavBytes.empty());
+    CHECK_EQ (r.samples[0].sha256.size(), static_cast<size_t> (64));
+
+    CHECK (findItem (r, "sample", ItemKind::approximated) != nullptr);
+    CHECK (findItem (r, "sample", ItemKind::dropped) == nullptr);
+    CHECK (r.report.fidelity == Fidelity::close);
+}
+
+TEST (vi_fixture_sample_all_oscillators_on_dropped)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("osc_1_on", 1);
+    f.set ("osc_2_on", 1);
+    f.set ("osc_3_on", 1);
+    f.set ("sample_on", 1);
+    f.sample = "{\"name\":\"My Sample\",\"length\":100,\"sample_rate\":48000,\"samples\":\"AAAA\"}";
+
+    ImportOptions o;
+    o.caps.sampleOsc = true;
+    auto r = run (f, o);
+
+    CHECK (findItem (r, "sample", ItemKind::dropped) != nullptr);
+    CHECK (r.report.fidelity == Fidelity::degraded);
+}
+
+TEST (user_sample_store_and_round_trip)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("sample_on", 1);
+    f.set ("sample_level", 0.9);
+    f.sample = "{\"name\":\"KickHit\",\"length\":50,\"sample_rate\":44100,\"samples\":\"AAAA\"}";
+
+    ImportOptions o;
+    o.caps.sampleOsc = true;
+    const auto r = run (f, o);
+    CHECK_EQ (r.status, ImportStatus::ok);
+    CHECK_EQ (r.samples.size(), static_cast<size_t> (1));
+
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "synthyboy_test_sample_store";
+    std::error_code ec;
+    std::filesystem::remove_all (tempDir, ec);
+
+    UserWavetableStore store (tempDir.string());
+    ContentRefs refs;
+    std::string pack, file;
+    CHECK (store.addSample (r.samples[0], pack, file));
+    CHECK_EQ (pack, std::string ("user.imported-vital"));
+    CHECK (! file.empty());
+    CHECK (store.hasSample (r.samples[0].sha256));
+
+    // Deduplication check
+    std::string pack2, file2;
+    CHECK (store.addSample (r.samples[0], pack2, file2));
+    CHECK_EQ (pack2, pack);
+    CHECK_EQ (file2, file);
+
+    refs.samples.push_back ({ r.samples[0].osc, pack, file });
+
+    const std::string sbpreset = serializeImportedPreset (r, r.meta, refs);
+    CHECK (! sbpreset.empty());
+    CHECK (sbpreset.find ("\"samples\":") != std::string::npos);
+
+    PresetMeta metaOut;
+    ParamValues loadedValues = ParamValues::defaults();
+    StateContent loadedContent;
+    const LoadResult loadRes = loadPreset (sbpreset.data(), sbpreset.size(), metaOut, loadedValues, loadedContent);
+    CHECK (loadRes.status == LoadStatus::ok);
+    CHECK_EQ (loadedContent.samples.size(), static_cast<size_t> (1));
+    CHECK_EQ (loadedContent.samples[0].osc, 2);
+    CHECK_EQ (loadedContent.samples[0].ref.pack, pack);
+    CHECK_EQ (loadedContent.samples[0].ref.file, file);
+    CHECK_EQ (loadedContent.samples[0].ref.sha256, r.samples[0].sha256);
+
+    std::filesystem::remove_all (tempDir, ec);
+}

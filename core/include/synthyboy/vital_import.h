@@ -78,6 +78,7 @@ struct ImportCaps
 {
     bool customWavetables = false;
     bool customLfoShapes = false;
+    bool sampleOsc = false;
     int maxWavetableFrames = 257;
 };
 
@@ -109,8 +110,28 @@ struct ImportedLfoShape
     std::vector<std::array<float, 3>> points; // x, y (value, up = high), power of the segment starting at the point
 };
 
+struct ImportedSample
+{
+    int osc = 0;                              // 1..3
+    std::string name;
+    std::string sha256;                       // sha256 of the generated 16-bit PCM WAV bytes
+    int sampleRate = 44100;
+    int numFrames = 0;
+    int channels = 1;                         // 1 (mono) or 2 (stereo)
+    std::vector<uint8_t> wavBytes;            // complete RIFF/WAVE 16-bit PCM file
+    std::vector<float> slices;                // manual slice positions 0..1
+};
+
 /** Reference to a stored wavetable in a ContentPack for an oscillator (1..3). */
 struct ContentWavetableRef
+{
+    int osc = 0;
+    std::string pack;
+    std::string file;
+};
+
+/** Reference to a stored sample in a ContentPack for an oscillator (1..3). */
+struct ContentSampleRef
 {
     int osc = 0;
     std::string pack;
@@ -120,6 +141,7 @@ struct ContentWavetableRef
 struct ContentRefs
 {
     std::vector<ContentWavetableRef> wavetables;
+    std::vector<ContentSampleRef> samples;
 
     const ContentWavetableRef* findWavetable (int osc) const noexcept
     {
@@ -128,17 +150,27 @@ struct ContentRefs
                 return &w;
         return nullptr;
     }
+
+    const ContentSampleRef* findSample (int osc) const noexcept
+    {
+        for (const auto& s : samples)
+            if (s.osc == osc)
+                return &s;
+        return nullptr;
+    }
 };
 
-/** Host-side interface for wavetable storage (docs/ui-design/11-vital-preset-import.md Annex A.2). */
+/** Host-side interface for wavetable and sample storage (docs/ui-design/11-vital-preset-import.md Annex A.2, A26). */
 struct ContentStore
 {
     virtual ~ContentStore() = default;
     virtual bool hasWavetable (const std::string& sha256) = 0;
     virtual bool addWavetable (const ImportedWavetable& wt, std::string& packOut, std::string& fileOut) = 0;
+    virtual bool hasSample (const std::string& sha256) { (void) sha256; return false; }
+    virtual bool addSample (const ImportedSample& s, std::string& packOut, std::string& fileOut) { (void) s; (void) packOut; (void) fileOut; return false; }
 };
 
-/** User-supplied ContentPack store for imported Vital wavetables (user.imported-vital). */
+/** User-supplied ContentPack store for imported Vital wavetables and samples (user.imported-vital). */
 class UserWavetableStore : public ContentStore
 {
 public:
@@ -146,6 +178,8 @@ public:
 
     bool hasWavetable (const std::string& sha256) override;
     bool addWavetable (const ImportedWavetable& wt, std::string& packOut, std::string& fileOut) override;
+    bool hasSample (const std::string& sha256) override;
+    bool addSample (const ImportedSample& s, std::string& packOut, std::string& fileOut) override;
 
     const ContentPackInfo& packInfo() const noexcept { return info_; }
     const std::string& packDirectory() const noexcept { return packDir_; }
@@ -176,6 +210,8 @@ struct ImportResult
     PresetMeta meta;
     std::vector<ImportedWavetable> wavetables; // custom tables that are not a built-in
     std::vector<ImportedLfoShape> lfoShapes;   // custom shapes that are not a built-in
+    std::vector<ImportedSample> samples;       // custom sample for oscN.type = Sample
+    ContentTuning tuning;                      // custom tuning scl/kbm
     ImportReport report;
     std::string macroNames[4];                 // Vital's macro display names
     std::string sourceSha256;                  // SHA-256 of the input bytes (tag "src:" uses the first 12 hex digits)
