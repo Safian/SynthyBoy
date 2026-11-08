@@ -12,6 +12,7 @@ set(UI_DIR "${CMAKE_CURRENT_LIST_DIR}")
 add_library(synthyboy_ui_model STATIC
     ${UI_DIR}/model/ControlModel.cpp
     ${UI_DIR}/model/GestureModel.cpp
+    ${UI_DIR}/model/FxModel.cpp
     ${UI_DIR}/model/ModModel.cpp)
 target_include_directories(synthyboy_ui_model PUBLIC ${UI_DIR}/model)
 # the consumers (plugin, tests) link synthyboy_core themselves; only its headers are needed here

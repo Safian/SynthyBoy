@@ -13,8 +13,10 @@ public:
           centerHandle (context, "phaser.center"),
           feedHandle (context, "phaser.feedback"),
           depthHandle (context, "phaser.depth"),
-          blendHandle (context, "phaser.blend")
+          blendHandle (context, "phaser.blend"),
+          depth2Handle (context, "phaser.depth2")
     {
+        depth2Handle.onChange = [this] { repaint(); };
         centerHandle.onChange = [this] { repaint(); };
         feedHandle.onChange = [this] { repaint(); };
         depthHandle.onChange = [this] { repaint(); };
@@ -33,20 +35,29 @@ public:
         const float feed = juce::jlimit (-0.95f, 0.95f, feedHandle.plain() / 100.0f);
         const float depth = juce::jlimit (0.0f, 1.0f, depthHandle.plain() / 48.0f);
 
-        // Draw allpass notches (multi-stage)
-        juce::Path p;
-        p.startNewSubPath (area.getX(), area.getY() + area.getHeight() * 0.35f);
-
-        const int numPts = 80;
-        for (int i = 0; i <= numPts; ++i)
+        // Draw allpass notches (multi-stage); with depth 2 the right channel sweeps by depth + depth 2 and gets its own thinner curve
+        const auto notchPath = [&] (float channelDepth)
         {
-            const float normX = static_cast<float> (i) / static_cast<float> (numPts);
-            const float diff = (normX - normCenter) * 6.0f;
-            const float notch = (1.0f + feed * std::cos (diff * juce::MathConstants<float>::pi * 1.5f)) * 0.5f;
-            const float y = area.getY() + area.getHeight() * (0.2f + 0.65f * (1.0f - notch * depth));
+            juce::Path p;
+            p.startNewSubPath (area.getX(), area.getY() + area.getHeight() * 0.35f);
+            const int numPts = 80;
+            for (int i = 0; i <= numPts; ++i)
+            {
+                const float normX = static_cast<float> (i) / static_cast<float> (numPts);
+                const float diff = (normX - normCenter) * 6.0f;
+                const float notch = (1.0f + feed * std::cos (diff * juce::MathConstants<float>::pi * 1.5f)) * 0.5f;
+                const float y = area.getY() + area.getHeight() * (0.2f + 0.65f * (1.0f - notch * channelDepth));
 
-            const float ptX = area.getX() + area.getWidth() * normX;
-            p.lineTo (ptX, y);
+                const float ptX = area.getX() + area.getWidth() * normX;
+                p.lineTo (ptX, y);
+            }
+            return p;
+        };
+        const juce::Path p = notchPath (depth);
+        if (depth2Handle.plain() != 0.0f)
+        {
+            g.setColour (t.colours.mod);
+            g.strokePath (notchPath (juce::jlimit (0.0f, 1.0f, (depthHandle.plain() + depth2Handle.plain()) / 48.0f)), juce::PathStrokeType (t.px (1.5f)));
         }
 
         g.setColour (t.colours.accent);
@@ -110,6 +121,7 @@ private:
     ParamHandle feedHandle;
     ParamHandle depthHandle;
     ParamHandle blendHandle;
+    ParamHandle depth2Handle;
 
     bool draggingNode = false;
 };
@@ -125,7 +137,7 @@ public:
     {
         return {
             "phaser.rate", "phaser.depth", "phaser.center", "phaser.mix",
-            "phaser.on", "phaser.sync", "phaser.division", "phaser.feedback", "phaser.blend", "phaser.phase_offset", "phaser.rack"
+            "phaser.on", "phaser.sync", "phaser.division", "phaser.feedback", "phaser.blend", "phaser.phase_offset", "phaser.depth2", "phaser.rack"
         };
     }
 
@@ -140,13 +152,14 @@ public:
         addControl ("phaser.center");
         addControl ("phaser.mix");
 
-        // More controls (7 keys)
+        // More controls (8 keys)
         addMoreControl ("phaser.on");
         addMoreControl ("phaser.sync");
         addMoreControl ("phaser.division");
         addMoreControl ("phaser.feedback");
         addMoreControl ("phaser.blend");
         addMoreControl ("phaser.phase_offset");
+        addMoreControl ("phaser.depth2");
         addMoreControl ("phaser.rack");
     }
 

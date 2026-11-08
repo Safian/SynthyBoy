@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "FxCommon.h"
+#include "../model/FxModel.h"
 
 namespace synthyboy::ui
 {
@@ -14,8 +15,10 @@ public:
           time2Handle (context, "delay.time2"),
           feedHandle (context, "delay.feedback"),
           cutoffHandle (context, "delay.filter_cutoff"),
-          spreadHandle (context, "delay.filter_spread")
+          spreadHandle (context, "delay.filter_spread"),
+          offsetHandle (context, "delay.offset")
     {
+        offsetHandle.onChange = [this] { repaint(); };
         timeHandle.onChange = [this] { repaint(); };
         time2Handle.onChange = [this] { repaint(); };
         feedHandle.onChange = [this] { repaint(); };
@@ -40,7 +43,7 @@ public:
 
         const float fb = juce::jlimit (0.0f, 0.95f, std::abs (feedHandle.plain()) / 100.0f);
         const float t1 = juce::jlimit (20.0f, 2000.0f, timeHandle.plain());
-        const float t2 = juce::jlimit (20.0f, 2000.0f, time2Handle.plain());
+        const float t2 = juce::jlimit (20.0f, 2000.0f, time2Handle.plain() * offsetHandle.plain()); // (delay.offset scales the right time)
 
         // Draw decaying pulses
         float ampL = 1.0f;
@@ -156,9 +159,77 @@ private:
     ParamHandle feedHandle;
     ParamHandle cutoffHandle;
     ParamHandle spreadHandle;
+    ParamHandle offsetHandle;
 
     bool draggingPad = false;
     bool showFftOverlay = false;
+};
+
+/** The row under the echo view: TAP (Tap->Delay, G74: the interval of the taps becomes the delay time) and the snap points of delay.offset. */
+class FxDelayTools final : public juce::Component
+{
+public:
+    explicit FxDelayTools (UiContext& context)
+        : timeHandle (context, "delay.time"),
+          time2Handle (context, "delay.time2"),
+          syncHandle (context, "delay.sync"),
+          offsetHandle (context, "delay.offset")
+    {
+        tapButton.setButtonText ("TAP");
+        tapButton.setTooltip ("Tap the tempo: sets Free sync and both delay times to the interval of the last taps");
+        tapButton.onClick = [this] { tap (juce::Time::getMillisecondCounterHiRes()); };
+        addAndMakeVisible (tapButton);
+        static const char* const names[3] = { "x1", "x4/3", "x3/2" };
+        static const char* const tips[3] = { "Right delay time = left", "Right delay time = 4/3 of left (triplet)", "Right delay time = 3/2 of left (dotted)" };
+        for (int i = 0; i < 3; ++i)
+        {
+            snapButtons[static_cast<size_t> (i)].setButtonText (names[i]);
+            snapButtons[static_cast<size_t> (i)].setTooltip (tips[i]);
+            snapButtons[static_cast<size_t> (i)].onClick = [this, i] { snapOffset (i); };
+            addAndMakeVisible (snapButtons[static_cast<size_t> (i)]);
+        }
+    }
+
+    /** One tap at `nowMs`; true once the interval was written to the parameters. */
+    bool tap (double nowMs)
+    {
+        if (! tapModel.tap (nowMs))
+        {
+            tapButton.setButtonText ("TAP");
+            return false;
+        }
+        const double ms = tapModel.intervalMs();
+        syncHandle.setPlainComplete (0.0f); // Free
+        timeHandle.setPlainComplete (juce::jlimit (timeHandle.info().min, timeHandle.info().max, static_cast<float> (ms)));
+        time2Handle.setPlainComplete (juce::jlimit (time2Handle.info().min, time2Handle.info().max, static_cast<float> (ms)));
+        tapButton.setButtonText ("TAP " + juce::String (juce::roundToInt (tapModel.bpm())));
+        return true;
+    }
+
+    void snapOffset (int index)
+    {
+        if (index >= 0 && index < 3)
+            offsetHandle.setPlainComplete (kDelayOffsetSnap[index]);
+    }
+
+    TapTempo& tapState() noexcept { return tapModel; }
+    juce::TextButton& tapButtonRef() noexcept { return tapButton; }
+    juce::TextButton& snapButton (int index) noexcept { return snapButtons[static_cast<size_t> (index)]; }
+
+    void resized() override
+    {
+        auto area = getLocalBounds();
+        tapButton.setBounds (area.removeFromLeft (area.getWidth() * 2 / 5).reduced (1, 0));
+        const int w = area.getWidth() / 3;
+        for (size_t i = 0; i < 3; ++i)
+            snapButtons[i].setBounds (area.removeFromLeft (i == 2 ? area.getWidth() : w).reduced (1, 0));
+    }
+
+private:
+    ParamHandle timeHandle, time2Handle, syncHandle, offsetHandle;
+    TapTempo tapModel;
+    juce::TextButton tapButton;
+    std::array<juce::TextButton, 3> snapButtons;
 };
 
 class FxDelayPanel final : public Panel
@@ -173,7 +244,7 @@ public:
         return {
             "delay.time", "delay.time2", "delay.feedback", "delay.mix",
             "delay.on", "delay.style", "delay.sync", "delay.division", "delay.division2",
-            "delay.filter_cutoff", "delay.filter_spread", "delay.rack"
+            "delay.filter_cutoff", "delay.filter_spread", "delay.hq", "delay.offset", "delay.rack"
         };
     }
 
@@ -188,7 +259,7 @@ public:
         addControl ("delay.feedback");
         addControl ("delay.mix");
 
-        // More controls (8 keys)
+        // More controls (10 keys); under the view: TAP and the offset snaps
         addMoreControl ("delay.on");
         addMoreControl ("delay.style");
         addMoreControl ("delay.sync");
@@ -196,7 +267,11 @@ public:
         addMoreControl ("delay.division2");
         addMoreControl ("delay.filter_cutoff");
         addMoreControl ("delay.filter_spread");
+        addMoreControl ("delay.hq");
+        addMoreControl ("delay.offset");
         addMoreControl ("delay.rack");
+        tools = std::make_unique<FxDelayTools> (ctx);
+        addAndMakeVisible (*tools);
     }
 
     int preferredHeight (int width) const override
@@ -204,7 +279,7 @@ public:
         const auto& t = ctx.theme;
         const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
         const int visualH = t.ipx (130.0f);
-        return headerHeight() + 2 * t.gap() + visualH + t.gap()
+        return headerHeight() + 2 * t.gap() + visualH + t.gap() + t.ipx (44.0f) + t.gap()
                + const_cast<FxDelayPanel*> (this)->layoutControls (area, true);
     }
 
@@ -217,11 +292,19 @@ public:
             visual->setBounds (area.removeFromTop (visualH));
             area.removeFromTop (ctx.theme.gap());
         }
+        if (tools != nullptr)
+        {
+            tools->setBounds (area.removeFromTop (ctx.theme.ipx (44.0f)));
+            area.removeFromTop (ctx.theme.gap());
+        }
         layoutControls (area, false);
     }
 
+    FxDelayTools* toolsRow() noexcept { return tools.get(); }
+
 private:
     std::unique_ptr<FxDelayView> visual;
+    std::unique_ptr<FxDelayTools> tools;
 };
 
 SYNTHYBOY_REGISTER_PANEL (FxDelayPanel, Page::fx, 40)

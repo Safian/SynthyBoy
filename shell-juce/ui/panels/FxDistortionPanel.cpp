@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "FxCommon.h"
+#include "FxShaperEditor.h"
 
 namespace synthyboy::ui
 {
@@ -210,7 +211,7 @@ public:
     {
         return {
             "distortion.drive", "distortion.mix", "distortion.filter_cutoff", "distortion.filter_resonance",
-            "distortion.on", "distortion.type", "distortion.filter_order", "distortion.filter_blend", "distortion.rack"
+            "distortion.on", "distortion.type", "distortion.filter_order", "distortion.filter_blend", "distortion.filter_keytrack", "distortion.rack"
         };
     }
 
@@ -225,20 +226,51 @@ public:
         addControl ("distortion.filter_cutoff");
         addControl ("distortion.filter_resonance");
 
-        // More controls (5 keys)
+        // More controls (6 keys)
         addMoreControl ("distortion.on");
         addMoreControl ("distortion.type");
         addMoreControl ("distortion.filter_order");
         addMoreControl ("distortion.filter_blend");
+        addMoreControl ("distortion.filter_keytrack");
         addMoreControl ("distortion.rack");
+
+        // X-Shaper (G75): the transfer curves are drawn in an editor that appears for the two X-Shaper types
+        shaper = std::make_unique<ShaperCurveEditor> (ctx);
+        addChildComponent (*shaper);
+        typeHandle = std::make_unique<ParamHandle> (ctx, "distortion.type");
+        typeHandle->onChange = [this] { updateShaper(); };
+        updateShaper();
     }
+
+    /** The X-Shaper editor is shown for X-Shaper (12) and X-Shaper (Asym) (13); B is only there for the second. */
+    void updateShaper()
+    {
+        // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
+        const int type = typeHandle != nullptr && typeHandle->valid()
+                             ? juce::roundToInt (typeHandle->info().min + typeHandle->normalised() * (typeHandle->info().max - typeHandle->info().min))
+                             : 0;
+        const bool show = type >= 12;
+        shaper->setAsymmetric (type == 13);
+        if (show != shaper->isVisible())
+        {
+            shaper->setVisible (show);
+            if (show)
+                shaper->reloadFromHost();
+            resized();
+            if (onHeightChanged)
+                onHeightChanged();
+        }
+    }
+
+    ShaperCurveEditor* shaperEditor() noexcept { return shaper.get(); }
 
     int preferredHeight (int width) const override
     {
         const auto& t = ctx.theme;
         const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
         const int visualH = t.ipx (130.0f);
-        return headerHeight() + 2 * t.gap() + visualH + t.gap()
+        const int shaperH = shaper != nullptr && shaper->isVisible() ? shaper->preferredHeight() + t.gap() : 0;
+        return headerHeight() + 2 * t.gap() + visualH + t.gap() + shaperH
                + const_cast<FxDistortionPanel*> (this)->layoutControls (area, true);
     }
 
@@ -251,11 +283,18 @@ public:
             visual->setBounds (area.removeFromTop (visualH));
             area.removeFromTop (ctx.theme.gap());
         }
+        if (shaper != nullptr && shaper->isVisible())
+        {
+            shaper->setBounds (area.removeFromTop (shaper->preferredHeight()));
+            area.removeFromTop (ctx.theme.gap());
+        }
         layoutControls (area, false);
     }
 
 private:
     std::unique_ptr<FxDistortionView> visual;
+    std::unique_ptr<ShaperCurveEditor> shaper;
+    std::unique_ptr<ParamHandle> typeHandle;
 };
 
 SYNTHYBOY_REGISTER_PANEL (FxDistortionPanel, Page::fx, 50)

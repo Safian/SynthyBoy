@@ -205,7 +205,8 @@ public:
             "reverb.size", "reverb.decay", "reverb.predelay", "reverb.mix",
             "reverb.on", "reverb.pre_low_cut", "reverb.pre_high_cut",
             "reverb.low_shelf_cutoff", "reverb.low_shelf_gain", "reverb.high_shelf_cutoff", "reverb.high_shelf_gain",
-            "reverb.chorus_amount", "reverb.chorus_rate", "reverb.force_enable", "reverb.rack"
+            "reverb.chorus_amount", "reverb.chorus_rate", "reverb.force_enable",
+            "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.rack"
         };
     }
 
@@ -220,7 +221,7 @@ public:
         addControl ("reverb.predelay");
         addControl ("reverb.mix");
 
-        // More controls (11 keys)
+        // More controls (17 keys)
         addMoreControl ("reverb.on");
         addMoreControl ("reverb.pre_low_cut");
         addMoreControl ("reverb.pre_high_cut");
@@ -231,7 +232,37 @@ public:
         addMoreControl ("reverb.chorus_amount");
         addMoreControl ("reverb.chorus_rate");
         addMoreControl ("reverb.force_enable");
+        addMoreControl ("reverb.type");
+        addMoreControl ("reverb.room");
+        addMoreControl ("reverb.width");
+        addMoreControl ("reverb.er_size");
+        addMoreControl ("reverb.diff_a");
+        addMoreControl ("reverb.diff_b");
         addMoreControl ("reverb.rack");
+
+        // the algorithm decides which controls apply (G77): ER size, the two diffusions and the room belong to the new algorithms, the
+        // room to Basin only; the width acts on every type
+        typeHandle = std::make_unique<ParamHandle> (ctx, "reverb.type");
+        typeHandle->onChange = [this] { updateDimming(); };
+        updateDimming();
+    }
+
+    void updateDimming()
+    {
+        // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
+        const int type = typeHandle != nullptr && typeHandle->valid()
+                             ? juce::roundToInt (typeHandle->info().min + typeHandle->normalised() * (typeHandle->info().max - typeHandle->info().min))
+                             : 0;
+        for (const auto& c : controls())
+        {
+            const auto& key = c->key();
+            bool applies = true;
+            if (key == "reverb.er_size" || key == "reverb.diff_a" || key == "reverb.diff_b")
+                applies = type != 0;
+            else if (key == "reverb.room")
+                applies = type == 5;
+            c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
+        }
     }
 
     int preferredHeight (int width) const override
@@ -257,6 +288,7 @@ public:
 
 private:
     std::unique_ptr<FxReverbView> visual;
+    std::unique_ptr<ParamHandle> typeHandle;
 };
 
 SYNTHYBOY_REGISTER_PANEL (FxReverbPanel, Page::fx, 100)
