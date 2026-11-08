@@ -45,8 +45,14 @@ namespace sbvital {
         kToFilter2,
         kRawOut,
         kDirectOut,
+        kBus1Out,   // SynthyBoy: the bus sends of the oscillators and the noise (docs/ui-design/13-new-keys.md 4.10)
+        kBus2Out,
         kNumOutputs
       };
+
+      // SynthyBoy: destinations appended to the five of the engine: a continuous blend of the two filters, and none (modulation source only)
+      static constexpr int kDestinationFilterBlend = 5;
+      static constexpr int kDestinationNone = 6;
 
       static force_inline int getFirstModulationIndex(int index) {
         return index == 0 ? 1 : 0;
@@ -76,6 +82,9 @@ namespace sbvital {
       void setFilter2On(const Value* on) { filter2_on_ = on; }
 
     protected:
+      void routeSource(int source, const poly_float* buffer, int destination, int num_samples, bool filter1_on, bool filter2_on,
+                       poly_float* filter1_output, poly_float* filter2_output, poly_float* raw_output, poly_float* direct_output);
+
       bool isFilter1On() { return filter1_on_ == nullptr || filter1_on_->value() != 0.0f; }
       bool isFilter2On() { return filter2_on_ == nullptr || filter2_on_->value() != 0.0f; }
       OscillatorModule* oscillators_[kNumOscillators];
@@ -86,6 +95,14 @@ namespace sbvital {
 
       const Value* filter1_on_;
       const Value* filter2_on_;
+
+      // SynthyBoy: per source (oscillators 1 to 3, the noise): the filter blend and the two bus sends (control-rate, ramped over the block)
+      Output* filter_blend_[kNumOscillators + 1] = {};
+      Output* bus1_send_[kNumOscillators + 1] = {};
+      Output* bus2_send_[kNumOscillators + 1] = {};
+      poly_float last_blend_[kNumOscillators + 1];
+      poly_float last_send1_[kNumOscillators + 1];
+      poly_float last_send2_[kNumOscillators + 1];
 
       JUCE_LEAK_DETECTOR(ProducersModule)
   };

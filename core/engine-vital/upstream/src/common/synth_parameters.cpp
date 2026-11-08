@@ -624,6 +624,57 @@ namespace sbvital {
     details_lookup_["filter_1_osc1_input"].default_value = 1.0f;
     details_lookup_["filter_2_osc2_input"].default_value = 1.0f;
 
+    // SynthyBoy (docs/ui-design/13-new-keys.md 4.10 and 4.12): the mixer graph (filter blend, sends, buses, DIRECT), the 16 effect
+    // modules with their racks and order. Added programmatically: the names follow one pattern.
+    auto add = [this](const std::string& name, mono_float min, mono_float max, mono_float def,
+                      ValueDetails::ValueScale scale = ValueDetails::kLinear, mono_float multiply = 1.0f,
+                      const char* units = "") {
+      ValueDetails details;
+      details.name = name;
+      details.version_added = 0;
+      details.min = min;
+      details.max = max;
+      details.default_value = def;
+      details.display_multiply = multiply;
+      details.value_scale = scale;
+      details.display_units = units;
+      details.display_name = name;
+      details.local_description = name;
+      details_lookup_[name] = details;
+      details_list_.push_back(&details_lookup_[name]);
+    };
+    for (int osc = 1; osc <= kNumOscillators; ++osc) {
+      const std::string prefix = "osc_" + std::to_string(osc) + "_";
+      add(prefix + "filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+      add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+      add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    }
+    add("sample_filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sample_bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sample_bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    for (int filter = 1; filter <= kNumFilters; ++filter) {
+      const std::string prefix = "filter_" + std::to_string(filter) + "_";
+      add(prefix + "destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
+      add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+      add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    }
+    add("bus1_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
+    add("bus2_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
+    add("direct_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
+    add("bus1_destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
+    add("bus2_destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
+    add("bus1_fx_bypass", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    add("bus2_fx_bypass", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    add("main_fx_bypass", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    static const char* const kModuleNames[16] = { "chorus", "compressor", "delay", "distortion", "eq", "filter_fx", "flanger", "phaser", "reverb",
+                                                  "hyperdim", "utility", "bode", "convolve", "splitter_lh", "splitter_lmh", "splitter_ms" };
+    for (int module = 0; module < 16; ++module) {
+      add("fx_order_" + std::to_string(module + 1), 0.0, 15.0, static_cast<mono_float>(module), ValueDetails::kIndexed);
+      add(std::string(kModuleNames[module]) + "_rack", 0.0, 9.0, 0.0, ValueDetails::kIndexed);
+      if (module >= 9)
+        add(std::string(kModuleNames[module]) + "_on", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    }
+
     std::sort(details_list_.begin(), details_list_.end(), compareValueDetails);
   }
 

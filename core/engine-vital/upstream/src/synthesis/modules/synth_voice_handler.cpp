@@ -46,6 +46,11 @@ namespace sbvital {
     direct_output_ = new Multiply();
     registerOutput(direct_output_->output());
 
+    bus1_output_ = new Multiply();
+    registerOutput(bus1_output_->output());
+    bus2_output_ = new Multiply();
+    registerOutput(bus2_output_->output());
+
     note_from_reference_ = new cr::Add();
     midi_offset_output_ = registerControlRateOutput(note_from_reference_->output(), true);
 
@@ -64,12 +69,31 @@ namespace sbvital {
     voice_sum->plug(producers_->output(ProducersModule::kRawOut), 1);
     output_->plug(voice_sum, 0);
     output_->plug(amplitude_, 1);
-    direct_output_->plug(producers_->output(ProducersModule::kDirectOut), 0);
+    // SynthyBoy: the direct output also takes the filters whose destination is Direct out; the buses sum the sends of the sources and filters
+    Add* direct_sum = new Add();
+    direct_sum->plug(producers_->output(ProducersModule::kDirectOut), 0);
+    direct_sum->plug(filters_module_->output(FiltersModule::kDirect), 1);
+    direct_output_->plug(direct_sum, 0);
     direct_output_->plug(amplitude_, 1);
+    Add* bus1_sum = new Add();
+    bus1_sum->plug(producers_->output(ProducersModule::kBus1Out), 0);
+    bus1_sum->plug(filters_module_->output(FiltersModule::kBus1), 1);
+    bus1_output_->plug(bus1_sum, 0);
+    bus1_output_->plug(amplitude_, 1);
+    Add* bus2_sum = new Add();
+    bus2_sum->plug(producers_->output(ProducersModule::kBus2Out), 0);
+    bus2_sum->plug(filters_module_->output(FiltersModule::kBus2), 1);
+    bus2_output_->plug(bus2_sum, 0);
+    bus2_output_->plug(amplitude_, 1);
 
     addProcessor(voice_sum);
     addProcessor(output_);
+    addProcessor(direct_sum);
     addProcessor(direct_output_);
+    addProcessor(bus1_sum);
+    addProcessor(bus1_output_);
+    addProcessor(bus2_sum);
+    addProcessor(bus2_output_);
 
     Output* macros[kNumMacros];
     for (int i = 0; i < kNumMacros; ++i)

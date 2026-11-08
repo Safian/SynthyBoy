@@ -536,7 +536,7 @@ public:
         // a bit is set only for an area that has a test rendering the key on and off (core/engine-vital/tests/test_wp123.cpp,
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
-             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2;
+             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks;
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -760,6 +760,8 @@ private:
         vFilter1Input = control ("filter_1_filter_input");
         vFilter2Input = control ("filter_2_filter_input");
         vFxOrder = control ("effect_chain_order");
+        for (int i = 0; i < static_cast<int> (kNumFxSlots); ++i)
+            vFxOrderN[static_cast<size_t> (i)] = control ("fx_order_" + std::to_string (i + 1));
         resolveBindings();
         resolveModulation();
         for (int i = 0; i < kNumLfo; ++i)
@@ -846,7 +848,7 @@ private:
                 routingParam = static_cast<int> (i);
             else if (key.compare (0, 9, "fx.order.") == 0)
             {
-                if (number (9) <= kNumLegacyFxSlots)
+                if (number (9) >= 1 && number (9) <= static_cast<int> (kNumFxSlots))
                     fxOrderParam[static_cast<size_t> (number (9) - 1)] = static_cast<int> (i);
             }
             else if (key == "master.bend_range")
@@ -1200,9 +1202,10 @@ private:
             }
         }
 
-        float choices[kNumLegacyFxSlots];
+        // the order of the 16 modules: fx.order.1 .. 16 repaired to a permutation (duplicates: a later position takes the lowest module not yet placed)
+        float choices[kNumFxSlots];
         bool same = true;
-        for (int i = 0; i < kNumLegacyFxSlots; ++i)
+        for (int i = 0; i < static_cast<int> (kNumFxSlots); ++i)
         {
             const int p = fxOrderParam[static_cast<size_t> (i)];
             choices[i] = p >= 0 ? params[static_cast<size_t> (p)].load (std::memory_order_relaxed) : static_cast<float> (i);
@@ -1210,13 +1213,14 @@ private:
         }
         if (! same || appliedFxOrder < 0.0f)
         {
-            for (int i = 0; i < kNumLegacyFxSlots; ++i)
+            for (int i = 0; i < static_cast<int> (kNumFxSlots); ++i)
                 appliedChoices[static_cast<size_t> (i)] = choices[i];
-            int order[kNumLegacyFxSlots];
-            resolveFxOrder (choices, order);
-            appliedFxOrder = sbvital::utils::encodeOrderToFloat (order, kNumLegacyFxSlots);
-            if (vFxOrder != nullptr)
-                vFxOrder->set (appliedFxOrder);
+            int order[kNumFxSlots];
+            resolveFxOrder (choices, order, static_cast<int> (kNumFxSlots));
+            appliedFxOrder = 1.0f;
+            for (int i = 0; i < static_cast<int> (kNumFxSlots); ++i)
+                if (vFxOrderN[static_cast<size_t> (i)] != nullptr)
+                    vFxOrderN[static_cast<size_t> (i)]->set (static_cast<float> (order[i]));
         }
     }
 
@@ -1811,7 +1815,8 @@ private:
     std::array<uint32_t, kNumLfo> appliedCustomId {};
     std::array<std::array<float, kMaxPointMods>, kNumLfo> appliedModValues {};
     std::array<std::array<int, 6>, kNumOsc> appliedMap {};
-    std::array<float, kNumLegacyFxSlots> appliedChoices {};
+    std::array<float, kNumFxSlots> appliedChoices {};
+    std::array<sbvital::Value*, kNumFxSlots> vFxOrderN {};
     float appliedRouting = -1.0f, appliedFxOrder = -1.0f;
     std::array<int, kNumOsc> wavetableParam { { -1, -1, -1 } };
     std::array<int, kNumLfo> shapeParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
@@ -1826,7 +1831,7 @@ private:
     std::array<sbvital::Value*, kNumLfo> vLfoSyncType {}, vLfoHostLock {};
     std::array<sbvital::Value*, kNumOsc> vOscMapWarp {};
     std::array<int, kNumLfo> lfoClock {};
-    std::array<int, kNumLegacyFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<int, kNumFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
     int routingParam = -1, bendRangeParam = -1;
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;

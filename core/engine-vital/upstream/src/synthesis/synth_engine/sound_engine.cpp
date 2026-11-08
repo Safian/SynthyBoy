@@ -79,7 +79,10 @@ namespace sbvital {
     addSubmodule(effect_chain_);
     addProcessor(effect_chain_);
     effect_chain_->plug(voice_handler_, ReorderableEffectChain::kAudio);
-    effect_chain_->plug(effect_chain_order, ReorderableEffectChain::kOrder);
+    (void)effect_chain_order; // kept for the Vital import (docs/UPSTREAM.md); the chain takes its order from fx_order_1 .. 16
+    effect_chain_->plug(voice_handler_->getBus1Output(), ReorderableEffectChain::kBus1);
+    effect_chain_->plug(voice_handler_->getBus2Output(), ReorderableEffectChain::kBus2);
+    effect_chain_->plug(voice_handler_->getDirectOutput(), ReorderableEffectChain::kDirect);
 
     SynthModule* compressor = effect_chain_->getEffect(constants::kCompressor);
     createStatusOutput("compressor_low_input", compressor->output(CompressorModule::kLowInputMeanSquared));
@@ -100,8 +103,7 @@ namespace sbvital {
     createStatusOutput("flanger_delay_frequency", flanger->output(FlangerModule::kFrequencyOutput));
 
     output_total_ = new Add();
-    output_total_->plug(effect_chain_, 0);
-    output_total_->plug(voice_handler_->getDirectOutput(), 1);
+    output_total_->plug(effect_chain_, 0);   // SynthyBoy: the direct output is added inside the chain (after the racks)
     addProcessor(output_total_);
 
     decimator_ = new Decimator(3);

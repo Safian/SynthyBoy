@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "synthyboy/params.h"
+
 namespace synthyboy
 {
 /** How our plain value becomes the value of the engine's control. One converter per kind (formulas in vital_bindings.cpp). */
@@ -69,7 +71,7 @@ double convertParam (const Binding& binding, double plain, double sampleRate, do
 
 /** Order of the effects from the nine choices fx.order.1 .. fx.order.9 (duplicates and out-of-range choices are resolved
     deterministically: a position whose effect is already placed takes the lowest effect that is still free). */
-void resolveFxOrder (const float* choices, int* order);
+void resolveFxOrder (const float* choices, int* order, int count = kNumLegacyFxSlots);
 
 /** What the engine's control is: min, max and default as the engine defines them (the tests compare against these). */
 struct ControlRange

@@ -40,6 +40,13 @@ namespace sbvital {
         kNumInputs
       };
 
+      enum {
+        kOutput,
+        kBus1Send,   // SynthyBoy: the output of the filter times its bus 1 send (docs/ui-design/13-new-keys.md 4.10)
+        kBus2Send,
+        kNumOutputs
+      };
+
       FilterModule(std::string prefix = "");
       virtual ~FilterModule() { }
 
@@ -57,6 +64,7 @@ namespace sbvital {
       }
 
       const Value* getOnValue() { return on_; }
+      const Value* getDestinationValue() { return destination_; }
 
     protected:
       void setModel(int new_model);
@@ -68,6 +76,11 @@ namespace sbvital {
       bool mono_;
 
       Value* on_;
+      Value* destination_ = nullptr;     // SynthyBoy: 0 effects only, 1 direct out, 2 none (the two voice filters only)
+      Output* bus1_send_ = nullptr;
+      Output* bus2_send_ = nullptr;
+      poly_float bus1_gain_ = 0.0f;
+      poly_float bus2_gain_ = 0.0f;
       Value* filter_model_;
       poly_float mix_;
 

@@ -29,3 +29,17 @@ Bits set: `kCapSampleOsc`, `kCapUserWavetable`, `kCapWarp2`. Tests: `core/engine
 * Normalize uses the peak of the whole file, not of the start..end region.
 * The wavetable file format is WAV (the `.sbwt` of C4 does not exist in the repository).
 * The Vital import (11 Annex) still maps nothing to `oscN.type` (WP9).
+
+## WP5 - mixer graph and racks
+
+Bits set: `kCapMixerGraph`, `kCapFxRacks`. Tests: `core/engine-vital/tests/test_wp5.cpp` (9 cases: filter blend crossfade, None as modulation source, sends and buses and Other bus and Direct, filter destinations, racks, per-rack order, 16 slot repair, random settings), plus the random key runs of `test_rt_alloc` (0 allocations).
+
+* **Sources**: `oscN.destination` / `noise.destination` 5 = Filter blend (equal power between the filter inputs; a switched off filter lets its share through to the effects, as for the engine's own filter destinations), 6 = None (no audio, still a warp source). `oscN.filter_blend`, `oscN.busM_send`, `noise.*` are poly modulation destinations ramped over the block; a send taps the source after level and pan whatever the destination is.
+* **Filters**: `filterN.destination` (Effects only / Direct out / None; in series the filter that feeds the other has no destination of its own) and `filterN.busM_send` (tap after the filter's mix).
+* **Buses**: sends -> (Other bus) -> rack -> `busN.level` -> Main / Direct / Other bus (both on Other: bus 2 goes to Main; bus 2 runs first when it feeds bus 1), `busN.fx_bypass`. Main = voices + buses to Main -> Main rack (`main.fx_bypass`) -> master volume.
+* **DIRECT**: skips every rack, scaled by `direct.level`, added after the racks. **Deviation from A16**: it still passes `master.volume`. In version 2 the engine's Direct out is summed before the volume, and R5 (a version 2 patch with an oscillator at Direct out must sound the same) wins over the assumption that Direct skips the master volume.
+* **Racks**: `<fx>.rack` for the 16 modules (Main, Bus 1, Bus 2, 7 band racks). `ReorderableEffectChain` was rewritten: each effect processes the signal of its own rack, in the order of `fx.order.1..16` filtered to that rack (per-effect segment processing of the Vital effects: every module is called on its own); `BandSplitterModule` is the interface the splitters of WP7 implement (split, run the band racks, merge). The modules 9..15 are pass-through placeholders in WP5.
+* **`fx.order` repair** for 16: `resolveFxOrder (choices, order, 16)` (a later position takes the lowest module not yet placed; tested). The float encoded `effect_chain_order` (9! fits a float, 16! does not) is replaced by 16 controls; the Vital import still decodes the old code in `core/vital-import`.
+* **Version 2 sound**: the default patch and the busy patch of `test_new_keys` render bit-identically (the effects run in the same order on the same signal; a silent bus costs one scan of the block).
+* **Tier low / medium**: no module is bypassed by the mixer graph; the racks run the effects the tier already allows (`fxMask`). A bus that is silent and has no enabled effect is skipped.
+* engine-own: none of the bits.

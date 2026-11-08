@@ -30,7 +30,7 @@
 namespace sbvital {
 
   FilterModule::FilterModule(std::string prefix) :
-      SynthModule(kNumInputs, 1), last_model_(-1), was_on_(false), 
+      SynthModule(kNumInputs, kNumOutputs), last_model_(-1), was_on_(false), 
       prefix_(std::move(prefix)), create_on_value_(true), mono_(false),
       on_(nullptr), filter_model_(nullptr), mix_(0.0f), filter_mix_(nullptr),
       comb_filter_(nullptr), digital_svf_(nullptr), dirty_filter_(nullptr),
@@ -75,6 +75,11 @@ namespace sbvital {
     filter_model_ = createBaseControl(prefix_ + "_model");
 
     filter_mix_ = createModControl(prefix_ + "_mix");
+    if (prefix_ != "filter_fx") { // the two voice filters have a destination and sends to the buses
+      destination_ = createBaseControl(prefix_ + "_destination");
+      bus1_send_ = createModControl(prefix_ + "_bus1_send");
+      bus2_send_ = createModControl(prefix_ + "_bus2_send");
+    }
 
     comb_filter_->useInput(input(kAudio), CombModule::kAudio);
     comb_filter_->plug(filter_style, CombModule::kStyle);
@@ -233,9 +238,35 @@ namespace sbvital {
         current_mix += delta_mix;
         audio_out[i] = utils::interpolate(audio_in[i], audio_out[i], current_mix);
       }
+
+      // SynthyBoy: the bus sends tap the output of the filter (after its mix)
+      if (bus1_send_ != nullptr) {
+        poly_mask reset_mask = getResetMask(kReset);
+        poly_float send1 = utils::clamp(bus1_send_->buffer[0], 0.0f, 1.0f);
+        poly_float send2 = utils::clamp(bus2_send_->buffer[0], 0.0f, 1.0f);
+        poly_float current1 = utils::maskLoad(bus1_gain_, send1, reset_mask);
+        poly_float current2 = utils::maskLoad(bus2_gain_, send2, reset_mask);
+        bus1_gain_ = send1;
+        bus2_gain_ = send2;
+        poly_float delta1 = (send1 - current1) * (1.0f / num_samples);
+        poly_float delta2 = (send2 - current2) * (1.0f / num_samples);
+        poly_float* bus1 = output(kBus1Send)->buffer;
+        poly_float* bus2 = output(kBus2Send)->buffer;
+        for (int i = 0; i < num_samples; ++i) {
+          current1 += delta1;
+          current2 += delta2;
+          bus1[i] = audio_out[i] * current1;
+          bus2[i] = audio_out[i] * current2;
+        }
+      }
     }
-    else
+    else {
       utils::zeroBuffer(output()->buffer, num_samples);
+      if (bus1_send_ != nullptr) {
+        utils::zeroBuffer(output(kBus1Send)->buffer, num_samples);
+        utils::zeroBuffer(output(kBus2Send)->buffer, num_samples);
+      }
+    }
   }
 
   void FilterModule::setMono(bool mono) {

@@ -125,8 +125,10 @@ std::vector<Binding> build()
         b.percent (k + "warp2.spread", c + "warp2_spread", 0.005);
         b.add (k + "phase", c + "phase", Conv::linear, 1.0 / 360.0);
         b.percent (k + "random_phase", c + "random_phase");
-        b.choice (k + "destination", c + "destination");
-        b.limit (k + "destination", 4); // 5 "Filter blend" and 6 "None" were appended in state version 3
+        b.choice (k + "destination", c + "destination"); // 5 Filter blend and 6 None (WP5) are the engine's destinations 5 and 6
+        b.percent (k + "filter_blend", c + "filter_blend");
+        b.percent (k + "bus1_send", c + "bus1_send");
+        b.percent (k + "bus2_send", c + "bus2_send");
         b.add (k + "unison.voices", c + "unison_voices", Conv::linear, 1.0, 0.0, Cap::unison);
         b.add (k + "unison.detune", c + "unison_detune", Conv::sqrtScaled, 1.0);
         b.add (k + "unison.detune_curve", c + "detune_power", Conv::linear);
@@ -147,7 +149,20 @@ std::vector<Binding> build()
     b.add ("noise.level", "sample_level", Conv::sqrtScaled, 0.01);
     b.percent ("noise.pan", "sample_pan");
     b.choice ("noise.destination", "sample_destination");
-    b.limit ("noise.destination", 4);
+    b.percent ("noise.filter_blend", "sample_filter_blend");
+    b.percent ("noise.bus1_send", "sample_bus1_send");
+    b.percent ("noise.bus2_send", "sample_bus2_send");
+
+    // --- mixer buses and DIRECT (WP5) -------------------------------------------------------------------------------
+    for (int bus = 1; bus <= 2; ++bus)
+    {
+        const std::string k = "bus" + std::to_string (bus) + ".", c = "bus" + std::to_string (bus) + "_";
+        b.add (k + "level", c + "level", Conv::linear);
+        b.choice (k + "destination", c + "destination");
+        b.choice (k + "fx_bypass", c + "fx_bypass");
+    }
+    b.add ("direct.level", "direct_level", Conv::linear);
+    b.choice ("main.fx_bypass", "main_fx_bypass");
 
     // --- filters --------------------------------------------------------------------------------------------------
     for (const char* name : { "filter1", "filter2", "fxfilter" })
@@ -159,6 +174,12 @@ std::vector<Binding> build()
             b.add (k + "on", c + "on", Conv::index, 1.0, 0.0, Cap::fx, 5);
         else
             b.choice (k + "on", c + "on");
+        if (! fx)
+        {
+            b.choice (k + "destination", c + "destination"); // WP5: effects only, direct out, none
+            b.percent (k + "bus1_send", c + "bus1_send");
+            b.percent (k + "bus2_send", c + "bus2_send");
+        }
         b.choice (k + "model", c + "model");
         b.choice (k + "style", c + "style");
         b.limit (k + "model", 7);  // the 14 models appended in state version 3 are not implemented yet
@@ -248,6 +269,16 @@ std::vector<Binding> build()
 
     // --- effects ---------------------------------------------------------------------------------------------------
     const auto on = [&] (const char* key, const char* control, int slot) { b.add (std::string (key) + ".on", std::string (control) + "_on", Conv::index, 1.0, 0.0, Cap::fx, slot); };
+    // the rack of each of the 16 modules (WP5)
+    {
+        static const char* const keys[16] = { "chorus", "compressor", "delay", "distortion", "eq", "fxfilter", "flanger", "phaser", "reverb",
+                                              "hyperdim", "utility", "bode", "convolve", "splitter_lh", "splitter_lmh", "splitter_ms" };
+        static const char* const controls[16] = { "chorus", "compressor", "delay", "distortion", "eq", "filter_fx", "flanger", "phaser", "reverb",
+                                                  "hyperdim", "utility", "bode", "convolve", "splitter_lh", "splitter_lmh", "splitter_ms" };
+        for (int m = 0; m < 16; ++m)
+            b.choice (std::string (keys[m]) + ".rack", std::string (controls[m]) + "_rack");
+    }
+
     on ("chorus", "chorus", 0);
     b.percent ("chorus.mix", "chorus_dry_wet");
     b.add ("chorus.rate", "chorus_frequency", Conv::log2Hz);
@@ -364,7 +395,7 @@ bool isSpecialParam (size_t paramIndex)
     };
     const auto startsWith = [&] (const char* prefix) { return std::strncmp (key, prefix, std::strlen (prefix)) == 0; };
     return endsWith (".wavetable") || endsWith (".shape") || std::strcmp (key, "filter.routing") == 0
-        || (std::strncmp (key, "fx.order.", 9) == 0 && std::atoi (key + 9) <= kNumLegacyFxSlots) // fx.order.10 .. 16: not implemented
+        || std::strncmp (key, "fx.order.", 9) == 0
         || ((endsWith (".source") || endsWith (".destination")) && key[0] == 'm' && key[1] == 'o') || std::strcmp (key, "master.bend_range") == 0
         // state version 3: handled by the adapter (vital_engine.cpp), not one control each
         || (startsWith ("env") && endsWith (".units")) || (startsWith ("lfo") && (endsWith (".mono") || endsWith (".host")))
@@ -406,14 +437,15 @@ double convertParam (const Binding& binding, double plain, double sampleRate, do
     return plain;
 }
 
-void resolveFxOrder (const float* choices, int* order)
+void resolveFxOrder (const float* choices, int* order, int count)
 {
-    bool used[kNumLegacyFxSlots] = {};
-    for (int position = 0; position < kNumLegacyFxSlots; ++position)
+    bool used[kNumFxSlots] = {};
+    count = std::min (count, static_cast<int> (kNumFxSlots));
+    for (int position = 0; position < count; ++position)
     {
         const float f = choices[position];
-        int effect = f >= 0.0f && f < static_cast<float> (kNumLegacyFxSlots) ? static_cast<int> (f + 0.5f) : -1;
-        if (effect < 0 || effect >= kNumLegacyFxSlots || used[effect])
+        int effect = f >= 0.0f && f < static_cast<float> (count) ? static_cast<int> (f + 0.5f) : -1;
+        if (effect < 0 || effect >= count || used[effect])
         {
             effect = 0;
             while (used[effect])
