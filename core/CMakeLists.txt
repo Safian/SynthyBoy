@@ -51,3 +51,5 @@ if(SYNTHYBOY_BUILD_TESTS)
         add_subdirectory(engine-vital/tests)
     endif()
 endif()
+
+add_subdirectory(fx-serum-a)
