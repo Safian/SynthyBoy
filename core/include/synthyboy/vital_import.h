@@ -195,6 +195,8 @@ private:
 struct PresetStore
 {
     virtual ~PresetStore() = default;
+    /** `name` is the path of the preset inside the store without extension ("Bank/Pad" or "Pad"); an empty srcTag asks whether the name is taken at all,
+        otherwise whether it holds the preset imported from that source (the "src:<12 hex>" tag of meta.tags). */
     virtual bool exists (const std::string& name, const std::string& srcTag) = 0;
     virtual bool write (const std::string& relPath, const std::string& sbpresetText, const std::string& reportJson) = 0;
 };
@@ -278,7 +280,7 @@ struct BatchSummary
 
 /** Imports one Vital document: `fileName` decides the kind (.vital / .vitaltable / .vitallfo), `folder` is the relPath prefix
     ("" or "Bank"). A preset is imported with options, its wavetables / samples go to `content`, the .sbpreset (+ report) to `presets`
-    under the duplicate policy of `batch`: identical source (PresetStore::exists (name, "src:<12 hex>")) is skipped (replace: written
+    under the duplicate policy of `batch`: identical source (PresetStore::exists ("<folder>/<name>", "src:<12 hex>")) is skipped (replace: written
     again), a name taken by different content is replaced / kept both ("Name (2)") / left for the caller (ask); skipSame keeps both.
     A stand-alone table is stored in `content`, a stand-alone LFO shape written as "<name>.lfoshape.json" (see serializeImportedLfoShape)
     with an empty report. Never throws. */

@@ -221,13 +221,15 @@ BatchRow importVitalDocument (const std::string& source, const std::string& file
         const std::string srcTag = "src:" + r.sourceSha256.substr (0, 12);
         std::string fileStem = safeFileName (meta.name, stem);
 
-        if (presets.exists (fileStem, srcTag) && batch.duplicate != BatchOptions::replace)
+        // the store is asked with the path inside the store, without the extension ("Bank/Name"), so two banks may hold the same name
+        const auto taken = [&] (const std::string& stem, const std::string& tag) { return presets.exists (joinPath (folder, stem), tag); };
+        if (taken (fileStem, srcTag) && batch.duplicate != BatchOptions::replace)
         {
             row.outcome = BatchOutcome::skippedSame;
             row.relPath = joinPath (folder, fileStem + ".sbpreset");
             return row;
         }
-        if (presets.exists (fileStem, {}) && ! presets.exists (fileStem, srcTag))
+        if (taken (fileStem, {}) && ! taken (fileStem, srcTag))
         {
             if (batch.duplicate == BatchOptions::ask)
             {
@@ -238,7 +240,7 @@ BatchRow importVitalDocument (const std::string& source, const std::string& file
             if (batch.duplicate != BatchOptions::replace) // skipSame and keepBoth: nothing of the other preset is lost
             {
                 const std::string base = fileStem;
-                for (int n = 2; n < 10000 && presets.exists (fileStem, {}); ++n)
+                for (int n = 2; n < 10000 && taken (fileStem, {}); ++n)
                     fileStem = base + " (" + std::to_string (n) + ")";
             }
         }
@@ -248,20 +250,12 @@ BatchRow importVitalDocument (const std::string& source, const std::string& file
         for (const auto& wt : r.wavetables)
         {
             std::string pack, file;
-            if (content.hasWavetable (wt.sha256) || content.addWavetable (wt, pack, file))
-            {
-                if (pack.empty() && ! content.addWavetable (wt, pack, file)) // present already: the store answers the reference
-                {
-                    row.error = "the content store refused a wavetable";
-                    return row;
-                }
-                refs.wavetables.push_back ({ wt.osc, pack, file });
-            }
-            else
+            if (! content.addWavetable (wt, pack, file)) // the store keys the tables by the SHA-256 of the file: an identical one is answered, not stored twice
             {
                 row.error = "the content store refused a wavetable";
                 return row;
             }
+            refs.wavetables.push_back ({ wt.osc, pack, file });
         }
         for (const auto& smp : r.samples)
         {
