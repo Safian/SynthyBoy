@@ -17,3 +17,5 @@ Brief and rules: [00-BRIEF.md](00-BRIEF.md).
 | 15-shell-features.md | key-free shell features: MIDI learn (G07), Save as Default (G02), module Lock (G08), .vitalbank / .vitaltable / .vitallfo import | sonnet-worker | built, A180-A196 |
 | 10-coverage-matrix.md | Serum/Vital function -> where in our UI; engine GAP list; all 880 keys reachable | main thread | draft written |
 | 12-decisions.md | owner decisions on the open questions of 10 §5.2 | owner + main thread | decided / proposed |
+| 16-COVERAGE-FINAL.md | final per-function audit of the whole synth against both manuals, checked against the code (supersedes 10 as the status reference) | main thread (work-coverage) | written 2026-11-08 |
+| 17-BACKLOG.md | the remaining work as ordered work packages with key estimates, dependencies and a parallel plan | main thread (work-coverage) | written 2026-11-08 |
