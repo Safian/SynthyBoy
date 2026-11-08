@@ -55,7 +55,7 @@ Not defects, kept: the engine's own check `wouldCloseLoop` (Vital `isDownstream`
   the two master keys are on a panel, screenshots (`/tmp/ui-shots/wtremap/mod-slot-curve-*.png`).
 - Core / import: `test_new_keys`, `test_params`, `test_engine_caps` (bit 43, source 39, destinations 453 / 454 / 519), `test_fxextra_keys`, `test_shell_clap` (all 1596 keys reachable),
   `test_state_v3`, `test_vital_import` (`vi_mod_amount_stereo_source_and_line_mapping_imported` extended).
-- Full `ctest`: see the last section.
+- Full `ctest -j8` (Release, plugin on, 55 tests): 53 passed at the first run; the two failures were `synthyboy_test_caps` (the `all >> 43` bound is now `>> 44`) and `state_random_walk_saves_loads_and_renders_the_same` (seed 2027 draws a silent patch with the 1596-key table, as after B15 / B17 / B18; seed 2030 is audible, comment in the test); both pass after the fix (re-run alone).
 
 ## 5. Importer on the 35 real presets
 
