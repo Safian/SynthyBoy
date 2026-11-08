@@ -648,7 +648,7 @@ bool hasUserDefault (const std::string& dir)
     return ! dir.empty() && std::filesystem::is_regular_file (userDefaultPath (dir), ec);
 }
 
-bool loadUserDefault (const std::string& dir, ParamValues& values, StateContent& content)
+bool loadUserDefault (const std::string& dir, ParamValues& values, StateContent& content, ShellState* shell)
 {
     if (! hasUserDefault (dir))
         return false;
@@ -665,6 +665,11 @@ bool loadUserDefault (const std::string& dir, ParamValues& values, StateContent&
             return false;
         values = v;
         content = std::move (c);
+        if (shell != nullptr)
+        {
+            ShellState parsed;
+            *shell = loadShellSection (text.data(), text.size(), parsed) == ShellStatus::ok ? std::move (parsed) : ShellState {};
+        }
         return true;
     }
     catch (...)

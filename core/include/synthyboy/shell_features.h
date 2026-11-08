@@ -132,8 +132,9 @@ std::string userDefaultPath (const std::string& dir);
 /** Writes the document atomically (temp file + rename), creating the directory. False on any failure (the old default stays). */
 bool saveUserDefault (const std::string& dir, const std::string& stateDocument);
 bool hasUserDefault (const std::string& dir);
-/** Loads the user default into values / content. False if there is none or it does not load (values / content untouched then). */
-bool loadUserDefault (const std::string& dir, ParamValues& values, StateContent& content);
+/** Loads the user default into values / content (and, when `shell` is given, its shell section: cleared if the file has none). False if
+    there is none or it does not load (everything untouched then). */
+bool loadUserDefault (const std::string& dir, ParamValues& values, StateContent& content, ShellState* shell = nullptr);
 /** Removes the user default (back to the factory init patch). True if there is none afterwards. */
 bool clearUserDefault (const std::string& dir);
 } // namespace synthyboy

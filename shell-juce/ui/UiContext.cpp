@@ -100,9 +100,11 @@ void ModAssignController::exitAssignMode()
 void ModAssignController::refresh()
 {
     auto next = ModSnapshot::build (access);
-    if (! (next == current))
+    const uint32_t midiRevision = host.midiMapRevision(); // MIDI learn: a CC was learned / removed (audio thread or UI)
+    if (! (next == current) || midiRevision != lastMidiRevision)
     {
         current = std::move (next);
+        lastMidiRevision = midiRevision;
         sendChangeMessage();
     }
 }

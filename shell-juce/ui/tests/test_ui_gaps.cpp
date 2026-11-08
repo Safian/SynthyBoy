@@ -217,7 +217,7 @@ TEST (uig_module_sheet_buttons_do_the_operations)
     ModuleSheet sheet (ctx, "filter1");
     sheet.setSize (sheet.preferredWidth(), sheet.preferredHeight());
     CHECK (sheet.button ("Copy") != nullptr && sheet.button ("Copy with mods") != nullptr && sheet.button ("Paste with mods") != nullptr);
-    CHECK (sheet.button ("Lock module") != nullptr && ! sheet.button ("Lock module")->isEnabled()); // GAP: no key
+    CHECK (sheet.button ("Lock module") != nullptr && sheet.button ("Lock module")->isEnabled()); // G08: a real lock now
     CHECK (sheet.swapButton ("filter2") != nullptr && sheet.swapButton ("filter1") == nullptr);
     for (auto* b : { sheet.button ("Copy"), sheet.button ("Init"), sheet.swapButton ("filter2") })
         CHECK (b != nullptr && b->getHeight() >= rig.editor->theme().touch() && b->getWidth() >= rig.editor->theme().touch());

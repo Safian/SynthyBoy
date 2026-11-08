@@ -20,6 +20,7 @@
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
+#include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
 #include <clap/ext/remote-controls.h>
 
@@ -60,6 +61,8 @@ struct SynthyBoyClap
     std::unique_ptr<IEngine> engine;
     ParamValues values;
     StateContent content; // the `content` section of the state (not parameters): custom LFO shapes, curves and the tuning go to the engine (setContent), main thread only
+    MidiCcMap midiMap;                // MIDI learn table (G07): CC -> parameter, read on the audio thread; saved in the `shell` section
+    std::vector<std::string> locks;   // module locks (G08), main thread; kept for the round trip with the editor shell
     Quality quality;
     std::vector<Event> events;
     double sampleRate = 48000.0;
@@ -78,6 +81,20 @@ struct SynthyBoyClap
 #else
         engine = createEngine (EngineKind::own);
 #endif
+
+        // Save as Default (G02): a new instance starts from the user's default patch (written by the editor shell), if there is one
+        ShellState defaultShell;
+        if (loadUserDefault (userDataDirectory(), values, content, &defaultShell))
+        {
+            midiMap.setBindings (defaultShell.midiCc);
+            locks = defaultShell.locks;
+            if (engine)
+            {
+                for (size_t i = 0; i < paramCount(); ++i)
+                    engine->setParam (paramTable()[i].id, values.plain[i]);
+                engine->setContent (content);
+            }
+        }
     }
 };
 
@@ -211,6 +228,34 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                 {
                     // the MIDI dialect of the note port: CC 64 sustain pedal, CC 1, CC 74, pressure, bend, note on/off
                     const auto* ev = reinterpret_cast<const clap_event_midi_t*> (hdr);
+                    // a controller that is in the MIDI learn table sets its parameter (G07) and is reported to the host
+                    if ((ev->data[0] & 0xF0) == 0xB0)
+                    {
+                        const auto hit = self->midiMap.handleCc (ev->data[1] & 0x7F, ev->data[2] & 0x7F);
+                        if (hit.apply)
+                        {
+                            const auto& info = paramTable()[hit.paramIndex];
+                            self->values.plain[hit.paramIndex] = hit.plain;
+                            self->engine->setParam (info.id, hit.plain);
+                            if (process->out_events != nullptr)
+                            {
+                                clap_event_param_value_t out {};
+                                out.header.size = sizeof out;
+                                out.header.time = ev->header.time;
+                                out.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+                                out.header.type = CLAP_EVENT_PARAM_VALUE;
+                                out.header.flags = 0;
+                                out.param_id = info.id;
+                                out.cookie = nullptr;
+                                out.note_id = -1;
+                                out.port_index = -1;
+                                out.channel = -1;
+                                out.key = -1;
+                                out.value = static_cast<double> (hit.plain);
+                                process->out_events->try_push (process->out_events, &out.header);
+                            }
+                        }
+                    }
                     Event e {};
                     if (translateMidiMessage (ev->data, 3, static_cast<int32_t> (ev->header.time), e))
                         self->events.push_back (e);
@@ -441,7 +486,11 @@ bool ext_state_save (const clap_plugin_t* p, const clap_ostream_t* stream) noexc
     if (stream == nullptr)
         return false;
 
-    const std::string s = saveState (toClap (p)->values, toClap (p)->content);
+    auto* self = toClap (p);
+    ShellState shell;
+    shell.midiCc = self->midiMap.bindings();
+    shell.locks = self->locks;
+    const std::string s = withShellSection (saveState (self->values, self->content), shell);
     const int64_t written = stream->write (stream, s.data(), s.size());
     return (written == static_cast<int64_t> (s.size()));
 }
@@ -465,9 +514,28 @@ bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexc
     if (buffer.empty())
         return false;
 
+    const ParamValues before = self->values;
+    const StateContent contentBefore = self->content;
     const LoadResult res = loadStateWithContent (buffer.data(), buffer.size(), self->values, self->content);
     if (res.status == LoadStatus::ok || res.status == LoadStatus::newer_version)
     {
+        // a session of ours carries the `shell` section (MIDI map, locks) and is restored as it is; a document without it is a preset
+        // change and the locked modules of this instance survive it (G08)
+        ShellState shell;
+        const ShellStatus shellStatus = loadShellSection (buffer.data(), buffer.size(), shell);
+        if (shellStatus == ShellStatus::ok || shellStatus == ShellStatus::rejected)
+        {
+            self->midiMap.setBindings (shell.midiCc);
+            self->locks = shell.locks;
+        }
+        else if (! self->locks.empty())
+        {
+            keepLockedValues (self->values, before, self->locks);
+            StateContent merged = self->content;
+            keepLockedContent (merged, contentBefore, self->locks);
+            if (validateContent (merged))
+                self->content = std::move (merged);
+        }
         if (self->engine)
         {
             for (size_t i = 0; i < paramCount(); ++i)

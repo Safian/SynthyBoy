@@ -35,6 +35,8 @@ private:
     class ModRow;
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void refreshValue();
+    void refreshLearn();
+    void learnClicked();
     void rebuildModRows();
     void showSourceMenu();
     void close();
@@ -44,6 +46,10 @@ private:
     juce::Label title, subtitle, info;
     juce::TextEditor valueBox;
     juce::TextButton minus { "-" }, plus { "+" }, reset { "Reset" }, learn { "MIDI learn" }, assign { "Assign mod" };
+public:
+    /** The MIDI learn button (the tests click it). */
+    juce::TextButton& learnButton() noexcept { return learn; }
+private:
     juce::OwnedArray<ModRow> rows;
 };
 

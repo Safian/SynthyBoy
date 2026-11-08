@@ -55,8 +55,23 @@ SynthyBoyProcessor::SynthyBoyProcessor()
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
     {
         rawParams[i] = apvts.getRawParameterValue (table[i].key);
+        paramPtrs[i] = apvts.getParameter (table[i].key);
         engine->setParam (table[i].id, table[i].def);
         sentToEngine[i] = std::numeric_limits<float>::quiet_NaN(); // the first block sends everything
+    }
+
+    // Save as Default (G02): a new instance starts from the user's default patch when there is one (the host's state, if any, replaces it)
+    userDir = synthyboy::userDataDirectory();
+    auto values = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent defaultContent;
+    synthyboy::ShellState defaultShell;
+    if (synthyboy::loadUserDefault (userDir, values, defaultContent, &defaultShell))
+    {
+        applyShell (defaultShell);
+        applyPatch (values, std::move (defaultContent), false);
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        savedValues = currentValues();
+        savedContent = patchContent;
     }
 }
 
@@ -245,6 +260,22 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             continue;
 
         const auto message = metadata.getMessage();
+
+        // MIDI learn / mapped controllers (G07): a CC that is in the table sets its parameter (host notified, the engine told right here)
+        if (metadata.numBytes == 3 && (message.getRawData()[0] & 0xF0) == 0xB0)
+        {
+            const auto hit = midiMap.handleCc (message.getRawData()[1] & 0x7F, message.getRawData()[2] & 0x7F);
+            if (hit.apply)
+            {
+                const size_t index = static_cast<size_t> (hit.paramIndex);
+                if (auto* parameter = paramPtrs[index])
+                    parameter->setValueNotifyingHost (parameter->convertTo0to1 (hit.plain));
+                rawParams[index]->store (hit.plain); // exact value, not the normalised round trip
+                engine->setParam (table[index].id, hit.plain);
+                sentToEngine[index] = hit.plain;
+            }
+        }
+
         synthyboy::Event e;
         // note on/off (with release velocity), pitch bend, mod wheel, CC 64 sustain pedal, CC 74 slide, channel and poly pressure,
         // all notes off: core/include/synthyboy/midi_events.h (shared with the CLAP shell)
@@ -387,13 +418,66 @@ bool SynthyBoyProcessor::loadLegacyXml (const void* data, int sizeInBytes, synth
     return true;
 }
 
-void SynthyBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
+synthyboy::ShellState SynthyBoyProcessor::shellState() const
+{
+    synthyboy::ShellState shell;
+    shell.midiCc = midiMap.bindings();
+    const std::lock_guard<std::mutex> lock (contentMutex);
+    shell.locks = locks;
+    return shell;
+}
+
+std::string SynthyBoyProcessor::stateText()
 {
     std::string text;
     {
         const std::lock_guard<std::mutex> lock (contentMutex);
         text = synthyboy::saveState (currentValues(), patchContent);
     }
+    return synthyboy::withShellSection (text, shellState());
+}
+
+void SynthyBoyProcessor::applyShell (const synthyboy::ShellState& shell)
+{
+    midiMap.setBindings (shell.midiCc);
+    const std::lock_guard<std::mutex> lock (contentMutex);
+    locks = shell.locks;
+}
+
+void SynthyBoyProcessor::applyPatch (synthyboy::ParamValues values, synthyboy::StateContent newContent, bool respectLocks)
+{
+    if (respectLocks)
+    {
+        std::vector<std::string> keep;
+        synthyboy::StateContent currentContent;
+        {
+            const std::lock_guard<std::mutex> lock (contentMutex);
+            keep = locks;
+            currentContent = patchContent;
+        }
+        if (! keep.empty())
+        {
+            synthyboy::keepLockedValues (values, currentValues(), keep);
+            synthyboy::StateContent merged = newContent;
+            synthyboy::keepLockedContent (merged, currentContent, keep);
+            if (synthyboy::validateContent (merged))
+                newContent = std::move (merged);
+        }
+    }
+
+    applyValues (values);
+    {
+        // a loaded document is a whole patch (the content of the previous one must not leak into it)
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        patchContent = std::move (newContent);
+        if (engine != nullptr)
+            engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
+    }
+}
+
+void SynthyBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
+{
+    const std::string text = stateText();
     destData.replaceAll (text.data(), text.size());
 }
 
@@ -407,20 +491,23 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
     const auto result = synthyboy::loadStateWithContent (data, static_cast<size_t> (sizeInBytes), values, loadedContent);
 
     bool apply = result.status == synthyboy::LoadStatus::ok || result.status == synthyboy::LoadStatus::newer_version;
+    const bool document = apply;
     if (result.status == synthyboy::LoadStatus::invalid)
         apply = loadLegacyXml (data, sizeInBytes, values);
 
     if (! apply)
         return;
 
-    applyValues (values);
-    {
-        // a loaded document is a whole patch; the legacy XML of the spike has no content (loadedContent is empty then)
-        const std::lock_guard<std::mutex> lock (contentMutex);
-        patchContent = std::move (loadedContent);
-        if (engine != nullptr)
-            engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
-    }
+    // A session of ours carries the `shell` section (MIDI map, locks): it is restored exactly, locks included. A document without it is a
+    // preset or a state of an older version: that is a preset change, the locked modules of this instance survive it (G08).
+    synthyboy::ShellState shell;
+    const auto shellStatus = document ? synthyboy::loadShellSection (data, static_cast<size_t> (sizeInBytes), shell) : synthyboy::ShellStatus::absent;
+    const bool session = shellStatus == synthyboy::ShellStatus::ok || shellStatus == synthyboy::ShellStatus::rejected;
+    if (session)
+        applyShell (shell);
+
+    // the legacy XML of the spike has no content (loadedContent is empty then)
+    applyPatch (values, std::move (loadedContent), ! session);
 
     {
         const std::lock_guard<std::mutex> lock (contentMutex);
@@ -476,6 +563,87 @@ bool SynthyBoyProcessor::setContent (const synthyboy::StateContent& newContent)
             engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
     }
     updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    return true;
+}
+
+// ---- MIDI learn, Save as Default, locks (docs/ui-design/15-shell-features.md) ------------------------------------------------------------
+
+void SynthyBoyProcessor::startMidiLearn (const std::string& key)
+{
+    const auto* info = synthyboy::findParamByKey (key.c_str());
+    midiMap.armLearn (info != nullptr ? synthyboy::findParamIndex (info->id) : -1);
+}
+
+void SynthyBoyProcessor::cancelMidiLearn()
+{
+    midiMap.disarm();
+}
+
+std::string SynthyBoyProcessor::midiLearnKey() const
+{
+    const int armed = midiMap.armedParam();
+    return armed >= 0 && static_cast<size_t> (armed) < synthyboy::paramCount() ? std::string (synthyboy::paramTable()[armed].key) : std::string();
+}
+
+int SynthyBoyProcessor::midiCcForKey (const std::string& key) const
+{
+    const auto* info = synthyboy::findParamByKey (key.c_str());
+    return info != nullptr ? midiMap.ccForParam (synthyboy::findParamIndex (info->id)) : -1;
+}
+
+void SynthyBoyProcessor::clearMidiCc (const std::string& key)
+{
+    if (const auto* info = synthyboy::findParamByKey (key.c_str()))
+    {
+        midiMap.clearParam (synthyboy::findParamIndex (info->id));
+        updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    }
+}
+
+bool SynthyBoyProcessor::saveAsDefault()
+{
+    return synthyboy::saveUserDefault (userDir, stateText());
+}
+
+bool SynthyBoyProcessor::clearUserDefault()
+{
+    return synthyboy::clearUserDefault (userDir);
+}
+
+bool SynthyBoyProcessor::initPatch()
+{
+    auto values = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent initContent;
+    synthyboy::loadUserDefault (userDir, values, initContent); // untouched (the factory init patch) when there is no default
+    applyPatch (values, std::move (initContent), true);
+    updateHostDisplay (ChangeDetails().withProgramChanged (true));
+    return true;
+}
+
+bool SynthyBoyProcessor::isModuleLocked (const std::string& prefix) const
+{
+    const std::lock_guard<std::mutex> lock (contentMutex);
+    return synthyboy::isLocked (locks, prefix);
+}
+
+void SynthyBoyProcessor::setModuleLocked (const std::string& prefix, bool locked)
+{
+    bool changed = false;
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        const bool before = synthyboy::isLocked (locks, prefix);
+        changed = synthyboy::setLocked (locks, prefix, locked) && before != synthyboy::isLocked (locks, prefix);
+    }
+    if (changed)
+        updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+}
+
+bool SynthyBoyProcessor::loadPatch (const synthyboy::ParamValues& values, const synthyboy::StateContent& newContent)
+{
+    if (! synthyboy::validateContent (newContent))
+        return false;
+    applyPatch (values, newContent, true);
+    updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }
 

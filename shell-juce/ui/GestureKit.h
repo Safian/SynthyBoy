@@ -125,13 +125,19 @@ private:
 };
 
 /** The "..." button of a module header: the visible alternative to the header long-press (design 01: opens the same module sheet). */
-class ModuleMenuButton final : public juce::TextButton
+class ModuleMenuButton final : public juce::TextButton, private juce::ChangeListener
 {
 public:
     ModuleMenuButton (UiContext& context, std::string prefix);
+    ~ModuleMenuButton() override;
     const std::string& prefix() const noexcept { return modulePrefix; }
+    /** True while the module is locked (G08): the button then reads "LOCK" instead of "...". */
+    bool showsLock() const noexcept { return getButtonText() == "LOCK"; }
 
 private:
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;
+    void refreshLock();
+
     UiContext& ctx;
     std::string modulePrefix;
 };

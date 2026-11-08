@@ -167,5 +167,26 @@ ModuleMenuButton::ModuleMenuButton (UiContext& context, std::string prefix)
 {
     setTooltip ("Module sheet: copy / paste / swap / init");
     onClick = [this] { showModuleSheet (ctx, modulePrefix, *this); };
+    ctx.assign.addChangeListener (this); // the lock toggles broadcast
+    refreshLock();
+}
+
+ModuleMenuButton::~ModuleMenuButton()
+{
+    ctx.assign.removeChangeListener (this);
+}
+
+void ModuleMenuButton::changeListenerCallback (juce::ChangeBroadcaster*)
+{
+    refreshLock();
+}
+
+void ModuleMenuButton::refreshLock()
+{
+    const bool locked = module_ops::isLocked (ctx, modulePrefix);
+    const juce::String text = locked ? "LOCK" : "...";
+    if (getButtonText() != text)
+        setButtonText (text);
+    setTooltip (locked ? juce::String ("Module sheet (locked: a preset change keeps this module)") : juce::String ("Module sheet: copy / paste / swap / init / lock"));
 }
 } // namespace synthyboy::ui

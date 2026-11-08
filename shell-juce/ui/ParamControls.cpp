@@ -137,6 +137,8 @@ void ParamDragControl::updateRing()
     s.target = isAssignTarget();
     s.armedSource = ctx.assign.flow().armedSource();
     s.activeSlot = ctx.assign.flow().activeSlot();
+    s.midiCc = ctx.host.midiCcForKey (handle.key());
+    s.learning = ctx.host.midiLearnKey() == handle.key();
     ring->setState (std::move (s));
 }
 

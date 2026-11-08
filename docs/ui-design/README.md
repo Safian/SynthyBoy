@@ -14,5 +14,6 @@ Brief and rules: [00-BRIEF.md](00-BRIEF.md).
 | 08-effects.md | 9 effects, chain order | agy | draft written |
 | 09-kick-integration.md | remote-control pages, ParamInfo mapping, JSON page definition | agy | draft written |
 | 11-vital-preset-import.md | import of Vital `.vital` presets (and wavetables/LFO shapes inside): format, key mapping to our 880 keys, unmappable values, report UI, licence rules | sonnet-worker (after 01-05) | draft written |
+| 15-shell-features.md | key-free shell features: MIDI learn (G07), Save as Default (G02), module Lock (G08), .vitalbank / .vitaltable / .vitallfo import | sonnet-worker | built, A180-A196 |
 | 10-coverage-matrix.md | Serum/Vital function -> where in our UI; engine GAP list; all 880 keys reachable | main thread | draft written |
 | 12-decisions.md | owner decisions on the open questions of 10 §5.2 | owner + main thread | decided / proposed |

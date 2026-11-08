@@ -174,6 +174,14 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 
 LFO tab chips + drag-to-copy, sync-mode dimming, the free-form shape editor (05-14 .. 05-18, 05-27 .. 05-29), mixer console strip level drag and name tap (02-16, 02-17), envelope pinch / wheel zoom while unlocked (05-03), EQ node pinch / wheel resonance (08-08), MONO pill (07-02).
 
+## Shell features (docs/ui-design/SHELLFEAT-REPORT.md, tests in `shell-juce/ui/tests/test_ui_shellfeat.cpp`)
+
+| Row | Gesture | Status |
+|-----|---------|--------|
+| 01-MIDI | Long-press a control -> sheet -> MIDI learn (G07): arm / cancel / remove; amber LEARN frame and `CCn` tag on the knob | **added**: `Sheet.cpp:85,125-150`, `Overlays.cpp:107-125`, `ParamControls.cpp updateRing`, `UiContext.cpp refresh` (map revision); tests `shf_midi_learn_*` |
+| 01-LOCK | Module sheet -> Lock module / Unlock module (G08); the header `...` button reads LOCK | **added** (was a disabled GAP): `ModuleSheet.cpp:102-116,179-185`, `GestureKit.cpp ModuleMenuButton::refreshLock`; tests `shf_module_lock_*` |
+| 07-DEFAULT | Global Settings: Save as Default / Clear Default, Init Preset loads the default (G02) | **added**: `GlbSettingsPanel.cpp:42-52,157-190`; test `shf_save_as_default_new_instances_and_init_preset` |
+
 ## Rows left after the gap closure (docs/ui-design/UI-GAPS-REPORT.md)
 
 - **NOT DONE with a hard reason (1)**: 02-28 (no noise sample key in `docs/params.json`). 05-22 is implemented since the engine plays point modulation per voice.

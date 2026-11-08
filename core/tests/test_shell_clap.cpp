@@ -5,7 +5,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -13,6 +16,7 @@
 
 #include "synthyboy/kick_pages.h"
 #include "synthyboy/params.h"
+#include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
 #include "synthyboy_clap.h"
 #include "test_runner.h"
@@ -464,4 +468,193 @@ TEST (native_clap_sustain_pedal_note_expression_and_transport)
     plugin->stop_processing (plugin);
     plugin->deactivate (plugin);
     plugin->destroy (plugin);
+}
+
+// G07 / G02 / G08 (docs/ui-design/15-shell-features.md): the native shell reads the MIDI map of the `shell` state section, applies mapped
+// controllers and reports them to the host; a new instance starts from the user default; locks survive a preset-like state load.
+namespace
+{
+struct OutCapture
+{
+    std::vector<clap_event_param_value_t> events;
+    clap_output_events_t list {};
+    OutCapture()
+    {
+        list.ctx = this;
+        list.try_push = [] (const clap_output_events_t* l, const clap_event_header_t* h) -> bool {
+            if (h->type != CLAP_EVENT_PARAM_VALUE)
+                return false;
+            static_cast<OutCapture*> (l->ctx)->events.push_back (*reinterpret_cast<const clap_event_param_value_t*> (h));
+            return true;
+        };
+    }
+};
+
+void setUserDir (const char* value)
+{
+   #if defined(_WIN32)
+    _putenv_s ("SYNTHYBOY_USER_DIR", value);
+   #else
+    if (value[0] != '\0')
+        setenv ("SYNTHYBOY_USER_DIR", value, 1);
+    else
+        unsetenv ("SYNTHYBOY_USER_DIR");
+   #endif
+}
+
+bool loadStateText (const clap_plugin_t* plugin, const std::string& text)
+{
+    const auto* stateExt = static_cast<const clap_plugin_state_t*> (plugin->get_extension (plugin, CLAP_EXT_STATE));
+    MemIStream in (text.data(), text.size());
+    return stateExt->load (plugin, &in.stream);
+}
+
+double paramValue (const clap_plugin_t* plugin, uint32_t id)
+{
+    const auto* paramsExt = static_cast<const clap_plugin_params_t*> (plugin->get_extension (plugin, CLAP_EXT_PARAMS));
+    double v = -9999.0;
+    paramsExt->get_value (plugin, id, &v);
+    return v;
+}
+
+void processEvents (const clap_plugin_t* plugin, const std::vector<clap_event_header_t*>& events, clap_output_events_t* out)
+{
+    std::vector<float> bufL (64, 0.0f), bufR (64, 0.0f);
+    float* channelData[2] = { bufL.data(), bufR.data() };
+    clap_audio_buffer_t audioOut {};
+    audioOut.data32 = channelData;
+    audioOut.channel_count = 2;
+    clap_process_t proc {};
+    proc.frames_count = 64;
+    proc.audio_outputs = &audioOut;
+    proc.audio_outputs_count = 1;
+    SimpleEvents list;
+    list.events = events;
+    clap_input_events_t in = list.inEvents();
+    proc.in_events = &in;
+    proc.out_events = out;
+    plugin->process (plugin, &proc);
+}
+
+clap_event_midi_t ccEvent (int cc, int value)
+{
+    clap_event_midi_t m {};
+    m.header.size = sizeof m;
+    m.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+    m.header.type = CLAP_EVENT_MIDI;
+    m.data[0] = 0xB0;
+    m.data[1] = static_cast<uint8_t> (cc);
+    m.data[2] = static_cast<uint8_t> (value);
+    return m;
+}
+
+int indexOfKey (const char* key)
+{
+    return findParamIndex (findParamByKey (key)->id);
+}
+} // namespace
+
+TEST (native_clap_midi_map_in_state_drives_parameters)
+{
+    setUserDir ((std::filesystem::temp_directory_path() / "sb_clap_nodefault").string().c_str());
+    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
+    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    const clap_plugin_t* plugin = factory->create_plugin (factory, &s_mockHost, "com.safian.synthyboy");
+    CHECK (plugin != nullptr && plugin->init (plugin));
+    CHECK (plugin->activate (plugin, 48000.0, 32, 512));
+    CHECK (plugin->start_processing (plugin));
+
+    ShellState shell;
+    shell.midiCc = { { 21, "master.volume" } };
+    shell.locks = { "osc1" };
+    CHECK (loadStateText (plugin, withShellSection (saveState (ParamValues::defaults()), shell)));
+
+    const ParamInfo* volume = findParamByKey ("master.volume");
+    CHECK (volume != nullptr);
+    if (volume == nullptr)
+        return;
+
+    OutCapture out;
+    auto hi = ccEvent (21, 127);
+    processEvents (plugin, { &hi.header }, &out.list);
+    CHECK_NEAR (paramValue (plugin, volume->id), volume->max, 0.01);
+    CHECK_EQ (out.events.size(), static_cast<size_t> (1));
+    if (! out.events.empty())
+    {
+        CHECK_EQ (out.events[0].param_id, volume->id);
+        CHECK_NEAR (out.events[0].value, volume->max, 0.01);
+    }
+
+    auto lo = ccEvent (21, 0);
+    processEvents (plugin, { &lo.header }, &out.list);
+    CHECK_NEAR (paramValue (plugin, volume->id), volume->min, 0.01);
+
+    // an unmapped controller and a null out list do nothing / do not crash
+    auto other = ccEvent (22, 100);
+    processEvents (plugin, { &other.header }, nullptr);
+    auto again = ccEvent (21, 127);
+    processEvents (plugin, { &again.header }, nullptr);
+    CHECK_NEAR (paramValue (plugin, volume->id), volume->max, 0.01);
+
+    // the map and the locks are saved with the state
+    const auto* stateExt = static_cast<const clap_plugin_state_t*> (plugin->get_extension (plugin, CLAP_EXT_STATE));
+    MemOStream saved;
+    CHECK (stateExt->save (plugin, &saved.stream));
+    const std::string text (saved.bytes.begin(), saved.bytes.end());
+    ShellState back;
+    CHECK (loadShellSection (text.data(), text.size(), back) == ShellStatus::ok);
+    CHECK (back == shell);
+
+    // a document without the section is a preset change: the locked module osc1 keeps its values
+    auto current = ParamValues::defaults();
+    current.plain[indexOfKey ("osc1.level")] = 0.123f;
+    CHECK (loadStateText (plugin, withShellSection (saveState (current), shell)));
+    auto preset = ParamValues::defaults();
+    preset.plain[indexOfKey ("osc1.level")] = 0.9f;
+    preset.plain[indexOfKey ("osc2.level")] = 0.4f;
+    CHECK (loadStateText (plugin, saveState (preset)));
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("osc1.level")->id), 0.123, 1.0e-4);
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("osc2.level")->id), 0.4, 1.0e-4);
+
+    plugin->stop_processing (plugin);
+    plugin->deactivate (plugin);
+    plugin->destroy (plugin);
+    setUserDir ("");
+}
+
+TEST (native_clap_new_instance_starts_from_the_user_default)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "sb_clap_default";
+    std::filesystem::remove_all (dir);
+    setUserDir (dir.string().c_str());
+
+    auto values = ParamValues::defaults();
+    values.plain[indexOfKey ("master.volume")] = -5.0f;
+    ShellState shell;
+    shell.midiCc = { { 30, "filter1.cutoff" } };
+    CHECK (saveUserDefault (dir.string(), withShellSection (saveState (values), shell)));
+
+    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
+    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    const clap_plugin_t* plugin = factory->create_plugin (factory, &s_mockHost, "com.safian.synthyboy");
+    CHECK (plugin != nullptr && plugin->init (plugin));
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("master.volume")->id), -5.0, 1.0e-4);
+
+    CHECK (plugin->activate (plugin, 48000.0, 32, 512));
+    CHECK (plugin->start_processing (plugin));
+    auto cc = ccEvent (30, 127);
+    processEvents (plugin, { &cc.header }, nullptr);
+    const ParamInfo* cutoff = findParamByKey ("filter1.cutoff");
+    CHECK_NEAR (paramValue (plugin, cutoff->id), cutoff->max, 0.5);
+    plugin->stop_processing (plugin);
+    plugin->deactivate (plugin);
+    plugin->destroy (plugin);
+
+    CHECK (clearUserDefault (dir.string()));
+    const clap_plugin_t* fresh = factory->create_plugin (factory, &s_mockHost, "com.safian.synthyboy");
+    CHECK (fresh != nullptr && fresh->init (fresh));
+    CHECK_NEAR (paramValue (fresh, findParamByKey ("master.volume")->id), -12.0, 1.0e-4);
+    fresh->destroy (fresh);
+    std::filesystem::remove_all (dir);
+    setUserDir ("");
 }

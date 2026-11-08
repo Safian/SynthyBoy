@@ -58,6 +58,7 @@ public:
 
 private:
     UiHost& host;
+    uint32_t lastMidiRevision = 0;
     ApvtsModMatrix access;
     AssignFlow assignFlow;
     ModSnapshot current;
