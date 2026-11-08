@@ -905,10 +905,37 @@ namespace sbvital {
     }
   }
   
+  // SynthyBoy (docs/ui-design/13-new-keys.md 4.14): the drawn remap curve of the oscillator slot applied to the frame position of the two lanes
+  // of one voice (index, index + 1), then RISE / FALL: a one pole glide of the remapped position (the position is read once per wave buffer,
+  // every kWavetableFadeTime seconds), jumping to the target at a note on. Off: the position is returned untouched.
+  poly_float SynthOscillator::remapFrame(poly_float frame, int index) {
+    const FrameRemap* remap = wavetable_->frameRemap();
+    if (!remap->on) {
+      for (bool& lane_on : remap_lane_on_)
+        lane_on = false;
+      return frame;
+    }
+
+    const float inverse_max = remap->max_frame > 0.0f ? 1.0f / remap->max_frame : 0.0f;
+    for (int lane = index; lane < index + 2; ++lane) {
+      float target = remap->map(frame[lane] * inverse_max) * remap->max_frame;
+      float current = remap_slew_[lane];
+      float time_ms = target > current ? remap->rise_ms : remap->fall_ms;
+      if (!remap_lane_on_[lane] || remap_snap_[lane] || time_ms <= 0.0f)
+        current = target;
+      else
+        current += (target - current) * (1.0f - std::exp(-1000.0f * kWavetableFadeTime / time_ms));
+      remap_slew_.set(lane, current);
+      remap_lane_on_[lane] = true;
+      frame.set(lane, current);
+    }
+    return frame;
+  }
+
   template<void(*spectralMorph)(const Wavetable::WavetableData*, int, poly_float*,
                                 FourierTransform*, float, int, const poly_float*)>
   void SynthOscillator::setFourierWaveBuffers(poly_float phase_inc, int index, bool formant_shift) {
-    poly_float wave_frame = input(kWaveFrame)->at(0);
+    poly_float wave_frame = remapFrame(input(kWaveFrame)->at(0), index);
     poly_float frame_spread = input(kUnisonFrameSpread)->at(0);
     phase_inc = utils::max(0.0f, phase_inc);
     float phase_inc_adjustment = getPhaseIncAdjustment();
@@ -1531,10 +1558,14 @@ namespace sbvital {
 
     poly_mask wave_buffer_mask = reset_mask | retrigger_mask;
     poly_float buffer_phase_inc = phase_inc_buffer_->buffer[num_samples - 1] * (1.0f / kPhaseMult);
+    for (int lane = 0; lane < poly_float::kSize; ++lane)
+      remap_snap_[lane] = wave_buffer_mask[lane] != 0; // SynthyBoy: a new note jumps to its remapped frame, it does not glide from the last note
     if (wave_buffer_mask[0])
       setWaveBuffers(buffer_phase_inc, 0);
     if (wave_buffer_mask[2])
       setWaveBuffers(buffer_phase_inc, 2);
+    for (int lane = 0; lane < poly_float::kSize; ++lane)
+      remap_snap_[lane] = false;
 
     if (reset_mask.anyMask())
       reset(reset_mask, trigger_offset);

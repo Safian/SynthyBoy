@@ -4,19 +4,19 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1484 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**1507 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 22 |
-| Osc 1 | 64 |
-| Osc 2 | 64 |
-| Osc 3 | 64 |
+| Osc 1 | 68 |
+| Osc 2 | 68 |
+| Osc 3 | 68 |
 | Noise | 7 |
-| Filter 1 | 21 |
-| Filter 2 | 21 |
+| Filter 1 | 22 |
+| Filter 2 | 22 |
 | Filters | 1 |
-| FX Filter | 18 |
+| FX Filter | 19 |
 | Envelope 1 | 16 |
 | Envelope 2 | 16 |
 | Envelope 3 | 16 |
@@ -37,7 +37,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Random LFO 4 | 8 |
 | Macros | 8 |
 | Mod Matrix | 704 |
-| FX | 194 |
+| FX | 202 |
 | LFO 9 | 16 |
 | LFO 10 | 16 |
 | Mixer | 8 |
@@ -145,6 +145,10 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.filter_blend` | Osc 1 Filter Blend | 0 .. 100 % | 0 % | Osc 1 | mod |  |
 | `osc1.bus1_send` | Osc 1 Bus 1 Send | 0 .. 100 % | 0 % | Osc 1 | mod |  |
 | `osc1.bus2_send` | Osc 1 Bus 2 Send | 0 .. 100 % | 0 % | Osc 1 | mod |  |
+| `osc1.remap.on` | Osc 1 Remap On | 0 Off, 1 On | Off | Osc 1 / Remap |  |  |
+| `osc1.remap.slot` | Osc 1 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 1 / Remap |  |  |
+| `osc1.remap.rise` | Osc 1 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
+| `osc1.remap.fall` | Osc 1 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
 
 ### Osc 2
 
@@ -214,6 +218,10 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.filter_blend` | Osc 2 Filter Blend | 0 .. 100 % | 0 % | Osc 2 | mod |  |
 | `osc2.bus1_send` | Osc 2 Bus 1 Send | 0 .. 100 % | 0 % | Osc 2 | mod |  |
 | `osc2.bus2_send` | Osc 2 Bus 2 Send | 0 .. 100 % | 0 % | Osc 2 | mod |  |
+| `osc2.remap.on` | Osc 2 Remap On | 0 Off, 1 On | Off | Osc 2 / Remap |  |  |
+| `osc2.remap.slot` | Osc 2 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 2 / Remap |  |  |
+| `osc2.remap.rise` | Osc 2 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
+| `osc2.remap.fall` | Osc 2 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
 
 ### Osc 3
 
@@ -283,6 +291,10 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.filter_blend` | Osc 3 Filter Blend | 0 .. 100 % | 0 % | Osc 3 | mod |  |
 | `osc3.bus1_send` | Osc 3 Bus 1 Send | 0 .. 100 % | 0 % | Osc 3 | mod |  |
 | `osc3.bus2_send` | Osc 3 Bus 2 Send | 0 .. 100 % | 0 % | Osc 3 | mod |  |
+| `osc3.remap.on` | Osc 3 Remap On | 0 Off, 1 On | Off | Osc 3 / Remap |  |  |
+| `osc3.remap.slot` | Osc 3 Remap Slot | 0 Remap 1, 1 Remap 2, 2 Remap 3, 3 Remap 4 | Remap 1 | Osc 3 / Remap |  |  |
+| `osc3.remap.rise` | Osc 3 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
+| `osc3.remap.fall` | Osc 3 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
 
 ### Noise
 
@@ -321,6 +333,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `filter1.var` | Filter 1 Var | 0 .. 100 % | 50 % | Filter 1 | mod |  |
 | `filter1.pan` | Filter 1 Pan | -100 .. 100 % | 0 % | Filter 1 | mod |  |
 | `filter1.level` | Filter 1 Level | -60 .. 12 dB | 0 dB | Filter 1 | mod |  |
+| `filter1.clean_mode` | Filter 1 Clean Mode | 0 Off, 1 On | Off | Filter 1 |  |  |
 
 ### Filter 2
 
@@ -347,6 +360,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `filter2.var` | Filter 2 Var | 0 .. 100 % | 50 % | Filter 2 | mod |  |
 | `filter2.pan` | Filter 2 Pan | -100 .. 100 % | 0 % | Filter 2 | mod |  |
 | `filter2.level` | Filter 2 Level | -60 .. 12 dB | 0 dB | Filter 2 | mod |  |
+| `filter2.clean_mode` | Filter 2 Clean Mode | 0 Off, 1 On | Off | Filter 2 |  |  |
 
 ### Filters
 
@@ -376,6 +390,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `fxfilter.var` | FX Filter Var | 0 .. 100 % | 50 % | FX Filter | mod |  |
 | `fxfilter.pan` | FX Filter Pan | -100 .. 100 % | 0 % | FX Filter | mod |  |
 | `fxfilter.level` | FX Filter Level | -60 .. 12 dB | 0 dB | FX Filter | mod |  |
+| `fxfilter.clean_mode` | FX Filter Clean Mode | 0 Off, 1 On | Off | FX Filter |  |  |
 
 ### Envelope 1
 
@@ -741,7 +756,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..38 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..403 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..411 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 |  |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -952,6 +967,14 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `splitter_ms.mid_bypass` | Splitter M/S Mid Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  |  |
 | `splitter_ms.side_bypass` | Splitter M/S Side Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  |  |
 | `splitter_ms.level` | Splitter M/S Level | -24 .. 12 dB | 0 dB | FX / Splitter M/S | mod |  |
+| `chorus.level` | Chorus Level | -24 .. 12 dB | 0 dB | FX / Chorus | mod |  |
+| `compressor.level` | Compressor Level | -24 .. 12 dB | 0 dB | FX / Compressor | mod |  |
+| `delay.level` | Delay Level | -24 .. 12 dB | 0 dB | FX / Delay | mod |  |
+| `distortion.level` | Distortion Level | -24 .. 12 dB | 0 dB | FX / Distortion | mod |  |
+| `eq.level` | EQ Level | -24 .. 12 dB | 0 dB | FX / EQ | mod |  |
+| `flanger.level` | Flanger Level | -24 .. 12 dB | 0 dB | FX / Flanger | mod |  |
+| `phaser.level` | Phaser Level | -24 .. 12 dB | 0 dB | FX / Phaser | mod |  |
+| `reverb.level` | Reverb Level | -24 .. 12 dB | 0 dB | FX / Reverb | mod |  |
 
 ### LFO 9
 
@@ -1462,6 +1485,14 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 401 | `splitter_lmh.freq_high` | Splitter L/M/H High Split Frequency |
 | 402 | `splitter_lmh.level` | Splitter L/M/H Level |
 | 403 | `splitter_ms.level` | Splitter M/S Level |
+| 404 | `chorus.level` | Chorus Level |
+| 405 | `compressor.level` | Compressor Level |
+| 406 | `delay.level` | Delay Level |
+| 407 | `distortion.level` | Distortion Level |
+| 408 | `eq.level` | EQ Level |
+| 409 | `flanger.level` | Flanger Level |
+| 410 | `phaser.level` | Phaser Level |
+| 411 | `reverb.level` | Reverb Level |
 
 ## Built-in wavetables and LFO shapes
 

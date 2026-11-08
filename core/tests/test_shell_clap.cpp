@@ -186,7 +186,7 @@ TEST (native_clap_extensions_and_parameter_parity)
     const auto* remoteControls = static_cast<const clap_plugin_remote_controls_t*> (
         plugin->get_extension (plugin, CLAP_EXT_REMOTE_CONTROLS));
     CHECK (remoteControls != nullptr);
-    CHECK_EQ (remoteControls->count (plugin), 103u);
+    CHECK_EQ (remoteControls->count (plugin), 107u);
 
     clap_remote_controls_page_t firstPage {};
     CHECK (remoteControls->get (plugin, 0, &firstPage));
@@ -203,7 +203,7 @@ TEST (native_clap_extensions_and_parameter_parity)
 
 TEST (kick_remote_control_pages_and_reachability)
 {
-    CHECK_EQ (kickPageCount(), 103u);
+    CHECK_EQ (kickPageCount(), 107u);
     const Page* pages = kickPageTable();
     CHECK (pages != nullptr);
 
@@ -237,8 +237,8 @@ TEST (kick_remote_control_pages_and_reachability)
         }
     }
 
-    // Asserts all 1484 keys in paramTable() are reachable
-    CHECK_EQ (allReachableKeys.size(), 1484u);
+    // Asserts all 1507 keys in paramTable() are reachable
+    CHECK_EQ (allReachableKeys.size(), 1507u);
     CHECK_EQ (allReachableKeys.size(), paramCount());
 
     // Macro defaults check

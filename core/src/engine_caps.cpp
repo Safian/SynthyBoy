@@ -5,6 +5,7 @@
 #include "synthyboy/engine_caps.h"
 
 #include <cstring>
+#include <initializer_list>
 
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
@@ -37,6 +38,15 @@ int numberAfter (const char* s, const char* prefix) noexcept
 
 EngineCapsMask classify (const char* key) noexcept
 {
+    // block B16 (WTREMAP): before the module prefixes (osc..., filter..., reverb.... would claim these keys)
+    if (std::strstr (key, ".remap.") != nullptr)
+        return kCapWtRemap;
+    if (endsWith (key, ".clean_mode"))
+        return kCapCleanMode;
+    if (endsWith (key, ".level"))
+        for (const char* fx : { "chorus.", "compressor.", "delay.", "distortion.", "eq.", "flanger.", "phaser.", "reverb." })
+            if (startsWith (key, fx))
+                return kCapFxLevel;
     if (endsWith (key, ".rack"))
         return kCapFxRacks; // before the module prefixes: fxfilter.rack is not a filter key
     if (startsWith (key, "macro."))
@@ -197,6 +207,9 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapFxConvolve:       return "fx_convolve";
         case kCapFxSplitters:      return "fx_splitters";
         case kCapReverbForce:      return "reverb_force";
+        case kCapWtRemap:          return "wt_remap";
+        case kCapFxLevel:          return "fx_level";
+        case kCapCleanMode:        return "clean_mode";
         case kCapNone:             break;
     }
     return "";

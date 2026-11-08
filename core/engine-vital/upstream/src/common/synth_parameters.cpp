@@ -458,6 +458,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "%", "Pan", nullptr },
     { "level", 0x000000, -60.0, 12.0, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "dB", "Level", nullptr },
+    { "clean_mode", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Clean Mode", strings::kOffOnNames },
     { "formant_x", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Formant X", nullptr },
     { "formant_y", 0x000000, 0.0, 1.0, 0.5, 0.0, 1.0,
@@ -669,6 +671,8 @@ namespace sbvital {
       add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
       add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     }
+    for (const char* name : { "chorus", "compressor", "delay", "distortion", "eq", "flanger", "phaser", "reverb" })
+      add(std::string(name) + "_level", -24.0, 12.0, 0.0, ValueDetails::kLinear, 1.0, "dB");   // SynthyBoy: the LEVEL trim of the nine Vital effects (the FX filter has filter_fx_level)
     add("bus1_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
     add("bus2_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");
     add("direct_level", -60.0, 6.0, 0.0, ValueDetails::kLinear, 1.0, "dB");

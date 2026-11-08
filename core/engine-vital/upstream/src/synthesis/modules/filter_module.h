@@ -31,6 +31,7 @@ namespace sbvital {
   class SallenKeyFilter;
   class SerumFilterBank;      // SynthyBoy: the filter models of state version 3
   class StereoCutoffOffset;
+  class CleanDriveGate;       // SynthyBoy: Clean Mode (docs/ui-design/13-new-keys.md 4.15)
 
   class FilterModule : public SynthModule {
     public:
@@ -101,6 +102,9 @@ namespace sbvital {
       StereoCutoffOffset* cutoff_offset_ = nullptr;
       Output* level_ = nullptr;
       poly_float level_gain_ = 1.0f;
+      Output* drive_ = nullptr;              // the drive control in dB (before the Clean Mode gate)
+      Value* clean_mode_ = nullptr;          // 1: the drive is a clean linear gain after the filter instead of a drive into it
+      poly_float clean_gain_ = 1.0f;
 
       JUCE_LEAK_DETECTOR(FilterModule)
   };
