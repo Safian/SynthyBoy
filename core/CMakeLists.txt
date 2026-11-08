@@ -54,3 +54,4 @@ endif()
 
 # Packages with their own CMake (after the tests: they use synthyboy_add_test)
 add_subdirectory(wavetable-render)
+add_subdirectory(vital-import)

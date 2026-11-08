@@ -4,7 +4,7 @@
 //
 // docs/ui-design/11-vital-preset-import.md 1.3.1 and Annex A.5 (approved: docs/ui-design/12-decisions.md Q31). Written from the
 // procedure of that design only; nothing is taken from the imported Vital sources. Where the design does not define a behaviour the
-// code carries a "// SPEC-GAP:" comment (list: core/vital-import/REPORT.md). JUCE-free, Vital-free, no I/O, no globals.
+// code carries a "// SPEC-GAP:" comment (list: grep SPEC-GAP core/). JUCE-free, Vital-free, no I/O, no globals.
 #pragma once
 
 #include <cstdint>
@@ -118,6 +118,16 @@ struct Result
     int numFrames = 0;
     std::vector<float> frames; // numFrames * kFrameSize
 };
+
+/** out[i] = sum_{k=1..count} cosCoef[k] cos (2 pi k i / kFrameSize) + sinCoef[k] sin (2 pi k i / kFrameSize), i < kFrameSize.
+    Arrays are indexed 1..count (index 0 unused); count is limited to kFrameSize / 2 - 1. */
+void synthesizeHarmonics (const double* cosCoef, const double* sinCoef, int count, float* out) noexcept;
+
+/** The inverse of synthesizeHarmonics for one frame: cosCoef[k], sinCoef[k], k = 1 .. count (index 0 = DC in cosCoef). */
+void analyzeHarmonics (const float* frame, int count, double* cosCoef, double* sinCoef) noexcept;
+
+/** mag[k] = amplitude of harmonic k of one frame (a sine of amplitude 1 gives 1), k = 1 .. count (mag[0] = DC). */
+void harmonicMagnitudes (const float* frame, int count, double* mag) noexcept;
 
 /** Frames of a description: the largest keyframe position over all groups and components + 1, in 1 .. kMaxFrames. */
 int frameCount (const Description& d) noexcept;

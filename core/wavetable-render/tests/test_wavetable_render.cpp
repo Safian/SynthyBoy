@@ -534,3 +534,24 @@ TEST (wt_random_descriptions_stay_finite)
         CHECK (allFinite);
     }
 }
+
+TEST (wt_harmonic_helpers_round_trip)
+{
+    double a[65] = {}, b[65] = {};
+    a[3] = 0.5;
+    b[1] = 1.0;
+    b[7] = -0.25;
+    std::vector<float> frame (kFrameSize);
+    synthesizeHarmonics (a, b, 64, frame.data());
+    CHECK_NEAR (harmonicMag (frame.data(), 1), 1.0, 1e-4);
+    CHECK_NEAR (harmonicMag (frame.data(), 3), 0.5, 1e-4);
+    double ca[65], sb[65], mag[65];
+    analyzeHarmonics (frame.data(), 64, ca, sb);
+    CHECK_NEAR (ca[3], 0.5, 1e-5);
+    CHECK_NEAR (sb[1], 1.0, 1e-5);
+    CHECK_NEAR (sb[7], -0.25, 1e-5);
+    CHECK_NEAR (ca[0], 0.0, 1e-6);
+    harmonicMagnitudes (frame.data(), 64, mag);
+    CHECK_NEAR (mag[7], 0.25, 1e-5);
+    CHECK_NEAR (mag[2], 0.0, 1e-5);
+}

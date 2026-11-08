@@ -30,6 +30,14 @@ JUCE itself bundles further third-party code inside its modules (for example Har
 listed in JUCE's own `LICENSE.md` and the respective module directories, and are not repeated here.
 The pinned JUCE version is built from source; nothing of it is copied into this repository.
 
+## Vital preset file format (interoperability data)
+
+`core/vital-import/vital_map.cpp` contains a table of the setting names of the `.vital` preset file format
+(730 rows, owner decision Q33 in `docs/ui-design/12-decisions.md`). The names are facts of the file format, authored from
+our own adapter table (`core/engine-vital/adapter/vital_bindings.cpp`); no Vital preset, wavetable or LFO file is
+bundled. The wavetable renderer (`core/wavetable-render/`) is a clean-room implementation from the design document; it
+does not contain Vital source code. The table ships in the binary under the AGPL-3.0-or-later of this project.
+
 ## Tools used for verification only (not linked, not distributed)
 
 | Tool | Version | Licence | Used for |

@@ -143,7 +143,7 @@ void Sha256::finalize (uint8_t hash[32]) noexcept
     const size_t bufferIndex = static_cast<size_t> (count_ & 63);
 
     buffer_[bufferIndex] = 0x80;
-    const size_t padLen = (bufferIndex < 56) ? (56 - 1 - bufferIndex) : (64 + 56 - 1 - bufferIndex);
+    const size_t padLen = (bufferIndex < 56) ? (56 - 1 - bufferIndex) : (64 - 1 - bufferIndex); // second case: only the rest of this block (it was a stack overflow for inputs of 56 .. 63 mod 64 bytes)
     if (padLen > 0)
         std::memset (buffer_ + bufferIndex + 1, 0, padLen);
 

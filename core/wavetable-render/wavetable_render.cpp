@@ -5,7 +5,7 @@
 // Written from the procedure of the design document and the field list of 1.1 only. The design fixes the render model (frames = last
 // keyframe position + 1, per frame every group runs its components in order, groups are summed, then the post-process) but gives no
 // formulas for the individual components: every formula below is an own definition and is marked "SPEC-GAP:" (see
-// core/vital-import/REPORT.md). The golden references of Annex C.2 decide later whether a definition has to change.
+// grep SPEC-GAP core/). The golden references of Annex C.2 decide later whether a definition has to change.
 
 #include "synthyboy/wavetable_render.h"
 
@@ -613,6 +613,39 @@ void renderLine (const Line& line, float* out, int n) noexcept
         }
         out[i] = static_cast<float> (y);
     }
+}
+
+void synthesizeHarmonics (const double* cosCoef, const double* sinCoef, int count, float* out) noexcept
+{
+    std::vector<Cx> sp (N, Cx (0, 0));
+    count = std::min (std::max (count, 0), N / 2 - 1);
+    for (int k = 1; k <= count; ++k) // a cos(kt) + b sin(kt) = Re((a - i b) e^{ikt}) -> bin k = (a - i b) / 2
+        sp[static_cast<size_t> (k)] = Cx (cosCoef[k], -sinCoef[k]) * (0.5 * N);
+    fromSpectrum (sp, out);
+}
+
+void analyzeHarmonics (const float* frame, int count, double* cosCoef, double* sinCoef) noexcept
+{
+    std::vector<Cx> sp;
+    toSpectrum (frame, sp);
+    count = std::min (std::max (count, 0), N / 2 - 1);
+    cosCoef[0] = sp[0].real() / N;
+    sinCoef[0] = 0.0;
+    for (int k = 1; k <= count; ++k) // X_k = N/2 (a - i b)
+    {
+        cosCoef[k] = 2.0 * sp[static_cast<size_t> (k)].real() / N;
+        sinCoef[k] = -2.0 * sp[static_cast<size_t> (k)].imag() / N;
+    }
+}
+
+void harmonicMagnitudes (const float* frame, int count, double* mag) noexcept
+{
+    std::vector<Cx> sp;
+    toSpectrum (frame, sp);
+    count = std::min (std::max (count, 0), N / 2 - 1);
+    mag[0] = sp[0].real() / N;
+    for (int k = 1; k <= count; ++k)
+        mag[k] = 2.0 * std::abs (sp[static_cast<size_t> (k)]) / N;
 }
 
 int frameCount (const Description& d) noexcept
