@@ -20,6 +20,7 @@
 #include "number.h"
 #include "sha256.h"
 #include "synthyboy/modulation.h"
+#include "synthyboy/tuning.h"
 #include "synthyboy/wavetable_render.h"
 #include "vital_content.h"
 #include "vital_import_internal.h"
@@ -836,8 +837,12 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
         }
     }
 
-    // ---- sample (noise) ------------------------------------------------------------------------------------------------------------
+    // ---- sample (noise or sample oscillator) ------------------------------------------------------------------------
     bool customSample = false;
+    int sampleMappedOsc = 0;
+    double sampleOn = 0.0, sampleLevel = 1.0, samplePan = 0.0, sampleDestination = 0.0;
+    double sampleTranspose = 0.0, sampleTune = 0.0, sampleRandomPhase = 0.0;
+    double sampleKeytrack = 1.0, sampleLoop = 0.0, sampleBounce = 0.0, sampleTransposeQuantize = 0.0;
     {
         const int sNode = c.member ("sample");
         if (sNode >= 0 && c.doc.nodes[static_cast<size_t> (sNode)].type == Type::object)
@@ -846,17 +851,82 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             const std::string sname = nn >= 0 && c.doc.nodes[static_cast<size_t> (nn)].type == Type::string
                 ? cleanText (c.doc.text (c.doc.nodes[static_cast<size_t> (nn)].str), 255, true) : std::string();
             customSample = ! sname.empty() && sname != "White Noise";
+
+            bool mm;
+            c.number (c.member ("sample_on"), sampleOn, mm);
+            c.number (c.member ("sample_level"), sampleLevel, mm);
+            c.number (c.member ("sample_pan"), samplePan, mm);
+            c.number (c.member ("sample_destination"), sampleDestination, mm);
+            c.number (c.member ("sample_transpose"), sampleTranspose, mm);
+            c.number (c.member ("sample_tune"), sampleTune, mm);
+            c.number (c.member ("sample_random_phase"), sampleRandomPhase, mm);
+            c.number (c.member ("sample_keytrack"), sampleKeytrack, mm);
+            c.number (c.member ("sample_loop"), sampleLoop, mm);
+            c.number (c.member ("sample_bounce"), sampleBounce, mm);
+            c.number (c.member ("sample_transpose_quantize"), sampleTransposeQuantize, mm);
+
+            const int ln = c.doc.find (sNode, "length"), rn = c.doc.find (sNode, "sample_rate");
+            double len = 0.0, sr = 44100.0;
+            c.number (ln, len, mm);
+            c.number (rn, sr, mm);
+
             if (customSample)
             {
-                double on = 0.0;
-                bool mm;
-                c.number (c.member ("sample_on"), on, mm);
-                const int ln = c.doc.find (sNode, "length"), rn = c.doc.find (sNode, "sample_rate");
-                double len = 0.0, sr = 0.0;
-                c.number (ln, len, mm);
-                c.number (rn, sr, mm);
-                c.item (on != 0.0 ? ItemKind::dropped : ItemKind::ignored, Reason::customSample, "noise", "sample", sname + " (" + num (len) + " samples, " + num (sr) + " Hz)",
-                        "noise.on", "Off", "custom_sample_unsupported");
+                if (opt.caps.sampleOsc)
+                {
+                    // Find the first oscillator that is off (default: osc1 on, osc2 off, osc3 off)
+                    int targetOsc = 0;
+                    for (int n = 1; n <= 3; ++n)
+                    {
+                        double onVal = (n == 1 ? 1.0 : 0.0);
+                        bool hasOn = false;
+                        const std::string name = "osc_" + std::to_string (n) + "_on";
+                        if (c.number (c.member (name.c_str()), onVal, hasOn) && onVal == 0.0)
+                        {
+                            targetOsc = n;
+                            break;
+                        }
+                        if (! hasOn && onVal == 0.0)
+                        {
+                            targetOsc = n;
+                            break;
+                        }
+                    }
+
+                    if (targetOsc > 0)
+                    {
+                        ImportedSample is;
+                        ContentNotes sampleNotes;
+                        if (parseVitalSample (c.doc, sNode, is, sampleNotes))
+                        {
+                            sampleMappedOsc = targetOsc;
+                            is.osc = targetOsc;
+                            res.samples.push_back (std::move (is));
+                            c.item (ItemKind::approximated, Reason::customSample, "osc" + std::to_string (targetOsc), "sample",
+                                    sname + " (" + num (len) + " samples, " + num (sr) + " Hz)",
+                                    "osc" + std::to_string (targetOsc) + ".type", "Sample", "sample_mapped_to_osc");
+
+                            if (sampleTransposeQuantize != 0.0)
+                                c.item (ItemKind::dropped, Reason::noEngineEquivalent, "osc" + std::to_string (targetOsc),
+                                        "sample_transpose_quantize", num (sampleTransposeQuantize), "", "", "transpose_quantize_unsupported");
+                        }
+                        else
+                        {
+                            c.item (sampleOn != 0.0 ? ItemKind::dropped : ItemKind::ignored, Reason::customSample, "noise", "sample",
+                                    sname + " (" + num (len) + " samples, " + num (sr) + " Hz)", "noise.on", "Off", "sample_audio_invalid");
+                        }
+                    }
+                    else
+                    {
+                        c.item (sampleOn != 0.0 ? ItemKind::dropped : ItemKind::ignored, Reason::limitExceeded, "noise", "sample",
+                                sname + " (" + num (len) + " samples, " + num (sr) + " Hz)", "", "", "all_oscillators_in_use");
+                    }
+                }
+                else
+                {
+                    c.item (sampleOn != 0.0 ? ItemKind::dropped : ItemKind::ignored, Reason::customSample, "noise", "sample",
+                            sname + " (" + num (len) + " samples, " + num (sr) + " Hz)", "noise.on", "Off", "custom_sample_unsupported");
+                }
             }
         }
     }
@@ -910,7 +980,15 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                 c.item (ItemKind::dropped, Reason::modSourceUnsupported, area, where, src + " -> " + dst + " amount " + num (amount), "", "", "source_not_exposed");
                 continue;
             }
-            const auto di = T.byControl.find (dst);
+            std::string actualDst = dst;
+            if (sampleMappedOsc > 0)
+            {
+                if (dst == "sample_level") actualDst = "osc_" + std::to_string (sampleMappedOsc) + "_level";
+                else if (dst == "sample_pan") actualDst = "osc_" + std::to_string (sampleMappedOsc) + "_pan";
+                else if (dst == "sample_transpose") actualDst = "osc_" + std::to_string (sampleMappedOsc) + "_transpose";
+                else if (dst == "sample_tune") actualDst = "osc_" + std::to_string (sampleMappedOsc) + "_tune";
+            }
+            const auto di = T.byControl.find (actualDst);
             int destChoice = 0;
             if (di != T.byControl.end() && T.info[static_cast<size_t> (di->second)].param >= 0)
                 destChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (T.info[static_cast<size_t> (di->second)].param)));
@@ -1113,6 +1191,53 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             ++rep.numDefaulted;
     }
 
+    // sample oscillator (when custom sample is mapped to an oscillator)
+    if (sampleMappedOsc > 0)
+    {
+        const std::string oscPrefix = "osc" + std::to_string (sampleMappedOsc) + ".";
+        if (const ParamInfo* typeParam = findParamByKey ((oscPrefix + "type").c_str()))
+            V.plain[findParamIndex (typeParam->id)] = 1.0f; // Sample
+
+        if (const ParamInfo* onParam = findParamByKey ((oscPrefix + "on").c_str()))
+            V.plain[findParamIndex (onParam->id)] = static_cast<float> (sampleOn != 0.0 ? 1.0 : 0.0);
+
+        if (const ParamInfo* lvlParam = findParamByKey ((oscPrefix + "level").c_str()))
+            V.plain[findParamIndex (lvlParam->id)] = constrainValue (*lvlParam, static_cast<float> (sampleLevel * sampleLevel * 100.0));
+
+        if (const ParamInfo* panParam = findParamByKey ((oscPrefix + "pan").c_str()))
+            V.plain[findParamIndex (panParam->id)] = constrainValue (*panParam, static_cast<float> (samplePan * 100.0));
+
+        if (const ParamInfo* destParam = findParamByKey ((oscPrefix + "destination").c_str()))
+        {
+            double dWant = std::floor (sampleDestination + 0.5);
+            if (dWant > 4.0 && dWant <= 14.0) dWant = 3.0; // Effects only
+            V.plain[findParamIndex (destParam->id)] = constrainValue (*destParam, static_cast<float> (dWant));
+        }
+
+        if (const ParamInfo* trParam = findParamByKey ((oscPrefix + "transpose").c_str()))
+            V.plain[findParamIndex (trParam->id)] = constrainValue (*trParam, static_cast<float> (std::floor (sampleTranspose + 0.5)));
+
+        if (const ParamInfo* tuneParam = findParamByKey ((oscPrefix + "tune").c_str()))
+            V.plain[findParamIndex (tuneParam->id)] = constrainValue (*tuneParam, static_cast<float> (sampleTune * 100.0));
+
+        if (const ParamInfo* randParam = findParamByKey ((oscPrefix + "random_phase").c_str()))
+            V.plain[findParamIndex (randParam->id)] = constrainValue (*randParam, static_cast<float> (sampleRandomPhase != 0.0 ? 100.0 : 0.0));
+
+        if (const ParamInfo* ktParam = findParamByKey ((oscPrefix + "sample.keytrack").c_str()))
+            V.plain[findParamIndex (ktParam->id)] = static_cast<float> (sampleKeytrack != 0.0 ? 1.0 : 0.0);
+
+        if (const ParamInfo* loopParam = findParamByKey ((oscPrefix + "sample.loop_mode").c_str()))
+        {
+            float lmode = 0.0f; // One-shot
+            if (sampleLoop != 0.0)
+                lmode = sampleBounce != 0.0 ? 3.0f : 1.0f;
+            V.plain[findParamIndex (loopParam->id)] = lmode;
+        }
+
+        if (const ParamInfo* noiseOn = findParamByKey ("noise.on"))
+            V.plain[findParamIndex (noiseOn->id)] = 0.0f;
+    }
+
     // oscillator / sample / sub / tuning items that have no counterpart
     {
         const auto isOn = [&] (const char* control) { double v = 0.0; bool m; return c.number (c.member (control), v, m) && v != 0.0; };
@@ -1161,6 +1286,8 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                                   "mpe_enabled", "bypass", "beats_per_minute", "view_spectrogram", "pitch_wheel", "mod_wheel", "compressor_low_band_unused",
                                   "filter_fx_filter_input" })
         {
+            if (sampleMappedOsc > 0 && std::strncmp (name, "sample_", 7) == 0)
+                continue;
             double v;
             bool m;
             if (c.number (c.member (name), v, m))
@@ -1392,6 +1519,27 @@ std::string serializeImportedPreset (const ImportResult& result, const PresetMet
         }
         content.lfoShapes.push_back (std::move (cls));
     }
+
+    for (const auto& is : result.samples)
+    {
+        ContentSample cs;
+        cs.osc = is.osc;
+        cs.ref.sha256 = is.sha256;
+        cs.ref.name = is.name;
+        cs.sampleRate = is.sampleRate;
+        cs.frames = is.numFrames;
+        cs.channels = is.channels;
+        cs.slices = is.slices;
+        if (const auto* ref = contentRefs.findSample (is.osc))
+        {
+            cs.ref.pack = ref->pack;
+            cs.ref.file = ref->file;
+        }
+        content.samples.push_back (std::move (cs));
+    }
+
+    if (result.tuning.present)
+        content.tuning = result.tuning;
 
     std::string s = savePreset (finalMeta, result.values, content, true);
     if (s.empty() || s.back() != '}')

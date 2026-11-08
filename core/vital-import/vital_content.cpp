@@ -11,6 +11,7 @@
 #include <fstream>
 
 #include "number.h"
+#include "sha256.h"
 #include "synthyboy/vital_import.h"
 
 namespace synthyboy
@@ -355,6 +356,154 @@ bool parseWavetable (const Doc& doc, int node, ParsedWavetable& out, ContentNote
     }
     return true;
 }
+
+std::vector<uint8_t> createWav16 (const int16_t* pcmLeft, const int16_t* pcmRight, size_t numFrames, int sampleRate, int channels)
+{
+    std::vector<uint8_t> b;
+    if (pcmLeft == nullptr || numFrames == 0 || channels < 1 || channels > 2)
+        return b;
+
+    const uint32_t dataSize = static_cast<uint32_t> (numFrames * static_cast<size_t> (channels) * sizeof (int16_t));
+    const uint32_t totalSize = 36 + dataSize;
+    b.reserve (44 + dataSize);
+
+    const auto put32 = [&] (uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (v >> (8 * i))); };
+    const auto put16 = [&] (uint16_t v) { b.push_back (static_cast<uint8_t> (v)); b.push_back (static_cast<uint8_t> (v >> 8)); };
+    const auto tag = [&] (const char* t) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (t[i])); };
+
+    tag ("RIFF");
+    put32 (totalSize);
+    tag ("WAVE");
+
+    tag ("fmt ");
+    put32 (16);
+    put16 (1); // PCM
+    put16 (static_cast<uint16_t> (channels));
+    put32 (static_cast<uint32_t> (sampleRate));
+    put32 (static_cast<uint32_t> (sampleRate * channels * 2));
+    put16 (static_cast<uint16_t> (channels * 2)); // block align
+    put16 (16); // bits per sample
+
+    tag ("data");
+    put32 (dataSize);
+
+    for (size_t i = 0; i < numFrames; ++i)
+    {
+        put16 (static_cast<uint16_t> (pcmLeft[i]));
+        if (channels == 2)
+            put16 (static_cast<uint16_t> (pcmRight != nullptr ? pcmRight[i] : pcmLeft[i]));
+    }
+    return b;
+}
+
+bool parseVitalSample (const json::Doc& doc, int node, ImportedSample& out, ContentNotes& notes)
+{
+    if (node < 0 || doc.nodes[static_cast<size_t> (node)].type != Type::object)
+        return false;
+
+    const int nameNode = doc.find (node, "name");
+    std::string sname = stringOf (doc, nameNode, 255);
+    if (sname.empty())
+        sname = "sample";
+
+    const double rawLen = numField (doc, node, -1, "length", 0.0);
+    const double rawSr = numField (doc, node, -1, "sample_rate", 44100.0);
+    const int sampleRate = static_cast<int> (clampd (rawSr, 1000.0, 192000.0));
+
+    const int sn = doc.find (node, "samples");
+    if (sn < 0)
+        return false;
+
+    std::vector<int16_t> pcmLeft;
+    const json::Node& snNode = doc.nodes[static_cast<size_t> (sn)];
+    if (snNode.type == Type::string)
+    {
+        std::vector<uint8_t> rawBytes;
+        if (! decodeField (doc, sn, rawBytes, notes))
+            return false;
+
+        const size_t targetLen = rawLen > 0.0 ? static_cast<size_t> (rawLen) : 0;
+        if (targetLen > 0 && rawBytes.size() >= targetLen * 4)
+        {
+            // float32 little endian
+            pcmLeft.resize (targetLen);
+            const float* fptr = reinterpret_cast<const float*> (rawBytes.data());
+            for (size_t i = 0; i < targetLen; ++i)
+                pcmLeft[i] = static_cast<int16_t> (std::lround (std::max (-1.0f, std::min (1.0f, fptr[i])) * 32767.0f));
+        }
+        else
+        {
+            // int16 little endian
+            const size_t frames = targetLen > 0 ? std::min (targetLen, rawBytes.size() / 2) : (rawBytes.size() / 2);
+            if (frames == 0)
+                return false;
+            pcmLeft.resize (frames);
+            for (size_t i = 0; i < frames; ++i)
+                pcmLeft[i] = static_cast<int16_t> (static_cast<uint16_t> (rawBytes[i * 2] | (rawBytes[i * 2 + 1] << 8)));
+        }
+    }
+    else if (snNode.type == Type::array)
+    {
+        for (int e = snNode.first; e >= 0; e = doc.nodes[static_cast<size_t> (e)].next)
+        {
+            double v;
+            if (numberOf (doc, e, v))
+                pcmLeft.push_back (static_cast<int16_t> (std::lround (std::max (-1.0, std::min (1.0, v)) * 32767.0)));
+        }
+    }
+    else
+    {
+        return false;
+    }
+
+    if (pcmLeft.empty())
+        return false;
+
+    std::vector<int16_t> pcmRight;
+    const int stn = doc.find (node, "samples_stereo");
+    if (stn >= 0)
+    {
+        const json::Node& stNode = doc.nodes[static_cast<size_t> (stn)];
+        if (stNode.type == Type::string)
+        {
+            std::vector<uint8_t> rawBytes;
+            if (decodeField (doc, stn, rawBytes, notes))
+            {
+                if (rawBytes.size() >= pcmLeft.size() * 4)
+                {
+                    pcmRight.resize (pcmLeft.size());
+                    const float* fptr = reinterpret_cast<const float*> (rawBytes.data());
+                    for (size_t i = 0; i < pcmLeft.size(); ++i)
+                        pcmRight[i] = static_cast<int16_t> (std::lround (std::max (-1.0f, std::min (1.0f, fptr[i])) * 32767.0f));
+                }
+                else if (rawBytes.size() >= pcmLeft.size() * 2)
+                {
+                    pcmRight.resize (pcmLeft.size());
+                    for (size_t i = 0; i < pcmLeft.size(); ++i)
+                        pcmRight[i] = static_cast<int16_t> (static_cast<uint16_t> (rawBytes[i * 2] | (rawBytes[i * 2 + 1] << 8)));
+                }
+            }
+        }
+        else if (stNode.type == Type::array)
+        {
+            for (int e = stNode.first; e >= 0; e = doc.nodes[static_cast<size_t> (e)].next)
+            {
+                double v;
+                if (numberOf (doc, e, v))
+                    pcmRight.push_back (static_cast<int16_t> (std::lround (std::max (-1.0, std::min (1.0, v)) * 32767.0)));
+            }
+        }
+    }
+
+    const int channels = (! pcmRight.empty() && pcmRight.size() == pcmLeft.size()) ? 2 : 1;
+    out.name = std::move (sname);
+    out.numFrames = static_cast<int> (pcmLeft.size());
+    out.sampleRate = sampleRate;
+    out.channels = channels;
+    out.wavBytes = createWav16 (pcmLeft.data(), channels == 2 ? pcmRight.data() : nullptr, pcmLeft.size(), sampleRate, channels);
+    out.sha256 = Sha256::hashBufferHex (out.wavBytes.data(), out.wavBytes.size());
+    return true;
+}
 } // namespace vitalimport
 
 UserWavetableStore::UserWavetableStore (const std::string& packDirectory)
@@ -451,6 +600,67 @@ bool UserWavetableStore::addWavetable (const ImportedWavetable& wt, std::string&
     cpf.path = relPath;
     cpf.sha256 = wt.sha256;
     cpf.size = byteSize;
+    info_.files.push_back (std::move (cpf));
+
+    writeContentPackManifest (packDir_, info_);
+    fileOut = relPath;
+    return true;
+}
+
+bool UserWavetableStore::hasSample (const std::string& sha256)
+{
+    if (sha256.empty())
+        return false;
+    for (const auto& f : info_.files)
+        if (f.sha256 == sha256)
+            return true;
+    return false;
+}
+
+bool UserWavetableStore::addSample (const ImportedSample& s, std::string& packOut, std::string& fileOut)
+{
+    packOut = info_.id.empty() ? "user.imported-vital" : info_.id;
+
+    for (const auto& f : info_.files)
+    {
+        if (f.sha256 == s.sha256)
+        {
+            fileOut = f.path;
+            return true;
+        }
+    }
+
+    std::string safeName;
+    for (char c : s.name)
+    {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')
+            safeName += c;
+        else if (c == ' ')
+            safeName += '_';
+    }
+    if (safeName.empty())
+        safeName = "sample";
+
+    const std::string shortHash = s.sha256.size() >= 12 ? s.sha256.substr (0, 12) : s.sha256;
+    const std::string relPath = "samples/" + safeName + "_" + shortHash + ".wav";
+
+    std::filesystem::path full = std::filesystem::path (packDir_) / relPath;
+    std::error_code ec;
+    std::filesystem::create_directories (full.parent_path(), ec);
+
+    std::ofstream out (full.string(), std::ios::binary);
+    if (! out)
+        return false;
+
+    out.write (reinterpret_cast<const char*> (s.wavBytes.data()), static_cast<std::streamsize> (s.wavBytes.size()));
+    out.close();
+    if (! out.good())
+        return false;
+
+    ContentPackFile cpf;
+    cpf.path = relPath;
+    cpf.sha256 = s.sha256;
+    cpf.size = s.wavBytes.size();
     info_.files.push_back (std::move (cpf));
 
     writeContentPackManifest (packDir_, info_);

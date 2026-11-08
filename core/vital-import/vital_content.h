@@ -11,6 +11,8 @@
 
 namespace synthyboy
 {
+struct ImportedSample;
+
 namespace vitalimport
 {
 /** What went wrong while parsing a piece of content; turned into report items by the caller. */
@@ -43,5 +45,9 @@ struct ParsedLfo
 bool parseWavetable (const json::Doc& doc, int node, ParsedWavetable& out, ContentNotes& notes);
 /** The LFO line object, sanitised as in design 1.3.2. False when invalid (fewer than 2 usable points). */
 bool parseLfoLine (const json::Doc& doc, int node, ParsedLfo& out, ContentNotes& notes);
+/** Decodes embedded Vital sample object (base64 or float array) and creates 16-bit PCM WAV bytes in out. */
+bool parseVitalSample (const json::Doc& doc, int node, ImportedSample& out, ContentNotes& notes);
+/** Creates standard 16-bit PCM RIFF/WAVE file bytes in memory. */
+std::vector<uint8_t> createWav16 (const int16_t* pcmLeft, const int16_t* pcmRight, size_t numFrames, int sampleRate, int channels);
 } // namespace vitalimport
 } // namespace synthyboy
