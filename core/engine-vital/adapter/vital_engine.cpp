@@ -117,7 +117,6 @@ float clampf (float v, float lo, float hi) noexcept
 constexpr int kWorkQueueCapacity = 4096;            // entries of the dependency search queues of a router (a pointer each)
 constexpr int kNumOsc = 3;
 constexpr int kNumLfo = 10;
-constexpr int kNumEnv = 6;
 constexpr int kNumMacro = 8;
 constexpr int kBakedPoints = 2048; // LineGenerator::kDefaultResolution
 
@@ -504,6 +503,7 @@ public:
             engine->process (kChunk);
         engine->allSoundsOff();
         activeCount.store (0, std::memory_order_relaxed);
+        latencyCache.store (engine->latencyFrames(), std::memory_order_relaxed);
     }
 
     void setParam (uint32_t id, float plain) noexcept override
@@ -575,6 +575,7 @@ public:
             handleEvent (events[next++]);
 
         activeCount.store (engine->getNumActiveVoices(), std::memory_order_relaxed);
+        latencyCache.store (engine->latencyFrames(), std::memory_order_relaxed);
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -651,6 +652,11 @@ public:
         return activeCount.load (std::memory_order_relaxed);
     }
 
+    int latencySamples() const noexcept override
+    {
+        return latencyCache.load (std::memory_order_relaxed);
+    }
+
     bool configured() const noexcept { return engine != nullptr && controlsComplete; }
 
     double controlValue (const char* name) const noexcept
@@ -720,6 +726,9 @@ private:
         qOversampling.store (q.oversampling >= 2 ? 2 : 1, std::memory_order_relaxed);
         qInterpolation.store (q.interpolation == Interpolation::spectral ? 1 : 0, std::memory_order_relaxed);
         qFxMask.store (q.fxMask & kFxAll, std::memory_order_relaxed);
+        qRealtime.store (q.realtime, std::memory_order_relaxed);
+        if (engine != nullptr) // an atomic flag of the module; takes effect at once
+            sbvital::setConvolveRealtime (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), q.realtime);
         qGeneration.fetch_add (1, std::memory_order_release);
     }
 
@@ -797,6 +806,7 @@ private:
             const std::lock_guard<std::mutex> lock (snapshotMutex);
             sbvital::setConvolveImpulse (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), impulse);
         }
+        sbvital::setConvolveRealtime (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), qRealtime.load (std::memory_order_relaxed));
         engine->setSampleRate (static_cast<int> (std::lround (sampleRate)));
         engine->setBpm (120.0f);
         controlMap = engine->getControls();
@@ -1171,8 +1181,9 @@ private:
             const auto& ix = sampleParams[static_cast<size_t> (i)];
             const auto P = [&] (int what) { const int idx = ix[static_cast<size_t> (what)]; return idx >= 0 ? params[static_cast<size_t> (idx)].load (std::memory_order_relaxed) : 0.0f; };
             const SampleEntry* entry = activeSnapshot != nullptr && activeSnapshot->sample[static_cast<size_t> (i)].present ? &activeSnapshot->sample[static_cast<size_t> (i)] : nullptr;
-            const bool typeSample = P (kSpType) > 0.5f;
-            sh->view = typeSample && entry != nullptr ? &entry->view : nullptr; // Sample without a sample in the content: a silent oscillator
+            // The view stays set while the type is Wavetable: the sample oscillator keeps playing during the 10 ms crossfade of a type change
+            // (OscillatorModule); Sample without a sample in the content: a silent oscillator
+            sh->view = entry != nullptr ? &entry->view : nullptr;
             sh->normalize_gain = entry != nullptr ? entry->data.normalizeGain() : 1.0f;
             sh->start = P (kSpStart) * 0.01f;
             sh->end = P (kSpEnd) * 0.01f;
@@ -1866,6 +1877,7 @@ private:
     // ---- state ----------------------------------------------------------------------------------------------------
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> activeCount { 0 };
+    std::atomic<int> latencyCache { 0 };
 
     struct NoteIdSlot
     {
@@ -1878,6 +1890,7 @@ private:
 
     std::atomic<int> qVoices { 8 }, qUnison { 16 }, qOversampling { 2 }, qInterpolation { 1 };
     std::atomic<uint32_t> qFxMask { kFxAll };
+    std::atomic<bool> qRealtime { false };
     std::atomic<uint32_t> qGeneration { 0 };
 
     // audio thread (and prepare) only

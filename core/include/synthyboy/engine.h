@@ -92,6 +92,12 @@ public:
 
     /** Number of sounding voices (including released ones that are still fading out) after the last process(). */
     virtual int activeVoices() const noexcept = 0;
+
+    /** Latency of the output in samples at the host rate, as of the last process() (any thread). engine-vital: Bode's Hilbert filter
+        delays the signal path it sits in, the engine delays every other path to match (the Direct output, the other buses, the bands of
+        a splitter, the voices that bypass the rack), so the whole output is late by this value and a host can compensate it. 0 without
+        such an effect. It changes when Bode is switched on or off or moved to another rack. */
+    virtual int latencySamples() const noexcept { return 0; }
 };
 
 /** The engine written for this project (always built; the only engine on iOS). */

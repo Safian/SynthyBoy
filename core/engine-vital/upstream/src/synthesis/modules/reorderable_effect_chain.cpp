@@ -99,12 +99,15 @@ namespace sbvital {
   ReorderableEffectChain::ReorderableEffectChain(const Output* beats_per_second, const Output* keytrack) :
       sbvital::SynthModule(kNumInputs, 1), equalizer_memory_(nullptr),
       beats_per_second_(beats_per_second), keytrack_(keytrack), main_fx_bypass_(nullptr), direct_level_(nullptr),
-      last_direct_gain_(1.0f) {
+      last_direct_gain_(1.0f), latency_(std::make_shared<std::atomic<int>>(0)) {
     for (int i = 0; i < kNumModules; ++i) {
       SynthModule* effect_module = createEffectModule(i);
       VITAL_ASSERT(effect_module);
 
       splitters_[i] = dynamic_cast<BandSplitterModule*>(effect_module);
+      if (splitters_[i] != nullptr)
+        for (auto& delay : band_delay_[i])
+          delay = std::make_shared<AlignDelay>();
       addSubmodule(effect_module);
       addProcessor(effect_module);
       effects_on_[i] = createBaseControl(std::string(kModuleNames[i]) + "_on");
@@ -208,6 +211,23 @@ namespace sbvital {
     return false;
   }
 
+  int ReorderableEffectChain::rackLatency(int rack) const {
+    int latency = 0;
+    for (int m = 0; m < kNumModules; ++m) {
+      if (effect_rack_[m] != rack || !isModuleOn(m))
+        continue;
+      if (splitters_[m] != nullptr) {
+        int slowest = 0;
+        for (int band = 0; band < splitters_[m]->numBands() && band < 3; ++band)
+          slowest = std::max(slowest, rackLatency(splitters_[m]->bandRack(band)));
+        latency += slowest;
+      }
+      else
+        latency += serumModuleLatency(effects_[m]);
+    }
+    return latency;
+  }
+
   // The signal after the effects of one rack, in the order of the chain. A splitter in the rack splits the signal, runs the effects of
   // its band racks on the bands and sums them again at its place in the order. Returns `in` itself when nothing processes.
   const poly_float* ReorderableEffectChain::runRack(int rack, const poly_float* in, int num_samples) {
@@ -222,8 +242,14 @@ namespace sbvital {
         BandSplitterModule* splitter = splitters_[index];
         splitter->split(current, num_samples);
         const poly_float* processed[3] = { nullptr, nullptr, nullptr };
+        int slowest = 0;
         for (int band = 0; band < splitter->numBands() && band < 3; ++band)
+          slowest = std::max(slowest, rackLatency(splitter->bandRack(band)));
+        for (int band = 0; band < splitter->numBands() && band < 3; ++band) {
           processed[band] = runRack(splitter->bandRack(band), splitter->bandBuffer(band), num_samples);
+          // the bands are summed again: the faster ones wait for the slowest (phase aligned bands)
+          processed[band] = band_delay_[index][band]->run(processed[band], num_samples, slowest - rackLatency(splitter->bandRack(band)));
+        }
         splitter->merge(processed, num_samples);
         current = splitter->output(0)->buffer;
       }
@@ -246,6 +272,29 @@ namespace sbvital {
     if (destination[0] == 2 && destination[1] == 2)
       destination[1] = 0;   // both want the other bus: bus 2 goes to the main bus, no feedback
     const bool bypass[2] = { bus_fx_bypass_[0]->value() > 0.5f, bus_fx_bypass_[1]->value() > 0.5f };
+    const bool main_bypass = main_fx_bypass_->value() > 0.5f;
+
+    // latency compensation: the latency of every path from the configuration (not from what is audible, so it does not jump with the
+    // signal) and the delays that bring the paths together in phase (see latencyFrames())
+    const int first = destination[1] == 2 ? 1 : 0;   // bus 2 feeds bus 1: bus 2 runs first
+    int bus_latency[2] = { 0, 0 };   // latency of the output of each bus
+    int bus_feed_latency = 0;        // latency of what the second bus gets from the first
+    {
+      const int second = 1 - first;
+      bus_latency[first] = bypass[first] ? 0 : rackLatency(kBus1Rack + first);
+      bus_feed_latency = destination[first] == 2 ? bus_latency[first] : 0;
+      bus_latency[second] = bus_feed_latency + (bypass[second] ? 0 : rackLatency(kBus1Rack + second));
+    }
+    int main_in_latency = 0;
+    for (int b = 0; b < 2; ++b)
+      if (destination[b] == 0)
+        main_in_latency = std::max(main_in_latency, bus_latency[b]);
+    const int main_latency = main_in_latency + (main_bypass ? 0 : rackLatency(kMain));
+    int total_latency = main_latency;
+    for (int b = 0; b < 2; ++b)
+      if (destination[b] == 1)
+        total_latency = std::max(total_latency, bus_latency[b]);
+    latency_->store(total_latency, std::memory_order_relaxed);
 
     // the buses: sends -> (the other bus) -> rack -> level
     const poly_float* bus_signal[2] = { nullptr, nullptr };
@@ -254,15 +303,15 @@ namespace sbvital {
     float bus_gain[2];
     for (int b = 0; b < 2; ++b)
       bus_gain[b] = dbToGain(bus_level_[b]->buffer[0][0]);
-    const int first = destination[1] == 2 ? 1 : 0;   // bus 2 feeds bus 1: bus 2 runs first
     for (int step = 0; step < 2; ++step) {
       const int b = step == 0 ? first : 1 - first;
       const int other = 1 - b;
-      const poly_float* source = bus_in[b];
-      bool live = !isSilent(bus_in[b], num_samples);
+      const poly_float* source = step == 1 ? bus_in_delay_[b].run(bus_in[b], num_samples, bus_feed_latency)   // waits for what the first bus sends
+                                           : bus_in[b];
+      bool live = !isSilent(source, num_samples);
       if (step == 1 && destination[other] == 2 && bus_live[other]) {   // the other bus ran first and sends into this one
         for (int i = 0; i < num_samples; ++i)
-          bus_mix_[b][i] = bus_in[b][i] + bus_result[other][i];
+          bus_mix_[b][i] = source[i] + bus_result[other][i];
         source = bus_mix_[b].data();
         live = true;
       }
@@ -283,25 +332,37 @@ namespace sbvital {
       bus_live[b] = true;
     }
 
+    // the buses wait for the slowest path where the paths come together: at Main and at the output
+    const poly_float* bus_aligned[2] = { bus_signal[0], bus_signal[1] };
+    for (int b = 0; b < 2; ++b) {
+      const int wait = destination[b] == 0 ? main_in_latency - bus_latency[b] : (destination[b] == 1 ? total_latency - bus_latency[b] : 0);
+      if (bus_live[b])
+        bus_aligned[b] = bus_out_delay_[b].run(bus_signal[b], num_samples, wait);
+      else
+        bus_out_delay_[b].reset();   // a silent bus leaves no history behind
+    }
+
     // the main bus: voices + the buses that go to Main, then the Main rack
-    const poly_float* main_signal = main_in;
+    const poly_float* main_signal = main_in_delay_.run(main_in, num_samples, main_in_latency);
     bool main_mixed = false;
     for (int b = 0; b < 2; ++b)
       if (bus_live[b] && destination[b] == 0) {
         if (!main_mixed) {
-          utils::copyBuffer(main_mix_.data(), main_in, num_samples);
+          utils::copyBuffer(main_mix_.data(), main_signal, num_samples);
           main_mixed = true;
         }
         for (int i = 0; i < num_samples; ++i)
-          main_mix_[i] += bus_signal[b][i];
+          main_mix_[i] += bus_aligned[b][i];
       }
     if (main_mixed)
       main_signal = main_mix_.data();
-    if (main_fx_bypass_->value() <= 0.5f)
+    if (!main_bypass)
       main_signal = runRack(kMain, main_signal, num_samples);
+    main_signal = main_out_delay_.run(main_signal, num_samples, total_latency - main_latency);
 
     // the direct output: no rack, scaled by its level, added at the end
-    bool direct_live = !isSilent(direct_in, num_samples);
+    const poly_float* direct_signal = direct_in_delay_.run(direct_in, num_samples, total_latency);
+    bool direct_live = !isSilent(direct_signal, num_samples);
     for (int b = 0; b < 2; ++b)
       direct_live = direct_live || (bus_live[b] && destination[b] == 1);
     poly_float* out = output()->buffer;
@@ -314,10 +375,10 @@ namespace sbvital {
       const float step_gain = (target - last_direct_gain_) / static_cast<float>(num_samples);
       float gain = last_direct_gain_;
       for (int i = 0; i < num_samples; ++i) {
-        poly_float direct = direct_in[i];
+        poly_float direct = direct_signal[i];
         for (int b = 0; b < 2; ++b)
           if (bus_live[b] && destination[b] == 1)
-            direct += bus_signal[b][i];
+            direct += bus_aligned[b][i];
         gain += step_gain;
         out[i] = main_signal[i] + (gain == 1.0f ? direct : direct * gain);
       }

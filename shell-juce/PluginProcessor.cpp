@@ -173,7 +173,19 @@ void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     }
 
     // the quality tier of this build (CMake SYNTHYBOY_DEFAULT_TIER, high on desktop); a tier only caps, it never changes parameters
-    engine->prepare (sampleRate, samplesPerBlock, synthyboy::qualityForTier (synthyboy::kDefaultTier));
+    // Live playback never waits for a helper thread of the engine; an offline bounce (isNonRealtime) is deterministic (Quality::realtime).
+    auto quality = synthyboy::qualityForTier (synthyboy::kDefaultTier);
+    quality.realtime = ! isNonRealtime();
+    engine->prepare (sampleRate, samplesPerBlock, quality);
+    setLatencySamples (engine->latencySamples());
+}
+
+void SynthyBoyProcessor::setNonRealtime (bool isNonRealtime) noexcept
+{
+    juce::AudioProcessor::setNonRealtime (isNonRealtime);
+    auto quality = synthyboy::qualityForTier (synthyboy::kDefaultTier);
+    quality.realtime = ! isNonRealtime;
+    engine->setQuality (quality);
 }
 
 bool SynthyBoyProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -248,6 +260,11 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     engine->process (events.data(), numEvents, buffer.getWritePointer (0),
                      numChannels > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
+
+    // Bode's latency (the engine delays every other path to match): tell the host when it changes
+    const int latency = engine->latencySamples();
+    if (latency != getLatencySamples())
+        setLatencySamples (latency);
 }
 
 double SynthyBoyProcessor::getTailLengthSeconds() const

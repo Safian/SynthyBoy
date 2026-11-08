@@ -449,3 +449,46 @@ TEST (sample_oscillator_survives_content_replacement_and_extreme_settings)
     CHECK (sbtest::allFinite (out.left) && sbtest::allFinite (more.left) && sbtest::allFinite (more.right));
     CHECK (sbtest::peak (more.left) < 4.0f);
 }
+
+TEST (oscillator_type_change_under_a_sounding_note_crossfades_in_10_ms)
+{
+    // a smooth sine table (user wavetable) held at 110 Hz; the type switches to Sample (and back) between two blocks. A hard switch cuts
+    // the sine at its current value (a step of up to the peak); the 10 ms crossfade leaves no step larger than the fade slope.
+    std::vector<float> table (2048);
+    for (size_t i = 0; i < table.size(); ++i)
+        table[i] = 0.8f * static_cast<float> (std::sin (2.0 * kPi * static_cast<double> (i) / 2048.0));
+    Content c;
+    c.table (table);
+    c.sample (sine (330.0, 1.0));
+
+    const auto maxStep = [] (const std::vector<float>& v, size_t from, size_t to)
+    {
+        float m = 0.0f;
+        for (size_t i = from + 1; i < to; ++i)
+            m = std::max (m, std::fabs (v[i] - v[i - 1]));
+        return m;
+    };
+    for (const bool toSample : { true, false })
+    {
+        auto e = makeVital();
+        c.apply (*e);
+        sampleOsc (*e);
+        setByKey (*e, "osc1.wavetable", 13.0f);
+        setByKey (*e, "osc1.type", toSample ? 0.0f : 1.0f);
+        setByKey (*e, "env1.attack", 0.0f);
+        setByKey (*e, "env1.release", 500.0f);
+        std::vector<float> all;
+        const auto append = [&] (const sbtest::Rendered& r) { all.insert (all.end(), r.left.begin(), r.left.end()); };
+        append (sbtest::render (*e, { noteOn (0, 45) }, 9984, 256));
+        const size_t switchAt = all.size();
+        setByKey (*e, "osc1.type", toSample ? 1.0f : 0.0f);
+        append (sbtest::render (*e, {}, 4096, 256));
+        const float peak = sbtest::peak (all);
+        const float slope = maxStep (all, 2000, 4000); // steepest step of the plain sine
+        const float stepAfter = maxStep (all, switchAt - 1, switchAt + 2048);
+        std::printf ("    %s: peak %.3f, plain step %.5f, step around the switch %.5f, value at the switch %.3f\n", toSample ? "wavetable -> sample" : "sample -> wavetable",
+                     static_cast<double> (peak), static_cast<double> (slope), static_cast<double> (stepAfter), static_cast<double> (all[switchAt - 1]));
+        CHECK (peak > 0.05f);
+        CHECK (stepAfter < 2.5f * slope + peak / 200.0f);
+    }
+}

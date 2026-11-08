@@ -22,6 +22,9 @@
 
 #include "synth_constants.h"
 
+#include <algorithm>
+#include <atomic>
+#include <memory>
 #include <vector>
 
 namespace sbvital {
@@ -40,6 +43,38 @@ namespace sbvital {
       virtual const poly_float* bandBuffer(int band) const = 0;
       /** Sums the processed bands into output (0) (bypassed bands pass their unprocessed signal or nothing, the level is applied). */
       virtual void merge(const poly_float* const* processed, int num_samples) = 0;
+  };
+
+  /** A fixed delay (at most kMaxDelay samples) that aligns a signal path with a slower one (latency compensation of the chain). */
+  class AlignDelay {
+    public:
+      static constexpr int kRing = 256;
+      static constexpr int kMaxDelay = kRing - 1;
+
+      AlignDelay() : ring_(kRing, poly_float(0.0f)), out_(kMaxBufferSize * kMaxOversample, poly_float(0.0f)) { }
+
+      /** `in` delayed by `delay` samples (`in` itself for 0). A change of the delay clears the history. */
+      const poly_float* run(const poly_float* in, int num_samples, int delay) {
+        delay = std::max(0, std::min(kMaxDelay, delay));
+        if (delay != delay_) {
+          delay_ = delay;
+          reset();
+        }
+        if (delay == 0)
+          return in;
+        for (int i = 0; i < num_samples; ++i) {
+          ring_[pos_] = in[i];
+          out_[i] = ring_[(pos_ - delay) & (kRing - 1)];
+          pos_ = (pos_ + 1) & (kRing - 1);
+        }
+        return out_.data();
+      }
+
+      void reset() { std::fill(ring_.begin(), ring_.end(), poly_float(0.0f)); }
+
+    private:
+      std::vector<poly_float> ring_, out_;
+      int pos_ = 0, delay_ = 0;
   };
 
   class ReorderableEffectChain : public SynthModule {
@@ -79,6 +114,9 @@ namespace sbvital {
       int rackOf(int module) const;
       /** The module at position `position` of the order (a permutation of 0 .. 15; an invalid one is the identity). */
       int moduleAt(int position) const { return effect_order_[position]; }
+      /** The latency of the chain output in samples of the chain's (oversampled) rate: the longest signal path (Bode's Hilbert filter); every
+          other path (the Direct output, the buses, the bands of a splitter, the voices that bypass a rack) is delayed to match it. */
+      int latencyFrames() const { return latency_->load(std::memory_order_relaxed); }
 
     protected:
       int note_counter_ = 0;
@@ -86,6 +124,7 @@ namespace sbvital {
       void refreshConfiguration();
       const poly_float* runRack(int rack, const poly_float* in, int num_samples);
       bool rackHasEnabledEffects(int rack) const;
+      int rackLatency(int rack) const;   // the latency a signal gets passing through the rack (enabled modules, the slowest band of a splitter)
       bool isModuleOn(int module) const { return effects_on_[module]->value() > 0.5f; }
 
       const StereoMemory* equalizer_memory_;
@@ -107,6 +146,9 @@ namespace sbvital {
       float last_bus_gain_[2];
       float last_direct_gain_;
 
+      std::shared_ptr<std::atomic<int>> latency_;
+      AlignDelay main_in_delay_, main_out_delay_, direct_in_delay_, bus_in_delay_[2], bus_out_delay_[2];
+      std::shared_ptr<AlignDelay> band_delay_[kNumModules][3];
       std::vector<poly_float> main_mix_, bus_mix_[2], bus_out_[2], direct_mix_;
 
       JUCE_LEAK_DETECTOR(ReorderableEffectChain)

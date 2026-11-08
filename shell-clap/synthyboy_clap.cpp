@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <atomic>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -64,12 +65,14 @@ struct SynthyBoyClap
     double sampleRate = 48000.0;
     uint32_t maxBlockSize = 512;
     bool active = false;
+    std::atomic<int> reportedLatency { 0 };   // the latency the host was told (ext_latency_get)
     bool processing = false;
 
     SynthyBoyClap (const clap_host_t* h)
         : host (h), values (ParamValues::defaults()), quality (qualityForTier (Tier::high))
     {
         events.reserve (256);
+        quality.realtime = true; // live: the audio thread never waits for the engine's helper thread (Quality::realtime)
 #if SYNTHYBOY_HAS_VITAL
         engine = createEngine (EngineKind::vital);
 #else
@@ -255,6 +258,14 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
 
         self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
                                outL, outR, static_cast<int> (process->frames_count));
+        // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart
+        const int latency = self->engine->latencySamples();
+        if (latency != self->reportedLatency.load (std::memory_order_relaxed))
+        {
+            self->reportedLatency.store (latency, std::memory_order_relaxed);
+            if (self->host != nullptr && self->host->request_restart != nullptr)
+                self->host->request_restart (self->host);
+        }
     }
 
     return (self->engine->activeVoices() > 0) ? CLAP_PROCESS_CONTINUE : CLAP_PROCESS_SLEEP;
@@ -492,9 +503,12 @@ const clap_plugin_voice_info_t s_voice_info = {
 };
 
 // latency & tail
-uint32_t ext_latency_get (const clap_plugin_t*) noexcept
+uint32_t ext_latency_get (const clap_plugin_t* plugin) noexcept
 {
-    return 0;
+    auto* self = static_cast<SynthyBoyClap*> (plugin->plugin_data);
+    const int latency = self->engine ? self->engine->latencySamples() : 0;
+    self->reportedLatency.store (latency, std::memory_order_relaxed);
+    return static_cast<uint32_t> (latency);
 }
 
 const clap_plugin_latency_t s_latency = {

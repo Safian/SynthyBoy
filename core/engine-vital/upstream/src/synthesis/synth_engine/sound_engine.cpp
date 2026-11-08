@@ -389,6 +389,11 @@ namespace sbvital {
     return voice_handler_->getSampleShared(index);
   }
 
+  int SoundEngine::latencyFrames() const {
+    const int oversample = std::max(1, effect_chain_->getOversampleAmount());
+    return (effect_chain_->latencyFrames() + oversample - 1) / oversample;
+  }
+
   SynthModule* SoundEngine::getEffectModule(int index) {
     return effect_chain_->getModule(index);
   }

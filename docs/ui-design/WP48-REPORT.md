@@ -23,9 +23,9 @@ Bits set: `kCapSampleOsc`, `kCapUserWavetable`, `kCapWarp2`. Tests: `core/engine
 
 ### Differences / limits (not hidden)
 
-* `loop_link` is an editor action (keep the loop length while dragging the start): no DSP effect. The key is stored.
+* `loop_link` is an editor action (keep the loop length while dragging the start): no DSP effect, by specification (13-new-keys.md A39). The key is stored.
 * `loop_relative` On: loop start / end are fractions of the playback region instead of the file.
-* A change of `oscN.type` while a note sounds takes effect at once for the running voices (the wavetable path stops, the sample path starts from the next note); no 10 ms crossfade yet.
+* A change of `oscN.type` while a note sounds is crossfaded over 10 ms (FIX1; the sample path itself starts from the next note).
 * Normalize uses the peak of the whole file, not of the start..end region.
 * The wavetable file format is WAV (the `.sbwt` of C4 does not exist in the repository).
 * The Vital import (11 Annex) still maps nothing to `oscN.type` (WP9).
@@ -82,11 +82,11 @@ The gate runs are in the section "Gates" at the end of this file.
 
 Nothing of the five work packages is left unset in the capability bits. Not done, with the exact reason:
 
-1. **`oscN.type` change without a click**: no 10 ms crossfade when `oscN.type` or a wavetable / sample changes under a sounding note (the engine's click guard of R7 is not generalised); the running voices switch at once. Reason: a crossfade needs both oscillator types to render during the fade, which the shared output buffers of the two types do not allow; a change at a note boundary is clean.
+1. (done in FIX1, see FIX1-REPORT.md) `oscN.type` crossfade.
 2. **Granular time stretch for `scan`** (pitch independent speed): the scan is varispeed. Reason: Q6 keeps granular GAP.
 3. **Vital import to `oscN.type = Sample`, the `.sbwt` format, the Kick pages and the MPC page cycler**: WP9 / C4, not part of this list.
-4. **Latency compensation** of Bode (64 samples) and the DAW-visible tail of Convolve: not reported to the host.
-5. **`loop_link`** is an editor action (no DSP).
+4. Bode latency compensation: done in FIX1. The DAW-visible tail of Convolve is still not reported to the host.
+5. `loop_link`: editor action by specification (A39), not a BLOCKED item.
 ## Gates (run once at the end of the whole list, on the final tree)
 
 * `cmake -S . -B build -DSYNTHYBOY_BUILD_PLUGIN=ON && cmake --build build -j8`: exit 0, VST3 and CLAP built; the only compiler warnings are the 14 `-Wmissing-field-initializers` of the older tests (`test_wp123.cpp`, `test_rt_alloc.cpp`, from WP2); none in the new code.

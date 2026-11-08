@@ -282,6 +282,129 @@ TEST (convolve_uses_the_impulse_of_the_content_and_rebuilds_when_the_size_change
     CHECK (rms (stretched.left, 0.6, 0.7) > 0.005);
 }
 
+TEST (convolve_rebuild_is_deterministic_offline_and_does_not_wait_in_realtime_mode)
+{
+    std::vector<float> ir (static_cast<size_t> (0.151 * kSr), 0.0f);
+    ir[static_cast<size_t> (0.05 * kSr)] = 0.9f;
+    ir[static_cast<size_t> (0.15 * kSr)] = 0.5f;
+    MemoryContentStore store;
+    store.add ("test", "ir.wav", wav16 (ir));
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "test";
+    ref.file = "ir.wav";
+    ref.name = "click";
+    content.impulses.push_back (ref);
+
+    // the size changes between blocks (a rebuild each time) with no pause for the builder thread: two runs must be bit identical
+    const auto run = [&]
+    {
+        auto e = makeVital();
+        e->setContentStore (&store);
+        e->setContent (content);
+        base (*e);
+        setByKey (*e, "convolve.on", 1.0f);
+        setByKey (*e, "convolve.ir", 1.0f);
+        setByKey (*e, "convolve.mix", 100.0f);
+        sbtest::Rendered all;
+        for (int part = 0; part < 6; ++part)
+        {
+            setByKey (*e, "convolve.size", 10.0f + 15.0f * static_cast<float> (part));
+            const auto r = sbtest::render (*e, part == 0 ? std::vector<Event> { noteOn (0, 57) } : std::vector<Event> {}, 4800, 256);
+            all.left.insert (all.left.end(), r.left.begin(), r.left.end());
+            all.right.insert (all.right.end(), r.right.begin(), r.right.end());
+        }
+        return all;
+    };
+    const auto a = run(), b = run();
+    CHECK (a.left == b.left && a.right == b.right);
+    CHECK (rms (a.left, 0.0, 0.1) > 0.001);
+
+    // realtime mode: the audio thread must not wait for the builder (a block with a pending rebuild returns at once)
+    Quality live;
+    live.realtime = true;
+    auto e = makeVital (live);
+    e->setContentStore (&store);
+    e->setContent (content);
+    base (*e);
+    setByKey (*e, "convolve.on", 1.0f);
+    setByKey (*e, "convolve.ir", 1.0f);
+    sbtest::render (*e, {}, 256, 256);
+    const auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < 20; ++i)
+    {
+        setByKey (*e, "convolve.size", 10.0f + 4.0f * static_cast<float> (i));
+        sbtest::render (*e, { noteOn (0, 57) }, 256, 256);
+    }
+    const auto ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
+    std::printf ("    realtime mode: 20 blocks with a rebuild each took %.1f ms\n", ms);
+    CHECK (ms < 1000.0);
+}
+
+TEST (bode_reports_its_latency_and_every_other_path_is_delayed_to_match)
+{
+    // Bode's Hilbert filter delays the path it sits in by 64 samples of the chain's rate. The engine reports it (latencySamples) and delays
+    // the paths that do not pass the effect (the other bus, the voices that bypass the rack, the Direct output), so with mix 0 the whole
+    // output is the output without Bode, late by exactly the reported latency.
+    for (const int oversampling : { 1, 2 })
+    {
+        for (const char* where : { "main", "bus1", "band" })
+        {
+            const auto run = [&] (bool bodeOn, int& latency)
+            {
+                Quality q;
+                q.oversampling = oversampling;
+                auto e = makeVital (q);
+                setByKey (*e, "osc1.wavetable", 1.0f);
+                setByKey (*e, "osc1.unison.voices", 1.0f);
+                setByKey (*e, "osc1.random_phase", 0.0f);
+                setByKey (*e, "osc1.level", 70.0f);
+                setByKey (*e, "osc2.on", 1.0f);
+                setByKey (*e, "osc2.wavetable", 2.0f);
+                setByKey (*e, "osc2.unison.voices", 1.0f);
+                setByKey (*e, "osc2.random_phase", 0.0f);
+                setByKey (*e, "osc2.transpose", 7.0f);
+                setByKey (*e, "osc2.level", 50.0f);
+                setByKey (*e, "filter1.on", 0.0f);
+                setByKey (*e, "filter2.on", 0.0f);
+                setByKey (*e, "master.volume", -6.0f);
+                setByKey (*e, "osc1.destination", 6.0f);   // no direct audio: osc 1 reaches the effects through the bus 1 send
+                setByKey (*e, "osc1.bus1_send", 100.0f);
+                setByKey (*e, "osc2.destination", 3.0f);   // osc 2: the main bus (a path that does not pass the bus rack)
+                setByKey (*e, "bode.mix", 0.0f);
+                setByKey (*e, "bode.on", bodeOn ? 1.0f : 0.0f);
+                const std::string w = where;
+                if (w == "bus1")
+                    setByKey (*e, "bode.rack", 1.0f);
+                else if (w == "band")
+                {
+                    setByKey (*e, "splitter_lh.on", 1.0f);
+                    setByKey (*e, "bode.rack", 3.0f);   // the low band of the L/H splitter in the Main rack
+                }
+                const auto r = sbtest::render (*e, { noteOn (0, 57) }, 20000, 256);
+                latency = e->latencySamples();
+                return r;
+            };
+            int off = -1, on = -1;
+            const auto ref = run (false, off);
+            const auto test = run (true, on);
+            const int expected = 64 / oversampling;
+            std::printf ("    oversampling %d, Bode in %s: latency %d (expected %d)\n", oversampling, where, on, expected);
+            CHECK_EQ (off, 0);
+            CHECK_EQ (on, expected);
+            double worst = 0.0, peak = 0.0;
+            for (size_t i = 4000; i + static_cast<size_t> (on) < ref.left.size() && i < 16000; ++i)
+            {
+                worst = std::max (worst, static_cast<double> (std::fabs (test.left[i + static_cast<size_t> (on)] - ref.left[i])));
+                peak = std::max (peak, static_cast<double> (std::fabs (ref.left[i])));
+            }
+            std::printf ("      shifted output differs by %.2e (peak %.3f)\n", worst, peak);
+            CHECK (peak > 0.05);
+            CHECK (worst < 0.01 * peak);
+        }
+    }
+}
+
 TEST (splitters_are_transparent_and_host_the_effects_of_their_bands)
 {
     auto e = makeVital();

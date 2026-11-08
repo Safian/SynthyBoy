@@ -70,6 +70,10 @@ struct Quality
     int oversampling = 2;                                   // 1 or 2
     Interpolation interpolation = Interpolation::linear;    // wavetable frame interpolation
     uint32_t fxMask = kFxAll;                               // effects that may be active
+    /** false (default): offline / deterministic. Work that an engine does on a helper thread (the Convolve rebuild of engine-vital) is
+        handed over at a fixed block boundary: the audio thread waits for it, so the output never depends on thread timing and an offline
+        bounce equals itself. true: live playback, the audio thread never waits (the new convolver is taken over when it is ready). */
+    bool realtime = false;
 };
 
 constexpr Quality qualityForTier (Tier tier) noexcept

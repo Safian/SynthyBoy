@@ -190,6 +190,8 @@ namespace sbvital {
     // ---- Bode frequency shifter --------------------------------------------------------------------------------------------------------
     class BodeModule : public StereoFxModule {
       public:
+        int latency() const { return fx_.latency(); }
+
         BodeModule(const Output* bps, const int* counter) : StereoFxModule(bps, counter) {
           mono_input_ = createBaseControl("bode_mono_input");
           shift_ = createMonoModControl("bode_shift");
@@ -272,6 +274,11 @@ namespace sbvital {
           delete stash_;
         }
 
+        // false (the default): deterministic handover. A block that posts a rebuild (or follows a new impulse / sample rate) waits for the
+        // builder and takes the new convolver over in that same block, so the output never depends on thread timing (offline renders,
+        // tests, bounces). true: live playback, the audio thread never waits and the take-over happens whenever the build is finished.
+        void setRealtime(bool realtime) { realtime_.store(realtime); }
+
         void setImpulse(std::shared_ptr<const ImpulseData> impulse) {
           std::atomic_store(&impulse_, std::move(impulse));
           impulse_version_.fetch_add(1);
@@ -288,24 +295,6 @@ namespace sbvital {
         }
 
         void processStereo(float* l, float* r, int n) override {
-          // the audio thread takes over a finished convolver and hands the old one back to the builder to free
-          if (stash_ != nullptr) {
-            for (auto& slot : retired_) {
-              Convolve* expected = nullptr;
-              if (slot.compare_exchange_strong(expected, stash_)) {
-                stash_ = nullptr;
-                break;
-              }
-            }
-          }
-          if (stash_ == nullptr) {
-            Convolve* next = pending_.exchange(nullptr);
-            if (next != nullptr) {
-              stash_ = active_;
-              active_ = next;
-            }
-          }
-
           // the settings that need a rebuild of the impulse are posted to the builder
           const bool use_ir = value(ir_) > 0.5f;
           const float size = mod(size_), attack = mod(attack_), decay = mod(decay_), damp = mod(damp_), gain = mod(ir_gain_);
@@ -323,6 +312,37 @@ namespace sbvital {
             want_gain_.store(gain);
             want_phi_.store(phi);
             want_version_.fetch_add(1);
+          }
+
+          // deterministic mode: wait until the builder has caught up with every posted change (the audio thread waits, it does not allocate)
+          if (!realtime_.load() && rate_.load() > 0.0f) {
+            while (!stop_.load() && (done_want_.load() != want_version_.load() || done_ir_.load() != impulse_version_.load() ||
+                                     done_rate_.load() != rate_version_.load()))
+              std::this_thread::yield();
+          }
+
+          // the audio thread takes over a finished convolver and hands the old one back to the builder to free
+          for (int attempt = 0; attempt < 1000; ++attempt) {
+            if (stash_ != nullptr) {
+              for (auto& slot : retired_) {
+                Convolve* expected = nullptr;
+                if (slot.compare_exchange_strong(expected, stash_)) {
+                  stash_ = nullptr;
+                  break;
+                }
+              }
+            }
+            if (stash_ == nullptr) {
+              Convolve* next = pending_.exchange(nullptr);
+              if (next != nullptr) {
+                stash_ = active_;
+                active_ = next;
+              }
+              break;
+            }
+            if (realtime_.load())
+              break;
+            std::this_thread::yield();   // the builder is freeing the retired convolvers (deterministic mode only)
           }
 
           if (active_ == nullptr)
@@ -368,8 +388,17 @@ namespace sbvital {
               Convolve* ready = fx.release();
               Convolve* old = pending_.exchange(ready);   // a build that was never taken over is replaced
               delete old;
+              done_want_.store(want);   // published after the convolver: the audio thread waiting on these finds the pending pointer set
+              done_ir_.store(ir_version);
+              done_rate_.store(rate_version);
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            else if (rate_.load() > 0.0f && want_version_.load() == 0) {
+              // nothing posted yet: nothing to wait for
+              done_want_.store(0);
+              done_ir_.store(ir_version);
+              done_rate_.store(rate_version);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(realtime_.load() ? 10 : 1));
           }
         }
 
@@ -387,6 +416,8 @@ namespace sbvital {
         std::atomic<Convolve*> pending_ { nullptr };
         std::atomic<Convolve*> retired_[4];
         std::atomic<uint32_t> want_version_ { 0 }, impulse_version_ { 0 }, rate_version_ { 0 };
+        std::atomic<uint32_t> done_want_ { ~0u }, done_ir_ { ~0u }, done_rate_ { ~0u };   // versions of the last published build
+        std::atomic<bool> realtime_ { false };
         std::atomic<bool> want_use_ { false }, want_phi_ { false }, stop_ { false };
         std::atomic<float> want_size_ { 50.0f }, want_attack_ { 0.0f }, want_decay_ { 100.0f }, want_damp_ { 0.0f }, want_gain_ { 0.0f }, rate_ { 0.0f };
         std::shared_ptr<const ImpulseData> impulse_;
@@ -561,6 +592,17 @@ namespace sbvital {
       case ReorderableEffectChain::kSplitterMs: return new SplitterMsModule();
       default: return nullptr;
     }
+  }
+
+  int serumModuleLatency(const SynthModule* module) {
+    if (const auto* bode = dynamic_cast<const BodeModule*>(module))
+      return bode->latency();
+    return 0;   // Hyper / Dimension, Utility, Convolve (zero latency partitioned convolution) and the crossovers (LR4, all-pass compensated)
+  }
+
+  void setConvolveRealtime(SynthModule* convolve, bool realtime) {
+    if (auto* module = dynamic_cast<ConvolveModule*>(convolve))
+      module->setRealtime(realtime);
   }
 
   void setConvolveImpulse(SynthModule* convolve, std::shared_ptr<const ImpulseData> impulse) {
