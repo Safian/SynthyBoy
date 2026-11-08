@@ -50,8 +50,8 @@ public:
     void setMode (Mode newMode);
 
     /** Undo / Redo access. */
-    bool canUndo() const noexcept { return undoStack.canUndo(); }
-    bool canRedo() const noexcept { return undoStack.canRedo(); }
+    bool canUndo() const noexcept { return undoPending || undoStack.canUndo(); }
+    bool canRedo() const noexcept { return ! undoPending && undoStack.canRedo(); }
     void performUndo();
     void performRedo();
 
@@ -91,7 +91,11 @@ private:
     class ImportSheet;
     class ThumbnailsStrip;
 
+    /** Marks the start of an edit. The undo stack holds states (baseline first), so the state the edit produces is recorded lazily,
+        by the next pushUndo / undo / redo: every edit becomes exactly one undo step. */
     void pushUndo();
+    void commitPendingUndo();
+    void layoutToolButtons (juce::Rectangle<int>& area);
     void updateHeaderInfo();
     void showOptionsMenu();
     void showRemoveMenu();
@@ -103,6 +107,8 @@ private:
     UiContext& ctx;
     wtedit::Wavetable wt;
     wtedit::UndoStack undoStack { 50 };
+    bool undoPending = false;   // an edit started after the last recorded state
+    bool strokeActive = false;  // a drawing gesture (mouse down .. up) is in progress: it is one undo step
     wtedit::vital::Group vitalGroup;
     size_t currentFrameIndex = 0;
     int rangeStart = -1;

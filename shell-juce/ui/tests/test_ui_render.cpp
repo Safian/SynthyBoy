@@ -110,7 +110,13 @@ void checkTouchTargets (SynthyBoyEditor& editor, const char* what)
         ++checked;
         const bool ok = c->getWidth() >= min && c->getHeight() >= min;
         if (! ok)
-            std::printf ("    too small: %s %dx%d\n", typeid (*c).name(), c->getWidth(), c->getHeight());
+            {
+                const auto* button = dynamic_cast<juce::Button*> (c);
+                const juce::Component* parent = c->getParentComponent();
+                std::printf ("    too small: %s \"%s\" in %s %dx%d\n", typeid (*c).name(),
+                             button != nullptr ? button->getButtonText().toRawUTF8() : c->getName().toRawUTF8(),
+                             parent != nullptr ? typeid (*parent).name() : "-", c->getWidth(), c->getHeight());
+            }
         CHECK (ok);
     }
     CHECK (checked > 10);

@@ -46,6 +46,7 @@ public:
     void zoomOut();
 
 private:
+    int headerHeight() const;
     void stepWavetable (int direction);
     void updateTableFromChoice();
 

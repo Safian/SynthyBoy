@@ -229,6 +229,8 @@ void WavetableView::setViewMode (ViewMode mode)
     mode2DBtn.setToggleState (mode == ViewMode::mode2D, juce::dontSendNotification);
     mode3DBtn.setToggleState (mode == ViewMode::mode3D, juce::dontSendNotification);
     modeSpBtn.setToggleState (mode == ViewMode::modeSP, juce::dontSendNotification);
+    zoomInBtn.setVisible (mode == ViewMode::mode3D);
+    zoomOutBtn.setVisible (mode == ViewMode::mode3D);
     repaint();
 }
 
@@ -327,7 +329,7 @@ void WavetableView::paint (juce::Graphics& g)
     g.setColour (t.colours.outline);
     g.drawRoundedRectangle (r, t.px (6.0f), 1.0f);
 
-    auto canvasArea = r.withTrimmedTop (static_cast<float> (t.touch())).reduced (t.px (6.0f));
+    auto canvasArea = r.withTrimmedTop (static_cast<float> (headerHeight())).reduced (t.px (6.0f));
     if (canvasArea.getWidth() <= 10.0f || canvasArea.getHeight() <= 10.0f)
         return;
 
@@ -501,12 +503,29 @@ void WavetableView::paint (juce::Graphics& g)
                 canvasArea.removeFromBottom (t.px (18.0f)), juce::Justification::bottomLeft, false);
 }
 
+int WavetableView::headerHeight() const
+{
+    const auto& t = ctx.theme;
+    // one row: [<][>] name [2D|3D|SP] [EDIT]; narrower than that the view switch drops to a second row
+    const int segW = juce::jmax (t.touch(), t.ipx (46.0f));
+    const int oneRowMin = 2 * t.touch() + t.ipx (2.0f) + 3 * t.gap() + 3 * segW + juce::jmax (t.touch(), t.ipx (60.0f)) + t.ipx (60.0f);
+    return getWidth() - 2 * t.gap() >= oneRowMin ? t.touch() : 2 * t.touch() + t.gap();
+}
+
 void WavetableView::resized()
 {
     const auto& t = ctx.theme;
     const int touch = t.touch();
     const int gap = t.gap();
-    auto header = getLocalBounds().reduced (gap).removeFromTop (touch);
+    const bool twoRows = headerHeight() > touch;
+    auto bounds = getLocalBounds().reduced (gap);
+    auto header = bounds.removeFromTop (touch);
+    juce::Rectangle<int> second;
+    if (twoRows)
+    {
+        bounds.removeFromTop (gap);
+        second = bounds.removeFromTop (touch);
+    }
 
     prevTableBtn.setBounds (header.removeFromLeft (touch));
     header.removeFromLeft (t.ipx (2));
@@ -518,18 +537,19 @@ void WavetableView::resized()
 
     // Segmented 2D | 3D | SP buttons
     const int segW = juce::jmax (touch, t.ipx (46));
-    modeSpBtn.setBounds (header.removeFromRight (segW));
-    mode3DBtn.setBounds (header.removeFromRight (segW));
-    mode2DBtn.setBounds (header.removeFromRight (segW));
-    header.removeFromRight (gap);
-
-    // Zoom controls
-    zoomOutBtn.setBounds (header.removeFromRight (touch));
-    header.removeFromRight (t.ipx (2));
-    zoomInBtn.setBounds (header.removeFromRight (touch));
-    header.removeFromRight (gap);
+    auto& segRow = twoRows ? second : header;
+    modeSpBtn.setBounds (segRow.removeFromRight (segW));
+    mode3DBtn.setBounds (segRow.removeFromRight (segW));
+    mode2DBtn.setBounds (segRow.removeFromRight (segW));
+    header.removeFromRight (twoRows ? 0 : gap);
 
     tableNameLabel.setBounds (header);
+
+    // Zoom buttons (3D tilt / zoom, the pinch alternative) float in the bottom-right corner of the canvas
+    auto corner = getLocalBounds().reduced (gap);
+    zoomInBtn.setBounds (corner.removeFromRight (touch).removeFromBottom (touch));
+    corner.removeFromRight (t.ipx (2));
+    zoomOutBtn.setBounds (corner.removeFromRight (touch).removeFromBottom (touch));
 }
 
 //==============================================================================

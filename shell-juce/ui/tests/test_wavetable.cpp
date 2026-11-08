@@ -141,12 +141,15 @@ TEST (ui_wavetable_model_and_operations)
     CHECK (! undo.canUndo());
     CHECK (! undo.canRedo());
 
+    // the stack records states: the baseline first, then the state after every edit
     undo.push (wt);
+    CHECK (! undo.canUndo());
     wt.setName ("Modified 1");
+    undo.push (wt);
     CHECK (undo.canUndo());
 
-    undo.push (wt);
     wt.setName ("Modified 2");
+    undo.push (wt);
 
     CHECK (undo.undo (wt));
     CHECK_EQ (wt.name(), "Modified 1");
@@ -379,6 +382,7 @@ TEST (ui_wavetable_headless_render_screenshots)
     std::printf ("    [UI SHOT] %s (%lld bytes)\n", sheetTabletFile.getFullPathName().toRawUTF8(), static_cast<long long> (sheetTabletFile.getSize()));
 
     // 4. Verify touch targets >= 44 points for all visible interactive controls
+    editorSheet.setVisible (true); // a free-standing component is hidden until shown; the walk skips hidden ones
     std::vector<juce::Component*> targets;
     collectInteractiveControls (editorSheet, targets);
     const int minTouch = editor->theme().touch();
@@ -390,7 +394,13 @@ TEST (ui_wavetable_headless_render_screenshots)
             continue;
         const bool touchOk = (c->getWidth() >= minTouch && c->getHeight() >= minTouch);
         if (! touchOk)
-            std::printf ("    Control too small: %s %dx%d (min %d)\n", typeid (*c).name(), c->getWidth(), c->getHeight(), minTouch);
+            {
+                const auto* button = dynamic_cast<juce::Button*> (c);
+                const juce::Component* parent = c->getParentComponent();
+                std::printf ("    Control too small: %s \"%s\" in %s %dx%d (min %d)\n", typeid (*c).name(),
+                             button != nullptr ? button->getButtonText().toRawUTF8() : c->getName().toRawUTF8(),
+                             parent != nullptr ? typeid (*parent).name() : "-", c->getWidth(), c->getHeight(), minTouch);
+            }
         CHECK (touchOk);
         ++verifiedTargets;
     }

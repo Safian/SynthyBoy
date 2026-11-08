@@ -453,10 +453,10 @@ public:
 
 // ---- FX Filter Panel ---------------------------------------------------------------------------------------------------------------
 
-class FxFilterPanel final : public FilterPanelBase
+class FltFxFilterPanel final : public FilterPanelBase
 {
 public:
-    explicit FxFilterPanel (UiContext& context)
+    explicit FltFxFilterPanel (UiContext& context)
         : FilterPanelBase (context, 3, "fxfilter") {}
 
     juce::String title() const override { return "FX Filter"; }
@@ -480,6 +480,6 @@ public:
 
 SYNTHYBOY_REGISTER_PANEL (Filter1Panel, Page::flt, 10)
 SYNTHYBOY_REGISTER_PANEL (Filter2Panel, Page::flt, 20)
-SYNTHYBOY_REGISTER_PANEL (FxFilterPanel, Page::flt, 30)
+SYNTHYBOY_REGISTER_PANEL (FltFxFilterPanel, Page::flt, 30)
 
 } // namespace synthyboy::ui
