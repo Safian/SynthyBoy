@@ -107,22 +107,126 @@ void ModSourceChip::showAssignments()
     if (! list.empty())
         menu.addItem (1000, "Remove all");
 
+    std::string prefix;
+    std::string familyName;
+    int familyIndex = 0;
+    int familyCount = 0;
+
+    if (sourceChoice >= 1 && sourceChoice <= 6)
+    {
+        prefix = "env" + std::to_string (sourceChoice);
+        familyName = "Envelope";
+        familyIndex = sourceChoice;
+        familyCount = 6;
+    }
+    else if (sourceChoice >= 7 && sourceChoice <= 14)
+    {
+        prefix = "lfo" + std::to_string (sourceChoice - 6);
+        familyName = "LFO";
+        familyIndex = sourceChoice - 6;
+        familyCount = 8;
+    }
+    else if (sourceChoice == 33)
+    {
+        prefix = "lfo9";
+        familyName = "LFO";
+        familyIndex = 9;
+        familyCount = 10;
+    }
+    else if (sourceChoice == 34)
+    {
+        prefix = "lfo10";
+        familyName = "LFO";
+        familyIndex = 10;
+        familyCount = 10;
+    }
+    else if (sourceChoice >= 15 && sourceChoice <= 18)
+    {
+        prefix = "rlfo" + std::to_string (sourceChoice - 14);
+        familyName = "Random LFO";
+        familyIndex = sourceChoice - 14;
+        familyCount = 4;
+    }
+
+    if (! prefix.empty())
+    {
+        menu.addSeparator();
+        menu.addSectionHeader ("Module operations");
+        menu.addItem (2001, "Copy " + juce::String (familyName) + " " + juce::String (familyIndex));
+        menu.addItem (2002, "Copy with modulation");
+        const auto& clip = ModuleClipboard::instance();
+        const bool canPaste = clip.canPasteTo (prefix);
+        menu.addItem (2003, "Paste", canPaste);
+        menu.addItem (2004, "Paste with modulation", canPaste);
+
+        juce::PopupMenu swapMenu;
+        for (int other = 1; other <= familyCount; ++other)
+            if (other != familyIndex)
+                swapMenu.addItem (3000 + other, juce::String (familyName) + " " + juce::String (other));
+        menu.addSubMenu ("Swap with...", swapMenu);
+        menu.addItem (2005, "Init (reset to default)");
+    }
+
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [safe = juce::Component::SafePointer<ModSourceChip> (this), list] (int result)
+                        [safe = juce::Component::SafePointer<ModSourceChip> (this), list, prefix, familyName, familyCount] (int result)
                         {
                             if (result <= 0 || safe == nullptr)
                                 return;
                             auto& assign = safe->ctx.assign;
                             if (result == 1000)
+                            {
                                 for (const auto& item : list)
                                     clearSlot (assign.matrix(), item.second.slot);
-                            else
+                            }
+                            else if (result >= 1 && result <= static_cast<int> (list.size() * 2))
                             {
                                 const auto& item = list[static_cast<size_t> ((result - 1) / 2)];
                                 if ((result - 1) % 2 == 0)
                                     setSlotBypass (assign.matrix(), item.second.slot, ! item.second.bypass);
                                 else
                                     clearSlot (assign.matrix(), item.second.slot);
+                            }
+                            else if (result == 2001)
+                            {
+                                const auto live = readLiveValues (safe->ctx);
+                                ModuleClipboard::instance().copy (prefix, live, false);
+                            }
+                            else if (result == 2002)
+                            {
+                                const auto live = readLiveValues (safe->ctx);
+                                ModuleClipboard::instance().copy (prefix, live, true, &assign.matrix());
+                            }
+                            else if (result == 2003)
+                            {
+                                auto live = readLiveValues (safe->ctx);
+                                if (ModuleClipboard::instance().paste (prefix, live, false))
+                                    applyValues (safe->ctx, live);
+                            }
+                            else if (result == 2004)
+                            {
+                                auto live = readLiveValues (safe->ctx);
+                                if (ModuleClipboard::instance().paste (prefix, live, true, &assign.matrix()))
+                                    applyValues (safe->ctx, live);
+                            }
+                            else if (result == 2005)
+                            {
+                                auto live = readLiveValues (safe->ctx);
+                                ModuleClipboard::initModule (prefix, live);
+                                applyValues (safe->ctx, live);
+                            }
+                            else if (result >= 3001 && result <= 3000 + familyCount)
+                            {
+                                const int otherIndex = result - 3000;
+                                std::string otherPrefix;
+                                if (familyName == "Envelope") otherPrefix = "env" + std::to_string (otherIndex);
+                                else if (familyName == "LFO") otherPrefix = "lfo" + std::to_string (otherIndex);
+                                else if (familyName == "Random LFO") otherPrefix = "rlfo" + std::to_string (otherIndex);
+                                if (! otherPrefix.empty())
+                                {
+                                    auto live = readLiveValues (safe->ctx);
+                                    if (ModuleClipboard::swapModules (prefix, otherPrefix, live, true, &assign.matrix()))
+                                        applyValues (safe->ctx, live);
+                                }
                             }
                             assign.refresh();
                             assign.sendChangeMessage();

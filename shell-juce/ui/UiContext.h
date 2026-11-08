@@ -73,4 +73,7 @@ struct UiContext
 
     juce::AudioProcessorValueTreeState& apvts() const { return host.parameters(); }
 };
+
+ParamValues readLiveValues (const UiContext& ctx);
+void applyValues (const UiContext& ctx, const ParamValues& values);
 } // namespace synthyboy::ui

@@ -225,6 +225,16 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     // notes played on the on-screen keyboard join the host's MIDI input (MidiKeyboardState takes its own lock for a few instructions)
     keyboard.processNextMidiBuffer (midiMessages, 0, numSamples, true);
 
+    // UI injected MIDI messages (pitch wheel, mod wheel, CC 64 sustain, etc.)
+    {
+        std::lock_guard<std::mutex> lock (uiMidiMutex);
+        if (! uiMidiBuffer.isEmpty())
+        {
+            midiMessages.addEvents (uiMidiBuffer, 0, numSamples, 0);
+            uiMidiBuffer.clear();
+        }
+    }
+
     // MIDI -> sample accurate events (fixed capacity, overflow is dropped and counted)
     const int capacity = static_cast<int> (events.size());
     int numEvents = 0;
@@ -265,6 +275,11 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     engine->process (events.data(), numEvents, buffer.getWritePointer (0),
                      numChannels > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
+
+    const float magL = buffer.getMagnitude (0, 0, numSamples);
+    const float magR = numChannels > 1 ? buffer.getMagnitude (1, 0, numSamples) : magL;
+    peakL.store (magL, std::memory_order_relaxed);
+    peakR.store (magR, std::memory_order_relaxed);
 
     // Bode's latency (the engine delays every other path to match): tell the host when it changes
     const int latency = engine->latencySamples();
@@ -387,6 +402,13 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
     // params.rescan(VALUES), VST3 into a restartComponent (clap-validator state-reproducibility).
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
 }
+
+void SynthyBoyProcessor::injectMidiMessage (const juce::MidiMessage& msg)
+{
+    std::lock_guard<std::mutex> lock (uiMidiMutex);
+    uiMidiBuffer.addEvent (msg, 0);
+}
+
 
 // This creates new instances of the plugin (entry point used by the VST3 and CLAP wrappers).
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
