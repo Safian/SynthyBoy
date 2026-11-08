@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (1576));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras)
+    CHECK_EQ (paramCount(), static_cast<size_t> (1578));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 2); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 2: B20 (MODAMT)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
-    CHECK_EQ (kNumModSources, 38);
-    CHECK_EQ (kNumModDestinations, 442);
-    CHECK_EQ (modSourceCount(), static_cast<size_t> (38));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (441));
+    CHECK_EQ (kNumModSources, 39);
+    CHECK_EQ (kNumModDestinations, 509);
+    CHECK_EQ (modSourceCount(), static_cast<size_t> (39));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (508));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (441));
-    CHECK_EQ (newModulatable, static_cast<size_t> (172)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18
+    CHECK_EQ (modulatable, static_cast<size_t> (442));
+    CHECK_EQ (newModulatable, static_cast<size_t> (173)); // 172 + 1 of B20 (master.stereo_routing)
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (1576));
+    CHECK_EQ (ids.size(), static_cast<size_t> (1578));
 }
 
 TEST (append_positions_golden)
@@ -137,6 +137,7 @@ TEST (append_positions_golden)
         { "compressor.limit", 1544 }, { "reverb.diff_b", 1557 }, // B17
         { "sub.on", 1558 }, { "sub.bus2_send", 1568 }, // B18 (osc-extras)
         { "noise.sample", 1569 }, { "noise.loop", 1575 },
+        { "master.stereo_routing", 1576 }, { "master.voice_override", 1577 }, // B20 (MODAMT)
     };
     for (const auto& e : expected)
         if (! CHECK_EQ (positionOf (e.key), e.position))
@@ -216,11 +217,11 @@ TEST (choice_lists_are_append_only)
     // mod source / destination choices
     for (const char* key : { "mod01.source", "mod64.source", "mod01.aux_source", "mod64.aux_source" })
     {
-        CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (39));
-        CHECK_EQ (byKey (key).max, 38.0f);
+        CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (40));
+        CHECK_EQ (byKey (key).max, 39.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (442));
-    CHECK_EQ (byKey ("mod64.destination").max, 441.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (509));
+    CHECK_EQ (byKey ("mod64.destination").max, 508.0f);
 
     // lists that stay unchanged
     CHECK_EQ (namesOf ("lfo1.sync").size(), static_cast<size_t> (5));
@@ -246,6 +247,9 @@ TEST (mod_sources_are_extended_by_appending)
     }
     CHECK (std::strcmp (choiceName (byKey ("mod05.source"), 29), "Macro 5") == 0);
     CHECK (std::strcmp (choiceName (byKey ("mod05.source"), 38), "Poly Aftertouch") == 0);
+    CHECK (std::strcmp (t[38].key, "stereo") == 0);
+    CHECK_EQ (t[38].bipolar, true);
+    CHECK (std::strcmp (choiceName (byKey ("mod05.source"), 39), "Stereo") == 0);
     CHECK (std::strcmp (choiceName (byKey ("mod05.source"), 25), "Aftertouch") == 0); // channel pressure keeps choice 25 (the 25th name)
 }
 
@@ -276,6 +280,10 @@ TEST (destination_numbers_of_version_2_do_not_move)
         { "osc1.pitch_coarse", 412, "osc3.unison.blend_shape", 423 }, // B14
         { "compressor.crossover_low", 424, "reverb.diff_b", 431 }, // B17
         { "sub.octave", 432, "noise.phase", 441 }, // B18
+        { "master.stereo_routing", 442, "master.stereo_routing", 442 }, // B20
+        { "mod01.amount", 443, "mod64.amount", 506 },
+        { "master.portamento.time", 507, "master.portamento.time", 507 },
+        { "master.polyphony", 508, "master.polyphony", 508 },
     };
     for (const auto& r : ranges)
     {
@@ -289,9 +297,9 @@ TEST (destination_numbers_of_version_2_do_not_move)
     CHECK_EQ (destinationOf ("sub.on"), 0);
     CHECK_EQ (destinationOf ("noise.sample"), 0);
 
-    // every choice 1..441 names a modulatable parameter, in strictly increasing table order
+    // every choice 1..442 names a modulatable parameter, in strictly increasing table order
     int previous = -1;
-    for (size_t c = 1; c <= modDestinationCount(); ++c)
+    for (size_t c = 1; c <= 442; ++c)
     {
         const int p = modDestinationParamIndex (c);
         CHECK (p > previous);

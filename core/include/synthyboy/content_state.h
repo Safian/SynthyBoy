@@ -27,6 +27,8 @@ constexpr int kMaxFilterCurvePoints = 16;
 constexpr int kMaxContentRemaps = 12;            // 3 oscillators x 4 slots (oscN.remap.slot)
 constexpr int kNumRemapSlots = 4;
 constexpr int kMaxRemapPoints = 64;
+constexpr int kMaxContentModCurves = 64;         // one per modulation matrix slot (modNN, G2)
+constexpr int kMaxModCurvePoints = 100;
 constexpr size_t kMaxTuningSclBytes = 64 * 1024;
 constexpr size_t kMaxTuningKbmBytes = 4 * 1024;
 constexpr double kMaxPointModAmount = 1.0;       // |amount| of the point modulation of a custom LFO point
@@ -91,6 +93,14 @@ struct ContentRemap
     std::vector<ContentPoint> points; // 2 .. kMaxRemapPoints, ascending x in 0..1 (the engine clamps the ends)
 };
 
+/** A drawn per-connection modulation curve (G2, 13-new-keys.md B20): remaps source value before applying amount.
+    `slot` is the modulation slot index (1..64). */
+struct ContentModCurve
+{
+    int slot = 0; // 1..64
+    std::vector<ContentPoint> points; // 2 .. kMaxModCurvePoints, ascending x in 0..1
+};
+
 struct ContentFilterCurvePoint
 {
     float x = 0.0f; // log frequency 0..1
@@ -124,11 +134,12 @@ struct StateContent
     std::vector<ContentFileRef> impulses;
     std::vector<ContentFilterCurve> filterCurves;
     std::vector<ContentRemap> remaps;
+    std::vector<ContentModCurve> modCurves;
 
     bool empty() const noexcept
     {
         return wavetables.empty() && samples.empty() && lfoShapes.empty() && velocityCurve.empty() && noteCurve.empty() && shaperA.empty() && shaperB.empty()
-            && ! tuning.present && impulses.empty() && filterCurves.empty() && remaps.empty();
+            && ! tuning.present && impulses.empty() && filterCurves.empty() && remaps.empty() && modCurves.empty();
     }
     void clear() noexcept { *this = StateContent {}; }
 };

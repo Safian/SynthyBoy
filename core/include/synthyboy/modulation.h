@@ -24,11 +24,11 @@ struct ModSourceInfo
 };
 
 /** Number of modulation sources (without "none"). */
-constexpr int kNumModSources = 38;
-/** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 38 were appended in version 3. */
+constexpr int kNumModSources = 39;
+/** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 39 were appended in version 3. */
 constexpr int kNumModSourcesV2 = 28;
-/** Size of the destination choice (modNN.destination): "none" plus every parameter flagged kParamModulatable (checked against the table). */
-constexpr int kNumModDestinations = 442; // 404 after B12, 412 after B16, 424 after B14, 432 after B17, plus the 10 modulatable keys of B18
+/** Size of the destination choice (modNN.destination): "none" plus every parameter flagged kParamModulatable and appended destinations. */
+constexpr int kNumModDestinations = 509; // 442 modulatable keys (including B20 stereo_routing) + 64 mod amounts + portamento time + polyphony + 1 "none"
 
 /** Source k (0-based) has the choice value k + 1; the order is the one of the list in docs/PARAMETERS.md. */
 const ModSourceInfo* modSourceTable() noexcept;

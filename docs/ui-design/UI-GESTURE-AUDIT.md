@@ -140,7 +140,7 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 | 06-07 | Macro knob drag / double-tap | implemented: K (macro row `Strip.cpp`) |
 | 06-08 | Macro chip drag swaps macros | **closed (gaps)**: drag a macro chip of the source drawer onto another macro chip = swap (value and assignments, `ModSourceBar.cpp:64`, `modSwapMacros`); alternative `Ops Menu > Swap Macros` `ModMatrixPanel.cpp`. Test `uig_macro_chips_swap_by_drag` |
 | 06-09 | Matrix row handle reorders slots | **closed (gaps)**: the slot number of a row is a 44 pt handle: drag up / down (the row swaps content with the neighbour it passes, `ModMatrixPanel.cpp:587`) or tap for the row menu Move up / Move down / Remove `:207`; `swapModSlots` (`model/ModModel.cpp:247`) exchanges all parameters of the two `modNN` slots. Reordering does not change the sound (slots sum); it changes the list order the user wants. Test `uig_mod_swap_slots_model_and_matrix_row_handle` |
-| 06-10 | Matrix curve graph vertical drag (`modNN.power`) | implemented: `ModCurvePanel.cpp:150-180` (double-tap resets `:180`) |
+| 06-10 | Matrix curve graph vertical drag (`modNN.power`) / free draw | implemented: `ModCurvePanel.cpp:190-245` (double-tap resets power or clears custom points `:232`), `ModCurvePanel.cpp:345-365` (Power Crv / Free Draw toggle, `content.modCurves` multi-point curve storage) |
 | 06-11 | Matrix row Bypass / Remove | implemented: `ModMatrixPanel.cpp:33-36`, `:97-99` |
 
 ## 07 Voice, MIDI, global

@@ -217,6 +217,7 @@ struct ImportResult
     std::vector<ImportedLfoShape> lfoShapes;   // custom shapes that are not a built-in
     std::vector<ImportedSample> samples;       // custom sample for oscN.type = Sample
     ContentTuning tuning;                      // custom tuning scl/kbm
+    std::vector<ContentModCurve> modCurves;    // custom per-connection modulation curves (G2)
     ImportReport report;
     std::string macroNames[4];                 // Vital's macro display names
     std::string sourceSha256;                  // SHA-256 of the input bytes (tag "src:" uses the first 12 hex digits)

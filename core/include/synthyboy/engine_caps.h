@@ -58,13 +58,15 @@ enum EngineCaps : EngineCapsMask
     // block B18 (osc-extras, 13-new-keys.md 4.18); bits 35 and 36 follow the B17 bits
     kCapSubOsc            = 1ull << 35, // G23: sub.* (sub oscillator)
     kCapNoiseExtras       = 1ull << 36, // G38: noise.sample / pitch / fine / phase / random_phase / keytrack / loop
+    // block B20 (mod-amount, 13-new-keys.md 4.20); bit 37
+    kCapModAmount         = 1ull << 37, // B20: mod-amount (G1-G6: amount modulation, mod curves, stereo source, stereo routing, voice override)
 };
 
 /** The bits of block B17. */
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = ((1ull << 30) - 1) | kCapFxExtrasAll | kCapSubOsc | kCapNoiseExtras;
+constexpr EngineCapsMask kCapAllKnown = ((1ull << 30) - 1) | kCapFxExtrasAll | kCapSubOsc | kCapNoiseExtras | kCapModAmount;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

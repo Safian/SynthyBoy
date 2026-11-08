@@ -138,6 +138,8 @@ EngineCapsMask classify (const char* key) noexcept
         return kCapFxConvolve;
     if (startsWith (key, "splitter_"))
         return kCapFxSplitters;
+    if (std::strcmp (key, "master.stereo_routing") == 0 || std::strcmp (key, "master.voice_override") == 0)
+        return kCapModAmount;
     return kCapNone;
 }
 
@@ -149,7 +151,11 @@ EngineCapsMask sourceCaps (int choice) noexcept
         return kCapMacros58;
     if (choice <= 34)
         return kCapLfo910;
-    return kCapModSourcesExtra;
+    if (choice <= 38)
+        return kCapModSourcesExtra;
+    if (choice == 39)
+        return kCapModAmount;
+    return kCapNone;
 }
 } // namespace
 
@@ -179,6 +185,8 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         case ChoiceSet::modDestination:
             if (v > 269)
             {
+                if (v >= 443)
+                    caps |= kCapModAmount;
                 const int target = modDestinationParamIndex (static_cast<size_t> (v));
                 caps |= target >= 0 ? requiredCaps (static_cast<size_t> (target)) : kCapNone;
             }
@@ -250,6 +258,7 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapFxReverbAlgos:    return "fx_reverb_algos";
         case kCapSubOsc:           return "sub_osc";
         case kCapNoiseExtras:      return "noise_extras";
+        case kCapModAmount:        return "mod_amount";
         case kCapNone:             break;
     }
     return "";

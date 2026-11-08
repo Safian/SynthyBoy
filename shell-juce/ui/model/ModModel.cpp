@@ -467,7 +467,7 @@ bool ModuleClipboard::paste (std::string_view destPrefix, ParamValues& target, b
             }
 
             const auto destRef = resolveKey (finalDestKey);
-            if (! destRef.valid() || (destRef.info->flags & kParamModulatable) == 0)
+            if (! destRef.valid() || modDestinationChoiceOf (static_cast<size_t> (destRef.index)) == 0)
                 continue;
 
             const size_t destChoice = modDestinationChoiceOf (static_cast<size_t> (destRef.index));

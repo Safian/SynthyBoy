@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "../Panel.h"
 #include "ModLogic.h"
+#include "synthyboy/shapes/shape.h"
 
 #include <cmath>
 #include <cstdio>
@@ -91,8 +92,44 @@ public:
 
         // Power readout badge
         char pwrStr[32];
-        std::snprintf (pwrStr, sizeof pwrStr, "Power: %+.1f %s", power, isFreeDraw ? "(GAP: Free Draw)" : "");
+        std::snprintf (pwrStr, sizeof pwrStr, "Power: %+.1f %s", power, isFreeDraw ? "(Free Draw)" : "");
         g.drawText (pwrStr, juce::Rectangle<float> (plotArea.getX() + t.px (4.0f), plotArea.getY() + t.px (4.0f), t.px (160.0f), t.px (14.0f)), juce::Justification::centredLeft, false);
+
+        // Custom curve in content
+        const auto& c = ctx.host.content();
+        const ContentModCurve* customCurve = nullptr;
+        for (const auto& mc : c.modCurves)
+        {
+            if (mc.slot == slot + 1 && ! mc.points.empty())
+            {
+                customCurve = &mc;
+                break;
+            }
+        }
+        shapes::ShapeData customShape;
+        if (customCurve != nullptr)
+        {
+            customShape.numPoints = std::min<size_t> (customCurve->points.size(), shapes::ShapeData::kMaxPoints);
+            for (size_t pi = 0; pi < customShape.numPoints; ++pi)
+            {
+                customShape.points[pi].x = customCurve->points[pi].x;
+                customShape.points[pi].y = customCurve->points[pi].y;
+                customShape.points[pi].curve = customCurve->points[pi].power;
+                customShape.points[pi].smooth = false;
+            }
+            customShape.sanitize();
+        }
+
+        const auto evaluateCurve = [&] (float inVal) -> float
+        {
+            if (customCurve != nullptr && customShape.numPoints >= 2)
+            {
+                const float normX = bipolar ? ((inVal + 1.0f) * 0.5f) : inVal;
+                const float outNorm = shapes::evaluateShape (customShape, normX);
+                return bipolar ? (outNorm * 2.0f - 1.0f) : outNorm;
+            }
+            return modPowerCurve (inVal, power, bipolar);
+        };
 
         // Curve path
         juce::Path curvePath;
@@ -104,7 +141,7 @@ public:
         {
             const float normX = static_cast<float> (i) / static_cast<float> (steps);
             const float inputVal = bipolar ? (normX * 2.0f - 1.0f) : normX;
-            const float outVal = modPowerCurve (inputVal, power, bipolar);
+            const float outVal = evaluateCurve (inputVal);
 
             const float normY = bipolar ? ((outVal + 1.0f) * 0.5f) : outVal;
             const float px = plotArea.getX() + normX * w;
@@ -125,7 +162,7 @@ public:
         // Animated live modulation ball
         const float animT = 0.5f + 0.5f * std::sin (animPhase);
         const float liveIn = bipolar ? (animT * 2.0f - 1.0f) : animT;
-        const float liveOut = modPowerCurve (liveIn, power, bipolar);
+        const float liveOut = evaluateCurve (liveIn);
         const float liveNormY = bipolar ? ((liveOut + 1.0f) * 0.5f) : liveOut;
         const float ballX = plotArea.getX() + animT * w;
         const float ballY = plotArea.getBottom() - liveNormY * h;
@@ -158,6 +195,47 @@ public:
     void mouseDrag (const juce::MouseEvent& e) override
     {
         if (! dragging) return;
+        const auto bounds = getLocalBounds().toFloat().reduced (ctx.theme.px (4.0f));
+        const auto plotArea = bounds.reduced (ctx.theme.px (24.0f), ctx.theme.px (18.0f));
+        if (isFreeDraw && plotArea.getWidth() > 10.0f && plotArea.getHeight() > 10.0f)
+        {
+            const float normX = std::clamp ((e.position.x - plotArea.getX()) / plotArea.getWidth(), 0.0f, 1.0f);
+            const float normY = std::clamp ((plotArea.getBottom() - e.position.y) / plotArea.getHeight(), 0.0f, 1.0f);
+            auto c = ctx.host.content();
+            ContentModCurve* target = nullptr;
+            for (auto& mc : c.modCurves)
+            {
+                if (mc.slot == slot + 1)
+                {
+                    target = &mc;
+                    break;
+                }
+            }
+            if (target == nullptr)
+            {
+                c.modCurves.push_back ({ slot + 1, { ContentPoint (0.0f, 0.0f), ContentPoint (1.0f, 1.0f) } });
+                target = &c.modCurves.back();
+            }
+            bool updated = false;
+            for (auto& pt : target->points)
+            {
+                if (std::fabs (pt.x - normX) < 0.05f)
+                {
+                    pt.y = normY;
+                    updated = true;
+                    break;
+                }
+            }
+            if (! updated && target->points.size() < 100)
+            {
+                target->points.push_back (ContentPoint (normX, normY));
+                std::sort (target->points.begin(), target->points.end(), [] (const ContentPoint& a, const ContentPoint& b) { return a.x < b.x; });
+            }
+            ctx.host.setContent (c);
+            repaint();
+            return;
+        }
+
         const float dy = downPos.y - e.position.y;
         // Dragging up increases curvature, dragging down decreases
         const float deltaPower = dy * 0.1f;
@@ -179,6 +257,14 @@ public:
 
     void mouseDoubleClick (const juce::MouseEvent&) override
     {
+        if (isFreeDraw)
+        {
+            auto c = ctx.host.content();
+            std::erase_if (c.modCurves, [this] (const ContentModCurve& mc) { return mc.slot == slot + 1; });
+            ctx.host.setContent (c);
+            repaint();
+            return;
+        }
         // Double-tap resets curve to linear 0.0
         const auto p = modSlotParams (slot);
         if (p.power >= 0)
@@ -285,13 +371,7 @@ public:
         };
         addAndMakeVisible (freeDrawButton);
 
-        gapBadge.setText ("GAP", juce::dontSendNotification);
-        gapBadge.setJustificationType (juce::Justification::centred);
-        gapBadge.setColour (juce::Label::backgroundColourId, ctx.theme.colours.warn);
-        gapBadge.setColour (juce::Label::textColourId, ctx.theme.colours.textOnAccent);
-        gapBadge.setFont (ctx.theme.font (ctx.theme.px (9.0f), true));
-        gapBadge.setTooltip ("Free-form multi-point remap curve is an engine GAP feature.");
-        addAndMakeVisible (gapBadge);
+        gapBadge.setVisible (false);
 
         addAndMakeVisible (curveView);
         curveView.onPowerChanged = [this] (float) { repaint(); };
@@ -303,7 +383,7 @@ public:
     bool twoBars (int innerWidth) const
     {
         const auto& t = ctx.theme;
-        return innerWidth < 2 * t.touch() + t.ipx (70.0f) + 3 * t.gap() + t.ipx (34.0f) + 2 * t.touch() + t.ipx (78.0f) + t.ipx (74.0f) + t.ipx (60.0f);
+        return innerWidth < 2 * t.touch() + t.ipx (70.0f) + 2 * t.gap() + 2 * t.touch() + t.ipx (78.0f) + t.ipx (74.0f) + t.ipx (60.0f);
     }
 
     int preferredHeight (int width) const override
@@ -338,15 +418,6 @@ public:
         topBar.removeFromLeft (gap);
 
         auto& right = two ? secondBar : topBar;
-        if (! two)
-        {
-            gapBadge.setBounds (right.removeFromRight (ctx.theme.ipx (34.0f)));
-            right.removeFromRight (ctx.theme.ipx (2.0f));
-        }
-        else
-        {
-            gapBadge.setBounds (topBar.removeFromRight (ctx.theme.ipx (34.0f)));
-        }
         freeDrawButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (74.0f))));
         right.removeFromRight (ctx.theme.ipx (2.0f));
         powerModeButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (78.0f))));

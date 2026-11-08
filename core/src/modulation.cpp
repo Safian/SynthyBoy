@@ -27,8 +27,16 @@ constexpr ModSourceInfo kSources[kNumModSources] = {
     { "macro5", "Macro 5", false },   { "macro6", "Macro 6", false },   { "macro7", "Macro 7", false },   { "macro8", "Macro 8", false },
     { "lfo9", "LFO 9", true },        { "lfo10", "LFO 10", true },
     { "lift", "Lift", false },        { "slide", "Slide", false },      { "oct_note", "Oct Note", false },
-    { "poly_aftertouch", "Poly Aftertouch", false }
+    { "poly_aftertouch", "Poly Aftertouch", false },
+    // appended in block B20 (choice value 39, G4)
+    { "stereo", "Stereo", true }
 };
+
+int findIndexByKey (const char* key) noexcept
+{
+    const ParamInfo* info = findParamByKey (key);
+    return info != nullptr ? findParamIndex (info->id) : -1;
+}
 
 /** Table index of the k-th modulatable parameter (k = 0 ..), computed once on first use (static local: thread safe). */
 struct DestinationLists
@@ -51,6 +59,35 @@ struct DestinationLists
                 paramOfChoice[count] = static_cast<int> (i);
                 choiceOfParam[i] = count;
             }
+        // block B20: per-slot modulation amounts (choices 443..506, G1)
+        for (int slot = 0; slot < kNumModSlots; ++slot)
+        {
+            char key[32];
+            std::snprintf (key, sizeof key, "mod%02d.amount", slot + 1);
+            const int p = findIndexByKey (key);
+            if (p >= 0 && choiceOfParam[p] == 0)
+            {
+                ++count;
+                paramOfChoice[count] = p;
+                choiceOfParam[p] = count;
+            }
+        }
+        // block B20: master.portamento.time (choice 507, G3)
+        const int porta = findIndexByKey ("master.portamento.time");
+        if (porta >= 0 && choiceOfParam[porta] == 0)
+        {
+            ++count;
+            paramOfChoice[count] = porta;
+            choiceOfParam[porta] = count;
+        }
+        // block B20: master.polyphony (choice 508, G3)
+        const int poly = findIndexByKey ("master.polyphony");
+        if (poly >= 0 && choiceOfParam[poly] == 0)
+        {
+            ++count;
+            paramOfChoice[count] = poly;
+            choiceOfParam[poly] = count;
+        }
     }
 };
 
@@ -58,12 +95,6 @@ const DestinationLists& destinations() noexcept
 {
     static const DestinationLists lists;
     return lists;
-}
-
-int findIndexByKey (const char* key) noexcept
-{
-    const ParamInfo* info = findParamByKey (key);
-    return info != nullptr ? findParamIndex (info->id) : -1;
 }
 } // namespace
 

@@ -102,6 +102,8 @@ constexpr const char* const kPhaseMemories[] = { "All Voices", "Contiguous", "Pe
 // B17: reverb algorithms and room modes (13-new-keys.md 4.17, G77)
 constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
 constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
+// B20: voice override choices (13-new-keys.md 4.20, G5)
+constexpr const char* const kVoiceOverrides[] = { "Kill", "Steal" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -743,11 +745,15 @@ constexpr ParamInfo kRaw[] = {
     onOff ("noise.random_phase", "Noise Random Phase", "Noise", false),
     onOff ("noise.keytrack", "Noise Keytrack", "Noise", false),
     onOff ("noise.loop", "Noise Loop", "Noise", true),
+
+    // --- B20: mod-amount: stereo routing and voice override (G5, positions 1576..1577) -------------------------------------------
+    SB_PCT ("master.stereo_routing", "Master Stereo Routing", "Master / Voicing", 100.0f, kMod),
+    pick ("master.voice_override", "Master Voice Override", "Master / Voicing", kVoiceOverrides, 0),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1576, "880 keys of state version 2 plus the 696 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18)");
+static_assert (kCount == 1578, "880 keys of state version 2 plus the 698 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 2 B20)");
 
 struct Table
 {
@@ -776,8 +782,8 @@ constexpr size_t countModulatable() noexcept
     return n;
 }
 
-static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable(),
-               "kNumModDestinations must be 1 + the number of kParamModulatable parameters");
+static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
+               "kNumModDestinations must be 1 + countModulatable (442) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

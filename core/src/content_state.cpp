@@ -150,6 +150,9 @@ bool operator== (const StateContent& a, const StateContent& b) noexcept
                                             { return p.x == q.x && p.y == q.y; }); })
         && sameVector (a.remaps, b.remaps, [] (const ContentRemap& x, const ContentRemap& y)
                        { return x.osc == y.osc && x.slot == y.slot && x.name == y.name
+                             && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); })
+        && sameVector (a.modCurves, b.modCurves, [] (const ContentModCurve& x, const ContentModCurve& y)
+                       { return x.slot == y.slot
                              && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); });
 }
 
@@ -245,6 +248,14 @@ bool validateContent (const StateContent& c) noexcept
         for (const auto& r : c.remaps)
             if (r.osc < 1 || r.osc > 3 || r.slot < 1 || r.slot > kNumRemapSlots || ! remapKeys.insert (r.osc * 10 + r.slot).second
                 || ! plainString (r.name, kMaxContentStringBytes) || ! pointsOk (r.points, kMaxRemapPoints, false, true))
+                return false;
+
+        if (c.modCurves.size() > static_cast<size_t> (kMaxContentModCurves))
+            return false;
+        std::set<int> modCurveSlots;
+        for (const auto& mc : c.modCurves)
+            if (mc.slot < 1 || mc.slot > kMaxContentModCurves || ! modCurveSlots.insert (mc.slot).second
+                || ! pointsOk (mc.points, kMaxModCurvePoints, false, true))
                 return false;
         return true;
     }

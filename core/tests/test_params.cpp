@@ -185,7 +185,10 @@ TEST (modulation_destinations_are_listed)
         const size_t choice = modDestinationChoiceOf (i);
         if ((p.flags & kParamModulatable) == 0)
         {
-            CHECK_EQ (choice, 0u);
+            if (choice != 0u)
+            {
+                CHECK (choice >= 443 && choice <= 508);
+            }
             continue;
         }
         ++modulatable;
@@ -196,11 +199,12 @@ TEST (modulation_destinations_are_listed)
         CHECK (std::strcmp (choiceName (dest, choice), p.name) == 0);
         CHECK (labels.insert (p.name).second);
     }
-    CHECK_EQ (modulatable, modDestinationCount());
-    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (modulatable));
+    CHECK_EQ (modulatable, static_cast<size_t> (442));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (508));
+    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (508));
     CHECK (modulatable > 200);
     CHECK_EQ (modDestinationParamIndex (0), -1);
-    CHECK_EQ (modDestinationParamIndex (modulatable + 1), -1);
+    CHECK_EQ (modDestinationParamIndex (modDestinationCount() + 1), -1);
     CHECK (std::strcmp (choiceName (byKey ("mod01.destination"), 0), "None") == 0);
 
     // a destination text parses back to its choice

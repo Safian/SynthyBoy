@@ -1056,6 +1056,11 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             int destChoice = 0;
             if (di != T.byControl.end() && T.info[static_cast<size_t> (di->second)].param >= 0)
                 destChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (T.info[static_cast<size_t> (di->second)].param)));
+            else if (actualDst == "stereo_routing")
+            {
+                if (const ParamInfo* pi = findParamByKey ("master.stereo_routing"))
+                    destChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (pi->id))));
+            }
             if (destChoice == 0)
             {
                 c.item (ItemKind::dropped, Reason::modDestinationUnsupported, area, where, src + " -> " + dst + " amount " + num (amount), "", "", "destination_not_modulatable");
@@ -1064,8 +1069,26 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             slotSourceChoice[i] = choice;
             slotDestChoice[i] = destChoice;
             slotActive[i] = true;
-            if (c.doc.find (e, "line_mapping") >= 0)
-                c.item (ItemKind::approximated, Reason::noEngineEquivalent, area, where + ".line_mapping", src + " -> " + dst, "", "", "line_map_curve_dropped");
+            const int lmNode = c.doc.find (e, "line_mapping");
+            if (lmNode >= 0)
+            {
+                ParsedLfo pl;
+                ContentNotes notes;
+                if (parseLfoLine (c.doc, lmNode, pl, notes))
+                {
+                    ContentModCurve mc;
+                    mc.slot = i + 1;
+                    for (size_t p = 0; p < pl.line.x.size(); ++p)
+                    {
+                        ContentPoint pt;
+                        pt.x = pl.line.x[p];
+                        pt.y = pl.line.y[p];
+                        pt.power = std::max (-20.0f, std::min (20.0f, pl.line.power[p]));
+                        mc.points.push_back (pt);
+                    }
+                    res.modCurves.push_back (std::move (mc));
+                }
+            }
             const ModSlotParams sp = modSlotParams (i);
             V.plain[sp.source] = static_cast<float> (choice);
             V.plain[sp.destination] = static_cast<float> (destChoice);
@@ -1311,7 +1334,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             const bool on = isOn ((p + "on").c_str());
             const std::string area = "osc" + std::to_string (n);
             struct U { const char* tail; double expected; };
-            for (const U& u : { U { "detune_range", 2.0 }, U { "midi_track", 1.0 }, U { "spectral_unison", 1.0 }, U { "transpose_quantize", 0.0 } })
+            for (const U& u : { U { "detune_range", 2.0 }, U { "midi_track", 1.0 }, U { "spectral_unison", 1.0 } })
             {
                 double v;
                 bool m;
@@ -1322,6 +1345,22 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                     c.item (on ? ItemKind::dropped : ItemKind::ignored, Reason::noEngineEquivalent, area, name, num (v), "", "", "no_engine_equivalent");
                 else
                     c.item (ItemKind::ignored, Reason::noEngineEquivalent, area, name, num (v), "", "", "engine_fixed_value");
+            }
+            {
+                const std::string name = p + "transpose_quantize";
+                double v;
+                bool m;
+                if (c.number (c.member (name.c_str()), v, m))
+                {
+                    const std::string snapKey = "osc" + std::to_string (n) + ".transpose_snap";
+                    if (const ParamInfo* pi = findParamByKey (snapKey.c_str()))
+                    {
+                        const float val = constrainValue (*pi, static_cast<float> (v));
+                        V.plain[static_cast<size_t> (findParamIndex (pi->id))] = val;
+                        ++rep.numImported;
+                        rep.imported.push_back ({ static_cast<uint16_t> (findParamIndex (pi->id)), static_cast<float> (v), val });
+                    }
+                }
             }
             for (const char* tail : { "smooth_interpolation", "view_2d" })
             {
@@ -1346,7 +1385,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             c.item (ItemKind::ignored, Reason::noEngineEquivalent, "sub", "sub_on", "0", "", "", "not_part_of_our_model");
         for (const char* name : { "sub_direct_out", "sub_transpose", "sub_transpose_quantize", "sub_tune", "sub_level", "sub_pan", "sub_waveform",
                                   "sample_random_phase", "sample_keytrack", "sample_loop", "sample_bounce", "sample_transpose", "sample_tune",
-                                  "sample_transpose_quantize", "voice_priority", "voice_override", "oversampling", "stereo_mode", "stereo_routing",
+                                  "sample_transpose_quantize", "voice_priority", "oversampling", "stereo_mode",
                                   "mpe_enabled", "bypass", "beats_per_minute", "view_spectrogram", "pitch_wheel", "mod_wheel", "compressor_low_band_unused",
                                   "filter_fx_filter_input" })
         {
@@ -1385,11 +1424,35 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             {
                 // A value other than Vital's default changes how the preset sounds (the stereo width of the voices, how voices are stolen),
                 // so it is a dropped setting; the default is just the engine's own behaviour.
-                static const struct { const char* name; double vitalDefault; } kBehaviour[] = { { "stereo_routing", 1.0 }, { "stereo_mode", 0.0 }, { "voice_override", 0.0 }, { "voice_priority", 4.0 } };
+                static const struct { const char* name; double vitalDefault; } kBehaviour[] = { { "stereo_mode", 0.0 }, { "voice_priority", 4.0 } };
                 bool changes = false;
                 for (const auto& b : kBehaviour)
                     changes = changes || (std::strcmp (name, b.name) == 0 && std::fabs (v - b.vitalDefault) > 1.0e-6);
                 c.item (changes ? ItemKind::dropped : ItemKind::ignored, Reason::noEngineEquivalent, std::strncmp (name, "sub_", 4) == 0 ? "sub" : "voice", name, num (v), "", "", changes ? "no_engine_equivalent" : "not_part_of_our_model");
+            }
+        }
+        {
+            double v;
+            bool m;
+            if (c.number (c.member ("stereo_routing"), v, m))
+            {
+                if (const ParamInfo* pi = findParamByKey ("master.stereo_routing"))
+                {
+                    const float val = constrainValue (*pi, static_cast<float> (v * 100.0));
+                    V.plain[static_cast<size_t> (findParamIndex (pi->id))] = val;
+                    ++rep.numImported;
+                    rep.imported.push_back ({ static_cast<uint16_t> (findParamIndex (pi->id)), static_cast<float> (v), val });
+                }
+            }
+            if (c.number (c.member ("voice_override"), v, m))
+            {
+                if (const ParamInfo* pi = findParamByKey ("master.voice_override"))
+                {
+                    const float val = constrainValue (*pi, static_cast<float> (std::floor (v + 0.5)));
+                    V.plain[static_cast<size_t> (findParamIndex (pi->id))] = val;
+                    ++rep.numImported;
+                    rep.imported.push_back ({ static_cast<uint16_t> (findParamIndex (pi->id)), static_cast<float> (v), val });
+                }
             }
         }
         for (const char* f : { "filter_1_", "filter_2_", "filter_fx_" })
@@ -1636,6 +1699,9 @@ std::string serializeImportedPreset (const ImportResult& result, const PresetMet
         }
         content.samples.push_back (std::move (cs));
     }
+
+    for (const auto& mc : result.modCurves)
+        content.modCurves.push_back (mc);
 
     if (result.tuning.present)
         content.tuning = result.tuning;
