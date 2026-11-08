@@ -359,3 +359,95 @@ TEST (content_swaps_while_notes_sound_are_safe)
     }
     CHECK (sbtest::allFinite (out.left));
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// lfoN.mono for the envelope and loop modes (A45)
+// ---------------------------------------------------------------------------------------------------------------------------------
+namespace
+{
+/** A Saw Up LFO of the given trigger type (2 envelope, 3 sustain envelope, 4 loop at point, 5 loop and hold) that sets the oscillator level. */
+std::unique_ptr<IEngine> monoEngine (int syncType, bool mono, float rateHz, float phaseDegrees = 0.0f)
+{
+    auto e = makeVital();
+    setByKey (*e, "lfo1.shape", choiceValue ("lfo1.shape", "Saw Up"));
+    setByKey (*e, "lfo1.rate", rateHz);
+    setByKey (*e, "lfo1.sync_type", static_cast<float> (syncType));
+    setByKey (*e, "lfo1.phase", phaseDegrees);
+    setByKey (*e, "lfo1.mono", mono ? 1.0f : 0.0f);
+    setByKey (*e, "env1.release", 1500.0f);
+    return e;
+}
+} // namespace
+
+TEST (mono_envelope_lfo_is_one_instance_for_all_voices)
+{
+    // a 1 Hz envelope LFO; the second note starts 0.5 s into the first: polyphonic it starts its own pass (low), mono it joins the running one
+    double levels[2] = {};
+    for (const bool mono : { false, true })
+    {
+        auto e = monoEngine (2, mono, 1.0f);
+        const auto out = render (*e, { noteOn (0, 60, 1.0f), noteOn (frames (0.5), 72, 1.0f) }, frames (0.8));
+        levels[mono ? 1 : 0] = lineAt (out, hzOf (72), 0.55, 4800);
+        std::printf ("    %s: second note 0.05 s after its start, line %.2f; first note %.2f\n", mono ? "mono" : "poly", levels[mono ? 1 : 0],
+                     lineAt (out, hzOf (60), 0.55, 4800));
+    }
+    CHECK (levels[1] > 4.0 * levels[0] + 1.0);
+}
+
+TEST (mono_envelope_lfo_restarts_with_a_new_note_group)
+{
+    auto e = monoEngine (2, true, 2.0f);
+    const auto out = render (*e, { noteOn (0, 60, 1.0f), noteOff (frames (0.7), 60), noteOn (frames (1.2), 64, 1.0f) }, frames (1.5));
+    const double first = rmsBetween (out, 0.6, 0.7);   // the pass is over (0.5 s): the LFO holds its last value
+    const double second = rmsBetween (out, 1.2, 1.23); // a new group: back at the start of the pass
+    std::printf ("    end of the first group %.4f, start of the second %.4f\n", first, second);
+    CHECK (first > 0.05);
+    CHECK (second < 0.2 * first);
+}
+
+TEST (mono_loop_lfo_shares_its_position)
+{
+    // loop at point (phase = loop start), 2 Hz: the second note joins the running loop instead of starting at the beginning
+    double at[2] = {};
+    for (const bool mono : { false, true })
+    {
+        auto e = monoEngine (4, mono, 2.0f, 0.0f);
+        const auto out = render (*e, { noteOn (0, 60, 1.0f), noteOn (frames (0.62), 72, 1.0f) }, frames (0.75));
+        at[mono ? 1 : 0] = lineAt (out, hzOf (72), 0.64, 3600);
+    }
+    std::printf ("    loop at point, second note shortly after it starts: poly %.2f, mono %.2f\n", at[0], at[1]);
+    CHECK (at[1] > 3.0 * at[0] + 1.0);
+}
+
+TEST (mono_sustain_envelope_lfo_is_held_while_any_key_is_down)
+{
+    // sustain envelope with the marker at 25 %: held at the marker while a key is down, then it runs on. The first key is released while the
+    // second is still down: polyphonic its LFO runs on to the end (louder than the held one), mono it stays at the marker with the other one.
+    double ratio[2] = {};
+    for (const bool mono : { false, true })
+    {
+        auto e = monoEngine (3, mono, 4.0f, 90.0f);
+        const auto out = render (*e, { noteOn (0, 60, 1.0f), noteOn (frames (0.05), 72, 1.0f), noteOff (frames (0.6), 60) }, frames (1.0));
+        const double released = lineAt (out, hzOf (60), 0.8, 4800), held = lineAt (out, hzOf (72), 0.8, 4800);
+        ratio[mono ? 1 : 0] = released / std::max (held, 1.0e-9);
+        std::printf ("    %s: released key %.2f, held key %.2f\n", mono ? "mono" : "poly", released, held);
+    }
+    CHECK (ratio[0] > 1.5);
+    CHECK (ratio[1] < 1.1);
+}
+
+TEST (mono_envelope_modes_are_deterministic_and_do_not_allocate)
+{
+    const auto play = []
+    {
+        auto e = monoEngine (5, true, 3.0f, 120.0f);
+        g_allocationsInProcess = 0;
+        const auto out = render (*e, { noteOn (0, 60, 1.0f), noteOn (frames (0.2), 67, 0.5f), noteOff (frames (0.5), 60), noteOff (frames (0.6), 67),
+                                       noteOn (frames (0.8), 64, 0.8f) }, frames (1.2));
+        CHECK (g_allocationsInProcess == 0);
+        return out;
+    };
+    const auto a = play(), b = play();
+    CHECK (a.left == b.left);
+    CHECK (sbtest::allFinite (a.left));
+}

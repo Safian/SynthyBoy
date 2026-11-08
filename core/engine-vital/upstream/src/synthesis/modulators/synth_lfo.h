@@ -40,8 +40,18 @@ namespace sbvital {
       virtual void bake(const float* values, int resolution, float* table) const noexcept = 0;
   };
 
+  // The notes as the mono LFOs see them (shared by all LFOs): one group is "the keys held down together"; a note on while no key is held
+  // (and no pedal is down) starts a new group. The adapter increments `chunk` before every engine chunk.
+  struct LfoNoteGroup {
+    uint32_t chunk = 0;
+    uint32_t group = 0;
+    bool held = false;    // a key is down or the sustain pedal is
+  };
+
   // Shared by an LFO and all its voice clones. Written by the audio thread between blocks only.
   struct LfoPointState {
+    bool mono = false;                                // lfoN.mono: in the envelope and loop modes ONE instance serves all voices (A45)
+    std::shared_ptr<LfoNoteGroup> note_group;
     const LfoPointModulation* modulation = nullptr;   // null: the LFO reads its one shared table
     uint32_t generation = 0;                          // changes with the modulation / the resolution: baked tables are stale
     int resolution = LfoPointModulation::kMaxResolution;
@@ -106,6 +116,15 @@ namespace sbvital {
         poly_float phase = 0.0f;
       };
 
+      // SynthyBoy: the one instance of a mono LFO in the envelope and loop modes. The first clone processed in a chunk (the leader) advances it
+      // and stores the result; the other voices start the chunk from it. A new note group restarts it.
+      struct MonoMaster {
+        LfoState control;
+        LfoState audio;
+        uint32_t chunk = ~0u;
+        uint32_t group = ~0u;
+      };
+
       static constexpr mono_float kMaxPower = 20.0f;
       static constexpr float kHalfLifeRatio = 0.2f;
       static constexpr float kMinHalfLife = 0.0002f;
@@ -164,6 +183,8 @@ namespace sbvital {
 
     protected:
       void updatePointTables();
+      void beginMono();
+      void endMono();
       void processTrigger();
       void processControlRate(int num_samples);
 
@@ -190,6 +211,13 @@ namespace sbvital {
       LineGenerator* source_;
 
       std::shared_ptr<double> sync_seconds_;
+
+      // SynthyBoy: mono envelope / loop modes
+      std::shared_ptr<MonoMaster> mono_master_;
+      bool mono_env_ = false;
+      bool mono_leader_ = false;
+      bool mono_new_group_ = false;
+      poly_mask reset_mask_;
 
       // SynthyBoy: per-voice point modulation
       std::shared_ptr<LfoPointState> point_state_;

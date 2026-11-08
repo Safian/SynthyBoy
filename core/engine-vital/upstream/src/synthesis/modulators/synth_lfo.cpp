@@ -31,6 +31,7 @@ namespace sbvital {
     sync_seconds_ = std::make_shared<double>();
     *sync_seconds_ = 0;
     point_state_ = std::make_shared<LfoPointState>();
+    mono_master_ = std::make_shared<MonoMaster>();
 
     trigger_sample_ = 0;
   }
@@ -112,8 +113,21 @@ namespace sbvital {
     direction_ = static_cast<int>(utils::clamp(std::round(input(kDirection)->at(0)[0]), 0.0f, 2.0f));
     poly_mask reset_mask = getResetMask(kNoteTrigger);
     poly_mask release_mask = getReleaseMask();
-    held_mask_ = (held_mask_ | reset_mask) & ~release_mask;
     poly_int trigger_offset = input(kNoteTrigger)->source->trigger_offset;
+    if (mono_env_) {
+      // SynthyBoy: one instance for all voices: it restarts with a new note group (at the start of the chunk), is held while a key is down
+      // or the pedal is, and the notes of single voices neither restart nor release it
+      const poly_mask all = poly_float::equal(poly_float(0.0f), poly_float(0.0f));
+      reset_mask = mono_new_group_ ? all : poly_mask();
+      release_mask = poly_mask();
+      held_mask_ = point_state_->note_group->held ? all : poly_mask();
+      trigger_sample_ = poly_int(0);
+      trigger_offset = poly_int(0);
+      trigger_delay_ = 0.0f;
+    }
+    else
+      held_mask_ = (held_mask_ | reset_mask) & ~release_mask;
+    reset_mask_ = reset_mask;
     trigger_sample_ = utils::maskLoad(trigger_sample_, trigger_offset, (reset_mask | release_mask));
 
     control_rate_state_.delay_time_passed = utils::maskLoad(control_rate_state_.delay_time_passed, 0.0f, reset_mask);
@@ -487,9 +501,9 @@ namespace sbvital {
 
     int sync_type = input(kSyncType)->at(0)[0];
     if (sync_type == kSustainEnvelope)
-      current_phase = utils::maskLoad(current_phase, 0.0f, getResetMask(kNoteTrigger));
+      current_phase = utils::maskLoad(current_phase, 0.0f, reset_mask_);
     else
-      current_phase = utils::maskLoad(current_phase, audio_rate_state_.phase, getResetMask(kNoteTrigger));
+      current_phase = utils::maskLoad(current_phase, audio_rate_state_.phase, reset_mask_);
 
     poly_float frequency = input(kFrequency)->at(0);
     float tick_time = 1.0f / getSampleRate();
@@ -512,6 +526,55 @@ namespace sbvital {
     output(kOscFrequency)->buffer[0] = frequency;
   }
 
+  namespace {
+    // the two lanes of the first voice of a pair copied to both voices
+    force_inline poly_float bothVoices(poly_float v) {
+      return poly_float(v[0], v[1], v[0], v[1]);
+    }
+
+    SynthLfo::LfoState bothVoices(const SynthLfo::LfoState& s) {
+      SynthLfo::LfoState result;
+      result.delay_time_passed = bothVoices(s.delay_time_passed);
+      result.fade_amplitude = bothVoices(s.fade_amplitude);
+      result.smooth_value = bothVoices(s.smooth_value);
+      result.fade_amount = bothVoices(s.fade_amount);
+      result.offset = bothVoices(s.offset);
+      result.phase = bothVoices(s.phase);
+      return result;
+    }
+  }
+
+  // SynthyBoy: a mono LFO in the envelope and loop modes is one instance for all voices (assumption A45 of docs/ui-design/13-new-keys.md).
+  void SynthLfo::beginMono() {
+    mono_env_ = false;
+    const LfoPointState& state = *point_state_;
+    if (!state.mono || !state.note_group)
+      return;
+    const int sync_type = input(kSyncType)->at(0)[0];
+    if (sync_type != kEnvelope && sync_type != kSustainEnvelope && sync_type != kLoopPoint && sync_type != kLoopHold)
+      return;
+
+    mono_env_ = true;
+    const LfoNoteGroup& notes = *state.note_group;
+    MonoMaster& master = *mono_master_;
+    mono_leader_ = master.chunk != notes.chunk;
+    mono_new_group_ = mono_leader_ && master.group != notes.group;
+    if (!mono_new_group_) {
+      control_rate_state_ = bothVoices(master.control);
+      audio_rate_state_ = bothVoices(master.audio);
+    }
+  }
+
+  void SynthLfo::endMono() {
+    if (!mono_env_ || !mono_leader_)
+      return;
+    MonoMaster& master = *mono_master_;
+    master.control = control_rate_state_;
+    master.audio = audio_rate_state_;
+    master.chunk = point_state_->note_group->chunk;
+    master.group = point_state_->note_group->group;
+  }
+
   void SynthLfo::process(int num_samples) {
     bool control_rate = isControlRate();
     if (was_control_rate_ && !control_rate)
@@ -519,11 +582,13 @@ namespace sbvital {
     was_control_rate_ = control_rate;
 
     updatePointTables();
+    beginMono();
     processTrigger();
 
     if (!control_rate)
       processAudioRate(num_samples);
     processControlRate(num_samples);
+    endMono();
   }
 
   void SynthLfo::correctToTime(double seconds) {

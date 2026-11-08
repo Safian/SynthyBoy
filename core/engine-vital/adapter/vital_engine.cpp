@@ -476,6 +476,9 @@ public:
         }
         for (auto& channelKeys : activeKey)
             channelKeys.fill (-1);
+        pedalChannels = 0;
+        noteGroup->held = false;
+        ++noteGroup->group;
         noteIds.fill (NoteIdSlot {});
         clockSeconds = 0.0;
         lastModWheel = lastAftertouch = 0.0f;
@@ -484,7 +487,7 @@ public:
         applyParams (true);
         // let every smoother in the engine settle on the (possibly changed) targets while nothing sounds
         for (int i = 0; i < kSettleChunks; ++i)
-            engine->process (kChunk);
+            runEngine (kChunk);
         engine->allSoundsOff();
         activeCount.store (0, std::memory_order_relaxed);
         latencyCache.store (engine->latencyFrames(), std::memory_order_relaxed);
@@ -548,8 +551,7 @@ public:
 
             updateClocks (pos);
             slewTune (end - pos);
-            *pointBudget = pointTablesPerChunk();
-            engine->process (end - pos);
+            runEngine (end - pos);
             clockSeconds += static_cast<double> (end - pos) / sampleRate;
             writeOutput (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
             pos = end;
@@ -825,6 +827,7 @@ private:
             lfoProcessors[static_cast<size_t> (i)] = engine->getLfo (i);
             lfoStates[static_cast<size_t> (i)] = lfoProcessors[static_cast<size_t> (i)]->pointState();
             lfoStates[static_cast<size_t> (i)]->budget = pointBudget;
+            lfoStates[static_cast<size_t> (i)]->note_group = noteGroup;
         }
 
         takeSnapshot();
@@ -838,12 +841,12 @@ private:
         {
             engine->noteOn (60, 1.0f, 0, 0);
             for (int i = 0; i < 8; ++i)
-                engine->process (kChunk);
+                runEngine (kChunk);
             engine->noteOff (60, 0.0f, 0, 0);
             for (int i = 0; i < 8; ++i)
-                engine->process (kChunk);
+                runEngine (kChunk);
             engine->allSoundsOff();
-            engine->process (kChunk);
+            runEngine (kChunk);
         }
     }
 
@@ -1371,6 +1374,27 @@ private:
         full[kBakedPoints + 2] = full[kBakedPoints];
     }
 
+    /** One chunk of the engine: the budget of the LFOs' point tables and the chunk counter of the mono LFOs are renewed first. */
+    void runEngine (int numFrames) noexcept
+    {
+        *pointBudget = pointTablesPerChunk();
+        ++noteGroup->chunk;
+        engine->process (numFrames);
+    }
+
+    /** The keys held down, for the mono LFOs (lfoN.mono in the envelope and loop modes): a note on while no key is held and no pedal is down
+        starts a new group, the LFO is held while a key or the pedal is down. */
+    bool keysHeld() const noexcept
+    {
+        if (pedalChannels != 0)
+            return true;
+        for (const auto& channelKeys : activeKey)
+            for (const int8_t k : channelKeys)
+                if (k >= 0)
+                    return true;
+        return false;
+    }
+
     /** Tables of the per-voice point modulation that the LFOs may bake in one chunk (the tier): the cost of a chunk is bounded, a table that
         has to wait is baked after `force_after` chunks at the latest. */
     int pointTablesPerChunk() const noexcept
@@ -1448,6 +1472,9 @@ private:
             const bool mono = lfoMonoParam[i] >= 0 && params[static_cast<size_t> (lfoMonoParam[i])].load (std::memory_order_relaxed) > 0.5f;
             const bool host = lfoHostParam[i] >= 0 && params[static_cast<size_t> (lfoHostParam[i])].load (std::memory_order_relaxed) > 0.5f;
             const int effective = (sync == sbvital::SynthLfo::kTrigger && (mono || host)) ? static_cast<int> (sbvital::SynthLfo::kSync) : sync;
+            // the envelope and loop modes: the LFO itself serves all voices from one instance (A45)
+            if (lfoStates[i] != nullptr)
+                lfoStates[i]->mono = mono;
             vLfoSyncType[i]->set (static_cast<float> (effective));
             const bool lock = host && effective == static_cast<int> (sbvital::SynthLfo::kSync);
             vLfoHostLock[i]->set (lock ? 1.0f : 0.0f);
@@ -1797,7 +1824,10 @@ private:
                 }
                 if (std::isnan (noteTable[static_cast<size_t> (key)]))
                     return; // a key the tuning does not map (a .kbm "x" entry) does not sound
+                if (! keysHeld())
+                    ++noteGroup->group; // the first note of a new group restarts the mono LFOs
                 activeKey[static_cast<size_t> (channel)][static_cast<size_t> (e.key)] = static_cast<int8_t> (key);
+                noteGroup->held = true;
                 // hitting a key that still rings lets the old note fade out first (as the own engine does)
                 engine->noteOff (key, 0.0f, 0, channel);
                 engine->noteOn (key, velocity, 0, channel);
@@ -1812,21 +1842,30 @@ private:
                     const int key = started >= 0 ? started : conform[static_cast<size_t> (e.key)];
                     started = -1;
                     engine->noteOff (key, std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f), 0, channel);
+                    noteGroup->held = keysHeld();
                 }
                 break;
             case Event::SustainPedal:
                 // pedal down keeps released notes sounding until it is lifted (the engine's own sustain handling)
                 if (e.channel < 0)
                 {
+                    pedalChannels = e.value >= 0.5f ? 0xffffu : 0u;
                     if (e.value >= 0.5f)
                         engine->sustainOnRange (0, numChannels - 1);
                     else
                         engine->sustainOffRange (0, 0, numChannels - 1);
                 }
                 else if (e.value >= 0.5f)
+                {
+                    pedalChannels |= 1u << (channel & 15);
                     engine->sustainOn (channel);
+                }
                 else
+                {
+                    pedalChannels &= ~(1u << (channel & 15));
                     engine->sustainOff (0, channel);
+                }
+                noteGroup->held = keysHeld();
                 break;
             case Event::NoteExpression:
                 handleExpression (e, channel);
@@ -1870,6 +1909,7 @@ private:
                     engine->allNotesOff (0, channel);
                     activeKey[static_cast<size_t> (channel)].fill (-1);
                 }
+                noteGroup->held = keysHeld();
                 break;
         }
     }
@@ -1973,6 +2013,8 @@ private:
     std::array<uint64_t, kNumLfo> pointWanted {};
     std::array<uint32_t, kNumLfo> appliedPointSnapshot {};
     std::shared_ptr<int> pointBudget = std::make_shared<int> (0); // tables the voices' LFOs may still bake in this chunk
+    std::shared_ptr<sbvital::LfoNoteGroup> noteGroup = std::make_shared<sbvital::LfoNoteGroup>(); // the keys held, for the mono LFOs
+    uint32_t pedalChannels = 0;                                   // bit c: the sustain pedal of channel c is down
     std::array<std::array<float, kMaxPointMods>, kNumLfo> appliedModValues {};
     std::array<std::array<int, 6>, kNumOsc> appliedMap {};
     std::array<float, kNumFxSlots> appliedChoices {};
