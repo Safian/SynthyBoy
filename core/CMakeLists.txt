@@ -45,6 +45,8 @@ else()
     target_compile_definitions(synthyboy_core PUBLIC SYNTHYBOY_HAS_VITAL=0)
 endif()
 
+add_subdirectory(formula)
+
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)
     if(SYNTHYBOY_WITH_VITAL)
