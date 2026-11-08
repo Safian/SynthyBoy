@@ -6,8 +6,12 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <unordered_set>
 #include <vector>
 
+#include <clap/ext/remote-controls.h>
+
+#include "synthyboy/kick_pages.h"
 #include "synthyboy/params.h"
 #include "synthyboy/state.h"
 #include "synthyboy_clap.h"
@@ -178,7 +182,85 @@ TEST (native_clap_extensions_and_parameter_parity)
     CHECK (voiceInfo->get (plugin, &vinfo));
     CHECK (vinfo.voice_capacity > 0);
 
+    // 5. Remote controls extension
+    const auto* remoteControls = static_cast<const clap_plugin_remote_controls_t*> (
+        plugin->get_extension (plugin, CLAP_EXT_REMOTE_CONTROLS));
+    CHECK (remoteControls != nullptr);
+    CHECK_EQ (remoteControls->count (plugin), 61u);
+
+    clap_remote_controls_page_t firstPage {};
+    CHECK (remoteControls->get (plugin, 0, &firstPage));
+    CHECK_EQ (std::string (firstPage.section_name), "Perf");
+    CHECK_EQ (std::string (firstPage.page_name), "Macros & Performance");
+    CHECK_EQ (firstPage.page_id, 0u);
+    CHECK (! firstPage.is_for_preset);
+    const ParamInfo* macro1Param = findParamByKey ("macro.1");
+    CHECK (macro1Param != nullptr);
+    CHECK_EQ (firstPage.param_ids[0], macro1Param->id);
+
     plugin->destroy (plugin);
+}
+
+TEST (kick_remote_control_pages_and_reachability)
+{
+    CHECK_EQ (kickPageCount(), 61u);
+    const Page* pages = kickPageTable();
+    CHECK (pages != nullptr);
+
+    std::unordered_set<std::string> allReachableKeys;
+
+    for (size_t i = 0; i < kickPageCount(); ++i)
+    {
+        const Page& page = pages[i];
+        CHECK (page.id != nullptr && page.id[0] != '\0');
+        CHECK (page.title != nullptr && page.title[0] != '\0');
+        CHECK (page.section != nullptr && page.section[0] != '\0');
+        CHECK (page.count >= 1 && page.count <= 8);
+
+        for (size_t k = 0; k < page.count; ++k)
+        {
+            CHECK (page.keys[k] != nullptr);
+            const ParamInfo* info = findParamByKey (page.keys[k]);
+            CHECK (info != nullptr);
+            allReachableKeys.insert (page.keys[k]);
+        }
+
+        if (page.moreKeys != nullptr)
+        {
+            for (size_t m = 0; m < page.moreCount; ++m)
+            {
+                CHECK (page.moreKeys[m] != nullptr);
+                const ParamInfo* info = findParamByKey (page.moreKeys[m]);
+                CHECK (info != nullptr);
+                allReachableKeys.insert (page.moreKeys[m]);
+            }
+        }
+    }
+
+    // Asserts all 880 keys in paramTable() are reachable
+    CHECK_EQ (allReachableKeys.size(), 880u);
+    CHECK_EQ (allReachableKeys.size(), paramCount());
+
+    // Macro defaults check
+    CHECK_EQ (categoryMacroDefaultCount(), 7u);
+    for (size_t c = 0; c < categoryMacroDefaultCount(); ++c)
+    {
+        const auto& cat = categoryMacroDefaults()[c];
+        CHECK (cat.category != nullptr && cat.category[0] != '\0');
+        for (size_t m = 0; m < 4; ++m)
+        {
+            const auto& mac = cat.macros[m];
+            CHECK (mac.macroKey != nullptr);
+            CHECK (findParamByKey (mac.macroKey) != nullptr);
+            CHECK (mac.label != nullptr && std::strlen (mac.label) <= 12);
+            CHECK (mac.targetCount >= 1);
+            for (size_t t = 0; t < mac.targetCount; ++t)
+            {
+                CHECK (mac.targets[t].destination != nullptr);
+                CHECK (findParamByKey (mac.targets[t].destination) != nullptr);
+            }
+        }
+    }
 }
 
 TEST (native_clap_audio_render_and_state)

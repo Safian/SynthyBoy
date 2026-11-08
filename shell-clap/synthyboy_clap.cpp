@@ -14,10 +14,12 @@
 
 #include "synthyboy/engine.h"
 #include "synthyboy/events.h"
+#include "synthyboy/kick_pages.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
 #include "synthyboy/state.h"
+#include <clap/ext/remote-controls.h>
 
 namespace synthyboy
 {
@@ -459,6 +461,47 @@ const clap_plugin_tail_t s_tail = {
     ext_tail_get
 };
 
+// remote-controls
+uint32_t ext_remote_controls_count (const clap_plugin_t*) noexcept
+{
+    return static_cast<uint32_t> (kickPageCount());
+}
+
+bool ext_remote_controls_get (const clap_plugin_t*, uint32_t page_index, clap_remote_controls_page_t* page) noexcept
+{
+    if (page == nullptr || page_index >= kickPageCount())
+        return false;
+
+    const Page& src = kickPageTable()[page_index];
+
+    std::memset (page, 0, sizeof (*page));
+
+    std::strncpy (page->section_name, src.section, sizeof (page->section_name) - 1);
+    page->page_id = page_index;
+    std::strncpy (page->page_name, src.title, sizeof (page->page_name) - 1);
+
+    for (size_t i = 0; i < CLAP_REMOTE_CONTROLS_COUNT; ++i)
+    {
+        if (i < src.count && src.keys[i] != nullptr)
+        {
+            const ParamInfo* p = findParamByKey (src.keys[i]);
+            page->param_ids[i] = (p != nullptr) ? p->id : CLAP_INVALID_ID;
+        }
+        else
+        {
+            page->param_ids[i] = CLAP_INVALID_ID;
+        }
+    }
+
+    page->is_for_preset = false;
+    return true;
+}
+
+const clap_plugin_remote_controls_t s_remote_controls = {
+    ext_remote_controls_count,
+    ext_remote_controls_get
+};
+
 // Extension query
 const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
 {
@@ -472,6 +515,9 @@ const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
     if (std::strcmp (id, CLAP_EXT_VOICE_INFO) == 0) return &s_voice_info;
     if (std::strcmp (id, CLAP_EXT_LATENCY) == 0) return &s_latency;
     if (std::strcmp (id, CLAP_EXT_TAIL) == 0) return &s_tail;
+    if (std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS) == 0 ||
+        std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS_COMPAT) == 0 ||
+        std::strcmp (id, "clap.remote-controls") == 0) return &s_remote_controls;
 
     return nullptr;
 }
