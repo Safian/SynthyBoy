@@ -169,6 +169,11 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 | 08-07 | Distortion waveshaper vertical drag = drive | implemented: `FxDistortionPanel.cpp:119-165` |
 | 08-08 | EQ nodes: drag X / Y; pinch = resonance | drag implemented: `FxEqPanel.cpp:135-178`; pinch (and wheel) **added**: `FxEqPanel.cpp:190-215` |
 | 08-09 | Reverb damping nodes | implemented: `FxReverbPanel.cpp:100-142` |
+| 08-10 | Compressor crossover tags (B17, G73): drag a tag between two bands sideways to scrub `compressor.crossover_low` / `_high` (60 points per octave) | **added**: `FxCompressorPanel.cpp:151` (hit, 52 x 44 points), `:170-175` (`scrubCrossover`, `model/FxModel.h`); the band labels follow the keys. Test `fx_extras_compressor_crossover_tags_scrub_the_frequency` (`test_fx.cpp:460`) |
+| 08-11 | Delay TAP (Tap->Delay, G74): tap the tempo, Free sync and both delay times follow the interval; x1 / x4/3 / x3/2 snap `delay.offset` | **added**: `FxDelayPanel.cpp:180` (TAP), `:194` (`tap`, `TapTempo` of `model/FxModel.h`), `:209` (`snapOffset`). Test `fx_extras_delay_tap_and_offset_snaps` (`test_fx.cpp:423`), model test `:364` |
+| 08-12 | X-Shaper curve editor (B17, G75): drag a point, double-tap the plot = add, double-tap a point = delete, drag the diamond = bend, A / B / Add / Del / Preset / Reset buttons | **added**: `panels/FxShaperEditor.cpp:392` (down), `:415` (drag), `:437` (double-tap), `:284` (bend by bisection on the engine's evaluator), buttons `:199`; shown by `FxDistortionPanel.cpp:246` for the two X-Shaper types. Test `fx_extras_xshaper_editor_edits_the_content` (`test_fx.cpp:492`) |
+| 08-13 | Reverb type chips: the controls that the chosen algorithm does not use dim (ER size, DIFF A / B for the new types, room for Basin) | **added**: `FxReverbPanel.cpp:250`. Test `fx_extras_reverb_dims_what_the_algorithm_does_not_use` (`test_fx.cpp:592`) |
+| 08-14 | Phaser DEPTH 2: a second (right channel) notch curve is drawn when depth 2 is not 0 | **added**: `FxPhaserPanel.cpp:60`; the knob is a More control (K). Test `fx_extras_phaser_depth2_is_a_more_control_and_draws_a_second_curve` (`test_fx.cpp:615`) |
 
 ## Added by this audit (tests in `shell-juce/ui/tests/test_ui_lfo.cpp`)
 
