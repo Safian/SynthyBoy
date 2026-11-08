@@ -205,4 +205,189 @@ void TransposeControl::mouseUp (const juce::MouseEvent& e)
     }
     downHit = Hit::none;
 }
+
+// --- TransposeSnapControl (Row 02-10) -------------------------------------------------------------
+namespace
+{
+constexpr const char* kSnapNoteNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+constexpr bool isSnapBlackKey (int s) { return s == 1 || s == 3 || s == 6 || s == 8 || s == 10; }
+}
+
+TransposeSnapControl::TransposeSnapControl (UiContext& context, const std::string& key, const juce::String& labelOverride)
+    : ParamControl (context, key, labelOverride.isNotEmpty() ? labelOverride : juce::String ("TRANSPOSE SNAP"))
+{
+}
+
+juce::Point<int> TransposeSnapControl::preferredSize() const
+{
+    const auto& t = ctx.theme;
+    return { kNumNotes * t.touch() / 2, t.ipx (16.0f) + 2 * t.touch() + t.gap() };
+}
+
+int TransposeSnapControl::rawMask() const
+{
+    return handle.valid() ? juce::roundToInt (handle.plain()) : 0;
+}
+
+void TransposeSnapControl::setMask (int mask)
+{
+    if (handle.valid())
+        handle.setPlainComplete (static_cast<float> (mask));
+}
+
+bool TransposeSnapControl::isKeyActive (int semitone) const
+{
+    return (rawMask() & (1 << semitone)) != 0;
+}
+
+bool TransposeSnapControl::isGlobalActive() const
+{
+    return (rawMask() & kGlobalSnapBit) != 0;
+}
+
+void TransposeSnapControl::toggleKey (int semitone)
+{
+    if (semitone >= 0 && semitone < 12)
+        setMask (rawMask() ^ (1 << semitone));
+}
+
+void TransposeSnapControl::toggleGlobal()
+{
+    setMask (rawMask() ^ kGlobalSnapBit);
+}
+
+void TransposeSnapControl::clear()
+{
+    setMask (0);
+}
+
+juce::Rectangle<int> TransposeSnapControl::noteBounds (int semitone) const
+{
+    const auto& t = ctx.theme;
+    const auto row = getLocalBounds().withTrimmedTop (t.ipx (16.0f)).withHeight (t.touch());
+    const int w = row.getWidth() / kNumNotes;
+    return { row.getX() + semitone * w, row.getY(), semitone == kNumNotes - 1 ? row.getRight() - (row.getX() + semitone * w) : w, row.getHeight() };
+}
+
+juce::Rectangle<int> TransposeSnapControl::clearBounds() const
+{
+    const auto& t = ctx.theme;
+    const int y = getHeight() - t.touch();
+    const int totalW = getWidth();
+    return { 0, y, (totalW - t.gap()) / 3, t.touch() };
+}
+
+juce::Rectangle<int> TransposeSnapControl::globalBounds() const
+{
+    const auto& t = ctx.theme;
+    const int y = getHeight() - t.touch();
+    const int clearW = clearBounds().getWidth();
+    return { clearW + t.gap(), y, getWidth() - clearW - t.gap(), t.touch() };
+}
+
+TransposeSnapControl::Hit TransposeSnapControl::hitAt (juce::Point<int> p, int& noteIndex) const
+{
+    for (int i = 0; i < kNumNotes; ++i)
+        if (noteBounds (i).contains (p))
+        {
+            noteIndex = i;
+            return Hit::note;
+        }
+    if (clearBounds().contains (p))
+        return Hit::clear;
+    if (globalBounds().contains (p))
+        return Hit::global;
+    return Hit::none;
+}
+
+void TransposeSnapControl::paint (juce::Graphics& g)
+{
+    if (! handle.valid())
+    {
+        paintUnknownKey (g);
+        return;
+    }
+    const auto& t = ctx.theme;
+    const Palette& c = t.colours;
+    const int mask = rawMask();
+
+    g.setFont (t.labelFont());
+    g.setColour (c.textDim);
+    juce::String status = mask == 0 ? "Off" : (isGlobalActive() ? "Global Snap" : "Custom Scale");
+    g.drawFittedText ("TRANSPOSE SNAP   " + status, 0, 0, getWidth(), t.ipx (16.0f), juce::Justification::centredLeft, 1);
+
+    // Purple depth colour c.mod as specified in Vital and row 02-10 ("lit keys purple")
+    for (int i = 0; i < kNumNotes; ++i)
+    {
+        const auto r = noteBounds (i).toFloat().reduced (t.px (1.0f));
+        const bool active = isKeyActive (i);
+        const bool black = isSnapBlackKey (i);
+
+        g.setColour (active ? c.mod : (black ? c.panel : c.panelRaised));
+        g.fillRoundedRectangle (r, t.px (4.0f));
+        g.setColour (c.outline);
+        g.drawRoundedRectangle (r, t.px (4.0f), 1.0f);
+
+        g.setColour (active ? c.onMod : (black ? c.textDim : c.text));
+        g.setFont (t.valueFont());
+        g.drawFittedText (kSnapNoteNames[i], noteBounds (i), juce::Justification::centred, 1);
+    }
+
+    // Clear button
+    const auto clr = clearBounds().toFloat().reduced (t.px (1.5f));
+    g.setColour (c.panelRaised);
+    g.fillRoundedRectangle (clr, t.px (6.0f));
+    g.setColour (c.outline);
+    g.drawRoundedRectangle (clr, t.px (6.0f), 1.0f);
+    g.setColour (c.text);
+    g.setFont (t.valueFont());
+    g.drawFittedText ("CLEAR", clr.toNearestInt(), juce::Justification::centred, 1);
+
+    // Global Snap button
+    const auto glb = globalBounds().toFloat().reduced (t.px (1.5f));
+    const bool globalOn = isGlobalActive();
+    g.setColour (globalOn ? c.mod : c.panelRaised);
+    g.fillRoundedRectangle (glb, t.px (6.0f));
+    g.setColour (c.outline);
+    g.drawRoundedRectangle (glb, t.px (6.0f), 1.0f);
+    g.setColour (globalOn ? c.onMod : c.text);
+    g.setFont (t.valueFont());
+    g.drawFittedText (globalOn ? "GLOBAL SNAP: ON" : "GLOBAL SNAP: OFF", glb.toNearestInt(), juce::Justification::centred, 1);
+}
+
+void TransposeSnapControl::mouseDown (const juce::MouseEvent& e)
+{
+    if (! handle.valid())
+        return;
+    if (e.mods.isPopupMenu())
+    {
+        consumedByMenu = true;
+        showSheet();
+        return;
+    }
+    downHit = hitAt (e.getPosition(), downNote);
+    beginPress();
+}
+
+void TransposeSnapControl::mouseUp (const juce::MouseEvent& e)
+{
+    cancelLongPress();
+    if (consumedByMenu || ! handle.valid())
+    {
+        downHit = Hit::none;
+        return;
+    }
+    int note = -1;
+    const auto upHit = hitAt (e.getPosition(), note);
+    if (upHit == downHit)
+    {
+        if (upHit == Hit::note && note >= 0)
+            toggleKey (note);
+        else if (upHit == Hit::clear)
+            clear();
+        else if (upHit == Hit::global)
+            toggleGlobal();
+    }
+    downHit = Hit::none;
+}
 } // namespace synthyboy::ui

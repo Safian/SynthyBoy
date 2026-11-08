@@ -23,8 +23,8 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 | 02-06 | Main knob: vertical drag, long-press sheet | implemented: K |
 | 02-07 | OCT / SEM segments + wheel | **closed (gaps)**: `TransposeControl` (`panels/TransposeControl.cpp:17`): OCT segments -2 .. +2 (tap), SEM wheel (vertical drag, 14 pt per semitone `:161`) with `-` `+`, `transpose = OCT * 12 + SEM` (`splitTranspose` / `joinTranspose`, `model/GestureModel.cpp`); long-press = the standard sheet = numeric entry of the total semitones (the alternative of the design). It takes a row of its own in the panel (`ParamControl::spansRow`). Created at `OscPanel.cpp:92`. Test `uig_transpose_oct_sem_control`, `uim_loop_pair_and_transpose_split` |
 | 02-08 | FIN knob | implemented: `oscN.tune` K |
-| 02-09 | Pitch MODE (Semitones / Harmonics / Ratio / Step) | GAP (no key) |
-| 02-10 | Transpose snap keyboard | GAP (no key) |
+| 02-09 | Pitch MODE (Semitones / Harmonics / Ratio / Step) | **closed (PITCHUNI)**: `oscN.pitch_mode` ParamChoice (`OscPanel.cpp:81`, `ParamControls.cpp:605`): Semitones / Harmonics / Ratio / Step choices. Mode selection updates coarse pitch unit/semantics. Test `uig_pitch_mode_and_transpose_snap_keyboard`. |
+| 02-10 | Transpose snap keyboard | **closed (PITCHUNI)**: `TransposeSnapControl` (`panels/TransposeControl.cpp:218`, `TransposeControl.h:51`): 12 semitone note keys C..B with purple lit toggle state, Clear button, Global Snap toggle pill (bit 12: 0x1000). Created at `OscPanel.cpp:95`. Test `uig_pitch_mode_and_transpose_snap_keyboard`. |
 | 02-11 | UNISON voices: drag on the number / `-` `+` | **closed (gaps)**: the unison count is a pill coloured by the CPU load (green < 50 %, amber < 80 %, red) `OscWaveView.cpp:122`, amber outline when the tier caps it; new host read-out `UiHost::cpuLoad ()` (processor: time of `engine->process` against the block duration, smoothed, `PluginProcessor.cpp:276`). Drag / `-` `+` as before (K). Tests `uig_voice_badge_cpu_pill_and_scope`, `uim_warp_picture_and_cpu_level` |
 | 02-12 | WARP+ type list (groups), `<` `>` | **closed (gaps)**: `ParamChoice::setGroups` / `buildOptionMenu` (`ParamControls.cpp:626`): tap a group, tap a mode; groups Basic / Alt / FM / RM, and Filter / Distortion / PD / AM listed greyed (the engine has no mode in them: GAP rows of 02 section 1); set for `oscN.warp.type` at `OscPanel.cpp:96`; `<` `>` still step the flat order. Test `uig_warp_type_list_is_grouped`, `uim_warp_groups_cover_every_choice_once` |
 | 02-13 | Warp mode picture (the 2D view draws the warped frame live) | **closed (gaps)**: `warpedValue` (`model/GestureModel.cpp:99`) draws every one of the 10 warp modes (Sync, Formant, Quantize, Bend, Squeeze, Pulse, FM / RM from Osc 2 / 3), used by `OscWaveView.cpp:13`. The old picture mapped the first three table indices to the wrong modes; it follows the `oscN.warp.type` order now. A drawing of the idea of each mode, not the engine's DSP. Test `uim_warp_picture_and_cpu_level` |
@@ -177,5 +177,5 @@ LFO tab chips + drag-to-copy, sync-mode dimming, the free-form shape editor (05-
 ## Rows left after the gap closure (docs/ui-design/UI-GAPS-REPORT.md)
 
 - **NOT DONE with a hard reason (1)**: 02-28 (no noise sample key in `docs/params.json`). 05-22 is implemented since the engine plays point modulation per voice.
-- **GAP in the design / engine, left as the task says (7)**: 02-09, 02-10, 02-14, 02-24, 02-25, 02-26, 02-27.
+- **GAP in the design / engine, left as the task says (5)**: 02-14, 02-24, 02-25, 02-26, 02-27.
 - **partial (0)**: none.

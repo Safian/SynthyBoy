@@ -452,6 +452,69 @@ TEST (uig_transpose_oct_sem_control)
     CHECK (tc->semMinusBounds().getWidth() >= rig.editor->theme().touch() && tc->semPlusBounds().getHeight() >= rig.editor->theme().touch());
 }
 
+TEST (uig_pitch_mode_and_transpose_snap_keyboard)
+{
+    Rig rig;
+    auto* panel = rig.panelTitled ("Oscillator 1");
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    panel->setMoreExpanded (true);
+
+    // Row 02-09: pitch MODE selector (Semitones / Harmonics / Ratio / Step)
+    auto* pitchMode = rig.find<ParamChoice> ([] (ParamChoice& c) { return c.key() == "osc1.pitch_mode"; });
+    CHECK (pitchMode != nullptr);
+    if (pitchMode != nullptr)
+    {
+        CHECK_EQ (rig.param ("osc1.pitch_mode"), 0.0f); // Default Semitones
+        rig.setParam ("osc1.pitch_mode", 1.0f);         // Harmonics
+        CHECK_EQ (rig.param ("osc1.pitch_mode"), 1.0f);
+        rig.setParam ("osc1.pitch_mode", 2.0f);         // Ratio
+        CHECK_EQ (rig.param ("osc1.pitch_mode"), 2.0f);
+        rig.setParam ("osc1.pitch_mode", 3.0f);         // Step
+        CHECK_EQ (rig.param ("osc1.pitch_mode"), 3.0f);
+        rig.setParam ("osc1.pitch_mode", 0.0f);         // Back to Semitones
+    }
+
+    // Row 02-10: Transpose snap keyboard
+    auto* snap = rig.find<TransposeSnapControl>();
+    CHECK (snap != nullptr);
+    if (snap == nullptr)
+        return;
+    CHECK (snap->key() == "osc1.transpose_snap");
+    CHECK (snap->isVisible() && snap->getWidth() >= snap->getParentComponent()->getWidth() - 2 * rig.editor->theme().gap() - 1);
+
+    // Initially off
+    CHECK_EQ (snap->rawMask(), 0);
+    CHECK (! snap->isKeyActive (0));
+    CHECK (! snap->isGlobalActive());
+
+    // Tap note key 0 (C)
+    tap (*snap, snap->noteBounds (0).getCentre().toFloat());
+    CHECK (snap->isKeyActive (0));
+    CHECK_EQ (rig.param ("osc1.transpose_snap"), 1.0f);
+
+    // Tap note key 7 (G) -> bit 7 = 128 -> total 129
+    tap (*snap, snap->noteBounds (7).getCentre().toFloat());
+    CHECK (snap->isKeyActive (7));
+    CHECK_EQ (rig.param ("osc1.transpose_snap"), 129.0f);
+
+    // Tap note key 0 again to toggle off
+    tap (*snap, snap->noteBounds (0).getCentre().toFloat());
+    CHECK (! snap->isKeyActive (0));
+    CHECK_EQ (rig.param ("osc1.transpose_snap"), 128.0f);
+
+    // Tap Global Snap button
+    tap (*snap, snap->globalBounds().getCentre().toFloat());
+    CHECK (snap->isGlobalActive());
+    CHECK_EQ (static_cast<int> (rig.param ("osc1.transpose_snap")) & TransposeSnapControl::kGlobalSnapBit, TransposeSnapControl::kGlobalSnapBit);
+
+    // Tap Clear button
+    tap (*snap, snap->clearBounds().getCentre().toFloat());
+    CHECK_EQ (rig.param ("osc1.transpose_snap"), 0.0f);
+    CHECK_EQ (snap->rawMask(), 0);
+}
+
 TEST (uig_warp_type_list_is_grouped)
 {
     Rig rig;
