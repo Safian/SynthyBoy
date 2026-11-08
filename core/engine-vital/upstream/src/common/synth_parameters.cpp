@@ -679,6 +679,28 @@ namespace sbvital {
     add("main_fx_bypass", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
     static const char* const kModuleNames[16] = { "chorus", "compressor", "delay", "distortion", "eq", "filter_fx", "flanger", "phaser", "reverb",
                                                   "hyperdim", "utility", "bode", "convolve", "splitter_lh", "splitter_lmh", "splitter_ms" };
+    // the parameters of the Serum modules: the value of the control is the value of the key in its own unit (Hz, %, ms, dB, choice index)
+    struct SerumParameter { const char* name; mono_float min, max, def; };
+    static const SerumParameter kSerumParameters[] = {
+      { "hyperdim_rate", 0.05f, 10.0f, 0.5f }, { "hyperdim_unison", 0, 7, 4 }, { "hyperdim_detune", 0, 100, 50 }, { "hyperdim_retrig", 0, 1, 0 },
+      { "hyperdim_mix", 0, 100, 50 }, { "hyperdim_dim_size", 0, 100, 50 }, { "hyperdim_dim_mix", 0, 100, 0 }, { "hyperdim_level", -24, 12, 0 },
+      { "utility_polarity_l", 0, 1, 0 }, { "utility_polarity_r", 0, 1, 0 }, { "utility_lpf", 20, 20000, 20000 }, { "utility_hpf", 20, 20000, 20 },
+      { "utility_mono_bass", 0, 1, 0 }, { "utility_mono_freq", 20, 500, 120 }, { "utility_width", 0, 200, 100 }, { "utility_pan", -100, 100, 0 },
+      { "utility_mix", 0, 100, 100 }, { "utility_level", -24, 12, 0 },
+      { "bode_mono_input", 0, 1, 0 }, { "bode_shift", 0, 100, 0 }, { "bode_range", 1, 5000, 100 }, { "bode_dir", -100, 100, 100 },
+      { "bode_width", 0, 100, 100 }, { "bode_delay", 1, 2000, 100 }, { "bode_sync", 0, 3, 0 }, { "bode_division", 0, 8, 5 }, { "bode_feed", 0, 100, 0 },
+      { "bode_balance", -100, 100, 0 }, { "bode_blur", 0, 100, 0 }, { "bode_retrig", 0, 1, 0 }, { "bode_mix", 0, 100, 50 }, { "bode_level", -24, 12, 0 },
+      { "convolve_ir", 0, 1, 0 }, { "convolve_size", 0, 100, 50 }, { "convolve_tone", -100, 100, 0 }, { "convolve_phi_min", 0, 1, 0 },
+      { "convolve_predelay", 0, 500, 0 }, { "convolve_sync", 0, 3, 0 }, { "convolve_division", 0, 8, 5 }, { "convolve_attack", 0, 2000, 0 },
+      { "convolve_decay", 0, 100, 100 }, { "convolve_damp", 0, 100, 0 }, { "convolve_ir_gain", -24, 24, 0 }, { "convolve_mix", 0, 100, 30 },
+      { "convolve_level", -24, 12, 0 },
+      { "splitter_lh_freq", 20, 20000, 500 }, { "splitter_lh_low_bypass", 0, 1, 0 }, { "splitter_lh_high_bypass", 0, 1, 0 }, { "splitter_lh_level", -24, 12, 0 },
+      { "splitter_lmh_freq_low", 20, 20000, 200 }, { "splitter_lmh_freq_high", 20, 20000, 3000 }, { "splitter_lmh_low_bypass", 0, 1, 0 },
+      { "splitter_lmh_mid_bypass", 0, 1, 0 }, { "splitter_lmh_high_bypass", 0, 1, 0 }, { "splitter_lmh_level", -24, 12, 0 },
+      { "splitter_ms_mid_bypass", 0, 1, 0 }, { "splitter_ms_side_bypass", 0, 1, 0 }, { "splitter_ms_level", -24, 12, 0 },
+    };
+    for (const SerumParameter& parameter : kSerumParameters)
+      add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.max - parameter.min <= 8.0f && parameter.min == 0.0f && parameter.max == std::floor(parameter.max) && parameter.max <= 8.0f ? ValueDetails::kIndexed : ValueDetails::kLinear);
     for (int module = 0; module < 16; ++module) {
       add("fx_order_" + std::to_string(module + 1), 0.0, 15.0, static_cast<mono_float>(module), ValueDetails::kIndexed);
       add(std::string(kModuleNames[module]) + "_rack", 0.0, 9.0, 0.0, ValueDetails::kIndexed);

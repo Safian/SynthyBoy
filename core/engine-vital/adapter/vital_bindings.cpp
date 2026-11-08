@@ -376,6 +376,24 @@ std::vector<Binding> build()
     b.add ("reverb.chorus_amount", "reverb_chorus_amount", Conv::sqrtScaled, 0.01);
     b.add ("reverb.chorus_rate", "reverb_chorus_frequency", Conv::log2Hz);
 
+    // --- the Serum modules (WP7): every key is the control of the same name in its own unit ------------------------------------------
+    struct Module { const char* key; int slot; std::initializer_list<const char*> params; };
+    const Module modules[] = {
+        { "hyperdim", 9, { "rate", "unison", "detune", "retrig", "mix", "dim_size", "dim_mix", "level" } },
+        { "utility", 10, { "polarity_l", "polarity_r", "lpf", "hpf", "mono_bass", "mono_freq", "width", "pan", "mix", "level" } },
+        { "bode", 11, { "mono_input", "shift", "range", "dir", "width", "delay", "sync", "division", "feed", "balance", "blur", "retrig", "mix", "level" } },
+        { "convolve", 12, { "ir", "size", "tone", "phi_min", "predelay", "sync", "division", "attack", "decay", "damp", "ir_gain", "mix", "level" } },
+        { "splitter_lh", 13, { "freq", "low_bypass", "high_bypass", "level" } },
+        { "splitter_lmh", 14, { "freq_low", "freq_high", "low_bypass", "mid_bypass", "high_bypass", "level" } },
+        { "splitter_ms", 15, { "mid_bypass", "side_bypass", "level" } },
+    };
+    for (const Module& m : modules)
+    {
+        on (m.key, m.key, m.slot);
+        for (const char* param : m.params)
+            b.add (std::string (m.key) + "." + param, std::string (m.key) + "_" + param, Conv::linear);
+    }
+
     return std::move (b.out);
 }
 } // namespace
@@ -396,7 +414,7 @@ bool isSpecialParam (size_t paramIndex)
     };
     const auto startsWith = [&] (const char* prefix) { return std::strncmp (key, prefix, std::strlen (prefix)) == 0; };
     return endsWith (".wavetable") || endsWith (".shape") || std::strcmp (key, "filter.routing") == 0
-        || std::strncmp (key, "fx.order.", 9) == 0
+        || std::strncmp (key, "fx.order.", 9) == 0 || std::strcmp (key, "reverb.force_enable") == 0
         || ((endsWith (".source") || endsWith (".destination")) && key[0] == 'm' && key[1] == 'o') || std::strcmp (key, "master.bend_range") == 0
         // state version 3: handled by the adapter (vital_engine.cpp), not one control each
         || (startsWith ("env") && endsWith (".units")) || (startsWith ("lfo") && (endsWith (".mono") || endsWith (".host")))

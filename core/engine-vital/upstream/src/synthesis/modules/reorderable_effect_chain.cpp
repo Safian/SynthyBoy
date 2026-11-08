@@ -26,6 +26,7 @@
 #include "filter_module.h"
 #include "phaser_module.h"
 #include "reverb_module.h"
+#include "serum_fx_modules.h"
 #include "synth_strings.h"
 
 namespace sbvital {
@@ -160,8 +161,10 @@ namespace sbvital {
         return new PhaserModule(beats_per_second_);
       case constants::kReverb:
         return new ReverbModule();
-      default:
-        return new PassThroughModule();
+      default: {
+        SynthModule* serum = createSerumModule(index, beats_per_second_, &note_counter_);
+        return serum != nullptr ? serum : new PassThroughModule();
+      }
     }
   }
 

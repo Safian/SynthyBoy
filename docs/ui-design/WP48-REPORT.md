@@ -56,3 +56,34 @@ Bits set: `kCapFilterExtras`, `kCapFilterModels`. Tests: `core/engine-vital/test
 * **PZ SVF curve data**: `content.filter_curves` -> `FilterCurveShared::fit ()` (message thread: one bell per point, Q from the spacing, a fixed point iteration on the gains so that the cascade follows the points) -> the voice filters run the bells instead of the package's PZ SVF; the cutoff shifts the curve along the frequency axis (1 kHz = as drawn). Measured on noise: drawn +36 dB between 200 Hz and 2 kHz, rendered 36.2 dB; +12 dB between 632 Hz and 2 kHz, rendered 12.5 dB. **Without curve data the PZ SVF type runs the package's pole / zero SVF** (not the "flat" of 13 section 5, which was written for a missing reference; a flat filter would make the type unusable).
 * **Tiers**: no model is bypassed on low / medium; 4 scalar filters per voice pair per slot (memory about 180 KB per filter at 96 kHz, about 25 MB for the 136 filters of the voice slots).
 * engine-own: none of the bits.
+
+## WP7 - new FX DSP
+
+Bits set: `kCapFxUtility`, `kCapFxHyperDimension`, `kCapFxBode`, `kCapFxConvolve`, `kCapFxSplitters`. Tests: `core/engine-vital/tests/test_wp7.cpp` (9 cases), random settings in every rack (`serum_modules_in_all_racks_survive_random_settings`) and the random key runs of `test_rt_alloc`.
+
+* **Utility** (`core/fx-serum-a`): polarity L / R, low / high pass (the extreme position bypasses the filter, A21), mono bass, width (200 % doubles the side signal, 0 % is mono: side / off < 1 %), pan (100 % = right 3x louder), mix, level (-12 dB measured exactly). All at the neutral position the signal passes (difference < 2 %).
+* **Hyper / Dimension** (`core/fx-serum-a`): changes the sound by > 30 % at mix 100 %, spreads the voices over the stereo field, Dimension alone widens, level. `hyperdim.retrig` restarts the hyper voices on every note on (`SoundEngine::noteOn` -> `noteTriggered ()`).
+* **Bode** (`core/fx-serum-b`): a 440 Hz sine with range 100 Hz, shift 100 %: 540 Hz up, 340 Hz down, 440 Hz with shift 0 (spectrum peak, tolerance 5 Hz). Mapping: shift % x range = the shift in Hz, dir % = direction, feedback 0 .. 100 % -> 0 .. 0.95, delay in ms or synced (division window of `kDivisions` 4 .. 12; Tempo / dotted / triplet). The package's Hilbert filter has a latency of 64 samples (reported by the package, not compensated: a few ms on the wet signal only).
+* **Convolve** (`core/fx-serum-b`, impulse from the content store): `convolve.ir` = Preset IR reads `content.impulses[0]` (WAV, mono or stereo) through the `IContentStore`; tone, pre-delay (ms or synced), mix and level act at once; **size, minimum phase, attack, decay, damping and IR gain re-partition the impulse (allocation) on a builder thread** (poll every 10 ms) and the audio thread takes the finished convolver over at the start of a block: a change is audible after the build (tens of milliseconds for a short impulse, longer for a long one; the old convolver keeps running meanwhile). Until the first build the module passes the signal. Size 50 % = the original length, 0 / 100 % = x0.25 / x4 (tested: the click of the impulse moves from 150 ms to 600 ms). The built-in impulse list is empty (`None`, `Preset IR`), as in the spec (A23).
+  * `test_rt_alloc` counts allocations of the thread that calls `process ()` only now (`alloc_hook.h`): the builder thread is allowed to allocate. The audio thread allocates nothing (all random-key runs).
+* **Splitters L/H, L/M/H, M/S** (`core/fx-serum-a` crossovers, LR4): the band racks host the effects (WP5 `runRack`), `<fx>.rack` = a band rack is inert while its splitter is off or not in the rack of the signal (tested), summing all bands with no effect is transparent: **-0.004 dB (L/H), -0.039 dB (L/M/H), 0.000 dB (M/S)** against the 0.1 dB of A24. **A bypassed band is removed from the sum** (the semantics of the package and of the wording of A24; Serum's own meaning of the button may differ). The package does not report latency for the crossovers (LR4 all-pass compensation inside).
+* **Tiers**: `Quality::fxMask` has bits 9 .. 15 for the new modules (`quality.h`); **tier low bypasses Hyper / Dimension, Bode and Convolve** (plus reverb and flanger as before), medium and high run everything. Tested: Hyper masked on low, running on high; Utility runs on both.
+* engine-own: none of the bits (the iOS engine has no chain of 16 modules).
+
+## WP8 - reverb force enable
+
+Bit set: `kCapReverbForce`. `effectiveFxMask (tierMask, reverbForceEnable)` in `quality.h` ORs `kFxReverb` into the tier's mask (only the reverb, not the flanger); the adapter applies it to every `Cap::fx` binding and re-applies `reverb.on` when the key changes. Tested on tier low: `reverb.on` masked (identical to no reverb, tail 0), with `reverb.force_enable` the tail is more than 20x the masked tail, switching it off removes it again, and the helper keeps the flanger masked.
+
+## Gates and verification
+
+Gate runs are listed at the end of this file (section "Gates").
+
+## BLOCKED / not done
+
+Nothing of the five work packages is left unset in the capability bits. Not done, with the exact reason:
+
+1. **`oscN.type` change without a click**: no 10 ms crossfade when `oscN.type` or a wavetable / sample changes under a sounding note (the engine's click guard of R7 is not generalised); the running voices switch at once. Reason: a crossfade needs both oscillator types to render during the fade, which the shared output buffers of the two types do not allow; a change at a note boundary is clean.
+2. **Granular time stretch for `scan`** (pitch independent speed): the scan is varispeed. Reason: Q6 keeps granular GAP.
+3. **Vital import to `oscN.type = Sample`, the `.sbwt` format, the Kick pages and the MPC page cycler**: WP9 / C4, not part of this list.
+4. **Latency compensation** of Bode (64 samples) and the DAW-visible tail of Convolve: not reported to the host.
+5. **`loop_link`** is an editor action (no DSP).

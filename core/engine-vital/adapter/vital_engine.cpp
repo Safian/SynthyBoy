@@ -30,6 +30,7 @@
 #include "modulation_connection_processor.h"
 #include "sample_oscillator.h"
 #include "serum_filter_bank.h"
+#include "serum_fx_modules.h"
 #include "sound_engine.h"
 #include "synth_lfo.h"
 #include "synth_oscillator.h"
@@ -285,6 +286,34 @@ void notesOf (const tuning::Tuning& t, std::array<float, 128>& out) noexcept
 }
 
 std::atomic<int> gTableVersion { 2000 };
+
+/** The impulse response of content.impulses[0] (convolve.ir = Preset IR); null if there is none or it cannot be read. */
+std::shared_ptr<const sbvital::ImpulseData> decodeImpulse (const StateContent& content, const IContentStore* store)
+{
+    std::vector<uint8_t> bytes;
+    if (store == nullptr || content.impulses.empty() || ! store->readFile (content.impulses[0], bytes))
+        return nullptr;
+    std::vector<float> left, right;
+    sampleosc::WavInfo info;
+    if (! sampleosc::readWav (bytes.data(), bytes.size(), left, right, info) || left.empty())
+        return nullptr;
+    auto ir = std::make_shared<sbvital::ImpulseData>();
+    ir->frames = static_cast<int> (left.size());
+    ir->channels = info.numChannels >= 2 ? 2 : 1;
+    ir->sample_rate = info.sampleRate > 0 ? info.sampleRate : 48000.0;
+    if (ir->channels == 1)
+        ir->samples = left;
+    else
+    {
+        ir->samples.resize (left.size() * 2);
+        for (size_t i = 0; i < left.size(); ++i)
+        {
+            ir->samples[2 * i] = left[i];
+            ir->samples[2 * i + 1] = right[i];
+        }
+    }
+    return ir;
+}
 
 /** The frames of a user wavetable file: a WAV whose length is a multiple of 2048 is that many frames; anything else is one cycle that
     is resampled to 2048 values. At most 256 frames. */
@@ -553,7 +582,8 @@ public:
         // a bit is set only for an area that has a test rendering the key on and off (core/engine-vital/tests/test_wp123.cpp,
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
-             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels;
+             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels | kCapReverbForce
+             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters;
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -596,7 +626,11 @@ public:
             store = contentStore;
         }
         auto snapshot = buildSnapshot (content, store);
+        auto impulseData = decodeImpulse (content, store);
         const std::lock_guard<std::mutex> lock (snapshotMutex);
+        impulse = impulseData;
+        if (engine != nullptr)
+            sbvital::setConvolveImpulse (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), impulse); // atomics only
         // snapshots the audio thread has replaced are done with: free them. The one it is using stays until it is replaced.
         for (auto it = snapshots.begin(); it != snapshots.end();)
             it = (*it)->retired.load (std::memory_order_acquire) ? snapshots.erase (it) : it + 1;
@@ -759,6 +793,10 @@ private:
             appliedCurveId[static_cast<size_t> (i)] = ~0u;
         }
 
+        {
+            const std::lock_guard<std::mutex> lock (snapshotMutex);
+            sbvital::setConvolveImpulse (engine->getEffectModule (sbvital::ReorderableEffectChain::kConvolve), impulse);
+        }
         engine->setSampleRate (static_cast<int> (std::lround (sampleRate)));
         engine->setBpm (120.0f);
         controlMap = engine->getControls();
@@ -921,6 +959,7 @@ private:
         mtsNoteOnParam = find ("master.tuning.mts_note_on_only");
         mpeOnParam = find ("master.mpe.on");
         mpeRangeParam = find ("master.mpe.bend_range");
+        reverbForceParam = find ("reverb.force_enable");
     }
 
     /** The tables of the modulation matrix: sources, destinations, the 64 connection processors. Everything the audio thread needs
@@ -1010,6 +1049,11 @@ private:
         applyWavetables();           // before the bindings: the frame scale of a user table
 
         const bool bpmChanged = appliedBpm != transport.bpm;
+        // Q27 / WP8: "reverb.force_enable" keeps the reverb running although the tier masks it out (the user trades polyphony for it)
+        const bool reverbForce = reverbForceParam >= 0 && params[static_cast<size_t> (reverbForceParam)].load (std::memory_order_relaxed) > 0.5f;
+        const bool forceChanged = reverbForce != appliedReverbForce;
+        appliedReverbForce = reverbForce;
+        const uint32_t fxMask = effectiveFxMask (quality.fxMask, reverbForce);
         for (Resolved& r : resolved)
         {
             const Binding& b = *r.binding;
@@ -1024,7 +1068,7 @@ private:
             const float plain = params[b.param].load (std::memory_order_relaxed);
             const bool capped = b.cap != Cap::none;
             const bool tempoDependent = b.conv == Conv::quarticBeats && bpmChanged;
-            if (! force && plain == applied[b.param] && ! (capped && qualityChanged) && ! activated && ! tempoDependent)
+            if (! force && plain == applied[b.param] && ! (capped && (qualityChanged || forceChanged)) && ! activated && ! tempoDependent)
                 continue;
             applied[b.param] = plain;
 
@@ -1036,7 +1080,7 @@ private:
                 case Cap::none:   break;
                 case Cap::voices: value = std::min (value, static_cast<double> (quality.maxVoices)); break;
                 case Cap::unison: value = std::min (value, static_cast<double> (quality.maxUnison)); break;
-                case Cap::fx:     value = (value > 0.5 && (quality.fxMask & (1u << b.capArg)) != 0) ? 1.0 : 0.0; break;
+                case Cap::fx:     value = (value > 0.5 && (fxMask & (1u << b.capArg)) != 0) ? 1.0 : 0.0; break;
             }
             const double clamped = std::clamp (value, r.lo, r.hi);
             if (r.isTune)
@@ -1868,7 +1912,8 @@ private:
     std::array<std::array<int, 6>, kNumOsc> mapParam { { { { -1, -1, -1, -1, -1, -1 } }, { { -1, -1, -1, -1, -1, -1 } }, { { -1, -1, -1, -1, -1, -1 } } } };
     int curveVelocityLegatoParam = -1, curveNoteLegatoParam = -1, portamentoParam = -1;
     int scaleKeyParam = -1, scaleTypeParam = -1, scaleModeParam = -1, a4Param = -1, tuningScaleParam = -1, mtsParam = -1, mtsNoteOnParam = -1;
-    int mpeOnParam = -1, mpeRangeParam = -1;
+    int mpeOnParam = -1, mpeRangeParam = -1, reverbForceParam = -1;
+    bool appliedReverbForce = false;
     std::array<sbvital::Value*, kNumLfo> vLfoSyncType {}, vLfoHostLock {};
     std::array<sbvital::Value*, kNumOsc> vOscMapWarp {};
     std::array<int, kNumLfo> lfoClock {};
@@ -1916,6 +1961,7 @@ private:
     // content: built on the message thread (setContent), taken over by the audio thread without a lock
     std::mutex snapshotMutex;
     StateContent lastContent;
+    std::shared_ptr<const sbvital::ImpulseData> impulse;   // the Convolve module's impulse response (message thread)
     const IContentStore* contentStore = nullptr;
     Snapshot* retireAfterApply = nullptr;
     std::vector<std::unique_ptr<Snapshot>> snapshots;

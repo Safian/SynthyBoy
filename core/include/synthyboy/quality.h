@@ -38,8 +38,24 @@ enum FxMask : uint32_t
     kFxFlanger    = 1u << 6,
     kFxPhaser     = 1u << 7,
     kFxReverb     = 1u << 8,
-    kFxAll        = (1u << 9) - 1u
+    // the Serum modules of state version 3 (docs/ui-design/13-new-keys.md 4.12): effect slots 9 .. 15
+    kFxHyperDim   = 1u << 9,
+    kFxUtility    = 1u << 10,
+    kFxBode       = 1u << 11,
+    kFxConvolve   = 1u << 12,
+    kFxSplitterLh = 1u << 13,
+    kFxSplitterLmh = 1u << 14,
+    kFxSplitterMs = 1u << 15,
+    kFxLegacy     = (1u << 9) - 1u,   // the nine effects of state version 2
+    kFxAll        = (1u << 16) - 1u
 };
+
+/** The effects a tier may run, with the "force enable" of the reverb (Q27): the user trades polyphony for the reverb, so a tier that masks
+    the reverb out does not remove it while `reverb.force_enable` is on. */
+constexpr uint32_t effectiveFxMask (uint32_t tierMask, bool reverbForceEnable) noexcept
+{
+    return reverbForceEnable ? (tierMask | kFxReverb) : tierMask;
+}
 
 /**
  * Per-instance quality settings (never a global). A tier only CAPS what a preset asks for (voices, unison voices,
@@ -60,8 +76,8 @@ constexpr Quality qualityForTier (Tier tier) noexcept
 {
     switch (tier)
     {
-        // low: the heavy effects (reverb, flanger) are bypassed
-        case Tier::low:    return Quality { 8, 4, 1, Interpolation::linear, kFxAll & ~(kFxReverb | kFxFlanger) };
+        // low: the heavy effects (reverb, flanger, and of state version 3 Hyper / Dimension, Bode, Convolve) are bypassed
+        case Tier::low:    return Quality { 8, 4, 1, Interpolation::linear, kFxAll & ~(kFxReverb | kFxFlanger | kFxHyperDim | kFxBode | kFxConvolve) };
         case Tier::medium: return Quality { 16, 8, 2, Interpolation::linear, kFxAll };
         case Tier::high:   return Quality { kMaxVoices, kMaxUnisonVoices, 2, Interpolation::spectral, kFxAll };
     }

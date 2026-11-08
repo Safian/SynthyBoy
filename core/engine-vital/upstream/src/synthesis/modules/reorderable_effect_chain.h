@@ -67,6 +67,7 @@ namespace sbvital {
       virtual Processor* clone() const override { return new ReorderableEffectChain(*this); }
 
       virtual void correctToTime(double seconds) override;
+      void noteTriggered() { ++note_counter_; }   // SynthyBoy: a note on (the retrigger of Hyper and Bode)
       void setOversampleAmount(int oversample) override;
 
       SynthModule* getEffect(constants::Effect effect) { return effects_[effect]; }
@@ -80,6 +81,7 @@ namespace sbvital {
       int moduleAt(int position) const { return effect_order_[position]; }
 
     protected:
+      int note_counter_ = 0;
       SynthModule* createEffectModule(int index);
       void refreshConfiguration();
       const poly_float* runRack(int rack, const poly_float* in, int num_samples);

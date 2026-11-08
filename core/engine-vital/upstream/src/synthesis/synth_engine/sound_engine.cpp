@@ -311,6 +311,7 @@ namespace sbvital {
   }
 
   void SoundEngine::noteOn(int note, mono_float velocity, int sample, int channel) {
+    effect_chain_->noteTriggered();   // SynthyBoy: the retrigger of Hyper and Bode
     voice_handler_->noteOn(note, velocity, sample, channel);
   }
 
@@ -386,6 +387,10 @@ namespace sbvital {
 
   SampleOscShared* SoundEngine::getSampleShared(int index) {
     return voice_handler_->getSampleShared(index);
+  }
+
+  SynthModule* SoundEngine::getEffectModule(int index) {
+    return effect_chain_->getModule(index);
   }
 
   FilterCurveShared* SoundEngine::getFilterCurve(int index) {
