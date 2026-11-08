@@ -206,6 +206,7 @@ endif()
 # ---------------------------------------------------------------------------
 if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_render
+        shell-juce/ui/tests/test_wavetable.cpp
         shell-juce/ui/tests/test_ui_render.cpp
         shell-juce/PluginProcessor.cpp
         ${SYNTHYBOY_UI_SOURCES}
