@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "synthyboy/engine.h"
+#include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
 #include "ui/UiHost.h"
 
@@ -91,6 +92,26 @@ public:
     synthyboy::StateContent content() const override;
     bool setContent (const synthyboy::StateContent& newContent) override;
 
+    // MIDI learn (G07), Save as Default (G02), locks (G08): docs/ui-design/15-shell-features.md
+    bool canMidiLearn() const noexcept override { return true; }
+    void startMidiLearn (const std::string& key) override;
+    void cancelMidiLearn() override;
+    std::string midiLearnKey() const override;
+    int midiCcForKey (const std::string& key) const override;
+    void clearMidiCc (const std::string& key) override;
+    uint32_t midiMapRevision() const noexcept override { return midiMap.revision(); }
+    bool saveAsDefault() override;
+    bool hasUserDefault() const override { return synthyboy::hasUserDefault (userDir); }
+    bool clearUserDefault() override;
+    bool initPatch() override;
+    bool canLock() const noexcept override { return true; }
+    bool isModuleLocked (const std::string& prefix) const override;
+    void setModuleLocked (const std::string& prefix, bool locked) override;
+    bool loadPatch (const synthyboy::ParamValues& values, const synthyboy::StateContent& newContent) override;
+    synthyboy::MidiCcMap& midiCcMap() noexcept { return midiMap; }
+    /** The directory of the user default (SYNTHYBOY_USER_DIR, else the user data directory); fixed at construction. */
+    const std::string& userDataDir() const noexcept { return userDir; }
+
     /** Preset browsing belongs to Kick: the owner of the preset list installs the prev / next callback and sets the shown name. */
     void setPresetStepHandler (std::function<void (int)> handler) { presetStepHandler = std::move (handler); }
     void setPresetName (const juce::String& name) { presetNameText = name; }
@@ -105,6 +126,7 @@ private:
 
     juce::AudioProcessorValueTreeState apvts;
     std::array<std::atomic<float>*, synthyboy::kMaxParams> rawParams {};
+    std::array<juce::RangedAudioParameter*, synthyboy::kMaxParams> paramPtrs {}; // looked up once: the audio thread must not search by name
     std::array<float, synthyboy::kMaxParams> sentToEngine {}; // audio thread: the value the engine has, for change detection
 
     // The `content` section of the state (custom LFO shapes, content references, ...: not parameters). Part of the host state
@@ -115,6 +137,16 @@ private:
     // what the host loaded last (or the defaults): "Revert to saved". Message thread, the content mutex covers hosts that do not.
     synthyboy::ParamValues savedValues = synthyboy::ParamValues::defaults();
     synthyboy::StateContent savedContent;
+
+    // shell features (not parameters): the CC map is read and learned on the audio thread (atomics), the locks belong to the message thread
+    synthyboy::MidiCcMap midiMap;
+    std::vector<std::string> locks; // guarded by contentMutex
+    std::string userDir;
+    synthyboy::ShellState shellState() const;       // takes contentMutex
+    std::string stateText();                         // saveState + content + shell section (the host state and the user default)
+    void applyShell (const synthyboy::ShellState& shell);
+    /** Parameters and content of a loaded patch; `respectLocks` keeps the locked modules of the current patch. */
+    void applyPatch (synthyboy::ParamValues values, synthyboy::StateContent newContent, bool respectLocks);
 
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction

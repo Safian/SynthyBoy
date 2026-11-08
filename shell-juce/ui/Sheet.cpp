@@ -81,13 +81,9 @@ ParamSheet::ParamSheet (UiContext& context, const std::string& key) : ctx (conte
     minus.onClick = [this] { nudge (-1); };
     plus.onClick = [this] { nudge (+1); };
     reset.onClick = [this] { handle.resetToDefault(); };
-    learn.setEnabled (ctx.host.canMidiLearn());
-    learn.setTooltip (ctx.host.canMidiLearn() ? juce::String ("Move a MIDI controller") : juce::String ("MIDI learn is not available yet"));
-    learn.onClick = [this]
-    {
-        ctx.host.startMidiLearn (handle.key());
-        close();
-    };
+    learn.setEnabled (ctx.host.canMidiLearn() && handle.valid());
+    learn.onClick = [this] { learnClicked(); };
+    refreshLearn();
     assign.setEnabled (handle.valid() && modDestinationChoiceOf (static_cast<size_t> (handle.index())) > 0);
     assign.setTooltip (assign.isEnabled() ? juce::String ("Pick a modulation source, then drag the control") : juce::String ("This control cannot be modulated"));
     assign.onClick = [this] { showSourceMenu(); };
@@ -123,6 +119,41 @@ int ParamSheet::preferredHeight() const
 void ParamSheet::changeListenerCallback (juce::ChangeBroadcaster*)
 {
     rebuildModRows();
+}
+
+/** MIDI learn button: "MIDI learn" arms the key (the sheet closes so the control shows LEARN), "Cancel learn" disarms, "Remove CC n" clears the mapping. */
+void ParamSheet::refreshLearn()
+{
+    const int cc = ctx.host.midiCcForKey (handle.key());
+    const bool armed = ctx.host.midiLearnKey() == handle.key();
+    learn.setButtonText (armed ? juce::String ("Cancel learn") : cc >= 0 ? "Remove CC " + juce::String (cc) : juce::String ("MIDI learn"));
+    learn.setTooltip (! ctx.host.canMidiLearn() ? juce::String ("MIDI learn is not available in this host")
+                      : armed ? juce::String ("Waiting for a MIDI controller")
+                      : cc >= 0 ? juce::String ("Unmap the controller") : juce::String ("Move a MIDI controller"));
+}
+
+void ParamSheet::learnClicked()
+{
+    if (! handle.valid())
+        return;
+    const int cc = ctx.host.midiCcForKey (handle.key());
+    if (ctx.host.midiLearnKey() == handle.key())
+    {
+        ctx.host.cancelMidiLearn();
+        refreshLearn();
+        ctx.assign.sendChangeMessage();
+        return;
+    }
+    if (cc >= 0)
+    {
+        ctx.host.clearMidiCc (handle.key());
+        refreshLearn();
+        ctx.assign.sendChangeMessage();
+        return;
+    }
+    ctx.host.startMidiLearn (handle.key());
+    ctx.assign.sendChangeMessage();
+    close();
 }
 
 void ParamSheet::refreshValue()

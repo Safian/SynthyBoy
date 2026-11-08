@@ -16,6 +16,7 @@ add_library(synthyboy_core STATIC
     src/content_pack.cpp
     src/content_store.cpp
     src/kick_pages.cpp
+    src/shell_features.cpp
     engine-own/own_engine.cpp)
 
 target_include_directories(synthyboy_core

@@ -28,6 +28,8 @@ public:
         bool target = false;     // armed and modulatable
         int armedSource = 0;     // choice value, 0 = none
         int activeSlot = -1;     // slot being dragged
+        int midiCc = -1;         // the CC mapped to the control (MIDI learn), -1 none
+        bool learning = false;   // waiting for a CC
     };
 
     void setState (State newState);

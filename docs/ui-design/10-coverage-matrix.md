@@ -30,7 +30,7 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | Displaying help (tooltips) [S p.23] | 01 §1.4 | none | HAVE | UI |
 | Using the Serum keyboard [S p.25] | 01 §1.3 | NoteOn / NoteOff events | HAVE | touch velocity, latch, octave shift |
 | Using knobs and sliders: drag, fine, wheel, numeric entry, reset [S p.25-26] | 01 §1.4 | any key | HAVE | long press = value / assign / reset / MIDI-learn menu |
-| MIDI Learn / Remove MIDI CC / Lock Parameter [S p.26] | 01 §1.4, 07 §1 | none | GAP | G07 (01) vs HAVE in 07: contradiction X2; lock = G08 |
+| MIDI Learn / Remove MIDI CC / Lock Parameter [S p.26] | 01 §1.4, 07 §1 | none (shell state) | HAVE | G07 built as a shell-side table (15-shell-features.md 2): long-press sheet -> MIDI learn / Remove CC; lock = G08 (module lock, 15 section 4) |
 | Undo and Redo [S p.27] | 01 §1.1 | any key, shapes | HAVE | UI; A/B compare added |
 | Controlling the main output volume + meter [S p.27] | 01 §1.1, 07 §1 | `master.volume` | HAVE | |
 | Enabling an oscillator or filter [S p.28] | 02 §1.1, 04 §1.1 | `osc1.on`, `osc2.on`, `osc3.on`, `filter1.on`, `filter2.on`, `noise.on`, `fxfilter.on` | HAVE | Sub osc: GAP (G23) |
@@ -39,7 +39,7 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | Pitch CRS, modes Harmonics / Ratio / Step, tracking toggle [S p.29-36] | 02 §1.1 | none | GAP | G25, G26, G27 |
 | Routing an oscillator or filter: Filter 1 / 2 / both, Main, Direct [S p.31] | 02 §1.1, 04 §1.1 | `osc1.destination`, `noise.destination`, `filter.routing` | PARTIAL | knob blend, None, Bus 1/2 = G28 |
 | Oscillator / filter output as modulation source [S p.208] | 02 §1.1, 06 §1 | none | GAP | G29 |
-| Accessing the module menu: Lock, Init, Copy, Paste, Copy w/ mods, swap [S p.33-34] | 01 §1.4 | all keys of the module + its `modNN` | PARTIAL | Lock = G08 |
+| Accessing the module menu: Lock, Init, Copy, Paste, Copy w/ mods, swap [S p.33-34] | 01 §1.4 | all keys of the module + its `modNN` | HAVE | Lock = G08, built (15-shell-features.md 4) |
 | Resizing the UI [S p.36] | 01 §1.1 | none | HAVE | UI scale; phone/tablet layouts |
 
 ### 1.2 Wavetable oscillator (pp.37-57)
@@ -341,13 +341,13 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | ID | GAP | Files | Engine would need |
 |----|-----|-------|-------------------|
 | G01 | Macros 5-8 | 01 §1.2, 06 §1 | four more macro keys + 4 mod-source choices |
-| G02 | Save as Default Preset | 01 §1.1 | user default-state slot loaded by Init |
+| G02 | Save as Default Preset | 01 §1.1 | user default-state slot loaded by Init (BUILT, 15-shell-features.md 3) |
 | G03 | Drag-out / Share last note as audio; Resample to wavetable; offline render | 01 §1.1, 03 §1.1, 07 §1 | offline render API for the last note / one bar |
 | G04 | Embed a sample in the preset | 01 §1.1 | sample oscillator + ContentPack samples |
 | G05 | Key + Scale quantizer, Vital Global Snap, transpose-snap keyboard | 01 §1.3, 02 §1.1, 07 §1 | note-filter stage in `IEngine` (or Kick MIDI pipeline) |
 | G06 | Oscillator mapping: key / velocity ranges, FOLD, WARP flag | 01 §1.3, 02 §1.1, 07 §1 | per-oscillator range state + voice gating |
-| G07 | MIDI Learn / CC map | 01 §1.4 | CC-to-parameter table in core (07 treats it as shell layer, X2) |
-| G08 | Lock parameter / lock module (survive preset load) | 01 §1.4, 08 §1.1 | locked-key set in the state loader |
+| G07 | MIDI Learn / CC map | 01 §1.4 | CC-to-parameter table in core (07 treats it as shell layer, X2) (BUILT, 15-shell-features.md 2) |
+| G08 | Lock parameter / lock module (survive preset load) | 01 §1.4, 08 §1.1 | locked-key set in the state loader (BUILT for modules and keys, 15-shell-features.md 4) |
 | G09 | Sustain pedal (CC64) | 07 §1 | `Event::Type::sustainPedal` (engine-vital already implements it) |
 | G10 | MPE / per-note expression (bend, slide, pressure, poly AT) | 07 §1, 06 §1 | note-expression events through CLAP + engine voices |
 | G11 | Tuning: A4 reference, `.scl` / `.kbm` / `.tun`, MTS-ESP | 07 §1, 11 §1.2.11 | expose `sbvital::Tuning` on `IEngine` |

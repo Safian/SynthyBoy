@@ -40,6 +40,16 @@ public:
         revertBtn.onClick = [this] { doRevert(); };
         addAndMakeVisible (revertBtn);
 
+        // Save as Default (G02): the current patch becomes the init patch of new instances and of Init Preset
+        saveDefaultBtn.setButtonText ("Save as Default");
+        saveDefaultBtn.onClick = [this] { doSaveDefault(); };
+        addAndMakeVisible (saveDefaultBtn);
+
+        clearDefaultBtn.setButtonText ("Clear Default");
+        clearDefaultBtn.onClick = [this] { doClearDefault(); };
+        addAndMakeVisible (clearDefaultBtn);
+        refreshDefaultButtons();
+
         doubleTapBtn.setButtonText ("Dbl-Tap: Reset");
         doubleTapBtn.onClick = [this]
         {
@@ -93,10 +103,10 @@ public:
 
         // Row group 1: Init / Revert buttons, row group 2: UI preferences. Each wraps into as many rows as the width needs,
         // every button at least two touch targets wide.
-        juce::TextButton* const initRow[] = { &initPresetBtn, &initModsBtn, &initLfosBtn, &revertBtn };
+        juce::TextButton* const initRow[] = { &initPresetBtn, &initModsBtn, &initLfosBtn, &revertBtn, &saveDefaultBtn, &clearDefaultBtn };
         juce::TextButton* const prefRow[] = { &doubleTapBtn, &freqUnitsBtn, &silenceOnStopBtn };
         auto area = bounds;
-        layoutGrid (area, initRow, 4);
+        layoutGrid (area, initRow, 6);
         layoutGrid (area, prefRow, 3);
     }
 
@@ -105,7 +115,7 @@ public:
     {
         const auto& t = ctx.theme;
         const int inner = viewWidth - 2 * t.gap();
-        const int rows = rowsFor (4, inner) + rowsFor (3, inner);
+        const int rows = rowsFor (6, inner) + rowsFor (3, inner);
         return 2 * t.gap() + rows * t.touch() + rows * t.gap() + t.ipx (24.0f);
     }
 
@@ -146,11 +156,38 @@ public:
     /** Every parameter to its default and the content (custom LFO shapes ...) emptied: a new patch. */
     void doInitPreset()
     {
-        applyValues (ctx, ParamValues::defaults());
-        ctx.host.setContent (StateContent {});
+        // the user's default patch (G02) when there is one, else the factory init patch; the locked modules (G08) stay as they are
+        const bool fromDefault = ctx.host.hasUserDefault();
+        if (! ctx.host.initPatch())
+        {
+            applyValues (ctx, ParamValues::defaults());
+            ctx.host.setContent (StateContent {});
+        }
         ctx.assign.refresh();
-        Toast::show (ctx, *this, "Preset initialised");
+        Toast::show (ctx, *this, fromDefault ? "Preset initialised from your default" : "Preset initialised");
         repaint();
+    }
+
+    void doSaveDefault()
+    {
+        const bool ok = ctx.host.saveAsDefault();
+        refreshDefaultButtons();
+        Toast::show (ctx, *this, ok ? "Saved as the default patch" : "Could not save the default patch");
+        repaint();
+    }
+
+    void doClearDefault()
+    {
+        const bool ok = ctx.host.clearUserDefault();
+        refreshDefaultButtons();
+        Toast::show (ctx, *this, ok ? "Default patch cleared" : "Could not clear the default patch");
+        repaint();
+    }
+
+    void refreshDefaultButtons()
+    {
+        saveDefaultBtn.setEnabled (true);
+        clearDefaultBtn.setEnabled (ctx.host.hasUserDefault());
     }
 
     void doInitMods()
@@ -188,6 +225,8 @@ public:
     juce::TextButton& initModsButton() noexcept { return initModsBtn; }
     juce::TextButton& initLfosButton() noexcept { return initLfosBtn; }
     juce::TextButton& revertButton() noexcept { return revertBtn; }
+    juce::TextButton& saveDefaultButton() noexcept { return saveDefaultBtn; }
+    juce::TextButton& clearDefaultButton() noexcept { return clearDefaultBtn; }
 
 private:
 
@@ -201,6 +240,8 @@ private:
     juce::TextButton initModsBtn;
     juce::TextButton initLfosBtn;
     juce::TextButton revertBtn;
+    juce::TextButton saveDefaultBtn;
+    juce::TextButton clearDefaultBtn;
 
     juce::TextButton doubleTapBtn;
     juce::TextButton freqUnitsBtn;

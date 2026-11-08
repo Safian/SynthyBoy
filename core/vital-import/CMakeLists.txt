@@ -5,10 +5,12 @@
 
 set(SB_VITAL_IMPORT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 target_sources(synthyboy_core PRIVATE
+    "${SB_VITAL_IMPORT_DIR}/zip_reader.cpp"
     "${SB_VITAL_IMPORT_DIR}/json_reader.cpp"
     "${SB_VITAL_IMPORT_DIR}/vital_map.cpp"
     "${SB_VITAL_IMPORT_DIR}/vital_content.cpp"
     "${SB_VITAL_IMPORT_DIR}/builtin_ref.cpp"
+    "${SB_VITAL_IMPORT_DIR}/vital_batch.cpp"
     "${SB_VITAL_IMPORT_DIR}/vital_import.cpp")
 target_include_directories(synthyboy_core PRIVATE "${SB_VITAL_IMPORT_DIR}")
 
@@ -17,6 +19,11 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_vital_import tests/test_vital_import.cpp tests/fixtures.cpp)
     target_include_directories(synthyboy_test_vital_import PRIVATE "${SB_VITAL_IMPORT_DIR}" "${SB_VITAL_IMPORT_DIR}/tests")
     target_compile_definitions(synthyboy_test_vital_import PRIVATE
+        SB_VITAL_PRESETS_DIR="${PROJECT_SOURCE_DIR}/tests/vital-presets")
+    # zip reader, batch import and .vitalbank
+    synthyboy_add_test(synthyboy_test_vital_bank tests/test_vital_bank.cpp tests/fixtures.cpp)
+    target_include_directories(synthyboy_test_vital_bank PRIVATE "${SB_VITAL_IMPORT_DIR}" "${SB_VITAL_IMPORT_DIR}/tests")
+    target_compile_definitions(synthyboy_test_vital_bank PRIVATE
         SB_VITAL_PRESETS_DIR="${PROJECT_SOURCE_DIR}/tests/vital-presets")
     # a cross-check against the engine's own built-in tables needs the Vital-derived engine
     if(SYNTHYBOY_WITH_VITAL)

@@ -104,6 +104,27 @@ void ModRing::paint (juce::Graphics& g)
         }
     }
 
+    if (current.learning)
+    {
+        // MIDI learn: the control waits for a CC
+        g.setColour (c.warn);
+        g.drawRoundedRectangle (bounds.reduced (1.0f), theme.px (6.0f), juce::jmax (2.0f, theme.px (2.0f)));
+        g.setFont (theme.font (theme.px (10.0f), true));
+        g.drawText ("LEARN", bounds.toNearestInt().removeFromBottom (theme.ipx (14.0f)), juce::Justification::centred, false);
+    }
+    else if (current.midiCc >= 0)
+    {
+        // the mapped controller, bottom right
+        const juce::String text = "CC" + juce::String (current.midiCc);
+        g.setFont (theme.font (theme.px (9.0f), true));
+        const int w = text.length() * theme.ipx (6.0f) + theme.ipx (4.0f);
+        const auto tag = juce::Rectangle<int> (getWidth() - w, getHeight() - theme.ipx (12.0f), w, theme.ipx (12.0f));
+        g.setColour (c.panel.withAlpha (0.85f));
+        g.fillRoundedRectangle (tag.toFloat(), theme.px (3.0f));
+        g.setColour (c.mod);
+        g.drawText (text, tag, juce::Justification::centred, false);
+    }
+
     if (! current.entries.empty())
     {
         // count badge, top left

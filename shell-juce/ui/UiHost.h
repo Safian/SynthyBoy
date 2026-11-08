@@ -15,6 +15,7 @@
 #include "model/ModModel.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine_caps.h"
+#include "synthyboy/state.h"
 
 namespace synthyboy::ui
 {
@@ -36,9 +37,34 @@ public:
     virtual void stepPreset (int direction) = 0;
     virtual juce::String presetName() const = 0;
 
-    /** MIDI-learn placeholder hook (docs/ui-design/01 1.4: GAP, no CC map in core). The sheet enables its button only if canMidiLearn(). */
+    /** MIDI learn (G07, docs/ui-design/15-shell-features.md): the shell keeps a CC -> parameter table (any channel) and saves it in the state.
+        startMidiLearn arms one key: the next learnable CC is mapped to it (the CC does not move the knob that first time). Message thread. */
     virtual bool canMidiLearn() const noexcept { return false; }
     virtual void startMidiLearn (const std::string& /*key*/) {}
+    virtual void cancelMidiLearn() {}
+    /** The key that waits for a CC, "" when learn mode is off. */
+    virtual std::string midiLearnKey() const { return {}; }
+    /** The CC mapped to `key`, -1 if none. */
+    virtual int midiCcForKey (const std::string& /*key*/) const { return -1; }
+    virtual void clearMidiCc (const std::string& /*key*/) {}
+    /** Changes with every change of the table or of the learn state (the editor timer polls it to redraw the knobs). */
+    virtual uint32_t midiMapRevision() const noexcept { return 0; }
+
+    /** Save as Default (G02): the current patch (parameters, content, MIDI map, locks) becomes the init patch of every new instance, stored in
+        the user data directory. hasUserDefault / clearUserDefault: the slot; initPatch loads it (or the factory init patch when the slot is
+        empty), the locked modules are kept. */
+    virtual bool saveAsDefault() { return false; }
+    virtual bool hasUserDefault() const { return false; }
+    virtual bool clearUserDefault() { return false; }
+    virtual bool initPatch() { return false; }
+
+    /** Locks (G08): a locked module ("osc1", "filter2", "lfo3", "env1" ...) keeps its parameters and content when a preset is loaded
+        (loadPatch, initPatch, a state without a shell section). Saved with the state. */
+    virtual bool canLock() const noexcept { return false; }
+    virtual bool isModuleLocked (const std::string& /*prefix*/) const { return false; }
+    virtual void setModuleLocked (const std::string& /*prefix*/, bool /*locked*/) {}
+    /** Loads a patch as a preset change: parameters and content, except what the locks keep. False when the host cannot. */
+    virtual bool loadPatch (const ParamValues& /*values*/, const StateContent& /*content*/) { return false; }
 
     /** Live output meter peaks (linear amplitude, e.g. 0..1 or higher if clipping) from the audio callback. */
     virtual float outputPeakL() const noexcept { return 0.0f; }

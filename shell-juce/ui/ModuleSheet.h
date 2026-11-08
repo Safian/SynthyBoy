@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Copy | Copy with mods | Paste | Paste with mods | Swap with ... | Init | Lock module (GAP: no key, shown disabled). The operations are free
+// Copy | Copy with mods | Paste | Paste with mods | Swap with ... | Init | Lock module (G08: shell-side lock list, see UiHost::setModuleLocked). The operations are free
 // functions on the UiContext (ModuleClipboard / ModuleSnapshot::swapModules of model/ModModel.h), so the gestures that reach them
 // (header long-press, strip drag onto another strip) and the tests use the same code.
 #pragma once
@@ -25,6 +25,9 @@ bool isModule (const std::string& prefix);
 bool copy (UiContext& ctx, const std::string& prefix, bool withMods);
 bool paste (UiContext& ctx, const std::string& prefix, bool withMods);
 bool init (UiContext& ctx, const std::string& prefix);
+/** Lock (G08): a locked module keeps its parameters and content when a preset is loaded. False for a prefix that is not a module or a host without locks. */
+bool setLocked (UiContext& ctx, const std::string& prefix, bool locked);
+bool isLocked (const UiContext& ctx, const std::string& prefix);
 /** Swaps all settings of the two modules (and the modulation slots that name them when withMods). */
 bool swap (UiContext& ctx, const std::string& a, const std::string& b, bool withMods = true);
 /** Copies `from` onto `to` without touching the clipboard. */
@@ -56,6 +59,7 @@ private:
     juce::OwnedArray<juce::TextButton> buttons;
     std::vector<std::pair<std::string, juce::TextButton*>> swapButtons;
     juce::Label swapLabel;
+    juce::String lockText;
 };
 
 /** Opens the sheet as a call-out box pointing at `anchor` (async). */

@@ -99,6 +99,20 @@ bool init (UiContext& ctx, const std::string& prefix)
     return true;
 }
 
+bool setLocked (UiContext& ctx, const std::string& prefix, bool locked)
+{
+    if (! isModule (prefix) || ! ctx.host.canLock())
+        return false;
+    ctx.host.setModuleLocked (prefix, locked);
+    ctx.assign.sendChangeMessage();
+    return ctx.host.isModuleLocked (prefix) == locked;
+}
+
+bool isLocked (const UiContext& ctx, const std::string& prefix)
+{
+    return isModule (prefix) && ctx.host.isModuleLocked (prefix);
+}
+
 bool swap (UiContext& ctx, const std::string& a, const std::string& b, bool withMods)
 {
     if (! isModule (a) || ! isModule (b))
@@ -161,9 +175,12 @@ ModuleSheet::ModuleSheet (UiContext& context, const std::string& prefixIn) : ctx
     }
 
     add ("Init", [this] { module_ops::init (ctx, modulePrefix); });
-    auto* lock = add ("Lock module", [] {});
-    lock->setEnabled (false); // GAP (01 section 1.4): the engine has no lock key
-    lock->setTooltip ("not available in this engine");
+    // Lock (G08): a locked module keeps its parameters and content when a preset is loaded; the lock is saved with the state
+    lockText = ctx.host.isModuleLocked (modulePrefix) ? "Unlock module" : "Lock module";
+    auto* lock = add (lockText,
+                      [this] { module_ops::setLocked (ctx, modulePrefix, ! ctx.host.isModuleLocked (modulePrefix)); });
+    lock->setEnabled (ctx.host.canLock());
+    lock->setTooltip (ctx.host.canLock() ? juce::String ("A preset change does not overwrite a locked module") : juce::String ("Locks are not available in this host"));
     refreshEnabled();
 }
 
@@ -241,7 +258,7 @@ void ModuleSheet::resized()
         ++col;
     }
     r.removeFromTop (gap);
-    row2 ("Init", "Lock module");
+    row2 ("Init", lockText.toRawUTF8());
 }
 
 void ModuleSheet::paint (juce::Graphics& g)
@@ -250,7 +267,7 @@ void ModuleSheet::paint (juce::Graphics& g)
     g.fillAll (t.colours.panel);
     g.setColour (t.colours.text);
     g.setFont (t.titleFont());
-    g.drawFittedText (module_ops::displayName (modulePrefix), getLocalBounds().reduced (t.gap()).removeFromTop (t.touch()),
+    g.drawFittedText (module_ops::displayName (modulePrefix) + (ctx.host.isModuleLocked (modulePrefix) ? juce::String ("  (locked)") : juce::String()), getLocalBounds().reduced (t.gap()).removeFromTop (t.touch()),
                       juce::Justification::centredLeft, 1);
 }
 

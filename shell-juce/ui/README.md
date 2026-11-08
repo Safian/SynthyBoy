@@ -51,7 +51,7 @@ Every control: value text with unit from `ParamInfo` (`displayText`, Hz >= 1000 
 `not available in this engine` when `requiredCaps()` of the key is not covered by `UiHost::engineCaps()` (still editable);
 purple target ring while a modulation source is armed and the key is modulatable; `ModRing` shows assigned depth.
 Long-press sheet (`Sheet.h`): exact value entry (`1.5k`, units allowed, empty + Enter = cancel), `-` / `+`, default and range,
-Reset, MIDI learn (enabled only if `UiHost::canMidiLearn()`), Assign mod (source menu arms the flow), list of the modulations
+Reset, MIDI learn (G07: arm / cancel / remove CC, see docs/ui-design/15-shell-features.md; enabled only if `UiHost::canMidiLearn()`), Assign mod (source menu arms the flow), list of the modulations
 on the key with bypass and remove.
 
 ## Modulation by touch (06-modulation.md)
@@ -84,7 +84,7 @@ all visible controls at phone / tablet sizes. Dark / light palette: `Theme::dark
 ## Host glue
 
 `UiHost` (UiHost.h) is the only thing the kit needs from the processor: APVTS, engine caps, keyboard state, A/B, preset prev / next +
-name, MIDI-learn hook. `SynthyBoyProcessor` implements it (`setPresetStepHandler`, `setPresetName` for Kick's preset list).
+name, MIDI learn, Save as Default, module locks (`canMidiLearn`, `saveAsDefault`, `initPatch`, `isModuleLocked`, `loadPatch`). `SynthyBoyProcessor` implements it (`setPresetStepHandler`, `setPresetName` for Kick's preset list).
 `createEditor()` returns `SynthyBoyEditor`; `SYNTHYBOY_GENERIC_UI=1` in the environment gives the generic JUCE editor back.
 
 ## Tabbed pages and patch content
