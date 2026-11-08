@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "../Panel.h"
 #include "OscWaveView.h"
+#include "TransposeControl.h"
 
 namespace synthyboy::ui
 {
@@ -18,9 +19,29 @@ public:
         addAndMakeVisible (waveView);
         onHandle.onChange = [this]
         {
+            updateDimming();
             repaint();
             waveView.repaint();
         };
+        // the swipe on the view (two fingers) goes to the next / previous oscillator, like the chips
+        waveView.onSwitchOscillator = [this] (int direction)
+        {
+            ctx.view->oscTab = juce::jlimit (0, 2, ctx.view->oscTab + direction);
+            if (onHeightChanged)
+                onHeightChanged();
+        };
+        updateDimming();
+    }
+
+    /** Only the oscillator chosen on the chip row takes part in the layout. */
+    bool hiddenInLayout() const override { return ctx.view->oscTab != OscIndex - 1; }
+    std::string modulePrefix() const override { return "osc" + std::to_string (OscIndex); }
+    OscWaveView& view() noexcept { return waveView; }
+
+    /** Power dot off: the whole panel dims (design 02 section 3; the controls stay editable). */
+    void updateDimming()
+    {
+        setAlpha (onHandle.valid() && onHandle.normalised() < 0.5f ? 0.4f : 1.0f); // normalised (): the listener runs before the atomic updates
     }
 
     juce::String title() const override
@@ -67,8 +88,13 @@ public:
         {
             if (i < 4)
                 addControl (all[i]);
-            else
-                addMoreControl (all[i]);
+            else if (all[i] == "osc" + std::to_string (OscIndex) + ".transpose")
+                addMoreControl (std::make_unique<TransposeControl> (ctx, all[i])); // OCT segments + SEM wheel
+            else if (auto& control = addMoreControl (all[i]); all[i] == "osc" + std::to_string (OscIndex) + ".warp.type")
+            {
+                if (auto* choice = dynamic_cast<ParamChoice*> (&control))
+                    choice->setGroups (warpTypeGroups()); // Basic / Alt / FM / RM, the groups without a mode greyed
+            }
         }
     }
 
@@ -99,7 +125,8 @@ public:
             const auto& t = ctx.theme;
             g.setFont (t.labelFont());
             g.setColour (t.colours.warn);
-            g.drawText ("[MUTED / OFF]", getLocalBounds().reduced (t.gap(), 0).withHeight (headerHeight() + t.gap() / 2),
+            g.drawText ("[MUTED / OFF]",
+                        getLocalBounds().reduced (t.gap(), 0).withTrimmedRight (t.touch()).withHeight (headerHeight() + t.gap() / 2),
                         juce::Justification::centredRight, false);
         }
     }

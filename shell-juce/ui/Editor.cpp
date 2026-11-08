@@ -37,6 +37,11 @@ SynthyBoyEditor::SynthyBoyEditor (juce::AudioProcessor& owner, UiHost& h)
     top->onAbToggle = [this] { toggleAb(); };
     top->onAssignToggle = [this] { setSourceBarOpen (! sourcesOpen); };
     top->onMenu = [this] { showMenu(); };
+    top->onVoiceBadge = [this]
+    {
+        tabs->select (Page::glb, false);
+        panels->setPage (Page::glb);
+    };
     tabs->onSelect = [this] (Page p) { panels->setPage (p); };
     for (int i = 0; i < kNumPages; ++i)
         tabs->setHasPanels (static_cast<Page> (i), panels->pageHasPanels (static_cast<Page> (i)));
@@ -117,6 +122,12 @@ void SynthyBoyEditor::timerCallback()
         updateUndoRedoButtons();
     }
     assign.refresh(); // host automation can move a mod slot
+    if (auto* poly = host.parameters().getRawParameterValue ("master.polyphony"))
+    {
+        const int voices = host.activeVoiceCount();
+        top->setVoiceBadge (voices, juce::roundToInt (poly->load()));
+        tabs->setBadge (Page::glb, voices > 0 ? juce::String (voices) : juce::String());
+    }
 }
 
 void SynthyBoyEditor::parameterGestureChanged (int, bool starting)

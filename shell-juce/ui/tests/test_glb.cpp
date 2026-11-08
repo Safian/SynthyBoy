@@ -241,7 +241,7 @@ TEST (glb_panels_registered_and_contract)
 
         CHECK (panel->title().isNotEmpty());
         const auto keys = panel->keys();
-        CHECK (! keys.empty());
+        CHECK (! keys.empty() || panel->title() == "Scope"); // the scope is a display, it has no key
         CHECK_EQ (keys.size(), panel->controls().size());
 
         for (size_t i = 0; i < keys.size(); ++i)

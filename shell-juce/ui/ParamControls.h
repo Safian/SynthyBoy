@@ -13,9 +13,11 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "Overlays.h"
 #include "ParamHandle.h"
+#include "model/GestureModel.h"
 
 namespace synthyboy::ui
 {
@@ -38,6 +40,8 @@ public:
 
     /** Natural size at the current theme scale; panels lay controls out with it. Always >= the 44 point touch target in both axes. */
     virtual juce::Point<int> preferredSize() const = 0;
+    /** True for a control that needs a row of its own (OCT / SEM): the panel layout gives it the full width. */
+    virtual bool spansRow() const noexcept { return false; }
 
     /** Opens the long-press sheet (also on right-click). */
     void showSheet();
@@ -81,6 +85,14 @@ public:
     /** Mouse-less entry points for the tests and for hardware encoders: a full gesture on the control. */
     void nudgeNormalised (float delta);
 
+    /** The count badge of the depth halo is a hit target: tap = the list of the modulators on this control; choosing one arms its source,
+        so the next drag on this control sets that modulator's depth (design 06). */
+    juce::Rectangle<int> modulatorBadgeBounds() const;
+    int modulatorCount() const;
+    /** Arms the source of the modulator in `slot` (what the list entry does). False if that slot does not modulate this control. */
+    bool selectModulator (int slot);
+    bool modulatorListShown() const noexcept { return badgeMenuShown; }
+
 protected:
     virtual bool isHorizontal() const noexcept { return false; }
     virtual float pixelsForFullRange() const;
@@ -105,7 +117,8 @@ private:
     juce::Point<float> downPos, lastPos;
     juce::uint32 lastTapMs = 0;
     juce::Point<float> lastTapPos;
-    bool pressed = false, dragging = false, assignDrag = false;
+    bool pressed = false, dragging = false, assignDrag = false, badgePress = false, badgeMenuShown = false;
+    void showModulatorList();
     FineZone zone = FineZone::normal;
 };
 
@@ -162,8 +175,15 @@ public:
     void step (int direction);
     /** The option list as shown (name, value, enabled): unavailable entries (caps) are disabled. */
     void showOptions();
+    /** Grouped option list ("tap a group, tap a mode", design 02 WARP+): the list opens as groups with sub menus. A group with `gap` and no
+        items is listed greyed (the design has it, the engine has no mode in it). Without groups the list is flat. */
+    void setGroups (std::vector<ChoiceGroup> newGroups) { groups = std::move (newGroups); }
+    const std::vector<ChoiceGroup>& choiceGroups() const noexcept { return groups; }
+    /** The menu showOptions () shows (the tests inspect it). */
+    juce::PopupMenu buildOptionMenu() const;
 
 private:
+    std::vector<ChoiceGroup> groups;
     juce::Rectangle<int> arrowArea (bool left) const;
     bool pressed = false;
     juce::Point<float> downPos;

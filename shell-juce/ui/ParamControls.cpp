@@ -182,6 +182,52 @@ void ParamDragControl::hideBubble()
     }
 }
 
+juce::Rectangle<int> ParamDragControl::modulatorBadgeBounds() const
+{
+    if (ring == nullptr || modulatorCount() == 0)
+        return {};
+    // the badge is drawn at the top left of the ring; the hit area is a little larger than the drawn dot
+    const int size = ctx.theme.ipx (26.0f);
+    return juce::Rectangle<int> (ring->getX(), ring->getY(), size, size).getIntersection (getLocalBounds());
+}
+
+int ParamDragControl::modulatorCount() const
+{
+    return handle.valid() ? static_cast<int> (ctx.assign.snapshot().entriesFor (handle.index()).size()) : 0;
+}
+
+bool ParamDragControl::selectModulator (int slot)
+{
+    if (! handle.valid())
+        return false;
+    for (const auto& e : ctx.assign.snapshot().entriesFor (handle.index()))
+        if (e.slot == slot)
+        {
+            if (ctx.assign.flow().armedSource() != e.source)
+                ctx.assign.tapSource (e.source);
+            return ctx.assign.flow().armedSource() == e.source;
+        }
+    return false;
+}
+
+void ParamDragControl::showModulatorList()
+{
+    const auto entries = ctx.assign.snapshot().entriesFor (handle.index());
+    if (entries.empty())
+        return;
+    badgeMenuShown = true;
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Modulators of " + juce::String (handle.info().name));
+    for (const auto& e : entries)
+        menu.addItem (e.slot + 1, juce::String (modSourceTable()[e.source - 1].name) + "   " + juce::String (juce::roundToInt (e.amount)) + " %");
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                        [safe = juce::Component::SafePointer<ParamDragControl> (this)] (int result)
+                        {
+                            if (result > 0 && safe != nullptr)
+                                safe->selectModulator (result - 1);
+                        });
+}
+
 void ParamDragControl::mouseDown (const juce::MouseEvent& e)
 {
     if (! handle.valid())
@@ -192,6 +238,9 @@ void ParamDragControl::mouseDown (const juce::MouseEvent& e)
         showSheet();
         return;
     }
+    badgePress = ctx.assign.flow().phase() == AssignFlow::Phase::idle && modulatorBadgeBounds().contains (e.getPosition());
+    if (badgePress)
+        return;
 
     pressed = true;
     dragging = false;
@@ -203,6 +252,8 @@ void ParamDragControl::mouseDown (const juce::MouseEvent& e)
 
 void ParamDragControl::mouseDrag (const juce::MouseEvent& e)
 {
+    if (badgePress)
+        return;
     if (! pressed || ! handle.valid())
         return;
 
@@ -248,6 +299,13 @@ void ParamDragControl::mouseUp (const juce::MouseEvent& e)
 {
     cancelLongPress();
     hideBubble();
+    if (badgePress)
+    {
+        badgePress = false;
+        if (modulatorBadgeBounds().contains (e.getPosition()))
+            showModulatorList();
+        return;
+    }
     if (! pressed)
         return;
     pressed = false;
@@ -565,20 +623,52 @@ void ParamChoice::step (int direction)
         }
 }
 
+juce::PopupMenu ParamChoice::buildOptionMenu() const
+{
+    juce::PopupMenu menu;
+    if (! handle.valid())
+        return menu;
+    const ParamInfo& info = handle.info();
+    const int count = static_cast<int> (choiceCount (info));
+    const int current = static_cast<int> (std::lround (handle.plain()));
+    const auto item = [&] (int i)
+    {
+        const bool ok = capStateForValue (handle.index(), static_cast<float> (i), ctx.host.engineCaps()).available;
+        return juce::PopupMenu::Item (juce::String (choiceName (info, static_cast<size_t> (i)))).setID (i + 1).setEnabled (ok).setTicked (i == current);
+    };
+
+    if (groups.empty())
+    {
+        for (int i = 0; i < count; ++i)
+            menu.addItem (item (i));
+        return menu;
+    }
+    // tap a group, tap a mode: a group with a single mode is that mode itself; a gap group is greyed
+    for (const auto& group : groups)
+    {
+        if (group.gap || group.items.empty())
+        {
+            menu.addItem (juce::PopupMenu::Item (juce::String (group.name) + " (not available)").setEnabled (false));
+            continue;
+        }
+        juce::PopupMenu sub;
+        bool hasCurrent = false;
+        for (const int i : group.items)
+            if (i >= 0 && i < count)
+            {
+                sub.addItem (item (i));
+                hasCurrent = hasCurrent || i == current;
+            }
+        menu.addSubMenu (group.name, sub, true, nullptr, hasCurrent);
+    }
+    return menu;
+}
+
 void ParamChoice::showOptions()
 {
     if (! handle.valid())
         return;
-    const ParamInfo& info = handle.info();
-    const int count = static_cast<int> (choiceCount (info));
-    const int current = static_cast<int> (std::lround (handle.plain()));
-
-    juce::PopupMenu menu;
-    for (int i = 0; i < count; ++i)
-    {
-        const bool ok = capStateForValue (handle.index(), static_cast<float> (i), ctx.host.engineCaps()).available;
-        menu.addItem (i + 1, juce::String (choiceName (info, static_cast<size_t> (i))), ok, i == current);
-    }
+    auto menu = buildOptionMenu();
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMinimumWidth (getWidth()),
                         [safe = juce::Component::SafePointer<ParamChoice> (this)] (int result)
                         {

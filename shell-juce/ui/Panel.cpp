@@ -5,6 +5,8 @@
 
 #include <algorithm>
 
+#include "ModuleSheet.h"
+
 namespace synthyboy::ui
 {
 PanelRegistry& PanelRegistry::instance()
@@ -38,9 +40,102 @@ const std::vector<PanelEntry>& PanelRegistry::entries() const
 
 // ---- Panel ------------------------------------------------------------------------------------------------------------------------
 
+Panel::Panel (UiContext& context) : ctx (context)
+{
+    addComponentListener (this);
+    headerPress.onLongPress = [this] { headerLongPressed(); };
+}
+
+Panel::~Panel()
+{
+    removeComponentListener (this);
+}
+
 int Panel::headerHeight() const
 {
-    return ctx.theme.ipx (28.0f);
+    // a module header carries the "..." button, which is a full touch target
+    return modulePrefix().empty() ? ctx.theme.ipx (28.0f) : juce::jmax (ctx.theme.ipx (28.0f), ctx.theme.touch());
+}
+
+juce::Rectangle<int> Panel::headerBounds() const
+{
+    return getLocalBounds().withHeight (headerHeight() + ctx.theme.gap() / 2);
+}
+
+void Panel::ensureModuleButton()
+{
+    const auto prefix = modulePrefix();
+    if (prefix.empty() || moduleMenuButton != nullptr)
+        return;
+    moduleMenuButton = std::make_unique<ModuleMenuButton> (ctx, prefix);
+    addAndMakeVisible (*moduleMenuButton);
+    componentMovedOrResized (*this, false, true);
+}
+
+void Panel::parentHierarchyChanged()
+{
+    ensureModuleButton();
+}
+
+void Panel::componentMovedOrResized (juce::Component&, bool, bool)
+{
+    if (moduleMenuButton != nullptr)
+    {
+        const int s = ctx.theme.touch();
+        moduleMenuButton->setBounds (getWidth() - ctx.theme.gap() - s, 0, s, s);
+    }
+}
+
+void Panel::headerLongPressed()
+{
+    const auto prefix = modulePrefix();
+    if (! prefix.empty())
+    {
+        headerDown = false;
+        showModuleSheet (ctx, prefix, *this);
+    }
+}
+
+bool Panel::dropModuleOn (juce::Point<int> parentPos, bool copy, bool withMods)
+{
+    const auto mine = modulePrefix();
+    auto* parent = getParentComponent();
+    if (mine.empty() || parent == nullptr)
+        return false;
+    for (auto* child : parent->getChildren())
+        if (auto* other = dynamic_cast<Panel*> (child); other != nullptr && other != this && other->isVisible() && other->getBounds().contains (parentPos))
+        {
+            const auto theirs = other->modulePrefix();
+            if (theirs.empty() || ! module_ops::isModule (theirs))
+                return false;
+            return copy ? module_ops::copyOnto (ctx, mine, theirs, withMods) : module_ops::swap (ctx, mine, theirs, true);
+        }
+    return false;
+}
+
+void Panel::mouseDown (const juce::MouseEvent& e)
+{
+    headerDown = ! modulePrefix().empty() && headerBounds().contains (e.getPosition());
+    headerDragging = false;
+    if (headerDown)
+        headerPress.press (e.position);
+}
+
+void Panel::mouseDrag (const juce::MouseEvent& e)
+{
+    if (! headerDown)
+        return;
+    headerPress.moved (e.position);
+    if (e.getDistanceFromDragStart() > ctx.theme.ipx (12.0f))
+        headerDragging = true;
+}
+
+void Panel::mouseUp (const juce::MouseEvent& e)
+{
+    headerPress.cancel();
+    if (headerDown && headerDragging)
+        dropModuleOn (e.getEventRelativeTo (getParentComponent()).getPosition(), e.mods.isAltDown(), e.mods.isShiftDown());
+    headerDown = headerDragging = false;
 }
 
 juce::Rectangle<int> Panel::contentArea() const
@@ -57,7 +152,19 @@ ParamControl& Panel::addControl (const std::string& key, const juce::String& lab
 
 ParamControl& Panel::addMoreControl (const std::string& key, const juce::String& label)
 {
-    auto& control = addControl (key, label);
+    owned.push_back (makeControl (ctx, key, label));
+    return adoptMore (*owned.back());
+}
+
+ParamControl& Panel::addMoreControl (std::unique_ptr<ParamControl> custom)
+{
+    owned.push_back (std::move (custom));
+    return adoptMore (*owned.back());
+}
+
+ParamControl& Panel::adoptMore (ParamControl& control)
+{
+    addAndMakeVisible (control);
     control.setVisible (moreExpanded);
     ++moreCount;
     if (! moreButtonAdded)
@@ -92,6 +199,8 @@ int Panel::layoutControls (juce::Rectangle<int> area, bool measureOnly)
     int cellW = 0, cellH = 0;
     for (const auto& c : owned)
     {
+        if (c->spansRow())
+            continue; // a control with a row of its own does not size the grid
         const auto s = c->preferredSize();
         cellW = juce::jmax (cellW, s.x);
         cellH = juce::jmax (cellH, s.y);
@@ -106,6 +215,19 @@ int Panel::layoutControls (juce::Rectangle<int> area, bool measureOnly)
     int x = 0, y = 0, col = 0;
     const auto place = [&] (ParamControl& c)
     {
+        if (c.spansRow())
+        {
+            if (col != 0)
+            {
+                col = 0;
+                x = 0;
+                y += cellH + gap;
+            }
+            if (! measureOnly)
+                c.setBounds (area.getX(), area.getY() + y, area.getWidth(), c.preferredSize().y);
+            y += c.preferredSize().y + gap;
+            return;
+        }
         if (! measureOnly)
         {
             // a toggle / choice keeps its own height, centred in the row of the knobs

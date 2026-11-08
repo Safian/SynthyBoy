@@ -142,13 +142,14 @@ private:
         }
     }
 
+public:
+    /** Every parameter to its default and the content (custom LFO shapes ...) emptied: a new patch. */
     void doInitPreset()
     {
-        volHandle.resetToDefault();
-        directHandle.resetToDefault();
-        transposeHandle.resetToDefault();
-        tuneHandle.resetToDefault();
-        initPresetBtn.setButtonText ("Preset Initialized");
+        applyValues (ctx, ParamValues::defaults());
+        ctx.host.setContent (StateContent {});
+        ctx.assign.refresh();
+        Toast::show (ctx, *this, "Preset initialised");
         repaint();
     }
 
@@ -157,21 +158,38 @@ private:
         for (int i = 0; i < 64; ++i)
             clearSlot (ctx.assign.matrix(), i);
         ctx.assign.refresh();
-        initModsBtn.setButtonText ("Mods Initialized");
+        Toast::show (ctx, *this, "All modulations cleared");
         repaint();
     }
 
+    /** All 10 LFOs and the 4 random LFOs back to their defaults, and the custom shapes with them. */
     void doInitLfos()
     {
-        initLfosBtn.setButtonText ("LFOs Initialized");
+        auto live = readLiveValues (ctx);
+        for (int n = 1; n <= 10; ++n)
+            ModuleClipboard::initModule ("lfo" + std::to_string (n), live);
+        for (int n = 1; n <= 4; ++n)
+            ModuleClipboard::initModule ("rlfo" + std::to_string (n), live);
+        applyValues (ctx, live);
+        auto content = ctx.host.content();
+        content.lfoShapes.clear();
+        ctx.host.setContent (content);
+        Toast::show (ctx, *this, "LFOs initialised");
         repaint();
     }
 
     void doRevert()
     {
-        revertBtn.setButtonText ("Reverted");
+        Toast::show (ctx, *this, ctx.host.revertToSaved() ? "Reverted to the saved patch" : "Nothing saved to revert to");
         repaint();
     }
+
+    juce::TextButton& initPresetButton() noexcept { return initPresetBtn; }
+    juce::TextButton& initModsButton() noexcept { return initModsBtn; }
+    juce::TextButton& initLfosButton() noexcept { return initLfosBtn; }
+    juce::TextButton& revertButton() noexcept { return revertBtn; }
+
+private:
 
     UiContext& ctx;
     ParamHandle volHandle;

@@ -74,7 +74,19 @@ void EnvCurveView::setZoomLocked (bool locked)
         if (locked)
             timeZoom = 1.0f; // locked = the graph fits the display again (design 05 section 2.1)
         repaint();
+        if (onZoomChanged)
+            onZoomChanged();
     }
+}
+
+void EnvCurveView::setZoom (float newZoom)
+{
+    if (zoomLocked)
+        return;
+    timeZoom = juce::jlimit (kMinTimeZoom, kMaxTimeZoom, newZoom);
+    repaint();
+    if (onZoomChanged)
+        onZoomChanged();
 }
 
 void EnvCurveView::zoomBy (float factor)
@@ -83,6 +95,8 @@ void EnvCurveView::zoomBy (float factor)
         return;
     timeZoom = juce::jlimit (kMinTimeZoom, kMaxTimeZoom, timeZoom * factor);
     repaint();
+    if (onZoomChanged)
+        onZoomChanged();
 }
 
 void EnvCurveView::mouseMagnify (const juce::MouseEvent&, float scaleFactor)

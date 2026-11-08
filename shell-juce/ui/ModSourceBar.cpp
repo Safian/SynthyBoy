@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ModSourceBar.h"
 
+#include "panels/ModLogic.h"
+
 namespace synthyboy::ui
 {
 ModSourceChip::ModSourceChip (UiContext& context, int source) : ctx (context), sourceChoice (source)
@@ -59,10 +61,34 @@ void ModSourceChip::paint (juce::Graphics& g)
     }
 }
 
+bool ModSourceChip::swapMacroSources (UiContext& context, int sourceA, int sourceB)
+{
+    const int a = macroOfSourceChoice (sourceA), b = macroOfSourceChoice (sourceB);
+    if (a == 0 || b == 0 || a == b)
+        return false;
+    auto& m = context.assign.matrix();
+    modSwapMacros (m, a, b, [&m] (int p) { return m.get (p); }, [&m] (int p, float v) { m.set (p, v); });
+    context.assign.refresh();
+    context.assign.sendChangeMessage();
+    return true;
+}
+
+void ModSourceChip::mouseDrag (const juce::MouseEvent& e)
+{
+    if (macroOfSourceChoice (sourceChoice) == 0)
+        return;
+    if (! dragging && e.getDistanceFromDragStart() > ctx.theme.ipx (12.0f))
+    {
+        dragging = true;
+        stopTimer(); // a move is no long-press
+    }
+}
+
 void ModSourceChip::mouseDown (const juce::MouseEvent& e)
 {
     pressed = true;
     consumed = false;
+    dragging = false;
     if (e.mods.isPopupMenu())
     {
         consumed = true;
@@ -78,6 +104,14 @@ void ModSourceChip::mouseUp (const juce::MouseEvent& e)
     if (! pressed)
         return;
     pressed = false;
+    if (dragging)
+    {
+        dragging = false;
+        if (auto* row = getParentComponent())
+            if (auto* other = dynamic_cast<ModSourceChip*> (row->getComponentAt (row->getLocalPoint (this, e.getPosition()))); other != nullptr && other != this)
+                swapMacroSources (ctx, sourceChoice, other->sourceChoice);
+        return;
+    }
     if (! consumed && getLocalBounds().contains (e.getPosition()))
         ctx.assign.tapSource (sourceChoice);
 }
@@ -90,6 +124,11 @@ void ModSourceChip::timerCallback()
 }
 
 void ModSourceChip::showAssignments()
+{
+    showAssignmentsFor (ctx, sourceChoice, *this);
+}
+
+void ModSourceChip::showAssignmentsFor (UiContext& ctx, int sourceChoice, juce::Component& anchor)
 {
     const auto list = ctx.assign.snapshot().entriesForSource (sourceChoice);
     juce::PopupMenu menu;
@@ -167,12 +206,12 @@ void ModSourceChip::showAssignments()
         menu.addItem (2005, "Init (reset to default)");
     }
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                        [safe = juce::Component::SafePointer<ModSourceChip> (this), list, prefix, familyName, familyCount] (int result)
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&anchor),
+                        [safe = juce::Component::SafePointer<juce::Component> (&anchor), ctxPtr = &ctx, list, prefix, familyName, familyCount] (int result)
                         {
                             if (result <= 0 || safe == nullptr)
                                 return;
-                            auto& assign = safe->ctx.assign;
+                            auto& assign = (*ctxPtr).assign;
                             if (result == 1000)
                             {
                                 for (const auto& item : list)
@@ -188,31 +227,31 @@ void ModSourceChip::showAssignments()
                             }
                             else if (result == 2001)
                             {
-                                const auto live = readLiveValues (safe->ctx);
+                                const auto live = readLiveValues ((*ctxPtr));
                                 ModuleClipboard::instance().copy (prefix, live, false);
                             }
                             else if (result == 2002)
                             {
-                                const auto live = readLiveValues (safe->ctx);
+                                const auto live = readLiveValues ((*ctxPtr));
                                 ModuleClipboard::instance().copy (prefix, live, true, &assign.matrix());
                             }
                             else if (result == 2003)
                             {
-                                auto live = readLiveValues (safe->ctx);
+                                auto live = readLiveValues ((*ctxPtr));
                                 if (ModuleClipboard::instance().paste (prefix, live, false))
-                                    applyValues (safe->ctx, live);
+                                    applyValues ((*ctxPtr), live);
                             }
                             else if (result == 2004)
                             {
-                                auto live = readLiveValues (safe->ctx);
+                                auto live = readLiveValues ((*ctxPtr));
                                 if (ModuleClipboard::instance().paste (prefix, live, true, &assign.matrix()))
-                                    applyValues (safe->ctx, live);
+                                    applyValues ((*ctxPtr), live);
                             }
                             else if (result == 2005)
                             {
-                                auto live = readLiveValues (safe->ctx);
+                                auto live = readLiveValues ((*ctxPtr));
                                 ModuleClipboard::initModule (prefix, live);
-                                applyValues (safe->ctx, live);
+                                applyValues ((*ctxPtr), live);
                             }
                             else if (result >= 3001 && result <= 3000 + familyCount)
                             {
@@ -223,9 +262,9 @@ void ModSourceChip::showAssignments()
                                 else if (familyName == "Random LFO") otherPrefix = "rlfo" + std::to_string (otherIndex);
                                 if (! otherPrefix.empty())
                                 {
-                                    auto live = readLiveValues (safe->ctx);
+                                    auto live = readLiveValues ((*ctxPtr));
                                     if (ModuleClipboard::swapModules (prefix, otherPrefix, live, true, &assign.matrix()))
-                                        applyValues (safe->ctx, live);
+                                        applyValues ((*ctxPtr), live);
                                 }
                             }
                             assign.refresh();

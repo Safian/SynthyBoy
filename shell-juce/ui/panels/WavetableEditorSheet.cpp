@@ -25,18 +25,55 @@ public:
         : owner (ownerSheet)
     {
         setOpaque (false);
+        zoomInBtn.onClick = [this] { owner.zoomWave (0.5f, 2.0f); };
+        zoomOutBtn.onClick = [this] { owner.zoomWave (0.5f, 0.5f); };
+        fitBtn.onClick = [this] { owner.fitWave(); };
+        addAndMakeVisible (zoomInBtn);
+        addAndMakeVisible (zoomOutBtn);
+        addAndMakeVisible (fitBtn);
+        press.onLongPress = [this]
+        {
+            // held still: this stroke nudges (design 03: long-press then drag with Nudge); the first touch point is taken back
+            nudgeHeld = true;
+            owner.restoreStrokeBackup();
+        };
+    }
+
+    juce::Button* zoomButton (int which) noexcept
+    {
+        return which == 0 ? static_cast<juce::Button*> (&zoomInBtn) : which == 1 ? static_cast<juce::Button*> (&zoomOutBtn) : &fitBtn;
+    }
+
+    LongPressDetector& longPress() noexcept { return press; }
+    bool nudgeActive() const noexcept { return nudgeHeld; }
+
+    void resized() override
+    {
+        const auto& t = owner.ctx.theme;
+        auto corner = getLocalBounds().reduced (t.ipx (2));
+        fitBtn.setBounds (corner.removeFromRight (t.touch()).removeFromTop (t.touch()));
+        corner = getLocalBounds().reduced (t.ipx (2));
+        corner.removeFromRight (t.touch());
+        zoomOutBtn.setBounds (corner.removeFromRight (t.touch()).removeFromTop (t.touch()));
+        corner = getLocalBounds().reduced (t.ipx (2));
+        corner.removeFromRight (2 * t.touch());
+        zoomInBtn.setBounds (corner.removeFromRight (t.touch()).removeFromTop (t.touch()));
     }
 
     void paint (juce::Graphics& g) override
     {
         const auto& t = owner.ctx.theme;
         const auto bounds = getLocalBounds().toFloat().reduced (t.px (2.0f));
+        const auto& vp = owner.waveVp;
 
         g.setColour (t.colours.panelRaised);
         g.fillRoundedRectangle (bounds, t.px (6.0f));
 
         g.setColour (t.colours.outline);
         g.drawRoundedRectangle (bounds, t.px (6.0f), 1.0f);
+
+        g.saveState();
+        g.reduceClipRegion (bounds.toNearestInt());
 
         // Center line (zero amplitude)
         const float midY = bounds.getCentreY();
@@ -50,8 +87,10 @@ public:
             g.setColour (t.colours.outline.withAlpha (0.25f));
             for (int i = 1; i < grid; ++i)
             {
-                const float gx = bounds.getX() + (bounds.getWidth() * static_cast<float> (i)) / static_cast<float> (grid);
-                g.drawVerticalLine (juce::roundToInt (gx), bounds.getY(), bounds.getBottom());
+                const float s = static_cast<float> (vp.toScreen (static_cast<double> (i) / static_cast<double> (grid)));
+                if (s < 0.0f || s > 1.0f)
+                    continue;
+                g.drawVerticalLine (juce::roundToInt (bounds.getX() + bounds.getWidth() * s), bounds.getY(), bounds.getBottom());
             }
         }
 
@@ -64,12 +103,20 @@ public:
             const float w = bounds.getWidth();
             const float h = bounds.getHeight() * 0.45f;
 
+            bool started = false;
             for (size_t i = 0; i < wtedit::kWaveformSize; ++i)
             {
-                const float x = startX + (static_cast<float> (i) / static_cast<float> (wtedit::kWaveformSize - 1)) * w;
+                const double pos = static_cast<double> (i) / static_cast<double> (wtedit::kWaveformSize - 1);
+                const float s = static_cast<float> (vp.toScreen (pos));
+                if (s < -0.02f || s > 1.02f)
+                    continue;
+                const float x = startX + s * w;
                 const float y = midY - frame[i] * h;
-                if (i == 0)
+                if (! started)
+                {
                     path.startNewSubPath (x, y);
+                    started = true;
+                }
                 else
                     path.lineTo (x, y);
             }
@@ -77,23 +124,74 @@ public:
             g.setColour (t.colours.accent);
             g.strokePath (path, juce::PathStrokeType (t.px (2.0f)));
         }
+        g.restoreState();
+
+        if (! vp.isFit())
+        {
+            g.setColour (t.colours.textDim);
+            g.setFont (t.labelFont());
+            g.drawText ("x" + juce::String (vp.zoom(), 1), bounds.toNearestInt().removeFromBottom (juce::roundToInt (t.px (16.0f))),
+                        juce::Justification::bottomLeft, false);
+        }
     }
 
     void mouseDown (const juce::MouseEvent& e) override
     {
+        owner.touchWave.down (e);
+        if (e.source.getIndex() > 0 || owner.touchWave.twoDown())
+        {
+            press.cancel();
+            owner.cancelStroke();
+            return;
+        }
+        nudgeHeld = false;
+        owner.beginStroke();
         owner.pushUndo();
         owner.strokeActive = true;
+        downPos = e.position;
+        press.press (e.position);
         handleDrag (e);
     }
 
-    void mouseUp (const juce::MouseEvent&) override
+    void mouseUp (const juce::MouseEvent& e) override
     {
-        owner.strokeActive = false;
+        owner.touchWave.up (e);
+        press.cancel();
+        owner.hideLoupe();
+        nudgeHeld = false;
+        if (e.source.getIndex() > 0)
+            return;
+        owner.endStroke();
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
     {
+        owner.touchWave.drag (e);
+        if (e.source.getIndex() > 0 || owner.touchWave.twoDown())
+        {
+            press.cancel();
+            owner.cancelStroke();
+            return;
+        }
+        if (! owner.strokeActive)
+            return;
+        press.moved (e.position);
         handleDrag (e);
+        owner.showLoupeAt (*this, e.getPosition());
+    }
+
+    void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
+    {
+        const float s = e.position.x / static_cast<float> (juce::jmax (1, getWidth()));
+        if (e.mods.isCtrlDown() || e.mods.isCommandDown())
+            owner.zoomWave (s, std::exp (wheel.deltaY * 2.0f));
+        else
+            owner.panWave (-(wheel.deltaX != 0.0f ? wheel.deltaX : wheel.deltaY) * static_cast<float> (owner.waveVp.span));
+    }
+
+    void mouseMagnify (const juce::MouseEvent& e, float scaleFactor) override
+    {
+        owner.zoomWave (e.position.x / static_cast<float> (juce::jmax (1, getWidth())), scaleFactor);
     }
 
 private:
@@ -103,17 +201,22 @@ private:
         if (bounds.getWidth() <= 0.0f || bounds.getHeight() <= 0.0f)
             return;
 
-        const float normX = juce::jlimit (0.0f, 0.999f, (e.position.x - bounds.getX()) / bounds.getWidth());
+        const float screenX = juce::jlimit (0.0f, 1.0f, (e.position.x - bounds.getX()) / bounds.getWidth());
+        const float normX = juce::jlimit (0.0f, 0.999f, static_cast<float> (owner.waveVp.toRange (static_cast<double> (screenX))));
         const float normY = juce::jlimit (-1.0f, 1.0f, 1.0f - 2.0f * ((e.position.y - bounds.getY()) / bounds.getHeight()));
 
         const int grid = owner.currentGridSize;
         const int step = static_cast<int> (normX * static_cast<float> (grid));
 
-        owner.applyToolAt (owner.currentTool, grid, step, normY);
+        owner.applyToolAt (nudgeHeld ? wtedit::DrawingTool::Nudge : owner.currentTool, grid, step, normY);
         repaint();
     }
 
     WavetableEditorSheet& owner;
+    juce::TextButton zoomInBtn { "+" }, zoomOutBtn { "-" }, fitBtn { "Fit" };
+    LongPressDetector press;
+    juce::Point<float> downPos;
+    bool nudgeHeld = false;
 };
 
 //==============================================================================
@@ -128,6 +231,9 @@ public:
         evenBtn.setClickingTogglesState (true);
         oddBtn.setClickingTogglesState (true);
         snapBtn.setClickingTogglesState (true);
+        nudgeBtn.setClickingTogglesState (true);
+        nudgeBtn.setTooltip ("Nudge all phases: a phase-bar drag moves every harmonic's phase by the same amount");
+        nudgeBtn.onClick = [this] { owner.setNudgeAllPhases (nudgeBtn.getToggleState()); };
 
         scaleBtn.onClick = [this]
         {
@@ -148,6 +254,7 @@ public:
         addAndMakeVisible (evenBtn);
         addAndMakeVisible (oddBtn);
         addAndMakeVisible (snapBtn);
+        addAndMakeVisible (nudgeBtn);
         addAndMakeVisible (scaleBtn);
         addAndMakeVisible (fftMenuBtn);
     }
@@ -210,27 +317,94 @@ public:
     {
         const auto& t = owner.ctx.theme;
         auto barArea = getLocalBounds().removeFromBottom (t.touch()).reduced (t.ipx (2), 0);
-        const int btnW = juce::jmax (t.touch(), barArea.getWidth() / 5);
+        const int btnW = juce::jmax (t.touch(), barArea.getWidth() / 6);
 
         evenBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
         oddBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
         snapBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
+        nudgeBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
         scaleBtn.setBounds (barArea.removeFromLeft (btnW).reduced (t.ipx (2), 0));
         fftMenuBtn.setBounds (barArea.reduced (t.ipx (2), 0));
     }
 
+    void setNudgeToggle (bool on) { nudgeBtn.setToggleState (on, juce::dontSendNotification); }
+
     void mouseDown (const juce::MouseEvent& e) override
     {
+        owner.touchSpectrum.down (e);
+        if (e.source.getIndex() > 0 || owner.touchSpectrum.twoDown())
+        {
+            owner.cancelStroke(); // the second finger: a gesture, not a drawing
+            return;
+        }
+        owner.beginStroke();
         owner.pushUndo();
+        owner.strokeActive = true;
         handleMouse (e);
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
     {
+        owner.touchSpectrum.drag (e);
+        if (e.source.getIndex() > 0 || owner.touchSpectrum.twoDown())
+        {
+            owner.cancelStroke();
+            return;
+        }
+        if (! owner.strokeActive)
+            return;
         handleMouse (e);
+        owner.showLoupeAt (*this, e.getPosition());
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        owner.touchSpectrum.up (e);
+        owner.hideLoupe();
+        if (e.source.getIndex() == 0)
+            owner.endStroke();
+    }
+
+    /** Double tap on a bar: numeric entry of that bin (amplitude in the upper half, phase in the lower half). */
+    void mouseDoubleClick (const juce::MouseEvent& e) override
+    {
+        owner.cancelStroke(); // the second press of the double tap started an edit of its own: take it back
+        bool phase = false;
+        const int bin = binAt (e.getPosition(), phase);
+        if (bin > 0)
+            showBinEntry (bin, phase);
+    }
+
+    /** The bin (1..64) and region under a point; -1 outside the bars. */
+    int binAt (juce::Point<int> p, bool& phase) const
+    {
+        const auto& t = owner.ctx.theme;
+        auto area = getLocalBounds().reduced (t.ipx (2));
+        area.removeFromBottom (t.touch());
+        if (! area.contains (p) || area.getWidth() <= 0)
+            return -1;
+        const float relX = static_cast<float> (p.x - area.getX()) / static_cast<float> (area.getWidth());
+        phase = static_cast<float> (p.y - area.getY()) >= static_cast<float> (area.getHeight()) * 0.5f;
+        return juce::jlimit (1, 64, static_cast<int> (relX * 64.0f) + 1);
     }
 
 private:
+    void showBinEntry (int bin, bool phase)
+    {
+        auto* w = new juce::AlertWindow (phase ? "Bin " + juce::String (bin) + " phase" : "Bin " + juce::String (bin) + " amplitude",
+                                         phase ? "degrees (0..360)" : "percent (0..100)", juce::MessageBoxIconType::NoIcon);
+        w->addTextEditor ("value", {}, {});
+        w->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        w->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+        w->enterModalState (true,
+                            juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<SpectrumCanvas> (this), bin, phase, w] (int result)
+                                                                  {
+                                                                      if (result == 1 && safe != nullptr)
+                                                                          safe->owner.enterBinValue (bin, phase, w->getTextEditorContents ("value"));
+                                                                  }),
+                            true);
+    }
+
     void handleMouse (const juce::MouseEvent& e)
     {
         const auto& t = owner.ctx.theme;
@@ -253,11 +427,6 @@ private:
         if (owner.currentFrameIndex >= owner.wt.numFrames())
             return;
 
-        auto& frame = owner.wt.getFrame (owner.currentFrameIndex);
-        std::array<float, wtedit::kWaveformSize> mags {};
-        std::array<float, wtedit::kWaveformSize> phases {};
-        wtedit::Radix2Fft::realToPolar (frame.sampleData(), mags.data(), phases.data(), wtedit::kWaveformSize);
-
         const float halfH = static_cast<float> (area.getHeight()) * 0.5f;
         if (static_cast<float> (e.y - area.getY()) < halfH)
         {
@@ -266,21 +435,15 @@ private:
             val = juce::jlimit (0.0f, 1.0f, val);
             if (snapBtn.getToggleState())
                 val = std::round (val * 4.0f) / 4.0f;
-            mags[static_cast<size_t> (bin)] = val;
+            owner.applyBinEdit (bin, false, val);
         }
         else
         {
-            // Edit phase
+            // Edit phase (moves every harmonic when "nudge all phases" is on)
             const float val = 1.0f - static_cast<float> (e.y - area.getY() - static_cast<int> (halfH)) / halfH;
-            phases[static_cast<size_t> (bin)] = (val * 2.0f - 1.0f) * kPi;
+            owner.applyBinEdit (bin, true, (val * 2.0f - 1.0f) * kPi);
         }
-
-        wtedit::Radix2Fft::polarToReal (mags.data(), phases.data(), frame.sampleData(), wtedit::kWaveformSize);
-        owner.isModified = true;
-        owner.updateHeaderInfo();
         repaint();
-        if (owner.waveCanvas)
-            owner.waveCanvas->repaint();
     }
 
     void showFftMenu()
@@ -335,6 +498,7 @@ private:
     juce::TextButton evenBtn { "EVEN" };
     juce::TextButton oddBtn { "ODD" };
     juce::TextButton snapBtn { "SNAP 1/4" };
+    juce::TextButton nudgeBtn { "NUDGE" };
     juce::TextButton scaleBtn { "SCALE" };
     juce::TextButton fftMenuBtn { "FFT ..." };
     int lastTouchedBin = 1;
@@ -837,6 +1001,35 @@ private:
 };
 
 //==============================================================================
+// IMPORT WORKER
+//==============================================================================
+class WavetableEditorSheet::ImportJob final : public juce::Thread
+{
+public:
+    ImportJob (std::vector<float> samplesIn, double sampleRateIn, wtedit::ImportOptions optionsIn)
+        : juce::Thread ("wavetable import"), samples (std::move (samplesIn)), sampleRate (sampleRateIn), options (optionsIn), result ("Imported Audio")
+    {
+    }
+
+    void run() override
+    {
+        wtedit::Wavetable imported ("Imported Audio");
+        ok = wtedit::importAudioSamples (samples.data(), samples.size(), sampleRate, options, imported);
+        result = std::move (imported);
+        samples.clear();
+        done = true;
+    }
+
+    std::vector<float> samples;
+    double sampleRate;
+    wtedit::ImportOptions options;
+    wtedit::Wavetable result;
+    bool ok = false;
+    std::atomic<bool> done { false };
+    std::atomic<bool> cancelled { false };
+};
+
+//==============================================================================
 // THUMBNAILS STRIP COMPONENT
 //==============================================================================
 class WavetableEditorSheet::ThumbnailsStrip final : public juce::Component
@@ -846,7 +1039,19 @@ public:
         : owner (ownerSheet)
     {
         setOpaque (false);
+        press.onLongPress = [this]
+        {
+            if (downIdx >= 0)
+            {
+                reordering = true; // held still on a thumbnail: drag it to another place (yellow insertion cursor)
+                dropBoundary = downIdx;
+                repaint();
+            }
+        };
     }
+
+    LongPressDetector& longPress() noexcept { return press; }
+    bool isReordering() const noexcept { return reordering; }
 
     void paint (juce::Graphics& g) override
     {
@@ -897,6 +1102,14 @@ public:
 
             x += thumbW + t.ipx (4);
         }
+
+        if (reordering)
+        {
+            const int step = thumbW + t.ipx (4);
+            const int cx = t.gap() + dropBoundary * step - t.ipx (2);
+            g.setColour (t.colours.warn);
+            g.fillRect (cx - t.ipx (1), t.ipx (1), t.ipx (3), getHeight() - t.ipx (2));
+        }
     }
 
     void mouseDown (const juce::MouseEvent& e) override
@@ -905,6 +1118,9 @@ public:
         const int thumbW = juce::jmax (t.touch(), t.ipx (56));
         const int totalStep = thumbW + t.ipx (4);
         const int idx = (e.x - t.gap()) / totalStep;
+        downIdx = e.x >= t.gap() && idx >= 0 && static_cast<size_t> (idx) < owner.wt.numFrames() ? idx : -1;
+        reordering = false;
+        press.press (e.position);
 
         if (idx >= 0 && static_cast<size_t> (idx) < owner.wt.numFrames())
         {
@@ -924,8 +1140,39 @@ public:
         }
     }
 
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (! reordering)
+        {
+            press.moved (e.position);
+            return;
+        }
+        const auto& t = owner.ctx.theme;
+        const int step = juce::jmax (t.touch(), t.ipx (56)) + t.ipx (4);
+        dropBoundary = juce::jlimit (0, static_cast<int> (owner.wt.numFrames()), juce::roundToInt (static_cast<float> (e.x - t.gap()) / static_cast<float> (step)));
+        repaint();
+    }
+
+    void mouseUp (const juce::MouseEvent&) override
+    {
+        press.cancel();
+        if (reordering && downIdx >= 0)
+        {
+            // the cursor sits in a gap between two thumbnails: the frame goes there
+            const int to = dropBoundary > downIdx ? dropBoundary - 1 : dropBoundary;
+            if (to != downIdx)
+                owner.moveFrameTo (static_cast<size_t> (downIdx), static_cast<size_t> (to));
+        }
+        reordering = false;
+        downIdx = -1;
+        repaint();
+    }
+
 private:
     WavetableEditorSheet& owner;
+    LongPressDetector press;
+    int downIdx = -1, dropBoundary = 0;
+    bool reordering = false;
 };
 
 //==============================================================================
@@ -947,7 +1194,11 @@ public:
         wtTabBtn.setClickingTogglesState (true);
         wtTabBtn.setRadioGroupId (201);
 
-        cancelBtn.onClick = [this] { setVisible (false); };
+        cancelBtn.onClick = [this]
+        {
+            owner.cancelImport(); // a running import is discarded when it ends
+            setVisible (false);
+        };
         importBtn.onClick = [this] { doImport(); };
 
         interpolateToggle.setToggleState (true, juce::dontSendNotification);
@@ -966,6 +1217,7 @@ public:
         addAndMakeVisible (cancelBtn);
         addAndMakeVisible (importBtn);
         addAndMakeVisible (infoLabel);
+        addChildComponent (progressBar);
 
         methodChoice.addItem ("Constant framesize (Pitch Average)", 1);
         methodChoice.addItem ("Dynamic pitch - zero snap", 2);
@@ -1014,12 +1266,24 @@ public:
 
         r.removeFromTop (t.gap());
         infoLabel.setBounds (r.removeFromTop (t.ipx (24)));
+        r.removeFromTop (t.gap());
+        progressBar.setBounds (r.removeFromTop (t.touch()));
 
         auto bottom = r.removeFromBottom (t.touch());
         const int bw = juce::jmax (t.touch() * 2, t.ipx (100));
         cancelBtn.setBounds (bottom.removeFromLeft (bw));
         importBtn.setBounds (bottom.removeFromRight (bw));
     }
+
+    /** While the worker thread imports: the progress bar (indeterminate, the importer reports no fraction) and no second import. */
+    void setBusy (bool busy)
+    {
+        progressBar.setVisible (busy);
+        importBtn.setEnabled (! busy);
+        infoLabel.setText (busy ? "Importing ... (you can cancel)" : "Select file and method to import into wavetable", juce::dontSendNotification);
+    }
+    bool progressVisible() const { return progressBar.isVisible(); }
+    void setInfo (const juce::String& text) { infoLabel.setText (text, juce::dontSendNotification); }
 
     void paint (juce::Graphics& g) override
     {
@@ -1080,7 +1344,8 @@ private:
                 default: opts.mode = wtedit::ImportMode::PitchAverage; break;
             }
 
-            owner.importAudioData (samples.data(), numSamples, sr, opts);
+            owner.importAudioAsync (std::move (samples), sr, opts);
+            return; // the sheet stays up with its progress bar until the worker is done
         }
 
         setVisible (false);
@@ -1099,12 +1364,19 @@ private:
     juce::TextButton cancelBtn { "Cancel" };
     juce::TextButton importBtn { "Import" };
     juce::Label infoLabel;
+    double progressValue { -1.0 }; // < 0: indeterminate
+    juce::ProgressBar progressBar { progressValue };
 };
 
 //==============================================================================
 // WAVETABLE EDITOR SHEET MAIN IMPLEMENTATION
 //==============================================================================
-WavetableEditorSheet::~WavetableEditorSheet() = default;
+WavetableEditorSheet::~WavetableEditorSheet()
+{
+    stopTimer();
+    if (importJob != nullptr)
+        importJob->waitForThreadToExit (-1);
+}
 
 WavetableEditorSheet::WavetableEditorSheet (UiContext& context, wtedit::Wavetable initialTable)
     : ctx (context), wt (std::move (initialTable))
@@ -1114,12 +1386,9 @@ WavetableEditorSheet::WavetableEditorSheet (UiContext& context, wtedit::Wavetabl
     undoStack.push (wt); // baseline state
 
     // Header buttons
-    closeBtn.onClick = [this]
-    {
-        if (onClosed)
-            onClosed (wt);
-        setVisible (false);
-    };
+    closeBtn.onClick = [this] { requestClose(); };
+    touchWave.onGesture = [this] (const TouchTracker::Gesture& g) { handleTouchGesture (g, true); };
+    touchSpectrum.onGesture = [this] (const TouchTracker::Gesture& g) { handleTouchGesture (g, false); };
 
     undoBtn.onClick = [this] { performUndo(); };
     redoBtn.onClick = [this] { performRedo(); };
@@ -1787,6 +2056,9 @@ void WavetableEditorSheet::showOptionsMenu()
     menu.addItem (4, "Export Single-Cycle Frame");
     menu.addItem (5, "Save Table");
     menu.addItem (6, "Embed in Preset");
+    menu.addSeparator();
+    menu.addItem (7, "Move frame left", currentFrameIndex > 0);
+    menu.addItem (8, "Move frame right", currentFrameIndex + 1 < wt.numFrames());
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (menuBtn),
         [this] (int result)
@@ -1799,6 +2071,8 @@ void WavetableEditorSheet::showOptionsMenu()
                 case 4: exportWavPrompt (wtedit::ExportFormat::SingleCycle); break;
                 case 5: isModified = false; updateHeaderInfo(); break;
                 case 6: isModified = false; updateHeaderInfo(); break;
+                case 7: moveFrameTo (currentFrameIndex, currentFrameIndex - 1); break; // the visible alternative of the thumbnail drag
+                case 8: moveFrameTo (currentFrameIndex, currentFrameIndex + 1); break;
                 default: break;
             }
         });
@@ -1966,6 +2240,10 @@ void WavetableEditorSheet::paint (juce::Graphics& g)
 {
     const auto& t = ctx.theme;
     g.fillAll (t.colours.background);
+    // the grabber: a swipe down on the header closes the sheet
+    g.setColour (t.colours.outline);
+    g.fillRoundedRectangle (juce::Rectangle<float> (static_cast<float> (getWidth()) * 0.5f - t.px (20.0f), t.px (2.0f), t.px (40.0f), t.px (3.0f)),
+                            t.px (1.5f));
 }
 
 void WavetableEditorSheet::resized()
@@ -2091,6 +2369,302 @@ void WavetableEditorSheet::resized()
 
     if (importSheet && importSheet->isVisible())
         importSheet->setBounds (getLocalBounds().reduced (gap * 2));
+}
+
+
+//==============================================================================
+// Gestures of the audit gap closure
+//==============================================================================
+juce::Component* WavetableEditorSheet::waveCanvasComponent() noexcept { return waveCanvas.get(); }
+juce::Component* WavetableEditorSheet::spectrumComponent() noexcept { return spectrumCanvas.get(); }
+juce::Component* WavetableEditorSheet::thumbnailsComponent() noexcept { return thumbnailsStrip.get(); }
+juce::Component* WavetableEditorSheet::importSheetComponent() noexcept { return importSheet.get(); }
+LongPressDetector* WavetableEditorSheet::waveLongPress() noexcept { return waveCanvas != nullptr ? &waveCanvas->longPress() : nullptr; }
+LongPressDetector* WavetableEditorSheet::thumbnailLongPress() noexcept { return thumbnailsStrip != nullptr ? &thumbnailsStrip->longPress() : nullptr; }
+bool WavetableEditorSheet::waveNudgeStroke() const noexcept { return waveCanvas != nullptr && waveCanvas->nudgeActive(); }
+bool WavetableEditorSheet::thumbnailReordering() const noexcept { return thumbnailsStrip != nullptr && thumbnailsStrip->isReordering(); }
+juce::Button* WavetableEditorSheet::waveZoomButton (int which) noexcept { return waveCanvas != nullptr ? waveCanvas->zoomButton (which) : nullptr; }
+
+void WavetableEditorSheet::zoomWave (float anchor, float factor)
+{
+    waveVp.zoomAbout (waveVp.toRange (static_cast<double> (juce::jlimit (0.0f, 1.0f, anchor))), static_cast<double> (factor));
+    if (waveCanvas)
+        waveCanvas->repaint();
+}
+
+void WavetableEditorSheet::panWave (float deltaScreenFraction)
+{
+    waveVp.pan (static_cast<double> (deltaScreenFraction) * waveVp.span);
+    if (waveCanvas)
+        waveCanvas->repaint();
+}
+
+void WavetableEditorSheet::fitWave()
+{
+    waveVp.fit();
+    if (waveCanvas)
+        waveCanvas->repaint();
+}
+
+void WavetableEditorSheet::handleTouchGesture (const TouchTracker::Gesture& g, bool fromWaveCanvas)
+{
+    switch (g.kind)
+    {
+        case TouchTracker::Kind::twoFingerTap:
+            performUndo(); // the visible alternative is the Undo button
+            break;
+        case TouchTracker::Kind::pinch:
+            if (fromWaveCanvas && waveCanvas != nullptr)
+                zoomWave (g.centre.x / static_cast<float> (juce::jmax (1, waveCanvas->getWidth())), g.scale);
+            break;
+        case TouchTracker::Kind::pan:
+            if (fromWaveCanvas && waveCanvas != nullptr)
+                panWave (-g.dx / static_cast<float> (juce::jmax (1, waveCanvas->getWidth())));
+            break;
+        case TouchTracker::Kind::twoFingerSwipe:
+        case TouchTracker::Kind::none:
+            break;
+    }
+}
+
+void WavetableEditorSheet::beginStroke()
+{
+    strokeBackup = std::make_unique<wtedit::Wavetable> (wt);
+}
+
+void WavetableEditorSheet::endStroke()
+{
+    strokeActive = false;
+    strokeBackup.reset();
+}
+
+void WavetableEditorSheet::restoreStrokeBackup()
+{
+    if (strokeBackup != nullptr)
+    {
+        wt = *strokeBackup;
+        if (currentFrameIndex >= wt.numFrames())
+            currentFrameIndex = wt.numFrames() - 1;
+        refreshAll();
+    }
+}
+
+void WavetableEditorSheet::cancelStroke()
+{
+    if (! strokeActive)
+        return;
+    restoreStrokeBackup();
+    undoPending = false; // the state is the recorded one again: nothing to undo, nothing to redo
+    strokeActive = false;
+    strokeBackup.reset();
+    hideLoupe();
+    updateHeaderInfo();
+}
+
+void WavetableEditorSheet::showLoupeAt (juce::Component& source, juce::Point<int> point)
+{
+    if (loupe == nullptr)
+        loupe = std::make_unique<Loupe> (ctx.theme);
+    loupe->show (source, point);
+}
+
+void WavetableEditorSheet::hideLoupe()
+{
+    if (loupe != nullptr)
+        loupe->hide();
+}
+
+void WavetableEditorSheet::refreshAll()
+{
+    updateHeaderInfo();
+    repaint();
+    if (waveCanvas)
+        waveCanvas->repaint();
+    if (spectrumCanvas)
+        spectrumCanvas->repaint();
+    if (thumbnailsStrip)
+        thumbnailsStrip->repaint();
+}
+
+void WavetableEditorSheet::setNudgeAllPhases (bool on)
+{
+    nudgeAll = on;
+    if (spectrumCanvas)
+        spectrumCanvas->setNudgeToggle (on);
+}
+
+void WavetableEditorSheet::applyBinEdit (int bin, bool phase, float value)
+{
+    constexpr int kHalf = static_cast<int> (wtedit::kWaveformSize / 2);
+    if (currentFrameIndex >= wt.numFrames() || bin < 1 || bin >= kHalf)
+        return;
+    auto& frame = wt.getFrame (currentFrameIndex);
+    std::array<float, wtedit::kWaveformSize> mags {};
+    std::array<float, wtedit::kWaveformSize> phases {};
+    wtedit::Radix2Fft::realToPolar (frame.sampleData(), mags.data(), phases.data(), wtedit::kWaveformSize);
+
+    const auto wrap = [] (float a)
+    {
+        while (a > kPi)
+            a -= 2.0f * kPi;
+        while (a < -kPi)
+            a += 2.0f * kPi;
+        return a;
+    };
+    if (phase)
+    {
+        if (nudgeAll)
+        {
+            // every harmonic that sounds moves by the amount this bar moved
+            const float delta = wrap (value - phases[static_cast<size_t> (bin)]);
+            for (int k = 1; k < kHalf; ++k)
+                if (mags[static_cast<size_t> (k)] > 1.0e-5f)
+                    phases[static_cast<size_t> (k)] = wrap (phases[static_cast<size_t> (k)] + delta);
+            phases[static_cast<size_t> (bin)] = wrap (value);
+        }
+        else
+            phases[static_cast<size_t> (bin)] = wrap (value);
+    }
+    else
+        mags[static_cast<size_t> (bin)] = juce::jlimit (0.0f, 1.0f, value);
+
+    wtedit::Radix2Fft::polarToReal (mags.data(), phases.data(), frame.sampleData(), wtedit::kWaveformSize);
+    isModified = true;
+    refreshAll();
+}
+
+bool WavetableEditorSheet::enterBinValue (int bin, bool phase, const juce::String& text)
+{
+    float v = 0.0f;
+    if (phase)
+    {
+        if (! parseBinPhaseDegrees (text.toStdString(), v))
+            return false;
+        const float rad = (v > 180.0f ? v - 360.0f : v) * kPi / 180.0f;
+        pushUndo();
+        applyBinEdit (bin, true, rad);
+        return true;
+    }
+    if (! parseBinAmplitude (text.toStdString(), v))
+        return false;
+    pushUndo();
+    applyBinEdit (bin, false, v);
+    return true;
+}
+
+bool WavetableEditorSheet::moveFrameTo (size_t from, size_t to)
+{
+    if (from == to || from >= wt.numFrames() || to >= wt.numFrames())
+        return false;
+    pushUndo();
+    if (! wt.moveFrame (from, to))
+    {
+        undoPending = false;
+        return false;
+    }
+    currentFrameIndex = to;
+    rangeStart = rangeEnd = -1;
+    refreshAll();
+    return true;
+}
+
+void WavetableEditorSheet::requestClose()
+{
+    if (onClosed)
+        onClosed (wt);
+    setVisible (false);
+}
+
+bool WavetableEditorSheet::handleCloseSwipe (juce::Point<float> from, juce::Point<float> to)
+{
+    const float dy = to.y - from.y, dx = to.x - from.x;
+    if (dy >= static_cast<float> (ctx.theme.ipx (80.0f)) && std::abs (dx) * 2.0f < dy)
+    {
+        requestClose();
+        return true;
+    }
+    return false;
+}
+
+void WavetableEditorSheet::mouseDown (const juce::MouseEvent& e)
+{
+    // the header band (the buttons take their own presses): a finger that goes down here may swipe the sheet away
+    closeSwipeArmed = e.position.y < static_cast<float> (ctx.theme.touch() + 2 * ctx.theme.gap());
+    closeSwipeFrom = e.position;
+}
+
+void WavetableEditorSheet::mouseUp (const juce::MouseEvent& e)
+{
+    if (closeSwipeArmed)
+        handleCloseSwipe (closeSwipeFrom, e.position);
+    closeSwipeArmed = false;
+}
+
+bool WavetableEditorSheet::importAudioAsync (std::vector<float> samples, double sampleRate, const wtedit::ImportOptions& opts)
+{
+    if (importJob != nullptr || samples.empty())
+        return false;
+    importJob = std::make_unique<ImportJob> (std::move (samples), sampleRate, opts);
+    importJob->startThread();
+    if (importSheet)
+        importSheet->setBusy (true);
+    startTimerHz (20);
+    return true;
+}
+
+bool WavetableEditorSheet::importWorkerDone() const noexcept
+{
+    return importJob != nullptr && importJob->done.load();
+}
+
+bool WavetableEditorSheet::finishImport()
+{
+    if (importJob == nullptr || ! importJob->done.load())
+        return false;
+    importJob->waitForThreadToExit (-1); // the flag is the last thing run () sets
+    const auto job = std::move (importJob);
+    importJob = nullptr;
+    stopTimer();
+    if (importSheet)
+        importSheet->setBusy (false);
+    if (job->cancelled.load())
+        return true; // discarded
+    if (! job->ok)
+    {
+        if (importSheet)
+            importSheet->setInfo ("Import failed: no usable audio");
+        return true;
+    }
+    pushUndo();
+    wt = job->result;
+    currentFrameIndex = 0;
+    vitalGroup.initFromWavetable (wt);
+    isModified = true;
+    refreshAll();
+    if (importSheet)
+        importSheet->setVisible (false);
+    return true;
+}
+
+void WavetableEditorSheet::cancelImport()
+{
+    if (importJob != nullptr)
+        importJob->cancelled = true;
+}
+
+bool WavetableEditorSheet::importProgressVisible() const
+{
+    return importSheet != nullptr && importSheet->progressVisible();
+}
+
+void WavetableEditorSheet::timerCallback()
+{
+    if (importJob == nullptr)
+    {
+        stopTimer();
+        return;
+    }
+    finishImport();
 }
 
 } // namespace synthyboy::ui

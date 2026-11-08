@@ -13,6 +13,9 @@ namespace synthyboy::ui
 class FilterPanelBase : public Panel
 {
 public:
+    /** Filter 1 and 2 are modules (module sheet); the FX filter is not part of ModuleClipboard. */
+    std::string modulePrefix() const override { return filterIdx <= 2 ? prefix : std::string(); }
+
     FilterPanelBase (UiContext& context, int filterIndex, const std::string& keyPrefix)
         : Panel (context),
           filterIdx (filterIndex),

@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "EnvelopePanel.h"
 
+#include "../ModSourceBar.h"
+
 namespace synthyboy::ui
 {
 
@@ -68,10 +70,16 @@ void EnvelopePanel::build()
     for (int i = 0; i < 6; ++i)
     {
         const int idx = i + 1;
-        auto btn = std::make_unique<juce::TextButton>();
+        auto btn = std::make_unique<SourceTabButton> (ctx, idx);
         btn->setClickingTogglesState (false);
         btn->setToggleState (idx == envIdx, juce::dontSendNotification);
-        btn->onClick = [this, idx] { scrollToEnvelope (idx); };
+        btn->onClick = [this, idx, b = btn.get()]
+        {
+            if (! b->consumeSuppressedClick())
+                selectEnvelope (idx);
+        };
+        btn->onLongPress = [this, b = btn.get()] { ModSourceChip::showAssignmentsFor (ctx, b->source(), *b); };
+        btn->onDropped = [this, idx] (juce::Component* target) { dropSourceOn (idx, target); };
         tabRow.addAndMakeVisible (*btn);
         tabButtons[static_cast<size_t> (i)] = std::move (btn);
     }
@@ -83,6 +91,20 @@ void EnvelopePanel::build()
         visual->setZoomLocked (zoomLockButton.getToggleState());
     };
     tabRow.addAndMakeVisible (zoomLockButton);
+
+    // the magnifier: time zoom 1 .. 16 (log), only while the lock is off; a pinch moves it too
+    magnifier.setRange (static_cast<double> (EnvCurveView::minZoom()), static_cast<double> (EnvCurveView::maxZoom()), 0.01);
+    magnifier.setSkewFactorFromMidPoint (4.0);
+    magnifier.setValue (1.0, juce::dontSendNotification);
+    magnifier.setEnabled (! visual->isZoomLocked());
+    magnifier.setTooltip ("Magnifier: zoom the time axis (unlock first)");
+    magnifier.onValueChange = [this] { visual->setZoom (static_cast<float> (magnifier.getValue())); };
+    visual->onZoomChanged = [this]
+    {
+        magnifier.setValue (static_cast<double> (visual->zoom()), juce::dontSendNotification);
+        magnifier.setEnabled (! visual->isZoomLocked());
+    };
+    tabRow.addAndMakeVisible (magnifier);
 
     addAndMakeVisible (tabRow);
     updateTabBadges();
@@ -112,41 +134,110 @@ void EnvelopePanel::changeListenerCallback (juce::ChangeBroadcaster* source)
         updateTabBadges();
 }
 
-void EnvelopePanel::scrollToEnvelope (int targetEnv)
+void EnvelopePanel::selectEnvelope (int targetEnv)
 {
-    if (targetEnv == envIdx)
+    targetEnv = juce::jlimit (1, 6, targetEnv);
+    if (ctx.view->envTab == targetEnv - 1)
         return;
+    ctx.view->envTab = targetEnv - 1;
+    if (onHeightChanged)
+        onHeightChanged(); // the host shows the panel of the chosen envelope and hides the others
+}
 
-    // Find parent viewport to scroll to the corresponding envelope panel
-    if (auto* vp = findParentComponentOfClass<juce::Viewport>())
+bool EnvelopePanel::dropSourceOn (int sourceChoice, juce::Component* target)
+{
+    auto& assign = ctx.assign;
+    ParamControl* control = nullptr;
+    for (auto* c = target; c != nullptr && control == nullptr; c = c->getParentComponent())
+        control = dynamic_cast<ParamControl*> (c);
+    bool done = false;
+    if (control != nullptr && control->paramHandle().valid())
     {
-        if (auto* viewed = vp->getViewedComponent())
+        if (assign.flow().armedSource() != sourceChoice)
+            assign.tapSource (sourceChoice);
+        auto& flow = assign.flow();
+        const int index = control->paramHandle().index();
+        if (flow.isTarget (index))
         {
-            for (auto* child : viewed->getChildren())
+            const auto result = flow.beginDrag (index);
+            if (result == AssignFlow::BeginResult::ok)
             {
-                if (auto* p = dynamic_cast<EnvelopePanel*> (child))
-                {
-                    if (p->envelopeIndex() == targetEnv)
-                    {
-                        vp->setViewPosition (0, p->getY() - ctx.theme.gap());
-                        break;
-                    }
-                }
+                if (std::abs (flow.amountNormalised() - 0.5f) < 1.0e-4f) // a new slot starts at 0 (= the middle of -100..+100): give it 50 %
+                    flow.setAmount (50.0f);
+                flow.endDrag();
+                done = true;
             }
+            else if (result == AssignFlow::BeginResult::matrixFull)
+                assign.setMessage ("Mod Matrix full (64/64 slots used)");
         }
+    }
+    assign.exitAssignMode();
+    assign.refresh();
+    assign.sendChangeMessage();
+    return done;
+}
+
+// ---- SourceTabButton ----------------------------------------------------------------------------------------------------------------
+
+void SourceTabButton::mouseDown (const juce::MouseEvent& e)
+{
+    dragging = false;
+    suppressClick = false;
+    press.onLongPress = [this]
+    {
+        suppressClick = true;
+        if (onLongPress)
+            onLongPress();
+    };
+    press.press (e.position);
+    juce::TextButton::mouseDown (e);
+}
+
+void SourceTabButton::mouseDrag (const juce::MouseEvent& e)
+{
+    press.moved (e.position);
+    if (! dragging && e.getDistanceFromDragStart() > ctx.theme.ipx (12.0f))
+    {
+        dragging = true;
+        suppressClick = true;
+        // arm the source: the modulatable controls show their target rings while the finger is on its way
+        if (ctx.assign.flow().armedSource() != sourceChoice)
+        {
+            ctx.assign.tapSource (sourceChoice);
+            armedByDrag = true;
+        }
+    }
+    juce::TextButton::mouseDrag (e);
+}
+
+void SourceTabButton::mouseUp (const juce::MouseEvent& e)
+{
+    press.cancel();
+    const bool wasDragging = dragging;
+    dragging = false;
+    juce::TextButton::mouseUp (e);
+    if (wasDragging)
+    {
+        auto* top = getTopLevelComponent();
+        juce::Component* target = nullptr;
+        if (top != nullptr)
+            target = top->getComponentAt (top->getLocalPoint (this, e.getPosition()));
+        if (onDropped)
+            onDropped (target);
+        armedByDrag = false;
     }
 }
 
 int EnvelopePanel::tabsPerRow (int width) const
 {
     const auto& t = ctx.theme;
-    return juce::jlimit (1, 7, (width + t.gap()) / (t.touch() + t.gap()));
+    return juce::jlimit (1, 8, (width + t.gap()) / (t.touch() + t.gap()));
 }
 
 int EnvelopePanel::tabRowHeight (int width) const
 {
     const auto& t = ctx.theme;
-    const int rows = (7 + tabsPerRow (width) - 1) / tabsPerRow (width);
+    const int rows = (8 + tabsPerRow (width) - 1) / tabsPerRow (width);
     return rows * t.touch() + (rows - 1) * t.gap();
 }
 
@@ -171,17 +262,18 @@ void EnvelopePanel::resized()
     const int tabH = tabRowHeight (fullArea.getWidth());
     tabRow.setBounds (fullArea.getX(), fullArea.getY(), fullArea.getWidth(), tabH);
 
-    // E1..E6 and Lock are 7 cells of at least a touch target; they wrap into as many rows as the width needs
-    juce::Component* cells[7];
+    // E1..E6, Lock and the magnifier are 8 cells of at least a touch target; they wrap into as many rows as the width needs
+    juce::Component* cells[8];
     for (size_t i = 0; i < 6; ++i)
         cells[i] = tabButtons[i].get();
     cells[6] = &zoomLockButton;
+    cells[7] = &magnifier;
     const int perRow = tabsPerRow (fullArea.getWidth());
-    const int rows = (7 + perRow - 1) / perRow;
-    const int rowLength = (7 + rows - 1) / rows;
+    const int rows = (8 + perRow - 1) / perRow;
+    const int rowLength = (8 + rows - 1) / rows;
     for (int row = 0; row < rows; ++row)
     {
-        const int inRow = juce::jmin (rowLength, 7 - row * rowLength);
+        const int inRow = juce::jmin (rowLength, 8 - row * rowLength);
         const int cellW = juce::jmax (1, (fullArea.getWidth() - (inRow - 1) * gap) / inRow);
         for (int i = 0; i < inRow; ++i)
             cells[row * rowLength + i]->setBounds (i * (cellW + gap), row * (t.touch() + gap), cellW, t.touch());

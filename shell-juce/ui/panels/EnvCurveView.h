@@ -29,6 +29,12 @@ public:
     /** Time zoom while the lock is off: 1 = the graph fits, > 1 shows the first part of the envelope larger. Pinch / wheel change it. */
     float zoom() const noexcept { return zoomLocked ? 1.0f : timeZoom; }
     void zoomBy (float factor);
+    /** The magnifier slider: sets the time zoom (1 .. 16) while the lock is off. */
+    void setZoom (float newZoom);
+    static constexpr float minZoom() noexcept { return 1.0f; }
+    static constexpr float maxZoom() noexcept { return 16.0f; }
+    /** Fired when the zoom or the lock changed (the magnifier follows a pinch). */
+    std::function<void()> onZoomChanged;
 
     void paint (juce::Graphics& g) override;
     void resized() override;

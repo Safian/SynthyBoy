@@ -103,6 +103,10 @@ undo (one drag = one step); it previews with the engine's own evaluator (`core/s
 A listener (`ParamHandle::onChange`) runs before the APVTS has updated its raw atomic: inside `onChange` read the new value with
 `normalised ()`, not `plain ()` (see `choiceIndexOf` in `LfoPanel.cpp`).
 
+## Gestures of the gap closure
+
+Module sheet (`ModuleSheet.*`, header long-press / `...` button / header drag in `Panel`), `GestureKit.*` (Loupe, TwoFingerInput, LongPressDetector, Toast), `model/GestureModel.*` (zoom / pan, slices, two-finger tracker, warp pictures). Per-row status and file:line: `docs/ui-design/UI-GESTURE-AUDIT.md`; summary `docs/ui-design/UI-GAPS-REPORT.md`. Tests: `synthyboy_test_ui_gaps` (screenshots to `/tmp/ui-shots/gaps/`).
+
 ## Tests
 
 `synthyboy_test_ui_model` (pure logic), `synthyboy_test_ui_lfo` (LFO page: tab chips, chip copy, dimming, shape editor gestures and undo, content round trip, the gestures of the audit; screenshots to `/tmp/ui-shots/follow/`), `synthyboy_test_ui_render` (real Components without a window or display; the processor

@@ -84,6 +84,10 @@ public:
     float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
     float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
     void injectMidiMessage (const juce::MidiMessage& msg) override;
+    bool revertToSaved() override;
+    int activeVoiceCount() const noexcept override { return voiceCount.load (std::memory_order_relaxed); }
+    float cpuLoad() const noexcept override { return cpu.load (std::memory_order_relaxed); }
+    int copyScope (float* dest, int maxSamples) const override;
     synthyboy::StateContent content() const override;
     bool setContent (const synthyboy::StateContent& newContent) override;
 
@@ -108,6 +112,10 @@ private:
     mutable std::mutex contentMutex;
     synthyboy::StateContent patchContent;
 
+    // what the host loaded last (or the defaults): "Revert to saved". Message thread, the content mutex covers hosts that do not.
+    synthyboy::ParamValues savedValues = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent savedContent;
+
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction
 
@@ -119,6 +127,12 @@ private:
     std::vector<synthyboy::Event> events;
     std::atomic<uint32_t> droppedEvents { 0 };
     std::atomic<float> peakL { 0.0f }, peakR { 0.0f };
+    std::atomic<int> voiceCount { 0 };
+    std::atomic<float> cpu { 0.0f };
+    // mono ring of the last output samples for the master scope (audio thread writes, the UI reads; relaxed atomics, a torn read only
+    // shows one odd sample)
+    std::array<std::atomic<float>, synthyboy::ui::UiHost::kScopeSamples> scopeRing {};
+    std::atomic<uint32_t> scopeWrite { 0 };
     std::mutex uiMidiMutex;
     juce::MidiBuffer uiMidiBuffer;
 

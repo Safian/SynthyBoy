@@ -273,8 +273,32 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         engine->setTransport (transport);
     }
 
+    const auto processStart = juce::Time::getHighResolutionTicks();
     engine->process (events.data(), numEvents, buffer.getWritePointer (0),
                      numChannels > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
+    {
+        // CPU: the time the engine needed for this block against the time the block lasts, smoothed over a few blocks
+        const double spent = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - processStart);
+        const double rate = getSampleRate();
+        const double budget = rate > 0.0 ? static_cast<double> (numSamples) / rate : 0.0;
+        if (budget > 0.0)
+        {
+            const float load = static_cast<float> (spent / budget);
+            cpu.store (cpu.load (std::memory_order_relaxed) * 0.9f + load * 0.1f, std::memory_order_relaxed);
+        }
+        voiceCount.store (engine->activeVoices(), std::memory_order_relaxed);
+
+        // the scope ring: the mono mix of the block
+        uint32_t w = scopeWrite.load (std::memory_order_relaxed);
+        const float* l = buffer.getReadPointer (0);
+        const float* r = numChannels > 1 ? buffer.getReadPointer (1) : l;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            scopeRing[w % synthyboy::ui::UiHost::kScopeSamples].store (0.5f * (l[i] + r[i]), std::memory_order_relaxed);
+            ++w;
+        }
+        scopeWrite.store (w, std::memory_order_release);
+    }
 
     const float magL = buffer.getMagnitude (0, 0, numSamples);
     const float magR = numChannels > 1 ? buffer.getMagnitude (1, 0, numSamples) : magL;
@@ -398,9 +422,39 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
             engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
     }
 
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        savedValues = currentValues();
+        savedContent = patchContent;
+    }
+
     // Values changed behind the host's back: the CLAP wrapper turns "program changed" into
     // params.rescan(VALUES), VST3 into a restartComponent (clap-validator state-reproducibility).
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
+}
+
+bool SynthyBoyProcessor::revertToSaved()
+{
+    synthyboy::ParamValues values;
+    synthyboy::StateContent content;
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        values = savedValues;
+        content = savedContent;
+    }
+    applyValues (values);
+    setContent (content);
+    return true;
+}
+
+int SynthyBoyProcessor::copyScope (float* dest, int maxSamples) const
+{
+    const uint32_t w = scopeWrite.load (std::memory_order_acquire);
+    const int available = static_cast<int> (std::min<uint32_t> (w, static_cast<uint32_t> (synthyboy::ui::UiHost::kScopeSamples)));
+    const int n = std::min (maxSamples, available);
+    for (int i = 0; i < n; ++i)
+        dest[i] = scopeRing[(w - static_cast<uint32_t> (n) + static_cast<uint32_t> (i)) % synthyboy::ui::UiHost::kScopeSamples].load (std::memory_order_relaxed);
+    return n;
 }
 
 synthyboy::StateContent SynthyBoyProcessor::content() const
