@@ -19,7 +19,8 @@ using namespace synthyboy::ui;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI juceInit; // message manager for the Components
+// message manager for the Components; released by the last test, so JUCE shuts down before the static destructors run
+juce::ScopedJuceInitialiser_GUI* juceInit = new juce::ScopedJuceInitialiser_GUI();
 
 /** The real processor, with the engine caps the test wants the UI to see. */
 class CapsHost final : public UiHost
@@ -560,4 +561,11 @@ TEST (uir_preset_strip_and_screenshots)
         std::printf ("    screenshot %s (%lld bytes)\n", file.getFullPathName().toRawUTF8(), static_cast<long long> (file.getSize()));
     }
     editor->setSourceBarOpen (false);
+}
+
+TEST (uir_zz_shutdown)
+{
+    delete juceInit;
+    juceInit = nullptr;
+    CHECK (true);
 }
