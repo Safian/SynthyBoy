@@ -90,6 +90,10 @@ namespace sbvital {
         kReset,
         kRetrigger,
         kFoldNote,  // SynthyBoy: semitones added to the note this oscillator plays (key fold of the oscillator mapping), 0 unplugged
+        kWarp2Type,    // SynthyBoy: the second warp slot (docs/ui-design/13-new-keys.md 4.9), applied after the first
+        kWarp2Amount,
+        kWarp2Phase,
+        kWarp2Spread,
         kNumInputs
       };
 
@@ -182,6 +186,14 @@ namespace sbvital {
         poly_int last_distortion_phase;
         poly_float distortion;
         poly_float last_distortion;
+        // SynthyBoy: second warp slot
+        int warp2_type;
+        int warp2_side;               // 0 both voices active, 1 only the left voice, 2 only the right voice (FM / RM sources)
+        poly_int distortion_phase2;
+        poly_int last_distortion_phase2;
+        poly_float distortion2;
+        poly_float last_distortion2;
+        const poly_float* modulation_buffer2;
 
         int num_buffer_samples;
         poly_int current_buffer_sample;
@@ -215,6 +227,7 @@ namespace sbvital {
       void reset(poly_mask reset_mask) override;
       void setSpectralMorphValues(SpectralMorph spectral_morph);
       void setDistortionValues(DistortionType distortion_type);
+      void setDistortion2Values(DistortionType distortion_type);
       void process(int num_samples) override;
       Processor* clone() const override { return new SynthOscillator(*this); }
 
@@ -297,6 +310,9 @@ namespace sbvital {
       poly_float last_spectral_morph_values_[kNumPolyPhase];
       poly_float distortion_values_[kNumPolyPhase];
       poly_float last_distortion_values_[kNumPolyPhase];
+      poly_float distortion2_values_[kNumPolyPhase];       // SynthyBoy: second warp slot
+      poly_float last_distortion2_values_[kNumPolyPhase];
+      poly_float distortion_phase2_;
       VoiceBlock voice_block_;
       utils::RandomGenerator random_generator_;
 

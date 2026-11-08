@@ -49,6 +49,7 @@ struct Binding
     int capArg = 0;
     int gateParam = -1;       // the binding writes its control only while parameter gateParam (a choice) equals gateValue: the millisecond and
     int gateValue = 0;        // the beat keys of an envelope time share one engine control (envN.units picks which one is live)
+    int frameOsc = 0;         // 1..3: the binding is the frame position (or spread) of that oscillator: the scale follows the frame count of its table
     int maxIndex = -1;        // Conv::index: the highest choice the engine implements (-1: no limit); choices appended to the list in
                               // state version 3 (a new filter model, ...) are stored but act like the last implemented one
 };

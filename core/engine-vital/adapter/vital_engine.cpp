@@ -28,6 +28,7 @@
 #endif
 
 #include "modulation_connection_processor.h"
+#include "sample_oscillator.h"
 #include "sound_engine.h"
 #include "synth_lfo.h"
 #include "synth_oscillator.h"
@@ -39,6 +40,9 @@
 #include "vital_bindings.h"
 #include "vital_tables.h"
 #include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
+#include "synthyboy/sampleosc/sample_data.h"
+#include "synthyboy/sampleosc/wav_reader.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/shapes/shapes.h"
 #include "synthyboy/tuning.h"
@@ -212,9 +216,22 @@ struct LfoCustom
     std::vector<PointMod> mods;
 };
 
+/** A sample of the content (oscN.type = Sample), decoded on the message thread. */
+struct SampleEntry
+{
+    sampleosc::SampleData data;
+    sampleosc::SampleView view;
+    std::vector<sampleosc::SampleData::Onset> onsets;
+    std::vector<float> manual;
+    bool present = false;
+};
+
 struct Snapshot
 {
     std::array<LfoCustom, kNumLfo> lfo;
+    std::array<std::unique_ptr<sbvital::Wavetable>, 3> userTable; // oscN.wavetable = Preset table (content.wavetables)
+    std::array<int, 3> userFrames {};
+    std::array<SampleEntry, 3> sample;                            // oscN.type = Sample (content.samples)
     bool hasVelocity = false, hasNote = false;
     std::array<float, kBakedPoints> velocityTable {}, noteTable {};
     std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
@@ -265,9 +282,67 @@ void notesOf (const tuning::Tuning& t, std::array<float, 128>& out) noexcept
     }
 }
 
-std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content)
+std::atomic<int> gTableVersion { 2000 };
+
+/** The frames of a user wavetable file: a WAV whose length is a multiple of 2048 is that many frames; anything else is one cycle that
+    is resampled to 2048 values. At most 256 frames. */
+bool decodeWavetable (const std::vector<uint8_t>& bytes, std::vector<float>& frames, int& numFrames)
+{
+    std::vector<float> left, right;
+    sampleosc::WavInfo info;
+    if (! sampleosc::readWav (bytes.data(), bytes.size(), left, right, info) || left.empty())
+        return false;
+    const size_t n = left.size();
+    if (n >= 2048 && n % 2048 == 0)
+    {
+        numFrames = static_cast<int> (std::min<size_t> (256, n / 2048));
+        frames.assign (left.begin(), left.begin() + static_cast<std::ptrdiff_t> (numFrames) * 2048);
+    }
+    else
+    {
+        numFrames = 1;
+        frames.resize (2048);
+        for (size_t i = 0; i < 2048; ++i)
+        {
+            const double pos = static_cast<double> (i) * static_cast<double> (n) / 2048.0;
+            const size_t i0 = std::min (n - 1, static_cast<size_t> (pos));
+            const size_t i1 = std::min (n - 1, i0 + 1);
+            const float f = static_cast<float> (pos - std::floor (pos));
+            frames[i] = left[i0] * (1.0f - f) + left[i1] * f;
+        }
+    }
+    return true;
+}
+
+std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const IContentStore* store)
 {
     auto s = std::make_unique<Snapshot>();
+
+    if (store != nullptr)
+    {
+        std::vector<uint8_t> bytes;
+        for (const ContentWavetable& w : content.wavetables)
+        {
+            std::vector<float> frames;
+            int numFrames = 0;
+            if (w.osc < 1 || w.osc > kNumOsc || ! store->readFile (w.ref, bytes) || ! decodeWavetable (bytes, frames, numFrames))
+                continue;
+            s->userTable[static_cast<size_t> (w.osc - 1)] = vitaltables::buildUserWavetable (frames.data(), numFrames, gTableVersion.fetch_add (1));
+            s->userFrames[static_cast<size_t> (w.osc - 1)] = numFrames;
+        }
+        for (const ContentSample& c : content.samples)
+        {
+            if (c.osc < 1 || c.osc > kNumOsc || ! store->readFile (c.ref, bytes))
+                continue;
+            SampleEntry& e = s->sample[static_cast<size_t> (c.osc - 1)];
+            if (! e.data.loadFromMemory (bytes.data(), bytes.size(), c.ref.file.c_str()) || ! e.data.isValid())
+                continue;
+            e.view = e.data.view();
+            e.onsets = e.data.detectOnsets();
+            e.manual = c.slices;
+            e.present = true;
+        }
+    }
 
     for (const ContentLfoShape& c : content.lfoShapes)
     {
@@ -461,7 +536,7 @@ public:
         // a bit is set only for an area that has a test rendering the key on and off (core/engine-vital/tests/test_wp123.cpp,
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
-             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping;
+             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2;
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -478,7 +553,32 @@ public:
 
     void setContent (const StateContent& content) override
     {
-        auto snapshot = buildSnapshot (content);
+        {
+            const std::lock_guard<std::mutex> lock (snapshotMutex);
+            lastContent = content;
+        }
+        publishContent (content);
+    }
+
+    void setContentStore (const IContentStore* store) override
+    {
+        StateContent content;
+        {
+            const std::lock_guard<std::mutex> lock (snapshotMutex);
+            contentStore = store;
+            content = lastContent;
+        }
+        publishContent (content);
+    }
+
+    void publishContent (const StateContent& content)
+    {
+        const IContentStore* store;
+        {
+            const std::lock_guard<std::mutex> lock (snapshotMutex);
+            store = contentStore;
+        }
+        auto snapshot = buildSnapshot (content, store);
         const std::lock_guard<std::mutex> lock (snapshotMutex);
         // snapshots the audio thread has replaced are done with: free them. The one it is using stays until it is replaced.
         for (auto it = snapshots.begin(); it != snapshots.end();)
@@ -598,6 +698,9 @@ private:
         for (auto& v : applied)
             v = std::numeric_limits<float>::quiet_NaN();
         appliedWavetable.fill (-1);
+        userFramesNow.fill (0);
+        appliedSliceKey.fill (~0ull);
+        retireAfterApply = nullptr;
         appliedShape.fill (-1);
         appliedCustomId.fill (0);
         appliedMap.fill ({ -1, -1, -1, -1, -1, -1 });
@@ -628,8 +731,11 @@ private:
         engine->setTuning (tuning.get());
 
         for (int i = 0; i < kNumOsc; ++i)
+        {
             if (sbvital::Wavetable* wavetable = engine->getWavetable (i))
                 wavetable->useExternalData (tables->data (kWavetableSaw));
+            sampleShared[static_cast<size_t> (i)] = engine->getSampleShared (i);
+        }
 
         engine->setSampleRate (static_cast<int> (std::lround (sampleRate)));
         engine->setBpm (120.0f);
@@ -765,6 +871,20 @@ private:
             for (int m = 0; m < 6; ++m)
                 mapParam[static_cast<size_t> (n - 1)][static_cast<size_t> (m)] = find (k + names[m]);
         }
+        {
+            static const char* const names[kSpCount] = { "type", "sample.start", "sample.end", "sample.root", "sample.keytrack", "sample.loop_mode",
+                "sample.loop_start", "sample.loop_end", "sample.loop_xfade", "sample.loop_relative", "sample.loop_exit", "sample.fade_edges",
+                "sample.normalize", "sample.reverse", "sample.slice_mode", "sample.slice_threshold", "sample.slice_play", "sample.slice_root",
+                "sample.scan_range", "sample.scan_reverse", "sample.scan_lock_tempo", "sample.scan_to_bpm", "sample.length_beats" };
+            for (int n = 1; n <= kNumOsc; ++n)
+            {
+                const std::string k = "osc" + std::to_string (n) + ".";
+                for (int w = 0; w < kSpCount; ++w)
+                    sampleParams[static_cast<size_t> (n - 1)][static_cast<size_t> (w)] = find (k + names[w]);
+                frameParams[static_cast<size_t> (n - 1)][0] = find (k + "frame");
+                frameParams[static_cast<size_t> (n - 1)][1] = find (k + "frame_spread");
+            }
+        }
         curveVelocityLegatoParam = find ("curve.velocity.legato");
         curveNoteLegatoParam = find ("curve.note.legato");
         portamentoParam = find ("master.portamento.time");
@@ -863,6 +983,7 @@ private:
         }
 
         applyScaleAndTuning (force); // first: the concert pitch it computes is added to the transposition below
+        applyWavetables();           // before the bindings: the frame scale of a user table
 
         const bool bpmChanged = appliedBpm != transport.bpm;
         for (Resolved& r : resolved)
@@ -884,6 +1005,8 @@ private:
             applied[b.param] = plain;
 
             double value = convertParam (b, static_cast<double> (plain), sampleRate, transport.bpm);
+            if (b.frameOsc > 0 && userFramesNow[static_cast<size_t> (b.frameOsc - 1)] > 1) // the frame position runs over the frames of the user table
+                value *= static_cast<double> (userFramesNow[static_cast<size_t> (b.frameOsc - 1)] - 1) / static_cast<double> (vitaltables::kMorphFrames - 1);
             switch (b.cap)
             {
                 case Cap::none:   break;
@@ -903,11 +1026,18 @@ private:
         appliedBpm = transport.bpm;
 
         applySpecials();
+        applySamples();
+        if (retireAfterApply != nullptr) // nothing references the replaced snapshot any more
+        {
+            retireAfterApply->retired.store (true, std::memory_order_release);
+            retireAfterApply = nullptr;
+        }
         for (int k = 0; k < kNumSlots; ++k)
             updateSlot (k);
     }
 
-    void applySpecials() noexcept
+    /** oscN.wavetable: a built-in table, or the user table of the content (Preset table; the saw when the content has none). */
+    void applyWavetables() noexcept
     {
         for (int i = 0; i < kNumOsc; ++i)
         {
@@ -915,16 +1045,106 @@ private:
             if (p < 0)
                 continue;
             int index = static_cast<int> (params[static_cast<size_t> (p)].load (std::memory_order_relaxed) + 0.5f);
+            sbvital::Wavetable* user = nullptr;
+            int frames = 0;
             if (index >= kNumBuiltinWavetables)
-                index = kWavetableSaw; // "Preset table": no content store yet, the documented fallback is the saw
-            if (index != appliedWavetable[static_cast<size_t> (i)])
             {
-                appliedWavetable[static_cast<size_t> (i)] = index;
+                if (activeSnapshot != nullptr && activeSnapshot->userTable[static_cast<size_t> (i)] != nullptr)
+                {
+                    user = activeSnapshot->userTable[static_cast<size_t> (i)].get();
+                    frames = activeSnapshot->userFrames[static_cast<size_t> (i)];
+                }
+                else
+                    index = kWavetableSaw; // "Preset table" without a table in the content: the documented fallback is the saw
+            }
+            const int key = user != nullptr ? 100000 + static_cast<int> (snapshotId) : index;
+            if (key != appliedWavetable[static_cast<size_t> (i)])
+            {
+                appliedWavetable[static_cast<size_t> (i)] = key;
                 if (auto* wavetable = engine->getWavetable (i))
-                    wavetable->useExternalData (tables->data (index));
+                    wavetable->useExternalData (user != nullptr ? const_cast<sbvital::Wavetable::WavetableData*> (user->getAllData()) : tables->data (index));
+            }
+            if (frames != userFramesNow[static_cast<size_t> (i)])
+            {
+                userFramesNow[static_cast<size_t> (i)] = frames;
+                for (int idx : frameParams[static_cast<size_t> (i)])
+                    if (idx >= 0)
+                        applied[static_cast<size_t> (idx)] = std::numeric_limits<float>::quiet_NaN(); // the frame scale changed: convert again
             }
         }
+    }
 
+    /** The settings and the sample of every oscillator slot, handed to the sample oscillators (they read them on this thread). */
+    void applySamples() noexcept
+    {
+        static constexpr float kFadeMs[9] = { 0.0f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f, 32.0f, 64.0f, 128.0f };
+        for (int i = 0; i < kNumOsc; ++i)
+        {
+            sbvital::SampleOscShared* sh = sampleShared[static_cast<size_t> (i)];
+            if (sh == nullptr)
+                continue;
+            const auto& ix = sampleParams[static_cast<size_t> (i)];
+            const auto P = [&] (int what) { const int idx = ix[static_cast<size_t> (what)]; return idx >= 0 ? params[static_cast<size_t> (idx)].load (std::memory_order_relaxed) : 0.0f; };
+            const SampleEntry* entry = activeSnapshot != nullptr && activeSnapshot->sample[static_cast<size_t> (i)].present ? &activeSnapshot->sample[static_cast<size_t> (i)] : nullptr;
+            const bool typeSample = P (kSpType) > 0.5f;
+            sh->view = typeSample && entry != nullptr ? &entry->view : nullptr; // Sample without a sample in the content: a silent oscillator
+            sh->normalize_gain = entry != nullptr ? entry->data.normalizeGain() : 1.0f;
+            sh->start = P (kSpStart) * 0.01f;
+            sh->end = P (kSpEnd) * 0.01f;
+            sh->root = static_cast<int> (P (kSpRoot) + 0.5f);
+            sh->keytrack = P (kSpKeytrack) > 0.5f;
+            sh->loop_mode = static_cast<int> (P (kSpLoopMode) + 0.5f);
+            sh->loop_start = P (kSpLoopStart) * 0.01f;
+            sh->loop_end = P (kSpLoopEnd) * 0.01f;
+            sh->loop_xfade_ms = P (kSpLoopXfade);
+            sh->loop_relative = P (kSpLoopRelative) > 0.5f;
+            sh->loop_exit = P (kSpLoopExit) > 0.5f;
+            sh->fade_ms = kFadeMs[std::max (0, std::min (8, static_cast<int> (P (kSpFadeEdges) + 0.5f)))];
+            sh->normalize = P (kSpNormalize) > 0.5f;
+            sh->reverse = P (kSpReverse) > 0.5f;
+            sh->slice_mode = static_cast<int> (P (kSpSliceMode) + 0.5f);
+            sh->slice_play = static_cast<int> (P (kSpSlicePlay) + 0.5f);
+            sh->slice_root = static_cast<int> (P (kSpSliceRoot) + 0.5f);
+            sh->scan_range = static_cast<int> (P (kSpScanRange) + 0.5f);
+            sh->scan_reverse = P (kSpScanReverse) > 0.5f;
+            sh->scan_lock_tempo = P (kSpScanLock) > 0.5f;
+            sh->scan_to_bpm = P (kSpScanToBpm) > 0.5f;
+            sh->length_beats = P (kSpLengthBeats);
+            sh->bpm = transport.bpm;
+            sh->quality = qOversampling.load (std::memory_order_relaxed) < 2 ? 0 : (quality.interpolation == Interpolation::spectral ? 2 : 1);
+            sh->max_unison = quality.maxUnison;
+
+            // the slice list: auto = the onsets of the file stronger than the threshold, manual = the positions of the content
+            const float threshold = P (kSpSliceThreshold);
+            const uint64_t key = (static_cast<uint64_t> (snapshotId) << 32) | (static_cast<uint64_t> (sh->slice_mode) << 24)
+                               | static_cast<uint64_t> (std::lround (threshold * 10.0f) + 1) | (entry != nullptr ? 1ull << 40 : 0ull);
+            if (key != appliedSliceKey[static_cast<size_t> (i)])
+            {
+                appliedSliceKey[static_cast<size_t> (i)] = key;
+                int n = 0;
+                if (entry != nullptr && sh->slice_mode != 0)
+                {
+                    sh->slices[n++] = 0.0f;
+                    if (sh->slice_mode == 1)
+                    {
+                        for (const auto& onset : entry->onsets)
+                            if (onset.strength >= 1.0f - threshold * 0.01f && n < sbvital::SampleOscShared::kMaxSlices)
+                                sh->slices[n++] = onset.position;
+                    }
+                    else
+                    {
+                        for (float position : entry->manual)
+                            if (position > sh->slices[n - 1] && position < 1.0f && n < sbvital::SampleOscShared::kMaxSlices)
+                                sh->slices[n++] = position;
+                    }
+                }
+                sh->num_slices = n;
+            }
+        }
+    }
+
+    void applySpecials() noexcept
+    {
         for (int i = 0; i < kNumLfo; ++i)
         {
             const int p = shapeParam[static_cast<size_t> (i)];
@@ -1007,8 +1227,11 @@ private:
         Snapshot* next = pendingSnapshot.exchange (nullptr, std::memory_order_acq_rel);
         if (next == nullptr)
             return;
-        if (activeSnapshot != nullptr)
-            activeSnapshot->retired.store (true, std::memory_order_release);
+        // the previous snapshot is retired (may be freed by the message thread) only after applyParams () has pointed the wavetables and
+        // the sample oscillators at the new one
+        if (retireAfterApply != nullptr)
+            retireAfterApply->retired.store (true, std::memory_order_release);
+        retireAfterApply = activeSnapshot;
         activeSnapshot = next;
         ++snapshotId;
         tuningStateId = ~0u; // the scale tables changed
@@ -1575,6 +1798,14 @@ private:
     uint32_t appliedQualityGeneration = ~0u;
     std::array<float, kMaxParams> applied {};
     std::array<int, kNumOsc> appliedWavetable {};
+    std::array<int, kNumOsc> userFramesNow {};                 // frames of the user table an oscillator plays (0: a built-in table)
+    std::array<std::array<int, 2>, kNumOsc> frameParams { { { { -1, -1 } }, { { -1, -1 } }, { { -1, -1 } } } };
+    enum { kSpType, kSpStart, kSpEnd, kSpRoot, kSpKeytrack, kSpLoopMode, kSpLoopStart, kSpLoopEnd, kSpLoopXfade, kSpLoopRelative, kSpLoopExit,
+           kSpFadeEdges, kSpNormalize, kSpReverse, kSpSliceMode, kSpSliceThreshold, kSpSlicePlay, kSpSliceRoot, kSpScanRange, kSpScanReverse,
+           kSpScanLock, kSpScanToBpm, kSpLengthBeats, kSpCount };
+    std::array<std::array<int, kSpCount>, kNumOsc> sampleParams {};
+    std::array<sbvital::SampleOscShared*, kNumOsc> sampleShared {};
+    std::array<uint64_t, kNumOsc> appliedSliceKey {};
     std::array<int, kNumLfo> appliedShape {};
     static constexpr size_t kMaxPointMods = 256;
     std::array<uint32_t, kNumLfo> appliedCustomId {};
@@ -1638,6 +1869,9 @@ private:
 
     // content: built on the message thread (setContent), taken over by the audio thread without a lock
     std::mutex snapshotMutex;
+    StateContent lastContent;
+    const IContentStore* contentStore = nullptr;
+    Snapshot* retireAfterApply = nullptr;
     std::vector<std::unique_ptr<Snapshot>> snapshots;
     std::atomic<Snapshot*> pendingSnapshot { nullptr };
     Snapshot* activeSnapshot = nullptr;

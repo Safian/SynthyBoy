@@ -48,3 +48,6 @@ if(MSVC)
 else()
     target_compile_options(synthyboy_engine_vital PRIVATE -w)
 endif()
+
+# The sample oscillator type (producers/sample_oscillator.cpp, our code in the fork) renders with the standalone core/sample-osc package.
+target_link_libraries(synthyboy_engine_vital PUBLIC synthyboy_sampleosc)

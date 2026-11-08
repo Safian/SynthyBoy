@@ -170,6 +170,53 @@ namespace sbvital {
       return utils::interpolate(1.0f, mod, distortion);
     }
 
+    // SynthyBoy: the second warp slot. Runs on the phase the first slot produced (docs/ui-design/13-new-keys.md 4.9, A15); the phase
+    // distortion of the slot is evaluated at run time (the first slot is a template for speed, this one is skipped when it is None).
+    force_inline poly_int warp2Phase(int type, int side, poly_int phase, poly_float amount, poly_int dist_phase,
+                                     const poly_float* mod, int i) {
+      switch (type) {
+        case SynthOscillator::kSync:
+        case SynthOscillator::kFormant:
+          return syncPhase(phase, amount, dist_phase, nullptr, 0);
+        case SynthOscillator::kQuantize:
+          return quantizePhase(phase, amount, dist_phase, nullptr, 0);
+        case SynthOscillator::kBend:
+          return bendPhase(phase, amount, dist_phase, nullptr, 0);
+        case SynthOscillator::kSqueeze:
+          return squeezePhase(phase, amount, dist_phase, nullptr, 0);
+        case SynthOscillator::kPulseWidth:
+          return pulseWidthPhase(phase, amount, dist_phase, nullptr, 0);
+        case SynthOscillator::kFmOscillatorA:
+        case SynthOscillator::kFmOscillatorB:
+        case SynthOscillator::kFmSample:
+          if (mod == nullptr)
+            return phase;
+          return side == 0 ? fmPhase(phase, amount, dist_phase, mod, i)
+                           : (side == 1 ? fmPhaseLeft(phase, amount, dist_phase, mod, i) : fmPhaseRight(phase, amount, dist_phase, mod, i));
+        default:
+          return phase;
+      }
+    }
+
+    force_inline poly_float warp2Window(int type, int side, poly_int phase, poly_int distorted, poly_float amount,
+                                        const poly_float* mod, int i) {
+      switch (type) {
+        case SynthOscillator::kFormant:
+          return halfSinWindow(phase, distorted, amount, nullptr, 0);
+        case SynthOscillator::kPulseWidth:
+          return pulseWidthWindow(phase, distorted, amount, nullptr, 0);
+        case SynthOscillator::kRmOscillatorA:
+        case SynthOscillator::kRmOscillatorB:
+        case SynthOscillator::kRmSample:
+          if (mod == nullptr)
+            return 1.0f;
+          return side == 0 ? rmWindow(phase, distorted, amount, mod, i)
+                           : (side == 1 ? rmWindowLeft(phase, distorted, amount, mod, i) : rmWindowRight(phase, distorted, amount, mod, i));
+        default:
+          return 1.0f;
+      }
+    }
+
     force_inline poly_float noTransposeSnap(poly_float midi, poly_float transpose, float*) {
       return midi + transpose;
     }
@@ -317,6 +364,18 @@ namespace sbvital {
       const poly_float* modulation_buffer = voice_block.modulation_buffer;
       if (modulation_buffer)
         modulation_buffer += start; // the buffer is null when no distortion needs it (null + offset is undefined)
+      // SynthyBoy: second warp slot
+      const int warp2 = voice_block.warp2_type;
+      const int warp2_side = voice_block.warp2_side;
+      poly_int current_dist_phase2 = voice_block.last_distortion_phase2;
+      poly_int delta_dist_phase2 = utils::toInt(utils::toFloat(voice_block.distortion_phase2 - current_dist_phase2) * sample_inc);
+      current_dist_phase2 += delta_dist_phase2 * start;
+      poly_float current_distortion2 = voice_block.last_distortion2;
+      poly_float distortion2_inc = (voice_block.distortion2 - current_distortion2) * sample_inc;
+      current_distortion2 += distortion2_inc * start;
+      const poly_float* modulation_buffer2 = voice_block.modulation_buffer2;
+      if (modulation_buffer2)
+        modulation_buffer2 += start;
       const poly_float* phase_inc_buffer = voice_block.phase_inc_buffer + start;
       const poly_int* phase_buffer = voice_block.phase_buffer + start;
       int num_samples = voice_block.end_sample - start;
@@ -328,8 +387,18 @@ namespace sbvital {
         current_dist_phase += delta_dist_phase;
         poly_int distorted_phase = phaseDistort(adjusted_phase, current_distortion,
                                                 current_dist_phase, modulation_buffer, i);
-        poly_float result = interpolate(from_buffers, to_buffers, distorted_phase + current_dist_phase, t);
-        audio_out[i] += window(adjusted_phase, distorted_phase, current_distortion, modulation_buffer, i) * result;
+        poly_int read_phase = distorted_phase + current_dist_phase;
+        poly_float mult = window(adjusted_phase, distorted_phase, current_distortion, modulation_buffer, i);
+        if (warp2 != SynthOscillator::kNone) {
+          current_distortion2 += distortion2_inc;
+          current_dist_phase2 += delta_dist_phase2;
+          poly_int phase2 = warp2Phase(warp2, warp2_side, read_phase, current_distortion2, current_dist_phase2,
+                                       modulation_buffer2, i);
+          mult *= warp2Window(warp2, warp2_side, read_phase, phase2, current_distortion2, modulation_buffer2, i);
+          read_phase = phase2 + current_dist_phase2;
+        }
+        poly_float result = interpolate(from_buffers, to_buffers, read_phase, t);
+        audio_out[i] += mult * result;
         t += t_inc;
       }
 
@@ -420,6 +489,18 @@ namespace sbvital {
       const poly_float* modulation_buffer = voice_block.modulation_buffer;
       if (modulation_buffer)
         modulation_buffer += start; // the buffer is null when no distortion needs it (null + offset is undefined)
+      // SynthyBoy: second warp slot
+      const int warp2 = voice_block.warp2_type;
+      const int warp2_side = voice_block.warp2_side;
+      poly_int current_dist_phase2 = voice_block.last_distortion_phase2;
+      poly_int delta_dist_phase2 = utils::toInt(utils::toFloat(voice_block.distortion_phase2 - current_dist_phase2) * sample_inc);
+      current_dist_phase2 += delta_dist_phase2 * start;
+      poly_float current_distortion2 = voice_block.last_distortion2;
+      poly_float distortion2_inc = (voice_block.distortion2 - current_distortion2) * sample_inc;
+      current_distortion2 += distortion2_inc * start;
+      const poly_float* modulation_buffer2 = voice_block.modulation_buffer2;
+      if (modulation_buffer2)
+        modulation_buffer2 += start;
       const poly_float* phase_inc_buffer = voice_block.phase_inc_buffer + start;
       const poly_int* phase_buffer = voice_block.phase_buffer + start;
       int num_samples = voice_block.end_sample - start;
@@ -434,7 +515,16 @@ namespace sbvital {
         poly_int distorted_phase = phaseDistort(adjusted_phase, current_distortion,
                                                 current_dist_phase, modulation_buffer, i);
         poly_float mult = window(adjusted_phase, distorted_phase, current_distortion, modulation_buffer, i);
-        poly_float read = mult * interpolate(from_buffers, to_buffers, distorted_phase + current_dist_phase, t);
+        poly_int read_phase = distorted_phase + current_dist_phase;
+        if (warp2 != SynthOscillator::kNone) {
+          current_distortion2 += distortion2_inc;
+          current_dist_phase2 += delta_dist_phase2;
+          poly_int phase2 = warp2Phase(warp2, warp2_side, read_phase, current_distortion2, current_dist_phase2,
+                                       modulation_buffer2, i);
+          mult *= warp2Window(warp2, warp2_side, read_phase, phase2, current_distortion2, modulation_buffer2, i);
+          read_phase = phase2 + current_dist_phase2;
+        }
+        poly_float read = mult * interpolate(from_buffers, to_buffers, read_phase, t);
         poly_float center_value = current_center_amplitude * read;
         audio_out[i] = center_value + current_detuned_amplitude * audio_out[i];
         VITAL_ASSERT(utils::isFinite(audio_out[i]));
@@ -525,6 +615,8 @@ namespace sbvital {
                                               shepard_double_mask(0), shepard_half_mask(0),
                                               distortion_phase(0), last_distortion_phase(0),
                                               distortion(0.0f), last_distortion(0.0f),
+                                              warp2_type(0), warp2_side(0), distortion_phase2(0), last_distortion_phase2(0),
+                                              distortion2(0.0f), last_distortion2(0.0f), modulation_buffer2(nullptr),
                                               num_buffer_samples(0), current_buffer_sample(0),
                                               smoothing_enabled(false), spectral_morph(kNoSpectralMorph),
                                               modulation_buffer(nullptr) {
@@ -561,7 +653,10 @@ namespace sbvital {
       last_spectral_morph_values_[i] = 1.0f;
       distortion_values_[i] = 0.0f;
       last_distortion_values_[i] = 0.0f;
+      distortion2_values_[i] = 0.0f;
+      last_distortion2_values_[i] = 0.0f;
     }
+    distortion_phase2_ = 0.0f;
 
     resetWavetableBuffers();
 
@@ -940,11 +1035,18 @@ namespace sbvital {
       voice_block.shepard_half_mask = compactAndLoadVoice(shepard_half_masks_ + 2 * index, active_mask);
       voice_block.distortion = compactAndLoadVoice(distortion_values_ + 2 * index, active_mask);
       voice_block.last_distortion = compactAndLoadVoice(last_distortion_values_ + 2 * index, active_mask);
+      voice_block.distortion2 = compactAndLoadVoice(distortion2_values_ + 2 * index, active_mask);
+      voice_block.last_distortion2 = compactAndLoadVoice(last_distortion2_values_ + 2 * index, active_mask);
       poly_int distortion_phase_swap = utils::swapVoices(voice_block.distortion_phase);
       voice_block.distortion_phase = utils::maskLoad(distortion_phase_swap, voice_block.distortion_phase, active_mask);
       poly_int last_distortion_phase_swap = utils::swapVoices(voice_block.last_distortion_phase);
       voice_block.last_distortion_phase = utils::maskLoad(last_distortion_phase_swap, voice_block.last_distortion_phase,
                                                           active_mask);
+      poly_int distortion_phase2_swap = utils::swapVoices(voice_block.distortion_phase2);
+      voice_block.distortion_phase2 = utils::maskLoad(distortion_phase2_swap, voice_block.distortion_phase2, active_mask);
+      poly_int last_distortion_phase2_swap = utils::swapVoices(voice_block.last_distortion_phase2);
+      voice_block.last_distortion_phase2 = utils::maskLoad(last_distortion_phase2_swap, voice_block.last_distortion_phase2,
+                                                           active_mask);
 
       int buffer_index = 2 * index * poly_float::kSize;
       compactAndLoadVoice(voice_block.from_buffers, last_buffers_ + buffer_index, active_mask);
@@ -966,6 +1068,8 @@ namespace sbvital {
       voice_block.shepard_half_mask = shepard_half_masks_[index];
       voice_block.distortion = distortion_values_[index];
       voice_block.last_distortion = last_distortion_values_[index];
+      voice_block.distortion2 = distortion2_values_[index];
+      voice_block.last_distortion2 = last_distortion2_values_[index];
 
       int buffer_index = index * poly_float::kSize;
       memcpy(voice_block.from_buffers, last_buffers_ + buffer_index, poly_float::kSize * sizeof(mono_float*));
@@ -1026,6 +1130,25 @@ namespace sbvital {
 
     bool is_spread = poly_float::notEqual(distortion_spread, 0.0f).anyMask() != 0;
     setDistortionValues(distortion_type, distortion_values_, kNumPolyPhase, is_spread);
+  }
+
+  void SynthOscillator::setDistortion2Values(DistortionType distortion_type) {
+    poly_float distortion_amount = input(kWarp2Amount)->at(0);
+    poly_float distortion_spread = input(kWarp2Spread)->at(0);
+    int num_phase_updates = active_oscillators_ / 2;
+    for (int v = 0; v < kNumPolyPhase; ++v) {
+      poly_float t = (v / (utils::imax(2, num_phase_updates) - 1.0f) * 2.0f);
+      last_distortion2_values_[v] = distortion2_values_[v];
+      distortion2_values_[v] = utils::clamp(distortion_amount + t * distortion_spread, 0.0f, 1.0f);
+    }
+
+    if (distortion_type == kQuantize) {
+      for (int i = 0; i < kNumPolyPhase; ++i)
+        last_distortion2_values_[i] = utils::max(1.5f, last_distortion2_values_[i]);
+    }
+
+    bool is_spread = poly_float::notEqual(distortion_spread, 0.0f).anyMask() != 0;
+    setDistortionValues(distortion_type, distortion2_values_, kNumPolyPhase, is_spread);
   }
 
   void SynthOscillator::setDistortionValues(DistortionType distortion_type,
@@ -1227,6 +1350,17 @@ namespace sbvital {
     DistortionType distortion_type = static_cast<DistortionType>((int)input(kDistortionType)->at(0)[0]);
     setSpectralMorphValues(spectral_morph);
     setDistortionValues(distortion_type);
+    DistortionType warp2_type = static_cast<DistortionType>(utils::clamp((int)input(kWarp2Type)->at(0)[0], 0, kNumDistortionTypes - 1));
+    setDistortion2Values(warp2_type);
+    voice_block_.warp2_type = warp2_type;
+    voice_block_.warp2_side = left_active && right_active ? 0 : (left_active ? 1 : 2);
+    voice_block_.modulation_buffer2 = nullptr;
+    if (warp2_type == kFmOscillatorB || warp2_type == kRmOscillatorB)
+      voice_block_.modulation_buffer2 = second_mod_oscillator_ != nullptr ? second_mod_oscillator_->buffer : nullptr;
+    else if (warp2_type == kFmSample || warp2_type == kRmSample)
+      voice_block_.modulation_buffer2 = sample_ != nullptr ? sample_->buffer : nullptr;
+    else if (warp2_type == kFmOscillatorA || warp2_type == kRmOscillatorA)
+      voice_block_.modulation_buffer2 = first_mod_oscillator_ != nullptr ? first_mod_oscillator_->buffer : nullptr;
     voice_block_.phase_inc_buffer = phase_inc_buffer_->buffer;
     voice_block_.spectral_morph = spectral_morph;
 
@@ -1386,6 +1520,15 @@ namespace sbvital {
     voice_block_.last_distortion_phase = utils::toInt(current_distortion_phase * kPhaseMult);
     voice_block_.distortion_phase = utils::toInt(distortion_phase_ * kPhaseMult);
 
+    // SynthyBoy: the distortion phase of the second warp slot
+    poly_float current_distortion_phase2 = distortion_phase2_;
+    distortion_phase2_ = 0.0f;
+    if (usesDistortionPhase(static_cast<DistortionType>(voice_block_.warp2_type)))
+      distortion_phase2_ = input(kWarp2Phase)->at(0) - 0.5f;
+    current_distortion_phase2 = utils::maskLoad(current_distortion_phase2, distortion_phase2_, reset_mask);
+    voice_block_.last_distortion_phase2 = utils::toInt(current_distortion_phase2 * kPhaseMult);
+    voice_block_.distortion_phase2 = utils::toInt(distortion_phase2_ * kPhaseMult);
+
     poly_mask wave_buffer_mask = reset_mask | retrigger_mask;
     poly_float buffer_phase_inc = phase_inc_buffer_->buffer[num_samples - 1] * (1.0f / kPhaseMult);
     if (wave_buffer_mask[0])
@@ -1479,6 +1622,7 @@ namespace sbvital {
       poly_float last_distortion_swap = utils::swapVoices(voice_block_.last_distortion);
       voice_block_.last_distortion = utils::maskLoad(last_distortion_swap, voice_block_.last_distortion,
                                                      active_voice_mask);
+      // (the second warp slot is loaded per index by loadVoiceBlock, which does the same for its values)
       poly_int swap_buffer_sample = utils::swapVoices(voice_block_.current_buffer_sample);
       voice_block_.current_buffer_sample = utils::maskLoad(swap_buffer_sample, voice_block_.current_buffer_sample,
                                                            active_voice_mask);

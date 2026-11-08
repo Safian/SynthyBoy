@@ -47,6 +47,7 @@ namespace sbvital {
       map_warp_[i] = createBaseControl("osc_" + number + "_map_warp");
       oscillators_[i]->useInput(input(kMidi), OscillatorModule::kMidi);
       oscillators_[i]->useInput(input(kFold1 + i), OscillatorModule::kFold);
+      oscillators_[i]->useInput(input(kNotePressed), OscillatorModule::kNotePressed);
       oscillators_[i]->useInput(input(kActiveVoices), OscillatorModule::kActiveVoices);
     }
 
@@ -62,6 +63,9 @@ namespace sbvital {
       oscillators_[i]->oscillator()->setFirstOscillatorOutput(oscillators_[index1]->output(OscillatorModule::kRaw));
       oscillators_[i]->oscillator()->setSecondOscillatorOutput(oscillators_[index2]->output(OscillatorModule::kRaw));
       oscillators_[i]->oscillator()->setSampleOutput(sampler_->output(SampleModule::kRaw));
+      oscillators_[i]->sampleOscillator()->setFirstOscillatorOutput(oscillators_[index1]->output(OscillatorModule::kRaw));
+      oscillators_[i]->sampleOscillator()->setSecondOscillatorOutput(oscillators_[index2]->output(OscillatorModule::kRaw));
+      oscillators_[i]->sampleOscillator()->setSampleOutput(sampler_->output(SampleModule::kRaw));
     }
   }
 
@@ -89,10 +93,14 @@ namespace sbvital {
 
     getLocalProcessor(sampler_)->process(num_samples);
 
-    SynthOscillator::DistortionType distortion_types[kNumOscillators];
+    // SynthyBoy: an oscillator waits for the sources of both of its warp slots
+    bool needs_first[kNumOscillators], needs_second[kNumOscillators];
     bool processed[kNumOscillators];
     for (int i = 0; i < kNumOscillators; ++i) {
-      distortion_types[i] = oscillators_[i]->getDistortionType();
+      SynthOscillator::DistortionType type1 = oscillators_[i]->getDistortionType();
+      SynthOscillator::DistortionType type2 = oscillators_[i]->getDistortionType2();
+      needs_first[i] = SynthOscillator::isFirstModulation(type1) || SynthOscillator::isFirstModulation(type2);
+      needs_second[i] = SynthOscillator::isSecondModulation(type1) || SynthOscillator::isSecondModulation(type2);
       processed[i] = false;
     }
    
@@ -102,8 +110,8 @@ namespace sbvital {
       OscillatorModule* module = oscillators_[index];
       int first_source = getFirstModulationIndex(index);
       int second_source = getSecondModulationIndex(index);
-      if ((!SynthOscillator::isFirstModulation(distortion_types[index]) || processed[first_source]) &&
-          (!SynthOscillator::isSecondModulation(distortion_types[index]) || processed[second_source]) &&
+      if ((!needs_first[index] || processed[first_source]) &&
+          (!needs_second[index] || processed[second_source]) &&
           !processed[index]) {
         num_processed++;
         processed[index] = true;

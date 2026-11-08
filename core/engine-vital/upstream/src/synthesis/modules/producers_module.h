@@ -36,6 +36,7 @@ namespace sbvital {
         kFold1,   // SynthyBoy: per voice semitones added to the note the oscillator plays (key fold)
         kFold2,
         kFold3,
+        kNotePressed,  // SynthyBoy: 1 while the key of the voice is held
         kNumInputs
       };
 
@@ -66,6 +67,8 @@ namespace sbvital {
       Wavetable* getWavetable(int index) {
         return oscillators_[index]->getWavetable();
       }
+
+      SampleOscShared* getSampleShared(int index) { return oscillators_[index]->sampleShared(); }
 
       Sample* getSample() { return sampler_->getSample(); }
       Output* samplePhaseOutput() { return sampler_->getPhaseOutput(); }

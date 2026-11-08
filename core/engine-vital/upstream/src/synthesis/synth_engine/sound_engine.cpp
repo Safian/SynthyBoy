@@ -382,6 +382,10 @@ namespace sbvital {
     return voice_handler_->getWavetable(index);
   }
 
+  SampleOscShared* SoundEngine::getSampleShared(int index) {
+    return voice_handler_->getSampleShared(index);
+  }
+
   Sample* SoundEngine::getSample() {
     return voice_handler_->getSample();
   }

@@ -147,6 +147,7 @@ namespace sbvital {
     producers_->plug(bent_midi_, ProducersModule::kMidi);
     producers_->plug(note_count(), ProducersModule::kNoteCount);
     producers_->plug(active_mask(), ProducersModule::kActiveVoices);
+    producers_->plug(note_pressed(), ProducersModule::kNotePressed);
     for (int i = 0; i < 3; ++i) {
       producers_->plug(osc_mute(i), ProducersModule::kMute1 + i);
       producers_->plug(osc_fold(i), ProducersModule::kFold1 + i);

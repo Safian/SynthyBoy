@@ -74,6 +74,20 @@ public:
 
     int numMipLevels() const noexcept { return numMipLevels_; }
 
+    /** Gain that brings the peak of the whole file to 1 (1 for silence); computed at load time. */
+    float normalizeGain() const noexcept { return normalizeGain_; }
+
+    /** Transient detection for the Auto slice mode (non-RT, deterministic: the same file and threshold give the same slices).
+        threshold 0..1 (0 = most slices): an onset is a rise of the short-term energy envelope (2 ms resolution) of at least
+        `1 - threshold` times the loudest rise, with a minimum distance of 20 ms. Returns slice starts as fractions 0..1 of the
+        file, ascending, the first one is always 0; at most maxSlices entries. */
+    std::vector<float> detectSlices (float threshold, int maxSlices = 128) const;
+
+    /** The onsets detectSlices () chooses from: position (fraction of the file) and strength (0..1, 1 = the strongest rise), ascending in
+        position, at most maxOnsets. A slice list for a threshold is the first slice 0 plus every onset with strength >= 1 - threshold. */
+    struct Onset { float position = 0.0f; float strength = 0.0f; };
+    std::vector<Onset> detectOnsets (int maxOnsets = 256) const;
+
     int64_t loopStart() const noexcept { return loopStart_; }
     int64_t loopEnd() const noexcept { return loopEnd_; }
     int loopType() const noexcept { return loopType_; }
@@ -88,6 +102,7 @@ private:
     double sampleRate_ = 44100.0;
     int rootNote_ = 60;
     float fineTuneCents_ = 0.0f;
+    float normalizeGain_ = 1.0f;
 
     int64_t loopStart_ = -1;
     int64_t loopEnd_ = -1;

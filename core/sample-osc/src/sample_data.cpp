@@ -166,11 +166,80 @@ bool SampleData::loadFromFrames (const float* left, const float* right, int64_t 
     return true;
 }
 
+std::vector<SampleData::Onset> SampleData::detectOnsets (int maxOnsets) const
+{
+    std::vector<Onset> out;
+    if (leftData_[0].empty() || numFrames_ < 2 || maxOnsets < 1)
+        return out;
+
+    const int64_t hop = std::max<int64_t> (1, static_cast<int64_t> (0.002 * sampleRate_));
+    const int64_t blocks = numFrames_ / hop;
+    if (blocks < 4)
+        return out;
+    std::vector<float> env (static_cast<size_t> (blocks), 0.0f);
+    for (int64_t b = 0; b < blocks; ++b)
+    {
+        double sum = 0.0;
+        for (int64_t i = b * hop; i < (b + 1) * hop; ++i)
+        {
+            const double l = leftData_[0][static_cast<size_t> (i)];
+            const double r = (numChannels_ == 2 && ! rightData_[0].empty()) ? rightData_[0][static_cast<size_t> (i)] : l;
+            sum += 0.5 * (l * l + r * r);
+        }
+        env[static_cast<size_t> (b)] = static_cast<float> (std::sqrt (sum / static_cast<double> (hop)));
+    }
+    // rise of the envelope against the mean of the previous 10 blocks (20 ms)
+    std::vector<float> rise (static_cast<size_t> (blocks), 0.0f);
+    float maxRise = 0.0f;
+    for (int64_t b = 1; b < blocks; ++b)
+    {
+        double mean = 0.0;
+        const int64_t from = std::max<int64_t> (0, b - 10);
+        for (int64_t k = from; k < b; ++k)
+            mean += env[static_cast<size_t> (k)];
+        mean /= static_cast<double> (b - from);
+        rise[static_cast<size_t> (b)] = std::max (0.0f, env[static_cast<size_t> (b)] - static_cast<float> (mean));
+        maxRise = std::max (maxRise, rise[static_cast<size_t> (b)]);
+    }
+    if (maxRise <= 1.0e-6f)
+        return out;
+    const int64_t minDistance = 10; // blocks (20 ms)
+    int64_t last = 0; // the file start is the first slice anyway: no onset within the minimum distance of it
+    for (int64_t b = 1; b < blocks && static_cast<int> (out.size()) < maxOnsets; ++b)
+    {
+        const float r = rise[static_cast<size_t> (b)];
+        if (r >= 0.05f * maxRise && r >= rise[static_cast<size_t> (b - 1)] && (b + 1 >= blocks || r > rise[static_cast<size_t> (b + 1)])
+            && b - last >= minDistance)
+        {
+            out.push_back ({ static_cast<float> (static_cast<double> (b * hop) / static_cast<double> (numFrames_)), r / maxRise });
+            last = b;
+        }
+    }
+    return out;
+}
+
+std::vector<float> SampleData::detectSlices (float threshold, int maxSlices) const
+{
+    std::vector<float> out { 0.0f };
+    const float limit = 1.0f - std::max (0.0f, std::min (1.0f, threshold));
+    for (const Onset& o : detectOnsets (256))
+        if (o.strength >= limit && static_cast<int> (out.size()) < maxSlices)
+            out.push_back (o.position);
+    return out;
+}
+
 void SampleData::buildMipLevels()
 {
     numMipLevels_ = 1;
     if (leftData_[0].empty())
         return;
+
+    float peak = 0.0f;
+    for (float v : leftData_[0])
+        peak = std::max (peak, std::fabs (v));
+    for (float v : rightData_[0])
+        peak = std::max (peak, std::fabs (v));
+    normalizeGain_ = peak > 1.0e-9f ? 1.0f / peak : 1.0f;
 
     // Design a 101-tap Kaiser low-pass filter with cutoff at 0.42 * pi and beta = 8.0
     constexpr int kTaps = 101;

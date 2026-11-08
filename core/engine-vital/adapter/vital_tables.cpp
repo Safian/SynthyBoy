@@ -189,6 +189,25 @@ WavetableSet::WavetableSet()
     }
 }
 
+std::unique_ptr<sbvital::Wavetable> buildUserWavetable (const float* frames, int numFrames, int version)
+{
+    numFrames = std::max (1, std::min (256, numFrames));
+    auto wavetable = std::make_unique<sbvital::Wavetable> (numFrames);
+    wavetable->setNumFrames (numFrames);
+    auto frame = std::make_unique<sbvital::WaveFrame>();
+    for (int f = 0; f < numFrames; ++f)
+    {
+        for (int n = 0; n < kN; ++n)
+            frame->time_domain[n] = frames[static_cast<size_t> (f) * kN + static_cast<size_t> (n)];
+        frame->toFrequencyDomain();
+        frame->index = f;
+        wavetable->loadWaveFrame (frame.get(), f);
+    }
+    wavetable->postProcess (0.0f);
+    const_cast<sbvital::Wavetable::WavetableData*> (wavetable->getAllData())->version = version;
+    return wavetable;
+}
+
 sbvital::Wavetable::WavetableData* WavetableSet::data (int index) noexcept
 {
     index = std::clamp (index, 0, size() - 1);

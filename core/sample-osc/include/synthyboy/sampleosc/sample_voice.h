@@ -5,6 +5,8 @@
 
 #include "synthyboy/sampleosc/sample_types.h"
 
+#include <limits>
+
 namespace synthyboy
 {
 namespace sampleosc
@@ -77,6 +79,24 @@ public:
     /** Unison level scaling multiplier. */
     void setUnisonLevel (float level) noexcept;
 
+    // --- SynthyBoy extensions (engine-vital integration) ---
+    /** Continuous pitch relative to the root key in semitones (bend, transposition, tune, unison detune of the host oscillator). Once
+        set it replaces the pitch derived from the played key and params.tune; NaN returns to the key based pitch. Real-time safe. */
+    void setSemitoneOffset (float semitones) noexcept;
+
+    /** Playback speed multiplier on top of the pitch (the "scan" of the oscillator): 1 = as recorded, 0 freezes the read head, negative
+        plays backwards. Real-time safe. */
+    void setSpeedMultiplier (double speed) noexcept;
+
+    /** Ends the loop: the voice plays on to the end of its region (one-shot behaviour), used for "exit loop on release" and Tailed. */
+    void releaseLoop() noexcept;
+
+    /** Renders numFrames with a per-frame rate multiplier (frequency modulation of the read head); rateMod may be null (= process). */
+    void processModulated (float* outLeft, float* outRight, int numFrames, const float* rateMod) noexcept;
+
+    /** Sets the read head to a fraction (0..1) of the playback region right now (uni start / start phase of the host oscillator). */
+    void seekFraction (double fraction) noexcept;
+
     // --- Status queries ---
     bool isActive() const noexcept { return active_; }
     bool isReleasing() const noexcept { return stopping_; }
@@ -98,6 +118,7 @@ public:
 private:
     void updatePitchRatio() noexcept;
     void renderFrame (float& outL, float& outR) noexcept;
+    void renderFrame (float& outL, float& outR, double rateMult) noexcept;
 
     double hostSampleRate_ = 44100.0;
     const SampleView* sample_ = nullptr;
@@ -111,6 +132,8 @@ private:
     double playhead_ = 0.0;
     double direction_ = 1.0;
     double pitchRatio_ = 1.0;
+    float semitoneOffset_ = std::numeric_limits<float>::quiet_NaN();
+    double speed_ = 1.0;
 
     // Unison per-voice modifiers
     float unisonPitchRatio_ = 1.0f;

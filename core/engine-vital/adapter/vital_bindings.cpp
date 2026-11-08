@@ -65,6 +65,13 @@ struct Builder
                 binding.maxIndex = maxIndex;
     }
     void hzNote (const std::string& key, const std::string& control) { add (key, control, Conv::noteFromHz); }
+    void frameOsc (const std::string& key, int osc)
+    {
+        const size_t param = indexOf (key);
+        for (auto& binding : out)
+            if (binding.param == param)
+                binding.frameOsc = osc;
+    }
     /** The binding of `key` writes its control only while the choice `gateKey` equals `value`. */
     void gate (const std::string& key, const std::string& gateKey, int value)
     {
@@ -105,6 +112,17 @@ std::vector<Binding> build()
         b.percent (k + "tune", c + "tune");
         b.add (k + "frame", c + "wave_frame", Conv::linear, 0.01 * (vitaltables::kMorphFrames - 1));
         b.add (k + "frame_spread", c + "frame_spread", Conv::linear, 0.01 * (vitaltables::kMorphFrames - 1));
+        b.frameOsc (k + "frame", n);
+        b.frameOsc (k + "frame_spread", n);
+        // state version 3: the oscillator type, the modulatable controls of the sample oscillator and the second warp slot
+        b.choice (k + "type", c + "type");
+        b.percent (k + "sample.scan", c + "sample_scan");
+        b.percent (k + "sample.uni_start", c + "sample_uni_start");
+        b.percent (k + "sample.uni_span", c + "sample_uni_span");
+        b.add (k + "warp2.type", c + "warp2_type", Conv::indexMap, 1.0, 0.0, Cap::none, 0, kWarpMap);
+        b.percent (k + "warp2.amount", c + "warp2_amount");
+        b.add (k + "warp2.phase", c + "warp2_phase", Conv::linear, 1.0 / 360.0);
+        b.percent (k + "warp2.spread", c + "warp2_spread", 0.005);
         b.add (k + "phase", c + "phase", Conv::linear, 1.0 / 360.0);
         b.percent (k + "random_phase", c + "random_phase");
         b.choice (k + "destination", c + "destination");
@@ -351,7 +369,9 @@ bool isSpecialParam (size_t paramIndex)
         // state version 3: handled by the adapter (vital_engine.cpp), not one control each
         || (startsWith ("env") && endsWith (".units")) || (startsWith ("lfo") && (endsWith (".mono") || endsWith (".host")))
         || (startsWith ("mod") && std::strstr (key, ".aux_") != nullptr) || startsWith ("curve.") || startsWith ("master.scale.")
-        || startsWith ("master.tuning.") || startsWith ("master.mpe.") || (startsWith ("osc") && std::strstr (key, ".map.") != nullptr);
+        || startsWith ("master.tuning.") || startsWith ("master.mpe.") || (startsWith ("osc") && std::strstr (key, ".map.") != nullptr)
+        // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
+        || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"));
 }
 
 double convertParam (const Binding& binding, double plain, double sampleRate, double bpm)

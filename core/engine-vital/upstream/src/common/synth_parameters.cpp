@@ -535,6 +535,23 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Destination", strings::kDestinationNames },
     { "view_2d", 0x000402, 0.0, 2.0, 1.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "View 2D", strings::kOffOnNames },
+    // SynthyBoy (docs/ui-design/13-new-keys.md 4.9): the oscillator type, the modulatable sample controls and the second warp slot
+    { "type", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Type", nullptr },
+    { "sample_scan", 0x000000, -1.0, 1.0, 1.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Sample Scan", nullptr },
+    { "sample_uni_start", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Sample Unison Start", nullptr },
+    { "sample_uni_span", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Sample Unison Span", nullptr },
+    { "warp2_type", 0x000000, 0.0, SynthOscillator::kNumDistortionTypes - 1, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Warp 2 Type", strings::kPhaseDistortionNames },
+    { "warp2_amount", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Warp 2 Amount", nullptr },
+    { "warp2_phase", 0x000000, 0.0, 1.0, 0.5, 0.0, 360.0,
+      ValueDetails::kLinear, false, "", "Warp 2 Phase", nullptr },
+    { "warp2_spread", 0x000000, -0.5, 0.5, 0.0, 0.0, 200.0,
+      ValueDetails::kLinear, false, "%", "Warp 2 Spread", nullptr },
   };
 
   const ValueDetails ValueDetailsLookup::mod_parameter_list[] = {

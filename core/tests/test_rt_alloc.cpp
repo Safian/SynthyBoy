@@ -14,6 +14,7 @@
 
 #include "alloc_hook.h"
 #include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/tuning.h"
 
 using namespace synthyboy;
@@ -215,9 +216,38 @@ StateContent makeContent (int variant)
     }
     content.velocityCurve = { { 0.0f, 0.2f, 0.0f }, { 0.5f, 0.9f, -3.0f }, { 1.0f, 1.0f, 0.0f } };
     content.noteCurve = { { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f, 2.0f } };
+    // WP4: a sample and a table for oscillator 1 and 2 (the store of the test holds the files)
+    for (int osc = 1; osc <= 2; ++osc)
+    {
+        ContentSample sample;
+        sample.osc = osc;
+        sample.ref.pack = "rt";
+        sample.ref.file = "sample.wav";
+        sample.slices = { 0.2f, 0.4f, 0.6f };
+        content.samples.push_back (sample);
+        ContentWavetable table;
+        table.osc = osc;
+        table.ref.pack = "rt";
+        table.ref.file = "table.wav";
+        content.wavetables.push_back (table);
+    }
     content.tuning.present = true;
     content.tuning.scl = "! t.scl\nt\n 7\n 200.0\n 400.0\n 500.0\n 700.0\n 900.0\n 1100.0\n 1200.0\n";
     return content;
+}
+
+std::vector<uint8_t> testWav (int frames, bool saw)
+{
+    std::vector<uint8_t> b;
+    const auto put32 = [&] (uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (v >> (8 * i))); };
+    const auto put16 = [&] (uint16_t v) { b.push_back (static_cast<uint8_t> (v)); b.push_back (static_cast<uint8_t> (v >> 8)); };
+    const auto tag = [&] (const char* t) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (t[i])); };
+    tag ("RIFF"); put32 (static_cast<uint32_t> (36 + frames * 2)); tag ("WAVE");
+    tag ("fmt "); put32 (16); put16 (1); put16 (1); put32 (44100); put32 (88200); put16 (2); put16 (16);
+    tag ("data"); put32 (static_cast<uint32_t> (frames * 2));
+    for (int i = 0; i < frames; ++i)
+        put16 (static_cast<uint16_t> (static_cast<int16_t> (saw ? (i % 2048) * 12 - 12000 : static_cast<int> (10000.0 * std::sin (i * 0.05)))));
+    return b;
 }
 } // namespace
 
@@ -231,6 +261,10 @@ TEST (process_does_not_allocate_with_the_new_events_content_and_keys)
         engine->prepare (48000.0, 128, qualityForTier (Tier::high));
         MovingMaster master;
         engine->setTuningSource (&master);
+        MemoryContentStore store;
+        store.add ("rt", "sample.wav", testWav (30000, false));
+        store.add ("rt", "table.wav", testWav (2048 * 3, true));
+        engine->setContentStore (&store);
 
         constexpr int blockSize = 128;
         static float left[blockSize], right[blockSize];
