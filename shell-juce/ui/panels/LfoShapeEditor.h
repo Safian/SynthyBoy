@@ -16,12 +16,21 @@
 // points then moves them all, with the "rainbow" falloff while Prop is on. The selected point bar: X / Y fields, Loop here (loop point of the
 // shape), Start here (the LFO phase marker lfoN.phase), Segment shape menu. All curves bends every segment with one handle. The grid
 // (columns x rows) has number fields and steppers.
+//
+// Point modulation (row 05-22, design 05 / 06): with a source chip armed (tap a chip in the source bar) every point shows a dashed purple
+// target ring; dragging a point sideways sets the depth of the armed source on X, up / down on Y (the larger movement wins; the end points
+// take Y only), a tap gives Y a 50 % depth. The point does not move meanwhile. Assigned points keep a purple ring and a depth bar (the
+// bar is the swing of the source from the point; a lighter bar is a negative depth, a thin grey one a bypassed modulation). Long-press a
+// point = its sheet: pick the source for X / Y, bypass (depth 0, the previous depth comes back), remove. Stored in content.lfo_shapes[]
+// points[].mod_x / mod_y (any source key, depth -1..1, no new keys); one drag = one undo step.
 #pragma once
 
+#include <array>
 #include <memory>
 #include <vector>
 
 #include "../GestureKit.h"
+#include "../model/ModModel.h"
 #include "../UiContext.h"
 #include "synthyboy/shapes/shape.h"
 
@@ -111,6 +120,20 @@ public:
     /** Writes pending edits to the host now (a timer does it at 30 Hz while dragging, mouse up does it at once). */
     void commitNow();
 
+    // ---- point modulation (each call is one undo step, written to the host at once) ----
+    /** Source (choice 1..38) and depth (-1..1) of one axis of a point. False for a bad point / source, or X on an end point. */
+    bool assignPointMod (int index, PointAxis axis, int sourceChoice, float depth);
+    bool clearPointMod (int index, PointAxis axis);
+    /** Bypass = depth 0 with the source kept; un-bypass restores the depth it had (50 % if unknown). False when there is no modulation. */
+    bool bypassPointMod (int index, PointAxis axis, bool bypass);
+    bool pointModBypassed (int index, PointAxis axis) const;
+    /** The long-press sheet of a point (a popup menu; the choices call the functions above). */
+    void showPointSheet (int index);
+    /** The source armed in the source bar (choice 1..38), 0 for none. */
+    int armedSource() const;
+    /** Centre of the depth ring of a point (tests, the sheet anchor): same as pointPosition. */
+    bool pointModDragging() const noexcept { return drag == Drag::pointMod; }
+
     // ---- geometry (tests) ----
     juce::Rectangle<float> plotBounds() const noexcept { return plot; }
     juce::Point<float> pointPosition (int index) const;
@@ -143,6 +166,8 @@ private:
     void updateButtons();
     void applyFieldEditors();
     void refreshFields();
+    void paintPointModulation (juce::Graphics& g);
+    float& memoFor (int index, PointAxis axis);
 
     UiContext& ctx;
     int lfo;
@@ -159,7 +184,7 @@ private:
     int idleTicks = 0;
 
     // open gesture
-    enum class Drag { none, point, handle, draw, cells, marquee, selection } drag = Drag::none;
+    enum class Drag { none, point, handle, draw, cells, marquee, selection, pointMod } drag = Drag::none;
     std::vector<float> cellLevel;
     std::vector<int> cellBrush;
     int lastCell = -1;
@@ -170,6 +195,12 @@ private:
     LongPressDetector press;
     bool pendingMarquee = false; // the press that may become a marquee
     int dragIndex = -1;
+    int pendingSheet = -1;                    // the point a long press would open the sheet of
+    bool modAxisChosen = false;               // a pointMod drag has moved far enough to know its axis
+    PointAxis modAxis = PointAxis::y;
+    float modStartDepth = 0.0f;
+    int lastArmed = 0;
+    std::vector<std::array<float, 2>> depthMemo; // depth before a bypass, per point and axis (0 = unknown)
     float dragStartPower = 0.0f;
     ContentLfoShape gestureStart;
     bool gestureChanged = false;

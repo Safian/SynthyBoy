@@ -1,6 +1,6 @@
 # UI gesture audit: section 3 "Interactions" of docs/ui-design/02 .. 08
 
-**Count after the gap closure (124 rows): closed (gaps) 46, NOT DONE with a hard technical reason 2 (02-28, 05-22), GAP left 7, partial 0, the rest implemented / added before.** `closed (gaps)` rows are covered by `shell-juce/ui/tests/test_ui_gaps.cpp` (pure logic: `test_ui_model.cpp`).
+**Count after the gap closure (124 rows): closed (gaps) 47 (05-22 added with the per-voice engine), NOT DONE with a hard technical reason 1 (02-28), GAP left 7, partial 0, the rest implemented / added before.** `closed (gaps)` rows are covered by `shell-juce/ui/tests/test_ui_gaps.cpp` (pure logic: `test_ui_model.cpp`).
 
 Method: every row of the Interactions table of 02, 03, 04, 05, 06, 07, 08 against `shell-juce/ui/` (state of this branch, line numbers are of the commit that contains this file). Status:
 
@@ -118,7 +118,7 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 | 05-19 | Brush tool | **closed (gaps)**: Brush tool with the five paint patterns of Vital (`kPaintPatternNames`: Step, Half, Down, Up, Tri; `brushPoints :957`), the picker button next to it chooses the brush; alternative: Flat / Ramp via Steps and Draw. The catalogue was readable in `core/engine-vital/upstream/.../synth_strings.h`. Test `uig_lfo_brush_tool_paints_the_chosen_brush` |
 | 05-20 | Marquee select, proportional move | **closed (gaps)**: marquee: hold still on the empty plot (`LfoShapeEditor.cpp:222`), drag a rectangle (`selectInRect :546`), a drag of a selected point moves all; `Prop` gives the rainbow falloff (`applySelectionMove :558`, one undo step). No alternative in the design. Test `uig_lfo_marquee_select_and_proportional_move` |
 | 05-21 | Selected point bar: Loop here / Start here | **closed (gaps)**: `Loop here` toggles `loopPoint` of the shape (`LfoShapeEditor.cpp:666`, dashed `LOOP` line), `Start here` writes `lfoN.phase` = x of the point (the phase marker, `:677`). Test `uig_lfo_selected_point_bar_loop_start_segment_fields_grid_all_curves` |
-| 05-22 | Modulate X / Y (point modulation) | NOT DONE (hard reason): the point list carries `modX` / `modY` but the engine honours only global sources for them (WP123-REPORT.md "BLOCKED" 1, core is another worker's); the `Modulate X` / `Modulate Y` buttons and the sheet would write data nothing reads. The editor keeps writing no `modX` / `modY` |
+| 05-22 | Modulate X / Y (point modulation) | **closed (gaps)**: with a source chip armed every point of the custom shape shows a dashed purple target ring `LfoShapeEditor.cpp:1403`; a drag on a point sets the depth of the armed source, sideways = X, up / down = Y (end points Y only), the bar follows the finger, the point does not move `:1128`; a tap = Y at 50 % `:1208`; assigned points keep a purple ring + depth bar (lighter = negative, grey = bypassed). Long-press a point = its sheet (source list per axis, Bypass, Remove) `:1347`; API `assignPointMod :1289`, `clearPointMod`, `bypassPointMod`. Stored in `content.lfo_shapes[].points[].mod_x / mod_y` through `UiHost::content / setContent` (no new keys; bypass = depth 0 with the source kept, the old depth is restored), one gesture = one undo step; pure logic `model/ModModel.cpp` (`setPointMod`, `pointModDragAmount`, `pointModDragAxis`). The engine plays it per voice (LFOVOICE-REPORT.md). Tests `uim_point_mod_set_remove_and_limits`, `uim_point_mod_drag_amount_and_axis`, `uil_point_mod_drag_with_an_armed_source_writes_mod_y_and_mod_x_and_undoes`, `uil_point_mod_sheet_actions_bypass_restore_and_remove`, `uil_point_mod_reaches_the_engine_the_render_differs` (render RMS differs with / without, equal when bypassed), screenshots `/tmp/ui-shots/pointmod/` |
 | 05-23 | Grid fields (number entry, steppers) | **closed (gaps)**: grid columns x rows (1 .. 32) with number fields and `-` `+` steppers, used by the snap, the grid lines and the Steps / Brush columns `LfoShapeEditor.cpp:510`. Test `uig_lfo_selected_point_bar_loop_start_segment_fields_grid_all_curves` |
 | 05-24 | Random LFO style chips | implemented: `rlfoN.style` ParamChoice + `<` `>` in the display (`LfoPanel.cpp:284`) |
 | 05-25 | Random LFO toggles stereo / sync | implemented: K |
@@ -176,6 +176,6 @@ LFO tab chips + drag-to-copy, sync-mode dimming, the free-form shape editor (05-
 
 ## Rows left after the gap closure (docs/ui-design/UI-GAPS-REPORT.md)
 
-- **NOT DONE with a hard reason (2)**: 02-28, 05-22 - 02-28 (no noise sample key in `docs/params.json`), 05-22 (the engine honours only global sources for point modulation; `core/` is another worker's).
+- **NOT DONE with a hard reason (1)**: 02-28 (no noise sample key in `docs/params.json`). 05-22 is implemented since the engine plays point modulation per voice.
 - **GAP in the design / engine, left as the task says (7)**: 02-09, 02-10, 02-14, 02-24, 02-25, 02-26, 02-27.
 - **partial (0)**: none.
