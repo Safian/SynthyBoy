@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 
+#include "GestureModel.h"
 #include "ModModel.h"
 #include "test_runner.h"
 
@@ -372,4 +373,167 @@ TEST (ui_ab_compare_snapshots)
     CHECK_NEAR (ab.snapshot (AbCompare::Slot::a).plain[vol], -3.0, 1e-6);
     CHECK_NEAR (ab.snapshot (AbCompare::Slot::b).plain[vol], -3.0, 1e-6);
     CHECK_NEAR (ab.toggle (live).plain[vol], -3.0, 1e-6);
+}
+
+// ---- gap closure: gesture maths (GestureModel.h) --------------------------------------------------------------------------------------
+
+TEST (uim_viewport_zoom_pan_fit)
+{
+    Viewport v;
+    CHECK (v.isFit());
+    v.zoomAbout (0.5, 4.0);
+    CHECK_NEAR (v.span, 0.25, 1e-9);
+    CHECK_NEAR (v.toRange (0.5), 0.5, 1e-9); // the anchor stays under the finger
+    v.pan (10.0);                            // clamped at the end
+    CHECK_NEAR (v.start + v.span, 1.0, 1e-9);
+    v.pan (-10.0);
+    CHECK_NEAR (v.start, 0.0, 1e-9);
+    v.zoomAbout (0.9, 1e9); // clamped at the finest span
+    CHECK_NEAR (v.span, Viewport::kMinSpan, 1e-12);
+    v.zoomAbout (0.9, 1e-9); // and back out to fit
+    CHECK (v.isFit());
+    CHECK_NEAR (v.start, 0.0, 1e-12);
+    v.zoomAbout (0.2, 2.0);
+    v.fit();
+    CHECK (v.isFit() && v.start == 0.0);
+    CHECK_NEAR (v.toScreen (0.25), 0.25, 1e-12);
+}
+
+TEST (uim_slice_list_edits)
+{
+    std::vector<float> s { 0.0f, 0.5f };
+    CHECK (addSlice (s, 0.25f));
+    CHECK (s.size() == 3 && s[1] == 0.25f);
+    CHECK (! addSlice (s, 0.2501f)); // closer than the minimum gap
+    CHECK (! addSlice (s, 1.5f));
+    CHECK (nearestSlice (s, 0.26f, 0.05f) == 1);
+    CHECK (nearestSlice (s, 0.7f, 0.05f) == -1);
+    CHECK (moveSlice (s, 1, 0.9f)); // clamped below the next slice
+    CHECK (s[1] < s[2] && s[1] > s[0]);
+    CHECK (moveSlice (s, 1, 0.1f));
+    CHECK_NEAR (s[1], 0.1, 1e-6);
+    CHECK (removeSlice (s, 1) && s.size() == 2);
+    CHECK (! removeSlice (s, 5));
+    std::vector<float> many;
+    for (int i = 0; i < kMaxSlices; ++i)
+        CHECK (addSlice (many, static_cast<float> (i) / 129.0f));
+    CHECK (! addSlice (many, 0.999f)); // 128 at most
+    // the threshold line: higher threshold = lower line (more onsets pass)
+    CHECK_NEAR (thresholdToLine (0.0f), 1.0, 1e-9);
+    CHECK_NEAR (thresholdToLine (100.0f), 0.0, 1e-9);
+    CHECK_NEAR (lineToThreshold (thresholdToLine (37.0f)), 37.0, 1e-4);
+}
+
+TEST (uim_loop_pair_and_transpose_split)
+{
+    float a = 0.2f, b = 0.5f;
+    moveLoopPair (a, b, 0.1f);
+    CHECK_NEAR (a, 0.3, 1e-6);
+    CHECK_NEAR (b, 0.6, 1e-6);
+    moveLoopPair (a, b, 5.0f); // stops at the end, keeps the length
+    CHECK_NEAR (b, 1.0, 1e-6);
+    CHECK_NEAR (b - a, 0.3, 1e-6);
+    moveLoopPair (a, b, -5.0f);
+    CHECK_NEAR (a, 0.0, 1e-6);
+    CHECK (betweenLoopMarkers (0.5f, 0.2f, 0.8f, 0.05f));
+    CHECK (! betweenLoopMarkers (0.21f, 0.2f, 0.8f, 0.05f));
+    CHECK (! betweenLoopMarkers (0.9f, 0.2f, 0.8f, 0.05f));
+
+    for (int t = -48; t <= 48; ++t)
+    {
+        const auto sp = splitTranspose (t);
+        CHECK_EQ (joinTranspose (sp.oct, sp.sem), t);
+        CHECK (sp.sem >= -6 && sp.sem <= 5);
+    }
+    CHECK_EQ (splitTranspose (12).oct, 1);
+    CHECK_EQ (splitTranspose (-7).oct, -1);
+    CHECK_EQ (joinTranspose (9, 0), 48);
+    CHECK_EQ (joinTranspose (-9, 0), -48);
+}
+
+TEST (uim_warp_groups_cover_every_choice_once)
+{
+    const auto groups = warpTypeGroups();
+    const auto ref = resolveKey ("osc1.warp.type");
+    CHECK (ref.valid());
+    std::array<int, 64> seen {};
+    for (const auto& g : groups)
+    {
+        CHECK (! g.gap || g.items.empty());
+        for (const int i : g.items)
+            ++seen[static_cast<size_t> (i)];
+    }
+    for (size_t i = 0; i < choiceCount (*ref.info); ++i)
+        CHECK_EQ (seen[i], 1);
+    CHECK_EQ (std::string (choiceName (*ref.info, 4)), std::string ("Bend"));
+    bool bendInAlt = false;
+    for (const auto& g : groups)
+        if (g.name == "Alt")
+            bendInAlt = g.items.size() == 1 && g.items[0] == 4;
+    CHECK (bendInAlt);
+}
+
+TEST (uim_touch_tracker_tap_swipe_pinch_pan)
+{
+    TouchTracker t;
+    using P = TouchTracker::Phase;
+    using K = TouchTracker::Kind;
+    // two-finger tap
+    CHECK (t.feed (P::down, 1, { 100, 100 }, 1000).kind == K::none);
+    CHECK (t.feed (P::down, 2, { 160, 100 }, 1040).kind == K::none);
+    CHECK (t.feed (P::up, 1, { 101, 100 }, 1150).kind == K::twoFingerTap);
+    t.feed (P::up, 2, { 160, 100 }, 1160);
+    CHECK_EQ (t.activeTouches(), 0);
+    // a slow press is no tap
+    t.feed (P::down, 1, { 100, 100 }, 2000);
+    t.feed (P::down, 2, { 160, 100 }, 2000);
+    CHECK (t.feed (P::up, 1, { 100, 100 }, 2800).kind == K::none);
+    t.feed (P::up, 2, { 160, 100 }, 2810);
+    // swipe: both fingers 100 px to the right
+    t.feed (P::down, 1, { 100, 100 }, 3000);
+    t.feed (P::down, 2, { 160, 100 }, 3000);
+    t.feed (P::drag, 1, { 150, 100 }, 3100);
+    t.feed (P::drag, 2, { 210, 100 }, 3100);
+    t.feed (P::drag, 1, { 200, 102 }, 3200);
+    t.feed (P::drag, 2, { 260, 102 }, 3200);
+    const auto swipe = t.feed (P::up, 1, { 200, 102 }, 3300);
+    CHECK (swipe.kind == K::twoFingerSwipe);
+    CHECK (swipe.dx > 90.0f);
+    t.feed (P::up, 2, { 260, 102 }, 3310);
+    // pinch out
+    t.feed (P::down, 1, { 100, 100 }, 4000);
+    t.feed (P::down, 2, { 140, 100 }, 4000);
+    t.feed (P::drag, 2, { 170, 100 }, 4040);
+    const auto pinch = t.feed (P::drag, 2, { 200, 100 }, 4050);
+    CHECK (pinch.kind == K::pinch);
+    CHECK (pinch.scale > 1.2f);
+    CHECK (t.feed (P::up, 1, { 100, 100 }, 4100).kind == K::none); // a pinch is no swipe / tap
+    t.feed (P::up, 2, { 200, 100 }, 4110);
+    // pan: both fingers down 40 px
+    t.feed (P::down, 1, { 100, 100 }, 5000);
+    t.feed (P::down, 2, { 160, 100 }, 5000);
+    t.feed (P::drag, 1, { 100, 120 }, 5050);
+    const auto pan = t.feed (P::drag, 2, { 160, 120 }, 5050);
+    CHECK (pan.kind == K::pan);
+    CHECK (pan.dy > 0.0f);
+    // a third finger is ignored
+    CHECK (t.feed (P::down, 3, { 10, 10 }, 5060).kind == K::none);
+    CHECK_EQ (t.activeTouches(), 2);
+}
+
+TEST (uim_parsers)
+{
+    float f = 0.0f;
+    CHECK (parseBinAmplitude ("37", f) && std::fabs (f - 0.37f) < 1e-6f);
+    CHECK (parseBinAmplitude (" 100 % ", f) && f == 1.0f);
+    CHECK (! parseBinAmplitude ("101", f));
+    CHECK (! parseBinAmplitude ("-3", f));
+    CHECK (! parseBinAmplitude ("", f));
+    CHECK (! parseBinAmplitude ("abc", f));
+    CHECK (parseBinPhaseDegrees ("-90", f) && std::fabs (f - 270.0f) < 1e-4f);
+    CHECK (parseBinPhaseDegrees ("450d", f) && std::fabs (f - 90.0f) < 1e-4f);
+    CHECK (! parseBinPhaseDegrees ("x", f));
+    double d = 0.0;
+    CHECK (parseNumber ("12.5", d) && d == 12.5);
+    CHECK (! parseNumber ("inf", d));
 }
