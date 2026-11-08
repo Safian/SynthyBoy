@@ -114,7 +114,14 @@ public:
     void mouseDrag (const juce::MouseEvent& e) override;
     void mouseUp (const juce::MouseEvent& e) override;
 
+    /** The channel strips (O1 O2 O3 NOISE F1 F2 B1 B2) in view coordinates; used by the gestures and the tests. */
+    juce::Rectangle<float> stripBounds (int strip) const;
+    static constexpr int kNumStrips = 8;
+
 private:
+    ParamHandle& stripLevel (int strip);
+    ParamHandle* stripPower (int strip); // O1 O2 O3 NOISE only
+    int stripAt (juce::Point<float> p) const;
     void stepFilterRouting();
     void toggleFxBypass();
 
@@ -132,8 +139,10 @@ private:
     juce::TextButton fxBypassButton { "FX On" };
     juce::TextButton routingButton { "Parallel" };
 
-    enum class FaderTarget { none, main, direct };
+    enum class FaderTarget { none, main, direct, strip };
     FaderTarget activeFader = FaderTarget::none;
+    int activeStrip = -1;
+    bool stripNameTap = false; // the press started on the name of a strip: a tap there toggles the channel
     float dragStartNorm = 0.0f;
     juce::Point<float> dragStartPos;
 };

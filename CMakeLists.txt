@@ -291,4 +291,26 @@ if(SYNTHYBOY_BUILD_TESTS)
     else()
         target_compile_definitions(synthyboy_test_ui_panels PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
     endif()
+
+    synthyboy_add_test(synthyboy_test_ui_lfo
+        shell-juce/ui/tests/test_ui_lfo.cpp
+        shell-juce/PluginProcessor.cpp
+        ${SYNTHYBOY_UI_SOURCES}
+        LINK synthyboy_ui_model
+             juce::juce_audio_processors
+             juce::juce_audio_utils
+             juce::juce_gui_basics
+             juce::juce_recommended_config_flags
+             juce::juce_recommended_warning_flags)
+    target_include_directories(synthyboy_test_ui_lfo PRIVATE shell-juce)
+    target_compile_definitions(synthyboy_test_ui_lfo PRIVATE
+        JucePlugin_Name="SynthyBoy"
+        SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
+        SYNTHYBOY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
+        target_compile_definitions(synthyboy_test_ui_lfo PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
+    else()
+        target_compile_definitions(synthyboy_test_ui_lfo PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
+    endif()
 endif()

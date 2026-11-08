@@ -87,8 +87,24 @@ all visible controls at phone / tablet sizes. Dark / light palette: `Theme::dark
 name, MIDI-learn hook. `SynthyBoyProcessor` implements it (`setPresetStepHandler`, `setPresetName` for Kick's preset list).
 `createEditor()` returns `SynthyBoyEditor`; `SYNTHYBOY_GENERIC_UI=1` in the environment gives the generic JUCE editor back.
 
+## Tabbed pages and patch content
+
+A panel can fold itself away: `Panel::hiddenInLayout()` (the `PanelHost` skips it). The LFO page uses it: `LfoTabsPanel` (L1..L10 | R1..R4,
+registered like any panel; tap = show that LFO, drag a chip onto a chip of the same kind = copy all of its settings and its custom shape)
+writes the choice to `UiContext::view->lfoTab`, every LFO panel hides itself unless it is the chosen one. Editor-wide view state lives in
+`ViewState` (shared by all panels of one editor).
+
+Data that is not a parameter (the custom LFO shape point lists, `content.lfo_shapes[]`) goes through `UiHost::content ()` (a copy) and
+`UiHost::setContent ()` (validated with `validateContent`, handed to the engine, host state marked dirty). `LfoShapeEditor`
+(`panels/LfoShapeEditor.*`) is the editor of one point list: drag / add / delete points, curve power per segment, Draw tool, snap, presets,
+undo (one drag = one step); it previews with the engine's own evaluator (`core/shapes`). Gesture status of every design row:
+`docs/ui-design/UI-GESTURE-AUDIT.md`.
+
+A listener (`ParamHandle::onChange`) runs before the APVTS has updated its raw atomic: inside `onChange` read the new value with
+`normalised ()`, not `plain ()` (see `choiceIndexOf` in `LfoPanel.cpp`).
+
 ## Tests
 
-`synthyboy_test_ui_model` (pure logic), `synthyboy_test_ui_render` (real Components without a window or display; the processor
+`synthyboy_test_ui_model` (pure logic), `synthyboy_test_ui_lfo` (LFO page: tab chips, chip copy, dimming, shape editor gestures and undo, content round trip, the gestures of the audit; screenshots to `/tmp/ui-shots/follow/`), `synthyboy_test_ui_render` (real Components without a window or display; the processor
 is the real one; writes the phone 390x844 and tablet 1024x768 screenshots to `ui-screenshots/` in the working directory or to
 `$SYNTHYBOY_UI_SCREENSHOT_DIR`). Both run in `ctest`. New panels are covered by the registry contract test without any test code.

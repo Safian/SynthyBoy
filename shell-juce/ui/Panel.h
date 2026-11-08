@@ -40,7 +40,10 @@ public:
     void setMoreExpanded (bool shouldExpand);
     int numMoreControls() const noexcept { return static_cast<int> (moreCount); }
 
-    /** Set by the PanelHost: called when preferredHeight() changed (More expanded / collapsed). */
+    /** True while the panel is folded away by a tab chip row of its page (LFO tabs): the PanelHost does not lay it out. */
+    virtual bool hiddenInLayout() const { return false; }
+
+    /** Set by the PanelHost: called when the layout changed (preferredHeight() changed: More expanded / collapsed; a tab was chosen). */
     std::function<void()> onHeightChanged;
 
     void paint (juce::Graphics&) override;

@@ -84,6 +84,8 @@ public:
     float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
     float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
     void injectMidiMessage (const juce::MidiMessage& msg) override;
+    synthyboy::StateContent content() const override;
+    bool setContent (const synthyboy::StateContent& newContent) override;
 
     /** Preset browsing belongs to Kick: the owner of the preset list installs the prev / next callback and sets the shown name. */
     void setPresetStepHandler (std::function<void (int)> handler) { presetStepHandler = std::move (handler); }
@@ -103,8 +105,8 @@ private:
 
     // The `content` section of the state (custom LFO shapes, content references, ...: not parameters). Part of the host state
     // (docs/ui-design/13-new-keys.md A25); no engine reads it yet. Message thread only, the mutex covers hosts that do not.
-    std::mutex contentMutex;
-    synthyboy::StateContent content;
+    mutable std::mutex contentMutex;
+    synthyboy::StateContent patchContent;
 
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction

@@ -208,10 +208,35 @@ class GlbPortamentoPanel final : public Panel
 {
 public:
     explicit GlbPortamentoPanel (UiContext& context)
-        : Panel (context), curveView (context)
+        : Panel (context), curveView (context), polyHandle (context, "master.polyphony")
     {
         addAndMakeVisible (curveView);
+
+        // [MONO] pill (design 07 section 3): polyphony 1 <-> the last polyphonic voice count
+        monoButton.setClickingTogglesState (false);
+        monoButton.setTooltip ("Mono: one voice. Tap again for the last voice count.");
+        monoButton.onClick = [this] { toggleMono(); };
+        addAndMakeVisible (monoButton);
+        polyHandle.onChange = [this] { updateMonoButton(); };
+        updateMonoButton();
     }
+
+    /** Mono on = master.polyphony 1; off = the voice count it had before (at least 2). Public for the tests. */
+    void toggleMono()
+    {
+        if (! polyHandle.valid())
+            return;
+        if (currentPolyphony() > 1.5f)
+        {
+            lastPolyphony = currentPolyphony();
+            polyHandle.setPlainComplete (1.0f);
+        }
+        else
+        {
+            polyHandle.setPlainComplete (juce::jlimit (2.0f, polyHandle.info().max, lastPolyphony >= 2.0f ? lastPolyphony : polyHandle.info().def));
+        }
+    }
+    bool isMono() const { return polyHandle.valid() && currentPolyphony() <= 1.5f; }
 
     juce::String title() const override { return "Portamento / Legato"; }
 
@@ -240,7 +265,7 @@ public:
         const auto& t = ctx.theme;
         const int visualH = t.ipx (120.0f);
         const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
-        return headerHeight() + 2 * t.gap() + visualH + t.gap()
+        return headerHeight() + 2 * t.gap() + visualH + t.gap() + t.touch() + t.gap()
              + const_cast<GlbPortamentoPanel*> (this)->layoutControls (area, true);
     }
 
@@ -250,11 +275,29 @@ public:
         const int visualH = ctx.theme.ipx (120.0f);
         curveView.setBounds (area.removeFromTop (visualH));
         area.removeFromTop (ctx.theme.gap());
+        monoButton.setBounds (area.removeFromTop (ctx.theme.touch()).removeFromLeft (juce::jmax (ctx.theme.touch() * 2, ctx.theme.ipx (96.0f))));
+        area.removeFromTop (ctx.theme.gap());
         layoutControls (area, false);
     }
 
 private:
+    /** Read from the parameter itself: inside onChange the raw atomic still holds the previous value. */
+    float currentPolyphony() const
+    {
+        const auto& info = polyHandle.info();
+        return info.min + polyHandle.normalised() * (info.max - info.min);
+    }
+
+    void updateMonoButton()
+    {
+        monoButton.setToggleState (isMono(), juce::dontSendNotification);
+        repaint();
+    }
+
     GlbPortaCurveView curveView;
+    ParamHandle polyHandle;
+    juce::TextButton monoButton { "MONO" };
+    float lastPolyphony = 0.0f;
 };
 
 SYNTHYBOY_REGISTER_PANEL (GlbPortamentoPanel, Page::glb, 20)

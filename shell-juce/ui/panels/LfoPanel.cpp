@@ -5,15 +5,19 @@
 // One panel per LFO: a shape display (the built-in shape, a phase marker, a drag-to-set-phase gesture), a shape stepper
 // ([<] name [>]) and the controls: four primary knobs next to the visual (rate, fade in, delay, smooth time), every other key
 // of the LFO behind "More" (sync mode, division, trigger mode, phase, smooth on/off, stereo, key follow, mono, direction, host).
-// Free-form shape drawing is an engine GAP (design 05 section 1.2): the display is read-only apart from the phase.
+// While lfoN.shape is Custom the display becomes the free-form shape editor (LfoShapeEditor: points, curve power, presets, undo; the
+// point list is content, read and written through UiHost). Built-in shapes: the display is read-only apart from the phase.
+// Only the LFO chosen on the tab chips (LfoTabsPanel) is shown; non-matching sync modes dim the rate / division / key-follow knobs.
 #include <array>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "../Panel.h"
 #include "../ParamHandle.h"
+#include "LfoShapeEditor.h"
 
 namespace synthyboy::ui
 {
@@ -47,6 +51,16 @@ float shapeValue (int shape, float x) noexcept
         case 11: return 2.0f * std::sin (pi * x) - 1.0f;                               // Half Sine
         default: return 0.0f;                                                          // Custom: point list is content, not shown here
     }
+}
+
+/** Choice index of a stepped key, read from the parameter itself: inside onChange the raw atomic of the APVTS can still hold the
+    previous value (it is updated by a listener that runs after ours), the normalised value is already the new one. */
+int choiceIndexOf (const ParamHandle& handle)
+{
+    if (! handle.valid())
+        return 0;
+    const auto& info = handle.info();
+    return juce::roundToInt (info.min + handle.normalised() * (info.max - info.min));
 }
 
 /** One cycle of a random LFO style for the display (style = choice index of rlfoN.style), range -1..+1. Computed once. */
@@ -99,7 +113,7 @@ std::array<float, kDisplayPoints> randomStyleCurve (int style)
 class LfoShapeView final : public juce::Component
 {
 public:
-    LfoShapeView (UiContext& context, const std::string& prefix, bool randomLfo)
+    LfoShapeView (UiContext& context, const std::string& prefix, int lfoIndex, bool randomLfo)
         : ctx (context), random (randomLfo),
           shapeHandle (context, prefix + (randomLfo ? ".style" : ".shape")),
           phaseHandle (context, prefix + ".phase"),
@@ -113,6 +127,11 @@ public:
         next.onClick = [this] { stepShape (1); };
         addAndMakeVisible (prev);
         addAndMakeVisible (next);
+        if (! random)
+        {
+            editor = std::make_unique<LfoShapeEditor> (ctx, lfoIndex);
+            addChildComponent (*editor);
+        }
 
         shapeHandle.onChange = [this] { refresh(); };
         phaseHandle.onChange = [this] { repaint(); };
@@ -128,7 +147,21 @@ public:
             phaseHandle.endGesture();
     }
 
-    int shapeIndex() const { return shapeHandle.valid() ? juce::roundToInt (shapeHandle.plain()) : 0; }
+    int shapeIndex() const { return choiceIndexOf (shapeHandle); }
+    bool isCustom() const { return ! random && shapeIndex() == kLfoShapeCustom; }
+    LfoShapeEditor* shapeEditor() noexcept { return editor.get(); }
+
+    /** Height at `width`: the stepper bar and the read-only display, or the stepper bar and the shape editor. */
+    int preferredHeight (int width) const
+    {
+        const auto& t = ctx.theme;
+        if (isCustom())
+            return 2 * t.gap() + t.touch() + t.gap() + editor->preferredHeight (width - 2 * t.gap());
+        return t.touch() + t.ipx (150.0f);
+    }
+
+    /** Set by the panel: the view changed height (the shape became / stopped being Custom). */
+    std::function<void()> onLayoutChanged;
 
     void resized() override
     {
@@ -139,7 +172,10 @@ public:
         next.setBounds (bar.removeFromRight (t.touch()));
         nameArea = bar;
         r.removeFromTop (t.gap());
-        plot = r;
+        const bool custom = isCustom();
+        plot = custom ? juce::Rectangle<int>() : r;
+        if (editor != nullptr)
+            editor->setBounds (custom ? r : juce::Rectangle<int>());
     }
 
     void paint (juce::Graphics& g) override
@@ -157,7 +193,7 @@ public:
         g.drawFittedText (shapeName(), nameArea, juce::Justification::centred, 1);
 
         const auto area = plot.toFloat().reduced (t.px (4.0f));
-        if (area.getWidth() < 4.0f || area.getHeight() < 4.0f)
+        if (isCustom() || area.getWidth() < 4.0f || area.getHeight() < 4.0f)
             return;
 
         // grid: centre line and quarters
@@ -198,8 +234,6 @@ public:
         g.setColour (c.textDim);
         g.setFont (t.labelFont());
         g.drawText (rateText(), plot.toFloat().reduced (t.px (6.0f), t.px (2.0f)), juce::Justification::bottomRight, false);
-        if (shape == 12 && ! random)
-            g.drawText ("Custom shape", plot.toFloat().reduced (t.px (6.0f), t.px (2.0f)), juce::Justification::topLeft, false);
     }
 
     void mouseDown (const juce::MouseEvent& e) override
@@ -229,6 +263,21 @@ private:
     {
         if (random)
             randomCurveCache = randomStyleCurve (shapeIndex());
+        if (editor != nullptr)
+        {
+            const bool custom = isCustom();
+            if (! custom)
+                lastBuiltIn = juce::jlimit (0, kNumLfoShapes - 1, shapeIndex());
+            editor->setActive (custom, lastBuiltIn); // a Custom shape without a point list starts as the shape that was showing
+            editor->setVisible (custom);
+            if (custom != wasCustom)
+            {
+                wasCustom = custom;
+                resized();
+                if (onLayoutChanged)
+                    onLayoutChanged();
+            }
+        }
         repaint();
     }
 
@@ -280,6 +329,9 @@ private:
     ParamHandle shapeHandle, phaseHandle, syncHandle, rateHandle, divisionHandle;
     juce::Rectangle<int> nameArea, plot;
     std::array<float, kDisplayPoints> randomCurveCache {};
+    std::unique_ptr<LfoShapeEditor> editor;
+    int lastBuiltIn = 0;
+    bool wasCustom = false;
 };
 
 namespace
@@ -288,7 +340,13 @@ class LfoPanelBase : public Panel
 {
 public:
     LfoPanelBase (UiContext& context, int index, bool randomLfo)
-        : Panel (context), idx (index), random (randomLfo) {}
+        : Panel (context), idx (index), random (randomLfo),
+          syncHandle (context, std::string (randomLfo ? "rlfo" : "lfo") + std::to_string (index) + ".sync") {}
+
+    /** Only the LFO chosen on the tab chips takes part in the layout. */
+    bool hiddenInLayout() const override { return ctx.view->lfoTab != (random ? 9 + idx : idx - 1); }
+
+    LfoShapeView* shapeView() noexcept { return visual.get(); }
 
     juce::String title() const override
     {
@@ -308,7 +366,8 @@ public:
 
     void build() override
     {
-        visual = std::make_unique<LfoShapeView> (ctx, std::string (random ? "rlfo" : "lfo") + std::to_string (idx), random);
+        visual = std::make_unique<LfoShapeView> (ctx, std::string (random ? "rlfo" : "lfo") + std::to_string (idx), idx, random);
+        visual->onLayoutChanged = [this] { if (onHeightChanged) onHeightChanged(); };
         addAndMakeVisible (*visual);
         const auto all = keys();
         for (size_t i = 0; i < all.size(); ++i)
@@ -318,29 +377,52 @@ public:
             else
                 addMoreControl (all[i]);
         }
+        syncHandle.onChange = [this] { updateDimming(); };
+        updateDimming();
+    }
+
+    /** Sync mode decides which rate controls apply (design 05 section 4): Free = rate in Hz, Tempo / dotted / triplet = division,
+        Key follow = the key-follow offsets (rate and division are off). A control the engine lacks stays dimmed anyway. */
+    void updateDimming()
+    {
+        const int mode = choiceIndexOf (syncHandle);
+        for (const auto& c : controls())
+        {
+            const auto& key = c->key();
+            const auto endsWith = [&key] (const char* suffix) { const std::string sfx (suffix); return key.size() >= sfx.size() && key.compare (key.size() - sfx.size(), sfx.size(), sfx) == 0; };
+            bool applies = true;
+            if (endsWith (".rate"))
+                applies = mode == 0;
+            else if (endsWith (".division"))
+                applies = mode >= 1 && mode <= 3;
+            else if (endsWith (".keytrack_transpose") || endsWith (".keytrack_tune"))
+                applies = mode == 4;
+            c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
+        }
     }
 
     int preferredHeight (int width) const override
     {
         const auto& t = ctx.theme;
         const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
-        return headerHeight() + 2 * t.gap() + visualHeight() + t.gap() + const_cast<LfoPanelBase*> (this)->layoutControls (area, true);
+        return headerHeight() + 2 * t.gap() + visualHeight (area.getWidth()) + t.gap() + const_cast<LfoPanelBase*> (this)->layoutControls (area, true);
     }
 
     void resized() override
     {
         auto area = contentArea();
         if (visual != nullptr)
-            visual->setBounds (area.removeFromTop (visualHeight()));
+            visual->setBounds (area.removeFromTop (visualHeight (area.getWidth())));
         area.removeFromTop (ctx.theme.gap());
         layoutControls (area, false);
     }
 
 private:
-    int visualHeight() const { return ctx.theme.touch() + ctx.theme.ipx (150.0f); }
+    int visualHeight (int width) const { return visual != nullptr ? visual->preferredHeight (width) : ctx.theme.touch() + ctx.theme.ipx (150.0f); }
 
     int idx;
     bool random;
+    ParamHandle syncHandle;
     std::unique_ptr<LfoShapeView> visual;
 };
 

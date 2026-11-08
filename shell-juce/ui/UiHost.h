@@ -13,6 +13,7 @@
 #include <string>
 
 #include "model/ModModel.h"
+#include "synthyboy/content_state.h"
 #include "synthyboy/engine_caps.h"
 
 namespace synthyboy::ui
@@ -42,6 +43,12 @@ public:
     /** Live output meter peaks (linear amplitude, e.g. 0..1 or higher if clipping) from the audio callback. */
     virtual float outputPeakL() const noexcept { return 0.0f; }
     virtual float outputPeakR() const noexcept { return 0.0f; }
+
+    /** The `content` section of the patch (custom LFO shapes, ...; not parameters). A copy, message thread. */
+    virtual StateContent content() const { return {}; }
+    /** Replaces the content, hands it to the engine and marks the host state dirty. Returns false (nothing changed) if the content
+        fails validateContent () or the host keeps no content. Message thread. */
+    virtual bool setContent (const StateContent& /*newContent*/) { return false; }
 
     /** Injects a MIDI message from the UI (pitch bend, mod wheel, CC 64 sustain, etc.) into the audio callback. */
     virtual void injectMidiMessage (const juce::MidiMessage& /*msg*/) {}

@@ -26,6 +26,9 @@ public:
 
     bool isZoomLocked() const noexcept { return zoomLocked; }
     void setZoomLocked (bool locked);
+    /** Time zoom while the lock is off: 1 = the graph fits, > 1 shows the first part of the envelope larger. Pinch / wheel change it. */
+    float zoom() const noexcept { return zoomLocked ? 1.0f : timeZoom; }
+    void zoomBy (float factor);
 
     void paint (juce::Graphics& g) override;
     void resized() override;
@@ -34,6 +37,8 @@ public:
     void mouseDrag (const juce::MouseEvent& e) override;
     void mouseUp (const juce::MouseEvent& e) override;
     void mouseDoubleClick (const juce::MouseEvent& e) override;
+    void mouseMagnify (const juce::MouseEvent& e, float scaleFactor) override;
+    void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
 
     enum class HitNode
     {
@@ -86,6 +91,9 @@ private:
     UiContext& ctx;
     int envIdx = 1;
     bool zoomLocked = true;
+    float timeZoom = 1.0f;
+    static constexpr float kMinTimeZoom = 1.0f, kMaxTimeZoom = 16.0f;
+    float displayZoom() const noexcept { return zoom(); }
 
     HitNode activeNode = HitNode::none;
     std::string activeKey;
