@@ -12,20 +12,20 @@ namespace synthyboy::ui
 {
 
 /** Total number of filter models in params.json. */
-inline constexpr int kNumFilterModels = 22;
+inline constexpr int kNumFilterModels = 27;
 
 /**
- * Returns the contextual 4th "Var" parameter label for a given filter model index.
- * Matches docs/ui-design/13-new-keys.md section 4.11 and CATALOGUE.md.
+ * Returns the contextual 4th "Var" parameter label for a given filter model index and optional style index.
+ * Matches docs/ui-design/13-new-keys.md section 4.11, CATALOGUE.md and Serum manual p.135-139.
  */
-inline const char* getVarLabelForModel (int modelIndex) noexcept
+inline const char* getVarLabelForModel (int modelIndex, int styleIndex = 0) noexcept
 {
     switch (modelIndex)
     {
         case 8:  return "FREQ";    // Multi SVF (cutoff of second SVF)
         case 9:  return "FAT";     // Slope (resonance path saturation)
         case 10: return "DB";      // EQ 6 dB (pass-band gain)
-        case 11: return "SPREAD";  // Ring Mod (carrier 2 spread)
+        case 11: return styleIndex == 1 ? "SPREAD" : "";  // Ring Mod (carrier 2 spread on x2)
         case 12: return "";        // Sample Hold (no Var)
         case 13: return "DAMP";    // Smear (HF feedback damping)
         case 14: return "BOEUF";   // French LP (second resonance)
@@ -36,18 +36,38 @@ inline const char* getVarLabelForModel (int modelIndex) noexcept
         case 19: return "STAGES";  // Diffusor (all-pass stages)
         case 20: return "SMOOTH";  // EMS Ladder (cutoff slew rate)
         case 21: return "SMOOTH";  // PZ SVF (cutoff slew rate)
+        case 22: return "FAT";     // Normal (12 styles: MG Low 12/24, Low 12/24, High 12/24, Band 12/24, Peak 12/24, Notch 12/24)
+        case 23: return "MORPH";   // Multi Morph (LBH, LPH, LNH, BPN)
+        case 24:                   // Flanges (9 styles)
+            if (styleIndex < 3) return "LP FREQ";
+            if (styleIndex < 6) return "HP FREQ";
+            return "HL WID";
+        case 25:                   // Misc (12 styles)
+            if (styleIndex < 3) return "DB";       // Low/Band/High EQ 12
+            if (styleIndex == 3) return "";        // German LP (no Var)
+            if (styleIndex <= 6) return "FORMNT";  // Formant I, II, III
+            if (styleIndex == 7) return "WIDTH";   // Bandreject
+            if (styleIndex <= 11) return "COMBFRQ";// Dist.Comb 1/2 LP/BP
+            return "";
+        case 26:                   // New (6 styles)
+            if (styleIndex < 2) return "SMOOTH";  // MG Ladder, Acid Ladder
+            if (styleIndex == 2) return "PAIN";   // MG Dirty
+            if (styleIndex == 3) return "FRQ2";   // Comb 2
+            if (styleIndex == 4) return "MIX";    // Exp MM
+            return "";                            // Exp BPF (no Var)
         default: return "";        // Models 0..7 use drive, comb_offset, formant.*
     }
 }
 
-/** Returns the model display name from index (0..21). */
+/** Returns the model display name from index (0..26). */
 inline const char* getFilterModelName (int modelIndex) noexcept
 {
     static const char* const kNames[kNumFilterModels] = {
         "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser",
         "Multi SVF", "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear",
         "French LP", "Add Bass", "Scream", "New Wsp", "DJ Mixer", "Diffusor",
-        "EMS Ladder", "PZ SVF"
+        "EMS Ladder", "PZ SVF",
+        "Normal", "Multi Morph", "Flanges", "Misc", "New"
     };
     if (modelIndex >= 0 && modelIndex < kNumFilterModels)
         return kNames[modelIndex];
@@ -100,6 +120,19 @@ inline std::vector<std::string> getStylesForModel (int modelIndex)
             return { "EMS Ladder" };
         case 21: // PZ SVF
             return { "PZ SVF" };
+        case 22: // Normal (12 styles)
+            return { "MG Low 12", "MG Low 24", "Low 12", "Low 24", "High 12", "High 24",
+                     "Band 12", "Band 24", "Peak 12", "Peak 24", "Notch 12", "Notch 24" };
+        case 23: // Multi Morph (4 styles)
+            return { "LBH", "LPH", "LNH", "BPN" };
+        case 24: // Flanges (9 styles)
+            return { "Cmb L", "Flg L", "Phs L", "Cmb H", "Flg H", "Phs H", "Cmb HL", "Flg HL", "Phs HL" };
+        case 25: // Misc (12 styles)
+            return { "Low EQ 12", "Band EQ 12", "High EQ 12", "German LP",
+                     "Formant-I", "Formant-II", "Formant-III", "Bandreject",
+                     "Dist.Comb 1 LP", "Dist.Comb 1 BP", "Dist.Comb 2 LP", "Dist.Comb 2 BP" };
+        case 26: // New (6 styles)
+            return { "MG Ladder", "Acid Ladder", "MG Dirty", "Comb 2", "Exp MM", "Exp BPF" };
         default:
             return { "Default" };
     }
@@ -136,6 +169,11 @@ inline const char* getBlendLabelForModel (int modelIndex, int styleIndex) noexce
         case 17: return "LP — Notch — HP";
         case 19: return "Diffusion Balance";
         case 21: return "Zero Placement";
+        case 22: return "LP — BP — HP";
+        case 23: return "LP — BP — HP";
+        case 24: return "Comb / Flange Blend";
+        case 25: return "EQ / Formant / Blend";
+        case 26: return "Ladder / Exp Blend";
         default: return "Blend";
     }
 }
@@ -434,23 +472,23 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
     static const std::vector<SerumFilterTypeEntry> catalog = {
         // Normal
         { "MG Low 6", "Normal", 9, 0, 0.0f },
-        { "MG Low 12", "Normal", 2, 0, 0.0f },
+        { "MG Low 12", "Normal", 22, 0, 0.0f },
         { "MG Low 18", "Normal", 9, 1, 0.0f },
-        { "MG Low 24", "Normal", 2, 1, 0.0f },
+        { "MG Low 24", "Normal", 22, 1, 0.0f },
         { "Low 6", "Normal", 9, 2, 0.0f },
-        { "Low 12", "Normal", 3, 0, 0.0f },
+        { "Low 12", "Normal", 22, 2, 0.0f },
         { "Low 18", "Normal", 9, 3, 0.0f },
-        { "Low 24", "Normal", 3, 1, 0.0f },
+        { "Low 24", "Normal", 22, 3, 0.0f },
         { "High 6", "Normal", 9, 4, 100.0f },
-        { "High 12", "Normal", 3, 0, 100.0f },
+        { "High 12", "Normal", 22, 4, 100.0f },
         { "High 18", "Normal", 9, 5, 100.0f },
-        { "High 24", "Normal", 3, 1, 100.0f },
-        { "Band 12", "Normal", 3, 0, 50.0f },
-        { "Band 24", "Normal", 3, 1, 50.0f },
-        { "Peak 12", "Normal", 3, 4, 50.0f },
-        { "Peak 24", "Normal", 0, 4, 50.0f },
-        { "Notch 12", "Normal", 3, 2, 50.0f },
-        { "Notch 24", "Normal", 3, 3, 50.0f },
+        { "High 24", "Normal", 22, 5, 100.0f },
+        { "Band 12", "Normal", 22, 6, 50.0f },
+        { "Band 24", "Normal", 22, 7, 50.0f },
+        { "Peak 12", "Normal", 22, 8, 50.0f },
+        { "Peak 24", "Normal", 22, 9, 50.0f },
+        { "Notch 12", "Normal", 22, 10, 50.0f },
+        { "Notch 24", "Normal", 22, 11, 50.0f },
 
         // Multi
         { "LH", "Multi", 8, 0, 0.0f },
@@ -465,29 +503,29 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
         { "PP", "Multi", 8, 9, 0.0f },
         { "PN", "Multi", 8, 10, 0.0f },
         { "NN", "Multi", 8, 11, 0.0f },
-        { "LBH", "Multi", 3, 0, 0.0f },
-        { "LPH", "Multi", 3, 4, 0.0f },
-        { "LNH", "Multi", 3, 2, 0.0f },
-        { "BPN", "Multi", 3, 4, 50.0f },
+        { "LBH", "Multi", 23, 0, 0.0f },
+        { "LPH", "Multi", 23, 1, 0.0f },
+        { "LNH", "Multi", 23, 2, 0.0f },
+        { "BPN", "Multi", 23, 3, 50.0f },
 
         // Flanges
-        { "Cmb L", "Flanges", 6, 0, 0.0f },
-        { "Flg L", "Flanges", 6, 1, 0.0f },
-        { "Phs L", "Flanges", 7, 0, 0.0f },
-        { "Cmb H", "Flanges", 6, 2, 50.0f },
-        { "Flg H", "Flanges", 6, 3, 50.0f },
-        { "Phs H", "Flanges", 7, 1, 50.0f },
-        { "Cmb HL", "Flanges", 6, 4, 100.0f },
-        { "Flg HL", "Flanges", 6, 5, 100.0f },
-        { "Phs HL", "Flanges", 7, 0, 100.0f },
+        { "Cmb L", "Flanges", 24, 0, 0.0f },
+        { "Flg L", "Flanges", 24, 1, 0.0f },
+        { "Phs L", "Flanges", 24, 2, 0.0f },
+        { "Cmb H", "Flanges", 24, 3, 50.0f },
+        { "Flg H", "Flanges", 24, 4, 50.0f },
+        { "Phs H", "Flanges", 24, 5, 50.0f },
+        { "Cmb HL", "Flanges", 24, 6, 100.0f },
+        { "Flg HL", "Flanges", 24, 7, 100.0f },
+        { "Phs HL", "Flanges", 24, 8, 100.0f },
 
         // Misc
         { "Low EQ 6", "Misc", 10, 0, 50.0f },
-        { "Low EQ 12", "Misc", 3, 5, 20.0f },
+        { "Low EQ 12", "Misc", 25, 0, 20.0f },
         { "Band EQ 6", "Misc", 10, 1, 50.0f },
-        { "Band EQ 12", "Misc", 3, 4, 50.0f },
+        { "Band EQ 12", "Misc", 25, 1, 50.0f },
         { "High EQ 6", "Misc", 10, 2, 50.0f },
-        { "High EQ 12", "Misc", 3, 5, 80.0f },
+        { "High EQ 12", "Misc", 25, 2, 80.0f },
         { "Ring Mod", "Misc", 11, 0, 50.0f },
         { "Ring Mod x2", "Misc", 11, 1, 50.0f },
         { "SampHold", "Misc", 12, 0, 50.0f },
@@ -496,16 +534,16 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
         { "Allpasses", "Misc", 13, 1, 50.0f },
         { "Reverb", "Misc", 13, 2, 50.0f },
         { "French LP", "Misc", 14, 0, 0.0f },
-        { "German LP", "Misc", 3, 0, 0.0f },
+        { "German LP", "Misc", 25, 3, 0.0f },
         { "Add Bass", "Misc", 15, 0, 0.0f },
-        { "Formant-I", "Misc", 5, 0, 0.0f },
-        { "Formant-II", "Misc", 5, 1, 0.0f },
-        { "Formant-III", "Misc", 5, 2, 0.0f },
-        { "Bandreject", "Misc", 3, 2, 50.0f },
-        { "Dist.Comb 1 LP", "Misc", 6, 0, 20.0f },
-        { "Dist.Comb 1 BP", "Misc", 6, 1, 50.0f },
-        { "Dist.Comb 2 LP", "Misc", 6, 2, 20.0f },
-        { "Dist.Comb 2 BP", "Misc", 6, 3, 50.0f },
+        { "Formant-I", "Misc", 25, 4, 0.0f },
+        { "Formant-II", "Misc", 25, 5, 0.0f },
+        { "Formant-III", "Misc", 25, 6, 0.0f },
+        { "Bandreject", "Misc", 25, 7, 50.0f },
+        { "Dist.Comb 1 LP", "Misc", 25, 8, 20.0f },
+        { "Dist.Comb 1 BP", "Misc", 25, 9, 50.0f },
+        { "Dist.Comb 2 LP", "Misc", 25, 10, 20.0f },
+        { "Dist.Comb 2 BP", "Misc", 25, 11, 50.0f },
         { "Scream LP", "Misc", 16, 0, 0.0f },
         { "Scream BP", "Misc", 16, 1, 50.0f },
 
@@ -513,16 +551,31 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
         { "New Wsp", "New", 17, 0, 0.0f },
         { "DJ Mixer Xfer", "New", 18, 0, 50.0f },
         { "Diffusor", "New", 19, 0, 50.0f },
-        { "MG Ladder", "New", 2, 1, 0.0f },
-        { "Acid Ladder", "New", 4, 1, 0.0f },
+        { "MG Ladder", "New", 26, 0, 0.0f },
+        { "Acid Ladder", "New", 26, 1, 0.0f },
         { "EMS Ladder", "New", 20, 0, 0.0f },
-        { "MG Dirty", "New", 1, 1, 0.0f },
+        { "MG Dirty", "New", 26, 2, 0.0f },
         { "PZ SVF", "New", 21, 0, 50.0f },
-        { "Comb 2", "New", 6, 0, 42.0f },
-        { "Exp MM", "New", 3, 2, 50.0f },
-        { "Exp BPF", "New", 3, 0, 50.0f }
+        { "Comb 2", "New", 26, 3, 42.0f },
+        { "Exp MM", "New", 26, 4, 50.0f },
+        { "Exp BPF", "New", 26, 5, 50.0f }
     };
     return catalog;
+}
+
+/** Returns the display name for a given (model, style) pair, using the Serum catalog name where applicable. */
+inline std::string getFilterTypeNameForModelAndStyle (int model, int style)
+{
+    const auto& catalog = getSerumFilterCatalog();
+    for (const auto& item : catalog)
+    {
+        if (item.model == model && item.style == style)
+            return item.name;
+    }
+    const auto styles = getStylesForModel (model);
+    if (style >= 0 && style < static_cast<int> (styles.size()))
+        return styles[static_cast<size_t> (style)];
+    return getFilterModelName (model);
 }
 
 } // namespace synthyboy::ui

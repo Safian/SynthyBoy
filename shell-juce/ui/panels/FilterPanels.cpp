@@ -34,7 +34,7 @@ public:
           fyHandle (context, prefix + ".formant.y"),
           ftHandle (context, prefix + ".formant.transpose"),
           responseView (context, cutoffHandle, resHandle, onHandle, modelHandle, styleHandle,
-                        blendHandle, varHandle, &fxHandle, &fyHandle, &ftHandle)
+                        blendHandle, varHandle, &fxHandle, &fyHandle, &ftHandle, prefix)
     {
         // Power toggle
         powerButton.setButtonText ("ON");
@@ -250,7 +250,7 @@ private:
         const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
         const int style = (styleHandle.valid() ? static_cast<int> (styleHandle.plain()) : 0);
 
-        modelButton.setButtonText (getFilterModelName (model));
+        modelButton.setButtonText (getFilterTypeNameForModelAndStyle (model, style));
 
         const auto styles = getStylesForModel (model);
         if (style >= 0 && style < static_cast<int> (styles.size()))
@@ -281,6 +281,7 @@ private:
     void refreshControlLabels()
     {
         const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
+        const int style = (styleHandle.valid() ? static_cast<int> (styleHandle.plain()) : 0);
         const auto& ctls = controls();
 
         // Primary controls: [0]=cutoff, [1]=res, [2]=drive, [3]=mix
@@ -306,7 +307,7 @@ private:
         {
             if (c->key() == varKey)
             {
-                const char* varLabel = getVarLabelForModel (model);
+                const char* varLabel = getVarLabelForModel (model, style);
                 if (varLabel[0] != '\0')
                 {
                     c->setLabel (varLabel);
@@ -327,18 +328,58 @@ private:
     void showModelMenu()
     {
         juce::PopupMenu menu;
-        for (int i = 0; i < kNumFilterModels; ++i)
+        const int curModel = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
+        const int curStyle = (styleHandle.valid() ? static_cast<int> (styleHandle.plain()) : 0);
+
+        const auto& catalog = getSerumFilterCatalog();
+        const char* const families[] = { "Normal", "Multi", "Flanges", "Misc", "New" };
+
+        struct MenuItemMap { int model; int style; float defaultBlend; };
+        std::vector<MenuItemMap> itemMap;
+        itemMap.push_back ({ 0, 0, 0.0f }); // 1-based indexing dummy
+
+        int itemIndex = 1;
+        for (const char* fam : families)
         {
-            menu.addItem (i + 1, getFilterModelName (i), true,
-                          modelHandle.valid() && static_cast<int> (modelHandle.plain()) == i);
+            juce::PopupMenu sub;
+            for (const auto& item : catalog)
+            {
+                if (std::string (item.family) == fam)
+                {
+                    const bool isTicked = (curModel == item.model && curStyle == item.style);
+                    sub.addItem (itemIndex, item.name, true, isTicked);
+                    itemMap.push_back ({ item.model, item.style, item.defaultBlend });
+                    ++itemIndex;
+                }
+            }
+            menu.addSubMenu (fam, sub);
         }
+
+        // Classic Vital models
+        juce::PopupMenu classicSub;
+        static const char* const kClassicNames[] = {
+            "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser"
+        };
+        for (int i = 0; i < 8; ++i)
+        {
+            const bool isTicked = (curModel == i);
+            classicSub.addItem (itemIndex, kClassicNames[i], true, isTicked);
+            itemMap.push_back ({ i, 0, 0.0f });
+            ++itemIndex;
+        }
+        menu.addSubMenu ("Classic", classicSub);
+
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (modelButton),
-                            [this] (int result) {
-                                if (result > 0 && modelHandle.valid())
+                            [this, itemMap] (int result) {
+                                if (result > 0 && result < static_cast<int> (itemMap.size()))
                                 {
-                                    modelHandle.setPlainComplete (static_cast<float> (result - 1));
+                                    const auto& m = itemMap[static_cast<size_t> (result)];
+                                    if (modelHandle.valid())
+                                        modelHandle.setPlainComplete (static_cast<float> (m.model));
                                     if (styleHandle.valid())
-                                        styleHandle.setPlainComplete (0.0f);
+                                        styleHandle.setPlainComplete (static_cast<float> (m.style));
+                                    if (blendHandle.valid())
+                                        blendHandle.setPlainComplete (m.defaultBlend);
                                     refreshAll();
                                 }
                             });

@@ -25,6 +25,8 @@ ParamHandle::ParamHandle (UiContext& context, const std::string& key) : ctx (con
 
 float ParamHandle::plain() const
 {
+    if (param != nullptr)
+        return param->convertFrom0to1 (param->getValue());
     return rawValue != nullptr ? rawValue->load() : (valid() ? info().def : 0.0f);
 }
 

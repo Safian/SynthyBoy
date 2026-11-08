@@ -26,6 +26,8 @@
 #include "ui/panels/WavetablePanel.h"
 #include "ui/panels/SubPanel.h"
 #include "ui/panels/NoisePanel.h"
+#include "ui/panels/FilterModels.h"
+#include "ui/panels/FilterViews.h"
 #include "test_runner.h"
 
 using namespace synthyboy;
@@ -2251,6 +2253,196 @@ TEST (uig_sub_and_noise_knobs_take_modulation_by_touch)
     CHECK (! flow.isTarget (resolveKey ("noise.sample").index));
     CHECK (! flow.isTarget (resolveKey ("noise.loop").index));
     rig.editor->context().assign.exitAssignMode();
+}
+
+TEST (uig_pz_svf_ui_curve_editor_moves_rendered_response)
+{
+    Rig rig (Page::flt);
+    auto* f1Panel = rig.panelTitled ("Filter 1");
+    CHECK (f1Panel != nullptr);
+    if (f1Panel == nullptr)
+        return;
+
+    auto* view = rig.find<FilterResponseView> (*f1Panel);
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+
+    // Setup noise through Filter 1
+    rig.setParam ("osc1.on", 0.0f);
+    rig.setParam ("noise.on", 1.0f);
+    rig.setParam ("noise.level", 100.0f);
+    rig.setParam ("noise.destination", 0.0f); // Filter 1
+    rig.setParam ("filter1.on", 1.0f);
+    rig.setParam ("filter1.model", 21.0f); // PZ SVF
+    rig.setParam ("filter1.cutoff", 1000.0f);
+    rig.setParam ("filter1.resonance", 0.0f);
+
+    rig.proc.setRateAndBufferSizeDetails (48000.0, 512);
+    rig.proc.prepareToPlay (48000.0, 512);
+
+    // Initial render with flat response
+    juce::AudioBuffer<float> bufFlat (2, 512);
+    juce::MidiBuffer midi;
+    midi.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+    // Warm up
+    for (int i = 0; i < 4; ++i)
+    {
+        bufFlat.clear();
+        rig.proc.processBlock (bufFlat, midi);
+        midi.clear();
+    }
+    float rmsFlat = 0.0f;
+    for (int i = 0; i < 8; ++i)
+    {
+        bufFlat.clear();
+        rig.proc.processBlock (bufFlat, midi);
+        rmsFlat += bufFlat.getRMSLevel (0, 0, 512);
+    }
+    rmsFlat /= 8.0f;
+    CHECK (rmsFlat > 1e-4f);
+
+    // Drag point 1 (centre point at normX = 0.5f, normY = 36/54 ~ 0.667) up to 0.95 (+15.3 dB)
+    const auto plotArea = view->getLocalBounds().toFloat().reduced (rig.editor->theme().px (6.0f), rig.editor->theme().px (8.0f));
+    const float ptX = plotArea.getX() + 0.5f * plotArea.getWidth();
+    const float ptY = plotArea.getBottom() - (36.0f / 54.0f) * plotArea.getHeight();
+    const float targetY = plotArea.getBottom() - 0.95f * plotArea.getHeight();
+
+    drag (*view, { ptX, ptY }, { ptX, targetY });
+
+    // Verify content.filterCurves was updated through UiHost::setContent
+    const auto& content = rig.proc.content();
+    auto it = std::find_if (content.filterCurves.begin(), content.filterCurves.end(),
+                            [] (const auto& c) { return c.filter == "filter1"; });
+    CHECK (it != content.filterCurves.end());
+    if (it != content.filterCurves.end())
+    {
+        CHECK (it->points.size() >= 3);
+        // Centre point y should be around +15 dB
+        CHECK (it->points[1].y > 10.0f);
+    }
+
+    // Render with boosted curve
+    juce::AudioBuffer<float> bufBoosted (2, 512);
+    float rmsBoosted = 0.0f;
+    for (int i = 0; i < 8; ++i)
+    {
+        bufBoosted.clear();
+        rig.proc.processBlock (bufBoosted, midi);
+        rmsBoosted += bufBoosted.getRMSLevel (0, 0, 512);
+    }
+    rmsBoosted /= 8.0f;
+
+    // Rendered response moved significantly!
+    CHECK (std::fabs (rmsBoosted - rmsFlat) / rmsFlat > 0.05f);
+
+    // Also test double-click adds a new point
+    const float newPtX = plotArea.getX() + 0.25f * plotArea.getWidth();
+    const float newPtY = plotArea.getBottom() - 0.2f * plotArea.getHeight(); // -25 dB
+    doubleTap (*view, { newPtX, newPtY });
+    const auto& contentAfterAdd = rig.proc.content();
+    auto itAdd = std::find_if (contentAfterAdd.filterCurves.begin(), contentAfterAdd.filterCurves.end(),
+                               [] (const auto& c) { return c.filter == "filter1"; });
+    CHECK (itAdd != contentAfterAdd.filterCurves.end());
+    if (itAdd != contentAfterAdd.filterCurves.end())
+    {
+        CHECK (itAdd->points.size() == 4);
+    }
+
+    // Test Reset button resets to 3 neutral points and updates content
+    auto* resetBtn = rig.find<juce::TextButton> (*view, [] (juce::TextButton& b) { return b.getButtonText() == "Reset"; });
+    CHECK (resetBtn != nullptr);
+    if (resetBtn != nullptr)
+    {
+        resetBtn->onClick();
+        const auto& contentAfterReset = rig.proc.content();
+        auto itReset = std::find_if (contentAfterReset.filterCurves.begin(), contentAfterReset.filterCurves.end(),
+                                     [] (const auto& c) { return c.filter == "filter1"; });
+        CHECK (itReset != contentAfterReset.filterCurves.end());
+        if (itReset != contentAfterReset.filterCurves.end())
+        {
+            CHECK (itReset->points.size() == 3);
+            CHECK_NEAR (itReset->points[1].y, 0.0, 0.5);
+        }
+    }
+}
+
+TEST (uig_filter_hierarchical_catalog_and_var_labels)
+{
+    // Check catalog has all 80 Serum filter types
+    const auto& catalog = getSerumFilterCatalog();
+    CHECK_EQ (static_cast<int> (catalog.size()), 80);
+
+    // Verify models 22..26 and their styles and Var labels
+    // Model 22: Normal (12 styles)
+    CHECK (std::string (getFilterModelName (22)) == "Normal");
+    CHECK_EQ (static_cast<int> (getStylesForModel (22).size()), 12);
+    CHECK (getFilterTypeNameForModelAndStyle (22, 0) == "MG Low 12");
+    CHECK (getFilterTypeNameForModelAndStyle (22, 1) == "MG Low 24");
+    CHECK (getFilterTypeNameForModelAndStyle (22, 2) == "Low 12");
+    CHECK (getFilterTypeNameForModelAndStyle (22, 3) == "Low 24");
+    CHECK (getFilterTypeNameForModelAndStyle (22, 7) == "Band 24");
+    CHECK (getFilterTypeNameForModelAndStyle (22, 11) == "Notch 24");
+    CHECK (std::string (getVarLabelForModel (22, 0)) == "FAT");
+
+    // Model 23: Multi Morph (4 styles)
+    CHECK (std::string (getFilterModelName (23)) == "Multi Morph");
+    CHECK_EQ (static_cast<int> (getStylesForModel (23).size()), 4);
+    CHECK (getFilterTypeNameForModelAndStyle (23, 0) == "LBH");
+    CHECK (getFilterTypeNameForModelAndStyle (23, 1) == "LPH");
+    CHECK (getFilterTypeNameForModelAndStyle (23, 3) == "BPN");
+    CHECK (std::string (getVarLabelForModel (23, 0)) == "MORPH");
+
+    // Model 24: Flanges (9 styles)
+    CHECK (std::string (getFilterModelName (24)) == "Flanges");
+    CHECK_EQ (static_cast<int> (getStylesForModel (24).size()), 9);
+    CHECK (getFilterTypeNameForModelAndStyle (24, 0) == "Cmb L");
+    CHECK (getFilterTypeNameForModelAndStyle (24, 4) == "Flg H");
+    CHECK (getFilterTypeNameForModelAndStyle (24, 8) == "Phs HL");
+    CHECK (std::string (getVarLabelForModel (24, 0)) == "LP FREQ");
+    CHECK (std::string (getVarLabelForModel (24, 4)) == "HP FREQ");
+    CHECK (std::string (getVarLabelForModel (24, 8)) == "HL WID");
+
+    // Model 25: Misc (12 styles)
+    CHECK (std::string (getFilterModelName (25)) == "Misc");
+    CHECK_EQ (static_cast<int> (getStylesForModel (25).size()), 12);
+    CHECK (getFilterTypeNameForModelAndStyle (25, 0) == "Low EQ 12");
+    CHECK (getFilterTypeNameForModelAndStyle (25, 3) == "German LP");
+    CHECK (getFilterTypeNameForModelAndStyle (25, 4) == "Formant-I");
+    CHECK (getFilterTypeNameForModelAndStyle (25, 7) == "Bandreject");
+    CHECK (getFilterTypeNameForModelAndStyle (25, 8) == "Dist.Comb 1 LP");
+    CHECK (std::string (getVarLabelForModel (25, 0)) == "DB");
+    CHECK (std::string (getVarLabelForModel (25, 3)) == "");
+    CHECK (std::string (getVarLabelForModel (25, 4)) == "FORMNT");
+    CHECK (std::string (getVarLabelForModel (25, 7)) == "WIDTH");
+    CHECK (std::string (getVarLabelForModel (25, 8)) == "COMBFRQ");
+
+    // Model 26: New (6 styles)
+    CHECK (std::string (getFilterModelName (26)) == "New");
+    CHECK_EQ (static_cast<int> (getStylesForModel (26).size()), 6);
+    CHECK (getFilterTypeNameForModelAndStyle (26, 0) == "MG Ladder");
+    CHECK (getFilterTypeNameForModelAndStyle (26, 1) == "Acid Ladder");
+    CHECK (getFilterTypeNameForModelAndStyle (26, 2) == "MG Dirty");
+    CHECK (getFilterTypeNameForModelAndStyle (26, 3) == "Comb 2");
+    CHECK (getFilterTypeNameForModelAndStyle (26, 4) == "Exp MM");
+    CHECK (getFilterTypeNameForModelAndStyle (26, 5) == "Exp BPF");
+    CHECK (std::string (getVarLabelForModel (26, 0)) == "SMOOTH");
+    CHECK (std::string (getVarLabelForModel (26, 2)) == "PAIN");
+    CHECK (std::string (getVarLabelForModel (26, 3)) == "FRQ2");
+    CHECK (std::string (getVarLabelForModel (26, 4)) == "MIX");
+    CHECK (std::string (getVarLabelForModel (26, 5)) == "");
+
+    // Verify in Panel UI that setting model/style updates button label
+    Rig rig (Page::flt);
+    rig.setParam ("filter1.model", 26.0f); // New
+    rig.setParam ("filter1.style", 2.0f);  // MG Dirty
+    auto* f1Panel = rig.panelTitled ("Filter 1");
+    CHECK (f1Panel != nullptr);
+    if (f1Panel != nullptr)
+    {
+        auto* modelBtn = rig.find<juce::TextButton> (*f1Panel, [] (juce::TextButton& b) { return b.getButtonText() == "MG Dirty"; });
+        CHECK (modelBtn != nullptr);
+    }
 }
 
 TEST (uig_zz_shutdown)

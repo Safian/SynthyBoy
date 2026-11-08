@@ -23,15 +23,19 @@ public:
     void reset()
     {
         points = {
-            { 0.0f, 0.65f },
-            { 0.35f, 0.65f },
-            { 0.5f, 0.85f },
-            { 0.7f, 0.35f },
-            { 1.0f, 0.15f }
+            { 0.0f, 36.0f / 54.0f },
+            { 0.5f, 36.0f / 54.0f },
+            { 1.0f, 36.0f / 54.0f }
         };
     }
 
     const std::vector<juce::Point<float>>& getPoints() const noexcept { return points; }
+
+    void setPoints (const std::vector<juce::Point<float>>& newPoints)
+    {
+        points = newPoints;
+        sortPoints();
+    }
 
     void setPoint (int index, juce::Point<float> p)
     {
@@ -122,7 +126,8 @@ public:
                         ParamHandle& varHandle,
                         ParamHandle* formantX = nullptr,
                         ParamHandle* formantY = nullptr,
-                        ParamHandle* formantTranspose = nullptr)
+                        ParamHandle* formantTranspose = nullptr,
+                        const std::string& prefix = "filter1")
         : ctx (context),
           cutoff (cutoffHandle),
           resonance (resHandle),
@@ -133,7 +138,8 @@ public:
           varParam (varHandle),
           fxParam (formantX),
           fyParam (formantY),
-          ftParam (formantTranspose)
+          ftParam (formantTranspose),
+          filterPrefix (prefix)
     {
         setOpaque (false);
 
@@ -142,10 +148,20 @@ public:
         addAndMakeVisible (modeButton);
 
         pzResetButton.setButtonText ("Reset");
-        pzResetButton.onClick = [this] { pzCurve.reset(); repaint(); };
+        pzResetButton.onClick = [this] {
+            pzCurve.reset();
+            commitPzCurveToContent();
+            repaint();
+        };
         addChildComponent (pzResetButton);
 
-        const auto updateCb = [this] { repaint(); };
+        loadPzCurveFromContent();
+
+        const auto updateCb = [this] {
+            if (modelParam.valid() && static_cast<int> (modelParam.plain()) == 21 && activePzPoint < 0)
+                loadPzCurveFromContent();
+            repaint();
+        };
         cutoff.onChange = updateCb;
         resonance.onChange = updateCb;
         onParam.onChange = updateCb;
@@ -181,6 +197,60 @@ public:
     }
 
     Mode mode() const noexcept { return currentMode; }
+
+    PzSvfCurve& getPzCurve() noexcept { return pzCurve; }
+    const PzSvfCurve& getPzCurve() const noexcept { return pzCurve; }
+
+    void loadPzCurveFromContent()
+    {
+        const auto& content = ctx.host.content();
+        for (const auto& c : content.filterCurves)
+        {
+            if (c.filter == filterPrefix && c.points.size() >= 2)
+            {
+                std::vector<juce::Point<float>> pts;
+                pts.reserve (c.points.size());
+                for (const auto& p : c.points)
+                {
+                    pts.push_back ({
+                        std::clamp (p.x, 0.0f, 1.0f),
+                        std::clamp ((p.y + 36.0f) / 54.0f, 0.0f, 1.0f)
+                    });
+                }
+                pzCurve.setPoints (pts);
+                return;
+            }
+        }
+    }
+
+    void commitPzCurveToContent()
+    {
+        auto content = ctx.host.content();
+        auto it = std::find_if (content.filterCurves.begin(), content.filterCurves.end(),
+                                [this] (const auto& c) { return c.filter == filterPrefix; });
+        if (pzCurve.getPoints().size() < 2)
+        {
+            if (it != content.filterCurves.end())
+                content.filterCurves.erase (it);
+        }
+        else
+        {
+            ContentFilterCurve curve;
+            curve.filter = filterPrefix;
+            for (const auto& p : pzCurve.getPoints())
+            {
+                curve.points.push_back ({
+                    std::clamp (p.x, 0.0f, 1.0f),
+                    std::clamp (p.y * 54.0f - 36.0f, -60.0f, 60.0f)
+                });
+            }
+            if (it != content.filterCurves.end())
+                *it = std::move (curve);
+            else
+                content.filterCurves.push_back (std::move (curve));
+        }
+        ctx.host.setContent (content);
+    }
 
     void setHasInputs (bool has)
     {
@@ -412,9 +482,6 @@ public:
 
     void mouseDown (const juce::MouseEvent& e) override
     {
-        if (e.mods.isPopupMenu())
-            return;
-
         const auto plotArea = getLocalBounds().toFloat().reduced (ctx.theme.px (6.0f), ctx.theme.px (8.0f));
         if (plotArea.getWidth() <= 1.0f || plotArea.getHeight() <= 1.0f)
             return;
@@ -425,14 +492,30 @@ public:
         {
             const float normX = std::clamp ((e.position.x - plotArea.getX()) / plotArea.getWidth(), 0.0f, 1.0f);
             const float normY = std::clamp ((plotArea.getBottom() - e.position.y) / plotArea.getHeight(), 0.0f, 1.0f);
+            if (e.mods.isPopupMenu() || e.mods.isRightButtonDown())
+            {
+                const int ptIdx = pzCurve.findNearestPoint ({ normX, normY }, 0.15f);
+                if (ptIdx >= 0 && pzCurve.getPoints().size() > 2)
+                {
+                    pzCurve.removePoint (ptIdx);
+                    commitPzCurveToContent();
+                    repaint();
+                }
+                return;
+            }
             activePzPoint = pzCurve.findNearestPoint ({ normX, normY }, 0.15f);
             if (activePzPoint < 0 && e.getNumberOfClicks() >= 2)
             {
                 pzCurve.addPoint ({ normX, normY });
+                activePzPoint = pzCurve.findNearestPoint ({ normX, normY }, 0.05f);
+                commitPzCurveToContent();
                 repaint();
             }
             return;
         }
+
+        if (e.mods.isPopupMenu())
+            return;
 
         if (model == 5 && fxParam != nullptr && fyParam != nullptr) // Formant vowel pad
         {
@@ -466,6 +549,7 @@ public:
             const float normX = std::clamp ((e.position.x - plotArea.getX()) / plotArea.getWidth(), 0.0f, 1.0f);
             const float normY = std::clamp ((plotArea.getBottom() - e.position.y) / plotArea.getHeight(), 0.0f, 1.0f);
             pzCurve.setPoint (activePzPoint, { normX, normY });
+            commitPzCurveToContent();
             repaint();
             return;
         }
@@ -485,6 +569,11 @@ public:
     void mouseUp (const juce::MouseEvent& e) override
     {
         juce::ignoreUnused (e);
+        if (activePzPoint >= 0)
+        {
+            commitPzCurveToContent();
+            activePzPoint = -1;
+        }
         if (draggingFormant)
         {
             draggingFormant = false;
@@ -497,7 +586,6 @@ public:
             cutoff.endGesture();
             resonance.endGesture();
         }
-        activePzPoint = -1;
     }
 
     void mouseDoubleClick (const juce::MouseEvent& e) override
@@ -554,6 +642,7 @@ private:
     juce::TextButton pzResetButton;
     PzSvfCurve pzCurve;
     int activePzPoint = -1;
+    std::string filterPrefix;
 };
 
 // ---- FilterInputsBar (Input Switches S A B C N) ------------------------------------------------------------------------------------
