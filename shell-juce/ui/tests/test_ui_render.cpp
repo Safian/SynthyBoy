@@ -13,6 +13,7 @@
 #include "ui/Editor.h"
 #include "ui/Sheet.h"
 #include "ui/panels/LfoTabsPanel.h"
+#include "ui/panels/OscTabsPanel.h"
 #include "test_runner.h"
 
 using namespace synthyboy;
@@ -161,7 +162,7 @@ TEST (uir_panel_registry_contract)
         CHECK (panel->title().isNotEmpty());
 
         const auto keys = panel->keys();
-        CHECK (! keys.empty() || dynamic_cast<LfoTabsPanel*> (panel.get()) != nullptr); // the LFO tab chip row is navigation, it has no key
+        CHECK (! keys.empty() || dynamic_cast<LfoTabsPanel*> (panel.get()) != nullptr || dynamic_cast<OscTabsPanel*> (panel.get()) != nullptr); // the LFO / oscillator chip rows are navigation, they have no key
         CHECK_EQ (keys.size(), panel->controls().size());
         for (size_t i = 0; i < keys.size() && i < panel->controls().size(); ++i)
         {

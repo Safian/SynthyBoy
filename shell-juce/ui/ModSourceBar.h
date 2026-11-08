@@ -27,6 +27,8 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
     void showAssignments();
+    /** The long-press list of a source (bypass / remove destinations, module operations) for any anchor: the envelope and LFO tabs use it. */
+    static void showAssignmentsFor (UiContext& context, int sourceChoice, juce::Component& anchor);
 
 private:
     void changeListenerCallback (juce::ChangeBroadcaster*) override { repaint(); }

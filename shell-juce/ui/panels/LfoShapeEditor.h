@@ -10,11 +10,18 @@
 // drag the diamond in the middle of a segment = curve power of that segment (double-tap = straight), Draw tool = paint the shape in
 // 32 columns, Snap = grid 16 x 8. Buttons are the non-gesture alternatives (Add, Delete, Undo, Redo, Presets, Smooth).
 // One drag = one undo step.
+//
+// Tools (design 05 section 2.4): Point, Draw (free levels), Steps (a flat step per grid column), Brush (a brush shape per grid column: Step,
+// Half, Down, Up, Tri = the paint patterns of Vital). Marquee: hold still on the empty plot, drag a rectangle; a drag of one of the selected
+// points then moves them all, with the "rainbow" falloff while Prop is on. The selected point bar: X / Y fields, Loop here (loop point of the
+// shape), Start here (the LFO phase marker lfoN.phase), Segment shape menu. All curves bends every segment with one handle. The grid
+// (columns x rows) has number fields and steppers.
 #pragma once
 
 #include <memory>
 #include <vector>
 
+#include "../GestureKit.h"
 #include "../UiContext.h"
 #include "synthyboy/shapes/shape.h"
 
@@ -51,7 +58,43 @@ public:
     bool canUndo() const noexcept { return ! undoStack.empty(); }
     bool canRedo() const noexcept { return ! redoStack.empty(); }
     bool snapOn() const noexcept { return snap; }
-    bool drawToolOn() const noexcept { return drawTool; }
+    bool drawToolOn() const noexcept { return tool_ == Tool::draw; }
+
+    enum class Tool { point, draw, steps, brush };
+    Tool tool() const noexcept { return tool_; }
+    void setTool (Tool newTool);
+    static constexpr int kNumBrushes = 5;
+    static const char* brushName (int brush) noexcept; // Step Half Down Up Tri
+    int brush() const noexcept { return brush_; }
+    void setBrush (int newBrush);
+    int gridColumns() const noexcept { return gridCols; }
+    int gridRows() const noexcept { return gridRowsN; }
+    /** Snap grid and the columns of the Steps / Brush tools; 1..32 columns, 1..32 rows. */
+    void setGrid (int columns, int rows);
+    bool proportional() const noexcept { return prop; }
+    void setProportional (bool on);
+    bool allCurves() const noexcept { return allCurvesOn; }
+    void setAllCurves (bool on);
+    /** The multi-selection (marquee); the single selected point is always part of it when there is one. */
+    const std::vector<int>& selection() const noexcept { return multi; }
+    /** Selects the points whose position (view coordinates) lies inside `rect`. False if none. */
+    bool selectInRect (juce::Rectangle<float> rect);
+    /** Moves the selection by (dx, dy) in plot units (0..1) from where it is now; `anchor` is the point under the finger (the falloff is
+        centred on it when Prop is on). One undo step. */
+    bool moveSelection (int anchor, float dx, float dy);
+    /** The selected point bar. */
+    bool setSelectedXY (float x, float y);
+    bool applyFieldText (bool isX, const juce::String& text); // percent 0..100
+    bool loopHere();                                           // toggles the loop point of the shape on the selected point
+    bool startHere();                                          // lfoN.phase = the selected point's x
+    /** Segment shape of the segment that starts at the selected point: 0 straight, 1 ease in, 2 ease out, 3 hard in, 4 hard out. */
+    bool setSegmentShape (int shape);
+    int loopPoint() const noexcept { return current.loopPoint; }
+    LongPressDetector& longPress() noexcept { return press; }
+    bool marqueeActive() const noexcept { return drag == Drag::marquee; }
+    juce::TextEditor& xFieldEditor() noexcept { return xField; }
+    juce::TextEditor& yFieldEditor() noexcept { return yField; }
+    juce::TextButton* barButton (const juce::String& text);
 
     // ---- editing API (what the gestures and buttons call; each call is one undo step) ----
     bool addPointAt (float x, float y);
@@ -93,7 +136,13 @@ private:
     int hitHandle (juce::Point<float> p) const;
     float evaluateAt (float x) const;
     void drawAt (juce::Point<float> p);
+    void paintCellAt (juce::Point<float> p);
+    void rebuildFromCells();
+    void selectOnly (int index);
+    void applySelectionMove (const std::vector<ContentPoint>& base, int anchor, float dx, float dy);
     void updateButtons();
+    void applyFieldEditors();
+    void refreshFields();
 
     UiContext& ctx;
     int lfo;
@@ -101,11 +150,25 @@ private:
     ContentLfoShape current;
     std::vector<ContentLfoShape> undoStack, redoStack;
     int selected = -1;
-    bool snap = false, drawTool = false, dirty = false;
+    std::vector<int> multi;
+    Tool tool_ = Tool::point;
+    int brush_ = 1;
+    int gridCols = 16, gridRowsN = 8;
+    bool prop = false, allCurvesOn = false;
+    bool snap = false, dirty = false;
     int idleTicks = 0;
 
     // open gesture
-    enum class Drag { none, point, handle, draw } drag = Drag::none;
+    enum class Drag { none, point, handle, draw, cells, marquee, selection } drag = Drag::none;
+    std::vector<float> cellLevel;
+    std::vector<int> cellBrush;
+    int lastCell = -1;
+    float lastCellY = 0.0f;
+    std::vector<float> handleStartPowers;
+    std::vector<ContentPoint> selectionBase;
+    juce::Point<float> selectionDown, marqueeFrom, marqueeTo;
+    LongPressDetector press;
+    bool pendingMarquee = false; // the press that may become a marquee
     int dragIndex = -1;
     float dragStartPower = 0.0f;
     ContentLfoShape gestureStart;
@@ -117,8 +180,11 @@ private:
     mutable bool cacheValid = false;
 
     juce::Rectangle<float> plot;
-    juce::TextButton pointBtn { "Point" }, drawBtn { "Draw" }, snapBtn { "Snap" }, smoothBtn { "Smooth" }, addBtn { "Add" },
-        deleteBtn { "Delete" }, undoBtn { "Undo" }, redoBtn { "Redo" }, presetBtn { "Presets" };
-    std::vector<juce::TextButton*> buttons;
+    juce::TextButton pointBtn { "Point" }, drawBtn { "Draw" }, stepsBtn { "Steps" }, brushBtn { "Brush" }, brushPickBtn { "Half" }, snapBtn { "Snap" },
+        smoothBtn { "Smooth" }, propBtn { "Prop" }, allCurvesBtn { "All curves" }, addBtn { "Add" }, deleteBtn { "Delete" }, undoBtn { "Undo" },
+        redoBtn { "Redo" }, presetBtn { "Presets" }, loopBtn { "Loop here" }, startBtn { "Start here" }, segBtn { "Segment" },
+        colsMinus { "-" }, colsPlus { "+" }, rowsMinus { "-" }, rowsPlus { "+" };
+    juce::TextEditor xField, yField, colsField, rowsField;
+    std::vector<juce::Component*> buttons;
 };
 } // namespace synthyboy::ui

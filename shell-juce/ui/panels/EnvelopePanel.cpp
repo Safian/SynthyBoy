@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "EnvelopePanel.h"
 
+#include "../ModSourceBar.h"
+
 namespace synthyboy::ui
 {
 
@@ -68,10 +70,16 @@ void EnvelopePanel::build()
     for (int i = 0; i < 6; ++i)
     {
         const int idx = i + 1;
-        auto btn = std::make_unique<juce::TextButton>();
+        auto btn = std::make_unique<SourceTabButton> (ctx, idx);
         btn->setClickingTogglesState (false);
         btn->setToggleState (idx == envIdx, juce::dontSendNotification);
-        btn->onClick = [this, idx] { scrollToEnvelope (idx); };
+        btn->onClick = [this, idx, b = btn.get()]
+        {
+            if (! b->consumeSuppressedClick())
+                selectEnvelope (idx);
+        };
+        btn->onLongPress = [this, b = btn.get()] { ModSourceChip::showAssignmentsFor (ctx, b->source(), *b); };
+        btn->onDropped = [this, idx] (juce::Component* target) { dropSourceOn (idx, target); };
         tabRow.addAndMakeVisible (*btn);
         tabButtons[static_cast<size_t> (i)] = std::move (btn);
     }
@@ -112,28 +120,97 @@ void EnvelopePanel::changeListenerCallback (juce::ChangeBroadcaster* source)
         updateTabBadges();
 }
 
-void EnvelopePanel::scrollToEnvelope (int targetEnv)
+void EnvelopePanel::selectEnvelope (int targetEnv)
 {
-    if (targetEnv == envIdx)
+    targetEnv = juce::jlimit (1, 6, targetEnv);
+    if (ctx.view->envTab == targetEnv - 1)
         return;
+    ctx.view->envTab = targetEnv - 1;
+    if (onHeightChanged)
+        onHeightChanged(); // the host shows the panel of the chosen envelope and hides the others
+}
 
-    // Find parent viewport to scroll to the corresponding envelope panel
-    if (auto* vp = findParentComponentOfClass<juce::Viewport>())
+bool EnvelopePanel::dropSourceOn (int sourceChoice, juce::Component* target)
+{
+    auto& assign = ctx.assign;
+    ParamControl* control = nullptr;
+    for (auto* c = target; c != nullptr && control == nullptr; c = c->getParentComponent())
+        control = dynamic_cast<ParamControl*> (c);
+    bool done = false;
+    if (control != nullptr && control->paramHandle().valid())
     {
-        if (auto* viewed = vp->getViewedComponent())
+        if (assign.flow().armedSource() != sourceChoice)
+            assign.tapSource (sourceChoice);
+        auto& flow = assign.flow();
+        const int index = control->paramHandle().index();
+        if (flow.isTarget (index))
         {
-            for (auto* child : viewed->getChildren())
+            const auto result = flow.beginDrag (index);
+            if (result == AssignFlow::BeginResult::ok)
             {
-                if (auto* p = dynamic_cast<EnvelopePanel*> (child))
-                {
-                    if (p->envelopeIndex() == targetEnv)
-                    {
-                        vp->setViewPosition (0, p->getY() - ctx.theme.gap());
-                        break;
-                    }
-                }
+                if (std::abs (flow.amountNormalised() - 0.5f) < 1.0e-4f) // a new slot starts at 0 (= the middle of -100..+100): give it 50 %
+                    flow.setAmount (50.0f);
+                flow.endDrag();
+                done = true;
             }
+            else if (result == AssignFlow::BeginResult::matrixFull)
+                assign.setMessage ("Mod Matrix full (64/64 slots used)");
         }
+    }
+    assign.exitAssignMode();
+    assign.refresh();
+    assign.sendChangeMessage();
+    return done;
+}
+
+// ---- SourceTabButton ----------------------------------------------------------------------------------------------------------------
+
+void SourceTabButton::mouseDown (const juce::MouseEvent& e)
+{
+    dragging = false;
+    suppressClick = false;
+    press.onLongPress = [this]
+    {
+        suppressClick = true;
+        if (onLongPress)
+            onLongPress();
+    };
+    press.press (e.position);
+    juce::TextButton::mouseDown (e);
+}
+
+void SourceTabButton::mouseDrag (const juce::MouseEvent& e)
+{
+    press.moved (e.position);
+    if (! dragging && e.getDistanceFromDragStart() > ctx.theme.ipx (12.0f))
+    {
+        dragging = true;
+        suppressClick = true;
+        // arm the source: the modulatable controls show their target rings while the finger is on its way
+        if (ctx.assign.flow().armedSource() != sourceChoice)
+        {
+            ctx.assign.tapSource (sourceChoice);
+            armedByDrag = true;
+        }
+    }
+    juce::TextButton::mouseDrag (e);
+}
+
+void SourceTabButton::mouseUp (const juce::MouseEvent& e)
+{
+    press.cancel();
+    const bool wasDragging = dragging;
+    dragging = false;
+    juce::TextButton::mouseUp (e);
+    if (wasDragging)
+    {
+        auto* top = getTopLevelComponent();
+        juce::Component* target = nullptr;
+        if (top != nullptr)
+            target = top->getComponentAt (top->getLocalPoint (this, e.getPosition()));
+        if (onDropped)
+            onDropped (target);
+        armedByDrag = false;
     }
 }
 
