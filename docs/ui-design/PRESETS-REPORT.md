@@ -8,16 +8,18 @@ Branch cut from develop `c44ce1f`. Generator: `scripts/gen-factory-presets.py` (
 * Reproduces the shipped sounds: for all 100 old presets the 880 version-2 keys equal the shipped values (checked by a script against the files of `develop`, 0 differences; the two hand-fixed presets, FM Digital Lead and Pulse Width Bass, come out of the script's own data). Byte-identical on re-run (`diff -r` of two output directories; `--check` and ctest `synthyboy_factory_presets_reproducible` guard the repository files).
 * Two findings in the old data, kept as they were (a sound change is the owner's call):
   * Four presets set `filter1.drive` above its range 0 .. 20 (Dirty Distortion Bass 65, Diode Saturated Bass 50, Dirty Peak Lead 55, Diode Bite Lead 40). The loader always clamped them, so the files now carry 20 (same sound).
-  * Ten spellings in the data of the old presets are not keys of the table and were silently dropped by the old generator: `fx.reverb.on` (26 presets), `fx.delay.on` (14), `fx.chorus.on` (15), `fx.distortion.on` (8), `fx.distortion.drive`, `fx.chorus.wet`, `fx.reverb.wet`, `noise.volume`, `osc2.volume`, `master.portamento`. The shipped presets therefore have those effects, noise and second-oscillator levels at their defaults, i.e. no reverb / delay / chorus / distortion unless a macro opens it. The script lists them (`IGNORED_LEGACY_KEYS`) and still ignores them; new presets may not use unknown keys (strict). Making them real (`reverb.on`, `delay.on`, `chorus.on`, `distortion.on`, `noise.level`, `osc2.level`, `master.portamento.time`) is the one-line-per-key decision for the listening session; the levels would then be re-tuned with `tune-preset-levels.py`.
+  * Ten spellings in the data of the old presets were not keys of the table and were silently dropped by the old generator (`fx.reverb.on`, `fx.delay.on`, `fx.chorus.on`, `fx.distortion.on`, `fx.distortion.drive`, `fx.chorus.wet`, `fx.reverb.wet`, `noise.volume`, `osc2.volume`, `master.portamento`). They are now mapped to the real keys (section 6, pack 1.2.0) and the generator stops with an error on any key that is not in the table, so this cannot recur. The "880 keys equal the shipped values" statement above is true for pack 1.1.0 only.
 
 ## 2. Macro wiring (Q29)
 
 Every preset: macro 1 .. 4 routed to the destinations of its category (09 section 2.3; `chorus.mix` etc. are the table keys of the same name) in mod slots after the highest slot the preset already uses (Space Wobble Bass keeps its own `mod01.amount`), source `macroN`, amount = the percentage of the table, unipolar, power 0. Macros stay 0 at default, so the sound at the default positions is the sound without the wiring. Macros 5 .. 8, sparingly: 5 unison stereo spread (osc 1 / 2 with more than one unison voice), 6 filter 1 resonance +30 (filter on, not in Pad), 7 osc 2 detune and warp (osc 2 on), 8 noise level (noise on). Where a macro opens an effect that the preset has off (almost all, see the dead spellings above), the effect is switched on with its mix at 0 and the macro also opens its mix (distortion +100, delay and reverb +40, FX filter +70), otherwise "Space" or "Drive" would do nothing. Rendered at the macro defaults the wired presets equal the unwired ones except two plucks (Acoustic Style Pluck, Bell Mallet Pluck: peak -1.1 dB, RMS -0.3 dB; any enabled effect module shifts the first transient of the engine by that much, reproduced with delay and with reverb at mix 0).
 
 Macro audibility test (macro N set to 100, chord RMS against -29.0 dBFS): Acid Saw Reso macro 1 -9.1 dB, 2 +8.1 dB, 4 +1.3 dB (reverb), 6 +1.6 dB; Solid Sub macros 1, 2, 4, 6 +1.9 .. +5.3 dB; Vibraphone Bars macros 2, 4, 6; Hyper Saw Lead macros 3, 4, 6. Macros 3, 5, 7, 8 are inert where the preset has no LFO routing, one unison voice, no second oscillator or no noise.
-`lfo1.rate` macros (Bass 3, Pad 3, Keys 2, FX 2) act only where LFO 1 is routed; no factory preset routes LFO 1 (the old Space Wobble Bass has the amount without a source), so these macros are inert until the sounds get a routing.
+`lfo1.rate` / `rlfo1.rate` macros (Bass 3, Pad 3, Keys 2, FX 2): since pack 1.2.0 every preset whose macro opens an LFO rate routes that LFO (own routes kept; otherwise LFO 1 to `filter1.cutoff`, 12 % Bass, 15 % Pad at 0.4 Hz, 8 % Keys, 30 % FX; FX also `rlfo1` to cutoff 30 %), and Lead macro 3 got `filter1.drive` so a one-voice lead has a live macro 3. The generator checks every wired macro (`check_macros`): a macro with no live route (zero amount, bypassed, effect/oscillator/filter off, unison voices 1, or an LFO rate of an unrouted LFO) is a build error. The three old stray `mod01.amount` values without source/destination (Space Wobble Bass, Vibraphone Bars, Alien Communication) became real LFO 1 routes.
 
 ## 3. Level normalisation
+
+Note: the per-preset volumes below are those of pack 1.1.0; pack 1.2.0 re-tuned them (section 6).
 
 Measure: RMS of the loudest 300 ms of the four-note chord (velocity 1.0, held 1 s, C1 root for Bass else C3), master.volume moved 1:1 (the stage is last in the path; one round converges). Target -29 dBFS, tolerance +-3 dB, chord peaks held below -1.5 dBFS (none needed holding).
 
@@ -170,7 +172,126 @@ Not covered by a showcase preset: Convolve (needs a preset IR), Sample oscillato
 
 ## 5. Open points for the listening session
 
-* The dead spellings of section 1 (effects off in 100 classics), then a re-tune.
+* Listen to the 99 changed presets of section 6 (reverb/delay/chorus/distortion/noise/osc2/portamento are now on; first values: distortion drive 0.3 dB per old percent, portamento 4 ms per old unit).
 * Low tier: the Hyper/Dimension and Bode presets are +7 / +5 dB louder than at medium and high because the tier skips those modules (tier design).
 * Single notes are quiet (-38 dBFS RMS median at velocity 0.8) because the target is the chord.
-* LFO 1 is routed by no classic preset, so the `lfo1.rate` macros of Bass 3, Pad 3, Keys 2, FX 2 are inert.
+
+## 6. Effects silently off in the old presets: fixed (pack 1.2.0)
+
+Mapping (old name -> table key; units from docs/PARAMETERS.md):
+
+| old | new | conversion |
+|---|---|---|
+| `fx.reverb.on`, `fx.delay.on`, `fx.chorus.on`, `fx.distortion.on` | `reverb.on`, `delay.on`, `chorus.on`, `distortion.on` | none; mix stays at the table defaults (reverb 25 %, delay 30 %, chorus 50 %, distortion 100 %) |
+| `fx.reverb.wet`, `fx.chorus.wet` | `reverb.mix`, `chorus.mix` | percent, as is |
+| `fx.distortion.drive` (old percent) | `distortion.drive` (dB, -30 .. 30) | 0.3 dB per percent (25 -> 7.5, 40 -> 12 dB); the five presets with `distortion.on` and no drive got 10 dB |
+| `noise.volume`, `osc2.volume` | `noise.level`, `osc2.level` | percent, as is (noise.on / osc2.on were already set) |
+| `master.portamento` (old 0 .. 100) | `master.portamento.time` (ms) | 4 ms per unit (Solo Square Lead 35 -> 140 ms) |
+
+Generator: the key-ignore list is gone; `make_preset` raises on any key not in docs/params.json for all 112 presets (only the range clamp of the old out-of-range values remains, same as the loader). `check_macros` fails the build on a dead macro. Pack version 1.1.0 -> 1.2.0.
+
+Before / after (high tier, chord measure of `synthyboy_preset_render`): before, median chord RMS -29.0 dBFS (sd 0.0) with every one of those effects at its default (off). After the fix the chord level was up to 19.2 dB off the target in the first round; `tune-preset-levels.py` re-converged in two rounds: chord RMS -29.0 dBFS for all 112 presets, highest chord peak -6.8 dBFS, highest single-note peak -15.3 dBFS, longest tail 4.49 s (unchanged). master.volume now spans -31.7 .. -4.4 dB; 75 presets got a new master.volume.
+
+Changed presets (99 of 112; the 13 others are showcase presets whose macros needed no change). Columns: category, changed values (old -> new), `mod-routes` = LFO route added for the macro, master.volume change in dB:
+
+| preset | category | changed | master.volume |
+|---|---|---|---|
+| 808 Boom | Bass | mod-routes | +0.0 dB |
+| Acid Saw Reso | Bass | mod-routes | +0.6 dB |
+| Click Attack Bass | Bass | noise.level 25->20 mod-routes | +0.0 dB |
+| Comb Metal Bass | Bass | mod-routes | -2.1 dB |
+| Diode Saturated Bass | Bass | mod-routes | -2.1 dB |
+| Dirty Distortion Bass | Bass | distortion.drive 0->12, distortion.mix 0->100 mod-routes | +3.8 dB |
+| EMS Squelch Bass | Bass | mod-routes | +0.0 dB |
+| Fast Arp Bass | Bass | mod-routes | +0.0 dB |
+| Fat Reese | Bass | mod-routes | -0.1 dB |
+| Formant Vowel Bass | Bass | mod-routes | +0.0 dB |
+| Gritty Square Bass | Bass | distortion.drive 0->7.5, distortion.mix 0->100 mod-routes | +0.3 dB |
+| Harmonic Sine Bass | Bass | mod-routes | -0.5 dB |
+| Moog Ladder Bass | Bass | mod-routes | +0.8 dB |
+| Odd Harmonics Bass | Bass | mod-routes | +0.0 dB |
+| Pulse Width Bass | Bass | mod-routes | -0.2 dB |
+| Punchy Pluck Bass | Bass | mod-routes | +0.0 dB |
+| Scream Filter Bass | Bass | mod-routes | -0.1 dB |
+| Solid Sub | Bass | mod-routes | -1.4 dB |
+| Space Wobble Bass | Bass | mod-routes | -0.6 dB |
+| Sub Duo Octave | Bass | osc2.level 50->75 mod-routes | -1.7 dB |
+| Sync Growl Bass | Bass | mod-routes | +0.0 dB |
+| Warm Analog Bass | Bass | mod-routes | -0.1 dB |
+| Alien Communication | FX | delay.mix 0->30 mod-routes | -0.7 dB |
+| Bode Shifter Drone | FX | mod-routes | -0.4 dB |
+| Cosmic Teleport | FX | delay.mix 0->30 mod-routes | -0.4 dB |
+| Game Over Zap | FX | distortion.drive 0->10, distortion.mix 0->100 mod-routes | -3.0 dB |
+| Metal Gong Strike | FX | reverb.mix 0->25 mod-routes | +5.7 dB |
+| Noise Riser | FX | noise.level 25->80, reverb.mix 0->25 mod-routes | -19.2 dB |
+| Sci-Fi Laser Sweep | FX | mod-routes | -0.3 dB |
+| Sonar Ping | FX | delay.mix 0->30, reverb.mix 0->25 mod-routes | +0.9 dB |
+| Space Wind Storm | FX | noise.level 25->70 mod-routes | -5.1 dB |
+| Sub Drop Boom | FX | mod-routes | +0.0 dB |
+| Vinyl Dust Crackle | FX | noise.level 25->40 mod-routes | -5.8 dB |
+| Accordion Reed | Keys | chorus.mix 0->50 mod-routes | -1.8 dB |
+| B3 Drawbar Organ | Keys | mod-routes | +0.0 dB |
+| Celesta Bells | Keys | reverb.mix 0->25 mod-routes | +0.4 dB |
+| Clavinet Funk | Keys | distortion.on 0->1, distortion.drive 0->10 mod-routes | -3.1 dB |
+| Dream Grand Piano | Keys | reverb.mix 0->25 mod-routes | +0.5 dB |
+| Dyno Electric Piano | Keys | chorus.mix 0->50 mod-routes | -2.1 dB |
+| FM Soft Organ | Keys | mod-routes | +0.0 dB |
+| Glass Organ Tones | Keys | reverb.mix 0->25 mod-routes | +0.8 dB |
+| Harpsichord Bar | Keys | mod-routes | +0.0 dB |
+| Just Intonation Keys | Keys | mod-routes | +0.0 dB |
+| Lo-Fi Rhodes | Keys | chorus.mix 0->50 mod-routes | -2.3 dB |
+| Muted Honky Tonk | Keys | mod-routes | -0.1 dB |
+| Rotary Rock Organ | Keys | chorus.mix 0->70, distortion.on 0->1, distortion.drive 0->7.5 mod-routes | -3.4 dB |
+| Utility Width Keys | Keys | mod-routes | +0.0 dB |
+| Vibraphone Bars | Keys | reverb.mix 0->25 mod-routes | -2.4 dB |
+| Vintage Electric Tine | Keys | osc2.level 50->40, chorus.mix 0->50 mod-routes | -1.8 dB |
+| Warm Toy Piano | Keys | mod-routes | +0.0 dB |
+| Bell Chime Lead | Lead | delay.mix 0->30 mod-routes | -0.2 dB |
+| Chorused Saw Solo | Lead | chorus.on 0->1, chorus.mix 50->75, reverb.mix 0->25 mod-routes | -2.5 dB |
+| Cosmic Drift Lead | Lead | reverb.mix 0->50 mod-routes | +0.8 dB |
+| Diode Bite Lead | Lead | mod-routes | +0.0 dB |
+| Dirty Peak Lead | Lead | mod-routes | +0.0 dB |
+| Dual Octave Hero | Lead | delay.mix 0->30 mod-routes | -0.4 dB |
+| FM Digital Lead | Lead | mod-routes | +0.0 dB |
+| Harmonic Shimmer Lead | Lead | chorus.on 0->1, delay.mix 0->30 mod-routes | -2.0 dB |
+| Hyper Saw Lead | Lead | delay.mix 0->30, reverb.mix 0->25 mod-routes | +0.1 dB |
+| Laser Beam Lead | Lead | delay.mix 0->30 mod-routes | -0.6 dB |
+| Metallic Edge Lead | Lead | distortion.on 0->1, distortion.drive 0->10 mod-routes | -6.6 dB |
+| MPE Pressure Lead | Lead | mod-routes | +0.0 dB |
+| Phaser Sweep Lead | Lead | reverb.mix 0->25 mod-routes | +0.6 dB |
+| Plucked Lead Tone | Lead | mod-routes | +0.0 dB |
+| Pulse Width Mod Lead | Lead | chorus.on 0->1, chorus.mix 50->60 mod-routes | -2.6 dB |
+| Screaming Sync Lead | Lead | distortion.on 0->1, distortion.drive 0->10 mod-routes | -6.1 dB |
+| Solo Square Lead | Lead | master.portamento.time 0->140 mod-routes | -0.1 dB |
+| Staccato Bleep Lead | Lead | mod-routes | +0.0 dB |
+| Tri Soft Solo | Lead | reverb.mix 0->25 mod-routes | +0.5 dB |
+| Twin Warp Lead | Lead | mod-routes | +0.0 dB |
+| Vocaloid Lead | Lead | delay.mix 0->30 mod-routes | -3.0 dB |
+| Warm Vintage Lead | Lead | chorus.on 0->1, chorus.mix 50->40 mod-routes | -1.6 dB |
+| Cathedral Choir | Pad | lfo1.rate 2->0.4, reverb.mix 0->70 mod-routes | +4.3 dB |
+| Comb Reso Swell | Pad | lfo1.rate 2->0.4 mod-routes | -0.9 dB |
+| Dark Cinema Drone | Pad | lfo1.rate 2->0.4, reverb.mix 0->25 mod-routes | +0.1 dB |
+| Deep Sea Ambient | Pad | lfo1.rate 2->0.4, reverb.mix 0->25 mod-routes | +3.2 dB |
+| Ethereal Glass | Pad | lfo1.rate 2->0.4, reverb.mix 0->65 mod-routes | +2.3 dB |
+| Frozen Aurora | Pad | lfo1.rate 2->0.4, delay.on 0->1, reverb.mix 0->25 mod-routes | +1.1 dB |
+| Gentle Flute Pad | Pad | noise.level 25->12, lfo1.rate 2->0.4 mod-routes | +0.1 dB |
+| Golden Dawn Pad | Pad | lfo1.rate 2->0.4, reverb.mix 0->25 mod-routes | +0.9 dB |
+| Harmonic Cloud | Pad | lfo1.rate 2->0.4, reverb.mix 0->25 mod-routes | +0.3 dB |
+| Hyper Dimension Pad | Pad | lfo1.rate 2->0.4 mod-routes | +0.0 dB |
+| Infinite Horizon | Pad | lfo1.rate 2->0.4, reverb.mix 0->60 mod-routes | +3.4 dB |
+| Lush Analog Pad | Pad | lfo1.rate 2->0.4, chorus.mix 0->50, reverb.mix 0->25 mod-routes | -1.2 dB |
+| Odd Harmonics Pad | Pad | lfo1.rate 2->0.4, chorus.mix 0->50 mod-routes | -1.4 dB |
+| Radiant Pulse Pad | Pad | chorus.mix 0->50 mod-routes | -1.8 dB |
+| Slow Motion Waves | Pad | lfo1.rate 2->0.4 mod-routes | -0.6 dB |
+| Space Odyssey Pad | Pad | lfo1.rate 2->0.4, delay.on 0->1, reverb.mix 0->25 mod-routes | +1.1 dB |
+| Starlight Shimmer | Pad | lfo1.rate 2->0.4, reverb.mix 0->25 mod-routes | +0.2 dB |
+| Subtle Tape Drift | Pad | chorus.mix 0->50 mod-routes | -2.0 dB |
+| Tri-Band Split Texture | Pad | lfo1.rate 2->0.4 mod-routes | -0.1 dB |
+| Velvet Strings | Pad | lfo1.rate 2->0.4, chorus.mix 0->50 mod-routes | -2.6 dB |
+| Vintage Brass Pad | Pad | lfo1.rate 2->0.4, chorus.mix 0->50 mod-routes | -2.1 dB |
+| Vowel Choir Pad | Pad | lfo1.rate 2->0.4, reverb.mix 0->25 mod-routes | +0.9 dB |
+| Bell Mallet Pluck | Pluck | delay.mix 0->30 | +0.2 dB |
+| Chime Drop | Pluck | reverb.mix 0->25 | +0.6 dB |
+| Electric Mute Pluck | Pluck | distortion.on 0->1, distortion.drive 0->10 | -3.0 dB |
+| Harp Drops | Pluck | delay.mix 0->30, reverb.mix 0->25 | +0.7 dB |
+| Trance Short Pluck | Pluck | delay.mix 0->30 | +0.0 dB |
