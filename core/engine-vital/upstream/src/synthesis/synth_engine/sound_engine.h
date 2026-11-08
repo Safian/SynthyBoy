@@ -57,6 +57,7 @@ namespace sbvital {
       mono_float getLastActiveNote() const;
 
       void setTuning(const Tuning* tuning);
+      void setOscMapping(int osc, int key_low, int key_high, int vel_low, int vel_high, bool fold);
       void setNoteTable(const mono_float* table);
       void retuneVoices(const mono_float* table);
       void setNotePitchBend(int note, int channel, mono_float semitones);
@@ -64,6 +65,7 @@ namespace sbvital {
       void setNoteSlide(int note, int channel, mono_float slide);
       void setChannelPitchBend(int channel, mono_float semitones);
       SynthVoiceHandler* voiceHandler();
+      void correctLfoToTime(int index, double seconds);
 
       void allSoundsOff() override;
       void allNotesOff(int sample) override;

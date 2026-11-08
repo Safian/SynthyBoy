@@ -36,6 +36,8 @@ namespace sbvital {
         kStereoPhase,
         kDelay,
         kNoteCount,
+        kDirection,  // SynthyBoy: 0 forward, 1 reverse, 2 ping pong (the shape is read backwards / forth and back within one cycle)
+        kHostLock,   // SynthyBoy: 1 = the phase is anchored to the sync clock (the host transport) on every block, not only at a note on
         kNumInputs
       };
 
@@ -78,8 +80,19 @@ namespace sbvital {
       static constexpr float kHalfLifeRatio = 0.2f;
       static constexpr float kMinHalfLife = 0.0002f;
 
+      // SynthyBoy: the direction of the cycle. Applied to the position in the shape, not to the running phase, so a change
+      // of direction never jumps the phase itself.
+      force_inline poly_float applyDirection(poly_float phase) const {
+        if (direction_ == 1)
+          return poly_float(1.0f) - phase;
+        if (direction_ == 2)
+          return poly_float(1.0f) - poly_float::abs(phase * 2.0f - 1.0f);
+        return phase;
+      }
+
       force_inline poly_float getValueAtPhase(mono_float* buffer, poly_float resolution,
                                               poly_int max_index, poly_float phase) {
+        phase = applyDirection(phase);
         poly_float boost = utils::clamp(phase * resolution, 0.0f, resolution);
         poly_int indices = utils::clamp(utils::toInt(boost), 0, max_index);
         poly_float t = boost - utils::toFloat(indices);
@@ -126,6 +139,7 @@ namespace sbvital {
       void processAudioRate(int num_samples);
 
       bool was_control_rate_;
+      int direction_ = 0;
       LfoState control_rate_state_;
       LfoState audio_rate_state_;
 

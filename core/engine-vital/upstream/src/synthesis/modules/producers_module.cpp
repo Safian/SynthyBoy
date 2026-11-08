@@ -43,7 +43,10 @@ namespace sbvital {
 
       oscillators_[i]->useInput(input(kReset), OscillatorModule::kReset);
       oscillators_[i]->useInput(input(kRetrigger), OscillatorModule::kRetrigger);
+      // SynthyBoy: the key fold offset of the oscillator mapping (0 unless it folds the note) and the "warp" switch
+      map_warp_[i] = createBaseControl("osc_" + number + "_map_warp");
       oscillators_[i]->useInput(input(kMidi), OscillatorModule::kMidi);
+      oscillators_[i]->useInput(input(kFold1 + i), OscillatorModule::kFold);
       oscillators_[i]->useInput(input(kActiveVoices), OscillatorModule::kActiveVoices);
     }
 
@@ -59,6 +62,25 @@ namespace sbvital {
       oscillators_[i]->oscillator()->setFirstOscillatorOutput(oscillators_[index1]->output(OscillatorModule::kRaw));
       oscillators_[i]->oscillator()->setSecondOscillatorOutput(oscillators_[index2]->output(OscillatorModule::kRaw));
       oscillators_[i]->oscillator()->setSampleOutput(sampler_->output(SampleModule::kRaw));
+    }
+  }
+
+  // SynthyBoy: silences the voices whose note or velocity is outside the oscillator's mapping. The levelled output always; the raw
+  // output (what the other oscillators use as FM / RM / sync source) too, unless "warp" keeps the oscillator running silently.
+  void ProducersModule::applyMute(int i, int num_samples) {
+    poly_mask muted = poly_float::greaterThan(input(kMute1 + i)->at(0), 0.5f);
+    if (!muted.anyMask())
+      return;
+
+    poly_float scale = utils::maskLoad(poly_float(1.0f), poly_float(0.0f), muted);
+    poly_float* levelled = oscillators_[i]->output(OscillatorModule::kLevelled)->buffer;
+    for (int s = 0; s < num_samples; ++s)
+      levelled[s] *= scale;
+
+    if (map_warp_[i] == nullptr || map_warp_[i]->value() < 0.5f) {
+      poly_float* raw = oscillators_[i]->output(OscillatorModule::kRaw)->buffer;
+      for (int s = 0; s < num_samples; ++s)
+        raw[s] *= scale;
     }
   }
 
@@ -86,6 +108,7 @@ namespace sbvital {
         num_processed++;
         processed[index] = true;
         getLocalProcessor(module)->process(num_samples);
+        applyMute(index, num_samples);
       }
       index = (index + 1) % kNumOscillators;
     }
@@ -94,8 +117,10 @@ namespace sbvital {
     // above and were not processed at all: their output buffers kept whatever they held (uninitialised memory at the start, NaN in
     // the filters behind them). They are processed now, with the other oscillator's output of the previous block (docs/UPSTREAM.md).
     for (int i = 0; i < kNumOscillators; ++i)
-      if (!processed[i])
+      if (!processed[i]) {
         getLocalProcessor(oscillators_[i])->process(num_samples);
+        applyMute(i, num_samples);
+      }
 
     poly_float* filter1_output = output(kToFilter1)->buffer;
     poly_float* filter2_output = output(kToFilter2)->buffer;

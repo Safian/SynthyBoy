@@ -51,6 +51,7 @@ namespace sbvital {
       void noteOff(int note, mono_float lift, int sample, int channel) override;
       bool shouldAccumulate(Output* output) override;
       void correctToTime(double seconds) override;
+      void correctLfoToTime(int index, double seconds); // SynthyBoy: the sync clock of one LFO (host mode)
       void disableUnnecessaryModSources();
       void disableModSource(const std::string& source);
 

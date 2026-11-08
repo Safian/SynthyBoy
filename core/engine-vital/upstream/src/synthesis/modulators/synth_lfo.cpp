@@ -36,6 +36,7 @@ namespace sbvital {
 
   force_inline void SynthLfo::processTrigger() {
     int sync_type = input(kSyncType)->at(0)[0];
+    direction_ = static_cast<int>(utils::clamp(std::round(input(kDirection)->at(0)[0]), 0.0f, 2.0f));
     poly_mask reset_mask = getResetMask(kNoteTrigger);
     poly_mask release_mask = getReleaseMask();
     held_mask_ = (held_mask_ | reset_mask) & ~release_mask;
@@ -67,6 +68,13 @@ namespace sbvital {
         poly_float offset_start = frequency * sample_offset * (1.0f / getSampleRate());
         audio_rate_state_.offset = utils::maskLoad(audio_rate_state_.offset, -offset_start, reset_mask);
       }
+    }
+
+    // SynthyBoy, host mode: the phase of a synced LFO follows the sync clock (the host's song position) on every block
+    if (sync_type == kSync && input(kHostLock)->at(0)[0] > 0.5f) {
+      poly_float locked = utils::getCycleOffsetFromSeconds(*sync_seconds_, input(kFrequency)->at(0));
+      control_rate_state_.offset = locked;
+      audio_rate_state_.offset = locked;
     }
   }
 

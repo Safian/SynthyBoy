@@ -58,6 +58,7 @@ namespace sbvital {
         kSampleAndHold,
         kSinInterpolate,
         kLorenzAttractor,
+        kRosslerAttractor, // SynthyBoy
         kNumStyles
       };
 
@@ -68,6 +69,7 @@ namespace sbvital {
       void process(RandomState* state, int num_samples);
       void processSampleAndHold(RandomState* state, int num_samples);
       void processLorenzAttractor(RandomState* state, int num_samples);
+      void processRosslerAttractor(RandomState* state, int num_samples);
       void correctToTime(double seconds);
 
     protected:

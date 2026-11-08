@@ -74,11 +74,39 @@ routers are grown at `prepare()`, and a slot whose wiring would close a loop (it
 An amount of 100 % is a full sweep of the destination's range **in the engine's own scale** (cutoffs in semitones, times through the
 engine's curve, ...), documented in docs/PARAMETERS.md.
 
-### Events
+### Events (core/include/synthyboy/events.h)
 
-`NoteOn` (velocity 0..1; a still-ringing note of the same key is released first, as in the own engine), `NoteOff`, `PitchBend` (per
+`SustainPedal` (per channel or all channels: the engine's sustain), `NoteOff` carries the release velocity (the "Lift" source),
+`NoteExpression` (tuning in semitones = per-note pitch, pressure = "Poly Aftertouch", brightness = "Slide"; addressed by host note id or by
+channel and key, key -1 = every note of the channel). `IEngine::setTransport` feeds the tempo (`setBpm`, the beat units of the envelopes and the
+tempo sync of everything else) and the song position (LFO host mode). Expressions are applied whatever `master.mpe.on` says (they are explicit
+data of the host); `master.mpe.on` decides what the MIDI channel messages mean (below). `NoteOn` (velocity 0..1; a still-ringing note of the same key is released first, as in the own engine), `NoteOff`, `PitchBend` (per
 channel, +-`master.bend_range` semitones; also feeds the "Pitch Wheel" source), `ModWheel` (per channel, the "Mod Wheel" source),
 `Aftertouch` (channel pressure, the "Aftertouch" source), `AllNotesOff` (all channels, or one channel).
+
+## State version 3 (docs/ui-design/13-new-keys.md WP1 to WP3, report: docs/ui-design/WP123-REPORT.md)
+
+`capabilities ()` reports `kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions |
+kCapEnvBeats | kCapCurves | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping`. Each bit has a test in
+`tests/test_wp123.cpp` (or `core/tests/test_events.cpp`) that renders the key off and on and asserts the audible difference.
+
+| Area | How it is done |
+|------|----------------|
+| Macros 5-8, LFO 9-10 | `kNumMacros` 8, `kNumLfos` 10 in the imported constants; bindings and sources like 1-4 / 1-8 |
+| Sources lift, slide, oct note, poly aftertouch | the engine's own outputs `lift`, `slide`, `note_in_octave`; `poly_aftertouch` is a new per-voice output (so `aftertouch` stays channel pressure) |
+| Aux source | `ModulationConnectionProcessor::kAuxInput`: `out = curve (src) * amount * aux * (aux_output / 100)`; the engine's sources are 0..1 at the output, so the "bipolar source maps to (x + 1) / 2" rule of A6 is the identity here. A loop-closing aux source is left unplugged like the main source |
+| LFO direction | the position in the shape is read forward, reversed or ping pong (`1 - |2p - 1|`) |
+| LFO mono | the engine's Sync mode with the clock of the running engine (all voices and notes share the phase); only for the Retrigger / Sync trigger types, the envelope and loop modes are note bound and ignore it |
+| LFO host | the Sync mode with the clock = the host's song position in seconds (`beats * 60 / bpm`), re-anchored every block (`kHostLock`); a stopped transport runs the engine clock (the LFO runs free). Free (Hz) mode anchors to seconds since the transport start (ASSUMPTION A4) |
+| Rossler | style 4 of the random LFO, RK4 per voice and stereo lane (same equations, constants and scaling as `core/shapes`) |
+| Envelope beats | `envN.attack_beats` etc. write the same engine controls as the millisecond keys, `envN.units` picks which of the two is live (`Binding::gateParam`); the seconds come from the tempo of the current block, so a tempo change moves a running stage (not frozen at the stage start). The inactive key is also inert as a modulation destination |
+| Envelope legato inverted | `retrigger_always` output: an envelope with the switch on retriggers on legato note ons |
+| Velocity / note curves | the table of `content.curves` is the remap table of every matrix slot whose source is velocity or note (identity when absent); `curve.*.legato` glides the source on legato notes over `master.portamento.time`. The curve is a property of the source in the matrix, the amplitude's own velocity tracking is not curved |
+| Custom LFO shapes | `content.lfo_shapes` -> `shapes::ShapeData` -> baked into the LFO's 2048 point table (no allocation). Point modulation: y' = y + amount * source, x' = x + amount * source between the neighbours; sources: macros (as the matrix sees them), mod wheel, pitch wheel (-1..1), channel pressure. A per-voice source has no meaning for a table shared by all voices and is ignored (docs/ui-design/WP123-REPORT.md, BLOCKED) |
+| Key / Scale | `conform[128]` between the event and the voice allocator; a note off finds the note that was started; Mark only and Chromatic are the identity |
+| Tuning | `VoiceHandler::setNoteTable`: the tuned MIDI note of every key (12-TET, Pythagorean, just, the user `.scl/.kbm`; an unmapped key does not sound); A4 is an offset of the transposition control slewed within 20 ms; MTS-ESP: `IEngine::setTuningSource`, queried per block (retunes sounding notes through `Voice::tuning_delta`) or at note on only; no/disconnected master = the scale |
+| MPE | `master.mpe.on`: manager channel (0) bend with `master.bend_range` moves every note, a member channel's bend with `master.mpe.bend_range` its own; member channel pressure = that note's poly aftertouch (and still channel pressure); CC 74 / `Brightness` = slide |
+| Oscillator mapping | `VoiceHandler` computes mute and fold per voice from key and velocity ranges (low > high swaps them); `ProducersModule` zeroes the muted levelled output (and the raw output, the FM / RM source of the others, unless `key_warp`); the fold is added to the note inside `SynthOscillator` |
 
 ## Behaviour that differs from the own engine (measured, see core/tests)
 

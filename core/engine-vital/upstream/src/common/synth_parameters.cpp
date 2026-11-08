@@ -377,6 +377,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Release Power", nullptr },
     { "sustain", 0x000000, 0.0, 1.0, 1.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Sustain", nullptr },
+    { "legato_inverted", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Legato Inverted", strings::kOffOnNames },
   };
 
   const ValueDetails ValueDetailsLookup::lfo_parameter_list[] = {
@@ -404,6 +406,10 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Transpose", nullptr },
     { "keytrack_tune", 0x000704, -1.0, 1.0, 0.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "", "Tune", nullptr },
+    { "direction", 0x000000, 0.0, 2.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Direction", nullptr },
+    { "host_lock", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Host Lock", strings::kOffOnNames },
   };
 
   const ValueDetails ValueDetailsLookup::random_lfo_parameter_list[] = {
@@ -509,6 +515,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Phase", nullptr },
     { "distortion_phase", 0x000000, 0.0, 1.0, 0.5, 0.0, 360.0,
       ValueDetails::kLinear, false, "", "Distortion Phase", nullptr },
+    { "map_warp", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Map Warp", strings::kOffOnNames },
     { "random_phase", 0x000000, 0.0, 1.0, 1.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Phase Randomization", nullptr },
     { "distortion_type", 0x000000, 0.0, SynthOscillator::kNumDistortionTypes - 1, 0.0, 0.0, 1.0,

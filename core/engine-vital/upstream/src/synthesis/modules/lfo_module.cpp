@@ -55,7 +55,10 @@ namespace sbvital {
     lfo_->plug(fade, SynthLfo::kFade);
     lfo_->plug(smooth_time, SynthLfo::kSmoothTime);
     lfo_->plug(delay, SynthLfo::kDelay);
+    lfo_->plug(createBaseControl(prefix_ + "_direction"), SynthLfo::kDirection);
+    lfo_->plug(createBaseControl(prefix_ + "_host_lock"), SynthLfo::kHostLock);
   }
+
 
   void LfoModule::correctToTime(double seconds) {
     lfo_->correctToTime(seconds);

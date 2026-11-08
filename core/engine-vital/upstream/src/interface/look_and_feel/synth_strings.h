@@ -228,6 +228,7 @@ namespace strings {
     "Sample & Hold",
     "Sine Interpolate",
     "Lorenz Attractor",
+    "Rossler Attractor",
   };
 
   const std::string kPaintPatternNames[] = {

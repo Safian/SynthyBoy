@@ -368,6 +368,7 @@ namespace sbvital {
 
       force_inline Output* voice_event() { return &voice_event_; }
       force_inline Output* retrigger() { return &retrigger_; }
+      force_inline Output* retrigger_always() { return &retrigger_always_; }
       force_inline Output* reset() { return &reset_; }
       force_inline Output* note() { return &note_; }
       force_inline Output* last_note() { return &last_note_; }
@@ -379,6 +380,15 @@ namespace sbvital {
       force_inline Output* lift() { return &lift_; }
       force_inline Output* aftertouch() { return &aftertouch_; }
       force_inline Output* slide() { return &slide_; }
+      // SynthyBoy, oscillator mapping: per oscillator the note range / velocity range a note must be in, the octave fold, and the
+      // per voice outputs derived from them (1 = silenced for that note, semitones the note is folded by). Set between two process() calls.
+      struct OscMapping {
+        int key_low = 0, key_high = 127, vel_low = 1, vel_high = 127;
+        bool fold = false;
+      };
+      void setOscMapping(int osc, const OscMapping& mapping) { osc_mapping_[osc] = mapping; }
+      force_inline Output* osc_mute(int osc) { return &osc_mute_[osc]; }
+      force_inline Output* osc_fold(int osc) { return &osc_fold_[osc]; }
       force_inline Output* poly_aftertouch() { return &poly_aftertouch_; }
       force_inline Output* active_mask() { return &active_mask_; }
       force_inline Output* pitch_wheel() { return &pitch_wheel_; }
@@ -469,6 +479,7 @@ namespace sbvital {
 
       cr::Output voice_event_;
       cr::Output retrigger_;
+      cr::Output retrigger_always_; // SynthyBoy: like retrigger_ but also on the legato note ons it leaves out
       cr::Output reset_;
       cr::Output note_;
       cr::Output last_note_;
@@ -480,6 +491,9 @@ namespace sbvital {
       cr::Output lift_;
       cr::Output aftertouch_;
       cr::Output slide_;
+      OscMapping osc_mapping_[3];
+      cr::Output osc_mute_[3];
+      cr::Output osc_fold_[3];
       cr::Output poly_aftertouch_;
       cr::Output active_mask_;
       cr::Output mod_wheel_;

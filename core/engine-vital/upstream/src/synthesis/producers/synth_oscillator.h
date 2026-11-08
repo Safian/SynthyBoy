@@ -89,6 +89,7 @@ namespace sbvital {
         kActiveVoices,
         kReset,
         kRetrigger,
+        kFoldNote,  // SynthyBoy: semitones added to the note this oscillator plays (key fold of the oscillator mapping), 0 unplugged
         kNumInputs
       };
 

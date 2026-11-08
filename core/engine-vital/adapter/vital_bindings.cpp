@@ -65,6 +65,17 @@ struct Builder
                 binding.maxIndex = maxIndex;
     }
     void hzNote (const std::string& key, const std::string& control) { add (key, control, Conv::noteFromHz); }
+    /** The binding of `key` writes its control only while the choice `gateKey` equals `value`. */
+    void gate (const std::string& key, const std::string& gateKey, int value)
+    {
+        const size_t param = indexOf (key);
+        for (auto& binding : out)
+            if (binding.param == param)
+            {
+                binding.gateParam = static_cast<int> (indexOf (gateKey));
+                binding.gateValue = value;
+            }
+    }
 };
 
 std::vector<Binding> build()
@@ -158,15 +169,24 @@ std::vector<Binding> build()
         b.add (k + "decay", c + "decay", Conv::quarticMs);
         b.percent (k + "sustain", c + "sustain");
         b.add (k + "release", c + "release", Conv::quarticMs);
+        // beat units (state version 3): the same engine controls, written from the beat keys while envN.units is Beats
+        for (const char* stage : { "delay", "attack", "hold", "decay", "release" })
+        {
+            b.add (k + stage + "_beats", c + stage, Conv::quarticBeats);
+            b.gate (k + stage, k + "units", 0);
+            b.gate (k + stage + "_beats", k + "units", 1);
+        }
+        b.choice (k + "legato_inverted", c + "legato_inverted");
         b.add (k + "attack_curve", c + "attack_power", Conv::linear);
         b.add (k + "decay_curve", c + "decay_power", Conv::linear);
         b.add (k + "release_curve", c + "release_power", Conv::linear);
     }
 
     // --- LFOs ------------------------------------------------------------------------------------------------------
-    for (int n = 1; n <= 8; ++n)
+    for (int n = 1; n <= 10; ++n)
     {
         const std::string k = "lfo" + std::to_string (n) + ".", c = "lfo_" + std::to_string (n) + "_";
+        b.choice (k + "direction", c + "direction");
         b.add (k + "rate", c + "frequency", Conv::log2Hz);
         b.choice (k + "sync", c + "sync");
         b.choice (k + "division", c + "tempo");
@@ -185,7 +205,6 @@ std::vector<Binding> build()
         const std::string k = "rlfo" + std::to_string (n) + ".", c = "random_" + std::to_string (n) + "_";
         b.choice (k + "style", c + "style");
         b.add (k + "rate", c + "frequency", Conv::log2Hz);
-        b.limit (k + "style", 3); // 4 "Rossler attractor" was appended in state version 3
         b.choice (k + "sync", c + "sync");
         b.choice (k + "division", c + "tempo");
         b.choice (k + "sync_type", c + "sync_type");
@@ -193,7 +212,7 @@ std::vector<Binding> build()
         b.add (k + "keytrack_transpose", c + "keytrack_transpose", Conv::linear);
         b.percent (k + "keytrack_tune", c + "keytrack_tune");
     }
-    for (int n = 1; n <= 4; ++n)
+    for (int n = 1; n <= 8; ++n)
         b.percent ("macro." + std::to_string (n), "macro_control_" + std::to_string (n));
 
     // --- modulation slots (source and destination are special) ---------------------------------------------------------
@@ -325,14 +344,21 @@ bool isSpecialParam (size_t paramIndex)
         const size_t n = std::strlen (key), m = std::strlen (suffix);
         return n >= m && std::strcmp (key + n - m, suffix) == 0;
     };
-    return endsWith (".wavetable") || endsWith (".shape") || std::strcmp (key, "filter.routing") == 0 || std::strncmp (key, "fx.order.", 9) == 0
-        || ((endsWith (".source") || endsWith (".destination")) && key[0] == 'm' && key[1] == 'o') || std::strcmp (key, "master.bend_range") == 0;
+    const auto startsWith = [&] (const char* prefix) { return std::strncmp (key, prefix, std::strlen (prefix)) == 0; };
+    return endsWith (".wavetable") || endsWith (".shape") || std::strcmp (key, "filter.routing") == 0
+        || (std::strncmp (key, "fx.order.", 9) == 0 && std::atoi (key + 9) <= kNumLegacyFxSlots) // fx.order.10 .. 16: not implemented
+        || ((endsWith (".source") || endsWith (".destination")) && key[0] == 'm' && key[1] == 'o') || std::strcmp (key, "master.bend_range") == 0
+        // state version 3: handled by the adapter (vital_engine.cpp), not one control each
+        || (startsWith ("env") && endsWith (".units")) || (startsWith ("lfo") && (endsWith (".mono") || endsWith (".host")))
+        || (startsWith ("mod") && std::strstr (key, ".aux_") != nullptr) || startsWith ("curve.") || startsWith ("master.scale.")
+        || startsWith ("master.tuning.") || startsWith ("master.mpe.") || (startsWith ("osc") && std::strstr (key, ".map.") != nullptr);
 }
 
-double convertParam (const Binding& binding, double plain, double sampleRate)
+double convertParam (const Binding& binding, double plain, double sampleRate, double bpm)
 {
     switch (binding.conv)
     {
+        case Conv::quarticBeats: return std::pow (std::max (0.0, plain) * 60.0 / std::max (bpm, 1.0), 0.25);
         case Conv::linear:     return plain * binding.a + binding.b;
         case Conv::sqrtScaled: return std::sqrt (std::max (0.0, plain * binding.a));
         case Conv::quarticMs:  return std::pow (std::max (0.0, plain) * 0.001, 0.25);

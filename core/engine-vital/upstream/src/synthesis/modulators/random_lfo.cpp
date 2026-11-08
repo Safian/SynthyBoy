@@ -136,6 +136,10 @@ namespace sbvital {
       processLorenzAttractor(state, num_samples);
       return;
     }
+    if (random_type == kRosslerAttractor) {
+      processRosslerAttractor(state, num_samples);
+      return;
+    }
     if (random_type == kSampleAndHold) {
       processSampleAndHold(state, num_samples);
       return;
@@ -253,6 +257,72 @@ namespace sbvital {
     state->state3 = state3;
 
     output()->trigger_value = state->state1 * kLorenzScale + 0.5f;
+  }
+
+  // SynthyBoy: the Rossler attractor (a = b = 0.2, c = 5.7), 4th order Runge-Kutta, the same system, constants, time scale (one turn of
+  // the orbit about 6 time units) and output normalisation as synthyboy::shapes::RosslerAttractor (core/shapes), per voice and stereo
+  // lane. The output is x / 12 mapped to 0..1.
+  void RandomLfo::processRosslerAttractor(RandomState* state, int num_samples) {
+    static constexpr float kA = 0.2f, kB = 0.2f, kC = 5.7f;
+    static constexpr float kRosslerInitialX = -6.0f;
+
+    bool mono = input(kStereo)->at(0)[0] == 0.0f;
+    poly_float x = state->state1, y = state->state2, z = state->state3;
+
+    poly_mask reset_mask = getResetMask(kReset);
+    if (reset_mask.anyMask() && input(kSync)->at(0)[0] == 0.0f) {
+      poly_float jitter = mono ? random_generator_.polyVoiceNext() : random_generator_.polyNext();
+      x = utils::maskLoad(x, jitter * 0.5f + kRosslerInitialX, reset_mask);
+      y = utils::maskLoad(y, 0.0f, reset_mask);
+      z = utils::maskLoad(z, 0.0f, reset_mask);
+    }
+    // a state that was never started (the constructor's 0.1, 0, 0 sits on the unstable fixed point side): begin on the orbit
+    poly_mask unstarted = poly_float::equal(z, 0.0f) & poly_float::equal(y, 0.0f) & poly_float::equal(x, 0.1f);
+    x = utils::maskLoad(x, kRosslerInitialX, unstarted);
+
+    poly_float frequency = input(kFrequency)->at(0);
+    poly_float h = utils::clamp(frequency * (6.0f / getSampleRate()), 0.00001f, 0.05f);
+    poly_float* dest = output()->buffer;
+    int count = isControlRate() ? 1 : num_samples;
+    int steps = isControlRate() ? num_samples : 1;
+
+    for (int i = 0; i < count; ++i) {
+      for (int s = 0; s < steps; ++s) {
+        poly_float k1x = -y - z, k1y = x + y * kA, k1z = (x - kC) * z + kB;
+        poly_float x2 = x + k1x * h * 0.5f, y2 = y + k1y * h * 0.5f, z2 = z + k1z * h * 0.5f;
+        poly_float k2x = -y2 - z2, k2y = x2 + y2 * kA, k2z = (x2 - kC) * z2 + kB;
+        poly_float x3 = x + k2x * h * 0.5f, y3 = y + k2y * h * 0.5f, z3 = z + k2z * h * 0.5f;
+        poly_float k3x = -y3 - z3, k3y = x3 + y3 * kA, k3z = (x3 - kC) * z3 + kB;
+        poly_float x4 = x + k3x * h, y4 = y + k3y * h, z4 = z + k3z * h;
+        poly_float k4x = -y4 - z4, k4y = x4 + y4 * kA, k4z = (x4 - kC) * z4 + kB;
+        x += (k1x + k2x * 2.0f + k3x * 2.0f + k4x) * (h * (1.0f / 6.0f));
+        y += (k1y + k2y * 2.0f + k3y * 2.0f + k4y) * (h * (1.0f / 6.0f));
+        z += (k1z + k2z * 2.0f + k3z * 2.0f + k4z) * (h * (1.0f / 6.0f));
+
+        // numerical safety (as the package): a diverged state restarts on the orbit
+        poly_mask bad = poly_float::greaterThan(poly_float::abs(x), 50.0f) | poly_float::greaterThan(poly_float::abs(y), 50.0f) |
+                        poly_float::lessThan(z, -10.0f) | poly_float::greaterThan(z, 100.0f);
+        x = utils::maskLoad(x, kRosslerInitialX, bad);
+        y = utils::maskLoad(y, 0.0f, bad);
+        z = utils::maskLoad(z, 0.0f, bad);
+      }
+      dest[i] = utils::clamp(x * (1.0f / 24.0f) + 0.5f, 0.0f, 1.0f);
+    }
+
+    if (mono) {
+      // both stereo lanes of a voice follow the left lane
+      x = x & constants::kLeftMask;
+      x += utils::swapStereo(x);
+      y = y & constants::kLeftMask;
+      y += utils::swapStereo(y);
+      z = z & constants::kLeftMask;
+      z += utils::swapStereo(z);
+    }
+
+    state->state1 = x;
+    state->state2 = y;
+    state->state3 = z;
+    output()->trigger_value = utils::clamp(x * (1.0f / 24.0f) + 0.5f, 0.0f, 1.0f);
   }
 
   void RandomLfo::correctToTime(double seconds) {

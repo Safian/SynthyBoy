@@ -27,6 +27,7 @@ namespace sbvital {
     public:
       enum {
         kTrigger,
+        kTriggerAlways,
         kNumInputs
       };
     

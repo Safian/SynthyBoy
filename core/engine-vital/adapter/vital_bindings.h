@@ -24,7 +24,9 @@ enum class Conv
     noteFromHz,   // 12 * log2 (plain / 8.1757989): a frequency in Hz as a MIDI note number (the engine's cutoff scale)
     index,        // plain + b: a choice, offset by b (the list of the control starts at b)
     indexMap,     // map[plain]: a choice whose engine index differs
-    volumeDb      // dB -> the engine's master volume (shown dB = sqrt (control) - 80), -60 dB and below is silence
+    volumeDb,     // dB -> the engine's master volume (shown dB = sqrt (control) - 80), -60 dB and below is silence
+    quarticBeats  // (plain * 60 / bpm) ^ (1/4): an envelope time in beats at the current tempo (the engine's seconds = control ^ 4); appended after the
+                  // version 2 converters: vital-import compares the numbers
 };
 
 /** What the quality tier may cap or bypass in the converted value. */
@@ -45,6 +47,8 @@ struct Binding
     const int* map = nullptr; // Conv::indexMap
     Cap cap = Cap::none;
     int capArg = 0;
+    int gateParam = -1;       // the binding writes its control only while parameter gateParam (a choice) equals gateValue: the millisecond and
+    int gateValue = 0;        // the beat keys of an envelope time share one engine control (envN.units picks which one is live)
     int maxIndex = -1;        // Conv::index: the highest choice the engine implements (-1: no limit); choices appended to the list in
                               // state version 3 (a new filter model, ...) are stored but act like the last implemented one
 };
@@ -54,11 +58,13 @@ struct Binding
 const std::vector<Binding>& vitalBindings();
 
 /** Parameters the adapter handles itself instead of through one control: the oscillator wavetables, the LFO shapes, the filter
-    routing, the order of the effects, the source and destination of the modulation slots, the pitch bend range. */
+    routing, the order of the effects, the source and destination of the modulation slots, the pitch bend range; of state version 3
+    the envelope units, the LFO mono / host switches, the aux keys of the slots, the curves, the scale, tuning and MPE keys and the
+    oscillator mapping. */
 bool isSpecialParam (size_t paramIndex);
 
 /** The raw (not clamped) value of the control for a plain value. sampleRate limits the cutoffs of the filters. */
-double convertParam (const Binding& binding, double plain, double sampleRate);
+double convertParam (const Binding& binding, double plain, double sampleRate, double bpm = 120.0);
 
 /** Order of the effects from the nine choices fx.order.1 .. fx.order.9 (duplicates and out-of-range choices are resolved
     deterministically: a position whose effect is already placed takes the lowest effect that is still free). */

@@ -50,8 +50,26 @@ namespace sbvital {
     SynthModule::init();
   }
 
+  poly_float ModulationConnectionProcessor::computeAuxFactor() const {
+    const Extras& extras = *extras_;
+    if (!extras.aux_active)
+      return 1.0f;
+
+    poly_float a = input(kAuxInput)->source->buffer[0];
+    if (extras.aux_bipolar)
+      a = a * 0.5f + 0.5f;
+    a = utils::clamp(a, 0.0f, 1.0f);
+    if (extras.aux_invert)
+      a = poly_float(1.0f) - a;
+    if (extras.aux_power != 0.0f)
+      a = futils::powerScale(a, poly_float(-extras.aux_power));
+    return a * extras.aux_output;
+  }
+
   void ModulationConnectionProcessor::process(int num_samples) {
     const Output* source = input(kModulationInput)->source;
+    aux_factor_ = computeAuxFactor();
+    block_seconds_ = static_cast<mono_float>(num_samples) / static_cast<mono_float>(getSampleRate());
     poly_float modulation_input = source->trigger_value;
     output(kModulationSource)->buffer[0] = modulation_input;
 
@@ -95,7 +113,7 @@ namespace sbvital {
     poly_float bipolar_offset = -bipolar_->value() * 0.5f;
     poly_float current_amount = modulation_amount_;
     poly_float stereo_scale = poly_float(1.0f) - (constants::kRightOne * 2.0f * stereo_->value());
-    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f) * stereo_scale;
+    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f) * stereo_scale * aux_factor_;
     modulation_amount_ = modulation_amount * (*destination_scale_);
     current_amount = utils::maskLoad(current_amount, modulation_amount_, getResetMask(kReset));
     poly_float delta_amount = (modulation_amount_ - current_amount) * (1.0f / num_samples);
@@ -124,7 +142,7 @@ namespace sbvital {
     poly_float current_amount = modulation_amount_;
     poly_float current_power = power_;
 
-    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f);
+    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f) * aux_factor_;
     modulation_amount_ = modulation_amount * (*destination_scale_);
 
     poly_mask reset_mask = getResetMask(kReset);
@@ -167,7 +185,7 @@ namespace sbvital {
     poly_float current_amount = modulation_amount_;
     poly_float current_power = power_;
 
-    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f);
+    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f) * aux_factor_;
     modulation_amount_ = modulation_amount * (*destination_scale_);
 
     poly_mask reset_mask = getResetMask(kReset);
@@ -215,7 +233,7 @@ namespace sbvital {
     poly_float bipolar_offset = -bipolar_->value() * 0.5f;
     poly_float current_amount = modulation_amount_;
     poly_float stereo_scale = poly_float(1.0f) - (constants::kRightOne * 2.0f * stereo_->value());
-    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f) * stereo_scale;
+    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f) * stereo_scale * aux_factor_;
     modulation_amount_ = modulation_amount * (*destination_scale_);
     current_amount = utils::maskLoad(current_amount, modulation_amount_, getResetMask(kReset));
     poly_float delta_amount = (modulation_amount_ - current_amount) * (1.0f / num_samples);
@@ -252,6 +270,14 @@ namespace sbvital {
 
     poly_float modulation_input = utils::clamp(source->buffer[0], 0.0f, 1.0f);
 
+    if (extras_->glide_active) {
+      // velocity / note curve "legato" (Q17): on a legato note the source glides to its new value over the portamento time; a
+      // fresh voice (reset) starts on its value
+      mono_float rate = 1.0f - std::exp(-block_seconds_ / std::max(extras_->glide_seconds, 0.0001f));
+      glide_value_ = utils::maskLoad(glide_value_ + (modulation_input - glide_value_) * rate, modulation_input, getResetMask(kReset));
+      modulation_input = glide_value_;
+    }
+
     if (!map_generator_->linear()) {
       mono_float* buffer = map_generator_->getCubicInterpolationBuffer();
       mono_float resolution = map_generator_->resolution();
@@ -278,7 +304,7 @@ namespace sbvital {
 
     poly_float power = -input(kModulationPower)->at(0);
     poly_float shifted_modulation = futils::powerScale(modulation_abs, power);
-    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f);
+    poly_float modulation_amount = utils::clamp(input(kModulationAmount)->at(0), -1.0f, 1.0f) * aux_factor_;
     poly_float pre_modulation = modulation_amount * shifted_modulation;
     poly_float raw_modulation = (pre_modulation ^ sign_mask) * polarity_post_scale;
     output(kModulationPreScale)->buffer[0] = raw_modulation;
