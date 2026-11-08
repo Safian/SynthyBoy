@@ -487,6 +487,259 @@ TEST (uig_warp_type_list_is_grouped)
     CHECK_EQ (rig.param ("osc1.warp.type"), 3.0f);
 }
 
+// ---- sample view ----------------------------------------------------------------------------------------------------------------------
+
+namespace
+{
+void giveSample (Rig& rig, int osc, std::vector<float> slices)
+{
+    auto c = rig.proc.content();
+    ContentSample s;
+    s.osc = osc;
+    s.ref.pack = "test";
+    s.ref.file = "loop.wav";
+    s.frames = 44100;
+    s.channels = 1;
+    s.sampleRate = 44100;
+    s.slices = std::move (slices);
+    c.samples.clear();
+    c.samples.push_back (s);
+    CHECK (rig.proc.setContent (c));
+}
+
+std::vector<float> storedSlices (Rig& rig, int osc)
+{
+    for (const auto& s : rig.proc.content().samples)
+        if (s.osc == osc)
+            return s.slices;
+    return {};
+}
+} // namespace
+
+TEST (uig_sample_view_zoom_pan_buttons_pinch_wheel)
+{
+    Rig rig;
+    rig.setParam ("osc1.type", 1.0f);
+    auto* view = rig.oscView (1);
+    CHECK (view != nullptr && view->isSampleType());
+    if (view == nullptr)
+        return;
+    auto& vp = view->sampleViewport();
+    CHECK (vp.isFit());
+    CHECK (view->zoomInButton().isVisible() && view->zoomOutButton().isVisible() && view->fitButton().isVisible());
+    for (auto* b : { &view->zoomInButton(), &view->zoomOutButton(), &view->fitButton() })
+        CHECK (b->getWidth() >= rig.editor->theme().touch() && b->getHeight() >= rig.editor->theme().touch());
+
+    view->zoomInButton().onClick();
+    CHECK (approx (static_cast<float> (vp.span), 0.5f, 1e-4f));
+    view->zoomInButton().onClick();
+    CHECK (approx (static_cast<float> (vp.span), 0.25f, 1e-4f));
+    view->zoomOutButton().onClick();
+    CHECK (approx (static_cast<float> (vp.span), 0.5f, 1e-4f));
+    view->fitButton().onClick();
+    CHECK (vp.isFit());
+
+    // pinch about the right edge keeps that point under the fingers
+    const auto area = view->waveArea();
+    const float x = area.getX() + area.getWidth() * 0.75f;
+    const float before = view->xToSampleNorm (x);
+    TouchTracker::Gesture pinch;
+    pinch.kind = TouchTracker::Kind::pinch;
+    pinch.scale = 4.0f;
+    pinch.centre = { x, area.getCentreY() };
+    view->handleTouchGesture (pinch);
+    CHECK (approx (static_cast<float> (vp.span), 0.25f, 1e-4f));
+    CHECK (approx (view->xToSampleNorm (x), before, 1e-3f));
+
+    // two-finger pan to the left reveals later parts
+    const double startBefore = vp.start;
+    TouchTracker::Gesture pan;
+    pan.kind = TouchTracker::Kind::pan;
+    pan.dx = -static_cast<float> (area.getWidth()) * 0.5f;
+    view->handleTouchGesture (pan);
+    CHECK (vp.start > startBefore);
+
+    // the trackpad pinch and the wheel
+    view->fitSample();
+    view->mouseMagnify (mouse (*view, { x, area.getCentreY() }, { x, area.getCentreY() }, false), 2.0f);
+    CHECK (approx (static_cast<float> (vp.span), 0.5f, 1e-4f));
+    juce::MouseWheelDetails wheel;
+    wheel.deltaX = 0.0f;
+    wheel.deltaY = -0.5f;
+    view->mouseWheelMove (mouse (*view, { x, area.getCentreY() }, { x, area.getCentreY() }, false), wheel);
+    CHECK (vp.start > 0.0); // plain wheel pans
+    view->mouseWheelMove (mouse (*view, { x, area.getCentreY() }, { x, area.getCentreY() }, false, 1,
+                                 juce::ModifierKeys (juce::ModifierKeys::ctrlModifier)), wheel);
+    CHECK (vp.span > 0.5); // ctrl + wheel down zooms out
+}
+
+TEST (uig_sample_view_markers_loupe_loop_pair)
+{
+    Rig rig;
+    rig.setParam ("osc1.type", 1.0f);
+    rig.setParam ("osc1.sample.start", 5.0f);
+    rig.setParam ("osc1.sample.end", 95.0f);
+    rig.setParam ("osc1.sample.loop_start", 30.0f);
+    rig.setParam ("osc1.sample.loop_end", 60.0f);
+    auto* view = rig.oscView (1);
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+    const float midY = view->waveArea().getCentreY();
+
+    // the start marker: drag with the loupe above the finger
+    const float sx = view->sampleNormToX (0.05f);
+    const float target = view->sampleNormToX (0.15f);
+    view->mouseDown (mouse (*view, { sx, midY }, { sx, midY }, false));
+    CHECK (view->isDraggingMarker());
+    view->mouseDrag (mouse (*view, { target, midY }, { sx, midY }, true));
+    CHECK (view->loupeShowing());
+    CHECK (approx (rig.param ("osc1.sample.start"), 15.0f, 0.5f));
+    view->mouseUp (mouse (*view, { target, midY }, { sx, midY }, true));
+    CHECK (! view->loupeShowing());
+    CHECK (! view->isDraggingMarker());
+
+    // the loupe sits above the finger, inside the editor
+    view->mouseDown (mouse (*view, { sx, midY }, { sx, midY }, false)); // the marker is at 15 %: the 44 pt tolerance still catches it
+    view->mouseDrag (mouse (*view, { sx + 5.0f, midY }, { sx, midY }, true));
+    CHECK (view->loupeShowing());
+    const auto finger = rig.editor->getLocalPoint (view, juce::Point<float> (sx + 5.0f, midY).toInt());
+    juce::Rectangle<int> loupeBounds;
+    if (auto* loupeComp = rig.find<Loupe>())
+        loupeBounds = loupeComp->loupeBounds();
+    CHECK (! loupeBounds.isEmpty());
+    CHECK (loupeBounds.getBottom() <= finger.y);
+    CHECK (rig.editor->getLocalBounds().contains (loupeBounds));
+    view->mouseUp (mouse (*view, { sx + 5.0f, midY }, { sx, midY }, true));
+
+    // drag between the loop markers: both move, the length stays
+    const float between = view->sampleNormToX (0.45f);
+    drag (*view, { between, midY }, { between + view->waveArea().getWidth() * 0.2f, midY });
+    CHECK (approx (rig.param ("osc1.sample.loop_start"), 50.0f, 1.0f));
+    CHECK (approx (rig.param ("osc1.sample.loop_end"), 80.0f, 1.0f));
+    // ... and stop at the sample end with the length kept
+    drag (*view, { view->sampleNormToX (0.65f), midY }, { view->waveArea().getRight(), midY });
+    CHECK (approx (rig.param ("osc1.sample.loop_end") - rig.param ("osc1.sample.loop_start"), 30.0f, 1.0f));
+    CHECK (rig.param ("osc1.sample.loop_end") <= 100.0f);
+
+    // double tap between the markers: the loop is the start / end again
+    rig.setParam ("osc1.sample.loop_start", 40.0f);
+    rig.setParam ("osc1.sample.loop_end", 80.0f);
+    doubleTap (*view, { view->sampleNormToX (0.6f), midY });
+    CHECK (approx (rig.param ("osc1.sample.loop_start"), rig.param ("osc1.sample.start"), 0.5f));
+    CHECK (approx (rig.param ("osc1.sample.loop_end"), rig.param ("osc1.sample.end"), 0.5f));
+    // double tap outside the loop resets start / end to the full range (existing gesture)
+    doubleTap (*view, { view->sampleNormToX (0.97f), midY });
+    CHECK (approx (rig.param ("osc1.sample.start"), 0.0f, 0.5f) && approx (rig.param ("osc1.sample.end"), 100.0f, 0.5f));
+
+    // a second finger cancels the one-finger gesture: no marker stays grabbed
+    view->mouseDown (mouse (*view, { sx, midY }, { sx, midY }, false));
+    TouchTracker::Gesture pinch;
+    pinch.kind = TouchTracker::Kind::pinch;
+    pinch.scale = 2.0f;
+    pinch.centre = { sx, midY };
+    view->handleTouchGesture (pinch);
+    view->mouseUp (mouse (*view, { sx, midY }, { sx, midY }, false));
+    CHECK (! view->isDraggingMarker());
+}
+
+TEST (uig_sample_view_slices_manual)
+{
+    Rig rig;
+    rig.setParam ("osc1.type", 1.0f);
+    auto* view = rig.oscView (1);
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+
+    // without a loaded sample there is no slice list to edit
+    rig.setParam ("osc1.sample.slice_mode", 2.0f);
+    view->refreshSliceCache();
+    CHECK (! view->canEditSlices());
+    CHECK (view->addSliceButton().isVisible() && ! view->addSliceButton().isEnabled());
+
+    giveSample (rig, 1, { 0.0f, 0.25f, 0.5f });
+    view->refreshSliceCache();
+    CHECK (view->canEditSlices());
+    CHECK_EQ (view->slices().size(), static_cast<size_t> (3));
+    rig.setParam ("osc1.sample.start", 0.0f);
+    rig.setParam ("osc1.sample.end", 100.0f);
+    rig.setParam ("osc1.sample.loop_start", 70.0f);
+    rig.setParam ("osc1.sample.loop_end", 90.0f);
+    const float midY = view->waveArea().getCentreY();
+
+    // drag the slice at 25 % to 40 %: the content is written once, at the end
+    const float x0 = view->sampleNormToX (0.25f);
+    const float x1 = view->sampleNormToX (0.40f);
+    view->mouseDown (mouse (*view, { x0, midY }, { x0, midY }, false));
+    view->mouseDrag (mouse (*view, { x1, midY }, { x0, midY }, true));
+    CHECK (view->loupeShowing());
+    CHECK (approx (storedSlices (rig, 1)[1], 0.25f, 1e-4f)); // not committed yet
+    view->mouseUp (mouse (*view, { x1, midY }, { x0, midY }, true));
+    const auto moved = storedSlices (rig, 1);
+    CHECK_EQ (moved.size(), static_cast<size_t> (3));
+    CHECK (approx (moved[1], 0.40f, 0.01f));
+    CHECK (moved[0] < moved[1] && moved[1] < moved[2]);
+
+    // long-press the empty waveform adds a slice, long-press a handle removes it
+    const float ax = view->sampleNormToX (0.2f);
+    view->mouseDown (mouse (*view, { ax, midY }, { ax, midY }, false));
+    CHECK (view->longPress().pending());
+    view->longPress().fire();
+    view->mouseUp (mouse (*view, { ax, midY }, { ax, midY }, false));
+    CHECK_EQ (storedSlices (rig, 1).size(), static_cast<size_t> (4));
+    const float hx = view->sampleNormToX (0.5f);
+    view->mouseDown (mouse (*view, { hx, midY }, { hx, midY }, false));
+    view->longPress().fire();
+    view->mouseUp (mouse (*view, { hx, midY }, { hx, midY }, false));
+    const auto afterRemove = storedSlices (rig, 1);
+    CHECK_EQ (afterRemove.size(), static_cast<size_t> (3));
+    CHECK (std::none_of (afterRemove.begin(), afterRemove.end(), [] (float v) { return std::abs (v - 0.5f) < 0.01f; }));
+
+    // the visible tools: + Slice adds in the middle of the view, a tap selects, - Slice removes the selection
+    view->addSliceButton().onClick();
+    CHECK_EQ (storedSlices (rig, 1).size(), static_cast<size_t> (4));
+    const float tapX = view->sampleNormToX (0.4f);
+    tap (*view, { tapX, midY });
+    CHECK (view->selectedSliceIndex() >= 0);
+    view->removeSliceButton().onClick();
+    CHECK_EQ (storedSlices (rig, 1).size(), static_cast<size_t> (3));
+    CHECK (view->addSliceButton().getWidth() >= rig.editor->theme().touch() && view->removeSliceButton().getHeight() >= rig.editor->theme().touch());
+
+    // the slice list can never leave the validated shape (ascending, 0..1)
+    const auto finalSlices = storedSlices (rig, 1);
+    CHECK (std::is_sorted (finalSlices.begin(), finalSlices.end()));
+}
+
+TEST (uig_sample_view_threshold_line_auto_slices)
+{
+    Rig rig;
+    rig.setParam ("osc1.type", 1.0f);
+    rig.setParam ("osc1.sample.slice_mode", 1.0f); // Auto
+    rig.setParam ("osc1.sample.slice_threshold", 50.0f);
+    auto* view = rig.oscView (1);
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+    CHECK (! view->addSliceButton().isVisible()); // Auto slices have no manual tools
+    const auto area = view->waveArea();
+    CHECK (approx (view->thresholdLineY(), area.getBottom() - 0.5f * area.getHeight(), 1.0f));
+
+    const float x = area.getCentreX();
+    const float y0 = view->thresholdLineY();
+    const float y1 = area.getY() + area.getHeight() * 0.2f; // up = fewer slices = lower threshold %
+    view->mouseDown (mouse (*view, { x, y0 }, { x, y0 }, false));
+    CHECK (view->isDraggingMarker());
+    view->mouseDrag (mouse (*view, { x, y1 }, { x, y0 }, true));
+    CHECK (view->loupeShowing());
+    view->mouseUp (mouse (*view, { x, y1 }, { x, y0 }, true));
+    CHECK (approx (rig.param ("osc1.sample.slice_threshold"), 20.0f, 1.0f));
+    CHECK (approx (view->thresholdLineY(), y1, 1.5f));
+    // dragged to the bottom: 100 %
+    drag (*view, { x, view->thresholdLineY() }, { x, area.getBottom() + 40.0f });
+    CHECK (approx (rig.param ("osc1.sample.slice_threshold"), 100.0f, 0.5f));
+}
+
 TEST (uig_zz_shutdown)
 {
     delete juceInitGaps;

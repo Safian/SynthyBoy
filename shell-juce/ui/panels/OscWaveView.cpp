@@ -149,7 +149,7 @@ OscWaveView::~OscWaveView() = default;
 
 bool OscWaveView::isSampleType() const
 {
-    return typeHandle.valid() && typeHandle.plain() >= 0.5f;
+    return typeHandle.valid() && typeHandle.normalised() >= 0.5f; // normalised (): the listener runs before the atomic updates
 }
 
 void OscWaveView::setViewMode (ViewMode newMode)
@@ -259,7 +259,7 @@ void OscWaveView::fitSample()
 
 int OscWaveView::sliceModeIndex() const
 {
-    return sliceModeHandle.valid() ? juce::roundToInt (sliceModeHandle.plain()) : 0;
+    return sliceModeHandle.valid() ? juce::roundToInt (sliceModeHandle.normalised() * static_cast<float> (sliceModeHandle.info().max)) : 0;
 }
 
 void OscWaveView::refreshSliceCache()
@@ -418,6 +418,12 @@ void OscWaveView::longPressedAt (juce::Point<float> where)
 {
     if (! isSampleType() || sliceModeIndex() != 2 || ! canEditSlices())
         return;
+    if (activeMarker == SampleMarker::loopPair) // held still inside the loop: this is no loop move
+    {
+        sampleLoopStartHandle.endGesture();
+        sampleLoopEndHandle.endGesture();
+        activeMarker = SampleMarker::none;
+    }
     // long-press a handle removes it, long-press the waveform adds one (design 02, replaces Alt-click)
     const int hit = nearestSliceAtX (where.x);
     draggedSlice = -1;
@@ -493,8 +499,8 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
             sampleLoopEndHandle.beginGesture();
         }
         press.press (e.position);
-        if (activeMarker != SampleMarker::none && activeMarker != SampleMarker::slice)
-            press.cancel(); // only the waveform and the slice handles have a long-press
+        if (activeMarker != SampleMarker::none && activeMarker != SampleMarker::slice && activeMarker != SampleMarker::loopPair)
+            press.cancel(); // only the waveform, the loop region and the slice handles have a long-press
     }
     else
     {
