@@ -84,15 +84,15 @@ public:
         // Axis labels
         g.setFont (t.font (t.px (10.0f)));
         g.setColour (t.colours.textDim);
-        g.drawText (bipolar ? "-1" : "0", plotArea.getX() - t.px (20.0f), plotArea.getBottom() - t.px (6.0f), t.px (16.0f), t.px (12.0f), juce::Justification::centredRight, false);
-        g.drawText ("+1", plotArea.getX() - t.px (20.0f), plotArea.getY() - t.px (6.0f), t.px (16.0f), t.px (12.0f), juce::Justification::centredRight, false);
-        g.drawText ("In: 0", plotArea.getX(), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f), juce::Justification::centredLeft, false);
-        g.drawText ("1", plotArea.getRight() - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (16.0f), t.px (12.0f), juce::Justification::centredRight, false);
+        g.drawText (bipolar ? "-1" : "0", juce::Rectangle<float> (plotArea.getX() - t.px (20.0f), plotArea.getBottom() - t.px (6.0f), t.px (16.0f), t.px (12.0f)), juce::Justification::centredRight, false);
+        g.drawText ("+1", juce::Rectangle<float> (plotArea.getX() - t.px (20.0f), plotArea.getY() - t.px (6.0f), t.px (16.0f), t.px (12.0f)), juce::Justification::centredRight, false);
+        g.drawText ("In: 0", juce::Rectangle<float> (plotArea.getX(), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f)), juce::Justification::centredLeft, false);
+        g.drawText ("1", juce::Rectangle<float> (plotArea.getRight() - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (16.0f), t.px (12.0f)), juce::Justification::centredRight, false);
 
         // Power readout badge
         char pwrStr[32];
         std::snprintf (pwrStr, sizeof pwrStr, "Power: %+.1f %s", power, isFreeDraw ? "(GAP: Free Draw)" : "");
-        g.drawText (pwrStr, plotArea.getX() + t.px (4.0f), plotArea.getY() + t.px (4.0f), t.px (160.0f), t.px (14.0f), juce::Justification::centredLeft, false);
+        g.drawText (pwrStr, juce::Rectangle<float> (plotArea.getX() + t.px (4.0f), plotArea.getY() + t.px (4.0f), t.px (160.0f), t.px (14.0f)), juce::Justification::centredLeft, false);
 
         // Curve path
         juce::Path curvePath;
@@ -299,7 +299,7 @@ public:
         updateRoutingDisplay();
     }
 
-    int preferredHeight (int width) const override
+    int preferredHeight (int /*width*/) const override
     {
         const int touch = ctx.theme.touch();
         const int gap = ctx.theme.gap();

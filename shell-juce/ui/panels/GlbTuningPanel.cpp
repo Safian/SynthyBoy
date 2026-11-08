@@ -34,7 +34,6 @@ std::array<float, 12> parseScalaCents (const std::string& sclContent)
     std::istringstream stream (sclContent);
     std::string line;
     std::string description;
-    int numNotes = 0;
     bool foundDesc = false;
     bool foundCount = false;
     std::vector<float> scaleCents;
@@ -55,7 +54,7 @@ std::array<float, 12> parseScalaCents (const std::string& sclContent)
         }
         if (! foundCount)
         {
-            try { numNotes = std::stoi (clean); } catch (...) { numNotes = 0; }
+            // the declared note count line is skipped: the notes themselves are parsed below
             foundCount = true;
             continue;
         }
@@ -241,7 +240,7 @@ public:
     void resized() override
     {
         const auto& t = ctx.theme;
-        const auto bounds = getLocalBounds().reduced (t.gap());
+        auto bounds = getLocalBounds().reduced (t.gap());
         const int touchH = t.touch();
         const int btnW = juce::jmax (t.touch() * 2, (bounds.getWidth() - t.gap()) / 2);
 

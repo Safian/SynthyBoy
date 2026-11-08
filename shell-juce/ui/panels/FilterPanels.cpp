@@ -224,8 +224,8 @@ private:
 
     void refreshModelAndStyle()
     {
-        const int model = (modelParam.valid() ? static_cast<int> (modelParam.plain()) : 3);
-        const int style = (styleParam.valid() ? static_cast<int> (styleParam.plain()) : 0);
+        const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
+        const int style = (styleHandle.valid() ? static_cast<int> (styleHandle.plain()) : 0);
 
         modelButton.setButtonText (getFilterModelName (model));
 
@@ -257,7 +257,7 @@ private:
 
     void refreshControlLabels()
     {
-        const int model = (modelParam.valid() ? static_cast<int> (modelParam.plain()) : 3);
+        const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
         const auto& ctls = controls();
 
         // Primary controls: [0]=cutoff, [1]=res, [2]=drive, [3]=mix
@@ -307,7 +307,7 @@ private:
         for (int i = 0; i < kNumFilterModels; ++i)
         {
             menu.addItem (i + 1, getFilterModelName (i), true,
-                          modelParam.valid() && static_cast<int> (modelParam.plain()) == i);
+                          modelHandle.valid() && static_cast<int> (modelHandle.plain()) == i);
         }
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (modelButton),
                             [this] (int result) {
@@ -323,7 +323,7 @@ private:
 
     void showStyleMenu()
     {
-        const int model = (modelParam.valid() ? static_cast<int> (modelParam.plain()) : 3);
+        const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
         const auto styles = getStylesForModel (model);
         juce::PopupMenu menu;
         for (size_t i = 0; i < styles.size(); ++i)

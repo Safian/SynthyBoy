@@ -104,7 +104,7 @@ void synthesizeTableFrame (int tableIndex, float t, wtedit::Frame& outFrame)
 //==============================================================================
 // OSC WAVE VIEW IMPLEMENTATION
 //==============================================================================
-OscWaveView::OscWaveView (UiContext& context, std::function<void()> onOpenEditorCallback)
+WavetableView::WavetableView (UiContext& context, std::function<void()> onOpenEditorCallback)
     : ctx (context),
       onOpenEditor (std::move (onOpenEditorCallback)),
       wt ("Saw to Square"),
@@ -176,12 +176,12 @@ OscWaveView::OscWaveView (UiContext& context, std::function<void()> onOpenEditor
     updateTableFromChoice();
 }
 
-int OscWaveView::preferredHeight() const
+int WavetableView::preferredHeight() const
 {
     return ctx.theme.ipx (200.0f);
 }
 
-void OscWaveView::stepWavetable (int direction)
+void WavetableView::stepWavetable (int direction)
 {
     if (handleWavetable.valid())
     {
@@ -194,7 +194,7 @@ void OscWaveView::stepWavetable (int direction)
     }
 }
 
-void OscWaveView::updateTableFromChoice()
+void WavetableView::updateTableFromChoice()
 {
     if (handleWavetable.valid())
     {
@@ -223,7 +223,7 @@ void OscWaveView::updateTableFromChoice()
     }
 }
 
-void OscWaveView::setViewMode (ViewMode mode)
+void WavetableView::setViewMode (ViewMode mode)
 {
     currentViewMode = mode;
     mode2DBtn.setToggleState (mode == ViewMode::mode2D, juce::dontSendNotification);
@@ -232,7 +232,7 @@ void OscWaveView::setViewMode (ViewMode mode)
     repaint();
 }
 
-void OscWaveView::cycleViewMode()
+void WavetableView::cycleViewMode()
 {
     switch (currentViewMode)
     {
@@ -242,26 +242,26 @@ void OscWaveView::cycleViewMode()
     }
 }
 
-void OscWaveView::setWavetable (const wtedit::Wavetable& newWt)
+void WavetableView::setWavetable (const wtedit::Wavetable& newWt)
 {
     wt = newWt;
     tableNameLabel.setText (juce::String (wt.name()), juce::dontSendNotification);
     repaint();
 }
 
-void OscWaveView::zoomIn()
+void WavetableView::zoomIn()
 {
     zoomLevel = juce::jmin (2.5f, zoomLevel * 1.25f);
     repaint();
 }
 
-void OscWaveView::zoomOut()
+void WavetableView::zoomOut()
 {
     zoomLevel = juce::jmax (0.5f, zoomLevel * 0.8f);
     repaint();
 }
 
-void OscWaveView::mouseDown (const juce::MouseEvent& e)
+void WavetableView::mouseDown (const juce::MouseEvent& e)
 {
     dragStartPos = e.position;
     isDragging = false;
@@ -271,7 +271,7 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
     // Check if clicked in SP mode to select harmonic bin
     if (currentViewMode == ViewMode::modeSP)
     {
-        const auto bounds = getLocalBounds().toFloat().reduced (ctx.theme.gap());
+        const auto bounds = getLocalBounds().toFloat().reduced (static_cast<float> (ctx.theme.gap()));
         const float relX = (e.position.x - bounds.getX()) / bounds.getWidth();
         if (relX >= 0.0f && relX <= 1.0f)
         {
@@ -281,7 +281,7 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
     }
 }
 
-void OscWaveView::mouseDrag (const juce::MouseEvent& e)
+void WavetableView::mouseDrag (const juce::MouseEvent& e)
 {
     const float dx = e.position.x - dragStartPos.x;
     if (! isDragging && std::abs (dx) > 3.0f)
@@ -301,7 +301,7 @@ void OscWaveView::mouseDrag (const juce::MouseEvent& e)
     }
 }
 
-void OscWaveView::mouseUp (const juce::MouseEvent&)
+void WavetableView::mouseUp (const juce::MouseEvent&)
 {
     if (isDragging)
     {
@@ -316,7 +316,7 @@ void OscWaveView::mouseUp (const juce::MouseEvent&)
     }
 }
 
-void OscWaveView::paint (juce::Graphics& g)
+void WavetableView::paint (juce::Graphics& g)
 {
     const auto& t = ctx.theme;
     auto r = getLocalBounds().toFloat().reduced (t.px (2.0f));
@@ -394,8 +394,10 @@ void OscWaveView::paint (juce::Graphics& g)
             }
             g.setColour (t.colours.mod);
             const float dashLengths[] = { 4.0f, 4.0f };
-            g.strokePath (wp, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::butt),
-                          juce::PathStrokeType (1.5f).createDashedStroke (wp, dashLengths, 2));
+            juce::Path dashed;
+            juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::butt)
+                .createDashedStroke (dashed, wp, dashLengths, 2);
+            g.fillPath (dashed);
         }
 
         // Phase marker line
@@ -489,17 +491,17 @@ void OscWaveView::paint (juce::Graphics& g)
         g.setFont (t.labelFont());
         g.drawText ("Harmonic " + juce::String (selectedHarmonic) + "  " +
                     juce::String (mags[static_cast<size_t> (selectedHarmonic)], 3),
-                    canvasArea.withHeight (t.ipx (20)), juce::Justification::topRight, false);
+                    canvasArea.withHeight (t.px (20.0f)), juce::Justification::topRight, false);
     }
 
     // Frame position lower-left label (e.g. "frame 27 / 64")
     g.setColour (t.colours.textDim);
     g.setFont (t.labelFont());
     g.drawText ("frame " + juce::String (curFrameIdx + 1) + " / " + juce::String (numFrames),
-                canvasArea.removeFromBottom (t.ipx (18)), juce::Justification::bottomLeft, false);
+                canvasArea.removeFromBottom (t.px (18.0f)), juce::Justification::bottomLeft, false);
 }
 
-void OscWaveView::resized()
+void WavetableView::resized()
 {
     const auto& t = ctx.theme;
     const int touch = t.touch();
@@ -561,7 +563,7 @@ std::vector<std::string> WavetablePanel::keys() const
 void WavetablePanel::build()
 {
     // 1. Add big visual
-    waveView = std::make_unique<OscWaveView> (ctx, [this] { openEditorSheet(); });
+    waveView = std::make_unique<WavetableView> (ctx, [this] { openEditorSheet(); });
     addAndMakeVisible (*waveView);
 
     // 2. Add primary controls (4)

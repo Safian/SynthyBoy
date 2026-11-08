@@ -43,7 +43,7 @@ public:
         const auto& t = ctx.theme;
         const auto area = getLocalBounds().toFloat().reduced (t.px (8.0f))
                                                     .withTrimmedTop (t.px (16.0f))
-                                                    .withTrimmedBottom (t.touch() + t.px (2.0f));
+                                                    .withTrimmedBottom (static_cast<float> (t.touch()) + t.px (2.0f));
 
         drawGrid (g, area, 5, 3);
 
@@ -79,7 +79,7 @@ public:
     void resized() override
     {
         const auto& t = ctx.theme;
-        const auto btnArea = getLocalBounds().removeFromBottom (t.touch()).reduced (t.ipx (8.0f), 0);
+        auto btnArea = getLocalBounds().removeFromBottom (t.touch()).reduced (t.ipx (8.0f), 0);
         loadIrButton.setBounds (btnArea.removeFromRight (t.touch() * 2));
     }
 
@@ -88,7 +88,7 @@ public:
         const auto& t = ctx.theme;
         const auto area = getLocalBounds().toFloat().reduced (t.px (8.0f))
                                                     .withTrimmedTop (t.px (16.0f))
-                                                    .withTrimmedBottom (t.touch() + t.px (2.0f));
+                                                    .withTrimmedBottom (static_cast<float> (t.touch()) + t.px (2.0f));
 
         const float attackNorm = attackHandle.plain() / 2000.0f;
         const float decayNorm = decayHandle.plain() / 100.0f;
@@ -112,7 +112,7 @@ public:
         const auto& t = ctx.theme;
         const auto area = getLocalBounds().toFloat().reduced (t.px (8.0f))
                                                     .withTrimmedTop (t.px (16.0f))
-                                                    .withTrimmedBottom (t.touch() + t.px (2.0f));
+                                                    .withTrimmedBottom (static_cast<float> (t.touch()) + t.px (2.0f));
 
         const float normX = juce::jlimit (0.0f, 1.0f, (e.position.x - area.getX()) / area.getWidth());
         if (draggingAtt)

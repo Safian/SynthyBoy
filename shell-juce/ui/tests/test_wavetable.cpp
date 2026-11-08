@@ -240,7 +240,7 @@ TEST (ui_wavetable_panel_controls_and_visual)
     visual->mouseUp (mouseEvent (*visual, center.translated (50.0f, 0.0f), center, false));
 
     const float scrubbedFrame = *proc.parameters().getRawParameterValue ("osc1.frame");
-    CHECK (scrubbedFrame != initFrame);
+    CHECK (std::abs (scrubbedFrame - initFrame) > 1.0e-6f);
 
     // Tap cycles view mode
     const auto initialMode = visual->viewMode();

@@ -67,7 +67,7 @@ public:
         if (isCapped)
             voiceStatus += " [TIER CAP]";
 
-        const float btnW = lockButton.getWidth();
+        const float btnW = static_cast<float> (lockButton.getWidth());
         const float statusX = bounds.getX() + pad + btnW + pad;
         const float statusW = bounds.getRight() - pad - statusX;
         g.drawText (voiceStatus, juce::Rectangle<float> (statusX, headerY, statusW, btnH),

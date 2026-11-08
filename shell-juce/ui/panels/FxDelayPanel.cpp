@@ -27,7 +27,7 @@ public:
     {
         paintBaseBackground (g);
         const auto& t = ctx.theme;
-        const auto area = getLocalBounds().toFloat().reduced (t.px (8.0f)).withTrimmedTop (t.px (16.0f));
+        auto area = getLocalBounds().toFloat().reduced (t.px (8.0f)).withTrimmedTop (t.px (16.0f));
 
         const float halfH = area.getHeight() * 0.45f;
         const auto timelineArea = area.removeFromTop (halfH);

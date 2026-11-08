@@ -14,17 +14,17 @@ public:
         const char* const bands[3] = { "low", "mid", "high" };
         for (int i = 0; i < 3; ++i)
         {
-            bandData[i].mode = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".mode");
-            bandData[i].mode->onChange = [this] { repaint(); };
+            band (i).mode = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".mode");
+            band (i).mode->onChange = [this] { repaint(); };
 
-            bandData[i].cutoff = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".cutoff");
-            bandData[i].cutoff->onChange = [this] { repaint(); };
+            band (i).cutoff = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".cutoff");
+            band (i).cutoff->onChange = [this] { repaint(); };
 
-            bandData[i].gain = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".gain");
-            bandData[i].gain->onChange = [this] { repaint(); };
+            band (i).gain = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".gain");
+            band (i).gain->onChange = [this] { repaint(); };
 
-            bandData[i].res = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".resonance");
-            bandData[i].res->onChange = [this] { repaint(); };
+            band (i).res = std::make_unique<ParamHandle> (ctx, std::string ("eq.") + bands[i] + ".resonance");
+            band (i).res->onChange = [this] { repaint(); };
         }
     }
 
@@ -53,10 +53,10 @@ public:
             float totalDb = 0.0f;
             for (int b = 0; b < 3; ++b)
             {
-                const float bFreq = bandData[b].cutoff->plain();
-                const float bGain = bandData[b].gain->plain();
-                const int bMode = juce::roundToInt (bandData[b].mode->plain());
-                const float bRes = juce::jlimit (0.1f, 10.0f, bandData[b].res->plain());
+                const float bFreq = band (b).cutoff->plain();
+                const float bGain = band (b).gain->plain();
+                const int bMode = juce::roundToInt (band (b).mode->plain());
+                const float bRes = juce::jlimit (0.1f, 10.0f, band (b).res->plain());
 
                 if (b == 0) // Low band: 0 Shelf, 1 High pass
                 {
@@ -120,11 +120,11 @@ public:
         const char* const nodeLabels[3] = { "L", "M", "H" };
         for (int b = 0; b < 3; ++b)
         {
-            const float normX = fxFreqToNorm (bandData[b].cutoff->plain());
-            const int bMode = juce::roundToInt (bandData[b].mode->plain());
+            const float normX = fxFreqToNorm (band (b).cutoff->plain());
+            const int bMode = juce::roundToInt (band (b).mode->plain());
             const bool isGainDimmed = (bMode == 1); // cut/notch mode dims gain (Section 4.4)
 
-            const float normY = isGainDimmed ? 0.5f : fxDbToNorm (bandData[b].gain->plain());
+            const float normY = isGainDimmed ? 0.5f : fxDbToNorm (band (b).gain->plain());
             const juce::Point<float> nodePos (area.getX() + area.getWidth() * normX,
                                               area.getBottom() - area.getHeight() * normY);
 
@@ -142,9 +142,9 @@ public:
 
         for (int b = 0; b < 3; ++b)
         {
-            const float normX = fxFreqToNorm (bandData[b].cutoff->plain());
-            const int bMode = juce::roundToInt (bandData[b].mode->plain());
-            const float normY = (bMode == 1) ? 0.5f : fxDbToNorm (bandData[b].gain->plain());
+            const float normX = fxFreqToNorm (band (b).cutoff->plain());
+            const int bMode = juce::roundToInt (band (b).mode->plain());
+            const float normY = (bMode == 1) ? 0.5f : fxDbToNorm (band (b).gain->plain());
             const juce::Point<float> nodePos (area.getX() + area.getWidth() * normX,
                                               area.getBottom() - area.getHeight() * normY);
 
@@ -159,8 +159,8 @@ public:
         if (closestBand >= 0 && minDistSq < t.px (30.0f) * t.px (30.0f))
         {
             draggingBand = closestBand;
-            bandData[draggingBand].cutoff->beginGesture();
-            bandData[draggingBand].gain->beginGesture();
+            band (draggingBand).cutoff->beginGesture();
+            band (draggingBand).gain->beginGesture();
             updateBandFromMouse (e.position, area);
         }
     }
@@ -179,8 +179,8 @@ public:
     {
         if (draggingBand >= 0 && draggingBand < 3)
         {
-            bandData[draggingBand].cutoff->endGesture();
-            bandData[draggingBand].gain->endGesture();
+            band (draggingBand).cutoff->endGesture();
+            band (draggingBand).gain->endGesture();
             draggingBand = -1;
         }
     }
@@ -191,13 +191,13 @@ private:
         const float normX = juce::jlimit (0.0f, 1.0f, (pos.x - area.getX()) / area.getWidth());
         const float normY = juce::jlimit (0.0f, 1.0f, (area.getBottom() - pos.y) / area.getHeight());
 
-        bandData[draggingBand].cutoff->setNormalised (normX);
+        band (draggingBand).cutoff->setNormalised (normX);
 
-        const int bMode = juce::roundToInt (bandData[draggingBand].mode->plain());
+        const int bMode = juce::roundToInt (band (draggingBand).mode->plain());
         if (bMode == 0) // Gain active in shelf/peak modes
         {
             const float db = fxNormToDb (normY);
-            bandData[draggingBand].gain->setPlainComplete (db);
+            band (draggingBand).gain->setPlainComplete (db);
         }
         repaint();
     }
@@ -209,6 +209,8 @@ private:
         std::unique_ptr<ParamHandle> gain;
         std::unique_ptr<ParamHandle> res;
     };
+    BandParams& band (int i) { return bandData[static_cast<size_t> (i)]; }
+
     std::array<BandParams, 3> bandData;
     int draggingBand = -1;
 };
