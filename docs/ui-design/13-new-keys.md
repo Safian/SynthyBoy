@@ -48,7 +48,7 @@ Column legend of the key tables: **Type** float / int (grid of 1) / choice / boo
 
 **ASSUMPTION A1** (Q19 is "proposed", Q24 "decided and with Q19"): all four are included. **ASSUMPTION A2**: Serum's other sources (Active Voices, Voice Index, Voice Mod, Note-On Rand 2, Fixed; G67) are not in the delegation list and stay GAP.
 
-Destination choice (`modNN.destination`, `kNumModDestinations` 270 → 404): the 134 modulatable new keys get the choice numbers 270..403 in table order. Per block: B01 270-273, B02 274-289, B04 290-319, B09 320-337, B10 338-356, B11 357-365, B12 366-403 (blocks without modulatable keys are skipped). Existing choice numbers 1..269 are unchanged.
+Destination choice (`modNN.destination`, `kNumModDestinations` 270 → 442): the 172 modulatable new keys get the choice numbers 270..441 in table order. Per block: B01 270-273, B02 274-289, B04 290-319, B09 320-337, B10 338-356, B11 357-365, B12 366-403, B16 404-411, B14 412-423, B17 424-431, B18 432-441 (blocks without modulatable keys are skipped). Existing choice numbers 1..269 are unchanged.
 
 ## 3. Appended values of EXISTING choice lists (exact names, never renumber)
 
@@ -490,6 +490,42 @@ Added by the fx-extras work package (FXEXTRA-REPORT.md), after block B16, as its
 
 **Choices appended** (section 3): `distortion.type` 6 -> 14 entries (`kNumLegacyDistortionTypes` = 6). **Destinations**: the 8 modulatable keys take the destination choices 412-419 (after the B16 levels 404-411) in table order (`compressor.crossover_low` 412, `compressor.crossover_high` 413, `delay.offset` 414, `distortion.filter_keytrack` 415, `phaser.depth2` 416, `reverb.width` 417, `reverb.diff_a` 418, `reverb.diff_b` 419); `kNumModDestinations` = 420. **Caps** (`engine_caps.h`, bits 29-33 after the B16 bits 26-28, A157): `kCapFxCompressorLimit` (the four compressor keys), `kCapFxDelayExtras`, `kCapFxDistortionExtras` (the keytrack, `distortion.type` >= 6, the two curves), `kCapFxPhaserDepth2`, `kCapFxReverbAlgos` (all six reverb keys); each is set by the Vital adapter because `test_fxextra.cpp` renders the keys off and on. **Kick** pages 108-112: `fx_comp_limit`, `fx_delay_3`, `fx_distortion_2`, `fx_phaser_3`, `fx_reverb_3`. **UI** (A158): the FX panels of the five modules get the new controls (limit toggle and crossover handles on the band view, HQ toggle / offset knob / TAP button, the X-Shaper curve editor, depth 2 knob, type / room chips and the four reverb knobs).
 
+### 4.18 B18 – Sub oscillator and Noise extras (G23, G38) – positions 1558..1575 [18] – area 02
+
+Added by the osc-extras work package (OSCEXTRA-REPORT.md) as the last trailing block (R2). It was drafted as "B13" on a branch cut before B16/B14/B17 and renumbered at the merge: positions 1558..1575, destination choices 432..441, capability bits 35 (`kCapSubOsc`) and 36 (`kCapNoiseExtras`), Kick page 116 (`sub_main`), `noise` extras on the `more:` sheet of the `noise` page.
+
+**Sub oscillator (`sub.*`, group `Sub`, Serum p.123-127) [11]:**
+
+| Key | Name | Type | Range | Default | Unit | Curve | Sc | Mod | Kick |
+|-----|------|------|-------|--------:|------|-------|----|-----|------|
+| `sub.on` | `Sub On` | bool | Off / On | Off | - | - | V, X | no | `sub_main` |
+| `sub.waveform` | `Sub Waveform` | choice (`kSubWaveforms`, 6) | 0..5 (Sine, Rounded Rect, Triangle, Saw, Square, Pulse) | 0 | - | - | V, X | no | `sub_main` |
+| `sub.octave` | `Sub Octave` | whole | -4 .. 4 | -1 | - | lin | V, S | y | `sub_main` |
+| `sub.tune` | `Sub Tune` | cont | -100 .. 100 | 0 | cents | lin | V, S | y | `sub_main` |
+| `sub.level` | `Sub Level` | cont | 0 .. 100 | 50 | % | lin | V, S | y | `sub_main` |
+| `sub.pan` | `Sub Pan` | cont | -100 .. 100 | 0 | % | lin | V, S | y | `sub_main` |
+| `sub.destination` | `Sub Destination` | choice (`kOscDestinations`, 7) | 0..6 | 0 | - | - | V, X | no | `sub_main` |
+| `sub.mono` | `Sub Mono` | bool | Off / On | On | - | - | V, X | no | `sub_main` |
+| `sub.filter_blend` | `Sub Filter Blend` | cont | 0 .. 100 | 0 | % | lin | V, S | y | `more:sub_main` |
+| `sub.bus1_send` | `Sub Bus 1 Send` | cont | 0 .. 100 | 0 | % | lin | V, S | y | `more:sub_main` |
+| `sub.bus2_send` | `Sub Bus 2 Send` | cont | 0 .. 100 | 0 | % | lin | V, S | y | `more:sub_main` |
+
+Semantics (**ASSUMPTIONS A60..A63, A67, A68**): `sub.waveform` selects one of 6 shapes (saw, square and pulse are PolyBLEP band-limited, sine / rounded rect / triangle are alias free by construction; pulse is 25 % duty, DC free). `sub.octave` transposes by octaves (-1 = 12 semitones down) and `sub.tune` by cents. `sub.destination` matches the oscillator destinations (Filter 1, Filter 2, Filters 1+2, Effects only, Direct out, Filter blend, None). When `sub.mono` is On, the sub plays monophonically on the lowest active voice note to prevent phase cancellation; when Off, it follows polyphonic voice allocation. `sub.filter_blend` crossfades between Filter 1 and Filter 2 when `sub.destination = Filter blend`. `sub.bus1_send` and `sub.bus2_send` tap post-level/pan into Bus 1 and Bus 2.
+
+**Noise colours and sample extras (`noise.*`, group `Noise`, Serum p.128-132) [7]:**
+
+| Key | Name | Type | Range | Default | Unit | Curve | Sc | Mod | Kick |
+|-----|------|------|-------|--------:|------|-------|----|-----|------|
+| `noise.sample` | `Noise Sample` | choice (`kNoiseSamples`, 9) | 0..8 (White Noise, Pink Noise, Brown Noise, Geiger, Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere) | 0 | - | - | V, X | no | `more:noise` |
+| `noise.pitch` | `Noise Pitch` | cont | -48 .. 48 | 0 | semitones | lin | V, S | y | `more:noise` |
+| `noise.fine` | `Noise Fine` | cont | -100 .. 100 | 0 | cents | lin | V, S | y | `more:noise` |
+| `noise.phase` | `Noise Phase` | cont | 0 .. 100 | 0 | % | lin | V, S | y | `more:noise` |
+| `noise.random_phase` | `Noise Random Phase` | bool | Off / On | Off | - | - | V, X | no | `more:noise` |
+| `noise.keytrack` | `Noise Keytrack` | bool | Off / On | Off | - | - | V, X | no | `more:noise` |
+| `noise.loop` | `Noise Loop` | bool | Off / On | On | - | - | V, X | no | `more:noise` |
+
+Semantics (**ASSUMPTIONS A64..A66, A69**): `noise.sample` selects from built-in procedurally generated noise buffers (no external audio files needed). `noise.pitch` and `noise.fine` vary playback speed / pitch. `noise.keytrack` adjusts pitch relative to MIDI note C4 (note 60). `noise.phase` offsets sample start; when `noise.random_phase` is On, start phase is randomized per note-on. `noise.loop` controls looping vs one-shot playback (one-shot: silent after the sample end, no held value). All wire into the existing `noise.level`, `noise.pan`, `noise.destination`, `noise.filter_blend`, `noise.bus1_send`, `noise.bus2_send`.
+
 ## 5. State that is not in the key list (additive `content` section, state version 3)
 
 Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatable, not modulatable) and are written to both the `.sbpreset` and the host state document (ASSUMPTION A25: the plugin state IS the preset; otherwise custom shapes would be lost when a DAW project reloads). **[WP0 fix]** The section sits INSIDE the state object (`{"format":"synthyboy-state","version":3,"params":{..},"content":{..}}`), so the host blob and the `.sbpreset` (whose `state` member is that object) share one writer and one parser; 11 C3 / `serializeImportedPreset` must write it there, not as a sibling of `state`. `loadState ()` stays allocation-free and skips the section (`LoadResult::content = ignored`); `loadStateWithContent ()` / `loadPreset (.., StateContent&)` parse it into `StateContent` (`content_state.h`, allocates, not for the audio thread). A value outside the caps or ranges drops the whole section (`LoadResult::content = rejected`, parameters still apply); only malformed JSON invalidates the document. Maximum nesting is 7 inside the section (`kMaxDepth` = 8 holds). Extra rules fixed by WP0: strings <= 255 bytes without control characters, pack / file are relative paths (no `..`, no `\`, no `:`, not absolute), sha256 empty or 64 lower case hex digits, LFO shape y in 0..1, point `power` in -20..20, point modulation `amount` in -1..1 and `source` a key of §2, tuning text may carry `\n \r \t` only, every list ascending in x.
@@ -538,17 +574,18 @@ Missing content at load: the existing fallback and `missing_content` flag (ARCHI
 | B16 | wavetable remap x3, FX levels x8, Clean Mode x3 (WTREMAP) | 23 | 1484..1506 | 8 | 404-411 |
 | B14 | pitch modes, CRS, snap, unison, phase legato (PITCHUNI) | 37 | 1507..1543 | 12 | 412-423 |
 | B17 | compressor limit / crossovers, delay hq / offset, distortion key track, phaser depth 2, reverb type / room / width / ER / diffusion | 14 | 1544..1557 | 8 | 424-431 |
-| **Total** | | **678** | 880..1557 | **162** | 270..431 |
+| B18 | sub osc, noise colours & extras (OSCEXTRA) | 18 | 1558..1575 | 10 | 432-441 |
+| **Total** | | **696** | 880..1575 | **172** | 270..441 |
 
-Resulting table: 880 + 664 = **1544 keys**, 269 + 154 = **423 modulatable** keys, destination choice size **424**, mod sources **38**, positions 0..1543. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
+Resulting table: 880 + 696 = **1576 keys**, 269 + 172 = **441 modulatable** keys, destination choice size **442**, mod sources **38**, positions 0..1575. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
 
 ## 8. Decided items deliberately NOT specified as keys, and undecided GAPs left out
 
-Left out because no decision names them (not silently dropped; the owner can add them as another block): Sub oscillator (G23), per-slot remap curve and RISE / FALL of the mod matrix slots (G69 matrix part; the wavetable position part is B16), warp modes G34-G37, noise colours (G38), ENV 1 toggle on channels (G39), voice steal / same-note (G12), poly legato (G13), separate bend up / down (G14), stereo spread (G15), LFO swing (G16), per-voice control (G17, Q25 proposed), 4x / no smoothing (G18), Multisample / Granular / Spectral (G19, G21, G22), dynamic effect instancing (G71), compressor / delay / distortion / reverb / phaser extras (G73-G77), Save as Default (G02), lock (G08), MIDI learn (G07: shell table, not a key). Q3, Q4 (A/B snapshots), Q7, Q31, Q32, Q33, Q14 need no key. G02, G07 and G08 are built key-free, see 15-shell-features.md.
+Left out because no decision names them (not silently dropped; the owner can add them as another block): per-slot remap curve and RISE / FALL of the mod matrix slots (G69 matrix part; the wavetable position part is B16), warp modes G34-G37, ENV 1 toggle on channels (G39), voice steal / same-note (G12), poly legato (G13), separate bend up / down (G14), stereo spread (G15), LFO swing (G16), per-voice control (G17, Q25 proposed), 4x / no smoothing (G18), Multisample / Granular / Spectral (G19, G21, G22), dynamic effect instancing (G71), compressor / delay / distortion / reverb / phaser extras (G73-G77), Save as Default (G02), lock (G08), MIDI learn (G07: shell table, not a key). Q3, Q4 (A/B snapshots), Q7, Q31, Q32, Q33, Q14 need no key. G02, G07 and G08 are built key-free, see 15-shell-features.md.
 
 ## 9. Kick pages (09 §5 has 61 pages)
 
-New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107, B14 adds 3 more: 110) (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
+New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107, B14 adds 3 more: 110, B17 adds 5: 115, B18 adds 1: 116) (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
 
 | Page id(s) | Section | Keys (<= 8) | New pages |
 |------------|---------|-------------|----------:|
@@ -559,6 +596,7 @@ New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107, B14 adds 3 more
 | `osc1_type_map`, `osc2_type_map`, `osc3_type_map` | Osc | `oscN.type`, six `oscN.map.*` (+1 free) | 3 |
 | `oscN_sample_1`, `oscN_sample_2` (N = 1..3) | Osc | §4.9; the 10 keys marked `more:` sit on the More sheet of `oscN_sample_2` | 6 |
 | `oscN_warp2` | Osc | `oscN.warp2.*` (+4 free) | 3 |
+| `sub_main` | Osc | `sub.on/waveform/octave/tune/level/pan/destination/mono` (more: `filter_blend`, `bus1_send`, `bus2_send`) | 1 |
 | `mix_routing`, `mix_bus`, `mix_sends_osc`, `mix_sends_filter` | Osc | §4.10 | 4 |
 | `filter1_extra`, `filter2_extra`, `fx_filter_extra` | Filter / FX | `filterN.var/pan/level` | 3 |
 | `fx_order_2` | FX | `fx.order.10` .. `fx.order.16` | 1 |
@@ -566,8 +604,9 @@ New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107, B14 adds 3 more
 | `fx_hyperdim_1/2`, `fx_utility_1/2`, `fx_bode_1/2`, `fx_convolve_1/2`, `fx_splitter_lh`, `fx_splitter_lmh`, `fx_splitter_ms` | FX | §4.12 | 11 |
 | `mod_slot_1_aux` .. `mod_slot_4_aux` | Matrix | `modNN.aux_*` (4 keys) | 4 |
 | `osc1_remap`, `osc2_remap`, `osc3_remap`, `fx_levels` (B16, WTREMAP; the Clean Mode keys join `filter1_extra`, `filter2_extra`, `fx_filter_extra`) | Osc / FX | `oscN.remap.on/slot/rise/fall`; the eight `<fx>.level` | 4 |
-| More sheets (no page) | - | `lfoN` (3 keys x10), `envN` (7 keys x6), `fx_reverb_1` (`reverb.force_enable`), Matrix view (`mod05`..`mod64` aux, 240 keys) | 0 |
-| **Total** | | | **42** |
+| More sheets (no page) | - | `lfoN` (3 keys x10), `envN` (7 keys x6), `fx_reverb_1` (`reverb.force_enable`), Matrix view (`mod05`..`mod64` aux, 240 keys), `noise` extras (7 keys), `sub_main` sends (3 keys) | 0 |
+| `sub_main` (B18, OSCEXTRA) | Osc | `sub.on/waveform/octave/tune/level/pan/destination/mono` (+ 3 sends on the more sheet) | 1 |
+| **Total** | | | **43** |
 
 Because `kick-pages.json` is generated by `synthyboy_paramdump` (Q28, proposed), the page table above is data, not code. The existing duplicate knobs (09 §4) are unchanged.
 
@@ -707,3 +746,13 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A156 | `reverb.width` is mid / side width of the wet signal for all types |
 | A157 | Five cap bits 30-34 for B17, apart from the WP bits |
 | A158 | UI of B17 as listed in 4.17 |
+| A60 | The Serum manual is not in the repository: the sub waveform list (Sine, Rounded Rect, Triangle, Saw, Square, Pulse) is this file's definition of "sine / triangle / saw / square / pulse + a few more" |
+| A61 | `sub.octave` -4 .. 4 whole octaves (default -1), `sub.tune` +-100 cents, `sub.level` default 50 % (the oscillator default), `sub.on` default Off so every existing preset is unchanged |
+| A62 | `sub.destination` uses the oscillator list `kOscDestinations` (Filter 1, Filter 2, Filters 1+2, Effects only, Direct out, Filter blend, None) with the mixer graph of 4.10 (`sub.filter_blend`, two bus sends) |
+| A63 | `sub.mono` (default On): only the voice with the lowest sounding note carries the sub; the hand-over between voices is ramped over one block (no click) |
+| A64 | Noise samples are built into the engine (9 procedural sets: White (the stock Vital noise, bit identical), Pink, Brown, Geiger, Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere); no files |
+| A65 | `noise.pitch` +-48 semitones, `noise.fine` +-100 cents, `noise.keytrack` (default Off) makes the playback rate follow the key relative to middle C, `noise.phase` is the start position in % of the sample, `noise.random_phase` picks it per note |
+| A66 | `noise.loop` (default On); off = one shot, silent after the end of the sample (the stock Vital held the last value) |
+| A67 | B18 is placed after B17: positions 1558..1575, destination choices 432..441 (renumbered from the draft "B13" at 404..413) |
+| A68 | Capability bits 35 (`kCapSubOsc`) and 36 (`kCapNoiseExtras`); each is set because `test_oscextra.cpp` renders every key off and on |
+| A69 | UI: Sub panel (picker row of six >= 44 pt segments, level / pan pad, four knobs, rest behind More) and Noise panel (`<` name `>` row, nine item menu, level / pan / pitch / fine knobs, rest behind More), both on the oscillator page |

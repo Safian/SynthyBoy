@@ -153,12 +153,15 @@ public:
     void mouseDrag (const juce::MouseEvent& e) override;
     void mouseUp (const juce::MouseEvent& e) override;
 
+    int currentSample() const;
+
 private:
     UiContext& ctx;
     ParamHandle levelHandle;
     ParamHandle panHandle;
     ParamHandle onHandle;
     ParamHandle destHandle;
+    ParamHandle sampleHandle;
 
     juce::Point<float> dragStartPos;
     float dragStartLevel = 0.0f;

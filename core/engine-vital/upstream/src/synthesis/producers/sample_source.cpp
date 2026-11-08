@@ -294,15 +294,155 @@ namespace sbvital {
       std::this_thread::yield(); // Wait for audio thread to finish using old_data.
   }
 
+  namespace {
+  void generateNoiseBuffer(int type, mono_float* buffer, int length) {
+    uint32_t seed = 0x12345678u + static_cast<uint32_t>(type) * 0x9e3779b9u;
+    auto rnd = [&seed]() -> float {
+      seed = seed * 1664525u + 1013904223u;
+      return static_cast<float>(static_cast<int32_t>(seed)) * (1.0f / 2147483648.0f);
+    };
+
+    switch (type) {
+      case Sample::kWhite: {
+        for (int i = 0; i < length; ++i)
+          buffer[i] = rnd() * 0.9f;
+        break;
+      }
+      case Sample::kPink: {
+        float b0 = 0.0f, b1 = 0.0f, b2 = 0.0f, b3 = 0.0f, b4 = 0.0f, b5 = 0.0f, b6 = 0.0f;
+        for (int i = 0; i < length; ++i) {
+          float white = rnd();
+          b0 = 0.99886f * b0 + white * 0.0555179f;
+          b1 = 0.99332f * b1 + white * 0.0750759f;
+          b2 = 0.96900f * b2 + white * 0.1538520f;
+          b3 = 0.86650f * b3 + white * 0.3104856f;
+          b4 = 0.55000f * b4 + white * 0.5329522f;
+          b5 = -0.7616f * b5 - white * 0.0168980f;
+          buffer[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362f) * 0.18f;
+          b6 = white * 0.115926f;
+        }
+        break;
+      }
+      case Sample::kBrown: {
+        float brown = 0.0f;
+        for (int i = 0; i < length; ++i) {
+          float white = rnd();
+          brown = (brown + 0.02f * white) * 0.98f;
+          buffer[i] = brown * 3.5f;
+        }
+        break;
+      }
+      case Sample::kGeiger: {
+        float click = 0.0f;
+        for (int i = 0; i < length; ++i) {
+          if (std::fabs(rnd()) < 0.0015f)
+            click += (rnd() > 0.0f ? 0.9f : -0.9f);
+          buffer[i] = click;
+          click *= 0.92f;
+        }
+        break;
+      }
+      case Sample::kTapeHiss: {
+        float lp = 0.0f;
+        for (int i = 0; i < length; ++i) {
+          float white = rnd();
+          lp += 0.35f * (white - lp);
+          buffer[i] = std::tanh(lp * 1.5f) * 0.8f;
+        }
+        break;
+      }
+      case Sample::kVinylClicks: {
+        float rumble = 0.0f, pop = 0.0f;
+        for (int i = 0; i < length; ++i) {
+          float white = rnd();
+          rumble += 0.04f * (white - rumble);
+          if (std::fabs(rnd()) < 0.0008f)
+            pop = (rnd() > 0.0f ? 0.85f : -0.85f);
+          buffer[i] = rumble * 0.3f + pop;
+          pop *= 0.85f;
+        }
+        break;
+      }
+      case Sample::kDigitalHash: {
+        float held = 0.0f;
+        int step = 0;
+        for (int i = 0; i < length; ++i) {
+          if ((step++ % 6) == 0) {
+            float raw = rnd();
+            held = std::floor(raw * 8.0f + 0.5f) * (1.0f / 8.0f);
+          }
+          buffer[i] = held * 0.9f;
+        }
+        break;
+      }
+      case Sample::kVelvetNoise: {
+        int grid = 16;
+        for (int i = 0; i < length; i += grid) {
+          int offset = static_cast<int>(std::fabs(rnd()) * (grid - 1));
+          float sign = (rnd() > 0.0f ? 0.9f : -0.9f);
+          for (int j = 0; j < grid && (i + j) < length; ++j)
+            buffer[i + j] = (j == offset) ? sign : 0.0f;
+        }
+        break;
+      }
+      case Sample::kAtmosphere: {
+        float s1 = 0.0f, s2 = 0.0f;
+        float f1 = 0.08f;
+        for (int i = 0; i < length; ++i) {
+          float white = rnd();
+          s1 += f1 * (white - s1);
+          s2 += f1 * (s1 - s2);
+          buffer[i] = (s1 - s2) * 2.8f;
+        }
+        break;
+      }
+      default: {
+        for (int i = 0; i < length; ++i)
+          buffer[i] = rnd() * 0.9f;
+        break;
+      }
+    }
+
+    // Small circular crossfade at boundary to ensure zero click on loop
+    constexpr int kXfade = 128;
+    for (int i = 0; i < kXfade && i < length; ++i) {
+      float t = static_cast<float>(i) / static_cast<float>(kXfade);
+      buffer[i] = buffer[i] * t + buffer[length - kXfade + i] * (1.0f - t);
+    }
+  }
+  } // namespace
+
   void Sample::init() {
     name_ = kDefaultName;
     mono_float buffer[kDefaultSampleLength];
-    utils::RandomGenerator random_generator(-0.9f, 0.9f);
 
+    // White Noise (index 0): identical to upstream Vital
+    utils::RandomGenerator random_generator(-0.9f, 0.9f);
     for (int i = 0; i < kDefaultSampleLength; ++i)
       buffer[i] = random_generator.next();
-
     loadSample(buffer, kDefaultSampleLength, kDefaultSampleRate);
+    noise_data_[kWhite] = nullptr;
+
+    // Remaining 8 procedural noise sets (1..8)
+    for (int t = 1; t < kNumNoiseTypes; ++t) {
+      generateNoiseBuffer(t, buffer, kDefaultSampleLength);
+      noise_data_[t] = std::make_unique<SampleData>(kDefaultSampleLength, kDefaultSampleRate, false);
+      createBandLimitedBuffers(noise_data_[t]->left_buffers, noise_data_[t]->left_loop_buffers,
+                               buffer, kDefaultSampleLength);
+    }
+
+    current_data_ = data_.get();
+    markUsed();
+  }
+
+  void Sample::setNoiseType(int type) {
+    if (type == kWhite) {
+      current_data_ = data_.get();
+      markUsed();
+    } else if (type > 0 && type < kNumNoiseTypes && noise_data_[type]) {
+      current_data_ = noise_data_[type].get();
+      markUsed();
+    }
   }
 
   json Sample::stateToJson() {
@@ -394,6 +534,11 @@ namespace sbvital {
     reset_offset *= current_phase_inc;
     
     poly_float reset_value = -reset_offset;
+    if (input(kPhase)->source) {
+      poly_float start_phase = utils::clamp(input(kPhase)->at(0), 0.0f, 1.0f);
+      if (poly_float::greaterThan (start_phase, 0.0f).anyMask())
+        reset_value += start_phase * audio_length;
+    }
     if (input(kRandomPhase)->at(0)[0]) {
       reset_value = random_generator_.next() * audio_length;
       reset_value = utils::maskLoad(reset_value, random_generator_.next() * audio_length, constants::kFirstMask);
@@ -466,6 +611,9 @@ namespace sbvital {
       value_matrix.transpose();
       raw_output[i] = interpolation_matrix.multiplyAndSumRows(value_matrix);
       VITAL_ASSERT(utils::isContained(raw_output[i]));
+      // SynthyBoy (noise.loop off): a one-shot sample that has reached its end is silent, it does not hold its last value
+      raw_output[i] = utils::maskLoad(raw_output[i], poly_float(0.0f),
+                                      poly_float::greaterThanOrEqual(current_index, audio_length) & ~loop_enabled_mask & ~bounce_enabled_mask);
 
       current_fraction += current_phase_inc;
       poly_float increment = utils::floor(current_fraction);

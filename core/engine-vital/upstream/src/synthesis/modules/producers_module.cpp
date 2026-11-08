@@ -20,7 +20,7 @@
 namespace sbvital {
   ProducersModule::ProducersModule() :
       SynthModule(kNumInputs, kNumOutputs), sample_destination_(nullptr),
-      filter1_on_(nullptr), filter2_on_(nullptr) {
+      sub_destination_(nullptr), filter1_on_(nullptr), filter2_on_(nullptr) {
     for (int i = 0; i < kNumOscillators; ++i) {
       std::string number = std::to_string(i + 1);
       oscillators_[i] = new OscillatorModule("osc_" + number);
@@ -34,6 +34,11 @@ namespace sbvital {
     addSubmodule(sampler_);
     addProcessor(sampler_);
     sampler_->enable(false);
+
+    sub_module_ = new SubModule();
+    addSubmodule(sub_module_);
+    addProcessor(sub_module_);
+    sub_module_->enable(false);
   }
 
   void ProducersModule::init() {
@@ -55,8 +60,15 @@ namespace sbvital {
     }
 
     sample_destination_ = createBaseControl("sample_destination");
-    for (int i = 0; i <= kNumOscillators; ++i) {
-      const std::string prefix = i < kNumOscillators ? "osc_" + std::to_string(i + 1) + "_" : "sample_";
+    sub_destination_ = createBaseControl("sub_destination");
+    for (int i = 0; i < kNumSources; ++i) {
+      std::string prefix;
+      if (i < kNumOscillators)
+        prefix = "osc_" + std::to_string(i + 1) + "_";
+      else if (i == kNumOscillators)
+        prefix = "sample_";
+      else
+        prefix = "sub_";
       filter_blend_[i] = createPolyModControl(prefix + "filter_blend");
       bus1_send_[i] = createPolyModControl(prefix + "bus1_send");
       bus2_send_[i] = createPolyModControl(prefix + "bus2_send");
@@ -67,6 +79,11 @@ namespace sbvital {
     sampler_->useInput(input(kReset), SampleModule::kReset);
     sampler_->useInput(input(kNoteCount), SampleModule::kNoteCount);
     sampler_->useInput(input(kMidi), SampleModule::kMidi);
+
+    sub_module_->useInput(input(kReset), SubModule::kReset);
+    sub_module_->useInput(input(kMidi), SubModule::kMidi);
+    sub_module_->useInput(input(kActiveVoices), SubModule::kActiveVoices);
+    sub_module_->useInput(input(kLowestNote), SubModule::kLowestNote);
 
     SynthModule::init();
     for (int i = 0; i < kNumOscillators; ++i) {
@@ -104,6 +121,7 @@ namespace sbvital {
     SynthModule::process(num_samples);
 
     getLocalProcessor(sampler_)->process(num_samples);
+    getLocalProcessor(sub_module_)->process(num_samples);
 
     // SynthyBoy: an oscillator waits for the sources of both of its warp slots
     bool needs_first[kNumOscillators], needs_second[kNumOscillators];
@@ -164,6 +182,10 @@ namespace sbvital {
 
     const poly_float* sample = sampler_->output(SampleModule::kLevelled)->buffer;
     routeSource(kNumOscillators, sample, static_cast<int>(sample_destination_->value()), num_samples, filter1_on, filter2_on,
+                filter1_output, filter2_output, raw_output, direct_output);
+
+    const poly_float* sub = sub_module_->output(SubModule::kLevelled)->buffer;
+    routeSource(kSourceSub, sub, static_cast<int>(sub_destination_->value()), num_samples, filter1_on, filter2_on,
                 filter1_output, filter2_output, raw_output, direct_output);
   }
 

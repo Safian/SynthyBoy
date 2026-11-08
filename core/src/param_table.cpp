@@ -29,6 +29,8 @@ constexpr const char* const kLfoShapes[kNumLfoShapes + 1] = {
     "Half Sine", "Custom"
 };
 static_assert (kLfoShapeCustom == kNumLfoShapes, "the Custom LFO shape is the entry after the built-in ones");
+constexpr const char* const kSubWaveforms[] = { "Sine", "Rounded Rect", "Triangle", "Saw", "Square", "Pulse" };
+constexpr const char* const kNoiseSamples[] = { "White Noise", "Pink Noise", "Brown Noise", "Geiger", "Tape Hiss", "Vinyl Clicks", "Digital Hash", "Velvet Noise", "Atmosphere" };
 constexpr const char* const kOscDestinations[] = { "Filter 1", "Filter 2", "Filters 1+2", "Effects only", "Direct out", "Filter blend", "None" };
 constexpr const char* const kStackStyles[] = {
     "Unison", "Center Drop 12", "Center Drop 24", "Octaves", "Two Octaves", "Power Chord", "Two Power Chords", "Major Chord",
@@ -719,11 +721,33 @@ constexpr ParamInfo kRaw[] = {
     SB_PCT ("reverb.er_size", "Reverb ER Size", "FX / Reverb", 50.0f, kAuto),
     SB_PCT ("reverb.diff_a", "Reverb Diffusion A", "FX / Reverb", 70.0f, kMod),
     SB_PCT ("reverb.diff_b", "Reverb Diffusion B", "FX / Reverb", 60.0f, kMod),
+
+    // --- B18: sub oscillator and noise colours/extras (G23, G38) (positions 1558..1575) ------------------------------------- ---------------------------------------------------
+    // sub oscillator
+    onOff ("sub.on", "Sub On", "Sub", false),
+    pick ("sub.waveform", "Sub Waveform", "Sub", kSubWaveforms, 0),
+    whole ("sub.octave", "Sub Octave", "Sub", -4.0f, 4.0f, -1.0f, Unit::none, kMod),
+    cont ("sub.tune", "Sub Tune", "Sub", -100.0f, 100.0f, 0.0f, Unit::cents, kMod),
+    SB_PCT ("sub.level", "Sub Level", "Sub", 50.0f, kMod),
+    SB_PCT_RANGE ("sub.pan", "Sub Pan", "Sub", -100.0f, 100.0f, 0.0f, kMod),
+    pick ("sub.destination", "Sub Destination", "Sub", kOscDestinations, 0),
+    onOff ("sub.mono", "Sub Mono", "Sub", true),
+    SB_PCT ("sub.filter_blend", "Sub Filter Blend", "Sub", 0.0f, kMod),
+    SB_SENDS ("sub", "Sub", "Sub"),
+
+    // noise colours and sample extras
+    pick ("noise.sample", "Noise Sample", "Noise", kNoiseSamples, 0),
+    whole ("noise.pitch", "Noise Pitch", "Noise", -48.0f, 48.0f, 0.0f, Unit::semitone, kMod),
+    cont ("noise.fine", "Noise Fine", "Noise", -100.0f, 100.0f, 0.0f, Unit::cents, kMod),
+    SB_PCT ("noise.phase", "Noise Phase", "Noise", 0.0f, kMod),
+    onOff ("noise.random_phase", "Noise Random Phase", "Noise", false),
+    onOff ("noise.keytrack", "Noise Keytrack", "Noise", false),
+    onOff ("noise.loop", "Noise Loop", "Noise", true),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1558, "880 keys of state version 2 plus the 678 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17)");
+static_assert (kCount == 1576, "880 keys of state version 2 plus the 696 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18)");
 
 struct Table
 {

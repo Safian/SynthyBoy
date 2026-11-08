@@ -77,7 +77,7 @@ TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
     }
     CHECK_EQ (position, 1558);
     CHECK_EQ (destination, 432);
-    CHECK_EQ (static_cast<int> (paramCount()), 1558);
+    CHECK_EQ (static_cast<int> (paramCount()), 1576); // + the 18 keys of B18
     CHECK_EQ (modDestinationParamIndex (424), 1546);
     CHECK_EQ (modDestinationParamIndex (431), 1557);
     CHECK_EQ (positionOf ("splitter_ms.level"), 1483); // B12 is unchanged
@@ -103,7 +103,7 @@ TEST (b17_choice_lists_and_names)
 
 TEST (b17_kick_pages_reach_every_key)
 {
-    CHECK_EQ (kickPageCount(), static_cast<size_t> (115));
+    CHECK_EQ (kickPageCount(), static_cast<size_t> (116)); // B18 adds sub_main
     const Page* pages = kickPageTable();
     for (const Key& k : kKeys)
     {

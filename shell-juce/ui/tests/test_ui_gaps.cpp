@@ -24,6 +24,8 @@
 #include "ui/panels/TransposeControl.h"
 #include "ui/panels/WavetableEditorSheet.h"
 #include "ui/panels/WavetablePanel.h"
+#include "ui/panels/SubPanel.h"
+#include "ui/panels/NoisePanel.h"
 #include "test_runner.h"
 
 using namespace synthyboy;
@@ -2094,6 +2096,161 @@ TEST (uig_screenshots_of_the_changed_screens)
             rig.shot ("mod-matrix-row-handles-" + n, sz.w, sz.h, false, Page::mod);
         }
     }
+}
+
+TEST (uig_sub_waveform_picker_and_noise_sample_stepper)
+{
+    Rig rig (Page::osc, 390, 844);
+
+    // 1. Sub waveform picker (row 02-27)
+    auto* subPanel = rig.find<SubPanel>();
+    CHECK (subPanel != nullptr);
+    if (subPanel != nullptr)
+    {
+        // Check initial waveform is 0 (Sine)
+        CHECK_EQ (static_cast<int> (rig.param ("sub.waveform") + 0.5f), 0);
+
+        // Click waveform button 3 (SAW)
+        subPanel->waveformButton (3).onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("sub.waveform") + 0.5f), 3);
+
+        // Click waveform button 5 (PULSE)
+        subPanel->waveformButton (5).onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("sub.waveform") + 0.5f), 5);
+
+        // Click waveform button 0 (SIN)
+        subPanel->waveformButton (0).onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("sub.waveform") + 0.5f), 0);
+
+        // Touch target size >= 44pt
+        const int minTouch = rig.editor->theme().touch();
+        for (int i = 0; i < 6; ++i)
+        {
+            CHECK (subPanel->waveformButton (i).getWidth() >= minTouch);
+            CHECK (subPanel->waveformButton (i).getHeight() >= minTouch);
+        }
+    }
+
+    // 2. Noise sample stepper < > and name (row 02-28)
+    auto* noisePanel = rig.find<NoisePanel>();
+    CHECK (noisePanel != nullptr);
+    if (noisePanel != nullptr)
+    {
+        // Initial noise sample is 0 (White Noise)
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 0);
+        CHECK_EQ (noisePanel->sampleNameButton().getButtonText(), "White Noise");
+
+        // Click next (>) -> 1 (Pink Noise)
+        noisePanel->sampleNextButton().onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 1);
+        CHECK_EQ (noisePanel->sampleNameButton().getButtonText(), "Pink Noise");
+
+        // Click next (>) -> 2 (Brown Noise)
+        noisePanel->sampleNextButton().onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 2);
+
+        // Click prev (<) -> back to 1 (Pink Noise)
+        noisePanel->samplePrevButton().onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 1);
+        CHECK_EQ (noisePanel->sampleNameButton().getButtonText(), "Pink Noise");
+
+        // Click prev (<) twice -> 0, then wraps to 8 (Atmosphere)
+        noisePanel->samplePrevButton().onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 0);
+        noisePanel->samplePrevButton().onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 8);
+        CHECK_EQ (noisePanel->sampleNameButton().getButtonText(), "Atmosphere");
+
+        // Touch targets >= 44pt
+        const int minTouch = rig.editor->theme().touch();
+        CHECK (noisePanel->samplePrevButton().getWidth() >= minTouch);
+        CHECK (noisePanel->samplePrevButton().getHeight() >= minTouch);
+        CHECK (noisePanel->sampleNextButton().getWidth() >= minTouch);
+        CHECK (noisePanel->sampleNextButton().getHeight() >= minTouch);
+        CHECK (noisePanel->sampleNameButton().getWidth() >= minTouch);
+        CHECK (noisePanel->sampleNameButton().getHeight() >= minTouch);
+    }
+}
+
+TEST (uig_sub_and_noise_panels_on_phone_and_tablet)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::osc, sz.w, sz.h);
+        rig.setParam ("sub.on", 1.0f);
+        rig.setParam ("sub.waveform", 3.0f);
+        rig.setParam ("noise.on", 1.0f);
+        rig.setParam ("noise.sample", 2.0f);
+        auto* subPanel = rig.find<SubPanel>();
+        auto* noisePanel = rig.find<NoisePanel>();
+        CHECK (subPanel != nullptr && noisePanel != nullptr);
+        if (subPanel == nullptr || noisePanel == nullptr)
+            return;
+
+        // the picker row: six segments side by side, every target >= 44 pt, none outside the panel, none on another
+        const int minTouch = rig.editor->theme().touch();
+        juce::Rectangle<int> previous;
+        for (int i = 0; i < 6; ++i)
+        {
+            const auto b = subPanel->waveformButton (i).getBounds();
+            CHECK (b.getWidth() >= minTouch && b.getHeight() >= minTouch);
+            CHECK (subPanel->getLocalBounds().contains (b));
+            CHECK (! b.intersects (previous));
+            previous = b;
+        }
+        // the active segment follows the key
+        subPanel->updateWaveformButtons();
+        CHECK_EQ (subPanel->waveformParamHandle().plain(), 3.0f);
+
+        // stepping the noise sample at the ends wraps; the key is always a whole sample number
+        rig.setParam ("noise.sample", 8.0f);
+        noisePanel->sampleNextButton().onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 0);
+        noisePanel->samplePrevButton().onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("noise.sample") + 0.5f), 8);
+
+        // the whole panel is reachable: the controls stay inside it
+        for (auto* panel : { static_cast<Panel*> (subPanel), static_cast<Panel*> (noisePanel) })
+        {
+            panel->setMoreExpanded (true);
+            CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
+            CHECK (panel->getWidth() <= sz.w);
+        }
+
+        // direct manipulation on the view: a vertical drag moves the level, a horizontal one the pan
+        rig.setParam ("sub.level", 40.0f);
+        rig.setParam ("sub.pan", 0.0f);
+        auto& view = subPanel->view();
+        const auto centre = view.getLocalBounds().getCentre().toFloat();
+        drag (view, centre, centre + juce::Point<float> (0.0f, -static_cast<float> (view.getHeight()) * 0.25f));
+        CHECK (rig.param ("sub.level") > 45.0f);
+        drag (view, centre, centre + juce::Point<float> (static_cast<float> (view.getWidth()) * 0.25f, 0.0f));
+        CHECK (rig.param ("sub.pan") > 20.0f);
+
+        rig.shot ("sub-noise-" + n, sz.w, sz.h, true, Page::osc);
+    }
+}
+
+TEST (uig_sub_and_noise_knobs_take_modulation_by_touch)
+{
+    Rig rig (Page::osc);
+    const int s0 = assignBySource (rig, 7, "sub.level", 40.0f);
+    const int s1 = assignBySource (rig, 8, "noise.pitch", -30.0f);
+    const int s2 = assignBySource (rig, 9, "sub.bus1_send", 25.0f);
+    CHECK (s0 >= 0 && s1 >= 0 && s2 >= 0 && s0 != s1 && s1 != s2);
+    auto& m = rig.editor->context().assign.matrix();
+    CHECK_EQ (static_cast<int> (m.get (modSlotParams (s0).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("sub.level").index))));
+    CHECK_EQ (static_cast<int> (m.get (modSlotParams (s1).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("noise.pitch").index))));
+    CHECK (approx (m.get (modSlotParams (s1).amount), -30.0f, 0.5f));
+    // the switches and choices of the block are not modulation targets
+    auto& flow = rig.editor->context().assign.flow();
+    rig.editor->context().assign.tapSource (7);
+    CHECK (! flow.isTarget (resolveKey ("sub.waveform").index));
+    CHECK (! flow.isTarget (resolveKey ("noise.sample").index));
+    CHECK (! flow.isTarget (resolveKey ("noise.loop").index));
+    rig.editor->context().assign.exitAssignMode();
 }
 
 TEST (uig_zz_shutdown)

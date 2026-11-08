@@ -101,6 +101,21 @@ namespace sbvital {
       force_inline void markUsed() { active_audio_data_ = current_data_; }
       force_inline void markUnused() { active_audio_data_ = nullptr; }
 
+      static constexpr int kNumNoiseTypes = 9;
+      enum NoiseType {
+        kWhite = 0,
+        kPink = 1,
+        kBrown = 2,
+        kGeiger = 3,
+        kTapeHiss = 4,
+        kVinylClicks = 5,
+        kDigitalHash = 6,
+        kVelvetNoise = 7,
+        kAtmosphere = 8
+      };
+
+      void setNoiseType(int type);
+
       json stateToJson();
       void jsonToState(json data);
 
@@ -110,6 +125,7 @@ namespace sbvital {
       SampleData* current_data_;
       std::atomic<SampleData*> active_audio_data_;
       std::unique_ptr<SampleData> data_;
+      std::unique_ptr<SampleData> noise_data_[kNumNoiseTypes];
 
       JUCE_LEAK_DETECTOR(Sample)
   };
@@ -136,6 +152,7 @@ namespace sbvital {
         kBounce,
         kPan,
         kNoteCount,
+        kPhase,
         kNumInputs
       };
 

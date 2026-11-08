@@ -31,6 +31,7 @@
 #include "distortion_module.h"
 #include "modulation_connection_processor.h"
 #include "sample_oscillator.h"
+#include "sample_source.h"
 #include "serum_filter_bank.h"
 #include "serum_fx_modules.h"
 #include "sound_engine.h"
@@ -506,6 +507,9 @@ public:
         noteGroup->held = false;
         ++noteGroup->group;
         noteIds.fill (NoteIdSlot {});
+        appliedNoiseSample = 0;
+        if (noiseSample_ != nullptr)
+            noiseSample_->setNoiseType (0);
         clockSeconds = 0.0;
         lastModWheel = lastAftertouch = 0.0f;
         lastBend = 0.0f;
@@ -600,7 +604,8 @@ public:
              | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters
              | kCapWtRemap | kCapFxLevel | kCapCleanMode // VERIFY: the three B16 bits stay only if the on / off renders of test_wtremap.cpp differ
              | kCapPitchUnison
-             | kCapFxExtrasAll; // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
+             | kCapFxExtrasAll // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
+             | kCapSubOsc | kCapNoiseExtras; // block B18: proven by core/engine-vital/tests/test_oscextra.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -819,6 +824,7 @@ private:
         }
         distortionModule = dynamic_cast<sbvital::DistortionModule*> (engine->getEffectModule (3)); // constants::kDistortion
         appliedShaperId = ~0u;
+        noiseSample_ = engine->getSample();
 
         {
             const std::lock_guard<std::mutex> lock (snapshotMutex);
@@ -945,6 +951,8 @@ private:
             }
             else if (key == "master.bend_range")
                 bendRangeParam = static_cast<int> (i);
+            else if (key == "noise.sample")
+                noiseSampleParam = static_cast<int> (i);
         }
 
         // state version 3 parameters the adapter reads itself
@@ -1370,6 +1378,16 @@ private:
                     vFilter1Input->set (mode == 2 ? 1.0f : 0.0f);
                 if (vFilter2Input != nullptr)
                     vFilter2Input->set (mode == 1 ? 1.0f : 0.0f);
+            }
+        }
+
+        if (noiseSampleParam >= 0 && noiseSample_ != nullptr)
+        {
+            const int sampleChoice = static_cast<int> (params[static_cast<size_t> (noiseSampleParam)].load (std::memory_order_relaxed) + 0.5f);
+            if (sampleChoice != appliedNoiseSample)
+            {
+                appliedNoiseSample = sampleChoice;
+                noiseSample_->setNoiseType (sampleChoice);
             }
         }
 
@@ -2118,6 +2136,9 @@ private:
     std::array<int, kNumLfo> lfoClock {};
     std::array<int, kNumFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
     int routingParam = -1, bendRangeParam = -1;
+    int noiseSampleParam = -1;
+    int appliedNoiseSample = 0;
+    sbvital::Sample* noiseSample_ = nullptr;
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;
     sbvital::Value* vFilter2Input = nullptr;

@@ -1003,16 +1003,23 @@ OscNoiseView::OscNoiseView (UiContext& context)
       levelHandle (context, "noise.level"),
       panHandle (context, "noise.pan"),
       onHandle (context, "noise.on"),
-      destHandle (context, "noise.destination")
+      destHandle (context, "noise.destination"),
+      sampleHandle (context, "noise.sample")
 {
     const auto repaintCb = [this] { repaint(); };
     levelHandle.onChange = repaintCb;
     panHandle.onChange = repaintCb;
     onHandle.onChange = repaintCb;
     destHandle.onChange = repaintCb;
+    sampleHandle.onChange = repaintCb;
 }
 
 OscNoiseView::~OscNoiseView() = default;
+
+int OscNoiseView::currentSample() const
+{
+    return sampleHandle.valid() ? juce::jlimit (0, 8, static_cast<int> (sampleHandle.plain() + 0.5f)) : 0;
+}
 
 void OscNoiseView::resized()
 {
@@ -1072,10 +1079,17 @@ void OscNoiseView::paint (juce::Graphics& g)
     g.setColour (c.outline);
     g.drawRoundedRectangle (r, t.px (8.0f), 1.0f);
 
-    // Header info
+    // Header info with sample colour name
+    static const char* const kSampleNames[] = {
+        "White Noise", "Pink Noise", "Brown Noise", "Geiger",
+        "Tape Hiss", "Vinyl Clicks", "Digital Hash", "Velvet Noise", "Atmosphere"
+    };
+    const int sampleIdx = currentSample();
+    const juce::String sampleName = (sampleIdx >= 0 && sampleIdx < 9) ? kSampleNames[sampleIdx] : "Noise";
+
     g.setFont (t.labelFont());
     g.setColour (c.textDim);
-    g.drawText ("White Noise Generator", r.reduced (t.px (8.0f), t.px (4.0f)).removeFromTop (t.px (18.0f)).toNearestInt(), juce::Justification::topLeft, false);
+    g.drawText (sampleName + " Generator", r.reduced (t.px (8.0f), t.px (4.0f)).removeFromTop (t.px (18.0f)).toNearestInt(), juce::Justification::topLeft, false);
 
     if (isOff)
     {
@@ -1085,18 +1099,53 @@ void OscNoiseView::paint (juce::Graphics& g)
 
     const auto scopeArea = r.reduced (t.px (8.0f), t.px (8.0f)).withTrimmedTop (t.px (18.0f));
 
-    // Draw animated pseudo-random noise waveform scope
+    // Draw animated pseudo-random noise waveform scope tailored to sample type
     juce::Path p;
     const int numPoints = juce::roundToInt (scopeArea.getWidth());
     const float midY = scopeArea.getCentreY();
     const float amp = scopeArea.getHeight() * 0.35f * (levelHandle.valid() ? levelHandle.normalised() : 0.5f);
 
-    juce::Random rnd (42);
+    juce::Random rnd (42 + sampleIdx * 101);
+    float filteredVal = 0.0f;
     for (int i = 0; i < numPoints; ++i)
     {
         const float x = scopeArea.getX() + static_cast<float> (i);
-        const float noiseVal = (rnd.nextFloat() * 2.0f - 1.0f);
-        const float y = midY + noiseVal * amp;
+        float noiseVal = rnd.nextFloat() * 2.0f - 1.0f;
+
+        switch (sampleIdx)
+        {
+            case 1: // Pink: smoothed low-mid emphasis
+                filteredVal += 0.25f * (noiseVal - filteredVal);
+                noiseVal = filteredVal * 1.8f;
+                break;
+            case 2: // Brown: integrated slope
+                filteredVal = (filteredVal + 0.08f * noiseVal) * 0.96f;
+                noiseVal = filteredVal * 3.0f;
+                break;
+            case 3: // Geiger: sparse spikes
+                noiseVal = (rnd.nextFloat() < 0.04f) ? (rnd.nextBool() ? 1.0f : -1.0f) : (noiseVal * 0.05f);
+                break;
+            case 4: // Tape Hiss: gentle lowpass
+                filteredVal += 0.4f * (noiseVal - filteredVal);
+                noiseVal = filteredVal * 1.3f;
+                break;
+            case 5: // Vinyl Clicks: intermittent crackle spikes
+                noiseVal = (rnd.nextFloat() < 0.02f) ? (rnd.nextBool() ? 0.9f : -0.9f) : (noiseVal * 0.15f);
+                break;
+            case 6: // Digital Hash: stepped 8-bit quantization
+                noiseVal = std::round (noiseVal * 4.0f) / 4.0f;
+                break;
+            case 7: // Velvet Noise: sparse impulses
+                noiseVal = ((i % 12) == (rnd.nextInt (12))) ? (rnd.nextBool() ? 1.0f : -1.0f) : 0.0f;
+                break;
+            case 8: // Atmosphere: resonant sinusoidal peaks
+                noiseVal = std::sin (static_cast<float> (i) * 0.12f) * 0.4f + noiseVal * 0.5f;
+                break;
+            default:
+                break;
+        }
+
+        const float y = midY + juce::jlimit (-1.0f, 1.0f, noiseVal) * amp;
         if (i == 0)
             p.startNewSubPath (x, y);
         else

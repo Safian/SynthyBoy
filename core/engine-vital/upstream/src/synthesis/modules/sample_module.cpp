@@ -37,6 +37,7 @@ namespace sbvital {
     Output* tune = createPolyModControl("sample_tune");
     Output* level = createPolyModControl("sample_level", true, true);
     Output* pan = createPolyModControl("sample_pan");
+    Output* phase = createPolyModControl("sample_phase");
 
     sampler_->useInput(input(kReset), SampleSource::kReset);
     sampler_->useInput(input(kMidi), SampleSource::kMidi);
@@ -50,6 +51,7 @@ namespace sbvital {
     sampler_->plug(tune, SampleSource::kTune);
     sampler_->plug(level, SampleSource::kLevel);
     sampler_->plug(pan, SampleSource::kPan);
+    sampler_->plug(phase, SampleSource::kPhase);
     sampler_->useOutput(output(kRaw), SampleSource::kRaw);
     sampler_->useOutput(output(kLevelled), SampleSource::kLevelled);
 
