@@ -48,6 +48,7 @@ else()
 endif()
 
 add_subdirectory(tuning)
+add_subdirectory(formula)
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)
