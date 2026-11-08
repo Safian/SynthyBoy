@@ -353,6 +353,8 @@ public:
         return (random ? "Random LFO " : "LFO ") + juce::String (idx);
     }
 
+    std::string modulePrefix() const override { return std::string (random ? "rlfo" : "lfo") + std::to_string (idx); }
+
     std::vector<std::string> keys() const override
     {
         const std::string p = (random ? "rlfo" : "lfo") + std::to_string (idx) + ".";

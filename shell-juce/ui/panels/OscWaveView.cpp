@@ -91,7 +91,9 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
       sampleStartHandle (context, "osc" + std::to_string (oscIndex) + ".sample.start"),
       sampleEndHandle (context, "osc" + std::to_string (oscIndex) + ".sample.end"),
       sampleLoopStartHandle (context, "osc" + std::to_string (oscIndex) + ".sample.loop_start"),
-      sampleLoopEndHandle (context, "osc" + std::to_string (oscIndex) + ".sample.loop_end")
+      sampleLoopEndHandle (context, "osc" + std::to_string (oscIndex) + ".sample.loop_end"),
+      sliceModeHandle (context, "osc" + std::to_string (oscIndex) + ".sample.slice_mode"),
+      sliceThresholdHandle (context, "osc" + std::to_string (oscIndex) + ".sample.slice_threshold")
 {
     const auto repaintCb = [this] { repaint(); };
     frameHandle.onChange = repaintCb;
@@ -105,31 +107,41 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     sampleEndHandle.onChange = repaintCb;
     sampleLoopStartHandle.onChange = repaintCb;
     sampleLoopEndHandle.onChange = repaintCb;
+    sliceModeHandle.onChange = [this] { refreshSliceCache(); updateButtons(); repaint(); };
+    sliceThresholdHandle.onChange = repaintCb;
 
-    prevWtButton.onClick = [this]
-    {
-        if (wtHandle.valid())
-        {
-            const float cur = wtHandle.plain();
-            const float next = juce::jmax (0.0f, cur - 1.0f);
-            wtHandle.setPlainComplete (next);
-        }
-    };
-    nextWtButton.onClick = [this]
-    {
-        if (wtHandle.valid())
-        {
-            const float cur = wtHandle.plain();
-            const float maxVal = static_cast<float> (wtHandle.info().max);
-            const float next = juce::jmin (maxVal, cur + 1.0f);
-            wtHandle.setPlainComplete (next);
-        }
-    };
+    prevWtButton.onClick = [this] { stepWavetable (-1); };
+    nextWtButton.onClick = [this] { stepWavetable (+1); };
     viewModeButton.onClick = [this] { cycleViewMode(); };
+
+    // the visible alternatives of the sample gestures (design 02: zoom buttons, slice + / trash tools)
+    zoomInBtn.onClick = [this] { zoomSampleAt (waveArea().getCentreX(), 2.0f); };
+    zoomOutBtn.onClick = [this] { zoomSampleAt (waveArea().getCentreX(), 0.5f); };
+    fitBtn.onClick = [this] { fitSample(); };
+    addSliceBtn.onClick = [this]
+    {
+        // a slice at the middle of what is on screen (or just right of the selected one)
+        addSliceAt (static_cast<float> (sampleVp.toRange (0.5)));
+    };
+    removeSliceBtn.onClick = [this]
+    {
+        if (selectedSlice >= 0)
+            removeSlice (selectedSlice);
+        else if (! sliceCache.empty())
+            removeSlice (nearestSlice (sliceCache, static_cast<float> (sampleVp.toRange (0.5)), 2.0f));
+    };
+    press.onLongPress = [this] { longPressedAt (dragStartPos); };
+    touch.onGesture = [this] (const TouchTracker::Gesture& g) { handleTouchGesture (g); };
 
     addAndMakeVisible (prevWtButton);
     addAndMakeVisible (nextWtButton);
     addAndMakeVisible (viewModeButton);
+    addAndMakeVisible (zoomInBtn);
+    addAndMakeVisible (zoomOutBtn);
+    addAndMakeVisible (fitBtn);
+    addAndMakeVisible (addSliceBtn);
+    addAndMakeVisible (removeSliceBtn);
+    refreshSliceCache();
     updateButtons();
 }
 
@@ -163,6 +175,15 @@ void OscWaveView::updateButtons()
     prevWtButton.setVisible (! isSample);
     nextWtButton.setVisible (! isSample);
     viewModeButton.setVisible (! isSample);
+    zoomInBtn.setVisible (isSample);
+    zoomOutBtn.setVisible (isSample);
+    fitBtn.setVisible (isSample);
+    const bool manual = isSample && sliceModeIndex() == 2;
+    addSliceBtn.setVisible (manual);
+    removeSliceBtn.setVisible (manual);
+    addSliceBtn.setEnabled (canEditSlices());
+    removeSliceBtn.setEnabled (canEditSlices() && ! sliceCache.empty());
+    addSliceBtn.setTooltip (canEditSlices() ? "Add a slice in the middle of the view" : "no sample is loaded in this oscillator");
 
     switch (mode)
     {
@@ -179,59 +200,310 @@ void OscWaveView::resized()
     const int gap = t.gap();
     const int btnW = juce::jmax (touchH, t.ipx (44.0f));
 
-    // Top control strip: prev, next, mode buttons
+    // Top control strip: prev, next, mode buttons (sample type: - + fit, and the slice tools)
     int x = t.gap();
     const int y = t.gap();
 
     prevWtButton.setBounds (x, y, btnW, touchH);
+    zoomOutBtn.setBounds (x, y, btnW, touchH);
     x += btnW + gap;
     nextWtButton.setBounds (x, y, btnW, touchH);
+    zoomInBtn.setBounds (x, y, btnW, touchH);
     x += btnW + gap;
     viewModeButton.setBounds (x, y, juce::jmax (btnW, t.ipx (50.0f)), touchH);
+    fitBtn.setBounds (x, y, juce::jmax (btnW, t.ipx (50.0f)), touchH);
+    x += juce::jmax (btnW, t.ipx (50.0f)) + gap;
+    addSliceBtn.setBounds (x, y, juce::jmax (btnW, t.ipx (72.0f)), touchH);
+    x += juce::jmax (btnW, t.ipx (72.0f)) + gap;
+    removeSliceBtn.setBounds (x, y, juce::jmax (btnW, t.ipx (72.0f)), touchH);
+}
+
+// ---- sample view geometry, slices ----------------------------------------------------------------------------------------------------
+
+juce::Rectangle<float> OscWaveView::waveArea() const
+{
+    const auto& t = ctx.theme;
+    return getLocalBounds().toFloat().reduced (t.px (1.0f)).reduced (t.px (8.0f), t.px (4.0f));
+}
+
+float OscWaveView::sampleNormToX (float norm) const
+{
+    const auto a = waveArea();
+    return a.getX() + static_cast<float> (sampleVp.toScreen (static_cast<double> (norm))) * a.getWidth();
+}
+
+float OscWaveView::xToSampleNorm (float x) const
+{
+    const auto a = waveArea();
+    return static_cast<float> (sampleVp.toRange (static_cast<double> ((x - a.getX()) / juce::jmax (1.0f, a.getWidth()))));
+}
+
+void OscWaveView::zoomSampleAt (float x, float factor)
+{
+    const double anchor = static_cast<double> (juce::jlimit (0.0f, 1.0f, xToSampleNorm (x)));
+    sampleVp.zoomAbout (anchor, static_cast<double> (factor));
+    repaint();
+}
+
+void OscWaveView::panSample (float dxPixels)
+{
+    sampleVp.pan (-static_cast<double> (dxPixels / juce::jmax (1.0f, waveArea().getWidth())) * sampleVp.span);
+    repaint();
+}
+
+void OscWaveView::fitSample()
+{
+    sampleVp.fit();
+    repaint();
+}
+
+int OscWaveView::sliceModeIndex() const
+{
+    return sliceModeHandle.valid() ? juce::roundToInt (sliceModeHandle.plain()) : 0;
+}
+
+void OscWaveView::refreshSliceCache()
+{
+    sliceCacheMs = juce::Time::getMillisecondCounter();
+    if (draggedSlice >= 0)
+        return; // the slice being dragged is the truth until the drag ends
+    sliceCache.clear();
+    for (const auto& s : ctx.host.content().samples)
+        if (s.osc == index)
+            sliceCache = s.slices;
+    if (selectedSlice >= static_cast<int> (sliceCache.size()))
+        selectedSlice = -1;
+}
+
+bool OscWaveView::canEditSlices() const
+{
+    for (const auto& s : ctx.host.content().samples)
+        if (s.osc == index)
+            return true;
+    return false;
+}
+
+bool OscWaveView::commitSlices (const std::vector<float>& newSlices)
+{
+    auto c = ctx.host.content();
+    for (auto& s : c.samples)
+        if (s.osc == index)
+        {
+            s.slices = newSlices;
+            if (! ctx.host.setContent (c))
+                return false;
+            refreshSliceCache();
+            updateButtons();
+            repaint();
+            return true;
+        }
+    return false;
+}
+
+bool OscWaveView::addSliceAt (float norm)
+{
+    if (! canEditSlices())
+        return false;
+    auto list = sliceCache;
+    if (! synthyboy::ui::addSlice (list, juce::jlimit (0.0f, 1.0f, norm)))
+        return false;
+    selectedSlice = nearestSlice (list, norm, 1.0f);
+    return commitSlices (list);
+}
+
+bool OscWaveView::removeSlice (int idx)
+{
+    auto list = sliceCache;
+    if (! synthyboy::ui::removeSlice (list, idx))
+        return false;
+    selectedSlice = -1;
+    return commitSlices (list);
+}
+
+int OscWaveView::nearestSliceAtX (float x) const
+{
+    int best = -1;
+    float bestD = static_cast<float> (ctx.theme.touch()) * 0.5f;
+    for (size_t i = 0; i < sliceCache.size(); ++i)
+    {
+        const float d = std::abs (sampleNormToX (sliceCache[i]) - x);
+        if (d <= bestD)
+        {
+            bestD = d;
+            best = static_cast<int> (i);
+        }
+    }
+    return best;
+}
+
+float OscWaveView::thresholdLineY() const
+{
+    const auto a = waveArea();
+    return a.getBottom() - synthyboy::ui::thresholdToLine (sliceThresholdHandle.valid() ? sliceThresholdHandle.plain() : 50.0f) * a.getHeight();
+}
+
+void OscWaveView::stepWavetable (int direction)
+{
+    if (! wtHandle.valid())
+        return;
+    const float next = juce::jlimit (0.0f, static_cast<float> (wtHandle.info().max), wtHandle.plain() + static_cast<float> (direction));
+    wtHandle.setPlainComplete (next);
+}
+
+void OscWaveView::handleTouchGesture (const TouchTracker::Gesture& g)
+{
+    using K = TouchTracker::Kind;
+    if (isSampleType())
+    {
+        if (g.kind == K::pinch)
+            zoomSampleAt (g.centre.x, g.scale);
+        else if (g.kind == K::pan)
+            panSample (g.dx);
+    }
+    else
+    {
+        if (g.kind == K::twoFingerSwipe && onSwitchOscillator)
+            onSwitchOscillator (g.dx < 0.0f ? +1 : -1); // swipe left = the next oscillator
+    }
+}
+
+void OscWaveView::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
+{
+    if (! isSampleType())
+        return;
+    if (e.mods.isCtrlDown() || e.mods.isCommandDown())
+        zoomSampleAt (e.position.x, std::exp (wheel.deltaY * 2.0f));
+    else
+        panSample ((wheel.deltaX != 0.0f ? wheel.deltaX : wheel.deltaY) * 200.0f);
+}
+
+void OscWaveView::mouseMagnify (const juce::MouseEvent& e, float scaleFactor)
+{
+    touch.magnify (e.position, scaleFactor);
+}
+
+void OscWaveView::cancelOneFingerGesture()
+{
+    press.cancel();
+    if (gestureOpen)
+    {
+        switch (activeMarker)
+        {
+            case SampleMarker::start:     sampleStartHandle.endGesture(); break;
+            case SampleMarker::end:       sampleEndHandle.endGesture(); break;
+            case SampleMarker::loopStart: sampleLoopStartHandle.endGesture(); break;
+            case SampleMarker::loopEnd:   sampleLoopEndHandle.endGesture(); break;
+            case SampleMarker::loopPair:  sampleLoopStartHandle.endGesture(); sampleLoopEndHandle.endGesture(); break;
+            case SampleMarker::threshold: sliceThresholdHandle.endGesture(); break;
+            case SampleMarker::none:
+            case SampleMarker::slice:     break;
+        }
+        if (activeMarker == SampleMarker::none && frameHandle.valid() && frameHandle.inGesture())
+            frameHandle.endGesture();
+    }
+    if (draggedSlice >= 0)
+    {
+        draggedSlice = -1;
+        refreshSliceCache();
+    }
+    activeMarker = SampleMarker::none;
+    gestureOpen = false;
+    nameSwipe = false;
+    if (loupe != nullptr)
+        loupe->hide();
+    repaint();
+}
+
+void OscWaveView::longPressedAt (juce::Point<float> where)
+{
+    if (! isSampleType() || sliceModeIndex() != 2 || ! canEditSlices())
+        return;
+    // long-press a handle removes it, long-press the waveform adds one (design 02, replaces Alt-click)
+    const int hit = nearestSliceAtX (where.x);
+    draggedSlice = -1;
+    sliceMoved = true; // the release that follows is not a tap
+    if (hit >= 0)
+        removeSlice (hit);
+    else if (waveArea().contains (where))
+        addSliceAt (xToSampleNorm (where.x));
 }
 
 void OscWaveView::mouseDown (const juce::MouseEvent& e)
 {
+    touch.down (e);
+    if (e.source.getIndex() > 0 || touch.twoDown())
+    {
+        cancelOneFingerGesture(); // the second finger: pinch / pan / swipe take over
+        return;
+    }
     dragStartPos = e.position;
     dragging = false;
+    sliceMoved = false;
+    nameSwipe = false;
+    activeMarker = SampleMarker::none;
+    gestureOpen = true;
 
     if (isSampleType())
     {
-        // Check which marker is close to click x
-        const float w = static_cast<float> (getWidth());
-        const float sX = sampleStartHandle.normalised() * w;
-        const float eX = sampleEndHandle.normalised() * w;
-        const float lsX = sampleLoopStartHandle.normalised() * w;
-        const float leX = sampleLoopEndHandle.normalised() * w;
-
+        refreshSliceCache();
         const float tol = static_cast<float> (ctx.theme.touch());
-        if (std::abs (e.position.x - sX) < tol)
+        const auto closeTo = [&] (float norm) { return std::abs (e.position.x - sampleNormToX (norm)) < tol; };
+        const bool manual = sliceModeIndex() == 2;
+
+        const int sliceHit = manual ? nearestSliceAtX (e.position.x) : -1;
+        if (sliceHit >= 0)
+        {
+            activeMarker = SampleMarker::slice;
+            draggedSlice = sliceHit;
+            selectedSlice = sliceHit;
+        }
+        else if (sliceModeIndex() == 1 && std::abs (e.position.y - thresholdLineY()) < tol * 0.5f)
+        {
+            activeMarker = SampleMarker::threshold;
+            sliceThresholdHandle.beginGesture();
+        }
+        else if (closeTo (sampleStartHandle.normalised()))
         {
             activeMarker = SampleMarker::start;
             sampleStartHandle.beginGesture();
         }
-        else if (std::abs (e.position.x - eX) < tol)
+        else if (closeTo (sampleEndHandle.normalised()))
         {
             activeMarker = SampleMarker::end;
             sampleEndHandle.beginGesture();
         }
-        else if (std::abs (e.position.x - lsX) < tol)
+        else if (closeTo (sampleLoopStartHandle.normalised()))
         {
             activeMarker = SampleMarker::loopStart;
             sampleLoopStartHandle.beginGesture();
         }
-        else if (std::abs (e.position.x - leX) < tol)
+        else if (closeTo (sampleLoopEndHandle.normalised()))
         {
             activeMarker = SampleMarker::loopEnd;
             sampleLoopEndHandle.beginGesture();
         }
-        else
+        else if (betweenLoopMarkers (xToSampleNorm (e.position.x), sampleLoopStartHandle.normalised(), sampleLoopEndHandle.normalised(), 0.0f))
         {
-            activeMarker = SampleMarker::none;
+            // a drag between the two loop markers moves both
+            activeMarker = SampleMarker::loopPair;
+            loopPairStartNorm = sampleLoopStartHandle.normalised();
+            loopPairEndNorm = sampleLoopEndHandle.normalised();
+            loopPairDownNorm = xToSampleNorm (e.position.x);
+            sampleLoopStartHandle.beginGesture();
+            sampleLoopEndHandle.beginGesture();
         }
+        press.press (e.position);
+        if (activeMarker != SampleMarker::none && activeMarker != SampleMarker::slice)
+            press.cancel(); // only the waveform and the slice handles have a long-press
     }
     else
     {
+        // the name strip on top: a horizontal swipe there steps the wavetable (design 02-04), everywhere else the drag scrubs the frame
+        if (e.position.y < static_cast<float> (ctx.theme.touch() + ctx.theme.gap()))
+        {
+            nameSwipe = true;
+            return;
+        }
         if (frameHandle.valid())
         {
             frameHandle.beginGesture();
@@ -242,21 +514,53 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
 
 void OscWaveView::mouseDrag (const juce::MouseEvent& e)
 {
+    touch.drag (e);
+    if (e.source.getIndex() > 0 || touch.twoDown() || ! gestureOpen)
+        return;
     dragging = true;
     if (isSampleType())
     {
-        const float w = static_cast<float> (juce::jmax (1, getWidth()));
-        const float norm = juce::jlimit (0.0f, 1.0f, e.position.x / w);
+        press.moved (e.position);
+        const float norm = juce::jlimit (0.0f, 1.0f, xToSampleNorm (e.position.x));
+        const bool showLoupe = activeMarker != SampleMarker::none;
         switch (activeMarker)
         {
             case SampleMarker::start:     sampleStartHandle.setNormalised (norm); break;
             case SampleMarker::end:       sampleEndHandle.setNormalised (norm); break;
             case SampleMarker::loopStart: sampleLoopStartHandle.setNormalised (norm); break;
             case SampleMarker::loopEnd:   sampleLoopEndHandle.setNormalised (norm); break;
-            case SampleMarker::none:      break;
+            case SampleMarker::loopPair:
+            {
+                float s = loopPairStartNorm, en = loopPairEndNorm;
+                moveLoopPair (s, en, xToSampleNorm (e.position.x) - loopPairDownNorm);
+                sampleLoopStartHandle.setNormalised (s);
+                sampleLoopEndHandle.setNormalised (en);
+                break;
+            }
+            case SampleMarker::slice:
+                if ((e.position - dragStartPos).getDistanceFromOrigin() > kLongPressSlopPx)
+                {
+                    sliceMoved = true;
+                    moveSlice (sliceCache, draggedSlice, norm);
+                    repaint();
+                }
+                break;
+            case SampleMarker::threshold:
+            {
+                const auto a = waveArea();
+                sliceThresholdHandle.setNormalised (lineToThreshold ((a.getBottom() - e.position.y) / juce::jmax (1.0f, a.getHeight())) / 100.0f);
+                break;
+            }
+            case SampleMarker::none: break;
+        }
+        if (showLoupe)
+        {
+            if (loupe == nullptr)
+                loupe = std::make_unique<Loupe> (ctx.theme);
+            loupe->show (*this, e.getPosition());
         }
     }
-    else
+    else if (! nameSwipe)
     {
         if (frameHandle.valid())
         {
@@ -270,6 +574,13 @@ void OscWaveView::mouseDrag (const juce::MouseEvent& e)
 
 void OscWaveView::mouseUp (const juce::MouseEvent& e)
 {
+    touch.up (e);
+    if (e.source.getIndex() > 0 || ! gestureOpen)
+        return;
+    press.cancel();
+    gestureOpen = false;
+    if (loupe != nullptr)
+        loupe->hide();
     if (isSampleType())
     {
         switch (activeMarker)
@@ -278,12 +589,34 @@ void OscWaveView::mouseUp (const juce::MouseEvent& e)
             case SampleMarker::end:       sampleEndHandle.endGesture(); break;
             case SampleMarker::loopStart: sampleLoopStartHandle.endGesture(); break;
             case SampleMarker::loopEnd:   sampleLoopEndHandle.endGesture(); break;
-            case SampleMarker::none:      break;
+            case SampleMarker::loopPair:  sampleLoopStartHandle.endGesture(); sampleLoopEndHandle.endGesture(); break;
+            case SampleMarker::threshold: sliceThresholdHandle.endGesture(); break;
+            case SampleMarker::slice:
+            {
+                const int moved = draggedSlice;
+                draggedSlice = -1;
+                if (sliceMoved && moved >= 0)
+                    commitSlices (sliceCache);
+                else
+                    refreshSliceCache();
+                break;
+            }
+            case SampleMarker::none: break;
         }
         activeMarker = SampleMarker::none;
+        repaint();
     }
     else
     {
+        if (nameSwipe)
+        {
+            const float dx = e.position.x - dragStartPos.x;
+            if (std::abs (dx) >= 48.0f)
+                stepWavetable (dx < 0.0f ? +1 : -1); // swipe left = the next table
+            nameSwipe = false;
+            dragging = false;
+            return;
+        }
         if (frameHandle.valid())
             frameHandle.endGesture();
 
@@ -294,11 +627,18 @@ void OscWaveView::mouseUp (const juce::MouseEvent& e)
     dragging = false;
 }
 
-void OscWaveView::mouseDoubleClick (const juce::MouseEvent&)
+void OscWaveView::mouseDoubleClick (const juce::MouseEvent& e)
 {
     if (isSampleType())
     {
-        // Reset start and end to full range
+        // double-tap between the loop markers resets the loop to the sample start / end; elsewhere start and end go back to the full range
+        if (betweenLoopMarkers (xToSampleNorm (e.position.x), sampleLoopStartHandle.normalised(), sampleLoopEndHandle.normalised(),
+                                kMinSliceGap))
+        {
+            sampleLoopStartHandle.setPlainComplete (sampleStartHandle.normalised() * 100.0f);
+            sampleLoopEndHandle.setPlainComplete (sampleEndHandle.normalised() * 100.0f);
+            return;
+        }
         sampleStartHandle.setPlainComplete (0.0f);
         sampleEndHandle.setPlainComplete (100.0f);
     }
@@ -363,11 +703,15 @@ void OscWaveView::paint (juce::Graphics& g)
     }
 
     // Main waveform area
-    const auto waveArea = r.reduced (t.px (8.0f), t.px (4.0f));
+    const auto area = waveArea();
     if (isSampleType())
-        paintSample (g, waveArea);
+    {
+        if (juce::Time::getMillisecondCounter() - sliceCacheMs > 500)
+            refreshSliceCache();
+        paintSample (g, area);
+    }
     else
-        paintWavetable (g, waveArea);
+        paintWavetable (g, area);
 
     g.endTransparencyLayer();
 }
@@ -535,27 +879,31 @@ void OscWaveView::paintSample (juce::Graphics& g, juce::Rectangle<float> area)
     const float loopEndNorm = sampleLoopEndHandle.valid() ? sampleLoopEndHandle.normalised() : 1.0f;
 
     const float w = area.getWidth();
-    const float sX = area.getX() + startNorm * w;
-    const float eX = area.getX() + endNorm * w;
-    const float lsX = area.getX() + loopStartNorm * w;
-    const float leX = area.getX() + loopEndNorm * w;
+    const float sX = sampleNormToX (startNorm);
+    const float eX = sampleNormToX (endNorm);
+    const float lsX = sampleNormToX (loopStartNorm);
+    const float leX = sampleNormToX (loopEndNorm);
+    const auto inside = [&area] (float x) { return x >= area.getX() - 0.5f && x <= area.getRight() + 0.5f; };
+
+    g.saveState();
+    g.reduceClipRegion (area.toNearestInt());
 
     // Loop region shaded background
     if (leX > lsX)
     {
         g.setColour (c.accent.withAlpha (0.12f));
-        g.fillRect (lsX, area.getY(), leX - lsX, area.getHeight());
+        g.fillRect (juce::jmax (lsX, area.getX()), area.getY(), juce::jmin (leX, area.getRight()) - juce::jmax (lsX, area.getX()), area.getHeight());
     }
 
-    // Sample waveform (procedural audio wave display)
+    // Sample waveform (procedural audio wave display) over the visible window
     juce::Path waveP;
-    const int points = juce::roundToInt (w);
+    const int points = juce::jmax (2, juce::roundToInt (w));
     const float midY = area.getCentreY();
     const float halfH = area.getHeight() * 0.4f;
 
     for (int i = 0; i < points; ++i)
     {
-        const float normX = static_cast<float> (i) / static_cast<float> (points);
+        const float normX = static_cast<float> (sampleVp.toRange (static_cast<double> (i) / static_cast<double> (points)));
         const float x = area.getX() + static_cast<float> (i);
 
         // Procedural decay envelope sample
@@ -571,25 +919,76 @@ void OscWaveView::paintSample (juce::Graphics& g, juce::Rectangle<float> area)
     g.setColour (c.accentDim);
     g.strokePath (waveP, juce::PathStrokeType (t.px (1.5f)));
 
-    // Markers: Start (green/text), End (warn/amber), Loop (mod/purple)
     // Loop markers
     g.setColour (c.mod);
-    g.drawVerticalLine (juce::roundToInt (lsX), area.getY(), area.getBottom());
-    g.drawVerticalLine (juce::roundToInt (leX), area.getY(), area.getBottom());
+    if (inside (lsX))
+        g.drawVerticalLine (juce::roundToInt (lsX), area.getY(), area.getBottom());
+    if (inside (leX))
+        g.drawVerticalLine (juce::roundToInt (leX), area.getY(), area.getBottom());
+
+    // Slice markers (Manual mode): a line with a handle at the foot, the selected one in the accent colour
+    if (sliceModeIndex() == 2)
+    {
+        for (size_t i = 0; i < sliceCache.size(); ++i)
+        {
+            const float x = sampleNormToX (sliceCache[i]);
+            if (! inside (x))
+                continue;
+            const bool sel = static_cast<int> (i) == selectedSlice;
+            g.setColour (sel ? c.accent : c.warn.withAlpha (0.85f));
+            g.drawVerticalLine (juce::roundToInt (x), area.getY(), area.getBottom());
+            juce::Path tri;
+            tri.addTriangle (x - t.px (6.0f), area.getBottom(), x + t.px (6.0f), area.getBottom(), x, area.getBottom() - t.px (11.0f));
+            g.fillPath (tri);
+        }
+    }
+    else if (sliceModeIndex() == 1)
+    {
+        // Auto slices: the threshold line, drag it up for fewer slices
+        const float y = thresholdLineY();
+        g.setColour (c.warn);
+        const float dashes[] = { t.px (6.0f), t.px (4.0f) };
+        g.drawDashedLine ({ area.getX(), y, area.getRight(), y }, dashes, 2, t.px (1.5f));
+        g.setFont (t.labelFont());
+        g.drawText ("TH " + juce::String (juce::roundToInt (sliceThresholdHandle.valid() ? sliceThresholdHandle.plain() : 50.0f)) + "%",
+                    juce::Rectangle<float> (area.getRight() - t.px (64.0f), y - t.px (16.0f), t.px (62.0f), t.px (14.0f)).toNearestInt(),
+                    juce::Justification::centredRight, false);
+    }
 
     // Start / End markers with tabs
-    g.setColour (c.accent);
-    g.drawVerticalLine (juce::roundToInt (sX), area.getY(), area.getBottom());
-    g.fillRect (sX - t.px (6.0f), area.getY(), t.px (12.0f), t.px (14.0f));
-    g.setColour (c.textOnAccent);
-    g.setFont (t.labelFont());
-    g.drawText ("S", juce::Rectangle<float> (sX - t.px (6.0f), area.getY(), t.px (12.0f), t.px (14.0f)).toNearestInt(), juce::Justification::centred, false);
+    const juce::Rectangle<float> sTab (sX - t.px (6.0f), area.getY(), t.px (12.0f), t.px (14.0f));
+    const juce::Rectangle<float> eTab (eX - t.px (6.0f), area.getY(), t.px (12.0f), t.px (14.0f));
+    if (inside (sX))
+    {
+        g.setColour (c.accent);
+        g.drawVerticalLine (juce::roundToInt (sX), area.getY(), area.getBottom());
+        g.fillRect (sTab);
+        g.setColour (c.textOnAccent);
+        g.setFont (t.labelFont());
+        g.drawText ("S", sTab.toNearestInt(), juce::Justification::centred, false);
+    }
+    if (inside (eX))
+    {
+        g.setColour (c.warn);
+        g.drawVerticalLine (juce::roundToInt (eX), area.getY(), area.getBottom());
+        g.fillRect (eTab);
+        g.setColour (c.textOnAccent);
+        g.setFont (t.labelFont());
+        g.drawText ("E", eTab.toNearestInt(), juce::Justification::centred, false);
+    }
+    g.restoreState();
 
-    g.setColour (c.warn);
-    g.drawVerticalLine (juce::roundToInt (eX), area.getY(), area.getBottom());
-    g.fillRect (eX - t.px (6.0f), area.getY(), t.px (12.0f), t.px (14.0f));
-    g.setColour (c.textOnAccent);
-    g.drawText ("E", juce::Rectangle<float> (eX - t.px (6.0f), area.getY(), t.px (12.0f), t.px (14.0f)).toNearestInt(), juce::Justification::centred, false);
+    // zoom read-out and the window bar (where the visible part sits in the whole sample)
+    if (! sampleVp.isFit())
+    {
+        g.setColour (c.textDim);
+        g.setFont (t.labelFont());
+        g.drawText ("x" + juce::String (sampleVp.zoom(), 1), area.toNearestInt().removeFromBottom (juce::roundToInt (t.px (16.0f))),
+                    juce::Justification::bottomRight, false);
+        g.setColour (c.accent.withAlpha (0.6f));
+        g.fillRect (area.getX() + static_cast<float> (sampleVp.start) * w, area.getBottom() - t.px (3.0f),
+                    static_cast<float> (sampleVp.span) * w, t.px (3.0f));
+    }
 }
 
 // ---- OscNoiseView -----------------------------------------------------------------------------------------------------------------

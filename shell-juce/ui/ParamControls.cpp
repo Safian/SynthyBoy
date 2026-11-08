@@ -565,20 +565,52 @@ void ParamChoice::step (int direction)
         }
 }
 
+juce::PopupMenu ParamChoice::buildOptionMenu() const
+{
+    juce::PopupMenu menu;
+    if (! handle.valid())
+        return menu;
+    const ParamInfo& info = handle.info();
+    const int count = static_cast<int> (choiceCount (info));
+    const int current = static_cast<int> (std::lround (handle.plain()));
+    const auto item = [&] (int i)
+    {
+        const bool ok = capStateForValue (handle.index(), static_cast<float> (i), ctx.host.engineCaps()).available;
+        return juce::PopupMenu::Item (juce::String (choiceName (info, static_cast<size_t> (i)))).setID (i + 1).setEnabled (ok).setTicked (i == current);
+    };
+
+    if (groups.empty())
+    {
+        for (int i = 0; i < count; ++i)
+            menu.addItem (item (i));
+        return menu;
+    }
+    // tap a group, tap a mode: a group with a single mode is that mode itself; a gap group is greyed
+    for (const auto& group : groups)
+    {
+        if (group.gap || group.items.empty())
+        {
+            menu.addItem (juce::PopupMenu::Item (juce::String (group.name) + " (not available)").setEnabled (false));
+            continue;
+        }
+        juce::PopupMenu sub;
+        bool hasCurrent = false;
+        for (const int i : group.items)
+            if (i >= 0 && i < count)
+            {
+                sub.addItem (item (i));
+                hasCurrent = hasCurrent || i == current;
+            }
+        menu.addSubMenu (group.name, sub, true, nullptr, hasCurrent);
+    }
+    return menu;
+}
+
 void ParamChoice::showOptions()
 {
     if (! handle.valid())
         return;
-    const ParamInfo& info = handle.info();
-    const int count = static_cast<int> (choiceCount (info));
-    const int current = static_cast<int> (std::lround (handle.plain()));
-
-    juce::PopupMenu menu;
-    for (int i = 0; i < count; ++i)
-    {
-        const bool ok = capStateForValue (handle.index(), static_cast<float> (i), ctx.host.engineCaps()).available;
-        menu.addItem (i + 1, juce::String (choiceName (info, static_cast<size_t> (i))), ok, i == current);
-    }
+    auto menu = buildOptionMenu();
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMinimumWidth (getWidth()),
                         [safe = juce::Component::SafePointer<ParamChoice> (this)] (int result)
                         {

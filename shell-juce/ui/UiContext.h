@@ -68,6 +68,7 @@ private:
 struct ViewState
 {
     int lfoTab = 0; // LfoTabsPanel: 0..9 = LFO 1..10, 10..13 = random LFO 1..4
+    int oscTab = 0; // OscTabsPanel: 0..2 = oscillator 1..3
 };
 
 /** What a control or panel gets: the host, the theme, the assign controller. Lives as long as the editor. */

@@ -31,6 +31,8 @@ set(SYNTHYBOY_UI_SOURCES
     ${UI_DIR}/Overlays.cpp
     ${UI_DIR}/ParamControls.cpp
     ${UI_DIR}/Sheet.cpp
+    ${UI_DIR}/ModuleSheet.cpp
+    ${UI_DIR}/GestureKit.cpp
     ${UI_DIR}/ModSourceBar.cpp
     ${UI_DIR}/Panel.cpp
     ${UI_DIR}/PanelHost.cpp

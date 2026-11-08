@@ -6,9 +6,11 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <string>
 
+#include "../GestureKit.h"
 #include "../ParamHandle.h"
 #include "../Theme.h"
 #include "../UiContext.h"
+#include "../model/GestureModel.h"
 
 namespace synthyboy::ui
 {
@@ -22,7 +24,7 @@ public:
     ~OscWaveView() override;
 
     enum class ViewMode { wave2D, wave3D, spectral };
-    enum class SampleMarker { none, start, end, loopStart, loopEnd };
+    enum class SampleMarker { none, start, end, loopStart, loopEnd, loopPair, slice, threshold };
 
     ViewMode viewMode() const noexcept { return mode; }
     void setViewMode (ViewMode newMode);
@@ -37,8 +39,51 @@ public:
     void mouseDrag (const juce::MouseEvent& e) override;
     void mouseUp (const juce::MouseEvent& e) override;
     void mouseDoubleClick (const juce::MouseEvent& e) override;
+    void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
+    void mouseMagnify (const juce::MouseEvent& e, float scaleFactor) override;
+
+    // ---- sample view: zoom / pan, slices, threshold line, loop pair, loupe (design 02 rows 19..23) ----
+    /** Where the sample waveform is drawn (the markers and the gestures use the same rectangle). */
+    juce::Rectangle<float> waveArea() const;
+    Viewport& sampleViewport() noexcept { return sampleVp; }
+    float sampleNormToX (float norm) const;
+    float xToSampleNorm (float x) const;
+    /** Zoom about the screen x (view coordinates) / pan by dx pixels. The + - Fit buttons call the same. */
+    void zoomSampleAt (float x, float factor);
+    void panSample (float dxPixels);
+    void fitSample();
+    /** Slice markers of the Manual slice mode: the `slices` of this oscillator's ContentSample (empty without a loaded sample). */
+    const std::vector<float>& slices() const noexcept { return sliceCache; }
+    bool canEditSlices() const;
+    bool addSliceAt (float norm);
+    bool removeSlice (int index);
+    int selectedSliceIndex() const noexcept { return selectedSlice; }
+    /** The threshold line (slice mode Auto): y in view coordinates. */
+    float thresholdLineY() const;
+    bool loupeShowing() const noexcept { return loupe != nullptr && loupe->isShowing(); }
+    /** The gestures of two fingers / a trackpad, also callable directly (tests, hardware): pinch zoom, pan, swipe to the next oscillator. */
+    void handleTouchGesture (const TouchTracker::Gesture& g);
+    /** The row of the design: switch to the previous (-1) / next (+1) oscillator; set by the panel. */
+    std::function<void (int)> onSwitchOscillator;
+    /** The wavetable name swipe (design 02-04): previous (-1) / next (+1) table. */
+    void stepWavetable (int direction);
+    void longPressedAt (juce::Point<float> where);
+
+    /** Test hooks. */
+    bool isDraggingMarker() const noexcept { return activeMarker != SampleMarker::none; }
+    juce::TextButton& zoomInButton() noexcept { return zoomInBtn; }
+    juce::TextButton& zoomOutButton() noexcept { return zoomOutBtn; }
+    juce::TextButton& fitButton() noexcept { return fitBtn; }
+    juce::TextButton& addSliceButton() noexcept { return addSliceBtn; }
+    juce::TextButton& removeSliceButton() noexcept { return removeSliceBtn; }
+    LongPressDetector& longPress() noexcept { return press; }
+    void refreshSliceCache();
 
 private:
+    bool commitSlices (const std::vector<float>& newSlices);
+    int sliceModeIndex() const;
+    int nearestSliceAtX (float x) const;
+    void cancelOneFingerGesture();
     void updateButtons();
     void paintWavetable (juce::Graphics& g, juce::Rectangle<float> area);
     void paintWave2D (juce::Graphics& g, juce::Rectangle<float> area, float frame, float warpAmount, int warpType, int wtIdx);
@@ -66,6 +111,22 @@ private:
     juce::TextButton prevWtButton { "<" };
     juce::TextButton nextWtButton { ">" };
     juce::TextButton viewModeButton { "2D" };
+    juce::TextButton zoomInBtn { "+" }, zoomOutBtn { "-" }, fitBtn { "Fit" };
+    juce::TextButton addSliceBtn { "+ Slice" }, removeSliceBtn { "- Slice" };
+
+    ParamHandle sliceModeHandle, sliceThresholdHandle;
+    Viewport sampleVp;
+    std::vector<float> sliceCache;
+    juce::uint32 sliceCacheMs = 0;
+    int selectedSlice = -1;
+    int draggedSlice = -1;
+    bool sliceMoved = false;
+    float loopPairStartNorm = 0.0f, loopPairEndNorm = 0.0f, loopPairDownNorm = 0.0f;
+    bool nameSwipe = false;
+    bool gestureOpen = false; // a one-finger gesture of this view is running (its mouseUp must close it)
+    TwoFingerInput touch;
+    LongPressDetector press;
+    std::unique_ptr<Loupe> loupe;
 
     juce::Point<float> dragStartPos;
     float dragStartNorm = 0.0f;

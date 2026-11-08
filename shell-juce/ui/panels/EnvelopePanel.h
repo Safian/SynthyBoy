@@ -28,6 +28,7 @@ public:
     int envelopeIndex() const noexcept { return envIdx; }
 
     juce::String title() const override;
+    std::string modulePrefix() const override { return "env" + std::to_string (envIdx); }
     std::vector<std::string> keys() const override;
     void build() override;
 
