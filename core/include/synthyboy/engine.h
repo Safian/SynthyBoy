@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "engine_caps.h"
 #include "events.h"
 #include "params.h"
 #include "quality.h"
@@ -41,6 +42,11 @@ public:
     /** Sets a parameter (plain value, constrained to the parameter's range); unknown ids and NaN are ignored. */
     virtual void setParam (uint32_t id, float plain) noexcept = 0;
     virtual float getParam (uint32_t id) const noexcept = 0;
+
+    /** The areas of functionality added after state version 2 that this engine implements (engine_caps.h). The default is none: the
+        keys of version 3 are stored and read back but not live, and supportsParam () is false for them until the bits they need
+        (requiredCaps ()) are all set. Constant for the lifetime of the engine; any thread. */
+    virtual EngineCapsMask capabilities() const noexcept { return kCapNone; }
 
     /** True if the engine acts on this parameter. The value of every parameter of the table is stored and read back by every
         engine, the others are simply ignored (the own engine implements a subset: core/engine-own/README.md). */

@@ -180,7 +180,7 @@ public:
     bool supportsParam (uint32_t id) const noexcept override
     {
         const int i = findParamIndex (id);
-        return i >= 0 && static_cast<size_t> (i) < kNumKeysV2; // the keys of state version 3 are stored but not implemented yet
+        return i >= 0 && capsCover (capabilities(), requiredCaps (static_cast<size_t> (i))); // the keys of state version 3 need their capability bits
     }
 
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override
