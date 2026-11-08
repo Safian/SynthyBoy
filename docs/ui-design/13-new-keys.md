@@ -363,7 +363,29 @@ Kick `fx_convolve_1` (on, ir, size, tone, phi_min, predelay, sync, division), `f
 
 5 + 7 + 4 = 16 keys. Crossovers are linear-phase-compensated Linkwitz-Riley 24 dB (**ASSUMPTION A24**, not in the manual; summing all unbypassed bands with no effects must be transparent within 0.1 dB, to be tested). FX scope for all of B12: `G` (the FX run on the summed output; modulation of FX parameters uses the existing "sum output" rule of 08), smoothing `S` for continuous keys, `X` for switches. Group of the order / rack / force keys: `FX / Order`, `FX / Racks`, `FX / Reverb`. Not added: per-module output LEVEL trim on the nine Vital effects (G72), compressor limit / crossovers (G73), delay Tap, reverb algorithms (G77), phaser DEPTH 2 (G76), X-Shaper (G75): none is decided.
 
-### 4.13 Choices made by WP0 where this file was silent
+### 4.14 B14 – Pitch modes, CRS coarse, pitch tracking, transpose snap, unison laws & range, phase legato (G25-G27, G31, G32) – positions 1484..1520 [37] – area 02 / 07
+
+12 keys per oscillator (N = 1..3) + 1 global voice key = 37 keys.
+
+| Key | Name | Type | Range | Default | Unit | Curve | Sc | Mod | Kick |
+|-----|------|------|-------|---------|------|-------|----|----:|------|
+| `oscN.pitch_mode` (x3) | `Osc N Pitch Mode` | choice | Semitones / Harmonics / Ratio / Step | Semitones | - | - | V | no | `oscN_pitch_uni` |
+| `oscN.pitch_coarse` (x3) | `Osc N Pitch Coarse` | float | -48 .. 48 | 0 | st | lin | V | y | same |
+| `oscN.pitch_track` (x3) | `Osc N Pitch Tracking` | bool | Off/On | On | - | - | V | no | same |
+| `oscN.pitch_bend_track` (x3) | `Osc N Pitch Bend Tracking` | bool | Off/On | On | - | - | V | no | `more:` |
+| `oscN.fixed_pitch` (x3) | `Osc N Fixed Pitch` | float | 0 .. 127 | 48 | - | lin | V | y | `oscN_pitch_uni` |
+| `oscN.transpose_snap` (x3) | `Osc N Transpose Snap` | int | 0 .. 8191 | 0 | - | lin | V | no | `more:` |
+| `oscN.unison.mode` (x3) | `Osc N Unison Mode` | choice | Linear / Super / Exp / Inv / Random | Linear | - | - | V | no | `oscN_pitch_uni` |
+| `oscN.unison.range` (x3) | `Osc N Unison Range` | float | 0 .. 48 | 2 | st | lin | V | y | same |
+| `oscN.unison.blend_shape` (x3) | `Osc N Unison Blend Shape` | float | -100 .. 100 | 0 | % | lin | V | y | same |
+| `oscN.unison.stack_repeat` (x3) | `Osc N Unison Stack Repeat` | choice | 1x / 2x / 3x | 1x | - | - | V | no | same |
+| `oscN.phase_legato` (x3) | `Osc N Phase Legato` | bool | Off/On | Off | - | - | V | no | `more:` |
+| `oscN.phase_memory` (x3) | `Osc N Phase Memory` | choice | All Voices / Contiguous / Per Voice | All Voices | - | - | V | no | `more:` |
+| `voice.phase_legato` | `Voice Phase Legato` | bool | Off/On | Off | - | - | G | no | `master_expression` |
+
+Order inside B14: `osc1` (12 keys), `osc2` (12 keys), `osc3` (12 keys), `voice.phase_legato` (1 key).
+
+### 4.15 Choices made by WP0 where this file was silent
 
 * **Order inside a block** (the destination numbers of §2 only depend on the counts, the order fixes the table positions): B03 is LFO-major (`lfo1.mono`, `lfo1.direction`, `lfo1.host`, `lfo2.mono` ...); B10 lists `osc1..3.filter_blend`, `noise.filter_blend`, then the sends source by source (`osc1.bus1_send`, `osc1.bus2_send`, `osc2.bus1_send` ... `noise.*`, `filter1.*`, `filter2.*`), `filter1.destination`, `filter2.destination`, `bus1.level`, `bus2.level`, `bus1.destination`, `bus2.destination`, `bus1.fx_bypass`, `bus2.fx_bypass`, `direct.level`, `main.fx_bypass`; B11 is filter-major (`filter1.var/pan/level`, `filter2.*`, `fxfilter.*`); B12 follows the row order of §4.12 (the 16 `<fx>.rack` keys in the order of the module list). `tests/test_new_keys.cpp` freezes the positions.
 * **Display names not given above:** `Utility Polarity Left/Right`, `Utility Low Pass`, `Utility High Pass`, `Utility Mono Bass`, `Utility Mono Bass Frequency`, `Utility Width/Pan/Mix/Level`; the Bode, Convolve and Splitter names are the ones of the tables. Rack keys: `<Module> Rack` (`Hyper Dimension Rack`, `Splitter L/M/H Rack`, ...).
@@ -413,17 +435,18 @@ Missing content at load: the existing fallback and `missing_content` flag (ARCHI
 | B10 | mixer, buses, direct | 26 | 1360..1385 | 19 | 338-356 |
 | B11 | filter var / pan / level (x3) | 9 | 1386..1394 | 9 | 357-365 |
 | B12 | fx order, racks, new FX, reverb force | 89 | 1395..1483 | 38 | 366-403 |
-| **Total** | | **604** | 880..1483 | **134** | 270..403 |
+| B14 | pitch modes, CRS, snap, unison, phase legato | 37 | 1484..1520 | 12 | 404-415 |
+| **Total** | | **641** | 880..1520 | **146** | 270..415 |
 
-Resulting table: 880 + 604 = **1484 keys**, 269 + 134 = **403 modulatable** keys, destination choice size **404**, mod sources **38**, positions 0..1483. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
+Resulting table: 880 + 641 = **1521 keys**, 269 + 146 = **415 modulatable** keys, destination choice size **416**, mod sources **38**, positions 0..1520. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
 
 ## 8. Decided items deliberately NOT specified as keys, and undecided GAPs left out
 
-Left out because no decision names them (not silently dropped; the owner can add them as another block): Sub oscillator (G23), Clean Mode (G54), per-slot remap curve and RISE / FALL (G69, Q20 proposed), CRS / pitch modes / pitch tracking (G25-G27), Phase Legato (G31), unison laws / range (G32), warp modes G34-G37, noise colours (G38), ENV 1 toggle on channels (G39), voice steal / same-note (G12), poly legato (G13), separate bend up / down (G14), stereo spread (G15), LFO swing (G16), per-voice control (G17, Q25 proposed), 4x / no smoothing (G18), Multisample / Granular / Spectral (G19, G21, G22), per-module FX LEVEL (G72), dynamic effect instancing (G71), compressor / delay / distortion / reverb / phaser extras (G73-G77), Save as Default (G02), lock (G08), MIDI learn (G07: shell table, not a key). Q3, Q4 (A/B snapshots), Q7, Q31, Q32, Q33, Q14 need no key.
+Left out because no decision names them (not silently dropped; the owner can add them as another block): Sub oscillator (G23), Clean Mode (G54), per-slot remap curve and RISE / FALL (G69, Q20 proposed), warp modes G34-G37, noise colours (G38), ENV 1 toggle on channels (G39), voice steal / same-note (G12), poly legato (G13), separate bend up / down (G14), stereo spread (G15), LFO swing (G16), per-voice control (G17, Q25 proposed), 4x / no smoothing (G18), Multisample / Granular / Spectral (G19, G21, G22), per-module FX LEVEL (G72), dynamic effect instancing (G71), compressor / delay / distortion / reverb / phaser extras (G73-G77), Save as Default (G02), lock (G08), MIDI learn (G07: shell table, not a key). Q3, Q4 (A/B snapshots), Q7, Q31, Q32, Q33, Q14 need no key. (G25-G27, G31, G32 specified in B14).
 
 ## 9. Kick pages (09 §5 has 61 pages)
 
-New pages: 42 -> **103 pages** (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
+New pages: 42 + 3 (B14) -> **106 pages** (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
 
 | Page id(s) | Section | Keys (<= 8) | New pages |
 |------------|---------|-------------|----------:|
@@ -546,3 +569,10 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A43 | `PZ SVF` without curve data runs the package's pole / zero SVF (the "flat" fallback of 5 is for a missing reference); with a curve the voice filter is a cascade of bells fitted to it, the cutoff shifts the curve (1 kHz = as drawn) |
 | A44 | Convolve re-partitions its impulse on a builder thread when size, minimum phase, attack, decay, damping or gain change (an audible change follows after the build); tier low bypasses Hyper / Dimension, Bode and Convolve |
 | A45 | `lfoN.mono` in the envelope and loop trigger types (Envelope, Sustain envelope, Loop at point, Loop and hold) is Serum's MONO: ONE LFO instance serves all voices. Notes are grouped: a note on while no key is held and no sustain pedal is down starts a new group, and only that restarts the LFO (from its start, delay and fade included); further notes of the group join the running instance at its current position and never restart or release it; the instance is "held" (Sustain envelope waits at the phase marker, Loop and hold loops) while any key of the group or the pedal is down, and runs on when the last one is released, also for the voices still in their release. The instance is advanced once per engine chunk with the rate / phase / delay / fade of the first voice processed, every voice reads it with its own rate (key follow) for that chunk. Retrigger and Sync types keep the A33 behaviour (Sync mode on the engine clock). Point modulation of a custom shape (Q17 / G65) reads the source of each voice: the points of the shape move per voice by `amount * source` (y clamped to 0..1, x between the neighbours, the end points keep x), every voice reads its own table; the sources are the outputs of the modulation sources as the matrix sees them (envelopes 0..1, LFOs -1..1, velocity, note, random, lift, slide, oct note, poly aftertouch per voice; macros, mod wheel, pitch wheel, channel pressure globally). A source that depends on the LFO itself (its own output, or an LFO that is modulated by it) would close a loop and is ignored, as for a matrix slot. The values are quantised to 1/4096 before a table is baked; the bake cost per chunk is bounded by the tier (low 4 tables of 512 points, medium 8 and high 16 of 2048; a table that has waited 4 chunks is baked anyway) |
+| A80 | `oscN.pitch_mode` (G26): 4 choices: Semitones (0), Harmonics (1), Ratio (2), Step (3). Semitones mode performs standard semitonic pitch transposition. Harmonics mode multiplies pitch by an integer harmonic index (1 + floor(coarse)). Ratio mode multiplies frequency by ratio 1 + coarse (or 1/(1-coarse) when negative). Step mode steps through the scale degrees of the active tuning / MTS-ESP dynamic tuning seam. Default Semitones (0). |
+| A81 | `oscN.pitch_coarse` (G25): Continuous coarse pitch parameter in matching unit. In Semitones: semitones (-48..48 st). In Harmonics: harmonic index offset (0..63). In Ratio: ratio offset (-16..16). In Step: scale degree step (-48..48). Modulatable (`kMod`). Default 0.0f. |
+| A82 | `oscN.pitch_track` & `oscN.fixed_pitch` (G27): `pitch_track` toggle (default on / true). When off, oscillator runs at fixed pitch `oscN.fixed_pitch` (default 48 = C3, matching Vital's `kNoMidiTrackDefault`). `oscN.pitch_bend_track` (default on / true) controls whether pitch bend affects fixed-pitch oscillators. |
+| A83 | `oscN.transpose_snap` (Row 02-10): Transpose snap keyboard quantizing transpose to selected pitch classes. 13-bit value (0..8191, default 0 = Off): bits 0..11 select pitch classes C through B; bit 12 (0x1000) selects Global Snap. Uses Vital's built-in `snapTranspose` engine algorithm. |
+| A84 | `oscN.unison.mode` (G32): 5 detune laws: Linear (0), Super (1), Exp (2), Inv (3), Random (4). Linear matches standard Vital detune. Super applies a cubic distribution clustered near the center. Exp applies an exponential distribution. Inv scoops the center voices outward. Random applies a deterministic per-voice pseudo-random detune. Default Linear (0). |
+| A85 | `oscN.unison.range` & `oscN.unison.blend_shape` & `oscN.unison.stack_repeat` (G32): `unison.range` sets maximum detune span (0..48 semitones, default 2.0 st, `kMod`). `unison.blend_shape` controls detuned vs center voice level distribution (-100..100%, default 0.0%, `kMod`). `unison.stack_repeat` sets interval repetition for stack styles (1x, 2x, 3x, default 1x = 0). |
+| A86 | `oscN.phase_legato` & `oscN.phase_memory` & `voice.phase_legato` (G31): `oscN.phase_legato` (per-oscillator) and `voice.phase_legato` (global/voice) preserve oscillator phase continuity across legato note transitions without resetting to start/random phase. `oscN.phase_memory` selects phase policy: All Voices (0), Contiguous (1), Per Voice (2). Defaults: off / All Voices. |

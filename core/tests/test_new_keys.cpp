@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (1484));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604);
+    CHECK_EQ (paramCount(), static_cast<size_t> (1521));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 641);
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
     CHECK_EQ (kNumModSources, 38);
-    CHECK_EQ (kNumModDestinations, 404);
+    CHECK_EQ (kNumModDestinations, 416);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (38));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (403));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (415));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (403));
-    CHECK_EQ (newModulatable, static_cast<size_t> (134));
+    CHECK_EQ (modulatable, static_cast<size_t> (415));
+    CHECK_EQ (newModulatable, static_cast<size_t> (146));
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (1484));
+    CHECK_EQ (ids.size(), static_cast<size_t> (1521));
 }
 
 TEST (append_positions_golden)
@@ -126,6 +126,10 @@ TEST (append_positions_golden)
         { "fx.order.10", 1395 }, { "fx.order.16", 1401 }, { "chorus.rack", 1402 }, { "splitter_ms.rack", 1417 },
         { "reverb.force_enable", 1418 }, { "hyperdim.on", 1419 }, { "utility.on", 1428 }, { "bode.on", 1439 },
         { "convolve.on", 1454 }, { "splitter_lh.on", 1468 }, { "splitter_ms.level", 1483 },
+        { "osc1.pitch_mode", 1484 }, { "osc1.phase_memory", 1495 },
+        { "osc2.pitch_mode", 1496 }, { "osc2.phase_memory", 1507 },
+        { "osc3.pitch_mode", 1508 }, { "osc3.phase_memory", 1519 },
+        { "voice.phase_legato", 1520 },
     };
     for (const auto& e : expected)
         if (! CHECK_EQ (positionOf (e.key), e.position))
@@ -208,8 +212,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (39));
         CHECK_EQ (byKey (key).max, 38.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (404));
-    CHECK_EQ (byKey ("mod64.destination").max, 403.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (416));
+    CHECK_EQ (byKey ("mod64.destination").max, 415.0f);
 
     // lists that stay unchanged
     CHECK_EQ (namesOf ("lfo1.sync").size(), static_cast<size_t> (5));
@@ -261,6 +265,7 @@ TEST (destination_numbers_of_version_2_do_not_move)
         { "osc1.filter_blend", 338, "direct.level", 356 },
         { "filter1.var", 357, "fxfilter.level", 365 },
         { "hyperdim.rate", 366, "splitter_ms.level", 403 },
+        { "osc1.pitch_coarse", 404, "osc3.unison.blend_shape", 415 },
     };
     for (const auto& r : ranges)
     {
@@ -320,6 +325,19 @@ TEST (new_key_defaults_are_neutral)
     CHECK_EQ (byKey ("utility.hpf").def, 20.0f);
     CHECK_EQ (byKey ("osc3.sample.keytrack").def, 1.0f);
     CHECK_EQ (byKey ("lfo10.smooth").def, 1.0f);
+    CHECK_EQ (byKey ("osc1.pitch_mode").def, 0.0f);
+    CHECK_EQ (byKey ("osc1.pitch_coarse").def, 0.0f);
+    CHECK_EQ (byKey ("osc1.pitch_track").def, 1.0f);
+    CHECK_EQ (byKey ("osc1.pitch_bend_track").def, 1.0f);
+    CHECK_EQ (byKey ("osc1.fixed_pitch").def, 48.0f);
+    CHECK_EQ (byKey ("osc1.transpose_snap").def, 0.0f);
+    CHECK_EQ (byKey ("osc1.unison.mode").def, 0.0f);
+    CHECK_EQ (byKey ("osc1.unison.range").def, 2.0f);
+    CHECK_EQ (byKey ("osc1.unison.blend_shape").def, 0.0f);
+    CHECK_EQ (byKey ("osc1.unison.stack_repeat").def, 0.0f);
+    CHECK_EQ (byKey ("osc1.phase_legato").def, 0.0f);
+    CHECK_EQ (byKey ("osc1.phase_memory").def, 0.0f);
+    CHECK_EQ (byKey ("voice.phase_legato").def, 0.0f);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
