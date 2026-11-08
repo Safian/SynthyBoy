@@ -709,9 +709,11 @@ TEST (vi_fixture_custom_wavetable)
     }
     CHECK_NEAR (val (r, "osc1.frame"), 50.0, 1e-3);
     CHECK_NEAR (val (r, "osc2.frame"), 50.0, 1e-3);
-    // the engine has no "Preset table" choice yet: nearest built-in + a report item (TODO(C1))
-    CHECK (findItem (r, "wavetables[0]", ItemKind::approximated) != nullptr);
-    CHECK (hasReason (r, Reason::nearestWavetable));
+    CHECK_EQ (val (r, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK_EQ (val (r, "osc2.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK_EQ (val (r, "osc3.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK (findItem (r, "wavetables[0]", ItemKind::approximated) == nullptr);
+    CHECK (! hasReason (r, Reason::nearestWavetable));
     // determinism: same bytes, same result
     const auto r2 = run (f, o);
     CHECK (r2.wavetables.size() == r.wavetables.size() && r2.wavetables[0].sha256 == r.wavetables[0].sha256 && r2.wavetables[2].sha256 == r.wavetables[2].sha256);
@@ -720,6 +722,9 @@ TEST (vi_fixture_custom_wavetable)
     // without the capability nothing is stored but the nearest built-in is chosen
     const auto none = run (f);
     CHECK (none.wavetables.empty());
+    CHECK (hasReason (none, Reason::nearestWavetable));
+    CHECK (findItem (none, "wavetables[0]", ItemKind::approximated) != nullptr);
+    CHECK (val (none, "osc1.wavetable") != static_cast<float> (kWavetablePresetTable));
     CHECK (valuesInRange (none));
 }
 
@@ -1271,4 +1276,39 @@ TEST (vi_real_presets_if_present)
 #else
     std::printf ("    SKIP: SB_VITAL_PRESETS_DIR not defined\n");
 #endif
+}
+
+TEST (user_wavetable_store)
+{
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "synthyboy_test_store";
+    std::error_code ec;
+    std::filesystem::remove_all (tempDir, ec);
+
+    UserWavetableStore store (tempDir.string());
+    ImportedWavetable wt;
+    wt.osc = 1;
+    wt.name = "My Test Table";
+    wt.author = "Test Author";
+    wt.numFrames = 2;
+    wt.frames.resize (2 * 2048, 100);
+    wt.sha256 = Sha256::hashBufferHex (wt.frames.data(), wt.frames.size() * sizeof (int16_t));
+
+    std::string pack, file;
+    CHECK (store.addWavetable (wt, pack, file));
+    CHECK_EQ (pack, std::string ("user.imported-vital"));
+    CHECK (! file.empty());
+    CHECK (store.hasWavetable (wt.sha256));
+
+    // Deduplication check
+    std::string pack2, file2;
+    CHECK (store.addWavetable (wt, pack2, file2));
+    CHECK_EQ (pack2, pack);
+    CHECK_EQ (file2, file);
+    CHECK_EQ (store.packInfo().files.size(), static_cast<size_t> (1));
+
+    // Verification
+    std::vector<std::string> errors;
+    CHECK (verifyContentPack (store.packDirectory(), store.packInfo(), errors));
+
+    std::filesystem::remove_all (tempDir, ec);
 }

@@ -96,6 +96,7 @@ constexpr int kNumBuiltinWavetables = 13;
 constexpr int kNumWavetableChoices = kNumBuiltinWavetables + 1;
 constexpr int kWavetableSine = 0;
 constexpr int kWavetableSaw  = 1;
+constexpr int kWavetablePresetTable = 13;
 /** The built-in LFO shapes (the first choice names of lfoN.shape). */
 constexpr int kNumLfoShapes = 12;
 /** The choice of lfoN.shape after the built-in ones: "Custom" (point list in content.lfo_shapes[]). */

@@ -752,18 +752,10 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                 V.plain[pidx] = static_cast<float> (shortcut);
                 continue; // exact built-in: nothing stored, frame fraction as for a built-in
             }
-            double distance = 0.0;
-            const int nearest = nearestBuiltinWavetable (r.frames.data(), r.numFrames, distance);
-            V.plain[pidx] = static_cast<float> (nearest);
             frameScaleFrames[osc] = r.numFrames;
-            char dist[32];
-            std::snprintf (dist, sizeof dist, "%.1f dB", distance);
-            // TODO(C1): with the choice "Preset table" (docs/ui-design/11 A.4) and caps.customWavetables the value would select it and this
-            // item would not be created. The table is returned in the result so that the host can store it already.
-            c.item (ItemKind::approximated, Reason::nearestWavetable, "content", where, pw.name, oscKey, valueText (*pinfo, nearest),
-                    opt.caps.customWavetables ? std::string ("preset_table_choice_missing; distance ") + dist : std::string ("nearest_builtin; distance ") + dist);
             if (opt.caps.customWavetables)
             {
+                V.plain[pidx] = static_cast<float> (kWavetablePresetTable);
                 ImportedWavetable iw;
                 iw.osc = osc + 1;
                 iw.name = pw.name;
@@ -772,6 +764,16 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                 iw.frames = toInt16 (r.frames);
                 iw.sha256 = Sha256::hashBufferHex (iw.frames.data(), iw.frames.size() * sizeof (int16_t));
                 res.wavetables.push_back (std::move (iw));
+            }
+            else
+            {
+                double distance = 0.0;
+                const int nearest = nearestBuiltinWavetable (r.frames.data(), r.numFrames, distance);
+                V.plain[pidx] = static_cast<float> (nearest);
+                char dist[32];
+                std::snprintf (dist, sizeof dist, "%.1f dB", distance);
+                c.item (ItemKind::approximated, Reason::nearestWavetable, "content", where, pw.name, oscKey, valueText (*pinfo, nearest),
+                        std::string ("nearest_builtin; distance ") + dist);
             }
         }
     }
