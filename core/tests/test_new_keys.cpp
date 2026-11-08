@@ -186,13 +186,14 @@ TEST (choice_lists_are_append_only)
     }
 
     const char* const models[] = { "Multi SVF", "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream",
-                                   "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF" };
+                                   "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF",
+                                   "Normal", "Multi Morph", "Flanges", "Misc", "New" };
     for (const char* key : { "filter1.model", "filter2.model", "fxfilter.model" })
     {
         const auto n = namesOf (key);
-        CHECK_EQ (n.size(), static_cast<size_t> (22));
+        CHECK_EQ (n.size(), static_cast<size_t> (27));
         CHECK (head (n, 8) == std::vector<std::string> ({ "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser" }));
-        for (size_t k = 0; k < 14; ++k)
+        for (size_t k = 0; k < 19; ++k)
             CHECK (n[8 + k] == models[k]);
     }
     for (const char* key : { "filter1.style", "filter2.style", "fxfilter.style" })

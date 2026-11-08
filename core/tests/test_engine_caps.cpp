@@ -138,7 +138,11 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (need ("lfo4.shape", 12.0f), static_cast<EngineCapsMask> (kCapCustomLfoShape));
     CHECK_EQ (need ("rlfo2.style", 4.0f), static_cast<EngineCapsMask> (kCapLfoOptions));
     CHECK_EQ (need ("filter1.model", 7.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("filter1.model", 21.0f), static_cast<EngineCapsMask> (kCapFilterModels));
+    CHECK_EQ (need ("filter1.model", 22.0f), static_cast<EngineCapsMask> (kCapFilterModels2));
+    CHECK_EQ (need ("filter2.model", 26.0f), static_cast<EngineCapsMask> (kCapFilterModels2));
     CHECK_EQ (need ("fxfilter.model", 21.0f), static_cast<EngineCapsMask> (kCapFilterModels));
+    CHECK_EQ (need ("fxfilter.model", 26.0f), static_cast<EngineCapsMask> (kCapFilterModels2));
     CHECK_EQ (need ("filter2.style", 5.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("filter2.style", 6.0f), static_cast<EngineCapsMask> (kCapFilterModels));
     CHECK_EQ (need ("osc3.destination", 4.0f), static_cast<EngineCapsMask> (kCapNone));

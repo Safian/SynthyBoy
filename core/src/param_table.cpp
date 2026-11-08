@@ -48,7 +48,9 @@ constexpr const char* const kWarpTypes3[] = { "None", "Sync", "Formant", "Quanti
                                               "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2" };
 constexpr const char* const kFilterModels[] = { "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser", "Multi SVF",
                                                 "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream",
-                                                "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF" };
+                                                "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF",
+                                                // WP-03 (FILTERS80): the remaining 43 Serum filter types
+                                                "Normal", "Multi Morph", "Flanges", "Misc", "New" };
 constexpr const char* const kFilterStyles[] = { "Style A (12 dB)", "Style B (24 dB)", "Style C (notch swap)", "Style D (dual notch)",
                                                 "Style E (band peak notch)", "Style F (shelf)", "Style G", "Style H", "Style I", "Style J",
                                                 "Style K", "Style L" };

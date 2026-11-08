@@ -207,6 +207,8 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         caps |= kCapCustomLfoShape;
     else if (startsWith (key, "rlfo") && endsWith (key, ".style") && v >= 4)
         caps |= kCapLfoOptions;
+    else if (endsWith (key, ".model") && v >= 22)
+        caps |= kCapFilterModels2;
     else if (endsWith (key, ".model") && v >= 8)
         caps |= kCapFilterModels;
     else if ((startsWith (key, "filter") || startsWith (key, "fxfilter")) && endsWith (key, ".style") && v >= 6)
@@ -268,6 +270,7 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapStereoSpread:     return "stereo_spread";
         case kCapLfoSwing:         return "lfo_swing";
         case kCapQualityOptions:   return "quality_options";
+        case kCapFilterModels2:    return "filter_models2";
         case kCapNone:             break;
     }
     return "";

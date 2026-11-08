@@ -62,7 +62,7 @@ inline size_t choicesInV2 (const synthyboy::ParamInfo& p)
     else if (key.compare (0, 4, "rlfo") == 0 && endsWith (".style"))
         n -= 1;
     else if (endsWith (".model"))
-        n -= 14;
+        n -= 19;
     else if (endsWith (".style") && (key.compare (0, 6, "filter") == 0 || key.compare (0, 8, "fxfilter") == 0))
         n -= 6;
     else if (key.compare (0, 9, "fx.order.") == 0)
