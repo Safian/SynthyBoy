@@ -1,0 +1,198 @@
+// SynthyBoy - core/tuning: Scala .scl scale parser and serializer.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+#include <cmath>
+#include <iomanip>
+#include <sstream>
+
+#include "synthyboy/tuning.h"
+#include "tuning_internal.h"
+
+namespace synthyboy
+{
+namespace tuning
+{
+namespace
+{
+constexpr char kScalaComment = '!';
+
+bool parsePitchToken (const std::string& token, PitchEntry& out) noexcept
+{
+    if (token.empty())
+        return false;
+
+    if (token.find ('.') != std::string::npos)
+    {
+        // Cents format
+        double cents = 0.0;
+        if (! detail::parseDoubleLocaleClassic (token, cents))
+            return false;
+        if (! std::isfinite (cents))
+            return false;
+
+        out.cents = cents;
+        out.ratio = std::pow (2.0, cents / 1200.0);
+        out.text = token;
+        return true;
+    }
+
+    const size_t slashPos = token.find ('/');
+    if (slashPos != std::string::npos)
+    {
+        // Ratio format: num/den
+        const std::string numStr = token.substr (0, slashPos);
+        const std::string denStr = token.substr (slashPos + 1);
+
+        int num = 0;
+        int den = 0;
+        if (! detail::parseIntLocaleClassic (numStr, num) || ! detail::parseIntLocaleClassic (denStr, den))
+            return false;
+
+        if (num <= 0 || den <= 0)
+            return false;
+
+        const double ratio = static_cast<double> (num) / static_cast<double> (den);
+        out.ratio = ratio;
+        out.cents = 1200.0 * std::log2 (ratio);
+        out.text = token;
+        return true;
+    }
+
+    // Integer ratio format: e.g. "2"
+    int val = 0;
+    if (! detail::parseIntLocaleClassic (token, val))
+        return false;
+
+    if (val <= 0)
+        return false;
+
+    const double ratio = static_cast<double> (val);
+    out.ratio = ratio;
+    out.cents = 1200.0 * std::log2 (ratio);
+    out.text = token;
+    return true;
+}
+
+} // namespace
+
+ParseResult parseScl (const char* text, size_t size, Tuning& out) noexcept
+{
+    if (text == nullptr || size == 0)
+        return { ParseError::emptyInput, 0, "Input is empty" };
+
+    if (size > kMaxTuningFileSize)
+        return { ParseError::tooLarge, 0, "Input exceeds maximum size limit" };
+
+    const auto lines = detail::splitLines (text, size);
+    if (lines.empty())
+        return { ParseError::emptyInput, 0, "Input contains no lines" };
+
+    enum class State
+    {
+        description,
+        scaleSize,
+        pitches
+    };
+
+    State state = State::description;
+    std::string desc;
+    int expectedSize = 0;
+    std::vector<PitchEntry> pitches;
+    size_t lineNum = 0;
+
+    for (const auto& rawLine : lines)
+    {
+        ++lineNum;
+        const std::string line = detail::trim (rawLine);
+        if (line.empty() || line[0] == kScalaComment)
+            continue;
+
+        switch (state)
+        {
+            case State::description:
+            {
+                desc = line;
+                state = State::scaleSize;
+                break;
+            }
+            case State::scaleSize:
+            {
+                const auto tokens = detail::splitTokens (line);
+                if (tokens.empty() || ! detail::parseIntLocaleClassic (tokens[0], expectedSize))
+                    return { ParseError::invalidScaleSize, lineNum, "Invalid scale size integer" };
+
+                if (expectedSize <= 0 || expectedSize > kMaxScaleNotes)
+                    return { ParseError::invalidScaleSize, lineNum, "Scale size out of range" };
+
+                pitches.reserve (static_cast<size_t> (expectedSize));
+                state = State::pitches;
+                break;
+            }
+            case State::pitches:
+            {
+                if (pitches.size() >= static_cast<size_t> (expectedSize))
+                    break;
+
+                const auto tokens = detail::splitTokens (line);
+                if (tokens.empty())
+                    continue;
+
+                PitchEntry entry;
+                if (! parsePitchToken (tokens[0], entry))
+                    return { ParseError::invalidPitch, lineNum, "Invalid pitch token in scale" };
+
+                pitches.push_back (entry);
+                break;
+            }
+        }
+    }
+
+    if (state != State::pitches || pitches.size() < static_cast<size_t> (expectedSize))
+        return { ParseError::missingPitchEntries, lineNum, "Scale file ended before all pitches were parsed" };
+
+    Tuning temp = out;
+    if (! temp.setScale (pitches))
+        return { ParseError::invalidScaleSize, lineNum, "Failed to apply scale pitches" };
+
+    temp.setDescription (desc);
+    if (temp.name().empty() || temp.name() == "12-TET")
+        temp.setName (desc);
+
+    out = std::move (temp);
+    return { ParseError::ok, 0, "Success" };
+}
+
+ParseResult Tuning::loadScl (const char* text, size_t size) noexcept
+{
+    return parseScl (text, size, *this);
+}
+
+std::string Tuning::toScl() const
+{
+    std::ostringstream ss;
+    ss.imbue (std::locale::classic());
+
+    ss << "! Generated by SynthyBoy\n";
+    ss << "!\n";
+    ss << (description_.empty() ? (name_.empty() ? "Custom scale" : name_) : description_) << "\n";
+    ss << scale_.size() << "\n";
+    ss << "!\n";
+
+    for (const auto& p : scale_)
+    {
+        if (! p.text.empty())
+        {
+            ss << p.text << "\n";
+        }
+        else
+        {
+            ss << std::fixed << std::setprecision (6) << p.cents << "\n";
+        }
+    }
+
+    return ss.str();
+}
+
+} // namespace tuning
+} // namespace synthyboy
