@@ -109,6 +109,9 @@ std::vector<Binding> build()
     b.choice ("master.portamento.always", "portamento_force");
     b.choice ("master.portamento.scaled", "portamento_scale");
     b.choice ("voice.phase_legato", "voice_phase_legato");
+    // Block B20: stereo routing and voice override (G5)
+    b.percent ("master.stereo_routing", "stereo_routing");
+    b.choice ("master.voice_override", "voice_override");
 
     // --- oscillators ----------------------------------------------------------------------------------------------
     for (int n = 1; n <= 3; ++n)

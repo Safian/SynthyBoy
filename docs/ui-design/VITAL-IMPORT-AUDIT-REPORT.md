@@ -183,21 +183,30 @@ only). The dropped modulations can only move the numbers by what they scale; the
 **PAD - Hanging Gardens of Ra** (14 dropped, 9 dB below the median): its macro 1 is 100 % and `macro_control_1 -> modulation_7_amount / _2_ / _5_ ...`
 raise the LFO 1 -> filter cutoff / osc 3 level / osc 1 warp connections whose own amounts are 0 (and `velocity -> modulation_17_amount`,
 `mod_wheel -> modulation_N_amount`). 13 of its 14 drops are connections whose destination is the amount of another connection, the 14th is
-`macro_control_4 -> stereo_routing`; it is not an importer bug but G1 below: the engine has no way to modulate a modulation amount.
+`macro_control_4 -> stereo_routing`; it was not an importer bug but G1 below: the engine had no way to modulate a modulation amount (fixed by B20, see the end of section 8).
 
 ## 8. Remaining true gaps (proposed change for each)
 
-| # | Gap | In the 35 files | Proposed change |
-|---|---|---|---|
-| G1 | **Modulation of a modulation amount** (`X -> modulation_N_amount`) | 52 connections, 17 presets (macros 27, mod wheel 13, envelopes 8, velocity 3, note 1); decides the sound of Hanging Gardens | 64 new destinations `modNN.amount` (appended to the `modNN.destination` list, choices 404 .. 467, state v3 append rule of doc 13) flagged modulatable, and binding of the engine control `modulation_N_amount` as a modulation target in the adapter (the Vital engine supports it); importer: remove the "not modulatable" drop for them |
-| G2 | **Curve of a modulation** (`line_mapping`) | 26 connections, 11 presets | per-slot custom curve like the LFO shape content (`content.mod_curves[]`, <= 100 points) + the engine's line map of the connection (the same `LineGenerator` as the LFO shapes) in the adapter; until then the curve is replaced by the linear map (reported) |
-| G3 | Modulation of `portamento_time`, `polyphony`, `stereo_routing` | 3 + 2 + 1 | make `master.portamento.time` modulatable; `polyphony` modulation is a Vital oddity (Nostalgia: macro 4 at -1 turns the preset mono): needs `master.polyphony` modulatable in the voice handler |
-| G4 | Modulation source `stereo` (and `lift`, `slide`, `note_in_octave` are already in the list) | 1 connection | source choice 39 `stereo` (+-1 per channel) in the adapter's mod source table |
-| G5 | `stereo_routing`, `voice_override` | 5 + 1 presets | keys `master.stereo_routing` (percent), `master.voice_override` (Kill / Steal) and bindings of the two engine controls |
-| G6 | `osc_N_transpose_quantize` | 1 preset (2 oscillators) | key `oscN.transpose_quantize` (int, 0 .. 8191) and the binding |
-| G7 | Sample as a 4th source | 5 presets lose their sample (Primal Hunger, Gentle Driven EP, Cloudgazer, Edge of Space, Time Spiral) | `noise.type` (Noise / Sample) with the sample keys of `oscN`, or a 4th sample voice; the importer then maps `sample_*` 1:1 and never needs a free oscillator. Also the Vital warp 'from sample' (9, 12) becomes mappable (1 file) |
-| G8 | Stored `mod_wheel` position (23 files non-zero) | | only if an A/B shows that Vital applies it: initial CC1 for the shell, no key |
-| G9 | Single-frame `Init` / phase shifted `Sine` are stored instead of a built-in | 36 + 3 of 43 single-frame tables | not an importer bug (section 9). Cheap exact option: one appended built-in `Saw down` (= Vital's Init waveform) in the 13 + 1 table list |
+G1 - G6 were built by the mod-amount work package (block B20, `MODAMT-REPORT.md`, merged on top of B15); the table shows what each gap became. Re-run of
+the audit on the same 35 files after the merge: **35 presets, 0 mismatches, errors 0**, 17852 value rows checked, 17287 engine read-backs equal to the file;
+modulation connections imported 586 (the first audit dropped 59 for the reasons of G1, G3, G4), of them **53 with a `modulation_N_amount` destination in 17 presets** (this run counted 53,
+the first audit 52) and 1 with the source `stereo`; **31 `line_mapping` curves** in `content.mod_curves[]` (the first audit counted 26 approximated as linear; the audit script now
+counts every carried curve); dropped items: 5, all of them the sample object (G7, unchanged). **PAD - Hanging Gardens of Ra**: 0 dropped, 0
+approximated (before: 14 dropped); rendered once with macro 1 at 0 and at 100 % (the other macros as imported, tier high, note C3): the two renders differ by
+an RMS of 0.0036 on a signal RMS of 0.0186 (19.6 %), i.e. the macro now moves the amounts of the connections it drives (before the merge the 6 connections of macro 1 to
+`modulation_N_amount` were dropped and the macro changed nothing of that).
+
+| # | Gap | In the 35 files | Status | What it became |
+|---|---|---|---|---|
+| G1 | **Modulation of a modulation amount** (`X -> modulation_N_amount`) | 53 connections, 17 presets | **done (B20)** | 64 appended destinations `modNN.amount` (choices 454 .. 517); the engine uses Vital's own `modulation_N_amount` input (per voice for per-voice sources); loops are not wired; UI: submenu "Mod Amounts" in the destination picker (loops greyed), loop badge on the row |
+| G2 | **Curve of a modulation** (`line_mapping`) | 26 (first audit) / 31 (counted now), 11+ presets | **done (B20)** | `content.mod_curves[]` (<= 100 points per slot), the connection's own line map in the adapter, "Custom" curve editor in the Slot Curve panel (the remap graph widget in mod curve mode); the importer stores every curve |
+| G3 | Modulation of `portamento_time`, `polyphony`, `stereo_routing` | 3 + 2 + 1 | **done (B20)** | destinations 518 (`master.portamento.time`), 519 (`master.polyphony`), 453 (`master.stereo_routing`); each has an off / on render test |
+| G4 | Modulation source `stereo` | 1 connection | **done (B20)** | source choice 39 `stereo` |
+| G5 | `stereo_routing`, `voice_override` | 5 + 1 presets | **done (B20)** | keys `master.stereo_routing` (1594), `master.voice_override` (1595) |
+| G6 | `osc_N_transpose_quantize` | 1 preset (2 oscillators) | **done (B14 key, B20 importer mapping)** | the existing `oscN.transpose_snap` (no new key, no new capability bit) |
+| G7 | Sample as a 4th source | 5 presets lose their sample (Primal Hunger, Gentle Driven EP, Cloudgazer, Edge of Space, Time Spiral) | open | `noise.type` (Noise / Sample) with the sample keys of `oscN`, or a 4th sample voice |
+| G8 | Stored `mod_wheel` position (23 files non-zero) | | open | only if an A/B shows that Vital applies it: initial CC1 for the shell, no key |
+| G9 | Single-frame `Init` / phase shifted `Sine` are stored instead of a built-in | 36 + 3 of 43 single-frame tables | open | Cheap exact option: one appended built-in `Saw down` in the table list |
 
 ## 9. Built-in shortcut (`matchBuiltinSingleCycle`)
 

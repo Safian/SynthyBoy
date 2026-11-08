@@ -65,13 +65,15 @@ enum EngineCaps : EngineCapsMask
     kCapStereoSpread     = 1ull << 40, // G15: master.stereo_spread
     kCapLfoSwing         = 1ull << 41, // G16: lfo1.swing .. lfo10.swing
     kCapQualityOptions   = 1ull << 42, // G18: quality.oversample_4x, quality.no_smoothing
+    // block B20 (mod-amount, 13-new-keys.md 4.20); bit 43 follows the B15 bits
+    kCapModAmount        = 1ull << 43, // B20: mod-amount (G1-G6: amount modulation, mod curves, stereo source, stereo routing, voice override)
 };
 
 /** The bits of block B17. */
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = (1ull << 43) - 1;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 44) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

@@ -95,6 +95,39 @@ struct ModLoopResult
     std::string reason;
 };
 
+/** The 0-based matrix slot whose amount is the modulation destination `dstChoice` (modNN.amount, block B20 / G1), or -1. */
+inline int modAmountSlotOfChoice (int dstChoice) noexcept
+{
+    if (dstChoice <= 0)
+        return -1;
+    const int p = modDestinationParamIndex (static_cast<size_t> (dstChoice));
+    if (p < 0 || static_cast<size_t> (p) >= paramCount())
+        return -1;
+    const char* key = paramTable()[p].key;
+    int n = 0;
+    char tail[16] = {};
+    if (std::sscanf (key, "mod%d.%15s", &n, tail) == 2 && std::string_view (tail) == "amount" && n >= 1 && n <= kNumModSlots)
+        return n - 1;
+    return -1;
+}
+
+/** True if slot `slot` pointed at the amount destination `dstChoice` would close a loop of amount modulations (a slot that modulates its
+    own amount, or A -> amount of B -> ... -> amount of A). The engine leaves such a connection unwired (core/engine-vital, MODAMT). */
+inline bool modAmountWouldLoop (const ModMatrixAccess& matrix, int slot, int dstChoice) noexcept
+{
+    int cur = modAmountSlotOfChoice (dstChoice);
+    for (int hops = 0; cur >= 0 && hops <= kNumModSlots; ++hops)
+    {
+        if (cur == slot)
+            return true;
+        const auto p = modSlotParams (cur);
+        if (p.source < 0 || p.destination < 0 || std::lround (matrix.get (p.source)) <= 0 || (p.bypass >= 0 && matrix.get (p.bypass) >= 0.5f))
+            return false;
+        cur = modAmountSlotOfChoice (static_cast<int> (std::lround (matrix.get (p.destination))));
+    }
+    return false;
+}
+
 /** Checks topological feedback loop cycles in the modulation dependency graph (06-modulation.md section 4.2). */
 inline ModLoopResult modDetectFeedbackLoop (const ModMatrixAccess& matrix, int slotToCheck) noexcept
 {
@@ -109,6 +142,15 @@ inline ModLoopResult modDetectFeedbackLoop (const ModMatrixAccess& matrix, int s
     const int dstChoice = static_cast<int> (std::round (matrix.get (pCheck.destination)));
     if (srcChoice <= 0 || dstChoice <= 0)
         return {};
+
+    if (modAmountWouldLoop (matrix, slotToCheck, dstChoice))
+    {
+        ModLoopResult res;
+        res.isLoop = true;
+        res.conflictingSlot = slotToCheck;
+        res.reason = "Amount loop: the slot modulates its own amount (directly or through other slots); the engine leaves it off.";
+        return res;
+    }
 
     const int dstParam = modDestinationParamIndex (static_cast<size_t> (dstChoice));
     if (dstParam < 0 || static_cast<size_t> (dstParam) >= paramCount())

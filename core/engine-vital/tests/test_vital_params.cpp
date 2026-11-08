@@ -297,7 +297,11 @@ TEST (modulatable_parameters_are_modulation_destinations_of_the_engine)
         }
         else
         {
-            CHECK (! exists);
+            const size_t choice = modDestinationChoiceOf (i);
+            if (choice > 0)
+                CHECK (exists);
+            else
+                CHECK (! exists);
         }
     }
     CHECK_EQ (destinations, static_cast<size_t> (269));

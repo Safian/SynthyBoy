@@ -148,6 +148,13 @@ StateContent fullContent()
     c.impulses.push_back (ref ("factory.impulses", "ir/hall.wav", "Hall"));
     c.filterCurves.push_back ({ "filter1", { { 0.0f, 0.0f }, { 0.5f, 6.0f }, { 1.0f, -12.0f } } });
     c.filterCurves.push_back ({ "fxfilter", { { 0.0f, 0.0f }, { 1.0f, 0.0f } } });
+    ContentModCurve mc; // B20: the per-connection modulation curves
+    mc.slot = 7;
+    mc.points = { point (0.0f, 0.0f), point (0.3f, 0.9f, -2.5f), point (1.0f, 0.2f) };
+    c.modCurves.push_back (mc);
+    mc.slot = 64;
+    mc.points = { point (0.0f, 1.0f), point (1.0f, 0.0f) };
+    c.modCurves.push_back (mc);
     return c;
 }
 
@@ -225,7 +232,7 @@ TEST (version_3_keys_are_never_touched_by_the_migration)
     CHECK_EQ (loaded.plain[indexOfKey ("fx.order.1")], 14.0f);
 }
 
-TEST (all_1594_keys_round_trip_with_exact_floats)
+TEST (all_keys_round_trip_with_exact_floats)
 {
     sbtest::Rng rng (2024);
     for (int round = 0; round < 40; ++round)
@@ -382,6 +389,14 @@ TEST (content_that_breaks_a_cap_is_rejected_but_the_parameters_apply)
         "{\"filter_curves\":[{\"filter\":\"filter3\",\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":0}]}]}",
         "{\"filter_curves\":[{\"filter\":\"filter1\",\"points\":[{\"x\":0,\"y\":99},{\"x\":1,\"y\":0}]}]}",
         "{\"filter_curves\":[{\"filter\":\"filter1\",\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":0}]},{\"filter\":\"filter1\",\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":0}]}]}",
+        "{\"mod_curves\":[{\"slot\":0,\"points\":" + pointsText (3, 0.0, 0.5) + "}]}",                           // slot out of range
+        "{\"mod_curves\":[{\"slot\":65,\"points\":" + pointsText (3, 0.0, 0.5) + "}]}",
+        "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (3, 0.0, 0.5) + "},{\"slot\":3,\"points\":" + pointsText (3, 0.0, 0.5) + "}]}", // slot twice
+        "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (1) + "}]}",                                      // one point
+        "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (101, 0.0, 0.0) + "}]}",                          // 101 points
+        "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (3, 0.9, -0.4) + "}]}",                           // x descending
+        "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (3, 0.0, 0.5, 2.0) + "}]}",                       // y > 1
+        "{\"mod_curves\":{\"slot\":3}}",                                                                      // wrong container
         "[1,2,3]",                                                                                              // the section is not an object
         "\"text\"",
         "7",
@@ -405,6 +420,7 @@ TEST (content_that_breaks_a_cap_is_rejected_but_the_parameters_apply)
         "{}", "{\"wavetables\":[]}", "{\"unknown\":{\"deep\":[1,2,{\"x\":null}]},\"impulses\":[{\"pack\":\"p\",\"file\":\"dir/f.wav\",\"extra\":true}]}",
         "{\"lfo_shapes\":[{\"lfo\":10,\"points\":" + pointsText (128, 0.0, 0.0) + "}]}",
         "{\"curves\":{\"velocity\":{\"points\":" + pointsText (64, 0.0, 0.0) + "}}}",
+        "{\"mod_curves\":[{\"slot\":64,\"points\":" + pointsText (100, 0.0, 0.0) + "}]}",
         "{\"tuning\":{\"scl\":\"" + std::string (kMaxTuningSclBytes, 'x') + "\",\"kbm\":null}}",
         "{\"tuning\":{\"scl\":\"x\",\"kbm\":\"" + std::string (kMaxTuningKbmBytes, 'x') + "\"}}",
         "{\"wavetables\":[{\"osc\":1,\"sha256\":\"" + std::string (64, '0') + "\",\"frames\":4096}]}",
@@ -436,7 +452,7 @@ TEST (content_that_breaks_a_cap_is_rejected_but_the_parameters_apply)
     CHECK (loadWithContentText (deep, out, v).status == LoadStatus::invalid);
 }
 
-TEST (the_largest_legal_state_stays_far_below_the_limit)
+TEST (the_largest_legal_state_stays_below_the_limit)
 {
     StateContent c;
     for (int lfo = 1; lfo <= 10; ++lfo)
@@ -462,6 +478,25 @@ TEST (the_largest_legal_state_stays_far_below_the_limit)
             s.slices.push_back (static_cast<float> (i) / 128.0f + 0.0012345f);
         c.samples.push_back (s);
     }
+    for (int slot = 1; slot <= kMaxContentModCurves; ++slot) // B20: every slot with a curve of the most points
+    {
+        ContentModCurve mc;
+        mc.slot = slot;
+        for (int i = 0; i < kMaxModCurvePoints; ++i)
+            mc.points.push_back (point (static_cast<float> (i) / 99.0f, 0.123456789f, -19.987654f));
+        c.modCurves.push_back (mc);
+    }
+    for (int osc = 1; osc <= 3; ++osc) // B16: every remap slot with the most points
+        for (int slot = 1; slot <= kNumRemapSlots; ++slot)
+        {
+            ContentRemap r;
+            r.osc = osc;
+            r.slot = slot;
+            r.name = std::string (255, 'n');
+            for (int i = 0; i < kMaxRemapPoints; ++i)
+                r.points.push_back (point (static_cast<float> (i) / 63.0f, 0.123456789f, -19.987654f));
+            c.remaps.push_back (r);
+        }
     c.tuning.present = true;
     c.tuning.scl = std::string (kMaxTuningSclBytes, '\n');
     c.tuning.hasKbm = true;
@@ -470,7 +505,7 @@ TEST (the_largest_legal_state_stays_far_below_the_limit)
     sbtest::Rng rng (3);
     const auto text = stateText (c, randomValues (rng));
     std::printf ("    largest legal state: %zu bytes (limit %zu)\n", text.size(), kMaxStateBytes);
-    CHECK (text.size() < kMaxStateBytes / 2);
+    CHECK (text.size() < kMaxStateBytes * 4 / 5); // with 64 mod curves of 100 points and 12 remaps of 64 points (B20 / B16) the worst case is ~76 %
     auto v = ParamValues::defaults();
     StateContent back;
     CHECK (loadStateWithContent (text.data(), text.size(), v, back).content == ContentStatus::ok && back == c);

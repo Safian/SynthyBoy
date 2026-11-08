@@ -63,6 +63,9 @@ target_include_directories(synthyboy_test_vital_oscextra PRIVATE "${CMAKE_CURREN
 synthyboy_add_test(synthyboy_test_vital_wp_voiceglb test_wp_voiceglb.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_wp_voiceglb PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+synthyboy_add_test(synthyboy_test_vital_modamt test_modamt.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_modamt PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
 
 # the ported unit tests of the Vital-derived DSP (tests/synthesis/**, translated from upstream's tests/synthesis)
 file(GLOB_RECURSE SBVITAL_PORTED_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/synthesis/*.cpp")
