@@ -398,7 +398,7 @@ std::string savePreset (const PresetMeta& meta, const ParamValues& values)
     return savePreset (meta, values, StateContent {});
 }
 
-std::string savePreset (const PresetMeta& meta, const ParamValues& values, const StateContent& content)
+std::string savePreset (const PresetMeta& meta, const ParamValues& values, const StateContent& content, bool allowEmptyAuthor)
 {
     std::string s;
     s.reserve (256 + 1024 + paramCount() * 28);
@@ -410,7 +410,8 @@ std::string savePreset (const PresetMeta& meta, const ParamValues& values, const
 
     s += "\"name\":"; escapeJsonString (meta.name.empty() ? "Init" : meta.name, s);
     s += ",\"category\":"; escapeJsonString (meta.category.empty() ? "Lead" : meta.category, s);
-    s += ",\"author\":"; escapeJsonString (meta.author.empty() ? "Safian Szabolcs" : meta.author, s);
+    const std::string author = (! allowEmptyAuthor && meta.author.empty()) ? "Safian Szabolcs" : meta.author;
+    s += ",\"author\":"; escapeJsonString (author, s);
     s += ",\"license\":"; escapeJsonString (meta.license.empty() ? "CC0-1.0" : meta.license, s);
     s += ",\"tags\":"; escapeJsonString (meta.tags, s);
     s += ",\"description\":"; escapeJsonString (meta.description, s);
@@ -419,6 +420,11 @@ std::string savePreset (const PresetMeta& meta, const ParamValues& values, const
     s += saveState (values, content);
     s += "}";
     return s;
+}
+
+std::string savePreset (const PresetMeta& meta, const ParamValues& values, const StateContent& content)
+{
+    return savePreset (meta, values, content, false);
 }
 
 bool readPresetMeta (const void* data, size_t size, PresetMeta& metaOut) noexcept

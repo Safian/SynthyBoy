@@ -17,6 +17,37 @@ namespace
 {
 constexpr size_t kMaxManifestBytes = 512 * 1024; // 512 KiB
 
+void escapeJsonString (const std::string& in, std::string& out)
+{
+    out += '"';
+    for (char c : in)
+    {
+        switch (c)
+        {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\b': out += "\\b"; break;
+            case '\f': out += "\\f"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (static_cast<unsigned char> (c) < 0x20)
+                {
+                    char buf[8];
+                    std::snprintf (buf, sizeof buf, "\\u%04x", static_cast<unsigned char> (c));
+                    out += buf;
+                }
+                else
+                {
+                    out += c;
+                }
+                break;
+        }
+    }
+    out += '"';
+}
+
 class ManifestParser
 {
 public:
@@ -351,6 +382,90 @@ bool parseContentPackManifest (const void* data, size_t size, ContentPackInfo& o
     const char* b = static_cast<const char*> (data);
     ManifestParser parser (b, b + size);
     return parser.parse (out);
+}
+
+std::string serializeContentPackManifest (const ContentPackInfo& info)
+{
+    std::string s;
+    s.reserve (256 + info.files.size() * 128);
+    s += "{\n";
+    s += "  \"schemaVersion\": ";
+    s += std::to_string (info.schemaVersion > 0 ? info.schemaVersion : 1);
+    s += ",\n  \"id\": ";
+    escapeJsonString (info.id, s);
+    if (! info.name.empty())
+    {
+        s += ",\n  \"name\": ";
+        escapeJsonString (info.name, s);
+    }
+    s += ",\n  \"version\": ";
+    escapeJsonString (info.version.empty() ? "1.0.0" : info.version, s);
+    s += ",\n  \"license\": ";
+    escapeJsonString (info.license.empty() ? "user-supplied" : info.license, s);
+    s += ",\n  \"attribution\": ";
+    escapeJsonString (info.attribution.empty() ? "user-supplied" : info.attribution, s);
+    s += ",\n  \"kind\": ";
+    escapeJsonString (info.kind.empty() ? "wavetables" : info.kind, s);
+    s += ",\n  \"requires_plugin\": ";
+    escapeJsonString (info.requiresPlugin.empty() ? ">=0.1.0" : info.requiresPlugin, s);
+    if (! info.description.empty())
+    {
+        s += ",\n  \"description\": ";
+        escapeJsonString (info.description, s);
+    }
+    s += ",\n  \"files\": [";
+    for (size_t i = 0; i < info.files.size(); ++i)
+    {
+        const auto& f = info.files[i];
+        s += "\n    {\n      \"path\": ";
+        escapeJsonString (f.path, s);
+        s += ",\n      \"sha256\": ";
+        escapeJsonString (f.sha256, s);
+        s += ",\n      \"size\": ";
+        s += std::to_string (f.size);
+        s += "\n    }";
+        if (i + 1 < info.files.size())
+            s += ",";
+    }
+    if (! info.files.empty())
+        s += "\n  ";
+    s += "]\n}\n";
+    return s;
+}
+
+bool writeContentPackManifest (const std::string& packDirectory, const ContentPackInfo& info)
+{
+    std::filesystem::path root (packDirectory);
+    std::error_code ec;
+    std::filesystem::create_directories (root, ec);
+    if (ec)
+        return false;
+
+    const std::string jsonText = serializeContentPackManifest (info);
+    const std::filesystem::path manifestPath = root / "contentpack.json";
+    const std::filesystem::path tmpPath = root / "contentpack.json.tmp";
+
+    std::ofstream out (tmpPath.string(), std::ios::binary);
+    if (! out)
+        return false;
+    out.write (jsonText.data(), static_cast<std::streamsize> (jsonText.size()));
+    out.close();
+    if (! out.good())
+        return false;
+
+    std::filesystem::rename (tmpPath, manifestPath, ec);
+    if (ec)
+    {
+        // Fallback to direct write
+        std::ofstream fallback (manifestPath.string(), std::ios::binary);
+        if (! fallback)
+            return false;
+        fallback.write (jsonText.data(), static_cast<std::streamsize> (jsonText.size()));
+        fallback.close();
+        std::filesystem::remove (tmpPath, ec);
+        return fallback.good();
+    }
+    return true;
 }
 
 bool verifyContentPack (const std::string& packDirectory, const ContentPackInfo& info, std::vector<std::string>& errorsOut)

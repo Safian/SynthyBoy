@@ -33,6 +33,12 @@ struct ContentPackInfo
 /** Parses a contentpack.json document into out. Returns true on success. */
 bool parseContentPackManifest (const void* data, size_t size, ContentPackInfo& out) noexcept;
 
+/** Serializes a ContentPackInfo into a valid contentpack.json string. */
+std::string serializeContentPackManifest (const ContentPackInfo& info);
+
+/** Writes contentpack.json into packDirectory atomically. Returns true on success. */
+bool writeContentPackManifest (const std::string& packDirectory, const ContentPackInfo& info);
+
 /** Verifies that all files declared in info exist in packDirectory and their SHA-256 matches.
     Appends error descriptions to errorsOut. Returns true if all files matched. */
 bool verifyContentPack (const std::string& packDirectory, const ContentPackInfo& info, std::vector<std::string>& errorsOut);

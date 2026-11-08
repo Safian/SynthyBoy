@@ -709,9 +709,11 @@ TEST (vi_fixture_custom_wavetable)
     }
     CHECK_NEAR (val (r, "osc1.frame"), 50.0, 1e-3);
     CHECK_NEAR (val (r, "osc2.frame"), 50.0, 1e-3);
-    // the engine has no "Preset table" choice yet: nearest built-in + a report item (TODO(C1))
-    CHECK (findItem (r, "wavetables[0]", ItemKind::approximated) != nullptr);
-    CHECK (hasReason (r, Reason::nearestWavetable));
+    CHECK_EQ (val (r, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK_EQ (val (r, "osc2.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK_EQ (val (r, "osc3.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK (findItem (r, "wavetables[0]", ItemKind::approximated) == nullptr);
+    CHECK (! hasReason (r, Reason::nearestWavetable));
     // determinism: same bytes, same result
     const auto r2 = run (f, o);
     CHECK (r2.wavetables.size() == r.wavetables.size() && r2.wavetables[0].sha256 == r.wavetables[0].sha256 && r2.wavetables[2].sha256 == r.wavetables[2].sha256);
@@ -720,6 +722,9 @@ TEST (vi_fixture_custom_wavetable)
     // without the capability nothing is stored but the nearest built-in is chosen
     const auto none = run (f);
     CHECK (none.wavetables.empty());
+    CHECK (hasReason (none, Reason::nearestWavetable));
+    CHECK (findItem (none, "wavetables[0]", ItemKind::approximated) != nullptr);
+    CHECK (val (none, "osc1.wavetable") != static_cast<float> (kWavetablePresetTable));
     CHECK (valuesInRange (none));
 }
 
@@ -813,11 +818,13 @@ TEST (vi_fixture_custom_lfo)
     CHECK (r.status == ImportStatus::ok);
     CHECK_EQ (val (r, "lfo1.shape"), 2.0f);   // Saw Up: built-in shortcut, nothing stored
     CHECK_EQ (val (r, "lfo2.shape"), 1.0f);   // Triangle
+    CHECK_EQ (val (r, "lfo3.shape"), static_cast<float> (kLfoShapeCustom)); // Custom shape selected
+    CHECK_EQ (val (r, "lfo4.shape"), static_cast<float> (kLfoShapeCustom)); // Custom shape selected
     CHECK (findItem (r, "lfos[1]", ItemKind::approximated) == nullptr);
-    // LFO 3 is custom but not used: stored, not reported; LFO 4 is custom and used: reported
+    // Custom shapes are stored in lfoShapes; with caps.customLfoShapes they are selected as Custom (not approximated)
     CHECK_EQ (r.lfoShapes.size(), static_cast<size_t> (2));
     CHECK (findItem (r, "lfos[2]", ItemKind::approximated) == nullptr);
-    CHECK (findItem (r, "lfos[3]", ItemKind::approximated) != nullptr);
+    CHECK (findItem (r, "lfos[3]", ItemKind::approximated) == nullptr);
     if (r.lfoShapes.size() == 2)
     {
         CHECK_EQ (r.lfoShapes[0].lfo, 3);
@@ -827,6 +834,11 @@ TEST (vi_fixture_custom_lfo)
         CHECK_NEAR (r.lfoShapes[0].points[0][1], 0.1, 1e-6);   // value = 1 - y
         CHECK_NEAR (r.lfoShapes[0].points[0][2], 3.0, 1e-6);
     }
+    // without caps.customLfoShapes, LFO 4 is approximated to nearest built-in
+    const auto none = run (f);
+    CHECK (none.lfoShapes.empty());
+    CHECK (val (none, "lfo4.shape") != static_cast<float> (kLfoShapeCustom));
+    CHECK (findItem (none, "lfos[3]", ItemKind::approximated) != nullptr);
     // invalid shapes are dropped alone: lfo 5, 6 are not used (ignored), the file is fine
     CHECK (findItem (r, "lfos[4]", ItemKind::ignored) != nullptr);
     CHECK_EQ (val (r, "lfo6.shape"), 3.0f);   // num_points 5 with 4 numbers: sanitised to 2 points = a falling line value, i.e. Saw Down
@@ -1271,4 +1283,128 @@ TEST (vi_real_presets_if_present)
 #else
     std::printf ("    SKIP: SB_VITAL_PRESETS_DIR not defined\n");
 #endif
+}
+
+TEST (user_wavetable_store)
+{
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "synthyboy_test_store";
+    std::error_code ec;
+    std::filesystem::remove_all (tempDir, ec);
+
+    UserWavetableStore store (tempDir.string());
+    ImportedWavetable wt;
+    wt.osc = 1;
+    wt.name = "My Test Table";
+    wt.author = "Test Author";
+    wt.numFrames = 2;
+    wt.frames.resize (2 * 2048, 100);
+    wt.sha256 = Sha256::hashBufferHex (wt.frames.data(), wt.frames.size() * sizeof (int16_t));
+
+    std::string pack, file;
+    CHECK (store.addWavetable (wt, pack, file));
+    CHECK_EQ (pack, std::string ("user.imported-vital"));
+    CHECK (! file.empty());
+    CHECK (store.hasWavetable (wt.sha256));
+
+    // Deduplication check
+    std::string pack2, file2;
+    CHECK (store.addWavetable (wt, pack2, file2));
+    CHECK_EQ (pack2, pack);
+    CHECK_EQ (file2, file);
+    CHECK_EQ (store.packInfo().files.size(), static_cast<size_t> (1));
+
+    // Verification
+    std::vector<std::string> errors;
+    CHECK (verifyContentPack (store.packDirectory(), store.packInfo(), errors));
+
+    std::filesystem::remove_all (tempDir, ec);
+}
+
+TEST (vi_import_serialize_load_round_trip)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.author = ""; // Author rule test: empty author stays empty
+
+    const std::string osc1 = wavetable ("CustomWave", { component ("Wave Source", "", { waveKeyframe (0, sineWave (2)), waveKeyframe (2, sineWave (3)) }) });
+    f.wavetables = "[" + osc1 + "]";
+
+    const std::vector<std::pair<double, double>> pts = { { 0, 0 }, { 0.2, 0.8 }, { 0.5, 0.3 }, { 0.8, 0.9 }, { 1, 1 } };
+    const std::vector<double> powers = { 2.5, -1.0, 0.0, -3.0, 0.0 };
+    const std::string customLfo = lineObject (pts, powers, true);
+    f.lfos = "[null,null," + customLfo + "]";
+
+    ImportOptions o;
+    o.caps.customWavetables = true;
+    o.caps.customLfoShapes = true;
+    const auto r = run (f, o);
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.wavetables.size(), static_cast<size_t> (1));
+    CHECK_EQ (r.lfoShapes.size(), static_cast<size_t> (1));
+    CHECK_EQ (val (r, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK_EQ (val (r, "lfo3.shape"), static_cast<float> (kLfoShapeCustom));
+
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "synthyboy_test_roundtrip_store";
+    std::error_code ec;
+    std::filesystem::remove_all (tempDir, ec);
+
+    UserWavetableStore store (tempDir.string());
+    ContentRefs refs;
+    for (const auto& wt : r.wavetables)
+    {
+        std::string pack, file;
+        CHECK (store.addWavetable (wt, pack, file));
+        refs.wavetables.push_back ({ wt.osc, pack, file });
+    }
+
+    const std::string sbpreset = serializeImportedPreset (r, r.meta, refs);
+    CHECK (! sbpreset.empty());
+    CHECK (sbpreset.size() <= (1u << 20));
+
+    // Verify import section exists and carries expected fields
+    CHECK (sbpreset.find ("\"import\":") != std::string::npos);
+    CHECK (sbpreset.find ("\"format\":\"vital\"") != std::string::npos);
+    CHECK (sbpreset.find ("\"sha256\":\"" + r.sourceSha256 + "\"") != std::string::npos);
+
+    // Read metadata: author must be empty!
+    PresetMeta metaOut;
+    CHECK (readPresetMeta (sbpreset.data(), sbpreset.size(), metaOut));
+    CHECK_EQ (metaOut.author, "");
+    CHECK_EQ (metaOut.name, r.meta.name);
+
+    // Full load
+    ParamValues loadedValues = ParamValues::defaults();
+    StateContent loadedContent;
+    const LoadResult loadRes = loadPreset (sbpreset.data(), sbpreset.size(), metaOut, loadedValues, loadedContent);
+    CHECK (loadRes.status == LoadStatus::ok);
+    CHECK_EQ (metaOut.author, "");
+    CHECK_EQ (val (r, "osc1.wavetable"), loadedValues.plain[findParamIndex (kParamOsc1Wavetable)]);
+    CHECK_EQ (val (r, "lfo3.shape"), loadedValues.plain[findParamIndex (hashKey ("lfo3.shape"))]);
+
+    // Content round-trip verification
+    CHECK_EQ (loadedContent.wavetables.size(), static_cast<size_t> (1));
+    if (! loadedContent.wavetables.empty())
+    {
+        CHECK_EQ (loadedContent.wavetables[0].osc, r.wavetables[0].osc);
+        CHECK_EQ (loadedContent.wavetables[0].ref.pack, refs.wavetables[0].pack);
+        CHECK_EQ (loadedContent.wavetables[0].ref.file, refs.wavetables[0].file);
+        CHECK_EQ (loadedContent.wavetables[0].ref.sha256, r.wavetables[0].sha256);
+        CHECK_EQ (loadedContent.wavetables[0].frames, r.wavetables[0].numFrames);
+    }
+
+    CHECK_EQ (loadedContent.lfoShapes.size(), static_cast<size_t> (1));
+    if (! loadedContent.lfoShapes.empty())
+    {
+        CHECK_EQ (loadedContent.lfoShapes[0].lfo, r.lfoShapes[0].lfo);
+        CHECK_EQ (loadedContent.lfoShapes[0].smooth, r.lfoShapes[0].smooth);
+        CHECK_EQ (loadedContent.lfoShapes[0].points.size(), r.lfoShapes[0].points.size());
+        for (size_t i = 0; i < r.lfoShapes[0].points.size(); ++i)
+        {
+            CHECK_NEAR (loadedContent.lfoShapes[0].points[i].x, r.lfoShapes[0].points[i][0], 1e-4f);
+            CHECK_NEAR (loadedContent.lfoShapes[0].points[i].y, r.lfoShapes[0].points[i][1], 1e-4f);
+            CHECK_NEAR (loadedContent.lfoShapes[0].points[i].power, r.lfoShapes[0].points[i][2], 1e-3f);
+        }
+    }
+
+    std::filesystem::remove_all (tempDir, ec);
 }

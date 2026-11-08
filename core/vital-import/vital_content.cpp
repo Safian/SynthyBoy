@@ -7,8 +7,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 
 #include "number.h"
+#include "synthyboy/vital_import.h"
 
 namespace synthyboy
 {
@@ -353,4 +356,105 @@ bool parseWavetable (const Doc& doc, int node, ParsedWavetable& out, ContentNote
     return true;
 }
 } // namespace vitalimport
+
+UserWavetableStore::UserWavetableStore (const std::string& packDirectory)
+{
+    std::filesystem::path p (packDirectory);
+    if (p.filename() == "user.imported-vital" || std::filesystem::exists (p / "contentpack.json"))
+        packDir_ = p.string();
+    else
+        packDir_ = (p / "user.imported-vital").string();
+
+    std::error_code ec;
+    std::filesystem::create_directories (packDir_, ec);
+
+    const std::filesystem::path manifest = std::filesystem::path (packDir_) / "contentpack.json";
+    if (std::filesystem::exists (manifest, ec))
+    {
+        std::ifstream f (manifest.string(), std::ios::binary);
+        if (f)
+        {
+            std::string content ((std::istreambuf_iterator<char> (f)), std::istreambuf_iterator<char>());
+            ContentPackInfo loaded;
+            if (parseContentPackManifest (content.data(), content.size(), loaded))
+                info_ = std::move (loaded);
+        }
+    }
+
+    if (info_.id.empty())
+    {
+        info_.schemaVersion = 1;
+        info_.id = "user.imported-vital";
+        info_.name = "Imported Vital Wavetables";
+        info_.version = "1.0.0";
+        info_.license = "user-supplied";
+        info_.attribution = "user-supplied";
+        info_.kind = "wavetables";
+        info_.requiresPlugin = ">=0.1.0";
+        info_.description = "User-imported wavetables from Vital presets";
+        writeContentPackManifest (packDir_, info_);
+    }
+}
+
+bool UserWavetableStore::hasWavetable (const std::string& sha256)
+{
+    if (sha256.empty())
+        return false;
+    for (const auto& f : info_.files)
+        if (f.sha256 == sha256)
+            return true;
+    return false;
+}
+
+bool UserWavetableStore::addWavetable (const ImportedWavetable& wt, std::string& packOut, std::string& fileOut)
+{
+    packOut = info_.id.empty() ? "user.imported-vital" : info_.id;
+
+    for (const auto& f : info_.files)
+    {
+        if (f.sha256 == wt.sha256)
+        {
+            fileOut = f.path;
+            return true;
+        }
+    }
+
+    std::string safeName;
+    for (char c : wt.name)
+    {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')
+            safeName += c;
+        else if (c == ' ')
+            safeName += '_';
+    }
+    if (safeName.empty())
+        safeName = "table";
+
+    const std::string shortHash = wt.sha256.size() >= 12 ? wt.sha256.substr (0, 12) : wt.sha256;
+    const std::string relPath = "tables/" + safeName + "_" + shortHash + ".sbwt";
+
+    std::filesystem::path full = std::filesystem::path (packDir_) / relPath;
+    std::error_code ec;
+    std::filesystem::create_directories (full.parent_path(), ec);
+
+    std::ofstream out (full.string(), std::ios::binary);
+    if (! out)
+        return false;
+
+    const size_t byteSize = wt.frames.size() * sizeof (int16_t);
+    out.write (reinterpret_cast<const char*> (wt.frames.data()), static_cast<std::streamsize> (byteSize));
+    out.close();
+    if (! out.good())
+        return false;
+
+    ContentPackFile cpf;
+    cpf.path = relPath;
+    cpf.sha256 = wt.sha256;
+    cpf.size = byteSize;
+    info_.files.push_back (std::move (cpf));
+
+    writeContentPackManifest (packDir_, info_);
+    fileOut = relPath;
+    return true;
+}
 } // namespace synthyboy

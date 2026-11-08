@@ -4,11 +4,6 @@
 //
 // docs/ui-design/11-vital-preset-import.md (sections 1.1 - 1.4, Annex A.2). JUCE-free, Vital-free, no I/O, no threads, no globals.
 // The importer works on bytes handed over by the host; the result is plain data.
-//
-// Not part of this header yet (blocked on the core changes of the design, Annex A.4): serializeImportedPreset / ContentRefs (C3),
-// ContentStore / PresetStore (C3, C4). Imported custom wavetables and LFO shapes are returned in the result; the parameters that
-// would select them ("Preset table" C1, "Custom" C2) do not exist in the table, so oscN.wavetable / lfoN.shape get the nearest
-// built-in and the report says so (TODO(C1), TODO(C2) in core/vital-import/vital_import.cpp mark the two places).
 #pragma once
 
 #include <array>
@@ -18,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "content_pack.h"
 #include "preset.h"
 #include "state.h"
 
@@ -113,6 +109,66 @@ struct ImportedLfoShape
     std::vector<std::array<float, 3>> points; // x, y (value, up = high), power of the segment starting at the point
 };
 
+/** Reference to a stored wavetable in a ContentPack for an oscillator (1..3). */
+struct ContentWavetableRef
+{
+    int osc = 0;
+    std::string pack;
+    std::string file;
+};
+
+struct ContentRefs
+{
+    std::vector<ContentWavetableRef> wavetables;
+
+    const ContentWavetableRef* findWavetable (int osc) const noexcept
+    {
+        for (const auto& w : wavetables)
+            if (w.osc == osc)
+                return &w;
+        return nullptr;
+    }
+};
+
+/** Host-side interface for wavetable storage (docs/ui-design/11-vital-preset-import.md Annex A.2). */
+struct ContentStore
+{
+    virtual ~ContentStore() = default;
+    virtual bool hasWavetable (const std::string& sha256) = 0;
+    virtual bool addWavetable (const ImportedWavetable& wt, std::string& packOut, std::string& fileOut) = 0;
+};
+
+/** User-supplied ContentPack store for imported Vital wavetables (user.imported-vital). */
+class UserWavetableStore : public ContentStore
+{
+public:
+    explicit UserWavetableStore (const std::string& packDirectory);
+
+    bool hasWavetable (const std::string& sha256) override;
+    bool addWavetable (const ImportedWavetable& wt, std::string& packOut, std::string& fileOut) override;
+
+    const ContentPackInfo& packInfo() const noexcept { return info_; }
+    const std::string& packDirectory() const noexcept { return packDir_; }
+
+private:
+    std::string packDir_;
+    ContentPackInfo info_;
+};
+
+struct PresetStore
+{
+    virtual ~PresetStore() = default;
+    virtual bool exists (const std::string& name, const std::string& srcTag) = 0;
+    virtual bool write (const std::string& relPath, const std::string& sbpresetText, const std::string& reportJson) = 0;
+};
+
+struct BatchOptions
+{
+    enum Duplicate { skipSame, replace, keepBoth, ask } duplicate = skipSame;
+    bool useVitalStyle = true;
+    std::string unknownStyleCategory = "Lead";
+};
+
 struct ImportResult
 {
     ImportStatus status = ImportStatus::malformed;
@@ -136,6 +192,12 @@ ImportResult importVitalPreset (const void* data, size_t size, const ImportOptio
 /** Stand-alone .vitaltable (the wavetable object) / .vitallfo (the LFO line object): the result holds one table / shape. */
 ImportResult importVitalWavetableFile (const void* data, size_t size, const ImportOptions& options) noexcept;
 ImportResult importVitalLfoFile (const void* data, size_t size, const ImportOptions& options) noexcept;
+
+/** .sbpreset text for an imported result: savePreset() content plus additive sections
+    "content": {"wavetables":[{osc,pack,file,sha256,name,author,frames}],"lfo_shapes":[{lfo,name,smooth,points}]},
+    "import":  {"source":{"format":"vital","version","sha256","preset_name","comments","macro_names"},"approximated":[keys<=64]}.
+    contentRefs fills pack/file for the wavetables the host stored. */
+std::string serializeImportedPreset (const ImportResult& result, const PresetMeta& finalMeta, const ContentRefs& contentRefs);
 
 /** The table of the one-to-one settings (for the tests and the report UI): number of rows, key and Vital control of a row. */
 size_t vitalRowCount() noexcept;

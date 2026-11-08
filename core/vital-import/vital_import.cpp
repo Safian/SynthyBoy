@@ -752,18 +752,10 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                 V.plain[pidx] = static_cast<float> (shortcut);
                 continue; // exact built-in: nothing stored, frame fraction as for a built-in
             }
-            double distance = 0.0;
-            const int nearest = nearestBuiltinWavetable (r.frames.data(), r.numFrames, distance);
-            V.plain[pidx] = static_cast<float> (nearest);
             frameScaleFrames[osc] = r.numFrames;
-            char dist[32];
-            std::snprintf (dist, sizeof dist, "%.1f dB", distance);
-            // TODO(C1): with the choice "Preset table" (docs/ui-design/11 A.4) and caps.customWavetables the value would select it and this
-            // item would not be created. The table is returned in the result so that the host can store it already.
-            c.item (ItemKind::approximated, Reason::nearestWavetable, "content", where, pw.name, oscKey, valueText (*pinfo, nearest),
-                    opt.caps.customWavetables ? std::string ("preset_table_choice_missing; distance ") + dist : std::string ("nearest_builtin; distance ") + dist);
             if (opt.caps.customWavetables)
             {
+                V.plain[pidx] = static_cast<float> (kWavetablePresetTable);
                 ImportedWavetable iw;
                 iw.osc = osc + 1;
                 iw.name = pw.name;
@@ -772,6 +764,16 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                 iw.frames = toInt16 (r.frames);
                 iw.sha256 = Sha256::hashBufferHex (iw.frames.data(), iw.frames.size() * sizeof (int16_t));
                 res.wavetables.push_back (std::move (iw));
+            }
+            else
+            {
+                double distance = 0.0;
+                const int nearest = nearestBuiltinWavetable (r.frames.data(), r.numFrames, distance);
+                V.plain[pidx] = static_cast<float> (nearest);
+                char dist[32];
+                std::snprintf (dist, sizeof dist, "%.1f dB", distance);
+                c.item (ItemKind::approximated, Reason::nearestWavetable, "content", where, pw.name, oscKey, valueText (*pinfo, nearest),
+                        std::string ("nearest_builtin; distance ") + dist);
             }
         }
     }
@@ -804,12 +806,14 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             double err = 0.0;
             const int match = matchBuiltinLfoShape (samples, nearest, err);
             const size_t pidx = static_cast<size_t> (findParamIndex (pinfo->id));
-            V.plain[pidx] = static_cast<float> (nearest);
             if (match >= 0)
+            {
+                V.plain[pidx] = static_cast<float> (nearest);
                 continue;
-            // TODO(C2): with the choice "Custom" (docs/ui-design/11 A.4) and caps.customLfoShapes the value would select it.
+            }
             if (opt.caps.customLfoShapes)
             {
+                V.plain[pidx] = static_cast<float> (kLfoShapeCustom);
                 ImportedLfoShape s;
                 s.lfo = n + 1;
                 s.name = pl.name;
@@ -818,12 +822,16 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                     s.points.push_back ({ pl.line.x[i], pl.line.y[i], pl.line.power[i] });
                 res.lfoShapes.push_back (std::move (s));
             }
-            if (lfoUsed[n])
+            else
             {
-                char e[32];
-                std::snprintf (e, sizeof e, "%.3f", err);
-                c.item (ItemKind::approximated, Reason::nearestLfoShape, "content", where, pl.name, key, valueText (*pinfo, nearest),
-                        opt.caps.customLfoShapes ? std::string ("custom_choice_missing; rms error ") + e : std::string ("nearest_builtin; rms error ") + e);
+                V.plain[pidx] = static_cast<float> (nearest);
+                if (lfoUsed[n])
+                {
+                    char e[32];
+                    std::snprintf (e, sizeof e, "%.3f", err);
+                    c.item (ItemKind::approximated, Reason::nearestLfoShape, "content", where, pl.name, key, valueText (*pinfo, nearest),
+                            std::string ("nearest_builtin; rms error ") + e);
+                }
             }
         }
     }
@@ -1343,5 +1351,96 @@ ImportResult importVitalWavetableFile (const void* data, size_t size, const Impo
 ImportResult importVitalLfoFile (const void* data, size_t size, const ImportOptions& options) noexcept
 {
     return standalone (data, size, options, false);
+}
+
+std::string serializeImportedPreset (const ImportResult& result, const PresetMeta& finalMeta, const ContentRefs& contentRefs)
+{
+    if (result.status != ImportStatus::ok)
+        return {};
+
+    StateContent content;
+    for (const auto& iw : result.wavetables)
+    {
+        ContentWavetable cw;
+        cw.osc = iw.osc;
+        cw.ref.sha256 = iw.sha256;
+        cw.ref.name = iw.name;
+        cw.author = iw.author;
+        cw.frames = iw.numFrames;
+        if (const auto* ref = contentRefs.findWavetable (iw.osc))
+        {
+            cw.ref.pack = ref->pack;
+            cw.ref.file = ref->file;
+        }
+        content.wavetables.push_back (std::move (cw));
+    }
+
+    for (const auto& is : result.lfoShapes)
+    {
+        ContentLfoShape cls;
+        cls.lfo = is.lfo;
+        cls.name = is.name;
+        cls.smooth = is.smooth;
+        cls.loopPoint = -1;
+        for (const auto& pt : is.points)
+        {
+            ContentPoint cp;
+            cp.x = pt[0];
+            cp.y = pt[1];
+            cp.power = std::max (-20.0f, std::min (20.0f, pt[2]));
+            cls.points.push_back (cp);
+        }
+        content.lfoShapes.push_back (std::move (cls));
+    }
+
+    std::string s = savePreset (finalMeta, result.values, content, true);
+    if (s.empty() || s.back() != '}')
+        return {};
+
+    s.pop_back();
+
+    s += ",\"import\":{\"source\":{";
+    s += "\"format\":\"vital\"";
+    s += ",\"version\":";
+    jsonEscape (result.report.vitalVersion, s);
+    s += ",\"sha256\":";
+    jsonEscape (result.sourceSha256, s);
+    s += ",\"preset_name\":";
+    jsonEscape (finalMeta.name.empty() ? result.meta.name : finalMeta.name, s);
+    s += ",\"comments\":";
+    jsonEscape (finalMeta.description.empty() ? result.meta.description : finalMeta.description, s);
+    s += ",\"macro_names\":[";
+    for (int i = 0; i < 4; ++i)
+    {
+        if (i > 0)
+            s += ',';
+        jsonEscape (result.macroNames[i], s);
+    }
+    s += "]},\"approximated\":[";
+
+    std::vector<std::string> approxKeys;
+    for (const auto& it : result.report.items)
+    {
+        if (it.kind == ItemKind::approximated && ! it.ourKey.empty())
+        {
+            if (std::find (approxKeys.begin(), approxKeys.end(), it.ourKey) == approxKeys.end())
+            {
+                if (approxKeys.size() < 64)
+                    approxKeys.push_back (it.ourKey);
+            }
+        }
+    }
+    for (size_t i = 0; i < approxKeys.size(); ++i)
+    {
+        if (i > 0)
+            s += ',';
+        jsonEscape (approxKeys[i], s);
+    }
+    s += "]}}";
+
+    if (s.size() > (1u << 20))
+        return {};
+
+    return s;
 }
 } // namespace synthyboy
