@@ -162,6 +162,7 @@ WavetableView::WavetableView (UiContext& context, std::function<void()> onOpenEd
 
     zoomInBtn.onClick = [this] { zoomIn(); };
     zoomOutBtn.onClick = [this] { zoomOut(); };
+    fingers.onGesture = [this] (const TouchTracker::Gesture& g) { handleTouchGesture (g); };
 
     addAndMakeVisible (tableNameLabel);
     addAndMakeVisible (prevTableBtn);
@@ -263,8 +264,74 @@ void WavetableView::zoomOut()
     repaint();
 }
 
+void WavetableView::resetView()
+{
+    zoomLevel = 1.0f;
+    tiltY = 1.0f;
+    yawX = 0.0f;
+    repaint();
+}
+
+void WavetableView::handleTouchGesture (const TouchTracker::Gesture& g)
+{
+    if (currentViewMode != ViewMode::mode3D)
+        return;
+    if (g.kind == TouchTracker::Kind::pinch)
+    {
+        zoomLevel = juce::jlimit (0.5f, 2.5f, zoomLevel * g.scale);
+        repaint();
+    }
+    else if (g.kind == TouchTracker::Kind::pan)
+    {
+        tiltY = juce::jlimit (0.25f, 2.0f, tiltY + g.dy / static_cast<float> (juce::jmax (1, getHeight())) * 2.0f);
+        yawX = juce::jlimit (-1.0f, 1.0f, yawX + g.dx / static_cast<float> (juce::jmax (1, getWidth())) * 2.0f);
+        repaint();
+    }
+}
+
+void WavetableView::mouseDoubleClick (const juce::MouseEvent&)
+{
+    if (currentViewMode == ViewMode::mode3D)
+        resetView();
+}
+
+void WavetableView::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
+{
+    if (currentViewMode != ViewMode::mode3D)
+        return;
+    TouchTracker::Gesture g;
+    if (e.mods.isCtrlDown() || e.mods.isCommandDown())
+    {
+        g.kind = TouchTracker::Kind::pinch;
+        g.scale = std::exp (wheel.deltaY * 2.0f);
+    }
+    else
+    {
+        g.kind = TouchTracker::Kind::pan;
+        g.dx = wheel.deltaX * 200.0f;
+        g.dy = wheel.deltaY * 200.0f;
+    }
+    handleTouchGesture (g);
+}
+
+void WavetableView::mouseMagnify (const juce::MouseEvent& e, float scaleFactor)
+{
+    fingers.magnify (e.position, scaleFactor);
+}
+
 void WavetableView::mouseDown (const juce::MouseEvent& e)
 {
+    fingers.down (e);
+    if (e.source.getIndex() > 0 || fingers.twoDown())
+    {
+        // the second finger: tilt / zoom take over, an open scrub is closed
+        if (isDragging && handleFrame.valid())
+            handleFrame.endGesture();
+        isDragging = false;
+        pairActive = true;
+        return;
+    }
+    pairActive = false;
     dragStartPos = e.position;
     isDragging = false;
     if (handleFrame.valid())
@@ -285,6 +352,9 @@ void WavetableView::mouseDown (const juce::MouseEvent& e)
 
 void WavetableView::mouseDrag (const juce::MouseEvent& e)
 {
+    fingers.drag (e);
+    if (e.source.getIndex() > 0 || fingers.twoDown() || pairActive)
+        return;
     const float dx = e.position.x - dragStartPos.x;
     if (! isDragging && std::abs (dx) > 3.0f)
     {
@@ -303,8 +373,16 @@ void WavetableView::mouseDrag (const juce::MouseEvent& e)
     }
 }
 
-void WavetableView::mouseUp (const juce::MouseEvent&)
+void WavetableView::mouseUp (const juce::MouseEvent& e)
 {
+    fingers.up (e);
+    if (e.source.getIndex() > 0)
+        return;
+    if (pairActive)
+    {
+        pairActive = fingers.twoDown();
+        return;
+    }
     if (isDragging)
     {
         if (handleFrame.valid())
@@ -421,8 +499,8 @@ void WavetableView::paint (juce::Graphics& g)
     {
         // 3D STACKED-FRAME VIEW
         const size_t drawCount = juce::jmin (size_t (64), numFrames);
-        const float stepY = (canvasArea.getHeight() * 0.45f * zoomLevel) / static_cast<float> (drawCount);
-        const float stepX = (canvasArea.getWidth() * 0.15f * zoomLevel) / static_cast<float> (drawCount);
+        const float stepY = (canvasArea.getHeight() * 0.45f * zoomLevel * tiltY) / static_cast<float> (drawCount);
+        const float stepX = (canvasArea.getWidth() * 0.15f * zoomLevel * (1.0f + yawX)) / static_cast<float> (drawCount);
         const float waveW = canvasArea.getWidth() * 0.75f;
         const float waveH = canvasArea.getHeight() * 0.28f * zoomLevel;
 

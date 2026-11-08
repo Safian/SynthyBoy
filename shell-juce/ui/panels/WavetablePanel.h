@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "../GestureKit.h"
 #include "../Panel.h"
 #include "WavetableEditorSheet.h"
 
@@ -29,6 +30,9 @@ public:
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
     void mouseUp (const juce::MouseEvent& e) override;
+    void mouseDoubleClick (const juce::MouseEvent& e) override;
+    void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override;
+    void mouseMagnify (const juce::MouseEvent& e, float scaleFactor) override;
 
     ViewMode viewMode() const noexcept { return currentViewMode; }
     void setViewMode (ViewMode mode);
@@ -44,6 +48,14 @@ public:
     /** Zoom controls for 3D tilt/zoom. */
     void zoomIn();
     void zoomOut();
+
+    /** 3D view: two fingers (or the trackpad / wheel) tilt and zoom, design 03 row "3D view". Pinch = zoom, two-finger drag up / down = tilt
+        (how steep the stack of frames rises), sideways = yaw (how far the frames slide). Double tap on the view and Reset restore it. */
+    float tilt() const noexcept { return tiltY; }
+    float yaw() const noexcept { return yawX; }
+    float zoom() const noexcept { return zoomLevel; }
+    void handleTouchGesture (const TouchTracker::Gesture& g);
+    void resetView();
 
 private:
     int headerHeight() const;
@@ -71,6 +83,10 @@ private:
     juce::Point<float> dragStartPos;
     float startFrameVal = 0.0f;
     float zoomLevel = 1.0f;
+    float tiltY = 1.0f; // 0.25 .. 2: factor on the vertical step between frames
+    float yawX = 0.0f;  // -1 .. 1: factor 1 + yaw on the horizontal step
+    TwoFingerInput fingers;
+    bool pairActive = false; // a two-finger gesture is running: the one-finger scrub is off
     int selectedHarmonic = 1;
 
     // Controls embedded in the visual header

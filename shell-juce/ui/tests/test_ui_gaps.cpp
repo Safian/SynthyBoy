@@ -16,6 +16,8 @@
 #include "ui/panels/OscTabsPanel.h"
 #include "ui/panels/OscWaveView.h"
 #include "ui/panels/TransposeControl.h"
+#include "ui/panels/WavetableEditorSheet.h"
+#include "ui/panels/WavetablePanel.h"
 #include "test_runner.h"
 
 using namespace synthyboy;
@@ -738,6 +740,375 @@ TEST (uig_sample_view_threshold_line_auto_slices)
     // dragged to the bottom: 100 %
     drag (*view, { x, view->thresholdLineY() }, { x, area.getBottom() + 40.0f });
     CHECK (approx (rig.param ("osc1.sample.slice_threshold"), 100.0f, 0.5f));
+}
+
+// ---- wavetable editor and 3D view -----------------------------------------------------------------------------------------------------
+
+namespace
+{
+wtedit::Wavetable makeTable (int frames)
+{
+    wtedit::Wavetable table ("Gaps");
+    for (int k = 0; k < frames; ++k)
+    {
+        wtedit::Frame f;
+        for (size_t i = 0; i < wtedit::kWaveformSize; ++i)
+            f[i] = 0.1f * static_cast<float> (k + 1) * std::sin (6.2831853f * static_cast<float> (i) / static_cast<float> (wtedit::kWaveformSize));
+        if (k == 0)
+            table.setFrame (0, f);
+        else
+            table.insertFrame (static_cast<size_t> (k), f);
+    }
+    return table;
+}
+
+float frameMarker (const wtedit::Wavetable& table, size_t frame)
+{
+    return table.getFrame (frame)[wtedit::kWaveformSize / 4]; // the peak of the sine: identifies the frame (0.1 * (k + 1))
+}
+
+void polar (const wtedit::Frame& f, std::array<float, wtedit::kWaveformSize>& mags, std::array<float, wtedit::kWaveformSize>& phases)
+{
+    wtedit::Radix2Fft::realToPolar (f.sampleData(), mags.data(), phases.data(), wtedit::kWaveformSize);
+}
+} // namespace
+
+TEST (uig_wavetable_canvas_zoom_pan_loupe_nudge_two_finger)
+{
+    Rig rig;
+    WavetableEditorSheet sheet (rig.editor->context(), makeTable (3));
+    sheet.setSize (390, 844);
+    auto* canvas = sheet.waveCanvasComponent();
+    CHECK (canvas != nullptr && canvas->getWidth() > 100);
+    if (canvas == nullptr)
+        return;
+
+    // the visible alternatives of pinch / two-finger drag: + - Fit
+    for (int i = 0; i < 3; ++i)
+    {
+        auto* b = sheet.waveZoomButton (i);
+        CHECK (b != nullptr && b->getWidth() >= rig.editor->theme().touch() && b->getHeight() >= rig.editor->theme().touch());
+    }
+    sheet.waveZoomButton (0)->onClick();
+    CHECK (approx (static_cast<float> (sheet.waveViewport().span), 0.5f, 1e-4f));
+    sheet.waveZoomButton (1)->onClick();
+    CHECK (sheet.waveViewport().isFit());
+    sheet.waveZoomButton (0)->onClick();
+    sheet.waveZoomButton (2)->onClick();
+    CHECK (sheet.waveViewport().isFit());
+
+    // pinch and two-finger pan through the gesture handler
+    TouchTracker::Gesture pinch;
+    pinch.kind = TouchTracker::Kind::pinch;
+    pinch.scale = 4.0f;
+    pinch.centre = { static_cast<float> (canvas->getWidth()) * 0.5f, 10.0f };
+    sheet.handleTouchGesture (pinch);
+    CHECK (approx (static_cast<float> (sheet.waveViewport().span), 0.25f, 1e-4f));
+    TouchTracker::Gesture pan;
+    pan.kind = TouchTracker::Kind::pan;
+    pan.dx = -static_cast<float> (canvas->getWidth()) * 0.25f;
+    const double before = sheet.waveViewport().start;
+    sheet.handleTouchGesture (pan);
+    CHECK (sheet.waveViewport().start > before);
+    sheet.fitWave();
+
+    // drawing while zoomed in at the start: a point at the middle of the screen is at 25 % of the cycle
+    sheet.zoomWave (0.0f, 2.0f); // span 0.5, start 0
+    const auto original = sheet.wavetable().getFrame (0);
+    const float cx = static_cast<float> (canvas->getWidth()) * 0.5f, cy = static_cast<float> (canvas->getHeight()) * 0.25f;
+    canvas->mouseDown (mouse (*canvas, { cx, cy }, { cx, cy }, false));
+    canvas->mouseDrag (mouse (*canvas, { cx + 2.0f, cy }, { cx, cy }, true));
+    CHECK (sheet.loupeShowing());
+    const auto& after = sheet.wavetable().getFrame (0);
+    int firstChanged = -1;
+    for (size_t i = 0; i < wtedit::kWaveformSize; ++i)
+        if (std::abs (after[i] - original[i]) > 1.0e-6f)
+        {
+            firstChanged = static_cast<int> (i);
+            break;
+        }
+    CHECK (firstChanged > 0);
+    CHECK (std::abs (static_cast<float> (firstChanged) / static_cast<float> (wtedit::kWaveformSize) - 0.25f) < 0.07f);
+    canvas->mouseUp (mouse (*canvas, { cx + 2.0f, cy }, { cx, cy }, true));
+    CHECK (! sheet.loupeShowing());
+    CHECK (sheet.canUndo()); // one stroke = one undo step
+    sheet.performUndo();
+    CHECK (approx (sheet.wavetable().getFrame (0)[100], original[100], 1e-6f) && approx (sheet.wavetable().getFrame (0)[static_cast<size_t> (firstChanged)], original[static_cast<size_t> (firstChanged)], 1e-6f));
+    sheet.fitWave();
+
+    // long-press then drag nudges, whatever tool is selected; the first touch point is taken back
+    canvas->mouseDown (mouse (*canvas, { cx, cy }, { cx, cy }, false));
+    CHECK (sheet.waveLongPress()->pending());
+    sheet.waveLongPress()->fire();
+    CHECK (sheet.waveNudgeStroke());
+    bool restored = true;
+    for (size_t i = 0; i < wtedit::kWaveformSize; i += 64)
+        restored = restored && approx (sheet.wavetable().getFrame (0)[i], original[i], 1e-6f);
+    CHECK (restored);
+    canvas->mouseDrag (mouse (*canvas, { cx, cy + 40.0f }, { cx, cy }, true));
+    canvas->mouseUp (mouse (*canvas, { cx, cy + 40.0f }, { cx, cy }, true));
+    CHECK (! sheet.waveNudgeStroke());
+
+    // a second finger takes the running stroke back (it was a gesture), with no undo or redo entry
+    sheet.performUndo();
+    sheet.performRedo();
+    const bool couldUndo = sheet.canUndo();
+    const bool couldRedo = sheet.canRedo();
+    const auto snapshot = sheet.wavetable().getFrame (0);
+    canvas->mouseDown (mouse (*canvas, { cx, cy }, { cx, cy }, false));
+    CHECK (sheet.strokeInProgress());
+    sheet.waveTouchInput().touchTracker().feed (TouchTracker::Phase::down, 7, { cx + 30.0f, cy }, 1000);
+    canvas->mouseDrag (mouse (*canvas, { cx + 5.0f, cy }, { cx, cy }, true));
+    CHECK (! sheet.strokeInProgress());
+    bool same = true;
+    for (size_t i = 0; i < wtedit::kWaveformSize; i += 32)
+        same = same && approx (sheet.wavetable().getFrame (0)[i], snapshot[i], 1e-6f);
+    CHECK (same);
+    CHECK_EQ (sheet.canUndo(), couldUndo);
+    CHECK_EQ (sheet.canRedo(), couldRedo);
+    sheet.waveTouchInput().touchTracker().reset();
+    canvas->mouseUp (mouse (*canvas, { cx + 5.0f, cy }, { cx, cy }, true));
+
+    // two-finger tap = undo (the Undo button is the visible alternative)
+    sheet.applyToolAt (wtedit::DrawingTool::FlatLine, 16, 3, 0.5f);
+    const float edited = sheet.wavetable().getFrame (0)[wtedit::kWaveformSize / 5];
+    TouchTracker::Gesture tapGesture;
+    tapGesture.kind = TouchTracker::Kind::twoFingerTap;
+    sheet.handleTouchGesture (tapGesture, false);
+    CHECK (std::abs (sheet.wavetable().getFrame (0)[wtedit::kWaveformSize / 5] - edited) > 1.0e-4f);
+}
+
+TEST (uig_wavetable_fft_bin_entry_and_nudge_all_phases)
+{
+    Rig rig;
+    WavetableEditorSheet sheet (rig.editor->context(), makeTable (1));
+    sheet.setSize (390, 844);
+    sheet.setMode (WavetableEditorSheet::Mode::spectrum);
+    std::array<float, wtedit::kWaveformSize> mags {}, phases {};
+
+    // build a frame with harmonics 1..6 so the phases are defined
+    {
+        wtedit::Frame f;
+        for (size_t i = 0; i < wtedit::kWaveformSize; ++i)
+        {
+            float v = 0.0f;
+            for (int h = 1; h <= 6; ++h)
+                v += std::sin (6.2831853f * static_cast<float> (h) * static_cast<float> (i) / static_cast<float> (wtedit::kWaveformSize)) / static_cast<float> (h);
+            f[i] = v * 0.3f;
+        }
+        sheet.wavetable().setFrame (0, f);
+    }
+
+    CHECK (sheet.enterBinValue (3, false, "50"));
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    const float m3 = mags[3];
+    CHECK (m3 > 0.0f);
+    CHECK (sheet.canUndo()); // numeric entry is one undo step
+    CHECK (sheet.enterBinValue (3, false, "100 %"));
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    CHECK (mags[3] > m3);
+    const float m3full = mags[3];
+    CHECK (! sheet.enterBinValue (3, false, "250")); // outside 0..100
+    CHECK (! sheet.enterBinValue (3, false, "loud"));
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    CHECK (std::abs (mags[3] - m3full) < 1e-4f);
+
+    // phase entry in degrees
+    CHECK (sheet.enterBinValue (2, true, "90"));
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    CHECK (std::abs (phases[2] - 1.5707963f) < 0.05f);
+    CHECK (! sheet.enterBinValue (2, true, "x"));
+
+    // one phase bar alone ...
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    const float p1 = phases[1], p4 = phases[4], p2 = phases[2];
+    sheet.applyBinEdit (2, true, p2 + 0.4f);
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    CHECK (std::abs (phases[2] - (p2 + 0.4f)) < 0.05f);
+    CHECK (std::abs (phases[1] - p1) < 0.05f && std::abs (phases[4] - p4) < 0.05f);
+
+    // ... and with "nudge all phases" every sounding harmonic moves by the same amount
+    sheet.setNudgeAllPhases (true);
+    CHECK (sheet.nudgeAllPhases());
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    const float q1 = phases[1], q4 = phases[4], q2 = phases[2];
+    sheet.applyBinEdit (2, true, q2 + 0.4f);
+    polar (sheet.wavetable().getFrame (0), mags, phases);
+    CHECK (std::abs (phases[2] - (q2 + 0.4f)) < 0.05f);
+    CHECK (std::abs (phases[1] - (q1 + 0.4f)) < 0.05f);
+    CHECK (std::abs (phases[4] - (q4 + 0.4f)) < 0.05f);
+    sheet.setNudgeAllPhases (false);
+
+    // the real mouse path: a vertical drag in the amplitude half of the spectrum canvas, with the loupe
+    auto* spec = sheet.spectrumComponent();
+    CHECK (spec != nullptr);
+    if (spec != nullptr)
+    {
+        const auto& t = rig.editor->theme();
+        auto area = spec->getLocalBounds().reduced (t.ipx (2));
+        area.removeFromBottom (t.touch());
+        const float x = static_cast<float> (area.getX()) + static_cast<float> (area.getWidth()) * (4.5f / 64.0f); // bin 5
+        const float y0 = static_cast<float> (area.getY()) + static_cast<float> (area.getHeight()) * 0.15f;
+        spec->mouseDown (mouse (*spec, { x, y0 }, { x, y0 }, false));
+        spec->mouseDrag (mouse (*spec, { x, y0 - 10.0f }, { x, y0 }, true));
+        CHECK (sheet.loupeShowing());
+        spec->mouseUp (mouse (*spec, { x, y0 - 10.0f }, { x, y0 }, true));
+        CHECK (! sheet.loupeShowing());
+        polar (sheet.wavetable().getFrame (0), mags, phases);
+        CHECK (mags[5] > 0.5f);
+    }
+}
+
+TEST (uig_wavetable_thumbnail_reorder_swipe_close)
+{
+    Rig rig;
+    WavetableEditorSheet sheet (rig.editor->context(), makeTable (5));
+    sheet.setSize (390, 844);
+    auto* strip = sheet.thumbnailsComponent();
+    CHECK (strip != nullptr);
+    if (strip == nullptr)
+        return;
+    const auto& t = rig.editor->theme();
+    const int step = juce::jmax (t.touch(), t.ipx (56)) + t.ipx (4);
+    const auto slotX = [&] (int i) { return static_cast<float> (t.gap() + i * step + step / 2); };
+    const float y = static_cast<float> (strip->getHeight()) * 0.5f;
+
+    // a tap selects, as before
+    tap (*strip, { slotX (2), y });
+    CHECK_EQ (sheet.currentFrame(), static_cast<size_t> (2));
+
+    // hold thumbnail 0, drag it to the gap after thumbnail 3: it becomes frame 3 (yellow insertion cursor while dragging)
+    const float v0 = frameMarker (sheet.wavetable(), 0), v1 = frameMarker (sheet.wavetable(), 1);
+    strip->mouseDown (mouse (*strip, { slotX (0), y }, { slotX (0), y }, false));
+    CHECK (sheet.thumbnailLongPress()->pending());
+    sheet.thumbnailLongPress()->fire();
+    CHECK (sheet.thumbnailReordering());
+    strip->mouseDrag (mouse (*strip, { slotX (3) + static_cast<float> (step) * 0.4f, y }, { slotX (0), y }, true));
+    strip->mouseUp (mouse (*strip, { slotX (3) + static_cast<float> (step) * 0.4f, y }, { slotX (0), y }, true));
+    CHECK (! sheet.thumbnailReordering());
+    CHECK (approx (frameMarker (sheet.wavetable(), 3), v0, 1e-4f));
+    CHECK (approx (frameMarker (sheet.wavetable(), 0), v1, 1e-4f));
+    CHECK_EQ (sheet.currentFrame(), static_cast<size_t> (3)); // the moved frame stays selected
+    sheet.performUndo();
+    CHECK (approx (frameMarker (sheet.wavetable(), 0), v0, 1e-4f)); // one undo step
+
+    // a quick drag without the hold does not reorder
+    strip->mouseDown (mouse (*strip, { slotX (0), y }, { slotX (0), y }, false));
+    strip->mouseDrag (mouse (*strip, { slotX (3), y }, { slotX (0), y }, true));
+    strip->mouseUp (mouse (*strip, { slotX (3), y }, { slotX (0), y }, true));
+    CHECK (approx (frameMarker (sheet.wavetable(), 0), v0, 1e-4f));
+
+    // the menu alternative (Move frame left / right) is the same operation
+    CHECK (sheet.moveFrameTo (1, 0));
+    CHECK (approx (frameMarker (sheet.wavetable(), 0), v1, 1e-4f));
+    CHECK (! sheet.moveFrameTo (0, 0) && ! sheet.moveFrameTo (0, 9));
+
+    // swipe down on the header closes the sheet; a short swipe or a sideways one does not
+    bool closed = false;
+    sheet.onClosed = [&closed] (const wtedit::Wavetable&) { closed = true; };
+    sheet.setVisible (true);
+    sheet.mouseDown (mouse (sheet, { 200.0f, 6.0f }, { 200.0f, 6.0f }, false));
+    sheet.mouseUp (mouse (sheet, { 204.0f, 30.0f }, { 200.0f, 6.0f }, true));
+    CHECK (! closed);
+    sheet.mouseDown (mouse (sheet, { 200.0f, 6.0f }, { 200.0f, 6.0f }, false));
+    sheet.mouseUp (mouse (sheet, { 330.0f, 130.0f }, { 200.0f, 6.0f }, true));
+    CHECK (! closed);
+    sheet.mouseDown (mouse (sheet, { 200.0f, 6.0f }, { 200.0f, 6.0f }, false));
+    sheet.mouseUp (mouse (sheet, { 204.0f, 140.0f }, { 200.0f, 6.0f }, true));
+    CHECK (closed && ! sheet.isVisible());
+    // a press far below the header never arms it
+    closed = false;
+    sheet.setVisible (true);
+    sheet.mouseDown (mouse (sheet, { 200.0f, 400.0f }, { 200.0f, 400.0f }, false));
+    sheet.mouseUp (mouse (sheet, { 204.0f, 600.0f }, { 200.0f, 400.0f }, true));
+    CHECK (! closed);
+}
+
+TEST (uig_wavetable_import_runs_on_a_worker_with_a_progress_bar)
+{
+    Rig rig;
+    WavetableEditorSheet sheet (rig.editor->context(), makeTable (1));
+    sheet.setSize (390, 844);
+    const auto firstMarker = frameMarker (sheet.wavetable(), 0);
+
+    std::vector<float> audio (44100 * 2);
+    for (size_t i = 0; i < audio.size(); ++i)
+        audio[i] = 0.6f * std::sin (6.2831853f * 220.0f * static_cast<float> (i) / 44100.0f);
+    wtedit::ImportOptions opts;
+    opts.mode = wtedit::ImportMode::Fft1024;
+    CHECK (sheet.importAudioAsync (audio, 44100.0, opts));
+    CHECK (sheet.importRunning());
+    CHECK (sheet.importProgressVisible());
+    CHECK (! sheet.importAudioAsync (audio, 44100.0, opts)); // one at a time
+    for (int i = 0; i < 1500 && ! sheet.importWorkerDone(); ++i)
+        juce::Thread::sleep (10);
+    CHECK (sheet.importWorkerDone());
+    CHECK (sheet.finishImport());
+    CHECK (! sheet.importRunning() && ! sheet.importProgressVisible());
+    CHECK (sheet.wavetable().numFrames() > 1);
+    CHECK (sheet.canUndo());
+    sheet.performUndo();
+    CHECK (approx (frameMarker (sheet.wavetable(), 0), firstMarker, 1e-4f));
+
+    // cancel: the worker finishes, the result is thrown away
+    CHECK (sheet.importAudioAsync (audio, 44100.0, opts));
+    sheet.cancelImport();
+    for (int i = 0; i < 1500 && ! sheet.importWorkerDone(); ++i)
+        juce::Thread::sleep (10);
+    CHECK (sheet.finishImport());
+    CHECK_EQ (sheet.wavetable().numFrames(), static_cast<size_t> (1));
+    CHECK (! sheet.finishImport()); // nothing left to finish
+}
+
+TEST (uig_wavetable_3d_view_tilt_pinch)
+{
+    Rig rig;
+    WavetablePanel panel (rig.editor->context());
+    panel.build();
+    panel.setBounds (0, 0, 390, panel.preferredHeight (390));
+    auto* view = panel.visual();
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+    view->setViewMode (WavetableView::ViewMode::mode3D);
+    CHECK (approx (view->tilt(), 1.0f) && approx (view->yaw(), 0.0f) && approx (view->zoom(), 1.0f));
+
+    TouchTracker::Gesture pinch;
+    pinch.kind = TouchTracker::Kind::pinch;
+    pinch.scale = 1.5f;
+    view->handleTouchGesture (pinch);
+    CHECK (approx (view->zoom(), 1.5f));
+    pinch.scale = 10.0f;
+    view->handleTouchGesture (pinch);
+    CHECK (approx (view->zoom(), 2.5f)); // clamped like the zoom buttons
+
+    TouchTracker::Gesture pan;
+    pan.kind = TouchTracker::Kind::pan;
+    pan.dy = static_cast<float> (view->getHeight()) * 0.25f;
+    pan.dx = -static_cast<float> (view->getWidth()) * 0.25f;
+    view->handleTouchGesture (pan);
+    CHECK (view->tilt() > 1.2f);
+    CHECK (view->yaw() < -0.3f);
+
+    // the trackpad: pinch and the wheel
+    view->resetView();
+    view->mouseMagnify (mouse (*view, { 50, 50 }, { 50, 50 }, false), 0.5f);
+    CHECK (approx (view->zoom(), 0.5f));
+    juce::MouseWheelDetails wheel;
+    wheel.deltaX = 0.0f;
+    wheel.deltaY = 0.25f;
+    view->mouseWheelMove (mouse (*view, { 50, 50 }, { 50, 50 }, false), wheel);
+    CHECK (view->tilt() > 1.0f);
+
+    // the visible alternative: zoom buttons; double tap resets the whole view
+    view->zoomIn();
+    view->mouseDoubleClick (mouse (*view, { 50, 50 }, { 50, 50 }, false, 2));
+    CHECK (approx (view->zoom(), 1.0f) && approx (view->tilt(), 1.0f) && approx (view->yaw(), 0.0f));
+
+    // the other view modes ignore the gestures
+    view->setViewMode (WavetableView::ViewMode::mode2D);
+    view->handleTouchGesture (pinch);
+    CHECK (approx (view->zoom(), 1.0f));
 }
 
 TEST (uig_zz_shutdown)
