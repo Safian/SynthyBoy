@@ -31,3 +31,11 @@ synthyboy_add_test(synthyboy_test_shell_clap test_shell_clap.cpp LINK synthyboy_
 synthyboy_add_test(synthyboy_test_engine     test_engine.cpp)
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete
 synthyboy_add_test(synthyboy_test_threads    test_threads.cpp)    # run under ThreadSanitizer in CI
+
+# Fuzz smoke (garbage / mutated documents into every parser, fixed seeds, bounded; part of the sanitizer jobs). Seeds: the factory presets
+# and the Vital fixtures of the importer's tests. SYNTHYBOY_FUZZ_SCALE=N in the environment multiplies the iterations.
+synthyboy_add_test(synthyboy_fuzz_smoke fuzz_smoke.cpp "${PROJECT_SOURCE_DIR}/core/vital-import/tests/fixtures.cpp"
+    LINK synthyboy_fx_serum_b synthyboy_sampleosc)
+target_include_directories(synthyboy_fuzz_smoke PRIVATE "${PROJECT_SOURCE_DIR}/core/vital-import" "${PROJECT_SOURCE_DIR}/core/vital-import/tests"
+    "${PROJECT_SOURCE_DIR}/core/fx-serum-b")
+target_compile_definitions(synthyboy_fuzz_smoke PRIVATE SYNTHYBOY_FUZZ_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
