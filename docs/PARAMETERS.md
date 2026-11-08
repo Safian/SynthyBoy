@@ -4,11 +4,11 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1484 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**1501 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
-| Master | 22 |
+| Master | 27 |
 | Osc 1 | 64 |
 | Osc 2 | 64 |
 | Osc 3 | 64 |
@@ -23,14 +23,14 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Envelope 4 | 16 |
 | Envelope 5 | 16 |
 | Envelope 6 | 16 |
-| LFO 1 | 16 |
-| LFO 2 | 16 |
-| LFO 3 | 16 |
-| LFO 4 | 16 |
-| LFO 5 | 16 |
-| LFO 6 | 16 |
-| LFO 7 | 16 |
-| LFO 8 | 16 |
+| LFO 1 | 17 |
+| LFO 2 | 17 |
+| LFO 3 | 17 |
+| LFO 4 | 17 |
+| LFO 5 | 17 |
+| LFO 6 | 17 |
+| LFO 7 | 17 |
+| LFO 8 | 17 |
 | Random LFO 1 | 8 |
 | Random LFO 2 | 8 |
 | Random LFO 3 | 8 |
@@ -38,9 +38,10 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Macros | 8 |
 | Mod Matrix | 704 |
 | FX | 194 |
-| LFO 9 | 16 |
-| LFO 10 | 16 |
+| LFO 9 | 17 |
+| LFO 10 | 17 |
 | Mixer | 8 |
+| Quality | 2 |
 
 ## Default patch
 
@@ -76,6 +77,11 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `master.tuning.mts_note_on_only` | Tuning MTS-ESP Note-On Only | 0 Off, 1 On | Off | Master / Tuning |  |  |
 | `master.mpe.on` | MPE On | 0 Off, 1 On | Off | Master / MPE |  |  |
 | `master.mpe.bend_range` | MPE Pitch Bend Range | 1 .. 96 st (steps of 1) | 48 st | Master / MPE |  |  |
+| `master.voice.same_note` | Master Same Note Mode | 0 Steal, 1 Stack, 2 Ignore | Steal | Master / Voicing |  |  |
+| `master.voice.steal_priority` | Master Voice Steal Priority | 0 Oldest, 1 Lowest, 2 Newest | Oldest | Master / Voicing |  |  |
+| `master.poly_legato` | Master Poly Legato | 0 Off, 1 On | Off | Master |  |  |
+| `master.bend_down_range` | Master Pitch Bend Down Range | 0 .. 24 st (steps of 1) | 2 st | Master |  |  |
+| `master.stereo_spread` | Master Stereo Spread | 0 .. 100 % | 100 % | Master | mod |  |
 
 ### Osc 1
 
@@ -523,6 +529,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo1.mono` | LFO 1 Mono | 0 Off, 1 On | Off | LFO 1 |  |  |
 | `lfo1.direction` | LFO 1 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 1 |  |  |
 | `lfo1.host` | LFO 1 Host Sync | 0 Off, 1 On | Off | LFO 1 |  |  |
+| `lfo1.swing` | LFO 1 Swing | 0 .. 100 % | 0 % | LFO 1 | mod |  |
 
 ### LFO 2
 
@@ -544,6 +551,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo2.mono` | LFO 2 Mono | 0 Off, 1 On | Off | LFO 2 |  |  |
 | `lfo2.direction` | LFO 2 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 2 |  |  |
 | `lfo2.host` | LFO 2 Host Sync | 0 Off, 1 On | Off | LFO 2 |  |  |
+| `lfo2.swing` | LFO 2 Swing | 0 .. 100 % | 0 % | LFO 2 | mod |  |
 
 ### LFO 3
 
@@ -565,6 +573,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo3.mono` | LFO 3 Mono | 0 Off, 1 On | Off | LFO 3 |  |  |
 | `lfo3.direction` | LFO 3 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 3 |  |  |
 | `lfo3.host` | LFO 3 Host Sync | 0 Off, 1 On | Off | LFO 3 |  |  |
+| `lfo3.swing` | LFO 3 Swing | 0 .. 100 % | 0 % | LFO 3 | mod |  |
 
 ### LFO 4
 
@@ -586,6 +595,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo4.mono` | LFO 4 Mono | 0 Off, 1 On | Off | LFO 4 |  |  |
 | `lfo4.direction` | LFO 4 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 4 |  |  |
 | `lfo4.host` | LFO 4 Host Sync | 0 Off, 1 On | Off | LFO 4 |  |  |
+| `lfo4.swing` | LFO 4 Swing | 0 .. 100 % | 0 % | LFO 4 | mod |  |
 
 ### LFO 5
 
@@ -607,6 +617,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo5.mono` | LFO 5 Mono | 0 Off, 1 On | Off | LFO 5 |  |  |
 | `lfo5.direction` | LFO 5 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 5 |  |  |
 | `lfo5.host` | LFO 5 Host Sync | 0 Off, 1 On | Off | LFO 5 |  |  |
+| `lfo5.swing` | LFO 5 Swing | 0 .. 100 % | 0 % | LFO 5 | mod |  |
 
 ### LFO 6
 
@@ -628,6 +639,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo6.mono` | LFO 6 Mono | 0 Off, 1 On | Off | LFO 6 |  |  |
 | `lfo6.direction` | LFO 6 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 6 |  |  |
 | `lfo6.host` | LFO 6 Host Sync | 0 Off, 1 On | Off | LFO 6 |  |  |
+| `lfo6.swing` | LFO 6 Swing | 0 .. 100 % | 0 % | LFO 6 | mod |  |
 
 ### LFO 7
 
@@ -649,6 +661,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo7.mono` | LFO 7 Mono | 0 Off, 1 On | Off | LFO 7 |  |  |
 | `lfo7.direction` | LFO 7 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 7 |  |  |
 | `lfo7.host` | LFO 7 Host Sync | 0 Off, 1 On | Off | LFO 7 |  |  |
+| `lfo7.swing` | LFO 7 Swing | 0 .. 100 % | 0 % | LFO 7 | mod |  |
 
 ### LFO 8
 
@@ -670,6 +683,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo8.mono` | LFO 8 Mono | 0 Off, 1 On | Off | LFO 8 |  |  |
 | `lfo8.direction` | LFO 8 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 8 |  |  |
 | `lfo8.host` | LFO 8 Host Sync | 0 Off, 1 On | Off | LFO 8 |  |  |
+| `lfo8.swing` | LFO 8 Swing | 0 .. 100 % | 0 % | LFO 8 | mod |  |
 
 ### Random LFO 1
 
@@ -741,7 +755,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..38 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..403 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..414 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 |  |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -973,6 +987,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `lfo9.mono` | LFO 9 Mono | 0 Off, 1 On | Off | LFO 9 |  |  |
 | `lfo9.direction` | LFO 9 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 9 |  |  |
 | `lfo9.host` | LFO 9 Host Sync | 0 Off, 1 On | Off | LFO 9 |  |  |
+| `lfo9.swing` | LFO 9 Swing | 0 .. 100 % | 0 % | LFO 9 | mod |  |
 
 ### LFO 10
 
@@ -994,6 +1009,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `lfo10.mono` | LFO 10 Mono | 0 Off, 1 On | Off | LFO 10 |  |  |
 | `lfo10.direction` | LFO 10 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 10 |  |  |
 | `lfo10.host` | LFO 10 Host Sync | 0 Off, 1 On | Off | LFO 10 |  |  |
+| `lfo10.swing` | LFO 10 Swing | 0 .. 100 % | 0 % | LFO 10 | mod |  |
 
 ### Mixer
 
@@ -1007,6 +1023,13 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `bus2.fx_bypass` | Bus 2 FX Bypass | 0 Off, 1 On | Off | Mixer / Bus 2 |  |  |
 | `direct.level` | Direct Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer | mod |  |
 | `main.fx_bypass` | Main FX Bypass | 0 Off, 1 On | Off | Mixer |  |  |
+
+### Quality
+
+| Key | Name | Range | Default | Group | Mod | Own engine |
+|-----|------|-------|---------|-------|-----|------------|
+| `quality.oversample_4x` | Quality 4x Oversampling | 0 Off, 1 On | Off | Quality |  |  |
+| `quality.no_smoothing` | Quality No Smoothing | 0 Off, 1 On | Off | Quality |  |  |
 
 ## Modulation sources
 
@@ -1462,6 +1485,17 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 401 | `splitter_lmh.freq_high` | Splitter L/M/H High Split Frequency |
 | 402 | `splitter_lmh.level` | Splitter L/M/H Level |
 | 403 | `splitter_ms.level` | Splitter M/S Level |
+| 404 | `master.stereo_spread` | Master Stereo Spread |
+| 405 | `lfo1.swing` | LFO 1 Swing |
+| 406 | `lfo2.swing` | LFO 2 Swing |
+| 407 | `lfo3.swing` | LFO 3 Swing |
+| 408 | `lfo4.swing` | LFO 4 Swing |
+| 409 | `lfo5.swing` | LFO 5 Swing |
+| 410 | `lfo6.swing` | LFO 6 Swing |
+| 411 | `lfo7.swing` | LFO 7 Swing |
+| 412 | `lfo8.swing` | LFO 8 Swing |
+| 413 | `lfo9.swing` | LFO 9 Swing |
+| 414 | `lfo10.swing` | LFO 10 Swing |
 
 ## Built-in wavetables and LFO shapes
 

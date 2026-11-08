@@ -48,6 +48,16 @@ namespace sbvital {
     poly_int remaining_samples = utils::maskLoad(num_samples, triggered_remaining, trigger_mask);
     start_value_ = utils::maskLoad(start_value_, value_, trigger_mask);
 
+    if (sPolyLegato && sRunningLevel > 0.001f) {
+      poly_mask on_mask = trigger_mask & note_on_mask;
+      if (on_mask.anyMask()) {
+        poly_state_ = utils::maskLoad(poly_state_, poly_float(sRunningState), on_mask);
+        position_ = utils::maskLoad(position_, poly_float(sRunningPosition), on_mask);
+        value_ = utils::maskLoad(value_, poly_float(sRunningLevel), on_mask);
+        start_value_ = utils::maskLoad(start_value_, poly_float(sRunningLevel), on_mask);
+      }
+    }
+
     poly_mask delay_mask = poly_float::equal(poly_state_, kVoiceIdle);
     poly_mask attack_mask = poly_float::equal(poly_state_, kVoiceOn);
     poly_mask hold_mask = poly_float::equal(poly_state_, kVoiceHold);
@@ -116,6 +126,16 @@ namespace sbvital {
 
     poly_mask dead_transition_mask = release_mask & poly_float::equal(position_, 1.0f);
     poly_state_ = utils::maskLoad(poly_state_, kVoiceKill, dead_transition_mask);
+
+    for (int i = 0; i < poly_float::kSize; ++i) {
+      float st = poly_state_[i];
+      if (st == kVoiceOn || st == kVoiceHold || st == kVoiceDecay) {
+        sRunningLevel = value_[i];
+        sRunningState = st;
+        sRunningPosition = position_[i];
+        break;
+      }
+    }
   }
 
   poly_float Envelope::processSection(poly_float* audio_out, int from, int to,
@@ -189,6 +209,16 @@ namespace sbvital {
 
       poly_mask dying = poly_float::equal(trigger_value, kVoiceOff) | poly_float::equal(trigger_value, kVoiceKill);
       start_value_ = utils::maskLoad(start_value_, value_, triggering);
+
+      if (sPolyLegato && sRunningLevel > 0.001f) {
+        poly_mask on_triggering = triggering & note_on_mask;
+        if (on_triggering.anyMask()) {
+          poly_state_ = utils::maskLoad(poly_state_, poly_float(sRunningState), on_triggering);
+          current_position = utils::maskLoad(current_position, poly_float(sRunningPosition), on_triggering);
+          value_ = utils::maskLoad(value_, poly_float(sRunningLevel), on_triggering);
+          start_value_ = utils::maskLoad(start_value_, poly_float(sRunningLevel), on_triggering);
+        }
+      }
       attack_power_ = utils::maskLoad(attack_power_, attack_power_end, triggering);
       decay_power_ = utils::maskLoad(decay_power_, decay_power_end, triggering);
       release_power_ = utils::maskLoad(release_power_, release_power_end, triggering);
@@ -255,5 +285,15 @@ namespace sbvital {
     release_power_ = release_power_end;
     sustain_ = sustain_end;
     output(kPhase)->buffer[0] = poly_state_ + position_;
+
+    for (int j = 0; j < poly_float::kSize; ++j) {
+      float st = poly_state_[j];
+      if (st == kVoiceOn || st == kVoiceHold || st == kVoiceDecay) {
+        sRunningLevel = audio_out[num_samples - 1][j];
+        sRunningState = st;
+        sRunningPosition = position_[j];
+        break;
+      }
+    }
   }
 } // namespace sbvital

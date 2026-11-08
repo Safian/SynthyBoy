@@ -52,6 +52,10 @@ namespace sbvital {
     legato_ = createBaseControl("legato");
 
     Output* stereo_routing = createMonoModControl("stereo_routing");
+    master_stereo_spread_ = createMonoModControl("master_stereo_spread");
+    cr::LowerBound* stereo_spread_active = new cr::LowerBound(0.0f);
+    stereo_spread_active->plug(master_stereo_spread_);
+    addProcessor(stereo_spread_active);
     Value* stereo_mode = createBaseControl("stereo_mode");
     Output* beats_per_second = createMonoModControl("beats_per_minute");
     cr::LowerBound* beats_per_second_clamped = new cr::LowerBound(0.0f);

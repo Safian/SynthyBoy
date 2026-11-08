@@ -96,6 +96,9 @@ std::vector<Binding> build()
     b.add ("master.transpose", "voice_transpose", Conv::linear);
     b.percent ("master.tune", "voice_tune");
     b.choice ("master.legato", "legato");
+    static constexpr int kVoicePriorityMap[] = { 1, 3, 0 }; // Oldest (0) -> 1, Lowest (1) -> 3, Newest (2) -> 0
+    b.add ("master.voice.steal_priority", "voice_priority", Conv::indexMap, 1.0, 0.0, Cap::none, 0, kVoicePriorityMap);
+    b.percent ("master.stereo_spread", "master_stereo_spread");
     b.add ("master.portamento.time", "portamento_time", Conv::log2Ms, -10.0);
     b.add ("master.portamento.slope", "portamento_slope", Conv::linear);
     b.choice ("master.portamento.always", "portamento_force");
@@ -239,6 +242,7 @@ std::vector<Binding> build()
         b.add (k + "stereo", c + "stereo", Conv::linear, 1.0 / 360.0);
         b.add (k + "keytrack_transpose", c + "keytrack_transpose", Conv::linear);
         b.percent (k + "keytrack_tune", c + "keytrack_tune");
+        b.percent (k + "swing", c + "swing");
     }
     for (int n = 1; n <= 4; ++n)
     {
@@ -421,7 +425,11 @@ bool isSpecialParam (size_t paramIndex)
         || (startsWith ("mod") && std::strstr (key, ".aux_") != nullptr) || startsWith ("curve.") || startsWith ("master.scale.")
         || startsWith ("master.tuning.") || startsWith ("master.mpe.") || (startsWith ("osc") && std::strstr (key, ".map.") != nullptr)
         // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
-        || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"));
+        || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"))
+        // B15 (G12, G13, G14, G18): handled by adapter / audio thread
+        || std::strcmp (key, "master.voice.same_note") == 0 || std::strcmp (key, "master.poly_legato") == 0
+        || std::strcmp (key, "master.bend_down_range") == 0
+        || std::strcmp (key, "quality.oversample_4x") == 0 || std::strcmp (key, "quality.no_smoothing") == 0;
 }
 
 double convertParam (const Binding& binding, double plain, double sampleRate, double bpm)

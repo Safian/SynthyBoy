@@ -363,7 +363,7 @@ public:
                      p + "style", p + "sync", p + "division", p + "keytrack_tune" };
         return { p + "rate", p + "fade_in", p + "delay", p + "smooth_time",                    // primary
                  p + "shape", p + "sync", p + "division", p + "sync_type", p + "phase", p + "smooth", p + "stereo",
-                 p + "keytrack_transpose", p + "keytrack_tune", p + "mono", p + "direction", p + "host" };
+                 p + "keytrack_transpose", p + "keytrack_tune", p + "mono", p + "direction", p + "host", p + "swing" };
     }
 
     void build() override

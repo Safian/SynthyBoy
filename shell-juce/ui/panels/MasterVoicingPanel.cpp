@@ -23,7 +23,8 @@ public:
                  "master.portamento.time", "master.portamento.slope", "master.portamento.always", "master.portamento.scaled",
                  "master.scale.key", "master.scale.type", "master.scale.mode",
                  "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only",
-                 "master.mpe.on", "master.mpe.bend_range" };
+                 "master.mpe.on", "master.mpe.bend_range",
+                 "master.voice.same_note", "master.voice.steal_priority", "master.poly_legato", "master.bend_down_range", "master.stereo_spread" };
     }
 
     void build() override

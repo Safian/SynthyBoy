@@ -408,6 +408,93 @@ TEST (glb_osc_map_direct_manipulation)
     CHECK_NEAR (plainOf (proc, "osc1.map.key_high"), 127.0, 0.1);
 }
 
+TEST (glb_voiceglb_panels_and_modulation)
+{
+    SynthyBoyProcessor proc;
+    CapsHost host (proc, kCapAllKnown);
+    Theme theme = Theme::dark();
+    ModAssignController assign (host);
+    UiContext ctx { host, theme, assign };
+
+    // 1. MasterVoicingPanel: verify B15 controls
+    std::unique_ptr<Panel> masterPanel;
+    for (const auto& e : PanelRegistry::instance().entries())
+    {
+        if (e.id.find ("MasterVoicing") != std::string::npos)
+        {
+            masterPanel = e.create (ctx);
+            break;
+        }
+    }
+    CHECK (masterPanel != nullptr);
+    if (masterPanel != nullptr)
+    {
+        masterPanel->build();
+        masterPanel->setSize (390, masterPanel->preferredHeight (390));
+        masterPanel->setMoreExpanded (true);
+
+        const char* expectedKeys[] = {
+            "master.voice.same_note", "master.voice.steal_priority", "master.poly_legato",
+            "master.bend_down_range", "master.stereo_spread"
+        };
+        for (const char* k : expectedKeys)
+        {
+            bool found = false;
+            for (const auto& c : masterPanel->controls())
+            {
+                if (c->key() == k)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (! found)
+                std::printf ("    [missing in MasterVoicingPanel]: %s\n", k);
+            CHECK (found);
+        }
+
+        // Check that master.stereo_spread is modulatable
+        ParamControl* stereoCtrl = nullptr;
+        for (const auto& c : masterPanel->controls())
+            if (c->key() == "master.stereo_spread")
+                stereoCtrl = c.get();
+        CHECK (stereoCtrl != nullptr);
+        if (stereoCtrl != nullptr)
+        {
+            auto* dragCtrl = dynamic_cast<ParamDragControl*> (stereoCtrl);
+            CHECK (dragCtrl != nullptr);
+            CHECK ((stereoCtrl->paramHandle().info().flags & kParamModulatable) != 0);
+        }
+    }
+
+    // 2. GlbQualityPanel: verify 4x oversampling and no smoothing controls
+    std::unique_ptr<Panel> qualPanel;
+    for (const auto& e : PanelRegistry::instance().entries())
+    {
+        if (e.id.find ("GlbQuality") != std::string::npos)
+        {
+            qualPanel = e.create (ctx);
+            break;
+        }
+    }
+    CHECK (qualPanel != nullptr);
+    if (qualPanel != nullptr)
+    {
+        qualPanel->build();
+        qualPanel->setSize (390, qualPanel->preferredHeight (390));
+        qualPanel->setMoreExpanded (true);
+
+        bool found4x = false, foundNoSmooth = false;
+        for (const auto& c : qualPanel->controls())
+        {
+            if (c->key() == "quality.oversample_4x") found4x = true;
+            if (c->key() == "quality.no_smoothing") foundNoSmooth = true;
+        }
+        CHECK (found4x);
+        CHECK (foundNoSmooth);
+    }
+}
+
 TEST (glb_touch_targets_on_all_new_panels)
 {
     SynthyBoyProcessor proc;

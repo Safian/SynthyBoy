@@ -24,6 +24,7 @@ namespace sbvital {
   class SmoothValue : public Value {
     public:
       static constexpr mono_float kSmoothCutoff = 5.0f;
+      static inline bool sBypassSmoothing = false;
 
       SmoothValue(mono_float value = 0.0f);
 

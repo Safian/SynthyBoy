@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (1484));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604);
+    CHECK_EQ (paramCount(), static_cast<size_t> (1501));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 621);
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
     CHECK_EQ (kNumModSources, 38);
-    CHECK_EQ (kNumModDestinations, 404);
+    CHECK_EQ (kNumModDestinations, 415);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (38));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (403));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (414));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (403));
-    CHECK_EQ (newModulatable, static_cast<size_t> (134));
+    CHECK_EQ (modulatable, static_cast<size_t> (414));
+    CHECK_EQ (newModulatable, static_cast<size_t> (145));
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (1484));
+    CHECK_EQ (ids.size(), static_cast<size_t> (1501));
 }
 
 TEST (append_positions_golden)
@@ -126,6 +126,9 @@ TEST (append_positions_golden)
         { "fx.order.10", 1395 }, { "fx.order.16", 1401 }, { "chorus.rack", 1402 }, { "splitter_ms.rack", 1417 },
         { "reverb.force_enable", 1418 }, { "hyperdim.on", 1419 }, { "utility.on", 1428 }, { "bode.on", 1439 },
         { "convolve.on", 1454 }, { "splitter_lh.on", 1468 }, { "splitter_ms.level", 1483 },
+        { "master.voice.same_note", 1484 }, { "master.stereo_spread", 1488 },
+        { "lfo1.swing", 1489 }, { "lfo10.swing", 1498 },
+        { "quality.oversample_4x", 1499 }, { "quality.no_smoothing", 1500 },
     };
     for (const auto& e : expected)
         if (! CHECK_EQ (positionOf (e.key), e.position))
@@ -395,7 +398,7 @@ TEST (engines_ignore_the_new_keys)
             {
                 const auto s = modSlotParams (k);
                 e->setParam (t[s.source].id, static_cast<float> (29 + k % 10));
-                e->setParam (t[s.destination].id, static_cast<float> (270 + k % 134));
+                e->setParam (t[s.destination].id, static_cast<float> (270 + k % 145));
             }
             const auto out = sbtest::render (*e, { sbtest::noteOn (0, 60, 0.9f), sbtest::noteOn (100, 64, 0.9f) }, 4800, 256);
             CHECK (sbtest::allFinite (out.left) && sbtest::allFinite (out.right));

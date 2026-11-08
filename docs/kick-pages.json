@@ -270,6 +270,15 @@
         {"key": "master.bend_range", "shortLabel": "Pitch Bend", "widget": "knob"},
         {"key": "master.velocity_track", "shortLabel": "Velocity T", "widget": "bipolar_knob"},
         {"key": "master.portamento.time", "shortLabel": "Porta Time", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "master.voice.same_note",
+        "master.voice.steal_priority",
+        "master.poly_legato",
+        "master.bend_down_range",
+        "master.stereo_spread",
+        "quality.oversample_4x",
+        "quality.no_smoothing"
       ]
     },
     {
@@ -669,7 +678,8 @@
         "lfo1.keytrack_tune",
         "lfo1.mono",
         "lfo1.direction",
-        "lfo1.host"
+        "lfo1.host",
+        "lfo1.swing"
       ]
     },
     {
@@ -694,7 +704,8 @@
         "lfo2.keytrack_tune",
         "lfo2.mono",
         "lfo2.direction",
-        "lfo2.host"
+        "lfo2.host",
+        "lfo2.swing"
       ]
     },
     {
@@ -719,7 +730,8 @@
         "lfo3.keytrack_tune",
         "lfo3.mono",
         "lfo3.direction",
-        "lfo3.host"
+        "lfo3.host",
+        "lfo3.swing"
       ]
     },
     {
@@ -744,7 +756,8 @@
         "lfo4.keytrack_tune",
         "lfo4.mono",
         "lfo4.direction",
-        "lfo4.host"
+        "lfo4.host",
+        "lfo4.swing"
       ]
     },
     {
@@ -769,7 +782,8 @@
         "lfo5.keytrack_tune",
         "lfo5.mono",
         "lfo5.direction",
-        "lfo5.host"
+        "lfo5.host",
+        "lfo5.swing"
       ]
     },
     {
@@ -794,7 +808,8 @@
         "lfo6.keytrack_tune",
         "lfo6.mono",
         "lfo6.direction",
-        "lfo6.host"
+        "lfo6.host",
+        "lfo6.swing"
       ]
     },
     {
@@ -819,7 +834,8 @@
         "lfo7.keytrack_tune",
         "lfo7.mono",
         "lfo7.direction",
-        "lfo7.host"
+        "lfo7.host",
+        "lfo7.swing"
       ]
     },
     {
@@ -844,7 +860,8 @@
         "lfo8.keytrack_tune",
         "lfo8.mono",
         "lfo8.direction",
-        "lfo8.host"
+        "lfo8.host",
+        "lfo8.swing"
       ]
     },
     {
@@ -1987,7 +2004,8 @@
         "lfo9.keytrack_tune",
         "lfo9.mono",
         "lfo9.direction",
-        "lfo9.host"
+        "lfo9.host",
+        "lfo9.swing"
       ]
     },
     {
@@ -2012,7 +2030,8 @@
         "lfo10.keytrack_tune",
         "lfo10.mono",
         "lfo10.direction",
-        "lfo10.host"
+        "lfo10.host",
+        "lfo10.swing"
       ]
     },
     {

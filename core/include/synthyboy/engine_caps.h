@@ -45,10 +45,16 @@ enum EngineCaps : EngineCapsMask
     kCapFxConvolve       = 1ull << 23, // WP7
     kCapFxSplitters      = 1ull << 24, // WP7
     kCapReverbForce      = 1ull << 25, // WP8
+    kCapVoiceSteal       = 1ull << 26, // WP voiceglb: master.voice.same_note, master.voice.steal_priority
+    kCapPolyLegato       = 1ull << 27, // WP voiceglb: master.poly_legato
+    kCapBendDownRange    = 1ull << 28, // WP voiceglb: master.bend_down_range
+    kCapStereoSpread     = 1ull << 29, // WP voiceglb: master.stereo_spread
+    kCapLfoSwing         = 1ull << 30, // WP voiceglb: lfo1.swing .. lfo10.swing
+    kCapQualityOptions   = 1ull << 31, // WP voiceglb: quality.oversample_4x, quality.no_smoothing
 };
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = (1ull << 26) - 1;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 32) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

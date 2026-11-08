@@ -77,6 +77,7 @@ namespace sbvital {
         kNoteCount,
         kDirection,  // SynthyBoy: 0 forward, 1 reverse, 2 ping pong (the shape is read backwards / forth and back within one cycle)
         kHostLock,   // SynthyBoy: 1 = the phase is anchored to the sync clock (the host transport) on every block, not only at a note on
+        kSwing,      // SynthyBoy: LFO swing / shuffle 0..1 (Serum LFO swing)
         kPointSource0,                                    // SynthyBoy: source s of a point modulation = input kPointSource0 + s
         kNumInputs = kPointSource0 + LfoPointModulation::kMaxSources
       };
@@ -129,6 +130,18 @@ namespace sbvital {
       static constexpr float kHalfLifeRatio = 0.2f;
       static constexpr float kMinHalfLife = 0.0002f;
 
+      // SynthyBoy: Serum LFO swing/shuffle. Warps the phase so that the first half of the cycle
+      // is elongated and the second half shortened, preserving [0, 1] range.
+      force_inline poly_float applySwing(poly_float phase) const {
+        if (swing_ <= 0.0001f)
+          return phase;
+        poly_float split = 0.5f + 0.25f * swing_;
+        poly_mask first_half = poly_float::lessThan(phase, split);
+        poly_float p_first = phase * (poly_float(0.5f) / split);
+        poly_float p_second = poly_float(0.5f) + (phase - split) * (poly_float(0.5f) / (poly_float(1.0f) - split));
+        return utils::maskLoad(p_second, p_first, first_half);
+      }
+
       // SynthyBoy: the direction of the cycle. Applied to the position in the shape, not to the running phase, so a change
       // of direction never jumps the phase itself.
       force_inline poly_float applyDirection(poly_float phase) const {
@@ -141,6 +154,7 @@ namespace sbvital {
 
       force_inline poly_float getValueAtPhase(mono_float* buffer, poly_float resolution,
                                               poly_int max_index, poly_float phase) {
+        phase = applySwing(phase);
         phase = applyDirection(phase);
         // SynthyBoy: with a per-voice point modulation every voice reads its own table (and its own resolution)
         if (voice_mode_) {
@@ -202,6 +216,7 @@ namespace sbvital {
 
       bool was_control_rate_;
       int direction_ = 0;
+      mono_float swing_ = 0.0f;
       LfoState control_rate_state_;
       LfoState audio_rate_state_;
 

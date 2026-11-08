@@ -126,6 +126,7 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 | 05-27 | Undo / Redo of shape edits, one drag = one entry | **added**: `LfoShapeEditor.cpp:310`, `mouseUp :730` (an own stack; the global undo of the kit does not exist) |
 | 05-28 | LFO tab chips L1..L10 / R1..R4 (2.2) | **added**: `LfoTabsPanel.cpp` |
 | 05-29 | Shape presets | **added**: `LfoShapeEditor.cpp:403` (the 12 built-in shapes as point lists) |
+| 05-30 | LFO swing (Serum LFO swing / shuffle) | implemented: `lfoN.swing` modulatable knob behind More (`LfoPanel.cpp:364`, K) |
 
 ## 06 Modulation
 
@@ -155,6 +156,11 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 | 07-06 | Oscillator mapping bars: drag handles / bar body; double-tap to type notes | implemented: `GlbOscMapPanel.cpp:175-295` |
 | 07-07 | Master scope / FFT display: tap / pinch toggles | **closed (gaps)**: `GlbScopePanel` (`panels/GlbScopePanel.cpp`): master wave / FFT display fed by the lock-free scope ring of the processor (`UiHost::copyScope`, `PluginProcessor.cpp:450`); tap `:138` or pinch `:34` toggles, `[Wave]` `[FFT]` buttons are the alternative; voices / CPU read-out. Test `uig_voice_badge_cpu_pill_and_scope` |
 | 07-08 | Init / Utility buttons with confirm toast | **closed (gaps)**: a toast confirms every Init / Utility button (`GestureKit.cpp:121`, `GlbSettingsPanel.cpp:147-181`). The buttons now really act: Init Preset = every parameter to its default and empty content, Init LFOs = all 14 LFO modules and their custom shapes, Revert = `UiHost::revertToSaved ()` (the processor keeps what the host loaded last, `PluginProcessor.cpp:436`); before, Init LFOs and Revert only changed their text. Test `uig_settings_buttons_act_and_confirm_with_a_toast` |
+| 07-09 | Voice steal / same-note mode (`master.voice.same_note` / `master.voice.steal_priority`) | implemented: ParamChoice behind More (`MasterVoicingPanel.cpp:19-27`, K) |
+| 07-10 | Poly legato (`master.poly_legato`) | implemented: ParamToggle behind More (`MasterVoicingPanel.cpp:19-27`, K) |
+| 07-11 | Pitch bend down range (`master.bend_down_range`) | implemented: ParamKnob behind More (`MasterVoicingPanel.cpp:19-27`, K) |
+| 07-12 | Stereo spread (`master.stereo_spread`) | implemented: modulatable ParamKnob behind More (`MasterVoicingPanel.cpp:19-27`, K) |
+| 07-13 | 4x oversampling & no smoothing (`quality.oversample_4x`, `quality.no_smoothing`) | implemented: ParamToggle behind More (`GlbQualityPanel.cpp:206-224`, K) |
 
 ## 08 Effects
 

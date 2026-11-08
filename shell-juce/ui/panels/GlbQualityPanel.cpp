@@ -209,18 +209,22 @@ public:
                  "reverb.force_enable",
                  "main.fx_bypass",
                  "bus1.fx_bypass",
-                 "bus2.fx_bypass" };
+                 "bus2.fx_bypass",
+                 "quality.oversample_4x",
+                 "quality.no_smoothing" };
     }
 
     void build() override
     {
-        // 3 primary controls, 2 behind More
+        // 3 primary controls, 4 behind More
         addControl ("master.polyphony");
         addControl ("reverb.force_enable");
         addControl ("main.fx_bypass");
 
         addMoreControl ("bus1.fx_bypass");
         addMoreControl ("bus2.fx_bypass");
+        addMoreControl ("quality.oversample_4x");
+        addMoreControl ("quality.no_smoothing");
     }
 
     int preferredHeight (int width) const override

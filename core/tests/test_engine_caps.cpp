@@ -44,14 +44,14 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
     // every defined bit has a name and is used by some key; five need no key: the event contract, and four that gate values of
     // lists (appended_choice_values_need_a_capability)
     const EngineCapsMask valueOnly = kCapEventContract | kCapModSourcesExtra | kCapCustomLfoShape | kCapUserWavetable | kCapFilterModels;
-    for (int bit = 0; bit < 26; ++bit)
+    for (int bit = 0; bit < 32; ++bit)
     {
         const EngineCapsMask b = 1ull << bit;
         CHECK (std::strlen (capName (b)) > 0);
         if ((valueOnly & b) == 0 && ! CHECK ((all & b) != 0))
             std::printf ("    bit %s has no key\n", capName (b));
     }
-    CHECK_EQ (all >> 26, static_cast<EngineCapsMask> (0));
+    CHECK_EQ (all >> 32, static_cast<EngineCapsMask> (0));
 
     struct Case { const char* key; EngineCapsMask caps; };
     const Case cases[] = {
@@ -85,6 +85,15 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
         { "bode.shift", kCapFxBode },
         { "convolve.ir", kCapFxConvolve },
         { "splitter_lmh.freq_low", kCapFxSplitters },
+        { "master.voice.same_note", kCapVoiceSteal },
+        { "master.voice.steal_priority", kCapVoiceSteal },
+        { "master.poly_legato", kCapPolyLegato },
+        { "master.bend_down_range", kCapBendDownRange },
+        { "master.stereo_spread", kCapStereoSpread },
+        { "lfo1.swing", kCapLfoSwing },
+        { "lfo10.swing", kCapLfo910 | kCapLfoSwing },
+        { "quality.oversample_4x", kCapQualityOptions },
+        { "quality.no_smoothing", kCapQualityOptions },
     };
     for (const auto& c : cases)
         if (! CHECK_EQ (requiredCaps (positionOf (c.key)), c.caps))
@@ -113,6 +122,9 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (need ("mod09.destination", 269.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("mod09.destination", 270.0f), static_cast<EngineCapsMask> (kCapMacros58));
     CHECK_EQ (need ("mod09.destination", 403.0f), static_cast<EngineCapsMask> (kCapFxSplitters));
+    CHECK_EQ (need ("mod09.destination", 404.0f), static_cast<EngineCapsMask> (kCapStereoSpread));
+    CHECK_EQ (need ("mod09.destination", 405.0f), static_cast<EngineCapsMask> (kCapLfoSwing));
+    CHECK_EQ (need ("mod09.destination", 414.0f), static_cast<EngineCapsMask> (kCapLfo910 | kCapLfoSwing));
     CHECK_EQ (need ("master.volume", 5.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("macro.5", 50.0f), static_cast<EngineCapsMask> (kCapMacros58));
     CHECK (capsCover (kCapMacros58 | kCapLfo910, kCapLfo910) && ! capsCover (kCapMacros58, kCapMacros58 | kCapLfo910));

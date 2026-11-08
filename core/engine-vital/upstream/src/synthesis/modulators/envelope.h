@@ -46,6 +46,11 @@ namespace sbvital {
         kNumOutputs
       };
 
+      static inline bool sPolyLegato = false;
+      static inline float sRunningLevel = 0.0f;
+      static inline float sRunningPosition = 0.0f;
+      static inline float sRunningState = 0.0f;
+
       Envelope();
       virtual ~Envelope() { }
 

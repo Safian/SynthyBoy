@@ -33,45 +33,51 @@ constexpr const char* s_more_env6[] = {
     "env6.attack_beats", "env6.hold_beats", "env6.decay_beats", "env6.release_beats"
 };
 
+constexpr const char* s_more_master_voicing[] = {
+    "master.voice.same_note", "master.voice.steal_priority", "master.poly_legato",
+    "master.bend_down_range", "master.stereo_spread",
+    "quality.oversample_4x", "quality.no_smoothing"
+};
+
 constexpr const char* s_more_lfo1[] = {
     "lfo1.smooth", "lfo1.smooth_time", "lfo1.stereo", "lfo1.keytrack_transpose", "lfo1.keytrack_tune",
-    "lfo1.mono", "lfo1.direction", "lfo1.host"
+    "lfo1.mono", "lfo1.direction", "lfo1.host", "lfo1.swing"
 };
 constexpr const char* s_more_lfo2[] = {
     "lfo2.smooth", "lfo2.smooth_time", "lfo2.stereo", "lfo2.keytrack_transpose", "lfo2.keytrack_tune",
-    "lfo2.mono", "lfo2.direction", "lfo2.host"
+    "lfo2.mono", "lfo2.direction", "lfo2.host", "lfo2.swing"
 };
 constexpr const char* s_more_lfo3[] = {
     "lfo3.smooth", "lfo3.smooth_time", "lfo3.stereo", "lfo3.keytrack_transpose", "lfo3.keytrack_tune",
-    "lfo3.mono", "lfo3.direction", "lfo3.host"
+    "lfo3.mono", "lfo3.direction", "lfo3.host", "lfo3.swing"
 };
 constexpr const char* s_more_lfo4[] = {
     "lfo4.smooth", "lfo4.smooth_time", "lfo4.stereo", "lfo4.keytrack_transpose", "lfo4.keytrack_tune",
-    "lfo4.mono", "lfo4.direction", "lfo4.host"
+    "lfo4.mono", "lfo4.direction", "lfo4.host", "lfo4.swing"
 };
 constexpr const char* s_more_lfo5[] = {
     "lfo5.smooth", "lfo5.smooth_time", "lfo5.stereo", "lfo5.keytrack_transpose", "lfo5.keytrack_tune",
-    "lfo5.mono", "lfo5.direction", "lfo5.host"
+    "lfo5.mono", "lfo5.direction", "lfo5.host", "lfo5.swing"
 };
 constexpr const char* s_more_lfo6[] = {
     "lfo6.smooth", "lfo6.smooth_time", "lfo6.stereo", "lfo6.keytrack_transpose", "lfo6.keytrack_tune",
-    "lfo6.mono", "lfo6.direction", "lfo6.host"
+    "lfo6.mono", "lfo6.direction", "lfo6.host", "lfo6.swing"
 };
 constexpr const char* s_more_lfo7[] = {
     "lfo7.smooth", "lfo7.smooth_time", "lfo7.stereo", "lfo7.keytrack_transpose", "lfo7.keytrack_tune",
-    "lfo7.mono", "lfo7.direction", "lfo7.host"
+    "lfo7.mono", "lfo7.direction", "lfo7.host", "lfo7.swing"
 };
 constexpr const char* s_more_lfo8[] = {
     "lfo8.smooth", "lfo8.smooth_time", "lfo8.stereo", "lfo8.keytrack_transpose", "lfo8.keytrack_tune",
-    "lfo8.mono", "lfo8.direction", "lfo8.host"
+    "lfo8.mono", "lfo8.direction", "lfo8.host", "lfo8.swing"
 };
 constexpr const char* s_more_lfo9[] = {
     "lfo9.smooth", "lfo9.smooth_time", "lfo9.stereo", "lfo9.keytrack_transpose", "lfo9.keytrack_tune",
-    "lfo9.mono", "lfo9.direction", "lfo9.host"
+    "lfo9.mono", "lfo9.direction", "lfo9.host", "lfo9.swing"
 };
 constexpr const char* s_more_lfo10[] = {
     "lfo10.smooth", "lfo10.smooth_time", "lfo10.stereo", "lfo10.keytrack_transpose", "lfo10.keytrack_tune",
-    "lfo10.mono", "lfo10.direction", "lfo10.host"
+    "lfo10.mono", "lfo10.direction", "lfo10.host", "lfo10.swing"
 };
 
 constexpr const char* s_more_osc1_sample_2[] = {
@@ -209,7 +215,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 1: Macros & Performance (Perf)
     { "macros", "Macros & Performance", "Perf", { "macro.1", "macro.2", "macro.3", "macro.4", "master.volume", "filter1.cutoff", "filter1.resonance", "env1.release" }, 8, nullptr, 0 },
     // Page 2: Master & Voicing (Master)
-    { "master_voicing", "Master & Voicing", "Master", { "master.volume", "master.transpose", "master.tune", "master.polyphony", "master.legato", "master.bend_range", "master.velocity_track", "master.portamento.time" }, 8, nullptr, 0 },
+    { "master_voicing", "Master & Voicing", "Master", { "master.volume", "master.transpose", "master.tune", "master.polyphony", "master.legato", "master.bend_range", "master.velocity_track", "master.portamento.time" }, 8, s_more_master_voicing, sizeof (s_more_master_voicing) / sizeof (s_more_master_voicing[0]) },
     // Page 3: Portamento & Glide (Master)
     { "master_porta", "Portamento & Glide", "Master", { "master.portamento.time", "master.portamento.slope", "master.portamento.always", "master.portamento.scaled", "master.legato", "master.polyphony", "master.bend_range", "master.volume" }, 8, nullptr, 0 },
     // Page 4: Osc 1 Main (Osc)
@@ -253,21 +259,21 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 23: Envelope 6 (Env)
     { "env6", "Envelope 6", "Env", { "env6.attack", "env6.hold", "env6.decay", "env6.sustain", "env6.release", "env6.delay", "env6.attack_curve", "env6.decay_curve" }, 8, s_more_env6, 8 },
     // Page 24: LFO 1 (LFO)
-    { "lfo1", "LFO 1", "LFO", { "lfo1.shape", "lfo1.sync", "lfo1.rate", "lfo1.division", "lfo1.sync_type", "lfo1.phase", "lfo1.fade_in", "lfo1.delay" }, 8, s_more_lfo1, 8 },
+    { "lfo1", "LFO 1", "LFO", { "lfo1.shape", "lfo1.sync", "lfo1.rate", "lfo1.division", "lfo1.sync_type", "lfo1.phase", "lfo1.fade_in", "lfo1.delay" }, 8, s_more_lfo1, sizeof (s_more_lfo1) / sizeof (s_more_lfo1[0]) },
     // Page 25: LFO 2 (LFO)
-    { "lfo2", "LFO 2", "LFO", { "lfo2.shape", "lfo2.sync", "lfo2.rate", "lfo2.division", "lfo2.sync_type", "lfo2.phase", "lfo2.fade_in", "lfo2.delay" }, 8, s_more_lfo2, 8 },
+    { "lfo2", "LFO 2", "LFO", { "lfo2.shape", "lfo2.sync", "lfo2.rate", "lfo2.division", "lfo2.sync_type", "lfo2.phase", "lfo2.fade_in", "lfo2.delay" }, 8, s_more_lfo2, sizeof (s_more_lfo2) / sizeof (s_more_lfo2[0]) },
     // Page 26: LFO 3 (LFO)
-    { "lfo3", "LFO 3", "LFO", { "lfo3.shape", "lfo3.sync", "lfo3.rate", "lfo3.division", "lfo3.sync_type", "lfo3.phase", "lfo3.fade_in", "lfo3.delay" }, 8, s_more_lfo3, 8 },
+    { "lfo3", "LFO 3", "LFO", { "lfo3.shape", "lfo3.sync", "lfo3.rate", "lfo3.division", "lfo3.sync_type", "lfo3.phase", "lfo3.fade_in", "lfo3.delay" }, 8, s_more_lfo3, sizeof (s_more_lfo3) / sizeof (s_more_lfo3[0]) },
     // Page 27: LFO 4 (LFO)
-    { "lfo4", "LFO 4", "LFO", { "lfo4.shape", "lfo4.sync", "lfo4.rate", "lfo4.division", "lfo4.sync_type", "lfo4.phase", "lfo4.fade_in", "lfo4.delay" }, 8, s_more_lfo4, 8 },
+    { "lfo4", "LFO 4", "LFO", { "lfo4.shape", "lfo4.sync", "lfo4.rate", "lfo4.division", "lfo4.sync_type", "lfo4.phase", "lfo4.fade_in", "lfo4.delay" }, 8, s_more_lfo4, sizeof (s_more_lfo4) / sizeof (s_more_lfo4[0]) },
     // Page 28: LFO 5 (LFO)
-    { "lfo5", "LFO 5", "LFO", { "lfo5.shape", "lfo5.sync", "lfo5.rate", "lfo5.division", "lfo5.sync_type", "lfo5.phase", "lfo5.fade_in", "lfo5.delay" }, 8, s_more_lfo5, 8 },
+    { "lfo5", "LFO 5", "LFO", { "lfo5.shape", "lfo5.sync", "lfo5.rate", "lfo5.division", "lfo5.sync_type", "lfo5.phase", "lfo5.fade_in", "lfo5.delay" }, 8, s_more_lfo5, sizeof (s_more_lfo5) / sizeof (s_more_lfo5[0]) },
     // Page 29: LFO 6 (LFO)
-    { "lfo6", "LFO 6", "LFO", { "lfo6.shape", "lfo6.sync", "lfo6.rate", "lfo6.division", "lfo6.sync_type", "lfo6.phase", "lfo6.fade_in", "lfo6.delay" }, 8, s_more_lfo6, 8 },
+    { "lfo6", "LFO 6", "LFO", { "lfo6.shape", "lfo6.sync", "lfo6.rate", "lfo6.division", "lfo6.sync_type", "lfo6.phase", "lfo6.fade_in", "lfo6.delay" }, 8, s_more_lfo6, sizeof (s_more_lfo6) / sizeof (s_more_lfo6[0]) },
     // Page 30: LFO 7 (LFO)
-    { "lfo7", "LFO 7", "LFO", { "lfo7.shape", "lfo7.sync", "lfo7.rate", "lfo7.division", "lfo7.sync_type", "lfo7.phase", "lfo7.fade_in", "lfo7.delay" }, 8, s_more_lfo7, 8 },
+    { "lfo7", "LFO 7", "LFO", { "lfo7.shape", "lfo7.sync", "lfo7.rate", "lfo7.division", "lfo7.sync_type", "lfo7.phase", "lfo7.fade_in", "lfo7.delay" }, 8, s_more_lfo7, sizeof (s_more_lfo7) / sizeof (s_more_lfo7[0]) },
     // Page 31: LFO 8 (LFO)
-    { "lfo8", "LFO 8", "LFO", { "lfo8.shape", "lfo8.sync", "lfo8.rate", "lfo8.division", "lfo8.sync_type", "lfo8.phase", "lfo8.fade_in", "lfo8.delay" }, 8, s_more_lfo8, 8 },
+    { "lfo8", "LFO 8", "LFO", { "lfo8.shape", "lfo8.sync", "lfo8.rate", "lfo8.division", "lfo8.sync_type", "lfo8.phase", "lfo8.fade_in", "lfo8.delay" }, 8, s_more_lfo8, sizeof (s_more_lfo8) / sizeof (s_more_lfo8[0]) },
     // Page 32: Random LFO 1 (LFO)
     { "rlfo1", "Random LFO 1", "LFO", { "rlfo1.style", "rlfo1.sync", "rlfo1.rate", "rlfo1.division", "rlfo1.sync_type", "rlfo1.stereo", "rlfo1.keytrack_transpose", "rlfo1.keytrack_tune" }, 8, nullptr, 0 },
     // Page 33: Random LFO 2 (LFO)
@@ -331,9 +337,9 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 62: Macros 5–8 (Perf)
     { "macros_2", "Macros 5–8", "Perf", { "macro.5", "macro.6", "macro.7", "macro.8", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 63: LFO 9 (LFO)
-    { "lfo9", "LFO 9", "LFO", { "lfo9.shape", "lfo9.sync", "lfo9.rate", "lfo9.division", "lfo9.sync_type", "lfo9.phase", "lfo9.fade_in", "lfo9.delay" }, 8, s_more_lfo9, 8 },
+    { "lfo9", "LFO 9", "LFO", { "lfo9.shape", "lfo9.sync", "lfo9.rate", "lfo9.division", "lfo9.sync_type", "lfo9.phase", "lfo9.fade_in", "lfo9.delay" }, 8, s_more_lfo9, sizeof (s_more_lfo9) / sizeof (s_more_lfo9[0]) },
     // Page 64: LFO 10 (LFO)
-    { "lfo10", "LFO 10", "LFO", { "lfo10.shape", "lfo10.sync", "lfo10.rate", "lfo10.division", "lfo10.sync_type", "lfo10.phase", "lfo10.fade_in", "lfo10.delay" }, 8, s_more_lfo10, 8 },
+    { "lfo10", "LFO 10", "LFO", { "lfo10.shape", "lfo10.sync", "lfo10.rate", "lfo10.division", "lfo10.sync_type", "lfo10.phase", "lfo10.fade_in", "lfo10.delay" }, 8, s_more_lfo10, sizeof (s_more_lfo10) / sizeof (s_more_lfo10[0]) },
     // Page 65: Scale & Tuning (Master)
     { "master_scale_tuning", "Scale & Tuning", "Master", { "master.scale.key", "master.scale.type", "master.scale.mode", "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only", nullptr }, 7, nullptr, 0 },
     // Page 66: Expression & MPE (Master)

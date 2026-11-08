@@ -27,10 +27,12 @@
  #include <xmmintrin.h>
 #endif
 
+#include "envelope.h"
 #include "modulation_connection_processor.h"
 #include "sample_oscillator.h"
 #include "serum_filter_bank.h"
 #include "serum_fx_modules.h"
+#include "smooth_value.h"
 #include "sound_engine.h"
 #include "synth_lfo.h"
 #include "synth_oscillator.h"
@@ -479,6 +481,7 @@ public:
         pedalChannels = 0;
         noteGroup->held = false;
         ++noteGroup->group;
+        sbvital::Envelope::sRunningLevel = 0.0f;
         noteIds.fill (NoteIdSlot {});
         clockSeconds = 0.0;
         lastModWheel = lastAftertouch = 0.0f;
@@ -571,7 +574,8 @@ public:
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
              | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels | kCapReverbForce
-             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters;
+             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters
+             | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions;
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -963,6 +967,12 @@ private:
         mpeOnParam = find ("master.mpe.on");
         mpeRangeParam = find ("master.mpe.bend_range");
         reverbForceParam = find ("reverb.force_enable");
+        sameNoteParam = find ("master.voice.same_note");
+        polyLegatoParam = find ("master.poly_legato");
+        bendDownRangeParam = find ("master.bend_down_range");
+        stereoSpreadParam = find ("master.stereo_spread");
+        oversample4xParam = find ("quality.oversample_4x");
+        noSmoothingParam = find ("quality.no_smoothing");
     }
 
     /** The tables of the modulation matrix: sources, destinations, the 64 connection processors. Everything the audio thread needs
@@ -1050,6 +1060,24 @@ private:
 
         applyScaleAndTuning (force); // first: the concert pitch it computes is added to the transposition below
         applyWavetables();           // before the bindings: the frame scale of a user table
+
+        // quality.oversample_4x
+        const bool oversample4x = oversample4xParam >= 0 && params[static_cast<size_t> (oversample4xParam)].load (std::memory_order_relaxed) > 0.5f;
+        const float targetOversampling = oversample4x ? 2.0f : (qOversampling.load() >= 2 ? 1.0f : 0.0f);
+        if (targetOversampling != appliedOversampling || qualityChanged)
+        {
+            setControl ("oversampling", targetOversampling);
+            engine->checkOversampling();
+            appliedOversampling = targetOversampling;
+        }
+
+        // quality.no_smoothing
+        const bool noSmoothing = noSmoothingParam >= 0 && params[static_cast<size_t> (noSmoothingParam)].load (std::memory_order_relaxed) > 0.5f;
+        sbvital::SmoothValue::sBypassSmoothing = noSmoothing;
+
+        // master.poly_legato
+        const bool polyLegato = polyLegatoParam >= 0 && params[static_cast<size_t> (polyLegatoParam)].load (std::memory_order_relaxed) > 0.5f;
+        sbvital::Envelope::sPolyLegato = polyLegato;
 
         const bool bpmChanged = appliedBpm != transport.bpm;
         // Q27 / WP8: "reverb.force_enable" keeps the reverb running although the tier masks it out (the user trades polyphony for it)
@@ -1594,13 +1622,15 @@ private:
             applyMpeBends();
         else if (changedMode)
             for (int c = 0; c < numChannels; ++c) // back to the plain per-channel wheel
-                engine->setPitchWheel (rawBend[static_cast<size_t> (c)] * masterBendRange() / kVitalLocalBendRange, c);
+                engine->setPitchWheel (rawBend[static_cast<size_t> (c)] * masterBendRange (rawBend[static_cast<size_t> (c)]) / kVitalLocalBendRange, c);
     }
 
     bool mpeOn() const noexcept { return mpeOnParam >= 0 && params[static_cast<size_t> (mpeOnParam)].load (std::memory_order_relaxed) > 0.5f; }
 
-    float masterBendRange() const noexcept
+    float masterBendRange (float bend = 1.0f) const noexcept
     {
+        if (bend < 0.0f && bendDownRangeParam >= 0)
+            return params[static_cast<size_t> (bendDownRangeParam)].load (std::memory_order_relaxed);
         return bendRangeParam >= 0 ? params[static_cast<size_t> (bendRangeParam)].load (std::memory_order_relaxed) : 2.0f;
     }
 
@@ -1608,7 +1638,7 @@ private:
     void applyMpeBends() noexcept
     {
         const float memberRange = mpeRangeParam >= 0 ? params[static_cast<size_t> (mpeRangeParam)].load (std::memory_order_relaxed) : 48.0f;
-        const float managerBend = rawBend[0] * masterBendRange();
+        const float managerBend = rawBend[0] * masterBendRange (rawBend[0]);
         for (int c = 0; c < numChannels; ++c)
             engine->setChannelPitchBend (c, managerBend + (c == 0 ? 0.0f : rawBend[static_cast<size_t> (c)] * memberRange));
     }
@@ -1824,12 +1854,19 @@ private:
                 }
                 if (std::isnan (noteTable[static_cast<size_t> (key)]))
                     return; // a key the tuning does not map (a .kbm "x" entry) does not sound
+
+                const int sameNoteMode = sameNoteParam >= 0 ? static_cast<int> (params[static_cast<size_t> (sameNoteParam)].load (std::memory_order_relaxed)) : 0;
+                const bool alreadyPlaying = activeKey[static_cast<size_t> (channel)][static_cast<size_t> (e.key)] >= 0;
+                if (sameNoteMode == 2 && alreadyPlaying)
+                    return; // Ignore mode: do not retrigger if key is already active
+
                 if (! keysHeld())
                     ++noteGroup->group; // the first note of a new group restarts the mono LFOs
                 activeKey[static_cast<size_t> (channel)][static_cast<size_t> (e.key)] = static_cast<int8_t> (key);
                 noteGroup->held = true;
-                // hitting a key that still rings lets the old note fade out first (as the own engine does)
-                engine->noteOff (key, 0.0f, 0, channel);
+
+                if (sameNoteMode == 0) // Steal
+                    engine->noteOff (key, 0.0f, 0, channel);
                 engine->noteOn (key, velocity, 0, channel);
                 rememberNoteId (e.noteId, key, channel);
                 break;
@@ -1880,7 +1917,7 @@ private:
                 if (mpeOn())
                     applyMpeBends(); // master.mpe.on: the member channel's bend range, the manager channel moves every note
                 else
-                    engine->setPitchWheel (bend * masterBendRange() / kVitalLocalBendRange, channel);
+                    engine->setPitchWheel (bend * masterBendRange (bend) / kVitalLocalBendRange, channel);
                 engine->setZonedPitchWheel (bend, channel, channel);
                 break;
             }
@@ -1954,12 +1991,33 @@ private:
     {
         const auto* out = reinterpret_cast<const sbvital::mono_float*> (engine->output (0)->buffer);
         constexpr int stride = static_cast<int> (sbvital::poly_float::kSize);
+        float spread = 1.0f;
+        if (engine->masterStereoSpread() != nullptr)
+            spread = clampf (engine->masterStereoSpread()->buffer[0][0], 0.0f, 1.0f);
+        else if (stereoSpreadParam >= 0)
+            spread = clampf (params[static_cast<size_t> (stereoSpreadParam)].load (std::memory_order_relaxed) * 0.01f, 0.0f, 1.0f);
+
         if (right != nullptr)
         {
-            for (int i = 0; i < n; ++i)
+            if (spread >= 0.9999f)
             {
-                left[i] = out[stride * i];
-                right[i] = out[stride * i + 1];
+                for (int i = 0; i < n; ++i)
+                {
+                    left[i] = out[stride * i];
+                    right[i] = out[stride * i + 1];
+                }
+            }
+            else
+            {
+                for (int i = 0; i < n; ++i)
+                {
+                    const float l = out[stride * i];
+                    const float r = out[stride * i + 1];
+                    const float mid = 0.5f * (l + r);
+                    const float side = 0.5f * (l - r);
+                    left[i] = mid + spread * side;
+                    right[i] = mid - spread * side;
+                }
             }
         }
         else
@@ -2036,6 +2094,9 @@ private:
     std::array<int, kNumLfo> lfoClock {};
     std::array<int, kNumFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
     int routingParam = -1, bendRangeParam = -1;
+    int sameNoteParam = -1, polyLegatoParam = -1, bendDownRangeParam = -1, stereoSpreadParam = -1;
+    int oversample4xParam = -1, noSmoothingParam = -1;
+    float appliedOversampling = -1.0f;
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;
     sbvital::Value* vFilter2Input = nullptr;
