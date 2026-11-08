@@ -185,6 +185,7 @@ std::vector<Binding> build()
         b.percent (k + "var", c + "var");    // WP6: the fourth knob of the models of state version 3
         b.percent (k + "pan", c + "pan");
         b.add (k + "level", c + "level", Conv::linear);
+        b.choice (k + "clean_mode", c + "clean_mode"); // block B16: the drive as a clean gain after the filter
         b.hzNote (k + "cutoff", c + "cutoff");
         b.percent (k + "resonance", c + "resonance");
         b.add (k + "drive", c + "drive", Conv::linear);
@@ -376,6 +377,10 @@ std::vector<Binding> build()
     b.add ("reverb.chorus_amount", "reverb_chorus_amount", Conv::sqrtScaled, 0.01);
     b.add ("reverb.chorus_rate", "reverb_chorus_frequency", Conv::log2Hz);
 
+    // block B16 (G72): the output LEVEL trim of the nine Vital effects (the FX filter has fxfilter.level)
+    for (const char* fx : { "chorus", "compressor", "delay", "distortion", "eq", "flanger", "phaser", "reverb" })
+        b.add (std::string (fx) + ".level", std::string (fx) + "_level", Conv::linear);
+
     // --- the Serum modules (WP7): every key is the control of the same name in its own unit ------------------------------------------
     struct Module { const char* key; int slot; std::initializer_list<const char*> params; };
     const Module modules[] = {
@@ -420,6 +425,8 @@ bool isSpecialParam (size_t paramIndex)
         || (startsWith ("env") && endsWith (".units")) || (startsWith ("lfo") && (endsWith (".mono") || endsWith (".host")))
         || (startsWith ("mod") && std::strstr (key, ".aux_") != nullptr) || startsWith ("curve.") || startsWith ("master.scale.")
         || startsWith ("master.tuning.") || startsWith ("master.mpe.") || (startsWith ("osc") && std::strstr (key, ".map.") != nullptr)
+        // block B16: the wavetable position remap of an oscillator (on, slot, RISE, FALL) goes to its FrameRemap, not to a control
+        || (startsWith ("osc") && std::strstr (key, ".remap.") != nullptr)
         // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
         || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"));
 }

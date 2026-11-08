@@ -437,7 +437,7 @@ public:
             "filter1.on", "filter1.model", "filter1.style", "filter1.blend", "filter1.keytrack",
             "filter1.comb_offset", "filter1.formant.x", "filter1.formant.y", "filter1.formant.resonance",
             "filter1.formant.spread", "filter1.formant.transpose", "filter1.var", "filter1.pan",
-            "filter1.level", "filter1.destination", "filter1.bus1_send", "filter1.bus2_send", "filter.routing"
+            "filter1.level", "filter1.clean_mode", "filter1.destination", "filter1.bus1_send", "filter1.bus2_send", "filter.routing"
         };
     }
 
@@ -464,7 +464,7 @@ public:
             "filter2.on", "filter2.model", "filter2.style", "filter2.blend", "filter2.keytrack",
             "filter2.comb_offset", "filter2.formant.x", "filter2.formant.y", "filter2.formant.resonance",
             "filter2.formant.spread", "filter2.formant.transpose", "filter2.var", "filter2.pan",
-            "filter2.level", "filter2.destination", "filter2.bus1_send", "filter2.bus2_send"
+            "filter2.level", "filter2.clean_mode", "filter2.destination", "filter2.bus1_send", "filter2.bus2_send"
         };
     }
 
@@ -491,7 +491,7 @@ public:
             "fxfilter.on", "fxfilter.model", "fxfilter.style", "fxfilter.blend", "fxfilter.keytrack",
             "fxfilter.comb_offset", "fxfilter.formant.x", "fxfilter.formant.y", "fxfilter.formant.resonance",
             "fxfilter.formant.spread", "fxfilter.formant.transpose", "fxfilter.var", "fxfilter.pan",
-            "fxfilter.level", "fxfilter.rack"
+            "fxfilter.level", "fxfilter.clean_mode", "fxfilter.rack"
         };
     }
 

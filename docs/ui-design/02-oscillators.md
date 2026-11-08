@@ -75,7 +75,7 @@ Status: `HAVE` = in engine and `docs/params.json`; `GAP` = missing in engine / p
 | Warp Asym +, Asym -, Asym +/- [S p.50] | Serum | none | GAP |
 | Warp Flip [S p.50] | Serum | none | GAP |
 | Warp Mirror [S p.51] | Serum | none | GAP |
-| Warp Remap 1-4 (drawn remap graph, pencil button) [S p.51] | Serum | none | GAP |
+| Warp Remap 1-4 (drawn remap graph, pencil button) [S p.51] | Serum | `oscN.remap.on`, `oscN.remap.slot`, `oscN.remap.rise`, `oscN.remap.fall` + `content.remaps` (as a position remap of the wavetable frame, not as a warp mode: 13 §4.14) | HAVE (WTREMAP) |
 | Warp Quantize [S p.51] [V p.10] | both | `oscN.warp.type` = Quantize | HAVE |
 | Warp Odd/Even [S p.51] | Serum | none | GAP |
 | Warp Formant [V p.10] | Vital | `oscN.warp.type` = Formant | HAVE |

@@ -45,10 +45,13 @@ enum EngineCaps : EngineCapsMask
     kCapFxConvolve       = 1ull << 23, // WP7
     kCapFxSplitters      = 1ull << 24, // WP7
     kCapReverbForce      = 1ull << 25, // WP8
+    kCapWtRemap          = 1ull << 26, // WTREMAP: oscN.remap.* (content.remaps), the frame position remap with RISE / FALL (G69)
+    kCapFxLevel          = 1ull << 27, // WTREMAP: <fx>.level of chorus, compressor, delay, distortion, eq, flanger, phaser, reverb (G72)
+    kCapCleanMode        = 1ull << 28, // WTREMAP: filterN.clean_mode, fxfilter.clean_mode (G54)
 };
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = (1ull << 26) - 1;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 29) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

@@ -136,7 +136,7 @@ public:
             "fxfilter.cutoff", "fxfilter.resonance", "fxfilter.drive", "fxfilter.mix",
             "fxfilter.on", "fxfilter.model", "fxfilter.style", "fxfilter.blend", "fxfilter.keytrack", "fxfilter.comb_offset",
             "fxfilter.formant.x", "fxfilter.formant.y", "fxfilter.formant.resonance", "fxfilter.formant.spread", "fxfilter.formant.transpose",
-            "fxfilter.var", "fxfilter.pan", "fxfilter.level", "fxfilter.rack"
+            "fxfilter.var", "fxfilter.pan", "fxfilter.level", "fxfilter.clean_mode", "fxfilter.rack"
         };
     }
 
@@ -166,6 +166,7 @@ public:
         addMoreControl ("fxfilter.var");
         addMoreControl ("fxfilter.pan");
         addMoreControl ("fxfilter.level");
+        addMoreControl ("fxfilter.clean_mode"); // block B16 (G54)
         addMoreControl ("fxfilter.rack");
     }
 

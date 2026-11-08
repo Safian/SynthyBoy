@@ -265,6 +265,7 @@ namespace sbvital {
       void doShepardWrap(poly_mask new_buffer_mask, int quantize);
       void setAmplitude();
       void setWaveBuffers(poly_float phase_inc, int index);
+      poly_float remapFrame(poly_float frame, int index);
       template<void(*spectralMorph)(const Wavetable::WavetableData*, int, poly_float*,
                                     FourierTransform*, float, int, const poly_float*)>
       void computeSpectralWaveBufferPair(int phase_update, int index, bool formant_shift,
@@ -323,6 +324,11 @@ namespace sbvital {
       int active_oscillators_;
       Wavetable* wavetable_;
       int wavetable_version_;
+      // SynthyBoy: the frame position remap (Wavetable::frameRemap ()): the remapped position per lane after RISE / FALL, and whether the
+      // lane has to jump to the target (note on) instead of gliding
+      poly_float remap_slew_ = 0.0f;
+      bool remap_lane_on_[poly_float::kSize] = {};
+      bool remap_snap_[poly_float::kSize] = {};
       Output* first_mod_oscillator_;
       Output* second_mod_oscillator_;
       Output* sample_;

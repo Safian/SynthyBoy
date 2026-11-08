@@ -173,7 +173,7 @@ public:
             "compressor.low.lower_threshold", "compressor.low.upper_threshold", "compressor.low.lower_ratio", "compressor.low.upper_ratio", "compressor.low.gain",
             "compressor.mid.lower_threshold", "compressor.mid.upper_threshold", "compressor.mid.lower_ratio", "compressor.mid.upper_ratio",
             "compressor.high.lower_threshold", "compressor.high.upper_threshold", "compressor.high.lower_ratio", "compressor.high.upper_ratio", "compressor.high.gain",
-            "compressor.rack"
+            "compressor.level", "compressor.rack"
         };
     }
 
@@ -205,6 +205,7 @@ public:
         addMoreControl ("compressor.high.lower_ratio");
         addMoreControl ("compressor.high.upper_ratio");
         addMoreControl ("compressor.high.gain");
+        addMoreControl ("compressor.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("compressor.rack");
     }
 

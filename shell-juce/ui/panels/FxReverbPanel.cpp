@@ -205,7 +205,7 @@ public:
             "reverb.size", "reverb.decay", "reverb.predelay", "reverb.mix",
             "reverb.on", "reverb.pre_low_cut", "reverb.pre_high_cut",
             "reverb.low_shelf_cutoff", "reverb.low_shelf_gain", "reverb.high_shelf_cutoff", "reverb.high_shelf_gain",
-            "reverb.chorus_amount", "reverb.chorus_rate", "reverb.force_enable", "reverb.rack"
+            "reverb.chorus_amount", "reverb.chorus_rate", "reverb.force_enable", "reverb.level", "reverb.rack"
         };
     }
 
@@ -231,6 +231,7 @@ public:
         addMoreControl ("reverb.chorus_amount");
         addMoreControl ("reverb.chorus_rate");
         addMoreControl ("reverb.force_enable");
+        addMoreControl ("reverb.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("reverb.rack");
     }
 

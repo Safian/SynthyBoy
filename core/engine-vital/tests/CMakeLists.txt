@@ -40,6 +40,10 @@ synthyboy_add_test(synthyboy_test_vital_wp7 test_wp7.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_wp7 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
 
+synthyboy_add_test(synthyboy_test_vital_wtremap test_wtremap.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_wtremap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
 synthyboy_add_test(synthyboy_test_vital_lfovoice test_lfovoice.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_lfovoice PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")

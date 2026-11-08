@@ -114,6 +114,9 @@ namespace sbvital {
       order_controls_[i] = createBaseControl("fx_order_" + std::to_string(i + 1));
       rack_controls_[i] = createBaseControl(std::string(kModuleNames[i]) + "_rack");
       effects_[i] = effect_module;
+      last_level_gain_[i] = 1.0f;
+      if (i < constants::kNumEffects && i != constants::kFilterFx) // the nine Vital modules; the FX filter has filter_fx_level
+        level_controls_[i] = createMonoModControl(std::string(kModuleNames[i]) + "_level");
       effect_order_[i] = i;
       effect_rack_[i] = kMain;
     }
@@ -256,6 +259,20 @@ namespace sbvital {
       else {
         effects_[index]->processWithInput(current, num_samples);
         current = effects_[index]->output(0)->buffer;
+        if (level_controls_[index] != nullptr) { // the LEVEL trim of the module, ramped over the block; 0 dB leaves the signal untouched
+          const float target = dbToGain(level_controls_[index]->buffer[0][0]);
+          const float from = last_level_gain_[index];
+          if (from != 1.0f || target != 1.0f) {
+            poly_float* audio = effects_[index]->output(0)->buffer;
+            const float step_gain = (target - from) / static_cast<float>(num_samples);
+            float gain = from;
+            for (int i = 0; i < num_samples; ++i) {
+              gain += step_gain;
+              audio[i] *= gain;
+            }
+          }
+          last_level_gain_[index] = target;
+        }
       }
     }
     return current;

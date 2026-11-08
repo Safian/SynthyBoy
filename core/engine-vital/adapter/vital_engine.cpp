@@ -228,6 +228,12 @@ struct Snapshot
     std::array<int, 3> userFrames {};
     std::array<SampleEntry, 3> sample;                            // oscN.type = Sample (content.samples)
     std::array<sbvital::FilterCurveShared, 3> filterCurve;        // PZ SVF curves of filter 1, filter 2 and the FX filter (content.filter_curves)
+    struct RemapEntry
+    {
+        bool present = false;
+        std::array<float, sbvital::FrameRemap::kSize + 1> table {};
+    };
+    std::array<std::array<RemapEntry, kNumRemapSlots>, 3> remap;  // the drawn wavetable position remaps (content.remaps): [osc][slot]
     bool hasVelocity = false, hasNote = false;
     std::array<float, kBakedPoints> velocityTable {}, noteTable {};
     std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
@@ -388,6 +394,16 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
             y[i] = c.points[static_cast<size_t> (i)].y;
         }
         s->filterCurve[static_cast<size_t> (slot)].fit (x, y, n);
+    }
+
+    for (const ContentRemap& r : content.remaps)
+    {
+        shapes::ShapeData shape;
+        if (r.osc < 1 || r.osc > 3 || r.slot < 1 || r.slot > kNumRemapSlots || ! buildShape (r.points, false, shape))
+            continue;
+        auto& e = s->remap[static_cast<size_t> (r.osc - 1)][static_cast<size_t> (r.slot - 1)];
+        shape.bake (e.table.data(), e.table.size());
+        e.present = true;
     }
 
     shapes::ShapeData curve;
@@ -571,7 +587,8 @@ public:
         // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
         return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
              | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping | kCapSampleOsc | kCapUserWavetable | kCapWarp2 | kCapMixerGraph | kCapFxRacks | kCapFilterExtras | kCapFilterModels | kCapReverbForce
-             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters;
+             | kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters
+             | kCapWtRemap | kCapFxLevel | kCapCleanMode; // VERIFY: the three B16 bits stay only if the on / off renders of test_wtremap.cpp differ
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -950,6 +967,12 @@ private:
                 frameParams[static_cast<size_t> (n - 1)][1] = find (k + "frame_spread");
             }
         }
+        for (int n = 1; n <= kNumOsc; ++n)
+        {
+            const char* const names[4] = { "on", "slot", "rise", "fall" };
+            for (int m = 0; m < 4; ++m)
+                remapParam[static_cast<size_t> (n - 1)][static_cast<size_t> (m)] = find ("osc" + std::to_string (n) + ".remap." + names[m]);
+        }
         curveVelocityLegatoParam = find ("curve.velocity.legato");
         curveNoteLegatoParam = find ("curve.note.legato");
         portamentoParam = find ("master.portamento.time");
@@ -1146,6 +1169,37 @@ private:
         }
     }
 
+    /** oscN.remap.*: the position remap of each oscillator (on, the drawn curve of the slot from the content, RISE / FALL) handed to the
+        FrameRemap of its wavetable. Cheap every block; the 257 table values are copied when the slot or the content changed. */
+    void applyRemaps() noexcept
+    {
+        for (size_t i = 0; i < static_cast<size_t> (kNumOsc); ++i)
+        {
+            if (remapParam[i][0] < 0)
+                continue;
+            sbvital::Wavetable* wavetable = engine->getWavetable (static_cast<int> (i));
+            if (wavetable == nullptr)
+                continue;
+            sbvital::FrameRemap* remap = wavetable->frameRemap();
+            const auto value = [&] (size_t m) { return params[static_cast<size_t> (remapParam[i][m])].load (std::memory_order_relaxed); };
+            const int slot = std::clamp (static_cast<int> (value (1) + 0.5f), 0, kNumRemapSlots - 1);
+            const uint64_t key = (static_cast<uint64_t> (snapshotId) << 8) | static_cast<uint64_t> (slot);
+            if (key != appliedRemapKey[i])
+            {
+                appliedRemapKey[i] = key;
+                const Snapshot::RemapEntry* entry = activeSnapshot != nullptr ? &activeSnapshot->remap[i][static_cast<size_t> (slot)] : nullptr;
+                if (entry != nullptr && entry->present)
+                    std::copy (entry->table.begin(), entry->table.end(), remap->table);
+                else
+                    remap->setIdentity(); // a slot nobody drew: the identity
+            }
+            remap->rise_ms = value (2);
+            remap->fall_ms = value (3);
+            remap->max_frame = userFramesNow[i] > 1 ? static_cast<float> (userFramesNow[i] - 1) : static_cast<float> (vitaltables::kMorphFrames - 1);
+            remap->on = value (0) > 0.5f;
+        }
+    }
+
     /** The drawn curves of the PZ SVF of the content, handed to the filters (a copy of a few hundred bytes when the content changed). */
     void applyFilterCurves() noexcept
     {
@@ -1278,6 +1332,7 @@ private:
         }
 
         applyLfoOptions();
+        applyRemaps();
         applyOscMapping();
         applyMpe();
 
@@ -1993,6 +2048,8 @@ private:
     uint32_t appliedQualityGeneration = ~0u;
     std::array<float, kMaxParams> applied {};
     std::array<int, kNumOsc> appliedWavetable {};
+    std::array<std::array<int, 4>, kNumOsc> remapParam { { { { -1, -1, -1, -1 } }, { { -1, -1, -1, -1 } }, { { -1, -1, -1, -1 } } } }; // on, slot, rise, fall
+    std::array<uint64_t, kNumOsc> appliedRemapKey { { ~0ull, ~0ull, ~0ull } };
     std::array<int, kNumOsc> userFramesNow {};                 // frames of the user table an oscillator plays (0: a built-in table)
     std::array<std::array<int, 2>, kNumOsc> frameParams { { { { -1, -1 } }, { { -1, -1 } }, { { -1, -1 } } } };
     enum { kSpType, kSpStart, kSpEnd, kSpRoot, kSpKeytrack, kSpLoopMode, kSpLoopStart, kSpLoopEnd, kSpLoopXfade, kSpLoopRelative, kSpLoopExit,
