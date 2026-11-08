@@ -40,12 +40,23 @@ constexpr const char* const kMorphTypes[] = {
     "None", "Vocode", "Formant Scale", "Harmonic Stretch", "Inharmonic Stretch", "Smear", "Random Amplitudes", "Low Pass",
     "High Pass", "Phase Disperse", "Shepard Tone", "Time Skew"
 };
+// Block B21 (13-new-keys.md 4.22): the Serum 2 warp modes appended to the shared warp list of both slots (index 11 on). X and Y are the
+// two other oscillators in the order of the Vital FM / RM entries. The legacy ids 0 .. 10 never move (legacyChoiceMax).
+#define SB_WARP_APPENDED(X, Y)                                                                                                                   \
+    "Sync Var", "Bend +", "Bend -", "Bend +/-", "Asym +", "Asym -", "Asym +/-", "Flip", "Mirror", "Remap 1", "Remap 2", "Remap 3", "Remap 4",     \
+    "Odd/Even", "Filter LPF", "Filter HPF", "Dist Tube", "Dist Soft Clip", "Dist Hard Clip", "Dist Diode 1", "Dist Diode 2",                      \
+    "Dist Linear Fold", "Dist Sine Fold", "Dist Zero-Square", "Dist Asym", "Dist Rectify", "Dist Sine Shaper", "Dist Stomp Box",                \
+    "Dist Tape Sat.", "Dist Soft Sat.", "FM Thru-Zero from " X, "FM Thru-Zero from " Y, "FM Exp from " X, "FM Exp from " Y,                      \
+    "FM Linear from " X, "FM Linear from " Y, "PD from " X, "PD from " Y, "PD Self", "AM from " X, "AM from " Y
 constexpr const char* const kWarpTypes1[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3" };
+                                              "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3",
+                                              SB_WARP_APPENDED("Osc 2", "Osc 3") };
 constexpr const char* const kWarpTypes2[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 1", "FM from Osc 3", "RM from Osc 1", "RM from Osc 3" };
+                                              "FM from Osc 1", "FM from Osc 3", "RM from Osc 1", "RM from Osc 3",
+                                              SB_WARP_APPENDED("Osc 1", "Osc 3") };
 constexpr const char* const kWarpTypes3[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2" };
+                                              "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2",
+                                              SB_WARP_APPENDED("Osc 1", "Osc 2") };
 constexpr const char* const kFilterModels[] = { "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser", "Multi SVF",
                                                 "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream",
                                                 "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF" };
@@ -773,11 +784,20 @@ constexpr ParamInfo kRaw[] = {
     // --- B20: mod-amount: stereo routing and voice override (G5, positions 1594..1595) -------------------------------------------
     SB_PCT ("master.stereo_routing", "Master Stereo Routing", "Master / Voicing", 100.0f, kMod),
     pick ("master.voice_override", "Master Voice Override", "Master / Voicing", kVoiceOverrides, 0),
+
+    // --- B21: warp-env: the ENV 1 button of the Main / Direct channels (G39, positions 1596..1602) -----------------------------------
+    onOff ("sub.env1", "Sub Env 1", "Sub", true),
+    onOff ("osc1.env1", "Osc 1 Env 1", "Osc 1", true),
+    onOff ("osc2.env1", "Osc 2 Env 1", "Osc 2", true),
+    onOff ("osc3.env1", "Osc 3 Env 1", "Osc 3", true),
+    onOff ("noise.env1", "Noise Env 1", "Noise", true),
+    onOff ("filter1.env1", "Filter 1 Env 1", "Filter 1", true),
+    onOff ("filter2.env1", "Filter 2 Env 1", "Filter 2", true),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1596, "880 keys of state version 2 plus the 716 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20)");
+static_assert (kCount == 1603, "880 keys of state version 2 plus the 723 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21)");
 
 struct Table
 {

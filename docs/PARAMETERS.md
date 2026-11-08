@@ -4,17 +4,17 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1596 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**1603 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 31 |
-| Osc 1 | 70 |
-| Osc 2 | 70 |
-| Osc 3 | 70 |
-| Noise | 14 |
-| Filter 1 | 22 |
-| Filter 2 | 22 |
+| Osc 1 | 71 |
+| Osc 2 | 71 |
+| Osc 3 | 71 |
+| Noise | 15 |
+| Filter 1 | 23 |
+| Filter 2 | 23 |
 | Filters | 1 |
 | FX Filter | 19 |
 | Envelope 1 | 16 |
@@ -44,7 +44,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Oscillator 1 | 10 |
 | Oscillator 2 | 10 |
 | Oscillator 3 | 10 |
-| Sub | 11 |
+| Sub | 12 |
 | Quality | 2 |
 
 ## Default patch
@@ -115,7 +115,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.morph.type` | Osc 1 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 1 / Spectral Morph |  |  |
 | `osc1.morph.amount` | Osc 1 Morph Amount | 0 .. 100 % | 50 % | Osc 1 / Spectral Morph | mod |  |
 | `osc1.morph.spread` | Osc 1 Morph Spread | -100 .. 100 % | 0 % | Osc 1 / Spectral Morph | mod |  |
-| `osc1.warp.type` | Osc 1 Warp Type | 11 choices: 0 None, 1 Sync, 2 Formant, ... , 10 RM from Osc 3 | None | Osc 1 / Warp |  |  |
+| `osc1.warp.type` | Osc 1 Warp Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 1 / Warp |  |  |
 | `osc1.warp.amount` | Osc 1 Warp Amount | 0 .. 100 % | 50 % | Osc 1 / Warp | mod |  |
 | `osc1.warp.phase` | Osc 1 Warp Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp | mod |  |
 | `osc1.warp.spread` | Osc 1 Warp Spread | -100 .. 100 % | 0 % | Osc 1 / Warp | mod |  |
@@ -152,7 +152,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.sample.length_beats` | Osc 1 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 1 / Sample |  |  |
 | `osc1.sample.uni_start` | Osc 1 Sample Unison Start | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
 | `osc1.sample.uni_span` | Osc 1 Sample Unison Span | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
-| `osc1.warp2.type` | Osc 1 Warp 2 Type | 11 choices: 0 None, 1 Sync, 2 Formant, ... , 10 RM from Osc 3 | None | Osc 1 / Warp 2 |  |  |
+| `osc1.warp2.type` | Osc 1 Warp 2 Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 1 / Warp 2 |  |  |
 | `osc1.warp2.amount` | Osc 1 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 1 / Warp 2 | mod |  |
 | `osc1.warp2.phase` | Osc 1 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp 2 | mod |  |
 | `osc1.warp2.spread` | Osc 1 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 1 / Warp 2 | mod |  |
@@ -165,6 +165,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.remap.fall` | Osc 1 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
 | `osc1.unison.blend_shape` | Osc 1 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 1 | mod |  |
 | `osc1.unison.stack_repeat` | Osc 1 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 1 |  |  |
+| `osc1.env1` | Osc 1 Env 1 | 0 Off, 1 On | On | Osc 1 |  |  |
 
 ### Osc 2
 
@@ -190,7 +191,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.morph.type` | Osc 2 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 2 / Spectral Morph |  |  |
 | `osc2.morph.amount` | Osc 2 Morph Amount | 0 .. 100 % | 50 % | Osc 2 / Spectral Morph | mod |  |
 | `osc2.morph.spread` | Osc 2 Morph Spread | -100 .. 100 % | 0 % | Osc 2 / Spectral Morph | mod |  |
-| `osc2.warp.type` | Osc 2 Warp Type | 11 choices: 0 None, 1 Sync, 2 Formant, ... , 10 RM from Osc 3 | None | Osc 2 / Warp |  |  |
+| `osc2.warp.type` | Osc 2 Warp Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 2 / Warp |  |  |
 | `osc2.warp.amount` | Osc 2 Warp Amount | 0 .. 100 % | 50 % | Osc 2 / Warp | mod |  |
 | `osc2.warp.phase` | Osc 2 Warp Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp | mod |  |
 | `osc2.warp.spread` | Osc 2 Warp Spread | -100 .. 100 % | 0 % | Osc 2 / Warp | mod |  |
@@ -227,7 +228,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.sample.length_beats` | Osc 2 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 2 / Sample |  |  |
 | `osc2.sample.uni_start` | Osc 2 Sample Unison Start | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
 | `osc2.sample.uni_span` | Osc 2 Sample Unison Span | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
-| `osc2.warp2.type` | Osc 2 Warp 2 Type | 11 choices: 0 None, 1 Sync, 2 Formant, ... , 10 RM from Osc 3 | None | Osc 2 / Warp 2 |  |  |
+| `osc2.warp2.type` | Osc 2 Warp 2 Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 2 / Warp 2 |  |  |
 | `osc2.warp2.amount` | Osc 2 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 2 / Warp 2 | mod |  |
 | `osc2.warp2.phase` | Osc 2 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp 2 | mod |  |
 | `osc2.warp2.spread` | Osc 2 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 2 / Warp 2 | mod |  |
@@ -240,6 +241,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.remap.fall` | Osc 2 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
 | `osc2.unison.blend_shape` | Osc 2 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 2 | mod |  |
 | `osc2.unison.stack_repeat` | Osc 2 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 2 |  |  |
+| `osc2.env1` | Osc 2 Env 1 | 0 Off, 1 On | On | Osc 2 |  |  |
 
 ### Osc 3
 
@@ -265,7 +267,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.morph.type` | Osc 3 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 3 / Spectral Morph |  |  |
 | `osc3.morph.amount` | Osc 3 Morph Amount | 0 .. 100 % | 50 % | Osc 3 / Spectral Morph | mod |  |
 | `osc3.morph.spread` | Osc 3 Morph Spread | -100 .. 100 % | 0 % | Osc 3 / Spectral Morph | mod |  |
-| `osc3.warp.type` | Osc 3 Warp Type | 11 choices: 0 None, 1 Sync, 2 Formant, ... , 10 RM from Osc 2 | None | Osc 3 / Warp |  |  |
+| `osc3.warp.type` | Osc 3 Warp Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 2 | None | Osc 3 / Warp |  |  |
 | `osc3.warp.amount` | Osc 3 Warp Amount | 0 .. 100 % | 50 % | Osc 3 / Warp | mod |  |
 | `osc3.warp.phase` | Osc 3 Warp Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp | mod |  |
 | `osc3.warp.spread` | Osc 3 Warp Spread | -100 .. 100 % | 0 % | Osc 3 / Warp | mod |  |
@@ -302,7 +304,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.sample.length_beats` | Osc 3 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 3 / Sample |  |  |
 | `osc3.sample.uni_start` | Osc 3 Sample Unison Start | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
 | `osc3.sample.uni_span` | Osc 3 Sample Unison Span | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
-| `osc3.warp2.type` | Osc 3 Warp 2 Type | 11 choices: 0 None, 1 Sync, 2 Formant, ... , 10 RM from Osc 2 | None | Osc 3 / Warp 2 |  |  |
+| `osc3.warp2.type` | Osc 3 Warp 2 Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 2 | None | Osc 3 / Warp 2 |  |  |
 | `osc3.warp2.amount` | Osc 3 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 3 / Warp 2 | mod |  |
 | `osc3.warp2.phase` | Osc 3 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp 2 | mod |  |
 | `osc3.warp2.spread` | Osc 3 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 3 / Warp 2 | mod |  |
@@ -315,6 +317,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.remap.fall` | Osc 3 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
 | `osc3.unison.blend_shape` | Osc 3 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 3 | mod |  |
 | `osc3.unison.stack_repeat` | Osc 3 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 3 |  |  |
+| `osc3.env1` | Osc 3 Env 1 | 0 Off, 1 On | On | Osc 3 |  |  |
 
 ### Noise
 
@@ -334,6 +337,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `noise.random_phase` | Noise Random Phase | 0 Off, 1 On | Off | Noise |  |  |
 | `noise.keytrack` | Noise Keytrack | 0 Off, 1 On | Off | Noise |  |  |
 | `noise.loop` | Noise Loop | 0 Off, 1 On | On | Noise |  |  |
+| `noise.env1` | Noise Env 1 | 0 Off, 1 On | On | Noise |  |  |
 
 ### Filter 1
 
@@ -361,6 +365,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `filter1.pan` | Filter 1 Pan | -100 .. 100 % | 0 % | Filter 1 | mod |  |
 | `filter1.level` | Filter 1 Level | -60 .. 12 dB | 0 dB | Filter 1 | mod |  |
 | `filter1.clean_mode` | Filter 1 Clean Mode | 0 Off, 1 On | Off | Filter 1 |  |  |
+| `filter1.env1` | Filter 1 Env 1 | 0 Off, 1 On | On | Filter 1 |  |  |
 
 ### Filter 2
 
@@ -388,6 +393,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `filter2.pan` | Filter 2 Pan | -100 .. 100 % | 0 % | Filter 2 | mod |  |
 | `filter2.level` | Filter 2 Level | -60 .. 12 dB | 0 dB | Filter 2 | mod |  |
 | `filter2.clean_mode` | Filter 2 Clean Mode | 0 Off, 1 On | Off | Filter 2 |  |  |
+| `filter2.env1` | Filter 2 Env 1 | 0 Off, 1 On | On | Filter 2 |  |  |
 
 ### Filters
 
@@ -1142,6 +1148,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `sub.filter_blend` | Sub Filter Blend | 0 .. 100 % | 0 % | Sub | mod |  |
 | `sub.bus1_send` | Sub Bus 1 Send | 0 .. 100 % | 0 % | Sub | mod |  |
 | `sub.bus2_send` | Sub Bus 2 Send | 0 .. 100 % | 0 % | Sub | mod |  |
+| `sub.env1` | Sub Env 1 | 0 Off, 1 On | On | Sub |  |  |
 
 ### Quality
 

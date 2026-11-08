@@ -634,7 +634,8 @@ public:
              | kCapFxExtrasAll // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
              | kCapSubOsc | kCapNoiseExtras // block B18: proven by core/engine-vital/tests/test_oscextra.cpp
              | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions
-             | kCapModAmount; // block B20: proven by core/engine-vital/tests/test_modamt.cpp
+             | kCapModAmount // block B20: proven by core/engine-vital/tests/test_modamt.cpp
+             | kCapWarpAll | kCapEnv1Toggle; // block B21: proven by core/engine-vital/tests/test_warpenv.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override

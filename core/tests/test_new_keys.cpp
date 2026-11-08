@@ -54,8 +54,8 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (1596));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT)
+    CHECK_EQ (paramCount(), static_cast<size_t> (1603));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
     CHECK_EQ (kNumModSources, 39);
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (1596));
+    CHECK_EQ (ids.size(), static_cast<size_t> (1603));
 }
 
 TEST (append_positions_golden)
@@ -142,6 +142,7 @@ TEST (append_positions_golden)
         { "lfo1.swing", 1582 }, { "lfo10.swing", 1591 },
         { "quality.oversample_4x", 1592 }, { "quality.no_smoothing", 1593 },
         { "master.stereo_routing", 1594 }, { "master.voice_override", 1595 }, // B20 (MODAMT)
+        { "sub.env1", 1596 }, { "osc1.env1", 1597 }, { "osc3.env1", 1599 }, { "noise.env1", 1600 }, { "filter1.env1", 1601 }, { "filter2.env1", 1602 }, // B21 (WARPENV)
     };
     for (const auto& e : expected)
         if (! CHECK_EQ (positionOf (e.key), e.position))
@@ -237,8 +238,11 @@ TEST (choice_lists_are_append_only)
 
     // lists that stay unchanged
     CHECK_EQ (namesOf ("lfo1.sync").size(), static_cast<size_t> (5));
-    CHECK_EQ (namesOf ("osc1.warp.type").size(), static_cast<size_t> (11));
-    CHECK_EQ (namesOf ("osc1.warp2.type").size(), static_cast<size_t> (11));
+    // the warp lists grew in block B21 (4.22): the eleven Vital modes keep their places, 41 modes are appended
+    CHECK_EQ (namesOf ("osc1.warp.type").size(), static_cast<size_t> (kNumWarpTypes));
+    CHECK_EQ (namesOf ("osc1.warp2.type").size(), static_cast<size_t> (kNumWarpTypes));
+    CHECK_EQ (namesOf ("osc1.warp.type")[10], std::string ("RM from Osc 3"));
+    CHECK_EQ (namesOf ("osc1.warp.type")[11], std::string ("Sync Var"));
     CHECK (namesOf ("osc2.warp2.type") == namesOf ("osc2.warp.type"));
     CHECK_EQ (namesOf ("filter.routing").size(), static_cast<size_t> (3));
     CHECK_EQ (namesOf ("lfo1.sync_type").size(), static_cast<size_t> (6));

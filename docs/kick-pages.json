@@ -2296,6 +2296,21 @@
       ]
     },
     {
+      "id": "mix_env1",
+      "section": "Osc",
+      "title": "Mixer ENV 1 Buttons",
+      "knobs": [
+        {"key": "osc1.env1", "shortLabel": "Env 1", "widget": "stepped"},
+        {"key": "osc2.env1", "shortLabel": "Env 1", "widget": "stepped"},
+        {"key": "osc3.env1", "shortLabel": "Env 1", "widget": "stepped"},
+        {"key": "sub.env1", "shortLabel": "Sub Env 1", "widget": "stepped"},
+        {"key": "noise.env1", "shortLabel": "Env 1", "widget": "stepped"},
+        {"key": "filter1.env1", "shortLabel": "Env 1", "widget": "stepped"},
+        {"key": "filter2.env1", "shortLabel": "Env 1", "widget": "stepped"},
+        null
+      ]
+    },
+    {
       "id": "mix_bus",
       "section": "Osc",
       "title": "Mixer Buses",

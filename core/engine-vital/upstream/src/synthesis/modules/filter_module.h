@@ -68,6 +68,7 @@ namespace sbvital {
 
       const Value* getOnValue() { return on_; }
       const Value* getDestinationValue() { return destination_; }
+      const Value* getEnv1Value() { return env1_; }
       struct FilterCurveShared* curveShared();   // SynthyBoy: the drawn curve of the PZ SVF
 
     protected:
@@ -80,6 +81,7 @@ namespace sbvital {
       bool mono_;
 
       Value* on_;
+      Value* env1_ = nullptr;            // SynthyBoy B21: the ENV 1 button (1 = on) of the two voice filters
       Value* destination_ = nullptr;     // SynthyBoy: 0 effects only, 1 direct out, 2 none (the two voice filters only)
       Output* bus1_send_ = nullptr;
       Output* bus2_send_ = nullptr;

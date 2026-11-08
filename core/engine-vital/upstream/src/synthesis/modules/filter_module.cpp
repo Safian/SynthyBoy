@@ -100,6 +100,7 @@ namespace sbvital {
     filter_mix_ = createModControl(prefix_ + "_mix");
     if (prefix_ != "filter_fx") { // the two voice filters have a destination and sends to the buses
       destination_ = createBaseControl(prefix_ + "_destination");
+      env1_ = createBaseControl(prefix_ + "_env1");
       bus1_send_ = createModControl(prefix_ + "_bus1_send");
       bus2_send_ = createModControl(prefix_ + "_bus2_send");
     }

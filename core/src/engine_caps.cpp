@@ -38,6 +38,9 @@ int numberAfter (const char* s, const char* prefix) noexcept
 
 EngineCapsMask classify (const char* key) noexcept
 {
+    // block B21: the ENV 1 buttons (sub.env1, oscN.env1, noise.env1, filterN.env1), before the module prefixes
+    if (endsWith (key, ".env1"))
+        return kCapEnv1Toggle;
     // block B16 (WTREMAP): before the module prefixes (osc..., filter..., reverb.... would claim these keys)
     if (std::strstr (key, ".remap.") != nullptr)
         return kCapWtRemap;
@@ -155,6 +158,20 @@ EngineCapsMask classify (const char* key) noexcept
     return kCapNone;
 }
 
+/** The bit of a warp mode of block B21 (warp list entry v >= kNumLegacyWarpTypes). */
+EngineCapsMask warpTypeCaps (int v) noexcept
+{
+    if (v <= 24)
+        return kCapWarpAlt;
+    if (v <= 26)
+        return kCapWarpFilter;
+    if (v <= 40)
+        return kCapWarpDist;
+    if (v <= 46)
+        return kCapWarpFm;
+    return kCapWarpPdAm;
+}
+
 EngineCapsMask sourceCaps (int choice) noexcept
 {
     if (choice <= kNumModSourcesV2)
@@ -225,6 +242,8 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         caps |= kCapFxRacks;
     else if (std::strcmp (key, "distortion.type") == 0 && v >= kNumLegacyDistortionTypes)
         caps |= kCapFxDistortionExtras;
+    else if (startsWith (key, "osc") && (endsWith (key, ".warp.type") || endsWith (key, ".warp2.type")) && v >= kNumLegacyWarpTypes)
+        caps |= warpTypeCaps (v);
 
     return caps;
 }
@@ -277,6 +296,12 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapLfoSwing:         return "lfo_swing";
         case kCapQualityOptions:   return "quality_options";
         case kCapModAmount:        return "mod_amount";
+        case kCapWarpAlt:          return "warp_alt";
+        case kCapWarpFilter:       return "warp_filter";
+        case kCapWarpDist:         return "warp_distortion";
+        case kCapWarpFm:           return "warp_fm";
+        case kCapWarpPdAm:         return "warp_pd_am";
+        case kCapEnv1Toggle:       return "env1_toggle";
         case kCapNone:             break;
     }
     return "";

@@ -71,6 +71,8 @@ inline size_t choicesInV2 (const synthyboy::ParamInfo& p)
         n -= 8; // block B17 (13-new-keys.md 4.17): Tube .. X-Shaper (Asym)
     else if (key == "delay.style")
         n -= 1; // MANUALCHECK (13-new-keys.md 4.19): Tap->Delay
+    else if (key.compare (0, 3, "osc") == 0 && endsWith (".warp.type"))
+        n -= 41; // block B21 (13-new-keys.md 4.22): the warp modes 11 .. 51 (oscN.warp2.type is a version 3 key)
 #endif
     return n;
 }

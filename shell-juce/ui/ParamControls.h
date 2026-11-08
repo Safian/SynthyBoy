@@ -181,9 +181,17 @@ public:
     const std::vector<ChoiceGroup>& choiceGroups() const noexcept { return groups; }
     /** The menu showOptions () shows (the tests inspect it). */
     juce::PopupMenu buildOptionMenu() const;
+    /** An action at the end of the option list, behind a separator ("Swap Warps" of the warp lists, 13-new-keys.md 4.22); the menu result
+        is not a value. runExtraAction () is what the menu item does (the tests call it). */
+    void setExtraAction (juce::String label, std::function<void()> action);
+    bool hasExtraAction() const noexcept { return static_cast<bool> (extraAction); }
+    void runExtraAction() const { if (extraAction) extraAction(); }
+    static constexpr int kExtraActionId = 100000;
 
 private:
     std::vector<ChoiceGroup> groups;
+    juce::String extraLabel;
+    std::function<void()> extraAction;
     juce::Rectangle<int> arrowArea (bool left) const;
     bool pressed = false;
     juce::Point<float> downPos;
