@@ -361,7 +361,7 @@ Kick `fx_convolve_1` (on, ir, size, tone, phi_min, predelay, sync, division), `f
 | `splitter_ms.mid_bypass` / `side_bypass` (2) | `Splitter M/S Mid Bypass` ... | bool | Off/On | Off | - | - | no | same |
 | `splitter_ms.level` | `Splitter M/S Level` | float | -24 .. 12 | 0 | dB | lin | y | same |
 
-5 + 7 + 4 = 16 keys. Crossovers are linear-phase-compensated Linkwitz-Riley 24 dB (**ASSUMPTION A24**, not in the manual; summing all unbypassed bands with no effects must be transparent within 0.1 dB, to be tested). FX scope for all of B12: `G` (the FX run on the summed output; modulation of FX parameters uses the existing "sum output" rule of 08), smoothing `S` for continuous keys, `X` for switches. Group of the order / rack / force keys: `FX / Order`, `FX / Racks`, `FX / Reverb`. Not added: per-module output LEVEL trim on the nine Vital effects (G72), compressor limit / crossovers (G73), delay Tap, reverb algorithms (G77), phaser DEPTH 2 (G76), X-Shaper (G75): none is decided.
+5 + 7 + 4 = 16 keys. Crossovers are linear-phase-compensated Linkwitz-Riley 24 dB (**ASSUMPTION A24**, not in the manual; summing all unbypassed bands with no effects must be transparent within 0.1 dB, to be tested). FX scope for all of B12: `G` (the FX run on the summed output; modulation of FX parameters uses the existing "sum output" rule of 08), smoothing `S` for continuous keys, `X` for switches. Group of the order / rack / force keys: `FX / Order`, `FX / Racks`, `FX / Reverb`. Not added here: per-module output LEVEL trim on the nine Vital effects (G72). Compressor limit / crossovers (G73), delay Tap / HQ / offset (G74), the distortion types and X-Shaper (G75), phaser DEPTH 2 (G76) and the reverb algorithms (G77) were added later as block B17 (4.14).
 
 ### 4.13 Choices made by WP0 where this file was silent
 
@@ -370,6 +370,61 @@ Kick `fx_convolve_1` (on, ir, size, tone, phi_min, predelay, sync, division), `f
 * **Groups not given above:** `Master / Curves` (B05), `Master / Scale`, `Master / Tuning`, `Master / MPE` (B07), `FX Filter` for the `fxfilter.*` additions of B11 (the existing group of that filter), `Osc N`, `Noise`, `Filter N` for the mixer keys of those sources.
 * **Constants added to `params.h` / `modulation.h`:** `kNumKeysV2` = 880, `kNumLegacyFxSlots` = 9 (the effect slots the engines implement; `kNumFxSlots` = 16 is the table), `kNumModSourcesV2` = 28.
 * **Engines:** an engine implements the version 2 keys only until `IEngine::capabilities ()` (engine_caps.h) says more; a stored value beyond what the engine implements acts like the last implemented one (filter model / style, `rlfoN.style`, oscillator destination), `Preset table` plays the saw and `Custom` the sine (§5 fallbacks).
+
+### 4.14 B17 – Compressor, delay, distortion, phaser and reverb extras (G73-G77) – positions 1484..1497 [14] – area 08
+
+Added by the fx-extras work package (FXEXTRA-REPORT.md), after block B12, as its own trailing block (R2: appended at the end of `kRaw[]`). The rows G73-G77 of `10-coverage-matrix.md` name the features only ("limit mode, adjustable crossovers", "Tap->Delay, HQ, scalar offset", "X-Shaper, Tube / Diode / Rectify, filter key track", "DEPTH 2", "Plate / Hall / Vintage / Nitrous + room modes"); the Serum manual is not in the repository, so the definitions below are this file's own (assumptions A140-A159). The per-module `LEVEL` trim (G72) is not part of B17.
+
+**Compressor** (`compressor.*`, group `FX / Compressor`, G73) [4]:
+
+| Key | Name | Type | Range | Default | Unit | Curve | Mod | Kick |
+|-----|------|------|-------|--------:|------|-------|-----|------|
+| `compressor.limit` | `Compressor Limit` | bool | Off/On | Off | - | - | no | `fx_comp_limit` |
+| `compressor.limit_latency_comp` | `Compressor Limiter Latency Comp` | bool | Off/On | On | - | - | no | `fx_comp_limit` |
+| `compressor.crossover_low` | `Compressor Low Crossover` | float | 20 .. 1000 | 120 | Hz | 0.4, 0 dec | y | `fx_comp_limit` |
+| `compressor.crossover_high` | `Compressor High Crossover` | float | 200 .. 16000 | 2500 | Hz | 0.4, 0 dec | y | `fx_comp_limit` |
+
+`limit` replaces the downward stage of every enabled band by a look-ahead limiter whose ceiling is the band's `upper_threshold` (the ratio is ignored, the upward stage stays). The limiter is a peak limiter of 1.5 ms look-ahead, stereo linked, with an estimate of the peak between two samples (A141); `release` sets how fast the gain returns. `limit_latency_comp` On adds the look-ahead to the latency of the chain (`IEngine::latencySamples ()`, the other signal paths of the chain are delayed by it, A142); Off leaves the chain alone, the module still delays its own dry signal so that `mix` never combs. The crossovers are the two Linkwitz-Riley 24 dB crossovers of the multiband compressor; the defaults 120 Hz and 2500 Hz are the fixed values of the engine (the design file 08 says 150 Hz and 3 kHz, which is not what the engine does, A143). The high one is kept 1.25 times above the low one. Modulation moves them once per block (A144).
+
+**Delay** (`delay.*`, group `FX / Delay`, G74) [2]:
+
+| Key | Name | Type | Range | Default | Unit | Curve | Mod | Kick |
+|-----|------|------|-------|--------:|------|-------|-----|------|
+| `delay.hq` | `Delay High Quality` | bool | Off/On | Off | - | - | no | `fx_delay_3` |
+| `delay.offset` | `Delay Offset` | float | 0.25 .. 4 | 1 | x | 0.5, 3 dec | y | `fx_delay_3` |
+
+`hq` reads the delay with an 8-point Lagrange interpolator instead of the 4-point Catmull-Rom of the Vital delay (A145). `offset` multiplies the delay time of the right channel (A146); at 1 the two channels are as before. The UI snaps to 1.333 (triplet) and 1.5 (dotted). **Tap->Delay** is not a key: it is the tap-tempo button of the delay panel, which measures the interval of the last taps and writes `delay.sync` = Free and `delay.time` / `delay.time2` (A147).
+
+**Distortion** (`distortion.*`, group `FX / Distortion`, G75) [1 key, 8 appended choices, 2 content curves]:
+
+| Key | Name | Type | Range | Default | Unit | Mod | Kick |
+|-----|------|------|-------|--------:|------|-----|------|
+| `distortion.filter_keytrack` | `Distortion Filter Key Track` | float | -100 .. 100 | 0 | % | y | `fx_distortion_2` |
+
+`distortion.type` gets the entries 6 `Tube`, 7 `Diode 1`, 8 `Diode 2`, 9 `Zero square`, 10 `Asym`, 11 `Rectify`, 12 `X-Shaper`, 13 `X-Shaper (Asym)` (R3, section 3). Definitions (v = input times the drive gain): Tube `tanh (v + 0.3) - tanh (0.3)`; Diode 1 `(1 - e^-v+) - 0.5 (1 - e^2v-)` (v+ and v- the positive and the negative part); Diode 2 `e^v- - e^-v+`; Zero square `tanh (32 v)`; Asym `tanh (v+) + max (v-, -0.5)`; Rectify `|clamp (v)|`. The types with an asymmetric curve (Tube, Diode 1, Asym, Rectify, X-Shaper (Asym)) pass a 10 Hz DC blocker (A148). `filter_keytrack` moves the cutoff of the filter by the note of the last key relative to C4 times the amount, like `fxfilter.keytrack` (A149). **X-Shaper**: the two transfer curves are drawn by the user and live in the `content` section as `content.curves.shaper_a` and `shaper_b` (same point list as the velocity curve: x = input magnitude 0..1, y = output magnitude 0..1, power per segment; empty = identity; section 5). X-Shaper uses A for both polarities (odd symmetric), X-Shaper (Asym) uses A for the positive and B for the negative half (A150). The curves are baked into 513-point tables on the message thread and copied to the effect between blocks.
+
+**Phaser** (`phaser.*`, group `FX / Phaser`, G76) [1]:
+
+| Key | Name | Type | Range | Default | Unit | Mod | Kick |
+|-----|------|------|-------|--------:|------|-----|------|
+| `phaser.depth2` | `Phaser Depth 2` | float | -48 .. 48 | 0 | semitones | y | `fx_phaser_3` |
+
+`depth2` is added to `phaser.depth` for the right channel only, so that the two channels sweep over different ranges; at 0 the effect is as before (A151).
+
+**Reverb** (`reverb.*`, group `FX / Reverb`, G77) [6]:
+
+| Key | Name | Type | Range | Default | Unit | Mod | Kick |
+|-----|------|------|-------|--------:|------|-----|------|
+| `reverb.type` | `Reverb Type` | choice | 0 `Vital`, 1 `Plate`, 2 `Hall`, 3 `Vintage`, 4 `Nitrous`, 5 `Basin` | 0 | - | no | `fx_reverb_3` |
+| `reverb.room` | `Reverb Room` | choice | 0 `Space`, 1 `Marble`, 2 `Rectangle`, 3 `Hexagon`, 4 `Box` | 2 | - | no | `fx_reverb_3` |
+| `reverb.width` | `Reverb Width` | float | 0 .. 200 | 100 | % | y | `fx_reverb_3` |
+| `reverb.er_size` | `Reverb ER Size` | float | 0 .. 100 | 50 | % | no | `fx_reverb_3` |
+| `reverb.diff_a` | `Reverb Diffusion A` | float | 0 .. 100 | 70 | % | y | `fx_reverb_3` |
+| `reverb.diff_b` | `Reverb Diffusion B` | float | 0 .. 100 | 60 | % | y | `fx_reverb_3` |
+
+`type` 0 is the feedback delay network of the Vital reverb, bit for bit as before (R5). The other five are our own algorithms (`reverb_algorithms.h`, A152): Plate (after Dattorro's plate: four input all-passes, a figure-of-eight tank with a modulated all-pass, damping and 14 output taps), Hall (eight-line feedback delay network with a Hadamard matrix, an all-pass in every line, long lines), Vintage (eight feedback combs and four series all-passes per channel, darker output), Nitrous (the network with short dense bright lines and strong modulation), Basin (the network with line lengths from the modes of a room). `room` chooses the room of Basin (dimensions in metres: Space 24x32x18, Marble 6.3x4.1x3, Rectangle 9x5.5x3.5, Hexagon 7.5x6.5x3.8, Box 5x5x5; the eight lines are the axial, tangential and oblique path lengths and their sum divided by the speed of sound) and is inert for the other types (A153). All types share `size` (scales the delay lines, 0.35x .. 2.8x), `decay` (T60, the loop gain of every line follows from its delay), the damping shelves, the pre cuts, the pre-delay, `chorus_amount` / `chorus_rate` (modulation of the lines) and `mix`. `er_size` scales the six early reflections per channel (A154); `diff_a` is the input diffusion, `diff_b` the diffusion inside the loops (A155). `width` is mid / side width of the wet signal for every type including Vital (A156); `er_size`, `diff_a`, `diff_b` and `room` are inert for the Vital type and the UI dims them there. Switching `type` or `room` clears the tail (stepped change, R7).
+
+**Choices appended** (section 3): `distortion.type` 6 -> 14 entries (`kNumLegacyDistortionTypes` = 6). **Destinations**: the 8 modulatable keys take the destination choices 404-411 in table order (`compressor.crossover_low` 404, `compressor.crossover_high` 405, `delay.offset` 406, `distortion.filter_keytrack` 407, `phaser.depth2` 408, `reverb.width` 409, `reverb.diff_a` 410, `reverb.diff_b` 411); `kNumModDestinations` = 412. **Caps** (`engine_caps.h`, bits 44-48, A157): `kCapFxCompressorLimit` (the four compressor keys), `kCapFxDelayExtras`, `kCapFxDistortionExtras` (the keytrack, `distortion.type` >= 6, the two curves), `kCapFxPhaserDepth2`, `kCapFxReverbAlgos` (all six reverb keys); each is set by the Vital adapter because `test_fxextra.cpp` renders the keys off and on. **Kick** pages 104-108: `fx_comp_limit`, `fx_delay_3`, `fx_distortion_2`, `fx_phaser_3`, `fx_reverb_3`. **UI** (A158): the FX panels of the five modules get the new controls (limit toggle and crossover handles on the band view, HQ toggle / offset knob / TAP button, the X-Shaper curve editor, depth 2 knob, type / room chips and the four reverb knobs).
 
 ## 5. State that is not in the key list (additive `content` section, state version 3)
 
@@ -386,6 +441,8 @@ Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatab
 | `content.filter_curves[]` | `{filter: "filter1"/"filter2"/"fxfilter", points:[{x: log frequency 0..1, y: dB}]}` (**ASSUMPTION A28**: the drawable PZ SVF stores a magnitude curve; the DSP fits pole / zero pairs) | <= 16 points | `filterN.model = PZ SVF` |
 
 Missing content at load: the existing fallback and `missing_content` flag (ARCHITECTURE 5.2): `Preset table` -> built-in Saw, `Sample` -> silent oscillator, `Custom` LFO -> `Sine`, `User file` tuning -> 12-TET, `Preset IR` -> bypass, `PZ SVF` -> flat.
+
+**B17 addition (4.14):** `content.curves` may also hold `shaper_a` and `shaper_b`, each `{"points":[{"x","y","power"}, ...]}` with the rules of the velocity curve (2 to 64 points, ascending x in 0..1, y in 0..1, |power| <= 20; absent or empty = the identity). They are the transfer curves of `distortion.type` X-Shaper and X-Shaper (Asym). The section stays part of state version 3 (additive, no version bump); an older reader ignores the two members.
 
 ## 6. Contract changes without keys
 
@@ -413,7 +470,8 @@ Missing content at load: the existing fallback and `missing_content` flag (ARCHI
 | B10 | mixer, buses, direct | 26 | 1360..1385 | 19 | 338-356 |
 | B11 | filter var / pan / level (x3) | 9 | 1386..1394 | 9 | 357-365 |
 | B12 | fx order, racks, new FX, reverb force | 89 | 1395..1483 | 38 | 366-403 |
-| **Total** | | **604** | 880..1483 | **134** | 270..403 |
+| B17 | compressor limit / crossovers, delay hq / offset, distortion key track, phaser depth 2, reverb type / room / width / ER / diffusion | 14 | 1484..1497 | 8 | 404-411 |
+| **Total** | | **618** | 880..1497 | **142** | 270..411 |
 
 Resulting table: 880 + 604 = **1484 keys**, 269 + 134 = **403 modulatable** keys, destination choice size **404**, mod sources **38**, positions 0..1483. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
 
@@ -546,3 +604,22 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A43 | `PZ SVF` without curve data runs the package's pole / zero SVF (the "flat" fallback of 5 is for a missing reference); with a curve the voice filter is a cascade of bells fitted to it, the cutoff shifts the curve (1 kHz = as drawn) |
 | A44 | Convolve re-partitions its impulse on a builder thread when size, minimum phase, attack, decay, damping or gain change (an audible change follows after the build); tier low bypasses Hyper / Dimension, Bode and Convolve |
 | A45 | `lfoN.mono` in the envelope and loop trigger types (Envelope, Sustain envelope, Loop at point, Loop and hold) is Serum's MONO: ONE LFO instance serves all voices. Notes are grouped: a note on while no key is held and no sustain pedal is down starts a new group, and only that restarts the LFO (from its start, delay and fade included); further notes of the group join the running instance at its current position and never restart or release it; the instance is "held" (Sustain envelope waits at the phase marker, Loop and hold loops) while any key of the group or the pedal is down, and runs on when the last one is released, also for the voices still in their release. The instance is advanced once per engine chunk with the rate / phase / delay / fade of the first voice processed, every voice reads it with its own rate (key follow) for that chunk. Retrigger and Sync types keep the A33 behaviour (Sync mode on the engine clock). Point modulation of a custom shape (Q17 / G65) reads the source of each voice: the points of the shape move per voice by `amount * source` (y clamped to 0..1, x between the neighbours, the end points keep x), every voice reads its own table; the sources are the outputs of the modulation sources as the matrix sees them (envelopes 0..1, LFOs -1..1, velocity, note, random, lift, slide, oct note, poly aftertouch per voice; macros, mod wheel, pitch wheel, channel pressure globally). A source that depends on the LFO itself (its own output, or an LFO that is modulated by it) would close a loop and is ignored, as for a matrix slot. The values are quantised to 1/4096 before a table is baked; the bake cost per chunk is bounded by the tier (low 4 tables of 512 points, medium 8 and high 16 of 2048; a table that has waited 4 chunks is baked anyway) |
+| A140 | G73-G77 are defined by this file (B17); the Serum manual is not in the repository, so every definition below is ours |
+| A141 | Limit mode: peak limiter, 1.5 ms look-ahead, stereo linked, ceiling = the band's upper threshold, estimated inter-sample peak; the upward stage is kept |
+| A142 | `limit_latency_comp` On reports the look-ahead as chain latency and delays the other paths; Off does not; the dry signal of the compressor mix is always aligned |
+| A143 | Crossover defaults 120 Hz / 2500 Hz (what the engine does), not the 150 Hz / 3 kHz written in 08 |
+| A144 | Modulated crossovers update the filter coefficients once per block |
+| A145 | Delay HQ: 8-point Lagrange read |
+| A146 | `delay.offset` multiplies the right delay time (all styles), range 0.25 .. 4 |
+| A147 | Tap->Delay is a UI tap-tempo action (writes Free sync and the two times), not a key |
+| A148 | Distortion types 6-11 as defined in 4.14; asymmetric types have a 10 Hz DC blocker |
+| A149 | Distortion filter key track uses the last-key note like the FX filter |
+| A150 | X-Shaper curves: odd symmetric from A; Asym: A positive, B negative; stored in `content.curves.shaper_a / shaper_b`, 513-point tables |
+| A151 | Phaser DEPTH 2 is a right-channel offset of the depth in semitones |
+| A152 | The five reverb algorithms are our own (Dattorro-type plate, Hadamard FDN, Freeverb-type combs, dense bright FDN, room-mode FDN) |
+| A153 | `reverb.room` acts on Basin only |
+| A154 | ER SIZE scales six early reflections per channel (level fixed per type) |
+| A155 | DIFF A = input diffusion, DIFF B = diffusion in the loops (Serum's DIFF A/B and DIFFUSION are mapped onto these two; FEEDBACK is the decay) |
+| A156 | `reverb.width` is mid / side width of the wet signal for all types |
+| A157 | Five cap bits 44-48 for B17, apart from the WP bits |
+| A158 | UI of B17 as listed in 4.14 |
