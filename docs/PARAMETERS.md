@@ -338,7 +338,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `filter1.on` | Filter 1 On | 0 Off, 1 On | On | Filter 1 |  | yes |
-| `filter1.model` | Filter 1 Model | 22 choices: 0 Analog, 1 Dirty, 2 Ladder, ... , 21 PZ SVF | Digital | Filter 1 |  |  |
+| `filter1.model` | Filter 1 Model | 27 choices: 0 Analog, 1 Dirty, 2 Ladder, ... , 26 New | Digital | Filter 1 |  |  |
 | `filter1.style` | Filter 1 Style | 12 choices: 0 Style A (12 dB), 1 Style B (24 dB), 2 Style C (notch swap), ... , 11 Style L | Style A (12 dB) | Filter 1 |  |  |
 | `filter1.cutoff` | Filter 1 Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 12000 Hz | Filter 1 | mod | yes |
 | `filter1.resonance` | Filter 1 Resonance | 0 .. 100 % | 20 % | Filter 1 | mod |  |
@@ -365,7 +365,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `filter2.on` | Filter 2 On | 0 Off, 1 On | Off | Filter 2 |  |  |
-| `filter2.model` | Filter 2 Model | 22 choices: 0 Analog, 1 Dirty, 2 Ladder, ... , 21 PZ SVF | Digital | Filter 2 |  |  |
+| `filter2.model` | Filter 2 Model | 27 choices: 0 Analog, 1 Dirty, 2 Ladder, ... , 26 New | Digital | Filter 2 |  |  |
 | `filter2.style` | Filter 2 Style | 12 choices: 0 Style A (12 dB), 1 Style B (24 dB), 2 Style C (notch swap), ... , 11 Style L | Style A (12 dB) | Filter 2 |  |  |
 | `filter2.cutoff` | Filter 2 Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 12000 Hz | Filter 2 | mod |  |
 | `filter2.resonance` | Filter 2 Resonance | 0 .. 100 % | 20 % | Filter 2 | mod |  |
@@ -398,7 +398,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `fxfilter.on` | FX Filter On | 0 Off, 1 On | Off | FX Filter |  |  |
-| `fxfilter.model` | FX Filter Model | 22 choices: 0 Analog, 1 Dirty, 2 Ladder, ... , 21 PZ SVF | Digital | FX Filter |  |  |
+| `fxfilter.model` | FX Filter Model | 27 choices: 0 Analog, 1 Dirty, 2 Ladder, ... , 26 New | Digital | FX Filter |  |  |
 | `fxfilter.style` | FX Filter Style | 12 choices: 0 Style A (12 dB), 1 Style B (24 dB), 2 Style C (notch swap), ... , 11 Style L | Style A (12 dB) | FX Filter |  |  |
 | `fxfilter.cutoff` | FX Filter Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 12000 Hz | FX Filter | mod |  |
 | `fxfilter.resonance` | FX Filter Resonance | 0 .. 100 % | 20 % | FX Filter | mod |  |
