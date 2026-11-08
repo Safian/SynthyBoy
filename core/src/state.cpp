@@ -790,6 +790,20 @@ private:
                         return true;
                     });
                 });
+            if (std::strcmp (key, "mod_curves") == 0)
+                return readArray (d, static_cast<size_t> (kMaxContentModCurves), [&] (size_t, int ed)
+                {
+                    c.modCurves.emplace_back();
+                    auto& mc = c.modCurves.back();
+                    return readObject (ed, [&] (const char* k, int vd, bool& h)
+                    {
+                        h = true;
+                        if (std::strcmp (k, "slot") == 0) return readInt (mc.slot, vd);
+                        if (std::strcmp (k, "points") == 0) return readPoints (mc.points, static_cast<size_t> (kMaxModCurvePoints), vd, false);
+                        h = false;
+                        return true;
+                    });
+                });
             handled = false;
             return true;
         });
@@ -1188,6 +1202,23 @@ void putContent (std::string& s, const StateContent& c)
             s += ',';
             putKey (s, "points");
             putPoints (s, r.points);
+            s += '}';
+        }
+        s += ']';
+    }
+    if (! c.modCurves.empty())
+    {
+        section ("mod_curves");
+        s += '[';
+        for (size_t i = 0; i < c.modCurves.size(); ++i)
+        {
+            const auto& mc = c.modCurves[i];
+            s += i > 0 ? ",{" : "{";
+            putKey (s, "slot");
+            putJsonInt (s, mc.slot);
+            s += ',';
+            putKey (s, "points");
+            putPoints (s, mc.points);
             s += '}';
         }
         s += ']';

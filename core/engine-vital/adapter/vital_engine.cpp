@@ -29,6 +29,7 @@
 
 #include "distortion.h"
 #include "distortion_module.h"
+#include "line_generator.h"
 #include "modulation_connection_processor.h"
 #include "sample_oscillator.h"
 #include "sample_source.h"
@@ -141,7 +142,9 @@ std::string vitalSourceName (int index)
     if (index < 32) return "macro_control_" + std::to_string (index - 28 + 5);
     if (index < 34) return "lfo_" + std::to_string (index - 32 + 9);
     static const char* const extra[] = { "lift", "slide", "note_in_octave", "poly_aftertouch" };
-    return extra[index - 34];
+    if (index < 38) return extra[index - 34];
+    if (index == 38) return "stereo";
+    return "";
 }
 
 /** MIDI note (fractional) of a frequency, 69 = 440 Hz. */
@@ -238,6 +241,12 @@ struct Snapshot
         std::array<float, sbvital::FrameRemap::kSize + 1> table {};
     };
     std::array<std::array<RemapEntry, kNumRemapSlots>, 3> remap;  // the drawn wavetable position remaps (content.remaps): [osc][slot]
+    struct ModCurveEntry
+    {
+        bool present = false;
+        std::vector<ContentPoint> points;
+    };
+    std::array<ModCurveEntry, kNumModSlots> modCurves;            // the per-slot modulation curves (content.modCurves, G2)
     bool hasVelocity = false, hasNote = false;
     std::array<float, kBakedPoints> velocityTable {}, noteTable {};
     std::array<std::array<float, sbvital::Distortion::kShaperSize>, 2> shaperTable {}; // X-Shaper curves A and B (content.curves.shaper_a / shaper_b)
@@ -410,6 +419,16 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
         auto& e = s->remap[static_cast<size_t> (r.osc - 1)][static_cast<size_t> (r.slot - 1)];
         shape.bake (e.table.data(), e.table.size());
         e.present = true;
+    }
+
+    for (const ContentModCurve& mc : content.modCurves)
+    {
+        if (mc.slot >= 1 && mc.slot <= kNumModSlots && mc.points.size() >= 2)
+        {
+            auto& e = s->modCurves[static_cast<size_t> (mc.slot - 1)];
+            e.present = true;
+            e.points = mc.points;
+        }
     }
 
     shapes::ShapeData curve;
@@ -614,7 +633,8 @@ public:
              | kCapPitchUnison
              | kCapFxExtrasAll // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
              | kCapSubOsc | kCapNoiseExtras // block B18: proven by core/engine-vital/tests/test_oscextra.cpp
-             | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions;
+             | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions
+             | kCapModAmount; // block B20: proven by core/engine-vital/tests/test_modamt.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -740,7 +760,7 @@ private:
         bool connected = false;
         uint32_t triedGeneration = 0;   // matrixGeneration at the last attempt to wire the slot
         sbvital::ModulationConnectionProcessor* processor = nullptr;
-        int sourceParam = -1, destinationParam = -1;
+        int sourceParam = -1, destinationParam = -1, amountParam = -1;
         bool eligible = true;          // the destination is live (an envelope time of the selected unit)
         int auxSourceParam = -1, auxInvParam = -1, auxPowerParam = -1, auxOutputParam = -1;
         int auxPlugged = 0;            // aux source choice that is plugged into the processor
@@ -904,7 +924,6 @@ private:
         setControl ("pitch_bend_range", 0.0f); // bends go through the per-channel path (handleEvent); this one is the zoned wheel
         setControl ("mpe_enabled", 0.0f);
         setControl ("bypass", 0.0f);
-        setControl ("stereo_routing", 1.0f);
         setControl ("stereo_mode", 0.0f);
         setControl ("voice_amplitude", 1.0f);
         for (int i = 1; i <= kNumOsc; ++i)
@@ -1041,7 +1060,7 @@ private:
             d.poly = name.empty() ? nullptr : engine->getPolyModulationDestination (name);
             d.monoSwitch = name.empty() ? nullptr : engine->getMonoModulationSwitch (name);
             d.polySwitch = name.empty() ? nullptr : engine->getPolyModulationSwitch (name);
-            d.valid = d.mono != nullptr && d.monoSwitch != nullptr && sbvital::Parameters::isParameter (name);
+            d.valid = (d.mono != nullptr || d.poly != nullptr) && (d.monoSwitch != nullptr || d.polySwitch != nullptr) && sbvital::Parameters::isParameter (name);
             for (const Binding& b : vitalBindings())
                 if (b.param == paramIndex && b.gateParam >= 0)
                 {
@@ -1053,7 +1072,8 @@ private:
             {
                 // room for every slot to be wired to this destination at the same time: wiring a slot then reuses a spare input
                 // and allocates nothing (Processor::plugNext allocates when it finds no free input)
-                d.mono->reserveInputs (kNumSlots);
+                if (d.mono != nullptr)
+                    d.mono->reserveInputs (kNumSlots);
                 if (d.poly != nullptr)
                     d.poly->reserveInputs (kNumSlots);
                 // a full sweep of the destination's own range (the frame positions of our built-in tables span 64 frames)
@@ -1083,6 +1103,7 @@ private:
             s.processor = bank.atIndex (k)->modulation_processor.get();
             s.sourceParam = p.source;
             s.destinationParam = p.destination;
+            s.amountParam = p.amount;
             s.auxSourceParam = p.auxSource;
             s.auxInvParam = p.auxInv;
             s.auxPowerParam = p.auxPower;
@@ -1786,14 +1807,28 @@ private:
     void updateCurve (int k, int source) noexcept
     {
         Slot& slot = slots[static_cast<size_t> (k)];
-        const int kind = (source == kSourceVelocity) ? 1 : (source == kSourceNote ? 2 : 0);
-        const bool have = activeSnapshot != nullptr && ((kind == 1 && activeSnapshot->hasVelocity) || (kind == 2 && activeSnapshot->hasNote));
+        const bool hasModCurve = activeSnapshot != nullptr && activeSnapshot->modCurves[static_cast<size_t> (k)].present;
+        const int kind = hasModCurve ? 3 : ((source == kSourceVelocity) ? 1 : (source == kSourceNote ? 2 : 0));
+        const bool have = hasModCurve || (activeSnapshot != nullptr && ((kind == 1 && activeSnapshot->hasVelocity) || (kind == 2 && activeSnapshot->hasNote)));
         const int want = have ? kind : 0;
         if (want != slot.curveKind || (want != 0 && slot.curveId != snapshotId))
         {
             LineGenerator& line = *slot.processor->lineMapGenerator();
             if (want == 0)
                 line.initLinear();
+            else if (want == 3)
+            {
+                const auto& pts = activeSnapshot->modCurves[static_cast<size_t> (k)].points;
+                const int n = static_cast<int> (std::min<size_t> (pts.size(), LineGenerator::kMaxPoints));
+                line.setSmooth (false);
+                line.setNumPoints (n);
+                for (int i = 0; i < n; ++i)
+                {
+                    line.setPoint (i, { pts[static_cast<size_t> (i)].x, 1.0f - pts[static_cast<size_t> (i)].y });
+                    line.setPower (i, pts[static_cast<size_t> (i)].power);
+                }
+                line.render();
+            }
             else
             {
                 // any non-linear point set marks the remap as active; the table is then written over what render () made of it
@@ -1889,14 +1924,54 @@ private:
         return change;
     }
 
+    int slotOfAmountChoice (int destinationChoice) const noexcept
+    {
+        if (destinationChoice <= 0)
+            return -1;
+        const int destParam = modDestinationParamIndex (static_cast<size_t> (destinationChoice));
+        if (destParam < 0)
+            return -1;
+        for (int s = 0; s < kNumSlots; ++s)
+            if (slots[static_cast<size_t> (s)].amountParam == destParam)
+                return s;
+        return -1;
+    }
+
+    bool wouldCloseSlotLoop (int k, int destinationChoice) const noexcept
+    {
+        int target = slotOfAmountChoice (destinationChoice);
+        if (target < 0)
+            return false;
+        if (target == k)
+            return true; // direct self-modulation
+        // Follow chain of slot modulations
+        int visited = 0;
+        while (target >= 0 && visited < kNumSlots)
+        {
+            if (target == k)
+                return true; // cycle
+            if (! slots[static_cast<size_t> (target)].connected)
+                break;
+            const int nextDestChoice = slots[static_cast<size_t> (target)].destination;
+            target = slotOfAmountChoice (nextDestChoice);
+            ++visited;
+        }
+        return false;
+    }
+
     /** True if wiring the slot would make the engine insert a feedback node (a loop in the graph: the source depends on the
         destination), which allocates; such a slot stays unwired (docs/PARAMETERS.md). The decision is the engine's own: the
         check that ProcessorRouter::connect makes for the connection, made first. */
-    bool wouldCloseLoop (const sbvital::modulation_change& change) const noexcept
+    bool wouldCloseLoop (int k, const sbvital::modulation_change& change) const noexcept
     {
+        const Slot& slot = slots[static_cast<size_t> (k)];
+        if (wouldCloseSlotLoop (k, slot.destination))
+            return true;
         change.modulation_processor->plug (change.source, sbvital::ModulationConnectionProcessor::kModulationInput); // as connectModulation does
         const bool polyphonic = change.source->owner->isPolyphonic() && change.poly_destination != nullptr;
-        const sbvital::Processor* destination = polyphonic ? change.poly_destination : change.mono_destination;
+        const sbvital::Processor* destination = (polyphonic && change.poly_destination != nullptr) ? change.poly_destination : (change.mono_destination != nullptr ? change.mono_destination : change.poly_destination);
+        if (destination == nullptr)
+            return true;
         const sbvital::ProcessorRouter* router = destination->router();
         return router != nullptr && router->isDownstream (destination, change.modulation_processor);
     }
@@ -1905,7 +1980,7 @@ private:
     {
         Slot& slot = slots[static_cast<size_t> (k)];
         const sbvital::modulation_change change = changeFor (k, false);
-        if (wouldCloseLoop (change))
+        if (wouldCloseLoop (k, change))
             return;
         engine->connectModulation (change);
         slot.connected = true;

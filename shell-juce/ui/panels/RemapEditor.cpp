@@ -70,10 +70,21 @@ const char* RemapEditor::presetName (int preset) noexcept
 }
 
 RemapEditor::RemapEditor (UiContext& context, int oscIndex)
-    : ctx (context), oscN (oscIndex), slotHandle (context, "osc" + std::to_string (oscIndex) + ".remap.slot")
+    : ctx (context), oscN (oscIndex), slotHandle (std::make_unique<ParamHandle> (context, "osc" + std::to_string (oscIndex) + ".remap.slot"))
+{
+    init();
+}
+
+RemapEditor::RemapEditor (UiContext& context, ModCurveMode, int modSlot)
+    : ctx (context), oscN (0), modMode (true), modSlotNumber (juce::jlimit (1, kMaxContentModCurves, modSlot)), maxPoints (static_cast<size_t> (kMaxModCurvePoints))
+{
+    init();
+}
+
+void RemapEditor::init()
 {
     current.osc = oscN;
-    current.slot = 1;
+    current.slot = modMode ? modSlotNumber : 1;
     setIdentityPoints();
     buttons = { &pencilBtn, &addBtn, &deleteBtn, &undoBtn, &redoBtn, &presetBtn, &resetBtn };
     for (auto* b : buttons)
@@ -98,7 +109,8 @@ RemapEditor::RemapEditor (UiContext& context, int oscIndex)
                                     safe->applyPreset (result - 1);
                             });
     };
-    slotHandle.onChange = [this] { reloadFromHost(); };
+    if (slotHandle != nullptr)
+        slotHandle->onChange = [this] { reloadFromHost(); };
     reloadFromHost();
     updateButtons();
     startTimerHz (30);
@@ -113,7 +125,17 @@ RemapEditor::~RemapEditor()
 
 int RemapEditor::slot() const
 {
-    return slotHandle.valid() ? juce::jlimit (1, kNumRemapSlots, juce::roundToInt (slotHandle.plain()) + 1) : 1;
+    if (modMode)
+        return modSlotNumber;
+    return slotHandle->valid() ? juce::jlimit (1, kNumRemapSlots, juce::roundToInt (slotHandle->plain()) + 1) : 1;
+}
+
+void RemapEditor::setModSlot (int modSlot)
+{
+    if (! modMode)
+        return;
+    modSlotNumber = juce::jlimit (1, kMaxContentModCurves, modSlot);
+    reloadFromHost();
 }
 
 juce::TextButton* RemapEditor::button (const juce::String& text)
@@ -157,17 +179,29 @@ void RemapEditor::reloadFromHost()
         return;
     const int wanted = slot();
     const auto content = ctx.host.content();
-    const auto it = std::find_if (content.remaps.begin(), content.remaps.end(), [this, wanted] (const ContentRemap& r) { return r.osc == oscN && r.slot == wanted; });
     ContentRemap next;
     next.osc = oscN;
     next.slot = wanted;
     bool found = false;
-    if (it != content.remaps.end() && it->points.size() >= kMinPoints)
+    if (modMode)
     {
-        next = *it;
-        found = true;
+        const auto mit = std::find_if (content.modCurves.begin(), content.modCurves.end(), [wanted] (const ContentModCurve& m) { return m.slot == wanted; });
+        if (mit != content.modCurves.end() && mit->points.size() >= kMinPoints)
+        {
+            next.points = mit->points;
+            found = true;
+        }
     }
     else
+    {
+        const auto it = std::find_if (content.remaps.begin(), content.remaps.end(), [this, wanted] (const ContentRemap& r) { return r.osc == oscN && r.slot == wanted; });
+        if (it != content.remaps.end() && it->points.size() >= kMinPoints)
+        {
+            next = *it;
+            found = true;
+        }
+    }
+    if (! found)
     {
         next.points.emplace_back (0.0f, 0.0f, 0.0f);
         next.points.emplace_back (1.0f, 1.0f, 0.0f);
@@ -191,6 +225,21 @@ void RemapEditor::commitNow()
 {
     dirty = false;
     auto content = ctx.host.content();
+    if (modMode)
+    {
+        const auto mit = std::find_if (content.modCurves.begin(), content.modCurves.end(), [this] (const ContentModCurve& m) { return m.slot == current.slot; });
+        if (! stored)
+        {
+            if (mit != content.modCurves.end())
+                content.modCurves.erase (mit);
+        }
+        else if (mit != content.modCurves.end())
+            mit->points = current.points;
+        else
+            content.modCurves.push_back ({ current.slot, current.points });
+        ctx.host.setContent (content);
+        return;
+    }
     const auto it = std::find_if (content.remaps.begin(), content.remaps.end(),
                                   [this] (const ContentRemap& r) { return r.osc == current.osc && r.slot == current.slot; });
     if (! stored)
@@ -272,7 +321,7 @@ void RemapEditor::redo()
 
 bool RemapEditor::addPointAt (float x)
 {
-    if (current.points.size() >= static_cast<size_t> (kMaxRemapPoints))
+    if (current.points.size() >= maxPoints)
         return false;
     x = juce::jlimit (0.0f, 1.0f, x);
     size_t at = 1;
@@ -499,7 +548,7 @@ void RemapEditor::updateButtons()
     undoBtn.setEnabled (canUndo());
     redoBtn.setEnabled (canRedo());
     deleteBtn.setEnabled (selected > 0 && selected + 1 < static_cast<int> (current.points.size()) && current.points.size() > kMinPoints);
-    addBtn.setEnabled (current.points.size() < static_cast<size_t> (kMaxRemapPoints));
+    addBtn.setEnabled (current.points.size() < maxPoints);
     resetBtn.setEnabled (stored);
 }
 
@@ -545,9 +594,9 @@ void RemapEditor::paint (juce::Graphics& g)
 
     g.setColour (c.textDim);
     g.setFont (t.labelFont());
-    g.drawText ("Frame position in", plot.toNearestInt().removeFromBottom (t.ipx (16.0f)), juce::Justification::centredRight, false);
+    g.drawText (modMode ? "Source value in" : "Frame position in", plot.toNearestInt().removeFromBottom (t.ipx (16.0f)), juce::Justification::centredRight, false);
     g.drawText ("out", plot.toNearestInt().removeFromTop (t.ipx (16.0f)), juce::Justification::centredLeft, false);
-    g.drawText (juce::String ("Remap ") + juce::String (slot()) + (stored ? "" : " (identity)"), plot.toNearestInt().removeFromTop (t.ipx (16.0f)),
+    g.drawText (juce::String (modMode ? "Slot curve " : "Remap ") + juce::String (slot()) + (stored ? "" : modMode ? " (straight)" : " (identity)"), plot.toNearestInt().removeFromTop (t.ipx (16.0f)),
                 juce::Justification::centredRight, false);
 
     if (! pencil)

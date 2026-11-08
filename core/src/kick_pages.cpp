@@ -356,7 +356,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 65: Scale & Tuning (Master)
     { "master_scale_tuning", "Scale & Tuning", "Master", { "master.scale.key", "master.scale.type", "master.scale.mode", "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only", nullptr }, 7, nullptr, 0 },
     // Page 66: Expression & MPE (Master)
-    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", "voice.phase_legato", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", "voice.phase_legato", "master.stereo_routing", "master.voice_override", nullptr }, 7, nullptr, 0 },
     // Page 67: Osc 1 Type & Mapping (Osc)
     { "osc1_type_map", "Osc 1 Type & Mapping", "Osc", { "osc1.type", "osc1.map.key_low", "osc1.map.key_high", "osc1.map.vel_low", "osc1.map.vel_high", "osc1.map.key_fold", "osc1.map.key_warp", nullptr }, 7, nullptr, 0 },
     // Page 68: Osc 2 Type & Mapping (Osc)

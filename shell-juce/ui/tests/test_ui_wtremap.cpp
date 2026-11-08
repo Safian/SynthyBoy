@@ -1,5 +1,6 @@
 // SynthyBoy - UI tests of block B16 (WTREMAP): the remap graph of the oscillators (row 02-14), the FX LEVEL knob of the effect panels and the Clean
-// Mode switch of the filter panels, plus the phone / tablet screenshots of the changed pages.
+// Mode switch of the filter panels, plus the phone / tablet screenshots of the changed pages. The last tests belong to block B20 (MODAMT): the
+// per-connection modulation curve editor and the amount destinations of the matrix.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <algorithm>
@@ -10,6 +11,7 @@
 
 #include "PluginProcessor.h"
 #include "ui/Editor.h"
+#include "ui/panels/ModLogic.h"
 #include "ui/panels/RemapEditor.h"
 #include "test_runner.h"
 
@@ -355,4 +357,215 @@ TEST (uiw_screenshots_of_the_changed_pages)
     rig.shot ("osc-remap-phone", 390, 844, Page::osc);
     rig.shot ("osc-remap-tablet", 1024, 768, Page::osc);
     rig.shot ("fx-tablet", 1024, 768, Page::fx);
+}
+
+// ---- block B20 (MODAMT): the per-connection modulation curve editor and the amount destinations of the matrix -------------------------
+
+namespace
+{
+class ArrayMatrix final : public ModMatrixAccess
+{
+public:
+    ArrayMatrix() : values (ParamValues::defaults()) {}
+    float get (int i) const override { return values.plain[static_cast<size_t> (i)]; }
+    void set (int i, float v) override { values.plain[static_cast<size_t> (i)] = v; }
+    void beginGesture (int) override {}
+    void endGesture (int) override {}
+    ParamValues values;
+};
+
+int indexOfKey (const char* key)
+{
+    return resolveKey (key).index;
+}
+
+const ContentModCurve* modCurveOf (const StateContent& c, int slot)
+{
+    for (const auto& m : c.modCurves)
+        if (m.slot == slot)
+            return &m;
+    return nullptr;
+}
+
+class ModCurvePanelAccess
+{
+public:
+    static Panel* find (Rig& rig) { return rig.panelTitled ("Slot Curve & Remap"); }
+};
+} // namespace
+
+TEST (uim_amount_destinations_are_found_and_loops_are_flagged)
+{
+    CHECK_EQ (modAmountSlotOfChoice (454), 0);
+    CHECK_EQ (modAmountSlotOfChoice (517), 63);
+    CHECK_EQ (modAmountSlotOfChoice (453), -1); // master.stereo_routing
+    CHECK_EQ (modAmountSlotOfChoice (518), -1); // portamento time
+    CHECK_EQ (modAmountSlotOfChoice (0), -1);
+
+    ArrayMatrix m;
+    const auto setSlot = [&] (int slot, int source, int dest)
+    {
+        const auto p = modSlotParams (slot);
+        m.set (p.source, static_cast<float> (source));
+        m.set (p.destination, static_cast<float> (dest));
+    };
+    // slot 1 -> amount of slot 2 -> amount of slot 3
+    setSlot (0, 19, 455);
+    setSlot (1, 20, 456);
+    CHECK (! modAmountWouldLoop (m, 0, 455));
+    CHECK (modAmountWouldLoop (m, 0, 454));  // its own amount
+    CHECK (modAmountWouldLoop (m, 2, 454));  // slot 3 -> amount of slot 1 closes 1 -> 2 -> 3 -> 1
+    CHECK (! modAmountWouldLoop (m, 2, 457)); // slot 3 -> amount of slot 4 is fine
+    CHECK (! modAmountWouldLoop (m, 2, static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (indexOfKey ("filter1.cutoff"))))));
+    // a bypassed link in the chain does not count
+    m.set (modSlotParams (1).bypass, 1.0f);
+    CHECK (! modAmountWouldLoop (m, 2, 454));
+
+    // the matrix row badge uses the same check
+    m.set (modSlotParams (1).bypass, 0.0f);
+    setSlot (2, 21, 454);
+    CHECK (modDetectFeedbackLoop (m, 2).isLoop);
+    setSlot (2, 21, 458);
+    CHECK (! modDetectFeedbackLoop (m, 2).isLoop);
+    setSlot (0, 19, 454);
+    CHECK (modDetectFeedbackLoop (m, 0).isLoop); // the slot modulates itself
+}
+
+TEST (uim_slot_curve_editor_draws_into_the_host_content_per_slot)
+{
+    Rig rig (Page::mod);
+    auto* panel = ModCurvePanelAccess::find (rig);
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    auto* ed = findChildOfType<RemapEditor> (*panel);
+    CHECK (ed != nullptr);
+    if (ed == nullptr)
+        return;
+    CHECK (ed->isModCurve());
+    CHECK (! ed->isVisible()); // the power graph is shown until "Custom" is chosen
+
+    juce::TextButton* custom = nullptr;
+    for (auto* c : panel->getChildren())
+        if (auto* b = dynamic_cast<juce::TextButton*> (c))
+            if (b->getButtonText() == "Custom")
+                custom = b;
+    CHECK (custom != nullptr);
+    if (custom == nullptr)
+        return;
+    custom->onClick();
+    CHECK (ed->isVisible());
+    CHECK_EQ (ed->slot(), 1);
+    CHECK (! ed->isDrawn());
+    CHECK_NEAR (ed->evaluateAt (0.3f), 0.3f, 1.0e-4f); // nothing drawn: the straight line, nothing stored
+    CHECK (modCurveOf (rig.proc.content(), 1) == nullptr);
+
+    const auto pos = [ed] (float x, float y)
+    {
+        const auto plot = ed->plotBounds();
+        return juce::Point<float> (plot.getX() + x * plot.getWidth(), plot.getBottom() - y * plot.getHeight());
+    };
+
+    // a point on the line, dragged up: the curve of slot 1 reaches the content (and validates)
+    doubleTap (*ed, pos (0.2f, 0.2f));
+    CHECK_EQ (ed->remap().points.size(), static_cast<size_t> (3));
+    const auto p1 = ed->pointPosition (1);
+    drag (*ed, p1, p1 + juce::Point<float> (0.0f, -40.0f));
+    {
+        const auto content = rig.proc.content();
+        const auto* mc = modCurveOf (content, 1);
+        CHECK (mc != nullptr);
+        if (mc != nullptr)
+        {
+            CHECK_EQ (mc->points.size(), static_cast<size_t> (3));
+            CHECK (mc->points[1].y > 0.35f);
+        }
+        CHECK (content.remaps.empty()); // it is not a wavetable remap
+        CHECK (validateContent (content));
+    }
+    ed->undo();
+    CHECK_NEAR (ed->remap().points[1].y, 0.2f, 1.0e-3f);
+
+    // another slot has its own (empty) curve; slot 1 keeps its entry
+    ed->commitNow();
+    ed->setModSlot (5);
+    CHECK_EQ (ed->slot(), 5);
+    CHECK (! ed->isDrawn());
+    CHECK (modCurveOf (rig.proc.content(), 5) == nullptr);
+    CHECK (modCurveOf (rig.proc.content(), 1) != nullptr);
+    ed->applyPreset (1); // Reverse
+    ed->commitNow();
+    CHECK (modCurveOf (rig.proc.content(), 5) != nullptr);
+    CHECK_NEAR (ed->evaluateAt (0.0f), 1.0f, 1.0e-3f);
+    CHECK_NEAR (ed->evaluateAt (1.0f), 0.0f, 1.0e-3f);
+    ed->resetToIdentity();
+    ed->commitNow();
+    CHECK (modCurveOf (rig.proc.content(), 5) == nullptr); // reset removes the entry: straight line again
+    CHECK (modCurveOf (rig.proc.content(), 1) != nullptr);
+
+    // a preset load with another content is picked up
+    StateContent other;
+    other.modCurves.push_back ({ 5, { ContentPoint (0.0f, 0.0f), ContentPoint (0.5f, 1.0f), ContentPoint (1.0f, 0.0f) } });
+    rig.proc.setContent (other);
+    ed->reloadFromHost();
+    CHECK (ed->isDrawn());
+    CHECK_EQ (ed->remap().points.size(), static_cast<size_t> (3));
+    ed->setModSlot (1);
+    CHECK (! ed->isDrawn());
+}
+
+TEST (uim_slot_curve_panel_fits_the_phone_and_the_tablet)
+{
+    for (const auto size : { juce::Point<int> (390, 844), juce::Point<int> (1024, 768) })
+    {
+        Rig rig (Page::mod, size.x, size.y);
+        auto* panel = ModCurvePanelAccess::find (rig);
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        auto* ed = findChildOfType<RemapEditor> (*panel);
+        for (auto* c : panel->getChildren())
+            if (auto* b = dynamic_cast<juce::TextButton*> (c))
+                if (b->getButtonText() == "Custom")
+                {
+                    b->onClick();
+                    CHECK (b->getHeight() >= 44 || b->getHeight() >= rig.editor->getHeight() / 20);
+                }
+        CHECK (ed != nullptr && ed->isVisible());
+        if (ed != nullptr)
+        {
+            CHECK (ed->getWidth() > 0 && ed->getHeight() > 0);
+            CHECK (ed->getBounds().getRight() <= panel->getWidth());
+        }
+    }
+}
+
+TEST (uim_master_stereo_routing_and_voice_override_are_on_the_voicing_panel)
+{
+    Rig rig (Page::glb);
+    bool found = false;
+    for (const auto& p : rig.editor->panelHost().allPanels())
+        if (hasControl (*p, "master.stereo_routing") && hasControl (*p, "master.voice_override"))
+            found = true;
+    CHECK (found);
+}
+
+TEST (uim_screenshots_of_the_slot_curve_editor)
+{
+    Rig rig (Page::mod);
+    auto* panel = ModCurvePanelAccess::find (rig);
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    for (auto* c : panel->getChildren())
+        if (auto* b = dynamic_cast<juce::TextButton*> (c))
+            if (b->getButtonText() == "Custom")
+                b->onClick();
+    if (auto* ed = findChildOfType<RemapEditor> (*panel))
+    {
+        ed->applyPreset (4); // S curve
+        ed->commitNow();
+    }
+    rig.shot ("mod-slot-curve-phone", 390, 844, Page::mod);
+    rig.shot ("mod-slot-curve-tablet", 1024, 768, Page::mod);
 }

@@ -4,11 +4,11 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1594 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**1596 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
-| Master | 29 |
+| Master | 31 |
 | Osc 1 | 70 |
 | Osc 2 | 70 |
 | Osc 3 | 70 |
@@ -60,13 +60,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `master.volume` | Master Volume | -60 .. 6 dB (skew 2.5) | -12 dB | Master | mod | yes |
-| `master.polyphony` | Master Polyphony | 1 .. 32 voices (steps of 1) | 16 voices | Master |  |  |
+| `master.polyphony` | Master Polyphony | 1 .. 32 voices (steps of 1) | 16 voices | Master | mod |  |
 | `master.bend_range` | Master Pitch Bend Range | 0 .. 24 st (steps of 1) | 2 st | Master |  | yes |
 | `master.velocity_track` | Master Velocity Tracking | -100 .. 100 % | 100 % | Master |  |  |
 | `master.transpose` | Master Transpose | -48 .. 48 st (steps of 1) | 0 st | Master |  | yes |
 | `master.tune` | Master Tune | -100 .. 100 ct | 0 ct | Master | mod | yes |
 | `master.legato` | Master Legato | 0 Off, 1 On | Off | Master |  |  |
-| `master.portamento.time` | Portamento Time | 0 .. 8000 ms (skew 0.300000012) | 0 ms | Master / Portamento |  |  |
+| `master.portamento.time` | Portamento Time | 0 .. 8000 ms (skew 0.300000012) | 0 ms | Master / Portamento | mod |  |
 | `master.portamento.slope` | Portamento Slope | -8 .. 8 | 0 | Master / Portamento |  |  |
 | `master.portamento.always` | Portamento Always | 0 Off, 1 On | Off | Master / Portamento |  |  |
 | `master.portamento.scaled` | Portamento Scaled By Interval | 0 Off, 1 On | Off | Master / Portamento |  |  |
@@ -88,6 +88,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `master.bend_down_range` | Master Pitch Bend Down Range | 0 .. 24 st (steps of 1) | 2 st | Master |  |  |
 | `master.bend_down_link` | Master Pitch Bend Down Same As Up | 0 Off, 1 On | On | Master |  |  |
 | `master.stereo_spread` | Master Stereo Spread | 0 .. 100 % | 100 % | Master | mod |  |
+| `master.stereo_routing` | Master Stereo Routing | 0 .. 100 % | 100 % | Master / Voicing | mod |  |
+| `master.voice_override` | Master Voice Override | 0 Kill, 1 Steal | Kill | Master / Voicing |  |  |
 
 ### Osc 1
 
@@ -788,14 +790,14 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
-| `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..38 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..452 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 |  |  |
+| `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..39 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..519 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.stereo` | Mod NN Stereo (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.bypass` | Mod NN Bypass (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
-| `modNN.aux_source` | Mod NN Aux Source (NN = 01 .. 64) | 0 None, 1..38 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.aux_source` | Mod NN Aux Source (NN = 01 .. 64) | 0 None, 1..39 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_inv` | Mod NN Aux Invert (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_power` | Mod NN Aux Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_output` | Mod NN Output Scale (NN = 01 .. 64) | 0 .. 200 % | 100 % | Mod Matrix / Slot 01 |  |  |
@@ -1192,6 +1194,7 @@ Choice values of `modNN.source` (0 = None).
 | 36 | `slide` | Slide | unipolar |
 | 37 | `oct_note` | Oct Note | unipolar |
 | 38 | `poly_aftertouch` | Poly Aftertouch | unipolar |
+| 39 | `stereo` | Stereo | bipolar |
 
 ## Modulation destinations
 
@@ -1651,6 +1654,73 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 450 | `lfo8.swing` | LFO 8 Swing |
 | 451 | `lfo9.swing` | LFO 9 Swing |
 | 452 | `lfo10.swing` | LFO 10 Swing |
+| 453 | `master.stereo_routing` | Master Stereo Routing |
+| 454 | `mod01.amount` | Mod 01 Amount |
+| 455 | `mod02.amount` | Mod 02 Amount |
+| 456 | `mod03.amount` | Mod 03 Amount |
+| 457 | `mod04.amount` | Mod 04 Amount |
+| 458 | `mod05.amount` | Mod 05 Amount |
+| 459 | `mod06.amount` | Mod 06 Amount |
+| 460 | `mod07.amount` | Mod 07 Amount |
+| 461 | `mod08.amount` | Mod 08 Amount |
+| 462 | `mod09.amount` | Mod 09 Amount |
+| 463 | `mod10.amount` | Mod 10 Amount |
+| 464 | `mod11.amount` | Mod 11 Amount |
+| 465 | `mod12.amount` | Mod 12 Amount |
+| 466 | `mod13.amount` | Mod 13 Amount |
+| 467 | `mod14.amount` | Mod 14 Amount |
+| 468 | `mod15.amount` | Mod 15 Amount |
+| 469 | `mod16.amount` | Mod 16 Amount |
+| 470 | `mod17.amount` | Mod 17 Amount |
+| 471 | `mod18.amount` | Mod 18 Amount |
+| 472 | `mod19.amount` | Mod 19 Amount |
+| 473 | `mod20.amount` | Mod 20 Amount |
+| 474 | `mod21.amount` | Mod 21 Amount |
+| 475 | `mod22.amount` | Mod 22 Amount |
+| 476 | `mod23.amount` | Mod 23 Amount |
+| 477 | `mod24.amount` | Mod 24 Amount |
+| 478 | `mod25.amount` | Mod 25 Amount |
+| 479 | `mod26.amount` | Mod 26 Amount |
+| 480 | `mod27.amount` | Mod 27 Amount |
+| 481 | `mod28.amount` | Mod 28 Amount |
+| 482 | `mod29.amount` | Mod 29 Amount |
+| 483 | `mod30.amount` | Mod 30 Amount |
+| 484 | `mod31.amount` | Mod 31 Amount |
+| 485 | `mod32.amount` | Mod 32 Amount |
+| 486 | `mod33.amount` | Mod 33 Amount |
+| 487 | `mod34.amount` | Mod 34 Amount |
+| 488 | `mod35.amount` | Mod 35 Amount |
+| 489 | `mod36.amount` | Mod 36 Amount |
+| 490 | `mod37.amount` | Mod 37 Amount |
+| 491 | `mod38.amount` | Mod 38 Amount |
+| 492 | `mod39.amount` | Mod 39 Amount |
+| 493 | `mod40.amount` | Mod 40 Amount |
+| 494 | `mod41.amount` | Mod 41 Amount |
+| 495 | `mod42.amount` | Mod 42 Amount |
+| 496 | `mod43.amount` | Mod 43 Amount |
+| 497 | `mod44.amount` | Mod 44 Amount |
+| 498 | `mod45.amount` | Mod 45 Amount |
+| 499 | `mod46.amount` | Mod 46 Amount |
+| 500 | `mod47.amount` | Mod 47 Amount |
+| 501 | `mod48.amount` | Mod 48 Amount |
+| 502 | `mod49.amount` | Mod 49 Amount |
+| 503 | `mod50.amount` | Mod 50 Amount |
+| 504 | `mod51.amount` | Mod 51 Amount |
+| 505 | `mod52.amount` | Mod 52 Amount |
+| 506 | `mod53.amount` | Mod 53 Amount |
+| 507 | `mod54.amount` | Mod 54 Amount |
+| 508 | `mod55.amount` | Mod 55 Amount |
+| 509 | `mod56.amount` | Mod 56 Amount |
+| 510 | `mod57.amount` | Mod 57 Amount |
+| 511 | `mod58.amount` | Mod 58 Amount |
+| 512 | `mod59.amount` | Mod 59 Amount |
+| 513 | `mod60.amount` | Mod 60 Amount |
+| 514 | `mod61.amount` | Mod 61 Amount |
+| 515 | `mod62.amount` | Mod 62 Amount |
+| 516 | `mod63.amount` | Mod 63 Amount |
+| 517 | `mod64.amount` | Mod 64 Amount |
+| 518 | `master.portamento.time` | Portamento Time |
+| 519 | `master.polyphony` | Master Polyphony |
 
 ## Built-in wavetables and LFO shapes
 

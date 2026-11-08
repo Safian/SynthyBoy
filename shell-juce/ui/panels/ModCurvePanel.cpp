@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "../Panel.h"
 #include "ModLogic.h"
+#include "RemapEditor.h"
+#include "synthyboy/shapes/shape.h"
 
 #include <cmath>
 #include <cstdio>
@@ -37,14 +39,6 @@ public:
     }
 
     int getSlot() const noexcept { return slot; }
-
-    void setFreeDrawMode (bool freeDraw)
-    {
-        isFreeDraw = freeDraw;
-        repaint();
-    }
-
-    bool getFreeDrawMode() const noexcept { return isFreeDraw; }
 
     std::function<void (float)> onPowerChanged;
 
@@ -89,9 +83,37 @@ public:
         g.drawText ("In: 0", juce::Rectangle<float> (plotArea.getX(), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f)), juce::Justification::centredLeft, false);
         g.drawText ("1", juce::Rectangle<float> (plotArea.getRight() - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (16.0f), t.px (12.0f)), juce::Justification::centredRight, false);
 
+        // The drawn slot curve (content.modCurves) maps the source value first, the power curve follows (Vital's line mapping, then power)
+        const auto& c = ctx.host.content();
+        shapes::ShapeData customShape;
+        bool custom = false;
+        for (const auto& mc : c.modCurves)
+            if (mc.slot == slot + 1 && mc.points.size() >= 2)
+            {
+                customShape.numPoints = std::min<size_t> (mc.points.size(), shapes::ShapeData::kMaxPoints);
+                for (size_t pi = 0; pi < customShape.numPoints; ++pi)
+                {
+                    customShape.points[pi].x = mc.points[pi].x;
+                    customShape.points[pi].y = mc.points[pi].y;
+                    customShape.points[pi].curve = mc.points[pi].power;
+                    customShape.points[pi].smooth = false;
+                }
+                customShape.sanitize();
+                custom = true;
+                break;
+            }
+
+        const auto evaluateCurve = [&] (float inVal) -> float
+        {
+            float u = bipolar ? (inVal + 1.0f) * 0.5f : inVal;
+            if (custom)
+                u = customShape.evaluate (std::clamp (u, 0.0f, 1.0f));
+            return modPowerCurve (bipolar ? u * 2.0f - 1.0f : u, power, bipolar);
+        };
+
         // Power readout badge
         char pwrStr[32];
-        std::snprintf (pwrStr, sizeof pwrStr, "Power: %+.1f %s", power, isFreeDraw ? "(GAP: Free Draw)" : "");
+        std::snprintf (pwrStr, sizeof pwrStr, "Power: %+.1f%s", static_cast<double> (power), custom ? "  (+ slot curve)" : "");
         g.drawText (pwrStr, juce::Rectangle<float> (plotArea.getX() + t.px (4.0f), plotArea.getY() + t.px (4.0f), t.px (160.0f), t.px (14.0f)), juce::Justification::centredLeft, false);
 
         // Curve path
@@ -104,7 +126,7 @@ public:
         {
             const float normX = static_cast<float> (i) / static_cast<float> (steps);
             const float inputVal = bipolar ? (normX * 2.0f - 1.0f) : normX;
-            const float outVal = modPowerCurve (inputVal, power, bipolar);
+            const float outVal = evaluateCurve (inputVal);
 
             const float normY = bipolar ? ((outVal + 1.0f) * 0.5f) : outVal;
             const float px = plotArea.getX() + normX * w;
@@ -125,7 +147,7 @@ public:
         // Animated live modulation ball
         const float animT = 0.5f + 0.5f * std::sin (animPhase);
         const float liveIn = bipolar ? (animT * 2.0f - 1.0f) : animT;
-        const float liveOut = modPowerCurve (liveIn, power, bipolar);
+        const float liveOut = evaluateCurve (liveIn);
         const float liveNormY = bipolar ? ((liveOut + 1.0f) * 0.5f) : liveOut;
         const float ballX = plotArea.getX() + animT * w;
         const float ballY = plotArea.getBottom() - liveNormY * h;
@@ -199,7 +221,6 @@ private:
 
     UiContext& ctx;
     int slot = 0;
-    bool isFreeDraw = false;
     juce::Point<float> downPos;
     float startPower = 0.0f;
     bool dragging = false;
@@ -266,44 +287,34 @@ public:
         addAndMakeVisible (routingLabel);
 
         powerModeButton.setButtonText ("Power Crv");
-        powerModeButton.setClickingTogglesState (true);
+        powerModeButton.setTooltip ("Power curve of the connection (drag the graph up / down)");
+        powerModeButton.setClickingTogglesState (false);
         powerModeButton.setToggleState (true, juce::dontSendNotification);
-        powerModeButton.onClick = [this] {
-            curveView.setFreeDrawMode (false);
-            powerModeButton.setToggleState (true, juce::dontSendNotification);
-            freeDrawButton.setToggleState (false, juce::dontSendNotification);
-        };
+        powerModeButton.onClick = [this] { setCustomMode (false); };
         addAndMakeVisible (powerModeButton);
 
-        freeDrawButton.setButtonText ("Free Draw");
-        freeDrawButton.setClickingTogglesState (true);
-        freeDrawButton.setToggleState (false, juce::dontSendNotification);
-        freeDrawButton.onClick = [this] {
-            curveView.setFreeDrawMode (true);
-            freeDrawButton.setToggleState (true, juce::dontSendNotification);
-            powerModeButton.setToggleState (false, juce::dontSendNotification);
-        };
-        addAndMakeVisible (freeDrawButton);
-
-        gapBadge.setText ("GAP", juce::dontSendNotification);
-        gapBadge.setJustificationType (juce::Justification::centred);
-        gapBadge.setColour (juce::Label::backgroundColourId, ctx.theme.colours.warn);
-        gapBadge.setColour (juce::Label::textColourId, ctx.theme.colours.textOnAccent);
-        gapBadge.setFont (ctx.theme.font (ctx.theme.px (9.0f), true));
-        gapBadge.setTooltip ("Free-form multi-point remap curve is an engine GAP feature.");
-        addAndMakeVisible (gapBadge);
+        customButton.setButtonText ("Custom");
+        customButton.setTooltip ("Draw a free curve for this connection: it maps the source value before the amount (Vital line mapping)");
+        customButton.setClickingTogglesState (false);
+        customButton.setToggleState (false, juce::dontSendNotification);
+        customButton.onClick = [this] { setCustomMode (true); };
+        addAndMakeVisible (customButton);
 
         addAndMakeVisible (curveView);
         curveView.onPowerChanged = [this] (float) { repaint(); };
 
+        editor = std::make_unique<RemapEditor> (ctx, RemapEditor::ModCurveMode {}, 1);
+        editor->setVisible (false);
+        addChildComponent (*editor);
+
         updateRoutingDisplay();
     }
 
-    /** One bar: [<] slot [>] .. [GAP] [free draw] [power mode] routing. Narrower than that the right group drops to a second bar. */
+    /** One bar: [<] slot [>] .. [Custom] [Power Crv] routing. Narrower than that the right group drops to a second bar. */
     bool twoBars (int innerWidth) const
     {
         const auto& t = ctx.theme;
-        return innerWidth < 2 * t.touch() + t.ipx (70.0f) + 3 * t.gap() + t.ipx (34.0f) + 2 * t.touch() + t.ipx (78.0f) + t.ipx (74.0f) + t.ipx (60.0f);
+        return innerWidth < 2 * t.touch() + t.ipx (70.0f) + 2 * t.gap() + 2 * t.touch() + t.ipx (78.0f) + t.ipx (74.0f) + t.ipx (60.0f);
     }
 
     int preferredHeight (int width) const override
@@ -311,7 +322,7 @@ public:
         const int touch = ctx.theme.touch();
         const int gap = ctx.theme.gap();
         const int bars = twoBars (width - 4 * gap) ? 2 : 1;
-        const int visualH = ctx.theme.ipx (160.0f);
+        const int visualH = customMode && editor != nullptr ? editor->preferredHeight (width - 2 * gap) : ctx.theme.ipx (160.0f);
         const int controlsH = isMoreExpanded() ? ctx.theme.ipx (140.0f) : ctx.theme.ipx (70.0f);
         return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + controlsH + gap;
     }
@@ -338,24 +349,24 @@ public:
         topBar.removeFromLeft (gap);
 
         auto& right = two ? secondBar : topBar;
-        if (! two)
-        {
-            gapBadge.setBounds (right.removeFromRight (ctx.theme.ipx (34.0f)));
-            right.removeFromRight (ctx.theme.ipx (2.0f));
-        }
-        else
-        {
-            gapBadge.setBounds (topBar.removeFromRight (ctx.theme.ipx (34.0f)));
-        }
-        freeDrawButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (74.0f))));
+        customButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (74.0f))));
         right.removeFromRight (ctx.theme.ipx (2.0f));
         powerModeButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (78.0f))));
         right.removeFromRight (gap);
         routingLabel.setBounds (right);
 
         area.removeFromTop (gap);
-        const int visualH = ctx.theme.ipx (160.0f);
-        curveView.setBounds (area.removeFromTop (visualH));
+        if (customMode && editor != nullptr)
+        {
+            editor->setBounds (area.removeFromTop (editor->preferredHeight (area.getWidth())));
+            curveView.setBounds ({});
+        }
+        else
+        {
+            curveView.setBounds (area.removeFromTop (ctx.theme.ipx (160.0f)));
+            if (editor != nullptr)
+                editor->setBounds ({});
+        }
 
         area.removeFromTop (gap);
         layoutControls (area, false);
@@ -367,8 +378,40 @@ private:
         currentSlot = (currentSlot + delta + kNumModSlots) % kNumModSlots;
         slotLabel.setText (juce::String::formatted ("Slot #%02d", currentSlot + 1), juce::dontSendNotification);
         curveView.setSlot (currentSlot);
+        if (editor != nullptr)
+            editor->setModSlot (currentSlot + 1);
         updateRoutingDisplay();
     }
+
+public:
+    /** Custom: the drawn slot curve editor (RemapEditor in mod curve mode) replaces the power graph. */
+    void setCustomMode (bool on)
+    {
+        if (customMode == on)
+            return;
+        customMode = on;
+        powerModeButton.setToggleState (! on, juce::dontSendNotification);
+        customButton.setToggleState (on, juce::dontSendNotification);
+        curveView.setVisible (! on);
+        if (editor != nullptr)
+        {
+            editor->setVisible (on);
+            editor->setModSlot (currentSlot + 1);
+        }
+        if (auto* parent = getParentComponent())
+            parent->resized();
+        resized();
+    }
+    bool isCustomMode() const noexcept { return customMode; }
+    RemapEditor* curveEditor() noexcept { return editor.get(); }
+    int shownSlot() const noexcept { return currentSlot; }
+    void showSlot (int slotIndex0)
+    {
+        currentSlot = juce::jlimit (0, kNumModSlots - 1, slotIndex0);
+        stepSlot (0);
+    }
+
+private:
 
     void updateRoutingDisplay()
     {
@@ -393,8 +436,9 @@ private:
     juce::TextButton nextSlotButton;
     juce::Label routingLabel;
     juce::TextButton powerModeButton;
-    juce::TextButton freeDrawButton;
-    juce::Label gapBadge;
+    juce::TextButton customButton;
+    bool customMode = false;
+    std::unique_ptr<RemapEditor> editor;
 
     ModCurveView curveView;
 };
