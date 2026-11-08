@@ -9,7 +9,7 @@
 namespace synthyboy
 {
 constexpr size_t kMaxKnobsPerPage = 8;
-constexpr size_t kKickPageCount = 116;
+constexpr size_t kKickPageCount = 118;
 
 struct Page
 {

@@ -49,6 +49,10 @@ namespace sbvital {
       return right->state().midi_note - left->state().midi_note;
     }
 
+    force_inline int voiceCompareLowestVelocityFirst(Voice* left, Voice* right) {
+      return static_cast<int>((right->state().velocity - left->state().velocity) * 1024.0f);
+    }
+
     force_inline int voiceCompareHighestFirst(Voice* left, Voice* right) {
       return left->state().midi_note - right->state().midi_note;
     }
@@ -678,6 +682,9 @@ namespace sbvital {
         break;
       case kOldest:
         active_voices_.sort<voiceCompareNewestFirst>();
+        break;
+      case kVelocity:
+        active_voices_.sort<voiceCompareLowestVelocityFirst>();
         break;
       default:
         break;

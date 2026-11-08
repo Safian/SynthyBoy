@@ -24,6 +24,9 @@ namespace sbvital {
   class SmoothValue : public Value {
     public:
       static constexpr mono_float kSmoothCutoff = 5.0f;
+      // SynthyBoy: quality.no_smoothing. Per audio thread, set by the adapter before every block of an engine, so that one instance
+      // with the option on never changes the sound of another instance (a plugin host may run both on the same thread, one after the other).
+      static inline thread_local bool sBypassSmoothing = false;
 
       SmoothValue(mono_float value = 0.0f);
 

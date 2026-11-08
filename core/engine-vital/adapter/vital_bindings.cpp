@@ -96,6 +96,14 @@ std::vector<Binding> build()
     b.add ("master.transpose", "voice_transpose", Conv::linear);
     b.percent ("master.tune", "voice_tune");
     b.choice ("master.legato", "legato");
+    // master.voice.steal_priority uses the names and the sense of Serum 2 (Voice Steal Priority: the kind of voice that is NOT stolen),
+    // which is also Vital's voice_priority: Newest (default: the earliest note goes) -> kRoundRobin (4, the engine default, which keeps the
+    // list in the order of playing, so nothing changes), Oldest -> kOldest (1), Highest -> kHighest (2), Lowest -> kLowest (3),
+    // Velocity (the lowest velocity goes) -> kVelocity (5, ours)
+    static constexpr int kVoicePriorityMap[] = { 4, 1, 2, 3, 5 };
+    b.add ("master.voice.steal_priority", "voice_priority", Conv::indexMap, 1.0, 0.0, Cap::none, 0, kVoicePriorityMap);
+    b.choice ("master.poly_legato", "poly_legato");
+    b.percent ("master.stereo_spread", "master_stereo_spread");
     b.add ("master.portamento.time", "portamento_time", Conv::log2Ms, -10.0);
     b.add ("master.portamento.slope", "portamento_slope", Conv::linear);
     b.choice ("master.portamento.always", "portamento_force");
@@ -274,6 +282,7 @@ std::vector<Binding> build()
         b.add (k + "stereo", c + "stereo", Conv::linear, 1.0 / 360.0);
         b.add (k + "keytrack_transpose", c + "keytrack_transpose", Conv::linear);
         b.percent (k + "keytrack_tune", c + "keytrack_tune");
+        b.percent (k + "swing", c + "swing");
     }
     for (int n = 1; n <= 4; ++n)
     {
@@ -480,7 +489,11 @@ bool isSpecialParam (size_t paramIndex)
         // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
         || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"))
         // B13: noise sample choice (procedural noise buffers)
-        || std::strcmp (key, "noise.sample") == 0;
+        || std::strcmp (key, "noise.sample") == 0
+        // B15 (G12, G14, G18): handled by the adapter (note on handling, the bend wheel, the quality controls of the thread)
+        || std::strcmp (key, "master.voice.same_note") == 0
+        || std::strcmp (key, "master.bend_down_range") == 0 || std::strcmp (key, "master.bend_down_link") == 0
+        || std::strcmp (key, "quality.oversample_4x") == 0 || std::strcmp (key, "quality.no_smoothing") == 0;
 }
 
 double convertParam (const Binding& binding, double plain, double sampleRate, double bpm)

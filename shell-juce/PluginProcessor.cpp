@@ -51,6 +51,7 @@ SynthyBoyProcessor::SynthyBoyProcessor()
       engine (createShellEngine())
 {
     caps = engine->capabilities();
+    startTimerHz (20);
     const auto* table = synthyboy::paramTable();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
     {
@@ -177,8 +178,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout SynthyBoyProcessor::createPa
     return layout;
 }
 
+void SynthyBoyProcessor::timerCallback()
+{
+    if (! engine->needsPrepare())
+        return;
+    // an option that only a prepare () can apply (4x oversampling resizes buffers): sounding notes end, the rest of the sound is kept
+    const juce::ScopedLock lock (getCallbackLock());
+    prepareToPlay (preparedSampleRate, preparedBlockSize);
+}
+
 void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    preparedSampleRate = sampleRate;
+    preparedBlockSize = samplesPerBlock;
     events.resize (static_cast<size_t> (maxEventsPerBlock));
 
     const auto* table = synthyboy::paramTable();

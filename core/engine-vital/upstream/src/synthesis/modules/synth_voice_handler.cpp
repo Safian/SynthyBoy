@@ -211,9 +211,12 @@ namespace sbvital {
       createStatusOutput(prefix + "_frequency", lfo->output(LfoModule::kOscFrequency));
     }
 
+    Value* poly_legato = createBaseControl("poly_legato");
     for (int i = 0; i < kNumEnvelopes; ++i) {
       std::string prefix = std::string("env_") + std::to_string(i + 1);
       EnvelopeModule* envelope = new EnvelopeModule(prefix, i == 0);
+      envelope->setLegatoBus(&legato_buses_[i]);
+      envelope->plug(poly_legato, EnvelopeModule::kPolyLegato);
       envelope->plug(retrigger(), EnvelopeModule::kTrigger);
       envelope->plug(retrigger_always(), EnvelopeModule::kTriggerAlways);
       addSubmodule(envelope);
@@ -354,6 +357,9 @@ namespace sbvital {
   }
 
   void SynthVoiceHandler::process(int num_samples) {
+    for (PolyLegatoBus& bus : legato_buses_)
+      bus.beginBlock();
+
     poly_mask reset_mask = reset()->trigger_mask;
     if (reset_mask.anyMask())
       resetFeedbacks(reset_mask);

@@ -26,6 +26,15 @@ namespace sbvital {
   SmoothValue::SmoothValue(mono_float value) : Value(value), current_value_(value) { }
 
   void SmoothValue::process(int num_samples) {
+    if (sBypassSmoothing) {
+      current_value_ = value_;
+      poly_float* dest = output()->buffer;
+      for (int i = 0; i < num_samples; ++i)
+        dest[i] = value_;
+      enable(false);
+      return;
+    }
+
     if (utils::equal(current_value_, value_) && utils::equal(current_value_, output()->buffer[0]) &&
         utils::equal(current_value_, output()->buffer[num_samples - 1])) {
       enable(false);
@@ -69,6 +78,11 @@ namespace sbvital {
     SmoothValue::SmoothValue(mono_float value) : Value(value), current_value_(value) { }
 
     void SmoothValue::process(int num_samples) {
+      if (sbvital::SmoothValue::sBypassSmoothing) {
+        current_value_ = value_;
+        output()->buffer[0] = value_;
+        return;
+      }
       mono_float decay = futils::exp(-2.0f * kPi * kSmoothCutoff * num_samples / getSampleRate());
       current_value_ = utils::interpolate(value_, current_value_, decay);
       output()->buffer[0] = current_value_;

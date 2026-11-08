@@ -58,13 +58,20 @@ enum EngineCaps : EngineCapsMask
     // block B18 (osc-extras, 13-new-keys.md 4.18); bits 35 and 36 follow the B17 bits
     kCapSubOsc            = 1ull << 35, // G23: sub.* (sub oscillator)
     kCapNoiseExtras       = 1ull << 36, // G38: noise.sample / pitch / fine / phase / random_phase / keytrack / loop
+    // block B15 (voiceglb, 13-new-keys.md 4.14); bits 37 .. 42 follow the B18 bits
+    kCapVoiceSteal       = 1ull << 37, // G12: master.voice.same_note, master.voice.steal_priority
+    kCapPolyLegato       = 1ull << 38, // G13: master.poly_legato
+    kCapBendDownRange    = 1ull << 39, // G14: master.bend_down_range
+    kCapStereoSpread     = 1ull << 40, // G15: master.stereo_spread
+    kCapLfoSwing         = 1ull << 41, // G16: lfo1.swing .. lfo10.swing
+    kCapQualityOptions   = 1ull << 42, // G18: quality.oversample_4x, quality.no_smoothing
 };
 
 /** The bits of block B17. */
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = ((1ull << 30) - 1) | kCapFxExtrasAll | kCapSubOsc | kCapNoiseExtras;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 43) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

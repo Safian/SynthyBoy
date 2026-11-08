@@ -58,6 +58,8 @@ EngineCapsMask classify (const char* key) noexcept
         EngineCapsMask caps = n >= 9 ? kCapLfo910 : kCapNone;
         if (endsWith (key, ".mono") || endsWith (key, ".direction") || endsWith (key, ".host"))
             caps |= kCapLfoOptions;
+        if (endsWith (key, ".swing"))
+            caps |= kCapLfoSwing;
         return caps;
     }
     if (startsWith (key, "env"))
@@ -72,6 +74,16 @@ EngineCapsMask classify (const char* key) noexcept
         return kCapTuning;
     if (startsWith (key, "master.mpe."))
         return kCapMpe;
+    if (startsWith (key, "master.voice."))
+        return kCapVoiceSteal;
+    if (std::strcmp (key, "master.poly_legato") == 0)
+        return kCapPolyLegato;
+    if (startsWith (key, "master.bend_down_"))
+        return kCapBendDownRange;
+    if (std::strcmp (key, "master.stereo_spread") == 0)
+        return kCapStereoSpread;
+    if (startsWith (key, "quality."))
+        return kCapQualityOptions;
 
     if (startsWith (key, "osc"))
     {
@@ -250,6 +262,12 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapFxReverbAlgos:    return "fx_reverb_algos";
         case kCapSubOsc:           return "sub_osc";
         case kCapNoiseExtras:      return "noise_extras";
+        case kCapVoiceSteal:       return "voice_steal";
+        case kCapPolyLegato:       return "poly_legato";
+        case kCapBendDownRange:    return "bend_down_range";
+        case kCapStereoSpread:     return "stereo_spread";
+        case kCapLfoSwing:         return "lfo_swing";
+        case kCapQualityOptions:   return "quality_options";
         case kCapNone:             break;
     }
     return "";

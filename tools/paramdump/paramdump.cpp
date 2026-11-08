@@ -216,7 +216,14 @@ std::string deriveShortLabel (const ParamInfo& p)
             { "High Bypass", "High Byp" },
             { "Mid Bypass", "Mid Byp" },
             { "Side Bypass", "Side Byp" },
-            { "Scan Lock To Tempo", "Lock Tempo" }
+            { "Scan Lock To Tempo", "Lock Tempo" },
+            { "Same Note Mode", "Same Note" },
+            { "Voice Steal Priority", "Steal Prio" },
+            { "Poly Legato", "Poly Leg" },
+            { "Pitch Bend Down Range", "Bend Down" },
+            { "Stereo Spread", "Stereo Spd" },
+            { "4x Oversampling", "4x Over" },
+            { "No Smoothing", "No Smooth" }
         };
         for (const auto& a : abbrevs)
         {

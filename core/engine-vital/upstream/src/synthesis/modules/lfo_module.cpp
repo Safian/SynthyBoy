@@ -57,6 +57,8 @@ namespace sbvital {
     lfo_->plug(delay, SynthLfo::kDelay);
     lfo_->plug(createBaseControl(prefix_ + "_direction"), SynthLfo::kDirection);
     lfo_->plug(createBaseControl(prefix_ + "_host_lock"), SynthLfo::kHostLock);
+    Output* swing = createPolyModControl(prefix_ + "_swing");
+    lfo_->plug(swing, SynthLfo::kSwing);
   }
 
 

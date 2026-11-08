@@ -62,7 +62,7 @@ and that the value arrives in the engine's control.
 Quality tiers (`Quality`, core/include/synthyboy/quality.h) cap the converted values without touching the stored parameters:
 `master.polyphony` -> `min (polyphony, maxVoices)`, `oscN.unison.voices` -> `min (voices, maxUnison)`, an effect's `on` is 0 if the tier
 bypasses it, `smooth_interpolation` of the oscillators follows `Quality::interpolation`. `setQuality()` is a lock-free hand-off
-(atomics), taken over at the start of the next block; `Quality::oversampling` is applied by `prepare()` only (it sizes the buffers).
+(atomics), taken over at the start of the next block; `Quality::oversampling` and `quality.oversample_4x` are applied by `prepare()` only (they size the buffers); a change of the key makes `needsPrepare()` true and the shell prepares the engine again.
 
 **Determinism and latency.** `Quality::realtime` false (the default; offline renders, tests, bounces) makes the Convolve rebuild deterministic: the block that posts a rebuild, or follows a new impulse / sample rate, waits for the builder thread and takes the result over in that block, so a render equals itself bit for bit. `true` (the plugin shells in live playback) never waits. `IEngine::latencySamples()` reports Bode's Hilbert latency at the host rate; the engine delays every other path (voices into Main, buses, Direct, the bands of a splitter) so the output is the output without Bode, late by exactly that value.
 

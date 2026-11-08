@@ -98,6 +98,11 @@ public:
         a splitter, the voices that bypass the rack), so the whole output is late by this value and a host can compensate it. 0 without
         such an effect. It changes when Bode is switched on or off or moved to another rack. */
     virtual int latencySamples() const noexcept { return 0; }
+
+    /** True when a parameter changed that the engine can only apply in prepare() (engine-vital: quality.oversample_4x resizes the buffers
+        of the effects and the voices, which must not happen on the audio thread). Any thread, lock free. The shell then prepares the engine
+        again on a thread that may allocate (JUCE: the message thread with the processing suspended; CLAP: request_restart). */
+    virtual bool needsPrepare() const noexcept { return false; }
 };
 
 /** The engine written for this project (always built; the only engine on iOS). */

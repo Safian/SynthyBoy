@@ -279,6 +279,7 @@ namespace sbvital {
         kHighest,
         kLowest,
         kRoundRobin,
+        kVelocity,     // SynthyBoy: Serum 2 "Velocity": the voice with the lowest note on velocity is stolen first
         kNumVoicePriorities
       };
 

@@ -111,6 +111,7 @@ namespace sbvital {
   force_inline void SynthLfo::processTrigger() {
     int sync_type = input(kSyncType)->at(0)[0];
     direction_ = static_cast<int>(utils::clamp(std::round(input(kDirection)->at(0)[0]), 0.0f, 2.0f));
+    swing_ = utils::clamp(input(kSwing)->at(0)[0], 0.0f, 1.0f);
     poly_mask reset_mask = getResetMask(kNoteTrigger);
     poly_mask release_mask = getReleaseMask();
     poly_int trigger_offset = input(kNoteTrigger)->source->trigger_offset;

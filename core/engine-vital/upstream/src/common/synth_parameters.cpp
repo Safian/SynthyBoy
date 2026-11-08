@@ -106,6 +106,8 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Legato", strings::kOffOnNames },
     { "voice_phase_legato", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Voice Phase Legato", strings::kOffOnNames },
+    { "poly_legato", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Poly Legato", strings::kOffOnNames },
     { "macro_control_1", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Macro 1", nullptr },
     { "macro_control_2", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
@@ -134,6 +136,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Voice Amplitude", nullptr },
     { "stereo_routing", 0x000000, 0.0, 1.0, 1.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Stereo Routing", nullptr },
+    { "master_stereo_spread", 0x000000, 0.0, 1.0, 1.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Master Stereo Spread", nullptr },
     { "stereo_mode", 0x000605, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Stereo Mode", strings::kStereoModeNames },
     { "portamento_time", 0x000000, -10.0, 4.0, -10.0, 0.0, 1.0,
@@ -412,6 +416,8 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Direction", nullptr },
     { "host_lock", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Host Lock", strings::kOffOnNames },
+    { "swing", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Swing", nullptr },
   };
 
   const ValueDetails ValueDetailsLookup::random_lfo_parameter_list[] = {

@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include "envelope.h"
 #include "synth_module.h"
 #include "producers_module.h"
 #include "voice_handler.h"
@@ -106,6 +107,8 @@ namespace sbvital {
 
       LfoModule* lfos_[kNumLfos];
       EnvelopeModule* envelopes_[kNumEnvelopes];
+      PolyLegatoBus legato_buses_[kNumEnvelopes]; // SynthyBoy: master.poly_legato, one bus per envelope
+
 
       Output note_retriggered_;
 

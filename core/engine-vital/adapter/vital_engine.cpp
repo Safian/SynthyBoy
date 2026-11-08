@@ -34,6 +34,7 @@
 #include "sample_source.h"
 #include "serum_filter_bank.h"
 #include "serum_fx_modules.h"
+#include "smooth_value.h"
 #include "sound_engine.h"
 #include "synth_lfo.h"
 #include "synth_oscillator.h"
@@ -481,6 +482,13 @@ public:
         reset();
     }
 
+    bool needsPrepare() const noexcept override { return oversample4xOn() != preparedOversample4x; }
+
+    bool oversample4xOn() const noexcept
+    {
+        return oversample4xParam >= 0 && params[static_cast<size_t> (oversample4xParam)].load (std::memory_order_relaxed) > 0.5f;
+    }
+
     void setQuality (const Quality& q) noexcept override
     {
         setQualityValues (q);
@@ -605,7 +613,8 @@ public:
              | kCapWtRemap | kCapFxLevel | kCapCleanMode // VERIFY: the three B16 bits stay only if the on / off renders of test_wtremap.cpp differ
              | kCapPitchUnison
              | kCapFxExtrasAll // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
-             | kCapSubOsc | kCapNoiseExtras; // block B18: proven by core/engine-vital/tests/test_oscextra.cpp
+             | kCapSubOsc | kCapNoiseExtras // block B18: proven by core/engine-vital/tests/test_oscextra.cpp
+             | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions;
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -835,7 +844,9 @@ private:
         engine->setBpm (120.0f);
         controlMap = engine->getControls();
         // the oversampling of the tier is fixed for the life of the buffers (IEngine::setQuality)
-        setControl ("oversampling", qOversampling.load() >= 2 ? 1.0f : 0.0f);
+        // quality.oversample_4x is part of that: it is read here and applied by the next prepare () (needsPrepare ())
+        preparedOversample4x = oversample4xOn();
+        setControl ("oversampling", preparedOversample4x ? 2.0f : (qOversampling.load() >= 2 ? 1.0f : 0.0f));
         engine->checkOversampling();
         engine->updateAllModulationSwitches();
         controlMap = engine->getControls();
@@ -1006,6 +1017,11 @@ private:
         mpeOnParam = find ("master.mpe.on");
         mpeRangeParam = find ("master.mpe.bend_range");
         reverbForceParam = find ("reverb.force_enable");
+        sameNoteParam = find ("master.voice.same_note");
+        bendDownRangeParam = find ("master.bend_down_range");
+        bendDownLinkParam = find ("master.bend_down_link");
+        oversample4xParam = find ("quality.oversample_4x");
+        noSmoothingParam = find ("quality.no_smoothing");
     }
 
     /** The tables of the modulation matrix: sources, destinations, the 64 connection processors. Everything the audio thread needs
@@ -1093,6 +1109,10 @@ private:
 
         applyScaleAndTuning (force); // first: the concert pitch it computes is added to the transposition below
         applyWavetables();           // before the bindings: the frame scale of a user table
+
+        // quality.no_smoothing
+        const bool noSmoothing = noSmoothingParam >= 0 && params[static_cast<size_t> (noSmoothingParam)].load (std::memory_order_relaxed) > 0.5f;
+        sbvital::SmoothValue::sBypassSmoothing = noSmoothing;
 
         const bool bpmChanged = appliedBpm != transport.bpm;
         // Q27 / WP8: "reverb.force_enable" keeps the reverb running although the tier masks it out (the user trades polyphony for it)
@@ -1690,13 +1710,17 @@ private:
             applyMpeBends();
         else if (changedMode)
             for (int c = 0; c < numChannels; ++c) // back to the plain per-channel wheel
-                engine->setPitchWheel (rawBend[static_cast<size_t> (c)] * masterBendRange() / kVitalLocalBendRange, c);
+                engine->setPitchWheel (rawBend[static_cast<size_t> (c)] * masterBendRange (rawBend[static_cast<size_t> (c)]) / kVitalLocalBendRange, c);
     }
 
     bool mpeOn() const noexcept { return mpeOnParam >= 0 && params[static_cast<size_t> (mpeOnParam)].load (std::memory_order_relaxed) > 0.5f; }
 
-    float masterBendRange() const noexcept
+    float masterBendRange (float bend = 1.0f) const noexcept
     {
+        // master.bend_down_link On (the default): the wheel has one range, both ways, as in version 2
+        if (bend < 0.0f && bendDownRangeParam >= 0 && bendDownLinkParam >= 0
+            && params[static_cast<size_t> (bendDownLinkParam)].load (std::memory_order_relaxed) < 0.5f)
+            return params[static_cast<size_t> (bendDownRangeParam)].load (std::memory_order_relaxed);
         return bendRangeParam >= 0 ? params[static_cast<size_t> (bendRangeParam)].load (std::memory_order_relaxed) : 2.0f;
     }
 
@@ -1704,7 +1728,7 @@ private:
     void applyMpeBends() noexcept
     {
         const float memberRange = mpeRangeParam >= 0 ? params[static_cast<size_t> (mpeRangeParam)].load (std::memory_order_relaxed) : 48.0f;
-        const float managerBend = rawBend[0] * masterBendRange();
+        const float managerBend = rawBend[0] * masterBendRange (rawBend[0]);
         for (int c = 0; c < numChannels; ++c)
             engine->setChannelPitchBend (c, managerBend + (c == 0 ? 0.0f : rawBend[static_cast<size_t> (c)] * memberRange));
     }
@@ -1920,12 +1944,19 @@ private:
                 }
                 if (std::isnan (noteTable[static_cast<size_t> (key)]))
                     return; // a key the tuning does not map (a .kbm "x" entry) does not sound
+
+                const int sameNoteMode = sameNoteParam >= 0 ? static_cast<int> (params[static_cast<size_t> (sameNoteParam)].load (std::memory_order_relaxed)) : 0;
+                const bool alreadyPlaying = activeKey[static_cast<size_t> (channel)][static_cast<size_t> (e.key)] >= 0;
+                if (sameNoteMode == 2 && alreadyPlaying)
+                    return; // Ignore mode: do not retrigger if key is already active
+
                 if (! keysHeld())
                     ++noteGroup->group; // the first note of a new group restarts the mono LFOs
                 activeKey[static_cast<size_t> (channel)][static_cast<size_t> (e.key)] = static_cast<int8_t> (key);
                 noteGroup->held = true;
-                // hitting a key that still rings lets the old note fade out first (as the own engine does)
-                engine->noteOff (key, 0.0f, 0, channel);
+
+                if (sameNoteMode == 0) // Steal
+                    engine->noteOff (key, 0.0f, 0, channel);
                 engine->noteOn (key, velocity, 0, channel);
                 rememberNoteId (e.noteId, key, channel);
                 break;
@@ -1976,7 +2007,7 @@ private:
                 if (mpeOn())
                     applyMpeBends(); // master.mpe.on: the member channel's bend range, the manager channel moves every note
                 else
-                    engine->setPitchWheel (bend * masterBendRange() / kVitalLocalBendRange, channel);
+                    engine->setPitchWheel (bend * masterBendRange (bend) / kVitalLocalBendRange, channel);
                 engine->setZonedPitchWheel (bend, channel, channel);
                 break;
             }
@@ -2050,12 +2081,30 @@ private:
     {
         const auto* out = reinterpret_cast<const sbvital::mono_float*> (engine->output (0)->buffer);
         constexpr int stride = static_cast<int> (sbvital::poly_float::kSize);
+        // master.stereo_spread (with its modulation): mid / side width of the finished mix, 1 = the version 2 sound
+        const float spread = clampf (engine->masterStereoSpread()->buffer[0][0], 0.0f, 1.0f);
+
         if (right != nullptr)
         {
-            for (int i = 0; i < n; ++i)
+            if (spread >= 0.9999f)
             {
-                left[i] = out[stride * i];
-                right[i] = out[stride * i + 1];
+                for (int i = 0; i < n; ++i)
+                {
+                    left[i] = out[stride * i];
+                    right[i] = out[stride * i + 1];
+                }
+            }
+            else
+            {
+                for (int i = 0; i < n; ++i)
+                {
+                    const float l = out[stride * i];
+                    const float r = out[stride * i + 1];
+                    const float mid = 0.5f * (l + r);
+                    const float side = 0.5f * (l - r);
+                    left[i] = mid + spread * side;
+                    right[i] = mid - spread * side;
+                }
             }
         }
         else
@@ -2139,6 +2188,9 @@ private:
     int noiseSampleParam = -1;
     int appliedNoiseSample = 0;
     sbvital::Sample* noiseSample_ = nullptr;
+    int sameNoteParam = -1, bendDownRangeParam = -1, bendDownLinkParam = -1;
+    int oversample4xParam = -1, noSmoothingParam = -1;
+    bool preparedOversample4x = false;
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;
     sbvital::Value* vFilter2Input = nullptr;

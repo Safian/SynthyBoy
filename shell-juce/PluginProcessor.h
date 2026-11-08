@@ -40,7 +40,8 @@
  * IEngine::setParam each block (only the parameters whose value changed), and the state blob is synthyboy::saveState().
  */
 class SynthyBoyProcessor final : public juce::AudioProcessor,
-                                 public synthyboy::ui::UiHost
+                                 public synthyboy::ui::UiHost,
+                                 private juce::Timer
 {
 public:
     /** Capacity of the per-block event list (allocated in prepareToPlay); further events of a block are dropped and counted. */
@@ -118,6 +119,11 @@ public:
     uint32_t getDroppedEventCount() const noexcept { return droppedEvents.load(); }
 
 private:
+    /** Message thread, 20 Hz: IEngine::needsPrepare () (quality.oversample_4x) -> prepare the engine again with the processing suspended. */
+    void timerCallback() override;
+    double preparedSampleRate = 44100.0;
+    int preparedBlockSize = 512;
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     synthyboy::ParamValues currentValues() const;

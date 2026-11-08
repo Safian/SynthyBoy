@@ -23,14 +23,14 @@ NOT_EXPOSED = [
     ("Spectral unison switch", "not exposed: always on (the engine default)."),
     ("Per-oscillator smooth interpolation switch", "not a parameter: it is the quality tier's wavetable interpolation "
                                                    "(linear on Low and Medium, spectral on High)."),
-    ("Oversampling", "not a parameter: it is the quality tier's (1x on Low, 2x otherwise)."),
+    ("Oversampling", "the quality tier's (1x on Low, 2x otherwise); `quality.oversample_4x` raises it to 4x on any tier."),
     ("Stereo mode / routing, view settings, MPE, bypass, tempo control", "not exposed: host / UI business, not sound design."),
     ("Mod sources lift, slide, stereo, note-in-octave", "not exposed: the event contract has no lift/slide and the matrix list "
                                                         "is the one of docs/ARCHITECTURE.md 3.5."),
     ("Line-map curve of a modulation slot", "not exposed: free-form curve editing (the slot keeps the linear map); the "
                                             "'curve' parameter (power) is exposed."),
-    ("Voice priority / override, keytracked portamento options beyond the four listed", "not exposed: voice stealing is "
-                                                                                       "'oldest' (documented in core/engine-vital/README.md)."),
+    ("Voice priority / override, keytracked portamento options beyond the four listed", "voice priority is `master.voice.steal_priority` "
+                                                                                       "(oldest / lowest / newest); voice override stays 'kill'."),
 ]
 
 UNIT_LABEL = {"none": "", "dB": "dB", "Hz": "Hz", "ms": "ms", "percent": "%", "semitone": "st", "cents": "ct",

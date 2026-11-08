@@ -1,6 +1,6 @@
 # MANUALCHECK - the earlier assumptions against the Serum 2 manual
 
-Branch `work-manualcheck` (from `develop`). The manual is `docs/ui-design/_manuals/serum2/Serum2-Manual.txt` (gitignored, read by absolute path, never committed; page numbers below are the pages of the user guide). Earlier workers had no access to it. No key was added, moved or renamed (the block at table position 1576 belongs to another worker); changed are behaviours, defaults of unreleased keys, one choice list (appended), labels, UI, tests and docs. Spec text: `13-new-keys.md` 4.19 (summary table) and the sections named below. Morning questions: rows 19, 20, 21, 22, 27 updated, 28 and 29 new.
+Branch `work-manualcheck` (from `develop`). The manual is `docs/ui-design/_manuals/serum2/Serum2-Manual.txt` (gitignored, read by absolute path, never committed; page numbers below are the pages of the user guide). Earlier workers had no access to it. No key was added, moved or renamed (the block at table position 1576 belongs to another worker); changed are behaviours, defaults of unreleased keys, one choice list (appended), labels, UI, tests and docs. Spec text: `13-new-keys.md` 4.20 (summary table) and the sections named below. Morning questions: rows 19, 20, 21, 22, 27 updated, 31 and 32 new.
 
 ## 1. Mismatches found and fixed
 
@@ -27,7 +27,7 @@ Factory presets: the 112 files store every key, so the changed defaults of unuse
 
 Sub waveform list (Sine, Rounded Rect, Triangle, Saw, Square, Pulse), OCT, pan, level, Direct / Main / None. Noise: White / Pink / Brown / Geiger names and their descriptions, loop default On with the one-shot switch, START, RAND, PITCH (the default 50 % = the original pitch is our 0 semitones), FINE, PAN, LEVEL, keytrack. Compressor: Single / Multiband (= `compressor.bands`), X-LOW / X-HIGH, band gains, Limiter Latency Comp. Delay HQ, Trip 1.333 / Dot 1.5 snaps of the scalar offset, FILTER. Distortion: the 13 types, OFF / PRE / POST filter order, filter key track. Phaser PHASE (50 % = 180 degrees). Reverb type names and order (Plate, Hall, Vintage, Nitrous, Basin). Pitch mode names (Semitones, Harmonics, Ratio, Step), unison laws (Linear, Super, Exp, Inv, Random), phase memory (All Voices, Contiguous, Per Voice), per-FX LEVEL (exists on every module), Phase Legato.
 
-## 3. Differences that stay (documented, morning question 28)
+## 3. Differences that stay (documented, morning question 31)
 
 Compressor limit: fixed 1.5 ms look-ahead (manual: attack 0-10 ms, makeup 36 dB), threshold -80 .. 0 dB (manual 0 .. -120 dB). Phaser rate 0.04 .. 4 Hz (manual 0 .. 20 Hz); POLES is the existing `phaser.blend` (4 / 8 / 12 stages); its key name is frozen by the first 880 keys. Reverb: all five algorithms are our own (the manual: Plate and Hall are a modified Tal Reverb, nothing else is described), default type Vital (manual Plate), WIDTH on every type (manual: Plate only), FEEDBACK of Nitrous / Basin is the `decay` time. Pitch modes act on the CRS slot (`pitch_coarse`), not on OCT / SEM, and Ratio has no SRC. Defaults that would change the 112 presets: osc B / C / noise destination (manual MAIN, ours Filter 1), unison blend 80 % (manual 75 %), distortion type (manual Tube, ours Soft clip). The drive knob of the distortion is not relabelled MORPH for the X-Shaper types (no dynamic label in the kit); the editor says it.
 

@@ -206,6 +206,8 @@ public:
     std::vector<std::string> keys() const override
     {
         return { "master.polyphony",
+                 "quality.oversample_4x",
+                 "quality.no_smoothing",
                  "reverb.force_enable",
                  "main.fx_bypass",
                  "bus1.fx_bypass",
@@ -214,11 +216,13 @@ public:
 
     void build() override
     {
-        // 3 primary controls, 2 behind More
+        // 4 primary controls (the two quality options of B15 are what this panel is about), 3 behind More
         addControl ("master.polyphony");
+        addControl ("quality.oversample_4x");
+        addControl ("quality.no_smoothing");
         addControl ("reverb.force_enable");
-        addControl ("main.fx_bypass");
 
+        addMoreControl ("main.fx_bypass");
         addMoreControl ("bus1.fx_bypass");
         addMoreControl ("bus2.fx_bypass");
     }

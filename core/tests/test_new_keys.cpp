@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (1576));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras)
+    CHECK_EQ (paramCount(), static_cast<size_t> (1594));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
     CHECK_EQ (kNumModSources, 38);
-    CHECK_EQ (kNumModDestinations, 442);
+    CHECK_EQ (kNumModDestinations, 453);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (38));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (441));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (452));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (441));
-    CHECK_EQ (newModulatable, static_cast<size_t> (172)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18
+    CHECK_EQ (modulatable, static_cast<size_t> (452));
+    CHECK_EQ (newModulatable, static_cast<size_t> (183)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18 + 11 of B15
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (1576));
+    CHECK_EQ (ids.size(), static_cast<size_t> (1594));
 }
 
 TEST (append_positions_golden)
@@ -137,6 +137,10 @@ TEST (append_positions_golden)
         { "compressor.limit", 1544 }, { "reverb.diff_b", 1557 }, // B17
         { "sub.on", 1558 }, { "sub.bus2_send", 1568 }, // B18 (osc-extras)
         { "noise.sample", 1569 }, { "noise.loop", 1575 },
+        // B15 (voiceglb): voice steal, poly legato, bend down, stereo spread, LFO swing, quality options (behind B18)
+        { "master.voice.same_note", 1576 }, { "master.bend_down_link", 1580 }, { "master.stereo_spread", 1581 },
+        { "lfo1.swing", 1582 }, { "lfo10.swing", 1591 },
+        { "quality.oversample_4x", 1592 }, { "quality.no_smoothing", 1593 },
     };
     for (const auto& e : expected)
         if (! CHECK_EQ (positionOf (e.key), e.position))
@@ -219,8 +223,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (39));
         CHECK_EQ (byKey (key).max, 38.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (442));
-    CHECK_EQ (byKey ("mod64.destination").max, 441.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (453));
+    CHECK_EQ (byKey ("mod64.destination").max, 452.0f);
 
     // MANUALCHECK: the delay mode Tap->Delay of Serum 2 (manual p.166) is appended to the four Vital styles
     {
@@ -433,7 +437,7 @@ TEST (engines_ignore_the_new_keys)
             {
                 const auto s = modSlotParams (k);
                 e->setParam (t[s.source].id, static_cast<float> (29 + k % 10));
-                e->setParam (t[s.destination].id, static_cast<float> (270 + k % 144));
+                e->setParam (t[s.destination].id, static_cast<float> (270 + k % 183));
             }
             const auto out = sbtest::render (*e, { sbtest::noteOn (0, 60, 0.9f), sbtest::noteOn (100, 64, 0.9f) }, 4800, 256);
             CHECK (sbtest::allFinite (out.left) && sbtest::allFinite (out.right));

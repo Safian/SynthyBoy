@@ -104,6 +104,8 @@ constexpr const char* const kPhaseMemories[] = { "All Voices", "Contiguous", "Pe
 // B17: reverb algorithms and room modes (13-new-keys.md 4.17, G77)
 constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
 constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
+constexpr const char* const kSameNoteModes[] = { "Steal", "Stack", "Ignore" };
+constexpr const char* const kVoiceStealPriorities[] = { "Newest", "Oldest", "Highest", "Lowest", "Velocity" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -745,11 +747,31 @@ constexpr ParamInfo kRaw[] = {
     onOff ("noise.random_phase", "Noise Random Phase", "Noise", false),
     onOff ("noise.keytrack", "Noise Keytrack", "Noise", false),
     onOff ("noise.loop", "Noise Loop", "Noise", true),
+
+    // --- B15: voice-global (G12, G13, G14, G15, G16, G18) (positions 1576..1593) ---------------------------------------------------------
+    pick ("master.voice.same_note", "Master Same Note Mode", "Master / Voicing", kSameNoteModes, 0),
+    pick ("master.voice.steal_priority", "Master Voice Steal Priority", "Master / Voicing", kVoiceStealPriorities, 0),
+    onOff ("master.poly_legato", "Master Poly Legato", "Master", false),
+    whole ("master.bend_down_range", "Master Pitch Bend Down Range", "Master", 0.0f, 24.0f, 2.0f, Unit::semitone, kAuto),
+    onOff ("master.bend_down_link", "Master Pitch Bend Down Same As Up", "Master", true), // On: down = master.bend_range (version 2 sound)
+    SB_PCT ("master.stereo_spread", "Master Stereo Spread", "Master", 100.0f, kMod),
+    SB_PCT ("lfo1.swing", "LFO 1 Swing", "LFO 1", 0.0f, kMod),
+    SB_PCT ("lfo2.swing", "LFO 2 Swing", "LFO 2", 0.0f, kMod),
+    SB_PCT ("lfo3.swing", "LFO 3 Swing", "LFO 3", 0.0f, kMod),
+    SB_PCT ("lfo4.swing", "LFO 4 Swing", "LFO 4", 0.0f, kMod),
+    SB_PCT ("lfo5.swing", "LFO 5 Swing", "LFO 5", 0.0f, kMod),
+    SB_PCT ("lfo6.swing", "LFO 6 Swing", "LFO 6", 0.0f, kMod),
+    SB_PCT ("lfo7.swing", "LFO 7 Swing", "LFO 7", 0.0f, kMod),
+    SB_PCT ("lfo8.swing", "LFO 8 Swing", "LFO 8", 0.0f, kMod),
+    SB_PCT ("lfo9.swing", "LFO 9 Swing", "LFO 9", 0.0f, kMod),
+    SB_PCT ("lfo10.swing", "LFO 10 Swing", "LFO 10", 0.0f, kMod),
+    onOff ("quality.oversample_4x", "Quality 4x Oversampling", "Quality", false),
+    onOff ("quality.no_smoothing", "Quality No Smoothing", "Quality", false),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1576, "880 keys of state version 2 plus the 696 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18)");
+static_assert (kCount == 1594, "880 keys of state version 2 plus the 714 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15)");
 
 struct Table
 {

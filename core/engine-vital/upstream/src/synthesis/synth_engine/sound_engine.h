@@ -111,6 +111,7 @@ namespace sbvital {
       void sostenutoOnRange(int from_channel, int to_channel);
       void sostenutoOffRange(int sample, int from_channel, int to_channel);
       force_inline int getOversamplingAmount() const { return last_oversampling_amount_; }
+      Output* masterStereoSpread() const noexcept { return master_stereo_spread_; }
 
       void checkOversampling();
 
@@ -120,6 +121,7 @@ namespace sbvital {
       SynthVoiceHandler* voice_handler_;
       ReorderableEffectChain* effect_chain_;
       Add* output_total_;
+      Output* master_stereo_spread_ = nullptr;
 
       int last_oversampling_amount_;
       int last_sample_rate_;
