@@ -62,13 +62,14 @@ namespace sbvital {
         kDrive,        // dB, 0 .. 20
         kBlend,        // 0 .. 2
         kVar,          // 0 .. 1
-        kModel,        // filter model of the table: 8 .. 21
+        kModel,        // filter model of the table: 8 .. 26
         kStyle,        // style inside the model
         kNumInputs
       };
 
       static constexpr int kFirstModel = 8;
-      static constexpr int kLastModel = 21;
+      static constexpr int kLastModel = 26;
+      static constexpr int kNumModels = 19;
 
       SerumFilterBank();
       SerumFilterBank(const SerumFilterBank& other);

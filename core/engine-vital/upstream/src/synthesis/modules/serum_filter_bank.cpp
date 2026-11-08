@@ -23,8 +23,8 @@ namespace sbvital {
       FilterType types[12];
     };
 
-    // docs/ui-design/13-new-keys.md 4.11: the model of the table (8 + index) -> the types of its styles
-    const ModelTypes kModels[14] = {
+    // docs/ui-design/13-new-keys.md 4.11 & 4.21: the model of the table (8 + index) -> the types of its styles
+    const ModelTypes kModels[19] = {
       { 12, { FilterType::LH, FilterType::LB, FilterType::LP, FilterType::LN, FilterType::HB, FilterType::HP, FilterType::HN, FilterType::BP,
               FilterType::BN, FilterType::PP, FilterType::PN, FilterType::NN } },                                          // 8  Multi SVF
       { 6, { FilterType::MGLow6, FilterType::MGLow18, FilterType::Low6, FilterType::Low18, FilterType::High6, FilterType::High18 } }, // 9  Slope
@@ -40,6 +40,15 @@ namespace sbvital {
       { 1, { FilterType::Diffusor } },                                                                                      // 19 Diffusor
       { 1, { FilterType::EMSLadder } },                                                                                     // 20 EMS Ladder
       { 1, { FilterType::PZSVF } },                                                                                         // 21 PZ SVF
+      { 12, { FilterType::MGLow12, FilterType::MGLow24, FilterType::Low12, FilterType::Low24, FilterType::High12, FilterType::High24,
+              FilterType::Band12, FilterType::Band24, FilterType::Peak12, FilterType::Peak24, FilterType::Notch12, FilterType::Notch24 } }, // 22 Normal
+      { 4, { FilterType::LBH, FilterType::LPH, FilterType::LNH, FilterType::BPN } },                                       // 23 Multi Morph
+      { 9, { FilterType::CmbL, FilterType::FlgL, FilterType::PhsL, FilterType::CmbH, FilterType::FlgH, FilterType::PhsH,
+             FilterType::CmbHL, FilterType::FlgHL, FilterType::PhsHL } },                                                  // 24 Flanges
+      { 12, { FilterType::LowEQ12, FilterType::BandEQ12, FilterType::HighEQ12, FilterType::GermanLP,
+              FilterType::FormantI, FilterType::FormantII, FilterType::FormantIII, FilterType::Bandreject,
+              FilterType::DistComb1LP, FilterType::DistComb1BP, FilterType::DistComb2LP, FilterType::DistComb2BP } },       // 25 Misc
+      { 6, { FilterType::MGLadder, FilterType::AcidLadder, FilterType::MGDirty, FilterType::Comb2, FilterType::ExpMM, FilterType::ExpBPF } }, // 26 New
     };
   } // namespace
 
@@ -129,7 +138,7 @@ namespace sbvital {
   }
 
   int SerumFilterBank::filterTypeOf(int model, int style) {
-    const int index = std::max(0, std::min(13, model - kFirstModel));
+    const int index = std::max(0, std::min(18, model - kFirstModel));
     const ModelTypes& m = kModels[index];
     return static_cast<int>(m.types[std::max(0, std::min(m.count - 1, style))]);
   }
@@ -205,11 +214,13 @@ namespace sbvital {
   void SerumFilterBank::process(int num_samples) {
     if (num_samples > kScratch)
       return;
-    if (static_cast<int>(input(kModel)->at(0)[0] + 0.5f) == kLastModel && curve_->num_bells > 0) {
+    const int model = static_cast<int>(input(kModel)->at(0)[0] + 0.5f);
+    const int style = static_cast<int>(input(kStyle)->at(0)[0] + 0.5f);
+    const int type = filterTypeOf(model, style);
+    if (type == static_cast<int>(FilterType::PZSVF) && curve_->num_bells > 0) {
       processCurve(num_samples);   // PZ SVF with a drawn curve
       return;
     }
-    const int type = filterTypeOf(static_cast<int>(input(kModel)->at(0)[0] + 0.5f), static_cast<int>(input(kStyle)->at(0)[0] + 0.5f));
     const poly_float* audio = input(kAudio)->source->buffer;
     const poly_float* note = input(kMidiCutoff)->source->buffer;
     poly_float* out = output()->buffer;

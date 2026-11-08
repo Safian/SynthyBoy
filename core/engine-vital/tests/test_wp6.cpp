@@ -94,6 +94,30 @@ const Style kTypes[] = {
     { 14, 0, "French LP" }, { 15, 0, "Add Bass" }, { 16, 0, "Scream LP" }, { 16, 1, "Scream BP" },
     { 17, 0, "New Wsp" }, { 18, 0, "DJ Mixer" }, { 19, 0, "Diffusor" }, { 20, 0, "EMS Ladder" }, { 21, 0, "PZ SVF" },
 };
+
+// WP-03 (FILTERS80): the remaining 43 Serum filter types mapped to models 22..26
+const Style kNewTypes43[] = {
+    // Model 22: Normal (12)
+    { 22, 0, "MG Low 12" }, { 22, 1, "MG Low 24" }, { 22, 2, "Low 12" }, { 22, 3, "Low 24" },
+    { 22, 4, "High 12" }, { 22, 5, "High 24" }, { 22, 6, "Band 12" }, { 22, 7, "Band 24" },
+    { 22, 8, "Peak 12" }, { 22, 9, "Peak 24" }, { 22, 10, "Notch 12" }, { 22, 11, "Notch 24" },
+    // Model 23: Multi Morph (4)
+    { 23, 0, "LBH" }, { 23, 1, "LPH" }, { 23, 2, "LNH" }, { 23, 3, "BPN" },
+    // Model 24: Flanges (9)
+    { 24, 0, "Cmb L" }, { 24, 1, "Flg L" }, { 24, 2, "Phs L" },
+    { 24, 3, "Cmb H" }, { 24, 4, "Flg H" }, { 24, 5, "Phs H" },
+    { 24, 6, "Cmb HL" }, { 24, 7, "Flg HL" }, { 24, 8, "Phs HL" },
+    // Model 25: Misc (12)
+    { 25, 0, "Low EQ 12" }, { 25, 1, "Band EQ 12" }, { 25, 2, "High EQ 12" },
+    { 25, 3, "German LP" },
+    { 25, 4, "Formant-I" }, { 25, 5, "Formant-II" }, { 25, 6, "Formant-III" },
+    { 25, 7, "Bandreject" },
+    { 25, 8, "Dist.Comb 1 LP" }, { 25, 9, "Dist.Comb 1 BP" },
+    { 25, 10, "Dist.Comb 2 LP" }, { 25, 11, "Dist.Comb 2 BP" },
+    // Model 26: New (6)
+    { 26, 0, "MG Ladder" }, { 26, 1, "Acid Ladder" }, { 26, 2, "MG Dirty" },
+    { 26, 3, "Comb 2" }, { 26, 4, "Exp MM" }, { 26, 5, "Exp BPF" }
+};
 } // namespace
 
 TEST (wp6_capabilities_are_reported)
@@ -101,9 +125,12 @@ TEST (wp6_capabilities_are_reported)
     auto e = createEngine (EngineKind::vital);
     CHECK ((e->capabilities() & kCapFilterExtras) != 0);
     CHECK ((e->capabilities() & kCapFilterModels) != 0);
+    CHECK ((e->capabilities() & kCapFilterModels2) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapFilterExtras | kCapFilterModels)) == 0);
+    CHECK ((own->capabilities() & (kCapFilterExtras | kCapFilterModels | kCapFilterModels2)) == 0);
     CHECK (sizeof (kTypes) / sizeof (kTypes[0]) == 37);
+    CHECK (sizeof (kNewTypes43) / sizeof (kNewTypes43[0]) == 43);
+    CHECK ((sizeof (kTypes) + sizeof (kNewTypes43)) / sizeof (kTypes[0]) == 80);
 }
 
 TEST (filter_level_trims_the_output_and_minus_60_is_silence)
@@ -300,4 +327,78 @@ TEST (pz_svf_follows_the_drawn_curve_from_the_content)
     setByKey (*e, "filter1.cutoff", 2000.0f);
     const auto shifted = play (*e, 0.8);
     CHECK (relativeDifference (withCurve, shifted, 0.25, 0.65) > 0.3);
+}
+
+TEST (all_43_remaining_types_are_stable_and_differ_from_each_other_and_from_analog)
+{
+    auto e = makeVital();
+    base (*e);
+    const auto analog = play (*e);
+    std::vector<sbtest::Rendered> renders;
+    setByKey (*e, "filter1.var", 85.0f);
+    for (const Style& type : kNewTypes43)
+    {
+        e->reset();
+        setByKey (*e, "filter1.model", static_cast<float> (type.model));
+        setByKey (*e, "filter1.style", static_cast<float> (type.style));
+        const auto out = play (*e);
+        CHECK (sbtest::allFinite (out.left) && sbtest::allFinite (out.right));
+        CHECK (sbtest::peak (out.left) < 4.0f);
+        if (rms (out.left) < 1.0e-4)
+            std::printf ("    silent: %s\n", type.name);
+        CHECK (rms (out.left) > 1.0e-4);
+        if (relativeDifference (analog, out) <= 0.005)
+            std::printf ("    equals the Analog model: %s\n", type.name);
+        CHECK (relativeDifference (analog, out) > 0.005);
+        renders.push_back (out);
+    }
+    // within a model the styles differ
+    for (size_t i = 1; i < renders.size(); ++i)
+    {
+        if (kNewTypes43[i].model == kNewTypes43[i - 1].model)
+        {
+            if (relativeDifference (renders[i - 1], renders[i]) <= 0.005)
+                std::printf ("    equals the previous style: %s\n", kNewTypes43[i].name);
+            CHECK (relativeDifference (renders[i - 1], renders[i]) > 0.005);
+        }
+    }
+    // style beyond the model's own clamps to its last
+    e->reset();
+    setByKey (*e, "filter1.model", 23.0f); // Multi Morph has 4 styles (0..3)
+    setByKey (*e, "filter1.style", 3.0f);  // style 3: BPN
+    const auto bpn = play (*e);
+    e->reset();
+    setByKey (*e, "filter1.style", 9.0f);  // clamped to 3
+    CHECK (relativeDifference (bpn, play (*e)) < 1.0e-6);
+}
+
+TEST (remaining_models_survive_extreme_settings_and_work_in_all_three_filter_slots)
+{
+    auto e = makeVital();
+    sbtest::Rng rng (42);
+    base (*e);
+    setByKey (*e, "osc2.on", 1.0f);
+    setByKey (*e, "osc2.destination", 1.0f);
+    setByKey (*e, "fxfilter.on", 1.0f);
+    setByKey (*e, "filter2.on", 1.0f);
+    for (int round = 0; round < 24; ++round)
+    {
+        for (const char* name : { "filter1", "filter2", "fxfilter" })
+        {
+            const std::string k = std::string (name) + ".";
+            const Style& type = kNewTypes43[rng.u32() % 43];
+            setByKey (*e, (k + "model").c_str(), static_cast<float> (type.model));
+            setByKey (*e, (k + "style").c_str(), static_cast<float> (type.style));
+            setByKey (*e, (k + "cutoff").c_str(), static_cast<float> (20.0 + rng.uniform() * 19980.0));
+            setByKey (*e, (k + "resonance").c_str(), static_cast<float> (rng.uniform() * 100.0));
+            setByKey (*e, (k + "drive").c_str(), static_cast<float> (rng.uniform() * 20.0));
+            setByKey (*e, (k + "var").c_str(), static_cast<float> (rng.uniform() * 100.0));
+            setByKey (*e, (k + "pan").c_str(), static_cast<float> (rng.uniform() * 200.0 - 100.0));
+            setByKey (*e, (k + "level").c_str(), static_cast<float> (rng.uniform() * 40.0 - 20.0));
+        }
+        setByKey (*e, "osc1.destination", static_cast<float> (rng.u32() % 4));
+        const auto out = sbtest::render (*e, { noteOn (0, 30 + static_cast<int> (rng.u32() % 50)), noteOn (0, 70) }, 14000, 200);
+        CHECK (sbtest::allFinite (out.left) && sbtest::allFinite (out.right));
+        CHECK (sbtest::peak (out.left) < 4.0f);
+    }
 }

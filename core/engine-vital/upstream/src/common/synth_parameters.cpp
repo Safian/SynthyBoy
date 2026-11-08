@@ -653,9 +653,9 @@ namespace sbvital {
         kModulationIdPrefix, kModulationNamePrefix, kNewModulationVersion);
     }
 
-    // SynthyBoy: the 14 filter models and 6 styles appended in state version 3 (docs/ui-design/13-new-keys.md 3)
+    // SynthyBoy: filter models 8..26 and 12 styles appended in state version 3 (WP6 and WP-03 FILTERS80)
     for (const char* filter : { "filter_1", "filter_2", "filter_fx" }) {
-      details_lookup_[std::string(filter) + "_model"].max = 21.0f;
+      details_lookup_[std::string(filter) + "_model"].max = 26.0f;
       details_lookup_[std::string(filter) + "_style"].max = 11.0f;
     }
     details_lookup_["osc_1_on"].default_value = 1.0f;
