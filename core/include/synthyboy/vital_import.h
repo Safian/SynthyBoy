@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "content_pack.h"
+#include "zip_reader.h"
 #include "preset.h"
 #include "state.h"
 
@@ -236,6 +237,63 @@ ImportResult importVitalLfoFile (const void* data, size_t size, const ImportOpti
     "import":  {"source":{"format":"vital","version","sha256","preset_name","comments","macro_names"},"approximated":[keys<=64]}.
     contentRefs fills pack/file for the wavetables the host stored. */
 std::string serializeImportedPreset (const ImportResult& result, const PresetMeta& finalMeta, const ContentRefs& contentRefs);
+
+// ---- batch import (docs/ui-design/11-vital-preset-import.md 2.6) and .vitalbank --------------------------------------------------------
+
+/** What a file name says it holds (case-insensitive extension): .vital preset, .vitaltable wavetable, .vitallfo LFO shape. */
+enum class VitalFileKind : uint8_t { unknown, preset, wavetable, lfo };
+VitalFileKind vitalFileKindFromName (const std::string& fileName) noexcept;
+bool isVitalBankName (const std::string& fileName) noexcept; // ".vitalbank"
+
+enum class BatchOutcome : uint8_t
+{
+    written,        // preset / shape written, or the wavetable stored
+    skippedSame,    // the store already has this name imported from the identical source (src: tag)
+    needsDecision,  // BatchOptions::ask and the name is taken by different content: nothing written (a non-interactive run cannot ask)
+    failed,         // the file did not import, or a store refused to write
+    ignored         // not a Vital file kind (other entries of a bank, directories, unsafe names)
+};
+
+struct BatchRow
+{
+    std::string source;      // "Bank.vitalbank/Pad.vital" or the file name
+    std::string name;        // the preset / table / shape name as imported ("" if the file did not import)
+    std::string relPath;     // what was written: "<bank>/<name>.sbpreset", "<name>.lfoshape.json", or the stored table of the pack
+    VitalFileKind kind = VitalFileKind::unknown;
+    BatchOutcome outcome = BatchOutcome::failed;
+    ImportStatus status = ImportStatus::malformed;
+    ZipStatus zip = ZipStatus::ok; // not ok: the entry could not be read out of its archive
+    Fidelity fidelity = Fidelity::exact;
+    int imported = 0, approximated = 0, dropped = 0, ignoredItems = 0, wavetables = 0, samples = 0, lfoShapes = 0;
+    std::string error;
+};
+
+struct BatchSummary
+{
+    std::vector<BatchRow> rows;
+    ZipStatus zip = ZipStatus::ok; // the status of opening the archive (a bank); ok for loose files
+    int written = 0, skippedSame = 0, needsDecision = 0, failed = 0, ignored = 0;
+    std::string error;
+};
+
+/** Imports one Vital document: `fileName` decides the kind (.vital / .vitaltable / .vitallfo), `folder` is the relPath prefix
+    ("" or "Bank"). A preset is imported with options, its wavetables / samples go to `content`, the .sbpreset (+ report) to `presets`
+    under the duplicate policy of `batch`: identical source (PresetStore::exists (name, "src:<12 hex>")) is skipped (replace: written
+    again), a name taken by different content is replaced / kept both ("Name (2)") / left for the caller (ask); skipSame keeps both.
+    A stand-alone table is stored in `content`, a stand-alone LFO shape written as "<name>.lfoshape.json" (see serializeImportedLfoShape)
+    with an empty report. Never throws. */
+BatchRow importVitalDocument (const std::string& source, const std::string& fileName, const std::string& folder, const void* data, size_t size,
+                              const ImportOptions& options, const BatchOptions& batch, ContentStore& content, PresetStore& presets) noexcept;
+
+/** Reads a .vitalbank (a zip of .vital files; .vitaltable / .vitallfo entries import as well) and runs importVitalDocument on every entry
+    that is a Vital kind and has a safe path; the other entries are rows with outcome ignored. Entries are inflated one at a time (memory:
+    the archive plus one entry). `bankName` is the file name of the bank (its stem is the folder). A bank that does not open gives an empty
+    summary with `zip` set and `error` filled. */
+BatchSummary importVitalBank (const void* data, size_t size, const std::string& bankName, const ImportOptions& options, const BatchOptions& batch,
+                              ContentStore& content, PresetStore& presets, const ZipLimits& limits = {}) noexcept;
+
+/** Deterministic JSON of a stand-alone LFO shape: {"format":"synthyboy-lfo-shape","version":1,"name":..,"smooth":..,"points":[{"x","y","power"}]}. */
+std::string serializeImportedLfoShape (const ImportedLfoShape& shape);
 
 /** The table of the one-to-one settings (for the tests and the report UI): number of rows, key and Vital control of a row. */
 size_t vitalRowCount() noexcept;
