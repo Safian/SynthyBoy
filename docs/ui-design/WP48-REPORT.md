@@ -76,7 +76,7 @@ Bit set: `kCapReverbForce`. `effectiveFxMask (tierMask, reverbForceEnable)` in `
 
 ## Gates and verification
 
-Gate runs are listed at the end of this file (section "Gates").
+The gate runs are in the section "Gates" at the end of this file.
 
 ## BLOCKED / not done
 
@@ -87,3 +87,10 @@ Nothing of the five work packages is left unset in the capability bits. Not done
 3. **Vital import to `oscN.type = Sample`, the `.sbwt` format, the Kick pages and the MPC page cycler**: WP9 / C4, not part of this list.
 4. **Latency compensation** of Bode (64 samples) and the DAW-visible tail of Convolve: not reported to the host.
 5. **`loop_link`** is an editor action (no DSP).
+## Gates (run once at the end of the whole list, on the final tree)
+
+* `cmake -S . -B build -DSYNTHYBOY_BUILD_PLUGIN=ON && cmake --build build -j8`: exit 0, VST3 and CLAP built; the only compiler warnings are the 14 `-Wmissing-field-initializers` of the older tests (`test_wp123.cpp`, `test_rt_alloc.cpp`, from WP2); none in the new code.
+* `ctest --test-dir build -j6`: **33 / 33 passed** (including `synthyboy_test_vital_audio`, the slow audio gates, and the golden checks `version_2_sound_is_unchanged_in_both_engines`: the version 2 default and busy patch hash unchanged; `synthyboy_test_rt`: 0 allocations; the new `synthyboy_test_vital_wp4` .. `wp7`).
+* `build/clap_smoke build/SynthyBoy_artefacts/Release/CLAP/SynthyBoy.clap`: all checks passed. `scripts/check-params-doc.sh build/tools/paramdump/synthyboy_paramdump`: `docs/params.json` and `docs/PARAMETERS.md` are up to date (no key was added or changed).
+* AddressSanitizer + UndefinedBehaviorSanitizer (separate build directory `build-asan`, RelWithDebInfo, `-fsanitize=address,undefined`): `synthyboy_test_vital_wp4` (8 cases), `wp5` (9), `wp6` (7), `wp7` (9), `synthyboy_test_rt` (4) and `synthyboy_test_sampleosc` (12): all passed, no sanitizer report. The ASan run found one bug in the test of the sample package (`sampleosc_loop_continuity_no_click` rendered 8064 frames into an 8000 frame buffer): fixed in the test.
+* clap-validator and ThreadSanitizer were not run (clap-validator is not installed on this machine; the only new thread is the Convolve builder, which communicates through atomics).
