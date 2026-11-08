@@ -45,6 +45,8 @@ struct Binding
     const int* map = nullptr; // Conv::indexMap
     Cap cap = Cap::none;
     int capArg = 0;
+    int maxIndex = -1;        // Conv::index: the highest choice the engine implements (-1: no limit); choices appended to the list in
+                              // state version 3 (a new filter model, ...) are stored but act like the last implemented one
 };
 
 /** The table: one entry per parameter that maps onto exactly one control. Parameters without an entry are the special ones

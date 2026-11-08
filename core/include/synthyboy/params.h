@@ -74,7 +74,11 @@ struct ParamInfo
 };
 
 /** Upper bound of the table size; fixed-size containers (ParamValues, engine) are sized with it. */
-constexpr size_t kMaxParams = 1024;
+constexpr size_t kMaxParams = 2048;
+
+/** The table of state version 2 had 880 keys; the keys of version 3 (docs/ui-design/13-new-keys.md) are appended after them, so the
+    first kNumKeysV2 table positions are the ones every older state, preset and engine knows. */
+constexpr size_t kNumKeysV2 = 880;
 
 /** Ids of the parameters the engines and tests address by name (== hashKey of the keys, see core/src/param_table.cpp). */
 constexpr uint32_t kParamMasterVolume   = hashKey ("master.volume");
@@ -86,14 +90,20 @@ constexpr uint32_t kParamOsc1Wavetable   = hashKey ("osc1.wavetable");
 constexpr uint32_t kParamFilter1On       = hashKey ("filter1.on");
 constexpr uint32_t kParamFilter1Cutoff   = hashKey ("filter1.cutoff");
 
-/** The built-in wavetables of oscillator 1..3 (choice names of oscN.wavetable); index 0 = Sine, 1 = Saw. */
+/** The built-in wavetables of oscillator 1..3 (the first choice names of oscN.wavetable); index 0 = Sine, 1 = Saw. */
 constexpr int kNumBuiltinWavetables = 13;
+/** Choices of oscN.wavetable: the built-in tables plus index kNumBuiltinWavetables = "Preset table" (content.wavetables[]). */
+constexpr int kNumWavetableChoices = kNumBuiltinWavetables + 1;
 constexpr int kWavetableSine = 0;
 constexpr int kWavetableSaw  = 1;
-/** The built-in LFO shapes (choice names of lfoN.shape). */
+/** The built-in LFO shapes (the first choice names of lfoN.shape). */
 constexpr int kNumLfoShapes = 12;
-/** Number of effect slots of the FX chain (fx.order.1 .. fx.order.9). */
-constexpr int kNumFxSlots = 9;
+/** The choice of lfoN.shape after the built-in ones: "Custom" (point list in content.lfo_shapes[]). */
+constexpr int kLfoShapeCustom = 12;
+/** Number of effect slots of the FX chain (fx.order.1 .. fx.order.16) and of effect modules (the choices of fx.order.N). */
+constexpr int kNumFxSlots = 16;
+/** The effect slots and modules of state version 2 (the nine Vital-style effects); the engines implement these only. */
+constexpr int kNumLegacyFxSlots = 9;
 
 /** The table, in stable order (state files and UIs list parameters in this order). */
 const ParamInfo* paramTable() noexcept;

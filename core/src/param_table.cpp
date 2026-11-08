@@ -19,15 +19,17 @@ namespace
 // ---------------------------------------------------------------------------------------------------------------------
 constexpr const char* const kOffOn[] = { "Off", "On" };
 
-constexpr const char* const kWavetables[kNumBuiltinWavetables] = {
+// choice lists that grew in version 3 only ever get entries appended (docs/ui-design/13-new-keys.md R3, section 3)
+constexpr const char* const kWavetables[kNumWavetableChoices] = {
     "Sine", "Saw", "Square", "Triangle", "Pulse 25%", "Saw to Square", "Sine to Saw", "Harmonic Series", "Odd Harmonics",
-    "Formant Sweep", "FM Sweep", "PWM Sweep", "Bell Partials"
+    "Formant Sweep", "FM Sweep", "PWM Sweep", "Bell Partials", "Preset table"
 };
-constexpr const char* const kLfoShapes[kNumLfoShapes] = {
+constexpr const char* const kLfoShapes[kNumLfoShapes + 1] = {
     "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Pulse 25%", "Steps Up", "Steps Down", "Random Steps", "Exp Up", "Exp Down",
-    "Half Sine"
+    "Half Sine", "Custom"
 };
-constexpr const char* const kOscDestinations[] = { "Filter 1", "Filter 2", "Filters 1+2", "Effects only", "Direct out" };
+static_assert (kLfoShapeCustom == kNumLfoShapes, "the Custom LFO shape is the entry after the built-in ones");
+constexpr const char* const kOscDestinations[] = { "Filter 1", "Filter 2", "Filters 1+2", "Effects only", "Direct out", "Filter blend", "None" };
 constexpr const char* const kStackStyles[] = {
     "Unison", "Center Drop 12", "Center Drop 24", "Octaves", "Two Octaves", "Power Chord", "Two Power Chords", "Major Chord",
     "Minor Chord", "Harmonic Series", "Odd Harmonics"
@@ -42,16 +44,19 @@ constexpr const char* const kWarpTypes2[] = { "None", "Sync", "Formant", "Quanti
                                               "FM from Osc 1", "FM from Osc 3", "RM from Osc 1", "RM from Osc 3" };
 constexpr const char* const kWarpTypes3[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
                                               "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2" };
-constexpr const char* const kFilterModels[] = { "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser" };
+constexpr const char* const kFilterModels[] = { "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser", "Multi SVF",
+                                                "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream",
+                                                "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF" };
 constexpr const char* const kFilterStyles[] = { "Style A (12 dB)", "Style B (24 dB)", "Style C (notch swap)", "Style D (dual notch)",
-                                                "Style E (band peak notch)", "Style F (shelf)" };
+                                                "Style E (band peak notch)", "Style F (shelf)", "Style G", "Style H", "Style I", "Style J",
+                                                "Style K", "Style L" };
 constexpr const char* const kLfoSync[] = { "Free (Hz)", "Tempo", "Tempo dotted", "Tempo triplet", "Key follow" };
 constexpr const char* const kFxSync[] = { "Free (Hz)", "Tempo", "Tempo dotted", "Tempo triplet" };
 constexpr const char* const kDivisions[] = { "Freeze", "32 bars", "16 bars", "8 bars", "4 bars", "2 bars", "1 bar", "1/2 note",
                                              "1/4 note", "1/8 note", "1/16 note", "1/32 note", "1/64 note" };
 constexpr const char* const kLfoSyncTypes[] = { "Retrigger", "Free-run", "Envelope", "Sustain envelope", "Loop at point", "Loop and hold" };
 constexpr const char* const kRandomSyncTypes[] = { "Retrigger", "Free-run" };
-constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Sine interpolate", "Lorenz attractor" };
+constexpr const char* const kRandomStyles[] = { "Perlin", "Sample and hold", "Sine interpolate", "Lorenz attractor", "Rossler attractor" };
 constexpr const char* const kDelayStyles[] = { "Mono", "Stereo", "Ping pong", "Mid ping pong" };
 constexpr const char* const kCompressorBands[] = { "Multiband", "Low band", "High band", "Single band" };
 constexpr const char* const kDistortionTypes[] = { "Soft clip", "Hard clip", "Linear fold", "Sine fold", "Bit crush", "Down sample" };
@@ -61,7 +66,30 @@ constexpr const char* const kEqBandModes[] = { "Peak", "Notch" };
 constexpr const char* const kEqHighModes[] = { "Shelf", "Low pass" };
 constexpr const char* const kFilterRouting[] = { "Parallel", "Series 1 to 2", "Series 2 to 1" };
 constexpr const char* const kFxNames[kNumFxSlots] = { "Chorus", "Compressor", "Delay", "Distortion", "EQ", "FX Filter", "Flanger", "Phaser",
-                                                      "Reverb" };
+                                                      "Reverb", "Hyper/Dimension", "Utility", "Bode", "Convolve", "Splitter L/H",
+                                                      "Splitter L/M/H", "Splitter M/S" };
+
+// lists of the keys appended in version 3 (13-new-keys.md section 4)
+constexpr const char* const kLfoDirections[] = { "Forward", "Reverse", "Ping pong" };
+constexpr const char* const kEnvUnits[] = { "Milliseconds", "Beats" };
+constexpr const char* const kScaleKeys[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+constexpr const char* const kScaleTypes[] = { "Chromatic (off)", "Major", "Natural Minor", "Harmonic Minor", "Melodic Minor", "Dorian", "Phrygian",
+                                              "Lydian", "Mixolydian", "Locrian", "Major Pentatonic", "Minor Pentatonic", "Blues", "Whole Tone",
+                                              "Diminished (H-W)", "Diminished (W-H)", "Phrygian Dominant", "Hungarian Minor", "Double Harmonic",
+                                              "Hirajoshi" };
+constexpr const char* const kScaleModes[] = { "Conform", "Mark only" };
+constexpr const char* const kTuningScales[] = { "12-TET", "Pythagorean", "Just intonation", "User file" };
+constexpr const char* const kOscTypes[] = { "Wavetable", "Sample" };
+constexpr const char* const kLoopModes[] = { "One-shot", "Forward loop", "Reverse loop", "Forward/reverse loop", "Tailed" };
+constexpr const char* const kFadeEdges[] = { "None", "1 ms", "2 ms", "4 ms", "8 ms", "16 ms", "32 ms", "64 ms", "128 ms" };
+constexpr const char* const kSliceModes[] = { "Off", "Auto", "Manual" };
+constexpr const char* const kSlicePlay[] = { "Play slice to end", "Play single slice" };
+constexpr const char* const kScanRanges[] = { "+-100 %", "+-200 %", "+-400 %", "+-800 %" };
+constexpr const char* const kFilterDestinations[] = { "Effects only", "Direct out", "None" };
+constexpr const char* const kBusDestinations[] = { "Main", "Direct", "Other bus" };
+constexpr const char* const kRacks[] = { "Main", "Bus 1", "Bus 2", "Splitter L/H low", "Splitter L/H high", "Splitter L/M/H low",
+                                         "Splitter L/M/H mid", "Splitter L/M/H high", "Splitter M/S mid", "Splitter M/S side" };
+constexpr const char* const kConvolveImpulses[] = { "None", "Preset IR" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -109,8 +137,7 @@ constexpr ParamInfo modSource (const char* key, const char* name, const char* gr
              kParamAutomatable | kParamStepped, nullptr, 0, ChoiceSet::modSource, 0, 0 };
 }
 
-/** The destination choice: 0 = none, then every modulatable parameter. kNumModDestinations is checked against the table below. */
-constexpr int kNumModDestinations = 1 + 269;
+/** The destination choice: 0 = none, then every modulatable parameter. kNumModDestinations (modulation.h) is checked against the table below. */
 constexpr ParamInfo modDestination (const char* key, const char* name, const char* group)
 {
     return { hashKey (key), key, name, group, 0.0f, static_cast<float> (kNumModDestinations - 1), 0.0f, 1.0f, 1.0f, Scale::stepped, Unit::none,
@@ -234,6 +261,85 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("eq." KEY ".cutoff", "EQ " NAME " Cutoff", "FX / EQ", 20.0f, 20000.0f, CUTOFF, Unit::Hz, kMod, 1, 0.3f),                               \
     cont ("eq." KEY ".gain", "EQ " NAME " Gain", "FX / EQ", -15.0f, 15.0f, 0.0f, Unit::dB, kMod),                                                \
     SB_PCT ("eq." KEY ".resonance", "EQ " NAME " Resonance", "FX / EQ", 30.0f, kMod)
+
+// ---------------------------------------------------------------------------------------------------------------------
+// repeated groups of the keys appended in state version 3 (docs/ui-design/13-new-keys.md, blocks B01 .. B12)
+// ---------------------------------------------------------------------------------------------------------------------
+#define SB_LFO_EXTRA(N)                                                                                                                          \
+    onOff ("lfo" #N ".mono", "LFO " #N " Mono", "LFO " #N, false),                                                                               \
+    pick ("lfo" #N ".direction", "LFO " #N " Direction", "LFO " #N, kLfoDirections, 0),                                                          \
+    onOff ("lfo" #N ".host", "LFO " #N " Host Sync", "LFO " #N, false)
+
+#define SB_ENV_BEATS(N)                                                                                                                          \
+    pick ("env" #N ".units", "Env " #N " Time Units", "Envelope " #N " / Beat Units", kEnvUnits, 0),                                             \
+    onOff ("env" #N ".legato_inverted", "Env " #N " Legato Inverted", "Envelope " #N " / Beat Units", false),                                    \
+    cont ("env" #N ".delay_beats", "Env " #N " Delay (Beats)", "Envelope " #N " / Beat Units", 0.0f, 8.0f, 0.0f, Unit::beats, kMod, 3, 0.4f),   \
+    cont ("env" #N ".attack_beats", "Env " #N " Attack (Beats)", "Envelope " #N " / Beat Units", 0.0f, 16.0f, 0.0625f, Unit::beats, kMod, 3,   \
+          0.3f),                                                                                                                                 \
+    cont ("env" #N ".hold_beats", "Env " #N " Hold (Beats)", "Envelope " #N " / Beat Units", 0.0f, 8.0f, 0.0f, Unit::beats, kMod, 3, 0.4f),     \
+    cont ("env" #N ".decay_beats", "Env " #N " Decay (Beats)", "Envelope " #N " / Beat Units", 0.0f, 16.0f, 1.0f, Unit::beats, kMod, 3, 0.3f), \
+    cont ("env" #N ".release_beats", "Env " #N " Release (Beats)", "Envelope " #N " / Beat Units", 0.0f, 16.0f, 0.5f, Unit::beats, kMod, 3,    \
+          0.3f)
+
+#define SB_SLOT_AUX(S)                                                                                                                           \
+    modSource ("mod" #S ".aux_source", "Mod " #S " Aux Source", "Mod Matrix / Slot " #S),                                                        \
+    onOff ("mod" #S ".aux_inv", "Mod " #S " Aux Invert", "Mod Matrix / Slot " #S, false),                                                        \
+    cont ("mod" #S ".aux_power", "Mod " #S " Aux Curve", "Mod Matrix / Slot " #S, -10.0f, 10.0f, 0.0f, Unit::none, kAuto),                       \
+    SB_PCT_RANGE ("mod" #S ".aux_output", "Mod " #S " Output Scale", "Mod Matrix / Slot " #S, 0.0f, 200.0f, 100.0f, kAuto)
+
+#define SB_OSC_MAP(N)                                                                                                                            \
+    whole ("osc" #N ".map.key_low", "Osc " #N " Key Low", "Osc " #N " / Mapping", 0.0f, 127.0f, 0.0f, Unit::none, kAuto),                        \
+    whole ("osc" #N ".map.key_high", "Osc " #N " Key High", "Osc " #N " / Mapping", 0.0f, 127.0f, 127.0f, Unit::none, kAuto),                    \
+    whole ("osc" #N ".map.vel_low", "Osc " #N " Velocity Low", "Osc " #N " / Mapping", 1.0f, 127.0f, 1.0f, Unit::none, kAuto),                   \
+    whole ("osc" #N ".map.vel_high", "Osc " #N " Velocity High", "Osc " #N " / Mapping", 1.0f, 127.0f, 127.0f, Unit::none, kAuto),               \
+    onOff ("osc" #N ".map.key_fold", "Osc " #N " Key Fold", "Osc " #N " / Mapping", false),                                                      \
+    onOff ("osc" #N ".map.key_warp", "Osc " #N " Key Warp", "Osc " #N " / Mapping", false)
+
+#define SB_OSC_SAMPLE(N, WARPLIST)                                                                                                               \
+    pick ("osc" #N ".type", "Osc " #N " Type", "Osc " #N, kOscTypes, 0),                                                                         \
+    cont ("osc" #N ".sample.start", "Osc " #N " Sample Start", "Osc " #N " / Sample", 0.0f, 100.0f, 0.0f, Unit::percent, kAuto, 2),             \
+    cont ("osc" #N ".sample.end", "Osc " #N " Sample End", "Osc " #N " / Sample", 0.0f, 100.0f, 100.0f, Unit::percent, kAuto, 2),               \
+    whole ("osc" #N ".sample.root", "Osc " #N " Sample Root Note", "Osc " #N " / Sample", 0.0f, 127.0f, 60.0f, Unit::none, kAuto),               \
+    onOff ("osc" #N ".sample.keytrack", "Osc " #N " Sample Pitch Tracking", "Osc " #N " / Sample", true),                                        \
+    pick ("osc" #N ".sample.loop_mode", "Osc " #N " Sample Loop Mode", "Osc " #N " / Sample", kLoopModes, 0),                                    \
+    cont ("osc" #N ".sample.loop_start", "Osc " #N " Sample Loop Start", "Osc " #N " / Sample", 0.0f, 100.0f, 0.0f, Unit::percent, kAuto, 2),   \
+    cont ("osc" #N ".sample.loop_end", "Osc " #N " Sample Loop End", "Osc " #N " / Sample", 0.0f, 100.0f, 100.0f, Unit::percent, kAuto, 2),    \
+    cont ("osc" #N ".sample.loop_xfade", "Osc " #N " Sample Loop Crossfade", "Osc " #N " / Sample", 0.0f, 1000.0f, 0.0f, Unit::ms, kAuto, 1,    \
+          0.4f),                                                                                                                                 \
+    onOff ("osc" #N ".sample.loop_relative", "Osc " #N " Sample Relative Loop", "Osc " #N " / Sample", false),                                   \
+    onOff ("osc" #N ".sample.loop_link", "Osc " #N " Sample Link Loop Length", "Osc " #N " / Sample", false),                                    \
+    onOff ("osc" #N ".sample.loop_exit", "Osc " #N " Sample Exit Loop On Release", "Osc " #N " / Sample", false),                                \
+    pick ("osc" #N ".sample.fade_edges", "Osc " #N " Sample Fade Edges", "Osc " #N " / Sample", kFadeEdges, 0),                                  \
+    onOff ("osc" #N ".sample.normalize", "Osc " #N " Sample Normalize", "Osc " #N " / Sample", false),                                           \
+    onOff ("osc" #N ".sample.reverse", "Osc " #N " Sample Reverse", "Osc " #N " / Sample", false),                                               \
+    pick ("osc" #N ".sample.slice_mode", "Osc " #N " Sample Slice Mode", "Osc " #N " / Sample", kSliceModes, 0),                                 \
+    SB_PCT ("osc" #N ".sample.slice_threshold", "Osc " #N " Sample Slice Threshold", "Osc " #N " / Sample", 50.0f, kAuto),                       \
+    pick ("osc" #N ".sample.slice_play", "Osc " #N " Sample Slice Playback", "Osc " #N " / Sample", kSlicePlay, 0),                              \
+    whole ("osc" #N ".sample.slice_root", "Osc " #N " Sample Slice Root Note", "Osc " #N " / Sample", 0.0f, 127.0f, 36.0f, Unit::none, kAuto),   \
+    SB_PCT_RANGE ("osc" #N ".sample.scan", "Osc " #N " Sample Scan", "Osc " #N " / Sample", -100.0f, 100.0f, 100.0f, kMod),                      \
+    pick ("osc" #N ".sample.scan_range", "Osc " #N " Sample Scan Range", "Osc " #N " / Sample", kScanRanges, 0),                                 \
+    onOff ("osc" #N ".sample.scan_reverse", "Osc " #N " Sample Scan Reverse", "Osc " #N " / Sample", false),                                     \
+    onOff ("osc" #N ".sample.scan_lock_tempo", "Osc " #N " Sample Scan Lock To Tempo", "Osc " #N " / Sample", false),                            \
+    onOff ("osc" #N ".sample.scan_to_bpm", "Osc " #N " Sample Length To BPM", "Osc " #N " / Sample", false),                                     \
+    cont ("osc" #N ".sample.length_beats", "Osc " #N " Sample Length (Beats)", "Osc " #N " / Sample", 0.25f, 64.0f, 4.0f, Unit::beats, kAuto, 2,  \
+          0.4f),                                                                                                                                 \
+    SB_PCT ("osc" #N ".sample.uni_start", "Osc " #N " Sample Unison Start", "Osc " #N " / Sample", 0.0f, kMod),                                  \
+    SB_PCT ("osc" #N ".sample.uni_span", "Osc " #N " Sample Unison Span", "Osc " #N " / Sample", 0.0f, kMod),                                    \
+    pick ("osc" #N ".warp2.type", "Osc " #N " Warp 2 Type", "Osc " #N " / Warp 2", WARPLIST, 0),                                                 \
+    SB_PCT ("osc" #N ".warp2.amount", "Osc " #N " Warp 2 Amount", "Osc " #N " / Warp 2", 50.0f, kMod),                                           \
+    cont ("osc" #N ".warp2.phase", "Osc " #N " Warp 2 Phase", "Osc " #N " / Warp 2", 0.0f, 360.0f, 180.0f, Unit::degrees, kMod, 0),             \
+    SB_PCT_RANGE ("osc" #N ".warp2.spread", "Osc " #N " Warp 2 Spread", "Osc " #N " / Warp 2", -100.0f, 100.0f, 0.0f, kMod)
+
+#define SB_SENDS(KEY, NAME, GROUP)                                                                                                               \
+    SB_PCT (KEY ".bus1_send", NAME " Bus 1 Send", GROUP, 0.0f, kMod),                                                                            \
+    SB_PCT (KEY ".bus2_send", NAME " Bus 2 Send", GROUP, 0.0f, kMod)
+
+#define SB_FILTER_EXTRA(KEY, NAME, GROUP)                                                                                                        \
+    SB_PCT (KEY ".var", NAME " Var", GROUP, 50.0f, kMod),                                                                                        \
+    SB_PCT_RANGE (KEY ".pan", NAME " Pan", GROUP, -100.0f, 100.0f, 0.0f, kMod),                                                                  \
+    cont (KEY ".level", NAME " Level", GROUP, -60.0f, 12.0f, 0.0f, Unit::dB, kMod)
+
+#define SB_FXRACK(KEY, NAME) pick (KEY ".rack", NAME " Rack", "FX / Racks", kRacks, 0)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // the table
@@ -383,10 +489,177 @@ constexpr ParamInfo kRaw[] = {
     cont ("reverb.high_shelf_gain", "Reverb High Shelf Gain", "FX / Reverb", -6.0f, 0.0f, -1.0f, Unit::dB, kMod),
     SB_PCT ("reverb.chorus_amount", "Reverb Chorus Amount", "FX / Reverb", 20.0f, kMod),
     cont ("reverb.chorus_rate", "Reverb Chorus Rate", "FX / Reverb", 0.01f, 8.0f, 0.25f, Unit::Hz, kMod, 2, 0.3f),
+
+    // =================================================================================================================
+    // Appended in state version 3 (docs/ui-design/13-new-keys.md, rule R2): everything below sits at the END of the table, in
+    // the block order B01 .. B12, so the positions, ids and modulation destination numbers above never change.
+    // =================================================================================================================
+
+    // --- B01: macros 5-8 (positions 880..883) ------------------------------------------------------------------------------
+    SB_MACRO (5), SB_MACRO (6), SB_MACRO (7), SB_MACRO (8),
+
+    // --- B02: LFO 9 and 10 (884..909) --------------------------------------------------------------------------------------
+    SB_LFO (9), SB_LFO (10),
+
+    // --- B03: mono / direction / host sync of all ten LFOs, LFO-major (910..939) -------------------------------------------------
+    SB_LFO_EXTRA (1), SB_LFO_EXTRA (2), SB_LFO_EXTRA (3), SB_LFO_EXTRA (4), SB_LFO_EXTRA (5), SB_LFO_EXTRA (6), SB_LFO_EXTRA (7),
+    SB_LFO_EXTRA (8), SB_LFO_EXTRA (9), SB_LFO_EXTRA (10),
+
+    // --- B04: envelope beat units and legato inverted (940..981) -------------------------------------------------------------
+    SB_ENV_BEATS (1), SB_ENV_BEATS (2), SB_ENV_BEATS (3), SB_ENV_BEATS (4), SB_ENV_BEATS (5), SB_ENV_BEATS (6),
+
+    // --- B05: velocity / note curve legato (982..983) ----------------------------------------------------------------------------
+    onOff ("curve.velocity.legato", "Velocity Curve Legato", "Master / Curves", false),
+    onOff ("curve.note.legato", "Note Curve Legato", "Master / Curves", false),
+
+    // --- B06: matrix aux source, slot-major (984..1239) --------------------------------------------------------------------------
+    SB_SLOT_AUX (01), SB_SLOT_AUX (02), SB_SLOT_AUX (03), SB_SLOT_AUX (04), SB_SLOT_AUX (05), SB_SLOT_AUX (06), SB_SLOT_AUX (07),
+    SB_SLOT_AUX (08), SB_SLOT_AUX (09), SB_SLOT_AUX (10), SB_SLOT_AUX (11), SB_SLOT_AUX (12), SB_SLOT_AUX (13), SB_SLOT_AUX (14),
+    SB_SLOT_AUX (15), SB_SLOT_AUX (16), SB_SLOT_AUX (17), SB_SLOT_AUX (18), SB_SLOT_AUX (19), SB_SLOT_AUX (20), SB_SLOT_AUX (21),
+    SB_SLOT_AUX (22), SB_SLOT_AUX (23), SB_SLOT_AUX (24), SB_SLOT_AUX (25), SB_SLOT_AUX (26), SB_SLOT_AUX (27), SB_SLOT_AUX (28),
+    SB_SLOT_AUX (29), SB_SLOT_AUX (30), SB_SLOT_AUX (31), SB_SLOT_AUX (32), SB_SLOT_AUX (33), SB_SLOT_AUX (34), SB_SLOT_AUX (35),
+    SB_SLOT_AUX (36), SB_SLOT_AUX (37), SB_SLOT_AUX (38), SB_SLOT_AUX (39), SB_SLOT_AUX (40), SB_SLOT_AUX (41), SB_SLOT_AUX (42),
+    SB_SLOT_AUX (43), SB_SLOT_AUX (44), SB_SLOT_AUX (45), SB_SLOT_AUX (46), SB_SLOT_AUX (47), SB_SLOT_AUX (48), SB_SLOT_AUX (49),
+    SB_SLOT_AUX (50), SB_SLOT_AUX (51), SB_SLOT_AUX (52), SB_SLOT_AUX (53), SB_SLOT_AUX (54), SB_SLOT_AUX (55), SB_SLOT_AUX (56),
+    SB_SLOT_AUX (57), SB_SLOT_AUX (58), SB_SLOT_AUX (59), SB_SLOT_AUX (60), SB_SLOT_AUX (61), SB_SLOT_AUX (62), SB_SLOT_AUX (63),
+    SB_SLOT_AUX (64),
+
+    // --- B07: key / scale, tuning, MPE (1240..1248) --------------------------------------------------------------------------------
+    pick ("master.scale.key", "Scale Key", "Master / Scale", kScaleKeys, 0),
+    pick ("master.scale.type", "Scale Type", "Master / Scale", kScaleTypes, 0),
+    pick ("master.scale.mode", "Scale Mode", "Master / Scale", kScaleModes, 0),
+    cont ("master.tuning.a4", "Concert Pitch A4", "Master / Tuning", 400.0f, 480.0f, 440.0f, Unit::Hz, kAuto, 2),
+    pick ("master.tuning.scale", "Tuning Scale", "Master / Tuning", kTuningScales, 0),
+    onOff ("master.tuning.mts_esp", "Tuning MTS-ESP", "Master / Tuning", false),
+    onOff ("master.tuning.mts_note_on_only", "Tuning MTS-ESP Note-On Only", "Master / Tuning", false),
+    onOff ("master.mpe.on", "MPE On", "Master / MPE", false),
+    whole ("master.mpe.bend_range", "MPE Pitch Bend Range", "Master / MPE", 1.0f, 96.0f, 48.0f, Unit::semitone, kAuto),
+
+    // --- B08: oscillator mapping (1249..1266) -----------------------------------------------------------------------------------------
+    SB_OSC_MAP (1), SB_OSC_MAP (2), SB_OSC_MAP (3),
+
+    // --- B09: oscillator type, sample oscillator, warp slot 2 (1267..1359) ----------------------------------------------------------
+    SB_OSC_SAMPLE (1, kWarpTypes1),
+    SB_OSC_SAMPLE (2, kWarpTypes2),
+    SB_OSC_SAMPLE (3, kWarpTypes3),
+
+    // --- B10: mixer routing, buses, direct (1360..1385) ------------------------------------------------------------------------------
+    SB_PCT ("osc1.filter_blend", "Osc 1 Filter Blend", "Osc 1", 0.0f, kMod),
+    SB_PCT ("osc2.filter_blend", "Osc 2 Filter Blend", "Osc 2", 0.0f, kMod),
+    SB_PCT ("osc3.filter_blend", "Osc 3 Filter Blend", "Osc 3", 0.0f, kMod),
+    SB_PCT ("noise.filter_blend", "Noise Filter Blend", "Noise", 0.0f, kMod),
+    SB_SENDS ("osc1", "Osc 1", "Osc 1"),
+    SB_SENDS ("osc2", "Osc 2", "Osc 2"),
+    SB_SENDS ("osc3", "Osc 3", "Osc 3"),
+    SB_SENDS ("noise", "Noise", "Noise"),
+    SB_SENDS ("filter1", "Filter 1", "Filter 1"),
+    SB_SENDS ("filter2", "Filter 2", "Filter 2"),
+    pick ("filter1.destination", "Filter 1 Destination", "Filter 1", kFilterDestinations, 0),
+    pick ("filter2.destination", "Filter 2 Destination", "Filter 2", kFilterDestinations, 0),
+    cont ("bus1.level", "Bus 1 Level", "Mixer / Bus 1", -60.0f, 6.0f, 0.0f, Unit::dB, kMod, 1, 2.5f),
+    cont ("bus2.level", "Bus 2 Level", "Mixer / Bus 2", -60.0f, 6.0f, 0.0f, Unit::dB, kMod, 1, 2.5f),
+    pick ("bus1.destination", "Bus 1 Destination", "Mixer / Bus 1", kBusDestinations, 0),
+    pick ("bus2.destination", "Bus 2 Destination", "Mixer / Bus 2", kBusDestinations, 0),
+    onOff ("bus1.fx_bypass", "Bus 1 FX Bypass", "Mixer / Bus 1", false),
+    onOff ("bus2.fx_bypass", "Bus 2 FX Bypass", "Mixer / Bus 2", false),
+    cont ("direct.level", "Direct Level", "Mixer", -60.0f, 6.0f, 0.0f, Unit::dB, kMod, 1, 2.5f),
+    onOff ("main.fx_bypass", "Main FX Bypass", "Mixer", false),
+
+    // --- B11: filter var / pan / level (1386..1394) ------------------------------------------------------------------------------------
+    SB_FILTER_EXTRA ("filter1", "Filter 1", "Filter 1"),
+    SB_FILTER_EXTRA ("filter2", "Filter 2", "Filter 2"),
+    SB_FILTER_EXTRA ("fxfilter", "FX Filter", "FX Filter"),
+
+    // --- B12: effects order, racks, new modules, reverb force enable (1395..1483) ----------------------------------------------------
+    SB_FXORDER (10, 9), SB_FXORDER (11, 10), SB_FXORDER (12, 11), SB_FXORDER (13, 12), SB_FXORDER (14, 13), SB_FXORDER (15, 14),
+    SB_FXORDER (16, 15),
+    SB_FXRACK ("chorus", "Chorus"), SB_FXRACK ("compressor", "Compressor"), SB_FXRACK ("delay", "Delay"),
+    SB_FXRACK ("distortion", "Distortion"), SB_FXRACK ("eq", "EQ"), SB_FXRACK ("fxfilter", "FX Filter"), SB_FXRACK ("flanger", "Flanger"),
+    SB_FXRACK ("phaser", "Phaser"), SB_FXRACK ("reverb", "Reverb"), SB_FXRACK ("hyperdim", "Hyper Dimension"),
+    SB_FXRACK ("utility", "Utility"), SB_FXRACK ("bode", "Bode"), SB_FXRACK ("convolve", "Convolve"),
+    SB_FXRACK ("splitter_lh", "Splitter L/H"), SB_FXRACK ("splitter_lmh", "Splitter L/M/H"), SB_FXRACK ("splitter_ms", "Splitter M/S"),
+    onOff ("reverb.force_enable", "Reverb Force Enable", "FX / Reverb", false),
+
+    // hyper / dimension
+    onOff ("hyperdim.on", "Hyper Dimension On", "FX / Hyper Dimension", false),
+    cont ("hyperdim.rate", "Hyper Rate", "FX / Hyper Dimension", 0.05f, 10.0f, 0.5f, Unit::Hz, kMod, 2, 0.3f),
+    whole ("hyperdim.unison", "Hyper Unison", "FX / Hyper Dimension", 0.0f, 7.0f, 4.0f, Unit::voices, kAuto),
+    SB_PCT ("hyperdim.detune", "Hyper Detune", "FX / Hyper Dimension", 50.0f, kMod),
+    onOff ("hyperdim.retrig", "Hyper Retrigger", "FX / Hyper Dimension", false),
+    SB_PCT ("hyperdim.mix", "Hyper Mix", "FX / Hyper Dimension", 50.0f, kMod),
+    SB_PCT ("hyperdim.dim_size", "Dimension Size", "FX / Hyper Dimension", 50.0f, kMod),
+    SB_PCT ("hyperdim.dim_mix", "Dimension Mix", "FX / Hyper Dimension", 0.0f, kMod),
+    cont ("hyperdim.level", "Hyper Dimension Level", "FX / Hyper Dimension", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+
+    // utility
+    onOff ("utility.on", "Utility On", "FX / Utility", false),
+    onOff ("utility.polarity_l", "Utility Polarity Left", "FX / Utility", false),
+    onOff ("utility.polarity_r", "Utility Polarity Right", "FX / Utility", false),
+    cont ("utility.lpf", "Utility Low Pass", "FX / Utility", 20.0f, 20000.0f, 20000.0f, Unit::Hz, kMod, 1, 0.3f),
+    cont ("utility.hpf", "Utility High Pass", "FX / Utility", 20.0f, 20000.0f, 20.0f, Unit::Hz, kMod, 1, 0.3f),
+    onOff ("utility.mono_bass", "Utility Mono Bass", "FX / Utility", false),
+    cont ("utility.mono_freq", "Utility Mono Bass Frequency", "FX / Utility", 20.0f, 500.0f, 120.0f, Unit::Hz, kMod, 1, 0.5f),
+    SB_PCT_RANGE ("utility.width", "Utility Width", "FX / Utility", 0.0f, 200.0f, 100.0f, kMod),
+    SB_PCT_RANGE ("utility.pan", "Utility Pan", "FX / Utility", -100.0f, 100.0f, 0.0f, kMod),
+    SB_PCT ("utility.mix", "Utility Mix", "FX / Utility", 100.0f, kMod),
+    cont ("utility.level", "Utility Level", "FX / Utility", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+
+    // bode frequency shifter
+    onOff ("bode.on", "Bode On", "FX / Bode", false),
+    onOff ("bode.mono_input", "Bode Mono Input", "FX / Bode", false),
+    SB_PCT ("bode.shift", "Bode Shift", "FX / Bode", 0.0f, kMod),
+    cont ("bode.range", "Bode Range", "FX / Bode", 1.0f, 5000.0f, 100.0f, Unit::Hz, kMod, 1, 0.3f),
+    SB_PCT_RANGE ("bode.dir", "Bode Direction", "FX / Bode", -100.0f, 100.0f, 100.0f, kMod),
+    SB_PCT ("bode.width", "Bode Width", "FX / Bode", 100.0f, kMod),
+    cont ("bode.delay", "Bode Delay", "FX / Bode", 1.0f, 2000.0f, 100.0f, Unit::ms, kMod, 1, 0.3f),
+    pick ("bode.sync", "Bode Sync", "FX / Bode", kFxSync, 0),
+    window ("bode.division", "Bode Division", "FX / Bode", kDivisions, 4, 9, 5),
+    SB_PCT ("bode.feed", "Bode Feedback", "FX / Bode", 0.0f, kMod),
+    SB_PCT_RANGE ("bode.balance", "Bode Balance", "FX / Bode", -100.0f, 100.0f, 0.0f, kMod),
+    SB_PCT ("bode.blur", "Bode Blur", "FX / Bode", 0.0f, kMod),
+    onOff ("bode.retrig", "Bode Retrigger", "FX / Bode", false),
+    SB_PCT ("bode.mix", "Bode Mix", "FX / Bode", 50.0f, kMod),
+    cont ("bode.level", "Bode Level", "FX / Bode", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+
+    // convolve
+    onOff ("convolve.on", "Convolve On", "FX / Convolve", false),
+    pick ("convolve.ir", "Convolve Impulse", "FX / Convolve", kConvolveImpulses, 0),
+    SB_PCT ("convolve.size", "Convolve Size", "FX / Convolve", 50.0f, kMod),
+    SB_PCT_RANGE ("convolve.tone", "Convolve Tone", "FX / Convolve", -100.0f, 100.0f, 0.0f, kMod),
+    onOff ("convolve.phi_min", "Convolve Minimum Phase", "FX / Convolve", false),
+    cont ("convolve.predelay", "Convolve Pre-delay", "FX / Convolve", 0.0f, 500.0f, 0.0f, Unit::ms, kMod, 1, 0.4f),
+    pick ("convolve.sync", "Convolve Sync", "FX / Convolve", kFxSync, 0),
+    window ("convolve.division", "Convolve Division", "FX / Convolve", kDivisions, 4, 9, 5),
+    cont ("convolve.attack", "Convolve Attack", "FX / Convolve", 0.0f, 2000.0f, 0.0f, Unit::ms, kMod, 1, 0.4f),
+    SB_PCT ("convolve.decay", "Convolve Decay", "FX / Convolve", 100.0f, kMod),
+    SB_PCT ("convolve.damp", "Convolve Damping", "FX / Convolve", 0.0f, kMod),
+    cont ("convolve.ir_gain", "Convolve IR Gain", "FX / Convolve", -24.0f, 24.0f, 0.0f, Unit::dB, kMod),
+    SB_PCT ("convolve.mix", "Convolve Mix", "FX / Convolve", 30.0f, kMod),
+    cont ("convolve.level", "Convolve Level", "FX / Convolve", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+
+    // splitters
+    onOff ("splitter_lh.on", "Splitter L/H On", "FX / Splitter L/H", false),
+    cont ("splitter_lh.freq", "Splitter L/H Split Frequency", "FX / Splitter L/H", 20.0f, 20000.0f, 500.0f, Unit::Hz, kMod, 1, 0.3f),
+    onOff ("splitter_lh.low_bypass", "Splitter L/H Low Bypass", "FX / Splitter L/H", false),
+    onOff ("splitter_lh.high_bypass", "Splitter L/H High Bypass", "FX / Splitter L/H", false),
+    cont ("splitter_lh.level", "Splitter L/H Level", "FX / Splitter L/H", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+    onOff ("splitter_lmh.on", "Splitter L/M/H On", "FX / Splitter L/M/H", false),
+    cont ("splitter_lmh.freq_low", "Splitter L/M/H Low Split Frequency", "FX / Splitter L/M/H", 20.0f, 20000.0f, 200.0f, Unit::Hz, kMod, 1, 0.3f),
+    cont ("splitter_lmh.freq_high", "Splitter L/M/H High Split Frequency", "FX / Splitter L/M/H", 20.0f, 20000.0f, 3000.0f, Unit::Hz, kMod, 1,
+          0.3f),
+    onOff ("splitter_lmh.low_bypass", "Splitter L/M/H Low Bypass", "FX / Splitter L/M/H", false),
+    onOff ("splitter_lmh.mid_bypass", "Splitter L/M/H Mid Bypass", "FX / Splitter L/M/H", false),
+    onOff ("splitter_lmh.high_bypass", "Splitter L/M/H High Bypass", "FX / Splitter L/M/H", false),
+    cont ("splitter_lmh.level", "Splitter L/M/H Level", "FX / Splitter L/M/H", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
+    onOff ("splitter_ms.on", "Splitter M/S On", "FX / Splitter M/S", false),
+    onOff ("splitter_ms.mid_bypass", "Splitter M/S Mid Bypass", "FX / Splitter M/S", false),
+    onOff ("splitter_ms.side_bypass", "Splitter M/S Side Bypass", "FX / Splitter M/S", false),
+    cont ("splitter_ms.level", "Splitter M/S Level", "FX / Splitter M/S", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
+static_assert (kCount == 1484, "880 keys of state version 2 plus the 604 keys appended in version 3");
 
 struct Table
 {

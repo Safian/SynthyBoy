@@ -64,7 +64,7 @@ TEST (state_save_format_is_exact_and_deterministic)
 {
     const auto v = ParamValues::defaults();
     const auto s = saveState (v);
-    const std::string head = "{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"master.volume\":-12,\"master.polyphony\":16,";
+    const std::string head = "{\"format\":\"synthyboy-state\",\"version\":3,\"params\":{\"master.volume\":-12,\"master.polyphony\":16,";
     CHECK (s.compare (0, head.size(), head) == 0);
     CHECK (s.size() > 10 * 1024 && s.size() < 64 * 1024); // about 20 KiB for the whole table, far below kMaxStateBytes
     std::printf ("    default state: %zu bytes, %zu parameters\n", s.size(), paramCount());
@@ -107,7 +107,7 @@ TEST (state_round_trip)
         const auto r = load (s, loaded);
         CHECK (r.status == LoadStatus::ok);
         CHECK_EQ (r.applied, static_cast<int> (paramCount()));
-        CHECK_EQ (r.version, 2);
+        CHECK_EQ (r.version, kStateVersion);
         if (! CHECK (sameValues (v, loaded)))
         {
             std::printf ("    %s\n", s.c_str());
@@ -276,7 +276,7 @@ TEST (state_nan_inf_and_huge_numbers)
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":0.4}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 0.0f);
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":0.6}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 1.0f);
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":5}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 5.0f);
-    CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":99}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 12.0f);
+    CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":99}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 13.0f);
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":-5}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 0.0f);
 }
 
@@ -437,11 +437,11 @@ TEST (state_v1_documents_are_migrated)
                 CHECK_EQ (v.plain[p], marker().plain[p]);
     }
 
-    // a v1 document that is saved again is a v2 document with the migrated values, and it loads to the same values
+    // a v1 document that is saved again is a current version document with the migrated values, and it loads to the same values
     ParamValues v = marker();
     load (kV1Documents[1], v);
     const auto saved = saveState (v);
-    CHECK (saved.find ("\"version\":2") != std::string::npos);
+    CHECK (saved.find ("\"version\":3") != std::string::npos);
     ParamValues again = marker();
     CHECK (load (saved, again).status == LoadStatus::ok && sameValues (v, again));
 }

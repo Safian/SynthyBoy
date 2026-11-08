@@ -35,8 +35,11 @@ struct PresetEntry
 };
 
 /** Deterministic text of a .sbpreset container:
-    {"format":"synthyboy-preset","version":1,"meta":{...},"state":{"format":"synthyboy-state","version":2,"params":{...}}} */
+    {"format":"synthyboy-preset","version":1,"meta":{...},"state":{"format":"synthyboy-state","version":3,"params":{...}}} */
 std::string savePreset (const PresetMeta& meta, const ParamValues& values);
+
+/** The same with the \`content\` section of state version 3 (custom LFO shapes, content references, ...) inside the state object. */
+std::string savePreset (const PresetMeta& meta, const ParamValues& values, const StateContent& content);
 
 /** Reads only the preset metadata from a .sbpreset document without loading parameter state or allocating engine structures.
     Returns true if metadata was found and valid. */
@@ -45,6 +48,9 @@ bool readPresetMeta (const void* data, size_t size, PresetMeta& metaOut) noexcep
 /** Parses a complete preset document (.sbpreset), extracting metadata and parameter values.
     Also accepts a raw state document (format: synthyboy-state) for backward compatibility, populating default metadata. */
 LoadResult loadPreset (const void* data, size_t size, PresetMeta& metaOut, ParamValues& valuesOut) noexcept;
+
+/** loadPreset () that also takes the content section (see loadStateWithContent for the rules). */
+LoadResult loadPreset (const void* data, size_t size, PresetMeta& metaOut, ParamValues& valuesOut, StateContent& contentInOut) noexcept;
 
 /** Scans a directory recursively for .sbpreset files and reads their metadata without parsing full states. */
 std::vector<PresetEntry> scanPresetDirectory (const std::string& directoryPath);

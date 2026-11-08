@@ -22,7 +22,12 @@ constexpr ModSourceInfo kSources[kNumModSources] = {
     { "macro1", "Macro 1", false },   { "macro2", "Macro 2", false },   { "macro3", "Macro 3", false },
     { "macro4", "Macro 4", false },
     { "velocity", "Velocity", false }, { "note", "Note", false },        { "aftertouch", "Aftertouch", false },
-    { "pitch_wheel", "Pitch Wheel", true }, { "mod_wheel", "Mod Wheel", false }, { "random", "Random per Note", false }
+    { "pitch_wheel", "Pitch Wheel", true }, { "mod_wheel", "Mod Wheel", false }, { "random", "Random per Note", false },
+    // appended in state version 3 (choice values 29 .. 38), docs/ui-design/13-new-keys.md section 2
+    { "macro5", "Macro 5", false },   { "macro6", "Macro 6", false },   { "macro7", "Macro 7", false },   { "macro8", "Macro 8", false },
+    { "lfo9", "LFO 9", true },        { "lfo10", "LFO 10", true },
+    { "lift", "Lift", false },        { "slide", "Slide", false },      { "oct_note", "Oct Note", false },
+    { "poly_aftertouch", "Poly Aftertouch", false }
 };
 
 /** Table index of the k-th modulatable parameter (k = 0 ..), computed once on first use (static local: thread safe). */
@@ -79,7 +84,7 @@ size_t modDestinationChoiceOf (size_t paramIndex) noexcept
 
 ModSlotParams modSlotParams (int slot) noexcept
 {
-    ModSlotParams p { -1, -1, -1, -1, -1, -1, -1 };
+    ModSlotParams p { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     if (slot < 0 || slot >= kNumModSlots)
         return p;
 
@@ -96,6 +101,10 @@ ModSlotParams modSlotParams (int slot) noexcept
     p.bipolar = find ("bipolar");
     p.stereo = find ("stereo");
     p.bypass = find ("bypass");
+    p.auxSource = find ("aux_source");
+    p.auxInv = find ("aux_inv");
+    p.auxPower = find ("aux_power");
+    p.auxOutput = find ("aux_output");
     return p;
 }
 } // namespace synthyboy

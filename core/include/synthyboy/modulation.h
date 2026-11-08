@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // A modulation slot is described by seven ordinary parameters (modNN.source / destination / amount / power / bipolar /
-// stereo / bypass). The source is a stepped choice over the table below (0 = none), the destination a stepped choice over
+// stereo / bypass) and four of the aux source (modNN.aux_source / aux_inv / aux_power / aux_output, state version 3). The source is a stepped choice over the table below (0 = none), the destination a stepped choice over
 // every parameter flagged kParamModulatable in table order (0 = none).
 #pragma once
 
@@ -24,7 +24,11 @@ struct ModSourceInfo
 };
 
 /** Number of modulation sources (without "none"). */
-constexpr int kNumModSources = 28;
+constexpr int kNumModSources = 38;
+/** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 38 were appended in version 3. */
+constexpr int kNumModSourcesV2 = 28;
+/** Size of the destination choice (modNN.destination): "none" plus every parameter flagged kParamModulatable (checked against the table). */
+constexpr int kNumModDestinations = 404;
 
 /** Source k (0-based) has the choice value k + 1; the order is the one of the list in docs/PARAMETERS.md. */
 const ModSourceInfo* modSourceTable() noexcept;
@@ -37,10 +41,12 @@ int modDestinationParamIndex (size_t choiceValue) noexcept;
 /** Index into paramTable() -> destination choice value (1-based), 0 if the parameter is not modulatable. */
 size_t modDestinationChoiceOf (size_t paramIndex) noexcept;
 
-/** Parameter indices of the seven parameters of slot 0 .. kNumModSlots - 1 (table order), -1 if out of range. */
+/** Parameter indices of the parameters of slot 0 .. kNumModSlots - 1 (looked up by key, the aux block sits at the end of the
+    table), -1 if out of range. */
 struct ModSlotParams
 {
     int source, destination, amount, power, bipolar, stereo, bypass;
+    int auxSource, auxInv, auxPower, auxOutput;
 };
 ModSlotParams modSlotParams (int slot) noexcept;
 } // namespace synthyboy

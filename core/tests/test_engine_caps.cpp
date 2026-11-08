@@ -1,0 +1,129 @@
+// SynthyBoy - core tests: EngineCaps (docs/ui-design/13-new-keys.md 6 and 11): which bit a key of state version 3 needs.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+#include <cstdio>
+#include <cstring>
+
+#include "synthyboy/engine.h"
+#include "synthyboy/engine_caps.h"
+#include "synthyboy/modulation.h"
+#include "synthyboy/params.h"
+#include "test_engines.h"
+#include "test_runner.h"
+
+using namespace synthyboy;
+
+namespace
+{
+size_t positionOf (const char* key)
+{
+    const ParamInfo* p = findParamByKey (key);
+    return p != nullptr ? static_cast<size_t> (findParamIndex (p->id)) : static_cast<size_t> (-1);
+}
+
+EngineCapsMask need (const char* key, float v)
+{
+    return requiredCapsForValue (positionOf (key), v);
+}
+} // namespace
+
+TEST (every_new_key_needs_a_capability_and_no_old_key_does)
+{
+    for (size_t i = 0; i < kNumKeysV2; ++i)
+        CHECK_EQ (requiredCaps (i), static_cast<EngineCapsMask> (kCapNone));
+
+    EngineCapsMask all = 0;
+    for (size_t i = kNumKeysV2; i < paramCount(); ++i)
+    {
+        const auto caps = requiredCaps (i);
+        if (! CHECK (caps != kCapNone))
+            std::printf ("    %s\n", paramTable()[i].key);
+        all |= caps;
+    }
+    // every defined bit has a name and is used by some key; five need no key: the event contract, and four that gate values of
+    // lists (appended_choice_values_need_a_capability)
+    const EngineCapsMask valueOnly = kCapEventContract | kCapModSourcesExtra | kCapCustomLfoShape | kCapUserWavetable | kCapFilterModels;
+    for (int bit = 0; bit < 26; ++bit)
+    {
+        const EngineCapsMask b = 1ull << bit;
+        CHECK (std::strlen (capName (b)) > 0);
+        if ((valueOnly & b) == 0 && ! CHECK ((all & b) != 0))
+            std::printf ("    bit %s has no key\n", capName (b));
+    }
+    CHECK_EQ (all >> 26, static_cast<EngineCapsMask> (0));
+
+    struct Case { const char* key; EngineCapsMask caps; };
+    const Case cases[] = {
+        { "macro.7", kCapMacros58 },
+        { "lfo9.rate", kCapLfo910 },
+        { "lfo10.mono", kCapLfo910 | kCapLfoOptions },
+        { "lfo3.direction", kCapLfoOptions },
+        { "env2.attack_beats", kCapEnvBeats },
+        { "curve.note.legato", kCapCurves },
+        { "mod33.aux_inv", kCapAuxSource },
+        { "master.scale.type", kCapKeyScale },
+        { "master.tuning.a4", kCapTuning },
+        { "master.mpe.on", kCapMpe },
+        { "osc2.map.vel_high", kCapOscMapping },
+        { "osc3.type", kCapSampleOsc },
+        { "osc1.sample.scan", kCapSampleOsc },
+        { "osc1.warp2.amount", kCapWarp2 },
+        { "osc1.filter_blend", kCapMixerGraph },
+        { "noise.bus2_send", kCapMixerGraph },
+        { "filter2.bus1_send", kCapMixerGraph },
+        { "filter1.destination", kCapMixerGraph },
+        { "bus2.level", kCapMixerGraph },
+        { "direct.level", kCapMixerGraph },
+        { "filter1.var", kCapFilterExtras },
+        { "fxfilter.level", kCapFilterExtras },
+        { "fx.order.12", kCapFxRacks },
+        { "fxfilter.rack", kCapFxRacks },
+        { "reverb.force_enable", kCapReverbForce },
+        { "hyperdim.rate", kCapFxHyperDimension },
+        { "utility.width", kCapFxUtility },
+        { "bode.shift", kCapFxBode },
+        { "convolve.ir", kCapFxConvolve },
+        { "splitter_lmh.freq_low", kCapFxSplitters },
+    };
+    for (const auto& c : cases)
+        if (! CHECK_EQ (requiredCaps (positionOf (c.key)), c.caps))
+            std::printf ("    %s\n", c.key);
+}
+
+TEST (appended_choice_values_need_a_capability)
+{
+    CHECK_EQ (need ("osc1.wavetable", 12.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("osc1.wavetable", 13.0f), static_cast<EngineCapsMask> (kCapUserWavetable));
+    CHECK_EQ (need ("lfo4.shape", 11.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("lfo4.shape", 12.0f), static_cast<EngineCapsMask> (kCapCustomLfoShape));
+    CHECK_EQ (need ("rlfo2.style", 4.0f), static_cast<EngineCapsMask> (kCapLfoOptions));
+    CHECK_EQ (need ("filter1.model", 7.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("fxfilter.model", 21.0f), static_cast<EngineCapsMask> (kCapFilterModels));
+    CHECK_EQ (need ("filter2.style", 5.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("filter2.style", 6.0f), static_cast<EngineCapsMask> (kCapFilterModels));
+    CHECK_EQ (need ("osc3.destination", 4.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("noise.destination", 5.0f), static_cast<EngineCapsMask> (kCapMixerGraph));
+    CHECK_EQ (need ("fx.order.3", 8.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("fx.order.3", 9.0f), static_cast<EngineCapsMask> (kCapFxRacks));
+    CHECK_EQ (need ("mod01.source", 28.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("mod01.source", 31.0f), static_cast<EngineCapsMask> (kCapMacros58));
+    CHECK_EQ (need ("mod01.source", 34.0f), static_cast<EngineCapsMask> (kCapLfo910));
+    CHECK_EQ (need ("mod01.source", 38.0f), static_cast<EngineCapsMask> (kCapModSourcesExtra));
+    CHECK_EQ (need ("mod09.destination", 269.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("mod09.destination", 270.0f), static_cast<EngineCapsMask> (kCapMacros58));
+    CHECK_EQ (need ("mod09.destination", 403.0f), static_cast<EngineCapsMask> (kCapFxSplitters));
+    CHECK_EQ (need ("master.volume", 5.0f), static_cast<EngineCapsMask> (kCapNone));
+    CHECK_EQ (need ("macro.5", 50.0f), static_cast<EngineCapsMask> (kCapMacros58));
+    CHECK (capsCover (kCapMacros58 | kCapLfo910, kCapLfo910) && ! capsCover (kCapMacros58, kCapMacros58 | kCapLfo910));
+    CHECK_EQ (requiredCapsForValue (999999, 0.0f), static_cast<EngineCapsMask> (kCapNone));
+}
+
+TEST (engines_report_no_new_capability_yet)
+{
+    for (const auto& c : sbtest::engineCases())
+    {
+        auto e = sbtest::makeEngine (c);
+        CHECK (e != nullptr && e->capabilities() == kCapNone);
+    }
+}

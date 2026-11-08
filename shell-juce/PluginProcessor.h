@@ -22,6 +22,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <array>
+#include <mutex>
 #include <atomic>
 #include <memory>
 #include <vector>
@@ -79,6 +80,11 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     std::array<std::atomic<float>*, synthyboy::kMaxParams> rawParams {};
     std::array<float, synthyboy::kMaxParams> sentToEngine {}; // audio thread: the value the engine has, for change detection
+
+    // The `content` section of the state (custom LFO shapes, content references, ...: not parameters). Part of the host state
+    // (docs/ui-design/13-new-keys.md A25); no engine reads it yet. Message thread only, the mutex covers hosts that do not.
+    std::mutex contentMutex;
+    synthyboy::StateContent content;
 
     std::unique_ptr<synthyboy::IEngine> engine;
     std::vector<synthyboy::Event> events;

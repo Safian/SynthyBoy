@@ -55,6 +55,7 @@ struct SynthyBoyClap
     const clap_host_t* host = nullptr;
     std::unique_ptr<IEngine> engine;
     ParamValues values;
+    StateContent content; // the `content` section of the state (not parameters; no engine reads it yet), main thread only
     Quality quality;
     std::vector<Event> events;
     double sampleRate = 48000.0;
@@ -380,7 +381,7 @@ bool ext_state_save (const clap_plugin_t* p, const clap_ostream_t* stream) noexc
     if (stream == nullptr)
         return false;
 
-    const std::string s = saveState (toClap (p)->values);
+    const std::string s = saveState (toClap (p)->values, toClap (p)->content);
     const int64_t written = stream->write (stream, s.data(), s.size());
     return (written == static_cast<int64_t> (s.size()));
 }
@@ -404,7 +405,7 @@ bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexc
     if (buffer.empty())
         return false;
 
-    const LoadResult res = loadState (buffer.data(), buffer.size(), self->values);
+    const LoadResult res = loadStateWithContent (buffer.data(), buffer.size(), self->values, self->content);
     if (res.status == LoadStatus::ok || res.status == LoadStatus::newer_version)
     {
         if (self->engine)
