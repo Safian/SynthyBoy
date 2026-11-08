@@ -806,12 +806,14 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             double err = 0.0;
             const int match = matchBuiltinLfoShape (samples, nearest, err);
             const size_t pidx = static_cast<size_t> (findParamIndex (pinfo->id));
-            V.plain[pidx] = static_cast<float> (nearest);
             if (match >= 0)
+            {
+                V.plain[pidx] = static_cast<float> (nearest);
                 continue;
-            // TODO(C2): with the choice "Custom" (docs/ui-design/11 A.4) and caps.customLfoShapes the value would select it.
+            }
             if (opt.caps.customLfoShapes)
             {
+                V.plain[pidx] = static_cast<float> (kLfoShapeCustom);
                 ImportedLfoShape s;
                 s.lfo = n + 1;
                 s.name = pl.name;
@@ -820,12 +822,16 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                     s.points.push_back ({ pl.line.x[i], pl.line.y[i], pl.line.power[i] });
                 res.lfoShapes.push_back (std::move (s));
             }
-            if (lfoUsed[n])
+            else
             {
-                char e[32];
-                std::snprintf (e, sizeof e, "%.3f", err);
-                c.item (ItemKind::approximated, Reason::nearestLfoShape, "content", where, pl.name, key, valueText (*pinfo, nearest),
-                        opt.caps.customLfoShapes ? std::string ("custom_choice_missing; rms error ") + e : std::string ("nearest_builtin; rms error ") + e);
+                V.plain[pidx] = static_cast<float> (nearest);
+                if (lfoUsed[n])
+                {
+                    char e[32];
+                    std::snprintf (e, sizeof e, "%.3f", err);
+                    c.item (ItemKind::approximated, Reason::nearestLfoShape, "content", where, pl.name, key, valueText (*pinfo, nearest),
+                            std::string ("nearest_builtin; rms error ") + e);
+                }
             }
         }
     }

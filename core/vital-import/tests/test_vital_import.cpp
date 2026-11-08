@@ -818,11 +818,13 @@ TEST (vi_fixture_custom_lfo)
     CHECK (r.status == ImportStatus::ok);
     CHECK_EQ (val (r, "lfo1.shape"), 2.0f);   // Saw Up: built-in shortcut, nothing stored
     CHECK_EQ (val (r, "lfo2.shape"), 1.0f);   // Triangle
+    CHECK_EQ (val (r, "lfo3.shape"), static_cast<float> (kLfoShapeCustom)); // Custom shape selected
+    CHECK_EQ (val (r, "lfo4.shape"), static_cast<float> (kLfoShapeCustom)); // Custom shape selected
     CHECK (findItem (r, "lfos[1]", ItemKind::approximated) == nullptr);
-    // LFO 3 is custom but not used: stored, not reported; LFO 4 is custom and used: reported
+    // Custom shapes are stored in lfoShapes; with caps.customLfoShapes they are selected as Custom (not approximated)
     CHECK_EQ (r.lfoShapes.size(), static_cast<size_t> (2));
     CHECK (findItem (r, "lfos[2]", ItemKind::approximated) == nullptr);
-    CHECK (findItem (r, "lfos[3]", ItemKind::approximated) != nullptr);
+    CHECK (findItem (r, "lfos[3]", ItemKind::approximated) == nullptr);
     if (r.lfoShapes.size() == 2)
     {
         CHECK_EQ (r.lfoShapes[0].lfo, 3);
@@ -832,6 +834,11 @@ TEST (vi_fixture_custom_lfo)
         CHECK_NEAR (r.lfoShapes[0].points[0][1], 0.1, 1e-6);   // value = 1 - y
         CHECK_NEAR (r.lfoShapes[0].points[0][2], 3.0, 1e-6);
     }
+    // without caps.customLfoShapes, LFO 4 is approximated to nearest built-in
+    const auto none = run (f);
+    CHECK (none.lfoShapes.empty());
+    CHECK (val (none, "lfo4.shape") != static_cast<float> (kLfoShapeCustom));
+    CHECK (findItem (none, "lfos[3]", ItemKind::approximated) != nullptr);
     // invalid shapes are dropped alone: lfo 5, 6 are not used (ignored), the file is fine
     CHECK (findItem (r, "lfos[4]", ItemKind::ignored) != nullptr);
     CHECK_EQ (val (r, "lfo6.shape"), 3.0f);   // num_points 5 with 4 numbers: sanitised to 2 points = a falling line value, i.e. Saw Down
