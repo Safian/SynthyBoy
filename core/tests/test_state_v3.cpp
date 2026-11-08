@@ -585,7 +585,8 @@ TEST (preset_with_content_round_trips_and_factory_presets_of_version_2_still_loa
     CHECK (loadPreset (plain.data(), plain.size(), metaBack, back).status == LoadStatus::ok);
     CHECK (readPresetMeta (text.data(), text.size(), metaBack) && metaBack.name == "With content");
 
-    // the 100 factory presets (.sbpreset version 1 holding a state of version 2) load as before
+    // the factory presets (.sbpreset version 1 holding a state of version 3, every key explicit) load completely; the same document cut
+    // back to the 880 keys of version 2 (what the first factory set was) still loads as before
     const std::filesystem::path root = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
     int count = 0;
     std::error_code ec;
@@ -600,15 +601,40 @@ TEST (preset_with_content_round_trips_and_factory_presets_of_version_2_still_loa
             StateContent c = fullContent();
             PresetMeta m;
             const auto fr = loadPreset (doc.data(), doc.size(), m, garbage, c);
-            const bool ok = CHECK (fr.status == LoadStatus::ok) && CHECK_EQ (fr.version, 2) && CHECK_EQ (fr.applied, static_cast<int> (kNumKeysV2))
-                         && CHECK (fr.content == ContentStatus::absent) && CHECK (c.empty()) && CHECK (! m.name.empty());
+            const bool hasContent = doc.find ("\"content\":") != std::string::npos;
+            const bool ok = CHECK (fr.status == LoadStatus::ok) && CHECK_EQ (fr.version, 3) && CHECK_EQ (fr.applied, static_cast<int> (paramCount()))
+                         && CHECK (hasContent ? fr.content == ContentStatus::ok : (fr.content == ContentStatus::absent && c.empty())) && CHECK (! m.name.empty());
             if (! ok)
                 std::printf ("    %s\n", entry.path().string().c_str());
-            for (int slot = 10; slot <= 16; ++slot)
-                CHECK_EQ (garbage.plain[indexOfKey (("fx.order." + std::to_string (slot)).c_str())], static_cast<float> (slot - 1));
+
+            // the version 2 form of the same document: the first 880 keys, no content section, state version 2
+            std::string v2 = doc;
+            const size_t paramsAt = v2.find ("\"params\":{");
+            size_t cut = paramsAt;
+            for (size_t commas = 0; cut != std::string::npos && cut < v2.size() && commas < kNumKeysV2; ++cut)
+                commas += v2[cut] == ',' ? 1 : 0;
+            if (CHECK (paramsAt != std::string::npos) && CHECK (cut < v2.size()))
+            {
+                v2.erase (cut - 1);
+                v2 += "}}}";
+                const size_t versionAt = v2.find ("\"version\":3");
+                if (CHECK (versionAt != std::string::npos))
+                    v2[versionAt + 10] = '2';
+                auto old = randomValues (rng);
+                StateContent oc = fullContent();
+                PresetMeta om;
+                const auto fo = loadPreset (v2.data(), v2.size(), om, old, oc);
+                CHECK (fo.status == LoadStatus::ok);
+                CHECK_EQ (fo.version, 2);
+                CHECK_EQ (fo.applied, static_cast<int> (kNumKeysV2));
+                CHECK (fo.content == ContentStatus::absent);
+                CHECK (oc.empty());
+                for (int slot = 10; slot <= 16; ++slot)
+                    CHECK_EQ (old.plain[indexOfKey (("fx.order." + std::to_string (slot)).c_str())], static_cast<float> (slot - 1));
+            }
             ++count;
         }
-    CHECK_EQ (count, 100);
+    CHECK (count >= 100);
 }
 
 namespace

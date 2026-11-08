@@ -7,7 +7,7 @@
 //
 // Per preset and tier (a fresh engine each, the state loaded the way the shell loads it: every parameter, then the content):
 //   single   one note (C1 for the category Bass, else C3), velocity 0.8, held 1.5 s, then released until the output is silent
-//   chord    four notes at velocity 1.0 held 1 s (the loudest thing a player does)
+//   chord    four notes at velocity 1.0 held 1 s (the loudest thing a player does); its RMS is the level measure of the factory presets
 //   --velocity (the report): single notes at velocity 0.25 / 0.5 / 0.75 / 1.0 held 0.5 s
 // Checks (exit code 1 if one fails): every sample finite; the peak of single and chord not above +3 dBFS; the single note not silent
 // (peak at least -60 dBFS); the tail ends: the output stays below -90 dBFS for 250 ms within 12 s of the note off.
@@ -29,6 +29,7 @@
 
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine.h"
+#include "synthyboy/engine_caps.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
@@ -309,19 +310,38 @@ int main (int argc, char** argv)
             tiers.push_back (t);
 
     int failures = unreadable;
+
+    // a preset may only use what the engine implements: every key that differs from its default is supported (capability bits of the
+    // key and of the value, e.g. a Scream filter model, a Custom LFO shape)
+    {
+        const auto probe = createEngine (o.engine);
+        const EngineCapsMask caps = probe->capabilities();
+        const ParamValues defaults = ParamValues::defaults();
+        for (const auto& p : presets)
+            for (size_t i = 0; i < paramCount(); ++i)
+            {
+                if (p.values.plain[i] == defaults.plain[i])
+                    continue;
+                if (! probe->supportsParam (paramTable()[i].id) || ! capsCover (caps, requiredCapsForValue (i, p.values.plain[i])))
+                {
+                    std::printf ("FAIL %s: %s = %g needs engine capabilities the engine does not have\n", p.file.c_str(), paramTable()[i].key, static_cast<double> (p.values.plain[i]));
+                    ++failures;
+                }
+            }
+    }
     std::printf ("preset-render: %zu presets, %zu tiers, engine %s, %.0f Hz\n", presets.size(), tiers.size(),
                  o.engine == EngineKind::vital ? "vital" : "own", o.sampleRate);
 
     for (const auto& t : tiers)
     {
         const Quality q = qualityForTier (t.tier);
-        std::vector<double> rmsLevels, peaks, tails;
+        std::vector<double> rmsLevels, chordLevels, peaks, tails;
         std::vector<std::string> names;
         std::vector<std::vector<double>> velPeaks (4); // per velocity step, the peak in dB for every preset
         std::vector<double> velSlope;
 
         if (! o.summaryOnly)
-            std::printf ("\n== tier %s ==\n%-34s %-8s %8s %8s %8s %8s %7s\n", t.name, "preset", "category", "peak", "chordPk", "rms", "dc", "tail s");
+            std::printf ("\n== tier %s ==\n%-34s %-8s %8s %8s %8s %9s %8s %7s\n", t.name, "preset", "category", "peak", "chordPk", "rms", "chordRms", "dc", "tail s");
 
         for (const auto& p : presets)
         {
@@ -369,12 +389,13 @@ int main (int argc, char** argv)
             if (s.finite)
             {
                 rmsLevels.push_back (s.rmsDb);
+                chordLevels.push_back (c.rmsDb);
                 peaks.push_back (std::max (s.peakDb, c.peakDb));
                 tails.push_back (s.tailSeconds);
                 names.push_back (p.file);
             }
             if (! o.summaryOnly)
-                std::printf ("%-34s %-8s %8.1f %8.1f %8.1f %8.4f %7.2f%s\n", p.file.c_str(), p.meta.category.c_str(), s.peakDb, c.peakDb, s.rmsDb, s.dc,
+                std::printf ("%-34s %-8s %8.1f %8.1f %8.1f %9.1f %8.4f %7.2f%s\n", p.file.c_str(), p.meta.category.c_str(), s.peakDb, c.peakDb, s.rmsDb, c.rmsDb, s.dc,
                              s.tailSeconds, problems.empty() ? "" : "  <== PROBLEM");
             for (const auto& m : problems)
             {
@@ -395,6 +416,10 @@ int main (int argc, char** argv)
                 if (std::fabs (rmsLevels[i] - med) > 8.0)
                     std::printf ("[%s]   level outlier (%+.1f dB from the median): %s (%.1f dBFS)\n", t.name, rmsLevels[i] - med, names[i].c_str(), rmsLevels[i]);
         }
+        if (! chordLevels.empty())
+            std::printf ("[%s] chord level (RMS of the loudest 300 ms, four notes, velocity 1.0): min %.1f  median %.1f  max %.1f dBFS, spread (sd) %.1f dB\n",
+                         t.name, *std::min_element (chordLevels.begin(), chordLevels.end()), median (chordLevels),
+                         *std::max_element (chordLevels.begin(), chordLevels.end()), stddev (chordLevels));
         if (o.velocity && ! velSlope.empty())
         {
             std::printf ("[%s] velocity curve, peak in dBFS, median over the presets: v0.25 %.1f  v0.5 %.1f  v0.75 %.1f  v1.0 %.1f;  v0.25 -> v1.0: %.1f dB "
