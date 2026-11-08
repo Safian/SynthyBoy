@@ -297,7 +297,7 @@ std::shared_ptr<const sbvital::ImpulseData> decodeImpulse (const StateContent& c
 }
 
 /** The frames of a user wavetable file: a WAV whose length is a multiple of 2048 is that many frames; anything else is one cycle that
-    is resampled to 2048 values. At most 256 frames. */
+    is resampled to 2048 values. At most 257 frames (kNumOscillatorWaveFrames: the keyframe positions of a Vital table are 0 .. 256). */
 bool decodeWavetable (const std::vector<uint8_t>& bytes, std::vector<float>& frames, int& numFrames)
 {
     std::vector<float> left, right;
@@ -307,7 +307,7 @@ bool decodeWavetable (const std::vector<uint8_t>& bytes, std::vector<float>& fra
     const size_t n = left.size();
     if (n >= 2048 && n % 2048 == 0)
     {
-        numFrames = static_cast<int> (std::min<size_t> (256, n / 2048));
+        numFrames = static_cast<int> (std::min<size_t> (static_cast<size_t> (sbvital::kNumOscillatorWaveFrames), n / 2048));
         frames.assign (left.begin(), left.begin() + static_cast<std::ptrdiff_t> (numFrames) * 2048);
     }
     else

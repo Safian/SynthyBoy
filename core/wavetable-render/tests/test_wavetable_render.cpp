@@ -240,6 +240,7 @@ TEST (wt_audio_file_source)
         c.audio.push_back (static_cast<int16_t> (std::lround (12000.0 * std::sin (2.0 * kPi * i / 512.0))));
     c.fadeStyle = 1; // none
     c.windowSize = 512;
+    c.normalizeGain = true; // normalise and raise to full scale
     Keyframe k;
     k.windowSize = 512;
     k.startPosition = 0;
@@ -247,11 +248,17 @@ TEST (wt_audio_file_source)
     auto r = run (single (c));
     CHECK_NEAR (peakOf (frame (r, 0)), 1.0, 1e-3); // normalised
     CHECK_NEAR (harmonicMag (frame (r, 0), 1), 1.0, 0.02); // 512 samples = one cycle -> fundamental
-    // without normalisation the level is the PCM level
+    // normalize_mult on, normalize_gain off: a frame below full scale is not raised
     c.normalizeGain = false;
     r = run (single (c));
     CHECK_NEAR (peakOf (frame (r, 0)), 12000.0 / 32768.0, 0.01);
+    // regression: both switches off (what real .vital files of audio-file tables have) leave the PCM level; they once gave a gain of 0 = silence
+    c.normalizeMult = false;
+    r = run (single (c));
+    CHECK_NEAR (peakOf (frame (r, 0)), 12000.0 / 32768.0, 0.01);
+    CHECK (peakOf (frame (r, 0)) > 0.1);
     // phase styles keep the magnitudes; "clear" gives a symmetric (cosine phase) cycle
+    c.normalizeMult = true;
     c.normalizeGain = true;
     c.phaseStyle = 1;
     r = run (single (c));
@@ -501,7 +508,8 @@ TEST (wt_random_descriptions_stay_finite)
                 c.phaseStyle = static_cast<int> (rng.u32() % 3);
                 c.windowSize = static_cast<int> (rng.u32());
                 c.audioSampleRate = static_cast<float> (rng.uniform() * 1e9);
-                c.normalizeMult = static_cast<float> (rng.uniform() * 100.0 - 50.0);
+                c.normalizeMult = (rng.u32() & 1) != 0;
+                c.normalizeGain = (rng.u32() & 1) != 0;
                 const int pcm = static_cast<int> (rng.u32() % 3000);
                 for (int i = 0; i < pcm; ++i)
                     c.audio.push_back (static_cast<int16_t> (rng.u32()));

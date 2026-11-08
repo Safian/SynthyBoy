@@ -1,5 +1,9 @@
 # Vital importer on real presets (35 files)
 
+> **Superseded in parts by `VITAL-IMPORT-AUDIT-REPORT.md`.** The render results below are wrong: the stored wavetable files were not readable by the
+> engine, so every imported table played as a saw (audit bug 1), and 15 of the 105 tables (all built from an audio file) were silent (bug 2). The
+> statement that no file uses an audio-file source is wrong (15 tables do). The import counts and the false `dropped` slots fix stand.
+
 Input: the owner's 10 loose `.vital` files plus the 25 presets of `Black_Lotus_Audio_-Division_DnB.vitalbank` (unzipped outside the repo;
 the files themselves are not committed). Tool: `synthyboy_vital_import --in DIR --out OUT --report` (new, `tools/vital-import`), then
 `synthyboy_preset_render --presets OUT --tier all` (engine vital, 48 kHz). Build: Release, `SYNTHYBOY_BUILD_PLUGIN=OFF`.

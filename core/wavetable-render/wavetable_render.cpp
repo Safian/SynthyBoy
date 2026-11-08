@@ -349,12 +349,16 @@ void doAudioFile (const Component& c, const CompState& s, const Blend& b, float*
         fromSpectrum (sp, seg.data());
     }
 
-    double peak = 0.0;
-    for (float v : seg)
-        peak = std::max (peak, static_cast<double> (std::fabs (v)));
-    const double mult = clampd (c.normalizeMult, 0.0, 16.0);
-    // SPEC-GAP: normalize_gain read as a switch (non-zero = normalise the frame to a peak of 1), normalize_mult as a further factor.
-    const double g = (c.normalizeGain && peak > 1.0e-9 ? 1.0 / peak : 1.0) * mult;
+    // normalize_mult (a switch): scale the frame so that its peak is 1. Without normalize_gain a frame below full scale is left alone (the
+    // factor never exceeds 1); with it the frame is raised to full scale. Both off: the PCM level of the audio.
+    double g = 1.0;
+    if (c.normalizeMult)
+    {
+        double peak = 0.0;
+        for (float v : seg)
+            peak = std::max (peak, static_cast<double> (std::fabs (v)));
+        g = 1.0 / std::max (c.normalizeGain ? 1.0e-7 : 1.0, peak);
+    }
     for (int k = 0; k < N; ++k)
         buf[k] = static_cast<float> (seg[static_cast<size_t> (k)] * g);
 }

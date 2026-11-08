@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "fixtures.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/preset.h"
 #include "sha256.h"
@@ -1298,13 +1299,34 @@ TEST (user_wavetable_store)
     wt.author = "Test Author";
     wt.numFrames = 2;
     wt.frames.resize (2 * 2048, 100);
-    wt.sha256 = Sha256::hashBufferHex (wt.frames.data(), wt.frames.size() * sizeof (int16_t));
 
     std::string pack, file;
     CHECK (store.addWavetable (wt, pack, file));
     CHECK_EQ (pack, std::string ("user.imported-vital"));
     CHECK (! file.empty());
-    CHECK (store.hasWavetable (wt.sha256));
+    // regression: the store wrote the raw int16 frames, which the engine (a WAV reader) never accepted: every imported table played the saw
+    CHECK (file.size() > 4 && file.compare (file.size() - 4, 4, ".wav") == 0);
+    CHECK_EQ (store.packInfo().files.size(), static_cast<size_t> (1));
+    const std::string fileSha = store.packInfo().files[0].sha256;
+    CHECK (store.hasWavetable (fileSha));
+    {
+        // the content store reads it back through the hash check, as a RIFF/WAVE 16-bit mono PCM file of 2 x 2048 samples
+        const DirectoryContentStore reader (tempDir.string()); // <root>/<pack>/<file>: the store keeps its pack in <root>/<pack id>
+        ContentFileRef ref;
+        ref.pack = pack;
+        ref.file = file;
+        ref.sha256 = fileSha;
+        std::vector<uint8_t> bytes;
+        CHECK (reader.readFile (ref, bytes));
+        CHECK_EQ (bytes.size(), static_cast<size_t> (44 + 2 * 2048 * 2));
+        if (bytes.size() >= 44)
+        {
+            CHECK (std::memcmp (bytes.data(), "RIFF", 4) == 0 && std::memcmp (bytes.data() + 8, "WAVE", 4) == 0);
+            CHECK_EQ (static_cast<int> (bytes[22]), 1);                    // mono
+            CHECK_EQ (static_cast<int> (bytes[34]), 16);                   // bits per sample
+            CHECK_EQ (static_cast<int> (static_cast<int16_t> (bytes[44] | (bytes[45] << 8))), 100); // the first sample
+        }
+    }
 
     // Deduplication check
     std::string pack2, file2;
@@ -1390,6 +1412,12 @@ TEST (vi_import_serialize_load_round_trip)
         CHECK_EQ (loadedContent.wavetables[0].ref.file, refs.wavetables[0].file);
         CHECK_EQ (loadedContent.wavetables[0].ref.sha256, r.wavetables[0].sha256);
         CHECK_EQ (loadedContent.wavetables[0].frames, r.wavetables[0].numFrames);
+        // regression: the reference hash is the hash of the stored FILE, so the content store that the engine uses resolves it
+        const DirectoryContentStore reader (tempDir.string());
+        ContentFileRef ref = loadedContent.wavetables[0].ref;
+        std::vector<uint8_t> bytes;
+        CHECK (reader.readFile (ref, bytes));
+        CHECK (bytes == r.wavetables[0].wavBytes);
     }
 
     CHECK_EQ (loadedContent.lfoShapes.size(), static_cast<size_t> (1));
@@ -1543,4 +1571,176 @@ TEST (vi_unused_mod_slots_are_not_reported)
     CHECK (r.report.fidelity != Fidelity::degraded);
     for (const auto& it : r.report.items)
         CHECK (it.vitalName.compare (0, 12, "modulations[") != 0 || it.vitalName == "modulations[0]");
+}
+
+// Real files write the two switches of an Audio File Source as JSON booleans (`"normalize_gain":false,"normalize_mult":false`). They were read as
+// numbers: `false` became a gain of 0 and every wavetable built from an audio file (15 of the 105 tables of the owner's presets) was silent.
+TEST (vi_audio_file_table_with_off_switches_is_not_silent)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    std::vector<int16_t> pcm (4096);
+    for (size_t i = 0; i < pcm.size(); ++i) // two partials: a pure sine would match the built-in Sine and not be stored
+    {
+        const double x = 2.0 * 3.14159265358979323846 * static_cast<double> (i) / 512.0;
+        pcm[i] = static_cast<int16_t> (std::lround (7000.0 * std::sin (x) + 3000.0 * std::sin (3.0 * x + 0.5)));
+    }
+    std::vector<uint8_t> bytes (pcm.size() * 2);
+    for (size_t i = 0; i < pcm.size(); ++i)
+    {
+        bytes[i * 2] = static_cast<uint8_t> (static_cast<uint16_t> (pcm[i]) & 0xFF);
+        bytes[i * 2 + 1] = static_cast<uint8_t> (static_cast<uint16_t> (pcm[i]) >> 8);
+    }
+    const std::string kf = "{\"position\":0,\"start_position\":0,\"window_fade\":1,\"window_size\":512}";
+    const std::string common = ",\"window_size\":512,\"fade_style\":1,\"phase_style\":0,\"random_seed\":3,\"audio_sample_rate\":44100,\"audio_file\":\"" + b64 (bytes.data(), bytes.size()) + "\"";
+    const std::string off = wavetable ("AF off", { component ("Audio File Source", "\"normalize_gain\":false,\"normalize_mult\":false" + common, { kf }) });
+    const std::string on = wavetable ("AF on", { component ("Audio File Source", "\"normalize_gain\":true,\"normalize_mult\":true" + common, { kf }) });
+    f.wavetables = "[" + off + "," + on + "]";
+    ImportOptions o;
+    o.caps.customWavetables = true;
+    const auto r = run (f, o);
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.wavetables.size(), static_cast<size_t> (2));
+    if (r.wavetables.size() == 2)
+    {
+        int peakOff = 0, peakOn = 0;
+        for (int16_t v : r.wavetables[0].frames)
+            peakOff = std::max (peakOff, std::abs (static_cast<int> (v)));
+        for (int16_t v : r.wavetables[1].frames)
+            peakOn = std::max (peakOn, std::abs (static_cast<int> (v)));
+        CHECK (peakOff > 7000 && peakOff < 10500);   // switches off: the PCM level (peak of the two partials about 9000 of 32767)
+        CHECK (peakOn > 32000);                       // both on: normalised to full scale
+    }
+}
+
+// Every key of `settings` ends up in one of imported / approximated / dropped / ignored. The members a newer Vital (or a tool that writes its
+// own) adds were only counted as "unknown", never reported.
+TEST (vi_every_unknown_setting_gets_an_item)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("osc_1_on", 1);
+    f.set ("osc_1_spectral_morph_type", 3);
+    f.set ("osc_1_spectral_morph_amount", 0.5);
+    f.set ("osc_1_spectral_morph_phase", 0.8);  // audible: morph on, phase not the default
+    f.set ("osc_2_spectral_morph_phase", 0.5);  // default
+    f.set ("osc_3_spectral_morph_phase", 0.9);  // osc 3 is off
+    f.setRaw ("custom_warps", "[{\"name\":\"Triangle\",\"num_points\":3,\"points\":[0,1,0.5,0,1,1],\"powers\":[0,0,0],\"smooth\":false}]");
+    f.setRaw ("random_values", "[{\"seed\":4},{\"seed\":5}]");
+    f.set ("eq_high_shelf_gain", 3.5);
+    const auto r = run (f, ImportOptions());
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.report.vitalUnknownKeys, 6);
+    const ReportItem* audible = findItem (r, "osc_1_spectral_morph_phase", ItemKind::dropped);
+    CHECK (audible != nullptr);
+    CHECK (findItem (r, "osc_2_spectral_morph_phase", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "osc_3_spectral_morph_phase", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "custom_warps", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "random_values", ItemKind::ignored) != nullptr);
+    const ReportItem* shelf = findItem (r, "eq_high_shelf_gain", ItemKind::ignored);
+    CHECK (shelf != nullptr && shelf->vitalValue == "3.5");
+    // a user warp that a warp type above the built-in ones selects is a loss
+    f.set ("osc_1_distortion_type", 13);
+    const auto selected = run (f, ImportOptions());
+    CHECK (findItem (selected, "custom_warps", ItemKind::dropped) != nullptr);
+}
+
+// The settings of a sample that was mapped to an oscillator are carried by that oscillator: they are imported, not lost between the classes.
+TEST (vi_mapped_sample_settings_are_accounted)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("sample_on", 1);
+    f.set ("sample_loop", 1);
+    f.set ("sample_keytrack", 1);
+    f.set ("sample_bounce", 0);
+    f.set ("sample_random_phase", 0);
+    f.set ("sample_transpose", 3);
+    f.set ("sample_tune", 0.1);
+    f.set ("sample_transpose_quantize", 0);
+    f.sample = "{\"name\":\"My Sample\",\"length\":100,\"sample_rate\":48000,\"samples\":\"AAAA\"}";
+    ImportOptions o;
+    o.caps.sampleOsc = true;
+    const auto mapped = run (f, o);
+    CHECK_EQ (mapped.samples.size(), static_cast<size_t> (1));
+    for (const char* key : { "sample_loop", "sample_keytrack", "sample_bounce", "sample_random_phase", "sample_transpose", "sample_tune" })
+        for (const auto& it : mapped.report.items)
+            CHECK (it.vitalName != key);
+    const ReportItem* quantize = findItem (mapped, "sample_transpose_quantize", ItemKind::ignored);
+    CHECK (quantize != nullptr && quantize->detail == "engine_fixed_value");
+    // without the capability nothing carries them: ignored items, as before
+    const auto lost = run (f, ImportOptions());
+    CHECK (findItem (lost, "sample_loop", ItemKind::ignored) != nullptr);
+}
+
+// A value that is not Vital's default for a behaviour setting we have no key for changes the sound: dropped, not ignored. MPE has a key.
+TEST (vi_behaviour_settings_are_dropped_when_not_default_and_mpe_is_imported)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("stereo_routing", 1);
+    f.set ("voice_override", 0);
+    f.set ("voice_priority", 4);
+    f.set ("mpe_enabled", 1);
+    auto r = run (f, ImportOptions());
+    CHECK (findItem (r, "stereo_routing", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "voice_override", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "mpe_enabled", ItemKind::ignored) == nullptr);
+    CHECK_EQ (val (r, "master.mpe.on"), 1.0f);
+    f.set ("stereo_routing", 0.41);
+    f.set ("voice_override", 1);
+    f.set ("mpe_enabled", 0);
+    r = run (f, ImportOptions());
+    CHECK (findItem (r, "stereo_routing", ItemKind::dropped) != nullptr);
+    CHECK (findItem (r, "voice_override", ItemKind::dropped) != nullptr);
+    CHECK_EQ (val (r, "master.mpe.on"), 0.0f);
+}
+
+// The built-in shortcut (a single frame equal to a built-in single cycle is not stored) and its limit: a table is only "the built-in" when the
+// WAVEFORM is the same. Vital's own `Init` (a falling saw with its jump at mid cycle, the opposite polarity of our rising Saw) and a phase shifted
+// `Sine` are different waveforms: a built-in table has no phase / polarity to offer, so they are stored (docs/ui-design/VITAL-IMPORT-AUDIT-REPORT.md 6).
+TEST (vi_single_cycle_shortcut_needs_the_same_waveform)
+{
+    using namespace sbfx;
+    const auto build = [] (int builtin, bool shiftAndInvert, bool shiftOnly)
+    {
+        std::vector<float> w (2048);
+        vitalimport::builtinWavetableFrame (builtin, 0.0, w.data());
+        std::vector<float> out (2048);
+        for (int n = 0; n < 2048; ++n)
+        {
+            if (shiftAndInvert)
+                out[static_cast<size_t> (n)] = -w[static_cast<size_t> ((n + 1024) % 2048)];
+            else if (shiftOnly)
+                out[static_cast<size_t> (n)] = w[static_cast<size_t> ((n + 300) % 2048)];
+            else
+                out[static_cast<size_t> (n)] = w[static_cast<size_t> (n)];
+        }
+        return out;
+    };
+    ImportOptions o;
+    o.caps.customWavetables = true;
+    const auto importTable = [&] (const std::vector<float>& wave)
+    {
+        Fixture f = defaultPatch();
+        f.wavetables = "[" + wavetable ("T", { component ("Wave Source", "\"interpolation\":0", { waveKeyframe (0, wave) }) }) + "]";
+        return run (f, o);
+    };
+    for (const int builtin : { 0, 1, 2, 3, 4 })
+    {
+        const auto r = importTable (build (builtin, false, false));
+        CHECK (r.wavetables.empty());
+        CHECK_EQ (val (r, "osc1.wavetable"), static_cast<float> (builtin));
+    }
+    // Vital's Init: -saw (n + half a cycle), a falling saw; (for the sine the same operation gives the same sine again)
+    const auto init = importTable (build (1, true, false));
+    CHECK_EQ (init.wavetables.size(), static_cast<size_t> (1));
+    CHECK_EQ (val (init, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
+    CHECK (importTable (build (0, true, false)).wavetables.empty());
+    for (const int builtin : { 0, 1 })
+    {
+        const auto shifted = importTable (build (builtin, false, true));
+        CHECK_EQ (shifted.wavetables.size(), static_cast<size_t> (1));
+        CHECK_EQ (val (shifted, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
+    }
 }
