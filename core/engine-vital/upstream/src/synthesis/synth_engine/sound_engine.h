@@ -99,6 +99,7 @@ namespace sbvital {
       FilterCurveShared* getFilterCurve(int index);   // 0 filter 1, 1 filter 2, 2 the FX filter
       Sample* getSample();
       LineGenerator* getLfoSource(int index);
+      SynthLfo* getLfo(int index);   // SynthyBoy: the LFO processor (point modulation sources, per-voice tables)
 
       void sustainOn(int channel);
       void sustainOff(int sample, int channel);

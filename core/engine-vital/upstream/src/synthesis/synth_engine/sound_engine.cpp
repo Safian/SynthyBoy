@@ -410,6 +410,10 @@ namespace sbvital {
     return voice_handler_->getLfoSource(index);
   }
 
+  SynthLfo* SoundEngine::getLfo(int index) {
+    return voice_handler_->getLfo(index);
+  }
+
   void SoundEngine::sustainOn(int channel) {
     voice_handler_->sustainOn(channel);
   }

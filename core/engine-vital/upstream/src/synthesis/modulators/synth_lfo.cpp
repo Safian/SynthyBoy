@@ -30,8 +30,82 @@ namespace sbvital {
     was_control_rate_ = true;
     sync_seconds_ = std::make_shared<double>();
     *sync_seconds_ = 0;
+    point_state_ = std::make_shared<LfoPointState>();
+    mono_master_ = std::make_shared<MonoMaster>();
 
     trigger_sample_ = 0;
+  }
+
+  // SynthyBoy: bakes the table of every voice of the pair whose point modulation sources have moved (budgeted), and points the four
+  // lanes at them. A voice without a usable table (nothing baked yet, or none within the budget) reads the shared table.
+  void SynthLfo::updatePointTables() {
+    static_assert(poly_float::kSize == 4, "per-voice LFO tables assume two voices per poly_float");
+    LfoPointState& state = *point_state_;
+    voice_mode_ = false;
+    if (state.modulation == nullptr)
+      return;
+
+    const uint64_t used = state.modulation->sources();
+    const mono_float* shared_table = source_->getCubicInterpolationBuffer();
+    const int shared_resolution = source_->resolution();
+    const int resolution = state.resolution;
+    const mono_float* buffers[kPointVoices];
+    int resolutions[kPointVoices];
+
+    for (int v = 0; v < kPointVoices; ++v) {
+      float values[LfoPointModulation::kMaxSources] = {};
+      bool changed = !voice_baked_[v] || voice_generation_[v] != state.generation;
+      for (int s = 0; s < LfoPointModulation::kMaxSources; ++s) {
+        if (((used >> s) & 1) == 0)
+          continue;
+        float raw = ((state.global_mask >> s) & 1) ? state.global_values[s] : input(kPointSource0 + s)->at(0)[2 * v];
+        if (!(raw > -1.0e4f && raw < 1.0e4f))
+          raw = 0.0f;
+        // 1/4096 steps: the table is baked again only for a change a listener cannot hear, and the result does not depend on rounding noise
+        values[s] = std::round(raw * 4096.0f) * (1.0f / 4096.0f);
+        if (values[s] != voice_values_[v][s])
+          changed = true;
+      }
+
+      if (changed) {
+        int* budget = state.budget.get();
+        const bool allowed = (budget != nullptr && *budget > 0) || voice_waited_[v] >= state.force_after;
+        if (allowed) {
+          if (budget != nullptr && *budget > 0)
+            --(*budget);
+          mono_float* table = voice_tables_[v];
+          state.modulation->bake(values, resolution, table + 1);
+          table[0] = table[1];
+          table[resolution + 1] = table[resolution];
+          table[resolution + 2] = table[resolution];
+          for (int s = 0; s < LfoPointModulation::kMaxSources; ++s)
+            voice_values_[v][s] = values[s];
+          voice_baked_[v] = true;
+          voice_generation_[v] = state.generation;
+          voice_waited_[v] = 0;
+        }
+        else
+          ++voice_waited_[v];
+      }
+      else
+        voice_waited_[v] = 0;
+
+      if (voice_baked_[v] && voice_generation_[v] == state.generation) {
+        buffers[v] = voice_tables_[v];
+        resolutions[v] = resolution;
+      }
+      else {
+        buffers[v] = shared_table;
+        resolutions[v] = shared_resolution;
+      }
+    }
+
+    for (int lane = 0; lane < 4; ++lane)
+      lane_buffers_[lane] = buffers[lane / 2];
+    lane_resolution_ = poly_float(static_cast<float>(resolutions[0]), static_cast<float>(resolutions[0]),
+                                  static_cast<float>(resolutions[1]), static_cast<float>(resolutions[1]));
+    lane_max_index_ = poly_int(resolutions[0] - 1, resolutions[0] - 1, resolutions[1] - 1, resolutions[1] - 1);
+    voice_mode_ = true;
   }
 
   force_inline void SynthLfo::processTrigger() {
@@ -39,8 +113,21 @@ namespace sbvital {
     direction_ = static_cast<int>(utils::clamp(std::round(input(kDirection)->at(0)[0]), 0.0f, 2.0f));
     poly_mask reset_mask = getResetMask(kNoteTrigger);
     poly_mask release_mask = getReleaseMask();
-    held_mask_ = (held_mask_ | reset_mask) & ~release_mask;
     poly_int trigger_offset = input(kNoteTrigger)->source->trigger_offset;
+    if (mono_env_) {
+      // SynthyBoy: one instance for all voices: it restarts with a new note group (at the start of the chunk), is held while a key is down
+      // or the pedal is, and the notes of single voices neither restart nor release it
+      const poly_mask all = poly_float::equal(poly_float(0.0f), poly_float(0.0f));
+      reset_mask = mono_new_group_ ? all : poly_mask();
+      release_mask = poly_mask();
+      held_mask_ = point_state_->note_group->held ? all : poly_mask();
+      trigger_sample_ = poly_int(0);
+      trigger_offset = poly_int(0);
+      trigger_delay_ = 0.0f;
+    }
+    else
+      held_mask_ = (held_mask_ | reset_mask) & ~release_mask;
+    reset_mask_ = reset_mask;
     trigger_sample_ = utils::maskLoad(trigger_sample_, trigger_offset, (reset_mask | release_mask));
 
     control_rate_state_.delay_time_passed = utils::maskLoad(control_rate_state_.delay_time_passed, 0.0f, reset_mask);
@@ -414,9 +501,9 @@ namespace sbvital {
 
     int sync_type = input(kSyncType)->at(0)[0];
     if (sync_type == kSustainEnvelope)
-      current_phase = utils::maskLoad(current_phase, 0.0f, getResetMask(kNoteTrigger));
+      current_phase = utils::maskLoad(current_phase, 0.0f, reset_mask_);
     else
-      current_phase = utils::maskLoad(current_phase, audio_rate_state_.phase, getResetMask(kNoteTrigger));
+      current_phase = utils::maskLoad(current_phase, audio_rate_state_.phase, reset_mask_);
 
     poly_float frequency = input(kFrequency)->at(0);
     float tick_time = 1.0f / getSampleRate();
@@ -439,17 +526,69 @@ namespace sbvital {
     output(kOscFrequency)->buffer[0] = frequency;
   }
 
+  namespace {
+    // the two lanes of the first voice of a pair copied to both voices
+    force_inline poly_float bothVoices(poly_float v) {
+      return poly_float(v[0], v[1], v[0], v[1]);
+    }
+
+    SynthLfo::LfoState bothVoices(const SynthLfo::LfoState& s) {
+      SynthLfo::LfoState result;
+      result.delay_time_passed = bothVoices(s.delay_time_passed);
+      result.fade_amplitude = bothVoices(s.fade_amplitude);
+      result.smooth_value = bothVoices(s.smooth_value);
+      result.fade_amount = bothVoices(s.fade_amount);
+      result.offset = bothVoices(s.offset);
+      result.phase = bothVoices(s.phase);
+      return result;
+    }
+  }
+
+  // SynthyBoy: a mono LFO in the envelope and loop modes is one instance for all voices (assumption A45 of docs/ui-design/13-new-keys.md).
+  void SynthLfo::beginMono() {
+    mono_env_ = false;
+    const LfoPointState& state = *point_state_;
+    if (!state.mono || !state.note_group)
+      return;
+    const int sync_type = input(kSyncType)->at(0)[0];
+    if (sync_type != kEnvelope && sync_type != kSustainEnvelope && sync_type != kLoopPoint && sync_type != kLoopHold)
+      return;
+
+    mono_env_ = true;
+    const LfoNoteGroup& notes = *state.note_group;
+    MonoMaster& master = *mono_master_;
+    mono_leader_ = master.chunk != notes.chunk;
+    mono_new_group_ = mono_leader_ && master.group != notes.group;
+    if (!mono_new_group_) {
+      control_rate_state_ = bothVoices(master.control);
+      audio_rate_state_ = bothVoices(master.audio);
+    }
+  }
+
+  void SynthLfo::endMono() {
+    if (!mono_env_ || !mono_leader_)
+      return;
+    MonoMaster& master = *mono_master_;
+    master.control = control_rate_state_;
+    master.audio = audio_rate_state_;
+    master.chunk = point_state_->note_group->chunk;
+    master.group = point_state_->note_group->group;
+  }
+
   void SynthLfo::process(int num_samples) {
     bool control_rate = isControlRate();
     if (was_control_rate_ && !control_rate)
       audio_rate_state_ = control_rate_state_;
     was_control_rate_ = control_rate;
 
+    updatePointTables();
+    beginMono();
     processTrigger();
 
     if (!control_rate)
       processAudioRate(num_samples);
     processControlRate(num_samples);
+    endMono();
   }
 
   void SynthLfo::correctToTime(double seconds) {

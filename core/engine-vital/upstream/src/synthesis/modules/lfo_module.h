@@ -46,6 +46,7 @@ namespace sbvital {
       void init() override;
       virtual Processor* clone() const override { return new LfoModule(*this); }
       void correctToTime(double seconds) override;
+      SynthLfo* lfo() { return lfo_; }   // SynthyBoy
       void setControlRate(bool control_rate) override;
 
     protected:
