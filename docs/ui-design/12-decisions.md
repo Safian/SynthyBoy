@@ -35,7 +35,7 @@ Q5 ask owner for MPC screen resolution / hardware controls. Q9 keep Vital warp +
 | 2 | LFO swing | Serum-style global amount + division | 2 keys + UI; per-LFO swing keys stay for old presets |
 | 3 | Several instances of one effect, arbitrary module count | Yes, several instances | dynamic FX instancing; the 2048 key budget (1596 used) does not fit it as flat keys: needs an instance/rack content model (design first) |
 | 4 | MTS-ESP | Verify the libMTSClient licence and link it | licence check first, then the Step mode binding |
-| 5 | Serum 1 presets / Compatibility Mode | Compatibility Mode wanted | needs a Serum 1 behaviour switch; the Serum 1 preset format is not in the repo: scope to be defined (open question) |
+| 5 | Serum 1 presets / Compatibility Mode | CORRECTED 2026-11-09: no Serum 1 at all. The target is Serum 2 only (filters, warps and everything else come from the Serum 2 manual). Wanted instead: Serum 2 preset import (.SerumPreset), tested on the 656 factory/user presets installed in /Library/Audio/Presets/Xfer Records/Serum 2 Presets | new work package WP-21 (importer in the pattern of core/vital-import); no Serum 1 mode, no .fxp import |
 | 6 | Kept-different settings (14 row 31) | Align everything to Serum | defaults and ranges per manual; the 112 factory presets must be re-tuned and listened to |
 | 7 | Hi-res wavetable switch, Round Robin priority | Both | 1 key + engine; Round Robin appended to the voice steal priority list |
 | 8 | Save-preset dialog and metadata editing | In the plugin as well | JUCE editor dialog (name, author, category, tags, comment) |

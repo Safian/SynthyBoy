@@ -191,3 +191,8 @@ Ordered by effect on a user of the plug-in, not by size:
 10. **Offline render features: Resample, Render OSC Warp, share audio** (WP-15).
 
 Smaller but audible: MPE mappings (WP-09), RISE / FALL (WP-08), live modulation display (WP-17), the 12 MANUALCHECK keys (WP-04, 05, 10).
+
+
+### WP-21 Serum 2 preset import (owner decision 2026-11-09, replaces the Serum 1 compatibility idea)
+
+Goal: import `.SerumPreset` files (Serum 2) into our parameter model with the same discipline as the Vital importer: a `core/serum-import` package (no I/O in the library), a CLI in `tools/`, a per-file report (imported / approximated / dropped / ignored, nothing unaccounted), the independent audit script pattern of `scripts/audit-vital-import.py`, and tests on the 656 real presets installed at `/Library/Audio/Presets/Xfer Records/Serum 2 Presets` (copy to the gitignored `tests/serum-presets/`, never commit). First step: reverse the container (header, compression, JSON/CBOR body) from the real files and write the format down in `docs/ui-design/19-serum-preset-format.md`; then map every Serum 2 parameter to our keys or content (wavetables, samples, noise, LFO shapes, mod matrix with curves, FX racks); dropped items become backlog rows. Depends on: most feature packages (the more features exist, the less is dropped); the importer can start now and gain coverage as WP-01..13 land. Keys: 0 to a few. Size XL.
