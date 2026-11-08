@@ -166,8 +166,8 @@ TEST (choice_names_match_the_range)
     CHECK (stepped > 300); // switches, models, the 128 source / destination choices of the matrix, ...
 
     // the built-in lists have the sizes the engines build
-    CHECK_EQ (choiceCount (byKey ("osc1.wavetable")), static_cast<size_t> (kNumBuiltinWavetables));
-    CHECK_EQ (choiceCount (byKey ("lfo8.shape")), static_cast<size_t> (kNumLfoShapes));
+    CHECK_EQ (choiceCount (byKey ("osc1.wavetable")), static_cast<size_t> (kNumWavetableChoices));
+    CHECK_EQ (choiceCount (byKey ("lfo8.shape")), static_cast<size_t> (kNumLfoShapes + 1));
     CHECK_EQ (choiceCount (byKey ("fx.order.9")), static_cast<size_t> (kNumFxSlots));
     CHECK (std::strcmp (choiceName (byKey ("osc1.wavetable"), kWavetableSine), "Sine") == 0);
     CHECK (std::strcmp (choiceName (byKey ("osc3.wavetable"), kWavetableSaw), "Saw") == 0);
@@ -294,7 +294,7 @@ TEST (normalise_known_values)
     const auto& wt = byKey ("osc1.wavetable");
     CHECK (toNormalised (wt, 0.0f) == 0.0f && toNormalised (wt, wt.max) == 1.0f);
     CHECK (fromNormalised (wt, 0.0f) == 0.0f && fromNormalised (wt, 1.0f) == wt.max);
-    CHECK_EQ (fromNormalised (wt, 0.5f), 6.0f); // 13 choices: the middle one
+    CHECK_EQ (fromNormalised (wt, 0.5f), 7.0f); // 14 choices (13 built-in tables and Preset table): 6.5 rounds up
 }
 
 TEST (normalise_round_trip)

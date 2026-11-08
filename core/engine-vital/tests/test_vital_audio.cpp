@@ -995,7 +995,7 @@ TEST (fx_order_changes_the_output)
         setByKey (*e, "fx.order.1", firstSlot);
         setByKey (*e, "fx.order.2", secondSlot);
         int slot = 3;
-        for (int fx = 0; fx < kNumFxSlots; ++fx)
+        for (int fx = 0; fx < kNumLegacyFxSlots; ++fx)
             if (fx != static_cast<int> (firstSlot) && fx != static_cast<int> (secondSlot))
                 setByKey (*e, ("fx.order." + std::to_string (slot++)).c_str(), static_cast<float> (fx));
         prepare (*e);
@@ -1017,7 +1017,7 @@ TEST (fx_order_changes_the_output)
     // an invalid order (duplicates) still gives a valid permutation: all effects run, output finite
     auto e = makeEngine();
     sawProbe (*e);
-    for (int i = 1; i <= kNumFxSlots; ++i)
+    for (int i = 1; i <= kNumLegacyFxSlots; ++i)
         setByKey (*e, ("fx.order." + std::to_string (i)).c_str(), 2.0f);
     setByKey (*e, "delay.on", 1.0f);
     setByKey (*e, "reverb.on", 1.0f);

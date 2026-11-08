@@ -179,7 +179,8 @@ public:
 
     bool supportsParam (uint32_t id) const noexcept override
     {
-        return findParamIndex (id) >= 0; // every parameter of the table is implemented
+        const int i = findParamIndex (id);
+        return i >= 0 && static_cast<size_t> (i) < kNumKeysV2; // the keys of state version 3 are stored but not implemented yet
     }
 
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override
@@ -425,14 +426,22 @@ private:
         {
             const std::string key = paramTable()[i].key;
             const auto number = [&] (size_t from) { return std::atoi (key.c_str() + from); };
+            // the engine implements 3 oscillators, 8 LFOs and the 9 effect slots of state version 2; the keys of osc/LFO/slot numbers
+            // beyond (lfo9, lfo10, fx.order.10 ..) are stored and ignored until a later work package gives them a meaning
             if (endsWith (key, ".wavetable"))
                 wavetableParam[static_cast<size_t> (number (3) - 1)] = static_cast<int> (i); // "osc1.wavetable": the digit at 3
             else if (endsWith (key, ".shape"))
-                shapeParam[static_cast<size_t> (number (3) - 1)] = static_cast<int> (i);    // "lfo3.shape"
+            {
+                if (number (3) <= kNumLfo)
+                    shapeParam[static_cast<size_t> (number (3) - 1)] = static_cast<int> (i);    // "lfo3.shape"
+            }
             else if (key == "filter.routing")
                 routingParam = static_cast<int> (i);
             else if (key.compare (0, 9, "fx.order.") == 0)
-                fxOrderParam[static_cast<size_t> (number (9) - 1)] = static_cast<int> (i);
+            {
+                if (number (9) <= kNumLegacyFxSlots)
+                    fxOrderParam[static_cast<size_t> (number (9) - 1)] = static_cast<int> (i);
+            }
             else if (key == "master.bend_range")
                 bendRangeParam = static_cast<int> (i);
         }
@@ -442,7 +451,7 @@ private:
         to wire a slot is looked up here (the lookups take std::string and walk maps: allocation, not for process()). */
     void resolveModulation()
     {
-        for (size_t k = 0; k < static_cast<size_t> (kNumModSources); ++k)
+        for (size_t k = 0; k < static_cast<size_t> (kNumModSourcesV2); ++k) // the sources 29 .. 38 have no output here: slots using them stay unwired
             sourceOutput[k] = engine->getModulationSource (vitalSourceName (static_cast<int> (k)));
 
         destinations.assign (modDestinationCount() + 1, Destination {});
@@ -542,7 +551,9 @@ private:
             const int p = wavetableParam[static_cast<size_t> (i)];
             if (p < 0)
                 continue;
-            const int index = static_cast<int> (params[static_cast<size_t> (p)].load (std::memory_order_relaxed) + 0.5f);
+            int index = static_cast<int> (params[static_cast<size_t> (p)].load (std::memory_order_relaxed) + 0.5f);
+            if (index >= kNumBuiltinWavetables)
+                index = kWavetableSaw; // "Preset table": no content store yet, the documented fallback is the saw
             if (index != appliedWavetable[static_cast<size_t> (i)])
             {
                 appliedWavetable[static_cast<size_t> (i)] = index;
@@ -556,7 +567,9 @@ private:
             const int p = shapeParam[static_cast<size_t> (i)];
             if (p < 0 || lfoLines[static_cast<size_t> (i)] == nullptr)
                 continue;
-            const int shape = static_cast<int> (params[static_cast<size_t> (p)].load (std::memory_order_relaxed) + 0.5f);
+            int shape = static_cast<int> (params[static_cast<size_t> (p)].load (std::memory_order_relaxed) + 0.5f);
+            if (shape >= kNumLfoShapes)
+                shape = 0; // "Custom": no custom point lists yet, the documented fallback is the sine
             if (shape != appliedShape[static_cast<size_t> (i)])
             {
                 appliedShape[static_cast<size_t> (i)] = shape;
@@ -578,9 +591,9 @@ private:
             }
         }
 
-        float choices[kNumFxSlots];
+        float choices[kNumLegacyFxSlots];
         bool same = true;
-        for (int i = 0; i < kNumFxSlots; ++i)
+        for (int i = 0; i < kNumLegacyFxSlots; ++i)
         {
             const int p = fxOrderParam[static_cast<size_t> (i)];
             choices[i] = p >= 0 ? params[static_cast<size_t> (p)].load (std::memory_order_relaxed) : static_cast<float> (i);
@@ -588,11 +601,11 @@ private:
         }
         if (! same || appliedFxOrder < 0.0f)
         {
-            for (int i = 0; i < kNumFxSlots; ++i)
+            for (int i = 0; i < kNumLegacyFxSlots; ++i)
                 appliedChoices[static_cast<size_t> (i)] = choices[i];
-            int order[kNumFxSlots];
+            int order[kNumLegacyFxSlots];
             resolveFxOrder (choices, order);
-            appliedFxOrder = sbvital::utils::encodeOrderToFloat (order, kNumFxSlots);
+            appliedFxOrder = sbvital::utils::encodeOrderToFloat (order, kNumLegacyFxSlots);
             if (vFxOrder != nullptr)
                 vFxOrder->set (appliedFxOrder);
         }
@@ -771,11 +784,11 @@ private:
     std::array<float, kMaxParams> applied {};
     std::array<int, kNumOsc> appliedWavetable {};
     std::array<int, kNumLfo> appliedShape {};
-    std::array<float, kNumFxSlots> appliedChoices {};
+    std::array<float, kNumLegacyFxSlots> appliedChoices {};
     float appliedRouting = -1.0f, appliedFxOrder = -1.0f;
     std::array<int, kNumOsc> wavetableParam { { -1, -1, -1 } };
     std::array<int, kNumLfo> shapeParam { { -1, -1, -1, -1, -1, -1, -1, -1 } };
-    std::array<int, kNumFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<int, kNumLegacyFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
     int routingParam = -1, bendRangeParam = -1;
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;

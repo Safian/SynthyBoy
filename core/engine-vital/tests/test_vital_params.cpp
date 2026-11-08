@@ -56,7 +56,9 @@ TEST (every_parameter_is_bound_or_special_exactly_once)
         ++bound[b.param];
     }
     size_t special = 0;
-    for (size_t i = 0; i < paramCount(); ++i)
+    for (size_t i = kNumKeysV2; i < paramCount(); ++i)
+        CHECK_EQ (bound[i], 0); // the keys of state version 3 are stored and ignored: no binding yet (the caps decide when they get one)
+    for (size_t i = 0; i < kNumKeysV2; ++i)
     {
         if (isSpecialParam (i))
         {
@@ -69,7 +71,7 @@ TEST (every_parameter_is_bound_or_special_exactly_once)
         }
     }
     // 3 + 3 wavetables / shapes... : 3 oscillators, 8 LFOs, routing, 9 FX order slots, 2 x 64 slot choices, bend range
-    CHECK_EQ (special, static_cast<size_t> (3 + 8 + 1 + kNumFxSlots + 2 * kNumModSlots + 1));
+    CHECK_EQ (special, static_cast<size_t> (3 + 8 + 1 + kNumLegacyFxSlots + 2 * kNumModSlots + 1));
     std::printf ("    %zu bound, %zu special\n", vitalBindings().size(), special);
 
     // every control exists in the engine and no two parameters share one
@@ -168,38 +170,38 @@ TEST (converters_known_values)
 
 TEST (fx_order_is_always_a_permutation)
 {
-    int order[kNumFxSlots];
+    int order[kNumLegacyFxSlots];
 
     // a valid permutation is kept
-    const float natural[kNumFxSlots] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+    const float natural[kNumLegacyFxSlots] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
     resolveFxOrder (natural, order);
-    for (int i = 0; i < kNumFxSlots; ++i)
+    for (int i = 0; i < kNumLegacyFxSlots; ++i)
         CHECK_EQ (order[i], i);
-    const float reversed[kNumFxSlots] = { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+    const float reversed[kNumLegacyFxSlots] = { 8, 7, 6, 5, 4, 3, 2, 1, 0 };
     resolveFxOrder (reversed, order);
-    for (int i = 0; i < kNumFxSlots; ++i)
+    for (int i = 0; i < kNumLegacyFxSlots; ++i)
         CHECK_EQ (order[i], 8 - i);
 
     // duplicates: the first position keeps the effect, later ones take the lowest free effect
-    const float dup[kNumFxSlots] = { 5, 5, 5, 0, 0, 0, 8, 8, 8 };
+    const float dup[kNumLegacyFxSlots] = { 5, 5, 5, 0, 0, 0, 8, 8, 8 };
     resolveFxOrder (dup, order);
-    const int expected[kNumFxSlots] = { 5, 0, 1, 2, 3, 4, 8, 6, 7 };
-    for (int i = 0; i < kNumFxSlots; ++i)
+    const int expected[kNumLegacyFxSlots] = { 5, 0, 1, 2, 3, 4, 8, 6, 7 };
+    for (int i = 0; i < kNumLegacyFxSlots; ++i)
         CHECK_EQ (order[i], expected[i]);
 
     // anything at all gives a permutation, deterministically
     sbtest::Rng rng (3);
     for (int trial = 0; trial < 5000; ++trial)
     {
-        float choices[kNumFxSlots];
+        float choices[kNumLegacyFxSlots];
         for (auto& c : choices)
-            c = trial % 7 == 0 ? static_cast<float> (rng.u32() % 20) - 5.0f : static_cast<float> (rng.u32() % kNumFxSlots);
-        int a[kNumFxSlots], b[kNumFxSlots];
+            c = trial % 7 == 0 ? static_cast<float> (rng.u32() % 20) - 5.0f : static_cast<float> (rng.u32() % kNumLegacyFxSlots);
+        int a[kNumLegacyFxSlots], b[kNumLegacyFxSlots];
         resolveFxOrder (choices, a);
         resolveFxOrder (choices, b);
-        std::set<int> seen (a, a + kNumFxSlots);
-        CHECK_EQ (seen.size(), static_cast<size_t> (kNumFxSlots));
-        CHECK (*seen.begin() == 0 && *seen.rbegin() == kNumFxSlots - 1);
+        std::set<int> seen (a, a + kNumLegacyFxSlots);
+        CHECK_EQ (seen.size(), static_cast<size_t> (kNumLegacyFxSlots));
+        CHECK (*seen.begin() == 0 && *seen.rbegin() == kNumLegacyFxSlots - 1);
         CHECK (std::memcmp (a, b, sizeof a) == 0);
     }
 }
@@ -242,7 +244,11 @@ TEST (modulatable_parameters_are_modulation_destinations_of_the_engine)
     {
         const bool flagged = (paramTable()[i].flags & kParamModulatable) != 0;
         const bool exists = vitalHasModulationDestination (*e, i);
-        if (flagged)
+        if (flagged && i >= kNumKeysV2)
+        {
+            CHECK (! exists); // the destinations of state version 3 have no engine control yet
+        }
+        else if (flagged)
         {
             ++destinations;
             if (! CHECK (exists))
@@ -256,7 +262,8 @@ TEST (modulatable_parameters_are_modulation_destinations_of_the_engine)
             CHECK (! exists);
         }
     }
-    CHECK_EQ (destinations, modDestinationCount());
+    CHECK_EQ (destinations, static_cast<size_t> (269));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (kNumModDestinations - 1));
     CHECK_EQ (missing, 0u);
 }
 
@@ -281,9 +288,9 @@ TEST (quality_tiers_cap_without_touching_the_parameters)
             CHECK_EQ (static_cast<int> (vitalControlValue (*e, ("osc_" + std::to_string (i) + "_unison_voices").c_str())), q.maxUnison);
         CHECK_EQ (static_cast<int> (vitalControlValue (*e, "oversampling")), q.oversampling >= 2 ? 1 : 0);
         CHECK_EQ (static_cast<int> (vitalControlValue (*e, "osc_1_smooth_interpolation")), q.interpolation == Interpolation::spectral ? 1 : 0);
-        const char* const fxControls[kNumFxSlots] = { "chorus_on", "compressor_on", "delay_on", "distortion_on", "eq_on", "filter_fx_on", "flanger_on",
+        const char* const fxControls[kNumLegacyFxSlots] = { "chorus_on", "compressor_on", "delay_on", "distortion_on", "eq_on", "filter_fx_on", "flanger_on",
                                                       "phaser_on", "reverb_on" };
-        for (int i = 0; i < kNumFxSlots; ++i)
+        for (int i = 0; i < kNumLegacyFxSlots; ++i)
             CHECK_EQ (static_cast<int> (vitalControlValue (*e, fxControls[i])), static_cast<int> ((q.fxMask >> i) & 1u));
 
         // ... and the stored values are what the preset asked for
@@ -435,7 +442,7 @@ TEST (modulation_slots_are_wired_and_unwired)
     for (int k = 0; k < kNumModSlots; ++k)
     {
         const auto s = modSlotParams (k);
-        e->setParam (paramTable()[s.source].id, static_cast<float> (1 + k % kNumModSources));
+        e->setParam (paramTable()[s.source].id, static_cast<float> (1 + k % kNumModSourcesV2));
         e->setParam (paramTable()[s.destination].id, static_cast<float> (cutoffChoice));
     }
     applyParams (*e);

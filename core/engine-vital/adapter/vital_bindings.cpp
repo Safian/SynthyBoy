@@ -56,6 +56,14 @@ struct Builder
 
     void percent (const std::string& key, const std::string& control, double scale = 0.01) { add (key, control, Conv::linear, scale); }
     void choice (const std::string& key, const std::string& control, double offset = 0.0) { add (key, control, Conv::index, 1.0, offset); }
+    /** Limits the choice of an already added binding to the entries the engine implements (see Binding::maxIndex). */
+    void limit (const std::string& key, int maxIndex)
+    {
+        const size_t param = indexOf (key);
+        for (auto& binding : out)
+            if (binding.param == param)
+                binding.maxIndex = maxIndex;
+    }
     void hzNote (const std::string& key, const std::string& control) { add (key, control, Conv::noteFromHz); }
 };
 
@@ -89,6 +97,7 @@ std::vector<Binding> build()
         b.add (k + "phase", c + "phase", Conv::linear, 1.0 / 360.0);
         b.percent (k + "random_phase", c + "random_phase");
         b.choice (k + "destination", c + "destination");
+        b.limit (k + "destination", 4); // 5 "Filter blend" and 6 "None" were appended in state version 3
         b.add (k + "unison.voices", c + "unison_voices", Conv::linear, 1.0, 0.0, Cap::unison);
         b.add (k + "unison.detune", c + "unison_detune", Conv::sqrtScaled, 1.0);
         b.add (k + "unison.detune_curve", c + "detune_power", Conv::linear);
@@ -109,6 +118,7 @@ std::vector<Binding> build()
     b.add ("noise.level", "sample_level", Conv::sqrtScaled, 0.01);
     b.percent ("noise.pan", "sample_pan");
     b.choice ("noise.destination", "sample_destination");
+    b.limit ("noise.destination", 4);
 
     // --- filters --------------------------------------------------------------------------------------------------
     for (const char* name : { "filter1", "filter2", "fxfilter" })
@@ -122,6 +132,8 @@ std::vector<Binding> build()
             b.choice (k + "on", c + "on");
         b.choice (k + "model", c + "model");
         b.choice (k + "style", c + "style");
+        b.limit (k + "model", 7);  // the 14 models appended in state version 3 are not implemented yet
+        b.limit (k + "style", 5);
         b.hzNote (k + "cutoff", c + "cutoff");
         b.percent (k + "resonance", c + "resonance");
         b.add (k + "drive", c + "drive", Conv::linear);
@@ -173,6 +185,7 @@ std::vector<Binding> build()
         const std::string k = "rlfo" + std::to_string (n) + ".", c = "random_" + std::to_string (n) + "_";
         b.choice (k + "style", c + "style");
         b.add (k + "rate", c + "frequency", Conv::log2Hz);
+        b.limit (k + "style", 3); // 4 "Rossler attractor" was appended in state version 3
         b.choice (k + "sync", c + "sync");
         b.choice (k + "division", c + "tempo");
         b.choice (k + "sync_type", c + "sync_type");
@@ -331,7 +344,7 @@ double convertParam (const Binding& binding, double plain, double sampleRate)
             const double limited = std::clamp (plain, 20.0, std::max (20.0, 0.45 * sampleRate));
             return 12.0 * std::log2 (limited / kMidi0Hz);
         }
-        case Conv::index:      return plain + binding.b;
+        case Conv::index:      return (binding.maxIndex >= 0 && plain > binding.maxIndex ? static_cast<double> (binding.maxIndex) : plain) + binding.b;
         case Conv::indexMap:
         {
             const int i = static_cast<int> (std::floor (plain + 0.5));
@@ -349,12 +362,12 @@ double convertParam (const Binding& binding, double plain, double sampleRate)
 
 void resolveFxOrder (const float* choices, int* order)
 {
-    bool used[kNumFxSlots] = {};
-    for (int position = 0; position < kNumFxSlots; ++position)
+    bool used[kNumLegacyFxSlots] = {};
+    for (int position = 0; position < kNumLegacyFxSlots; ++position)
     {
         const float f = choices[position];
-        int effect = f >= 0.0f && f < static_cast<float> (kNumFxSlots) ? static_cast<int> (f + 0.5f) : -1;
-        if (effect < 0 || effect >= kNumFxSlots || used[effect])
+        int effect = f >= 0.0f && f < static_cast<float> (kNumLegacyFxSlots) ? static_cast<int> (f + 0.5f) : -1;
+        if (effect < 0 || effect >= kNumLegacyFxSlots || used[effect])
         {
             effect = 0;
             while (used[effect])
