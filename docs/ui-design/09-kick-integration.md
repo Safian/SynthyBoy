@@ -1,6 +1,6 @@
 # Kick UI & Remote-Control Integration – mobile UI design
 
-Defines how SynthyBoy integrates into **Kick** (Kick mobile/tablet host and Akai MPC Key 61 hardware surface) via `ParamInfo` (`core/include/synthyboy/params.h`), `docs/params.json` (880 parameters), `clap.remote-controls` (`docs/ARCHITECTURE.md` §4.1, §5.1, §8), and a declarative JSON page definition format. Includes the concrete JSON schema, all 61 8-knob remote-control pages across every synth area, default 4-macro assignments per preset category (`content/presets/contentpack.json`), and a Python verification report accounting for all 880 keys.
+Defines how SynthyBoy integrates into **Kick** (Kick mobile/tablet host and Akai MPC Key 61 hardware surface) via `ParamInfo` (`core/include/synthyboy/params.h`), `docs/params.json` (1484 parameters), `clap.remote-controls` (`docs/ARCHITECTURE.md` §4.1, §5.1, §8), and a declarative JSON page definition format. Includes the concrete JSON schema, all 103 8-knob remote-control pages across every synth area, default 4-macro assignments per preset category (`content/presets/contentpack.json`), and a Python verification report accounting for all 1484 keys.
 
 * **Out-of-scope exclusions (`00-BRIEF.md`):** Preset browser (`[S p.327]`): excluded: Kick. Clips (`[S p.219]`): excluded: Kick. Arpeggiator (`[S p.244]`): excluded: Kick.
 
@@ -175,7 +175,7 @@ Kick reads `kick-pages.json` alongside `docs/params.json`. Each page has a stabl
 
 ```
 +---------------------------------------------------------------------------------------+
-| KICK INSTRUMENT: SynthyBoy | Tier: LOW (8v Cap) | Page 4/61: Osc 1 Main  [More Sheet] |
+| KICK INSTRUMENT: SynthyBoy | Tier: LOW (8v Cap) | Page 4/103: Osc 1 Main  [More Sheet] |
 +--------------------+--------------------+--------------------+------------------------+
 | Q-LINK 1 [osc1.on] | Q-LINK 2 [wavetbl] | Q-LINK 3 [frame]   | Q-LINK 4 [osc1.level]  |
 |   ((   ON   ))     |   ((   Saw   ))    |   ((  24.5 %  ))   |   ((   50.0 %   ))     |
@@ -233,7 +233,7 @@ To make hardware Q-Links and the mobile Macro Bar predictable across all 100 fac
 
 ---
 
-## 5. Kick remote pages (All Areas — 61 Pages, <= 8 Params per Page)
+## 5. Kick remote pages (All Areas — 103 Pages, <= 8 Params per Page)
 
 Every key in the table below is a verified key from `docs/params.json`:
 
@@ -300,14 +300,56 @@ Every key in the table below is a verified key from `docs/params.json`:
 | 59 | `mod_slot_4` | Matrix | **Mod Matrix Slot 4** | `mod04.source` | `mod04.destination` | `mod04.amount` | `mod04.power` | `mod04.bipolar` | `mod04.stereo` | `mod04.bypass` | — |
 | 60 | `mod_amounts_1_8` | Matrix | **Mod Amounts 1–8** | `mod01.amount` | `mod02.amount` | `mod03.amount` | `mod04.amount` | `mod05.amount` | `mod06.amount` | `mod07.amount` | `mod08.amount` |
 | 61 | `mod_amounts_9_16` | Matrix | **Mod Amounts 9–16** | `mod09.amount` | `mod10.amount` | `mod11.amount` | `mod12.amount` | `mod13.amount` | `mod14.amount` | `mod15.amount` | `mod16.amount` |
+| 62 | `macros_2` | Perf | **Macros 5–8** | `macro.5` | `macro.6` | `macro.7` | `macro.8` | — | — | — | — |
+| 63 | `lfo9` | LFO | **LFO 9** | `lfo9.shape` | `lfo9.sync` | `lfo9.rate` | `lfo9.division` | `lfo9.sync_type` | `lfo9.phase` | `lfo9.fade_in` | `lfo9.delay` |
+| 64 | `lfo10` | LFO | **LFO 10** | `lfo10.shape` | `lfo10.sync` | `lfo10.rate` | `lfo10.division` | `lfo10.sync_type` | `lfo10.phase` | `lfo10.fade_in` | `lfo10.delay` |
+| 65 | `master_scale_tuning` | Master | **Scale & Tuning** | `master.scale.key` | `master.scale.type` | `master.scale.mode` | `master.tuning.a4` | `master.tuning.scale` | `master.tuning.mts_esp` | `master.tuning.mts_note_on_only` | — |
+| 66 | `master_expression` | Master | **Expression & MPE** | `master.mpe.on` | `master.mpe.bend_range` | `curve.velocity.legato` | `curve.note.legato` | — | — | — | — |
+| 67 | `osc1_type_map` | Osc | **Osc 1 Type & Mapping** | `osc1.type` | `osc1.map.key_low` | `osc1.map.key_high` | `osc1.map.vel_low` | `osc1.map.vel_high` | `osc1.map.key_fold` | `osc1.map.key_warp` | — |
+| 68 | `osc2_type_map` | Osc | **Osc 2 Type & Mapping** | `osc2.type` | `osc2.map.key_low` | `osc2.map.key_high` | `osc2.map.vel_low` | `osc2.map.vel_high` | `osc2.map.key_fold` | `osc2.map.key_warp` | — |
+| 69 | `osc3_type_map` | Osc | **Osc 3 Type & Mapping** | `osc3.type` | `osc3.map.key_low` | `osc3.map.key_high` | `osc3.map.vel_low` | `osc3.map.vel_high` | `osc3.map.key_fold` | `osc3.map.key_warp` | — |
+| 70 | `osc1_sample_1` | Osc | **Osc 1 Sample Main** | `osc1.sample.start` | `osc1.sample.end` | `osc1.sample.root` | `osc1.sample.keytrack` | `osc1.sample.loop_mode` | `osc1.sample.loop_start` | `osc1.sample.loop_end` | `osc1.sample.loop_xfade` |
+| 71 | `osc1_sample_2` | Osc | **Osc 1 Sample Playback** | `osc1.sample.scan` | `osc1.sample.scan_range` | `osc1.sample.scan_reverse` | `osc1.sample.scan_lock_tempo` | `osc1.sample.scan_to_bpm` | `osc1.sample.length_beats` | `osc1.sample.uni_start` | `osc1.sample.uni_span` |
+| 72 | `osc2_sample_1` | Osc | **Osc 2 Sample Main** | `osc2.sample.start` | `osc2.sample.end` | `osc2.sample.root` | `osc2.sample.keytrack` | `osc2.sample.loop_mode` | `osc2.sample.loop_start` | `osc2.sample.loop_end` | `osc2.sample.loop_xfade` |
+| 73 | `osc2_sample_2` | Osc | **Osc 2 Sample Playback** | `osc2.sample.scan` | `osc2.sample.scan_range` | `osc2.sample.scan_reverse` | `osc2.sample.scan_lock_tempo` | `osc2.sample.scan_to_bpm` | `osc2.sample.length_beats` | `osc2.sample.uni_start` | `osc2.sample.uni_span` |
+| 74 | `osc3_sample_1` | Osc | **Osc 3 Sample Main** | `osc3.sample.start` | `osc3.sample.end` | `osc3.sample.root` | `osc3.sample.keytrack` | `osc3.sample.loop_mode` | `osc3.sample.loop_start` | `osc3.sample.loop_end` | `osc3.sample.loop_xfade` |
+| 75 | `osc3_sample_2` | Osc | **Osc 3 Sample Playback** | `osc3.sample.scan` | `osc3.sample.scan_range` | `osc3.sample.scan_reverse` | `osc3.sample.scan_lock_tempo` | `osc3.sample.scan_to_bpm` | `osc3.sample.length_beats` | `osc3.sample.uni_start` | `osc3.sample.uni_span` |
+| 76 | `osc1_warp2` | Osc | **Osc 1 Warp 2** | `osc1.warp2.type` | `osc1.warp2.amount` | `osc1.warp2.phase` | `osc1.warp2.spread` | — | — | — | — |
+| 77 | `osc2_warp2` | Osc | **Osc 2 Warp 2** | `osc2.warp2.type` | `osc2.warp2.amount` | `osc2.warp2.phase` | `osc2.warp2.spread` | — | — | — | — |
+| 78 | `osc3_warp2` | Osc | **Osc 3 Warp 2** | `osc3.warp2.type` | `osc3.warp2.amount` | `osc3.warp2.phase` | `osc3.warp2.spread` | — | — | — | — |
+| 79 | `mix_routing` | Osc | **Mixer Routing** | `osc1.filter_blend` | `osc2.filter_blend` | `osc3.filter_blend` | `noise.filter_blend` | `filter1.destination` | `filter2.destination` | `direct.level` | `main.fx_bypass` |
+| 80 | `mix_bus` | Osc | **Mixer Buses** | `bus1.level` | `bus1.destination` | `bus1.fx_bypass` | `bus2.level` | `bus2.destination` | `bus2.fx_bypass` | — | — |
+| 81 | `mix_sends_osc` | Osc | **Mixer Osc Sends** | `osc1.bus1_send` | `osc1.bus2_send` | `osc2.bus1_send` | `osc2.bus2_send` | `osc3.bus1_send` | `osc3.bus2_send` | `noise.bus1_send` | `noise.bus2_send` |
+| 82 | `mix_sends_filter` | Osc | **Mixer Filter Sends** | `filter1.bus1_send` | `filter1.bus2_send` | `filter2.bus1_send` | `filter2.bus2_send` | — | — | — | — |
+| 83 | `filter1_extra` | Filter | **Filter 1 Extra** | `filter1.var` | `filter1.pan` | `filter1.level` | — | — | — | — | — |
+| 84 | `filter2_extra` | Filter | **Filter 2 Extra** | `filter2.var` | `filter2.pan` | `filter2.level` | — | — | — | — | — |
+| 85 | `fx_filter_extra` | FX | **FX Filter Extra** | `fxfilter.var` | `fxfilter.pan` | `fxfilter.level` | — | — | — | — | — |
+| 86 | `fx_order_2` | FX | **FX Chain Order 10–16** | `fx.order.10` | `fx.order.11` | `fx.order.12` | `fx.order.13` | `fx.order.14` | `fx.order.15` | `fx.order.16` | — |
+| 87 | `fx_rack_1` | FX | **FX Racks 1–8** | `chorus.rack` | `compressor.rack` | `delay.rack` | `distortion.rack` | `eq.rack` | `fxfilter.rack` | `flanger.rack` | `phaser.rack` |
+| 88 | `fx_rack_2` | FX | **FX Racks 9–16** | `reverb.rack` | `hyperdim.rack` | `utility.rack` | `bode.rack` | `convolve.rack` | `splitter_lh.rack` | `splitter_lmh.rack` | `splitter_ms.rack` |
+| 89 | `fx_hyperdim_1` | FX | **Hyper Dimension Main** | `hyperdim.on` | `hyperdim.rate` | `hyperdim.unison` | `hyperdim.detune` | `hyperdim.retrig` | `hyperdim.mix` | — | — |
+| 90 | `fx_hyperdim_2` | FX | **Dimension & Level** | `hyperdim.dim_size` | `hyperdim.dim_mix` | `hyperdim.level` | — | — | — | — | — |
+| 91 | `fx_utility_1` | FX | **Utility Filters & Width** | `utility.on` | `utility.polarity_l` | `utility.polarity_r` | `utility.lpf` | `utility.hpf` | `utility.mono_bass` | `utility.mono_freq` | `utility.width` |
+| 92 | `fx_utility_2` | FX | **Utility Pan, Mix & Level** | `utility.pan` | `utility.mix` | `utility.level` | — | — | — | — | — |
+| 93 | `fx_bode_1` | FX | **Bode Frequency Shifter 1** | `bode.on` | `bode.mono_input` | `bode.shift` | `bode.range` | `bode.dir` | `bode.width` | `bode.delay` | `bode.sync` |
+| 94 | `fx_bode_2` | FX | **Bode Frequency Shifter 2** | `bode.division` | `bode.feed` | `bode.balance` | `bode.blur` | `bode.retrig` | `bode.mix` | `bode.level` | — |
+| 95 | `fx_convolve_1` | FX | **Convolver 1** | `convolve.on` | `convolve.ir` | `convolve.size` | `convolve.tone` | `convolve.phi_min` | `convolve.predelay` | `convolve.sync` | `convolve.division` |
+| 96 | `fx_convolve_2` | FX | **Convolver 2** | `convolve.attack` | `convolve.decay` | `convolve.damp` | `convolve.ir_gain` | `convolve.mix` | `convolve.level` | — | — |
+| 97 | `fx_splitter_lh` | FX | **Splitter Low / High** | `splitter_lh.on` | `splitter_lh.freq` | `splitter_lh.low_bypass` | `splitter_lh.high_bypass` | `splitter_lh.level` | — | — | — |
+| 98 | `fx_splitter_lmh` | FX | **Splitter Low / Mid / High** | `splitter_lmh.on` | `splitter_lmh.freq_low` | `splitter_lmh.freq_high` | `splitter_lmh.low_bypass` | `splitter_lmh.mid_bypass` | `splitter_lmh.high_bypass` | `splitter_lmh.level` | — |
+| 99 | `fx_splitter_ms` | FX | **Splitter Mid / Side** | `splitter_ms.on` | `splitter_ms.mid_bypass` | `splitter_ms.side_bypass` | `splitter_ms.level` | — | — | — | — |
+| 100 | `mod_slot_1_aux` | Matrix | **Mod Matrix Slot 1 Aux** | `mod01.aux_source` | `mod01.aux_inv` | `mod01.aux_power` | `mod01.aux_output` | — | — | — | — |
+| 101 | `mod_slot_2_aux` | Matrix | **Mod Matrix Slot 2 Aux** | `mod02.aux_source` | `mod02.aux_inv` | `mod02.aux_power` | `mod02.aux_output` | — | — | — | — |
+| 102 | `mod_slot_3_aux` | Matrix | **Mod Matrix Slot 3 Aux** | `mod03.aux_source` | `mod03.aux_inv` | `mod03.aux_power` | `mod03.aux_output` | — | — | — | — |
+| 103 | `mod_slot_4_aux` | Matrix | **Mod Matrix Slot 4 Aux** | `mod04.aux_source` | `mod04.aux_inv` | `mod04.aux_power` | `mod04.aux_output` | — | — | — | — |
 
 ---
 
-## 6. Coverage check & Python Verification Report (All 880 Keys)
+## 6. Coverage check & Python Verification Report (All 1484 Keys)
 
 ### 6.1 Python Verification Snippet
 
-Running the following snippet from the repository root verifies that all 61 pages contain at most 8 parameters, that 100% of referenced keys exist in `docs/params.json`, and prints the exact breakdown of reached vs. overflow ("More" sheet / Matrix) keys:
+Running the following snippet from the repository root verifies that all 103 pages contain at most 8 parameters, that 100% of referenced keys exist in `docs/params.json`, and prints the exact breakdown of reached vs. overflow ("More" sheet / Matrix) keys:
 
 ```python
 import json, re
@@ -319,9 +361,9 @@ valid_set = set(all_params)
 with open("docs/ui-design/09-kick-integration.md") as f:
     md = f.read()
 
-# Parse the 61 rows of the Section 5 table
+# Parse the 103 rows of the Section 5 table
 rows = re.findall(r"^\|\s*\d+\s*\|\s*`([a-z0-9_]+)`\s*\|([^|]+)\|([^|]+)\|(.+)\|$", md, re.M)
-assert len(rows) == 61, f"Expected 61 pages, got {len(rows)}"
+assert len(rows) == 103, f"Expected 103 pages, got {len(rows)}"
 
 reached = set()
 for page_id, sec, title, cells in rows:
@@ -338,20 +380,23 @@ print(f"Unique keys reached directly on 8-knob pages: {len(reached)}")
 print(f"Keys not on a primary 8-knob page: {len(unreached)}")
 ```
 
-### 6.2 Report of Keys of the 880 Not Reached by a Primary 8-Knob Page (454 Keys)
+### 6.2 Report of Keys of the 1484 Not Reached by a Primary 8-Knob Page (807 Keys)
 
-Out of **880** total parameters in `docs/params.json`:
-- **426 parameters** are reached directly on the **61 primary 8-knob remote pages** in §5 (including **100%** of `Master` (11), `Macros` (4), `Osc 1` (24), `Osc 2` (24), `Osc 3` (24), `Noise` (4), `Filter 1` (15), `Filter 2` (15), `Filters` (1), `FX Filter` (15), `Random LFO 1..4` (32), and `FX` (105)).
-- **454 parameters** are intentionally kept off the primary 8-knob hardware bank to avoid scrolling through 110+ pages, and are reached via a module **"More" sheet** (`moreKeys` in `kick-pages.json`) or the **Modulation Matrix UI**:
+Out of **1484** total parameters in `docs/params.json`:
+- **677 parameters** are reached directly on the **103 primary 8-knob remote pages** in §5 (including **100%** of `Master` (11), `Macros` (8), `Osc 1..3` (main/unison/warp/shaping/type/map/sample/warp2), `Noise` (4), `Mixer` (26), `Filters` (39), `Random LFO 1..4` (32), and `FX` (186)).
+- **807 parameters** are intentionally kept off the primary 8-knob hardware bank to avoid scrolling through pages, and are reached via a module **"More" sheet** (`moreKeys` in `kick-pages.json`) or the **Modulation Matrix UI**:
 
 | Unreached Key Group | Exact Keys (`docs/params.json`) | Count | Where Reached (`More` Sheet or `Matrix`) |
 |---------------------|---------------------------------|-------|------------------------------------------|
-| **Envelope Release Curves (Env 1–6)** | `env1.release_curve`, `env2.release_curve`, `env3.release_curve`, `env4.release_curve`, `env5.release_curve`, `env6.release_curve` | **6** | **`env1`..`env6` "More / Curves" Sheet** (`moreKeys` on pages `env1..env6`; also direct-dragged on the Release segment curve in `05-envelopes-lfos.md` §2) |
-| **LFO Smoothing, Stereo & Key Follow (LFO 1–8)** | For `N = 1..8`: `lfoN.smooth`, `lfoN.smooth_time`, `lfoN.stereo`, `lfoN.keytrack_transpose`, `lfoN.keytrack_tune` | **40** *(8 x 5)* | **`lfo1`..`lfo8` "More / Smooth & Key Follow" Sheet** (`moreKeys` on pages `lfo1..lfo8`; also in the LFO "More" drawer in `05-envelopes-lfos.md` §2) |
+| **Envelope Release Curves & Beat Units (Env 1–6)** | For `N = 1..6`: `envN.release_curve`, `envN.units`, `envN.legato_inverted`, `envN.delay_beats`, `envN.attack_beats`, `envN.hold_beats`, `envN.decay_beats`, `envN.release_beats` | **48** *(6 x 8)* | **`env1`..`env6` "More / Curves & Beat Units" Sheet** (`moreKeys` on pages `env1..env6`; also direct-dragged in `05-envelopes-lfos.md` §2) |
+| **LFO Smoothing, Stereo, Key Follow, Mono, Direction & Host Sync (LFO 1–10)** | For `N = 1..10`: `lfoN.smooth`, `lfoN.smooth_time`, `lfoN.stereo`, `lfoN.keytrack_transpose`, `lfoN.keytrack_tune`, `lfoN.mono`, `lfoN.direction`, `lfoN.host` | **80** *(10 x 8)* | **`lfo1`..`lfo10` "More / Smooth, Mode & Key Follow" Sheet** (`moreKeys` on pages `lfo1..lfo10`; also in LFO "More" drawer in `05-envelopes-lfos.md` §2) |
+| **Oscillator Sample Slicing & Advanced Playback (Osc 1–3)** | For `N = 1..3`: `oscN.sample.loop_relative`, `oscN.sample.loop_link`, `oscN.sample.loop_exit`, `oscN.sample.fade_edges`, `oscN.sample.normalize`, `oscN.sample.reverse`, `oscN.sample.slice_mode`, `oscN.sample.slice_threshold`, `oscN.sample.slice_play`, `oscN.sample.slice_root` | **30** *(3 x 10)* | **`osc1_sample_2`..`osc3_sample_2` "More / Slicing & Advanced" Sheet** (`moreKeys` on pages `osc1_sample_2`..`osc3_sample_2`) |
+| **Reverb Force Enable** | `reverb.force_enable` | **1** | **`fx_reverb_1` "More" Sheet** (`moreKeys` on page `fx_reverb_1`) |
 | **Mod Matrix Slots 05–16 Non-Amount Fields** *(note: `mod05..16.amount` ARE on pages 60–61)* | For `NN = 05..16`: `modNN.source`, `modNN.destination`, `modNN.power`, `modNN.bipolar`, `modNN.stereo`, `modNN.bypass` | **72** *(12 x 6)* | **Modulation Matrix Page & Long-Press Knob Context Sheet** (`06-modulation.md` §2.2, §2.3) |
 | **Mod Matrix Slots 17–64 All Fields** | For `NN = 17..64`: `modNN.source`, `modNN.destination`, `modNN.amount`, `modNN.power`, `modNN.bipolar`, `modNN.stereo`, `modNN.bypass` | **336** *(48 x 7)* | **Modulation Matrix Page & Long-Press Knob Context Sheet** (`06-modulation.md` §2.2, §2.3) |
-| **Total Unreached on Primary 8-Knob Pages** | `6 + 40 + 72 + 336` | **454** | **100% reachable via `env1..6` / `lfo1..8` "More" sheets (46) or Modulation Matrix (408)** |
-| **Grand Total Verified** | `426 (on 61 pages) + 454 (More/Matrix)` | **880 / 880** | **Every single key in `docs/params.json` accounted for** |
+| **Mod Matrix Slots 05–64 Aux Source & Scale Fields** | For `NN = 05..64`: `modNN.aux_source`, `modNN.aux_inv`, `modNN.aux_power`, `modNN.aux_output` | **240** *(60 x 4)* | **Modulation Matrix Page & Slot Aux Sheet** (`s_more_mod_matrix` on `mod_amounts_9_16`) |
+| **Total Unreached on Primary 8-Knob Pages** | `48 + 80 + 30 + 1 + 72 + 336 + 240` | **807** | **100% reachable via `env1..6` / `lfo1..10` / `osc1..3_sample_2` / `fx_reverb_1` "More" sheets (159) or Modulation Matrix (648)** |
+| **Grand Total Verified** | `677 (on 103 pages) + 807 (More/Matrix)` | **1484 / 1484** | **Every single key in `docs/params.json` accounted for** |
 
 ---
 
@@ -360,4 +405,4 @@ Out of **880** total parameters in `docs/params.json`:
 1. **Sequencer exclusions (`00-BRIEF.md`):** Serum 2 **Clips** (`[S p.219]`) and **Arpeggiator** (`[S p.244]`) are excluded because Kick provides them.
 2. **Where `kick-pages.json` lives in the repo:** Should `kick-pages.json` be generated alongside `docs/params.json` by `tools/paramdump/synthyboy_paramdump` (from C++ `constexpr` page tables in `core/` so `shell-clap`'s `clap.remote-controls` and Kick read the exact same compiled table), or committed as a standalone JSON file in `docs/kick-pages.json`?
 3. **Factory Preset Macro Wiring (`scripts/gen-factory-presets.py`):** Currently the 100 generated factory presets in `scripts/gen-factory-presets.py` leave `mod01..mod04` unwired on most patches. Should we update `scripts/gen-factory-presets.py` in Phase 5 so every factory preset comes pre-wired with the 4 category Macro assignments from §2.3?
-4. **Hardware Q-Link Bank Filtering on MPC Key 61:** Should the MPC Q-Link page cycler skip pages for disabled modules (`osc2.on == 0`, `filter2.on == 0`, `<fx>.on == 0`) by default with a `[Show Disabled Pages]` toggle, or always cycle through all 61 pages in fixed order?
+4. **Hardware Q-Link Bank Filtering on MPC Key 61:** Should the MPC Q-Link page cycler skip pages for disabled modules (`osc2.on == 0`, `filter2.on == 0`, `<fx>.on == 0`) by default with a `[Show Disabled Pages]` toggle, or always cycle through all 103 pages in fixed order?
