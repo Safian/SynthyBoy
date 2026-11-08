@@ -5,6 +5,7 @@
 
 set(SB_VITAL_IMPORT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 target_sources(synthyboy_core PRIVATE
+    "${SB_VITAL_IMPORT_DIR}/zip_reader.cpp"
     "${SB_VITAL_IMPORT_DIR}/json_reader.cpp"
     "${SB_VITAL_IMPORT_DIR}/vital_map.cpp"
     "${SB_VITAL_IMPORT_DIR}/vital_content.cpp"
