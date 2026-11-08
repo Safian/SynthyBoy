@@ -38,5 +38,12 @@ public:
     /** MIDI-learn placeholder hook (docs/ui-design/01 1.4: GAP, no CC map in core). The sheet enables its button only if canMidiLearn(). */
     virtual bool canMidiLearn() const noexcept { return false; }
     virtual void startMidiLearn (const std::string& /*key*/) {}
+
+    /** Live output meter peaks (linear amplitude, e.g. 0..1 or higher if clipping) from the audio callback. */
+    virtual float outputPeakL() const noexcept { return 0.0f; }
+    virtual float outputPeakR() const noexcept { return 0.0f; }
+
+    /** Injects a MIDI message from the UI (pitch bend, mod wheel, CC 64 sustain, etc.) into the audio callback. */
+    virtual void injectMidiMessage (const juce::MidiMessage& /*msg*/) {}
 };
 } // namespace synthyboy::ui

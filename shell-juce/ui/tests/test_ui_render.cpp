@@ -33,6 +33,9 @@ public:
     AbCompare& abCompare() override { return inner.abCompare(); }
     void stepPreset (int d) override { inner.stepPreset (d); }
     juce::String presetName() const override { return inner.presetName(); }
+    float outputPeakL() const noexcept override { return inner.outputPeakL(); }
+    float outputPeakR() const noexcept override { return inner.outputPeakR(); }
+    void injectMidiMessage (const juce::MidiMessage& msg) override { inner.injectMidiMessage (msg); }
 
 private:
     SynthyBoyProcessor& inner;

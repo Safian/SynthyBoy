@@ -11,7 +11,9 @@
 
 namespace synthyboy::ui
 {
-class SynthyBoyEditor final : public juce::AudioProcessorEditor, private juce::Timer
+class SynthyBoyEditor final : public juce::AudioProcessorEditor,
+                              private juce::Timer,
+                              private juce::AudioProcessorParameter::Listener
 {
 public:
     SynthyBoyEditor (juce::AudioProcessor& owner, UiHost& host);
@@ -19,6 +21,7 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress& key) override;
 
     UiContext& context() noexcept { return ctx; }
     Theme& theme() noexcept { return uiTheme; }
@@ -34,6 +37,10 @@ public:
     /** A/B compare: stores the live state in the active slot and applies the other one (decision Q4). */
     void toggleAb();
     void copyActiveToOtherAb();
+    void performUndo();
+    void performRedo();
+    void updateUndoRedoButtons();
+    UndoHistory& undoStack() noexcept { return undoHistory; }
     void setUiScale (float scale);
     void setDarkMode (bool dark);
     /** Creates an editor sized for the given reference device (phone 390x844, tablet 1024x768, ...). */
@@ -41,6 +48,8 @@ public:
 
 private:
     void timerCallback() override;
+    void parameterValueChanged (int, float) override {}
+    void parameterGestureChanged (int parameterIndex, bool starting) override;
     void showMenu();
     void updateAbLabel();
     ParamValues readLiveValues() const;
@@ -51,6 +60,10 @@ private:
     SynthLookAndFeel laf;
     ModAssignController assign;
     UiContext ctx;
+    UndoHistory undoHistory;
+    int openGestures = 0;
+    ParamValues gestureStartValues;
+    juce::String lastPresetName;
 
     std::unique_ptr<TopBar> top;
     std::unique_ptr<MacroRow> macros;

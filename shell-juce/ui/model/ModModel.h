@@ -144,4 +144,124 @@ private:
     bool storedA = false, storedB = false;
     Slot current = Slot::a;
 };
+
+inline bool operator== (const ParamValues& a, const ParamValues& b) noexcept
+{
+    const size_t count = paramCount();
+    for (size_t i = 0; i < count; ++i)
+        if (std::abs (a.plain[i] - b.plain[i]) > 1.0e-7f)
+            return false;
+    return true;
+}
+inline bool operator!= (const ParamValues& a, const ParamValues& b) noexcept { return ! (a == b); }
+
+// ---- Undo / Redo (docs/ui-design/01 section 1.1, 4: session-only, 200 depth) ----------------------------------------------------
+
+class UndoHistory
+{
+public:
+    static constexpr size_t kMaxDepth = 200;
+
+    void push (const ParamValues& before)
+    {
+        undoStack.push_back (before);
+        if (undoStack.size() > kMaxDepth)
+            undoStack.erase (undoStack.begin());
+        redoStack.clear();
+    }
+
+    bool canUndo() const noexcept { return ! undoStack.empty(); }
+    bool canRedo() const noexcept { return ! redoStack.empty(); }
+
+    bool undo (const ParamValues& currentLive, ParamValues& outTarget)
+    {
+        if (undoStack.empty())
+            return false;
+        redoStack.push_back (currentLive);
+        outTarget = undoStack.back();
+        undoStack.pop_back();
+        return true;
+    }
+
+    bool redo (const ParamValues& currentLive, ParamValues& outTarget)
+    {
+        if (redoStack.empty())
+            return false;
+        undoStack.push_back (currentLive);
+        outTarget = redoStack.back();
+        redoStack.pop_back();
+        return true;
+    }
+
+    void clear()
+    {
+        undoStack.clear();
+        redoStack.clear();
+    }
+
+    size_t undoDepth() const noexcept { return undoStack.size(); }
+    size_t redoDepth() const noexcept { return redoStack.size(); }
+
+private:
+    std::vector<ParamValues> undoStack;
+    std::vector<ParamValues> redoStack;
+};
+
+// ---- Module Clipboard & Operations (docs/ui-design/01 section 1.4, 2.4) ---------------------------------------------------------
+
+struct CopiedModSlot
+{
+    int slot = -1;
+    bool isSource = false; // true: module was source; false: module was destination
+    int source = 0;
+    std::string destKey;
+    float amount = 0.0f;
+    bool bipolar = false;
+    bool bypass = false;
+};
+
+struct ModuleSnapshot
+{
+    std::string prefix;
+    std::string kind;
+    std::vector<std::pair<std::string, float>> params; // (property suffix, plain value)
+    std::vector<CopiedModSlot> mods;
+    bool empty() const noexcept { return params.empty(); }
+};
+
+std::string moduleKindForPrefix (std::string_view prefix);
+int sourceChoiceForModulePrefix (std::string_view prefix);
+
+class ModuleClipboard
+{
+public:
+    static ModuleClipboard& instance();
+
+    bool hasContent() const noexcept { return ! current.empty(); }
+    const ModuleSnapshot& content() const noexcept { return current; }
+    bool canPasteTo (std::string_view destPrefix) const;
+
+    void copy (std::string_view prefix, const ParamValues& live, bool withMods = false, const ModMatrixAccess* matrix = nullptr);
+    bool paste (std::string_view destPrefix, ParamValues& target, bool withMods = false, ModMatrixAccess* matrix = nullptr) const;
+    static void initModule (std::string_view prefix, ParamValues& target);
+    static bool swapModules (std::string_view prefixA, std::string_view prefixB, ParamValues& target, bool withMods = false, ModMatrixAccess* matrix = nullptr);
+
+    void clear() { current = ModuleSnapshot {}; }
+
+private:
+    ModuleSnapshot current;
+};
+
+// ---- Key & Scale helpers (docs/ui-design/01 section 1.3, 2.4, docs/params.json) --------------------------------------------------
+
+struct ScaleInfo
+{
+    static constexpr int kNumKeys = 12;
+    static constexpr int kNumScales = 20;
+
+    static const char* keyName (int keyIndex) noexcept;
+    static const char* scaleName (int scaleType) noexcept;
+    static bool inScale (int scaleKey, int scaleType, int midiNote) noexcept;
+    static bool isRoot (int scaleKey, int scaleType, int midiNote) noexcept;
+};
 } // namespace synthyboy::ui

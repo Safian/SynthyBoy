@@ -289,4 +289,335 @@ void AbCompare::copyActiveToOther (const ParamValues& live)
     b = live;
     storedA = storedB = true;
 }
+
+// ---- Module Clipboard & Operations -----------------------------------------------------------------------------------------------
+
+std::string moduleKindForPrefix (std::string_view prefix)
+{
+    if (prefix.rfind ("env", 0) == 0) return "env";
+    if (prefix.rfind ("rlfo", 0) == 0) return "rlfo";
+    if (prefix.rfind ("lfo", 0) == 0) return "lfo";
+    if (prefix.rfind ("osc", 0) == 0) return "osc";
+    if (prefix.rfind ("filter", 0) == 0) return "filter";
+    return std::string (prefix);
+}
+
+int sourceChoiceForModulePrefix (std::string_view prefix)
+{
+    if (prefix.rfind ("env", 0) == 0 && prefix.length() > 3)
+    {
+        const int n = std::atoi (prefix.data() + 3);
+        if (n >= 1 && n <= 6) return n; // 1..6
+    }
+    else if (prefix.rfind ("lfo", 0) == 0 && prefix.length() > 3)
+    {
+        const int n = std::atoi (prefix.data() + 3);
+        if (n >= 1 && n <= 8) return 6 + n; // 7..14
+        if (n == 9) return 33;
+        if (n == 10) return 34;
+    }
+    else if (prefix.rfind ("rlfo", 0) == 0 && prefix.length() > 4)
+    {
+        const int n = std::atoi (prefix.data() + 4);
+        if (n >= 1 && n <= 4) return 14 + n; // 15..18
+    }
+    return 0;
+}
+
+ModuleClipboard& ModuleClipboard::instance()
+{
+    static ModuleClipboard clip;
+    return clip;
+}
+
+bool ModuleClipboard::canPasteTo (std::string_view destPrefix) const
+{
+    if (current.empty() || destPrefix == current.prefix)
+        return false;
+    return moduleKindForPrefix (destPrefix) == current.kind;
+}
+
+void ModuleClipboard::copy (std::string_view prefix, const ParamValues& live, bool withMods, const ModMatrixAccess* matrix)
+{
+    current = ModuleSnapshot {};
+    current.prefix = std::string (prefix);
+    current.kind = moduleKindForPrefix (prefix);
+
+    const std::string dotPrefix = current.prefix + ".";
+    const auto* table = paramTable();
+    const size_t count = paramCount();
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        std::string_view key (table[i].key);
+        if (key.rfind (dotPrefix, 0) == 0)
+        {
+            const std::string prop (key.substr (dotPrefix.length()));
+            current.params.emplace_back (prop, live.plain[i]);
+        }
+    }
+
+    if (withMods && matrix != nullptr)
+    {
+        const int srcChoice = sourceChoiceForModulePrefix (prefix);
+        for (int slot = 0; slot < kNumModSlots; ++slot)
+        {
+            const auto p = modSlotParams (slot);
+            if (! slotInUse (*matrix, p))
+                continue;
+
+            const int slotSrc = static_cast<int> (std::lround (matrix->get (p.source)));
+            const int destChoice = static_cast<int> (std::lround (matrix->get (p.destination)));
+            const int destParam = modDestinationParamIndex (static_cast<size_t> (destChoice));
+            const std::string destKey = destParam >= 0 ? table[destParam].key : "";
+
+            if (srcChoice > 0 && slotSrc == srcChoice)
+            {
+                current.mods.push_back ({ slot, true, slotSrc, destKey,
+                                          matrix->get (p.amount), matrix->get (p.bipolar) >= 0.5f, matrix->get (p.bypass) >= 0.5f });
+            }
+            else if (! destKey.empty() && destKey.rfind (dotPrefix, 0) == 0)
+            {
+                current.mods.push_back ({ slot, false, slotSrc, destKey,
+                                          matrix->get (p.amount), matrix->get (p.bipolar) >= 0.5f, matrix->get (p.bypass) >= 0.5f });
+            }
+        }
+    }
+}
+
+bool ModuleClipboard::paste (std::string_view destPrefix, ParamValues& target, bool withMods, ModMatrixAccess* matrix) const
+{
+    if (current.empty())
+        return false;
+
+    const std::string dotPrefix = std::string (destPrefix) + ".";
+    for (const auto& [prop, val] : current.params)
+    {
+        const std::string key = dotPrefix + prop;
+        const auto ref = resolveKey (key);
+        if (ref.valid())
+            target.plain[ref.index] = val;
+    }
+
+    if (withMods && matrix != nullptr)
+    {
+        const int newSrcChoice = sourceChoiceForModulePrefix (destPrefix);
+        for (const auto& m : current.mods)
+        {
+            int slotToUse = -1;
+            int finalSrc = m.source;
+            std::string finalDestKey = m.destKey;
+
+            if (m.isSource)
+            {
+                if (newSrcChoice <= 0)
+                    continue;
+                finalSrc = newSrcChoice;
+            }
+            else
+            {
+                if (m.destKey.length() > current.prefix.length())
+                {
+                    const std::string prop = m.destKey.substr (current.prefix.length() + 1);
+                    finalDestKey = dotPrefix + prop;
+                }
+            }
+
+            const auto destRef = resolveKey (finalDestKey);
+            if (! destRef.valid() || ! destRef.info->isModulatable())
+                continue;
+
+            const size_t destChoice = modDestinationChoiceOf (static_cast<size_t> (destRef.index));
+            if (destChoice == 0)
+                continue;
+
+            for (int s = 0; s < kNumModSlots; ++s)
+            {
+                const auto p = modSlotParams (s);
+                const int curSrc = static_cast<int> (std::lround (matrix->get (p.source)));
+                const int curDst = static_cast<int> (std::lround (matrix->get (p.destination)));
+                if (curSrc == finalSrc && curDst == static_cast<int> (destChoice))
+                {
+                    slotToUse = s;
+                    break;
+                }
+                if (slotToUse < 0 && (curSrc == 0 || curDst == 0))
+                    slotToUse = s;
+            }
+
+            if (slotToUse >= 0)
+            {
+                const auto p = modSlotParams (slotToUse);
+                matrix->beginGesture (p.amount);
+                matrix->set (p.destination, static_cast<float> (destChoice));
+                matrix->set (p.amount, m.amount);
+                matrix->set (p.bipolar, m.bipolar ? 1.0f : 0.0f);
+                matrix->set (p.bypass, m.bypass ? 1.0f : 0.0f);
+                matrix->set (p.source, static_cast<float> (finalSrc));
+                matrix->endGesture (p.amount);
+            }
+        }
+    }
+    return true;
+}
+
+void ModuleClipboard::initModule (std::string_view prefix, ParamValues& target)
+{
+    const std::string dotPrefix = std::string (prefix) + ".";
+    const auto* table = paramTable();
+    const size_t count = paramCount();
+    for (size_t i = 0; i < count; ++i)
+    {
+        std::string_view key (table[i].key);
+        if (key.rfind (dotPrefix, 0) == 0)
+            target.plain[i] = table[i].def;
+    }
+}
+
+bool ModuleClipboard::swapModules (std::string_view prefixA, std::string_view prefixB, ParamValues& target, bool withMods, ModMatrixAccess* matrix)
+{
+    if (prefixA == prefixB || moduleKindForPrefix (prefixA) != moduleKindForPrefix (prefixB))
+        return false;
+
+    const std::string dotA = std::string (prefixA) + ".";
+    const std::string dotB = std::string (prefixB) + ".";
+    const auto* table = paramTable();
+    const size_t count = paramCount();
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        std::string_view keyA (table[i].key);
+        if (keyA.rfind (dotA, 0) == 0)
+        {
+            const std::string prop (keyA.substr (dotA.length()));
+            const std::string keyB = dotB + prop;
+            const auto refB = resolveKey (keyB);
+            if (refB.valid())
+                std::swap (target.plain[i], target.plain[refB.index]);
+        }
+    }
+
+    if (withMods && matrix != nullptr)
+    {
+        const int srcA = sourceChoiceForModulePrefix (prefixA);
+        const int srcB = sourceChoiceForModulePrefix (prefixB);
+
+        for (int s = 0; s < kNumModSlots; ++s)
+        {
+            const auto p = modSlotParams (s);
+            if (! slotInUse (*matrix, p))
+                continue;
+
+            int curSrc = static_cast<int> (std::lround (matrix->get (p.source)));
+            int curDstChoice = static_cast<int> (std::lround (matrix->get (p.destination)));
+            int destParam = modDestinationParamIndex (static_cast<size_t> (curDstChoice));
+            std::string destKey = destParam >= 0 ? table[destParam].key : "";
+
+            bool changed = false;
+            if (srcA > 0 && srcB > 0)
+            {
+                if (curSrc == srcA) { curSrc = srcB; changed = true; }
+                else if (curSrc == srcB) { curSrc = srcA; changed = true; }
+            }
+
+            if (! destKey.empty())
+            {
+                if (destKey.rfind (dotA, 0) == 0)
+                {
+                    const std::string newKey = dotB + destKey.substr (dotA.length());
+                    const auto r = resolveKey (newKey);
+                    if (r.valid()) { curDstChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (r.index))); changed = true; }
+                }
+                else if (destKey.rfind (dotB, 0) == 0)
+                {
+                    const std::string newKey = dotA + destKey.substr (dotB.length());
+                    const auto r = resolveKey (newKey);
+                    if (r.valid()) { curDstChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (r.index))); changed = true; }
+                }
+            }
+
+            if (changed)
+            {
+                matrix->set (p.destination, static_cast<float> (curDstChoice));
+                matrix->set (p.source, static_cast<float> (curSrc));
+            }
+        }
+    }
+    return true;
+}
+
+// ---- ScaleInfo --------------------------------------------------------------------------------------------------------------------
+
+namespace
+{
+struct ScalePattern
+{
+    int count;
+    int steps[8];
+};
+
+constexpr ScalePattern kScalePatterns[] = {
+    { 12, { 0 } },                          // 0: Chromatic (off)
+    { 7, { 0, 2, 4, 5, 7, 9, 11 } },        // 1: Major
+    { 7, { 0, 2, 3, 5, 7, 8, 10 } },        // 2: Natural Minor
+    { 7, { 0, 2, 3, 5, 7, 8, 11 } },        // 3: Harmonic Minor
+    { 7, { 0, 2, 3, 5, 7, 9, 11 } },        // 4: Melodic Minor
+    { 7, { 0, 2, 3, 5, 7, 9, 10 } },        // 5: Dorian
+    { 7, { 0, 1, 3, 5, 7, 8, 10 } },        // 6: Phrygian
+    { 7, { 0, 2, 4, 6, 7, 9, 11 } },        // 7: Lydian
+    { 7, { 0, 2, 4, 5, 7, 9, 10 } },        // 8: Mixolydian
+    { 7, { 0, 1, 3, 5, 6, 8, 10 } },        // 9: Locrian
+    { 5, { 0, 2, 4, 7, 9 } },               // 10: Major Pentatonic
+    { 5, { 0, 3, 5, 7, 10 } },              // 11: Minor Pentatonic
+    { 6, { 0, 3, 5, 6, 7, 10 } },           // 12: Blues
+    { 6, { 0, 2, 4, 6, 8, 10 } },           // 13: Whole Tone
+    { 8, { 0, 1, 3, 4, 6, 7, 9, 10 } },     // 14: Diminished (H-W)
+    { 8, { 0, 2, 3, 5, 6, 8, 9, 11 } },     // 15: Diminished (W-H)
+    { 7, { 0, 1, 4, 5, 7, 8, 10 } },        // 16: Phrygian Dominant
+    { 7, { 0, 2, 3, 6, 7, 8, 11 } },        // 17: Hungarian Minor
+    { 7, { 0, 1, 4, 5, 7, 8, 11 } },        // 18: Double Harmonic
+    { 5, { 0, 2, 3, 7, 8 } },               // 19: Hirajoshi
+};
+} // namespace
+
+const char* ScaleInfo::keyName (int keyIndex) noexcept
+{
+    static constexpr const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    return names[((keyIndex % 12) + 12) % 12];
+}
+
+const char* ScaleInfo::scaleName (int scaleType) noexcept
+{
+    static constexpr const char* names[] = {
+        "Chromatic (off)", "Major", "Natural Minor", "Harmonic Minor", "Melodic Minor",
+        "Dorian", "Phrygian", "Lydian", "Mixolydian", "Locrian",
+        "Major Pentatonic", "Minor Pentatonic", "Blues", "Whole Tone",
+        "Diminished (H-W)", "Diminished (W-H)", "Phrygian Dominant",
+        "Hungarian Minor", "Double Harmonic", "Hirajoshi"
+    };
+    if (scaleType < 0 || scaleType >= kNumScales)
+        return "Chromatic (off)";
+    return names[scaleType];
+}
+
+bool ScaleInfo::inScale (int scaleKey, int scaleType, int midiNote) noexcept
+{
+    if (scaleType <= 0 || scaleType >= kNumScales)
+        return true;
+
+    const int pitchClass = ((midiNote % 12) - (scaleKey % 12) + 12) % 12;
+    const auto& pat = kScalePatterns[scaleType];
+    for (int i = 0; i < pat.count; ++i)
+        if (pat.steps[i] == pitchClass)
+            return true;
+    return false;
+}
+
+bool ScaleInfo::isRoot (int scaleKey, int scaleType, int midiNote) noexcept
+{
+    if (scaleType <= 0)
+        return false;
+    const int pitchClass = ((midiNote % 12) - (scaleKey % 12) + 12) % 12;
+    return pitchClass == 0;
+}
 } // namespace synthyboy::ui

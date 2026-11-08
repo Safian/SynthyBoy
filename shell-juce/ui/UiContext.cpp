@@ -111,4 +111,34 @@ void ModAssignController::setMessage (const juce::String& m)
 {
     statusMessage = m;
 }
+
+ParamValues readLiveValues (const UiContext& ctx)
+{
+    auto values = ParamValues::defaults();
+    const auto* table = paramTable();
+    const size_t count = paramCount();
+    auto& apvts = ctx.apvts();
+    for (size_t i = 0; i < count; ++i)
+        if (auto* raw = apvts.getRawParameterValue (table[i].key))
+            values.plain[i] = raw->load();
+    return values;
+}
+
+void applyValues (const UiContext& ctx, const ParamValues& values)
+{
+    const auto* table = paramTable();
+    const size_t count = paramCount();
+    auto& apvts = ctx.apvts();
+    for (size_t i = 0; i < count; ++i)
+        if (auto* p = apvts.getParameter (table[i].key))
+        {
+            const float target = p->convertTo0to1 (values.plain[i]);
+            if (std::abs (p->getValue() - target) > 1.0e-7f)
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (target);
+                p->endChangeGesture();
+            }
+        }
+}
 } // namespace synthyboy::ui

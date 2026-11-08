@@ -81,6 +81,9 @@ public:
     synthyboy::ui::AbCompare& abCompare() override { return ab; }
     void stepPreset (int direction) override { if (presetStepHandler) presetStepHandler (direction); }
     juce::String presetName() const override { return presetNameText; }
+    float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
+    float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
+    void injectMidiMessage (const juce::MidiMessage& msg) override;
 
     /** Preset browsing belongs to Kick: the owner of the preset list installs the prev / next callback and sets the shown name. */
     void setPresetStepHandler (std::function<void (int)> handler) { presetStepHandler = std::move (handler); }
@@ -113,6 +116,9 @@ private:
     std::function<void (int)> presetStepHandler;
     std::vector<synthyboy::Event> events;
     std::atomic<uint32_t> droppedEvents { 0 };
+    std::atomic<float> peakL { 0.0f }, peakR { 0.0f };
+    std::mutex uiMidiMutex;
+    juce::MidiBuffer uiMidiBuffer;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SynthyBoyProcessor)
 };
