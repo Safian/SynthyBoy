@@ -190,6 +190,8 @@ namespace sbvital {
     // ---- Bode frequency shifter --------------------------------------------------------------------------------------------------------
     class BodeModule : public StereoFxModule {
       public:
+        int latency() const { return fx_.latency(); }
+
         BodeModule(const Output* bps, const int* counter) : StereoFxModule(bps, counter) {
           mono_input_ = createBaseControl("bode_mono_input");
           shift_ = createMonoModControl("bode_shift");
@@ -590,6 +592,12 @@ namespace sbvital {
       case ReorderableEffectChain::kSplitterMs: return new SplitterMsModule();
       default: return nullptr;
     }
+  }
+
+  int serumModuleLatency(const SynthModule* module) {
+    if (const auto* bode = dynamic_cast<const BodeModule*>(module))
+      return bode->latency();
+    return 0;   // Hyper / Dimension, Utility, Convolve (zero latency partitioned convolution) and the crossovers (LR4, all-pass compensated)
   }
 
   void setConvolveRealtime(SynthModule* convolve, bool realtime) {

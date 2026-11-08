@@ -177,6 +177,7 @@ void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     auto quality = synthyboy::qualityForTier (synthyboy::kDefaultTier);
     quality.realtime = ! isNonRealtime();
     engine->prepare (sampleRate, samplesPerBlock, quality);
+    setLatencySamples (engine->latencySamples());
 }
 
 void SynthyBoyProcessor::setNonRealtime (bool isNonRealtime) noexcept
@@ -259,6 +260,11 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     engine->process (events.data(), numEvents, buffer.getWritePointer (0),
                      numChannels > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
+
+    // Bode's latency (the engine delays every other path to match): tell the host when it changes
+    const int latency = engine->latencySamples();
+    if (latency != getLatencySamples())
+        setLatencySamples (latency);
 }
 
 double SynthyBoyProcessor::getTailLengthSeconds() const

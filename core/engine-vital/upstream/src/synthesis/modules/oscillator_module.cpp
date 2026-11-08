@@ -17,6 +17,9 @@
 
 #include "oscillator_module.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "synth_oscillator.h"
 #include "wavetable.h"
 
@@ -139,8 +142,10 @@ namespace sbvital {
     so->plug(distortion_amount, SampleOscillator::kWarpAmount);
     so->plug(distortion2_type_, SampleOscillator::kWarp2Type);
     so->plug(warp2_amount, SampleOscillator::kWarp2Amount);
-    so->useOutput(output(kRaw), SampleOscillator::kRaw);
-    so->useOutput(output(kLevelled), SampleOscillator::kLevelled);
+    sample_raw_ = std::make_shared<Output>(output(kRaw)->buffer_size);
+    sample_levelled_ = std::make_shared<Output>(output(kLevelled)->buffer_size);
+    so->useOutput(sample_raw_.get(), SampleOscillator::kRaw);
+    so->useOutput(sample_levelled_.get(), SampleOscillator::kLevelled);
 
     addProcessor(oscillator_);
     addProcessor(sample_oscillator_);
@@ -151,15 +156,62 @@ namespace sbvital {
   void OscillatorModule::process(int num_samples) {
     bool on = on_->value();
 
-    // SynthyBoy: exactly one of the two oscillator types runs (both write the module's outputs)
+    // SynthyBoy: exactly one of the two oscillator types runs, except during the 10 ms crossfade that follows a change of oscN.type
+    // while the oscillator is sounding (both run, the sample oscillator into its own outputs, and the module blends them).
     const bool sample = type_ != nullptr && type_->value() > 0.5f;
-    if (sample != (! getLocalProcessor(oscillator_)->enabled())) {
-      getLocalProcessor(oscillator_)->enable(! sample);
-      getLocalProcessor(sample_oscillator_)->enable(sample);
+    if (sample != type_sample_) {
+      if (on && *was_on_ && sounding_) {
+        fading_ = true;
+        fade_position_ = 0;
+        fade_length_ = std::max(1, static_cast<int>(0.01 * getSampleRate()));
+        getLocalProcessor(oscillator_)->enable(true);
+        getLocalProcessor(sample_oscillator_)->enable(true);
+      }
+      else {
+        fading_ = false;
+        getLocalProcessor(oscillator_)->enable(!sample);
+        getLocalProcessor(sample_oscillator_)->enable(sample);
+      }
+      type_sample_ = sample;
+    }
+    else if (!fading_ && getLocalProcessor(oscillator_)->enabled() == getLocalProcessor(sample_oscillator_)->enabled()) {
+      // the block after a fade: only the new type keeps running
+      getLocalProcessor(oscillator_)->enable(!type_sample_);
+      getLocalProcessor(sample_oscillator_)->enable(type_sample_);
     }
 
-    if (on)
+    if (on) {
       SynthModule::process(num_samples);
+
+      poly_float* raw = output(kRaw)->buffer;
+      poly_float* levelled = output(kLevelled)->buffer;
+      const poly_float* sample_raw = sample_raw_->buffer;
+      const poly_float* sample_levelled = sample_levelled_->buffer;
+      if (fading_) {
+        for (int i = 0; i < num_samples; ++i) {
+          const float g = std::min(1.0f, static_cast<float>(fade_position_ + i + 1) / static_cast<float>(fade_length_));
+          const poly_float to_sample = type_sample_ ? g : 1.0f - g;   // share of the sample oscillator
+          raw[i] = raw[i] + (sample_raw[i] - raw[i]) * to_sample;
+          levelled[i] = levelled[i] + (sample_levelled[i] - levelled[i]) * to_sample;
+        }
+        fade_position_ += num_samples;
+        if (fade_position_ >= fade_length_)
+          fading_ = false;
+      }
+      else if (type_sample_) {
+        for (int i = 0; i < num_samples; ++i) {
+          raw[i] = sample_raw[i];
+          levelled[i] = sample_levelled[i];
+        }
+      }
+
+      float magnitude = 0.0f;
+      for (int i = 0; i < num_samples; ++i) {
+        const poly_float v = raw[i];
+        magnitude = std::max(magnitude, std::max(std::max(std::fabs(v[0]), std::fabs(v[1])), std::max(std::fabs(v[2]), std::fabs(v[3]))));
+      }
+      sounding_ = magnitude > 1.0e-5f;   // a change of the type fades only what is being heard
+    }
     else if (*was_on_) {
       output(kRaw)->clearBuffer();
       output(kLevelled)->clearBuffer();

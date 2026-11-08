@@ -68,6 +68,18 @@ namespace sbvital {
       std::shared_ptr<bool> was_on_;
       std::shared_ptr<SampleOscShared> sample_shared_;
 
+      // SynthyBoy: oscN.type crossfade. The sample oscillator writes into its own outputs; the module copies them into its outputs (or
+      // blends them with the wavetable oscillator during the 10 ms fade that follows a change of the type under a sounding note).
+      // The voices are processed by clones of this module one after the other: the processor flags (enabled) and the Output buffers are
+      // shared between the clones, the counters below are the clone's own. The processors are switched at the START of the block after the
+      // fade ends, so every clone of the block that ends it still blends.
+      std::shared_ptr<Output> sample_raw_, sample_levelled_;
+      bool type_sample_ = false;     // the type that is (or is being faded to)
+      bool fading_ = false;
+      bool sounding_ = false;        // the output of the last block was not silent
+      int fade_position_ = 0;
+      int fade_length_ = 1;
+
       Value* on_;
       SynthOscillator* oscillator_;
       SampleOscillator* sample_oscillator_;

@@ -94,6 +94,7 @@ namespace sbvital {
       void setChannelRangeSlide(int from_channel, int to_channel, mono_float value, int sample);
       Wavetable* getWavetable(int index);
       SampleOscShared* getSampleShared(int index);
+      int latencyFrames() const;   // SynthyBoy: latency of the output in samples of the host rate (reorderable_effect_chain.h)
       SynthModule* getEffectModule(int index);   // SynthyBoy: the module of the effect chain (0 .. 15)
       FilterCurveShared* getFilterCurve(int index);   // 0 filter 1, 1 filter 2, 2 the FX filter
       Sample* getSample();

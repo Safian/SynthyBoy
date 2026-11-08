@@ -503,6 +503,7 @@ public:
             engine->process (kChunk);
         engine->allSoundsOff();
         activeCount.store (0, std::memory_order_relaxed);
+        latencyCache.store (engine->latencyFrames(), std::memory_order_relaxed);
     }
 
     void setParam (uint32_t id, float plain) noexcept override
@@ -574,6 +575,7 @@ public:
             handleEvent (events[next++]);
 
         activeCount.store (engine->getNumActiveVoices(), std::memory_order_relaxed);
+        latencyCache.store (engine->latencyFrames(), std::memory_order_relaxed);
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -648,6 +650,11 @@ public:
     int activeVoices() const noexcept override
     {
         return activeCount.load (std::memory_order_relaxed);
+    }
+
+    int latencySamples() const noexcept override
+    {
+        return latencyCache.load (std::memory_order_relaxed);
     }
 
     bool configured() const noexcept { return engine != nullptr && controlsComplete; }
@@ -1174,8 +1181,9 @@ private:
             const auto& ix = sampleParams[static_cast<size_t> (i)];
             const auto P = [&] (int what) { const int idx = ix[static_cast<size_t> (what)]; return idx >= 0 ? params[static_cast<size_t> (idx)].load (std::memory_order_relaxed) : 0.0f; };
             const SampleEntry* entry = activeSnapshot != nullptr && activeSnapshot->sample[static_cast<size_t> (i)].present ? &activeSnapshot->sample[static_cast<size_t> (i)] : nullptr;
-            const bool typeSample = P (kSpType) > 0.5f;
-            sh->view = typeSample && entry != nullptr ? &entry->view : nullptr; // Sample without a sample in the content: a silent oscillator
+            // The view stays set while the type is Wavetable: the sample oscillator keeps playing during the 10 ms crossfade of a type change
+            // (OscillatorModule); Sample without a sample in the content: a silent oscillator
+            sh->view = entry != nullptr ? &entry->view : nullptr;
             sh->normalize_gain = entry != nullptr ? entry->data.normalizeGain() : 1.0f;
             sh->start = P (kSpStart) * 0.01f;
             sh->end = P (kSpEnd) * 0.01f;
@@ -1869,6 +1877,7 @@ private:
     // ---- state ----------------------------------------------------------------------------------------------------
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> activeCount { 0 };
+    std::atomic<int> latencyCache { 0 };
 
     struct NoteIdSlot
     {
