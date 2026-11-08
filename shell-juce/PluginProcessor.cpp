@@ -20,6 +20,7 @@
 #include "PluginProcessor.h"
 
 #include "synthyboy/midi_events.h"
+#include "ui/Editor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -49,6 +50,7 @@ SynthyBoyProcessor::SynthyBoyProcessor()
       apvts (*this, nullptr, "SynthyBoyState", createParameterLayout()),
       engine (createShellEngine())
 {
+    caps = engine->capabilities();
     const auto* table = synthyboy::paramTable();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
     {
@@ -220,6 +222,9 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         }
     }
 
+    // notes played on the on-screen keyboard join the host's MIDI input (MidiKeyboardState takes its own lock for a few instructions)
+    keyboard.processNextMidiBuffer (midiMessages, 0, numSamples, true);
+
     // MIDI -> sample accurate events (fixed capacity, overflow is dropped and counted)
     const int capacity = static_cast<int> (events.size());
     int numEvents = 0;
@@ -289,8 +294,10 @@ double SynthyBoyProcessor::getTailLengthSeconds() const
 
 juce::AudioProcessorEditor* SynthyBoyProcessor::createEditor()
 {
-    // Generic parameter GUI (the own GUI is Phase 5): one section per parameter group.
-    return new juce::GenericAudioProcessorEditor (*this);
+    // SYNTHYBOY_GENERIC_UI=1: the generic parameter editor (one section per parameter group) stays reachable for debugging
+    if (juce::SystemStats::getEnvironmentVariable ("SYNTHYBOY_GENERIC_UI", {}).trim() == "1")
+        return new juce::GenericAudioProcessorEditor (*this);
+    return new synthyboy::ui::SynthyBoyEditor (*this, *this);
 }
 
 synthyboy::ParamValues SynthyBoyProcessor::currentValues() const

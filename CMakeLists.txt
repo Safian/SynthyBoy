@@ -150,9 +150,14 @@ if(APPLE)
     endforeach()
 endif()
 
+# The custom GUI (shell-juce/ui, Phase 5): pure view-model library + Components compiled into the plugin
+find_package(Threads REQUIRED)
+add_subdirectory(shell-juce/ui)
+
 target_sources(SynthyBoy PRIVATE
     shell-juce/PluginProcessor.cpp
-    shell-juce/PluginProcessor.h)
+    shell-juce/PluginProcessor.h
+    ${SYNTHYBOY_UI_SOURCES})
 
 target_include_directories(SynthyBoy PRIVATE shell-juce)
 
@@ -172,7 +177,10 @@ target_compile_definitions(SynthyBoy PUBLIC
 target_link_libraries(SynthyBoy
     PRIVATE
         synthyboy_core
+        synthyboy_ui_model
         juce::juce_audio_processors
+        juce::juce_audio_utils
+        juce::juce_gui_basics
         juce::juce_audio_plugin_client
     PUBLIC
         juce::juce_recommended_config_flags
@@ -189,4 +197,32 @@ if(NOT WIN32)
     target_include_directories(clap_smoke PRIVATE "${CLAP_INCLUDE_DIR}")
     target_link_libraries(clap_smoke PRIVATE synthyboy_core ${CMAKE_DL_LIBS})
     add_dependencies(clap_smoke SynthyBoy_CLAP)
+endif()
+
+# ---------------------------------------------------------------------------
+# GUI tests with real Components, no window and no display needed: the controls bound to the real processor, the assign-by-touch flow,
+# A/B, keyboard to audio, 44 point touch targets, the panel registry contract and the phone / tablet screenshots
+# (written to ui-screenshots/ in the test's working directory, or to $SYNTHYBOY_UI_SCREENSHOT_DIR).
+# ---------------------------------------------------------------------------
+if(SYNTHYBOY_BUILD_TESTS)
+    synthyboy_add_test(synthyboy_test_ui_render
+        shell-juce/ui/tests/test_ui_render.cpp
+        shell-juce/PluginProcessor.cpp
+        ${SYNTHYBOY_UI_SOURCES}
+        LINK synthyboy_ui_model
+             juce::juce_audio_processors
+             juce::juce_audio_utils
+             juce::juce_gui_basics
+             juce::juce_recommended_config_flags
+             juce::juce_recommended_warning_flags)
+    target_include_directories(synthyboy_test_ui_render PRIVATE shell-juce)
+    target_compile_definitions(synthyboy_test_ui_render PRIVATE
+        JucePlugin_Name="SynthyBoy"
+        SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
+        target_compile_definitions(synthyboy_test_ui_render PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
+    else()
+        target_compile_definitions(synthyboy_test_ui_render PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
+    endif()
 endif()

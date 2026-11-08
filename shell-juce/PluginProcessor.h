@@ -20,8 +20,10 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_utils/juce_audio_utils.h>
 
 #include <array>
+#include <functional>
 #include <mutex>
 #include <atomic>
 #include <memory>
@@ -29,13 +31,15 @@
 
 #include "synthyboy/engine.h"
 #include "synthyboy/state.h"
+#include "ui/UiHost.h"
 
 /**
  * JUCE shell: owns no DSP. The parameter layout is generated from synthyboy::paramTable() (one JUCE parameter per entry, grouped
  * by the " / " hierarchy of ParamInfo::group), MIDI and parameter values are converted into synthyboy::Event /
  * IEngine::setParam each block (only the parameters whose value changed), and the state blob is synthyboy::saveState().
  */
-class SynthyBoyProcessor final : public juce::AudioProcessor
+class SynthyBoyProcessor final : public juce::AudioProcessor,
+                                 public synthyboy::ui::UiHost
 {
 public:
     /** Capacity of the per-block event list (allocated in prepareToPlay); further events of a block are dropped and counted. */
@@ -69,6 +73,18 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }
+
+    // synthyboy::ui::UiHost (the editor's view of the processor; message thread)
+    juce::AudioProcessorValueTreeState& parameters() override { return apvts; }
+    synthyboy::EngineCapsMask engineCaps() const noexcept override { return caps; }
+    juce::MidiKeyboardState& keyboardState() override { return keyboard; }
+    synthyboy::ui::AbCompare& abCompare() override { return ab; }
+    void stepPreset (int direction) override { if (presetStepHandler) presetStepHandler (direction); }
+    juce::String presetName() const override { return presetNameText; }
+
+    /** Preset browsing belongs to Kick: the owner of the preset list installs the prev / next callback and sets the shown name. */
+    void setPresetStepHandler (std::function<void (int)> handler) { presetStepHandler = std::move (handler); }
+    void setPresetName (const juce::String& name) { presetNameText = name; }
     uint32_t getDroppedEventCount() const noexcept { return droppedEvents.load(); }
 
 private:
@@ -88,6 +104,13 @@ private:
     synthyboy::StateContent content;
 
     std::unique_ptr<synthyboy::IEngine> engine;
+    synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction
+
+    // editor state that outlives the editor window
+    juce::MidiKeyboardState keyboard; // notes of the on-screen keyboard, merged into the MIDI input of processBlock
+    synthyboy::ui::AbCompare ab;
+    juce::String presetNameText { "Init" };
+    std::function<void (int)> presetStepHandler;
     std::vector<synthyboy::Event> events;
     std::atomic<uint32_t> droppedEvents { 0 };
 
