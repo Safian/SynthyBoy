@@ -40,6 +40,8 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void updateTabBadges();
     void scrollToEnvelope (int targetEnv);
+    int tabsPerRow (int width) const;
+    int tabRowHeight (int width) const;
 
     int envIdx = 1;
     std::unique_ptr<EnvCurveView> visual;

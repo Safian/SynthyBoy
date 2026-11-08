@@ -353,8 +353,8 @@ TEST (glb_key_scale_direct_manipulation)
         return;
 
     // Clicking pad index 7 (G)
-    const float padW = visual->getWidth() / 12.0f;
-    const juce::Point<float> tapPos (padW * 7.5f, visual->getHeight() * 0.7f);
+    const float padW = static_cast<float> (visual->getWidth()) / 12.0f;
+    const juce::Point<float> tapPos (padW * 7.5f, static_cast<float> (visual->getHeight()) * 0.7f);
     visual->mouseDown (mouse (*visual, tapPos, tapPos, false));
     visual->mouseUp (mouse (*visual, tapPos, tapPos, false));
 

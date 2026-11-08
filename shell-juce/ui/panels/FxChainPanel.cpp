@@ -130,7 +130,7 @@ public:
 
         const auto slotArea = getLocalBounds().reduced (t.ipx (6.0f))
                                               .withTrimmedTop (t.ipx (20.0f))
-                                              .withTrimmedBottom (t.touch() + t.ipx (4.0f));
+                                              .withTrimmedBottom (t.touch() + t.ipx (4.0f)).toFloat();
 
         const int cols = 8;
         const int rows = 2;
@@ -187,7 +187,7 @@ public:
 
             // Drag handle "="
             g.setFont (t.font (t.px (11.0f), true));
-            g.drawText ("=", rect.removeFromRight (t.px (12.0f)), juce::Justification::centred, false);
+            g.drawText ("=", juce::Rectangle<float> (rect).removeFromRight (t.px (12.0f)), juce::Justification::centred, false);
         }
 
         // Draw drop insertion line when dragging
@@ -213,7 +213,7 @@ public:
         moveLeftButton.setBounds (b.removeFromLeft (btnW));
         b.removeFromLeft (t.gap());
         moveRightButton.setBounds (b.removeFromLeft (btnW));
-        bypassAllButton.setBounds (btnArea.removeFromRight (btnW));
+        bypassAllButton.setBounds (juce::Rectangle<int> (btnArea).removeFromRight (btnW));
     }
 
     void mouseDown (const juce::MouseEvent& e) override
@@ -295,7 +295,7 @@ private:
         const auto& t = ctx.theme;
         const auto slotArea = getLocalBounds().reduced (t.ipx (6.0f))
                                               .withTrimmedTop (t.ipx (20.0f))
-                                              .withTrimmedBottom (t.touch() + t.ipx (4.0f));
+                                              .withTrimmedBottom (t.touch() + t.ipx (4.0f)).toFloat();
         const int cols = 8;
         const int rows = 2;
         const float slotW = static_cast<float> (slotArea.getWidth()) / static_cast<float> (cols);

@@ -111,7 +111,6 @@ private:
         const float normX = juce::jlimit (0.0f, 1.0f, (pos.x - area.getX()) / area.getWidth());
         const float normY = juce::jlimit (0.0f, 1.0f, 1.0f - (pos.y - area.getY()) / area.getHeight());
 
-        const float newFreq = fxNormToFreq (normX);
         const float newSpread = normY * 100.0f;
 
         cutoffHandle.setNormalised (normX);

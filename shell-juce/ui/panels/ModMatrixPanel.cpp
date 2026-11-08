@@ -89,7 +89,7 @@ public:
         loopBadge.setText ("LOOP!", juce::dontSendNotification);
         loopBadge.setJustificationType (juce::Justification::centred);
         loopBadge.setColour (juce::Label::backgroundColourId, ctx.theme.colours.warn);
-        loopBadge.setColour (juce::Label::textColourId, juce::Colours::black);
+        loopBadge.setColour (juce::Label::textColourId, ctx.theme.colours.textOnAccent);
         loopBadge.setFont (ctx.theme.font (ctx.theme.px (10.0f), true));
         loopBadge.setVisible (false);
         addAndMakeVisible (loopBadge);
@@ -170,8 +170,6 @@ public:
     void resized() override
     {
         auto r = getLocalBounds().reduced (ctx.theme.ipx (2.0f), ctx.theme.ipx (2.0f));
-        const int h = r.getHeight();
-
         slotLabel.setBounds (r.removeFromLeft (ctx.theme.ipx (32.0f)));
         bypassButton.setBounds (r.removeFromLeft (ctx.theme.ipx (36.0f)));
         r.removeFromLeft (ctx.theme.ipx (4.0f));
@@ -496,7 +494,7 @@ public:
         {
             auto row = std::make_unique<ModSlotRow> (ctx, i,
                 [this] { updateStatus(); },
-                [this] (int s) { juce::ignoreUnused (s); });
+                [] (int) {});
             container.addAndMakeVisible (*row);
             container.rows.push_back (std::move (row));
         }

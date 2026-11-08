@@ -64,30 +64,30 @@ public:
 
         const float quarterW = plotArea.getWidth() * 0.25f;
         for (int i = 0; i <= 4; ++i)
-            g.drawVerticalLine (juce::roundToInt (plotArea.getX() + i * quarterW), plotArea.getY(), plotArea.getBottom());
+            g.drawVerticalLine (juce::roundToInt (plotArea.getX() + static_cast<float> (i) * quarterW), plotArea.getY(), plotArea.getBottom());
 
         // Labels
         g.setFont (t.font (t.px (10.0f)));
         g.setColour (t.colours.textDim);
-        g.drawText ("100%", plotArea.getX() - t.px (26.0f), plotArea.getY() - t.px (6.0f), t.px (24.0f), t.px (12.0f), juce::Justification::centredRight, false);
-        g.drawText ("50%", plotArea.getX() - t.px (26.0f), plotArea.getCentreY() - t.px (6.0f), t.px (24.0f), t.px (12.0f), juce::Justification::centredRight, false);
-        g.drawText ("0%", plotArea.getX() - t.px (26.0f), plotArea.getBottom() - t.px (6.0f), t.px (24.0f), t.px (12.0f), juce::Justification::centredRight, false);
+        g.drawText ("100%", juce::Rectangle<float> (plotArea.getX() - t.px (26.0f), plotArea.getY() - t.px (6.0f), t.px (24.0f), t.px (12.0f)), juce::Justification::centredRight, false);
+        g.drawText ("50%", juce::Rectangle<float> (plotArea.getX() - t.px (26.0f), plotArea.getCentreY() - t.px (6.0f), t.px (24.0f), t.px (12.0f)), juce::Justification::centredRight, false);
+        g.drawText ("0%", juce::Rectangle<float> (plotArea.getX() - t.px (26.0f), plotArea.getBottom() - t.px (6.0f), t.px (24.0f), t.px (12.0f)), juce::Justification::centredRight, false);
 
         if (noteMode)
         {
-            g.drawText ("C-1 (0)", plotArea.getX() - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (45.0f), t.px (12.0f), juce::Justification::centredLeft, false);
-            g.drawText ("C1 (36)", plotArea.getX() + quarterW - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f), juce::Justification::centred, false);
-            g.drawText ("C3 (60)", plotArea.getX() + 2 * quarterW - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f), juce::Justification::centred, false);
-            g.drawText ("C5 (84)", plotArea.getX() + 3 * quarterW - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f), juce::Justification::centred, false);
-            g.drawText ("G9 (127)", plotArea.getRight() - t.px (40.0f), plotArea.getBottom() + t.px (2.0f), t.px (45.0f), t.px (12.0f), juce::Justification::centredRight, false);
+            g.drawText ("C-1 (0)", juce::Rectangle<float> (plotArea.getX() - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (45.0f), t.px (12.0f)), juce::Justification::centredLeft, false);
+            g.drawText ("C1 (36)", juce::Rectangle<float> (plotArea.getX() + quarterW - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f)), juce::Justification::centred, false);
+            g.drawText ("C3 (60)", juce::Rectangle<float> (plotArea.getX() + 2 * quarterW - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f)), juce::Justification::centred, false);
+            g.drawText ("C5 (84)", juce::Rectangle<float> (plotArea.getX() + 3 * quarterW - t.px (16.0f), plotArea.getBottom() + t.px (2.0f), t.px (40.0f), t.px (12.0f)), juce::Justification::centred, false);
+            g.drawText ("G9 (127)", juce::Rectangle<float> (plotArea.getRight() - t.px (40.0f), plotArea.getBottom() + t.px (2.0f), t.px (45.0f), t.px (12.0f)), juce::Justification::centredRight, false);
         }
         else
         {
-            g.drawText ("0", plotArea.getX(), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f), juce::Justification::centredLeft, false);
-            g.drawText ("32", plotArea.getX() + quarterW - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f), juce::Justification::centred, false);
-            g.drawText ("64", plotArea.getX() + 2 * quarterW - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f), juce::Justification::centred, false);
-            g.drawText ("96", plotArea.getX() + 3 * quarterW - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f), juce::Justification::centred, false);
-            g.drawText ("127", plotArea.getRight() - t.px (20.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f), juce::Justification::centredRight, false);
+            g.drawText ("0", juce::Rectangle<float> (plotArea.getX(), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f)), juce::Justification::centredLeft, false);
+            g.drawText ("32", juce::Rectangle<float> (plotArea.getX() + quarterW - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f)), juce::Justification::centred, false);
+            g.drawText ("64", juce::Rectangle<float> (plotArea.getX() + 2 * quarterW - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f)), juce::Justification::centred, false);
+            g.drawText ("96", juce::Rectangle<float> (plotArea.getX() + 3 * quarterW - t.px (10.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f)), juce::Justification::centred, false);
+            g.drawText ("127", juce::Rectangle<float> (plotArea.getRight() - t.px (20.0f), plotArea.getBottom() + t.px (2.0f), t.px (20.0f), t.px (12.0f)), juce::Justification::centredRight, false);
         }
 
         // Draw curve connecting points
@@ -115,7 +115,7 @@ public:
             const float py = plotArea.getBottom() - points[i].y * plotArea.getHeight();
             g.setColour (t.colours.accent);
             g.fillEllipse (px - r, py - r, r * 2.0f, r * 2.0f);
-            g.setColour (juce::Colours::white);
+            g.setColour (t.colours.text);
             g.drawEllipse (px - r, py - r, r * 2.0f, r * 2.0f, 1.0f);
         }
     }
@@ -225,7 +225,7 @@ public:
         gapBadge.setText ("GAP", juce::dontSendNotification);
         gapBadge.setJustificationType (juce::Justification::centred);
         gapBadge.setColour (juce::Label::backgroundColourId, ctx.theme.colours.warn);
-        gapBadge.setColour (juce::Label::textColourId, juce::Colours::black);
+        gapBadge.setColour (juce::Label::textColourId, ctx.theme.colours.textOnAccent);
         gapBadge.setFont (ctx.theme.font (ctx.theme.px (9.0f), true));
         gapBadge.setTooltip ("Custom multi-point curve storage is an engine GAP feature.");
         addAndMakeVisible (gapBadge);
@@ -246,14 +246,21 @@ public:
         addAndMakeVisible (curveView);
     }
 
+    /** One bar: [Velocity][Note] .. [GAP][Init][Assign]; narrower than that Init / Assign drop to a second bar. */
+    bool twoBars (int innerWidth) const
+    {
+        const auto& t = ctx.theme;
+        return innerWidth < t.ipx (110.0f) + t.ipx (4.0f) + t.ipx (100.0f) + 4 * t.gap() + t.ipx (34.0f) + t.ipx (80.0f) + t.ipx (115.0f);
+    }
+
     int preferredHeight (int width) const override
     {
-        juce::ignoreUnused (width);
         const int touch = ctx.theme.touch();
         const int gap = ctx.theme.gap();
+        const int bars = twoBars (width - 4 * gap) ? 2 : 1;
         const int visualH = ctx.theme.ipx (160.0f);
         const int controlsH = ctx.theme.ipx (70.0f);
-        return headerHeight() + touch + gap + visualH + gap + controlsH + gap;
+        return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + controlsH + gap;
     }
 
     void resized() override
@@ -263,16 +270,24 @@ public:
         const int gap = ctx.theme.gap();
 
         auto topBar = area.removeFromTop (h);
-        veloTabButton.setBounds (topBar.removeFromLeft (ctx.theme.ipx (110.0f)));
+        const bool two = twoBars (area.getWidth());
+        juce::Rectangle<int> secondBar;
+        if (two)
+        {
+            area.removeFromTop (gap);
+            secondBar = area.removeFromTop (h);
+        }
+        veloTabButton.setBounds (topBar.removeFromLeft (juce::jmax (h, ctx.theme.ipx (110.0f))));
         topBar.removeFromLeft (ctx.theme.ipx (4.0f));
-        noteTabButton.setBounds (topBar.removeFromLeft (ctx.theme.ipx (100.0f)));
+        noteTabButton.setBounds (topBar.removeFromLeft (juce::jmax (h, ctx.theme.ipx (100.0f))));
         topBar.removeFromLeft (gap);
 
-        assignButton.setBounds (topBar.removeFromRight (ctx.theme.ipx (115.0f)));
-        topBar.removeFromRight (gap);
-        initButton.setBounds (topBar.removeFromRight (ctx.theme.ipx (80.0f)));
-        topBar.removeFromRight (gap);
+        auto& right = two ? secondBar : topBar;
         gapBadge.setBounds (topBar.removeFromRight (ctx.theme.ipx (34.0f)));
+        topBar.removeFromRight (gap);
+        assignButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (115.0f))));
+        right.removeFromRight (gap);
+        initButton.setBounds (right.removeFromRight (juce::jmax (h, ctx.theme.ipx (80.0f))));
 
         area.removeFromTop (gap);
         const int visualH = ctx.theme.ipx (160.0f);

@@ -109,7 +109,7 @@ public:
         g.setFont (t.font (t.px (10.0f)));
         g.setColour (c.textDim);
         const float semiX = (exprX - 0.5f) * 2.0f * bendRng;
-        juce::String readX = "X (Bend): " + (semiX >= 0.0f ? "+" : "") + juce::String (semiX, 1) + " st";
+        juce::String readX = juce::String ("X (Bend): ") + (semiX >= 0.0f ? "+" : "") + juce::String (semiX, 1) + " st";
         juce::String readY = "Y (Slide): " + juce::String (juce::roundToInt (exprY * 100.0f)) + "%";
         juce::String readZ = "Z (Press): " + juce::String (juce::roundToInt (exprZ * 100.0f)) + "%";
         g.drawText (readX + "  |  " + readY + "  |  " + readZ,
@@ -135,7 +135,7 @@ public:
     void resized() override
     {
         const auto& t = ctx.theme;
-        const auto bounds = getLocalBounds().reduced (t.gap());
+        auto bounds = getLocalBounds().reduced (t.gap());
         const int touchH = t.touch();
         const int gap = t.gap();
         const int btnW = juce::jmax (t.touch() * 2, (bounds.getWidth() - 2 * gap) / 3);

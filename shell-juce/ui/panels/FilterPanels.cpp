@@ -124,11 +124,27 @@ public:
         refreshControlLabels();
     }
 
+    /** The chip rows under the title: [power][F1][F2][FX] and, for filter 1 / 2, the routing chip beside them or (narrow) in a row of its own.
+        Every chip is a full touch target high. */
+    bool routingOnOwnRow (int innerWidth) const
+    {
+        const auto& t = ctx.theme;
+        const int navW = juce::jmax (t.touch(), t.ipx (44.0f));
+        const int routeW = juce::jmax (t.touch() * 3, t.ipx (132.0f));
+        return routingChip != nullptr && innerWidth < 4 * navW + 3 * t.gap() + t.gap() + routeW;
+    }
+
+    int chipRowsHeight (int innerWidth) const
+    {
+        const auto& t = ctx.theme;
+        return t.touch() + (routingOnOwnRow (innerWidth) ? t.gap() + t.touch() : 0);
+    }
+
     int preferredHeight (int width) const override
     {
         const auto& t = ctx.theme;
         const int gap = t.gap();
-        const int headerH = headerHeight();
+        const int headerH = headerHeight() + gap + chipRowsHeight (width - 2 * gap);
         const int touchH = t.touch();
         const int visualH = t.ipx (140.0f);
         const int inputsH = (filterIdx <= 2 ? touchH + gap : 0);
@@ -148,26 +164,30 @@ public:
         const auto bounds = getLocalBounds().reduced (gap);
         int y = bounds.getY();
 
-        // Header: Title, F1/F2/FX chips, Routing chip, Power button
+        // Header: the title is drawn by the Panel; under it the chip row with Power, F1/F2/FX and the Routing chip
         const int headerH = headerHeight();
-        const int powerW = touchH;
-        powerButton.setBounds (bounds.getRight() - powerW, y, powerW, headerH);
-
-        int rightX = powerButton.getX() - gap;
+        y += headerH + gap;
+        const int navChipW = juce::jmax (touchH, t.ipx (44.0f));
+        powerButton.setBounds (bounds.getX(), y, navChipW, touchH);
+        int x = powerButton.getRight() + gap;
+        for (size_t i = 0; i < 3; ++i)
+        {
+            filterNavChips[i]->setBounds (x, y, navChipW, touchH);
+            x += navChipW + gap;
+        }
         if (routingChip != nullptr)
         {
-            const int routeW = juce::jmax (touchH * 3, t.ipx (132.0f));
-            routingChip->setBounds (rightX - routeW, y, routeW, headerH);
-            rightX -= routeW + gap;
+            if (routingOnOwnRow (bounds.getWidth()))
+            {
+                y += touchH + gap;
+                routingChip->setBounds (bounds.getX(), y, bounds.getWidth(), touchH);
+            }
+            else
+            {
+                routingChip->setBounds (x, y, bounds.getRight() - x, touchH);
+            }
         }
-
-        const int navChipW = juce::jmax (touchH, t.ipx (44.0f));
-        for (int i = 2; i >= 0; --i)
-        {
-            filterNavChips[static_cast<size_t> (i)]->setBounds (rightX - navChipW, y, navChipW, headerH);
-            rightX -= navChipW + gap / 2;
-        }
-        y += headerH + gap;
+        y += touchH + gap;
 
         // Model & Style row: Model button, Style button, Types button
         const int typeBtnW = juce::jmax (touchH, t.ipx (60.0f));
@@ -224,8 +244,8 @@ private:
 
     void refreshModelAndStyle()
     {
-        const int model = (modelParam.valid() ? static_cast<int> (modelParam.plain()) : 3);
-        const int style = (styleParam.valid() ? static_cast<int> (styleParam.plain()) : 0);
+        const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
+        const int style = (styleHandle.valid() ? static_cast<int> (styleHandle.plain()) : 0);
 
         modelButton.setButtonText (getFilterModelName (model));
 
@@ -257,7 +277,7 @@ private:
 
     void refreshControlLabels()
     {
-        const int model = (modelParam.valid() ? static_cast<int> (modelParam.plain()) : 3);
+        const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
         const auto& ctls = controls();
 
         // Primary controls: [0]=cutoff, [1]=res, [2]=drive, [3]=mix
@@ -307,7 +327,7 @@ private:
         for (int i = 0; i < kNumFilterModels; ++i)
         {
             menu.addItem (i + 1, getFilterModelName (i), true,
-                          modelParam.valid() && static_cast<int> (modelParam.plain()) == i);
+                          modelHandle.valid() && static_cast<int> (modelHandle.plain()) == i);
         }
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (modelButton),
                             [this] (int result) {
@@ -323,7 +343,7 @@ private:
 
     void showStyleMenu()
     {
-        const int model = (modelParam.valid() ? static_cast<int> (modelParam.plain()) : 3);
+        const int model = (modelHandle.valid() ? static_cast<int> (modelHandle.plain()) : 3);
         const auto styles = getStylesForModel (model);
         juce::PopupMenu menu;
         for (size_t i = 0; i < styles.size(); ++i)
@@ -453,10 +473,10 @@ public:
 
 // ---- FX Filter Panel ---------------------------------------------------------------------------------------------------------------
 
-class FxFilterPanel final : public FilterPanelBase
+class FltFxFilterPanel final : public FilterPanelBase
 {
 public:
-    explicit FxFilterPanel (UiContext& context)
+    explicit FltFxFilterPanel (UiContext& context)
         : FilterPanelBase (context, 3, "fxfilter") {}
 
     juce::String title() const override { return "FX Filter"; }
@@ -480,6 +500,6 @@ public:
 
 SYNTHYBOY_REGISTER_PANEL (Filter1Panel, Page::flt, 10)
 SYNTHYBOY_REGISTER_PANEL (Filter2Panel, Page::flt, 20)
-SYNTHYBOY_REGISTER_PANEL (FxFilterPanel, Page::flt, 30)
+SYNTHYBOY_REGISTER_PANEL (FltFxFilterPanel, Page::flt, 30)
 
 } // namespace synthyboy::ui

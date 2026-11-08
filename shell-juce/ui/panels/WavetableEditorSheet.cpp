@@ -82,7 +82,13 @@ public:
     void mouseDown (const juce::MouseEvent& e) override
     {
         owner.pushUndo();
+        owner.strokeActive = true;
         handleDrag (e);
+    }
+
+    void mouseUp (const juce::MouseEvent&) override
+    {
+        owner.strokeActive = false;
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
@@ -357,7 +363,7 @@ public:
         scopeAllBtn.setClickingTogglesState (true);
         scopeAllBtn.setRadioGroupId (101);
 
-        searchBox.setTextToShowWhenEmpty ("Search process commands...", juce::Colours::grey);
+        searchBox.setTextToShowWhenEmpty ("Search process commands...", owner.ctx.theme.colours.textDim);
         searchBox.onTextChange = [this] { updateFilteredList(); };
 
         addAndMakeVisible (scopeSingleBtn);
@@ -549,7 +555,7 @@ public:
             if (owner.applyFormula (formulaInput.getText().toStdString(), &err))
             {
                 statusLabel.setText ("Formula applied successfully", juce::dontSendNotification);
-                statusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
+                statusLabel.setColour (juce::Label::textColourId, owner.ctx.theme.colours.ok);
             }
             else
             {
@@ -649,7 +655,7 @@ private:
         {
             statusLabel.setText (f.isMultiFrame() ? "Valid multi-frame formula (uses y/z)" : "Valid single-frame formula",
                                  juce::dontSendNotification);
-            statusLabel.setColour (juce::Label::textColourId, juce::Colours::limegreen);
+            statusLabel.setColour (juce::Label::textColourId, owner.ctx.theme.colours.ok);
         }
         else
         {
@@ -1105,6 +1111,7 @@ WavetableEditorSheet::WavetableEditorSheet (UiContext& context, wtedit::Wavetabl
 {
     // Sync vital group from wavetable
     vitalGroup.initFromWavetable (wt);
+    undoStack.push (wt); // baseline state
 
     // Header buttons
     closeBtn.onClick = [this]
@@ -1288,15 +1295,26 @@ void WavetableEditorSheet::setMode (Mode newMode)
     resized();
 }
 
+void WavetableEditorSheet::commitPendingUndo()
+{
+    if (undoPending)
+    {
+        undoStack.push (wt);
+        undoPending = false;
+    }
+}
+
 void WavetableEditorSheet::pushUndo()
 {
-    undoStack.push (wt);
+    commitPendingUndo();
+    undoPending = true;
     isModified = true;
     updateHeaderInfo();
 }
 
 void WavetableEditorSheet::performUndo()
 {
+    commitPendingUndo();
     if (undoStack.canUndo())
     {
         undoStack.undo (wt);
@@ -1315,6 +1333,7 @@ void WavetableEditorSheet::performUndo()
 
 void WavetableEditorSheet::performRedo()
 {
+    commitPendingUndo();
     if (undoStack.canRedo())
     {
         undoStack.redo (wt);
@@ -1331,6 +1350,28 @@ void WavetableEditorSheet::performRedo()
     }
 }
 
+void WavetableEditorSheet::layoutToolButtons (juce::Rectangle<int>& area)
+{
+    // 13 drawing tools + the grid button wrap into as many rows as the width needs, every button at least a touch target wide
+    juce::Component* const buttons[] = { &toolFlatBtn, &toolSineBtn, &toolSlopeUpBtn, &toolSlopeDownBtn, &toolCurveUpBtn, &toolCurveDownBtn,
+                                         &toolHalfSinePeakBtn, &toolHalfSineValleyBtn, &toolInterpLinBtn, &toolInterpCurvedBtn,
+                                         &toolNudgeBtn, &toolNoiseBtn, &toolMirrorBtn, &gridBtn };
+    constexpr int count = static_cast<int> (sizeof (buttons) / sizeof (buttons[0]));
+    const int touch = ctx.theme.touch();
+    const int perRow = juce::jlimit (1, count, area.getWidth() / touch);
+    const int rows = (count + perRow - 1) / perRow;
+    const int rowLength = (count + rows - 1) / rows;
+
+    for (int row = 0; row < rows; ++row)
+    {
+        auto rowArea = area.removeFromTop (touch);
+        const int inRow = juce::jmin (rowLength, count - row * rowLength);
+        const int w = rowArea.getWidth() / juce::jmax (1, inRow);
+        for (int i = 0; i < inRow; ++i)
+            buttons[row * rowLength + i]->setBounds (i == inRow - 1 ? rowArea : rowArea.removeFromLeft (w));
+    }
+}
+
 void WavetableEditorSheet::updateHeaderInfo()
 {
     titleLabel.setText ("OSC 1  \"" + juce::String (wt.name()) + "\"" + (isModified ? " *" : ""),
@@ -1344,8 +1385,8 @@ void WavetableEditorSheet::updateHeaderInfo()
     framePosLabel.setFont (ctx.theme.valueFont());
     framePosLabel.setColour (juce::Label::textColourId, ctx.theme.colours.text);
 
-    undoBtn.setEnabled (undoStack.canUndo());
-    redoBtn.setEnabled (undoStack.canRedo());
+    undoBtn.setEnabled (canUndo());
+    redoBtn.setEnabled (canRedo());
     pasteBtn.setEnabled (hasClipboard);
     morphMenuBtn.setEnabled (wt.numFrames() > 1 && wt.numFrames() < wtedit::kMaxFrames);
     sortMenuBtn.setEnabled (wt.numFrames() > 1);
@@ -1449,6 +1490,8 @@ void WavetableEditorSheet::morphFrames (wtedit::MorphMode morphMode)
 
 void WavetableEditorSheet::applyToolAt (wtedit::DrawingTool tool, int gridSize, int stepIndex, float param)
 {
+    if (! strokeActive)
+        pushUndo(); // a single call outside a mouse gesture is its own undo step
     if (currentFrameIndex < wt.numFrames())
     {
         wtedit::applyDrawingTool (wt.getFrame (currentFrameIndex), tool, gridSize, stepIndex, param);
@@ -2005,22 +2048,7 @@ void WavetableEditorSheet::resized()
         auto rightArea = r;
 
         // Tool strip on left top
-        auto toolRow = leftArea.removeFromTop (touch);
-        const int toolW = juce::jmax (t.touch(), toolRow.getWidth() / 14);
-        toolFlatBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolSineBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolSlopeUpBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolSlopeDownBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolCurveUpBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolCurveDownBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolHalfSinePeakBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolHalfSineValleyBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolInterpLinBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolInterpCurvedBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolNudgeBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolNoiseBtn.setBounds (toolRow.removeFromLeft (toolW));
-        toolMirrorBtn.setBounds (toolRow.removeFromLeft (toolW));
-        gridBtn.setBounds (toolRow);
+        layoutToolButtons (leftArea);
 
         leftArea.removeFromTop (gap);
         if (waveCanvas)
@@ -2034,23 +2062,7 @@ void WavetableEditorSheet::resized()
         // Phone Portrait layout
         if (currentMode == Mode::wave)
         {
-            auto toolRow = r.removeFromTop (touch);
-            const int toolW = juce::jmax (touch, toolRow.getWidth() / 14);
-            toolFlatBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolSineBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolSlopeUpBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolSlopeDownBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolCurveUpBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolCurveDownBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolHalfSinePeakBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolHalfSineValleyBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolInterpLinBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolInterpCurvedBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolNudgeBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolNoiseBtn.setBounds (toolRow.removeFromLeft (toolW));
-            toolMirrorBtn.setBounds (toolRow.removeFromLeft (toolW));
-            gridBtn.setBounds (toolRow);
-
+            layoutToolButtons (r);
             r.removeFromTop (gap);
             if (waveCanvas)
                 waveCanvas->setBounds (r);

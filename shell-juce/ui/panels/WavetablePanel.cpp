@@ -104,7 +104,7 @@ void synthesizeTableFrame (int tableIndex, float t, wtedit::Frame& outFrame)
 //==============================================================================
 // OSC WAVE VIEW IMPLEMENTATION
 //==============================================================================
-OscWaveView::OscWaveView (UiContext& context, std::function<void()> onOpenEditorCallback)
+WavetableView::WavetableView (UiContext& context, std::function<void()> onOpenEditorCallback)
     : ctx (context),
       onOpenEditor (std::move (onOpenEditorCallback)),
       wt ("Saw to Square"),
@@ -176,12 +176,12 @@ OscWaveView::OscWaveView (UiContext& context, std::function<void()> onOpenEditor
     updateTableFromChoice();
 }
 
-int OscWaveView::preferredHeight() const
+int WavetableView::preferredHeight() const
 {
     return ctx.theme.ipx (200.0f);
 }
 
-void OscWaveView::stepWavetable (int direction)
+void WavetableView::stepWavetable (int direction)
 {
     if (handleWavetable.valid())
     {
@@ -194,7 +194,7 @@ void OscWaveView::stepWavetable (int direction)
     }
 }
 
-void OscWaveView::updateTableFromChoice()
+void WavetableView::updateTableFromChoice()
 {
     if (handleWavetable.valid())
     {
@@ -223,16 +223,18 @@ void OscWaveView::updateTableFromChoice()
     }
 }
 
-void OscWaveView::setViewMode (ViewMode mode)
+void WavetableView::setViewMode (ViewMode mode)
 {
     currentViewMode = mode;
     mode2DBtn.setToggleState (mode == ViewMode::mode2D, juce::dontSendNotification);
     mode3DBtn.setToggleState (mode == ViewMode::mode3D, juce::dontSendNotification);
     modeSpBtn.setToggleState (mode == ViewMode::modeSP, juce::dontSendNotification);
+    zoomInBtn.setVisible (mode == ViewMode::mode3D);
+    zoomOutBtn.setVisible (mode == ViewMode::mode3D);
     repaint();
 }
 
-void OscWaveView::cycleViewMode()
+void WavetableView::cycleViewMode()
 {
     switch (currentViewMode)
     {
@@ -242,26 +244,26 @@ void OscWaveView::cycleViewMode()
     }
 }
 
-void OscWaveView::setWavetable (const wtedit::Wavetable& newWt)
+void WavetableView::setWavetable (const wtedit::Wavetable& newWt)
 {
     wt = newWt;
     tableNameLabel.setText (juce::String (wt.name()), juce::dontSendNotification);
     repaint();
 }
 
-void OscWaveView::zoomIn()
+void WavetableView::zoomIn()
 {
     zoomLevel = juce::jmin (2.5f, zoomLevel * 1.25f);
     repaint();
 }
 
-void OscWaveView::zoomOut()
+void WavetableView::zoomOut()
 {
     zoomLevel = juce::jmax (0.5f, zoomLevel * 0.8f);
     repaint();
 }
 
-void OscWaveView::mouseDown (const juce::MouseEvent& e)
+void WavetableView::mouseDown (const juce::MouseEvent& e)
 {
     dragStartPos = e.position;
     isDragging = false;
@@ -271,7 +273,7 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
     // Check if clicked in SP mode to select harmonic bin
     if (currentViewMode == ViewMode::modeSP)
     {
-        const auto bounds = getLocalBounds().toFloat().reduced (ctx.theme.gap());
+        const auto bounds = getLocalBounds().toFloat().reduced (static_cast<float> (ctx.theme.gap()));
         const float relX = (e.position.x - bounds.getX()) / bounds.getWidth();
         if (relX >= 0.0f && relX <= 1.0f)
         {
@@ -281,7 +283,7 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
     }
 }
 
-void OscWaveView::mouseDrag (const juce::MouseEvent& e)
+void WavetableView::mouseDrag (const juce::MouseEvent& e)
 {
     const float dx = e.position.x - dragStartPos.x;
     if (! isDragging && std::abs (dx) > 3.0f)
@@ -301,7 +303,7 @@ void OscWaveView::mouseDrag (const juce::MouseEvent& e)
     }
 }
 
-void OscWaveView::mouseUp (const juce::MouseEvent&)
+void WavetableView::mouseUp (const juce::MouseEvent&)
 {
     if (isDragging)
     {
@@ -316,7 +318,7 @@ void OscWaveView::mouseUp (const juce::MouseEvent&)
     }
 }
 
-void OscWaveView::paint (juce::Graphics& g)
+void WavetableView::paint (juce::Graphics& g)
 {
     const auto& t = ctx.theme;
     auto r = getLocalBounds().toFloat().reduced (t.px (2.0f));
@@ -327,7 +329,7 @@ void OscWaveView::paint (juce::Graphics& g)
     g.setColour (t.colours.outline);
     g.drawRoundedRectangle (r, t.px (6.0f), 1.0f);
 
-    auto canvasArea = r.withTrimmedTop (static_cast<float> (t.touch())).reduced (t.px (6.0f));
+    auto canvasArea = r.withTrimmedTop (static_cast<float> (headerHeight())).reduced (t.px (6.0f));
     if (canvasArea.getWidth() <= 10.0f || canvasArea.getHeight() <= 10.0f)
         return;
 
@@ -394,14 +396,16 @@ void OscWaveView::paint (juce::Graphics& g)
             }
             g.setColour (t.colours.mod);
             const float dashLengths[] = { 4.0f, 4.0f };
-            g.strokePath (wp, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::butt),
-                          juce::PathStrokeType (1.5f).createDashedStroke (wp, dashLengths, 2));
+            juce::Path dashed;
+            juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::butt)
+                .createDashedStroke (dashed, wp, dashLengths, 2);
+            g.fillPath (dashed);
         }
 
         // Phase marker line
         const float phaseDeg = handlePhase.valid() ? handlePhase.plain() : 0.0f;
         const float phaseX = canvasArea.getX() + (phaseDeg / 360.0f) * canvasArea.getWidth();
-        g.setColour (juce::Colours::yellow.withAlpha (0.8f));
+        g.setColour (t.colours.warn.withAlpha (0.8f));
         g.drawVerticalLine (juce::roundToInt (phaseX), canvasArea.getY(), canvasArea.getBottom());
 
         // Random phase shaded band
@@ -409,7 +413,7 @@ void OscWaveView::paint (juce::Graphics& g)
         if (randPhase > 1.0f)
         {
             const float bandW = (randPhase / 100.0f) * canvasArea.getWidth() * 0.5f;
-            g.setColour (juce::Colours::yellow.withAlpha (0.15f));
+            g.setColour (t.colours.warn.withAlpha (0.15f));
             g.fillRect (phaseX - bandW * 0.5f, canvasArea.getY(), bandW, canvasArea.getHeight());
         }
     }
@@ -450,7 +454,7 @@ void OscWaveView::paint (juce::Graphics& g)
             else if (isKeyframe)
             {
                 // Real / keyframe: bright green
-                g.setColour (juce::Colour (0xff44cc44).withAlpha (0.8f));
+                g.setColour (t.colours.ok.withAlpha (0.8f));
                 g.strokePath (p, juce::PathStrokeType (1.2f));
             }
             else
@@ -489,22 +493,39 @@ void OscWaveView::paint (juce::Graphics& g)
         g.setFont (t.labelFont());
         g.drawText ("Harmonic " + juce::String (selectedHarmonic) + "  " +
                     juce::String (mags[static_cast<size_t> (selectedHarmonic)], 3),
-                    canvasArea.withHeight (t.ipx (20)), juce::Justification::topRight, false);
+                    canvasArea.withHeight (t.px (20.0f)), juce::Justification::topRight, false);
     }
 
     // Frame position lower-left label (e.g. "frame 27 / 64")
     g.setColour (t.colours.textDim);
     g.setFont (t.labelFont());
     g.drawText ("frame " + juce::String (curFrameIdx + 1) + " / " + juce::String (numFrames),
-                canvasArea.removeFromBottom (t.ipx (18)), juce::Justification::bottomLeft, false);
+                canvasArea.removeFromBottom (t.px (18.0f)), juce::Justification::bottomLeft, false);
 }
 
-void OscWaveView::resized()
+int WavetableView::headerHeight() const
+{
+    const auto& t = ctx.theme;
+    // one row: [<][>] name [2D|3D|SP] [EDIT]; narrower than that the view switch drops to a second row
+    const int segW = juce::jmax (t.touch(), t.ipx (46.0f));
+    const int oneRowMin = 2 * t.touch() + t.ipx (2.0f) + 3 * t.gap() + 3 * segW + juce::jmax (t.touch(), t.ipx (60.0f)) + t.ipx (60.0f);
+    return getWidth() - 2 * t.gap() >= oneRowMin ? t.touch() : 2 * t.touch() + t.gap();
+}
+
+void WavetableView::resized()
 {
     const auto& t = ctx.theme;
     const int touch = t.touch();
     const int gap = t.gap();
-    auto header = getLocalBounds().reduced (gap).removeFromTop (touch);
+    const bool twoRows = headerHeight() > touch;
+    auto bounds = getLocalBounds().reduced (gap);
+    auto header = bounds.removeFromTop (touch);
+    juce::Rectangle<int> second;
+    if (twoRows)
+    {
+        bounds.removeFromTop (gap);
+        second = bounds.removeFromTop (touch);
+    }
 
     prevTableBtn.setBounds (header.removeFromLeft (touch));
     header.removeFromLeft (t.ipx (2));
@@ -516,18 +537,19 @@ void OscWaveView::resized()
 
     // Segmented 2D | 3D | SP buttons
     const int segW = juce::jmax (touch, t.ipx (46));
-    modeSpBtn.setBounds (header.removeFromRight (segW));
-    mode3DBtn.setBounds (header.removeFromRight (segW));
-    mode2DBtn.setBounds (header.removeFromRight (segW));
-    header.removeFromRight (gap);
-
-    // Zoom controls
-    zoomOutBtn.setBounds (header.removeFromRight (touch));
-    header.removeFromRight (t.ipx (2));
-    zoomInBtn.setBounds (header.removeFromRight (touch));
-    header.removeFromRight (gap);
+    auto& segRow = twoRows ? second : header;
+    modeSpBtn.setBounds (segRow.removeFromRight (segW));
+    mode3DBtn.setBounds (segRow.removeFromRight (segW));
+    mode2DBtn.setBounds (segRow.removeFromRight (segW));
+    header.removeFromRight (twoRows ? 0 : gap);
 
     tableNameLabel.setBounds (header);
+
+    // Zoom buttons (3D tilt / zoom, the pinch alternative) float in the bottom-right corner of the canvas
+    auto corner = getLocalBounds().reduced (gap);
+    zoomInBtn.setBounds (corner.removeFromRight (touch).removeFromBottom (touch));
+    corner.removeFromRight (t.ipx (2));
+    zoomOutBtn.setBounds (corner.removeFromRight (touch).removeFromBottom (touch));
 }
 
 //==============================================================================
@@ -561,7 +583,7 @@ std::vector<std::string> WavetablePanel::keys() const
 void WavetablePanel::build()
 {
     // 1. Add big visual
-    waveView = std::make_unique<OscWaveView> (ctx, [this] { openEditorSheet(); });
+    waveView = std::make_unique<WavetableView> (ctx, [this] { openEditorSheet(); });
     addAndMakeVisible (*waveView);
 
     // 2. Add primary controls (4)

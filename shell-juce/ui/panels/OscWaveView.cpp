@@ -288,7 +288,7 @@ void OscWaveView::mouseUp (const juce::MouseEvent& e)
             frameHandle.endGesture();
 
         // Direct tap on view cycles mode if not dragged
-        if (! dragging && e.getDistanceFromDragStart() < 4.0f)
+        if (! dragging && e.getDistanceFromDragStart() < 4)
             cycleViewMode();
     }
     dragging = false;
@@ -328,7 +328,7 @@ void OscWaveView::paint (juce::Graphics& g)
 
     // Header info (wavetable name, tier warning, off badge)
     const int topH = t.touch();
-    auto headerArea = r.removeFromTop (static_cast<float> (topH + t.gap())).reduced (t.px (8.0f), 0.0f);
+    auto headerArea = juce::Rectangle<float> (r).removeFromTop (static_cast<float> (topH + t.gap())).reduced (t.px (8.0f), 0.0f);
 
     g.setFont (t.labelFont());
     g.setColour (c.textDim);

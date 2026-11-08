@@ -184,7 +184,11 @@ TEST (fx_direct_manipulation_and_interactions)
 TEST (fx_headless_render_and_screenshots)
 {
     SynthyBoyProcessor proc;
-    auto editor = std::make_unique<SynthyBoyEditor> (proc);
+    std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
+    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    CHECK (editor != nullptr);
+    if (editor == nullptr)
+        return;
     editor->panelHost().setPage (Page::fx);
 
     const juce::File shotDir ("/tmp/ui-shots/fx");

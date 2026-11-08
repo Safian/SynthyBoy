@@ -60,8 +60,8 @@ void StereoMeter::paint (juce::Graphics& g)
         {
             const float barH = track.getHeight() * norm;
             const juce::Rectangle<float> bar (x, track.getBottom() - barH, chW, barH);
-            const juce::Colour barCol = norm > 0.91f ? juce::Colours::red
-                                      : (norm > 0.82f ? juce::Colours::orange : c.accent);
+            const juce::Colour barCol = norm > 0.91f ? c.danger
+                                      : (norm > 0.82f ? c.warn : c.accent);
             g.setColour (barCol);
             g.fillRoundedRectangle (bar, t.px (2.0f));
         }
@@ -234,7 +234,7 @@ void PitchWheel::paint (juce::Graphics& g)
     const float thumbH = t.px (10.0f);
     const float thumbY = juce::jlimit (r.getY() + 1.0f, r.getBottom() - thumbH - 1.0f, midY - (pos * (r.getHeight() * 0.44f)) - thumbH * 0.5f);
     const juce::Rectangle<float> thumb (r.getX() + 2.0f, thumbY, r.getWidth() - 4.0f, thumbH);
-    g.setColour (c.knobCap);
+    g.setColour (c.text);
     g.fillRoundedRectangle (thumb, t.px (3.0f));
     g.setColour (c.outline);
     g.drawRoundedRectangle (thumb, t.px (3.0f), 1.0f);
@@ -317,7 +317,7 @@ void ModWheel::paint (juce::Graphics& g)
     const float thumbH = t.px (10.0f);
     const float thumbY = juce::jlimit (r.getY() + 2.0f, r.getBottom() - thumbH - 2.0f, r.getBottom() - 4.0f - (pos * (r.getHeight() - 14.0f)) - thumbH);
     const juce::Rectangle<float> thumb (r.getX() + 2.0f, thumbY, r.getWidth() - 4.0f, thumbH);
-    g.setColour (c.knobCap);
+    g.setColour (c.text);
     g.fillRoundedRectangle (thumb, t.px (3.0f));
     g.setColour (c.outline);
     g.drawRoundedRectangle (thumb, t.px (3.0f), 1.0f);
@@ -354,7 +354,8 @@ class LatchingKeyboard final : public juce::MidiKeyboardComponent
 public:
     LatchingKeyboard (juce::MidiKeyboardState& state, UiContext& context)
         : juce::MidiKeyboardComponent (state, juce::MidiKeyboardComponent::horizontalKeyboard),
-          ctx (context)
+          ctx (context),
+          keyState (state)
     {
     }
 
@@ -370,7 +371,7 @@ public:
     void releaseHeldNotes()
     {
         for (const int note : heldNotes)
-            getState().noteOff (1, note, 0.0f);
+            keyState.noteOff (1, note, 0.0f);
         heldNotes.clear();
     }
 
@@ -378,37 +379,19 @@ public:
     {
         if (holdActive)
         {
-            const auto pos = e.position;
-            const auto r = getLocalBounds();
-            const int whiteCount = juce::roundToInt (static_cast<float> (r.getWidth()) / getKeyWidth());
-            const int lowest = getLowestVisibleKey();
-
-            int hitNote = -1;
-            for (int k = lowest; k < lowest + whiteCount * 2 && k <= 127; ++k)
-            {
-                const auto keyRect = getRectangleForKey (k);
-                if (keyRect.contains (pos.toInt()))
-                {
-                    if (isBlackNote (k))
-                    {
-                        hitNote = k;
-                        break;
-                    }
-                    hitNote = k;
-                }
-            }
+            const int hitNote = getNoteAndVelocityAtPosition (e.position).note;
 
             if (hitNote >= 0)
             {
                 auto it = std::find (heldNotes.begin(), heldNotes.end(), hitNote);
                 if (it != heldNotes.end())
                 {
-                    getState().noteOff (1, hitNote, 0.0f);
+                    keyState.noteOff (1, hitNote, 0.0f);
                     heldNotes.erase (it);
                 }
                 else
                 {
-                    getState().noteOn (1, hitNote, 0.8f);
+                    keyState.noteOn (1, hitNote, 0.8f);
                     heldNotes.push_back (hitNote);
                 }
                 return;
@@ -431,25 +414,21 @@ public:
         juce::MidiKeyboardComponent::mouseDrag (e);
     }
 
-    void drawWhiteKey (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) override
+    void drawWhiteNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area, bool isDown, bool isOver,
+                        juce::Colour lineColour, juce::Colour textColour) override
     {
-        juce::MidiKeyboardComponent::drawWhiteKey (midiNote, g, area);
+        juce::MidiKeyboardComponent::drawWhiteNote (midiNote, g, area, isDown, isOver, lineColour, textColour);
         drawScaleOverlay (midiNote, g, area);
     }
 
-    void drawBlackKey (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) override
+    void drawBlackNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area, bool isDown, bool isOver,
+                        juce::Colour fillColour) override
     {
-        juce::MidiKeyboardComponent::drawBlackKey (midiNote, g, area);
+        juce::MidiKeyboardComponent::drawBlackNote (midiNote, g, area, isDown, isOver, fillColour);
         drawScaleOverlay (midiNote, g, area);
     }
 
 private:
-    static bool isBlackNote (int note) noexcept
-    {
-        const int pc = note % 12;
-        return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
-    }
-
     void drawScaleOverlay (int midiNote, juce::Graphics& g, juce::Rectangle<float> area)
     {
         const auto* kRaw = ctx.apvts().getRawParameterValue ("master.scale.key");
@@ -475,6 +454,7 @@ private:
     }
 
     UiContext& ctx;
+    juce::MidiKeyboardState& keyState;
     bool holdActive = false;
     std::vector<int> heldNotes;
 };

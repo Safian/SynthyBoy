@@ -34,7 +34,6 @@ public:
         drawGrid (g, area, 5, 3);
 
         const float midX = area.getCentreX();
-        const float midY = area.getCentreY();
 
         // Center carrier line
         g.setColour (t.colours.outline.withAlpha (0.4f));

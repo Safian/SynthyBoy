@@ -43,7 +43,7 @@ void ModSourceChip::paint (juce::Graphics& g)
     g.fillRoundedRectangle (r, t.px (8.0f));
     g.setColour (armed ? c.mod.brighter (0.3f) : c.outline);
     g.drawRoundedRectangle (r, t.px (8.0f), 1.0f);
-    g.setColour (armed ? juce::Colours::white : c.text);
+    g.setColour (armed ? c.onMod : c.text);
     g.setFont (t.valueFont());
     g.drawFittedText (juce::String (sourceChipLabel (sourceChoice)), getLocalBounds(), juce::Justification::centred, 1);
 
@@ -51,9 +51,9 @@ void ModSourceChip::paint (juce::Graphics& g)
     {
         const float d = t.px (14.0f);
         const juce::Rectangle<float> badge (r.getRight() - d, r.getY() - d * 0.25f, d, d);
-        g.setColour (armed ? juce::Colours::white : c.mod);
+        g.setColour (armed ? c.onMod : c.mod);
         g.fillEllipse (badge);
-        g.setColour (armed ? c.mod : juce::Colours::white);
+        g.setColour (armed ? c.mod : c.onMod);
         g.setFont (t.font (d * 0.72f, true));
         g.drawText (juce::String (n), badge.toNearestInt(), juce::Justification::centred, false);
     }

@@ -15,13 +15,13 @@ namespace synthyboy::ui
 {
 
 /** Big interactive wavetable visual component with 2D, 3D stacked-frame, and SP modes. */
-class OscWaveView final : public juce::Component
+class WavetableView final : public juce::Component
 {
 public:
     enum class ViewMode { mode2D, mode3D, modeSP };
 
-    OscWaveView (UiContext& context, std::function<void()> onOpenEditorCallback = nullptr);
-    ~OscWaveView() override = default;
+    WavetableView (UiContext& context, std::function<void()> onOpenEditorCallback = nullptr);
+    ~WavetableView() override = default;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
@@ -46,6 +46,7 @@ public:
     void zoomOut();
 
 private:
+    int headerHeight() const;
     void stepWavetable (int direction);
     void updateTableFromChoice();
 
@@ -83,7 +84,7 @@ private:
     juce::TextButton zoomInBtn { "+" };
     juce::TextButton zoomOutBtn { "-" };
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OscWaveView)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WavetableView)
 };
 
 /** Wavetable panel registered on Page::osc after the oscillators. */
@@ -100,11 +101,11 @@ public:
     int preferredHeight (int width) const override;
     void resized() override;
 
-    OscWaveView* visual() noexcept { return waveView.get(); }
+    WavetableView* visual() noexcept { return waveView.get(); }
     void openEditorSheet();
 
 private:
-    std::unique_ptr<OscWaveView> waveView;
+    std::unique_ptr<WavetableView> waveView;
     std::unique_ptr<WavetableEditorSheet> editorSheet;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WavetablePanel)
