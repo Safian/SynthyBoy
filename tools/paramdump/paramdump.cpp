@@ -110,13 +110,20 @@ std::string deriveShortLabel (const ParamInfo& p)
 {
     std::string name = p.name;
     const char* prefixes[] = {
+        "Osc 1 Sample ", "Osc 2 Sample ", "Osc 3 Sample ",
+        "Osc 1 Warp 2 ", "Osc 2 Warp 2 ", "Osc 3 Warp 2 ",
         "Master ", "Filter 1 ", "Filter 2 ", "FX Filter ", "FX ", "Filter ",
         "Osc 1 ", "Osc 2 ", "Osc 3 ", "Noise ", "Envelope 1 ", "Envelope 2 ",
         "Envelope 3 ", "Envelope 4 ", "Envelope 5 ", "Envelope 6 ",
         "Env 1 ", "Env 2 ", "Env 3 ", "Env 4 ", "Env 5 ", "Env 6 ",
         "LFO 1 ", "LFO 2 ", "LFO 3 ", "LFO 4 ", "LFO 5 ", "LFO 6 ", "LFO 7 ", "LFO 8 ",
+        "LFO 9 ", "LFO 10 ",
         "Random LFO 1 ", "Random LFO 2 ", "Random LFO 3 ", "Random LFO 4 ",
         "Chorus ", "Compressor ", "Delay ", "Distortion ", "EQ ", "Flanger ", "Phaser ", "Reverb ",
+        "Hyper Dimension ", "Hyper ", "Dimension ",
+        "Utility ", "Bode ", "Convolve ",
+        "Splitter L/M/H ", "Splitter L/H ", "Splitter M/S ",
+        "Bus 1 ", "Bus 2 ", "Direct ", "Main ",
         "Mod 01 ", "Mod 02 ", "Mod 03 ", "Mod 04 ", "Mod 05 ", "Mod 06 ", "Mod 07 ", "Mod 08 ",
         "Mod 09 ", "Mod 10 ", "Mod 11 ", "Mod 12 ", "Mod 13 ", "Mod 14 ", "Mod 15 ", "Mod 16 "
     };
@@ -180,7 +187,36 @@ std::string deriveShortLabel (const ParamInfo& p)
             { "Wavetable", "Wave" },
             { "Transpose", "Trans" },
             { "Polyphony", "Poly" },
-            { "Bend Range", "Bend" }
+            { "Bend Range", "Bend" },
+            { "Pitch Tracking", "Pitch Track" },
+            { "Loop Crossfade", "Loop XFade" },
+            { "Lock To Tempo", "Lock Tempo" },
+            { "Length To BPM", "Len To BPM" },
+            { "Length (Beats)", "Length Bts" },
+            { "Unison Start", "Uni Start" },
+            { "Unison Span", "Uni Span" },
+            { "Polarity Left", "Polarity L" },
+            { "Polarity Right", "Polarity R" },
+            { "Mono Bass Frequency", "Mono Freq" },
+            { "Mono Bass", "Mono Bass" },
+            { "Mono Input", "Mono In" },
+            { "Minimum Phase", "Min Phase" },
+            { "Output Scale", "Out Scale" },
+            { "MPE Pitch Bend Range", "MPE Bend" },
+            { "Concert Pitch A4", "Pitch A4" },
+            { "Tuning MTS-ESP Note-On Only", "MTS NoteOn" },
+            { "Tuning MTS-ESP", "MTS-ESP" },
+            { "Tuning Scale", "Tuning Scl" },
+            { "Velocity Curve Legato", "Vel Legato" },
+            { "Note Curve Legato", "Note Legato" },
+            { "Split Frequency", "Split Freq" },
+            { "Low Split Frequency", "Low Split" },
+            { "High Split Frequency", "High Split" },
+            { "Low Bypass", "Low Byp" },
+            { "High Bypass", "High Byp" },
+            { "Mid Bypass", "Mid Byp" },
+            { "Side Bypass", "Side Byp" },
+            { "Scan Lock To Tempo", "Lock Tempo" }
         };
         for (const auto& a : abbrevs)
         {
@@ -201,7 +237,8 @@ const char* deriveWidget (const ParamInfo& p)
     const std::string key = p.key;
     const size_t len = key.length();
     if ((len >= 3 && key.compare (len - 3, 3, ".on") == 0) ||
-        (len >= 7 && key.compare (len - 7, 7, ".bypass") == 0))
+        (len >= 7 && key.compare (len - 7, 7, ".bypass") == 0) ||
+        (len >= 7 && key.compare (len - 7, 7, "_bypass") == 0))
     {
         return "toggle";
     }
