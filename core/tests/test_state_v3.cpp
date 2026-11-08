@@ -1,4 +1,4 @@
-// SynthyBoy - core tests: state version 3 (docs/ui-design/13-new-keys.md 5 and 10): the v2 -> v3 migration, round trips of all 1484 keys,
+// SynthyBoy - core tests: state version 3 (docs/ui-design/13-new-keys.md 5 and 10): the v2 -> v3 migration, round trips of all 1594 keys,
 // the additive `content` section (round trip, rejection, fuzz), presets with content, the factory presets of version 2.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -225,7 +225,7 @@ TEST (version_3_keys_are_never_touched_by_the_migration)
     CHECK_EQ (loaded.plain[indexOfKey ("fx.order.1")], 14.0f);
 }
 
-TEST (all_1484_keys_round_trip_with_exact_floats)
+TEST (all_1594_keys_round_trip_with_exact_floats)
 {
     sbtest::Rng rng (2024);
     for (int round = 0; round < 40; ++round)
@@ -647,7 +647,7 @@ struct Rendering
     bool exists = false;
 };
 
-/** The golden events on an engine whose parameters come from loaded state values (all 1484 of them are handed to the engine). */
+/** The golden events on an engine whose parameters come from loaded state values (all 1594 of them are handed to the engine). */
 Rendering renderLoaded (EngineKind kind, const ParamValues& values, bool polyphonyLast)
 {
     Rendering out;

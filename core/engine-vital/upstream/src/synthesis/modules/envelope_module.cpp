@@ -26,6 +26,7 @@ namespace sbvital {
     envelope_ = new Envelope();
     envelope_->useInput(input(kTrigger), Envelope::kTrigger);
     envelope_->useInput(input(kTriggerAlways), Envelope::kTriggerAlways);
+    envelope_->useInput(input(kPolyLegato), Envelope::kPolyLegato);
     
     envelope_->useOutput(output(kValue), Envelope::kValue);
     envelope_->useOutput(output(kPhase), Envelope::kPhase);

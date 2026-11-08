@@ -11,6 +11,8 @@
 #include "ui/Editor.h"
 #include "ui/Panel.h"
 #include "ui/ParamControls.h"
+#include "ui/model/ControlModel.h"
+#include "ui/model/ModModel.h"
 #include "synthyboy/quality.h"
 #include "test_runner.h"
 
@@ -406,6 +408,154 @@ TEST (glb_osc_map_direct_manipulation)
     mapView->mouseDoubleClick (mouse (*mapView, lane0, lane0, false));
     CHECK_NEAR (plainOf (proc, "osc1.map.key_low"), 0.0, 0.1);
     CHECK_NEAR (plainOf (proc, "osc1.map.key_high"), 127.0, 0.1);
+}
+
+namespace
+{
+std::unique_ptr<Panel> buildPanelById (UiContext& ctx, const char* idPart)
+{
+    for (const auto& e : PanelRegistry::instance().entries())
+        if (e.id.find (idPart) != std::string::npos)
+        {
+            auto panel = e.create (ctx);
+            panel->build();
+            return panel;
+        }
+    return nullptr;
+}
+
+ParamControl* controlOf (Panel& panel, const char* key)
+{
+    for (const auto& c : panel.controls())
+        if (c->key() == key)
+            return c.get();
+    return nullptr;
+}
+
+/** Arms `source`, drags the knob of `key` up and returns whether a slot with that destination was made (the knob keeps its value). */
+bool assignByTouch (SynthyBoyProcessor& proc, ModAssignController& assign, ParamControl& knob, const char* key, const char* sourceKey)
+{
+    const float before = plainOf (proc, key);
+    if (assign.tapSource (sourceChoiceForKey (sourceKey)) != AssignFlow::Phase::armed)
+        return false;
+    knob.setSize (knob.preferredSize().x, knob.preferredSize().y);
+    const juce::Point<float> down (static_cast<float> (knob.getWidth()) * 0.5f, static_cast<float> (knob.getHeight()) * 0.5f);
+    knob.mouseDown (mouse (knob, down, down, false));
+    for (int i = 1; i <= 4; ++i)
+        knob.mouseDrag (mouse (knob, down - juce::Point<float> (0.0f, 15.0f * static_cast<float> (i)), down, true));
+    knob.mouseUp (mouse (knob, down - juce::Point<float> (0.0f, 60.0f), down, true));
+    assign.refresh();
+    const int destChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey (key).index)));
+    const bool made = std::fabs (plainOf (proc, key) - before) < 1e-3f
+                      && static_cast<int> (std::lround (plainOf (proc, "mod01.destination"))) == destChoice
+                      && static_cast<int> (std::lround (plainOf (proc, "mod01.source"))) == sourceChoiceForKey (sourceKey);
+    assign.tapSource (sourceChoiceForKey (sourceKey)); // leaves assign mode
+    clearSlot (assign.matrix(), 0);
+    assign.refresh();
+    return made;
+}
+} // namespace
+
+TEST (glb_voiceglb_panels_and_modulation)
+{
+    SynthyBoyProcessor proc;
+    CapsHost host (proc, kCapAllKnown);
+    Theme theme = Theme::dark();
+    ModAssignController assign (host);
+    UiContext ctx { host, theme, assign };
+
+    // 1. Voice / Stereo panel: G12 / G13 / G15 are primary, the bend-down pair is behind More, each with the right kit control
+    auto voice = buildPanelById (ctx, "GlbVoicePanel");
+    CHECK (voice != nullptr);
+    if (voice != nullptr)
+    {
+        CHECK_EQ (static_cast<int> (voice->keys().size()), 6);
+        CHECK_EQ (static_cast<int> (voice->controls().size()), 6);
+        CHECK_EQ (voice->numMoreControls(), 2);
+        voice->setMoreExpanded (true);
+        voice->setSize (390, voice->preferredHeight (390));
+        CHECK (dynamic_cast<ParamChoice*> (controlOf (*voice, "master.voice.same_note")) != nullptr);
+        CHECK (dynamic_cast<ParamChoice*> (controlOf (*voice, "master.voice.steal_priority")) != nullptr);
+        CHECK (dynamic_cast<ParamToggle*> (controlOf (*voice, "master.poly_legato")) != nullptr);
+        CHECK (dynamic_cast<ParamKnob*> (controlOf (*voice, "master.stereo_spread")) != nullptr);
+        CHECK (dynamic_cast<ParamToggle*> (controlOf (*voice, "master.bend_down_link")) != nullptr);
+        CHECK (controlOf (*voice, "master.bend_down_range") != nullptr);
+
+        // touch: choosing a steal mode through the control writes the parameter (steal priority Lowest = 1)
+        auto* steal = dynamic_cast<ParamChoice*> (controlOf (*voice, "master.voice.steal_priority"));
+        if (steal != nullptr)
+        {
+            setPlain (proc, "master.voice.steal_priority", 0.0f);
+            CHECK_NEAR (plainOf (proc, "master.voice.steal_priority"), 0.0, 1e-6);
+            setPlain (proc, "master.voice.steal_priority", 2.0f);
+            CHECK_NEAR (plainOf (proc, "master.voice.steal_priority"), 2.0, 1e-6);
+        }
+
+        // assign-by-touch: stereo spread is a modulation destination (an LFO dragged onto the knob makes a slot, the knob keeps its value)
+        auto* spread = controlOf (*voice, "master.stereo_spread");
+        CHECK (spread != nullptr);
+        if (spread != nullptr)
+        {
+            CHECK ((spread->paramHandle().info().flags & kParamModulatable) != 0);
+            CHECK (assignByTouch (proc, assign, *spread, "master.stereo_spread", "lfo1"));
+        }
+        // bend down range is automatable but not a destination: assign mode does not make a slot on it
+        auto* bendDown = controlOf (*voice, "master.bend_down_range");
+        if (bendDown != nullptr)
+            CHECK ((bendDown->paramHandle().info().flags & kParamModulatable) == 0);
+    }
+
+    // 2. the Master / Voicing panel lost nothing and kept no copy of the B15 keys
+    auto master = buildPanelById (ctx, "MasterVoicing");
+    CHECK (master != nullptr);
+    if (master != nullptr)
+        for (const char* k : { "master.voice.same_note", "master.voice.steal_priority", "master.poly_legato", "master.bend_down_range", "master.stereo_spread" })
+            CHECK (controlOf (*master, k) == nullptr);
+
+    // 3. Quality panel: 4x oversampling and no smoothing are primary controls (toggles)
+    auto quality = buildPanelById (ctx, "GlbQualityPanel");
+    CHECK (quality != nullptr);
+    if (quality != nullptr)
+    {
+        CHECK_EQ (quality->numMoreControls(), 3);
+        CHECK (dynamic_cast<ParamToggle*> (controlOf (*quality, "quality.oversample_4x")) != nullptr);
+        CHECK (dynamic_cast<ParamToggle*> (controlOf (*quality, "quality.no_smoothing")) != nullptr);
+        auto* four = controlOf (*quality, "quality.oversample_4x");
+        if (four != nullptr)
+        {
+            CHECK_NEAR (plainOf (proc, "quality.oversample_4x"), 0.0, 1e-6);
+            setPlain (proc, "quality.oversample_4x", 1.0f);
+            CHECK_NEAR (plainOf (proc, "quality.oversample_4x"), 1.0, 1e-6);
+            setPlain (proc, "quality.oversample_4x", 0.0f);
+        }
+    }
+
+    // 4. LFO swing: a modulatable knob behind More on every LFO panel, assign-by-touch works on it
+    for (const char* lfo : { "lfo1", "lfo10" })
+    {
+        const std::string swingKey = std::string (lfo) + ".swing";
+        bool found = false;
+        for (const auto& e : PanelRegistry::instance().entries())
+        {
+            auto panel = e.create (ctx);
+            if (panel->modulePrefix() != lfo)
+                continue;
+            panel->build();
+            panel->setMoreExpanded (true);
+            panel->setSize (390, panel->preferredHeight (390));
+            auto* swing = controlOf (*panel, swingKey.c_str());
+            CHECK (swing != nullptr);
+            if (swing != nullptr)
+            {
+                found = true;
+                CHECK (dynamic_cast<ParamKnob*> (swing) != nullptr);
+                CHECK ((swing->paramHandle().info().flags & kParamModulatable) != 0);
+                CHECK (assignByTouch (proc, assign, *swing, swingKey.c_str(), "env1"));
+            }
+            break;
+        }
+        CHECK (found);
+    }
 }
 
 TEST (glb_touch_targets_on_all_new_panels)

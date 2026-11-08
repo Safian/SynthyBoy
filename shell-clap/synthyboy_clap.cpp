@@ -303,6 +303,9 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
 
         self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
                                outL, outR, static_cast<int> (process->frames_count));
+        // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
+        if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
+            self->host->request_restart (self->host);
         // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart
         const int latency = self->engine->latencySamples();
         if (latency != self->reportedLatency.load (std::memory_order_relaxed))

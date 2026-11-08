@@ -185,14 +185,14 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | Serum function | Our design (file §) | Our keys | Status | Note |
 |----------------|---------------------|----------|--------|------|
 | Voicing: Mono [S p.216] | 07 §2.1 | `master.polyphony` (= 1) | HAVE | |
-| Voicing: Legato [S p.216] | 07 §2.1 | `master.legato` | PARTIAL | mono legato HAVE; poly legato G13 |
-| Voicing: Poly (voice count, same-note limit) [S p.216] | 07 §2.1 | `master.polyphony` | PARTIAL | same-note switch, steal priority G12 |
+| Voicing: Legato [S p.216] | 07 §2.1 | `master.legato` | HAVE | mono legato HAVE; poly legato `master.poly_legato` (B15, G13 done) |
+| Voicing: Poly (voice count, same-note limit) [S p.216] | 07 §2.1 | `master.polyphony` | HAVE | `master.voice.same_note`, `master.voice.steal_priority` (B15, G12 done) |
 | Portamento: Porta, Curve, Always, Scaled [S p.217-218] | 07 §2.1 | `master.portamento.time`, `master.portamento.slope`, `master.portamento.always`, `master.portamento.scaled` | HAVE | |
 | Clips: CLIP module, global parameters, clip banks, piano roll, grid, zoom, fold, clip length, settings, managing, triggering, recording, MIDI out, routing, configuring, macros [S p.219-243] | - | - | EXCLUDED | excluded: Kick (grid / sequencer) |
 | Arpeggiator: module, global parameters, banks, patterns, graph editor, transpose, playback, retrigger, velocity, managing, triggering, MIDI out, configuring [S p.244-266] | - | - | EXCLUDED | excluded: Kick |
 | Keyboard: Transpose [S p.267] | 01 §1.3 | `master.transpose` | HAVE | strip +-24, sheet full range |
 | Keyboard: Key and Scale [S p.268] | 01 §1.3, 07 §1 | none | GAP | G05 |
-| Keyboard: Swing [S p.269] | 01 §1.3 | none | EXCLUDED | grid swing = Kick; LFO swing G16; X5 |
+| Keyboard: Swing [S p.269] | 01 §1.3 | none | EXCLUDED | grid swing = Kick; LFO swing `lfoN.swing` (B15, G16 done); X5 |
 | Keyboard: Oscillator Mapping (key / velocity ranges, FOLD, WARP) [S p.269-273] | 01 §1.3, 07 §1 | none | GAP | G06 |
 
 ### 1.8 Wavetable editor (pp.274-303)
@@ -234,7 +234,7 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | Preferences: MPE, limit mod depth on drop, mod wheel to WT pos, silence on host stop, MIDI map from preset [S p.314-315] | 07 §1, §2.4 | none | PARTIAL | UI prefs HAVE; MPE G10 |
 | Voice control: loading preset, new configuration, configuring [S p.316-317] | 07 §2.3 | none | GAP | G17 |
 | Voice control: randomization, scaling, saving [S p.318-319] | 07 §2.3 | none | GAP | G17 |
-| Setting the quality (Draft / High / Ultra) [S p.319] | 07 §2.2 | none (quality tier, `IEngine::setQuality`) | PARTIAL | 4x + smoothing switch G18 |
+| Setting the quality (Draft / High / Ultra) [S p.319] | 07 §2.2 | none (quality tier, `IEngine::setQuality`) | HAVE | `quality.oversample_4x`, `quality.no_smoothing` (B15, G18 done) |
 | Tuning: concert pitch, tuning file, MTS-ESP, lock [S p.320-321] | 07 §2.4 | none | GAP | G11 |
 | Checking the build version and date [S p.322] | 07 §2.4 | none | HAVE | About sheet |
 

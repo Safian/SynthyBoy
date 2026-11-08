@@ -28,6 +28,7 @@ namespace sbvital {
       enum {
         kTrigger,
         kTriggerAlways,
+        kPolyLegato,
         kNumInputs
       };
     
@@ -41,6 +42,8 @@ namespace sbvital {
       virtual ~EnvelopeModule() { }
 
       void init() override;
+      /** Poly legato bus of this envelope (shared by the clones of the module, so set it before the module is added to a router). */
+      void setLegatoBus(PolyLegatoBus* bus) { envelope_->setLegatoBus(bus); }
       virtual Processor* clone() const override { return new EnvelopeModule(*this); }
 
       void setControlRate(bool control_rate) override { 
