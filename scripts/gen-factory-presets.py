@@ -380,6 +380,108 @@ def with_macros(category: str, ov: dict) -> dict:
     return out
 
 
+def file_name_of(name: str) -> str:
+    return name.lower().replace(" ", "_").replace("-", "_") + ".sbpreset"
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# Showcase presets (12): the engine features of state version 3. Every key used here is live in the Vital engine (all bits of
+# engine_caps.h are set by engine-vital; the sample oscillator needs sample content and is not shown). Only real table keys
+# (strict), values inside their ranges (checked), content only where the preset needs it.
+# ---------------------------------------------------------------------------------------------------------------------------
+def mod(slot: int, source: str, dest: str, amount: float, aux: str = None, aux_inv: bool = False) -> dict:
+    """One mod-matrix route: source key of modSources (`lfo1`, `env2`, `slide`, ...), destination key of the table, amount in percent."""
+    p = f"mod{slot:02d}."
+    out = {p + "source": mod_source[source], p + "destination": mod_destination[dest], p + "amount": amount}
+    if aux is not None:
+        out[p + "aux_source"] = mod_source[aux]
+        if aux_inv:
+            out[p + "aux_inv"] = 1
+    return out
+
+
+def merge(*parts: dict) -> dict:
+    out = {}
+    for part in parts:
+        out.update(part)
+    return out
+
+
+# A custom LFO shape (lfoN.shape = Custom, content.lfo_shapes): three hops that fall back, smoothed.
+HOP_SHAPE = {"lfo": 1, "name": "Triple Hop", "smooth": True,
+             "points": [(0.0, 0.0, 0.0), (0.12, 1.0, 0.0), (0.3, 0.25, 0.0), (0.46, 0.85, 0.0), (0.66, 0.1, 0.0), (0.82, 0.55, 0.0), (1.0, 0.0, 0.0)]}
+
+showcase = [
+    ("Scream Filter Bass", "Bass", "serum-filter,scream,aggressive",
+     "Saw bass through the Scream filter model, envelope-driven cutoff",
+     merge({"osc1.wavetable": 1, "osc1.unison.voices": 3, "osc1.unison.detune": 18, "filter1.model": 16, "filter1.cutoff": 600,
+            "filter1.resonance": 55, "filter1.drive": 6, "env1.release": 150, "env2.decay": 260, "env2.sustain": 8},
+           mod(1, "env2", "filter1.cutoff", 55)), None),
+    ("Diffusor Cloud Pad", "Pad", "serum-filter,diffusor,smeared,ambient",
+     "Detuned saw pad smeared by the Diffusor filter, slow filter drift",
+     merge({"osc1.wavetable": 1, "osc1.unison.voices": 5, "osc1.unison.detune": 30, "osc1.unison.spread": 80, "filter1.model": 19,
+            "filter1.cutoff": 3800, "filter1.resonance": 45, "env1.attack": 700, "env1.release": 1500, "lfo1.rate": 0.3,
+            "reverb.on": 1, "reverb.mix": 28, "reverb.decay": 3200},
+           mod(1, "lfo1", "filter1.cutoff", 30)), None),
+    ("EMS Squelch Bass", "Bass", "serum-filter,ems,squelch,acid",
+     "Resonant EMS ladder bass with a short filter envelope",
+     merge({"osc1.wavetable": 2, "filter1.model": 20, "filter1.cutoff": 380, "filter1.resonance": 70, "filter1.drive": 4,
+            "env1.decay": 450, "env1.sustain": 30, "env2.decay": 220, "env2.sustain": 0},
+           mod(1, "env2", "filter1.cutoff", 60)), None),
+    ("Twin Warp Lead", "Lead", "warp2,sync,bend,modern",
+     "Two warp stages in series (Sync then Bend), the second one swept by an LFO",
+     merge({"osc1.wavetable": 1, "osc1.warp.type": 1, "osc1.warp.amount": 35, "osc1.warp2.type": 4, "osc1.warp2.amount": 40,
+            "filter1.cutoff": 5200, "lfo1.rate": 0.8, "delay.on": 1, "delay.mix": 18},
+           mod(1, "lfo1", "osc1.warp2.amount", 35)), None),
+    ("Aux Keyscale Pluck", "Pluck", "aux-modulation,lfo,keyscale,rhythmic",
+     "Pluck whose LFO filter sweep deepens up the keyboard: the aux source of the route is the key played",
+     merge({"osc1.wavetable": 1, "env1.decay": 700, "env1.sustain": 0, "env1.release": 300, "filter1.cutoff": 700, "filter1.resonance": 35,
+            "lfo1.rate": 7},
+           mod(1, "lfo1", "filter1.cutoff", 90, aux="note"),
+           mod(2, "env1", "osc1.warp.amount", 30, aux="mod_wheel"), {"osc1.warp.type": 1}), None),
+    ("Hyper Dimension Pad", "Pad", "hyper,dimension,wide,serum-fx",
+     "Sine-to-saw pad widened by the Hyper/Dimension effect",
+     {"osc1.wavetable": 6, "osc1.frame": 55, "env1.attack": 500, "env1.release": 1200, "filter1.cutoff": 6500,
+      "hyperdim.on": 1, "hyperdim.unison": 5, "hyperdim.detune": 55, "hyperdim.mix": 60, "hyperdim.dim_size": 70, "hyperdim.dim_mix": 40,
+      "reverb.on": 1, "reverb.mix": 20}, None),
+    ("Utility Width Keys", "Keys", "utility,stereo,mono-bass,wide",
+     "Chorused triangle-and-square keys, widened above 150 Hz with a mono low end from the Utility effect",
+     {"osc1.wavetable": 3, "osc2.on": 1, "osc2.wavetable": 2, "osc2.level": 30, "osc2.transpose": 12, "env1.decay": 800, "env1.sustain": 35,
+      "filter1.cutoff": 3000, "chorus.on": 1, "chorus.mix": 40, "utility.on": 1, "utility.width": 170, "utility.mono_bass": 1,
+      "utility.mono_freq": 150, "utility.hpf": 30}, None),
+    ("Bode Shifter Drone", "FX", "bode,frequency-shifter,drone,metallic",
+     "Slow saw drone through the Bode frequency shifter with feedback",
+     {"osc1.wavetable": 1, "osc1.unison.voices": 3, "osc1.unison.detune": 20, "env1.attack": 800, "env1.release": 1800, "filter1.cutoff": 5000,
+      "bode.on": 1, "bode.shift": 20, "bode.range": 400, "bode.feed": 40, "bode.blur": 30, "bode.mix": 60, "reverb.on": 1, "reverb.mix": 25}, None),
+    ("Custom Shape Wobble", "Bass", "custom-lfo,wobble,rhythmic",
+     "Wobble bass whose filter follows a hand-drawn three-hop LFO shape stored in the preset",
+     merge({"osc1.wavetable": 1, "osc1.unison.voices": 2, "osc1.unison.detune": 12, "filter1.cutoff": 450, "filter1.resonance": 40,
+            "lfo1.shape": 12, "lfo1.rate": 3},
+           mod(1, "lfo1", "filter1.cutoff", 70)), {"lfo_shapes": [HOP_SHAPE]}),
+    ("MPE Pressure Lead", "Lead", "mpe,expressive,pressure,slide",
+     "MPE lead: per-note pressure opens the filter, slide pushes the warp, bend range 48",
+     merge({"master.mpe.on": 1, "master.mpe.bend_range": 48, "master.polyphony": 8, "osc1.wavetable": 1, "osc1.warp.type": 1,
+            "osc1.warp.amount": 15, "filter1.cutoff": 1500, "filter1.resonance": 30, "env1.release": 300, "reverb.on": 1, "reverb.mix": 15},
+           mod(1, "poly_aftertouch", "filter1.cutoff", 55),
+           mod(2, "slide", "osc1.warp.amount", 50),
+           mod(3, "poly_aftertouch", "osc1.unison.detune", 20)), None),
+    ("Just Intonation Keys", "Keys", "tuning,just-intonation,bell,pure",
+     "Harmonic-series keys in just intonation, A4 at 440 Hz",
+     {"master.tuning.scale": 2, "master.tuning.a4": 440, "osc1.wavetable": 7, "env1.decay": 900, "env1.sustain": 20, "env1.release": 700,
+      "filter1.cutoff": 6000, "reverb.on": 1, "reverb.mix": 22, "chorus.on": 1, "chorus.mix": 25}, None),
+    ("Tri-Band Split Texture", "Pad", "splitter,racks,multiband,texture",
+     "Three-band split: distortion on the lows, wide Utility on the mids, chorus on the highs",
+     {"osc1.wavetable": 1, "osc1.unison.voices": 5, "osc1.unison.detune": 40, "env1.attack": 300, "env1.release": 900, "filter1.cutoff": 9000,
+      "splitter_lmh.on": 1, "splitter_lmh.freq_low": 220, "splitter_lmh.freq_high": 2500,
+      "distortion.on": 1, "distortion.rack": 5, "distortion.drive": 30, "distortion.mix": 60,
+      "utility.on": 1, "utility.rack": 6, "utility.width": 160,
+      "chorus.on": 1, "chorus.rack": 7, "chorus.mix": 60}, None),
+]
+assert len(showcase) == 12
+assert len(set(p[0] for p in presets) | set(s[0] for s in showcase)) == 112, "preset names must be unique"
+assert len(set(file_name_of(p[0]) for p in presets) | set(file_name_of(s[0]) for s in showcase)) == 112
+
+
 def load_levels() -> dict:
     """master.volume per preset name (level normalisation, scripts/tune-preset-levels.py); a preset without an entry keeps its own."""
     if not os.path.isfile(LEVELS_PATH):
@@ -392,7 +494,7 @@ def build_all():
     """All presets as (name, category, meta, document text), in a fixed order."""
     out = []
     levels = load_levels()
-    unknown = sorted(set(levels) - set(p[0] for p in presets))
+    unknown = sorted(set(levels) - set(p[0] for p in presets) - set(x[0] for x in showcase))
     if unknown:
         raise KeyError(f"{LEVELS_PATH}: no preset named {unknown}")
     for name, category, tags, desc, ov in presets:
@@ -401,11 +503,17 @@ def build_all():
             ov["master.volume"] = levels[name]
         meta, doc = make_preset(name, category, tags, desc, ov, strict=False)
         out.append((name, category, meta, doc))
+    for name, category, tags, desc, ov, content in showcase:
+        ov = with_macros(category, ov)
+        if name in levels:
+            ov["master.volume"] = levels[name]
+        meta, doc = make_preset(name, category, tags, desc, ov, content=content, strict=True)
+        out.append((name, category, meta, doc))
     return out
 
 
 def file_name(name: str) -> str:
-    return name.lower().replace(" ", "_").replace("-", "_") + ".sbpreset"
+    return file_name_of(name)
 
 
 def manifest_text(entries) -> str:
@@ -417,7 +525,7 @@ def manifest_text(entries) -> str:
         "schemaVersion": 1,
         "id": "com.safian.synthyboy.factory-presets",
         "name": "Factory Presets",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "license": "CC0-1.0",
         "attribution": "Safian Szabolcs",
         "kind": "presets",

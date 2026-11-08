@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "id": "com.safian.synthyboy.factory-presets",
   "name": "Factory Presets",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "CC0-1.0",
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "100 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "112 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -508,6 +508,66 @@
       "path": "FX/vinyl_dust_crackle.sbpreset",
       "sha256": "526d121b34507444afbc63ba3b6870df8e2b80850165af9361a4a9d5dbf35d3c",
       "size": 29534
+    },
+    {
+      "path": "Bass/scream_filter_bass.sbpreset",
+      "sha256": "0736acdb9106746aa3c7e72d11fce2197dfce97c7c2993c2eb7324b987ed7228",
+      "size": 29572
+    },
+    {
+      "path": "Pad/diffusor_cloud_pad.sbpreset",
+      "sha256": "afd61623cd6736c2ffcc4a10f082ec20cb689bb7a0a607a6a23f7ce06f60d529",
+      "size": 29584
+    },
+    {
+      "path": "Bass/ems_squelch_bass.sbpreset",
+      "sha256": "b7e7098ddd129e90fff93a0b626ce7c0bc1f2f4206a0285d1693edb6ddc206ee",
+      "size": 29554
+    },
+    {
+      "path": "Lead/twin_warp_lead.sbpreset",
+      "sha256": "26cf0058fca728e988a119b131ae31b26115fb9bbe1046708c182f8aa52b6fd5",
+      "size": 29563
+    },
+    {
+      "path": "Pluck/aux_keyscale_pluck.sbpreset",
+      "sha256": "d81f0e0cef88d1134174f416d92e0fc0137c39f53ddd3dc2fa06a4013449c7de",
+      "size": 29607
+    },
+    {
+      "path": "Pad/hyper_dimension_pad.sbpreset",
+      "sha256": "97bfd06acbf0464a97b8c97ef29f7d9684321d443842bbe78a8e4f1c2b458c93",
+      "size": 29560
+    },
+    {
+      "path": "Keys/utility_width_keys.sbpreset",
+      "sha256": "4f41c5c89a4e1363cfee7786d7b1f7fb918e28c3759268651be909935d2f1480",
+      "size": 29603
+    },
+    {
+      "path": "FX/bode_shifter_drone.sbpreset",
+      "sha256": "062fd45aa7320c8a28f9893d340203d9a35acb4f1145176b3fcfcfce0f2bd2dd",
+      "size": 29585
+    },
+    {
+      "path": "Bass/custom_shape_wobble.sbpreset",
+      "sha256": "39e10cb2dd72e69decc8037ed9e99848c3ede1cc26b7412657aa5511956f3817",
+      "size": 29868
+    },
+    {
+      "path": "Lead/mpe_pressure_lead.sbpreset",
+      "sha256": "7362e238496558bb75a7407b8a45025ac8239af2542b32351be6227559d7ead3",
+      "size": 29583
+    },
+    {
+      "path": "Keys/just_intonation_keys.sbpreset",
+      "sha256": "f3f14ef5904da6330d873b669931b5296cb8494701a8872df94a78731ec91fed",
+      "size": 29554
+    },
+    {
+      "path": "Pad/tri_band_split_texture.sbpreset",
+      "sha256": "1bca0caf654bda55bf1510a86a0e7c05897bc37c770327e2ef072ded92d8433b",
+      "size": 29598
     }
   ]
 }

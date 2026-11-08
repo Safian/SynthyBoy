@@ -29,6 +29,7 @@
 
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine.h"
+#include "synthyboy/engine_caps.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
@@ -309,6 +310,25 @@ int main (int argc, char** argv)
             tiers.push_back (t);
 
     int failures = unreadable;
+
+    // a preset may only use what the engine implements: every key that differs from its default is supported (capability bits of the
+    // key and of the value, e.g. a Scream filter model, a Custom LFO shape)
+    {
+        const auto probe = createEngine (o.engine);
+        const EngineCapsMask caps = probe->capabilities();
+        const ParamValues defaults = ParamValues::defaults();
+        for (const auto& p : presets)
+            for (size_t i = 0; i < paramCount(); ++i)
+            {
+                if (p.values.plain[i] == defaults.plain[i])
+                    continue;
+                if (! probe->supportsParam (paramTable()[i].id) || ! capsCover (caps, requiredCapsForValue (i, p.values.plain[i])))
+                {
+                    std::printf ("FAIL %s: %s = %g needs engine capabilities the engine does not have\n", p.file.c_str(), paramTable()[i].key, static_cast<double> (p.values.plain[i]));
+                    ++failures;
+                }
+            }
+    }
     std::printf ("preset-render: %zu presets, %zu tiers, engine %s, %.0f Hz\n", presets.size(), tiers.size(),
                  o.engine == EngineKind::vital ? "vital" : "own", o.sampleRate);
 

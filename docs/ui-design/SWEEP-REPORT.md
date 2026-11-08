@@ -68,7 +68,7 @@ Level outliers beyond 8 dB from the median (for the listening session): louder: 
 
 ## 6. Not fixed / open
 
-* **Factory preset generator vs. shipped files** (owner decision): `scripts/gen-factory-presets.py` produces different files than the ones in the repo (it follows the current key table). Either regenerate all 100 (state version 3 inside, sound unchanged because the new keys sit at defaults, new hashes) or pin the generator to the v2 key list. Until then, edit the shipped files and the script together, as done for the two fixes.
+* **Factory preset generator vs. shipped files** (resolved, see `PRESETS-REPORT.md`: the generator now writes all presets as state v3 and is the source of the files; the text below is the state at the time of this report): `scripts/gen-factory-presets.py` produces different files than the ones in the repo (it follows the current key table). Either regenerate all 100 (state version 3 inside, sound unchanged because the new keys sit at defaults, new hashes) or pin the generator to the v2 key list. Until then, edit the shipped files and the script together, as done for the two fixes.
 * **Spectral morphs that silence a sine-like table** (Vocode, Random Amplitudes, High Pass; ~22 of 168 table x morph combinations at 40 %): Vital behaviour, kept; the UI could warn. Not a defect of the adapter.
 * **Quiet factory set**: peaks -14 .. -26 dBFS for one note. A level pass over 100 presets is a sound-design decision (owner listening).
 * **DC offset** 4 % in `dirty_distortion_bass` (and about 1 % in a few Lead / Bass presets): from the distortion stage; inaudible but visible on a meter. Not changed.

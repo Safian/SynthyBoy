@@ -585,7 +585,8 @@ TEST (preset_with_content_round_trips_and_factory_presets_of_version_2_still_loa
     CHECK (loadPreset (plain.data(), plain.size(), metaBack, back).status == LoadStatus::ok);
     CHECK (readPresetMeta (text.data(), text.size(), metaBack) && metaBack.name == "With content");
 
-    // the 100 factory presets (.sbpreset version 1 holding a state of version 2) load as before
+    // the factory presets (.sbpreset version 1 holding a state of version 3, every key explicit) load completely; the same document cut
+    // back to the 880 keys of version 2 (what the first factory set was) still loads as before
     const std::filesystem::path root = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
     int count = 0;
     std::error_code ec;

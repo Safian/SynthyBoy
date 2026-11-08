@@ -23,7 +23,7 @@
     {
       "id": "com.safian.synthyboy.factory-presets",
       "name": "Factory Presets",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "presets",
       "license": "CC0-1.0",
       "required": false,
