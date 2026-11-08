@@ -41,8 +41,11 @@ public:
     void setAbLabel (const juce::String& text) { ab.setButtonText (text); }
     void setAssignOpen (bool open) { assign.setToggleState (open, juce::dontSendNotification); }
     void updateUndoRedo (bool canUndo, bool canRedo);
+    /** "3/16v": the sounding voices against the voice cap; a tap jumps to GLOBAL (design 07). Shown where the top bar has room for it. */
+    void setVoiceBadge (int active, int cap);
+    bool voiceBadgeShown() const noexcept { return voices.isVisible(); }
 
-    std::function<void()> onUndo, onRedo, onAbToggle, onAssignToggle, onMenu;
+    std::function<void()> onUndo, onRedo, onAbToggle, onAssignToggle, onMenu, onVoiceBadge;
 
     void resized() override;
     void paint (juce::Graphics&) override;
@@ -50,6 +53,7 @@ public:
     juce::TextButton prev { "<" }, next { ">" };
     juce::TextButton undo { "U" }, redo { "R" };
     juce::TextButton ab { "A" }, assign { "MOD" }, menu { "..." };
+    juce::TextButton voices { "0/16v" };
 
 private:
     UiContext& ctx;

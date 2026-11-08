@@ -20,6 +20,8 @@ public:
     Page selected() const noexcept { return current; }
     void select (Page page, bool notify = true);
     void setHasPanels (Page page, bool has);
+    /** A short read-out on a tab ("GLB 3": the sounding voices on the GLOBAL tab); empty text takes it away. */
+    void setBadge (Page page, const juce::String& text);
     std::function<void (Page)> onSelect;
 
     void resized() override;

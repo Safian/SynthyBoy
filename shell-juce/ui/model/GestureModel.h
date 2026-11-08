@@ -54,6 +54,11 @@ bool moveSlice (std::vector<float>& slices, int index, float pos);
 float thresholdToLine (float percent) noexcept;
 float lineToThreshold (float lineFraction) noexcept;
 
+// ---- CPU colour ---------------------------------------------------------------------------------------------------------------------
+
+/** The unison voice count is coloured by the CPU load of the audio callback (design 02 row UNISON): 0 = green (< 50 %), 1 = amber (< 80 %), 2 = red. */
+int cpuLevel (float load) noexcept;
+
 // ---- loop pair ----------------------------------------------------------------------------------------------------------------------
 
 /** Drag between the two loop markers moves both by `delta` (0..1 of the sample), keeping the length; stops at the ends. */

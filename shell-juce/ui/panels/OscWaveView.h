@@ -4,6 +4,8 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <array>
+#include <memory>
 #include <string>
 
 #include "../GestureKit.h"
@@ -78,6 +80,9 @@ public:
     juce::TextButton& removeSliceButton() noexcept { return removeSliceBtn; }
     LongPressDetector& longPress() noexcept { return press; }
     void refreshSliceCache();
+    /** Colour level of the unison voice pill by the CPU load (cpuLevel ()), -1 while the oscillator has one voice (no pill). */
+    int unisonPillLevel() const;
+    bool unisonCapped() const;
 
 private:
     bool commitSlices (const std::vector<float>& newSlices);
@@ -178,6 +183,18 @@ public:
     /** The channel strips (O1 O2 O3 NOISE F1 F2 B1 B2) in view coordinates; used by the gestures and the tests. */
     juce::Rectangle<float> stripBounds (int strip) const;
     static constexpr int kNumStrips = 8;
+    /** The header of a strip (its name at the foot: tap = power, long-press = module sheet, drag onto another strip = swap / copy) and the
+        pan band above it (drag sideways = the strip's pan). */
+    juce::Rectangle<float> nameBounds (int strip) const;
+    juce::Rectangle<float> panBounds (int strip) const;
+    /** The module the strip stands for ("osc1" .. "osc3", "filter1", "filter2"); empty for NOISE and the buses. */
+    static const char* stripModulePrefix (int strip) noexcept;
+    bool hasPan (int strip) const noexcept { return strip >= 0 && strip < 6 && panHandles[static_cast<size_t> (strip)] != nullptr; }
+    /** End of a header drag (the mouse path calls it; the tests call it): swap the two modules, copy with `copy`. */
+    bool dropOnStrip (int from, int to, bool copy, bool withMods);
+    void stripHeaderLongPressed (int strip);
+    LongPressDetector& longPress() noexcept { return press; }
+    int dropTargetStrip() const noexcept { return dropStrip; }
 
 private:
     ParamHandle& stripLevel (int strip);
@@ -206,5 +223,10 @@ private:
     bool stripNameTap = false; // the press started on the name of a strip: a tap there toggles the channel
     float dragStartNorm = 0.0f;
     juce::Point<float> dragStartPos;
+
+    std::array<std::unique_ptr<ParamHandle>, 6> panHandles; // O1 O2 O3 NOISE F1 F2
+    LongPressDetector press;
+    bool panDrag = false, nameDragging = false, nameConsumed = false;
+    int dropStrip = -1;
 };
 } // namespace synthyboy::ui

@@ -50,6 +50,16 @@ public:
         fails validateContent () or the host keeps no content. Message thread. */
     virtual bool setContent (const StateContent& /*newContent*/) { return false; }
 
+    /** Sounding voices (released ones that still fade out included) after the last audio block: IEngine::activeVoices (). 0 without an engine. */
+    virtual int activeVoiceCount() const noexcept { return 0; }
+    /** Load of the audio callback: the time process () needed for the last blocks as a fraction of the time the blocks last (smoothed;
+        0 = idle, 1 = at the limit). 0 when the host does not measure. */
+    virtual float cpuLoad() const noexcept { return 0.0f; }
+    /** Copies the latest `maxSamples` (up to kScopeSamples) mono samples of the master output, oldest first, into `dest`; returns how many were
+        copied (0 before the first block). Message thread; lock free on the audio side. */
+    virtual int copyScope (float* /*dest*/, int /*maxSamples*/) const { return 0; }
+    static constexpr int kScopeSamples = 4096;
+
     /** Injects a MIDI message from the UI (pitch bend, mod wheel, CC 64 sustain, etc.) into the audio callback. */
     virtual void injectMidiMessage (const juce::MidiMessage& /*msg*/) {}
 };

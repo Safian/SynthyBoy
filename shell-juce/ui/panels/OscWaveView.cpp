@@ -5,6 +5,8 @@
 
 #include <cmath>
 
+#include "../ModuleSheet.h"
+
 namespace synthyboy::ui
 {
 // Helper: evaluate sample point in [0, 1] for a given wavetable choice and frame
@@ -146,6 +148,17 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
 }
 
 OscWaveView::~OscWaveView() = default;
+
+int OscWaveView::unisonPillLevel() const
+{
+    const int voices = unisonVoicesHandle.valid() ? juce::roundToInt (unisonVoicesHandle.normalised() * static_cast<float> (unisonVoicesHandle.info().max - unisonVoicesHandle.info().min) + static_cast<float> (unisonVoicesHandle.info().min)) : 1;
+    return voices > 1 ? cpuLevel (ctx.host.cpuLoad()) : -1;
+}
+
+bool OscWaveView::unisonCapped() const
+{
+    return unisonVoicesHandle.valid() && juce::roundToInt (unisonVoicesHandle.plain()) > 8;
+}
 
 bool OscWaveView::isSampleType() const
 {
@@ -697,10 +710,26 @@ void OscWaveView::paint (juce::Graphics& g)
 
     // Tier-capped badge (voices > tierCap)
     const int voices = unisonVoicesHandle.valid() ? juce::roundToInt (unisonVoicesHandle.plain()) : 1;
-    if (voices > 8) // medium / low tier cap hint
+    if (unisonCapped()) // medium / low tier cap hint
     {
         g.setColour (c.warn);
         g.drawText ("TIER CAPPED", headerArea.toNearestInt(), juce::Justification::centredRight, true);
+    }
+    // the unison count as a pill coloured by the CPU load (green / amber / red), amber outline when the tier caps it
+    if (const int level = unisonPillLevel(); level >= 0)
+    {
+        const auto pill = juce::Rectangle<float> (r.getRight() - t.px (54.0f), r.getBottom() - t.px (24.0f), t.px (48.0f), t.px (18.0f));
+        const juce::Colour colours[] = { c.ok, c.warn, c.danger };
+        g.setColour (colours[level].withAlpha (0.85f));
+        g.fillRoundedRectangle (pill, t.px (9.0f));
+        if (unisonCapped())
+        {
+            g.setColour (c.warn);
+            g.drawRoundedRectangle (pill, t.px (9.0f), t.px (2.0f));
+        }
+        g.setColour (c.textOnAccent);
+        g.setFont (t.labelFont());
+        g.drawText (juce::String (voices) + "v", pill.toNearestInt(), juce::Justification::centred, false);
     }
     if (isOff)
     {
@@ -1143,6 +1172,18 @@ OscMixConsoleView::OscMixConsoleView (UiContext& context)
       noiseOn (context, "noise.on")
 {
     const auto repaintCb = [this] { repaint(); };
+    for (size_t i = 0; i < panHandles.size(); ++i)
+    {
+        static const char* const keys[] = { "osc1.pan", "osc2.pan", "osc3.pan", "noise.pan", "filter1.pan", "filter2.pan" };
+        panHandles[i] = std::make_unique<ParamHandle> (context, keys[i]);
+        panHandles[i]->onChange = repaintCb;
+    }
+    press.onLongPress = [this]
+    {
+        nameConsumed = true;
+        nameDragging = false;
+        stripHeaderLongPressed (activeStrip);
+    };
     masterVolumeHandle.onChange = repaintCb;
     directLevelHandle.onChange = repaintCb;
     mainFxBypassHandle.onChange = [this]
@@ -1215,6 +1256,40 @@ juce::Rectangle<float> OscMixConsoleView::stripBounds (int strip) const
     return { x, stripsArea.getY(), stripW, stripsArea.getHeight() };
 }
 
+juce::Rectangle<float> OscMixConsoleView::nameBounds (int strip) const
+{
+    auto col = stripBounds (strip);
+    return col.removeFromBottom (static_cast<float> (ctx.theme.touch()));
+}
+
+juce::Rectangle<float> OscMixConsoleView::panBounds (int strip) const
+{
+    const auto name = nameBounds (strip);
+    return { name.getX(), name.getY() - ctx.theme.px (24.0f), name.getWidth(), ctx.theme.px (24.0f) };
+}
+
+const char* OscMixConsoleView::stripModulePrefix (int strip) noexcept
+{
+    static const char* const prefixes[] = { "osc1", "osc2", "osc3", "", "filter1", "filter2", "", "" };
+    return strip >= 0 && strip < kNumStrips ? prefixes[strip] : "";
+}
+
+bool OscMixConsoleView::dropOnStrip (int from, int to, bool copy, bool withMods)
+{
+    dropStrip = -1;
+    const std::string a = stripModulePrefix (from), b = stripModulePrefix (to);
+    if (a.empty() || b.empty() || a == b)
+        return false;
+    return copy ? module_ops::copyOnto (ctx, a, b, withMods) : module_ops::swap (ctx, a, b, true);
+}
+
+void OscMixConsoleView::stripHeaderLongPressed (int strip)
+{
+    const std::string prefix = stripModulePrefix (strip);
+    if (! prefix.empty())
+        showModuleSheet (ctx, prefix, *this);
+}
+
 int OscMixConsoleView::stripAt (juce::Point<float> p) const
 {
     for (int i = 0; i < kNumStrips; ++i)
@@ -1243,12 +1318,23 @@ void OscMixConsoleView::mouseDown (const juce::MouseEvent& e)
     if (activeStrip >= 0)
     {
         // design 02 section 3: drag a strip = its level, tap its header (here: the name at the foot) = its power
-        const auto col = stripBounds (activeStrip);
         auto& level = stripLevel (activeStrip);
         activeFader = FaderTarget::strip;
-        if (stripPower (activeStrip) != nullptr && e.position.y > col.getBottom() - static_cast<float> (ctx.theme.touch()))
+        panDrag = false;
+        nameDragging = false;
+        nameConsumed = false;
+        dropStrip = -1;
+        if (nameBounds (activeStrip).contains (e.position))
         {
+            // the header: tap = power (O1 O2 O3 NOISE), long-press = module sheet, drag onto another strip = swap / copy
             stripNameTap = true;
+            if (stripModulePrefix (activeStrip)[0] != '\0')
+                press.press (e.position);
+        }
+        else if (hasPan (activeStrip) && panBounds (activeStrip).contains (e.position))
+        {
+            panDrag = true;
+            panHandles[static_cast<size_t> (activeStrip)]->beginGesture();
         }
         else if (level.valid())
         {
@@ -1293,7 +1379,24 @@ void OscMixConsoleView::mouseDrag (const juce::MouseEvent& e)
 
     if (activeFader == FaderTarget::strip)
     {
-        if (! stripNameTap && stripLevel (activeStrip).valid())
+        if (stripNameTap)
+        {
+            press.moved (e.position);
+            if (! nameConsumed && (e.position - dragStartPos).getDistanceFromOrigin() > ctx.theme.px (10.0f))
+            {
+                nameDragging = true;
+                dropStrip = stripAt (e.position);
+                repaint();
+            }
+            return;
+        }
+        if (panDrag)
+        {
+            const auto col = stripBounds (activeStrip);
+            panHandles[static_cast<size_t> (activeStrip)]->setNormalised (juce::jlimit (0.0f, 1.0f, (e.position.x - col.getX()) / juce::jmax (1.0f, col.getWidth())));
+            return;
+        }
+        if (stripLevel (activeStrip).valid())
         {
             const float colH = juce::jmax (1.0f, stripBounds (activeStrip).getHeight() * 0.7f);
             stripLevel (activeStrip).setNormalised (juce::jlimit (0.0f, 1.0f, dragStartNorm - (e.position.y - dragStartPos.y) / colH));
@@ -1313,17 +1416,29 @@ void OscMixConsoleView::mouseDrag (const juce::MouseEvent& e)
 
 void OscMixConsoleView::mouseUp (const juce::MouseEvent& e)
 {
+    press.cancel();
     if (activeFader == FaderTarget::strip)
     {
         if (stripNameTap)
         {
-            if (auto* power = stripPower (activeStrip); power != nullptr && power->valid() && e.getDistanceFromDragStart() < 6)
-                power->setPlainComplete (power->plain() >= 0.5f ? 0.0f : 1.0f);
+            if (nameDragging)
+                dropOnStrip (activeStrip, stripAt (e.position), e.mods.isAltDown(), e.mods.isShiftDown());
+            else if (! nameConsumed)
+                if (auto* power = stripPower (activeStrip); power != nullptr && power->valid() && e.getDistanceFromDragStart() < 6)
+                    power->setPlainComplete (power->plain() >= 0.5f ? 0.0f : 1.0f);
+        }
+        else if (panDrag)
+        {
+            panHandles[static_cast<size_t> (activeStrip)]->endGesture();
         }
         else if (stripLevel (activeStrip).valid())
         {
             stripLevel (activeStrip).endGesture();
         }
+        nameDragging = false;
+        nameConsumed = false;
+        panDrag = false;
+        dropStrip = -1;
         repaint();
     }
     else if (activeFader == FaderTarget::main && masterVolumeHandle.valid())
@@ -1392,7 +1507,24 @@ void OscMixConsoleView::paint (juce::Graphics& g)
         g.setColour (ch.on ? c.accent.withAlpha (0.75f) : c.textDim.withAlpha (0.3f));
         g.fillRect (col.getX() + t.px (3.0f), barY, col.getWidth() - t.px (6.0f), barH);
 
-        // Name
+        // Pan band: a thin track over the foot of the level bar, the dot is the pan
+        if (hasPan (i))
+        {
+            const auto pb = panBounds (i).reduced (t.px (6.0f), 0.0f);
+            const float panNorm = panHandles[static_cast<size_t> (i)]->valid() ? panHandles[static_cast<size_t> (i)]->normalised() : 0.5f;
+            g.setColour (c.outline);
+            g.drawHorizontalLine (juce::roundToInt (pb.getCentreY()), pb.getX(), pb.getRight());
+            g.setColour (c.mod);
+            const float dx = pb.getX() + panNorm * pb.getWidth();
+            g.fillEllipse (dx - t.px (4.0f), pb.getCentreY() - t.px (4.0f), t.px (8.0f), t.px (8.0f));
+        }
+
+        // Name (the header of the strip); the drop target of a header drag is outlined
+        if (dropStrip == i && activeStrip != i)
+        {
+            g.setColour (c.mod);
+            g.drawRoundedRectangle (stripBounds (i).reduced (t.px (1.0f)), t.px (4.0f), t.px (3.0f));
+        }
         g.setColour (ch.on ? c.text : c.textDim);
         g.drawText (ch.name, col.removeFromBottom (t.px (14.0f)).toNearestInt(), juce::Justification::centred, false);
     }

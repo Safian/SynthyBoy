@@ -14,6 +14,7 @@
 #include "ui/Editor.h"
 #include "ui/ModuleSheet.h"
 #include "ui/panels/EnvelopePanel.h"
+#include "ui/panels/GlbScopePanel.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/OscTabsPanel.h"
 #include "ui/panels/OscWaveView.h"
@@ -1410,6 +1411,178 @@ TEST (uig_envelope_tabs_select_long_press_and_drop_on_a_control)
     if (onKey != nullptr)
         CHECK (! env1->dropSourceOn (2, onKey));
     CHECK (rig.editor->context().assign.flow().armedSource() == 0);
+}
+
+// ---- mixer strips, voices / CPU / scope ---------------------------------------------------------------------------------------------
+
+TEST (uig_mixer_strip_header_sheet_swap_copy_and_pan)
+{
+    Rig rig (Page::mix);
+    auto* mix = rig.find<OscMixConsoleView>();
+    CHECK (mix != nullptr);
+    if (mix == nullptr)
+        return;
+    CHECK (std::string (OscMixConsoleView::stripModulePrefix (1)) == "osc2" && std::string (OscMixConsoleView::stripModulePrefix (5)) == "filter2");
+    CHECK (std::string (OscMixConsoleView::stripModulePrefix (3)).empty() && std::string (OscMixConsoleView::stripModulePrefix (6)).empty());
+
+    // the strip header is a 44 point band
+    for (int i = 0; i < OscMixConsoleView::kNumStrips; ++i)
+        CHECK (mix->nameBounds (i).getHeight() >= static_cast<float> (rig.editor->theme().touch()) - 0.5f);
+
+    // tap on the header: power (O1 .. NOISE), as before
+    rig.setParam ("osc2.on", 1.0f);
+    const auto n2 = mix->nameBounds (1).getCentre();
+    tap (*mix, n2);
+    CHECK_EQ (rig.param ("osc2.on"), 0.0f);
+    tap (*mix, n2);
+    CHECK_EQ (rig.param ("osc2.on"), 1.0f);
+
+    // long-press on the header of O2 opens the module sheet; the release after it is no tap
+    const int before = desktopComponents();
+    mix->mouseDown (mouse (*mix, n2, n2, false));
+    CHECK (mix->longPress().pending());
+    mix->longPress().fire();
+    CHECK (desktopComponents() == before + 1);
+    dismissCallOuts();
+    mix->mouseUp (mouse (*mix, n2, n2, false));
+    CHECK_EQ (rig.param ("osc2.on"), 1.0f);
+    // NOISE and the buses have no module sheet: no long press is armed
+    const auto nn = mix->nameBounds (3).getCentre();
+    mix->mouseDown (mouse (*mix, nn, nn, false));
+    CHECK (! mix->longPress().pending());
+    mix->mouseUp (mouse (*mix, nn, nn, false));
+
+    // drag the header of O1 onto O3: swap; with Alt: copy
+    rig.setParam ("osc1.tune", 17.0f);
+    rig.setParam ("osc3.tune", -9.0f);
+    const auto from = mix->nameBounds (0).getCentre();
+    const auto to = mix->nameBounds (2).getCentre();
+    mix->mouseDown (mouse (*mix, from, from, false));
+    mix->mouseDrag (mouse (*mix, to, from, true));
+    CHECK_EQ (mix->dropTargetStrip(), 2);
+    mix->mouseUp (mouse (*mix, to, from, true));
+    CHECK (approx (rig.param ("osc1.tune"), -9.0f) && approx (rig.param ("osc3.tune"), 17.0f));
+    CHECK_EQ (rig.param ("osc2.on"), 1.0f); // a drag is no tap on the power
+    CHECK (mix->dropOnStrip (2, 0, true, false)); // copy O3 onto O1
+    CHECK (approx (rig.param ("osc1.tune"), 17.0f) && approx (rig.param ("osc3.tune"), 17.0f));
+    CHECK (! mix->dropOnStrip (0, 3, false, false)); // NOISE is no module
+    CHECK (! mix->dropOnStrip (0, 4, false, false)); // an oscillator and a filter do not swap
+    CHECK (! mix->dropOnStrip (1, 1, false, false));
+    rig.setParam ("filter1.cutoff", 100.0f);
+    rig.setParam ("filter2.cutoff", 400.0f);
+    CHECK (mix->dropOnStrip (4, 5, false, false)); // F1 <-> F2
+    CHECK (approx (rig.param ("filter1.cutoff"), 400.0f, 4.0f) && approx (rig.param ("filter2.cutoff"), 100.0f, 4.0f));
+
+    // pan: a sideways drag in the band above the header (O1 O2 O3 NOISE F1 F2 have a pan key, the buses do not)
+    CHECK (mix->hasPan (0) && mix->hasPan (3) && mix->hasPan (5) && ! mix->hasPan (6) && ! mix->hasPan (7));
+    rig.setParam ("osc3.pan", 0.0f);
+    const auto band = mix->panBounds (2);
+    const juce::Point<float> p0 { band.getX() + band.getWidth() * 0.5f, band.getCentreY() };
+    drag (*mix, p0, { band.getRight() - 1.0f, band.getCentreY() });
+    CHECK (rig.param ("osc3.pan") > 40.0f);
+    drag (*mix, { band.getRight() - 1.0f, band.getCentreY() }, { band.getX() + 1.0f, band.getCentreY() });
+    CHECK (rig.param ("osc3.pan") < -40.0f);
+    // the level fader of the strip still works above the band
+    const float level0 = rig.param ("osc3.level");
+    const auto col = mix->stripBounds (2);
+    drag (*mix, { col.getCentreX(), col.getY() + col.getHeight() * 0.3f }, { col.getCentreX(), col.getY() + 2.0f });
+    CHECK (! approx (rig.param ("osc3.level"), level0, 1e-4f));
+}
+
+TEST (uig_voice_badge_cpu_pill_and_scope)
+{
+    // the processor side of the three new host read-outs
+    {
+        SynthyBoyProcessor proc;
+        proc.setRateAndBufferSizeDetails (48000.0, 512);
+        proc.prepareToPlay (48000.0, 512);
+        CHECK_EQ (proc.activeVoiceCount(), 0);
+        CHECK_EQ (proc.copyScope (nullptr, 0), 0);
+        juce::AudioBuffer<float> buffer (2, 512);
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+        for (int block = 0; block < 12; ++block)
+        {
+            buffer.clear();
+            proc.processBlock (buffer, midi);
+            midi.clear();
+        }
+        CHECK (proc.activeVoiceCount() >= 1);
+        CHECK (proc.cpuLoad() > 0.0f && proc.cpuLoad() < 50.0f);
+        std::vector<float> scope (UiHost::kScopeSamples + 10, 0.0f);
+        const int got = proc.copyScope (scope.data(), static_cast<int> (scope.size()));
+        CHECK_EQ (got, UiHost::kScopeSamples);
+        float peak = 0.0f;
+        for (int i = 0; i < got; ++i)
+            peak = std::max (peak, std::abs (scope[static_cast<size_t> (i)]));
+        CHECK (peak > 0.001f);
+        CHECK_EQ (proc.copyScope (scope.data(), 16), 16); // the latest samples, oldest first
+        proc.releaseResources();
+    }
+
+    Rig rig (Page::glb, 768, 1024);
+    // top bar: the badge shows where there is room, a tap jumps to GLOBAL
+    CHECK (rig.editor->topBar().voiceBadgeShown());
+    rig.editor->topBar().setVoiceBadge (3, 16);
+    CHECK (rig.editor->topBar().voices.getButtonText() == "3/16v");
+    rig.editor->pageTabs().select (Page::osc, false);
+    rig.editor->panelHost().setPage (Page::osc);
+    rig.editor->topBar().voices.onClick();
+    CHECK (rig.editor->panelHost().page() == Page::glb);
+    CHECK (rig.editor->topBar().voices.getHeight() >= rig.editor->theme().touch() && rig.editor->topBar().voices.getWidth() >= rig.editor->theme().touch());
+    rig.editor->setSize (390, 844);
+    CHECK (! rig.editor->topBar().voiceBadgeShown()); // phone: no room in the bar; the GLB tab carries the count, GLOBAL > Scope the read-out
+    rig.editor->pageTabs().setBadge (Page::glb, "3");
+    CHECK (rig.editor->pageTabs().button (Page::glb).getButtonText() == "GLB 3");
+    rig.editor->pageTabs().setBadge (Page::glb, {});
+    CHECK (rig.editor->pageTabs().button (Page::glb).getButtonText() == juce::String (pageLabel (Page::glb)));
+
+    // the scope panel: tap toggles Wave / FFT, a pinch does too, the segment buttons are the alternative
+    rig.editor->panelHost().setPage (Page::glb);
+    auto* scopePanel = dynamic_cast<GlbScopePanel*> (rig.anyPanelTitled ("Scope"));
+    CHECK (scopePanel != nullptr);
+    if (scopePanel == nullptr)
+        return;
+    auto& scope = scopePanel->scope();
+    CHECK (scope.mode() == ScopeView::Mode::wave);
+    tap (scope, { 20.0f, 20.0f });
+    CHECK (scope.mode() == ScopeView::Mode::fft);
+    TouchTracker::Gesture pinch;
+    pinch.kind = TouchTracker::Kind::pinch;
+    pinch.scale = 1.4f;
+    scope.handleTouchGesture (pinch);
+    CHECK (scope.mode() == ScopeView::Mode::wave);
+    scope.mouseMagnify (mouse (scope, { 10, 10 }, { 10, 10 }, false), 0.7f);
+    CHECK (scope.mode() == ScopeView::Mode::fft);
+    scopePanel->waveButton().onClick();
+    CHECK (scope.mode() == ScopeView::Mode::wave);
+    scopePanel->fftButton().onClick();
+    CHECK (scope.mode() == ScopeView::Mode::fft);
+    CHECK (scopePanel->waveButton().getHeight() >= rig.editor->theme().touch());
+    // a drag over the display is no tap
+    scope.mouseDown (mouse (scope, { 10, 10 }, { 10, 10 }, false));
+    scope.mouseDrag (mouse (scope, { 60, 10 }, { 10, 10 }, true));
+    scope.mouseUp (mouse (scope, { 60, 10 }, { 10, 10 }, true));
+    CHECK (scope.mode() == ScopeView::Mode::fft);
+    CHECK (scopePanel->readout().contains ("voices") && scopePanel->readout().contains ("CPU"));
+
+    // the unison pill: green below 50 % CPU, amber below 80 %, red above (pure rule) and absent for one voice
+    CHECK_EQ (cpuLevel (0.1f), 0);
+    CHECK_EQ (cpuLevel (0.5f), 1);
+    CHECK_EQ (cpuLevel (0.79f), 1);
+    CHECK_EQ (cpuLevel (0.8f), 2);
+    rig.setParam ("osc1.unison.voices", 1.0f);
+    auto* view = rig.oscView (1);
+    CHECK (view != nullptr);
+    if (view != nullptr)
+    {
+        CHECK_EQ (view->unisonPillLevel(), -1);
+        rig.setParam ("osc1.unison.voices", 12.0f);
+        CHECK_EQ (view->unisonPillLevel(), 0); // the test host measures no load
+        CHECK (view->unisonCapped());          // 12 > 8: amber outline
+        rig.setParam ("osc1.unison.voices", 6.0f);
+        CHECK (! view->unisonCapped());
+    }
 }
 
 TEST (uig_zz_shutdown)

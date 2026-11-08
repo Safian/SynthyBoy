@@ -36,6 +36,14 @@ void PageTabs::setHasPanels (Page page, bool has)
     buttons[static_cast<size_t> (page)]->setAlpha (has ? 1.0f : 0.55f);
 }
 
+void PageTabs::setBadge (Page page, const juce::String& text)
+{
+    auto& b = *buttons[static_cast<size_t> (page)];
+    const juce::String wanted = juce::String (pageLabel (page)) + (text.isEmpty() ? juce::String() : " " + text);
+    if (b.getButtonText() != wanted)
+        b.setButtonText (wanted);
+}
+
 void PageTabs::resized()
 {
     viewport.setBounds (getLocalBounds());

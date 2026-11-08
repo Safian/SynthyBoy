@@ -94,6 +94,13 @@ float lineToThreshold (float lineFraction) noexcept
     return (1.0f - std::min (1.0f, std::max (0.0f, lineFraction))) * 100.0f;
 }
 
+// ---- CPU colour ---------------------------------------------------------------------------------------------------------------------
+
+int cpuLevel (float load) noexcept
+{
+    return load < 0.5f ? 0 : load < 0.8f ? 1 : 2;
+}
+
 // ---- loop pair ----------------------------------------------------------------------------------------------------------------------
 
 void moveLoopPair (float& loopStart, float& loopEnd, float delta) noexcept

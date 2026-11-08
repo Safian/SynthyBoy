@@ -92,7 +92,9 @@ TopBar::TopBar (UiContext& context) : ctx (context)
     undo.setEnabled (false);
     redo.setEnabled (false);
 
-    for (auto* b : { &prev, &next, &undo, &redo, &ab, &assign, &menu })
+    voices.setTooltip ("Sounding voices / voice cap: tap for GLOBAL");
+    voices.onClick = [this] { if (onVoiceBadge) onVoiceBadge(); };
+    for (auto* b : { &prev, &next, &undo, &redo, &ab, &assign, &menu, &voices })
         addAndMakeVisible (*b);
 }
 
@@ -122,7 +124,21 @@ void TopBar::resized()
     ab.setBounds (r.removeFromRight (h));
     redo.setBounds (r.removeFromRight (h));
     undo.setBounds (r.removeFromRight (h));
+    // the voice badge needs a name area of at least 96 points; where the bar is that crowded (phone, tablet landscape with the shared
+    // macro row) the count is on the GLB page tab instead and in GLOBAL > Scope
+    const int badgeW = juce::jmax (h, ctx.theme.ipx (60.0f));
+    const bool room = r.getWidth() - h - badgeW >= ctx.theme.ipx (96.0f);
+    voices.setVisible (room);
+    if (room)
+        voices.setBounds (r.removeFromRight (badgeW));
     next.setBounds (r.removeFromRight (h));
+}
+
+void TopBar::setVoiceBadge (int active, int cap)
+{
+    const auto text = juce::String (active) + "/" + juce::String (cap) + "v";
+    if (voices.getButtonText() != text)
+        voices.setButtonText (text);
 }
 
 void TopBar::paint (juce::Graphics& g)
