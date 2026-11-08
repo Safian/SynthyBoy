@@ -61,7 +61,11 @@ float lineToThreshold (float lineFraction) noexcept;
     (`oscN.warp.type` choice 0 None, 1 Sync, 2 Formant, 3 Quantize, 4 Bend, 5 Squeeze, 6 Pulse, 7 / 8 FM from Osc 2 / 3, 9 / 10 RM from
     Osc 2 / 3) at `amount` 0..1. A drawing of the idea of each mode, not the engine's DSP: the other oscillator of FM / RM is a sine at
     twice / three times the frequency. type 0 and amount 0 return the cycle unchanged. */
-float warpedValue (int type, float amount, float phase, const std::function<float (float)>& wave);
+float warpedValue (int type, float amount, float phase, const std::function<float (float)>& wave,
+                   const std::function<float (float)>& remapCurve = {});
+/** The pictures of the modes of block B21 (choices 11 .. 51: Sync Var, Bend, Asym, Flip, Mirror, Remap 1-4, Odd/Even, LPF / HPF, the 14
+    distortions, FM Thru-Zero / Exp / Linear, PD, PD Self, AM). `remapCurve` is the drawn curve of the oscillator for Remap 1, 2 and 4 (empty =
+    the diagonal). Also drawings of the idea of each mode, not the DSP. */
 
 // ---- CPU colour ---------------------------------------------------------------------------------------------------------------------
 
@@ -94,8 +98,8 @@ struct ChoiceGroup
     std::vector<int> items; // choice indices of the key
     bool gap = false;       // the design lists the group but the engine has no mode in it: shown greyed, no items
 };
-/** WARP+ list of docs/ui-design/02 (Basic / Alt / FM / RM, with the Filter / Distortion / PD / AM groups the engine does not have as gaps).
-    Every choice of `oscN.warp.type` is in exactly one group. */
+/** WARP+ list of docs/ui-design/02 (Basic / Alt / Filter / Distortion / FM / PD / AM / RM as in the Serum 2 manual p.49-56; block B21 filled
+    the groups that used to be gaps). Every choice of `oscN.warp.type` and `oscN.warp2.type` is in exactly one group. */
 std::vector<ChoiceGroup> warpTypeGroups();
 
 // ---- two-finger tracker -------------------------------------------------------------------------------------------------------------

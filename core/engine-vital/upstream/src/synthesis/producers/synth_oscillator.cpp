@@ -309,6 +309,10 @@ namespace sbvital {
     // The distortion modes: the drive is 0 .. 30 dB over the warp amount
     force_inline poly_float xShape(int type, poly_float value, poly_float amount) {
       const poly_float drive = Distortion::driveDbScale(amount * 30.0f);
+      // the product value x drive stays inside +-40: the exponentials of the diode curves leave the float range beyond (a hot drive on a
+      // loud wave gave NaN in the random walk of test_rt_alloc)
+      const poly_float limit = poly_float(40.0f) / drive;
+      value = utils::clamp(value, -limit, limit);
       switch (type) {
         case SynthOscillator::kShTube: return Distortion::getDrivenValue(Distortion::kTube, value, drive);
         case SynthOscillator::kShSoftClip: return Distortion::getDrivenValue(Distortion::kSoftClip, value, drive);

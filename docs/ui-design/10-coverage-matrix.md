@@ -61,9 +61,9 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | Unison WARP 2 spread [S p.48] | 02 §1.2 | none | GAP | G32 (one `warp` + one `morph` slot only) |
 | Warp: OFF, amount [S p.49] | 02 §1.2 | `osc1.warp.type`, `osc1.warp.amount` | HAVE | |
 | Warp slot 2 / Swap Warps [S p.49, p.56] | 02 §1.2 | `osc1.morph.type`, `osc1.morph.amount` | PARTIAL | morph = fixed second family; free slots G33 |
-| Warp Sync (+ Var), Alt group, PWM, Quantize, Formant, Squeeze [S p.50-51] [V p.10] | 02 §1.2 | `osc1.warp.type`, `osc1.warp.amount`, `osc1.warp.phase` | PARTIAL | Sync, Bend, Pulse, Quantize, Formant, Squeeze HAVE; Var, Bend +/-, Asym, Flip, Mirror, Remap, Odd/Even = G34 |
-| Warp Filter group LPF / HPF, Distortion group (14 modes) [S p.52-53] | 02 §1.2 | none (spectral LP/HP exist as morph types: `osc1.morph.type`) | GAP | G35 |
-| Warp FM / RM from other oscillators [S p.54-56] [V p.10] | 02 §1.2 | `osc1.warp.type` | PARTIAL | FM / RM from Osc x HAVE; from Noise, Sub, Filters, sampler, Thru-Zero / Exp / Linear, PD, AM = G29, G36, G37 |
+| Warp Sync (+ Var), Alt group, PWM, Quantize, Formant, Squeeze [S p.50-51] [V p.10] | 02 §1.2 | `osc1.warp.type`, `osc1.warp.amount`, `osc1.warp.phase` | HAVE | Sync, Bend, Pulse, Quantize, Formant, Squeeze, and (B21, 13-new-keys.md 4.22) Sync Var, Bend +/-, Asym, Flip, Mirror, Remap 1-4, Odd/Even |
+| Warp Filter group LPF / HPF, Distortion group (14 modes) [S p.52-53] | 02 §1.2 | `osc1.warp.type` entries 25-40 (B21) | HAVE | Filter LPF / HPF and the 14 distortions |
+| Warp FM / RM from other oscillators [S p.54-56] [V p.10] | 02 §1.2 | `osc1.warp.type` | PARTIAL | FM / RM from Osc x HAVE; Thru-Zero / Exp / Linear, PD, AM from Osc x HAVE (B21); from Noise, Sub, Filters, sampler = G29 |
 | Wavetable pan, level [S p.57] | 02 §1.1 | `osc1.pan`, `osc1.level` | HAVE | |
 
 ### 1.3 Multisample, Sample, Granular, Spectral oscillators (pp.58-122)
@@ -114,7 +114,7 @@ Method notes: the Serum TOC text (pp.3-12) lost the Delay module line; Delay is 
 | Filter mix [S p.143] | 04 §1.1 | `filter1.mix` | HAVE | |
 | Keytrack following oscillator pitch [S p.142] | 04 §1.1 | `filter1.keytrack` | PARTIAL | knob HAVE, follow-osc-pitch G56 |
 | Mixer: exploring, channels, toggle [S p.144-145] | 02 §1.9 | `osc1.on`, `noise.on`, `filter1.on` | HAVE | |
-| Mixer: sending to busses, ENV 1 button [S p.146] | 02 §1.9 | `osc1.destination`, `noise.destination` | PARTIAL | discrete Main / Direct; Bus 1/2, ENV1 toggle = G39 |
+| Mixer: sending to busses, ENV 1 button [S p.146] | 02 §1.9 | `osc1.destination`, `noise.destination` | HAVE | discrete Main / Direct; Bus 1/2 (B10); ENV 1 toggle (`oscN.env1`, B21) |
 | Mixer: pan and levels [S p.147] | 02 §1.9 | `osc1.pan`, `osc1.level`, `noise.pan`, `noise.level` | HAVE | |
 | Mixer: mixing filters (routing, pan, mix, levels) [S p.148-149] | 02 §1.9, 04 §1.1 | `filter.routing`, `filter1.mix`, `filter2.mix` | PARTIAL | series / parallel only; per-filter outputs, pan, level = G39, G55 |
 | Mixer: mixing the busses, levels [S p.150] | 02 §1.9 | none | GAP | G39 |

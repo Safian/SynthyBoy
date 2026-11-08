@@ -643,6 +643,11 @@ juce::PopupMenu ParamChoice::buildOptionMenu() const
     {
         for (int i = 0; i < count; ++i)
             menu.addItem (item (i));
+        if (extraAction)
+        {
+            menu.addSeparator();
+            menu.addItem (juce::PopupMenu::Item (extraLabel).setID (kExtraActionId));
+        }
         return menu;
     }
     // tap a group, tap a mode: a group with a single mode is that mode itself; a gap group is greyed
@@ -663,6 +668,11 @@ juce::PopupMenu ParamChoice::buildOptionMenu() const
             }
         menu.addSubMenu (group.name, sub, true, nullptr, hasCurrent);
     }
+    if (extraAction)
+    {
+        menu.addSeparator();
+        menu.addItem (juce::PopupMenu::Item (extraLabel).setID (kExtraActionId));
+    }
     return menu;
 }
 
@@ -674,9 +684,17 @@ void ParamChoice::showOptions()
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMinimumWidth (getWidth()),
                         [safe = juce::Component::SafePointer<ParamChoice> (this)] (int result)
                         {
-                            if (result > 0 && safe != nullptr)
+                            if (result == kExtraActionId && safe != nullptr)
+                                safe->runExtraAction();
+                            else if (result > 0 && safe != nullptr)
                                 safe->handle.setPlainComplete (static_cast<float> (result - 1));
                         });
+}
+
+void ParamChoice::setExtraAction (juce::String label, std::function<void()> action)
+{
+    extraLabel = std::move (label);
+    extraAction = std::move (action);
 }
 
 // ---- ParamToggle ------------------------------------------------------------------------------------------------------------------

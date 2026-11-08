@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
@@ -511,4 +512,112 @@ TEST (warpenv_env1_off_follows_the_longest_envelope_release)
     Synth enveloped = longEnvelope;
     enveloped.set ("osc1.env1", 1.0f);
     CHECK (rms (enveloped.playEvents ({ noteOn (0, 48), noteOff (12000, 48) }, 1.2), 0.6, 1.1) < 1.0e-3);
+}
+
+// ---- the sample oscillator: AM, the distortion group and the FM laws act on a sample, the rest is inert -------------------------------------------
+
+namespace
+{
+std::vector<uint8_t> wav16 (const std::vector<float>& samples, int sampleRate = 48000)
+{
+    std::vector<uint8_t> b;
+    const auto put32 = [&] (uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (v >> (8 * i))); };
+    const auto put16 = [&] (uint16_t v) { b.push_back (static_cast<uint8_t> (v)); b.push_back (static_cast<uint8_t> (v >> 8)); };
+    const auto tag = [&] (const char* t) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (t[i])); };
+    tag ("RIFF"); put32 (static_cast<uint32_t> (36 + samples.size() * 2)); tag ("WAVE");
+    tag ("fmt "); put32 (16); put16 (1); put16 (1); put32 (static_cast<uint32_t> (sampleRate)); put32 (static_cast<uint32_t> (sampleRate * 2)); put16 (2); put16 (16);
+    tag ("data"); put32 (static_cast<uint32_t> (samples.size() * 2));
+    for (float s : samples)
+        put16 (static_cast<uint16_t> (static_cast<int16_t> (std::lround (std::max (-1.0f, std::min (1.0f, s)) * 32767.0f))));
+    return b;
+}
+
+/** Oscillator 1 as a looped 220 Hz sine sample; osc 2 is the modulator. */
+struct SampleRig
+{
+    MemoryContentStore store;
+    StateContent state;
+
+    SampleRig()
+    {
+        std::vector<float> audio (48000);
+        for (size_t i = 0; i < audio.size(); ++i)
+            audio[i] = 0.8f * static_cast<float> (std::sin (2.0 * 3.14159265358979 * 220.0 * static_cast<double>(i) / 48000.0));
+        store.add ("test", "sample.wav", wav16 (audio));
+        ContentSample c;
+        c.osc = 1;
+        c.ref.pack = "test";
+        c.ref.file = "sample.wav";
+        c.ref.name = "sample";
+        c.sampleRate = 48000;
+        c.frames = static_cast<int> (audio.size());
+        c.channels = 1;
+        state.samples.push_back (c);
+    }
+
+    sbtest::Rendered play (int mode, float amount) const
+    {
+        auto e = createEngine (EngineKind::vital);
+        e->setParam (kParamMasterPolyphony, 32.0f);
+        e->prepare (kSr, 256, Quality {});
+        e->setContentStore (&store);
+        e->setContent (state);
+        for (const auto& s : settings (mode, amount))
+            setByKey (*e, s.first.c_str(), s.second);
+        return sbtest::render (*e, { noteOn (0, 57) }, static_cast<int> (0.5 * kSr), 256);
+    }
+
+    std::vector<std::pair<std::string, float>> settings (int mode, float amount) const
+    {
+        std::vector<std::pair<std::string, float>> out;
+        for (const auto& s : { std::make_pair ("osc1.type", 1.0f), std::make_pair ("osc1.sample.root", 57.0f), std::make_pair ("osc1.sample.loop_mode", 1.0f),
+                               std::make_pair ("osc1.level", 100.0f), std::make_pair ("osc1.unison.voices", 1.0f), std::make_pair ("osc1.random_phase", 0.0f),
+                               std::make_pair ("osc1.destination", 3.0f), std::make_pair ("osc2.on", 1.0f), std::make_pair ("osc2.transpose", 7.0f),
+                               std::make_pair ("osc2.destination", 6.0f), std::make_pair ("osc3.on", 0.0f), std::make_pair ("filter1.on", 0.0f),
+                               std::make_pair ("filter2.on", 0.0f), std::make_pair ("noise.on", 0.0f), std::make_pair ("master.volume", -6.0f),
+                               std::make_pair ("osc1.warp.type", static_cast<float> (mode)), std::make_pair ("osc1.warp.amount", amount) })
+            out.emplace_back (s.first, s.second);
+        return out;
+    }
+};
+} // namespace
+
+TEST (warpenv_sample_oscillator_takes_am_the_distortions_and_the_fm_laws)
+{
+    SampleRig rig;
+    const auto reference = rig.play (0, 50.0f);
+    CHECK (rms (reference) > 0.05);
+    for (int mode : { 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 45, 50 })
+    {
+        const auto r = rig.play (mode, 70.0f);
+        if (! CHECK (relativeDifference (reference, r) > 0.03))
+            std::printf("    mode %d (%s) does nothing on a sample\n", mode, kModeNames[mode]);
+        CHECK (sbtest::allFinite (r.left));
+    }
+    // the filters, Odd/Even and the phase domain modes have nothing to work on in a sample: the same sound
+    for (int mode : { 12, 18, 20, 24, 25, 26, 47, 49 })
+        CHECK (relativeDifference (reference, rig.play (mode, 70.0f)) < 1.0e-6);
+}
+
+TEST (warpenv_extreme_settings_stay_finite)
+{
+    // every mode in both slots at the ends of every knob, on the extreme notes, with a hot modulator and a full unison
+    for (int slot = 1; slot <= 2; ++slot)
+        for (int mode = 11; mode < kNumWarpTypes; ++mode)
+            for (float amount : { 0.0f, 100.0f })
+                for (int key : { 12, 120 })
+                {
+                    Synth e = base();
+                    e.set ("osc1.unison.voices", 16.0f);
+                    e.set ("osc1.unison.detune", 100.0f);
+                    e.set ("osc2.transpose", 48.0f);
+                    e.set ("osc3.transpose", -48.0f);
+                    e.set (slot == 1 ? "osc1.warp.type" : "osc1.warp2.type", static_cast<float> (mode));
+                    e.set (slot == 1 ? "osc1.warp.amount" : "osc1.warp2.amount", amount);
+                    e.set (slot == 1 ? "osc1.warp.phase" : "osc1.warp2.phase", amount * 3.6f);
+                    e.set (slot == 1 ? "osc1.warp.spread" : "osc1.warp2.spread", amount > 0.0f ? 100.0f : -100.0f);
+                    const auto r = e.play (0.25, key);
+                    if (! CHECK (sbtest::allFinite (r.left) && sbtest::allFinite (r.right)))
+                        std::printf ("    slot %d mode %d (%s) amount %.0f key %d\n", slot, mode, kModeNames[mode], amount, key);
+                }
 }
