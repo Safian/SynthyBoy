@@ -9,6 +9,7 @@ add_library(synthyboy_core STATIC
     src/param_table.cpp
     src/modulation.cpp
     src/state.cpp
+    src/content_state.cpp
     src/sha256.cpp
     src/preset.cpp
     src/content_pack.cpp

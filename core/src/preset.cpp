@@ -395,6 +395,11 @@ PresetMeta PresetMeta::initDefault() noexcept
 
 std::string savePreset (const PresetMeta& meta, const ParamValues& values)
 {
+    return savePreset (meta, values, StateContent {});
+}
+
+std::string savePreset (const PresetMeta& meta, const ParamValues& values, const StateContent& content)
+{
     std::string s;
     s.reserve (256 + 1024 + paramCount() * 28);
     s += "{\"format\":\"";
@@ -411,7 +416,7 @@ std::string savePreset (const PresetMeta& meta, const ParamValues& values)
     s += ",\"description\":"; escapeJsonString (meta.description, s);
 
     s += "},\"state\":";
-    s += saveState (values);
+    s += saveState (values, content);
     s += "}";
     return s;
 }
@@ -426,7 +431,9 @@ bool readPresetMeta (const void* data, size_t size, PresetMeta& metaOut) noexcep
     return parser.parseMetaOnly (metaOut);
 }
 
-LoadResult loadPreset (const void* data, size_t size, PresetMeta& metaOut, ParamValues& valuesOut) noexcept
+namespace
+{
+LoadResult loadPresetImpl (const void* data, size_t size, PresetMeta& metaOut, ParamValues& valuesOut, StateContent* contentOut) noexcept
 {
     LoadResult res;
     if (data == nullptr || size == 0)
@@ -447,16 +454,27 @@ LoadResult loadPreset (const void* data, size_t size, PresetMeta& metaOut, Param
         const char* stateStart = nullptr;
         size_t stateLen = 0;
         if (parser.locateStateObject (stateStart, stateLen) && stateStart != nullptr && stateLen > 0)
-            return loadState (stateStart, stateLen, valuesOut);
+            return contentOut != nullptr ? loadStateWithContent (stateStart, stateLen, valuesOut, *contentOut) : loadState (stateStart, stateLen, valuesOut);
         return res;
     }
 
     // Fallback: check if the document is a raw synthyboy-state document
-    res = loadState (data, size, valuesOut);
+    res = contentOut != nullptr ? loadStateWithContent (data, size, valuesOut, *contentOut) : loadState (data, size, valuesOut);
     if (res.status == LoadStatus::ok || res.status == LoadStatus::newer_version)
         metaOut = PresetMeta::initDefault();
 
     return res;
+}
+} // namespace
+
+LoadResult loadPreset (const void* data, size_t size, PresetMeta& metaOut, ParamValues& valuesOut) noexcept
+{
+    return loadPresetImpl (data, size, metaOut, valuesOut, nullptr);
+}
+
+LoadResult loadPreset (const void* data, size_t size, PresetMeta& metaOut, ParamValues& valuesOut, StateContent& contentInOut) noexcept
+{
+    return loadPresetImpl (data, size, metaOut, valuesOut, &contentInOut);
 }
 
 std::vector<PresetEntry> scanPresetDirectory (const std::string& directoryPath)

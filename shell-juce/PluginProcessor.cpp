@@ -341,7 +341,11 @@ bool SynthyBoyProcessor::loadLegacyXml (const void* data, int sizeInBytes, synth
 
 void SynthyBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    const auto text = synthyboy::saveState (currentValues());
+    std::string text;
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        text = synthyboy::saveState (currentValues(), content);
+    }
     destData.replaceAll (text.data(), text.size());
 }
 
@@ -351,7 +355,8 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
         return;
 
     auto values = currentValues();
-    const auto result = synthyboy::loadState (data, static_cast<size_t> (sizeInBytes), values);
+    synthyboy::StateContent loadedContent;
+    const auto result = synthyboy::loadStateWithContent (data, static_cast<size_t> (sizeInBytes), values, loadedContent);
 
     bool apply = result.status == synthyboy::LoadStatus::ok || result.status == synthyboy::LoadStatus::newer_version;
     if (result.status == synthyboy::LoadStatus::invalid)
@@ -361,6 +366,11 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
         return;
 
     applyValues (values);
+    {
+        // a loaded document is a whole patch; the legacy XML of the spike has no content (loadedContent is empty then)
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        content = std::move (loadedContent);
+    }
 
     // Values changed behind the host's back: the CLAP wrapper turns "program changed" into
     // params.rescan(VALUES), VST3 into a restartComponent (clap-validator state-reproducibility).

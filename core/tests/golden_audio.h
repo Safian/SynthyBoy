@@ -36,8 +36,32 @@ inline uint64_t audioFnv (const sbtest::Rendered& r)
     return h;
 }
 
+/** The first 880 plain values of the "busy" patch: deterministic pseudo-random values, a stepped parameter drawn from the values it had
+    in version 2 (its lists have grown since). Not constrained: the engine does that. */
+inline std::vector<float> busyPlainValues()
+{
+    using namespace synthyboy;
+    std::vector<float> out;
+    sbtest::Rng rng (0x5b57a7e5ull);
+    const auto* table = paramTable();
+    for (size_t i = 0; i < 880; ++i)
+    {
+        const double u = rng.uniform();
+        out.push_back (table[i].scale == Scale::stepped ? std::floor (static_cast<float> (u) * (maxInV2 (table[i]) + 1.0f))
+                                                        : fromNormalised (table[i], static_cast<float> (u)));
+    }
+    return out;
+}
+
+inline const std::vector<synthyboy::Event>& audioEvents()
+{
+    static const std::vector<synthyboy::Event> events = { sbtest::noteOn (0, 60, 0.8f), sbtest::noteOn (2000, 67, 0.6f), sbtest::noteOff (20000, 60),
+                                                          sbtest::noteOff (30000, 67) };
+    return events;
+}
+
 /** Renders two overlapping notes. busy = false: the default patch. busy = true: the first 880 parameters (the keys of version 2)
-    set to deterministic pseudo-random values first. Returns 0 if the engine does not exist in this build. */
+    set to busyPlainValues () first. Returns an empty result if the engine does not exist in this build. */
 inline sbtest::Rendered audioRender (synthyboy::EngineKind kind, bool busy)
 {
     using namespace synthyboy;
@@ -48,22 +72,12 @@ inline sbtest::Rendered audioRender (synthyboy::EngineKind kind, bool busy)
     engine->setParam (kParamMasterPolyphony, 32.0f);
     if (busy)
     {
-        sbtest::Rng rng (0x5b57a7e5ull);
-        const auto* table = paramTable();
-        for (size_t i = 0; i < 880; ++i)
-        {
-            // a stepped parameter is drawn from the values it had in version 2 (its lists have grown since)
-            const double u = rng.uniform();
-            const float plain = table[i].scale == Scale::stepped ? std::floor (static_cast<float> (u) * (maxInV2 (table[i]) + 1.0f))
-                                                                 : fromNormalised (table[i], static_cast<float> (u));
-            engine->setParam (table[i].id, plain);
-        }
+        const auto values = busyPlainValues();
+        for (size_t i = 0; i < values.size(); ++i)
+            engine->setParam (paramTable()[i].id, values[i]);
     }
     engine->prepare (48000.0, 512, Quality {});
-
-    const std::vector<Event> events = { sbtest::noteOn (0, 60, 0.8f), sbtest::noteOn (2000, 67, 0.6f), sbtest::noteOff (20000, 60),
-                                        sbtest::noteOff (30000, 67) };
-    return sbtest::render (*engine, events, 48000, 480);
+    return sbtest::render (*engine, audioEvents(), 48000, 480);
 }
 
 inline uint64_t audioHash (synthyboy::EngineKind kind, bool busy)
