@@ -51,6 +51,7 @@ endif()
 add_subdirectory(tuning)
 add_subdirectory(formula)
 add_subdirectory(filters-serum)
+add_subdirectory(wavetable-edit)
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)
