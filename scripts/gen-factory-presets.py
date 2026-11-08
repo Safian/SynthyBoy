@@ -380,11 +380,26 @@ def with_macros(category: str, ov: dict) -> dict:
     return out
 
 
+def load_levels() -> dict:
+    """master.volume per preset name (level normalisation, scripts/tune-preset-levels.py); a preset without an entry keeps its own."""
+    if not os.path.isfile(LEVELS_PATH):
+        return {}
+    with open(LEVELS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def build_all():
     """All presets as (name, category, meta, document text), in a fixed order."""
     out = []
+    levels = load_levels()
+    unknown = sorted(set(levels) - set(p[0] for p in presets))
+    if unknown:
+        raise KeyError(f"{LEVELS_PATH}: no preset named {unknown}")
     for name, category, tags, desc, ov in presets:
-        meta, doc = make_preset(name, category, tags, desc, with_macros(category, ov), strict=False)
+        ov = with_macros(category, ov)
+        if name in levels:
+            ov["master.volume"] = levels[name]
+        meta, doc = make_preset(name, category, tags, desc, ov, strict=False)
         out.append((name, category, meta, doc))
     return out
 
