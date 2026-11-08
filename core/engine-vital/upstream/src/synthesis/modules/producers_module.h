@@ -30,6 +30,12 @@ namespace sbvital {
         kMidi,
         kActiveVoices,
         kNoteCount,
+        kMute1,   // SynthyBoy: per voice 1 = the oscillator is silenced for this note (key / velocity mapping), 0 unplugged
+        kMute2,
+        kMute3,
+        kFold1,   // SynthyBoy: per voice semitones added to the note the oscillator plays (key fold)
+        kFold2,
+        kFold3,
         kNumInputs
       };
 
@@ -53,6 +59,7 @@ namespace sbvital {
       virtual ~ProducersModule() { }
 
       void process(int num_samples) override;
+      void applyMute(int osc, int num_samples);
       void init() override;
       virtual Processor* clone() const override { return new ProducersModule(*this); }
 
@@ -70,6 +77,7 @@ namespace sbvital {
       bool isFilter2On() { return filter2_on_ == nullptr || filter2_on_->value() != 0.0f; }
       OscillatorModule* oscillators_[kNumOscillators];
       Value* oscillator_destinations_[kNumOscillators];
+      Value* map_warp_[kNumOscillators] = { nullptr, nullptr, nullptr };
       Value* sample_destination_;
       SampleModule* sampler_;
 

@@ -38,6 +38,19 @@ our own adapter table (`core/engine-vital/adapter/vital_bindings.cpp`); no Vital
 bundled. The wavetable renderer (`core/wavetable-render/`) is a clean-room implementation from the design document; it
 does not contain Vital source code. The table ships in the binary under the AGPL-3.0-or-later of this project.
 
+## MTS-ESP (not linked, not distributed)
+
+`master.tuning.mts_esp` (docs/ui-design/13-new-keys.md 4.7, owner decision Q23) is served through a seam only:
+`synthyboy::IEngine::setTuningSource (const tuning::ITuningSource*)` (core/include/synthyboy/engine.h, core/include/synthyboy/tuning.h).
+**No MTS-ESP code or header is part of this repository and the core never links the library.** The ODDSound MTS-ESP client
+library (`libMTSClient`, https://github.com/ODDSound/MTS-ESP) is, as far as we know, published under a permissive licence (believed to be MIT; **not verified in this task**, see the check below; the MTS-ESP
+master library is separate software, and the "MTS-ESP" name is a trademark of ODDSound Ltd). A shell that wants a master
+connection links `libMTSClient` itself (an MIT licensed file, compatible with the AGPL-3.0-or-later of this project; its notice goes
+into this file at that time, if the licence text confirms it), wraps `MTS_HasMaster ()` / `MTS_NoteToFrequency ()` in an `ITuningSource` and hands the pointer to the
+engine. Until a shell does that the key falls back to the scale (the engine behaves as "no master"). **Licence check to do before the
+first shell links the library:** read the licence text of the pinned `libMTSClient` revision and record revision and licence here; this
+work package did not fetch it, so nothing above is a verified copy of the licence.
+
 ## Tools used for verification only (not linked, not distributed)
 
 | Tool | Version | Licence | Used for |

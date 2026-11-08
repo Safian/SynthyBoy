@@ -18,8 +18,10 @@
 #include <cstring>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <set>
 #include <string>
+#include <vector>
 
 #if defined (__SSE2__) || defined (_M_X64) || (defined (_M_IX86_FP) && _M_IX86_FP >= 2)
  #include <xmmintrin.h>
@@ -27,6 +29,7 @@
 
 #include "modulation_connection_processor.h"
 #include "sound_engine.h"
+#include "synth_lfo.h"
 #include "synth_oscillator.h"
 #include "synth_constants.h"
 #include "synth_parameters.h"
@@ -35,7 +38,10 @@
 #include "value_switch.h"
 #include "vital_bindings.h"
 #include "vital_tables.h"
+#include "synthyboy/content_state.h"
 #include "synthyboy/modulation.h"
+#include "synthyboy/shapes/shapes.h"
+#include "synthyboy/tuning.h"
 
 namespace synthyboy
 {
@@ -104,7 +110,10 @@ float clampf (float v, float lo, float hi) noexcept
 
 constexpr int kWorkQueueCapacity = 4096;            // entries of the dependency search queues of a router (a pointer each)
 constexpr int kNumOsc = 3;
-constexpr int kNumLfo = 8;
+constexpr int kNumLfo = 10;
+constexpr int kNumEnv = 6;
+constexpr int kNumMacro = 8;
+constexpr int kBakedPoints = 2048; // LineGenerator::kDefaultResolution
 
 /** Names of the engine's modulation sources, in the order of core/src/modulation.cpp (modSourceTable). */
 std::string vitalSourceName (int index)
@@ -113,8 +122,206 @@ std::string vitalSourceName (int index)
     if (index < 14) return "lfo_" + std::to_string (index - 5);
     if (index < 18) return "random_" + std::to_string (index - 13);
     if (index < 22) return "macro_control_" + std::to_string (index - 17);
-    static const char* const performance[] = { "velocity", "note", "aftertouch", "pitch_wheel", "mod_wheel", "random" };
-    return performance[index - 22];
+    if (index < 28)
+    {
+        static const char* const performance[] = { "velocity", "note", "aftertouch", "pitch_wheel", "mod_wheel", "random" };
+        return performance[index - 22];
+    }
+    // state version 3 (modulation.cpp): macro 5 .. 8, LFO 9 and 10, lift, slide, oct note, poly aftertouch
+    if (index < 32) return "macro_control_" + std::to_string (index - 28 + 5);
+    if (index < 34) return "lfo_" + std::to_string (index - 32 + 9);
+    static const char* const extra[] = { "lift", "slide", "note_in_octave", "poly_aftertouch" };
+    return extra[index - 34];
+}
+
+/** MIDI note (fractional) of a frequency, 69 = 440 Hz. */
+float noteFromHz (double hz) noexcept
+{
+    return static_cast<float> (69.0 + 12.0 * std::log2 (hz / 440.0));
+}
+
+/** The notes of the scales of master.scale.type (semitones above the key); index 0 (chromatic) is not in the table. */
+struct ScaleDef
+{
+    int count;
+    int steps[8];
+};
+constexpr ScaleDef kScales[] = {
+    { 12, { 0 } },                          // chromatic (filled in by inScale ())
+    { 7, { 0, 2, 4, 5, 7, 9, 11 } },        // Major
+    { 7, { 0, 2, 3, 5, 7, 8, 10 } },        // Natural Minor
+    { 7, { 0, 2, 3, 5, 7, 8, 11 } },        // Harmonic Minor
+    { 7, { 0, 2, 3, 5, 7, 9, 11 } },        // Melodic Minor
+    { 7, { 0, 2, 3, 5, 7, 9, 10 } },        // Dorian
+    { 7, { 0, 1, 3, 5, 7, 8, 10 } },        // Phrygian
+    { 7, { 0, 2, 4, 6, 7, 9, 11 } },        // Lydian
+    { 7, { 0, 2, 4, 5, 7, 9, 10 } },        // Mixolydian
+    { 7, { 0, 1, 3, 5, 6, 8, 10 } },        // Locrian
+    { 5, { 0, 2, 4, 7, 9 } },               // Major Pentatonic
+    { 5, { 0, 3, 5, 7, 10 } },              // Minor Pentatonic
+    { 6, { 0, 3, 5, 6, 7, 10 } },           // Blues
+    { 6, { 0, 2, 4, 6, 8, 10 } },           // Whole Tone
+    { 8, { 0, 1, 3, 4, 6, 7, 9, 10 } },     // Diminished (H-W)
+    { 8, { 0, 2, 3, 5, 6, 8, 9, 11 } },     // Diminished (W-H)
+    { 7, { 0, 1, 4, 5, 7, 8, 10 } },        // Phrygian Dominant
+    { 7, { 0, 2, 3, 6, 7, 8, 11 } },        // Hungarian Minor
+    { 7, { 0, 1, 4, 5, 7, 8, 11 } },        // Double Harmonic
+    { 5, { 0, 2, 3, 7, 8 } },               // Hirajoshi
+};
+constexpr int kNumScaleTypes = static_cast<int> (sizeof (kScales) / sizeof (kScales[0]));
+
+bool inScale (int type, int pitchClass) noexcept
+{
+    if (type <= 0 || type >= kNumScaleTypes)
+        return true;
+    for (int i = 0; i < kScales[type].count; ++i)
+        if (kScales[type].steps[i] == pitchClass)
+            return true;
+    return false;
+}
+
+/** The scale-conformed note: a note outside the scale moves to the nearest note inside it, a tie goes down (ASSUMPTION A7). */
+int conformedNote (int note, int key, int type) noexcept
+{
+    if (type <= 0 || type >= kNumScaleTypes)
+        return note;
+    for (int d = 0; d < 12; ++d)
+    {
+        const int down = note - d, up = note + d;
+        if (down >= 0 && inScale (type, (((down - key) % 12) + 12) % 12))
+            return down;
+        if (up <= 127 && inScale (type, (((up - key) % 12) + 12) % 12))
+            return up;
+    }
+    return note;
+}
+
+// ---- content (setContent): everything the audio thread needs from the `content` section, built on the message thread ---------------
+struct PointMod
+{
+    int point = 0;
+    bool isX = false;
+    int source = 0; // sourceKind ()
+    float amount = 0.0f;
+};
+
+struct LfoCustom
+{
+    bool present = false;
+    shapes::ShapeData shape;
+    std::vector<PointMod> mods;
+};
+
+struct Snapshot
+{
+    std::array<LfoCustom, kNumLfo> lfo;
+    bool hasVelocity = false, hasNote = false;
+    std::array<float, kBakedPoints> velocityTable {}, noteTable {};
+    std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
+    std::atomic<bool> retired { false };                 // the audio thread has replaced it
+};
+
+/** The sources a point modulation can read in the engine (the global ones; the per-voice sources have no meaning for a table shared by all
+    voices): 1..8 macros, 9 mod wheel, 10 pitch wheel (-1..1), 11 channel pressure; 0: not supported (the modulation is ignored). */
+int sourceKind (const std::string& key) noexcept
+{
+    if (key.size() == 6 && key.compare (0, 5, "macro") == 0 && key[5] >= '1' && key[5] <= '8')
+        return key[5] - '0';
+    if (key == "mod_wheel") return 9;
+    if (key == "pitch_wheel") return 10;
+    if (key == "aftertouch") return 11;
+    return 0;
+}
+
+bool buildShape (const std::vector<ContentPoint>& points, bool smooth, shapes::ShapeData& out) noexcept
+{
+    if (points.size() < 2)
+        return false;
+    out = shapes::ShapeData {};
+    out.numPoints = std::min<size_t> (points.size(), shapes::ShapeData::kMaxPoints);
+    for (size_t i = 0; i < out.numPoints; ++i)
+    {
+        out.points[i].x = points[i].x;
+        out.points[i].y = points[i].y;
+        out.points[i].curve = points[i].power;
+        out.points[i].smooth = smooth;
+    }
+    out.sanitize();
+    return true;
+}
+
+void identityNotes (std::array<float, 128>& out) noexcept
+{
+    for (size_t k = 0; k < out.size(); ++k)
+        out[k] = static_cast<float> (k);
+}
+
+void notesOf (const tuning::Tuning& t, std::array<float, 128>& out) noexcept
+{
+    for (size_t k = 0; k < out.size(); ++k)
+    {
+        const double f = t.table()[k];
+        out[k] = f > 0.0 ? noteFromHz (f) : std::numeric_limits<float>::quiet_NaN();
+    }
+}
+
+std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content)
+{
+    auto s = std::make_unique<Snapshot>();
+
+    for (const ContentLfoShape& c : content.lfoShapes)
+    {
+        if (c.lfo < 1 || c.lfo > kNumLfo)
+            continue;
+        LfoCustom& l = s->lfo[static_cast<size_t> (c.lfo - 1)];
+        if (! buildShape (c.points, c.smooth, l.shape))
+            continue;
+        l.present = true;
+        for (size_t i = 0; i < c.points.size() && i < l.shape.numPoints; ++i)
+        {
+            if (c.points[i].modX.present && i > 0 && i + 1 < l.shape.numPoints) // the end points stay at 0 and 1
+                l.mods.push_back ({ static_cast<int> (i), true, sourceKind (c.points[i].modX.source), c.points[i].modX.amount });
+            if (c.points[i].modY.present)
+                l.mods.push_back ({ static_cast<int> (i), false, sourceKind (c.points[i].modY.source), c.points[i].modY.amount });
+        }
+    }
+
+    shapes::ShapeData curve;
+    if (buildShape (content.velocityCurve, false, curve))
+    {
+        curve.bake (s->velocityTable.data(), kBakedPoints);
+        s->hasVelocity = true;
+    }
+    if (buildShape (content.noteCurve, false, curve))
+    {
+        curve.bake (s->noteTable.data(), kBakedPoints);
+        s->hasNote = true;
+    }
+
+    // the four tuning scales (master.tuning.scale): 12-TET, Pythagorean, just intonation (5-limit), the user file
+    identityNotes (s->scaleNotes[0]);
+    const char* const pythagorean = "! pythagorean.scl\nPythagorean 12-tone\n 12\n 256/243\n 9/8\n 32/27\n 81/64\n 4/3\n 729/512\n 3/2\n 128/81\n 27/16\n 16/9\n 243/128\n 2/1\n";
+    const char* const just = "! just.scl\n5-limit just intonation\n 12\n 16/15\n 9/8\n 6/5\n 5/4\n 4/3\n 45/32\n 3/2\n 8/5\n 5/3\n 9/5\n 15/8\n 2/1\n";
+    for (int which = 1; which <= 2; ++which)
+    {
+        tuning::Tuning t;
+        const std::string text = which == 1 ? pythagorean : just;
+        if (t.loadScl (text).ok())
+            notesOf (t, s->scaleNotes[static_cast<size_t> (which)]);
+        else
+            identityNotes (s->scaleNotes[static_cast<size_t> (which)]);
+    }
+    identityNotes (s->scaleNotes[3]);
+    if (content.tuning.present)
+    {
+        tuning::Tuning t;
+        bool ok = t.loadScl (content.tuning.scl).ok();
+        if (ok && content.tuning.hasKbm)
+            ok = t.loadKbm (content.tuning.kbm).ok();
+        if (ok)
+            notesOf (t, s->scaleNotes[3]);
+    }
+    return s;
 }
 
 class VitalEngine final : public IEngine
@@ -127,6 +334,12 @@ public:
             params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
         findParamIndex (0); // builds the id lookup now, not on the first setParam
         setQualityValues (Quality {});
+        identityNotes (noteTable);
+        for (auto& channelKeys : activeKey)
+            channelKeys.fill (-1);
+        for (int i = 0; i < kNumConform; ++i)
+            conform[static_cast<size_t> (i)] = static_cast<int8_t> (i);
+        setContent (StateContent {}); // the built-in tuning scales
     }
 
     void prepare (double newSampleRate, int /*maxBlockFrames*/, const Quality& q) override
@@ -152,9 +365,18 @@ public:
         for (int channel = 0; channel < numChannels; ++channel)
         {
             engine->setPitchWheel (0.0f, channel); // bends survive allSoundsOff() inside the voice handler
+            engine->setChannelPitchBend (channel, 0.0f);
             engine->setZonedPitchWheel (0.0f, channel, channel);
             engine->setModWheel (0.0f, channel);
+            rawBend[static_cast<size_t> (channel)] = 0.0f;
         }
+        for (auto& channelKeys : activeKey)
+            channelKeys.fill (-1);
+        noteIds.fill (NoteIdSlot {});
+        clockSeconds = 0.0;
+        lastModWheel = lastAftertouch = 0.0f;
+        lastBend = 0.0f;
+        takeSnapshot();
         applyParams (true);
         // let every smoother in the engine settle on the (possibly changed) targets while nothing sounds
         for (int i = 0; i < kSettleChunks; ++i)
@@ -197,6 +419,12 @@ public:
         }
 
         ScopedFlushDenormals denormals;
+        takeSnapshot();
+        if (transport.bpm != engineBpm)
+        {
+            engine->setBpm (static_cast<float> (transport.bpm));
+            engineBpm = transport.bpm;
+        }
         applyParams (false);
 
         // Vital's note triggers are only sample accurate at the start of a processed chunk (the "sample" offset of
@@ -213,7 +441,10 @@ public:
             if (next < numEvents)
                 end = std::min (end, std::clamp (events[next].frame, pos, numFrames));
 
+            updateClocks (pos);
+            slewTune (end - pos);
             engine->process (end - pos);
+            clockSeconds += static_cast<double> (end - pos) / sampleRate;
             writeOutput (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
             pos = end;
         }
@@ -223,6 +454,45 @@ public:
             handleEvent (events[next++]);
 
         activeCount.store (engine->getNumActiveVoices(), std::memory_order_relaxed);
+    }
+
+    EngineCapsMask capabilities() const noexcept override
+    {
+        // a bit is set only for an area that has a test rendering the key on and off (core/engine-vital/tests/test_wp123.cpp,
+        // core/tests/test_events.cpp); docs/ui-design/WP123-REPORT.md lists what each bit covers and what it does not
+        return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapLfoOptions | kCapEnvBeats | kCapCurves
+             | kCapCustomLfoShape | kCapKeyScale | kCapTuning | kCapMpe | kCapOscMapping;
+    }
+
+    void setTransport (const TransportInfo& t) noexcept override
+    {
+        transport.bpm = std::isfinite (t.bpm) && t.bpm >= 1.0 && t.bpm <= 999.0 ? t.bpm : 120.0;
+        transport.songPosBeats = std::isfinite (t.songPosBeats) ? t.songPosBeats : 0.0;
+        transport.playing = t.playing;
+    }
+
+    void setTuningSource (const tuning::ITuningSource* source) noexcept override
+    {
+        tuningSource.store (source, std::memory_order_release);
+    }
+
+    void setContent (const StateContent& content) override
+    {
+        auto snapshot = buildSnapshot (content);
+        const std::lock_guard<std::mutex> lock (snapshotMutex);
+        // snapshots the audio thread has replaced are done with: free them. The one it is using stays until it is replaced.
+        for (auto it = snapshots.begin(); it != snapshots.end();)
+            it = (*it)->retired.load (std::memory_order_acquire) ? snapshots.erase (it) : it + 1;
+        Snapshot* raw = snapshot.get();
+        snapshots.push_back (std::move (snapshot));
+        Snapshot* previous = pendingSnapshot.exchange (raw, std::memory_order_acq_rel);
+        if (previous != nullptr) // never picked up by the audio thread: nobody holds it
+            for (auto it = snapshots.begin(); it != snapshots.end(); ++it)
+                if (it->get() == previous)
+                {
+                    snapshots.erase (it);
+                    break;
+                }
     }
 
     int activeVoices() const noexcept override
@@ -261,6 +531,8 @@ private:
         const Binding* binding = nullptr;
         sbvital::Value* control = nullptr;
         double lo = 0.0, hi = 0.0;
+        bool wasActive = true;  // gated bindings (envelope time units): active in the last block
+        bool isTune = false;    // master.tune: the concert pitch offset is added to this control
     };
 
     struct Destination
@@ -271,6 +543,7 @@ private:
         sbvital::ValueSwitch* monoSwitch = nullptr;
         sbvital::ValueSwitch* polySwitch = nullptr;
         float scale = 1.0f;
+        int gateParam = -1, gateValue = 0; // an envelope time: live only while envN.units has this value
     };
 
     struct Slot
@@ -281,6 +554,11 @@ private:
         uint32_t triedGeneration = 0;   // matrixGeneration at the last attempt to wire the slot
         sbvital::ModulationConnectionProcessor* processor = nullptr;
         int sourceParam = -1, destinationParam = -1;
+        bool eligible = true;          // the destination is live (an envelope time of the selected unit)
+        int auxSourceParam = -1, auxInvParam = -1, auxPowerParam = -1, auxOutputParam = -1;
+        int auxPlugged = 0;            // aux source choice that is plugged into the processor
+        int curveKind = 0;             // 0: linear remap, 1: velocity curve, 2: note curve
+        uint32_t curveId = 0;          // snapshot the curve comes from
     };
 
     // ---- quality hand-off (any thread -> audio thread) -------------------------------------------------------------
@@ -321,7 +599,20 @@ private:
             v = std::numeric_limits<float>::quiet_NaN();
         appliedWavetable.fill (-1);
         appliedShape.fill (-1);
+        appliedCustomId.fill (0);
+        appliedMap.fill ({ -1, -1, -1, -1, -1, -1 });
         appliedRouting = appliedFxOrder = -1.0f;
+        engineBpm = -1.0;
+        appliedBpm = -1.0;
+        clockSeconds = 0.0;
+        snapshotId = 0;
+        curveId = 0;
+        tuningStateId = ~0u;
+        wasMts = false;
+        mpeApplied = -1;
+        conformKey = conformType = -1;
+        for (auto& v : appliedModValues)
+            v.fill (0.0f);
         appliedQualityGeneration = ~0u;
         engine.reset();
         tuning.reset();
@@ -352,6 +643,14 @@ private:
         applyFixedControls();
         for (int i = 0; i < kNumOsc; ++i)
             vSmooth[static_cast<size_t> (i)] = control ("osc_" + std::to_string (i + 1) + "_smooth_interpolation");
+        for (int i = 0; i < kNumLfo; ++i)
+        {
+            vLfoSyncType[static_cast<size_t> (i)] = control ("lfo_" + std::to_string (i + 1) + "_sync_type");
+            vLfoHostLock[static_cast<size_t> (i)] = control ("lfo_" + std::to_string (i + 1) + "_host_lock");
+        }
+        for (int i = 0; i < kNumOsc; ++i)
+            vOscMapWarp[static_cast<size_t> (i)] = control ("osc_" + std::to_string (i + 1) + "_map_warp");
+        engine->setNoteTable (noteTable.data());
         vFilter1Input = control ("filter_1_filter_input");
         vFilter2Input = control ("filter_2_filter_input");
         vFxOrder = control ("effect_chain_order");
@@ -360,6 +659,7 @@ private:
         for (int i = 0; i < kNumLfo; ++i)
             lfoLines[static_cast<size_t> (i)] = engine->getLfoSource (i);
 
+        takeSnapshot();
         applyParams (true);
 
         // Warm-up: the first notes an engine plays differ slightly from all later ones (measured: the very first note
@@ -419,6 +719,7 @@ private:
             }
             r.lo = range.min;
             r.hi = range.max;
+            r.isTune = binding.control == "voice_transpose"; // the concert pitch (master.tuning.a4) is added to the transposition
             resolved.push_back (r);
         }
 
@@ -445,13 +746,44 @@ private:
             else if (key == "master.bend_range")
                 bendRangeParam = static_cast<int> (i);
         }
+
+        // state version 3 parameters the adapter reads itself
+        const auto find = [] (const std::string& key) { const ParamInfo* info = findParamByKey (key.c_str()); return info != nullptr ? findParamIndex (info->id) : -1; };
+        for (int n = 1; n <= kNumLfo; ++n)
+        {
+            const std::string k = "lfo" + std::to_string (n) + ".";
+            lfoMonoParam[static_cast<size_t> (n - 1)] = find (k + "mono");
+            lfoHostParam[static_cast<size_t> (n - 1)] = find (k + "host");
+            lfoSyncParam[static_cast<size_t> (n - 1)] = find (k + "sync_type");
+        }
+        for (int n = 1; n <= kNumMacro; ++n)
+            macroParam[static_cast<size_t> (n - 1)] = find ("macro." + std::to_string (n));
+        for (int n = 1; n <= kNumOsc; ++n)
+        {
+            const std::string k = "osc" + std::to_string (n) + ".map.";
+            const char* const names[6] = { "key_low", "key_high", "vel_low", "vel_high", "key_fold", "key_warp" };
+            for (int m = 0; m < 6; ++m)
+                mapParam[static_cast<size_t> (n - 1)][static_cast<size_t> (m)] = find (k + names[m]);
+        }
+        curveVelocityLegatoParam = find ("curve.velocity.legato");
+        curveNoteLegatoParam = find ("curve.note.legato");
+        portamentoParam = find ("master.portamento.time");
+        scaleKeyParam = find ("master.scale.key");
+        scaleTypeParam = find ("master.scale.type");
+        scaleModeParam = find ("master.scale.mode");
+        a4Param = find ("master.tuning.a4");
+        tuningScaleParam = find ("master.tuning.scale");
+        mtsParam = find ("master.tuning.mts_esp");
+        mtsNoteOnParam = find ("master.tuning.mts_note_on_only");
+        mpeOnParam = find ("master.mpe.on");
+        mpeRangeParam = find ("master.mpe.bend_range");
     }
 
     /** The tables of the modulation matrix: sources, destinations, the 64 connection processors. Everything the audio thread needs
         to wire a slot is looked up here (the lookups take std::string and walk maps: allocation, not for process()). */
     void resolveModulation()
     {
-        for (size_t k = 0; k < static_cast<size_t> (kNumModSourcesV2); ++k) // the sources 29 .. 38 have no output here: slots using them stay unwired
+        for (size_t k = 0; k < static_cast<size_t> (kNumModSources); ++k)
             sourceOutput[k] = engine->getModulationSource (vitalSourceName (static_cast<int> (k)));
 
         destinations.assign (modDestinationCount() + 1, Destination {});
@@ -465,6 +797,13 @@ private:
             d.monoSwitch = name.empty() ? nullptr : engine->getMonoModulationSwitch (name);
             d.polySwitch = name.empty() ? nullptr : engine->getPolyModulationSwitch (name);
             d.valid = d.mono != nullptr && d.monoSwitch != nullptr && sbvital::Parameters::isParameter (name);
+            for (const Binding& b : vitalBindings())
+                if (b.param == paramIndex && b.gateParam >= 0)
+                {
+                    d.gateParam = b.gateParam;
+                    d.gateValue = b.gateValue;
+                    break;
+                }
             if (d.valid)
             {
                 // room for every slot to be wired to this destination at the same time: wiring a slot then reuses a spare input
@@ -499,6 +838,10 @@ private:
             s.processor = bank.atIndex (k)->modulation_processor.get();
             s.sourceParam = p.source;
             s.destinationParam = p.destination;
+            s.auxSourceParam = p.auxSource;
+            s.auxInvParam = p.auxInv;
+            s.auxPowerParam = p.auxPower;
+            s.auxOutputParam = p.auxOutput;
         }
     }
 
@@ -519,16 +862,28 @@ private:
             appliedQualityGeneration = generation;
         }
 
-        for (const Resolved& r : resolved)
+        applyScaleAndTuning (force); // first: the concert pitch it computes is added to the transposition below
+
+        const bool bpmChanged = appliedBpm != transport.bpm;
+        for (Resolved& r : resolved)
         {
             const Binding& b = *r.binding;
+            bool active = true;
+            if (b.gateParam >= 0) // an envelope time of the unit that envN.units has not selected writes nothing
+                active = (params[static_cast<size_t> (b.gateParam)].load (std::memory_order_relaxed) > 0.5f) == (b.gateValue > 0);
+            const bool activated = active && ! r.wasActive;
+            r.wasActive = active;
+            if (! active)
+                continue;
+
             const float plain = params[b.param].load (std::memory_order_relaxed);
             const bool capped = b.cap != Cap::none;
-            if (! force && plain == applied[b.param] && ! (capped && qualityChanged))
+            const bool tempoDependent = b.conv == Conv::quarticBeats && bpmChanged;
+            if (! force && plain == applied[b.param] && ! (capped && qualityChanged) && ! activated && ! tempoDependent)
                 continue;
             applied[b.param] = plain;
 
-            double value = convertParam (b, static_cast<double> (plain), sampleRate);
+            double value = convertParam (b, static_cast<double> (plain), sampleRate, transport.bpm);
             switch (b.cap)
             {
                 case Cap::none:   break;
@@ -536,8 +891,16 @@ private:
                 case Cap::unison: value = std::min (value, static_cast<double> (quality.maxUnison)); break;
                 case Cap::fx:     value = (value > 0.5 && (quality.fxMask & (1u << b.capArg)) != 0) ? 1.0 : 0.0; break;
             }
-            r.control->set (static_cast<float> (std::clamp (value, r.lo, r.hi)));
+            const double clamped = std::clamp (value, r.lo, r.hi);
+            if (r.isTune)
+            {
+                tuneBase = clamped;
+                r.control->set (static_cast<float> (clamped + a4Current));
+            }
+            else
+                r.control->set (static_cast<float> (clamped));
         }
+        appliedBpm = transport.bpm;
 
         applySpecials();
         for (int k = 0; k < kNumSlots; ++k)
@@ -568,14 +931,40 @@ private:
             if (p < 0 || lfoLines[static_cast<size_t> (i)] == nullptr)
                 continue;
             int shape = static_cast<int> (params[static_cast<size_t> (p)].load (std::memory_order_relaxed) + 0.5f);
-            if (shape >= kNumLfoShapes)
-                shape = 0; // "Custom": no custom point lists yet, the documented fallback is the sine
-            if (shape != appliedShape[static_cast<size_t> (i)])
+            const LfoCustom* custom = nullptr;
+            if (shape == kLfoShapeCustom && activeSnapshot != nullptr && activeSnapshot->lfo[static_cast<size_t> (i)].present)
+                custom = &activeSnapshot->lfo[static_cast<size_t> (i)];
+            if (shape >= kNumLfoShapes && custom == nullptr)
+                shape = 0; // "Custom" without a point list in the content: the documented fallback is the sine
+            if (custom != nullptr)
+            {
+                // the point list of content.lfo_shapes, baked into the LFO's table; re-baked when a point modulation source moved
+                bool rebake = appliedShape[static_cast<size_t> (i)] != kLfoShapeCustom || appliedCustomId[static_cast<size_t> (i)] != snapshotId;
+                for (size_t m = 0; m < custom->mods.size() && m < kMaxPointMods; ++m)
+                {
+                    const float v = modValue (custom->mods[m].source);
+                    if (std::fabs (v - appliedModValues[static_cast<size_t> (i)][m]) > 1.0e-4f)
+                        rebake = true;
+                }
+                if (rebake)
+                {
+                    for (size_t m = 0; m < custom->mods.size() && m < kMaxPointMods; ++m)
+                        appliedModValues[static_cast<size_t> (i)][m] = modValue (custom->mods[m].source);
+                    bakeCustomShape (i, *custom);
+                }
+                appliedShape[static_cast<size_t> (i)] = kLfoShapeCustom;
+                appliedCustomId[static_cast<size_t> (i)] = snapshotId;
+            }
+            else if (shape != appliedShape[static_cast<size_t> (i)])
             {
                 appliedShape[static_cast<size_t> (i)] = shape;
                 vitaltables::applyLfoShape (*lfoLines[static_cast<size_t> (i)], shape);
             }
         }
+
+        applyLfoOptions();
+        applyOscMapping();
+        applyMpe();
 
         if (routingParam >= 0)
         {
@@ -611,7 +1000,305 @@ private:
         }
     }
 
+    // ---- content, clocks, tuning ----------------------------------------------------------------------------------------
+    /** The audio thread takes over the snapshot setContent () built (lock free). */
+    void takeSnapshot() noexcept
+    {
+        Snapshot* next = pendingSnapshot.exchange (nullptr, std::memory_order_acq_rel);
+        if (next == nullptr)
+            return;
+        if (activeSnapshot != nullptr)
+            activeSnapshot->retired.store (true, std::memory_order_release);
+        activeSnapshot = next;
+        ++snapshotId;
+        tuningStateId = ~0u; // the scale tables changed
+        ++matrixGeneration;  // the curves: every velocity / note slot takes its table again
+    }
+
+    float modValue (int kind) const noexcept
+    {
+        if (kind >= 1 && kind <= kNumMacro)
+        {
+            // the macro as the matrix sees it (the knob plus its modulation, as of the last block), else the knob
+            const sbvital::Output* out = sourceOutput[static_cast<size_t> (kSourceMacro1 + kind - 1)];
+            if (out != nullptr)
+                return out->buffer[0][0];
+            const int p = macroParam[static_cast<size_t> (kind - 1)];
+            return p >= 0 ? params[static_cast<size_t> (p)].load (std::memory_order_relaxed) * 0.01f : 0.0f;
+        }
+        switch (kind)
+        {
+            case 9:  return lastModWheel;
+            case 10: return lastBend;
+            case 11: return lastAftertouch;
+            default: return 0.0f;
+        }
+    }
+
+    /** The custom shape with its point modulation applied (the moved positions keep their order, no sort needed), baked into the LFO's table. */
+    void bakeCustomShape (int i, const LfoCustom& custom) noexcept
+    {
+        shapes::ShapeData shape = custom.shape;
+        for (const PointMod& m : custom.mods)
+        {
+            const float v = modValue (m.source) * m.amount;
+            shapes::Point& point = shape.points[static_cast<size_t> (m.point)];
+            if (m.isX)
+            {
+                const float low = shape.points[static_cast<size_t> (m.point - 1)].x;
+                const float high = custom.shape.points[static_cast<size_t> (m.point + 1)].x;
+                point.x = std::clamp (point.x + v, low, high);
+            }
+            else
+                point.y = std::clamp (point.y + v, 0.0f, 1.0f);
+        }
+        LineGenerator& line = *lfoLines[static_cast<size_t> (i)];
+        shape.bake (line.getBuffer(), kBakedPoints);
+        float* full = line.getCubicInterpolationBuffer(); // [0] and the two values behind the table, as LineGenerator::render () leaves them
+        full[0] = full[1];
+        full[kBakedPoints + 1] = full[kBakedPoints];
+        full[kBakedPoints + 2] = full[kBakedPoints];
+    }
+
+    /** mono / host switches of the LFOs: both are the engine's "Sync" mode (the phase comes from a clock shared by all voices); host locks
+        that clock to the transport. Other sync types (envelope and loop modes) are not changed by mono. */
+    void applyLfoOptions() noexcept
+    {
+        for (size_t i = 0; i < static_cast<size_t> (kNumLfo); ++i)
+        {
+            if (vLfoSyncType[i] == nullptr || vLfoHostLock[i] == nullptr || lfoSyncParam[i] < 0)
+                continue;
+            const int sync = static_cast<int> (params[static_cast<size_t> (lfoSyncParam[i])].load (std::memory_order_relaxed) + 0.5f);
+            const bool mono = lfoMonoParam[i] >= 0 && params[static_cast<size_t> (lfoMonoParam[i])].load (std::memory_order_relaxed) > 0.5f;
+            const bool host = lfoHostParam[i] >= 0 && params[static_cast<size_t> (lfoHostParam[i])].load (std::memory_order_relaxed) > 0.5f;
+            const int effective = (sync == sbvital::SynthLfo::kTrigger && (mono || host)) ? static_cast<int> (sbvital::SynthLfo::kSync) : sync;
+            vLfoSyncType[i]->set (static_cast<float> (effective));
+            const bool lock = host && effective == static_cast<int> (sbvital::SynthLfo::kSync);
+            vLfoHostLock[i]->set (lock ? 1.0f : 0.0f);
+            // 0: the clock stays at 0 as in version 2 (a "Sync" LFO restarts at phase 0), 1: the engine's running time, 2: the host's song position
+            lfoClock[i] = lock ? 2 : (mono ? 1 : 0);
+        }
+    }
+
+    /** The clock of every LFO before a chunk: the engine's own running time, or the host's song position for a host-locked LFO. */
+    void updateClocks (int pos) noexcept
+    {
+        const double hostSeconds = transport.playing ? transport.songPosBeats * 60.0 / transport.bpm + static_cast<double> (pos) / sampleRate : clockSeconds;
+        for (int i = 0; i < kNumLfo; ++i)
+        {
+            const int kind = lfoClock[static_cast<size_t> (i)];
+            engine->correctLfoToTime (i, kind == 2 ? hostSeconds : (kind == 1 ? clockSeconds : 0.0));
+        }
+    }
+
+    /** Moves the concert pitch offset of the sounding notes to its target within about 20 ms (master.tuning.a4). */
+    void slewTune (int frames) noexcept
+    {
+        if (a4Current == a4Target)
+            return;
+        a4Current += (a4Target - a4Current) * std::min (1.0, static_cast<double> (frames) / (0.02 * sampleRate));
+        if (std::fabs (a4Target - a4Current) < 1.0e-4)
+            a4Current = a4Target;
+        for (const Resolved& r : resolved)
+            if (r.isTune)
+                r.control->set (static_cast<float> (std::clamp (tuneBase + a4Current, r.lo, r.hi)));
+    }
+
+    /** master.scale.* (the note conforming table) and master.tuning.* (the tuned note of every key, concert pitch, MTS-ESP). */
+    void applyScaleAndTuning (bool force) noexcept
+    {
+        const auto value = [this] (int p, float fallback) { return p >= 0 ? params[static_cast<size_t> (p)].load (std::memory_order_relaxed) : fallback; };
+
+        const int key = static_cast<int> (value (scaleKeyParam, 0.0f) + 0.5f);
+        const int mode = static_cast<int> (value (scaleModeParam, 0.0f) + 0.5f);
+        const int type = mode == 0 ? static_cast<int> (value (scaleTypeParam, 0.0f) + 0.5f) : 0; // "Mark only" changes nothing audible
+        if (force || key != conformKey || type != conformType)
+        {
+            conformKey = key;
+            conformType = type;
+            for (int n = 0; n < kNumConform; ++n)
+                conform[static_cast<size_t> (n)] = static_cast<int8_t> (conformedNote (n, key, type));
+        }
+
+        const tuning::ITuningSource* source = tuningSource.load (std::memory_order_acquire);
+        const bool wantMts = value (mtsParam, 0.0f) > 0.5f;
+        mtsActive = wantMts && source != nullptr && source->isConnected();
+        mtsNoteOnOnly = value (mtsNoteOnParam, 0.0f) > 0.5f;
+
+        const double a4 = std::clamp (static_cast<double> (value (a4Param, 440.0f)), 400.0, 480.0);
+        a4Target = mtsActive ? 0.0 : 12.0 * std::log2 (a4 / 440.0); // an MTS master overrides the scale and the concert pitch
+        if (force)
+            a4Current = a4Target;
+
+        if (mtsActive)
+        {
+            if (! mtsNoteOnOnly)
+            {
+                std::array<double, 128> frequencies {};
+                if (source->query128Keys (frequencies))
+                {
+                    for (size_t k = 0; k < 128; ++k)
+                        noteTable[k] = frequencies[k] > 0.0 ? noteFromHz (frequencies[k]) : std::numeric_limits<float>::quiet_NaN();
+                    engine->retuneVoices (noteTable.data());
+                }
+            }
+            wasMts = true;
+            tuningStateId = ~0u; // back to the scale when the master goes away
+        }
+        else
+        {
+            const int scale = std::clamp (static_cast<int> (value (tuningScaleParam, 0.0f) + 0.5f), 0, 3);
+            const uint32_t state = static_cast<uint32_t> (scale) | (snapshotId << 2);
+            if (force || wasMts || state != tuningStateId)
+            {
+                tuningStateId = state;
+                wasMts = false;
+                if (activeSnapshot != nullptr)
+                    noteTable = activeSnapshot->scaleNotes[static_cast<size_t> (scale)];
+                else
+                    identityNotes (noteTable);
+            }
+        }
+    }
+
+    void applyOscMapping() noexcept
+    {
+        for (size_t i = 0; i < static_cast<size_t> (kNumOsc); ++i)
+        {
+            std::array<int, 6> now {};
+            for (size_t m = 0; m < 6; ++m)
+                now[m] = mapParam[i][m] >= 0 ? static_cast<int> (params[static_cast<size_t> (mapParam[i][m])].load (std::memory_order_relaxed) + 0.5f) : 0;
+            if (now == appliedMap[i])
+                continue;
+            appliedMap[i] = now;
+            engine->setOscMapping (static_cast<int> (i), now[0], now[1], now[2], now[3], now[4] != 0);
+            if (vOscMapWarp[i] != nullptr)
+                vOscMapWarp[i]->set (now[5] != 0 ? 1.0f : 0.0f);
+        }
+    }
+
+    /** MPE on/off or a new range: every channel's pitch is recomputed. */
+    void applyMpe() noexcept
+    {
+        const bool on = mpeOn();
+        const float range = mpeRangeParam >= 0 ? params[static_cast<size_t> (mpeRangeParam)].load (std::memory_order_relaxed) : 48.0f;
+        const int state = (on ? 1 : 0) + 2 * static_cast<int> (range + 0.5f);
+        if (state == mpeApplied)
+            return;
+        const bool changedMode = (mpeApplied < 0 ? 0 : (mpeApplied & 1)) != (on ? 1 : 0);
+        mpeApplied = state;
+        if (on)
+            applyMpeBends();
+        else if (changedMode)
+            for (int c = 0; c < numChannels; ++c) // back to the plain per-channel wheel
+                engine->setPitchWheel (rawBend[static_cast<size_t> (c)] * masterBendRange() / kVitalLocalBendRange, c);
+    }
+
+    bool mpeOn() const noexcept { return mpeOnParam >= 0 && params[static_cast<size_t> (mpeOnParam)].load (std::memory_order_relaxed) > 0.5f; }
+
+    float masterBendRange() const noexcept
+    {
+        return bendRangeParam >= 0 ? params[static_cast<size_t> (bendRangeParam)].load (std::memory_order_relaxed) : 2.0f;
+    }
+
+    /** MPE: the manager channel's wheel (master.bend_range) moves every note, a member channel's wheel (master.mpe.bend_range) its own notes. */
+    void applyMpeBends() noexcept
+    {
+        const float memberRange = mpeRangeParam >= 0 ? params[static_cast<size_t> (mpeRangeParam)].load (std::memory_order_relaxed) : 48.0f;
+        const float managerBend = rawBend[0] * masterBendRange();
+        for (int c = 0; c < numChannels; ++c)
+            engine->setChannelPitchBend (c, managerBend + (c == 0 ? 0.0f : rawBend[static_cast<size_t> (c)] * memberRange));
+    }
+
     // ---- the modulation matrix --------------------------------------------------------------------------------------
+    bool destinationEligible (int destination) const noexcept
+    {
+        if (destination <= 0 || static_cast<size_t> (destination) >= destinations.size())
+            return true;
+        const Destination& d = destinations[static_cast<size_t> (destination)];
+        return d.gateParam < 0 || (params[static_cast<size_t> (d.gateParam)].load (std::memory_order_relaxed) > 0.5f) == (d.gateValue > 0);
+    }
+
+    /** The aux source of a connected slot (src x amount x aux x output): plug / unplug it and hand the settings to the connection. */
+    void updateAux (int k) noexcept
+    {
+        Slot& slot = slots[static_cast<size_t> (k)];
+        if (slot.auxSourceParam < 0)
+            return;
+        int aux = slot.connected ? static_cast<int> (params[static_cast<size_t> (slot.auxSourceParam)].load (std::memory_order_relaxed) + 0.5f) : 0;
+        if (aux < 0 || aux > kNumModSources || (aux > 0 && sourceOutput[static_cast<size_t> (aux - 1)] == nullptr))
+            aux = 0;
+
+        if (aux != slot.auxPlugged)
+        {
+            if (slot.auxPlugged > 0)
+                slot.processor->unplug (sourceOutput[static_cast<size_t> (slot.auxPlugged - 1)]);
+            slot.auxPlugged = 0;
+            if (aux > 0)
+            {
+                // like the main source: a source that depends on the destination would close a loop (the engine would allocate a
+                // feedback node), such an aux source is left unplugged
+                const sbvital::Output* out = sourceOutput[static_cast<size_t> (aux - 1)];
+                const Destination& d = destinations[static_cast<size_t> (slot.destination)];
+                bool loop = false;
+                for (const sbvital::Processor* target : { d.mono, d.poly })
+                    if (target != nullptr && target->router() != nullptr && target->router()->isDownstream (target, out->owner))
+                        loop = true;
+                if (! loop)
+                {
+                    slot.processor->plug (out, sbvital::ModulationConnectionProcessor::kAuxInput);
+                    out->owner->enable (true);
+                    slot.auxPlugged = aux;
+                }
+            }
+        }
+
+        // the engine's sources are 0..1 at the output (the bipolar display is the slot's own flag), so the mapping to 0..1 is the identity
+        slot.processor->setAux (slot.auxPlugged > 0, false, params[static_cast<size_t> (slot.auxInvParam)].load (std::memory_order_relaxed) > 0.5f,
+                                params[static_cast<size_t> (slot.auxPowerParam)].load (std::memory_order_relaxed),
+                                params[static_cast<size_t> (slot.auxOutputParam)].load (std::memory_order_relaxed) * 0.01f);
+    }
+
+    /** The velocity and note curve of content.curves are the remap table of the slots that read those sources; "legato" glides them. */
+    void updateCurve (int k, int source) noexcept
+    {
+        Slot& slot = slots[static_cast<size_t> (k)];
+        const int kind = (source == kSourceVelocity) ? 1 : (source == kSourceNote ? 2 : 0);
+        const bool have = activeSnapshot != nullptr && ((kind == 1 && activeSnapshot->hasVelocity) || (kind == 2 && activeSnapshot->hasNote));
+        const int want = have ? kind : 0;
+        if (want != slot.curveKind || (want != 0 && slot.curveId != snapshotId))
+        {
+            LineGenerator& line = *slot.processor->lineMapGenerator();
+            if (want == 0)
+                line.initLinear();
+            else
+            {
+                // any non-linear point set marks the remap as active; the table is then written over what render () made of it
+                line.setSmooth (false);
+                line.setNumPoints (3);
+                line.setPoint (0, { 0.0f, 1.0f });
+                line.setPoint (1, { 0.5f, 0.5f });
+                line.setPoint (2, { 1.0f, 0.0f });
+                line.render();
+                const auto& table = want == 1 ? activeSnapshot->velocityTable : activeSnapshot->noteTable;
+                float* data = line.getBuffer();
+                for (int i = 0; i < kBakedPoints; ++i)
+                    data[i] = std::clamp (table[static_cast<size_t> (i)], 0.0f, 1.0f);
+                float* full = line.getCubicInterpolationBuffer();
+                full[0] = full[1];
+                full[kBakedPoints + 1] = full[kBakedPoints];
+                full[kBakedPoints + 2] = full[kBakedPoints];
+            }
+            slot.curveKind = want;
+            slot.curveId = snapshotId;
+        }
+
+        const int legatoParam = kind == 1 ? curveVelocityLegatoParam : (kind == 2 ? curveNoteLegatoParam : -1);
+        const bool glide = legatoParam >= 0 && params[static_cast<size_t> (legatoParam)].load (std::memory_order_relaxed) > 0.5f;
+        const float seconds = portamentoParam >= 0 ? params[static_cast<size_t> (portamentoParam)].load (std::memory_order_relaxed) * 0.001f : 0.0f;
+        slot.processor->setGlide (glide, seconds);
+    }
+
     void updateSlot (int k) noexcept
     {
         Slot& slot = slots[static_cast<size_t> (k)];
@@ -619,16 +1306,19 @@ private:
             return;
         const int source = static_cast<int> (params[static_cast<size_t> (slot.sourceParam)].load (std::memory_order_relaxed) + 0.5f);
         const int destination = static_cast<int> (params[static_cast<size_t> (slot.destinationParam)].load (std::memory_order_relaxed) + 0.5f);
-        if (source == slot.source && destination == slot.destination)
+        const bool eligible = destinationEligible (destination);
+        if (source == slot.source && destination == slot.destination && eligible == slot.eligible)
         {
             // a slot that was left unwired because it would have closed a loop gets another chance when the matrix has changed
-            if (slot.source > 0 && slot.destination > 0 && ! slot.connected && slot.triedGeneration != matrixGeneration
+            if (slot.source > 0 && slot.destination > 0 && ! slot.connected && slot.triedGeneration != matrixGeneration && eligible
                 && static_cast<size_t> (destination) < destinations.size() && destinations[static_cast<size_t> (destination)].valid
                 && sourceOutput[static_cast<size_t> (source - 1)] != nullptr)
             {
                 slot.triedGeneration = matrixGeneration;
                 connectSlot (k);
             }
+            updateAux (k);
+            updateCurve (k, slot.source);
             return;
         }
 
@@ -636,10 +1326,13 @@ private:
             disconnectSlot (k);
         slot.source = source;
         slot.destination = destination;
+        slot.eligible = eligible;
         slot.triedGeneration = matrixGeneration;
         if (source > 0 && destination > 0 && static_cast<size_t> (destination) < destinations.size() && destinations[static_cast<size_t> (destination)].valid
-            && sourceOutput[static_cast<size_t> (source - 1)] != nullptr)
+            && sourceOutput[static_cast<size_t> (source - 1)] != nullptr && eligible)
             connectSlot (k);
+        updateAux (k);
+        updateCurve (k, slot.source);
     }
 
     sbvital::modulation_change changeFor (int k, bool disconnecting) const noexcept
@@ -716,37 +1409,127 @@ private:
                 if (e.key < 0 || e.key > 127)
                     return;
                 const float velocity = std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f);
+                // master.scale.*: the key the voice allocator sees (a note outside the scale moves into it)
+                const int key = conform[static_cast<size_t> (e.key)];
+                if (mtsActive)
+                {
+                    // an MTS master: its frequency for the key (all keys again every block unless "note on only")
+                    const tuning::ITuningSource* source = tuningSource.load (std::memory_order_acquire);
+                    const double hz = source != nullptr ? source->frequencyForKey (key) : 0.0;
+                    if (hz > 0.0)
+                        noteTable[static_cast<size_t> (key)] = noteFromHz (hz);
+                }
+                if (std::isnan (noteTable[static_cast<size_t> (key)]))
+                    return; // a key the tuning does not map (a .kbm "x" entry) does not sound
+                activeKey[static_cast<size_t> (channel)][static_cast<size_t> (e.key)] = static_cast<int8_t> (key);
                 // hitting a key that still rings lets the old note fade out first (as the own engine does)
-                engine->noteOff (e.key, 0.0f, 0, channel);
-                engine->noteOn (e.key, velocity, 0, channel);
+                engine->noteOff (key, 0.0f, 0, channel);
+                engine->noteOn (key, velocity, 0, channel);
+                rememberNoteId (e.noteId, key, channel);
                 break;
             }
             case Event::NoteOff:
                 if (e.key >= 0 && e.key <= 127)
-                    engine->noteOff (e.key, 0.0f, 0, channel);
+                {
+                    // the note that was started (the scale may have changed since); the release velocity is the "Lift" source (0 = unknown)
+                    int8_t& started = activeKey[static_cast<size_t> (channel)][static_cast<size_t> (e.key)];
+                    const int key = started >= 0 ? started : conform[static_cast<size_t> (e.key)];
+                    started = -1;
+                    engine->noteOff (key, std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f), 0, channel);
+                }
+                break;
+            case Event::SustainPedal:
+                // pedal down keeps released notes sounding until it is lifted (the engine's own sustain handling)
+                if (e.channel < 0)
+                {
+                    if (e.value >= 0.5f)
+                        engine->sustainOnRange (0, numChannels - 1);
+                    else
+                        engine->sustainOffRange (0, 0, numChannels - 1);
+                }
+                else if (e.value >= 0.5f)
+                    engine->sustainOn (channel);
+                else
+                    engine->sustainOff (0, channel);
+                break;
+            case Event::NoteExpression:
+                handleExpression (e, channel);
                 break;
             case Event::PitchBend:
             {
                 // the per-channel wheel of the voices moves the pitch (a value of 1 is kVitalLocalBendRange semitones); the zoned
                 // wheel only feeds the "Pitch Wheel" modulation source (its range control is 0, see applyFixedControls)
                 const float bend = std::isnan (e.value) ? 0.0f : clampf (e.value, -1.0f, 1.0f);
-                const float range = bendRangeParam >= 0 ? params[static_cast<size_t> (bendRangeParam)].load (std::memory_order_relaxed) : 2.0f;
-                engine->setPitchWheel (bend * range / kVitalLocalBendRange, channel);
+                rawBend[static_cast<size_t> (channel)] = bend;
+                lastBend = bend;
+                if (mpeOn())
+                    applyMpeBends(); // master.mpe.on: the member channel's bend range, the manager channel moves every note
+                else
+                    engine->setPitchWheel (bend * masterBendRange() / kVitalLocalBendRange, channel);
                 engine->setZonedPitchWheel (bend, channel, channel);
                 break;
             }
             case Event::ModWheel:
-                engine->setModWheel (std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f), channel);
+                lastModWheel = std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f);
+                engine->setModWheel (lastModWheel, channel);
                 break;
             case Event::Aftertouch:
-                engine->setChannelAftertouch (channel, std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f), 0);
+            {
+                const float pressure = std::isnan (e.value) ? 0.0f : clampf (e.value, 0.0f, 1.0f);
+                lastAftertouch = pressure;
+                engine->setChannelAftertouch (channel, pressure, 0);
+                if (mpeOn() && channel > 0)
+                    engine->setNotePressure (-1, channel, pressure); // an MPE member channel carries one note: its pressure is that note's
                 break;
+            }
             case Event::AllNotesOff:
                 if (e.channel < 0)
+                {
                     engine->allNotesOff (0);
+                    for (auto& channelKeys : activeKey)
+                        channelKeys.fill (-1);
+                }
                 else
+                {
                     engine->allNotesOff (0, channel);
+                    activeKey[static_cast<size_t> (channel)].fill (-1);
+                }
                 break;
+        }
+    }
+
+    /** Host note ids -> (key, channel): CLAP addresses a note expression by id (the key may be a wildcard). A small ring of the last notes. */
+    void rememberNoteId (int32_t id, int key, int channel) noexcept
+    {
+        if (id < 0)
+            return;
+        noteIds[static_cast<size_t> (noteIdNext)] = { id, key, channel };
+        noteIdNext = (noteIdNext + 1) % kNoteIdSlots;
+    }
+
+    void handleExpression (const Event& e, int channel) noexcept
+    {
+        int key = e.key < 0 ? -1 : std::min<int> (e.key, 127);
+        if (key >= 0)
+        {
+            const int8_t started = activeKey[static_cast<size_t> (channel)][static_cast<size_t> (key)];
+            key = started >= 0 ? started : conform[static_cast<size_t> (key)];
+        }
+        if (e.noteId >= 0)
+            for (const NoteIdSlot& slot : noteIds)
+                if (slot.id == e.noteId)
+                {
+                    key = slot.key;
+                    channel = slot.channel;
+                    break;
+                }
+        if (! std::isfinite (e.value))
+            return;
+        switch (e.expression)
+        {
+            case Event::Tuning:     engine->setNotePitchBend (key, channel, clampf (e.value, -96.0f, 96.0f)); break;
+            case Event::Pressure:   engine->setNotePressure (key, channel, clampf (e.value, 0.0f, 1.0f)); break;
+            case Event::Brightness: engine->setNoteSlide (key, channel, clampf (e.value, 0.0f, 1.0f)); break;
         }
     }
 
@@ -774,6 +1557,15 @@ private:
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> activeCount { 0 };
 
+    struct NoteIdSlot
+    {
+        int32_t id = -1;
+        int key = -1, channel = 0;
+    };
+    static constexpr int kNoteIdSlots = 64;
+    std::array<NoteIdSlot, kNoteIdSlots> noteIds {};
+    int noteIdNext = 0;
+
     std::atomic<int> qVoices { 8 }, qUnison { 16 }, qOversampling { 2 }, qInterpolation { 1 };
     std::atomic<uint32_t> qFxMask { kFxAll };
     std::atomic<uint32_t> qGeneration { 0 };
@@ -784,10 +1576,25 @@ private:
     std::array<float, kMaxParams> applied {};
     std::array<int, kNumOsc> appliedWavetable {};
     std::array<int, kNumLfo> appliedShape {};
+    static constexpr size_t kMaxPointMods = 256;
+    std::array<uint32_t, kNumLfo> appliedCustomId {};
+    std::array<std::array<float, kMaxPointMods>, kNumLfo> appliedModValues {};
+    std::array<std::array<int, 6>, kNumOsc> appliedMap {};
     std::array<float, kNumLegacyFxSlots> appliedChoices {};
     float appliedRouting = -1.0f, appliedFxOrder = -1.0f;
     std::array<int, kNumOsc> wavetableParam { { -1, -1, -1 } };
-    std::array<int, kNumLfo> shapeParam { { -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<int, kNumLfo> shapeParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<int, kNumLfo> lfoMonoParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<int, kNumLfo> lfoHostParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<int, kNumLfo> lfoSyncParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<int, kNumMacro> macroParam { { -1, -1, -1, -1, -1, -1, -1, -1 } };
+    std::array<std::array<int, 6>, kNumOsc> mapParam { { { { -1, -1, -1, -1, -1, -1 } }, { { -1, -1, -1, -1, -1, -1 } }, { { -1, -1, -1, -1, -1, -1 } } } };
+    int curveVelocityLegatoParam = -1, curveNoteLegatoParam = -1, portamentoParam = -1;
+    int scaleKeyParam = -1, scaleTypeParam = -1, scaleModeParam = -1, a4Param = -1, tuningScaleParam = -1, mtsParam = -1, mtsNoteOnParam = -1;
+    int mpeOnParam = -1, mpeRangeParam = -1;
+    std::array<sbvital::Value*, kNumLfo> vLfoSyncType {}, vLfoHostLock {};
+    std::array<sbvital::Value*, kNumOsc> vOscMapWarp {};
+    std::array<int, kNumLfo> lfoClock {};
     std::array<int, kNumLegacyFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
     int routingParam = -1, bendRangeParam = -1;
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
@@ -807,6 +1614,34 @@ private:
     std::array<LineGenerator*, kNumLfo> lfoLines {};
     double sampleRate = 44100.0;
     bool controlsComplete = false;
+
+    // host transport, the clock of the LFOs, the concert pitch offset (audio thread)
+    TransportInfo transport;
+    double engineBpm = -1.0, appliedBpm = -1.0, clockSeconds = 0.0;
+    double a4Current = 0.0, a4Target = 0.0, tuneBase = 0.0;
+    float lastModWheel = 0.0f, lastAftertouch = 0.0f, lastBend = 0.0f;
+    std::array<float, 16> rawBend {};
+    int mpeApplied = -1;
+
+    // scale, tuning (audio thread); the note table is the one the voice handler reads
+    static constexpr int kNumConform = 128;
+    static constexpr int kSourceVelocity = 23, kSourceNote = 24; // modulation source choices
+    static constexpr int kSourceMacro1 = 18;                     // index of "macro1" in sourceOutput
+    std::array<int8_t, kNumConform> conform {};
+    int conformKey = -1, conformType = -1;
+    std::array<float, 128> noteTable {};
+    std::array<std::array<int8_t, 128>, 16> activeKey {}; // the key a note was started on, per host key and channel (-1: none)
+    uint32_t tuningStateId = ~0u;
+    bool mtsActive = false, mtsNoteOnOnly = false, wasMts = false;
+    std::atomic<const tuning::ITuningSource*> tuningSource { nullptr };
+    uint32_t curveId = 0;
+
+    // content: built on the message thread (setContent), taken over by the audio thread without a lock
+    std::mutex snapshotMutex;
+    std::vector<std::unique_ptr<Snapshot>> snapshots;
+    std::atomic<Snapshot*> pendingSnapshot { nullptr };
+    Snapshot* activeSnapshot = nullptr;
+    uint32_t snapshotId = 0;
 };
 } // namespace
 

@@ -1307,7 +1307,7 @@ namespace sbvital {
     poly_float current_midi = midi_note_;
     midi_note_ = kNoMidiTrackDefault;
     if (midi_track)
-      midi_note_ = input(kMidiNote)->at(0);
+      midi_note_ = input(kMidiNote)->at(0) + input(kFoldNote)->at(0);
 
     float sample_inc = 1.0f / num_samples;
     current_midi = utils::maskLoad(current_midi, midi_note_, reset_mask);

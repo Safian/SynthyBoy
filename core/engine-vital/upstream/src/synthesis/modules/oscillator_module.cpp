@@ -67,6 +67,7 @@ namespace sbvital {
     oscillator_->useInput(input(kRetrigger), SynthOscillator::kRetrigger);
     oscillator_->useInput(input(kActiveVoices), SynthOscillator::kActiveVoices);
     oscillator_->useInput(input(kMidi), SynthOscillator::kMidiNote);
+    oscillator_->useInput(input(kFold), SynthOscillator::kFoldNote);
     oscillator_->plug(wave_frame, SynthOscillator::kWaveFrame);
     oscillator_->plug(midi_track, SynthOscillator::kMidiTrack);
     oscillator_->plug(smooth_interpolation, SynthOscillator::kSmoothlyInterpolate);

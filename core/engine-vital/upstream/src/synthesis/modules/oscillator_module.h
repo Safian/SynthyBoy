@@ -30,6 +30,7 @@ namespace sbvital {
         kRetrigger,
         kMidi,
         kActiveVoices,
+        kFold,
         kNumInputs
       };
 

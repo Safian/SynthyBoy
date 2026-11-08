@@ -33,8 +33,9 @@ namespace sbvital {
   }
 
   void Envelope::processControlRate(int num_samples) {
-    poly_mask trigger_mask = input(kTrigger)->source->trigger_mask;
-    poly_float trigger_value = input(kTrigger)->source->trigger_value;
+    const Output* trigger = triggerSource();
+    poly_mask trigger_mask = trigger->trigger_mask;
+    poly_float trigger_value = trigger->trigger_value;
     poly_float delay_time = utils::max(input(kDelay)->at(0), 0.0f);
     poly_mask has_delay_mask = poly_float::notEqual(delay_time, 0.0f);
     poly_mask note_on_mask = poly_float::equal(trigger_value, kVoiceOn);
@@ -43,7 +44,7 @@ namespace sbvital {
     poly_state_ = utils::maskLoad(poly_state_, trigger_value, trigger_mask);
     position_ = utils::maskLoad(position_, 0.0f, trigger_mask);
 
-    poly_int triggered_remaining = poly_int(num_samples) - input(kTrigger)->source->trigger_offset;
+    poly_int triggered_remaining = poly_int(num_samples) - trigger->trigger_offset;
     poly_int remaining_samples = utils::maskLoad(num_samples, triggered_remaining, trigger_mask);
     start_value_ = utils::maskLoad(start_value_, value_, trigger_mask);
 
@@ -167,13 +168,14 @@ namespace sbvital {
 
     poly_float delta_kill = delta_time * (1.0f / kVoiceKillTime);
 
-    poly_mask trigger_mask = input(kTrigger)->source->trigger_mask;
-    poly_float trigger_value = input(kTrigger)->source->trigger_value;
+    const Output* trigger = triggerSource();
+    poly_mask trigger_mask = trigger->trigger_mask;
+    poly_float trigger_value = trigger->trigger_value;
     poly_mask has_delay_mask = poly_float::notEqual(delay_time, 0.0f);
     poly_mask note_on_mask = poly_float::equal(trigger_value, kVoiceOn);
     trigger_value = utils::maskLoad(trigger_value, kVoiceIdle, has_delay_mask & note_on_mask);
     
-    poly_int triggered_position = input(kTrigger)->source->trigger_offset;
+    poly_int triggered_position = trigger->trigger_offset;
     triggered_position = utils::maskLoad(num_samples, triggered_position, trigger_mask);
 
     poly_float current_position = position_;

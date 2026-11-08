@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "alloc_hook.h"
+#include "synthyboy/content_state.h"
+#include "synthyboy/tuning.h"
 
 using namespace synthyboy;
 
@@ -166,5 +168,136 @@ TEST (process_does_not_allocate_while_patches_change)
         if (! CHECK_EQ (allocations, 0ul))
             std::printf ("    %s, tier %d: %lu allocation(s) during process()\n", engineCase.name, static_cast<int> (tier), allocations);
         CHECK (finite);
+    }
+}
+
+// WP1 to WP3 (docs/ui-design/13-new-keys.md): the new events (sustain pedal, note expression, release velocity), the host transport, the content
+// (custom LFO shapes with point modulation, velocity / note curves, a user tuning), an MTS-ESP style tuning source and every new key at random
+// values (aux sources, LFO options, beat units, scale, MPE, oscillator mapping) must not allocate in process() either. setContent () itself runs
+// on the "message thread" (allocation allowed, not counted).
+namespace
+{
+struct MovingMaster final : tuning::ITuningSource
+{
+    mutable float cents = 0.0f;
+    bool isConnected() const noexcept override { return true; }
+    double frequencyForKey (int key) const noexcept override { return 440.0 * std::pow (2.0, (key - 69.0) / 12.0 + cents / 1200.0); }
+    bool query128Keys (std::array<double, tuning::kNumKeys>& out) const noexcept override
+    {
+        for (int k = 0; k < tuning::kNumKeys; ++k)
+            out[static_cast<size_t> (k)] = frequencyForKey (k);
+        return true;
+    }
+};
+
+StateContent makeContent (int variant)
+{
+    StateContent content;
+    for (int lfo = 1; lfo <= 10; lfo += 3)
+    {
+        ContentLfoShape shape;
+        shape.lfo = lfo;
+        shape.smooth = (variant + lfo) % 2 == 0;
+        const int points = 2 + (variant * 7 + lfo * 5) % 40;
+        for (int i = 0; i < points; ++i)
+        {
+            ContentPoint p;
+            p.x = static_cast<float> (i) / static_cast<float> (points - 1);
+            p.y = static_cast<float> ((i * 37 + variant * 11) % 100) / 100.0f;
+            p.power = static_cast<float> ((i % 5) - 2);
+            if (i % 3 == 1)
+                p.modY = { true, i % 2 == 0 ? "macro1" : "mod_wheel", 0.5f };
+            if (i % 4 == 2)
+                p.modX = { true, "pitch_wheel", 0.1f };
+            shape.points.push_back (p);
+        }
+        content.lfoShapes.push_back (shape);
+    }
+    content.velocityCurve = { { 0.0f, 0.2f, 0.0f }, { 0.5f, 0.9f, -3.0f }, { 1.0f, 1.0f, 0.0f } };
+    content.noteCurve = { { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f, 2.0f } };
+    content.tuning.present = true;
+    content.tuning.scl = "! t.scl\nt\n 7\n 200.0\n 400.0\n 500.0\n 700.0\n 900.0\n 1100.0\n 1200.0\n";
+    return content;
+}
+} // namespace
+
+TEST (process_does_not_allocate_with_the_new_events_content_and_keys)
+{
+    for (const sbtest::EngineCase& engineCase : sbtest::engineCases())
+    {
+        sbtest::Context context (engineCase.name);
+        auto engine = createEngine (engineCase.kind);
+        engine->setParam (kParamMasterPolyphony, 32.0f);
+        engine->prepare (48000.0, 128, qualityForTier (Tier::high));
+        MovingMaster master;
+        engine->setTuningSource (&master);
+
+        constexpr int blockSize = 128;
+        static float left[blockSize], right[blockSize];
+        sbtest::Rng rng (21);
+        Event events[12];
+        bool finite = true;
+        unsigned long allocations = 0;
+
+        for (int block = 0; block < 1600; ++block)
+        {
+            if (block % 150 == 0)
+                engine->setContent (makeContent (block / 150)); // message thread
+            // new keys: a few random ones per block, always the extremes of the new aux / option groups too
+            for (int k = 0; k < 8; ++k)
+            {
+                const size_t index = kNumKeysV2 + rng.u32() % (paramCount() - kNumKeysV2);
+                const auto& info = paramTable()[index];
+                engine->setParam (info.id, info.min + static_cast<float> (rng.uniform()) * (info.max - info.min));
+            }
+            for (int k = 0; k < 3; ++k)
+            {
+                const auto slot = modSlotParams (static_cast<int> (rng.u32() % kNumModSlots));
+                engine->setParam (paramTable()[slot.source].id, static_cast<float> (rng.u32() % (1 + modSourceCount())));
+                engine->setParam (paramTable()[slot.destination].id, static_cast<float> (rng.u32() % (1 + modDestinationCount())));
+                engine->setParam (paramTable()[slot.auxSource].id, static_cast<float> (rng.u32() % (1 + modSourceCount())));
+                engine->setParam (paramTable()[slot.auxPower].id, -10.0f + 20.0f * static_cast<float> (rng.uniform()));
+            }
+            master.cents = static_cast<float> (block % 200);
+
+            int n = 0;
+            if (block % 2 == 0)
+                events[n++] = sbtest::noteOn (static_cast<int> (rng.u32() % 60), 30 + static_cast<int> (rng.u32() % 60), 0.3f + 0.7f * static_cast<float> (rng.uniform()),
+                                              static_cast<int> (rng.u32() % 4), block);
+            if (block % 3 == 0)
+            {
+                Event off = sbtest::noteOff (80, 30 + static_cast<int> (rng.u32() % 60), static_cast<int> (rng.u32() % 4));
+                off.value = static_cast<float> (rng.uniform());
+                events[n++] = off;
+            }
+            Event pedal = sbtest::noteOn (90, 0, rng.u32() % 2 == 0 ? 1.0f : 0.0f, static_cast<int> (rng.u32() % 4) - 1);
+            pedal.type = Event::SustainPedal;
+            events[n++] = pedal;
+            Event expression = sbtest::noteOn (100, static_cast<int> (rng.u32() % 128) - 1, static_cast<float> (rng.uniform() * 4.0 - 2.0),
+                                               static_cast<int> (rng.u32() % 16), static_cast<int> (rng.u32() % 50) - 1);
+            expression.type = Event::NoteExpression;
+            expression.expression = static_cast<Event::Expression> (rng.u32() % 3);
+            events[n++] = expression;
+            if (block % 5 == 0)
+                events[n++] = sbtest::pitchBend (110, static_cast<float> (rng.uniform() * 2.0 - 1.0), static_cast<int> (rng.u32() % 4));
+            std::stable_sort (events, events + n, [] (const Event& a, const Event& b) { return a.frame < b.frame; });
+
+            TransportInfo transport;
+            transport.bpm = 40.0 + static_cast<double> (rng.u32() % 200);
+            transport.songPosBeats = block * 0.25;
+            transport.playing = block % 7 != 0;
+
+            const auto before = g_allocations.load();
+            engine->setTransport (transport);
+            engine->process (events, n, left, right, blockSize);
+            allocations += g_allocations.load() - before;
+            for (int i = 0; i < blockSize; ++i)
+                finite = finite && std::isfinite (left[i]) && std::isfinite (right[i]);
+        }
+
+        if (! CHECK_EQ (allocations, 0ul))
+            std::printf ("    %s: %lu allocation(s) during process()\n", engineCase.name, allocations);
+        CHECK (finite);
+        engine->setTuningSource (nullptr);
     }
 }

@@ -112,6 +112,14 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Macro 3", nullptr },
     { "macro_control_4", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Macro 4", nullptr },
+    { "macro_control_5", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "", "Macro 5", nullptr },
+    { "macro_control_6", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "", "Macro 6", nullptr },
+    { "macro_control_7", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "", "Macro 7", nullptr },
+    { "macro_control_8", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kLinear, false, "", "Macro 8", nullptr },
     { "pitch_bend_range", 0x000000, 0.0, 48.0, 2.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, " semitones", "Pitch Bend Range", nullptr },
     { "polyphony", 0x000000, 1.0, kMaxPolyphony - 1, 8.0, 0.0, 1.0,
@@ -369,6 +377,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Release Power", nullptr },
     { "sustain", 0x000000, 0.0, 1.0, 1.0, 0.0, 1.0,
       ValueDetails::kLinear, false, "", "Sustain", nullptr },
+    { "legato_inverted", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Legato Inverted", strings::kOffOnNames },
   };
 
   const ValueDetails ValueDetailsLookup::lfo_parameter_list[] = {
@@ -396,6 +406,10 @@ namespace sbvital {
       ValueDetails::kIndexed, false, "", "Transpose", nullptr },
     { "keytrack_tune", 0x000704, -1.0, 1.0, 0.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "", "Tune", nullptr },
+    { "direction", 0x000000, 0.0, 2.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Direction", nullptr },
+    { "host_lock", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Host Lock", strings::kOffOnNames },
   };
 
   const ValueDetails ValueDetailsLookup::random_lfo_parameter_list[] = {
@@ -501,6 +515,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "", "Phase", nullptr },
     { "distortion_phase", 0x000000, 0.0, 1.0, 0.5, 0.0, 360.0,
       ValueDetails::kLinear, false, "", "Distortion Phase", nullptr },
+    { "map_warp", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Map Warp", strings::kOffOnNames },
     { "random_phase", 0x000000, 0.0, 1.0, 1.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Phase Randomization", nullptr },
     { "distortion_type", 0x000000, 0.0, SynthOscillator::kNumDistortionTypes - 1, 0.0, 0.0, 1.0,

@@ -13,6 +13,15 @@
 
 namespace synthyboy
 {
+struct StateContent;
+namespace tuning
+{
+class ITuningSource;
+}
+} // namespace synthyboy
+
+namespace synthyboy
+{
 /**
  * A synthesis engine. Shells and UIs only see this interface; engine-own and (optionally) engine-vital implement it.
  *
@@ -47,6 +56,21 @@ public:
         keys of version 3 are stored and read back but not live, and supportsParam () is false for them until the bits they need
         (requiredCaps ()) are all set. Constant for the lifetime of the engine; any thread. */
     virtual EngineCapsMask capabilities() const noexcept { return kCapNone; }
+
+    /** The host transport at the start of the next process() call (audio thread, before process(); no allocation). Tempo sync,
+        the beat units of the envelopes and the HOST mode of the LFOs read it. Without a call the engine runs at 120 BPM with a stopped
+        transport. Engines without tempo sync ignore it. */
+    virtual void setTransport (const TransportInfo&) noexcept {}
+
+    /** The `content` section of the state (custom LFO shapes, velocity / note curves, the tuning file; content_state.h). NOT real-time:
+        call it from the message thread (it may allocate), it is handed to the audio thread at the start of its next block without a lock.
+        It is kept across prepare() and reset(); an engine ignores the parts it has no capability for (capabilities ()). */
+    virtual void setContent (const StateContent&) {}
+
+    /** The MTS-ESP seam (docs/ui-design/13-new-keys.md 4.7): an external dynamic tuning source that master.tuning.mts_esp uses while it
+        reports itself connected. The pointer is not owned and must stay valid until it is replaced by nullptr; the shell links the
+        MTS-ESP client library (the core never does) and wraps it in a tuning::ITuningSource. Any thread, lock free. */
+    virtual void setTuningSource (const tuning::ITuningSource*) noexcept {}
 
     /** True if the engine acts on this parameter. The value of every parameter of the table is stored and read back by every
         engine, the others are simply ignored (the own engine implements a subset: core/engine-own/README.md). */

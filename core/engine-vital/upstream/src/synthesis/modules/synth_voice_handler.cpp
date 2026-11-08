@@ -147,6 +147,10 @@ namespace sbvital {
     producers_->plug(bent_midi_, ProducersModule::kMidi);
     producers_->plug(note_count(), ProducersModule::kNoteCount);
     producers_->plug(active_mask(), ProducersModule::kActiveVoices);
+    for (int i = 0; i < 3; ++i) {
+      producers_->plug(osc_mute(i), ProducersModule::kMute1 + i);
+      producers_->plug(osc_fold(i), ProducersModule::kFold1 + i);
+    }
     addSubmodule(producers_);
     addProcessor(producers_);
   }
@@ -174,6 +178,7 @@ namespace sbvital {
       std::string prefix = std::string("env_") + std::to_string(i + 1);
       EnvelopeModule* envelope = new EnvelopeModule(prefix, i == 0);
       envelope->plug(retrigger(), EnvelopeModule::kTrigger);
+      envelope->plug(retrigger_always(), EnvelopeModule::kTriggerAlways);
       addSubmodule(envelope);
       addProcessor(envelope);
       envelopes_[i] = envelope;
@@ -204,6 +209,7 @@ namespace sbvital {
     data_->mod_sources["aftertouch"] = aftertouch();
     data_->mod_sources["velocity"] = velocity();
     data_->mod_sources["slide"] = slide();
+    data_->mod_sources["poly_aftertouch"] = poly_aftertouch();
     data_->mod_sources["lift"] = lift();
     data_->mod_sources["mod_wheel"] = mod_wheel();
     data_->mod_sources["pitch_wheel"] = pitch_wheel_percent();
@@ -213,6 +219,7 @@ namespace sbvital {
     createStatusOutput("aftertouch" ,aftertouch());
     createStatusOutput("velocity", velocity());
     createStatusOutput("slide", slide());
+    createStatusOutput("poly_aftertouch", poly_aftertouch());
     createStatusOutput("lift", lift());
     createStatusOutput("mod_wheel", mod_wheel());
     createStatusOutput("pitch_wheel", pitch_wheel_percent());
@@ -358,6 +365,11 @@ namespace sbvital {
       return false;
 
     return VoiceHandler::shouldAccumulate(output);
+  }
+
+  void SynthVoiceHandler::correctLfoToTime(int index, double seconds) {
+    if (index >= 0 && index < kNumLfos)
+      lfos_[index]->correctToTime(seconds);
   }
 
   void SynthVoiceHandler::correctToTime(double seconds) {

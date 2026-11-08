@@ -53,6 +53,8 @@ add_subdirectory(formula)
 add_subdirectory(filters-serum)
 add_subdirectory(wavetable-edit)
 add_subdirectory(shapes)
+# the custom LFO shapes and the velocity / note curves of engine-vital are evaluated with the shapes package
+target_link_libraries(synthyboy_core PRIVATE synthyboy_shapes)
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)

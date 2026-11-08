@@ -355,7 +355,8 @@ TEST (version_2_sound_is_unchanged_in_both_engines)
         sbtest::state().context = engineName (g.kind);
         CHECK (rms.size() == 8);
         for (size_t i = 0; i < rms.size() && i < 8; ++i)
-            CHECK (std::fabs (rms[i] - g.rms[i]) <= 1.0e-6 + 1.0e-3 * g.rms[i]);
+            if (! CHECK (std::fabs (rms[i] - g.rms[i]) <= 1.0e-6 + 1.0e-3 * g.rms[i]))
+                std::printf ("    segment %zu: rms %.9g, golden %.9g\n", i, rms[i], g.rms[i]);
 #if defined(__APPLE__) && defined(__aarch64__) && defined(NDEBUG)
         // bit exact on the platform the golden was computed on
         CHECK_EQ (sbgolden::audioFnv (r), g.hash);
@@ -374,9 +375,10 @@ TEST (engines_ignore_the_new_keys)
         if (e == nullptr)
             continue;
 
+        // the engine claims exactly the keys whose capability bits it reports (the own engine acts on none of them)
         const auto* t = paramTable();
         for (size_t i = kNumKeysV2; i < paramCount(); ++i)
-            CHECK (! e->supportsParam (t[i].id)); // no engine acts on a new key yet
+            CHECK_EQ (e->supportsParam (t[i].id), c.kind != EngineKind::own && capsCover (e->capabilities(), requiredCaps (i)));
 
         // every new key at random values (also the extremes, and the new mod sources / destinations of a slot): no crash, finite audio
         sbtest::Rng rng (0x4e57ull);

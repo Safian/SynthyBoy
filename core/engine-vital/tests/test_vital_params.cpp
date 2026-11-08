@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -56,8 +57,24 @@ TEST (every_parameter_is_bound_or_special_exactly_once)
         ++bound[b.param];
     }
     size_t special = 0;
+    // the keys of state version 3: exactly the ones whose capability bits the engine reports are bound once or handled by the adapter
+    // (special); every other one is stored and ignored
+    auto probe = createVitalEngine();
+    size_t v3Live = 0;
     for (size_t i = kNumKeysV2; i < paramCount(); ++i)
-        CHECK_EQ (bound[i], 0); // the keys of state version 3 are stored and ignored: no binding yet (the caps decide when they get one)
+    {
+        const bool live = capsCover (probe->capabilities(), requiredCaps (i));
+        v3Live += live ? 1 : 0;
+        if (live)
+        {
+            CHECK ((bound[i] == 1) != isSpecialParam (i));
+            if (bound[i] + (isSpecialParam (i) ? 1 : 0) != 1)
+                std::printf ("    %s is live but neither bound nor special\n", paramTable()[i].key);
+        }
+        else if (! CHECK (bound[i] == 0 && ! isSpecialParam (i)))
+            std::printf ("    %s is bound but its capability bit is not set\n", paramTable()[i].key);
+    }
+    std::printf ("    %zu keys of state version 3 are live in this engine\n", v3Live);
     for (size_t i = 0; i < kNumKeysV2; ++i)
     {
         if (isSpecialParam (i))
@@ -74,13 +91,29 @@ TEST (every_parameter_is_bound_or_special_exactly_once)
     CHECK_EQ (special, static_cast<size_t> (3 + 8 + 1 + kNumLegacyFxSlots + 2 * kNumModSlots + 1));
     std::printf ("    %zu bound, %zu special\n", vitalBindings().size(), special);
 
-    // every control exists in the engine and no two parameters share one
+    // every control exists in the engine and no two parameters share one; except the millisecond and the beat key of an envelope time (one
+    // control, gated by envN.units to opposite values)
     std::set<std::string> controls;
+    std::map<std::string, std::vector<const Binding*>> shared;
     for (const auto& b : vitalBindings())
     {
         CHECK (vitalControlRange (b.control).exists);
-        CHECK (controls.insert (b.control).second);
+        if (b.gateParam < 0)
+            CHECK (controls.insert (b.control).second);
+        else
+            shared[b.control].push_back (&b);
     }
+    for (const auto& entry : shared)
+    {
+        CHECK (controls.count (entry.first) == 0);
+        CHECK_EQ (entry.second.size(), static_cast<size_t> (2));
+        if (entry.second.size() == 2)
+        {
+            CHECK_EQ (entry.second[0]->gateParam, entry.second[1]->gateParam);
+            CHECK (entry.second[0]->gateValue != entry.second[1]->gateValue);
+        }
+    }
+    CHECK_EQ (shared.size(), static_cast<size_t> (30)); // 6 envelopes x delay, attack, hold, decay, release
 }
 
 TEST (converted_values_stay_inside_the_controls_of_the_engine)
@@ -216,6 +249,8 @@ TEST (parameters_reach_the_controls_of_the_engine)
     {
         const auto& info = paramTable()[b.param];
         const auto range = vitalControlRange (b.control);
+        if (b.gateParam >= 0) // the envelope time unit this binding belongs to
+            e->setParam (paramTable()[b.gateParam].id, static_cast<float> (b.gateValue));
         for (const float plain : { info.min, info.def, info.max, fromNormalised (info, 0.5f) })
         {
             e->setParam (info.id, plain);
@@ -232,6 +267,8 @@ TEST (parameters_reach_the_controls_of_the_engine)
                 std::printf ("    %s = %.9g: control %s is %.9g, expected %.9g\n", info.key, static_cast<double> (plain), b.control.c_str(), got, want);
         }
         e->setParam (info.id, info.def);
+        if (b.gateParam >= 0)
+            e->setParam (paramTable()[b.gateParam].id, paramTable()[b.gateParam].def);
     }
     std::printf ("    %ld parameter values applied and read back\n", checked);
 }
@@ -246,7 +283,8 @@ TEST (modulatable_parameters_are_modulation_destinations_of_the_engine)
         const bool exists = vitalHasModulationDestination (*e, i);
         if (flagged && i >= kNumKeysV2)
         {
-            CHECK (! exists); // the destinations of state version 3 have no engine control yet
+            // the destinations of state version 3 exist for the keys whose capability bits the engine reports
+            CHECK_EQ (exists, capsCover (e->capabilities(), requiredCaps (i)));
         }
         else if (flagged)
         {

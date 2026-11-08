@@ -93,6 +93,7 @@ namespace sbvital {
     voice_event_.owner = &voice_router_;
     retrigger_.owner = &voice_router_;
     reset_.owner = &voice_router_;
+    retrigger_always_.owner = &voice_router_;
     note_.owner = &voice_router_;
     last_note_.owner = &voice_router_;
     note_pressed_.owner = &voice_router_;
@@ -103,6 +104,11 @@ namespace sbvital {
     lift_.owner = &voice_router_;
     aftertouch_.owner = &voice_router_;
     slide_.owner = &voice_router_;
+    poly_aftertouch_.owner = &voice_router_;
+    for (int i = 0; i < 3; ++i) {
+      osc_mute_[i].owner = &voice_router_;
+      osc_fold_[i].owner = &voice_router_;
+    }
     active_mask_.owner = &voice_router_;
     mod_wheel_.owner = &voice_router_;
     pitch_wheel_.owner = &voice_router_;
@@ -124,6 +130,7 @@ namespace sbvital {
     lift_.clearTrigger();
     voice_event_.clearTrigger();
     retrigger_.clearTrigger();
+    retrigger_always_.clearTrigger();
     reset_.clearTrigger();
     aftertouch_.clearTrigger();
     slide_.clearTrigger();
@@ -149,6 +156,7 @@ namespace sbvital {
           else if (voice->state().event == kVoiceOff)
             lift_.trigger(mask, voice->state().lift, offset);
 
+          retrigger_always_.trigger(mask, voice->state().event, offset);
           if (!legato_ || voice->last_key_state() != Voice::kHeld || voice->state().event != kVoiceOn)
             retrigger_.trigger(mask, voice->state().event, offset);
 
@@ -199,6 +207,33 @@ namespace sbvital {
 
       aftertouch_.trigger_value = utils::maskLoad(aftertouch_.trigger_value, voice->aftertouch(), mask);
       slide_.trigger_value = utils::maskLoad(slide_.trigger_value, voice->slide(), mask);
+      poly_aftertouch_.trigger_value = utils::maskLoad(poly_aftertouch_.trigger_value, voice->polyPressure(), mask);
+
+      for (int osc = 0; osc < 3; ++osc) {
+        const OscMapping& map = osc_mapping_[osc];
+        int low = map.key_low < map.key_high ? map.key_low : map.key_high;
+        int high = map.key_low < map.key_high ? map.key_high : map.key_low;
+        int vel_low = map.vel_low < map.vel_high ? map.vel_low : map.vel_high;
+        int vel_high = map.vel_low < map.vel_high ? map.vel_high : map.vel_low;
+        int note_number = voice->state().midi_note;
+        int velocity = static_cast<int>(voice->state().velocity * 127.0f + 0.5f);
+        if (velocity < 1)
+          velocity = 1;
+
+        bool key_ok = note_number >= low && note_number <= high;
+        mono_float fold = 0.0f;
+        if (!key_ok && map.fold && high - low >= 11) {
+          int shift = note_number < low ? (low - note_number + 11) / 12 : -((note_number - high + 11) / 12);
+          int folded = note_number + 12 * shift;
+          if (folded >= low && folded <= high) {
+            key_ok = true;
+            fold = 12.0f * shift;
+          }
+        }
+        bool muted = !key_ok || velocity < vel_low || velocity > vel_high;
+        osc_mute_[osc].trigger_value = utils::maskLoad(osc_mute_[osc].trigger_value, muted ? 1.0f : 0.0f, mask);
+        osc_fold_[osc].trigger_value = utils::maskLoad(osc_fold_[osc].trigger_value, fold, mask);
+      }
 
       bool dead = voice->key_state() == Voice::kDead;
       poly_float active_value = dead ? 0.0f : 1.0f;
@@ -214,7 +249,8 @@ namespace sbvital {
       pitch_wheel_percent_.trigger_value = utils::maskLoad(pitch_wheel_percent_.trigger_value,
                                                            pitch_wheel_percent, mask);
 
-      mono_float local_pitch_bend = voice->state().local_pitch_bend * kLocalPitchBendRange;
+      mono_float local_pitch_bend = voice->state().local_pitch_bend * kLocalPitchBendRange +
+                                    voice->state().note_bend + voice->state().tuning_delta;
       local_pitch_bend_.trigger_value = utils::maskLoad(local_pitch_bend_.trigger_value, local_pitch_bend, mask);
     }
   }
@@ -656,7 +692,9 @@ namespace sbvital {
       return;
 
     mono_float tuned_note = note;
-    if (tuning_)
+    if (note_table_)
+      tuned_note = note_table_[note & 127];
+    else if (tuning_)
       tuned_note = tuning_->convertMidiNote(note);
 
     poly_float last_note = tuned_note;
@@ -707,7 +745,9 @@ namespace sbvital {
             mono_float old_note = getNote(old_note_value);
             int old_channel = getChannel(old_note_value);
             mono_float tuned_note = old_note;
-            if (tuning_)
+            if (note_table_)
+              tuned_note = note_table_[static_cast<int>(old_note) & 127];
+            else if (tuning_)
               tuned_note = tuning_->convertMidiNote(old_note);
 
             total_notes_++;
@@ -756,6 +796,45 @@ namespace sbvital {
     for (Voice* voice : active_voices_) {
       if (voice->state().channel == channel && voice->held())
         voice->setSlide(slide, sample);
+    }
+  }
+
+  void VoiceHandler::retuneVoices(const mono_float* table) {
+    for (Voice* voice : active_voices_) {
+      mono_float target = table[voice->state().midi_note & 127];
+      if (target == target)  // a key the live tuning does not map (NaN) keeps its pitch
+        voice->setTuningDelta(target - voice->state().tuned_note);
+    }
+  }
+
+  void VoiceHandler::setNotePitchBend(int note, int channel, mono_float semitones) {
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && (note < 0 || voice->state().midi_note == note))
+        voice->setNoteBend(semitones);
+    }
+  }
+
+  void VoiceHandler::setNotePressure(int note, int channel, mono_float pressure) {
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && (note < 0 || voice->state().midi_note == note))
+        voice->setPolyPressure(pressure);
+    }
+  }
+
+  void VoiceHandler::setNoteSlide(int note, int channel, mono_float slide) {
+    if (note < 0)
+      slide_values_[channel] = slide;
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && (note < 0 || voice->state().midi_note == note))
+        voice->setSlide(slide, 0);
+    }
+  }
+
+  void VoiceHandler::setChannelPitchBend(int channel, mono_float semitones) {
+    pitch_wheel_values_[channel] = semitones / kLocalPitchBendRange;
+    for (Voice* voice : active_voices_) {
+      if (voice->state().channel == channel && voice->held())
+        voice->setLocalPitchBend(pitch_wheel_values_[channel]);
     }
   }
 

@@ -44,9 +44,16 @@ TEST (crosscheck_table_equals_adapter_bindings)
     std::map<std::string, const vitalimport::VitalRow*> byKey;
     for (size_t i = 0; i < n; ++i)
         byKey[rows[i].key] = &rows[i];
-    CHECK_EQ (vitalBindings().size(), n);
+    // the bindings of the keys of state version 3 (macros 5 to 8, LFO 9 and 10, direction, beat units, ...) have no counterpart in a Vital
+    // preset: the table covers the version 2 keys, one binding each
+    size_t v2Bindings = 0;
+    for (const auto& b : vitalBindings())
+        v2Bindings += b.param < kNumKeysV2 ? 1 : 0;
+    CHECK_EQ (v2Bindings, n);
     for (const auto& b : vitalBindings())
     {
+        if (b.param >= kNumKeysV2)
+            continue;
         const char* key = paramTable()[b.param].key;
         const auto it = byKey.find (key);
         CHECK (it != byKey.end());

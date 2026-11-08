@@ -23,12 +23,12 @@
 
 namespace sbvital {
 
-  constexpr int kNumLfos = 8;
+  constexpr int kNumLfos = 10; // SynthyBoy: 8 upstream, LFO 9 and 10 added (docs/UPSTREAM.md)
   constexpr int kNumOscillators = 3;
   constexpr int kNumOscillatorWaveFrames = 257;
   constexpr int kNumEnvelopes = 6;
   constexpr int kNumRandomLfos = 4;
-  constexpr int kNumMacros = 4;
+  constexpr int kNumMacros = 8; // SynthyBoy: 4 upstream, macros 5 to 8 added
   constexpr int kNumFilters = 2;
   constexpr int kNumFormants = 4;
   constexpr int kNumChannels = 2;

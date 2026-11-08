@@ -25,6 +25,7 @@ namespace sbvital {
       SynthModule(kNumInputs, kNumOutputs), prefix_(prefix), force_audio_rate_(force_audio_rate) {
     envelope_ = new Envelope();
     envelope_->useInput(input(kTrigger), Envelope::kTrigger);
+    envelope_->useInput(input(kTriggerAlways), Envelope::kTriggerAlways);
     
     envelope_->useOutput(output(kValue), Envelope::kValue);
     envelope_->useOutput(output(kPhase), Envelope::kPhase);
@@ -54,5 +55,6 @@ namespace sbvital {
     envelope_->plug(attack_power, Envelope::kAttackPower);
     envelope_->plug(decay_power, Envelope::kDecayPower);
     envelope_->plug(release_power, Envelope::kReleasePower);
+    envelope_->plug(createBaseControl(prefix_ + "_legato_inverted"), Envelope::kLegatoInverted);
   }
 } // namespace sbvital

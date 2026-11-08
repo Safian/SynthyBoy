@@ -119,11 +119,20 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (requiredCapsForValue (999999, 0.0f), static_cast<EngineCapsMask> (kCapNone));
 }
 
-TEST (engines_report_no_new_capability_yet)
+TEST (engines_report_only_known_capabilities_and_never_change_them)
 {
+    // every bit an engine reports is a defined bit, the report does not change with prepare() or playing, and supportsParam () follows it
     for (const auto& c : sbtest::engineCases())
     {
+        sbtest::Context ctx (c.name);
         auto e = sbtest::makeEngine (c);
-        CHECK (e != nullptr && e->capabilities() == kCapNone);
+        CHECK (e != nullptr);
+        const EngineCapsMask before = e->capabilities();
+        CHECK_EQ (before & ~kCapAllKnown, static_cast<EngineCapsMask> (0));
+        e->process (nullptr, 0, nullptr, nullptr, 0);
+        CHECK_EQ (e->capabilities(), before);
+        for (size_t i = kNumKeysV2; i < paramCount(); ++i)
+            if (! capsCover (before, requiredCaps (i)))
+                CHECK (! e->supportsParam (paramTable()[i].id)); // a key whose capability bit is not set is never claimed
     }
 }

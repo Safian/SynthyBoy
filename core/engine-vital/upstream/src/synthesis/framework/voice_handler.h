@@ -30,7 +30,7 @@ namespace sbvital {
 
   struct VoiceState {
     VoiceState() : event(kInvalid), midi_note(0), tuned_note(0.0f), last_note(0.0f), velocity(0.0f),
-                   lift(0.0f), local_pitch_bend(0.0f), note_pressed(0), note_count(0),
+                   lift(0.0f), local_pitch_bend(0.0f), note_bend(0.0f), tuning_delta(0.0f), note_pressed(0), note_count(0),
                    channel(0), sostenuto_pressed(false) { }
 
     VoiceEvent event;
@@ -40,6 +40,8 @@ namespace sbvital {
     mono_float velocity;
     mono_float lift;
     mono_float local_pitch_bend;
+    mono_float note_bend;    // per-note pitch in semitones (CLAP TUNING note expression), added to the channel bend
+    mono_float tuning_delta; // semitones the live tuning (MTS-ESP) moved the note since it was activated
     int note_pressed;
     int note_count;
     int channel;
@@ -89,6 +91,9 @@ namespace sbvital {
         state_.velocity = velocity;
         state_.lift = kDefaultLiftVelocity;
         state_.local_pitch_bend = 0.0f;
+        state_.note_bend = 0.0f;
+        state_.tuning_delta = 0.0f;
+        poly_pressure_ = 0.0f;
         state_.last_note = last_note;
         state_.note_pressed = note_pressed;
         state_.note_count = note_count;
@@ -134,6 +139,11 @@ namespace sbvital {
       force_inline void setLocalPitchBend(mono_float bend) {
         state_.local_pitch_bend = bend;
       }
+
+      force_inline void setNoteBend(mono_float semitones) { state_.note_bend = semitones; }
+      force_inline void setTuningDelta(mono_float semitones) { state_.tuning_delta = semitones; }
+      force_inline void setPolyPressure(mono_float pressure) { poly_pressure_ = pressure; }
+      force_inline mono_float polyPressure() const { return poly_pressure_; }
 
       force_inline void setLiftVelocity(mono_float lift) {
         state_.lift = lift;
@@ -202,7 +212,7 @@ namespace sbvital {
       }
 
       force_inline void clearSlideEvent() {
-        aftertouch_sample_ = -1;
+        slide_sample_ = -1;
       }
 
       force_inline void clearEvents() {
@@ -236,6 +246,7 @@ namespace sbvital {
 
       int slide_sample_;
       mono_float slide_;
+      mono_float poly_pressure_ = 0.0f;
 
       AggregateVoice* parent_;
   };
@@ -285,6 +296,18 @@ namespace sbvital {
       virtual void init() override;
       virtual void setSampleRate(int sample_rate) override;
       void setTuning(const Tuning* tuning) { tuning_ = tuning; }
+      // The tuned note (MIDI note, fractional) of each of the 128 keys; takes precedence over the Tuning object. Read at note on.
+      // nullptr = the equal tempered keys. The table is owned by the caller and only changed between two process() calls.
+      void setNoteTable(const mono_float* table) { note_table_ = table; }
+      // Moves the sounding voices to the tuned notes of `table` (live tuning): the difference to the table they started with is
+      // added to their pitch.
+      void retuneVoices(const mono_float* table);
+      // Per-note expression (key < 0: every note of the channel). Pitch in semitones, pressure and slide 0..1.
+      void setNotePitchBend(int note, int channel, mono_float semitones);
+      void setNotePressure(int note, int channel, mono_float pressure);
+      void setNoteSlide(int note, int channel, mono_float slide);
+      // Pitch of the MPE member channels: the wheel value in semitones, per voice of the channel (replaces setPitchWheel's bend)
+      void setChannelPitchBend(int channel, mono_float semitones);
 
       int getNumActiveVoices();
       force_inline int getNumPressedNotes() { return pressed_notes_.size(); }
@@ -345,6 +368,7 @@ namespace sbvital {
 
       force_inline Output* voice_event() { return &voice_event_; }
       force_inline Output* retrigger() { return &retrigger_; }
+      force_inline Output* retrigger_always() { return &retrigger_always_; }
       force_inline Output* reset() { return &reset_; }
       force_inline Output* note() { return &note_; }
       force_inline Output* last_note() { return &last_note_; }
@@ -356,6 +380,16 @@ namespace sbvital {
       force_inline Output* lift() { return &lift_; }
       force_inline Output* aftertouch() { return &aftertouch_; }
       force_inline Output* slide() { return &slide_; }
+      // SynthyBoy, oscillator mapping: per oscillator the note range / velocity range a note must be in, the octave fold, and the
+      // per voice outputs derived from them (1 = silenced for that note, semitones the note is folded by). Set between two process() calls.
+      struct OscMapping {
+        int key_low = 0, key_high = 127, vel_low = 1, vel_high = 127;
+        bool fold = false;
+      };
+      void setOscMapping(int osc, const OscMapping& mapping) { osc_mapping_[osc] = mapping; }
+      force_inline Output* osc_mute(int osc) { return &osc_mute_[osc]; }
+      force_inline Output* osc_fold(int osc) { return &osc_fold_[osc]; }
+      force_inline Output* poly_aftertouch() { return &poly_aftertouch_; }
       force_inline Output* active_mask() { return &active_mask_; }
       force_inline Output* pitch_wheel() { return &pitch_wheel_; }
       force_inline Output* pitch_wheel_percent() { return &pitch_wheel_percent_; }
@@ -445,6 +479,7 @@ namespace sbvital {
 
       cr::Output voice_event_;
       cr::Output retrigger_;
+      cr::Output retrigger_always_; // SynthyBoy: like retrigger_ but also on the legato note ons it leaves out
       cr::Output reset_;
       cr::Output note_;
       cr::Output last_note_;
@@ -456,6 +491,10 @@ namespace sbvital {
       cr::Output lift_;
       cr::Output aftertouch_;
       cr::Output slide_;
+      OscMapping osc_mapping_[3];
+      cr::Output osc_mute_[3];
+      cr::Output osc_fold_[3];
+      cr::Output poly_aftertouch_;
       cr::Output active_mask_;
       cr::Output mod_wheel_;
       cr::Output pitch_wheel_;
@@ -471,6 +510,7 @@ namespace sbvital {
       mono_float slide_values_[kNumMidiChannels];
 
       const Tuning* tuning_;
+      const mono_float* note_table_ = nullptr;
       VoicePriority voice_priority_;
       VoiceOverride voice_override_;
 

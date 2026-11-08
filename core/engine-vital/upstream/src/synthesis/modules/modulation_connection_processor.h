@@ -29,6 +29,7 @@ namespace sbvital {
         kModulationAmount,
         kModulationPower,
         kReset,
+        kAuxInput,  // SynthyBoy: the aux source of the slot (docs/ui-design/13-new-keys.md 4.6), plugged by the adapter while it is set
         kNumInputs
       };
 
@@ -71,6 +72,21 @@ namespace sbvital {
 
       LineGenerator* lineMapGenerator() { return map_generator_.get(); }
 
+      // SynthyBoy: out = curve (source) * amount * aux * (aux_output / 100), aux = curve_aux (invert ? 1 - a : a) with a the aux source
+      // mapped to 0..1 (a bipolar source as (x + 1) / 2). `active` false: the factor is 1. The values are set between two blocks.
+      void setAux(bool active, bool bipolar, bool invert, mono_float power, mono_float output) {
+        extras_->aux_active = active;
+        extras_->aux_bipolar = bipolar;
+        extras_->aux_invert = invert;
+        extras_->aux_power = power;
+        extras_->aux_output = output;
+      }
+      // SynthyBoy: the velocity / note curves (Q17) glide on legato notes: the source moves to its new value over `seconds`
+      void setGlide(bool active, mono_float seconds) {
+        extras_->glide_active = active;
+        extras_->glide_seconds = seconds;
+      }
+
     protected:
       int index_;
       bool polyphonic_;
@@ -81,6 +97,18 @@ namespace sbvital {
 
       poly_float power_;
       poly_float modulation_amount_;
+      // settings shared by the clones of the processor (every voice has its own copy of the processor, like destination_scale_)
+      struct Extras {
+        bool aux_active = false, aux_bipolar = false, aux_invert = false;
+        mono_float aux_power = 0.0f, aux_output = 1.0f;
+        bool glide_active = false;
+        mono_float glide_seconds = 0.0f;
+      };
+      std::shared_ptr<Extras> extras_ = std::make_shared<Extras>();
+      poly_float aux_factor_ = 1.0f;
+      poly_float glide_value_ = 0.0f;
+      mono_float block_seconds_ = 0.0f;
+      poly_float computeAuxFactor() const;
 
       std::shared_ptr<mono_float> destination_scale_;
       mono_float last_destination_scale_;

@@ -35,6 +35,8 @@ namespace sbvital {
         kRelease,
         kReleasePower,
         kTrigger,
+        kTriggerAlways,   // SynthyBoy: every note event, also the legato note ons that kTrigger leaves out
+        kLegatoInverted,  // SynthyBoy: 1 = this envelope retriggers on legato note ons (reads kTriggerAlways)
         kNumInputs
       };
 
@@ -51,6 +53,10 @@ namespace sbvital {
       virtual void process(int num_samples) override;
 
     private:
+      force_inline const Output* triggerSource() const {
+        return input(kLegatoInverted)->at(0)[0] > 0.5f ? input(kTriggerAlways)->source : input(kTrigger)->source;
+      }
+
       void processControlRate(int num_samples);
       void processAudioRate(int num_samples);
 

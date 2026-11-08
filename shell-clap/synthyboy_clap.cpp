@@ -15,6 +15,7 @@
 #include "synthyboy/engine.h"
 #include "synthyboy/events.h"
 #include "synthyboy/kick_pages.h"
+#include "synthyboy/midi_events.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
@@ -57,7 +58,7 @@ struct SynthyBoyClap
     const clap_host_t* host = nullptr;
     std::unique_ptr<IEngine> engine;
     ParamValues values;
-    StateContent content; // the `content` section of the state (not parameters; no engine reads it yet), main thread only
+    StateContent content; // the `content` section of the state (not parameters): custom LFO shapes, curves and the tuning go to the engine (setContent), main thread only
     Quality quality;
     std::vector<Event> events;
     double sampleRate = 48000.0;
@@ -181,6 +182,37 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     self->events.push_back (e);
                     break;
                 }
+                case CLAP_EVENT_NOTE_EXPRESSION:
+                {
+                    // per-note expressions (MPE through CLAP, docs/ui-design/13-new-keys.md 4.7): TUNING (semitones), PRESSURE, BRIGHTNESS
+                    const auto* ev = reinterpret_cast<const clap_event_note_expression_t*> (hdr);
+                    Event e {};
+                    e.frame = static_cast<int32_t> (ev->header.time);
+                    e.type = Event::NoteExpression;
+                    e.channel = static_cast<int16_t> (std::clamp<int> (ev->channel, 0, 15));
+                    e.key = static_cast<int16_t> (ev->key);
+                    e.noteId = ev->note_id;
+                    e.value = static_cast<float> (ev->value);
+                    if (ev->expression_id == CLAP_NOTE_EXPRESSION_TUNING)
+                        e.expression = Event::Tuning;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_PRESSURE)
+                        e.expression = Event::Pressure;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
+                        e.expression = Event::Brightness;
+                    else
+                        break; // volume, pan, vibrato, expression: not used
+                    self->events.push_back (e);
+                    break;
+                }
+                case CLAP_EVENT_MIDI:
+                {
+                    // the MIDI dialect of the note port: CC 64 sustain pedal, CC 1, CC 74, pressure, bend, note on/off
+                    const auto* ev = reinterpret_cast<const clap_event_midi_t*> (hdr);
+                    Event e {};
+                    if (translateMidiMessage (ev->data, 3, static_cast<int32_t> (ev->header.time), e))
+                        self->events.push_back (e);
+                    break;
+                }
                 case CLAP_EVENT_PARAM_VALUE:
                 {
                     const auto* ev = reinterpret_cast<const clap_event_param_value_t*> (hdr);
@@ -198,6 +230,21 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     break;
             }
         }
+    }
+
+    // host transport (tempo sync, beat units, LFO HOST mode)
+    {
+        TransportInfo transport;
+        if (process->transport != nullptr)
+        {
+            const clap_event_transport_t* t = process->transport;
+            if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) != 0 && t->tempo > 0.0)
+                transport.bpm = t->tempo;
+            if ((t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) != 0)
+                transport.songPosBeats = static_cast<double> (t->song_pos_beats) / static_cast<double> (CLAP_BEATTIME_FACTOR);
+            transport.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
+        }
+        self->engine->setTransport (transport);
     }
 
     // 2. Render audio
@@ -414,6 +461,7 @@ bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexc
         {
             for (size_t i = 0; i < paramCount(); ++i)
                 self->engine->setParam (paramTable()[i].id, self->values.plain[i]);
+            self->engine->setContent (self->content); // main thread: allocates, handed to the audio thread lock free
         }
         return true;
     }
