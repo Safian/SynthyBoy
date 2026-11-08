@@ -56,8 +56,8 @@
     },
     {
       "path": "Bass/pulse_width_bass.sbpreset",
-      "sha256": "e02c4c545907d6975edad59607f56789ce96778feccec6afc135b1d7a71ca3d4",
-      "size": 16857
+      "sha256": "08eeb6c8b8bc5fd9e5bd014da42a1d35d5c84af34db8c862075c7c83c6862d7e",
+      "size": 16858
     },
     {
       "path": "Bass/comb_metal_bass.sbpreset",
@@ -151,8 +151,8 @@
     },
     {
       "path": "Lead/fm_digital_lead.sbpreset",
-      "sha256": "2932e277c0098c58e4a6b0c9b6e7b68c0bb7f01257caa39c02eebdcce2236bdf",
-      "size": 16868
+      "sha256": "bd16d2f6db3093e0a5a2470a5874738b7b8b3212977768398c79c3e2479f1ec7",
+      "size": 16869
     },
     {
       "path": "Lead/tri_soft_solo.sbpreset",

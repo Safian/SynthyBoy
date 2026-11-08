@@ -110,7 +110,7 @@ TEST (convolve_ir_rate_conversion)
     convolve.params.tone = 0.0f;
     convolve.params.preDelay = 0.0f;
 
-    const int totalFrames = 600;
+    const int totalFrames = 640; // a whole number of 64-frame blocks (600 overran the buffers; found by ASan)
     std::vector<float> inL (static_cast<size_t> (totalFrames), 0.0f);
     std::vector<float> inR (static_cast<size_t> (totalFrames), 0.0f);
     inL[0] = 1.0f; // Impulse at sample 0

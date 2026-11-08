@@ -135,7 +135,10 @@ void ShapeData::sanitize() noexcept
 
 float ShapeData::evaluate (float phase) const noexcept
 {
-    if (numPoints == 0)
+    // evaluate() is also called on data that was never sanitized (garbage state): never index past the array
+    const size_t n = std::min (numPoints, kMaxPoints);
+
+    if (n == 0)
         return 0.0f;
 
     if (! std::isfinite (phase))
@@ -143,23 +146,23 @@ float ShapeData::evaluate (float phase) const noexcept
 
     phase = std::clamp (phase, 0.0f, 1.0f);
 
-    if (numPoints == 1)
+    if (n == 1)
         return sanitizeOutput (points[0].y);
 
     if (phase <= points[0].x)
     {
         size_t idx = 0;
-        while (idx + 1 < numPoints && points[idx + 1].x <= phase)
+        while (idx + 1 < n && points[idx + 1].x <= phase)
             ++idx;
         return sanitizeOutput (points[idx].y);
     }
 
-    if (phase >= points[numPoints - 1].x)
-        return sanitizeOutput (points[numPoints - 1].y);
+    if (phase >= points[n - 1].x)
+        return sanitizeOutput (points[n - 1].y);
 
     // Binary search for the right segment
     size_t low = 0;
-    size_t high = numPoints - 1;
+    size_t high = n - 1;
     while (low + 1 < high)
     {
         const size_t mid = low + (high - low) / 2;
@@ -170,7 +173,7 @@ float ShapeData::evaluate (float phase) const noexcept
     }
 
     // In case of duplicate x points (vertical step) at the exact boundary
-    while (low + 1 < numPoints - 1 && points[low + 1].x <= phase && points[low].x == points[low + 1].x)
+    while (low + 1 < n - 1 && points[low + 1].x <= phase && points[low].x == points[low + 1].x)
         ++low;
 
     const Point& p0 = points[low];

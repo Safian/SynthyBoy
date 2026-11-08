@@ -104,6 +104,7 @@ add_subdirectory(shell-clap)
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(bench)
     add_subdirectory(tools/paramdump)
+    add_subdirectory(tools/preset-render)
 endif()
 
 if(NOT SYNTHYBOY_BUILD_PLUGIN)
