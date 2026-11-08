@@ -94,6 +94,15 @@ constexpr const char* s_more_reverb1[] = {
     "reverb.force_enable"
 };
 
+constexpr const char* s_more_sub[] = {
+    "sub.filter_blend", "sub.bus1_send", "sub.bus2_send"
+};
+
+constexpr const char* s_more_noise[] = {
+    "noise.sample", "noise.pitch", "noise.fine", "noise.phase",
+    "noise.random_phase", "noise.keytrack", "noise.loop"
+};
+
 constexpr const char* s_more_mod_matrix[] = {
     "mod05.source", "mod05.destination", "mod05.power", "mod05.bipolar", "mod05.stereo", "mod05.bypass",
     "mod06.source", "mod06.destination", "mod06.power", "mod06.bipolar", "mod06.stereo", "mod06.bypass",
@@ -231,7 +240,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 12: Osc 3 Morph & Warp (Osc)
     { "osc3_shaping", "Osc 3 Morph & Warp", "Osc", { "osc3.morph.type", "osc3.morph.amount", "osc3.morph.spread", "osc3.warp.type", "osc3.warp.amount", "osc3.warp.phase", "osc3.warp.spread", "osc3.frame_spread" }, 8, nullptr, 0 },
     // Page 13: Noise & Osc Mix (Osc)
-    { "noise", "Noise & Osc Mix", "Osc", { "noise.on", "noise.level", "noise.pan", "noise.destination", "filter.routing", "osc1.level", "osc2.level", "osc3.level" }, 8, nullptr, 0 },
+    { "noise", "Noise & Osc Mix", "Osc", { "noise.on", "noise.level", "noise.pan", "noise.destination", "filter.routing", "osc1.level", "osc2.level", "osc3.level" }, 8, s_more_noise, 7 },
     // Page 14: Filter 1 Main (Filter)
     { "filter1_main", "Filter 1 Main", "Filter", { "filter1.on", "filter1.model", "filter1.style", "filter1.cutoff", "filter1.resonance", "filter1.drive", "filter1.blend", "filter1.mix" }, 8, nullptr, 0 },
     // Page 15: Filter 1 Key & Formant (Filter)
@@ -362,7 +371,9 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc2_warp2", "Osc 2 Warp 2", "Osc", { "osc2.warp2.type", "osc2.warp2.amount", "osc2.warp2.phase", "osc2.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 78: Osc 3 Warp 2 (Osc)
     { "osc3_warp2", "Osc 3 Warp 2", "Osc", { "osc3.warp2.type", "osc3.warp2.amount", "osc3.warp2.phase", "osc3.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
-    // Page 79: Mixer Routing (Osc)
+    // Page 79: Sub Oscillator (Osc)
+    { "sub_main", "Sub Oscillator", "Osc", { "sub.on", "sub.waveform", "sub.octave", "sub.tune", "sub.level", "sub.pan", "sub.destination", "sub.mono" }, 8, s_more_sub, 3 },
+    // Page 80: Mixer Routing (Osc)
     { "mix_routing", "Mixer Routing", "Osc", { "osc1.filter_blend", "osc2.filter_blend", "osc3.filter_blend", "noise.filter_blend", "filter1.destination", "filter2.destination", "direct.level", "main.fx_bypass" }, 8, nullptr, 0 },
     // Page 80: Mixer Buses (Osc)
     { "mix_bus", "Mixer Buses", "Osc", { "bus1.level", "bus1.destination", "bus1.fx_bypass", "bus2.level", "bus2.destination", "bus2.fx_bypass", nullptr, nullptr }, 6, nullptr, 0 },

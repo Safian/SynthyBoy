@@ -399,6 +399,7 @@ namespace sbvital {
       force_inline int polyphony() { return polyphony_; }
     
       mono_float getLastActiveNote() const;
+      mono_float getLowestActiveNote() const;
 
       virtual ProcessorRouter* getMonoRouter() override { return &global_router_; }
       virtual ProcessorRouter* getPolyRouter() override { return &voice_router_; }

@@ -28,7 +28,7 @@ constexpr int kNumModSources = 38;
 /** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 38 were appended in version 3. */
 constexpr int kNumModSourcesV2 = 28;
 /** Size of the destination choice (modNN.destination): "none" plus every parameter flagged kParamModulatable (checked against the table). */
-constexpr int kNumModDestinations = 404;
+constexpr int kNumModDestinations = 414;
 
 /** Source k (0-based) has the choice value k + 1; the order is the one of the list in docs/PARAMETERS.md. */
 const ModSourceInfo* modSourceTable() noexcept;

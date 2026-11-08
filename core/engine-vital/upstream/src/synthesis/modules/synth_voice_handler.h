@@ -121,6 +121,7 @@ namespace sbvital {
       LineMap* pitch_wheel_mapping_;
 
       cr::Value* stereo_;
+      cr::Value* lowest_active_note_;
       cr::Multiply* note_percentage_;
 
       Multiply* output_;

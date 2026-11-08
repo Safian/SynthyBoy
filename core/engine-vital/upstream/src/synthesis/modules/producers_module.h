@@ -20,6 +20,7 @@
 #include "synth_module.h"
 #include "oscillator_module.h"
 #include "sample_module.h"
+#include "sub_module.h"
 
 namespace sbvital {
   class ProducersModule : public SynthModule {
@@ -37,6 +38,7 @@ namespace sbvital {
         kFold2,
         kFold3,
         kNotePressed,  // SynthyBoy: 1 while the key of the voice is held
+        kLowestNote,   // SynthyBoy: lowest active MIDI note (for mono sub)
         kNumInputs
       };
 
@@ -53,6 +55,8 @@ namespace sbvital {
       // SynthyBoy: destinations appended to the five of the engine: a continuous blend of the two filters, and none (modulation source only)
       static constexpr int kDestinationFilterBlend = 5;
       static constexpr int kDestinationNone = 6;
+      static constexpr int kNumSources = kNumOscillators + 2; // osc1..3, noise, sub
+      static constexpr int kSourceSub = kNumOscillators + 1; // 4
 
       static force_inline int getFirstModulationIndex(int index) {
         return index == 0 ? 1 : 0;
@@ -92,17 +96,19 @@ namespace sbvital {
       Value* map_warp_[kNumOscillators] = { nullptr, nullptr, nullptr };
       Value* sample_destination_;
       SampleModule* sampler_;
+      Value* sub_destination_;
+      SubModule* sub_module_;
 
       const Value* filter1_on_;
       const Value* filter2_on_;
 
-      // SynthyBoy: per source (oscillators 1 to 3, the noise): the filter blend and the two bus sends (control-rate, ramped over the block)
-      Output* filter_blend_[kNumOscillators + 1] = {};
-      Output* bus1_send_[kNumOscillators + 1] = {};
-      Output* bus2_send_[kNumOscillators + 1] = {};
-      poly_float last_blend_[kNumOscillators + 1];
-      poly_float last_send1_[kNumOscillators + 1];
-      poly_float last_send2_[kNumOscillators + 1];
+      // SynthyBoy: per source (oscillators 1 to 3, noise, sub): the filter blend and the two bus sends (control-rate, ramped over the block)
+      Output* filter_blend_[kNumSources] = {};
+      Output* bus1_send_[kNumSources] = {};
+      Output* bus2_send_[kNumSources] = {};
+      poly_float last_blend_[kNumSources];
+      poly_float last_send1_[kNumSources];
+      poly_float last_send2_[kNumSources];
 
       JUCE_LEAK_DETECTOR(ProducersModule)
   };

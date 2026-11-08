@@ -866,6 +866,15 @@ namespace sbvital {
     return 0.0f;
   }
 
+  mono_float VoiceHandler::getLowestActiveNote() const {
+    mono_float lowest = 999.0f;
+    for (Voice* voice : active_voices_) {
+      if (voice->state().event != kVoiceKill && voice->state().midi_note < lowest)
+        lowest = voice->state().midi_note;
+    }
+    return lowest < 990.0f ? lowest : 0.0f;
+  }
+
   void VoiceHandler::addProcessor(Processor* processor) {
     processor->setSampleRate(getSampleRate());
     voice_router_.addProcessor(processor);

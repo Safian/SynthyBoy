@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1484 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**1502 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -12,7 +12,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Osc 1 | 64 |
 | Osc 2 | 64 |
 | Osc 3 | 64 |
-| Noise | 7 |
+| Noise | 14 |
 | Filter 1 | 21 |
 | Filter 2 | 21 |
 | Filters | 1 |
@@ -41,6 +41,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | LFO 9 | 16 |
 | LFO 10 | 16 |
 | Mixer | 8 |
+| Sub | 11 |
 
 ## Default patch
 
@@ -295,6 +296,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `noise.filter_blend` | Noise Filter Blend | 0 .. 100 % | 0 % | Noise | mod |  |
 | `noise.bus1_send` | Noise Bus 1 Send | 0 .. 100 % | 0 % | Noise | mod |  |
 | `noise.bus2_send` | Noise Bus 2 Send | 0 .. 100 % | 0 % | Noise | mod |  |
+| `noise.sample` | Noise Sample | 9 choices: 0 White Noise, 1 Pink Noise, 2 Brown Noise, ... , 8 Atmosphere | White Noise | Noise |  |  |
+| `noise.pitch` | Noise Pitch | -48 .. 48 st (steps of 1) | 0 st | Noise | mod |  |
+| `noise.fine` | Noise Fine | -100 .. 100 ct | 0 ct | Noise | mod |  |
+| `noise.phase` | Noise Phase | 0 .. 100 % | 0 % | Noise | mod |  |
+| `noise.random_phase` | Noise Random Phase | 0 Off, 1 On | Off | Noise |  |  |
+| `noise.keytrack` | Noise Keytrack | 0 Off, 1 On | Off | Noise |  |  |
+| `noise.loop` | Noise Loop | 0 Off, 1 On | On | Noise |  |  |
 
 ### Filter 1
 
@@ -741,7 +749,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..38 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..403 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..413 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 |  |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -1007,6 +1015,22 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `bus2.fx_bypass` | Bus 2 FX Bypass | 0 Off, 1 On | Off | Mixer / Bus 2 |  |  |
 | `direct.level` | Direct Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer | mod |  |
 | `main.fx_bypass` | Main FX Bypass | 0 Off, 1 On | Off | Mixer |  |  |
+
+### Sub
+
+| Key | Name | Range | Default | Group | Mod | Own engine |
+|-----|------|-------|---------|-------|-----|------------|
+| `sub.on` | Sub On | 0 Off, 1 On | Off | Sub |  |  |
+| `sub.waveform` | Sub Waveform | 0 Sine, 1 Rounded Rect, 2 Triangle, 3 Saw, 4 Square, 5 Pulse | Sine | Sub |  |  |
+| `sub.octave` | Sub Octave | -4 .. 4 (steps of 1) | -1 | Sub | mod |  |
+| `sub.tune` | Sub Tune | -100 .. 100 ct | 0 ct | Sub | mod |  |
+| `sub.level` | Sub Level | 0 .. 100 % | 50 % | Sub | mod |  |
+| `sub.pan` | Sub Pan | -100 .. 100 % | 0 % | Sub | mod |  |
+| `sub.destination` | Sub Destination | 7 choices: 0 Filter 1, 1 Filter 2, 2 Filters 1+2, ... , 6 None | Filter 1 | Sub |  |  |
+| `sub.mono` | Sub Mono | 0 Off, 1 On | On | Sub |  |  |
+| `sub.filter_blend` | Sub Filter Blend | 0 .. 100 % | 0 % | Sub | mod |  |
+| `sub.bus1_send` | Sub Bus 1 Send | 0 .. 100 % | 0 % | Sub | mod |  |
+| `sub.bus2_send` | Sub Bus 2 Send | 0 .. 100 % | 0 % | Sub | mod |  |
 
 ## Modulation sources
 
@@ -1462,6 +1486,16 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 401 | `splitter_lmh.freq_high` | Splitter L/M/H High Split Frequency |
 | 402 | `splitter_lmh.level` | Splitter L/M/H Level |
 | 403 | `splitter_ms.level` | Splitter M/S Level |
+| 404 | `sub.octave` | Sub Octave |
+| 405 | `sub.tune` | Sub Tune |
+| 406 | `sub.level` | Sub Level |
+| 407 | `sub.pan` | Sub Pan |
+| 408 | `sub.filter_blend` | Sub Filter Blend |
+| 409 | `sub.bus1_send` | Sub Bus 1 Send |
+| 410 | `sub.bus2_send` | Sub Bus 2 Send |
+| 411 | `noise.pitch` | Noise Pitch |
+| 412 | `noise.fine` | Noise Fine |
+| 413 | `noise.phase` | Noise Phase |
 
 ## Built-in wavetables and LFO shapes
 

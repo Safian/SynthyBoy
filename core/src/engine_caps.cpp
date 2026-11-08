@@ -73,8 +73,17 @@ EngineCapsMask classify (const char* key) noexcept
             return kCapMixerGraph;
         return kCapSampleOsc; // oscN.type, oscN.sample.*
     }
+    if (startsWith (key, "sub."))
+        return kCapSubOsc;
     if (startsWith (key, "noise."))
-        return kCapMixerGraph; // filter_blend, bus sends
+    {
+        if (endsWith (key, ".filter_blend") || endsWith (key, "_send"))
+            return kCapMixerGraph;
+        if (std::strcmp (key, "noise.on") == 0 || std::strcmp (key, "noise.level") == 0
+            || std::strcmp (key, "noise.pan") == 0 || std::strcmp (key, "noise.destination") == 0)
+            return kCapNone;
+        return kCapNoiseExtras;
+    }
 
     if (startsWith (key, "filter") || startsWith (key, "fxfilter"))
     {
@@ -160,7 +169,7 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         caps |= kCapFilterModels;
     else if ((startsWith (key, "filter") || startsWith (key, "fxfilter")) && endsWith (key, ".style") && v >= 6)
         caps |= kCapFilterModels;
-    else if ((startsWith (key, "osc") || startsWith (key, "noise")) && endsWith (key, ".destination") && v >= 5)
+    else if ((startsWith (key, "osc") || startsWith (key, "noise") || startsWith (key, "sub")) && endsWith (key, ".destination") && v >= 5)
         caps |= kCapMixerGraph;
     else if (startsWith (key, "fx.order.") && v >= kNumLegacyFxSlots)
         caps |= kCapFxRacks;
@@ -197,6 +206,8 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapFxConvolve:       return "fx_convolve";
         case kCapFxSplitters:      return "fx_splitters";
         case kCapReverbForce:      return "reverb_force";
+        case kCapSubOsc:           return "sub_osc";
+        case kCapNoiseExtras:      return "noise_extras";
         case kCapNone:             break;
     }
     return "";

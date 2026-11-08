@@ -1,6 +1,6 @@
 # UI gesture audit: section 3 "Interactions" of docs/ui-design/02 .. 08
 
-**Count after the gap closure (124 rows): closed (gaps) 47 (05-22 added with the per-voice engine), NOT DONE with a hard technical reason 1 (02-28), GAP left 7, partial 0, the rest implemented / added before.** `closed (gaps)` rows are covered by `shell-juce/ui/tests/test_ui_gaps.cpp` (pure logic: `test_ui_model.cpp`).
+**Count after the gap closure (124 rows): closed (gaps) 49 (05-22 added with the per-voice engine, 02-27 and 02-28 added with OSCEXTRA), NOT DONE with a hard technical reason 0, GAP left 6, partial 0, the rest implemented / added before.** `closed (gaps)` rows are covered by `shell-juce/ui/tests/test_ui_gaps.cpp` (pure logic: `test_ui_model.cpp`).
 
 Method: every row of the Interactions table of 02, 03, 04, 05, 06, 07, 08 against `shell-juce/ui/` (state of this branch, line numbers are of the commit that contains this file). Status:
 
@@ -41,8 +41,8 @@ K (kit, every control that is a plain key): vertical drag + fine zones `ParamCon
 | 02-24 | X\|Y dot (granular / spectral) | GAP (Q6: granular / spectral stay GAP) |
 | 02-25 | Window button (granular) | GAP |
 | 02-26 | Spectral Lo / Hi markers, spectral filter editor | GAP |
-| 02-27 | Sub waveform picker | GAP (no sub oscillator key) |
-| 02-28 | Noise sample `< >` | NOT DONE (hard reason): `docs/params.json` has no noise sample key - all `noise.*` keys are level, pan, on, destination, filter blend and the two bus sends (`NoisePanel.cpp:27-35`); a `< >` without a key would be an invented key. Noise level / pan drag on the view stays `OscWaveView.cpp` (OscNoiseView) |
+| 02-27 | Sub waveform picker | **closed (gaps)**: 6 segmented buttons (SIN, RECT, TRI, SAW, SQR, PULSE) with >= 44 pt touch targets `SubPanel.cpp:142-167`, taps update `sub.waveform` (`:177-194`); direct manipulation (drag level/pan) on `SubWaveView` (`:36-68`). Test `uig_sub_waveform_picker_and_noise_sample_stepper` |
+| 02-28 | Noise sample `< >` | **closed (gaps)**: `<` `>` stepper buttons and sample name popup `NoisePanel.cpp:22-26` (`stepSample :47-56`, `showSampleMenu :58-79`) switching among the 9 procedural noise colors; direct manipulation (level/pan) on `OscWaveView.cpp:1028-1065` (OscNoiseView). Test `uig_sub_waveform_picker_and_noise_sample_stepper` |
 | 02-29 | MAIN fader | implemented: console Main fader `OscWaveView.cpp:833` (`master.volume`), main knob in the macro row |
 | 02-30 | Bus FX bypass button | implemented: `OscWaveView.cpp:757` / `:766` (`FX On` / `FX Byp`) |
 
@@ -176,6 +176,6 @@ LFO tab chips + drag-to-copy, sync-mode dimming, the free-form shape editor (05-
 
 ## Rows left after the gap closure (docs/ui-design/UI-GAPS-REPORT.md)
 
-- **NOT DONE with a hard reason (1)**: 02-28 (no noise sample key in `docs/params.json`). 05-22 is implemented since the engine plays point modulation per voice.
-- **GAP in the design / engine, left as the task says (7)**: 02-09, 02-10, 02-14, 02-24, 02-25, 02-26, 02-27.
+- **NOT DONE with a hard reason (0)**: none (02-28 closed with OSCEXTRA procedural noise sample sets). 05-22 is implemented since the engine plays point modulation per voice.
+- **GAP in the design / engine, left as the task says (6)**: 02-09, 02-10, 02-14, 02-24, 02-25, 02-26 (02-27 closed with OSCEXTRA sub oscillator).
 - **partial (0)**: none.

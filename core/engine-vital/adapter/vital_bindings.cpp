@@ -144,7 +144,7 @@ std::vector<Binding> build()
         b.percent (k + "warp.spread", c + "distortion_spread", 0.005);
     }
 
-    // --- noise (the engine's built-in white noise sample) ------------------------------------------------------------
+    // --- noise (the engine's built-in noise sample and extras) --------------------------------------------------------
     b.choice ("noise.on", "sample_on");
     b.add ("noise.level", "sample_level", Conv::sqrtScaled, 0.01);
     b.percent ("noise.pan", "sample_pan");
@@ -152,6 +152,25 @@ std::vector<Binding> build()
     b.percent ("noise.filter_blend", "sample_filter_blend");
     b.percent ("noise.bus1_send", "sample_bus1_send");
     b.percent ("noise.bus2_send", "sample_bus2_send");
+    b.add ("noise.pitch", "sample_transpose", Conv::linear);
+    b.percent ("noise.fine", "sample_tune", 0.01);
+    b.percent ("noise.phase", "sample_phase");
+    b.choice ("noise.random_phase", "sample_random_phase");
+    b.choice ("noise.keytrack", "sample_keytrack");
+    b.choice ("noise.loop", "sample_loop");
+
+    // --- sub oscillator (G23) ---------------------------------------------------------------------------------------
+    b.choice ("sub.on", "sub_on");
+    b.choice ("sub.waveform", "sub_waveform");
+    b.add ("sub.octave", "sub_octave", Conv::linear);
+    b.add ("sub.tune", "sub_tune", Conv::linear);
+    b.add ("sub.level", "sub_level", Conv::sqrtScaled, 0.01);
+    b.percent ("sub.pan", "sub_pan");
+    b.choice ("sub.destination", "sub_destination");
+    b.choice ("sub.mono", "sub_mono");
+    b.percent ("sub.filter_blend", "sub_filter_blend");
+    b.percent ("sub.bus1_send", "sub_bus1_send");
+    b.percent ("sub.bus2_send", "sub_bus2_send");
 
     // --- mixer buses and DIRECT (WP5) -------------------------------------------------------------------------------
     for (int bus = 1; bus <= 2; ++bus)
@@ -421,7 +440,9 @@ bool isSpecialParam (size_t paramIndex)
         || (startsWith ("mod") && std::strstr (key, ".aux_") != nullptr) || startsWith ("curve.") || startsWith ("master.scale.")
         || startsWith ("master.tuning.") || startsWith ("master.mpe.") || (startsWith ("osc") && std::strstr (key, ".map.") != nullptr)
         // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
-        || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"));
+        || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"))
+        // B13: noise sample choice (procedural noise buffers)
+        || std::strcmp (key, "noise.sample") == 0;
 }
 
 double convertParam (const Binding& binding, double plain, double sampleRate, double bpm)

@@ -39,7 +39,7 @@ namespace sbvital {
       pitch_wheel_(nullptr), filters_module_(nullptr), lfos_(), envelopes_(), lfo_sources_(), random_(nullptr),
       random_lfos_(), note_mapping_(nullptr), velocity_mapping_(nullptr), aftertouch_mapping_(nullptr),
       slide_mapping_(nullptr), lift_mapping_(nullptr), mod_wheel_mapping_(nullptr),
-      pitch_wheel_mapping_(nullptr), stereo_(nullptr), note_percentage_(nullptr), last_active_voice_mask_(0) {
+      pitch_wheel_mapping_(nullptr), stereo_(nullptr), lowest_active_note_(nullptr), note_percentage_(nullptr), last_active_voice_mask_(0) {
     output_ = new Multiply();
     registerOutput(output_->output());
 
@@ -165,12 +165,14 @@ namespace sbvital {
   }
 
   void SynthVoiceHandler::createProducers() {
+    lowest_active_note_ = new cr::Value(0.0f);
     producers_ = new ProducersModule();
     producers_->plug(reset(), ProducersModule::kReset);
     producers_->plug(retrigger(), ProducersModule::kRetrigger);
     producers_->plug(bent_midi_, ProducersModule::kMidi);
     producers_->plug(note_count(), ProducersModule::kNoteCount);
     producers_->plug(active_mask(), ProducersModule::kActiveVoices);
+    producers_->plug(lowest_active_note_, ProducersModule::kLowestNote);
     producers_->plug(note_pressed(), ProducersModule::kNotePressed);
     for (int i = 0; i < 3; ++i) {
       producers_->plug(osc_mute(i), ProducersModule::kMute1 + i);
@@ -345,6 +347,9 @@ namespace sbvital {
     poly_mask reset_mask = reset()->trigger_mask;
     if (reset_mask.anyMask())
       resetFeedbacks(reset_mask);
+
+    if (lowest_active_note_)
+      lowest_active_note_->set(getLowestActiveNote());
 
     VoiceHandler::process(num_samples);
     int num_voices = getNumActiveVoices();

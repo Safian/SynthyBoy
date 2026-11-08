@@ -435,6 +435,15 @@
         {"key": "osc1.level", "shortLabel": "Level", "widget": "knob"},
         {"key": "osc2.level", "shortLabel": "Level", "widget": "knob"},
         {"key": "osc3.level", "shortLabel": "Level", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "noise.sample",
+        "noise.pitch",
+        "noise.fine",
+        "noise.phase",
+        "noise.random_phase",
+        "noise.keytrack",
+        "noise.loop"
       ]
     },
     {
@@ -2259,6 +2268,26 @@
         null,
         null,
         null
+      ]
+    },
+    {
+      "id": "sub_main",
+      "section": "Osc",
+      "title": "Sub Oscillator",
+      "knobs": [
+        {"key": "sub.on", "shortLabel": "Sub On", "widget": "toggle"},
+        {"key": "sub.waveform", "shortLabel": "Sub Wavefo", "widget": "stepped"},
+        {"key": "sub.octave", "shortLabel": "Sub Octave", "widget": "bipolar_knob"},
+        {"key": "sub.tune", "shortLabel": "Sub Tune", "widget": "bipolar_knob"},
+        {"key": "sub.level", "shortLabel": "Sub Level", "widget": "knob"},
+        {"key": "sub.pan", "shortLabel": "Sub Pan", "widget": "bipolar_knob"},
+        {"key": "sub.destination", "shortLabel": "Sub Destin", "widget": "stepped"},
+        {"key": "sub.mono", "shortLabel": "Sub Mono", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "sub.filter_blend",
+        "sub.bus1_send",
+        "sub.bus2_send"
       ]
     },
     {

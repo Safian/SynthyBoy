@@ -663,6 +663,18 @@ namespace sbvital {
     add("sample_filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sample_bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sample_bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sample_phase", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sub_on", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
+    add("sub_waveform", 0.0, 5.0, 0.0, ValueDetails::kIndexed);
+    add("sub_octave", -4.0, 4.0, -1.0, ValueDetails::kLinear);
+    add("sub_tune", -100.0, 100.0, 0.0, ValueDetails::kLinear, 1.0, "cents");
+    add("sub_level", 0.0, 1.0, 0.70710678119, ValueDetails::kQuadratic);
+    add("sub_pan", -1.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sub_destination", 0.0, 6.0, 0.0, ValueDetails::kIndexed);
+    add("sub_mono", 0.0, 1.0, 1.0, ValueDetails::kIndexed);
+    add("sub_filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sub_bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sub_bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     for (int filter = 1; filter <= kNumFilters; ++filter) {
       const std::string prefix = "filter_" + std::to_string(filter) + "_";
       add(prefix + "destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
