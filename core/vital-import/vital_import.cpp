@@ -20,6 +20,7 @@
 #include "number.h"
 #include "sha256.h"
 #include "synthyboy/modulation.h"
+#include "synthyboy/tuning.h"
 #include "synthyboy/wavetable_render.h"
 #include "vital_content.h"
 #include "vital_import_internal.h"
