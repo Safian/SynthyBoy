@@ -77,9 +77,14 @@ private:
 // ---- locks (G08) ----------------------------------------------------------------------------------------------------------------------
 
 constexpr size_t kMaxLocks = 64;
+constexpr const char* kMatrixLock = "matrix";          // Lock Matrix
+constexpr const char* kQualityLock = "quality";        // lock the quality settings
+constexpr const char* kTuningLock = "master.tuning";   // lock the tuning configuration
 constexpr size_t kMaxLockNameBytes = 48;
 
-/** A lock names a module prefix ("osc1", "filter2", "lfo3", "env1", "fx": every key "<name>.*") or one parameter key ("master.volume"). */
+/** A lock names a module prefix ("osc1", "filter2", "lfo3", "env1", "fx": every key "<name>.*") or one parameter key ("master.volume"). Three locks of the
+    global settings are names too (GROUPA2 WP-02): "matrix" (Lock Matrix: the 64 slots `modNN.*` and the per-connection curves, S p.214), "quality" (S p.319)
+    and "master.tuning" (the tuning keys and the tuning table, S p.321) - the last two are ordinary prefixes. */
 bool isValidLockName (const std::string& name) noexcept;
 /** True if the parameter `key` is covered by the lock entry `lock` (key == lock, or key starts with "<lock>."). */
 bool lockCoversKey (const std::string& lock, const char* key) noexcept;

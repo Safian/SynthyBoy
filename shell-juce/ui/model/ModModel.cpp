@@ -200,6 +200,26 @@ float AssignFlow::amountNormalised() const
     return toNormalised (info, matrix.get (slotTable()[static_cast<size_t> (slot)].amount));
 }
 
+void AssignFlow::depthRange (float& lowest, float& highest) const
+{
+    lowest = -100.0f;
+    highest = 100.0f;
+    if (! limitHeadroom || state != Phase::dragging || destination < 0)
+        return;
+    const float position = toNormalised (paramTable()[static_cast<size_t> (destination)], matrix.get (destination)); // 0..1
+    if (matrix.get (slotTable()[static_cast<size_t> (slot)].bipolar) >= 0.5f)
+    {
+        const float room = 100.0f * std::min (position, 1.0f - position);
+        lowest = -room;
+        highest = room;
+    }
+    else
+    {
+        lowest = -100.0f * position;
+        highest = 100.0f * (1.0f - position);
+    }
+}
+
 void AssignFlow::dragBy (float dyUpPx, FineZone zone)
 {
     if (state != Phase::dragging)
@@ -207,7 +227,9 @@ void AssignFlow::dragBy (float dyUpPx, FineZone zone)
     const int idx = slotTable()[static_cast<size_t> (slot)].amount;
     const ParamInfo& info = paramTable()[static_cast<size_t> (idx)];
     const float n = applyDragDelta (toNormalised (info, matrix.get (idx)), dyUpPx, zone);
-    matrix.set (idx, fromNormalised (info, n));
+    float lowest = -100.0f, highest = 100.0f;
+    depthRange (lowest, highest);
+    matrix.set (idx, std::clamp (fromNormalised (info, n), lowest, highest));
 }
 
 void AssignFlow::setAmount (float percent)

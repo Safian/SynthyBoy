@@ -80,6 +80,14 @@ void ParamControl::showSheet()
         showParamSheet (ctx, handle.key(), *this);
 }
 
+void ParamControl::showValueBox()
+{
+    if (onValueBox)
+        onValueBox();
+    else if (handle.valid())
+        showParamSheet (ctx, handle.key(), *this, true);
+}
+
 void ParamControl::paintUnknownKey (juce::Graphics& g) const
 {
     g.setColour (ctx.theme.colours.warn);
@@ -145,6 +153,8 @@ void ParamDragControl::updateRing()
 void ParamDragControl::showBubble (FineZone z)
 {
     zone = z;
+    if (! ctx.host.preferences().valueBubbles) // "Param value tooltips" off (S p.313)
+        return;
     auto* top = getTopLevelComponent();
     if (top == nullptr || top == this || ! handle.valid())
         return;
@@ -158,7 +168,7 @@ void ParamDragControl::showBubble (FineZone z)
         text = juce::String (displayText (amount, ctx.assign.matrix().get (modSlotParams (ctx.assign.flow().activeSlot()).amount)));
     }
     else
-        text = juce::String (displayText (handle.info(), handle.plain()));
+        text = juce::String (valueText (ctx, handle.info(), handle.plain()));
     bubble->setContent (text, z);
 
     if (bubble->getParentComponent() != top)
@@ -234,6 +244,23 @@ void ParamDragControl::mouseDown (const juce::MouseEvent& e)
 {
     if (! handle.valid())
         return;
+    // Appendix G: Cmd-click (Ctrl-click on Windows) resets the control to its default; with the keyboard shortcuts preference off it is an ordinary press
+    if (ctx.host.preferences().keyboardShortcuts && (e.mods.isCommandDown() || (e.mods.isCtrlDown() && ! e.mods.isPopupMenu())) && ctx.assign.flow().phase() == AssignFlow::Phase::idle)
+    {
+        consumedByMenu = true;
+        pressed = false;
+        handle.resetToDefault();
+        return;
+    }
+    // Appendix G: Shift-Alt-click on a modulated control switches the modulation between directional and bi-directional
+    if (ctx.host.preferences().keyboardShortcuts && e.mods.isShiftDown() && e.mods.isAltDown() && ! e.mods.isPopupMenu() && modulatorCount() > 0
+        && ctx.assign.flow().phase() == AssignFlow::Phase::idle)
+    {
+        consumedByMenu = true;
+        pressed = false;
+        toggleModulationPolarity();
+        return;
+    }
     if (e.mods.isPopupMenu())
     {
         consumedByMenu = true;
@@ -268,6 +295,7 @@ void ParamDragControl::mouseDrag (const juce::MouseEvent& e)
 
         // armed source + modulatable control: this drag sets the modulation depth instead of the value (06-modulation.md 2.1)
         auto& flow = ctx.assign.flow();
+        flow.setLimitToHeadroom (ctx.host.preferences().limitModDepth); // "Limit Mod depth on drop" (S p.314)
         if (flow.phase() == AssignFlow::Phase::armed && handle.modulatable() && flow.isTarget (handle.index()))
         {
             const auto result = flow.beginDrag (handle.index());
@@ -284,6 +312,9 @@ void ParamDragControl::mouseDrag (const juce::MouseEvent& e)
     const float sideways = isHorizontal() ? e.position.y - downPos.y : e.position.x - downPos.x;
     lastPos = e.position;
     zone = zoneForOffset (sideways, ctx.theme.px (kFineZoneWidthPx));
+    // Appendix G: Shift-drag fine tunes (the same step as the fine zone at the side)
+    if (zone == FineZone::normal && e.mods.isShiftDown() && ctx.host.preferences().keyboardShortcuts)
+        zone = FineZone::fine;
 
     if (assignDrag)
     {
@@ -334,7 +365,11 @@ void ParamDragControl::mouseUp (const juce::MouseEvent& e)
     const auto now = juce::Time::getMillisecondCounter();
     if (isDoubleTap (static_cast<int> (now - lastTapMs), e.position.getDistanceFrom (lastTapPos)))
     {
-        handle.resetToDefault();
+        // "Double-click params" (S p.313): reset to the default, or open the value box
+        if (ctx.host.preferences().doubleClickResets)
+            handle.resetToDefault();
+        else
+            showValueBox();
         lastTapMs = 0;
     }
     else
@@ -344,6 +379,25 @@ void ParamDragControl::mouseUp (const juce::MouseEvent& e)
     }
 }
 
+bool ParamDragControl::toggleModulationPolarity()
+{
+    const auto& entries = ctx.assign.snapshot().entriesFor (handle.index());
+    if (entries.empty())
+        return false;
+    const float wanted = entries.front().bipolar ? 0.0f : 1.0f;
+    auto& matrix = ctx.assign.matrix();
+    for (const auto& entry : entries)
+    {
+        const int param = modSlotParams (entry.slot).bipolar;
+        matrix.beginGesture (param);
+        matrix.set (param, wanted);
+        matrix.endGesture (param);
+    }
+    ctx.assign.refresh();
+    ctx.assign.sendChangeMessage();
+    return true;
+}
+
 void ParamDragControl::longPressed()
 {
     pressed = false;
@@ -351,8 +405,13 @@ void ParamDragControl::longPressed()
     showSheet();
 }
 
-void ParamDragControl::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+void ParamDragControl::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
+    if (! ctx.host.preferences().mouseWheel) // "Mouse wheel param control" off (S p.314): the wheel scrolls the page
+    {
+        Component::mouseWheelMove (e, wheel);
+        return;
+    }
     if (handle.valid() && wheel.deltaY != 0.0f)
         nudgeNormalised (wheel.deltaY * 0.05f);
 }
@@ -459,7 +518,7 @@ void ParamKnob::paint (juce::Graphics& g)
     {
         g.setColour (c.text);
         g.setFont (t.valueFont());
-        g.drawFittedText (juce::String (displayText (info, handle.plain())), 0, getHeight() - t.ipx (20.0f), getWidth(), t.ipx (20.0f),
+        g.drawFittedText (juce::String (valueText (ctx, info, handle.plain())), 0, getHeight() - t.ipx (20.0f), getWidth(), t.ipx (20.0f),
                           juce::Justification::centred, 1);
     }
 }
@@ -507,7 +566,7 @@ void ParamSlider::paint (juce::Graphics& g)
     g.drawFittedText (labelText, 0, 0, getWidth() / 2, t.ipx (16.0f), juce::Justification::centredLeft, 1);
     g.setColour (c.text);
     g.setFont (t.valueFont());
-    g.drawFittedText (juce::String (displayText (info, handle.plain())), getWidth() / 2, 0, getWidth() / 2, t.ipx (16.0f),
+    g.drawFittedText (juce::String (valueText (ctx, info, handle.plain())), getWidth() / 2, 0, getWidth() / 2, t.ipx (16.0f),
                       juce::Justification::centredRight, 1);
 
     const auto tb = trackBounds();
@@ -572,7 +631,7 @@ void ParamChoice::paint (juce::Graphics& g)
 
     g.setColour (c.text);
     g.setFont (t.valueFont());
-    g.drawFittedText (juce::String (displayText (handle.info(), handle.plain())),
+    g.drawFittedText (juce::String (valueText (ctx, handle.info(), handle.plain())),
                       pill.toNearestInt().withTrimmedLeft (arrowArea (true).getWidth()).withTrimmedRight (arrowArea (false).getWidth()),
                       juce::Justification::centred, 1);
 }

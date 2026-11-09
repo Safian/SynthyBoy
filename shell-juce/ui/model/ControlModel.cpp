@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -69,6 +70,54 @@ std::string displayText (const ParamInfo& info, float plain)
     valueToText (info, plain, buf, sizeof buf);
     const std::string unit = unitText (info);
     return unit.empty() ? std::string (buf) : std::string (buf) + " " + unit;
+}
+
+bool isCutoffReadout (const ParamInfo& info) noexcept
+{
+    if (info.unit != Unit::Hz || info.scale == Scale::stepped)
+        return false;
+    const std::string key = info.key;
+    for (const char* word : { "cutoff", "center", "_cut", "lpf", "hpf", "freq", "crossover" })
+        if (key.find (word) != std::string::npos)
+            return true;
+    return false;
+}
+
+std::string semitoneText (float hz)
+{
+    const double semis = hz > 0.0f ? 12.0 * std::log2 (static_cast<double> (hz) / 261.6256) : -999.0;
+    char buf[48];
+    std::snprintf (buf, sizeof buf, "%+.1f st", semis);
+    return buf;
+}
+
+bool semitoneTextToHz (const std::string& text, float& hz)
+{
+    std::string t = text;
+    while (! t.empty() && std::isspace (static_cast<unsigned char> (t.back()))) t.pop_back();
+    for (const char* suffix : { "semitones", "semitone", "semis", "semi", "st" })
+    {
+        const size_t n = std::strlen (suffix);
+        if (t.size() > n && t.compare (t.size() - n, n, suffix) == 0)
+        {
+            t.erase (t.size() - n);
+            break;
+        }
+    }
+    while (! t.empty() && std::isspace (static_cast<unsigned char> (t.back()))) t.pop_back();
+    if (t.empty())
+        return false;
+    char* end = nullptr;
+    const double semis = std::strtod (t.c_str(), &end);
+    if (end == t.c_str() || *end != '\0' || ! std::isfinite (semis) || std::fabs (semis) > 200.0)
+        return false;
+    hz = static_cast<float> (261.6256 * std::pow (2.0, semis / 12.0));
+    return true;
+}
+
+std::string displayText (const ParamInfo& info, float plain, bool semitones)
+{
+    return semitones && isCutoffReadout (info) ? semitoneText (plain) : displayText (info, plain);
 }
 
 std::string sourceChipLabel (int sourceChoice)

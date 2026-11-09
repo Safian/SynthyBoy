@@ -176,6 +176,7 @@ WavetableView::WavetableView (UiContext& context, std::function<void()> onOpenEd
     addAndMakeVisible (zoomInBtn);
     addAndMakeVisible (zoomOutBtn);
 
+    setViewMode (ctx.host.preferences().waveform3d ? ViewMode::mode3D : ViewMode::mode2D); // "Default waveform view" (S p.314)
     updateTableFromChoice();
 }
 

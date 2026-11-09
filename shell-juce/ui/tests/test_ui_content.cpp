@@ -15,6 +15,7 @@
 #include "fixtures.h"
 #include "serum_fixtures.h"
 #include "synthyboy/library_items.h"
+#include "synthyboy/preferences.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/vital_plugin_import.h"
 #include "test_runner.h"
@@ -22,7 +23,9 @@
 #include "ui/ContentSheets.h"
 #include "ui/Editor.h"
 #include "ui/LibraryMenu.h"
+#include "ui/Sheet.h"
 #include "ui/panels/FxRackView.h"
+#include "ui/panels/GlbSettingsPanel.h"
 #include "ui/panels/GlbVoiceControlPanel.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/NoisePanel.h"
@@ -1031,4 +1034,661 @@ TEST (content_voice_control_panel_steps_length_init_presets_and_style_file)
                 CHECK (c->getRight() <= panel.getWidth() && c->getBottom() <= panel.getHeight());
         CHECK_EQ (panel.cell (0, panel.selectedRow())->isVisible(), true);
     }
+}
+
+// ---- GROUPA2 (WP-02): preferences, MIDI map files, locks of the global settings, transport stop, ultra render, About ------------------------------------
+
+namespace
+{
+juce::MouseEvent mouseAt (juce::Component& c, juce::Point<float> pos, juce::Point<float> downPos, bool dragged, juce::ModifierKeys mods = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                          int clicks = 1)
+{
+    auto source = juce::Desktop::getInstance().getMainMouseSource();
+    return juce::MouseEvent (source, pos, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, juce::Time::getCurrentTime(), downPos, juce::Time::getCurrentTime(), clicks, dragged);
+}
+
+void tap (juce::Component& c, juce::Point<float> pos, juce::ModifierKeys mods = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier))
+{
+    c.mouseDown (mouseAt (c, pos, pos, false, mods));
+    c.mouseUp (mouseAt (c, pos, pos, false, mods));
+}
+
+void setPref (Host& h, bool synthyboy::Preferences::* field, bool on)
+{
+    synthyboy::Preferences p = h.proc.preferences();
+    p.*field = on;
+    h.proc.setPreferences (p);
+}
+
+float plainOfKey (SynthyBoyProcessor& proc, const char* key) { return readParameter (proc, key); }
+} // namespace
+
+TEST (content_preferences_are_stored_per_user_and_the_settings_panel_toggles_them)
+{
+    for (const int width : { 390, 1024 })
+    {
+        Host h ("prefs_panel");
+        CHECK (h.proc.preferences() == Preferences {});
+        GlbSettingsPanel panel (h.ctx);
+        panel.build();
+        panel.setBounds (0, 0, width, panel.preferredHeight (width));
+        auto& view = panel.view();
+        const int touch = h.theme.touch();
+        const uint32_t rev0 = h.proc.preferencesRevision();
+        for (size_t i = 0; i < preferenceCount(); ++i)
+        {
+            auto& b = view.preferenceButton (i);
+            CHECK (b.isShowing() || b.isVisible());
+            CHECK (b.getHeight() >= touch && b.getWidth() >= touch * 2);
+            CHECK (b.getRight() <= view.getWidth());
+            const bool before = view.preference (i);
+            CHECK_EQ (b.getToggleState(), before);
+            b.onClick();
+            CHECK_EQ (view.preference (i), ! before);
+            CHECK_EQ (b.getToggleState(), ! before);
+            CHECK_EQ (h.proc.preferences().*(preferenceTable()[i].field), ! before);
+        }
+        CHECK (h.proc.preferencesRevision() >= rev0 + preferenceCount());
+        // the file holds them, a new instance (and the native shell) read the same file
+        const Preferences saved = h.proc.preferences();
+        CHECK (loadPreferences (h.proc.userDirectory()) == saved);
+        CHECK (saved != Preferences {});
+        SynthyBoyProcessor second;
+        CHECK (second.preferences() == saved);
+        // the panel gets taller with the grid of two columns on a tablet than on a phone, never shorter than its content
+        if (width == 390)
+            CHECK (panel.preferredHeight (width) > panel.preferredHeight (1024));
+        for (size_t i = 0; i < preferenceCount(); ++i)
+            view.preferenceButton (i).onClick();
+        CHECK (h.proc.preferences() == Preferences {});
+    }
+}
+
+TEST (content_preferences_change_how_the_controls_behave)
+{
+    Host h ("prefs_controls");
+    juce::Component top;
+    top.setSize (400, 400);
+    ParamKnob knob (h.ctx, "filter1.cutoff");
+    top.addAndMakeVisible (knob);
+    knob.setBounds (10, 10, 80, 120);
+    const auto centre = juce::Point<float> (40.0f, 60.0f);
+    const ParamInfo& info = *findParamByKey ("filter1.cutoff");
+    const auto valueOf = [&] { return readParameter (h.proc, "filter1.cutoff"); };
+    const juce::ModifierKeys plain (juce::ModifierKeys::leftButtonModifier);
+
+    // double click resets (default) or opens the value box (preference)
+    setParameter (h.proc, "filter1.cutoff", 3000.0f);
+    tap (knob, centre);
+    tap (knob, centre);
+    CHECK_NEAR (valueOf(), info.def, 1.0);
+    int valueBoxes = 0;
+    knob.onValueBox = [&] { ++valueBoxes; };
+    setPref (h, &Preferences::doubleClickResets, false);
+    setParameter (h.proc, "filter1.cutoff", 3000.0f);
+    juce::Thread::sleep (350);   // the first tap of the pair must not count as the second tap of the reset above
+    tap (knob, centre);
+    tap (knob, centre);
+    CHECK_NEAR (valueOf(), 3000.0, 1.0);
+    CHECK_EQ (valueBoxes, 1);
+    setPref (h, &Preferences::doubleClickResets, true);
+
+    // the value bubble follows the drag, or stays away
+    for (const bool bubbles : { true, false })
+    {
+        setPref (h, &Preferences::valueBubbles, bubbles);
+        knob.mouseDown (mouseAt (knob, centre, centre, false));
+        knob.mouseDrag (mouseAt (knob, centre + juce::Point<float> (0.0f, -30.0f), centre, true));
+        CHECK_EQ (knob.bubbleShown(), bubbles);
+        knob.mouseUp (mouseAt (knob, centre + juce::Point<float> (0.0f, -30.0f), centre, true));
+        CHECK (! knob.bubbleShown());
+    }
+    setPref (h, &Preferences::valueBubbles, true);
+
+    // the mouse wheel turns the control, or is passed on (the page scrolls)
+    setParameter (h.proc, "filter1.cutoff", 3000.0f);
+    juce::MouseWheelDetails wheel;
+    wheel.deltaY = 1.0f;
+    knob.mouseWheelMove (mouseAt (knob, centre, centre, false), wheel);
+    const float turned = valueOf();
+    CHECK (turned > 3000.5f);
+    setPref (h, &Preferences::mouseWheel, false);
+    knob.mouseWheelMove (mouseAt (knob, centre, centre, false), wheel);
+    CHECK_NEAR (valueOf(), turned, 1.0e-3);
+    setPref (h, &Preferences::mouseWheel, true);
+
+    // the keyboard shortcuts of Appendix G: Cmd-click resets, Shift-drag is fine, Shift-Alt-click turns a modulation bi-directional
+    setParameter (h.proc, "filter1.cutoff", 3000.0f);
+    const juce::ModifierKeys command (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::commandModifier);
+    setPref (h, &Preferences::keyboardShortcuts, false);
+    tap (knob, centre, command);
+    CHECK_NEAR (valueOf(), 3000.0, 1.0);          // a plain press and release: no reset without the shortcuts
+    setPref (h, &Preferences::keyboardShortcuts, true);
+    tap (knob, centre, command);
+    CHECK_NEAR (valueOf(), info.def, 1.0);
+    const auto dragBy = [&] (juce::ModifierKeys mods)
+    {
+        setParameter (h.proc, "filter1.cutoff", 3000.0f);
+        const float before = valueOf();
+        knob.mouseDown (mouseAt (knob, centre, centre, false, mods));
+        knob.mouseDrag (mouseAt (knob, centre + juce::Point<float> (0.0f, -20.0f), centre, true, mods));
+        knob.mouseUp (mouseAt (knob, centre + juce::Point<float> (0.0f, -20.0f), centre, true, mods));
+        return valueOf() - before;
+    };
+    const float coarse = dragBy (plain);
+    const float fine = dragBy (juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::shiftModifier));
+    CHECK (coarse > 0.0f && fine > 0.0f && fine < 0.5f * coarse);
+
+    auto& flow = h.ctx.assign.flow();
+    CHECK (flow.tapSource (7) == AssignFlow::Phase::armed);
+    CHECK (flow.beginDrag (findParamIndex (info.id)) == AssignFlow::BeginResult::ok);
+    flow.setAmount (40.0f);
+    flow.endDrag();
+    flow.cancel();
+    h.ctx.assign.refresh();
+    CHECK (knob.modulatorCount() > 0);
+    const int slot = h.ctx.assign.snapshot().entriesFor (findParamIndex (info.id)).front().slot;
+    const int polarityParam = modSlotParams (slot).bipolar;
+    const float polarity0 = h.ctx.assign.matrix().get (polarityParam);
+    const juce::ModifierKeys shiftAlt (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::shiftModifier | juce::ModifierKeys::altModifier);
+    tap (knob, centre, shiftAlt);
+    CHECK (std::fabs (h.ctx.assign.matrix().get (polarityParam) - polarity0) > 0.5f);
+    tap (knob, centre, shiftAlt);
+    CHECK_NEAR (h.ctx.assign.matrix().get (polarityParam), polarity0, 1.0e-6);
+}
+
+TEST (content_preference_frequency_units_show_and_take_semitones)
+{
+    Host h ("prefs_freq");
+    const ParamInfo& cutoff = *findParamByKey ("filter1.cutoff");
+    const ParamInfo& rate = *findParamByKey ("lfo1.rate");
+    CHECK (isCutoffReadout (cutoff) && isCutoffReadout (*findParamByKey ("eq.low.cutoff")) && isCutoffReadout (*findParamByKey ("splitter_lh.freq"))
+           && isCutoffReadout (*findParamByKey ("reverb.pre_low_cut")) && isCutoffReadout (*findParamByKey ("utility.lpf")));
+    CHECK (! isCutoffReadout (rate) && ! isCutoffReadout (*findParamByKey ("master.tuning.a4")) && ! isCutoffReadout (*findParamByKey ("osc1.level")));
+    CHECK_EQ (valueText (h.ctx, cutoff, 261.6256f), displayText (cutoff, 261.6256f));
+    setPref (h, &Preferences::freqSemitones, true);
+    CHECK_EQ (valueText (h.ctx, cutoff, 261.6256f), std::string ("+0.0 st"));
+    CHECK_EQ (valueText (h.ctx, cutoff, 523.2511f), std::string ("+12.0 st"));
+    CHECK_EQ (valueText (h.ctx, cutoff, 130.8128f), std::string ("-12.0 st"));
+    CHECK_EQ (valueText (h.ctx, rate, 2.0f), displayText (rate, 2.0f));     // a rate is no cutoff
+    // the value box takes semitones in that mode, and Hz when it is told so
+    ParamSheet sheet (h.ctx, "filter1.cutoff");
+    CHECK (sheet.applyValueText ("12"));
+    CHECK_NEAR (readParameter (h.proc, "filter1.cutoff"), 523.25, 0.5);
+    CHECK (sheet.applyValueText ("-12 st"));
+    CHECK_NEAR (readParameter (h.proc, "filter1.cutoff"), 130.81, 0.5);
+    CHECK (sheet.applyValueText ("2 kHz"));
+    CHECK_NEAR (readParameter (h.proc, "filter1.cutoff"), 2000.0, 1.0);
+    CHECK (sheet.applyValueText ("440 Hz"));
+    CHECK_NEAR (readParameter (h.proc, "filter1.cutoff"), 440.0, 1.0);
+    float hz = 0.0f;
+    CHECK (semitoneTextToHz ("+7.5 semitones", hz) && std::fabs (hz - 261.6256f * std::pow (2.0f, 7.5f / 12.0f)) < 0.05f);
+    CHECK (! semitoneTextToHz ("loud", hz) && ! semitoneTextToHz ("", hz) && ! semitoneTextToHz ("st", hz) && ! semitoneTextToHz ("999", hz));
+    setPref (h, &Preferences::freqSemitones, false);
+    CHECK (sheet.applyValueText ("1000"));
+    CHECK_NEAR (readParameter (h.proc, "filter1.cutoff"), 1000.0, 1.0);   // Hz again
+}
+
+TEST (content_preferences_limit_the_mod_depth_choose_the_waveform_view_and_let_the_mod_wheel_scan_the_table)
+{
+    Host h ("prefs_misc");
+    const int level = findParamIndex (findParamByKey ("osc1.level")->id);
+    // limit mod depth on drop: a knob at 75 % takes +25 %
+    for (const bool limit : { false, true })
+    {
+        setPref (h, &Preferences::limitModDepth, limit);
+        setParameter (h.proc, "osc1.level", 75.0f);
+        auto& flow = h.ctx.assign.flow();
+        flow.setLimitToHeadroom (h.proc.preferences().limitModDepth);
+        CHECK (flow.tapSource (7) == AssignFlow::Phase::armed);
+        CHECK (flow.beginDrag (level) == AssignFlow::BeginResult::ok);
+        flow.dragBy (1000.0f, FineZone::normal);
+        const int slot = flow.activeSlot();
+        const float amount = h.ctx.assign.matrix().get (modSlotParams (slot).amount);
+        flow.dragBy (-5000.0f, FineZone::normal);
+        const float down = h.ctx.assign.matrix().get (modSlotParams (slot).amount);
+        flow.endDrag();
+        flow.cancel();
+        if (limit)
+        {
+            CHECK_NEAR (amount, 25.0, 0.5);       // up: the 25 % the knob has left
+            CHECK_NEAR (down, -75.0, 0.5);        // down: the 75 % below it
+        }
+        else
+        {
+            CHECK_NEAR (amount, 100.0, 0.5);
+            CHECK_NEAR (down, -100.0, 0.5);
+        }
+        clearSlot (h.ctx.assign.matrix(), slot);
+    }
+    // a bipolar modulation takes the smaller room of the two sides
+    {
+        setParameter (h.proc, "osc1.level", 90.0f);
+        auto& flow = h.ctx.assign.flow();
+        flow.setLimitToHeadroom (true);
+        CHECK (flow.tapSource (7) == AssignFlow::Phase::armed);
+        CHECK (flow.beginDrag (level) == AssignFlow::BeginResult::ok);
+        h.ctx.assign.matrix().set (modSlotParams (flow.activeSlot()).bipolar, 1.0f);
+        flow.dragBy (1000.0f, FineZone::normal);
+        CHECK_NEAR (h.ctx.assign.matrix().get (modSlotParams (flow.activeSlot()).amount), 10.0, 0.5);
+        const int slot = flow.activeSlot();
+        flow.endDrag();
+        flow.cancel();
+        clearSlot (h.ctx.assign.matrix(), slot);
+    }
+
+    // the default waveform view of the oscillator panels
+    {
+        OscWaveView two (h.ctx, 1);
+        CHECK (two.viewMode() == OscWaveView::ViewMode::wave2D);
+        setPref (h, &Preferences::waveform3d, true);
+        OscWaveView three (h.ctx, 2);
+        CHECK (three.viewMode() == OscWaveView::ViewMode::wave3D);
+        setPref (h, &Preferences::waveform3d, false);
+    }
+
+    // the mod wheel scans the frames of the table while the editor is open (preference)
+    {
+        wtedit::Wavetable table ("scan");
+        for (size_t f = 0; f < 10; ++f)
+        {
+            wtedit::Frame frame;
+            for (size_t i = 0; i < 2048; ++i)
+                frame[i] = 0.1f * static_cast<float> (f + 1) * static_cast<float> (std::sin (2.0 * kPi * static_cast<double> (i) / 2048.0));
+            table.insertFrame (f, frame);
+        }
+        WavetableEditorSheet sheet (h.ctx, table);
+        sheet.setBounds (0, 0, 390, 844);
+        const auto wheelTo = [&] (int value)
+        {
+            h.proc.injectMidiMessage (juce::MidiMessage::controllerEvent (1, 1, value));
+            juce::AudioBuffer<float> buffer (2, 256);
+            juce::MidiBuffer midi;
+            h.proc.processBlock (buffer, midi);
+        };
+        const size_t frames = sheet.wavetable().numFrames();
+        CHECK (frames >= 10);
+        sheet.setCurrentFrame (3);
+        wheelTo (127);
+        sheet.followModWheel();
+        CHECK_EQ (sheet.currentFrame(), size_t { 3 });                 // the preference is off
+        setPref (h, &Preferences::modWheelToWtPos, true);
+        wheelTo (64);
+        sheet.followModWheel();
+        CHECK_EQ (sheet.currentFrame(), static_cast<size_t> (std::lround (64.0 / 127.0 * static_cast<double> (frames - 1))));
+        wheelTo (127);
+        sheet.followModWheel();
+        CHECK_EQ (sheet.currentFrame(), frames - 1);
+        wheelTo (0);
+        sheet.followModWheel();
+        CHECK_EQ (sheet.currentFrame(), size_t { 0 });
+        // a click on a frame by hand is not fought: the wheel has to move again to take over
+        sheet.setCurrentFrame (5);
+        sheet.followModWheel();
+        CHECK_EQ (sheet.currentFrame(), size_t { 5 });
+        CHECK_NEAR (h.proc.modWheel(), 0.0, 1.0e-6);
+    }
+}
+
+TEST (content_about_line_comes_from_the_build)
+{
+    Host h ("prefs_about");
+    const juce::String about = h.proc.aboutText();
+    CHECK (about.startsWith ("SynthyBoy " + juce::String (SYNTHYBOY_VERSION_STRING)));
+    CHECK (about.contains ("built ") && about.contains (juce::String (__DATE__)));
+    CHECK (about.contains ("vital DSP") || about.contains ("own engine"));
+    CHECK (about.contains (juce::String (paramCount()) + " parameters"));
+    CHECK (! about.contains ("ContentPacks: OK"));
+    GlbSettingsPanel panel (h.ctx);
+    panel.build();
+    CHECK_EQ (panel.view().aboutLine(), about);
+}
+
+TEST (content_midi_map_files_default_map_and_the_map_of_a_preset)
+{
+    Host h ("prefs_map");
+    GlbSettingsPanel panel (h.ctx);
+    panel.build();
+    panel.setBounds (0, 0, 390, panel.preferredHeight (390));
+    auto& view = panel.view();
+    const auto file = [&] (const char* name) { return juce::File (h.workDir().string()).getChildFile (name); };
+    h.workDir();
+    fs::create_directories (h.workDir());
+
+    h.proc.midiCcMap().clearAll();
+    CHECK (h.proc.midiCcMap().assignKey (21, "filter1.cutoff"));
+    CHECK (h.proc.midiCcMap().assignKey (22, "macro.2"));
+    // save, clear, load
+    CHECK (view.saveMidiMapFile (file ("mine.sbmidimap")).ok);
+    CHECK (file ("mine.sbmidimap").existsAsFile());
+    h.proc.midiCcMap().clearAll();
+    CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 0 });
+    CHECK (view.loadMidiMapFile (file ("mine.sbmidimap")).ok);
+    CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+    CHECK_EQ (h.proc.midiCcMap().paramForCc (21), findParamIndex (findParamByKey ("filter1.cutoff")->id));
+    // a file that is no map leaves the map alone
+    {
+        const juce::File junk = file ("junk.sbmidimap");
+        junk.replaceWithText ("{\"format\":\"nope\"}");
+        CHECK (! view.loadMidiMapFile (junk).ok);
+        CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+    }
+    // the buttons ask the host for a file (the test host answers at once)
+    {
+        FileRequest asked;
+        h.proc.setFileRequestHandler ([&] (const FileRequest& r, std::function<void (const juce::File&)> done)
+        {
+            asked = r;
+            done (file (r.mode == FileRequest::Mode::save ? "viaButton.sbmidimap" : "mine.sbmidimap"));
+            return true;
+        });
+        view.saveMapButton().onClick();
+        CHECK (asked.mode == FileRequest::Mode::save && asked.wildcards.contains ("sbmidimap") && asked.purpose == "midimap");
+        CHECK (file ("viaButton.sbmidimap").existsAsFile());
+        h.proc.midiCcMap().clearAll();
+        view.loadMapButton().onClick();
+        CHECK (asked.mode == FileRequest::Mode::open && asked.wildcards.contains ("SerumMIDIMap"));
+        CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+    }
+
+    // the default map: loaded by a new instance, Init Preset and a preset change
+    CHECK (! h.proc.hasDefaultMidiMap());
+    CHECK (! view.clearMapButton().isEnabled());
+    view.defaultMapButton().onClick();
+    CHECK (h.proc.hasDefaultMidiMap());
+    view.refreshMapButtons();
+    CHECK (view.clearMapButton().isEnabled());
+    h.proc.midiCcMap().clearAll();
+    CHECK (h.proc.initPatch());
+    CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+    h.proc.midiCcMap().clearAll();
+    CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}));
+    CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+    {
+        SynthyBoyProcessor fresh;
+        CHECK_EQ (fresh.midiMapBindings().size(), size_t { 2 });
+    }
+    // a preset's own map: used only with the preference "Load MIDI Map from Presets"
+    const MidiMapBindings presetMap { { 40, "osc1.level" } };
+    CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}, &presetMap));
+    CHECK_EQ (h.proc.midiCcMap().paramForCc (40), -1);
+    CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+    setPref (h, &Preferences::loadMidiMapFromPresets, true);
+    CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}, &presetMap));
+    CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 1 });
+    CHECK_EQ (h.proc.midiCcMap().paramForCc (40), findParamIndex (findParamByKey ("osc1.level")->id));
+    CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}));   // a preset without a map: the default map
+    CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+
+    // a Serum 2 .SerumMIDIMap file and a preset with a map
+    {
+        using namespace sbserum;
+        const auto entryOf = [] (double cc, double id) { return map ({ { "ccNum", num (cc) }, { "paramIDs", nums ({ id }) } }); };
+        const Bytes list = arr ({ entryOf (14, 7000000), entryOf (15, 7001000) });
+        const fs::path serum = writeBytes (h.workDir() / "Macros CC14-15.SerumMIDIMap", container ("SerumMIDIMap", map ({ { "midiMap", list } }), "Macros"));
+        const auto loadedSerum = view.loadMidiMapFile (juce::File (serum.string()));
+        CHECK (loadedSerum.ok);
+        CHECK_EQ (h.proc.midiMapBindings().size(), size_t { 2 });
+        CHECK_EQ (h.proc.midiCcMap().paramForCc (14), findParamIndex (findParamByKey ("macro.1")->id));
+        CHECK_EQ (h.proc.midiCcMap().paramForCc (15), findParamIndex (findParamByKey ("macro.2")->id));
+        // a preset that carries the map
+        Preset p;
+        p.set ("midiMap", arr ({ entryOf (16, 7002000) }));
+        const fs::path presetFile = writeBytes (h.workDir() / "WithMap.SerumPreset", p.file ("WithMap"));
+        const SerumFlowResult imported = importSerumFile (h.ctx, juce::File (presetFile.string()), 0);
+        CHECK (imported.flow.ok);
+        CHECK_EQ (h.proc.midiCcMap().paramForCc (16), findParamIndex (findParamByKey ("macro.3")->id));   // the preference is on
+        setPref (h, &Preferences::loadMidiMapFromPresets, false);
+        const SerumFlowResult again = importSerumFile (h.ctx, juce::File (presetFile.string()), 0);
+        CHECK (again.flow.ok);
+        CHECK_EQ (h.proc.midiCcMap().paramForCc (16), -1);                                                 // off: the default map
+        CHECK_EQ (h.proc.midiCcMap().paramForCc (21), findParamIndex (findParamByKey ("filter1.cutoff")->id));
+    }
+
+    view.clearMapButton().onClick();
+    CHECK (! h.proc.hasDefaultMidiMap());
+    h.proc.setFileRequestHandler ({});
+}
+
+TEST (content_locks_of_the_global_settings_matrix_quality_tuning_survive_a_preset_change)
+{
+    Host h ("prefs_locks");
+    setParameter (h.proc, "mod01.source", 7.0f);
+    setParameter (h.proc, "mod01.destination", 12.0f);
+    setParameter (h.proc, "mod01.amount", 33.0f);
+    setParameter (h.proc, "quality.oversample_4x", 1.0f);
+    setParameter (h.proc, "master.tuning.a4", 432.0f);
+    setParameter (h.proc, "osc1.level", 11.0f);
+    auto preset = ParamValues::defaults();
+    preset.plain[static_cast<size_t> (findParamIndex (findParamByKey ("osc1.level")->id))] = 88.0f;
+    ContentModCurve curve;
+    curve.slot = 1;
+    curve.points = { ContentPoint (0.0f, 0.0f), ContentPoint (1.0f, 0.5f) };
+    StateContent content;
+    content.modCurves.push_back (curve);
+    CHECK (h.proc.setContent (content));
+
+    // Lock Matrix (the menu item of the matrix panel is the host lock "matrix")
+    h.proc.setModuleLocked (kMatrixLock, true);
+    CHECK (h.proc.loadPatch (preset, StateContent {}));
+    CHECK_EQ (plainOfKey (h.proc, "mod01.source"), 7.0f);
+    CHECK_NEAR (plainOfKey (h.proc, "mod01.amount"), 33.0, 1.0e-3);
+    CHECK_NEAR (plainOfKey (h.proc, "osc1.level"), 88.0, 1.0e-3);          // the rest of the patch changed
+    CHECK_EQ (plainOfKey (h.proc, "quality.oversample_4x"), 0.0f);
+    CHECK_EQ (h.proc.content().modCurves.size(), size_t { 1 });             // the drawn curves stayed
+    h.proc.setModuleLocked (kMatrixLock, false);
+    CHECK (h.proc.loadPatch (preset, StateContent {}));
+    CHECK_EQ (plainOfKey (h.proc, "mod01.source"), 0.0f);
+    CHECK (h.proc.content().modCurves.empty());
+
+    // the quality lock: the button of the Quality panel is the host lock "quality"
+    auto quality = PanelRegistry::instance().create ("GlbQualityPanel", h.ctx);
+    CHECK (quality != nullptr);
+    if (quality != nullptr)
+    {
+        quality->build();
+        quality->setBounds (0, 0, 390, quality->preferredHeight (390));
+        juce::TextButton* lock = nullptr;
+        std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+        {
+            if (auto* b = dynamic_cast<juce::TextButton*> (&c); b != nullptr && b->getButtonText().startsWith ("Lock Across Presets"))
+                lock = b;
+            for (auto* child : c.getChildren())
+                find (*child);
+        };
+        find (*quality);
+        CHECK (lock != nullptr);
+        if (lock != nullptr)
+        {
+            CHECK (lock->getHeight() >= h.theme.touch());
+            CHECK (lock->getButtonText().endsWith ("OFF"));
+            setParameter (h.proc, "quality.oversample_4x", 1.0f);
+            lock->onClick();
+            CHECK (h.proc.isModuleLocked (kQualityLock));
+            CHECK (lock->getButtonText().endsWith ("ON"));
+            CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}));
+            CHECK_EQ (plainOfKey (h.proc, "quality.oversample_4x"), 1.0f);
+            lock->onClick();
+            CHECK (! h.proc.isModuleLocked (kQualityLock));
+            CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}));
+            CHECK_EQ (plainOfKey (h.proc, "quality.oversample_4x"), 0.0f);
+        }
+    }
+
+    // the tuning lock: parameters and the tuning table
+    auto tuning = PanelRegistry::instance().create ("GlbTuningPanel", h.ctx);
+    CHECK (tuning != nullptr);
+    if (tuning != nullptr)
+    {
+        tuning->build();
+        tuning->setBounds (0, 0, 390, tuning->preferredHeight (390));
+        juce::TextButton* lock = nullptr;
+        std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+        {
+            if (auto* b = dynamic_cast<juce::TextButton*> (&c); b != nullptr && b->getButtonText().startsWith ("Tuning Lock"))
+                lock = b;
+            for (auto* child : c.getChildren())
+                find (*child);
+        };
+        find (*tuning);
+        CHECK (lock != nullptr);
+        if (lock != nullptr)
+        {
+            CHECK (lock->getHeight() >= h.theme.touch() && lock->getWidth() >= h.theme.touch() * 2);
+            setParameter (h.proc, "master.tuning.a4", 432.0f);
+            StateContent tuned;
+            tuned.tuning.present = true;
+            tuned.tuning.scl = "! just\n 3\n 9/8\n 5/4\n 2/1\n";
+            CHECK (h.proc.setContent (tuned));
+            lock->onClick();
+            CHECK (h.proc.isModuleLocked (kTuningLock));
+            CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}));
+            CHECK_NEAR (plainOfKey (h.proc, "master.tuning.a4"), 432.0, 1.0e-3);
+            CHECK (h.proc.content().tuning.present);
+            lock->onClick();
+            CHECK (h.proc.loadPatch (ParamValues::defaults(), StateContent {}));
+            CHECK_NEAR (plainOfKey (h.proc, "master.tuning.a4"), 440.0, 1.0e-3);
+            CHECK (! h.proc.content().tuning.present);
+        }
+    }
+
+    // the locks are part of the session
+    h.proc.setModuleLocked (kMatrixLock, true);
+    h.proc.setModuleLocked (kQualityLock, true);
+    juce::MemoryBlock saved;
+    h.proc.getStateInformation (saved);
+    SynthyBoyProcessor restored;
+    restored.setStateInformation (saved.getData(), static_cast<int> (saved.getSize()));
+    CHECK (restored.isModuleLocked (kMatrixLock) && restored.isModuleLocked (kQualityLock) && ! restored.isModuleLocked (kTuningLock));
+}
+
+namespace
+{
+struct FakeHost final : juce::AudioPlayHead
+{
+    bool known = true, playing = true;
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        if (! known)
+            return {};
+        PositionInfo info;
+        info.setIsPlaying (playing);
+        info.setBpm (120.0);
+        info.setPpqPosition (0.0);
+        return info;
+    }
+};
+
+/** Renders one block of 256 frames, returns the left channel's RMS. */
+float blockRms (SynthyBoyProcessor& proc, juce::MidiBuffer midi = {})
+{
+    juce::AudioBuffer<float> buffer (2, 256);
+    buffer.clear();
+    proc.processBlock (buffer, midi);
+    return buffer.getRMSLevel (0, 0, 256);
+}
+} // namespace
+
+TEST (content_the_juce_shell_silences_notes_and_tails_when_the_host_transport_stops)
+{
+    for (const bool silence : { true, false })
+    {
+        Host h ("prefs_stop");
+        setPref (h, &Preferences::silenceOnStop, silence);
+        setParameter (h.proc, "reverb.on", 1.0f);
+        setParameter (h.proc, "reverb.mix", 100.0f);
+        setParameter (h.proc, "env1.release", 4000.0f);
+        FakeHost head;
+        h.proc.setPlayHead (&head);
+        (void) blockRms (h.proc, [] { juce::MidiBuffer m; m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0); return m; }());
+        float running = 0.0f;
+        for (int i = 0; i < 60; ++i)
+            running = blockRms (h.proc);
+        CHECK (running > 0.01f);
+        head.playing = false;                       // the host stops
+        (void) blockRms (h.proc);
+        float after = 0.0f;
+        for (int i = 0; i < 4; ++i)
+            after = blockRms (h.proc);
+        if (silence)
+            CHECK (after < 1.0e-4f);
+        else
+            CHECK (after > 0.01f);
+        // playing again: a new note sounds, the engine is alive
+        head.playing = true;
+        (void) blockRms (h.proc, [] { juce::MidiBuffer m; m.addEvent (juce::MidiMessage::noteOn (1, 64, 0.9f), 0); return m; }());
+        float again = 0.0f;
+        for (int i = 0; i < 20; ++i)
+            again = blockRms (h.proc);
+        CHECK (again > 0.01f);
+        h.proc.setPlayHead (nullptr);
+    }
+    // no transport information at all: nothing is ever stopped
+    Host h ("prefs_stop_none");
+    FakeHost head;
+    head.known = false;
+    h.proc.setPlayHead (&head);
+    (void) blockRms (h.proc, [] { juce::MidiBuffer m; m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0); return m; }());
+    float rms = 0.0f;
+    for (int i = 0; i < 30; ++i)
+        rms = blockRms (h.proc);
+    CHECK (rms > 0.01f);
+    h.proc.setPlayHead (nullptr);
+}
+
+TEST (content_the_juce_shell_bounces_at_ultra_quality_when_the_preference_is_on)
+{
+    const auto render = [] (bool preference, bool offline)
+    {
+        Host h ("prefs_ultra");
+        setPref (h, &Preferences::ultraRender, preference);
+        h.proc.setNonRealtime (offline);
+        h.proc.prepareToPlay (48000.0, 256);
+        std::vector<float> out;
+        for (int b = 0; b < 40; ++b)
+        {
+            juce::AudioBuffer<float> buffer (2, 256);
+            buffer.clear();
+            juce::MidiBuffer midi;
+            if (b == 0)
+                midi.addEvent (juce::MidiMessage::noteOn (1, 100, 1.0f), 0);
+            h.proc.processBlock (buffer, midi);
+            out.insert (out.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + 256);
+        }
+        return out;
+    };
+    const auto plain = render (false, false);
+    CHECK (render (true, false) == plain);        // live: the preference does not apply
+    CHECK (render (false, true) == render (false, true));
+    CHECK (render (true, true) != render (false, true));
+    CHECK (render (true, true) == render (true, true));  // and a bounce is repeatable
+}
+
+TEST (content_a_new_instance_takes_the_mpe_preferences_unless_the_user_saved_a_default)
+{
+    Host h ("prefs_mpe");
+    Preferences prefs;
+    prefs.mpeByDefault = true;
+    prefs.mpeYBipolar = true;
+    h.proc.setPreferences (prefs);
+    {
+        SynthyBoyProcessor fresh;
+        CHECK_EQ (plainOfKey (fresh, "master.mpe.on"), 1.0f);
+        CHECK_EQ (plainOfKey (fresh, "master.mpe.y_bipolar"), 1.0f);
+        CHECK_EQ (plainOfKey (fresh, "master.mpe.bend_to_x"), 0.0f);
+        // the patch that was loaded last is what "Revert" returns to
+        setParameter (fresh, "master.mpe.on", 0.0f);
+        CHECK (fresh.revertToSaved());
+        CHECK_EQ (plainOfKey (fresh, "master.mpe.on"), 1.0f);
+    }
+    // Init Preset is the factory (or the user's) patch: the preferences are for a new instance only
+    setParameter (h.proc, "master.mpe.on", 0.0f);
+    CHECK (h.proc.initPatch());
+    CHECK_EQ (plainOfKey (h.proc, "master.mpe.on"), 0.0f);
+    CHECK (h.proc.saveAsDefault());
+    {
+        SynthyBoyProcessor withDefault;
+        CHECK_EQ (plainOfKey (withDefault, "master.mpe.on"), 0.0f);
+    }
+    CHECK (h.proc.clearUserDefault());
 }

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "../Panel.h"
+#include "synthyboy/shell_features.h"
 #include "../ParamHandle.h"
 #include "synthyboy/quality.h"
 
@@ -23,15 +24,25 @@ public:
         reverbForceHandle.onChange = update;
         mainFxBypassHandle.onChange = update;
 
-        lockButton.setButtonText ("Lock Across Presets: OFF");
+        // "Lock the quality settings, even when you load a new preset" (S p.319, GROUPA2 WP-02): the host's lock "quality" keeps every quality.* key
         lockButton.onClick = [this]
         {
-            lockedAcrossPresets = ! lockedAcrossPresets;
-            lockButton.setButtonText (lockedAcrossPresets ? "Lock Across Presets: ON" : "Lock Across Presets: OFF");
+            ctx.host.setModuleLocked (kQualityLock, ! ctx.host.isModuleLocked (kQualityLock));
+            syncLock();
             repaint();
         };
         addAndMakeVisible (lockButton);
+        syncLock();
     }
+
+    /** The button shows what the host says (the lock is saved with the session). */
+    void syncLock()
+    {
+        lockedAcrossPresets = ctx.host.isModuleLocked (kQualityLock);
+        lockButton.setButtonText (lockedAcrossPresets ? "Lock Across Presets: ON" : "Lock Across Presets: OFF");
+        lockButton.setToggleState (lockedAcrossPresets, juce::dontSendNotification);
+    }
+    juce::TextButton& lockToggle() noexcept { return lockButton; }
 
     void setTier (Tier tier)
     {

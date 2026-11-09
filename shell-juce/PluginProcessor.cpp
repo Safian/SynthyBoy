@@ -64,6 +64,8 @@ SynthyBoyProcessor::SynthyBoyProcessor()
 
     // Save as Default (G02): a new instance starts from the user's default patch when there is one (the host's state, if any, replaces it)
     userDir = synthyboy::userDataDirectory();
+    prefs = synthyboy::loadPreferences (userDir);
+    prefSilenceOnStop.store (prefs.silenceOnStop);
 
     // the content pipeline (WP-01): the store is set before any content reaches the engine; every document load (applyPatch) then decodes its
     // references against it
@@ -83,6 +85,74 @@ SynthyBoyProcessor::SynthyBoyProcessor()
         savedValues = currentValues();
         savedContent = patchContent;
     }
+    else
+    {
+        // the preferences of a new instance (S p.314): MPE on, pitch bend also to X, Y bi-directional; a patch the user saved as default wins over them (A383)
+        const auto set = [&] (const char* key, bool on) { if (on) values.plain[static_cast<size_t> (synthyboy::findParamIndex (synthyboy::findParamByKey (key)->id))] = 1.0f; };
+        set ("master.mpe.on", prefs.mpeByDefault);
+        set ("master.mpe.bend_to_x", prefs.mpeBendToX);
+        set ("master.mpe.y_bipolar", prefs.mpeYBipolar);
+        if (prefs.mpeByDefault || prefs.mpeBendToX || prefs.mpeYBipolar)
+        {
+            applyValues (values);
+            const std::lock_guard<std::mutex> lock (contentMutex);
+            savedValues = currentValues();
+        }
+    }
+    // the default MIDI CC map (S p.325) in a new instance, unless the default patch brought a map of its own
+    if (midiMap.numMappings() == 0)
+        applyMapOfPresetChange (nullptr);
+}
+
+void SynthyBoyProcessor::applyMapOfPresetChange (const synthyboy::ui::MidiMapBindings* presetMidiMap)
+{
+    if (prefs.loadMidiMapFromPresets && presetMidiMap != nullptr && ! presetMidiMap->empty())
+    {
+        midiMap.setBindings (*presetMidiMap);
+        return;
+    }
+    std::vector<std::pair<int, std::string>> bindings;
+    if (synthyboy::loadDefaultMidiMap (userDir, bindings))
+        midiMap.setBindings (bindings);
+}
+
+void SynthyBoyProcessor::setPreferences (const synthyboy::Preferences& newPrefs)
+{
+    if (newPrefs == prefs)
+        return;
+    prefs = newPrefs;
+    prefSilenceOnStop.store (prefs.silenceOnStop);
+    synthyboy::savePreferences (userDir, prefs);
+    prefsRev.fetch_add (1, std::memory_order_relaxed);
+}
+
+int SynthyBoyProcessor::setMidiMapBindings (const synthyboy::ui::MidiMapBindings& bindings)
+{
+    const int taken = midiMap.setBindings (bindings);
+    updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    return taken;
+}
+
+bool SynthyBoyProcessor::saveDefaultMidiMap()
+{
+    return synthyboy::saveDefaultMidiMap (userDir, midiMap.bindings());
+}
+
+juce::String SynthyBoyProcessor::aboutText() const
+{
+   #ifdef SYNTHYBOY_VERSION_STRING
+    const juce::String version (SYNTHYBOY_VERSION_STRING);
+   #else
+    const juce::String version ("dev");
+   #endif
+    const juce::String engineName = (caps & synthyboy::kCapVoiceControl) != 0 ? "vital DSP (AGPL-3.0)" : "own engine";
+    int packs = 0; // installed content packs: the directories below <userDir>/packs
+    std::error_code ec;
+    if (! userDir.empty())
+        for (std::filesystem::directory_iterator it ((std::filesystem::path (userDir) / "packs"), ec), end; ! ec && it != end; it.increment (ec))
+            packs += it->is_directory (ec) ? 1 : 0;
+    return "SynthyBoy " + version + " | built " + juce::String (__DATE__) + " | Engine: " + engineName + " | " + juce::String (synthyboy::paramCount()) + " parameters | content packs: "
+           + juce::String (packs);
 }
 
 SynthyBoyProcessor::~SynthyBoyProcessor()
@@ -221,6 +291,8 @@ void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // Live playback never waits for a helper thread of the engine; an offline bounce (isNonRealtime) is deterministic (Quality::realtime).
     auto quality = synthyboy::qualityForTier (synthyboy::kDefaultTier);
     quality.realtime = ! isNonRealtime();
+    engine->setUltraRender (prefs.ultraRender && isNonRealtime()); // a bounce at 4x oversampling (S p.315, A385)
+    stopWatch.reset();
     engine->prepare (sampleRate, samplesPerBlock, quality);
     setLatencySamples (engine->latencySamples());
 }
@@ -231,6 +303,8 @@ void SynthyBoyProcessor::setNonRealtime (bool isNonRealtime) noexcept
     auto quality = synthyboy::qualityForTier (synthyboy::kDefaultTier);
     quality.realtime = ! isNonRealtime;
     engine->setQuality (quality);
+    engine->setUltraRender (prefs.ultraRender && isNonRealtime); // reported by needsPrepare (): the 20 Hz timer prepares the engine again
+
 }
 
 bool SynthyBoyProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -311,6 +385,8 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                                                std::clamp (metadata.samplePosition, 0, numSamples - 1), e))
             continue;
 
+        if (e.type == synthyboy::Event::ModWheel)
+            modWheelPosition.store (e.value, std::memory_order_relaxed);
         if (numEvents < capacity)
             events[static_cast<size_t> (numEvents++)] = e;
         else
@@ -320,6 +396,7 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     {
         // host transport (tempo sync, beat units, LFO HOST mode)
         synthyboy::TransportInfo transport;
+        bool transportKnown = false;
         if (auto* playHead = getPlayHead())
             if (const auto position = playHead->getPosition())
             {
@@ -328,7 +405,12 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                 if (const auto ppq = position->getPpqPosition())
                     transport.songPosBeats = *ppq;
                 transport.playing = position->getIsPlaying();
+                transportKnown = true;
             }
+        // the host stopped (running -> stopped): notes end and the effect tails are cleared (S p.315, A381). Before the block, so the events of
+        // this block (a note played with the transport stopped) start a clean engine.
+        if (stopWatch.update (transportKnown, transport.playing) && prefSilenceOnStop.load (std::memory_order_relaxed))
+            engine->silence();
         engine->setTransport (transport);
     }
 
@@ -537,6 +619,8 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
 
     // the legacy XML of the spike has no content (loadedContent is empty then)
     applyPatch (values, std::move (loadedContent), ! session);
+    if (! session)
+        applyMapOfPresetChange (nullptr); // a preset change: the default MIDI map (S p.315)
 
     {
         const std::lock_guard<std::mutex> lock (contentMutex);
@@ -652,6 +736,7 @@ bool SynthyBoyProcessor::initPatch()
     synthyboy::StateContent initContent;
     synthyboy::loadUserDefault (userDir, values, initContent); // untouched (the factory init patch) when there is no default
     applyPatch (values, std::move (initContent), true);
+    applyMapOfPresetChange (nullptr); // Init Preset loads the default MIDI map (S p.315)
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }
@@ -674,11 +759,12 @@ void SynthyBoyProcessor::setModuleLocked (const std::string& prefix, bool locked
         updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
 }
 
-bool SynthyBoyProcessor::loadPatch (const synthyboy::ParamValues& values, const synthyboy::StateContent& newContent)
+bool SynthyBoyProcessor::loadPatch (const synthyboy::ParamValues& values, const synthyboy::StateContent& newContent, const synthyboy::ui::MidiMapBindings* presetMidiMap)
 {
     if (! synthyboy::validateContent (newContent))
         return false;
     applyPatch (values, newContent, true);
+    applyMapOfPresetChange (presetMidiMap);
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }

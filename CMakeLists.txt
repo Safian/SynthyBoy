@@ -25,6 +25,9 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment ta
 
 project(SynthyBoy VERSION 0.1.0 LANGUAGES C CXX)
 
+# The version shown in Preferences / About (UiHost::aboutText, S15-20): the project version above, for every target (the plug-in shells and the tests)
+add_compile_definitions(SYNTHYBOY_VERSION_STRING="${PROJECT_VERSION}")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

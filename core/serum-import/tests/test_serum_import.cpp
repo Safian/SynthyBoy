@@ -976,3 +976,35 @@ TEST (serum_style_files_are_complete_voice_control_configurations)
         CHECK_NEAR (value (r, "voicectl.scale.env"), 100.0, 1e-3);
     }
 }
+
+// GROUPA2 (WP-02, A386): the MIDI CC map of a preset and of a .SerumMIDIMap file (the macros are decoded, other ids are reported)
+TEST (serum_midi_cc_maps_of_presets_and_map_files_become_bindings)
+{
+    const auto entryOf = [] (double cc, const std::vector<double>& ids) { return map ({ { "ccNum", num (cc) }, { "paramIDs", nums (ids) } }); };
+    const Bytes list = arr ({ entryOf (14, { 7000000 }), entryOf (21, { 7007000 }), entryOf (30, { 3001000 }), entryOf (64, { 7001000 }), entryOf (40, {}) });
+    {
+        Preset p;
+        p.set ("midiMap", list);
+        const SerumImportResult r = run (p.file());
+        CHECK (r.status == ImportStatus::ok);
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (r.midiMap.size(), size_t { 2 });
+        CHECK_EQ (r.midiMap[0].first, 14);
+        CHECK_EQ (r.midiMap[0].second, std::string ("macro.1"));
+        CHECK_EQ (r.midiMap[1].first, 21);
+        CHECK_EQ (r.midiMap[1].second, std::string ("macro.8"));
+        CHECK (entryWith (r, "midi_map_entry") >= 0);
+        CHECK_EQ (countKind (r, ItemKind::dropped, "midiMap"), 2 + 2 + 1); // dropped: the other module (ccNum + id), the sustain pedal (ccNum + id), a ccNum with an empty id list (the ccNum)
+        CHECK (entryWith (r, "midi_cc_map_not_imported") < 0);
+        CHECK (entryWith (r, "midi_map_cc_not_learnable") >= 0);   // CC 64 is the sustain pedal
+        CHECK (entryWith (r, "midi_map_parameter_not_decoded") >= 0);
+    }
+    {
+        const Bytes file = container ("SerumMIDIMap", map ({ { "midiMap", list } }), "Macros");
+        const SerumImportResult r = run (file);
+        CHECK (r.status == ImportStatus::ok);
+        CHECK (r.kind == SerumFileKind::midiMap);
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (r.midiMap.size(), size_t { 2 });
+    }
+}

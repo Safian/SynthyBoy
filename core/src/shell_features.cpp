@@ -5,6 +5,7 @@
 #include "synthyboy/shell_features.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -167,6 +168,9 @@ bool lockCoversKey (const std::string& lock, const char* key) noexcept
 {
     if (key == nullptr || lock.empty())
         return false;
+    if (lock == kMatrixLock)
+        // the 64 slots: mod01.source .. mod64.bypass, mod01.aux_source ... (not mod_wheel-like names: two digits and a dot)
+        return std::strncmp (key, "mod", 3) == 0 && std::isdigit (static_cast<unsigned char> (key[3])) && std::isdigit (static_cast<unsigned char> (key[4])) && key[5] == '.';
     const size_t n = lock.size();
     if (std::strncmp (key, lock.c_str(), n) != 0)
         return false;
@@ -241,6 +245,14 @@ bool keepLockedContent (StateContent& patch, const StateContent& current, const 
     keepEntries (patch.remaps, current.remaps, [&] (const ContentRemap& e) { return lockedModule (locks, "osc", e.osc); });
     keepEntries (patch.lfoShapes, current.lfoShapes, [&] (const ContentLfoShape& e) { return lockedModule (locks, "lfo", e.lfo); });
     keepEntries (patch.filterCurves, current.filterCurves, [&] (const ContentFilterCurve& e) { return isLocked (locks, e.filter); });
+    // GROUPA2 (WP-02): Lock Matrix keeps the drawn per-connection curves, the tuning lock the tuning table
+    if (isLocked (locks, kMatrixLock))
+    {
+        patch.modCurves = current.modCurves;
+        std::sort (patch.modCurves.begin(), patch.modCurves.end(), [] (const auto& a, const auto& b) { return a.slot < b.slot; });
+    }
+    if (isLocked (locks, kTuningLock))
+        patch.tuning = current.tuning;
     // keep the order the writer expects (ascending oscillator / LFO / filter)
     std::sort (patch.wavetables.begin(), patch.wavetables.end(), [] (const auto& a, const auto& b) { return a.osc < b.osc; });
     std::sort (patch.samples.begin(), patch.samples.end(), [] (const auto& a, const auto& b) { return a.osc < b.osc; });

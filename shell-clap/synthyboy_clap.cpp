@@ -18,6 +18,7 @@
 #include "synthyboy/kick_pages.h"
 #include "synthyboy/midi_events.h"
 #include "synthyboy/params.h"
+#include "synthyboy/preferences.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
 #include "synthyboy/shell_features.h"
@@ -26,6 +27,7 @@
 #include "synthyboy/vital_plugin_import.h"
 #include "synthyboy_content_ext.h"
 #include <clap/ext/remote-controls.h>
+#include <clap/ext/render.h>
 
 #include <filesystem>
 #include <fstream>
@@ -71,6 +73,9 @@ struct SynthyBoyClap
     StateContent content; // the `content` section of the state (not parameters): custom LFO shapes, curves and the tuning go to the engine (setContent), main thread only
     MidiCcMap midiMap;                // MIDI learn table (G07): CC -> parameter, read on the audio thread; saved in the `shell` section
     std::vector<std::string> locks;   // module locks (G08), main thread; kept for the round trip with the editor shell
+    Preferences prefs;                // the global preferences (GROUPA2 WP-02): read once when the plug-in is created (the editor shell writes the file)
+    TransportStopWatch stopWatch;     // audio thread: the host transport stops -> silence () when prefs.silenceOnStop
+    bool offlineRender = false;       // clap_plugin_render: the host renders offline
     Quality quality;
     std::vector<Event> events;
     double sampleRate = 48000.0;
@@ -100,6 +105,8 @@ struct SynthyBoyClap
         if (engine)
             engine->setContentStore (&contentStore); // before the first setContent: the references of the content decode against the library
 
+        prefs = loadPreferences (userDataDirectory());
+
         // Save as Default (G02): a new instance starts from the user's default patch (written by the editor shell), if there is one
         ShellState defaultShell;
         if (loadUserDefault (userDataDirectory(), values, content, &defaultShell))
@@ -113,6 +120,30 @@ struct SynthyBoyClap
                 engine->setContent (content);
             }
         }
+        else
+        {
+            // the preferences of a new instance (S p.314, A383): MPE on, pitch bend also to X, Y bi-directional
+            const auto set = [this] (const char* key, bool on)
+            {
+                if (const ParamInfo* info = findParamByKey (key); info != nullptr && on)
+                {
+                    values.plain[static_cast<size_t> (findParamIndex (info->id))] = 1.0f;
+                    if (engine) engine->setParam (info->id, 1.0f);
+                }
+            };
+            set ("master.mpe.on", prefs.mpeByDefault);
+            set ("master.mpe.bend_to_x", prefs.mpeBendToX);
+            set ("master.mpe.y_bipolar", prefs.mpeYBipolar);
+        }
+        applyDefaultMidiMap (false);
+    }
+
+    /** The default MIDI CC map file (S p.325): when `force`, it replaces the table; else only an empty table takes it (a new instance). */
+    void applyDefaultMidiMap (bool force)
+    {
+        std::vector<std::pair<int, std::string>> bindings;
+        if ((force || midiMap.numMappings() == 0) && loadDefaultMidiMap (userDataDirectory(), bindings))
+            midiMap.setBindings (bindings);
     }
 };
 
@@ -140,8 +171,12 @@ bool clap_activate (const clap_plugin_t* p, double sample_rate, uint32_t, uint32
     auto* self = toClap (p);
     self->sampleRate = sample_rate > 0.0 ? sample_rate : 48000.0;
     self->maxBlockSize = std::max (max_frames_count, 32u);
+    self->stopWatch.reset();
     if (self->engine)
+    {
+        self->engine->setUltraRender (self->prefs.ultraRender && self->offlineRender);
         self->engine->prepare (self->sampleRate, static_cast<int> (self->maxBlockSize), self->quality);
+    }
     self->active = true;
     return true;
 }
@@ -312,6 +347,9 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                 transport.songPosBeats = static_cast<double> (t->song_pos_beats) / static_cast<double> (CLAP_BEATTIME_FACTOR);
             transport.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
         }
+        // the host stopped: notes end and the effect tails are cleared (S p.315, A381)
+        if (self->stopWatch.update (process->transport != nullptr, transport.playing) && self->prefs.silenceOnStop)
+            self->engine->silence();
         self->engine->setTransport (transport);
     }
 
@@ -551,13 +589,17 @@ bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexc
             self->midiMap.setBindings (shell.midiCc);
             self->locks = shell.locks;
         }
-        else if (! self->locks.empty())
+        else
         {
-            keepLockedValues (self->values, before, self->locks);
-            StateContent merged = self->content;
-            keepLockedContent (merged, contentBefore, self->locks);
-            if (validateContent (merged))
-                self->content = std::move (merged);
+            self->applyDefaultMidiMap (true); // a preset change loads the default MIDI map (S p.315)
+            if (! self->locks.empty())
+            {
+                keepLockedValues (self->values, before, self->locks);
+                StateContent merged = self->content;
+                keepLockedContent (merged, contentBefore, self->locks);
+                if (validateContent (merged))
+                    self->content = std::move (merged);
+            }
         }
         if (self->engine)
         {
@@ -846,6 +888,27 @@ const synthyboy_plugin_content_t s_content = {
     ext_content_import_vital
 };
 
+// render (offline bounce): "Use Ultra quality when rendering" (S p.315, A385)
+bool ext_render_has_hard_realtime_requirement (const clap_plugin_t*) noexcept { return false; }
+
+bool ext_render_set (const clap_plugin_t* p, clap_plugin_render_mode mode) noexcept
+{
+    auto* self = toClap (p);
+    self->offlineRender = mode == CLAP_RENDER_OFFLINE;
+    if (self->engine)
+    {
+        self->engine->setUltraRender (self->prefs.ultraRender && self->offlineRender); // the process call asks the host for a restart (needsPrepare)
+        self->quality.realtime = ! self->offlineRender;
+        self->engine->setQuality (self->quality);
+    }
+    return true;
+}
+
+const clap_plugin_render_t s_render = {
+    ext_render_has_hard_realtime_requirement,
+    ext_render_set
+};
+
 // Extension query
 const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
 {
@@ -859,6 +922,7 @@ const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
     if (std::strcmp (id, CLAP_EXT_VOICE_INFO) == 0) return &s_voice_info;
     if (std::strcmp (id, CLAP_EXT_LATENCY) == 0) return &s_latency;
     if (std::strcmp (id, CLAP_EXT_TAIL) == 0) return &s_tail;
+    if (std::strcmp (id, CLAP_EXT_RENDER) == 0) return &s_render;
     if (std::strcmp (id, SYNTHYBOY_EXT_CONTENT) == 0) return &s_content;
     if (std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS) == 0 ||
         std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS_COMPAT) == 0 ||

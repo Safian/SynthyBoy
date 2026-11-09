@@ -30,6 +30,8 @@ public:
     int preferredHeight() const;
     int preferredWidth() const;
     ParamHandle& paramHandle() noexcept { return handle; }
+    /** Puts the cursor into the value box with the text selected (double-click opens the value box, GROUPA2 WP-02). */
+    void focusValueBox() { valueBox.grabKeyboardFocus(); valueBox.selectAll(); }
 
 private:
     class ModRow;
@@ -54,5 +56,5 @@ private:
 };
 
 /** Opens the sheet for `key` as a call-out box pointing at `anchor` (async; returns immediately). */
-void showParamSheet (UiContext& context, const std::string& key, juce::Component& anchor);
+void showParamSheet (UiContext& context, const std::string& key, juce::Component& anchor, bool focusValueBox = false);
 } // namespace synthyboy::ui

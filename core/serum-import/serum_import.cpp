@@ -19,6 +19,8 @@
 #include "synthyboy/filters/filter_types.h"
 #include "synthyboy/fx_types.h"
 #include "synthyboy/modulation.h"
+#include "synthyboy/preferences.h"
+#include "synthyboy/shell_features.h"
 #include "vital_import_internal.h"
 
 namespace synthyboy
@@ -431,7 +433,52 @@ void Importer::runPreset()
     for (int r = 0; r < 3 && ! cancelled(); ++r) fxRack (r, false);
     modSlots();
     curves();
+    midiMapSection (get (0, "midiMap"), "midiMap");
     unmappedTopLevel();
+}
+
+// GROUPA2 (WP-02): the CC map of a preset or of a .SerumMIDIMap file. The ids are `module * 1,000,000 + index * 1,000 + parameter`; only the macros are decoded
+// ("Macros CC14-21" is the map of the factory presets that carry one), every other id is reported and left out.
+void Importer::midiMapSection (int arrayNode, const std::string& path)
+{
+    if (arrayNode < 0 || N (arrayNode).type != cbor::Type::array)
+        return;
+    const cbor::Node& list = N (arrayNode);
+    for (uint32_t k = 0; k < list.count; ++k)
+    {
+        const int e = static_cast<int> (d.kids[list.first + k]);
+        if (! isMap (e))
+            continue;
+        const int ccNode = get (e, "ccNum"), ids = get (e, "paramIDs");
+        const int cc = isNumber (ccNode) ? static_cast<int> (num (ccNode)) : -1;
+        const int leaves = leavesUnder (d, e);
+        std::string key;
+        if (ids >= 0 && N (ids).type == cbor::Type::array)
+            for (uint32_t j = 0; j < N (ids).count && key.empty(); ++j)
+            {
+                if (N (ids).floatArray) // an array of numbers is stored compactly
+                {
+                    key = serumMidiParamKey (static_cast<long long> (d.arrayNumber (static_cast<uint32_t> (ids), j)));
+                    continue;
+                }
+                const int idNode = static_cast<int> (d.kids[N (ids).first + j]);
+                if (isNumber (idNode))
+                    key = serumMidiParamKey (static_cast<long long> (num (idNode)));
+            }
+        const std::string where = path + "/" + std::to_string (k);
+        if (! key.empty() && MidiCcMap::isLearnableCc (cc))
+        {
+            R.midiMap.emplace_back (cc, key);
+            entry (ItemKind::imported, Reason::exact, "voice", where, "CC " + std::to_string (cc), key, "CC " + std::to_string (cc), "midi_map_entry", leaves);
+        }
+        else
+            entry (ItemKind::dropped, Reason::noEngineEquivalent, "voice", where, "CC " + std::to_string (cc), "", "",
+                   key.empty() ? "midi_map_parameter_not_decoded" : "midi_map_cc_not_learnable", leaves);
+        consume (e);
+    }
+    consume (arrayNode); // the shell of the array
+    std::sort (R.midiMap.begin(), R.midiMap.end());
+    R.midiMap.erase (std::unique (R.midiMap.begin(), R.midiMap.end(), [] (const auto& a, const auto& b) { return a.first == b.first; }), R.midiMap.end());
 }
 
 void Importer::macro (int i)

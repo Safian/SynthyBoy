@@ -49,6 +49,9 @@ public:
     /** Current frame index (0-based). */
     size_t currentFrame() const noexcept { return currentFrameIndex; }
     void setCurrentFrame (size_t index);
+    /** "Mod Wheel -> WT Pos (when WT Editor is open)" (S p.315, GROUPA2 WP-02): while the preference is on, a move of the mod wheel since the last call scans the
+        frames of the table (0 = the first, 1 = the last). The 30 Hz timer of the sheet calls it; the tests call it too. */
+    void followModWheel();
 
     /** Active editor mode. */
     Mode mode() const noexcept { return currentMode; }
@@ -212,6 +215,7 @@ private:
     bool strokeActive = false;  // a drawing gesture (mouse down .. up) is in progress: it is one undo step
     wtedit::vital::Group vitalGroup;
     size_t currentFrameIndex = 0;
+    float lastModWheel = 0.0f;
     int rangeStart = -1;
     int rangeEnd = -1;
     bool rangeSelectActive = false;

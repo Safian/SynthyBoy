@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "../Panel.h"
+#include "synthyboy/shell_features.h"
 #include "ModLogic.h"
 #include "ModMatrixReorder.h"
 
@@ -689,7 +690,8 @@ private:
     {
         const int used = modCountActiveSlots (ctx.assign.matrix());
         lastActiveCount = used;
-        statusLabel.setText (juce::String::formatted ("%d / 64 Active", used), juce::dontSendNotification);
+        statusLabel.setText (juce::String::formatted ("%d / 64 Active", used) + (ctx.host.isModuleLocked (kMatrixLock) ? juce::String ("  (locked)") : juce::String()),
+                             juce::dontSendNotification);
     }
 
     void layoutSlotRows()
@@ -756,7 +758,7 @@ private:
         juce::PopupMenu menu;
         menu.addItem (1, "Sort by Source (ascending)");
         menu.addItem (2, "Sort by Destination (ascending)");
-        menu.addItem (3, "Lock Matrix (preserve across presets)", true, matrixLocked);
+        menu.addItem (3, "Lock Matrix (preserve across presets)", true, ctx.host.isModuleLocked (kMatrixLock));
         menu.addSeparator();
         menu.addItem (4, "Create Vibrato (Unused LFO -> Pitch via Wheel)");
         menu.addItem (5, "Create Velo -> Amp Assignment");
@@ -779,7 +781,9 @@ private:
             }
             else if (result == 3)
             {
-                matrixLocked = ! matrixLocked;
+                // Lock Matrix (S p.214, GROUPA2 WP-02): the host keeps the 64 slots and their curves when a preset is loaded
+                ctx.host.setModuleLocked (kMatrixLock, ! ctx.host.isModuleLocked (kMatrixLock));
+                updateStatus();
             }
             else if (result == 4)
             {
@@ -859,7 +863,6 @@ private:
     ModSlotContainer container;
 
     int lastActiveCount = -1;
-    bool matrixLocked = false;
 };
 
 SYNTHYBOY_REGISTER_PANEL (ModMatrixPanel, Page::mod, 10)

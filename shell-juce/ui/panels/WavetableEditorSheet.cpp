@@ -1432,6 +1432,8 @@ WavetableEditorSheet::WavetableEditorSheet (UiContext& context, wtedit::Wavetabl
     // Sync vital group from wavetable
     vitalGroup.initFromWavetable (wt);
     undoStack.push (wt); // baseline state
+    lastModWheel = ctx.host.modWheel();
+    startTimerHz (30); // the import worker and the mod wheel (followModWheel)
 
     // Header buttons
     closeBtn.onClick = [this] { requestClose(); };
@@ -2877,7 +2879,6 @@ bool WavetableEditorSheet::finishImport()
     importJob->waitForThreadToExit (-1); // the flag is the last thing run () sets
     const auto job = std::move (importJob);
     importJob = nullptr;
-    stopTimer();
     if (importSheet)
         importSheet->setBusy (false);
     if (job->cancelled.load())
@@ -2910,14 +2911,23 @@ bool WavetableEditorSheet::importProgressVisible() const
     return importSheet != nullptr && importSheet->progressVisible();
 }
 
+void WavetableEditorSheet::followModWheel()
+{
+    const float wheel = ctx.host.modWheel();
+    if (std::abs (wheel - lastModWheel) < 1.0e-6f)
+        return;
+    lastModWheel = wheel;
+    const size_t frames = wt.numFrames();
+    if (! ctx.host.preferences().modWheelToWtPos || frames == 0)
+        return;
+    setCurrentFrame (static_cast<size_t> (juce::roundToInt (juce::jlimit (0.0f, 1.0f, wheel) * static_cast<float> (frames - 1))));
+}
+
 void WavetableEditorSheet::timerCallback()
 {
-    if (importJob == nullptr)
-    {
-        stopTimer();
-        return;
-    }
-    finishImport();
+    followModWheel();
+    if (importJob != nullptr)
+        finishImport();
 }
 
 } // namespace synthyboy::ui

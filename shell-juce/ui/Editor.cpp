@@ -188,6 +188,8 @@ void SynthyBoyEditor::updateUndoRedoButtons()
 
 bool SynthyBoyEditor::keyPressed (const juce::KeyPress& key)
 {
+    if (! host.preferences().keyboardShortcuts) // "Keyboard shortcuts" off (S p.314): the computer keyboard belongs to the host
+        return false;
     const bool cmdOrCtrl = key.getModifiers().isCommandDown() || key.getModifiers().isCtrlDown();
     if (cmdOrCtrl)
     {

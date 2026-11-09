@@ -37,6 +37,8 @@ public:
     void runFxFile();    // .SerumFX / .SerumFXRack
     void runShape();     // .XferShape
     void runStyle();     // .SerumStyle (GROUPA2, WP-07): a voice control configuration
+    void runMidiMap();   // .SerumMIDIMap (GROUPA2, WP-02)
+    void midiMapSection (int arrayNode, const std::string& path); // `midiMap`: [{ccNum, paramIDs}]
     void runUnmapped (const char* what); // the families without an equivalent
     void finish();       // the sweep of unconsumed leaves, counts, fidelity
 

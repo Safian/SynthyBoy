@@ -35,6 +35,15 @@ ControlKind defaultKind (const ParamInfo& info) noexcept;
 
 /** Value text with unit as the value bubble and the sheet show it: ParamInfo::decimals, unit label, Hz from 1000 as kHz. Stepped: the choice name. */
 std::string displayText (const ParamInfo& info, float plain);
+/** True for the frequency readouts that are cutoffs of a filter, a band or a crossover (Hz parameters that are no rates: the cutoffs, centres, filters of the
+    effects, the splitter and crossover frequencies): the readouts the frequency units preference changes (GROUPA2 WP-02, A382). */
+bool isCutoffReadout (const ParamInfo& info) noexcept;
+/** A frequency in semitones from middle C (261.6256 Hz), Vital's "semitones" units: "+7.0 st", "-12.5 st". */
+std::string semitoneText (float hz);
+/** "7", "+7.5", "-12 st", "3 semi", "3 semitones" -> the frequency in Hz; false when the text is not a number with an optional such suffix. */
+bool semitoneTextToHz (const std::string& text, float& hz);
+/** displayText () with the frequency units preference: a cutoff readout is shown in semitones when `semitones`. */
+std::string displayText (const ParamInfo& info, float plain, bool semitones);
 /** Label for a control: the display name without the group prefix ("Master Volume" in group "Master" -> "Volume"). */
 std::string shortName (const ParamInfo& info);
 /** The unit label only ("dB", "Hz", ...; "" for none). */

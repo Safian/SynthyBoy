@@ -35,6 +35,9 @@ struct SerumPluginImport
     // `content` may hold the impulse response of the chain
     std::vector<int> touched;
 
+    // the MIDI CC map of a preset or of a .SerumMIDIMap file (GROUPA2 WP-02; only the macros are known, the other ids are reported)
+    std::vector<std::pair<int, std::string>> midiMap;
+
     // a shape or curve (.XferShape)
     LfoShapeFile shape;
 

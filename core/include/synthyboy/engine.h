@@ -49,6 +49,14 @@ public:
     /** Silences all voices and snaps smoothers to the current parameter values. */
     virtual void reset() = 0;
 
+    /** Silences the sounding notes and flushes the tails of the effects at once (the host transport stopped, preferences.h silenceOnStop). Audio thread,
+        between two process () calls: no allocation, the parameters, the controllers and the content stay as they are. The default does nothing (engine-own). */
+    virtual void silence() noexcept {}
+
+    /** Ultra quality for an offline render (preferences.h ultraRender): the oversampling of the quality option 4x, read by prepare () like
+        quality.oversample_4x (needsPrepare () reports a change). Set it before prepare (); engines without the option ignore it. Any thread. */
+    virtual void setUltraRender (bool) noexcept {}
+
     /** Sets a parameter (plain value, constrained to the parameter's range); unknown ids and NaN are ignored. */
     virtual void setParam (uint32_t id, float plain) noexcept = 0;
     virtual float getParam (uint32_t id) const noexcept = 0;

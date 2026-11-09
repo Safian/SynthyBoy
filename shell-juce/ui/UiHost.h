@@ -12,16 +12,22 @@
 
 #include <functional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "model/ModModel.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine_caps.h"
+#include "synthyboy/preferences.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/user_library.h"
 
 namespace synthyboy::ui
 {
+/** A MIDI CC map as the shell keeps it: (CC number, parameter key), ascending by CC. */
+using MidiMapBindings = std::vector<std::pair<int, std::string>>;
+
 /** A request for a file the host asks the user for (WP-01): the JUCE shell opens a juce::FileChooser, a test host answers at once. */
 struct FileRequest
 {
@@ -78,7 +84,27 @@ public:
     virtual bool isModuleLocked (const std::string& /*prefix*/) const { return false; }
     virtual void setModuleLocked (const std::string& /*prefix*/, bool /*locked*/) {}
     /** Loads a patch as a preset change: parameters and content, except what the locks keep. False when the host cannot. */
-    virtual bool loadPatch (const ParamValues& /*values*/, const StateContent& /*content*/) { return false; }
+    virtual bool loadPatch (const ParamValues& /*values*/, const StateContent& /*content*/, const MidiMapBindings* /*presetMidiMap*/ = nullptr) { return false; }
+
+    // ---- preferences, MIDI map files, global locks (GROUPA2 WP-02, docs/ui-design/13-new-keys.md 4.31) ----
+    /** The global preferences (core/include/synthyboy/preferences.h), stored per user in <userDirectory>/preferences.json. A reference to the host's copy; message thread.
+        A host without a store answers the defaults and ignores setPreferences (). */
+    virtual const Preferences& preferences() const noexcept { static const Preferences defaults; return defaults; }
+    /** Replaces the preferences, saves the file and applies the ones the shell acts on. */
+    virtual void setPreferences (const Preferences& /*prefs*/) {}
+    /** Bumped by every setPreferences () (the editor timer polls it to redraw). */
+    virtual uint32_t preferencesRevision() const noexcept { return 0; }
+    /** The position of the mod wheel (0..1) as the last MIDI message set it (any channel; the on-screen wheel included). */
+    virtual float modWheel() const noexcept { return 0.0f; }
+    /** One line for Preferences / About: version, build date, engine, content (S p.322). */
+    virtual juce::String aboutText() const { return {}; }
+    /** The MIDI CC map in full, and its replacement (S p.325: Load / Save MIDI Map). setMidiMapBindings () returns the number of entries taken, -1 if the host keeps none. */
+    virtual MidiMapBindings midiMapBindings() const { return {}; }
+    virtual int setMidiMapBindings (const MidiMapBindings& /*bindings*/) { return -1; }
+    /** The default MIDI CC map (S p.325, Default.SerumMIDIMap): loaded in a new instance, by Init Preset and by a preset change. */
+    virtual bool hasDefaultMidiMap() const { return false; }
+    virtual bool saveDefaultMidiMap() { return false; }
+    virtual bool clearDefaultMidiMap() { return false; }
 
     /** Live output meter peaks (linear amplitude, e.g. 0..1 or higher if clipping) from the audio callback. */
     virtual float outputPeakL() const noexcept { return 0.0f; }

@@ -110,11 +110,12 @@ SerumImportResult importSerumFile (const void* data, size_t size, const SerumImp
         else if (ft == "SerumFXRack") { r.kind = SerumFileKind::fxRack; imp.runFxFile(); }
         else if (ft == "XferShape") { r.kind = SerumFileKind::shape; imp.runShape(); }
         else if (ft == "SerumStyle") { r.kind = SerumFileKind::style; imp.runStyle(); }
+        else if (ft == "SerumMIDIMap") { r.kind = SerumFileKind::midiMap; imp.runMidiMap(); }
         else
         {
             r.kind = ft == "XferPath" ? SerumFileKind::path : ft == "XferClip" ? SerumFileKind::clip : ft == "XferClipBank" ? SerumFileKind::clipBank : ft == "XferArp" ? SerumFileKind::arp
                      : ft == "XferArpBank" ? SerumFileKind::arpBank : ft.rfind ("XferFilterPZ", 0) == 0 ? SerumFileKind::filterPz
-                     : ft == "SerumMIDIMap" ? SerumFileKind::midiMap : SerumFileKind::unknown;
+                     : SerumFileKind::unknown;
             imp.runUnmapped (ft.c_str());
         }
         if (r.kind == SerumFileKind::preset)

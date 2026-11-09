@@ -530,7 +530,26 @@ public:
 
     bool oversample4xOn() const noexcept
     {
-        return oversample4xParam >= 0 && params[static_cast<size_t> (oversample4xParam)].load (std::memory_order_relaxed) > 0.5f;
+        return ultraRender.load (std::memory_order_relaxed)
+               || (oversample4xParam >= 0 && params[static_cast<size_t> (oversample4xParam)].load (std::memory_order_relaxed) > 0.5f);
+    }
+
+    void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
+
+    /** The host stopped: every note ends now and the tails of the effects are cleared (A381). The controllers (bend, mod wheel, pedal position of the
+        wheels) and the parameters stay; the note book keeping of the adapter starts empty. */
+    void silence() noexcept override
+    {
+        if (engine == nullptr)
+            return;
+        engine->allSoundsOff(); // the voices, the effect chain (hardReset), the decimator
+        for (auto& channelKeys : activeKey)
+            channelKeys.fill (-1);
+        pedalChannels = 0;
+        noteGroup->held = false;
+        ++noteGroup->group;
+        noteIds.fill (NoteIdSlot {});
+        activeCount.store (0, std::memory_order_relaxed);
     }
 
     void setQuality (const Quality& q) noexcept override
@@ -2628,6 +2647,7 @@ private:
     int sameNoteParam = -1, bendDownRangeParam = -1, bendDownLinkParam = -1;
     int oversample4xParam = -1, noSmoothingParam = -1;
     bool preparedOversample4x = false;
+    std::atomic<bool> ultraRender { false };
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;
     sbvital::Value* vFilter2Input = nullptr;

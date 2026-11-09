@@ -494,6 +494,13 @@ public:
         const auto plotArea = getLocalBounds().toFloat().reduced (ctx.theme.px (6.0f), ctx.theme.px (8.0f));
         if (plotArea.getWidth() <= 1.0f || plotArea.getHeight() <= 1.0f)
             return;
+        // Appendix G: Alt-click on the display cycles the display modes (the double tap does the same for touch)
+        if (ctx.host.preferences().keyboardShortcuts && e.mods.isAltDown() && ! e.mods.isShiftDown() && ! e.mods.isPopupMenu()
+            && ! (modelParam.valid() && static_cast<int> (modelParam.plain()) == 21))
+        {
+            cycleMode();
+            return;
+        }
 
         const int model = (modelParam.valid() ? static_cast<int> (modelParam.plain()) : 3);
 

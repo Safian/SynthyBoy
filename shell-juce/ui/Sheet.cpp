@@ -161,10 +161,10 @@ void ParamSheet::refreshValue()
     if (! handle.valid())
         return;
     if (! valueBox.hasKeyboardFocus (false))
-        valueBox.setText (juce::String (displayText (handle.info(), handle.plain())), juce::dontSendNotification);
+        valueBox.setText (juce::String (valueText (ctx, handle.info(), handle.plain())), juce::dontSendNotification);
     const ParamInfo& pi = handle.info();
-    info.setText ("default " + juce::String (displayText (pi, pi.def)) + "     range " + juce::String (displayText (pi, pi.min)) + " .. "
-                      + juce::String (displayText (pi, pi.max)),
+    info.setText ("default " + juce::String (valueText (ctx, pi, pi.def)) + "     range " + juce::String (valueText (ctx, pi, pi.min)) + " .. "
+                      + juce::String (valueText (ctx, pi, pi.max)),
                   juce::dontSendNotification);
 }
 
@@ -192,6 +192,17 @@ bool ParamSheet::applyValueText (const juce::String& text)
         entry = juce::String (entry.getDoubleValue() * 1000.0, 3);
 
     float v = handle.plain();
+    if (ctx.host.preferences().freqSemitones && isCutoffReadout (handle.info()))
+    {
+        // the frequency units preference: a cutoff is typed in semitones from middle C ("7", "-12 st"); "1.2 kHz" / "440 Hz" still work
+        float hz = 0.0f;
+        const bool typedHz = entry.endsWithIgnoreCase ("hz") || entry.endsWithIgnoreCase ("khz") || entry.endsWithIgnoreCase ("k");
+        if (! typedHz && semitoneTextToHz (entry.toStdString(), hz))
+        {
+            handle.setPlainComplete (juce::jlimit (handle.info().min, handle.info().max, hz));
+            return true;
+        }
+    }
     if (! textToValue (handle.info(), entry.toRawUTF8(), v))
         return false;
     handle.setPlainComplete (v);
@@ -270,10 +281,13 @@ void ParamSheet::resized()
         row->setBounds (r.removeFromTop (t.touch()));
 }
 
-void showParamSheet (UiContext& context, const std::string& key, juce::Component& anchor)
+void showParamSheet (UiContext& context, const std::string& key, juce::Component& anchor, bool focusValueBox)
 {
     auto sheet = std::make_unique<ParamSheet> (context, key);
+    juce::Component::SafePointer<ParamSheet> safe (sheet.get());
     auto& box = juce::CallOutBox::launchAsynchronously (std::move (sheet), anchor.getScreenBounds(), nullptr);
     (void) box;
+    if (focusValueBox)
+        juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->focusValueBox(); });
 }
 } // namespace synthyboy::ui

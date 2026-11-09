@@ -887,7 +887,7 @@ void Importer::finish()
     int soundDropped = 0;
     for (const SerumReportEntry& e : rep.entries)
         if (e.kind == ItemKind::dropped && e.detail != "clip_player_not_modelled" && e.detail != "arpeggiator_not_modelled" && e.detail != "retrigger_state_not_modelled"
-            && e.detail != "midi_cc_map_not_imported" && e.detail != "lfo_point_modulation_bus_state" && e.serumPath != "mpeConfig" && e.detail != "interface_state")
+            && e.detail != "midi_cc_map_not_imported" && e.detail != "midi_map_parameter_not_decoded" && e.detail != "midi_map_cc_not_learnable" && e.detail != "lfo_point_modulation_bus_state" && e.serumPath != "mpeConfig" && e.detail != "interface_state")
             ++soundDropped;
     rep.fidelity = soundDropped > 0 ? Fidelity::degraded : (rep.numApproximated > 0 ? Fidelity::close : Fidelity::exact);
     for (size_t i = 0; i < touched.size(); ++i)
@@ -929,6 +929,13 @@ void Importer::runShape()
         acctRest (lfo, reduced ? ItemKind::approximated : ItemKind::imported, reduced ? Reason::truncated : Reason::exact, "shape", "LFO", "", "", reduced ? "shape_resampled_to_128_points" : "shape_points_and_curves");
     }
     else if (lfo >= 0) acctRest (lfo, ItemKind::dropped, Reason::noEngineEquivalent, "shape", "LFO", "", "", "shape_unreadable");
+    unmappedTopLevel();
+}
+
+void Importer::runMidiMap()
+{
+    meta();
+    midiMapSection (get (0, "midiMap"), "midiMap");
     unmappedTopLevel();
 }
 

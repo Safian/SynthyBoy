@@ -9,6 +9,7 @@
 #include <vector>
 #include "../Panel.h"
 #include "../ParamHandle.h"
+#include "synthyboy/shell_features.h"
 
 namespace synthyboy::ui
 {
@@ -122,7 +123,24 @@ public:
         clearButton.setButtonText ("Clear Tuning");
         clearButton.onClick = [this] { resetTuning(); };
         addAndMakeVisible (clearButton);
+
+        // "Lock the tuning configuration" (S p.321, GROUPA2 WP-02): the host's lock "master.tuning" keeps the tuning keys and the tuning table across presets
+        lockButton.onClick = [this]
+        {
+            ctx.host.setModuleLocked (kTuningLock, ! ctx.host.isModuleLocked (kTuningLock));
+            syncLock();
+        };
+        addAndMakeVisible (lockButton);
+        syncLock();
     }
+
+    void syncLock()
+    {
+        const bool locked = ctx.host.isModuleLocked (kTuningLock);
+        lockButton.setButtonText (locked ? "Tuning Lock: ON" : "Tuning Lock: OFF");
+        lockButton.setToggleState (locked, juce::dontSendNotification);
+    }
+    juce::TextButton& lockToggle() noexcept { return lockButton; }
 
     void loadScalaString (const std::string& sclText)
     {
@@ -242,11 +260,12 @@ public:
         const auto& t = ctx.theme;
         auto bounds = getLocalBounds().reduced (t.gap());
         const int touchH = t.touch();
-        const int btnW = juce::jmax (t.touch() * 2, (bounds.getWidth() - t.gap()) / 2);
+        const int btnW = juce::jmax (t.touch() * 2, (bounds.getWidth() - 2 * t.gap()) / 3);
 
         auto bottomArea = bounds.removeFromBottom (touchH);
         loadButton.setBounds (bottomArea.removeFromLeft (btnW));
         clearButton.setBounds (bottomArea.removeFromRight (btnW));
+        lockButton.setBounds (bottomArea.reduced (t.gap(), 0).withSizeKeepingCentre (juce::jmax (t.touch() * 2, bottomArea.getWidth() - 2 * t.gap()), touchH));
     }
 
 private:
@@ -277,6 +296,7 @@ private:
 
     juce::TextButton loadButton;
     juce::TextButton clearButton;
+    juce::TextButton lockButton;
     std::unique_ptr<juce::FileChooser> fileChooser;
 
     std::array<float, 12> userCents {};

@@ -128,6 +128,7 @@ struct SerumImportResult
     std::vector<ContentModCurve> modCurves;
     std::vector<ContentPoint> velocityCurve, noteCurve, shaperA, shaperB;
     ContentTuning tuning;
+    std::vector<std::pair<int, std::string>> midiMap; // the MIDI CC map of a preset (`midiMap`) or of a .SerumMIDIMap file: (CC, our parameter key), ascending by CC (GROUPA2 WP-02)
     LfoShapeFile shape;                        // kind shape: the one shape / curve of the file
     SerumImportReport report;
     std::string macroNames[8];

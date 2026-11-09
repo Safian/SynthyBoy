@@ -99,6 +99,12 @@ public:
     /** dragging: the amount as a normalised position (0..1 == -100..+100 %). */
     float amountNormalised() const;
     void dragBy (float dyUpPx, FineZone zone);
+    /** The preference "Limit Mod depth on drop (based on knob value)" (S p.314, GROUPA2 WP-02): while on, the depth of a drag never exceeds the room the knob has
+        left (a knob at 75 % takes +25 %, a bipolar slot at most the smaller room of the two sides), so a full modulator reaches 100 % and no more. */
+    void setLimitToHeadroom (bool on) noexcept { limitHeadroom = on; }
+    bool limitsToHeadroom() const noexcept { return limitHeadroom; }
+    /** The range the depth may take now (percent): the whole -100 .. 100 unless the limit is on. */
+    void depthRange (float& lowest, float& highest) const;
     void setAmount (float percent);
     /** dragging -> armed. */
     void endDrag();
@@ -115,6 +121,7 @@ private:
     int source = 0;
     int slot = -1;
     int destination = -1;
+    bool limitHeadroom = false;
 };
 
 /** Slot editing outside the touch flow (the sheet's mod list): remove an assignment (all seven slot parameters back to their defaults)

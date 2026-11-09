@@ -479,9 +479,18 @@ SerumFlowResult importSerumFile (UiContext& ctx, const juce::File& file, int lfo
     }
     const juce::String counts = juce::String (in.report.numImported) + " settings, " + juce::String (in.report.numApproximated) + " approximated, "
                                 + juce::String (in.report.numDropped) + " dropped";
+    if (in.kind == SerumFileKind::midiMap)
+    {
+        // a CC map file (GROUPA2 WP-02): the map of the plug-in is replaced (the macros are decoded, the other ids are in the report)
+        const int taken = ctx.host.setMidiMapBindings (in.midiMap);
+        result.flow = taken >= 0 ? done ("MIDI map " + juce::String (in.name) + ": " + juce::String (taken) + " controllers, " + juce::String (in.report.numDropped) + " dropped")
+                                 : fail ("This host keeps no MIDI map");
+        return result;
+    }
     if (in.kind == SerumFileKind::preset)
     {
-        if (! ctx.host.loadPatch (in.values, in.content))
+        // the CC map of the preset is used when the preference "Load MIDI Map from Presets" is on (the host decides; else its default map)
+        if (! ctx.host.loadPatch (in.values, in.content, in.midiMap.empty() ? nullptr : &in.midiMap))
         {
             result.flow = fail ("this host cannot load a patch");
             return result;

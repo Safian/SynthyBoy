@@ -13,9 +13,11 @@
 #include <vector>
 
 #include <clap/ext/remote-controls.h>
+#include <clap/ext/render.h>
 
 #include "synthyboy/kick_pages.h"
 #include "synthyboy/params.h"
+#include "synthyboy/preferences.h"
 #include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
 #include "synthyboy_clap.h"
@@ -657,4 +659,240 @@ TEST (native_clap_new_instance_starts_from_the_user_default)
     fresh->destroy (fresh);
     std::filesystem::remove_all (dir);
     setUserDir ("");
+}
+
+// GROUPA2 (WP-02): the native shell reads the preferences (MPE defaults of a new instance, silence on stop, ultra render) and the default MIDI map
+namespace
+{
+/** Renders `blocks` blocks of 256 frames with the transport running or stopped; returns the peak of the left channel of the last block. */
+float runBlocks (const clap_plugin_t* plugin, const std::vector<clap_event_header_t*>& events, int blocks, bool transportKnown, bool playing, float* rmsOut = nullptr)
+{
+    std::vector<float> bufL (256, 0.0f), bufR (256, 0.0f);
+    float* channelData[2] = { bufL.data(), bufR.data() };
+    clap_audio_buffer_t audioOut {};
+    audioOut.data32 = channelData;
+    audioOut.channel_count = 2;
+    clap_event_transport_t transport {};
+    transport.flags = CLAP_TRANSPORT_HAS_TEMPO | (playing ? CLAP_TRANSPORT_IS_PLAYING : 0u);
+    transport.tempo = 120.0;
+    clap_process_t proc {};
+    proc.frames_count = 256;
+    proc.transport = transportKnown ? &transport : nullptr;
+    proc.audio_outputs = &audioOut;
+    proc.audio_outputs_count = 1;
+    SimpleEvents list;
+    list.events = events;
+    clap_input_events_t in = list.inEvents();
+    float peak = 0.0f;
+    double sum = 0.0;
+    for (int b = 0; b < blocks; ++b)
+    {
+        proc.in_events = b == 0 ? &in : nullptr;
+        plugin->process (plugin, &proc);
+        peak = 0.0f;
+        for (float v : bufL)
+        {
+            peak = std::max (peak, std::fabs (v));
+            sum += static_cast<double> (v) * v;
+        }
+    }
+    if (rmsOut != nullptr)
+        *rmsOut = static_cast<float> (std::sqrt (sum / (256.0 * blocks)));
+    return peak;
+}
+
+const clap_plugin_t* createPlugin()
+{
+    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
+    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    const clap_plugin_t* plugin = factory->create_plugin (factory, &s_mockHost, "com.safian.synthyboy");
+    if (plugin != nullptr)
+        plugin->init (plugin);
+    return plugin;
+}
+} // namespace
+
+TEST (native_clap_preferences_mpe_defaults_default_midi_map_and_preset_changes)
+{
+    const auto dir = std::filesystem::temp_directory_path() / "sb_clap_prefs";
+    std::filesystem::remove_all (dir);
+    setUserDir (dir.string().c_str());
+
+    Preferences prefs;
+    prefs.mpeByDefault = true;
+    prefs.mpeBendToX = true;
+    CHECK (savePreferences (dir.string(), prefs));
+    CHECK (saveDefaultMidiMap (dir.string(), { { 30, "filter1.cutoff" } }));
+
+    const clap_plugin_t* plugin = createPlugin();
+    CHECK (plugin != nullptr);
+    if (plugin == nullptr)
+        return;
+    // a new instance: MPE on and pitch bend also to X from the preferences, Y stays unipolar
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("master.mpe.on")->id), 1.0, 1.0e-6);
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("master.mpe.bend_to_x")->id), 1.0, 1.0e-6);
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("master.mpe.y_bipolar")->id), 0.0, 1.0e-6);
+    // and the default MIDI map of the new instance
+    CHECK (plugin->activate (plugin, 48000.0, 32, 512));
+    CHECK (plugin->start_processing (plugin));
+    auto cc = ccEvent (30, 127);
+    processEvents (plugin, { &cc.header }, nullptr);
+    const ParamInfo* cutoff = findParamByKey ("filter1.cutoff");
+    CHECK_NEAR (paramValue (plugin, cutoff->id), cutoff->max, 0.5);
+
+    // a session brings its own map and keeps it; a preset change (no shell section) loads the default map again
+    ShellState shell;
+    shell.midiCc = { { 21, "master.volume" } };
+    CHECK (loadStateText (plugin, withShellSection (saveState (ParamValues::defaults()), shell)));
+    auto session = ccEvent (21, 127);
+    processEvents (plugin, { &session.header }, nullptr);
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("master.volume")->id), findParamByKey ("master.volume")->max, 0.01);
+    CHECK (loadStateText (plugin, saveState (ParamValues::defaults())));
+    auto lo = ccEvent (30, 0);
+    processEvents (plugin, { &lo.header }, nullptr);
+    CHECK_NEAR (paramValue (plugin, cutoff->id), cutoff->min, 0.5);
+    auto oldMap = ccEvent (21, 127);
+    const double volumeBefore = paramValue (plugin, findParamByKey ("master.volume")->id);
+    processEvents (plugin, { &oldMap.header }, nullptr);
+    CHECK_NEAR (paramValue (plugin, findParamByKey ("master.volume")->id), volumeBefore, 1.0e-6);   // CC 21 is no longer mapped
+    plugin->stop_processing (plugin);
+    plugin->deactivate (plugin);
+    plugin->destroy (plugin);
+
+    // a default patch the user saved wins over the MPE preferences of a new instance
+    auto values = ParamValues::defaults();
+    CHECK (saveUserDefault (dir.string(), withShellSection (saveState (values), ShellState {})));
+    const clap_plugin_t* withDefault = createPlugin();
+    CHECK_NEAR (paramValue (withDefault, findParamByKey ("master.mpe.on")->id), 0.0, 1.0e-6);
+    withDefault->destroy (withDefault);
+    std::filesystem::remove_all (dir);
+    setUserDir ("");
+}
+
+TEST (native_clap_silences_notes_and_tails_when_the_host_stops)
+{
+    for (const bool silence : { true, false })
+    {
+        const auto dir = std::filesystem::temp_directory_path() / (silence ? "sb_clap_stop_on" : "sb_clap_stop_off");
+        std::filesystem::remove_all (dir);
+        setUserDir (dir.string().c_str());
+        Preferences prefs;
+        prefs.silenceOnStop = silence;
+        CHECK (savePreferences (dir.string(), prefs));
+
+        const clap_plugin_t* plugin = createPlugin();
+        CHECK (plugin != nullptr && plugin->activate (plugin, 48000.0, 32, 512) && plugin->start_processing (plugin));
+        auto patch = ParamValues::defaults();
+        patch.plain[indexOfKey ("reverb.on")] = 1.0f;
+        patch.plain[indexOfKey ("reverb.mix")] = 100.0f;
+        patch.plain[indexOfKey ("env1.release")] = 4000.0f;
+        CHECK (loadStateText (plugin, saveState (patch)));
+
+        clap_event_note_t on {};
+        on.header.size = sizeof on;
+        on.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+        on.header.type = CLAP_EVENT_NOTE_ON;
+        on.note_id = 1;
+        on.key = 60;
+        on.velocity = 0.9;
+        float rms = 0.0f;
+        runBlocks (plugin, { &on.header }, 1, true, true);
+        runBlocks (plugin, {}, 60, true, true, &rms);         // the transport runs, the note is held
+        CHECK (rms > 0.01f);
+        // the transport stops: the note ends and the tail is cleared (only with the preference), a block later it is quiet
+        runBlocks (plugin, {}, 1, true, false);
+        const float after = runBlocks (plugin, {}, 4, true, false, &rms);
+        if (silence)
+            CHECK (rms < 1.0e-4f && after < 1.0e-3f);
+        else
+            CHECK (rms > 0.01f);
+        plugin->stop_processing (plugin);
+        plugin->deactivate (plugin);
+        plugin->destroy (plugin);
+        std::filesystem::remove_all (dir);
+    }
+    // a host that gives no transport at all never stops
+    const auto dir = std::filesystem::temp_directory_path() / "sb_clap_stop_none";
+    std::filesystem::remove_all (dir);
+    setUserDir (dir.string().c_str());
+    const clap_plugin_t* plugin = createPlugin();
+    CHECK (plugin != nullptr && plugin->activate (plugin, 48000.0, 32, 512) && plugin->start_processing (plugin));
+    clap_event_note_t on {};
+    on.header.size = sizeof on;
+    on.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+    on.header.type = CLAP_EVENT_NOTE_ON;
+    on.note_id = 1;
+    on.key = 60;
+    on.velocity = 0.9;
+    float rms = 0.0f;
+    runBlocks (plugin, { &on.header }, 1, false, false);
+    runBlocks (plugin, {}, 20, false, false, &rms);
+    CHECK (rms > 0.01f);
+    plugin->stop_processing (plugin);
+    plugin->deactivate (plugin);
+    plugin->destroy (plugin);
+    std::filesystem::remove_all (dir);
+    setUserDir ("");
+}
+
+TEST (native_clap_offline_render_runs_at_ultra_quality_when_the_preference_is_on)
+{
+    const auto render = [] (bool ultraPreference, bool offline)
+    {
+        const auto dir = std::filesystem::temp_directory_path() / "sb_clap_ultra";
+        std::filesystem::remove_all (dir);
+        setUserDir (dir.string().c_str());
+        Preferences prefs;
+        prefs.ultraRender = ultraPreference;
+        savePreferences (dir.string(), prefs);
+        const clap_plugin_t* plugin = createPlugin();
+        const auto* ext = static_cast<const clap_plugin_render_t*> (plugin->get_extension (plugin, CLAP_EXT_RENDER));
+        CHECK (ext != nullptr);
+        if (ext != nullptr)
+        {
+            CHECK (! ext->has_hard_realtime_requirement (plugin));
+            CHECK (ext->set (plugin, offline ? CLAP_RENDER_OFFLINE : CLAP_RENDER_REALTIME));
+        }
+        plugin->activate (plugin, 48000.0, 32, 512);
+        plugin->start_processing (plugin);
+        clap_event_note_t on {};
+        on.header.size = sizeof on;
+        on.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+        on.header.type = CLAP_EVENT_NOTE_ON;
+        on.note_id = 1;
+        on.key = 100;
+        on.velocity = 1.0;
+        std::vector<float> left;
+        std::vector<float> bufL (256, 0.0f), bufR (256, 0.0f);
+        float* channelData[2] = { bufL.data(), bufR.data() };
+        clap_audio_buffer_t audioOut {};
+        audioOut.data32 = channelData;
+        audioOut.channel_count = 2;
+        clap_process_t proc {};
+        proc.frames_count = 256;
+        proc.audio_outputs = &audioOut;
+        proc.audio_outputs_count = 1;
+        SimpleEvents list;
+        list.events = { &on.header };
+        clap_input_events_t in = list.inEvents();
+        for (int b = 0; b < 40; ++b)
+        {
+            proc.in_events = b == 0 ? &in : nullptr;
+            plugin->process (plugin, &proc);
+            left.insert (left.end(), bufL.begin(), bufL.end());
+        }
+        plugin->stop_processing (plugin);
+        plugin->deactivate (plugin);
+        plugin->destroy (plugin);
+        std::filesystem::remove_all (dir);
+        setUserDir ("");
+        return left;
+    };
+    const auto live = render (true, false);        // the preference is on, the host plays live: normal quality
+    const auto plain = render (false, false);
+    const auto bounce = render (true, true);       // the host renders offline: ultra
+    const auto offlineOnly = render (false, true); // offline without the preference: normal quality
+    CHECK (live == plain);
+    CHECK (offlineOnly == plain);
+    CHECK (bounce != plain);
 }

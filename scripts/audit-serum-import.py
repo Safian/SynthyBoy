@@ -544,6 +544,7 @@ class Audit:
         self.audit_content(name, tree, sb, content_dir)
         self.audit_noise(name, tree, sb)
         self.audit_voice_panel(name, tree, sb)
+        self.audit_midi_map(name, tree, report)
 
     VOICE_ROWS = {'Pan': 'pan', 'Detune': 'detune', 'FilterCutoff': 'cutoff', 'EnvTime': 'env', 'Mod1': 'mod1', 'Mod2': 'mod2'}
     VOICE_OTHER = {'kParamVoiceCount': 'voicectl.length', 'kParamGlobalRandomOscPan': 'voicectl.rand.pan', 'kParamGlobalRandomOscDetune': 'voicectl.rand.detune',
@@ -582,6 +583,31 @@ class Audit:
                 got = params.get(key)
                 if got is not None and abs(got - T.clamp(key, info['default'])) > 1e-6:
                     self.err(name, '%s is %s, the panel does not mention it (default %s)' % (key, got, info['default']))
+
+    def audit_midi_map(self, name, tree, report):
+        """GROUPA2 (WP-02, A386): the CC map of a preset: an entry whose first parameter id is a macro (module 7, index 0..7) and whose CC can be learned is imported as
+        macro.N, every other one is dropped; nothing is left unreported."""
+        mm = tree.get('midiMap')
+        if not isinstance(mm, list):
+            return
+        by_path = {e['path']: e for e in report['entries'] if e['path'].startswith('midiMap/')}
+        for k, item in enumerate(mm):
+            ids = item.get('paramIDs') or []
+            cc = item.get('ccNum')
+            want = None
+            if ids and isinstance(ids[0], (int, float)):
+                pid = int(ids[0])
+                module, index, parameter = pid // 1000000, (pid // 1000) % 1000, pid % 1000
+                if module == 7 and 0 <= index < 8 and parameter == 0 and 1 <= cc <= 119 and cc not in (32, 64, 6, 38) and not 96 <= cc <= 101:
+                    want = 'macro.%d' % (index + 1)
+            e = by_path.get('midiMap/%d' % k)
+            self.stats['midi map entries checked'] += 1
+            if e is None:
+                self.err(name, 'midiMap/%d is not in the report' % k)
+            elif want is not None and (e['kind'] != 'imported' or e['key'] != want):
+                self.err(name, 'midiMap/%d: expected imported as %s, got %s %s' % (k, want, e['kind'], e['key']))
+            elif want is None and e['kind'] != 'dropped':
+                self.err(name, 'midiMap/%d: expected dropped, got %s' % (k, e['kind']))
 
     SERUM_ROOT = ''
 

@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "synthyboy/engine.h"
+#include "synthyboy/preferences.h"
 #include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
@@ -122,7 +123,20 @@ public:
     bool canLock() const noexcept override { return true; }
     bool isModuleLocked (const std::string& prefix) const override;
     void setModuleLocked (const std::string& prefix, bool locked) override;
-    bool loadPatch (const synthyboy::ParamValues& values, const synthyboy::StateContent& newContent) override;
+    bool loadPatch (const synthyboy::ParamValues& values, const synthyboy::StateContent& newContent,
+                    const synthyboy::ui::MidiMapBindings* presetMidiMap = nullptr) override;
+
+    // preferences, MIDI map files, About (GROUPA2 WP-02)
+    const synthyboy::Preferences& preferences() const noexcept override { return prefs; }
+    void setPreferences (const synthyboy::Preferences& newPrefs) override;
+    uint32_t preferencesRevision() const noexcept override { return prefsRev.load (std::memory_order_relaxed); }
+    float modWheel() const noexcept override { return modWheelPosition.load (std::memory_order_relaxed); }
+    juce::String aboutText() const override;
+    synthyboy::ui::MidiMapBindings midiMapBindings() const override { return midiMap.bindings(); }
+    int setMidiMapBindings (const synthyboy::ui::MidiMapBindings& bindings) override;
+    bool hasDefaultMidiMap() const override { return synthyboy::hasDefaultMidiMap (userDir); }
+    bool saveDefaultMidiMap() override;
+    bool clearDefaultMidiMap() override { return synthyboy::clearDefaultMidiMap (userDir); }
     synthyboy::MidiCcMap& midiCcMap() noexcept { return midiMap; }
     /** The directory of the user default (SYNTHYBOY_USER_DIR, else the user data directory); fixed at construction. */
     const std::string& userDataDir() const noexcept { return userDir; }
@@ -161,6 +175,14 @@ private:
     // shell features (not parameters): the CC map is read and learned on the audio thread (atomics), the locks belong to the message thread
     synthyboy::MidiCcMap midiMap;
     std::vector<std::string> locks; // guarded by contentMutex
+    // preferences (GROUPA2 WP-02): the struct belongs to the message thread, the audio thread reads the atomics next to it
+    synthyboy::Preferences prefs;
+    std::atomic<uint32_t> prefsRev { 0 };
+    std::atomic<bool> prefSilenceOnStop { true };
+    std::atomic<float> modWheelPosition { 0.0f };
+    synthyboy::TransportStopWatch stopWatch; // audio thread
+    /** A preset change: the preset's own CC map when the preference says so and the preset has one, else the default map file when there is one. */
+    void applyMapOfPresetChange (const synthyboy::ui::MidiMapBindings* presetMidiMap);
     std::string userDir;
     synthyboy::ShellState shellState() const;       // takes contentMutex
     std::string stateText();                         // saveState + content + shell section (the host state and the user default)

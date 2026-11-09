@@ -125,6 +125,12 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
             if (! out.ok) out.error = "the shape has fewer than two points";
             return out;
         }
+        if (r.kind == SerumFileKind::midiMap)
+        {
+            out.midiMap = r.midiMap;
+            out.ok = true;
+            return out;
+        }
         if (r.kind != SerumFileKind::preset && r.kind != SerumFileKind::fxModule && r.kind != SerumFileKind::fxRack
             && r.kind != SerumFileKind::style)
         {
@@ -171,6 +177,7 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
         out.meta = loadedMeta;
         out.presetText = text;
         out.touched = r.touched;
+        out.midiMap = r.midiMap;
         for (const auto& n : r.macroNames) out.macroNames.push_back (n);
         out.ok = true;
     }

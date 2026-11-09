@@ -11,6 +11,7 @@
 // caps the key needs, assign-by-touch target (06-modulation.md) when a source chip is armed, right-click / long-press = sheet.
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,6 +46,9 @@ public:
 
     /** Opens the long-press sheet (also on right-click). */
     void showSheet();
+    /** Double-click with the preference "Double-click params: value box": the sheet with the cursor in its value box. `onValueBox` (the tests) replaces it. */
+    void showValueBox();
+    std::function<void()> onValueBox;
 
 protected:
     virtual void valueChanged() { repaint(); }
@@ -92,6 +96,10 @@ public:
     /** Arms the source of the modulator in `slot` (what the list entry does). False if that slot does not modulate this control. */
     bool selectModulator (int slot);
     bool modulatorListShown() const noexcept { return badgeMenuShown; }
+    /** The value bubble is up (while a drag runs and the preference "Param value tooltips" is on). */
+    bool bubbleShown() const noexcept { return bubble != nullptr && bubble->getParentComponent() != nullptr; }
+    /** Shift-Alt-click (Appendix G): the polarity of the modulations of this control is switched (all of them to the opposite of the first). False if there is none. */
+    bool toggleModulationPolarity();
 
 protected:
     virtual bool isHorizontal() const noexcept { return false; }

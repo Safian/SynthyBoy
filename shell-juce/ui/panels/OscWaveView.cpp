@@ -129,7 +129,7 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     addAndMakeVisible (sampleMenuBtn);
     addAndMakeVisible (editBtn);
     refreshSliceCache();
-    updateButtons();
+    setViewMode (ctx.host.preferences().waveform3d ? ViewMode::wave3D : ViewMode::wave2D); // "Default waveform view" (S p.314)
 }
 
 OscWaveView::~OscWaveView()

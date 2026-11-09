@@ -93,6 +93,9 @@ struct UiContext
     KeyRef resolve (std::string_view key) const noexcept { return keys != nullptr ? keys->resolve (key) : resolveKey (key); }
 };
 
+/** The text of a value as the controls show it: displayText () with the frequency units preference (cutoff readouts in semitones, GROUPA2 WP-02). */
+inline std::string valueText (const UiContext& ctx, const ParamInfo& info, float plain) { return displayText (info, plain, ctx.host.preferences().freqSemitones); }
+
 ParamValues readLiveValues (const UiContext& ctx);
 void applyValues (const UiContext& ctx, const ParamValues& values);
 } // namespace synthyboy::ui
