@@ -203,6 +203,9 @@ public:
     void mouseUp (const juce::MouseEvent& e) override;
 
     int currentSample() const;
+    /** noise.type = Sample and the content sample (osc 4) exists: the view shows the file's waveform and name. */
+    bool showsContentSample() const;
+    void setStatus (const juce::String& text) { status = text; repaint(); }
 
 private:
     UiContext& ctx;
@@ -211,6 +214,8 @@ private:
     ParamHandle onHandle;
     ParamHandle destHandle;
     ParamHandle sampleHandle;
+    ParamHandle typeHandle;
+    juce::String status;
 
     juce::Point<float> dragStartPos;
     float dragStartLevel = 0.0f;

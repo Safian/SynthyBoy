@@ -696,6 +696,10 @@ namespace sbvital {
     add("sample_bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sample_bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sample_phase", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+    add("sample_stereo", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");    // GROUPA1 (B23): noise.stereo, colour samples only
+    add("sample_filter", -1.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");   // GROUPA1 (B23): noise.filter, negative low pass / positive high pass
+    add("sub_phase", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");        // GROUPA1 (B23): sub.phase, the start phase at note on
+    add("sub_phase_contiguous", 0.0, 1.0, 0.0, ValueDetails::kIndexed);       // GROUPA1 (B23): a new note continues with the phase of the previous one
     add("sub_on", 0.0, 1.0, 0.0, ValueDetails::kIndexed);
     add("sub_waveform", 0.0, 5.0, 0.0, ValueDetails::kIndexed);
     add("sub_octave", -4.0, 4.0, -1.0, ValueDetails::kLinear);

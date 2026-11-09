@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (2051));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7 + 448); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV), 448: B22 (FXINST: 16 slots x 28 keys)
+    CHECK_EQ (paramCount(), static_cast<size_t> (2057));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7 + 448 + 6); // 6: B23 (GROUPA1 WP-04: sub.phase, sub.phase_contiguous, noise.stereo, noise.filter, noise.type, noise.bounce), 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV), 448: B22 (FXINST: 16 slots x 28 keys)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (4096)); // raised for block B22 (FX instance pool)
     CHECK_EQ (kNumModSources, 39);
-    CHECK_EQ (kNumModDestinations, 904);
+    CHECK_EQ (kNumModDestinations, 907);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (39));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (903));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (906));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384));
-    CHECK_EQ (newModulatable, static_cast<size_t> (184 + 384)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18 + 11 of B15 + 1 of B20 (master.stereo_routing) + the 384 pool parameters of B22
+    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3)); // 3: sub.phase, noise.stereo, noise.filter of B23
+    CHECK_EQ (newModulatable, static_cast<size_t> (184 + 384 + 3)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18 + 11 of B15 + 1 of B20 (master.stereo_routing) + the 384 pool parameters of B22
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (2051));
+    CHECK_EQ (ids.size(), static_cast<size_t> (2057));
 }
 
 TEST (append_positions_golden)
@@ -146,6 +146,8 @@ TEST (append_positions_golden)
         // B22 (FXINST): 16 slots of 28 keys (type, on, rack, order, p01 .. p24) behind B21
         { "fxi01.type", 1603 }, { "fxi01.on", 1604 }, { "fxi01.rack", 1605 }, { "fxi01.order", 1606 }, { "fxi01.p01", 1607 }, { "fxi01.p24", 1630 },
         { "fxi02.type", 1631 }, { "fxi08.p10", 1603 + 7 * 28 + 4 + 9 }, { "fxi16.type", 1603 + 15 * 28 }, { "fxi16.p24", 2050 },
+        // B23 (GROUPA1 WP-04)
+        { "sub.phase", 2051 }, { "sub.phase_contiguous", 2052 }, { "noise.stereo", 2053 }, { "noise.filter", 2054 }, { "noise.type", 2055 }, { "noise.bounce", 2056 },
     };
     for (const auto& e : expected)
         if (! CHECK_EQ (positionOf (e.key), e.position))
@@ -229,8 +231,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (40));
         CHECK_EQ (byKey (key).max, 39.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (904));
-    CHECK_EQ (byKey ("mod64.destination").max, 903.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (907));
+    CHECK_EQ (byKey ("mod64.destination").max, 906.0f);
 
     // MANUALCHECK: the delay mode Tap->Delay of Serum 2 (manual p.166) is appended to the four Vital styles
     {

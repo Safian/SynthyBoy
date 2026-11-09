@@ -366,9 +366,28 @@ void Importer::noiseOsc()
             else entry (ItemKind::dropped, Reason::enumRemapped, area, bp + "/plainParams/kParamNoiseType", str (nt), "", "", "enum_value_unknown");
             consume (nt);
         }
-        if (isText (rel))
+        // GROUPA1 (WP-04): the noise source plays the sample of the preset: the data embedded in it, else the file of the Noises folder. A colour
+        // (kParamNoiseType) is a generated noise: it stays the generator, and the file name it carries is ignored
+        const int emb = get (B, "embeddedNoiseData");
+        bool sampleStored = false;
+        if (type < 0 && opt.noiseSample && opt.customSamples)
         {
-            // Serum plays a noise sample file; ours has generators: the name decides (a user sample as the noise source is a backlog item)
+            if (emb >= 0 && N (emb).type == cbor::Type::array && N (emb).count > 0)
+                sampleStored = noiseSampleFromEmbedded (emb, B, bp);
+            if (! sampleStored && isText (rel))
+            {
+                sampleStored = noiseSampleFromFile (str (rel), bp + "/relativePathToNoiseSample");
+                if (sampleStored) consume (rel);
+            }
+            else if (sampleStored && isText (rel))
+            {
+                entry (ItemKind::ignored, Reason::exact, area, bp + "/relativePathToNoiseSample", str (rel), "", "", "noise_file_replaced_by_the_embedded_data");
+                consume (rel);
+            }
+        }
+        if (isText (rel) && ! used[static_cast<size_t> (rel)])
+        {
+            // no sample can be played (a colour, a missing file, an engine without the noise sample): the name of the file picks the nearest generator
             std::string name = str (rel);
             std::string lower;
             for (const char c : name) lower += static_cast<char> (std::tolower (static_cast<unsigned char> (c)));
@@ -391,7 +410,19 @@ void Importer::noiseOsc()
             consume (rel);
         }
         const int col = get (bplain, "kParamColor");
-        if (col >= 0) { entry (ItemKind::dropped, Reason::noEngineEquivalent, area, bp + "/plainParams/kParamColor", valueText (col), "", "", "noise_color_not_modelled"); consume (col); }
+        if (col >= 0)
+        {
+            if (isNumber (col) && type >= 0 && type <= 3)
+            {
+                // A348: kParamColor of a colour noise is the FILTER knob, 0 .. 1 with 0.5 in the middle (off), below it a low pass, above a high pass
+                bool cl = false;
+                const double st = store ("noise.filter", (num (col) - 0.5) * 200.0, &cl);
+                entry (ItemKind::approximated, cl ? Reason::clamped : Reason::tierNote, area, bp + "/plainParams/kParamColor", valueText (col), "noise.filter", fmt (st), "noise_color_is_the_filter_knob_assumed");
+            }
+            else
+                entry (ItemKind::dropped, Reason::noEngineEquivalent, area, bp + "/plainParams/kParamColor", valueText (col), "", "", "noise_filter_acts_on_the_colour_samples_only");
+            consume (col);
+        }
         for (const Unmapped& u : bum)
         {
             if (used[static_cast<size_t> (u.node)]) continue;
@@ -403,8 +434,7 @@ void Importer::noiseOsc()
             const int m = get (B, meta);
             if (m >= 0 && ! used[static_cast<size_t> (m)]) { entry (ItemKind::ignored, Reason::exact, "content", bp + "/" + meta, valueText (m), "", "", "derived_from_the_noise_data", leavesUnder (d, m)); consume (m); }
         }
-        const int emb = get (B, "embeddedNoiseData");
-        if (emb >= 0) acctRest (emb, ItemKind::dropped, Reason::noEngineEquivalent, "content", bp + "/embeddedNoiseData", "", "", "embedded_noise_sample_not_representable");
+        if (emb >= 0 && ! used[static_cast<size_t> (emb)]) acctRest (emb, ItemKind::dropped, Reason::noEngineEquivalent, "content", bp + "/embeddedNoiseData", "", "", "embedded_noise_sample_not_representable");
     }
     // the noise osc is audible only when switched on; the on-switch of the common block was applied by the rules
 }

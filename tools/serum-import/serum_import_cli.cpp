@@ -180,7 +180,7 @@ int main (int argc, char** argv)
     // UserContentStore keeps its files below <dir>/content
     const std::string storeRoot = store.rootDirectory();
     (void) storeRoot;
-    const EngineCapsMask caps = kCapUserWavetable | kCapSampleOsc | kCapCustomLfoShape;
+    const EngineCapsMask caps = kCapUserWavetable | kCapSampleOsc | kCapNoiseSample | kCapCustomLfoShape;
 
     Totals t;
     for (const fs::path& f : files)

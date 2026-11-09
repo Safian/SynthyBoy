@@ -89,6 +89,9 @@ public:
     /** Replaces the content, hands it to the engine and marks the host state dirty. Returns false (nothing changed) if the content
         fails validateContent () or the host keeps no content. Message thread. */
     virtual bool setContent (const StateContent& /*newContent*/) { return false; }
+    /** The engine reads the files of the current content again (a file that was missing when the content was set has been added to the library:
+        setContent () with an equal content does nothing). Message thread. */
+    virtual void reloadContent() {}
 
     // ---- content pipeline (WP-01, docs/ui-design/13-new-keys.md 4.25) ----
     /** The user content library behind the engine (wavetables, samples, impulse responses on disk; the engine resolves the references of `content`

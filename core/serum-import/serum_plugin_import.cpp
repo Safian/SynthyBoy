@@ -83,6 +83,7 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
         options.fallbackName = stem.c_str();
         options.customWavetables = (caps & kCapUserWavetable) != 0;
         options.customSamples = (caps & kCapSampleOsc) != 0;
+        options.noiseSample = (caps & kCapNoiseSample) != 0;
         options.customLfoShapes = (caps & kCapCustomLfoShape) != 0;
         options.categoryHint = categoryHint.empty() ? nullptr : categoryHint.c_str();
 

@@ -268,6 +268,7 @@ int main (int argc, char** argv)
     opt.caps.customWavetables = true;
     opt.caps.customLfoShapes = true;
     opt.caps.sampleOsc = true;
+    opt.caps.noiseSample = true;
     BatchOptions batch;
     batch.duplicate = o.duplicate;
 

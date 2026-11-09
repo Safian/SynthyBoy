@@ -77,6 +77,7 @@ ImportCaps importCapsFor (EngineCapsMask caps) noexcept
     c.customWavetables = (caps & kCapUserWavetable) != 0;
     c.customLfoShapes = (caps & kCapCustomLfoShape) != 0;
     c.sampleOsc = (caps & kCapSampleOsc) != 0;
+    c.noiseSample = (caps & kCapNoiseSample) != 0;
     return c;
 }
 

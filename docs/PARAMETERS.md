@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2051 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2057 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -12,7 +12,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Osc 1 | 71 |
 | Osc 2 | 71 |
 | Osc 3 | 71 |
-| Noise | 15 |
+| Noise | 19 |
 | Filter 1 | 23 |
 | Filter 2 | 23 |
 | Filters | 1 |
@@ -44,7 +44,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Oscillator 1 | 10 |
 | Oscillator 2 | 10 |
 | Oscillator 3 | 10 |
-| Sub | 12 |
+| Sub | 14 |
 | Quality | 2 |
 
 ## Default patch
@@ -338,6 +338,10 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `noise.keytrack` | Noise Keytrack | 0 Off, 1 On | Off | Noise |  |  |
 | `noise.loop` | Noise Loop | 0 Off, 1 On | On | Noise |  |  |
 | `noise.env1` | Noise Env 1 | 0 Off, 1 On | On | Noise |  |  |
+| `noise.stereo` | Noise Stereo | 0 .. 100 % | 0 % | Noise | mod |  |
+| `noise.filter` | Noise Filter | -100 .. 100 % | 0 % | Noise | mod |  |
+| `noise.type` | Noise Type | 0 Noise, 1 Sample | Noise | Noise |  |  |
+| `noise.bounce` | Noise Bounce | 0 Off, 1 On | Off | Noise |  |  |
 
 ### Filter 1
 
@@ -797,7 +801,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..39 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..903 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..906 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -1597,6 +1601,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `sub.bus1_send` | Sub Bus 1 Send | 0 .. 100 % | 0 % | Sub | mod |  |
 | `sub.bus2_send` | Sub Bus 2 Send | 0 .. 100 % | 0 % | Sub | mod |  |
 | `sub.env1` | Sub Env 1 | 0 Off, 1 On | On | Sub |  |  |
+| `sub.phase` | Sub Phase | 0 .. 100 % | 0 % | Sub | mod |  |
+| `sub.phase_contiguous` | Sub Phase Contiguous | 0 Off, 1 On | Off | Sub |  |  |
 
 ### Quality
 
@@ -2560,6 +2566,9 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 901 | `fxi16.p22` | FX Slot 16 P22 |
 | 902 | `fxi16.p23` | FX Slot 16 P23 |
 | 903 | `fxi16.p24` | FX Slot 16 P24 |
+| 904 | `sub.phase` | Sub Phase |
+| 905 | `noise.stereo` | Noise Stereo |
+| 906 | `noise.filter` | Noise Filter |
 
 ## Built-in wavetables and LFO shapes
 

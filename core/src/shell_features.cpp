@@ -237,7 +237,7 @@ bool keepLockedContent (StateContent& patch, const StateContent& current, const 
         return false;
     const StateContent before = patch;
     keepEntries (patch.wavetables, current.wavetables, [&] (const ContentWavetable& e) { return lockedModule (locks, "osc", e.osc); });
-    keepEntries (patch.samples, current.samples, [&] (const ContentSample& e) { return lockedModule (locks, "osc", e.osc); });
+    keepEntries (patch.samples, current.samples, [&] (const ContentSample& e) { return e.osc == kNoiseSampleOsc ? isLocked (locks, "noise") : lockedModule (locks, "osc", e.osc); });
     keepEntries (patch.remaps, current.remaps, [&] (const ContentRemap& e) { return lockedModule (locks, "osc", e.osc); });
     keepEntries (patch.lfoShapes, current.lfoShapes, [&] (const ContentLfoShape& e) { return lockedModule (locks, "lfo", e.lfo); });
     keepEntries (patch.filterCurves, current.filterCurves, [&] (const ContentFilterCurve& e) { return isLocked (locks, e.filter); });

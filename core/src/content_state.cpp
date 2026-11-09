@@ -173,7 +173,7 @@ bool validateContent (const StateContent& c) noexcept
         oscs.clear();
         for (const auto& s : c.samples)
         {
-            if (s.osc < 1 || s.osc > 3 || ! oscs.insert (s.osc).second || ! refOk (s.ref) || s.sampleRate < 0 || s.sampleRate > 768000
+            if (s.osc < 1 || s.osc > kNoiseSampleOsc || ! oscs.insert (s.osc).second || ! refOk (s.ref) || s.sampleRate < 0 || s.sampleRate > 768000
                 || s.frames < 0 || s.frames > (1 << 30) || s.channels < 0 || s.channels > 2 || s.slices.size() > static_cast<size_t> (kMaxSampleSlices))
                 return false;
             float previous = 0.0f;

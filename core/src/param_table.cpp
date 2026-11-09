@@ -125,6 +125,8 @@ constexpr const char* const kVoiceOverrides[] = { "Kill", "Steal" };
 constexpr const char* const kFxInstanceTypes[] = { "None", "Chorus", "Compressor", "Delay", "Distortion", "EQ", "FX Filter", "Flanger", "Phaser",
                                                    "Reverb", "Hyper/Dimension", "Utility", "Bode", "Convolve" };
 constexpr const char* const kPoolRacks[] = { "Main", "Bus 1", "Bus 2" };
+// B23 (GROUPA1, WP-04): the noise source plays a generator or a user sample
+constexpr const char* const kNoiseTypes[] = { "Noise", "Sample" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -816,11 +818,19 @@ constexpr ParamInfo kRaw[] = {
     // --- B22: fx-instances: the pool of 16 effect instance slots, 28 keys each (G73, positions 1603..2050) ------------------------------
     SB_FXI (01), SB_FXI (02), SB_FXI (03), SB_FXI (04), SB_FXI (05), SB_FXI (06), SB_FXI (07), SB_FXI (08),
     SB_FXI (09), SB_FXI (10), SB_FXI (11), SB_FXI (12), SB_FXI (13), SB_FXI (14), SB_FXI (15), SB_FXI (16),
+
+    // --- B23: GROUPA1 WP-04: Sub phase, Noise stereo / filter / type / bounce (13-new-keys.md 4.27, positions 2051..2056) ---------------
+    SB_PCT ("sub.phase", "Sub Phase", "Sub", 0.0f, kMod),
+    onOff ("sub.phase_contiguous", "Sub Phase Contiguous", "Sub", false),
+    SB_PCT ("noise.stereo", "Noise Stereo", "Noise", 0.0f, kMod),
+    SB_PCT_RANGE ("noise.filter", "Noise Filter", "Noise", -100.0f, 100.0f, 0.0f, kMod),
+    pick ("noise.type", "Noise Type", "Noise", kNoiseTypes, 0),
+    onOff ("noise.bounce", "Noise Bounce", "Noise", false),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2051, "880 keys of state version 2 plus the 1171 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22)");
+static_assert (kCount == 2057, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23)");
 
 struct Table
 {
@@ -850,7 +860,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

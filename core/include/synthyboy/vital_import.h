@@ -80,6 +80,8 @@ struct ImportCaps
     bool customWavetables = false;
     bool customLfoShapes = false;
     bool sampleOsc = false;
+    /** The noise source plays a content sample (noise.type = Sample, kCapNoiseSample): a Vital sample maps there, no free oscillator is needed. */
+    bool noiseSample = false;
     int maxWavetableFrames = 257;
 };
 

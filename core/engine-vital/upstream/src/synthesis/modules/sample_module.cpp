@@ -38,6 +38,8 @@ namespace sbvital {
     Output* level = createPolyModControl("sample_level", true, true);
     Output* pan = createPolyModControl("sample_pan");
     Output* phase = createPolyModControl("sample_phase");
+    Output* stereo = createPolyModControl("sample_stereo");    // GROUPA1: noise.stereo
+    Output* filter = createPolyModControl("sample_filter");    // GROUPA1: noise.filter
 
     sampler_->useInput(input(kReset), SampleSource::kReset);
     sampler_->useInput(input(kMidi), SampleSource::kMidi);
@@ -52,6 +54,8 @@ namespace sbvital {
     sampler_->plug(level, SampleSource::kLevel);
     sampler_->plug(pan, SampleSource::kPan);
     sampler_->plug(phase, SampleSource::kPhase);
+    sampler_->plug(stereo, SampleSource::kStereo);
+    sampler_->plug(filter, SampleSource::kFilter);
     sampler_->useOutput(output(kRaw), SampleSource::kRaw);
     sampler_->useOutput(output(kLevelled), SampleSource::kLevelled);
 

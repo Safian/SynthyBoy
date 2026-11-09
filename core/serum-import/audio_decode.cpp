@@ -305,8 +305,91 @@ bool decodeWavFloat (const uint8_t* d, size_t size, size_t maxFrames, DecodedAud
     }
 }
 
+// AIFF / AIFF-C with PCM samples (big endian; AIFC 'NONE', or 'sowt' = little endian): the Serum factory folders hold some .aif files (GROUPA1, WP-04)
+bool decodeAiff (const uint8_t* d, size_t size, size_t maxFrames, DecodedAudio& out) noexcept
+{
+    try
+    {
+        out = DecodedAudio {};
+        if (size < 12 || std::memcmp (d, "FORM", 4) != 0 || (std::memcmp (d + 8, "AIFF", 4) != 0 && std::memcmp (d + 8, "AIFC", 4) != 0)) return false;
+        const bool aifc = std::memcmp (d + 8, "AIFC", 4) == 0;
+        const auto be32 = [&] (size_t at) { return (static_cast<size_t> (d[at]) << 24) | (static_cast<size_t> (d[at + 1]) << 16) | (static_cast<size_t> (d[at + 2]) << 8) | static_cast<size_t> (d[at + 3]); };
+        size_t pos = 12;
+        int channels = 0, bits = 0;
+        size_t frames = 0;
+        double rate = 0.0;
+        bool littleEndian = false, isFloat = false;
+        const uint8_t* data = nullptr;
+        size_t dataLen = 0;
+        while (size - pos >= 8)
+        {
+            const size_t len = be32 (pos + 4);
+            const uint8_t* c = d + pos + 8;
+            const size_t avail = std::min (len, size - pos - 8);
+            if (std::memcmp (d + pos, "COMM", 4) == 0 && avail >= 18)
+            {
+                channels = (c[0] << 8) | c[1];
+                frames = be32 (pos + 8 + 2);
+                bits = (c[6] << 8) | c[7];
+                // the sample rate is an 80 bit extended float: sign / 15 bit exponent, 64 bit mantissa
+                const int exponent = ((c[8] & 0x7F) << 8) | c[9];
+                uint64_t mantissa = 0;
+                for (int k = 0; k < 8; ++k) mantissa = (mantissa << 8) | c[10 + k];
+                rate = std::ldexp (static_cast<double> (mantissa), exponent - 16383 - 63);
+                if (aifc)
+                {
+                    if (avail < 22) return false;
+                    if (std::memcmp (c + 18, "sowt", 4) == 0) littleEndian = true;
+                    else if (std::memcmp (c + 18, "fl32", 4) == 0 || std::memcmp (c + 18, "FL32", 4) == 0) isFloat = true;   // 32 bit float (Serum's own files)
+                    else if (std::memcmp (c + 18, "NONE", 4) != 0 && std::memcmp (c + 18, "twos", 4) != 0) return false;
+                }
+            }
+            else if (std::memcmp (d + pos, "SSND", 4) == 0 && avail >= 8)
+            {
+                const size_t offset = be32 (pos + 8);
+                if (8 + offset > avail) return false;
+                data = c + 8 + offset;
+                dataLen = avail - 8 - offset;
+            }
+            pos += 8 + len + (len & 1);
+            if (pos > size) break;
+        }
+        if (! data || channels <= 0 || channels > 8 || rate < 1.0 || rate > 1.0e6) return false;
+        if (bits != 8 && bits != 16 && bits != 24 && bits != 32) return false;
+        if (isFloat && bits != 32) return false;
+        const size_t bytes = static_cast<size_t> (bits / 8);
+        frames = std::min (frames, dataLen / (bytes * static_cast<size_t> (channels)));
+        if (frames == 0 || frames > maxFrames) return false;
+        out.sampleRate = static_cast<int> (std::lround (rate));
+        out.channels = channels;
+        out.data.resize (frames * static_cast<size_t> (channels));
+        for (size_t i = 0; i < out.data.size(); ++i)
+        {
+            const uint8_t* s = data + i * bytes;
+            uint32_t raw = 0;
+            for (size_t k = 0; k < bytes; ++k)
+                raw = (raw << 8) | s[littleEndian ? bytes - 1 - k : k];
+            if (isFloat)
+            {
+                float f;
+                std::memcpy (&f, &raw, 4);
+                out.data[i] = std::isfinite (f) ? f : 0.0f;
+                continue;
+            }
+            const int32_t v = static_cast<int32_t> (raw << (32 - bits)) >> (32 - bits);   // sign extended
+            out.data[i] = static_cast<float> (v) / static_cast<float> (1ull << (bits - 1));
+        }
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
 bool decodeAudio (const uint8_t* data, size_t size, size_t maxFrames, DecodedAudio& out) noexcept
 {
+    if (size >= 4 && std::memcmp (data, "FORM", 4) == 0) return decodeAiff (data, size, maxFrames, out);
     if (size >= 4 && std::memcmp (data, "fLaC", 4) == 0) return decodeFlac (data, size, maxFrames, out);
     return decodeWavFloat (data, size, maxFrames, out);
 }

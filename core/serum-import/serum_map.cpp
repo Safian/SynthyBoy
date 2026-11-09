@@ -130,6 +130,7 @@ const Rule kNoise[] = {
     { "Noise", "kParamFine", "noise.fine", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "NoiseOsc", "kParamFine", "noise.fine", Conv::lin, 100, 0, C, 0, nullptr, "noise_fine_unit_assumed" },
     { "NoiseOsc", "kParamInitialPhase", "noise.phase", Conv::lin, 1, 0, X, 0, nullptr, "" },
+    { "NoiseOsc", "kParamColor", "noise.filter", Conv::lin, 200, -100, A, kNaN, nullptr, "noise_color_is_the_filter_knob_assumed" }, // A348
     { "NoiseOsc", "kParamRandomPhase", "noise.random_phase", Conv::boolean, 1, 0, C, 0, nullptr, "random_phase_amount_to_switch" },
     { "NoiseOsc", "kParamOneShot", "noise.loop", Conv::lin, -1, 1, X, 0, nullptr, "" },
 };
@@ -141,6 +142,9 @@ const Rule kSub[] = {
     { "Sub", "kParamOctave", "sub.octave", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "Sub", "kParamPitch", "sub.tune", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "SubOsc", "kParamShape", "sub.waveform", Conv::enumName, 1, 0, X, kNaN, &kSubShapeEnum, "" },
+    // GROUPA1 (WP-04, A349): the start phase in degrees (0 .. 360) is sub.phase in percent of a cycle; the option "contiguous" is sub.phase_contiguous
+    { "SubOsc", "kParamInitialPhase", "sub.phase", Conv::lin, 100.0 / 360.0, 0, X, 0, nullptr, "" },
+    { "SubOsc", "kParamContiguousPhase", "sub.phase_contiguous", Conv::boolean, 1, 0, X, 0, nullptr, "" },
 };
 
 const Rule kFilter[] = {

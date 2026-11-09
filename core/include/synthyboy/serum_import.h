@@ -101,6 +101,7 @@ struct SerumImportOptions
     bool customWavetables = true;                               // the engine can play a stored table (kCapUserWavetable); false: the nearest built-in table
     bool customSamples = true;                                  // the engine has the sample oscillator (kCapSampleOsc)
     bool customLfoShapes = true;                                // the engine plays a drawn LFO shape (kCapCustomLfoShape)
+    bool noiseSample = true;                                    // the noise source plays a stored sample (noise.type = Sample, kCapNoiseSample)
     const char* categoryHint = nullptr;                         // the folder of the file ("Bass"): the preset category
     int fileRack = 0;                                           // an effect chain file (.SerumFX / .SerumFXRack) goes into this rack (0 Main, 1 Bus 1, 2 Bus 2)
 };

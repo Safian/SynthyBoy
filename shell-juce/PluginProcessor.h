@@ -94,6 +94,7 @@ public:
     int copyScope (float* dest, int maxSamples) const override;
     synthyboy::StateContent content() const override;
     bool setContent (const synthyboy::StateContent& newContent) override;
+    void reloadContent() override;
 
     // content pipeline (WP-01): the user content library behind the engine, the JSON item library, file requests
     synthyboy::UserContentStore* contentLibrary() override { return contentStore.get(); }

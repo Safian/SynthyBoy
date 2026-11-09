@@ -295,8 +295,8 @@ namespace sbvital {
   }
 
   namespace {
-  void generateNoiseBuffer(int type, mono_float* buffer, int length) {
-    uint32_t seed = 0x12345678u + static_cast<uint32_t>(type) * 0x9e3779b9u;
+  void generateNoiseBuffer(int type, mono_float* buffer, int length, uint32_t salt = 0) {
+    uint32_t seed = 0x12345678u + static_cast<uint32_t>(type) * 0x9e3779b9u + salt;
     auto rnd = [&seed]() -> float {
       seed = seed * 1664525u + 1013904223u;
       return static_cast<float>(static_cast<int32_t>(seed)) * (1.0f / 2147483648.0f);
@@ -415,27 +415,59 @@ namespace sbvital {
   void Sample::init() {
     name_ = kDefaultName;
     mono_float buffer[kDefaultSampleLength];
+    mono_float other[kDefaultSampleLength];
 
     // White Noise (index 0): identical to upstream Vital
     utils::RandomGenerator random_generator(-0.9f, 0.9f);
     for (int i = 0; i < kDefaultSampleLength; ++i)
       buffer[i] = random_generator.next();
-    loadSample(buffer, kDefaultSampleLength, kDefaultSampleRate);
+    // GROUPA1 (noise.stereo): the colour samples carry a second, uncorrelated channel (an own generator: the engine's random seed counter
+    // must not move, it decides the random LFOs). With STEREO at 0 the right channel is the left one again, bit for bit.
+    generateNoiseBuffer(kWhite, other, kDefaultSampleLength, 0x51ED2701u);
+    loadSample(buffer, other, kDefaultSampleLength, kDefaultSampleRate);
+    data_->colour = true;
     noise_data_[kWhite] = nullptr;
 
     // Remaining 8 procedural noise sets (1..8)
     for (int t = 1; t < kNumNoiseTypes; ++t) {
       generateNoiseBuffer(t, buffer, kDefaultSampleLength);
-      noise_data_[t] = std::make_unique<SampleData>(kDefaultSampleLength, kDefaultSampleRate, false);
+      const bool colour = t <= kGeiger;
+      noise_data_[t] = std::make_unique<SampleData>(kDefaultSampleLength, kDefaultSampleRate, colour);
+      noise_data_[t]->colour = colour;
       createBandLimitedBuffers(noise_data_[t]->left_buffers, noise_data_[t]->left_loop_buffers,
                                buffer, kDefaultSampleLength);
+      if (colour) {
+        generateNoiseBuffer(t, other, kDefaultSampleLength, 0x51ED2701u);
+        createBandLimitedBuffers(noise_data_[t]->right_buffers, noise_data_[t]->right_loop_buffers,
+                                 other, kDefaultSampleLength);
+      }
     }
 
     current_data_ = data_.get();
     markUsed();
   }
 
+  std::unique_ptr<Sample::SampleData> Sample::makeUserData(const mono_float* left, const mono_float* right, int size, int sample_rate) {
+    static constexpr int kMaxSize = 1764000;
+    size = std::max(kMinSize, std::min(size, kMaxSize));
+    auto data = std::make_unique<SampleData>(size, sample_rate, right != nullptr);
+    createBandLimitedBuffers(data->left_buffers, data->left_loop_buffers, left, size);
+    if (right != nullptr)
+      createBandLimitedBuffers(data->right_buffers, data->right_loop_buffers, right, size);
+    return data;
+  }
+
+  void Sample::useUserData(SampleData* data) {
+    if (data != nullptr) {
+      current_data_ = data;
+      markUsed();
+    }
+    else
+      setNoiseType(noise_type_);
+  }
+
   void Sample::setNoiseType(int type) {
+    noise_type_ = type;
     if (type == kWhite) {
       current_data_ = data_.get();
       markUsed();
@@ -631,6 +663,7 @@ namespace sbvital {
     }
 
     bounce_mask_ = current_bounce;
+    colourStage(raw_output, num_samples, reset_mask);
     if (reset_mask.anyMask())
       clearOutputBufferForReset(reset_mask, kReset, kRaw);
 
@@ -651,6 +684,61 @@ namespace sbvital {
     phase_output_->buffer[0] = utils::encodePhaseAndVoice(phase, input(kNoteCount)->at(0));
 
     sample_->markUnused();
+  }
+
+  // GROUPA1 (13-new-keys.md 4.27): STEREO and FILTER of the noise colours (Serum 2 manual p.129). Only the generated colour samples (White, Pink, Brown,
+  // Geiger) pass through it; every other sample (the other generators, a user sample) is untouched, as is a colour at STEREO 0 and FILTER 0 (the right
+  // channel is then the left one, exactly as before the colour samples had two channels).
+  void SampleSource::colourStage(poly_float* raw, int num_samples, poly_mask reset_mask) {
+    if (!sample_->activeIsColour()) {
+      filter_active_ = false;
+      return;
+    }
+
+    const poly_float correlation = poly_float(1.0f) - utils::clamp(input(kStereo)->at(0), 0.0f, 1.0f);
+    const poly_float uncorrelated = utils::sqrt(poly_float(1.0f) - correlation * correlation);   // keeps the power of the right channel
+    for (int i = 0; i < num_samples; ++i) {
+      poly_float mixed = correlation * utils::swapStereo(raw[i]) + uncorrelated * raw[i];
+      raw[i] = utils::maskLoad(mixed, raw[i], constants::kLeftMask);
+    }
+
+    const poly_float amount = utils::clamp(input(kFilter)->at(0), -1.0f, 1.0f);
+    const poly_mask active = poly_float::greaterThan(poly_float::abs(amount), 1.0e-4f);
+    if (!active.anyMask()) {
+      if (filter_active_ && num_samples > 0) {
+        filter_lp1_ = filter_lp2_ = raw[num_samples - 1];   // the poles follow the signal while the filter is off: no click when it comes in
+      }
+      filter_active_ = false;
+      return;
+    }
+
+    // a two pole low pass (negative: 40 Hz .. 20 kHz) or its complement (positive: 20 Hz .. 16 kHz), log spaced over the knob
+    const poly_float magnitude = poly_float::abs(amount);
+    const poly_float low_pass_hz = futils::exp(magnitude * -6.2146081f) * 20000.0f;           // 20000 * 0.002^m
+    const poly_float high_pass_hz = futils::exp(magnitude * 6.6846117f) * 20.0f;              // 20 * 800^m
+    const poly_mask is_low_pass = poly_float::lessThan(amount, 0.0f);
+    poly_float cutoff = utils::maskLoad(high_pass_hz, low_pass_hz, is_low_pass);
+    cutoff = utils::min(cutoff, 0.45f * getSampleRate());
+    poly_float coefficient = poly_float(1.0f) - futils::exp(cutoff * (-6.28318531f / getSampleRate()));
+    coefficient = utils::min(coefficient, 0.99f);
+    coefficient = utils::maskLoad(poly_float(1.0f), coefficient, active);                     // an idle lane just follows
+
+    poly_float lp1 = filter_lp1_, lp2 = filter_lp2_;
+    if (!filter_active_ || reset_mask.anyMask()) {
+      poly_float seed = num_samples > 0 ? raw[0] : poly_float(0.0f);
+      lp1 = filter_active_ ? utils::maskLoad(lp1, seed, reset_mask) : seed;
+      lp2 = filter_active_ ? utils::maskLoad(lp2, seed, reset_mask) : seed;
+    }
+    for (int i = 0; i < num_samples; ++i) {
+      const poly_float x = raw[i];
+      lp1 += coefficient * (x - lp1);
+      lp2 += coefficient * (lp1 - lp2);
+      const poly_float filtered = utils::maskLoad(x - lp2, lp2, is_low_pass);
+      raw[i] = utils::maskLoad(x, filtered, active);
+    }
+    filter_lp1_ = lp1;
+    filter_lp2_ = lp2;
+    filter_active_ = true;
   }
 
   force_inline poly_float SampleSource::snapTranspose(poly_float input_midi, poly_float transpose, int quantize) {

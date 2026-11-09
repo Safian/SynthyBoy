@@ -24,6 +24,7 @@
 #include "ui/LibraryMenu.h"
 #include "ui/panels/FxRackView.h"
 #include "ui/panels/LfoShapeEditor.h"
+#include "ui/panels/NoisePanel.h"
 #include "ui/panels/OscWaveView.h"
 #include "ui/panels/WavetableEditorSheet.h"
 
@@ -589,6 +590,88 @@ TEST (content_serum_import_inside_the_plugin_with_the_report_sheet)
     });
     editor->importSerumFromMenu();
     CHECK (asked);
+}
+
+TEST (content_noise_sample_load_through_the_noise_panel_plays_survives_a_state_round_trip_and_falls_back_when_removed)
+{
+    Host h ("noise_sample");
+    setParameter (h.proc, "osc1.on", 0.0f);
+    setParameter (h.proc, "noise.on", 1.0f);
+    setParameter (h.proc, "noise.level", 100.0f);
+    setParameter (h.proc, "noise.destination", 3.0f); // effects only
+    setParameter (h.proc, "noise.keytrack", 0.0f);
+    NoisePanel panel (h.ctx);
+    panel.build();
+    panel.setBounds (0, 0, 390, 700);
+
+    // the generator plays first
+    const auto generated = render (h.proc, 57, 0.8);
+    CHECK (rms (generated, 0.2, 0.7) > 0.01);
+    CHECK (! panel.usesSample());
+    CHECK (! panel.removeButton().isEnabled());
+
+    // Load...: the WP-01 flow for the noise source (osc 4); noise.type switches to Sample, the name button shows the file
+    const fs::path wavFile = writeBytes (h.workDir() / "Tone.wav", encodeWav (tone (440.0, 1.0).data(), nullptr, 48000, 48000, 16));
+    h.proc.setFileRequestHandler ([&] (const FileRequest& request, std::function<void (const juce::File&)> done)
+    {
+        CHECK (request.purpose == "sample");
+        done (juce::File (wavFile.string()));
+        return true;
+    });
+    panel.loadButton().onClick();
+    CHECK (panel.status().startsWith ("Loaded Tone"));
+    CHECK (panel.usesSample());
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "noise.type")), 1);
+    const auto content = h.proc.content();
+    CHECK_EQ (content.samples.size(), static_cast<size_t> (1));
+    CHECK_EQ (content.samples[0].osc, kNoiseSampleOsc);
+    CHECK_EQ (content.samples[0].ref.pack, std::string (kPackSamples));
+    CHECK_EQ (panel.sampleNameButton().getButtonText(), juce::String ("Tone"));
+    CHECK (panel.removeButton().isEnabled());
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "osc1.type")), 0); // no oscillator was taken for it
+
+    // it plays at its recorded pitch (no key tracking), also on another key; the generator is gone
+    const auto sampled = render (h.proc, 57, 1.0);
+    CHECK_NEAR (hzOf (sampled, 0.3, 0.9), 440.0, 8.0);
+    CHECK_NEAR (hzOf (render (h.proc, 81, 1.0), 0.3, 0.9), 440.0, 8.0);
+    CHECK (relDiff (generated, sampled, 0.2, 0.7) > 0.5);
+
+    // the picture is the file: another sample gives another one
+    const auto picture = panel.view().createComponentSnapshot (panel.view().getLocalBounds());
+    CHECK (panel.view().showsContentSample());
+
+    // a state round trip into another instance (its library lacks the file, the Missing Files flow is the WP-01 one; here the file is found by the sha)
+    juce::MemoryBlock state;
+    h.proc.getStateInformation (state);
+    {
+        Host b ("noise_sample_b"); // a new user directory: only the state travels
+        b.proc.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+        CHECK_EQ (static_cast<int> (readParameter (b.proc, "noise.type")), 1);
+        CHECK_EQ (b.proc.content().samples.size(), static_cast<size_t> (1));
+        MissingFilesModel model (b.ctx);
+        CHECK_EQ (model.items().size(), static_cast<size_t> (1));
+        CHECK (model.describe (0).startsWith ("Noise sample"));
+        CHECK (model.locate (0, juce::File (wavFile.string())).ok);
+        setParameter (b.proc, "osc1.on", 0.0f);
+        setParameter (b.proc, "noise.keytrack", 0.0f);
+        const auto wave = render (b.proc, 57, 1.0);
+        CHECK_NEAR (hzOf (wave, 0.3, 0.9), 440.0, 8.0);
+    }
+
+    // stepping through the generators leaves the sample (the file stays in the patch)
+    panel.sampleNextButton().onClick();
+    CHECK (! panel.usesSample());
+    CHECK_EQ (h.proc.content().samples.size(), static_cast<size_t> (1));
+    CHECK (relDiff (generated, render (h.proc, 57, 0.8), 0.2, 0.7) < 5.0); // a generator again (not the tone)
+
+    // Remove: the reference is gone; with noise.type = Sample the engine plays the generator (the documented fallback)
+    setParameter (h.proc, "noise.type", 1.0f);
+    setParameter (h.proc, "noise.sample", 0.0f);
+    CHECK (panel.removeSample().ok);
+    CHECK (h.proc.content().samples.empty());
+    CHECK (! panel.view().showsContentSample());
+    CHECK (rms (render (h.proc, 57, 0.8), 0.2, 0.7) > 0.01);
+    CHECK (hzOf (render (h.proc, 57, 1.0), 0.3, 0.9) > 3000.0); // noise, not the tone
 }
 
 TEST (content_missing_files_dialog_logic_locate_remove_and_hash_check)

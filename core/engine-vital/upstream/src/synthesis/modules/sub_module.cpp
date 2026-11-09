@@ -21,6 +21,8 @@ namespace sbvital {
     Output* tune = createPolyModControl("sub_tune");
     Output* level = createPolyModControl("sub_level");
     Output* pan = createPolyModControl("sub_pan");
+    Output* phase = createPolyModControl("sub_phase");                  // GROUPA1: sub.phase
+    Value* phase_contiguous = createBaseControl("sub_phase_contiguous"); // GROUPA1: sub.phase_contiguous
 
     sub_source_->useInput(input(kReset), SubSource::kReset);
     sub_source_->useInput(input(kMidi), SubSource::kMidi);
@@ -33,6 +35,8 @@ namespace sbvital {
     sub_source_->plug(tune, SubSource::kTune);
     sub_source_->plug(level, SubSource::kLevel);
     sub_source_->plug(pan, SubSource::kPan);
+    sub_source_->plug(phase, SubSource::kPhase);
+    sub_source_->plug(phase_contiguous, SubSource::kPhaseContiguous);
 
     sub_source_->useOutput(output(kRaw), SubSource::kRaw);
     sub_source_->useOutput(output(kLevelled), SubSource::kLevelled);

@@ -579,6 +579,13 @@ synthyboy::StateContent SynthyBoyProcessor::content() const
     return patchContent;
 }
 
+void SynthyBoyProcessor::reloadContent()
+{
+    const std::lock_guard<std::mutex> lock (contentMutex);
+    if (engine != nullptr)
+        engine->setContent (patchContent);
+}
+
 bool SynthyBoyProcessor::setContent (const synthyboy::StateContent& newContent)
 {
     if (! synthyboy::validateContent (newContent))

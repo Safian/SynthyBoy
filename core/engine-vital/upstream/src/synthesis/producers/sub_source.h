@@ -26,6 +26,8 @@ namespace sbvital {
         kPan,
         kWaveform,
         kMono,
+        kPhase,              // GROUPA1: the start phase at note on, 0 .. 1
+        kPhaseContiguous,    // GROUPA1: a new note continues with the phase of the previous one
         kNumInputs
       };
 
@@ -58,6 +60,8 @@ namespace sbvital {
 
       poly_float phase_;
       poly_float gate_;
+      mono_float last_phase_ = 0.0f;   // the phase of the note that started last (as it was at the end of the last block), for PHASE CONTIGUOUS
+      int last_lane_ = -1;             // its lane, followed while it sounds
 
       JUCE_LEAK_DETECTOR(SubSource)
   };

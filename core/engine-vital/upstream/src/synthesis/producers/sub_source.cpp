@@ -15,7 +15,18 @@ namespace sbvital {
 
   void SubSource::process(int num_samples) {
     poly_mask reset_mask = getResetMask(kReset);
-    phase_ = utils::maskLoad(phase_, poly_float(0.0f), reset_mask);
+    if (reset_mask.anyMask()) {
+      // GROUPA1 (13-new-keys.md 4.27, Serum 2 manual p.127): PHASE is the start phase at note on (0 = today's sound). With PHASE CONTIGUOUS a new note
+      // takes over the phase of the previous one instead: the phase the note that started last had when this block began.
+      poly_float start = utils::clamp(input(kPhase)->at(0), 0.0f, 1.0f);
+      if (input(kPhaseContiguous)->at(0)[0] > 0.5f && last_lane_ >= 0)
+        start = poly_float(last_phase_);
+      phase_ = utils::maskLoad(phase_, start, reset_mask);
+      // the lane the newest note runs on (a pair of lanes belongs to one voice: the left one is followed)
+      for (int lane = 0; lane < poly_float::kSize; lane += 2)
+        if (reset_mask[lane])
+          last_lane_ = lane;
+    }
 
     poly_float midi_note = input(kMidi)->at(0);
     poly_float octave = input(kOctave)->at(0);
@@ -98,6 +109,8 @@ namespace sbvital {
       levelled_buffer[i] = val * gain;
     }
     gate_ = gate_target;
+    if (last_lane_ >= 0)
+      last_phase_ = phase_[last_lane_];
   }
 
   // PolyBLEP residual at the wrap of the phase p (0..1) for the increment inc: 0 away from the edge.

@@ -124,6 +124,7 @@ float clampf (float v, float lo, float hi) noexcept
 
 constexpr int kWorkQueueCapacity = 4096;            // entries of the dependency search queues of a router (a pointer each)
 constexpr int kNumOsc = 3;
+constexpr int kNoiseSampleSlot = 4; // content.samples[].osc of the noise source (GROUPA1, WP-04)
 constexpr int kNumLfo = 10;
 constexpr int kNumMacro = 8;
 constexpr int kBakedPoints = 2048; // LineGenerator::kDefaultResolution
@@ -236,6 +237,7 @@ struct Snapshot
     std::array<std::unique_ptr<sbvital::Wavetable>, 3> userTable; // oscN.wavetable = Preset table (content.wavetables)
     std::array<int, 3> userFrames {};
     std::array<SampleEntry, 3> sample;                            // oscN.type = Sample (content.samples)
+    std::unique_ptr<sbvital::Sample::SampleData> noiseSample;     // noise.type = Sample: content.samples[osc 4] as the band limited buffers of the noise source
     std::array<sbvital::FilterCurveShared, 3> filterCurve;        // PZ SVF curves of filter 1, filter 2 and the FX filter (content.filter_curves)
     struct RemapEntry
     {
@@ -368,6 +370,19 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
         }
         for (const ContentSample& c : content.samples)
         {
+            if (c.osc == kNoiseSampleSlot && store->readFile (c.ref, bytes))
+            {
+                // GROUPA1 (WP-04): the sample of the noise source (osc 4). Decoded here, on the message thread: the audio thread only swaps a pointer
+                sampleosc::SampleData decoded;
+                if (decoded.loadFromMemory (bytes.data(), bytes.size(), c.ref.file.c_str()) && decoded.isValid())
+                {
+                    const sampleosc::SampleView v = decoded.view();
+                    const int frames = static_cast<int> (std::min<int64_t> (v.numFrames, 1764000));
+                    s->noiseSample = sbvital::Sample::makeUserData (v.channelData[0], v.numChannels > 1 ? v.channelData[1] : nullptr, frames,
+                                                                     static_cast<int> (std::lround (v.sampleRate)));
+                }
+                continue;
+            }
             if (c.osc < 1 || c.osc > kNumOsc || ! store->readFile (c.ref, bytes))
                 continue;
             SampleEntry& e = s->sample[static_cast<size_t> (c.osc - 1)];
@@ -543,6 +558,7 @@ public:
         ++noteGroup->group;
         noteIds.fill (NoteIdSlot {});
         appliedNoiseSample = 0;
+        appliedNoiseUser = nullptr;
         if (noiseSample_ != nullptr)
             noiseSample_->setNoiseType (0);
         clockSeconds = 0.0;
@@ -644,7 +660,8 @@ public:
              | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions
              | kCapModAmount // block B20: proven by core/engine-vital/tests/test_modamt.cpp
              | kCapWarpAll | kCapEnv1Toggle // block B21: proven by core/engine-vital/tests/test_warpenv.cpp
-             | kCapFxInstances; // block B22: proven by core/engine-vital/tests/test_fxinstances.cpp (a slot of every type renders what instance 0 renders)
+             | kCapFxInstances // block B22: proven by core/engine-vital/tests/test_fxinstances.cpp (a slot of every type renders what instance 0 renders)
+             | kCapSubPhase | kCapNoiseColour | kCapNoiseSample; // block B23 (GROUPA1 WP-04): proven by core/engine-vital/tests/test_noisesample.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -1012,6 +1029,8 @@ private:
                 bendRangeParam = static_cast<int> (i);
             else if (key == "noise.sample")
                 noiseSampleParam = static_cast<int> (i);
+            else if (key == "noise.type")
+                noiseTypeParam = static_cast<int> (i);
         }
 
         // state version 3 parameters the adapter reads itself
@@ -1622,11 +1641,24 @@ private:
 
         if (noiseSampleParam >= 0 && noiseSample_ != nullptr)
         {
+            // noise.type = Sample plays the content sample (osc 4); without one (nothing loaded, file missing) the generator of noise.sample plays
+            sbvital::Sample::SampleData* user = nullptr;
+            if (noiseTypeParam >= 0 && params[static_cast<size_t> (noiseTypeParam)].load (std::memory_order_relaxed) > 0.5f && activeSnapshot != nullptr)
+                user = activeSnapshot->noiseSample.get();
             const int sampleChoice = static_cast<int> (params[static_cast<size_t> (noiseSampleParam)].load (std::memory_order_relaxed) + 0.5f);
-            if (sampleChoice != appliedNoiseSample)
+            if (user != appliedNoiseUser)
             {
+                appliedNoiseUser = user;
                 appliedNoiseSample = sampleChoice;
                 noiseSample_->setNoiseType (sampleChoice);
+                noiseSample_->useUserData (user);
+            }
+            else if (sampleChoice != appliedNoiseSample)
+            {
+                appliedNoiseSample = sampleChoice;
+                noiseSample_->setNoiseType (sampleChoice);   // (a user sample keeps playing: the choice is the generator behind it)
+                if (user != nullptr)
+                    noiseSample_->useUserData (user);
             }
         }
 
@@ -2459,7 +2491,9 @@ private:
     std::array<int, kNumFxSlots> fxOrderParam { { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 } };
     int routingParam = -1, bendRangeParam = -1;
     int noiseSampleParam = -1;
+    int noiseTypeParam = -1;
     int appliedNoiseSample = 0;
+    sbvital::Sample::SampleData* appliedNoiseUser = nullptr;
     sbvital::Sample* noiseSample_ = nullptr;
     int sameNoteParam = -1, bendDownRangeParam = -1, bendDownLinkParam = -1;
     int oversample4xParam = -1, noSmoothingParam = -1;

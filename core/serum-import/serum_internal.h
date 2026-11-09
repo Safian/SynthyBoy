@@ -85,6 +85,7 @@ struct DecodedAudio
 bool decodeFlac (const uint8_t* data, size_t size, size_t maxFrames, DecodedAudio& out) noexcept;
 /** RIFF/WAVE PCM 8/16/24/32 and IEEE float 32/64 (also WAVE_FORMAT_EXTENSIBLE). */
 bool decodeWavFloat (const uint8_t* data, size_t size, size_t maxFrames, DecodedAudio& out) noexcept;
+bool decodeAiff (const uint8_t* data, size_t size, size_t maxFrames, DecodedAudio& out) noexcept;
 /** FLAC or WAV, decided by the magic. */
 bool decodeAudio (const uint8_t* data, size_t size, size_t maxFrames, DecodedAudio& out) noexcept;
 

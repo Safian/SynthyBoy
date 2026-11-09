@@ -19,6 +19,7 @@
 
 #include "number.h"
 #include "sha256.h"
+#include "synthyboy/content_state.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 #include "synthyboy/tuning.h"
@@ -902,6 +903,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
     // ---- sample (noise or sample oscillator) ------------------------------------------------------------------------
     bool customSample = false;
     int sampleMappedOsc = 0;
+    bool sampleMappedNoise = false; // the sample is the sample of the noise source (noise.type = Sample, GROUPA1 WP-04)
     double sampleOn = 0.0, sampleLevel = 1.0, samplePan = 0.0, sampleDestination = 0.0;
     double sampleTranspose = 0.0, sampleTune = 0.0, sampleRandomPhase = 0.0;
     double sampleKeytrack = 1.0, sampleLoop = 0.0, sampleBounce = 0.0, sampleTransposeQuantize = 0.0;
@@ -934,7 +936,26 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
 
             if (customSample)
             {
-                if (opt.caps.sampleOsc)
+                if (opt.caps.noiseSample)
+                {
+                    // the Vital sample is a fourth source next to the oscillators: it becomes the sample of the noise source (osc slot 4 of the content)
+                    ImportedSample is;
+                    ContentNotes sampleNotes;
+                    const std::string description = sname + " (" + num (len) + " samples, " + num (sr) + " Hz)";
+                    if (parseVitalSample (c.doc, sNode, is, sampleNotes))
+                    {
+                        sampleMappedNoise = true;
+                        is.osc = kNoiseSampleOsc;
+                        res.samples.push_back (std::move (is));
+                        ++rep.numImported; // exact: the audio is stored as it is and plays at its own pitch (an imported item is counted, not listed)
+                        rep.imported.push_back ({ 0xFFFF, 1.0f, 1.0f });
+                        if (sampleTransposeQuantize != 0.0)
+                            c.item (ItemKind::dropped, Reason::noEngineEquivalent, "noise", "sample_transpose_quantize", num (sampleTransposeQuantize), "", "", "transpose_quantize_unsupported");
+                    }
+                    else
+                        c.item (sampleOn != 0.0 ? ItemKind::dropped : ItemKind::ignored, Reason::customSample, "noise", "sample", description, "noise.on", "Off", "sample_audio_invalid");
+                }
+                else if (opt.caps.sampleOsc)
                 {
                     // Find the first oscillator that is off (default: osc1 on, osc2 off, osc3 off)
                     int targetOsc = 0;
@@ -1047,6 +1068,12 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                 continue;
             }
             std::string actualDst = dst;
+            std::string directKey; // a destination that has a key but no row of the table (sample_transpose, sample_tune of the noise source)
+            if (sampleMappedNoise)
+            {
+                if (dst == "sample_transpose") directKey = "noise.pitch";
+                else if (dst == "sample_tune") directKey = "noise.fine";
+            }
             if (sampleMappedOsc > 0)
             {
                 if (dst == "sample_level") actualDst = "osc_" + std::to_string (sampleMappedOsc) + "_level";
@@ -1056,7 +1083,12 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             }
             const auto di = T.byControl.find (actualDst);
             int destChoice = 0;
-            if (di != T.byControl.end() && T.info[static_cast<size_t> (di->second)].param >= 0)
+            if (! directKey.empty())
+            {
+                if (const ParamInfo* pi = findParamByKey (directKey.c_str()))
+                    destChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (pi->id))));
+            }
+            else if (di != T.byControl.end() && T.info[static_cast<size_t> (di->second)].param >= 0)
                 destChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (T.info[static_cast<size_t> (di->second)].param)));
             else if (actualDst == "stereo_routing")
             {
@@ -1163,7 +1195,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
         }
         else if (info.kind == RowKind::sampleOn)
         {
-            want = customSample ? 0.0 : std::floor (x + 0.5);
+            want = customSample && ! sampleMappedNoise ? 0.0 : std::floor (x + 0.5);
         }
         else
         {
@@ -1280,6 +1312,23 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             ++rep.numDefaulted;
     }
 
+    // the noise source plays the sample (GROUPA1, WP-04): the keys the Vital sampler has next to level / pan / destination
+    if (sampleMappedNoise)
+    {
+        const auto put = [&] (const char* key, double plain)
+        {
+            if (const ParamInfo* info = findParamByKey (key))
+                V.plain[static_cast<size_t> (findParamIndex (info->id))] = constrainValue (*info, static_cast<float> (plain));
+        };
+        put ("noise.type", 1.0);
+        put ("noise.loop", sampleLoop != 0.0 ? 1.0 : 0.0);
+        put ("noise.bounce", sampleBounce != 0.0 ? 1.0 : 0.0);
+        put ("noise.keytrack", sampleKeytrack != 0.0 ? 1.0 : 0.0);
+        put ("noise.random_phase", sampleRandomPhase != 0.0 ? 1.0 : 0.0);
+        put ("noise.pitch", std::floor (sampleTranspose + 0.5));
+        put ("noise.fine", sampleTune * 100.0);
+    }
+
     // sample oscillator (when custom sample is mapped to an oscillator)
     if (sampleMappedOsc > 0)
     {
@@ -1393,6 +1442,19 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
         {
             double v;
             bool m;
+            if (sampleMappedNoise && std::strncmp (name, "sample_", 7) == 0)
+            {
+                // consumed by the noise source (loop, bounce, key tracking, random phase, transpose, tune)
+                if (c.number (c.member (name), v, m))
+                {
+                    if (std::strcmp (name, "sample_transpose_quantize") != 0)
+                    {
+                        ++rep.numImported;
+                        rep.imported.push_back ({ 0xFFFF, static_cast<float> (v), static_cast<float> (v) });
+                    }
+                }
+                continue;
+            }
             if (sampleMappedOsc > 0 && std::strncmp (name, "sample_", 7) == 0)
             {
                 // consumed by the oscillator the sample was mapped to (osc N: random phase, transpose, tune, keytrack, loop mode)

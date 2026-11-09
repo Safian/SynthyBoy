@@ -14,9 +14,13 @@ SubWaveView::SubWaveView (UiContext& context)
       levelHandle (context, "sub.level"),
       panHandle (context, "sub.pan"),
       onHandle (context, "sub.on"),
-      waveHandle (context, "sub.waveform")
+      waveHandle (context, "sub.waveform"),
+      phaseHandle (context, "sub.phase"),
+      contiguousHandle (context, "sub.phase_contiguous")
 {
     const auto repaintCb = [this] { repaint(); };
+    phaseHandle.onChange = repaintCb;
+    contiguousHandle.onChange = repaintCb;
     levelHandle.onChange = repaintCb;
     panHandle.onChange = repaintCb;
     onHandle.onChange = repaintCb;
@@ -28,6 +32,16 @@ SubWaveView::~SubWaveView() = default;
 int SubWaveView::currentWaveform() const
 {
     return waveHandle.valid() ? juce::jlimit (0, 5, static_cast<int> (waveHandle.plain() + 0.5f)) : 0;
+}
+
+float SubWaveView::startPhase() const
+{
+    return phaseHandle.valid() ? juce::jlimit (0.0f, 1.0f, phaseHandle.plain() * 0.01f) : 0.0f;
+}
+
+bool SubWaveView::phaseContiguous() const
+{
+    return contiguousHandle.valid() && contiguousHandle.plain() > 0.5f;
 }
 
 void SubWaveView::resized()
@@ -113,10 +127,11 @@ void SubWaveView::paint (juce::Graphics& g)
         constexpr float twoPi = juce::MathConstants<float>::twoPi;
 
         juce::Path p;
+        float firstY = midY;
         for (int i = 0; i < numPoints; ++i)
         {
             const float x = scopeArea.getX() + static_cast<float> (i);
-            const float phase = (static_cast<float> (i) / static_cast<float> (numPoints)) * 2.0f; // 2 periods
+            const float phase = (static_cast<float> (i) / static_cast<float> (numPoints)) * 2.0f + startPhase(); // 2 periods, from the start phase
             const float cyclePos = phase - std::floor (phase); // 0..1
             float v = 0.0f;
 
@@ -147,6 +162,8 @@ void SubWaveView::paint (juce::Graphics& g)
 
             const float y = midY - v * amp;
             if (i == 0)
+                firstY = y;
+            if (i == 0)
                 p.startNewSubPath (x, y);
             else
                 p.lineTo (x, y);
@@ -154,6 +171,16 @@ void SubWaveView::paint (juce::Graphics& g)
 
         g.setColour (c.accent);
         g.strokePath (p, juce::PathStrokeType (t.px (2.0f)));
+
+        // the point where a note starts, and the tag of the contiguous option
+        g.setColour (c.mod);
+        g.fillEllipse (scopeArea.getX() - t.px (3.0f), firstY - t.px (3.0f), t.px (6.0f), t.px (6.0f));
+        if (phaseContiguous())
+        {
+            g.setFont (t.labelFont());
+            g.setColour (c.textDim);
+            g.drawText ("CONT", scopeArea.toNearestInt(), juce::Justification::bottomRight, false);
+        }
     }
 
     g.endTransparencyLayer();
@@ -231,6 +258,7 @@ std::vector<std::string> SubPanel::keys() const
 
         // Behind More (7 controls)
         "sub.on", "sub.destination", "sub.mono", "sub.waveform",
+        "sub.phase", "sub.phase_contiguous",
         "sub.filter_blend", "sub.bus1_send", "sub.bus2_send"
     };
 }

@@ -161,17 +161,27 @@ FlowResult loadSampleFile (UiContext& ctx, int osc, const juce::File& file)
         return fail ("the stored sample cannot be read back");
     if (! commit (ctx, content))
         return fail ("the content was refused");
-    const std::string o = "osc" + std::to_string (osc);
-    if (probe.rootNote >= 0)
-        setParameter (ctx.host, (o + ".sample.root").c_str(), static_cast<float> (probe.rootNote));
-    const int sampleType = choiceIndexOf ((o + ".type").c_str(), "Sample");
-    if (sampleType >= 0)
-        setParameter (ctx.host, (o + ".type").c_str(), static_cast<float> (sampleType));
-    setParameter (ctx.host, (o + ".sample.start").c_str(), 0.0f);
-    setParameter (ctx.host, (o + ".sample.end").c_str(), 100.0f);
     juce::String msg = "Loaded " + file.getFileName();
-    if (probe.rootNote >= 0)
-        msg << ", root note " << probe.rootNote << (probe.rootFromName ? " (from the file name)" : " (from the file)");
+    if (osc == kNoiseSampleOsc)
+    {
+        // the noise source (GROUPA1, WP-04): it plays the file at its recorded pitch (no root note, no region keys); the choice noise.type = Sample selects it
+        const int sampleType = choiceIndexOf ("noise.type", "Sample");
+        if (sampleType >= 0)
+            setParameter (ctx.host, "noise.type", static_cast<float> (sampleType));
+    }
+    else
+    {
+        const std::string o = "osc" + std::to_string (osc);
+        if (probe.rootNote >= 0)
+            setParameter (ctx.host, (o + ".sample.root").c_str(), static_cast<float> (probe.rootNote));
+        const int sampleType = choiceIndexOf ((o + ".type").c_str(), "Sample");
+        if (sampleType >= 0)
+            setParameter (ctx.host, (o + ".type").c_str(), static_cast<float> (sampleType));
+        setParameter (ctx.host, (o + ".sample.start").c_str(), 0.0f);
+        setParameter (ctx.host, (o + ".sample.end").c_str(), 100.0f);
+        if (probe.rootNote >= 0)
+            msg << ", root note " << probe.rootNote << (probe.rootFromName ? " (from the file name)" : " (from the file)");
+    }
     contentCache (ctx).clear();
     return done (msg);
 }
@@ -582,7 +592,8 @@ juce::String MissingFilesModel::describe (size_t row) const
         return {};
     const MissingContent& m = missing[row];
     const char* kind = m.kind == ContentKind::wavetable ? "wavetable" : (m.kind == ContentKind::sample ? "sample" : "impulse response");
-    juce::String text = m.kind == ContentKind::impulse ? juce::String ("Convolve ") + kind : "Osc " + juce::String (m.osc) + " " + kind;
+    juce::String text = m.kind == ContentKind::impulse ? juce::String ("Convolve ") + kind
+                      : (m.kind == ContentKind::sample && m.osc == kNoiseSampleOsc ? juce::String ("Noise ") + kind : "Osc " + juce::String (m.osc) + " " + kind);
     text << ": " << (m.ref.name.empty() ? juce::String (m.ref.file) : juce::String (m.ref.name));
     text << (m.reason == MissingReason::hashMismatch ? " (the file changed since the preset was saved)" : " (not found)");
     return text;
@@ -610,6 +621,7 @@ FlowResult MissingFilesModel::locate (size_t row, const juce::File& file, bool a
         return fail (missing[row].ref.sha256.empty() ? juce::String ("the file could not be stored") : juce::String ("this is not the file the preset was saved with"));
     if (! commit (ctx, content))
         return fail ("the content was refused");
+    ctx.host.reloadContent(); // the reference may be the same as before: the engine has not seen the file yet
     contentCache (ctx).clear();
     refresh();
     return done ("Located " + file.getFileName());

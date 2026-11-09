@@ -78,6 +78,10 @@ enum EngineCaps : EngineCapsMask
     kCapFxInstances      = 1ull << 50, // G73: the pool of 16 effect instance slots fxi01 .. fxi16 (several instances of one effect)
     // block B23 (filters80, 13-new-keys.md); bit 51 follows the B22 bit
     kCapFilterModels2    = 1ull << 51, // WP-03 (FILTERS80): filter models 22..26 and styles for the remaining 43 Serum types
+    // block B23 (GROUPA1, 13-new-keys.md 4.27); bits 52 .. 54 follow the WP-03 bit
+    kCapSubPhase         = 1ull << 52, // WP-04: sub.phase, sub.phase_contiguous
+    kCapNoiseColour      = 1ull << 53, // WP-04: noise.stereo, noise.filter (the colour samples White / Pink / Brown / Geiger)
+    kCapNoiseSample      = 1ull << 54, // WP-04: noise.type = Sample (a content sample as the noise source), noise.bounce
 };
 
 /** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
@@ -87,7 +91,7 @@ constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDi
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = (1ull << 52) - 1;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 55) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

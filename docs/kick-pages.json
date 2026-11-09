@@ -443,7 +443,11 @@
         "noise.phase",
         "noise.random_phase",
         "noise.keytrack",
-        "noise.loop"
+        "noise.loop",
+        "noise.type",
+        "noise.bounce",
+        "noise.stereo",
+        "noise.filter"
       ]
     },
     {
@@ -2885,7 +2889,9 @@
       "moreKeys": [
         "sub.filter_blend",
         "sub.bus1_send",
-        "sub.bus2_send"
+        "sub.bus2_send",
+        "sub.phase",
+        "sub.phase_contiguous"
       ]
     },
     {

@@ -1361,9 +1361,11 @@ OscNoiseView::OscNoiseView (UiContext& context)
       panHandle (context, "noise.pan"),
       onHandle (context, "noise.on"),
       destHandle (context, "noise.destination"),
-      sampleHandle (context, "noise.sample")
+      sampleHandle (context, "noise.sample"),
+      typeHandle (context, "noise.type")
 {
     const auto repaintCb = [this] { repaint(); };
+    typeHandle.onChange = repaintCb;
     levelHandle.onChange = repaintCb;
     panHandle.onChange = repaintCb;
     onHandle.onChange = repaintCb;
@@ -1372,6 +1374,11 @@ OscNoiseView::OscNoiseView (UiContext& context)
 }
 
 OscNoiseView::~OscNoiseView() = default;
+
+bool OscNoiseView::showsContentSample() const
+{
+    return typeHandle.valid() && typeHandle.plain() > 0.5f && sampleOf (ctx.host.content(), kNoiseSampleOsc) != nullptr;
+}
 
 int OscNoiseView::currentSample() const
 {
@@ -1442,11 +1449,14 @@ void OscNoiseView::paint (juce::Graphics& g)
         "Tape Hiss", "Vinyl Clicks", "Digital Hash", "Velvet Noise", "Atmosphere"
     };
     const int sampleIdx = currentSample();
-    const juce::String sampleName = (sampleIdx >= 0 && sampleIdx < 9) ? kSampleNames[sampleIdx] : "Noise";
+    juce::String sampleName = (sampleIdx >= 0 && sampleIdx < 9) ? kSampleNames[sampleIdx] : "Noise";
+    const auto content = ctx.host.content(); // a copy: the pointer below points into it
+    const ContentSample* contentSample = showsContentSample() ? sampleOf (content, kNoiseSampleOsc) : nullptr;
 
     g.setFont (t.labelFont());
     g.setColour (c.textDim);
-    g.drawText (sampleName + " Generator", r.reduced (t.px (8.0f), t.px (4.0f)).removeFromTop (t.px (18.0f)).toNearestInt(), juce::Justification::topLeft, false);
+    g.drawText (contentSample != nullptr ? juce::String (contentSample->ref.name) + " (Sample)" : sampleName + " Generator",
+                r.reduced (t.px (8.0f), t.px (4.0f)).removeFromTop (t.px (18.0f)).toNearestInt(), juce::Justification::topLeft, false);
 
     if (isOff)
     {
@@ -1462,6 +1472,30 @@ void OscNoiseView::paint (juce::Graphics& g)
     const float midY = scopeArea.getCentreY();
     const float amp = scopeArea.getHeight() * 0.35f * (levelHandle.valid() ? levelHandle.normalised() : 0.5f);
 
+    if (contentSample != nullptr)
+    {
+        // the file: min / max of the decoded sample over the width (the real waveform, WP-04)
+        if (const auto prev = contentCache (ctx).samplePreview (ctx.host, contentSample->ref))
+        {
+            const int columns = juce::jmax (2, numPoints);
+            std::vector<float> lo, hi;
+            prev->peaks (0.0f, 1.0f, columns, lo, hi);
+            juce::Path wave;
+            const float w = scopeArea.getWidth();
+            wave.startNewSubPath (scopeArea.getX(), midY - hi[0] * amp * 2.5f);
+            for (int i = 1; i < columns; ++i)
+                wave.lineTo (scopeArea.getX() + static_cast<float> (i) * w / static_cast<float> (columns - 1), midY - hi[static_cast<size_t> (i)] * amp * 2.5f);
+            for (int i = columns - 1; i >= 0; --i)
+                wave.lineTo (scopeArea.getX() + static_cast<float> (i) * w / static_cast<float> (columns - 1), midY - lo[static_cast<size_t> (i)] * amp * 2.5f);
+            wave.closeSubPath();
+            g.setColour (c.accentDim.withAlpha (0.55f));
+            g.fillPath (wave);
+            g.setColour (c.accentDim);
+            g.strokePath (wave, juce::PathStrokeType (t.px (1.0f)));
+        }
+    }
+    else
+    {
     juce::Random rnd (42 + sampleIdx * 101);
     float filteredVal = 0.0f;
     for (int i = 0; i < numPoints; ++i)
@@ -1510,6 +1544,14 @@ void OscNoiseView::paint (juce::Graphics& g)
     }
     g.setColour (c.accent.withAlpha (0.7f));
     g.strokePath (p, juce::PathStrokeType (t.px (1.2f)));
+    }
+
+    if (status.isNotEmpty())
+    {
+        g.setFont (t.labelFont());
+        g.setColour (c.textDim);
+        g.drawText (status, r.reduced (t.px (8.0f), t.px (4.0f)).removeFromBottom (t.px (16.0f)).toNearestInt(), juce::Justification::bottomLeft, true);
+    }
 
     // Crosshair for Pan / Level
     const float panNorm = panHandle.valid() ? panHandle.normalised() : 0.5f;

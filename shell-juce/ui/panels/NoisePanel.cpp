@@ -9,9 +9,12 @@ NoisePanel::NoisePanel (UiContext& context)
     : Panel (context),
       noiseView (context),
       onHandle (context, "noise.on"),
-      sampleHandle (context, "noise.sample")
+      sampleHandle (context, "noise.sample"),
+      typeHandle (context, "noise.type")
 {
     addAndMakeVisible (noiseView);
+    addAndMakeVisible (loadBtn);
+    addAndMakeVisible (removeBtn);
     addAndMakeVisible (prevSampleBtn);
     addAndMakeVisible (sampleNameBtn);
     addAndMakeVisible (nextSampleBtn);
@@ -19,6 +22,13 @@ NoisePanel::NoisePanel (UiContext& context)
     prevSampleBtn.onClick = [this] { stepSample (-1); };
     nextSampleBtn.onClick = [this] { stepSample (1); };
     sampleNameBtn.onClick = [this] { showSampleMenu(); };
+    loadBtn.onClick = [this] { requestSampleFile(); };
+    removeBtn.onClick = [this] { removeSample(); };
+    typeHandle.onChange = [this]
+    {
+        updateSampleButtonText();
+        noiseView.repaint();
+    };
 
     onHandle.onChange = [this]
     {
@@ -45,6 +55,8 @@ void NoisePanel::stepSample (int direction)
     const int now = juce::jlimit (0, count - 1, static_cast<int> (sampleHandle.plain() + 0.5f));
     const int next = (now + direction + count) % count;
     sampleHandle.setPlainComplete (static_cast<float> (next));
+    if (typeHandle.valid() && usesSample())
+        typeHandle.setPlainComplete (0.0f); // stepping through the generators leaves the content sample
     updateSampleButtonText();
     noiseView.repaint();
 }
@@ -59,19 +71,78 @@ void NoisePanel::showSampleMenu()
         "Tape Hiss", "Vinyl Clicks", "Digital Hash", "Velvet Noise", "Atmosphere"
     };
     const int now = static_cast<int> (sampleHandle.plain() + 0.5f);
+    const bool sample = usesSample();
     for (int i = 0; i < 9; ++i)
-    {
-        menu.addItem (i + 1, kSampleNames[i], true, now == i);
-    }
+        menu.addItem (i + 1, kSampleNames[i], true, ! sample && now == i);
+    menu.addSeparator();
+    const auto content = ctx.host.content(); // a copy: the pointer below points into it
+    const ContentSample* loaded = sampleOf (content, kNoiseSampleOsc);
+    if (loaded != nullptr)
+        menu.addItem (30, juce::String (loaded->ref.name), true, sample);
+    menu.addItem (31, "Load Sample...", ctx.host.canRequestFile());
+    menu.addItem (32, "Remove Sample", loaded != nullptr);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (sampleNameBtn),
-                        [this] (int result) {
-                            if (result > 0 && sampleHandle.valid())
+                        [safe = juce::Component::SafePointer<NoisePanel> (this)] (int result)
+                        {
+                            if (safe == nullptr || result <= 0 || ! safe->sampleHandle.valid())
+                                return;
+                            if (result <= 9)
                             {
-                                sampleHandle.setPlainComplete (static_cast<float> (result - 1));
-                                updateSampleButtonText();
-                                noiseView.repaint();
+                                if (safe->typeHandle.valid())
+                                    safe->typeHandle.setPlainComplete (0.0f);
+                                safe->sampleHandle.setPlainComplete (static_cast<float> (result - 1));
                             }
+                            else if (result == 30 && safe->typeHandle.valid())
+                                safe->typeHandle.setPlainComplete (1.0f);
+                            else if (result == 31)
+                                safe->requestSampleFile();
+                            else if (result == 32)
+                                safe->removeSample();
+                            safe->updateSampleButtonText();
+                            safe->noiseView.repaint();
                         });
+}
+
+bool NoisePanel::usesSample() const
+{
+    return typeHandle.valid() && typeHandle.plain() > 0.5f;
+}
+
+void NoisePanel::requestSampleFile()
+{
+    FileRequest request;
+    request.title = "Load a sample into the noise oscillator";
+    request.wildcards = audioFileWildcard();
+    request.purpose = "sample";
+    if (! ctx.host.requestFile (request, [safe = juce::Component::SafePointer<NoisePanel> (this)] (const juce::File& file)
+        {
+            if (safe != nullptr)
+                safe->loadSampleFile (file);
+        }))
+    {
+        statusLine = "This host cannot ask for a file";
+        repaint();
+    }
+}
+
+FlowResult NoisePanel::loadSampleFile (const juce::File& file)
+{
+    const FlowResult result = synthyboy::ui::loadSampleFile (ctx, kNoiseSampleOsc, file);
+    statusLine = result.message;
+    noiseView.setStatus (statusLine);
+    updateSampleButtonText();
+    repaint();
+    return result;
+}
+
+FlowResult NoisePanel::removeSample()
+{
+    const FlowResult result = synthyboy::ui::removeSample (ctx, kNoiseSampleOsc);
+    statusLine = result.message;
+    noiseView.setStatus (statusLine);
+    updateSampleButtonText();
+    repaint();
+    return result;
 }
 
 void NoisePanel::updateSampleButtonText()
@@ -81,7 +152,12 @@ void NoisePanel::updateSampleButtonText()
         "Tape Hiss", "Vinyl Clicks", "Digital Hash", "Velvet Noise", "Atmosphere"
     };
     const int now = sampleHandle.valid() ? juce::jlimit (0, 8, static_cast<int> (sampleHandle.plain() + 0.5f)) : 0;
-    sampleNameBtn.setButtonText (kSampleNames[now]);
+    const auto content = ctx.host.content(); // a copy: the pointer below points into it
+    const ContentSample* loaded = sampleOf (content, kNoiseSampleOsc);
+    // noise.type = Sample: the file's name (without the content the engine plays the generator, so the generator's name stays)
+    sampleNameBtn.setButtonText (usesSample() && loaded != nullptr ? juce::String (loaded->ref.name) : juce::String (kSampleNames[now]));
+    removeBtn.setEnabled (loaded != nullptr);
+    loadBtn.setEnabled (ctx.host.canRequestFile());
 }
 
 std::vector<std::string> NoisePanel::keys() const
@@ -91,8 +167,9 @@ std::vector<std::string> NoisePanel::keys() const
         "noise.level", "noise.pan", "noise.pitch", "noise.fine",
 
         // Behind More (10 controls)
-        "noise.on", "noise.sample", "noise.destination", "noise.phase",
-        "noise.random_phase", "noise.keytrack", "noise.loop",
+        "noise.on", "noise.type", "noise.sample", "noise.destination", "noise.phase",
+        "noise.random_phase", "noise.keytrack", "noise.loop", "noise.bounce",
+        "noise.stereo", "noise.filter",
         "noise.filter_blend", "noise.bus1_send", "noise.bus2_send"
     };
 }
@@ -115,7 +192,7 @@ int NoisePanel::preferredHeight (int width) const
     const int touchH = t.touch();
     const int visualH = t.ipx (120.0f);
     const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
-    return headerHeight() + touchH + visualH + 4 * t.gap() + const_cast<NoisePanel*> (this)->layoutControls (area, true);
+    return headerHeight() + 2 * touchH + visualH + 5 * t.gap() + const_cast<NoisePanel*> (this)->layoutControls (area, true);
 }
 
 void NoisePanel::resized()
@@ -132,6 +209,13 @@ void NoisePanel::resized()
     nextSampleBtn.setBounds (sampleRow.removeFromRight (touchH));
     sampleRow.removeFromRight (t.gap());
     sampleNameBtn.setBounds (sampleRow);
+
+    // the file row: Load... and Remove (the sample of the noise source, WP-01 flow)
+    area.removeFromTop (t.gap());
+    auto fileRow = area.removeFromTop (touchH);
+    removeBtn.setBounds (fileRow.removeFromRight (fileRow.getWidth() / 3));
+    fileRow.removeFromRight (t.gap());
+    loadBtn.setBounds (fileRow);
 
     area.removeFromTop (t.gap());
     auto topArea = area.removeFromTop (visualH);

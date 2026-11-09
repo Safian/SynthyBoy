@@ -28,8 +28,9 @@ constexpr int kNumModSources = 39;
 /** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 39 were appended in version 3. */
 constexpr int kNumModSourcesV2 = 28;
 /** Size of the destination choice (modNN.destination): "none" plus every parameter flagged kParamModulatable and the appended destinations. */
-constexpr int kNumModDestinations = 904; // 453 after B15 + B20 stereo_routing (1 + 453 modulatable keys), + 64 mod amounts (454..517) + portamento time (518) + polyphony (519),
+constexpr int kNumModDestinations = 907; // 453 after B15 + B20 stereo_routing (1 + 453 modulatable keys), + 64 mod amounts (454..517) + portamento time (518) + polyphony (519),
                                          // + the 384 parameters fxiNN.pKK of the effect instance pool (B22: choice values 520 .. 903)
+                                         // + sub.phase, noise.stereo, noise.filter (B23, GROUPA1: 904 .. 906)
 
 /** Source k (0-based) has the choice value k + 1; the order is the one of the list in docs/PARAMETERS.md. */
 const ModSourceInfo* modSourceTable() noexcept;

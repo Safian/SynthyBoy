@@ -199,6 +199,10 @@ std::vector<Binding> build()
     b.choice ("noise.random_phase", "sample_random_phase");
     b.choice ("noise.keytrack", "sample_keytrack");
     b.choice ("noise.loop", "sample_loop");
+    // block B23 (GROUPA1, WP-04); noise.type is handled by the adapter (a generator or the content sample)
+    b.percent ("noise.stereo", "sample_stereo");
+    b.percent ("noise.filter", "sample_filter");
+    b.choice ("noise.bounce", "sample_bounce");
 
     // --- sub oscillator (G23) ---------------------------------------------------------------------------------------
     b.choice ("sub.on", "sub_on");
@@ -210,6 +214,8 @@ std::vector<Binding> build()
     b.choice ("sub.destination", "sub_destination");
     b.choice ("sub.env1", "sub_env1");
     b.choice ("sub.mono", "sub_mono");
+    b.percent ("sub.phase", "sub_phase");
+    b.choice ("sub.phase_contiguous", "sub_phase_contiguous");
     b.percent ("sub.filter_blend", "sub_filter_blend");
     b.percent ("sub.bus1_send", "sub_bus1_send");
     b.percent ("sub.bus2_send", "sub_bus2_send");
@@ -509,7 +515,7 @@ bool isSpecialParam (size_t paramIndex)
         // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
         || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"))
         // B13: noise sample choice (procedural noise buffers)
-        || std::strcmp (key, "noise.sample") == 0
+        || std::strcmp (key, "noise.sample") == 0 || std::strcmp (key, "noise.type") == 0
         // B22: the effect instance pool (type, on, rack, order and the normalised parameters of a slot): the adapter builds the module and drives its controls
         || (startsWith ("fxi") && key[3] >= '0' && key[3] <= '9')
         // B15 (G12, G14, G18): handled by the adapter (note on handling, the bend wheel, the quality controls of the thread)

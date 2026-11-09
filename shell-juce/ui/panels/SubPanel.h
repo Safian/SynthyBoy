@@ -25,6 +25,10 @@ public:
     void mouseUp (const juce::MouseEvent& e) override;
 
     int currentWaveform() const;
+    /** sub.phase as a fraction of a cycle: the picture starts there, as the voice does at note on (WP-04). */
+    float startPhase() const;
+    /** sub.phase_contiguous: a new note continues with the phase of the previous one (the picture says CONT). */
+    bool phaseContiguous() const;
 
 private:
     UiContext& ctx;
@@ -32,6 +36,8 @@ private:
     ParamHandle panHandle;
     ParamHandle onHandle;
     ParamHandle waveHandle;
+    ParamHandle phaseHandle;
+    ParamHandle contiguousHandle;
 
     juce::Point<float> dragStartPos;
     float dragStartLevel = 0.0f;

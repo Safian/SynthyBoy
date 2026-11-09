@@ -1485,6 +1485,66 @@ TEST (vi_fixture_sample_imported_to_osc)
     CHECK (r.report.fidelity == Fidelity::close);
 }
 
+// GROUPA1 (WP-04): the Vital sample is a fourth source: with the engine capability it becomes the sample of the noise source, no oscillator is taken
+TEST (vi_fixture_sample_imported_to_the_noise_source)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("osc_1_on", 1);
+    f.set ("osc_2_on", 1);
+    f.set ("osc_3_on", 1); // all three oscillators in use: the old mapping had to drop the sample (the five presets of the audit)
+    f.set ("sample_on", 1);
+    f.set ("sample_level", 0.8);
+    f.set ("sample_pan", -0.5);
+    f.set ("sample_destination", 2);
+    f.set ("sample_transpose", 7);
+    f.set ("sample_tune", 0.2);
+    f.set ("sample_random_phase", 1);
+    f.set ("sample_keytrack", 1);
+    f.set ("sample_loop", 1);
+    f.set ("sample_bounce", 1);
+    f.set ("sample_transpose_quantize", 0);
+    f.sample = "{\"name\":\"My Sample\",\"length\":100,\"sample_rate\":48000,\"samples\":\"AAAA\"}";
+
+    ImportOptions o;
+    o.caps.sampleOsc = true;
+    o.caps.noiseSample = true;
+    auto r = run (f, o);
+
+    CHECK_EQ (r.status, ImportStatus::ok);
+    CHECK_EQ (val (r, "noise.on"), 1.0f);
+    CHECK_EQ (val (r, "noise.type"), 1.0f); // Sample
+    CHECK_NEAR (val (r, "noise.level"), 64.0f, 1e-3f); // 0.8^2 * 100
+    CHECK_NEAR (val (r, "noise.pan"), -50.0f, 1e-3f);
+    CHECK_EQ (val (r, "noise.destination"), 2.0f);
+    CHECK_EQ (val (r, "noise.pitch"), 7.0f);
+    CHECK_NEAR (val (r, "noise.fine"), 20.0f, 1e-3f);
+    CHECK_EQ (val (r, "noise.random_phase"), 1.0f);
+    CHECK_EQ (val (r, "noise.keytrack"), 1.0f);
+    CHECK_EQ (val (r, "noise.loop"), 1.0f);
+    CHECK_EQ (val (r, "noise.bounce"), 1.0f); // sample_bounce: the ping-pong loop
+    CHECK_EQ (val (r, "osc1.type"), 0.0f);
+    CHECK_EQ (val (r, "osc2.type"), 0.0f);
+    CHECK_EQ (val (r, "osc3.type"), 0.0f);
+
+    CHECK_EQ (r.samples.size(), static_cast<size_t> (1));
+    CHECK_EQ (r.samples[0].osc, kNoiseSampleOsc);
+    CHECK_EQ (r.samples[0].name, std::string ("My Sample"));
+    CHECK (! r.samples[0].wavBytes.empty());
+    CHECK (findItem (r, "sample", ItemKind::dropped) == nullptr);
+    CHECK (findItem (r, "sample", ItemKind::approximated) == nullptr);
+    CHECK (r.report.fidelity != Fidelity::degraded);
+
+    // loop off, bounce off: a one shot, forward
+    f.set ("sample_loop", 0);
+    f.set ("sample_bounce", 0);
+    f.set ("sample_keytrack", 0);
+    const auto once = run (f, o);
+    CHECK_EQ (val (once, "noise.loop"), 0.0f);
+    CHECK_EQ (val (once, "noise.bounce"), 0.0f);
+    CHECK_EQ (val (once, "noise.keytrack"), 0.0f);
+}
+
 TEST (vi_fixture_sample_all_oscillators_on_dropped)
 {
     using namespace sbfx;

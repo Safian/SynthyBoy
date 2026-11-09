@@ -194,6 +194,78 @@ bool Importer::loadSample (const std::string& area, const std::string& relPath, 
     return true;
 }
 
+bool Importer::noiseSampleFromFile (const std::string& relPath, const std::string& path)
+{
+    std::vector<uint8_t> bytes;
+    const std::string rel = normalisePath (relPath);
+    DecodedAudio a;
+    if (! readContent ("Noises", rel, bytes) || ! decodeAudio (bytes.data(), bytes.size(), opt.limits.maxAudioFrames, a) || a.frames() == 0)
+    {
+        ++R.missingFiles;
+        return false;
+    }
+    ImportedSample s;
+    s.osc = kNoiseSampleOsc;
+    s.name = stemOf (rel);
+    const size_t n = a.frames();
+    const int ch = a.channels >= 2 ? 2 : 1;
+    std::vector<float> left (n), right (ch == 2 ? n : 0);
+    for (size_t i = 0; i < n; ++i)
+    {
+        left[i] = a.data[i * static_cast<size_t> (a.channels)];
+        if (ch == 2) right[i] = a.data[i * static_cast<size_t> (a.channels) + 1];
+    }
+    s.sampleRate = a.sampleRate;
+    s.numFrames = static_cast<int> (n);
+    s.channels = ch;
+    s.wavBytes = encodeWav (left.data(), ch == 2 ? right.data() : nullptr, n, a.sampleRate, 24);
+    s.sha256 = Sha256::hashBufferHex (s.wavBytes.data(), s.wavBytes.size());
+    R.samples.erase (std::remove_if (R.samples.begin(), R.samples.end(), [] (const ImportedSample& x) { return x.osc == kNoiseSampleOsc; }), R.samples.end());
+    R.samples.push_back (std::move (s));
+    store ("noise.type", 1);
+    entry (ItemKind::imported, Reason::exact, "content", path, rel, "noise.type", "Sample", "noise_sample_file_stored_in_the_library");
+    return true;
+}
+
+// embeddedNoiseData: a list with one array of samples per channel (numChannels, numFrames, sampleRate beside it)
+bool Importer::noiseSampleFromEmbedded (int embNode, int metaNode, const std::string& path)
+{
+    const uint32_t channelCount = d.arraySize (static_cast<uint32_t> (embNode));
+    if (channelCount == 0) return false;
+    const int ch = static_cast<int> (std::min<uint32_t> (channelCount, 2));
+    std::vector<std::vector<float>> data (static_cast<size_t> (ch));
+    size_t frames = 0;
+    for (int c = 0; c < ch; ++c)
+    {
+        const int arr = static_cast<int> (d.kids[N (embNode).first + static_cast<uint32_t> (c)]);
+        const uint32_t count = d.arraySize (static_cast<uint32_t> (arr));
+        if (count == 0 || count > static_cast<uint32_t> (opt.limits.maxAudioFrames)) return false;
+        data[static_cast<size_t> (c)].resize (count);
+        for (uint32_t k = 0; k < count; ++k)
+        {
+            const double v = d.arrayNumber (static_cast<uint32_t> (arr), k);
+            data[static_cast<size_t> (c)][k] = std::isfinite (v) ? static_cast<float> (std::max (-1.0, std::min (1.0, v))) : 0.0f;
+        }
+        frames = c == 0 ? count : std::min<size_t> (frames, count);
+    }
+    if (ch == 2) { data[0].resize (frames); data[1].resize (frames); }
+    const int rateNode = get (metaNode, "sampleRate");
+    const int rate = std::max (8000, std::min (384000, rateNode >= 0 ? static_cast<int> (num (rateNode, 44100.0)) : 44100));
+    ImportedSample s;
+    s.osc = kNoiseSampleOsc;
+    s.name = "Embedded noise";
+    s.sampleRate = rate;
+    s.numFrames = static_cast<int> (frames);
+    s.channels = ch;
+    s.wavBytes = encodeWav (data[0].data(), ch == 2 ? data[1].data() : nullptr, frames, rate, 24);
+    s.sha256 = Sha256::hashBufferHex (s.wavBytes.data(), s.wavBytes.size());
+    R.samples.erase (std::remove_if (R.samples.begin(), R.samples.end(), [] (const ImportedSample& x) { return x.osc == kNoiseSampleOsc; }), R.samples.end());
+    R.samples.push_back (std::move (s));
+    store ("noise.type", 1);
+    acctRest (embNode, ItemKind::imported, Reason::exact, "content", path + "/embeddedNoiseData", "noise.type", "Sample", "embedded_noise_sample_stored_in_the_library");
+    return true;
+}
+
 namespace
 {
 struct SfzRegion

@@ -185,6 +185,62 @@ TEST (wav_float_and_pcm_decode)
     CHECK (! decodeFlac (w.data(), w.size(), 100, a));
 }
 
+TEST (aiff_pcm_and_sowt_decode)
+{
+    // a 16 bit stereo AIFF of two frames (44100 Hz as the 80 bit extended float 0x400E AC44 0000 0000 0000), then the same as AIFF-C 'sowt' (little endian samples)
+    const auto be32 = [] (std::vector<uint8_t>& v, uint32_t x) { for (int i = 3; i >= 0; --i) v.push_back (static_cast<uint8_t> (x >> (8 * i))); };
+    const auto be16 = [] (std::vector<uint8_t>& v, uint16_t x) { v.push_back (static_cast<uint8_t> (x >> 8)); v.push_back (static_cast<uint8_t> (x)); };
+    const auto tag = [] (std::vector<uint8_t>& v, const char* t) { for (int i = 0; i < 4; ++i) v.push_back (static_cast<uint8_t> (t[i])); };
+    const auto build = [&] (bool aifc, bool little)
+    {
+        std::vector<uint8_t> a;
+        tag (a, "FORM");
+        be32 (a, 0);
+        tag (a, aifc ? "AIFC" : "AIFF");
+        tag (a, "COMM");
+        be32 (a, aifc ? 24 : 18);
+        be16 (a, 2); be32 (a, 2); be16 (a, 16);
+        for (const uint8_t b : { 0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }) a.push_back (b);
+        if (aifc) { tag (a, little ? "sowt" : "NONE"); be16 (a, 0); }
+        tag (a, "SSND");
+        be32 (a, 8 + 8);
+        be32 (a, 0); be32 (a, 0);
+        const int16_t samples[4] = { 16384, -16384, 8192, -32768 };
+        for (const int16_t v : samples)
+        {
+            const uint16_t u = static_cast<uint16_t> (v);
+            if (little) { a.push_back (static_cast<uint8_t> (u)); a.push_back (static_cast<uint8_t> (u >> 8)); }
+            else be16 (a, u);
+        }
+        return a;
+    };
+    for (const auto& file : { build (false, false), build (true, false), build (true, true) })
+    {
+        DecodedAudio a;
+        CHECK (decodeAudio (file.data(), file.size(), 100, a));
+        CHECK (a.sampleRate == 44100 && a.channels == 2 && a.frames() == 2);
+        CHECK (a.data.size() == 4 && a.data[0] == 0.5f && a.data[1] == -0.5f && a.data[2] == 0.25f && a.data[3] == -1.0f);
+        CHECK (! decodeAudio (file.data(), file.size(), 1, a));
+    }
+    {
+        // AIFF-C 'fl32': big endian 32 bit float (the Serum factory noises)
+        std::vector<uint8_t> f;
+        tag (f, "FORM"); be32 (f, 0); tag (f, "AIFC"); tag (f, "COMM"); be32 (f, 24);
+        be16 (f, 1); be32 (f, 2); be16 (f, 32);
+        for (const uint8_t b : { 0x40, 0x0E, 0xAC, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }) f.push_back (b);
+        tag (f, "fl32"); be16 (f, 0);
+        tag (f, "SSND"); be32 (f, 16); be32 (f, 0); be32 (f, 0);
+        be32 (f, 0x3E800000u); be32 (f, 0xBF000000u); // 0.25, -0.5
+        DecodedAudio a;
+        CHECK (decodeAudio (f.data(), f.size(), 100, a));
+        CHECK (a.channels == 1 && a.frames() == 2 && a.data[0] == 0.25f && a.data[1] == -0.5f);
+    }
+    std::vector<uint8_t> bad = build (true, false);
+    bad[bad.size() - 40] = 'X'; // a damaged chunk header must not crash
+    DecodedAudio a;
+    (void) decodeAudio (bad.data(), bad.size(), 100, a);
+}
+
 TEST (real_files_container_decodes_every_family)
 {
     namespace fs = std::filesystem;

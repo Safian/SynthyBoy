@@ -279,6 +279,84 @@ TEST (serum_compressor_ratio_at_its_maximum_is_the_limit_mode)
     }
 }
 
+// GROUPA1 (WP-04, A348): the noise source plays the sample of the preset (the file of the Noises folder, or the data embedded in it); a colour stays the
+// generator and its kParamColor is the FILTER knob
+TEST (serum_noise_source_takes_the_sample_file_the_embedded_data_or_the_colour)
+{
+    const auto noisePreset = [] (const Map& block)
+    {
+        Preset p;
+        p.set ("Oscillator3", map ({ { "plainParams", plain ({ { "kParamEnable", 1 } }) }, { "NoiseOsc3", map (block) } }));
+        return p;
+    };
+    const auto meta = [] (int frames, int channels, int rate) -> Map
+    {
+        return { { "numFrames", num (frames) }, { "numChannels", num (channels) }, { "sampleRate", num (rate) }, { "detuneFactor", num (1) } };
+    };
+
+    // 1. a file of the Noises folder
+    {
+        MemResolver res;
+        std::vector<float> noise (2000);
+        for (size_t i = 0; i < noise.size(); ++i) noise[i] = 0.5f * static_cast<float> (std::sin (0.3 * static_cast<double> (i)));
+        res.files["Noises/Organics/Hum.wav"] = wavFloat (noise);
+        Map block = meta (2000, 1, 44100);
+        block.push_back ({ "relativePathToNoiseSample", text ("Organics/Hum.wav") });
+        block.push_back ({ "plainParams", plain ({ { "kParamColor", 0.25 }, { "kParamOneShot", 1 } }) });
+        const SerumImportResult r = run (noisePreset (block).file(), &res);
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (value (r, "noise.type"), 1.0f);
+        CHECK_EQ (value (r, "noise.loop"), 0.0f);          // one shot
+        CHECK_EQ (value (r, "noise.filter"), 0.0f);        // a sample has no filter: kParamColor is dropped
+        CHECK_EQ (r.samples.size(), size_t { 1 });
+        CHECK_EQ (r.samples[0].osc, kNoiseSampleOsc);
+        CHECK_EQ (r.samples[0].numFrames, 2000);
+        CHECK (entryWith (r, "noise_sample_file_stored_in_the_library") >= 0);
+        CHECK (entryWith (r, "noise_filter_acts_on_the_colour_samples_only") >= 0);
+    }
+    // 2. the data embedded in the preset wins over the file name beside it
+    {
+        MemResolver res;
+        res.files["Noises/Organics/Hum.wav"] = wavFloat (std::vector<float> (300, 0.1f));
+        std::vector<double> data (500);
+        for (size_t i = 0; i < data.size(); ++i) data[i] = 0.25 * std::sin (0.1 * static_cast<double> (i));
+        Map block = meta (500, 1, 22050);
+        block.push_back ({ "embeddedNoiseData", arr ({ nums (data) }) });
+        block.push_back ({ "relativePathToNoiseSample", text ("Organics/Hum.wav") });
+        const SerumImportResult r = run (noisePreset (block).file(), &res);
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (value (r, "noise.type"), 1.0f);
+        CHECK_EQ (r.samples.size(), size_t { 1 });
+        CHECK_EQ (r.samples[0].numFrames, 500);
+        CHECK_EQ (r.samples[0].sampleRate, 22050);
+        CHECK (entryWith (r, "noise_file_replaced_by_the_embedded_data") >= 0);
+        CHECK (entryWith (r, "embedded_noise_sample_stored_in_the_library") >= 0);
+    }
+    // 3. a colour is a generator; kParamColor is its FILTER knob (0.5 = off, below a low pass, above a high pass)
+    for (const double color : { 0.25, 0.5, 1.0 })
+    {
+        Map block = meta (100, 1, 44100);
+        block.push_back ({ "relativePathToNoiseSample", text ("Organics/Hum.wav") });
+        block.push_back ({ "plainParams", map (withText ({ { "kParamColor", color } }, { { "kParamNoiseType", "Pink" } })) });
+        const SerumImportResult r = run (noisePreset (block).file());
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (value (r, "noise.type"), 0.0f);
+        CHECK_EQ (value (r, "noise.sample"), 1.0f);        // Pink
+        CHECK_NEAR (value (r, "noise.filter"), (color - 0.5) * 200.0, 1e-3);
+        CHECK (r.samples.empty());
+    }
+    // 4. a file that cannot be read: the nearest generator by its name, as before
+    {
+        Map block = meta (100, 1, 44100);
+        block.push_back ({ "relativePathToNoiseSample", text ("Analog/ARP pink.wav") });
+        const SerumImportResult r = run (noisePreset (block).file());
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (value (r, "noise.type"), 0.0f);
+        CHECK_EQ (value (r, "noise.sample"), 1.0f);
+        CHECK (entryWith (r, "noise_file_matched_by_name") >= 0);
+    }
+}
+
 TEST (serum_effect_racks_become_pool_slots_in_order)
 {
     Preset p;
@@ -715,7 +793,7 @@ TEST (serum_real_presets_import_without_a_failure_and_with_every_leaf_accounted)
         const std::vector<uint8_t> bytes ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char>());
         ++files;
         const auto t0 = std::chrono::steady_clock::now();
-        const SerumPluginImport r = importSerumFileForPlugin (e.path().filename().string(), bytes, content, kCapUserWavetable | kCapSampleOsc | kCapCustomLfoShape, &resolver);
+        const SerumPluginImport r = importSerumFileForPlugin (e.path().filename().string(), bytes, content, kCapUserWavetable | kCapSampleOsc | kCapNoiseSample | kCapCustomLfoShape, &resolver);
         slowest = std::max (slowest, std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
         if (! r.ok) { ++failed; std::printf ("  FAILED %s: %s\n", e.path().string().c_str(), r.error.c_str()); continue; }
         if (r.report.unaccounted != 0) { ++unaccounted; std::printf ("  unaccounted %d in %s\n", r.report.unaccounted, e.path().string().c_str()); }

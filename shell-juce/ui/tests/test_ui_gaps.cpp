@@ -2241,6 +2241,84 @@ TEST (uig_sub_and_noise_panels_on_phone_and_tablet)
     }
 }
 
+// GROUPA1 (WP-04): the new keys of the Sub and Noise panels on phone and tablet; the views follow them, the file buttons are touch sized
+TEST (uig_wp04_sub_phase_and_noise_colour_controls_on_phone_and_tablet)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::osc, sz.w, sz.h);
+        auto* subPanel = rig.find<SubPanel>();
+        auto* noisePanel = rig.find<NoisePanel>();
+        CHECK (subPanel != nullptr && noisePanel != nullptr);
+        if (subPanel == nullptr || noisePanel == nullptr)
+            continue;
+
+        const auto has = [] (const std::vector<std::string>& keys, const char* key) { return std::find (keys.begin(), keys.end(), std::string (key)) != keys.end(); };
+        for (const char* key : { "sub.phase", "sub.phase_contiguous" })
+            CHECK (has (subPanel->keys(), key));
+        for (const char* key : { "noise.type", "noise.bounce", "noise.stereo", "noise.filter" })
+            CHECK (has (noisePanel->keys(), key));
+
+        // the Sub picture starts at the phase and says CONT for the contiguous option
+        rig.setParam ("sub.on", 1.0f);
+        rig.setParam ("sub.waveform", 0.0f);
+        rig.setParam ("sub.phase", 0.0f);
+        auto& view = subPanel->view();
+        view.setBounds (0, 0, juce::jmax (200, view.getWidth()), juce::jmax (80, view.getHeight()));
+        const auto atZero = view.createComponentSnapshot (view.getLocalBounds());
+        rig.setParam ("sub.phase", 25.0f);
+        CHECK_NEAR (view.startPhase(), 0.25f, 1.0e-4f);
+        const auto atQuarter = view.createComponentSnapshot (view.getLocalBounds());
+        int differing = 0;
+        for (int y = 0; y < atZero.getHeight(); ++y)
+            for (int x = 0; x < atZero.getWidth(); ++x)
+                differing += atZero.getPixelAt (x, y) != atQuarter.getPixelAt (x, y) ? 1 : 0;
+        CHECK (differing > 50); // the sine starts a quarter cycle later: another picture
+        CHECK (! view.phaseContiguous());
+        rig.setParam ("sub.phase_contiguous", 1.0f);
+        CHECK (view.phaseContiguous());
+
+        // the file row of the noise panel: Load and Remove are touch sized, Remove waits for a sample, Load for a host that can ask for a file
+        const int minTouch = rig.editor->theme().touch();
+        CHECK (noisePanel->loadButton().getHeight() >= minTouch && noisePanel->loadButton().getWidth() >= minTouch);
+        CHECK (noisePanel->removeButton().getHeight() >= minTouch && noisePanel->removeButton().getWidth() >= minTouch);
+        CHECK (! noisePanel->removeButton().getBounds().intersects (noisePanel->loadButton().getBounds()));
+        CHECK (! noisePanel->removeButton().isEnabled());
+        // noise.type = Sample without a loaded file: the generator's name stays (the engine plays the generator)
+        rig.setParam ("noise.type", 1.0f);
+        CHECK (noisePanel->usesSample());
+        CHECK_EQ (noisePanel->sampleNameButton().getButtonText(), juce::String ("White Noise"));
+        rig.setParam ("noise.type", 0.0f);
+
+        for (auto* panel : { static_cast<Panel*> (subPanel), static_cast<Panel*> (noisePanel) })
+        {
+            panel->setMoreExpanded (true);
+            CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
+            CHECK (panel->getWidth() <= sz.w);
+        }
+        rig.shot ("sub-noise-wp04-" + n, sz.w, sz.h, true, Page::osc);
+    }
+}
+
+TEST (uig_wp04_new_keys_take_modulation_by_touch_where_they_are_continuous)
+{
+    Rig rig (Page::osc);
+    const int s0 = assignBySource (rig, 7, "sub.phase", 40.0f);
+    const int s1 = assignBySource (rig, 8, "noise.stereo", -30.0f);
+    const int s2 = assignBySource (rig, 9, "noise.filter", 25.0f);
+    CHECK (s0 >= 0 && s1 >= 0 && s2 >= 0 && s0 != s1 && s1 != s2);
+    auto& m = rig.editor->context().assign.matrix();
+    CHECK_EQ (static_cast<int> (m.get (modSlotParams (s0).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("sub.phase").index))));
+    CHECK_EQ (static_cast<int> (m.get (modSlotParams (s2).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("noise.filter").index))));
+    auto& flow = rig.editor->context().assign.flow();
+    rig.editor->context().assign.tapSource (7);
+    CHECK (! flow.isTarget (resolveKey ("sub.phase_contiguous").index));
+    CHECK (! flow.isTarget (resolveKey ("noise.type").index));
+    CHECK (! flow.isTarget (resolveKey ("noise.bounce").index));
+}
+
 TEST (uig_sub_and_noise_knobs_take_modulation_by_touch)
 {
     Rig rig (Page::osc);

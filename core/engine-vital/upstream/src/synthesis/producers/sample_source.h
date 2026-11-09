@@ -38,6 +38,7 @@ namespace sbvital {
         int length;
         int sample_rate;
         bool stereo;
+        bool colour = false;   // GROUPA1: White / Pink / Brown / Geiger (noise.stereo and noise.filter act on these only)
         std::vector<std::unique_ptr<mono_float[]>> left_buffers;
         std::vector<std::unique_ptr<mono_float[]>> left_loop_buffers;
         std::vector<std::unique_ptr<mono_float[]>> right_buffers;
@@ -116,6 +117,13 @@ namespace sbvital {
 
       void setNoiseType(int type);
 
+      /** GROUPA1 (noise.type = Sample): a user sample as the noise source. `makeUserData` builds the band limited buffers on any thread
+          (right may be null = mono); `useUserData` (audio thread, a pointer swap like setNoiseType) plays it, nullptr goes back to the
+          generator last selected with setNoiseType. The caller keeps the data alive while it is selected. */
+      static std::unique_ptr<SampleData> makeUserData(const mono_float* left, const mono_float* right, int size, int sample_rate);
+      void useUserData(SampleData* data);
+      bool activeIsColour() const { auto* d = active_audio_data_.load(); return d != nullptr && d->colour; }
+
       json stateToJson();
       void jsonToState(json data);
 
@@ -126,6 +134,7 @@ namespace sbvital {
       std::atomic<SampleData*> active_audio_data_;
       std::unique_ptr<SampleData> data_;
       std::unique_ptr<SampleData> noise_data_[kNumNoiseTypes];
+      int noise_type_ = 0;
 
       JUCE_LEAK_DETECTOR(Sample)
   };
@@ -153,6 +162,8 @@ namespace sbvital {
         kPan,
         kNoteCount,
         kPhase,
+        kStereo,    // GROUPA1: 0 .. 1, colour samples only (0 = mono, 1 = no correlation between left and right)
+        kFilter,    // GROUPA1: -1 .. 1, colour samples only (negative low pass, positive high pass, 0 = off)
         kNumInputs
       };
 
@@ -172,6 +183,10 @@ namespace sbvital {
     private:
       poly_float snapTranspose(poly_float input_midi, poly_float transpose, int quantize);
 
+      void colourStage(poly_float* raw, int num_samples, poly_mask reset_mask);
+
+      poly_float filter_lp1_ = 0.0f, filter_lp2_ = 0.0f;   // two one-pole stages per lane (GROUPA1 noise.filter)
+      bool filter_active_ = false;
       poly_float pan_amplitude_;
       int transpose_quantize_;
       poly_float last_quantized_transpose_;

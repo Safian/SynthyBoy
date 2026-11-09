@@ -232,9 +232,9 @@ WT = {'kParamInitialPhase': ('osc#.phase', lin(1)), 'kParamRandomPhase': ('osc#.
       'kParamPhaseMemory': ('osc#.phase_memory', PHASEMEM)}
 NOISE = {'kParamVolume': ('noise.level', lin(100)), 'kParamPan': ('noise.pan', lin(2)), 'kParamEnable': ('noise.on', boolean), 'kParamPitch': ('noise.pitch', lin(1))}
 NOISEOSC = {'kParamFine': ('noise.fine', lin(100)), 'kParamInitialPhase': ('noise.phase', lin(1)), 'kParamRandomPhase': ('noise.random_phase', boolean),
-            'kParamOneShot': ('noise.loop', lin(-1, 1))}
+            'kParamOneShot': ('noise.loop', lin(-1, 1)), 'kParamColor': ('noise.filter', lin(200, -100))}
 SUB = {'kParamVolume': ('sub.level', lin(100)), 'kParamPan': ('sub.pan', lin(2)), 'kParamEnable': ('sub.on', boolean), 'kParamOctave': ('sub.octave', lin(1))}
-SUBOSC = {'kParamShape': ('sub.waveform', SUBSHAPE)}
+SUBOSC = {'kParamShape': ('sub.waveform', SUBSHAPE), 'kParamInitialPhase': ('sub.phase', lin(100.0 / 360.0)), 'kParamContiguousPhase': ('sub.phase_contiguous', boolean)}
 FILTER = {'kParamEnable': ('filter#.on', boolean), 'kParamFreq': ('filter#.cutoff', note_hz), 'kParamReso': ('filter#.resonance', lin(1)), 'kParamDrive': ('filter#.drive', lin(0.2)),
           'kParamVar': ('filter#.var', lin(1)), 'kParamWet': ('filter#.mix', lin(1)), 'kParamKeyTrack': ('filter#.keytrack', lin(100)), 'kParamLevelOut': ('filter#.level', db),
           'kParamStereo': ('filter#.pan', lin(2, -100)), 'kParamPad': ('filter#.clean_mode', boolean), 'kParamX': ('filter#.formant.x', lin(100)), 'kParamY': ('filter#.formant.y', lin(100))}
@@ -542,6 +542,49 @@ class Audit:
             self.err(name, 'unexplained non-default key %s = %s' % (k, params[k]))
         self.stats['strays'] += len(strays)
         self.audit_content(name, tree, sb, content_dir)
+        self.audit_noise(name, tree, sb)
+
+    SERUM_ROOT = ''
+
+    def audit_noise(self, name, tree, sb):
+        """GROUPA1 (WP-04, A348): the noise source plays the embedded data, else the file of the Noises folder, unless the preset names a colour; a colour's
+        kParamColor is the FILTER knob; a sample noise has no filter."""
+        o = tree.get('Oscillator3', {})
+        no = o.get('NoiseOsc3') if isinstance(o, dict) else None
+        params = sb['state']['params']
+        stored = [x for x in sb['state'].get('content', {}).get('samples', []) if x['osc'] == 4]
+        if not isinstance(no, dict):
+            if params.get('noise.type', 0) != 0 or stored:
+                self.err(name, 'noise.type / noise sample without a NoiseOsc3 block')
+            return
+        pp = no.get('plainParams') if isinstance(no.get('plainParams'), dict) else {}
+        colour = pp.get('kParamNoiseType') in ('White', 'Pink', 'Brown', 'Geiger')
+        rel = no.get('relativePathToNoiseSample')
+        emb = no.get('embeddedNoiseData')
+        have = None
+        if not colour:
+            if isinstance(emb, list) and emb and isinstance(emb[0], list) and emb[0]:
+                have = 'embedded'
+            elif isinstance(rel, str) and os.path.isfile(os.path.join(self.SERUM_ROOT, 'Samples', 'Factory Non-Tonal', 'Noises', rel.replace('\\', '/').lstrip('/'))):
+                have = 'file'
+        typ = params.get('noise.type', 0)
+        self.stats['noise sources checked'] += 1
+        if have:
+            if typ != 1 or len(stored) != 1:
+                self.err(name, 'noise sample (%s): noise.type %s, %d stored samples' % (have, typ, len(stored)))
+            elif have == 'embedded' and stored[0]['frames'] != len(emb[0]):
+                self.err(name, 'embedded noise sample: %d frames stored, %d in the preset' % (stored[0]['frames'], len(emb[0])))
+            elif have == 'embedded':
+                self.stats['embedded noise samples'] += 1
+        else:
+            if typ != 0 or stored:
+                self.err(name, 'no noise sample can be read, yet noise.type %s with %d stored samples' % (typ, len(stored)))
+        if colour and isinstance(pp.get('kParamColor'), (int, float)):
+            want = max(-100.0, min(100.0, (pp['kParamColor'] - 0.5) * 200.0))
+            if abs(params.get('noise.filter', 0.0) - want) > 2e-4 * 100:
+                self.err(name, 'noise.filter: expected %.4g (kParamColor %s) got %s' % (want, pp['kParamColor'], params.get('noise.filter')))
+        elif not colour and params.get('noise.filter', 0.0) != 0.0:
+            self.err(name, 'noise.filter set on a sample noise')
 
     SERUM_DEFAULTS = [(r'osc(\d)\.on$', lambda m: 1.0 if m.group(1) == '1' else 0.0), (r'(noise|sub)\.on$', lambda m: 0.0), (r'filter\d\.on$', lambda m: 0.0),
                       (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.spread$', lambda m: 100.0),
@@ -711,6 +754,7 @@ def main():
     a = ap.parse_args()
     content_dir = a.content_dir or os.path.join(a.imported, 'content')
     audit = Audit(a.v)
+    Audit.SERUM_ROOT = a.serum
     pairs = find_pairs(a.serum, a.imported)
     first = None
     for rel, src, rep, sb in pairs:

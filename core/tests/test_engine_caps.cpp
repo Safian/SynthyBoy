@@ -53,18 +53,24 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
     }
     // block B17: its five bits sit apart from the work package bits
     for (const EngineCapsMask b : { kCapFxCompressorLimit, kCapFxDelayExtras, kCapFxDistortionExtras, kCapFxPhaserDepth2, kCapFxReverbAlgos, kCapSubOsc, kCapNoiseExtras,
-                                     kCapVoiceSteal, kCapPolyLegato, kCapBendDownRange, kCapStereoSpread, kCapLfoSwing, kCapQualityOptions, kCapModAmount, kCapEnv1Toggle, kCapFxInstances })
+                                     kCapVoiceSteal, kCapPolyLegato, kCapBendDownRange, kCapStereoSpread, kCapLfoSwing, kCapQualityOptions, kCapModAmount, kCapEnv1Toggle, kCapFxInstances, kCapSubPhase, kCapNoiseColour, kCapNoiseSample })
     {
         CHECK (std::strlen (capName (b)) > 0);
         if (! CHECK ((all & b) != 0))
             std::printf ("    bit %s has no key\n", capName (b));
     }
     CHECK_EQ (all & ~kCapAllKnown, static_cast<EngineCapsMask> (0));
-    CHECK_EQ (all >> 51, static_cast<EngineCapsMask> (0)); // bits 44 .. 48 (the warp modes) are needed by values of a choice list only
+    CHECK_EQ (all >> 55, static_cast<EngineCapsMask> (0)); // bits 44 .. 48 (the warp modes) are needed by values of a choice list only
 
     struct Case { const char* key; EngineCapsMask caps; };
     const Case cases[] = {
         { "macro.7", kCapMacros58 },
+        { "sub.phase", kCapSubPhase },
+        { "sub.phase_contiguous", kCapSubPhase },
+        { "noise.stereo", kCapNoiseColour },
+        { "noise.filter", kCapNoiseColour },
+        { "noise.type", kCapNoiseSample },
+        { "noise.bounce", kCapNoiseSample },
         { "osc2.remap.slot", kCapWtRemap },
         { "osc3.remap.fall", kCapWtRemap },
         { "chorus.level", kCapFxLevel },

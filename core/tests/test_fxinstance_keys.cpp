@@ -48,7 +48,7 @@ TEST (fxi_block_b22_is_28_keys_per_slot_behind_b21)
     {
         int slot = -1, number = -2;
         const bool isSlotKey = fxInstanceOfParam (i, slot, number);
-        CHECK_EQ (isSlotKey, i >= 1603);
+        CHECK_EQ (isSlotKey, i >= 1603 && i < 1603 + 16 * 28); // (the keys behind block B22 belong to later blocks)
         if (isSlotKey)
         {
             CHECK_EQ (slot, static_cast<int> (i - 1603) / 28);

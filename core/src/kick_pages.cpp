@@ -105,12 +105,14 @@ constexpr const char* s_more_reverb1[] = {
 };
 
 constexpr const char* s_more_sub[] = {
-    "sub.filter_blend", "sub.bus1_send", "sub.bus2_send"
+    "sub.filter_blend", "sub.bus1_send", "sub.bus2_send",
+    "sub.phase", "sub.phase_contiguous" // B23
 };
 
 constexpr const char* s_more_noise[] = {
     "noise.sample", "noise.pitch", "noise.fine", "noise.phase",
-    "noise.random_phase", "noise.keytrack", "noise.loop"
+    "noise.random_phase", "noise.keytrack", "noise.loop",
+    "noise.type", "noise.bounce", "noise.stereo", "noise.filter" // B23
 };
 
 constexpr const char* s_more_mod_matrix[] = {
@@ -265,7 +267,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 12: Osc 3 Morph & Warp (Osc)
     { "osc3_shaping", "Osc 3 Morph & Warp", "Osc", { "osc3.morph.type", "osc3.morph.amount", "osc3.morph.spread", "osc3.warp.type", "osc3.warp.amount", "osc3.warp.phase", "osc3.warp.spread", "osc3.frame_spread" }, 8, nullptr, 0 },
     // Page 13: Noise & Osc Mix (Osc)
-    { "noise", "Noise & Osc Mix", "Osc", { "noise.on", "noise.level", "noise.pan", "noise.destination", "filter.routing", "osc1.level", "osc2.level", "osc3.level" }, 8, s_more_noise, 7 },
+    { "noise", "Noise & Osc Mix", "Osc", { "noise.on", "noise.level", "noise.pan", "noise.destination", "filter.routing", "osc1.level", "osc2.level", "osc3.level" }, 8, s_more_noise, 11 },
     // Page 14: Filter 1 Main (Filter)
     { "filter1_main", "Filter 1 Main", "Filter", { "filter1.on", "filter1.model", "filter1.style", "filter1.cutoff", "filter1.resonance", "filter1.drive", "filter1.blend", "filter1.mix" }, 8, nullptr, 0 },
     // Page 15: Filter 1 Key & Formant (Filter)
@@ -469,7 +471,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 114: Reverb Algorithm (FX)
     { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, nullptr, 0 },
     // Page 115: Sub Oscillator (Osc), block B18 (13-new-keys.md 4.18)
-    { "sub_main", "Sub Oscillator", "Osc", { "sub.on", "sub.waveform", "sub.octave", "sub.tune", "sub.level", "sub.pan", "sub.destination", "sub.mono" }, 8, s_more_sub, 3 },
+    { "sub_main", "Sub Oscillator", "Osc", { "sub.on", "sub.waveform", "sub.octave", "sub.tune", "sub.level", "sub.pan", "sub.destination", "sub.mono" }, 8, s_more_sub, 5 },
     // Page 116: Voice & Stereo (Master), block B15 (13-new-keys.md 4.19): same-note / steal modes, poly legato, bend up / down, stereo spread
     { "voice_global", "Voice & Stereo", "Master", { "master.voice.same_note", "master.voice.steal_priority", "master.poly_legato", "master.bend_range", "master.bend_down_range", "master.bend_down_link", "master.stereo_spread", "master.polyphony" }, 8, nullptr, 0 },
     // Page 117: Quality Options (Master)

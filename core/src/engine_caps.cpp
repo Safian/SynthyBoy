@@ -110,8 +110,14 @@ EngineCapsMask classify (const char* key) noexcept
     }
     if (std::strcmp (key, "voice.phase_legato") == 0)
         return kCapPitchUnison;
+    if (std::strcmp (key, "sub.phase") == 0 || std::strcmp (key, "sub.phase_contiguous") == 0)
+        return kCapSubPhase;
     if (startsWith (key, "sub."))
         return kCapSubOsc;
+    if (std::strcmp (key, "noise.stereo") == 0 || std::strcmp (key, "noise.filter") == 0)
+        return kCapNoiseColour;
+    if (std::strcmp (key, "noise.type") == 0 || std::strcmp (key, "noise.bounce") == 0)
+        return kCapNoiseSample;
     if (startsWith (key, "noise."))
     {
         if (endsWith (key, ".filter_blend") || endsWith (key, "_send"))
@@ -320,6 +326,9 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapEnv1Toggle:       return "env1_toggle";
         case kCapFxInstances:      return "fx_instances";
         case kCapFilterModels2:    return "filter_models2";
+        case kCapSubPhase:         return "sub_phase";
+        case kCapNoiseColour:      return "noise_colour";
+        case kCapNoiseSample:      return "noise_sample";
         case kCapNone:             break;
     }
     return "";

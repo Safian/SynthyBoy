@@ -85,3 +85,7 @@ synthyboy_add_test(synthyboy_test_vital_dsp test_vital_dsp.cpp ${SBVITAL_PORTED_
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_dsp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/synthesis")
 set_source_files_properties(${SBVITAL_PORTED_TESTS} PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/w,-w>")
+
+synthyboy_add_test(synthyboy_test_vital_noisesample test_noisesample.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_noisesample PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")

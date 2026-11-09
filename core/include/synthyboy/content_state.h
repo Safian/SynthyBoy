@@ -16,7 +16,8 @@ namespace synthyboy
 {
 constexpr size_t kMaxContentStringBytes = 255;   // name, author, pack, file, filter, source
 constexpr int kMaxContentWavetables = 3;         // one per oscillator (oscN.wavetable = Preset table)
-constexpr int kMaxContentSamples = 3;            // one per oscillator (oscN.type = Sample)
+constexpr int kNoiseSampleOsc = 4;               // content.samples[].osc of the noise source (noise.type = Sample, GROUPA1 WP-04)
+constexpr int kMaxContentSamples = 4;            // one per oscillator (oscN.type = Sample) and one for the noise source (osc 4)
 constexpr int kMaxSampleSlices = 128;
 constexpr int kMaxContentLfoShapes = 10;         // one per LFO (lfoN.shape = Custom)
 constexpr int kMaxLfoShapePoints = 128;
@@ -51,7 +52,7 @@ struct ContentWavetable
 
 struct ContentSample
 {
-    int osc = 0; // 1..3
+    int osc = 0; // 1..3 = the oscillator, 4 = the noise source (kNoiseSampleOsc)
     ContentFileRef ref;
     int sampleRate = 0, frames = 0, channels = 0;
     std::vector<float> slices; // 0..1, ascending

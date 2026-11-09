@@ -129,6 +129,9 @@ public:
     bool loadSample (const std::string& area, const std::string& relPath, const std::string& displayName, int osc, const std::string& path, int baseNote, int* sampleFramesOut = nullptr,
                      int* sampleRateOut = nullptr, std::vector<float>* slices = nullptr);
     bool readContent (const char* area, const std::string& rel, std::vector<uint8_t>& bytes);
+    // the sample of the noise source (GROUPA1, WP-04): a file of the Noises folder, or the data embedded in the preset
+    bool noiseSampleFromFile (const std::string& relPath, const std::string& path);
+    bool noiseSampleFromEmbedded (int embNode, int metaNode, const std::string& path);
     bool pointsFromCurve (int curveNode, std::vector<ContentPoint>& out, bool closeAtOne, int* loopback = nullptr);
     bool applyMultisample (int osc, int msNode, const std::string& path, int* rootOut);
 
