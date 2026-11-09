@@ -151,7 +151,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S04-01 | S p.69 | Select the sampler (oscillator type Sample) | DONE | `oscN.type` (PT:315); t_wp4 `sample_oscillator_type_plays_the_content_sample_at_the_key_pitch` :179 |  |
 | S04-02 | S p.68, 70 | Choose / load a sample: list, Load Sample, show location, reload; root note from the file name or WAV chunk | DONE (WP-01) | engine reads `content.samples` through an IContentStore (t_wp4 :179) but the shell sets none and has no file chooser (X01-01) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S04-03 | S p.71 | Sample START / END markers | DONE (WP-01) | `oscN.sample.start`, `.end` (PT:582..); OscWaveView.cpp:504; ui_gaps `uig_sample_view_markers_loupe_loop_pair` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
-| S04-04 | S p.72 | Sample ops: Show Marker Animation, Zoom to Start / End | DONE (WP-01, range band; live position WP-17) | zoom / pan: OscWaveView.cpp:336; ui_gaps `uig_sample_view_zoom_pan_buttons_pinch_wheel` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S04-04 | S p.72 | Sample ops: Show Marker Animation, Zoom to Start / End | DONE (WP-01 range band, GROUPA2 WP-17 live marker: `OscWaveView.cpp:409`, test `content_sample_marker_animation_shows_the_live_unison_start`) | zoom / pan: OscWaveView.cpp:336; ui_gaps `uig_sample_view_zoom_pan_buttons_pinch_wheel` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S04-05 | S p.72-73 | Snap Off / Zero / Beats / Loop | DONE (WP-01) | none ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S04-06 | S p.73 | Fade Edges, Normalize, Reverse | DONE | `oscN.sample.fade_edges`, `.normalize`, `.reverse`; t_wp4 `sample_scan_normalize_fades_slices_and_unison_start` :250, `sample_loop_modes_start_end_and_reverse` :205 |  |
 | S04-07 | S p.73 | Trim (cut the sample to start / end) | DONE (WP-01) | none (start / end exist) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
@@ -306,7 +306,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S11-30 | S p.210 | Matrix-only sources: Note-On Alt 1 / 2 | MISSING | none |  |
 | S11-31 | S p.210 | Matrix-only sources: Note-On Rand 1 / 2 and Rand (Discrete) | PARTIAL | one per-note `random` source (Vital) | second random, discrete variant missing |
 | S11-32 | S p.210 | Matrix-only sources: Release Velocity | MISSING | note-off velocity reaches the engine (kCapEventContract, ct_events) but is not a source |  |
-| S11-33 | S p.210 | Matrix-only sources: Voice Index, Voice Mod 1 / 2 | MISSING | none | depends on voice control (S15-08) |
+| S11-33 | S p.210 | Matrix-only sources: Voice Index, Voice Mod 1 / 2 | DONE (GROUPA2 WP-07; Active Voices stays WP-06) | modSources 40 .. 42 (`voice_index`, `voice_mod1`, `voice_mod2`, `kCapVoiceSources`); `voicecontrol_voice_index_and_voice_mods_are_modulation_sources`; Serum ids 56 / 57 / 58 map to them | |
 | S11-34 | S p.210 | Expression / MPE X / Y / Z as sources | PARTIAL | `slide` (Y), `poly_aftertouch` (Z), `lift`, `oct_note` exist; per-note bend (X) drives pitch only | no X source |
 | S11-35 | S p.211 | Sources Mod Wheel, Aftertouch, Poly Aftertouch, Pitch Bend | DONE | modSources 23-28, 35-38 (docs/params.json); t_vital_audio `matrix_macro_velocity_and_mod_wheel_are_sources` :586 |  |
 | S11-36 | S p.211 | Source Fixed (constant 1 with depth slider) | MISSING | none | tiny |
@@ -316,11 +316,11 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S11-40 | S p.211-212 | AUX SOURCE, INV, aux CRV, OUTPUT | DONE | `modNN.aux_source/inv/power/output`; t_wp123 `aux_source_multiplies_the_slot` :266 |  |
 | S11-41 | S p.212-213 | Matrix expand, move row, bypass, remove | DONE | ui_gaps `uig_mod_swap_slots_model_and_matrix_row_handle`; ModMatrixReorder.h |  |
 | S11-42 | S p.214 | Matrix ops: sort by source / destination, vibrato, Velo->Amp, bake macros, init | DONE | ModMatrixPanel.cpp:735-765; ModLogic.h:386; ui_model `ui_mod_snapshot_and_slot_editing` |  |
-| S11-43 | S p.214 | Matrix op: Lock Matrix (keep assignments on preset change) | PARTIAL | menu item exists (ModMatrixPanel.cpp:737, 760) | the flag `matrixLocked` is read nowhere (ModMatrixPanel.cpp:840): no effect |
+| S11-43 | S p.214 | Matrix op: Lock Matrix (keep assignments on preset change) | DONE (GROUPA2 WP-02) | lock name `matrix` (`modNN.*` + `content.mod_curves`); `ModMatrixPanel.cpp:785`; same test as S15-13 | |
 | S11-44 | V p.24-25, audit G1 | Modulation of another connection's amount (`X -> modulation_N_amount`) | IN-PROGRESS | G1, worker mod-amount (B20): 52 connections in 17 of 35 real presets |  |
 | S11-45 | V p.23, audit G4 | Modulation source `stereo` | IN-PROGRESS | G4, worker mod-amount (B20) |  |
 | S11-46 | audit G3 | Modulation of portamento time, polyphony, stereo routing | IN-PROGRESS | G3, worker mod-amount (B20) |  |
-| S11-47 | V p.16 | Live modulation display: cyan value line on knobs, LFO / envelope playheads, random-LFO history, hover audition | MISSING | UiHost offers voice count, CPU, scope, peaks only (UiHost.h:84-90); the halo shows depth, not the live value | 14 row 10 (random-LFO history needs engine data): needs an engine to UI modulation read-out |
+| S11-47 | V p.16 | Live modulation display: cyan value line on knobs, LFO / envelope playheads, random-LFO history, hover audition | DONE (GROUPA2 WP-17; hover audition stays out) | `LiveValues` (readout.h), `updateReadout` (`vital_engine.cpp:1271`), `LiveBus.cpp:172`, the knob mark (`Overlays.cpp:115`), `LfoPanel.cpp:268`, `EnvCurveView.cpp:55`; tests `synthyboy_test_vital_readout`, `content_live_bus_...` (`test_ui_content.cpp:1740`), `content_a_modulated_knob_...` (`:1816`), `content_lfo_displays_...` (`:1873`), `content_envelope_view_...` (`:1949`) | hover audition (a touch UI has no hover) |
 
 ### S12 Serum 2: voicing, keyboard, clips, arp (p.215-273)
 
@@ -375,25 +375,25 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
 | S15-01 | S p.313 | Preferences: help tooltips, parameter value bubbles | DONE | Editor.h:74; ParamControls.cpp:152 ValueBubble |  |
-| S15-02 | S p.313 | Preference: double-click resets or opens a value box | PARTIAL | GlbSettingsPanel.cpp:53-58 toggle | the toggle flips a private bool; nothing reads it (grep dblTapIsReset: this file only); no preference storage exists |
-| S15-03 | S p.314 | Preferences: mouse-wheel parameter control, keyboard shortcuts on/off, default waveform view 2D / 3D | MISSING | none | needs a preferences store (user dir exists: core/src/shell_features.cpp) |
-| S15-04 | S p.314 | Preferences: MPE enabled by default, pitch bend also maps to Expr X, Expr Y bipolar | PARTIAL (GROUPA1 WP-09) | the keys `master.mpe.bend_to_x`, `master.mpe.y_bipolar` exist (B24) and act; "MPE enabled by default" is the key `master.mpe.on` in the preset | the preference store that sets the keys for a new instance is WP-02 |
-| S15-05 | S p.314-315 | Preferences: limit mod depth on drop, mod wheel -> WT POS, load MIDI map from presets, ultra quality render, update check | MISSING | none | update check = n/a (store) |
-| S15-06 | S p.315 | Preference: silence notes and FX tails when the host stops | PARTIAL | GlbSettingsPanel.cpp:69-75 toggle | flag read nowhere; the engine has no transport-stop handling for it |
-| S15-07 | S p.313-315, V p.42 | Frequency units option Hz / semitones | PARTIAL | GlbSettingsPanel.cpp:61-66 toggle | flag read nowhere (grep freqIsHz: this file only) |
-| S15-08 | S p.316-317 | Voice control: select oscillators, load / init a configuration, 1-8 step sequence of per-voice values | MISSING | none (grep voice_control: no hits in core, shells, params.json) | G17 |
-| S15-09 | S p.318 | Voice control randomization: PAN, DETUNE, CUTOFF, ENVS | MISSING | none | G17 |
-| S15-10 | S p.318 | Voice control scaling of all envelope and LFO times | MISSING | none | G17 |
-| S15-11 | S p.319 | Voice control save / presets | MISSING | none | G17; needs the user store |
+| S15-02 | S p.313 | Preference: double-click resets or opens a value box | DONE (GROUPA2 WP-02) | `Preferences::doubleClickResets` (preferences.h:16); `ParamControls.cpp:414` (reset or `showValueBox`); test `content_preferences_change_how_the_controls_behave` (`test_ui_content.cpp:1112`) | the dead toggle of GlbSettingsPanel is replaced by the 14 preference toggles |
+| S15-03 | S p.314 | Preferences: mouse-wheel parameter control, keyboard shortcuts on/off, default waveform view 2D / 3D | DONE (GROUPA2 WP-02) | `mouseWheel`, `keyboardShortcuts`, `waveform3d`; `ParamControls.cpp:457`, `Editor.cpp:191`, `OscWaveView.cpp`, `WavetablePanel.cpp`; tests `content_preferences_*` (`test_ui_content.cpp:1071`, `:1112`, `:1237`) | |
+| S15-04 | S p.314 | Preferences: MPE enabled by default, pitch bend also maps to Expr X, Expr Y bipolar | DONE (GROUPA2 WP-02) | `mpeByDefault`, `mpeBendToX`, `mpeYBipolar` set the keys of a new instance (JUCE `PluginProcessor.cpp` constructor, native `synthyboy_clap.cpp`); tests `content_a_new_instance_takes_the_mpe_preferences_unless_the_user_saved_a_default` (`test_ui_content.cpp:1672`), `native_clap_preferences_mpe_defaults_default_midi_map_and_preset_changes` | a saved default patch wins (A383) |
+| S15-05 | S p.314-315 | Preferences: limit mod depth on drop, mod wheel -> WT POS, load MIDI map from presets, ultra quality render, update check | DONE (GROUPA2 WP-02; the update check is n/a) | `limitModDepth` (`ModModel.cpp:203`), `modWheelToWtPos` (`WavetableEditorSheet.cpp`), `loadMidiMapFromPresets` (`PluginProcessor.cpp:104`), `ultraRender` (`IEngine::setUltraRender`); tests `content_preferences_limit_the_mod_depth_...` (`test_ui_content.cpp:1237`), `content_midi_map_files_default_map_and_the_map_of_a_preset` (`:1352`), `content_the_juce_shell_bounces_at_ultra_quality_when_the_preference_is_on` (`:1644`), `synthyboy_test_vital_silence` `ultra_render_is_the_4x_oversampling_of_the_quality_option` | WP-15 consumes the same flag for the offline render |
+| S15-06 | S p.315 | Preference: silence notes and FX tails when the host stops | DONE (GROUPA2 WP-02) | `IEngine::silence ()` (`vital_engine.cpp:541`), `TransportStopWatch`, both shells (`PluginProcessor.cpp:412`, `synthyboy_clap.cpp:351`); tests `silence_ends_the_notes_and_flushes_the_tails_at_once`, `content_the_juce_shell_silences_notes_and_tails_when_the_host_transport_stops` (`test_ui_content.cpp:1597`), `native_clap_silences_notes_and_tails_when_the_host_stops` | |
+| S15-07 | S p.313-315, V p.42 | Frequency units option Hz / semitones | DONE (GROUPA2 WP-02) | `freqSemitones`; `displayText (info, plain, semitones)` / `valueText` (`ControlModel.cpp`, `UiContext.h`), value box `Sheet.cpp`; test `content_preference_frequency_units_show_and_take_semitones` (`test_ui_content.cpp:1205`) | semitones from middle C, cutoff-type readouts only (A382) |
+| S15-08 | S p.316-317 | Voice control: select oscillators, load / init a configuration, 1-8 step sequence of per-voice values | DONE (GROUPA2 WP-07) | `voicectl.length`, `.sN.{pan,detune,cutoff,env,mod1,mod2}`, `.osc.{a,b,c,noise,sub}` (B26, PT:2063-2124); `voice_handler.cpp:218`; `GlbVoiceControlPanel.h:97`; tests `synthyboy_test_vital_voicecontrol` (10 cases), `content_voice_control_panel_steps_length_init_presets_and_style_file` (`test_ui_content.cpp:940`) | |
+| S15-09 | S p.318 | Voice control randomization: PAN, DETUNE, CUTOFF, ENVS | DONE (GROUPA2 WP-07) | `voicectl.rand.*` (+ the x10 switch); `voicecontrol_randomisation_is_stable_per_note_and_differs_between_notes` | |
+| S15-10 | S p.318 | Voice control scaling of all envelope and LFO times | DONE (GROUPA2 WP-07) | `voicectl.scale.env`, `.scale.lfo`, `.scale.lfo_mode`; `voicecontrol_envelope_time_per_voice_and_scaling_of_all_envelopes`, `voicecontrol_lfo_scaling_by_percent_and_by_rate` | |
+| S15-11 | S p.319 | Voice control save / presets | DONE (GROUPA2 WP-07) | user library category `voice_control` (`serializeVoiceControlPreset`, `library_items.cpp`), the Presets button of the panel (`GlbVoiceControlPanel.h:279`), `.SerumStyle` import (18 files, 0 dropped); tests `library_item_voice_control_holds_the_62_keys_and_applies_a_complete_configuration`, `serum_style_files_are_complete_voice_control_configurations` | |
 | S15-12 | S p.319 | Quality Draft / High / Ultra (1x / 2x / 4x) | DONE | tiers (IEngine::setQuality) + `quality.oversample_4x`; t_wp_voiceglb `oversample_4x_changes_the_aliasing` :534; GlbQualityPanel.cpp:254 | switching 4x ends sounding notes (14 row 29) |
-| S15-13 | S p.319 | Lock the quality across preset loads | MISSING | none | small: module lock for `quality.*` |
+| S15-13 | S p.319 | Lock the quality across preset loads | DONE (GROUPA2 WP-02) | lock name `quality`; the Quality panel button (`GlbQualityPanel.cpp:30`); test `content_locks_of_the_global_settings_matrix_quality_tuning_survive_a_preset_change` (`test_ui_content.cpp:1458`) | |
 | S15-14 | S p.319 | S1 Compatibility Mode (Serum 1 presets) | MISSING | none | no Serum preset importer exists; owner decision (probably drop) |
 | S15-15 | S p.320 | Disable parameter smoothing | DONE | `quality.no_smoothing`; t_wp_voiceglb `no_smoothing_makes_a_parameter_jump_instant` :582 |  |
 | S15-16 | S p.320 | Concert pitch A4 | DONE | `master.tuning.a4` (PT:571); t_wp123 `tuning_concert_pitch_scales_user_file_and_mts_esp` :673; GlbTuningPanel.cpp:341 |  |
 | S15-17 | S p.320 | Tuning files .tun (+ .scl / .kbm), clear tuning | DONE | core/tuning; `master.tuning.scale`; GlbTuningPanel.cpp:255 file chooser; core/tuning/test_tuning.cpp |  |
 | S15-18 | S p.321 | MTS-ESP tuning (enable, note-on only), .tun takes precedence | PARTIAL | `master.tuning.mts_esp`, `.mts_note_on_only`; core/include/synthyboy/tuning.h seam; fake source in t_wp123 :673 | libMTSClient not linked, licence not verified (14 row 5) |
-| S15-19 | S p.321 | Lock the tuning configuration | MISSING | none | small: module lock for `master.tuning.*` |
-| S15-20 | S p.322 | Build version and date | DONE | GlbSettingsPanel.cpp:94 About text | hard-coded string 'v0.1.0 ... ContentPacks: OK' |
+| S15-19 | S p.321 | Lock the tuning configuration | DONE (GROUPA2 WP-02) | lock name `master.tuning` (keys + tuning table); the "Tuning Lock" button (`GlbTuningPanel.cpp:130`); same test | |
+| S15-20 | S p.322 | Build version and date | DONE (GROUPA2 WP-02) | `UiHost::aboutText ()` (CMake version `SYNTHYBOY_VERSION_STRING`, `__DATE__`, engine, parameters, packs); test `content_about_line_comes_from_the_build` (`test_ui_content.cpp:1338`) | the hard-coded string is gone |
 | S15-21 | S p.325-326 | MPE: enable, XYZ -> Macro 1 / 2 / 3, YZ -> Macro 1 / 2, Y -> Mod Wheel, bend range 1-96 | DONE (GROUPA1 WP-09) | `master.mpe.on`, `.bend_range`, `.xyz_macro`, `.y_modwheel`, `.bend_to_x`, `.y_bipolar` (B24, PT:2057-2060); vital_engine.cpp `mpeAxis`; t_mpe (5 cases); GlbMpePanel.cpp:197 | closed by GROUPA1: docs/ui-design/GROUPA1-REPORT.md; the encoding of Serum's `mpeConfig` is unknown (14 row 67) |
 
 ### S16 Serum 2: appendices (p.323-354)
@@ -403,13 +403,13 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S16-01 | S p.323-324 | Main menu: Init Preset, Init LFOs, Init Modulations, Revert to Saved, Save as Default | DONE | GlbSettingsPanel.cpp:27-48, 160-220; ui_gaps `uig_settings_buttons_act_and_confirm_with_a_toast`; ct_shell_features `shell_user_default_round_trip` :282 |  |
 | S16-02 | S p.324 | Main menu: Load Preset, Import Preset Pack, folders, rescan | EXCLUDED | Kick |  |
 | S16-03 | S p.324 | Main menu: Render OSC Warp, Resample | MISSING | none | see S13 (G53) |
-| S16-04 | S p.325 | Main menu: Load / Save MIDI Map files, default map | PARTIAL | map lives in the state / shell section (ct_shell_features `shell_midi_map_bindings_round_trip` :110; native_clap_midi_map_in_state_drives_parameters) | no file load / save of a map, no default map |
+| S16-04 | S p.325 | Main menu: Load / Save MIDI Map files, default map | DONE (GROUPA2 WP-02) | `serializeMidiMap` / `parseMidiMap` / default map file (`preferences.cpp`), the four buttons of the settings (`GlbSettingsPanel.h`), `.SerumMIDIMap` and preset `midiMap` import (macros); tests `midi_map_files_default_map_and_serum_ids`, `content_midi_map_files_default_map_and_the_map_of_a_preset` (`test_ui_content.cpp:1352`), `serum_midi_cc_maps_of_presets_and_map_files_become_bindings` | Serum ids of other modules than the macros are not known (question 74) |
 | S16-05 | S p.325 | Main menu: Load Tuning (.tun) | DONE | GlbTuningPanel.cpp:255 |  |
 | S16-06 | S p.340-343 (C) | Preferences file: default artist; preset change by MIDI / notes | EXCLUDED | Kick preset browser |  |
 | S16-07 | S p.344-345 (D) | Serum file structure | EXCLUDED | not a function |  |
 | S16-08 | S p.346-347 (E) | Creating wavetables (help text) | MISSING | none | help text in the import sheet (small) |
 | S16-09 | S p.348 (F) | Optimizing: CPU tiers, unison | DONE | tiers; t_vital_params `quality_tiers_cap_without_touching_the_parameters` :308 |  |
-| S16-10 | S p.349-353 (G) | Keyboard shortcuts | PARTIAL | Editor.cpp:182 keyPressed (undo / redo) | desktop shortcut set not built; every function has a touch alternative |
+| S16-10 | S p.349-353 (G) | Keyboard shortcuts | PARTIAL (GROUPA2 WP-02: the set that makes sense is built) | Cmd/Ctrl-click reset, Shift-drag fine, Shift-Alt-click polarity (`ParamControls.cpp:293`, `:306`), Alt-click filter display, undo / redo; gated by the preference; the rest (preset browser, clips, piano roll, Option-F, Renders folder) is Kick or not applicable, see 13-new-keys 4.31 | |
 
 ### V01 Vital manual (unofficial, 43 pages as cited)
 
@@ -427,7 +427,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | V01-10 | V p.8-9 | Unison and phase settings | DONE | see S02 |  |
 | V01-11 | V p.10 | FM / RM from another oscillator or the sampler | PARTIAL | FM / RM from Osc N | from the sampler / noise missing (S02, G29) |
 | V01-12 | V p.13-15 | Filters: types, blend, keytrack, routing, formant, comb, phaser | DONE | see S08 |  |
-| V01-13 | V p.16 | Modulation overview, cyan live display | PARTIAL | depth halo yes | live value display missing (S11) |
+| V01-13 | V p.16 | Modulation overview, cyan live display | DONE (GROUPA2 WP-17) | depth halo + live mark | see S11-47 |
 | V01-14 | V p.17-18 | Envelopes (env 1 mapped to volume by default) | DONE | see S11; default patch maps env1 to amp |  |
 | V01-15 | V p.18-20 | LFOs: shape chooser, brush, grid, phase, mode, frequency, smooth, delay, stereo | DONE | `lfoN.stereo`, see S11 |  |
 | V01-16 | V p.21-22 | Random LFOs: Perlin, S&H, Sine interpolate, Lorenz | DONE | `rlfoN.*` |  |
@@ -504,7 +504,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | G14 | Separate bend up / down | DONE | t_wp_voiceglb :321 |
 | G15 | Global stereo spread | DONE | t_wp_voiceglb :369 |
 | G16 | Swing for synced LFOs | DIFFERENT | 14 row 28: per-LFO amount, no global amount / division |
-| G17 | Per-voice control | MISSING | S15-08 .. S15-11 |
+| G17 | Per-voice control | DONE (GROUPA2 WP-07) | S15-08 .. S15-11 |
 | G18 | 4x oversampling, no smoothing | DONE | t_wp_voiceglb :534, :582 |
 | G19 | Multisample oscillator | MISSING | S03 |
 | G20 | Sample oscillator | PARTIAL | engine DONE (t_wp4); no way to load a sample: S04-02, X01-01 |
@@ -554,7 +554,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | G64 | LFO mono / direction / host / 10x / phase snap | PARTIAL | all DONE except phase snap to grid |
 | G65 | LFO point modulation | DONE | t_lfovoice, t_wp123 :559 |
 | G66 | VELO / NOTE custom curves | DONE | t_wp123 :498 |
-| G67 | Sources Lift, Slide, Oct Note, Poly AT, Stereo, Rand 2 / discrete, Active Voices, Voice Index / Mod | PARTIAL | Lift .. Poly AT DONE; Stereo IN-PROGRESS; rest MISSING (S11) |
+| G67 | Sources Lift, Slide, Oct Note, Poly AT, Stereo, Rand 2 / discrete, Active Voices, Voice Index / Mod | PARTIAL | Lift .. Poly AT DONE; Voice Index / Mod DONE (GROUPA2 WP-07); Stereo IN-PROGRESS; rest MISSING (S11) |
 | G68 | Matrix AUX SOURCE, INV, CRV, OUTPUT | DONE | t_wp123 :266 |
 | G69 | Per-slot curve, RISE / FALL | PARTIAL | wavetable remap DONE (t_wtremap); matrix curve IN-PROGRESS (modamt); RISE / FALL MISSING |
 | G70 | Parallel FX racks | DONE | t_wp5 :231 |
@@ -603,7 +603,7 @@ Count of the 84: DIFFERENT 2, DONE 40, IN-PROGRESS 4, MISSING 11, PARTIAL 27.
 | Q22 | Sustain pedal event (proposed) | yes | ct_events :126 |
 | Q23 | Full tuning incl. MTS-ESP | all but the MTS-ESP client | S15-18 |
 | Q24 | MPE through CLAP note expression | partly | S15-21 |
-| Q25 | Per-voice control, key / velocity ranges (proposed) | ranges yes, per-voice control MISSING | S12, S15-08 |
+| Q25 | Per-voice control, key / velocity ranges (proposed) | ranges yes, per-voice control DONE (GROUPA2 WP-07) | S12, S15-08 |
 | Q26 | All Serum-only FX modules | yes | S10 |
 | Q27 | Force-enable reverb (proposed) | yes | t_wp7 :503 |
 | Q28 | Kick pages generated by paramdump (proposed) | yes | X01-07 |

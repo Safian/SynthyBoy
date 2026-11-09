@@ -20,12 +20,12 @@ Built from [16-COVERAGE-FINAL.md](16-COVERAGE-FINAL.md) (row ids such as S04-02 
 | WP | Name | Rows closed (16) | Keys | Parts | Depends on | Parallel group |
 |----|------|------------------|-----:|-------|-----------|----------------|
 | WP-01 | Content pipeline in the shells | X01-01..03, S01-08, S02-03, S04-02..03, S04 snap / trim, S07-06 (UI), S10 Convolve IR, S13-01..17, S14, I01-16, S11 shape presets, S10 rack presets | 0 | shell + UI + tests; engine accessor for slice onsets | none | A |
-| WP-02 | Preferences and dead toggles | S15-02..07, S15-13, S15-19, S11 Lock Matrix, S16 MIDI map files, S15-20, S16 shortcuts | 0 | shell + UI + tests | none (shares PluginProcessor.cpp / UiHost.h with WP-01) | A |
+| WP-02 | Preferences and dead toggles - DONE (GROUPA2) | S15-02..07, S15-13, S15-19, S11 Lock Matrix, S16 MIDI map files, S15-20, S16 shortcuts | 0 | shell + UI + tests | none (shares PluginProcessor.cpp / UiHost.h with WP-01) | A |
 | WP-03 | The remaining 43 Serum filter types and the PZ SVF editor | S08 (5 rows), G57, G58 | 0 (choice entries) | engine mapping + UI picker + editor + tests | none | A |
 | WP-04 | Noise, Sub, sample as a source (B21) - DONE (GROUPA1, B23) | S07-02, S07-06 (engine), S07-08, I01-07 | 5 | engine + keys + Kick + UI + importer + tests | WP-01 for the file load UI | A |
 | WP-05 | Oscillator extras (B22) | S01-20, S02 smooth interpolation, S04 single-slice modulation | 9 | engine + keys + Kick + UI + tests | (Swap Warps was built by warp-env) | B |
 | WP-06 | Modulation sources and audio-rate taps | S11 (oscillator / filter outputs, Active Voices, Note-On Alt, Rand 2 / discrete, Release Velocity, Expression X, Fixed), S02 FM / PD / AM / RM from Noise, Sub, Filters | 0 (source and warp choices) | engine + choices + Kick + UI + tests | warp-env and mod-amount merged | B |
-| WP-07 | Voice control (B23) | S15-08..11, S11 Voice Index / Voice Mod | about 62 | engine + keys + Kick + UI + tests | WP-01 for presets (optional) | A |
+| WP-07 | Voice control (B23) - DONE (GROUPA2, B26) | S15-08..11, S11 Voice Index / Voice Mod | about 62 | engine + keys + Kick + UI + tests | WP-01 for presets (optional) | A |
 | WP-08 | Matrix RISE / FALL and control-sheet extras | S11 RISE / FALL, Aux submenu, G69 matrix part | 0 | engine + content + UI + tests | mod-amount merged | B |
 | WP-09 | MPE completion (B24) - DONE (GROUPA1) | S15-21, S15-04 (MPE part), V01 | 4 | engine + keys + Kick + UI + tests | none | A |
 | WP-10 | FX remainder (B25) - DONE (GROUPA1) | S10 delay left offset, reverb FEEDBACK, rack operations, rack presets, multi-instance (decision) | 2 | engine + keys + Kick + UI + tests | WP-01 for rack presets | A |
@@ -35,7 +35,7 @@ Built from [16-COVERAGE-FINAL.md](16-COVERAGE-FINAL.md) (row ids such as S04-02 
 | WP-14 | Sample-class to wavetable | S04-last, S05-last, S06-last (G51) | 0 | conversion + UI + tests | WP-01, WP-11 / 12 for the Granular / Spectral entry points | D |
 | WP-15 | Offline render: Resample, Render OSC Warp, share audio | S01-09, S13-16, S13-17, S15-05 (ultra render) | 0 | engine offline API + UI + tests | WP-01 | D |
 | WP-16 | Wavetable frame <-> LFO shape | S11 copy row | 0 | UI + tests | WP-01 | D |
-| WP-17 | Live modulation read-out | S11 live display, 14 row 10 | 0 | engine ring + UiHost + UI + tests | none | A |
+| WP-17 | Live modulation read-out - DONE (GROUPA2) | S11 live display, 14 row 10 | 0 | engine ring + UiHost + UI + tests | none | A |
 | WP-18 | Importer follow-ups | I01-08..10, I01-15 | 0 (1 table choice) | importer + tests | mod-amount merged; WP-04 | B |
 | WP-19 | Owner decisions | see section 4 | - | decisions only | - | - |
 | WP-20 | Gates before the push | X01-09 | - | listening passes, clap-validator, full suite | all | last |
@@ -59,7 +59,7 @@ g. CLAP / mobile: file access has no host UI in CLAP. Decision Q39 (CLAP custom 
 Keys: 0. Kick: none (content is not a key). Tests: headless with `MemoryContentStore` / a temp directory: save table -> reload state -> audio differs from the saw fallback; sample load -> `sample_oscillator_type_plays_the_content_sample_at_the_key_pitch` through the shell; Convolve IR -> tail appears; import of the synthetic fixtures of `tests/` (the 35 real presets stay out of git).
 Files touched: `shell-juce/PluginProcessor.*`, `UiHost.h`, `WavetableEditorSheet.cpp`, `WavetablePanel.cpp`, `OscWaveView.cpp`, `FxConvolvePanel.cpp`, `shell-clap/`, `core/vital-import` link. Conflicts: WP-02 (PluginProcessor.cpp, UiHost.h), WP-11/12/13 (OscWaveView.cpp) - run WP-01 first or agree the UiHost additions up front.
 
-### WP-02 Preferences and dead toggles
+### WP-02 Preferences and dead toggles (DONE on branch `work-groupA2`, GROUPA2-REPORT.md; A381 .. A392, 13-new-keys 4.31)
 
 Items: a preferences store (JSON in the user dir) and the real behaviour behind: double-click reset / value box (S15-02), parameter value bubble toggle, mouse-wheel control on / off, keyboard shortcuts on / off, default waveform view 2D / 3D, frequency units Hz / semitones in every cutoff-type readout (S15-07, a formatter in `ParamControls`), MPE enabled by default, limit mod depth on drop (`AssignFlow` clamps the new depth to the headroom of the knob), mod wheel -> WT POS while the editor is open (needs WP-01 b), silence notes and FX tails when the host stops (S15-06: `IEngine` panic + effect flush from the transport-stop callback in both shells), load MIDI map from presets, ultra quality offline render flag (consumed by WP-15), real About line (version and build from CMake, S15-20). Lock Matrix (S11): make `matrixLocked` real by locking `modNN.*` + the curve content in `applyPatch`/`keepLockedContent` (core/src/shell_features.cpp); lock for `quality.*` and `master.tuning.*` (S15-13, S15-19). MIDI map load / save files and a default map (S16). Desktop shortcut set of Appendix G where it makes sense (S16).
 Keys 0. Tests: the shf_* pattern (`ui_shellfeat`), `ct_shell_features`. Kick: none.
@@ -84,7 +84,7 @@ Sources to append to `modSources` (docs/params.json): Oscillator A, B, C, Noise,
 Keys 0; `kNumModSources` 38 -> about 51, capability bit(s), loop check for sources that depend on the destination's own oscillator (as the aux-source loop check in LFOVOICE-REPORT section 1). Kick: source choices are on the `modNN` pages already. Tests: each source moves a destination (t_wp123 :204 pattern); FM from Sub changes the spectrum.
 Depends on warp-env (warp lists) and mod-amount (source / destination tables, `stereo` source).
 
-### WP-07 Voice control (block B23)
+### WP-07 Voice control (DONE on branch `work-groupA2`, GROUPA2-REPORT.md; built as block B26 with 62 keys, A369 .. A380, 13-new-keys 4.30)
 
 Serum 2 p.316-319. Keys (about 62): sequence length (1), 8 steps x 6 per-voice values (PAN, DETUNE, CUTOFF, ENV offset, MOD 1, MOD 2) = 48, randomization PAN / DETUNE / CUTOFF / ENVS (4), scaling of all envelope times and LFO times (3 incl. percent / rate mode), oscillator mask A / B / C (3). Engine: per-voice variation applied at note on in the voice handler (voice index = note counter modulo length), random draws from the voice's own seed (deterministic for the tests); sources Voice Index and Voice Mod 1 / 2 (WP-06 list). UI: `GlbVoiceControlPanel` (step grid, touch sized). Presets through WP-01 f. Kick: about 8 pages. Tests: each value off / on; 8-step sequence audible; determinism.
 
@@ -120,7 +120,7 @@ An `IEngine` offline render entry (render N frames of a note / one bar at ultra 
 
 Frame -> LFO point list (resample 2048 -> points) and LFO shape -> table frame (S p.196-198). Needs WP-01 for the table write-back. 0 keys.
 
-### WP-17 Live modulation read-out
+### WP-17 Live modulation read-out (DONE on branch `work-groupA2`, GROUPA2-REPORT.md; A393 .. A396, 13-new-keys 4.32; also closes the WP-01 marker animation and the MPE pad of GROUPA1)
 
 Engine -> UI ring of modulation values (per source, plus per destination for the shown knobs), written in `processBlock` like `copyScope`; UI: live value line on modulated knobs, LFO / envelope playheads, random-LFO history (14 row 10). Capability bit not needed (UI read-only). 0 keys.
 
@@ -205,7 +205,7 @@ Each row is a class of values the importer reads, accounts and drops because the
 |----:|--------------------------------------|------:|---------------|
 | S1 | Clip player: `MidiClip0..11`, `ClipPlayer*` (notes, automation lanes, grid state; also the 137 `.XferClip`, 14 `.XferClipBank` files): `clip_player_not_modelled` | 649 | a clip player / MIDI clip engine with a note + automation lane model (Serum 2 manual p.250 ff.) |
 | S2 | Arpeggiator: `Arp0`, `ArpClip0..11` (shape, offset, repeats, gate, retrigger, velocity decay, transpose, wrap; 12 `.XferArp`, 4 `.XferArpBank`): `arpeggiator_not_modelled` | 219 | an arpeggiator with the Serum 2 pattern clips |
-| S3 | Voice panel (`VoicePanel0`: eight step values for pan / detune / env time / cutoff / mod 1 / mod 2, random amounts, scaling; 18 `.SerumStyle`): `voice_panel_not_modelled`; the sources Voice Mod 1 / 2, Voice Index, Active Voices | 244 | WP-07 voice control |
+| S3 | Voice panel (`VoicePanel0`: eight step values for pan / detune / env time / cutoff / mod 1 / mod 2, random amounts, scaling; 18 `.SerumStyle`): `voice_panel_not_modelled`; the sources Voice Mod 1 / 2, Voice Index, Active Voices | 244 | WP-07 voice control - **CLOSED by GROUPA2 WP-07** (the panel and the three sources are imported; Active Voices stays WP-06) |
 | S4 | PZ SVF poles and zeros (`VoiceFilter#/PZs`, `FXFilter/PZs`; 31 `.XferFilterPZ*`): `pz_svf_poles_and_zeros_not_imported`; the filter type itself is imported, the response curve is not | 21 | a conversion from the Serum poles / zeros (frequency, Q, gain, type per pair) to the drawn `filter_curves`, or a real pole / zero filter |
 | S5 | Path LFOs (`pathData`, 21 `.XferPath`) and the sources LFO 1..10 Y: `path_lfo_not_modelled` | 39 | an XY path LFO with two outputs |
 | S6 | Multisample details: the other zones (reduced to one, A341), envelope override (`kParamEnv*`), timbre shift, velocity tracking, random phase of a zone; Granular (`kParamDensity`, grain length, window, randomisation) and Spectral oscillator parameters (`kParamSpecFlt*`, freq lo / hi, the spectral warps, `flex`): `multisample_feature_not_modelled`, `granular_feature_not_modelled`, `spectral_feature_not_modelled` | 493 + 99 | WP-12 / WP-13 |
@@ -213,6 +213,6 @@ Each row is a class of values the importer reads, accounts and drops because the
 | S8 | Matrix: modulation of other mod slots' smooth / delay (`ModSlot` destinations), the slew (rise / fall) and the delay of a slot, the drawn aux curve (`aux_curve_not_modelled`), the output curve display; sources Alt. 1 / 2, Expr X, Fixed (`modulation_source_not_modelled`) | 152 | matrix extensions (G-series) |
 | S9 | Destinations without a key: `Arp` / `MidiClip` parameters, `NoiseOsc.kParamColor`, `MultiSampleOsc` timbre shift, granular / spectral parameters, `Oscillator.kParamHzOffset`, `kParamPosition` of the sample player, compressor `Gain0..2`, `Ratio0..2` per band, delay `OffsetR`, bode shift sign, reverb `VintageScale`: `destination_not_modelled`, `effect_parameter_not_modelled` | 137 + 74 | per feature |
 | S10 | Effects: the splitter bands (the modules after a splitter are flattened, A338; the pool has no band racks), the second and further impulse response (`only_one_impulse_response_per_patch`), per module options (`FiltMode` of the chorus, `NumPoles` of the phaser, `Depth2`, `BW` and `NumStages` of the distortion, `DimELevelOut`, `Link`, `SwapAB`), `effect_detail_not_modelled` | 166 | pool band racks; several IR slots |
-| S11 | Global: swing (`kParamSwing`), S1 compatibility, the tuning table (`tuningData`, 2 files), `mpeConfig`, the scale quantizer details (the 12 note flags), the MIDI CC map (`.SerumMIDIMap`, `midiMap`), note latch, `kParamVoiceAmp` as a destination only | 656 | per feature |
+| S11 | Global: swing (`kParamSwing`), S1 compatibility, the tuning table (`tuningData`, 2 files), `mpeConfig`, the scale quantizer details (the 12 note flags), the MIDI CC map (`.SerumMIDIMap`, `midiMap`; **map CLOSED by GROUPA2 WP-02** for the macros), note latch, `kParamVoiceAmp` as a destination only | 656 | per feature |
 | S12 | The sample player: `trimHead` / `trimTail` / `gain`, `kParamHzOffset`, `kParamPosition`, BPM scan range, base tempo, the loop start link | 90 | sample player extensions |
 | S13 | The LFO point modulation target "curve" (target 2): `point_curve_modulation_not_modelled`; LFO swing flag; random LFOs beyond the fourth (`more_than_four_random_lfos`) | 57 | a curve source in `ContentPoint`; more Random LFOs |

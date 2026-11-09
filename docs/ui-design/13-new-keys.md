@@ -829,6 +829,106 @@ Capability bits 56 `kCapFxDelayOffsetLeft` and 57 `kCapReverbFeedback` (proven b
 | A367 | `delay.offset_left` has the range, skew and snaps of `delay.offset` | |
 | A368 | Bus operations on the modules of a rack, clipboard of the rack view, modulation not copied, no lock (Lock FX Bus of the manual is the preset lock of WP-02) | |
 
+### 4.30 GROUPA2 WP-07 – Voice control (B26: 62 keys, positions 2063..2124, three modulation sources, no destinations) – area 01 / 05 / 07
+
+Serum 2 manual p.316-319, the real files (`VoicePanel0` of 104 of the 656 presets, the 18 `.SerumStyle` files). **What was already there (A369):** polyphony, voice steal priority, same-note mode, legato and poly legato, portamento, the unison laws and the oscillator key / velocity mapping are B14 / B15 (`master.polyphony`, `master.voice.*`, `master.poly_legato`, `master.portamento.*`, `oscN.unison.*`, `oscN.map.*`); WP-07 is only the *per voice* panel of Serum (the sequence, the randomisation, the scaling, the mask) and its sources, so nothing is built twice. Capability bits 58 `kCapVoiceControl` (the keys) and 59 `kCapVoiceSources` (the source choice values 40 .. 42), both proven by `test_voicecontrol.cpp`.
+
+| Key | Name | Type | Range | Default | Unit | Curve | Sc | Mod | Kick | Group |
+|-----|------|------|-------|--------:|------|-------|----|-----|------|-------|
+| `voicectl.length` | `Voice Control Sequence Length` | whole | 1 .. 8 | 8 | - | lin | V, X | no | `voicectl_main` | `Voice Control` |
+| `voicectl.sN.pan` (N = 1..8) | `Voice Control Step N Pan` | float | -100 .. 100 | 0 | % | lin | V, X | no | `voicectl_pan` | `Voice Control / Step N` |
+| `voicectl.sN.detune` | `... Detune` | float | -100 .. 100 | 0 | cents | lin | V, X | no | `voicectl_detune` | same |
+| `voicectl.sN.cutoff` | `... Cutoff` | float | -100 .. 100 | 0 | % | lin | V, X | no | `voicectl_cutoff` | same |
+| `voicectl.sN.env` | `... Envelope Time` | float | -100 .. 100 | 0 | % | lin | V, X | no | `voicectl_env` | same |
+| `voicectl.sN.mod1` / `.mod2` | `... Mod 1` / `Mod 2` | float | -100 .. 100 | 0 | % | lin | V, X | no | `voicectl_mod1` / `_mod2` | same |
+| `voicectl.rand.pan` / `.cutoff` / `.env` | `Voice Control Random Pan` ... | float | 0 .. 100 | 0 | % | lin | V, X | no | `voicectl_random` | `Voice Control / Random` |
+| `voicectl.rand.detune` | `Voice Control Random Detune` | float | 0 .. 100 | 0 | cents | lin | V, X | no | `voicectl_random` | same |
+| `voicectl.rand.detune10x` | `Voice Control Random Detune x10` | bool | Off / On | Off | - | - | V, X | no | `voicectl_random` | same |
+| `voicectl.scale.env` | `Voice Control Envelope Time Scaling` | float | 25 .. 400 | 100 | % | skew 0.43 | G, X | no | `voicectl_main` | `Voice Control / Scaling` |
+| `voicectl.scale.lfo` | `Voice Control LFO Time Scaling` | float | 25 .. 400 | 100 | % | skew 0.43 | G, X | no | `voicectl_main` | same |
+| `voicectl.scale.lfo_mode` | `Voice Control LFO Scaling Mode` | choice | `Percent`, `Rate` | Percent | - | - | G, X | no | `voicectl_main` | same |
+| `voicectl.osc.a` / `.b` / `.c` / `.noise` / `.sub` | `Voice Control Applies to Osc A` ... | bool | Off / On | On | - | - | V, X | no | `voicectl_main` | `Voice Control / Targets` |
+
+62 keys (1 + 48 + 5 + 3 + 5), none is a modulation destination (the destinations stay 908). Appended modulation sources (state version 3 list, choice values 40 .. 42): `voice_index` (`Voice Index`, 0 .. 1), `voice_mod1` (`Voice Mod 1`, -1 .. 1), `voice_mod2` (`Voice Mod 2`); `kNumModSources` 39 -> 42. All defaults are neutral: every step is 0, the scalings are 100 %, the mask has every target, the sequence has 8 steps; the 112 factory presets are unchanged (`gen-factory-presets.py --check`).
+
+**The engine (`voice_handler.cpp:218` `evaluateVoiceControl`).** Every note gets a counter that restarts with `allSoundsOff ()` (`VoiceState::sequence`; the two warm-up notes of `prepare ()` do not count), the step is `(counter - 1) mod length`; the legato / steal re-triggers count as notes, a chord takes consecutive steps in event order. The values are evaluated for the voice in every block from the step and a hash of (seed, counter, stream) - the random draws are therefore stable for a note and repeat in every render (determinism test). Pan adds to the pan of the source (`osc_N_pan`, `sub_pan`, `sample_pan` through a `cr::Add` in the module), detune moves the oscillators through their key fold (`osc_fold`, so a sample oscillator keeps its slice key) and the sub and the noise through their tune, the cutoff adds semitones to the key tracking term of both filters (`FilterModule::kVoiceCutoff`), the envelope time is a per voice factor on delay / attack / hold / decay / release of all six envelopes (`EnvelopeModule::kTimeScale`), the LFO scaling a factor on the frequency of the ten LFOs and the four random LFOs (`LfoModule::kRateScale`, one mono value set by the adapter, `vital_engine.cpp:2145` `applyVoiceControl`). Defaults multiply by exactly 1 and add exactly 0.
+
+**UI.** `GlbVoiceControlPanel` (`Page::glb`, order 55): the Pan / Detune / Cutoff / Env time / Mod 1 / Mod 2 chips choose the row, eight 44 point cells (two lines of four on a phone) are vertical bars (drag, double tap resets, long press opens the sheet), the number buttons 1 .. 8 above them are the sequence length (cells beyond it are dimmed), Init resets the 62 keys, Presets is the user library (`voice_control` category, item `synthyboy-voice-control`, `library_items.h`) and "Load from file" takes a `.SerumStyle`. The four primary knobs are the length, the two scalings and the LFO mode, the random amounts and the mask are the More sheet. Eight Kick pages `voicectl_*` (136 .. 143).
+
+**Importers.** Serum `VoicePanel0` -> the keys (`serum_import.cpp:508` `voicePanel`; every value is exact, `kParamGlobalScalingLfoTimeSnap` approximated), a `.SerumStyle` is a complete configuration (absent = default; written as `touched` onto the patch, and as `<name>.voicecontrol.json` by the CLI), the sources 56 / 57 / 58 of the matrix map to the three new sources (`serum_map.cpp`), `Active Voices` (55) stays dropped. The 18 style files import with 0 dropped; in the 656 presets 52 carry a voice panel (5 more are all-default) and 501 leaves less are dropped. `scripts/audit-serum-import.py` checks every panel value independently and that no voicectl key is written that the file does not mention (`audit_voice_panel`).
+
+| ID | Assumption (default) | Question |
+|----|----------------------|---------:|
+| A369 | Scope: B14 / B15 already hold polyphony, steal, legato, portamento, unison; WP-07 adds only the per voice panel, its randomisation, scalings, mask and the three sources | |
+| A370 | Layout: 8 steps x (pan, detune, cutoff, env time, mod 1, mod 2); the mask has A, B, C, Noise, Sub (the files carry `kParamOscA/B/C/N/S`); the default length is 8 (an absent `kParamVoiceCount`) | |
+| A371 | The step is picked by a note counter (see above); Voice Index = step / (length - 1), 0 for a length of 1 | 72 |
+| A372 | Value laws: pan +-100 % of the pan, detune +-100 cents, cutoff +-100 % = +-36 semitones, envelope time +-100 % = x 4^(+-1), Mod 1 / 2 = +-1; random amounts draw uniformly in +-amount (detune in cents, x10 with the switch) | 71 |
+| A373 | The values follow the voice live (edits reach sounding notes), the random draw is fixed per note | 72 |
+| A374 | Scaling: 25 .. 400 % on a log taper for the envelope times and the LFO times; Percent mode is a time (200 % = half the rate), Rate mode a speed (200 % = twice); applies to free and tempo synced LFOs, the random LFOs included; the Serum "Snap" flag is read as Rate | 71, 72 |
+| A375 | Voice Mod 1 / 2 are bipolar, Voice Index unipolar | |
+| A376 | Pan and detune of Osc A / B / C / Noise / Sub act as described above; detune of an oscillator with pitch tracking off is not applied (the fixed pitch ignores the fold) | |
+| A377 | A target that is off ignores pan and detune; cutoff, envelope time, the scalings and the sources are not masked (filters and envelopes belong to no oscillator) | |
+| A378 | Voice control presets are items of the user library; Init is the default configuration | |
+| A379 | Serum import: `VoicePanel0/plainParams` as above, a style resets everything it does not mention, random detune up to 100 cents (x10 with `kParamGlobalRandomOscDetune10x`) | 71 |
+| A380 | Sources 56 / 57 / 58 of the Serum matrix are Voice Mod 1 / 2 and Voice Index | |
+
+### 4.31 GROUPA2 WP-02 – Preferences and dead toggles (no new keys; `kMaxParams` untouched) – area 01 / 07 / 10
+
+`core/include/synthyboy/preferences.h`, `core/src/preferences.cpp`: the 14 preferences of Serum p.313-315 and Vital p.42 as `Preferences`, stored per user as `<userDir>/preferences.json` (atomic write, damaged file = defaults), read by both shells and by the UI through `UiHost::preferences ()` (`setPreferences`, `preferencesRevision`). The settings panel (`GlbSettingsPanel.h`) has one 44 point toggle for each (one column on a phone, two on a tablet) and the three buttons that only flipped a private bool are gone.
+
+| Preference | What it does now (file:line) |
+|------------|-------------------------------|
+| `doubleClickResets` | a double tap resets (default) or opens the value box of the sheet with the cursor in it (`ParamControls.cpp:414`, `Sheet.cpp` `focusValueBox`) |
+| `valueBubbles` | the bubble of a drag is shown or not (`ParamControls.cpp:201`) |
+| `mouseWheel` | the wheel turns the control under it or is passed on to scroll the page (`ParamControls.cpp:457`) |
+| `keyboardShortcuts` | gates `Editor::keyPressed` (`Editor.cpp:191`) and the Appendix G gestures below |
+| `waveform3d` | the start view of `OscWaveView` and `WavetableView` (2D by default; the Wavetable panel used to start in 3D) |
+| `freqSemitones` | cutoff-type readouts (`isCutoffReadout`: Hz keys with cutoff / centre / cut / lpf / hpf / freq / crossover in the key) show "+7.0 st" from middle C (A382) in every control, sheet and bubble (`valueText`), and the value box takes "7", "-12 st", "2 kHz" |
+| `mpeByDefault`, `mpeBendToX`, `mpeYBipolar` | the three MPE keys of a new instance (JUCE `PluginProcessor.cpp` constructor, native `synthyboy_clap.cpp`); a patch saved as default wins (A383) |
+| `limitModDepth` | `AssignFlow::dragBy` clamps the depth to the room of the knob (`ModModel.cpp:203`): a knob at 75 % takes +25 %, a bipolar slot the smaller side |
+| `modWheelToWtPos` | `WavetableEditorSheet::followModWheel` (`WavetableEditorSheet.cpp:2914`) scans the frames with the mod wheel while the editor is open; the processor records the wheel (`UiHost::modWheel`) |
+| `silenceOnStop` | the stop edge of the host transport (`TransportStopWatch`, `preferences.h`) calls `IEngine::silence ()` (JUCE `PluginProcessor.cpp:412`, native `synthyboy_clap.cpp:351`); the vital engine ends all voices, clears the effect tails and the note book (`vital_engine.cpp:541`), keeps controllers, parameters and content; a host without transport information never stops (A381) |
+| `loadMidiMapFromPresets` | with it a preset that carries a CC map (a Serum preset's `midiMap`) brings that map, without it the default map file is loaded (`PluginProcessor.cpp:104` `applyMapOfPresetChange`) |
+| `ultraRender` | a host bounce (JUCE `isNonRealtime`, CLAP `render` extension offline) runs at 4x oversampling: `IEngine::setUltraRender` (read by `prepare ()` like `quality.oversample_4x`, A385) |
+
+**Lock Matrix, quality, tuning (A387).** `kMatrixLock` ("matrix": the 64 slots `modNN.*` with their aux keys and `content.mod_curves`), `kQualityLock` ("quality": `quality.*`) and `kTuningLock` ("master.tuning": the keys and the tuning table) are lock names of the existing shell lock list (saved with the session); the Lock Matrix item of the matrix menu (`ModMatrixPanel.cpp:785`), the "Lock Across Presets" button of the Quality panel (`GlbQualityPanel.cpp:30`, it only flipped a bool before) and a new "Tuning Lock" button of the Tuning panel (`GlbTuningPanel.cpp:130`) set them.
+
+**MIDI map files and the default map (A386).** `{"format":"synthyboy-midi-map"}` files (`serializeMidiMap` / `parseMidiMap`), buttons Load MIDI Map... / Save MIDI Map... / Set Default Map / Clear Default Map in the settings; `<userDir>/midimap/Default.sbmidimap` is loaded by a new instance (unless the default patch has a map), Init Preset and every preset change. The Serum importer reads `.SerumMIDIMap` files and the `midiMap` of presets (ids `module x 1,000,000 + index x 1,000 + parameter`; only the macro module 7 is decoded, "Macros CC14-21" is the map of 6 factory presets, the other ids are reported `midi_map_parameter_not_decoded`): `SerumImportResult::midiMap`, `<name>.sbmidimap` from the CLI, `UiHost::loadPatch (..., presetMidiMap)`.
+
+**Appendix G (A390).** Implemented, with the shortcut preference on: Cmd-click (Ctrl-click) resets a control, Shift-drag is fine, Shift-Alt-click on a modulated control switches the modulation between directional and bi-directional (`ParamControls.cpp:293`, `:306`), Alt-click on the filter display cycles the display modes (`FilterViews.h`), Alt-tap on the FX bypass buttons bypasses the bus (existed), module copy by Alt-drag of the label (existed), Cmd-Z / Shift-Cmd-Z / Ctrl-Y (existed). Not applicable: the preset browser and preview keys (Kick), the clip player, arpeggiator and piano roll (not in this synthesizer), Option-F to expand the matrix and rack (the pages are scrolling lists), the Renders folder, the LFO / sample gestures that the editors have in their own form (double tap adds a point, the grid snaps).
+
+**About (S15-20, A392).** `UiHost::aboutText ()`: "SynthyBoy 0.1.0 | built Nov  9 2026 | Engine: vital DSP (AGPL-3.0) | 2125 parameters | content packs: N" - the version is the CMake project version (`SYNTHYBOY_VERSION_STRING`), the date `__DATE__`, the engine from its capability bits, the packs the directories of `<userDir>/packs`.
+
+| ID | Assumption (default) | Question |
+|----|----------------------|---------:|
+| A381 | Silence on stop: the running -> stopped edge with transport information; the live notes of a stopped host are not touched; `IEngine::silence ()` is the engine's panic (voices, effect tails; the first block after it may carry -69 dBFS of filter state, dead after two blocks) | 73 |
+| A382 | Frequency units: semitones from middle C (261.6256 Hz), one decimal; only the cutoff-type readouts, not LFO rates, not A4 | 73 |
+| A383 | The MPE preferences set the keys of a new instance only when no user default patch exists; Init Preset is not touched | |
+| A384 | Defaults: silence on stop ON (what the panel showed), limit mod depth OFF, every other as in Serum (tooltips / bubbles / wheel / shortcuts on, reset on double click, 2D, MPE off, no map from presets, no ultra render) | 73 |
+| A385 | Ultra render = 4x oversampling (the option of `quality.oversample_4x`) when the host renders offline and the preference is on; JUCE: set in `prepareToPlay` and `setNonRealtime` (the 20 Hz timer prepares again), CLAP: `render.set`, then the host restarts | |
+| A386 | MIDI map: our file format and default file; applied on a new instance (if empty), Init Preset, every preset change; a preset's own map only with the preference; Serum ids: only the macros | 74 |
+| A387 | Locks of the global settings are names of the existing lock list | |
+| A388 | Limit mod depth acts on the touch drag (`AssignFlow`), not on the numeric entry of the sheet | |
+| A389 | Mod wheel to WT position: the wheel (0 .. 1) picks frame round (wheel x (frames - 1)) when it moves, the editor is not fought when a frame is chosen by hand | |
+| A390 | The Appendix G set above | |
+| A391 | The default waveform view also applies to the wavetable panel, which started in 3D | |
+| A392 | The About line as above | |
+
+### 4.32 GROUPA2 WP-17 – Live read-out of the engine (no keys, no capability bit; `LiveValues` in `core/include/synthyboy/readout.h`) – area 05 / 06 / 07
+
+`IEngine::setReadoutTargets (indices, count)` and `copyReadout (LiveValues&)` (any thread, relaxed atomics, no allocation: `synthyboy_test_rt` stays green). The vital engine writes at the end of every block (`vital_engine.cpp:1271` `updateReadout`): the value of each of the 42 modulation sources (the Vital status outputs of the voice that was heard last; macros from their controls), the phase of the ten LFOs and the stage / position of the six envelopes of the heard voice, the number of voices, and for up to 96 subscribed knobs the modulated plain value: the sum of what the connections add (`modulation_amount_N` status output x destination range, only slots that end at that knob) is added to the raw value of the plain value and converted back with `invertParam` (the new inverse of `convertParam`, tested for every binding); a knob that nothing modulates, a choice and the frame positions show the plain value. Unused LFOs and envelopes are switched off by the engine and have no phase (A393). `UiHost::setReadoutTargets / copyReadout` forward to the engine; the other hosts say false.
+
+**UI.** `LiveBus` (`shell-juce/ui/LiveBus.cpp:172`, one per editor, `UiContext::live`): displays `bind` themselves (shown = visible with all parents), their knobs are merged into one target list, the values are copied 30 times a second while a display listens (5 Hz housekeeping while only hidden displays are bound, nothing when none is), plus the history of the four random LFOs (160 samples). Consumers: every modulated knob / slider gets a bright mark on its ring at the live value (`Overlays.cpp:115`, `ParamDragControl::liveTick`); the LFO display a playhead and a dot on the curve (`LfoPanel.cpp:268` `playheadFraction`); the random LFO a trace of the last 5 s; the envelope display a playhead through attack / hold / decay / release (`EnvCurveView.cpp:55` `livePlayhead`); the sample view the live unison start next to the range band of "Show marker animation" (`OscWaveView.cpp:409` `liveUniStart`); the MPE pad follows the pitch wheel / slide / pressure of the heard voice when it is not touched.
+
+**Scope decision.** "Marker animation shows only the range band" (WP-01) is in scope and closed (the live marker of the unison start - the only modulatable position of the sample view). "The MPE pad does not send events" (GROUPA1) is an input gesture, but the pad is also the display of the three axes, so the package takes both: `GlbMpePadView::sendExpression` sends the pitch bend, CC 74 and the channel pressure on channel 1 (the manager channel of MPE moves every note, an ordinary channel without MPE) when the pad is touched and springs back on release (A396).
+
+| ID | Assumption (default) | Question |
+|----|----------------------|---------:|
+| A393 | The read-out is the engine's own: an LFO / envelope that nothing uses has no phase (no playhead); the sources show the voice that was heard last | 75 |
+| A394 | The live value of a knob is raw + the connections' contribution, mapped back to plain; stereo / curve remaps of a slot are inside the engine's amount | |
+| A395 | Displays: mark, playheads, trace (160 samples at 30 Hz), marker line; the envelope delay and attack are one engine state, the dot is placed by the level | |
+| A396 | The pad sends on channel 1, X = pitch bend, Y = CC 74, Z = channel pressure; letting go centres X and zeroes Y and Z | 76 |
+
 ## 5. State that is not in the key list (additive `content` section, state version 3)
 
 Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatable, not modulatable) and are written to both the `.sbpreset` and the host state document (ASSUMPTION A25: the plugin state IS the preset; otherwise custom shapes would be lost when a DAW project reloads). **[WP0 fix]** The section sits INSIDE the state object (`{"format":"synthyboy-state","version":3,"params":{..},"content":{..}}`), so the host blob and the `.sbpreset` (whose `state` member is that object) share one writer and one parser; 11 C3 / `serializeImportedPreset` must write it there, not as a sibling of `state`. `loadState ()` stays allocation-free and skips the section (`LoadResult::content = ignored`); `loadStateWithContent ()` / `loadPreset (.., StateContent&)` parse it into `StateContent` (`content_state.h`, allocates, not for the audio thread). A value outside the caps or ranges drops the whole section (`LoadResult::content = rejected`, parameters still apply); only malformed JSON invalidates the document. Maximum nesting is 7 inside the section (`kMaxDepth` = 8 holds). Extra rules fixed by WP0: strings <= 255 bytes without control characters, pack / file are relative paths (no `..`, no `\`, no `:`, not absolute), sha256 empty or 64 lower case hex digits, LFO shape y in 0..1, point `power` in -20..20, point modulation `amount` in -1..1 and `source` a key of §2, tuning text may carry `\n \r \t` only, every list ascending in x.
@@ -887,6 +987,7 @@ Missing content at load: the existing fallback and `missing_content` flag (ARCHI
 | B23 | sub phase, noise stereo / filter / type / bounce (GROUPA1 WP-04) | 6 | 2051..2056 | 3 | 904-906 |
 | B24 | MPE: XYZ / YZ to macros, Y to mod wheel, bend also to X, Y bi-directional (GROUPA1 WP-09) | 4 | 2057..2060 | 0 | - |
 | B25 | delay offset left, reverb feedback (GROUPA1 WP-10) | 2 | 2061..2062 | 2 | 907-908 |
+| B26 | voice control: length, 8 x 6 step values, random, scaling, mask; sources Voice Index / Voice Mod 1 / 2 (GROUPA2 WP-07) | 62 | 2063..2124 | 0 | - |
 
 Resulting table of B01-B21: 880 + 723 = **1603 keys**, 269 + 184 = **453 modulatable** keys, destination choice size **520** (453 modulatable keys + 66 appended destinations + none), mod sources **39**, positions 0..1602. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered. **After B25: 2063 keys, 842 modulatable keys, destination choice size 909, positions 0..2062, `kMaxParams` 4096.**
 
