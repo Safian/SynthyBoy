@@ -518,7 +518,7 @@ bool SynthyBoyProcessor::shareFile (const juce::File& file, const juce::String& 
     }
 #if JUCE_IOS || JUCE_ANDROID
     // the platform share sheet (S01-09 on mobile: the rendered note goes to Files, Messages, a DAW ...)
-    juce::ContentSharer::getInstance()->shareFiles (juce::Array<juce::URL> { juce::URL (file) }, [done] (bool success, const juce::String&) { if (done) done (success); });
+    shareSession = juce::ContentSharer::shareFilesScoped (juce::Array<juce::URL> { juce::URL (file) }, [done] (bool success, const juce::String&) { if (done) done (success); });
     return true;
 #else
     file.revealToUser(); // desktop: the file in the file manager, from where it can be dragged

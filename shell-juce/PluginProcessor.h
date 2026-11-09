@@ -210,6 +210,9 @@ private:
     FileRequestHandler fileRequestHandler;
     std::unique_ptr<juce::FileChooser> fileChooser;
     ShareHandler shareHandler;
+#if JUCE_IOS || JUCE_ANDROID
+    juce::ScopedMessageBox shareSession; // the open platform share sheet (iOS / Android)
+#endif
     // the last note (audio thread writes, the message thread reads; relaxed atomics, a torn read only shows an odd length): see lastNote ()
     std::atomic<int> lastKey { -1 };
     std::atomic<float> lastVelocity { 0.8f };

@@ -32,9 +32,9 @@ Built from [16-COVERAGE-FINAL.md](16-COVERAGE-FINAL.md) (row ids such as S04-02 
 | WP-11 | Granular oscillator (B28) - DONE (GROUPC) | S05 (7 rows), 02-24, 02-25 | 36-48 | new DSP package + keys + Kick + UI + tests | WP-01 (sample load); sample-osc package | C |
 | WP-12 | Spectral oscillator (B29) - DONE (GROUPC) | S06 (7 rows), 02-26 | 24-36 | new DSP package + keys + Kick + UI + tests | WP-01 | C |
 | WP-13 | Multisample oscillator (B30) - DONE (GROUPC) | S03 (5 rows) | 30-42 | instrument content + DSP + keys + Kick + UI + tests | WP-01 | C |
-| WP-14 | Sample-class to wavetable | S04-last, S05-last, S06-last (G51) | 0 | conversion + UI + tests | WP-01, WP-11 / 12 for the Granular / Spectral entry points | D |
-| WP-15 | Offline render: Resample, Render OSC Warp, share audio | S01-09, S13-16, S13-17, S15-05 (ultra render) | 0 | engine offline API + UI + tests | WP-01 | D |
-| WP-16 | Wavetable frame <-> LFO shape | S11 copy row | 0 | UI + tests | WP-01 | D |
+| WP-14 | Sample-class to wavetable - DONE (GROUPD) | S04-last, S05-last, S06-last (G51) | 0 | conversion + UI + tests | WP-01, WP-11 / 12 for the Granular / Spectral entry points | D |
+| WP-15 | Offline render: Resample, Render OSC Warp, share audio - DONE (GROUPD) | S01-09, S13-16, S13-17, S15-05 (ultra render) | 0 | engine offline API + UI + tests | WP-01 | D |
+| WP-16 | Wavetable frame <-> LFO shape - DONE (GROUPD) | S11 copy row | 0 | UI + tests | WP-01 | D |
 | WP-17 | Live modulation read-out - DONE (GROUPA2) | S11 live display, 14 row 10 | 0 | engine ring + UiHost + UI + tests | none | A |
 | WP-18 | Importer follow-ups - DONE (GROUPB; the A/B with real Vital stays with the owner) | I01-08..10, I01-15 | 0 (1 table choice) | importer + tests | mod-amount merged; WP-04 | B |
 | WP-19 | Owner decisions | see section 4 | - | decisions only | - | - |
@@ -108,15 +108,15 @@ Each: a new DSP package under `core/` (granular, spectral STFT resynthesis, mult
 * Multisample (30-42): instrument content kind (SFZ -> `content.instruments[]`, ContentPack), OVERRIDE / DELAY / A / H / D / S / R, vel track, rand, timbre; "switch the last note played to a sample".
 Dependencies: WP-01 (load). Parallel: the three own different core packages and key blocks; recommended order granular -> spectral -> multisample so that each review sees one DSP family.
 
-### WP-14 Sample-class to wavetable
+### WP-14 Sample-class to wavetable (DONE on branch `work-groupD`, GROUPD-REPORT.md; 13-new-keys 4.40, A435 .. A448)
 
 "Switch to wavetable" for Sample (and Granular / Spectral once they exist): convert the start..end region with `wtedit::importAudioSamples` (core/wavetable-edit/src/audio_import.cpp) into a table, store through WP-01, set `oscN.type` = Wavetable and `oscN.wavetable` = Preset table. 0 keys.
 
-### WP-15 Offline render
+### WP-15 Offline render (DONE on branch `work-groupD`, GROUPD-REPORT.md)
 
 An `IEngine` offline render entry (render N frames of a note / one bar at ultra quality without the real-time caps), used for Resample to wavetable (S p.324), Render OSC Warp (256 frames across WARP; the same renderer feeds `wtedit`), and share / drag-out of the last note as audio (S01-09; mobile: share sheet). tools/preset-render already renders offline - reuse its path. 0 keys.
 
-### WP-16 Wavetable frame <-> LFO shape
+### WP-16 Wavetable frame <-> LFO shape (DONE on branch `work-groupD`, GROUPD-REPORT.md)
 
 Frame -> LFO point list (resample 2048 -> points) and LFO shape -> table frame (S p.196-198). Needs WP-01 for the table write-back. 0 keys.
 

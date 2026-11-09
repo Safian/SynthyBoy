@@ -74,7 +74,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S01-06 | S p.20 | Creating a new sound: Init Preset | DONE | UiHost::initPatch -> PluginProcessor; GlbSettingsPanel.cpp:167; ui_shellfeat `shf_save_as_default_new_instances_and_init_preset` |  |
 | S01-07 | S p.21 | Saving changes, ARTIST / DESC metadata | EXCLUDED | Kick preset browser / save owns the metadata UI (core format has author / description / tags: core/src/preset.cpp, ct_preset `preset_save_load_round_trip` :38) | confirm with the owner that the synth UI needs no save dialog |
 | S01-08 | S p.22 | Embedding content when saving a preset | DONE (WP-01) | state v3 `content` section references files by pack / file / sha256 (core/src/content_state.cpp, ct_state_v3 :250); Q8 decision: tables are not embedded ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
-| S01-09 | S p.22 | Dragging audio to the DAW / share a rendered note | MISSING | none (grep Resample / renderOffline: none) | needs an offline render API; G03 |
+| S01-09 | S p.22 | Dragging audio to the DAW / share a rendered note | **DONE (GROUPD WP-15)** | `IEngine::renderOffline` (`vital_engine.cpp:796`), `LastNoteSheet` (`ContentSheets.cpp`: Save as WAV, Share through `UiHost::shareFile`, Drag out), CLAP `render_last_note`; tests `groupd_last_note_as_audio_...`, `the_last_note_renders_to_a_wav_with_its_release_tail`, `offline_render_does_not_disturb_the_live_engine` | GROUPD-REPORT.md; the mobile share sheet and the DAW drag are untested on device (14 row 97) |
 | S01-10 | S p.24 | Help tooltips | DONE | Editor.h:74 TooltipWindow; setTooltip on controls |  |
 | S01-11 | S p.25 | Serum keyboard (touch keys, velocity, octave shift) | DONE | Strip.cpp; ui_render `uir_keyboard_notes_reach_the_engine` |  |
 | S01-12 | S p.25-26 | Knobs and sliders: drag, fine, wheel, numeric entry, reset | DONE | Sheet.cpp (value entry), ParamControls.cpp; ui_render `uir_sheet_value_entry`, `uir_toggle_choice_and_slider`, ui_model `ui_gesture_maths` | the double-click preference is a dead toggle: S15-02 |
@@ -164,7 +164,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S04-14 | S p.81-82 | Sample unison START / SPAN | DONE | `oscN.sample.uni_start`, `.uni_span`; t_wp4 :250 |  |
 | S04-15 | S p.83 | Warp on a sample | PARTIAL | only Quantize / FM / RM act on a sample voice (14 row 9) | other warps inert by decision; revisit after warp-env |
 | S04-16 | S p.84 | Sample pan, level | DONE | `oscN.pan`, `oscN.level` |  |
-| S04-17 | S p.84, 103, 122 | Switch a sample to a wavetable | MISSING | none | G51 |
+| S04-17 | S p.84, 103, 122 | Switch a sample to a wavetable | **DONE (GROUPD WP-14)** | `convert::sampleRegionToWavetable` (`wave_convert.cpp:111`), `ContentIO.cpp:847`, sample menu `OscWaveView.cpp:541`; tests `switch_to_wavetable_sample_to_table_is_audibly_the_source_region` (0.003 dB), `groupd_switch_to_wavetable_...` | 14 rows 93, 94 |
 | S04-18 | V p.10-12 | Vital sampler: level, pan, pitch, loop, keytrack, bounce, routing, own sample | PARTIAL | `noise.*` covers the built-in noise samples only (PT:407.., VB:170) | custom sample, bounce (ping-pong) missing: I01-07 |
 
 ### S05 Serum 2: granular oscillator (p.85-103)
@@ -177,7 +177,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S05-04 | S p.96-98 | Granular X\|Y control | **DONE (GROUPC)** | GROUPC WP-11: `oscN.gran.y_axis / xy_y`, the X\\|Y dot | - |
 | S05-05 | S p.99-101 | Granular warp mode, scan, density, length | **DONE (GROUPC)** | GROUPC WP-11: shared warp keys, `scan*`, `density*`, `length*` | - |
 | S05-06 | S p.102 | Granular grain randomization, pan, level | **DONE (GROUPC)** | GROUPC WP-11: `oscN.gran.rand_*`, `reverse_grains` | - |
-| S05-07 | S p.103 | Granular: switch to wavetable | MISSING | none | G51 |
+| S05-07 | S p.103 | Granular: switch to wavetable | **DONE (GROUPD WP-14)** | same flow for the Granular type (the sample region); test `groupd_switch_to_wavetable_...` type 2 | 14 row 93 |
 
 ### S06 Serum 2: spectral oscillator (p.104-122)
 
@@ -189,7 +189,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S06-04 | S p.111-113 | Spectral unison | **DONE (GROUPC)** | GROUPC WP-12: shared unison keys | - |
 | S06-05 | S p.114-115 | Spectral X\|Y control | **DONE (GROUPC)** | GROUPC WP-12: `oscN.spec.y_axis / xy_y` | - |
 | S06-06 | S p.116-121 | Spectral scan, cut, filter curve, mix, warp mode, pan, level | **DONE (GROUPC)** | GROUPC WP-12: `scan*`, `cut`, `mix`, the filter graph, `phase_lock`, `transients`, 23 spectral warps | - |
-| S06-07 | S p.122 | Spectral: switch to wavetable | MISSING | none | G51 |
+| S06-07 | S p.122 | Spectral: switch to wavetable | **DONE (GROUPD WP-14)** | same flow for the Spectral type; test `groupd_switch_to_wavetable_...` type 3 | 14 row 93 |
 
 ### S07 Serum 2: sub and noise (p.123-132)
 
@@ -294,7 +294,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S11-18 | S p.193 | LFO editor on a large canvas | DONE | LfoShapeEditor.cpp (full width on tablet); UI-FOLLOW-REPORT |  |
 | S11-19 | S p.189 | Copy all LFO settings by dragging a tab | DONE | ui_lfo `uil_drag_a_chip_onto_another_copies_the_lfo` |  |
 | S11-20 | S p.195-196 | Modulator depth, negative depth, halo | DONE | `modNN.amount`, `.bipolar`; ModSourceBar.cpp; ui_gaps `uig_depth_halo_badge_is_a_target` |  |
-| S11-21 | S p.196-198 | Copy a wavetable frame to an LFO / an LFO shape to a wavetable | MISSING | none (grep in shell-juce/ui: none) | G52; the wavetable half needs X01-01 |
+| S11-21 | S p.196-198 | Copy a wavetable frame to an LFO / an LFO shape to a wavetable | **DONE (GROUPD WP-16)** | `convert::frameToLfoShape / lfoShapeToFrame` (`wave_convert.cpp:464 / :586`), `ContentIO.cpp:966 / :1010`, LFO Presets menu, wave menu, Alt-drag of the tab; tests `wavetable_frame_to_lfo_shape_and_back_stays_within_the_error_bound`, `groupd_wavetable_frame_and_lfo_shape_copy_both_ways`, `groupd_alt_drag_...` | 14 row 98 |
 | S11-22 | S p.198-200 | Modulate LFO points (X / Y) by menu or drag | DONE | `content.lfo_shapes[].points[].mod_x/mod_y`; t_lfovoice :140-340, t_wp123 :559; ui_lfo `uil_point_mod_reaches_the_engine_the_render_differs` |  |
 | S11-23 | S p.199-201 | Control context menu: Mod Source submenu, bypass, remove, remove all, reset, MIDI learn, lock | DONE | Sheet.cpp:57-222; ui_render `uir_sheet_value_entry`; ui_shellfeat `shf_midi_learn_*` |  |
 | S11-24 | S p.199 | Context menu: Aux Source submenu | DONE (GROUPB WP-08) | tap a modulation row of the control sheet: `Sheet.cpp:41` (`showConnectionMenu`) |  |
@@ -358,8 +358,8 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S13-13 | S p.290, 302-303 | Save wavetable, Embed in preset, Missing Files dialog | DONE (WP-01) | menu items `Save Table` / `Embed in Preset` only clear the modified flag (WavetableEditorSheet.cpp:2068-2069) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S13-14 | S p.301 | Animate WT POS with an LFO after import | DONE | matrix: `lfoN` -> `oscN.frame` |  |
 | S13-15 | S p.315 | Mod wheel scans WT POS while the editor is open | MISSING | none | preference of S15-05 |
-| S13-16 | S p.324 | Render OSC Warp (current frame -> 256 frames across WARP) | MISSING | none | G53; needs offline warp render + X01-01 |
-| S13-17 | S p.324 | Resample (play one bar, capture as wavetable) | MISSING | none | G53 / G03; needs an offline render API |
+| S13-16 | S p.324 | Render OSC Warp (current frame -> 256 frames across WARP) | **DONE (GROUPD WP-15)** | `convert::renderOscWarp` (`wave_convert.cpp:206`), `ContentIO.cpp:877`, Rendering menu and wave menu; tests `render_osc_warp_bakes_256_frames_that_sound_like_the_warped_oscillator` (0.005 dB, level exact), `render_osc_warp_without_a_warp_extracts_the_exact_cycle_of_the_wavetable` | 14 row 96 |
+| S13-17 | S p.324 | Resample (play one bar, capture as wavetable) | **DONE (GROUPD WP-15)** | `convert::renderResample / audioToWavetables` (`wave_convert.cpp:141`), `ContentIO.cpp:900`, Rendering menu, CLAP `resample`; tests `resample_captures_the_patch_as_a_wavetable_and_is_deterministic` (0.001 dB), `groupd_render_osc_warp_...` | 14 row 95 |
 
 ### S14 Serum 2: formula parser (p.304-311)
 
@@ -490,7 +490,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 |---|-----|-----------|-----------------|
 | G01 | Macros 5-8 | DONE | `macro.5..8`, t_wp123 :140 |
 | G02 | Save as Default Preset | DONE | S16, ct_shell_features :282 |
-| G03 | Drag-out / share audio, resample, offline render | MISSING | S01-09, S13-17 |
+| G03 | Drag-out / share audio, resample, offline render | **DONE (GROUPD WP-15)** | S01-09, S13-17 |
 | G04 | Embed a sample in the preset | MISSING | S01-08, X01-01 |
 | G05 | Key + Scale, transpose-snap keyboard | DONE | S12, V01 snap; t_wp123 :640 |
 | G06 | Oscillator mapping | DONE | S12; t_wp123 :891 |
@@ -538,9 +538,9 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | G48 | Formula parser | PARTIAL | core DONE; presets / saving MISSING (S14) |
 | G49 | Export | PARTIAL | S13-12: bytes dropped |
 | G50 | Import (audio, image, Vital styles) | PARTIAL | S13-09 .. S13-11: core DONE, UI synthetic |
-| G51 | Switch oscillator type on import / sample to wavetable | MISSING | S04, S05, S06 last rows |
-| G52 | Wavetable frame <-> LFO shape copy | MISSING | S11 |
-| G53 | Render OSC Warp | MISSING | S13-16 |
+| G51 | Switch oscillator type on import / sample to wavetable | **DONE (GROUPD WP-14)** | S04, S05, S06 last rows |
+| G52 | Wavetable frame <-> LFO shape copy | **DONE (GROUPD WP-16)** | S11 |
+| G53 | Render OSC Warp | **DONE (GROUPD WP-15)** | S13-16 |
 | G54 | Drive Clean Mode | DONE | t_wtremap :332 |
 | G55 | Filter pan and level | DONE | t_wp6 :109, :146 |
 | G56 | Keytrack follows oscillator pitch | DIFFERENT | 12-decisions Q14 |
