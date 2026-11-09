@@ -637,6 +637,10 @@ class Audit:
             for band in ('low', 'mid', 'high'):
                 bkey = key.replace('.mid.', '.%s.' % band)
                 self.fx_slot_value(name, sb, slot, own.index(bkey), bkey, exp)
+            if param == 'kParamRatio':
+                # A347: the maximum ratio (1,000,000) is the Serum LIMIT detent: limit mode on, else off
+                limit = 1.0 if float(node) >= 1.0e5 else 0.0
+                self.fx_slot_value(name, sb, slot, own.index('compressor.limit'), 'compressor.limit', limit)
             return
         if key not in own:
             self.err(name, '%s: %s is not a parameter of the pool type' % (e['path'], key))

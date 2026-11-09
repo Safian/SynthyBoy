@@ -44,6 +44,7 @@ namespace sbvital {
   LookaheadLimiter::LookaheadLimiter() : lookahead_(0), levels_(0), write_(0), sum_(1.0f), previous_gain_(1.0f), x1_(0.0f), x2_(0.0f),
                                           x3_(0.0f), ring_mask_(kLimiterRing - 1), since_exact_sum_(0) {
     input_ring_.assign(kLimiterRing, poly_float(0.0f));
+    dry_ring_.assign(kLimiterRing, poly_float(0.0f));
     need_ring_.assign(kLimiterRing, poly_float(1.0f));
     smooth_ring_.assign(kLimiterRing, poly_float(1.0f));
     for (int j = 0; j < kMaxLevels; ++j)
@@ -64,6 +65,7 @@ namespace sbvital {
 
   void LookaheadLimiter::reset() {
     std::fill(input_ring_.begin(), input_ring_.end(), poly_float(0.0f));
+    std::fill(dry_ring_.begin(), dry_ring_.end(), poly_float(0.0f));
     std::fill(need_ring_.begin(), need_ring_.end(), poly_float(1.0f));
     std::fill(smooth_ring_.begin(), smooth_ring_.end(), poly_float(1.0f));
     for (int j = 0; j < kMaxLevels; ++j)
@@ -76,11 +78,12 @@ namespace sbvital {
   }
 
   void LookaheadLimiter::process(const poly_float* audio_in, int num_samples, poly_float ceiling, poly_float release,
-                                 poly_float* audio_out, poly_float* delayed) {
+                                 poly_float* audio_out, poly_float* delayed, const poly_float* pre_gain) {
     const int taps = lookahead_ + 1;
     const mono_float tap_scale = 1.0f / taps;
     for (int i = 0; i < num_samples; ++i) {
-      const poly_float x = audio_in[i];
+      const poly_float dry = audio_in[i];
+      const poly_float x = pre_gain != nullptr ? dry * pre_gain[i] : dry;
 
       // the gain this sample needs: its own peak and the estimated peak between the two samples before it
       const poly_float mid = ((x2_ + x1_) * 9.0f - (x3_ + x)) * (1.0f / 16.0f);
@@ -105,6 +108,7 @@ namespace sbvital {
       sum_ = sum_ + window_min - oldest;
       smooth_ring_[static_cast<size_t>(write_) & ring_mask_] = window_min;
       input_ring_[static_cast<size_t>(write_) & ring_mask_] = x;
+      dry_ring_[static_cast<size_t>(write_) & ring_mask_] = dry;
       need_ring_[static_cast<size_t>(write_) & ring_mask_] = need;
       if (++since_exact_sum_ >= taps) {
         since_exact_sum_ = 0;
@@ -121,7 +125,7 @@ namespace sbvital {
       gain = utils::min(utils::min(gain, climb), 1.0f);
       previous_gain_ = gain;
       audio_out[i] = delayed_sample * gain;
-      delayed[i] = delayed_sample;
+      delayed[i] = pre_gain != nullptr ? dry_ring_[out_index] : delayed_sample;
       ++write_;
     }
   }
@@ -130,6 +134,7 @@ namespace sbvital {
                          mono_float base_attack_ms_second, mono_float base_release_ms_second) :
       Processor(kNumInputs, kNumOutputs), input_mean_squared_(0.0f) {
     limited_.assign(kMaxBufferSize * kMaxOversample, poly_float(0.0f));
+    pre_gain_.assign(kMaxBufferSize * kMaxOversample, poly_float(1.0f));
     delayed_.assign(kMaxBufferSize * kMaxOversample, poly_float(0.0f));
     base_attack_ms_ = utils::maskLoad(poly_float(base_attack_ms_second), base_attack_ms_first, constants::kFirstMask);
     poly_float second_release = base_release_ms_second;
@@ -193,7 +198,19 @@ namespace sbvital {
     lower_threshold *= lower_threshold;
     poly_float lower_ratio = utils::clamp(input(kLowerRatio)->at(0), -1.0f, 1.0f) * 0.5f;
 
-    limiter_.process(audio_in, num_samples, ceiling, release_scale, limited_.data(), delayed_.data());
+    // GROUPA1 (A347): in limit mode the makeup gain drives the signal INTO the limiter (Serum 2 manual p.163: the limiter has a makeup range of
+    // 0-36 dB), so the output never exceeds the ceiling; scaleOutput () only follows the ramp and does not multiply again
+    {
+      const poly_float from = output_mult_;
+      const poly_float target = futils::dbToMagnitude(utils::clamp(input(kOutputGain)->at(0), kMinGain, kMaxGain));
+      const poly_float step = (target - from) * (1.0f / num_samples);
+      poly_float g = from;
+      for (int i = 0; i < num_samples; ++i) {
+        g += step;
+        pre_gain_[i] = g;
+      }
+    }
+    limiter_.process(audio_in, num_samples, ceiling, release_scale, limited_.data(), delayed_.data(), pre_gain_.data());
 
     poly_float low_enveloped_mean_squared = low_enveloped_mean_squared_;
     for (int i = 0; i < num_samples; ++i) {
@@ -287,7 +304,8 @@ namespace sbvital {
     for (int i = 0; i < num_samples; ++i) {
       current_output_mult += delta_output_mult;
       current_mix += delta_mix;
-      audio_out[i] = utils::interpolate(audio_input[i], audio_out[i] * current_output_mult, current_mix);
+      // limit mode: the gain was applied before the limiter (processLimit)
+      audio_out[i] = utils::interpolate(audio_input[i], limit_ ? audio_out[i] : audio_out[i] * current_output_mult, current_mix);
       VITAL_ASSERT(utils::isContained(audio_out[i]));
     }
   }

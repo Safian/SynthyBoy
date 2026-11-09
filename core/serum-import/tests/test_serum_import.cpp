@@ -247,6 +247,38 @@ TEST (serum_linear_gain_destinations_get_their_modulation_depth_limited)
     CHECK (entryWith (r, "db_destination_depth_limited") >= 0);
 }
 
+// GROUPA1 (A347): the maximum compressor RATIO (1,000,000) is the Serum LIMIT detent: limit mode, the makeup gain drives into the limiter
+TEST (serum_compressor_ratio_at_its_maximum_is_the_limit_mode)
+{
+    const auto fx = [] (const std::string& name, const Bytes& pp, int type) { return map ({ { name, map ({ { "plainParams", pp } }) }, { "type", num (type) } }); };
+    const auto run1 = [&] (double ratio)
+    {
+        Preset p;
+        p.set ("FXRack0", map ({ { "FX", arr ({ fx ("FXComp", plain ({ { "kParamRatio", ratio }, { "kParamThresh", 0.5 }, { "kParamMakeup", 3.5 }, { "kParamWet", 100 } }), 2) }) },
+                                 { "displayName", text ("") }, { "plainParams", dflt() } }));
+        return run (p.file());
+    };
+    int limitNumber = -1;
+    const FxTypeDescriptor& cd = fxTypeDescriptor (kFxTypeCompressor);
+    for (int q = 0; q < cd.count; ++q)
+        if (cd.source[q] == findParamIndex (hashKey ("compressor.limit"))) limitNumber = q;
+    CHECK (limitNumber >= 0);
+    for (const double ratio : { 1.0e6, 4.0 })
+    {
+        const SerumImportResult r = run1 (ratio);
+        CHECK (r.status == ImportStatus::ok);
+        CHECK_EQ (r.report.unaccounted, 0);
+        const FxRacks racks = fxRacks (r.values.plain);
+        int slot = -1;
+        for (const FxRackItem& it : racks.rack[0]) if (it.pool) slot = it.index;
+        CHECK (slot >= 0);
+        if (slot < 0) continue;
+        const double limit = fxInstancePlain (kFxTypeCompressor, limitNumber, r.values.plain[fxInstanceKeys (slot).p[limitNumber]]);
+        CHECK_NEAR (limit, ratio >= 1.0e5 ? 1.0 : 0.0, 1e-4);
+        CHECK ((entryWith (r, "compressor_ratio_max_is_limit_mode") >= 0) == (ratio >= 1.0e5));
+    }
+}
+
 TEST (serum_effect_racks_become_pool_slots_in_order)
 {
     Preset p;

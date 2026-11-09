@@ -36,6 +36,9 @@ namespace sbvital {
   namespace futils {
 
     force_inline poly_float exp2(poly_float exponent) {
+      // SynthyBoy: the exponent of the float is built from the integer part (pow2ToFloat); below -126 / above 126 it left the exponent field
+      // (garbage, NaN for a deep diode or exp fold of a loud signal). The ends are the smallest normal float and 2^126.
+      exponent = poly_float::max(poly_float::min(exponent, 126.0f), -126.0f);
       static constexpr mono_float kCoefficient0 = 1.0f;
       static constexpr mono_float kCoefficient1 = 16970.0 / 24483.0;
       static constexpr mono_float kCoefficient2 = 1960.0 / 8161.0;

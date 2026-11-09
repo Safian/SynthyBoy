@@ -639,3 +639,80 @@ TEST (b17_keys_survive_random_settings_and_type_changes)
 
 
 
+
+// GROUPA1 (A347): in limit mode the makeup gain drives INTO the limiter (Serum 2 manual p.163): the peaks stay at the ceiling for any gain, and
+// more gain only makes the limited signal louder. Before, the gain came after the limiter and moved the peaks over the ceiling.
+TEST (compressor_limit_mode_makeup_gain_drives_into_the_limiter)
+{
+    auto e = makeVital();
+    base (*e);
+    setByKey (*e, "osc1.level", 8.0f);                                    // below the ceiling at gain 0 (a saw peaks near the level)
+    setByKey (*e, "compressor.on", 1.0f);
+    setByKey (*e, "compressor.bands", 3.0f);
+    setByKey (*e, "compressor.mid.upper_ratio", 0.0f);
+    setByKey (*e, "compressor.mid.lower_ratio", 0.0f);
+    setByKey (*e, "compressor.mid.upper_threshold", -6.0f);
+    setByKey (*e, "compressor.mid.lower_threshold", -80.0f);
+    setByKey (*e, "compressor.limit", 1.0f);
+    setByKey (*e, "compressor.mid.gain", 0.0f);
+    const auto flat = play (*e);
+    setByKey (*e, "compressor.mid.gain", 12.0f);
+    const auto driven = play (*e);
+    setByKey (*e, "compressor.mid.gain", 24.0f);
+    const auto hard = play (*e);
+    setByKey (*e, "compressor.mid.gain", 30.0f);
+    const auto slammed = play (*e);
+    CHECK (finite (flat) && finite (driven) && finite (slammed) && finite (hard));
+    CHECK (rms (driven.left) > 1.5 * rms (flat.left));                     // the makeup is drive: the limited signal gets louder
+    CHECK (peak (driven.left) > 1.5 * peak (flat.left));
+    // 6 dB more drive on a signal that is limited already does not move the peaks (a gain after the limiter would: a factor of 2)
+    CHECK (peak (slammed.left) < 1.1 * peak (hard.left));
+}
+
+// ---- numeric robustness of the effect chain (GROUPA1 item 0) -------------------------------------------------------------------------------
+// A Serum 2 preset (compressor makeup +13.5 dB on three bands, two EQs with gain and a high Q, a Diode 1 distortion at +12.7 dB) went to NaN:
+// the loud signal drove the exponent of futils::exp2 below -126, where the float exponent field wrapped (the chain case is
+// fxi_loud_compressor_eq_diode_chain_stays_finite in test_fxinstances.cpp). The values here are synthetic (no preset file).
+
+TEST (robust_exp2_stays_finite_and_monotone_for_any_exponent)
+{
+    using namespace sbvital;
+    float previous = 0.0f;
+    for (float x = -400.0f; x <= 400.0f; x += 0.37f)
+    {
+        const float y = futils::exp2 (poly_float (x))[0];
+        CHECK (std::isfinite (y));
+        CHECK (y >= 0.0f);
+        CHECK (y >= previous * 0.999f); // never falls back (a wrapped exponent made garbage)
+        previous = y;
+    }
+    // inside the old working range the value is the exact approximation of 2^x (relative error below 1e-5)
+    for (float x = -100.0f; x <= 100.0f; x += 0.731f)
+        CHECK (std::fabs (futils::exp2 (poly_float (x))[0] / std::exp2 (x) - 1.0f) < 1.0e-5f);
+}
+
+TEST (robust_extreme_legal_values_never_produce_nan)
+{
+    // every distortion type at the ends of the drive range behind the loudest compressor / EQ settings the ranges allow
+    for (int type = 0; type < 14; ++type)
+        for (const float drive : { -30.0f, 30.0f })
+        {
+            auto e = makeVital();
+            base (*e);
+            setByKey (*e, "compressor.on", 1.0f);
+            for (const char* band : { "low", "mid", "high" })
+                setByKey (*e, (std::string ("compressor.") + band + ".gain").c_str(), 30.0f);
+            setByKey (*e, "eq.on", 1.0f);
+            for (const char* band : { "low", "mid", "high" })
+            {
+                setByKey (*e, (std::string ("eq.") + band + ".gain").c_str(), 15.0f);
+                setByKey (*e, (std::string ("eq.") + band + ".resonance").c_str(), 100.0f);
+            }
+            setByKey (*e, "distortion.on", 1.0f);
+            setByKey (*e, "distortion.type", static_cast<float> (type));
+            setByKey (*e, "distortion.drive", drive);
+            const auto r = play (*e, 0.6, 40);
+            if (! CHECK (finite (r)))
+                std::printf ("    type %d drive %g\n", type, static_cast<double> (drive));
+        }
+}

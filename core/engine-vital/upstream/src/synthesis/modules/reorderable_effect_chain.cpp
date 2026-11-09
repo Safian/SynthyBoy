@@ -187,6 +187,18 @@ namespace sbvital {
     return makeEffectModule(index, beats_per_second_, keytrack_, &note_counter_, &equalizer_memory_);
   }
 
+  namespace {
+    // SynthyBoy: a module whose output left the finite range (a feedback path that blew up) must not carry NaN / inf into the rest of the chain
+    // and the master bus for ever: the block is replaced by silence and the module starts again from its reset state.
+    bool scrubNonFinite(poly_float* audio, int num_samples) {
+      if (utils::isFinite(audio, num_samples))
+        return false;
+      for (int i = 0; i < num_samples; ++i)
+        audio[i] = poly_float(0.0f);
+      return true;
+    }
+  } // namespace
+
   // ---- FxInstanceModule -----------------------------------------------------------------------------------------------------------------
   FxInstanceModule::FxInstanceModule(int module_index, const Output* beats_per_second, const Output* keytrack, const int* note_counter) :
       SynthModule(0, 1), module_index_(module_index), effect_(nullptr), live_beats_per_second_(beats_per_second), live_keytrack_(keytrack),
@@ -217,6 +229,8 @@ namespace sbvital {
     note_counter_ = *live_note_counter_ - note_counter_offset_;
     effect_->processWithInput(audio_in, num_samples);
     poly_float* audio = effect_->output(0)->buffer;
+    if (scrubNonFinite(audio, num_samples))
+      effect_->hardReset();
     if (level_ != nullptr) { // the LEVEL trim of the module, ramped over the block; 0 dB leaves the signal untouched (as in the chain)
       const float target = dbToGain(level_->buffer[0][0]);
       const float from = last_level_gain_;
@@ -379,6 +393,8 @@ namespace sbvital {
       else {
         effects_[index]->processWithInput(current, num_samples);
         current = effects_[index]->output(0)->buffer;
+        if (scrubNonFinite(effects_[index]->output(0)->buffer, num_samples))
+          effects_[index]->hardReset();
         if (level_controls_[index] != nullptr) { // the LEVEL trim of the module, ramped over the block; 0 dB leaves the signal untouched
           const float target = dbToGain(level_controls_[index]->buffer[0][0]);
           const float from = last_level_gain_[index];

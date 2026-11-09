@@ -24,6 +24,7 @@ namespace serumimport
 namespace
 {
 double clampd (double v, double lo, double hi) { return std::max (lo, std::min (hi, v)); }
+constexpr double kSerumLimitRatio = 1.0e5; // a Serum compressor RATIO from here on is the LIMIT detent (the file stores 1,000,000)
 
 std::string modPrefix (int slot0)
 {
@@ -284,6 +285,9 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
                 const Rule& rule = rows[r];
                 if (nm != rule.param) continue;
                 if (handled) { if (rule.conv != Conv::enumName && isNumber (v)) put (rule.key, convert (rule, num (v)), nullptr); continue; }
+                // A347: a Serum compressor RATIO at its maximum (1,000,000) is the LIMIT detent, a true peak limiter (manual p.163): limit mode, the
+                // makeup gain drives into the limiter
+                const bool limitDetent = type == kFxTypeCompressor && nm == "kParamRatio" && isNumber (v) && num (v) >= kSerumLimitRatio;
                 if (rule.conv == Conv::enumName)
                 {
                     if (! isText (v)) continue;
@@ -305,6 +309,7 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
                 Reason reason = Reason::exact;
                 std::string detail = rule.note;
                 if (cl) { kind = ItemKind::approximated; reason = Reason::clamped; if (detail.empty()) detail = "clamped_to_range"; }
+                if (limitDetent) { put ("compressor.limit", 1, nullptr); kind = ItemKind::approximated; detail = "compressor_ratio_max_is_limit_mode"; }
                 entry (kind, reason, area, p, valueText (v), rule.key, fmt (ours), detail);
                 consume (v);
                 handled = true;

@@ -671,3 +671,45 @@ TEST (fxi_the_rack_edits_of_the_ui_model_give_the_order_the_engine_plays)
     writeAll (*e, w);
     CHECK (difference (alone, playSettled (*e, 1)) < 1.0e-3);
 }
+
+// ---- numeric robustness (GROUPA1 item 0) -----------------------------------------------------------------------------------------------------
+// The slot values of a Serum 2 bass preset that went to NaN in the render gate (normalised values, typed in: no preset file): compressor with
+// +13.5 dB makeup on three bands, two EQs with gain and Q 63 / 47, then a Diode 1 distortion at +12.7 dB. The loud signal drove futils::exp2 below
+// -126, where the exponent field of the float wrapped; the chain must stay finite for every input level.
+TEST (fxi_loud_compressor_eq_diode_chain_stays_finite)
+{
+    static const float kSlots[4][24] = {
+        { 1.0f, 0.48302f, 0.909907f, 0.0f, 0.5f, 0.946985f, 0.5f, 0.732233f, 0.724686f, 0.5f, 0.946985f, 0.5f, 0.732233f, 0.724686f, 0.5f, 0.946985f, 0.5f, 0.732233f, 0.724686f, 0.666667f, 0.0f, 1.0f, 0.401337f, 0.462624f },
+        { 0.0f, 0.210711f, 0.647889f, 0.62892f, 0.0f, 0.548841f, 0.792982f, 0.472519f, 0.0f, 0.759315f, 0.5f, 0.3f, 0.666667f },
+        { 0.0f, 0.190875f, 0.5f, 0.3f, 0.0f, 0.440857f, 0.230993f, 0.468739f, 0.0f, 0.759315f, 0.5f, 0.3f, 0.666667f },
+        { 0.538462f, 0.711166f, 0.0f, 0.5f, 0.375229f, 0.5f, 0.0f, 0.373795f, 0.5f },
+    };
+    static const int kTypes[4] = { 2, 5, 5, 4 };
+    for (const float level : { 100.0f, 200.0f }) // unison saw stack, the second one beyond a normal patch
+        for (const int voices : { 1, 6 })
+        {
+            auto e = makeVital();
+            base (*e);
+            setByKey (*e, "master.volume", 0.0f);
+            setByKey (*e, "osc1.level", level);
+            setByKey (*e, "osc1.unison.voices", static_cast<float> (voices));
+            for (int s = 0; s < 4; ++s)
+            {
+                setSlot (*e, s, kTypes[s], true, 0, 993 + s);
+                for (int k = 0; k < kFxInstanceParams; ++k)
+                    e->setParam (paramTable()[fxInstanceKeys (s).p[k]].id, kSlots[s][k]);
+            }
+            std::vector<Event> chord { noteOn (0, 36), noteOn (0, 43), noteOn (0, 48), noteOn (0, 55) };
+            e->reset();
+            const auto r = sbtest::render (*e, chord, static_cast<int> (1.0 * kSr), 256);
+            bool ok = true;
+            double peak = 0.0;
+            for (size_t i = 0; i < r.left.size(); ++i)
+            {
+                ok = ok && std::isfinite (r.left[i]) && std::isfinite (r.right[i]);
+                peak = std::max ({ peak, static_cast<double> (std::fabs (r.left[i])), static_cast<double> (std::fabs (r.right[i])) });
+            }
+            if (! CHECK (ok && peak < 100.0))
+                std::printf ("    level %g voices %d\n", static_cast<double> (level), voices);
+        }
+}

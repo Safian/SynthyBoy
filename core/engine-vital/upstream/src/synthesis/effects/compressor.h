@@ -43,15 +43,17 @@ namespace sbvital {
 
       /** Limits `num_samples` of audio_in to the amplitude `ceiling` (per sample window: a constant for the block). `release` is the
           fraction of the way back to unity per sample. `delayed` receives the input delayed by the look-ahead (the dry signal of a mix),
-          `audio_out` the limited signal. */
+          `audio_out` the limited signal. `pre_gain` (optional, one value per sample) is the drive into the limiter: the limited signal is
+          audio_in * pre_gain held under the ceiling, `delayed` stays the unscaled input (GROUPA1: the makeup gain of the Serum limiter). */
       void process(const poly_float* audio_in, int num_samples, poly_float ceiling, poly_float release,
-                   poly_float* audio_out, poly_float* delayed);
+                   poly_float* audio_out, poly_float* delayed, const poly_float* pre_gain = nullptr);
 
     private:
       int lookahead_;      // delay D in samples; the box smoothing has D + 1 taps
       int levels_;         // dyadic min levels: the min window is 2^levels_ >= D + 1
       int write_;
       std::vector<poly_float> input_ring_;     // kMaxLookahead + 1 rounded to a power of two
+      std::vector<poly_float> dry_ring_;       // the unscaled input (the dry signal), the same length
       std::vector<poly_float> need_ring_;      // the gain each sample needs, for the exact final clamp and the min levels
       std::vector<poly_float> level_ring_[kMaxLevels];
       std::vector<poly_float> smooth_ring_;    // the min values for the running sum
@@ -122,6 +124,7 @@ namespace sbvital {
       LookaheadLimiter limiter_;
       std::vector<poly_float> limited_;   // the limiter output and its delayed input, one block each
       std::vector<poly_float> delayed_;
+      std::vector<poly_float> pre_gain_;  // limit mode: the makeup gain ramp of the block, applied before the limiter
 
       JUCE_LEAK_DETECTOR(Compressor)
   };
