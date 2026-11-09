@@ -45,9 +45,11 @@
 #include "utils.h"
 #include "value_switch.h"
 #include "vital_bindings.h"
+#include "vital_fx_pool.h"
 #include "vital_point_mod.h"
 #include "vital_tables.h"
 #include "synthyboy/content_state.h"
+#include "synthyboy/fx_types.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/sampleosc/sample_data.h"
 #include "synthyboy/sampleosc/wav_reader.h"
@@ -252,6 +254,7 @@ struct Snapshot
     std::array<std::array<float, sbvital::Distortion::kShaperSize>, 2> shaperTable {}; // X-Shaper curves A and B (content.curves.shaper_a / shaper_b)
     std::array<bool, 2> hasShaper { { false, false } };
     std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
+    std::shared_ptr<const sbvital::ImpulseData> impulse;  // content.impulses[0], for the Convolve instances of the effect pool
     std::atomic<bool> retired { false };                 // the audio thread has replaced it
 };
 
@@ -493,6 +496,11 @@ public:
         setContent (StateContent {}); // the built-in tuning scales
     }
 
+    ~VitalEngine() override
+    {
+        resetPool(); // the pool and its packages go before the engine whose chain they were running in
+    }
+
     void prepare (double newSampleRate, int /*maxBlockFrames*/, const Quality& q) override
     {
         sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
@@ -635,7 +643,8 @@ public:
              | kCapSubOsc | kCapNoiseExtras // block B18: proven by core/engine-vital/tests/test_oscextra.cpp
              | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions
              | kCapModAmount // block B20: proven by core/engine-vital/tests/test_modamt.cpp
-             | kCapWarpAll | kCapEnv1Toggle; // block B21: proven by core/engine-vital/tests/test_warpenv.cpp
+             | kCapWarpAll | kCapEnv1Toggle // block B21: proven by core/engine-vital/tests/test_warpenv.cpp
+             | kCapFxInstances; // block B22: proven by core/engine-vital/tests/test_fxinstances.cpp (a slot of every type renders what instance 0 renders)
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -679,6 +688,7 @@ public:
         }
         auto snapshot = buildSnapshot (content, store);
         auto impulseData = decodeImpulse (content, store);
+        snapshot->impulse = impulseData;
         const std::lock_guard<std::mutex> lock (snapshotMutex);
         impulse = impulseData;
         if (engine != nullptr)
@@ -720,6 +730,21 @@ public:
     {
         const size_t choice = modDestinationChoiceOf (paramIndex);
         return choice < destinations.size() && destinations[choice].valid;
+    }
+
+    bool hasPoolModule (int slot) const noexcept
+    {
+        return pool != nullptr && slot >= 0 && slot < kNumFxInstances && poolRt[static_cast<size_t> (slot)].active != nullptr;
+    }
+
+    int poolBuilds() const noexcept { return pool != nullptr ? pool->pendingBuilds() : 0; }
+
+    bool poolDestinationValid (int slot, int number) const noexcept
+    {
+        if (slot < 0 || slot >= kNumFxInstances || number < 0 || number >= kFxInstanceParams)
+            return false;
+        const int choice = poolChoice[static_cast<size_t> (slot)][static_cast<size_t> (number)];
+        return choice > 0 && static_cast<size_t> (choice) < destinations.size() && destinations[static_cast<size_t> (choice)].valid;
     }
 
     int connectedSlots() const noexcept
@@ -828,6 +853,7 @@ private:
         for (auto& v : appliedModValues)
             v.fill (0.0f);
         appliedQualityGeneration = ~0u;
+        resetPool();
         engine.reset();
         tuning.reset();
         if (tables == nullptr)
@@ -838,6 +864,8 @@ private:
         sbvital::RandomValues::instance();
         sbvital::utils::RandomGenerator::next_seed_ = 0;
         engine = std::make_unique<sbvital::SoundEngine>();
+        pool = std::make_unique<FxPool> (*engine);
+        poolRt.fill (PoolRt {});
         tuning = std::make_unique<Tuning>(); // default 12-tone equal temperament
         engine->setTuning (tuning.get());
 
@@ -1086,6 +1114,11 @@ private:
             }
         }
 
+        // the destinations of the pool slots (block B22) are filled in when a module is handed over (handoverPool ())
+        for (int s = 0; s < kNumFxInstances; ++s)
+            for (int k = 0; k < kFxInstanceParams; ++k)
+                poolChoice[static_cast<size_t> (s)][static_cast<size_t> (k)] = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (fxInstanceKeys (s).p[k])));
+
         // the search for dependencies of a connection uses work queues that grow on demand: grow them now, on every router that a
         // destination sits in or below
         std::set<sbvital::ProcessorRouter*> routers;
@@ -1182,6 +1215,7 @@ private:
         appliedBpm = transport.bpm;
 
         applySpecials();
+        applyPool (force, fxMask, qualityChanged);
         applySamples();
         applyFilterCurves();
         applyShaperCurves();
@@ -1192,6 +1226,169 @@ private:
         }
         for (int k = 0; k < kNumSlots; ++k)
             updateSlot (k);
+    }
+
+    // ---- the effect instance pool (block B22, docs/ui-design/18-FX-INSTANCES.md) -----------------------------------------------------------
+    struct PoolRt
+    {
+        FxBuilt* active = nullptr;   // the instance the chain has (null: the slot is empty or its module is not ready)
+        int wanted = 0;              // the type that was asked for last
+        uint32_t generation = 0;     // pool request number of `wanted`
+        bool requested = false;      // a request for `wanted` has been posted and is not yet taken
+    };
+
+    /** Frees the packages and the pool (message / prepare thread; the audio thread is not running). */
+    void resetPool()
+    {
+        if (pool == nullptr)
+            return;
+        pool.reset(); // deletes every module, the live ones in the chain included
+        for (auto& rt : poolRt)
+        {
+            delete rt.active;
+            rt = PoolRt {};
+        }
+    }
+
+    /** The modulation slots wired to a destination of a pool slot are unwired (before the module they point into goes away). */
+    void disconnectPoolSlots (int s) noexcept
+    {
+        for (int k = 0; k < kNumSlots; ++k)
+        {
+            Slot& slot = slots[static_cast<size_t> (k)];
+            if (! slot.connected)
+                continue;
+            for (int choice : poolChoice[static_cast<size_t> (s)])
+                if (choice > 0 && choice == slot.destination)
+                {
+                    disconnectSlot (k);
+                    break;
+                }
+        }
+    }
+
+    /** Takes a built instance over (or null: empties the slot): unwires the modulation, gives the module to the chain, publishes the
+        destinations. Audio thread. */
+    void handoverPool (int s, FxBuilt* next) noexcept
+    {
+        PoolRt& rt = poolRt[static_cast<size_t> (s)];
+        disconnectPoolSlots (s);
+        FxBuilt* previous = rt.active;
+        auto* chain = engine->effectChain();
+        chain->setPoolModule (s, next != nullptr ? next->module : nullptr);
+        if (next != nullptr)
+            next->handedOver = true;
+        rt.active = next;
+        for (int k = 0; k < kFxInstanceParams; ++k)
+        {
+            const int choice = poolChoice[static_cast<size_t> (s)][static_cast<size_t> (k)];
+            if (choice <= 0 || static_cast<size_t> (choice) >= destinations.size())
+                continue;
+            Destination d {};
+            if (next != nullptr && k < next->count)
+            {
+                const FxBuilt::Param& p = next->params[static_cast<size_t> (k)];
+                d.mono = p.mono;
+                d.monoSwitch = p.monoSwitch;
+                d.scale = p.scale;
+                d.valid = p.mono != nullptr && p.monoSwitch != nullptr;
+            }
+            destinations[static_cast<size_t> (choice)] = d;
+        }
+        ++matrixGeneration; // the slots that were unwired (or waited for this destination) try again
+        pool->release (previous);
+        pool->collectNow();
+    }
+
+    /** Parameters, content and routing of the pool slots; builds and hands over modules. Audio thread (force: prepare / reset, may allocate). */
+    void applyPool (bool force, uint32_t fxMask, bool qualityChanged) noexcept
+    {
+        if (pool == nullptr)
+            return;
+        const bool synchronous = force || ! qRealtime.load (std::memory_order_relaxed);
+        for (int s = 0; s < kNumFxInstances; ++s)
+        {
+            const FxInstanceKeys& keys = fxInstanceKeys (s);
+            PoolRt& rt = poolRt[static_cast<size_t> (s)];
+            auto value = [&] (int index) { return params[static_cast<size_t> (index)].load (std::memory_order_relaxed); };
+            int type = static_cast<int> (value (keys.type) + 0.5f);
+            if (type < 0 || type >= kNumFxInstanceTypes)
+                type = 0;
+
+            if (type != rt.wanted || (type != 0 && ! rt.requested && rt.active == nullptr))
+            {
+                rt.wanted = type;
+                rt.requested = false;
+                if (type == 0)
+                {
+                    pool->cancel (s); // supersedes a build in progress; type 0 builds nothing
+                    handoverPool (s, nullptr);
+                }
+                else
+                {
+                    float normalised[kFxInstanceParams];
+                    for (int k = 0; k < kFxInstanceParams; ++k)
+                        normalised[k] = value (keys.p[k]);
+                    if (! synchronous && rt.active != nullptr)
+                        handoverPool (s, nullptr); // dry (10 ms crossfade) until the new module is ready
+                    rt.requested = pool->request (s, type, normalised, synchronous);
+                    rt.generation = pool->generation (s);
+                }
+            }
+
+            if (rt.requested)
+                if (FxBuilt* built = pool->takeReady (s, rt.generation))
+                {
+                    if (built->type == rt.wanted)
+                    {
+                        handoverPool (s, built);
+                        rt.requested = false;
+                    }
+                    else
+                        pool->release (built);
+                }
+
+            FxBuilt* b = rt.active;
+            if (b != nullptr)
+            {
+                if (qualityChanged)
+                    sbvital::setConvolveRealtime (b->module->effect(), qRealtime.load (std::memory_order_relaxed));
+                if (b->contentId != snapshotId)
+                {
+                    b->contentId = snapshotId;
+                    if (auto* curve = b->module->filterCurve())
+                    {
+                        if (activeSnapshot != nullptr)
+                            *curve = activeSnapshot->filterCurve[2];
+                        else
+                            curve->num_bells = 0;
+                    }
+                    if (auto* distortion = b->module->distortion())
+                    {
+                        const bool a = activeSnapshot != nullptr && activeSnapshot->hasShaper[0], c = activeSnapshot != nullptr && activeSnapshot->hasShaper[1];
+                        distortion->setShaperCurves (a ? activeSnapshot->shaperTable[0].data() : nullptr, c ? activeSnapshot->shaperTable[1].data() : nullptr);
+                    }
+                    if (b->type == kFxTypeConvolve)
+                        sbvital::setConvolveImpulse (b->module->effect(), activeSnapshot != nullptr ? activeSnapshot->impulse : nullptr);
+                }
+                for (int k = 0; k < b->count; ++k)
+                {
+                    FxBuilt::Param& p = b->params[static_cast<size_t> (k)];
+                    const float norm = value (keys.p[k]);
+                    if (p.control == nullptr || (! force && norm == b->appliedNorm[static_cast<size_t> (k)]))
+                        continue;
+                    b->appliedNorm[static_cast<size_t> (k)] = norm;
+                    const double plain = fromNormalised (*p.source, norm);
+                    const double converted = convertParam (*p.binding, plain, sampleRate, transport.bpm);
+                    p.control->set (static_cast<float> (std::clamp (converted, p.lo, p.hi)));
+                }
+            }
+
+            const int module = fxTypeDescriptor (type).module;
+            const bool tierAllows = module >= 0 && (fxMask & (1u << module)) != 0;
+            engine->effectChain()->setPoolConfig (s, b != nullptr && value (keys.on) > 0.5f && tierAllows, static_cast<int> (value (keys.rack) + 0.5f),
+                                                  static_cast<int> (value (keys.order) + 0.5f));
+        }
     }
 
     /** oscN.wavetable: a built-in table, or the user table of the content (Preset table; the saw when the content has none). */
@@ -2274,6 +2471,9 @@ private:
 
     std::unique_ptr<vitaltables::WavetableSet> tables; // before the engine: the engine's wavetables point into it
     std::unique_ptr<sbvital::SoundEngine> engine;
+    std::unique_ptr<FxPool> pool;                 // after the engine: it dies first
+    std::array<PoolRt, kNumFxInstances> poolRt {};
+    std::array<std::array<int, kFxInstanceParams>, kNumFxInstances> poolChoice {}; // modulation destination choice of each pool parameter
     std::unique_ptr<Tuning> tuning;
     std::map<std::string, sbvital::Value*> controlMap;
     std::vector<Resolved> resolved;
@@ -2352,5 +2552,23 @@ int vitalConnectedSlots (const IEngine& engine) noexcept
 int vitalEffectiveVoiceLimit (const IEngine& engine) noexcept
 {
     return static_cast<int> (vitalControlValue (engine, "polyphony"));
+}
+
+bool vitalHasPoolModule (const IEngine& engine, int slot) noexcept
+{
+    const auto* vital = dynamic_cast<const VitalEngine*> (&engine);
+    return vital != nullptr && vital->hasPoolModule (slot);
+}
+
+int vitalPoolBuilds (const IEngine& engine) noexcept
+{
+    const auto* vital = dynamic_cast<const VitalEngine*> (&engine);
+    return vital != nullptr ? vital->poolBuilds() : 0;
+}
+
+bool vitalPoolDestinationValid (const IEngine& engine, int slot, int number) noexcept
+{
+    const auto* vital = dynamic_cast<const VitalEngine*> (&engine);
+    return vital != nullptr && vital->poolDestinationValid (slot, number);
 }
 } // namespace synthyboy

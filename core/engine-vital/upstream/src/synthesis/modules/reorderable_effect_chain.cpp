@@ -132,6 +132,10 @@ namespace sbvital {
     direct_level_ = createMonoModControl("direct_level");
 
     const size_t size = kMaxBufferSize * kMaxOversample;
+    for (auto& slot : pool_)
+      slot.mix.assign(size, poly_float(0.0f));
+    for (auto& ring : retired_)
+      ring.store(nullptr);
     main_mix_.assign(size, poly_float(0.0f));
     direct_mix_.assign(size, poly_float(0.0f));
     for (int b = 0; b < 2; ++b) {
@@ -144,34 +148,109 @@ namespace sbvital {
     return static_cast<FilterFxModule*>(effects_[constants::kFilterFx])->filter()->curveShared();
   }
 
-  SynthModule* ReorderableEffectChain::createEffectModule(int index) {
-    switch(index) {
-      case constants::kChorus:
-        return new ChorusModule(beats_per_second_);
-      case constants::kCompressor:
-        return new CompressorModule();
-      case constants::kDelay:
-        return new DelayModule(beats_per_second_);
-      case constants::kDistortion:
-        return new DistortionModule(keytrack_);
-      case constants::kEq: {
-        EqualizerModule* eq = new EqualizerModule();
-        equalizer_memory_ = eq->getAudioMemory();
-        return eq;
-      }
-      case constants::kFlanger:
-        return new FlangerModule(beats_per_second_);
-      case constants::kFilterFx:
-        return new FilterFxModule(keytrack_);
-      case constants::kPhaser:
-        return new PhaserModule(beats_per_second_);
-      case constants::kReverb:
-        return new ReverbModule();
-      default: {
-        SynthModule* serum = createSerumModule(index, beats_per_second_, &note_counter_);
-        return serum != nullptr ? serum : new PassThroughModule();
+  namespace {
+    /** The module with the index (0 .. 15), as the chain and the instance pool both build it. eq_memory (may be null) receives the analyser memory of the EQ. */
+    SynthModule* makeEffectModule(int index, const Output* beats_per_second, const Output* keytrack, const int* note_counter,
+                                  const StereoMemory** eq_memory) {
+      switch(index) {
+        case constants::kChorus:
+          return new ChorusModule(beats_per_second);
+        case constants::kCompressor:
+          return new CompressorModule();
+        case constants::kDelay:
+          return new DelayModule(beats_per_second);
+        case constants::kDistortion:
+          return new DistortionModule(keytrack);
+        case constants::kEq: {
+          EqualizerModule* eq = new EqualizerModule();
+          if (eq_memory != nullptr)
+            *eq_memory = eq->getAudioMemory();
+          return eq;
+        }
+        case constants::kFlanger:
+          return new FlangerModule(beats_per_second);
+        case constants::kFilterFx:
+          return new FilterFxModule(keytrack);
+        case constants::kPhaser:
+          return new PhaserModule(beats_per_second);
+        case constants::kReverb:
+          return new ReverbModule();
+        default: {
+          SynthModule* serum = createSerumModule(index, beats_per_second, note_counter);
+          return serum != nullptr ? serum : new PassThroughModule();
+        }
       }
     }
+  } // namespace
+
+  SynthModule* ReorderableEffectChain::createEffectModule(int index) {
+    return makeEffectModule(index, beats_per_second_, keytrack_, &note_counter_, &equalizer_memory_);
+  }
+
+  // ---- FxInstanceModule -----------------------------------------------------------------------------------------------------------------
+  FxInstanceModule::FxInstanceModule(int module_index, const Output* beats_per_second, const Output* keytrack, const int* note_counter) :
+      SynthModule(0, 1), module_index_(module_index), effect_(nullptr), live_beats_per_second_(beats_per_second), live_keytrack_(keytrack),
+      live_note_counter_(note_counter) {
+    VITAL_ASSERT(module_index >= 0 && module_index < ReorderableEffectChain::kFirstSerumModule + 4);
+    beats_per_second_.buffer[0] = 2.0f;   // 120 BPM until prime () / the first block
+    keytrack_.buffer[0] = 0.0f;
+    effect_ = makeEffectModule(module_index, &beats_per_second_, &keytrack_, &note_counter_, nullptr);
+    addSubmodule(effect_);
+    addProcessor(effect_);
+    if (module_index < constants::kNumEffects && module_index != constants::kFilterFx) // same condition as the level trims of the chain
+      level_ = createMonoModControl(std::string(kModuleNames[module_index]) + "_level");
+  }
+
+  void FxInstanceModule::prime(poly_float beats_per_second, poly_float keytrack) {
+    beats_per_second_.buffer[0] = beats_per_second;
+    keytrack_.buffer[0] = keytrack;
+  }
+
+  const poly_float* FxInstanceModule::run(const poly_float* audio_in, int num_samples) {
+    // the audio thread is the only one that reads the engine's outputs: the copies of the module follow them from here
+    beats_per_second_.buffer[0] = live_beats_per_second_->buffer[0];
+    keytrack_.buffer[0] = live_keytrack_->buffer[0];
+    if (!counted_) {
+      note_counter_offset_ = *live_note_counter_;   // a note that sounded before the module existed does not retrigger it
+      counted_ = true;
+    }
+    note_counter_ = *live_note_counter_ - note_counter_offset_;
+    effect_->processWithInput(audio_in, num_samples);
+    poly_float* audio = effect_->output(0)->buffer;
+    if (level_ != nullptr) { // the LEVEL trim of the module, ramped over the block; 0 dB leaves the signal untouched (as in the chain)
+      const float target = dbToGain(level_->buffer[0][0]);
+      const float from = last_level_gain_;
+      if (from != 1.0f || target != 1.0f) {
+        const float step_gain = (target - from) / static_cast<float>(num_samples);
+        float gain = from;
+        for (int i = 0; i < num_samples; ++i) {
+          gain += step_gain;
+          audio[i] *= gain;
+        }
+      }
+      last_level_gain_ = target;
+    }
+    return audio;
+  }
+
+  int FxInstanceModule::latency() const {
+    return serumModuleLatency(effect_);
+  }
+
+  FilterCurveShared* FxInstanceModule::filterCurve() {
+    return module_index_ == constants::kFilterFx ? static_cast<FilterFxModule*>(effect_)->filter()->curveShared() : nullptr;
+  }
+
+  DistortionModule* FxInstanceModule::distortion() {
+    return module_index_ == constants::kDistortion ? static_cast<DistortionModule*>(effect_) : nullptr;
+  }
+
+  void FxInstanceModule::hardReset() {
+    effect_->hardReset();   // the level trim keeps its gain, as the trims of instance 0 do (no ramp from 0 dB at every note)
+  }
+
+  void FxInstanceModule::correctToTime(double seconds) {
+    effect_->correctToTime(seconds);
   }
 
   void ReorderableEffectChain::setOversampleAmount(int oversample) {
@@ -205,12 +284,45 @@ namespace sbvital {
       if (on != effects_[i]->enabled())
         effects_[i]->enable(on);
     }
+    buildRackItems();
+  }
+
+  // The modules of every rack in processing order. Instance 0 sorts by its position in fx_order (q * kPoolOrderStep), a pool slot by its
+  // order; on a tie the module of instance 0 comes first and the slots by number. Without active slots this is the order of positions.
+  void ReorderableEffectChain::buildRackItems() {
+    for (int rack = 0; rack < kNumRacks; ++rack) {
+      RackItem* items = rack_items_[rack];
+      int count = 0;
+      for (int position = 0; position < kNumModules; ++position) {
+        const int index = effect_order_[position];
+        if (effect_rack_[index] == rack)
+          items[count++] = { position * kPoolOrderStep, index };
+      }
+      if (rack < 3)
+        for (int slot = 0; slot < kNumPoolSlots; ++slot) {
+          const PoolSlot& s = pool_[slot];
+          if (s.rack != rack || (s.target == nullptr && s.leaving == nullptr))
+            continue;
+          int at = count;
+          while (at > 0 && items[at - 1].key > s.order) {
+            items[at] = items[at - 1];
+            --at;
+          }
+          items[at] = { s.order, kNumModules + slot };
+          ++count;
+        }
+      rack_item_count_[rack] = count;
+    }
   }
 
   bool ReorderableEffectChain::rackHasEnabledEffects(int rack) const {
     for (int m = 0; m < kNumModules; ++m)
       if (effect_rack_[m] == rack && effects_on_[m]->value() > 0.5f)
         return true;
+    if (rack < 3)
+      for (const PoolSlot& s : pool_)
+        if (s.rack == rack && (s.target != nullptr || s.leaving != nullptr))
+          return true;
     return false;
   }
 
@@ -228,6 +340,10 @@ namespace sbvital {
       else
         latency += serumModuleLatency(effects_[m]);
     }
+    if (rack < 3)
+      for (const PoolSlot& s : pool_)
+        if (s.rack == rack && s.target != nullptr)
+          latency += s.target->latency();
     return latency;
   }
 
@@ -235,8 +351,12 @@ namespace sbvital {
   // its band racks on the bands and sums them again at its place in the order. Returns `in` itself when nothing processes.
   const poly_float* ReorderableEffectChain::runRack(int rack, const poly_float* in, int num_samples) {
     const poly_float* current = in;
-    for (int position = 0; position < kNumModules; ++position) {
-      const int index = effect_order_[position];
+    for (int item = 0; item < rack_item_count_[rack]; ++item) {
+      const int index = rack_items_[rack][item].id;
+      if (index >= kNumModules) {
+        current = runPool(index - kNumModules, current, num_samples);
+        continue;
+      }
       if (effect_rack_[index] != rack || !isModuleOn(index))
         continue;
 
@@ -412,10 +532,133 @@ namespace sbvital {
   void ReorderableEffectChain::hardReset() {
     for (int i = 0; i < kNumModules; ++i)
       effects_[i]->hardReset();
+    for (PoolSlot& s : pool_) {
+      if (s.module != nullptr)
+        s.module->hardReset();
+      if (s.leaving != nullptr)
+        s.leaving->hardReset();
+    }
   }
 
   void ReorderableEffectChain::correctToTime(double seconds) {
     for (int i = 0; i < kNumModules; ++i)
       effects_[i]->correctToTime(seconds);
+    for (PoolSlot& s : pool_) {
+      if (s.module != nullptr)
+        s.module->correctToTime(seconds);
+      if (s.leaving != nullptr)
+        s.leaving->correctToTime(seconds);
+    }
+  }
+
+  // ---- the effect instance pool -------------------------------------------------------------------------------------------------------
+  void ReorderableEffectChain::retirePoolModule(FxInstanceModule* module) {
+    if (module == nullptr)
+      return;
+    // the ring is flushed first so that the backlog (only used when the consumer is far behind) keeps its order
+    for (FxInstanceModule*& waiting : retire_backlog_) {
+      if (waiting == nullptr)
+        continue;
+      const unsigned w = retired_write_.load(std::memory_order_relaxed);
+      if (w - retired_read_.load(std::memory_order_acquire) >= static_cast<unsigned>(kRetireRing))
+        break;
+      retired_[w % kRetireRing].store(waiting, std::memory_order_relaxed);
+      retired_write_.store(w + 1, std::memory_order_release);
+      waiting = nullptr;
+    }
+    const unsigned w = retired_write_.load(std::memory_order_relaxed);
+    if (w - retired_read_.load(std::memory_order_acquire) < static_cast<unsigned>(kRetireRing)) {
+      retired_[w % kRetireRing].store(module, std::memory_order_relaxed);
+      retired_write_.store(w + 1, std::memory_order_release);
+      return;
+    }
+    for (FxInstanceModule*& waiting : retire_backlog_)
+      if (waiting == nullptr) {
+        waiting = module;
+        return;
+      }
+    VITAL_ASSERT(false);   // 256 modules waiting for the creator's thread and 32 more behind them: cannot happen with a creator that drains the ring
+  }
+
+  FxInstanceModule* ReorderableEffectChain::popRetired() {
+    const unsigned r = retired_read_.load(std::memory_order_relaxed);
+    if (r == retired_write_.load(std::memory_order_acquire))
+      return nullptr;
+    FxInstanceModule* module = retired_[r % kRetireRing].load(std::memory_order_relaxed);
+    retired_read_.store(r + 1, std::memory_order_release);
+    return module;
+  }
+
+  void ReorderableEffectChain::finishPoolFade(PoolSlot& s) {
+    s.fade_left = 0;
+    if (s.leaving == nullptr)
+      return;
+    if (s.leaving_retire)
+      retirePoolModule(s.leaving);
+    else
+      s.leaving->enable(false);   // idle until the slot is switched on again (enable (true) resets its state)
+    s.leaving = nullptr;
+    s.leaving_retire = false;
+  }
+
+  void ReorderableEffectChain::startPoolFade(PoolSlot& s, FxInstanceModule* next) {
+    if (s.fade_left > 0)
+      finishPoolFade(s);   // a change within 10 ms of the last one: the earlier outgoing module is dropped at once
+    s.leaving = s.target;
+    s.leaving_retire = false;
+    s.target = next;
+    if (next != nullptr && !next->enabled())
+      next->enable(true);
+    s.fade_left = (s.leaving != nullptr || next != nullptr) ? std::max(1, getSampleRate() * kPoolFadeMs / 1000) : 0;
+    s.fade_total = std::max(1, s.fade_left);
+  }
+
+  void ReorderableEffectChain::updatePoolTarget(int slot) {
+    PoolSlot& s = pool_[slot];
+    FxInstanceModule* next = (s.on && s.module != nullptr) ? s.module : nullptr;
+    if (next != s.target)
+      startPoolFade(s, next);
+  }
+
+  void ReorderableEffectChain::setPoolModule(int slot, FxInstanceModule* module) {
+    PoolSlot& s = pool_[slot];
+    if (module == s.module)
+      return;
+    FxInstanceModule* old = s.module;
+    s.module = module;
+    updatePoolTarget(slot);
+    if (old == nullptr)
+      return;
+    if (old == s.leaving)
+      s.leaving_retire = true;    // fading out (it was the running module or already on its way out): hand it back when the fade ends
+    else
+      retirePoolModule(old);      // it was not running
+  }
+
+  void ReorderableEffectChain::setPoolConfig(int slot, bool on, int rack, int order) {
+    PoolSlot& s = pool_[slot];
+    s.rack = std::max(0, std::min(2, rack));
+    s.order = std::max(0, std::min(1023, order));
+    s.on = on;
+    updatePoolTarget(slot);
+  }
+
+  const poly_float* ReorderableEffectChain::runPool(int slot, const poly_float* in, int num_samples) {
+    PoolSlot& s = pool_[slot];
+    if (s.fade_left <= 0)
+      return s.target != nullptr ? s.target->run(in, num_samples) : in;
+
+    const poly_float* from = s.leaving != nullptr ? s.leaving->run(in, num_samples) : in;
+    const poly_float* to = s.target != nullptr ? s.target->run(in, num_samples) : in;
+    poly_float* out = s.mix.data();
+    const float scale = 1.0f / static_cast<float>(s.fade_total);
+    for (int i = 0; i < num_samples; ++i) {
+      const float t = std::min(1.0f, static_cast<float>(s.fade_total - s.fade_left + i + 1) * scale);
+      out[i] = from[i] * (1.0f - t) + to[i] * t;
+    }
+    s.fade_left -= num_samples;
+    if (s.fade_left <= 0)
+      finishPoolFade(s);
+    return out;
   }
 } // namespace sbvital

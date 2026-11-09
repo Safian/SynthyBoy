@@ -510,6 +510,8 @@ bool isSpecialParam (size_t paramIndex)
         || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"))
         // B13: noise sample choice (procedural noise buffers)
         || std::strcmp (key, "noise.sample") == 0
+        // B22: the effect instance pool (type, on, rack, order and the normalised parameters of a slot): the adapter builds the module and drives its controls
+        || (startsWith ("fxi") && key[3] >= '0' && key[3] <= '9')
         // B15 (G12, G14, G18): handled by the adapter (note on handling, the bend wheel, the quality controls of the thread)
         || std::strcmp (key, "master.voice.same_note") == 0
         || std::strcmp (key, "master.bend_down_range") == 0 || std::strcmp (key, "master.bend_down_link") == 0
@@ -594,6 +596,19 @@ Conversion vitalConvert (size_t paramIndex, double plain, double sampleRate)
             break;
         }
     return c;
+}
+
+const Binding* vitalBindingOf (size_t paramIndex)
+{
+    static const std::vector<const Binding*> index = []
+    {
+        std::vector<const Binding*> v (paramCount(), nullptr);
+        for (const auto& binding : vitalBindings())
+            if (binding.param < v.size() && v[binding.param] == nullptr)
+                v[binding.param] = &binding;
+        return v;
+    }();
+    return paramIndex < index.size() ? index[paramIndex] : nullptr;
 }
 
 std::string vitalControlOf (size_t paramIndex)

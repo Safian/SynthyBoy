@@ -71,6 +71,14 @@ synthyboy_add_test(synthyboy_test_vital_warpenv test_warpenv.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_warpenv PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
 
+synthyboy_add_test(synthyboy_test_vital_fxinstances test_fxinstances.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_fxinstances PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
+synthyboy_add_test(synthyboy_test_vital_fxinstances_rt test_fxinstances_rt.cpp   # replaces global operator new / delete; also run under ThreadSanitizer
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_fxinstances_rt PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
 # the ported unit tests of the Vital-derived DSP (tests/synthesis/**, translated from upstream's tests/synthesis)
 file(GLOB_RECURSE SBVITAL_PORTED_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/synthesis/*.cpp")
 synthyboy_add_test(synthyboy_test_vital_dsp test_vital_dsp.cpp ${SBVITAL_PORTED_TESTS}

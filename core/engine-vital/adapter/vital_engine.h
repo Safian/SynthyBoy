@@ -24,4 +24,7 @@ double vitalControlValue (const IEngine& engine, const char* control) noexcept; 
 bool vitalHasModulationDestination (const IEngine& engine, size_t paramIndex) noexcept; // the parameter's control is a modulation destination
 int vitalConnectedSlots (const IEngine& engine) noexcept;                                // modulation slots currently wired in the engine
 int vitalEffectiveVoiceLimit (const IEngine& engine) noexcept;                           // value of the engine's polyphony control
+bool vitalHasPoolModule (const IEngine& engine, int slot) noexcept;                      // the effect instance pool slot has its module (the audio thread took it over)
+int vitalPoolBuilds (const IEngine& engine) noexcept;                                    // module builds of the pool that are queued or running
+bool vitalPoolDestinationValid (const IEngine& engine, int slot, int number) noexcept;   // parameter `number` of the slot's module is a wired modulation destination
 } // namespace synthyboy
