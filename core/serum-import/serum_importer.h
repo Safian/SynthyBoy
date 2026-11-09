@@ -137,7 +137,7 @@ public:
     static std::vector<ContentPoint> reduce (std::vector<ContentPoint> p, size_t maxPoints);
 
     // the modulation destinations
-    struct Dest { std::string key; Fid fid = Fid::exact; std::string note; bool ok = false; Reason why = Reason::modDestinationUnsupported; std::string whyText; };
+    struct Dest { std::string key; Fid fid = Fid::exact; std::string note; bool ok = false; bool dbLaw = false; std::string srcKey; Reason why = Reason::modDestinationUnsupported; std::string whyText; };
     Dest destOf (const std::string& type, int id, const std::string& param);
 
     // LFO point modulation

@@ -228,6 +228,25 @@ TEST (serum_modulation_matrix_sources_destinations_curves)
     CHECK_NEAR (r.modCurves[0].points.back().y, 0.8, 1e-6);
 }
 
+TEST (serum_linear_gain_destinations_get_their_modulation_depth_limited)
+{
+    Preset p;
+    const auto slot = [] (const std::string& type, int id, const std::string& param, double amount)
+    {
+        return map ({ { "source", nums ({ 16, 0 }) }, { "destModuleTypeString", text (type) }, { "destModuleID", num (id) }, { "destModuleParamName", text (param) },
+                      { "destModuleParamID", num (0) }, { "plainParams", plain ({ { "kParamAmount", amount } }) } });
+    };
+    p.set ("ModSlot0", slot ("VoiceFilter", 0, "kParamLevelOut", 75));  // filter level -60 .. +12 dB: +75 % would be +54 dB; limited to +12 dB of 72 -> 12.5 %
+    p.set ("ModSlot1", slot ("VoiceFilter", 0, "kParamLevelOut", -100)); // -24 dB of 72 -> -33.3 %
+    p.set ("ModSlot2", slot ("VoiceFilter", 0, "kParamFreq", 75));       // not a gain: untouched
+    const SerumImportResult r = run (p.file());
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_NEAR (r.values.plain[modSlotParams (0).amount], 75.0 * 12.0 / 72.0, 1e-3);
+    CHECK_NEAR (r.values.plain[modSlotParams (1).amount], -100.0 * 24.0 / 72.0, 1e-3);
+    CHECK_NEAR (r.values.plain[modSlotParams (2).amount], 75.0, 1e-3);
+    CHECK (entryWith (r, "db_destination_depth_limited") >= 0);
+}
+
 TEST (serum_effect_racks_become_pool_slots_in_order)
 {
     Preset p;

@@ -302,6 +302,39 @@ FX = {
 }
 
 
+POOL_TYPES = ['chorus', 'compressor', 'delay', 'distortion', 'eq', 'fxfilter', 'flanger', 'phaser', 'reverb', 'hyperdim', 'utility', 'bode', 'convolve']  # fxiNN.type 1 ..
+
+
+def db_keys():
+    keys = set()
+    tables = [OSC, WARPKEYS, WT, NOISE, NOISEOSC, SUB, SUBOSC, FILTER, ENV, MACRO, GLOBAL] + list(FX.values())
+    for t in tables:
+        for key, fn in t.values():
+            if fn is db:
+                keys.add(key)
+    for n in (1, 2):
+        keys.add('filter%d.level' % n)
+    for band in ('low', 'mid', 'high'):
+        keys.add('compressor.%s.upper_threshold' % band)
+        keys.add('compressor.%s.gain' % band)
+    return keys
+
+
+DB_KEYS = db_keys()
+
+
+def source_key(sb, key):
+    """a pool parameter fxiNN.pKK -> the key of the table it stands for."""
+    m = re.match(r'fxi(\d\d)\.p(\d\d)$', key)
+    if not m:
+        return key
+    t = int(sb['state']['params'].get('fxi%s.type' % m.group(1), 0))
+    if t < 1:
+        return key
+    own = T.pool_own_keys(POOL_TYPES[t - 1])
+    return own[int(m.group(2)) - 1] if int(m.group(2)) - 1 < len(own) else key
+
+
 def expected(fn, v):
     if isinstance(fn, dict):
         return float(fn[v]) if isinstance(v, str) and v in fn else None
@@ -456,7 +489,15 @@ class Audit:
                     if key != e['key']:
                         self.err(name, '%s: importer wrote %s, expected %s' % (e['path'], e['key'], key))
                     else:
-                        self.check_value(name, e['path'], sb, key, spec[1](float(node)), e['path'])
+                        want = spec[1](float(node))
+                        if spec[0] == 'amount':
+                            # a destination whose Serum value is a linear gain (a dB value here) gets its depth limited to 24 dB down / 12 dB up
+                            dk = next((x['ours'] for x in report['entries'] if x['path'] == 'ModSlot%d/destModule*' % (k - 1)), '')
+                            sk = source_key(sb, dk)
+                            if sk in DB_KEYS and sk in T.by_key:
+                                rng = T.by_key[sk]['max'] - T.by_key[sk]['min']
+                                want = want * min(1.0, (24.0 if want < 0 else 12.0) / rng)
+                        self.check_value(name, e['path'], sb, key, want, e['path'])
         # transposition: octave * 12 + semitones
         for i in range(3):
             o = tree.get('Oscillator%d' % i, {}).get('plainParams')

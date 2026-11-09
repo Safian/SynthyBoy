@@ -436,6 +436,8 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
                     out.fid = rows[i].fid;
                     out.note = rows[i].note;
                     out.ok = true;
+                    out.dbLaw = rows[i].conv == Conv::dbFromLin;
+                    out.srcKey = out.key;
                     return true;
                 }
         }
@@ -466,7 +468,7 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
     else if (type == "Macro") { if (fromRules ({ "Macro" }, n)) return out; }
     else if (type == "Global")
     {
-        if (param == "kParamVoiceAmp") { out.key = "master.volume"; out.ok = true; out.fid = Fid::approx; out.note = "voice_amp_as_master_volume"; return out; }
+        if (param == "kParamVoiceAmp") { out.key = "master.volume"; out.ok = true; out.fid = Fid::approx; out.note = "voice_amp_as_master_volume"; out.dbLaw = true; out.srcKey = "master.volume"; return out; }
         if (fromRules ({ "Global" }, 1)) return out;
     }
     else if (type == "LFO")
@@ -533,6 +535,8 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
                 for (size_t i = 0; i < count; ++i)
                     if (param == rows[i].param)
                     {
+                        out.dbLaw = rows[i].conv == Conv::dbFromLin;
+                        out.srcKey = rows[i].key;
                         if (pf.slot < 0) { out.key = rows[i].key; out.ok = true; out.fid = rows[i].fid; return out; }
                         const FxTypeDescriptor& desc = fxTypeDescriptor (pf.type);
                         const int src = indexOf (rows[i].key);
@@ -681,7 +685,29 @@ void Importer::modSlots()
                 entry (cl ? ItemKind::approximated : okKind, cl ? Reason::clamped : Reason::exact, area, name + "/plainParams/" + nm, valueText (v), key, fmt (st), detail);
                 consume (v);
             };
-            number ("kParamAmount", "amount", 1.0, -100, 100, "");
+            {
+                // a destination whose Serum value is a linear gain (0 .. 1) is a dB value here: the same relative depth would move it over the whole dB range, so the
+                // depth is limited to 24 dB down / 12 dB up (A346)
+                double scale = 1.0;
+                const int amountNode = get (pp, "kParamAmount");
+                if (dest.dbLaw && amountNode >= 0)
+                {
+                    const ParamInfo& di = paramTable()[static_cast<size_t> (indexOf (dest.srcKey.empty() ? dest.key : dest.srcKey))];
+                    const double range = static_cast<double> (di.max - di.min);
+                    scale = (num (amountNode) < 0 ? 24.0 : 12.0) / range;
+                    if (scale > 1.0) scale = 1.0;
+                }
+                if (scale < 1.0 && amountNode >= 0)
+                {
+                    bool cl = false;
+                    const double st = store (pfx + ".amount", clampd (num (amountNode) * scale, -100, 100), &cl);
+                    setByFile[static_cast<size_t> (indexOf (pfx + ".amount"))] = 1;
+                    entry (ItemKind::approximated, Reason::tierNote, area, name + "/plainParams/kParamAmount", valueText (amountNode), pfx + ".amount", fmt (st), "db_destination_depth_limited");
+                    consume (amountNode);
+                }
+                else
+                    number ("kParamAmount", "amount", 1.0, -100, 100, "");
+            }
             number ("kParamBipolar", "bipolar", 1.0, 0, 1, "");
             number ("kParamBypass", "bypass", 1.0, 0, 1, "");
             number ("kParamAuxInverted", "aux_inv", 1.0, 0, 1, "");
