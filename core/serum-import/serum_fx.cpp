@@ -464,7 +464,11 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
     else if (type == "VoiceFilter") { if (fromRules ({ "Filter" }, n)) return out; }
     else if (type == "Env") { if (fromRules ({ "Env" }, n)) return out; }
     else if (type == "Macro") { if (fromRules ({ "Macro" }, n)) return out; }
-    else if (type == "Global") { if (fromRules ({ "Global" }, 1)) return out; }
+    else if (type == "Global")
+    {
+        if (param == "kParamVoiceAmp") { out.key = "master.volume"; out.ok = true; out.fid = Fid::approx; out.note = "voice_amp_as_master_volume"; return out; }
+        if (fromRules ({ "Global" }, 1)) return out;
+    }
     else if (type == "LFO")
     {
         if (id >= 0 && id < 10)

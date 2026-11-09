@@ -131,7 +131,7 @@ const Rule kNoise[] = {
     { "NoiseOsc", "kParamFine", "noise.fine", Conv::lin, 100, 0, C, 0, nullptr, "noise_fine_unit_assumed" },
     { "NoiseOsc", "kParamInitialPhase", "noise.phase", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "NoiseOsc", "kParamRandomPhase", "noise.random_phase", Conv::boolean, 1, 0, C, 0, nullptr, "random_phase_amount_to_switch" },
-    { "NoiseOsc", "kParamOneShot", "noise.loop", Conv::lin, -1, 1, X, 1, nullptr, "" },
+    { "NoiseOsc", "kParamOneShot", "noise.loop", Conv::lin, -1, 1, X, 0, nullptr, "" },
 };
 
 const Rule kSub[] = {
@@ -174,7 +174,6 @@ const Rule kMacro[] = { { "Macro", "kParamValue", "macro.#", Conv::lin, 1, 0, X,
 
 const Rule kGlobal[] = {
     { "Global", "kParamMasterVolume", "master.volume", Conv::dbFromLin, 1, 0, C, kNaN, nullptr, "master_volume_linear_assumed" },
-    { "Global", "kParamVoiceAmp", "master.volume", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "voice_amp_as_master_volume" },
     { "Global", "kParamPolyCount", "master.polyphony", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "Global", "kParamBendRangeUp", "master.bend_range", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "Global", "kParamLegato", "master.legato", Conv::boolean, 1, 0, X, 0, nullptr, "" },
