@@ -84,6 +84,17 @@ TEST (midi_translation)
     CHECK_EQ (e.key, -1);
     CHECK_EQ (e.channel, 4);
 
+    // GROUPA1 (WP-09): CC 10 (pan) is the X axis of an MPE member channel
+    const uint8_t panMsg[] = { 0xB3, 10, 127 }, panCentre[] = { 0xB3, 10, 0 };
+    CHECK (translateMidiMessage (panMsg, 3, 0, e));
+    CHECK_EQ (e.type, Event::NoteExpression);
+    CHECK_EQ (e.expression, Event::Pan);
+    CHECK_EQ (e.key, -1);
+    CHECK_EQ (e.channel, 3);
+    CHECK_EQ (e.value, 1.0f);
+    CHECK (translateMidiMessage (panCentre, 3, 0, e));
+    CHECK_EQ (e.value, 0.0f);
+
     const uint8_t polyPressure[] = { 0xA2, 70, 100 };
     CHECK (translateMidiMessage (polyPressure, 3, 0, e));
     CHECK_EQ (e.type, Event::NoteExpression);

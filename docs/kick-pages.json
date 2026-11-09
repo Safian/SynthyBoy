@@ -2066,6 +2066,12 @@
         {"key": "master.stereo_routing", "shortLabel": "Stereo Rou", "widget": "knob"},
         {"key": "master.voice_override", "shortLabel": "Voice Over", "widget": "stepped"},
         null
+      ],
+      "moreKeys": [
+        "master.mpe.xyz_macro",
+        "master.mpe.y_modwheel",
+        "master.mpe.bend_to_x",
+        "master.mpe.y_bipolar"
       ]
     },
     {

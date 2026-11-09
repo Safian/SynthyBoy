@@ -661,7 +661,8 @@ public:
              | kCapModAmount // block B20: proven by core/engine-vital/tests/test_modamt.cpp
              | kCapWarpAll | kCapEnv1Toggle // block B21: proven by core/engine-vital/tests/test_warpenv.cpp
              | kCapFxInstances // block B22: proven by core/engine-vital/tests/test_fxinstances.cpp (a slot of every type renders what instance 0 renders)
-             | kCapSubPhase | kCapNoiseColour | kCapNoiseSample; // block B23 (GROUPA1 WP-04): proven by core/engine-vital/tests/test_noisesample.cpp
+             | kCapSubPhase | kCapNoiseColour | kCapNoiseSample // block B23 (GROUPA1 WP-04): proven by core/engine-vital/tests/test_noisesample.cpp
+             | kCapMpeRouting; // block B24 (GROUPA1 WP-09): proven by core/engine-vital/tests/test_mpe.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -1003,6 +1004,8 @@ private:
             r.hi = range.max;
             r.isTune = binding.control == "voice_transpose"; // the concert pitch (master.tuning.a4) is added to the transposition
             resolved.push_back (r);
+            if (binding.control.compare (0, 14, "macro_control_") == 0 && binding.control.size() == 15 && binding.control[14] >= '1' && binding.control[14] <= '8')
+                macroResolved[static_cast<size_t> (binding.control[14] - '1')] = resolved.size() - 1;   // GROUPA1 (WP-09): the MPE axes write these controls
         }
 
         for (size_t i = 0; i < paramCount(); ++i)
@@ -1083,6 +1086,10 @@ private:
         mtsNoteOnParam = find ("master.tuning.mts_note_on_only");
         mpeOnParam = find ("master.mpe.on");
         mpeRangeParam = find ("master.mpe.bend_range");
+        mpeXyzMacroParam = find ("master.mpe.xyz_macro");
+        mpeYModWheelParam = find ("master.mpe.y_modwheel");
+        mpeBendToXParam = find ("master.mpe.bend_to_x");
+        mpeYBipolarParam = find ("master.mpe.y_bipolar");
         reverbForceParam = find ("reverb.force_enable");
         sameNoteParam = find ("master.voice.same_note");
         bendDownRangeParam = find ("master.bend_down_range");
@@ -1181,6 +1188,7 @@ private:
             appliedQualityGeneration = generation;
         }
 
+        applyMpeMacroMap();          // before the bindings: the macros that were driven by an MPE axis take their knobs back in this pass
         applyScaleAndTuning (force); // first: the concert pitch it computes is added to the transposition below
         applyWavetables();           // before the bindings: the frame scale of a user table
 
@@ -2310,7 +2318,12 @@ private:
                 rawBend[static_cast<size_t> (channel)] = bend;
                 lastBend = bend;
                 if (mpeOn())
+                {
                     applyMpeBends(); // master.mpe.on: the member channel's bend range, the manager channel moves every note
+                    // Serum: "MPE Pitch Bend (also) maps to Expr X": the member channel's wheel is the X axis as well
+                    if (channel > 0 && mpeBendToXParam >= 0 && params[static_cast<size_t> (mpeBendToXParam)].load (std::memory_order_relaxed) > 0.5f)
+                        mpeAxis (0, 0.5f + 0.5f * bend, channel);
+                }
                 else
                     engine->setPitchWheel (bend * masterBendRange (bend) / kVitalLocalBendRange, channel);
                 engine->setZonedPitchWheel (bend, channel, channel);
@@ -2326,7 +2339,10 @@ private:
                 lastAftertouch = pressure;
                 engine->setChannelAftertouch (channel, pressure, 0);
                 if (mpeOn() && channel > 0)
+                {
                     engine->setNotePressure (-1, channel, pressure); // an MPE member channel carries one note: its pressure is that note's
+                    mpeAxis (2, pressure, channel);                   // and the Z axis
+                }
                 break;
             }
             case Event::AllNotesOff:
@@ -2377,7 +2393,61 @@ private:
         {
             case Event::Tuning:     engine->setNotePitchBend (key, channel, clampf (e.value, -96.0f, 96.0f)); break;
             case Event::Pressure:   engine->setNotePressure (key, channel, clampf (e.value, 0.0f, 1.0f)); break;
-            case Event::Brightness: engine->setNoteSlide (key, channel, clampf (e.value, 0.0f, 1.0f)); break;
+            case Event::Brightness: engine->setNoteSlide (key, channel, clampf (e.value, 0.0f, 1.0f)); mpeAxis (1, clampf (e.value, 0.0f, 1.0f), channel); break;
+            case Event::Pan:        mpeAxis (0, clampf (e.value, 0.0f, 1.0f), channel); break;
+        }
+        if (e.expression == Event::Pressure)
+            mpeAxis (2, clampf (e.value, 0.0f, 1.0f), channel);
+    }
+
+    /** GROUPA1 (WP-09, 13-new-keys.md 4.28): the MPE axes X (0), Y (1), Z (2), each 0..1, drive the macros (master.mpe.xyz_macro: XYZ -> macros 1, 2, 3, or
+        YZ -> macros 1, 2) and Y the mod wheel (master.mpe.y_modwheel). They act on the note expressions of the host as well, with MPE off (manual p.325). The
+        macros are global: the last axis value that arrived wins. y_bipolar: Y is centred on 0.5 and the macro / mod wheel get the size of the deflection. */
+    void mpeAxis (int axis, float value, int channel) noexcept
+    {
+        const int map = mpeXyzMacroParam >= 0 ? static_cast<int> (params[static_cast<size_t> (mpeXyzMacroParam)].load (std::memory_order_relaxed) + 0.5f) : 0;
+        const bool yToWheel = mpeYModWheelParam >= 0 && params[static_cast<size_t> (mpeYModWheelParam)].load (std::memory_order_relaxed) > 0.5f;
+        if (map == 0 && ! yToWheel)
+            return;
+        float v = value;
+        if (axis == 1 && mpeYBipolarParam >= 0 && params[static_cast<size_t> (mpeYBipolarParam)].load (std::memory_order_relaxed) > 0.5f)
+            v = std::fabs (2.0f * value - 1.0f);
+        if (map == 1 || (map == 2 && axis >= 1))
+        {
+            const int macro = map == 1 ? axis : axis - 1;   // XYZ: 0, 1, 2; YZ: Y -> 0, Z -> 1
+            if (macro >= 0 && macro < 3)
+                setMacroFromMpe (macro, v);
+        }
+        if (axis == 1 && yToWheel)
+        {
+            lastModWheel = v;
+            engine->setModWheel (v, channel);
+        }
+    }
+
+    /** A macro takes the value of an MPE axis (the control, not the knob); applyMpeMacroMap () gives it back when the mapping is switched off. */
+    void setMacroFromMpe (int macro, float value) noexcept
+    {
+        const size_t index = macroResolved[static_cast<size_t> (macro)];
+        if (index == SIZE_MAX)
+            return;
+        const Resolved& r = resolved[index];
+        if (r.control != nullptr)
+            r.control->set (clampf (value, 0.0f, 1.0f));
+    }
+
+    /** The mapping was switched off or changed: the macros 1 .. 3 are written from their knobs again. */
+    void applyMpeMacroMap() noexcept
+    {
+        const int map = mpeXyzMacroParam >= 0 ? static_cast<int> (params[static_cast<size_t> (mpeXyzMacroParam)].load (std::memory_order_relaxed) + 0.5f) : 0;
+        if (map == appliedMpeMacroMap)
+            return;
+        appliedMpeMacroMap = map;
+        for (int m = 0; m < 3; ++m)
+        {
+            const size_t index = macroResolved[static_cast<size_t> (m)];
+            if (index != SIZE_MAX)
+                applied[resolved[index].binding->param] = std::numeric_limits<float>::quiet_NaN();
         }
     }
 
@@ -2484,6 +2554,9 @@ private:
     int curveVelocityLegatoParam = -1, curveNoteLegatoParam = -1, portamentoParam = -1;
     int scaleKeyParam = -1, scaleTypeParam = -1, scaleModeParam = -1, a4Param = -1, tuningScaleParam = -1, mtsParam = -1, mtsNoteOnParam = -1;
     int mpeOnParam = -1, mpeRangeParam = -1, reverbForceParam = -1;
+    int mpeXyzMacroParam = -1, mpeYModWheelParam = -1, mpeBendToXParam = -1, mpeYBipolarParam = -1;
+    std::array<size_t, 8> macroResolved { SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX }; // index into `resolved` of macro 1 .. 8
+    int appliedMpeMacroMap = 0;       // master.mpe.xyz_macro as of the last block: a change gives the macros back to their knobs
     bool appliedReverbForce = false;
     std::array<sbvital::Value*, kNumLfo> vLfoSyncType {}, vLfoHostLock {};
     std::array<sbvital::Value*, kNumOsc> vOscMapWarp {};

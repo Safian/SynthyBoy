@@ -30,7 +30,8 @@ struct Event
     {
         Tuning = 0,     // per-note pitch, semitones (CLAP TUNING; master.mpe.on adds the member channel bend)
         Pressure = 1,   // per-note pressure 0..1 (CLAP PRESSURE, MIDI poly key pressure): source "Poly Aftertouch"
-        Brightness = 2  // per-note slide / Y 0..1 (CLAP BRIGHTNESS, MIDI CC 74 of an MPE member channel): source "Slide"
+        Brightness = 2, // per-note slide / Y 0..1 (CLAP BRIGHTNESS, MIDI CC 74 of an MPE member channel): source "Slide"
+        Pan = 3         // per-note X 0..1, 0.5 = centre (CLAP PAN, MIDI CC 10): the X axis of the MPE mappings (master.mpe.xyz_macro), GROUPA1 WP-09
     };
 
     int32_t frame = 0;   // 0 .. numFrames - 1, position inside the block

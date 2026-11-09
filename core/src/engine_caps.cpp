@@ -79,6 +79,9 @@ EngineCapsMask classify (const char* key) noexcept
         return kCapKeyScale;
     if (startsWith (key, "master.tuning."))
         return kCapTuning;
+    if (std::strcmp (key, "master.mpe.xyz_macro") == 0 || std::strcmp (key, "master.mpe.y_modwheel") == 0
+        || std::strcmp (key, "master.mpe.bend_to_x") == 0 || std::strcmp (key, "master.mpe.y_bipolar") == 0)
+        return kCapMpeRouting;
     if (startsWith (key, "master.mpe."))
         return kCapMpe;
     if (startsWith (key, "master.voice."))
@@ -329,6 +332,7 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapSubPhase:         return "sub_phase";
         case kCapNoiseColour:      return "noise_colour";
         case kCapNoiseSample:      return "noise_sample";
+        case kCapMpeRouting:       return "mpe_routing";
         case kCapNone:             break;
     }
     return "";

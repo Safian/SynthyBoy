@@ -2319,6 +2319,64 @@ TEST (uig_wp04_new_keys_take_modulation_by_touch_where_they_are_continuous)
     CHECK (! flow.isTarget (resolveKey ("noise.bounce").index));
 }
 
+// GROUPA1 (WP-09): the quick maps of the MPE pad set the keys (they only changed their own caption before), and the four keys are controls of the panel
+TEST (uig_wp09_mpe_quick_maps_set_the_keys_on_phone_and_tablet)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::glb, sz.w, sz.h);
+        Panel* mpe = rig.panelTitled ("MPE & Expression");
+        CHECK (mpe != nullptr);
+        if (mpe == nullptr)
+            continue;
+        const auto keys = mpe->keys();
+        for (const char* key : { "master.mpe.xyz_macro", "master.mpe.y_modwheel", "master.mpe.bend_to_x", "master.mpe.y_bipolar" })
+            CHECK (std::find (keys.begin(), keys.end(), std::string (key)) != keys.end());
+
+        const auto button = [&] (const char* caption) -> juce::TextButton*
+        {
+            return rig.find<juce::TextButton> (*mpe, [caption] (juce::TextButton& b) { return b.getButtonText().startsWith (caption); });
+        };
+        auto* xyz = button ("XYZ");
+        auto* yz = button ("YZ");
+        auto* yWheel = button ("Y ->");
+        CHECK (xyz != nullptr && yz != nullptr && yWheel != nullptr);
+        if (xyz == nullptr || yz == nullptr || yWheel == nullptr)
+            continue;
+        const int minTouch = rig.editor->theme().touch();
+        for (auto* b : { xyz, yz, yWheel })
+            CHECK (b->getHeight() >= minTouch && b->getWidth() >= minTouch);
+
+        CHECK_EQ (static_cast<int> (rig.param ("master.mpe.xyz_macro")), 0);
+        xyz->onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("master.mpe.xyz_macro") + 0.5f), 1);
+        CHECK (xyz->getToggleState() && ! yz->getToggleState());
+        yz->onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("master.mpe.xyz_macro") + 0.5f), 2);
+        CHECK (yz->getToggleState() && ! xyz->getToggleState());
+        yz->onClick(); // a second tap switches the map off
+        CHECK_EQ (static_cast<int> (rig.param ("master.mpe.xyz_macro") + 0.5f), 0);
+        CHECK (! yz->getToggleState());
+        yWheel->onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("master.mpe.y_modwheel") + 0.5f), 1);
+        CHECK (yWheel->getToggleState());
+        yWheel->onClick();
+        CHECK_EQ (static_cast<int> (rig.param ("master.mpe.y_modwheel") + 0.5f), 0);
+
+        // the key changed elsewhere (a preset, the generic control, automation) shows on the buttons
+        rig.setParam ("master.mpe.xyz_macro", 1.0f);
+        CHECK (xyz->getToggleState());
+        rig.setParam ("master.mpe.xyz_macro", 0.0f);
+
+        mpe->setMoreExpanded (true);
+        CHECK (mpe->getHeight() >= mpe->preferredHeight (mpe->getWidth()) - 1);
+        CHECK (mpe->getWidth() <= sz.w);
+        rig.shot ("mpe-wp09-" + n, sz.w, sz.h, true, Page::glb);
+    }
+}
+
 TEST (uig_sub_and_noise_knobs_take_modulation_by_touch)
 {
     Rig rig (Page::osc);

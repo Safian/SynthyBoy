@@ -357,6 +357,23 @@ TEST (serum_noise_source_takes_the_sample_file_the_embedded_data_or_the_colour)
     }
 }
 
+// GROUPA1 (WP-09, A350): mpeConfig 0 = no mapping; a value nobody has seen is reported, not guessed
+TEST (serum_mpe_config_zero_is_no_mapping_and_other_values_are_reported)
+{
+    for (const double config : { 0.0, 3.0 })
+    {
+        Preset p;
+        p.set ("Global0", map ({ { "plainParams", plain ({ { "kParamPolyCount", 8 } }) } }));
+        p.set ("mpeConfig", num (config));
+        const SerumImportResult r = run (p.file());
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (value (r, "master.mpe.xyz_macro"), 0.0f);
+        CHECK_EQ (value (r, "master.mpe.y_modwheel"), 0.0f);
+        CHECK ((entryWith (r, "mpe_config_no_mapping") >= 0) == (config == 0.0));
+        CHECK ((entryWith (r, "mpe_config_value_not_decoded") >= 0) == (config != 0.0));
+    }
+}
+
 TEST (serum_effect_racks_become_pool_slots_in_order)
 {
     Preset p;

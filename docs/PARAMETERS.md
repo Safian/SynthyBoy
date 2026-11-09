@@ -4,11 +4,11 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2057 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2061 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
-| Master | 31 |
+| Master | 35 |
 | Osc 1 | 71 |
 | Osc 2 | 71 |
 | Osc 3 | 71 |
@@ -90,6 +90,10 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `master.stereo_spread` | Master Stereo Spread | 0 .. 100 % | 100 % | Master | mod |  |
 | `master.stereo_routing` | Master Stereo Routing | 0 .. 100 % | 100 % | Master / Voicing | mod |  |
 | `master.voice_override` | Master Voice Override | 0 Kill, 1 Steal | Kill | Master / Voicing |  |  |
+| `master.mpe.xyz_macro` | MPE XYZ to Macros | 0 Off, 1 XYZ -> Macro 1, 2, 3, 2 YZ -> Macro 1, 2 | Off | Master / MPE |  |  |
+| `master.mpe.y_modwheel` | MPE Y to Mod Wheel | 0 Off, 1 On | Off | Master / MPE |  |  |
+| `master.mpe.bend_to_x` | MPE Pitch Bend also to X | 0 Off, 1 On | Off | Master / MPE |  |  |
+| `master.mpe.y_bipolar` | MPE Y Bi-directional | 0 Off, 1 On | Off | Master / MPE |  |  |
 
 ### Osc 1
 

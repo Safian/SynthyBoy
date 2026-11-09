@@ -16,9 +16,17 @@ public:
           mpeOnHandle (context, "master.mpe.on"),
           mpeBendHandle (context, "master.mpe.bend_range"),
           bendRangeHandle (context, "master.bend_range"),
-          velTrackHandle (context, "master.velocity_track")
+          velTrackHandle (context, "master.velocity_track"),
+          xyzHandle (context, "master.mpe.xyz_macro"),
+          yWheelHandle (context, "master.mpe.y_modwheel"),
+          bendToXHandle (context, "master.mpe.bend_to_x"),
+          yBipolarHandle (context, "master.mpe.y_bipolar")
     {
-        const auto update = [this] { repaint(); };
+        const auto update = [this] { syncButtons(); repaint(); };
+        xyzHandle.onChange = update;
+        yWheelHandle.onChange = update;
+        bendToXHandle.onChange = update;
+        yBipolarHandle.onChange = update;
         mpeOnHandle.onChange = update;
         mpeBendHandle.onChange = update;
         bendRangeHandle.onChange = update;
@@ -35,7 +43,13 @@ public:
         quickMapYMod.setButtonText ("Y -> Mod Wheel");
         quickMapYMod.onClick = [this] { doQuickMap (1); };
         addAndMakeVisible (quickMapYMod);
+        syncButtons();
     }
+
+    /** The three quick maps are real now (WP-09): they set master.mpe.xyz_macro / y_modwheel and show their state. */
+    juce::Button& xyzButton() noexcept { return quickMapXyz; }
+    juce::Button& yzButton() noexcept { return quickMapYz; }
+    juce::Button& yModWheelButton() noexcept { return quickMapYMod; }
 
     void paint (juce::Graphics& g) override
     {
@@ -171,15 +185,29 @@ private:
         repaint();
     }
 
+    int xyzMode() const { return xyzHandle.valid() ? juce::roundToInt (xyzHandle.plain()) : 0; }
+
+    void syncButtons()
+    {
+        quickMapXyz.setToggleState (xyzMode() == 1, juce::dontSendNotification);
+        quickMapYz.setToggleState (xyzMode() == 2, juce::dontSendNotification);
+        quickMapYMod.setToggleState (yWheelHandle.valid() && yWheelHandle.plain() > 0.5f, juce::dontSendNotification);
+    }
+
     void doQuickMap (int mapType)
     {
-        // Feedback highlight
+        // 3: XYZ -> Macro 1, 2, 3 (choice 1), 2: YZ -> Macro 1, 2 (choice 2), 1: Y -> Mod Wheel (the switch); a second tap switches the map off
         if (mapType == 1)
-            quickMapYMod.setButtonText ("Mapped: Y->MW");
-        else if (mapType == 2)
-            quickMapYz.setButtonText ("Mapped: YZ->M12");
-        else
-            quickMapXyz.setButtonText ("Mapped: XYZ->M123");
+        {
+            if (yWheelHandle.valid())
+                yWheelHandle.setPlainComplete (yWheelHandle.plain() > 0.5f ? 0.0f : 1.0f);
+        }
+        else if (xyzHandle.valid())
+        {
+            const int wanted = mapType == 3 ? 1 : 2;
+            xyzHandle.setPlainComplete (xyzMode() == wanted ? 0.0f : static_cast<float> (wanted));
+        }
+        syncButtons();
         repaint();
     }
 
@@ -188,6 +216,10 @@ private:
     ParamHandle mpeBendHandle;
     ParamHandle bendRangeHandle;
     ParamHandle velTrackHandle;
+    ParamHandle xyzHandle;
+    ParamHandle yWheelHandle;
+    ParamHandle bendToXHandle;
+    ParamHandle yBipolarHandle;
 
     juce::TextButton quickMapXyz;
     juce::TextButton quickMapYz;
@@ -216,12 +248,16 @@ public:
                  "master.bend_range",
                  "master.velocity_track",
                  "curve.velocity.legato",
-                 "curve.note.legato" };
+                 "curve.note.legato",
+                 "master.mpe.xyz_macro",
+                 "master.mpe.y_modwheel",
+                 "master.mpe.bend_to_x",
+                 "master.mpe.y_bipolar" };
     }
 
     void build() override
     {
-        // 4 primary controls next to visual, 2 behind More
+        // 4 primary controls next to visual, 6 behind More
         addControl ("master.mpe.on");
         addControl ("master.mpe.bend_range");
         addControl ("master.bend_range");
@@ -229,6 +265,10 @@ public:
 
         addMoreControl ("curve.velocity.legato");
         addMoreControl ("curve.note.legato");
+        addMoreControl ("master.mpe.xyz_macro");
+        addMoreControl ("master.mpe.y_modwheel");
+        addMoreControl ("master.mpe.bend_to_x");
+        addMoreControl ("master.mpe.y_bipolar");
     }
 
     int preferredHeight (int width) const override

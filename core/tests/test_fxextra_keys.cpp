@@ -77,7 +77,7 @@ TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
     }
     CHECK_EQ (position, 1558);
     CHECK_EQ (destination, 432);
-    CHECK_EQ (static_cast<int> (paramCount()), 2057); // + the 18 keys of B18, the 18 of B15, the 2 of B20, the 7 of B21, the 448 of B22 and the 6 of B23
+    CHECK_EQ (static_cast<int> (paramCount()), 2061); // + the 18 keys of B18, the 18 of B15, the 2 of B20, the 7 of B21, the 448 of B22, the 6 of B23 and the 4 of B24
     CHECK_EQ (modDestinationParamIndex (424), 1546);
     CHECK_EQ (modDestinationParamIndex (431), 1557);
     CHECK_EQ (positionOf ("splitter_ms.level"), 1483); // B12 is unchanged

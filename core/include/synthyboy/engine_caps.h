@@ -82,6 +82,8 @@ enum EngineCaps : EngineCapsMask
     kCapSubPhase         = 1ull << 52, // WP-04: sub.phase, sub.phase_contiguous
     kCapNoiseColour      = 1ull << 53, // WP-04: noise.stereo, noise.filter (the colour samples White / Pink / Brown / Geiger)
     kCapNoiseSample      = 1ull << 54, // WP-04: noise.type = Sample (a content sample as the noise source), noise.bounce
+    // block B24 (GROUPA1, 13-new-keys.md 4.28); bit 55
+    kCapMpeRouting       = 1ull << 55, // WP-09: master.mpe.xyz_macro / y_modwheel / bend_to_x / y_bipolar
 };
 
 /** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
@@ -91,7 +93,7 @@ constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDi
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = (1ull << 55) - 1;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 56) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

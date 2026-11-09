@@ -222,7 +222,7 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                 }
                 case CLAP_EVENT_NOTE_EXPRESSION:
                 {
-                    // per-note expressions (MPE through CLAP, docs/ui-design/13-new-keys.md 4.7): TUNING (semitones), PRESSURE, BRIGHTNESS
+                    // per-note expressions (MPE through CLAP, docs/ui-design/13-new-keys.md 4.7): TUNING (semitones), PRESSURE, BRIGHTNESS, PAN
                     const auto* ev = reinterpret_cast<const clap_event_note_expression_t*> (hdr);
                     Event e {};
                     e.frame = static_cast<int32_t> (ev->header.time);
@@ -237,8 +237,10 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                         e.expression = Event::Pressure;
                     else if (ev->expression_id == CLAP_NOTE_EXPRESSION_BRIGHTNESS)
                         e.expression = Event::Brightness;
+                    else if (ev->expression_id == CLAP_NOTE_EXPRESSION_PAN)
+                        e.expression = Event::Pan; // the X axis of the MPE mappings
                     else
-                        break; // volume, pan, vibrato, expression: not used
+                        break; // volume, vibrato, expression: not used
                     self->events.push_back (e);
                     break;
                 }

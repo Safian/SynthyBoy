@@ -5,7 +5,7 @@
 // Header only, no allocation. The mapping (docs/ui-design/13-new-keys.md 6):
 //   0x9n vel > 0 -> NoteOn            0x9n vel 0, 0x8n -> NoteOff, value = release velocity / 127
 //   0xEn         -> PitchBend         0xDn -> Aftertouch (channel pressure)      0xAn -> NoteExpression Pressure (key = note)
-//   CC 1 -> ModWheel    CC 64 -> SustainPedal (>= 64 down)    CC 74 -> NoteExpression Brightness (key = -1: the whole channel)
+//   CC 10 -> NoteExpression Pan (X, key = -1)    CC 1 -> ModWheel    CC 64 -> SustainPedal (>= 64 down)    CC 74 -> NoteExpression Brightness (key = -1: the whole channel)
 //   CC 120 / 123 -> AllNotesOff (that channel)
 // Everything else is not translated (returns false).
 #pragma once
@@ -74,6 +74,15 @@ inline bool translateMidiMessage (const uint8_t* bytes, int numBytes, int frame,
             {
                 out.type = Event::SustainPedal;
                 out.value = d2 >= 64 ? 1.0f : 0.0f;
+                return true;
+            }
+            if (d1 == 10)
+            {
+                // GROUPA1 (WP-09): CC 10 (pan) is the X axis of an MPE member channel (Serum 2 manual p.314); 0.5 = centre
+                out.type = Event::NoteExpression;
+                out.expression = Event::Pan;
+                out.key = -1;
+                out.value = static_cast<float> (d2) / 127.0f;
                 return true;
             }
             if (d1 == 74)

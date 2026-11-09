@@ -1,4 +1,4 @@
-{"format":"synthyboy-params","version":1,"stateVersion":3,"count":2057,
+{"format":"synthyboy-params","version":1,"stateVersion":3,"count":2061,
 "modSources":[
   {"choice":1,"key":"env1","name":"Env 1","bipolar":false},
   {"choice":2,"key":"env2","name":"Env 2","bipolar":false},
@@ -3005,5 +3005,9 @@
   {"key":"noise.stereo","id":4066428236,"name":"Noise Stereo","group":"Noise","min":0,"max":100,"default":0,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"percent","flags":["automatable","modulatable"],"modulatable":905,"ownEngine":false},
   {"key":"noise.filter","id":3684301004,"name":"Noise Filter","group":"Noise","min":-100,"max":100,"default":0,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"percent","flags":["automatable","modulatable"],"modulatable":906,"ownEngine":false},
   {"key":"noise.type","id":1327169934,"name":"Noise Type","group":"Noise","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Noise","Sample"],"modulatable":0,"ownEngine":false},
-  {"key":"noise.bounce","id":3575587804,"name":"Noise Bounce","group":"Noise","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Off","On"],"modulatable":0,"ownEngine":false}
+  {"key":"noise.bounce","id":3575587804,"name":"Noise Bounce","group":"Noise","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Off","On"],"modulatable":0,"ownEngine":false},
+  {"key":"master.mpe.xyz_macro","id":109577038,"name":"MPE XYZ to Macros","group":"Master / MPE","min":0,"max":2,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Off","XYZ -> Macro 1, 2, 3","YZ -> Macro 1, 2"],"modulatable":0,"ownEngine":false},
+  {"key":"master.mpe.y_modwheel","id":2845800951,"name":"MPE Y to Mod Wheel","group":"Master / MPE","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Off","On"],"modulatable":0,"ownEngine":false},
+  {"key":"master.mpe.bend_to_x","id":3088052386,"name":"MPE Pitch Bend also to X","group":"Master / MPE","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Off","On"],"modulatable":0,"ownEngine":false},
+  {"key":"master.mpe.y_bipolar","id":697929529,"name":"MPE Y Bi-directional","group":"Master / MPE","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Off","On"],"modulatable":0,"ownEngine":false}
 ]}

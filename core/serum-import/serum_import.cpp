@@ -531,6 +531,20 @@ void Importer::global()
         entry (cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, "voice", "mpePitchBendRange", valueText (pbr), "master.mpe.bend_range", fmt (st), "");
         consume (pbr);
     }
+    // GROUPA1 (WP-09, A350): mpeConfig is the number of the main menu mappings (XYZ -> Macro ..., Y -> Mod Wheel). 0 (all of the 656 presets of the installation) is
+    // "no mapping": the keys stay Off. A number we have never seen is not decoded: the mappings stay Off and the value is reported
+    const int mpeConfig = get (0, "mpeConfig");
+    if (mpeConfig >= 0)
+    {
+        if (isNumber (mpeConfig) && num (mpeConfig) == 0.0)
+        {
+            store ("master.mpe.xyz_macro", 0);
+            entry (ItemKind::imported, Reason::exact, "voice", "mpeConfig", valueText (mpeConfig), "master.mpe.xyz_macro", "Off", "mpe_config_no_mapping");
+        }
+        else
+            entry (ItemKind::dropped, Reason::noEngineEquivalent, "voice", "mpeConfig", valueText (mpeConfig), "master.mpe.xyz_macro", "Off", "mpe_config_value_not_decoded");
+        consume (mpeConfig);
+    }
     const int pq = get (0, "PitchQuantizer0");
     if (pq >= 0)
     {

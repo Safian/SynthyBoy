@@ -127,6 +127,8 @@ constexpr const char* const kFxInstanceTypes[] = { "None", "Chorus", "Compressor
 constexpr const char* const kPoolRacks[] = { "Main", "Bus 1", "Bus 2" };
 // B23 (GROUPA1, WP-04): the noise source plays a generator or a user sample
 constexpr const char* const kNoiseTypes[] = { "Noise", "Sample" };
+// B24 (GROUPA1, WP-09): the MPE axis mappings to the macros (Serum 2 manual p.326)
+constexpr const char* const kMpeMacroMaps[] = { "Off", "XYZ -> Macro 1, 2, 3", "YZ -> Macro 1, 2" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -826,11 +828,17 @@ constexpr ParamInfo kRaw[] = {
     SB_PCT_RANGE ("noise.filter", "Noise Filter", "Noise", -100.0f, 100.0f, 0.0f, kMod),
     pick ("noise.type", "Noise Type", "Noise", kNoiseTypes, 0),
     onOff ("noise.bounce", "Noise Bounce", "Noise", false),
+
+    // --- B24: GROUPA1 WP-09: MPE completion (13-new-keys.md 4.28, positions 2057..2060) -----------------------------------------------
+    pick ("master.mpe.xyz_macro", "MPE XYZ to Macros", "Master / MPE", kMpeMacroMaps, 0),
+    onOff ("master.mpe.y_modwheel", "MPE Y to Mod Wheel", "Master / MPE", false),
+    onOff ("master.mpe.bend_to_x", "MPE Pitch Bend also to X", "Master / MPE", false),
+    onOff ("master.mpe.y_bipolar", "MPE Y Bi-directional", "Master / MPE", false),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2057, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23)");
+static_assert (kCount == 2061, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24)");
 
 struct Table
 {
