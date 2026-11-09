@@ -58,6 +58,9 @@ namespace sbvital {
       force_inline SynthOscillator* oscillator() { return oscillator_; }
       force_inline SampleOscillator* sampleOscillator() { return sample_oscillator_; }
       SampleOscShared* sampleShared() { return sample_shared_.get(); }
+      // GROUPB WP-05: the pitch tap of the oscillator (what a Ratio SRC reads) and whether the oscillator runs
+      std::shared_ptr<Output> pitchTap() const { return oscillator_->pitchTap(); }
+      bool isOn() const { return on_ != nullptr && on_->value() != 0.0f; }
       SynthOscillator::DistortionType getDistortionType() {
         int val = distortion_type_->value();
         return static_cast<SynthOscillator::DistortionType>(val);

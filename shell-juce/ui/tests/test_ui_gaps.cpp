@@ -26,6 +26,7 @@
 #include "ui/panels/WavetablePanel.h"
 #include "ui/panels/SubPanel.h"
 #include "ui/panels/NoisePanel.h"
+#include "ui/model/RatioSource.h"
 #include "ui/panels/FilterModels.h"
 #include "ui/panels/FilterViews.h"
 #include "test_runner.h"
@@ -2374,6 +2375,98 @@ TEST (uig_wp09_mpe_quick_maps_set_the_keys_on_phone_and_tablet)
         CHECK (mpe->getHeight() >= mpe->preferredHeight (mpe->getWidth()) - 1);
         CHECK (mpe->getWidth() <= sz.w);
         rig.shot ("mpe-wp09-" + n, sz.w, sz.h, true, Page::glb);
+    }
+}
+
+// GROUPB (WP-05): Ratio SRC, smooth interpolation and the slice destination are controls of the oscillator panel; the source list greys the oscillator itself and
+// loops, the controls dim when their mode is not the one that reads them, and the slice knob takes a modulation source by touch
+TEST (uig_wp05_ratio_source_smooth_interpolation_and_slice_destination)
+{
+    // the loop rule of the model
+    CHECK (ratioSourceAllowed (1, 0, { 0, 0, 0 }) && ratioSourceAllowed (1, 4, { 0, 0, 0 }) && ratioSourceAllowed (1, 2, { 0, 0, 0 }));
+    CHECK (! ratioSourceAllowed (2, 2, { 0, 0, 0 }) && ! ratioSourceAllowed (1, 5, { 0, 0, 0 }));
+    CHECK (! ratioSourceAllowed (1, 2, { 0, 1, 0 }));       // osc 2 is tuned to osc 1: osc 1 may not be tuned to osc 2
+    CHECK (ratioSourceAllowed (1, 3, { 0, 0, 2 }));         // osc 1 -> osc 3 -> osc 2 -> the note: a chain, no loop
+    CHECK (ratioSourceAllowed (1, 3, { 0, 0, 4 }));         // osc 3 is tuned to the sub: fine
+    CHECK (! ratioSourceAllowed (1, 3, { 0, 3, 2 }));       // osc 3 -> osc 2 -> osc 3
+
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::osc, sz.w, sz.h);
+        rig.editor->context().view->oscTab = 1; // oscillator 2
+        rig.editor->panelHost().setPage (Page::osc);
+        Panel* panel = rig.panelTitled ("Oscillator 2");
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        const auto keys = panel->keys();
+        for (const char* key : { "osc2.ratio_src", "osc2.smooth_interp", "osc2.sample.slice" })
+            CHECK (std::find (keys.begin(), keys.end(), std::string (key)) != keys.end());
+        panel->setMoreExpanded (true);
+        const auto controlOf = [&] (const char* key) -> ParamControl*
+        {
+            for (const auto& c : panel->controls())
+                if (c->key() == key)
+                    return c.get();
+            return nullptr;
+        };
+        auto* ratio = dynamic_cast<ParamChoice*> (controlOf ("osc2.ratio_src"));
+        auto* smooth = dynamic_cast<ParamToggle*> (controlOf ("osc2.smooth_interp"));
+        auto* slice = controlOf ("osc2.sample.slice");
+        CHECK (ratio != nullptr && smooth != nullptr && slice != nullptr);
+        if (ratio == nullptr || smooth == nullptr || slice == nullptr)
+            continue;
+
+        // dimming: the Ratio pitch mode reads the source, a wavetable reads the smooth switch, Play Single Slice reads the slice
+        CHECK (ratio->getAlpha() < 0.9f);
+        CHECK (slice->getAlpha() < 0.9f);
+        CHECK (smooth->getAlpha() > 0.9f);
+        rig.setParam ("osc2.pitch_mode", 2.0f);
+        CHECK (ratio->getAlpha() > 0.9f);
+        rig.setParam ("osc2.type", 1.0f);
+        rig.setParam ("osc2.sample.slice_mode", 1.0f);
+        rig.setParam ("osc2.sample.slice_play", 1.0f);
+        CHECK (slice->getAlpha() > 0.9f);
+        CHECK (smooth->getAlpha() < 0.9f);
+        rig.setParam ("osc2.type", 0.0f);
+
+        // the source list: not the oscillator itself, not a loop
+        const auto enabled = [&] (const juce::PopupMenu& menu, int id)
+        {
+            juce::PopupMenu::MenuItemIterator it (menu);
+            while (it.next())
+                if (it.getItem().itemID == id)
+                    return it.getItem().isEnabled;
+            return false;
+        };
+        auto menu = ratio->buildOptionMenu();
+        CHECK (enabled (menu, 1) && enabled (menu, 2) && ! enabled (menu, 3) && enabled (menu, 4) && enabled (menu, 5)); // Base, Osc 1, (Osc 2), Osc 3, Sub
+        rig.setParam ("osc1.ratio_src", 2.0f);  // osc 1 is tuned to osc 2: osc 2 may not be tuned to osc 1
+        menu = ratio->buildOptionMenu();
+        CHECK (! enabled (menu, 2) && enabled (menu, 4));
+        rig.setParam ("osc1.ratio_src", 0.0f);
+        ratio->step (+1);                       // the arrow skips the greyed Osc 2 ... from Base: Osc 1
+        CHECK_EQ (static_cast<int> (rig.param ("osc2.ratio_src") + 0.5f), 1);
+        ratio->step (+1);                       // ... and from Osc 1 on to Osc 3
+        CHECK_EQ (static_cast<int> (rig.param ("osc2.ratio_src") + 0.5f), 3);
+        smooth->toggle();
+        CHECK_EQ (static_cast<int> (rig.param ("osc2.smooth_interp") + 0.5f), 1);
+
+        // every control keeps the touch size and fits the panel
+        const int minTouch = rig.editor->theme().touch();
+        for (auto* c : { static_cast<ParamControl*> (ratio), static_cast<ParamControl*> (smooth), slice })
+            CHECK (c->getHeight() >= minTouch);
+        CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
+        CHECK (panel->getWidth() <= sz.w);
+
+        // the slice destination takes a modulation source by touch
+        const int slot = assignBySource (rig, 7, "osc2.sample.slice", 50.0f);
+        CHECK (slot >= 0);
+        auto& m = rig.editor->context().assign.matrix();
+        CHECK_EQ (static_cast<int> (m.get (modSlotParams (slot).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("osc2.sample.slice").index))));
+        rig.shot ("osc-wp05-" + n, sz.w, sz.h, true, Page::osc);
     }
 }
 

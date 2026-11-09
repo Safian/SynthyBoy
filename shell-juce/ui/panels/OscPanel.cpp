@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "../Panel.h"
+#include "../model/RatioSource.h"
 #include "OscWaveView.h"
 #include "TransposeControl.h"
 
@@ -82,7 +83,9 @@ public:
             o + ".pitch_mode", o + ".pitch_coarse", o + ".pitch_track", o + ".fixed_pitch",
             o + ".pitch_bend_track", o + ".transpose_snap",
             o + ".unison.mode", o + ".unison.range", o + ".unison.blend_shape", o + ".unison.stack_repeat",
-            o + ".phase_legato", o + ".phase_memory"
+            o + ".phase_legato", o + ".phase_memory",
+            // Block B27 (GROUPB WP-05): Ratio SRC, smooth interpolation of the frame position, the slice destination of Play Single Slice
+            o + ".ratio_src", o + ".smooth_interp", o + ".sample.slice"
         };
     }
 
@@ -106,12 +109,18 @@ public:
                     choice->setExtraAction ("Swap Warps", [this] { swapWarps(); });
                 }
             }
+            else if (all[i] == "osc" + std::to_string (OscIndex) + ".ratio_src")
+            {
+                // the oscillator itself and a source that would close a loop are greyed (the engine would play the note of the voice instead)
+                if (auto* choice = dynamic_cast<ParamChoice*> (&control))
+                    choice->setEntryFilter ([this] (int value) { return ratioSourceAllowed (OscIndex, value, ratioSources()); });
+            }
         }
 
         // what the Serum 2 manual ties to other controls (p.35-36, p.47): the fixed pitch is the pitch of a wavetable oscillator with pitch tracking off,
         // the pitch bend switch is for the sample types with pitch tracking off, the stack repeat (1-3x) belongs to the Octaves / Power Chord stacks
         const std::string o = "osc" + std::to_string (OscIndex);
-        for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type" })
+        for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type", ".pitch_mode", ".sample.slice_mode", ".sample.slice_play" })
         {
             auto handle = std::make_unique<ParamHandle> (ctx, o + suffix);
             handle->onChange = [this] { updateControlDimming(); };
@@ -127,7 +136,7 @@ public:
             // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
             return h.valid() ? juce::roundToInt (h.info().min + h.normalised() * (h.info().max - h.info().min)) : 0;
         };
-        if (dimHandles.size() < 5)
+        if (dimHandles.size() < 8)
             return;
         const bool tracking = choiceOf (*dimHandles[0]) != 0;
         const int type = choiceOf (*dimHandles[1]);
@@ -136,6 +145,7 @@ public:
         // Sync Var (warp mode 11): the phase knob of the slot is the VAR fader of the manual (p.50: hard sync .. very soft sync)
         const int warpType = choiceOf (*dimHandles[3]);
         const int warp2Type = choiceOf (*dimHandles[4]);
+        const int pitchMode = choiceOf (*dimHandles[5]), sliceMode = choiceOf (*dimHandles[6]), slicePlay = choiceOf (*dimHandles[7]);
         for (const auto& c : controls())
         {
             const auto& key = c->key();
@@ -146,6 +156,12 @@ public:
                 applies = ! tracking && type == 1;
             else if (key == o + ".unison.stack_repeat")
                 applies = stack == 3 || stack == 5;
+            else if (key == o + ".ratio_src")
+                applies = pitchMode == 2;                                  // only the Ratio pitch mode reads a source (Serum 2 manual p.30)
+            else if (key == o + ".smooth_interp")
+                applies = type == 0;                                       // the frame position of a wavetable
+            else if (key == o + ".sample.slice")
+                applies = type == 1 && sliceMode != 0 && slicePlay == 1;   // Play Single Slice only
             c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
             const bool first = key == o + ".warp.phase", second = key == o + ".warp2.phase";
             if (first || second)
@@ -158,6 +174,19 @@ public:
                     c->setLabel (wanted);
             }
         }
+    }
+
+    /** The three `oscN.ratio_src` values (0 Base note, 1 .. 3 Osc 1 .. 3, 4 Sub), for the entry filter. */
+    std::array<int, 3> ratioSources() const
+    {
+        std::array<int, 3> sources { 0, 0, 0 };
+        for (int n = 1; n <= 3; ++n)
+        {
+            ParamHandle handle (ctx, "osc" + std::to_string (n) + ".ratio_src");
+            if (handle.valid())
+                sources[static_cast<size_t> (n - 1)] = juce::roundToInt (handle.plain());
+        }
+        return sources;
     }
 
     /** Swap Warps (Serum 2 manual p.56): the warp 1 mode, amount, phase and spread change places with the warp 2 values. */

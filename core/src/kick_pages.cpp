@@ -77,27 +77,33 @@ constexpr const char* s_more_lfo10[] = {
 constexpr const char* s_more_osc1_sample_2[] = {
     "osc1.sample.loop_relative", "osc1.sample.loop_link", "osc1.sample.loop_exit",
     "osc1.sample.fade_edges", "osc1.sample.normalize", "osc1.sample.reverse",
-    "osc1.sample.slice_mode", "osc1.sample.slice_threshold", "osc1.sample.slice_play", "osc1.sample.slice_root"
+    "osc1.sample.slice_mode", "osc1.sample.slice_threshold", "osc1.sample.slice_play", "osc1.sample.slice_root",
+    "osc1.sample.slice" // B27
 };
 constexpr const char* s_more_osc2_sample_2[] = {
     "osc2.sample.loop_relative", "osc2.sample.loop_link", "osc2.sample.loop_exit",
     "osc2.sample.fade_edges", "osc2.sample.normalize", "osc2.sample.reverse",
-    "osc2.sample.slice_mode", "osc2.sample.slice_threshold", "osc2.sample.slice_play", "osc2.sample.slice_root"
+    "osc2.sample.slice_mode", "osc2.sample.slice_threshold", "osc2.sample.slice_play", "osc2.sample.slice_root",
+    "osc2.sample.slice" // B27
 };
 constexpr const char* s_more_osc3_sample_2[] = {
     "osc3.sample.loop_relative", "osc3.sample.loop_link", "osc3.sample.loop_exit",
     "osc3.sample.fade_edges", "osc3.sample.normalize", "osc3.sample.reverse",
-    "osc3.sample.slice_mode", "osc3.sample.slice_threshold", "osc3.sample.slice_play", "osc3.sample.slice_root"
+    "osc3.sample.slice_mode", "osc3.sample.slice_threshold", "osc3.sample.slice_play", "osc3.sample.slice_root",
+    "osc3.sample.slice" // B27
 };
 
 constexpr const char* s_more_osc1_pitch_uni[] = {
-    "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory"
+    "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory",
+    "osc1.ratio_src", "osc1.smooth_interp" // B27
 };
 constexpr const char* s_more_osc2_pitch_uni[] = {
-    "osc2.pitch_bend_track", "osc2.transpose_snap", "osc2.phase_legato", "osc2.phase_memory"
+    "osc2.pitch_bend_track", "osc2.transpose_snap", "osc2.phase_legato", "osc2.phase_memory",
+    "osc2.ratio_src", "osc2.smooth_interp" // B27
 };
 constexpr const char* s_more_osc3_pitch_uni[] = {
-    "osc3.pitch_bend_track", "osc3.transpose_snap", "osc3.phase_legato", "osc3.phase_memory"
+    "osc3.pitch_bend_track", "osc3.transpose_snap", "osc3.phase_legato", "osc3.phase_memory",
+    "osc3.ratio_src", "osc3.smooth_interp" // B27
 };
 
 constexpr const char* s_more_reverb1[] = {
@@ -389,15 +395,15 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 70: Osc 1 Sample Main (Osc)
     { "osc1_sample_1", "Osc 1 Sample Main", "Osc", { "osc1.sample.start", "osc1.sample.end", "osc1.sample.root", "osc1.sample.keytrack", "osc1.sample.loop_mode", "osc1.sample.loop_start", "osc1.sample.loop_end", "osc1.sample.loop_xfade" }, 8, nullptr, 0 },
     // Page 71: Osc 1 Sample Playback (Osc)
-    { "osc1_sample_2", "Osc 1 Sample Playback", "Osc", { "osc1.sample.scan", "osc1.sample.scan_range", "osc1.sample.scan_reverse", "osc1.sample.scan_lock_tempo", "osc1.sample.scan_to_bpm", "osc1.sample.length_beats", "osc1.sample.uni_start", "osc1.sample.uni_span" }, 8, s_more_osc1_sample_2, 10 },
+    { "osc1_sample_2", "Osc 1 Sample Playback", "Osc", { "osc1.sample.scan", "osc1.sample.scan_range", "osc1.sample.scan_reverse", "osc1.sample.scan_lock_tempo", "osc1.sample.scan_to_bpm", "osc1.sample.length_beats", "osc1.sample.uni_start", "osc1.sample.uni_span" }, 8, s_more_osc1_sample_2, 11 },
     // Page 72: Osc 2 Sample Main (Osc)
     { "osc2_sample_1", "Osc 2 Sample Main", "Osc", { "osc2.sample.start", "osc2.sample.end", "osc2.sample.root", "osc2.sample.keytrack", "osc2.sample.loop_mode", "osc2.sample.loop_start", "osc2.sample.loop_end", "osc2.sample.loop_xfade" }, 8, nullptr, 0 },
     // Page 73: Osc 2 Sample Playback (Osc)
-    { "osc2_sample_2", "Osc 2 Sample Playback", "Osc", { "osc2.sample.scan", "osc2.sample.scan_range", "osc2.sample.scan_reverse", "osc2.sample.scan_lock_tempo", "osc2.sample.scan_to_bpm", "osc2.sample.length_beats", "osc2.sample.uni_start", "osc2.sample.uni_span" }, 8, s_more_osc2_sample_2, 10 },
+    { "osc2_sample_2", "Osc 2 Sample Playback", "Osc", { "osc2.sample.scan", "osc2.sample.scan_range", "osc2.sample.scan_reverse", "osc2.sample.scan_lock_tempo", "osc2.sample.scan_to_bpm", "osc2.sample.length_beats", "osc2.sample.uni_start", "osc2.sample.uni_span" }, 8, s_more_osc2_sample_2, 11 },
     // Page 74: Osc 3 Sample Main (Osc)
     { "osc3_sample_1", "Osc 3 Sample Main", "Osc", { "osc3.sample.start", "osc3.sample.end", "osc3.sample.root", "osc3.sample.keytrack", "osc3.sample.loop_mode", "osc3.sample.loop_start", "osc3.sample.loop_end", "osc3.sample.loop_xfade" }, 8, nullptr, 0 },
     // Page 75: Osc 3 Sample Playback (Osc)
-    { "osc3_sample_2", "Osc 3 Sample Playback", "Osc", { "osc3.sample.scan", "osc3.sample.scan_range", "osc3.sample.scan_reverse", "osc3.sample.scan_lock_tempo", "osc3.sample.scan_to_bpm", "osc3.sample.length_beats", "osc3.sample.uni_start", "osc3.sample.uni_span" }, 8, s_more_osc3_sample_2, 10 },
+    { "osc3_sample_2", "Osc 3 Sample Playback", "Osc", { "osc3.sample.scan", "osc3.sample.scan_range", "osc3.sample.scan_reverse", "osc3.sample.scan_lock_tempo", "osc3.sample.scan_to_bpm", "osc3.sample.length_beats", "osc3.sample.uni_start", "osc3.sample.uni_span" }, 8, s_more_osc3_sample_2, 11 },
     // Page 76: Osc 1 Warp 2 (Osc)
     { "osc1_warp2", "Osc 1 Warp 2", "Osc", { "osc1.warp2.type", "osc1.warp2.amount", "osc1.warp2.phase", "osc1.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 77: Osc 2 Warp 2 (Osc)
@@ -461,11 +467,11 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc3_remap", "Osc 3 Remap", "Osc", { "osc3.remap.on", "osc3.remap.slot", "osc3.remap.rise", "osc3.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     { "fx_levels", "FX Levels", "FX", { "chorus.level", "compressor.level", "delay.level", "distortion.level", "eq.level", "flanger.level", "phaser.level", "reverb.level" }, 8, nullptr, 0 },
     // Page 104: Osc 1 Pitch & Unison (Osc)
-    { "osc1_pitch_uni", "Osc 1 Pitch & Unison", "Osc", { "osc1.pitch_mode", "osc1.pitch_coarse", "osc1.pitch_track", "osc1.fixed_pitch", "osc1.unison.mode", "osc1.unison.range", "osc1.unison.blend_shape", "osc1.unison.stack_repeat" }, 8, s_more_osc1_pitch_uni, 4 },
+    { "osc1_pitch_uni", "Osc 1 Pitch & Unison", "Osc", { "osc1.pitch_mode", "osc1.pitch_coarse", "osc1.pitch_track", "osc1.fixed_pitch", "osc1.unison.mode", "osc1.unison.range", "osc1.unison.blend_shape", "osc1.unison.stack_repeat" }, 8, s_more_osc1_pitch_uni, 6 },
     // Page 105: Osc 2 Pitch & Unison (Osc)
-    { "osc2_pitch_uni", "Osc 2 Pitch & Unison", "Osc", { "osc2.pitch_mode", "osc2.pitch_coarse", "osc2.pitch_track", "osc2.fixed_pitch", "osc2.unison.mode", "osc2.unison.range", "osc2.unison.blend_shape", "osc2.unison.stack_repeat" }, 8, s_more_osc2_pitch_uni, 4 },
+    { "osc2_pitch_uni", "Osc 2 Pitch & Unison", "Osc", { "osc2.pitch_mode", "osc2.pitch_coarse", "osc2.pitch_track", "osc2.fixed_pitch", "osc2.unison.mode", "osc2.unison.range", "osc2.unison.blend_shape", "osc2.unison.stack_repeat" }, 8, s_more_osc2_pitch_uni, 6 },
     // Page 106: Osc 3 Pitch & Unison (Osc)
-    { "osc3_pitch_uni", "Osc 3 Pitch & Unison", "Osc", { "osc3.pitch_mode", "osc3.pitch_coarse", "osc3.pitch_track", "osc3.fixed_pitch", "osc3.unison.mode", "osc3.unison.range", "osc3.unison.blend_shape", "osc3.unison.stack_repeat" }, 8, s_more_osc3_pitch_uni, 4 },
+    { "osc3_pitch_uni", "Osc 3 Pitch & Unison", "Osc", { "osc3.pitch_mode", "osc3.pitch_coarse", "osc3.pitch_track", "osc3.fixed_pitch", "osc3.unison.mode", "osc3.unison.range", "osc3.unison.blend_shape", "osc3.unison.stack_repeat" }, 8, s_more_osc3_pitch_uni, 6 },
     // Page 110: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.17)
     { "fx_comp_limit", "Compressor Limit & Crossovers", "FX", { "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high", "compressor.mix", "compressor.attack", "compressor.release", "compressor.on" }, 8, nullptr, 0 },
     // Page 111: Delay Quality & Offset (FX)

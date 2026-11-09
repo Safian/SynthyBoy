@@ -1413,9 +1413,25 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                     }
                 }
             }
-            for (const char* tail : { "smooth_interpolation", "view_2d" })
             {
-                const std::string name = p + tail;
+                // GROUPB WP-05: the smooth interpolation of the frame position (the Smooth Interpolation switch of the wave frame knob)
+                const std::string name = p + "smooth_interpolation";
+                double v;
+                bool m;
+                if (c.number (c.member (name.c_str()), v, m))
+                {
+                    const std::string smoothKey = "osc" + std::to_string (n) + ".smooth_interp";
+                    if (const ParamInfo* pi = findParamByKey (smoothKey.c_str()))
+                    {
+                        const float val = constrainValue (*pi, v >= 0.5 ? 1.0f : 0.0f);
+                        V.plain[static_cast<size_t> (findParamIndex (pi->id))] = val;
+                        ++rep.numImported;
+                        rep.imported.push_back ({ static_cast<uint16_t> (findParamIndex (pi->id)), static_cast<float> (v), val });
+                    }
+                }
+            }
+            {
+                const std::string name = p + "view_2d";
                 double v;
                 bool m;
                 if (c.number (c.member (name.c_str()), v, m))

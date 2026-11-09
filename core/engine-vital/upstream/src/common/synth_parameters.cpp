@@ -560,6 +560,11 @@ namespace sbvital {
       ValueDetails::kLinear, false, "%", "Sample Unison Start", nullptr },
     { "sample_uni_span", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Sample Unison Span", nullptr },
+    // SynthyBoy (GROUPB, WP-05): the slice destination of Play Single Slice and the Ratio SRC (0 Base note, 1 .. 3 Osc 1 .. 3, 4 Sub)
+    { "sample_slice", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Sample Slice", nullptr },
+    { "ratio_src", 0x000000, 0.0, 4.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Ratio Source", nullptr },
     { "warp2_type", 0x000000, 0.0, SynthOscillator::kNumDistortionTypes - 1, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Warp 2 Type", strings::kPhaseDistortionNames },
     { "warp2_amount", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,

@@ -182,6 +182,11 @@ std::vector<Binding> build()
         b.choice (k + "unison.stack_repeat", c + "unison_stack_repeat");
         b.choice (k + "phase_legato", c + "phase_legato");
         b.choice (k + "phase_memory", c + "phase_memory");
+
+        // Block B27 (GROUPB, WP-05): Ratio SRC, smooth interpolation of the frame position and the slice destination
+        b.choice (k + "ratio_src", c + "ratio_src");
+        b.choice (k + "smooth_interp", c + "smooth_interpolation");
+        b.percent (k + "sample.slice", c + "sample_slice");
     }
 
     // --- noise (the engine's built-in noise sample and extras) --------------------------------------------------------
@@ -515,7 +520,7 @@ bool isSpecialParam (size_t paramIndex)
         // block B16: the wavetable position remap of an oscillator (on, slot, RISE, FALL) goes to its FrameRemap, not to a control
         || (startsWith ("osc") && std::strstr (key, ".remap.") != nullptr)
         // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
-        || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"))
+        || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span") && ! endsWith (".sample.slice"))
         // B13: noise sample choice (procedural noise buffers)
         || std::strcmp (key, "noise.sample") == 0 || std::strcmp (key, "noise.type") == 0
         // B22: the effect instance pool (type, on, rack, order and the normalised parameters of a slot): the adapter builds the module and drives its controls

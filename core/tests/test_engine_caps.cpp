@@ -53,14 +53,14 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
     }
     // block B17: its five bits sit apart from the work package bits
     for (const EngineCapsMask b : { kCapFxCompressorLimit, kCapFxDelayExtras, kCapFxDistortionExtras, kCapFxPhaserDepth2, kCapFxReverbAlgos, kCapSubOsc, kCapNoiseExtras,
-                                     kCapVoiceSteal, kCapPolyLegato, kCapBendDownRange, kCapStereoSpread, kCapLfoSwing, kCapQualityOptions, kCapModAmount, kCapEnv1Toggle, kCapFxInstances, kCapSubPhase, kCapNoiseColour, kCapNoiseSample, kCapMpeRouting, kCapFxDelayOffsetLeft, kCapReverbFeedback, kCapVoiceControl })
+                                     kCapVoiceSteal, kCapPolyLegato, kCapBendDownRange, kCapStereoSpread, kCapLfoSwing, kCapQualityOptions, kCapModAmount, kCapEnv1Toggle, kCapFxInstances, kCapSubPhase, kCapNoiseColour, kCapNoiseSample, kCapMpeRouting, kCapFxDelayOffsetLeft, kCapReverbFeedback, kCapVoiceControl, kCapOscExtras2 })
     {
         CHECK (std::strlen (capName (b)) > 0);
         if (! CHECK ((all & b) != 0))
             std::printf ("    bit %s has no key\n", capName (b));
     }
     CHECK_EQ (all & ~kCapAllKnown, static_cast<EngineCapsMask> (0));
-    CHECK_EQ (all >> 59, static_cast<EngineCapsMask> (0)); // bit 59 (the sources Voice Index / Mod) is needed by values of a choice list only; bit 58 by the voicectl keys
+    CHECK_EQ (all >> 61, static_cast<EngineCapsMask> (0)); // bit 59 (the sources Voice Index / Mod) is needed by values of a choice list only; bit 58 by the voicectl keys
     // bits 44 .. 48 (the warp modes) are needed by values of a choice list only
 
     struct Case { const char* key; EngineCapsMask caps; };
@@ -77,6 +77,10 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
         { "master.mpe.bend_to_x", kCapMpeRouting },
         { "master.mpe.y_bipolar", kCapMpeRouting },
         { "master.mpe.on", kCapMpe },
+        { "osc1.ratio_src", kCapOscExtras2 },
+        { "osc2.smooth_interp", kCapOscExtras2 },
+        { "osc3.sample.slice", kCapOscExtras2 },
+        { "osc3.sample.slice_play", kCapSampleOsc },
         { "delay.offset_left", kCapFxDelayOffsetLeft },
         { "reverb.feedback", kCapReverbFeedback },
         { "delay.offset", kCapFxDelayExtras },

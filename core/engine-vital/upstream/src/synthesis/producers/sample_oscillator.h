@@ -80,6 +80,7 @@ namespace sbvital {
         kRawMidiNote,      // the note without the bend (pitch bend tracking, Serum 2 manual p.36)
         kMidiTrack,        // oscN.pitch_track: 0 = the recorded pitch, whatever the key
         kPitchBendTrack,   // oscN.pitch_bend_track: 1 = the bend still moves an oscillator whose pitch tracking is off
+        kSlice,            // GROUPB WP-05: oscN.sample.slice, -1 .. 1: slices added to the slice of the key in Play Single Slice mode
         kNumInputs
       };
 
@@ -103,6 +104,8 @@ namespace sbvital {
       void setFirstOscillatorOutput(Output* oscillator) { first_mod_oscillator_ = oscillator; }
       void setSecondOscillatorOutput(Output* oscillator) { second_mod_oscillator_ = oscillator; }
       void setSampleOutput(Output* sample) { sample_ = sample; }
+      /** GROUPB WP-05: the tap that carries this oscillator's pitch (MIDI notes per voice) to the Ratio SRC of the others; shared with the wavetable oscillator of the module. */
+      void setPitchTap(std::shared_ptr<Output> tap) { pitch_tap_ = std::move(tap); }
 
       void setOversampleAmount(int oversample) override;
       void reset(poly_mask reset_mask) override;
@@ -133,5 +136,6 @@ namespace sbvital {
       Output* sample_ = nullptr;
       int scratch_size_ = 0;
       std::shared_ptr<float[]> scratch_;
+      std::shared_ptr<Output> pitch_tap_;
   };
 } // namespace sbvital

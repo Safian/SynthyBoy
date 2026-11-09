@@ -100,6 +100,9 @@ EngineCapsMask classify (const char* key) noexcept
 
     if (startsWith (key, "osc"))
     {
+        // block B27 (GROUPB, WP-05)
+        if (endsWith (key, ".ratio_src") || endsWith (key, ".smooth_interp") || endsWith (key, ".sample.slice"))
+            return kCapOscExtras2;
         if (std::strstr (key, ".pitch_") != nullptr || std::strstr (key, ".fixed_pitch") != nullptr
             || std::strstr (key, ".transpose_snap") != nullptr || std::strstr (key, ".unison.mode") != nullptr
             || std::strstr (key, ".unison.range") != nullptr || std::strstr (key, ".unison.blend_shape") != nullptr
@@ -347,6 +350,7 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapReverbFeedback:   return "reverb_feedback";
         case kCapVoiceControl:     return "voice_control";
         case kCapVoiceSources:     return "voice_sources";
+        case kCapOscExtras2:       return "osc_extras2";
         case kCapNone:             break;
     }
     return "";

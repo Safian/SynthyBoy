@@ -129,6 +129,8 @@ constexpr const char* const kPoolRacks[] = { "Main", "Bus 1", "Bus 2" };
 constexpr const char* const kNoiseTypes[] = { "Noise", "Sample" };
 // B24 (GROUPA1, WP-09): the MPE axis mappings to the macros (Serum 2 manual p.326)
 constexpr const char* const kMpeMacroMaps[] = { "Off", "XYZ -> Macro 1, 2, 3", "YZ -> Macro 1, 2" };
+// B27 (GROUPB, WP-05): the Ratio SRC of an oscillator (Serum 2 manual p.30) and its smooth interpolation of the frame position
+constexpr const char* const kRatioSources[] = { "Base note", "Osc 1", "Osc 2", "Osc 3", "Sub" };
 // B26 (GROUPA2, WP-07): the voice control LFO scaling is set as a percentage of the time or as a rate (Serum 2 manual p.318)
 constexpr const char* const kVoiceCtlLfoScaleModes[] = { "Percent", "Rate" };
 
@@ -302,6 +304,12 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("eq." KEY ".cutoff", "EQ " NAME " Cutoff", "FX / EQ", 20.0f, 20000.0f, CUTOFF, Unit::Hz, kMod, 1, 0.3f),                               \
     cont ("eq." KEY ".gain", "EQ " NAME " Gain", "FX / EQ", -15.0f, 15.0f, 0.0f, Unit::dB, kMod),                                                \
     SB_PCT ("eq." KEY ".resonance", "EQ " NAME " Resonance", "FX / EQ", 30.0f, kMod)
+
+// B27 (GROUPB, WP-05): per oscillator the Ratio SRC, the smooth interpolation and the slice destination of Play Single Slice
+#define SB_OSC_EXTRA2(N)                                                                                                                         \
+    pick ("osc" #N ".ratio_src", "Osc " #N " Ratio Source", "Oscillator " #N, kRatioSources, 0),                                                \
+    onOff ("osc" #N ".smooth_interp", "Osc " #N " Smooth Interpolation", "Oscillator " #N, false),                                   \
+    SB_PCT_RANGE ("osc" #N ".sample.slice", "Osc " #N " Sample Slice Select", "Osc " #N " / Sample", -100.0f, 100.0f, 0.0f, kMod)
 
 // B26 (GROUPA2, WP-07): one step of the voice control sequence (Serum 2 manual p.316 - 318): the six per voice values of step N
 #define SB_VCTL_STEP(N)                                                                                                                          \
@@ -865,11 +873,13 @@ constexpr ParamInfo kRaw[] = {
     onOff ("voicectl.osc.c", "Voice Control Applies to Osc C", "Voice Control / Targets", true),
     onOff ("voicectl.osc.noise", "Voice Control Applies to Noise", "Voice Control / Targets", true),
     onOff ("voicectl.osc.sub", "Voice Control Applies to Sub", "Voice Control / Targets", true),
+    // --- B27: GROUPB WP-05: oscillator extras (13-new-keys.md 4.33, positions 2125..2133) ------------------------------------------------
+    SB_OSC_EXTRA2 (1), SB_OSC_EXTRA2 (2), SB_OSC_EXTRA2 (3),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2125, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26)");
+static_assert (kCount == 2134, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27)");
 
 struct Table
 {
@@ -899,7 +909,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

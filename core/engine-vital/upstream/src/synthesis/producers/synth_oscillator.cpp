@@ -1288,7 +1288,10 @@ namespace sbvital {
                                 FourierTransform*, float, int, const poly_float*)>
   void SynthOscillator::computeSpectralWaveBufferPair(int phase_update, int index, bool formant_shift,
                                                       float phase_adjustment, poly_int wave_index,
-                                                      poly_float voice_increment, poly_float morph_amount) {
+                                                      poly_float voice_increment, poly_float morph_amount,
+                                                      poly_float frame_fraction) {
+    // SynthyBoy (GROUPB, WP-05): smooth interpolation: the fraction of the frame position blends this frame with the next one
+    const bool smooth = input(kSmoothlyInterpolate) != nullptr && input(kSmoothlyInterpolate)->at(0)[0] > 0.5f;
     for (int i = index; i < index + 2; ++i) {
       mono_float adjust_phase_inc = voice_increment[i] * phase_adjustment;
       mono_float formant_adjustment = voice_increment[i] * Wavetable::kWaveformSize;
@@ -1313,9 +1316,20 @@ namespace sbvital {
 
       spectralMorph(wavetable_data, table_index, fourier_buffer,
                     fourier_transform_.get(), shift, last_harmonic, RandomValues::instance()->buffer());
+      if (smooth && frame_fraction[i] > 0.0f && table_index + 1 < wavetable_data->num_frames) {
+        poly_float* second = blend_scratch_.get();
+        spectralMorph(wavetable_data, table_index + 1, second, fourier_transform_.get(), shift, last_harmonic,
+                      RandomValues::instance()->buffer());
+        const mono_float t = frame_fraction[i];
+        mono_float* a = (mono_float*)fourier_buffer;
+        const mono_float* b = (const mono_float*)second;
+        for (int k = 0; k < Wavetable::kWaveformSize + 2 * poly_float::kSize; ++k)
+          a[k] += (b[k] - a[k]) * t;
+      }
       wave_buffers_[buffer_index] = ((mono_float*)fourier_buffer) + poly_float::kSize - 1;
 
-      if (i == index && morph_amount[i] == morph_amount[i + 1] && wave_index[i] == wave_index[i + 1]) {
+      if (i == index && morph_amount[i] == morph_amount[i + 1] && wave_index[i] == wave_index[i + 1] &&
+          frame_fraction[i] == frame_fraction[i + 1]) {
         last_buffers_[buffer_index + 1] = wave_buffers_[buffer_index + 1];
         wave_buffers_[buffer_index + 1] = wave_buffers_[buffer_index];
         return;
@@ -1384,10 +1398,12 @@ namespace sbvital {
         poly_float voice_increment = phase_inc * detunings_[v] * frequency_mult;
         poly_float t = v * t_inc;
         poly_float frame = wave_frame + t * frame_spread;
-        poly_int wave_index = utils::toInt(utils::clamp(frame, 0.0f, kNumOscillatorWaveFrames - 1));
+        poly_float clamped_frame = utils::clamp(frame, 0.0f, kNumOscillatorWaveFrames - 1);
+        poly_int wave_index = utils::toInt(clamped_frame);
 
         computeSpectralWaveBufferPair<spectralMorph>(v, index, formant_shift, phase_inc_adjustment,
-                                                     wave_index, voice_increment, morph_amount);
+                                                     wave_index, voice_increment, morph_amount,
+                                                     clamped_frame - utils::toFloat(wave_index));
       }
     }
     else {
@@ -1396,10 +1412,12 @@ namespace sbvital {
 
       poly_float morph_amount = spectral_morph_values_[0];
       poly_float voice_increment = phase_inc * detunings_[0] * frequency_mult;
-      poly_int wave_index = utils::toInt(utils::clamp(wave_frame, 0.0f, kNumOscillatorWaveFrames - 1));
+      poly_float clamped_frame = utils::clamp(wave_frame, 0.0f, kNumOscillatorWaveFrames - 1);
+      poly_int wave_index = utils::toInt(clamped_frame);
 
       computeSpectralWaveBufferPair<spectralMorph>(0, index, formant_shift, phase_inc_adjustment,
-                                                   wave_index, voice_increment, morph_amount);
+                                                   wave_index, voice_increment, morph_amount,
+                                                   clamped_frame - utils::toFloat(wave_index));
 
       for (int v = 1; v < num_phase_updates; ++v) {
         for (int i = index; i < index + 2; ++i) {
@@ -1962,6 +1980,9 @@ namespace sbvital {
     }
 
     int pitch_mode = input(kPitchMode) ? static_cast<int>(std::round(input(kPitchMode)->at(0)[0])) : 0;
+    // SynthyBoy (GROUPB, WP-05): Ratio SRC: the pitch of another oscillator (or the sub) replaces the note of the voice
+    if (pitch_mode == 2 && *ratio_source_ != nullptr)
+      midi_note_ = (*ratio_source_)->buffer[0];
     poly_float coarse = input(kPitchCoarse) ? input(kPitchCoarse)->at(0) : poly_float(0.0f);
     poly_float coarse_semitones = 0.0f;
     if (pitch_mode == 0) {
@@ -2013,6 +2034,7 @@ namespace sbvital {
 
     poly_float base_midi = current_midi + transpose_buffer[0] + tune_buffer[0] + coarse_semitones;
     poly_float base_frequency = utils::midiNoteToFrequency(base_midi);
+    pitch_tap_->buffer[0] = midi_note_ + transpose_buffer[0] + tune_buffer[0] + coarse_semitones;
 
     poly_float sample_rate_scale = kPhaseMult / getSampleRate();
     poly_float phase_scale = kPhaseMult;

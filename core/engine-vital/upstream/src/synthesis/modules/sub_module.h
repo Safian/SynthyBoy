@@ -36,6 +36,10 @@ namespace sbvital {
       void init() override;
       Processor* clone() const override { return new SubModule(*this); }
 
+      /** GROUPB WP-05: the pitch tap of the sub source (Ratio SRC of the oscillators) and whether the sub runs. */
+      std::shared_ptr<Output> pitchTap() const { return sub_source_->pitchTap(); }
+      bool isOn() const { return on_ != nullptr && on_->value() != 0.0f; }
+
     protected:
       std::shared_ptr<bool> was_on_;
       SubSource* sub_source_;

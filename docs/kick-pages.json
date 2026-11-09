@@ -2158,7 +2158,8 @@
         "osc1.sample.slice_mode",
         "osc1.sample.slice_threshold",
         "osc1.sample.slice_play",
-        "osc1.sample.slice_root"
+        "osc1.sample.slice_root",
+        "osc1.sample.slice"
       ]
     },
     {
@@ -2200,7 +2201,8 @@
         "osc2.sample.slice_mode",
         "osc2.sample.slice_threshold",
         "osc2.sample.slice_play",
-        "osc2.sample.slice_root"
+        "osc2.sample.slice_root",
+        "osc2.sample.slice"
       ]
     },
     {
@@ -2242,7 +2244,8 @@
         "osc3.sample.slice_mode",
         "osc3.sample.slice_threshold",
         "osc3.sample.slice_play",
-        "osc3.sample.slice_root"
+        "osc3.sample.slice_root",
+        "osc3.sample.slice"
       ]
     },
     {
@@ -2758,7 +2761,9 @@
         "osc1.pitch_bend_track",
         "osc1.transpose_snap",
         "osc1.phase_legato",
-        "osc1.phase_memory"
+        "osc1.phase_memory",
+        "osc1.ratio_src",
+        "osc1.smooth_interp"
       ]
     },
     {
@@ -2779,7 +2784,9 @@
         "osc2.pitch_bend_track",
         "osc2.transpose_snap",
         "osc2.phase_legato",
-        "osc2.phase_memory"
+        "osc2.phase_memory",
+        "osc2.ratio_src",
+        "osc2.smooth_interp"
       ]
     },
     {
@@ -2800,7 +2807,9 @@
         "osc3.pitch_bend_track",
         "osc3.transpose_snap",
         "osc3.phase_legato",
-        "osc3.phase_memory"
+        "osc3.phase_memory",
+        "osc3.ratio_src",
+        "osc3.smooth_interp"
       ]
     },
     {

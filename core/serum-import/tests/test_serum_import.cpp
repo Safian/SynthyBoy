@@ -1008,3 +1008,41 @@ TEST (serum_midi_cc_maps_of_presets_and_map_files_become_bindings)
         CHECK_EQ (r.midiMap.size(), size_t { 2 });
     }
 }
+
+// GROUPB (WP-05, A398 / A399): the ratio source, the table crossfade mode (smooth interpolation) and the single slice destination have keys
+TEST (serum_ratio_source_smooth_interpolation_and_single_slice_destination_have_keys)
+{
+    const auto wtBlock = [] (double xfade)
+    {
+        return map ({ { "embeddedWTData", nums (ramp (4096)) }, { "numFrames", num (4096) }, { "numChannels", num (1) }, { "plainParams", plain ({ { "kParamTablePos", 1 }, { "kParamXfadeMode", xfade } }) } });
+    };
+    Preset p;
+    // OSC A: Ratio mode with the source Sub (4); OSC B: Ratio with Osc A (0); OSC C: Ratio with itself (2) and the table crossfade mode on
+    p.set ("Oscillator0", map ({ { "plainParams", map (withText ({ { "kParamPitchRatio", 4 }, { "kParamPitchSource", 4 } }, { { "kParamPitchMode", "Ratio" } })) }, { "WTOsc0", wtBlock (0) } }));
+    p.set ("Oscillator1", map ({ { "plainParams", map (withText ({ { "kParamPitchRatio", 2 }, { "kParamPitchSource", 0 } }, { { "kParamPitchMode", "Ratio" } })) } }));
+    p.set ("Oscillator2", map ({ { "plainParams", map (withText ({ { "kParamPitchRatio", 2 }, { "kParamPitchSource", 2 } }, { { "kParamPitchMode", "Ratio" } })) }, { "WTOsc2", wtBlock (1) } }));
+    p.set ("ModSlot0", map ({ { "source", nums ({ 6, 0 }) }, { "destModuleTypeString", text ("Oscillator") }, { "destModuleID", num (1) }, { "destModuleParamName", text ("kParamSlicingSingleSlice") },
+                              { "destModuleParamID", num (0) }, { "plainParams", plain ({ { "kParamAmount", 50 } }) } }));
+    const SerumImportResult r = run (p.file());
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_EQ (value (r, "osc1.ratio_src"), 4.0f);   // Sub
+    CHECK_EQ (value (r, "osc2.ratio_src"), 1.0f);   // Osc 1
+    CHECK_EQ (value (r, "osc3.ratio_src"), 0.0f);   // itself: the note
+    CHECK_EQ (value (r, "osc1.smooth_interp"), 0.0f);
+    CHECK_EQ (value (r, "osc3.smooth_interp"), 1.0f);
+    const ModSlotParams s0 = modSlotParams (0);
+    CHECK_EQ (r.values.plain[s0.destination], static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (hashKey ("osc2.sample.slice"))))));
+    CHECK (entryWith (r, "ratio_source_noise_not_modelled") < 0);
+
+    // outside the Ratio mode the source is read and ignored; the Noise has no home
+    Preset q;
+    q.set ("Oscillator0", map ({ { "plainParams", map (withText ({ { "kParamPitchSource", 1 } }, { { "kParamPitchMode", "Harmonics" } })) } }));
+    q.set ("Oscillator1", map ({ { "plainParams", map (withText ({ { "kParamPitchRatio", 2 }, { "kParamPitchSource", 3 } }, { { "kParamPitchMode", "Ratio" } })) } }));
+    const SerumImportResult s = run (q.file());
+    CHECK_EQ (s.report.unaccounted, 0);
+    CHECK_EQ (value (s, "osc1.ratio_src"), 0.0f);
+    CHECK_EQ (value (s, "osc2.ratio_src"), 0.0f);
+    CHECK (entryWith (s, "ratio_source_noise_not_modelled") >= 0);
+    CHECK (entryWith (s, "ratio_source_outside_ratio_mode") >= 0);
+}

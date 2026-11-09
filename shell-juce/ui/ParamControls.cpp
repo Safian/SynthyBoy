@@ -722,7 +722,7 @@ void ParamChoice::step (int direction)
     const int count = static_cast<int> (choiceCount (info));
     const int current = static_cast<int> (std::lround (handle.plain()));
     for (int i = current + direction; i >= 0 && i < count; i += direction)
-        if (capStateForValue (handle.infoIndex(), static_cast<float> (i), ctx.host.engineCaps()).available)
+        if (entryAllowed (i) && capStateForValue (handle.infoIndex(), static_cast<float> (i), ctx.host.engineCaps()).available)
         {
             handle.setPlainComplete (static_cast<float> (i));
             return;
@@ -739,7 +739,7 @@ juce::PopupMenu ParamChoice::buildOptionMenu() const
     const int current = static_cast<int> (std::lround (handle.plain()));
     const auto item = [&] (int i)
     {
-        const bool ok = capStateForValue (handle.infoIndex(), static_cast<float> (i), ctx.host.engineCaps()).available;
+        const bool ok = entryAllowed (i) && capStateForValue (handle.infoIndex(), static_cast<float> (i), ctx.host.engineCaps()).available;
         return juce::PopupMenu::Item (juce::String (choiceName (info, static_cast<size_t> (i)))).setID (i + 1).setEnabled (ok).setTicked (i == current);
     };
 

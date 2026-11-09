@@ -50,6 +50,7 @@ namespace sbvital {
       oscillators_[i]->useInput(input(kRetrigger), OscillatorModule::kRetrigger);
       // SynthyBoy: the key fold offset of the oscillator mapping (0 unless it folds the note) and the "warp" switch
       map_warp_[i] = createBaseControl("osc_" + number + "_map_warp");
+      ratio_src_[i] = createBaseControl("osc_" + number + "_ratio_src");
       oscillators_[i]->useInput(input(kMidi), OscillatorModule::kMidi);
       oscillators_[i]->useInput(input(kFold1 + i), OscillatorModule::kFold);
       oscillators_[i]->useInput(input(kNotePressed), OscillatorModule::kNotePressed);
@@ -104,6 +105,47 @@ namespace sbvital {
     }
   }
 
+  // SynthyBoy (GROUPB, WP-05): the Ratio SRC of oscillator `osc` as 0 (the note of the voice) or 1 .. 4 (oscillator 1 .. 3, sub). A source that
+  // is the oscillator itself, that is switched off, or whose own chain of sources leads back to this oscillator (A and B tuned to each other)
+  // is the note of the voice.
+  int ProducersModule::effectiveRatioSource(int osc) const {
+    auto source_of = [this](int o) {
+      if (ratio_src_[o] == nullptr)
+        return 0;
+      int src = static_cast<int>(ratio_src_[o]->value() + 0.5f);
+      return src < 0 || src > kNumOscillators + 1 ? 0 : src;
+    };
+    int src = source_of(osc);
+    if (src == 0)
+      return 0;
+    if (src == kNumOscillators + 1)
+      return sub_module_->isOn() ? src : 0;
+    if (src - 1 == osc || !oscillators_[src - 1]->isOn())
+      return 0;
+    int walk = src - 1;
+    for (int hops = 0; hops < kNumOscillators; ++hops) {
+      int next = source_of(walk);
+      if (next == 0 || next == kNumOscillators + 1)
+        return src;
+      walk = next - 1;
+      if (walk == osc)
+        return 0;
+    }
+    return 0;
+  }
+
+  // Hands the pitch tap of the source to the oscillator, once the source has run in this block (the taps are shared by the voice pairs,
+  // so a tap that was not written by this pair's own pass would hold another pair's pitch).
+  void ProducersModule::connectRatioSource(int osc, const bool* processed) {
+    int src = effectiveRatioSource(osc);
+    std::shared_ptr<Output> tap;
+    if (src == kNumOscillators + 1)
+      tap = sub_module_->pitchTap();
+    else if (src > 0 && processed[src - 1])
+      tap = oscillators_[src - 1]->pitchTap();
+    oscillators_[osc]->oscillator()->setRatioSource(tap.get());
+  }
+
   // SynthyBoy: silences the voices whose note or velocity is outside the oscillator's mapping. The levelled output always; the raw
   // output (what the other oscillators use as FM / RM / sync source) too, unless "warp" keeps the oscillator running silently.
   void ProducersModule::applyMute(int i, int num_samples) {
@@ -132,7 +174,9 @@ namespace sbvital {
     // SynthyBoy: an oscillator waits for the sources of both of its warp slots
     bool needs_first[kNumOscillators], needs_second[kNumOscillators];
     bool processed[kNumOscillators];
+    int ratio_source[kNumOscillators];
     for (int i = 0; i < kNumOscillators; ++i) {
+      ratio_source[i] = effectiveRatioSource(i);
       SynthOscillator::DistortionType type1 = oscillators_[i]->getDistortionType();
       SynthOscillator::DistortionType type2 = oscillators_[i]->getDistortionType2();
       needs_first[i] = SynthOscillator::isFirstModulation(type1) || SynthOscillator::isFirstModulation(type2);
@@ -146,11 +190,14 @@ namespace sbvital {
       OscillatorModule* module = oscillators_[index];
       int first_source = getFirstModulationIndex(index);
       int second_source = getSecondModulationIndex(index);
+      const int ratio = ratio_source[index];
       if ((!needs_first[index] || processed[first_source]) &&
           (!needs_second[index] || processed[second_source]) &&
+          (ratio < 1 || ratio > kNumOscillators || processed[ratio - 1]) &&
           !processed[index]) {
         num_processed++;
         processed[index] = true;
+        connectRatioSource(index, processed);
         getLocalProcessor(module)->process(num_samples);
         applyMute(index, num_samples);
       }
@@ -162,7 +209,9 @@ namespace sbvital {
     // the filters behind them). They are processed now, with the other oscillator's output of the previous block (docs/UPSTREAM.md).
     for (int i = 0; i < kNumOscillators; ++i)
       if (!processed[i]) {
+        connectRatioSource(i, processed);
         getLocalProcessor(oscillators_[i])->process(num_samples);
+        processed[i] = true;
         applyMute(i, num_samples);
       }
 

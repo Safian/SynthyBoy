@@ -53,6 +53,9 @@ namespace sbvital {
       void process(int num_samples) override;
       Processor* clone() const override { return new SubSource(*this); }
 
+      /** GROUPB WP-05: the pitch of the sub in MIDI notes per voice (note + octaves + tune) of the last block: the Ratio SRC of an oscillator. */
+      std::shared_ptr<Output> pitchTap() const { return pitch_tap_; }
+
     private:
       static constexpr float kPulseWidth = 0.25f;
       static poly_float polyBlep(poly_float p, poly_float inc);
@@ -62,6 +65,7 @@ namespace sbvital {
       poly_float gate_;
       mono_float last_phase_ = 0.0f;   // the phase of the note that started last (as it was at the end of the last block), for PHASE CONTIGUOUS
       int last_lane_ = -1;             // its lane, followed while it sounds
+      std::shared_ptr<Output> pitch_tap_ = std::make_shared<Output>(1);
 
       JUCE_LEAK_DETECTOR(SubSource)
   };

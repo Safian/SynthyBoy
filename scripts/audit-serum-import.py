@@ -543,6 +543,7 @@ class Audit:
         self.stats['strays'] += len(strays)
         self.audit_content(name, tree, sb, content_dir)
         self.audit_noise(name, tree, sb)
+        self.audit_osc_extras(name, tree, sb)
         self.audit_voice_panel(name, tree, sb)
         self.audit_midi_map(name, tree, report)
 
@@ -650,6 +651,34 @@ class Audit:
                 self.err(name, 'noise.filter: expected %.4g (kParamColor %s) got %s' % (want, pp['kParamColor'], params.get('noise.filter')))
         elif not colour and params.get('noise.filter', 0.0) != 0.0:
             self.err(name, 'noise.filter set on a sample noise')
+
+    RATIO_SOURCE = {0: 1, 1: 2, 2: 3, 3: 0, 4: 4}
+
+    def audit_osc_extras(self, name, tree, sb):
+        """GROUPB (WP-05, A398 / A399): kParamPitchSource (0 .. 2 = Osc A .. C, 3 = Noise, 4 = Sub) is osc#.ratio_src when the pitch mode is Ratio (an oscillator that names
+        itself, the noise and every other mode play the note of the voice); the WT block's kParamXfadeMode is osc#.smooth_interp (1 = on)."""
+        params = sb['state']['params']
+        for i in range(3):
+            o = tree.get('Oscillator%d' % i)
+            pp = o.get('plainParams') if isinstance(o, dict) and isinstance(o.get('plainParams'), dict) else {}
+            want = 0
+            if pp.get('kParamPitchMode') == 'Ratio' and isinstance(pp.get('kParamPitchSource'), (int, float)):
+                want = self.RATIO_SOURCE.get(int(round(pp['kParamPitchSource'])), 0)
+                if want == i + 1:
+                    want = 0
+                self.stats['ratio sources'] += 1
+            got = params.get('osc%d.ratio_src' % (i + 1), 0)
+            if got != want:
+                self.err(name, 'osc%d.ratio_src: expected %d got %s' % (i + 1, want, got))
+            wt = o.get('WTOsc%d' % i) if isinstance(o, dict) else None
+            wp = wt.get('plainParams') if isinstance(wt, dict) and isinstance(wt.get('plainParams'), dict) else {}
+            smooth = 0
+            if pp.get('kParamType', 'kOsc_WT') == 'kOsc_WT' and isinstance(wp.get('kParamXfadeMode'), (int, float)):
+                smooth = 1 if wp['kParamXfadeMode'] >= 0.5 else 0
+                self.stats['smooth interpolation flags'] += 1
+            got = params.get('osc%d.smooth_interp' % (i + 1), 0)
+            if got != smooth:
+                self.err(name, 'osc%d.smooth_interp: expected %d got %s' % (i + 1, smooth, got))
 
     SERUM_DEFAULTS = [(r'osc(\d)\.on$', lambda m: 1.0 if m.group(1) == '1' else 0.0), (r'(noise|sub)\.on$', lambda m: 0.0), (r'filter\d\.on$', lambda m: 0.0),
                       (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.spread$', lambda m: 100.0),
@@ -840,10 +869,12 @@ def main():
     mutation_ok = True
     if a.selftest and first:
         rel, src, report, preset = first
-        muts = [('osc1.level', 3.0), ('filter1.cutoff', 77.0), ('env1.attack', 999.0), ('master.volume', 5.0), ('lfo1.rate', 17.0), ('mod01.amount', -77.0), ('osc1.unison.voices', 11.0), ('voicectl.s1.pan', 33.0)]
+        muts = [('osc1.level', 3.0), ('filter1.cutoff', 77.0), ('env1.attack', 999.0), ('master.volume', 5.0), ('lfo1.rate', 17.0), ('mod01.amount', -77.0), ('osc1.unison.voices', 11.0), ('voicectl.s1.pan', 33.0), ('osc1.smooth_interp', None), ('osc1.ratio_src', None)]
         for key, val in muts:
             if key not in preset['state']['params']:
                 continue
+            if val is None:
+                val = 1.0 - preset['state']['params'][key]  # a flag / small choice: the other value
             bad = json.loads(json.dumps({'state': preset['state']}))
             bad['state']['params'][key] = val
             t = Audit(False)

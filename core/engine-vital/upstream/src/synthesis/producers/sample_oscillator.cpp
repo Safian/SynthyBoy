@@ -109,7 +109,10 @@ namespace sbvital {
     if (sh.slice_mode != 0 && sh.num_slices > 0) {
       int key = static_cast<int>(std::lround(input(kMidiNote)->at(0)[lane] - input(kTranspose)->at(0)[lane] -
                                            input(kTune)->at(0)[lane] - input(kFoldNote)->at(0)[lane]));
-      int index = std::max(0, std::min(sh.num_slices - 1, key - sh.slice_root));
+      int offset = 0;
+      if (sh.slice_play == 1) // GROUPB WP-05: the slice destination moves a single slice (+-100 % = the whole slice list)
+        offset = static_cast<int>(std::lround(input(kSlice)->at(0)[lane] * static_cast<float>(sh.num_slices - 1)));
+      int index = std::max(0, std::min(sh.num_slices - 1, key - sh.slice_root + offset));
       lo = sh.slices[index];
       hi = sh.slice_play == 1 ? (index + 1 < sh.num_slices ? sh.slices[index + 1] : 1.0f) : 1.0f;
       slot.sliced = true;
@@ -164,6 +167,8 @@ namespace sbvital {
     poly_float* levelled = output(kLevelled)->buffer;
     utils::zeroBuffer(raw, num_samples);
     utils::zeroBuffer(levelled, num_samples);
+    if (pitch_tap_)
+      pitch_tap_->buffer[0] = input(kMidiNote)->at(0) + input(kFoldNote)->at(0) + input(kTranspose)->at(0) + input(kTune)->at(0);
 
     if (num_samples > scratch_size_ || sh.view == nullptr || ! sh.view->isValid()) {
       for (Slot& slot : slots_)

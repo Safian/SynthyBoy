@@ -286,6 +286,11 @@ namespace sbvital {
       void setSampleOutput(Output* sample) { sample_ = sample; }
       // Shared with the clones (one per voice pair): the voice handler sets the table on the original once
       void setNoteTable(const mono_float* table) { *note_table_ = table; }
+      // SynthyBoy (GROUPB, WP-05): Ratio SRC. pitchTap () holds, per voice, the pitch of this oscillator in MIDI notes (note + fold +
+      // transposition + tune + the coarse term of the pitch mode) as of the last block; an oscillator in Ratio mode whose source is
+      // set takes that pitch instead of the note of its own voice. The cell is shared with the clones (one per voice pair).
+      std::shared_ptr<Output> pitchTap() const { return pitch_tap_; }
+      void setRatioSource(const Output* tap) { *ratio_source_ = tap; }
 
       virtual void setOversampleAmount(int oversample) override {
         Processor::setOversampleAmount(oversample);
@@ -323,7 +328,8 @@ namespace sbvital {
                                     FourierTransform*, float, int, const poly_float*)>
       void computeSpectralWaveBufferPair(int phase_update, int index, bool formant_shift,
                                          float phase_adjustment, poly_int wave_index,
-                                         poly_float voice_increment, poly_float morph_amount);
+                                         poly_float voice_increment, poly_float morph_amount,
+                                         poly_float frame_fraction);
       template<void(*spectralMorph)(const Wavetable::WavetableData*, int, poly_float*,
                                     FourierTransform*, float, int, const poly_float*)>
       void setFourierWaveBuffers(poly_float phase_inc, int index, bool formant_shift);
@@ -393,6 +399,10 @@ namespace sbvital {
       std::shared_ptr<Output> phase_inc_buffer_;
       std::shared_ptr<PhaseBuffer> phase_buffer_;
       std::shared_ptr<const mono_float*> note_table_ = std::make_shared<const mono_float*>(nullptr);
+      std::shared_ptr<Output> pitch_tap_ = std::make_shared<Output>(1);
+      // SynthyBoy (GROUPB, WP-05): the second frame of a smooth interpolation (oscN.smooth_interp); a clone's own scratch
+      std::shared_ptr<poly_float[]> blend_scratch_ = std::shared_ptr<poly_float[]>(new poly_float[kSpectralBufferSize]());
+      std::shared_ptr<const Output*> ratio_source_ = std::make_shared<const Output*>(nullptr);
       // Phase legato (A86): the phases of the voice that rendered last, shared by all the voice pairs (clones) of this oscillator.
       // Every clone runs on the audio thread, so no synchronisation is needed.
       struct PhaseLegatoState {

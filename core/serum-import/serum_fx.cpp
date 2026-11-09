@@ -461,6 +461,8 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
         {
             if (param == "kParamOctave" || param == "kParamPitch") { out.key = keyOf ("osc#.transpose", n); out.ok = true; out.fid = Fid::close; out.note = "octave_and_semitones_share_the_transpose_range"; return out; }
             if (param == "kParamScanRate") { out.key = keyOf ("osc#.sample.scan", n); out.ok = true; return out; }
+            // GROUPB WP-05 (A399): the single slice destination: the depth is a share of the slice list (+-100 % = every slice)
+            if (param == "kParamSlicingSingleSlice") { out.key = keyOf ("osc#.sample.slice", n); out.ok = true; out.fid = Fid::approx; out.note = "single_slice_depth_is_a_share_of_the_slice_list"; return out; }
             if (param == "kParamPitchRatio") { out.key = keyOf ("osc#.pitch_coarse", n); out.ok = true; out.fid = Fid::approx; return out; }
             if (fromRules ({ "Osc" }, n)) return out;
         }

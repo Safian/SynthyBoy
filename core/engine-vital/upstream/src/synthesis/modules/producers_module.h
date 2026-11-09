@@ -112,6 +112,9 @@ namespace sbvital {
       OscillatorModule* oscillators_[kNumOscillators];
       Value* oscillator_destinations_[kNumOscillators];
       Value* map_warp_[kNumOscillators] = { nullptr, nullptr, nullptr };
+      Value* ratio_src_[kNumOscillators] = { nullptr, nullptr, nullptr };   // GROUPB WP-05: 0 Base note, 1 .. 3 oscillator, 4 Sub
+      int effectiveRatioSource(int osc) const;
+      void connectRatioSource(int osc, const bool* processed);
       Value* sample_destination_;
       SampleModule* sampler_;
       Value* sub_destination_;

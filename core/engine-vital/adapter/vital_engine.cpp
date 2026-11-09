@@ -686,7 +686,8 @@ public:
              | kCapSubPhase | kCapNoiseColour | kCapNoiseSample // block B23 (GROUPA1 WP-04): proven by core/engine-vital/tests/test_noisesample.cpp
              | kCapMpeRouting // block B24 (GROUPA1 WP-09): proven by core/engine-vital/tests/test_mpe.cpp
              | kCapFxDelayOffsetLeft | kCapReverbFeedback // block B25 (GROUPA1 WP-10): proven by core/engine-vital/tests/test_fxextra.cpp
-             | kCapVoiceControl | kCapVoiceSources; // block B26 (GROUPA2 WP-07): proven by core/engine-vital/tests/test_voicecontrol.cpp
+             | kCapVoiceControl | kCapVoiceSources // block B26 (GROUPA2 WP-07): proven by core/engine-vital/tests/test_voicecontrol.cpp
+             | kCapOscExtras2; // block B27 (GROUPB WP-05): proven by core/engine-vital/tests/test_oscextra2.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -943,8 +944,6 @@ private:
         controlMap = engine->getControls();
 
         applyFixedControls();
-        for (int i = 0; i < kNumOsc; ++i)
-            vSmooth[static_cast<size_t> (i)] = control ("osc_" + std::to_string (i + 1) + "_smooth_interpolation");
         for (int i = 0; i < kNumLfo; ++i)
         {
             vLfoSyncType[static_cast<size_t> (i)] = control ("lfo_" + std::to_string (i + 1) + "_sync_type");
@@ -1366,9 +1365,6 @@ private:
             quality.maxUnison = qUnison.load (std::memory_order_relaxed);
             quality.interpolation = qInterpolation.load (std::memory_order_relaxed) != 0 ? Interpolation::spectral : Interpolation::linear;
             quality.fxMask = qFxMask.load (std::memory_order_relaxed);
-            for (sbvital::Value* v : vSmooth)
-                if (v != nullptr)
-                    v->set (quality.interpolation == Interpolation::spectral ? 1.0f : 0.0f);
             appliedQualityGeneration = generation;
         }
 
@@ -2810,7 +2806,6 @@ private:
     std::array<std::atomic<float>, LiveValues::kNumLfos> readoutLfoPhase {};
     std::array<std::atomic<float>, LiveValues::kNumEnvs> readoutEnvStage {}, readoutEnvPosition {};
     std::atomic<uint32_t> readoutBlock { 0 };
-    std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;
     sbvital::Value* vFilter2Input = nullptr;
     sbvital::Value* vFxOrder = nullptr;

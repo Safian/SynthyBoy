@@ -33,6 +33,7 @@ namespace sbvital {
     poly_float tune = input(kTune)->at(0);
 
     poly_float total_pitch = utils::clamp(midi_note + octave * 12.0f + tune, -24.0f, 136.0f);
+    pitch_tap_->buffer[0] = total_pitch;
     poly_float frequency = utils::midiNoteToFrequency(total_pitch);
     poly_float sample_rate_recip = 1.0f / getSampleRate();
     poly_float phase_inc = poly_float::min(frequency * sample_rate_recip, poly_float(0.499f));

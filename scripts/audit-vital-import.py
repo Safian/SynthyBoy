@@ -352,7 +352,8 @@ class Audit:
                 kinds.append('imported')
             elif key in ('pitch_bend_range', 'effect_chain_order', 'filter_1_filter_input', 'filter_2_filter_input', 'mpe_enabled',
                          'stereo_routing', 'voice_override',
-                         'osc_1_transpose_quantize', 'osc_2_transpose_quantize', 'osc_3_transpose_quantize'):
+                         'osc_1_transpose_quantize', 'osc_2_transpose_quantize', 'osc_3_transpose_quantize',
+                         'osc_1_smooth_interpolation', 'osc_2_smooth_interpolation', 'osc_3_smooth_interpolation'):
                 kinds.append('imported')
             elif key in SAMPLE_CONSUMED and content.get('samples'):
                 kinds.append('imported')  # carried by the oscillator the sample was mapped to
@@ -572,6 +573,12 @@ class Audit:
             pk = 'osc%d.transpose_snap' % n
             if k in S:
                 check(pk, round_half_up(S[k]), k, S[k], k)
+            else:
+                touched.add(pk)
+            k = 'osc_%d_smooth_interpolation' % n   # GROUPB WP-05
+            pk = 'osc%d.smooth_interp' % n
+            if k in S:
+                check(pk, 1.0 if S[k] >= 0.5 else 0.0, k, S[k], k)
             else:
                 touched.add(pk)
         a, b = S.get('filter_1_filter_input'), S.get('filter_2_filter_input')

@@ -1824,6 +1824,22 @@ TEST (vi_mod_amount_stereo_source_and_line_mapping_imported)
     CHECK (findItem (gr, "modulations[3]", ItemKind::dropped) == nullptr);
 }
 
+// GROUPB (WP-05): osc_N_smooth_interpolation is osc N smooth_interp (it was the quality tier's and ignored)
+TEST (vi_smooth_interpolation_is_imported)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("osc_1_smooth_interpolation", 1.0);
+    f.set ("osc_2_smooth_interpolation", 0.0);
+    f.set ("osc_3_smooth_interpolation", 1.0);
+    const auto r = run (f, ImportOptions());
+    CHECK_EQ (r.status, ImportStatus::ok);
+    CHECK_EQ (val (r, "osc1.smooth_interp"), 1.0f);
+    CHECK_EQ (val (r, "osc2.smooth_interp"), 0.0f);
+    CHECK_EQ (val (r, "osc3.smooth_interp"), 1.0f);
+    CHECK (findItem (r, "osc_1_smooth_interpolation", ItemKind::ignored) == nullptr);
+}
+
 // The built-in shortcut (a single frame equal to a built-in single cycle is not stored) and its limit: a table is only "the built-in" when the
 // WAVEFORM is the same. Vital's own `Init` (a falling saw with its jump at mid cycle, the opposite polarity of our rising Saw) and a phase shifted
 // `Sine` are different waveforms: a built-in table has no phase / polarity to offer, so they are stored (docs/ui-design/VITAL-IMPORT-AUDIT-REPORT.md 6).

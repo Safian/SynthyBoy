@@ -123,9 +123,32 @@ void Importer::oscillator (int i)
         if (used[static_cast<size_t> (u.node)]) continue;
         const std::string p = on + "/plainParams/" + u.name;
         if (u.name == "kParamLoopCrossfade") continue; // after the sample is known
+        if (u.name == "kParamPitchSource")
+        {
+            // GROUPB WP-05 (A398): the ratio source of the Ratio pitch mode: 0 .. 2 = Osc A .. C, 3 = Noise, 4 = Sub (the enumeration is read from the two
+            // factory presets that hold it); an oscillator that names itself plays the note of the voice
+            const double v = num (u.node);
+            const int src = static_cast<int> (std::lround (v));
+            const int mode = static_cast<int> (R.values.plain[static_cast<size_t> (indexOf (key ("pitch_mode")))]);
+            if (mode != 2)
+                entry (ItemKind::ignored, Reason::exact, area, p, valueText (u.node), "", "", "ratio_source_outside_ratio_mode");
+            else if (src == 3)
+                entry (ItemKind::dropped, Reason::noEngineEquivalent, area, p, valueText (u.node), key ("ratio_src"), "Base note", "ratio_source_noise_not_modelled");
+            else
+            {
+                const int ours = src == 4 ? 4 : (src >= 0 && src <= 2 && src != i ? src + 1 : 0);
+                store (key ("ratio_src"), ours);
+                setByFile[static_cast<size_t> (indexOf (key ("ratio_src")))] = 1;
+                static const char* const names[5] = { "Base note", "Osc 1", "Osc 2", "Osc 3", "Sub" };
+                entry (src == i ? ItemKind::approximated : ItemKind::imported, src == i ? Reason::enumRemapped : Reason::exact, area, p, valueText (u.node), key ("ratio_src"), names[ours],
+                       src == i ? "ratio_source_is_the_oscillator_itself_note_used" : "ratio_source");
+            }
+            consume (u.node);
+            continue;
+        }
         const char* why = "serum_feature_not_modelled";
         if (u.name == "kParamPosition" || u.name == "kParamHzOffset" || u.name == "kParamBaseTempo" || u.name == "kParamScanBPMRate" || u.name == "kParamScanBPMDivide"
-            || u.name == "kParamScanRange" || u.name == "kParamManualPositionMode" || u.name == "kParamLoopStartLink" || u.name == "kParamPitchSource" || u.name == "kParamPitchRatioModMode")
+            || u.name == "kParamScanRange" || u.name == "kParamManualPositionMode" || u.name == "kParamLoopStartLink" || u.name == "kParamPitchRatioModMode")
             why = "sample_or_pitch_feature_not_modelled";
         entry (ItemKind::dropped, Reason::noEngineEquivalent, area, p, valueText (u.node), "", "", why);
         consume (u.node);
@@ -168,7 +191,16 @@ void Importer::oscillator (int i)
             const std::string p = bp + "/plainParams/" + u.name;
             const bool warpish = u.name.find ("Warp") != std::string::npos;
             const char* why = kind == 1 ? "multisample_feature_not_modelled" : kind == 3 ? "granular_feature_not_modelled" : kind == 4 ? "spectral_feature_not_modelled" : "serum_feature_not_modelled";
-            if (u.name == "kParamXfadeMode") why = "table_crossfade_mode_not_modelled";
+            if (u.name == "kParamXfadeMode" && kind == 0)
+            {
+                // GROUPB WP-05 (A399): the crossfade mode of the table is the Smooth Interpretation of WT POS (1 = on); 0 / absent = off
+                const double v = num (u.node);
+                store (key ("smooth_interp"), v >= 0.5 ? 1 : 0);
+                setByFile[static_cast<size_t> (indexOf (key ("smooth_interp")))] = 1;
+                entry (ItemKind::approximated, Reason::enumRemapped, area, p, valueText (u.node), key ("smooth_interp"), v >= 0.5 ? "On" : "Off", "table_crossfade_mode_read_as_smooth_interpretation");
+                consume (u.node);
+                continue;
+            }
             entry (ItemKind::dropped, Reason::noEngineEquivalent, area, p, valueText (u.node), "", "", warpish ? "warp_parameter_not_modelled" : why);
             consume (u.node);
         }

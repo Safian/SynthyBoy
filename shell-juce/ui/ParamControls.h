@@ -207,8 +207,13 @@ public:
     bool hasExtraAction() const noexcept { return static_cast<bool> (extraAction); }
     void runExtraAction() const { if (extraAction) extraAction(); }
     static constexpr int kExtraActionId = 100000;
+    /** A panel can switch single entries off (shown greyed, skipped by the arrows): the Ratio SRC of an oscillator cannot be the oscillator itself or close a loop
+        (GROUPB WP-05). The filter gets the choice value and returns true if the entry may be chosen. */
+    void setEntryFilter (std::function<bool (int)> filter) { entryFilter = std::move (filter); }
+    bool entryAllowed (int value) const { return ! entryFilter || entryFilter (value); }
 
 private:
+    std::function<bool (int)> entryFilter;
     std::vector<ChoiceGroup> groups;
     juce::String extraLabel;
     std::function<void()> extraAction;

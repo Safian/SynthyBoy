@@ -86,6 +86,7 @@ namespace sbvital {
     Output* sample_scan = createPolyModControl(prefix_ + "_sample_scan");
     Output* sample_uni_start = createPolyModControl(prefix_ + "_sample_uni_start");
     Output* sample_uni_span = createPolyModControl(prefix_ + "_sample_uni_span");
+    Output* sample_slice = createPolyModControl(prefix_ + "_sample_slice"); // GROUPB WP-05
     // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
     Value* pitch_mode = createBaseControl(prefix_ + "_pitch_mode");
     Output* pitch_coarse = createPolyModControl(prefix_ + "_pitch_coarse");
@@ -173,6 +174,8 @@ namespace sbvital {
     so->plug(sample_scan, SampleOscillator::kScan);
     so->plug(sample_uni_start, SampleOscillator::kUniStart);
     so->plug(sample_uni_span, SampleOscillator::kUniSpan);
+    so->plug(sample_slice, SampleOscillator::kSlice);
+    so->setPitchTap(oscillator_->pitchTap());
     so->plug(distortion_type_, SampleOscillator::kWarpType);
     so->plug(distortion_amount, SampleOscillator::kWarpAmount);
     so->plug(distortion2_type_, SampleOscillator::kWarp2Type);

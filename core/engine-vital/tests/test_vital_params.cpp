@@ -337,7 +337,7 @@ TEST (quality_tiers_cap_without_touching_the_parameters)
         for (int i = 1; i <= 3; ++i)
             CHECK_EQ (static_cast<int> (vitalControlValue (*e, ("osc_" + std::to_string (i) + "_unison_voices").c_str())), q.maxUnison);
         CHECK_EQ (static_cast<int> (vitalControlValue (*e, "oversampling")), q.oversampling >= 2 ? 1 : 0);
-        CHECK_EQ (static_cast<int> (vitalControlValue (*e, "osc_1_smooth_interpolation")), q.interpolation == Interpolation::spectral ? 1 : 0);
+        CHECK_EQ (static_cast<int> (vitalControlValue (*e, "osc_1_smooth_interpolation")), 0); // GROUPB WP-05: the key (default Off), no longer the tier
         const char* const fxControls[kNumLegacyFxSlots] = { "chorus_on", "compressor_on", "delay_on", "distortion_on", "eq_on", "filter_fx_on", "flanger_on",
                                                       "phaser_on", "reverb_on" };
         for (int i = 0; i < kNumLegacyFxSlots; ++i)

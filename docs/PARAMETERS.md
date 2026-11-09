@@ -4,14 +4,14 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2125 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2134 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 35 |
-| Osc 1 | 71 |
-| Osc 2 | 71 |
-| Osc 3 | 71 |
+| Osc 1 | 72 |
+| Osc 2 | 72 |
+| Osc 3 | 72 |
 | Noise | 19 |
 | Filter 1 | 23 |
 | Filter 2 | 23 |
@@ -41,9 +41,9 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | LFO 9 | 17 |
 | LFO 10 | 17 |
 | Mixer | 8 |
-| Oscillator 1 | 10 |
-| Oscillator 2 | 10 |
-| Oscillator 3 | 10 |
+| Oscillator 1 | 12 |
+| Oscillator 2 | 12 |
+| Oscillator 3 | 12 |
 | Sub | 14 |
 | Quality | 2 |
 | Voice Control | 62 |
@@ -171,6 +171,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.unison.blend_shape` | Osc 1 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 1 | mod |  |
 | `osc1.unison.stack_repeat` | Osc 1 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 1 |  |  |
 | `osc1.env1` | Osc 1 Env 1 | 0 Off, 1 On | On | Osc 1 |  |  |
+| `osc1.sample.slice` | Osc 1 Sample Slice Select | -100 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
 
 ### Osc 2
 
@@ -247,6 +248,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.unison.blend_shape` | Osc 2 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 2 | mod |  |
 | `osc2.unison.stack_repeat` | Osc 2 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 2 |  |  |
 | `osc2.env1` | Osc 2 Env 1 | 0 Off, 1 On | On | Osc 2 |  |  |
+| `osc2.sample.slice` | Osc 2 Sample Slice Select | -100 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
 
 ### Osc 3
 
@@ -323,6 +325,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.unison.blend_shape` | Osc 3 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 3 | mod |  |
 | `osc3.unison.stack_repeat` | Osc 3 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 3 |  |  |
 | `osc3.env1` | Osc 3 Env 1 | 0 Off, 1 On | On | Osc 3 |  |  |
+| `osc3.sample.slice` | Osc 3 Sample Slice Select | -100 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
 
 ### Noise
 
@@ -806,7 +809,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..42 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..908 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..911 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -1561,6 +1564,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc1.unison.range` | Osc 1 Unison Range | 0 .. 48 st | 2 st | Oscillator 1 | mod |  |
 | `osc1.phase_legato` | Osc 1 Phase Legato | 0 Off, 1 On | Off | Oscillator 1 |  |  |
 | `osc1.phase_memory` | Osc 1 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 1 |  |  |
+| `osc1.ratio_src` | Osc 1 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 1 |  |  |
+| `osc1.smooth_interp` | Osc 1 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 1 |  |  |
 
 ### Oscillator 2
 
@@ -1576,6 +1581,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc2.unison.range` | Osc 2 Unison Range | 0 .. 48 st | 2 st | Oscillator 2 | mod |  |
 | `osc2.phase_legato` | Osc 2 Phase Legato | 0 Off, 1 On | Off | Oscillator 2 |  |  |
 | `osc2.phase_memory` | Osc 2 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 2 |  |  |
+| `osc2.ratio_src` | Osc 2 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 2 |  |  |
+| `osc2.smooth_interp` | Osc 2 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 2 |  |  |
 
 ### Oscillator 3
 
@@ -1591,6 +1598,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc3.unison.range` | Osc 3 Unison Range | 0 .. 48 st | 2 st | Oscillator 3 | mod |  |
 | `osc3.phase_legato` | Osc 3 Phase Legato | 0 Off, 1 On | Off | Oscillator 3 |  |  |
 | `osc3.phase_memory` | Osc 3 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 3 |  |  |
+| `osc3.ratio_src` | Osc 3 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 3 |  |  |
+| `osc3.smooth_interp` | Osc 3 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 3 |  |  |
 
 ### Sub
 
@@ -2648,6 +2657,9 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 906 | `noise.filter` | Noise Filter |
 | 907 | `delay.offset_left` | Delay Offset Left |
 | 908 | `reverb.feedback` | Reverb Feedback |
+| 909 | `osc1.sample.slice` | Osc 1 Sample Slice Select |
+| 910 | `osc2.sample.slice` | Osc 2 Sample Slice Select |
+| 911 | `osc3.sample.slice` | Osc 3 Sample Slice Select |
 
 ## Built-in wavetables and LFO shapes
 
