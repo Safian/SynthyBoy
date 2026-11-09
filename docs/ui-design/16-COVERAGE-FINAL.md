@@ -73,7 +73,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S01-05 | S p.327-339 (B) | Presets browser: folders, search, tags, ratings, packs, export | EXCLUDED | Kick (00-BRIEF) |  |
 | S01-06 | S p.20 | Creating a new sound: Init Preset | DONE | UiHost::initPatch -> PluginProcessor; GlbSettingsPanel.cpp:167; ui_shellfeat `shf_save_as_default_new_instances_and_init_preset` |  |
 | S01-07 | S p.21 | Saving changes, ARTIST / DESC metadata | EXCLUDED | Kick preset browser / save owns the metadata UI (core format has author / description / tags: core/src/preset.cpp, ct_preset `preset_save_load_round_trip` :38) | confirm with the owner that the synth UI needs no save dialog |
-| S01-08 | S p.22 | Embedding content when saving a preset | PARTIAL | state v3 `content` section references files by pack / file / sha256 (core/src/content_state.cpp, ct_state_v3 :250); Q8 decision: tables are not embedded | the shell has NO content store (grep setContentStore in shell-juce, shell-clap: none), so a user wavetable / sample / IR cannot be created or referenced from the plugin: X01-01 |
+| S01-08 | S p.22 | Embedding content when saving a preset | DONE (WP-01) | state v3 `content` section references files by pack / file / sha256 (core/src/content_state.cpp, ct_state_v3 :250); Q8 decision: tables are not embedded ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S01-09 | S p.22 | Dragging audio to the DAW / share a rendered note | MISSING | none (grep Resample / renderOffline: none) | needs an offline render API; G03 |
 | S01-10 | S p.24 | Help tooltips | DONE | Editor.h:74 TooltipWindow; setTooltip on controls |  |
 | S01-11 | S p.25 | Serum keyboard (touch keys, velocity, octave shift) | DONE | Strip.cpp; ui_render `uir_keyboard_notes_reach_the_engine` |  |
@@ -97,7 +97,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 |----|-----|----------|--------|----------|------------|
 | S02-01 | S p.38 | Wavetable anatomy: up to 256 frames of 2048 samples | DONE | engine reads 1..256 frames (t_wp4 `user_wavetable_of_257_frames_keeps_every_frame` :496); 13 built-in tables |  |
 | S02-02 | S p.39, V p.7-8 | Waveform display 2D / 3D / spectral | DONE | WavetablePanel.cpp:144, OscWaveView.cpp:292; ui_wavetable `ui_wavetable_panel_controls_and_visual`, ui_gaps `uig_wavetable_3d_view_tilt_pinch` | a Preset-table oscillator cannot be displayed (no store): X01-01 |
-| S02-03 | S p.40 | Choose a wavetable: menu, arrows, wheel, swipe | PARTIAL | `oscN.wavetable` = 13 built-ins + `Preset table` (PT); OscWaveView.cpp:328; ui_gaps `uig_osc_wavetable_name_swipe_steps_the_table` | no ContentPack / user wavetable list, no wavetable ships in content/; user tables unreachable: X01-01 |
+| S02-03 | S p.40 | Choose a wavetable: menu, arrows, wheel, swipe | DONE (WP-01) | `oscN.wavetable` = 13 built-ins + `Preset table` (PT); OscWaveView.cpp:328; ui_gaps `uig_osc_wavetable_name_swipe_steps_the_table` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S02-04 | S p.41 | PHASE | DONE | `oscN.phase`; original v2 key (sweep test t_vital_audio :138) |  |
 | S02-05 | S p.42 | RAND (random phase) | DONE | `oscN.random_phase`; original v2 key |  |
 | S02-06 | S p.43 | Phase Legato | DONE | `oscN.phase_legato`, `voice.phase_legato`; t_pitchuni `phase_legato_changes_the_start_phase_of_overlapping_notes` :337 |  |
@@ -149,13 +149,13 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
 | S04-01 | S p.69 | Select the sampler (oscillator type Sample) | DONE | `oscN.type` (PT:315); t_wp4 `sample_oscillator_type_plays_the_content_sample_at_the_key_pitch` :179 |  |
-| S04-02 | S p.68, 70 | Choose / load a sample: list, Load Sample, show location, reload; root note from the file name or WAV chunk | MISSING | engine reads `content.samples` through an IContentStore (t_wp4 :179) but the shell sets none and has no file chooser (X01-01) | no way to get a sample into the plugin |
-| S04-03 | S p.71 | Sample START / END markers | PARTIAL | `oscN.sample.start`, `.end` (PT:582..); OscWaveView.cpp:504; ui_gaps `uig_sample_view_markers_loupe_loop_pair` | the displayed waveform is procedural (OscWaveView.cpp:903-914), not the sample |
-| S04-04 | S p.72 | Sample ops: Show Marker Animation, Zoom to Start / End | PARTIAL | zoom / pan: OscWaveView.cpp:336; ui_gaps `uig_sample_view_zoom_pan_buttons_pinch_wheel` | marker animation under modulation missing (UI only) |
-| S04-05 | S p.72-73 | Snap Off / Zero / Beats / Loop | MISSING | none | UI-only; needs the sample data in the shell |
+| S04-02 | S p.68, 70 | Choose / load a sample: list, Load Sample, show location, reload; root note from the file name or WAV chunk | DONE (WP-01) | engine reads `content.samples` through an IContentStore (t_wp4 :179) but the shell sets none and has no file chooser (X01-01) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S04-03 | S p.71 | Sample START / END markers | DONE (WP-01) | `oscN.sample.start`, `.end` (PT:582..); OscWaveView.cpp:504; ui_gaps `uig_sample_view_markers_loupe_loop_pair` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S04-04 | S p.72 | Sample ops: Show Marker Animation, Zoom to Start / End | DONE (WP-01, range band; live position WP-17) | zoom / pan: OscWaveView.cpp:336; ui_gaps `uig_sample_view_zoom_pan_buttons_pinch_wheel` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S04-05 | S p.72-73 | Snap Off / Zero / Beats / Loop | DONE (WP-01) | none ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S04-06 | S p.73 | Fade Edges, Normalize, Reverse | DONE | `oscN.sample.fade_edges`, `.normalize`, `.reverse`; t_wp4 `sample_scan_normalize_fades_slices_and_unison_start` :250, `sample_loop_modes_start_end_and_reverse` :205 |  |
-| S04-07 | S p.73 | Trim (cut the sample to start / end) | MISSING | none (start / end exist) | small: a destructive or content-side trim |
-| S04-08 | S p.74-75 | Slicing Off / Auto (threshold) / Manual | PARTIAL | `oscN.sample.slice_mode`, `.slice_threshold`, `content.samples[].slices`; t_wp4 `sample_slices_auto_and_manual_pick_the_slice_by_key` :295; ui_gaps `uig_sample_view_slices_manual`, `uig_sample_view_threshold_line_auto_slices` | Auto slice markers are not drawn (IEngine does not hand out the onsets); display procedural |
+| S04-07 | S p.73 | Trim (cut the sample to start / end) | DONE (WP-01) | none (start / end exist) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S04-08 | S p.74-75 | Slicing Off / Auto (threshold) / Manual | DONE (WP-01) | `oscN.sample.slice_mode`, `.slice_threshold`, `content.samples[].slices`; t_wp4 `sample_slices_auto_and_manual_pick_the_slice_by_key` :295; ui_gaps `uig_sample_view_slices_manual`, `uig_sample_view_threshold_line_auto_slices` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S04-09 | S p.76 | Slice options: Play Slice to End, Play Single Slice, Root Note | DONE | `oscN.sample.slice_play`, `.slice_root` |  |
 | S04-10 | S p.76 | Mod source on the single-slice destination | MISSING | modDestinations hold scan / uni_start / uni_span only | new modulatable `oscN.sample.slice` (3 keys) |
 | S04-11 | S p.76 | Send slices to clip / auto-sync to clip | EXCLUDED | Kick (clips) |  |
@@ -243,7 +243,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
 | S10-01 | S p.152-153 | FX racks MAIN / BUS 1 / BUS 2 | DONE | `<fx>.rack` for 16 modules (kRacks PT:96); t_wp5 `racks_assign_the_effect_to_main_bus_1_or_bus_2` :231; FxChainPanel.cpp:34 |  |
-| S10-02 | S p.154, 158 | Load / save rack presets | MISSING | none | needs the user store of X01-01 |
+| S10-02 | S p.154, 158 | Load / save rack presets | DONE (WP-01) | none ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S10-03 | S p.155-157 | Add / copy / remove modules (several instances of one effect) | PARTIAL | 16 fixed modules, one instance per type, remove = bypass (A19, 14 row 3) | several instances of the same effect impossible; owner decision |
 | S10-04 | S p.156 | Reorder modules | DONE | `fx.order.1..16`; t_wp5 :271, :309; FxChainPanel hold-to-reorder |  |
 | S10-05 | S p.157 | Bypass a module | DONE | `<fx>.on` |  |
@@ -255,7 +255,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S10-11 | S p.162-163, V p.28-30 | Compressor: single / multiband, limit, crossovers | DONE | `compressor.*` (+limit, crossovers); t_fxextra :153, :209, :245; FxCompressorPanel.cpp:315 |  |
 | S10-12 | S p.163 | Compressor limit attack 0-10 ms / makeup 36 dB / threshold 0 .. -120 | DIFFERENT | fixed 1.5 ms look-ahead, threshold -80 .. 0 (14 row 31) |  |
 | S10-13 | S p.164-166 | Convolve: engine | DONE | `convolve.*` (PT:665); core/fx-serum-b; t_wp7 `convolve_uses_the_impulse_of_the_content_and_rebuilds_when_the_size_changes` :231 |  |
-| S10-14 | S p.164-166 | Convolve: load an impulse response | MISSING | FxConvolvePanel.cpp:26-31: `Load IR...` only toggles `convolve.ir` None / Preset IR; no file, no `content.impulses` | the effect stays bypassed from the UI; X01-01 |
+| S10-14 | S p.164-166 | Convolve: load an impulse response | DONE (WP-01) | FxConvolvePanel.cpp:26-31: `Load IR...` only toggles `convolve.ir` None / Preset IR; no file, no `content.impulses` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S10-15 | S p.165-166, V p.30-31 | Delay: modes, HQ, scalar offset, Tap->Delay | DONE | `delay.*` (+style 4, hq, offset); t_fxextra :273, :307; FxDelayPanel.cpp:312 |  |
 | S10-16 | S p.166 | Delay left offset (one scalar offset per channel) | MISSING | only `delay.offset` | MANUALCHECK 4: `delay.offset_left` (1 key) |
 | S10-17 | S p.167-169, V p.32-33 | Distortion: 13 types, filter order, X-Shaper editor | DONE | `distortion.*`; t_fxextra :346, :395; FxShaperEditor.cpp; ui_fx `fx_extras_xshaper_editor_edits_the_content` | default type Soft clip vs Tube (14 row 31) |
@@ -281,7 +281,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S11-05 | S p.187, 194 | Assign an envelope / LFO to a control by drag (halo, destination count, tooltip) | DONE | ui_render `uir_assign_by_touch_through_controls`; ui_gaps `uig_envelope_tabs_select_long_press_and_drop_on_a_control`, `uig_depth_halo_badge_is_a_target` |  |
 | S11-06 | S p.188 | LFOs 1-10 (+ 4 random LFOs), tiles | DONE | `lfo1..10.*`, `rlfo1..4.*`; t_wp123 `lfo_9_and_10_run_and_modulate` :170; LfoTabsPanel.cpp:174 |  |
 | S11-07 | S p.189-190 | LFO graph tools: point, flat, ramp up / down, steps, brush, marquee, snap, proportional move | DONE | LfoShapeEditor.cpp; ui_lfo `uil_shape_editor_edits_the_point_list_through_gestures`; ui_gaps `uig_lfo_steps_tool_draws_one_step_per_grid_column`, `uig_lfo_brush_tool_paints_the_chosen_brush`, `uig_lfo_marquee_select_and_proportional_move`; engine `lfoN.shape` = Custom (kCapCustomLfoShape) t_wp123 :559 |  |
-| S11-08 | S p.191, V p.19 | LFO SHAPE menu: load a preset, save a user shape, favourites | PARTIAL | `Presets` button = the 12 built-in shapes as point lists (LfoShapeEditor) | user shape presets and favourites missing (need the user store of X01-01); a stand-alone `.vitallfo` imports to `.lfoshape.json` but no editor loads it (14 row 25) |
+| S11-08 | S p.191, V p.19 | LFO SHAPE menu: load a preset, save a user shape, favourites | DONE (WP-01) | `Presets` button = the 12 built-in shapes as point lists (LfoShapeEditor) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S11-09 | S p.191, V p.21-22 | LFO TYPE Normal, S&H, Chaos Lorenz, Chaos Rossler | DONE | `rlfoN.style` Perlin / S&H / Sine interpolate / Lorenz / Rossler (PT:kRandomStyles); t_wp123 `random_lfo_rossler_attractor_style` :404 |  |
 | S11-10 | S p.191 | LFO type Path | DIFFERENT | dropped: the manual does not describe it (12-decisions Q17) |  |
 | S11-11 | S p.191, V p.19-20 | LFO MODE FREE / RETRIG / ENVELOPE (+ sustain env, loop point, loop and hold) | DONE | `lfoN.sync_type` (6 modes, PT:kLfoSyncTypes) |  |
@@ -343,19 +343,19 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
-| S13-01 | S p.274-275 | Editor thumbnails, select, reorder | PARTIAL | core: wtedit model (core/wavetable-edit, 256 frames); UI: WavetableEditorSheet thumbnails; ui_gaps `uig_wavetable_thumbnail_reorder_swipe_close` | edits never reach the engine or a preset: closing the sheet only updates the panel's own view copy (WavetablePanel.cpp:709-721); X01-02 |
-| S13-02 | S p.276-277 | Drawing tools (flat, sine, slopes, curves, half sines, interpolate, nudge, noise, mirror), grid | PARTIAL | core drawing_tools.cpp; WaveCanvas (WavetableEditorSheet.cpp:21); ui_gaps `uig_wavetable_canvas_zoom_pan_loupe_nudge_two_finger` | same disconnect, X01-02 |
-| S13-03 | S p.278-280 | FFT area (draw amplitude / phase) and FFT menu | PARTIAL | core frame_ops.cpp `fft*`; SpectrumCanvas (WavetableEditorSheet.cpp:225); ui_gaps `uig_wavetable_fft_bin_entry_and_nudge_all_phases` | same disconnect, X01-02 |
-| S13-04 | S p.281-283 | Frame management: copy / paste, insert / remove, sort | PARTIAL | core frame_ops.cpp; ui_wavetable `ui_wavetable_editor_sheet_operations`; WavetableEditorSheet.cpp:1723 | same disconnect, X01-02 |
-| S13-05 | S p.284, 304-311 | Formula parser field in the editor | PARTIAL | core/formula (GRAMMAR.md, 21 + 4 functions); FormulaView (WavetableEditorSheet.cpp:707-735) | same disconnect, X01-02 |
-| S13-06 | S p.285-288 | Single / All process menus (normalize, flip, fade, filter, blur, PWM, set spectra, ...) | PARTIAL | core frame_ops.cpp; ProcessView (WavetableEditorSheet.cpp:510) with search | same disconnect, X01-02 |
-| S13-07 | S p.289 | Morph menu | PARTIAL | core `interpolateBetweenKeyframes`; WavetableEditorSheet.cpp:1740 | same disconnect, X01-02 |
+| S13-01 | S p.274-275 | Editor thumbnails, select, reorder | DONE (WP-01) | core: wtedit model (core/wavetable-edit, 256 frames); UI: WavetableEditorSheet thumbnails; ui_gaps `uig_wavetable_thumbnail_reorder_swipe_close` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-02 | S p.276-277 | Drawing tools (flat, sine, slopes, curves, half sines, interpolate, nudge, noise, mirror), grid | DONE (WP-01) | core drawing_tools.cpp; WaveCanvas (WavetableEditorSheet.cpp:21); ui_gaps `uig_wavetable_canvas_zoom_pan_loupe_nudge_two_finger` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-03 | S p.278-280 | FFT area (draw amplitude / phase) and FFT menu | DONE (WP-01) | core frame_ops.cpp `fft*`; SpectrumCanvas (WavetableEditorSheet.cpp:225); ui_gaps `uig_wavetable_fft_bin_entry_and_nudge_all_phases` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-04 | S p.281-283 | Frame management: copy / paste, insert / remove, sort | DONE (WP-01) | core frame_ops.cpp; ui_wavetable `ui_wavetable_editor_sheet_operations`; WavetableEditorSheet.cpp:1723 ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-05 | S p.284, 304-311 | Formula parser field in the editor | DONE (WP-01) | core/formula (GRAMMAR.md, 21 + 4 functions); FormulaView (WavetableEditorSheet.cpp:707-735) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-06 | S p.285-288 | Single / All process menus (normalize, flip, fade, filter, blur, PWM, set spectra, ...) | DONE (WP-01) | core frame_ops.cpp; ProcessView (WavetableEditorSheet.cpp:510) with search ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-07 | S p.289 | Morph menu | DONE (WP-01) | core `interpolateBetweenKeyframes`; WavetableEditorSheet.cpp:1740 ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S13-08 | V p.8 | Vital component / keyframe model: Wave Source, Line Source, Phase Shift, Wave Window, Frequency Filter, Slew Limiter, Wave Folder, Wave Warp | PARTIAL | core wtedit::vital (vital_model.cpp); UI lists and adds components (WavetableEditorSheet.cpp:940-1000) | no per-component parameter editing, no Line Source / Audio File Source UI, no keyframe editor; the render has no path to the oscillator |
-| S13-09 | S p.285 | Import a wavetable file (WAV) | MISSING | UI imports a synthetic 2 s saw sweep: WavetableEditorSheet.cpp:1298-1330 | no file chooser, no file read; X01-02 |
-| S13-10 | S p.291-298 | Import audio as wavetable: multi-cycle, advanced, FFT / vocoded, single-cycle, import menu | PARTIAL | core audio_import.cpp (modes PitchAverage .. Fft2048); ImportJob worker thread (:1006) with progress | fed with generated test audio, not a file; text overrides (S p.295) not built |
-| S13-11 | S p.300-301 | Import an image as a wavetable | PARTIAL | core image_import.cpp | UI feeds a 64x64 generated gradient (WavetableEditorSheet.cpp:1304-1310), no file |
-| S13-12 | S p.285-288 | Export (WAV 16 / 32 bit, single cycle, all / single) | PARTIAL | core wav_export.cpp | exportWavPrompt builds the bytes and drops them (WavetableEditorSheet.cpp:2228-2237): nothing is written |
-| S13-13 | S p.290, 302-303 | Save wavetable, Embed in preset, Missing Files dialog | MISSING | menu items `Save Table` / `Embed in Preset` only clear the modified flag (WavetableEditorSheet.cpp:2068-2069) | no `.wav` in a store, no `content.wavetables` entry, no `oscN.wavetable` = Preset table |
+| S13-09 | S p.285 | Import a wavetable file (WAV) | DONE (WP-01) | UI imports a synthetic 2 s saw sweep: WavetableEditorSheet.cpp:1298-1330 ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-10 | S p.291-298 | Import audio as wavetable: multi-cycle, advanced, FFT / vocoded, single-cycle, import menu | DONE (WP-01) | core audio_import.cpp (modes PitchAverage .. Fft2048); ImportJob worker thread (:1006) with progress ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-11 | S p.300-301 | Import an image as a wavetable | DONE (WP-01) | core image_import.cpp ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-12 | S p.285-288 | Export (WAV 16 / 32 bit, single cycle, all / single) | DONE (WP-01) | core wav_export.cpp ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S13-13 | S p.290, 302-303 | Save wavetable, Embed in preset, Missing Files dialog | DONE (WP-01) | menu items `Save Table` / `Embed in Preset` only clear the modified flag (WavetableEditorSheet.cpp:2068-2069) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S13-14 | S p.301 | Animate WT POS with an LFO after import | DONE | matrix: `lfoN` -> `oscN.frame` |  |
 | S13-15 | S p.315 | Mod wheel scans WT POS while the editor is open | MISSING | none | preference of S15-05 |
 | S13-16 | S p.324 | Render OSC Warp (current frame -> 256 frames across WARP) | MISSING | none | G53; needs offline warp render + X01-01 |
@@ -366,9 +366,9 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
 | S14-01 | S p.304-306 | Formula grammar: functions, binary operators, constants and variables, q FFT mode | DONE | core/formula (GRAMMAR.md, REPORT.md, formula.cpp bytecode VM); core/formula/tests | manual ambiguities listed `[S unclear]` in GRAMMAR.md (precedence of && / \|\|, % and ?:) |
-| S14-02 | S p.284 | Formula applied to the editor's table | PARTIAL | applyFormula (WavetableEditorSheet.cpp:719) | result stays inside the editor: X01-02 |
-| S14-03 | S p.307-308 | Formula presets menu, saving own formulas, manual file management | MISSING | FormulaView has a text field, Apply, Clear (WavetableEditorSheet.cpp:707-735) | needs the user store (X01-01) |
-| S14-04 | S p.309-311 | Formula examples | MISSING | none in the UI | example list (small) |
+| S14-02 | S p.284 | Formula applied to the editor's table | DONE (WP-01) | applyFormula (WavetableEditorSheet.cpp:719) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S14-03 | S p.307-308 | Formula presets menu, saving own formulas, manual file management | DONE (WP-01) | FormulaView has a text field, Apply, Clear (WavetableEditorSheet.cpp:707-735) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| S14-04 | S p.309-311 | Formula examples | DONE (WP-01) | none in the UI ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 
 ### S15 Serum 2: global settings, voice control, quality, tuning (p.312-322)
 
@@ -463,19 +463,19 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | I01-09 | audit G9 | Single-frame `Init` and phase-shifted `Sine` tables stored as content instead of a built-in | MISSING | 8 distinct 4 KB files for 43 uses | one appended built-in `Saw down` |
 | I01-10 | audit 4 | Importer ignores the keys added after the audit: `detune_range` -> `oscN.unison.range`, `midi_track` -> `oscN.pitch_track`, `voice_priority` -> `master.voice.steal_priority`, `spectral_unison` | MISSING | vital_import.cpp:188 lists them as auxiliary (ignored / dropped) although the keys exist since B14 / B15 | all 35 files use the defaults, so no preset changes; a non-default file would lose the setting |
 | I01-11 | 11 Q31 | Clean-room wavetable renderer for the 10 Vital component types | DONE | core/wavetable-render; audit: 105 of 105 tables, 0 silent | component formulas are our definitions (14 row 1, SPEC-GAP); needs A/B against real Vital |
-| I01-12 | 11 Q5 | Stand-alone `.vitaltable`, `.vitallfo`, `.vitalbank` batch | PARTIAL | tools/vital-import writes `.lfoshape.json` (14 row 25) | no editor / plugin entry point loads them (I01-16) |
+| I01-12 | 11 Q5 | Stand-alone `.vitaltable`, `.vitallfo`, `.vitalbank` batch | DONE (WP-01) | tools/vital-import writes `.lfoshape.json` (14 row 25) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | I01-13 | 11 Q38 | Export as `.vital` | DIFFERENT | not a product feature (12-decisions: proposed Q38) |  |
 | I01-14 | audit 7 | Imported presets that fail the factory render gate (8 of 35) | DIFFERENT | presets themselves are hot (VITAL-IMPORT-AUDIT section 7); gate is for factory presets, report only |  |
 | I01-15 | 14 row 1 | Importer A/B against real Vital audio | MISSING | no Vital render exists in the repo | only listening can settle the SPEC-GAP list (`grep SPEC-GAP core/`) |
-| I01-16 | I01-01 | Import entry points inside the plugin (file chooser, content store, batch) | MISSING | importer is a CLI only (tools/vital-import); shell-juce / shell-clap do not link core/vital-import | X01-01 |
+| I01-16 | I01-01 | Import entry points inside the plugin (file chooser, content store, batch) | DONE (WP-01) | importer is a CLI only (tools/vital-import); shell-juce / shell-clap do not link core/vital-import ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 
 ### X01 Cross-cutting: shell, content pipeline, platforms (found in this audit)
 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
-| X01-01 | audit | Content store in the shells (user wavetables, samples, impulse responses, imported presets) | MISSING | grep setContentStore in shell-juce, shell-clap: none; only tools/preset-render and tools/vital-import attach one (preset_render.cpp:96) | root cause of S01-08, S02-03, S04-02, S07-06, S10 Convolve, S13, I01: WP-1 |
-| X01-02 | audit | Wavetable editor to engine link (open from the oscillator's table, apply, save, embed) | MISSING | WavetablePanel.cpp:709-721 copies the panel's view table in and out; no UiHost call | WP-1 |
-| X01-03 | audit | Sample / wavetable / IR file chooser flows (only the tuning panel has one: GlbTuningPanel.cpp:255) | MISSING | none | WP-1 |
+| X01-01 | audit | Content store in the shells (user wavetables, samples, impulse responses, imported presets) | DONE (WP-01) | grep setContentStore in shell-juce, shell-clap: none; only tools/preset-render and tools/vital-import attach one (preset_render.cpp:96) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| X01-02 | audit | Wavetable editor to engine link (open from the oscillator's table, apply, save, embed) | DONE (WP-01) | WavetablePanel.cpp:709-721 copies the panel's view table in and out; no UiHost call ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
+| X01-03 | audit | Sample / wavetable / IR file chooser flows (only the tuning panel has one: GlbTuningPanel.cpp:255) | DONE (WP-01) | none ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | X01-04 | 14 row 11 | iOS ships which engine: engine-own has none of the Serum-class features | MISSING | engine-own sets 1 of the 43 cap bits (event contract) | owner decision (WP-17) |
 | X01-05 | 14 row 29 | 4x oversample switch ends sounding notes (needs prepare) | DIFFERENT | accepted (14 row 29) |  |
 | X01-06 | 14 row 13 | Velocity 0.25 -> 1.0 = 24.1 dB (squared law) | DIFFERENT | left as is until listening (14 row 13) |  |

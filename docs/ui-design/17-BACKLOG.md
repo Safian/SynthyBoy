@@ -44,7 +44,7 @@ Sizes (relative): XL = a new DSP package or a cross-shell subsystem (WP-01, WP-1
 
 ## 3. Package details
 
-### WP-01 Content pipeline in the shells (first; unblocks 10 other packages)
+### WP-01 Content pipeline in the shells (DONE on branch `work-wp01`, see WP01-REPORT.md; first; unblocks 10 other packages)
 
 The audit's central finding (16 section 2, items 1-3): the engine handles user wavetables, samples and impulse responses (t_wp4 :179, :333, t_wp7 :231), but the shells never create or attach a content store, and the UI paths that look finished are facades.
 
