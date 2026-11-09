@@ -177,7 +177,7 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
             }
         });
         placed[rack].push_back (pf);
-        acctRest (node, ItemKind::dropped, Reason::noEngineEquivalent, area, path, "", "", "splitter_detail_not_modelled");
+        acctRest (node == 0 ? fxMap : node, ItemKind::dropped, Reason::noEngineEquivalent, area, path, "", "", "splitter_detail_not_modelled");
         return;
     }
     const int type = fxTypeOf (fxName);
@@ -255,7 +255,24 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
     const int pp = get (fxMap, "plainParams");
     std::map<std::string, int> seen;
     const auto find = [&] (const char* name) { return get (pp, name); };
-    bool eqBand1Peak = false;
+    // the bands of the Serum EQ: the left band is our low band, the right band our high band; a band set to Peak uses the mid band (the first peak), a second
+    // peak falls back to the shelf of its side
+    std::string eqGroup[2];
+    bool eqShelfForPeak[2] = { false, false };
+    if (type == kFxTypeEq)
+    {
+        const int t1 = find ("kParamType1") >= 0 ? static_cast<int> (num (find ("kParamType1"))) : 0, t2 = find ("kParamType2") >= 0 ? static_cast<int> (num (find ("kParamType2"))) : 0;
+        bool midTaken = false;
+        const int types[2] = { t1, t2 };
+        for (int b = 0; b < 2; ++b)
+        {
+            const bool peak = types[b] == 1;
+            if (peak && ! midTaken) { eqGroup[b] = "mid"; midTaken = true; }
+            else { eqGroup[b] = b == 0 ? "low" : "high"; eqShelfForPeak[b] = peak; }
+        }
+        placed[rack].back().eq[0] = eqGroup[0];
+        placed[rack].back().eq[1] = eqGroup[1];
+    }
     if (isMap (pp))
         forMap (pp, [&] (const std::string& nm, int v, int)
         {
@@ -323,12 +340,10 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
             }
             else if (type == kFxTypeEq && isNumber (v) && (nm.rfind ("kParamFreq", 0) == 0 || nm.rfind ("kParamGain", 0) == 0 || nm.rfind ("kParamReso", 0) == 0 || nm.rfind ("kParamType", 0) == 0))
             {
-                // the two bands of the Serum EQ: the left band is our low band, the right band our high band; a band set to Peak uses the mid band
                 const int band = nm.back() == '2' ? 2 : 1;
-                const int t = find (band == 1 ? "kParamType1" : "kParamType2") >= 0 ? static_cast<int> (num (find (band == 1 ? "kParamType1" : "kParamType2"))) : 0;
-                const bool peak = t == 1;
-                std::string group = peak ? "mid" : (band == 1 ? "low" : "high");
-                if (peak) { if (eqBand1Peak) { entry (ItemKind::dropped, Reason::noEngineEquivalent, area, p, valueText (v), "", "", "eq_second_peak_band_dropped"); consume (v); return; } eqBand1Peak = true; }
+                const int t = band == 1 ? (find ("kParamType1") >= 0 ? static_cast<int> (num (find ("kParamType1"))) : 0) : (find ("kParamType2") >= 0 ? static_cast<int> (num (find ("kParamType2"))) : 0);
+                const std::string& group = eqGroup[band - 1];
+                const bool asMid = group == "mid", shelfForPeak = eqShelfForPeak[band - 1];
                 std::string key;
                 double value = num (v);
                 if (nm.rfind ("kParamFreq", 0) == 0) key = "eq." + group + ".cutoff";
@@ -337,11 +352,12 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
                 else
                 {
                     key = "eq." + group + ".mode";
-                    value = peak ? 0.0 : (t == 2 ? 1.0 : 0.0); // low: Shelf | High pass, high: Shelf | Low pass, mid: Peak | Notch
+                    value = asMid ? 0.0 : (t == 2 ? 1.0 : 0.0); // low: Shelf | High pass, high: Shelf | Low pass, mid: Peak | Notch
                 }
                 bool cl = false;
                 const double st = put (key, value, &cl);
-                entry (peak || cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, p, valueText (v), key, fmt (st), peak ? "eq_peak_band_on_the_mid_band" : (cl ? "clamped_to_range" : ""));
+                entry (asMid || shelfForPeak || cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, p, valueText (v), key, fmt (st),
+                       asMid ? "eq_peak_band_on_the_mid_band" : shelfForPeak ? "eq_second_peak_as_shelf" : (cl ? "clamped_to_range" : ""));
                 consume (v);
             }
         });
@@ -397,7 +413,7 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
     if (ty >= 0) { entry (ItemKind::ignored, Reason::exact, area, path + "/type", valueText (ty), "", "", "effect_type_code"); consume (ty); }
     const int ui = get (node, "kUIParamMixOrGain");
     if (ui >= 0) { entry (ItemKind::ignored, Reason::exact, area, path + "/kUIParamMixOrGain", valueText (ui), "", "", "interface_state"); consume (ui); }
-    acctRest (node, ItemKind::dropped, Reason::noEngineEquivalent, area, path, "", "", "effect_detail_not_modelled");
+    acctRest (node == 0 ? fxMap : node, ItemKind::dropped, Reason::noEngineEquivalent, area, path, "", "", "effect_detail_not_modelled");
     (void) index;
 }
 
@@ -488,6 +504,28 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
             {
                 size_t count = 0;
                 const Rule* rows = fxRulesOf (pf.type, count);
+                std::string eqKey;
+                if (pf.type == kFxTypeEq && param.size() > 6 && param.rfind ("kParam", 0) == 0 && (param.back() == '1' || param.back() == '2'))
+                {
+                    const std::string& group = pf.eq[param.back() - '1'];
+                    const std::string base = param.substr (6, param.size() - 7);
+                    if (! group.empty() && (base == "Freq" || base == "Gain" || base == "Reso"))
+                        eqKey = "eq." + group + (base == "Freq" ? ".cutoff" : base == "Gain" ? ".gain" : ".resonance");
+                }
+                if (! eqKey.empty())
+                {
+                    const FxTypeDescriptor& desc = fxTypeDescriptor (pf.type);
+                    const int src = indexOf (eqKey);
+                    for (int q = 0; q < desc.count; ++q)
+                        if (desc.source[q] == src)
+                        {
+                            out.key = pf.slot < 0 ? eqKey : paramTable()[fxInstanceKeys (pf.slot).p[q]].key;
+                            out.ok = true;
+                            out.fid = Fid::close;
+                            out.note = "eq_band_modulated_on_its_group";
+                            return out;
+                        }
+                }
                 for (size_t i = 0; i < count; ++i)
                     if (param == rows[i].param)
                     {
@@ -569,9 +607,11 @@ void Importer::modSlots()
         if (mainChoice < 0)
         {
             acctRest (S, ItemKind::dropped, Reason::modSourceUnsupported, area, name, "", "", "modulation_source_not_modelled");
+            if (! R.report.entries.empty()) R.report.entries.back().serumValue = destType + "#" + std::to_string (destId) + " " + destParam + " src=" + std::to_string (a) + "," + std::to_string (b);
             continue;
         }
         const Dest dest = destOf (destType, destId, destParam);
+        const std::string desc = destType + "#" + std::to_string (destId) + " " + destParam + " src=" + std::to_string (a) + "," + std::to_string (b);
         int choice = 0;
         if (dest.ok)
         {
@@ -581,6 +621,7 @@ void Importer::modSlots()
         if (choice <= 0)
         {
             acctRest (S, ItemKind::dropped, Reason::modDestinationUnsupported, area, name, "", "", dest.ok ? "destination_is_not_modulatable" : dest.whyText);
+            if (! R.report.entries.empty()) R.report.entries.back().serumValue = desc;
             continue;
         }
         ++slotsUsed;
@@ -819,7 +860,7 @@ void Importer::runFxFile()
         forMap (0, [&] (const std::string& nm, int v, int) { if (nm.rfind ("FX", 0) == 0 && nm != "fxType" && isMap (v)) name = nm; });
         if (! name.empty()) fxEntry (std::max (0, std::min (2, opt.fileRack)), 0, 0, "");
         const int ft = get (0, "fxType");
-        if (ft >= 0) { entry (ItemKind::imported, Reason::exact, "fx", "fxType", valueText (ft), "", "", "effect_type_name"); consume (ft); }
+        if (ft >= 0 && ! used[static_cast<size_t> (ft)]) { entry (ItemKind::imported, Reason::exact, "fx", "fxType", valueText (ft), "", "", "effect_type_name"); consume (ft); }
     }
     unmappedTopLevel();
 }

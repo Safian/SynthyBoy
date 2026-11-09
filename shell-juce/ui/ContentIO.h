@@ -16,6 +16,7 @@
 
 #include "UiContext.h"
 #include "synthyboy/user_content.h"
+#include "synthyboy/serum_plugin_import.h"
 #include "synthyboy/vital_plugin_import.h"
 #include "synthyboy/wavetable_edit.h"
 
@@ -78,6 +79,17 @@ struct VitalFlowResult
     VitalPluginImport imported;
 };
 VitalFlowResult importVitalFile (UiContext& ctx, const juce::File& file, int osc, int lfo);
+
+/** Serum 2 file (.SerumPreset / .SerumFX / .SerumFXRack / .XferShape, WP-21). A preset replaces the patch, an effect chain is written onto the current patch
+    (only the parameters it holds), a shape goes to the LFO `lfo` (1..10; 0 = not a target); any other Serum family is only reported. The tables, samples and
+    impulses of a preset are read from the Serum content folder that holds the file (the nearest ancestor with a Tables or Samples folder; none: they are reported
+    missing). */
+struct SerumFlowResult
+{
+    FlowResult flow;
+    SerumPluginImport imported;
+};
+SerumFlowResult importSerumFile (UiContext& ctx, const juce::File& file, int lfo);
 
 /** Decoded forms of library files for the views, keyed by the SHA-256 of the reference (so a replaced file is decoded again). Message thread. */
 class ContentCache

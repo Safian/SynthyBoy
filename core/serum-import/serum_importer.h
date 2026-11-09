@@ -24,6 +24,7 @@ struct PlacedFx
     int slot = -1;       // pool slot, -1 = a module of instance 0
     const char* prefix = ""; // instance 0: the key prefix ("convolve")
     std::string serumName;
+    std::string eq[2];   // FXEQ: the group ("low", "mid", "high") each Serum band was written to
 };
 
 class Importer

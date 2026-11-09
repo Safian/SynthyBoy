@@ -433,6 +433,97 @@ VitalFlowResult importVitalFile (UiContext& ctx, const juce::File& file, int osc
     return result;
 }
 
+// ---- Serum 2 ---------------------------------------------------------------------------------------------------------------------------
+
+SerumFlowResult importSerumFile (UiContext& ctx, const juce::File& file, int lfo)
+{
+    SerumFlowResult result;
+    auto* library = ctx.host.contentLibrary();
+    if (library == nullptr)
+    {
+        result.flow = fail ("this host keeps no content library");
+        return result;
+    }
+    const std::vector<uint8_t> bytes = readFileBytes (file);
+    if (bytes.empty())
+    {
+        result.flow = fail ("the file cannot be read");
+        return result;
+    }
+    const std::string root = findSerumContentRoot (utf8 (file.getFullPathName()));
+    SerumFolderResolver resolver (root);
+    // the folder below Presets/Factory (Bass, Pad, ...) is the category of a preset
+    std::string hint;
+    for (auto dir = file.getParentDirectory(); dir.exists() && dir != dir.getParentDirectory(); dir = dir.getParentDirectory())
+        if (dir.getParentDirectory().getFileName() == "Factory" && dir.getParentDirectory().getParentDirectory().getFileName() == "Presets")
+        {
+            hint = utf8 (dir.getFileName());
+            break;
+        }
+    result.imported = importSerumFileForPlugin (utf8 (file.getFileName()), bytes, *library, ctx.host.engineCaps(), root.empty() ? nullptr : &resolver, hint);
+    const SerumPluginImport& in = result.imported;
+    if (! in.ok)
+    {
+        result.flow = fail ("Not imported: " + juce::String (in.error));
+        return result;
+    }
+    const juce::String counts = juce::String (in.report.numImported) + " settings, " + juce::String (in.report.numApproximated) + " approximated, "
+                                + juce::String (in.report.numDropped) + " dropped";
+    if (in.kind == SerumFileKind::preset)
+    {
+        if (! ctx.host.loadPatch (in.values, in.content))
+        {
+            result.flow = fail ("this host cannot load a patch");
+            return result;
+        }
+        contentCache (ctx).clear();
+        result.flow = done ("Imported " + juce::String (in.name) + ": " + counts + (in.missingFiles > 0 ? ", " + juce::String (in.missingFiles) + " files not found" : juce::String()));
+        return result;
+    }
+    if (in.kind == SerumFileKind::fxModule || in.kind == SerumFileKind::fxRack)
+    {
+        // the chain goes onto the patch that is loaded now: only the parameters it holds are written
+        for (const int index : in.touched)
+            setParameter (ctx.host, paramTable()[static_cast<size_t> (index)].key, in.values.plain[static_cast<size_t> (index)]);
+        if (! in.content.impulses.empty())
+        {
+            auto content = ctx.host.content();
+            content.impulses = in.content.impulses;
+            commit (ctx, content);
+        }
+        contentCache (ctx).clear();
+        result.flow = done ("Effect chain " + juce::String (in.name) + ": " + counts);
+        return result;
+    }
+    if (in.kind == SerumFileKind::shape)
+    {
+        auto content = ctx.host.content();
+        if (lfo >= 1 && lfo <= kMaxContentLfoShapes)
+        {
+            content.lfoShapes.erase (std::remove_if (content.lfoShapes.begin(), content.lfoShapes.end(), [lfo] (const ContentLfoShape& s) { return s.lfo == lfo; }),
+                                     content.lfoShapes.end());
+            ContentLfoShape shape;
+            shape.lfo = lfo;
+            shape.name = in.shape.name;
+            shape.smooth = in.shape.smooth;
+            shape.points = in.shape.points;
+            content.lfoShapes.push_back (std::move (shape));
+            std::sort (content.lfoShapes.begin(), content.lfoShapes.end(), [] (const ContentLfoShape& a, const ContentLfoShape& b) { return a.lfo < b.lfo; });
+            if (commit (ctx, content))
+            {
+                const std::string key = "lfo" + std::to_string (lfo) + ".shape";
+                setParameter (ctx.host, key.c_str(), static_cast<float> (std::max (0, choiceIndexOf (key.c_str(), "Custom"))));
+                result.flow = done ("Shape " + juce::String (in.name) + " is now the shape of LFO " + juce::String (lfo));
+                return result;
+            }
+        }
+        result.flow = fail ("Choose an LFO to receive the shape");
+        return result;
+    }
+    result.flow = done (juce::String (in.name) + ": this kind of file has no equivalent here (see the list)");
+    return result;
+}
+
 // ---- cache -----------------------------------------------------------------------------------------------------------------------------
 
 std::shared_ptr<const SamplePreview> ContentCache::samplePreview (UiHost& host, const ContentFileRef& ref)

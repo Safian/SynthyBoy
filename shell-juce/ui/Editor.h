@@ -43,6 +43,9 @@ public:
     void importVitalFromMenu();
     /** Imports a file and shows the report sheet (the menu and the tests call this). */
     VitalFlowResult importVitalFile (const juce::File& file);
+    /** Menu "Import Serum 2 file..." (WP-21): .SerumPreset / .SerumFX / .SerumFXRack / .XferShape with the report. */
+    void importSerumFromMenu();
+    SerumFlowResult importSerumFile (const juce::File& file);
     /** The open sheet (Missing Files / Vital report), null when none. */
     juce::Component* contentSheet() noexcept { return sheet.get(); }
     void closeContentSheet();

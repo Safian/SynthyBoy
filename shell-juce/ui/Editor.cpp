@@ -337,6 +337,28 @@ void SynthyBoyEditor::importVitalFromMenu()
     });
 }
 
+SerumFlowResult SynthyBoyEditor::importSerumFile (const juce::File& file)
+{
+    SerumFlowResult result = synthyboy::ui::importSerumFile (ctx, file, ctx.view->lfoTab < 10 ? ctx.view->lfoTab + 1 : 0);
+    auto report = std::make_unique<ImportReportSheet> (ctx, result);
+    report->onFinished = [this] { closeContentSheet(); };
+    showSheet (std::move (report));
+    return result;
+}
+
+void SynthyBoyEditor::importSerumFromMenu()
+{
+    FileRequest request;
+    request.title = "Import a Serum 2 file";
+    request.wildcards = "*.SerumPreset;*.SerumFX;*.SerumFXRack;*.XferShape;*.XferPath;*.XferClip;*.XferArp;*.SerumStyle;*.XferFilterPZSingle;*.XferFilterPZMulti";
+    request.purpose = "serum";
+    host.requestFile (request, [safe = juce::Component::SafePointer<SynthyBoyEditor> (this)] (const juce::File& file)
+    {
+        if (safe != nullptr)
+            safe->importSerumFile (file);
+    });
+}
+
 void SynthyBoyEditor::showMenu()
 {
     juce::PopupMenu menu;
@@ -359,6 +381,7 @@ void SynthyBoyEditor::showMenu()
 
     menu.addSeparator();
     menu.addItem (60, "Import Vital file...", host.canRequestFile() && host.contentLibrary() != nullptr);
+    menu.addItem (62, "Import Serum 2 file...", host.canRequestFile() && host.contentLibrary() != nullptr);
     menu.addItem (61, "Missing files...", host.contentLibrary() != nullptr);
     menu.addSeparator();
     menu.addItem (2, uiTheme.isDark() ? "Light theme" : "Dark theme");
@@ -375,6 +398,8 @@ void SynthyBoyEditor::showMenu()
                                 return;
                             if (result == 60)
                                 safe->importVitalFromMenu();
+                            else if (result == 62)
+                                safe->importSerumFromMenu();
                             else if (result == 61)
                                 safe->checkMissingContent();
                             else if (result == 10)

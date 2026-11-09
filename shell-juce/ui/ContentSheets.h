@@ -46,6 +46,7 @@ class ImportReportSheet final : public juce::Component
 {
 public:
     ImportReportSheet (UiContext& context, const VitalFlowResult& result);
+    ImportReportSheet (UiContext& context, const SerumFlowResult& result);
 
     void paint (juce::Graphics& g) override;
     void resized() override;
@@ -55,7 +56,7 @@ public:
 
 private:
     UiContext& ctx;
-    juce::String headline, body;
+    juce::String headline, body, title { "Vital import" };
     juce::TextEditor view;
     juce::TextButton closeBtn { "Close" };
 };

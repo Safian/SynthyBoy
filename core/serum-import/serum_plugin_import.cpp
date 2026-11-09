@@ -22,22 +22,34 @@ bool SerumFolderResolver::read (const std::string& area, const std::string& relP
     else if (area == "Impulses") sub = "Impulses";
     else if (area == "Noises") sub = "Samples/Factory Non-Tonal/Noises";
     else return false;
-    // a relative path of the preset never leaves the folder
-    fs::path rel;
-    std::string part;
-    for (size_t i = 0; i <= relPath.size(); ++i)
+    // the path of the preset is relative to the folder of its area and may climb ("Factory/Drums/../../../Samples/..."): it is resolved lexically
+    // and must stay inside the Serum content folder
+    std::vector<std::string> parts;
     {
-        if (i == relPath.size() || relPath[i] == '/' || relPath[i] == '\\')
+        std::string comp;
+        const auto push = [&] (const std::string& c)
         {
-            if (part == "..") return false;
-            if (! part.empty() && part != ".") rel /= part;
-            part.clear();
+            if (c.empty() || c == ".") return true;
+            if (c == "..") { if (parts.empty()) return false; parts.pop_back(); return true; }
+            parts.push_back (c);
+            return true;
+        };
+        std::string base = sub + "/" + relPath;
+        for (size_t i = 0; i <= base.size(); ++i)
+        {
+            if (i == base.size() || base[i] == '/' || base[i] == '\\')
+            {
+                if (! push (comp)) return false;
+                comp.clear();
+            }
+            else comp += base[i];
         }
-        else part += relPath[i];
     }
+    fs::path rel;
+    for (const std::string& c : parts) rel /= c;
     if (rel.empty()) return false;
     std::error_code ec;
-    const fs::path file = fs::path (root_) / sub / rel;
+    const fs::path file = fs::path (root_) / rel;
     if (! fs::is_regular_file (file, ec)) return false;
     if (fs::file_size (file, ec) > (512u << 20)) return false;
     std::ifstream in (file, std::ios::binary);

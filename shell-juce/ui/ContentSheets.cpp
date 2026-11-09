@@ -142,6 +142,30 @@ ImportReportSheet::ImportReportSheet (UiContext& context, const VitalFlowResult&
     addAndMakeVisible (closeBtn);
 }
 
+ImportReportSheet::ImportReportSheet (UiContext& context, const SerumFlowResult& result) : ctx (context)
+{
+    const SerumPluginImport& in = result.imported;
+    title = "Serum 2 import";
+    headline = result.flow.message;
+    static const char* const fidelity[] = { "exact", "close", "degraded" };
+    body << "Fidelity: " << fidelity[static_cast<int> (in.report.fidelity)] << "\n"
+         << in.report.numImported << " values imported, " << in.report.numApproximated << " approximated, " << in.report.numDropped << " dropped, "
+         << in.report.numIgnored << " ignored, " << in.report.numDefaulted << " Serum defaults applied\n";
+    if (in.missingFiles > 0)
+        body << in.missingFiles << " referenced files were not found (open the file from inside the Serum content folder)\n";
+    body << "\n";
+    for (const auto& line : serumReportLines (in.report))
+        body << juce::String (juce::CharPointer_UTF8 (line.c_str())) << "\n";
+    if (in.report.truncated)
+        body << "... (the list is cut)\n";
+    view.setMultiLine (true, true);
+    view.setReadOnly (true);
+    view.setText (body, false);
+    closeBtn.onClick = [this] { if (onFinished) onFinished(); };
+    addAndMakeVisible (view);
+    addAndMakeVisible (closeBtn);
+}
+
 void ImportReportSheet::paint (juce::Graphics& g)
 {
     const auto& t = ctx.theme;
@@ -151,7 +175,7 @@ void ImportReportSheet::paint (juce::Graphics& g)
     g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), t.px (8.0f), 1.5f);
     g.setColour (t.colours.text);
     g.setFont (t.titleFont());
-    g.drawText ("Vital import", getLocalBounds().reduced (t.gap()).removeFromTop (t.touch()), juce::Justification::centredLeft, true);
+    g.drawText (title, getLocalBounds().reduced (t.gap()).removeFromTop (t.touch()), juce::Justification::centredLeft, true);
     g.setFont (t.labelFont());
     g.setColour (t.colours.textDim);
     auto r = getLocalBounds().reduced (t.gap());
