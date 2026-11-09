@@ -8,6 +8,7 @@
 
 #include "engine_caps.h"
 #include "events.h"
+#include "offline_render.h"
 #include "params.h"
 #include "quality.h"
 #include "readout.h"
@@ -57,6 +58,12 @@ public:
     /** Ultra quality for an offline render (preferences.h ultraRender): the oversampling of the quality option 4x, read by prepare () like
         quality.oversample_4x (needsPrepare () reports a change). Set it before prepare (); engines without the option ignore it. Any thread. */
     virtual void setUltraRender (bool) noexcept {}
+
+    /** Renders `request` offline (offline_render.h, GROUPD WP-15) on a private instance of the engine that starts from this engine's parameters
+        and content: this engine is only read (no reset, no voice touched, the audio thread is not waited for), the result is deterministic and
+        at the quality of the high tier without the caps of the tier it runs in; request.ultra = 4x oversampling. Message thread, may take long.
+        False when the engine has no offline render (the default; renderOfflineAny () then builds the twin from outside). */
+    virtual bool renderOffline (const OfflineRequest& /*request*/, OfflineAudio& /*out*/) { return false; }
 
     /** Sets a parameter (plain value, constrained to the parameter's range); unknown ids and NaN are ignored. */
     virtual void setParam (uint32_t id, float plain) noexcept = 0;

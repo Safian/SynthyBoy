@@ -161,6 +161,8 @@ public:
     int channels() const noexcept { return channels_; }
     int64_t frames() const noexcept { return static_cast<int64_t> (mono_.size()); }
     double seconds() const noexcept { return sampleRate_ > 0 ? static_cast<double> (mono_.size()) / sampleRate_ : 0.0; }
+    /** The mono mix of the whole file (Switch to wavetable converts a region of it, GROUPD WP-14). */
+    const std::vector<float>& mono() const noexcept { return mono_; }
 
     /** Min / max of the mono mix in `columns` equal parts of [startNorm, endNorm] (the display of the zoomed view). */
     void peaks (float startNorm, float endNorm, int columns, std::vector<float>& minOut, std::vector<float>& maxOut) const;

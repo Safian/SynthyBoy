@@ -52,7 +52,9 @@ float detectPitchPeriod(const float* signal, size_t length, double sampleRate) n
     if (maxLag >= length / 2) maxLag = length / 2;
     if (minLag >= maxLag) return 2048.0f;
 
-    // Normalized Square Difference Function (NSDF)
+    // Normalized Square Difference Function (NSDF). The fundamental is the FIRST peak that comes close to the highest one (McLeod's rule, k = 0.9): the
+    // highest peak alone lands on a multiple of the period whenever a longer lag happens to fit the signal better (GROUPD WP-14)
+    std::vector<float> nsdf(maxLag + 2, -1.0f);
     float bestCorr = -1.0f;
     size_t bestLag = minLag;
 
@@ -75,16 +77,63 @@ float detectPitchPeriod(const float* signal, size_t length, double sampleRate) n
         const double denom = std::sqrt(sumSq1 * sumSq2);
         if (denom > 1e-12)
         {
-            const float nsdf = static_cast<float>(2.0 * sumProd / (sumSq1 + sumSq2));
-            if (nsdf > bestCorr)
+            nsdf[lag] = static_cast<float>(2.0 * sumProd / (sumSq1 + sumSq2));
+            if (nsdf[lag] > bestCorr)
             {
-                bestCorr = nsdf;
+                bestCorr = nsdf[lag];
                 bestLag = lag;
             }
         }
     }
 
+    if (bestCorr > 0.0f)
+        for (size_t lag = minLag + 1; lag <= maxLag; ++lag)
+            if (nsdf[lag] >= 0.9f * bestCorr && nsdf[lag] >= nsdf[lag - 1] && nsdf[lag] >= nsdf[lag + 1])
+            {
+                bestLag = lag;
+                break;
+            }
+
     return static_cast<float>(bestLag);
+}
+
+// NSDF of one lag (the quantity detectPitchPeriod maximises)
+double nsdfAt(const float* signal, size_t length, size_t lag) noexcept
+{
+    if (lag == 0 || lag >= length)
+        return -1.0;
+    double sumProd = 0.0, sumSq1 = 0.0, sumSq2 = 0.0;
+    for (size_t i = 0; i + lag < length; ++i)
+    {
+        const double s1 = static_cast<double>(signal[i]);
+        const double s2 = static_cast<double>(signal[i + lag]);
+        sumProd += s1 * s2;
+        sumSq1 += s1 * s1;
+        sumSq2 += s2 * s2;
+    }
+    return (sumSq1 + sumSq2) > 1e-12 ? 2.0 * sumProd / (sumSq1 + sumSq2) : -1.0;
+}
+
+// The period with a fraction: detectPitchPeriod's integer lag refined by a parabola through the NSDF at lag - 1, lag, lag + 1 (GROUPD WP-14: a
+// 220 Hz tone at 44.1 kHz has the period 200.45, the integer lag 200 cuts every cycle 0.2 % short and the frames get a seam)
+double refinePeriod(const float* signal, size_t length, float coarseLag) noexcept
+{
+    const size_t lag = static_cast<size_t>(coarseLag);
+    if (lag < 3 || lag + 2 >= length)
+        return static_cast<double>(coarseLag);
+    const double a = nsdfAt(signal, length, lag - 1), b = nsdfAt(signal, length, lag), c = nsdfAt(signal, length, lag + 1);
+    const double denom = a - 2.0 * b + c;
+    if (std::fabs(denom) < 1e-12)
+        return static_cast<double>(lag);
+    return static_cast<double>(lag) + std::clamp(0.5 * (a - c) / denom, -1.0, 1.0);
+}
+
+// Cubic (Catmull-Rom) reading at a fractional position, the ends repeat their first / last sample
+float readCubic(const float* in, size_t length, double pos) noexcept
+{
+    const auto at = [in, length](long i) { return in[static_cast<size_t>(std::clamp<long>(i, 0, static_cast<long>(length) - 1))]; };
+    const long i = static_cast<long>(std::floor(pos));
+    return cubicHermite(at(i - 1), at(i), at(i + 1), at(i + 2), static_cast<float>(pos - static_cast<double>(i)));
 }
 
 // Finds the nearest positive zero-crossing around targetIndex
@@ -416,14 +465,16 @@ bool importAudioSamples(const float* samples, size_t numSamples, double sampleRa
 
     case ImportMode::PitchAverage:
     {
-        const float avgPeriod = detectPitchPeriod(samples, numSamples, sampleRate);
-        const size_t period = static_cast<size_t>(std::max(16.0f, avgPeriod));
+        const float coarse = detectPitchPeriod(samples, numSamples, sampleRate);
+        const double period = std::max(16.0, refinePeriod(samples, numSamples, coarse));
 
-        const size_t totalF = std::min(maxF, numSamples / period);
+        const size_t totalF = std::min(maxF, static_cast<size_t>(static_cast<double>(numSamples) / period));
         for (size_t f = 0; f < totalF; ++f)
         {
             Frame frame;
-            resampleBuffer(samples + f * period, period, frame.sampleData(), kWaveformSize);
+            const double start = static_cast<double>(f) * period;
+            for (size_t i = 0; i < kWaveformSize; ++i)
+                frame[i] = readCubic(samples, numSamples, start + static_cast<double>(i) * period / static_cast<double>(kWaveformSize));
             importedFrames.push_back(frame);
         }
         break;

@@ -790,6 +790,29 @@ public:
         publishContent (content);
     }
 
+    /** Offline render (offline_render.h, GROUPD WP-15): a private instance of this engine with a copy of the parameters, the content and the store. This
+        engine is only read (atomic parameter loads, the content copy under the mutex the message thread already uses), so the audio thread is not
+        disturbed and no state of this engine changes. */
+    bool renderOffline (const OfflineRequest& request, OfflineAudio& out) override
+    {
+        VitalEngine twin;
+        for (size_t i = 0; i < kMaxParams; ++i)
+            twin.params[i].store (params[i].load (std::memory_order_relaxed), std::memory_order_relaxed);
+        twin.tuningSource.store (tuningSource.load (std::memory_order_acquire), std::memory_order_release);
+        StateContent content;
+        const IContentStore* store;
+        {
+            const std::lock_guard<std::mutex> lock (snapshotMutex);
+            content = lastContent;
+            store = contentStore;
+        }
+        return runOfflineRequest (twin, request, out, [&content, store] (IEngine& e)
+        {
+            e.setContent (content); // before the store: nothing is decoded twice
+            e.setContentStore (store);
+        });
+    }
+
     void publishContent (const StateContent& content)
     {
         const IContentStore* store;

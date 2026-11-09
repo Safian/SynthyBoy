@@ -23,6 +23,8 @@ add_library(synthyboy_core STATIC
     src/kick_pages.cpp
     src/shell_features.cpp
     src/preferences.cpp
+    src/offline_render.cpp
+    src/wave_convert.cpp
     engine-own/own_engine.cpp)
 
 target_include_directories(synthyboy_core

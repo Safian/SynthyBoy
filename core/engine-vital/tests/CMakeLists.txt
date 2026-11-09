@@ -133,3 +133,8 @@ target_include_directories(synthyboy_test_vital_multisample PRIVATE "${CMAKE_CUR
 synthyboy_add_test(synthyboy_test_vital_groupc_rt test_groupc_rt.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_groupc_rt PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
+# GROUPD (WP-14 / 15 / 16): the offline render entry, Switch to wavetable, Resample, Render OSC Warp, the audio of the last note
+synthyboy_add_test(synthyboy_test_vital_groupd test_groupd.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_groupd PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
