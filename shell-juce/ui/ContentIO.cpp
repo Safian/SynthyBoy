@@ -803,4 +803,246 @@ FlowResult MissingFilesModel::removeAll()
     refresh();
     return done ("References removed");
 }
+// ---- GROUPD WP-14 / WP-15 / WP-16 --------------------------------------------------------------------------------------------------------
+
+ParamValues readAllValues (UiHost& host)
+{
+    ParamValues values = ParamValues::defaults();
+    const auto* table = paramTable();
+    for (size_t i = 0; i < paramCount(); ++i)
+        if (auto* raw = host.parameters().getRawParameterValue (table[i].key))
+            values.plain[i] = raw->load();
+    return values;
+}
+
+convert::OfflineRunner offlineRunner (UiContext& ctx)
+{
+    return [&ctx] (const OfflineRequest& request, OfflineAudio& audio)
+    {
+        OfflineRequest copy = request;
+        copy.ultra = request.ultra || ctx.host.preferences().ultraRender; // "Use Ultra quality when rendering" (S p.315)
+        return ctx.host.renderOffline (copy, audio);
+    };
+}
+
+namespace
+{
+std::string oscKey (int osc, const char* tail) { return "osc" + std::to_string (osc) + "." + tail; }
+
+/** Stores `table` for `osc`, makes the oscillator a Wavetable oscillator playing it. */
+FlowResult installTable (UiContext& ctx, int osc, const wtedit::Wavetable& table)
+{
+    const FlowResult saved = saveWavetable (ctx, osc, table, false);
+    if (! saved.ok)
+        return saved;
+    const int wavetable = choiceIndexOf (oscKey (osc, "type").c_str(), "Wavetable");
+    if (wavetable >= 0)
+        setParameter (ctx.host, oscKey (osc, "type").c_str(), static_cast<float> (wavetable));
+    return saved;
+}
+
+juce::String oscName (int osc) { return osc == 1 ? "Osc A" : (osc == 2 ? "Osc B" : "Osc C"); }
+} // namespace
+
+FlowResult switchToWavetable (UiContext& ctx, int osc, const wtedit::ImportOptions& options)
+{
+    if (osc < 1 || osc > 3)
+        return fail ("no such oscillator");
+    const int type = juce::roundToInt (readParameter (ctx.host, oscKey (osc, "type").c_str()));
+    if (type != kOscTypeSample && type != kOscTypeGranular && type != kOscTypeSpectral)
+        return fail ("Switch to Wavetable needs a Sample, Granular or Spectral oscillator");
+    const auto content = ctx.host.content();
+    const ContentSample* sample = sampleOf (content, osc);
+    if (sample == nullptr)
+        return fail ("no sample is loaded in this oscillator");
+    const std::vector<uint8_t> bytes = storedSampleBytes (ctx.host, osc);
+    const auto preview = bytes.empty() ? nullptr : SamplePreview::create (bytes, sample->ref.name);
+    if (preview == nullptr || preview->frames() <= 0)
+        return fail ("the sample file is missing or cannot be read");
+    const float start = readParameter (ctx.host, oscKey (osc, "sample.start").c_str(), 0.0f) * 0.01f;
+    const float end = readParameter (ctx.host, oscKey (osc, "sample.end").c_str(), 100.0f) * 0.01f;
+    wtedit::Wavetable table;
+    std::string error;
+    const std::string name = (sample->ref.name.empty() ? std::string ("Sample") : sample->ref.name) + " wavetable";
+    if (! convert::sampleRegionToWavetable (preview->mono().data(), preview->mono().size(), static_cast<double> (preview->sampleRate()), start, end, options, name, table, &error))
+        return fail (juce::String (error));
+    const FlowResult saved = installTable (ctx, osc, table);
+    if (! saved.ok)
+        return saved;
+    setParameter (ctx.host, oscKey (osc, "frame").c_str(), 0.0f);
+    contentCache (ctx).clear();
+    return done ("Switched to a wavetable of " + juce::String (static_cast<int> (table.numFrames())) + " frames (" + juce::String (juce::roundToInt ((end - start) * 100.0f)) + " % of the sample)");
+}
+
+FlowResult renderOscWarp (UiContext& ctx, int osc)
+{
+    if (osc < 1 || osc > 3)
+        return fail ("no such oscillator");
+    const auto values = std::make_unique<ParamValues> (readAllValues (ctx.host));
+    convert::WarpRenderOptions options;
+    options.osc = osc;
+    wtedit::Wavetable table;
+    std::string error;
+    float scale = 1.0f;
+    if (! convert::renderOscWarp (offlineRunner (ctx), values.get(), options, utf8 (oscName (osc)) + " warp", table, &error, &scale))
+        return fail (error.empty() ? juce::String ("this host cannot render offline") : juce::String (error));
+    const float warpAmount = readParameter (ctx.host, oscKey (osc, "warp.amount").c_str(), 0.0f);
+    const float level = readParameter (ctx.host, oscKey (osc, "level").c_str(), 50.0f);
+    const FlowResult saved = installTable (ctx, osc, table);
+    if (! saved.ok)
+        return saved;
+    for (const auto& change : convert::warpBakeParameterChanges (osc, warpAmount, scale, level))
+        setParameter (ctx.host, change.first.c_str(), change.second);
+    contentCache (ctx).clear();
+    return done ("Rendered " + juce::String (static_cast<int> (table.numFrames())) + " frames across WARP into " + oscName (osc));
+}
+
+FlowResult resampleToWavetable (UiContext& ctx, int target, const wtedit::ImportOptions& importOptions)
+{
+    if (target < 0 || target > 3)
+        return fail ("no such oscillator");
+    const auto last = ctx.host.lastNote();
+    convert::ResampleOptions options;
+    options.key = last.valid ? last.key : 60;
+    options.velocity = last.valid ? last.velocity : 0.8f;
+    options.bpm = ctx.host.tempoBpm();
+    OfflineAudio audio;
+    if (! convert::renderResample (offlineRunner (ctx), options, audio))
+        return fail ("this host cannot render offline");
+    wtedit::Wavetable left, right;
+    std::string error;
+    if (! convert::audioToWavetables (audio, importOptions, "Resample", left, target == 0 ? &right : nullptr, &error))
+        return fail (juce::String (error));
+    const int first = target == 0 ? 1 : target;
+    left.setName ("Resample " + std::string (oscName (first).toRawUTF8()));
+    FlowResult saved = installTable (ctx, first, left);
+    if (saved.ok && target == 0)
+    {
+        right.setName ("Resample Osc B");
+        saved = installTable (ctx, 2, right);
+    }
+    if (! saved.ok)
+        return saved;
+    contentCache (ctx).clear();
+    return done ("Resampled one bar (" + juce::MidiMessage::getMidiNoteName (options.key, true, true, 3) + ") into " + (target == 0 ? juce::String ("Osc A + Osc B") : oscName (target)));
+}
+
+FlowResult renderLastNote (UiContext& ctx, LastNoteAudio& out)
+{
+    const auto last = ctx.host.lastNote();
+    if (! last.valid)
+        return fail ("play a note first");
+    convert::NoteRender note;
+    note.key = last.key;
+    note.velocity = last.velocity;
+    note.heldSeconds = juce::jlimit (0.25, 20.0, last.heldSeconds);
+    if (! convert::renderNote (offlineRunner (ctx), note, out.audio))
+        return fail ("this host cannot render offline");
+    out.wav = convert::audioToWav (out.audio, 24);
+    if (out.wav.empty())
+        return fail ("nothing was rendered");
+    out.name = juce::File::createLegalFileName (ctx.host.presetName() + " " + juce::MidiMessage::getMidiNoteName (last.key, true, true, 3));
+    return done (juce::String (out.seconds(), 2) + " s, " + juce::MidiMessage::getMidiNoteName (last.key, true, true, 3));
+}
+
+FlowResult saveLastNoteAs (const LastNoteAudio& note, const juce::File& destination)
+{
+    if (note.wav.empty())
+        return fail ("no note has been rendered");
+    const juce::File target = destination.hasFileExtension ("wav") ? destination : destination.withFileExtension ("wav");
+    if (! writeFileBytes (target, note.wav))
+        return fail ("the file could not be written");
+    return done ("Saved " + target.getFileName());
+}
+
+juce::File writeLastNoteTemp (const LastNoteAudio& note)
+{
+    if (note.wav.empty())
+        return {};
+    const juce::File file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SynthyBoy").getChildFile (note.name + ".wav");
+    return writeFileBytes (file, note.wav) ? file : juce::File();
+}
+
+FlowResult copyWavetableFrameToLfo (UiContext& ctx, int osc, int lfo)
+{
+    if (osc < 1 || osc > 3 || lfo < 1 || lfo > kMaxContentLfoShapes)
+        return fail ("no such oscillator or LFO");
+    wtedit::Frame frame;
+    bool have = false;
+    {
+        // the engine's own frame (WT POS, Remap), warp and morph off: right for the built-in tables as well as for a Preset table
+        const auto values = std::make_unique<ParamValues> (readAllValues (ctx.host));
+        convert::WarpRenderOptions options;
+        options.osc = osc;
+        options.frames = 2;
+        options.rawFrame = true;
+        wtedit::Wavetable one;
+        std::string error;
+        if (convert::renderOscWarp (offlineRunner (ctx), values.get(), options, "frame", one, &error) && one.numFrames() > 0)
+        {
+            frame = one.getFrame (0);
+            have = true;
+        }
+    }
+    if (! have)
+    {
+        // a host without an offline render: the frame of the stored table at WT POS
+        wtedit::Wavetable stored;
+        if (! loadWavetableOf (ctx.host, osc, stored))
+            return fail ("the frame could not be read (no table of this oscillator, no offline render)");
+        frame = convert::interpolatedFrame (stored, readParameter (ctx.host, oscKey (osc, "frame").c_str(), 0.0f) * 0.01f);
+    }
+    ContentLfoShape shape;
+    float error = 0.0f;
+    if (! convert::frameToLfoShape (frame, lfo, shape, 0.002f, kMaxLfoShapePoints, &error))
+        return fail ("the frame could not be converted");
+    shape.name = std::string (oscName (osc).toRawUTF8()) + " frame";
+    auto content = ctx.host.content();
+    content.lfoShapes.erase (std::remove_if (content.lfoShapes.begin(), content.lfoShapes.end(), [lfo] (const ContentLfoShape& s) { return s.lfo == lfo; }), content.lfoShapes.end());
+    content.lfoShapes.push_back (shape);
+    std::sort (content.lfoShapes.begin(), content.lfoShapes.end(), [] (const ContentLfoShape& a, const ContentLfoShape& b) { return a.lfo < b.lfo; });
+    if (! commit (ctx, content))
+        return fail ("the content was refused");
+    setParameter (ctx.host, ("lfo" + std::to_string (lfo) + ".shape").c_str(), static_cast<float> (kLfoShapeCustom));
+    return done (oscName (osc) + " frame is the shape of LFO " + juce::String (lfo) + " (" + juce::String (static_cast<int> (shape.points.size())) + " points, error " + juce::String (error * 100.0f, 2) + " %)");
+}
+
+FlowResult copyLfoShapeToWavetable (UiContext& ctx, int lfo, int osc)
+{
+    if (osc < 1 || osc > 3 || lfo < 1 || lfo > kMaxContentLfoShapes)
+        return fail ("no such oscillator or LFO");
+    const auto content = ctx.host.content();
+    ContentLfoShape shape;
+    const auto it = std::find_if (content.lfoShapes.begin(), content.lfoShapes.end(), [lfo] (const ContentLfoShape& s) { return s.lfo == lfo; });
+    const int builtIn = juce::roundToInt (readParameter (ctx.host, ("lfo" + std::to_string (lfo) + ".shape").c_str()));
+    if (builtIn == kLfoShapeCustom && it != content.lfoShapes.end() && it->points.size() >= 2)
+        shape = *it;
+    else if (builtIn >= 0 && builtIn < kNumLfoShapes)
+        shape = convert::builtInLfoShape (lfo, builtIn);
+    else
+        return fail ("this LFO has no shape to copy");
+    wtedit::Frame frame;
+    convert::lfoShapeToFrame (shape, frame);
+
+    wtedit::Wavetable table;
+    bool replaced = false;
+    const bool presetTable = juce::roundToInt (readParameter (ctx.host, oscKey (osc, "wavetable").c_str())) == choiceIndexOf (oscKey (osc, "wavetable").c_str(), "Preset");
+    if (presetTable && loadWavetableOf (ctx.host, osc, table) && table.numFrames() > 0)
+    {
+        const float position = juce::jlimit (0.0f, 1.0f, readParameter (ctx.host, oscKey (osc, "frame").c_str(), 0.0f) * 0.01f);
+        const size_t index = static_cast<size_t> (juce::roundToInt (position * static_cast<float> (table.numFrames() - 1)));
+        table.setFrame (index, frame);
+        replaced = true;
+    }
+    else
+    {
+        table = wtedit::Wavetable ("LFO " + std::to_string (lfo) + " shape");
+        table.setFrame (0, frame);
+    }
+    const FlowResult saved = installTable (ctx, osc, table);
+    if (! saved.ok)
+        return saved;
+    contentCache (ctx).clear();
+    return done (replaced ? "LFO " + juce::String (lfo) + " is the current frame of " + oscName (osc) : "LFO " + juce::String (lfo) + " is a new one-frame table in " + oscName (osc));
+}
 } // namespace synthyboy::ui

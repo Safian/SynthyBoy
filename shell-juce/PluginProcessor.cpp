@@ -388,6 +388,16 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
         if (e.type == synthyboy::Event::ModWheel)
             modWheelPosition.store (e.value, std::memory_order_relaxed);
+        // the last note (share / drag-out of the last note, Resample): key, velocity, when it started and ended (running sample count)
+        if (e.type == synthyboy::Event::NoteOn)
+        {
+            lastKey.store (e.key, std::memory_order_relaxed);
+            lastVelocity.store (e.value, std::memory_order_relaxed);
+            lastOnSample.store (samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
+            lastOffSample.store (-1, std::memory_order_relaxed);
+        }
+        else if (e.type == synthyboy::Event::NoteOff && e.key == lastKey.load (std::memory_order_relaxed))
+            lastOffSample.store (samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
         if (numEvents < capacity)
             events[static_cast<size_t> (numEvents++)] = e;
         else
@@ -407,6 +417,7 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                     transport.songPosBeats = *ppq;
                 transport.playing = position->getIsPlaying();
                 transportKnown = true;
+                tempo.store (transport.bpm, std::memory_order_relaxed);
             }
         // the host stopped (running -> stopped): notes end and the effect tails are cleared (S p.315, A381). Before the block, so the events of
         // this block (a note played with the transport stopped) start a clean engine.
@@ -442,6 +453,8 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         scopeWrite.store (w, std::memory_order_release);
     }
 
+    samplesDone.fetch_add (numSamples, std::memory_order_relaxed);
+
     const float magL = buffer.getMagnitude (0, 0, numSamples);
     const float magR = numChannels > 1 ? buffer.getMagnitude (1, 0, numSamples) : magL;
     peakL.store (magL, std::memory_order_relaxed);
@@ -451,6 +464,68 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const int latency = engine->latencySamples();
     if (latency != getLatencySamples())
         setLatencySamples (latency);
+}
+
+// ---- offline render, last note, share hook (GROUPD WP-15) ----------------------------------------------------------------------------------
+
+bool SynthyBoyProcessor::renderOffline (const synthyboy::OfflineRequest& request, synthyboy::OfflineAudio& out)
+{
+    if (engine == nullptr)
+        return false;
+    // the values of the parameter tree: the engine only gets them with the next audio block, a render right after a gesture must hear them
+    auto values = std::make_unique<synthyboy::ParamValues> (currentValues());
+    synthyboy::OfflineRequest copy = request;
+    if (copy.values == nullptr)
+        copy.values = values.get();
+    synthyboy::StateContent content;
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        content = patchContent;
+    }
+    synthyboy::EngineKind kind = synthyboy::EngineKind::own;
+#if SYNTHYBOY_SHELL_ENGINE_VITAL
+    kind = synthyboy::EngineKind::vital;
+#endif
+    return synthyboy::renderOfflineAny (*engine, kind, &content, contentStore.get(), copy, out);
+}
+
+synthyboy::ui::UiHost::LastNote SynthyBoyProcessor::lastNote() const
+{
+    LastNote note;
+    const int key = lastKey.load (std::memory_order_relaxed);
+    if (key < 0)
+        return note;
+    note.valid = true;
+    note.key = key;
+    note.velocity = lastVelocity.load (std::memory_order_relaxed);
+    const int64_t on = lastOnSample.load (std::memory_order_relaxed), off = lastOffSample.load (std::memory_order_relaxed);
+    const int64_t end = off >= 0 ? off : samplesDone.load (std::memory_order_relaxed);
+    const double rate = getSampleRate() > 0.0 ? getSampleRate() : 44100.0;
+    note.heldSeconds = std::max (0.05, static_cast<double> (end - on) / rate);
+    return note;
+}
+
+bool SynthyBoyProcessor::shareFile (const juce::File& file, const juce::String& title, std::function<void (bool)> done)
+{
+    if (! file.existsAsFile())
+        return false;
+    if (shareHandler)
+    {
+        const bool ok = shareHandler (file, title);
+        if (done)
+            done (ok);
+        return ok;
+    }
+#if JUCE_IOS || JUCE_ANDROID
+    // the platform share sheet (S01-09 on mobile: the rendered note goes to Files, Messages, a DAW ...)
+    juce::ContentSharer::getInstance()->shareFiles (juce::Array<juce::URL> { juce::URL (file) }, [done] (bool success, const juce::String&) { if (done) done (success); });
+    return true;
+#else
+    file.revealToUser(); // desktop: the file in the file manager, from where it can be dragged
+    if (done)
+        done (true);
+    return true;
+#endif
 }
 
 double SynthyBoyProcessor::getTailLengthSeconds() const

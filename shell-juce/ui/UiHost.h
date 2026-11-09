@@ -17,6 +17,7 @@
 
 #include "model/ModModel.h"
 #include "synthyboy/content_state.h"
+#include "synthyboy/offline_render.h"
 #include "synthyboy/engine_caps.h"
 #include "synthyboy/preferences.h"
 #include "synthyboy/readout.h"
@@ -156,6 +157,26 @@ public:
         values of the last blocks. A host without an engine answers false and the displays show the stored values. Message thread; the engine side is lock free. */
     virtual void setReadoutTargets (const std::vector<int>& /*paramIndices*/) {}
     virtual bool copyReadout (LiveValues& /*out*/) const { return false; }
+
+    // ---- offline render, share / drag-out of the last note (GROUPD WP-15, 13-new-keys.md 4.40) ----
+    /** Renders `request` on a private copy of the engine (IEngine::renderOffline, offline_render.h): the live engine is not touched. The host fills `request.values` with the values of its
+        parameter tree when the caller left it null (the engine only has them after the next block). False when the host has no engine that renders offline. Message thread. */
+    virtual bool renderOffline (const OfflineRequest& /*request*/, OfflineAudio& /*out*/) { return false; }
+    /** The last note that was played (keyboard, MIDI input, the on-screen keys): key, velocity, how long it was held (still held: so far). `valid` is false before the first note. */
+    struct LastNote
+    {
+        bool valid = false;
+        int key = 60;
+        float velocity = 0.8f;
+        double heldSeconds = 1.0;
+    };
+    virtual LastNote lastNote() const { return {}; }
+    /** The tempo of the host transport (Resample plays one bar at this tempo); 120 without a host tempo. */
+    virtual double tempoBpm() const noexcept { return 120.0; }
+    /** The share hook: hands an audio file to the platform's share sheet (iOS / Android: juce::ContentSharer; desktop: the file is shown in the file manager). `done` gets the success.
+        False when the host has no way to share. */
+    virtual bool shareFile (const juce::File& /*file*/, const juce::String& /*title*/, std::function<void (bool)> /*done*/ = {}) { return false; }
+    virtual bool canShareFiles() const noexcept { return false; }
 
     /** Injects a MIDI message from the UI (pitch bend, mod wheel, CC 64 sustain, etc.) into the audio callback. */
     virtual void injectMidiMessage (const juce::MidiMessage& /*msg*/) {}

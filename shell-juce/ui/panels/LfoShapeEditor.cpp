@@ -19,7 +19,6 @@ namespace
 constexpr int kDrawColumns = 32;
 constexpr size_t kMinPoints = 2;
 constexpr float kMaxPower = static_cast<float> (kMaxPointPower);
-constexpr float kTwoPi = 6.28318530717958647692f;
 
 const char* const kPresetNames[kNumLfoShapes] = { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Pulse 25%",
                                                   "Steps Up", "Steps Down", "Random Steps", "Exp Up", "Exp Down", "Half Sine" };
@@ -51,15 +50,6 @@ float snapTo (float v, int divisions) noexcept
     return std::round (v * d) / d;
 }
 
-/** Fills `s.points` with n + 1 samples of f over x in 0..1 (y in 0..1). */
-void sampled (ContentLfoShape& s, int n, const std::function<float (float)>& f)
-{
-    for (int i = 0; i <= n; ++i)
-    {
-        const float x = static_cast<float> (i) / static_cast<float> (n);
-        s.points.emplace_back (x, juce::jlimit (0.0f, 1.0f, f (x)));
-    }
-}
 } // namespace
 
 const char* lfoShapePresetName (int builtInShape)
@@ -69,44 +59,7 @@ const char* lfoShapePresetName (int builtInShape)
 
 ContentLfoShape lfoShapePreset (int lfo, int builtInShape)
 {
-    ContentLfoShape s;
-    s.lfo = lfo;
-    s.name = "Custom";
-    auto add = [&s] (float x, float y, float power = 0.0f) { s.points.emplace_back (x, y, power); };
-
-    switch (builtInShape)
-    {
-        case 0:  sampled (s, 32, [] (float x) { return 0.5f + 0.5f * std::sin (kTwoPi * x); }); break;
-        case 1:  add (0.0f, 0.0f); add (0.5f, 1.0f); add (1.0f, 0.0f); break;
-        case 2:  add (0.0f, 0.0f); add (1.0f, 1.0f); break;
-        case 3:  add (0.0f, 1.0f); add (1.0f, 0.0f); break;
-        case 4:  add (0.0f, 1.0f); add (0.5f, 1.0f); add (0.5f, 0.0f); add (1.0f, 0.0f); break;
-        case 5:  add (0.0f, 1.0f); add (0.25f, 1.0f); add (0.25f, 0.0f); add (1.0f, 0.0f); break;
-        case 6:
-        case 7:
-            for (int i = 0; i < 4; ++i)
-            {
-                const float level = static_cast<float> (builtInShape == 6 ? i : 3 - i) / 3.0f;
-                add (static_cast<float> (i) / 4.0f, level);
-                add (static_cast<float> (i + 1) / 4.0f, level);
-            }
-            break;
-        case 8:
-        {
-            static constexpr float steps[8] = { 0.4f, -0.7f, 0.9f, -0.2f, -0.9f, 0.6f, 0.1f, -0.5f };
-            for (int i = 0; i < 8; ++i)
-            {
-                add (static_cast<float> (i) / 8.0f, 0.5f + 0.5f * steps[i]);
-                add (static_cast<float> (i + 1) / 8.0f, 0.5f + 0.5f * steps[i]);
-            }
-            break;
-        }
-        case 9:  add (0.0f, 0.0f, 5.0f); add (1.0f, 1.0f); break;   // power 5: (e^(5x) - 1) / (e^5 - 1), the built-in
-        case 10: add (0.0f, 1.0f, -5.0f); add (1.0f, 0.0f); break;
-        case 11: sampled (s, 16, [] (float x) { return std::sin (3.14159265358979f * x); }); break;
-        default: add (0.0f, 0.5f); add (1.0f, 0.5f); break;
-    }
-    return s;
+    return convert::builtInLfoShape (lfo, builtInShape);
 }
 
 bool copyLfoSettings (UiContext& ctx, bool random, int from, int to)
@@ -285,6 +238,11 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
         for (int i = 0; i < kNumLfoShapes; ++i)
             menu.addItem (i + 1, lfoShapePresetName (i));
         menu.addSeparator();
+        for (int osc = 1; osc <= 3; ++osc) // Serum's Default menu: "Wavetable A to LFO" (manual p.197); the other direction is the Alt-drag of the tab (p.198)
+            menu.addItem (300 + osc, "Wavetable " + juce::String (osc == 1 ? "A" : (osc == 2 ? "B" : "C")) + " to LFO", ctx.host.contentLibrary() != nullptr);
+        for (int osc = 1; osc <= 3; ++osc)
+            menu.addItem (400 + osc, "LFO to Wavetable " + juce::String (osc == 1 ? "A" : (osc == 2 ? "B" : "C")), ctx.host.contentLibrary() != nullptr);
+        menu.addSeparator();
         shapeLibrary->addTo (menu, 1000);
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetBtn).withMinimumWidth (ctx.theme.ipx (160.0f)),
                             [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
@@ -293,6 +251,10 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
                                     return;
                                 if (result >= 1000)
                                     safe->shapeLibrary->run (result);
+                                else if (result > 300 && result <= 303)
+                                    safe->copyFromWavetable (result - 300);
+                                else if (result > 400 && result <= 403)
+                                    safe->copyToWavetable (result - 400);
                                 else
                                     safe->applyPreset (result - 1);
                             });
@@ -523,6 +485,38 @@ bool LfoShapeEditor::applyShapeFile (const LfoShapeFile& shape)
     selectOnly (-1);
     touched();
     return true;
+}
+
+FlowResult LfoShapeEditor::copyFromWavetable (int osc)
+{
+    if (dirty)
+        commitNow(); // pending edits go to the host first: the flow reads and writes the host's shape
+    pushUndo();
+    const FlowResult result = copyWavetableFrameToLfo (ctx, osc, lfo);
+    if (! result.ok)
+    {
+        if (! undoStack.empty())
+            undoStack.pop_back();
+        return result;
+    }
+    const auto content = ctx.host.content();
+    const auto it = std::find_if (content.lfoShapes.begin(), content.lfoShapes.end(), [this] (const ContentLfoShape& l) { return l.lfo == lfo; });
+    if (it != content.lfoShapes.end())
+    {
+        current = *it;
+        selectOnly (-1);
+        cacheValid = false;
+        updateButtons();
+        repaint();
+    }
+    return result;
+}
+
+FlowResult LfoShapeEditor::copyToWavetable (int osc)
+{
+    if (dirty)
+        commitNow();
+    return copyLfoShapeToWavetable (ctx, lfo, osc);
 }
 
 bool LfoShapeEditor::applyShapeFromFile (const juce::File& file)

@@ -29,6 +29,7 @@
 #include <memory>
 #include <vector>
 
+#include "../ContentIO.h"
 #include "../GestureKit.h"
 #include "../LibraryMenu.h"
 #include "synthyboy/user_content.h"
@@ -116,6 +117,10 @@ public:
     void applyPreset (int builtInShape);
     /** A shape from the user library / a file (S11 shape presets, 14 row 25): replaces the points, one undo step. */
     bool applyShapeFile (const LfoShapeFile& shape);
+    /** GROUPD WP-16 (manual p.197-198): "Wavetable A / B / C to LFO" copies the current frame of the oscillator into this LFO's shape (one undo step), "LFO to Wavetable A / B / C"
+        writes this LFO's shape into the oscillator's table. The Presets menu has both. */
+    FlowResult copyFromWavetable (int osc);
+    FlowResult copyToWavetable (int osc);
     /** A `.lfoshape.json` or a Vital `.vitallfo`. */
     bool applyShapeFromFile (const juce::File& file);
     /** The menu of the user shape library (save, load, favourites, file); the Presets button shows it below the built-in shapes. */

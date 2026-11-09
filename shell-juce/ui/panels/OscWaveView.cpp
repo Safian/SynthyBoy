@@ -132,6 +132,8 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     snapBtn.onClick = [this] { setSnapMode (static_cast<SnapMode> ((static_cast<int> (snap) + 1) % 4)); };
     snapBtn.setTooltip ("Snap the markers: Off / Zero crossing / Beats / Loop points");
     sampleMenuBtn.onClick = [this] { showSampleMenu(); };
+    waveMenuBtn.onClick = [this] { showWaveMenu(); };
+    waveMenuBtn.setTooltip ("Render OSC Warp, Resample, wavetable frame <-> LFO shape");
     editBtn.onClick = [this] { openEditor(); };
     editBtn.setTooltip ("Edit the wavetable of this oscillator");
     press.onLongPress = [this] { longPressedAt (dragStartPos); };
@@ -149,6 +151,7 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     addAndMakeVisible (snapBtn);
     addAndMakeVisible (sampleMenuBtn);
     addAndMakeVisible (editBtn);
+    addAndMakeVisible (waveMenuBtn);
     refreshSliceCache();
     // WP-17: the live marker follows the engine while the marker animation shows and the unison start is modulated
     ctx.live->bind (*this,
@@ -293,6 +296,7 @@ void OscWaveView::updateButtons()
     snapBtn.setVisible (isSample);
     sampleMenuBtn.setVisible (isSample || multi);
     editBtn.setVisible (! isSample && ! multi);
+    waveMenuBtn.setVisible (! isSample && ! multi);
     sampleMenuBtn.setEnabled (multi ? ! ctx.host.content().instruments.empty() : preview() != nullptr);
     zoomInBtn.setVisible (isSample);
     zoomOutBtn.setVisible (isSample);
@@ -344,6 +348,7 @@ void OscWaveView::resized()
     snapBtn.setBounds (x2, y2, juce::jmax (btnW, t.ipx (96.0f)), touchH);
     x2 += juce::jmax (btnW, t.ipx (96.0f)) + gap;
     sampleMenuBtn.setBounds (x2, y2, btnW, touchH);
+    waveMenuBtn.setBounds (t.gap(), y2, btnW, touchH);
     editBtn.setBounds (nextWtButton.getBounds().getX() + juce::jmax (btnW, t.ipx (50.0f)) + btnW + 2 * gap, y, juce::jmax (btnW, t.ipx (56.0f)), touchH);
 }
 
@@ -533,6 +538,13 @@ void OscWaveView::showSampleMenu()
     menu.addItem (3, "Trim to START / END", sample != nullptr);
     menu.addItem (4, "Remove the sample", sample != nullptr);
     menu.addSeparator();
+    // Switch to Wavetable (manual p.68): the import options of the wavetable editor
+    juce::PopupMenu toWavetable;
+    const auto& importChoices = convert::importChoices();
+    for (size_t i = 0; i < importChoices.size(); ++i)
+        toWavetable.addItem (100 + static_cast<int> (i), importChoices[i].label, sample != nullptr);
+    menu.addSubMenu ("Switch to Wavetable", toWavetable, sample != nullptr);
+    menu.addSeparator();
     menu.addItem (5, "Show marker animation", true, markerAnimation);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&sampleMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
     {
@@ -552,8 +564,90 @@ void OscWaveView::showSampleMenu()
             case 3: safe->trimSample(); break;
             case 4: safe->removeSample(); break;
             case 5: safe->setMarkerAnimation (! safe->markerAnimation); break;
-            default: break;
+            default:
+                if (result >= 100 && result < 100 + static_cast<int> (convert::importChoices().size()))
+                {
+                    wtedit::ImportOptions options;
+                    options.mode = convert::importChoices()[static_cast<size_t> (result - 100)].mode;
+                    safe->switchToWavetable (options);
+                }
+                break;
         }
+    });
+}
+
+FlowResult OscWaveView::switchToWavetable (const wtedit::ImportOptions& options)
+{
+    const FlowResult result = synthyboy::ui::switchToWavetable (ctx, index, options);
+    statusLine = result.message;
+    refreshSliceCache();
+    updateButtons();
+    repaint();
+    return result;
+}
+
+FlowResult OscWaveView::renderWarp()
+{
+    const FlowResult result = synthyboy::ui::renderOscWarp (ctx, index);
+    statusLine = result.message;
+    updateButtons();
+    repaint();
+    return result;
+}
+
+FlowResult OscWaveView::resample (bool withNext)
+{
+    const FlowResult result = synthyboy::ui::resampleToWavetable (ctx, withNext ? 0 : index);
+    statusLine = result.message;
+    updateButtons();
+    repaint();
+    return result;
+}
+
+FlowResult OscWaveView::copyFrameToLfo (int lfo)
+{
+    const FlowResult result = synthyboy::ui::copyWavetableFrameToLfo (ctx, index, lfo);
+    statusLine = result.message;
+    repaint();
+    return result;
+}
+
+FlowResult OscWaveView::copyLfoShapeHere (int lfo)
+{
+    const FlowResult result = synthyboy::ui::copyLfoShapeToWavetable (ctx, lfo, index);
+    statusLine = result.message;
+    updateButtons();
+    repaint();
+    return result;
+}
+
+void OscWaveView::showWaveMenu()
+{
+    juce::PopupMenu menu;
+    menu.addItem (1, "Render OSC Warp (256 frames)", ctx.host.contentLibrary() != nullptr && oscType() == kOscTypeWavetable);
+    juce::PopupMenu resampleMenu;
+    resampleMenu.addItem (2, "Osc " + juce::String (index), ctx.host.contentLibrary() != nullptr);
+    if (index == 1)
+        resampleMenu.addItem (3, "Osc A + Osc B", ctx.host.contentLibrary() != nullptr);
+    menu.addSubMenu ("Resample (one bar of the last note) to", resampleMenu, ctx.host.contentLibrary() != nullptr);
+    menu.addSeparator();
+    juce::PopupMenu toLfo, fromLfo;
+    for (int lfo = 1; lfo <= kMaxContentLfoShapes; ++lfo)
+    {
+        toLfo.addItem (100 + lfo, "LFO " + juce::String (lfo));
+        fromLfo.addItem (200 + lfo, "LFO " + juce::String (lfo), ctx.host.contentLibrary() != nullptr);
+    }
+    menu.addSubMenu ("Copy this frame to LFO", toLfo);
+    menu.addSubMenu ("Copy LFO shape to this wavetable", fromLfo, ctx.host.contentLibrary() != nullptr);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&waveMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
+    {
+        if (safe == nullptr || result <= 0)
+            return;
+        if (result == 1) safe->renderWarp();
+        else if (result == 2) safe->resample (false);
+        else if (result == 3) safe->resample (true);
+        else if (result > 100 && result <= 100 + kMaxContentLfoShapes) safe->copyFrameToLfo (result - 100);
+        else if (result > 200 && result <= 200 + kMaxContentLfoShapes) safe->copyLfoShapeHere (result - 200);
     });
 }
 

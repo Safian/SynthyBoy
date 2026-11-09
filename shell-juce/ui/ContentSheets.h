@@ -60,4 +60,66 @@ private:
     juce::TextEditor view;
     juce::TextButton closeBtn { "Close" };
 };
+
+/** A short message with a Close button (the result of a menu action that has no sheet of its own). */
+class MessageSheet final : public juce::Component
+{
+public:
+    MessageSheet (UiContext& context, juce::String titleText, juce::String bodyText);
+
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+    juce::TextButton& closeButton() noexcept { return closeBtn; }
+    const juce::String& text() const noexcept { return body; }
+    std::function<void()> onFinished;
+
+private:
+    UiContext& ctx;
+    juce::String title, body;
+    juce::TextButton closeBtn { "Close" };
+};
+
+/** The last note as audio (GROUPD WP-15, S01-09): the note is rendered offline (ultra quality when the preference says so), the sheet shows the waveform and offers Save as WAV (a file
+    chooser), Share (the platform share sheet through UiHost::shareFile) and the drag chip (JUCE desktop: the WAV file is dragged out to the DAW). */
+class LastNoteSheet final : public juce::Component
+{
+public:
+    explicit LastNoteSheet (UiContext& context);
+    ~LastNoteSheet() override;
+
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+
+    /** Renders the last note again (the sheet does it on construction). */
+    FlowResult render();
+    const LastNoteAudio& note() const noexcept { return rendered; }
+    const juce::String& status() const noexcept { return statusLine; }
+    /** Save as WAV: asks the host for the file (FileChooser); `saveTo` writes it. */
+    void requestSave();
+    FlowResult saveTo (const juce::File& file);
+    /** Share: the file in the temp folder goes to the share hook of the host. */
+    FlowResult share();
+    /** Drag-out: writes the temp file and starts an external drag of it (the chip calls this when the drag begins; false where the platform has no file drag, mobile). */
+    bool startDragOut();
+    /** The file the drag-out / share would hand over (written on demand). */
+    juce::File dragFile();
+
+    juce::TextButton& saveButton() noexcept { return saveBtn; }
+    juce::TextButton& shareButton() noexcept { return shareBtn; }
+    juce::TextButton& closeButton() noexcept { return closeBtn; }
+    juce::Component& dragChip() noexcept;
+    /** Test hook: replaces the external drag (headless runs cannot start one). */
+    std::function<bool (const juce::File&)> dragHandler;
+    std::function<void()> onFinished;
+
+private:
+    class Chip;
+    UiContext& ctx;
+    LastNoteAudio rendered;
+    juce::String statusLine;
+    std::vector<float> peaksMin, peaksMax;
+    juce::File tempFile;
+    juce::TextButton saveBtn { "Save as WAV..." }, shareBtn { "Share..." }, closeBtn { "Close" };
+    std::unique_ptr<Chip> chip;
+};
 } // namespace synthyboy::ui

@@ -18,6 +18,8 @@
 #include "synthyboy/user_content.h"
 #include "synthyboy/serum_plugin_import.h"
 #include "synthyboy/vital_plugin_import.h"
+#include "synthyboy/offline_render.h"
+#include "synthyboy/wave_convert.h"
 #include "synthyboy/wavetable_edit.h"
 
 namespace synthyboy::ui
@@ -65,6 +67,43 @@ std::vector<uint8_t> storedSampleBytes (UiHost& host, int osc);
 /** Cuts the sample of the oscillator to its START .. END region: stores the new WAV, rescales the slices, resets START / END (and the loop markers). */
 FlowResult trimSample (UiContext& ctx, int osc);
 FlowResult removeSample (UiContext& ctx, int osc);
+
+// ---- GROUPD: Switch to wavetable (WP-14), the offline renders (WP-15), wavetable frame <-> LFO shape (WP-16) -------------------------------------------------------
+
+/** "Switch to Wavetable" of the Sample menu (manual p.68, Granular p.103, Spectral p.122): the START .. END region of the oscillator's sample becomes a wavetable by `options`
+    (the import options of manual p.291), stored through the library, `oscN.type` = Wavetable, `oscN.wavetable` = Preset table, WT POS 0. The sample stays attached (switch back
+    with the type menu). Fails for a wavetable oscillator and when no sample is loaded. */
+FlowResult switchToWavetable (UiContext& ctx, int osc, const wtedit::ImportOptions& options = {});
+/** The runner of the offline render helpers: UiHost::renderOffline with the "Use Ultra quality when rendering" preference applied. */
+convert::OfflineRunner offlineRunner (UiContext& ctx);
+/** All parameters of the parameter tree as a ParamValues (what the offline render starts from). */
+ParamValues readAllValues (UiHost& host);
+/** Render OSC Warp (manual p.324): the current frame of oscillator `osc` swept over WARP 0..100 % into 256 frames, stored as the oscillator's table; WARP type and Morph become
+    None, Remap off, WT POS = the warp amount (so the sound stays). */
+FlowResult renderOscWarp (UiContext& ctx, int osc);
+/** Resample (manual p.324): one bar of the last played note (C3 before any note) is rendered and imported as the wavetable of oscillator `target` (1..3); target 0 = Osc A and
+    Osc B (left channel to A, right to B). `options` is the import mode (Pitch Average by default). */
+FlowResult resampleToWavetable (UiContext& ctx, int target, const wtedit::ImportOptions& options = {});
+
+/** The last note as audio (S01-09, share / drag-out): rendered offline at the tempo-independent length it was held (0.25 s .. 20 s) plus its release tail. */
+struct LastNoteAudio
+{
+    OfflineAudio audio;
+    std::vector<uint8_t> wav;      // 24-bit stereo WAV
+    juce::String name;             // "Init E3" (preset name and note)
+    double seconds() const noexcept { return audio.sampleRate > 0.0 ? static_cast<double> (audio.frames()) / audio.sampleRate : 0.0; }
+};
+FlowResult renderLastNote (UiContext& ctx, LastNoteAudio& out);
+FlowResult saveLastNoteAs (const LastNoteAudio& note, const juce::File& destination);
+/** Writes the WAV to the temp folder (`<temp>/SynthyBoy/<name>.wav`) for the drag-out and the share sheet; an empty File on failure. */
+juce::File writeLastNoteTemp (const LastNoteAudio& note);
+
+/** Wavetable A to LFO (manual p.197): the current frame of oscillator `osc` (WT POS, Remap, as the engine plays it, without warp and morph) becomes the point list of LFO `lfo`,
+    `lfoN.shape` = Custom. */
+FlowResult copyWavetableFrameToLfo (UiContext& ctx, int osc, int lfo);
+/** LFO shape to wavetable (manual p.198): LFO `lfo` (its custom points, or its built-in shape) sampled to a frame; it replaces the current frame of the oscillator's own table, or
+    (built-in table) becomes a one-frame table "LFO n shape". */
+FlowResult copyLfoShapeToWavetable (UiContext& ctx, int lfo, int osc);
 
 /** Wavetable: store the table as a 16-bit WAV (the user pack, or the embedded pack for `embed`), attach it to the oscillator and set oscN.wavetable to
     the Preset table entry. */

@@ -35,6 +35,9 @@ public:
     juce::Rectangle<int> chipBounds (int tab) const;
     /** End of a chip drag (the chip calls it on mouse up; the tests call it directly): copies onto the chip at `overTab`. */
     void dragEnded (int from, int overTab);
+    /** GROUPD WP-16 (manual p.198, "Option-drag an LFO tab to a wavetable"): the chip of LFO `from` (0..9) was dropped with Alt / Option held at the screen position
+        `screenPos`; when a wavetable display of an oscillator lies there, the LFO shape is copied into that oscillator's table. True when it was copied. */
+    bool dropOnWavetable (int from, juce::Point<int> screenPos);
 
     static juce::String tabLabel (int tab);
 

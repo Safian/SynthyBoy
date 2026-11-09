@@ -107,6 +107,16 @@ public:
     bool requestFile (const synthyboy::ui::FileRequest& request, std::function<void (const juce::File&)> done) override;
     bool canRequestFile() const noexcept override { return true; }
     uint32_t contentRevision() const noexcept override { return contentRev.load (std::memory_order_relaxed); }
+
+    // offline render, last note, share hook (GROUPD WP-15)
+    bool renderOffline (const synthyboy::OfflineRequest& request, synthyboy::OfflineAudio& out) override;
+    LastNote lastNote() const override;
+    double tempoBpm() const noexcept override { return tempo.load (std::memory_order_relaxed); }
+    bool shareFile (const juce::File& file, const juce::String& title, std::function<void (bool)> done) override;
+    bool canShareFiles() const noexcept override { return true; }
+    /** Tests and alternative shells answer the share request themselves (instead of the platform share sheet). */
+    using ShareHandler = std::function<bool (const juce::File&, const juce::String&)>;
+    void setShareHandler (ShareHandler handler) { shareHandler = std::move (handler); }
     /** Tests and alternative shells answer the file requests themselves (instead of a juce::FileChooser). */
     using FileRequestHandler = std::function<bool (const synthyboy::ui::FileRequest&, std::function<void (const juce::File&)>)>;
     void setFileRequestHandler (FileRequestHandler handler) { fileRequestHandler = std::move (handler); }
@@ -199,6 +209,12 @@ private:
     std::atomic<uint32_t> contentRev { 0 };
     FileRequestHandler fileRequestHandler;
     std::unique_ptr<juce::FileChooser> fileChooser;
+    ShareHandler shareHandler;
+    // the last note (audio thread writes, the message thread reads; relaxed atomics, a torn read only shows an odd length): see lastNote ()
+    std::atomic<int> lastKey { -1 };
+    std::atomic<float> lastVelocity { 0.8f };
+    std::atomic<int64_t> lastOnSample { 0 }, lastOffSample { -1 }, samplesDone { 0 };
+    std::atomic<double> tempo { 120.0 };
 
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction

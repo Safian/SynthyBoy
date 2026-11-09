@@ -368,6 +368,34 @@ void SynthyBoyEditor::importSerumFromMenu()
     });
 }
 
+FlowResult SynthyBoyEditor::renderOscWarpFromMenu (int osc)
+{
+    const int target = osc >= 1 && osc <= 3 ? osc : juce::jlimit (1, 3, ctx.view->oscTab + 1);
+    const FlowResult result = synthyboy::ui::renderOscWarp (ctx, target);
+    auto message = std::make_unique<MessageSheet> (ctx, "Render OSC Warp", result.message);
+    message->onFinished = [this] { closeContentSheet(); };
+    showSheet (std::move (message));
+    return result;
+}
+
+FlowResult SynthyBoyEditor::resampleFromMenu (int target)
+{
+    const FlowResult result = synthyboy::ui::resampleToWavetable (ctx, target);
+    auto message = std::make_unique<MessageSheet> (ctx, "Resample", result.message);
+    message->onFinished = [this] { closeContentSheet(); };
+    showSheet (std::move (message));
+    return result;
+}
+
+LastNoteSheet* SynthyBoyEditor::showLastNoteSheet()
+{
+    auto note = std::make_unique<LastNoteSheet> (ctx);
+    auto* raw = note.get();
+    note->onFinished = [this] { closeContentSheet(); };
+    showSheet (std::move (note));
+    return raw;
+}
+
 void SynthyBoyEditor::showMenu()
 {
     juce::PopupMenu menu;
@@ -392,6 +420,17 @@ void SynthyBoyEditor::showMenu()
     menu.addItem (60, "Import Vital file...", host.canRequestFile() && host.contentLibrary() != nullptr);
     menu.addItem (62, "Import Serum 2 file...", host.canRequestFile() && host.contentLibrary() != nullptr);
     menu.addItem (61, "Missing files...", host.contentLibrary() != nullptr);
+    // Rendering (Serum's main menu, manual p.324) and the last note as audio (S01-09)
+    juce::PopupMenu rendering, resampleMenu;
+    rendering.addItem (70, "Render OSC Warp (current oscillator)", host.contentLibrary() != nullptr);
+    resampleMenu.addItem (71, "Osc A", host.contentLibrary() != nullptr);
+    resampleMenu.addItem (72, "Osc B", host.contentLibrary() != nullptr);
+    resampleMenu.addItem (73, "Osc C", host.contentLibrary() != nullptr);
+    resampleMenu.addItem (74, "Osc A + Osc B", host.contentLibrary() != nullptr);
+    rendering.addSubMenu ("Resample to", resampleMenu, host.contentLibrary() != nullptr);
+    rendering.addSeparator();
+    rendering.addItem (75, "Last note as audio...");
+    menu.addSubMenu ("Rendering", rendering);
     menu.addSeparator();
     menu.addItem (2, uiTheme.isDark() ? "Light theme" : "Dark theme");
     juce::PopupMenu sizes;
@@ -411,6 +450,14 @@ void SynthyBoyEditor::showMenu()
                                 safe->importSerumFromMenu();
                             else if (result == 61)
                                 safe->checkMissingContent();
+                            else if (result == 70)
+                                safe->renderOscWarpFromMenu();
+                            else if (result >= 71 && result <= 73)
+                                safe->resampleFromMenu (result - 70);
+                            else if (result == 74)
+                                safe->resampleFromMenu (0);
+                            else if (result == 75)
+                                safe->showLastNoteSheet();
                             else if (result == 10)
                                 safe->performUndo();
                             else if (result == 11)

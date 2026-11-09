@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ContentSheets.h"
 
+#include <algorithm>
+
 namespace synthyboy::ui
 {
 MissingFilesSheet::MissingFilesSheet (UiContext& context) : ctx (context), rows (context)
@@ -191,5 +193,225 @@ void ImportReportSheet::resized()
     r.removeFromTop (t.touch() + t.ipx (36.0f));
     r.removeFromBottom (t.gap());
     view.setBounds (r);
+}
+
+MessageSheet::MessageSheet (UiContext& context, juce::String titleText, juce::String bodyText) : ctx (context), title (std::move (titleText)), body (std::move (bodyText))
+{
+    closeBtn.onClick = [this] { if (onFinished) onFinished(); };
+    addAndMakeVisible (closeBtn);
+}
+
+void MessageSheet::paint (juce::Graphics& g)
+{
+    const auto& t = ctx.theme;
+    g.setColour (t.colours.panel);
+    g.fillRoundedRectangle (getLocalBounds().toFloat(), t.px (8.0f));
+    g.setColour (t.colours.outline);
+    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), t.px (8.0f), 1.5f);
+    auto r = getLocalBounds().reduced (t.gap());
+    g.setColour (t.colours.text);
+    g.setFont (t.titleFont());
+    g.drawText (title, r.removeFromTop (t.touch()), juce::Justification::centredLeft, true);
+    g.setFont (t.labelFont());
+    g.setColour (t.colours.textDim);
+    g.drawFittedText (body, r.removeFromTop (t.touch() * 2), juce::Justification::topLeft, 4);
+}
+
+void MessageSheet::resized()
+{
+    const auto& t = ctx.theme;
+    closeBtn.setBounds (getLocalBounds().reduced (t.gap()).removeFromBottom (t.touch()).removeFromRight (juce::jmax (t.touch() * 2, t.ipx (90.0f))));
+}
+
+// ---- the last note as audio -------------------------------------------------------------------------------------------------------------
+
+class LastNoteSheet::Chip final : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    explicit Chip (LastNoteSheet& owner) : sheet (owner) {}
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& t = sheet.ctx.theme;
+        g.setColour (t.colours.panelRaised);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), t.px (6.0f));
+        g.setColour (sheet.ctx.host.canShareFiles() && ! sheet.ctx.host.canRequestFile() ? t.colours.outline : t.colours.accent);
+        g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), t.px (6.0f), 1.5f);
+        g.setColour (t.colours.text);
+        g.setFont (t.valueFont());
+        g.drawFittedText ("Drag out", getLocalBounds(), juce::Justification::centred, 1);
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (started || e.getDistanceFromDragStart() < sheet.ctx.theme.ipx (6.0f))
+            return;
+        started = sheet.startDragOut();
+    }
+    void mouseUp (const juce::MouseEvent&) override { started = false; }
+
+private:
+    LastNoteSheet& sheet;
+    bool started = false;
+};
+
+LastNoteSheet::LastNoteSheet (UiContext& context) : ctx (context)
+{
+    chip = std::make_unique<Chip> (*this);
+    saveBtn.onClick = [this] { requestSave(); };
+    shareBtn.onClick = [this] { share(); };
+    closeBtn.onClick = [this] { if (onFinished) onFinished(); };
+    addAndMakeVisible (saveBtn);
+    addAndMakeVisible (shareBtn);
+    addAndMakeVisible (closeBtn);
+    addAndMakeVisible (*chip);
+    chip->setTooltip ("Drag the rendered note into your DAW or a folder");
+    render();
+}
+
+LastNoteSheet::~LastNoteSheet() = default;
+
+juce::Component& LastNoteSheet::dragChip() noexcept { return *chip; }
+
+FlowResult LastNoteSheet::render()
+{
+    tempFile = juce::File();
+    rendered = LastNoteAudio();
+    const FlowResult result = renderLastNote (ctx, rendered);
+    statusLine = result.message;
+    peaksMin.clear();
+    peaksMax.clear();
+    if (result.ok)
+    {
+        constexpr int columns = 256;
+        const size_t n = rendered.audio.left.size();
+        for (int c = 0; c < columns; ++c)
+        {
+            const size_t from = n * static_cast<size_t> (c) / columns, to = std::max (from + 1, n * static_cast<size_t> (c + 1) / columns);
+            float lo = 0.0f, hi = 0.0f;
+            for (size_t i = from; i < to && i < n; ++i)
+            {
+                const float v = 0.5f * (rendered.audio.left[i] + rendered.audio.right[i]);
+                lo = std::min (lo, v);
+                hi = std::max (hi, v);
+            }
+            peaksMin.push_back (lo);
+            peaksMax.push_back (hi);
+        }
+    }
+    saveBtn.setEnabled (result.ok);
+    shareBtn.setEnabled (result.ok && ctx.host.canShareFiles());
+    chip->setVisible (result.ok);
+    repaint();
+    return result;
+}
+
+juce::File LastNoteSheet::dragFile()
+{
+    if (! tempFile.existsAsFile())
+        tempFile = writeLastNoteTemp (rendered);
+    return tempFile;
+}
+
+void LastNoteSheet::requestSave()
+{
+    FileRequest request;
+    request.mode = FileRequest::Mode::save;
+    request.title = "Save the last note as audio";
+    request.wildcards = "*.wav";
+    request.suggestedName = rendered.name + ".wav";
+    request.purpose = "export";
+    if (! ctx.host.requestFile (request, [safe = juce::Component::SafePointer<LastNoteSheet> (this)] (const juce::File& file)
+        {
+            if (safe != nullptr)
+                safe->saveTo (file);
+        }))
+    {
+        statusLine = "This host cannot ask for a file";
+        repaint();
+    }
+}
+
+FlowResult LastNoteSheet::saveTo (const juce::File& file)
+{
+    const FlowResult result = saveLastNoteAs (rendered, file);
+    statusLine = result.message;
+    repaint();
+    return result;
+}
+
+FlowResult LastNoteSheet::share()
+{
+    const juce::File file = dragFile();
+    if (! file.existsAsFile())
+    {
+        statusLine = "Nothing to share";
+        repaint();
+        return { false, statusLine };
+    }
+    if (! ctx.host.shareFile (file, rendered.name))
+    {
+        statusLine = "This host has no share function";
+        repaint();
+        return { false, statusLine };
+    }
+    statusLine = "Shared " + file.getFileName();
+    repaint();
+    return { true, statusLine };
+}
+
+bool LastNoteSheet::startDragOut()
+{
+    const juce::File file = dragFile();
+    if (! file.existsAsFile())
+        return false;
+    const bool started = dragHandler ? dragHandler (file)
+                                     : juce::DragAndDropContainer::performExternalDragDropOfFiles (juce::StringArray (file.getFullPathName()), false, chip.get());
+    statusLine = started ? "Dragging " + file.getFileName() : juce::String ("This platform cannot drag files out: use Share or Save as WAV");
+    repaint();
+    return started;
+}
+
+void LastNoteSheet::paint (juce::Graphics& g)
+{
+    const auto& t = ctx.theme;
+    g.setColour (t.colours.panel);
+    g.fillRoundedRectangle (getLocalBounds().toFloat(), t.px (8.0f));
+    g.setColour (t.colours.outline);
+    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), t.px (8.0f), 1.5f);
+    auto r = getLocalBounds().reduced (t.gap());
+    g.setColour (t.colours.text);
+    g.setFont (t.titleFont());
+    g.drawText ("Last note as audio", r.removeFromTop (t.touch()), juce::Justification::centredLeft, true);
+    g.setFont (t.labelFont());
+    g.setColour (t.colours.textDim);
+    g.drawText (statusLine, r.removeFromTop (t.ipx (28.0f)), juce::Justification::centredLeft, true);
+    auto plot = r.removeFromTop (juce::jmax (t.touch() * 2, t.ipx (120.0f))).toFloat();
+    g.setColour (t.colours.panelRaised);
+    g.fillRoundedRectangle (plot, t.px (4.0f));
+    if (! peaksMax.empty())
+    {
+        g.setColour (t.colours.accent);
+        const float mid = plot.getCentreY(), half = plot.getHeight() * 0.5f;
+        for (size_t c = 0; c < peaksMax.size(); ++c)
+        {
+            const float x = plot.getX() + plot.getWidth() * (static_cast<float> (c) + 0.5f) / static_cast<float> (peaksMax.size());
+            g.drawLine (x, mid - juce::jlimit (0.0f, 1.0f, peaksMax[c]) * half, x, mid - juce::jlimit (-1.0f, 0.0f, peaksMin[c]) * half, 1.0f);
+        }
+    }
+}
+
+void LastNoteSheet::resized()
+{
+    const auto& t = ctx.theme;
+    auto r = getLocalBounds().reduced (t.gap());
+    auto bottom = r.removeFromBottom (t.touch());
+    closeBtn.setBounds (bottom.removeFromRight (juce::jmax (t.touch() * 2, t.ipx (90.0f))));
+    bottom.removeFromRight (t.gap());
+    shareBtn.setBounds (bottom.removeFromRight (juce::jmax (t.touch() * 2, t.ipx (100.0f))));
+    bottom.removeFromRight (t.gap());
+    saveBtn.setBounds (bottom.removeFromRight (juce::jmax (t.touch() * 2, t.ipx (130.0f))));
+    r.removeFromTop (t.touch() + t.ipx (28.0f) + juce::jmax (t.touch() * 2, t.ipx (120.0f)) + t.gap());
+    chip->setBounds (r.removeFromTop (t.touch()).removeFromLeft (juce::jmax (t.touch() * 3, t.ipx (140.0f))));
 }
 } // namespace synthyboy::ui

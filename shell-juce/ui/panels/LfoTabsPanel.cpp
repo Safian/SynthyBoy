@@ -4,6 +4,7 @@
 #include "LfoTabsPanel.h"
 
 #include "LfoShapeEditor.h"
+#include "OscWaveView.h"
 
 namespace synthyboy::ui
 {
@@ -46,7 +47,9 @@ public:
 
     void mouseUp (const juce::MouseEvent& e) override
     {
-        if (dragging)
+        if (dragging && e.mods.isAltDown() && tab < 10 && panel.dropOnWavetable (tab, e.getScreenPosition()))
+            panel.dragEnded (tab, -1);
+        else if (dragging)
             panel.dragEnded (tab, panel.tabAt (e.getEventRelativeTo (&panel).getPosition()));
         else if (getLocalBounds().contains (e.getPosition()))
             panel.selectTab (tab);
@@ -169,6 +172,25 @@ void LfoTabsPanel::dragEnded (int from, int overTab)
     repaint();
     for (auto& c : chips)
         c->repaint();
+}
+
+bool LfoTabsPanel::dropOnWavetable (int from, juce::Point<int> screenPos)
+{
+    if (from < 0 || from >= 10)
+        return false;
+    auto* top = getTopLevelComponent();
+    if (top == nullptr)
+        return false;
+    juce::Component* hit = top->getComponentAt (top->getLocalPoint (nullptr, screenPos));
+    while (hit != nullptr && dynamic_cast<OscWaveView*> (hit) == nullptr)
+        hit = hit->getParentComponent();
+    auto* view = dynamic_cast<OscWaveView*> (hit);
+    if (view == nullptr || view->oscType() != kOscTypeWavetable)
+        return false;
+    const FlowResult result = view->copyLfoShapeHere (from + 1);
+    hint = result.message;
+    repaint();
+    return result.ok;
 }
 
 SYNTHYBOY_REGISTER_PANEL (LfoTabsPanel, Page::lfo, 5)

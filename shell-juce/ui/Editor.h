@@ -46,6 +46,13 @@ public:
     /** Menu "Import Serum 2 file..." (WP-21): .SerumPreset / .SerumFX / .SerumFXRack / .XferShape with the report. */
     void importSerumFromMenu();
     SerumFlowResult importSerumFile (const juce::File& file);
+    // ---- GROUPD WP-15 (13-new-keys.md 4.40): the Rendering menu (Serum's main menu, manual p.324) and the last note as audio ----
+    /** Render OSC Warp of oscillator `osc` (1..3; 0 = the oscillator of the open tab). The result is shown in a message sheet. */
+    FlowResult renderOscWarpFromMenu (int osc = 0);
+    /** Resample to oscillator 1..3, or 0 = Osc A + Osc B. */
+    FlowResult resampleFromMenu (int target);
+    /** Opens the "Last note as audio" sheet (render, Save as WAV, Share, drag-out). */
+    LastNoteSheet* showLastNoteSheet();
     /** The open sheet (Missing Files / Vital report), null when none. */
     juce::Component* contentSheet() noexcept { return sheet.get(); }
     void closeContentSheet();

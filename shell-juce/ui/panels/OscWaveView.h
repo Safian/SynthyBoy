@@ -156,6 +156,20 @@ public:
     juce::TextButton& snapButton() noexcept { return snapBtn; }
     juce::TextButton& sampleMenuButton() noexcept { return sampleMenuBtn; }
     juce::TextButton& editButton() noexcept { return editBtn; }
+    juce::TextButton& waveMenuButton() noexcept { return waveMenuBtn; }
+
+    // ---- GROUPD (13-new-keys.md 4.40): Switch to wavetable, Render OSC Warp, Resample, wavetable frame <-> LFO shape; the menus call these ----
+    /** "Switch to Wavetable" (Sample / Granular / Spectral): the START .. END region of the sample becomes this oscillator's table. */
+    FlowResult switchToWavetable (const wtedit::ImportOptions& options);
+    /** Render OSC Warp: 256 frames across WARP. */
+    FlowResult renderWarp();
+    /** Resample: one bar of the last note into this oscillator (`withNext`: Osc A and Osc B, only on oscillator 1). */
+    FlowResult resample (bool withNext = false);
+    /** Wavetable to LFO / LFO shape to this wavetable. */
+    FlowResult copyFrameToLfo (int lfo);
+    FlowResult copyLfoShapeHere (int lfo);
+    /** The wavetable menu of the "..." button on a wavetable oscillator. */
+    void showWaveMenu();
     /** The wavetable editor of this oscillator (Edit button); null until opened. */
     WavetableEditorSheet* editorSheetPtr() noexcept { return editorSheet.get(); }
     void openEditor();
@@ -220,7 +234,7 @@ private:
     juce::TextButton viewModeButton { "2D" };
     juce::TextButton zoomInBtn { "+" }, zoomOutBtn { "-" }, fitBtn { "Fit" };
     juce::TextButton addSliceBtn { "+ Slice" }, removeSliceBtn { "- Slice" };
-    juce::TextButton loadSampleBtn { "Load" }, snapBtn { "Snap: Off" }, sampleMenuBtn { "..." }, editBtn { "Edit" };
+    juce::TextButton loadSampleBtn { "Load" }, snapBtn { "Snap: Off" }, sampleMenuBtn { "..." }, editBtn { "Edit" }, waveMenuBtn { "..." };
     SnapMode snap = SnapMode::off;
     bool markerAnimation = false;
     void timerCallback() override { repaint(); }
