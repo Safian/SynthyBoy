@@ -43,3 +43,8 @@ synthyboy_add_test(synthyboy_fuzz_smoke fuzz_smoke.cpp "${PROJECT_SOURCE_DIR}/co
 target_include_directories(synthyboy_fuzz_smoke PRIVATE "${PROJECT_SOURCE_DIR}/core/vital-import" "${PROJECT_SOURCE_DIR}/core/vital-import/tests"
     "${PROJECT_SOURCE_DIR}/core/fx-serum-b")
 target_compile_definitions(synthyboy_fuzz_smoke PRIVATE SYNTHYBOY_FUZZ_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# The user content library of the shells (WP-01): store, references, Missing Files logic, library, Vital import inside the plugin (synthetic fixtures)
+synthyboy_add_test(synthyboy_test_user_content test_user_content.cpp "${PROJECT_SOURCE_DIR}/core/vital-import/tests/fixtures.cpp")
+target_include_directories(synthyboy_test_user_content PRIVATE "${PROJECT_SOURCE_DIR}/core/vital-import" "${PROJECT_SOURCE_DIR}/core/vital-import/tests")
+synthyboy_add_test(synthyboy_test_clap_content test_clap_content.cpp LINK synthyboy_static)

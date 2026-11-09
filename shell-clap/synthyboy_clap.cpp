@@ -27,6 +27,7 @@
 #include "synthyboy_content_ext.h"
 #include <clap/ext/remote-controls.h>
 
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 
@@ -95,6 +96,7 @@ struct SynthyBoyClap
         engine = createEngine (EngineKind::own);
 #endif
 
+        contentStore.addPackRoot ((std::filesystem::path (userDataDirectory()) / "packs").string()); // installed content packs
         if (engine)
             engine->setContentStore (&contentStore); // before the first setContent: the references of the content decode against the library
 

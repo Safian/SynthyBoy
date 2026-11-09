@@ -59,8 +59,9 @@ std::string fmt (double v)
 std::string quote (const std::string& s)
 {
     std::string o = "\"";
-    for (unsigned char c : s)
+    for (const char ch : s)
     {
+        const auto c = static_cast<unsigned char> (ch);
         if (c == '"' || c == '\\') { o += '\\'; o += static_cast<char> (c); }
         else if (c < 0x20) { char b[8]; std::snprintf (b, sizeof b, "\\u%04x", c); o += b; }
         else o += static_cast<char> (c);

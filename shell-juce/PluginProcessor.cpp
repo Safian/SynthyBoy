@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <limits>
@@ -68,6 +69,8 @@ SynthyBoyProcessor::SynthyBoyProcessor()
     // references against it
     contentStore = std::make_unique<synthyboy::UserContentStore> (userDir);
     itemLibrary = std::make_unique<synthyboy::UserLibrary> (userDir);
+    if (! userDir.empty())
+        contentStore->addPackRoot ((std::filesystem::path (userDir) / "packs").string()); // installed content packs: <userDir>/packs/<pack>/<file>
     engine->setContentStore (contentStore.get());
     auto values = synthyboy::ParamValues::defaults();
     synthyboy::StateContent defaultContent;

@@ -81,6 +81,8 @@ public:
     /** Real import of a file: audio (decoded with juce::AudioFormatManager, the worker thread of importAudioAsync), image (decoded with the JUCE image formats,
         luminance), wavetable (a WAV of 2048 sample cycles, a single cycle WAV or a Vital .vitaltable). Audio returns once the worker runs. */
     bool importFile (const juce::File& file, ImportKind kind, const wtedit::ImportOptions& options = {});
+    /** Export WAV (16-bit / 32-bit float / single cycle): asks the host for the file and writes it. */
+    void promptExport (wtedit::ExportFormat format) { exportWavPrompt (format); }
     /** Writes the export bytes of `format` to `file`. */
     bool exportToFile (wtedit::ExportFormat format, const juce::File& file);
     /** The formula presets of the user library (Presets button of the formula view) and the entry the tests use. */

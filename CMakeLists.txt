@@ -401,4 +401,27 @@ if(SYNTHYBOY_BUILD_TESTS)
     else()
         target_compile_definitions(synthyboy_test_ui_shellfeat PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
     endif()
+
+    # the content pipeline of the shell (WP-01): library, sample / table / IR flows, Vital import, Missing Files, library menus (synthetic fixtures only)
+    synthyboy_add_test(synthyboy_test_ui_content
+        shell-juce/ui/tests/test_ui_content.cpp
+        core/vital-import/tests/fixtures.cpp
+        shell-juce/PluginProcessor.cpp
+        ${SYNTHYBOY_UI_SOURCES}
+        LINK synthyboy_ui_model
+             juce::juce_audio_processors
+             juce::juce_audio_utils
+             juce::juce_gui_basics
+             juce::juce_recommended_config_flags
+             juce::juce_recommended_warning_flags)
+    target_include_directories(synthyboy_test_ui_content PRIVATE shell-juce core/vital-import core/vital-import/tests)
+    target_compile_definitions(synthyboy_test_ui_content PRIVATE
+        JucePlugin_Name="SynthyBoy"
+        SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
+        target_compile_definitions(synthyboy_test_ui_content PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
+    else()
+        target_compile_definitions(synthyboy_test_ui_content PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
+    endif()
 endif()
