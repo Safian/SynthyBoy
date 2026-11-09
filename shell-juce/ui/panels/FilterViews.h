@@ -880,7 +880,7 @@ public:
                     b->onClick = [this, item] {
                         if (model.valid()) model.setPlainComplete (static_cast<float> (item.model));
                         if (style.valid()) style.setPlainComplete (static_cast<float> (item.style));
-                        if (blend.valid()) blend.setPlainComplete (item.defaultBlend);
+                        if (blend.valid() && item.defaultBlend >= 0.0f) blend.setPlainComplete (item.defaultBlend); // < 0: the type has no Blend
                         if (auto* callout = findParentComponentOfClass<juce::CallOutBox>())
                             callout->dismiss();
                     };

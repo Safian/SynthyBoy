@@ -2690,6 +2690,38 @@ TEST (uig_pz_svf_curve_has_at_most_16_points_and_a_double_tap_on_a_point_deletes
     CHECK (synthyboy::validateContent (rig.proc.content()));
 }
 
+TEST (uig_filter_type_picker_sheet_sets_model_and_style_of_each_of_the_80_types_in_each_slot)
+{
+    Rig rig (Page::flt);
+    auto& ctx = rig.editor->context();
+    for (const char* prefix : { "filter1", "filter2", "fxfilter" })
+    {
+        const std::string p (prefix);
+        ParamHandle model (ctx, p + ".model"), style (ctx, p + ".style"), blend (ctx, p + ".blend");
+        FilterTypePickerSheet sheet (ctx, model, style, blend);
+        sheet.setSize (sheet.preferredWidth(), sheet.preferredHeight());
+        rig.setParam ((p + ".blend").c_str(), 37.0f);
+        int taps = 0;
+        for (const auto& item : getSerumFilterCatalog())
+        {
+            auto* button = rig.find<juce::TextButton> (sheet, [&] (juce::TextButton& b) { return b.getButtonText() == item.name; });
+            CHECK (button != nullptr);
+            if (button == nullptr)
+                continue;
+            rig.setParam ((p + ".model").c_str(), 0.0f);
+            rig.setParam ((p + ".style").c_str(), 0.0f);
+            button->onClick();
+            ++taps;
+            CHECK_EQ (static_cast<int> (rig.param ((p + ".model").c_str())), item.model);
+            CHECK_EQ (static_cast<int> (rig.param ((p + ".style").c_str())), item.style);
+            if (item.model >= 22) // these types have no Blend: the knob is left alone
+                CHECK_NEAR (rig.param ((p + ".blend").c_str()), 37.0f, 0.5f);
+            rig.setParam ((p + ".blend").c_str(), 37.0f);
+        }
+        CHECK_EQ (taps, 80);
+    }
+}
+
 TEST (uig_zz_shutdown)
 {
     delete juceInitGaps;
