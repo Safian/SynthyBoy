@@ -100,6 +100,7 @@ struct SerumImportOptions
     const char* fallbackName = nullptr;                         // file stem when the preset has no name
     bool customWavetables = true;                               // the engine can play a stored table (kCapUserWavetable); false: the nearest built-in table
     bool customSamples = true;                                  // the engine has the sample oscillator (kCapSampleOsc)
+    bool granularOsc = true;                                    // the engine has the granular oscillator (kCap2Granular); without it a granular oscillator is imported as a sample oscillator
     bool customLfoShapes = true;                                // the engine plays a drawn LFO shape (kCapCustomLfoShape)
     bool noiseSample = true;                                    // the noise source plays a stored sample (noise.type = Sample, kCapNoiseSample)
     const char* categoryHint = nullptr;                         // the folder of the file ("Bass"): the preset category

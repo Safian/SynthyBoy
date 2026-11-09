@@ -4,14 +4,14 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2134 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2227 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 35 |
-| Osc 1 | 72 |
-| Osc 2 | 72 |
-| Osc 3 | 72 |
+| Osc 1 | 103 |
+| Osc 2 | 103 |
+| Osc 3 | 103 |
 | Noise | 19 |
 | Filter 1 | 23 |
 | Filter 2 | 23 |
@@ -130,7 +130,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.map.vel_high` | Osc 1 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 1 / Mapping |  |  |
 | `osc1.map.key_fold` | Osc 1 Key Fold | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
 | `osc1.map.key_warp` | Osc 1 Key Warp | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
-| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample | Wavetable | Osc 1 |  |  |
+| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample, 2 Granular | Wavetable | Osc 1 |  |  |
 | `osc1.sample.start` | Osc 1 Sample Start | 0 .. 100 % | 0 % | Osc 1 / Sample |  |  |
 | `osc1.sample.end` | Osc 1 Sample End | 0 .. 100 % | 100 % | Osc 1 / Sample |  |  |
 | `osc1.sample.root` | Osc 1 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 1 / Sample |  |  |
@@ -172,6 +172,37 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.unison.stack_repeat` | Osc 1 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 1 |  |  |
 | `osc1.env1` | Osc 1 Env 1 | 0 Off, 1 On | On | Osc 1 |  |  |
 | `osc1.sample.slice` | Osc 1 Sample Slice Select | -100 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
+| `osc1.gran.window_amount` | Osc 1 Grain Window Amount | 0 .. 100 % | 50 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.window_skew` | Osc 1 Grain Window Skew | -100 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.window_shape` | Osc 1 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 1 / Granular |  |  |
+| `osc1.gran.density_mode` | Osc 1 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 1 / Granular |  |  |
+| `osc1.gran.density` | Osc 1 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 1 / Granular | mod |  |
+| `osc1.gran.density_sync` | Osc 1 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 1 / Granular |  |  |
+| `osc1.gran.density_grains` | Osc 1 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 1 / Granular |  |  |
+| `osc1.gran.length_mode` | Osc 1 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 1 / Granular |  |  |
+| `osc1.gran.length` | Osc 1 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 1 / Granular | mod |  |
+| `osc1.gran.length_sync` | Osc 1 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 1 / Granular |  |  |
+| `osc1.gran.length_percent` | Osc 1 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.jump_start` | Osc 1 Grain Jump Start | 0 Off, 1 On | On | Osc 1 / Granular |  |  |
+| `osc1.gran.max_grains` | Osc 1 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 1 / Granular |  |  |
+| `osc1.gran.loop_grains` | Osc 1 Grain Loop Grains | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
+| `osc1.gran.manual` | Osc 1 Grain Manual Position | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
+| `osc1.gran.position` | Osc 1 Grain Position | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.scan_keytrack` | Osc 1 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
+| `osc1.gran.rand_offset` | Osc 1 Grain Random Offset | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_dir` | Osc 1 Grain Random Direction | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.reverse_grains` | Osc 1 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
+| `osc1.gran.rand_pitch` | Osc 1 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_length` | Osc 1 Grain Random Length | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_pan` | Osc 1 Grain Random Pan | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_level` | Osc 1 Grain Random Level | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_window` | Osc 1 Grain Random Window | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_skew` | Osc 1 Grain Random Skew | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_warp` | Osc 1 Grain Random Warp | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.rand_warp2` | Osc 1 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.spawn_pattern` | Osc 1 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 1 / Granular |  |  |
+| `osc1.gran.y_axis` | Osc 1 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 1 / Granular |  |  |
+| `osc1.gran.xy_y` | Osc 1 Grain Y Position | 0 .. 100 % | 50 % | Osc 1 / Granular | mod |  |
 
 ### Osc 2
 
@@ -207,7 +238,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.map.vel_high` | Osc 2 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 2 / Mapping |  |  |
 | `osc2.map.key_fold` | Osc 2 Key Fold | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
 | `osc2.map.key_warp` | Osc 2 Key Warp | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
-| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample | Wavetable | Osc 2 |  |  |
+| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample, 2 Granular | Wavetable | Osc 2 |  |  |
 | `osc2.sample.start` | Osc 2 Sample Start | 0 .. 100 % | 0 % | Osc 2 / Sample |  |  |
 | `osc2.sample.end` | Osc 2 Sample End | 0 .. 100 % | 100 % | Osc 2 / Sample |  |  |
 | `osc2.sample.root` | Osc 2 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 2 / Sample |  |  |
@@ -249,6 +280,37 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.unison.stack_repeat` | Osc 2 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 2 |  |  |
 | `osc2.env1` | Osc 2 Env 1 | 0 Off, 1 On | On | Osc 2 |  |  |
 | `osc2.sample.slice` | Osc 2 Sample Slice Select | -100 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
+| `osc2.gran.window_amount` | Osc 2 Grain Window Amount | 0 .. 100 % | 50 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.window_skew` | Osc 2 Grain Window Skew | -100 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.window_shape` | Osc 2 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 2 / Granular |  |  |
+| `osc2.gran.density_mode` | Osc 2 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 2 / Granular |  |  |
+| `osc2.gran.density` | Osc 2 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 2 / Granular | mod |  |
+| `osc2.gran.density_sync` | Osc 2 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 2 / Granular |  |  |
+| `osc2.gran.density_grains` | Osc 2 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 2 / Granular |  |  |
+| `osc2.gran.length_mode` | Osc 2 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 2 / Granular |  |  |
+| `osc2.gran.length` | Osc 2 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 2 / Granular | mod |  |
+| `osc2.gran.length_sync` | Osc 2 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 2 / Granular |  |  |
+| `osc2.gran.length_percent` | Osc 2 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.jump_start` | Osc 2 Grain Jump Start | 0 Off, 1 On | On | Osc 2 / Granular |  |  |
+| `osc2.gran.max_grains` | Osc 2 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 2 / Granular |  |  |
+| `osc2.gran.loop_grains` | Osc 2 Grain Loop Grains | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
+| `osc2.gran.manual` | Osc 2 Grain Manual Position | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
+| `osc2.gran.position` | Osc 2 Grain Position | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.scan_keytrack` | Osc 2 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
+| `osc2.gran.rand_offset` | Osc 2 Grain Random Offset | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_dir` | Osc 2 Grain Random Direction | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.reverse_grains` | Osc 2 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
+| `osc2.gran.rand_pitch` | Osc 2 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_length` | Osc 2 Grain Random Length | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_pan` | Osc 2 Grain Random Pan | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_level` | Osc 2 Grain Random Level | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_window` | Osc 2 Grain Random Window | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_skew` | Osc 2 Grain Random Skew | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_warp` | Osc 2 Grain Random Warp | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.rand_warp2` | Osc 2 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.spawn_pattern` | Osc 2 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 2 / Granular |  |  |
+| `osc2.gran.y_axis` | Osc 2 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 2 / Granular |  |  |
+| `osc2.gran.xy_y` | Osc 2 Grain Y Position | 0 .. 100 % | 50 % | Osc 2 / Granular | mod |  |
 
 ### Osc 3
 
@@ -284,7 +346,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.map.vel_high` | Osc 3 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 3 / Mapping |  |  |
 | `osc3.map.key_fold` | Osc 3 Key Fold | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
 | `osc3.map.key_warp` | Osc 3 Key Warp | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
-| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample | Wavetable | Osc 3 |  |  |
+| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample, 2 Granular | Wavetable | Osc 3 |  |  |
 | `osc3.sample.start` | Osc 3 Sample Start | 0 .. 100 % | 0 % | Osc 3 / Sample |  |  |
 | `osc3.sample.end` | Osc 3 Sample End | 0 .. 100 % | 100 % | Osc 3 / Sample |  |  |
 | `osc3.sample.root` | Osc 3 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 3 / Sample |  |  |
@@ -326,6 +388,37 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.unison.stack_repeat` | Osc 3 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 3 |  |  |
 | `osc3.env1` | Osc 3 Env 1 | 0 Off, 1 On | On | Osc 3 |  |  |
 | `osc3.sample.slice` | Osc 3 Sample Slice Select | -100 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
+| `osc3.gran.window_amount` | Osc 3 Grain Window Amount | 0 .. 100 % | 50 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.window_skew` | Osc 3 Grain Window Skew | -100 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.window_shape` | Osc 3 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 3 / Granular |  |  |
+| `osc3.gran.density_mode` | Osc 3 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 3 / Granular |  |  |
+| `osc3.gran.density` | Osc 3 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 3 / Granular | mod |  |
+| `osc3.gran.density_sync` | Osc 3 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 3 / Granular |  |  |
+| `osc3.gran.density_grains` | Osc 3 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 3 / Granular |  |  |
+| `osc3.gran.length_mode` | Osc 3 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 3 / Granular |  |  |
+| `osc3.gran.length` | Osc 3 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 3 / Granular | mod |  |
+| `osc3.gran.length_sync` | Osc 3 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 3 / Granular |  |  |
+| `osc3.gran.length_percent` | Osc 3 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.jump_start` | Osc 3 Grain Jump Start | 0 Off, 1 On | On | Osc 3 / Granular |  |  |
+| `osc3.gran.max_grains` | Osc 3 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 3 / Granular |  |  |
+| `osc3.gran.loop_grains` | Osc 3 Grain Loop Grains | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
+| `osc3.gran.manual` | Osc 3 Grain Manual Position | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
+| `osc3.gran.position` | Osc 3 Grain Position | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.scan_keytrack` | Osc 3 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
+| `osc3.gran.rand_offset` | Osc 3 Grain Random Offset | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_dir` | Osc 3 Grain Random Direction | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.reverse_grains` | Osc 3 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
+| `osc3.gran.rand_pitch` | Osc 3 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_length` | Osc 3 Grain Random Length | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_pan` | Osc 3 Grain Random Pan | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_level` | Osc 3 Grain Random Level | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_window` | Osc 3 Grain Random Window | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_skew` | Osc 3 Grain Random Skew | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_warp` | Osc 3 Grain Random Warp | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.rand_warp2` | Osc 3 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.spawn_pattern` | Osc 3 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 3 / Granular |  |  |
+| `osc3.gran.y_axis` | Osc 3 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 3 / Granular |  |  |
+| `osc3.gran.xy_y` | Osc 3 Grain Y Position | 0 .. 100 % | 50 % | Osc 3 / Granular | mod |  |
 
 ### Noise
 
@@ -809,7 +902,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..911 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..962 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -2675,6 +2768,57 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 909 | `osc1.sample.slice` | Osc 1 Sample Slice Select |
 | 910 | `osc2.sample.slice` | Osc 2 Sample Slice Select |
 | 911 | `osc3.sample.slice` | Osc 3 Sample Slice Select |
+| 912 | `osc1.gran.window_amount` | Osc 1 Grain Window Amount |
+| 913 | `osc1.gran.window_skew` | Osc 1 Grain Window Skew |
+| 914 | `osc1.gran.density` | Osc 1 Grain Density |
+| 915 | `osc1.gran.length` | Osc 1 Grain Length |
+| 916 | `osc1.gran.length_percent` | Osc 1 Grain Length Percent |
+| 917 | `osc1.gran.position` | Osc 1 Grain Position |
+| 918 | `osc1.gran.rand_offset` | Osc 1 Grain Random Offset |
+| 919 | `osc1.gran.rand_dir` | Osc 1 Grain Random Direction |
+| 920 | `osc1.gran.rand_pitch` | Osc 1 Grain Random Pitch |
+| 921 | `osc1.gran.rand_length` | Osc 1 Grain Random Length |
+| 922 | `osc1.gran.rand_pan` | Osc 1 Grain Random Pan |
+| 923 | `osc1.gran.rand_level` | Osc 1 Grain Random Level |
+| 924 | `osc1.gran.rand_window` | Osc 1 Grain Random Window |
+| 925 | `osc1.gran.rand_skew` | Osc 1 Grain Random Skew |
+| 926 | `osc1.gran.rand_warp` | Osc 1 Grain Random Warp |
+| 927 | `osc1.gran.rand_warp2` | Osc 1 Grain Random Warp 2 |
+| 928 | `osc1.gran.xy_y` | Osc 1 Grain Y Position |
+| 929 | `osc2.gran.window_amount` | Osc 2 Grain Window Amount |
+| 930 | `osc2.gran.window_skew` | Osc 2 Grain Window Skew |
+| 931 | `osc2.gran.density` | Osc 2 Grain Density |
+| 932 | `osc2.gran.length` | Osc 2 Grain Length |
+| 933 | `osc2.gran.length_percent` | Osc 2 Grain Length Percent |
+| 934 | `osc2.gran.position` | Osc 2 Grain Position |
+| 935 | `osc2.gran.rand_offset` | Osc 2 Grain Random Offset |
+| 936 | `osc2.gran.rand_dir` | Osc 2 Grain Random Direction |
+| 937 | `osc2.gran.rand_pitch` | Osc 2 Grain Random Pitch |
+| 938 | `osc2.gran.rand_length` | Osc 2 Grain Random Length |
+| 939 | `osc2.gran.rand_pan` | Osc 2 Grain Random Pan |
+| 940 | `osc2.gran.rand_level` | Osc 2 Grain Random Level |
+| 941 | `osc2.gran.rand_window` | Osc 2 Grain Random Window |
+| 942 | `osc2.gran.rand_skew` | Osc 2 Grain Random Skew |
+| 943 | `osc2.gran.rand_warp` | Osc 2 Grain Random Warp |
+| 944 | `osc2.gran.rand_warp2` | Osc 2 Grain Random Warp 2 |
+| 945 | `osc2.gran.xy_y` | Osc 2 Grain Y Position |
+| 946 | `osc3.gran.window_amount` | Osc 3 Grain Window Amount |
+| 947 | `osc3.gran.window_skew` | Osc 3 Grain Window Skew |
+| 948 | `osc3.gran.density` | Osc 3 Grain Density |
+| 949 | `osc3.gran.length` | Osc 3 Grain Length |
+| 950 | `osc3.gran.length_percent` | Osc 3 Grain Length Percent |
+| 951 | `osc3.gran.position` | Osc 3 Grain Position |
+| 952 | `osc3.gran.rand_offset` | Osc 3 Grain Random Offset |
+| 953 | `osc3.gran.rand_dir` | Osc 3 Grain Random Direction |
+| 954 | `osc3.gran.rand_pitch` | Osc 3 Grain Random Pitch |
+| 955 | `osc3.gran.rand_length` | Osc 3 Grain Random Length |
+| 956 | `osc3.gran.rand_pan` | Osc 3 Grain Random Pan |
+| 957 | `osc3.gran.rand_level` | Osc 3 Grain Random Level |
+| 958 | `osc3.gran.rand_window` | Osc 3 Grain Random Window |
+| 959 | `osc3.gran.rand_skew` | Osc 3 Grain Random Skew |
+| 960 | `osc3.gran.rand_warp` | Osc 3 Grain Random Warp |
+| 961 | `osc3.gran.rand_warp2` | Osc 3 Grain Random Warp 2 |
+| 962 | `osc3.gran.xy_y` | Osc 3 Grain Y Position |
 
 ## Built-in wavetables and LFO shapes
 

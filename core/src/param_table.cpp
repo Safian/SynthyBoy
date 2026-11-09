@@ -104,7 +104,9 @@ constexpr const char* const kScaleTypes[] = { "Chromatic (off)", "Major", "Natur
                                               "Hirajoshi" };
 constexpr const char* const kScaleModes[] = { "Conform", "Mark only" };
 constexpr const char* const kTuningScales[] = { "12-TET", "Pythagorean", "Just intonation", "User file" };
-constexpr const char* const kOscTypes[] = { "Wavetable", "Sample" };
+constexpr const char* const kOscTypes[] = { "Wavetable", "Sample",
+                                             // GROUPC WP-11 (B28): the granular oscillator
+                                             "Granular" };
 constexpr const char* const kLoopModes[] = { "One-shot", "Forward loop", "Reverse loop", "Forward/reverse loop", "Tailed" };
 constexpr const char* const kFadeEdges[] = { "None", "1 ms", "2 ms", "4 ms", "8 ms", "16 ms", "32 ms", "64 ms", "128 ms" };
 constexpr const char* const kSliceModes[] = { "Off", "Auto", "Manual" };
@@ -137,6 +139,15 @@ constexpr const char* const kNoiseTypes[] = { "Noise", "Sample" };
 constexpr const char* const kMpeMacroMaps[] = { "Off", "XYZ -> Macro 1, 2, 3", "YZ -> Macro 1, 2" };
 // B27 (GROUPB, WP-05): the Ratio SRC of an oscillator (Serum 2 manual p.30) and its smooth interpolation of the frame position
 constexpr const char* const kRatioSources[] = { "Base note", "Osc 1", "Osc 2", "Osc 3", "Sub" };
+// B28 (GROUPC, WP-11): the granular oscillator (Serum 2 manual p.85 - 103, 13-new-keys.md 4.37)
+constexpr const char* const kGrainWindows[] = { "Hann", "Welch", "Gaussian", "Blackman-Harris", "Sinc", "Tukey", "Triangle", "Trapezoid", "ExpDec", "Exp Dec Rev" };
+constexpr const char* const kGrainRateModes[] = { "Free", "BPM Sync", "Grains" };
+constexpr const char* const kGrainLengthModes[] = { "Free", "BPM Sync", "Percent" };
+constexpr const char* const kGrainDivisions[] = { "1/1", "1/1T", "1/1.", "1/2", "1/2T", "1/2.", "1/4", "1/4T", "1/4.", "1/8", "1/8T", "1/8.", "1/16", "1/16T", "1/16.",
+                                                  "1/32", "1/32T", "1/32.", "1/64", "1/64T", "1/64.", "1/128", "1/128T", "1/128." };
+constexpr const char* const kSpawnPatterns[] = { "Together", "Even", "Exp", "Random" };
+constexpr const char* const kGrainYAxes[] = { "None", "Level", "Warp", "Warp 2", "Density", "Grain Length", "Window Amt", "Window Skew", "Rand Offset", "Rand Dir",
+                                              "Rand Pitch", "Rand Length", "Rand Pan", "Rand Gain", "Rand Window", "Rand Skew", "Rand Warp", "Rand Warp 2" };
 // B26 (GROUPA2, WP-07): the voice control LFO scaling is set as a percentage of the time or as a rate (Serum 2 manual p.318)
 constexpr const char* const kVoiceCtlLfoScaleModes[] = { "Percent", "Rate" };
 
@@ -393,6 +404,40 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     SB_PCT ("osc" #N ".warp2.amount", "Osc " #N " Warp 2 Amount", "Osc " #N " / Warp 2", 50.0f, kMod),                                           \
     cont ("osc" #N ".warp2.phase", "Osc " #N " Warp 2 Phase", "Osc " #N " / Warp 2", 0.0f, 360.0f, 180.0f, Unit::degrees, kMod, 0),             \
     SB_PCT_RANGE ("osc" #N ".warp2.spread", "Osc " #N " Warp 2 Spread", "Osc " #N " / Warp 2", -100.0f, 100.0f, 0.0f, kMod)
+
+// B28 (GROUPC, WP-11): per oscillator the type specific keys of the granular oscillator (the region, loop, scan, slice and unison keys are the oscN.sample.* ones)
+#define SB_OSC_GRAN(N)                                                                                                                           \
+    SB_PCT ("osc" #N ".gran.window_amount", "Osc " #N " Grain Window Amount", "Osc " #N " / Granular", 50.0f, kMod),                             \
+    SB_PCT_RANGE ("osc" #N ".gran.window_skew", "Osc " #N " Grain Window Skew", "Osc " #N " / Granular", -100.0f, 100.0f, 0.0f, kMod),         \
+    pick ("osc" #N ".gran.window_shape", "Osc " #N " Grain Window Shape", "Osc " #N " / Granular", kGrainWindows, 0),                            \
+    pick ("osc" #N ".gran.density_mode", "Osc " #N " Grain Density Mode", "Osc " #N " / Granular", kGrainRateModes, 0),                          \
+    cont ("osc" #N ".gran.density", "Osc " #N " Grain Density", "Osc " #N " / Granular", 0.1f, 1000.0f, 20.0f, Unit::Hz, kMod, 1, 0.3f),         \
+    pick ("osc" #N ".gran.density_sync", "Osc " #N " Grain Density Division", "Osc " #N " / Granular", kGrainDivisions, 12),                     \
+    whole ("osc" #N ".gran.density_grains", "Osc " #N " Grain Density Grains", "Osc " #N " / Granular", 1.0f, 64.0f, 8.0f, Unit::none, kAuto),  \
+    pick ("osc" #N ".gran.length_mode", "Osc " #N " Grain Length Mode", "Osc " #N " / Granular", kGrainLengthModes, 0),                          \
+    cont ("osc" #N ".gran.length", "Osc " #N " Grain Length", "Osc " #N " / Granular", 1.0f, 4000.0f, 100.0f, Unit::ms, kMod, 1, 0.3f),         \
+    pick ("osc" #N ".gran.length_sync", "Osc " #N " Grain Length Division", "Osc " #N " / Granular", kGrainDivisions, 12),                       \
+    cont ("osc" #N ".gran.length_percent", "Osc " #N " Grain Length Percent", "Osc " #N " / Granular", 5.0f, 1000.0f, 200.0f, Unit::percent, kMod, 0, 0.5f), \
+    onOff ("osc" #N ".gran.jump_start", "Osc " #N " Grain Jump Start", "Osc " #N " / Granular", true),                                           \
+    whole ("osc" #N ".gran.max_grains", "Osc " #N " Grain Max Grains", "Osc " #N " / Granular", 1.0f, 128.0f, 64.0f, Unit::none, kAuto),        \
+    onOff ("osc" #N ".gran.loop_grains", "Osc " #N " Grain Loop Grains", "Osc " #N " / Granular", false),                                        \
+    onOff ("osc" #N ".gran.manual", "Osc " #N " Grain Manual Position", "Osc " #N " / Granular", false),                                         \
+    SB_PCT ("osc" #N ".gran.position", "Osc " #N " Grain Position", "Osc " #N " / Granular", 0.0f, kMod),                                        \
+    onOff ("osc" #N ".gran.scan_keytrack", "Osc " #N " Grain Scan Key Track", "Osc " #N " / Granular", false),                                   \
+    SB_PCT ("osc" #N ".gran.rand_offset", "Osc " #N " Grain Random Offset", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    SB_PCT ("osc" #N ".gran.rand_dir", "Osc " #N " Grain Random Direction", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    onOff ("osc" #N ".gran.reverse_grains", "Osc " #N " Grain Reverse Grains", "Osc " #N " / Granular", false),                                  \
+    cont ("osc" #N ".gran.rand_pitch", "Osc " #N " Grain Random Pitch", "Osc " #N " / Granular", 0.0f, 24.0f, 0.0f, Unit::semitone, kMod, 2, 0.4f), \
+    SB_PCT ("osc" #N ".gran.rand_length", "Osc " #N " Grain Random Length", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    SB_PCT ("osc" #N ".gran.rand_pan", "Osc " #N " Grain Random Pan", "Osc " #N " / Granular", 0.0f, kMod),                                      \
+    SB_PCT ("osc" #N ".gran.rand_level", "Osc " #N " Grain Random Level", "Osc " #N " / Granular", 0.0f, kMod),                                  \
+    SB_PCT ("osc" #N ".gran.rand_window", "Osc " #N " Grain Random Window", "Osc " #N " / Granular", 0.0f, kMod),                               \
+    SB_PCT ("osc" #N ".gran.rand_skew", "Osc " #N " Grain Random Skew", "Osc " #N " / Granular", 0.0f, kMod),                                    \
+    SB_PCT ("osc" #N ".gran.rand_warp", "Osc " #N " Grain Random Warp", "Osc " #N " / Granular", 0.0f, kMod),                                    \
+    SB_PCT ("osc" #N ".gran.rand_warp2", "Osc " #N " Grain Random Warp 2", "Osc " #N " / Granular", 0.0f, kMod),                                \
+    pick ("osc" #N ".gran.spawn_pattern", "Osc " #N " Grain Spawn Pattern", "Osc " #N " / Granular", kSpawnPatterns, 0),                         \
+    pick ("osc" #N ".gran.y_axis", "Osc " #N " Grain Y Axis", "Osc " #N " / Granular", kGrainYAxes, 0),                                          \
+    SB_PCT ("osc" #N ".gran.xy_y", "Osc " #N " Grain Y Position", "Osc " #N " / Granular", 50.0f, kMod)
 
 #define SB_SENDS(KEY, NAME, GROUP)                                                                                                               \
     SB_PCT (KEY ".bus1_send", NAME " Bus 1 Send", GROUP, 0.0f, kMod),                                                                            \
@@ -881,11 +926,13 @@ constexpr ParamInfo kRaw[] = {
     onOff ("voicectl.osc.sub", "Voice Control Applies to Sub", "Voice Control / Targets", true),
     // --- B27: GROUPB WP-05: oscillator extras (13-new-keys.md 4.33, positions 2125..2133) ------------------------------------------------
     SB_OSC_EXTRA2 (1), SB_OSC_EXTRA2 (2), SB_OSC_EXTRA2 (3),
+    // --- B28: GROUPC WP-11: the granular oscillator (13-new-keys.md 4.37, positions 2134..2226) ---------------------------------------------
+    SB_OSC_GRAN (1), SB_OSC_GRAN (2), SB_OSC_GRAN (3),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2134, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27)");
+static_assert (kCount == 2227, "880 keys of state version 2 plus the 1270 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28)");
 
 struct Table
 {
@@ -915,7 +962,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

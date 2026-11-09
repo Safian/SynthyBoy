@@ -52,6 +52,6 @@ endif()
 # The sample oscillator type (producers/sample_oscillator.cpp) renders with the standalone core/sample-osc package, the filter models of state
 # version 3 (modules/serum_filter_bank.cpp) with core/filters-serum, the Serum modules of the effect chain (modules/serum_fx_modules.cpp) with core/fx-serum-a and -b: our code in the fork,
 # not Vital's.
-target_link_libraries(synthyboy_engine_vital PUBLIC synthyboy_sampleosc synthyboy_filters_serum synthyboy_fx_serum_a synthyboy_fx_serum_b)
+target_link_libraries(synthyboy_engine_vital PUBLIC synthyboy_sampleosc synthyboy_granular synthyboy_filters_serum synthyboy_fx_serum_a synthyboy_fx_serum_b)
 find_package(Threads REQUIRED)   # the builder thread of the Convolve module
 target_link_libraries(synthyboy_engine_vital PUBLIC Threads::Threads)

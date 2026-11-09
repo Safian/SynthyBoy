@@ -87,6 +87,14 @@ namespace sbvital {
     Output* sample_uni_start = createPolyModControl(prefix_ + "_sample_uni_start");
     Output* sample_uni_span = createPolyModControl(prefix_ + "_sample_uni_span");
     Output* sample_slice = createPolyModControl(prefix_ + "_sample_slice"); // GROUPB WP-05
+    // GROUPC WP-11 (13-new-keys.md 4.37): the modulatable keys of the granular oscillator, in the order of SampleOscillator::kGranWindowAmount ..
+    static const char* const kGranControls[SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount + 1] = {
+      "_gran_window_amount", "_gran_window_skew", "_gran_density", "_gran_length", "_gran_length_percent", "_gran_position", "_gran_rand_offset",
+      "_gran_rand_dir", "_gran_rand_pitch", "_gran_rand_length", "_gran_rand_pan", "_gran_rand_level", "_gran_rand_window", "_gran_rand_skew",
+      "_gran_rand_warp", "_gran_rand_warp2", "_gran_xy_y" };
+    Output* gran_controls[SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount + 1];
+    for (int i = 0; i <= SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount; ++i)
+      gran_controls[i] = createPolyModControl(prefix_ + kGranControls[i]);
     // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
     Value* pitch_mode = createBaseControl(prefix_ + "_pitch_mode");
     Output* pitch_coarse = createPolyModControl(prefix_ + "_pitch_coarse");
@@ -175,6 +183,9 @@ namespace sbvital {
     so->plug(sample_uni_start, SampleOscillator::kUniStart);
     so->plug(sample_uni_span, SampleOscillator::kUniSpan);
     so->plug(sample_slice, SampleOscillator::kSlice);
+    so->plug(type_, SampleOscillator::kType);
+    for (int i = 0; i <= SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount; ++i)
+      so->plug(gran_controls[i], SampleOscillator::kGranWindowAmount + i);
     so->setPitchTap(oscillator_->pitchTap());
     so->plug(distortion_type_, SampleOscillator::kWarpType);
     so->plug(distortion_amount, SampleOscillator::kWarpAmount);

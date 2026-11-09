@@ -32,14 +32,27 @@ public:
     ~OscWaveView() override;
 
     enum class ViewMode { wave2D, wave3D, spectral };
-    enum class SampleMarker { none, start, end, loopStart, loopEnd, loopPair, slice, threshold };
+    enum class SampleMarker { none, start, end, loopStart, loopEnd, loopPair, slice, threshold, xy, window };
 
     ViewMode viewMode() const noexcept { return mode; }
     void setViewMode (ViewMode newMode);
     void cycleViewMode();
 
     int oscIndex() const noexcept { return index; }
+    /** The value of oscN.type (0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample), read from the control itself. */
+    int oscType() const;
+    /** Sample, Granular and Spectral show the waveform of the content sample with the region and loop markers. */
     bool isSampleType() const;
+    bool isGranular() const { return oscType() == kOscTypeGranular; }
+
+    // ---- granular view (GROUPC WP-11, design 02 / 13-new-keys.md 4.37): the window thumbnail and the X|Y dot ----
+    /** The window thumbnail (top right of the display): a tap steps the grain window shape, a drag sets the amount (up) and the skew (sideways). */
+    juce::Rectangle<float> windowThumbArea() const;
+    /** The X|Y dot (manual mode): x is the position in the region, y the Y position `oscN.gran.xy_y`. */
+    juce::Point<float> xyDotPosition() const;
+    /** The grains the display draws for the current settings: (position 0..1 in the file, length as share of the file, height 0..1). Deterministic. */
+    struct GrainMark { float position, length, height; };
+    std::vector<GrainMark> grainMarks() const;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
@@ -150,6 +163,11 @@ private:
     ParamHandle warpAmountHandle;
     ParamHandle warpTypeHandle;
     ParamHandle unisonVoicesHandle;
+
+    ParamHandle granPositionHandle, granXyYHandle, granManualHandle, granWindowAmountHandle, granWindowSkewHandle, granWindowShapeHandle, granDensityHandle,
+        granLengthHandle, granRandOffsetHandle;
+    bool windowTap = false;
+    void paintGranular (juce::Graphics& g, juce::Rectangle<float> area);
 
     ParamHandle sampleStartHandle;
     ParamHandle sampleEndHandle;

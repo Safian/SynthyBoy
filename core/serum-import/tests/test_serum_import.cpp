@@ -1052,6 +1052,61 @@ TEST (serum_ratio_source_smooth_interpolation_and_single_slice_destination_have_
     CHECK (entryWith (s, "ratio_source_outside_ratio_mode") >= 0);
 }
 
+// GROUPC (WP-11, A412 .. A418): the granular oscillator keeps its type and its parameters (density and grain length with their modes, window, randomisations, X|Y axis, manual position)
+TEST (serum_granular_oscillator_has_a_type_and_keys)
+{
+    const auto granularBlock = [] (std::vector<std::pair<std::string, double>> numbers, const std::vector<std::pair<std::string, std::string>>& texts)
+    {
+        return map ({ { "plainParams", map (withText (numbers, texts)) } });
+    };
+    Preset p;
+    // OSC A: Free density in Hz, no length mode (percent of the period), hann default, randomisations, the dot placed by hand
+    p.set ("Oscillator0", map ({ { "plainParams", map (withText ({ { "kParamManualPositionMode", 1 }, { "kParamPosition", 35 } }, { { "kParamType", "kOsc_Granular" } })) },
+                                 { "GranularOsc0", granularBlock ({ { "kParamDensity", 42.5 }, { "kParamGrainLength", 2.0 }, { "kParamWindowParam", 30 }, { "kParamWindowSkew", -20 }, { "kParamRandomOffset", 12 },
+                                                                   { "kParamRandomPitch", 0.5 }, { "kParamRandomGain", 40 }, { "kParamRandomWarp2", 10 } },
+                                                                 { { "kParamWindowShape", "kWindowTukey" }, { "kParamUnisonTrigPattern", "kExponential" }, { "kParamYAxisAssignment", "kYAxisOscVolume" } }) } }));
+    // OSC B: BPM density (2 beats) and BPM length (0.25 beats); OSC C: Grains density
+    p.set ("Oscillator1", map ({ { "plainParams", map (withText ({}, { { "kParamType", "kOsc_Granular" } })) },
+                                 { "GranularOsc1", granularBlock ({ { "kParamDensity", 2.0 }, { "kParamGrainLength", 0.25 } }, { { "kParamDensityMode", "kDensityBPM" }, { "kParamLengthMode", "kLengthBPM" } }) } }));
+    p.set ("Oscillator2", map ({ { "plainParams", map (withText ({}, { { "kParamType", "kOsc_Granular" } })) },
+                                 { "GranularOsc2", granularBlock ({ { "kParamDensity", 6.4 }, { "kParamGrainLength", 0.0 } }, { { "kParamDensityMode", "kDensityGrains" } }) } }));
+    const SerumImportResult r = run (p.file());
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.report.unaccounted, 0);
+    for (int n = 1; n <= 3; ++n)
+        CHECK_EQ (value (r, ("osc" + std::to_string (n) + ".type").c_str()), 2.0f);
+    CHECK_EQ (value (r, "osc1.gran.density_mode"), 0.0f);
+    CHECK_NEAR (value (r, "osc1.gran.density"), 42.5, 1.0e-3);
+    CHECK_EQ (value (r, "osc1.gran.length_mode"), 2.0f);          // no mode in the file: percent of the density period (A413)
+    CHECK_NEAR (value (r, "osc1.gran.length_percent"), 200.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.gran.window_amount"), 30.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.gran.window_skew"), -20.0, 1.0e-3);
+    CHECK_EQ (value (r, "osc1.gran.window_shape"), 5.0f);          // Tukey
+    CHECK_EQ (value (r, "osc1.gran.spawn_pattern"), 2.0f);         // Exp
+    CHECK_EQ (value (r, "osc1.gran.y_axis"), 1.0f);                // Level
+    CHECK_NEAR (value (r, "osc1.gran.rand_offset"), 12.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.gran.rand_pitch"), 0.5, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.gran.rand_level"), 40.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.gran.rand_warp2"), 10.0, 1.0e-3);
+    CHECK_EQ (value (r, "osc1.gran.manual"), 1.0f);
+    CHECK_NEAR (value (r, "osc1.gran.position"), 35.0, 1.0e-3);
+    CHECK_EQ (value (r, "osc2.gran.density_mode"), 1.0f);
+    CHECK_EQ (value (r, "osc2.gran.density_sync"), 3.0f);          // 2 beats = a 1/2 note: entry 3 of the divisions (1/1, 1/1T, 1/1., 1/2, ...)
+    CHECK_EQ (value (r, "osc2.gran.length_mode"), 1.0f);
+    CHECK_EQ (value (r, "osc2.gran.length_sync"), 12.0f);          // a quarter of a beat = a 1/16 note: entry 12
+    CHECK_EQ (value (r, "osc3.gran.density_mode"), 2.0f);
+    CHECK_EQ (value (r, "osc3.gran.density_grains"), 6.0f);
+    CHECK_NEAR (value (r, "osc3.gran.length_percent"), 5.0, 1.0e-3);   // 0 x 100 % clamps to the 5 % minimum
+    CHECK (entryWith (r, "granular_density_beats_to_the_nearest_division") >= 0);
+    CHECK (entryWith (r, "granular_manual_mode") >= 0);
+    // a wavetable oscillator next to it keeps its type
+    Preset q;
+    q.set ("Oscillator0", map ({ { "plainParams", map (withText ({}, { { "kParamType", "kOsc_WT" } })) } }));
+    const SerumImportResult t = run (q.file());
+    CHECK_EQ (value (t, "osc1.type"), 0.0f);
+    CHECK_EQ (value (t, "osc1.gran.density_mode"), 0.0f);
+}
+
 // GROUPB (WP-06, A401 / A402): the warp modes from the noise, sub and filters and the matrix sources that were dropped have a home
 TEST (serum_warp_modes_from_the_noise_sub_and_filters_and_the_new_matrix_sources)
 {

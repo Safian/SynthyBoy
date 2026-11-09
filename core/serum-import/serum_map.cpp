@@ -42,7 +42,15 @@ ENUM (kWarpEnum, 0, "warp",
       { "kFMP_NOISE", 60, C }, { "kFMP_SUB", 61, C }, { "kFMP_FILT1", 62, C }, { "kFMP_FILT2", 63, C }, { "kPD_NOISE", 64, X }, { "kPD_SUB", 65, X }, { "kPD_FILT1", 66, X }, { "kPD_FILT2", 67, X },
       { "kAM_NOISE", 68, X }, { "kAM_SUB", 69, X }, { "kAM_FILT1", 70, X }, { "kAM_FILT2", 71, X }, { "kRM_NOISE", 72, C }, { "kRM_SUB", 73, C }, { "kRM_FILT1", 74, C }, { "kRM_FILT2", 75, C });
 
-ENUM (kOscTypeEnum, 0, "osc.type", { "kOsc_WT", 0, X }, { "kOsc_Sample", 1, X }, { "kOsc_MultiSample", 1, A }, { "kOsc_Granular", 1, A }, { "kOsc_Spectral", 1, A });
+ENUM (kOscTypeEnum, 0, "osc.type", { "kOsc_WT", 0, X }, { "kOsc_Sample", 1, X }, { "kOsc_MultiSample", 1, A }, { "kOsc_Granular", 2, X }, { "kOsc_Spectral", 1, A });
+// GROUPC WP-11 (A412 .. A418): the granular oscillator. Only the names kWindowBlackmanHarris / ExpDec / Gaussian / Triangle / Tukey, kDensityFree / BPM, kLengthBPM, kEven /
+// kExponential / kRandom and kYAxisOscVolume occur in the 656 factory presets; the others are the names in the pattern of those (close, not verified against a file).
+ENUM (kGrainWindowEnum, 0, "gran.window", { "kWindowHann", 0, C }, { "kWindowWelch", 1, C }, { "kWindowGaussian", 2, X }, { "kWindowBlackmanHarris", 3, X }, { "kWindowSinc", 4, C },
+      { "kWindowTukey", 5, X }, { "kWindowTriangle", 6, X }, { "kWindowTrapezoid", 7, C }, { "kWindowExpDec", 8, X }, { "kWindowExpDecRev", 9, C }, { "kWindowExpDecReverse", 9, C });
+ENUM (kSpawnPatternEnum, 0, "gran.spawn", { "kTogether", 0, C }, { "kEven", 1, X }, { "kExponential", 2, X }, { "kRandom", 3, X });
+ENUM (kYAxisEnum, 0, "gran.yaxis", { "kYAxisNone", 0, C }, { "kYAxisOscVolume", 1, X }, { "kYAxisWarp", 2, C }, { "kYAxisWarp2", 3, C }, { "kYAxisDensity", 4, C }, { "kYAxisGrainLength", 5, C },
+      { "kYAxisWindowAmount", 6, C }, { "kYAxisWindowSkew", 7, C }, { "kYAxisRandomOffset", 8, C }, { "kYAxisRandomDir", 9, C }, { "kYAxisRandomPitch", 10, C }, { "kYAxisRandomGrainLength", 11, C },
+      { "kYAxisRandomPan", 12, C }, { "kYAxisRandomGain", 13, C }, { "kYAxisRandomWindowAmount", 14, C }, { "kYAxisRandomWindowSkew", 15, C }, { "kYAxisRandomWarp", 16, C }, { "kYAxisRandomWarp2", 17, C });
 ENUM (kLoopEnum, 0, "loop", { "kNone", 0, X }, { "kForward", 1, X }, { "kReverse", 2, X }, { "kPingPong", 3, X }, { "kTailed", 4, X });
 ENUM (kUnisonStackEnum, 0, "unison.stack", { "kNoUnisonStack", 0, X }, { "kCenter12", 1, X }, { "kCenter24", 2, X }, { "kOctave1", 3, X }, { "kOctave2", 4, X },
       { "kOctave3", 4, A }, { "kOctaveFifth1", 5, X }, { "kOctaveFifth2", 6, X }, { "kOctaveFifth3", 6, A });
@@ -124,6 +132,25 @@ const Rule kWt[] = {
 
 const Rule kMulti[] = {
     { "Multi", "kParamRandomPhase", "osc#.random_phase", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+};
+
+// GROUPC WP-11 (A412 .. A418, 13-new-keys.md 4.37): the type specific block of a granular oscillator. Density, grain length and their modes are read in code (serum_voice.cpp).
+const Rule kGranular[] = {
+    { "Granular", "kParamWindowParam", "osc#.gran.window_amount", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamWindowSkew", "osc#.gran.window_skew", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamWindowShape", "osc#.gran.window_shape", Conv::enumName, 1, 0, X, kNaN, &kGrainWindowEnum, "" },
+    { "Granular", "kParamUnisonTrigPattern", "osc#.gran.spawn_pattern", Conv::enumName, 1, 0, X, kNaN, &kSpawnPatternEnum, "" },
+    { "Granular", "kParamYAxisAssignment", "osc#.gran.y_axis", Conv::enumName, 1, 0, X, kNaN, &kYAxisEnum, "" },
+    { "Granular", "kParamRandomOffset", "osc#.gran.rand_offset", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomDir", "osc#.gran.rand_dir", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomPitch", "osc#.gran.rand_pitch", Conv::lin, 1, 0, C, kNaN, nullptr, "grain_pitch_randomisation_in_semitones_assumed" },
+    { "Granular", "kParamRandomGrainLength", "osc#.gran.rand_length", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomPan", "osc#.gran.rand_pan", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomGain", "osc#.gran.rand_level", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomWindowAmount", "osc#.gran.rand_window", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomWindowSkew", "osc#.gran.rand_skew", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomWarp", "osc#.gran.rand_warp", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Granular", "kParamRandomWarp2", "osc#.gran.rand_warp2", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
 };
 
 const Rule kNoise[] = {
@@ -213,6 +240,7 @@ const Rule* rulesOf (const char* scope, size_t& count) noexcept
     if (! std::strcmp (scope, "Osc")) { count = sizeof (kOsc) / sizeof (Rule); return kOsc; }
     if (! std::strcmp (scope, "Warp")) { count = sizeof (kWarp) / sizeof (Rule); return kWarp; }
     if (! std::strcmp (scope, "WT")) { count = sizeof (kWt) / sizeof (Rule); return kWt; }
+    if (! std::strcmp (scope, "Granular")) { count = sizeof (kGranular) / sizeof (Rule); return kGranular; }
     if (! std::strcmp (scope, "Multi")) { count = sizeof (kMulti) / sizeof (Rule); return kMulti; }
     if (! std::strcmp (scope, "Noise") || ! std::strcmp (scope, "NoiseOsc")) { count = sizeof (kNoise) / sizeof (Rule); return kNoise; }
     if (! std::strcmp (scope, "Sub") || ! std::strcmp (scope, "SubOsc")) { count = sizeof (kSub) / sizeof (Rule); return kSub; }

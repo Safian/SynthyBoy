@@ -2470,6 +2470,119 @@ TEST (uig_wp05_ratio_source_smooth_interpolation_and_slice_destination)
     }
 }
 
+// GROUPC (WP-11): the granular oscillator: type choice, window thumbnail (tap steps the shape, drag sets amount and skew), the X|Y dot of the manual mode, mode dependent dimming
+TEST (uig_wp11_granular_view_window_thumbnail_xy_dot_dimming_and_assignment)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::osc, sz.w, sz.h);
+        rig.editor->context().view->oscTab = 0;
+        rig.editor->panelHost().setPage (Page::osc);
+        Panel* panel = rig.panelTitled ("Oscillator 1");
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        const auto keys = panel->keys();
+        for (const char* key : { "osc1.gran.window_amount", "osc1.gran.density", "osc1.gran.length", "osc1.gran.rand_warp2", "osc1.gran.y_axis", "osc1.gran.xy_y", "osc1.gran.spawn_pattern" })
+            CHECK (std::find (keys.begin(), keys.end(), std::string (key)) != keys.end());
+        panel->setMoreExpanded (true);
+        const auto controlOf = [&] (const char* key) -> ParamControl*
+        {
+            for (const auto& c : panel->controls())
+                if (c->key() == key)
+                    return c.get();
+            return nullptr;
+        };
+        for (const char* key : { "osc1.gran.window_shape", "osc1.gran.density", "osc1.gran.position", "osc1.gran.density_grains", "osc1.gran.length_percent" })
+            CHECK (controlOf (key) != nullptr);
+
+        // the type list offers Granular; dimming follows the type and the modes
+        auto* type = dynamic_cast<ParamChoice*> (controlOf ("osc1.type"));
+        CHECK (type != nullptr);
+        if (type == nullptr)
+            continue;
+        const auto menu = type->buildOptionMenu();
+        int entries = 0;
+        juce::PopupMenu::MenuItemIterator it (menu);
+        while (it.next())
+            entries += it.getItem().itemID >= 1 && it.getItem().itemID < ParamChoice::kExtraActionId ? 1 : 0;
+        CHECK_EQ (entries, 3); // Wavetable, Sample, Granular
+        CHECK (controlOf ("osc1.gran.density")->getAlpha() < 0.9f); // the wavetable type: the granular keys are dimmed
+        rig.setParam ("osc1.type", 2.0f);
+        CHECK (controlOf ("osc1.gran.density")->getAlpha() > 0.9f);
+        CHECK (controlOf ("osc1.gran.density_sync")->getAlpha() < 0.9f && controlOf ("osc1.gran.density_grains")->getAlpha() < 0.9f);
+        CHECK (controlOf ("osc1.gran.position")->getAlpha() < 0.9f);   // only the manual mode reads it
+        rig.setParam ("osc1.gran.density_mode", 1.0f);
+        CHECK (controlOf ("osc1.gran.density_sync")->getAlpha() > 0.9f && controlOf ("osc1.gran.density")->getAlpha() < 0.9f);
+        rig.setParam ("osc1.gran.density_mode", 2.0f);
+        CHECK (controlOf ("osc1.gran.density_grains")->getAlpha() > 0.9f);
+        rig.setParam ("osc1.gran.density_mode", 0.0f);
+        rig.setParam ("osc1.gran.length_mode", 2.0f);
+        CHECK (controlOf ("osc1.gran.length_percent")->getAlpha() > 0.9f && controlOf ("osc1.gran.length")->getAlpha() < 0.9f);
+        rig.setParam ("osc1.gran.length_mode", 0.0f);
+
+        auto* view = rig.oscView (1);
+        CHECK (view != nullptr);
+        if (view == nullptr)
+            continue;
+        CHECK_EQ (view->oscType(), 2);
+        CHECK (view->isSampleType() && view->isGranular());
+
+        // the window thumbnail: touch sized; a tap steps the shape, a drag up and to the right sets amount and skew
+        const auto thumb = view->windowThumbArea();
+        CHECK (thumb.getWidth() >= static_cast<float> (rig.editor->theme().touch()) && thumb.getHeight() >= static_cast<float> (rig.editor->theme().touch()));
+        CHECK (view->waveArea().contains (thumb));
+        CHECK_EQ (static_cast<int> (rig.param ("osc1.gran.window_shape") + 0.5f), 0);
+        view->mouseDown (mouse (*view, thumb.getCentre(), thumb.getCentre(), false));
+        view->mouseUp (mouse (*view, thumb.getCentre(), thumb.getCentre(), false));
+        CHECK_EQ (static_cast<int> (rig.param ("osc1.gran.window_shape") + 0.5f), 1);
+        const auto from = thumb.getCentre(), to = juce::Point<float> (thumb.getRight() - 2.0f, thumb.getY() + 2.0f);
+        view->mouseDown (mouse (*view, from, from, false));
+        view->mouseDrag (mouse (*view, to, from, true));
+        view->mouseUp (mouse (*view, to, from, true));
+        CHECK (rig.param ("osc1.gran.window_amount") > 90.0f);
+        CHECK (rig.param ("osc1.gran.window_skew") > 80.0f);
+        CHECK_EQ (static_cast<int> (rig.param ("osc1.gran.window_shape") + 0.5f), 1); // a drag does not step the shape
+
+        // manual mode: the finger places the dot (x = position in the region, y = Y position)
+        rig.setParam ("osc1.gran.manual", 1.0f);
+        CHECK (controlOf ("osc1.gran.position")->getAlpha() > 0.9f);
+        const auto area = view->waveArea();
+        const juce::Point<float> target (area.getX() + area.getWidth() * 0.75f, area.getY() + area.getHeight() * 0.25f);
+        const juce::Point<float> start (area.getCentreX(), area.getCentreY() + 10.0f);
+        view->mouseDown (mouse (*view, start, start, false));
+        view->mouseDrag (mouse (*view, target, start, true));
+        view->mouseUp (mouse (*view, target, start, true));
+        CHECK_NEAR (rig.param ("osc1.gran.position"), 75.0, 6.0);
+        CHECK_NEAR (rig.param ("osc1.gran.xy_y"), 75.0, 8.0);
+        const auto dot = view->xyDotPosition();
+        CHECK_NEAR (dot.x, target.x, 8.0);
+        CHECK_NEAR (dot.y, target.y, 8.0);
+
+        // the grain marks follow the settings (deterministic), more random offset spreads them
+        const auto a = view->grainMarks(), b = view->grainMarks();
+        CHECK (! a.empty() && a.size() == b.size() && std::abs (a[0].position - b[0].position) < 1.0e-9f);
+        rig.setParam ("osc1.gran.density", 200.0f);
+        rig.setParam ("osc1.gran.length", 100.0f);
+        CHECK (view->grainMarks().size() > a.size());
+
+        // assign-by-touch: the position (and the Y position) take a source
+        const int slot = assignBySource (rig, 7, "osc1.gran.position", 50.0f);
+        CHECK (slot >= 0);
+        auto& m = rig.editor->context().assign.matrix();
+        CHECK_EQ (static_cast<int> (m.get (modSlotParams (slot).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("osc1.gran.position").index))));
+
+        // every control keeps the touch size and the panel fits
+        for (const char* key : { "osc1.gran.density", "osc1.gran.window_shape", "osc1.gran.rand_pitch" })
+            CHECK (controlOf (key)->getHeight() >= rig.editor->theme().touch());
+        CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
+        CHECK (panel->getWidth() <= sz.w);
+        rig.shot ("osc-wp11-granular-" + n, sz.w, sz.h, true, Page::osc);
+    }
+}
+
 // GROUPB (WP-06): the 15 new sources are chips of the source bar and can be assigned by touch; the warp list offers the modes from the Noise, Sub and Filters in its groups
 TEST (uig_wp06_new_sources_are_chips_and_assignable_and_the_warp_list_has_the_new_modes)
 {

@@ -52,7 +52,7 @@ struct SerumPluginImport
 /** Imports one Serum file. `bytes` is the file, `fileName` decides the kind for audio files (the header decides for every Serum container); `caps` are the
     capabilities of the engine. `resolver` supplies the files a preset references (null: they are reported missing). Never throws. */
 SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const std::vector<uint8_t>& bytes, UserContentStore& store, EngineCapsMask caps,
-                                            SerumContentResolver* resolver, const std::string& categoryHint = {});
+                                            SerumContentResolver* resolver, const std::string& categoryHint = {}, EngineCaps2Mask caps2 = kCap2AllKnown);
 
 /** Resolver on a Serum content folder (the parent of Tables / Samples / Multisamples / Impulses): the common implementation of the CLI and the plugin. */
 class SerumFolderResolver final : public SerumContentResolver

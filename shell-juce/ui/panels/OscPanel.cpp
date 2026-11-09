@@ -85,7 +85,16 @@ public:
             o + ".unison.mode", o + ".unison.range", o + ".unison.blend_shape", o + ".unison.stack_repeat",
             o + ".phase_legato", o + ".phase_memory",
             // Block B27 (GROUPB WP-05): Ratio SRC, smooth interpolation of the frame position, the slice destination of Play Single Slice
-            o + ".ratio_src", o + ".smooth_interp", o + ".sample.slice"
+            o + ".ratio_src", o + ".smooth_interp", o + ".sample.slice",
+            // Block B28 (GROUPC WP-11): the granular oscillator
+            o + ".gran.window_amount", o + ".gran.window_skew", o + ".gran.window_shape", o + ".gran.density_mode",
+            o + ".gran.density", o + ".gran.density_sync", o + ".gran.density_grains", o + ".gran.length_mode",
+            o + ".gran.length", o + ".gran.length_sync", o + ".gran.length_percent", o + ".gran.jump_start",
+            o + ".gran.max_grains", o + ".gran.loop_grains", o + ".gran.manual", o + ".gran.position",
+            o + ".gran.scan_keytrack", o + ".gran.rand_offset", o + ".gran.rand_dir", o + ".gran.reverse_grains",
+            o + ".gran.rand_pitch", o + ".gran.rand_length", o + ".gran.rand_pan", o + ".gran.rand_level",
+            o + ".gran.rand_window", o + ".gran.rand_skew", o + ".gran.rand_warp", o + ".gran.rand_warp2",
+            o + ".gran.spawn_pattern", o + ".gran.y_axis", o + ".gran.xy_y"
         };
     }
 
@@ -120,7 +129,8 @@ public:
         // what the Serum 2 manual ties to other controls (p.35-36, p.47): the fixed pitch is the pitch of a wavetable oscillator with pitch tracking off,
         // the pitch bend switch is for the sample types with pitch tracking off, the stack repeat (1-3x) belongs to the Octaves / Power Chord stacks
         const std::string o = "osc" + std::to_string (OscIndex);
-        for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type", ".pitch_mode", ".sample.slice_mode", ".sample.slice_play" })
+        for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type", ".pitch_mode", ".sample.slice_mode", ".sample.slice_play",
+                                    ".gran.density_mode", ".gran.length_mode", ".gran.manual" })
         {
             auto handle = std::make_unique<ParamHandle> (ctx, o + suffix);
             handle->onChange = [this] { updateControlDimming(); };
@@ -136,7 +146,7 @@ public:
             // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
             return h.valid() ? juce::roundToInt (h.info().min + h.normalised() * (h.info().max - h.info().min)) : 0;
         };
-        if (dimHandles.size() < 8)
+        if (dimHandles.size() < 11)
             return;
         const bool tracking = choiceOf (*dimHandles[0]) != 0;
         const int type = choiceOf (*dimHandles[1]);
@@ -146,6 +156,8 @@ public:
         const int warpType = choiceOf (*dimHandles[3]);
         const int warp2Type = choiceOf (*dimHandles[4]);
         const int pitchMode = choiceOf (*dimHandles[5]), sliceMode = choiceOf (*dimHandles[6]), slicePlay = choiceOf (*dimHandles[7]);
+        const int densityMode = choiceOf (*dimHandles[8]), lengthMode = choiceOf (*dimHandles[9]);
+        const bool granManual = choiceOf (*dimHandles[10]) != 0, granular = type == kOscTypeGranular, sampleClass = type >= kOscTypeSample && type <= kOscTypeSpectral;
         for (const auto& c : controls())
         {
             const auto& key = c->key();
@@ -153,7 +165,7 @@ public:
             if (key == o + ".fixed_pitch")
                 applies = ! tracking && type == 0;
             else if (key == o + ".pitch_bend_track")
-                applies = ! tracking && type == 1;
+                applies = ! tracking && sampleClass;
             else if (key == o + ".unison.stack_repeat")
                 applies = stack == 3 || stack == 5;
             else if (key == o + ".ratio_src")
@@ -161,7 +173,19 @@ public:
             else if (key == o + ".smooth_interp")
                 applies = type == 0;                                       // the frame position of a wavetable
             else if (key == o + ".sample.slice")
-                applies = type == 1 && sliceMode != 0 && slicePlay == 1;   // Play Single Slice only
+                applies = sampleClass && sliceMode != 0 && slicePlay == 1; // Play Single Slice only
+            else if (key.rfind (o + ".gran.", 0) == 0)
+            {
+                // the granular keys apply to the Granular type; of the rate and length triples only the one the mode reads (manual p.101 - 102)
+                applies = granular;
+                if (key == o + ".gran.density")                 applies = applies && densityMode == 0;
+                else if (key == o + ".gran.density_sync")       applies = applies && densityMode == 1;
+                else if (key == o + ".gran.density_grains")     applies = applies && densityMode == 2;
+                else if (key == o + ".gran.length")             applies = applies && lengthMode == 0;
+                else if (key == o + ".gran.length_sync")        applies = applies && lengthMode == 1;
+                else if (key == o + ".gran.length_percent")     applies = applies && lengthMode == 2 && densityMode != 2;
+                else if (key == o + ".gran.position")           applies = applies && granManual;
+            }
             c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
             const bool first = key == o + ".warp.phase", second = key == o + ".warp2.phase";
             if (first || second)

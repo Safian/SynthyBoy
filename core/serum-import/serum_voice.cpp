@@ -20,6 +20,118 @@ double clampd (double v, double lo, double hi) { return std::max (lo, std::min (
 } // namespace
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
+// the granular oscillator (GROUPC WP-11, assumptions A412 .. A414): density and grain length are a value plus a mode
+// ---------------------------------------------------------------------------------------------------------------------------------------
+namespace
+{
+/** Beats of an entry of kGrainDivisions (3 per division: straight, triplet, dotted; 1/1 .. 1/128), the list of oscN.gran.density_sync / length_sync. */
+double divisionBeatsOf (int index)
+{
+    const double beats = 4.0 / static_cast<double> (1 << (index / 3));
+    return index % 3 == 0 ? beats : (index % 3 == 1 ? beats * 2.0 / 3.0 : beats * 1.5);
+}
+
+int nearestDivision (double beats)
+{
+    int best = 12;
+    double bestError = 1.0e9;
+    for (int i = 0; i < 24; ++i)
+    {
+        const double e = std::fabs (std::log2 (std::max (1.0e-6, beats) / divisionBeatsOf (i)));
+        if (e < bestError)
+        {
+            bestError = e;
+            best = i;
+        }
+    }
+    return best;
+}
+} // namespace
+
+void Importer::granularRates (int n, int plain, const std::string& area, const std::string& path)
+{
+    const auto key = [&] (const char* tail) { return area + "." + tail; };
+    // 0 free, 1 BPM, 2 grains (density), 3 percent (length); the node is reported once the key is stored
+    int modeNode[2] = { -1, -1 };
+    const auto modeOf = [&] (const char* param, int slot, int& mode, bool& present)
+    {
+        mode = -1;
+        present = false;
+        const int node = get (plain, param);
+        if (node < 0 || ! isText (node))
+            return;
+        present = true;
+        modeNode[slot] = node;
+        const std::string name = str (node);
+        mode = name.find ("BPM") != std::string::npos ? 1 : (name.find ("Grain") != std::string::npos ? 2 : (name.find ("Percent") != std::string::npos ? 3 : 0));
+    };
+    (void) n;
+
+    // density: Free = Hz, BPM = the beats between two grains (nearest division), Grains = the number of grains that play at the same time
+    int dMode = 0;
+    bool dPresent = false;
+    modeOf ("kParamDensityMode", 0, dMode, dPresent);
+    if (dMode < 0)
+        dMode = 0;
+    const int dn = get (plain, "kParamDensity");
+    if (dPresent || dn >= 0)
+    {
+        store (key ("gran.density_mode"), dMode);
+        setByFile[static_cast<size_t> (indexOf (key ("gran.density_mode")))] = 1;
+        if (modeNode[0] >= 0)
+        {
+            static const char* const names[3] = { "Free", "BPM Sync", "Grains" };
+            entry (ItemKind::imported, Reason::exact, area, path + "/kParamDensityMode", valueText (modeNode[0]), key ("gran.density_mode"), names[dMode], "granular_density_mode");
+            consume (modeNode[0]);
+        }
+    }
+    if (dn >= 0)
+    {
+        const double v = num (dn);
+        bool cl = false;
+        const char* target = dMode == 1 ? "gran.density_sync" : (dMode == 2 ? "gran.density_grains" : "gran.density");
+        const double st = store (key (target), dMode == 1 ? nearestDivision (v) : (dMode == 2 ? std::round (v) : v), &cl);
+        setByFile[static_cast<size_t> (indexOf (key (target)))] = 1;
+        entry (cl || dMode == 1 ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : (dMode == 1 ? Reason::enumRemapped : Reason::exact), area, path + "/kParamDensity", valueText (dn),
+               key (target), fmt (st), dMode == 1 ? "granular_density_beats_to_the_nearest_division" : (dMode == 2 ? "granular_density_grains" : "granular_density_in_hz_assumed"));
+        consume (dn);
+    }
+
+    // grain length: Free = seconds, BPM = beats (nearest division), Percent = a multiple of the density period; no mode in the file = Percent (A413)
+    int lMode = 3;
+    bool lPresent = false;
+    modeOf ("kParamLengthMode", 1, lMode, lPresent);
+    if (lMode < 0)
+        lMode = 3;
+    const int ln = get (plain, "kParamGrainLength");
+    if (lPresent || ln >= 0)
+    {
+        const int stored = lMode == 3 ? 2 : lMode == 1 ? 1 : 0;
+        store (key ("gran.length_mode"), stored);
+        setByFile[static_cast<size_t> (indexOf (key ("gran.length_mode")))] = 1;
+        if (modeNode[1] >= 0)
+        {
+            static const char* const names[3] = { "Free", "BPM Sync", "Percent" };
+            entry (ItemKind::imported, Reason::exact, area, path + "/kParamLengthMode", valueText (modeNode[1]), key ("gran.length_mode"), names[stored], "granular_length_mode");
+            consume (modeNode[1]);
+        }
+    }
+    if (ln >= 0)
+    {
+        const double v = num (ln);
+        bool cl = false;
+        const char* target = lMode == 1 ? "gran.length_sync" : (lMode == 3 ? "gran.length_percent" : "gran.length");
+        const double raw = lMode == 1 ? nearestDivision (v) : (lMode == 3 ? v * 100.0 : v * 1000.0);
+        const double st = store (key (target), raw, &cl);
+        setByFile[static_cast<size_t> (indexOf (key (target)))] = 1;
+        entry (cl || lMode == 1 || lMode == 3 ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : (lMode == 1 || lMode == 3 ? Reason::enumRemapped : Reason::exact), area,
+               path + "/kParamGrainLength", valueText (ln), key (target), fmt (st),
+               lMode == 1 ? "granular_length_beats_to_the_nearest_division" : (lMode == 3 ? "granular_length_as_a_multiple_of_the_density_period_assumed" : "granular_length_in_seconds"));
+        consume (ln);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
 // oscillators
 // ---------------------------------------------------------------------------------------------------------------------------------------
 void Importer::oscillator (int i)
@@ -46,10 +158,11 @@ void Importer::oscillator (int i)
     if (tn >= 0)
     {
         const bool known = kind != 0 || typeName == "kOsc_WT";
-        store (key ("type"), kind == 0 ? 0 : 1);
+        store (key ("type"), kind == 0 ? 0 : (kind == 3 && opt.granularOsc ? kOscTypeGranular : 1)); // GROUPC: Granular is its own type (a sample oscillator on an engine without it)
         setByFile[static_cast<size_t> (indexOf (key ("type")))] = 1;
-        entry (! known ? ItemKind::dropped : (kind <= 0 || kind == 2 ? ItemKind::imported : ItemKind::approximated), known ? Reason::exact : Reason::enumRemapped, area, on + "/plainParams/kParamType",
-               typeName, key ("type"), kind == 0 ? "Wavetable" : "Sample", kind == 1 ? "multisample_reduced_to_one_zone" : kind == 3 ? "granular_played_as_sample" : kind == 4 ? "spectral_played_as_sample" : "");
+        entry (! known ? ItemKind::dropped : (kind <= 0 || kind == 2 || kind == 3 ? ItemKind::imported : ItemKind::approximated), known ? Reason::exact : Reason::enumRemapped, area, on + "/plainParams/kParamType",
+               typeName, key ("type"), kind == 0 ? "Wavetable" : (kind == 3 && opt.granularOsc ? "Granular" : "Sample"),
+               kind == 1 ? "multisample_reduced_to_one_zone" : kind == 4 ? "spectral_played_as_sample" : (kind == 3 && ! opt.granularOsc ? "granular_played_as_sample" : ""));
         consume (tn);
     }
     else store (key ("type"), 0);
@@ -146,6 +259,19 @@ void Importer::oscillator (int i)
             consume (u.node);
             continue;
         }
+        if (kind == 3 && (u.name == "kParamManualPositionMode" || u.name == "kParamPosition"))
+        {
+            // GROUPC WP-11: the play head of the granular oscillator: Manual places it at Position (0 .. 100 % of the region)
+            const bool manualRow = u.name == "kParamManualPositionMode";
+            const double v = num (u.node);
+            bool cl = false;
+            const double st = store (key (manualRow ? "gran.manual" : "gran.position"), manualRow ? (v >= 0.5 ? 1.0 : 0.0) : v, &cl);
+            setByFile[static_cast<size_t> (indexOf (key (manualRow ? "gran.manual" : "gran.position")))] = 1;
+            entry (cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, p, valueText (u.node), key (manualRow ? "gran.manual" : "gran.position"), fmt (st),
+                   manualRow ? "granular_manual_mode" : "granular_manual_position");
+            consume (u.node);
+            continue;
+        }
         const char* why = "serum_feature_not_modelled";
         if (u.name == "kParamPosition" || u.name == "kParamHzOffset" || u.name == "kParamBaseTempo" || u.name == "kParamScanBPMRate" || u.name == "kParamScanBPMDivide"
             || u.name == "kParamScanRange" || u.name == "kParamManualPositionMode" || u.name == "kParamLoopStartLink" || u.name == "kParamPitchRatioModMode")
@@ -169,8 +295,12 @@ void Importer::oscillator (int i)
         const int bplain = get (B, "plainParams");
         std::vector<Unmapped> bum;
         if (isDefaultBlock (bplain)) noteDefault (bplain);
-        else applyScope (kind == 0 ? std::initializer_list<const char*> { "Warp", "WT" } : kind == 1 ? std::initializer_list<const char*> { "Warp", "Multi" } : std::initializer_list<const char*> { "Warp" },
-                         bplain, n, area, bp + "/plainParams", bum, true, { "kParamTablePos" });
+        else applyScope (kind == 0 ? std::initializer_list<const char*> { "Warp", "WT" } : kind == 1 ? std::initializer_list<const char*> { "Warp", "Multi" }
+                                                                                   : kind == 3 ? std::initializer_list<const char*> { "Warp", "Granular" } : std::initializer_list<const char*> { "Warp" },
+                         bplain, n, area, bp + "/plainParams", bum, true,
+                         { "kParamTablePos", "kParamDensity", "kParamDensityMode", "kParamGrainLength", "kParamLengthMode" });
+        if (kind == 3)
+            granularRates (n, bplain, area, bp + "/plainParams");
         if (kind == 0)
         {
             const int tp = get (bplain, "kParamTablePos");

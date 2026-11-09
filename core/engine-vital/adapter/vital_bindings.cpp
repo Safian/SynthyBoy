@@ -187,6 +187,15 @@ std::vector<Binding> build()
         b.choice (k + "ratio_src", c + "ratio_src");
         b.choice (k + "smooth_interp", c + "smooth_interpolation");
         b.percent (k + "sample.slice", c + "sample_slice");
+
+        // Block B28 (GROUPC, WP-11): the modulatable keys of the granular oscillator (the static ones are handled by the adapter, isSpecialParam)
+        for (const char* name : { "window_amount", "window_skew", "position", "rand_offset", "rand_dir", "rand_length", "rand_pan", "rand_level",
+                                  "rand_window", "rand_skew", "rand_warp", "rand_warp2", "xy_y" })
+            b.percent (k + "gran." + name, c + "gran_" + name);
+        b.add (k + "gran.density", c + "gran_density", Conv::linear);
+        b.add (k + "gran.length", c + "gran_length", Conv::linear);
+        b.add (k + "gran.length_percent", c + "gran_length_percent", Conv::linear);
+        b.add (k + "gran.rand_pitch", c + "gran_rand_pitch", Conv::linear);
     }
 
     // --- noise (the engine's built-in noise sample and extras) --------------------------------------------------------
@@ -501,6 +510,23 @@ const std::vector<Binding>& vitalBindings()
     return table;
 }
 
+namespace
+{
+/** The modulatable keys of oscN.gran.* (bound to controls; every other oscN.gran.* key is read by the adapter). */
+bool isGranularModulatable (const char* key)
+{
+    for (const char* name : { "window_amount", "window_skew", "position", "rand_offset", "rand_dir", "rand_length", "rand_pan", "rand_level", "rand_window",
+                              "rand_skew", "rand_warp", "rand_warp2", "xy_y", "density", "length", "length_percent", "rand_pitch" })
+    {
+        const std::string tail = std::string (".gran.") + name;
+        const size_t n = std::strlen (key);
+        if (n >= tail.size() && tail == key + n - tail.size())
+            return true;
+    }
+    return false;
+}
+} // namespace
+
 bool isSpecialParam (size_t paramIndex)
 {
     const char* key = paramTable()[paramIndex].key;
@@ -521,6 +547,8 @@ bool isSpecialParam (size_t paramIndex)
         || (startsWith ("osc") && std::strstr (key, ".remap.") != nullptr)
         // WP4: the static keys of the sample oscillator (scan, unison start and span are modulatable controls, bound normally)
         || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span") && ! endsWith (".sample.slice"))
+        // B28: the static keys of the granular oscillator (the modulatable ones are bound normally)
+        || (startsWith ("osc") && std::strstr (key, ".gran.") != nullptr && ! isGranularModulatable (key))
         // B13: noise sample choice (procedural noise buffers)
         || std::strcmp (key, "noise.sample") == 0 || std::strcmp (key, "noise.type") == 0
         // B22: the effect instance pool (type, on, rack, order and the normalised parameters of a slot): the adapter builds the module and drives its controls

@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "OscWaveView.h"
 
+#include "synthyboy/granular/granular.h"
+
 #include "WavetableEditorSheet.h"
 
 #include <cmath>
@@ -62,6 +64,15 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
       warpAmountHandle (context, "osc" + std::to_string (oscIndex) + ".warp.amount"),
       warpTypeHandle (context, "osc" + std::to_string (oscIndex) + ".warp.type"),
       unisonVoicesHandle (context, "osc" + std::to_string (oscIndex) + ".unison.voices"),
+      granPositionHandle (context, "osc" + std::to_string (oscIndex) + ".gran.position"),
+      granXyYHandle (context, "osc" + std::to_string (oscIndex) + ".gran.xy_y"),
+      granManualHandle (context, "osc" + std::to_string (oscIndex) + ".gran.manual"),
+      granWindowAmountHandle (context, "osc" + std::to_string (oscIndex) + ".gran.window_amount"),
+      granWindowSkewHandle (context, "osc" + std::to_string (oscIndex) + ".gran.window_skew"),
+      granWindowShapeHandle (context, "osc" + std::to_string (oscIndex) + ".gran.window_shape"),
+      granDensityHandle (context, "osc" + std::to_string (oscIndex) + ".gran.density"),
+      granLengthHandle (context, "osc" + std::to_string (oscIndex) + ".gran.length"),
+      granRandOffsetHandle (context, "osc" + std::to_string (oscIndex) + ".gran.rand_offset"),
       sampleStartHandle (context, "osc" + std::to_string (oscIndex) + ".sample.start"),
       sampleEndHandle (context, "osc" + std::to_string (oscIndex) + ".sample.end"),
       sampleLoopStartHandle (context, "osc" + std::to_string (oscIndex) + ".sample.loop_start"),
@@ -79,6 +90,9 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     warpAmountHandle.onChange = repaintCb;
     warpTypeHandle.onChange = repaintCb;
     unisonVoicesHandle.onChange = repaintCb;
+    for (ParamHandle* handle : { &granPositionHandle, &granXyYHandle, &granManualHandle, &granWindowAmountHandle, &granWindowSkewHandle, &granWindowShapeHandle,
+                                 &granDensityHandle, &granLengthHandle, &granRandOffsetHandle })
+        handle->onChange = repaintCb;
     sampleStartHandle.onChange = repaintCb;
     sampleEndHandle.onChange = repaintCb;
     sampleLoopStartHandle.onChange = repaintCb;
@@ -153,9 +167,56 @@ bool OscWaveView::unisonCapped() const
     return unisonVoicesHandle.valid() && juce::roundToInt (unisonVoicesHandle.plain()) > 8;
 }
 
+int OscWaveView::oscType() const
+{
+    // (read from the normalised value: the listener runs before the atomic updates)
+    return typeHandle.valid() ? juce::roundToInt (typeHandle.info().min + typeHandle.normalised() * (typeHandle.info().max - typeHandle.info().min)) : 0;
+}
+
 bool OscWaveView::isSampleType() const
 {
-    return typeHandle.valid() && typeHandle.normalised() >= 0.5f; // normalised (): the listener runs before the atomic updates
+    const int type = oscType();
+    return type == kOscTypeSample || type == kOscTypeGranular || type == kOscTypeSpectral;
+}
+
+juce::Rectangle<float> OscWaveView::windowThumbArea() const
+{
+    const auto area = waveArea();
+    const float w = static_cast<float> (ctx.theme.touch()) * 1.7f, h = static_cast<float> (ctx.theme.touch()) * 1.1f;
+    return { area.getRight() - w - ctx.theme.px (4.0f), area.getY() + ctx.theme.px (4.0f), w, h };
+}
+
+juce::Point<float> OscWaveView::xyDotPosition() const
+{
+    const auto area = waveArea();
+    const float start = sampleStartHandle.valid() ? sampleStartHandle.normalised() : 0.0f, end = sampleEndHandle.valid() ? sampleEndHandle.normalised() : 1.0f;
+    const float position = granPositionHandle.valid() ? granPositionHandle.normalised() : 0.0f;
+    const float y = granXyYHandle.valid() ? granXyYHandle.normalised() : 0.5f;
+    return { sampleNormToX (start + (end - start) * position), area.getBottom() - y * area.getHeight() };
+}
+
+std::vector<OscWaveView::GrainMark> OscWaveView::grainMarks() const
+{
+    std::vector<GrainMark> marks;
+    if (! granDensityHandle.valid() || ! granLengthHandle.valid())
+        return marks;
+    const float density = granDensityHandle.plain(), lengthSec = granLengthHandle.plain() * 0.001f;
+    const int count = juce::jlimit (1, 24, juce::roundToInt (density * lengthSec));
+    const float start = sampleStartHandle.valid() ? sampleStartHandle.normalised() : 0.0f, end = sampleEndHandle.valid() ? sampleEndHandle.normalised() : 1.0f;
+    const bool manual = granManualHandle.valid() && granManualHandle.plain() > 0.5f;
+    const float position = manual && granPositionHandle.valid() ? granPositionHandle.normalised() : 0.0f;
+    const float spread = granRandOffsetHandle.valid() ? granRandOffsetHandle.normalised() : 0.0f;
+    const auto prev = preview();
+    const float seconds = prev != nullptr ? static_cast<float> (prev->seconds()) : 1.0f;
+    uint32_t state = 0x9e3779b9u;
+    const auto next = [&state] { state = state * 1664525u + 1013904223u; return static_cast<float> (state >> 8) * (1.0f / 16777216.0f); };
+    for (int i = 0; i < count; ++i)
+    {
+        const float offset = (next() * 2.0f - 1.0f) * spread * 0.5f;
+        const float here = juce::jlimit (0.0f, 1.0f, start + (end - start) * juce::jlimit (0.0f, 1.0f, position + offset + 0.02f * static_cast<float> (i) / static_cast<float> (count)));
+        marks.push_back ({ here, juce::jlimit (0.002f, 0.5f, lengthSec / juce::jmax (0.01f, seconds)), 0.25f + 0.7f * next() });
+    }
+    return marks;
 }
 
 void OscWaveView::setViewMode (ViewMode newMode)
@@ -597,6 +658,8 @@ void OscWaveView::cancelOneFingerGesture()
             case SampleMarker::loopEnd:   sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::loopPair:  sampleLoopStartHandle.endGesture(); sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::threshold: sliceThresholdHandle.endGesture(); break;
+            case SampleMarker::xy:        granPositionHandle.endGesture(); granXyYHandle.endGesture(); break;
+            case SampleMarker::window:    granWindowAmountHandle.endGesture(); granWindowSkewHandle.endGesture(); break;
             case SampleMarker::none:
             case SampleMarker::slice:     break;
         }
@@ -659,7 +722,17 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
         const bool manual = sliceModeIndex() == 2;
 
         const int sliceHit = manual ? nearestSliceAtX (e.position.x) : -1;
-        if (sliceHit >= 0)
+        const bool granularManual = isGranular() && granManualHandle.valid() && granManualHandle.plain() > 0.5f;
+        windowTap = false;
+        if (isGranular() && windowThumbArea().contains (e.position))
+        {
+            // the window thumbnail: a tap steps the shape, a drag sets amount (up) and skew (sideways)
+            activeMarker = SampleMarker::window;
+            windowTap = true;
+            granWindowAmountHandle.beginGesture();
+            granWindowSkewHandle.beginGesture();
+        }
+        else if (sliceHit >= 0)
         {
             activeMarker = SampleMarker::slice;
             draggedSlice = sliceHit;
@@ -690,15 +763,23 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
             activeMarker = SampleMarker::loopEnd;
             sampleLoopEndHandle.beginGesture();
         }
-        else if (betweenLoopMarkers (xToSampleNorm (e.position.x), sampleLoopStartHandle.normalised(), sampleLoopEndHandle.normalised(), 0.0f))
+        else if (! granularManual && betweenLoopMarkers (xToSampleNorm (e.position.x), sampleLoopStartHandle.normalised(), sampleLoopEndHandle.normalised(), 0.0f))
         {
-            // a drag between the two loop markers moves both
+            // a drag between the two loop markers moves both (not in the manual granular mode: there the finger places the X|Y dot)
             activeMarker = SampleMarker::loopPair;
             loopPairStartNorm = sampleLoopStartHandle.normalised();
             loopPairEndNorm = sampleLoopEndHandle.normalised();
             loopPairDownNorm = xToSampleNorm (e.position.x);
             sampleLoopStartHandle.beginGesture();
             sampleLoopEndHandle.beginGesture();
+        }
+        if (activeMarker == SampleMarker::none && granularManual && waveArea().contains (e.position))
+        {
+            // manual mode: the dot follows the finger (position in the region, Y position)
+            activeMarker = SampleMarker::xy;
+            granPositionHandle.beginGesture();
+            granXyYHandle.beginGesture();
+            mouseDrag (e);
         }
         press.press (e.position);
         if (activeMarker != SampleMarker::none && activeMarker != SampleMarker::slice && activeMarker != SampleMarker::loopPair)
@@ -759,9 +840,30 @@ void OscWaveView::mouseDrag (const juce::MouseEvent& e)
                 sliceThresholdHandle.setNormalised (lineToThreshold ((a.getBottom() - e.position.y) / juce::jmax (1.0f, a.getHeight())) / 100.0f);
                 break;
             }
+            case SampleMarker::xy:
+            {
+                const auto a = waveArea();
+                const float start = sampleStartHandle.normalised(), end = sampleEndHandle.normalised();
+                const float p = end > start ? (xToSampleNorm (e.position.x) - start) / (end - start) : 0.0f;
+                granPositionHandle.setNormalised (juce::jlimit (0.0f, 1.0f, p));
+                granXyYHandle.setNormalised (juce::jlimit (0.0f, 1.0f, (a.getBottom() - e.position.y) / juce::jmax (1.0f, a.getHeight())));
+                break;
+            }
+            case SampleMarker::window:
+            {
+                const auto thumb = windowThumbArea();
+                if ((e.position - dragStartPos).getDistanceFromOrigin() > kLongPressSlopPx)
+                    windowTap = false;
+                if (! windowTap)
+                {
+                    granWindowAmountHandle.setNormalised (juce::jlimit (0.0f, 1.0f, (thumb.getBottom() - e.position.y) / juce::jmax (1.0f, thumb.getHeight())));
+                    granWindowSkewHandle.setNormalised (juce::jlimit (0.0f, 1.0f, (e.position.x - thumb.getX()) / juce::jmax (1.0f, thumb.getWidth())));
+                }
+                break;
+            }
             case SampleMarker::none: break;
         }
-        if (showLoupe)
+        if (showLoupe && activeMarker != SampleMarker::xy && activeMarker != SampleMarker::window)
         {
             if (loupe == nullptr)
                 loupe = std::make_unique<Loupe> (ctx.theme);
@@ -799,6 +901,17 @@ void OscWaveView::mouseUp (const juce::MouseEvent& e)
             case SampleMarker::loopEnd:   sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::loopPair:  sampleLoopStartHandle.endGesture(); sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::threshold: sliceThresholdHandle.endGesture(); break;
+            case SampleMarker::xy:        granPositionHandle.endGesture(); granXyYHandle.endGesture(); break;
+            case SampleMarker::window:
+                granWindowAmountHandle.endGesture();
+                granWindowSkewHandle.endGesture();
+                if (windowTap && granWindowShapeHandle.valid())
+                {
+                    const int count = static_cast<int> (granWindowShapeHandle.info().max) + 1;
+                    granWindowShapeHandle.setPlainComplete (static_cast<float> ((juce::roundToInt (granWindowShapeHandle.plain()) + 1) % count));
+                }
+                windowTap = false;
+                break;
             case SampleMarker::slice:
             {
                 const int moved = draggedSlice;
@@ -886,11 +999,12 @@ void OscWaveView::paint (juce::Graphics& g)
     {
         const auto content = ctx.host.content();
         const ContentSample* sample = sampleOf (content, index);
+        const char* const kKinds[] = { "", "", "Granular ", "Spectral ", "" };
         if (sample == nullptr)
-            wtName = "Osc " + juce::String (index) + ": no sample (Load)";
+            wtName = "Osc " + juce::String (index) + ": " + kKinds[oscType()] + "no sample (Load)";
         else
         {
-            wtName = "Osc " + juce::String (index) + ": " + juce::String (sample->ref.name);
+            wtName = "Osc " + juce::String (index) + ": " + kKinds[oscType()] + juce::String (sample->ref.name);
             if (const auto prev = preview())
                 wtName << "  " << juce::String (prev->seconds(), 2) << " s";
         }
@@ -944,6 +1058,8 @@ void OscWaveView::paint (juce::Graphics& g)
         if (juce::Time::getMillisecondCounter() - sliceCacheMs > 500)
             refreshSliceCache();
         paintSample (g, area);
+        if (isGranular())
+            paintGranular (g, area);
     }
     else
         paintWavetable (g, area);
@@ -1374,6 +1490,58 @@ void OscWaveView::paintSample (juce::Graphics& g, juce::Rectangle<float> area)
 }
 
 // ---- OscNoiseView -----------------------------------------------------------------------------------------------------------------
+
+/** The granular overlay: the grains the settings spawn (bars across the region), the grain window thumbnail and, in manual mode, the X|Y dot. */
+void OscWaveView::paintGranular (juce::Graphics& g, juce::Rectangle<float> area)
+{
+    const auto& t = ctx.theme;
+    const Palette& c = t.colours;
+    g.saveState();
+    g.reduceClipRegion (area.toNearestInt());
+
+    for (const GrainMark& mark : grainMarks())
+    {
+        const float x = sampleNormToX (mark.position);
+        const float w = juce::jmax (t.px (2.0f), sampleNormToX (mark.position + mark.length) - x);
+        const float h = area.getHeight() * 0.5f * mark.height;
+        g.setColour (c.accent.withAlpha (0.35f));
+        g.fillRoundedRectangle (x, area.getCentreY() - h * 0.5f, w, h, t.px (2.0f));
+    }
+
+    // the window thumbnail
+    const auto thumb = windowThumbArea();
+    g.setColour (c.panel.withAlpha (0.85f));
+    g.fillRoundedRectangle (thumb, t.px (6.0f));
+    g.setColour (c.outline);
+    g.drawRoundedRectangle (thumb, t.px (6.0f), 1.0f);
+    {
+        const auto shape = static_cast<synthyboy::granular::WindowShape> (juce::jlimit (0, synthyboy::granular::kNumWindowShapes - 1, granWindowShapeHandle.valid() ? juce::roundToInt (granWindowShapeHandle.plain()) : 0));
+        const float amount = granWindowAmountHandle.valid() ? granWindowAmountHandle.normalised() : 0.5f;
+        const float skew = granWindowSkewHandle.valid() ? granWindowSkewHandle.normalised() * 2.0f - 1.0f : 0.0f;
+        const auto inner = thumb.reduced (t.px (6.0f));
+        juce::Path p;
+        const int steps = 40;
+        for (int i = 0; i <= steps; ++i)
+        {
+            const float w = synthyboy::granular::windowValue (shape, static_cast<float> (i) / steps, amount, skew);
+            const float x = inner.getX() + inner.getWidth() * static_cast<float> (i) / steps;
+            const float y = inner.getBottom() - inner.getHeight() * juce::jlimit (0.0f, 1.0f, w);
+            i == 0 ? p.startNewSubPath (x, y) : p.lineTo (x, y);
+        }
+        g.setColour (c.accent);
+        g.strokePath (p, juce::PathStrokeType (t.px (1.5f)));
+    }
+
+    // the X|Y dot of the manual mode
+    if (granManualHandle.valid() && granManualHandle.plain() > 0.5f)
+    {
+        const auto dot = xyDotPosition();
+        g.setColour (c.danger.withAlpha (0.9f));
+        g.drawLine (dot.x, area.getY(), dot.x, area.getBottom(), t.px (1.0f));
+        g.fillEllipse (dot.x - t.px (7.0f), dot.y - t.px (7.0f), t.px (14.0f), t.px (14.0f));
+    }
+    g.restoreState();
+}
 
 OscNoiseView::OscNoiseView (UiContext& context)
     : ctx (context),

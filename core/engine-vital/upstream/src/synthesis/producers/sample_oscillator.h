@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include "processor.h"
+#include "synthyboy/granular/granular.h"
 #include "synthyboy/sampleosc/sample_types.h"
 #include "synthyboy/sampleosc/sample_voice.h"
 
@@ -49,6 +50,24 @@ namespace sbvital {
     double bpm = 120.0;
     int quality = 2;                                        // 0 low, 1 medium, 2 high (interpolation of the sample voices)
     int max_unison = 16;
+
+    // GROUPC WP-11 (13-new-keys.md 4.37): the static keys of the granular oscillator (the modulatable ones are inputs of the processor)
+    struct Granular {
+      int window_shape = 0;                                 // synthyboy::granular::WindowShape
+      int density_mode = 0;                                 // 0 free (Hz), 1 BPM sync, 2 grains
+      int density_sync = 12;                                // index of kGrainDivisions
+      int density_grains = 8;
+      int length_mode = 0;                                  // 0 free (ms), 1 BPM sync, 2 percent of the density period
+      int length_sync = 12;
+      bool jump_start = true;
+      int max_grains = 64;
+      bool loop_grains = false;
+      bool manual = false;
+      bool scan_keytrack = false;
+      bool reverse_grains = false;
+      int spawn_pattern = 0;                                // 0 together, 1 even, 2 exp, 3 random
+      int y_axis = 0;                                       // 0 none, 1 level, 2 warp, 3 warp 2, 4 density, ... (kGrainYAxes)
+    } gran;
   };
 
   class SampleOscillator : public Processor {
@@ -82,6 +101,10 @@ namespace sbvital {
         kMidiTrack,        // oscN.pitch_track: 0 = the recorded pitch, whatever the key
         kPitchBendTrack,   // oscN.pitch_bend_track: 1 = the bend still moves an oscillator whose pitch tracking is off
         kSlice,            // GROUPB WP-05: oscN.sample.slice, -1 .. 1: slices added to the slice of the key in Play Single Slice mode
+        kType,             // GROUPC: oscN.type, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample (the module runs this processor for 1 .. 4)
+        // GROUPC WP-11 (4.37): the modulatable keys of the granular oscillator
+        kGranWindowAmount, kGranWindowSkew, kGranDensity, kGranLength, kGranLengthPercent, kGranPosition, kGranRandOffset, kGranRandDir, kGranRandPitch,
+        kGranRandLength, kGranRandPan, kGranRandLevel, kGranRandWindow, kGranRandSkew, kGranRandWarp, kGranRandWarp2, kGranXyY,
         kNumInputs
       };
 
@@ -116,6 +139,10 @@ namespace sbvital {
     private:
       struct Slot {
         synthyboy::sampleosc::SampleVoice voices[kMaxUnison];
+        synthyboy::granular::GranularVoice gvoices[kMaxUnison];      // GROUPC WP-11: one grain cloud per unison voice
+        int kind = 1;                                                // the oscillator type this slot's voices were started for
+        int old_kind = 0;                                            // GROUPC: the kind that fades out after a change of the type under a running note (0: none)
+        int fade_pos = 0, fade_len = 1;
         float start_random[kMaxUnison] = {};
         bool running = false;
         bool pressed = false;
@@ -127,7 +154,11 @@ namespace sbvital {
       };
 
       void noteOn(Slot& slot, int lane, int unison, int num_samples);
-      void renderSlot(Slot& slot, int slot_index, int unison, int num_samples, poly_float* raw);
+      void startKind(Slot& slot, int kind, int lane, int unison);
+      void stopKind(Slot& slot, int kind);
+      bool kindActive(const Slot& slot, int kind) const;
+      void renderSlot(Slot& slot, int kind, int slot_index, int unison, int num_samples, poly_float* raw, float ramp0, float ramp1);
+      void buildGrainParams(const Slot& slot, int lane, int unison, synthyboy::granular::GrainParams& gp, float& level, float* warp_amounts, bool tracks) const;
       uint32_t nextRandom() noexcept;
 
       const SampleOscShared* shared_;

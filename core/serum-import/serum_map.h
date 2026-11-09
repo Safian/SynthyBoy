@@ -54,7 +54,7 @@ const Rule* rulesOf (const char* scope, size_t& count) noexcept;
 /** Value of `rule` applied to the number `v`. */
 double convert (const Rule& rule, double v) noexcept;
 
-extern const EnumTable kWarpEnum, kOscTypeEnum, kLoopEnum, kUnisonStackEnum, kDetuneModeEnum, kPhaseMemoryEnum, kSubShapeEnum, kNoiseTypeEnum, kFilterRoutingEnum,
+extern const EnumTable kGrainWindowEnum, kSpawnPatternEnum, kYAxisEnum, kWarpEnum, kOscTypeEnum, kLoopEnum, kUnisonStackEnum, kDetuneModeEnum, kPhaseMemoryEnum, kSubShapeEnum, kNoiseTypeEnum, kFilterRoutingEnum,
     kPitchModeEnum, kSlicingEnum, kFxDistortionEnum, kReverbTypeEnum, kRoutingDestEnum;
 
 /** The filter type string of a VoiceFilter / FXFilter ("MgL24") -> our (model, style); false for a name the table does not know. `fid` is the fidelity. */

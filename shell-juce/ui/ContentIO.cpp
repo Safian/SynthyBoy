@@ -470,7 +470,7 @@ SerumFlowResult importSerumFile (UiContext& ctx, const juce::File& file, int lfo
             hint = utf8 (dir.getFileName());
             break;
         }
-    result.imported = importSerumFileForPlugin (utf8 (file.getFileName()), bytes, *library, ctx.host.engineCaps(), root.empty() ? nullptr : &resolver, hint);
+    result.imported = importSerumFileForPlugin (utf8 (file.getFileName()), bytes, *library, ctx.host.engineCaps(), root.empty() ? nullptr : &resolver, hint, ctx.host.engineCaps2());
     const SerumPluginImport& in = result.imported;
     if (! in.ok)
     {

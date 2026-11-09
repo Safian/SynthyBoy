@@ -622,7 +622,7 @@ public:
     bool supportsParam (uint32_t id) const noexcept override
     {
         const int i = findParamIndex (id);
-        return i >= 0 && capsCover (capabilities(), requiredCaps (static_cast<size_t> (i))); // the keys of state version 3 need their capability bits
+        return i >= 0 && capsCover (capabilities(), requiredCaps (static_cast<size_t> (i))) && capsCover2 (capabilities2(), requiredCaps2 (static_cast<size_t> (i))); // the keys of state version 3 need their capability bits
     }
 
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override
@@ -676,6 +676,11 @@ public:
         activeCount.store (engine->getNumActiveVoices(), std::memory_order_relaxed);
         latencyCache.store (engine->latencyFrames(), std::memory_order_relaxed);
         updateReadout();
+    }
+
+    EngineCaps2Mask capabilities2() const noexcept override
+    {
+        return kCap2Granular; // GROUPC WP-11 (B28): proven by core/engine-vital/tests/test_granular_osc.cpp
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -1093,7 +1098,9 @@ private:
             static const char* const names[kSpCount] = { "type", "sample.start", "sample.end", "sample.root", "sample.keytrack", "sample.loop_mode",
                 "sample.loop_start", "sample.loop_end", "sample.loop_xfade", "sample.loop_relative", "sample.loop_exit", "sample.fade_edges",
                 "sample.normalize", "sample.reverse", "sample.slice_mode", "sample.slice_threshold", "sample.slice_play", "sample.slice_root",
-                "sample.scan_range", "sample.scan_reverse", "sample.scan_lock_tempo", "sample.scan_to_bpm", "sample.length_beats" };
+                "sample.scan_range", "sample.scan_reverse", "sample.scan_lock_tempo", "sample.scan_to_bpm", "sample.length_beats",
+                "gran.window_shape", "gran.density_mode", "gran.density_sync", "gran.density_grains", "gran.length_mode", "gran.length_sync", "gran.jump_start",
+                "gran.max_grains", "gran.loop_grains", "gran.manual", "gran.scan_keytrack", "gran.reverse_grains", "gran.spawn_pattern", "gran.y_axis" };
             for (int n = 1; n <= kNumOsc; ++n)
             {
                 const std::string k = "osc" + std::to_string (n) + ".";
@@ -1749,6 +1756,24 @@ private:
             sh->bpm = transport.bpm;
             sh->quality = qOversampling.load (std::memory_order_relaxed) < 2 ? 0 : (quality.interpolation == Interpolation::spectral ? 2 : 1);
             sh->max_unison = quality.maxUnison;
+            {
+                auto& g = sh->gran;
+                const auto I = [&] (int what) { return static_cast<int> (P (what) + 0.5f); };
+                g.window_shape = I (kSpGranWindowShape);
+                g.density_mode = I (kSpGranDensityMode);
+                g.density_sync = I (kSpGranDensitySync);
+                g.density_grains = I (kSpGranDensityGrains);
+                g.length_mode = I (kSpGranLengthMode);
+                g.length_sync = I (kSpGranLengthSync);
+                g.jump_start = P (kSpGranJumpStart) > 0.5f;
+                g.max_grains = I (kSpGranMaxGrains);
+                g.loop_grains = P (kSpGranLoopGrains) > 0.5f;
+                g.manual = P (kSpGranManual) > 0.5f;
+                g.scan_keytrack = P (kSpGranScanKeytrack) > 0.5f;
+                g.reverse_grains = P (kSpGranReverseGrains) > 0.5f;
+                g.spawn_pattern = I (kSpGranSpawnPattern);
+                g.y_axis = I (kSpGranYAxis);
+            }
 
             // the slice list: auto = the onsets of the file stronger than the threshold, manual = the positions of the content
             const float threshold = P (kSpSliceThreshold);
@@ -2760,7 +2785,10 @@ private:
     std::array<std::array<int, 2>, kNumOsc> frameParams { { { { -1, -1 } }, { { -1, -1 } }, { { -1, -1 } } } };
     enum { kSpType, kSpStart, kSpEnd, kSpRoot, kSpKeytrack, kSpLoopMode, kSpLoopStart, kSpLoopEnd, kSpLoopXfade, kSpLoopRelative, kSpLoopExit,
            kSpFadeEdges, kSpNormalize, kSpReverse, kSpSliceMode, kSpSliceThreshold, kSpSlicePlay, kSpSliceRoot, kSpScanRange, kSpScanReverse,
-           kSpScanLock, kSpScanToBpm, kSpLengthBeats, kSpCount };
+           kSpScanLock, kSpScanToBpm, kSpLengthBeats,
+           // GROUPC WP-11: the static keys of the granular oscillator
+           kSpGranWindowShape, kSpGranDensityMode, kSpGranDensitySync, kSpGranDensityGrains, kSpGranLengthMode, kSpGranLengthSync, kSpGranJumpStart,
+           kSpGranMaxGrains, kSpGranLoopGrains, kSpGranManual, kSpGranScanKeytrack, kSpGranReverseGrains, kSpGranSpawnPattern, kSpGranYAxis, kSpCount };
     std::array<std::array<int, kSpCount>, kNumOsc> sampleParams {};
     std::array<sbvital::SampleOscShared*, kNumOsc> sampleShared {};
     std::array<sbvital::FilterCurveShared*, 3> curveShared {};

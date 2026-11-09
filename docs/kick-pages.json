@@ -3659,6 +3659,153 @@
         {"key": "voicectl.s7.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
         {"key": "voicectl.s8.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"}
       ]
+    },
+    {
+      "id": "osc1_gran_1",
+      "section": "Osc",
+      "title": "Osc 1 Granular",
+      "knobs": [
+        {"key": "osc1.gran.density", "shortLabel": "Grain Dens", "widget": "knob"},
+        {"key": "osc1.gran.length", "shortLabel": "Grain Leng", "widget": "knob"},
+        {"key": "osc1.gran.window_amount", "shortLabel": "Grain Wind", "widget": "knob"},
+        {"key": "osc1.gran.window_skew", "shortLabel": "Grain Wind", "widget": "bipolar_knob"},
+        {"key": "osc1.gran.window_shape", "shortLabel": "Grain Wind", "widget": "stepped"},
+        {"key": "osc1.gran.position", "shortLabel": "Grain Posi", "widget": "knob"},
+        {"key": "osc1.gran.manual", "shortLabel": "Grain Manu", "widget": "stepped"},
+        {"key": "osc1.gran.jump_start", "shortLabel": "Grain Jump", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc1.gran.density_mode",
+        "osc1.gran.density_sync",
+        "osc1.gran.density_grains",
+        "osc1.gran.length_mode",
+        "osc1.gran.length_sync",
+        "osc1.gran.length_percent",
+        "osc1.gran.max_grains",
+        "osc1.gran.loop_grains",
+        "osc1.gran.scan_keytrack"
+      ]
+    },
+    {
+      "id": "osc1_gran_2",
+      "section": "Osc",
+      "title": "Osc 1 Grain Random",
+      "knobs": [
+        {"key": "osc1.gran.rand_offset", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc1.gran.rand_dir", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc1.gran.rand_pitch", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc1.gran.rand_length", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc1.gran.rand_pan", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc1.gran.rand_level", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc1.gran.rand_window", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc1.gran.rand_skew", "shortLabel": "Grain Rand", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "osc1.gran.rand_warp",
+        "osc1.gran.rand_warp2",
+        "osc1.gran.reverse_grains",
+        "osc1.gran.spawn_pattern",
+        "osc1.gran.y_axis",
+        "osc1.gran.xy_y"
+      ]
+    },
+    {
+      "id": "osc2_gran_1",
+      "section": "Osc",
+      "title": "Osc 2 Granular",
+      "knobs": [
+        {"key": "osc2.gran.density", "shortLabel": "Grain Dens", "widget": "knob"},
+        {"key": "osc2.gran.length", "shortLabel": "Grain Leng", "widget": "knob"},
+        {"key": "osc2.gran.window_amount", "shortLabel": "Grain Wind", "widget": "knob"},
+        {"key": "osc2.gran.window_skew", "shortLabel": "Grain Wind", "widget": "bipolar_knob"},
+        {"key": "osc2.gran.window_shape", "shortLabel": "Grain Wind", "widget": "stepped"},
+        {"key": "osc2.gran.position", "shortLabel": "Grain Posi", "widget": "knob"},
+        {"key": "osc2.gran.manual", "shortLabel": "Grain Manu", "widget": "stepped"},
+        {"key": "osc2.gran.jump_start", "shortLabel": "Grain Jump", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc2.gran.density_mode",
+        "osc2.gran.density_sync",
+        "osc2.gran.density_grains",
+        "osc2.gran.length_mode",
+        "osc2.gran.length_sync",
+        "osc2.gran.length_percent",
+        "osc2.gran.max_grains",
+        "osc2.gran.loop_grains",
+        "osc2.gran.scan_keytrack"
+      ]
+    },
+    {
+      "id": "osc2_gran_2",
+      "section": "Osc",
+      "title": "Osc 2 Grain Random",
+      "knobs": [
+        {"key": "osc2.gran.rand_offset", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc2.gran.rand_dir", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc2.gran.rand_pitch", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc2.gran.rand_length", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc2.gran.rand_pan", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc2.gran.rand_level", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc2.gran.rand_window", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc2.gran.rand_skew", "shortLabel": "Grain Rand", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "osc2.gran.rand_warp",
+        "osc2.gran.rand_warp2",
+        "osc2.gran.reverse_grains",
+        "osc2.gran.spawn_pattern",
+        "osc2.gran.y_axis",
+        "osc2.gran.xy_y"
+      ]
+    },
+    {
+      "id": "osc3_gran_1",
+      "section": "Osc",
+      "title": "Osc 3 Granular",
+      "knobs": [
+        {"key": "osc3.gran.density", "shortLabel": "Grain Dens", "widget": "knob"},
+        {"key": "osc3.gran.length", "shortLabel": "Grain Leng", "widget": "knob"},
+        {"key": "osc3.gran.window_amount", "shortLabel": "Grain Wind", "widget": "knob"},
+        {"key": "osc3.gran.window_skew", "shortLabel": "Grain Wind", "widget": "bipolar_knob"},
+        {"key": "osc3.gran.window_shape", "shortLabel": "Grain Wind", "widget": "stepped"},
+        {"key": "osc3.gran.position", "shortLabel": "Grain Posi", "widget": "knob"},
+        {"key": "osc3.gran.manual", "shortLabel": "Grain Manu", "widget": "stepped"},
+        {"key": "osc3.gran.jump_start", "shortLabel": "Grain Jump", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc3.gran.density_mode",
+        "osc3.gran.density_sync",
+        "osc3.gran.density_grains",
+        "osc3.gran.length_mode",
+        "osc3.gran.length_sync",
+        "osc3.gran.length_percent",
+        "osc3.gran.max_grains",
+        "osc3.gran.loop_grains",
+        "osc3.gran.scan_keytrack"
+      ]
+    },
+    {
+      "id": "osc3_gran_2",
+      "section": "Osc",
+      "title": "Osc 3 Grain Random",
+      "knobs": [
+        {"key": "osc3.gran.rand_offset", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc3.gran.rand_dir", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc3.gran.rand_pitch", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc3.gran.rand_length", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc3.gran.rand_pan", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc3.gran.rand_level", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc3.gran.rand_window", "shortLabel": "Grain Rand", "widget": "knob"},
+        {"key": "osc3.gran.rand_skew", "shortLabel": "Grain Rand", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "osc3.gran.rand_warp",
+        "osc3.gran.rand_warp2",
+        "osc3.gran.reverse_grains",
+        "osc3.gran.spawn_pattern",
+        "osc3.gran.y_axis",
+        "osc3.gran.xy_y"
+      ]
     }
   ]
 }

@@ -93,6 +93,28 @@ constexpr const char* s_more_osc3_sample_2[] = {
     "osc3.sample.slice" // B27
 };
 
+constexpr const char* s_more_osc1_gran_1[] = {
+    "osc1.gran.density_mode", "osc1.gran.density_sync", "osc1.gran.density_grains", "osc1.gran.length_mode", "osc1.gran.length_sync",
+    "osc1.gran.length_percent", "osc1.gran.max_grains", "osc1.gran.loop_grains", "osc1.gran.scan_keytrack"
+};
+constexpr const char* s_more_osc1_gran_2[] = {
+    "osc1.gran.rand_warp", "osc1.gran.rand_warp2", "osc1.gran.reverse_grains", "osc1.gran.spawn_pattern", "osc1.gran.y_axis", "osc1.gran.xy_y"
+};
+constexpr const char* s_more_osc2_gran_1[] = {
+    "osc2.gran.density_mode", "osc2.gran.density_sync", "osc2.gran.density_grains", "osc2.gran.length_mode", "osc2.gran.length_sync",
+    "osc2.gran.length_percent", "osc2.gran.max_grains", "osc2.gran.loop_grains", "osc2.gran.scan_keytrack"
+};
+constexpr const char* s_more_osc2_gran_2[] = {
+    "osc2.gran.rand_warp", "osc2.gran.rand_warp2", "osc2.gran.reverse_grains", "osc2.gran.spawn_pattern", "osc2.gran.y_axis", "osc2.gran.xy_y"
+};
+constexpr const char* s_more_osc3_gran_1[] = {
+    "osc3.gran.density_mode", "osc3.gran.density_sync", "osc3.gran.density_grains", "osc3.gran.length_mode", "osc3.gran.length_sync",
+    "osc3.gran.length_percent", "osc3.gran.max_grains", "osc3.gran.loop_grains", "osc3.gran.scan_keytrack"
+};
+constexpr const char* s_more_osc3_gran_2[] = {
+    "osc3.gran.rand_warp", "osc3.gran.rand_warp2", "osc3.gran.reverse_grains", "osc3.gran.spawn_pattern", "osc3.gran.y_axis", "osc3.gran.xy_y"
+};
+
 constexpr const char* s_more_osc1_pitch_uni[] = {
     "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory",
     "osc1.ratio_src", "osc1.smooth_interp" // B27
@@ -506,7 +528,14 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Voice control, the Mod 1 of the eight steps (block B26)
     { "voicectl_mod1", "Voice Control Mod 1", "Master", { "voicectl.s1.mod1", "voicectl.s2.mod1", "voicectl.s3.mod1", "voicectl.s4.mod1", "voicectl.s5.mod1", "voicectl.s6.mod1", "voicectl.s7.mod1", "voicectl.s8.mod1" }, 8, nullptr, 0 },
     // Voice control, the Mod 2 of the eight steps (block B26)
-    { "voicectl_mod2", "Voice Control Mod 2", "Master", { "voicectl.s1.mod2", "voicectl.s2.mod2", "voicectl.s3.mod2", "voicectl.s4.mod2", "voicectl.s5.mod2", "voicectl.s6.mod2", "voicectl.s7.mod2", "voicectl.s8.mod2" }, 8, nullptr, 0 }
+    { "voicectl_mod2", "Voice Control Mod 2", "Master", { "voicectl.s1.mod2", "voicectl.s2.mod2", "voicectl.s3.mod2", "voicectl.s4.mod2", "voicectl.s5.mod2", "voicectl.s6.mod2", "voicectl.s7.mod2", "voicectl.s8.mod2" }, 8, nullptr, 0 },
+    // Granular, block B28 (GROUPC WP-11; 13-new-keys.md 4.37): pages 144 - 149
+    { "osc1_gran_1", "Osc 1 Granular", "Osc", { "osc1.gran.density", "osc1.gran.length", "osc1.gran.window_amount", "osc1.gran.window_skew", "osc1.gran.window_shape", "osc1.gran.position", "osc1.gran.manual", "osc1.gran.jump_start" }, 8, s_more_osc1_gran_1, 9 },
+    { "osc1_gran_2", "Osc 1 Grain Random", "Osc", { "osc1.gran.rand_offset", "osc1.gran.rand_dir", "osc1.gran.rand_pitch", "osc1.gran.rand_length", "osc1.gran.rand_pan", "osc1.gran.rand_level", "osc1.gran.rand_window", "osc1.gran.rand_skew" }, 8, s_more_osc1_gran_2, 6 },
+    { "osc2_gran_1", "Osc 2 Granular", "Osc", { "osc2.gran.density", "osc2.gran.length", "osc2.gran.window_amount", "osc2.gran.window_skew", "osc2.gran.window_shape", "osc2.gran.position", "osc2.gran.manual", "osc2.gran.jump_start" }, 8, s_more_osc2_gran_1, 9 },
+    { "osc2_gran_2", "Osc 2 Grain Random", "Osc", { "osc2.gran.rand_offset", "osc2.gran.rand_dir", "osc2.gran.rand_pitch", "osc2.gran.rand_length", "osc2.gran.rand_pan", "osc2.gran.rand_level", "osc2.gran.rand_window", "osc2.gran.rand_skew" }, 8, s_more_osc2_gran_2, 6 },
+    { "osc3_gran_1", "Osc 3 Granular", "Osc", { "osc3.gran.density", "osc3.gran.length", "osc3.gran.window_amount", "osc3.gran.window_skew", "osc3.gran.window_shape", "osc3.gran.position", "osc3.gran.manual", "osc3.gran.jump_start" }, 8, s_more_osc3_gran_1, 9 },
+    { "osc3_gran_2", "Osc 3 Grain Random", "Osc", { "osc3.gran.rand_offset", "osc3.gran.rand_dir", "osc3.gran.rand_pitch", "osc3.gran.rand_length", "osc3.gran.rand_pan", "osc3.gran.rand_level", "osc3.gran.rand_window", "osc3.gran.rand_skew" }, 8, s_more_osc3_gran_2, 6 }
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

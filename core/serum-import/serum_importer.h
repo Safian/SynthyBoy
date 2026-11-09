@@ -107,6 +107,8 @@ public:
     // ---- sections ----
     void meta();
     void oscillator (int i);
+    /** GROUPC WP-11: the density and the grain length of a granular block (value + mode -> mode, Hz / division / count, ms / division / percent). */
+    void granularRates (int n, int plain, const std::string& area, const std::string& path);
     void noiseOsc();
     void subOsc();
     void routing();

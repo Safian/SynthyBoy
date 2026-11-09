@@ -213,6 +213,13 @@ PHASEMEM = {'kAll': 0, 'kContiguous': 1, 'kPerVoice': 2}
 SUBSHAPE = {'kSine': 0, 'kRoundRect': 1, 'kTriangle': 2, 'kSaw': 3, 'kSquare': 4, 'kPulse': 5}
 DISTORTION = {'kTube': 6, 'kSoftClip': 0, 'kHardClip': 1, 'kDiode1': 7, 'kDiode2': 8, 'kLinFold': 2, 'kSinFold': 3, 'kZeroSquare': 9, 'kDownsample': 5, 'kAsym': 10,
               'kRectify': 11, 'kXShaper': 12, 'kXShaperAsym': 13, 'kSineShaper': 3, 'kStompBox': 6, 'kTapeSat': 0, 'kOverdrive': 0, 'kSoftSat': 0}
+# GROUPC WP-11 (A412 .. A418): the granular oscillator (13-new-keys.md 4.37)
+GRAIN_WINDOW = {'kWindowHann': 0, 'kWindowWelch': 1, 'kWindowGaussian': 2, 'kWindowBlackmanHarris': 3, 'kWindowSinc': 4, 'kWindowTukey': 5, 'kWindowTriangle': 6, 'kWindowTrapezoid': 7,
+                'kWindowExpDec': 8, 'kWindowExpDecRev': 9, 'kWindowExpDecReverse': 9}
+SPAWN = {'kTogether': 0, 'kEven': 1, 'kExponential': 2, 'kRandom': 3}
+YAXIS = {'kYAxisNone': 0, 'kYAxisOscVolume': 1, 'kYAxisWarp': 2, 'kYAxisWarp2': 3, 'kYAxisDensity': 4, 'kYAxisGrainLength': 5, 'kYAxisWindowAmount': 6, 'kYAxisWindowSkew': 7,
+         'kYAxisRandomOffset': 8, 'kYAxisRandomDir': 9, 'kYAxisRandomPitch': 10, 'kYAxisRandomGrainLength': 11, 'kYAxisRandomPan': 12, 'kYAxisRandomGain': 13,
+         'kYAxisRandomWindowAmount': 14, 'kYAxisRandomWindowSkew': 15, 'kYAxisRandomWarp': 16, 'kYAxisRandomWarp2': 17}
 REVERB = {'kPlate': 1, 'kHall': 2, 'kVintage': 3, 'kSpace': 4, 'kAbyss': 5}
 
 OSC = {
@@ -231,6 +238,11 @@ OSC = {
     'kParamScanTempoLock': ('osc#.sample.scan_lock_tempo', boolean)}
 WARPKEYS = {'kParamWarp': ('osc#.warp.amount', lin(100)), 'kParamWarp2': ('osc#.warp2.amount', lin(100)), 'kParamWarpVar': ('osc#.warp.phase', lin(360)),
             'kParamWarpVar2': ('osc#.warp2.phase', lin(360)), 'kParamWarpMenu': ('osc#.warp.type', WARP), 'kParamWarpMenu2': ('osc#.warp2.type', WARP)}
+GRAN = {'kParamWindowParam': ('osc#.gran.window_amount', lin(1)), 'kParamWindowSkew': ('osc#.gran.window_skew', lin(1)), 'kParamWindowShape': ('osc#.gran.window_shape', GRAIN_WINDOW),
+        'kParamUnisonTrigPattern': ('osc#.gran.spawn_pattern', SPAWN), 'kParamYAxisAssignment': ('osc#.gran.y_axis', YAXIS), 'kParamRandomOffset': ('osc#.gran.rand_offset', lin(1)),
+        'kParamRandomDir': ('osc#.gran.rand_dir', lin(1)), 'kParamRandomPitch': ('osc#.gran.rand_pitch', lin(1)), 'kParamRandomGrainLength': ('osc#.gran.rand_length', lin(1)),
+        'kParamRandomPan': ('osc#.gran.rand_pan', lin(1)), 'kParamRandomGain': ('osc#.gran.rand_level', lin(1)), 'kParamRandomWindowAmount': ('osc#.gran.rand_window', lin(1)),
+        'kParamRandomWindowSkew': ('osc#.gran.rand_skew', lin(1)), 'kParamRandomWarp': ('osc#.gran.rand_warp', lin(1)), 'kParamRandomWarp2': ('osc#.gran.rand_warp2', lin(1))}
 WT = {'kParamInitialPhase': ('osc#.phase', lin(1)), 'kParamRandomPhase': ('osc#.random_phase', lin(1)), 'kParamUnisonWTPos': ('osc#.frame_spread', lin(1)),
       'kParamPhaseMemory': ('osc#.phase_memory', PHASEMEM)}
 NOISE = {'kParamVolume': ('noise.level', lin(100)), 'kParamPan': ('noise.pan', lin(2)), 'kParamEnable': ('noise.on', boolean), 'kParamPitch': ('noise.pitch', lin(1))}
@@ -376,6 +388,8 @@ class Audit:
                     table = dict(WARPKEYS)
                     if blk.startswith('WTOsc'):
                         table.update(WT)
+                    if blk.startswith('GranularOsc'):
+                        table.update(GRAN)
                     if blk.startswith('MultiSampleOsc'):
                         table.update({'kParamRandomPhase': ('osc#.random_phase', lin(1))})
                     return table, idx + 1, parts[3]
@@ -536,7 +550,7 @@ class Audit:
                 continue
             if k in explained or k.startswith(fx_prefixes) or k.startswith(mod_prefixes):
                 continue
-            if re.match(r'(fx\.order\.\d+|splitter_(lh|lmh|ms)\.(on|rack|freq|freq_low|freq_high|low_bypass|mid_bypass|high_bypass|high_bypass)|osc\d\.sample\.(root|scan_range|scan)|osc\d\.tune|master\.polyphony|osc\d\.pitch_coarse)$', k):
+            if re.match(r'(fx\.order\.\d+|splitter_(lh|lmh|ms)\.(on|rack|freq|freq_low|freq_high|low_bypass|mid_bypass|high_bypass|high_bypass)|osc\d\.sample\.(root|scan_range|scan)|osc\d\.gran\.(density_mode|density|density_sync|density_grains|length_mode|length|length_sync|length_percent|manual|position)|osc\d\.tune|master\.polyphony|osc\d\.pitch_coarse)$', k):
                 continue
             if self.default_rule(k, tree, v):
                 continue
@@ -547,6 +561,7 @@ class Audit:
         self.audit_content(name, tree, sb, content_dir)
         self.audit_noise(name, tree, sb)
         self.audit_osc_extras(name, tree, sb)
+        self.audit_granular(name, tree, sb)
         self.audit_mod_slew(name, tree, sb)
         self.audit_voice_panel(name, tree, sb)
         self.audit_midi_map(name, tree, report)
@@ -712,6 +727,54 @@ class Audit:
             got = params.get('osc%d.smooth_interp' % (i + 1), 0)
             if got != smooth:
                 self.err(name, 'osc%d.smooth_interp: expected %d got %s' % (i + 1, smooth, got))
+
+    @staticmethod
+    def nearest_division(beats):
+        """the entry of oscN.gran.density_sync / length_sync (3 per division 1/1 .. 1/128: straight, triplet, dotted) nearest to `beats` on a log scale."""
+        best, err = 12, 1e9
+        for i in range(24):
+            b = 4.0 / (1 << (i // 3)) * (1.0, 2.0 / 3.0, 1.5)[i % 3]
+            e = abs(math.log2(max(1e-6, beats) / b))
+            if e < err:
+                best, err = i, e
+        return best
+
+    def audit_granular(self, name, tree, sb):
+        """GROUPC WP-11 (A412 .. A418): type Granular (2); the block rows are in GRAN; here the value + mode pairs: density (Free = Hz, BPM = beats -> nearest division, Grains = count) and
+        grain length (Free = seconds -> ms, BPM = beats -> nearest division, Percent = a multiple of the density period -> percent; no mode in the file = Percent); the play head of
+        the common block: kParamManualPositionMode and kParamPosition."""
+        params = sb['state']['params']
+        for i in range(3):
+            n = i + 1
+            o = tree.get('Oscillator%d' % i)
+            pp = o.get('plainParams') if isinstance(o, dict) and isinstance(o.get('plainParams'), dict) else {}
+            if pp.get('kParamType') != 'kOsc_Granular':
+                if params.get('osc%d.type' % n) == 2:
+                    self.err(name, 'osc%d.type is Granular but the file says %s' % (n, pp.get('kParamType', 'kOsc_WT')))
+                continue
+            self.stats['granular oscillators'] += 1
+            if params.get('osc%d.type' % n) != 2:
+                self.err(name, 'osc%d.type: expected 2 (Granular) got %s' % (n, params.get('osc%d.type' % n)))
+            blk = o.get('GranularOsc%d' % i)
+            bp = blk.get('plainParams') if isinstance(blk, dict) and isinstance(blk.get('plainParams'), dict) else {}
+            md, dv = bp.get('kParamDensityMode'), bp.get('kParamDensity')
+            dm = 1 if isinstance(md, str) and 'BPM' in md else (2 if isinstance(md, str) and 'Grain' in md else 0)
+            if md is not None or dv is not None:
+                self.check_value(name, None, sb, 'osc%d.gran.density_mode' % n, dm, 'kParamDensityMode')
+            if isinstance(dv, (int, float)):
+                key, val = (('density', dv), ('density_sync', self.nearest_division(dv)), ('density_grains', round(dv)))[dm]
+                self.check_value(name, None, sb, 'osc%d.gran.%s' % (n, key), val, 'kParamDensity')
+            ml, lv = bp.get('kParamLengthMode'), bp.get('kParamGrainLength')
+            lm = 1 if isinstance(ml, str) and 'BPM' in ml else (3 if ml is None or (isinstance(ml, str) and 'Percent' in ml) else 0)
+            if ml is not None or lv is not None:
+                self.check_value(name, None, sb, 'osc%d.gran.length_mode' % n, {0: 0, 1: 1, 3: 2}[lm], 'kParamLengthMode')
+            if isinstance(lv, (int, float)):
+                key, val = {0: ('length', lv * 1000.0), 1: ('length_sync', self.nearest_division(lv)), 3: ('length_percent', lv * 100.0)}[lm]
+                self.check_value(name, None, sb, 'osc%d.gran.%s' % (n, key), val, 'kParamGrainLength')
+            if isinstance(pp.get('kParamManualPositionMode'), (int, float)):
+                self.check_value(name, None, sb, 'osc%d.gran.manual' % n, 1.0 if pp['kParamManualPositionMode'] >= 0.5 else 0.0, 'kParamManualPositionMode')
+            if isinstance(pp.get('kParamPosition'), (int, float)):
+                self.check_value(name, None, sb, 'osc%d.gran.position' % n, pp['kParamPosition'], 'kParamPosition')
 
     SERUM_DEFAULTS = [(r'osc(\d)\.on$', lambda m: 1.0 if m.group(1) == '1' else 0.0), (r'(noise|sub)\.on$', lambda m: 0.0), (r'filter\d\.on$', lambda m: 0.0),
                       (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.spread$', lambda m: 100.0),
@@ -918,6 +981,31 @@ def main():
             print('selftest: mutation of %-18s %s' % (key, 'found' if found else 'NOT FOUND'))
             if not found:
                 mutation_ok = False
+    if a.selftest:
+        # GROUPC: the granular keys are found as well (a preset with a granular oscillator that has a density, a grain length and a window)
+        for rel, src, rep, sb in pairs:
+            _h, tree = load_serum(src)
+            for i in range(3):
+                o = tree.get('Oscillator%d' % i)
+                pp = o.get('plainParams') if isinstance(o, dict) and isinstance(o.get('plainParams'), dict) else {}
+                blk = o.get('GranularOsc%d' % i) if isinstance(o, dict) else None
+                bp = blk.get('plainParams') if isinstance(blk, dict) and isinstance(blk.get('plainParams'), dict) else {}
+                if pp.get('kParamType') == 'kOsc_Granular' and 'kParamDensity' in bp and 'kParamGrainLength' in bp:
+                    report = json.load(open(rep))
+                    preset = json.load(open(sb))
+                    for key in ('osc%d.type' % (i + 1), 'osc%d.gran.density' % (i + 1), 'osc%d.gran.length_percent' % (i + 1), 'osc%d.gran.window_amount' % (i + 1)):
+                        bad = json.loads(json.dumps({'state': preset['state']}))
+                        bad['state']['params'][key] = bad['state']['params'].get(key, 0.0) + 1.5
+                        t = Audit(False)
+                        t.audit_file(rel, src, report, bad, content_dir)
+                        found = any(key in e for e in t.errors)
+                        print('selftest: mutation of %-22s %s' % (key, 'found' if found else 'NOT FOUND'))
+                        if not found:
+                            mutation_ok = False
+                    break
+            else:
+                continue
+            break
     print('audited %d files; %s' % (audit.stats['files'], ', '.join('%s %d' % (k, v) for k, v in sorted(audit.stats.items()) if k != 'files')))
     for e in audit.errors[:60]:
         print('ERROR', e)
