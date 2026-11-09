@@ -63,6 +63,12 @@ SynthyBoyProcessor::SynthyBoyProcessor()
 
     // Save as Default (G02): a new instance starts from the user's default patch when there is one (the host's state, if any, replaces it)
     userDir = synthyboy::userDataDirectory();
+
+    // the content pipeline (WP-01): the store is set before any content reaches the engine; every document load (applyPatch) then decodes its
+    // references against it
+    contentStore = std::make_unique<synthyboy::UserContentStore> (userDir);
+    itemLibrary = std::make_unique<synthyboy::UserLibrary> (userDir);
+    engine->setContentStore (contentStore.get());
     auto values = synthyboy::ParamValues::defaults();
     synthyboy::StateContent defaultContent;
     synthyboy::ShellState defaultShell;
@@ -74,6 +80,13 @@ SynthyBoyProcessor::SynthyBoyProcessor()
         savedValues = currentValues();
         savedContent = patchContent;
     }
+}
+
+SynthyBoyProcessor::~SynthyBoyProcessor()
+{
+    stopTimer();
+    if (engine != nullptr)
+        engine->setContentStore (nullptr);
 }
 
 namespace
@@ -485,6 +498,7 @@ void SynthyBoyProcessor::applyPatch (synthyboy::ParamValues values, synthyboy::S
         if (engine != nullptr)
             engine->setContent (patchContent); // message thread: allocates, handed to the audio thread lock free
     }
+    contentRev.fetch_add (1, std::memory_order_relaxed); // a whole document arrived: the editor checks it for missing files
 }
 
 void SynthyBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -656,6 +670,33 @@ bool SynthyBoyProcessor::loadPatch (const synthyboy::ParamValues& values, const 
         return false;
     applyPatch (values, newContent, true);
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
+    return true;
+}
+
+bool SynthyBoyProcessor::requestFile (const synthyboy::ui::FileRequest& request, std::function<void (const juce::File&)> done)
+{
+    if (fileRequestHandler)
+        return fileRequestHandler (request, std::move (done));
+    if (! done)
+        return false;
+    // the last folder per purpose is remembered for the session
+    static std::map<juce::String, juce::File> lastFolder;
+    const bool save = request.mode == synthyboy::ui::FileRequest::Mode::save;
+    juce::File start = lastFolder.count (request.purpose) != 0 ? lastFolder[request.purpose] : juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
+    if (save && request.suggestedName.isNotEmpty())
+        start = start.getChildFile (request.suggestedName);
+    fileChooser = std::make_unique<juce::FileChooser> (request.title, start, request.wildcards);
+    const auto flags = save ? juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting
+                            : juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+    const juce::String purpose = request.purpose;
+    fileChooser->launchAsync (flags, [purpose, save, callback = std::move (done)] (const juce::FileChooser& chooser)
+    {
+        const auto file = chooser.getResult();
+        if (file == juce::File() || (! save && ! file.existsAsFile()))
+            return;
+        lastFolder[purpose] = file.getParentDirectory();
+        callback (file);
+    });
     return true;
 }
 

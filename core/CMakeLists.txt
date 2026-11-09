@@ -17,6 +17,8 @@ add_library(synthyboy_core STATIC
     src/preset.cpp
     src/content_pack.cpp
     src/content_store.cpp
+    src/user_content.cpp
+    src/user_library.cpp
     src/kick_pages.cpp
     src/shell_features.cpp
     engine-own/own_engine.cpp)
@@ -75,3 +77,5 @@ add_subdirectory(fx-serum-a)
 add_subdirectory(fx-serum-b)
 
 add_subdirectory(sample-osc)
+# the user content library decodes WAV files with the sample oscillator's reader (also in the own-engine-only build)
+target_link_libraries(synthyboy_core PUBLIC synthyboy_sampleosc)

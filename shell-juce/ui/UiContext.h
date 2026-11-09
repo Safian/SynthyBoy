@@ -66,12 +66,15 @@ private:
     juce::String statusMessage;
 };
 
+class ContentCache;
+
 /** Editor-wide view state that panels share (which tab of a tabbed page is shown). Message thread. */
 struct ViewState
 {
     int lfoTab = 0; // LfoTabsPanel: 0..9 = LFO 1..10, 10..13 = random LFO 1..4
     int oscTab = 0; // OscTabsPanel: 0..2 = oscillator 1..3
     int envTab = 0; // EnvelopePanel tabs E1..E6: 0..5
+    std::shared_ptr<ContentCache> contentCache; // decoded samples / tables of the content library for the views (ContentIO.h), made on first use
 };
 
 /** What a control or panel gets: the host, the theme, the assign controller. Lives as long as the editor. */

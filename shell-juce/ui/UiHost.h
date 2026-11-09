@@ -10,15 +10,29 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 
+#include <functional>
 #include <string>
 
 #include "model/ModModel.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine_caps.h"
 #include "synthyboy/state.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/user_library.h"
 
 namespace synthyboy::ui
 {
+/** A request for a file the host asks the user for (WP-01): the JUCE shell opens a juce::FileChooser, a test host answers at once. */
+struct FileRequest
+{
+    enum class Mode { open, save };
+    Mode mode = Mode::open;
+    juce::String title;
+    juce::String wildcards;      // "*.wav;*.flac"
+    juce::String suggestedName;  // save: the proposed file name
+    juce::String purpose;        // "sample", "wavetable", "impulse", "vital", "lfoshape", "export": the host remembers the last folder per purpose
+};
+
 class UiHost
 {
 public:
@@ -75,6 +89,20 @@ public:
     /** Replaces the content, hands it to the engine and marks the host state dirty. Returns false (nothing changed) if the content
         fails validateContent () or the host keeps no content. Message thread. */
     virtual bool setContent (const StateContent& /*newContent*/) { return false; }
+
+    // ---- content pipeline (WP-01, docs/ui-design/13-new-keys.md 4.25) ----
+    /** The user content library behind the engine (wavetables, samples, impulse responses on disk; the engine resolves the references of `content`
+        through it). Null when the host keeps none. Message thread. */
+    virtual UserContentStore* contentLibrary() { return nullptr; }
+    /** The library of small JSON items (LFO shapes, formulas, FX racks, voice control presets). Null when the host keeps none. */
+    virtual UserLibrary* userLibrary() { return nullptr; }
+    /** The user data directory of the host ("" when unknown); the Vital importer writes the presets of a bank below it. */
+    virtual std::string userDirectory() const { return {}; }
+    /** Asks the user for a file; `done` is called on the message thread with the chosen file, never with a file that does not exist (open), and not at
+        all when the user cancels. Returns false (and never calls `done`) when the host cannot ask. */
+    virtual bool requestFile (const FileRequest& /*request*/, std::function<void (const juce::File&)> /*done*/) { return false; }
+    /** Bumped whenever a whole document is loaded (setStateInformation, loadPatch, initPatch, revert): the editor looks for missing files then. */
+    virtual uint32_t contentRevision() const noexcept { return 0; }
 
     /** "Revert to saved" (design 07): the parameters and content go back to what the host last loaded (setStateInformation, or the defaults of a
         new instance). False when the host keeps no such snapshot. Message thread. */

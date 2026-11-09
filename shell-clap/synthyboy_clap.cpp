@@ -22,7 +22,13 @@
 #include "synthyboy/quality.h"
 #include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/vital_plugin_import.h"
+#include "synthyboy_content_ext.h"
 #include <clap/ext/remote-controls.h>
+
+#include <fstream>
+#include <iterator>
 
 namespace synthyboy
 {
@@ -59,6 +65,7 @@ struct SynthyBoyClap
     clap_plugin_t plugin {};
     const clap_host_t* host = nullptr;
     std::unique_ptr<IEngine> engine;
+    UserContentStore contentStore { userDataDirectory() }; // the user content library (WP-01): the engine resolves the references of `content` through it
     ParamValues values;
     StateContent content; // the `content` section of the state (not parameters): custom LFO shapes, curves and the tuning go to the engine (setContent), main thread only
     MidiCcMap midiMap;                // MIDI learn table (G07): CC -> parameter, read on the audio thread; saved in the `shell` section
@@ -71,6 +78,12 @@ struct SynthyBoyClap
     std::atomic<int> reportedLatency { 0 };   // the latency the host was told (ext_latency_get)
     bool processing = false;
 
+    ~SynthyBoyClap()
+    {
+        if (engine)
+            engine->setContentStore (nullptr); // the store is destroyed before the engine (member order)
+    }
+
     SynthyBoyClap (const clap_host_t* h)
         : host (h), values (ParamValues::defaults()), quality (qualityForTier (Tier::high))
     {
@@ -81,6 +94,9 @@ struct SynthyBoyClap
 #else
         engine = createEngine (EngineKind::own);
 #endif
+
+        if (engine)
+            engine->setContentStore (&contentStore); // before the first setContent: the references of the content decode against the library
 
         // Save as Default (G02): a new instance starts from the user's default patch (written by the editor shell), if there is one
         ShellState defaultShell;
@@ -636,6 +652,196 @@ const clap_plugin_remote_controls_t s_remote_controls = {
     ext_remote_controls_get
 };
 
+// synthyboy.content (shell-clap/synthyboy_content_ext.h): the user content library for a host without a file dialog
+bool readWholeFile (const char* path, std::vector<uint8_t>& bytes)
+{
+    if (path == nullptr || path[0] == '\0')
+        return false;
+    std::ifstream in (path, std::ios::binary);
+    if (! in)
+        return false;
+    bytes.assign ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char>());
+    return ! bytes.empty() && bytes.size() <= kMaxContentFileBytes;
+}
+
+void copyText (char* dest, size_t capacity, const std::string& text)
+{
+    std::strncpy (dest, text.c_str(), capacity - 1);
+    dest[capacity - 1] = '\0';
+}
+
+void fillItem (synthyboy_content_item_t& out, const UserContentItem& item)
+{
+    out = synthyboy_content_item_t {};
+    out.kind = static_cast<uint32_t> (item.kind);
+    copyText (out.name, sizeof out.name, item.ref.name);
+    copyText (out.pack, sizeof out.pack, item.ref.pack);
+    copyText (out.file, sizeof out.file, item.ref.file);
+    copyText (out.sha256, sizeof out.sha256, item.ref.sha256);
+    out.size_bytes = item.size;
+    out.embedded = item.embedded ? 1u : 0u;
+}
+
+bool validKind (uint32_t kind) noexcept { return kind <= SYNTHYBOY_CONTENT_IMPULSE; }
+
+/** The state changed outside the audio path: the engine gets the content, the host is told to save. */
+void contentChanged (SynthyBoyClap* self)
+{
+    if (self->engine)
+        self->engine->setContent (self->content);
+    if (self->host != nullptr && self->host->get_extension != nullptr)
+        if (const auto* state = static_cast<const clap_host_state_t*> (self->host->get_extension (self->host, CLAP_EXT_STATE)))
+            if (state->mark_dirty != nullptr)
+                state->mark_dirty (self->host);
+}
+
+uint32_t ext_content_count (const clap_plugin_t* p, uint32_t kind) noexcept
+{
+    return validKind (kind) ? static_cast<uint32_t> (toClap (p)->contentStore.list (static_cast<ContentKind> (kind)).size()) : 0u;
+}
+
+int32_t ext_content_get (const clap_plugin_t* p, uint32_t kind, uint32_t index, synthyboy_content_item_t* item) noexcept
+{
+    if (item == nullptr || ! validKind (kind))
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    const auto items = toClap (p)->contentStore.list (static_cast<ContentKind> (kind));
+    if (index >= items.size())
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    fillItem (*item, items[index]);
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_import_file (const clap_plugin_t* p, uint32_t kind, const char* path, synthyboy_content_item_t* item) noexcept
+{
+    if (path == nullptr || ! validKind (kind))
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    auto* self = toClap (p);
+    std::vector<uint8_t> bytes;
+    if (! readWholeFile (path, bytes))
+        return SYNTHYBOY_CONTENT_ERR_READ;
+    const std::string name = fileStemOf (path);
+    ContentFileRef ref;
+    UserContentItem result;
+    result.kind = static_cast<ContentKind> (kind);
+    if (kind == SYNTHYBOY_CONTENT_WAVETABLE && vitalFileKindFromName (path) == VitalFileKind::wavetable)
+    {
+        const VitalPluginImport imported = importVitalFileForPlugin (path, bytes, self->contentStore, userDataDirectory(), self->engine ? self->engine->capabilities() : kCapNone);
+        if (! imported.ok)
+            return SYNTHYBOY_CONTENT_ERR_FORMAT;
+        ref = imported.tableRef;
+    }
+    else
+    {
+        SampleFacts facts;
+        if (! probeSampleWav (bytes, path, facts))
+            return SYNTHYBOY_CONTENT_ERR_FORMAT;
+        if (! self->contentStore.addFile (static_cast<ContentKind> (kind), name, bytes, ref))
+            return SYNTHYBOY_CONTENT_ERR_STORE;
+    }
+    result.ref = ref;
+    result.size = bytes.size();
+    if (item != nullptr)
+        fillItem (*item, result);
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_attach (const clap_plugin_t* p, uint32_t kind, uint32_t index, uint32_t osc) noexcept
+{
+    if (! validKind (kind))
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    auto* self = toClap (p);
+    const auto items = self->contentStore.list (static_cast<ContentKind> (kind));
+    if (index >= items.size())
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    const ContentFileRef& ref = items[index].ref;
+    switch (kind)
+    {
+        case SYNTHYBOY_CONTENT_WAVETABLE:
+            if (osc < 1 || osc > 3 || ! attachStoredWavetable (self->content, static_cast<int> (osc), ref, self->contentStore))
+                return osc < 1 || osc > 3 ? SYNTHYBOY_CONTENT_ERR_ARGUMENT : SYNTHYBOY_CONTENT_ERR_FORMAT;
+            break;
+        case SYNTHYBOY_CONTENT_SAMPLE:
+            if (osc < 1 || osc > 3 || ! attachStoredSample (self->content, &self->values, static_cast<int> (osc), ref, self->contentStore))
+                return osc < 1 || osc > 3 ? SYNTHYBOY_CONTENT_ERR_ARGUMENT : SYNTHYBOY_CONTENT_ERR_FORMAT;
+            if (self->engine)
+                for (size_t i = 0; i < paramCount(); ++i)
+                    self->engine->setParam (paramTable()[i].id, self->values.plain[i]);
+            break;
+        default:
+            attachImpulse (self->content, ref);
+            break;
+    }
+    if (! validateContent (self->content))
+        return SYNTHYBOY_CONTENT_ERR_FORMAT;
+    contentChanged (self);
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_remove (const clap_plugin_t* p, uint32_t kind, uint32_t index) noexcept
+{
+    if (! validKind (kind))
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    auto* self = toClap (p);
+    const auto items = self->contentStore.list (static_cast<ContentKind> (kind));
+    if (index >= items.size())
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    if (! self->contentStore.remove (items[index].ref))
+        return SYNTHYBOY_CONTENT_ERR_STORE;
+    if (self->engine) // a reference to the removed file is now a missing file: the engine falls back
+        self->engine->setContent (self->content);
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_import_vital (const clap_plugin_t* p, const char* path, char* summary, uint32_t capacity) noexcept
+{
+    if (path == nullptr)
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    auto* self = toClap (p);
+    std::vector<uint8_t> bytes;
+    if (! readWholeFile (path, bytes))
+        return SYNTHYBOY_CONTENT_ERR_READ;
+    const VitalPluginImport imported = importVitalFileForPlugin (path, bytes, self->contentStore, userDataDirectory(), self->engine ? self->engine->capabilities() : kCapNone);
+    const auto say = [&] (const std::string& text) { if (summary != nullptr && capacity > 0) copyText (summary, capacity, text); };
+    if (! imported.ok)
+    {
+        say (imported.error);
+        return SYNTHYBOY_CONTENT_ERR_FORMAT;
+    }
+    if (imported.bank)
+    {
+        say ("bank " + imported.name + ": " + std::to_string (imported.summary.written) + " written, " + std::to_string (imported.summary.skippedSame) + " already there, "
+             + std::to_string (imported.summary.failed) + " failed");
+        return SYNTHYBOY_CONTENT_OK;
+    }
+    if (imported.kind != VitalFileKind::preset)
+    {
+        say (imported.name + ": stored in the library"); // a table: use import_file / attach, a shape needs the editor
+        return imported.kind == VitalFileKind::wavetable ? SYNTHYBOY_CONTENT_OK : SYNTHYBOY_CONTENT_ERR_FORMAT;
+    }
+    self->values = imported.values;
+    self->content = imported.content;
+    if (self->engine)
+        for (size_t i = 0; i < paramCount(); ++i)
+            self->engine->setParam (paramTable()[i].id, self->values.plain[i]);
+    contentChanged (self);
+    if (self->host != nullptr && self->host->get_extension != nullptr)
+        if (const auto* params = static_cast<const clap_host_params_t*> (self->host->get_extension (self->host, CLAP_EXT_PARAMS)))
+            if (params->rescan != nullptr)
+                params->rescan (self->host, CLAP_PARAM_RESCAN_VALUES);
+    say (imported.name + ": " + std::to_string (imported.report.numImported) + " imported, " + std::to_string (imported.report.numApproximated) + " approximated, "
+         + std::to_string (imported.report.numDropped) + " dropped");
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+const synthyboy_plugin_content_t s_content = {
+    ext_content_count,
+    ext_content_get,
+    ext_content_import_file,
+    ext_content_attach,
+    ext_content_remove,
+    ext_content_import_vital
+};
+
 // Extension query
 const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
 {
@@ -649,6 +855,7 @@ const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
     if (std::strcmp (id, CLAP_EXT_VOICE_INFO) == 0) return &s_voice_info;
     if (std::strcmp (id, CLAP_EXT_LATENCY) == 0) return &s_latency;
     if (std::strcmp (id, CLAP_EXT_TAIL) == 0) return &s_tail;
+    if (std::strcmp (id, SYNTHYBOY_EXT_CONTENT) == 0) return &s_content;
     if (std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS) == 0 ||
         std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS_COMPAT) == 0 ||
         std::strcmp (id, "clap.remote-controls") == 0) return &s_remote_controls;

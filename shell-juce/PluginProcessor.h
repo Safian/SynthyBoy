@@ -32,6 +32,8 @@
 #include "synthyboy/engine.h"
 #include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/user_library.h"
 #include "ui/UiHost.h"
 
 /**
@@ -48,7 +50,7 @@ public:
     static constexpr int maxEventsPerBlock = 1024;
 
     SynthyBoyProcessor();
-    ~SynthyBoyProcessor() override = default;
+    ~SynthyBoyProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void setNonRealtime (bool isNonRealtime) noexcept override;
@@ -92,6 +94,16 @@ public:
     int copyScope (float* dest, int maxSamples) const override;
     synthyboy::StateContent content() const override;
     bool setContent (const synthyboy::StateContent& newContent) override;
+
+    // content pipeline (WP-01): the user content library behind the engine, the JSON item library, file requests
+    synthyboy::UserContentStore* contentLibrary() override { return contentStore.get(); }
+    synthyboy::UserLibrary* userLibrary() override { return itemLibrary.get(); }
+    std::string userDirectory() const override { return userDir; }
+    bool requestFile (const synthyboy::ui::FileRequest& request, std::function<void (const juce::File&)> done) override;
+    uint32_t contentRevision() const noexcept override { return contentRev.load (std::memory_order_relaxed); }
+    /** Tests and alternative shells answer the file requests themselves (instead of a juce::FileChooser). */
+    using FileRequestHandler = std::function<bool (const synthyboy::ui::FileRequest&, std::function<void (const juce::File&)>)>;
+    void setFileRequestHandler (FileRequestHandler handler) { fileRequestHandler = std::move (handler); }
 
     // MIDI learn (G07), Save as Default (G02), locks (G08): docs/ui-design/15-shell-features.md
     bool canMidiLearn() const noexcept override { return true; }
@@ -153,6 +165,13 @@ private:
     void applyShell (const synthyboy::ShellState& shell);
     /** Parameters and content of a loaded patch; `respectLocks` keeps the locked modules of the current patch. */
     void applyPatch (synthyboy::ParamValues values, synthyboy::StateContent newContent, bool respectLocks);
+
+    // declared before the engine: the engine is destroyed first and never sees a dead store
+    std::unique_ptr<synthyboy::UserContentStore> contentStore;
+    std::unique_ptr<synthyboy::UserLibrary> itemLibrary;
+    std::atomic<uint32_t> contentRev { 0 };
+    FileRequestHandler fileRequestHandler;
+    std::unique_ptr<juce::FileChooser> fileChooser;
 
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction

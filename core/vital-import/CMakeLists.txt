@@ -11,6 +11,7 @@ target_sources(synthyboy_core PRIVATE
     "${SB_VITAL_IMPORT_DIR}/vital_content.cpp"
     "${SB_VITAL_IMPORT_DIR}/builtin_ref.cpp"
     "${SB_VITAL_IMPORT_DIR}/vital_batch.cpp"
+    "${SB_VITAL_IMPORT_DIR}/plugin_import.cpp"
     "${SB_VITAL_IMPORT_DIR}/vital_import.cpp")
 target_include_directories(synthyboy_core PRIVATE "${SB_VITAL_IMPORT_DIR}")
 
