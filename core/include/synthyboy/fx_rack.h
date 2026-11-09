@@ -81,6 +81,10 @@ void fxSetOn (const float* plain, FxRackItem item, bool on, std::vector<FxWrite>
 /** The parameters of a slot back to the defaults of its type (type, power, rack and order stay): the Init of the module sheet. */
 bool fxInitSlot (const float* plain, int slot, std::vector<FxWrite>& writes);
 
+/** Gives the slots of every rack distinct orders in the order the engine would process them (after a paste or a swap of slots, which copy the order of
+    the other slot): nothing changes in what is played. */
+void fxNormalise (const float* plain, std::vector<FxWrite>& writes);
+
 /** Applies writes to a plain value array (the tests, and the UI for its model). */
 void fxApply (float* plain, const std::vector<FxWrite>& writes) noexcept;
 } // namespace synthyboy

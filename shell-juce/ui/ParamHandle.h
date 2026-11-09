@@ -22,8 +22,14 @@ public:
 
     bool valid() const noexcept { return param != nullptr && ref.valid(); }
     const std::string& key() const noexcept { return keyText; }
+    /** The parameter whose range, curve, unit and names apply (for a control of a pool slot: the key of instance 0 it stands for). */
     const ParamInfo& info() const noexcept { return *ref.info; }
+    /** The stored parameter: the one that is automated and modulated (for a control of a pool slot: fxiNN.pKK). */
     int index() const noexcept { return ref.index; }
+    /** Table index of info() (the same as index() except for a control of a pool slot). */
+    int infoIndex() const noexcept { return ref.sourceIndex(); }
+    /** True if the control can be a modulation destination: the stored parameter is one and, for a pool slot, so is the key of the type. */
+    bool modulatable() const noexcept;
 
     float plain() const;
     float normalised() const;

@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ModuleSheet.h"
 
+#include <cstdio>
 #include <cstdlib>
+
+#include "FxRackOps.h"
+#include "synthyboy/fx_rack.h"
 
 namespace synthyboy::ui
 {
@@ -17,7 +21,18 @@ struct Family
     const char* label;
     int count;
 };
-constexpr Family kFamilies[] = { { "osc", "OSC", 3 }, { "filter", "FILTER", 2 }, { "env", "ENV", 6 }, { "lfo", "LFO", 10 }, { "rlfo", "RANDOM LFO", 4 } };
+// "fxi": the slots of the effect instance pool (fxi01 .. fxi16, two digits); they copy, paste, swap and init like the other modules
+constexpr Family kFamilies[] = { { "osc", "OSC", 3 }, { "filter", "FILTER", 2 }, { "env", "ENV", 6 }, { "lfo", "LFO", 10 }, { "rlfo", "RANDOM LFO", 4 },
+                                 { "fxi", "FX SLOT", 16 } };
+
+/** After a paste, a swap or a copy onto a slot: the slots have distinct orders again (they copy the order of the other slot). */
+void settlePool (UiContext& ctx, ParamValues& live)
+{
+    std::vector<FxWrite> writes;
+    fxNormalise (live.plain, writes);
+    fxApply (live.plain, writes);
+    applyValues (ctx, live);
+}
 
 bool parse (const std::string& prefix, const Family*& family, int& number)
 {
@@ -29,6 +44,8 @@ bool parse (const std::string& prefix, const Family*& family, int& number)
             const std::string rest = prefix.substr (stem.size());
             if (rest.find_first_not_of ("0123456789") != std::string::npos)
                 continue; // "lfo" must not claim "rlfo1" nor the other way round
+            if (stem == "fxi" && rest.size() != 2)
+                continue; // the slots of the pool have two digits (fxi01)
             const int n = std::atoi (rest.c_str());
             if (n >= 1 && n <= f.count)
             {
@@ -41,6 +58,11 @@ bool parse (const std::string& prefix, const Family*& family, int& number)
     return false;
 }
 } // namespace
+
+bool isPoolSlot (const std::string& prefix)
+{
+    return prefix.size() == 5 && prefix.compare (0, 3, "fxi") == 0 && std::atoi (prefix.c_str() + 3) >= 1 && std::atoi (prefix.c_str() + 3) <= kNumFxInstances;
+}
 
 bool isModule (const std::string& prefix)
 {
@@ -64,7 +86,11 @@ std::vector<std::string> siblings (const std::string& prefix)
     if (parse (prefix, f, n))
         for (int i = 1; i <= f->count; ++i)
             if (i != n)
-                out.push_back (std::string (f->stem) + std::to_string (i));
+            {
+            char number[8];
+            std::snprintf (number, sizeof number, std::string (f->stem) == "fxi" ? "%02d" : "%d", i);
+            out.push_back (std::string (f->stem) + number);
+        }
     return out;
 }
 
@@ -83,7 +109,10 @@ bool paste (UiContext& ctx, const std::string& prefix, bool withMods)
     auto live = readLiveValues (ctx);
     if (! ModuleClipboard::instance().paste (prefix, live, withMods, withMods ? &ctx.assign.matrix() : nullptr))
         return false;
-    applyValues (ctx, live);
+    if (isPoolSlot (prefix))
+        settlePool (ctx, live);
+    else
+        applyValues (ctx, live);
     ctx.assign.refresh();
     ctx.assign.sendChangeMessage();
     return true;
@@ -94,6 +123,17 @@ bool init (UiContext& ctx, const std::string& prefix)
     if (! isModule (prefix))
         return false;
     auto live = readLiveValues (ctx);
+    if (isPoolSlot (prefix))
+    {
+        // the parameters back to the defaults of the type; the module itself stays (its type, power, rack and place)
+        std::vector<FxWrite> writes;
+        const int slot = std::atoi (prefix.c_str() + 3) - 1;
+        if (! fxInitSlot (live.plain, slot, writes))
+            return false;
+        fxApply (live.plain, writes);
+        applyValues (ctx, live);
+        return true;
+    }
     ModuleClipboard::initModule (prefix, live);
     applyValues (ctx, live);
     return true;
@@ -120,7 +160,10 @@ bool swap (UiContext& ctx, const std::string& a, const std::string& b, bool with
     auto live = readLiveValues (ctx);
     if (! ModuleClipboard::swapModules (a, b, live, withMods, withMods ? &ctx.assign.matrix() : nullptr))
         return false;
-    applyValues (ctx, live);
+    if (isPoolSlot (a))
+        settlePool (ctx, live);
+    else
+        applyValues (ctx, live);
     ctx.assign.refresh();
     ctx.assign.sendChangeMessage();
     return true;
@@ -135,7 +178,10 @@ bool copyOnto (UiContext& ctx, const std::string& from, const std::string& to, b
     auto live = readLiveValues (ctx);
     if (! scratch.paste (to, live, withMods, withMods ? &ctx.assign.matrix() : nullptr))
         return false;
-    applyValues (ctx, live);
+    if (isPoolSlot (to))
+        settlePool (ctx, live);
+    else
+        applyValues (ctx, live);
     ctx.assign.refresh();
     ctx.assign.sendChangeMessage();
     return true;
@@ -157,6 +203,21 @@ ModuleSheet::ModuleSheet (UiContext& context, const std::string& prefixIn) : ctx
         addAndMakeVisible (b);
         return b;
     };
+
+    if (module_ops::isPoolSlot (modulePrefix))
+    {
+        // the module of a pool slot: power, a copy of it in the next free slot, take it out of the rack (the slot becomes free)
+        const int slot = std::atoi (modulePrefix.c_str() + 3) - 1;
+        const bool on = fxItemOn (fx_ops::values (ctx).plain, { true, slot });
+        poolPowerText = on ? "Bypass" : "Enable";
+        add (poolPowerText, [this, slot] { fx_ops::toggleOn (ctx, { true, slot }); });
+        add ("Duplicate", [this, slot] { fx_ops::duplicate (ctx, { true, slot }); });
+        add ("Remove", [this, slot] { fx_ops::removeSlot (ctx, slot); });
+        if (fx_ops::values (ctx).plain[fxInstanceKeys (slot).type] < 0.5f)
+            for (const char* name : { "Bypass", "Enable", "Duplicate", "Remove" })
+                if (auto* b = button (name))
+                    b->setEnabled (false);
+    }
 
     add ("Copy", [this] { module_ops::copy (ctx, modulePrefix, false); });
     add ("Copy with mods", [this] { module_ops::copy (ctx, modulePrefix, true); });
@@ -219,7 +280,8 @@ int ModuleSheet::preferredHeight() const
     const auto& t = ctx.theme;
     const int perRow = juce::jmax (1, (preferredWidth() - t.gap()) / (t.touch() + t.gap()));
     const int swapRows = (static_cast<int> (swapButtons.size()) + perRow - 1) / perRow;
-    return t.touch() /*title*/ + 2 * (t.touch() + t.gap()) + t.touch() /*swap label*/ + swapRows * (t.touch() + t.gap()) + (t.touch() + t.gap()) + t.gap();
+    const int poolRow = module_ops::isPoolSlot (modulePrefix) ? t.touch() + t.gap() : 0;
+    return t.touch() /*title*/ + poolRow + 2 * (t.touch() + t.gap()) + t.touch() /*swap label*/ + swapRows * (t.touch() + t.gap()) + (t.touch() + t.gap()) + t.gap();
 }
 
 void ModuleSheet::resized()
@@ -228,6 +290,19 @@ void ModuleSheet::resized()
     const int gap = t.gap(), h = t.touch();
     auto r = getLocalBounds().reduced (gap);
     r.removeFromTop (h); // title (painted)
+
+    if (module_ops::isPoolSlot (modulePrefix))
+    {
+        auto row = r.removeFromTop (h);
+        r.removeFromTop (gap);
+        const int w = (row.getWidth() - 2 * gap) / 3;
+        for (const char* name : { poolPowerText.toRawUTF8(), "Duplicate", "Remove" })
+        {
+            if (auto* b = button (name))
+                b->setBounds (row.removeFromLeft (w));
+            row.removeFromLeft (gap);
+        }
+    }
 
     const auto row2 = [&] (const char* a, const char* b)
     {

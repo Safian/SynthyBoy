@@ -342,6 +342,7 @@ std::string moduleKindForPrefix (std::string_view prefix)
     if (prefix.rfind ("lfo", 0) == 0) return "lfo";
     if (prefix.rfind ("osc", 0) == 0) return "osc";
     if (prefix.rfind ("filter", 0) == 0) return "filter";
+    if (prefix.rfind ("fxi", 0) == 0) return "fxi"; // the slots of the effect instance pool paste onto each other
     return std::string (prefix);
 }
 

@@ -84,7 +84,7 @@ ParamSheet::ParamSheet (UiContext& context, const std::string& key) : ctx (conte
     learn.setEnabled (ctx.host.canMidiLearn() && handle.valid());
     learn.onClick = [this] { learnClicked(); };
     refreshLearn();
-    assign.setEnabled (handle.valid() && modDestinationChoiceOf (static_cast<size_t> (handle.index())) > 0);
+    assign.setEnabled (handle.modulatable() && modDestinationChoiceOf (static_cast<size_t> (handle.index())) > 0);
     assign.setTooltip (assign.isEnabled() ? juce::String ("Pick a modulation source, then drag the control") : juce::String ("This control cannot be modulated"));
     assign.onClick = [this] { showSourceMenu(); };
 

@@ -18,9 +18,12 @@ namespace synthyboy::ui
 /** A key of the parameter table resolved once. Controls are bound by KEY, never by index (the index is derived, the key is the contract). */
 struct KeyRef
 {
-    const ParamInfo* info = nullptr;
-    int index = -1;
+    const ParamInfo* info = nullptr; // the parameter whose range, curve, unit and choice names apply
+    int index = -1;                  // table index of the parameter that is stored, automated and modulated
+    int infoIndex = -1;              // table index of `info`; -1: the same as `index`. They differ for a parameter of a pool slot (FxKeySet)
+    bool storedNormalised = false;   // the stored value is the normalised value of `info` (fxiNN.pKK), not its plain value
     bool valid() const noexcept { return info != nullptr && index >= 0; }
+    int sourceIndex() const noexcept { return infoIndex >= 0 ? infoIndex : index; }
 };
 
 KeyRef resolveKey (std::string_view key) noexcept;

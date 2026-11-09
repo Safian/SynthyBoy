@@ -116,6 +116,9 @@ public:
     void add (PanelEntry entry);
     /** All panels sorted by (page, order, id). */
     const std::vector<PanelEntry>& entries() const;
+    /** A new panel of the registered class `id` (the class name, "FxChorusPanel"), built for `context`: the effect panels of a pool slot are made this way with a
+        context that has a key set. nullptr if there is no such class. The caller calls build (). */
+    std::unique_ptr<Panel> create (const std::string& id, UiContext& context) const;
 
 private:
     mutable std::vector<PanelEntry> list;

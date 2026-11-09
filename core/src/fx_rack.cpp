@@ -321,6 +321,13 @@ bool fxInitSlot (const float* plain, int slot, std::vector<FxWrite>& writes)
     return true;
 }
 
+void fxNormalise (const float* plain, std::vector<FxWrite>& writes)
+{
+    const FxRacks racks = fxRacks (plain);
+    for (int r = 0; r < kNumPoolRacks; ++r)
+        placeList (plain, racks.rack[static_cast<size_t> (r)], writes);
+}
+
 void fxApply (float* plain, const std::vector<FxWrite>& writes) noexcept
 {
     for (const FxWrite& w : writes)

@@ -38,6 +38,14 @@ const std::vector<PanelEntry>& PanelRegistry::entries() const
     return list;
 }
 
+std::unique_ptr<Panel> PanelRegistry::create (const std::string& id, UiContext& context) const
+{
+    for (const auto& entry : entries())
+        if (entry.id == id)
+            return entry.create (context);
+    return nullptr;
+}
+
 // ---- Panel ------------------------------------------------------------------------------------------------------------------------
 
 Panel::Panel (UiContext& context) : ctx (context)

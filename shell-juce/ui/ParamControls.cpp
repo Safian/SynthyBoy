@@ -53,7 +53,7 @@ void ParamControl::changeListenerCallback (juce::ChangeBroadcaster*)
 
 bool ParamControl::isAssignTarget() const
 {
-    return handle.valid() && ctx.assign.flow().isTarget (handle.index());
+    return handle.modulatable() && ctx.assign.flow().isTarget (handle.index());
 }
 
 void ParamControl::beginPress()
@@ -268,7 +268,7 @@ void ParamDragControl::mouseDrag (const juce::MouseEvent& e)
 
         // armed source + modulatable control: this drag sets the modulation depth instead of the value (06-modulation.md 2.1)
         auto& flow = ctx.assign.flow();
-        if (flow.phase() == AssignFlow::Phase::armed && flow.isTarget (handle.index()))
+        if (flow.phase() == AssignFlow::Phase::armed && handle.modulatable() && flow.isTarget (handle.index()))
         {
             const auto result = flow.beginDrag (handle.index());
             assignDrag = result == AssignFlow::BeginResult::ok;
@@ -618,7 +618,7 @@ void ParamChoice::step (int direction)
     const int count = static_cast<int> (choiceCount (info));
     const int current = static_cast<int> (std::lround (handle.plain()));
     for (int i = current + direction; i >= 0 && i < count; i += direction)
-        if (capStateForValue (handle.index(), static_cast<float> (i), ctx.host.engineCaps()).available)
+        if (capStateForValue (handle.infoIndex(), static_cast<float> (i), ctx.host.engineCaps()).available)
         {
             handle.setPlainComplete (static_cast<float> (i));
             return;
@@ -635,7 +635,7 @@ juce::PopupMenu ParamChoice::buildOptionMenu() const
     const int current = static_cast<int> (std::lround (handle.plain()));
     const auto item = [&] (int i)
     {
-        const bool ok = capStateForValue (handle.index(), static_cast<float> (i), ctx.host.engineCaps()).available;
+        const bool ok = capStateForValue (handle.infoIndex(), static_cast<float> (i), ctx.host.engineCaps()).available;
         return juce::PopupMenu::Item (juce::String (choiceName (info, static_cast<size_t> (i)))).setID (i + 1).setEnabled (ok).setTicked (i == current);
     };
 
@@ -762,7 +762,7 @@ void ParamToggle::toggle()
 
 std::unique_ptr<ParamControl> makeControl (UiContext& context, const std::string& key, const juce::String& labelOverride)
 {
-    const KeyRef ref = resolveKey (key);
+    const KeyRef ref = context.resolve (key);
     if (ref.valid())
         switch (defaultKind (*ref.info))
         {
