@@ -4,14 +4,14 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2227 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2269 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 35 |
-| Osc 1 | 103 |
-| Osc 2 | 103 |
-| Osc 3 | 103 |
+| Osc 1 | 117 |
+| Osc 2 | 117 |
+| Osc 3 | 117 |
 | Noise | 19 |
 | Filter 1 | 23 |
 | Filter 2 | 23 |
@@ -120,7 +120,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.morph.type` | Osc 1 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 1 / Spectral Morph |  |  |
 | `osc1.morph.amount` | Osc 1 Morph Amount | 0 .. 100 % | 50 % | Osc 1 / Spectral Morph | mod |  |
 | `osc1.morph.spread` | Osc 1 Morph Spread | -100 .. 100 % | 0 % | Osc 1 / Spectral Morph | mod |  |
-| `osc1.warp.type` | Osc 1 Warp Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 1 / Warp |  |  |
+| `osc1.warp.type` | Osc 1 Warp Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 1 / Warp |  |  |
 | `osc1.warp.amount` | Osc 1 Warp Amount | 0 .. 100 % | 50 % | Osc 1 / Warp | mod |  |
 | `osc1.warp.phase` | Osc 1 Warp Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp | mod |  |
 | `osc1.warp.spread` | Osc 1 Warp Spread | -100 .. 100 % | 0 % | Osc 1 / Warp | mod |  |
@@ -130,7 +130,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.map.vel_high` | Osc 1 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 1 / Mapping |  |  |
 | `osc1.map.key_fold` | Osc 1 Key Fold | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
 | `osc1.map.key_warp` | Osc 1 Key Warp | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
-| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample, 2 Granular | Wavetable | Osc 1 |  |  |
+| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral | Wavetable | Osc 1 |  |  |
 | `osc1.sample.start` | Osc 1 Sample Start | 0 .. 100 % | 0 % | Osc 1 / Sample |  |  |
 | `osc1.sample.end` | Osc 1 Sample End | 0 .. 100 % | 100 % | Osc 1 / Sample |  |  |
 | `osc1.sample.root` | Osc 1 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 1 / Sample |  |  |
@@ -157,7 +157,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.sample.length_beats` | Osc 1 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 1 / Sample |  |  |
 | `osc1.sample.uni_start` | Osc 1 Sample Unison Start | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
 | `osc1.sample.uni_span` | Osc 1 Sample Unison Span | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
-| `osc1.warp2.type` | Osc 1 Warp 2 Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 1 / Warp 2 |  |  |
+| `osc1.warp2.type` | Osc 1 Warp 2 Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 1 / Warp 2 |  |  |
 | `osc1.warp2.amount` | Osc 1 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 1 / Warp 2 | mod |  |
 | `osc1.warp2.phase` | Osc 1 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp 2 | mod |  |
 | `osc1.warp2.spread` | Osc 1 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 1 / Warp 2 | mod |  |
@@ -203,6 +203,20 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.gran.spawn_pattern` | Osc 1 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 1 / Granular |  |  |
 | `osc1.gran.y_axis` | Osc 1 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 1 / Granular |  |  |
 | `osc1.gran.xy_y` | Osc 1 Grain Y Position | 0 .. 100 % | 50 % | Osc 1 / Granular | mod |  |
+| `osc1.spec.freq_lo` | Osc 1 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 1 / Spectral | mod |  |
+| `osc1.spec.freq_hi` | Osc 1 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 1 / Spectral | mod |  |
+| `osc1.spec.lohi_smooth` | Osc 1 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 1 / Spectral |  |  |
+| `osc1.spec.lohi_post_warp` | Osc 1 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
+| `osc1.spec.cut` | Osc 1 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 1 / Spectral | mod |  |
+| `osc1.spec.mix` | Osc 1 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 1 / Spectral | mod |  |
+| `osc1.spec.freq_shift` | Osc 1 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 1 / Spectral | mod |  |
+| `osc1.spec.manual` | Osc 1 Spectral Manual Position | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
+| `osc1.spec.position` | Osc 1 Spectral Position | 0 .. 100 % | 0 % | Osc 1 / Spectral | mod |  |
+| `osc1.spec.scan_keytrack` | Osc 1 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
+| `osc1.spec.phase_lock` | Osc 1 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
+| `osc1.spec.transients` | Osc 1 Spectral Transients | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
+| `osc1.spec.y_axis` | Osc 1 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 1 / Spectral |  |  |
+| `osc1.spec.xy_y` | Osc 1 Spectral Y Position | 0 .. 100 % | 50 % | Osc 1 / Spectral | mod |  |
 
 ### Osc 2
 
@@ -228,7 +242,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.morph.type` | Osc 2 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 2 / Spectral Morph |  |  |
 | `osc2.morph.amount` | Osc 2 Morph Amount | 0 .. 100 % | 50 % | Osc 2 / Spectral Morph | mod |  |
 | `osc2.morph.spread` | Osc 2 Morph Spread | -100 .. 100 % | 0 % | Osc 2 / Spectral Morph | mod |  |
-| `osc2.warp.type` | Osc 2 Warp Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 2 / Warp |  |  |
+| `osc2.warp.type` | Osc 2 Warp Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 2 / Warp |  |  |
 | `osc2.warp.amount` | Osc 2 Warp Amount | 0 .. 100 % | 50 % | Osc 2 / Warp | mod |  |
 | `osc2.warp.phase` | Osc 2 Warp Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp | mod |  |
 | `osc2.warp.spread` | Osc 2 Warp Spread | -100 .. 100 % | 0 % | Osc 2 / Warp | mod |  |
@@ -238,7 +252,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.map.vel_high` | Osc 2 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 2 / Mapping |  |  |
 | `osc2.map.key_fold` | Osc 2 Key Fold | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
 | `osc2.map.key_warp` | Osc 2 Key Warp | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
-| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample, 2 Granular | Wavetable | Osc 2 |  |  |
+| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral | Wavetable | Osc 2 |  |  |
 | `osc2.sample.start` | Osc 2 Sample Start | 0 .. 100 % | 0 % | Osc 2 / Sample |  |  |
 | `osc2.sample.end` | Osc 2 Sample End | 0 .. 100 % | 100 % | Osc 2 / Sample |  |  |
 | `osc2.sample.root` | Osc 2 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 2 / Sample |  |  |
@@ -265,7 +279,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.sample.length_beats` | Osc 2 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 2 / Sample |  |  |
 | `osc2.sample.uni_start` | Osc 2 Sample Unison Start | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
 | `osc2.sample.uni_span` | Osc 2 Sample Unison Span | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
-| `osc2.warp2.type` | Osc 2 Warp 2 Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 2 / Warp 2 |  |  |
+| `osc2.warp2.type` | Osc 2 Warp 2 Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 2 / Warp 2 |  |  |
 | `osc2.warp2.amount` | Osc 2 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 2 / Warp 2 | mod |  |
 | `osc2.warp2.phase` | Osc 2 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp 2 | mod |  |
 | `osc2.warp2.spread` | Osc 2 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 2 / Warp 2 | mod |  |
@@ -311,6 +325,20 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.gran.spawn_pattern` | Osc 2 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 2 / Granular |  |  |
 | `osc2.gran.y_axis` | Osc 2 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 2 / Granular |  |  |
 | `osc2.gran.xy_y` | Osc 2 Grain Y Position | 0 .. 100 % | 50 % | Osc 2 / Granular | mod |  |
+| `osc2.spec.freq_lo` | Osc 2 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 2 / Spectral | mod |  |
+| `osc2.spec.freq_hi` | Osc 2 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 2 / Spectral | mod |  |
+| `osc2.spec.lohi_smooth` | Osc 2 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 2 / Spectral |  |  |
+| `osc2.spec.lohi_post_warp` | Osc 2 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
+| `osc2.spec.cut` | Osc 2 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 2 / Spectral | mod |  |
+| `osc2.spec.mix` | Osc 2 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 2 / Spectral | mod |  |
+| `osc2.spec.freq_shift` | Osc 2 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 2 / Spectral | mod |  |
+| `osc2.spec.manual` | Osc 2 Spectral Manual Position | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
+| `osc2.spec.position` | Osc 2 Spectral Position | 0 .. 100 % | 0 % | Osc 2 / Spectral | mod |  |
+| `osc2.spec.scan_keytrack` | Osc 2 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
+| `osc2.spec.phase_lock` | Osc 2 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
+| `osc2.spec.transients` | Osc 2 Spectral Transients | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
+| `osc2.spec.y_axis` | Osc 2 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 2 / Spectral |  |  |
+| `osc2.spec.xy_y` | Osc 2 Spectral Y Position | 0 .. 100 % | 50 % | Osc 2 / Spectral | mod |  |
 
 ### Osc 3
 
@@ -336,7 +364,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.morph.type` | Osc 3 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 3 / Spectral Morph |  |  |
 | `osc3.morph.amount` | Osc 3 Morph Amount | 0 .. 100 % | 50 % | Osc 3 / Spectral Morph | mod |  |
 | `osc3.morph.spread` | Osc 3 Morph Spread | -100 .. 100 % | 0 % | Osc 3 / Spectral Morph | mod |  |
-| `osc3.warp.type` | Osc 3 Warp Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 3 / Warp |  |  |
+| `osc3.warp.type` | Osc 3 Warp Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 3 / Warp |  |  |
 | `osc3.warp.amount` | Osc 3 Warp Amount | 0 .. 100 % | 50 % | Osc 3 / Warp | mod |  |
 | `osc3.warp.phase` | Osc 3 Warp Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp | mod |  |
 | `osc3.warp.spread` | Osc 3 Warp Spread | -100 .. 100 % | 0 % | Osc 3 / Warp | mod |  |
@@ -346,7 +374,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.map.vel_high` | Osc 3 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 3 / Mapping |  |  |
 | `osc3.map.key_fold` | Osc 3 Key Fold | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
 | `osc3.map.key_warp` | Osc 3 Key Warp | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
-| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample, 2 Granular | Wavetable | Osc 3 |  |  |
+| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral | Wavetable | Osc 3 |  |  |
 | `osc3.sample.start` | Osc 3 Sample Start | 0 .. 100 % | 0 % | Osc 3 / Sample |  |  |
 | `osc3.sample.end` | Osc 3 Sample End | 0 .. 100 % | 100 % | Osc 3 / Sample |  |  |
 | `osc3.sample.root` | Osc 3 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 3 / Sample |  |  |
@@ -373,7 +401,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.sample.length_beats` | Osc 3 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 3 / Sample |  |  |
 | `osc3.sample.uni_start` | Osc 3 Sample Unison Start | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
 | `osc3.sample.uni_span` | Osc 3 Sample Unison Span | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
-| `osc3.warp2.type` | Osc 3 Warp 2 Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 3 / Warp 2 |  |  |
+| `osc3.warp2.type` | Osc 3 Warp 2 Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 3 / Warp 2 |  |  |
 | `osc3.warp2.amount` | Osc 3 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 3 / Warp 2 | mod |  |
 | `osc3.warp2.phase` | Osc 3 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp 2 | mod |  |
 | `osc3.warp2.spread` | Osc 3 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 3 / Warp 2 | mod |  |
@@ -419,6 +447,20 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.gran.spawn_pattern` | Osc 3 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 3 / Granular |  |  |
 | `osc3.gran.y_axis` | Osc 3 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 3 / Granular |  |  |
 | `osc3.gran.xy_y` | Osc 3 Grain Y Position | 0 .. 100 % | 50 % | Osc 3 / Granular | mod |  |
+| `osc3.spec.freq_lo` | Osc 3 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 3 / Spectral | mod |  |
+| `osc3.spec.freq_hi` | Osc 3 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 3 / Spectral | mod |  |
+| `osc3.spec.lohi_smooth` | Osc 3 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 3 / Spectral |  |  |
+| `osc3.spec.lohi_post_warp` | Osc 3 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
+| `osc3.spec.cut` | Osc 3 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 3 / Spectral | mod |  |
+| `osc3.spec.mix` | Osc 3 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 3 / Spectral | mod |  |
+| `osc3.spec.freq_shift` | Osc 3 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 3 / Spectral | mod |  |
+| `osc3.spec.manual` | Osc 3 Spectral Manual Position | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
+| `osc3.spec.position` | Osc 3 Spectral Position | 0 .. 100 % | 0 % | Osc 3 / Spectral | mod |  |
+| `osc3.spec.scan_keytrack` | Osc 3 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
+| `osc3.spec.phase_lock` | Osc 3 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
+| `osc3.spec.transients` | Osc 3 Spectral Transients | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
+| `osc3.spec.y_axis` | Osc 3 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 3 / Spectral |  |  |
+| `osc3.spec.xy_y` | Osc 3 Spectral Y Position | 0 .. 100 % | 50 % | Osc 3 / Spectral | mod |  |
 
 ### Noise
 
@@ -902,7 +944,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..962 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..983 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -2819,6 +2861,27 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 960 | `osc3.gran.rand_warp` | Osc 3 Grain Random Warp |
 | 961 | `osc3.gran.rand_warp2` | Osc 3 Grain Random Warp 2 |
 | 962 | `osc3.gran.xy_y` | Osc 3 Grain Y Position |
+| 963 | `osc1.spec.freq_lo` | Osc 1 Spectral Freq Lo |
+| 964 | `osc1.spec.freq_hi` | Osc 1 Spectral Freq Hi |
+| 965 | `osc1.spec.cut` | Osc 1 Spectral Filter Cut |
+| 966 | `osc1.spec.mix` | Osc 1 Spectral Filter Mix |
+| 967 | `osc1.spec.freq_shift` | Osc 1 Spectral Frequency Shift |
+| 968 | `osc1.spec.position` | Osc 1 Spectral Position |
+| 969 | `osc1.spec.xy_y` | Osc 1 Spectral Y Position |
+| 970 | `osc2.spec.freq_lo` | Osc 2 Spectral Freq Lo |
+| 971 | `osc2.spec.freq_hi` | Osc 2 Spectral Freq Hi |
+| 972 | `osc2.spec.cut` | Osc 2 Spectral Filter Cut |
+| 973 | `osc2.spec.mix` | Osc 2 Spectral Filter Mix |
+| 974 | `osc2.spec.freq_shift` | Osc 2 Spectral Frequency Shift |
+| 975 | `osc2.spec.position` | Osc 2 Spectral Position |
+| 976 | `osc2.spec.xy_y` | Osc 2 Spectral Y Position |
+| 977 | `osc3.spec.freq_lo` | Osc 3 Spectral Freq Lo |
+| 978 | `osc3.spec.freq_hi` | Osc 3 Spectral Freq Hi |
+| 979 | `osc3.spec.cut` | Osc 3 Spectral Filter Cut |
+| 980 | `osc3.spec.mix` | Osc 3 Spectral Filter Mix |
+| 981 | `osc3.spec.freq_shift` | Osc 3 Spectral Frequency Shift |
+| 982 | `osc3.spec.position` | Osc 3 Spectral Position |
+| 983 | `osc3.spec.xy_y` | Osc 3 Spectral Y Position |
 
 ## Built-in wavetables and LFO shapes
 

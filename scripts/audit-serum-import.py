@@ -201,6 +201,9 @@ WARP = {'kNoWarp': 0, 'kSync': 1, 'kQuantize': 3, 'kPWM': 6, 'kBendPos': 12, 'kB
         'kDistHardClip': 29, 'kDistDiode1': 30, 'kDistDiode2': 31, 'kDistLinFold': 32, 'kDistSinFold': 33, 'kDistZeroSquare': 34, 'kDistAsym': 35, 'kDistRectify': 36,
         'kDistSineShaper': 37, 'kDistStompBox': 38, 'kDistTapeSat': 39, 'kDistSoftSat': 40, 'kFM_OSC': 41, 'kFM_OSC2': 42, 'kFMX_OSC': 43, 'kFMX_OSC2': 44, 'kFMP_OSC': 45,
         'kFMP_OSC2': 46, 'kPD_OSC': 47, 'kPD_OSC2': 48, 'kSelfPD': 49, 'kAM_OSC': 50, 'kAM_OSC2': 51, 'kRM_OSC': 9, 'kRM_OSC2': 10}
+WARP.update({'kSpectralComb': 76, 'kAddharmonics': 77, 'kAddsubharmonics': 78, 'kDetune': 79, 'kShepardNarrow': 80, 'kShepardFilter': 81, 'kPeakOctaveDown': 82, 'kPeakOctaveUp': 83,
+             'kPeakHarmDown': 84, 'kPeakHarmUp': 85, 'kGate': 86, 'kSpectralPitchShift': 87, 'kSpectralPhaseTwist': 88, 'kSpread': 89, 'kSpectralShift': 90, 'kSmear': 91, 'kMirror': 92,
+             'kMask_OSC': 93, 'kMask_OSC2': 94, 'kMask_NOISE': 95, 'kVocode_OSC': 96, 'kVocode_OSC2': 97, 'kVocode_NOISE': 98})   # GROUPC WP-12: the spectral warps
 for _i, _fam in enumerate(('kFM', 'kFMX', 'kFMP', 'kPD', 'kAM', 'kRM')):   # GROUPB WP-06: the modes from the noise, sub and filters, entries 52 .. 75
     for _j, _src in enumerate(('NOISE', 'SUB', 'FILT1', 'FILT2')):
         WARP['%s_%s' % (_fam, _src)] = 52 + 4 * _i + _j
@@ -243,6 +246,9 @@ GRAN = {'kParamWindowParam': ('osc#.gran.window_amount', lin(1)), 'kParamWindowS
         'kParamRandomDir': ('osc#.gran.rand_dir', lin(1)), 'kParamRandomPitch': ('osc#.gran.rand_pitch', lin(1)), 'kParamRandomGrainLength': ('osc#.gran.rand_length', lin(1)),
         'kParamRandomPan': ('osc#.gran.rand_pan', lin(1)), 'kParamRandomGain': ('osc#.gran.rand_level', lin(1)), 'kParamRandomWindowAmount': ('osc#.gran.rand_window', lin(1)),
         'kParamRandomWindowSkew': ('osc#.gran.rand_skew', lin(1)), 'kParamRandomWarp': ('osc#.gran.rand_warp', lin(1)), 'kParamRandomWarp2': ('osc#.gran.rand_warp2', lin(1))}
+SPECTRAL = {'kParamFreqLo': ('osc#.spec.freq_lo', lin(1)), 'kParamFreqHi': ('osc#.spec.freq_hi', lin(1)), 'kParamLoHiIsSmooth': ('osc#.spec.lohi_smooth', boolean),
+            'kParamLoHiPostWarp': ('osc#.spec.lohi_post_warp', boolean), 'kParamPhaseLock': ('osc#.spec.phase_lock', boolean), 'kParamTransients': ('osc#.spec.transients', boolean),
+            'kParamSpecFltShift': ('osc#.spec.cut', lin(1)), 'kParamSpecFltWetDry': ('osc#.spec.mix', lin(1))}
 WT = {'kParamInitialPhase': ('osc#.phase', lin(1)), 'kParamRandomPhase': ('osc#.random_phase', lin(1)), 'kParamUnisonWTPos': ('osc#.frame_spread', lin(1)),
       'kParamPhaseMemory': ('osc#.phase_memory', PHASEMEM)}
 NOISE = {'kParamVolume': ('noise.level', lin(100)), 'kParamPan': ('noise.pan', lin(2)), 'kParamEnable': ('noise.on', boolean), 'kParamPitch': ('noise.pitch', lin(1))}
@@ -390,6 +396,8 @@ class Audit:
                         table.update(WT)
                     if blk.startswith('GranularOsc'):
                         table.update(GRAN)
+                    if blk.startswith('SpectralOsc'):
+                        table.update(SPECTRAL)
                     if blk.startswith('MultiSampleOsc'):
                         table.update({'kParamRandomPhase': ('osc#.random_phase', lin(1))})
                     return table, idx + 1, parts[3]
@@ -550,7 +558,7 @@ class Audit:
                 continue
             if k in explained or k.startswith(fx_prefixes) or k.startswith(mod_prefixes):
                 continue
-            if re.match(r'(fx\.order\.\d+|splitter_(lh|lmh|ms)\.(on|rack|freq|freq_low|freq_high|low_bypass|mid_bypass|high_bypass|high_bypass)|osc\d\.sample\.(root|scan_range|scan)|osc\d\.gran\.(density_mode|density|density_sync|density_grains|length_mode|length|length_sync|length_percent|manual|position)|osc\d\.tune|master\.polyphony|osc\d\.pitch_coarse)$', k):
+            if re.match(r'(fx\.order\.\d+|splitter_(lh|lmh|ms)\.(on|rack|freq|freq_low|freq_high|low_bypass|mid_bypass|high_bypass|high_bypass)|osc\d\.sample\.(root|scan_range|scan)|osc\d\.gran\.(density_mode|density|density_sync|density_grains|length_mode|length|length_sync|length_percent|manual|position)|osc\d\.spec\.(manual|position|freq_shift|mix|cut)|osc\d\.tune|master\.polyphony|osc\d\.pitch_coarse)$', k):
                 continue
             if self.default_rule(k, tree, v):
                 continue
@@ -562,6 +570,7 @@ class Audit:
         self.audit_noise(name, tree, sb)
         self.audit_osc_extras(name, tree, sb)
         self.audit_granular(name, tree, sb)
+        self.audit_spectral(name, tree, sb)
         self.audit_mod_slew(name, tree, sb)
         self.audit_voice_panel(name, tree, sb)
         self.audit_midi_map(name, tree, report)
@@ -775,6 +784,42 @@ class Audit:
                 self.check_value(name, None, sb, 'osc%d.gran.manual' % n, 1.0 if pp['kParamManualPositionMode'] >= 0.5 else 0.0, 'kParamManualPositionMode')
             if isinstance(pp.get('kParamPosition'), (int, float)):
                 self.check_value(name, None, sb, 'osc%d.gran.position' % n, pp['kParamPosition'], 'kParamPosition')
+
+    def audit_spectral(self, name, tree, sb):
+        """GROUPC WP-12 (A419 .. A426): type Spectral (3); the block rows are in SPECTRAL; here the common block (Manual, Position, Hz offset = the frequency shift) and the flex curve
+        (the drawn filter mask, content.spectral_filters: not stored when flat, y = 0.5 everywhere)."""
+        params = sb['state']['params']
+        stored = {e['osc']: e for e in sb['state'].get('content', {}).get('spectral_filters', [])}
+        for i in range(3):
+            n = i + 1
+            o = tree.get('Oscillator%d' % i)
+            pp = o.get('plainParams') if isinstance(o, dict) and isinstance(o.get('plainParams'), dict) else {}
+            if pp.get('kParamType') != 'kOsc_Spectral':
+                if params.get('osc%d.type' % n) == 3:
+                    self.err(name, 'osc%d.type is Spectral but the file says %s' % (n, pp.get('kParamType', 'kOsc_WT')))
+                if n in stored:
+                    self.err(name, 'osc%d has a spectral filter but is not a spectral oscillator' % n)
+                continue
+            self.stats['spectral oscillators'] += 1
+            if params.get('osc%d.type' % n) != 3:
+                self.err(name, 'osc%d.type: expected 3 (Spectral) got %s' % (n, params.get('osc%d.type' % n)))
+            if isinstance(pp.get('kParamManualPositionMode'), (int, float)):
+                self.check_value(name, None, sb, 'osc%d.spec.manual' % n, 1.0 if pp['kParamManualPositionMode'] >= 0.5 else 0.0, 'kParamManualPositionMode')
+            if isinstance(pp.get('kParamPosition'), (int, float)):
+                self.check_value(name, None, sb, 'osc%d.spec.position' % n, pp['kParamPosition'], 'kParamPosition')
+            if isinstance(pp.get('kParamHzOffset'), (int, float)):
+                self.check_value(name, None, sb, 'osc%d.spec.freq_shift' % n, pp['kParamHzOffset'], 'kParamHzOffset')
+            blk = o.get('SpectralOsc%d' % i)
+            flex = blk.get('flex') if isinstance(blk, dict) else None
+            ys = flex.get('yVals') if isinstance(flex, dict) else None
+            drawn = isinstance(ys, list) and len(ys) > 0 and any(abs(y - 0.5) > 1e-4 for y in ys)
+            if drawn != (n in stored):
+                self.err(name, 'osc%d: the flex curve is %s but the preset %s a spectral filter' % (n, 'drawn' if drawn else 'flat', 'has' if n in stored else 'has no'))
+            elif drawn:
+                self.stats['spectral filters'] += 1
+                pts = stored[n]['points']
+                if len(pts) < 2 or pts[0]['x'] > 1e-3 or pts[-1]['x'] < 1 - 1e-3:
+                    self.err(name, 'osc%d: the spectral filter does not span the axis' % n)
 
     SERUM_DEFAULTS = [(r'osc(\d)\.on$', lambda m: 1.0 if m.group(1) == '1' else 0.0), (r'(noise|sub)\.on$', lambda m: 0.0), (r'filter\d\.on$', lambda m: 0.0),
                       (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.spread$', lambda m: 100.0),
@@ -1005,6 +1050,32 @@ def main():
                     break
             else:
                 continue
+            break
+        # the spectral keys as well (a preset with a spectral oscillator that has a frequency band and a filter mix)
+        for rel, src, rep, sb in pairs:
+            _h, tree = load_serum(src)
+            found_spectral = None
+            for i in range(3):
+                o = tree.get('Oscillator%d' % i)
+                pp = o.get('plainParams') if isinstance(o, dict) and isinstance(o.get('plainParams'), dict) else {}
+                blk = o.get('SpectralOsc%d' % i) if isinstance(o, dict) else None
+                bp = blk.get('plainParams') if isinstance(blk, dict) and isinstance(blk.get('plainParams'), dict) else {}
+                if pp.get('kParamType') == 'kOsc_Spectral' and 'kParamFreqLo' in bp:
+                    found_spectral = i
+                    break
+            if found_spectral is None:
+                continue
+            report = json.load(open(rep))
+            preset = json.load(open(sb))
+            for key in ('osc%d.type' % (found_spectral + 1), 'osc%d.spec.freq_lo' % (found_spectral + 1)):
+                bad = json.loads(json.dumps({'state': preset['state']}))
+                bad['state']['params'][key] = bad['state']['params'].get(key, 0.0) + 1.5
+                t = Audit(False)
+                t.audit_file(rel, src, report, bad, content_dir)
+                found = any(key in e for e in t.errors)
+                print('selftest: mutation of %-22s %s' % (key, 'found' if found else 'NOT FOUND'))
+                if not found:
+                    mutation_ok = False
             break
     print('audited %d files; %s' % (audit.stats['files'], ', '.join('%s %d' % (k, v) for k, v in sorted(audit.stats.items()) if k != 'files')))
     for e in audit.errors[:60]:

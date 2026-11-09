@@ -30,7 +30,11 @@ public:
     /** The same graph for the per-connection modulation curve of matrix slot `modSlot` (1..64, MODAMT G2): content.modCurves[] instead of
         content.remaps[]; x is the value of the source, y what the connection uses before the amount; no entry = the straight line. */
     struct ModCurveMode {};
+    /** The same graph for the spectral filter mask of oscillator `osc` (GROUPC WP-12): content.spectralFilters[]; x is the position on the frequency axis (log, 20 Hz .. 20 kHz),
+        y the gain (0.5 = unity, 1 = +6 dB, 0 = silence); no entry = flat. */
+    struct SpectralFilterMode {};
     RemapEditor (UiContext& context, ModCurveMode, int modSlot);
+    RemapEditor (UiContext& context, SpectralFilterMode, int oscIndex);
     ~RemapEditor() override;
 
     int preferredHeight (int width) const;
@@ -38,6 +42,7 @@ public:
     // ---- state (tests, panel) ----
     int osc() const noexcept { return oscN; }
     bool isModCurve() const noexcept { return modMode; }
+    bool isSpectralFilter() const noexcept { return specMode; }
     /** Mod curve mode: show another matrix slot (1..64). */
     void setModSlot (int modSlot);
     /** The slot oscN.remap.slot shows, 1..4. */
@@ -52,6 +57,8 @@ public:
     bool canRedo() const noexcept { return ! redoStack.empty(); }
     juce::TextButton* button (const juce::String& text);
 
+    static constexpr int kNumSpectralPresets = 8;
+    static const char* spectralPresetName (int preset) noexcept; // Flat Low pass High pass Band pass Notch Tilt down Comb Formants
     static constexpr int kNumPresets = 8;
     static const char* presetName (int preset) noexcept; // Linear Reverse Ease in Ease out S curve Steps 4 Steps 8 Jump
 
@@ -107,6 +114,7 @@ private:
     int oscN;
     std::unique_ptr<ParamHandle> slotHandle; // oscN.remap.slot (remap mode only)
     bool modMode = false;
+    bool specMode = false;
     int modSlotNumber = 1;
     size_t maxPoints = static_cast<size_t> (kMaxRemapPoints);
     ContentRemap current;

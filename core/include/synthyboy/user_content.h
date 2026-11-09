@@ -166,6 +166,9 @@ public:
     float snapToZero (float norm, int windowFrames = 2048) const;
     /** The sample value (mono mix) at a fraction. */
     float valueAt (float norm) const;
+    /** The spectrogram of [startNorm, endNorm] for the display of the spectral oscillator: `columns` x `rows` values 0..1 (column major: out[column * rows + row], row 0 = 20 Hz, the last
+        row = 20 kHz, log axis; level in dB over a 60 dB range, normalised to the loudest cell). */
+    void spectrogram (float startNorm, float endNorm, int columns, int rows, std::vector<float>& out) const;
 
 private:
     int sampleRate_ = 0, channels_ = 0;

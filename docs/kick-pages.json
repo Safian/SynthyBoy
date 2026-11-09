@@ -3806,6 +3806,75 @@
         "osc3.gran.y_axis",
         "osc3.gran.xy_y"
       ]
+    },
+    {
+      "id": "osc1_spec_1",
+      "section": "Osc",
+      "title": "Osc 1 Spectral",
+      "knobs": [
+        {"key": "osc1.spec.freq_lo", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc1.spec.freq_hi", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc1.spec.cut", "shortLabel": "Spectral F", "widget": "bipolar_knob"},
+        {"key": "osc1.spec.mix", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc1.spec.freq_shift", "shortLabel": "Spectral F", "widget": "bipolar_knob"},
+        {"key": "osc1.spec.position", "shortLabel": "Spectral P", "widget": "knob"},
+        {"key": "osc1.spec.manual", "shortLabel": "Spectral M", "widget": "stepped"},
+        {"key": "osc1.spec.phase_lock", "shortLabel": "Spectral P", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc1.spec.lohi_smooth",
+        "osc1.spec.lohi_post_warp",
+        "osc1.spec.scan_keytrack",
+        "osc1.spec.transients",
+        "osc1.spec.y_axis",
+        "osc1.spec.xy_y"
+      ]
+    },
+    {
+      "id": "osc2_spec_1",
+      "section": "Osc",
+      "title": "Osc 2 Spectral",
+      "knobs": [
+        {"key": "osc2.spec.freq_lo", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc2.spec.freq_hi", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc2.spec.cut", "shortLabel": "Spectral F", "widget": "bipolar_knob"},
+        {"key": "osc2.spec.mix", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc2.spec.freq_shift", "shortLabel": "Spectral F", "widget": "bipolar_knob"},
+        {"key": "osc2.spec.position", "shortLabel": "Spectral P", "widget": "knob"},
+        {"key": "osc2.spec.manual", "shortLabel": "Spectral M", "widget": "stepped"},
+        {"key": "osc2.spec.phase_lock", "shortLabel": "Spectral P", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc2.spec.lohi_smooth",
+        "osc2.spec.lohi_post_warp",
+        "osc2.spec.scan_keytrack",
+        "osc2.spec.transients",
+        "osc2.spec.y_axis",
+        "osc2.spec.xy_y"
+      ]
+    },
+    {
+      "id": "osc3_spec_1",
+      "section": "Osc",
+      "title": "Osc 3 Spectral",
+      "knobs": [
+        {"key": "osc3.spec.freq_lo", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc3.spec.freq_hi", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc3.spec.cut", "shortLabel": "Spectral F", "widget": "bipolar_knob"},
+        {"key": "osc3.spec.mix", "shortLabel": "Spectral F", "widget": "knob"},
+        {"key": "osc3.spec.freq_shift", "shortLabel": "Spectral F", "widget": "bipolar_knob"},
+        {"key": "osc3.spec.position", "shortLabel": "Spectral P", "widget": "knob"},
+        {"key": "osc3.spec.manual", "shortLabel": "Spectral M", "widget": "stepped"},
+        {"key": "osc3.spec.phase_lock", "shortLabel": "Spectral P", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "osc3.spec.lohi_smooth",
+        "osc3.spec.lohi_post_warp",
+        "osc3.spec.scan_keytrack",
+        "osc3.spec.transients",
+        "osc3.spec.y_axis",
+        "osc3.spec.xy_y"
+      ]
     }
   ]
 }

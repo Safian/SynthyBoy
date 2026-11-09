@@ -135,6 +135,7 @@ namespace sbvital {
     switch (kind) {
       case 1: for (int u = 0; u < slot.unison; ++u) if (slot.voices[u].isActive()) return true; return false;
       case 2: for (int u = 0; u < slot.unison; ++u) if (slot.gvoices[u].isActive()) return true; return false;
+      case 3: for (int u = 0; u < std::min(slot.unison, kMaxSpectralUnison); ++u) if (slot.svoices[u].isActive()) return true; return false;
       default: return false;
     }
   }
@@ -145,6 +146,8 @@ namespace sbvital {
         slot.voices[u].reset();
       else if (kind == 2)
         slot.gvoices[u].reset();
+      else if (kind == 3 && u < kMaxSpectralUnison)
+        slot.svoices[u].reset();
     }
   }
 
@@ -182,6 +185,19 @@ namespace sbvital {
 
   void SampleOscillator::startKind(Slot& slot, int kind, int lane, int unison) {
     const SampleOscShared& sh = *shared_;
+    // the pitch of the note (as in renderSlot): the grains / frames that are made at the note on already play at it
+    float note_semitones = input(kTranspose)->at(0)[lane] + input(kTune)->at(0)[lane];
+    if (tracksPitch(lane) && ! slot.sliced)
+      note_semitones += input(kMidiNote)->at(0)[lane] + input(kFoldNote)->at(0)[lane] - static_cast<float>(sh.root);
+    else if (input(kPitchBendTrack)->at(0)[0] > 0.5f && ! slot.sliced)
+      note_semitones += input(kMidiNote)->at(0)[lane] - input(kRawMidiNote)->at(0)[lane];
+    const float note_detune_cents = input(kDetuneRange)->at(0)[lane] * input(kUnisonDetune)->at(0)[lane];
+    const float note_power = input(kDetunePower)->at(0)[lane];
+    const auto unison_ratio = [&](int u) {
+      const float t = unison > 1 ? 2.0f * u / (unison - 1) - 1.0f : 0.0f;
+      const float shaped = std::copysign(futils::powerScale(std::fabs(t), note_power), t);
+      return std::exp2((note_semitones + shaped * note_detune_cents * 0.01f) / 12.0f);
+    };
     const float uni_start = utils::clamp(input(kUniStart)->at(0)[lane], 0.0f, 1.0f);
     const float uni_span = utils::clamp(input(kUniSpan)->at(0)[lane], 0.0f, 1.0f);
     const float phase = input(kPhase)->at(0)[lane];
@@ -206,10 +222,31 @@ namespace sbvital {
         float fraction = phase + random_phase * rnd_phase + uni_start * rnd + uni_span * t;
         fraction -= std::floor(fraction);
         slot.start_random[u] = rnd;
+        gp.pitchRatio = unison_ratio(u);
         slot.gvoices[u].noteOn(sh.view, gp, nextRandom() | 1u, spawn, sh.gran.jump_start, fraction);
       }
       for (int u = unison; u < kMaxUnison; ++u)
         slot.gvoices[u].reset();
+      return;
+    }
+
+    if (kind == 3) {
+      synthyboy::spectral::SpectralParams sp;
+      float level = 1.0f;
+      float warp_amounts[2];
+      buildSpectralParams(slot, lane, unison, sp, level, warp_amounts);
+      const int voices = std::min(unison, kMaxSpectralUnison);
+      for (int u = 0; u < voices; ++u) {
+        const float t = unison > 1 ? static_cast<float>(u) / static_cast<float>(unison - 1) : 0.0f;
+        const float rnd = (nextRandom() >> 8) * (1.0f / 16777216.0f);
+        slot.start_random[u] = rnd;
+        float fraction = phase + random_phase * rnd_phase + uni_start * rnd + uni_span * t;
+        fraction -= std::floor(fraction);
+        sp.pitchRatio = unison_ratio(u);
+        slot.svoices[u].noteOn(sh.spec.analysis, sp, fraction);
+      }
+      for (int u = voices; u < kMaxSpectralUnison; ++u)
+        slot.svoices[u].reset();
       return;
     }
 
@@ -270,6 +307,8 @@ namespace sbvital {
           voice.prepare(static_cast<double>(prepared_rate_));
         for (synthyboy::granular::GranularVoice& voice : slot.gvoices)
           voice.prepare(static_cast<double>(prepared_rate_));
+        for (synthyboy::spectral::SpectralVoice& voice : slot.svoices)
+          voice.prepare(static_cast<double>(prepared_rate_));
       }
     }
 
@@ -277,6 +316,8 @@ namespace sbvital {
     const poly_mask reset_mask = getResetMask(kReset);
     const int unison = std::max(1, std::min(std::min(kMaxUnison, sh.max_unison), static_cast<int>(std::lround(input(kUnisonVoices)->at(0)[0]))));
     const int kind = std::max(1, std::min(4, static_cast<int>(std::lround(input(kType)->at(0)[0]))));
+    const int spectral_unison = std::min(unison, kMaxSpectralUnison);
+    (void)spectral_unison;
 
     for (int v = 0; v < kVoicesPerInstance; ++v) {
       const int lane = 2 * v;
@@ -318,6 +359,8 @@ namespace sbvital {
           for (int u = 0; u < slot.unison; ++u) {
             slot.voices[u].releaseLoop();
             slot.gvoices[u].releaseLoop();
+            if (u < kMaxSpectralUnison)
+              slot.svoices[u].releaseLoop();
           }
       }
       slot.pressed = pressed;
@@ -448,6 +491,119 @@ namespace sbvital {
     }
   }
 
+  // The block's external signals for the mask and vocode warps: the lane of the first / second other oscillator and of the noise is appended to a ring, the magnitude spectrum of
+  // the last 2048 samples is computed once per block (only when a warp needs it).
+  void SampleOscillator::updateExternalSpectra(Slot& slot, int lane, int num_samples, const int* warp_types) {
+    using namespace synthyboy::spectral;
+    bool needed[3] = { false, false, false };
+    for (int w = 0; w < 2; ++w)
+      if (SynthOscillator::isSpectralWarp(warp_types[w])) {
+        const int index = warp_types[w] - SynthOscillator::kSpecComb;
+        if (isExternalWarp(index))
+          needed[externalSource(index)] = true;
+      }
+    const Output* outputs[3] = { first_mod_oscillator_, second_mod_oscillator_, sample_ };
+    for (int s = 0; s < 3; ++s) {
+      if (!needed[s] || outputs[s] == nullptr)
+        continue;
+      const poly_float* src = outputs[s]->buffer;
+      float* ring = slot.ext_ring[s];
+      for (int i = 0; i < num_samples; ++i)
+        ring[(slot.ext_pos + i) & (kFftSize - 1)] = src[i][lane];
+    }
+    slot.ext_pos = (slot.ext_pos + num_samples) & (kFftSize - 1);
+    Scratch& scratch = *spectral_scratch_;
+    for (int s = 0; s < 3; ++s) {
+      if (!needed[s] || outputs[s] == nullptr)
+        continue;
+      for (int n = 0; n < kFftSize; ++n) {
+        const float w = 0.5f - 0.5f * std::cos(6.2831853f * static_cast<float>(n) / kFftSize);
+        scratch.re[n] = slot.ext_ring[s][(slot.ext_pos + n) & (kFftSize - 1)] * w;
+        scratch.im[n] = 0.0f;
+      }
+      Fft::instance().forward(scratch.re, scratch.im);
+      for (int k = 0; k < kBins; ++k)
+        slot.ext_mag[s][k] = std::sqrt(scratch.re[k] * scratch.re[k] + scratch.im[k] * scratch.im[k]);
+    }
+  }
+
+  // The settings of the spectral voices for this block (the keys, the X|Y control, the region of the slot, the drawn filter).
+  void SampleOscillator::buildSpectralParams(Slot& slot, int lane, int unison, synthyboy::spectral::SpectralParams& sp, float& level, float* warp_amounts) {
+    using namespace synthyboy::spectral;
+    const SampleOscShared& sh = *shared_;
+    const SampleOscShared::Spectral& g = sh.spec;
+    const auto in = [&](int what) { return input(what)->at(0)[lane]; };
+    const float y = utils::clamp(in(kSpecXyY), 0.0f, 1.0f);
+    const int axis = g.y_axis;
+    sp.scratch = spectral_scratch_.get();
+    sp.hostRate = static_cast<double>(getSampleRate());
+    sp.regionLo = slot.region_lo;
+    sp.regionHi = slot.region_hi;
+    sp.loopMode = loopModeOf(sh.loop_mode);
+    float ls = sh.loop_start, le = sh.loop_end;
+    if (sh.loop_relative) {
+      ls = slot.region_lo + ls * (slot.region_hi - slot.region_lo);
+      le = slot.region_lo + le * (slot.region_hi - slot.region_lo);
+    }
+    sp.loopLo = ls;
+    sp.loopHi = le;
+    sp.manual = g.manual;
+    sp.position = utils::clamp(in(kSpecPosition), 0.0f, 1.0f);
+    static const float kRange[4] = { 1.0f, 2.0f, 4.0f, 8.0f };
+    float speed = in(kScan) * kRange[std::max(0, std::min(3, sh.scan_range))];
+    if (sh.scan_reverse)
+      speed = -speed;
+    if (sh.scan_lock_tempo)
+      speed *= static_cast<float>(sh.bpm / 120.0);
+    if (sh.scan_to_bpm) {
+      const double region_seconds = (slot.region_hi - slot.region_lo) * static_cast<double>(sh.view->numFrames) / sh.view->sampleRate;
+      const double target_seconds = static_cast<double>(sh.length_beats) * 60.0 / std::max(1.0, sh.bpm);
+      speed *= static_cast<float>(target_seconds > 1.0e-6 ? region_seconds / target_seconds : 1.0);
+    }
+    if (g.scan_keytrack)
+      speed *= std::exp2((in(kMidiNote) + in(kFoldNote) - 60.0f) / 12.0f);
+    sp.scanSpeed = speed;
+
+    float lo = axis == 6 ? 20.0f * std::pow(1000.0f, y) : in(kSpecFreqLo);
+    float hi = axis == 7 ? 20.0f * std::pow(1000.0f, y) : in(kSpecFreqHi);
+    sp.freqLoHz = utils::clamp(lo, 20.0f, 20000.0f);
+    sp.freqHiHz = utils::clamp(hi, 20.0f, 20000.0f);
+    sp.bandSmooth = g.lohi_smooth;
+    sp.bandPostWarp = g.lohi_post_warp;
+    sp.phaseLock = g.phase_lock;
+    sp.transients = g.transients;
+    sp.freqShiftHz = utils::clamp(in(kSpecFreqShift), -2000.0f, 2000.0f);
+    const float cut = axis == 4 ? 2.0f * y - 1.0f : utils::clamp(in(kSpecCut), -1.0f, 1.0f);
+    const float mix = axis == 5 ? y : utils::clamp(in(kSpecMix), 0.0f, 1.0f);
+    level = axis == 1 ? y : 1.0f;
+
+    // the spectral filter: the drawn curve (flat without one) shifted by CUT, mixed wet / dry
+    if (g.has_filter) {
+      const uint32_t key = g.filter_id * 2654435761u ^ static_cast<uint32_t>(std::lround((cut + 1.0f) * 4000.0f)) * 40503u ^ static_cast<uint32_t>(std::lround(mix * 1000.0f)) * 9973u ^ static_cast<uint32_t>(sh.view->sampleRate);
+      if (key != slot.filter_key) {
+        slot.filter_key = key;
+        static const struct Axis { float x[257]; Axis() { for (int i = 0; i < 257; ++i) x[i] = static_cast<float>(i) / 256.0f; } } axis_table;
+        buildFilterGains(slot.filter_gains, axis_table.x, g.filter_table, 257, cut, mix, sh.view->sampleRate / kFftSize); // the filter acts on the bins of the sample (its own sample rate)
+      }
+      sp.filterGain = slot.filter_gains;
+    }
+    else
+      sp.filterGain = nullptr;
+
+    const int types[2] = { static_cast<int>(input(kWarpType)->at(0)[0]), static_cast<int>(input(kWarp2Type)->at(0)[0]) };
+    const float amounts[2] = { axis == 2 ? y : utils::clamp(in(kWarpAmount), 0.0f, 1.0f), axis == 3 ? y : utils::clamp(in(kWarp2Amount), 0.0f, 1.0f) };
+    const float vars[2] = { utils::clamp(in(kWarpVar), 0.0f, 1.0f), utils::clamp(in(kWarp2Var), 0.0f, 1.0f) };
+    for (int w = 0; w < 2; ++w) {
+      warp_amounts[w] = amounts[w];
+      sp.warpType[w] = SynthOscillator::isSpectralWarp(types[w]) ? types[w] - SynthOscillator::kSpecComb : -1;
+      sp.warpAmount[w] = amounts[w];
+      sp.warpVar[w] = vars[w];
+    }
+    for (int s = 0; s < 3; ++s)
+      sp.external[s] = slot.ext_mag[s];
+    (void)unison;
+  }
+
   void SampleOscillator::renderSlot(Slot& slot, int kind, int slot_index, int unison, int num_samples, poly_float* raw, float ramp0, float ramp1) {
     const SampleOscShared& sh = *shared_;
     const int lane = 2 * slot_index;
@@ -455,6 +611,7 @@ namespace sbvital {
     float* sr = scratch_.get() + kMaxScratch;
     float* rate_mod = scratch_.get() + 2 * kMaxScratch;
     const bool granular = kind == 2;
+    const bool spectral = kind == 3;
 
     // pitch: the note of the voice (bend, portamento) + fold + transposition + tune relative to the root key; a slice or a switched off
     // key tracking plays at the recorded pitch (+ transposition + tune)
@@ -504,6 +661,15 @@ namespace sbvital {
       amounts[1] = grain_amounts[1];
     }
 
+    synthyboy::spectral::SpectralParams sp;
+    float spec_level = 1.0f;
+    if (spectral) {
+      float spec_amounts[2];
+      buildSpectralParams(slot, lane, unison, sp, spec_level, spec_amounts);
+      updateExternalSpectra(slot, lane, num_samples, warp_types);
+    }
+    const int voices = spectral ? std::min(unison, kMaxSpectralUnison) : unison;
+
     // unison weights (centre voice and detuned voices, normalised to equal power)
     const float centre_w = 1.0f - 0.5f * blend;
     const float detuned_w = std::max(0.25f, 1.0f - (1.0f - blend) * (1.0f - blend));
@@ -516,8 +682,8 @@ namespace sbvital {
     }
     const float norm = sum_squares > 0.0f ? 1.0f / std::sqrt(sum_squares) : 1.0f;
 
-    for (int u = 0; u < unison; ++u) {
-      const bool voice_active = granular ? slot.gvoices[u].isActive() : slot.voices[u].isActive();
+    for (int u = 0; u < voices; ++u) {
+      const bool voice_active = spectral ? slot.svoices[u].isActive() : (granular ? slot.gvoices[u].isActive() : slot.voices[u].isActive());
       if (! voice_active)
         continue;
       const float t = unison > 1 ? 2.0f * u / (unison - 1) - 1.0f : 0.0f;
@@ -540,7 +706,20 @@ namespace sbvital {
           }
           mod = rate_mod;
         }
-      if (granular) {
+      if (spectral) {
+        // Frequency Modulation of the read speed has no per sample meaning here: the block mean of the deviation scales the pitch
+        float mean_rate = 1.0f;
+        if (mod != nullptr) {
+          float sum = 0.0f;
+          for (int i = 0; i < num_samples; ++i)
+            sum += mod[i];
+          mean_rate = std::max(0.1f, sum / static_cast<float>(std::max(1, num_samples)));
+        }
+        sp.pitchRatio = std::exp2((semitones + shaped * detune_cents * 0.01f) / 12.0f) * mean_rate;
+        sp.gain = spec_level;
+        slot.svoices[u].process(sp, sl, sr, num_samples);
+      }
+      else if (granular) {
         gp.pitchRatio = std::exp2((semitones + shaped * detune_cents * 0.01f) / 12.0f);
         gp.gain = gran_level;
         slot.gvoices[u].process(gp, sl, sr, num_samples, mod);

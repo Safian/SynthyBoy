@@ -95,6 +95,12 @@ namespace sbvital {
     Output* gran_controls[SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount + 1];
     for (int i = 0; i <= SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount; ++i)
       gran_controls[i] = createPolyModControl(prefix_ + kGranControls[i]);
+    // GROUPC WP-12 (4.38): the modulatable keys of the spectral oscillator, in the order of SampleOscillator::kSpecFreqLo ..
+    static const char* const kSpecControls[SampleOscillator::kSpecXyY - SampleOscillator::kSpecFreqLo + 1] = {
+      "_spec_freq_lo", "_spec_freq_hi", "_spec_cut", "_spec_mix", "_spec_freq_shift", "_spec_position", "_spec_xy_y" };
+    Output* spec_controls[SampleOscillator::kSpecXyY - SampleOscillator::kSpecFreqLo + 1];
+    for (int i = 0; i <= SampleOscillator::kSpecXyY - SampleOscillator::kSpecFreqLo; ++i)
+      spec_controls[i] = createPolyModControl(prefix_ + kSpecControls[i]);
     // SynthyBoy Block B14: Pitch and unison modes, transpose snap, phase legato
     Value* pitch_mode = createBaseControl(prefix_ + "_pitch_mode");
     Output* pitch_coarse = createPolyModControl(prefix_ + "_pitch_coarse");
@@ -186,6 +192,10 @@ namespace sbvital {
     so->plug(type_, SampleOscillator::kType);
     for (int i = 0; i <= SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount; ++i)
       so->plug(gran_controls[i], SampleOscillator::kGranWindowAmount + i);
+    for (int i = 0; i <= SampleOscillator::kSpecXyY - SampleOscillator::kSpecFreqLo; ++i)
+      so->plug(spec_controls[i], SampleOscillator::kSpecFreqLo + i);
+    so->plug(distortion_phase, SampleOscillator::kWarpVar);
+    so->plug(warp2_phase, SampleOscillator::kWarp2Var);
     so->setPitchTap(oscillator_->pitchTap());
     so->plug(distortion_type_, SampleOscillator::kWarpType);
     so->plug(distortion_amount, SampleOscillator::kWarpAmount);

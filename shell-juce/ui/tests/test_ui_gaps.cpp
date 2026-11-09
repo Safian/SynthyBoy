@@ -18,6 +18,7 @@
 #include "ui/panels/FxRackView.h"
 #include "ui/panels/GlbScopePanel.h"
 #include "ui/panels/ModMatrixReorder.h"
+#include "ui/panels/RemapEditor.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/OscTabsPanel.h"
 #include "ui/panels/OscWaveView.h"
@@ -552,9 +553,9 @@ TEST (uig_warp_type_list_is_grouped)
                 ++tickedSub; // the group of the current type is marked
         }
     }
-    CHECK_EQ (groups, 8 + 2);     // the eight groups, a separator and Swap Warps
+    CHECK_EQ (groups, 10 + 2);    // the ten groups (eight and the two spectral ones of GROUPC WP-12), a separator and Swap Warps
     CHECK_EQ (disabledGroups, 0); // block B21: Filter / Distortion / PD / AM have their modes
-    CHECK_EQ (subMenus, 8);       // Basic / Alt / Filter / Distortion / FM / PD / AM / RM
+    CHECK_EQ (subMenus, 10);      // Basic / Alt / Filter / Distortion / FM / PD / AM / RM and the two spectral groups
     CHECK_EQ (tickedSub, 1);      // warp type None sits in Basic
     CHECK (warp->hasExtraAction());
 
@@ -2508,7 +2509,7 @@ TEST (uig_wp11_granular_view_window_thumbnail_xy_dot_dimming_and_assignment)
         juce::PopupMenu::MenuItemIterator it (menu);
         while (it.next())
             entries += it.getItem().itemID >= 1 && it.getItem().itemID < ParamChoice::kExtraActionId ? 1 : 0;
-        CHECK_EQ (entries, 3); // Wavetable, Sample, Granular
+        CHECK (entries >= 3); // Wavetable, Sample, Granular (and the types appended later)
         CHECK (controlOf ("osc1.gran.density")->getAlpha() < 0.9f); // the wavetable type: the granular keys are dimmed
         rig.setParam ("osc1.type", 2.0f);
         CHECK (controlOf ("osc1.gran.density")->getAlpha() > 0.9f);
@@ -2580,6 +2581,108 @@ TEST (uig_wp11_granular_view_window_thumbnail_xy_dot_dimming_and_assignment)
         CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
         CHECK (panel->getWidth() <= sz.w);
         rig.shot ("osc-wp11-granular-" + n, sz.w, sz.h, true, Page::osc);
+    }
+}
+
+// GROUPC (WP-12): the spectral oscillator: the type list, the frequency strip with the Lo / Hi markers (drag), the X|Y dot, the spectral filter graph with its presets, dimming, assignment
+TEST (uig_wp12_spectral_view_frequency_markers_filter_graph_and_dimming)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::osc, sz.w, sz.h);
+        rig.editor->context().view->oscTab = 0;
+        rig.editor->panelHost().setPage (Page::osc);
+        Panel* panel = rig.panelTitled ("Oscillator 1");
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        const auto keys = panel->keys();
+        for (const char* key : { "osc1.spec.freq_lo", "osc1.spec.freq_hi", "osc1.spec.cut", "osc1.spec.mix", "osc1.spec.freq_shift", "osc1.spec.phase_lock", "osc1.spec.y_axis" })
+            CHECK (std::find (keys.begin(), keys.end(), std::string (key)) != keys.end());
+        panel->setMoreExpanded (true);
+        const auto controlOf = [&] (const char* key) -> ParamControl*
+        {
+            for (const auto& c : panel->controls())
+                if (c->key() == key)
+                    return c.get();
+            return nullptr;
+        };
+        auto* view = rig.oscView (1);
+        CHECK (view != nullptr);
+        if (view == nullptr)
+            continue;
+        // dimming follows the type
+        CHECK (controlOf ("osc1.spec.cut")->getAlpha() < 0.9f);
+        rig.setParam ("osc1.type", 3.0f);
+        CHECK_EQ (view->oscType(), 3);
+        CHECK (view->isSpectral() && view->isSampleType() && ! view->isGranular());
+        CHECK (controlOf ("osc1.spec.cut")->getAlpha() > 0.9f);
+        CHECK (controlOf ("osc1.spec.position")->getAlpha() < 0.9f);
+        rig.setParam ("osc1.spec.manual", 1.0f);
+        CHECK (controlOf ("osc1.spec.position")->getAlpha() > 0.9f);
+        CHECK (controlOf ("osc1.gran.density")->getAlpha() < 0.9f);
+
+        // the frequency strip: the markers at the ends of the log axis; dragging the high marker down sets Freq Hi, the low marker cannot pass it
+        const auto strip = view->freqStripArea();
+        CHECK (strip.getWidth() >= static_cast<float> (rig.editor->theme().touch()));
+        CHECK (view->waveArea().contains (strip));
+        CHECK (view->freqMarkerPosition (true).y < view->freqMarkerPosition (false).y);
+        CHECK_NEAR (view->yToFreq (view->freqToY (1000.0f)), 1000.0, 1.0);
+        const auto hi = view->freqMarkerPosition (true);
+        const juce::Point<float> to (hi.x, view->freqToY (1000.0f));
+        view->mouseDown (mouse (*view, hi, hi, false));
+        view->mouseDrag (mouse (*view, to, hi, true));
+        view->mouseUp (mouse (*view, to, hi, true));
+        CHECK_NEAR (rig.param ("osc1.spec.freq_hi"), 1000.0, 25.0);
+        const auto lo = view->freqMarkerPosition (false);
+        const juce::Point<float> above (lo.x, view->freqToY (9000.0f));
+        view->mouseDown (mouse (*view, lo, lo, false));
+        view->mouseDrag (mouse (*view, above, lo, true));
+        view->mouseUp (mouse (*view, above, lo, true));
+        CHECK (rig.param ("osc1.spec.freq_lo") <= rig.param ("osc1.spec.freq_hi") + 0.5f); // Lo stops at Hi
+
+        // the manual X|Y dot
+        const auto area = view->waveArea();
+        const juce::Point<float> start (area.getCentreX(), area.getCentreY() + 8.0f), target (area.getX() + area.getWidth() * 0.4f, area.getY() + area.getHeight() * 0.3f);
+        view->mouseDown (mouse (*view, start, start, false));
+        view->mouseDrag (mouse (*view, target, start, true));
+        view->mouseUp (mouse (*view, target, start, true));
+        CHECK_NEAR (rig.param ("osc1.spec.position"), 40.0, 8.0);
+        CHECK_NEAR (rig.param ("osc1.spec.xy_y"), 70.0, 8.0);
+
+        // the spectral filter graph below the display: touch sized, presets draw a curve into the content, Reset removes it
+        const auto* probe = rig.find<RemapEditor> ([] (RemapEditor& e) { return e.isSpectralFilter(); });
+        CHECK (probe != nullptr);
+        if (probe != nullptr)
+        {
+            auto* editor = const_cast<RemapEditor*> (probe);
+            CHECK (editor->isVisible() && editor->getHeight() >= editor->preferredHeight (editor->getWidth()) - 1);
+            CHECK (! editor->isDrawn());
+            CHECK_NEAR (editor->evaluateAt (0.5f), 0.5, 1.0e-6);   // flat: unity
+            editor->applyPreset (4);                               // Notch
+            editor->commitNow();
+            CHECK (editor->isDrawn());
+            CHECK_EQ (rig.proc.content().spectralFilters.size(), static_cast<size_t> (1));
+            CHECK_EQ (rig.proc.content().spectralFilters[0].osc, 1);
+            CHECK (editor->evaluateAt (0.5f) < 0.1f && editor->evaluateAt (0.0f) > 0.45f);
+            CHECK (std::string (RemapEditor::spectralPresetName (6)) == "Comb");
+            editor->resetToIdentity();
+            editor->commitNow();
+            CHECK (rig.proc.content().spectralFilters.empty());
+        }
+        rig.setParam ("osc1.type", 0.0f);
+        CHECK (rig.find<RemapEditor> ([] (RemapEditor& e) { return e.isSpectralFilter() && e.isVisible(); }) == nullptr); // hidden again
+
+        // assign-by-touch: the cut takes a source
+        rig.setParam ("osc1.type", 3.0f);
+        const int slot = assignBySource (rig, 7, "osc1.spec.cut", 50.0f);
+        CHECK (slot >= 0);
+        auto& m = rig.editor->context().assign.matrix();
+        CHECK_EQ (static_cast<int> (m.get (modSlotParams (slot).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("osc1.spec.cut").index))));
+        CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
+        rig.shot ("osc-wp12-spectral-" + n, sz.w, sz.h, true, Page::osc);
     }
 }
 

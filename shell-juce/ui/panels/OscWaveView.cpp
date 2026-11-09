@@ -64,6 +64,11 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
       warpAmountHandle (context, "osc" + std::to_string (oscIndex) + ".warp.amount"),
       warpTypeHandle (context, "osc" + std::to_string (oscIndex) + ".warp.type"),
       unisonVoicesHandle (context, "osc" + std::to_string (oscIndex) + ".unison.voices"),
+      specFreqLoHandle (context, "osc" + std::to_string (oscIndex) + ".spec.freq_lo"),
+      specFreqHiHandle (context, "osc" + std::to_string (oscIndex) + ".spec.freq_hi"),
+      specManualHandle (context, "osc" + std::to_string (oscIndex) + ".spec.manual"),
+      specPositionHandle (context, "osc" + std::to_string (oscIndex) + ".spec.position"),
+      specXyYHandle (context, "osc" + std::to_string (oscIndex) + ".spec.xy_y"),
       granPositionHandle (context, "osc" + std::to_string (oscIndex) + ".gran.position"),
       granXyYHandle (context, "osc" + std::to_string (oscIndex) + ".gran.xy_y"),
       granManualHandle (context, "osc" + std::to_string (oscIndex) + ".gran.manual"),
@@ -90,7 +95,7 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     warpAmountHandle.onChange = repaintCb;
     warpTypeHandle.onChange = repaintCb;
     unisonVoicesHandle.onChange = repaintCb;
-    for (ParamHandle* handle : { &granPositionHandle, &granXyYHandle, &granManualHandle, &granWindowAmountHandle, &granWindowSkewHandle, &granWindowShapeHandle,
+    for (ParamHandle* handle : { &specFreqLoHandle, &specFreqHiHandle, &specManualHandle, &specPositionHandle, &specXyYHandle, &granPositionHandle, &granXyYHandle, &granManualHandle, &granWindowAmountHandle, &granWindowSkewHandle, &granWindowShapeHandle,
                                  &granDensityHandle, &granLengthHandle, &granRandOffsetHandle })
         handle->onChange = repaintCb;
     sampleStartHandle.onChange = repaintCb;
@@ -190,9 +195,47 @@ juce::Point<float> OscWaveView::xyDotPosition() const
 {
     const auto area = waveArea();
     const float start = sampleStartHandle.valid() ? sampleStartHandle.normalised() : 0.0f, end = sampleEndHandle.valid() ? sampleEndHandle.normalised() : 1.0f;
-    const float position = granPositionHandle.valid() ? granPositionHandle.normalised() : 0.0f;
-    const float y = granXyYHandle.valid() ? granXyYHandle.normalised() : 0.5f;
+    const ParamHandle& positionHandle = isSpectral() ? specPositionHandle : granPositionHandle;
+    const ParamHandle& yHandle = isSpectral() ? specXyYHandle : granXyYHandle;
+    const float position = positionHandle.valid() ? positionHandle.normalised() : 0.0f;
+    const float y = yHandle.valid() ? yHandle.normalised() : 0.5f;
     return { sampleNormToX (start + (end - start) * position), area.getBottom() - y * area.getHeight() };
+}
+
+bool OscWaveView::xyManualOn() const
+{
+    if (isGranular())
+        return granManualHandle.valid() && granManualHandle.plain() > 0.5f;
+    if (isSpectral())
+        return specManualHandle.valid() && specManualHandle.plain() > 0.5f;
+    return false;
+}
+
+juce::Rectangle<float> OscWaveView::freqStripArea() const
+{
+    const auto area = waveArea();
+    const float w = static_cast<float> (ctx.theme.touch());
+    return { area.getRight() - w, area.getY(), w, area.getHeight() };
+}
+
+float OscWaveView::freqToY (float hz) const
+{
+    const auto strip = freqStripArea();
+    const float norm = juce::jlimit (0.0f, 1.0f, std::log (juce::jmax (20.0f, hz) / 20.0f) / std::log (1000.0f));
+    return strip.getBottom() - norm * strip.getHeight();
+}
+
+float OscWaveView::yToFreq (float y) const
+{
+    const auto strip = freqStripArea();
+    const float norm = juce::jlimit (0.0f, 1.0f, (strip.getBottom() - y) / juce::jmax (1.0f, strip.getHeight()));
+    return 20.0f * std::pow (1000.0f, norm);
+}
+
+juce::Point<float> OscWaveView::freqMarkerPosition (bool high) const
+{
+    const ParamHandle& handle = high ? specFreqHiHandle : specFreqLoHandle;
+    return { freqStripArea().getCentreX(), freqToY (handle.valid() ? handle.plain() : (high ? 20000.0f : 20.0f)) };
 }
 
 std::vector<OscWaveView::GrainMark> OscWaveView::grainMarks() const
@@ -658,7 +701,9 @@ void OscWaveView::cancelOneFingerGesture()
             case SampleMarker::loopEnd:   sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::loopPair:  sampleLoopStartHandle.endGesture(); sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::threshold: sliceThresholdHandle.endGesture(); break;
-            case SampleMarker::xy:        granPositionHandle.endGesture(); granXyYHandle.endGesture(); break;
+            case SampleMarker::xy:        xyPositionHandle().endGesture(); xyYHandle().endGesture(); break;
+            case SampleMarker::freqLo:    specFreqLoHandle.endGesture(); break;
+            case SampleMarker::freqHi:    specFreqHiHandle.endGesture(); break;
             case SampleMarker::window:    granWindowAmountHandle.endGesture(); granWindowSkewHandle.endGesture(); break;
             case SampleMarker::none:
             case SampleMarker::slice:     break;
@@ -722,9 +767,17 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
         const bool manual = sliceModeIndex() == 2;
 
         const int sliceHit = manual ? nearestSliceAtX (e.position.x) : -1;
-        const bool granularManual = isGranular() && granManualHandle.valid() && granManualHandle.plain() > 0.5f;
+        const bool granularManual = xyManualOn();
         windowTap = false;
-        if (isGranular() && windowThumbArea().contains (e.position))
+        const float distanceHigh = std::abs (e.position.y - freqMarkerPosition (true).y), distanceLow = std::abs (e.position.y - freqMarkerPosition (false).y);
+        if (isSpectral() && freqStripArea().contains (e.position) && std::min (distanceHigh, distanceLow) < static_cast<float> (ctx.theme.touch()))
+        {
+            // the nearer of the two markers on the frequency strip
+            const bool high = distanceHigh <= distanceLow;
+            activeMarker = high ? SampleMarker::freqHi : SampleMarker::freqLo;
+            (high ? specFreqHiHandle : specFreqLoHandle).beginGesture();
+        }
+        else if (isGranular() && windowThumbArea().contains (e.position))
         {
             // the window thumbnail: a tap steps the shape, a drag sets amount (up) and skew (sideways)
             activeMarker = SampleMarker::window;
@@ -777,8 +830,8 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
         {
             // manual mode: the dot follows the finger (position in the region, Y position)
             activeMarker = SampleMarker::xy;
-            granPositionHandle.beginGesture();
-            granXyYHandle.beginGesture();
+            xyPositionHandle().beginGesture();
+            xyYHandle().beginGesture();
             mouseDrag (e);
         }
         press.press (e.position);
@@ -845,8 +898,17 @@ void OscWaveView::mouseDrag (const juce::MouseEvent& e)
                 const auto a = waveArea();
                 const float start = sampleStartHandle.normalised(), end = sampleEndHandle.normalised();
                 const float p = end > start ? (xToSampleNorm (e.position.x) - start) / (end - start) : 0.0f;
-                granPositionHandle.setNormalised (juce::jlimit (0.0f, 1.0f, p));
-                granXyYHandle.setNormalised (juce::jlimit (0.0f, 1.0f, (a.getBottom() - e.position.y) / juce::jmax (1.0f, a.getHeight())));
+                xyPositionHandle().setNormalised (juce::jlimit (0.0f, 1.0f, p));
+                xyYHandle().setNormalised (juce::jlimit (0.0f, 1.0f, (a.getBottom() - e.position.y) / juce::jmax (1.0f, a.getHeight())));
+                break;
+            }
+            case SampleMarker::freqLo:
+            case SampleMarker::freqHi:
+            {
+                ParamHandle& handle = activeMarker == SampleMarker::freqHi ? specFreqHiHandle : specFreqLoHandle;
+                const float other = activeMarker == SampleMarker::freqHi ? specFreqLoHandle.plain() : specFreqHiHandle.plain();
+                const float hz = yToFreq (e.position.y);
+                handle.setPlainComplete (activeMarker == SampleMarker::freqHi ? juce::jmax (hz, other) : juce::jmin (hz, other));
                 break;
             }
             case SampleMarker::window:
@@ -901,7 +963,9 @@ void OscWaveView::mouseUp (const juce::MouseEvent& e)
             case SampleMarker::loopEnd:   sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::loopPair:  sampleLoopStartHandle.endGesture(); sampleLoopEndHandle.endGesture(); break;
             case SampleMarker::threshold: sliceThresholdHandle.endGesture(); break;
-            case SampleMarker::xy:        granPositionHandle.endGesture(); granXyYHandle.endGesture(); break;
+            case SampleMarker::xy:        xyPositionHandle().endGesture(); xyYHandle().endGesture(); break;
+            case SampleMarker::freqLo:    specFreqLoHandle.endGesture(); break;
+            case SampleMarker::freqHi:    specFreqHiHandle.endGesture(); break;
             case SampleMarker::window:
                 granWindowAmountHandle.endGesture();
                 granWindowSkewHandle.endGesture();
@@ -1060,6 +1124,8 @@ void OscWaveView::paint (juce::Graphics& g)
         paintSample (g, area);
         if (isGranular())
             paintGranular (g, area);
+        else if (isSpectral())
+            paintSpectral (g, area);
     }
     else
         paintWavetable (g, area);
@@ -1490,6 +1556,77 @@ void OscWaveView::paintSample (juce::Graphics& g, juce::Rectangle<float> area)
 }
 
 // ---- OscNoiseView -----------------------------------------------------------------------------------------------------------------
+
+/** The spectral overlay: the spectrogram of the sample under the waveform, the frequency strip with the Lo / Hi markers and the band between them, the X|Y dot of the manual mode. */
+void OscWaveView::rebuildSpectrogram()
+{
+    const auto prev = preview();
+    const auto area = waveArea();
+    const float start = static_cast<float> (sampleVp.toRange (0.0)), end = static_cast<float> (sampleVp.toRange (1.0));
+    const int columns = juce::jlimit (8, 400, juce::roundToInt (area.getWidth() / 3.0f));
+    if (prev == nullptr)
+    {
+        spectrogramFor = nullptr;
+        spectrogramColumns = 0;
+        return;
+    }
+    if (spectrogramFor == prev.get() && spectrogramColumns == columns && std::abs (spectrogramStart - start) < 1.0e-4f && std::abs (spectrogramEnd - end) < 1.0e-4f)
+        return;
+    std::vector<float> cells;
+    const int rows = 48;
+    prev->spectrogram (start, end, columns, rows, cells);
+    spectrogramImage = juce::Image (juce::Image::ARGB, columns, rows, true);
+    const Palette& c = ctx.theme.colours;
+    for (int x = 0; x < columns; ++x)
+        for (int y = 0; y < rows; ++y)
+        {
+            const float v = cells[static_cast<size_t> (x) * rows + static_cast<size_t> (y)];
+            spectrogramImage.setPixelAt (x, rows - 1 - y, c.accent.withAlpha (juce::jlimit (0.0f, 1.0f, v * v * 0.8f)));
+        }
+    spectrogramFor = prev.get();
+    spectrogramColumns = columns;
+    spectrogramStart = start;
+    spectrogramEnd = end;
+}
+
+void OscWaveView::paintSpectral (juce::Graphics& g, juce::Rectangle<float> area)
+{
+    const auto& t = ctx.theme;
+    const Palette& c = t.colours;
+    rebuildSpectrogram();
+    g.saveState();
+    g.reduceClipRegion (area.toNearestInt());
+    if (spectrogramColumns > 0)
+    {
+        g.setImageResamplingQuality (juce::Graphics::lowResamplingQuality);
+        g.drawImage (spectrogramImage, area);
+    }
+    // the band between Freq Lo and Freq Hi and the strip with the two markers
+    const auto strip = freqStripArea();
+    const auto lo = freqMarkerPosition (false), hi = freqMarkerPosition (true);
+    g.setColour (c.panel.withAlpha (0.7f));
+    g.fillRect (strip);
+    g.setColour (c.accent.withAlpha (0.18f));
+    g.fillRect (area.getX(), hi.y, area.getWidth() - strip.getWidth(), lo.y - hi.y);
+    g.setColour (c.accent);
+    for (const auto& marker : { lo, hi })
+    {
+        g.drawLine (area.getX(), marker.y, strip.getRight(), marker.y, t.px (1.0f));
+        g.fillRoundedRectangle (marker.x - t.px (14.0f), marker.y - t.px (5.0f), t.px (28.0f), t.px (10.0f), t.px (4.0f));
+    }
+    g.setColour (c.textDim);
+    g.setFont (t.labelFont());
+    g.drawText (juce::String (juce::roundToInt (specFreqHiHandle.valid() ? specFreqHiHandle.plain() : 20000.0f)) + " Hz", strip.toNearestInt().removeFromTop (t.ipx (14.0f)), juce::Justification::centred, false);
+    g.drawText (juce::String (juce::roundToInt (specFreqLoHandle.valid() ? specFreqLoHandle.plain() : 20.0f)) + " Hz", strip.toNearestInt().removeFromBottom (t.ipx (14.0f)), juce::Justification::centred, false);
+    if (xyManualOn())
+    {
+        const auto dot = xyDotPosition();
+        g.setColour (c.danger.withAlpha (0.9f));
+        g.drawLine (dot.x, area.getY(), dot.x, area.getBottom(), t.px (1.0f));
+        g.fillEllipse (dot.x - t.px (7.0f), dot.y - t.px (7.0f), t.px (14.0f), t.px (14.0f));
+    }
+    g.restoreState();
+}
 
 /** The granular overlay: the grains the settings spawn (bars across the region), the grain window thumbnail and, in manual mode, the X|Y dot. */
 void OscWaveView::paintGranular (juce::Graphics& g, juce::Rectangle<float> area)

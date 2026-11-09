@@ -169,10 +169,16 @@ namespace sbvital {
         kSrcPdNoise, kSrcPdSub, kSrcPdFilter1, kSrcPdFilter2,
         kSrcAmNoise, kSrcAmSub, kSrcAmFilter1, kSrcAmFilter2,
         kSrcRmNoise, kSrcRmSub, kSrcRmFilter1, kSrcRmFilter2,
+        // GROUPC WP-12 (docs/ui-design/13-new-keys.md 4.38): the spectral warps, acting on the spectral oscillator only (the oscillators of the other types ignore them)
+        kSpecComb, kSpecAddHarmonics, kSpecAddSubharmonics, kSpecDetune, kSpecShepardNarrow, kSpecShepardFilter, kSpecPeakOctaveDown, kSpecPeakOctaveUp,
+        kSpecPeakHarmonicDown, kSpecPeakHarmonicUp, kSpecGate, kSpecPitchShift, kSpecPhaseTwist, kSpecSpread, kSpecShift, kSpecSmear, kSpecMirror,
+        kSpecMaskFirst, kSpecMaskSecond, kSpecMaskNoise, kSpecVocodeFirst, kSpecVocodeSecond, kSpecVocodeNoise,
         kNumDistortionTypes
       };
 
-      static bool isSourceWarp(int type) { return type >= kSrcFmThruZeroNoise && type < kNumDistortionTypes; }
+      static bool isSourceWarp(int type) { return type >= kSrcFmThruZeroNoise && type < kSpecComb; }
+      /** GROUPC WP-12: a spectral warp (index 0 = kSpecComb, the order of synthyboy::spectral::Warp). */
+      static bool isSpectralWarp(int type) { return type >= kSpecComb && type < kNumDistortionTypes; }
       /** 0 FM Thru-Zero, 1 FM Exp, 2 FM Linear, 3 PD, 4 AM, 5 RM */
       static int sourceWarpFamily(int type) { return (type - kSrcFmThruZeroNoise) / 4; }
       /** 0 Noise, 1 Sub, 2 Filter 1, 3 Filter 2 */

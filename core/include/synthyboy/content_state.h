@@ -28,6 +28,8 @@ constexpr int kMaxFilterCurvePoints = 16;
 constexpr int kMaxContentRemaps = 12;            // 3 oscillators x 4 slots (oscN.remap.slot)
 constexpr int kNumRemapSlots = 4;
 constexpr int kMaxRemapPoints = 64;
+constexpr int kMaxContentSpectralFilters = 3;    // one drawn spectral filter curve per oscillator (oscN.type = Spectral, GROUPC WP-12)
+constexpr int kMaxContentInstruments = 3;        // one multisample instrument per oscillator (oscN.type = Multisample, GROUPC WP-13)
 constexpr int kMaxContentModCurves = 64;         // one per modulation matrix slot (modNN, G2)
 constexpr float kMaxModSlewMs = 5000.0f;         // RISE / FALL of a modulation connection (GROUPB WP-08)
 constexpr int kMaxModCurvePoints = 100;
@@ -57,6 +59,15 @@ struct ContentSample
     ContentFileRef ref;
     int sampleRate = 0, frames = 0, channels = 0;
     std::vector<float> slices; // 0..1, ascending
+};
+
+/** A multisample instrument of an oscillator (GROUPC WP-13, 13-new-keys.md 4.39): `ref` is the SFZ file of a content pack (or of the user library); the samples its regions name
+    are files of the same pack, relative to the folder of the SFZ file. `zones` is the number of regions the SFZ has (display only, 0 = unknown). */
+struct ContentInstrument
+{
+    int osc = 0; // 1..3
+    ContentFileRef ref;
+    int zones = 0;
 };
 
 /** Point modulation of a custom LFO point (G65): a modulation source key of docs/ui-design/13-new-keys.md section 2 and an amount. */
@@ -140,12 +151,15 @@ struct StateContent
     std::vector<ContentFileRef> impulses;
     std::vector<ContentFilterCurve> filterCurves;
     std::vector<ContentRemap> remaps;
+    /** The drawn mask of the spectral filter of oscillator `osc` (GROUPC WP-12): x = position on the frequency axis (log, 20 Hz .. 20 kHz) 0..1, y = 0..1 with 0.5 = unity gain; `slot` is 1. */
+    std::vector<ContentRemap> spectralFilters;
+    std::vector<ContentInstrument> instruments;
     std::vector<ContentModCurve> modCurves;
 
     bool empty() const noexcept
     {
         return wavetables.empty() && samples.empty() && lfoShapes.empty() && velocityCurve.empty() && noteCurve.empty() && shaperA.empty() && shaperB.empty()
-            && ! tuning.present && impulses.empty() && filterCurves.empty() && remaps.empty() && modCurves.empty();
+            && ! tuning.present && impulses.empty() && filterCurves.empty() && remaps.empty() && spectralFilters.empty() && instruments.empty() && modCurves.empty();
     }
     void clear() noexcept { *this = StateContent {}; }
 };

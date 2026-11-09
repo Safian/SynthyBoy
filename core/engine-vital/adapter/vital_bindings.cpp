@@ -196,6 +196,13 @@ std::vector<Binding> build()
         b.add (k + "gran.length", c + "gran_length", Conv::linear);
         b.add (k + "gran.length_percent", c + "gran_length_percent", Conv::linear);
         b.add (k + "gran.rand_pitch", c + "gran_rand_pitch", Conv::linear);
+
+        // Block B29 (GROUPC, WP-12): the modulatable keys of the spectral oscillator
+        for (const char* name : { "cut", "mix", "position", "xy_y" })
+            b.percent (k + "spec." + name, c + "spec_" + name);
+        b.add (k + "spec.freq_lo", c + "spec_freq_lo", Conv::linear);
+        b.add (k + "spec.freq_hi", c + "spec_freq_hi", Conv::linear);
+        b.add (k + "spec.freq_shift", c + "spec_freq_shift", Conv::linear);
     }
 
     // --- noise (the engine's built-in noise sample and extras) --------------------------------------------------------
@@ -525,6 +532,19 @@ bool isGranularModulatable (const char* key)
     }
     return false;
 }
+
+/** The modulatable keys of oscN.spec.* (bound to controls; every other oscN.spec.* key is read by the adapter). */
+bool isSpectralModulatable (const char* key)
+{
+    for (const char* name : { "freq_lo", "freq_hi", "cut", "mix", "freq_shift", "position", "xy_y" })
+    {
+        const std::string tail = std::string (".spec.") + name;
+        const size_t n = std::strlen (key);
+        if (n >= tail.size() && tail == key + n - tail.size())
+            return true;
+    }
+    return false;
+}
 } // namespace
 
 bool isSpecialParam (size_t paramIndex)
@@ -549,6 +569,7 @@ bool isSpecialParam (size_t paramIndex)
         || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span") && ! endsWith (".sample.slice"))
         // B28: the static keys of the granular oscillator (the modulatable ones are bound normally)
         || (startsWith ("osc") && std::strstr (key, ".gran.") != nullptr && ! isGranularModulatable (key))
+        || (startsWith ("osc") && std::strstr (key, ".spec.") != nullptr && ! isSpectralModulatable (key))
         // B13: noise sample choice (procedural noise buffers)
         || std::strcmp (key, "noise.sample") == 0 || std::strcmp (key, "noise.type") == 0
         // B22: the effect instance pool (type, on, rack, order and the normalised parameters of a slot): the adapter builds the module and drives its controls

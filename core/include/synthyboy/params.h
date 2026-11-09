@@ -117,7 +117,7 @@ constexpr int kNumLegacyDistortionTypes = 6;
     (Serum 2 warp modes: 11 Sync Var .. 51 AM from the second other oscillator, 13-new-keys.md 4.22). */
 constexpr int kNumLegacyWarpTypes = 11;
 /** Number of entries of the warp lists after GROUPB WP-06 (52 .. 75: FM Thru-Zero / Exp / Linear, PD, AM and RM from the Noise, Sub, Filter 1 and Filter 2; 52 after block B21). */
-constexpr int kNumWarpTypes = 76;
+constexpr int kNumWarpTypes = 99; // GROUPC WP-12: 76 .. 98 are the 23 spectral warps
 
 /** The values of oscN.type (13-new-keys.md 4.9 and, from GROUPC, 4.37 .. 4.39): 0 and 1 are the wavetable and sample oscillators of state version 3, 2 .. 4 were appended in the blocks B28 .. B30. */
 constexpr int kOscTypeWavetable = 0;

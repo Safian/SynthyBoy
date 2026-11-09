@@ -790,6 +790,34 @@ private:
                         return true;
                     });
                 });
+            if (std::strcmp (key, "spectral_filters") == 0)
+                return readArray (d, static_cast<size_t> (kMaxContentSpectralFilters), [&] (size_t, int ed)
+                {
+                    c.spectralFilters.emplace_back();
+                    auto& r = c.spectralFilters.back();
+                    r.slot = 1;
+                    return readObject (ed, [&] (const char* k, int vd, bool& h)
+                    {
+                        h = true;
+                        if (std::strcmp (k, "osc") == 0) return readInt (r.osc, vd);
+                        if (std::strcmp (k, "name") == 0) return readText (r.name, kMaxContentStringBytes, vd);
+                        if (std::strcmp (k, "points") == 0) return readPoints (r.points, static_cast<size_t> (kMaxRemapPoints), vd, false);
+                        h = false;
+                        return true;
+                    });
+                });
+            if (std::strcmp (key, "instruments") == 0)
+                return readArray (d, static_cast<size_t> (kMaxContentInstruments), [&] (size_t, int ed)
+                {
+                    c.instruments.emplace_back();
+                    auto& in = c.instruments.back();
+                    return readObject (ed, [&] (const char* k, int vd, bool& h)
+                    {
+                        if (std::strcmp (k, "osc") == 0) { h = true; return readInt (in.osc, vd); }
+                        if (std::strcmp (k, "zones") == 0) { h = true; return readInt (in.zones, vd); }
+                        return readFileRefMember (in.ref, k, vd, h);
+                    });
+                });
             if (std::strcmp (key, "mod_curves") == 0)
                 return readArray (d, static_cast<size_t> (kMaxContentModCurves), [&] (size_t, int ed)
                 {
@@ -1204,6 +1232,45 @@ void putContent (std::string& s, const StateContent& c)
             s += ',';
             putKey (s, "points");
             putPoints (s, r.points);
+            s += '}';
+        }
+        s += ']';
+    }
+    if (! c.spectralFilters.empty())
+    {
+        section ("spectral_filters");
+        s += '[';
+        for (size_t i = 0; i < c.spectralFilters.size(); ++i)
+        {
+            const auto& r = c.spectralFilters[i];
+            s += i > 0 ? ",{" : "{";
+            putKey (s, "osc");
+            putJsonInt (s, r.osc);
+            s += ',';
+            putKey (s, "name");
+            putJsonString (s, r.name);
+            s += ',';
+            putKey (s, "points");
+            putPoints (s, r.points);
+            s += '}';
+        }
+        s += ']';
+    }
+    if (! c.instruments.empty())
+    {
+        section ("instruments");
+        s += '[';
+        for (size_t i = 0; i < c.instruments.size(); ++i)
+        {
+            const auto& in = c.instruments[i];
+            s += i > 0 ? ",{" : "{";
+            putKey (s, "osc");
+            putJsonInt (s, in.osc);
+            s += ',';
+            putFileRefFields (s, in.ref);
+            s += ',';
+            putKey (s, "zones");
+            putJsonInt (s, in.zones);
             s += '}';
         }
         s += ']';

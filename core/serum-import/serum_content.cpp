@@ -187,12 +187,13 @@ bool Importer::loadSample (const std::string& area, const std::string& relPath, 
     R.samples.erase (std::remove_if (R.samples.begin(), R.samples.end(), [osc] (const ImportedSample& x) { return x.osc == osc; }), R.samples.end());
     R.samples.push_back (std::move (s));
     // GROUPC: a granular oscillator keeps its type (the sample file is its content as well)
-    const bool granular = static_cast<int> (R.values.plain[static_cast<size_t> (indexOf (okey + ".type"))] + 0.5) == kOscTypeGranular;
-    store (okey + ".type", granular ? kOscTypeGranular : kOscTypeSample);
+    const int typeNow = static_cast<int> (R.values.plain[static_cast<size_t> (indexOf (okey + ".type"))] + 0.5);
+    const bool granular = typeNow == kOscTypeGranular, spectralType = typeNow == kOscTypeSpectral;
+    store (okey + ".type", granular ? kOscTypeGranular : (spectralType ? kOscTypeSpectral : kOscTypeSample));
     store (okey + ".sample.root", std::max (0, std::min (127, baseNote)));
     if (framesOut) *framesOut = static_cast<int> (n);
     if (rateOut) *rateOut = a.sampleRate;
-    entry (ItemKind::imported, Reason::exact, "content", path, rel, okey + ".type", granular ? "Granular" : "Sample", "sample_file_stored_in_the_library", 0);
+    entry (ItemKind::imported, Reason::exact, "content", path, rel, okey + ".type", granular ? "Granular" : (spectralType ? "Spectral" : "Sample"), "sample_file_stored_in_the_library", 0);
     return true;
 }
 

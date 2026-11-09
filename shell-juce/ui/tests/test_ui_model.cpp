@@ -461,7 +461,7 @@ TEST (uim_warp_groups_cover_every_choice_once)
     const auto groups = warpTypeGroups();
     const auto ref = resolveKey ("osc1.warp.type");
     CHECK (ref.valid());
-    std::array<int, 96> seen {};
+    std::array<int, 128> seen {};
     for (const auto& g : groups)
     {
         CHECK (! g.gap || g.items.empty());

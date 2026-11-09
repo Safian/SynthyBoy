@@ -115,6 +115,16 @@ constexpr const char* s_more_osc3_gran_2[] = {
     "osc3.gran.rand_warp", "osc3.gran.rand_warp2", "osc3.gran.reverse_grains", "osc3.gran.spawn_pattern", "osc3.gran.y_axis", "osc3.gran.xy_y"
 };
 
+constexpr const char* s_more_osc1_spec_1[] = {
+    "osc1.spec.lohi_smooth", "osc1.spec.lohi_post_warp", "osc1.spec.scan_keytrack", "osc1.spec.transients", "osc1.spec.y_axis", "osc1.spec.xy_y"
+};
+constexpr const char* s_more_osc2_spec_1[] = {
+    "osc2.spec.lohi_smooth", "osc2.spec.lohi_post_warp", "osc2.spec.scan_keytrack", "osc2.spec.transients", "osc2.spec.y_axis", "osc2.spec.xy_y"
+};
+constexpr const char* s_more_osc3_spec_1[] = {
+    "osc3.spec.lohi_smooth", "osc3.spec.lohi_post_warp", "osc3.spec.scan_keytrack", "osc3.spec.transients", "osc3.spec.y_axis", "osc3.spec.xy_y"
+};
+
 constexpr const char* s_more_osc1_pitch_uni[] = {
     "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory",
     "osc1.ratio_src", "osc1.smooth_interp" // B27
@@ -535,7 +545,11 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc2_gran_1", "Osc 2 Granular", "Osc", { "osc2.gran.density", "osc2.gran.length", "osc2.gran.window_amount", "osc2.gran.window_skew", "osc2.gran.window_shape", "osc2.gran.position", "osc2.gran.manual", "osc2.gran.jump_start" }, 8, s_more_osc2_gran_1, 9 },
     { "osc2_gran_2", "Osc 2 Grain Random", "Osc", { "osc2.gran.rand_offset", "osc2.gran.rand_dir", "osc2.gran.rand_pitch", "osc2.gran.rand_length", "osc2.gran.rand_pan", "osc2.gran.rand_level", "osc2.gran.rand_window", "osc2.gran.rand_skew" }, 8, s_more_osc2_gran_2, 6 },
     { "osc3_gran_1", "Osc 3 Granular", "Osc", { "osc3.gran.density", "osc3.gran.length", "osc3.gran.window_amount", "osc3.gran.window_skew", "osc3.gran.window_shape", "osc3.gran.position", "osc3.gran.manual", "osc3.gran.jump_start" }, 8, s_more_osc3_gran_1, 9 },
-    { "osc3_gran_2", "Osc 3 Grain Random", "Osc", { "osc3.gran.rand_offset", "osc3.gran.rand_dir", "osc3.gran.rand_pitch", "osc3.gran.rand_length", "osc3.gran.rand_pan", "osc3.gran.rand_level", "osc3.gran.rand_window", "osc3.gran.rand_skew" }, 8, s_more_osc3_gran_2, 6 }
+    { "osc3_gran_2", "Osc 3 Grain Random", "Osc", { "osc3.gran.rand_offset", "osc3.gran.rand_dir", "osc3.gran.rand_pitch", "osc3.gran.rand_length", "osc3.gran.rand_pan", "osc3.gran.rand_level", "osc3.gran.rand_window", "osc3.gran.rand_skew" }, 8, s_more_osc3_gran_2, 6 },
+    // Spectral, block B29 (GROUPC WP-12; 13-new-keys.md 4.38): pages 150 - 152
+    { "osc1_spec_1", "Osc 1 Spectral", "Osc", { "osc1.spec.freq_lo", "osc1.spec.freq_hi", "osc1.spec.cut", "osc1.spec.mix", "osc1.spec.freq_shift", "osc1.spec.position", "osc1.spec.manual", "osc1.spec.phase_lock" }, 8, s_more_osc1_spec_1, 6 },
+    { "osc2_spec_1", "Osc 2 Spectral", "Osc", { "osc2.spec.freq_lo", "osc2.spec.freq_hi", "osc2.spec.cut", "osc2.spec.mix", "osc2.spec.freq_shift", "osc2.spec.position", "osc2.spec.manual", "osc2.spec.phase_lock" }, 8, s_more_osc2_spec_1, 6 },
+    { "osc3_spec_1", "Osc 3 Spectral", "Osc", { "osc3.spec.freq_lo", "osc3.spec.freq_hi", "osc3.spec.cut", "osc3.spec.mix", "osc3.spec.freq_shift", "osc3.spec.position", "osc3.spec.manual", "osc3.spec.phase_lock" }, 8, s_more_osc3_spec_1, 6 }
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

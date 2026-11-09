@@ -4,6 +4,8 @@
 
 #include "synthyboy/user_content.h"
 
+#include "synthyboy/spectral/spectral.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -615,6 +617,46 @@ std::vector<float> SamplePreview::autoSlices (float threshold) const
         if (o.second >= need && o.first > 0.0f && static_cast<int> (slices.size()) < kMaxSampleSlices)
             slices.push_back (o.first);
     return slices;
+}
+
+void SamplePreview::spectrogram (float startNorm, float endNorm, int columns, int rows, std::vector<float>& out) const
+{
+    using namespace spectral;
+    columns = std::max (1, columns);
+    rows = std::max (1, rows);
+    out.assign (static_cast<size_t> (columns) * static_cast<size_t> (rows), 0.0f);
+    if (mono_.empty() || sampleRate_ <= 0)
+        return;
+    startNorm = std::max (0.0f, std::min (1.0f, startNorm));
+    endNorm = std::max (startNorm, std::min (1.0f, endNorm));
+    std::vector<float> re (kFftSize), im (kFftSize);
+    const double binHz = static_cast<double> (sampleRate_) / kFftSize;
+    float peak = 1.0e-9f;
+    for (int c = 0; c < columns; ++c)
+    {
+        const double norm = static_cast<double> (startNorm) + (static_cast<double> (endNorm) - startNorm) * (c + 0.5) / columns;
+        const int64_t centre = static_cast<int64_t> (norm * static_cast<double> (mono_.size()));
+        for (int n = 0; n < kFftSize; ++n)
+        {
+            const int64_t at = centre - kFftSize / 2 + n;
+            const float w = 0.5f - 0.5f * std::cos (6.2831853f * static_cast<float> (n) / kFftSize);
+            re[static_cast<size_t> (n)] = at >= 0 && at < static_cast<int64_t> (mono_.size()) ? mono_[static_cast<size_t> (at)] * w : 0.0f;
+            im[static_cast<size_t> (n)] = 0.0f;
+        }
+        Fft::instance().forward (re.data(), im.data());
+        for (int r = 0; r < rows; ++r)
+        {
+            const double lo = 20.0 * std::pow (1000.0, static_cast<double> (r) / rows), hi = 20.0 * std::pow (1000.0, static_cast<double> (r + 1) / rows);
+            const int k0 = std::max (1, static_cast<int> (lo / binHz)), k1 = std::min (kBins - 1, std::max (k0, static_cast<int> (hi / binHz)));
+            float m = 0.0f;
+            for (int k = k0; k <= k1; ++k)
+                m = std::max (m, std::sqrt (re[static_cast<size_t> (k)] * re[static_cast<size_t> (k)] + im[static_cast<size_t> (k)] * im[static_cast<size_t> (k)]));
+            out[static_cast<size_t> (c) * static_cast<size_t> (rows) + static_cast<size_t> (r)] = m;
+            peak = std::max (peak, m);
+        }
+    }
+    for (float& v : out)
+        v = std::max (0.0f, 1.0f + 20.0f * std::log10 (std::max (v, 1.0e-9f) / peak) / 60.0f);
 }
 
 float SamplePreview::valueAt (float norm) const

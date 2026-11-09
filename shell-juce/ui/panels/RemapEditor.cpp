@@ -19,6 +19,7 @@ constexpr float kMaxPower = static_cast<float> (kMaxPointPower);
 constexpr int kPencilColumns = 32;
 
 const char* const kPresetNames[RemapEditor::kNumPresets] = { "Linear", "Reverse", "Ease in", "Ease out", "S curve", "Steps 4", "Steps 8", "Jump" };
+const char* const kSpectralPresetNames[RemapEditor::kNumSpectralPresets] = { "Flat", "Low pass", "High pass", "Band pass", "Notch", "Tilt down", "Comb", "Formants" };
 
 shapes::ShapeData toShapeData (const ContentRemap& r)
 {
@@ -64,6 +65,11 @@ void stepped (ContentRemap& r, int n)
 }
 } // namespace
 
+const char* RemapEditor::spectralPresetName (int preset) noexcept
+{
+    return preset >= 0 && preset < kNumSpectralPresets ? kSpectralPresetNames[preset] : "";
+}
+
 const char* RemapEditor::presetName (int preset) noexcept
 {
     return preset >= 0 && preset < kNumPresets ? kPresetNames[preset] : "";
@@ -77,6 +83,12 @@ RemapEditor::RemapEditor (UiContext& context, int oscIndex)
 
 RemapEditor::RemapEditor (UiContext& context, ModCurveMode, int modSlot)
     : ctx (context), oscN (0), modMode (true), modSlotNumber (juce::jlimit (1, kMaxContentModCurves, modSlot)), maxPoints (static_cast<size_t> (kMaxModCurvePoints))
+{
+    init();
+}
+
+RemapEditor::RemapEditor (UiContext& context, SpectralFilterMode, int oscIndex)
+    : ctx (context), oscN (oscIndex), specMode (true)
 {
     init();
 }
@@ -100,8 +112,8 @@ void RemapEditor::init()
     presetBtn.onClick = [this]
     {
         juce::PopupMenu menu;
-        for (int i = 0; i < kNumPresets; ++i)
-            menu.addItem (i + 1, presetName (i));
+        for (int i = 0; i < (specMode ? kNumSpectralPresets : kNumPresets); ++i)
+            menu.addItem (i + 1, specMode ? spectralPresetName (i) : presetName (i));
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetBtn),
                             [safe = juce::Component::SafePointer<RemapEditor> (this)] (int result)
                             {
@@ -127,6 +139,8 @@ int RemapEditor::slot() const
 {
     if (modMode)
         return modSlotNumber;
+    if (specMode)
+        return 1;
     return slotHandle->valid() ? juce::jlimit (1, kNumRemapSlots, juce::roundToInt (slotHandle->plain()) + 1) : 1;
 }
 
@@ -149,8 +163,8 @@ juce::TextButton* RemapEditor::button (const juce::String& text)
 void RemapEditor::setIdentityPoints()
 {
     current.points.clear();
-    current.points.emplace_back (0.0f, 0.0f, 0.0f);
-    current.points.emplace_back (1.0f, 1.0f, 0.0f);
+    current.points.emplace_back (0.0f, specMode ? 0.5f : 0.0f, 0.0f);
+    current.points.emplace_back (1.0f, specMode ? 0.5f : 1.0f, 0.0f);
     cacheValid = false;
 }
 
@@ -194,8 +208,9 @@ void RemapEditor::reloadFromHost()
     }
     else
     {
-        const auto it = std::find_if (content.remaps.begin(), content.remaps.end(), [this, wanted] (const ContentRemap& r) { return r.osc == oscN && r.slot == wanted; });
-        if (it != content.remaps.end() && it->points.size() >= kMinPoints)
+        auto& curves = specMode ? content.spectralFilters : content.remaps;
+        const auto it = std::find_if (curves.begin(), curves.end(), [this, wanted] (const ContentRemap& r) { return r.osc == oscN && r.slot == wanted; });
+        if (it != curves.end() && it->points.size() >= kMinPoints)
         {
             next = *it;
             found = true;
@@ -203,8 +218,8 @@ void RemapEditor::reloadFromHost()
     }
     if (! found)
     {
-        next.points.emplace_back (0.0f, 0.0f, 0.0f);
-        next.points.emplace_back (1.0f, 1.0f, 0.0f);
+        next.points.emplace_back (0.0f, specMode ? 0.5f : 0.0f, 0.0f);
+        next.points.emplace_back (1.0f, specMode ? 0.5f : 1.0f, 0.0f);
     }
     if (wanted == loadedSlot && found == stored && sameRemap (next, current))
         return;
@@ -246,17 +261,20 @@ void RemapEditor::commitNow()
         ctx.host.setContent (content);
         return;
     }
-    const auto it = std::find_if (content.remaps.begin(), content.remaps.end(),
+    auto& curves = specMode ? content.spectralFilters : content.remaps;
+    const auto it = std::find_if (curves.begin(), curves.end(),
                                   [this] (const ContentRemap& r) { return r.osc == current.osc && r.slot == current.slot; });
     if (! stored)
     {
-        if (it != content.remaps.end())
-            content.remaps.erase (it);
+        if (it != curves.end())
+            curves.erase (it);
     }
-    else if (it != content.remaps.end())
+    else if (it != curves.end())
         *it = current;
     else
-        content.remaps.push_back (current);
+        curves.push_back (current);
+    if (specMode)
+        std::sort (curves.begin(), curves.end(), [] (const ContentRemap& a, const ContentRemap& b) { return a.osc < b.osc; });
     ctx.host.setContent (content);
 }
 
@@ -425,9 +443,33 @@ bool RemapEditor::paintStroke (const std::vector<juce::Point<float>>& stroke)
 
 void RemapEditor::applyPreset (int preset)
 {
-    if (preset < 0 || preset >= kNumPresets)
+    if (preset < 0 || preset >= (specMode ? kNumSpectralPresets : kNumPresets))
         return;
     pushUndo();
+    if (specMode)
+    {
+        // gain curves over the log frequency axis (0.5 = unity)
+        switch (preset)
+        {
+            case 0: current.points.clear(); current.points.emplace_back (0.0f, 0.5f, 0.0f); current.points.emplace_back (1.0f, 0.5f, 0.0f); break;
+            case 1: sampled (current, 32, [] (float x) { return x < 0.5f ? 0.5f : 0.5f * std::max (0.0f, 1.0f - (x - 0.5f) / 0.15f); }); break;
+            case 2: sampled (current, 32, [] (float x) { return x > 0.5f ? 0.5f : 0.5f * std::max (0.0f, 1.0f - (0.5f - x) / 0.15f); }); break;
+            case 3: sampled (current, 32, [] (float x) { return 0.5f * std::max (0.0f, 1.0f - std::fabs (x - 0.5f) / 0.12f); }); break;
+            case 4: sampled (current, 32, [] (float x) { return 0.5f * std::min (1.0f, std::fabs (x - 0.5f) / 0.1f); }); break;
+            case 5: sampled (current, 16, [] (float x) { return 0.5f - 0.45f * x; }); break;
+            case 6: sampled (current, 32, [] (float x) { return 0.5f * (0.15f + 0.85f * (0.5f + 0.5f * std::cos (x * 12.566371f * 2.0f))); }); break;
+            default: sampled (current, 48, [] (float x)
+                              {
+                                  float g = 0.04f;
+                                  for (float centre : { 0.42f, 0.55f, 0.66f, 0.76f })
+                                      g = std::max (g, 0.5f * std::exp (-(x - centre) * (x - centre) / (2.0f * 0.025f * 0.025f)));
+                                  return g;
+                              }); break;
+        }
+        selected = -1;
+        touched();
+        return;
+    }
     switch (preset)
     {
         case 0: current.points.clear(); current.points.emplace_back (0.0f, 0.0f, 0.0f); current.points.emplace_back (1.0f, 1.0f, 0.0f); break;
@@ -451,7 +493,8 @@ void RemapEditor::applyPreset (int preset)
 
 void RemapEditor::resetToIdentity()
 {
-    if (! stored && current.points.size() == 2 && current.points[0].y == 0.0f && current.points[1].y == 1.0f)
+    const float first = specMode ? 0.5f : 0.0f, last = specMode ? 0.5f : 1.0f;
+    if (! stored && current.points.size() == 2 && std::abs (current.points[0].y - first) < 1.0e-6f && std::abs (current.points[1].y - last) < 1.0e-6f)
         return;
     pushUndo();
     setIdentityPoints();
@@ -579,10 +622,10 @@ void RemapEditor::paint (juce::Graphics& g)
         g.drawVerticalLine (juce::roundToInt (toX (f)), plot.getY(), plot.getBottom());
         g.drawHorizontalLine (juce::roundToInt (toY (f)), plot.getX(), plot.getRight());
     }
-    // the identity: what the table does without a remap
+    // the identity: what the table does without a remap (the flat unity line of the spectral filter)
     g.setColour (c.textDim.withAlpha (0.5f));
     const float dashes[] = { t.px (4.0f), t.px (4.0f) };
-    g.drawDashedLine ({ toX (0.0f), toY (0.0f), toX (1.0f), toY (1.0f) }, dashes, 2, t.px (1.0f));
+    g.drawDashedLine ({ toX (0.0f), toY (specMode ? 0.5f : 0.0f), toX (1.0f), toY (specMode ? 0.5f : 1.0f) }, dashes, 2, t.px (1.0f));
 
     constexpr int steps = 256;
     juce::Path path;
@@ -600,10 +643,11 @@ void RemapEditor::paint (juce::Graphics& g)
 
     g.setColour (c.textDim);
     g.setFont (t.labelFont());
-    g.drawText (modMode ? "Source value in" : "Frame position in", plot.toNearestInt().removeFromBottom (t.ipx (16.0f)), juce::Justification::centredRight, false);
-    g.drawText ("out", plot.toNearestInt().removeFromTop (t.ipx (16.0f)), juce::Justification::centredLeft, false);
-    g.drawText (juce::String (modMode ? "Slot curve " : "Remap ") + juce::String (slot()) + (stored ? "" : modMode ? " (straight)" : " (identity)"), plot.toNearestInt().removeFromTop (t.ipx (16.0f)),
-                juce::Justification::centredRight, false);
+    g.drawText (specMode ? "Frequency 20 Hz - 20 kHz" : modMode ? "Source value in" : "Frame position in", plot.toNearestInt().removeFromBottom (t.ipx (16.0f)), juce::Justification::centredRight, false);
+    g.drawText (specMode ? "gain" : "out", plot.toNearestInt().removeFromTop (t.ipx (16.0f)), juce::Justification::centredLeft, false);
+    g.drawText (specMode ? juce::String ("Spectral filter") + (stored ? "" : " (flat)")
+                         : juce::String (modMode ? "Slot curve " : "Remap ") + juce::String (slot()) + (stored ? "" : modMode ? " (straight)" : " (identity)"),
+                plot.toNearestInt().removeFromTop (t.ipx (16.0f)), juce::Justification::centredRight, false);
 
     if (! pencil)
     {

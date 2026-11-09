@@ -4,6 +4,7 @@
 #include "../Panel.h"
 #include "../model/RatioSource.h"
 #include "OscWaveView.h"
+#include "RemapEditor.h"
 #include "TransposeControl.h"
 
 namespace synthyboy::ui
@@ -18,6 +19,8 @@ public:
           onHandle (context, "osc" + std::to_string (OscIndex) + ".on")
     {
         addAndMakeVisible (waveView);
+        specFilter = std::make_unique<RemapEditor> (context, RemapEditor::SpectralFilterMode {}, OscIndex);
+        addChildComponent (*specFilter); // visible for the Spectral type
         onHandle.onChange = [this]
         {
             updateDimming();
@@ -38,6 +41,8 @@ public:
     bool hiddenInLayout() const override { return ctx.view->oscTab != OscIndex - 1; }
     std::string modulePrefix() const override { return "osc" + std::to_string (OscIndex); }
     OscWaveView& view() noexcept { return waveView; }
+    /** The spectral filter graph (GROUPC WP-12), visible while the oscillator is a Spectral one. */
+    RemapEditor& spectralFilter() noexcept { return *specFilter; }
 
     /** Power dot off: the whole panel dims (design 02 section 3; the controls stay editable). */
     void updateDimming()
@@ -94,7 +99,12 @@ public:
             o + ".gran.scan_keytrack", o + ".gran.rand_offset", o + ".gran.rand_dir", o + ".gran.reverse_grains",
             o + ".gran.rand_pitch", o + ".gran.rand_length", o + ".gran.rand_pan", o + ".gran.rand_level",
             o + ".gran.rand_window", o + ".gran.rand_skew", o + ".gran.rand_warp", o + ".gran.rand_warp2",
-            o + ".gran.spawn_pattern", o + ".gran.y_axis", o + ".gran.xy_y"
+            o + ".gran.spawn_pattern", o + ".gran.y_axis", o + ".gran.xy_y",
+            // Block B29 (GROUPC WP-12): the spectral oscillator
+            o + ".spec.freq_lo", o + ".spec.freq_hi", o + ".spec.lohi_smooth", o + ".spec.lohi_post_warp",
+            o + ".spec.cut", o + ".spec.mix", o + ".spec.freq_shift", o + ".spec.manual",
+            o + ".spec.position", o + ".spec.scan_keytrack", o + ".spec.phase_lock", o + ".spec.transients",
+            o + ".spec.y_axis", o + ".spec.xy_y"
         };
     }
 
@@ -130,7 +140,7 @@ public:
         // the pitch bend switch is for the sample types with pitch tracking off, the stack repeat (1-3x) belongs to the Octaves / Power Chord stacks
         const std::string o = "osc" + std::to_string (OscIndex);
         for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type", ".pitch_mode", ".sample.slice_mode", ".sample.slice_play",
-                                    ".gran.density_mode", ".gran.length_mode", ".gran.manual" })
+                                    ".gran.density_mode", ".gran.length_mode", ".gran.manual", ".spec.manual" })
         {
             auto handle = std::make_unique<ParamHandle> (ctx, o + suffix);
             handle->onChange = [this] { updateControlDimming(); };
@@ -146,7 +156,7 @@ public:
             // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
             return h.valid() ? juce::roundToInt (h.info().min + h.normalised() * (h.info().max - h.info().min)) : 0;
         };
-        if (dimHandles.size() < 11)
+        if (dimHandles.size() < 12)
             return;
         const bool tracking = choiceOf (*dimHandles[0]) != 0;
         const int type = choiceOf (*dimHandles[1]);
@@ -158,6 +168,13 @@ public:
         const int pitchMode = choiceOf (*dimHandles[5]), sliceMode = choiceOf (*dimHandles[6]), slicePlay = choiceOf (*dimHandles[7]);
         const int densityMode = choiceOf (*dimHandles[8]), lengthMode = choiceOf (*dimHandles[9]);
         const bool granManual = choiceOf (*dimHandles[10]) != 0, granular = type == kOscTypeGranular, sampleClass = type >= kOscTypeSample && type <= kOscTypeSpectral;
+        const bool specManual = choiceOf (*dimHandles[11]) != 0, spectral = type == kOscTypeSpectral;
+        if (specFilter != nullptr && specFilter->isVisible() != spectral)
+        {
+            specFilter->setVisible (spectral);
+            if (onHeightChanged)
+                onHeightChanged();
+        }
         for (const auto& c : controls())
         {
             const auto& key = c->key();
@@ -174,6 +191,8 @@ public:
                 applies = type == 0;                                       // the frame position of a wavetable
             else if (key == o + ".sample.slice")
                 applies = sampleClass && sliceMode != 0 && slicePlay == 1; // Play Single Slice only
+            else if (key.rfind (o + ".spec.", 0) == 0)
+                applies = spectral && (key != o + ".spec.position" || specManual);   // the spectral keys apply to the Spectral type; the position only in the manual mode
             else if (key.rfind (o + ".gran.", 0) == 0)
             {
                 // the granular keys apply to the Granular type; of the rate and length triples only the one the mode reads (manual p.101 - 102)
@@ -233,7 +252,8 @@ public:
         const auto& t = ctx.theme;
         const int visualH = t.ipx (180.0f);
         const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
-        return headerHeight() + visualH + 3 * t.gap() + const_cast<OscPanelBase*> (this)->layoutControls (area, true);
+        const int filterH = specFilter != nullptr && specFilter->isVisible() ? specFilter->preferredHeight (width - 2 * t.gap()) + t.gap() : 0;
+        return headerHeight() + visualH + 3 * t.gap() + filterH + const_cast<OscPanelBase*> (this)->layoutControls (area, true);
     }
 
     void resized() override
@@ -244,6 +264,11 @@ public:
         auto topArea = area.removeFromTop (visualH);
         waveView.setBounds (topArea);
         area.removeFromTop (t.gap());
+        if (specFilter != nullptr && specFilter->isVisible())
+        {
+            specFilter->setBounds (area.removeFromTop (specFilter->preferredHeight (area.getWidth())));
+            area.removeFromTop (t.gap());
+        }
         layoutControls (area, false);
     }
 
@@ -265,6 +290,7 @@ private:
     static constexpr int kWarpSyncVar = 11; // oscN.warp.type entry "Sync Var"
     juce::String phaseLabel;
     OscWaveView waveView;
+    std::unique_ptr<RemapEditor> specFilter;
     ParamHandle onHandle;
     std::vector<std::unique_ptr<ParamHandle>> dimHandles;
 };

@@ -40,9 +40,14 @@ ENUM (kWarpEnum, 0, "warp",
       // GROUPB WP-06: the modes from the noise, the sub and the two filters (entries 52 .. 75, four per family: NOISE, SUB, FILT1, FILT2)
       { "kFM_NOISE", 52, C }, { "kFM_SUB", 53, C }, { "kFM_FILT1", 54, C }, { "kFM_FILT2", 55, C }, { "kFMX_NOISE", 56, C }, { "kFMX_SUB", 57, C }, { "kFMX_FILT1", 58, C }, { "kFMX_FILT2", 59, C },
       { "kFMP_NOISE", 60, C }, { "kFMP_SUB", 61, C }, { "kFMP_FILT1", 62, C }, { "kFMP_FILT2", 63, C }, { "kPD_NOISE", 64, X }, { "kPD_SUB", 65, X }, { "kPD_FILT1", 66, X }, { "kPD_FILT2", 67, X },
-      { "kAM_NOISE", 68, X }, { "kAM_SUB", 69, X }, { "kAM_FILT1", 70, X }, { "kAM_FILT2", 71, X }, { "kRM_NOISE", 72, C }, { "kRM_SUB", 73, C }, { "kRM_FILT1", 74, C }, { "kRM_FILT2", 75, C });
+      { "kAM_NOISE", 68, X }, { "kAM_SUB", 69, X }, { "kAM_FILT1", 70, X }, { "kAM_FILT2", 71, X }, { "kRM_NOISE", 72, C }, { "kRM_SUB", 73, C }, { "kRM_FILT1", 74, C }, { "kRM_FILT2", 75, C },
+      // GROUPC WP-12 (A419 .. A426): the spectral warps of the spectral oscillator (entries 76 .. 98). The names are Serum's, the algorithms are ours (the manual does not describe them): close.
+      { "kSpectralComb", 76, C }, { "kAddharmonics", 77, C }, { "kAddsubharmonics", 78, C }, { "kDetune", 79, C }, { "kShepardNarrow", 80, C }, { "kShepardFilter", 81, C },
+      { "kPeakOctaveDown", 82, C }, { "kPeakOctaveUp", 83, C }, { "kPeakHarmDown", 84, C }, { "kPeakHarmUp", 85, C }, { "kGate", 86, C }, { "kSpectralPitchShift", 87, C },
+      { "kSpectralPhaseTwist", 88, C }, { "kSpread", 89, C }, { "kSpectralShift", 90, C }, { "kSmear", 91, C }, { "kMirror", 92, C },
+      { "kMask_OSC", 93, C }, { "kMask_OSC2", 94, C }, { "kMask_NOISE", 95, C }, { "kVocode_OSC", 96, C }, { "kVocode_OSC2", 97, C }, { "kVocode_NOISE", 98, C });
 
-ENUM (kOscTypeEnum, 0, "osc.type", { "kOsc_WT", 0, X }, { "kOsc_Sample", 1, X }, { "kOsc_MultiSample", 1, A }, { "kOsc_Granular", 2, X }, { "kOsc_Spectral", 1, A });
+ENUM (kOscTypeEnum, 0, "osc.type", { "kOsc_WT", 0, X }, { "kOsc_Sample", 1, X }, { "kOsc_MultiSample", 1, A }, { "kOsc_Granular", 2, X }, { "kOsc_Spectral", 3, X });
 // GROUPC WP-11 (A412 .. A418): the granular oscillator. Only the names kWindowBlackmanHarris / ExpDec / Gaussian / Triangle / Tukey, kDensityFree / BPM, kLengthBPM, kEven /
 // kExponential / kRandom and kYAxisOscVolume occur in the 656 factory presets; the others are the names in the pattern of those (close, not verified against a file).
 ENUM (kGrainWindowEnum, 0, "gran.window", { "kWindowHann", 0, C }, { "kWindowWelch", 1, C }, { "kWindowGaussian", 2, X }, { "kWindowBlackmanHarris", 3, X }, { "kWindowSinc", 4, C },
@@ -153,6 +158,18 @@ const Rule kGranular[] = {
     { "Granular", "kParamRandomWarp2", "osc#.gran.rand_warp2", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
 };
 
+// GROUPC WP-12 (A419 .. A426, 13-new-keys.md 4.38): the type specific block of a spectral oscillator (the flex curve, the common block's Position / Manual / Hz offset are read in code)
+const Rule kSpectral[] = {
+    { "Spectral", "kParamFreqLo", "osc#.spec.freq_lo", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Spectral", "kParamFreqHi", "osc#.spec.freq_hi", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Spectral", "kParamLoHiIsSmooth", "osc#.spec.lohi_smooth", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "Spectral", "kParamLoHiPostWarp", "osc#.spec.lohi_post_warp", Conv::boolean, 1, 0, C, kNaN, nullptr, "post_warp_parameter_name_assumed" },
+    { "Spectral", "kParamPhaseLock", "osc#.spec.phase_lock", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "Spectral", "kParamTransients", "osc#.spec.transients", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "Spectral", "kParamSpecFltShift", "osc#.spec.cut", Conv::lin, 1, 0, C, kNaN, nullptr, "spectral_filter_shift_is_cut" },
+    { "Spectral", "kParamSpecFltWetDry", "osc#.spec.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+};
+
 const Rule kNoise[] = {
     { "Noise", "kParamVolume", "noise.level", Conv::lin, 100, 0, C, kNaN, nullptr, "level_linear_assumed" },
     { "Noise", "kParamPan", "noise.pan", Conv::lin, 2, 0, X, 0, nullptr, "" },
@@ -241,6 +258,7 @@ const Rule* rulesOf (const char* scope, size_t& count) noexcept
     if (! std::strcmp (scope, "Warp")) { count = sizeof (kWarp) / sizeof (Rule); return kWarp; }
     if (! std::strcmp (scope, "WT")) { count = sizeof (kWt) / sizeof (Rule); return kWt; }
     if (! std::strcmp (scope, "Granular")) { count = sizeof (kGranular) / sizeof (Rule); return kGranular; }
+    if (! std::strcmp (scope, "Spectral")) { count = sizeof (kSpectral) / sizeof (Rule); return kSpectral; }
     if (! std::strcmp (scope, "Multi")) { count = sizeof (kMulti) / sizeof (Rule); return kMulti; }
     if (! std::strcmp (scope, "Noise") || ! std::strcmp (scope, "NoiseOsc")) { count = sizeof (kNoise) / sizeof (Rule); return kNoise; }
     if (! std::strcmp (scope, "Sub") || ! std::strcmp (scope, "SubOsc")) { count = sizeof (kSub) / sizeof (Rule); return kSub; }

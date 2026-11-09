@@ -331,6 +331,9 @@ std::vector<ChoiceGroup> warpTypeGroups()
         { "PD", { 47, 48, 49, 64, 65, 66, 67 }, false },
         { "AM", { 50, 51, 68, 69, 70, 71 }, false },
         { "RM", { 9, 10, 72, 73, 74, 75 }, false },
+        // GROUPC WP-12 (4.38): the spectral warps of the spectral oscillator (76 .. 98)
+        { "Spectral", { 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92 }, false },
+        { "Spectral Mask", { 93, 94, 95, 96, 97, 98 }, false },
     };
 }
 

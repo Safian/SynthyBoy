@@ -158,11 +158,11 @@ void Importer::oscillator (int i)
     if (tn >= 0)
     {
         const bool known = kind != 0 || typeName == "kOsc_WT";
-        store (key ("type"), kind == 0 ? 0 : (kind == 3 && opt.granularOsc ? kOscTypeGranular : 1)); // GROUPC: Granular is its own type (a sample oscillator on an engine without it)
+        store (key ("type"), kind == 0 ? 0 : (kind == 3 && opt.granularOsc ? kOscTypeGranular : (kind == 4 && opt.spectralOsc ? kOscTypeSpectral : 1))); // GROUPC: Granular and Spectral are their own types (a sample oscillator on an engine without them)
         setByFile[static_cast<size_t> (indexOf (key ("type")))] = 1;
-        entry (! known ? ItemKind::dropped : (kind <= 0 || kind == 2 || kind == 3 ? ItemKind::imported : ItemKind::approximated), known ? Reason::exact : Reason::enumRemapped, area, on + "/plainParams/kParamType",
-               typeName, key ("type"), kind == 0 ? "Wavetable" : (kind == 3 && opt.granularOsc ? "Granular" : "Sample"),
-               kind == 1 ? "multisample_reduced_to_one_zone" : kind == 4 ? "spectral_played_as_sample" : (kind == 3 && ! opt.granularOsc ? "granular_played_as_sample" : ""));
+        entry (! known ? ItemKind::dropped : (kind <= 0 || kind == 2 || kind == 3 || kind == 4 ? ItemKind::imported : ItemKind::approximated), known ? Reason::exact : Reason::enumRemapped, area, on + "/plainParams/kParamType",
+               typeName, key ("type"), kind == 0 ? "Wavetable" : (kind == 3 && opt.granularOsc ? "Granular" : (kind == 4 && opt.spectralOsc ? "Spectral" : "Sample")),
+               kind == 1 ? "multisample_reduced_to_one_zone" : (kind == 4 && ! opt.spectralOsc ? "spectral_played_as_sample" : (kind == 3 && ! opt.granularOsc ? "granular_played_as_sample" : "")));
         consume (tn);
     }
     else store (key ("type"), 0);
@@ -259,16 +259,18 @@ void Importer::oscillator (int i)
             consume (u.node);
             continue;
         }
-        if (kind == 3 && (u.name == "kParamManualPositionMode" || u.name == "kParamPosition"))
+        if ((kind == 3 || kind == 4) && (u.name == "kParamManualPositionMode" || u.name == "kParamPosition" || (kind == 4 && u.name == "kParamHzOffset")))
         {
-            // GROUPC WP-11: the play head of the granular oscillator: Manual places it at Position (0 .. 100 % of the region)
-            const bool manualRow = u.name == "kParamManualPositionMode";
+            // GROUPC WP-11 / WP-12: the play head of the granular and the spectral oscillator: Manual places it at Position (0 .. 100 % of the region); the spectral Hz offset is the
+            // frequency shift
+            const char* prefix = kind == 3 ? "gran." : "spec.";
+            const std::string target = u.name == "kParamHzOffset" ? "spec.freq_shift" : std::string (prefix) + (u.name == "kParamManualPositionMode" ? "manual" : "position");
             const double v = num (u.node);
             bool cl = false;
-            const double st = store (key (manualRow ? "gran.manual" : "gran.position"), manualRow ? (v >= 0.5 ? 1.0 : 0.0) : v, &cl);
-            setByFile[static_cast<size_t> (indexOf (key (manualRow ? "gran.manual" : "gran.position")))] = 1;
-            entry (cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, p, valueText (u.node), key (manualRow ? "gran.manual" : "gran.position"), fmt (st),
-                   manualRow ? "granular_manual_mode" : "granular_manual_position");
+            const double st = store (key (target.c_str()), u.name == "kParamManualPositionMode" ? (v >= 0.5 ? 1.0 : 0.0) : v, &cl);
+            setByFile[static_cast<size_t> (indexOf (key (target.c_str())))] = 1;
+            entry (cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, p, valueText (u.node), key (target.c_str()), fmt (st),
+                   u.name == "kParamHzOffset" ? "spectral_hz_offset_is_the_frequency_shift" : (u.name == "kParamManualPositionMode" ? "manual_position_mode" : "manual_position"));
             consume (u.node);
             continue;
         }
@@ -296,11 +298,41 @@ void Importer::oscillator (int i)
         std::vector<Unmapped> bum;
         if (isDefaultBlock (bplain)) noteDefault (bplain);
         else applyScope (kind == 0 ? std::initializer_list<const char*> { "Warp", "WT" } : kind == 1 ? std::initializer_list<const char*> { "Warp", "Multi" }
-                                                                                   : kind == 3 ? std::initializer_list<const char*> { "Warp", "Granular" } : std::initializer_list<const char*> { "Warp" },
+                                                                                   : kind == 3 ? std::initializer_list<const char*> { "Warp", "Granular" }
+                                                                                   : kind == 4 ? std::initializer_list<const char*> { "Warp", "Spectral" } : std::initializer_list<const char*> { "Warp" },
                          bplain, n, area, bp + "/plainParams", bum, true,
                          { "kParamTablePos", "kParamDensity", "kParamDensityMode", "kParamGrainLength", "kParamLengthMode" });
         if (kind == 3)
             granularRates (n, bplain, area, bp + "/plainParams");
+        if (kind == 4)
+        {
+            // the drawn mask of the spectral filter (flex): x = position on the log frequency axis, y = 0 .. 1 with 0.5 unity (A422); a flat 0.5 curve is not stored
+            const int fx = get (B, "flex");
+            if (isMap (fx) && N (fx).count > 0)
+            {
+                std::vector<ContentPoint> pts;
+                bool flat = true;
+                if (pointsFromCurve (fx, pts, true))
+                {
+                    for (const ContentPoint& pt : pts) if (std::fabs (pt.y - 0.5) > 1e-4) flat = false;
+                    if (! flat && opt.spectralOsc)
+                    {
+                        ContentRemap rm;
+                        rm.osc = n;
+                        rm.slot = 1;
+                        rm.name = "Serum filter";
+                        rm.points = reduce (pts, kMaxRemapPoints);
+                        R.spectralFilters.push_back (std::move (rm));
+                        acctRest (fx, ItemKind::imported, Reason::exact, area, bp + "/flex", "content.spectral_filters", "Serum filter", "spectral_filter_curve");
+                    }
+                    else
+                        acctRest (fx, flat ? ItemKind::imported : ItemKind::dropped, flat ? Reason::exact : Reason::noEngineEquivalent, area, bp + "/flex", "", "",
+                                  flat ? "spectral_filter_curve_is_flat" : "spectral_filter_curve_without_the_spectral_oscillator");
+                }
+                else acctRest (fx, ItemKind::dropped, Reason::noEngineEquivalent, area, bp + "/flex", "", "", "spectral_filter_curve_unreadable");
+            }
+            else if (fx >= 0) acctRest (fx, ItemKind::ignored, Reason::exact, area, bp + "/flex", "", "", "spectral_filter_curve_is_empty");
+        }
         if (kind == 0)
         {
             const int tp = get (bplain, "kParamTablePos");

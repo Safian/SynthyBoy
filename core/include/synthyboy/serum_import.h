@@ -100,6 +100,7 @@ struct SerumImportOptions
     const char* fallbackName = nullptr;                         // file stem when the preset has no name
     bool customWavetables = true;                               // the engine can play a stored table (kCapUserWavetable); false: the nearest built-in table
     bool customSamples = true;                                  // the engine has the sample oscillator (kCapSampleOsc)
+    bool spectralOsc = true;                                    // the engine has the spectral oscillator (kCap2Spectral), otherwise a spectral oscillator is imported as a sample oscillator
     bool granularOsc = true;                                    // the engine has the granular oscillator (kCap2Granular); without it a granular oscillator is imported as a sample oscillator
     bool customLfoShapes = true;                                // the engine plays a drawn LFO shape (kCapCustomLfoShape)
     bool noiseSample = true;                                    // the noise source plays a stored sample (noise.type = Sample, kCapNoiseSample)
@@ -126,6 +127,7 @@ struct SerumImportResult
     std::vector<SerumImportedImpulse> impulses;
     std::vector<ContentLfoShape> lfoShapes;
     std::vector<ContentRemap> remaps;
+    std::vector<ContentRemap> spectralFilters;   // GROUPC WP-12: the drawn filter mask of a spectral oscillator (flex)
     std::vector<ContentModCurve> modCurves;
     std::vector<ContentPoint> velocityCurve, noteCurve, shaperA, shaperB;
     ContentTuning tuning;

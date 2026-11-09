@@ -53,7 +53,11 @@ constexpr const char* const kMorphTypes[] = {
     "FM Exp from Noise", "FM Exp from Sub", "FM Exp from Filter 1", "FM Exp from Filter 2",                                                      \
     "FM Linear from Noise", "FM Linear from Sub", "FM Linear from Filter 1", "FM Linear from Filter 2",                                          \
     "PD from Noise", "PD from Sub", "PD from Filter 1", "PD from Filter 2", "AM from Noise", "AM from Sub", "AM from Filter 1", "AM from Filter 2", \
-    "RM from Noise", "RM from Sub", "RM from Filter 1", "RM from Filter 2"
+    "RM from Noise", "RM from Sub", "RM from Filter 1", "RM from Filter 2",                                                                       \
+    /* GROUPC WP-12 (13-new-keys.md 4.38): the spectral warps of the spectral oscillator (entries 76 .. 98; inert on the other oscillator types) */       \
+    "Spectral Comb", "Add Harmonics", "Add Subharmonics", "Spectral Detune", "Shepard Narrow", "Shepard Filter", "Peak Octave Down", "Peak Octave Up",  \
+    "Peak Harmonic Down", "Peak Harmonic Up", "Spectral Gate", "Spectral Pitch Shift", "Phase Twist", "Spectral Spread", "Spectral Shift",             \
+    "Spectral Smear", "Spectral Mirror", "Mask from " X, "Mask from " Y, "Mask from Noise", "Vocode from " X, "Vocode from " Y, "Vocode from Noise"
 constexpr const char* const kWarpTypes1[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
                                               "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3",
                                               SB_WARP_APPENDED("Osc 2", "Osc 3") };
@@ -105,8 +109,8 @@ constexpr const char* const kScaleTypes[] = { "Chromatic (off)", "Major", "Natur
 constexpr const char* const kScaleModes[] = { "Conform", "Mark only" };
 constexpr const char* const kTuningScales[] = { "12-TET", "Pythagorean", "Just intonation", "User file" };
 constexpr const char* const kOscTypes[] = { "Wavetable", "Sample",
-                                             // GROUPC WP-11 (B28): the granular oscillator
-                                             "Granular" };
+                                             // GROUPC WP-11 (B28): the granular oscillator, WP-12 (B29): the spectral oscillator
+                                             "Granular", "Spectral" };
 constexpr const char* const kLoopModes[] = { "One-shot", "Forward loop", "Reverse loop", "Forward/reverse loop", "Tailed" };
 constexpr const char* const kFadeEdges[] = { "None", "1 ms", "2 ms", "4 ms", "8 ms", "16 ms", "32 ms", "64 ms", "128 ms" };
 constexpr const char* const kSliceModes[] = { "Off", "Auto", "Manual" };
@@ -148,6 +152,8 @@ constexpr const char* const kGrainDivisions[] = { "1/1", "1/1T", "1/1.", "1/2", 
 constexpr const char* const kSpawnPatterns[] = { "Together", "Even", "Exp", "Random" };
 constexpr const char* const kGrainYAxes[] = { "None", "Level", "Warp", "Warp 2", "Density", "Grain Length", "Window Amt", "Window Skew", "Rand Offset", "Rand Dir",
                                               "Rand Pitch", "Rand Length", "Rand Pan", "Rand Gain", "Rand Window", "Rand Skew", "Rand Warp", "Rand Warp 2" };
+// B29 (GROUPC, WP-12): the spectral oscillator (Serum 2 manual p.104 - 122, 13-new-keys.md 4.38)
+constexpr const char* const kSpecYAxes[] = { "None", "Level", "Warp", "Warp 2", "Spec Flt Cutoff", "Spec Flt Wet/Dry", "Freq Lo", "Freq Hi" };
 // B26 (GROUPA2, WP-07): the voice control LFO scaling is set as a percentage of the time or as a rate (Serum 2 manual p.318)
 constexpr const char* const kVoiceCtlLfoScaleModes[] = { "Percent", "Rate" };
 
@@ -438,6 +444,23 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     pick ("osc" #N ".gran.spawn_pattern", "Osc " #N " Grain Spawn Pattern", "Osc " #N " / Granular", kSpawnPatterns, 0),                         \
     pick ("osc" #N ".gran.y_axis", "Osc " #N " Grain Y Axis", "Osc " #N " / Granular", kGrainYAxes, 0),                                          \
     SB_PCT ("osc" #N ".gran.xy_y", "Osc " #N " Grain Y Position", "Osc " #N " / Granular", 50.0f, kMod)
+
+// B29 (GROUPC, WP-12): per oscillator the type specific keys of the spectral oscillator (the region, loop, scan, slice and unison keys are the oscN.sample.* ones)
+#define SB_OSC_SPEC(N)                                                                                                                           \
+    cont ("osc" #N ".spec.freq_lo", "Osc " #N " Spectral Freq Lo", "Osc " #N " / Spectral", 20.0f, 20000.0f, 20.0f, Unit::Hz, kMod, 0, 0.3f),     \
+    cont ("osc" #N ".spec.freq_hi", "Osc " #N " Spectral Freq Hi", "Osc " #N " / Spectral", 20.0f, 20000.0f, 20000.0f, Unit::Hz, kMod, 0, 0.3f), \
+    onOff ("osc" #N ".spec.lohi_smooth", "Osc " #N " Spectral Smooth Band Edges", "Osc " #N " / Spectral", true),                                \
+    onOff ("osc" #N ".spec.lohi_post_warp", "Osc " #N " Spectral Band After Warp", "Osc " #N " / Spectral", false),                              \
+    SB_PCT_RANGE ("osc" #N ".spec.cut", "Osc " #N " Spectral Filter Cut", "Osc " #N " / Spectral", -100.0f, 100.0f, 0.0f, kMod),                \
+    SB_PCT ("osc" #N ".spec.mix", "Osc " #N " Spectral Filter Mix", "Osc " #N " / Spectral", 100.0f, kMod),                                      \
+    cont ("osc" #N ".spec.freq_shift", "Osc " #N " Spectral Frequency Shift", "Osc " #N " / Spectral", -2000.0f, 2000.0f, 0.0f, Unit::Hz, kMod, 0), \
+    onOff ("osc" #N ".spec.manual", "Osc " #N " Spectral Manual Position", "Osc " #N " / Spectral", false),                                      \
+    SB_PCT ("osc" #N ".spec.position", "Osc " #N " Spectral Position", "Osc " #N " / Spectral", 0.0f, kMod),                                     \
+    onOff ("osc" #N ".spec.scan_keytrack", "Osc " #N " Spectral Scan Key Track", "Osc " #N " / Spectral", false),                                \
+    onOff ("osc" #N ".spec.phase_lock", "Osc " #N " Spectral Phase Lock", "Osc " #N " / Spectral", false),                                       \
+    onOff ("osc" #N ".spec.transients", "Osc " #N " Spectral Transients", "Osc " #N " / Spectral", false),                                       \
+    pick ("osc" #N ".spec.y_axis", "Osc " #N " Spectral Y Axis", "Osc " #N " / Spectral", kSpecYAxes, 0),                                        \
+    SB_PCT ("osc" #N ".spec.xy_y", "Osc " #N " Spectral Y Position", "Osc " #N " / Spectral", 50.0f, kMod)
 
 #define SB_SENDS(KEY, NAME, GROUP)                                                                                                               \
     SB_PCT (KEY ".bus1_send", NAME " Bus 1 Send", GROUP, 0.0f, kMod),                                                                            \
@@ -928,11 +951,13 @@ constexpr ParamInfo kRaw[] = {
     SB_OSC_EXTRA2 (1), SB_OSC_EXTRA2 (2), SB_OSC_EXTRA2 (3),
     // --- B28: GROUPC WP-11: the granular oscillator (13-new-keys.md 4.37, positions 2134..2226) ---------------------------------------------
     SB_OSC_GRAN (1), SB_OSC_GRAN (2), SB_OSC_GRAN (3),
+    // --- B29: GROUPC WP-12: the spectral oscillator (13-new-keys.md 4.38, positions 2227..2268) ----------------------------------------------
+    SB_OSC_SPEC (1), SB_OSC_SPEC (2), SB_OSC_SPEC (3),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2227, "880 keys of state version 2 plus the 1270 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28)");
+static_assert (kCount == 2269, "880 keys of state version 2 plus the 1312 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29)");
 
 struct Table
 {
@@ -962,7 +987,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

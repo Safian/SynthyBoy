@@ -275,6 +275,51 @@ TEST (content_saved_table_survives_a_state_reload_and_differs_from_the_saw_fallb
     CHECK_EQ (stored.numFrames(), static_cast<size_t> (2));
 }
 
+// GROUPC (WP-11 / WP-12): the sample that was loaded through the shell is the content of the granular and the spectral oscillator as well (the same content.samples[] entry)
+TEST (content_granular_and_spectral_types_play_the_loaded_sample_through_the_shell)
+{
+    Host h ("granspec");
+    const fs::path wavFile = writeBytes (h.workDir() / "Tone A3.wav", encodeWav (tone (440.0, 2.0).data(), nullptr, 48000, 48000, 16));
+    OscWaveView view (h.ctx, 1);
+    view.setBounds (0, 0, 390, 220);
+    CHECK (view.loadSampleFile (juce::File (wavFile.string())).ok);
+    setParameter (h.proc, "osc1.sample.loop_mode", 1.0f);
+    const auto sample = render (h.proc, 69, 1.0);
+    CHECK_NEAR (hzOf (sample, 0.3, 0.9), 440.0, 6.0);
+    setParameter (h.proc, "osc1.sample.scan", 10.0f); // a slow scan of the grain play head / the spectral head (the pitch stays)
+
+    // Granular: same content, same pitch, a different sound (grains)
+    setParameter (h.proc, "osc1.type", static_cast<float> (kOscTypeGranular));
+    CHECK_EQ (view.oscType(), kOscTypeGranular);
+    CHECK (view.isSampleType() && view.isGranular() && view.preview() != nullptr);
+    setParameter (h.proc, "osc1.gran.density", 80.0f);
+    setParameter (h.proc, "osc1.gran.length", 120.0f);
+    const auto granular = render (h.proc, 69, 1.0);
+    CHECK (rms (granular, 0.3, 0.9) > 0.02);
+    CHECK_NEAR (hzOf (granular, 0.3, 0.9), 440.0, 30.0);
+    CHECK (relDiff (sample, granular, 0.3, 0.9) > 0.02);
+    // the octave up moves the grains' pitch
+    CHECK_NEAR (hzOf (render (h.proc, 81, 1.0), 0.3, 0.9), 880.0, 60.0);
+
+    // Spectral: the spectrogram of the loaded sample is drawn, the markers sit on the strip, a key changes the pitch only
+    setParameter (h.proc, "osc1.type", static_cast<float> (kOscTypeSpectral));
+    CHECK (view.isSpectral() && ! view.isGranular());
+    juce::Image image (juce::Image::ARGB, 390, 220, true);
+    {
+        juce::Graphics g (image);
+        view.paint (g);
+    }
+    CHECK (view.hasSpectrogram());
+    const auto spectral = render (h.proc, 69, 1.0);
+    CHECK (rms (spectral, 0.3, 0.9) > 0.03);
+    CHECK_NEAR (hzOf (spectral, 0.3, 0.9), 440.0, 15.0);
+    CHECK_NEAR (hzOf (render (h.proc, 57, 1.0), 0.3, 0.9), 220.0, 15.0);
+    // Freq Hi below the tone removes it
+    setParameter (h.proc, "osc1.spec.freq_hi", 300.0f);
+    setParameter (h.proc, "osc1.spec.lohi_smooth", 0.0f);
+    CHECK (rms (render (h.proc, 69, 1.0), 0.3, 0.9) < 0.1 * rms (spectral, 0.3, 0.9));
+}
+
 TEST (content_sample_load_plays_the_content_sample_at_the_key_pitch_through_the_shell)
 {
     Host h ("sample");

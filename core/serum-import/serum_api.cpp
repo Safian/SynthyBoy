@@ -216,6 +216,7 @@ std::string serializeSerumPreset (const SerumImportResult& result, const PresetM
     }
     content.lfoShapes = result.lfoShapes;
     content.remaps = result.remaps;
+    content.spectralFilters = result.spectralFilters;
     content.modCurves = result.modCurves;
     content.velocityCurve = result.velocityCurve;
     content.noteCurve = result.noteCurve;
@@ -232,6 +233,7 @@ std::string serializeSerumPreset (const SerumImportResult& result, const PresetM
         for (const auto& w : content.samples) { StateContent t; t.samples.push_back (w); if (ok (t)) keep.samples.push_back (w); }
         for (const auto& w : content.lfoShapes) { StateContent t; t.lfoShapes.push_back (w); if (ok (t)) keep.lfoShapes.push_back (w); }
         for (const auto& w : content.remaps) { StateContent t; t.remaps.push_back (w); if (ok (t)) keep.remaps.push_back (w); }
+        for (const auto& w : content.spectralFilters) { StateContent t; t.spectralFilters.push_back (w); if (ok (t)) keep.spectralFilters.push_back (w); }
         for (const auto& w : content.modCurves) { StateContent t; t.modCurves.push_back (w); if (ok (t)) keep.modCurves.push_back (w); }
         { StateContent t; t.velocityCurve = content.velocityCurve; if (ok (t)) keep.velocityCurve = content.velocityCurve; }
         { StateContent t; t.noteCurve = content.noteCurve; if (ok (t)) keep.noteCurve = content.noteCurve; }

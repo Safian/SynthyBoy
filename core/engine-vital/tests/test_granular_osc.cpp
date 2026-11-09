@@ -23,7 +23,7 @@ TEST (granular_capability_and_type_list)
     auto e = makeVital();
     CHECK ((e->capabilities2() & kCap2Granular) != 0);
     const auto* type = findParamByKey ("osc1.type");
-    CHECK_EQ (type->max, 2.0f);
+    CHECK (type->max >= 2.0f);
     CHECK_EQ (std::string (choiceName (*type, 2)), "Granular");
     CHECK ((requiredCapsForValue2 (static_cast<size_t> (findParamIndex (type->id)), 2.0f) & kCap2Granular) != 0);
     CHECK_EQ (requiredCapsForValue2 (static_cast<size_t> (findParamIndex (type->id)), 1.0f), kCap2None);

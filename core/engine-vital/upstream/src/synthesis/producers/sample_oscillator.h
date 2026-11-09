@@ -15,6 +15,7 @@
 #include "processor.h"
 #include "synthyboy/granular/granular.h"
 #include "synthyboy/sampleosc/sample_types.h"
+#include "synthyboy/spectral/spectral.h"
 #include "synthyboy/sampleosc/sample_voice.h"
 
 namespace sbvital {
@@ -68,6 +69,21 @@ namespace sbvital {
       int spawn_pattern = 0;                                // 0 together, 1 even, 2 exp, 3 random
       int y_axis = 0;                                       // 0 none, 1 level, 2 warp, 3 warp 2, 4 density, ... (kGrainYAxes)
     } gran;
+
+    // GROUPC WP-12 (13-new-keys.md 4.38): the spectral oscillator
+    struct Spectral {
+      const synthyboy::spectral::Analysis* analysis = nullptr;  // the analysis of the sample (built when the content was set), null: silent
+      bool lohi_smooth = true;
+      bool lohi_post_warp = false;
+      bool manual = false;
+      bool scan_keytrack = false;
+      bool phase_lock = false;
+      bool transients = false;
+      int y_axis = 0;                                           // 0 none, 1 level, 2 warp, 3 warp 2, 4 cut, 5 mix, 6 freq lo, 7 freq hi
+      bool has_filter = false;                                  // a drawn spectral filter curve: 257 values of y (0 .. 1, 0.5 = unity) over the log frequency axis
+      float filter_table[257] = {};
+      uint32_t filter_id = 0;                                   // changes when the curve changes
+    } spec;
   };
 
   class SampleOscillator : public Processor {
@@ -101,10 +117,14 @@ namespace sbvital {
         kMidiTrack,        // oscN.pitch_track: 0 = the recorded pitch, whatever the key
         kPitchBendTrack,   // oscN.pitch_bend_track: 1 = the bend still moves an oscillator whose pitch tracking is off
         kSlice,            // GROUPB WP-05: oscN.sample.slice, -1 .. 1: slices added to the slice of the key in Play Single Slice mode
+        kWarpVar,          // GROUPC WP-12: the VAR fader (oscN.warp.phase, 0 .. 1) of the warp slots, read by the spectral warps
+        kWarp2Var,
         kType,             // GROUPC: oscN.type, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample (the module runs this processor for 1 .. 4)
         // GROUPC WP-11 (4.37): the modulatable keys of the granular oscillator
         kGranWindowAmount, kGranWindowSkew, kGranDensity, kGranLength, kGranLengthPercent, kGranPosition, kGranRandOffset, kGranRandDir, kGranRandPitch,
         kGranRandLength, kGranRandPan, kGranRandLevel, kGranRandWindow, kGranRandSkew, kGranRandWarp, kGranRandWarp2, kGranXyY,
+        // GROUPC WP-12 (4.38): the modulatable keys of the spectral oscillator
+        kSpecFreqLo, kSpecFreqHi, kSpecCut, kSpecMix, kSpecFreqShift, kSpecPosition, kSpecXyY,
         kNumInputs
       };
 
@@ -115,6 +135,7 @@ namespace sbvital {
       };
 
       static constexpr int kMaxUnison = 16;
+      static constexpr int kMaxSpectralUnison = 8;   // a spectral voice is an inverse FFT per hop: the unison of the spectral type is capped
       static constexpr int kVoicesPerInstance = 2;  // two Vital voices per poly_float
 
       explicit SampleOscillator(const SampleOscShared* shared);
@@ -140,6 +161,13 @@ namespace sbvital {
       struct Slot {
         synthyboy::sampleosc::SampleVoice voices[kMaxUnison];
         synthyboy::granular::GranularVoice gvoices[kMaxUnison];      // GROUPC WP-11: one grain cloud per unison voice
+        synthyboy::spectral::SpectralVoice svoices[kMaxSpectralUnison]; // GROUPC WP-12: one resynthesis voice per unison voice
+        // the signals of the other oscillators / the noise for the mask and vocode warps (a ring of the last 2048 samples of the lane and its magnitude spectrum)
+        float ext_ring[3][synthyboy::spectral::kFftSize] = {};
+        float ext_mag[3][synthyboy::spectral::kBins] = {};
+        int ext_pos = 0;
+        float filter_gains[synthyboy::spectral::kBins] = {};
+        uint32_t filter_key = 0;
         int kind = 1;                                                // the oscillator type this slot's voices were started for
         int old_kind = 0;                                            // GROUPC: the kind that fades out after a change of the type under a running note (0: none)
         int fade_pos = 0, fade_len = 1;
@@ -158,6 +186,8 @@ namespace sbvital {
       void stopKind(Slot& slot, int kind);
       bool kindActive(const Slot& slot, int kind) const;
       void renderSlot(Slot& slot, int kind, int slot_index, int unison, int num_samples, poly_float* raw, float ramp0, float ramp1);
+      void buildSpectralParams(Slot& slot, int lane, int unison, synthyboy::spectral::SpectralParams& sp, float& level, float* warp_amounts);
+      void updateExternalSpectra(Slot& slot, int lane, int num_samples, const int* warp_types);
       void buildGrainParams(const Slot& slot, int lane, int unison, synthyboy::granular::GrainParams& gp, float& level, float* warp_amounts, bool tracks) const;
       uint32_t nextRandom() noexcept;
 
@@ -170,6 +200,7 @@ namespace sbvital {
       Output* sample_ = nullptr;
       int scratch_size_ = 0;
       std::shared_ptr<float[]> scratch_;
+      std::shared_ptr<synthyboy::spectral::Scratch> spectral_scratch_ = std::make_shared<synthyboy::spectral::Scratch>();
       std::shared_ptr<Output> pitch_tap_;
       std::shared_ptr<std::array<const Output*, 4>> extra_sources_ = std::make_shared<std::array<const Output*, 4>>();
   };

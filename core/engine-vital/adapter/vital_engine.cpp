@@ -53,6 +53,7 @@
 #include "synthyboy/content_store.h"
 #include "synthyboy/sampleosc/sample_data.h"
 #include "synthyboy/sampleosc/wav_reader.h"
+#include "synthyboy/spectral/spectral.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/shapes/shapes.h"
 #include "synthyboy/tuning.h"
@@ -232,6 +233,7 @@ struct SampleEntry
 {
     sampleosc::SampleData data;
     sampleosc::SampleView view;
+    spectral::Analysis analysis;                                  // GROUPC WP-12: the STFT analysis of the sample (the spectral oscillator), built with the content
     std::vector<sampleosc::SampleData::Onset> onsets;
     std::vector<float> manual;
     bool present = false;
@@ -240,6 +242,13 @@ struct SampleEntry
 struct Snapshot
 {
     std::array<LfoCustom, kNumLfo> lfo;
+    struct SpectralFilterEntry
+    {
+        bool present = false;
+        std::array<float, 257> table {};
+        uint32_t id = 0;
+    };
+    std::array<SpectralFilterEntry, 3> spectralFilter;            // the drawn spectral filter masks (content.spectral_filters, GROUPC WP-12)
     std::array<std::unique_ptr<sbvital::Wavetable>, 3> userTable; // oscN.wavetable = Preset table (content.wavetables)
     std::array<int, 3> userFrames {};
     std::array<SampleEntry, 3> sample;                            // oscN.type = Sample (content.samples)
@@ -396,6 +405,7 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
             if (! e.data.loadFromMemory (bytes.data(), bytes.size(), c.ref.file.c_str()) || ! e.data.isValid())
                 continue;
             e.view = e.data.view();
+            e.analysis.build (e.view); // GROUPC WP-12: for the spectral oscillator (about 4 ms per second of audio)
             e.onsets = e.data.detectOnsets();
             e.manual = c.slices;
             e.present = true;
@@ -444,6 +454,18 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
         auto& e = s->remap[static_cast<size_t> (r.osc - 1)][static_cast<size_t> (r.slot - 1)];
         shape.bake (e.table.data(), e.table.size());
         e.present = true;
+    }
+
+    static std::atomic<uint32_t> spectralFilterIds { 1 };
+    for (const ContentRemap& r : content.spectralFilters)
+    {
+        shapes::ShapeData shape;
+        if (r.osc < 1 || r.osc > 3 || ! buildShape (r.points, false, shape))
+            continue;
+        auto& e = s->spectralFilter[static_cast<size_t> (r.osc - 1)];
+        shape.bake (e.table.data(), e.table.size());
+        e.present = true;
+        e.id = spectralFilterIds.fetch_add (1);
     }
 
     for (const ContentModCurve& mc : content.modCurves)
@@ -680,7 +702,8 @@ public:
 
     EngineCaps2Mask capabilities2() const noexcept override
     {
-        return kCap2Granular; // GROUPC WP-11 (B28): proven by core/engine-vital/tests/test_granular_osc.cpp
+        return kCap2Granular   // GROUPC WP-11 (B28): proven by core/engine-vital/tests/test_granular_osc.cpp
+             | kCap2Spectral | kCap2SpectralWarps; // GROUPC WP-12 (B29): proven by core/engine-vital/tests/test_spectral_osc.cpp
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -1100,7 +1123,8 @@ private:
                 "sample.normalize", "sample.reverse", "sample.slice_mode", "sample.slice_threshold", "sample.slice_play", "sample.slice_root",
                 "sample.scan_range", "sample.scan_reverse", "sample.scan_lock_tempo", "sample.scan_to_bpm", "sample.length_beats",
                 "gran.window_shape", "gran.density_mode", "gran.density_sync", "gran.density_grains", "gran.length_mode", "gran.length_sync", "gran.jump_start",
-                "gran.max_grains", "gran.loop_grains", "gran.manual", "gran.scan_keytrack", "gran.reverse_grains", "gran.spawn_pattern", "gran.y_axis" };
+                "gran.max_grains", "gran.loop_grains", "gran.manual", "gran.scan_keytrack", "gran.reverse_grains", "gran.spawn_pattern", "gran.y_axis",
+                "spec.lohi_smooth", "spec.lohi_post_warp", "spec.manual", "spec.scan_keytrack", "spec.phase_lock", "spec.transients", "spec.y_axis" };
             for (int n = 1; n <= kNumOsc; ++n)
             {
                 const std::string k = "osc" + std::to_string (n) + ".";
@@ -1773,6 +1797,25 @@ private:
                 g.reverse_grains = P (kSpGranReverseGrains) > 0.5f;
                 g.spawn_pattern = I (kSpGranSpawnPattern);
                 g.y_axis = I (kSpGranYAxis);
+            }
+            {
+                auto& g = sh->spec;
+                g.analysis = entry != nullptr && entry->analysis.valid() ? &entry->analysis : nullptr;
+                g.lohi_smooth = P (kSpSpecLohiSmooth) > 0.5f;
+                g.lohi_post_warp = P (kSpSpecLohiPostWarp) > 0.5f;
+                g.manual = P (kSpSpecManual) > 0.5f;
+                g.scan_keytrack = P (kSpSpecScanKeytrack) > 0.5f;
+                g.phase_lock = P (kSpSpecPhaseLock) > 0.5f;
+                g.transients = P (kSpSpecTransients) > 0.5f;
+                g.y_axis = static_cast<int> (P (kSpSpecYAxis) + 0.5f);
+                const Snapshot::SpectralFilterEntry* filter = activeSnapshot != nullptr && activeSnapshot->spectralFilter[static_cast<size_t> (i)].present
+                                                                  ? &activeSnapshot->spectralFilter[static_cast<size_t> (i)] : nullptr;
+                g.has_filter = filter != nullptr;
+                if (filter != nullptr && g.filter_id != filter->id)
+                {
+                    g.filter_id = filter->id;
+                    std::copy (filter->table.begin(), filter->table.end(), g.filter_table);
+                }
             }
 
             // the slice list: auto = the onsets of the file stronger than the threshold, manual = the positions of the content
@@ -2788,7 +2831,9 @@ private:
            kSpScanLock, kSpScanToBpm, kSpLengthBeats,
            // GROUPC WP-11: the static keys of the granular oscillator
            kSpGranWindowShape, kSpGranDensityMode, kSpGranDensitySync, kSpGranDensityGrains, kSpGranLengthMode, kSpGranLengthSync, kSpGranJumpStart,
-           kSpGranMaxGrains, kSpGranLoopGrains, kSpGranManual, kSpGranScanKeytrack, kSpGranReverseGrains, kSpGranSpawnPattern, kSpGranYAxis, kSpCount };
+           kSpGranMaxGrains, kSpGranLoopGrains, kSpGranManual, kSpGranScanKeytrack, kSpGranReverseGrains, kSpGranSpawnPattern, kSpGranYAxis,
+           // GROUPC WP-12: the static keys of the spectral oscillator
+           kSpSpecLohiSmooth, kSpSpecLohiPostWarp, kSpSpecManual, kSpSpecScanKeytrack, kSpSpecPhaseLock, kSpSpecTransients, kSpSpecYAxis, kSpCount };
     std::array<std::array<int, kSpCount>, kNumOsc> sampleParams {};
     std::array<sbvital::SampleOscShared*, kNumOsc> sampleShared {};
     std::array<sbvital::FilterCurveShared*, 3> curveShared {};

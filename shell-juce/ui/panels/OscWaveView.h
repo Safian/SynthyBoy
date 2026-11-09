@@ -32,7 +32,7 @@ public:
     ~OscWaveView() override;
 
     enum class ViewMode { wave2D, wave3D, spectral };
-    enum class SampleMarker { none, start, end, loopStart, loopEnd, loopPair, slice, threshold, xy, window };
+    enum class SampleMarker { none, start, end, loopStart, loopEnd, loopPair, slice, threshold, xy, window, freqLo, freqHi };
 
     ViewMode viewMode() const noexcept { return mode; }
     void setViewMode (ViewMode newMode);
@@ -44,6 +44,16 @@ public:
     /** Sample, Granular and Spectral show the waveform of the content sample with the region and loop markers. */
     bool isSampleType() const;
     bool isGranular() const { return oscType() == kOscTypeGranular; }
+    bool isSpectral() const { return oscType() == kOscTypeSpectral; }
+
+    // ---- spectral view (GROUPC WP-12, 13-new-keys.md 4.38): the spectrogram of the sample, the low / high frequency markers on its right edge ----
+    /** The strip at the right edge of the display where the Freq Lo / Hi markers live (log axis 20 Hz .. 20 kHz, bottom to top). */
+    juce::Rectangle<float> freqStripArea() const;
+    float freqToY (float hz) const;
+    float yToFreq (float y) const;
+    juce::Point<float> freqMarkerPosition (bool high) const;
+    /** True once a spectrogram of the loaded sample is available (computed on the first paint after a sample is loaded). */
+    bool hasSpectrogram() const noexcept { return spectrogramColumns > 0; }
 
     // ---- granular view (GROUPC WP-11, design 02 / 13-new-keys.md 4.37): the window thumbnail and the X|Y dot ----
     /** The window thumbnail (top right of the display): a tap steps the grain window shape, a drag sets the amount (up) and the skew (sideways). */
@@ -164,6 +174,16 @@ private:
     ParamHandle warpTypeHandle;
     ParamHandle unisonVoicesHandle;
 
+    ParamHandle specFreqLoHandle, specFreqHiHandle, specManualHandle, specPositionHandle, specXyYHandle;
+    juce::Image spectrogramImage;
+    const SamplePreview* spectrogramFor = nullptr;
+    int spectrogramColumns = 0;
+    float spectrogramStart = -1.0f, spectrogramEnd = -1.0f;
+    void paintSpectral (juce::Graphics& g, juce::Rectangle<float> area);
+    void rebuildSpectrogram();
+    ParamHandle& xyPositionHandle() noexcept { return isSpectral() ? specPositionHandle : granPositionHandle; }
+    ParamHandle& xyYHandle() noexcept { return isSpectral() ? specXyYHandle : granXyYHandle; }
+    bool xyManualOn() const;
     ParamHandle granPositionHandle, granXyYHandle, granManualHandle, granWindowAmountHandle, granWindowSkewHandle, granWindowShapeHandle, granDensityHandle,
         granLengthHandle, granRandOffsetHandle;
     bool windowTap = false;

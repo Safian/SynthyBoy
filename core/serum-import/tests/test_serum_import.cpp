@@ -1098,13 +1098,57 @@ TEST (serum_granular_oscillator_has_a_type_and_keys)
     CHECK_EQ (value (r, "osc3.gran.density_grains"), 6.0f);
     CHECK_NEAR (value (r, "osc3.gran.length_percent"), 5.0, 1.0e-3);   // 0 x 100 % clamps to the 5 % minimum
     CHECK (entryWith (r, "granular_density_beats_to_the_nearest_division") >= 0);
-    CHECK (entryWith (r, "granular_manual_mode") >= 0);
+    CHECK (entryWith (r, "manual_position_mode") >= 0);
     // a wavetable oscillator next to it keeps its type
     Preset q;
     q.set ("Oscillator0", map ({ { "plainParams", map (withText ({}, { { "kParamType", "kOsc_WT" } })) } }));
     const SerumImportResult t = run (q.file());
     CHECK_EQ (value (t, "osc1.type"), 0.0f);
     CHECK_EQ (value (t, "osc1.gran.density_mode"), 0.0f);
+}
+
+// GROUPC (WP-12, A419 .. A426): the spectral oscillator keeps its type, its band, filter and warps; the flex curve is the drawn filter mask; a flat curve is not stored
+TEST (serum_spectral_oscillator_has_a_type_keys_warps_and_a_filter_curve)
+{
+    const auto flexBlock = [] (const std::vector<double>& xs, const std::vector<double>& ys)
+    {
+        std::vector<double> curve (xs.size(), 0.5);
+        return map ({ { "curveVals", nums (curve) }, { "numPoints", num (static_cast<double> (xs.size()) - 1) }, { "xVals", nums (xs) }, { "yVals", nums (ys) } });
+    };
+    Preset p;
+    p.set ("Oscillator0", map ({ { "plainParams", map (withText ({ { "kParamManualPositionMode", 1 }, { "kParamPosition", 62 }, { "kParamHzOffset", -794.4 } }, { { "kParamType", "kOsc_Spectral" } })) },
+                                 { "SpectralOsc0", map ({ { "plainParams", map (withText ({ { "kParamFreqLo", 110.0 }, { "kParamFreqHi", 2253.0 }, { "kParamSpecFltShift", -35.0 }, { "kParamSpecFltWetDry", 60.0 },
+                                                                                          { "kParamWarp", 0.5 }, { "kParamWarp2", 0.25 } },
+                                                                                        { { "kParamWarpMenu", "kSpectralComb" }, { "kParamWarpMenu2", "kVocode_NOISE" } })) },
+                                                          { "flex", flexBlock ({ 0.0, 0.52, 0.57, 1.0 }, { 0.5, 0.5, 0.75, 0.86 }) } }) } }));
+    // OSC B: a flat flex curve and the on switches; OSC C is a spectral oscillator too (smooth band off, phase lock and transients on)
+    p.set ("Oscillator1", map ({ { "plainParams", map (withText ({}, { { "kParamType", "kOsc_Spectral" } })) },
+                                 { "SpectralOsc1", map ({ { "plainParams", map (withText ({ { "kParamLoHiIsSmooth", 0 }, { "kParamPhaseLock", 1 }, { "kParamTransients", 1 } }, {})) },
+                                                          { "flex", flexBlock ({ 0.0, 1.0 }, { 0.5, 0.5 }) } }) } }));
+    const SerumImportResult r = run (p.file());
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_EQ (value (r, "osc1.type"), 3.0f);
+    CHECK_EQ (value (r, "osc2.type"), 3.0f);
+    CHECK_EQ (value (r, "osc1.spec.manual"), 1.0f);
+    CHECK_NEAR (value (r, "osc1.spec.position"), 62.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.spec.freq_shift"), -794.4, 1.0e-2);
+    CHECK_NEAR (value (r, "osc1.spec.freq_lo"), 110.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.spec.freq_hi"), 2253.0, 1.0e-2);
+    CHECK_NEAR (value (r, "osc1.spec.cut"), -35.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.spec.mix"), 60.0, 1.0e-3);
+    CHECK_EQ (value (r, "osc1.warp.type"), 76.0f);   // Spectral Comb
+    CHECK_EQ (value (r, "osc1.warp2.type"), 98.0f);  // Vocode from Noise
+    CHECK_EQ (value (r, "osc2.spec.lohi_smooth"), 0.0f);
+    CHECK_EQ (value (r, "osc2.spec.phase_lock"), 1.0f);
+    CHECK_EQ (value (r, "osc2.spec.transients"), 1.0f);
+    CHECK_EQ (r.spectralFilters.size(), static_cast<size_t> (1));   // OSC B's flat curve is not stored
+    CHECK_EQ (r.spectralFilters[0].osc, 1);
+    CHECK_EQ (r.spectralFilters[0].slot, 1);
+    CHECK (r.spectralFilters[0].points.size() >= 3);
+    CHECK_NEAR (r.spectralFilters[0].points.back().y, 0.14, 1.0e-3);   // the file stores the screen y (up is 0), as for every curve of the Serum files
+    CHECK (entryWith (r, "spectral_filter_curve") >= 0);
+    CHECK (entryWith (r, "spectral_filter_curve_is_flat") >= 0);
 }
 
 // GROUPB (WP-06, A401 / A402): the warp modes from the noise, sub and filters and the matrix sources that were dropped have a home

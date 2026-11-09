@@ -243,6 +243,8 @@ bool keepLockedContent (StateContent& patch, const StateContent& current, const 
     keepEntries (patch.wavetables, current.wavetables, [&] (const ContentWavetable& e) { return lockedModule (locks, "osc", e.osc); });
     keepEntries (patch.samples, current.samples, [&] (const ContentSample& e) { return e.osc == kNoiseSampleOsc ? isLocked (locks, "noise") : lockedModule (locks, "osc", e.osc); });
     keepEntries (patch.remaps, current.remaps, [&] (const ContentRemap& e) { return lockedModule (locks, "osc", e.osc); });
+    keepEntries (patch.spectralFilters, current.spectralFilters, [&] (const ContentRemap& e) { return lockedModule (locks, "osc", e.osc); });
+    keepEntries (patch.instruments, current.instruments, [&] (const ContentInstrument& e) { return lockedModule (locks, "osc", e.osc); });
     keepEntries (patch.lfoShapes, current.lfoShapes, [&] (const ContentLfoShape& e) { return lockedModule (locks, "lfo", e.lfo); });
     keepEntries (patch.filterCurves, current.filterCurves, [&] (const ContentFilterCurve& e) { return isLocked (locks, e.filter); });
     // GROUPA2 (WP-02): Lock Matrix keeps the drawn per-connection curves, the tuning lock the tuning table
@@ -257,6 +259,8 @@ bool keepLockedContent (StateContent& patch, const StateContent& current, const 
     std::sort (patch.wavetables.begin(), patch.wavetables.end(), [] (const auto& a, const auto& b) { return a.osc < b.osc; });
     std::sort (patch.samples.begin(), patch.samples.end(), [] (const auto& a, const auto& b) { return a.osc < b.osc; });
     std::sort (patch.remaps.begin(), patch.remaps.end(), [] (const auto& a, const auto& b) { return a.osc != b.osc ? a.osc < b.osc : a.slot < b.slot; });
+    std::sort (patch.spectralFilters.begin(), patch.spectralFilters.end(), [] (const auto& a, const auto& b) { return a.osc < b.osc; });
+    std::sort (patch.instruments.begin(), patch.instruments.end(), [] (const auto& a, const auto& b) { return a.osc < b.osc; });
     std::sort (patch.lfoShapes.begin(), patch.lfoShapes.end(), [] (const auto& a, const auto& b) { return a.lfo < b.lfo; });
     std::sort (patch.filterCurves.begin(), patch.filterCurves.end(), [] (const auto& a, const auto& b) { return a.filter < b.filter; });
     return patch != before;

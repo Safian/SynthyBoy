@@ -85,6 +85,7 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
         options.customSamples = (caps & kCapSampleOsc) != 0;
         options.noiseSample = (caps & kCapNoiseSample) != 0;
         options.granularOsc = capsCover2 (caps2, kCap2Granular);
+        options.spectralOsc = capsCover2 (caps2, kCap2Spectral);
         options.customLfoShapes = (caps & kCapCustomLfoShape) != 0;
         options.categoryHint = categoryHint.empty() ? nullptr : categoryHint.c_str();
 
