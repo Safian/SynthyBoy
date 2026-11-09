@@ -13,6 +13,7 @@
 // Presets (Linear, Reverse, ease curves, steps), Reset (back to the identity, the entry is removed from the content).
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "../ParamHandle.h"
@@ -26,12 +27,19 @@ class RemapEditor final : public juce::Component, private juce::Timer
 {
 public:
     RemapEditor (UiContext& context, int oscIndex);
+    /** The same graph for the per-connection modulation curve of matrix slot `modSlot` (1..64, MODAMT G2): content.modCurves[] instead of
+        content.remaps[]; x is the value of the source, y what the connection uses before the amount; no entry = the straight line. */
+    struct ModCurveMode {};
+    RemapEditor (UiContext& context, ModCurveMode, int modSlot);
     ~RemapEditor() override;
 
     int preferredHeight (int width) const;
 
     // ---- state (tests, panel) ----
     int osc() const noexcept { return oscN; }
+    bool isModCurve() const noexcept { return modMode; }
+    /** Mod curve mode: show another matrix slot (1..64). */
+    void setModSlot (int modSlot);
     /** The slot oscN.remap.slot shows, 1..4. */
     int slot() const;
     const ContentRemap& remap() const noexcept { return current; }
@@ -80,6 +88,7 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
 
 private:
+    void init();
     void timerCallback() override;
     void pushUndo();
     void touched();
@@ -96,7 +105,10 @@ private:
 
     UiContext& ctx;
     int oscN;
-    ParamHandle slotHandle; // oscN.remap.slot
+    std::unique_ptr<ParamHandle> slotHandle; // oscN.remap.slot (remap mode only)
+    bool modMode = false;
+    int modSlotNumber = 1;
+    size_t maxPoints = static_cast<size_t> (kMaxRemapPoints);
     ContentRemap current;
     bool stored = false; // an entry for (osc, slot) exists in the content
     int loadedSlot = 0;

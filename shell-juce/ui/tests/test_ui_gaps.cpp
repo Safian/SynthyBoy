@@ -15,7 +15,7 @@
 #include "ui/ModuleSheet.h"
 #include "ui/panels/EnvelopePanel.h"
 #include "ui/ModSourceBar.h"
-#include "ui/panels/FxChainView.h"
+#include "ui/panels/FxRackView.h"
 #include "ui/panels/GlbScopePanel.h"
 #include "ui/panels/ModMatrixReorder.h"
 #include "ui/panels/LfoShapeEditor.h"
@@ -551,10 +551,11 @@ TEST (uig_warp_type_list_is_grouped)
                 ++tickedSub; // the group of the current type is marked
         }
     }
-    CHECK_EQ (groups, 8);
-    CHECK_EQ (disabledGroups, 4); // Filter / Distortion / PD / AM have no mode in this engine
-    CHECK_EQ (subMenus, 4);       // Basic / Alt / FM / RM
+    CHECK_EQ (groups, 8 + 2);     // the eight groups, a separator and Swap Warps
+    CHECK_EQ (disabledGroups, 0); // block B21: Filter / Distortion / PD / AM have their modes
+    CHECK_EQ (subMenus, 8);       // Basic / Alt / Filter / Distortion / FM / PD / AM / RM
     CHECK_EQ (tickedSub, 1);      // warp type None sits in Basic
+    CHECK (warp->hasExtraAction());
 
     // <  > still step through the flat order
     rig.setParam ("osc1.warp.type", 2.0f);
@@ -1860,87 +1861,91 @@ TEST (uig_settings_buttons_act_and_confirm_with_a_toast)
 
 TEST (uig_fx_chain_slot_power_reorder_and_bypass_alternatives)
 {
+    // the racks of the FX page are strips of cards (docs/ui-design/18-FX-INSTANCES.md 2.8); the gestures of the old 16 slot ribbon are the ones of the cards
     Rig rig (Page::fx);
-    auto* view = rig.find<FxChainView>();
+    auto* view = rig.find<FxRackView>();
     CHECK (view != nullptr);
     if (view == nullptr)
         return;
-    for (auto* b : { &view->powerToggleButton(), &view->bypassAllToggleButton() })
+    for (auto* b : { &view->powerToggleButton(), &view->bypassAllToggleButton(), &view->moveLeft(), &view->moveRight(), &view->duplicateToggleButton(),
+                     &view->removeSlotButton(), &view->addModuleButton() })
         CHECK (b->getHeight() >= rig.editor->theme().touch() && b->getWidth() >= rig.editor->theme().touch());
 
-    const auto centreOf = [view] (int slot) { return view->slotBounds (slot).getCentre(); };
-    const auto dotOf = [view, &rig] (int slot)
+    const auto mainRack = [view] { return view->racks().rack[0]; };
+    const auto centreOf = [view] (FxRackItem item) { return view->cardBounds (item).getCentre(); };
+    const auto dotOf = [view, &rig] (FxRackItem item)
     {
-        const auto r = view->slotBounds (slot);
+        const auto r = view->cardBounds (item);
         return juce::Point<float> (r.getX() + rig.editor->theme().px (6.0f), r.getCentreY());
     };
+    const FxRackItem first = mainRack()[0], second = mainRack()[1], third = mainRack()[2], fourth = mainRack()[3], fifth = mainRack()[4];
 
-    // double tap on a slot toggles its effect (design 08-02), a tap on the dot does too
-    const bool before2 = view->slotIsOn (2);
-    doubleTap (*view, centreOf (2));
-    CHECK (view->slotIsOn (2) != before2);
-    doubleTap (*view, centreOf (2));
-    CHECK_EQ (view->slotIsOn (2), before2);
-    const bool before3 = view->slotIsOn (3);
-    tap (*view, dotOf (3));
-    CHECK (view->slotIsOn (3) != before3);
-    tap (*view, dotOf (3));
+    // double tap on a card toggles its module (design 08-02), a tap on the dot does too
+    const bool before2 = view->isOn (third);
+    doubleTap (*view, centreOf (third));
+    CHECK (view->isOn (third) != before2);
+    doubleTap (*view, centreOf (third));
+    CHECK_EQ (view->isOn (third), before2);
+    const bool before3 = view->isOn (fourth);
+    tap (*view, dotOf (fourth));
+    CHECK (view->isOn (fourth) != before3);
+    tap (*view, dotOf (fourth));
+    CHECK_EQ (view->isOn (fourth), before3);
 
-    // [ON] is the visible alternative: it follows the selected slot
-    view->setSelectedSlot (4);
-    const bool before4 = view->slotIsOn (4);
+    // [ON] is the visible alternative: it follows the selected card
+    view->select (fifth);
+    const bool before4 = view->isOn (fifth);
     CHECK (view->powerToggleButton().getButtonText() == (before4 ? "ON" : "OFF"));
     view->powerToggleButton().onClick();
-    CHECK (view->slotIsOn (4) != before4);
-    CHECK (view->powerToggleButton().getButtonText() == (view->slotIsOn (4) ? "ON" : "OFF"));
+    CHECK (view->isOn (fifth) != before4);
+    CHECK (view->powerToggleButton().getButtonText() == (view->isOn (fifth) ? "ON" : "OFF"));
 
-    // Opt/Alt on the dot: every effect at once (bypass), again: restored
-    for (int i = 0; i < 16; ++i)
-        if (view->slotIsOn (i) == false)
-            view->toggleSlotPower (i);
-    tap (*view, dotOf (3));  // plain: one effect off
-    CHECK (! view->slotIsOn (3));
-    tap (*view, dotOf (3));
+    // Opt/Alt on the dot: every module at once (bypass), again: restored
+    for (const auto& item : mainRack())
+        if (! view->isOn (item))
+            view->togglePower (item);
     const auto altTap = [&] (juce::Point<float> p)
     {
         const auto mods = juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier | juce::ModifierKeys::altModifier);
         view->mouseDown (mouse (*view, p, p, false, 1, mods));
         view->mouseUp (mouse (*view, p, p, false, 1, mods));
     };
-    altTap (dotOf (5));
-    int on = 0;
-    for (int i = 0; i < 16; ++i)
-        on += view->slotIsOn (i) ? 1 : 0;
-    CHECK_EQ (on, 0);
-    altTap (dotOf (5));
-    on = 0;
-    for (int i = 0; i < 16; ++i)
-        on += view->slotIsOn (i) ? 1 : 0;
-    CHECK_EQ (on, 16);
+    const auto countOn = [&]
+    {
+        int on = 0;
+        for (const auto& item : mainRack())
+            on += view->isOn (item) ? 1 : 0;
+        return on;
+    };
+    altTap (dotOf (fifth));
+    CHECK_EQ (countOn(), 0);
+    altTap (dotOf (fifth));
+    CHECK_EQ (countOn(), 16);
 
-    // reorder needs the hold: a quick drag does nothing, hold + drag moves the slot, the yellow drop line shows while it is armed
-    const auto order = view->chainOrder();
-    view->mouseDown (mouse (*view, centreOf (0), centreOf (0), false));
-    view->mouseDrag (mouse (*view, centreOf (3), centreOf (0), true));
-    view->mouseUp (mouse (*view, centreOf (3), centreOf (0), true));
-    CHECK (view->chainOrder() == order);
-    const auto from = centreOf (0) + juce::Point<float> (6.0f, 0.0f); // away from the dot
-    const auto to = centreOf (3);
+    // reorder needs the hold: a quick drag does nothing, hold + drag moves the card, the drop line shows while it is armed
+    const auto order = mainRack();
+    view->mouseDown (mouse (*view, centreOf (first), centreOf (first), false));
+    view->mouseDrag (mouse (*view, centreOf (fourth), centreOf (first), true));
+    view->mouseUp (mouse (*view, centreOf (fourth), centreOf (first), true));
+    CHECK (mainRack() == order);
+    const auto from = centreOf (first) + juce::Point<float> (6.0f, 0.0f); // away from the dot
+    const auto to = centreOf (fourth) + juce::Point<float> (6.0f, 0.0f);   // right of the centre of the 4th card: behind it
     view->mouseDown (mouse (*view, from, from, false));
     CHECK (view->longPress().pending());
     view->longPress().fire();
     CHECK (view->reorderIsArmed());
     view->mouseDrag (mouse (*view, to, from, true));
+    CHECK (view->dropLineShown());
     view->mouseUp (mouse (*view, to, from, true));
-    const auto moved = view->chainOrder();
-    CHECK_EQ (moved[3], order[0]);
-    CHECK_EQ (moved[0], order[1]);
+    const auto moved = mainRack();
+    CHECK (moved[3] == first);
+    CHECK (moved[0] == second);
     CHECK (! view->reorderIsArmed());
 
-    // the buttons are the alternative: Move Left / Right act on the selected slot
-    view->setSelectedSlot (3);
-    view->moveSelectedSlot (-1);
-    CHECK_EQ (view->chainOrder()[2], order[0]);
+    // the buttons are the alternative: Move Left / Right act on the selected card
+    view->select (first);
+    view->moveLeft().onClick();
+    CHECK (mainRack()[2] == first);
 }
 
 // ---- screenshots of the changed screens (phone 390x844, tablet 1024x768) -> /tmp/ui-shots/gaps/ --------------------------------------------
@@ -2080,12 +2085,13 @@ TEST (uig_screenshots_of_the_changed_screens)
         }
         {
             Rig rig (Page::fx, sz.w, sz.h);
-            if (auto* view = rig.find<FxChainView>())
+            if (auto* view = rig.find<FxRackView>())
             {
-                const auto from = view->slotBounds (1).getCentre() + juce::Point<float> (6.0f, 0.0f);
+                const auto main = view->racks().rack[0];
+                const auto from = view->cardBounds (main[1]).getCentre() + juce::Point<float> (6.0f, 0.0f);
                 view->mouseDown (mouse (*view, from, from, false));
                 view->longPress().fire();
-                view->mouseDrag (mouse (*view, view->slotBounds (4).getCentre(), from, true));
+                view->mouseDrag (mouse (*view, view->cardBounds (main[4]).getCentre(), from, true));
             }
             rig.shot ("fx-chain-armed-reorder-" + n, sz.w, sz.h, false, Page::fx);
         }
@@ -2442,6 +2448,111 @@ TEST (uig_filter_hierarchical_catalog_and_var_labels)
     {
         auto* modelBtn = rig.find<juce::TextButton> (*f1Panel, [] (juce::TextButton& b) { return b.getButtonText() == "MG Dirty"; });
         CHECK (modelBtn != nullptr);
+    }
+}
+
+// ---- block B21 (warp-env): Swap Warps, the VAR fader of Sync Var, the ENV 1 buttons of the mixer channels -------------------------------
+
+TEST (uig_swap_warps_exchanges_the_two_warp_slots)
+{
+    Rig rig;
+    auto* panel = rig.panelTitled ("Oscillator 1");
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    panel->setMoreExpanded (true);
+    auto* warp = rig.find<ParamChoice> ([] (ParamChoice& c) { return c.key() == "osc1.warp.type"; });
+    auto* warp2 = rig.find<ParamChoice> ([] (ParamChoice& c) { return c.key() == "osc1.warp2.type"; });
+    CHECK (warp != nullptr && warp2 != nullptr);
+    if (warp == nullptr || warp2 == nullptr)
+        return;
+    CHECK (warp->hasExtraAction() && warp2->hasExtraAction());
+    CHECK (! warp2->choiceGroups().empty()); // the second slot has the same grouped list
+
+    rig.setParam ("osc1.warp.type", 18.0f); // Flip
+    rig.setParam ("osc1.warp.amount", 30.0f);
+    rig.setParam ("osc1.warp.phase", 90.0f);
+    rig.setParam ("osc1.warp.spread", 10.0f);
+    rig.setParam ("osc1.warp2.type", 25.0f); // LPF
+    rig.setParam ("osc1.warp2.amount", 70.0f);
+    rig.setParam ("osc1.warp2.phase", 200.0f);
+    rig.setParam ("osc1.warp2.spread", -20.0f);
+    warp2->runExtraAction();
+    CHECK_EQ (rig.param ("osc1.warp.type"), 25.0f);
+    CHECK_EQ (rig.param ("osc1.warp2.type"), 18.0f);
+    CHECK_NEAR (rig.param ("osc1.warp.amount"), 70.0f, 0.01);
+    CHECK_NEAR (rig.param ("osc1.warp2.amount"), 30.0f, 0.01);
+    CHECK_NEAR (rig.param ("osc1.warp.phase"), 200.0f, 0.5);
+    CHECK_NEAR (rig.param ("osc1.warp2.phase"), 90.0f, 0.5);
+    CHECK_NEAR (rig.param ("osc1.warp.spread"), -20.0f, 0.01);
+    CHECK_NEAR (rig.param ("osc1.warp2.spread"), 10.0f, 0.01);
+    warp->runExtraAction(); // twice is the original
+    CHECK_EQ (rig.param ("osc1.warp.type"), 18.0f);
+    CHECK_NEAR (rig.param ("osc1.warp2.amount"), 70.0f, 0.01);
+    // the other oscillators are not touched
+    CHECK_EQ (rig.param ("osc2.warp.type"), 0.0f);
+}
+
+TEST (uig_sync_var_names_the_warp_phase_knob_var)
+{
+    Rig rig;
+    auto* panel = rig.panelTitled ("Oscillator 1");
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    panel->setMoreExpanded (true);
+    auto* phase = rig.find<ParamControl> ([] (ParamControl& c) { return c.key() == "osc1.warp.phase"; });
+    auto* phase2 = rig.find<ParamControl> ([] (ParamControl& c) { return c.key() == "osc1.warp2.phase"; });
+    CHECK (phase != nullptr && phase2 != nullptr);
+    if (phase == nullptr || phase2 == nullptr)
+        return;
+    const juce::String original = phase->label();
+    CHECK (original != "Var");
+    rig.setParam ("osc1.warp.type", 11.0f); // Sync Var
+    CHECK_EQ (phase->label(), juce::String ("Var"));
+    CHECK_EQ (phase2->label(), original);
+    rig.setParam ("osc1.warp2.type", 11.0f);
+    CHECK_EQ (phase2->label(), juce::String ("Var"));
+    rig.setParam ("osc1.warp.type", 12.0f);
+    CHECK_EQ (phase->label(), original);
+}
+
+TEST (uig_env1_buttons_sit_on_the_mixer_and_grey_out_off_main_and_direct)
+{
+    Rig rig (Page::mix);
+    auto* panel = rig.panelTitled ("Mixer");
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    panel->setMoreExpanded (true);
+    struct Channel { const char* env; const char* destination; float toFilter, toMain, toDirect, toNone; };
+    const Channel channels[] = { { "osc1.env1", "osc1.destination", 0.0f, 3.0f, 4.0f, 6.0f }, { "osc2.env1", "osc2.destination", 0.0f, 3.0f, 4.0f, 6.0f },
+                                 { "osc3.env1", "osc3.destination", 0.0f, 3.0f, 4.0f, 6.0f }, { "sub.env1", "sub.destination", 0.0f, 3.0f, 4.0f, 6.0f },
+                                 { "noise.env1", "noise.destination", 0.0f, 3.0f, 4.0f, 6.0f },
+                                 { "filter1.env1", "filter1.destination", 99.0f, 0.0f, 1.0f, 2.0f }, { "filter2.env1", "filter2.destination", 99.0f, 0.0f, 1.0f, 2.0f } };
+    for (const Channel& c : channels)
+    {
+        auto* button = rig.find<ParamToggle> ([&] (ParamToggle& t) { return t.key() == c.env; });
+        CHECK (button != nullptr);
+        if (button == nullptr)
+            continue;
+        CHECK_EQ (rig.param (c.env), 1.0f); // On is today's sound
+        if (c.toFilter != 99.0f)
+        {
+            rig.setParam (c.destination, c.toFilter);
+            CHECK (button->getAlpha() < 0.9f);
+        }
+        rig.setParam (c.destination, c.toMain);
+        CHECK (button->getAlpha() > 0.9f);
+        rig.setParam (c.destination, c.toDirect);
+        CHECK (button->getAlpha() > 0.9f);
+        rig.setParam (c.destination, c.toNone);
+        CHECK (button->getAlpha() < 0.9f);
+        rig.setParam (c.destination, c.toMain);
+        tap (*button, button->getLocalBounds().getCentre().toFloat());
+        CHECK_EQ (rig.param (c.env), 0.0f);
+        tap (*button, button->getLocalBounds().getCentre().toFloat());
+        CHECK_EQ (rig.param (c.env), 1.0f);
     }
 }
 

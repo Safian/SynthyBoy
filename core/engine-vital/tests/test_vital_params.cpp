@@ -13,6 +13,7 @@
 
 #include "line_generator.h" // Vital-derived
 #include "synthyboy/engine.h"
+#include "synthyboy/fx_types.h"
 #include "synthyboy/modulation.h"
 #include "test_runner.h"
 #include "test_util.h"
@@ -281,7 +282,14 @@ TEST (modulatable_parameters_are_modulation_destinations_of_the_engine)
     {
         const bool flagged = (paramTable()[i].flags & kParamModulatable) != 0;
         const bool exists = vitalHasModulationDestination (*e, i);
-        if (flagged && i >= kNumKeysV2)
+        int poolSlot = 0, poolNumber = 0;
+        if (flagged && fxInstanceOfParam (i, poolSlot, poolNumber))
+        {
+            // block B22: the parameters of the effect instance pool are destinations of the module in the slot; an empty slot has none
+            // (test_fxinstances.cpp: a destination exists once the slot has its module and goes when the module goes)
+            CHECK (! exists);
+        }
+        else if (flagged && i >= kNumKeysV2)
         {
             // the destinations of state version 3 exist for the keys whose capability bits the engine reports
             CHECK_EQ (exists, capsCover (e->capabilities(), requiredCaps (i)));
@@ -297,7 +305,11 @@ TEST (modulatable_parameters_are_modulation_destinations_of_the_engine)
         }
         else
         {
-            CHECK (! exists);
+            const size_t choice = modDestinationChoiceOf (i);
+            if (choice > 0)
+                CHECK (exists);
+            else
+                CHECK (! exists);
         }
     }
     CHECK_EQ (destinations, static_cast<size_t> (269));

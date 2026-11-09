@@ -146,8 +146,25 @@ namespace sbvital {
         kRmOscillatorA,
         kRmOscillatorB,
         kRmSample,
+        // SynthyBoy block B21 (docs/ui-design/13-new-keys.md 4.22): the Serum 2 warp modes, appended to the shared list of both slots
+        kSyncVar,        // Sync with a soft edge at the reset (the VAR fader is the warp phase knob)
+        kBendPlus, kBendMinus, kBendPlusMinus,
+        kAsymPlus, kAsymMinus, kAsymPlusMinus,
+        kFlip, kMirror,
+        kRemap1, kRemap2, kRemap3, kRemap4,
+        kOddEven,
+        kFilterLow, kFilterHigh,
+        kShTube, kShSoftClip, kShHardClip, kShDiode1, kShDiode2, kShLinearFold, kShSineFold, kShZeroSquare, kShAsym, kShRectify,
+        kShSineShaper, kShStompBox, kShTapeSat, kShSoftSat,
+        kFmThruZeroA, kFmThruZeroB, kFmExpA, kFmExpB, kFmLinearA, kFmLinearB,
+        kPdA, kPdB, kPdSelf,
+        kAmA, kAmB,
         kNumDistortionTypes
       };
+
+      static bool isExtendedWarp(int type) { return type >= kSyncVar; }
+      /** One sample through a distortion mode of block B21 (kShTube .. kShSoftSat) at the warp amount 0..1; used by the sample oscillator. */
+      static float warpShape(int type, float value, float amount);
 
       enum UnisonStackType {
         kNormal,
@@ -179,6 +196,24 @@ namespace sbvital {
       static constexpr int kSpectralBufferSize = Wavetable::kWaveformSize * 2 / poly_float::kSize + poly_float::kSize;
       static const mono_float kStackMultipliers[kNumUnisonStackTypes][kNumPolyPhase];
 
+      /** State a warp mode of block B21 keeps from sample to sample (per lane): the integrated modulator of FM Thru-Zero / Exp / Linear and the
+          two one-pole stages of the filter warps. Reset at note on. */
+      struct WarpState {
+        poly_int acc = 0;
+        poly_float lp1 = 0.0f;
+        poly_float lp2 = 0.0f;
+      };
+
+      /** The per block data of one extended warp slot (slot 1 is stage 0, slot 2 is stage 1). type is 0 when the slot is None or one of the
+          original Vital modes (those run through the original code path). */
+      struct WarpStage {
+        int type = 0;
+        int side = 0;                  // 0 both voices active, 1 only the left voice, 2 only the right voice (modulator sources)
+        poly_float var = 0.5f;         // Sync Var: the VAR fader 0..1
+        const mono_float* remap = nullptr; // Remap 1-4: the 257 values of the curve of the oscillator
+        const poly_float* mod = nullptr;
+      };
+
       struct VoiceBlock {
         VoiceBlock();
 
@@ -207,6 +242,8 @@ namespace sbvital {
         poly_float distortion2;
         poly_float last_distortion2;
         const poly_float* modulation_buffer2;
+        WarpStage stage[2];            // SynthyBoy B21
+        WarpState state[2];
 
         int num_buffer_samples;
         poly_int current_buffer_sample;
@@ -267,6 +304,7 @@ namespace sbvital {
       void processBlend(int num_samples, poly_mask reset_mask);
 
       void loadVoiceBlock(VoiceBlock& voice_block, int index, poly_mask active_mask);
+      void storeWarpState(int index, bool single_voice, poly_mask active_mask);
 
       void resetWavetableBuffers();
       void setActiveOscillators(int new_active_oscillators);
@@ -329,6 +367,7 @@ namespace sbvital {
       poly_float distortion2_values_[kNumPolyPhase];       // SynthyBoy: second warp slot
       poly_float last_distortion2_values_[kNumPolyPhase];
       poly_float distortion_phase2_;
+      WarpState warp_state_[2][kNumPolyPhase];   // SynthyBoy B21: per unison pair, like phases_
       VoiceBlock voice_block_;
       utils::RandomGenerator random_generator_;
 

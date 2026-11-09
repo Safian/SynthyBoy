@@ -30,6 +30,8 @@
 namespace sbvital {
 
   class StereoMemory;
+  class DistortionModule;
+  struct FilterCurveShared;
 
   /** A module that splits its input into bands that other effects process (the three splitters; the band racks are 3 to 9). */
   class BandSplitterModule : public SynthModule {
@@ -77,6 +79,48 @@ namespace sbvital {
       int pos_ = 0, delay_ = 0;
   };
 
+  /** SynthyBoy (docs/ui-design/18-FX-INSTANCES.md): one MORE instance of an effect module, living outside the chain's own 16 modules.
+      It owns its effect module and the output level trim of the Vital effects (which the chain keeps in its own controls for the
+      modules of instance 0) and has a control table of its own: the controls carry the usual names ("chorus_dry_wet" ...), so the same
+      bindings that drive instance 0 drive an instance, through `getControls()` of THIS module. Built (constructed, init, sample rate
+      set) on any thread, then handed to the chain with `setPoolModule()` on the audio thread. */
+  class FxInstanceModule : public SynthModule {
+    public:
+      FxInstanceModule(int module_index, const Output* beats_per_second, const Output* keytrack, const int* note_counter);
+
+      int moduleIndex() const { return module_index_; }
+      SynthModule* effect() { return effect_; }
+      /** The module reads the tempo, the key track and the note counter of the engine from copies of its own: the builder thread runs it (the
+          settle blocks) while the audio thread writes the engine's own. `prime ()` sets the copies (any thread, before the hand over), `run ()`
+          refreshes them from the engine's (audio thread). */
+      void prime(poly_float beats_per_second, poly_float keytrack);
+      /** Runs the effect on `audio_in` and applies the level trim; returns the output buffer (valid until the next call). */
+      const poly_float* run(const poly_float* audio_in, int num_samples);
+      /** The latency in samples of the module (Bode's Hilbert filter, the limiter of the compressor). */
+      int latency() const;
+      /** The drawn curves of the PZ SVF (FX filter type), null for the other types. */
+      FilterCurveShared* filterCurve();
+      /** The distortion (X-Shaper tables), null for the other types. */
+      DistortionModule* distortion();
+
+      void process(int) override { }
+      void hardReset() override;
+      void correctToTime(double seconds) override;
+      Processor* clone() const override { VITAL_ASSERT(false); return nullptr; }
+
+    private:
+      int module_index_;
+      SynthModule* effect_;
+      Output* level_ = nullptr;
+      float last_level_gain_ = 1.0f;
+      const Output* live_beats_per_second_;
+      const Output* live_keytrack_;
+      const int* live_note_counter_;
+      Output beats_per_second_ { 1 }, keytrack_ { 1 };   // control rate copies the effect reads
+      int note_counter_ = 0, note_counter_offset_ = 0;   // note ons since the module's first block
+      bool counted_ = false;
+  };
+
   class ReorderableEffectChain : public SynthModule {
     public:
       enum {
@@ -91,6 +135,11 @@ namespace sbvital {
       static constexpr int kNumModules = 16;          // the 9 effects of Vital and the 7 Serum modules
       static constexpr int kFirstSerumModule = constants::kNumEffects;
       static constexpr int kNumRacks = 10;            // Main, Bus 1, Bus 2, then the bands of the splitters
+      static constexpr int kNumPoolSlots = 16;        // SynthyBoy: the effect instance pool (FxInstanceModule), racks Main / Bus 1 / Bus 2 only
+      static constexpr int kMaxRackItems = kNumModules + kNumPoolSlots;
+      static constexpr int kPoolOrderStep = 64;       // a module of instance 0 at position q of fx_order sorts as q * kPoolOrderStep + kPoolOrderBase,
+      static constexpr int kPoolOrderBase = 32;       // a slot by its own order (core/include/synthyboy/fx_types.h kFxOrderStep / kFxOrderBase: the same numbers)
+      static constexpr int kPoolFadeMs = 10;          // crossfade when the module of a slot changes or is switched on / off
       enum Rack { kMain, kBus1Rack, kBus2Rack, kLhLow, kLhHigh, kLmhLow, kLmhMid, kLmhHigh, kMsMid, kMsSide };
       enum Module { kHyperDimension = 9, kUtility, kBode, kConvolve, kSplitterLh, kSplitterLmh, kSplitterMs };
 
@@ -99,7 +148,7 @@ namespace sbvital {
       virtual void process(int num_samples) override;
       virtual void hardReset() override;
       virtual void processWithInput(const poly_float* audio_in, int num_samples) override;
-      virtual Processor* clone() const override { return new ReorderableEffectChain(*this); }
+      virtual Processor* clone() const override { VITAL_ASSERT(false); return nullptr; }   // never cloned (a mono module); the pool's ring is not copyable
 
       virtual void correctToTime(double seconds) override;
       void noteTriggered() { ++note_counter_; }   // SynthyBoy: a note on (the retrigger of Hyper and Bode)
@@ -114,11 +163,53 @@ namespace sbvital {
       int rackOf(int module) const;
       /** The module at position `position` of the order (a permutation of 0 .. 15; an invalid one is the identity). */
       int moduleAt(int position) const { return effect_order_[position]; }
+      // ---- the effect instance pool (audio thread; between two process () calls) ---------------------------------------------------------
+      /** Hands the module of a pool slot over (nullptr: the slot is empty). The chain does not own it: the replaced module is faded out
+          (10 ms) if it was running and then offered through popRetired (); the creator deletes it there, off the audio thread. */
+      void setPoolModule(int slot, FxInstanceModule* module);
+      /** on / rack (0 Main, 1 Bus 1, 2 Bus 2) / order (0 .. 1023) of a slot. A module that is switched on or off is faded in or out. */
+      void setPoolConfig(int slot, bool on, int rack, int order);
+      /** A module the chain has finished with (lock free, one consumer thread); nullptr when there is none. */
+      FxInstanceModule* popRetired();
+      /** The module the slot has been handed (even while it is off). */
+      FxInstanceModule* poolModule(int slot) const { return pool_[slot].module; }
+      /** What the creator of an instance needs to build the same module the chain builds (the tempo, the key track, the note counter). */
+      const Output* beatsPerSecondOutput() const { return beats_per_second_; }
+      const Output* keytrackOutput() const { return keytrack_; }
+      const int* noteCounter() const { return &note_counter_; }
+      poly_float liveBeatsPerSecond() const { return beats_per_second_->buffer[0]; }
+      poly_float liveKeytrack() const { return keytrack_->buffer[0]; }
+      /** True while a slot crossfades (its module is changing or switching on / off). */
+      bool poolFading(int slot) const { return pool_[slot].fade_left > 0; }
+
       /** The latency of the chain output in samples of the chain's (oversampled) rate: the longest signal path (Bode's Hilbert filter); every
           other path (the Direct output, the buses, the bands of a splitter, the voices that bypass a rack) is delayed to match it. */
       int latencyFrames() const { return latency_->load(std::memory_order_relaxed); }
 
     protected:
+      struct RackItem {
+        int key;   // sort value: q * kPoolOrderStep for the module at position q, the order of a pool slot
+        int id;    // 0 .. kNumModules - 1: a module of instance 0; kNumModules + s: pool slot s
+      };
+
+      struct PoolSlot {
+        FxInstanceModule* module = nullptr;    // handed over by the creator, not owned
+        FxInstanceModule* target = nullptr;    // what processes now: `module` while the slot is on, else nullptr (dry)
+        FxInstanceModule* leaving = nullptr;   // fading out
+        bool leaving_retire = false;           // `leaving` has been replaced by the creator: hand it back when the fade is over
+        bool on = false;
+        int rack = 0, order = 1023;
+        int fade_left = 0, fade_total = 1;
+        std::vector<poly_float> mix;           // output of a crossfade
+      };
+
+      void updatePoolTarget(int slot);
+      void startPoolFade(PoolSlot& s, FxInstanceModule* next);
+      void finishPoolFade(PoolSlot& s);
+      void retirePoolModule(FxInstanceModule* module);
+      const poly_float* runPool(int slot, const poly_float* in, int num_samples);
+      void buildRackItems();
+
       int note_counter_ = 0;
       SynthModule* createEffectModule(int index);
       void refreshConfiguration();
@@ -149,6 +240,14 @@ namespace sbvital {
       float last_level_gain_[kNumModules] = {};
       float last_bus_gain_[2];
       float last_direct_gain_;
+
+      PoolSlot pool_[kNumPoolSlots];
+      RackItem rack_items_[kNumRacks][kMaxRackItems];
+      int rack_item_count_[kNumRacks] = {};
+      static constexpr int kRetireRing = 256;
+      std::atomic<FxInstanceModule*> retired_[kRetireRing];
+      std::atomic<unsigned> retired_write_ { 0 }, retired_read_ { 0 };
+      FxInstanceModule* retire_backlog_[kNumPoolSlots * 2] = {};
 
       std::shared_ptr<std::atomic<int>> latency_;
       AlignDelay main_in_delay_, main_out_delay_, direct_in_delay_, bus_in_delay_[2], bus_out_delay_[2];

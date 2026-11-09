@@ -6,6 +6,8 @@
 #include "ModMatrixReorder.h"
 
 #include <algorithm>
+#include <array>
+#include <map>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -146,8 +148,11 @@ public:
         stereoButton.setButtonText (snap.stereo ? "STER" : "MONO");
 
         char crvBuf[16];
-        std::snprintf (crvBuf, sizeof crvBuf, "C:%+.1f", snap.power);
-        curveButton.setButtonText (crvBuf);
+        std::snprintf (crvBuf, sizeof crvBuf, "C:%+.1f", static_cast<double> (snap.power));
+        // a star marks a drawn slot curve (content.modCurves, G2)
+        const auto& drawn = ctx.host.content().modCurves;
+        const bool hasDrawn = std::any_of (drawn.begin(), drawn.end(), [this] (const ContentModCurve& m) { return m.slot == slot + 1 && m.points.size() >= 2; });
+        curveButton.setButtonText (juce::String (crvBuf) + (hasDrawn ? "*" : ""));
 
         // Feedback loop check
         const auto loop = modDetectFeedbackLoop (ctx.assign.matrix(), slot);
@@ -382,6 +387,8 @@ private:
 
         const size_t totalDest = modDestinationCount();
         std::map<std::string, juce::PopupMenu> subMenus;
+        // the amounts of the 64 slots (G1) are one submenu "Mod Amounts" in eight groups of eight; a slot that would close a loop is greyed out
+        std::array<juce::PopupMenu, kNumModSlots / 8> amountGroups;
 
         for (size_t d = 1; d <= totalDest; ++d)
         {
@@ -389,12 +396,27 @@ private:
             if (pIndex >= 0 && static_cast<size_t> (pIndex) < paramCount())
             {
                 const auto& info = paramTable()[pIndex];
+                const int amountSlot = modAmountSlotOfChoice (static_cast<int> (d));
+                if (amountSlot >= 0)
+                {
+                    const bool loops = modAmountWouldLoop (ctx.assign.matrix(), slot, static_cast<int> (d));
+                    amountGroups[static_cast<size_t> (amountSlot / 8)].addItem (static_cast<int> (d), juce::String (info.name) + (loops ? " (loop)" : ""), ! loops,
+                                                                                 static_cast<int> (std::lround (ctx.assign.matrix().get (modSlotParams (slot).destination))) == static_cast<int> (d));
+                    continue;
+                }
                 std::string group = info.group;
                 const size_t cut = group.find (" / ");
                 if (cut != std::string::npos)
                     group = group.substr (0, cut);
                 subMenus[group].addItem (static_cast<int> (d), info.name);
             }
+        }
+
+        {
+            juce::PopupMenu amounts;
+            for (size_t g = 0; g < amountGroups.size(); ++g)
+                amounts.addSubMenu (juce::String::formatted ("Slots %d-%d", static_cast<int> (g) * 8 + 1, static_cast<int> (g) * 8 + 8), amountGroups[g]);
+            subMenus["Mod Amounts"] = std::move (amounts);
         }
 
         for (auto& pair : subMenus)

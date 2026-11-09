@@ -52,6 +52,8 @@ namespace sbvital {
         kDirectOut,
         kBus1Out,   // SynthyBoy: the bus sends of the oscillators and the noise (docs/ui-design/13-new-keys.md 4.10)
         kBus2Out,
+        kRawFree,    // SynthyBoy B21: the Main / Direct channels whose ENV 1 button is off (not multiplied by the amplitude envelope)
+        kDirectFree,
         kNumOutputs
       };
 
@@ -113,6 +115,7 @@ namespace sbvital {
       Output* filter_blend_[kNumSources] = {};
       Output* bus1_send_[kNumSources] = {};
       Output* bus2_send_[kNumSources] = {};
+      Value* env1_[kNumSources] = {};   // SynthyBoy B21: the ENV 1 button of the channel (1 = on, the amplitude envelope applies)
       poly_float last_blend_[kNumSources];
       poly_float last_send1_[kNumSources];
       poly_float last_send2_[kNumSources];

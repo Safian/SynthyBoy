@@ -9,7 +9,7 @@ Branch `work-coverage` (from `develop` bc376e4, 1594 keys). Docs-only audit of 2
 | DONE | engine + key + Kick page + UI + a test that proves the audible or functional effect; Kick and UI are implied for every key (see X01-07, X01-08), so a row lists the key, the engine / test and the panel |
 | PARTIAL | part of the function is DONE; the gap column says exactly what is missing |
 | MISSING | not in the code (or only a facade that does nothing) |
-| IN-PROGRESS | owned by one of the two running workers (branches `agy/warpenv` = block B19: warp modes G34-G37 + ENV 1 toggles G39; `agy/modamt` = block B20: mod-amount modulation G1-G6 of the import audit); not counted as MISSING |
+| IN-PROGRESS | owned by one of the two running workers (`agy/modamt` = block B20: mod-amount modulation G1-G6 of the import audit; the warp-env items G34-G39 are DONE in block B21 since 2026-11-09); not counted as MISSING |
 | DIFFERENT | differs from Serum on purpose (a row of 14-morning-questions.md or a decision of 12-decisions.md is named) |
 | EXCLUDED | Kick or not a function (00-BRIEF: browser, internal grid / sequencer, Arp, Clips) |
 
@@ -36,14 +36,14 @@ Items that no earlier list named (found in this audit, all in the tables above):
 | Area | Rows | DONE | PARTIAL | MISSING | IN-PROGRESS | DIFFERENT | EXCLUDED |
 |------|-----:|-----:|--------:|--------:|------------:|----------:|---------:|
 | S01 Serum 2: welcome, basics, pitch, routing, module menu (p.13-36) | 24 | 16 | 2 | 2 | 0 | 0 | 4 |
-| S02 Serum 2: wavetable oscillator, unison, warp (p.37-57) | 38 | 22 | 4 | 2 | 10 | 0 | 0 |
+| S02 Serum 2: wavetable oscillator, unison, warp (p.37-57) | 38 | 33 | 4 | 1 | 0 | 0 | 0 |
 | S03 Serum 2: multisample oscillator (p.58-67) | 5 | 0 | 0 | 5 | 0 | 0 | 0 |
 | S04 Serum 2: sample oscillator (p.68-84) | 18 | 7 | 5 | 5 | 0 | 0 | 1 |
 | S05 Serum 2: granular oscillator (p.85-103) | 7 | 0 | 0 | 7 | 0 | 0 | 0 |
 | S06 Serum 2: spectral oscillator (p.104-122) | 7 | 0 | 0 | 7 | 0 | 0 | 0 |
 | S07 Serum 2: sub and noise (p.123-132) | 8 | 5 | 0 | 3 | 0 | 0 | 0 |
 | S08 Serum 2: filters (p.133-143) | 17 | 9 | 3 | 4 | 0 | 1 | 0 |
-| S09 Serum 2: mixer and routing (p.144-151) | 7 | 6 | 0 | 0 | 1 | 0 | 0 |
+| S09 Serum 2: mixer and routing (p.144-151) | 7 | 7 | 0 | 0 | 0 | 0 | 0 |
 | S10 Serum 2: FX (p.152-182) | 27 | 20 | 1 | 5 | 0 | 1 | 0 |
 | S11 Serum 2: modulation (p.183-214) | 47 | 25 | 5 | 10 | 5 | 2 | 0 |
 | S12 Serum 2: voicing, keyboard, clips, arp (p.215-273) | 12 | 9 | 0 | 0 | 0 | 0 | 3 |
@@ -54,7 +54,7 @@ Items that no earlier list named (found in this audit, all in the tables above):
 | V01 Vital manual (unofficial, 43 pages as cited) | 32 | 21 | 7 | 0 | 2 | 1 | 1 |
 | I01 Vital import fidelity and import entry points | 16 | 1 | 1 | 6 | 6 | 2 | 0 |
 | X01 Cross-cutting: shell, content pipeline, platforms (found in this audit) | 10 | 3 | 1 | 4 | 0 | 2 | 0 |
-| **Total** | **327** | **155** | **48** | **79** | **24** | **9** | **12** |
+| **Total** | **327** | **167** | **48** | **78** | **13** | **9** | **12** |
 
 Serum 2 chapters (S01-S16): 269 rows; Vital manual (V01): 32 rows; import fidelity (I01): 16; cross-cutting (X01): 10. A row is a user-facing function or a group of functions that share one status and one evidence; the Serum filter list, the warp mode table and the modulation sources are split where the status differs.
 
@@ -111,22 +111,22 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S02-14 | S p.48, V p.41 | Unison WT POS / WARP 1 / WARP 2 spread | DONE | `frame_spread`, `warp.spread`, `warp2.spread`, `morph.spread` |  |
 | S02-15 | S p.49 | WARP menu (grouped), amount, < > | DONE | `oscN.warp.type`, `warp.amount`; ParamControls.cpp:626 setGroups; ui_gaps `uig_warp_type_list_is_grouped` |  |
 | S02-16 | S p.49, 56 | Second warp slot | DONE | `oscN.warp2.*` (VB:131); t_wp4 `warp_slot_2_changes_the_oscillator_and_chains_after_slot_1` :377 |  |
-| S02-17 | S p.56 | Swap Warps (exchange the two slots) | MISSING | none | UI-only action (swap the 4 + 4 keys), no new key |
+| S02-17 | S p.56 | Swap Warps (exchange the two slots) | DONE | Swap Warps entry at the end of the grouped warp lists (`ParamChoice::setExtraAction`, `OscPanel.cpp` `swapWarps`); test `uig_swap_warps_exchanges_the_two_warp_slots` |  |
 | S02-18 | S p.50 | Warp Sync | DONE | warp type Sync (PT:43) |  |
-| S02-19 | S p.50 | Sync Var fader (hard to soft sync) | IN-PROGRESS | G34, worker warp-env (branch agy/warpenv, block B19) |  |
-| S02-20 | S p.50 | Bend +, Bend -, Bend +/- | IN-PROGRESS | G34: we have one Vital `Bend`; worker warp-env |  |
+| S02-19 | S p.50 | Sync Var fader (hard to soft sync) | DONE | warp entry `Sync Var` (11), VAR fader = the phase knob of the slot (labelled Var); test_warpenv `warpenv_neutral_positions_and_the_alt_modes` | a separate entry instead of a fader on Sync: morning question 35 |
+| S02-20 | S p.50 | Bend +, Bend -, Bend +/- | DONE | warp entries `Bend +` (12), `Bend -` (13), `Bend +/-` (14); cap bit 44; test_warpenv | own laws: morning question 36 |
 | S02-21 | S p.50 | PWM | DONE | warp type Pulse (Vital pulse width) is the PWM of Serum in effect (PT:43) | behaviour not A/B checked against Serum |
-| S02-22 | S p.50-51 | Asym +, Asym -, Asym +/-, Flip, Mirror | IN-PROGRESS | G34, worker warp-env |  |
-| S02-23 | S p.51 | Remap 1-4 warp modes (graph, mirrored, sine, 4x) | IN-PROGRESS | G34, worker warp-env; the `oscN.remap.*` position remap (WTREMAP, PT:360) is a different feature |  |
+| S02-22 | S p.50-51 | Asym +, Asym -, Asym +/-, Flip, Mirror | DONE | warp entries `Asym +/-/+-` (15-17), `Flip` (18), `Mirror` (19); cap bit 44; test_warpenv | own laws: morning question 36 |
+| S02-23 | S p.51 | Remap 1-4 warp modes (graph, mirrored, sine, 4x) | DONE | warp entries `Remap 1-4` (20-23) read the curve of `oscN.remap.slot` (B16); test_warpenv `warpenv_remap_modes_use_the_curve_of_the_oscillator` |  |
 | S02-24 | S p.51 | Quantize | DONE | warp type Quantize (PT:43) |  |
-| S02-25 | S p.51 | Odd/Even | IN-PROGRESS | G34, worker warp-env |  |
-| S02-26 | S p.52 | Warp Filter group LPF / HPF | IN-PROGRESS | G35, worker warp-env (spectral Low Pass / High Pass exist only as morph types `oscN.morph.type`) |  |
-| S02-27 | S p.52-54 | Warp Distortion group (14 modes: Tube .. Soft Sat.) | IN-PROGRESS | G35, worker warp-env |  |
+| S02-25 | S p.51 | Odd/Even | DONE | warp entry `Odd/Even` (24); test_warpenv (0 % odd only, 100 % even only) |  |
+| S02-26 | S p.52 | Warp Filter group LPF / HPF | DONE | warp entries `Filter LPF` (25), `Filter HPF` (26); cap bit 45; test_warpenv (centroid) |  |
+| S02-27 | S p.52-54 | Warp Distortion group (14 modes: Tube .. Soft Sat.) | DONE | warp entries 27-40 `Dist Tube` .. `Dist Soft Sat.`; cap bit 46; test_warpenv | four shapers are our own curves: morning question 36 |
 | S02-28 | S p.54 | FM from Osc B / C | DONE | warp types FM from Osc N (PT:43-47); t_vital_params `oscillators_that_modulate_each_other_stay_finite` :539 |  |
 | S02-29 | S p.54, 56 | FM / PD / AM / RM from Noise, Sub, Filter 1, Filter 2 (audio-rate taps) | MISSING | none | G29: needs audio-rate source taps; coordinate with warp-env (same warp enum) |
-| S02-30 | S p.54-55 | FM Thru-Zero, Exp, Linear | IN-PROGRESS | G36, worker warp-env |  |
-| S02-31 | S p.55 | PD (from B, C, Self) | IN-PROGRESS | G37, worker warp-env |  |
-| S02-32 | S p.56 | AM (from B, C) | IN-PROGRESS | G37, worker warp-env |  |
+| S02-30 | S p.54-55 | FM Thru-Zero, Exp, Linear | DONE | warp entries 41-46 `FM Thru-Zero / Exp / Linear from X / Y`; cap bit 47; test_warpenv `warpenv_fm_thru_zero_exp_and_linear_are_different_laws` |  |
+| S02-31 | S p.55 | PD (from B, C, Self) | DONE | warp entries 47-49 `PD from X / Y`, `PD Self`; cap bit 48; test_warpenv |  |
+| S02-32 | S p.56 | AM (from B, C) | DONE | warp entries 50, 51 `AM from X / Y`; cap bit 48; test_warpenv |  |
 | S02-33 | S p.56 | RM from Osc B / C | DONE | warp types RM from Osc N |  |
 | S02-34 | V p.9 | Left mod knob: spectral morph algorithms (Vocode, Formant Scale, Harmonic / Inharmonic Stretch, Smear, Random Amplitudes, LP, HP, Phase Disperse, Shepard, Time Skew) | DONE | `oscN.morph.*` (kMorphTypes PT:39); t_vital_params `morph_never_gives_nan` :510 |  |
 | S02-35 | V p.10 | Right mod knob: Formant, Squeeze, Sync, Bend, PWM, Quantize | DONE | warp types (PT:43) |  |
@@ -231,7 +231,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
 | S09-01 | S p.144-145 | Mixer channels (A, B, C, SUB, NOISE, F1, F2, buses), toggles | DONE | MixerPanel.cpp:74; OscWaveView.cpp:1256; ui_gaps `uig_mixer_strip_header_sheet_swap_copy_and_pan` |  |
-| S09-02 | S p.146 | Mixer ENV 1 button per channel (Main / Direct) | IN-PROGRESS | G39, worker warp-env (block B19); MANUALCHECK 4 proposed `sub.env1`, `oscN.env1`, `noise.env1` |  |
+| S09-02 | S p.146 | Mixer ENV 1 button per channel (Main / Direct) | DONE | `sub.env1`, `oscN.env1`, `noise.env1`, `filterN.env1` (B21), toggles behind More of MixerPanel (`MixerPanel.cpp`), greyed unless the channel goes to Main / Direct; tests `warpenv_env1_button_of_every_channel`, `warpenv_env1_off_follows_the_longest_envelope_release`, `uig_env1_buttons_sit_on_the_mixer_and_grey_out_off_main_and_direct` |  |
 | S09-03 | S p.146, 149 | Sends to Bus 1 / Bus 2, routing of filters to buses | DONE | `*.bus1/2_send`, `filterN.destination`; t_wp5 :152, :209 |  |
 | S09-04 | S p.147 | Mixer pan and levels | DONE | `oscN.pan/level`, `noise.*`, `sub.*`; OscWaveView.cpp:1480; ui_lfo `uil_mix_console_strip_drag_is_the_level_and_the_name_tap_is_the_power` |  |
 | S09-05 | S p.148-149 | Mixing filters: routing, pan, mix, levels | DONE | `filter.routing`, `filterN.pan/mix/level` |  |
@@ -520,13 +520,13 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | G30 | 256 frames, smooth interpolation switch | PARTIAL | S02: frames DONE, switch MISSING |
 | G31 | Phase legato, phase memory | DONE | S02 |
 | G32 | Unison laws, range, stack repeat, warp 2 spread, hi-res | DONE | S02 (hi-res PARTIAL) |
-| G33 | Two free warp slots, Swap Warps | PARTIAL | slot 2 DONE; Swap Warps MISSING |
-| G34 | Warp modes Var, Bend +/-, Asym, Flip, Mirror, Remap 1-4, Odd/Even | IN-PROGRESS | warp-env (B19) |
-| G35 | Warp Filter group, Distortion group | IN-PROGRESS | warp-env (B19) |
-| G36 | Warp FM Thru-Zero / Exp / Linear, FM from sampler | IN-PROGRESS | warp-env; sources Noise / Sub / Filters stay MISSING (G29) |
-| G37 | Warp PD and AM | IN-PROGRESS | warp-env |
+| G33 | Two free warp slots, Swap Warps | DONE | slot 2 (B09), Swap Warps (B21) |
+| G34 | Warp modes Var, Bend +/-, Asym, Flip, Mirror, Remap 1-4, Odd/Even | DONE | warp-env (B21) |
+| G35 | Warp Filter group, Distortion group | DONE | warp-env (B21) |
+| G36 | Warp FM Thru-Zero / Exp / Linear, FM from sampler | PARTIAL | Thru-Zero / Exp / Linear DONE (B21); sources Noise / Sub / Filters stay MISSING (G29) |
+| G37 | Warp PD and AM | DONE | warp-env (B21); sources Noise / Sub / Filters stay MISSING (G29) |
 | G38 | Noise colours, STEREO / FILTER, own sample, loop, start, pitch | PARTIAL | colours / loop / pitch DONE; STEREO, FILTER, own sample MISSING |
-| G39 | Mixer: ENV 1 toggle, buses, DIRECT, filter outputs | PARTIAL | all DONE except the ENV 1 toggles (IN-PROGRESS, warp-env) |
+| G39 | Mixer: ENV 1 toggle, buses, DIRECT, filter outputs | DONE | ENV 1 toggles (B21) |
 | G40 | Wavetable name / modified, save / load / embed | MISSING | S13-13, X01-02 |
 | G41 | Drawing tools, grid | PARTIAL | core + UI DONE, not connected |
 | G42 | Keyframe / component model, thumbnails | PARTIAL | S13-01, S13-08 |
@@ -587,7 +587,7 @@ Count of the 84: DIFFERENT 2, DONE 40, IN-PROGRESS 4, MISSING 11, PARTIAL 27.
 | Q6 | Sample osc now; granular / spectral / multisample decide later | sample engine yes; the three others still MISSING | S03, S05, S06, backlog WP-11 .. WP-13 |
 | Q7 | Full wavetable editor on mobile | UI yes, not connected | S13, X01-02 |
 | Q8 | User wavetables by content id + store; presets packaged with their tables | format yes, shell store no | X01-01 |
-| Q9 | Keep Vital warp + morph, add a free second slot (proposed) | yes (warp2) | S02; Swap Warps MISSING |
+| Q9 | Keep Vital warp + morph, add a free second slot (proposed) | yes (warp2, Swap Warps, the Serum 2 warp modes appended: B21) | S02 |
 | Q10 | All five export formats (proposed) | core yes, UI drops the bytes | S13-12 |
 | Q11 | Full formula grammar (proposed) | core yes | S14 |
 | Q12 | Image import, Render OSC Warp, Resample (proposed) | image core yes, UI synthetic; Render OSC Warp and Resample MISSING | S13 |

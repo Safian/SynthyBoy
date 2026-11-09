@@ -106,8 +106,14 @@ namespace sbvital {
     const int destination2 = static_cast<int>(filter_2_->getDestinationValue()->value());
     poly_float* direct = output(kDirect)->buffer;
     utils::zeroBuffer(direct, num_samples);
+    poly_float* main_free = output(kMainFree)->buffer;
+    poly_float* direct_free = output(kDirectFree)->buffer;
+    utils::zeroBuffer(main_free, num_samples);
+    utils::zeroBuffer(direct_free, num_samples);
+    const bool env1_off_1 = filter_1_->getEnv1Value() != nullptr && filter_1_->getEnv1Value()->value() < 0.5f && (destination1 == 0 || destination1 == 1);
+    const bool env1_off_2 = filter_2_->getEnv1Value() != nullptr && filter_2_->getEnv1Value()->value() < 0.5f && (destination2 == 0 || destination2 == 1);
 
-    if (destination1 != 0 || destination2 != 0) {
+    if (destination1 != 0 || destination2 != 0 || env1_off_1 || env1_off_2) {
       poly_float* main_out = output(kOutput)->buffer;
       const poly_float* f1 = filter_1_->output()->buffer;
       const poly_float* f2 = filter_2_->output()->buffer;
@@ -117,15 +123,15 @@ namespace sbvital {
       for (int i = 0; i < num_samples; ++i) {
         if (use1) {
           if (destination1 == 0)
-            main_out[i] += f1[i];
+            (env1_off_1 ? main_free : main_out)[i] += f1[i];
           else if (destination1 == 1)
-            direct[i] += f1[i];
+            (env1_off_1 ? direct_free : direct)[i] += f1[i];
         }
         if (use2) {
           if (destination2 == 0)
-            main_out[i] += f2[i];
+            (env1_off_2 ? main_free : main_out)[i] += f2[i];
           else if (destination2 == 1)
-            direct[i] += f2[i];
+            (env1_off_2 ? direct_free : direct)[i] += f2[i];
         }
       }
     }

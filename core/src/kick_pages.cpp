@@ -224,6 +224,21 @@ constexpr const char* s_more_mod_matrix[] = {
     "mod63.aux_power", "mod63.aux_output", "mod64.aux_source", "mod64.aux_inv", "mod64.aux_power", "mod64.aux_output"
 };
 
+// Block B22 (13-new-keys.md 4.23): one page per slot of the effect instance pool. The generic names are all Kick sees (the pages are static);
+// the true labels come from the descriptor table (core/src/fx_types.cpp), which a Kick-side feature could export.
+#define SB_KICK_FXI_MORE(N)                                                                                                                      \
+    constexpr const char* s_more_fxi##N[] = {                                                                                                   \
+        "fxi" #N ".p05", "fxi" #N ".p06", "fxi" #N ".p07", "fxi" #N ".p08", "fxi" #N ".p09", "fxi" #N ".p10", "fxi" #N ".p11", "fxi" #N ".p12", \
+        "fxi" #N ".p13", "fxi" #N ".p14", "fxi" #N ".p15", "fxi" #N ".p16", "fxi" #N ".p17", "fxi" #N ".p18", "fxi" #N ".p19", "fxi" #N ".p20", \
+        "fxi" #N ".p21", "fxi" #N ".p22", "fxi" #N ".p23", "fxi" #N ".p24"                                                                      \
+    }
+SB_KICK_FXI_MORE (01); SB_KICK_FXI_MORE (02); SB_KICK_FXI_MORE (03); SB_KICK_FXI_MORE (04); SB_KICK_FXI_MORE (05); SB_KICK_FXI_MORE (06);
+SB_KICK_FXI_MORE (07); SB_KICK_FXI_MORE (08); SB_KICK_FXI_MORE (09); SB_KICK_FXI_MORE (10); SB_KICK_FXI_MORE (11); SB_KICK_FXI_MORE (12);
+SB_KICK_FXI_MORE (13); SB_KICK_FXI_MORE (14); SB_KICK_FXI_MORE (15); SB_KICK_FXI_MORE (16);
+#define SB_KICK_FXI_PAGE(N)                                                                                                                      \
+    { "fxi" #N, "FX Slot " #N, "FX", { "fxi" #N ".type", "fxi" #N ".on", "fxi" #N ".rack", "fxi" #N ".order", "fxi" #N ".p01", "fxi" #N ".p02",   \
+      "fxi" #N ".p03", "fxi" #N ".p04" }, 8, s_more_fxi##N, 20 }
+
 constexpr Page s_kickPages[kKickPageCount] = {
     // Page 1: Macros & Performance (Perf)
     { "macros", "Macros & Performance", "Perf", { "macro.1", "macro.2", "macro.3", "macro.4", "master.volume", "filter1.cutoff", "filter1.resonance", "env1.release" }, 8, nullptr, 0 },
@@ -356,7 +371,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 65: Scale & Tuning (Master)
     { "master_scale_tuning", "Scale & Tuning", "Master", { "master.scale.key", "master.scale.type", "master.scale.mode", "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only", nullptr }, 7, nullptr, 0 },
     // Page 66: Expression & MPE (Master)
-    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", "voice.phase_legato", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "master_expression", "Expression & MPE", "Master", { "master.mpe.on", "master.mpe.bend_range", "curve.velocity.legato", "curve.note.legato", "voice.phase_legato", "master.stereo_routing", "master.voice_override", nullptr }, 7, nullptr, 0 },
     // Page 67: Osc 1 Type & Mapping (Osc)
     { "osc1_type_map", "Osc 1 Type & Mapping", "Osc", { "osc1.type", "osc1.map.key_low", "osc1.map.key_high", "osc1.map.vel_low", "osc1.map.vel_high", "osc1.map.key_fold", "osc1.map.key_warp", nullptr }, 7, nullptr, 0 },
     // Page 68: Osc 2 Type & Mapping (Osc)
@@ -383,6 +398,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc3_warp2", "Osc 3 Warp 2", "Osc", { "osc3.warp2.type", "osc3.warp2.amount", "osc3.warp2.phase", "osc3.warp2.spread", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 80: Mixer Routing (Osc)
     { "mix_routing", "Mixer Routing", "Osc", { "osc1.filter_blend", "osc2.filter_blend", "osc3.filter_blend", "noise.filter_blend", "filter1.destination", "filter2.destination", "direct.level", "main.fx_bypass" }, 8, nullptr, 0 },
+    { "mix_env1", "Mixer ENV 1 Buttons", "Osc", { "osc1.env1", "osc2.env1", "osc3.env1", "sub.env1", "noise.env1", "filter1.env1", "filter2.env1" }, 7, nullptr, 0 },
     // Page 80: Mixer Buses (Osc)
     { "mix_bus", "Mixer Buses", "Osc", { "bus1.level", "bus1.destination", "bus1.fx_bypass", "bus2.level", "bus2.destination", "bus2.fx_bypass", nullptr, nullptr }, 6, nullptr, 0 },
     // Page 81: Mixer Osc Sends (Osc)
@@ -457,7 +473,11 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 116: Voice & Stereo (Master), block B15 (13-new-keys.md 4.19): same-note / steal modes, poly legato, bend up / down, stereo spread
     { "voice_global", "Voice & Stereo", "Master", { "master.voice.same_note", "master.voice.steal_priority", "master.poly_legato", "master.bend_range", "master.bend_down_range", "master.bend_down_link", "master.stereo_spread", "master.polyphony" }, 8, nullptr, 0 },
     // Page 117: Quality Options (Master)
-    { "quality_options", "Quality Options", "Master", { "quality.oversample_4x", "quality.no_smoothing", "reverb.force_enable", "master.polyphony", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 }
+    { "quality_options", "Quality Options", "Master", { "quality.oversample_4x", "quality.no_smoothing", "reverb.force_enable", "master.polyphony", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
+    // Pages 120 - 135: the 16 slots of the effect instance pool (block B22)
+    SB_KICK_FXI_PAGE (01), SB_KICK_FXI_PAGE (02), SB_KICK_FXI_PAGE (03), SB_KICK_FXI_PAGE (04), SB_KICK_FXI_PAGE (05), SB_KICK_FXI_PAGE (06),
+    SB_KICK_FXI_PAGE (07), SB_KICK_FXI_PAGE (08), SB_KICK_FXI_PAGE (09), SB_KICK_FXI_PAGE (10), SB_KICK_FXI_PAGE (11), SB_KICK_FXI_PAGE (12),
+    SB_KICK_FXI_PAGE (13), SB_KICK_FXI_PAGE (14), SB_KICK_FXI_PAGE (15), SB_KICK_FXI_PAGE (16)
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

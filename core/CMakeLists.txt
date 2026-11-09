@@ -8,6 +8,8 @@ add_library(synthyboy_core STATIC
     src/params.cpp
     src/param_table.cpp
     src/modulation.cpp
+    src/fx_types.cpp
+    src/fx_rack.cpp
     src/state.cpp
     src/content_state.cpp
     src/engine_caps.cpp
@@ -41,6 +43,7 @@ if(SYNTHYBOY_WITH_VITAL)
     # the adapter (our code, strict warnings like the rest of the core) is compiled into the core; the imported DSP is
     # the separate static library
     target_sources(synthyboy_core PRIVATE engine-vital/adapter/vital_engine.cpp engine-vital/adapter/vital_bindings.cpp
+                                          engine-vital/adapter/vital_fx_pool.cpp
                                           engine-vital/adapter/vital_tables.cpp)
     target_include_directories(synthyboy_core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/engine-vital/adapter")
     target_link_libraries(synthyboy_core PRIVATE synthyboy_engine_vital)

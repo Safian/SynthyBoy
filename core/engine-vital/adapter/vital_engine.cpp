@@ -29,6 +29,7 @@
 
 #include "distortion.h"
 #include "distortion_module.h"
+#include "line_generator.h"
 #include "modulation_connection_processor.h"
 #include "sample_oscillator.h"
 #include "sample_source.h"
@@ -44,9 +45,11 @@
 #include "utils.h"
 #include "value_switch.h"
 #include "vital_bindings.h"
+#include "vital_fx_pool.h"
 #include "vital_point_mod.h"
 #include "vital_tables.h"
 #include "synthyboy/content_state.h"
+#include "synthyboy/fx_types.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/sampleosc/sample_data.h"
 #include "synthyboy/sampleosc/wav_reader.h"
@@ -141,7 +144,9 @@ std::string vitalSourceName (int index)
     if (index < 32) return "macro_control_" + std::to_string (index - 28 + 5);
     if (index < 34) return "lfo_" + std::to_string (index - 32 + 9);
     static const char* const extra[] = { "lift", "slide", "note_in_octave", "poly_aftertouch" };
-    return extra[index - 34];
+    if (index < 38) return extra[index - 34];
+    if (index == 38) return "stereo";
+    return "";
 }
 
 /** MIDI note (fractional) of a frequency, 69 = 440 Hz. */
@@ -238,11 +243,18 @@ struct Snapshot
         std::array<float, sbvital::FrameRemap::kSize + 1> table {};
     };
     std::array<std::array<RemapEntry, kNumRemapSlots>, 3> remap;  // the drawn wavetable position remaps (content.remaps): [osc][slot]
+    struct ModCurveEntry
+    {
+        bool present = false;
+        std::vector<ContentPoint> points;
+    };
+    std::array<ModCurveEntry, kNumModSlots> modCurves;            // the per-slot modulation curves (content.modCurves, G2)
     bool hasVelocity = false, hasNote = false;
     std::array<float, kBakedPoints> velocityTable {}, noteTable {};
     std::array<std::array<float, sbvital::Distortion::kShaperSize>, 2> shaperTable {}; // X-Shaper curves A and B (content.curves.shaper_a / shaper_b)
     std::array<bool, 2> hasShaper { { false, false } };
     std::array<std::array<float, 128>, 4> scaleNotes {}; // tuned MIDI note of every key per master.tuning.scale at A4 = 440 (NaN: unmapped)
+    std::shared_ptr<const sbvital::ImpulseData> impulse;  // content.impulses[0], for the Convolve instances of the effect pool
     std::atomic<bool> retired { false };                 // the audio thread has replaced it
 };
 
@@ -412,6 +424,16 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
         e.present = true;
     }
 
+    for (const ContentModCurve& mc : content.modCurves)
+    {
+        if (mc.slot >= 1 && mc.slot <= kNumModSlots && mc.points.size() >= 2)
+        {
+            auto& e = s->modCurves[static_cast<size_t> (mc.slot - 1)];
+            e.present = true;
+            e.points = mc.points;
+        }
+    }
+
     shapes::ShapeData curve;
     if (buildShape (content.velocityCurve, false, curve))
     {
@@ -472,6 +494,11 @@ public:
         for (int i = 0; i < kNumConform; ++i)
             conform[static_cast<size_t> (i)] = static_cast<int8_t> (i);
         setContent (StateContent {}); // the built-in tuning scales
+    }
+
+    ~VitalEngine() override
+    {
+        resetPool(); // the pool and its packages go before the engine whose chain they were running in
     }
 
     void prepare (double newSampleRate, int /*maxBlockFrames*/, const Quality& q) override
@@ -614,7 +641,10 @@ public:
              | kCapPitchUnison
              | kCapFxExtrasAll // block B17: proven by core/engine-vital/tests/test_fxextra.cpp
              | kCapSubOsc | kCapNoiseExtras // block B18: proven by core/engine-vital/tests/test_oscextra.cpp
-             | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions;
+             | kCapVoiceSteal | kCapPolyLegato | kCapBendDownRange | kCapStereoSpread | kCapLfoSwing | kCapQualityOptions
+             | kCapModAmount // block B20: proven by core/engine-vital/tests/test_modamt.cpp
+             | kCapWarpAll | kCapEnv1Toggle // block B21: proven by core/engine-vital/tests/test_warpenv.cpp
+             | kCapFxInstances; // block B22: proven by core/engine-vital/tests/test_fxinstances.cpp (a slot of every type renders what instance 0 renders)
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -658,6 +688,7 @@ public:
         }
         auto snapshot = buildSnapshot (content, store);
         auto impulseData = decodeImpulse (content, store);
+        snapshot->impulse = impulseData;
         const std::lock_guard<std::mutex> lock (snapshotMutex);
         impulse = impulseData;
         if (engine != nullptr)
@@ -701,6 +732,21 @@ public:
         return choice < destinations.size() && destinations[choice].valid;
     }
 
+    bool hasPoolModule (int slot) const noexcept
+    {
+        return pool != nullptr && slot >= 0 && slot < kNumFxInstances && poolRt[static_cast<size_t> (slot)].active != nullptr;
+    }
+
+    int poolBuilds() const noexcept { return pool != nullptr ? pool->pendingBuilds() : 0; }
+
+    bool poolDestinationValid (int slot, int number) const noexcept
+    {
+        if (slot < 0 || slot >= kNumFxInstances || number < 0 || number >= kFxInstanceParams)
+            return false;
+        const int choice = poolChoice[static_cast<size_t> (slot)][static_cast<size_t> (number)];
+        return choice > 0 && static_cast<size_t> (choice) < destinations.size() && destinations[static_cast<size_t> (choice)].valid;
+    }
+
     int connectedSlots() const noexcept
     {
         int n = 0;
@@ -740,7 +786,7 @@ private:
         bool connected = false;
         uint32_t triedGeneration = 0;   // matrixGeneration at the last attempt to wire the slot
         sbvital::ModulationConnectionProcessor* processor = nullptr;
-        int sourceParam = -1, destinationParam = -1;
+        int sourceParam = -1, destinationParam = -1, amountParam = -1;
         bool eligible = true;          // the destination is live (an envelope time of the selected unit)
         int auxSourceParam = -1, auxInvParam = -1, auxPowerParam = -1, auxOutputParam = -1;
         int auxPlugged = 0;            // aux source choice that is plugged into the processor
@@ -807,6 +853,7 @@ private:
         for (auto& v : appliedModValues)
             v.fill (0.0f);
         appliedQualityGeneration = ~0u;
+        resetPool();
         engine.reset();
         tuning.reset();
         if (tables == nullptr)
@@ -817,6 +864,8 @@ private:
         sbvital::RandomValues::instance();
         sbvital::utils::RandomGenerator::next_seed_ = 0;
         engine = std::make_unique<sbvital::SoundEngine>();
+        pool = std::make_unique<FxPool> (*engine);
+        poolRt.fill (PoolRt {});
         tuning = std::make_unique<Tuning>(); // default 12-tone equal temperament
         engine->setTuning (tuning.get());
 
@@ -904,7 +953,6 @@ private:
         setControl ("pitch_bend_range", 0.0f); // bends go through the per-channel path (handleEvent); this one is the zoned wheel
         setControl ("mpe_enabled", 0.0f);
         setControl ("bypass", 0.0f);
-        setControl ("stereo_routing", 1.0f);
         setControl ("stereo_mode", 0.0f);
         setControl ("voice_amplitude", 1.0f);
         for (int i = 1; i <= kNumOsc; ++i)
@@ -1041,7 +1089,7 @@ private:
             d.poly = name.empty() ? nullptr : engine->getPolyModulationDestination (name);
             d.monoSwitch = name.empty() ? nullptr : engine->getMonoModulationSwitch (name);
             d.polySwitch = name.empty() ? nullptr : engine->getPolyModulationSwitch (name);
-            d.valid = d.mono != nullptr && d.monoSwitch != nullptr && sbvital::Parameters::isParameter (name);
+            d.valid = (d.mono != nullptr || d.poly != nullptr) && (d.monoSwitch != nullptr || d.polySwitch != nullptr) && sbvital::Parameters::isParameter (name);
             for (const Binding& b : vitalBindings())
                 if (b.param == paramIndex && b.gateParam >= 0)
                 {
@@ -1053,7 +1101,8 @@ private:
             {
                 // room for every slot to be wired to this destination at the same time: wiring a slot then reuses a spare input
                 // and allocates nothing (Processor::plugNext allocates when it finds no free input)
-                d.mono->reserveInputs (kNumSlots);
+                if (d.mono != nullptr)
+                    d.mono->reserveInputs (kNumSlots);
                 if (d.poly != nullptr)
                     d.poly->reserveInputs (kNumSlots);
                 // a full sweep of the destination's own range (the frame positions of our built-in tables span 64 frames)
@@ -1064,6 +1113,11 @@ private:
                     d.scale = 2.0f * static_cast<float> (vitaltables::kMorphFrames - 1);
             }
         }
+
+        // the destinations of the pool slots (block B22) are filled in when a module is handed over (handoverPool ())
+        for (int s = 0; s < kNumFxInstances; ++s)
+            for (int k = 0; k < kFxInstanceParams; ++k)
+                poolChoice[static_cast<size_t> (s)][static_cast<size_t> (k)] = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (fxInstanceKeys (s).p[k])));
 
         // the search for dependencies of a connection uses work queues that grow on demand: grow them now, on every router that a
         // destination sits in or below
@@ -1083,6 +1137,7 @@ private:
             s.processor = bank.atIndex (k)->modulation_processor.get();
             s.sourceParam = p.source;
             s.destinationParam = p.destination;
+            s.amountParam = p.amount;
             s.auxSourceParam = p.auxSource;
             s.auxInvParam = p.auxInv;
             s.auxPowerParam = p.auxPower;
@@ -1160,6 +1215,7 @@ private:
         appliedBpm = transport.bpm;
 
         applySpecials();
+        applyPool (force, fxMask, qualityChanged);
         applySamples();
         applyFilterCurves();
         applyShaperCurves();
@@ -1170,6 +1226,169 @@ private:
         }
         for (int k = 0; k < kNumSlots; ++k)
             updateSlot (k);
+    }
+
+    // ---- the effect instance pool (block B22, docs/ui-design/18-FX-INSTANCES.md) -----------------------------------------------------------
+    struct PoolRt
+    {
+        FxBuilt* active = nullptr;   // the instance the chain has (null: the slot is empty or its module is not ready)
+        int wanted = 0;              // the type that was asked for last
+        uint32_t generation = 0;     // pool request number of `wanted`
+        bool requested = false;      // a request for `wanted` has been posted and is not yet taken
+    };
+
+    /** Frees the packages and the pool (message / prepare thread; the audio thread is not running). */
+    void resetPool()
+    {
+        if (pool == nullptr)
+            return;
+        pool.reset(); // deletes every module, the live ones in the chain included
+        for (auto& rt : poolRt)
+        {
+            delete rt.active;
+            rt = PoolRt {};
+        }
+    }
+
+    /** The modulation slots wired to a destination of a pool slot are unwired (before the module they point into goes away). */
+    void disconnectPoolSlots (int s) noexcept
+    {
+        for (int k = 0; k < kNumSlots; ++k)
+        {
+            Slot& slot = slots[static_cast<size_t> (k)];
+            if (! slot.connected)
+                continue;
+            for (int choice : poolChoice[static_cast<size_t> (s)])
+                if (choice > 0 && choice == slot.destination)
+                {
+                    disconnectSlot (k);
+                    break;
+                }
+        }
+    }
+
+    /** Takes a built instance over (or null: empties the slot): unwires the modulation, gives the module to the chain, publishes the
+        destinations. Audio thread. */
+    void handoverPool (int s, FxBuilt* next) noexcept
+    {
+        PoolRt& rt = poolRt[static_cast<size_t> (s)];
+        disconnectPoolSlots (s);
+        FxBuilt* previous = rt.active;
+        auto* chain = engine->effectChain();
+        chain->setPoolModule (s, next != nullptr ? next->module : nullptr);
+        if (next != nullptr)
+            next->handedOver = true;
+        rt.active = next;
+        for (int k = 0; k < kFxInstanceParams; ++k)
+        {
+            const int choice = poolChoice[static_cast<size_t> (s)][static_cast<size_t> (k)];
+            if (choice <= 0 || static_cast<size_t> (choice) >= destinations.size())
+                continue;
+            Destination d {};
+            if (next != nullptr && k < next->count)
+            {
+                const FxBuilt::Param& p = next->params[static_cast<size_t> (k)];
+                d.mono = p.mono;
+                d.monoSwitch = p.monoSwitch;
+                d.scale = p.scale;
+                d.valid = p.mono != nullptr && p.monoSwitch != nullptr;
+            }
+            destinations[static_cast<size_t> (choice)] = d;
+        }
+        ++matrixGeneration; // the slots that were unwired (or waited for this destination) try again
+        pool->release (previous);
+        pool->collectNow();
+    }
+
+    /** Parameters, content and routing of the pool slots; builds and hands over modules. Audio thread (force: prepare / reset, may allocate). */
+    void applyPool (bool force, uint32_t fxMask, bool qualityChanged) noexcept
+    {
+        if (pool == nullptr)
+            return;
+        const bool synchronous = force || ! qRealtime.load (std::memory_order_relaxed);
+        for (int s = 0; s < kNumFxInstances; ++s)
+        {
+            const FxInstanceKeys& keys = fxInstanceKeys (s);
+            PoolRt& rt = poolRt[static_cast<size_t> (s)];
+            auto value = [&] (int index) { return params[static_cast<size_t> (index)].load (std::memory_order_relaxed); };
+            int type = static_cast<int> (value (keys.type) + 0.5f);
+            if (type < 0 || type >= kNumFxInstanceTypes)
+                type = 0;
+
+            if (type != rt.wanted || (type != 0 && ! rt.requested && rt.active == nullptr))
+            {
+                rt.wanted = type;
+                rt.requested = false;
+                if (type == 0)
+                {
+                    pool->cancel (s); // supersedes a build in progress; type 0 builds nothing
+                    handoverPool (s, nullptr);
+                }
+                else
+                {
+                    float normalised[kFxInstanceParams];
+                    for (int k = 0; k < kFxInstanceParams; ++k)
+                        normalised[k] = value (keys.p[k]);
+                    if (! synchronous && rt.active != nullptr)
+                        handoverPool (s, nullptr); // dry (10 ms crossfade) until the new module is ready
+                    rt.requested = pool->request (s, type, normalised, synchronous);
+                    rt.generation = pool->generation (s);
+                }
+            }
+
+            if (rt.requested)
+                if (FxBuilt* built = pool->takeReady (s, rt.generation))
+                {
+                    if (built->type == rt.wanted)
+                    {
+                        handoverPool (s, built);
+                        rt.requested = false;
+                    }
+                    else
+                        pool->release (built);
+                }
+
+            FxBuilt* b = rt.active;
+            if (b != nullptr)
+            {
+                if (qualityChanged)
+                    sbvital::setConvolveRealtime (b->module->effect(), qRealtime.load (std::memory_order_relaxed));
+                if (b->contentId != snapshotId)
+                {
+                    b->contentId = snapshotId;
+                    if (auto* curve = b->module->filterCurve())
+                    {
+                        if (activeSnapshot != nullptr)
+                            *curve = activeSnapshot->filterCurve[2];
+                        else
+                            curve->num_bells = 0;
+                    }
+                    if (auto* distortion = b->module->distortion())
+                    {
+                        const bool a = activeSnapshot != nullptr && activeSnapshot->hasShaper[0], c = activeSnapshot != nullptr && activeSnapshot->hasShaper[1];
+                        distortion->setShaperCurves (a ? activeSnapshot->shaperTable[0].data() : nullptr, c ? activeSnapshot->shaperTable[1].data() : nullptr);
+                    }
+                    if (b->type == kFxTypeConvolve)
+                        sbvital::setConvolveImpulse (b->module->effect(), activeSnapshot != nullptr ? activeSnapshot->impulse : nullptr);
+                }
+                for (int k = 0; k < b->count; ++k)
+                {
+                    FxBuilt::Param& p = b->params[static_cast<size_t> (k)];
+                    const float norm = value (keys.p[k]);
+                    if (p.control == nullptr || (! force && norm == b->appliedNorm[static_cast<size_t> (k)]))
+                        continue;
+                    b->appliedNorm[static_cast<size_t> (k)] = norm;
+                    const double plain = fromNormalised (*p.source, norm);
+                    const double converted = convertParam (*p.binding, plain, sampleRate, transport.bpm);
+                    p.control->set (static_cast<float> (std::clamp (converted, p.lo, p.hi)));
+                }
+            }
+
+            const int module = fxTypeDescriptor (type).module;
+            const bool tierAllows = module >= 0 && (fxMask & (1u << module)) != 0;
+            engine->effectChain()->setPoolConfig (s, b != nullptr && value (keys.on) > 0.5f && tierAllows, static_cast<int> (value (keys.rack) + 0.5f),
+                                                  static_cast<int> (value (keys.order) + 0.5f));
+        }
     }
 
     /** oscN.wavetable: a built-in table, or the user table of the content (Preset table; the saw when the content has none). */
@@ -1786,14 +2005,28 @@ private:
     void updateCurve (int k, int source) noexcept
     {
         Slot& slot = slots[static_cast<size_t> (k)];
-        const int kind = (source == kSourceVelocity) ? 1 : (source == kSourceNote ? 2 : 0);
-        const bool have = activeSnapshot != nullptr && ((kind == 1 && activeSnapshot->hasVelocity) || (kind == 2 && activeSnapshot->hasNote));
+        const bool hasModCurve = activeSnapshot != nullptr && activeSnapshot->modCurves[static_cast<size_t> (k)].present;
+        const int kind = hasModCurve ? 3 : ((source == kSourceVelocity) ? 1 : (source == kSourceNote ? 2 : 0));
+        const bool have = hasModCurve || (activeSnapshot != nullptr && ((kind == 1 && activeSnapshot->hasVelocity) || (kind == 2 && activeSnapshot->hasNote)));
         const int want = have ? kind : 0;
         if (want != slot.curveKind || (want != 0 && slot.curveId != snapshotId))
         {
             LineGenerator& line = *slot.processor->lineMapGenerator();
             if (want == 0)
                 line.initLinear();
+            else if (want == 3)
+            {
+                const auto& pts = activeSnapshot->modCurves[static_cast<size_t> (k)].points;
+                const int n = static_cast<int> (std::min<size_t> (pts.size(), LineGenerator::kMaxPoints));
+                line.setSmooth (false);
+                line.setNumPoints (n);
+                for (int i = 0; i < n; ++i)
+                {
+                    line.setPoint (i, { pts[static_cast<size_t> (i)].x, 1.0f - pts[static_cast<size_t> (i)].y });
+                    line.setPower (i, pts[static_cast<size_t> (i)].power);
+                }
+                line.render();
+            }
             else
             {
                 // any non-linear point set marks the remap as active; the table is then written over what render () made of it
@@ -1889,14 +2122,54 @@ private:
         return change;
     }
 
+    int slotOfAmountChoice (int destinationChoice) const noexcept
+    {
+        if (destinationChoice <= 0)
+            return -1;
+        const int destParam = modDestinationParamIndex (static_cast<size_t> (destinationChoice));
+        if (destParam < 0)
+            return -1;
+        for (int s = 0; s < kNumSlots; ++s)
+            if (slots[static_cast<size_t> (s)].amountParam == destParam)
+                return s;
+        return -1;
+    }
+
+    bool wouldCloseSlotLoop (int k, int destinationChoice) const noexcept
+    {
+        int target = slotOfAmountChoice (destinationChoice);
+        if (target < 0)
+            return false;
+        if (target == k)
+            return true; // direct self-modulation
+        // Follow chain of slot modulations
+        int visited = 0;
+        while (target >= 0 && visited < kNumSlots)
+        {
+            if (target == k)
+                return true; // cycle
+            if (! slots[static_cast<size_t> (target)].connected)
+                break;
+            const int nextDestChoice = slots[static_cast<size_t> (target)].destination;
+            target = slotOfAmountChoice (nextDestChoice);
+            ++visited;
+        }
+        return false;
+    }
+
     /** True if wiring the slot would make the engine insert a feedback node (a loop in the graph: the source depends on the
         destination), which allocates; such a slot stays unwired (docs/PARAMETERS.md). The decision is the engine's own: the
         check that ProcessorRouter::connect makes for the connection, made first. */
-    bool wouldCloseLoop (const sbvital::modulation_change& change) const noexcept
+    bool wouldCloseLoop (int k, const sbvital::modulation_change& change) const noexcept
     {
+        const Slot& slot = slots[static_cast<size_t> (k)];
+        if (wouldCloseSlotLoop (k, slot.destination))
+            return true;
         change.modulation_processor->plug (change.source, sbvital::ModulationConnectionProcessor::kModulationInput); // as connectModulation does
         const bool polyphonic = change.source->owner->isPolyphonic() && change.poly_destination != nullptr;
-        const sbvital::Processor* destination = polyphonic ? change.poly_destination : change.mono_destination;
+        const sbvital::Processor* destination = (polyphonic && change.poly_destination != nullptr) ? change.poly_destination : (change.mono_destination != nullptr ? change.mono_destination : change.poly_destination);
+        if (destination == nullptr)
+            return true;
         const sbvital::ProcessorRouter* router = destination->router();
         return router != nullptr && router->isDownstream (destination, change.modulation_processor);
     }
@@ -1905,7 +2178,7 @@ private:
     {
         Slot& slot = slots[static_cast<size_t> (k)];
         const sbvital::modulation_change change = changeFor (k, false);
-        if (wouldCloseLoop (change))
+        if (wouldCloseLoop (k, change))
             return;
         engine->connectModulation (change);
         slot.connected = true;
@@ -2198,6 +2471,9 @@ private:
 
     std::unique_ptr<vitaltables::WavetableSet> tables; // before the engine: the engine's wavetables point into it
     std::unique_ptr<sbvital::SoundEngine> engine;
+    std::unique_ptr<FxPool> pool;                 // after the engine: it dies first
+    std::array<PoolRt, kNumFxInstances> poolRt {};
+    std::array<std::array<int, kFxInstanceParams>, kNumFxInstances> poolChoice {}; // modulation destination choice of each pool parameter
     std::unique_ptr<Tuning> tuning;
     std::map<std::string, sbvital::Value*> controlMap;
     std::vector<Resolved> resolved;
@@ -2276,5 +2552,23 @@ int vitalConnectedSlots (const IEngine& engine) noexcept
 int vitalEffectiveVoiceLimit (const IEngine& engine) noexcept
 {
     return static_cast<int> (vitalControlValue (engine, "polyphony"));
+}
+
+bool vitalHasPoolModule (const IEngine& engine, int slot) noexcept
+{
+    const auto* vital = dynamic_cast<const VitalEngine*> (&engine);
+    return vital != nullptr && vital->hasPoolModule (slot);
+}
+
+int vitalPoolBuilds (const IEngine& engine) noexcept
+{
+    const auto* vital = dynamic_cast<const VitalEngine*> (&engine);
+    return vital != nullptr ? vital->poolBuilds() : 0;
+}
+
+bool vitalPoolDestinationValid (const IEngine& engine, int slot, int number) noexcept
+{
+    const auto* vital = dynamic_cast<const VitalEngine*> (&engine);
+    return vital != nullptr && vital->poolDestinationValid (slot, number);
 }
 } // namespace synthyboy

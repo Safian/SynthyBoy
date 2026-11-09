@@ -10,7 +10,7 @@
 namespace synthyboy::ui
 {
 // Helper: evaluate sample point in [0, 1] for a given wavetable choice and frame; the warp is the picture of its mode (warpedValue)
-static float evalWave (float phase, int wtChoice, float frame, float warpAmount, int warpType)
+static float evalWave (float phase, int wtChoice, float frame, float warpAmount, int warpType, const std::function<float (float)>& remapCurve = {})
 {
     return warpedValue (warpType, warpAmount, phase, [wtChoice, frame] (float ph)
     {
@@ -45,7 +45,7 @@ static float evalWave (float phase, int wtChoice, float frame, float warpAmount,
             y0 = (y0 + harm2 + harm3 + harm4) / (1.0f + 0.5f * frame + 0.25f * frame);
         }
         return juce::jlimit (-1.0f, 1.0f, y0);
-    });
+    }, remapCurve);
 }
 
 // ---- OscWaveView ------------------------------------------------------------------------------------------------------------------
@@ -760,11 +760,38 @@ void OscWaveView::paintWave2D (juce::Graphics& g, juce::Rectangle<float> area, f
     juce::Path p;
     juce::Path fillP;
 
+    // Remap 1, 2 and 4 (warp modes 20, 21, 23) follow the curve drawn for this oscillator (the slot of oscN.remap.slot, points joined by lines)
+    std::function<float (float)> remapCurve;
+    if (warpType == 20 || warpType == 21 || warpType == 23)
+    {
+        ParamHandle slotHandle (ctx, "osc" + std::to_string (oscIndex()) + ".remap.slot");
+        const int slot = slotHandle.valid() ? juce::roundToInt (slotHandle.plain()) + 1 : 1;
+        const auto content = ctx.host.content(); // (a copy: the range below must not point into a temporary)
+        for (const auto& r : content.remaps)
+            if (r.osc == oscIndex() && r.slot == slot && r.points.size() >= 2)
+            {
+                const auto points = r.points;
+                remapCurve = [points] (float x)
+                {
+                    if (x <= points.front().x)
+                        return points.front().y;
+                    for (size_t k = 1; k < points.size(); ++k)
+                        if (x <= points[k].x)
+                        {
+                            const float span = points[k].x - points[k - 1].x;
+                            const float f = span > 1.0e-6f ? (x - points[k - 1].x) / span : 0.0f;
+                            return points[k - 1].y + (points[k].y - points[k - 1].y) * f;
+                        }
+                    return points.back().y;
+                };
+            }
+    }
+
     const float halfH = area.getHeight() * 0.42f;
     for (int i = 0; i < numPoints; ++i)
     {
         const float phase = static_cast<float> (i) / static_cast<float> (numPoints);
-        const float yVal = evalWave (phase, wtIdx, frame, warpAmount, warpType);
+        const float yVal = evalWave (phase, wtIdx, frame, warpAmount, warpType, remapCurve);
         const float x = area.getX() + static_cast<float> (i);
         const float y = midY - yVal * halfH;
 

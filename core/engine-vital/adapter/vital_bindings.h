@@ -91,6 +91,9 @@ struct Conversion
 };
 Conversion vitalConvert (size_t paramIndex, double plain, double sampleRate = 48000.0);
 
+/** The first binding of a parameter, nullptr if it has none (a special parameter). Valid for the life of the process. */
+const Binding* vitalBindingOf (size_t paramIndex);
+
 /** The control that a modulation destination of the matrix drives (the first binding of the parameter), "" if none. */
 std::string vitalControlOf (size_t paramIndex);
 } // namespace synthyboy

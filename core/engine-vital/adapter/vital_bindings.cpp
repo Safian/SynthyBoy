@@ -24,7 +24,20 @@ namespace synthyboy
 namespace
 {
 constexpr double kMidi0Hz = 8.1757989156437073;
-constexpr int kWarpMap[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11 }; // our warp types -> the engine's (9 and 12 would use the sample)
+// our warp types -> the engine's (9 and 12 would use the sample). From 11 on (block B21, 13-new-keys.md 4.22) the engine's enum continues
+// after kRmSample (12): our 11 is the engine's 13, and so on in the same order
+constexpr int makeWarpMap (int index) { return index < 11 ? (index < 9 ? index : index + 1) : index + 2; }
+struct WarpMapTable
+{
+    int values[kNumWarpTypes];
+    constexpr WarpMapTable() : values()
+    {
+        for (int i = 0; i < kNumWarpTypes; ++i)
+            values[i] = makeWarpMap (i);
+    }
+};
+constexpr WarpMapTable kWarpMapTable;
+constexpr const int* kWarpMap = kWarpMapTable.values;
 
 struct Builder
 {
@@ -109,6 +122,9 @@ std::vector<Binding> build()
     b.choice ("master.portamento.always", "portamento_force");
     b.choice ("master.portamento.scaled", "portamento_scale");
     b.choice ("voice.phase_legato", "voice_phase_legato");
+    // Block B20: stereo routing and voice override (G5)
+    b.percent ("master.stereo_routing", "stereo_routing");
+    b.choice ("master.voice_override", "voice_override");
 
     // --- oscillators ----------------------------------------------------------------------------------------------
     for (int n = 1; n <= 3; ++n)
@@ -134,6 +150,7 @@ std::vector<Binding> build()
         b.percent (k + "warp2.spread", c + "warp2_spread", 0.005);
         b.add (k + "phase", c + "phase", Conv::linear, 1.0 / 360.0);
         b.percent (k + "random_phase", c + "random_phase");
+        b.choice (k + "env1", c + "env1"); // B21: the ENV 1 button of the Main / Direct channel
         b.choice (k + "destination", c + "destination"); // 5 Filter blend and 6 None (WP5) are the engine's destinations 5 and 6
         b.percent (k + "filter_blend", c + "filter_blend");
         b.percent (k + "bus1_send", c + "bus1_send");
@@ -172,6 +189,7 @@ std::vector<Binding> build()
     b.add ("noise.level", "sample_level", Conv::sqrtScaled, 0.01);
     b.percent ("noise.pan", "sample_pan");
     b.choice ("noise.destination", "sample_destination");
+    b.choice ("noise.env1", "sample_env1");
     b.percent ("noise.filter_blend", "sample_filter_blend");
     b.percent ("noise.bus1_send", "sample_bus1_send");
     b.percent ("noise.bus2_send", "sample_bus2_send");
@@ -190,6 +208,7 @@ std::vector<Binding> build()
     b.add ("sub.level", "sub_level", Conv::sqrtScaled, 0.01);
     b.percent ("sub.pan", "sub_pan");
     b.choice ("sub.destination", "sub_destination");
+    b.choice ("sub.env1", "sub_env1");
     b.choice ("sub.mono", "sub_mono");
     b.percent ("sub.filter_blend", "sub_filter_blend");
     b.percent ("sub.bus1_send", "sub_bus1_send");
@@ -219,6 +238,7 @@ std::vector<Binding> build()
         if (! fx)
         {
             b.choice (k + "destination", c + "destination"); // WP5: effects only, direct out, none
+            b.choice (k + "env1", c + "env1");           // B21: the ENV 1 button
             b.percent (k + "bus1_send", c + "bus1_send");
             b.percent (k + "bus2_send", c + "bus2_send");
         }
@@ -490,6 +510,8 @@ bool isSpecialParam (size_t paramIndex)
         || (startsWith ("osc") && std::strstr (key, ".sample.") != nullptr && ! endsWith (".scan") && ! endsWith (".uni_start") && ! endsWith (".uni_span"))
         // B13: noise sample choice (procedural noise buffers)
         || std::strcmp (key, "noise.sample") == 0
+        // B22: the effect instance pool (type, on, rack, order and the normalised parameters of a slot): the adapter builds the module and drives its controls
+        || (startsWith ("fxi") && key[3] >= '0' && key[3] <= '9')
         // B15 (G12, G14, G18): handled by the adapter (note on handling, the bend wheel, the quality controls of the thread)
         || std::strcmp (key, "master.voice.same_note") == 0
         || std::strcmp (key, "master.bend_down_range") == 0 || std::strcmp (key, "master.bend_down_link") == 0
@@ -574,6 +596,19 @@ Conversion vitalConvert (size_t paramIndex, double plain, double sampleRate)
             break;
         }
     return c;
+}
+
+const Binding* vitalBindingOf (size_t paramIndex)
+{
+    static const std::vector<const Binding*> index = []
+    {
+        std::vector<const Binding*> v (paramCount(), nullptr);
+        for (const auto& binding : vitalBindings())
+            if (binding.param < v.size() && v[binding.param] == nullptr)
+                v[binding.param] = &binding;
+        return v;
+    }();
+    return paramIndex < index.size() ? index[paramIndex] : nullptr;
 }
 
 std::string vitalControlOf (size_t paramIndex)

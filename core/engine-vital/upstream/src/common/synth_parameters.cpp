@@ -688,7 +688,10 @@ namespace sbvital {
       add(prefix + "filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
       add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
       add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
+      add(prefix + "env1", 0.0, 1.0, 1.0, ValueDetails::kIndexed);   // B21: the ENV 1 button of the Main / Direct channel
     }
+    add("sample_env1", 0.0, 1.0, 1.0, ValueDetails::kIndexed);
+    add("sub_env1", 0.0, 1.0, 1.0, ValueDetails::kIndexed);
     add("sample_filter_blend", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sample_bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     add("sample_bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
@@ -707,6 +710,7 @@ namespace sbvital {
     for (int filter = 1; filter <= kNumFilters; ++filter) {
       const std::string prefix = "filter_" + std::to_string(filter) + "_";
       add(prefix + "destination", 0.0, 2.0, 0.0, ValueDetails::kIndexed);
+      add(prefix + "env1", 0.0, 1.0, 1.0, ValueDetails::kIndexed);
       add(prefix + "bus1_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
       add(prefix + "bus2_send", 0.0, 1.0, 0.0, ValueDetails::kLinear, 100.0, "%");
     }

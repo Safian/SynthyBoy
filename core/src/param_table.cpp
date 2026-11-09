@@ -40,12 +40,23 @@ constexpr const char* const kMorphTypes[] = {
     "None", "Vocode", "Formant Scale", "Harmonic Stretch", "Inharmonic Stretch", "Smear", "Random Amplitudes", "Low Pass",
     "High Pass", "Phase Disperse", "Shepard Tone", "Time Skew"
 };
+// Block B21 (13-new-keys.md 4.22): the Serum 2 warp modes appended to the shared warp list of both slots (index 11 on). X and Y are the
+// two other oscillators in the order of the Vital FM / RM entries. The legacy ids 0 .. 10 never move (legacyChoiceMax).
+#define SB_WARP_APPENDED(X, Y)                                                                                                                   \
+    "Sync Var", "Bend +", "Bend -", "Bend +/-", "Asym +", "Asym -", "Asym +/-", "Flip", "Mirror", "Remap 1", "Remap 2", "Remap 3", "Remap 4",     \
+    "Odd/Even", "Filter LPF", "Filter HPF", "Dist Tube", "Dist Soft Clip", "Dist Hard Clip", "Dist Diode 1", "Dist Diode 2",                      \
+    "Dist Linear Fold", "Dist Sine Fold", "Dist Zero-Square", "Dist Asym", "Dist Rectify", "Dist Sine Shaper", "Dist Stomp Box",                \
+    "Dist Tape Sat.", "Dist Soft Sat.", "FM Thru-Zero from " X, "FM Thru-Zero from " Y, "FM Exp from " X, "FM Exp from " Y,                      \
+    "FM Linear from " X, "FM Linear from " Y, "PD from " X, "PD from " Y, "PD Self", "AM from " X, "AM from " Y
 constexpr const char* const kWarpTypes1[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3" };
+                                              "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3",
+                                              SB_WARP_APPENDED("Osc 2", "Osc 3") };
 constexpr const char* const kWarpTypes2[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 1", "FM from Osc 3", "RM from Osc 1", "RM from Osc 3" };
+                                              "FM from Osc 1", "FM from Osc 3", "RM from Osc 1", "RM from Osc 3",
+                                              SB_WARP_APPENDED("Osc 1", "Osc 3") };
 constexpr const char* const kWarpTypes3[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
-                                              "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2" };
+                                              "FM from Osc 1", "FM from Osc 2", "RM from Osc 1", "RM from Osc 2",
+                                              SB_WARP_APPENDED("Osc 1", "Osc 2") };
 constexpr const char* const kFilterModels[] = { "Analog", "Dirty", "Ladder", "Digital", "Diode", "Formant", "Comb", "Phaser", "Multi SVF",
                                                 "Slope", "EQ 6 dB", "Ring Mod", "Sample Hold", "Smear", "French LP", "Add Bass", "Scream",
                                                 "New Wsp", "DJ Mixer", "Diffusor", "EMS Ladder", "PZ SVF",
@@ -108,6 +119,12 @@ constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintag
 constexpr const char* const kReverbRooms[] = { "Space", "Marble", "Rectangle", "Hexagon", "Box" };
 constexpr const char* const kSameNoteModes[] = { "Steal", "Stack", "Ignore" };
 constexpr const char* const kVoiceStealPriorities[] = { "Newest", "Oldest", "Highest", "Lowest", "Velocity" };
+// B20: voice override choices (13-new-keys.md 4.20, G5)
+constexpr const char* const kVoiceOverrides[] = { "Kill", "Steal" };
+// B22: the effect instance pool (13-new-keys.md 4.23, 18-FX-INSTANCES.md): the type of a slot (the module index of instance 0 plus one) and its racks
+constexpr const char* const kFxInstanceTypes[] = { "None", "Chorus", "Compressor", "Delay", "Distortion", "EQ", "FX Filter", "Flanger", "Phaser",
+                                                   "Reverb", "Hyper/Dimension", "Utility", "Bode", "Convolve" };
+constexpr const char* const kPoolRacks[] = { "Main", "Bus 1", "Bus 2" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -368,6 +385,19 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
 #define SB_FXLEVEL(KEY, NAME) cont (KEY ".level", NAME " Level", "FX / " NAME, -24.0f, 12.0f, 0.0f, Unit::dB, kMod)
 
 #define SB_FXRACK(KEY, NAME) pick (KEY ".rack", NAME " Rack", "FX / Racks", kRacks, 0)
+
+// B22: one slot of the effect instance pool. fxiNN.pKK is the normalised (0..1) value of the K-th parameter of the slot's type
+// (core/src/fx_types.cpp says which key that is); the generic host name is "FX Slot NN PKK", the UI shows the real labels.
+#define SB_FXI_P(N, K) cont ("fxi" #N ".p" #K, "FX Slot " #N " P" #K, "FX / Slot " #N, 0.0f, 1.0f, 0.0f, Unit::none, kMod, 3)
+#define SB_FXI(N)                                                                                                                                \
+    pick ("fxi" #N ".type", "FX Slot " #N " Type", "FX / Slot " #N, kFxInstanceTypes, 0),                                                         \
+    onOff ("fxi" #N ".on", "FX Slot " #N " On", "FX / Slot " #N, false),                                                                         \
+    pick ("fxi" #N ".rack", "FX Slot " #N " Rack", "FX / Slot " #N, kPoolRacks, 0),                                                              \
+    whole ("fxi" #N ".order", "FX Slot " #N " Order", "FX / Slot " #N, 0.0f, 1023.0f, 1023.0f, Unit::none, kAuto),                              \
+    SB_FXI_P (N, 01), SB_FXI_P (N, 02), SB_FXI_P (N, 03), SB_FXI_P (N, 04), SB_FXI_P (N, 05), SB_FXI_P (N, 06), SB_FXI_P (N, 07),              \
+    SB_FXI_P (N, 08), SB_FXI_P (N, 09), SB_FXI_P (N, 10), SB_FXI_P (N, 11), SB_FXI_P (N, 12), SB_FXI_P (N, 13), SB_FXI_P (N, 14),              \
+    SB_FXI_P (N, 15), SB_FXI_P (N, 16), SB_FXI_P (N, 17), SB_FXI_P (N, 18), SB_FXI_P (N, 19), SB_FXI_P (N, 20), SB_FXI_P (N, 21),              \
+    SB_FXI_P (N, 22), SB_FXI_P (N, 23), SB_FXI_P (N, 24)
 
 #define SB_OSC_PITCH_UNI(N)                                                                                                                      \
     pick ("osc" #N ".pitch_mode", "Osc " #N " Pitch Mode", "Oscillator " #N, kPitchModes, 0),                                                   \
@@ -769,11 +799,28 @@ constexpr ParamInfo kRaw[] = {
     SB_PCT ("lfo10.swing", "LFO 10 Swing", "LFO 10", 0.0f, kMod),
     onOff ("quality.oversample_4x", "Quality 4x Oversampling", "Quality", false),
     onOff ("quality.no_smoothing", "Quality No Smoothing", "Quality", false),
+
+    // --- B20: mod-amount: stereo routing and voice override (G5, positions 1594..1595) -------------------------------------------
+    SB_PCT ("master.stereo_routing", "Master Stereo Routing", "Master / Voicing", 100.0f, kMod),
+    pick ("master.voice_override", "Master Voice Override", "Master / Voicing", kVoiceOverrides, 0),
+
+    // --- B21: warp-env: the ENV 1 button of the Main / Direct channels (G39, positions 1596..1602) -----------------------------------
+    onOff ("sub.env1", "Sub Env 1", "Sub", true),
+    onOff ("osc1.env1", "Osc 1 Env 1", "Osc 1", true),
+    onOff ("osc2.env1", "Osc 2 Env 1", "Osc 2", true),
+    onOff ("osc3.env1", "Osc 3 Env 1", "Osc 3", true),
+    onOff ("noise.env1", "Noise Env 1", "Noise", true),
+    onOff ("filter1.env1", "Filter 1 Env 1", "Filter 1", true),
+    onOff ("filter2.env1", "Filter 2 Env 1", "Filter 2", true),
+
+    // --- B22: fx-instances: the pool of 16 effect instance slots, 28 keys each (G73, positions 1603..2050) ------------------------------
+    SB_FXI (01), SB_FXI (02), SB_FXI (03), SB_FXI (04), SB_FXI (05), SB_FXI (06), SB_FXI (07), SB_FXI (08),
+    SB_FXI (09), SB_FXI (10), SB_FXI (11), SB_FXI (12), SB_FXI (13), SB_FXI (14), SB_FXI (15), SB_FXI (16),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 1594, "880 keys of state version 2 plus the 714 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15)");
+static_assert (kCount == 2051, "880 keys of state version 2 plus the 1171 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22)");
 
 struct Table
 {
@@ -802,8 +849,8 @@ constexpr size_t countModulatable() noexcept
     return n;
 }
 
-static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable(),
-               "kNumModDestinations must be 1 + the number of kParamModulatable parameters");
+static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

@@ -65,14 +65,29 @@ enum EngineCaps : EngineCapsMask
     kCapStereoSpread     = 1ull << 40, // G15: master.stereo_spread
     kCapLfoSwing         = 1ull << 41, // G16: lfo1.swing .. lfo10.swing
     kCapQualityOptions   = 1ull << 42, // G18: quality.oversample_4x, quality.no_smoothing
-    kCapFilterModels2    = 1ull << 43, // WP-03 (FILTERS80): filter models 22..26 and styles for the remaining 43 Serum types
+    // block B20 (mod-amount, 13-new-keys.md 4.20); bit 43 follows the B15 bits
+    kCapModAmount        = 1ull << 43, // B20: mod-amount (G1-G6: amount modulation, mod curves, stereo source, stereo routing, voice override)
+    // block B21 (warp-env, 13-new-keys.md 4.22); bits 44 .. 49 follow the B20 bit
+    kCapWarpAlt          = 1ull << 44, // G34: warp modes Sync Var, Bend +/-, Asym +/-, Flip, Mirror, Remap 1-4, Odd/Even (warp list entries 11 .. 24)
+    kCapWarpFilter       = 1ull << 45, // G35: warp modes Filter LPF / HPF (25, 26)
+    kCapWarpDist         = 1ull << 46, // G35: the 14 distortion warp modes (27 .. 40)
+    kCapWarpFm           = 1ull << 47, // G36: warp modes FM Thru-Zero / Exp / Linear (41 .. 46)
+    kCapWarpPdAm         = 1ull << 48, // G37: warp modes PD (47 .. 49) and AM (50, 51)
+    kCapEnv1Toggle       = 1ull << 49, // G39: sub.env1, oscN.env1, noise.env1, filterN.env1
+    // block B22 (fx-instances, 13-new-keys.md 4.23); bit 50 follows the B21 bits
+    kCapFxInstances      = 1ull << 50, // G73: the pool of 16 effect instance slots fxi01 .. fxi16 (several instances of one effect)
+    // block B23 (filters80, 13-new-keys.md); bit 51 follows the B22 bit
+    kCapFilterModels2    = 1ull << 51, // WP-03 (FILTERS80): filter models 22..26 and styles for the remaining 43 Serum types
 };
+
+/** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
+constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDist | kCapWarpFm | kCapWarpPdAm;
 
 /** The bits of block B17. */
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = (1ull << 44) - 1;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 52) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

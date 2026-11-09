@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "PluginProcessor.h"
+#include "synthyboy/fx_types.h"
 #include "synthyboy/params.h"
 #include "ui/Editor.h"
 #include "test_runner.h"
@@ -114,6 +115,11 @@ TEST (uip_every_parameter_key_has_a_control)
     for (size_t i = 0; i < paramCount(); ++i)
     {
         const std::string key = paramTable()[i].key;
+        // block B22: the keys of the effect instance pool are served by the rack view (type, on, rack, order) and by the effect panels through a key set
+        // (pKK); that every one of them is reachable is proven by test_fxinstances_ui.cpp
+        int poolSlot = 0, poolNumber = 0;
+        if (fxInstanceOfParam (i, poolSlot, poolNumber))
+            continue;
         if (reachable.count (key) == 0)
             missing.push_back (key);
     }

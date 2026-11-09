@@ -4,7 +4,7 @@ Built from [16-COVERAGE-FINAL.md](16-COVERAGE-FINAL.md) (row ids such as S04-02 
 
 | Worker | Branch | Block | Items |
 |--------|--------|-------|-------|
-| warp-env | `agy/warpenv` | B19, assumptions from A220 | warp modes G34-G37 (Var fader, Bend +/-, Asym, Flip, Mirror, Remap 1-4, Odd/Even, Filter group, Distortion group, FM Thru-Zero / Exp / Linear, PD, AM) and the ENV 1 toggles G39 |
+| warp-env (DONE on branch `work-warpenv`, WARPENV-REPORT.md; built as block B21 with the assumptions A270 .. A284, the lead renumbers at merge: the planned B21 of WP-04 below moves) | `agy/warpenv` | B19, assumptions from A220 | warp modes G34-G37 (Var fader, Bend +/-, Asym, Flip, Mirror, Remap 1-4, Odd/Even, Filter group, Distortion group, FM Thru-Zero / Exp / Linear, PD, AM) and the ENV 1 toggles G39 |
 | mod-amount | `agy/modamt` | B20, assumptions from A240 | modulation of modulation amounts G1, per-connection curve G2, modulation of portamento / polyphony / stereo routing G3, source `stereo` G4, `stereo_routing` + `voice_override` G5, transpose quantize G6 of VITAL-IMPORT-AUDIT-REPORT.md |
 
 ## 1. Rules that apply to every package
@@ -23,7 +23,7 @@ Built from [16-COVERAGE-FINAL.md](16-COVERAGE-FINAL.md) (row ids such as S04-02 
 | WP-02 | Preferences and dead toggles | S15-02..07, S15-13, S15-19, S11 Lock Matrix, S16 MIDI map files, S15-20, S16 shortcuts | 0 | shell + UI + tests | none (shares PluginProcessor.cpp / UiHost.h with WP-01) | A |
 | WP-03 | The remaining 43 Serum filter types and the PZ SVF editor | S08 (5 rows), G57, G58 | 0 (choice entries) | engine mapping + UI picker + editor + tests | none | A |
 | WP-04 | Noise, Sub, sample as a source (B21) | S07-02, S07-06 (engine), S07-08, I01-07 | 5 | engine + keys + Kick + UI + importer + tests | WP-01 for the file load UI | A |
-| WP-05 | Oscillator extras (B22) | S01-20, S02 smooth interpolation, S02 Swap Warps, S04 single-slice modulation | 9 | engine + keys + Kick + UI + tests | warp-env merged (Swap Warps UI) | B |
+| WP-05 | Oscillator extras (B22) | S01-20, S02 smooth interpolation, S04 single-slice modulation | 9 | engine + keys + Kick + UI + tests | (Swap Warps was built by warp-env) | B |
 | WP-06 | Modulation sources and audio-rate taps | S11 (oscillator / filter outputs, Active Voices, Note-On Alt, Rand 2 / discrete, Release Velocity, Expression X, Fixed), S02 FM / PD / AM / RM from Noise, Sub, Filters | 0 (source and warp choices) | engine + choices + Kick + UI + tests | warp-env and mod-amount merged | B |
 | WP-07 | Voice control (B23) | S15-08..11, S11 Voice Index / Voice Mod | about 62 | engine + keys + Kick + UI + tests | WP-01 for presets (optional) | A |
 | WP-08 | Matrix RISE / FALL and control-sheet extras | S11 RISE / FALL, Aux submenu, G69 matrix part | 0 | engine + content + UI + tests | mod-amount merged | B |
@@ -76,7 +76,7 @@ Keys (5): `sub.phase`, `sub.phase_contiguous`, `noise.stereo`, `noise.filter` (M
 ### WP-05 Oscillator extras (block B22)
 
 Keys (9): `oscN.ratio_src` (3; choice Base note, Osc 1-3, Sub; own number excluded in the UI), `oscN.smooth_interp` (3; the `osc_N_smooth_interpolation` control, VE:856, replaces the tier-only decision), `oscN.sample.slice` (3; modulatable single slice for the Play Single Slice mode). Swap Warps (no key: exchange the 4 + 4 warp keys, UI action on the warp row). Hi-resolution wavetable (V p.40) stays tier-controlled unless the owner wants a switch (WP-19).
-Dependency: Swap Warps touches the warp UI that warp-env changes - start after its merge. Tests: ratio tunes osc 2 to osc 1 x ratio (pitch measurement as t_pitchuni :88); smooth interpolation off / on at a modulated WT POS; slice modulation moves the played slice (t_wp4 :295 pattern).
+Swap Warps is done (warp-env: an entry of the warp lists, no key). Tests: ratio tunes osc 2 to osc 1 x ratio (pitch measurement as t_pitchuni :88); smooth interpolation off / on at a modulated WT POS; slice modulation moves the played slice (t_wp4 :295 pattern).
 
 ### WP-06 Modulation sources and audio-rate taps
 
@@ -162,7 +162,7 @@ One Claude fan-out at a time per the model policy; Gemini `agy` workers may take
 
 | Block | Package | Keys |
 |-------|---------|-----:|
-| B19 | warp-env (running) | assumed <= 20 |
+| B19 | warp-env (done as B21 of its branch: 7 keys, 1596..1602) | 7 |
 | B20 | mod-amount (running) | assumed <= 20 |
 | B21 | WP-04 | 5 |
 | B22 | WP-05 | 9 |
@@ -191,3 +191,8 @@ Ordered by effect on a user of the plug-in, not by size:
 10. **Offline render features: Resample, Render OSC Warp, share audio** (WP-15).
 
 Smaller but audible: MPE mappings (WP-09), RISE / FALL (WP-08), live modulation display (WP-17), the 12 MANUALCHECK keys (WP-04, 05, 10).
+
+
+### WP-21 Serum 2 preset import (owner decision 2026-11-09, replaces the Serum 1 compatibility idea)
+
+Goal: import `.SerumPreset` files (Serum 2) into our parameter model with the same discipline as the Vital importer: a `core/serum-import` package (no I/O in the library), a CLI in `tools/`, a per-file report (imported / approximated / dropped / ignored, nothing unaccounted), the independent audit script pattern of `scripts/audit-vital-import.py`, and tests on the 656 real presets installed at `/Library/Audio/Presets/Xfer Records/Serum 2 Presets` (copy to the gitignored `tests/serum-presets/`, never commit). First step: reverse the container (header, compression, JSON/CBOR body) from the real files and write the format down in `docs/ui-design/19-serum-preset-format.md`; then map every Serum 2 parameter to our keys or content (wavetables, samples, noise, LFO shapes, mod matrix with curves, FX racks); dropped items become backlog rows. Depends on: most feature packages (the more features exist, the less is dropped); the importer can start now and gain coverage as WP-01..13 land. Keys: 0 to a few. Size XL.

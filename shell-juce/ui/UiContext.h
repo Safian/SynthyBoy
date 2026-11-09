@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Theme.h"
+#include "model/FxKeySet.h"
 #include "UiHost.h"
 #include "model/ModModel.h"
 
@@ -80,8 +81,13 @@ struct UiContext
     Theme& theme;
     ModAssignController& assign;
     std::shared_ptr<ViewState> view = std::make_shared<ViewState>();
+    /** Block B22: the panel is built for a slot of the effect instance pool. Every key of the panel is then resolved through this set (FxKeySet), so one panel
+        class edits instance 0 (null, the keys as written) and any slot. */
+    std::shared_ptr<const FxKeySet> keys = nullptr;
 
     juce::AudioProcessorValueTreeState& apvts() const { return host.parameters(); }
+    /** The key of a control of a panel: resolveKey () for instance 0, the slot's key and the ParamInfo of the type's key for a pool slot. */
+    KeyRef resolve (std::string_view key) const noexcept { return keys != nullptr ? keys->resolve (key) : resolveKey (key); }
 };
 
 ParamValues readLiveValues (const UiContext& ctx);

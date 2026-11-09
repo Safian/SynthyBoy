@@ -10,7 +10,7 @@ Verified baseline (read from the repo on 2026-11-08):
 | Modulatable keys / destination choices | 269 / `kNumModDestinations` = 270 (0 = none) | `param_table.cpp`, `params.json` |
 | Mod sources | 28 (`kNumModSources`, choice 1..28) | `modulation.h` |
 | Highest id value | 4293057762 = `hashKey("mod22.destination")` (table position 475). Ids are hashes, not a counter: see R1 | `params.json` |
-| `kMaxParams` | 1024 | `params.h:77` |
+| `kMaxParams` | 1024 (2048 from WP0, 4096 from B22) | `params.h` |
 | State version | `kStateVersion` = 2, `kMaxStateBytes` = 1 MiB, `kMaxPresetFileBytes` = 1 MiB | `state.h`, `preset.cpp` |
 | Built-in lists | `kNumBuiltinWavetables` 13, `kNumLfoShapes` 12, `kNumFxSlots` 9, 8 filter models, 6 filter styles | `params.h`, `param_table.cpp` |
 
@@ -66,7 +66,7 @@ Destination choice (`modNN.destination`, `kNumModDestinations` 270 → 442): the
 | `modNN.source` (mod01..mod64) | 28 | 29..38 of §2 (also the list of the new `modNN.aux_source`) | 38 |
 | `modNN.destination` | 270 | 270..403 of §2 | 404 |
 
-Lists that stay unchanged: `kLfoSync`, `kDivisions`, `kFxSync`, `kWarpTypes1/2/3` (the new `oscN.warp2.type` uses the same three lists, so a later new warp mode is appended once for both slots), `kOscDestinations` of the existing keys, `kFilterRouting`, `kLfoSyncTypes`, `kMorphTypes`.
+Block B21 appended the warp lists `kWarpTypes1/2/3` (shared by `oscN.warp.type` and `oscN.warp2.type`): 11 `Sync Var` .. 51 `AM from Y`, 41 entries, new size 52, `legacyChoiceMax` 10 (section 4.22). Lists that stay unchanged: `kLfoSync`, `kDivisions`, `kFxSync`, `kOscDestinations` of the existing keys, `kFilterRouting`, `kLfoSyncTypes`, `kMorphTypes`.
 
 ## 4. New keys, by block (block order = table append order)
 
@@ -221,7 +221,7 @@ Semantics (**ASSUMPTION A13** for every number the manual does not give; manual 
 | `oscN.warp2.phase` | `Osc N Warp 2 Phase` | float | 0 .. 360 | 180 | deg | lin, 0 dec | V, S | y | `oscN_warp2` |
 | `oscN.warp2.spread` | `Osc N Warp 2 Spread` | float | -100 .. 100 | 0 | % | lin | V, S | y | `oscN_warp2` |
 
-Group `Osc N / Warp 2`. Order of evaluation: `warp`, then `warp2`, then the morph family (**ASSUMPTION A15**; "Swap Warps" is a UI action exchanging the two value sets). New warp modes of G34-G37 are not decided; when added they are appended to the shared list.
+Group `Osc N / Warp 2`. Order of evaluation: `warp`, then `warp2`, then the morph family (**ASSUMPTION A15**; "Swap Warps" is a UI action exchanging the two value sets). The new warp modes of G34-G37 were appended to the shared list in block B21 (section 4.22), "Swap Warps" is a UI action there (A281).
 
 ### 4.10 B10 – Mixer routing, buses, DIRECT (Q16; G28, G39, G70) – positions 1360..1385 [26] – area 02 / 04 / 08
 
@@ -236,7 +236,7 @@ Group `Osc N / Warp 2`. Order of evaluation: `warp`, then `warp2`, then the morp
 | `direct.level` | `Direct Level` | float | -60 .. 6 | 0 | dB | 2.5 | G, S | y | `mix_routing` |
 | `main.fx_bypass` | `Main FX Bypass` | bool | Off / On | Off | - | - | G, X | no | `mix_routing` |
 
-Total: 4 + 12 + 2 + 2 + 2 + 2 + 1 + 1 = 26. Groups `Osc N`, `Noise`, `Filter N`, `Mixer / Bus N`, `Mixer`. Semantics (**ASSUMPTION A16**, 02 §1.9 / 08 §1.1 name the controls, not the graph): `filter_blend` is used only when `destination = Filter blend` (equal-power crossfade between Filter 1 and 2: 50 % = -3 dB each; `Filters 1+2` keeps both at unity as in v2). A send taps the source after its level / pan (filters: after `mix`, `pan`, `level`), independent of its `destination`, so a source can feed a filter and a bus at the same time. `filterN.destination` applies to the filter's output unless the filter feeds the other filter (`filter.routing` series). A bus sums its sends, runs through the effects whose `rack` is that bus unless `fx_bypass`, then `level`, then `destination` (`Other bus` = the other bus; if both buses choose `Other bus`, bus 2 is treated as `Main`, no feedback). `Main` = sum of sources with destination `Effects only`, filters to Main and buses to Main, run through the `Main` rack unless `main.fx_bypass`, then `master.volume` (= Serum MAIN level). `Direct` = sources with `Direct out`, buses to Direct, filters to Direct; it skips every rack and `master.volume` and is scaled by `direct.level`, then added at the output. The ENV 1 toggle on Main / Direct channels (G39) and the Sub oscillator (G23) are not decided and not specified.
+Total: 4 + 12 + 2 + 2 + 2 + 2 + 1 + 1 = 26. Groups `Osc N`, `Noise`, `Filter N`, `Mixer / Bus N`, `Mixer`. Semantics (**ASSUMPTION A16**, 02 §1.9 / 08 §1.1 name the controls, not the graph): `filter_blend` is used only when `destination = Filter blend` (equal-power crossfade between Filter 1 and 2: 50 % = -3 dB each; `Filters 1+2` keeps both at unity as in v2). A send taps the source after its level / pan (filters: after `mix`, `pan`, `level`), independent of its `destination`, so a source can feed a filter and a bus at the same time. `filterN.destination` applies to the filter's output unless the filter feeds the other filter (`filter.routing` series). A bus sums its sends, runs through the effects whose `rack` is that bus unless `fx_bypass`, then `level`, then `destination` (`Other bus` = the other bus; if both buses choose `Other bus`, bus 2 is treated as `Main`, no feedback). `Main` = sum of sources with destination `Effects only`, filters to Main and buses to Main, run through the `Main` rack unless `main.fx_bypass`, then `master.volume` (= Serum MAIN level). `Direct` = sources with `Direct out`, buses to Direct, filters to Direct; it skips every rack and `master.volume` and is scaled by `direct.level`, then added at the output. The ENV 1 toggle on Main / Direct channels (G39) is specified in block B21 (section 4.22); the Sub oscillator (G23) in B18.
 
 ### 4.11 B11 – Filter additions (Q13, Q15; G55, G58) – positions 1386..1394 [9] – area 04
 
@@ -586,6 +586,83 @@ The first workers had no access to the Serum 2 manual (354 pages, `docs/ui-desig
 | Unison laws, range, blend, stack `12 (1-3x)` / `12+7 (1-3x)` | laws match; stack repeat **fixed** |
 | Phase legato options, phase memory list | match |
 
+### 4.21 B20 – Mod amount destinations, per-connection curves, stereo source, stereo routing & voice override (G1-G6) – positions 1594..1595 [2] – area 05 / 06 / 01
+
+Added by the mod-amount work package (MODAMT-REPORT.md) as the last trailing block (R2). It was drafted as the block at 1576..1577 on a branch cut before B15 and renumbered at the merge (assumptions A197..A205, the draft numbers A240..A248). Two keys only: everything else is a destination, a source or content.
+
+**Master voicing extras (`master.*`, group `Master / Voicing`, G5) [2]:**
+
+| Key | Name | Type | Range | Default | Unit | Curve | Sc | Mod | Kick |
+|-----|------|------|-------|--------:|------|-------|----|-----|------|
+| `master.stereo_routing` | `Master Stereo Routing` | cont | 0 .. 100 | 100 | % | lin | G, S | yes (choice 453) | `master_expression` |
+| `master.voice_override` | `Master Voice Override` | choice (`kVoiceOverrides`, 2) | 0 `Kill`, 1 `Steal` | 0 | - | - | G, X | no | `master_expression` |
+
+Binding: `stereo_routing` and `voice_override` are Vital's own engine controls (the stereo decoder at the end of the chain, `sound_engine.cpp`; the voice handler). Capability bit **43** (`kCapModAmount`, A205) is set because `core/engine-vital/tests/test_modamt.cpp` renders every item off and on.
+
+**New destinations** (the choice list `modNN.destination`, `kNumModDestinations` 453 -> **520**; stored in presets, so the numbers never move):
+
+| Choices | Destination | Note |
+|--------:|-------------|------|
+| 453 | `master.stereo_routing` | the only new key of the table that is `kParamModulatable` |
+| 454 .. 517 | `mod01.amount` .. `mod64.amount` (G1) | not flagged modulatable in the table (they sit in the version 2 region, which must not change); listed by `DestinationLists` |
+| 518 | `master.portamento.time` (G3) | Vital `portamento_time` (per voice) |
+| 519 | `master.polyphony` (G3) | Vital `polyphony` (the voice handler reads it every block) |
+
+Rule for later blocks: the three appended groups sit right behind the last key of B20 (table index 1595, `kLastIndexOfB20` in `core/src/modulation.cpp`); a modulatable key of a later block gets the next choice number from **520** on, in table order. `test_new_keys.cpp` (`mod destination choices`) pins every number.
+
+**New source**: choice **39** `stereo` (G4, bipolar): Vital's `stereo` source, a per-channel sign (left / right of the voice) that a connection turns into a different value on each channel. Needs `kCapModAmount`.
+
+**New content** (section 5): `content.mod_curves[]` (G2).
+
+Semantics (**ASSUMPTIONS A197..A205**): see the table in section 12. Short form: a connection whose destination is the amount of another connection evaluates per voice when its source is per voice (Vital routes a polyphonic source to the polyphonic `modulation_N_amount` input; a global source acts on all voices); the amount is clamped to -1 .. 1 after the modulation, as in Vital. A connection that would close a loop (a slot on its own amount, or A -> amount of B -> ... -> amount of A) is not wired by the engine (neutral: the base amount stays), the matrix row shows the loop badge and the destination menu greys the entries that would close one. A drawn per-connection curve maps the source value (0 .. 1) before the power curve and the amount, exactly as Vital's `line_mapping`; no entry = the straight line.
+
+### 4.22 B21 – Serum 2 warp modes (G34-G37) and the ENV 1 buttons of the Main / Direct channels (G39) – positions 1596..1602 [7] – area 02 / 04
+
+Added by the warp-env work package (WARPENV-REPORT.md) as the last trailing block (R2). The warp modes are **appended entries of the two shared warp lists** (no key), the only keys are the seven ENV 1 buttons. Assumptions A270 .. A284, the table is in section 12. Manual references are the Serum 2 manual p.49-56 (warp), p.146 and p.149 (ENV 1 button).
+
+**Warp lists** (`oscN.warp.type`, `oscN.warp2.type`, N = 1..3; `kNumWarpTypes` = 52, `kNumLegacyWarpTypes` = 11). Entries 0 .. 10 are the Vital modes and never move; `legacyChoiceMax` (core/vital-import/vital_import.cpp) caps an imported Vital choice at 10. X is the first, Y the second other oscillator in the order of the Vital FM / RM entries (osc 1: X = Osc 2, Y = Osc 3; osc 2: X = Osc 1, Y = Osc 3; osc 3: X = Osc 1, Y = Osc 2). Each entry needs the capability bit of its row; `requiredCapsForValue` returns it for a value of the list.
+
+| Entries | Names | Group in the picker | Cap bit | What it does (amount = the WARP knob 0 .. 100 %) |
+|--------:|-------|---------------------|---------|--------------------------------------------------|
+| 11 | `Sync Var` | Basic | 44 `kCapWarpAlt` | Sync (same ratio law as `Sync`) with a raised cosine fade of the slave cycle around its reset; the **phase knob of the slot is the VAR fader** (0 = hard sync, 100 % = fades half a cycle on each side) |
+| 12, 13, 14 | `Bend +`, `Bend -`, `Bend +/-` | Alt | 44 | each half of the cycle is bent on its own: `+` pinches towards the middle of the cycle (exponent 1 .. 4), `-` pulls outwards (exponent 1 .. 1/4); `+/-` neutral at 50 % |
+| 15, 16, 17 | `Asym +`, `Asym -`, `Asym +/-` | Alt | 44 | the same bend on the whole cycle, to the right / to the left; `+/-` neutral at 50 % |
+| 18 | `Flip` | Alt | 44 | polarity flip of the waveform from the position `1 - amount` of the cycle on (0 % = never) |
+| 19 | `Mirror` | Alt | 44 | the second half of the cycle plays the first half backwards; the amount bends both halves like `Asym +/-` (always audible) |
+| 20, 21, 22, 23 | `Remap 1` .. `Remap 4` | Alt | 44 | 1: the drawn curve of the oscillator (below) remaps the cycle, the amount mixes the curve with the diagonal; 2: the curve on each half; 3: a sinusoidal remap; 4: the curve four times per cycle |
+| 24 | `Odd/Even` | Alt | 44 | splits the wave into its even and odd harmonics (the wave and itself half a cycle later): 50 % original, 0 % odd only, 100 % even only |
+| 25, 26 | `Filter LPF`, `Filter HPF` | Filter | 45 `kCapWarpFilter` | two one pole stages, the cutoff follows the pitch (multiples of the fundamental): LPF 1 .. 128 (open at 100 %), HPF 0.5 .. 64 (open at 0 %) |
+| 27 .. 40 | `Dist Tube`, `Dist Soft Clip`, `Dist Hard Clip`, `Dist Diode 1`, `Dist Diode 2`, `Dist Linear Fold`, `Dist Sine Fold`, `Dist Zero-Square`, `Dist Asym`, `Dist Rectify`, `Dist Sine Shaper`, `Dist Stomp Box`, `Dist Tape Sat.`, `Dist Soft Sat.` | Distortion | 46 `kCapWarpDist` | waveshaper on the sample after the wavetable read, drive 0 .. 30 dB over the amount; the first ten use the curves of `distortion.type` |
+| 41, 42 | `FM Thru-Zero from X / Y` | FM | 47 `kCapWarpFm` | frequency modulation by the other oscillator: the modulator is integrated into the phase, the instantaneous frequency may go negative (the phase runs backwards, manual p.54); index 8 x amount^2 |
+| 43, 44 | `FM Exp from X / Y` | FM | 47 | the frequency is multiplied by 2^(4 x amount^2 x modulator) (exponential law) |
+| 45, 46 | `FM Linear from X / Y` | FM | 47 | thru-zero FM with the frequency clamped at zero ("can't do thru-zero", manual p.55) |
+| 47, 48 | `PD from X / Y` | PD | 48 `kCapWarpPdAm` | phase distortion: the other oscillator offsets the read phase by up to 0.9 cycle x amount |
+| 49 | `PD Self` | PD | 48 | the wavetable read at the unmodified phase is the modulator of a second read |
+| 50, 51 | `AM from X / Y` | AM | 48 | amplitude modulation: gain 1 - a + a x (0.5 + 0.5 x modulator) (RM, entries 9 and 10, uses the bipolar modulator) |
+
+The `Remap 1`, `Remap 2` and `Remap 4` modes read the 257-value table of the oscillator's own remap curve (`content.remaps[]`, the slot `oscN.remap.slot` of block B16, the same `FrameRemap` table of its wavetable, whether `oscN.remap.on` is on or not; an empty slot is the diagonal = no change). The "Remap" of block B16 moves the wavetable position, the warp mode moves the phase of the wave cycle: two features that share the drawn curve (A273).
+
+Evaluation order (A15 extended): slot 1, then slot 2, then the morph family. The **phase domain** modes (Sync Var, Bend, Asym, Flip, Mirror, Remap, FM, PD, AM) move the read phase before the wavetable read; the **value domain** modes (Odd/Even, Filter, Distortion) act on the sample after the read. When one slot is a value mode and the other a phase mode, the phase mode therefore always runs first (A275). The phase knob of the slot is a read phase offset for the modes that move the phase and for Sync Var the VAR fader; it is not used by the value and modulator modes. The Vital modes Shepard-tone morph and warp ignore the new modes (the Shepard code path has no warp 2 either).
+
+**Warp on a sample voice** (A38 extended, A276): AM, the distortion group and the FM laws (Thru-Zero as the Vital FM, Exp, Linear) act on a sample (FM modulates the read speed); the filters, Odd/Even, PD and all phase modes are inert on a sample.
+
+**Keys** (group of the module; type bool, Off / On; default **On** = today's sound, because ENV 1 is applied to every channel today; Sc: V, X; Mod: no; Kick: `mix_env1`):
+
+| Key | Name | Cap bit |
+|-----|------|---------|
+| `sub.env1` | `Sub Env 1` | 49 `kCapEnv1Toggle` |
+| `osc1.env1`, `osc2.env1`, `osc3.env1` | `Osc N Env 1` | 49 |
+| `noise.env1` | `Noise Env 1` | 49 |
+| `filter1.env1`, `filter2.env1` | `Filter N Env 1` | 49 |
+
+Semantics (manual p.146, p.149; A277 .. A279): the button belongs to a channel whose destination is **Main** (Effects only) or **Direct**; for other destinations (Filter, Filter blend, bus only, None; for a filter: its output into the other filter, None) it has no effect and the UI greys it out. With the button **off** the channel is not multiplied by ENV 1; it is still multiplied by the velocity tracking and the voice amplitude (A277), so a held note plays at full level like a free-running oscillator. The voice then ends when the longest **enabled** envelope (ENV 1 and every ENV 2 .. 4 that is used as a source in the mod matrix) has finished its release (A278); with every button on, the voice ends with ENV 1 exactly as before (bit identical). The bus sends are not affected (a bus is a send, not a Main / Direct channel). The filters' buttons (`filterN.env1`) are not in the MANUALCHECK proposal but in the manual (p.149) and are built here (A279).
+
+UI: the seven buttons are toggles behind More of the Mixer panel (`MixerPanel.cpp`), each greyed unless the destination of its channel is Main or Direct; the warp picker is the grouped list of `warpTypeGroups ()` (eight groups, no gaps any more) with **Swap Warps** at the end of the list of both slots (exchanges the four values type / amount / phase / spread of slot 1 and slot 2, A281); while `Sync Var` is the type of a slot, the phase knob of the slot is labelled **Var** (A282). Kick page `mix_env1` (119 pages).
+
+### 4.23 B22 – Several instances of one effect: the pool of 16 slots (G73) – positions 1603..2050 [448] – area 08
+
+Added by the fx-instances work package (FXINSTANCES-REPORT.md, design 18-FX-INSTANCES.md) as the last trailing block (R2). Per slot `fxi01 .. fxi16` 28 keys: `fxiNN.type` (None, Chorus, Compressor, Delay, Distortion, EQ, FX Filter, Flanger, Phaser, Reverb, Hyper/Dimension, Utility, Bode, Convolve; default None), `fxiNN.on` (Off), `fxiNN.rack` (Main, Bus 1, Bus 2), `fxiNN.order` (0 .. 1023, default 1023) and `fxiNN.p01 .. p24` (float 0..1, default 0, generic name "FX Slot NN Pkk", modulatable). What parameter k means is the k-th key of the type's own list (table order, without `.on` and `.rack`, without `reverb.force_enable`): `core/src/fx_types.cpp` is the descriptor, range / curve / unit / names are those of the source key. Defaults leave every slot None / off: the 112 presets sound as before. Capability bit 50 `kCapFxInstances`; a type value also needs the bit of its module. Destination choices 520 .. 903 (`kNumModDestinations` 904). `kMaxParams` 4096. Assumptions A290 .. A298 (section 12). Kick: pages `fxi01 .. fxi16` (type, on, rack, order, p01 .. p04; More: p05 .. p24), 135 pages.
+
 ## 5. State that is not in the key list (additive `content` section, state version 3)
 
 Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatable, not modulatable) and are written to both the `.sbpreset` and the host state document (ASSUMPTION A25: the plugin state IS the preset; otherwise custom shapes would be lost when a DAW project reloads). **[WP0 fix]** The section sits INSIDE the state object (`{"format":"synthyboy-state","version":3,"params":{..},"content":{..}}`), so the host blob and the `.sbpreset` (whose `state` member is that object) share one writer and one parser; 11 C3 / `serializeImportedPreset` must write it there, not as a sibling of `state`. `loadState ()` stays allocation-free and skips the section (`LoadResult::content = ignored`); `loadStateWithContent ()` / `loadPreset (.., StateContent&)` parse it into `StateContent` (`content_state.h`, allocates, not for the audio thread). A value outside the caps or ranges drops the whole section (`LoadResult::content = rejected`, parameters still apply); only malformed JSON invalidates the document. Maximum nesting is 7 inside the section (`kMaxDepth` = 8 holds). Extra rules fixed by WP0: strings <= 255 bytes without control characters, pack / file are relative paths (no `..`, no `\`, no `:`, not absolute), sha256 empty or 64 lower case hex digits, LFO shape y in 0..1, point `power` in -20..20, point modulation `amount` in -1..1 and `source` a key of §2, tuning text may carry `\n \r \t` only, every list ascending in x.
@@ -596,6 +673,7 @@ Required by Q8, Q17, Q23, Q6, Q26. These are not `ParamInfo` keys (not automatab
 | `content.samples[]` | `{osc 1..3, pack, file, sha256, name, sample_rate, frames, channels, slices:[0..1,...]}` (**ASSUMPTION A26**: samples are referenced like tables, never embedded: audio would break the 1 MiB limit; "embed in preset" G04 is not decided) | 3 entries, <= 128 slices | `oscN.type = Sample` |
 | `content.lfo_shapes[]` | `{lfo 1..10, name, smooth, loop_point?, points:[{x, y, power, mod_x?:{source, amount}, mod_y?:{source, amount}}]}`; `source` is a mod-source key of §2 / the table; `mod_*` is the point modulation of G65 | <= 128 points per shape (Vital line generator: 100) -> ~4 KB per shape, 40 KB worst case | `lfoN.shape = Custom` |
 | `content.curves` | `{velocity:{points}, note:{points}}`, points `{x, y, power}`, default identity `[(0,0),(1,1)]` | <= 64 points each | sources `velocity`, `note` |
+| `content.mod_curves[]` | `{slot: 1..64, points:[{x, y, power}]}` | <= 64 entries, <= 100 points per curve | mod connection curve (`line_mapping` in Vital / Serum per-slot curve) |
 | `content.tuning` | `{scl: text, kbm: text or null}` (a `.tun` is converted to the same pair at load, **ASSUMPTION A27**) | scl <= 64 KiB, kbm <= 4 KiB | `master.tuning.scale = User file` |
 | `content.impulses[]` | `{pack, file, sha256, name}` | 1 entry | `convolve.ir = Preset IR` |
 | `content.remaps[]` | `{osc 1..3, slot 1..4, name, points:[{x, y, power}]}` (B16, A120): the drawn wavetable position remap of an oscillator slot; no point modulation | <= 12 entries, <= 64 points each | `oscN.remap.slot` |
@@ -636,9 +714,11 @@ Missing content at load: the existing fallback and `missing_content` flag (ARCHI
 | B17 | compressor limit / crossovers, delay hq / offset, distortion key track, phaser depth 2, reverb type / room / width / ER / diffusion | 14 | 1544..1557 | 8 | 424-431 |
 | B18 | sub osc, noise colours & extras (OSCEXTRA) | 18 | 1558..1575 | 10 | 432-441 |
 | B15 | voice steal, poly legato, bend down, stereo spread, lfo swing (x10), quality 4x / no smoothing (VOICEGLB) | 18 | 1576..1593 | 11 | 442-452 |
-| **Total** | | **714** | 880..1593 | **183** | 270..452 |
+| B20 | stereo routing, voice override (MODAMT); plus 64 mod amounts, portamento time and polyphony as appended destinations | 2 | 1594..1595 | 1 (+66 appended) | 453 (+454-519) |
+| B21 | ENV 1 buttons of the Main / Direct channels: sub, osc 1-3, noise, filter 1-2 (WARPENV); plus 41 appended entries of the warp lists | 7 | 1596..1602 | 0 | - |
+| **Total** | | **723** | 880..1602 | **184** | 270..519 |
 
-Resulting table: 880 + 714 = **1594 keys**, 269 + 183 = **452 modulatable** keys, destination choice size **453**, mod sources **38**, positions 0..1593. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
+Resulting table: 880 + 723 = **1603 keys**, 269 + 184 = **453 modulatable** keys, destination choice size **520** (453 modulatable keys + 66 appended destinations + none), mod sources **39**, positions 0..1602. The sustain pedal adds 0 keys. Choice-list appends (§3): 9 lists, 0 renumbered.
 
 ## 8. Decided items deliberately NOT specified as keys, and undecided GAPs left out
 
@@ -646,7 +726,7 @@ Left out because no decision names them (not silently dropped; the owner can add
 
 ## 9. Kick pages (09 §5 has 61 pages)
 
-New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107, B14 adds 3 more: 110, B17 adds 5: 115, B18 adds 1: 116, B15 adds 2: 118) (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
+New pages: 42 -> **103 pages** (B16 of WTREMAP adds 4 more: 107, B14 adds 3 more: 110, B17 adds 5: 115, B18 adds 1: 116, B15 adds 2: 118, B21 adds 1: `mix_env1` (119); B20 adds 0: its two keys sit on the page `master_expression`) (one `clap.remote-controls` page = at most 8 keys; keys on a `more:` sheet add no page).
 
 | Page id(s) | Section | Keys (<= 8) | New pages |
 |------------|---------|-------------|----------:|
@@ -830,3 +910,36 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A110 | `same_note` Ignore tests the key as the adapter sees it (a key whose note off has been seen is free again, also while its release rings) |
 | A111 | `lfoN.swing` and `master.stereo_spread` are read once per block (swing from the first voice lane), like `stereo_routing`; fast modulation of them is block-rate |
 | A112 | The presets are regenerated only for the 18 new keys at their defaults; no preset sounds different |
+| A197 | Modulating another connection's amount (G1): `modNN.amount` is a destination (choices 454 .. 517). The engine uses Vital's own `modulation_N_amount` input; a loop (a slot on its own amount, or a chain A -> amount of B -> ... -> amount of A) is not wired (decided before wiring, no allocation), the amount stays at its base value, the slot is retried when the matrix changes. The result of the modulated amount is clamped to -1 .. 1 (Vital). The UI marks the row (loop badge) and greys the entries of the destination menu that would close a loop |
+| A198 | Per-connection curve (G2): `content.mod_curves[]` `{slot 1..64, points}` (<= 100 points, x ascending 0 .. 1, y 0 .. 1, power -20 .. 20), at most one per slot, no key. It is Vital's `line_mapping`: applied to the source value (unipolar, 0 .. 1) before the power curve and the amount; a slot without an entry is the straight line. It replaces the velocity / note curve of a slot whose source is velocity / note |
+| A199 | Destination numbering: choices 1 .. 453 are the modulatable keys in table order (B20 adds `master.stereo_routing` = 453), 454 .. 517 `mod01.amount` .. `mod64.amount`, 518 `master.portamento.time`, 519 `master.polyphony`. The appended group sits behind the last key of B20; later blocks continue at 520, so stored presets stay valid. `kNumModDestinations` = 520 |
+| A200 | Source `stereo` (G4, choice 39, bipolar): Vital's `stereo` modulation source; its per-channel sign makes a connection move the left and the right channel in opposite directions (test: cutoff driven by it gives different channels). Needs `kCapModAmount` |
+| A201 | `master.stereo_routing` 0 .. 100 % (default 100, modulatable): Vital's `stereo_routing`, the stereo decoder at the end of the chain (before the master volume): 100 % = the signal as it is, 0 % = both channels carry the same (centre) signal; in between an equal-power blend. It is not `master.stereo_spread` (A104: mid / side width of the finished mix, per block); both exist, they multiply |
+| A202 | `master.voice_override` (Kill / Steal, default Kill = Vital's default): what happens to the voice that has to give way when the polyphony is reached: Kill lets it fade out quickly while the new voice starts, Steal gives the voice to the new note at once. Audible with a polyphony of 2 and three notes |
+| A203 | Modulation of `master.portamento.time` (518) and `master.polyphony` (519): the engine's own destinations `portamento_time` / `polyphony`. The engine reads the polyphony at every note: modulated down (test: a macro takes 8 voices to 1) the next notes steal as at a lower polyphony setting (`master.voice.*`, A100). `modNN.amount` is not flagged modulatable in the table (version 2 region), the three groups are listed by `DestinationLists` |
+| A204 | `osc_N_transpose_quantize` (G6) maps onto the existing `oscN.transpose_snap` (B14: 0 .. 8191 = the 12 pitch-class bits plus bit 12 global snap, the same bitmask Vital stores); no new key and no new capability bit |
+| A205 | Capability bit 43 `kCapModAmount`, set because every item has an off / on render in `test_modamt.cpp` (amount destination, per-slot curve, stereo source, stereo routing, voice override, portamento time, polyphony); a mod source 39 or a destination >= 454 needs it, the keys `master.stereo_routing` / `master.voice_override` too |
+| A270 | Warp list order (B21): the 41 new modes are appended in the order of the manual's table (Sync Var, Bend, Asym, Flip, Mirror, Remap, Odd/Even, Filter, Distortion, FM, PD, AM); the modulator modes come as a first-other / second-other pair (X, Y) like the Vital FM / RM entries; the list has 52 entries for both slots and all three oscillators, `kNumWarpTypes`. The modulator sources Noise, Sub, Filter 1 and 2 of the manual (p.54-56) are not built here (backlog WP-06, G29) |
+| A271 | Bend / Asym laws (own, the manual gives none): a bend of strength s in 0 .. 1 is the power `1 + 3 s` of the position inside each half (Bend) or the whole cycle (Asym), the minus variants use the reciprocal power; the +/- variants map the knob 0 .. 100 % to s = -1 .. +1 (neutral at 50 %). Vital's own `Bend` (entry 4) stays as it is |
+| A272 | Flip: the polarity flips from the cycle position `1 - amount` on; Mirror: the second half plays the first half backwards (position 1 - u) and the amount bends both halves like Asym +/-; Odd/Even: the even / odd harmonics are the half sums / half differences of the wave and itself half a cycle later, the knob scales them (50 % original) |
+| A273 | Remap 1-4 read the table of `oscN.remap.slot` (block B16, the curve drawn in the Remap panel): the feature "wavetable position remap" (RISE / FALL) and the warp modes share the curve; Remap 1 mixes curve and diagonal by the amount, 2 does it per half, 3 is a fixed sine remap (position - amount x sin (2 pi position) / 2 pi), 4 repeats the curve four times |
+| A274 | Sync Var is a separate list entry whose VAR fader is the **phase knob of the slot** (no new key; 0 % = hard sync, 100 % = a raised cosine fade over half a cycle each side of the reset). The Serum control is a fader that appears with Sync; a key per slot (6 keys) was not worth the table space. Morning question 35 |
+| A275 | Evaluation: the phase domain modes of both slots run before the wavetable read, the value domain modes (Odd/Even, Filter, Distortion) after it, so slot 1 = Distortion with slot 2 = Bend runs the Bend first. Slot 2 (like the original slot 2) is not part of the band limit choice of the wavetable read that slot 1 Sync / Formant / Sync Var get |
+| A276 | Warp on a sample voice: AM, the 14 distortions and the three FM laws act, everything else of the new modes is inert (a sample has no cycle to bend, filter, split or remap) |
+| A277 | A channel whose ENV 1 button is off skips the envelope but keeps the velocity tracking and the voice amplitude (the same factor as the enveloped path, applied to the free output), so the level follows the velocity |
+| A278 | A voice with a sounding free channel ends when ENV 1 and every enabled ENV 2 .. 4 are silent (an envelope counts as enabled when the mod matrix uses it); with every ENV 1 button on the voice killer is the amplitude as before (bit identical) |
+| A279 | `filter1.env1` and `filter2.env1` are built although the MANUALCHECK proposal named only the sources: the manual shows the button on the filter channels too (p.149); the table has 7 keys instead of 5 |
+| A280 | Capability bits 44 .. 49, one per area, each set because `core/engine-vital/tests/test_warpenv.cpp` renders every mode / key off and on: 44 `kCapWarpAlt` (entries 11 .. 24), 45 `kCapWarpFilter` (25, 26), 46 `kCapWarpDist` (27 .. 40), 47 `kCapWarpFm` (41 .. 46), 48 `kCapWarpPdAm` (47 .. 51), 49 `kCapEnv1Toggle` (the seven keys). The five warp bits are needed by a value of a choice list (`requiredCapsForValue`), not by a key |
+| A281 | Swap Warps is an action at the end of the grouped list of both warp type controls (not a key): it exchanges type, amount, phase and spread of the two slots, each as a host gesture |
+| A282 | While a slot's type is `Sync Var` its phase knob is labelled `Var` |
+| A283 | Numbers the manual does not give: filter order 12 dB; distortion drive 0 .. 30 dB over the amount; FM index 8 x amount^2 (Thru-Zero, Linear), exponent 4 x amount^2 (Exp); PD up to 0.9 cycle; the four shapers without a counterpart in `distortion.type` (Sine Shaper, Stomp Box, Tape Sat., Soft Sat.) are our own curves |
+| A284 | The second warp slot now starts a note at its amount (it ramped up from zero over the first block, slot 1 has snapped since Vital); the sound of a patch with a warp 2 changes in the first 5 ms of each note, no other sound changes |
+| A290 | Parameters per slot P = 24, not 16: the compressor has 24 keys, the reverb 19 and the FX filter 18 (with 16, 8 + 3 + 2 would not fit). Key cost 16 x 28 = 448 |
+| A291 | The slot parameter is the NORMALISED value of the source key (its own skew); stepped keys are stored as index / max and snapped by the engine, so a host sees a generic knob. The conversion is the one of `ParamInfo` (`fromNormalised`), so instance 0 and a slot given the same numbers render bit-identically (tested for every key) |
+| A292 | The order scale: a module of instance 0 at position q of `fx.order` sorts as q * 64 + 32, a slot by `fxiNN.order` (0 .. 1023); a module of instance 0 before a slot on a tie, slots by number. The edits (core/fx_rack.h) renumber so that no tie is needed |
+| A293 | Pool slots live in Main, Bus 1 or Bus 2 only (no band racks), the splitters stay single instance 0 modules (design 7); a module of instance 0 in a band rack is duplicated into Main |
+| A294 | Parameters of an instance are applied through the bindings of the source key (same conversion, same limits); `reverb.force_enable` and the tier mask are engine wide: the mask bit of the module's type bypasses a slot as it bypasses instance 0 |
+| A295 | The 10 ms crossfade also covers switching a slot on / off and a type change; until the module is built the slot passes the signal dry (realtime), offline (`Quality::realtime` false) the audio thread waits for the builder and takes the module over in the same block. The builder settles the module with 100 silent chunks (as `reset ()` does for instance 0); a free running LFO starts at the phase the settle left, so a slot equals instance 0 only for equal histories (the tests give both the same) |
+| A296 | Content (X-Shaper curves, FX filter curve, impulse response) is shared: every distortion / FX filter / convolve instance uses the one the content holds; the EQ analyser and the compressor meters show instance 0 only |
+| A297 | Modulation of a slot parameter is wired to the destination of the module behind it: a handover unwires and rewires the matrix slots that name it; a parameter whose source key is not modulatable has no destination (the UI refuses to assign it) |
+| A298 | A removed module sends its slot back to the key defaults (type None, parameters 0); modulation slots that named it keep their destination and reconnect when a module of that slot returns |

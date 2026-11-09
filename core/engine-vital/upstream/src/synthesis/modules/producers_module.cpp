@@ -72,6 +72,7 @@ namespace sbvital {
       filter_blend_[i] = createPolyModControl(prefix + "filter_blend");
       bus1_send_[i] = createPolyModControl(prefix + "bus1_send");
       bus2_send_[i] = createPolyModControl(prefix + "bus2_send");
+      env1_[i] = createBaseControl(prefix + "env1");
       last_blend_[i] = 0.0f;
       last_send1_[i] = 0.0f;
       last_send2_[i] = 0.0f;
@@ -170,6 +171,8 @@ namespace sbvital {
     utils::zeroBuffer(direct_output, num_samples);
     utils::zeroBuffer(output(kBus1Out)->buffer, num_samples);
     utils::zeroBuffer(output(kBus2Out)->buffer, num_samples);
+    utils::zeroBuffer(output(kRawFree)->buffer, num_samples);
+    utils::zeroBuffer(output(kDirectFree)->buffer, num_samples);
 
     bool filter1_on = isFilter1On();
     bool filter2_on = isFilter2On();
@@ -218,7 +221,11 @@ namespace sbvital {
       }
     }
     else {
-      if (raw || (!filter2 && filter1 && !filter1_on) ||
+      // the ENV 1 button of a Main / Direct channel (manual p.146): off = the channel is not multiplied by the amplitude envelope
+      const bool env1_off = env1_[source] != nullptr && env1_[source]->value() < 0.5f;
+      if (raw && env1_off)
+        utils::addBuffers(output(kRawFree)->buffer, output(kRawFree)->buffer, buffer, num_samples);
+      else if (raw || (!filter2 && filter1 && !filter1_on) ||
                  (!filter1 && filter2 && !filter2_on) ||
                  (filter1 && filter2 && !filter1_on && !filter2_on)) {
         utils::addBuffers(raw_output, raw_output, buffer, num_samples);
@@ -227,7 +234,9 @@ namespace sbvital {
         utils::addBuffers(filter1_output, filter1_output, buffer, num_samples);
       if (filter2)
         utils::addBuffers(filter2_output, filter2_output, buffer, num_samples);
-      if (direct_out)
+      if (direct_out && env1_off)
+        utils::addBuffers(output(kDirectFree)->buffer, output(kDirectFree)->buffer, buffer, num_samples);
+      else if (direct_out)
         utils::addBuffers(direct_output, direct_output, buffer, num_samples);
     }
 

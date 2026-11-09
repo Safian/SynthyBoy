@@ -21,6 +21,8 @@ juce::String displayName (const std::string& prefix);
 /** The modules of the same kind as `prefix` (osc1..3, filter1..2, env1..6, lfo1..10, rlfo1..4), `prefix` itself excluded. */
 std::vector<std::string> siblings (const std::string& prefix);
 bool isModule (const std::string& prefix);
+/** "fxi01" .. "fxi16": a slot of the effect instance pool. */
+bool isPoolSlot (const std::string& prefix);
 
 bool copy (UiContext& ctx, const std::string& prefix, bool withMods);
 bool paste (UiContext& ctx, const std::string& prefix, bool withMods);
@@ -59,7 +61,7 @@ private:
     juce::OwnedArray<juce::TextButton> buttons;
     std::vector<std::pair<std::string, juce::TextButton*>> swapButtons;
     juce::Label swapLabel;
-    juce::String lockText;
+    juce::String lockText, poolPowerText;
 };
 
 /** Opens the sheet as a call-out box pointing at `anchor` (async). */

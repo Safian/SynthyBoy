@@ -350,7 +350,9 @@ class Audit:
                     kinds.append('ignored:unused_modulation_slot' if i not in slot_dropped else 'dropped:with_its_modulation_connection')
             elif key in self.by_control:
                 kinds.append('imported')
-            elif key in ('pitch_bend_range', 'effect_chain_order', 'filter_1_filter_input', 'filter_2_filter_input', 'mpe_enabled'):
+            elif key in ('pitch_bend_range', 'effect_chain_order', 'filter_1_filter_input', 'filter_2_filter_input', 'mpe_enabled',
+                         'stereo_routing', 'voice_override',
+                         'osc_1_transpose_quantize', 'osc_2_transpose_quantize', 'osc_3_transpose_quantize'):
                 kinds.append('imported')
             elif key in SAMPLE_CONSUMED and content.get('samples'):
                 kinds.append('imported')  # carried by the oscillator the sample was mapped to
@@ -386,6 +388,8 @@ class Audit:
                             self.dropped_items.append((name, it))
                 else:
                     cnt['imported(modulation connection)'] += 1
+                    if 'line_mapping' in m:
+                        cnt['imported(modulation line_mapping)'] += 1
                     for it in slot_items.get(i, []):
                         cnt['approximated(modulation line_mapping)'] += 1
         for sk in ('wavetables', 'lfos'):
@@ -483,7 +487,7 @@ class Audit:
     def audit_meta(self, name, vdoc, sb, stem):
         meta = sb['meta']
         src = sb['import']['source']
-        want_name = vdoc.get('preset_name') or stem
+        want_name = vdoc.get('preset_name') or os.path.splitext(name)[0]
         if meta.get('name') != want_name[:255]:
             self.err(name, 'meta', 'name %r, expected %r' % (meta.get('name'), want_name))
         if meta.get('author', '') != vdoc.get('author', ''):
@@ -555,6 +559,21 @@ class Audit:
             check('master.mpe.on', 1.0 if S['mpe_enabled'] else 0.0, 'mpe_enabled', S['mpe_enabled'], 'mpe_enabled')
         else:
             touched.add('master.mpe.on')
+        if 'stereo_routing' in S:
+            check('master.stereo_routing', round(S['stereo_routing'] * 100.0, 3), 'stereo_routing', S['stereo_routing'], 'stereo_routing')
+        else:
+            touched.add('master.stereo_routing')
+        if 'voice_override' in S:
+            check('master.voice_override', round_half_up(S['voice_override']), 'voice_override', S['voice_override'], 'voice_override')
+        else:
+            touched.add('master.voice_override')
+        for n in (1, 2, 3):
+            k = 'osc_%d_transpose_quantize' % n
+            pk = 'osc%d.transpose_snap' % n
+            if k in S:
+                check(pk, round_half_up(S[k]), k, S[k], k)
+            else:
+                touched.add(pk)
         a, b = S.get('filter_1_filter_input'), S.get('filter_2_filter_input')
         if a is not None or b is not None:
             f1, f2 = bool(a), bool(b)
@@ -701,6 +720,20 @@ class Audit:
             for fld in ('amount', 'power', 'bipolar', 'stereo', 'bypass'):
                 if 'modulation_%d_%s' % (nn, fld) not in S:
                     self.err(name, 'mod', 'slot %d has no %s in settings (default taken)' % (nn, fld))
+        mod_curves = {mc['slot']: mc for mc in content.get('mod_curves', [])}
+        for i in active:
+            m = mods[i]
+            if 'line_mapping' in m:
+                mc = mod_curves.get(i + 1)
+                if not mc:
+                    self.err(name, 'content', 'slot %d has line_mapping in file but no mod_curves in preset' % (i + 1))
+                else:
+                    lm = m['line_mapping']
+                    pts = lm['points']
+                    want_pts = [(round(pts[2 * k], 4), round(1.0 - pts[2 * k + 1], 4), round(lm['powers'][k], 3)) for k in range(min(lm['num_points'], len(lm['powers'])))]
+                    got_pts = [(round(p['x'], 4), round(p['y'], 4), round(p['power'], 3)) for p in mc['points']]
+                    if want_pts != got_pts:
+                        self.err(name, 'content', 'slot %d line_mapping points differ: file(1-y)=%s stored=%s' % (i + 1, want_pts[:4], got_pts[:4]))
 
     def expect_volume(self, S):
         raw = S.get('volume', 5473.0404)
@@ -718,6 +751,8 @@ class Audit:
     def mod_dest_key(self, dst, S, sample_target=0):
         if sample_target and dst in ('sample_level', 'sample_pan', 'sample_transpose', 'sample_tune'):
             dst = 'osc_%d_%s' % (sample_target, dst[len('sample_'):])
+        if dst == 'stereo_routing':
+            return 'master.stereo_routing'
         if dst in self.by_control:
             return self.by_control[dst]
         return dst

@@ -97,17 +97,21 @@ public:
                 addMoreControl (std::make_unique<TransposeControl> (ctx, all[i])); // OCT segments + SEM wheel
             else if (all[i] == "osc" + std::to_string (OscIndex) + ".transpose_snap")
                 addMoreControl (std::make_unique<TransposeSnapControl> (ctx, all[i])); // Row 02-10 Transpose snap keyboard
-            else if (auto& control = addMoreControl (all[i]); all[i] == "osc" + std::to_string (OscIndex) + ".warp.type")
+            else if (auto& control = addMoreControl (all[i]);
+                     all[i] == "osc" + std::to_string (OscIndex) + ".warp.type" || all[i] == "osc" + std::to_string (OscIndex) + ".warp2.type")
             {
                 if (auto* choice = dynamic_cast<ParamChoice*> (&control))
-                    choice->setGroups (warpTypeGroups()); // Basic / Alt / FM / RM, the groups without a mode greyed
+                {
+                    choice->setGroups (warpTypeGroups()); // Basic / Alt / Filter / Distortion / FM / PD / AM / RM (Serum 2 manual p.49-56)
+                    choice->setExtraAction ("Swap Warps", [this] { swapWarps(); });
+                }
             }
         }
 
         // what the Serum 2 manual ties to other controls (p.35-36, p.47): the fixed pitch is the pitch of a wavetable oscillator with pitch tracking off,
         // the pitch bend switch is for the sample types with pitch tracking off, the stack repeat (1-3x) belongs to the Octaves / Power Chord stacks
         const std::string o = "osc" + std::to_string (OscIndex);
-        for (const char* suffix : { ".pitch_track", ".type", ".unison.stack" })
+        for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type" })
         {
             auto handle = std::make_unique<ParamHandle> (ctx, o + suffix);
             handle->onChange = [this] { updateControlDimming(); };
@@ -123,12 +127,15 @@ public:
             // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
             return h.valid() ? juce::roundToInt (h.info().min + h.normalised() * (h.info().max - h.info().min)) : 0;
         };
-        if (dimHandles.size() < 3)
+        if (dimHandles.size() < 5)
             return;
         const bool tracking = choiceOf (*dimHandles[0]) != 0;
         const int type = choiceOf (*dimHandles[1]);
         const int stack = choiceOf (*dimHandles[2]);
         const std::string o = "osc" + std::to_string (OscIndex);
+        // Sync Var (warp mode 11): the phase knob of the slot is the VAR fader of the manual (p.50: hard sync .. very soft sync)
+        const int warpType = choiceOf (*dimHandles[3]);
+        const int warp2Type = choiceOf (*dimHandles[4]);
         for (const auto& c : controls())
         {
             const auto& key = c->key();
@@ -140,6 +147,31 @@ public:
             else if (key == o + ".unison.stack_repeat")
                 applies = stack == 3 || stack == 5;
             c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
+            const bool first = key == o + ".warp.phase", second = key == o + ".warp2.phase";
+            if (first || second)
+            {
+                if (phaseLabel.isEmpty())
+                    phaseLabel = c->label();
+                const bool var = (first ? warpType : warp2Type) == kWarpSyncVar;
+                const juce::String wanted = var ? juce::String ("Var") : phaseLabel;
+                if (c->label() != wanted)
+                    c->setLabel (wanted);
+            }
+        }
+    }
+
+    /** Swap Warps (Serum 2 manual p.56): the warp 1 mode, amount, phase and spread change places with the warp 2 values. */
+    void swapWarps()
+    {
+        const std::string o = "osc" + std::to_string (OscIndex);
+        for (const char* what : { "type", "amount", "phase", "spread" })
+        {
+            ParamHandle first (ctx, o + ".warp." + what), second (ctx, o + ".warp2." + what);
+            if (! first.valid() || ! second.valid())
+                continue;
+            const float a = first.plain(), b = second.plain();
+            first.setPlainComplete (b);
+            second.setPlainComplete (a);
         }
     }
 
@@ -177,6 +209,8 @@ public:
     }
 
 private:
+    static constexpr int kWarpSyncVar = 11; // oscN.warp.type entry "Sync Var"
+    juce::String phaseLabel;
     OscWaveView waveView;
     ParamHandle onHandle;
     std::vector<std::unique_ptr<ParamHandle>> dimHandles;

@@ -468,9 +468,14 @@ TEST (uim_warp_groups_cover_every_choice_once)
     CHECK_EQ (std::string (choiceName (*ref.info, 4)), std::string ("Bend"));
     bool bendInAlt = false;
     for (const auto& g : groups)
+    {
+        CHECK (! g.gap);
         if (g.name == "Alt")
-            bendInAlt = g.items.size() == 1 && g.items[0] == 4;
+            bendInAlt = g.items.size() == 14 && g.items[0] == 4;
+    }
     CHECK (bendInAlt);
+    CHECK_EQ (std::string (choiceName (*ref.info, 11)), std::string ("Sync Var"));
+    CHECK_EQ (choiceCount (*ref.info), static_cast<size_t> (52));
 }
 
 TEST (uim_touch_tracker_tap_swipe_pinch_pan)
@@ -561,6 +566,24 @@ TEST (uim_warp_picture_and_cpu_level)
         }
         CHECK (maxDiff > 0.02f);
     }
+    // the modes of block B21 (11 .. 51) too; Remap 1, 2 and 4 follow the drawn curve (here x squared)
+    const auto drawn = [] (float x) { return x * x; };
+    for (int type = 11; type <= 51; ++type)
+    {
+        float maxDiff = 0.0f;
+        for (int i = 0; i < 128; ++i)
+        {
+            const float ph = static_cast<float> (i) / 128.0f;
+            const float w = warpedValue (type, 0.7f, ph, saw, drawn);
+            CHECK (std::isfinite (w));
+            CHECK (std::fabs (w) <= 2.0001f);
+            maxDiff = std::max (maxDiff, std::fabs (w - saw (ph)));
+        }
+        if (! CHECK (maxDiff > 0.02f))
+            std::printf ("    warp picture %d\n", type);
+    }
+    CHECK_NEAR (warpedValue (14, 0.5f, 0.3f, saw), saw (0.3f), 1e-5);  // Bend +/- is neutral in the middle
+    CHECK_NEAR (warpedValue (20, 1.0f, 0.4f, saw), saw (0.4f), 1e-5);  // without a drawn curve Remap 1 is the diagonal
     // a few exact ones: Sync doubles the speed at amount 1/3, Quantize holds the value inside a step, Formant is silent after the squeezed cycle
     CHECK_NEAR (warpedValue (1, 1.0f / 3.0f, 0.25f, saw), saw (0.5f), 1e-5);
     CHECK_NEAR (warpedValue (3, 1.0f, 0.5f, saw), warpedValue (3, 1.0f, 0.5f + 0.01f, saw), 1e-5);

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "synthyboy/engine_caps.h"
+#include "synthyboy/fx_types.h"
 
 #include <cstring>
 #include <initializer_list>
@@ -38,6 +39,12 @@ int numberAfter (const char* s, const char* prefix) noexcept
 
 EngineCapsMask classify (const char* key) noexcept
 {
+    // block B22: the keys of the effect instance pool (fxiNN.type / on / rack / order / pKK)
+    if (startsWith (key, "fxi") && key[3] >= '0' && key[3] <= '9')
+        return kCapFxInstances;
+    // block B21: the ENV 1 buttons (sub.env1, oscN.env1, noise.env1, filterN.env1), before the module prefixes
+    if (endsWith (key, ".env1"))
+        return kCapEnv1Toggle;
     // block B16 (WTREMAP): before the module prefixes (osc..., filter..., reverb.... would claim these keys)
     if (std::strstr (key, ".remap.") != nullptr)
         return kCapWtRemap;
@@ -150,7 +157,23 @@ EngineCapsMask classify (const char* key) noexcept
         return kCapFxConvolve;
     if (startsWith (key, "splitter_"))
         return kCapFxSplitters;
+    if (std::strcmp (key, "master.stereo_routing") == 0 || std::strcmp (key, "master.voice_override") == 0)
+        return kCapModAmount;
     return kCapNone;
+}
+
+/** The bit of a warp mode of block B21 (warp list entry v >= kNumLegacyWarpTypes). */
+EngineCapsMask warpTypeCaps (int v) noexcept
+{
+    if (v <= 24)
+        return kCapWarpAlt;
+    if (v <= 26)
+        return kCapWarpFilter;
+    if (v <= 40)
+        return kCapWarpDist;
+    if (v <= 46)
+        return kCapWarpFm;
+    return kCapWarpPdAm;
 }
 
 EngineCapsMask sourceCaps (int choice) noexcept
@@ -161,7 +184,11 @@ EngineCapsMask sourceCaps (int choice) noexcept
         return kCapMacros58;
     if (choice <= 34)
         return kCapLfo910;
-    return kCapModSourcesExtra;
+    if (choice <= 38)
+        return kCapModSourcesExtra;
+    if (choice == 39)
+        return kCapModAmount;
+    return kCapNone;
 }
 } // namespace
 
@@ -179,6 +206,16 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
 
     EngineCapsMask caps = requiredCaps (paramIndex);
     const ParamInfo& info = paramTable()[paramIndex];
+    {
+        // the type of a pool slot needs the capability of the module it stands for (a slot of type Bode needs what Bode needs)
+        int slot = 0, number = 0;
+        if (fxInstanceOfParam (paramIndex, slot, number) && number < 0 && info.choiceSet == ChoiceSet::list && std::strcmp (info.key + 6, "type") == 0)
+        {
+            const int type = static_cast<int> (plain + 0.5f);
+            const int onIndex = type > 0 && type < kNumFxInstanceTypes ? fxTypeDescriptor (type).onIndex : -1;
+            return caps | (onIndex >= 0 ? requiredCaps (static_cast<size_t> (onIndex)) : kCapNone);
+        }
+    }
     if (info.scale != Scale::stepped || ! (plain >= 0.0f && plain < 1.0e6f))
         return caps;
 
@@ -191,6 +228,8 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         case ChoiceSet::modDestination:
             if (v > 269)
             {
+                if (v >= 454)
+                    caps |= kCapModAmount;
                 const int target = modDestinationParamIndex (static_cast<size_t> (v));
                 caps |= target >= 0 ? requiredCaps (static_cast<size_t> (target)) : kCapNone;
             }
@@ -219,6 +258,8 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
         caps |= kCapFxRacks;
     else if (std::strcmp (key, "distortion.type") == 0 && v >= kNumLegacyDistortionTypes)
         caps |= kCapFxDistortionExtras;
+    else if (startsWith (key, "osc") && (endsWith (key, ".warp.type") || endsWith (key, ".warp2.type")) && v >= kNumLegacyWarpTypes)
+        caps |= warpTypeCaps (v);
 
     return caps;
 }
@@ -270,6 +311,14 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapStereoSpread:     return "stereo_spread";
         case kCapLfoSwing:         return "lfo_swing";
         case kCapQualityOptions:   return "quality_options";
+        case kCapModAmount:        return "mod_amount";
+        case kCapWarpAlt:          return "warp_alt";
+        case kCapWarpFilter:       return "warp_filter";
+        case kCapWarpDist:         return "warp_distortion";
+        case kCapWarpFm:           return "warp_fm";
+        case kCapWarpPdAm:         return "warp_pd_am";
+        case kCapEnv1Toggle:       return "env1_toggle";
+        case kCapFxInstances:      return "fx_instances";
         case kCapFilterModels2:    return "filter_models2";
         case kCapNone:             break;
     }

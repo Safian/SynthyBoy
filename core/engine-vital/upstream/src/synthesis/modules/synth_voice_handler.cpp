@@ -31,6 +31,37 @@
 #include "modulation_connection_processor.h"
 
 namespace sbvital {
+  namespace {
+    /** The voice killer: the amplitude envelope path, and while a channel with its ENV 1 button off sounds also the enabled envelopes 2 to 4
+        (Serum 2 manual p.146: such a voice ends after the longest release of any of the envelopes). With every ENV 1 button on the output is the
+        amplitude, bit for bit, as before. */
+    class VoiceKeepAlive : public Processor {
+      public:
+        static constexpr int kNumEnvelopeInputs = 3;
+        enum { kAmplitude, kFreeAudio, kEnvelope1, kNumInputs = kEnvelope1 + kNumEnvelopeInputs };
+
+        VoiceKeepAlive() : Processor(kNumInputs, 1) { }
+        Processor* clone() const override { return new VoiceKeepAlive(*this); }
+
+        void process(int num_samples) override {
+          const poly_float* amplitude = input(kAmplitude)->source->buffer;
+          const poly_float* free_audio = input(kFreeAudio)->source->buffer;
+          poly_float* out = output()->buffer;
+          poly_float free_peak = 0.0f;
+          for (int i = 0; i < num_samples; ++i)
+            free_peak = utils::max(free_peak, poly_float::abs(free_audio[i]));
+          poly_float envelope = 0.0f;
+          for (int e = 0; e < kNumEnvelopeInputs; ++e) {
+            const Output* source = input(kEnvelope1 + e)->source;
+            if (source != nullptr && source->owner != nullptr && source->owner->enabled())
+              envelope = utils::max(envelope, poly_float::abs(source->buffer[0]));
+          }
+          const poly_float hold = utils::maskLoad(poly_float(0.0f), envelope, poly_float::greaterThan(free_peak, 1.0e-6f));
+          for (int i = 0; i < num_samples; ++i)
+            out[i] = utils::max(amplitude[i], hold);
+        }
+    };
+  }
 
   SynthVoiceHandler::SynthVoiceHandler(Output* beats_per_second) :
       VoiceHandler(0, kMaxPolyphony), producers_(nullptr), beats_per_second_(beats_per_second),
@@ -41,10 +72,12 @@ namespace sbvital {
       slide_mapping_(nullptr), lift_mapping_(nullptr), mod_wheel_mapping_(nullptr),
       pitch_wheel_mapping_(nullptr), stereo_(nullptr), lowest_active_note_(nullptr), note_percentage_(nullptr), last_active_voice_mask_(0) {
     output_ = new Multiply();
-    registerOutput(output_->output());
+    main_final_ = new Add();
+    registerOutput(main_final_->output());
 
     direct_output_ = new Multiply();
-    registerOutput(direct_output_->output());
+    direct_final_ = new Add();
+    registerOutput(direct_final_->output());
 
     bus1_output_ = new Multiply();
     registerOutput(bus1_output_->output());
@@ -69,6 +102,49 @@ namespace sbvital {
     voice_sum->plug(producers_->output(ProducersModule::kRawOut), 1);
     output_->plug(voice_sum, 0);
     output_->plug(amplitude_, 1);
+    // SynthyBoy B21 (13-new-keys.md 4.22): a Main / Direct channel with its ENV 1 button off is multiplied by the velocity and voice amplitude
+    // only (amplitude twice, as the squared amplitude of the enveloped path) and added behind the envelope
+    Add* main_free = new Add();
+    main_free->plug(producers_->output(ProducersModule::kRawFree), 0);
+    main_free->plug(filters_module_->output(FiltersModule::kMainFree), 1);
+    Add* direct_free = new Add();
+    direct_free->plug(producers_->output(ProducersModule::kDirectFree), 0);
+    direct_free->plug(filters_module_->output(FiltersModule::kDirectFree), 1);
+    Add* free_sum = new Add();
+    free_sum->plug(main_free, 0);
+    free_sum->plug(direct_free, 1);
+    Processor* free_gain_main[2];
+    Processor* free_gain_direct[2];
+    for (int stage = 0; stage < 2; ++stage) {
+      free_gain_main[stage] = new SmoothMultiply();
+      free_gain_main[stage]->plug(stage == 0 ? static_cast<Processor*>(main_free) : free_gain_main[0], SmoothMultiply::kAudioRate);
+      free_gain_main[stage]->plug(control_amplitude_, SmoothMultiply::kControlRate);
+      free_gain_main[stage]->plug(reset(), SmoothMultiply::kReset);
+      free_gain_direct[stage] = new SmoothMultiply();
+      free_gain_direct[stage]->plug(stage == 0 ? static_cast<Processor*>(direct_free) : free_gain_direct[0], SmoothMultiply::kAudioRate);
+      free_gain_direct[stage]->plug(control_amplitude_, SmoothMultiply::kControlRate);
+      free_gain_direct[stage]->plug(reset(), SmoothMultiply::kReset);
+    }
+    main_final_->plug(output_, 0);
+    main_final_->plug(free_gain_main[1], 1);
+    direct_final_->plug(direct_output_, 0);
+    direct_final_->plug(free_gain_direct[1], 1);
+    // the voice lives as long as the longest enabled envelope while a free channel sounds (manual p.146)
+    keep_alive_ = new VoiceKeepAlive();
+    keep_alive_->plug(amplitude_, VoiceKeepAlive::kAmplitude);
+    keep_alive_->plug(free_sum, VoiceKeepAlive::kFreeAudio);
+    for (int i = 1; i < kNumEnvelopes && i <= VoiceKeepAlive::kNumEnvelopeInputs; ++i)
+      keep_alive_->plug(envelopes_[i]->output(EnvelopeModule::kValue), VoiceKeepAlive::kEnvelope1 + i - 1);
+    addProcessor(main_free);
+    addProcessor(direct_free);
+    addProcessor(free_sum);
+    for (int stage = 0; stage < 2; ++stage) {
+      addProcessor(free_gain_main[stage]);
+      addProcessor(free_gain_direct[stage]);
+    }
+    addProcessor(keep_alive_);
+    addProcessor(main_final_);
+    addProcessor(direct_final_);
     // SynthyBoy: the direct output also takes the filters whose destination is Direct out; the buses sum the sends of the sources and filters
     Add* direct_sum = new Add();
     direct_sum->plug(producers_->output(ProducersModule::kDirectOut), 0);
@@ -99,7 +175,7 @@ namespace sbvital {
     for (int i = 0; i < kNumMacros; ++i)
       macros[i] = createMonoModControl("macro_control_" + std::to_string(i + 1));
 
-    setVoiceKiller(amplitude_->output());
+    setVoiceKiller(keep_alive_->output());
 
     for (int i = 0; i < sbvital::kMaxModulationConnections; ++i) {
       ModulationConnectionProcessor* processor = modulation_bank_.atIndex(i)->modulation_processor.get();
@@ -354,6 +430,7 @@ namespace sbvital {
 
     addProcessor(control_amplitude);
     addProcessor(amplitude_);
+    control_amplitude_ = amplitude;
   }
 
   void SynthVoiceHandler::process(int num_samples) {

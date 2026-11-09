@@ -31,12 +31,31 @@ namespace sbvital {
     }
 
     // Warp on a sample (docs/ui-design/13-new-keys.md 4.9, decided in WP4): a sample has no cycle, so the phase domain warps (Sync,
-    // Formant, Bend, Squeeze, Pulse Width) have nothing to bend and are inert. Quantize reduces the resolution of the output, Frequency
-    // Modulation modulates the read speed with the source, Ring Modulation multiplies the output with it.
-    enum WarpKind { kWarpNone, kWarpQuantize, kWarpFm, kWarpRm };
+    // Formant, Bend, Squeeze, Pulse Width and the modes of block B21 that move the read phase) have nothing to bend and are inert.
+    // Quantize reduces the resolution of the output, Frequency Modulation (also Thru-Zero, Exp and Linear) modulates the read speed
+    // with the source, Ring and Amplitude Modulation multiply the output with it, the distortion group shapes the output (B21, 13-new-keys.md
+    // 4.22). Filter, Odd/Even and the phase distortion are inert on a sample.
+    enum WarpKind { kWarpNone, kWarpQuantize, kWarpFm, kWarpRm, kWarpAm, kWarpShape };
+    enum FmLaw { kFmLinearLaw, kFmExpLaw, kFmClampedLaw };
 
-    WarpKind warpKindOf(int type, const Output*& source, Output* a, Output* b, Output* sample) {
+    WarpKind warpKindOf(int type, const Output*& source, FmLaw& law, Output* a, Output* b, Output* sample) {
       using D = SynthOscillator;
+      law = kFmLinearLaw;
+      if (D::isExtendedWarp(type)) {
+        if (type >= D::kShTube && type <= D::kShSoftSat)
+          return kWarpShape;
+        switch (type) {
+          case D::kFmThruZeroA: source = a; return kWarpFm;
+          case D::kFmThruZeroB: source = b; return kWarpFm;
+          case D::kFmExpA: source = a; law = kFmExpLaw; return kWarpFm;
+          case D::kFmExpB: source = b; law = kFmExpLaw; return kWarpFm;
+          case D::kFmLinearA: source = a; law = kFmClampedLaw; return kWarpFm;
+          case D::kFmLinearB: source = b; law = kFmClampedLaw; return kWarpFm;
+          case D::kAmA: source = a; return kWarpAm;
+          case D::kAmB: source = b; return kWarpAm;
+          default: return kWarpNone;
+        }
+      }
       switch (type) {
         case D::kQuantize: return kWarpQuantize;
         case D::kFmOscillatorA: source = a; return kWarpFm;
@@ -241,9 +260,11 @@ namespace sbvital {
 
     // the two warp slots
     const Output* sources[2] = { nullptr, nullptr };
+    FmLaw laws[2] = { kFmLinearLaw, kFmLinearLaw };
+    const int warp_types[2] = { static_cast<int>(input(kWarpType)->at(0)[0]), static_cast<int>(input(kWarp2Type)->at(0)[0]) };
     const WarpKind kinds[2] = {
-      warpKindOf(static_cast<int>(input(kWarpType)->at(0)[0]), sources[0], first_mod_oscillator_, second_mod_oscillator_, sample_),
-      warpKindOf(static_cast<int>(input(kWarp2Type)->at(0)[0]), sources[1], first_mod_oscillator_, second_mod_oscillator_, sample_)
+      warpKindOf(warp_types[0], sources[0], laws[0], first_mod_oscillator_, second_mod_oscillator_, sample_),
+      warpKindOf(warp_types[1], sources[1], laws[1], first_mod_oscillator_, second_mod_oscillator_, sample_)
     };
     const float amounts[2] = { utils::clamp(input(kWarpAmount)->at(0)[lane], 0.0f, 1.0f), utils::clamp(input(kWarp2Amount)->at(0)[lane], 0.0f, 1.0f) };
 
@@ -276,7 +297,12 @@ namespace sbvital {
           const float depth = 4.0f * amounts[w] * amounts[w];
           for (int i = 0; i < num_samples; ++i) {
             const float s = src[i][lane];
-            rate_mod[i] = (mod == nullptr ? 1.0f : rate_mod[i]) + depth * s;
+            float deviation = depth * s;
+            if (laws[w] == kFmExpLaw)
+              deviation = std::exp2(deviation) - 1.0f;
+            else if (laws[w] == kFmClampedLaw)
+              deviation = std::max(deviation, -1.0f);
+            rate_mod[i] = (mod == nullptr ? 1.0f : rate_mod[i]) + deviation;
           }
           mod = rate_mod;
         }
@@ -291,6 +317,20 @@ namespace sbvital {
             const float m = 1.0f + amounts[w] * (src[i][lane] - 1.0f);
             sl[i] *= m;
             sr[i] *= m;
+          }
+        }
+        else if (kinds[w] == kWarpAm && sources[w] != nullptr) {
+          const poly_float* src = sources[w]->buffer;
+          for (int i = 0; i < num_samples; ++i) {
+            const float m = 1.0f - amounts[w] + amounts[w] * (0.5f + 0.5f * std::max(-1.0f, std::min(1.0f, src[i][lane])));
+            sl[i] *= m;
+            sr[i] *= m;
+          }
+        }
+        else if (kinds[w] == kWarpShape) {
+          for (int i = 0; i < num_samples; ++i) {
+            sl[i] = SynthOscillator::warpShape(warp_types[w], sl[i], amounts[w]);
+            sr[i] = SynthOscillator::warpShape(warp_types[w], sr[i], amounts[w]);
           }
         }
         else if (kinds[w] == kWarpQuantize) {

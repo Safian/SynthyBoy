@@ -523,12 +523,13 @@ TEST (vi_fixture_mod_matrix)
     // area carries the slot
     CHECK_EQ (findItem (r, "modulations[28]", ItemKind::dropped)->area, std::string ("mod29"));
 
-    // a connection with a line map curve is kept linear and flagged
+    // a connection with a line map curve is imported into modCurves
     Fixture g = sbfx::defaultPatch();
     g.mods.emplace_back ("lfo_1", "filter_1_cutoff");
-    g.modExtra["0"] = "\"line_mapping\":{\"num_points\":2}";
+    g.modExtra["0"] = "\"line_mapping\":{\"name\":\"Curve\",\"num_points\":2,\"points\":[0.0,1.0,1.0,0.0],\"powers\":[0.0,0.0]}";
     const auto lr = run (g);
-    CHECK (findItem (lr, "modulations[0].line_mapping", ItemKind::approximated) != nullptr);
+    CHECK_EQ (lr.modCurves.size(), static_cast<size_t> (1));
+    CHECK_EQ (lr.modCurves[0].slot, 1);
     CHECK_EQ (val (lr, "mod01.source"), 7.0f);
 
     // more than 64 connections: the rest is ignored with a report item
@@ -1673,7 +1674,7 @@ TEST (vi_mapped_sample_settings_are_accounted)
     CHECK (findItem (lost, "sample_loop", ItemKind::ignored) != nullptr);
 }
 
-// A value that is not Vital's default for a behaviour setting we have no key for changes the sound: dropped, not ignored. MPE has a key.
+// A value that is not Vital's default for a behaviour setting we have no key for changes the sound: dropped, not ignored. MPE, stereo_routing and voice_override have keys.
 TEST (vi_behaviour_settings_are_dropped_when_not_default_and_mpe_is_imported)
 {
     using namespace sbfx;
@@ -1683,17 +1684,84 @@ TEST (vi_behaviour_settings_are_dropped_when_not_default_and_mpe_is_imported)
     f.set ("voice_priority", 4);
     f.set ("mpe_enabled", 1);
     auto r = run (f, ImportOptions());
-    CHECK (findItem (r, "stereo_routing", ItemKind::ignored) != nullptr);
-    CHECK (findItem (r, "voice_override", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "voice_priority", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "stereo_routing", ItemKind::ignored) == nullptr);
+    CHECK (findItem (r, "voice_override", ItemKind::ignored) == nullptr);
     CHECK (findItem (r, "mpe_enabled", ItemKind::ignored) == nullptr);
     CHECK_EQ (val (r, "master.mpe.on"), 1.0f);
+    CHECK_EQ (val (r, "master.stereo_routing"), 100.0f);
+    CHECK_EQ (val (r, "master.voice_override"), 0.0f);
+
     f.set ("stereo_routing", 0.41);
     f.set ("voice_override", 1);
+    f.set ("voice_priority", 1);
     f.set ("mpe_enabled", 0);
     r = run (f, ImportOptions());
-    CHECK (findItem (r, "stereo_routing", ItemKind::dropped) != nullptr);
-    CHECK (findItem (r, "voice_override", ItemKind::dropped) != nullptr);
+    CHECK (findItem (r, "voice_priority", ItemKind::dropped) != nullptr);
+    CHECK (findItem (r, "stereo_routing", ItemKind::dropped) == nullptr);
+    CHECK (findItem (r, "voice_override", ItemKind::dropped) == nullptr);
     CHECK_EQ (val (r, "master.mpe.on"), 0.0f);
+    CHECK_NEAR (val (r, "master.stereo_routing"), 41.0f, 1e-3);
+    CHECK_EQ (val (r, "master.voice_override"), 1.0f);
+}
+
+TEST (vi_mod_amount_stereo_source_and_line_mapping_imported)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    // Modulation 1: macro 1 -> modulation_2_amount
+    // Modulation 2: stereo -> filter_1_cutoff with line_mapping
+    const std::string lineMap = "{\"name\":\"Custom\",\"num_points\":3,\"points\":[0.0,1.0,0.5,0.2,1.0,0.0],\"powers\":[0.0,0.0,0.0],\"smooth\":false}";
+    f.mods.push_back ({ "macro_control_1", "modulation_2_amount" });
+    f.mods.push_back ({ "stereo", "filter_1_cutoff" });
+    f.modExtra["1"] = "\"line_mapping\":" + lineMap;
+    f.set ("modulation_1_amount", 0.75);
+    f.set ("modulation_2_amount", 0.50);
+    f.set ("osc_1_transpose_quantize", 2049); // bits 0 and 11
+
+    const auto r = run (f, ImportOptions());
+    CHECK_EQ (r.status, ImportStatus::ok);
+
+    // Slot 1: macro 1 (choice 19) -> mod02.amount (choice 455)
+    CHECK_EQ (val (r, "mod01.source"), 19.0f);
+    const auto mod02AmtChoice = modDestinationChoiceOf (static_cast<size_t> (findParamIndex (findParamByKey ("mod02.amount")->id)));
+    CHECK_EQ (val (r, "mod01.destination"), static_cast<float> (mod02AmtChoice));
+    CHECK_NEAR (val (r, "mod01.amount"), 75.0f, 1e-2);
+
+    // Slot 2: stereo (choice 39) -> Filter 1 Cutoff
+    CHECK_EQ (val (r, "mod02.source"), 39.0f);
+    const auto cutoffChoice = modDestinationChoiceOf (static_cast<size_t> (findParamIndex (kParamFilter1Cutoff)));
+    CHECK_EQ (val (r, "mod02.destination"), static_cast<float> (cutoffChoice));
+    CHECK_NEAR (val (r, "mod02.amount"), 50.0f, 1e-2);
+
+    // line_mapping stored in modCurves for slot 2
+    CHECK_EQ (r.modCurves.size(), static_cast<size_t> (1));
+    CHECK_EQ (r.modCurves[0].slot, 2);
+    CHECK_EQ (r.modCurves[0].points.size(), static_cast<size_t> (3));
+    // Vital line_mapping has y in GUI space (y = 1 - value)
+    CHECK_NEAR (r.modCurves[0].points[0].y, 0.0f, 1e-3);
+    CHECK_NEAR (r.modCurves[0].points[1].y, 0.8f, 1e-3);
+    CHECK_NEAR (r.modCurves[0].points[2].y, 1.0f, 1e-3);
+
+    // osc_1_transpose_quantize imported into osc1.transpose_snap
+    CHECK_EQ (val (r, "osc1.transpose_snap"), 2049.0f);
+
+    // the other new destinations: stereo_routing, portamento_time, polyphony (G3)
+    Fixture g = defaultPatch();
+    g.mods.push_back ({ "macro_control_4", "stereo_routing" });
+    g.mods.push_back ({ "macro_control_1", "portamento_time" });
+    g.mods.push_back ({ "macro_control_2", "polyphony" });
+    g.mods.push_back ({ "note", "modulation_64_amount" });
+    const auto gr = run (g, ImportOptions());
+    CHECK_EQ (gr.status, ImportStatus::ok);
+    CHECK_EQ (val (gr, "mod01.destination"), 453.0f);
+    CHECK_EQ (val (gr, "mod02.destination"), 518.0f);
+    CHECK_EQ (val (gr, "mod03.destination"), 519.0f);
+    CHECK_EQ (val (gr, "mod04.destination"), 517.0f);
+    CHECK (findItem (gr, "modulations[0]", ItemKind::dropped) == nullptr);
+    CHECK (findItem (gr, "modulations[1]", ItemKind::dropped) == nullptr);
+    CHECK (findItem (gr, "modulations[2]", ItemKind::dropped) == nullptr);
+    CHECK (findItem (gr, "modulations[3]", ItemKind::dropped) == nullptr);
 }
 
 // The built-in shortcut (a single frame equal to a built-in single cycle is not stored) and its limit: a table is only "the built-in" when the
@@ -1742,5 +1810,21 @@ TEST (vi_single_cycle_shortcut_needs_the_same_waveform)
         const auto shifted = importTable (build (builtin, false, true));
         CHECK_EQ (shifted.wavetables.size(), static_cast<size_t> (1));
         CHECK_EQ (val (shifted, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
+    }
+}
+
+// Block B21 (13-new-keys.md 4.22): the warp lists grew to 52 entries; an imported Vital choice stays in the eleven modes Vital has
+TEST (vi_warp_choices_stay_in_the_vital_range)
+{
+    for (const char* key : { "osc1.warp.type", "osc2.warp.type", "osc3.warp.type", "osc1.warp2.type", "osc3.warp2.type" })
+        CHECK_EQ (legacyChoiceMax (key), 10);
+    CHECK_EQ (legacyChoiceMax ("osc1.warp.amount"), -1);
+    CHECK_EQ (legacyChoiceMax ("osc1.morph.type"), -1);
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        const ParamInfo& p = paramTable()[i];
+        const size_t n = std::strlen (p.key);
+        if (n > 10 && std::strcmp (p.key + n - 10, ".warp.type") == 0)
+            CHECK (legacyChoiceMax (p.key) < static_cast<int> (p.numChoices) - 1);
     }
 }

@@ -342,6 +342,7 @@ std::string moduleKindForPrefix (std::string_view prefix)
     if (prefix.rfind ("lfo", 0) == 0) return "lfo";
     if (prefix.rfind ("osc", 0) == 0) return "osc";
     if (prefix.rfind ("filter", 0) == 0) return "filter";
+    if (prefix.rfind ("fxi", 0) == 0) return "fxi"; // the slots of the effect instance pool paste onto each other
     return std::string (prefix);
 }
 
@@ -467,7 +468,7 @@ bool ModuleClipboard::paste (std::string_view destPrefix, ParamValues& target, b
             }
 
             const auto destRef = resolveKey (finalDestKey);
-            if (! destRef.valid() || (destRef.info->flags & kParamModulatable) == 0)
+            if (! destRef.valid() || modDestinationChoiceOf (static_cast<size_t> (destRef.index)) == 0)
                 continue;
 
             const size_t destChoice = modDestinationChoiceOf (static_cast<size_t> (destRef.index));
