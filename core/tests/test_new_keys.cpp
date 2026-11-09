@@ -57,7 +57,7 @@ TEST (counts_and_constants)
     CHECK_EQ (paramCount(), static_cast<size_t> (1603));
     CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7); // 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV)
     CHECK (paramCount() <= kMaxParams);
-    CHECK_EQ (kMaxParams, static_cast<size_t> (2048));
+    CHECK_EQ (kMaxParams, static_cast<size_t> (4096)); // raised for block B22 (FX instance pool)
     CHECK_EQ (kNumModSources, 39);
     CHECK_EQ (kNumModDestinations, 520);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (39));

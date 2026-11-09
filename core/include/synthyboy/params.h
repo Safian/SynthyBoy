@@ -73,8 +73,11 @@ struct ParamInfo
     uint16_t order;             // display order (position in the table; set when the table is built)
 };
 
-/** Upper bound of the table size; fixed-size containers (ParamValues, engine) are sized with it. */
-constexpr size_t kMaxParams = 2048;
+/** Upper bound of the table size; fixed-size containers (ParamValues, engine) are sized with it. Raised from 2048 to 4096 for the FX
+    instance pool (block B22, docs/ui-design/18-FX-INSTANCES.md): it is a compile-time constant and part of no file format (ids are
+    hashKey (key), the state stores keys), so the raise changes no saved state. Table indices are stored as uint16_t (IdIndex, order). */
+constexpr size_t kMaxParams = 4096;
+static_assert (kMaxParams <= 65535, "table indices are stored as uint16_t");
 
 /** The table of state version 2 had 880 keys; the keys of version 3 (docs/ui-design/13-new-keys.md) are appended after them, so the
     first kNumKeysV2 table positions are the ones every older state, preset and engine knows. */
