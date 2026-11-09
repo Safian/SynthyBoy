@@ -100,6 +100,7 @@ public:
     synthyboy::UserLibrary* userLibrary() override { return itemLibrary.get(); }
     std::string userDirectory() const override { return userDir; }
     bool requestFile (const synthyboy::ui::FileRequest& request, std::function<void (const juce::File&)> done) override;
+    bool canRequestFile() const noexcept override { return true; }
     uint32_t contentRevision() const noexcept override { return contentRev.load (std::memory_order_relaxed); }
     /** Tests and alternative shells answer the file requests themselves (instead of a juce::FileChooser). */
     using FileRequestHandler = std::function<bool (const synthyboy::ui::FileRequest&, std::function<void (const juce::File&)>)>;

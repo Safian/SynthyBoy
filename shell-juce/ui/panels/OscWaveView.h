@@ -7,19 +7,25 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "../GestureKit.h"
 #include "../ParamHandle.h"
 #include "../Theme.h"
+#include "../ContentIO.h"
 #include "../UiContext.h"
 #include "../model/GestureModel.h"
 
+#include "synthyboy/user_content.h"
+
 namespace synthyboy::ui
 {
+class WavetableEditorSheet;
+
 /** Large interactive visual for an oscillator: wavetable 2D / 3D / spectral and sample waveform views (02-oscillators.md §2.1, §2.2, §3).
     Direct manipulation: horizontal drag on the wave changes oscN.frame; drag handles set sample start/end and loop markers.
     Tap on the view cycles 2D -> 3D -> SP mode. Visible alternative: prev/next and view mode buttons. */
-class OscWaveView final : public juce::Component
+class OscWaveView final : public juce::Component, private juce::Timer
 {
 public:
     OscWaveView (UiContext& context, int oscIndex);
@@ -80,6 +86,40 @@ public:
     juce::TextButton& removeSliceButton() noexcept { return removeSliceBtn; }
     LongPressDetector& longPress() noexcept { return press; }
     void refreshSliceCache();
+    // ---- content pipeline (WP-01 c): load / reload / trim a sample, the real waveform, snap, auto slices, marker animation ----
+    /** The decoded sample of this oscillator (null without one). */
+    std::shared_ptr<const SamplePreview> preview() const;
+    /** Load Sample: the file is decoded, stored in the user library and becomes `content.samples[osc]`; the root note is taken from the file name / the WAV
+        chunk. Returns the result line shown in the header. */
+    FlowResult loadSampleFile (const juce::File& file);
+    /** Asks the host for the file (Load button); `loadSampleFile` runs when the user chose one. */
+    void requestSampleFile();
+    FlowResult trimSample();
+    FlowResult removeSample();
+    FlowResult reloadSample();
+    /** Snap Off / Zero / Beats / Loop of the markers (design 02, S p.72-73). The Snap button cycles it. */
+    SnapMode snapMode() const noexcept { return snap; }
+    void setSnapMode (SnapMode mode);
+    /** A marker position as the drag would set it for `raw` (the snap applied). */
+    float snappedMarker (float raw, SampleMarker marker) const;
+    /** The slice starts the Auto mode draws: the onsets stronger than the threshold (the same rule as the engine). */
+    std::vector<float> autoSliceMarkers() const;
+    /** Show Marker Animation: the modulation range of UNI START / SPAN / SCAN is drawn as bands. */
+    bool markerAnimationOn() const noexcept { return markerAnimation; }
+    void setMarkerAnimation (bool on);
+    /** The ranges (start, end as fractions of the file) the modulation of oscN.sample.uni_start covers; empty when it is not modulated. */
+    std::vector<std::pair<float, float>> modulationBands() const;
+    const juce::String& sampleStatus() const noexcept { return statusLine; }
+    juce::TextButton& loadButton() noexcept { return loadSampleBtn; }
+    juce::TextButton& snapButton() noexcept { return snapBtn; }
+    juce::TextButton& sampleMenuButton() noexcept { return sampleMenuBtn; }
+    juce::TextButton& editButton() noexcept { return editBtn; }
+    /** The wavetable editor of this oscillator (Edit button); null until opened. */
+    WavetableEditorSheet* editorSheetPtr() noexcept { return editorSheet.get(); }
+    void openEditor();
+    /** The table the oscillator plays from the library (the Preset table entry); null for a built-in table. */
+    std::shared_ptr<const wtedit::Wavetable> userTable() const;
+
     /** Colour level of the unison voice pill by the CPU load (cpuLevel ()), -1 while the oscillator has one voice (no pill). */
     int unisonPillLevel() const;
     bool unisonCapped() const;
@@ -118,6 +158,15 @@ private:
     juce::TextButton viewModeButton { "2D" };
     juce::TextButton zoomInBtn { "+" }, zoomOutBtn { "-" }, fitBtn { "Fit" };
     juce::TextButton addSliceBtn { "+ Slice" }, removeSliceBtn { "- Slice" };
+    juce::TextButton loadSampleBtn { "Load" }, snapBtn { "Snap: Off" }, sampleMenuBtn { "..." }, editBtn { "Edit" };
+    SnapMode snap = SnapMode::off;
+    bool markerAnimation = false;
+    void timerCallback() override { repaint(); }
+    juce::String statusLine;
+    std::unique_ptr<WavetableEditorSheet> editorSheet;
+    ParamHandle sampleLengthBeatsHandle, sampleUniStartHandle;
+    void paintUserTable (juce::Graphics& g, juce::Rectangle<float> area, const wtedit::Wavetable& table);
+    void showSampleMenu();
 
     ParamHandle sliceModeHandle, sliceThresholdHandle;
     Viewport sampleVp;

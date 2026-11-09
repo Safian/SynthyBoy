@@ -113,6 +113,13 @@ void SynthyBoyEditor::resized()
 
 void SynthyBoyEditor::timerCallback()
 {
+    retiredSheets.clear();
+    if (const uint32_t revision = host.contentRevision(); revision != checkedContentRevision)
+    {
+        checkedContentRevision = revision;
+        if (sheet == nullptr)
+            checkMissingContent();
+    }
     const auto currentName = host.presetName();
     if (currentName != lastPresetName)
     {
@@ -274,6 +281,62 @@ void SynthyBoyEditor::setDarkMode (bool dark)
     repaint();
 }
 
+void SynthyBoyEditor::showSheet (std::unique_ptr<juce::Component> component)
+{
+    closeContentSheet();
+    sheet = std::move (component);
+    addAndMakeVisible (*sheet);
+    const int w = juce::jmin (getWidth() - 2 * uiTheme.gap(), uiTheme.ipx (640.0f));
+    const int h = juce::jmin (getHeight() - 2 * uiTheme.gap(), uiTheme.ipx (520.0f));
+    sheet->setBounds (getLocalBounds().withSizeKeepingCentre (w, h));
+    sheet->toFront (true);
+}
+
+void SynthyBoyEditor::closeContentSheet()
+{
+    // a button of the sheet may be what called us: the sheet is hidden now and deleted on the next timer tick
+    if (sheet != nullptr)
+    {
+        sheet->setVisible (false);
+        retiredSheets.push_back (std::move (sheet));
+        sheet.reset();
+        repaint();
+    }
+}
+
+bool SynthyBoyEditor::checkMissingContent()
+{
+    MissingFilesModel model (ctx);
+    if (model.empty())
+        return false;
+    auto missing = std::make_unique<MissingFilesSheet> (ctx);
+    missing->onFinished = [this] { closeContentSheet(); };
+    showSheet (std::move (missing));
+    return true;
+}
+
+VitalFlowResult SynthyBoyEditor::importVitalFile (const juce::File& file)
+{
+    VitalFlowResult result = synthyboy::ui::importVitalFile (ctx, file, ctx.view->oscTab + 1, ctx.view->lfoTab < 10 ? ctx.view->lfoTab + 1 : 0);
+    auto report = std::make_unique<ImportReportSheet> (ctx, result);
+    report->onFinished = [this] { closeContentSheet(); };
+    showSheet (std::move (report));
+    return result;
+}
+
+void SynthyBoyEditor::importVitalFromMenu()
+{
+    FileRequest request;
+    request.title = "Import a Vital file";
+    request.wildcards = "*.vital;*.vitalbank;*.vitaltable;*.vitallfo";
+    request.purpose = "vital";
+    host.requestFile (request, [safe = juce::Component::SafePointer<SynthyBoyEditor> (this)] (const juce::File& file)
+    {
+        if (safe != nullptr)
+            safe->importVitalFile (file);
+    });
+}
+
 void SynthyBoyEditor::showMenu()
 {
     juce::PopupMenu menu;
@@ -295,6 +358,9 @@ void SynthyBoyEditor::showMenu()
     menu.addSubMenu ("Module", moduleMenu);
 
     menu.addSeparator();
+    menu.addItem (60, "Import Vital file...", host.canRequestFile() && host.contentLibrary() != nullptr);
+    menu.addItem (61, "Missing files...", host.contentLibrary() != nullptr);
+    menu.addSeparator();
     menu.addItem (2, uiTheme.isDark() ? "Light theme" : "Dark theme");
     juce::PopupMenu sizes;
     const float steps[] = { 0.75f, 1.0f, 1.25f, 1.5f, 2.0f };
@@ -307,7 +373,11 @@ void SynthyBoyEditor::showMenu()
                         {
                             if (safe == nullptr || result <= 0)
                                 return;
-                            if (result == 10)
+                            if (result == 60)
+                                safe->importVitalFromMenu();
+                            else if (result == 61)
+                                safe->checkMissingContent();
+                            else if (result == 10)
                                 safe->performUndo();
                             else if (result == 11)
                                 safe->performRedo();

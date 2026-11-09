@@ -16,6 +16,8 @@
 #include "../GestureKit.h"
 #include "../ModuleSheet.h"
 #include "FxCommon.h"
+#include "../LibraryMenu.h"
+#include "synthyboy/library_items.h"
 
 namespace synthyboy::ui
 {
@@ -30,8 +32,10 @@ public:
           bypassAllButton ("Bypass All"),
           duplicateButton ("Duplicate"),
           removeButton ("Remove"),
-          addButton ("+ Add")
+          addButton ("+ Add"),
+          presetsButton ("Presets")
     {
+        initRackPresets();
         // everything that decides the racks: the order, the power and the rack of the 16 modules, type / power / rack / order of the 16 slots
         const auto watch = [this] (const std::string& key)
         {
@@ -71,7 +75,7 @@ public:
             }
         };
 
-        for (auto* b : { &moveLeftButton, &moveRightButton, &powerButton, &bypassAllButton, &duplicateButton, &removeButton, &addButton })
+        for (auto* b : { &moveLeftButton, &moveRightButton, &powerButton, &bypassAllButton, &duplicateButton, &removeButton, &addButton, &presetsButton })
             addAndMakeVisible (*b);
         refresh();
     }
@@ -317,6 +321,28 @@ public:
     juce::TextButton& duplicateToggleButton() noexcept { return duplicateButton; }
     juce::TextButton& removeSlotButton() noexcept { return removeButton; }
     juce::TextButton& addModuleButton() noexcept { return addButton; }
+    /** FX rack presets (S10-02): the whole chain (modules, order, racks, the pool slots) saved to and loaded from the user library. */
+    juce::TextButton& rackPresetsButton() noexcept { return presetsButton; }
+    LibraryMenu& rackPresets() noexcept { return *rackLibrary; }
+    void initRackPresets()
+    {
+        LibraryMenuSpec spec;
+        spec.category = kLibFxRacks;
+        spec.noun = "FX rack";
+        spec.suggestedName = "My rack";
+        spec.makeItem = [this] (const juce::String& name) { return serializeFxRackPreset (name.toStdString(), readLiveValues (ctx)); };
+        spec.applyItem = [this] (const juce::String&, const std::string& json)
+        {
+            ParamValues values = readLiveValues (ctx);
+            if (applyFxRackPreset (json, values) == 0)
+                return false;
+            applyValues (ctx, values);
+            refresh();
+            return true;
+        };
+        rackLibrary = std::make_shared<LibraryMenu> (ctx, std::move (spec));
+        presetsButton.onClick = [this] { rackLibrary->show (presetsButton); };
+    }
     juce::TextButton& moveLeft() noexcept { return moveLeftButton; }
     juce::TextButton& moveRight() noexcept { return moveRightButton; }
     LongPressDetector& longPress() noexcept { return press; }
@@ -347,7 +373,7 @@ public:
             }
         };
         split (row1, { &moveLeftButton, &moveRightButton, &powerButton, &bypassAllButton });
-        split (row2, { &duplicateButton, &removeButton, &addButton });
+        split (row2, { &duplicateButton, &removeButton, &addButton, &presetsButton });
     }
 
     void paint (juce::Graphics& g) override
@@ -611,7 +637,8 @@ private:
     Layout layout;
     int lastHeight = 0;
 
-    juce::TextButton moveLeftButton, moveRightButton, powerButton, bypassAllButton, duplicateButton, removeButton, addButton;
+    juce::TextButton moveLeftButton, moveRightButton, powerButton, bypassAllButton, duplicateButton, removeButton, addButton, presetsButton;
+    std::shared_ptr<LibraryMenu> rackLibrary;
     LongPressDetector press;
     bool reorderArmed = false, isDragging = false;
     FxRackItem selection, dragItem;

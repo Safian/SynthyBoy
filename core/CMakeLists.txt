@@ -19,6 +19,7 @@ add_library(synthyboy_core STATIC
     src/content_store.cpp
     src/user_content.cpp
     src/user_library.cpp
+    src/library_items.cpp
     src/kick_pages.cpp
     src/shell_features.cpp
     engine-own/own_engine.cpp)

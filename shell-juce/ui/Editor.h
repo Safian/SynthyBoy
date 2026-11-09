@@ -5,6 +5,7 @@
 
 #include <memory>
 
+#include "ContentSheets.h"
 #include "ModSourceBar.h"
 #include "PanelHost.h"
 #include "Strip.h"
@@ -34,6 +35,17 @@ public:
     bool isSourceBarOpen() const noexcept { return sourcesOpen; }
 
     void setSourceBarOpen (bool open);
+
+    // ---- content pipeline (WP-01): Missing Files dialog on load, Vital import with its report ----
+    /** Looks for references the library cannot resolve and opens the Missing Files dialog when there are some (the timer does it after a load). */
+    bool checkMissingContent();
+    /** Menu "Import Vital file...": asks for the file, imports it and shows the report. */
+    void importVitalFromMenu();
+    /** Imports a file and shows the report sheet (the menu and the tests call this). */
+    VitalFlowResult importVitalFile (const juce::File& file);
+    /** The open sheet (Missing Files / Vital report), null when none. */
+    juce::Component* contentSheet() noexcept { return sheet.get(); }
+    void closeContentSheet();
     /** A/B compare: stores the live state in the active slot and applies the other one (decision Q4). */
     void toggleAb();
     void copyActiveToOtherAb();
@@ -73,5 +85,9 @@ private:
     std::unique_ptr<KeyboardStrip> keyboard;
     juce::TooltipWindow tooltips { this, 600 };
     bool sourcesOpen = false;
+    std::unique_ptr<juce::Component> sheet;
+    std::vector<std::unique_ptr<juce::Component>> retiredSheets;
+    uint32_t checkedContentRevision = 0;
+    void showSheet (std::unique_ptr<juce::Component> component);
 };
 } // namespace synthyboy::ui

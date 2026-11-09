@@ -30,6 +30,8 @@
 #include <vector>
 
 #include "../GestureKit.h"
+#include "../LibraryMenu.h"
+#include "synthyboy/user_content.h"
 #include "../model/ModModel.h"
 #include "../UiContext.h"
 #include "synthyboy/shapes/shape.h"
@@ -112,6 +114,12 @@ public:
     bool movePoint (int index, float x, float y);
     bool setSegmentPower (int segment, float power);
     void applyPreset (int builtInShape);
+    /** A shape from the user library / a file (S11 shape presets, 14 row 25): replaces the points, one undo step. */
+    bool applyShapeFile (const LfoShapeFile& shape);
+    /** A `.lfoshape.json` or a Vital `.vitallfo`. */
+    bool applyShapeFromFile (const juce::File& file);
+    /** The menu of the user shape library (save, load, favourites, file); the Presets button shows it below the built-in shapes. */
+    LibraryMenu& libraryMenu() noexcept { return *shapeLibrary; }
     void setSmooth (bool shouldSmooth);
     void setSnap (bool shouldSnap);
     void setDrawTool (bool shouldDraw);
@@ -171,6 +179,7 @@ private:
 
     UiContext& ctx;
     int lfo;
+    std::shared_ptr<LibraryMenu> shapeLibrary;
     bool active = false;
     ContentLfoShape current;
     std::vector<ContentLfoShape> undoStack, redoStack;

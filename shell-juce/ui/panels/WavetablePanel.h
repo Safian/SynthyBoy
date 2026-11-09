@@ -44,6 +44,8 @@ public:
     /** Access to internal wavetable. */
     const wtedit::Wavetable& wavetable() const noexcept { return wt; }
     void setWavetable (const wtedit::Wavetable& newWt);
+    /** The oscillator's table changed in the library (Save Table, a loaded patch): the view shows the real file. */
+    void refreshFromContent();
 
     /** Zoom controls for 3D tilt/zoom. */
     void zoomIn();

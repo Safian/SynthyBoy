@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "WavetablePanel.h"
 
+#include "../ContentIO.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -207,6 +209,16 @@ void WavetableView::updateTableFromChoice()
             tableNameLabel.setFont (ctx.theme.titleFont());
             tableNameLabel.setColour (juce::Label::textColourId, ctx.theme.colours.text);
 
+            // the Preset table: the file the oscillator plays (content.wavetables[osc 1]) from the user library
+            if (idx >= 13)
+            {
+                wtedit::Wavetable stored;
+                if (loadWavetableOf (ctx.host, 1, stored))
+                {
+                    wt = std::move (stored);
+                    tableNameLabel.setText (juce::String (wt.name()), juce::dontSendNotification);
+                }
+            }
             // Re-synthesize table preview if index is built-in
             if (idx < 13)
             {
@@ -243,6 +255,12 @@ void WavetableView::cycleViewMode()
         case ViewMode::mode3D: setViewMode (ViewMode::modeSP); break;
         case ViewMode::modeSP: setViewMode (ViewMode::mode2D); break;
     }
+}
+
+void WavetableView::refreshFromContent()
+{
+    updateTableFromChoice();
+    repaint();
 }
 
 void WavetableView::setWavetable (const wtedit::Wavetable& newWt)
@@ -709,30 +727,19 @@ void WavetablePanel::resized()
 
 void WavetablePanel::openEditorSheet()
 {
-    if (! editorSheet)
-    {
-        wtedit::Wavetable initialWt = waveView ? waveView->wavetable() : wtedit::Wavetable ("Default");
-        editorSheet = std::make_unique<WavetableEditorSheet> (ctx, std::move (initialWt));
-        editorSheet->onClosed = [this] (const wtedit::Wavetable& modifiedWt)
-        {
-            if (waveView)
-                waveView->setWavetable (modifiedWt);
-        };
-    }
-
-    auto* topComp = getTopLevelComponent();
-    if (topComp != nullptr)
-    {
-        topComp->addAndMakeVisible (*editorSheet);
-        editorSheet->setBounds (topComp->getLocalBounds());
-    }
-    else
-    {
-        addAndMakeVisible (*editorSheet);
-        editorSheet->setBounds (getLocalBounds());
-    }
-    editorSheet->setVisible (true);
-    editorSheet->toFront (true);
+    // the editor opens on the table the oscillator really plays: the saved file of the Preset table, else the built-in frames of the view
+    const wtedit::Wavetable builtIn = waveView ? waveView->wavetable() : wtedit::Wavetable ("Default");
+    WavetableEditorSheet::open (ctx, 1, *this, editorSheet, builtIn,
+                                [this] (const wtedit::Wavetable& modifiedWt)
+                                {
+                                    if (waveView)
+                                        waveView->setWavetable (modifiedWt);
+                                },
+                                [this]
+                                {
+                                    if (waveView)
+                                        waveView->refreshFromContent();
+                                });
 }
 
 SYNTHYBOY_REGISTER_PANEL (WavetablePanel, Page::osc, 40)

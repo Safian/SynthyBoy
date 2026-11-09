@@ -8,6 +8,7 @@
 #include <functional>
 #include <string>
 
+#include "../ContentIO.h"
 #include "../ParamHandle.h"
 #include "synthyboy/params.h"
 
@@ -256,15 +257,43 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
     deleteBtn.onClick = [this] { deleteSelected(); };
     undoBtn.onClick = [this] { undo(); };
     redoBtn.onClick = [this] { redo(); };
+    {
+        LibraryMenuSpec spec;
+        spec.category = kLibLfoShapes;
+        spec.noun = "shape";
+        spec.suggestedName = "My shape";
+        spec.makeItem = [this] (const juce::String& name)
+        {
+            LfoShapeFile file;
+            file.name = name.toStdString();
+            file.smooth = current.smooth;
+            file.points = current.points;
+            return file.points.size() >= 2 ? serializeLfoShapeFile (file) : std::string();
+        };
+        spec.applyItem = [this] (const juce::String&, const std::string& json)
+        {
+            LfoShapeFile file;
+            return parseLfoShapeFile (json, file) && applyShapeFile (file);
+        };
+        spec.fileWildcards = "*.json;*.vitallfo";
+        spec.applyFile = [this] (const juce::File& file) { return applyShapeFromFile (file); };
+        shapeLibrary = std::make_shared<LibraryMenu> (ctx, std::move (spec));
+    }
     presetBtn.onClick = [this]
     {
         juce::PopupMenu menu;
         for (int i = 0; i < kNumLfoShapes; ++i)
             menu.addItem (i + 1, lfoShapePresetName (i));
+        menu.addSeparator();
+        shapeLibrary->addTo (menu, 1000);
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetBtn).withMinimumWidth (ctx.theme.ipx (160.0f)),
                             [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
                             {
-                                if (safe != nullptr && result > 0)
+                                if (safe == nullptr || result <= 0)
+                                    return;
+                                if (result >= 1000)
+                                    safe->shapeLibrary->run (result);
+                                else
                                     safe->applyPreset (result - 1);
                             });
     };
@@ -480,6 +509,35 @@ void LfoShapeEditor::applyPreset (int builtInShape)
     current = lfoShapePreset (lfo, builtInShape);
     selectOnly (-1);
     touched();
+}
+
+bool LfoShapeEditor::applyShapeFile (const LfoShapeFile& shape)
+{
+    if (shape.points.size() < kMinPoints || static_cast<int> (shape.points.size()) > kMaxLfoShapePoints)
+        return false;
+    pushUndo();
+    current.points = shape.points;
+    current.smooth = shape.smooth;
+    current.loopPoint = -1;
+    current.name = shape.name;
+    selectOnly (-1);
+    touched();
+    return true;
+}
+
+bool LfoShapeEditor::applyShapeFromFile (const juce::File& file)
+{
+    LfoShapeFile shape;
+    if (file.getFileExtension().equalsIgnoreCase (".vitallfo"))
+    {
+        const auto result = importVitalFile (ctx, file, 0, 0); // a shape is applied below to THIS editor's LFO, not to a slot chosen by the flow
+        if (! result.imported.ok || result.imported.kind != VitalFileKind::lfo)
+            return false;
+        shape = result.imported.lfoShape;
+    }
+    else if (! parseLfoShapeFile (file.loadFileAsString().toStdString(), shape))
+        return false;
+    return applyShapeFile (shape);
 }
 
 void LfoShapeEditor::setSmooth (bool shouldSmooth)

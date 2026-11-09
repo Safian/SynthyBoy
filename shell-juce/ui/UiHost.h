@@ -101,6 +101,8 @@ public:
     /** Asks the user for a file; `done` is called on the message thread with the chosen file, never with a file that does not exist (open), and not at
         all when the user cancels. Returns false (and never calls `done`) when the host cannot ask. */
     virtual bool requestFile (const FileRequest& /*request*/, std::function<void (const juce::File&)> /*done*/) { return false; }
+    /** True when requestFile () can ask (the menus dim their file entries otherwise). */
+    virtual bool canRequestFile() const noexcept { return false; }
     /** Bumped whenever a whole document is loaded (setStateInformation, loadPatch, initPatch, revert): the editor looks for missing files then. */
     virtual uint32_t contentRevision() const noexcept { return 0; }
 

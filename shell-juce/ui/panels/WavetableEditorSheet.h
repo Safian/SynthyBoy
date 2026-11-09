@@ -10,7 +10,9 @@
 #include <string>
 #include <vector>
 
+#include "../ContentIO.h"
 #include "../GestureKit.h"
+#include "../LibraryMenu.h"
 #include "../Theme.h"
 #include "../UiContext.h"
 #include "../model/GestureModel.h"
@@ -60,6 +62,36 @@ public:
 
     /** Closes sheet and notifies listener. */
     std::function<void(const wtedit::Wavetable&)> onClosed;
+    /** The table was written to the library and the oscillator now plays it (Save Table / Embed in Preset). */
+    std::function<void()> onSaved;
+
+    // ---- content pipeline (WP-01 b): the oscillator this sheet edits, the library, real files ----
+    /** The oscillator (1..3) whose table is edited; Save Table attaches the file to it. */
+    void setTargetOsc (int osc);
+    int targetOsc() const noexcept { return oscIndex; }
+    /** True while the table has edits that are not saved. */
+    bool modified() const noexcept { return isModified; }
+    /** Save Table: a 16-bit WAV into the user library, `content.wavetables[osc]`, oscN.wavetable = Preset table. Embed in Preset: the same into the embedded
+        pack of the preset. */
+    FlowResult saveToLibrary (bool embed);
+    /** The last status line (also in the header). */
+    const juce::String& statusText() const noexcept { return statusMessage; }
+
+    enum class ImportKind { audio, image, wavetable };
+    /** Real import of a file: audio (decoded with juce::AudioFormatManager, the worker thread of importAudioAsync), image (decoded with the JUCE image formats,
+        luminance), wavetable (a WAV of 2048 sample cycles, a single cycle WAV or a Vital .vitaltable). Audio returns once the worker runs. */
+    bool importFile (const juce::File& file, ImportKind kind, const wtedit::ImportOptions& options = {});
+    /** Writes the export bytes of `format` to `file`. */
+    bool exportToFile (wtedit::ExportFormat format, const juce::File& file);
+    /** The formula presets of the user library (Presets button of the formula view) and the entry the tests use. */
+    LibraryMenu* formulaLibraryMenu() noexcept;
+    bool applyFormulaItem (const std::string& json);
+
+    /** Opens (or re-shows) the editor on top of `anchor`'s top level component for oscillator `osc`: the table is the one in the library when
+        oscN.wavetable is the Preset table, else `builtIn`. `holder` keeps the sheet between calls. */
+    static WavetableEditorSheet& open (UiContext& context, int osc, juce::Component& anchor, std::unique_ptr<WavetableEditorSheet>& holder,
+                                       const wtedit::Wavetable& builtIn, std::function<void(const wtedit::Wavetable&)> onClosedCallback,
+                                       std::function<void()> onSavedCallback);
 
     /** Import helpers for direct programmatic invocation (and tests). */
     bool importAudioData (const float* samples, size_t numSamples, double sampleRate, const wtedit::ImportOptions& opts);
@@ -90,6 +122,9 @@ public:
     juce::Component* spectrumComponent() noexcept;
     juce::Component* thumbnailsComponent() noexcept;
     juce::Component* importSheetComponent() noexcept;
+    /** The Import sheet's file choice (tests answer it without a dialog): Choose, then Import with the tab of `kind`. */
+    void chooseImportFile (const juce::File& file, ImportKind kind);
+    void pressImport();
     /** The long-press detectors of the wave canvas (hold still = nudge stroke) and of the thumbnail strip (hold = reorder); the tests fire them. */
     LongPressDetector* waveLongPress() noexcept;
     LongPressDetector* thumbnailLongPress() noexcept;
@@ -162,8 +197,13 @@ private:
     void showMorphMenu();
     void showImportDialog();
     void exportWavPrompt (wtedit::ExportFormat format);
+    void replaceTable (wtedit::Wavetable newTable);
+    void say (const juce::String& text);
 
     UiContext& ctx;
+    int oscIndex = 1;
+    juce::String statusMessage;
+    juce::File lastImportFile;
     wtedit::Wavetable wt;
     wtedit::UndoStack undoStack { 50 };
     bool undoPending = false;   // an edit started after the last recorded state

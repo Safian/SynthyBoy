@@ -475,3 +475,77 @@ ContentCache& contentCache (UiContext& ctx)
     return *ctx.view->contentCache;
 }
 } // namespace synthyboy::ui
+
+namespace synthyboy::ui
+{
+void MissingFilesModel::refresh()
+{
+    missing.clear();
+    if (auto* library = ctx.host.contentLibrary())
+        missing = findMissingContent (ctx.host.content(), *library);
+}
+
+juce::String MissingFilesModel::describe (size_t row) const
+{
+    if (row >= missing.size())
+        return {};
+    const MissingContent& m = missing[row];
+    const char* kind = m.kind == ContentKind::wavetable ? "wavetable" : (m.kind == ContentKind::sample ? "sample" : "impulse response");
+    juce::String text = m.kind == ContentKind::impulse ? juce::String ("Convolve ") + kind : "Osc " + juce::String (m.osc) + " " + kind;
+    text << ": " << (m.ref.name.empty() ? juce::String (m.ref.file) : juce::String (m.ref.name));
+    text << (m.reason == MissingReason::hashMismatch ? " (the file changed since the preset was saved)" : " (not found)");
+    return text;
+}
+
+FlowResult MissingFilesModel::locate (size_t row, const juce::File& file, bool acceptDifferent)
+{
+    auto* library = ctx.host.contentLibrary();
+    if (library == nullptr || row >= missing.size())
+        return fail ("nothing to locate");
+    const std::vector<uint8_t> bytes = readFileBytes (file);
+    if (bytes.empty())
+        return fail ("the file cannot be read");
+    std::vector<uint8_t> stored = bytes;
+    if (missing[row].kind != ContentKind::wavetable && ! isWavBytes (bytes)) // the library keeps WAV; another format is converted
+    {
+        DecodedAudio audio;
+        juce::String error;
+        if (! decodeAudioFile (file, audio, &error))
+            return fail (error);
+        stored = encodeWav (audio.left.data(), audio.right.empty() ? nullptr : audio.right.data(), audio.left.size(), juce::roundToInt (audio.sampleRate), 24);
+    }
+    auto content = ctx.host.content();
+    if (! relinkMissing (content, missing[row], stored, utf8 (file.getFileName()), *library, acceptDifferent))
+        return fail (missing[row].ref.sha256.empty() ? juce::String ("the file could not be stored") : juce::String ("this is not the file the preset was saved with"));
+    if (! commit (ctx, content))
+        return fail ("the content was refused");
+    contentCache (ctx).clear();
+    refresh();
+    return done ("Located " + file.getFileName());
+}
+
+FlowResult MissingFilesModel::remove (size_t row)
+{
+    if (row >= missing.size())
+        return fail ("nothing to remove");
+    auto content = ctx.host.content();
+    dropMissing (content, missing[row]);
+    if (! commit (ctx, content))
+        return fail ("the content was refused");
+    contentCache (ctx).clear();
+    refresh();
+    return done ("Reference removed");
+}
+
+FlowResult MissingFilesModel::removeAll()
+{
+    auto content = ctx.host.content();
+    for (const auto& m : missing)
+        dropMissing (content, m);
+    if (! commit (ctx, content))
+        return fail ("the content was refused");
+    contentCache (ctx).clear();
+    refresh();
+    return done ("References removed");
+}
+} // namespace synthyboy::ui

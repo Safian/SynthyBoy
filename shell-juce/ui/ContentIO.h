@@ -97,3 +97,31 @@ ContentCache& contentCache (UiContext& ctx);
 const ContentSample* sampleOf (const StateContent& content, int osc) noexcept;
 const ContentWavetable* wavetableOf (const StateContent& content, int osc) noexcept;
 } // namespace synthyboy::ui
+
+namespace synthyboy::ui
+{
+/** The logic of the Missing Files dialog (S13-13, S01-08): the references of the loaded patch the library cannot resolve, and the answers (locate the
+    file, remove the reference). The dialog component only shows the rows and calls these. */
+class MissingFilesModel
+{
+public:
+    explicit MissingFilesModel (UiContext& context) : ctx (context) { refresh(); }
+
+    /** Looks at the host content again. */
+    void refresh();
+    const std::vector<MissingContent>& items() const noexcept { return missing; }
+    bool empty() const noexcept { return missing.empty(); }
+    /** Row text: "Osc 2 wavetable: Pad.wav (not found)". */
+    juce::String describe (size_t row) const;
+    /** The user located a file for the row: it is added to the library and the reference follows. A file whose SHA-256 differs from the reference is
+        refused unless `acceptDifferent`. */
+    FlowResult locate (size_t row, const juce::File& file, bool acceptDifferent = false);
+    /** Drops the reference of the row from the content (the engine falls back: saw / silence / bypass). */
+    FlowResult remove (size_t row);
+    FlowResult removeAll();
+
+private:
+    UiContext& ctx;
+    std::vector<MissingContent> missing;
+};
+} // namespace synthyboy::ui

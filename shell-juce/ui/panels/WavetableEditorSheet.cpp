@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "WavetableEditorSheet.h"
 
+#include "../ContentIO.h"
+#include "../LibraryMenu.h"
+#include "synthyboy/library_items.h"
+
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -829,47 +833,69 @@ private:
         }
     }
 
+    void ensureLibrary()
+    {
+        if (formulaLibrary == nullptr)
+        {
+            LibraryMenuSpec spec;
+            spec.category = kLibFormulas;
+            spec.noun = "formula";
+            spec.suggestedName = "My formula";
+            spec.makeItem = [this] (const juce::String& name)
+            {
+                const auto text = formulaInput.getText().toStdString();
+                return text.empty() ? std::string() : serializeFormulaItem (name.toStdString(), text);
+            };
+            spec.applyItem = [this] (const juce::String&, const std::string& json) { return setFormulaFromItem (json); };
+            spec.fileWildcards = "*.json";
+            spec.applyFile = [this] (const juce::File& file) { return setFormulaFromItem (file.loadFileAsString().toStdString()); };
+            formulaLibrary = std::make_shared<LibraryMenu> (owner.ctx, std::move (spec));
+        }
+    }
+
     void showPresetsMenu()
     {
+        ensureLibrary();
         juce::PopupMenu menu;
-        juce::PopupMenu singles;
-        singles.addItem (1, "Sine: sin(2*pi*x)");
-        singles.addItem (2, "Saw: 1 - 2*w");
-        singles.addItem (3, "Square: x < 0 ? -1 : 1");
-        singles.addItem (4, "Triangle: abs(2*x) - 1");
-        singles.addItem (5, "2nd Harmonic: sin(2*pi*x) + 0.5*sin(4*pi*x)");
-        singles.addItem (6, "Bell Partials: sin(2*pi*x) + 0.7*sin(5.5*pi*x)");
-
-        juce::PopupMenu multis;
-        multis.addItem (10, "Saw to Square: (1 - 2*w) * (1 - y) + (x < 0 ? -1 : 1) * y");
-        multis.addItem (11, "Harmonic Sweep: sin(2*pi*x * (1 + y * 7))");
-        multis.addItem (12, "Formant Sweep: sin(2*pi*x) * (1 - y) + sin(6*pi*x) * y");
-        multis.addItem (13, "Spectral Partials (q): q < 16 ? 1.0 / q : 0.0");
-
-        menu.addSubMenu ("Singles", singles);
-        menu.addSubMenu ("Multis", multis);
-
+        juce::PopupMenu examples;
+        const auto& list = formulaExamples();
+        for (size_t i = 0; i < list.size(); ++i)
+            examples.addItem (static_cast<int> (i) + 1, juce::String (list[i].name) + ":  " + list[i].expression);
+        menu.addSubMenu ("Examples", examples);
+        menu.addSeparator();
+        formulaLibrary->addTo (menu, 1000);
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetsBtn),
-            [this] (int result)
+            [this, library = formulaLibrary] (int result)
             {
-                switch (result)
+                if (result >= 1000)
+                    library->run (result);
+                else if (result > 0 && static_cast<size_t> (result) <= formulaExamples().size())
                 {
-                    case 1:  formulaInput.setText ("sin(2*pi*x)"); break;
-                    case 2:  formulaInput.setText ("1 - 2*w"); break;
-                    case 3:  formulaInput.setText ("x < 0 ? -1 : 1"); break;
-                    case 4:  formulaInput.setText ("abs(2*x) - 1"); break;
-                    case 5:  formulaInput.setText ("sin(2*pi*x) + 0.5*sin(4*pi*x)"); break;
-                    case 6:  formulaInput.setText ("sin(2*pi*x) + 0.7*sin(5.5*pi*x)"); break;
-                    case 10: formulaInput.setText ("(1 - 2*w) * (1 - y) + (x < 0 ? -1 : 1) * y"); break;
-                    case 11: formulaInput.setText ("sin(2*pi*x * (1 + y * 7))"); break;
-                    case 12: formulaInput.setText ("sin(2*pi*x) * (1 - y) + sin(6*pi*x) * y"); break;
-                    case 13: formulaInput.setText ("q < 16 ? 1.0 / q : 0.0"); break;
-                    default: break;
+                    formulaInput.setText (formulaExamples()[static_cast<size_t> (result) - 1].expression);
+                    validateFormula();
                 }
-                validateFormula();
             });
     }
 
+public:
+    /** Makes the library menu (also done by the Presets button). */
+    void openLibrary() { ensureLibrary(); }
+    /** Sets the text field from a formula item of the user library; false when it is not one. */
+    bool setFormulaFromItem (const std::string& json)
+    {
+        std::string name, expression;
+        if (! parseFormulaItem (json, name, expression))
+            return false;
+        formulaInput.setText (expression);
+        validateFormula();
+        return true;
+    }
+    LibraryMenu* library() noexcept { return formulaLibrary.get(); }
+    const juce::String formulaText() const { return formulaInput.getText(); }
+    void setFormulaText (const juce::String& text) { formulaInput.setText (text); validateFormula(); }
+
+private:
+    std::shared_ptr<LibraryMenu> formulaLibrary;
     WavetableEditorSheet& owner;
     juce::TextEditor formulaInput;
     juce::TextButton applyBtn { "Apply" };
@@ -1181,6 +1207,7 @@ private:
 class WavetableEditorSheet::ImportSheet final : public juce::Component
 {
 public:
+    using ImportKind = WavetableEditorSheet::ImportKind;
     ImportSheet (WavetableEditorSheet& ownerSheet)
         : owner (ownerSheet)
     {
@@ -1200,6 +1227,8 @@ public:
             setVisible (false);
         };
         importBtn.onClick = [this] { doImport(); };
+        chooseBtn.onClick = [this] { chooseFile(); };
+        addAndMakeVisible (chooseBtn);
 
         interpolateToggle.setToggleState (true, juce::dontSendNotification);
         fadeEdgesToggle.setToggleState (false, juce::dontSendNotification);
@@ -1234,7 +1263,7 @@ public:
         channelChoice.setSelectedId (1, juce::dontSendNotification);
 
         samplesPerCycleBox.setText ("2048");
-        infoLabel.setText ("Select file and method to import into wavetable", juce::dontSendNotification);
+        infoLabel.setText ("Choose a file and a method", juce::dontSendNotification);
     }
 
     void resized() override
@@ -1248,6 +1277,8 @@ public:
         imageTabBtn.setBounds (tabs.removeFromLeft (tabW));
         wtTabBtn.setBounds (tabs);
 
+        r.removeFromTop (t.gap());
+        chooseBtn.setBounds (r.removeFromTop (t.touch()));
         r.removeFromTop (t.gap());
         methodChoice.setBounds (r.removeFromTop (t.touch()));
         r.removeFromTop (t.gap());
@@ -1295,61 +1326,78 @@ public:
     }
 
 private:
+    /** The Choose button: the host asks for a file, the sheet remembers it. The wildcard follows the tab. */
+    void chooseFile()
+    {
+        FileRequest request;
+        request.title = imageTabBtn.getToggleState() ? "Import an image as a wavetable" : (wtTabBtn.getToggleState() ? "Import a wavetable" : "Import audio as a wavetable");
+        request.wildcards = imageTabBtn.getToggleState() ? "*.png;*.jpg;*.jpeg;*.gif"
+                                                         : (wtTabBtn.getToggleState() ? "*.wav;*.vitaltable;*.flac;*.aif;*.aiff" : audioFileWildcard());
+        request.purpose = "wavetable";
+        if (! owner.ctx.host.requestFile (request, [safe = juce::Component::SafePointer<ImportSheet> (this)] (const juce::File& file)
+            {
+                if (safe != nullptr)
+                    safe->setChosen (file);
+            }))
+            infoLabel.setText ("This host cannot ask for a file", juce::dontSendNotification);
+    }
+
     void doImport()
     {
-        owner.pushUndo();
-
-        if (imageTabBtn.getToggleState())
+        if (! chosen.existsAsFile())
         {
-            // Sample image import: 64x64 grayscale test buffer
-            std::vector<uint8_t> gray (64 * 64, 128);
-            for (size_t y = 0; y < 64; ++y)
-                for (size_t x = 0; x < 64; ++x)
-                    gray[y * 64 + x] = static_cast<uint8_t> ((x * 4 + y * 2) % 256);
-
-            owner.importImageData (gray.data(), 64, 64);
+            chooseFile(); // nothing chosen yet: Import asks for the file first
+            return;
         }
-        else
+        wtedit::ImportOptions opts;
+        opts.channel = (channelChoice.getSelectedId() == 2) ? 1 : 0;
+        opts.fadeEdges = fadeEdgesToggle.getToggleState();
+        opts.normalize = normalizeToggle.getToggleState();
+        opts.frameSize = static_cast<size_t> (samplesPerCycleBox.getText().getIntValue());
+        if (opts.frameSize < 32)
+            opts.frameSize = 2048;
+        switch (methodChoice.getSelectedId())
         {
-            // Synthesize audio import test data (2 seconds saw sweep)
-            const double sr = 44100.0;
-            const size_t numSamples = static_cast<size_t> (sr * 2.0);
-            std::vector<float> samples (numSamples, 0.0f);
-            for (size_t i = 0; i < numSamples; ++i)
-            {
-                const double t = static_cast<double> (i) / sr;
-                const double freq = 110.0 + 220.0 * (t / 2.0);
-                const double phase = std::fmod (t * freq, 1.0);
-                samples[i] = static_cast<float> (1.0 - 2.0 * phase);
-            }
-
-            wtedit::ImportOptions opts;
-            opts.channel = (channelChoice.getSelectedId() == 2) ? 1 : 0;
-            opts.fadeEdges = fadeEdgesToggle.getToggleState();
-            opts.normalize = normalizeToggle.getToggleState();
-            opts.frameSize = static_cast<size_t> (samplesPerCycleBox.getText().getIntValue());
-            if (opts.frameSize < 32)
-                opts.frameSize = 2048;
-
-            switch (methodChoice.getSelectedId())
-            {
-                case 1: opts.mode = wtedit::ImportMode::PitchAverage; break;
-                case 2: opts.mode = wtedit::ImportMode::PitchDetectZeroSnap; break;
-                case 3: opts.mode = wtedit::ImportMode::PitchDetectFollow; break;
-                case 4: opts.mode = wtedit::ImportMode::ByFrameSize; break;
-                case 5: opts.mode = wtedit::ImportMode::Fft256; break;
-                case 6: opts.mode = wtedit::ImportMode::Fft512; break;
-                case 7: opts.mode = wtedit::ImportMode::Fft1024; break;
-                case 8: opts.mode = wtedit::ImportMode::Fft2048; break;
-                default: opts.mode = wtedit::ImportMode::PitchAverage; break;
-            }
-
-            owner.importAudioAsync (std::move (samples), sr, opts);
-            return; // the sheet stays up with its progress bar until the worker is done
+            case 1: opts.mode = wtedit::ImportMode::PitchAverage; break;
+            case 2: opts.mode = wtedit::ImportMode::PitchDetectZeroSnap; break;
+            case 3: opts.mode = wtedit::ImportMode::PitchDetectFollow; break;
+            case 4: opts.mode = wtedit::ImportMode::ByFrameSize; break;
+            case 5: opts.mode = wtedit::ImportMode::Fft256; break;
+            case 6: opts.mode = wtedit::ImportMode::Fft512; break;
+            case 7: opts.mode = wtedit::ImportMode::Fft1024; break;
+            case 8: opts.mode = wtedit::ImportMode::Fft2048; break;
+            default: opts.mode = wtedit::ImportMode::PitchAverage; break;
         }
-
-        setVisible (false);
+        const auto kind = imageTabBtn.getToggleState() ? ImportKind::image : (wtTabBtn.getToggleState() ? ImportKind::wavetable : ImportKind::audio);
+        if (! owner.importFile (chosen, kind, opts))
+        {
+            infoLabel.setText (owner.statusText().isEmpty() ? juce::String ("Import failed") : owner.statusText(), juce::dontSendNotification);
+            return;
+        }
+        if (kind != ImportKind::audio)
+            setVisible (false);
+        // audio: the sheet stays up with its progress bar until the worker is done
     }
+
+public:
+    void setChosen (const juce::File& file)
+    {
+        chosen = file;
+        infoLabel.setText (file.getFileName(), juce::dontSendNotification);
+        chooseBtn.setButtonText (file.getFileName());
+    }
+    const juce::File& chosenFile() const noexcept { return chosen; }
+    void selectKind (ImportKind kind)
+    {
+        audioTabBtn.setToggleState (kind == ImportKind::audio, juce::dontSendNotification);
+        imageTabBtn.setToggleState (kind == ImportKind::image, juce::dontSendNotification);
+        wtTabBtn.setToggleState (kind == ImportKind::wavetable, juce::dontSendNotification);
+    }
+    void pressImport() { doImport(); }
+
+private:
+    juce::File chosen;
+    juce::TextButton chooseBtn { "Choose file..." };
 
     WavetableEditorSheet& owner;
     juce::TextButton audioTabBtn { "Audio" };
@@ -1578,6 +1626,7 @@ void WavetableEditorSheet::pushUndo()
     commitPendingUndo();
     undoPending = true;
     isModified = true;
+    statusMessage = {};
     updateHeaderInfo();
 }
 
@@ -1643,7 +1692,8 @@ void WavetableEditorSheet::layoutToolButtons (juce::Rectangle<int>& area)
 
 void WavetableEditorSheet::updateHeaderInfo()
 {
-    titleLabel.setText ("OSC 1  \"" + juce::String (wt.name()) + "\"" + (isModified ? " *" : ""),
+    titleLabel.setText ("OSC " + juce::String (oscIndex) + "  \"" + juce::String (wt.name()) + "\"" + (isModified ? " *" : "")
+                            + (statusMessage.isNotEmpty() ? "  -  " + statusMessage : juce::String()),
                         juce::dontSendNotification);
     titleLabel.setFont (ctx.theme.titleFont());
     titleLabel.setColour (juce::Label::textColourId, ctx.theme.colours.text);
@@ -2069,8 +2119,8 @@ void WavetableEditorSheet::showOptionsMenu()
                 case 2: exportWavPrompt (wtedit::ExportFormat::Wav16Bit); break;
                 case 3: exportWavPrompt (wtedit::ExportFormat::Wav32BitFloat); break;
                 case 4: exportWavPrompt (wtedit::ExportFormat::SingleCycle); break;
-                case 5: isModified = false; updateHeaderInfo(); break;
-                case 6: isModified = false; updateHeaderInfo(); break;
+                case 5: saveToLibrary (false); break;
+                case 6: saveToLibrary (true); break;
                 case 7: moveFrameTo (currentFrameIndex, currentFrameIndex - 1); break; // the visible alternative of the thumbnail drag
                 case 8: moveFrameTo (currentFrameIndex, currentFrameIndex + 1); break;
                 default: break;
@@ -2227,13 +2277,216 @@ void WavetableEditorSheet::showImportDialog()
 
 void WavetableEditorSheet::exportWavPrompt (wtedit::ExportFormat format)
 {
+    FileRequest request;
+    request.mode = FileRequest::Mode::save;
+    request.title = format == wtedit::ExportFormat::SingleCycle ? "Export the frame as a single cycle WAV" : "Export the wavetable as a WAV file";
+    request.wildcards = "*.wav";
+    request.purpose = "export";
+    request.suggestedName = juce::String (wt.name()).replaceCharacters ("/\\:", "___") + ".wav";
+    if (! ctx.host.requestFile (request, [safe = juce::Component::SafePointer<WavetableEditorSheet> (this), format] (const juce::File& file)
+        {
+            if (safe != nullptr)
+                safe->exportToFile (format, file.hasFileExtension ("wav") ? file : file.withFileExtension ("wav"));
+        }))
+        say ("This host cannot ask for a file");
+}
+
+bool WavetableEditorSheet::exportToFile (wtedit::ExportFormat format, const juce::File& file)
+{
     wtedit::ExportOptions opts;
     opts.format = format;
     opts.singleFrameIndex = currentFrameIndex;
-
     std::vector<uint8_t> wavBytes;
-    wtedit::exportWav (wt, opts, wavBytes);
-    // In headless or mobile, the buffer is generated and verified
+    if (! wtedit::exportWav (wt, opts, wavBytes) || ! writeFileBytes (file, wavBytes))
+    {
+        say ("Export failed: " + file.getFileName());
+        return false;
+    }
+    say ("Exported " + file.getFileName());
+    return true;
+}
+
+void WavetableEditorSheet::say (const juce::String& text)
+{
+    statusMessage = text;
+    updateHeaderInfo();
+}
+
+void WavetableEditorSheet::setTargetOsc (int osc)
+{
+    oscIndex = juce::jlimit (1, kMaxContentWavetables, osc);
+    updateHeaderInfo();
+}
+
+FlowResult WavetableEditorSheet::saveToLibrary (bool embed)
+{
+    commitPendingUndo();
+    const FlowResult result = saveWavetable (ctx, oscIndex, wt, embed);
+    if (result.ok)
+    {
+        isModified = false;
+        if (onSaved)
+            onSaved();
+    }
+    say (result.message);
+    return result;
+}
+
+void WavetableEditorSheet::replaceTable (wtedit::Wavetable newTable)
+{
+    pushUndo();
+    wt = std::move (newTable);
+    currentFrameIndex = 0;
+    vitalGroup.initFromWavetable (wt);
+    isModified = true;
+    refreshAll();
+}
+
+bool WavetableEditorSheet::importFile (const juce::File& file, ImportKind kind, const wtedit::ImportOptions& options)
+{
+    lastImportFile = file;
+    switch (kind)
+    {
+        case ImportKind::audio:
+        {
+            DecodedAudio audio;
+            juce::String error;
+            if (! decodeAudioFile (file, audio, &error))
+            {
+                say ("Import failed: " + error);
+                return false;
+            }
+            wtedit::ImportOptions opts = options;
+            const std::vector<float>& channel = (opts.channel == 1 && ! audio.right.empty()) ? audio.right : audio.left;
+            if (! importAudioAsync (channel, audio.sampleRate, opts))
+            {
+                say ("Import failed: an import is already running");
+                return false;
+            }
+            return true;
+        }
+        case ImportKind::image:
+        {
+            juce::Image image = juce::ImageFileFormat::loadFrom (file);
+            if (! image.isValid())
+            {
+                say ("Import failed: not an image this build can read");
+                return false;
+            }
+            if (image.getWidth() > 256 || image.getHeight() > 1024)
+                image = image.rescaled (juce::jmin (256, image.getWidth()), juce::jmin (1024, image.getHeight()));
+            std::vector<uint8_t> gray (static_cast<size_t> (image.getWidth()) * static_cast<size_t> (image.getHeight()));
+            for (int y = 0; y < image.getHeight(); ++y)
+                for (int x = 0; x < image.getWidth(); ++x)
+                {
+                    const auto c = image.getPixelAt (x, y);
+                    gray[static_cast<size_t> (y) * static_cast<size_t> (image.getWidth()) + static_cast<size_t> (x)] =
+                        static_cast<uint8_t> (juce::roundToInt (0.299f * c.getFloatRed() * 255.0f + 0.587f * c.getFloatGreen() * 255.0f + 0.114f * c.getFloatBlue() * 255.0f));
+                }
+            pushUndo();
+            if (! importImageData (gray.data(), image.getWidth(), image.getHeight()))
+            {
+                say ("Import failed: the image gives no table");
+                return false;
+            }
+            return true;
+        }
+        case ImportKind::wavetable:
+        {
+            wtedit::Wavetable table (file.getFileNameWithoutExtension().toStdString());
+            std::vector<uint8_t> bytes = readFileBytes (file);
+            if (file.hasFileExtension ("vitaltable"))
+            {
+                auto* library = ctx.host.contentLibrary();
+                if (library == nullptr)
+                {
+                    say ("This host keeps no content library");
+                    return false;
+                }
+                const auto imported = importVitalFileForPlugin (file.getFileName().toStdString(), bytes, *library, ctx.host.userDirectory(), ctx.host.engineCaps());
+                bytes.clear();
+                if (! imported.ok || ! library->readFile (imported.tableRef, bytes))
+                {
+                    say ("Import failed: " + juce::String (imported.error));
+                    return false;
+                }
+            }
+            if (bytes.empty() || ! wavetableFromWav (bytes, table.name(), table))
+            {
+                DecodedAudio audio; // a wavetable in a format other than WAV: its samples are cut into 2048 sample cycles
+                juce::String error;
+                if (! decodeAudioFile (file, audio, &error))
+                {
+                    say ("Import failed: " + error);
+                    return false;
+                }
+                const std::vector<uint8_t> wav = encodeWav (audio.left.data(), nullptr, audio.left.size(), juce::roundToInt (audio.sampleRate), 16);
+                if (! wavetableFromWav (wav, table.name(), table))
+                {
+                    say ("Import failed: no table in the file");
+                    return false;
+                }
+            }
+            replaceTable (std::move (table));
+            say ("Imported " + file.getFileName());
+            return true;
+        }
+    }
+    return false;
+}
+
+void WavetableEditorSheet::chooseImportFile (const juce::File& file, ImportKind kind)
+{
+    if (importSheet == nullptr)
+        return;
+    showImportDialog();
+    importSheet->selectKind (kind);
+    importSheet->setChosen (file);
+}
+
+void WavetableEditorSheet::pressImport()
+{
+    if (importSheet != nullptr)
+        importSheet->pressImport();
+}
+
+LibraryMenu* WavetableEditorSheet::formulaLibraryMenu() noexcept
+{
+    if (formulaView == nullptr)
+        return nullptr;
+    formulaView->openLibrary();
+    return formulaView->library();
+}
+
+bool WavetableEditorSheet::applyFormulaItem (const std::string& json)
+{
+    return formulaView != nullptr && formulaView->setFormulaFromItem (json);
+}
+
+WavetableEditorSheet& WavetableEditorSheet::open (UiContext& context, int osc, juce::Component& anchor, std::unique_ptr<WavetableEditorSheet>& holder,
+                                                   const wtedit::Wavetable& builtIn, std::function<void(const wtedit::Wavetable&)> onClosedCallback,
+                                                   std::function<void()> onSavedCallback)
+{
+    // unsaved edits survive closing the sheet; a saved (or never edited) sheet starts again from the table the oscillator really plays
+    if (holder == nullptr || holder->targetOsc() != osc || ! holder->modified())
+    {
+        wtedit::Wavetable initial = builtIn;
+        wtedit::Wavetable stored;
+        if (loadWavetableOf (context.host, osc, stored)
+            && juce::roundToInt (readParameter (context.host, ("osc" + std::to_string (osc) + ".wavetable").c_str())) == choiceIndexOf (("osc" + std::to_string (osc) + ".wavetable").c_str(), "Preset"))
+            initial = std::move (stored);
+        holder = std::make_unique<WavetableEditorSheet> (context, std::move (initial));
+        holder->setTargetOsc (osc);
+    }
+    holder->onClosed = std::move (onClosedCallback);
+    holder->onSaved = std::move (onSavedCallback);
+    auto* top = anchor.getTopLevelComponent();
+    juce::Component& parent = top != nullptr ? *top : anchor;
+    parent.addAndMakeVisible (*holder);
+    holder->setBounds (parent.getLocalBounds());
+    holder->setVisible (true);
+    holder->toFront (true);
+    return *holder;
 }
 
 void WavetableEditorSheet::paint (juce::Graphics& g)
