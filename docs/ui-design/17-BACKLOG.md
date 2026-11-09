@@ -29,9 +29,9 @@ Built from [16-COVERAGE-FINAL.md](16-COVERAGE-FINAL.md) (row ids such as S04-02 
 | WP-08 | Matrix RISE / FALL and control-sheet extras - DONE (GROUPB) | S11 RISE / FALL, Aux submenu, G69 matrix part | 0 | engine + content + UI + tests | mod-amount merged | B |
 | WP-09 | MPE completion (B24) - DONE (GROUPA1) | S15-21, S15-04 (MPE part), V01 | 4 | engine + keys + Kick + UI + tests | none | A |
 | WP-10 | FX remainder (B25) - DONE (GROUPA1) | S10 delay left offset, reverb FEEDBACK, rack operations, rack presets, multi-instance (decision) | 2 | engine + keys + Kick + UI + tests | WP-01 for rack presets | A |
-| WP-11 | Granular oscillator (B26) | S05 (7 rows), 02-24, 02-25 | 36-48 | new DSP package + keys + Kick + UI + tests | WP-01 (sample load); sample-osc package | C |
-| WP-12 | Spectral oscillator (B27) | S06 (7 rows), 02-26 | 24-36 | new DSP package + keys + Kick + UI + tests | WP-01 | C |
-| WP-13 | Multisample oscillator (B28) | S03 (5 rows) | 30-42 | instrument content + DSP + keys + Kick + UI + tests | WP-01 | C |
+| WP-11 | Granular oscillator (B28) - DONE (GROUPC) | S05 (7 rows), 02-24, 02-25 | 36-48 | new DSP package + keys + Kick + UI + tests | WP-01 (sample load); sample-osc package | C |
+| WP-12 | Spectral oscillator (B29) - DONE (GROUPC) | S06 (7 rows), 02-26 | 24-36 | new DSP package + keys + Kick + UI + tests | WP-01 | C |
+| WP-13 | Multisample oscillator (B30) - DONE (GROUPC) | S03 (5 rows) | 30-42 | instrument content + DSP + keys + Kick + UI + tests | WP-01 | C |
 | WP-14 | Sample-class to wavetable | S04-last, S05-last, S06-last (G51) | 0 | conversion + UI + tests | WP-01, WP-11 / 12 for the Granular / Spectral entry points | D |
 | WP-15 | Offline render: Resample, Render OSC Warp, share audio | S01-09, S13-16, S13-17, S15-05 (ultra render) | 0 | engine offline API + UI + tests | WP-01 | D |
 | WP-16 | Wavetable frame <-> LFO shape | S11 copy row | 0 | UI + tests | WP-01 | D |
@@ -100,7 +100,7 @@ Keys (4): `master.mpe.xyz_macro` (Off, XYZ -> Macro 1 / 2 / 3, YZ -> Macro 1 / 2
 
 Keys (2): `delay.offset_left`, `reverb.feedback` (specs in MANUALCHECK-REPORT section 4). Rack operations: cut / copy / paste / clear a bus, rack presets (WP-01 f); multi-instance modules only if the owner reverses A19 (WP-19). Tests: t_fxextra pattern.
 
-### WP-11 / WP-12 / WP-13 Granular, Spectral, Multisample (blocks B26, B27, B28)
+### WP-11 / WP-12 / WP-13 Granular, Spectral, Multisample (DONE on branch `work-groupC`, GROUPC-REPORT.md; built as blocks B28, B29, B30 with the assumptions A412 .. A434, 13-new-keys 4.37 .. 4.39; the capability bits live in a second word)
 
 Each: a new DSP package under `core/` (granular, spectral STFT resynthesis, multisample zones with envelope), a new `oscN.type` entry (append after Sample; capability bit proven by an off / on render), per-oscillator keys, panel in OscWaveView, Kick pages, tests. They reuse the sample region keys (`oscN.sample.start/end/loop_*`, `scan`, `uni_*`) wherever the manual says the operations are shared (S p.71, 88, 108), so only the type-specific keys are new.
 * Granular (36-48 keys over 3 oscillators): window amount / skew / shape, density, length, grain randomization, spawn pattern, X|Y control, pitch-preserving scan (the varispeed scan of S04 is the reason this oscillator exists).

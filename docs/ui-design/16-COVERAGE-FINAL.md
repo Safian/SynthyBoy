@@ -37,10 +37,10 @@ Items that no earlier list named (found in this audit, all in the tables above):
 |------|-----:|-----:|--------:|--------:|------------:|----------:|---------:|
 | S01 Serum 2: welcome, basics, pitch, routing, module menu (p.13-36) | 24 | 16 | 2 | 2 | 0 | 0 | 4 |
 | S02 Serum 2: wavetable oscillator, unison, warp (p.37-57) | 38 | 33 | 4 | 1 | 0 | 0 | 0 |
-| S03 Serum 2: multisample oscillator (p.58-67) | 5 | 0 | 0 | 5 | 0 | 0 | 0 |
+| S03 Serum 2: multisample oscillator (p.58-67) | 5 | 5 | 0 | 0 | 0 | 0 | 0 |
 | S04 Serum 2: sample oscillator (p.68-84) | 18 | 7 | 5 | 5 | 0 | 0 | 1 |
-| S05 Serum 2: granular oscillator (p.85-103) | 7 | 0 | 0 | 7 | 0 | 0 | 0 |
-| S06 Serum 2: spectral oscillator (p.104-122) | 7 | 0 | 0 | 7 | 0 | 0 | 0 |
+| S05 Serum 2: granular oscillator (p.85-103) | 7 | 6 | 0 | 1 | 0 | 0 | 0 |
+| S06 Serum 2: spectral oscillator (p.104-122) | 7 | 6 | 0 | 1 | 0 | 0 | 0 |
 | S07 Serum 2: sub and noise (p.123-132) | 8 | 5 | 0 | 3 | 0 | 0 | 0 |
 | S08 Serum 2: filters (p.133-143) | 17 | 9 | 3 | 4 | 0 | 1 | 0 |
 | S09 Serum 2: mixer and routing (p.144-151) | 7 | 7 | 0 | 0 | 0 | 0 | 0 |
@@ -138,11 +138,11 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
-| S03-01 | S p.58-60 | Multisample: select instrument / SFZ, zone display | MISSING | none | G19; needs instrument content format + content store |
-| S03-02 | S p.61-62 | Multisample envelope (OVERRIDE, DELAY, A, H, D, S, R) | MISSING | none | G19 |
-| S03-03 | S p.62 | Multisample VEL TRACK, RAND | MISSING | none | G19 |
-| S03-04 | S p.63-66 | Multisample TIMBRE, unison, warp, pan, level | MISSING | none (pan / level exist as osc keys) | G19 |
-| S03-05 | S p.67 | Switch the last note played to a sample | MISSING | none | G19 |
+| S03-01 | S p.58-60 | Multisample: select instrument / SFZ, zone display | **DONE (GROUPC)** | GROUPC WP-13: `OscWaveView::paintMultisample`, `loadInstrumentFile`; SFZ instrument in `content.instruments[]` | - |
+| S03-02 | S p.61-62 | Multisample envelope (OVERRIDE, DELAY, A, H, D, S, R) | **DONE (GROUPC)** | GROUPC WP-13: `oscN.multi.override / delay / attack / hold / decay / sustain / release`, `LayerVoice` envelope | - |
+| S03-03 | S p.62 | Multisample VEL TRACK, RAND | **DONE (GROUPC)** | GROUPC WP-13: `oscN.multi.vel_track / vel_override`, `oscN.random_phase` | - |
+| S03-04 | S p.63-66 | Multisample TIMBRE, unison, warp, pan, level | **DONE (GROUPC)** | GROUPC WP-13: `oscN.multi.timbre`, the oscillator's own unison / warp / pan / level | - |
+| S03-05 | S p.67 | Switch the last note played to a sample | **DONE (GROUPC)** | GROUPC WP-13: `switchToSingleSample` (`ContentIO.cpp`) | - |
 
 ### S04 Serum 2: sample oscillator (p.68-84)
 
@@ -171,24 +171,24 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
-| S05-01 | S p.85-90 | Granular: select, start / end, operations, loop menu, crossfade | MISSING | none | G21 (Q6: decide later) |
-| S05-02 | S p.91-92 | Granular window amount / skew / shape | MISSING | none | G21 |
-| S05-03 | S p.93-95 | Granular unison START / SPAN / SPAWN pattern | MISSING | none | G21 |
-| S05-04 | S p.96-98 | Granular X\|Y control | MISSING | none | G21 |
-| S05-05 | S p.99-101 | Granular warp mode, scan, density, length | MISSING | none | G21 |
-| S05-06 | S p.102 | Granular grain randomization, pan, level | MISSING | none | G21 |
+| S05-01 | S p.85-90 | Granular: select, start / end, operations, loop menu, crossfade | **DONE (GROUPC)** | GROUPC WP-11: `oscN.type` Granular, shared region / loop keys, `loop_grains`, `manual` | - |
+| S05-02 | S p.91-92 | Granular window amount / skew / shape | **DONE (GROUPC)** | GROUPC WP-11: `oscN.gran.window_*`, the thumbnail | - |
+| S05-03 | S p.93-95 | Granular unison START / SPAN / SPAWN pattern | **DONE (GROUPC)** | GROUPC WP-11: shared `uni_start / uni_span`, `oscN.gran.spawn_pattern` | - |
+| S05-04 | S p.96-98 | Granular X\|Y control | **DONE (GROUPC)** | GROUPC WP-11: `oscN.gran.y_axis / xy_y`, the X\\|Y dot | - |
+| S05-05 | S p.99-101 | Granular warp mode, scan, density, length | **DONE (GROUPC)** | GROUPC WP-11: shared warp keys, `scan*`, `density*`, `length*` | - |
+| S05-06 | S p.102 | Granular grain randomization, pan, level | **DONE (GROUPC)** | GROUPC WP-11: `oscN.gran.rand_*`, `reverse_grains` | - |
 | S05-07 | S p.103 | Granular: switch to wavetable | MISSING | none | G51 |
 
 ### S06 Serum 2: spectral oscillator (p.104-122)
 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
-| S06-01 | S p.104-106 | Spectral: select, start / end | MISSING | none | G22 |
-| S06-02 | S p.107 | Spectral high / low frequency markers | MISSING | none | G22 |
-| S06-03 | S p.108-110 | Spectral operations, loop menu, crossfade | MISSING | none | G22 |
-| S06-04 | S p.111-113 | Spectral unison | MISSING | none | G22 |
-| S06-05 | S p.114-115 | Spectral X\|Y control | MISSING | none | G22 |
-| S06-06 | S p.116-121 | Spectral scan, cut, filter curve, mix, warp mode, pan, level | MISSING | none | G22 |
+| S06-01 | S p.104-106 | Spectral: select, start / end | **DONE (GROUPC)** | GROUPC WP-12: `oscN.type` Spectral, spectrogram, shared start / end | - |
+| S06-02 | S p.107 | Spectral high / low frequency markers | **DONE (GROUPC)** | GROUPC WP-12: `oscN.spec.freq_lo / freq_hi / lohi_smooth / lohi_post_warp`, the frequency strip | - |
+| S06-03 | S p.108-110 | Spectral operations, loop menu, crossfade | **DONE (GROUPC)** | GROUPC WP-12: shared loop keys, `manual`, `position` | - |
+| S06-04 | S p.111-113 | Spectral unison | **DONE (GROUPC)** | GROUPC WP-12: shared unison keys | - |
+| S06-05 | S p.114-115 | Spectral X\|Y control | **DONE (GROUPC)** | GROUPC WP-12: `oscN.spec.y_axis / xy_y` | - |
+| S06-06 | S p.116-121 | Spectral scan, cut, filter curve, mix, warp mode, pan, level | **DONE (GROUPC)** | GROUPC WP-12: `scan*`, `cut`, `mix`, the filter graph, `phase_lock`, `transients`, 23 spectral warps | - |
 | S06-07 | S p.122 | Spectral: switch to wavetable | MISSING | none | G51 |
 
 ### S07 Serum 2: sub and noise (p.123-132)
@@ -655,9 +655,9 @@ Count of the 84: DIFFERENT 2, DONE 40, IN-PROGRESS 4, MISSING 11, PARTIAL 27.
 
 | Row | Gesture | Status | Reason |
 |-----|---------|--------|--------|
-| 02-24 | X\|Y dot (granular / spectral) | GAP | no granular / spectral oscillator |
-| 02-25 | Window button (granular) | GAP | no granular oscillator |
-| 02-26 | Spectral Lo / Hi markers, spectral filter editor | GAP | no spectral oscillator |
+| 02-24 | X\|Y dot (granular / spectral) | **DONE (GROUPC)** | closed (GROUPC WP-11 / WP-12): see UI-GESTURE-AUDIT 02-24 |
+| 02-25 | Window button (granular) | **DONE (GROUPC)** | closed (GROUPC WP-11): see UI-GESTURE-AUDIT 02-25 |
+| 02-26 | Spectral Lo / Hi markers, spectral filter editor | **DONE (GROUPC)** | closed (GROUPC WP-12): see UI-GESTURE-AUDIT 02-26 |
 
 The audit's 'closed' rows describe gestures that work on the data the UI has. Rows whose data is not connected (wavetable editor save / import / export, sample view, Convolve IR, preference toggles, Lock Matrix) are listed in section 2 and in S04, S10, S11, S13, S15.
 
