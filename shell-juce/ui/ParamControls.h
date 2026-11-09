@@ -96,6 +96,13 @@ public:
     /** Arms the source of the modulator in `slot` (what the list entry does). False if that slot does not modulate this control. */
     bool selectModulator (int slot);
     bool modulatorListShown() const noexcept { return badgeMenuShown; }
+    /** Where the engine plays the control now (normalised), -1 while it is not subscribed to the live bus (not modulated, not on screen, no read-out). */
+    float liveNormalisedValue() const noexcept { return liveSubscribed ? liveNormalised : -1.0f; }
+    bool liveSubscription() const noexcept { return liveSubscribed; }
+    /** One update of the live bus, called by the bus (and by the tests after they polled it). */
+    void liveTick();
+    /** Re-reads whether the control is modulated and on screen (the JUCE visibility callbacks call it; the tests call it too). */
+    void refreshLiveSubscription() { updateLiveSubscription(); }
     /** The value bubble is up (while a drag runs and the preference "Param value tooltips" is on). */
     bool bubbleShown() const noexcept { return bubble != nullptr && bubble->getParentComponent() != nullptr; }
     /** Shift-Alt-click (Appendix G): the polarity of the modulations of this control is switched (all of them to the opposite of the first). False if there is none. */
@@ -127,6 +134,11 @@ private:
     juce::Point<float> lastTapPos;
     bool pressed = false, dragging = false, assignDrag = false, badgePress = false, badgeMenuShown = false;
     void showModulatorList();
+    void updateLiveSubscription();
+    void visibilityChanged() override;
+    void parentHierarchyChanged() override;
+    bool liveSubscribed = false;
+    float liveNormalised = -1.0f;
     FineZone zone = FineZone::normal;
 };
 

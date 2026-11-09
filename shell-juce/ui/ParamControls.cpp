@@ -100,7 +100,50 @@ void ParamControl::paintUnknownKey (juce::Graphics& g) const
 
 ParamDragControl::~ParamDragControl()
 {
+    ctx.live->remove (this);
     hideBubble();
+}
+
+/** WP-17: a control that is modulated and on screen asks the engine for its modulated value and listens to the live bus. */
+void ParamDragControl::updateLiveSubscription()
+{
+    const bool want = handle.valid() && handle.modulatable() && LiveBus::shown (*this) && ! ctx.assign.snapshot().entriesFor (handle.index()).empty();
+    if (want == liveSubscribed)
+        return;
+    liveSubscribed = want;
+    if (want)
+    {
+        ctx.live->subscribe (this, { handle.index() });
+        ctx.live->listen (this, [this] { liveTick(); });
+    }
+    else
+    {
+        ctx.live->remove (this);
+        liveNormalised = -1.0f;
+        updateRing();
+    }
+}
+
+void ParamDragControl::liveTick()
+{
+    if (! liveSubscribed || ! handle.valid())
+        return;
+    const float live = ctx.live->hasLive (handle.index()) ? toNormalised (handle.info(), ctx.live->liveOf (handle.index(), handle.plain())) : -1.0f;
+    if (std::fabs (live - liveNormalised) > 0.002f)
+    {
+        liveNormalised = live;
+        updateRing();
+    }
+}
+
+void ParamDragControl::visibilityChanged()
+{
+    updateLiveSubscription();
+}
+
+void ParamDragControl::parentHierarchyChanged()
+{
+    updateLiveSubscription();
 }
 
 void ParamDragControl::initRing()
@@ -131,6 +174,7 @@ void ParamDragControl::valueChanged()
 
 void ParamDragControl::assignStateChanged()
 {
+    updateLiveSubscription();
     updateRing();
     repaint();
 }
@@ -147,6 +191,7 @@ void ParamDragControl::updateRing()
     s.activeSlot = ctx.assign.flow().activeSlot();
     s.midiCc = ctx.host.midiCcForKey (handle.key());
     s.learning = ctx.host.midiLearnKey() == handle.key();
+    s.live = liveSubscribed ? liveNormalised : -1.0f;
     ring->setState (std::move (s));
 }
 

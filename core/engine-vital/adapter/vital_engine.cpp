@@ -665,6 +665,7 @@ public:
 
         activeCount.store (engine->getNumActiveVoices(), std::memory_order_relaxed);
         latencyCache.store (engine->latencyFrames(), std::memory_order_relaxed);
+        updateReadout();
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -1209,6 +1210,149 @@ private:
             s.auxPowerParam = p.auxPower;
             s.auxOutputParam = p.auxOutput;
         }
+
+        resolveReadout();
+    }
+
+    /** GROUPA2 (WP-17): the pointers the audio thread reads for the display, looked up here once (the lookups walk maps). */
+    void resolveReadout()
+    {
+        destReadout.assign (paramCount(), DestReadout {});
+        for (size_t i = 0; i < paramCount(); ++i)
+        {
+            const Binding* b = vitalBindingOf (i);
+            if (b == nullptr || b->frameOsc != 0 || b->conv == Conv::index || b->conv == Conv::indexMap || ! sbvital::Parameters::isParameter (b->control))
+                continue;
+            destReadout[i].binding = b;
+        }
+        // what a connection adds to its destination, as the Vital display reads it: "modulation_amount_N" is amount x source in units of the destination's range
+        for (int k = 0; k < kNumSlots; ++k)
+            amountStatus[static_cast<size_t> (k)] = engine->getStatusOutput ("modulation_amount_" + std::to_string (k + 1));
+        for (int k = 0; k < kNumModSources; ++k)
+            sourceStatus[static_cast<size_t> (k)] = engine->getStatusOutput (vitalSourceName (k));
+        for (int n = 0; n < kNumMacro; ++n)
+            macroValue[static_cast<size_t> (n)] = control ("macro_control_" + std::to_string (n + 1));
+        for (int n = 0; n < kNumLfo; ++n)
+            lfoPhaseStatus[static_cast<size_t> (n)] = engine->getStatusOutput ("lfo_" + std::to_string (n + 1) + "_phase");
+        for (int n = 0; n < 6; ++n)
+            envPhaseStatus[static_cast<size_t> (n)] = engine->getStatusOutput ("env_" + std::to_string (n + 1) + "_phase");
+    }
+
+    void setReadoutTargets (const int* paramIndices, int count) noexcept override
+    {
+        const int n = paramIndices == nullptr ? 0 : std::clamp (count, 0, LiveValues::kMaxTargets);
+        for (int i = 0; i < n; ++i)
+            readoutTarget[static_cast<size_t> (i)].store (paramIndices[i], std::memory_order_relaxed);
+        readoutCount.store (n, std::memory_order_release);
+    }
+
+    bool copyReadout (LiveValues& out) const noexcept override
+    {
+        out.block = readoutBlock.load (std::memory_order_acquire);
+        if (out.block == 0)
+            return false;
+        out.activeVoices = readoutVoices.load (std::memory_order_relaxed);
+        for (int k = 0; k < LiveValues::kMaxSources; ++k)
+            out.source[k] = readoutSource[static_cast<size_t> (k)].load (std::memory_order_relaxed);
+        for (int n = 0; n < LiveValues::kNumLfos; ++n)
+            out.lfoPhase[n] = readoutLfoPhase[static_cast<size_t> (n)].load (std::memory_order_relaxed);
+        for (int n = 0; n < LiveValues::kNumEnvs; ++n)
+        {
+            out.envStage[n] = readoutEnvStage[static_cast<size_t> (n)].load (std::memory_order_relaxed);
+            out.envPosition[n] = readoutEnvPosition[static_cast<size_t> (n)].load (std::memory_order_relaxed);
+        }
+        out.numTargets = std::min (readoutShown.load (std::memory_order_acquire), LiveValues::kMaxTargets);
+        for (int i = 0; i < out.numTargets; ++i)
+            out.target[i] = readoutValue[static_cast<size_t> (i)].load (std::memory_order_relaxed);
+        return true;
+    }
+
+    /** End of every block (audio thread): the sources, the phases and the modulated value of the subscribed knobs. */
+    void updateReadout() noexcept
+    {
+        const int voices = engine->getNumActiveVoices();
+        readoutVoices.store (voices, std::memory_order_relaxed);
+        const auto clean = [] (float v) noexcept { return std::isfinite (v) && std::fabs (v) < 1.0e6f ? v : 0.0f; };
+        for (int k = 0; k < kNumModSources; ++k)
+        {
+            const sbvital::StatusOutput* s = sourceStatus[static_cast<size_t> (k)];
+            float v = s != nullptr ? clean (s->value()[0]) : 0.0f;
+            // the macros are global: their control is the value, also while no voice sounds (the status output only follows the voices)
+            const int macro = k >= kSourceMacro1 && k < kSourceMacro1 + 4 ? k - kSourceMacro1 : (k >= kSourceMacro5 && k < kSourceMacro5 + 4 ? k - kSourceMacro5 + 4 : -1);
+            if (macro >= 0 && macroValue[static_cast<size_t> (macro)] != nullptr)
+                v = clean (macroValue[static_cast<size_t> (macro)]->value());
+            readoutSource[static_cast<size_t> (k)].store (v, std::memory_order_relaxed);
+        }
+        for (int n = 0; n < kNumLfo; ++n)
+        {
+            const sbvital::StatusOutput* s = lfoPhaseStatus[static_cast<size_t> (n)];
+            float phase = -1.0f;
+            if (s != nullptr && voices > 0)
+            {
+                const float encoded = clean (s->value()[0]);
+                phase = sbvital::utils::decodePhaseAndVoice (sbvital::poly_float (encoded)).first[0];
+            }
+            readoutLfoPhase[static_cast<size_t> (n)].store (phase, std::memory_order_relaxed);
+        }
+        for (int n = 0; n < 6; ++n)
+        {
+            const sbvital::StatusOutput* s = envPhaseStatus[static_cast<size_t> (n)];
+            float stage = 0.0f, position = 0.0f;
+            if (s != nullptr && voices > 0)
+            {
+                const float raw = clean (s->value()[0]);
+                const float state = std::floor (raw);
+                position = std::clamp (raw - state, 0.0f, 1.0f);
+                // VoiceEvent: 2 on (attack), 3 hold, 4 decay, 5 off (release), 6 kill; 0 / 1 invalid / idle
+                stage = state >= 2.0f ? std::min (state - 1.0f, 5.0f) : 0.0f;
+            }
+            readoutEnvStage[static_cast<size_t> (n)].store (stage, std::memory_order_relaxed);
+            readoutEnvPosition[static_cast<size_t> (n)].store (position, std::memory_order_relaxed);
+        }
+
+        const int count = readoutCount.load (std::memory_order_acquire);
+        const double sr = sampleRate > 0.0 ? sampleRate : 48000.0;
+        for (int i = 0; i < count; ++i)
+        {
+            const int index = readoutTarget[static_cast<size_t> (i)].load (std::memory_order_relaxed);
+            float live = 0.0f;
+            if (index >= 0 && static_cast<size_t> (index) < destReadout.size())
+            {
+                const float plain = params[static_cast<size_t> (index)].load (std::memory_order_relaxed);
+                live = plain;
+                const DestReadout& r = destReadout[static_cast<size_t> (index)];
+                if (r.binding != nullptr)
+                {
+                    // the sum of the connections that end here (the slots are wired by this thread: their fields are read without a lock)
+                    const int choice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (index)));
+                    double delta = 0.0;
+                    if (choice > 0 && static_cast<size_t> (choice) < destinations.size())
+                    {
+                        const double scale = destinations[static_cast<size_t> (choice)].scale;
+                        for (int k = 0; k < kNumSlots; ++k)
+                        {
+                            const Slot& slot = slots[static_cast<size_t> (k)];
+                            const sbvital::StatusOutput* amount = amountStatus[static_cast<size_t> (k)];
+                            if (slot.connected && slot.destination == choice && amount != nullptr)
+                                delta += static_cast<double> (clean (amount->value()[0])) * scale;
+                        }
+                    }
+                    if (delta != 0.0 && std::isfinite (delta))
+                    {
+                        const double raw = convertParam (*r.binding, static_cast<double> (plain), sr, transport.bpm) + delta;
+                        const double inverted = invertParam (*r.binding, raw, sr, transport.bpm);
+                        if (std::isfinite (inverted))
+                        {
+                            const ParamInfo& info = paramTable()[static_cast<size_t> (index)];
+                            live = static_cast<float> (std::clamp (inverted, static_cast<double> (info.min), static_cast<double> (info.max)));
+                        }
+                    }
+                }
+            }
+            readoutValue[static_cast<size_t> (i)].store (live, std::memory_order_relaxed);
+        }
+        readoutShown.store (count, std::memory_order_release);
+        readoutBlock.store (readoutBlock.load (std::memory_order_relaxed) + 1u, std::memory_order_release);
     }
 
     // ---- parameters -> controls ------------------------------------------------------------------------------------
@@ -2648,6 +2792,24 @@ private:
     int oversample4xParam = -1, noSmoothingParam = -1;
     bool preparedOversample4x = false;
     std::atomic<bool> ultraRender { false };
+    // GROUPA2 (WP-17): the live read-out for the display (written at the end of every block, read by copyReadout ())
+    struct DestReadout
+    {
+        const Binding* binding = nullptr;
+    };
+    std::vector<DestReadout> destReadout;
+    std::array<const sbvital::StatusOutput*, kNumSlots> amountStatus {};
+    std::array<const sbvital::StatusOutput*, 48> sourceStatus {};
+    std::array<sbvital::Value*, 8> macroValue {};
+    std::array<const sbvital::StatusOutput*, 10> lfoPhaseStatus {};
+    std::array<const sbvital::StatusOutput*, 6> envPhaseStatus {};
+    std::array<std::atomic<int>, LiveValues::kMaxTargets> readoutTarget {};
+    std::atomic<int> readoutCount { 0 }, readoutShown { 0 }, readoutVoices { 0 };
+    std::array<std::atomic<float>, LiveValues::kMaxTargets> readoutValue {};
+    std::array<std::atomic<float>, LiveValues::kMaxSources> readoutSource {};
+    std::array<std::atomic<float>, LiveValues::kNumLfos> readoutLfoPhase {};
+    std::array<std::atomic<float>, LiveValues::kNumEnvs> readoutEnvStage {}, readoutEnvPosition {};
+    std::atomic<uint32_t> readoutBlock { 0 };
     std::array<sbvital::Value*, kNumOsc> vSmooth {};
     sbvital::Value* vFilter1Input = nullptr;
     sbvital::Value* vFilter2Input = nullptr;

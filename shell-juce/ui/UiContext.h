@@ -9,6 +9,7 @@
 
 #include "Theme.h"
 #include "model/FxKeySet.h"
+#include "LiveBus.h"
 #include "UiHost.h"
 #include "model/ModModel.h"
 
@@ -87,6 +88,8 @@ struct UiContext
     /** Block B22: the panel is built for a slot of the effect instance pool. Every key of the panel is then resolved through this set (FxKeySet), so one panel
         class edits instance 0 (null, the keys as written) and any slot. */
     std::shared_ptr<const FxKeySet> keys = nullptr;
+    /** The live values of the engine for the displays (GROUPA2 WP-17); shared by every context copy of the editor. */
+    std::shared_ptr<LiveBus> live = std::make_shared<LiveBus> (host);
 
     juce::AudioProcessorValueTreeState& apvts() const { return host.parameters(); }
     /** The key of a control of a panel: resolveKey () for instance 0, the slot's key and the ParamInfo of the type's key for a pool slot. */

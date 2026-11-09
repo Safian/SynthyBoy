@@ -93,6 +93,8 @@ public:
     int activeVoiceCount() const noexcept override { return voiceCount.load (std::memory_order_relaxed); }
     float cpuLoad() const noexcept override { return cpu.load (std::memory_order_relaxed); }
     int copyScope (float* dest, int maxSamples) const override;
+    void setReadoutTargets (const std::vector<int>& paramIndices) override { if (engine != nullptr) engine->setReadoutTargets (paramIndices.data(), static_cast<int> (paramIndices.size())); }
+    bool copyReadout (synthyboy::LiveValues& out) const override { return engine != nullptr && engine->copyReadout (out); }
     synthyboy::StateContent content() const override;
     bool setContent (const synthyboy::StateContent& newContent) override;
     void reloadContent() override;

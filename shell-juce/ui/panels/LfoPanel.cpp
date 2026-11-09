@@ -17,6 +17,7 @@
 
 #include "../Panel.h"
 #include "../ParamHandle.h"
+#include "LfoPanelProbe.h"
 #include "LfoShapeEditor.h"
 
 namespace synthyboy::ui
@@ -114,7 +115,7 @@ class LfoShapeView final : public juce::Component
 {
 public:
     LfoShapeView (UiContext& context, const std::string& prefix, int lfoIndex, bool randomLfo)
-        : ctx (context), random (randomLfo),
+        : ctx (context), random (randomLfo), number (lfoIndex),
           shapeHandle (context, prefix + (randomLfo ? ".style" : ".shape")),
           phaseHandle (context, prefix + ".phase"),
           syncHandle (context, prefix + ".sync"),
@@ -139,6 +140,8 @@ public:
         rateHandle.onChange = [this] { repaint(); };
         divisionHandle.onChange = [this] { repaint(); };
         refresh();
+        // WP-17: the playhead of the LFO (and the trace of a random LFO) follows the engine while the view is on screen
+        ctx.live->bind (*this, {}, [this] { repaint (plot); });
     }
 
     ~LfoShapeView() override
@@ -230,6 +233,8 @@ public:
         g.setColour (c.warn);
         g.drawVerticalLine (juce::roundToInt (markerX), area.getY(), area.getBottom());
 
+        paintLive (g, area, phase);
+
         // rate read-out
         g.setColour (c.textDim);
         g.setFont (t.labelFont());
@@ -258,7 +263,60 @@ public:
 
     juce::TextButton prev, next;
 
+    /** WP-17: where the engine is in the cycle of this LFO (a playhead and a dot on the curve), or the last seconds of a random LFO (a trace). Public for the tests:
+        the playhead position in the plot as a fraction of its width, -1 when the engine plays no voice with this LFO. */
+    float playheadFraction() const
+    {
+        if (random || ! ctx.live->available() || number < 1 || number > LiveValues::kNumLfos)
+            return -1.0f;
+        const float engine = ctx.live->values().lfoPhase[number - 1];
+        if (engine < 0.0f)
+            return -1.0f;
+        const float start = phaseHandle.valid() ? phaseHandle.plain() / 360.0f : 0.0f;
+        return std::fmod (engine - start + 2.0f, 1.0f);   // the plot starts at the phase marker
+    }
+    juce::Rectangle<int> plotBounds() const noexcept { return plot; }
+
 private:
+    void paintLive (juce::Graphics& g, juce::Rectangle<float> area, float startPhase)
+    {
+        const auto& t = ctx.theme;
+        const auto& c = t.colours;
+        if (! ctx.live->available())
+            return;
+        if (random)
+        {
+            // the trace of the last seconds (oldest on the left), the newest value as a dot at the right edge
+            const auto history = ctx.live->randomHistory (number);
+            juce::Path trace;
+            for (size_t i = 0; i < history.size(); ++i)
+            {
+                const float x = area.getX() + area.getWidth() * static_cast<float> (i) / static_cast<float> (history.size() - 1);
+                const float y = area.getCentreY() - juce::jlimit (-1.0f, 1.0f, history[i]) * area.getHeight() * 0.45f;
+                if (i == 0) trace.startNewSubPath (x, y); else trace.lineTo (x, y);
+            }
+            g.setColour (c.mod.withAlpha (0.85f));
+            g.strokePath (trace, juce::PathStrokeType (t.px (1.5f)));
+            const float r = t.px (4.0f);
+            g.fillEllipse (area.getRight() - r, area.getCentreY() - juce::jlimit (-1.0f, 1.0f, history.back()) * area.getHeight() * 0.45f - r, 2.0f * r, 2.0f * r);
+            return;
+        }
+        const float fraction = playheadFraction();
+        if (fraction < 0.0f)
+            return;
+        (void) startPhase;
+        const float x = area.getX() + fraction * area.getWidth();
+        g.setColour (c.text.withAlpha (0.8f));
+        g.drawVerticalLine (juce::roundToInt (x), area.getY(), area.getBottom());
+        const float value = ctx.live->source (liveSourceChoice (number));
+        const float r = t.px (4.0f);
+        g.setColour (c.mod);
+        g.fillEllipse (x - r, area.getCentreY() - juce::jlimit (-1.0f, 1.0f, value) * area.getHeight() * 0.45f - r, 2.0f * r, 2.0f * r);
+    }
+
+    /** Modulation source choice value of LFO n: lfo1 .. lfo8 are 7 .. 14, lfo9 and lfo10 33 and 34. */
+    static int liveSourceChoice (int n) noexcept { return n <= 8 ? 6 + n : 24 + n; }
+
     void refresh()
     {
         if (random)
@@ -326,6 +384,7 @@ private:
 
     UiContext& ctx;
     bool random;
+    int number;
     ParamHandle shapeHandle, phaseHandle, syncHandle, rateHandle, divisionHandle;
     juce::Rectangle<int> nameArea, plot;
     std::array<float, kDisplayPoints> randomCurveCache {};
@@ -426,6 +485,10 @@ private:
     bool random;
     ParamHandle syncHandle;
     std::unique_ptr<LfoShapeView> visual;
+
+public:
+    LfoShapeView* display() noexcept { return visual.get(); }
+    bool isRandom() const noexcept { return random; }
 };
 
 template <int N>
@@ -474,4 +537,16 @@ SYNTHYBOY_REGISTER_PANEL (RandomLfo1Panel, Page::lfo, 110)
 SYNTHYBOY_REGISTER_PANEL (RandomLfo2Panel, Page::lfo, 120)
 SYNTHYBOY_REGISTER_PANEL (RandomLfo3Panel, Page::lfo, 130)
 SYNTHYBOY_REGISTER_PANEL (RandomLfo4Panel, Page::lfo, 140)
+
+bool probeLfoPanel (Panel& panel, LfoLiveProbe& out)
+{
+    auto* lfo = dynamic_cast<LfoPanelBase*> (&panel);
+    if (lfo == nullptr || lfo->display() == nullptr)
+        return false;
+    out.random = lfo->isRandom();
+    out.playhead = lfo->display()->playheadFraction();
+    out.plot = lfo->display()->plotBounds();
+    out.bound = LiveBus::shown (*lfo->display());
+    return true;
+}
 } // namespace synthyboy::ui

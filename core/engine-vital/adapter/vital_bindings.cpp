@@ -560,6 +560,26 @@ double convertParam (const Binding& binding, double plain, double sampleRate, do
     return plain;
 }
 
+double invertParam (const Binding& binding, double raw, double sampleRate, double bpm)
+{
+    (void) sampleRate;
+    switch (binding.conv)
+    {
+        case Conv::quarticBeats: return std::pow (std::max (0.0, raw), 4.0) * std::max (bpm, 1.0) / 60.0;
+        case Conv::linear:       return binding.a != 0.0 ? (raw - binding.b) / binding.a : std::nan ("");
+        case Conv::sqrtScaled:   return binding.a != 0.0 ? std::max (0.0, raw) * std::max (0.0, raw) / binding.a : std::nan ("");
+        case Conv::quarticMs:    return std::pow (std::max (0.0, raw), 4.0) * 1000.0;
+        case Conv::log2Ms:       return std::exp2 (raw) * 1000.0;
+        case Conv::log2Hz:       return std::exp2 (raw);
+        case Conv::log2PeriodMs: return 1000.0 / std::exp2 (raw);
+        case Conv::noteFromHz:   return kMidi0Hz * std::exp2 (raw / 12.0);
+        case Conv::volumeDb:     return std::sqrt (std::max (0.0, raw)) - 80.0;
+        case Conv::index:
+        case Conv::indexMap:     return std::nan ("");
+    }
+    return std::nan ("");
+}
+
 void resolveFxOrder (const float* choices, int* order, int count)
 {
     bool used[kNumFxSlots] = {};

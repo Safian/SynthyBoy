@@ -3,7 +3,9 @@
 // Headless: a real processor with a temp user directory, audio through processBlock, the panels as components. Synthetic fixtures only.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
 #include <cmath>
+#include <set>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -24,7 +26,10 @@
 #include "ui/Editor.h"
 #include "ui/LibraryMenu.h"
 #include "ui/Sheet.h"
+#include "ui/panels/EnvCurveView.h"
 #include "ui/panels/FxRackView.h"
+#include "ui/panels/GlbMpePanel.h"
+#include "ui/panels/LfoPanelProbe.h"
 #include "ui/panels/GlbSettingsPanel.h"
 #include "ui/panels/GlbVoiceControlPanel.h"
 #include "ui/panels/LfoShapeEditor.h"
@@ -1691,4 +1696,390 @@ TEST (content_a_new_instance_takes_the_mpe_preferences_unless_the_user_saved_a_d
         CHECK_EQ (plainOfKey (withDefault, "master.mpe.on"), 0.0f);
     }
     CHECK (h.proc.clearUserDefault());
+}
+
+// ---- GROUPA2 (WP-17): the live read-out of the engine on the displays ---------------------------------------------------------------------------------
+
+namespace
+{
+void blocksOf (SynthyBoyProcessor& proc, int count, juce::MidiBuffer first = {})
+{
+    for (int i = 0; i < count; ++i)
+    {
+        juce::AudioBuffer<float> buffer (2, 256);
+        buffer.clear();
+        juce::MidiBuffer midi;
+        if (i == 0)
+            midi = first;
+        proc.processBlock (buffer, midi);
+    }
+}
+
+juce::MidiBuffer noteOnAt (int key, float velocity = 0.9f)
+{
+    juce::MidiBuffer m;
+    m.addEvent (juce::MidiMessage::noteOn (1, key, velocity), 0);
+    return m;
+}
+
+int indexOfKey (const char* key) { return findParamIndex (findParamByKey (key)->id); }
+
+/** Routes `source` to `destination` in the next free slot of the processor. */
+void routeSlot (SynthyBoyProcessor& proc, int slot, const char* sourceKey, const char* destinationKey, float amount)
+{
+    char key[24];
+    std::snprintf (key, sizeof key, "mod%02d.source", slot);
+    setParameter (proc, key, static_cast<float> (sourceChoiceForKey (sourceKey)));
+    std::snprintf (key, sizeof key, "mod%02d.destination", slot);
+    setParameter (proc, key, static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (indexOfKey (destinationKey)))));
+    std::snprintf (key, sizeof key, "mod%02d.amount", slot);
+    setParameter (proc, key, amount);
+}
+} // namespace
+
+TEST (content_live_bus_merges_subscriptions_and_delivers_the_values_of_the_engine)
+{
+    Host h ("live_bus");
+    LiveBus& bus = *h.ctx.live;
+    CHECK (! bus.available());
+    bus.poll();
+    CHECK (! bus.available());                       // the engine has not run a block yet
+    blocksOf (h.proc, 2);
+    bus.poll();
+    CHECK (bus.available());
+    CHECK_EQ (bus.values().activeVoices, 0);
+
+    const int cutoff = indexOfKey ("filter1.cutoff"), level = indexOfKey ("osc1.level"), resonance = indexOfKey ("filter1.resonance");
+    int a = 0, b = 0;
+    bus.subscribe (&a, { cutoff, level });
+    bus.subscribe (&b, { level, resonance, -1 });    // a duplicate is merged, an index of -1 is left out
+    bus.poll();
+    CHECK ((bus.targets() == std::vector<int> { cutoff, level, resonance }));
+    blocksOf (h.proc, 1);
+    bus.poll();
+    CHECK_EQ (bus.values().numTargets, 3);
+    CHECK (bus.hasLive (cutoff) && bus.hasLive (level) && bus.hasLive (resonance));
+    CHECK (! bus.hasLive (indexOfKey ("osc2.level")));
+    CHECK_NEAR (bus.liveOf (cutoff, -1.0f), readParameter (h.proc, "filter1.cutoff"), 1.0e-3);
+    CHECK_NEAR (bus.liveOf (indexOfKey ("osc2.level"), 123.0f), 123.0, 1.0e-6);   // not subscribed: the fallback
+
+    // a modulation makes the live value differ from the knob
+    routeSlot (h.proc, 1, "macro1", "filter1.cutoff", 50.0f);
+    setParameter (h.proc, "macro.1", 0.0f);
+    blocksOf (h.proc, 3, noteOnAt (60));
+    bus.poll();
+    const float base = bus.liveOf (cutoff, 0.0f);
+    setParameter (h.proc, "macro.1", 100.0f);
+    blocksOf (h.proc, 3);
+    bus.poll();
+    CHECK (bus.liveOf (cutoff, 0.0f) > base + 100.0f);
+    CHECK_NEAR (bus.source (sourceChoiceForKey ("macro1")), 1.0f, 1.0e-3f);
+    CHECK_EQ (bus.values().activeVoices, 1);
+
+    // the listeners are called after every update, the timer runs while somebody listens
+    int ticks = 0;
+    bus.listen (&a, [&] { ++ticks; });
+    const uint32_t before = bus.updates();
+    bus.poll();
+    bus.poll();
+    CHECK_EQ (ticks, 2);
+    CHECK_EQ (bus.updates(), before + 2);
+    bus.remove (&b);
+    CHECK ((bus.targets() == std::vector<int> { cutoff, level }));    // the engine is told at once
+    bus.remove (&a);
+    CHECK (bus.targets().empty());
+    blocksOf (h.proc, 1);
+    bus.poll();
+    CHECK_EQ (bus.values().numTargets, 0);
+    CHECK_EQ (bus.listeners(), 0);
+
+    // the random LFOs keep a short history of their own values
+    routeSlot (h.proc, 2, "rlfo1", "osc1.level", 40.0f);
+    setParameter (h.proc, "rlfo1.rate", 8.0f);
+    setParameter (h.proc, "rlfo1.sync", 0.0f);
+    int c = 0;
+    bus.listen (&c, [] {});
+    for (int i = 0; i < 80; ++i)
+    {
+        blocksOf (h.proc, 2);
+        bus.poll();
+    }
+    const auto history = bus.randomHistory (1);
+    CHECK_EQ (history.size(), static_cast<size_t> (LiveBus::kHistory));
+    float lo = 9.0f, hi = -9.0f;
+    for (const float v : history) { lo = std::min (lo, v); hi = std::max (hi, v); CHECK (v >= -1.001f && v <= 1.001f); }
+    CHECK (hi - lo > 0.1f);
+    CHECK_EQ (bus.randomHistory (0).size(), static_cast<size_t> (LiveBus::kHistory));   // outside 1 .. 4: zeros
+    bus.remove (&c);
+}
+
+TEST (content_a_modulated_knob_shows_the_live_value_and_costs_nothing_when_hidden_or_unmodulated)
+{
+    Host h ("live_knob");
+    LiveBus& bus = *h.ctx.live;
+    juce::Component top;
+    top.setSize (400, 400);
+    ParamKnob knob (h.ctx, "filter1.cutoff");
+    top.addAndMakeVisible (knob);
+    knob.setBounds (10, 10, 80, 120);
+    top.setVisible (true);
+    blocksOf (h.proc, 2);
+    bus.poll();
+    CHECK (! knob.liveSubscription());                     // nothing modulates it
+    CHECK ((bus.targets().empty()));
+
+    routeSlot (h.proc, 1, "macro1", "filter1.cutoff", 60.0f);
+    h.ctx.assign.refresh();
+    h.ctx.assign.dispatchPendingMessages();      // the knobs hear about a changed matrix through a change message
+    CHECK (knob.liveSubscription());
+    setParameter (h.proc, "filter1.cutoff", 1000.0f);
+    setParameter (h.proc, "macro.1", 0.0f);
+    blocksOf (h.proc, 3, noteOnAt (60));
+    bus.poll();           // the target list goes to the engine
+    blocksOf (h.proc, 3);
+    bus.poll();           // and the next block answers it
+    CHECK ((bus.targets() == std::vector<int> { indexOfKey ("filter1.cutoff") }));
+    const ParamInfo& info = *findParamByKey ("filter1.cutoff");
+    CHECK_NEAR (knob.liveNormalisedValue(), toNormalised (info, 1000.0f), 0.01);
+    setParameter (h.proc, "macro.1", 100.0f);
+    blocksOf (h.proc, 4);
+    bus.poll();
+    CHECK (knob.liveNormalisedValue() > toNormalised (info, 1000.0f) + 0.05f);
+    // the knob is drawn with the mark (the ring knows it)
+    knob.setSize (80, 120);
+    juce::Image image (juce::Image::ARGB, 80, 120, true);
+    juce::Graphics g (image);
+    knob.paintEntireComponent (g, false);
+    CHECK (image.isValid());
+
+    // a hidden knob (a tab that is not shown) is out of the target list
+    top.setVisible (false);
+    knob.refreshLiveSubscription();
+    bus.poll();
+    CHECK (! knob.liveSubscription());
+    CHECK (bus.targets().empty());
+    top.setVisible (true);
+    knob.refreshLiveSubscription();
+    CHECK (knob.liveSubscription());
+    // the modulation removed: nothing to show, the knob leaves the bus
+    clearSlot (h.ctx.assign.matrix(), 0);
+    h.ctx.assign.refresh();
+    h.ctx.assign.dispatchPendingMessages();
+    CHECK (! knob.liveSubscription());
+    CHECK (knob.liveNormalisedValue() < 0.0f);
+    CHECK (bus.targets().empty());
+}
+
+TEST (content_lfo_displays_get_a_playhead_and_random_lfos_a_trace)
+{
+    Host h ("live_lfo");
+    LiveBus& bus = *h.ctx.live;
+    routeSlot (h.proc, 1, "lfo1", "osc1.level", 10.0f);   // an LFO that nothing uses is switched off by the engine
+    setParameter (h.proc, "lfo1.rate", 2.0f);
+    setParameter (h.proc, "lfo1.sync", 0.0f);
+    setParameter (h.proc, "lfo1.sync_type", 0.0f);
+    setParameter (h.proc, "lfo1.phase", 0.0f);
+    auto panel = PanelRegistry::instance().create ("Lfo1Panel", h.ctx);
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    panel->build();
+    panel->setBounds (0, 0, 390, panel->preferredHeight (390));
+    panel->setVisible (true);
+    LfoLiveProbe probe;
+    CHECK (probeLfoPanel (*panel, probe));
+    CHECK (probe.bound && ! probe.random);
+    blocksOf (h.proc, 2);
+    bus.poll();
+    CHECK (probeLfoPanel (*panel, probe) && probe.playhead < 0.0f);     // no voice: no playhead
+    blocksOf (h.proc, 1, noteOnAt (60));
+    std::vector<float> heads;
+    for (int i = 0; i < 6; ++i)
+    {
+        blocksOf (h.proc, 12);
+        bus.poll();
+        CHECK (probeLfoPanel (*panel, probe));
+        CHECK (probe.playhead >= 0.0f && probe.playhead < 1.0f);
+        heads.push_back (probe.playhead);
+    }
+    CHECK (std::fabs (heads.front() - heads.back()) > 0.02f || std::fabs (heads[1] - heads[3]) > 0.02f);
+    // the playhead is where the cycle is: 2 Hz, 12 blocks of 256 at 48 kHz = 0.064 s per step
+    const double elapsed = 1.0 * 256 / 48000.0 + 6 * 12 * 256 / 48000.0;
+    const double expected = std::fmod (2.0 * elapsed, 1.0);
+    const double diff = std::fabs (heads.back() - expected);
+    CHECK (std::min (diff, 1.0 - diff) < 0.06);
+    // painting the display with the playhead does not crash
+    juce::Image image (juce::Image::ARGB, panel->getWidth(), panel->getHeight(), true);
+    juce::Graphics g (image);
+    panel->paintEntireComponent (g, false);
+
+    // hidden: the display costs nothing
+    panel->setVisible (false);
+    bus.poll();
+    CHECK (bus.listeners() == 0 || ! LiveBus::shown (*panel));
+    CHECK (probeLfoPanel (*panel, probe) && ! probe.bound);
+
+    // a random LFO: a trace (the history of the bus), no playhead
+    auto random = PanelRegistry::instance().create ("RandomLfo1Panel", h.ctx);
+    CHECK (random != nullptr);
+    if (random != nullptr)
+    {
+        random->build();
+        random->setBounds (0, 0, 390, random->preferredHeight (390));
+        random->setVisible (true);
+        CHECK (probeLfoPanel (*random, probe) && probe.random && probe.bound && probe.playhead < 0.0f);
+        routeSlot (h.proc, 2, "rlfo1", "osc1.pan", 30.0f);
+        setParameter (h.proc, "rlfo1.rate", 8.0f);
+        setParameter (h.proc, "rlfo1.sync", 0.0f);
+        for (int i = 0; i < 30; ++i)
+        {
+            blocksOf (h.proc, 3);
+            bus.poll();
+        }
+        const auto history = bus.randomHistory (1);
+        float lo = 9.0f, hi = -9.0f;
+        for (const float v : history) { lo = std::min (lo, v); hi = std::max (hi, v); }
+        CHECK (hi - lo > 0.05f);
+        juce::Image image2 (juce::Image::ARGB, random->getWidth(), random->getHeight(), true);
+        juce::Graphics g2 (image2);
+        random->paintEntireComponent (g2, false);
+    }
+}
+
+TEST (content_envelope_view_has_a_playhead_that_walks_through_the_stages)
+{
+    Host h ("live_env");
+    LiveBus& bus = *h.ctx.live;
+    setParameter (h.proc, "env1.attack", 400.0f);
+    setParameter (h.proc, "env1.hold", 200.0f);
+    setParameter (h.proc, "env1.decay", 400.0f);
+    setParameter (h.proc, "env1.sustain", 50.0f);
+    setParameter (h.proc, "env1.release", 600.0f);
+    EnvCurveView view (h.ctx, 1);
+    view.setBounds (0, 0, 400, 220);
+    view.setVisible (true);
+    juce::Point<float> head;
+    blocksOf (h.proc, 2);
+    bus.poll();
+    CHECK (! view.livePlayhead (head));                     // no voice
+    blocksOf (h.proc, 1, noteOnAt (60));
+    std::vector<float> xs;
+    std::vector<int> stages;
+    for (int i = 0; i < 12; ++i)
+    {
+        blocksOf (h.proc, 10);
+        bus.poll();
+        const bool got = view.livePlayhead (head);
+        CHECK (got);
+        if (got)
+        {
+            xs.push_back (head.x);
+            CHECK (head.y >= 0.0f && head.y <= 220.0f);
+        }
+        stages.push_back (static_cast<int> (bus.values().envStage[0]));
+    }
+    // 0.05 s per step: attack (to 0.4 s), hold (to 0.6 s), decay (to 1.0 s): the dot moves right through the three stages
+    CHECK (stages.front() == 1);
+    CHECK (std::find (stages.begin(), stages.end(), 2) != stages.end());
+    CHECK (std::find (stages.begin(), stages.end(), 3) != stages.end());
+    for (size_t i = 1; i < xs.size(); ++i)
+        CHECK (xs[i] >= xs[i - 1] - 0.5f);
+    CHECK (xs.back() > xs.front() + 20.0f);
+    // the note off: release, to the right of the sustain stretch
+    juce::MidiBuffer off;
+    off.addEvent (juce::MidiMessage::noteOff (1, 60), 0);
+    blocksOf (h.proc, 8, off);
+    bus.poll();
+    CHECK (view.livePlayhead (head));
+    CHECK_EQ (static_cast<int> (bus.values().envStage[0]), 4);
+    CHECK (head.x > xs.back());
+    // the voice is over: no playhead
+    blocksOf (h.proc, 400);
+    bus.poll();
+    CHECK (! view.livePlayhead (head));
+    // hidden: unbound
+    view.setVisible (false);
+    bus.poll();
+    CHECK_EQ (bus.listeners(), 0);
+}
+
+TEST (content_sample_marker_animation_shows_the_live_unison_start)
+{
+    Host h ("live_marker");
+    LiveBus& bus = *h.ctx.live;
+    OscWaveView view (h.ctx, 1);
+    view.setBounds (0, 0, 400, 220);
+    view.setVisible (true);
+    CHECK (view.liveUniStart() < 0.0f);                    // the animation is off
+    view.setMarkerAnimation (true);
+    CHECK (view.liveUniStart() < 0.0f);                    // nothing modulates the unison start
+    routeSlot (h.proc, 1, "lfo1", "osc1.sample.uni_start", 50.0f);
+    setParameter (h.proc, "lfo1.rate", 3.0f);
+    setParameter (h.proc, "lfo1.sync", 0.0f);
+    setParameter (h.proc, "osc1.sample.uni_start", 30.0f);
+    h.ctx.assign.refresh();
+    h.ctx.assign.dispatchPendingMessages();
+    blocksOf (h.proc, 1, noteOnAt (60));
+    blocksOf (h.proc, 2);
+    bus.poll();     // the marker asks for the target
+    std::set<int> seen;
+    for (int i = 0; i < 60; ++i)
+    {
+        blocksOf (h.proc, 5);
+        bus.poll();
+        const float live = view.liveUniStart();
+        CHECK (live >= 0.0f && live <= 1.0f);
+        seen.insert (static_cast<int> (std::lround (live * 100.0f)));
+    }
+    CHECK (seen.size() > 6);                                // the marker moves
+    view.setMarkerAnimation (false);
+    bus.poll();
+    CHECK (view.liveUniStart() < 0.0f);
+    CHECK (bus.targets().empty());                          // and the engine stops computing it
+}
+
+TEST (content_the_mpe_pad_sends_events_and_follows_the_engine_when_not_touched)
+{
+    Host h ("live_pad");
+    LiveBus& bus = *h.ctx.live;
+    GlbMpePanel panel (h.ctx);
+    panel.build();
+    panel.setBounds (0, 0, 390, panel.preferredHeight (390));
+    panel.setVisible (true);
+    auto& pad = panel.pad();
+    pad.setBounds (0, 0, 360, 150);
+    blocksOf (h.proc, 1, noteOnAt (60));
+    blocksOf (h.proc, 3);
+    bus.poll();
+    CHECK_NEAR (pad.padX(), 0.5f, 0.02f);
+
+    // a touch at the top right sends a bend up, the slide and the pressure: the engine's sources answer
+    const auto where = juce::Point<float> (350.0f, 25.0f);
+    pad.mouseDown (mouseAt (pad, where, where, false));
+    CHECK (pad.touching());
+    blocksOf (h.proc, 4);
+    bus.poll();
+    CHECK (bus.source (sourceChoiceForKey ("pitch_wheel")) > 0.8f);     // 0 .. 1, 0.5 in the middle
+    CHECK (bus.source (sourceChoiceForKey ("slide")) > 0.5f);
+    // dragging to the left bottom: the bend goes down, the slide towards 0
+    const auto there = juce::Point<float> (20.0f, 140.0f);
+    pad.mouseDrag (mouseAt (pad, there, where, true));
+    blocksOf (h.proc, 4);
+    bus.poll();
+    CHECK (bus.source (sourceChoiceForKey ("pitch_wheel")) < 0.2f);
+    CHECK (bus.source (sourceChoiceForKey ("slide")) < 0.3f);
+    pad.mouseUp (mouseAt (pad, there, where, true));
+    CHECK (! pad.touching());
+    blocksOf (h.proc, 4);
+    bus.poll();
+    CHECK_NEAR (bus.source (sourceChoiceForKey ("pitch_wheel")), 0.5f, 0.02f);   // sprung back to the middle
+    CHECK_NEAR (bus.source (sourceChoiceForKey ("slide")), 0.0f, 0.02f);
+
+    // not touched: the pad shows what arrives from elsewhere (a controller)
+    h.proc.injectMidiMessage (juce::MidiMessage::pitchWheel (1, 12288));
+    h.proc.injectMidiMessage (juce::MidiMessage::controllerEvent (1, 74, 100));
+    blocksOf (h.proc, 4);
+    bus.poll();
+    CHECK_NEAR (pad.padX(), 0.5f + 0.5f * 0.5f, 0.03f);
+    CHECK_NEAR (pad.padY(), 100.0f / 127.0f, 0.03f);
 }

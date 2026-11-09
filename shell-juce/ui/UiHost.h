@@ -19,6 +19,7 @@
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine_caps.h"
 #include "synthyboy/preferences.h"
+#include "synthyboy/readout.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/user_library.h"
@@ -148,6 +149,11 @@ public:
         copied (0 before the first block). Message thread; lock free on the audio side. */
     virtual int copyScope (float* /*dest*/, int /*maxSamples*/) const { return 0; }
     static constexpr int kScopeSamples = 4096;
+
+    /** The live values of the engine for the displays (GROUPA2 WP-17, readout.h): the knobs whose modulated value is wanted (table indices) and the copy of the
+        values of the last blocks. A host without an engine answers false and the displays show the stored values. Message thread; the engine side is lock free. */
+    virtual void setReadoutTargets (const std::vector<int>& /*paramIndices*/) {}
+    virtual bool copyReadout (LiveValues& /*out*/) const { return false; }
 
     /** Injects a MIDI message from the UI (pitch bend, mod wheel, CC 64 sustain, etc.) into the audio callback. */
     virtual void injectMidiMessage (const juce::MidiMessage& /*msg*/) {}

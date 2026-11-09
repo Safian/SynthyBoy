@@ -69,6 +69,10 @@ bool isSpecialParam (size_t paramIndex);
 /** The raw (not clamped) value of the control for a plain value. sampleRate limits the cutoffs of the filters. */
 double convertParam (const Binding& binding, double plain, double sampleRate, double bpm = 120.0);
 
+/** The inverse of convertParam for the continuous converters: the plain value for a raw value of the control (GROUPA2 WP-17: the live value of a modulated knob).
+    NaN for a converter that has no inverse (index, indexMap). */
+double invertParam (const Binding& binding, double raw, double sampleRate, double bpm = 120.0);
+
 /** Order of the effects from the nine choices fx.order.1 .. fx.order.9 (duplicates and out-of-range choices are resolved
     deterministically: a position whose effect is already placed takes the lowest effect that is still free). */
 void resolveFxOrder (const float* choices, int* order, int count = kNumLegacyFxSlots);

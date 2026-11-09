@@ -104,6 +104,26 @@ void ModRing::paint (juce::Graphics& g)
         }
     }
 
+    if (current.live >= 0.0f && ! current.entries.empty())
+    {
+        // the live value (WP-17): a bright mark where the engine plays the control right now, on top of the halo of the modulations
+        g.setColour (c.text);
+        if (shape == Shape::ring)
+        {
+            const auto centre = bounds.getCentre();
+            const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f - stroke;
+            const float angle = angleFor (current.live);
+            const float inner = radius - stroke * 1.6f, outer = radius + stroke * 1.2f;
+            g.drawLine (centre.x + std::sin (angle) * inner, centre.y - std::cos (angle) * inner, centre.x + std::sin (angle) * outer, centre.y - std::cos (angle) * outer,
+                        juce::jmax (2.0f, stroke * 0.8f));
+        }
+        else
+        {
+            const float x = bounds.getX() + current.live * bounds.getWidth();
+            g.fillRect (x - stroke * 0.4f, bounds.getBottom() - stroke * 2.4f, juce::jmax (2.0f, stroke * 0.8f), stroke * 2.6f);
+        }
+    }
+
     if (current.learning)
     {
         // MIDI learn: the control waits for a CC

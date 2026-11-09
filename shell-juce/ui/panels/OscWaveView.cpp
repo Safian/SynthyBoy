@@ -129,6 +129,11 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     addAndMakeVisible (sampleMenuBtn);
     addAndMakeVisible (editBtn);
     refreshSliceCache();
+    // WP-17: the live marker follows the engine while the marker animation shows and the unison start is modulated
+    ctx.live->bind (*this,
+                    [this] { return markerAnimation && sampleUniStartHandle.valid() && ! ctx.assign.snapshot().entriesFor (sampleUniStartHandle.index()).empty()
+                                        ? std::vector<int> { sampleUniStartHandle.index() } : std::vector<int> {}; },
+                    [this] { repaint(); });
     setViewMode (ctx.host.preferences().waveform3d ? ViewMode::wave3D : ViewMode::wave2D); // "Default waveform view" (S p.314)
 }
 
@@ -399,6 +404,13 @@ std::vector<std::pair<float, float>> OscWaveView::modulationBands() const
         bands.emplace_back (juce::jlimit (0.0f, 1.0f, entry.bipolar ? base - depth : base), juce::jlimit (0.0f, 1.0f, base + depth));
     }
     return bands;
+}
+
+float OscWaveView::liveUniStart() const
+{
+    if (! markerAnimation || ! sampleUniStartHandle.valid() || ! ctx.live->hasLive (sampleUniStartHandle.index()))
+        return -1.0f;
+    return toNormalised (sampleUniStartHandle.info(), ctx.live->liveOf (sampleUniStartHandle.index(), sampleUniStartHandle.plain()));
 }
 
 void OscWaveView::openEditor()
@@ -1304,7 +1316,15 @@ void OscWaveView::paintSample (juce::Graphics& g, juce::Rectangle<float> area)
                     juce::Justification::centredRight, false);
     }
 
-    // Show Marker Animation: the range the modulation of UNI START sweeps over (live positions need the modulation read-out, 14 row 49)
+    // Show Marker Animation: the range the modulation of UNI START sweeps over, and the marker itself where the engine plays it now (WP-17)
+    if (const float live = liveUniStart(); live >= 0.0f)
+    {
+        const float lx = sampleNormToX (live);
+        g.setColour (c.text);
+        g.drawVerticalLine (juce::roundToInt (lx), area.getY(), area.getBottom());
+        g.setColour (c.mod);
+        g.fillRect (lx - t.px (4.0f), area.getY(), t.px (8.0f), t.px (6.0f));
+    }
     if (markerAnimation)
         for (const auto& band : modulationBands())
         {

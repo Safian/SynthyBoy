@@ -59,6 +59,9 @@ public:
         releaseCurve // Curve dot 3
     };
 
+    /** WP-17: where the playhead of the heard voice is (in the coordinates of the view); false while no voice sounds or the engine gives no read-out. */
+    bool livePlayhead (juce::Point<float>& out) const;
+
     /** Pure logic test hook: returns node positions and hit testing without requiring a display. */
     juce::Point<float> getNodePosition (HitNode node) const;
     HitNode hitTestNode (juce::Point<float> pos) const;

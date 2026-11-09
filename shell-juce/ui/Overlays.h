@@ -30,6 +30,7 @@ public:
         int activeSlot = -1;     // slot being dragged
         int midiCc = -1;         // the CC mapped to the control (MIDI learn), -1 none
         bool learning = false;   // waiting for a CC
+        float live = -1.0f;      // the normalised value the engine really plays now (all modulations in), -1 = unknown (GROUPA2 WP-17)
     };
 
     void setState (State newState);

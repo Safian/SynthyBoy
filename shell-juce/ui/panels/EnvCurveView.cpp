@@ -49,6 +49,35 @@ EnvCurveView::EnvCurveView (UiContext& context, int envIndex)
       hReleaseBeats (context, "env" + std::to_string (envIdx) + ".release_beats")
 {
     setOpaque (false);
+    ctx.live->bind (*this, {}, [this] { repaint(); }); // WP-17: the playhead follows the heard voice while the view is on screen
+}
+
+bool EnvCurveView::livePlayhead (juce::Point<float>& out) const
+{
+    if (! ctx.live->available())
+        return false;
+    const auto& lv = ctx.live->values();
+    const int n = envIdx - 1;
+    const int stage = static_cast<int> (lv.envStage[n]);
+    if (lv.activeVoices <= 0 || stage < 1 || stage > 4)
+        return false;
+    const float position = juce::jlimit (0.0f, 1.0f, lv.envPosition[n]);
+    const float level = juce::jlimit (0.0f, 1.0f, lv.source[n]);
+    const auto area = plotArea();
+    const auto v = readCurrentValues();
+    const float tHoldVisual = juce::jmax (40.0f, (v.delay + v.attack + v.hold + v.decay + v.release) * 0.12f);
+    const float totalTime = juce::jmax (200.0f, v.delay + v.attack + v.hold + v.decay + tHoldVisual + v.release) / displayZoom();
+    const float t1 = v.delay, t2 = t1 + v.attack, t3 = t2 + v.hold, t4 = t3 + v.decay, tSusHold = t4 + tHoldVisual;
+    float time = 0.0f;
+    switch (stage)
+    {
+        case 1: time = (level < 1.0e-4f && v.delay > 0.0f) ? position * t1 : t1 + position * v.attack; break;   // the delay and the attack are one state of the engine
+        case 2: time = t2 + position * v.hold; break;
+        case 3: time = t3 + position * v.decay; break;                                                          // at the end of the decay the voice sustains: the dot waits at the sustain node
+        default: time = tSusHold + position * v.release; break;
+    }
+    out = { timeToX (time, totalTime, area), valToY (level, area) };
+    return true;
 }
 
 EnvCurveView::~EnvCurveView()
@@ -458,6 +487,18 @@ void EnvCurveView::paint (juce::Graphics& g)
         g.fillEllipse (p.x - curveRadius, p.y - curveRadius, curveRadius * 2.0f, curveRadius * 2.0f);
         g.setColour (isDrag ? c.textOnAccent : c.accent);
         g.drawEllipse (p.x - curveRadius, p.y - curveRadius, curveRadius * 2.0f, curveRadius * 2.0f, 1.5f);
+    }
+
+    // WP-17: the playhead of the voice that is heard
+    if (juce::Point<float> head; livePlayhead (head))
+    {
+        g.setColour (c.text.withAlpha (0.7f));
+        g.drawVerticalLine (juce::roundToInt (head.x), area.getY(), area.getBottom());
+        const float r = t.px (5.0f);
+        g.setColour (c.mod);
+        g.fillEllipse (head.x - r, head.y - r, 2.0f * r, 2.0f * r);
+        g.setColour (c.text);
+        g.drawEllipse (head.x - r, head.y - r, 2.0f * r, 2.0f * r, 1.2f);
     }
 
     // Drag value bubble / tooltip

@@ -109,6 +109,9 @@ public:
     void setMarkerAnimation (bool on);
     /** The ranges (start, end as fractions of the file) the modulation of oscN.sample.uni_start covers; empty when it is not modulated. */
     std::vector<std::pair<float, float>> modulationBands() const;
+    /** WP-17: where the engine plays the unison start now (normalised position in the sample), -1 while the marker animation is off, nothing modulates it or the engine gives
+        no read-out. */
+    float liveUniStart() const;
     const juce::String& sampleStatus() const noexcept { return statusLine; }
     juce::TextButton& loadButton() noexcept { return loadSampleBtn; }
     juce::TextButton& snapButton() noexcept { return snapBtn; }
