@@ -296,7 +296,7 @@ namespace sbvital {
       for (int position = 0; position < kNumModules; ++position) {
         const int index = effect_order_[position];
         if (effect_rack_[index] == rack)
-          items[count++] = { position * kPoolOrderStep, index };
+          items[count++] = { position * kPoolOrderStep + kPoolOrderBase, index };
       }
       if (rack < 3)
         for (int slot = 0; slot < kNumPoolSlots; ++slot) {

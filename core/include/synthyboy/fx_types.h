@@ -41,10 +41,11 @@ enum FxInstanceType : int
     kNumFxInstanceTypes // 14
 };
 
-/** The order key of a pool slot lives on the same scale as the positions of the 16 modules of instance 0: module m at position q of
-    fx.order has the sort value q * kFxOrderStep; a slot has fxiNN.order (0 .. kFxOrderMax) directly. Items of one rack are sorted by this
-    value, a module of instance 0 before a slot on a tie, slots by number. */
+/** The order key of a pool slot lives on the same scale as the positions of the 16 modules of instance 0: the module at position q of fx.order sorts as
+    q * kFxOrderStep + kFxOrderBase (fxModuleSortKey, fx_rack.h), a slot by fxiNN.order (0 .. kFxOrderMax) directly. The items of one rack are sorted by this
+    value, a module of instance 0 before a slot on a tie, slots by number. The base leaves room in front of the first module. */
 constexpr int kFxOrderStep = 64;
+constexpr int kFxOrderBase = 32;
 constexpr int kFxOrderMax = 1023;
 
 struct FxTypeDescriptor

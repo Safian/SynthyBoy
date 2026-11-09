@@ -137,7 +137,8 @@ namespace sbvital {
       static constexpr int kNumRacks = 10;            // Main, Bus 1, Bus 2, then the bands of the splitters
       static constexpr int kNumPoolSlots = 16;        // SynthyBoy: the effect instance pool (FxInstanceModule), racks Main / Bus 1 / Bus 2 only
       static constexpr int kMaxRackItems = kNumModules + kNumPoolSlots;
-      static constexpr int kPoolOrderStep = 64;       // a module of instance 0 at position q of fx_order sorts as q * kPoolOrderStep, a slot by its own order
+      static constexpr int kPoolOrderStep = 64;       // a module of instance 0 at position q of fx_order sorts as q * kPoolOrderStep + kPoolOrderBase,
+      static constexpr int kPoolOrderBase = 32;       // a slot by its own order (core/include/synthyboy/fx_types.h kFxOrderStep / kFxOrderBase: the same numbers)
       static constexpr int kPoolFadeMs = 10;          // crossfade when the module of a slot changes or is switched on / off
       enum Rack { kMain, kBus1Rack, kBus2Rack, kLhLow, kLhHigh, kLmhLow, kLmhMid, kLmhHigh, kMsMid, kMsSide };
       enum Module { kHyperDimension = 9, kUtility, kBode, kConvolve, kSplitterLh, kSplitterLmh, kSplitterMs };

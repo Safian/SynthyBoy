@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "synthyboy/engine.h"
+#include "synthyboy/fx_rack.h"
 #include "synthyboy/fx_types.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
@@ -596,4 +597,77 @@ TEST (fxi_sixteen_heavy_slots_stay_finite_under_extreme_settings)
         if (! finite || peak >= 100.0f)
             std::printf ("    round %d: finite %d peak %g\n", round, finite ? 1 : 0, static_cast<double> (peak));
     }
+}
+
+// ---- the edits of fx_rack.h are what the engine does ----------------------------------------------------------------------------------------
+
+namespace
+{
+std::vector<float> readAll (const IEngine& e)
+{
+    std::vector<float> plain (paramCount());
+    for (size_t i = 0; i < paramCount(); ++i)
+        plain[i] = e.getParam (paramTable()[i].id);
+    return plain;
+}
+
+void writeAll (IEngine& e, const std::vector<FxWrite>& writes)
+{
+    for (const FxWrite& w : writes)
+        e.setParam (paramTable()[w.param].id, w.value);
+}
+} // namespace
+
+TEST (fxi_the_rack_edits_of_the_ui_model_give_the_order_the_engine_plays)
+{
+    // instance 0: distortion at position 1; a utility slot with a low pass appended to Main: it sounds behind the distortion
+    const auto setup = [] (IEngine& e)
+    {
+        base (e);
+        setByKey (e, "distortion.on", 1.0f);
+        setByKey (e, "distortion.drive", 24.0f);
+        setByKey (e, "distortion.mix", 100.0f);
+    };
+    auto e = makeVital();
+    setup (*e);
+    std::vector<FxWrite> w;
+    const int slot = fxAddModule (readAll (*e).data(), kFxTypeUtility, 0, w);
+    CHECK_EQ (slot, 0);
+    writeAll (*e, w);
+    setSlotKey (*e, 0, kFxTypeUtility, "utility.lpf", 700.0f);
+    const auto behind = playSettled (*e, 1);
+
+    // the same in an engine that is told the order directly: utility first (order 0), then the distortion
+    auto f = makeVital();
+    setup (*f);
+    utilitySlot (*f, 0, 0, 0, 700.0f);
+    const auto explicitFirst = playSettled (*f, 1);
+    CHECK (difference (behind, explicitFirst) > 0.05);   // the two orders are different sounds
+
+    // move the slot to the front of Main with the model: it must sound like the explicit order
+    w.clear();
+    CHECK (fxMove (readAll (*e).data(), { true, 0 }, 0, 0, w));
+    writeAll (*e, w);
+    CHECK (difference (explicitFirst, playSettled (*e, 1)) < 1.0e-3);   // (the slot's lpf differs by the round trip of the normalised value)
+
+    // and back to the end of Main: behind the distortion again
+    w.clear();
+    CHECK (fxMove (readAll (*e).data(), { true, 0 }, 0, 16, w));
+    writeAll (*e, w);
+    CHECK (difference (behind, playSettled (*e, 1)) < 1.0e-3);
+
+    // a module of instance 0 moved behind the slot: the distortion at the end
+    w.clear();
+    CHECK (fxMove (readAll (*e).data(), { false, 3 }, 0, 16, w));
+    writeAll (*e, w);
+    CHECK (difference (explicitFirst, playSettled (*e, 1)) < 1.0e-3);
+
+    // removing the slot: the sound is the distortion alone
+    auto g = makeVital();
+    setup (*g);
+    const auto alone = playSettled (*g, 1);
+    w.clear();
+    CHECK (fxRemoveSlot (readAll (*e).data(), 0, w));
+    writeAll (*e, w);
+    CHECK (difference (alone, playSettled (*e, 1)) < 1.0e-3);
 }
