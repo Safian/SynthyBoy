@@ -320,16 +320,17 @@ std::vector<ChoiceGroup> warpTypeGroups()
     // oscN.warp.type: the eleven Vital modes (None Sync Formant Quantize Bend Squeeze Pulse FM from X / Y, RM from X / Y) and the 41 Serum 2 modes
     // appended in block B21 (13-new-keys.md 4.22): 11 Sync Var, 12 .. 14 Bend +, -, +/-, 15 .. 17 Asym +, -, +/-, 18 Flip, 19 Mirror, 20 .. 23 Remap 1-4,
     // 24 Odd/Even, 25 / 26 LPF / HPF, 27 .. 40 the distortions, 41 .. 46 FM Thru-Zero / Exp / Linear from X / Y, 47 / 48 / 49 PD from X / Y / Self,
-    // 50 / 51 AM from X / Y
+    // 50 / 51 AM from X / Y; GROUPB WP-06 (4.34) 52 .. 75: FM Thru-Zero (52 .. 55), FM Exp (56 .. 59), FM Linear (60 .. 63), PD (64 .. 67), AM (68 .. 71) and
+    // RM (72 .. 75) from the Noise, Sub, Filter 1 and Filter 2
     return {
         { "Basic", { 0, 1, 11, 2, 3, 5, 6 }, false },
         { "Alt", { 4, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24 }, false },
         { "Filter", { 25, 26 }, false },
         { "Distortion", { 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40 }, false },
-        { "FM", { 7, 8, 41, 42, 43, 44, 45, 46 }, false },
-        { "PD", { 47, 48, 49 }, false },
-        { "AM", { 50, 51 }, false },
-        { "RM", { 9, 10 }, false },
+        { "FM", { 7, 8, 41, 42, 43, 44, 45, 46, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63 }, false },
+        { "PD", { 47, 48, 49, 64, 65, 66, 67 }, false },
+        { "AM", { 50, 51, 68, 69, 70, 71 }, false },
+        { "RM", { 9, 10, 72, 73, 74, 75 }, false },
     };
 }
 

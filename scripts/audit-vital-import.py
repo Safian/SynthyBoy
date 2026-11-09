@@ -530,7 +530,7 @@ class Audit:
             return (0.0 if custom_sample else round_half_up(raw)), 'noise on (a custom sample is not noise)'
         if re.match(r'osc_\d_distortion_type$', ctl):
             e = round_half_up(raw)
-            mp = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 10: 9, 11: 10}  # Vital kFmSample (9) and kRmSample (12) have no counterpart
+            mp = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 52, 10: 9, 11: 10, 12: 72}  # GROUPB WP-06: Vital kFmSample (9) -> FM Thru-Zero from Noise, kRmSample (12) -> RM from Noise
             return float(mp.get(e, 0)), 'warp type map'
         if ctl == 'portamento_time':
             return (0.0 if raw <= -9.9999 else min(2.0 ** raw * 1000.0, float(p['max']))), 'portamento (-10 = off)'

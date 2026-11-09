@@ -92,6 +92,9 @@ enum EngineCaps : EngineCapsMask
     kCapVoiceSources     = 1ull << 59, // WP-07: the modulation sources Voice Index, Voice Mod 1, Voice Mod 2 (choice values 40 .. 42)
     // block B27 (GROUPB, 13-new-keys.md 4.33); bit 60
     kCapOscExtras2       = 1ull << 60, // WP-05: oscN.ratio_src, oscN.smooth_interp, oscN.sample.slice
+    // GROUPB WP-06 (13-new-keys.md 4.34): choices only, no keys; bits 61 and 62
+    kCapModSources2      = 1ull << 61, // WP-06: the modulation sources 43 .. 57 (Oscillator A .. Fixed)
+    kCapWarpSources      = 1ull << 62, // WP-06: the warp modes 52 .. 75 (FM / PD / AM / RM from the Noise, Sub, Filter 1, Filter 2)
 };
 
 /** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
@@ -101,7 +104,7 @@ constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDi
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = ~0ull >> (64 - 61);
+constexpr EngineCapsMask kCapAllKnown = ~0ull >> (64 - 63);
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

@@ -114,6 +114,12 @@ namespace sbvital {
       osc_fold_[i].owner = &voice_router_;
     }
     voice_index_.owner = &voice_router_;
+    for (cr::Output& output : note_on_alt_)
+      output.owner = &voice_router_;
+    note_on_rand2_.owner = &voice_router_;
+    for (cr::Output& output : note_on_discrete_)
+      output.owner = &voice_router_;
+    expression_x_.owner = &voice_router_;
     voice_cutoff_.owner = &voice_router_;
     voice_env_time_.owner = &voice_router_;
     voice_env_time_.trigger_value = 1.0f;
@@ -243,6 +249,20 @@ namespace sbvital {
       voice_index_.trigger_value = utils::maskLoad(voice_index_.trigger_value, control.index, mask);
       voice_mod_[0].trigger_value = utils::maskLoad(voice_mod_[0].trigger_value, control.mod1, mask);
       voice_mod_[1].trigger_value = utils::maskLoad(voice_mod_[1].trigger_value, control.mod2, mask);
+      {
+        // GROUPB WP-06: the sources of the note counter (all of them are a function of the counter and the seed: the same notes give the same values)
+        const int sequence = voice->state().sequence;
+        const unsigned int count = sequence > 0 ? static_cast<unsigned int>(sequence) : 1u;
+        const mono_float alt = static_cast<mono_float>((count - 1u) & 1u);
+        note_on_alt_[0].trigger_value = utils::maskLoad(note_on_alt_[0].trigger_value, alt, mask);
+        note_on_alt_[1].trigger_value = utils::maskLoad(note_on_alt_[1].trigger_value, 1.0f - alt, mask);
+        note_on_rand2_.trigger_value = utils::maskLoad(note_on_rand2_.trigger_value, 0.5f * (voiceControlDraw(voice_control_.seed, count, 101) + 1.0f), mask);
+        for (int k = 0; k < kNumDiscreteRandoms; ++k)
+          note_on_discrete_[k].trigger_value = utils::maskLoad(note_on_discrete_[k].trigger_value,
+                                                               0.5f * (voiceControlDraw(voice_control_.seed, count, 200u + static_cast<unsigned int>(k)) + 1.0f), mask);
+        const mono_float bend = (voice->state().local_pitch_bend * kLocalPitchBendRange + voice->state().note_bend + voice->state().tuning_delta) / kLocalPitchBendRange;
+        expression_x_.trigger_value = utils::maskLoad(expression_x_.trigger_value, bend < -1.0f ? -1.0f : (bend > 1.0f ? 1.0f : bend), mask);
+      }
       voice_cutoff_.trigger_value = utils::maskLoad(voice_cutoff_.trigger_value, control.cutoff, mask);
       voice_env_time_.trigger_value = utils::maskLoad(voice_env_time_.trigger_value, control.env_time, mask);
       for (int i = 0; i < kVoiceControlTargets; ++i) {

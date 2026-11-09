@@ -58,9 +58,9 @@ TEST (counts_and_constants)
     CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7 + 448 + 6 + 4 + 2 + 62 + 9); // 9: B27 (GROUPB WP-05: oscN.ratio_src, oscN.smooth_interp, oscN.sample.slice), 62: B26 (GROUPA2 WP-07: the voice control voicectl.*), 2: B25 (GROUPA1 WP-10: delay.offset_left, reverb.feedback), 4: B24 (GROUPA1 WP-09: master.mpe.xyz_macro, y_modwheel, bend_to_x, y_bipolar), 6: B23 (GROUPA1 WP-04: sub.phase, sub.phase_contiguous, noise.stereo, noise.filter, noise.type, noise.bounce), 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV), 448: B22 (FXINST: 16 slots x 28 keys)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (4096)); // raised for block B22 (FX instance pool)
-    CHECK_EQ (kNumModSources, 42);
+    CHECK_EQ (kNumModSources, 57);
     CHECK_EQ (kNumModDestinations, 912);
-    CHECK_EQ (modSourceCount(), static_cast<size_t> (42));
+    CHECK_EQ (modSourceCount(), static_cast<size_t> (57));
     CHECK_EQ (modDestinationCount(), static_cast<size_t> (911));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 14);
@@ -238,8 +238,8 @@ TEST (choice_lists_are_append_only)
     // mod source / destination choices
     for (const char* key : { "mod01.source", "mod64.source", "mod01.aux_source", "mod64.aux_source" })
     {
-        CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (43));
-        CHECK_EQ (byKey (key).max, 42.0f);
+        CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (58));
+        CHECK_EQ (byKey (key).max, 57.0f);
     }
     CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (912));
     CHECK_EQ (byKey ("mod64.destination").max, 911.0f);
@@ -254,7 +254,7 @@ TEST (choice_lists_are_append_only)
 
     // lists that stay unchanged
     CHECK_EQ (namesOf ("lfo1.sync").size(), static_cast<size_t> (5));
-    // the warp lists grew in block B21 (4.22): the eleven Vital modes keep their places, 41 modes are appended
+    // the warp lists grew in block B21 (4.22): the eleven Vital modes keep their places, 41 modes are appended; GROUPB WP-06 (4.34) appended 24 more
     CHECK_EQ (namesOf ("osc1.warp.type").size(), static_cast<size_t> (kNumWarpTypes));
     CHECK_EQ (namesOf ("osc1.warp2.type").size(), static_cast<size_t> (kNumWarpTypes));
     CHECK_EQ (namesOf ("osc1.warp.type")[10], std::string ("RM from Osc 3"));

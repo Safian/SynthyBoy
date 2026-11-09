@@ -51,6 +51,8 @@ namespace sbvital {
         kVoicePanSub,
         kVoiceDetuneNoise,
         kVoiceDetuneSub,
+        kFilter1Tap,   // GROUPB WP-06: the output of filter 1 / 2 of the previous block (a Feedback node of the voice router): the source of FM / PD / AM / RM from a filter
+        kFilter2Tap,
         kNumInputs
       };
 
@@ -63,6 +65,11 @@ namespace sbvital {
         kBus2Out,
         kRawFree,    // SynthyBoy B21: the Main / Direct channels whose ENV 1 button is off (not multiplied by the amplitude envelope)
         kDirectFree,
+        kTapOsc1,    // GROUPB WP-06: the last sample of the levelled output of the oscillators, the noise and the sub (element 0), read by the SourceTap processors
+        kTapOsc2,
+        kTapOsc3,
+        kTapNoise,
+        kTapSub,
         kNumOutputs
       };
 
@@ -102,6 +109,9 @@ namespace sbvital {
         for (int i = 0; i < kNumOscillators; ++i)
           oscillators_[i]->oscillator()->setNoteTable(table);
       }
+
+      /** GROUPB WP-06: the extra warp sources (Sub, Filter 1, Filter 2) of the three oscillators. The noise is the sample output they already know. */
+      void connectWarpSources();
 
     protected:
       void routeSource(int source, const poly_float* buffer, int destination, int num_samples, bool filter1_on, bool filter2_on,

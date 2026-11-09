@@ -364,6 +364,20 @@ private:
         menu.addItem (36, "Slide");
         menu.addItem (37, "Oct Note");
         menu.addItem (38, "Poly Aftertouch");
+        menu.addItem (39, "Stereo");
+
+        // the sources of the voice control and of GROUPB WP-06 (13-new-keys.md 4.34): the outputs of the sound sources and the sources of the note counter
+        const int sourceKey = findParamIndex (hashKey ("mod01.source"));
+        const auto addGroup = [&] (const char* name, int first, int last)
+        {
+            juce::PopupMenu group;
+            for (int i = first; i <= last; ++i)
+                group.addItem (i, modSourceTable()[i - 1].name, capStateForValue (sourceKey, static_cast<float> (i), ctx.host.engineCaps()).available);
+            menu.addSubMenu (name, group);
+        };
+        addGroup ("Voice Control", 40, 42);
+        addGroup ("Sound Sources", 43, 49);
+        addGroup ("Note & Voice", 50, 57);
 
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&sourceButton),
                             [this] (int result) {

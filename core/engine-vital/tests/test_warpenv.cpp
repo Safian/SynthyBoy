@@ -159,7 +159,8 @@ double powerAt (const std::vector<double>& p, double hz)
     return sum;
 }
 
-const char* const kModeNames[kNumWarpTypes] = {
+constexpr int kB21Modes = 52; // the warp modes of block B21 (the list has 24 more since GROUPB WP-06)
+const char* const kModeNames[kB21Modes] = {
     "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse", "FM A", "FM B", "RM A", "RM B", "Sync Var", "Bend +", "Bend -", "Bend +/-",
     "Asym +", "Asym -", "Asym +/-", "Flip", "Mirror", "Remap 1", "Remap 2", "Remap 3", "Remap 4", "Odd/Even", "LPF", "HPF", "Tube", "Soft Clip",
     "Hard Clip", "Diode 1", "Diode 2", "Linear Fold", "Sine Fold", "Zero-Square", "Asym", "Rectify", "Sine Shaper", "Stomp Box", "Tape Sat.",
@@ -199,7 +200,7 @@ TEST (warpenv_capabilities_and_lists)
     const EngineCapsMask bits = kCapWarpAll | kCapEnv1Toggle;
     CHECK ((vital->capabilities() & bits) == bits);
     CHECK ((own->capabilities() & bits) == 0);
-    CHECK_EQ (kNumWarpTypes, 52);
+    CHECK_EQ (kNumWarpTypes, 76); // 52 after block B21, 76 with the modes from the Noise, Sub and Filters (GROUPB WP-06, test_modsources.cpp)
     for (const char* key : { "osc1.warp.type", "osc2.warp.type", "osc3.warp.type", "osc1.warp2.type", "osc2.warp2.type", "osc3.warp2.type" })
     {
         const ParamInfo* info = findParamByKey (key);
@@ -217,7 +218,7 @@ TEST (warpenv_capabilities_and_lists)
     // the cap bit of a value of the choice list
     const size_t index = static_cast<size_t> (findParamIndex (findParamByKey ("osc1.warp.type")->id));
     CHECK_EQ (requiredCapsForValue (index, 7.0f), requiredCaps (index));
-    for (int mode = 11; mode < kNumWarpTypes; ++mode)
+    for (int mode = 11; mode < kB21Modes; ++mode)
         CHECK ((requiredCapsForValue (index, static_cast<float> (mode)) & bitOfMode (mode)) != 0);
     for (const char* key : { "sub.env1", "osc1.env1", "osc2.env1", "osc3.env1", "noise.env1", "filter1.env1", "filter2.env1" })
     {
@@ -236,7 +237,7 @@ TEST (warpenv_every_mode_is_audible_in_both_slots)
     const auto reference = base().play();
     CHECK (rms (reference) > 0.02);
     for (int slot = 1; slot <= 2; ++slot)
-        for (int mode = 11; mode < kNumWarpTypes; ++mode)
+        for (int mode = 11; mode < kB21Modes; ++mode)
         {
             // the modulator modes use the other oscillators: the list of osc 1 has osc 2 / osc 3 in the first / second place
             Synth e = base();
@@ -257,7 +258,7 @@ TEST (warpenv_slot_one_and_slot_two_render_the_same_mode_identically)
 {
     // (Sync Var is left out: like Sync, it raises the harmonic content that the band limit of the wavetable read allows in slot 1 only; slot 2 has
     // always read the table at the pitch of the oscillator, see 13-new-keys.md 4.22)
-    for (int mode = 12; mode < kNumWarpTypes; ++mode)
+    for (int mode = 12; mode < kB21Modes; ++mode)
     {
         Synth one = base(), two = base();
         one.set ("osc1.warp.type", static_cast<float> (mode));
@@ -273,7 +274,7 @@ TEST (warpenv_slot_one_and_slot_two_render_the_same_mode_identically)
 TEST (warpenv_every_mode_is_finite_with_unison_and_a_chord)
 {
     // unison 5 and two notes at once (the voice pairing) and one note alone (the single voice path), the warp amount modulated by a macro
-    for (int mode = 11; mode < kNumWarpTypes; ++mode)
+    for (int mode = 11; mode < kB21Modes; ++mode)
     {
         for (int chord = 0; chord < 2; ++chord)
         {
@@ -603,7 +604,7 @@ TEST (warpenv_extreme_settings_stay_finite)
 {
     // every mode in both slots at the ends of every knob, on the extreme notes, with a hot modulator and a full unison
     for (int slot = 1; slot <= 2; ++slot)
-        for (int mode = 11; mode < kNumWarpTypes; ++mode)
+        for (int mode = 11; mode < kB21Modes; ++mode)
             for (float amount : { 0.0f, 100.0f })
                 for (int key : { 12, 120 })
                 {

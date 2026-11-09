@@ -105,6 +105,21 @@ namespace sbvital {
     }
   }
 
+  // GROUPB WP-06: Sub, Filter 1 and Filter 2 as warp sources. The cells of the oscillators are shared with the clones of the voice pairs (set at every block: the filter
+  // taps are plugged after this module is initialised); the filter taps are the Feedback nodes of the voice router (the previous block of the filter, per voice pair), the sub is processed before the oscillators.
+  void ProducersModule::connectWarpSources() {
+    for (int i = 0; i < kNumOscillators; ++i) {
+      SynthOscillator* osc = oscillators_[i]->oscillator();
+      osc->setExtraWarpSource(1, sub_module_->output(SubModule::kRaw));
+      osc->setExtraWarpSource(2, input(kFilter1Tap)->source);
+      osc->setExtraWarpSource(3, input(kFilter2Tap)->source);
+      SampleOscillator* so = oscillators_[i]->sampleOscillator();
+      so->setExtraWarpSource(1, sub_module_->output(SubModule::kRaw));
+      so->setExtraWarpSource(2, input(kFilter1Tap)->source);
+      so->setExtraWarpSource(3, input(kFilter2Tap)->source);
+    }
+  }
+
   // SynthyBoy (GROUPB, WP-05): the Ratio SRC of oscillator `osc` as 0 (the note of the voice) or 1 .. 4 (oscillator 1 .. 3, sub). A source that
   // is the oscillator itself, that is switched off, or whose own chain of sources leads back to this oscillator (A and B tuned to each other)
   // is the note of the voice.
@@ -167,6 +182,7 @@ namespace sbvital {
 
   void ProducersModule::process(int num_samples) {
     SynthModule::process(num_samples);
+    connectWarpSources();
 
     getLocalProcessor(sampler_)->process(num_samples);
     getLocalProcessor(sub_module_)->process(num_samples);
@@ -214,6 +230,12 @@ namespace sbvital {
         processed[i] = true;
         applyMute(i, num_samples);
       }
+
+    // GROUPB WP-06: the taps of the sources (the last sample of the levelled output; SourceTap holds it for the block)
+    for (int i = 0; i < kNumOscillators; ++i)
+      output(kTapOsc1 + i)->buffer[0] = oscillators_[i]->output(OscillatorModule::kLevelled)->buffer[num_samples - 1];
+    output(kTapNoise)->buffer[0] = sampler_->output(SampleModule::kLevelled)->buffer[num_samples - 1];
+    output(kTapSub)->buffer[0] = sub_module_->output(SubModule::kLevelled)->buffer[num_samples - 1];
 
     poly_float* filter1_output = output(kToFilter1)->buffer;
     poly_float* filter2_output = output(kToFilter2)->buffer;

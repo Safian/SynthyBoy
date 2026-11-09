@@ -69,6 +69,10 @@ namespace sbvital {
       virtual ProcessorRouter* getPolyRouter();
       virtual void resetFeedbacks(poly_mask reset_mask);
 
+      /** GROUPB WP-06: destination's input `index` reads `source` one block late through an audio rate Feedback node (a loop on purpose: the warps from a
+          filter, the filter being behind the oscillators). The node has its own history per clone of the router, like the nodes connect () inserts. */
+      void connectAudioFeedback(Processor* destination, const Output* source, int index);
+
     protected:
       // When we create a cycle into the ProcessorRouter graph, we must insert
       // a Feedback node and add it here.

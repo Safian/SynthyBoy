@@ -15,7 +15,7 @@ namespace synthyboy
 struct LiveValues
 {
     static constexpr int kMaxTargets = 96;   // knobs that show their modulated value at the same time
-    static constexpr int kMaxSources = 48;   // >= kNumModSources
+    static constexpr int kMaxSources = 64;   // >= kNumModSources
     static constexpr int kNumLfos = 10;
     static constexpr int kNumEnvs = 6;
 

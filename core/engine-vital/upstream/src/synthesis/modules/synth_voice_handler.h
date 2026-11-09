@@ -89,6 +89,7 @@ namespace sbvital {
       void createModulators();
       void createVoiceOutput();
       void createFilters(Output* keytrack);
+      void createSourceTaps();   // GROUPB WP-06
 
       void setupPolyModulationReadouts();
 
@@ -128,6 +129,8 @@ namespace sbvital {
       LineMap* pitch_wheel_mapping_;
 
       cr::Value* stereo_;
+      cr::Value* active_voices_ = nullptr;   // GROUPB WP-06: the number of active voices over the polyphony
+      cr::Value* fixed_ = nullptr;           // GROUPB WP-06: the source Fixed (1)
       cr::Value* lfo_rate_scale_ = nullptr;   // SynthyBoy (GROUPA2, WP-07)
       cr::Value* lowest_active_note_;
       cr::Multiply* note_percentage_;

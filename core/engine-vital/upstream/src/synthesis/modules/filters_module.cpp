@@ -163,5 +163,11 @@ namespace sbvital {
     else
       processParallel(num_samples);
     route(num_samples, mode);
+
+    // GROUPB WP-06: the taps (the last sample for the modulation sources, the whole block for the warps from a filter)
+    output(kTapFilter1)->buffer[0] = filter_1_->output()->buffer[num_samples - 1];
+    output(kTapFilter2)->buffer[0] = filter_2_->output()->buffer[num_samples - 1];
+    utils::copyBuffer(output(kFeedFilter1)->buffer, filter_1_->output()->buffer, num_samples);
+    utils::copyBuffer(output(kFeedFilter2)->buffer, filter_2_->output()->buffer, num_samples);
   }
 } // namespace sbvital

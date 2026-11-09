@@ -456,7 +456,7 @@ TEST (uim_warp_groups_cover_every_choice_once)
     const auto groups = warpTypeGroups();
     const auto ref = resolveKey ("osc1.warp.type");
     CHECK (ref.valid());
-    std::array<int, 64> seen {};
+    std::array<int, 96> seen {};
     for (const auto& g : groups)
     {
         CHECK (! g.gap || g.items.empty());
@@ -475,7 +475,7 @@ TEST (uim_warp_groups_cover_every_choice_once)
     }
     CHECK (bendInAlt);
     CHECK_EQ (std::string (choiceName (*ref.info, 11)), std::string ("Sync Var"));
-    CHECK_EQ (choiceCount (*ref.info), static_cast<size_t> (52));
+    CHECK_EQ (choiceCount (*ref.info), static_cast<size_t> (kNumWarpTypes));
 }
 
 TEST (uim_touch_tracker_tap_swipe_pinch_pan)

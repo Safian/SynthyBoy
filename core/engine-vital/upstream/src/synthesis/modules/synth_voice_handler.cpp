@@ -24,6 +24,7 @@
 #include "operators.h"
 #include "portamento_slope.h"
 #include "random_lfo_module.h"
+#include "source_tap.h"
 #include "synth_constants.h"
 #include "lfo_module.h"
 #include "trigger_random.h"
@@ -95,6 +96,7 @@ namespace sbvital {
     createProducers();
     createModulators();
     createFilters(note_from_reference_->output());
+    createSourceTaps();
     createVoiceOutput();
 
     Add* voice_sum = new Add();
@@ -359,6 +361,50 @@ namespace sbvital {
     createStatusOutput("pitch_wheel", pitch_wheel_percent());
   }
 
+  // GROUPB WP-06 (13-new-keys.md 4.34): the oscillators, the noise, the sub and the filters as matrix sources, and the sources that are not a signal
+  void SynthVoiceHandler::createSourceTaps() {
+    struct Tap { const char* name; Output* input; };
+    const Tap taps[] = {
+      { "osc_1_out", producers_->output(ProducersModule::kTapOsc1) },   { "osc_2_out", producers_->output(ProducersModule::kTapOsc2) },
+      { "osc_3_out", producers_->output(ProducersModule::kTapOsc3) },   { "noise_out", producers_->output(ProducersModule::kTapNoise) },
+      { "sub_out", producers_->output(ProducersModule::kTapSub) },      { "filter_1_out", filters_module_->output(FiltersModule::kTapFilter1) },
+      { "filter_2_out", filters_module_->output(FiltersModule::kTapFilter2) },
+    };
+    for (const Tap& tap : taps) {
+      SourceTap* processor = new SourceTap();
+      processor->plug(tap.input);
+      addProcessor(processor);
+      data_->mod_sources[tap.name] = processor->output();
+      createStatusOutput(tap.name, processor->output());
+    }
+    // the warps from a filter read the filter one block late (the filters run behind the oscillators): a Feedback node per filter
+    getPolyRouter()->connectAudioFeedback(producers_, filters_module_->output(FiltersModule::kFeedFilter1), ProducersModule::kFilter1Tap);
+    getPolyRouter()->connectAudioFeedback(producers_, filters_module_->output(FiltersModule::kFeedFilter2), ProducersModule::kFilter2Tap);
+
+    active_voices_ = new cr::Value(0.0f);
+    addIdleMonoProcessor(active_voices_);
+    fixed_ = new cr::Value(1.0f);
+    addIdleMonoProcessor(fixed_);
+    data_->mod_sources["active_voices"] = active_voices_->output();
+    data_->mod_sources["fixed"] = fixed_->output();
+    createStatusOutput("active_voices", active_voices_->output());
+    createStatusOutput("fixed", fixed_->output());
+    data_->mod_sources["note_on_alt1"] = note_on_alt(0);
+    data_->mod_sources["note_on_alt2"] = note_on_alt(1);
+    data_->mod_sources["note_on_rand2"] = note_on_rand2();
+    data_->mod_sources["release_velocity"] = lift();   // the note-off velocity: the Vital source Lift is Serum's Release Velocity
+    data_->mod_sources["expression_x"] = expression_x();
+    createStatusOutput("note_on_alt1", note_on_alt(0));
+    createStatusOutput("note_on_alt2", note_on_alt(1));
+    createStatusOutput("note_on_rand2", note_on_rand2());
+    createStatusOutput("expression_x", expression_x());
+    for (int k = 0; k < kNumDiscreteRandoms; ++k) {
+      const std::string name = "note_on_discrete_" + std::to_string(k + 1);
+      data_->mod_sources[name] = note_on_discrete(k);
+    }
+    createStatusOutput("note_on_discrete_1", note_on_discrete(0));
+  }
+
   FilterCurveShared* SynthVoiceHandler::getFilterCurve(int filter) {
     return filters_module_->curveShared(filter);
   }
@@ -466,6 +512,8 @@ namespace sbvital {
     VoiceHandler::process(num_samples);
     int num_voices = getNumActiveVoices();
     num_voices_.buffer[0] = num_voices;
+    if (active_voices_)   // GROUPB WP-06: the active voices over the polyphony limit
+      active_voices_->set(std::min(1.0f, static_cast<mono_float>(num_voices) / static_cast<mono_float>(std::max(1, polyphony()))));
     note_retriggered_.clearTrigger();
 
     if (num_voices == 0) {

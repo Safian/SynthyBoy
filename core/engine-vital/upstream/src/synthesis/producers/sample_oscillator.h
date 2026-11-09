@@ -9,6 +9,7 @@
 // a processor instance serves.
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 #include "processor.h"
@@ -106,6 +107,8 @@ namespace sbvital {
       void setSampleOutput(Output* sample) { sample_ = sample; }
       /** GROUPB WP-05: the tap that carries this oscillator's pitch (MIDI notes per voice) to the Ratio SRC of the others; shared with the wavetable oscillator of the module. */
       void setPitchTap(std::shared_ptr<Output> tap) { pitch_tap_ = std::move(tap); }
+      /** GROUPB WP-06: the extra warp sources, the Sub (1), Filter 1 (2) and Filter 2 (3) (0 is the noise: setSampleOutput); a cell shared with the clones. */
+      void setExtraWarpSource(int index, const Output* source) { (*extra_sources_)[static_cast<size_t>(index)] = source; }
 
       void setOversampleAmount(int oversample) override;
       void reset(poly_mask reset_mask) override;
@@ -137,5 +140,6 @@ namespace sbvital {
       int scratch_size_ = 0;
       std::shared_ptr<float[]> scratch_;
       std::shared_ptr<Output> pitch_tap_;
+      std::shared_ptr<std::array<const Output*, 4>> extra_sources_ = std::make_shared<std::array<const Output*, 4>>();
   };
 } // namespace sbvital

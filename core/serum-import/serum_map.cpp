@@ -36,7 +36,11 @@ ENUM (kWarpEnum, 0, "warp",
       { "kDistDiode2", 31, X }, { "kDistLinFold", 32, X }, { "kDistSinFold", 33, X }, { "kDistZeroSquare", 34, X }, { "kDistAsym", 35, X }, { "kDistRectify", 36, X },
       { "kDistSineShaper", 37, X }, { "kDistStompBox", 38, X }, { "kDistTapeSat", 39, X }, { "kDistSoftSat", 40, X },
       { "kFM_OSC", 41, C }, { "kFM_OSC2", 42, C }, { "kFMX_OSC", 43, C }, { "kFMX_OSC2", 44, C }, { "kFMP_OSC", 45, C }, { "kFMP_OSC2", 46, C },
-      { "kPD_OSC", 47, X }, { "kPD_OSC2", 48, X }, { "kSelfPD", 49, X }, { "kAM_OSC", 50, X }, { "kAM_OSC2", 51, X }, { "kRM_OSC", 9, C }, { "kRM_OSC2", 10, C });
+      { "kPD_OSC", 47, X }, { "kPD_OSC2", 48, X }, { "kSelfPD", 49, X }, { "kAM_OSC", 50, X }, { "kAM_OSC2", 51, X }, { "kRM_OSC", 9, C }, { "kRM_OSC2", 10, C },
+      // GROUPB WP-06: the modes from the noise, the sub and the two filters (entries 52 .. 75, four per family: NOISE, SUB, FILT1, FILT2)
+      { "kFM_NOISE", 52, C }, { "kFM_SUB", 53, C }, { "kFM_FILT1", 54, C }, { "kFM_FILT2", 55, C }, { "kFMX_NOISE", 56, C }, { "kFMX_SUB", 57, C }, { "kFMX_FILT1", 58, C }, { "kFMX_FILT2", 59, C },
+      { "kFMP_NOISE", 60, C }, { "kFMP_SUB", 61, C }, { "kFMP_FILT1", 62, C }, { "kFMP_FILT2", 63, C }, { "kPD_NOISE", 64, X }, { "kPD_SUB", 65, X }, { "kPD_FILT1", 66, X }, { "kPD_FILT2", 67, X },
+      { "kAM_NOISE", 68, X }, { "kAM_SUB", 69, X }, { "kAM_FILT1", 70, X }, { "kAM_FILT2", 71, X }, { "kRM_NOISE", 72, C }, { "kRM_SUB", 73, C }, { "kRM_FILT1", 74, C }, { "kRM_FILT2", 75, C });
 
 ENUM (kOscTypeEnum, 0, "osc.type", { "kOsc_WT", 0, X }, { "kOsc_Sample", 1, X }, { "kOsc_MultiSample", 1, A }, { "kOsc_Granular", 1, A }, { "kOsc_Spectral", 1, A });
 ENUM (kLoopEnum, 0, "loop", { "kNone", 0, X }, { "kForward", 1, X }, { "kReverse", 2, X }, { "kPingPong", 3, X }, { "kTailed", 4, X });
@@ -320,8 +324,20 @@ int sourceChoiceOf (int id, const char*& name, Fid& fid) noexcept
         case 17: return keyChoice ("note");
         case 18: return keyChoice ("aftertouch");
         case 19: return keyChoice ("poly_aftertouch");
+        case 20: return keyChoice ("noise");           // GROUPB WP-06 (A401): the output of the noise oscillator
         case 21: return keyChoice ("random");
-        case 22: fid = Fid::approx; return keyChoice ("random"); // Rand 2: a second per-note random number, the same source here
+        case 22: return keyChoice ("note_on_rand2");   // Rand 2: a second per-note random number
+        case 23: return keyChoice ("note_on_alt1");
+        case 24: return keyChoice ("note_on_alt2");
+        case 34: return keyChoice ("expression_x");
+        case 38: return keyChoice ("fixed");
+        case 49: return keyChoice ("osc_a");
+        case 50: return keyChoice ("osc_b");
+        case 51: return keyChoice ("osc_c");
+        case 52: return keyChoice ("sub");
+        case 53: return keyChoice ("filter1");
+        case 54: return keyChoice ("filter2");
+        case 55: return keyChoice ("active_voices");
         case 25: case 26: case 27: case 28: case 29: case 30: case 31: case 32:
         {
             static const char* k[] = { "macro1", "macro2", "macro3", "macro4", "macro5", "macro6", "macro7", "macro8" };
@@ -330,11 +346,11 @@ int sourceChoiceOf (int id, const char*& name, Fid& fid) noexcept
         case 33: return keyChoice ("pitch_wheel");
         case 35: return keyChoice ("slide");           // Expr Y (Timbre)
         case 36: fid = Fid::approx; return keyChoice ("poly_aftertouch"); // Expr Z (pressure)
-        case 37: return keyChoice ("lift");
+        case 37: return keyChoice ("release_velocity");   // the same output as lift (Vital's name for the note-off velocity)
         case 56: return keyChoice ("voice_mod1");      // GROUPA2 (WP-07): the sources of the voice control
         case 57: return keyChoice ("voice_mod2");
         case 58: return keyChoice ("voice_index");
-        case 59: fid = Fid::approx; return keyChoice ("random"); // Rand (Discrete)
+        case 59: return keyChoice ("note_on_rand_discrete"); // Rand (Discrete): a number of its own for every slot
         default: break;
     }
     name = "";

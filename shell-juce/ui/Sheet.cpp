@@ -227,11 +227,16 @@ void ParamSheet::showSourceMenu()
 {
     juce::PopupMenu menu;
     const int sourceKey = findParamIndex (hashKey ("mod01.source"));
+    // the first 42 sources as before; the 15 sources of GROUPB WP-06 (outputs of the sound sources, note counter) are two submenus
+    juce::PopupMenu sound, note;
     for (int s = 1; s <= kNumModSources; ++s)
     {
         const bool ok = capStateForValue (sourceKey, static_cast<float> (s), ctx.host.engineCaps()).available;
-        menu.addItem (s, juce::String (modSourceTable()[s - 1].name), ok, ctx.assign.flow().armedSource() == s);
+        auto& target = s <= 42 ? menu : (s <= 49 ? sound : note);
+        target.addItem (s, juce::String (modSourceTable()[s - 1].name), ok, ctx.assign.flow().armedSource() == s);
     }
+    menu.addSubMenu ("Sound Sources", sound);
+    menu.addSubMenu ("Note & Voice", note);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&assign),
                         [safe = juce::Component::SafePointer<ParamSheet> (this)] (int result)
                         {

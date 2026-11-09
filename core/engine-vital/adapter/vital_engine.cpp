@@ -149,6 +149,10 @@ std::string vitalSourceName (int index)
     if (index == 38) return "stereo";
     static const char* const voice[] = { "voice_index", "voice_mod1", "voice_mod2" }; // block B26 (GROUPA2, WP-07)
     if (index >= 39 && index < 42) return voice[index - 39];
+    // GROUPB WP-06 (choice values 43 .. 57): the outputs of the sound sources and the sources of the note counter
+    static const char* const groupb[] = { "osc_1_out", "osc_2_out", "osc_3_out", "noise_out", "sub_out", "filter_1_out", "filter_2_out", "active_voices", "note_on_alt1",
+                                          "note_on_alt2", "note_on_rand2", "note_on_discrete_1", "release_velocity", "expression_x", "fixed" };
+    if (index >= 42 && index < 57) return groupb[index - 42];
     return "";
 }
 
@@ -687,7 +691,8 @@ public:
              | kCapMpeRouting // block B24 (GROUPA1 WP-09): proven by core/engine-vital/tests/test_mpe.cpp
              | kCapFxDelayOffsetLeft | kCapReverbFeedback // block B25 (GROUPA1 WP-10): proven by core/engine-vital/tests/test_fxextra.cpp
              | kCapVoiceControl | kCapVoiceSources // block B26 (GROUPA2 WP-07): proven by core/engine-vital/tests/test_voicecontrol.cpp
-             | kCapOscExtras2; // block B27 (GROUPB WP-05): proven by core/engine-vital/tests/test_oscextra2.cpp
+             | kCapOscExtras2 // block B27 (GROUPB WP-05): proven by core/engine-vital/tests/test_oscextra2.cpp
+             | kCapModSources2 | kCapWarpSources; // GROUPB WP-06: proven by core/engine-vital/tests/test_modsources.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -1144,6 +1149,8 @@ private:
     {
         for (size_t k = 0; k < static_cast<size_t> (kNumModSources); ++k)
             sourceOutput[k] = engine->getModulationSource (vitalSourceName (static_cast<int> (k)));
+        for (size_t k = 0; k < discreteOutput.size(); ++k) // GROUPB WP-06: Note-On Rand (Discrete) gives every slot its own number
+            discreteOutput[k] = engine->getModulationSource ("note_on_discrete_" + std::to_string (k + 1));
 
         destinations.assign (modDestinationCount() + 1, Destination {});
         for (size_t choice = 1; choice <= modDestinationCount(); ++choice)
@@ -2227,13 +2234,13 @@ private:
         if (aux != slot.auxPlugged)
         {
             if (slot.auxPlugged > 0)
-                slot.processor->unplug (sourceOutput[static_cast<size_t> (slot.auxPlugged - 1)]);
+                slot.processor->unplug (sourceFor (k, slot.auxPlugged));
             slot.auxPlugged = 0;
             if (aux > 0)
             {
                 // like the main source: a source that depends on the destination would close a loop (the engine would allocate a
                 // feedback node), such an aux source is left unplugged
-                const sbvital::Output* out = sourceOutput[static_cast<size_t> (aux - 1)];
+                const sbvital::Output* out = sourceFor (k, aux);
                 const Destination& d = destinations[static_cast<size_t> (slot.destination)];
                 bool loop = false;
                 for (const sbvital::Processor* target : { d.mono, d.poly })
@@ -2344,12 +2351,20 @@ private:
         updateCurve (k, slot.source);
     }
 
+    /** The output a slot reads for a source choice: its own number for Note-On Rand (Discrete), the shared output of the source for the others. */
+    sbvital::Output* sourceFor (int k, int choice) const noexcept
+    {
+        if (choice == kSourceRandDiscrete && discreteOutput[static_cast<size_t> (k)] != nullptr)
+            return discreteOutput[static_cast<size_t> (k)];
+        return sourceOutput[static_cast<size_t> (choice - 1)];
+    }
+
     sbvital::modulation_change changeFor (int k, bool disconnecting) const noexcept
     {
         const Slot& slot = slots[static_cast<size_t> (k)];
         const Destination& d = destinations[static_cast<size_t> (slot.destination)];
         sbvital::modulation_change change {};
-        change.source = sourceOutput[static_cast<size_t> (slot.source - 1)];
+        change.source = sourceFor (k, slot.source);
         change.mono_destination = d.mono;
         change.poly_destination = d.poly;
         change.destination_scale = d.scale;
@@ -2795,7 +2810,7 @@ private:
     };
     std::vector<DestReadout> destReadout;
     std::array<const sbvital::StatusOutput*, kNumSlots> amountStatus {};
-    std::array<const sbvital::StatusOutput*, 48> sourceStatus {};
+    std::array<const sbvital::StatusOutput*, 64> sourceStatus {};
     std::array<sbvital::Value*, 8> macroValue {};
     std::array<const sbvital::StatusOutput*, 10> lfoPhaseStatus {};
     std::array<const sbvital::StatusOutput*, 6> envPhaseStatus {};
@@ -2820,6 +2835,7 @@ private:
     std::vector<Resolved> resolved;
     std::vector<Destination> destinations;
     std::array<sbvital::Output*, kNumModSources> sourceOutput {};
+    std::array<sbvital::Output*, 64> discreteOutput {};
     std::array<Slot, kNumSlots> slots;
     uint32_t matrixGeneration = 0;
     std::array<LineGenerator*, kNumLfo> lfoLines {};
@@ -2837,6 +2853,7 @@ private:
     // scale, tuning (audio thread); the note table is the one the voice handler reads
     static constexpr int kNumConform = 128;
     static constexpr int kSourceVelocity = 23, kSourceNote = 24; // modulation source choices
+    static constexpr int kSourceRandDiscrete = 54;               // GROUPB WP-06: Note-On Rand (Discrete)
     static constexpr int kSourceMacro1 = 18;                     // index of "macro1" in sourceOutput
     static constexpr int kSourceMacro5 = 28;                     // index of "macro5"
     std::array<int8_t, kNumConform> conform {};

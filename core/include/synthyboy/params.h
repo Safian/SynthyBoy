@@ -113,8 +113,8 @@ constexpr int kNumLegacyDistortionTypes = 6;
 /** oscN.warp.type / oscN.warp2.type entries 0 .. 10 are the Vital modes of state version 2; 11 .. 51 were appended in block B21
     (Serum 2 warp modes: 11 Sync Var .. 51 AM from the second other oscillator, 13-new-keys.md 4.22). */
 constexpr int kNumLegacyWarpTypes = 11;
-/** Number of entries of the warp lists after block B21. */
-constexpr int kNumWarpTypes = 52;
+/** Number of entries of the warp lists after GROUPB WP-06 (52 .. 75: FM Thru-Zero / Exp / Linear, PD, AM and RM from the Noise, Sub, Filter 1 and Filter 2; 52 after block B21). */
+constexpr int kNumWarpTypes = 76;
 
 /** The table, in stable order (state files and UIs list parameters in this order). */
 const ParamInfo* paramTable() noexcept;

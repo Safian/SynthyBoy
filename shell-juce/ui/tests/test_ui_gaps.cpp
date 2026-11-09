@@ -2470,6 +2470,70 @@ TEST (uig_wp05_ratio_source_smooth_interpolation_and_slice_destination)
     }
 }
 
+// GROUPB (WP-06): the 15 new sources are chips of the source bar and can be assigned by touch; the warp list offers the modes from the Noise, Sub and Filters in its groups
+TEST (uig_wp06_new_sources_are_chips_and_assignable_and_the_warp_list_has_the_new_modes)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        Rig rig (Page::osc, sz.w, sz.h);
+        rig.editor->setSourceBarOpen (true);
+        const char* const destinations[] = { "osc2.level", "osc1.level", "osc1.pan", "osc1.tune" };
+        int slots[15];
+        int n = 0;
+        for (int source = 43; source <= 57; ++source)
+        {
+            CHECK (rig.editor->sourceBar().chipFor (source) != nullptr);
+            // a different destination for every few sources so that the matrix never runs out of rows: the slots are taken in order
+            slots[n] = assignBySource (rig, source, destinations[(source - 43) % 4], 20.0f + static_cast<float> (source - 43));
+            CHECK (slots[n] >= 0);
+            auto& m = rig.editor->context().assign.matrix();
+            CHECK_EQ (static_cast<int> (m.get (modSlotParams (slots[n]).source)), source);
+            ++n;
+        }
+        // the sound sources are labelled with their module
+        CHECK_EQ (std::string (modSourceTable()[42].name), std::string ("Oscillator A"));
+        CHECK_EQ (std::string (modSourceTable()[56].name), std::string ("Fixed"));
+
+        rig.editor->context().view->oscTab = 0;
+        rig.editor->panelHost().setPage (Page::osc);
+        Panel* panel = rig.panelTitled ("Oscillator 1");
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        panel->setMoreExpanded (true);
+        ParamChoice* warp = nullptr;
+        for (const auto& c : panel->controls())
+            if (c->key() == "osc1.warp.type")
+                warp = dynamic_cast<ParamChoice*> (c.get());
+        CHECK (warp != nullptr);
+        if (warp == nullptr)
+            continue;
+        const auto menu = warp->buildOptionMenu();
+        int itemsEnabled = 0, total = 0;
+        std::function<void (const juce::PopupMenu&)> walk = [&] (const juce::PopupMenu& m)
+        {
+            juce::PopupMenu::MenuItemIterator it (m);
+            while (it.next())
+            {
+                if (it.getItem().subMenu != nullptr)
+                    walk (*it.getItem().subMenu);
+                else if (it.getItem().itemID >= 1 && it.getItem().itemID < ParamChoice::kExtraActionId)
+                {
+                    ++total;
+                    itemsEnabled += it.getItem().isEnabled ? 1 : 0;
+                }
+            }
+        };
+        walk (menu);
+        CHECK_EQ (total, kNumWarpTypes);       // every entry is in exactly one group
+        CHECK_EQ (itemsEnabled, total);        // the engine has the capability bits
+        warp->paramHandle().setPlainComplete (75.0f);
+        CHECK_EQ (static_cast<int> (rig.param ("osc1.warp.type") + 0.5f), 75);
+        rig.shot ("osc-wp06-" + juce::String (sz.name), sz.w, sz.h, true, Page::osc);
+    }
+}
+
 TEST (uig_sub_and_noise_knobs_take_modulation_by_touch)
 {
     Rig rig (Page::osc);

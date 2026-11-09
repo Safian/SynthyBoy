@@ -31,7 +31,13 @@ constexpr ModSourceInfo kSources[kNumModSources] = {
     // appended in block B20 (choice value 39, G4)
     { "stereo", "Stereo", true },
     // appended in block B26 (GROUPA2, WP-07; choice values 40 .. 42): the per voice values of the voice control
-    { "voice_index", "Voice Index", false }, { "voice_mod1", "Voice Mod 1", true }, { "voice_mod2", "Voice Mod 2", true }
+    { "voice_index", "Voice Index", false }, { "voice_mod1", "Voice Mod 1", true }, { "voice_mod2", "Voice Mod 2", true },
+    // appended by GROUPB WP-06 (13-new-keys.md 4.34; choice values 43 .. 57): the output of the sound sources, and the sources that are not a control
+    { "osc_a", "Oscillator A", true }, { "osc_b", "Oscillator B", true }, { "osc_c", "Oscillator C", true }, { "noise", "Noise", true }, { "sub", "Sub", true },
+    { "filter1", "Filter 1", true }, { "filter2", "Filter 2", true },
+    { "active_voices", "Active Voices", false }, { "note_on_alt1", "Note-On Alt 1", false }, { "note_on_alt2", "Note-On Alt 2", false },
+    { "note_on_rand2", "Note-On Rand 2", false }, { "note_on_rand_discrete", "Note-On Rand (Discrete)", false }, { "release_velocity", "Release Velocity", false },
+    { "expression_x", "Expression X", true }, { "fixed", "Fixed", false }
 };
 
 int findIndexByKey (const char* key) noexcept

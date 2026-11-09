@@ -47,7 +47,13 @@ constexpr const char* const kMorphTypes[] = {
     "Odd/Even", "Filter LPF", "Filter HPF", "Dist Tube", "Dist Soft Clip", "Dist Hard Clip", "Dist Diode 1", "Dist Diode 2",                      \
     "Dist Linear Fold", "Dist Sine Fold", "Dist Zero-Square", "Dist Asym", "Dist Rectify", "Dist Sine Shaper", "Dist Stomp Box",                \
     "Dist Tape Sat.", "Dist Soft Sat.", "FM Thru-Zero from " X, "FM Thru-Zero from " Y, "FM Exp from " X, "FM Exp from " Y,                      \
-    "FM Linear from " X, "FM Linear from " Y, "PD from " X, "PD from " Y, "PD Self", "AM from " X, "AM from " Y
+    "FM Linear from " X, "FM Linear from " Y, "PD from " X, "PD from " Y, "PD Self", "AM from " X, "AM from " Y,                                 \
+    /* GROUPB WP-06: from the Noise, Sub, Filter 1, Filter 2 (entries 52 .. 75) */                                                               \
+    "FM Thru-Zero from Noise", "FM Thru-Zero from Sub", "FM Thru-Zero from Filter 1", "FM Thru-Zero from Filter 2",                              \
+    "FM Exp from Noise", "FM Exp from Sub", "FM Exp from Filter 1", "FM Exp from Filter 2",                                                      \
+    "FM Linear from Noise", "FM Linear from Sub", "FM Linear from Filter 1", "FM Linear from Filter 2",                                          \
+    "PD from Noise", "PD from Sub", "PD from Filter 1", "PD from Filter 2", "AM from Noise", "AM from Sub", "AM from Filter 1", "AM from Filter 2", \
+    "RM from Noise", "RM from Sub", "RM from Filter 1", "RM from Filter 2"
 constexpr const char* const kWarpTypes1[] = { "None", "Sync", "Formant", "Quantize", "Bend", "Squeeze", "Pulse",
                                               "FM from Osc 2", "FM from Osc 3", "RM from Osc 2", "RM from Osc 3",
                                               SB_WARP_APPENDED("Osc 2", "Osc 3") };

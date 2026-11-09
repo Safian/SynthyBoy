@@ -347,7 +347,26 @@ namespace sbvital {
     template<class Read>
     force_inline poly_int xWarpPhase(const SynthOscillator::WarpStage& st, SynthOscillator::WarpState& ws, poly_int phase, poly_float amount,
                                      poly_float inc, int i, poly_float& mult, Read read) {
-      const int type = st.type;
+      int type = st.type;
+      if (SynthOscillator::isSourceWarp(type)) {
+        // GROUPB WP-06: the modes from the Noise, Sub and Filters are the modes of the other oscillators with another modulator (st.mod)
+        static const int kFamilyType[5] = { SynthOscillator::kFmThruZeroA, SynthOscillator::kFmExpA, SynthOscillator::kFmLinearA, SynthOscillator::kPdA, SynthOscillator::kAmA };
+        const int family = SynthOscillator::sourceWarpFamily(type);
+        if (family == 5) {
+          if (st.mod == nullptr)
+            return phase;
+          const poly_float m = xModulator(st.mod, st.side, i);
+          poly_float gain;
+          for (size_t l = 0; l < poly_float::kSize; ++l) {
+            const float a = std::max(0.0f, std::min(1.0f, amount[l]));
+            const float mod = std::max(-1.0f, std::min(1.0f, m[l]));
+            gain.set(l, 1.0f - a + a * mod);
+          }
+          mult *= gain;
+          return phase;
+        }
+        type = kFamilyType[family];
+      }
       if (isXPhaseDomain(type)) {
         poly_int out;
         for (size_t l = 0; l < poly_float::kSize; ++l) {
@@ -1858,6 +1877,11 @@ namespace sbvital {
     voice_block_.warp2_side = left_active && right_active ? 0 : (left_active ? 1 : 2);
     {
       const auto mod_source = [this](int type) -> const poly_float* {
+        if (isSourceWarp(type)) {
+          const int source = sourceWarpSource(type);
+          const Output* out = source == 0 ? sample_ : (*extra_sources_)[static_cast<size_t>(source)];
+          return out != nullptr ? out->buffer : nullptr;
+        }
         switch (type) {
           case kFmThruZeroA: case kFmExpA: case kFmLinearA: case kPdA: case kAmA:
             return first_mod_oscillator_ != nullptr ? first_mod_oscillator_->buffer : nullptr;

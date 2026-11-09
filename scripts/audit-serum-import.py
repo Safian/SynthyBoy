@@ -201,6 +201,9 @@ WARP = {'kNoWarp': 0, 'kSync': 1, 'kQuantize': 3, 'kPWM': 6, 'kBendPos': 12, 'kB
         'kDistHardClip': 29, 'kDistDiode1': 30, 'kDistDiode2': 31, 'kDistLinFold': 32, 'kDistSinFold': 33, 'kDistZeroSquare': 34, 'kDistAsym': 35, 'kDistRectify': 36,
         'kDistSineShaper': 37, 'kDistStompBox': 38, 'kDistTapeSat': 39, 'kDistSoftSat': 40, 'kFM_OSC': 41, 'kFM_OSC2': 42, 'kFMX_OSC': 43, 'kFMX_OSC2': 44, 'kFMP_OSC': 45,
         'kFMP_OSC2': 46, 'kPD_OSC': 47, 'kPD_OSC2': 48, 'kSelfPD': 49, 'kAM_OSC': 50, 'kAM_OSC2': 51, 'kRM_OSC': 9, 'kRM_OSC2': 10}
+for _i, _fam in enumerate(('kFM', 'kFMX', 'kFMP', 'kPD', 'kAM', 'kRM')):   # GROUPB WP-06: the modes from the noise, sub and filters, entries 52 .. 75
+    for _j, _src in enumerate(('NOISE', 'SUB', 'FILT1', 'FILT2')):
+        WARP['%s_%s' % (_fam, _src)] = 52 + 4 * _i + _j
 STACK = {'kNoUnisonStack': 0, 'kCenter12': 1, 'kCenter24': 2, 'kOctave1': 3, 'kOctave2': 4, 'kOctave3': 4, 'kOctaveFifth1': 5, 'kOctaveFifth2': 6, 'kOctaveFifth3': 6}
 DETUNE = {'kDetuneLinear': 0, 'kDetuneSuper': 1, 'kDetuneExp': 2, 'kDetuneInv': 3, 'kDetuneRandom': 4}
 LOOP = {'kNone': 0, 'kForward': 1, 'kReverse': 2, 'kPingPong': 3, 'kTailed': 4}
@@ -721,8 +724,10 @@ class Audit:
             return
         got = sb['state']['params'].get('mod%02d.source' % slot)
         self.stats['mod sources'] += 1
-        base = {1: 'mod_wheel', 2: 'env1', 3: 'env2', 4: 'env3', 5: 'env4', 16: 'velocity', 17: 'note', 18: 'aftertouch', 19: 'poly_aftertouch', 21: 'random', 22: 'random', 33: 'pitch_wheel',
-                35: 'slide', 36: 'poly_aftertouch', 37: 'lift', 56: 'voice_mod1', 57: 'voice_mod2', 58: 'voice_index', 59: 'random'}
+        base = {1: 'mod_wheel', 2: 'env1', 3: 'env2', 4: 'env3', 5: 'env4', 16: 'velocity', 17: 'note', 18: 'aftertouch', 19: 'poly_aftertouch', 20: 'noise', 21: 'random',
+                22: 'note_on_rand2', 23: 'note_on_alt1', 24: 'note_on_alt2', 33: 'pitch_wheel', 34: 'expression_x', 35: 'slide', 36: 'poly_aftertouch', 37: 'release_velocity',
+                38: 'fixed', 49: 'osc_a', 50: 'osc_b', 51: 'osc_c', 52: 'sub', 53: 'filter1', 54: 'filter2', 55: 'active_voices', 56: 'voice_mod1', 57: 'voice_mod2',
+                58: 'voice_index', 59: 'note_on_rand_discrete'}
         sid = src[0]
         if 6 <= sid <= 13:
             want_key = 'lfo%d' % (sid - 5)

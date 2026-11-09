@@ -177,6 +177,13 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (need ("mod01.source", 39.0f), static_cast<EngineCapsMask> (kCapModAmount));
     CHECK_EQ (need ("mod01.source", 40.0f), static_cast<EngineCapsMask> (kCapVoiceSources));
     CHECK_EQ (need ("mod01.source", 42.0f), static_cast<EngineCapsMask> (kCapVoiceSources));
+    CHECK_EQ (need ("mod01.source", 43.0f), static_cast<EngineCapsMask> (kCapModSources2));   // GROUPB WP-06
+    CHECK_EQ (need ("mod01.source", 57.0f), static_cast<EngineCapsMask> (kCapModSources2));
+    CHECK_EQ (need ("mod01.aux_source", 50.0f), static_cast<EngineCapsMask> (kCapAuxSource | kCapModSources2));
+    CHECK_EQ (need ("osc1.warp.type", 51.0f), static_cast<EngineCapsMask> (kCapWarpPdAm));
+    CHECK_EQ (need ("osc2.warp.type", 52.0f), static_cast<EngineCapsMask> (kCapWarpSources));
+    CHECK_EQ (need ("osc2.warp2.type", 52.0f), static_cast<EngineCapsMask> (kCapWarp2 | kCapWarpSources));
+    CHECK_EQ (need ("osc3.warp.type", 75.0f), static_cast<EngineCapsMask> (kCapWarpSources));
     CHECK_EQ (need ("mod01.aux_source", 41.0f), static_cast<EngineCapsMask> (kCapAuxSource | kCapVoiceSources));
     CHECK_EQ (requiredCaps (static_cast<size_t> (findParamIndex (findParamByKey ("voicectl.s4.cutoff")->id))), static_cast<EngineCapsMask> (kCapVoiceControl));
     CHECK_EQ (requiredCaps (static_cast<size_t> (findParamIndex (findParamByKey ("voicectl.osc.sub")->id))), static_cast<EngineCapsMask> (kCapVoiceControl));

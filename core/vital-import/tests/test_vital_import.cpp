@@ -350,14 +350,14 @@ TEST (vi_fixture_osc_all)
     CHECK_EQ (val (r, "osc1.destination"), 4.0f);
     CHECK_EQ (r.report.numApproximated, 0);
 
-    // engine indices 9 and 12 (from sample) have no counterpart: None + approximated; 10 and 11 shift down by one
-    for (const auto& c : { std::make_pair (9, 0), std::make_pair (12, 0), std::make_pair (10, 9), std::make_pair (11, 10) })
+    // engine indices 9 and 12 (from sample) are the noise source since GROUPB WP-06 (FM Thru-Zero / RM from Noise, 52 and 72, approximated); 10 and 11 shift down by one
+    for (const auto& c : { std::make_pair (9, 52), std::make_pair (12, 72), std::make_pair (10, 9), std::make_pair (11, 10) })
     {
         f.set ("osc_2_distortion_type", c.first);
         const auto q = run (f);
         CHECK_EQ (val (q, "osc2.warp.type"), static_cast<float> (c.second));
         const bool flagged = findItem (q, "osc_2_distortion_type", ItemKind::approximated) != nullptr;
-        CHECK_EQ (flagged, c.second == 0);
+        CHECK_EQ (flagged, c.second >= 52);
     }
     // destinations 5 .. 14 (send to one effect) become Effects only
     for (int d = 5; d <= 14; ++d)

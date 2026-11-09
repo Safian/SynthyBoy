@@ -120,7 +120,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.morph.type` | Osc 1 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 1 / Spectral Morph |  |  |
 | `osc1.morph.amount` | Osc 1 Morph Amount | 0 .. 100 % | 50 % | Osc 1 / Spectral Morph | mod |  |
 | `osc1.morph.spread` | Osc 1 Morph Spread | -100 .. 100 % | 0 % | Osc 1 / Spectral Morph | mod |  |
-| `osc1.warp.type` | Osc 1 Warp Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 1 / Warp |  |  |
+| `osc1.warp.type` | Osc 1 Warp Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 1 / Warp |  |  |
 | `osc1.warp.amount` | Osc 1 Warp Amount | 0 .. 100 % | 50 % | Osc 1 / Warp | mod |  |
 | `osc1.warp.phase` | Osc 1 Warp Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp | mod |  |
 | `osc1.warp.spread` | Osc 1 Warp Spread | -100 .. 100 % | 0 % | Osc 1 / Warp | mod |  |
@@ -157,7 +157,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.sample.length_beats` | Osc 1 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 1 / Sample |  |  |
 | `osc1.sample.uni_start` | Osc 1 Sample Unison Start | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
 | `osc1.sample.uni_span` | Osc 1 Sample Unison Span | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
-| `osc1.warp2.type` | Osc 1 Warp 2 Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 1 / Warp 2 |  |  |
+| `osc1.warp2.type` | Osc 1 Warp 2 Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 1 / Warp 2 |  |  |
 | `osc1.warp2.amount` | Osc 1 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 1 / Warp 2 | mod |  |
 | `osc1.warp2.phase` | Osc 1 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp 2 | mod |  |
 | `osc1.warp2.spread` | Osc 1 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 1 / Warp 2 | mod |  |
@@ -197,7 +197,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.morph.type` | Osc 2 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 2 / Spectral Morph |  |  |
 | `osc2.morph.amount` | Osc 2 Morph Amount | 0 .. 100 % | 50 % | Osc 2 / Spectral Morph | mod |  |
 | `osc2.morph.spread` | Osc 2 Morph Spread | -100 .. 100 % | 0 % | Osc 2 / Spectral Morph | mod |  |
-| `osc2.warp.type` | Osc 2 Warp Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 2 / Warp |  |  |
+| `osc2.warp.type` | Osc 2 Warp Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 2 / Warp |  |  |
 | `osc2.warp.amount` | Osc 2 Warp Amount | 0 .. 100 % | 50 % | Osc 2 / Warp | mod |  |
 | `osc2.warp.phase` | Osc 2 Warp Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp | mod |  |
 | `osc2.warp.spread` | Osc 2 Warp Spread | -100 .. 100 % | 0 % | Osc 2 / Warp | mod |  |
@@ -234,7 +234,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.sample.length_beats` | Osc 2 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 2 / Sample |  |  |
 | `osc2.sample.uni_start` | Osc 2 Sample Unison Start | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
 | `osc2.sample.uni_span` | Osc 2 Sample Unison Span | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
-| `osc2.warp2.type` | Osc 2 Warp 2 Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 3 | None | Osc 2 / Warp 2 |  |  |
+| `osc2.warp2.type` | Osc 2 Warp 2 Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 2 / Warp 2 |  |  |
 | `osc2.warp2.amount` | Osc 2 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 2 / Warp 2 | mod |  |
 | `osc2.warp2.phase` | Osc 2 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp 2 | mod |  |
 | `osc2.warp2.spread` | Osc 2 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 2 / Warp 2 | mod |  |
@@ -274,7 +274,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.morph.type` | Osc 3 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 3 / Spectral Morph |  |  |
 | `osc3.morph.amount` | Osc 3 Morph Amount | 0 .. 100 % | 50 % | Osc 3 / Spectral Morph | mod |  |
 | `osc3.morph.spread` | Osc 3 Morph Spread | -100 .. 100 % | 0 % | Osc 3 / Spectral Morph | mod |  |
-| `osc3.warp.type` | Osc 3 Warp Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 2 | None | Osc 3 / Warp |  |  |
+| `osc3.warp.type` | Osc 3 Warp Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 3 / Warp |  |  |
 | `osc3.warp.amount` | Osc 3 Warp Amount | 0 .. 100 % | 50 % | Osc 3 / Warp | mod |  |
 | `osc3.warp.phase` | Osc 3 Warp Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp | mod |  |
 | `osc3.warp.spread` | Osc 3 Warp Spread | -100 .. 100 % | 0 % | Osc 3 / Warp | mod |  |
@@ -311,7 +311,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.sample.length_beats` | Osc 3 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 3 / Sample |  |  |
 | `osc3.sample.uni_start` | Osc 3 Sample Unison Start | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
 | `osc3.sample.uni_span` | Osc 3 Sample Unison Span | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
-| `osc3.warp2.type` | Osc 3 Warp 2 Type | 52 choices: 0 None, 1 Sync, 2 Formant, ... , 51 AM from Osc 2 | None | Osc 3 / Warp 2 |  |  |
+| `osc3.warp2.type` | Osc 3 Warp 2 Type | 76 choices: 0 None, 1 Sync, 2 Formant, ... , 75 RM from Filter 2 | None | Osc 3 / Warp 2 |  |  |
 | `osc3.warp2.amount` | Osc 3 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 3 / Warp 2 | mod |  |
 | `osc3.warp2.phase` | Osc 3 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp 2 | mod |  |
 | `osc3.warp2.spread` | Osc 3 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 3 / Warp 2 | mod |  |
@@ -808,14 +808,14 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
-| `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..42 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..911 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.stereo` | Mod NN Stereo (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.bypass` | Mod NN Bypass (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
-| `modNN.aux_source` | Mod NN Aux Source (NN = 01 .. 64) | 0 None, 1..42 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.aux_source` | Mod NN Aux Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_inv` | Mod NN Aux Invert (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_power` | Mod NN Aux Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_output` | Mod NN Output Scale (NN = 01 .. 64) | 0 .. 200 % | 100 % | Mod Matrix / Slot 01 |  |  |
@@ -1742,6 +1742,21 @@ Choice values of `modNN.source` (0 = None).
 | 40 | `voice_index` | Voice Index | unipolar |
 | 41 | `voice_mod1` | Voice Mod 1 | bipolar |
 | 42 | `voice_mod2` | Voice Mod 2 | bipolar |
+| 43 | `osc_a` | Oscillator A | bipolar |
+| 44 | `osc_b` | Oscillator B | bipolar |
+| 45 | `osc_c` | Oscillator C | bipolar |
+| 46 | `noise` | Noise | bipolar |
+| 47 | `sub` | Sub | bipolar |
+| 48 | `filter1` | Filter 1 | bipolar |
+| 49 | `filter2` | Filter 2 | bipolar |
+| 50 | `active_voices` | Active Voices | unipolar |
+| 51 | `note_on_alt1` | Note-On Alt 1 | unipolar |
+| 52 | `note_on_alt2` | Note-On Alt 2 | unipolar |
+| 53 | `note_on_rand2` | Note-On Rand 2 | unipolar |
+| 54 | `note_on_rand_discrete` | Note-On Rand (Discrete) | unipolar |
+| 55 | `release_velocity` | Release Velocity | unipolar |
+| 56 | `expression_x` | Expression X | bipolar |
+| 57 | `fixed` | Fixed | unipolar |
 
 ## Modulation destinations
 

@@ -424,6 +424,13 @@ namespace sbvital {
         mono_float env_time;                          // factor
       };
       static VoiceControlValues evaluateVoiceControl(const VoiceControl& control, int sequence);
+      /** GROUPB WP-06: the per voice matrix sources of the note counter: Note-On Alt 1 / 2 (0 / 1 by turns, Alt 2 is the inverse), Note-On Rand 2 (a second random
+          number per note), Note-On Rand (Discrete) (one number per modulation slot and note) and Expression X (the per note bend over its 48 semitone range). */
+      static constexpr int kNumDiscreteRandoms = 64;
+      force_inline Output* note_on_alt(int i) { return &note_on_alt_[i]; }
+      force_inline Output* note_on_rand2() { return &note_on_rand2_; }
+      force_inline Output* note_on_discrete(int slot) { return &note_on_discrete_[slot]; }
+      force_inline Output* expression_x() { return &expression_x_; }
       force_inline Output* voice_index() { return &voice_index_; }
       force_inline Output* voice_mod(int i) { return &voice_mod_[i]; }
       force_inline Output* voice_pan(int target) { return &voice_pan_[target]; }
@@ -539,6 +546,10 @@ namespace sbvital {
       cr::Output osc_mute_[3];
       cr::Output osc_fold_[3];
       VoiceControl voice_control_;
+      cr::Output note_on_alt_[2];
+      cr::Output note_on_rand2_;
+      cr::Output note_on_discrete_[64];
+      cr::Output expression_x_;
       cr::Output voice_index_;
       cr::Output voice_mod_[2];
       cr::Output voice_pan_[kVoiceControlTargets];

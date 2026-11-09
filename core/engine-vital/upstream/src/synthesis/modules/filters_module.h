@@ -41,6 +41,10 @@ namespace sbvital {
         kBus2,
         kMainFree,  // SynthyBoy B21: the filters to Main / Direct whose ENV 1 button is off (not multiplied by the amplitude envelope)
         kDirectFree,
+        kTapFilter1,  // GROUPB WP-06: the last sample of each filter (element 0), read by the SourceTap processors; the whole block, read through a Feedback node
+        kTapFilter2,
+        kFeedFilter1, // the output of filter 1 / 2 of the whole block: the source of the warps from a filter (one block later, through a Feedback node)
+        kFeedFilter2,
         kNumOutputs
       };
 

@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "spectral_morph.h"
 #include "synth_constants.h"
 #include "utils.h"
@@ -159,8 +161,22 @@ namespace sbvital {
         kFmThruZeroA, kFmThruZeroB, kFmExpA, kFmExpB, kFmLinearA, kFmLinearB,
         kPdA, kPdB, kPdSelf,
         kAmA, kAmB,
+        // GROUPB WP-06 (docs/ui-design/13-new-keys.md 4.34): FM Thru-Zero / Exp / Linear, PD, AM and RM from the Noise, the Sub, Filter 1 and Filter 2 (six
+        // families of four sources; the modes of the other oscillators and Vital's FM / RM from the sample are above)
+        kSrcFmThruZeroNoise, kSrcFmThruZeroSub, kSrcFmThruZeroFilter1, kSrcFmThruZeroFilter2,
+        kSrcFmExpNoise, kSrcFmExpSub, kSrcFmExpFilter1, kSrcFmExpFilter2,
+        kSrcFmLinearNoise, kSrcFmLinearSub, kSrcFmLinearFilter1, kSrcFmLinearFilter2,
+        kSrcPdNoise, kSrcPdSub, kSrcPdFilter1, kSrcPdFilter2,
+        kSrcAmNoise, kSrcAmSub, kSrcAmFilter1, kSrcAmFilter2,
+        kSrcRmNoise, kSrcRmSub, kSrcRmFilter1, kSrcRmFilter2,
         kNumDistortionTypes
       };
+
+      static bool isSourceWarp(int type) { return type >= kSrcFmThruZeroNoise && type < kNumDistortionTypes; }
+      /** 0 FM Thru-Zero, 1 FM Exp, 2 FM Linear, 3 PD, 4 AM, 5 RM */
+      static int sourceWarpFamily(int type) { return (type - kSrcFmThruZeroNoise) / 4; }
+      /** 0 Noise, 1 Sub, 2 Filter 1, 3 Filter 2 */
+      static int sourceWarpSource(int type) { return (type - kSrcFmThruZeroNoise) % 4; }
 
       static bool isExtendedWarp(int type) { return type >= kSyncVar; }
       /** One sample through a distortion mode of block B21 (kShTube .. kShSoftSat) at the warp amount 0..1; used by the sample oscillator. */
@@ -290,6 +306,8 @@ namespace sbvital {
       // transposition + tune + the coarse term of the pitch mode) as of the last block; an oscillator in Ratio mode whose source is
       // set takes that pitch instead of the note of its own voice. The cell is shared with the clones (one per voice pair).
       std::shared_ptr<Output> pitchTap() const { return pitch_tap_; }
+      /** GROUPB WP-06: the sources of the warps FM / PD / AM / RM from the Noise (0, the sample output), the Sub (1), Filter 1 (2) and Filter 2 (3). A cell shared with the clones. */
+      void setExtraWarpSource(int index, const Output* source) { (*extra_sources_)[static_cast<size_t>(index)] = source; }
       void setRatioSource(const Output* tap) { *ratio_source_ = tap; }
 
       virtual void setOversampleAmount(int oversample) override {
@@ -400,6 +418,7 @@ namespace sbvital {
       std::shared_ptr<PhaseBuffer> phase_buffer_;
       std::shared_ptr<const mono_float*> note_table_ = std::make_shared<const mono_float*>(nullptr);
       std::shared_ptr<Output> pitch_tap_ = std::make_shared<Output>(1);
+      std::shared_ptr<std::array<const Output*, 4>> extra_sources_ = std::make_shared<std::array<const Output*, 4>>();
       // SynthyBoy (GROUPB, WP-05): the second frame of a smooth interpolation (oscN.smooth_interp); a clone's own scratch
       std::shared_ptr<poly_float[]> blend_scratch_ = std::shared_ptr<poly_float[]>(new poly_float[kSpectralBufferSize]());
       std::shared_ptr<const Output*> ratio_source_ = std::make_shared<const Output*>(nullptr);

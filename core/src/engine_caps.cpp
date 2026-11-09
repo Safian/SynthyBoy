@@ -193,6 +193,8 @@ EngineCapsMask warpTypeCaps (int v) noexcept
         return kCapWarpDist;
     if (v <= 46)
         return kCapWarpFm;
+    if (v >= 52)
+        return kCapWarpSources; // GROUPB WP-06: from the Noise, Sub and Filters
     return kCapWarpPdAm;
 }
 
@@ -210,7 +212,7 @@ EngineCapsMask sourceCaps (int choice) noexcept
         return kCapModAmount;
     if (choice <= 42)
         return kCapVoiceSources;
-    return kCapNone;
+    return kCapModSources2; // GROUPB WP-06: 43 .. 57
 }
 } // namespace
 
@@ -351,6 +353,8 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapVoiceControl:     return "voice_control";
         case kCapVoiceSources:     return "voice_sources";
         case kCapOscExtras2:       return "osc_extras2";
+        case kCapModSources2:      return "mod_sources2";
+        case kCapWarpSources:      return "warp_sources";
         case kCapNone:             break;
     }
     return "";

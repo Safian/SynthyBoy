@@ -389,7 +389,10 @@ double fromFile (const VitalRow& r, double x, bool portamentoTime, bool& unmappa
             if (e >= 0.0 && e <= 8.0) return e;
             if (e == 10.0) return 9.0;
             if (e == 11.0) return 10.0;
-            if (e == 9.0 || e == 12.0) { unmappable = true; return 0.0; }
+            // GROUPB WP-06: Vital's FM / RM from the sample is the noise source here (the sample of Vital plays through the noise source): the nearest of the new
+            // modes, FM Thru-Zero from Noise (52) and RM from Noise (72; the same law as Vital's ring modulation)
+            if (e == 9.0) { unmappable = true; return 52.0; }
+            if (e == 12.0) { unmappable = true; return 72.0; }
             return e < 0.0 ? e : 100.0;
         }
         case Conv::volumeDb:
@@ -1205,7 +1208,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
         // Choice lists that got values appended (13-new-keys.md section 3): a Vital file only knows the original range, so
         // an out-of-range index must clamp to the original last entry, never land on a new Serum-only entry.
         bool legacyCapped = false;
-        if (const int legacyMax = legacyChoiceMax (pinfo.key); legacyMax >= 0 && want > legacyMax)
+        if (const int legacyMax = legacyChoiceMax (pinfo.key); legacyMax >= 0 && want > legacyMax && ! unmappable)
         {
             want = legacyMax;
             legacyCapped = true;
@@ -1221,7 +1224,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             const bool audibleOff = info.kind == RowKind::warp && reason == Reason::enumRemapped;
             (void) audibleOff;
             c.item (ItemKind::approximated, remapped ? reason : Reason::clamped, area, row.control, num (x), pinfo.key, valueText (pinfo, got),
-                    unmappable ? "warp_from_sample_unsupported" : (remapped ? "send_to_effect_mapped_to_effects_only" : "outside_our_range"));
+                    unmappable ? "warp_from_sample_mapped_to_the_noise_source" : (remapped ? "send_to_effect_mapped_to_effects_only" : "outside_our_range"));
         }
         else
         {

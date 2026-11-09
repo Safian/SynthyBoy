@@ -38,7 +38,7 @@ namespace sbvital {
     enum WarpKind { kWarpNone, kWarpQuantize, kWarpFm, kWarpRm, kWarpAm, kWarpShape };
     enum FmLaw { kFmLinearLaw, kFmExpLaw, kFmClampedLaw };
 
-    WarpKind warpKindOf(int type, const Output*& source, FmLaw& law, Output* a, Output* b, Output* sample) {
+    WarpKind warpKindOf(int type, const Output*& source, FmLaw& law, Output* a, Output* b, Output* sample, const std::array<const Output*, 4>& extra) {
       using D = SynthOscillator;
       law = kFmLinearLaw;
       if (D::isExtendedWarp(type)) {
@@ -53,7 +53,21 @@ namespace sbvital {
           case D::kFmLinearB: source = b; law = kFmClampedLaw; return kWarpFm;
           case D::kAmA: source = a; return kWarpAm;
           case D::kAmB: source = b; return kWarpAm;
-          default: return kWarpNone;
+          default:
+            if (D::isSourceWarp(type)) {
+              // GROUPB WP-06: the same modes from the Noise (0), Sub (1), Filter 1 (2), Filter 2 (3); PD is a phase mode and inert on a sample
+              const int src = D::sourceWarpSource(type);
+              source = src == 0 ? sample : extra[static_cast<size_t>(src)];
+              switch (D::sourceWarpFamily(type)) {
+                case 0: return kWarpFm;
+                case 1: law = kFmExpLaw; return kWarpFm;
+                case 2: law = kFmClampedLaw; return kWarpFm;
+                case 3: return kWarpNone;
+                case 4: return kWarpAm;
+                default: return kWarpRm;
+              }
+            }
+            return kWarpNone;
         }
       }
       switch (type) {
@@ -268,8 +282,8 @@ namespace sbvital {
     FmLaw laws[2] = { kFmLinearLaw, kFmLinearLaw };
     const int warp_types[2] = { static_cast<int>(input(kWarpType)->at(0)[0]), static_cast<int>(input(kWarp2Type)->at(0)[0]) };
     const WarpKind kinds[2] = {
-      warpKindOf(warp_types[0], sources[0], laws[0], first_mod_oscillator_, second_mod_oscillator_, sample_),
-      warpKindOf(warp_types[1], sources[1], laws[1], first_mod_oscillator_, second_mod_oscillator_, sample_)
+      warpKindOf(warp_types[0], sources[0], laws[0], first_mod_oscillator_, second_mod_oscillator_, sample_, *extra_sources_),
+      warpKindOf(warp_types[1], sources[1], laws[1], first_mod_oscillator_, second_mod_oscillator_, sample_, *extra_sources_)
     };
     const float amounts[2] = { utils::clamp(input(kWarpAmount)->at(0)[lane], 0.0f, 1.0f), utils::clamp(input(kWarp2Amount)->at(0)[lane], 0.0f, 1.0f) };
 

@@ -202,7 +202,7 @@ TEST (serum_modulation_matrix_sources_destinations_curves)
     };
     p.set ("ModSlot0", slot (6, 25, "Oscillator", 0, "kParamVolume", plain ({ { "kParamAmount", 50 }, { "kParamBipolar", 1 } })));        // LFO 1, aux Macro 1
     p.set ("ModSlot1", slot (7, 0, "VoiceFilter", 0, "kParamFreq", plain ({ { "kParamAmount", -30 } })));                                 // LFO 2 (Lorenz -> rlfo1)
-    p.set ("ModSlot2", slot (51, 0, "VoiceFilter", 0, "kParamFreq", plain ({ { "kParamAmount", 10 } })));                                // OSC C as a source: no equivalent
+    p.set ("ModSlot2", slot (51, 0, "VoiceFilter", 0, "kParamFreq", plain ({ { "kParamAmount", 10 } })));                                // OSC C as a source (GROUPB WP-06: the output of osc 3)
     p.set ("ModSlot3", slot (1, 0, "Arp", 0, "kParamGate", plain ({ { "kParamAmount", 10 } })));                                         // an arpeggiator target: none
     p.set ("ModSlot4", slot (16, 0, "WTOsc", 1, "kParamTablePos", plain ({ { "kParamAmount", 20 }, { "kParamMainCurveData", 1 }, { "kParamCurveIn", 40 } }),
                              arr ({ curveMap ({ 0, 1 }, { 1, 0.2 }, { 0.5, 0.5 }), map ({}) })));                                          // Velo -> table position of osc B with a drawn curve
@@ -217,8 +217,8 @@ TEST (serum_modulation_matrix_sources_destinations_curves)
     CHECK_EQ (r.values.plain[s0.bipolar], 1.0f);
     CHECK_EQ (r.values.plain[s1.source], 15.0f);                     // rlfo1 is choice 15
     CHECK_NEAR (r.values.plain[s1.amount], -30.0, 1e-3);
-    CHECK_EQ (r.values.plain[s2.source], 0.0f);                      // dropped
-    CHECK (countKind (r, ItemKind::dropped, "ModSlot2") >= 1);
+    CHECK_EQ (r.values.plain[s2.source], 45.0f);                     // the output of oscillator C (GROUPB WP-06)
+    CHECK_NEAR (r.values.plain[s2.amount], 10.0, 1e-3);
     CHECK (countKind (r, ItemKind::dropped, "ModSlot3") >= 1);
     CHECK_EQ (r.values.plain[s4.source], 23.0f);                     // velocity
     CHECK_EQ (r.values.plain[s4.destination], static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (hashKey ("osc2.frame"))))));
@@ -832,7 +832,12 @@ TEST (serum_rule_tables_point_at_real_keys)
     serumimport::Fid f2;
     CHECK_EQ (serumimport::sourceChoiceOf (27, name, f2), 21);  // Serum id 27 is Macro 3 = our choice 21 (macro1 is 19)
     CHECK_EQ (serumimport::sourceChoiceOf (1, name, f2), 27);   // Mod Wheel
-    CHECK_EQ (serumimport::sourceChoiceOf (51, name, f2), -1);  // OSC C as a source: none
+    CHECK_EQ (serumimport::sourceChoiceOf (51, name, f2), 45);  // OSC C as a source: the output of oscillator C (GROUPB WP-06)
+    CHECK_EQ (serumimport::sourceChoiceOf (53, name, f2), 48);  // Filter 1
+    CHECK_EQ (serumimport::sourceChoiceOf (55, name, f2), 50);  // Active Voices
+    CHECK_EQ (serumimport::sourceChoiceOf (23, name, f2), 51);  // Note-On Alt. 1
+    CHECK_EQ (serumimport::sourceChoiceOf (59, name, f2), 54);  // Note-On Rand (Discrete)
+    CHECK_EQ (serumimport::sourceChoiceOf (39, name, f2), -1);  // LFO 1 Y: no home
 }
 
 namespace
@@ -938,7 +943,7 @@ TEST (serum_voice_panel_is_imported_into_the_voice_control_keys_and_the_voice_so
     CHECK_EQ (r.values.plain[modSlotParams (0).source], 41.0f); // voice_mod1
     CHECK_EQ (r.values.plain[modSlotParams (1).source], 42.0f); // voice_mod2
     CHECK_EQ (r.values.plain[modSlotParams (2).source], 40.0f); // voice_index
-    CHECK_EQ (r.values.plain[modSlotParams (3).source], 0.0f);  // Active Voices
+    CHECK_EQ (r.values.plain[modSlotParams (3).source], 50.0f); // Active Voices (GROUPB WP-06)
 }
 
 TEST (serum_style_files_are_complete_voice_control_configurations)
@@ -1045,4 +1050,34 @@ TEST (serum_ratio_source_smooth_interpolation_and_single_slice_destination_have_
     CHECK_EQ (value (s, "osc2.ratio_src"), 0.0f);
     CHECK (entryWith (s, "ratio_source_noise_not_modelled") >= 0);
     CHECK (entryWith (s, "ratio_source_outside_ratio_mode") >= 0);
+}
+
+// GROUPB (WP-06, A401 / A402): the warp modes from the noise, sub and filters and the matrix sources that were dropped have a home
+TEST (serum_warp_modes_from_the_noise_sub_and_filters_and_the_new_matrix_sources)
+{
+    const struct { const char* name; int ours; } modes[] = { { "kFM_NOISE", 52 }, { "kFM_FILT2", 55 }, { "kFMX_SUB", 57 }, { "kFMP_FILT1", 62 }, { "kPD_SUB", 65 }, { "kAM_NOISE", 68 }, { "kRM_FILT2", 75 } };
+    for (const auto& m : modes)
+    {
+        Preset p;
+        p.set ("Oscillator0", map ({ { "plainParams", plain ({}) },
+                                     { "WTOsc0", map ({ { "embeddedWTData", nums (ramp (4096)) }, { "numFrames", num (4096) }, { "numChannels", num (1) },
+                                                        { "plainParams", map (withText ({ { "kParamWarp", 0.5 } }, { { "kParamWarpMenu", m.name } })) } }) } }));
+        const SerumImportResult r = run (p.file());
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (value (r, "osc1.warp.type"), static_cast<float> (m.ours));
+    }
+    const auto slot = [] (int source, const std::string& type, int id, const std::string& param)
+    {
+        return map ({ { "source", nums ({ static_cast<double> (source), 0 }) }, { "destModuleTypeString", text (type) }, { "destModuleID", num (id) }, { "destModuleParamName", text (param) },
+                      { "destModuleParamID", num (0) }, { "plainParams", plain ({ { "kParamAmount", 30 } }) } });
+    };
+    Preset p;
+    const int ids[] = { 20, 22, 23, 24, 34, 37, 38, 49, 52, 54, 55, 59 };
+    const float expected[] = { 46, 53, 51, 52, 56, 55, 57, 43, 47, 49, 50, 54 };
+    for (size_t i = 0; i < sizeof ids / sizeof ids[0]; ++i)
+        p.set ("ModSlot" + std::to_string (i), slot (ids[i], "Oscillator", 1, "kParamVolume"));
+    const SerumImportResult r = run (p.file());
+    CHECK_EQ (r.report.unaccounted, 0);
+    for (size_t i = 0; i < sizeof ids / sizeof ids[0]; ++i)
+        CHECK_EQ (r.values.plain[modSlotParams (static_cast<int> (i)).source], expected[i]);
 }

@@ -191,6 +191,13 @@ namespace sbvital {
     }
   }
 
+  void ProcessorRouter::connectAudioFeedback(Processor* destination, const Output* source, int index) {
+    Feedback* feedback = new Feedback();
+    feedback->plug(source);
+    destination->plug(feedback, index);
+    addFeedback(feedback);
+  }
+
   void ProcessorRouter::disconnect(const Processor* destination, const Output* source) {
     if (isDownstream(destination, source->owner)) {
       // We're fine unless there is a cycle and need to delete a Feedback node.
