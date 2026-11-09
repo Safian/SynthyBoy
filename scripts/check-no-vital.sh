@@ -14,6 +14,13 @@
 set -euo pipefail
 
 pattern='sbvital|Vital|vital::'
+# The importer of the Vital FILE FORMAT (core/vital-import: parses .vital / .vitalbank JSON into our own presets, own code, part of the
+# core on every platform) is not Vital-derived engine code: its API identifiers (namespace vitalimport, importVital*, isVitalBankName,
+# VitalPluginImport, looksLikeVitalPreset, decodeVitalEffectOrder), the names of the content pack it writes ("Imported Vital Wavetables",
+# "User-imported wavetables from Vital presets"), the importer's error texts ("not a Vital file", "the bank holds no Vital preset"; the words
+# "Vital" + file / preset / bank / table / LFO) and the user-visible reverb type name "Vital" (core/src/param_table.cpp kReverbTypes, a
+# string in the parameter table, no engine code) are allowed. Anything else that mentions Vital still fails.
+allowed='vitalimport|importVital|isVitalBankName|VitalPluginImport|looksLikeVitalPreset|decodeVitalEffectOrder|Imported Vital Wavetables|imported wavetables from Vital presets|Vital (file|preset|bank|table|lfo)|^[[:space:]]*Vital$'
 NM="${NM:-nm}"
 AR="${AR:-ar}"
 STRINGS="${STRINGS:-strings}"
@@ -40,14 +47,14 @@ check_archive()
         found=1
     fi
 
-    hits="$(demangled_symbols "$archive" | grep -E "$pattern" || true)"
+    hits="$(demangled_symbols "$archive" | grep -E "$pattern" | grep -Ev "$allowed" || true)"
     if [[ -n "$hits" ]]; then
         echo "check-no-vital: $archive: symbols match /$pattern/ ($(echo "$hits" | wc -l | tr -d ' ') lines):" >&2
         echo "$hits" | head -n 5 | sed 's/^/    /' >&2
         found=1
     fi
 
-    hits="$("$STRINGS" -a "$archive" | grep -E "$pattern" || true)"
+    hits="$("$STRINGS" -a "$archive" | grep -E "$pattern" | grep -Ev "$allowed" || true)"
     if [[ -n "$hits" ]]; then
         echo "check-no-vital: $archive: strings match /$pattern/ ($(echo "$hits" | wc -l | tr -d ' ') lines):" >&2
         echo "$hits" | head -n 5 | sed 's/^/    /' >&2
@@ -69,8 +76,14 @@ CPP
     cat > "$dir/tainted.cpp" <<'CPP'
 namespace sbvital { int tainted_marker() { return 2; } }
 CPP
+    cat > "$dir/importer.cpp" <<'CPP'
+namespace synthyboy { namespace vitalimport { int importer_marker() { return 3; } } }
+int importVitalPreset() { return 4; }
+CPP
     "$cxx" -c "$dir/clean.cpp" -o "$dir/clean.o"
     "$cxx" -c "$dir/tainted.cpp" -o "$dir/tainted.o"
+    "$cxx" -c "$dir/importer.cpp" -o "$dir/importer.o"
+    "$AR" rcs "$dir/libimporter.a" "$dir/importer.o"
     "$AR" rcs "$dir/libclean.a" "$dir/clean.o"
     "$AR" rcs "$dir/libtainted.a" "$dir/tainted.o"
 
@@ -86,6 +99,13 @@ CPP
         status=1
     else
         echo "self-test: an archive with a symbol in namespace sbvital is rejected: ok"
+    fi
+
+    if check_archive "$dir/libimporter.a" 2>/dev/null; then
+        echo "self-test: the importer of the Vital file format (vitalimport, importVital*) passes: ok"
+    else
+        echo "self-test FAILED: the importer identifiers were rejected" >&2
+        status=1
     fi
     return $status
 }
