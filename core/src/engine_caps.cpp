@@ -290,6 +290,66 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
     return caps;
 }
 
+EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept
+{
+    if (paramIndex < kNumKeysV2 || paramIndex >= paramCount())
+        return kCap2None;
+    const char* key = paramTable()[paramIndex].key;
+    if (! startsWith (key, "osc"))
+        return kCap2None;
+    if (std::strstr (key, ".gran.") != nullptr)
+        return kCap2Granular;
+    if (std::strstr (key, ".spec.") != nullptr)
+        return kCap2Spectral;
+    if (std::strstr (key, ".multi.") != nullptr)
+        return kCap2Multisample;
+    return kCap2None;
+}
+
+EngineCaps2Mask requiredCapsForValue2 (size_t paramIndex, float plain) noexcept
+{
+    if (paramIndex >= paramCount())
+        return kCap2None;
+    EngineCaps2Mask caps = requiredCaps2 (paramIndex);
+    const ParamInfo& info = paramTable()[paramIndex];
+    if (info.scale != Scale::stepped || ! (plain >= 0.0f && plain < 1.0e6f))
+        return caps;
+    const int v = static_cast<int> (plain + 0.5f);
+    if (info.choiceSet == ChoiceSet::modDestination)
+    {
+        const int target = v > 269 ? modDestinationParamIndex (static_cast<size_t> (v)) : -1;
+        return caps | (target >= 0 ? requiredCaps2 (static_cast<size_t> (target)) : kCap2None);
+    }
+    if (info.choiceSet != ChoiceSet::list)
+        return caps;
+    const char* key = info.key;
+    if (startsWith (key, "osc") && std::strlen (key) == 9 && endsWith (key, ".type")) // oscN.type (not oscN.warp.type)
+    {
+        if (v == kOscTypeGranular)
+            caps |= kCap2Granular;
+        else if (v == kOscTypeSpectral)
+            caps |= kCap2Spectral;
+        else if (v == kOscTypeMultisample)
+            caps |= kCap2Multisample;
+    }
+    else if (startsWith (key, "osc") && (endsWith (key, ".warp.type") || endsWith (key, ".warp2.type")) && v >= kFirstSpectralWarp)
+        caps |= kCap2SpectralWarps;
+    return caps;
+}
+
+const char* capName2 (EngineCaps2Mask bit) noexcept
+{
+    switch (bit)
+    {
+        case kCap2Granular:      return "granular";
+        case kCap2Spectral:      return "spectral";
+        case kCap2SpectralWarps: return "spectral_warps";
+        case kCap2Multisample:   return "multisample";
+        case kCap2None:          break;
+    }
+    return "";
+}
+
 const char* capName (EngineCapsMask bit) noexcept
 {
     switch (bit)

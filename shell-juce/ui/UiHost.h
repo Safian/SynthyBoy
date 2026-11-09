@@ -49,6 +49,8 @@ public:
     virtual juce::AudioProcessorValueTreeState& parameters() = 0;
     /** IEngine::capabilities () of the engine behind the processor; constant for the life of the processor. */
     virtual EngineCapsMask engineCaps() const noexcept = 0;
+    /** IEngine::capabilities2 () (GROUPC: granular, spectral, multisample); a host that does not override it reports every bit. */
+    virtual EngineCaps2Mask engineCaps2() const noexcept { return kCap2AllKnown; }
     /** Notes played on the mini keyboard; the processor merges them into the MIDI input of the audio callback. */
     virtual juce::MidiKeyboardState& keyboardState() = 0;
     /** The two A/B snapshots live with the processor so they survive closing the editor. */

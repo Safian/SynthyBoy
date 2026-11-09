@@ -59,6 +59,7 @@ public:
     void setMessage (const juce::String& m);
 
     EngineCapsMask engineCaps() const noexcept { return host.engineCaps(); }
+    EngineCaps2Mask engineCaps2() const noexcept { return host.engineCaps2(); }
 
 private:
     UiHost& host;

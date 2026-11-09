@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "synthyboy/engine.h"
 #include "synthyboy/engine_caps.h"
@@ -222,5 +223,42 @@ TEST (engines_report_only_known_capabilities_and_never_change_them)
         for (size_t i = kNumKeysV2; i < paramCount(); ++i)
             if (! capsCover (before, requiredCaps (i)))
                 CHECK (! e->supportsParam (paramTable()[i].id)); // a key whose capability bit is not set is never claimed
+    }
+}
+
+// GROUPC: the second capability word (all 64 bits of the first are in use)
+TEST (second_capability_word_names_the_bits_of_the_new_oscillator_types)
+{
+    const auto need2 = [] (const char* key, float v) { return requiredCapsForValue2 (positionOf (key), v); };
+    CHECK_EQ (need2 ("osc1.type", 0.0f), kCap2None);
+    CHECK_EQ (need2 ("osc1.type", 1.0f), kCap2None);
+    CHECK_EQ (need2 ("osc1.type", 2.0f), static_cast<EngineCaps2Mask> (kCap2Granular));
+    CHECK_EQ (need2 ("osc2.warp.type", 3.0f), kCap2None);   // oscN.warp.type is not oscN.type
+    CHECK_EQ (need2 ("osc2.warp2.type", 75.0f), kCap2None);
+    CHECK_EQ (requiredCaps2 (positionOf ("osc3.gran.density")), static_cast<EngineCaps2Mask> (kCap2Granular));
+    CHECK_EQ (requiredCaps2 (positionOf ("osc3.sample.scan")), kCap2None);
+    CHECK_EQ (requiredCaps2 (positionOf ("osc1.level")), kCap2None);
+    CHECK_EQ (requiredCaps2 (positionOf ("master.volume")), kCap2None);
+    CHECK_EQ (requiredCaps2 (999999), kCap2None);
+    // a modulation destination that is a key of the new blocks needs the bit of that key
+    const int destination = modDestinationChoiceOf (positionOf ("osc2.gran.position"));
+    CHECK (destination > 269);
+    CHECK_EQ (need2 ("mod01.destination", static_cast<float> (destination)), static_cast<EngineCaps2Mask> (kCap2Granular));
+    CHECK_EQ (need2 ("mod01.destination", 100.0f), kCap2None);
+    CHECK (capsCover2 (kCap2Granular | kCap2Spectral, kCap2Spectral) && ! capsCover2 (kCap2Granular, kCap2Granular | kCap2Spectral));
+    CHECK_EQ (std::string (capName2 (kCap2Granular)), "granular");
+    // the first word did not change: bit 63 is the last one and nothing of the new blocks claims it
+    CHECK_EQ (kCapWavetableSawDown, 1ull << 63);
+    // every engine reports only known bits of the second word, and a key whose bits are missing is never claimed
+    for (const auto& c : sbtest::engineCases())
+    {
+        sbtest::Context ctx (c.name);
+        auto e = sbtest::makeEngine (c);
+        CHECK (e != nullptr);
+        const EngineCaps2Mask caps2 = e->capabilities2();
+        CHECK_EQ (caps2 & ~kCap2AllKnown, kCap2None);
+        for (size_t i = kNumKeysV2; i < paramCount(); ++i)
+            if (! capsCover2 (caps2, requiredCaps2 (i)))
+                CHECK (! e->supportsParam (paramTable()[i].id));
     }
 }

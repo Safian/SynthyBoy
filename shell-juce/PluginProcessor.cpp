@@ -52,6 +52,7 @@ SynthyBoyProcessor::SynthyBoyProcessor()
       engine (createShellEngine())
 {
     caps = engine->capabilities();
+    caps2 = engine->capabilities2();
     startTimerHz (20);
     const auto* table = synthyboy::paramTable();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)

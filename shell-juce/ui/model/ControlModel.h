@@ -64,13 +64,14 @@ struct CapState
 {
     bool available = true;      // false: draw dimmed, tooltip kNotAvailableText (the value stays editable and stored)
     EngineCapsMask missing = 0; // the bits the engine does not report
+    EngineCaps2Mask missing2 = 0; // the bits of the second word the engine does not report
     std::string tooltip;        // empty when available
 };
 
 /** A key whose required cap bits are not all set in `engineCaps` is unavailable. */
-CapState capStateForKey (int paramIndex, EngineCapsMask engineCaps);
+CapState capStateForKey (int paramIndex, EngineCapsMask engineCaps, EngineCaps2Mask engineCaps2 = kCap2AllKnown);
 /** A single choice value (an appended entry of a version 2 list needs bits the key itself does not). */
-CapState capStateForValue (int paramIndex, float plain, EngineCapsMask engineCaps);
+CapState capStateForValue (int paramIndex, float plain, EngineCapsMask engineCaps, EngineCaps2Mask engineCaps2 = kCap2AllKnown);
 
 // ---- gestures ----------------------------------------------------------------------------------------------------------------------
 

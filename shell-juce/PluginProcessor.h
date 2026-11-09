@@ -82,6 +82,7 @@ public:
     // synthyboy::ui::UiHost (the editor's view of the processor; message thread)
     juce::AudioProcessorValueTreeState& parameters() override { return apvts; }
     synthyboy::EngineCapsMask engineCaps() const noexcept override { return caps; }
+    synthyboy::EngineCaps2Mask engineCaps2() const noexcept override { return caps2; }
     juce::MidiKeyboardState& keyboardState() override { return keyboard; }
     synthyboy::ui::AbCompare& abCompare() override { return ab; }
     void stepPreset (int direction) override { if (presetStepHandler) presetStepHandler (direction); }
@@ -201,6 +202,7 @@ private:
 
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction
+    synthyboy::EngineCaps2Mask caps2 = synthyboy::kCap2None; // engine->capabilities2 ()
 
     // editor state that outlives the editor window
     juce::MidiKeyboardState keyboard; // notes of the on-screen keyboard, merged into the MIDI input of processBlock

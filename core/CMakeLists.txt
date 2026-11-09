@@ -80,5 +80,6 @@ add_subdirectory(fx-serum-a)
 add_subdirectory(fx-serum-b)
 
 add_subdirectory(sample-osc)
+add_subdirectory(granular)
 # the user content library decodes WAV files with the sample oscillator's reader (also in the own-engine-only build)
-target_link_libraries(synthyboy_core PUBLIC synthyboy_sampleosc)
+target_link_libraries(synthyboy_core PUBLIC synthyboy_sampleosc synthyboy_granular)

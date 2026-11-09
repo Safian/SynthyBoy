@@ -145,31 +145,35 @@ std::string macroKey (int n)
     return "macro." + std::to_string (n);
 }
 
-CapState capStateForKey (int paramIndex, EngineCapsMask engineCaps)
+CapState capStateForKey (int paramIndex, EngineCapsMask engineCaps, EngineCaps2Mask engineCaps2)
 {
     CapState s;
     if (paramIndex < 0)
         return s;
     const EngineCapsMask needed = requiredCaps (static_cast<size_t> (paramIndex));
-    if (! capsCover (engineCaps, needed))
+    const EngineCaps2Mask needed2 = requiredCaps2 (static_cast<size_t> (paramIndex));
+    if (! capsCover (engineCaps, needed) || ! capsCover2 (engineCaps2, needed2))
     {
         s.available = false;
         s.missing = needed & ~engineCaps;
+        s.missing2 = needed2 & ~engineCaps2;
         s.tooltip = kNotAvailableText;
     }
     return s;
 }
 
-CapState capStateForValue (int paramIndex, float plain, EngineCapsMask engineCaps)
+CapState capStateForValue (int paramIndex, float plain, EngineCapsMask engineCaps, EngineCaps2Mask engineCaps2)
 {
     CapState s;
     if (paramIndex < 0)
         return s;
     const EngineCapsMask needed = requiredCapsForValue (static_cast<size_t> (paramIndex), plain);
-    if (! capsCover (engineCaps, needed))
+    const EngineCaps2Mask needed2 = requiredCapsForValue2 (static_cast<size_t> (paramIndex), plain);
+    if (! capsCover (engineCaps, needed) || ! capsCover2 (engineCaps2, needed2))
     {
         s.available = false;
         s.missing = needed & ~engineCaps;
+        s.missing2 = needed2 & ~engineCaps2;
         s.tooltip = kNotAvailableText;
     }
     return s;

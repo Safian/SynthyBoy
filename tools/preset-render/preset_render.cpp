@@ -333,13 +333,14 @@ int main (int argc, char** argv)
     {
         const auto probe = createEngine (o.engine);
         const EngineCapsMask caps = probe->capabilities();
+        const EngineCaps2Mask caps2 = probe->capabilities2();
         const ParamValues defaults = ParamValues::defaults();
         for (const auto& p : presets)
             for (size_t i = 0; i < paramCount(); ++i)
             {
                 if (p.values.plain[i] == defaults.plain[i])
                     continue;
-                if (! probe->supportsParam (paramTable()[i].id) || ! capsCover (caps, requiredCapsForValue (i, p.values.plain[i])))
+                if (! probe->supportsParam (paramTable()[i].id) || ! capsCover (caps, requiredCapsForValue (i, p.values.plain[i])) || ! capsCover2 (caps2, requiredCapsForValue2 (i, p.values.plain[i])))
                 {
                     std::printf ("FAIL %s: %s = %g needs engine capabilities the engine does not have\n", p.file.c_str(), paramTable()[i].key, static_cast<double> (p.values.plain[i]));
                     ++failures;

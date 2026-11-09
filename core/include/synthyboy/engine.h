@@ -66,6 +66,8 @@ public:
         keys of version 3 are stored and read back but not live, and supportsParam () is false for them until the bits they need
         (requiredCaps ()) are all set. Constant for the lifetime of the engine; any thread. */
     virtual EngineCapsMask capabilities() const noexcept { return kCapNone; }
+    /** The second capability word (GROUPC): the granular, spectral and multisample oscillators. A key needs the bits of both words (requiredCaps (), requiredCaps2 ()). */
+    virtual EngineCaps2Mask capabilities2() const noexcept { return kCap2None; }
 
     /** The host transport at the start of the next process() call (audio thread, before process(); no allocation). Tempo sync,
         the beat units of the envelopes and the HOST mode of the LFOs read it. Without a call the engine runs at 120 BPM with a stopped

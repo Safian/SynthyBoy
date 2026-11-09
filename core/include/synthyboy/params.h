@@ -119,6 +119,15 @@ constexpr int kNumLegacyWarpTypes = 11;
 /** Number of entries of the warp lists after GROUPB WP-06 (52 .. 75: FM Thru-Zero / Exp / Linear, PD, AM and RM from the Noise, Sub, Filter 1 and Filter 2; 52 after block B21). */
 constexpr int kNumWarpTypes = 76;
 
+/** The values of oscN.type (13-new-keys.md 4.9 and, from GROUPC, 4.37 .. 4.39): 0 and 1 are the wavetable and sample oscillators of state version 3, 2 .. 4 were appended in the blocks B28 .. B30. */
+constexpr int kOscTypeWavetable = 0;
+constexpr int kOscTypeSample = 1;
+constexpr int kOscTypeGranular = 2;
+constexpr int kOscTypeSpectral = 3;
+constexpr int kOscTypeMultisample = 4;
+/** The first entry of the warp lists that only the spectral oscillator acts on (GROUPC WP-12, 13-new-keys.md 4.38; needs kCap2SpectralWarps). */
+constexpr int kFirstSpectralWarp = 76;
+
 /** The table, in stable order (state files and UIs list parameters in this order). */
 const ParamInfo* paramTable() noexcept;
 size_t paramCount() noexcept;

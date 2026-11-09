@@ -99,6 +99,30 @@ enum EngineCaps : EngineCapsMask
     kCapWavetableSawDown = 1ull << 63, // WP-18: oscN.wavetable = 14 "Saw Down" (the built-in falling saw of Vital's Init table)
 };
 
+// ---- the second capability word (GROUPC, 13-new-keys.md 4.37): the 64 bits above are all in use, so the capabilities of the new oscillator types live in a
+// second word. IEngine::capabilities2 () reports it (a new engine reports none), requiredCaps2 () / requiredCapsForValue2 () name the bits a key / a value needs,
+// supportsParam () needs both words, the UI dims with both. Word 1 is untouched: every earlier bit keeps its value.
+using EngineCaps2Mask = uint64_t;
+
+enum EngineCaps2 : EngineCaps2Mask
+{
+    kCap2None            = 0,
+    kCap2Granular        = 1ull << 0, // WP-11 (B28): oscN.type = Granular, oscN.gran.*
+    kCap2Spectral        = 1ull << 1, // WP-12 (B29): oscN.type = Spectral, oscN.spec.*
+    kCap2SpectralWarps   = 1ull << 2, // WP-12: the spectral warp modes 76 .. 96 of the shared warp list
+    kCap2Multisample     = 1ull << 3, // WP-13 (B30): oscN.type = Multisample, oscN.multi.*, content.instruments
+};
+
+constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample;
+
+/** The bits of the second word a key of the table needs (0 for every key that predates it). Total, no allocation. */
+EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept;
+/** The bits of the second word a value of a choice parameter needs (oscN.type 2 .. 4, the warp modes 76 .. 96, a modulation destination that is a key of the blocks above). */
+EngineCaps2Mask requiredCapsForValue2 (size_t paramIndex, float plain) noexcept;
+inline bool capsCover2 (EngineCaps2Mask caps, EngineCaps2Mask needed) noexcept { return (caps & needed) == needed; }
+/** Short stable name of a single bit of the second word ("granular"), "" for anything else. */
+const char* capName2 (EngineCaps2Mask bit) noexcept;
+
 /** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
 constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDist | kCapWarpFm | kCapWarpPdAm;
 

@@ -49,14 +49,15 @@ CapState ParamHandle::caps() const
 {
     if (! valid())
         return {};
-    CapState state = capStateForKey (ref.index, ctx.host.engineCaps());
+    CapState state = capStateForKey (ref.index, ctx.host.engineCaps(), ctx.host.engineCaps2());
     if (ref.sourceIndex() != ref.index) // a pool slot: the engine needs the bit of the pool and what the key of the type needs
     {
-        const CapState source = capStateForKey (ref.sourceIndex(), ctx.host.engineCaps());
+        const CapState source = capStateForKey (ref.sourceIndex(), ctx.host.engineCaps(), ctx.host.engineCaps2());
         if (! source.available)
         {
             state.available = false;
             state.missing |= source.missing;
+            state.missing2 |= source.missing2;
             if (state.tooltip.empty())
                 state.tooltip = source.tooltip;
         }
