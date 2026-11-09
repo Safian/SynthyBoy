@@ -25,7 +25,7 @@ namespace sbvital {
   class Feedback : public Processor {
     public:
       Feedback(bool control_rate = false) : Processor(1, 1, control_rate), buffer_index_(0) {
-        utils::zeroBuffer(buffer_, kMaxBufferSize);
+        utils::zeroBuffer(buffer_, kFeedbackSize);
       }
 
       virtual ~Feedback() { }
@@ -39,7 +39,10 @@ namespace sbvital {
       }
 
     protected:
-      poly_float buffer_[kMaxBufferSize];
+      // SynthyBoy (GROUPC): the history holds an oversampled block (kMaxBufferSize x kMaxOversample samples): GROUPB WP-06 uses the node for the filter taps of the oscillators,
+      // which run at the oversampled rate; with the ring of one block refreshOutput () read before the start of the buffer (found by UBSan, test_modsources and the GROUPC tests)
+      static constexpr int kFeedbackSize = kMaxBufferSize * kMaxOversample;
+      poly_float buffer_[kFeedbackSize];
       int buffer_index_;
 
       JUCE_LEAK_DETECTOR(Feedback)

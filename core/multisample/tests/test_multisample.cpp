@@ -78,7 +78,7 @@ std::vector<float> play (LayerVoice& v, int frames, float semitones, int release
     {
         if (releaseAt >= 0 && done == releaseAt)
             v.noteOff (fast);
-        v.processAdd (l.data() + done, r.data() + done, tl.data(), tr.data(), 256, semitones, nullptr, 1.0f, 1.0f);
+        v.processAdd (l.data() + done, r.data() + done, tl.data(), tr.data(), std::min (256, frames - done), semitones, nullptr, 1.0f, 1.0f);
     }
     return l;
 }

@@ -129,3 +129,7 @@ target_include_directories(synthyboy_test_vital_spectral PRIVATE "${CMAKE_CURREN
 synthyboy_add_test(synthyboy_test_vital_multisample test_multisample_osc.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_multisample PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
+synthyboy_add_test(synthyboy_test_vital_groupc_rt test_groupc_rt.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_groupc_rt PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
