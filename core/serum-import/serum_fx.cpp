@@ -871,7 +871,14 @@ void Importer::finish()
     }
     SerumImportReport& rep = R.report;
     rep.unaccounted = rep.leaves - (rep.numImported + rep.numApproximated + rep.numDropped + rep.numIgnored);
-    rep.fidelity = rep.numDropped > 0 || rep.numApproximated > 0 ? (rep.numDropped > 10 ? Fidelity::degraded : Fidelity::close) : Fidelity::exact;
+    // fidelity: degraded when something that sounds was dropped, close when something was approximated, else exact. The clip player, the arpeggiator, the
+    // retrigger state, the MIDI map and the interface state are part of the file but not of the sound of the patch.
+    int soundDropped = 0;
+    for (const SerumReportEntry& e : rep.entries)
+        if (e.kind == ItemKind::dropped && e.detail != "clip_player_not_modelled" && e.detail != "arpeggiator_not_modelled" && e.detail != "retrigger_state_not_modelled"
+            && e.detail != "midi_cc_map_not_imported" && e.detail != "lfo_point_modulation_bus_state" && e.serumPath != "mpeConfig" && e.detail != "interface_state")
+            ++soundDropped;
+    rep.fidelity = soundDropped > 0 ? Fidelity::degraded : (rep.numApproximated > 0 ? Fidelity::close : Fidelity::exact);
     for (size_t i = 0; i < touched.size(); ++i)
         if (touched[i]) R.touched.push_back (static_cast<int> (i));
 }
