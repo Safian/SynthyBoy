@@ -2556,6 +2556,140 @@ TEST (uig_env1_buttons_sit_on_the_mixer_and_grey_out_off_main_and_direct)
     }
 }
 
+TEST (uig_filter_menu_reaches_every_serum_type_and_every_type_shows_its_name_and_var_label_in_all_three_slots)
+{
+    // the catalog (the hierarchical menu) reaches each of the 80 core types exactly once, under its name, in the family of the manual
+    const auto& catalog = getSerumFilterCatalog();
+    std::vector<int> reached (static_cast<size_t> (synthyboy::filters::kFilterTypeCount), 0);
+    for (const auto& item : catalog)
+    {
+        CHECK (item.model >= synthyboy::filters::kFirstSerumModel && item.model <= synthyboy::filters::kLastSerumModel);
+        CHECK (item.style >= 0 && item.style < synthyboy::filters::serumModelStyleCount (item.model));
+        const int type = synthyboy::filters::serumFilterTypeOf (item.model, item.style);
+        CHECK (std::string (item.name) == synthyboy::filters::getFilterTypeName (type));
+        CHECK (std::string (item.family) == synthyboy::filters::getFilterFamilyName (type));
+        if (type >= 0 && type < synthyboy::filters::kFilterTypeCount)
+            ++reached[static_cast<size_t> (type)];
+        // the Var label of the UI is the one the manual (and core/filters-serum) gives the type
+        const std::string manual = synthyboy::filters::getFilterVarName (type);
+        const std::string shown = getVarLabelForModel (item.model, item.style);
+        if (item.model >= 22)
+            CHECK (shown == (manual == "N/A" ? std::string() : manual));
+    }
+    for (const int n : reached)
+        CHECK_EQ (n, 1);
+
+    for (const char* prefix : { "filter1", "filter2", "fxfilter" })
+    {
+        Rig rig (Page::flt);
+        const char* title = std::string (prefix) == "filter1" ? "Filter 1" : (std::string (prefix) == "filter2" ? "Filter 2" : "FX Filter");
+        auto* panel = rig.panelTitled (title);
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        const std::string p (prefix);
+        for (int model = 22; model <= 26; ++model)
+            for (int style = 0; style < static_cast<int> (getStylesForModel (model).size()); ++style)
+            {
+                rig.setParam ((p + ".model").c_str(), static_cast<float> (model));
+                rig.setParam ((p + ".style").c_str(), static_cast<float> (style));
+                const std::string name = getFilterTypeNameForModelAndStyle (model, style);
+                auto* modelBtn = rig.find<juce::TextButton> (*panel, [&] (juce::TextButton& b) { return b.getButtonText() == juce::String (name); });
+                CHECK (modelBtn != nullptr);
+                const std::string label = getVarLabelForModel (model, style);
+                auto* varControl = rig.find<ParamControl> (*panel, [&] (ParamControl& c) { return c.key() == p + ".var"; });
+                CHECK (varControl != nullptr);
+                if (varControl != nullptr)
+                    CHECK (varControl->label() == juce::String (label.empty() ? "Var (N/A)" : label));
+            }
+    }
+    // the classic models keep their own name on the type button
+    Rig rig (Page::flt);
+    rig.setParam ("filter1.model", 2.0f);
+    rig.setParam ("filter1.style", 1.0f);
+    auto* f1 = rig.panelTitled ("Filter 1");
+    CHECK (f1 != nullptr);
+    if (f1 != nullptr)
+        CHECK (rig.find<juce::TextButton> (*f1, [] (juce::TextButton& b) { return b.getButtonText() == "Ladder"; }) != nullptr);
+}
+
+TEST (uig_filter_view_shows_the_measured_dsp_response_of_the_new_types)
+{
+    using synthyboy::ui::FilterResponseMeasure;
+    FilterResponseMeasure m;
+    // High 12 (model 22 style 4) at 1 kHz: stop band below, pass band above; Low 12 (style 2) the other way round
+    const auto hpLow = m.at (100.0f, 22, 4, 1000.0f, 0.0f, 0.0f, 50.0f);
+    const auto hpHigh = m.at (8000.0f, 22, 4, 1000.0f, 0.0f, 0.0f, 50.0f);
+    CHECK (hpHigh.magnitudeDb > hpLow.magnitudeDb + 20.0f);
+    CHECK (m.measureCount() == 1); // the same settings are measured once
+    const auto lpLow = m.at (100.0f, 22, 2, 1000.0f, 0.0f, 0.0f, 50.0f);
+    const auto lpHigh = m.at (8000.0f, 22, 2, 1000.0f, 0.0f, 0.0f, 50.0f);
+    CHECK (lpLow.magnitudeDb > lpHigh.magnitudeDb + 20.0f);
+    CHECK_EQ (m.measureCount(), 2);
+    // the cutoff moves the curve, the resonance raises the peak
+    const auto at1k = m.at (1000.0f, 22, 2, 1000.0f, 90.0f, 0.0f, 50.0f);
+    const auto flat1k = m.at (1000.0f, 22, 2, 1000.0f, 0.0f, 0.0f, 50.0f);
+    CHECK (at1k.magnitudeDb > flat1k.magnitudeDb + 6.0f);
+    const auto low2k = m.at (2000.0f, 22, 2, 1000.0f, 0.0f, 0.0f, 50.0f);
+    const auto moved = m.at (2000.0f, 22, 2, 4000.0f, 0.0f, 0.0f, 50.0f);
+    CHECK (moved.magnitudeDb > low2k.magnitudeDb + 6.0f);
+    // Bandreject (25, 7) has its notch at the cutoff
+    const auto notch = m.at (1000.0f, 25, 7, 1000.0f, 0.0f, 0.0f, 50.0f);
+    const auto away = m.at (4000.0f, 25, 7, 1000.0f, 0.0f, 0.0f, 50.0f);
+    CHECK (away.magnitudeDb > notch.magnitudeDb + 6.0f);
+    // every point of every one of the 43 types is a finite number
+    for (int model = 22; model <= 26; ++model)
+        for (int style = 0; style < static_cast<int> (getStylesForModel (model).size()); ++style)
+        {
+            FilterResponseMeasure each;
+            each.at (1000.0f, model, style, 1000.0f, 100.0f, 100.0f, 100.0f);
+            for (const auto& v : each.points())
+                CHECK (std::isfinite (v.magnitudeDb) && std::isfinite (v.phaseRad));
+        }
+}
+
+TEST (uig_pz_svf_curve_has_at_most_16_points_and_a_double_tap_on_a_point_deletes_it)
+{
+    PzSvfCurve curve;
+    for (int i = 0; i < 40; ++i)
+        curve.addPoint ({ 0.02f + 0.024f * static_cast<float> (i), 0.5f });
+    CHECK_EQ (static_cast<int> (curve.getPoints().size()), synthyboy::kMaxFilterCurvePoints);
+    CHECK_EQ (curve.addPoint ({ 0.5f, 0.5f }), -1);
+    // moving a point across its neighbour keeps the order and returns the new index
+    PzSvfCurve three;
+    const int moved = three.setPoint (0, { 0.7f, 0.9f });
+    CHECK_EQ (moved, 1);
+    CHECK (three.getPoints()[0].x <= three.getPoints()[1].x && three.getPoints()[1].x <= three.getPoints()[2].x);
+
+    Rig rig (Page::flt);
+    rig.setParam ("filter2.model", 21.0f);
+    auto* panel = rig.panelTitled ("Filter 2");
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    auto* view = rig.find<FilterResponseView> (*panel);
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+    const auto plot = view->getLocalBounds().toFloat().reduced (rig.editor->theme().px (6.0f), rig.editor->theme().px (8.0f));
+    const juce::Point<float> where (plot.getX() + 0.25f * plot.getWidth(), plot.getBottom() - 0.8f * plot.getHeight());
+    doubleTap (*view, where);
+    auto count = [&]
+    {
+        for (const auto& c : rig.proc.content().filterCurves)
+            if (c.filter == "filter2")
+                return static_cast<int> (c.points.size());
+        return -1;
+    };
+    CHECK_EQ (count(), 4);
+    doubleTap (*view, where); // on the new point: deleted again
+    CHECK_EQ (count(), 3);
+    // a curve of Filter 2 does not touch Filter 1
+    for (const auto& c : rig.proc.content().filterCurves)
+        CHECK (c.filter != "filter1");
+    CHECK (synthyboy::validateContent (rig.proc.content()));
+}
+
 TEST (uig_zz_shutdown)
 {
     delete juceInitGaps;

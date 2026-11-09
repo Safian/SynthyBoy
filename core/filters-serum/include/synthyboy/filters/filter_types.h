@@ -112,4 +112,15 @@ const char* getFilterFamilyName (int type) noexcept;
 /** Returns the name of the Var parameter for this filter type (FAT, FREQ, MORPH, etc.). */
 const char* getFilterVarName (int type) noexcept;
 
+/** First and last model of the filter model list (filterN.model) that is rendered by a Serum type: 8 .. 26 (0 .. 7 are the classic models). */
+constexpr int kFirstSerumModel = 8;
+constexpr int kLastSerumModel = 26;
+
+/** Number of styles of a model (kFirstSerumModel .. kLastSerumModel); 0 for any other model. */
+int serumModelStyleCount (int model) noexcept;
+
+/** The FilterType a (model, style) pair of the table selects (the one place of the mapping, used by the engine and the UI). A style beyond the
+    model's last clamps to the last, a model outside 8 .. 26 clamps to the nearest; the result is always a valid FilterType index. */
+int serumFilterTypeOf (int model, int style) noexcept;
+
 } // namespace synthyboy::filters

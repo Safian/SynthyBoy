@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 using namespace synthyboy::filters;
@@ -422,4 +423,40 @@ TEST (serum_filters_determinism)
         for (int i = 0; i < kBlockSize; ++i)
             CHECK_EQ (out1[i], out2[i]);
     }
+}
+
+// =============================================================================
+// Model / style table of filterN.model (8 .. 26) -> FilterType, shared by the engine and the UI
+// =============================================================================
+TEST (serum_filters_model_style_table_reaches_every_type_exactly_once)
+{
+    std::vector<int> hits (static_cast<size_t> (kFilterTypeCount), 0);
+    int total = 0;
+    for (int model = kFirstSerumModel; model <= kLastSerumModel; ++model)
+    {
+        const int styles = serumModelStyleCount (model);
+        CHECK (styles >= 1 && styles <= 12);
+        for (int style = 0; style < styles; ++style)
+        {
+            const int type = serumFilterTypeOf (model, style);
+            CHECK (type >= 0 && type < kFilterTypeCount);
+            if (type >= 0 && type < kFilterTypeCount)
+                ++hits[static_cast<size_t> (type)];
+            ++total;
+        }
+        // a style beyond the last clamps to the last, a negative one to the first
+        CHECK_EQ (serumFilterTypeOf (model, styles + 5), serumFilterTypeOf (model, styles - 1));
+        CHECK_EQ (serumFilterTypeOf (model, -3), serumFilterTypeOf (model, 0));
+    }
+    CHECK_EQ (total, kFilterTypeCount);
+    for (int t = 0; t < kFilterTypeCount; ++t)
+        CHECK_EQ (hits[static_cast<size_t> (t)], 1);
+    CHECK_EQ (serumModelStyleCount (7), 0);
+    CHECK_EQ (serumModelStyleCount (27), 0);
+    // the names of the new models' styles
+    CHECK (std::string (getFilterTypeName (serumFilterTypeOf (22, 4))) == "High 12");
+    CHECK (std::string (getFilterTypeName (serumFilterTypeOf (23, 3))) == "BPN");
+    CHECK (std::string (getFilterTypeName (serumFilterTypeOf (24, 8))) == "Phs HL");
+    CHECK (std::string (getFilterTypeName (serumFilterTypeOf (25, 11))) == "Dist.Comb 2 BP");
+    CHECK (std::string (getFilterTypeName (serumFilterTypeOf (26, 5))) == "Exp BPF");
 }

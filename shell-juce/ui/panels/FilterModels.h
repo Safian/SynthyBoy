@@ -169,11 +169,7 @@ inline const char* getBlendLabelForModel (int modelIndex, int styleIndex) noexce
         case 17: return "LP — Notch — HP";
         case 19: return "Diffusion Balance";
         case 21: return "Zero Placement";
-        case 22: return "LP — BP — HP";
-        case 23: return "LP — BP — HP";
-        case 24: return "Comb / Flange Blend";
-        case 25: return "EQ / Formant / Blend";
-        case 26: return "Ladder / Exp Blend";
+        // models 22 .. 26: the blend knob has no effect on these types (the Var control does the morphing), so the plain label
         default: return "Blend";
     }
 }
@@ -464,7 +460,7 @@ struct SerumFilterTypeEntry
     const char* family; // "Normal", "Multi", "Flanges", "Misc", "New"
     int model;
     int style;
-    float defaultBlend; // 0..100
+    float defaultBlend; // 0..100; negative: the type does not use Blend, a pick leaves the knob alone
 };
 
 inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
@@ -472,23 +468,23 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
     static const std::vector<SerumFilterTypeEntry> catalog = {
         // Normal
         { "MG Low 6", "Normal", 9, 0, 0.0f },
-        { "MG Low 12", "Normal", 22, 0, 0.0f },
+        { "MG Low 12", "Normal", 22, 0, -1.0f },
         { "MG Low 18", "Normal", 9, 1, 0.0f },
-        { "MG Low 24", "Normal", 22, 1, 0.0f },
+        { "MG Low 24", "Normal", 22, 1, -1.0f },
         { "Low 6", "Normal", 9, 2, 0.0f },
-        { "Low 12", "Normal", 22, 2, 0.0f },
+        { "Low 12", "Normal", 22, 2, -1.0f },
         { "Low 18", "Normal", 9, 3, 0.0f },
-        { "Low 24", "Normal", 22, 3, 0.0f },
+        { "Low 24", "Normal", 22, 3, -1.0f },
         { "High 6", "Normal", 9, 4, 100.0f },
-        { "High 12", "Normal", 22, 4, 100.0f },
+        { "High 12", "Normal", 22, 4, -1.0f },
         { "High 18", "Normal", 9, 5, 100.0f },
-        { "High 24", "Normal", 22, 5, 100.0f },
-        { "Band 12", "Normal", 22, 6, 50.0f },
-        { "Band 24", "Normal", 22, 7, 50.0f },
-        { "Peak 12", "Normal", 22, 8, 50.0f },
-        { "Peak 24", "Normal", 22, 9, 50.0f },
-        { "Notch 12", "Normal", 22, 10, 50.0f },
-        { "Notch 24", "Normal", 22, 11, 50.0f },
+        { "High 24", "Normal", 22, 5, -1.0f },
+        { "Band 12", "Normal", 22, 6, -1.0f },
+        { "Band 24", "Normal", 22, 7, -1.0f },
+        { "Peak 12", "Normal", 22, 8, -1.0f },
+        { "Peak 24", "Normal", 22, 9, -1.0f },
+        { "Notch 12", "Normal", 22, 10, -1.0f },
+        { "Notch 24", "Normal", 22, 11, -1.0f },
 
         // Multi
         { "LH", "Multi", 8, 0, 0.0f },
@@ -503,29 +499,29 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
         { "PP", "Multi", 8, 9, 0.0f },
         { "PN", "Multi", 8, 10, 0.0f },
         { "NN", "Multi", 8, 11, 0.0f },
-        { "LBH", "Multi", 23, 0, 0.0f },
-        { "LPH", "Multi", 23, 1, 0.0f },
-        { "LNH", "Multi", 23, 2, 0.0f },
-        { "BPN", "Multi", 23, 3, 50.0f },
+        { "LBH", "Multi", 23, 0, -1.0f },
+        { "LPH", "Multi", 23, 1, -1.0f },
+        { "LNH", "Multi", 23, 2, -1.0f },
+        { "BPN", "Multi", 23, 3, -1.0f },
 
         // Flanges
-        { "Cmb L", "Flanges", 24, 0, 0.0f },
-        { "Flg L", "Flanges", 24, 1, 0.0f },
-        { "Phs L", "Flanges", 24, 2, 0.0f },
-        { "Cmb H", "Flanges", 24, 3, 50.0f },
-        { "Flg H", "Flanges", 24, 4, 50.0f },
-        { "Phs H", "Flanges", 24, 5, 50.0f },
-        { "Cmb HL", "Flanges", 24, 6, 100.0f },
-        { "Flg HL", "Flanges", 24, 7, 100.0f },
-        { "Phs HL", "Flanges", 24, 8, 100.0f },
+        { "Cmb L", "Flanges", 24, 0, -1.0f },
+        { "Flg L", "Flanges", 24, 1, -1.0f },
+        { "Phs L", "Flanges", 24, 2, -1.0f },
+        { "Cmb H", "Flanges", 24, 3, -1.0f },
+        { "Flg H", "Flanges", 24, 4, -1.0f },
+        { "Phs H", "Flanges", 24, 5, -1.0f },
+        { "Cmb HL", "Flanges", 24, 6, -1.0f },
+        { "Flg HL", "Flanges", 24, 7, -1.0f },
+        { "Phs HL", "Flanges", 24, 8, -1.0f },
 
         // Misc
         { "Low EQ 6", "Misc", 10, 0, 50.0f },
-        { "Low EQ 12", "Misc", 25, 0, 20.0f },
+        { "Low EQ 12", "Misc", 25, 0, -1.0f },
         { "Band EQ 6", "Misc", 10, 1, 50.0f },
-        { "Band EQ 12", "Misc", 25, 1, 50.0f },
+        { "Band EQ 12", "Misc", 25, 1, -1.0f },
         { "High EQ 6", "Misc", 10, 2, 50.0f },
-        { "High EQ 12", "Misc", 25, 2, 80.0f },
+        { "High EQ 12", "Misc", 25, 2, -1.0f },
         { "Ring Mod", "Misc", 11, 0, 50.0f },
         { "Ring Mod x2", "Misc", 11, 1, 50.0f },
         { "SampHold", "Misc", 12, 0, 50.0f },
@@ -534,16 +530,16 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
         { "Allpasses", "Misc", 13, 1, 50.0f },
         { "Reverb", "Misc", 13, 2, 50.0f },
         { "French LP", "Misc", 14, 0, 0.0f },
-        { "German LP", "Misc", 25, 3, 0.0f },
+        { "German LP", "Misc", 25, 3, -1.0f },
         { "Add Bass", "Misc", 15, 0, 0.0f },
-        { "Formant-I", "Misc", 25, 4, 0.0f },
-        { "Formant-II", "Misc", 25, 5, 0.0f },
-        { "Formant-III", "Misc", 25, 6, 0.0f },
-        { "Bandreject", "Misc", 25, 7, 50.0f },
-        { "Dist.Comb 1 LP", "Misc", 25, 8, 20.0f },
-        { "Dist.Comb 1 BP", "Misc", 25, 9, 50.0f },
-        { "Dist.Comb 2 LP", "Misc", 25, 10, 20.0f },
-        { "Dist.Comb 2 BP", "Misc", 25, 11, 50.0f },
+        { "Formant-I", "Misc", 25, 4, -1.0f },
+        { "Formant-II", "Misc", 25, 5, -1.0f },
+        { "Formant-III", "Misc", 25, 6, -1.0f },
+        { "Bandreject", "Misc", 25, 7, -1.0f },
+        { "Dist.Comb 1 LP", "Misc", 25, 8, -1.0f },
+        { "Dist.Comb 1 BP", "Misc", 25, 9, -1.0f },
+        { "Dist.Comb 2 LP", "Misc", 25, 10, -1.0f },
+        { "Dist.Comb 2 BP", "Misc", 25, 11, -1.0f },
         { "Scream LP", "Misc", 16, 0, 0.0f },
         { "Scream BP", "Misc", 16, 1, 50.0f },
 
@@ -551,14 +547,14 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
         { "New Wsp", "New", 17, 0, 0.0f },
         { "DJ Mixer Xfer", "New", 18, 0, 50.0f },
         { "Diffusor", "New", 19, 0, 50.0f },
-        { "MG Ladder", "New", 26, 0, 0.0f },
-        { "Acid Ladder", "New", 26, 1, 0.0f },
+        { "MG Ladder", "New", 26, 0, -1.0f },
+        { "Acid Ladder", "New", 26, 1, -1.0f },
         { "EMS Ladder", "New", 20, 0, 0.0f },
-        { "MG Dirty", "New", 26, 2, 0.0f },
+        { "MG Dirty", "New", 26, 2, -1.0f },
         { "PZ SVF", "New", 21, 0, 50.0f },
-        { "Comb 2", "New", 26, 3, 42.0f },
-        { "Exp MM", "New", 26, 4, 50.0f },
-        { "Exp BPF", "New", 26, 5, 50.0f }
+        { "Comb 2", "New", 26, 3, -1.0f },
+        { "Exp MM", "New", 26, 4, -1.0f },
+        { "Exp BPF", "New", 26, 5, -1.0f }
     };
     return catalog;
 }
@@ -566,6 +562,8 @@ inline const std::vector<SerumFilterTypeEntry>& getSerumFilterCatalog()
 /** Returns the display name for a given (model, style) pair, using the Serum catalog name where applicable. */
 inline std::string getFilterTypeNameForModelAndStyle (int model, int style)
 {
+    if (model < 8) // the classic models (Analog .. Phaser) show their own name; their styles are variants, not types
+        return getFilterModelName (model);
     const auto& catalog = getSerumFilterCatalog();
     for (const auto& item : catalog)
     {

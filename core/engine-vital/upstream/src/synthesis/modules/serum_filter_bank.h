@@ -69,7 +69,6 @@ namespace sbvital {
 
       static constexpr int kFirstModel = 8;
       static constexpr int kLastModel = 26;
-      static constexpr int kNumModels = 19;
 
       SerumFilterBank();
       SerumFilterBank(const SerumFilterBank& other);

@@ -5,6 +5,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "FilterMeasure.h"
 #include "FilterModels.h"
 #include "../ParamHandle.h"
 #include "../Theme.h"
@@ -37,14 +38,13 @@ public:
         sortPoints();
     }
 
-    void setPoint (int index, juce::Point<float> p)
+    /** Moves a point; the points stay ordered by x, so the index of the moved point can change: the new index is returned (-1 for a bad index). */
+    int setPoint (int index, juce::Point<float> p)
     {
-        if (index >= 0 && index < static_cast<int> (points.size()))
-        {
-            points[static_cast<size_t> (index)].x = std::clamp (p.x, 0.0f, 1.0f);
-            points[static_cast<size_t> (index)].y = std::clamp (p.y, 0.0f, 1.0f);
-            sortPoints();
-        }
+        if (index < 0 || index >= static_cast<int> (points.size()))
+            return -1;
+        points.erase (points.begin() + index);
+        return insertSorted ({ std::clamp (p.x, 0.0f, 1.0f), std::clamp (p.y, 0.0f, 1.0f) });
     }
 
     int findNearestPoint (juce::Point<float> pos, float maxDist) const
@@ -63,10 +63,12 @@ public:
         return nearest;
     }
 
-    void addPoint (juce::Point<float> p)
+    /** content.filter_curves holds at most kMaxFilterCurvePoints points; returns the index of the new point, -1 if the curve is full. */
+    int addPoint (juce::Point<float> p)
     {
-        points.push_back ({ std::clamp (p.x, 0.0f, 1.0f), std::clamp (p.y, 0.0f, 1.0f) });
-        sortPoints();
+        if (static_cast<int> (points.size()) >= kMaxFilterCurvePoints)
+            return -1;
+        return insertSorted ({ std::clamp (p.x, 0.0f, 1.0f), std::clamp (p.y, 0.0f, 1.0f) });
     }
 
     void removePoint (int index)
@@ -101,6 +103,13 @@ public:
     }
 
 private:
+    int insertSorted (juce::Point<float> p)
+    {
+        auto it = std::upper_bound (points.begin(), points.end(), p, [] (const auto& a, const auto& b) { return a.x < b.x; });
+        it = points.insert (it, p);
+        return static_cast<int> (it - points.begin());
+    }
+
     void sortPoints()
     {
         std::stable_sort (points.begin(), points.end(), [] (const auto& a, const auto& b) { return a.x < b.x; });
@@ -325,7 +334,7 @@ public:
             {
                 const float normB = (static_cast<float> (b) + 0.5f) / static_cast<float> (numBins);
                 const float freqB = normToFrequency (normB);
-                const auto r = evaluateFilterResponse (freqB, model, style, fc, resVal, blendVal, varVal, fX, fY, fTrans);
+                const auto r = responseAt (freqB, model, style, fc, resVal, blendVal, varVal, fX, fY, fTrans);
                 const float binH = std::clamp ((r.magnitudeDb + 36.0f) / 54.0f, 0.0f, 1.0f) * plotArea.getHeight() * 0.75f;
                 const auto binRect = juce::Rectangle<float> (plotArea.getX() + static_cast<float> (b) * binW + 1.0f,
                                                             plotArea.getBottom() - binH, binW - 2.0f, binH);
@@ -357,7 +366,7 @@ public:
             else if (currentMode == Mode::phase)
             {
                 const float freq = normToFrequency (normX);
-                const auto r = evaluateFilterResponse (freq, model, style, fc, resVal, blendVal, varVal, fX, fY, fTrans);
+                const auto r = responseAt (freq, model, style, fc, resVal, blendVal, varVal, fX, fY, fTrans);
                 // Phase range [-pi, +pi] -> [bottom, top]
                 const float normPhase = (r.phaseRad + 3.14159265f) / (2.0f * 3.14159265f);
                 py = plotArea.getBottom() - std::clamp (normPhase, 0.0f, 1.0f) * plotArea.getHeight();
@@ -365,7 +374,7 @@ public:
             else // Frequency response |H(f)| dB
             {
                 const float freq = normToFrequency (normX);
-                const auto r = evaluateFilterResponse (freq, model, style, fc, resVal, blendVal, varVal, fX, fY, fTrans);
+                const auto r = responseAt (freq, model, style, fc, resVal, blendVal, varVal, fX, fY, fTrans);
                 const float normDb = std::clamp ((r.magnitudeDb + 36.0f) / 54.0f, 0.0f, 1.0f);
                 py = plotArea.getBottom() - normDb * plotArea.getHeight();
             }
@@ -398,7 +407,7 @@ public:
         {
             const float dotNormX = frequencyToNorm (fc);
             const float dotX = plotArea.getX() + dotNormX * plotArea.getWidth();
-            const auto atCutoff = evaluateFilterResponse (fc, model, style, fc, resVal, blendVal, varVal);
+            const auto atCutoff = responseAt (fc, model, style, fc, resVal, blendVal, varVal, 50.0f, 50.0f, 0.0f);
             const float dotNormY = std::clamp ((atCutoff.magnitudeDb + 36.0f) / 54.0f, 0.0f, 1.0f);
             const float dotY = plotArea.getBottom() - dotNormY * plotArea.getHeight();
             const float dotRadius = t.px (isPeakWarn ? 6.0f : 5.0f);
@@ -504,10 +513,15 @@ public:
                 return;
             }
             activePzPoint = pzCurve.findNearestPoint ({ normX, normY }, 0.15f);
-            if (activePzPoint < 0 && e.getNumberOfClicks() >= 2)
+            if (e.getNumberOfClicks() >= 2)
             {
-                pzCurve.addPoint ({ normX, normY });
-                activePzPoint = pzCurve.findNearestPoint ({ normX, normY }, 0.05f);
+                if (activePzPoint < 0)
+                    activePzPoint = pzCurve.addPoint ({ normX, normY }); // double tap on empty space: a new point (at most 16)
+                else if (pzCurve.getPoints().size() > 2)               // double tap on a point: delete it (touch has no right click)
+                {
+                    pzCurve.removePoint (activePzPoint);
+                    activePzPoint = -1;
+                }
                 commitPzCurveToContent();
                 repaint();
             }
@@ -548,7 +562,7 @@ public:
         {
             const float normX = std::clamp ((e.position.x - plotArea.getX()) / plotArea.getWidth(), 0.0f, 1.0f);
             const float normY = std::clamp ((plotArea.getBottom() - e.position.y) / plotArea.getHeight(), 0.0f, 1.0f);
-            pzCurve.setPoint (activePzPoint, { normX, normY });
+            activePzPoint = pzCurve.setPoint (activePzPoint, { normX, normY });
             commitPzCurveToContent();
             repaint();
             return;
@@ -592,8 +606,24 @@ public:
     {
         if (modeButton.getBounds().contains (e.getPosition()))
             return;
+        if (modelParam.valid() && static_cast<int> (modelParam.plain()) == 21) // PZ SVF: a double tap edits the curve, it does not switch the display
+            return;
         cycleMode();
     }
+
+    /** The response shown for a model: the closed-form sketch of the older models, the measured DSP response of the Serum models 22 .. 26. */
+    FilterResponse responseAt (float f, int model, int style, float cutoffHz, float resPercent, float blendPercent, float varPercent,
+                               float formantX, float formantY, float formantTranspose)
+    {
+        if (FilterResponseMeasure::handles (model))
+        {
+            const auto v = measure.at (f, model, style, cutoffHz, resPercent, blendPercent, varPercent);
+            return { v.magnitudeDb, v.phaseRad };
+        }
+        return evaluateFilterResponse (f, model, style, cutoffHz, resPercent, blendPercent, varPercent, formantX, formantY, formantTranspose);
+    }
+
+    const FilterResponseMeasure& responseMeasure() const noexcept { return measure; }
 
 private:
     void updateCutoffResFromMouse (juce::Point<float> pos, juce::Rectangle<float> plotArea)
@@ -643,6 +673,7 @@ private:
     PzSvfCurve pzCurve;
     int activePzPoint = -1;
     std::string filterPrefix;
+    FilterResponseMeasure measure;
 };
 
 // ---- FilterInputsBar (Input Switches S A B C N) ------------------------------------------------------------------------------------

@@ -352,16 +352,38 @@ TEST (all_43_remaining_types_are_stable_and_differ_from_each_other_and_from_anal
         CHECK (relativeDifference (analog, out) > 0.005);
         renders.push_back (out);
     }
-    // within a model the styles differ
-    for (size_t i = 1; i < renders.size(); ++i)
+    // every type differs from every other one, also from the 37 types of the models 8 .. 21. Two settings are rendered: the one above and a second one
+    // (more resonance, drive, blend, other Var) that wakes up what the first leaves neutral (blend of PZ SVF, FAT of the state variable filters);
+    // two types are only the same type if they are equal at both
+    std::vector<Style> all (std::begin (kNewTypes43), std::end (kNewTypes43));
+    all.insert (all.end(), std::begin (kTypes), std::end (kTypes));
+    for (const Style& type : kTypes)
     {
-        if (kNewTypes43[i].model == kNewTypes43[i - 1].model)
-        {
-            if (relativeDifference (renders[i - 1], renders[i]) <= 0.005)
-                std::printf ("    equals the previous style: %s\n", kNewTypes43[i].name);
-            CHECK (relativeDifference (renders[i - 1], renders[i]) > 0.005);
-        }
+        e->reset();
+        setByKey (*e, "filter1.model", static_cast<float> (type.model));
+        setByKey (*e, "filter1.style", static_cast<float> (type.style));
+        renders.push_back (play (*e));
     }
+    std::vector<sbtest::Rendered> second;
+    setByKey (*e, "filter1.resonance", 70.0f);
+    setByKey (*e, "filter1.drive", 8.0f);
+    setByKey (*e, "filter1.blend", 100.0f);
+    setByKey (*e, "filter1.var", 15.0f);
+    for (const Style& type : all)
+    {
+        e->reset();
+        setByKey (*e, "filter1.model", static_cast<float> (type.model));
+        setByKey (*e, "filter1.style", static_cast<float> (type.style));
+        second.push_back (play (*e));
+    }
+    for (size_t i = 0; i < renders.size(); ++i)
+        for (size_t j = i + 1; j < renders.size(); ++j)
+        {
+            const double d = std::max (relativeDifference (renders[i], renders[j]), relativeDifference (second[i], second[j]));
+            if (d <= 0.005)
+                std::printf ("    equal renders: %s and %s\n", all[i].name, all[j].name);
+            CHECK (d > 0.005);
+        }
     // style beyond the model's own clamps to its last
     e->reset();
     setByKey (*e, "filter1.model", 23.0f); // Multi Morph has 4 styles (0..3)
@@ -401,4 +423,65 @@ TEST (remaining_models_survive_extreme_settings_and_work_in_all_three_filter_slo
         CHECK (sbtest::allFinite (out.left) && sbtest::allFinite (out.right));
         CHECK (sbtest::peak (out.left) < 4.0f);
     }
+}
+
+TEST (all_43_remaining_types_stay_finite_and_bounded_at_the_corners_of_every_control_in_all_three_slots)
+{
+    auto e = makeVital();
+    base (*e);
+    setByKey (*e, "osc2.on", 1.0f);
+    setByKey (*e, "osc2.destination", 1.0f);
+    setByKey (*e, "fxfilter.on", 1.0f);
+    setByKey (*e, "filter2.on", 1.0f);
+    const float cutoffs[] = { 20.0f, 20000.0f };
+    const float resonances[] = { 0.0f, 100.0f };
+    const float drives[] = { 0.0f, 20.0f };
+    const float vars[] = { 0.0f, 100.0f };
+    int slotIndex = 0;
+    for (const char* name : { "filter1", "filter2", "fxfilter" })
+    {
+        const std::string k = std::string (name) + ".";
+        for (const Style& type : kNewTypes43)
+            for (const float cutoff : cutoffs)
+                for (const float resonance : resonances)
+                    for (const float drive : drives)
+                        for (const float var : vars)
+                        {
+                            e->reset();
+                            setByKey (*e, (k + "model").c_str(), static_cast<float> (type.model));
+                            setByKey (*e, (k + "style").c_str(), static_cast<float> (type.style));
+                            setByKey (*e, (k + "cutoff").c_str(), cutoff);
+                            setByKey (*e, (k + "resonance").c_str(), resonance);
+                            setByKey (*e, (k + "drive").c_str(), drive);
+                            setByKey (*e, (k + "var").c_str(), var);
+                            // the three slots are fed: osc1 -> filter 1, osc2 -> filter 2; the FX filter sits in the effect chain
+                            setByKey (*e, "osc1.destination", slotIndex == 2 ? 3.0f : 0.0f);
+                            setByKey (*e, "osc2.destination", slotIndex == 1 ? 1.0f : 3.0f);
+                            const auto out = sbtest::render (*e, { noteOn (0, 40), noteOn (0, 88) }, 9000, 256);
+                            const bool ok = sbtest::allFinite (out.left) && sbtest::allFinite (out.right) && sbtest::peak (out.left) < 4.0f
+                                            && sbtest::peak (out.right) < 4.0f;
+                            if (! ok)
+                                std::printf ("    unstable: %s in %s cutoff %.0f res %.0f drive %.0f var %.0f\n", type.name, name, cutoff, resonance, drive, var);
+                            CHECK (ok);
+                        }
+        ++slotIndex;
+    }
+}
+
+TEST (the_drawn_filter_curve_is_ignored_by_every_type_but_the_pz_svf)
+{
+    // the curve of content.filter_curves belongs to PZ SVF only: a 43-type model with a curve in the content renders as without it
+    auto e = makeVital();
+    base (*e);
+    setByKey (*e, "filter1.model", 22.0f);
+    setByKey (*e, "filter1.style", 2.0f);
+    const auto without = play (*e);
+    StateContent content;
+    ContentFilterCurve curve;
+    curve.filter = "filter1";
+    curve.points = { { 0.0f, -30.0f }, { 1.0f, 12.0f } };
+    content.filterCurves.push_back (curve);
+    e->setContent (content);
+    e->reset();
+    CHECK (relativeDifference (without, play (*e)) < 1.0e-4);
 }

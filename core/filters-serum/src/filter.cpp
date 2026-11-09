@@ -692,12 +692,12 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     }
     case FilterType::GermanLP:
     {
-        // Clean ZDF 4-pole LP
+        // Clean ZDF 4-pole LP: the resonance lives in the first 12 dB stage, the second one is critically damped (R = 1), so the
+        // type keeps a smooth 24 dB roll-off with one resonant peak, unlike the state variable Low 24 whose two stages share the resonance
         float lp1 = 0.0f, bp1 = 0.0f, hp1 = 0.0f, notch1 = 0.0f, peak1 = 0.0f;
         float lp2 = 0.0f, bp2 = 0.0f, hp2 = 0.0f, notch2 = 0.0f, peak2 = 0.0f;
-        const float R1 = std::sqrt (R);
-        svf1_.process (drivenIn, g, R1, 0.0f, lp1, bp1, hp1, notch1, peak1);
-        svf2_.process (lp1, g, R1, 0.0f, lp2, bp2, hp2, notch2, peak2);
+        svf1_.process (drivenIn, g, R, 0.0f, lp1, bp1, hp1, notch1, peak1);
+        svf2_.process (lp1, g, 1.0f, 0.0f, lp2, bp2, hp2, notch2, peak2);
         rawOut = lp2;
         break;
     }
@@ -847,7 +847,8 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
         // EDP Wasp OTA model: blend LP -> Notch -> HP
         float lp = 0.0f, bp = 0.0f, hp = 0.0f, notch = 0.0f, peak = 0.0f;
         // Non-linear distortion inside Wasp loop
-        waspSVF_.process (drivenIn, g, R, 0.5f, lp, bp, hp, notch, peak);
+        // the Wasp overdrives its OTA input stage: a hard saturation in front of the loop (the buzz), unity gain for small signals
+        waspSVF_.process (softClip (3.0f * drivenIn) * (1.0f / 3.0f), g, R, 0.5f, lp, bp, hp, notch, peak);
 
         if (var < 0.5f)
         {
@@ -971,9 +972,10 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     }
     case FilterType::ExpMM:
     {
-        // Oberheim SEM multimode: blend LP -> Notch -> HP via Var (MIX)
+        // Oberheim SEM multimode: blend LP -> Notch -> HP via Var (MIX). The SEM state variable core has OTA input saturation, a gentler
+        // resonance range than the plain SVF (R from 1 down to 0.3) and some feedback saturation
         float lp = 0.0f, bp = 0.0f, hp = 0.0f, notch = 0.0f, peak = 0.0f;
-        svf1_.process (drivenIn, g, R, 0.0f, lp, bp, hp, notch, peak);
+        svf1_.process (softClip (1.8f * drivenIn) * (1.0f / 1.8f), g, 1.0f - 0.7f * res, 0.3f, lp, bp, hp, notch, peak);
 
         if (var < 0.5f)
         {
@@ -989,9 +991,9 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     }
     case FilterType::ExpBPF:
     {
-        // Oberheim SEM bandpass
+        // Oberheim SEM bandpass: the same core as Exp MM (OTA input saturation, gentler resonance), band output
         float lp = 0.0f, bp = 0.0f, hp = 0.0f, notch = 0.0f, peak = 0.0f;
-        svf1_.process (drivenIn, g, R, 0.0f, lp, bp, hp, notch, peak);
+        svf1_.process (softClip (1.8f * drivenIn) * (1.0f / 1.8f), g, 1.0f - 0.7f * res, 0.3f, lp, bp, hp, notch, peak);
         rawOut = bp;
         break;
     }

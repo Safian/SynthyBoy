@@ -378,7 +378,7 @@ private:
                                         modelHandle.setPlainComplete (static_cast<float> (m.model));
                                     if (styleHandle.valid())
                                         styleHandle.setPlainComplete (static_cast<float> (m.style));
-                                    if (blendHandle.valid())
+                                    if (blendHandle.valid() && m.defaultBlend >= 0.0f)
                                         blendHandle.setPlainComplete (m.defaultBlend);
                                     refreshAll();
                                 }

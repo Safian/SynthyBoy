@@ -35,7 +35,8 @@ float ParamHandle::plain() const
 {
     if (rawValue == nullptr)
         return valid() ? info().def : 0.0f;
-    const float stored = rawValue->load();
+    // read the parameter itself: inside an onChange callback the raw atomic of the tree may not have caught up with the new value yet
+    const float stored = param != nullptr ? param->convertFrom0to1 (param->getValue()) : rawValue->load();
     return ref.storedNormalised ? fromNormalised (info(), stored) : stored;
 }
 
