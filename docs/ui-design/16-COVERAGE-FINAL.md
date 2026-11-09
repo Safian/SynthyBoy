@@ -85,7 +85,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S01-17 | S p.29 | Choosing options with menus, arrows, wheel | DONE | ParamChoice (ParamControls.cpp:605); ui_render `uir_toggle_choice_and_slider` |  |
 | S01-18 | S p.29 | Pitch OCT / SEM / FIN / CRS | DONE | `oscN.transpose`, `oscN.tune`, `oscN.pitch_coarse` (PT:371); TransposeControl.cpp:17; t_pitchuni `pitch_coarse_and_modes_render_distinct_audio` :88; ui_gaps `uig_transpose_oct_sem_control` |  |
 | S01-19 | S p.30 | Pitch modes Semitones / Harmonics / Ratio / Step | PARTIAL | `oscN.pitch_mode` (PT:371, PT:100); t_pitchuni :88, `step_mode_follows_the_active_tuning` :279 | Ratio has no SRC choice (S01-20); Step follows the active scale / .scl only, real MTS-ESP source not linked (S15-18) |
-| S01-20 | S p.30 | Ratio mode SRC (tune to another oscillator or Sub) | MISSING | none | MANUALCHECK 4: 3 keys `oscN.ratio_src` |
+| S01-20 | S p.30 | Ratio mode SRC (tune to another oscillator or Sub) | DONE (GROUPB WP-05) | `oscN.ratio_src` (B27), pitch taps `producers_module.cpp:154`; `test_oscextra2.cpp` `ratio_source_tunes_an_oscillator_to_another_oscillator_or_the_sub`; `OscPanel.cpp:112` (loop-safe list) | Serum enumeration read from two files (14 row 77) |
 | S01-21 | S p.30 | Global > Main Tuning as modulation destination | DONE | `master.tune` is a modulation destination (modDestinations); t_vital_params `modulatable_parameters_are_modulation_destinations_of_the_engine` :276 |  |
 | S01-22 | S p.31-32 | Routing: filter knob blend, Main, Direct, None, Bus 1 / 2 sends | DONE | `oscN.destination` (PT:kOscDestinations), `oscN.filter_blend`, `oscN.bus1/2_send`, `filterN.destination`, `filterN.busM_send`; t_wp5 :100, :129, :152, :209; OscWaveView.cpp:758 |  |
 | S01-23 | S p.33-35 | Module menu: Lock, Init, Copy, Paste, Copy w/ mods, Swap, drag-copy | DONE | ModuleSheet.cpp:102-185; ui_gaps `uig_module_ops_swap_copy_paste_init`, `uig_module_header_drag_onto_another_header_swaps_alt_copies`; ui_shellfeat `shf_module_lock_*` | lock keeps the module's own keys, not the modNN slots pointing at it (14 row 24) |
@@ -103,7 +103,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S02-06 | S p.43 | Phase Legato | DONE | `oscN.phase_legato`, `voice.phase_legato`; t_pitchuni `phase_legato_changes_the_start_phase_of_overlapping_notes` :337 |  |
 | S02-07 | S p.44 | Phase memory All Voices / Contiguous / Per Voice | DONE | `oscN.phase_memory`; t_pitchuni :364 |  |
 | S02-08 | S p.45 | WT POS | DONE | `oscN.frame`, `oscN.frame_spread` |  |
-| S02-09 | S p.45 | WT POS Smooth Interpretation switch | PARTIAL | engine sets `smooth_interpolation` by quality tier only (VE:856) | no key / switch (3 keys `oscN.smooth_interp`) |
+| S02-09 | S p.45 | WT POS Smooth Interpretation switch | DONE (GROUPB WP-05) | `oscN.smooth_interp` (B27), `synth_oscillator.cpp:1338`; `smooth_interpolation_off_steps_between_frames_on_blends_them` | default Off (14 row 78) |
 | S02-10 | S p.45 | Unison voices 1-16 with CPU colour | DONE | `oscN.unison.voices`; OscWaveView.cpp:122; t_vital_audio `unison_seven_voices_against_one` :750 |  |
 | S02-11 | S p.46-47 | Unison MODE Linear / Super / Exp / Inv / Random | DONE | `oscN.unison.mode` (PT:377, VB:155); t_pitchuni `unison_modes_and_blend_shape_render_distinct_audio` :180 |  |
 | S02-12 | S p.47 | Unison STACK (Center-12 / -24, octaves, 12+7 with 1-3x repeat) | DONE | `oscN.unison.stack` (11 styles), `oscN.unison.stack_repeat` (PT:380); t_pitchuni :180 |  |
@@ -123,7 +123,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S02-26 | S p.52 | Warp Filter group LPF / HPF | DONE | warp entries `Filter LPF` (25), `Filter HPF` (26); cap bit 45; test_warpenv (centroid) |  |
 | S02-27 | S p.52-54 | Warp Distortion group (14 modes: Tube .. Soft Sat.) | DONE | warp entries 27-40 `Dist Tube` .. `Dist Soft Sat.`; cap bit 46; test_warpenv | four shapers are our own curves: morning question 36 |
 | S02-28 | S p.54 | FM from Osc B / C | DONE | warp types FM from Osc N (PT:43-47); t_vital_params `oscillators_that_modulate_each_other_stay_finite` :539 |  |
-| S02-29 | S p.54, 56 | FM / PD / AM / RM from Noise, Sub, Filter 1, Filter 2 (audio-rate taps) | MISSING | none | G29: needs audio-rate source taps; coordinate with warp-env (same warp enum) |
+| S02-29 | S p.54, 56 | FM / PD / AM / RM from Noise, Sub, Filter 1, Filter 2 (audio-rate taps) | DONE (GROUPB WP-06) | warp entries 52 .. 75 (`kSrcFmThruZeroNoise ..`), `synth_oscillator.cpp:351`; `warp_modes_from_the_noise_sub_and_filters_change_the_sound` (24 modes), `..._use_the_filter_of_the_same_voice`, `..._act_on_a_sample_oscillator` | the filters are read one block late (14 row 80) |
 | S02-30 | S p.54-55 | FM Thru-Zero, Exp, Linear | DONE | warp entries 41-46 `FM Thru-Zero / Exp / Linear from X / Y`; cap bit 47; test_warpenv `warpenv_fm_thru_zero_exp_and_linear_are_different_laws` |  |
 | S02-31 | S p.55 | PD (from B, C, Self) | DONE | warp entries 47-49 `PD from X / Y`, `PD Self`; cap bit 48; test_warpenv |  |
 | S02-32 | S p.56 | AM (from B, C) | DONE | warp entries 50, 51 `AM from X / Y`; cap bit 48; test_warpenv |  |
@@ -157,7 +157,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S04-07 | S p.73 | Trim (cut the sample to start / end) | DONE (WP-01) | none (start / end exist) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S04-08 | S p.74-75 | Slicing Off / Auto (threshold) / Manual | DONE (WP-01) | `oscN.sample.slice_mode`, `.slice_threshold`, `content.samples[].slices`; t_wp4 `sample_slices_auto_and_manual_pick_the_slice_by_key` :295; ui_gaps `uig_sample_view_slices_manual`, `uig_sample_view_threshold_line_auto_slices` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S04-09 | S p.76 | Slice options: Play Slice to End, Play Single Slice, Root Note | DONE | `oscN.sample.slice_play`, `.slice_root` |  |
-| S04-10 | S p.76 | Mod source on the single-slice destination | MISSING | modDestinations hold scan / uni_start / uni_span only | new modulatable `oscN.sample.slice` (3 keys) |
+| S04-10 | S p.76 | Mod source on the single-slice destination | DONE (GROUPB WP-05) | `oscN.sample.slice` (B27, destinations 909 .. 911), `sample_oscillator.cpp:128`; `single_slice_destination_moves_the_played_slice_by_value_and_by_modulation` |  |
 | S04-11 | S p.76 | Send slices to clip / auto-sync to clip | EXCLUDED | Kick (clips) |  |
 | S04-12 | S p.77-79 | Loop menu: One-shot, Forward, Reverse, Forward/Reverse, Tailed; loop start / end / crossfade | DONE | `oscN.sample.loop_mode`, `.loop_start`, `.loop_end`, `.loop_xfade`, `.loop_relative`, `.loop_exit`; t_wp4 :205 |  |
 | S04-13 | S p.80 | Scan (speed, range, reverse, lock to tempo, to BPM) | DONE | `oscN.sample.scan` .. `.length_beats`; t_wp4 :250 | varispeed; pitch-preserving scan is the granular oscillator (S05) |
@@ -297,22 +297,22 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S11-21 | S p.196-198 | Copy a wavetable frame to an LFO / an LFO shape to a wavetable | MISSING | none (grep in shell-juce/ui: none) | G52; the wavetable half needs X01-01 |
 | S11-22 | S p.198-200 | Modulate LFO points (X / Y) by menu or drag | DONE | `content.lfo_shapes[].points[].mod_x/mod_y`; t_lfovoice :140-340, t_wp123 :559; ui_lfo `uil_point_mod_reaches_the_engine_the_render_differs` |  |
 | S11-23 | S p.199-201 | Control context menu: Mod Source submenu, bypass, remove, remove all, reset, MIDI learn, lock | DONE | Sheet.cpp:57-222; ui_render `uir_sheet_value_entry`; ui_shellfeat `shf_midi_learn_*` |  |
-| S11-24 | S p.199 | Context menu: Aux Source submenu | PARTIAL | aux source is set in the matrix row (ModMatrixPanel) | not in the per-control sheet (small) |
-| S11-25 | S p.199, 211 | Context menu: Edit Custom Curve (CRV of a connection) | IN-PROGRESS | G2, worker mod-amount (branch agy/modamt, block B20) |  |
+| S11-24 | S p.199 | Context menu: Aux Source submenu | DONE (GROUPB WP-08) | tap a modulation row of the control sheet: `Sheet.cpp:41` (`showConnectionMenu`) |  |
+| S11-25 | S p.199, 211 | Context menu: Edit Custom Curve (CRV of a connection) | DONE (modamt B20 + GROUPB WP-08) | `Sheet.cpp:41` -> `UiContext::ViewState::openSlotCurve` (`Editor.cpp:46`), `ModCurvePanel::showModSlotCurve`; test `uim_wp08_rise_fall_sliders_write_the_slot_record_and_the_sheet_opens_the_curve` |  |
 | S11-26 | S p.202-205 | Velocity and Note graphs, Legato (portamento time), Init Graph | DONE | `curve.velocity.legato`, `curve.note.legato`, `content.curves`; t_wp123 `velocity_and_note_curves_and_their_legato_glide` :498; ModVelNotePanel.cpp:310 |  |
 | S11-27 | S p.206-208 | Macros 1-8: assign, swap, macros as destinations | DONE | `macro.1..8`; t_wp123 `macros_5_to_8_are_sources_and_destinations` :140; ui_gaps `uig_macro_chips_swap_by_drag` |  |
-| S11-28 | S p.208, 210 | Oscillators (A, B, C, Noise, Sub) and Filter 1 / 2 outputs as modulation sources | MISSING | modSources list has 38 entries, none of them an audio output | G29: audio-rate source taps (block of 7 sources) |
-| S11-29 | S p.210 | Matrix-only sources: Active Voices | MISSING | none |  |
-| S11-30 | S p.210 | Matrix-only sources: Note-On Alt 1 / 2 | MISSING | none |  |
-| S11-31 | S p.210 | Matrix-only sources: Note-On Rand 1 / 2 and Rand (Discrete) | PARTIAL | one per-note `random` source (Vital) | second random, discrete variant missing |
-| S11-32 | S p.210 | Matrix-only sources: Release Velocity | MISSING | note-off velocity reaches the engine (kCapEventContract, ct_events) but is not a source |  |
+| S11-28 | S p.208, 210 | Oscillators (A, B, C, Noise, Sub) and Filter 1 / 2 outputs as modulation sources | DONE (GROUPB WP-06) | modSources 43 .. 49 (`SourceTap`, `synth_voice_handler.cpp:365`); `every_sound_source_moves_a_destination` | the held last sample of the block (14 row 79) |
+| S11-29 | S p.210 | Matrix-only sources: Active Voices | DONE (GROUPB WP-06) | modSource 50; `active_voices_alt_rand_fixed_release_velocity_and_expression_x` |  |
+| S11-30 | S p.210 | Matrix-only sources: Note-On Alt 1 / 2 | DONE (GROUPB WP-06) | modSources 51, 52 (`voice_handler.cpp` `prepareVoiceValues`); same test |  |
+| S11-31 | S p.210 | Matrix-only sources: Note-On Rand 1 / 2 and Rand (Discrete) | DONE (GROUPB WP-06) | `random` (Rand 1), modSources 53 (Rand 2) and 54 (Discrete, a number per slot, `sourceFor`); same test |  |
+| S11-32 | S p.210 | Matrix-only sources: Release Velocity | DONE (GROUPB WP-06) | modSource 55 = the output of `lift` (the note-off velocity); same test (a hard release against a soft one) |  |
 | S11-33 | S p.210 | Matrix-only sources: Voice Index, Voice Mod 1 / 2 | DONE (GROUPA2 WP-07; Active Voices stays WP-06) | modSources 40 .. 42 (`voice_index`, `voice_mod1`, `voice_mod2`, `kCapVoiceSources`); `voicecontrol_voice_index_and_voice_mods_are_modulation_sources`; Serum ids 56 / 57 / 58 map to them | |
-| S11-34 | S p.210 | Expression / MPE X / Y / Z as sources | PARTIAL | `slide` (Y), `poly_aftertouch` (Z), `lift`, `oct_note` exist; per-note bend (X) drives pitch only | no X source |
+| S11-34 | S p.210 | Expression / MPE X / Y / Z as sources | DONE (GROUPB WP-06) | `slide` (Y), `poly_aftertouch` (Z), `lift`, `oct_note`, and modSource 56 Expression X (the per note bend over 48 semitones) |  |
 | S11-35 | S p.211 | Sources Mod Wheel, Aftertouch, Poly Aftertouch, Pitch Bend | DONE | modSources 23-28, 35-38 (docs/params.json); t_vital_audio `matrix_macro_velocity_and_mod_wheel_are_sources` :586 |  |
-| S11-36 | S p.211 | Source Fixed (constant 1 with depth slider) | MISSING | none | tiny |
+| S11-36 | S p.211 | Source Fixed (constant 1 with depth slider) | DONE (GROUPB WP-06) | modSource 57; same test |  |
 | S11-37 | S p.209 | 64 matrix slots, source / amount / polarity / stereo / destination / bypass | DONE | `modNN.*` (PT:301); t_vital_audio :635, :682; t_vital_params `modulation_slots_are_wired_and_unwired` :461; ModMatrixPanel.cpp:843 |  |
-| S11-38 | S p.211 | CRV curve of the source, editable curve | IN-PROGRESS | G2, worker mod-amount (B20) |  |
-| S11-39 | S p.211, V p.25-26 | RISE / FALL slew limiter on the source (curve editor) | MISSING | none | MANUALCHECK 4: `modNN.rise`, `modNN.fall` (128 keys); share the curve content of B20, run after it |
+| S11-38 | S p.211 | CRV curve of the source, editable curve | DONE (modamt B20) | `content.mod_curves`, `ModCurvePanel` Custom, `RemapEditor` mod curve mode; RISE / FALL beside it (GROUPB WP-08) |  |
+| S11-39 | S p.211, V p.25-26 | RISE / FALL slew limiter on the source (curve editor) | DONE (GROUPB WP-08) | `content.mod_curves[].rise / .fall` (0 keys), `slewStep` (`modulation_connection_processor.cpp:72`); `test_modslew.cpp`; sliders `ModCurvePanel.cpp:320` | the 128 key proposal not built (14 row 81) |
 | S11-40 | S p.211-212 | AUX SOURCE, INV, aux CRV, OUTPUT | DONE | `modNN.aux_source/inv/power/output`; t_wp123 `aux_source_multiplies_the_slot` :266 |  |
 | S11-41 | S p.212-213 | Matrix expand, move row, bypass, remove | DONE | ui_gaps `uig_mod_swap_slots_model_and_matrix_row_handle`; ModMatrixReorder.h |  |
 | S11-42 | S p.214 | Matrix ops: sort by source / destination, vibrato, Velo->Amp, bake macros, init | DONE | ModMatrixPanel.cpp:735-765; ModLogic.h:386; ui_model `ui_mod_snapshot_and_slot_editing` |  |
@@ -459,14 +459,14 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | I01-05 | audit G5 | `stereo_routing` (5 presets), `voice_override` (1 preset) | IN-PROGRESS | worker mod-amount (B20): keys + bindings |  |
 | I01-06 | audit G6 | `osc_N_transpose_quantize` | IN-PROGRESS | worker mod-amount task text asks for a key, but `oscN.transpose_snap` exists since B14 and is bound to `transpose_quantize` (VB:161): the worker must reuse it and only add the importer mapping | duplicate-key risk, tell the lead |
 | I01-07 | audit G7 | Sample as a 4th source (5 of 35 presets lose their sample); Vital warp 'from sample' | PARTIAL (GROUPA1 WP-04) | a Vital sample is the sample of the noise source (`noise.type` = Sample, osc 4): 7 samples of the 35 presets kept, 0 dropped; vi_fixture_sample_imported_to_the_noise_source | the warp 'from sample' (`sample_input`) has no home until WP-06 |
-| I01-08 | audit G8 | Stored `mod_wheel` position (23 files non-zero) | MISSING | not applied | only if an A/B against Vital shows Vital restores it |
-| I01-09 | audit G9 | Single-frame `Init` and phase-shifted `Sine` tables stored as content instead of a built-in | MISSING | 8 distinct 4 KB files for 43 uses | one appended built-in `Saw down` |
-| I01-10 | audit 4 | Importer ignores the keys added after the audit: `detune_range` -> `oscN.unison.range`, `midi_track` -> `oscN.pitch_track`, `voice_priority` -> `master.voice.steal_priority`, `spectral_unison` | MISSING | vital_import.cpp:188 lists them as auxiliary (ignored / dropped) although the keys exist since B14 / B15 | all 35 files use the defaults, so no preset changes; a non-default file would lose the setting |
+| I01-08 | audit G8 | Stored `mod_wheel` position (23 files non-zero) | DECIDED (GROUPB WP-18) | not applied (A410) | the A/B needs Vital (14 row 82) |
+| I01-09 | audit G9 | Single-frame `Init` and phase-shifted `Sine` tables stored as content instead of a built-in | DONE for `Init` (GROUPB WP-18) | `oscN.wavetable` = 14 "Saw Down" (cap bit 63), `matchBuiltinSingleCycle`; test `vi_single_cycle_shortcut_needs_the_same_waveform`; 34 stored tables fewer in the audit set | the shifted `Sine` stays stored (a shift is not a built-in) |
+| I01-10 | audit 4 | Importer: `detune_range` -> `oscN.unison.range`, `midi_track` -> `oscN.pitch_track`, `voice_priority` -> `master.voice.steal_priority`; `spectral_unison` | DONE (GROUPB WP-18; `spectral_unison` stays the engine's fixed value) | `vital_import.cpp` (the direct rows), test `vi_detune_range_midi_track_and_voice_priority_are_imported`; audit 35 presets, 0 mismatches | A409 |
 | I01-11 | 11 Q31 | Clean-room wavetable renderer for the 10 Vital component types | DONE | core/wavetable-render; audit: 105 of 105 tables, 0 silent | component formulas are our definitions (14 row 1, SPEC-GAP); needs A/B against real Vital |
 | I01-12 | 11 Q5 | Stand-alone `.vitaltable`, `.vitallfo`, `.vitalbank` batch | DONE (WP-01) | tools/vital-import writes `.lfoshape.json` (14 row 25) ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | I01-13 | 11 Q38 | Export as `.vital` | DIFFERENT | not a product feature (12-decisions: proposed Q38) |  |
 | I01-14 | audit 7 | Imported presets that fail the factory render gate (8 of 35) | DIFFERENT | presets themselves are hot (VITAL-IMPORT-AUDIT section 7); gate is for factory presets, report only |  |
-| I01-15 | 14 row 1 | Importer A/B against real Vital audio | MISSING | no Vital render exists in the repo | only listening can settle the SPEC-GAP list (`grep SPEC-GAP core/`) |
+| I01-15 | 14 row 1 | Importer A/B against real Vital audio | OPEN (owner) | no Vital render exists in the repo | only listening can settle the SPEC-GAP list (`grep SPEC-GAP core/`) |
 | I01-16 | I01-01 | Import entry points inside the plugin (file chooser, content store, batch) | DONE (WP-01) | importer is a CLI only (tools/vital-import); shell-juce / shell-clap do not link core/vital-import ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 
 ### X01 Cross-cutting: shell, content pipeline, platforms (found in this audit)
@@ -513,11 +513,11 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | G23 | Sub oscillator | DONE | S07; sub.phase separate (MANUALCHECK) |
 | G24 | User wavetable selection | PARTIAL | engine DONE (t_wp4 :333); no store / list: S02-03, X01-01 |
 | G25 | CRS continuous coarse pitch | DONE | `oscN.pitch_coarse` |
-| G26 | Pitch modes Harmonics / Ratio / Step | PARTIAL | S01-19, S01-20 (Ratio SRC) |
+| G26 | Pitch modes Harmonics / Ratio / Step | DONE (GROUPB WP-05: Ratio SRC) | S01-19, S01-20 |
 | G27 | Pitch tracking toggle, bend tracking | DONE | `oscN.pitch_track`, `.pitch_bend_track`; t_pitchuni :131, :254 |
 | G28 | Routing blend, None, Bus 1 / 2 | DONE | S01 routing row; t_wp5 |
-| G29 | Oscillator / filter outputs as sources | MISSING | S11, S02 (FM from Noise / Sub / Filters) |
-| G30 | 256 frames, smooth interpolation switch | PARTIAL | S02: frames DONE, switch MISSING |
+| G29 | Oscillator / filter outputs as sources | DONE (GROUPB WP-06) | S11, S02 (FM from Noise / Sub / Filters) |
+| G30 | 256 frames, smooth interpolation switch | DONE (GROUPB WP-05) | S02 |
 | G31 | Phase legato, phase memory | DONE | S02 |
 | G32 | Unison laws, range, stack repeat, warp 2 spread, hi-res | DONE | S02 (hi-res PARTIAL) |
 | G33 | Two free warp slots, Swap Warps | DONE | slot 2 (B09), Swap Warps (B21) |
@@ -554,9 +554,9 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | G64 | LFO mono / direction / host / 10x / phase snap | PARTIAL | all DONE except phase snap to grid |
 | G65 | LFO point modulation | DONE | t_lfovoice, t_wp123 :559 |
 | G66 | VELO / NOTE custom curves | DONE | t_wp123 :498 |
-| G67 | Sources Lift, Slide, Oct Note, Poly AT, Stereo, Rand 2 / discrete, Active Voices, Voice Index / Mod | PARTIAL | Lift .. Poly AT DONE; Voice Index / Mod DONE (GROUPA2 WP-07); Stereo IN-PROGRESS; rest MISSING (S11) |
+| G67 | Sources Lift, Slide, Oct Note, Poly AT, Stereo, Rand 2 / discrete, Active Voices, Voice Index / Mod | DONE (GROUPA2 WP-07, GROUPB WP-06; Stereo from modamt) | S11 |
 | G68 | Matrix AUX SOURCE, INV, CRV, OUTPUT | DONE | t_wp123 :266 |
-| G69 | Per-slot curve, RISE / FALL | PARTIAL | wavetable remap DONE (t_wtremap); matrix curve IN-PROGRESS (modamt); RISE / FALL MISSING |
+| G69 | Per-slot curve, RISE / FALL | DONE (modamt curve, GROUPB WP-08 RISE / FALL) | `content.mod_curves` |
 | G70 | Parallel FX racks | DONE | t_wp5 :231 |
 | G71 | Dynamic module instancing | PARTIAL | A19, 14 row 3: one instance per type |
 | G72 | Per-module LEVEL | DONE | t_wtremap :282 |
@@ -628,9 +628,9 @@ Count of the 84: DIFFERENT 2, DONE 40, IN-PROGRESS 4, MISSING 11, PARTIAL 27.
 | `noise.stereo`, `noise.filter` | 2 | DONE (GROUPA1, B23) | WP-04 |
 | `delay.offset_left` | 1 | DONE (GROUPA1, B25) | WP-10 |
 | `reverb.feedback` | 1 | DONE (GROUPA1, B25) | WP-10 |
-| `oscN.ratio_src` | 3 | MISSING | WP-05 |
+| `oscN.ratio_src` | 3 | DONE (GROUPB, B27) | WP-05 |
 | ENV 1 on/off: `sub.env1`, `oscN.env1`, `noise.env1` | 5 | IN-PROGRESS (warp-env, the worker decides the key names) | - |
-| `modNN.rise`, `modNN.fall` + per-slot curve | 128 | curve IN-PROGRESS (modamt); RISE / FALL MISSING | WP-08 (recommended: fields of the curve content, 0 keys) |
+| `modNN.rise`, `modNN.fall` + per-slot curve | 128 | curve DONE (modamt); RISE / FALL DONE as curve content, 0 keys (GROUPB WP-08, 14 row 81) | WP-08 |
 | Warp modes Remap 1-4 | 0 (4 choice entries) | IN-PROGRESS (warp-env) | - |
 | Section 3 'differences that stay' | - | DIFFERENT (14 row 31) | WP-19 owner list |
 
@@ -644,10 +644,10 @@ Count of the 84: DIFFERENT 2, DONE 40, IN-PROGRESS 4, MISSING 11, PARTIAL 27.
 | G4 source `stereo` | IN-PROGRESS | modamt |
 | G5 `stereo_routing`, `voice_override` | IN-PROGRESS | modamt (keys + bindings) |
 | G6 `osc_N_transpose_quantize` | IN-PROGRESS | the key `oscN.transpose_snap` exists already: reuse, importer mapping only |
-| G7 sample as a 4th source | DONE (GROUPA1 WP-04; the warp 'from sample' waits for WP-06) | `noise.type` + content osc 4 |
-| G8 stored `mod_wheel` | MISSING | needs one A/B against Vital |
-| G9 built-in `Saw down` table | MISSING | backlog WP-18 |
-| importer vs B14 / B15 keys (detune range, midi track, priority) | MISSING | backlog WP-18 |
+| G7 sample as a 4th source | DONE (GROUPA1 WP-04; the warp 'from sample' is FM Thru-Zero / RM from Noise since GROUPB WP-06) | `noise.type` + content osc 4 |
+| G8 stored `mod_wheel` | DECIDED: not applied (GROUPB WP-18, 14 row 82) |
+| G9 built-in `Saw down` table | DONE (GROUPB WP-18) |
+| importer vs B14 / B15 keys (detune range, midi track, priority) | DONE (GROUPB WP-18) |
 
 ## 9. Appendix E - UI rows still GAP / NOT DONE
 
