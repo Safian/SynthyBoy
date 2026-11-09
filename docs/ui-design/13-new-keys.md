@@ -735,7 +735,7 @@ Added by the WP-21 work package (WP21-REPORT.md). **No keys** (decision A343): e
 | A346 | A modulation destination whose Serum value is a linear gain (oscillator / filter / effect levels, master volume, bus levels; stored in dB here) would move over the whole dB range with the same relative depth (a velocity depth of 75 % on a filter level = +54 dB); its depth is limited to 24 dB down and 12 dB up (`db_destination_depth_limited`, a depth that is already smaller stays) | 64 |
 | A345 | The old container (format 0: zlib + UBJSON, 12 files) is read into the same value tree as the CBOR; the UBJSON reader supports the optimised containers and the `$` / `#` markers | |
 
-**Numbers on the 656 real presets** (WP21-REPORT.md): 656 of 656 import, no crash or hang (slowest file 0.17 s), 0 unaccounted leaves; the independent audit recomputes 45543 voice values, 16924 effect values, 12810 matrix sources and destinations, 1433 stored tables (3.4 M samples compared with the embedded data) with 0 mismatches and finds all 7 injected mutations.
+**Numbers on the 656 real presets** (WP21-REPORT.md): 656 of 656 import, no crash or hang (slowest file 0.18 s), 0 unaccounted leaves; the independent audit recomputes 45543 voice values, 16924 effect values, 12810 matrix sources and destinations, 1433 stored tables (3.4 M samples compared with the embedded data) with 0 mismatches and finds all 7 injected mutations.
 
 ## 5. State that is not in the key list (additive `content` section, state version 3)
 
