@@ -8,6 +8,7 @@ add_library(synthyboy_core STATIC
     src/params.cpp
     src/param_table.cpp
     src/modulation.cpp
+    src/fx_types.cpp
     src/state.cpp
     src/content_state.cpp
     src/engine_caps.cpp

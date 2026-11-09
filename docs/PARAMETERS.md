@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**1603 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2051 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -37,7 +37,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Random LFO 4 | 8 |
 | Macros | 8 |
 | Mod Matrix | 704 |
-| FX | 216 |
+| FX | 664 |
 | LFO 9 | 17 |
 | LFO 10 | 17 |
 | Mixer | 8 |
@@ -797,7 +797,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..39 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..519 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..903 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -1030,6 +1030,454 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `reverb.er_size` | Reverb ER Size | 0 .. 100 % | 50 % | FX / Reverb |  |  |
 | `reverb.diff_a` | Reverb Diffusion A | 0 .. 100 % | 70 % | FX / Reverb | mod |  |
 | `reverb.diff_b` | Reverb Diffusion B | 0 .. 100 % | 60 % | FX / Reverb | mod |  |
+| `fxi01.type` | FX Slot 01 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 01 |  |  |
+| `fxi01.on` | FX Slot 01 On | 0 Off, 1 On | Off | FX / Slot 01 |  |  |
+| `fxi01.rack` | FX Slot 01 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 01 |  |  |
+| `fxi01.order` | FX Slot 01 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 01 |  |  |
+| `fxi01.p01` | FX Slot 01 P01 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p02` | FX Slot 01 P02 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p03` | FX Slot 01 P03 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p04` | FX Slot 01 P04 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p05` | FX Slot 01 P05 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p06` | FX Slot 01 P06 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p07` | FX Slot 01 P07 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p08` | FX Slot 01 P08 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p09` | FX Slot 01 P09 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p10` | FX Slot 01 P10 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p11` | FX Slot 01 P11 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p12` | FX Slot 01 P12 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p13` | FX Slot 01 P13 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p14` | FX Slot 01 P14 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p15` | FX Slot 01 P15 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p16` | FX Slot 01 P16 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p17` | FX Slot 01 P17 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p18` | FX Slot 01 P18 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p19` | FX Slot 01 P19 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p20` | FX Slot 01 P20 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p21` | FX Slot 01 P21 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p22` | FX Slot 01 P22 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p23` | FX Slot 01 P23 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi01.p24` | FX Slot 01 P24 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
+| `fxi02.type` | FX Slot 02 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 02 |  |  |
+| `fxi02.on` | FX Slot 02 On | 0 Off, 1 On | Off | FX / Slot 02 |  |  |
+| `fxi02.rack` | FX Slot 02 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 02 |  |  |
+| `fxi02.order` | FX Slot 02 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 02 |  |  |
+| `fxi02.p01` | FX Slot 02 P01 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p02` | FX Slot 02 P02 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p03` | FX Slot 02 P03 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p04` | FX Slot 02 P04 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p05` | FX Slot 02 P05 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p06` | FX Slot 02 P06 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p07` | FX Slot 02 P07 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p08` | FX Slot 02 P08 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p09` | FX Slot 02 P09 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p10` | FX Slot 02 P10 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p11` | FX Slot 02 P11 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p12` | FX Slot 02 P12 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p13` | FX Slot 02 P13 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p14` | FX Slot 02 P14 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p15` | FX Slot 02 P15 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p16` | FX Slot 02 P16 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p17` | FX Slot 02 P17 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p18` | FX Slot 02 P18 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p19` | FX Slot 02 P19 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p20` | FX Slot 02 P20 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p21` | FX Slot 02 P21 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p22` | FX Slot 02 P22 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p23` | FX Slot 02 P23 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi02.p24` | FX Slot 02 P24 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
+| `fxi03.type` | FX Slot 03 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 03 |  |  |
+| `fxi03.on` | FX Slot 03 On | 0 Off, 1 On | Off | FX / Slot 03 |  |  |
+| `fxi03.rack` | FX Slot 03 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 03 |  |  |
+| `fxi03.order` | FX Slot 03 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 03 |  |  |
+| `fxi03.p01` | FX Slot 03 P01 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p02` | FX Slot 03 P02 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p03` | FX Slot 03 P03 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p04` | FX Slot 03 P04 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p05` | FX Slot 03 P05 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p06` | FX Slot 03 P06 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p07` | FX Slot 03 P07 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p08` | FX Slot 03 P08 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p09` | FX Slot 03 P09 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p10` | FX Slot 03 P10 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p11` | FX Slot 03 P11 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p12` | FX Slot 03 P12 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p13` | FX Slot 03 P13 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p14` | FX Slot 03 P14 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p15` | FX Slot 03 P15 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p16` | FX Slot 03 P16 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p17` | FX Slot 03 P17 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p18` | FX Slot 03 P18 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p19` | FX Slot 03 P19 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p20` | FX Slot 03 P20 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p21` | FX Slot 03 P21 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p22` | FX Slot 03 P22 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p23` | FX Slot 03 P23 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi03.p24` | FX Slot 03 P24 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
+| `fxi04.type` | FX Slot 04 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 04 |  |  |
+| `fxi04.on` | FX Slot 04 On | 0 Off, 1 On | Off | FX / Slot 04 |  |  |
+| `fxi04.rack` | FX Slot 04 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 04 |  |  |
+| `fxi04.order` | FX Slot 04 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 04 |  |  |
+| `fxi04.p01` | FX Slot 04 P01 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p02` | FX Slot 04 P02 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p03` | FX Slot 04 P03 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p04` | FX Slot 04 P04 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p05` | FX Slot 04 P05 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p06` | FX Slot 04 P06 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p07` | FX Slot 04 P07 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p08` | FX Slot 04 P08 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p09` | FX Slot 04 P09 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p10` | FX Slot 04 P10 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p11` | FX Slot 04 P11 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p12` | FX Slot 04 P12 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p13` | FX Slot 04 P13 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p14` | FX Slot 04 P14 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p15` | FX Slot 04 P15 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p16` | FX Slot 04 P16 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p17` | FX Slot 04 P17 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p18` | FX Slot 04 P18 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p19` | FX Slot 04 P19 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p20` | FX Slot 04 P20 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p21` | FX Slot 04 P21 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p22` | FX Slot 04 P22 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p23` | FX Slot 04 P23 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi04.p24` | FX Slot 04 P24 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
+| `fxi05.type` | FX Slot 05 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 05 |  |  |
+| `fxi05.on` | FX Slot 05 On | 0 Off, 1 On | Off | FX / Slot 05 |  |  |
+| `fxi05.rack` | FX Slot 05 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 05 |  |  |
+| `fxi05.order` | FX Slot 05 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 05 |  |  |
+| `fxi05.p01` | FX Slot 05 P01 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p02` | FX Slot 05 P02 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p03` | FX Slot 05 P03 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p04` | FX Slot 05 P04 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p05` | FX Slot 05 P05 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p06` | FX Slot 05 P06 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p07` | FX Slot 05 P07 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p08` | FX Slot 05 P08 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p09` | FX Slot 05 P09 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p10` | FX Slot 05 P10 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p11` | FX Slot 05 P11 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p12` | FX Slot 05 P12 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p13` | FX Slot 05 P13 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p14` | FX Slot 05 P14 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p15` | FX Slot 05 P15 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p16` | FX Slot 05 P16 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p17` | FX Slot 05 P17 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p18` | FX Slot 05 P18 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p19` | FX Slot 05 P19 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p20` | FX Slot 05 P20 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p21` | FX Slot 05 P21 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p22` | FX Slot 05 P22 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p23` | FX Slot 05 P23 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi05.p24` | FX Slot 05 P24 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
+| `fxi06.type` | FX Slot 06 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 06 |  |  |
+| `fxi06.on` | FX Slot 06 On | 0 Off, 1 On | Off | FX / Slot 06 |  |  |
+| `fxi06.rack` | FX Slot 06 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 06 |  |  |
+| `fxi06.order` | FX Slot 06 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 06 |  |  |
+| `fxi06.p01` | FX Slot 06 P01 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p02` | FX Slot 06 P02 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p03` | FX Slot 06 P03 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p04` | FX Slot 06 P04 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p05` | FX Slot 06 P05 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p06` | FX Slot 06 P06 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p07` | FX Slot 06 P07 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p08` | FX Slot 06 P08 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p09` | FX Slot 06 P09 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p10` | FX Slot 06 P10 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p11` | FX Slot 06 P11 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p12` | FX Slot 06 P12 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p13` | FX Slot 06 P13 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p14` | FX Slot 06 P14 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p15` | FX Slot 06 P15 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p16` | FX Slot 06 P16 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p17` | FX Slot 06 P17 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p18` | FX Slot 06 P18 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p19` | FX Slot 06 P19 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p20` | FX Slot 06 P20 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p21` | FX Slot 06 P21 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p22` | FX Slot 06 P22 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p23` | FX Slot 06 P23 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi06.p24` | FX Slot 06 P24 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
+| `fxi07.type` | FX Slot 07 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 07 |  |  |
+| `fxi07.on` | FX Slot 07 On | 0 Off, 1 On | Off | FX / Slot 07 |  |  |
+| `fxi07.rack` | FX Slot 07 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 07 |  |  |
+| `fxi07.order` | FX Slot 07 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 07 |  |  |
+| `fxi07.p01` | FX Slot 07 P01 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p02` | FX Slot 07 P02 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p03` | FX Slot 07 P03 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p04` | FX Slot 07 P04 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p05` | FX Slot 07 P05 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p06` | FX Slot 07 P06 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p07` | FX Slot 07 P07 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p08` | FX Slot 07 P08 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p09` | FX Slot 07 P09 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p10` | FX Slot 07 P10 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p11` | FX Slot 07 P11 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p12` | FX Slot 07 P12 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p13` | FX Slot 07 P13 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p14` | FX Slot 07 P14 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p15` | FX Slot 07 P15 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p16` | FX Slot 07 P16 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p17` | FX Slot 07 P17 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p18` | FX Slot 07 P18 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p19` | FX Slot 07 P19 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p20` | FX Slot 07 P20 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p21` | FX Slot 07 P21 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p22` | FX Slot 07 P22 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p23` | FX Slot 07 P23 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi07.p24` | FX Slot 07 P24 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
+| `fxi08.type` | FX Slot 08 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 08 |  |  |
+| `fxi08.on` | FX Slot 08 On | 0 Off, 1 On | Off | FX / Slot 08 |  |  |
+| `fxi08.rack` | FX Slot 08 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 08 |  |  |
+| `fxi08.order` | FX Slot 08 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 08 |  |  |
+| `fxi08.p01` | FX Slot 08 P01 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p02` | FX Slot 08 P02 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p03` | FX Slot 08 P03 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p04` | FX Slot 08 P04 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p05` | FX Slot 08 P05 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p06` | FX Slot 08 P06 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p07` | FX Slot 08 P07 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p08` | FX Slot 08 P08 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p09` | FX Slot 08 P09 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p10` | FX Slot 08 P10 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p11` | FX Slot 08 P11 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p12` | FX Slot 08 P12 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p13` | FX Slot 08 P13 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p14` | FX Slot 08 P14 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p15` | FX Slot 08 P15 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p16` | FX Slot 08 P16 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p17` | FX Slot 08 P17 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p18` | FX Slot 08 P18 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p19` | FX Slot 08 P19 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p20` | FX Slot 08 P20 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p21` | FX Slot 08 P21 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p22` | FX Slot 08 P22 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p23` | FX Slot 08 P23 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi08.p24` | FX Slot 08 P24 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
+| `fxi09.type` | FX Slot 09 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 09 |  |  |
+| `fxi09.on` | FX Slot 09 On | 0 Off, 1 On | Off | FX / Slot 09 |  |  |
+| `fxi09.rack` | FX Slot 09 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 09 |  |  |
+| `fxi09.order` | FX Slot 09 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 09 |  |  |
+| `fxi09.p01` | FX Slot 09 P01 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p02` | FX Slot 09 P02 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p03` | FX Slot 09 P03 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p04` | FX Slot 09 P04 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p05` | FX Slot 09 P05 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p06` | FX Slot 09 P06 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p07` | FX Slot 09 P07 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p08` | FX Slot 09 P08 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p09` | FX Slot 09 P09 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p10` | FX Slot 09 P10 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p11` | FX Slot 09 P11 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p12` | FX Slot 09 P12 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p13` | FX Slot 09 P13 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p14` | FX Slot 09 P14 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p15` | FX Slot 09 P15 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p16` | FX Slot 09 P16 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p17` | FX Slot 09 P17 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p18` | FX Slot 09 P18 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p19` | FX Slot 09 P19 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p20` | FX Slot 09 P20 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p21` | FX Slot 09 P21 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p22` | FX Slot 09 P22 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p23` | FX Slot 09 P23 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi09.p24` | FX Slot 09 P24 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
+| `fxi10.type` | FX Slot 10 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 10 |  |  |
+| `fxi10.on` | FX Slot 10 On | 0 Off, 1 On | Off | FX / Slot 10 |  |  |
+| `fxi10.rack` | FX Slot 10 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 10 |  |  |
+| `fxi10.order` | FX Slot 10 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 10 |  |  |
+| `fxi10.p01` | FX Slot 10 P01 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p02` | FX Slot 10 P02 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p03` | FX Slot 10 P03 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p04` | FX Slot 10 P04 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p05` | FX Slot 10 P05 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p06` | FX Slot 10 P06 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p07` | FX Slot 10 P07 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p08` | FX Slot 10 P08 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p09` | FX Slot 10 P09 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p10` | FX Slot 10 P10 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p11` | FX Slot 10 P11 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p12` | FX Slot 10 P12 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p13` | FX Slot 10 P13 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p14` | FX Slot 10 P14 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p15` | FX Slot 10 P15 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p16` | FX Slot 10 P16 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p17` | FX Slot 10 P17 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p18` | FX Slot 10 P18 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p19` | FX Slot 10 P19 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p20` | FX Slot 10 P20 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p21` | FX Slot 10 P21 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p22` | FX Slot 10 P22 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p23` | FX Slot 10 P23 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi10.p24` | FX Slot 10 P24 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
+| `fxi11.type` | FX Slot 11 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 11 |  |  |
+| `fxi11.on` | FX Slot 11 On | 0 Off, 1 On | Off | FX / Slot 11 |  |  |
+| `fxi11.rack` | FX Slot 11 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 11 |  |  |
+| `fxi11.order` | FX Slot 11 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 11 |  |  |
+| `fxi11.p01` | FX Slot 11 P01 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p02` | FX Slot 11 P02 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p03` | FX Slot 11 P03 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p04` | FX Slot 11 P04 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p05` | FX Slot 11 P05 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p06` | FX Slot 11 P06 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p07` | FX Slot 11 P07 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p08` | FX Slot 11 P08 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p09` | FX Slot 11 P09 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p10` | FX Slot 11 P10 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p11` | FX Slot 11 P11 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p12` | FX Slot 11 P12 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p13` | FX Slot 11 P13 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p14` | FX Slot 11 P14 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p15` | FX Slot 11 P15 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p16` | FX Slot 11 P16 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p17` | FX Slot 11 P17 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p18` | FX Slot 11 P18 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p19` | FX Slot 11 P19 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p20` | FX Slot 11 P20 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p21` | FX Slot 11 P21 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p22` | FX Slot 11 P22 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p23` | FX Slot 11 P23 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi11.p24` | FX Slot 11 P24 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
+| `fxi12.type` | FX Slot 12 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 12 |  |  |
+| `fxi12.on` | FX Slot 12 On | 0 Off, 1 On | Off | FX / Slot 12 |  |  |
+| `fxi12.rack` | FX Slot 12 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 12 |  |  |
+| `fxi12.order` | FX Slot 12 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 12 |  |  |
+| `fxi12.p01` | FX Slot 12 P01 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p02` | FX Slot 12 P02 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p03` | FX Slot 12 P03 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p04` | FX Slot 12 P04 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p05` | FX Slot 12 P05 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p06` | FX Slot 12 P06 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p07` | FX Slot 12 P07 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p08` | FX Slot 12 P08 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p09` | FX Slot 12 P09 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p10` | FX Slot 12 P10 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p11` | FX Slot 12 P11 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p12` | FX Slot 12 P12 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p13` | FX Slot 12 P13 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p14` | FX Slot 12 P14 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p15` | FX Slot 12 P15 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p16` | FX Slot 12 P16 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p17` | FX Slot 12 P17 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p18` | FX Slot 12 P18 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p19` | FX Slot 12 P19 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p20` | FX Slot 12 P20 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p21` | FX Slot 12 P21 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p22` | FX Slot 12 P22 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p23` | FX Slot 12 P23 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi12.p24` | FX Slot 12 P24 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
+| `fxi13.type` | FX Slot 13 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 13 |  |  |
+| `fxi13.on` | FX Slot 13 On | 0 Off, 1 On | Off | FX / Slot 13 |  |  |
+| `fxi13.rack` | FX Slot 13 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 13 |  |  |
+| `fxi13.order` | FX Slot 13 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 13 |  |  |
+| `fxi13.p01` | FX Slot 13 P01 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p02` | FX Slot 13 P02 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p03` | FX Slot 13 P03 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p04` | FX Slot 13 P04 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p05` | FX Slot 13 P05 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p06` | FX Slot 13 P06 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p07` | FX Slot 13 P07 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p08` | FX Slot 13 P08 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p09` | FX Slot 13 P09 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p10` | FX Slot 13 P10 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p11` | FX Slot 13 P11 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p12` | FX Slot 13 P12 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p13` | FX Slot 13 P13 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p14` | FX Slot 13 P14 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p15` | FX Slot 13 P15 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p16` | FX Slot 13 P16 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p17` | FX Slot 13 P17 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p18` | FX Slot 13 P18 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p19` | FX Slot 13 P19 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p20` | FX Slot 13 P20 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p21` | FX Slot 13 P21 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p22` | FX Slot 13 P22 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p23` | FX Slot 13 P23 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi13.p24` | FX Slot 13 P24 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
+| `fxi14.type` | FX Slot 14 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 14 |  |  |
+| `fxi14.on` | FX Slot 14 On | 0 Off, 1 On | Off | FX / Slot 14 |  |  |
+| `fxi14.rack` | FX Slot 14 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 14 |  |  |
+| `fxi14.order` | FX Slot 14 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 14 |  |  |
+| `fxi14.p01` | FX Slot 14 P01 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p02` | FX Slot 14 P02 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p03` | FX Slot 14 P03 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p04` | FX Slot 14 P04 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p05` | FX Slot 14 P05 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p06` | FX Slot 14 P06 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p07` | FX Slot 14 P07 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p08` | FX Slot 14 P08 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p09` | FX Slot 14 P09 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p10` | FX Slot 14 P10 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p11` | FX Slot 14 P11 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p12` | FX Slot 14 P12 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p13` | FX Slot 14 P13 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p14` | FX Slot 14 P14 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p15` | FX Slot 14 P15 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p16` | FX Slot 14 P16 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p17` | FX Slot 14 P17 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p18` | FX Slot 14 P18 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p19` | FX Slot 14 P19 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p20` | FX Slot 14 P20 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p21` | FX Slot 14 P21 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p22` | FX Slot 14 P22 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p23` | FX Slot 14 P23 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi14.p24` | FX Slot 14 P24 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
+| `fxi15.type` | FX Slot 15 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 15 |  |  |
+| `fxi15.on` | FX Slot 15 On | 0 Off, 1 On | Off | FX / Slot 15 |  |  |
+| `fxi15.rack` | FX Slot 15 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 15 |  |  |
+| `fxi15.order` | FX Slot 15 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 15 |  |  |
+| `fxi15.p01` | FX Slot 15 P01 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p02` | FX Slot 15 P02 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p03` | FX Slot 15 P03 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p04` | FX Slot 15 P04 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p05` | FX Slot 15 P05 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p06` | FX Slot 15 P06 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p07` | FX Slot 15 P07 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p08` | FX Slot 15 P08 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p09` | FX Slot 15 P09 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p10` | FX Slot 15 P10 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p11` | FX Slot 15 P11 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p12` | FX Slot 15 P12 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p13` | FX Slot 15 P13 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p14` | FX Slot 15 P14 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p15` | FX Slot 15 P15 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p16` | FX Slot 15 P16 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p17` | FX Slot 15 P17 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p18` | FX Slot 15 P18 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p19` | FX Slot 15 P19 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p20` | FX Slot 15 P20 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p21` | FX Slot 15 P21 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p22` | FX Slot 15 P22 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p23` | FX Slot 15 P23 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi15.p24` | FX Slot 15 P24 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
+| `fxi16.type` | FX Slot 16 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 16 |  |  |
+| `fxi16.on` | FX Slot 16 On | 0 Off, 1 On | Off | FX / Slot 16 |  |  |
+| `fxi16.rack` | FX Slot 16 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 16 |  |  |
+| `fxi16.order` | FX Slot 16 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 16 |  |  |
+| `fxi16.p01` | FX Slot 16 P01 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p02` | FX Slot 16 P02 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p03` | FX Slot 16 P03 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p04` | FX Slot 16 P04 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p05` | FX Slot 16 P05 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p06` | FX Slot 16 P06 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p07` | FX Slot 16 P07 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p08` | FX Slot 16 P08 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p09` | FX Slot 16 P09 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p10` | FX Slot 16 P10 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p11` | FX Slot 16 P11 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p12` | FX Slot 16 P12 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p13` | FX Slot 16 P13 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p14` | FX Slot 16 P14 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p15` | FX Slot 16 P15 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p16` | FX Slot 16 P16 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p17` | FX Slot 16 P17 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p18` | FX Slot 16 P18 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p19` | FX Slot 16 P19 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p20` | FX Slot 16 P20 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p21` | FX Slot 16 P21 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p22` | FX Slot 16 P22 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p23` | FX Slot 16 P23 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `fxi16.p24` | FX Slot 16 P24 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
 
 ### LFO 9
 
@@ -1728,6 +2176,390 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 517 | `mod64.amount` | Mod 64 Amount |
 | 518 | `master.portamento.time` | Portamento Time |
 | 519 | `master.polyphony` | Master Polyphony |
+| 520 | `fxi01.p01` | FX Slot 01 P01 |
+| 521 | `fxi01.p02` | FX Slot 01 P02 |
+| 522 | `fxi01.p03` | FX Slot 01 P03 |
+| 523 | `fxi01.p04` | FX Slot 01 P04 |
+| 524 | `fxi01.p05` | FX Slot 01 P05 |
+| 525 | `fxi01.p06` | FX Slot 01 P06 |
+| 526 | `fxi01.p07` | FX Slot 01 P07 |
+| 527 | `fxi01.p08` | FX Slot 01 P08 |
+| 528 | `fxi01.p09` | FX Slot 01 P09 |
+| 529 | `fxi01.p10` | FX Slot 01 P10 |
+| 530 | `fxi01.p11` | FX Slot 01 P11 |
+| 531 | `fxi01.p12` | FX Slot 01 P12 |
+| 532 | `fxi01.p13` | FX Slot 01 P13 |
+| 533 | `fxi01.p14` | FX Slot 01 P14 |
+| 534 | `fxi01.p15` | FX Slot 01 P15 |
+| 535 | `fxi01.p16` | FX Slot 01 P16 |
+| 536 | `fxi01.p17` | FX Slot 01 P17 |
+| 537 | `fxi01.p18` | FX Slot 01 P18 |
+| 538 | `fxi01.p19` | FX Slot 01 P19 |
+| 539 | `fxi01.p20` | FX Slot 01 P20 |
+| 540 | `fxi01.p21` | FX Slot 01 P21 |
+| 541 | `fxi01.p22` | FX Slot 01 P22 |
+| 542 | `fxi01.p23` | FX Slot 01 P23 |
+| 543 | `fxi01.p24` | FX Slot 01 P24 |
+| 544 | `fxi02.p01` | FX Slot 02 P01 |
+| 545 | `fxi02.p02` | FX Slot 02 P02 |
+| 546 | `fxi02.p03` | FX Slot 02 P03 |
+| 547 | `fxi02.p04` | FX Slot 02 P04 |
+| 548 | `fxi02.p05` | FX Slot 02 P05 |
+| 549 | `fxi02.p06` | FX Slot 02 P06 |
+| 550 | `fxi02.p07` | FX Slot 02 P07 |
+| 551 | `fxi02.p08` | FX Slot 02 P08 |
+| 552 | `fxi02.p09` | FX Slot 02 P09 |
+| 553 | `fxi02.p10` | FX Slot 02 P10 |
+| 554 | `fxi02.p11` | FX Slot 02 P11 |
+| 555 | `fxi02.p12` | FX Slot 02 P12 |
+| 556 | `fxi02.p13` | FX Slot 02 P13 |
+| 557 | `fxi02.p14` | FX Slot 02 P14 |
+| 558 | `fxi02.p15` | FX Slot 02 P15 |
+| 559 | `fxi02.p16` | FX Slot 02 P16 |
+| 560 | `fxi02.p17` | FX Slot 02 P17 |
+| 561 | `fxi02.p18` | FX Slot 02 P18 |
+| 562 | `fxi02.p19` | FX Slot 02 P19 |
+| 563 | `fxi02.p20` | FX Slot 02 P20 |
+| 564 | `fxi02.p21` | FX Slot 02 P21 |
+| 565 | `fxi02.p22` | FX Slot 02 P22 |
+| 566 | `fxi02.p23` | FX Slot 02 P23 |
+| 567 | `fxi02.p24` | FX Slot 02 P24 |
+| 568 | `fxi03.p01` | FX Slot 03 P01 |
+| 569 | `fxi03.p02` | FX Slot 03 P02 |
+| 570 | `fxi03.p03` | FX Slot 03 P03 |
+| 571 | `fxi03.p04` | FX Slot 03 P04 |
+| 572 | `fxi03.p05` | FX Slot 03 P05 |
+| 573 | `fxi03.p06` | FX Slot 03 P06 |
+| 574 | `fxi03.p07` | FX Slot 03 P07 |
+| 575 | `fxi03.p08` | FX Slot 03 P08 |
+| 576 | `fxi03.p09` | FX Slot 03 P09 |
+| 577 | `fxi03.p10` | FX Slot 03 P10 |
+| 578 | `fxi03.p11` | FX Slot 03 P11 |
+| 579 | `fxi03.p12` | FX Slot 03 P12 |
+| 580 | `fxi03.p13` | FX Slot 03 P13 |
+| 581 | `fxi03.p14` | FX Slot 03 P14 |
+| 582 | `fxi03.p15` | FX Slot 03 P15 |
+| 583 | `fxi03.p16` | FX Slot 03 P16 |
+| 584 | `fxi03.p17` | FX Slot 03 P17 |
+| 585 | `fxi03.p18` | FX Slot 03 P18 |
+| 586 | `fxi03.p19` | FX Slot 03 P19 |
+| 587 | `fxi03.p20` | FX Slot 03 P20 |
+| 588 | `fxi03.p21` | FX Slot 03 P21 |
+| 589 | `fxi03.p22` | FX Slot 03 P22 |
+| 590 | `fxi03.p23` | FX Slot 03 P23 |
+| 591 | `fxi03.p24` | FX Slot 03 P24 |
+| 592 | `fxi04.p01` | FX Slot 04 P01 |
+| 593 | `fxi04.p02` | FX Slot 04 P02 |
+| 594 | `fxi04.p03` | FX Slot 04 P03 |
+| 595 | `fxi04.p04` | FX Slot 04 P04 |
+| 596 | `fxi04.p05` | FX Slot 04 P05 |
+| 597 | `fxi04.p06` | FX Slot 04 P06 |
+| 598 | `fxi04.p07` | FX Slot 04 P07 |
+| 599 | `fxi04.p08` | FX Slot 04 P08 |
+| 600 | `fxi04.p09` | FX Slot 04 P09 |
+| 601 | `fxi04.p10` | FX Slot 04 P10 |
+| 602 | `fxi04.p11` | FX Slot 04 P11 |
+| 603 | `fxi04.p12` | FX Slot 04 P12 |
+| 604 | `fxi04.p13` | FX Slot 04 P13 |
+| 605 | `fxi04.p14` | FX Slot 04 P14 |
+| 606 | `fxi04.p15` | FX Slot 04 P15 |
+| 607 | `fxi04.p16` | FX Slot 04 P16 |
+| 608 | `fxi04.p17` | FX Slot 04 P17 |
+| 609 | `fxi04.p18` | FX Slot 04 P18 |
+| 610 | `fxi04.p19` | FX Slot 04 P19 |
+| 611 | `fxi04.p20` | FX Slot 04 P20 |
+| 612 | `fxi04.p21` | FX Slot 04 P21 |
+| 613 | `fxi04.p22` | FX Slot 04 P22 |
+| 614 | `fxi04.p23` | FX Slot 04 P23 |
+| 615 | `fxi04.p24` | FX Slot 04 P24 |
+| 616 | `fxi05.p01` | FX Slot 05 P01 |
+| 617 | `fxi05.p02` | FX Slot 05 P02 |
+| 618 | `fxi05.p03` | FX Slot 05 P03 |
+| 619 | `fxi05.p04` | FX Slot 05 P04 |
+| 620 | `fxi05.p05` | FX Slot 05 P05 |
+| 621 | `fxi05.p06` | FX Slot 05 P06 |
+| 622 | `fxi05.p07` | FX Slot 05 P07 |
+| 623 | `fxi05.p08` | FX Slot 05 P08 |
+| 624 | `fxi05.p09` | FX Slot 05 P09 |
+| 625 | `fxi05.p10` | FX Slot 05 P10 |
+| 626 | `fxi05.p11` | FX Slot 05 P11 |
+| 627 | `fxi05.p12` | FX Slot 05 P12 |
+| 628 | `fxi05.p13` | FX Slot 05 P13 |
+| 629 | `fxi05.p14` | FX Slot 05 P14 |
+| 630 | `fxi05.p15` | FX Slot 05 P15 |
+| 631 | `fxi05.p16` | FX Slot 05 P16 |
+| 632 | `fxi05.p17` | FX Slot 05 P17 |
+| 633 | `fxi05.p18` | FX Slot 05 P18 |
+| 634 | `fxi05.p19` | FX Slot 05 P19 |
+| 635 | `fxi05.p20` | FX Slot 05 P20 |
+| 636 | `fxi05.p21` | FX Slot 05 P21 |
+| 637 | `fxi05.p22` | FX Slot 05 P22 |
+| 638 | `fxi05.p23` | FX Slot 05 P23 |
+| 639 | `fxi05.p24` | FX Slot 05 P24 |
+| 640 | `fxi06.p01` | FX Slot 06 P01 |
+| 641 | `fxi06.p02` | FX Slot 06 P02 |
+| 642 | `fxi06.p03` | FX Slot 06 P03 |
+| 643 | `fxi06.p04` | FX Slot 06 P04 |
+| 644 | `fxi06.p05` | FX Slot 06 P05 |
+| 645 | `fxi06.p06` | FX Slot 06 P06 |
+| 646 | `fxi06.p07` | FX Slot 06 P07 |
+| 647 | `fxi06.p08` | FX Slot 06 P08 |
+| 648 | `fxi06.p09` | FX Slot 06 P09 |
+| 649 | `fxi06.p10` | FX Slot 06 P10 |
+| 650 | `fxi06.p11` | FX Slot 06 P11 |
+| 651 | `fxi06.p12` | FX Slot 06 P12 |
+| 652 | `fxi06.p13` | FX Slot 06 P13 |
+| 653 | `fxi06.p14` | FX Slot 06 P14 |
+| 654 | `fxi06.p15` | FX Slot 06 P15 |
+| 655 | `fxi06.p16` | FX Slot 06 P16 |
+| 656 | `fxi06.p17` | FX Slot 06 P17 |
+| 657 | `fxi06.p18` | FX Slot 06 P18 |
+| 658 | `fxi06.p19` | FX Slot 06 P19 |
+| 659 | `fxi06.p20` | FX Slot 06 P20 |
+| 660 | `fxi06.p21` | FX Slot 06 P21 |
+| 661 | `fxi06.p22` | FX Slot 06 P22 |
+| 662 | `fxi06.p23` | FX Slot 06 P23 |
+| 663 | `fxi06.p24` | FX Slot 06 P24 |
+| 664 | `fxi07.p01` | FX Slot 07 P01 |
+| 665 | `fxi07.p02` | FX Slot 07 P02 |
+| 666 | `fxi07.p03` | FX Slot 07 P03 |
+| 667 | `fxi07.p04` | FX Slot 07 P04 |
+| 668 | `fxi07.p05` | FX Slot 07 P05 |
+| 669 | `fxi07.p06` | FX Slot 07 P06 |
+| 670 | `fxi07.p07` | FX Slot 07 P07 |
+| 671 | `fxi07.p08` | FX Slot 07 P08 |
+| 672 | `fxi07.p09` | FX Slot 07 P09 |
+| 673 | `fxi07.p10` | FX Slot 07 P10 |
+| 674 | `fxi07.p11` | FX Slot 07 P11 |
+| 675 | `fxi07.p12` | FX Slot 07 P12 |
+| 676 | `fxi07.p13` | FX Slot 07 P13 |
+| 677 | `fxi07.p14` | FX Slot 07 P14 |
+| 678 | `fxi07.p15` | FX Slot 07 P15 |
+| 679 | `fxi07.p16` | FX Slot 07 P16 |
+| 680 | `fxi07.p17` | FX Slot 07 P17 |
+| 681 | `fxi07.p18` | FX Slot 07 P18 |
+| 682 | `fxi07.p19` | FX Slot 07 P19 |
+| 683 | `fxi07.p20` | FX Slot 07 P20 |
+| 684 | `fxi07.p21` | FX Slot 07 P21 |
+| 685 | `fxi07.p22` | FX Slot 07 P22 |
+| 686 | `fxi07.p23` | FX Slot 07 P23 |
+| 687 | `fxi07.p24` | FX Slot 07 P24 |
+| 688 | `fxi08.p01` | FX Slot 08 P01 |
+| 689 | `fxi08.p02` | FX Slot 08 P02 |
+| 690 | `fxi08.p03` | FX Slot 08 P03 |
+| 691 | `fxi08.p04` | FX Slot 08 P04 |
+| 692 | `fxi08.p05` | FX Slot 08 P05 |
+| 693 | `fxi08.p06` | FX Slot 08 P06 |
+| 694 | `fxi08.p07` | FX Slot 08 P07 |
+| 695 | `fxi08.p08` | FX Slot 08 P08 |
+| 696 | `fxi08.p09` | FX Slot 08 P09 |
+| 697 | `fxi08.p10` | FX Slot 08 P10 |
+| 698 | `fxi08.p11` | FX Slot 08 P11 |
+| 699 | `fxi08.p12` | FX Slot 08 P12 |
+| 700 | `fxi08.p13` | FX Slot 08 P13 |
+| 701 | `fxi08.p14` | FX Slot 08 P14 |
+| 702 | `fxi08.p15` | FX Slot 08 P15 |
+| 703 | `fxi08.p16` | FX Slot 08 P16 |
+| 704 | `fxi08.p17` | FX Slot 08 P17 |
+| 705 | `fxi08.p18` | FX Slot 08 P18 |
+| 706 | `fxi08.p19` | FX Slot 08 P19 |
+| 707 | `fxi08.p20` | FX Slot 08 P20 |
+| 708 | `fxi08.p21` | FX Slot 08 P21 |
+| 709 | `fxi08.p22` | FX Slot 08 P22 |
+| 710 | `fxi08.p23` | FX Slot 08 P23 |
+| 711 | `fxi08.p24` | FX Slot 08 P24 |
+| 712 | `fxi09.p01` | FX Slot 09 P01 |
+| 713 | `fxi09.p02` | FX Slot 09 P02 |
+| 714 | `fxi09.p03` | FX Slot 09 P03 |
+| 715 | `fxi09.p04` | FX Slot 09 P04 |
+| 716 | `fxi09.p05` | FX Slot 09 P05 |
+| 717 | `fxi09.p06` | FX Slot 09 P06 |
+| 718 | `fxi09.p07` | FX Slot 09 P07 |
+| 719 | `fxi09.p08` | FX Slot 09 P08 |
+| 720 | `fxi09.p09` | FX Slot 09 P09 |
+| 721 | `fxi09.p10` | FX Slot 09 P10 |
+| 722 | `fxi09.p11` | FX Slot 09 P11 |
+| 723 | `fxi09.p12` | FX Slot 09 P12 |
+| 724 | `fxi09.p13` | FX Slot 09 P13 |
+| 725 | `fxi09.p14` | FX Slot 09 P14 |
+| 726 | `fxi09.p15` | FX Slot 09 P15 |
+| 727 | `fxi09.p16` | FX Slot 09 P16 |
+| 728 | `fxi09.p17` | FX Slot 09 P17 |
+| 729 | `fxi09.p18` | FX Slot 09 P18 |
+| 730 | `fxi09.p19` | FX Slot 09 P19 |
+| 731 | `fxi09.p20` | FX Slot 09 P20 |
+| 732 | `fxi09.p21` | FX Slot 09 P21 |
+| 733 | `fxi09.p22` | FX Slot 09 P22 |
+| 734 | `fxi09.p23` | FX Slot 09 P23 |
+| 735 | `fxi09.p24` | FX Slot 09 P24 |
+| 736 | `fxi10.p01` | FX Slot 10 P01 |
+| 737 | `fxi10.p02` | FX Slot 10 P02 |
+| 738 | `fxi10.p03` | FX Slot 10 P03 |
+| 739 | `fxi10.p04` | FX Slot 10 P04 |
+| 740 | `fxi10.p05` | FX Slot 10 P05 |
+| 741 | `fxi10.p06` | FX Slot 10 P06 |
+| 742 | `fxi10.p07` | FX Slot 10 P07 |
+| 743 | `fxi10.p08` | FX Slot 10 P08 |
+| 744 | `fxi10.p09` | FX Slot 10 P09 |
+| 745 | `fxi10.p10` | FX Slot 10 P10 |
+| 746 | `fxi10.p11` | FX Slot 10 P11 |
+| 747 | `fxi10.p12` | FX Slot 10 P12 |
+| 748 | `fxi10.p13` | FX Slot 10 P13 |
+| 749 | `fxi10.p14` | FX Slot 10 P14 |
+| 750 | `fxi10.p15` | FX Slot 10 P15 |
+| 751 | `fxi10.p16` | FX Slot 10 P16 |
+| 752 | `fxi10.p17` | FX Slot 10 P17 |
+| 753 | `fxi10.p18` | FX Slot 10 P18 |
+| 754 | `fxi10.p19` | FX Slot 10 P19 |
+| 755 | `fxi10.p20` | FX Slot 10 P20 |
+| 756 | `fxi10.p21` | FX Slot 10 P21 |
+| 757 | `fxi10.p22` | FX Slot 10 P22 |
+| 758 | `fxi10.p23` | FX Slot 10 P23 |
+| 759 | `fxi10.p24` | FX Slot 10 P24 |
+| 760 | `fxi11.p01` | FX Slot 11 P01 |
+| 761 | `fxi11.p02` | FX Slot 11 P02 |
+| 762 | `fxi11.p03` | FX Slot 11 P03 |
+| 763 | `fxi11.p04` | FX Slot 11 P04 |
+| 764 | `fxi11.p05` | FX Slot 11 P05 |
+| 765 | `fxi11.p06` | FX Slot 11 P06 |
+| 766 | `fxi11.p07` | FX Slot 11 P07 |
+| 767 | `fxi11.p08` | FX Slot 11 P08 |
+| 768 | `fxi11.p09` | FX Slot 11 P09 |
+| 769 | `fxi11.p10` | FX Slot 11 P10 |
+| 770 | `fxi11.p11` | FX Slot 11 P11 |
+| 771 | `fxi11.p12` | FX Slot 11 P12 |
+| 772 | `fxi11.p13` | FX Slot 11 P13 |
+| 773 | `fxi11.p14` | FX Slot 11 P14 |
+| 774 | `fxi11.p15` | FX Slot 11 P15 |
+| 775 | `fxi11.p16` | FX Slot 11 P16 |
+| 776 | `fxi11.p17` | FX Slot 11 P17 |
+| 777 | `fxi11.p18` | FX Slot 11 P18 |
+| 778 | `fxi11.p19` | FX Slot 11 P19 |
+| 779 | `fxi11.p20` | FX Slot 11 P20 |
+| 780 | `fxi11.p21` | FX Slot 11 P21 |
+| 781 | `fxi11.p22` | FX Slot 11 P22 |
+| 782 | `fxi11.p23` | FX Slot 11 P23 |
+| 783 | `fxi11.p24` | FX Slot 11 P24 |
+| 784 | `fxi12.p01` | FX Slot 12 P01 |
+| 785 | `fxi12.p02` | FX Slot 12 P02 |
+| 786 | `fxi12.p03` | FX Slot 12 P03 |
+| 787 | `fxi12.p04` | FX Slot 12 P04 |
+| 788 | `fxi12.p05` | FX Slot 12 P05 |
+| 789 | `fxi12.p06` | FX Slot 12 P06 |
+| 790 | `fxi12.p07` | FX Slot 12 P07 |
+| 791 | `fxi12.p08` | FX Slot 12 P08 |
+| 792 | `fxi12.p09` | FX Slot 12 P09 |
+| 793 | `fxi12.p10` | FX Slot 12 P10 |
+| 794 | `fxi12.p11` | FX Slot 12 P11 |
+| 795 | `fxi12.p12` | FX Slot 12 P12 |
+| 796 | `fxi12.p13` | FX Slot 12 P13 |
+| 797 | `fxi12.p14` | FX Slot 12 P14 |
+| 798 | `fxi12.p15` | FX Slot 12 P15 |
+| 799 | `fxi12.p16` | FX Slot 12 P16 |
+| 800 | `fxi12.p17` | FX Slot 12 P17 |
+| 801 | `fxi12.p18` | FX Slot 12 P18 |
+| 802 | `fxi12.p19` | FX Slot 12 P19 |
+| 803 | `fxi12.p20` | FX Slot 12 P20 |
+| 804 | `fxi12.p21` | FX Slot 12 P21 |
+| 805 | `fxi12.p22` | FX Slot 12 P22 |
+| 806 | `fxi12.p23` | FX Slot 12 P23 |
+| 807 | `fxi12.p24` | FX Slot 12 P24 |
+| 808 | `fxi13.p01` | FX Slot 13 P01 |
+| 809 | `fxi13.p02` | FX Slot 13 P02 |
+| 810 | `fxi13.p03` | FX Slot 13 P03 |
+| 811 | `fxi13.p04` | FX Slot 13 P04 |
+| 812 | `fxi13.p05` | FX Slot 13 P05 |
+| 813 | `fxi13.p06` | FX Slot 13 P06 |
+| 814 | `fxi13.p07` | FX Slot 13 P07 |
+| 815 | `fxi13.p08` | FX Slot 13 P08 |
+| 816 | `fxi13.p09` | FX Slot 13 P09 |
+| 817 | `fxi13.p10` | FX Slot 13 P10 |
+| 818 | `fxi13.p11` | FX Slot 13 P11 |
+| 819 | `fxi13.p12` | FX Slot 13 P12 |
+| 820 | `fxi13.p13` | FX Slot 13 P13 |
+| 821 | `fxi13.p14` | FX Slot 13 P14 |
+| 822 | `fxi13.p15` | FX Slot 13 P15 |
+| 823 | `fxi13.p16` | FX Slot 13 P16 |
+| 824 | `fxi13.p17` | FX Slot 13 P17 |
+| 825 | `fxi13.p18` | FX Slot 13 P18 |
+| 826 | `fxi13.p19` | FX Slot 13 P19 |
+| 827 | `fxi13.p20` | FX Slot 13 P20 |
+| 828 | `fxi13.p21` | FX Slot 13 P21 |
+| 829 | `fxi13.p22` | FX Slot 13 P22 |
+| 830 | `fxi13.p23` | FX Slot 13 P23 |
+| 831 | `fxi13.p24` | FX Slot 13 P24 |
+| 832 | `fxi14.p01` | FX Slot 14 P01 |
+| 833 | `fxi14.p02` | FX Slot 14 P02 |
+| 834 | `fxi14.p03` | FX Slot 14 P03 |
+| 835 | `fxi14.p04` | FX Slot 14 P04 |
+| 836 | `fxi14.p05` | FX Slot 14 P05 |
+| 837 | `fxi14.p06` | FX Slot 14 P06 |
+| 838 | `fxi14.p07` | FX Slot 14 P07 |
+| 839 | `fxi14.p08` | FX Slot 14 P08 |
+| 840 | `fxi14.p09` | FX Slot 14 P09 |
+| 841 | `fxi14.p10` | FX Slot 14 P10 |
+| 842 | `fxi14.p11` | FX Slot 14 P11 |
+| 843 | `fxi14.p12` | FX Slot 14 P12 |
+| 844 | `fxi14.p13` | FX Slot 14 P13 |
+| 845 | `fxi14.p14` | FX Slot 14 P14 |
+| 846 | `fxi14.p15` | FX Slot 14 P15 |
+| 847 | `fxi14.p16` | FX Slot 14 P16 |
+| 848 | `fxi14.p17` | FX Slot 14 P17 |
+| 849 | `fxi14.p18` | FX Slot 14 P18 |
+| 850 | `fxi14.p19` | FX Slot 14 P19 |
+| 851 | `fxi14.p20` | FX Slot 14 P20 |
+| 852 | `fxi14.p21` | FX Slot 14 P21 |
+| 853 | `fxi14.p22` | FX Slot 14 P22 |
+| 854 | `fxi14.p23` | FX Slot 14 P23 |
+| 855 | `fxi14.p24` | FX Slot 14 P24 |
+| 856 | `fxi15.p01` | FX Slot 15 P01 |
+| 857 | `fxi15.p02` | FX Slot 15 P02 |
+| 858 | `fxi15.p03` | FX Slot 15 P03 |
+| 859 | `fxi15.p04` | FX Slot 15 P04 |
+| 860 | `fxi15.p05` | FX Slot 15 P05 |
+| 861 | `fxi15.p06` | FX Slot 15 P06 |
+| 862 | `fxi15.p07` | FX Slot 15 P07 |
+| 863 | `fxi15.p08` | FX Slot 15 P08 |
+| 864 | `fxi15.p09` | FX Slot 15 P09 |
+| 865 | `fxi15.p10` | FX Slot 15 P10 |
+| 866 | `fxi15.p11` | FX Slot 15 P11 |
+| 867 | `fxi15.p12` | FX Slot 15 P12 |
+| 868 | `fxi15.p13` | FX Slot 15 P13 |
+| 869 | `fxi15.p14` | FX Slot 15 P14 |
+| 870 | `fxi15.p15` | FX Slot 15 P15 |
+| 871 | `fxi15.p16` | FX Slot 15 P16 |
+| 872 | `fxi15.p17` | FX Slot 15 P17 |
+| 873 | `fxi15.p18` | FX Slot 15 P18 |
+| 874 | `fxi15.p19` | FX Slot 15 P19 |
+| 875 | `fxi15.p20` | FX Slot 15 P20 |
+| 876 | `fxi15.p21` | FX Slot 15 P21 |
+| 877 | `fxi15.p22` | FX Slot 15 P22 |
+| 878 | `fxi15.p23` | FX Slot 15 P23 |
+| 879 | `fxi15.p24` | FX Slot 15 P24 |
+| 880 | `fxi16.p01` | FX Slot 16 P01 |
+| 881 | `fxi16.p02` | FX Slot 16 P02 |
+| 882 | `fxi16.p03` | FX Slot 16 P03 |
+| 883 | `fxi16.p04` | FX Slot 16 P04 |
+| 884 | `fxi16.p05` | FX Slot 16 P05 |
+| 885 | `fxi16.p06` | FX Slot 16 P06 |
+| 886 | `fxi16.p07` | FX Slot 16 P07 |
+| 887 | `fxi16.p08` | FX Slot 16 P08 |
+| 888 | `fxi16.p09` | FX Slot 16 P09 |
+| 889 | `fxi16.p10` | FX Slot 16 P10 |
+| 890 | `fxi16.p11` | FX Slot 16 P11 |
+| 891 | `fxi16.p12` | FX Slot 16 P12 |
+| 892 | `fxi16.p13` | FX Slot 16 P13 |
+| 893 | `fxi16.p14` | FX Slot 16 P14 |
+| 894 | `fxi16.p15` | FX Slot 16 P15 |
+| 895 | `fxi16.p16` | FX Slot 16 P16 |
+| 896 | `fxi16.p17` | FX Slot 16 P17 |
+| 897 | `fxi16.p18` | FX Slot 16 P18 |
+| 898 | `fxi16.p19` | FX Slot 16 P19 |
+| 899 | `fxi16.p20` | FX Slot 16 P20 |
+| 900 | `fxi16.p21` | FX Slot 16 P21 |
+| 901 | `fxi16.p22` | FX Slot 16 P22 |
+| 902 | `fxi16.p23` | FX Slot 16 P23 |
+| 903 | `fxi16.p24` | FX Slot 16 P24 |
 
 ## Built-in wavetables and LFO shapes
 

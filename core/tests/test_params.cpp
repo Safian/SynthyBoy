@@ -192,16 +192,17 @@ TEST (modulation_destinations_are_listed)
             continue;
         }
         ++modulatable;
-        // listed once, in table order: choice k is the k-th modulatable parameter and carries its name
-        CHECK_EQ (choice, modulatable);
+        // listed once, in table order: choice k is the k-th modulatable parameter and carries its name; the 66 appended destinations of block B20
+        // (64 mod amounts, portamento time, polyphony) sit after key 1595, so the modulatable keys of later blocks (B22) continue at 520
+        CHECK_EQ (choice, modulatable + (i > 1595 ? 66u : 0u));
         CHECK_EQ (modDestinationParamIndex (choice), static_cast<int> (i));
         const auto& dest = byKey ("mod01.destination");
         CHECK (std::strcmp (choiceName (dest, choice), p.name) == 0);
         CHECK (labels.insert (p.name).second);
     }
-    CHECK_EQ (modulatable, static_cast<size_t> (453));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (519));
-    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (519));
+    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384)); // 384: the 16 x 24 parameters fxiNN.pKK of block B22
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (519 + 384));
+    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (519 + 384));
     CHECK (modulatable > 200);
     CHECK_EQ (modDestinationParamIndex (0), -1);
     CHECK_EQ (modDestinationParamIndex (modDestinationCount() + 1), -1);

@@ -74,6 +74,8 @@ enum EngineCaps : EngineCapsMask
     kCapWarpFm           = 1ull << 47, // G36: warp modes FM Thru-Zero / Exp / Linear (41 .. 46)
     kCapWarpPdAm         = 1ull << 48, // G37: warp modes PD (47 .. 49) and AM (50, 51)
     kCapEnv1Toggle       = 1ull << 49, // G39: sub.env1, oscN.env1, noise.env1, filterN.env1
+    // block B22 (fx-instances, 13-new-keys.md 4.23); bit 50 follows the B21 bits
+    kCapFxInstances      = 1ull << 50, // G73: the pool of 16 effect instance slots fxi01 .. fxi16 (several instances of one effect)
 };
 
 /** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
@@ -83,7 +85,7 @@ constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDi
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = (1ull << 50) - 1;
+constexpr EngineCapsMask kCapAllKnown = (1ull << 51) - 1;
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;
