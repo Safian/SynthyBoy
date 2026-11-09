@@ -196,13 +196,13 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | ID | Ref | Function | Status | Evidence | Gap / note |
 |----|-----|----------|--------|----------|------------|
 | S07-01 | S p.123-127 | Sub oscillator: on, waveform (6), OCT, CRS, pan, level, routing | DONE | `sub.*` (PT:731-741); sub_source.cpp; t_oscextra `sub_osc_on_off_and_level` :244, `sub_osc_waveforms_have_their_designed_spectra` :265, `sub_osc_octave_and_tune_set_the_pitch` :316, `sub_osc_pan_and_destination` :338; SubPanel.cpp:142-194; ui_gaps `uig_sub_waveform_picker_and_noise_sample_stepper` |  |
-| S07-02 | S p.127 | Sub PHASE and contiguous option | MISSING | none | MANUALCHECK 4: `sub.phase`, `sub.phase_contiguous` (2 keys) |
+| S07-02 | S p.127 | Sub PHASE and contiguous option | DONE (GROUPA1 WP-04) | `sub.phase`, `sub.phase_contiguous` (B23, PT:2051-2052); sub_source.cpp; t_noisesample `sub_phase_sets_the_start_phase`, `sub_phase_contiguous_continues_with_the_phase_of_the_previous_note`; SubPanel.cpp:37; Serum import `kParamInitialPhase` / `kParamContiguousPhase` (A349) | closed by GROUPA1: docs/ui-design/GROUPA1-REPORT.md |
 | S07-03 | S p.145 | Sub into filter blend, bus sends | DONE | `sub.filter_blend`, `sub.bus1/2_send`; t_oscextra :384, :408 |  |
 | S07-04 | S p.128, 132 | Noise: on, level, pan, routing | DONE | `noise.*`; t_oscextra `noise_extras_keep_the_existing_noise_routing` :612 |  |
 | S07-05 | S p.129 | Noise presets: White / Pink / Brown / Geiger (+5 of ours) | DONE | `noise.sample` (PT:743, VB:170); t_oscextra `noise_sample_selection_changes_the_colour` :486; NoisePanel.cpp:22-79 | the other five names and the pulse width are ours (14 row 27) |
-| S07-06 | S p.130 | Noise: load an own sample | MISSING | `noise.sample` lists 9 procedural samples only | needs the content store (X01-01) + a `noise.type`; same as Vital sampler (I01-07) |
+| S07-06 | S p.130 | Noise: load an own sample | DONE (GROUPA1 WP-04) | `noise.type` Noise / Sample (B23), `content.samples[]` osc 4, `Sample::makeUserData` / `useUserData`; NoisePanel.cpp:111 (Load...), WP-01 flow `loadSampleFile`; t_noisesample `noise_type_sample_plays_the_content_sample`; ui_content `content_noise_sample_load_through_the_noise_panel_...` | closed by GROUPA1: docs/ui-design/GROUPA1-REPORT.md |
 | S07-07 | S p.131-132 | Noise one-shot / loop, START, RAND, PITCH, FINE, keytrack | DONE | `noise.loop`, `.phase`, `.random_phase`, `.pitch`, `.fine`, `.keytrack`; t_oscextra :519, :551 |  |
-| S07-08 | S p.129 | Noise STEREO and FILTER knobs (colour samples) | MISSING | none | MANUALCHECK 4: `noise.stereo`, `noise.filter` (2 keys) |
+| S07-08 | S p.129 | Noise STEREO and FILTER knobs (colour samples) | DONE (GROUPA1 WP-04) | `noise.stereo`, `noise.filter` (B23); sample_source.cpp `colourStage`; t_noisesample `noise_stereo_decorrelates_the_colour_samples`, `noise_filter_low_and_high_passes_the_colour_samples` | closed by GROUPA1: docs/ui-design/GROUPA1-REPORT.md |
 
 ### S08 Serum 2: filters (p.133-143)
 
@@ -247,7 +247,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S10-03 | S p.155-157 | Add / copy / remove modules (several instances of one effect) | PARTIAL | 16 fixed modules, one instance per type, remove = bypass (A19, 14 row 3) | several instances of the same effect impossible; owner decision |
 | S10-04 | S p.156 | Reorder modules | DONE | `fx.order.1..16`; t_wp5 :271, :309; FxChainPanel hold-to-reorder |  |
 | S10-05 | S p.157 | Bypass a module | DONE | `<fx>.on` |  |
-| S10-06 | S p.158 | Rack operations: cut / copy / paste / clear a bus | MISSING | none | small UI over the rack keys |
+| S10-06 | S p.158 | Rack operations: cut / copy / paste / clear a bus | DONE (GROUPA1 WP-10) | `fxCopyRack` / `fxClearRack` / `fxPasteRack` (core/src/fx_rack.cpp), FxRackView.h:214 (`showBusMenu`); ct_fxrack `fxrack_copy_paste_...`, `fxrack_cut_and_clear_...`, `fxrack_paste_stops_...`; ui_fxinst `fxui_wp10_bus_operations_...` | closed by GROUPA1: docs/ui-design/GROUPA1-REPORT.md |
 | S10-07 | S p.159 | Modulate FX parameters | DONE | FX keys are modulation destinations; t_fxextra `b17_keys_survive_random_settings_and_type_changes` :604 |  |
 | S10-08 | S p.160 | Per-module LEVEL trim | DONE | `<fx>.level` (kCapFxLevel); t_wtremap `fx_level_trims_every_module_output` :282; ui_wtremap `uiw_fx_panels_have_the_level_knob_and_the_filter_panels_the_clean_mode_switch` |  |
 | S10-09 | S p.161 | Bode frequency shifter | DONE | `bode.*` (PT:648); core/fx-serum-b; t_wp7 `bode_shifts_the_frequency_up_and_down` :201; FxBodePanel.cpp:189 |  |
@@ -257,7 +257,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S10-13 | S p.164-166 | Convolve: engine | DONE | `convolve.*` (PT:665); core/fx-serum-b; t_wp7 `convolve_uses_the_impulse_of_the_content_and_rebuilds_when_the_size_changes` :231 |  |
 | S10-14 | S p.164-166 | Convolve: load an impulse response | DONE (WP-01) | FxConvolvePanel.cpp:26-31: `Load IR...` only toggles `convolve.ir` None / Preset IR; no file, no `content.impulses` ; closed by WP-01: docs/ui-design/WP01-REPORT.md | 
 | S10-15 | S p.165-166, V p.30-31 | Delay: modes, HQ, scalar offset, Tap->Delay | DONE | `delay.*` (+style 4, hq, offset); t_fxextra :273, :307; FxDelayPanel.cpp:312 |  |
-| S10-16 | S p.166 | Delay left offset (one scalar offset per channel) | MISSING | only `delay.offset` | MANUALCHECK 4: `delay.offset_left` (1 key) |
+| S10-16 | S p.166 | Delay left offset (one scalar offset per channel) | DONE (GROUPA1 WP-10) | `delay.offset_left` (B25, PT:2061); delay.cpp; t_fxextra `delay_offset_left_multiplies_the_time_of_the_left_channel`; Serum import `kParamOffsetL` / `kParamOffsetR` (A351) | closed by GROUPA1 |
 | S10-17 | S p.167-169, V p.32-33 | Distortion: 13 types, filter order, X-Shaper editor | DONE | `distortion.*`; t_fxextra :346, :395; FxShaperEditor.cpp; ui_fx `fx_extras_xshaper_editor_edits_the_content` | default type Soft clip vs Tube (14 row 31) |
 | S10-18 | S p.169, V p.34 | Equalizer | DONE | `eq.*` (3 bands, superset of Serum's 2); FxEqPanel.cpp:328 |  |
 | S10-19 | S p.170, V p.34 | Filter (FX) | DONE | `fxfilter.*`; FxFilterPanel.cpp:198 |  |
@@ -265,7 +265,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S10-21 | S p.173 | Hyper / Dimension | DONE | `hyperdim.*` (PT:624); core/fx-serum-a hyper_dimension.cpp; t_wp7 :174; FxHyperDimPanel.cpp:215 |  |
 | S10-22 | S p.174, V p.36-37 | Phaser incl. DEPTH 2 | DONE | `phaser.*` (+depth2); t_fxextra :463; FxPhaserPanel.cpp:192 | rate range 0.04 .. 4 Hz vs manual 0 .. 20 Hz (14 row 31) |
 | S10-23 | S p.175-177, V p.37-38 | Reverb: Plate / Hall / Vintage / Nitrous / Basin, rooms, controls per type | DONE | `reverb.*` (PT:722); t_fxextra `reverb_algorithms` :491; FxReverbPanel.cpp:251 | algorithms are our own, sound needs a listening pass (14 row 21); default type Vital (row 31) |
-| S10-24 | S p.177 | Reverb FEEDBACK of Nitrous / Basin | MISSING | `reverb.decay` is used instead | MANUALCHECK 4: `reverb.feedback` (1 key) |
+| S10-24 | S p.177 | Reverb FEEDBACK of Nitrous / Basin | DONE (GROUPA1 WP-10) | `reverb.feedback` (B25, PT:2062); reverb_algorithms.cpp; t_fxextra `reverb_feedback_scales_the_tail_of_nitrous_and_basin_only`; Serum import of Space / Abyss (A352) | closed by GROUPA1; the law is ours (14 row 68) |
 | S10-25 | S p.177-181 | Splitter L/H, L/M/H, M/S | DONE | `splitter_*.*` (PT:681); core/fx-serum-a; t_wp7 `splitters_are_transparent_and_host_the_effects_of_their_bands` :408; FxSplitterPanels.cpp:500 |  |
 | S10-26 | S p.182 | Utility | DONE | `utility.*` (PT:635); t_wp7 :121; FxUtilityPanel.cpp:192 |  |
 | S10-27 | V p.27 | Effects chain of 9 effects, order | DONE | `fx.order.*`; FxChainPanel.cpp:65 |  |
@@ -377,7 +377,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S15-01 | S p.313 | Preferences: help tooltips, parameter value bubbles | DONE | Editor.h:74; ParamControls.cpp:152 ValueBubble |  |
 | S15-02 | S p.313 | Preference: double-click resets or opens a value box | PARTIAL | GlbSettingsPanel.cpp:53-58 toggle | the toggle flips a private bool; nothing reads it (grep dblTapIsReset: this file only); no preference storage exists |
 | S15-03 | S p.314 | Preferences: mouse-wheel parameter control, keyboard shortcuts on/off, default waveform view 2D / 3D | MISSING | none | needs a preferences store (user dir exists: core/src/shell_features.cpp) |
-| S15-04 | S p.314 | Preferences: MPE enabled by default, pitch bend also maps to Expr X, Expr Y bipolar | MISSING | `master.mpe.on`, `.bend_range` only | 3 prefs / keys, see S15-21 |
+| S15-04 | S p.314 | Preferences: MPE enabled by default, pitch bend also maps to Expr X, Expr Y bipolar | PARTIAL (GROUPA1 WP-09) | the keys `master.mpe.bend_to_x`, `master.mpe.y_bipolar` exist (B24) and act; "MPE enabled by default" is the key `master.mpe.on` in the preset | the preference store that sets the keys for a new instance is WP-02 |
 | S15-05 | S p.314-315 | Preferences: limit mod depth on drop, mod wheel -> WT POS, load MIDI map from presets, ultra quality render, update check | MISSING | none | update check = n/a (store) |
 | S15-06 | S p.315 | Preference: silence notes and FX tails when the host stops | PARTIAL | GlbSettingsPanel.cpp:69-75 toggle | flag read nowhere; the engine has no transport-stop handling for it |
 | S15-07 | S p.313-315, V p.42 | Frequency units option Hz / semitones | PARTIAL | GlbSettingsPanel.cpp:61-66 toggle | flag read nowhere (grep freqIsHz: this file only) |
@@ -394,7 +394,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S15-18 | S p.321 | MTS-ESP tuning (enable, note-on only), .tun takes precedence | PARTIAL | `master.tuning.mts_esp`, `.mts_note_on_only`; core/include/synthyboy/tuning.h seam; fake source in t_wp123 :673 | libMTSClient not linked, licence not verified (14 row 5) |
 | S15-19 | S p.321 | Lock the tuning configuration | MISSING | none | small: module lock for `master.tuning.*` |
 | S15-20 | S p.322 | Build version and date | DONE | GlbSettingsPanel.cpp:94 About text | hard-coded string 'v0.1.0 ... ContentPacks: OK' |
-| S15-21 | S p.325-326 | MPE: enable, XYZ -> Macro 1 / 2 / 3, YZ -> Macro 1 / 2, Y -> Mod Wheel, bend range 1-96 | PARTIAL | `master.mpe.on`, `.bend_range` (PT:575-576); t_wp123 `mpe_per_note_bend_pressure_and_slide` :816; GlbMpePanel.cpp:256 | the macro / mod wheel mappings missing (S15-04: 4 keys) |
+| S15-21 | S p.325-326 | MPE: enable, XYZ -> Macro 1 / 2 / 3, YZ -> Macro 1 / 2, Y -> Mod Wheel, bend range 1-96 | DONE (GROUPA1 WP-09) | `master.mpe.on`, `.bend_range`, `.xyz_macro`, `.y_modwheel`, `.bend_to_x`, `.y_bipolar` (B24, PT:2057-2060); vital_engine.cpp `mpeAxis`; t_mpe (5 cases); GlbMpePanel.cpp:197 | closed by GROUPA1: docs/ui-design/GROUPA1-REPORT.md; the encoding of Serum's `mpeConfig` is unknown (14 row 67) |
 
 ### S16 Serum 2: appendices (p.323-354)
 
@@ -458,7 +458,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | I01-04 | audit G4 | Source `stereo` | IN-PROGRESS | worker mod-amount (B20) |  |
 | I01-05 | audit G5 | `stereo_routing` (5 presets), `voice_override` (1 preset) | IN-PROGRESS | worker mod-amount (B20): keys + bindings |  |
 | I01-06 | audit G6 | `osc_N_transpose_quantize` | IN-PROGRESS | worker mod-amount task text asks for a key, but `oscN.transpose_snap` exists since B14 and is bound to `transpose_quantize` (VB:161): the worker must reuse it and only add the importer mapping | duplicate-key risk, tell the lead |
-| I01-07 | audit G7 | Sample as a 4th source (5 of 35 presets lose their sample); Vital warp 'from sample' | MISSING | importer drops a custom sample when no oscillator is free (core/vital-import/vital_import.cpp:975-981) | needs `noise.type` Noise / Sample + content store (backlog WP-04) |
+| I01-07 | audit G7 | Sample as a 4th source (5 of 35 presets lose their sample); Vital warp 'from sample' | PARTIAL (GROUPA1 WP-04) | a Vital sample is the sample of the noise source (`noise.type` = Sample, osc 4): 7 samples of the 35 presets kept, 0 dropped; vi_fixture_sample_imported_to_the_noise_source | the warp 'from sample' (`sample_input`) has no home until WP-06 |
 | I01-08 | audit G8 | Stored `mod_wheel` position (23 files non-zero) | MISSING | not applied | only if an A/B against Vital shows Vital restores it |
 | I01-09 | audit G9 | Single-frame `Init` and phase-shifted `Sine` tables stored as content instead of a built-in | MISSING | 8 distinct 4 KB files for 43 uses | one appended built-in `Saw down` |
 | I01-10 | audit 4 | Importer ignores the keys added after the audit: `detune_range` -> `oscN.unison.range`, `midi_track` -> `oscN.pitch_track`, `voice_priority` -> `master.voice.steal_priority`, `spectral_unison` | MISSING | vital_import.cpp:188 lists them as auxiliary (ignored / dropped) although the keys exist since B14 / B15 | all 35 files use the defaults, so no preset changes; a non-default file would lose the setting |
@@ -624,10 +624,10 @@ Count of the 84: DIFFERENT 2, DONE 40, IN-PROGRESS 4, MISSING 11, PARTIAL 27.
 
 | Proposal | Keys | Status | Backlog |
 |----------|-----:|--------|---------|
-| `sub.phase`, `sub.phase_contiguous` | 2 | MISSING | WP-04 |
-| `noise.stereo`, `noise.filter` | 2 | MISSING | WP-04 |
-| `delay.offset_left` | 1 | MISSING | WP-10 |
-| `reverb.feedback` | 1 | MISSING | WP-10 |
+| `sub.phase`, `sub.phase_contiguous` | 2 | DONE (GROUPA1, B23) | WP-04 |
+| `noise.stereo`, `noise.filter` | 2 | DONE (GROUPA1, B23) | WP-04 |
+| `delay.offset_left` | 1 | DONE (GROUPA1, B25) | WP-10 |
+| `reverb.feedback` | 1 | DONE (GROUPA1, B25) | WP-10 |
 | `oscN.ratio_src` | 3 | MISSING | WP-05 |
 | ENV 1 on/off: `sub.env1`, `oscN.env1`, `noise.env1` | 5 | IN-PROGRESS (warp-env, the worker decides the key names) | - |
 | `modNN.rise`, `modNN.fall` + per-slot curve | 128 | curve IN-PROGRESS (modamt); RISE / FALL MISSING | WP-08 (recommended: fields of the curve content, 0 keys) |
@@ -644,7 +644,7 @@ Count of the 84: DIFFERENT 2, DONE 40, IN-PROGRESS 4, MISSING 11, PARTIAL 27.
 | G4 source `stereo` | IN-PROGRESS | modamt |
 | G5 `stereo_routing`, `voice_override` | IN-PROGRESS | modamt (keys + bindings) |
 | G6 `osc_N_transpose_quantize` | IN-PROGRESS | the key `oscN.transpose_snap` exists already: reuse, importer mapping only |
-| G7 sample as a 4th source | MISSING | backlog WP-04 (`noise.type`) + WP-01 (content) |
+| G7 sample as a 4th source | DONE (GROUPA1 WP-04; the warp 'from sample' waits for WP-06) | `noise.type` + content osc 4 |
 | G8 stored `mod_wheel` | MISSING | needs one A/B against Vital |
 | G9 built-in `Saw down` table | MISSING | backlog WP-18 |
 | importer vs B14 / B15 keys (detune range, midi track, priority) | MISSING | backlog WP-18 |
