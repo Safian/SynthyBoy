@@ -18,6 +18,18 @@
 #include "synthyboy/serum_plugin_import.h"
 #include "test_runner.h"
 
+// the wall time check is meaningless under a sanitizer (ThreadSanitizer: 15 to 30 times slower; found by the WP-20 TSan run)
+#if defined (__SANITIZE_THREAD__) || defined (__SANITIZE_ADDRESS__)
+ #define SBTEST_INSTRUMENTED 1
+#elif defined (__has_feature)
+ #if __has_feature (thread_sanitizer) || __has_feature (address_sanitizer)
+  #define SBTEST_INSTRUMENTED 1
+ #endif
+#endif
+#ifndef SBTEST_INSTRUMENTED
+ #define SBTEST_INSTRUMENTED 0
+#endif
+
 using namespace synthyboy;
 using namespace sbserum;
 
@@ -955,7 +967,7 @@ TEST (serum_real_presets_import_without_a_failure_and_with_every_leaf_accounted)
     CHECK_EQ (failed, 0);
     CHECK_EQ (unaccounted, 0);
     CHECK_EQ (validated, files);
-    CHECK (slowest < 20.0);
+    if (! SBTEST_INSTRUMENTED) CHECK (slowest < 20.0);
 }
 
 // GROUPA2 (WP-07, A379 / A380): the voice panel of a preset and of a .SerumStyle file, and the sources Voice Mod 1 / 2 and Voice Index

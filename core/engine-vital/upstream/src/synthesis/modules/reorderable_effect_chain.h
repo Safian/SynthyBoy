@@ -94,8 +94,10 @@ namespace sbvital {
           settle blocks) while the audio thread writes the engine's own. `prime ()` sets the copies (any thread, before the hand over), `run ()`
           refreshes them from the engine's (audio thread). */
       void prime(poly_float beats_per_second, poly_float keytrack);
-      /** Runs the effect on `audio_in` and applies the level trim; returns the output buffer (valid until the next call). */
-      const poly_float* run(const poly_float* audio_in, int num_samples);
+      /** Runs the effect on `audio_in` and applies the level trim; returns the output buffer (valid until the next call). `follow_engine`
+          false (the builder thread's settle blocks): the tempo, key track and note counter are NOT read from the engine (the audio thread
+          writes them: a data race otherwise, found by ThreadSanitizer, WP-20); the copies set by `prime ()` are used and no note counts. */
+      const poly_float* run(const poly_float* audio_in, int num_samples, bool follow_engine = true);
       /** The latency in samples of the module (Bode's Hilbert filter, the limiter of the compressor). */
       int latency() const;
       /** The drawn curves of the PZ SVF (FX filter type), null for the other types. */

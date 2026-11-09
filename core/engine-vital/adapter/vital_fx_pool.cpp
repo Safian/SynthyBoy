@@ -287,7 +287,7 @@ FxBuilt* FxPool::build (const Request& r)
     module->hardReset();
     std::vector<sbvital::poly_float> silence (static_cast<size_t> (sbvital::kMaxBufferSize) * static_cast<size_t> (sbvital::kMaxOversample), sbvital::poly_float (0.0f));
     for (int i = 0; i < kSettleChunks; ++i)
-        module->run (silence.data(), sbvital::kMaxBufferSize * os);
+        module->run (silence.data(), sbvital::kMaxBufferSize * os, false);   // false: this thread never reads what the audio thread writes
     module->hardReset();
     return built;
 }

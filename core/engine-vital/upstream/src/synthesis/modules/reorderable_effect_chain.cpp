@@ -218,15 +218,17 @@ namespace sbvital {
     keytrack_.buffer[0] = keytrack;
   }
 
-  const poly_float* FxInstanceModule::run(const poly_float* audio_in, int num_samples) {
-    // the audio thread is the only one that reads the engine's outputs: the copies of the module follow them from here
-    beats_per_second_.buffer[0] = live_beats_per_second_->buffer[0];
-    keytrack_.buffer[0] = live_keytrack_->buffer[0];
-    if (!counted_) {
-      note_counter_offset_ = *live_note_counter_;   // a note that sounded before the module existed does not retrigger it
-      counted_ = true;
+  const poly_float* FxInstanceModule::run(const poly_float* audio_in, int num_samples, bool follow_engine) {
+    if (follow_engine) {
+      // the audio thread is the only one that reads the engine's outputs: the copies of the module follow them from here
+      beats_per_second_.buffer[0] = live_beats_per_second_->buffer[0];
+      keytrack_.buffer[0] = live_keytrack_->buffer[0];
+      if (!counted_) {
+        note_counter_offset_ = *live_note_counter_;   // a note that sounded before the module existed does not retrigger it
+        counted_ = true;
+      }
+      note_counter_ = *live_note_counter_ - note_counter_offset_;
     }
-    note_counter_ = *live_note_counter_ - note_counter_offset_;
     effect_->processWithInput(audio_in, num_samples);
     poly_float* audio = effect_->output(0)->buffer;
     if (scrubNonFinite(audio, num_samples))
