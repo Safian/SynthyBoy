@@ -13,6 +13,7 @@
 
 #include "PluginProcessor.h"
 #include "fixtures.h"
+#include "serum_fixtures.h"
 #include "synthyboy/library_items.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/vital_plugin_import.h"
@@ -506,6 +507,87 @@ TEST (content_vital_import_inside_the_plugin_with_the_report_sheet)
         return true;
     });
     editor->importVitalFromMenu();
+    CHECK (asked);
+}
+
+TEST (content_serum_import_inside_the_plugin_with_the_report_sheet)
+{
+    Host h ("serum");
+    std::unique_ptr<juce::AudioProcessorEditor> base (h.proc.createEditor());
+    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    CHECK (editor != nullptr);
+    if (editor == nullptr)
+        return;
+    editor->setSize (390, 844);
+    using namespace sbserum;
+
+    // a preset: patch, table and filter come in, the report sheet shows the numbers
+    std::vector<double> table (4096);
+    for (size_t i = 0; i < table.size(); ++i)
+        table[i] = std::sin (2.0 * kPi * static_cast<double> (i % 2048) / 2048.0 * (i < 2048 ? 1.0 : 3.0));
+    Preset p;
+    p.set ("Oscillator0", map ({ { "plainParams", plain ({ { "kParamVolume", 0.8 } }) },
+                                 { "WTOsc0", map ({ { "embeddedWTData", nums (table) }, { "plainParams", plain ({ { "kParamTablePos", 128 } }) } }) } }));
+    p.set ("VoiceFilter0", map ({ { "plainParams", plain ({ { "kParamEnable", 1 }, { "kParamFreq", 0.6 } }) } }));
+    p.set ("Env0", map ({ { "plainParams", plain ({ { "kParamAttack", 0.002 }, { "kParamRelease", 0.3 } }) } }));
+    const Bytes preset = p.file ("Serum Fixture");
+    const fs::path file = writeBytes (h.workDir() / "Serum Fixture.SerumPreset", preset);
+    const float cutoffBefore = readParameter (h.proc, "filter1.cutoff");
+    const auto result = editor->importSerumFile (juce::File (file.string()));
+    CHECK (result.flow.ok);
+    CHECK (result.imported.kind == SerumFileKind::preset);
+    CHECK (std::abs (readParameter (h.proc, "filter1.cutoff") - cutoffBefore) > 1.0f);
+    CHECK (! h.proc.content().wavetables.empty());
+    CHECK (MissingFilesModel (h.ctx).empty());
+    CHECK (rms (render (h.proc, 57, 0.5), 0.1, 0.4) > 0.001);
+    auto* report = dynamic_cast<ImportReportSheet*> (editor->contentSheet());
+    CHECK (report != nullptr);
+    if (report != nullptr)
+    {
+        CHECK (report->text().contains ("values imported"));
+        CHECK (report->text().contains ("Fidelity"));
+        report->closeButton().onClick();
+        CHECK (editor->contentSheet() == nullptr);
+    }
+
+    // an effect chain is written onto the patch that is loaded now (only the parameters it holds)
+    const Bytes fx = container ("SerumFX", map ({ { "FXPhaser", map ({ { "plainParams", plain ({ { "kParamRate", 1.5 }, { "kParamWet", 60 } }) } }) }, { "fxType", text ("FXPhaser") }, { "type", num (2) } }), "Phaser");
+    const fs::path fxFile = writeBytes (h.workDir() / "Phaser.SerumFX", fx);
+    const float cutoffAfter = readParameter (h.proc, "filter1.cutoff");
+    const auto f = synthyboy::ui::importSerumFile (h.ctx, juce::File (fxFile.string()), 0);
+    CHECK (f.flow.ok);
+    CHECK (f.imported.kind == SerumFileKind::fxModule);
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "fxi01.type")), kFxTypePhaser);
+    CHECK (std::abs (readParameter (h.proc, "filter1.cutoff") - cutoffAfter) < 1e-3f); // the patch is otherwise untouched
+
+    // a shape goes into the chosen LFO slot and switches it to Custom
+    const Bytes shape = container ("XferShape", map ({ { "LFO", map ({ { "curveVals", nums ({ 0.5, 0.5, 0.5 }) }, { "numPoints", num (2) }, { "xVals", nums ({ 0, 0.5, 1 }) }, { "yVals", nums ({ 1, 0, 1 }) } }) } }), "Tri");
+    const fs::path shapeFile = writeBytes (h.workDir() / "Tri.XferShape", shape);
+    const auto s = synthyboy::ui::importSerumFile (h.ctx, juce::File (shapeFile.string()), 3);
+    CHECK (s.flow.ok);
+    bool lfo3 = false;
+    for (const auto& sh : h.proc.content().lfoShapes)
+        lfo3 = lfo3 || (sh.lfo == 3 && sh.points.size() == 3);
+    CHECK (lfo3);
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "lfo3.shape")), choiceIndexOf ("lfo3.shape", "Custom"));
+    CHECK (! synthyboy::ui::importSerumFile (h.ctx, juce::File (shapeFile.string()), 0).flow.ok); // no LFO chosen
+    const fs::path junk = writeBytes (h.workDir() / "bad.SerumPreset", { 'n', 'o', 'p', 'e' });
+    CHECK (! synthyboy::ui::importSerumFile (h.ctx, juce::File (junk.string()), 1).flow.ok);
+    // a family without an equivalent is reported, nothing changes
+    const Bytes arp = container ("XferArp", map ({ { "ArpClip", map ({ { "name", text ("x") } }) } }), "Arp");
+    const fs::path arpFile = writeBytes (h.workDir() / "Arp.XferArp", arp);
+    const auto a = synthyboy::ui::importSerumFile (h.ctx, juce::File (arpFile.string()), 1);
+    CHECK (a.flow.ok);
+    CHECK (a.imported.report.numDropped >= 1);
+
+    // the menu entry asks the host for the file
+    bool asked = false;
+    h.proc.setFileRequestHandler ([&] (const FileRequest& request, std::function<void (const juce::File&)>)
+    {
+        asked = request.wildcards.contains ("SerumPreset") && request.purpose == "serum";
+        return true;
+    });
+    editor->importSerumFromMenu();
     CHECK (asked);
 }
 

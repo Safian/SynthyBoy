@@ -26,6 +26,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -231,10 +232,23 @@ int main (int argc, char** argv)
         t.unaccounted += rep.unaccounted;
         t.missing += r.missingFiles;
         t.stored += r.storedFiles;
-        for (const SerumReportEntry& e : rep.entries)
         {
-            if (e.kind == ItemKind::dropped) { t.droppedBy[normalise (e.serumPath) + " [" + e.detail + "]"] += e.count; t.droppedFiles[normalise (e.serumPath) + " [" + e.detail + "]"] += 1; }
-            if (e.kind == ItemKind::approximated) { t.approxBy[(e.ourKey.empty() ? normalise (e.serumPath) : normalise (e.ourKey)) + " [" + e.detail + "]"] += e.count; t.approxFiles[(e.ourKey.empty() ? normalise (e.serumPath) : normalise (e.ourKey)) + " [" + e.detail + "]"] += 1; }
+            std::set<std::string> seenDropped, seenApprox; // a file counts once per name in the "files" column
+            for (const SerumReportEntry& e : rep.entries)
+            {
+                if (e.kind == ItemKind::dropped)
+                {
+                    const std::string name = normalise (e.serumPath) + " [" + e.detail + "]";
+                    t.droppedBy[name] += e.count;
+                    if (seenDropped.insert (name).second) t.droppedFiles[name] += 1;
+                }
+                if (e.kind == ItemKind::approximated)
+                {
+                    const std::string name = (e.ourKey.empty() ? normalise (e.serumPath) : normalise (e.ourKey)) + " [" + e.detail + "]";
+                    t.approxBy[name] += e.count;
+                    if (seenApprox.insert (name).second) t.approxFiles[name] += 1;
+                }
+            }
         }
         std::printf ("%-60s kind=%s status=ok fidelity=%s imported=%d approximated=%d dropped=%d ignored=%d defaulted=%d unaccounted=%d stored=%d missing=%d %.0fms\n", fileName.c_str(), kindName (r.kind),
                      fidelityName (rep.fidelity), rep.numImported, rep.numApproximated, rep.numDropped, rep.numIgnored, rep.numDefaulted, rep.unaccounted, r.storedFiles, r.missingFiles, ms);

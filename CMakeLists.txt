@@ -415,7 +415,7 @@ if(SYNTHYBOY_BUILD_TESTS)
              juce::juce_gui_basics
              juce::juce_recommended_config_flags
              juce::juce_recommended_warning_flags)
-    target_include_directories(synthyboy_test_ui_content PRIVATE shell-juce core/vital-import core/vital-import/tests)
+    target_include_directories(synthyboy_test_ui_content PRIVATE shell-juce core/vital-import core/vital-import/tests core/serum-import/tests)
     target_compile_definitions(synthyboy_test_ui_content PRIVATE
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
