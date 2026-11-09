@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "groupd_util.h"
 #include "synthyboy/params.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy_clap.h"
@@ -190,6 +191,139 @@ TEST (clap_content_extension_imports_lists_attaches_and_removes)
     CHECK_EQ (ext->attach (plugin, SYNTHYBOY_CONTENT_WAVETABLE, 0, 2), SYNTHYBOY_CONTENT_OK);
     CHECK_EQ (ext->import_file (plugin, SYNTHYBOY_CONTENT_IMPULSE, file.string().c_str(), &item), SYNTHYBOY_CONTENT_OK);
     CHECK_EQ (ext->attach (plugin, SYNTHYBOY_CONTENT_IMPULSE, 0, 0), SYNTHYBOY_CONTENT_OK);
+
+    plugin->stop_processing (plugin);
+    plugin->deactivate (plugin);
+    plugin->destroy (plugin);
+    fs::remove_all (dir);
+    unsetenv ("SYNTHYBOY_USER_DIR");
+}
+
+/** One block with parameter events only (no note): the shell's stored values and the engine take them. */
+void setParams (const clap_plugin_t* plugin, std::vector<clap_event_param_value_t> params)
+{
+    std::vector<float> l (256, 0.0f), r (256, 0.0f);
+    float* data[2] = { l.data(), r.data() };
+    clap_audio_buffer_t audio {};
+    audio.data32 = data;
+    audio.channel_count = 2;
+    Events events;
+    for (auto& p : params)
+        events.list.push_back (&p.header);
+    clap_process_t proc {};
+    proc.frames_count = 256;
+    proc.audio_outputs = &audio;
+    proc.audio_outputs_count = 1;
+    proc.in_events = &events.in;
+    plugin->process (plugin, &proc);
+}
+
+// GROUPD (WP-14 / 15 / 16) through the CLAP extension of the native shell (the mobile / Kick path): Switch to wavetable, the audio of the last note, Resample, Render OSC Warp,
+// wavetable frame <-> LFO shape
+TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_lfo_shapes)
+{
+    const fs::path dir = fs::temp_directory_path() / "sb_clap_groupd";
+    fs::remove_all (dir);
+    setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
+
+    const double f0 = 220.0;
+    const auto tone = groupd::sawTone (f0, 1.5, 48000.0, 16);
+    writeFile (dir / "in" / "Saw A3.wav", encodeWav (tone.data(), nullptr, tone.size(), 48000, 16));
+
+    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
+    CHECK (entry->init ("synthyboy_static"));
+    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    const clap_plugin_t* plugin = factory->create_plugin (factory, &s_host, "com.safian.synthyboy");
+    CHECK (plugin != nullptr && plugin->init (plugin));
+    const auto* ext = static_cast<const synthyboy_plugin_content_t*> (plugin->get_extension (plugin, SYNTHYBOY_EXT_CONTENT));
+    CHECK (ext != nullptr);
+    if (ext == nullptr)
+        return;
+    CHECK (ext->switch_to_wavetable != nullptr && ext->render_osc_warp != nullptr && ext->resample != nullptr && ext->render_last_note != nullptr
+           && ext->wavetable_frame_to_lfo != nullptr && ext->lfo_shape_to_wavetable != nullptr);
+    CHECK (plugin->activate (plugin, 48000.0, 32, 256));
+    CHECK (plugin->start_processing (plugin));
+
+    char summary[256] = {};
+    synthyboy_content_item_t item {};
+    CHECK_EQ (ext->import_file (plugin, SYNTHYBOY_CONTENT_SAMPLE, (dir / "in" / "Saw A3.wav").string().c_str(), &item), SYNTHYBOY_CONTENT_OK);
+    CHECK_EQ (ext->attach (plugin, SYNTHYBOY_CONTENT_SAMPLE, 0, 1), SYNTHYBOY_CONTENT_OK);
+    const auto plain = [] (int osc) { return std::vector<clap_event_param_value_t> {
+        paramEvent (("osc" + std::to_string (osc) + ".unison.voices").c_str(), 1.0), paramEvent (("osc" + std::to_string (osc) + ".random_phase").c_str(), 0.0),
+        paramEvent (("osc" + std::to_string (osc) + ".phase").c_str(), 0.0), paramEvent (("osc" + std::to_string (osc) + ".level").c_str(), 100.0) }; };
+    auto params = plain (1);
+    params.push_back (paramEvent ("osc1.type", 1.0));
+    params.push_back (paramEvent ("osc1.sample.loop_mode", 1.0));
+    params.push_back (paramEvent ("filter1.on", 0.0));
+    params.push_back (paramEvent ("env1.attack", 0.0));
+    params.push_back (paramEvent ("env1.sustain", 100.0));
+    params.push_back (paramEvent ("master.volume", -6.0));
+    setParams (plugin, params);
+
+    // errors: an unknown mode / oscillator, a wavetable oscillator (osc 2), no note played yet
+    CHECK_EQ (ext->switch_to_wavetable (plugin, 1, 99, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
+    CHECK_EQ (ext->switch_to_wavetable (plugin, 4, 0, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
+    CHECK_EQ (ext->switch_to_wavetable (plugin, 2, 0, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_STATE);
+    const fs::path out = dir / "out" / "last.wav";
+    CHECK_EQ (ext->render_last_note (plugin, out.string().c_str(), summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_STATE);
+    CHECK_EQ (ext->render_last_note (plugin, nullptr, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
+
+    // Switch to wavetable: the sample (a 220 Hz saw) becomes the table; played at A3 it has the harmonics of the source within 0.5 dB
+    CHECK_EQ (ext->switch_to_wavetable (plugin, 1, 0, summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
+    std::printf ("    switch_to_wavetable: %s\n", summary);
+    CHECK_EQ (ext->count (plugin, SYNTHYBOY_CONTENT_WAVETABLE), 1u);
+    const auto played = play (plugin, 57, 1.5);
+    const size_t from = 24000, n = 36000;
+    const auto source = groupd::harmonicDb (tone, 24000, n, f0, 48000.0, 12);
+    const auto heard = groupd::harmonicDb (played, from, n, f0, 48000.0, 12);
+    std::vector<double> a, b;
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        a.push_back (source[i] - source[0]);
+        b.push_back (heard[i] - heard[0]);
+    }
+    const double worst = groupd::worstHarmonicDifference (a, b, 40.0);
+    std::printf ("    CLAP shell: sample -> wavetable, harmonics 1..12 worst difference %.3f dB\n", worst);
+    CHECK (worst < 0.5);
+
+    // the audio of the last note (A3, held 1.5 s so far) as a WAV file
+    CHECK_EQ (ext->render_last_note (plugin, out.string().c_str(), summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
+    std::ifstream wav (out, std::ios::binary);
+    std::string head (12, '\0');
+    wav.read (head.data(), 12);
+    CHECK (head.compare (0, 4, "RIFF") == 0 && head.compare (8, 4, "WAVE") == 0);
+    CHECK (fs::file_size (out) > 48000u * 6u);
+
+    // Resample: one bar of that note becomes the table of osc 2 (the plain wavetable oscillator turns into the captured sound), A + B takes both
+    plugin->reset (plugin);
+    CHECK_EQ (ext->resample (plugin, 5, 0, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
+    CHECK_EQ (ext->resample (plugin, 2, 0, summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
+    const uint32_t afterOsc2 = ext->count (plugin, SYNTHYBOY_CONTENT_WAVETABLE);
+    CHECK (afterOsc2 >= 2u);   // the files are content addressed: identical channels are stored once
+    CHECK_EQ (ext->resample (plugin, 0, 0, summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
+    const uint32_t afterAB = ext->count (plugin, SYNTHYBOY_CONTENT_WAVETABLE);
+    CHECK (afterAB >= afterOsc2);
+
+    // Render OSC Warp on osc 1 (a wavetable oscillator since the switch) and the refusal on a sample oscillator
+    auto warp = plain (1);
+    warp.push_back (paramEvent ("osc1.warp.type", 1.0)); // Sync
+    warp.push_back (paramEvent ("osc1.warp.amount", 30.0));
+    warp.push_back (paramEvent ("osc3.type", 1.0));
+    setParams (plugin, warp);
+    CHECK_EQ (ext->render_osc_warp (plugin, 1, summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
+    std::printf ("    render_osc_warp: %s\n", summary);
+    CHECK (ext->count (plugin, SYNTHYBOY_CONTENT_WAVETABLE) > afterAB);
+    CHECK_EQ (ext->render_osc_warp (plugin, 3, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_STATE);
+    CHECK_EQ (ext->render_osc_warp (plugin, 7, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
+    plugin->reset (plugin);
+    CHECK (rmsOf (play (plugin, 57, 1.0), 0.3, 0.9) > 0.02);   // the baked oscillator sounds
+
+    // wavetable frame -> LFO 1 (custom shape), LFO shape -> wavetable of osc 3 (one-frame table: osc 3 is a sample oscillator with no table)
+    CHECK_EQ (ext->wavetable_frame_to_lfo (plugin, 1, 1, summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
+    std::printf ("    wavetable_frame_to_lfo: %s\n", summary);
+    CHECK_EQ (ext->wavetable_frame_to_lfo (plugin, 1, 11, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
+    CHECK_EQ (ext->lfo_shape_to_wavetable (plugin, 1, 2, summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
+    CHECK_EQ (ext->lfo_shape_to_wavetable (plugin, 11, 2, summary, sizeof summary), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
 
     plugin->stop_processing (plugin);
     plugin->deactivate (plugin);

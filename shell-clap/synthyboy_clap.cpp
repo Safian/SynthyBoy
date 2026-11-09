@@ -24,6 +24,7 @@
 #include "synthyboy/shell_features.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
+#include "synthyboy/wave_convert.h"
 #include "synthyboy/vital_plugin_import.h"
 #include "synthyboy_content_ext.h"
 #include <clap/ext/remote-controls.h>
@@ -76,6 +77,11 @@ struct SynthyBoyClap
     Preferences prefs;                // the global preferences (GROUPA2 WP-02): read once when the plug-in is created (the editor shell writes the file)
     TransportStopWatch stopWatch;     // audio thread: the host transport stops -> silence () when prefs.silenceOnStop
     bool offlineRender = false;       // clap_plugin_render: the host renders offline
+    // the last note (audio thread writes, the main thread reads: Resample, the audio of the last note) and the host tempo
+    std::atomic<int> lastKey { -1 };
+    std::atomic<float> lastVelocity { 0.8f };
+    std::atomic<int64_t> lastOnSample { 0 }, lastOffSample { -1 }, samplesDone { 0 };
+    std::atomic<double> tempo { 120.0 };
     Quality quality;
     std::vector<Event> events;
     double sampleRate = 48000.0;
@@ -239,6 +245,10 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     e.value = static_cast<float> (ev->velocity);
                     e.noteId = ev->note_id;
                     self->events.push_back (e);
+                    self->lastKey.store (e.key, std::memory_order_relaxed);
+                    self->lastVelocity.store (e.value, std::memory_order_relaxed);
+                    self->lastOnSample.store (self->samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
+                    self->lastOffSample.store (-1, std::memory_order_relaxed);
                     break;
                 }
                 case CLAP_EVENT_NOTE_OFF:
@@ -253,6 +263,8 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     e.value = static_cast<float> (ev->velocity);
                     e.noteId = ev->note_id;
                     self->events.push_back (e);
+                    if (e.key == self->lastKey.load (std::memory_order_relaxed))
+                        self->lastOffSample.store (self->samplesDone.load (std::memory_order_relaxed) + e.frame, std::memory_order_relaxed);
                     break;
                 }
                 case CLAP_EVENT_NOTE_EXPRESSION:
@@ -342,7 +354,10 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
         {
             const clap_event_transport_t* t = process->transport;
             if ((t->flags & CLAP_TRANSPORT_HAS_TEMPO) != 0 && t->tempo > 0.0)
+            {
                 transport.bpm = t->tempo;
+                self->tempo.store (t->tempo, std::memory_order_relaxed);
+            }
             if ((t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) != 0)
                 transport.songPosBeats = static_cast<double> (t->song_pos_beats) / static_cast<double> (CLAP_BEATTIME_FACTOR);
             transport.playing = (t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
@@ -361,6 +376,7 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
 
         self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
                                outL, outR, static_cast<int> (process->frames_count));
+        self->samplesDone.fetch_add (process->frames_count, std::memory_order_relaxed);
         // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
         if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
             self->host->request_restart (self->host);
@@ -879,13 +895,314 @@ int32_t ext_content_import_vital (const clap_plugin_t* p, const char* path, char
     return SYNTHYBOY_CONTENT_OK;
 }
 
+// ---- GROUPD (WP-14 / 15 / 16): the conversions and offline renders of core/wave_convert.h through the library of this shell ----------------------
+
+/** Sets a parameter of the stored values and of the engine; the host re-reads the values after the action (rescan). */
+void setValue (SynthyBoyClap* self, const std::string& key, float plain)
+{
+    const ParamInfo* info = findParamByKey (key.c_str());
+    if (info == nullptr)
+        return;
+    const float v = constrainValue (*info, plain);
+    self->values.plain[static_cast<size_t> (findParamIndex (info->id))] = v;
+    if (self->engine)
+        self->engine->setParam (info->id, v);
+}
+
+float valueOf (const SynthyBoyClap* self, const std::string& key, float fallback = 0.0f)
+{
+    const ParamInfo* info = findParamByKey (key.c_str());
+    return info != nullptr ? self->values.plain[static_cast<size_t> (findParamIndex (info->id))] : fallback;
+}
+
+void say (char* summary, uint32_t capacity, const std::string& text)
+{
+    if (summary != nullptr && capacity > 0)
+        copyText (summary, capacity, text);
+}
+
+convert::OfflineRunner offlineRunner (SynthyBoyClap* self)
+{
+    return [self] (const OfflineRequest& request, OfflineAudio& audio)
+    {
+        if (! self->engine)
+            return false;
+        OfflineRequest copy = request;
+        copy.ultra = request.ultra || self->prefs.ultraRender; // "Use Ultra quality when rendering" (S p.315)
+        if (copy.values == nullptr)
+            copy.values = &self->values;
+        const EngineKind kind =
+#if SYNTHYBOY_HAS_VITAL
+            EngineKind::vital;
+#else
+            EngineKind::own;
+#endif
+        return renderOfflineAny (*self->engine, kind, &self->content, &self->contentStore, copy, audio);
+    };
+}
+
+/** A new table for oscillator `osc`: the library, the state reference, oscN.type = Wavetable, oscN.wavetable = Preset table. */
+bool installTable (SynthyBoyClap* self, int osc, const wtedit::Wavetable& table)
+{
+    const std::vector<uint8_t> wav = wavetableToWav (table);
+    ContentFileRef ref;
+    if (wav.empty() || ! self->contentStore.addFile (ContentKind::wavetable, table.name().empty() ? std::string ("Table") : table.name(), wav, ref))
+        return false;
+    attachWavetable (self->content, osc, ref, table.author(), static_cast<int> (table.numFrames()));
+    const std::string o = "osc" + std::to_string (osc) + ".";
+    setValue (self, o + "type", static_cast<float> (kOscTypeWavetable));
+    setValue (self, o + "wavetable", static_cast<float> (kWavetablePresetTable));
+    return true;
+}
+
+/** The action is done: the engine gets the content, the host the new values and the dirty flag. */
+void actionDone (SynthyBoyClap* self)
+{
+    contentChanged (self);
+    if (self->host != nullptr && self->host->get_extension != nullptr)
+        if (const auto* params = static_cast<const clap_host_params_t*> (self->host->get_extension (self->host, CLAP_EXT_PARAMS)))
+            if (params->rescan != nullptr)
+                params->rescan (self->host, CLAP_PARAM_RESCAN_VALUES);
+}
+
+wtedit::ImportOptions importOptionsOf (uint32_t mode)
+{
+    wtedit::ImportOptions options;
+    const auto& choices = convert::importChoices();
+    options.mode = choices[std::min<size_t> (mode, choices.size() - 1)].mode;
+    return options;
+}
+
+int32_t ext_content_switch_to_wavetable (const clap_plugin_t* p, uint32_t osc, uint32_t importMode, char* summary, uint32_t capacity) noexcept
+{
+    auto* self = toClap (p);
+    if (osc < 1 || osc > 3 || importMode >= convert::importChoices().size())
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    const std::string o = "osc" + std::to_string (osc) + ".";
+    const int type = static_cast<int> (std::lround (valueOf (self, o + "type")));
+    if (type != kOscTypeSample && type != kOscTypeGranular && type != kOscTypeSpectral)
+    {
+        say (summary, capacity, "needs a Sample, Granular or Spectral oscillator");
+        return SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    const ContentSample* sample = nullptr;
+    for (const auto& s : self->content.samples)
+        if (s.osc == static_cast<int> (osc))
+            sample = &s;
+    std::vector<uint8_t> bytes;
+    if (sample == nullptr || ! self->contentStore.readFile (sample->ref, bytes))
+    {
+        say (summary, capacity, "no sample is loaded in this oscillator");
+        return SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    const auto preview = SamplePreview::create (bytes, sample->ref.name);
+    if (preview == nullptr || preview->frames() <= 0)
+        return SYNTHYBOY_CONTENT_ERR_FORMAT;
+    wtedit::Wavetable table;
+    std::string error;
+    if (! convert::sampleRegionToWavetable (preview->mono().data(), preview->mono().size(), static_cast<double> (preview->sampleRate()), valueOf (self, o + "sample.start") * 0.01f,
+                                            valueOf (self, o + "sample.end", 100.0f) * 0.01f, importOptionsOf (importMode), (sample->ref.name.empty() ? std::string ("Sample") : sample->ref.name) + " wavetable", table, &error))
+    {
+        say (summary, capacity, error);
+        return SYNTHYBOY_CONTENT_ERR_FORMAT;
+    }
+    if (! installTable (self, static_cast<int> (osc), table))
+        return SYNTHYBOY_CONTENT_ERR_STORE;
+    setValue (self, o + "frame", 0.0f);
+    actionDone (self);
+    say (summary, capacity, "wavetable of " + std::to_string (table.numFrames()) + " frames");
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_render_osc_warp (const clap_plugin_t* p, uint32_t osc, char* summary, uint32_t capacity) noexcept
+{
+    auto* self = toClap (p);
+    if (osc < 1 || osc > 3)
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    convert::WarpRenderOptions options;
+    options.osc = static_cast<int> (osc);
+    wtedit::Wavetable table;
+    std::string error;
+    float scale = 1.0f;
+    const std::string o = "osc" + std::to_string (osc) + ".";
+    if (static_cast<int> (std::lround (valueOf (self, o + "type"))) != kOscTypeWavetable)
+    {
+        say (summary, capacity, "Render OSC Warp needs a wavetable oscillator");
+        return SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    if (! convert::renderOscWarp (offlineRunner (self), &self->values, options, "Osc " + std::string (osc == 1 ? "A" : (osc == 2 ? "B" : "C")) + " warp", table, &error, &scale))
+    {
+        say (summary, capacity, error);
+        return error.empty() ? SYNTHYBOY_CONTENT_ERR_RENDER : SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    const float amount = valueOf (self, o + "warp.amount"), level = valueOf (self, o + "level", 50.0f);
+    if (! installTable (self, static_cast<int> (osc), table))
+        return SYNTHYBOY_CONTENT_ERR_STORE;
+    for (const auto& change : convert::warpBakeParameterChanges (static_cast<int> (osc), amount, scale, level))
+        setValue (self, change.first, change.second);
+    actionDone (self);
+    say (summary, capacity, std::to_string (table.numFrames()) + " frames across WARP");
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_resample (const clap_plugin_t* p, uint32_t target, uint32_t importMode, char* summary, uint32_t capacity) noexcept
+{
+    auto* self = toClap (p);
+    if (target > 3 || importMode >= convert::importChoices().size())
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    convert::ResampleOptions options;
+    const int key = self->lastKey.load (std::memory_order_relaxed);
+    options.key = key >= 0 ? key : 60;
+    options.velocity = key >= 0 ? self->lastVelocity.load (std::memory_order_relaxed) : 0.8f;
+    options.bpm = self->tempo.load (std::memory_order_relaxed);
+    OfflineAudio audio;
+    if (! convert::renderResample (offlineRunner (self), options, audio))
+        return SYNTHYBOY_CONTENT_ERR_RENDER;
+    wtedit::Wavetable left, right;
+    std::string error;
+    if (! convert::audioToWavetables (audio, importOptionsOf (importMode), "Resample", left, target == 0 ? &right : nullptr, &error))
+    {
+        say (summary, capacity, error);
+        return SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    left.setName (target == 0 ? "Resample Osc A" : "Resample Osc " + std::string (target == 1 ? "A" : (target == 2 ? "B" : "C")));
+    if (! installTable (self, target == 0 ? 1 : static_cast<int> (target), left))
+        return SYNTHYBOY_CONTENT_ERR_STORE;
+    if (target == 0)
+    {
+        right.setName ("Resample Osc B");
+        if (! installTable (self, 2, right))
+            return SYNTHYBOY_CONTENT_ERR_STORE;
+    }
+    actionDone (self);
+    say (summary, capacity, "one bar, " + std::to_string (left.numFrames()) + " frames");
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_render_last_note (const clap_plugin_t* p, const char* path, char* summary, uint32_t capacity) noexcept
+{
+    auto* self = toClap (p);
+    if (path == nullptr || path[0] == '\0')
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    const int key = self->lastKey.load (std::memory_order_relaxed);
+    if (key < 0)
+    {
+        say (summary, capacity, "play a note first");
+        return SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    const int64_t on = self->lastOnSample.load (std::memory_order_relaxed), off = self->lastOffSample.load (std::memory_order_relaxed);
+    const int64_t end = off >= 0 ? off : self->samplesDone.load (std::memory_order_relaxed);
+    convert::NoteRender note;
+    note.key = key;
+    note.velocity = self->lastVelocity.load (std::memory_order_relaxed);
+    note.heldSeconds = std::clamp (static_cast<double> (end - on) / std::max (self->sampleRate, 1.0), 0.25, 20.0);
+    OfflineAudio audio;
+    if (! convert::renderNote (offlineRunner (self), note, audio))
+        return SYNTHYBOY_CONTENT_ERR_RENDER;
+    const std::vector<uint8_t> wav = convert::audioToWav (audio, 24);
+    std::error_code ec;
+    std::filesystem::create_directories (std::filesystem::path (path).parent_path(), ec);
+    std::ofstream out (path, std::ios::binary);
+    if (wav.empty() || ! out)
+        return SYNTHYBOY_CONTENT_ERR_STORE;
+    out.write (reinterpret_cast<const char*> (wav.data()), static_cast<std::streamsize> (wav.size()));
+    if (! out)
+        return SYNTHYBOY_CONTENT_ERR_STORE;
+    say (summary, capacity, std::to_string (audio.frames()) + " frames at " + std::to_string (static_cast<int> (audio.sampleRate)) + " Hz");
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_wavetable_frame_to_lfo (const clap_plugin_t* p, uint32_t osc, uint32_t lfo, char* summary, uint32_t capacity) noexcept
+{
+    auto* self = toClap (p);
+    if (osc < 1 || osc > 3 || lfo < 1 || lfo > static_cast<uint32_t> (kMaxContentLfoShapes))
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    convert::WarpRenderOptions options;
+    options.osc = static_cast<int> (osc);
+    options.frames = 2;
+    options.rawFrame = true;
+    wtedit::Wavetable one;
+    std::string error;
+    if (! convert::renderOscWarp (offlineRunner (self), &self->values, options, "frame", one, &error) || one.numFrames() == 0)
+    {
+        say (summary, capacity, error);
+        return SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    ContentLfoShape shape;
+    float reached = 0.0f;
+    if (! convert::frameToLfoShape (one.getFrame (0), static_cast<int> (lfo), shape, 0.002f, kMaxLfoShapePoints, &reached))
+        return SYNTHYBOY_CONTENT_ERR_FORMAT;
+    shape.name = "Osc " + std::string (osc == 1 ? "A" : (osc == 2 ? "B" : "C")) + " frame";
+    auto& shapes = self->content.lfoShapes;
+    shapes.erase (std::remove_if (shapes.begin(), shapes.end(), [lfo] (const ContentLfoShape& s) { return s.lfo == static_cast<int> (lfo); }), shapes.end());
+    shapes.push_back (shape);
+    std::sort (shapes.begin(), shapes.end(), [] (const ContentLfoShape& a, const ContentLfoShape& b) { return a.lfo < b.lfo; });
+    setValue (self, "lfo" + std::to_string (lfo) + ".shape", static_cast<float> (kLfoShapeCustom));
+    actionDone (self);
+    say (summary, capacity, std::to_string (shape.points.size()) + " points");
+    return SYNTHYBOY_CONTENT_OK;
+}
+
+int32_t ext_content_lfo_shape_to_wavetable (const clap_plugin_t* p, uint32_t lfo, uint32_t osc, char* summary, uint32_t capacity) noexcept
+{
+    auto* self = toClap (p);
+    if (osc < 1 || osc > 3 || lfo < 1 || lfo > static_cast<uint32_t> (kMaxContentLfoShapes))
+        return SYNTHYBOY_CONTENT_ERR_ARGUMENT;
+    const std::string l = "lfo" + std::to_string (lfo) + ".shape";
+    const int builtIn = static_cast<int> (std::lround (valueOf (self, l)));
+    const auto it = std::find_if (self->content.lfoShapes.begin(), self->content.lfoShapes.end(), [lfo] (const ContentLfoShape& s) { return s.lfo == static_cast<int> (lfo); });
+    ContentLfoShape shape;
+    if (builtIn == kLfoShapeCustom && it != self->content.lfoShapes.end() && it->points.size() >= 2)
+        shape = *it;
+    else if (builtIn >= 0 && builtIn < kNumLfoShapes)
+        shape = convert::builtInLfoShape (static_cast<int> (lfo), builtIn);
+    else
+    {
+        say (summary, capacity, "this LFO has no shape to copy");
+        return SYNTHYBOY_CONTENT_ERR_STATE;
+    }
+    wtedit::Frame frame;
+    convert::lfoShapeToFrame (shape, frame);
+    wtedit::Wavetable table;
+    const std::string o = "osc" + std::to_string (osc) + ".";
+    bool replaced = false;
+    const ContentWavetable* current = nullptr;
+    for (const auto& w : self->content.wavetables)
+        if (w.osc == static_cast<int> (osc))
+            current = &w;
+    std::vector<uint8_t> bytes;
+    if (current != nullptr && static_cast<int> (std::lround (valueOf (self, o + "wavetable"))) == kWavetablePresetTable && self->contentStore.readFile (current->ref, bytes)
+        && wavetableFromWav (bytes, current->ref.name, table) && table.numFrames() > 0)
+    {
+        const float position = std::clamp (valueOf (self, o + "frame") * 0.01f, 0.0f, 1.0f);
+        table.setFrame (static_cast<size_t> (std::lround (position * static_cast<float> (table.numFrames() - 1))), frame);
+        replaced = true;
+    }
+    else
+    {
+        table = wtedit::Wavetable ("LFO " + std::to_string (lfo) + " shape");
+        table.setFrame (0, frame);
+    }
+    if (! installTable (self, static_cast<int> (osc), table))
+        return SYNTHYBOY_CONTENT_ERR_STORE;
+    actionDone (self);
+    say (summary, capacity, replaced ? "the current frame was replaced" : "a new one-frame table");
+    return SYNTHYBOY_CONTENT_OK;
+}
+
 const synthyboy_plugin_content_t s_content = {
     ext_content_count,
     ext_content_get,
     ext_content_import_file,
     ext_content_attach,
     ext_content_remove,
-    ext_content_import_vital
+    ext_content_import_vital,
+    ext_content_switch_to_wavetable,
+    ext_content_render_osc_warp,
+    ext_content_resample,
+    ext_content_render_last_note,
+    ext_content_wavetable_frame_to_lfo,
+    ext_content_lfo_shape_to_wavetable
 };
 
 // render (offline bounce): "Use Ultra quality when rendering" (S p.315, A385)

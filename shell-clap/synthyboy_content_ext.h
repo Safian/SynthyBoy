@@ -36,7 +36,9 @@ enum
     SYNTHYBOY_CONTENT_ERR_ARGUMENT = 1, /* bad kind / index / oscillator / null pointer */
     SYNTHYBOY_CONTENT_ERR_READ = 2,     /* the file cannot be read */
     SYNTHYBOY_CONTENT_ERR_FORMAT = 3,   /* not a file of that kind */
-    SYNTHYBOY_CONTENT_ERR_STORE = 4     /* the library cannot be written / the item does not exist */
+    SYNTHYBOY_CONTENT_ERR_STORE = 4,    /* the library cannot be written / the item does not exist */
+    SYNTHYBOY_CONTENT_ERR_STATE = 5,    /* the oscillator / patch is not in a state the action needs (wrong oscillator type, no sample, silent, no note yet) */
+    SYNTHYBOY_CONTENT_ERR_RENDER = 6    /* the engine cannot render offline */
 };
 
 typedef struct synthyboy_content_item
@@ -68,6 +70,25 @@ typedef struct synthyboy_plugin_content
     /* Imports a Vital `.vital` preset (the sound is loaded and the host re-reads the parameters) or a `.vitalbank` (every preset is written to
        `<user dir>/presets/<bank>/`). `summary` (if not null) receives a one line result. */
     int32_t (*import_vital) (const clap_plugin_t* plugin, const char* path, char* summary, uint32_t summary_capacity);
+
+    /* ---- GROUPD (WP-14 / 15 / 16, docs/ui-design/13-new-keys.md 4.40). Appended: a client that knows the older table does not use them. All run on the main thread
+       and may take long (an offline render at the quality of the high tier; "Use Ultra quality when rendering" of the preferences is honoured). `summary` (may be null) gets a
+       one line result. ---- */
+
+    /* Switch to Wavetable (Sample, Granular, Spectral oscillator `osc` 1..3): the START .. END region of its sample becomes the oscillator's wavetable. import_mode: 0 Constant
+       framesize (Pitch Average), 1 Dynamic pitch zero snap, 2 Dynamic pitch follow, 3 Frequency estimation, 4..7 FFT 256 .. 2048, 8 Single cycle. oscN.type becomes Wavetable. */
+    int32_t (*switch_to_wavetable) (const clap_plugin_t* plugin, uint32_t osc, uint32_t import_mode, char* summary, uint32_t summary_capacity);
+    /* Render OSC Warp of wavetable oscillator `osc` 1..3: 256 frames across WARP 0..100 %, stored and attached (WARP type None, Morph None, Remap off, WT POS = the warp amount). */
+    int32_t (*render_osc_warp) (const clap_plugin_t* plugin, uint32_t osc, char* summary, uint32_t summary_capacity);
+    /* Resample: one bar of the last played note (C3 before any note; tempo of the host transport) becomes the wavetable of `target` 1..3, or of Osc 1 + Osc 2 (target 0: left
+       channel to 1, right channel to 2). import_mode as above. */
+    int32_t (*resample) (const clap_plugin_t* plugin, uint32_t target, uint32_t import_mode, char* summary, uint32_t summary_capacity);
+    /* The last played note (held as long as it was, with its release tail) rendered to a 24-bit stereo WAV file at `path`: the host (Kick) shares it or drags it out. */
+    int32_t (*render_last_note) (const clap_plugin_t* plugin, const char* path, char* summary, uint32_t summary_capacity);
+    /* Wavetable `osc` frame at WT POS -> shape of LFO `lfo` 1..10 (lfoN.shape = Custom), and LFO `lfo` shape -> the table of oscillator `osc` (replaces the current frame of its own
+       table, or becomes a one-frame table). */
+    int32_t (*wavetable_frame_to_lfo) (const clap_plugin_t* plugin, uint32_t osc, uint32_t lfo, char* summary, uint32_t summary_capacity);
+    int32_t (*lfo_shape_to_wavetable) (const clap_plugin_t* plugin, uint32_t lfo, uint32_t osc, char* summary, uint32_t summary_capacity);
 } synthyboy_plugin_content_t;
 
 #ifdef __cplusplus
