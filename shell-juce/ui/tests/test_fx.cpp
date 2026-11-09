@@ -617,6 +617,46 @@ TEST (fx_extras_reverb_dims_what_the_algorithm_does_not_use)
     CHECK (alpha ("reverb.er_size") < 0.9f && alpha ("reverb.diff_b") < 0.9f);
     setParamPlain (f, "reverb.type", 5.0f); // Basin
     CHECK (alpha ("reverb.room") < 0.9f);
+    // FEEDBACK (WP-10, Serum 2 manual p.177): Nitrous and Basin only
+    CHECK (alpha ("reverb.feedback") > 0.99f);
+    for (const float type : { 0.0f, 1.0f, 2.0f, 3.0f })
+    {
+        setParamPlain (f, "reverb.type", type);
+        CHECK (alpha ("reverb.feedback") < 0.9f);
+    }
+    setParamPlain (f, "reverb.type", 4.0f);
+    CHECK (alpha ("reverb.feedback") > 0.99f);
+}
+
+TEST (fx_wp10_delay_left_offset_is_a_more_control_and_moves_the_left_echoes)
+{
+    FxFixture f;
+    auto panel = makeFxPanel (f.ctx, "FxDelayPanel");
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+    bool found = false;
+    for (const auto& c : panel->controls())
+        found = found || c->key() == "delay.offset_left";
+    CHECK (found);
+    auto* view = findChildOfType<FxVisualBase> (*panel);
+    CHECK (view != nullptr);
+    if (view == nullptr)
+        return;
+    view->setBounds (0, 0, 360, 130);
+    ParamHandle offsetLeft (f.ctx, "delay.offset_left");
+    ParamHandle time (f.ctx, "delay.time");
+    time.setPlainComplete (200.0f);
+    offsetLeft.setPlainComplete (1.0f);
+    const auto before = view->createComponentSnapshot (view->getLocalBounds(), true, 1.0f);
+    offsetLeft.setPlainComplete (2.0f);
+    CHECK_NEAR (offsetLeft.plain(), 2.0f, 1e-3);
+    const auto after = view->createComponentSnapshot (view->getLocalBounds(), true, 1.0f);
+    int differing = 0;
+    for (int y = 0; y < before.getHeight(); ++y)
+        for (int x = 0; x < before.getWidth(); ++x)
+            differing += before.getPixelAt (x, y) != after.getPixelAt (x, y) ? 1 : 0;
+    CHECK (differing > 30); // the left echoes sit at twice the time
 }
 
 TEST (fx_extras_phaser_depth2_is_a_more_control_and_draws_a_second_curve)

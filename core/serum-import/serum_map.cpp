@@ -396,7 +396,9 @@ const Rule kDelay[] = {
     { "FX", "kParamBW", "delay.filter_spread", Conv::lin, 12.12, 0, A, kNaN, nullptr, "delay_bandwidth_as_spread" },
     { "FX", "kParamMode", "delay.style", Conv::lin, 1, 1, A, kNaN, nullptr, "delay_mode_nearest_style" },
     { "FX", "kParamHQ", "delay.hq", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamOffsetL", "delay.offset", Conv::lin, 1, 0, A, kNaN, nullptr, "delay_offset_left_only" },
+    // GROUPA1 (WP-10, A351): one scalar per channel (Serum manual p.166: 1.1 = 110 %), the same unit as ours
+    { "FX", "kParamOffsetL", "delay.offset_left", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamOffsetR", "delay.offset", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamLevelOut", "delay.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
 };
 const Rule kDist[] = {

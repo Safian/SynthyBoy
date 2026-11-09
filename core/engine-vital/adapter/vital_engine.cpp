@@ -662,7 +662,8 @@ public:
              | kCapWarpAll | kCapEnv1Toggle // block B21: proven by core/engine-vital/tests/test_warpenv.cpp
              | kCapFxInstances // block B22: proven by core/engine-vital/tests/test_fxinstances.cpp (a slot of every type renders what instance 0 renders)
              | kCapSubPhase | kCapNoiseColour | kCapNoiseSample // block B23 (GROUPA1 WP-04): proven by core/engine-vital/tests/test_noisesample.cpp
-             | kCapMpeRouting; // block B24 (GROUPA1 WP-09): proven by core/engine-vital/tests/test_mpe.cpp
+             | kCapMpeRouting // block B24 (GROUPA1 WP-09): proven by core/engine-vital/tests/test_mpe.cpp
+             | kCapFxDelayOffsetLeft | kCapReverbFeedback; // block B25 (GROUPA1 WP-10): proven by core/engine-vital/tests/test_fxextra.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override

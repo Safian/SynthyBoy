@@ -16,9 +16,11 @@ public:
           feedHandle (context, "delay.feedback"),
           cutoffHandle (context, "delay.filter_cutoff"),
           spreadHandle (context, "delay.filter_spread"),
-          offsetHandle (context, "delay.offset")
+          offsetHandle (context, "delay.offset"),
+          offsetLeftHandle (context, "delay.offset_left")
     {
         offsetHandle.onChange = [this] { repaint(); };
+        offsetLeftHandle.onChange = [this] { repaint(); };
         timeHandle.onChange = [this] { repaint(); };
         time2Handle.onChange = [this] { repaint(); };
         feedHandle.onChange = [this] { repaint(); };
@@ -42,7 +44,7 @@ public:
         g.drawHorizontalLine (juce::roundToInt (midY), timelineArea.getX(), timelineArea.getRight());
 
         const float fb = juce::jlimit (0.0f, 0.95f, std::abs (feedHandle.plain()) / 100.0f);
-        const float t1 = juce::jlimit (20.0f, 2000.0f, timeHandle.plain());
+        const float t1 = juce::jlimit (20.0f, 2000.0f, timeHandle.plain() * offsetLeftHandle.plain()); // (delay.offset_left scales the left time)
         const float t2 = juce::jlimit (20.0f, 2000.0f, time2Handle.plain() * offsetHandle.plain()); // (delay.offset scales the right time)
 
         // Draw decaying pulses
@@ -160,6 +162,7 @@ private:
     ParamHandle cutoffHandle;
     ParamHandle spreadHandle;
     ParamHandle offsetHandle;
+    ParamHandle offsetLeftHandle;
 
     bool draggingPad = false;
     bool showFftOverlay = false;
@@ -245,7 +248,7 @@ public:
         return {
             "delay.time", "delay.time2", "delay.feedback", "delay.mix",
             "delay.on", "delay.style", "delay.sync", "delay.division", "delay.division2",
-            "delay.filter_cutoff", "delay.filter_spread", "delay.hq", "delay.offset", "delay.level", "delay.rack"
+            "delay.filter_cutoff", "delay.filter_spread", "delay.hq", "delay.offset", "delay.offset_left", "delay.level", "delay.rack"
         };
     }
 
@@ -270,6 +273,7 @@ public:
         addMoreControl ("delay.filter_spread");
         addMoreControl ("delay.hq");
         addMoreControl ("delay.offset");
+        addMoreControl ("delay.offset_left"); // block B25 (WP-10): the scalar of the left delay time
         addMoreControl ("delay.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("delay.rack");
         tools = std::make_unique<FxDelayTools> (ctx);

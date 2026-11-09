@@ -109,6 +109,8 @@ constexpr const char* s_more_sub[] = {
     "sub.phase", "sub.phase_contiguous" // B23
 };
 
+constexpr const char* s_more_delay_offset[] = { "delay.offset_left" };   // B25
+constexpr const char* s_more_reverb_feedback[] = { "reverb.feedback" };  // B25
 constexpr const char* s_more_mpe[] = {
     "master.mpe.xyz_macro", "master.mpe.y_modwheel", "master.mpe.bend_to_x", "master.mpe.y_bipolar" // B24
 };
@@ -466,13 +468,13 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 110: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.17)
     { "fx_comp_limit", "Compressor Limit & Crossovers", "FX", { "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high", "compressor.mix", "compressor.attack", "compressor.release", "compressor.on" }, 8, nullptr, 0 },
     // Page 111: Delay Quality & Offset (FX)
-    { "fx_delay_3", "Delay Quality & Offset", "FX", { "delay.hq", "delay.offset", "delay.time", "delay.time2", "delay.sync", "delay.feedback", "delay.mix", "delay.on" }, 8, nullptr, 0 },
+    { "fx_delay_3", "Delay Quality & Offset", "FX", { "delay.hq", "delay.offset", "delay.time", "delay.time2", "delay.sync", "delay.feedback", "delay.mix", "delay.on" }, 8, s_more_delay_offset, 1 },
     // Page 112: Distortion Key Track (FX)
     { "fx_distortion_2", "Distortion Key Track", "FX", { "distortion.type", "distortion.filter_keytrack", "distortion.filter_order", "distortion.filter_cutoff", "distortion.drive", "distortion.mix", "distortion.on", nullptr }, 7, nullptr, 0 },
     // Page 113: Phaser Depth 2 (FX)
     { "fx_phaser_3", "Phaser Depth 2", "FX", { "phaser.depth2", "phaser.depth", "phaser.center", "phaser.rate", "phaser.feedback", "phaser.mix", "phaser.on", nullptr }, 7, nullptr, 0 },
     // Page 114: Reverb Algorithm (FX)
-    { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, nullptr, 0 },
+    { "fx_reverb_3", "Reverb Algorithm", "FX", { "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.mix", "reverb.on" }, 8, s_more_reverb_feedback, 1 },
     // Page 115: Sub Oscillator (Osc), block B18 (13-new-keys.md 4.18)
     { "sub_main", "Sub Oscillator", "Osc", { "sub.on", "sub.waveform", "sub.octave", "sub.tune", "sub.level", "sub.pan", "sub.destination", "sub.mono" }, 8, s_more_sub, 5 },
     // Page 116: Voice & Stereo (Master), block B15 (13-new-keys.md 4.19): same-note / steal modes, poly legato, bend up / down, stereo spread

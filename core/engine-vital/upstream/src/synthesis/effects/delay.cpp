@@ -89,6 +89,9 @@ namespace sbvital {
     mono_float offset = input(kOffset)->at(0)[0];
     if (offset > 0.0f && std::fabs(offset - 1.0f) > 1.0e-6f)
       samples = utils::maskLoad(samples, samples * utils::clamp(offset, 0.25f, 4.0f), constants::kRightMask);
+    const mono_float offset_left = input(kOffsetLeft)->at(0)[0];
+    if (offset_left > 0.0f && std::fabs(offset_left - 1.0f) > 1.0e-6f)
+      samples = utils::maskLoad(samples, samples * utils::clamp(offset_left, 0.25f, 4.0f), constants::kLeftMask);
     if (style == kMidPingPong)
       samples += utils::swapStereo(samples) & constants::kLeftMask;
     if (style == kPingPong) {

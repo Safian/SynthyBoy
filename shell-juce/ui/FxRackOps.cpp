@@ -68,6 +68,38 @@ int duplicate (UiContext& ctx, FxRackItem item)
     return slot;
 }
 
+int copyBus (const UiContext& ctx, int rack, FxRackClip& clip)
+{
+    clip = fxCopyRack (readLiveValues (ctx).plain, rack);
+    return static_cast<int> (clip.entries.size());
+}
+
+int clearBus (UiContext& ctx, int rack)
+{
+    auto live = values (ctx);
+    std::vector<FxWrite> writes;
+    const int removed = fxClearRack (live.plain, rack, writes);
+    if (removed > 0)
+        commit (ctx, live, writes);
+    return removed;
+}
+
+int cutBus (UiContext& ctx, int rack, FxRackClip& clip)
+{
+    copyBus (ctx, rack, clip);
+    return clearBus (ctx, rack);
+}
+
+int pasteBus (UiContext& ctx, const FxRackClip& clip, int rack)
+{
+    auto live = values (ctx);
+    std::vector<FxWrite> writes;
+    const int pasted = fxPasteRack (live.plain, clip, rack, writes);
+    if (pasted > 0)
+        commit (ctx, live, writes);
+    return pasted;
+}
+
 bool move (UiContext& ctx, FxRackItem item, int rack, int index)
 {
     auto live = values (ctx);

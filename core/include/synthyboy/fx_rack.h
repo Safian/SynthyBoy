@@ -85,6 +85,28 @@ bool fxInitSlot (const float* plain, int slot, std::vector<FxWrite>& writes);
     the other slot): nothing changes in what is played. */
 void fxNormalise (const float* plain, std::vector<FxWrite>& writes);
 
+/** The rack clipboard (GROUPA1, WP-10; Serum 2 manual p.158 "Cut / Copy / Paste / Clear FX Bus"): the modules of a bus as the parameters of pool slots,
+    in processing order. The modulation assignments do not travel with it (a copy "without modulations"). */
+struct FxRackClip
+{
+    struct Entry
+    {
+        int type = kFxTypeNone;
+        bool on = true;
+        float p[kFxInstanceParams] = {};   // the normalised parameters of the slot of this type
+    };
+    std::vector<Entry> entries;
+    bool empty() const noexcept { return entries.empty(); }
+};
+
+/** Copies the modules of a bus (rack 0 .. 2): the slots of the pool, and the modules of instance 0 that are on; a splitter has no pool type and is left
+    out. Nothing is written. */
+FxRackClip fxCopyRack (const float* plain, int rack);
+/** Clears a bus: its slots are removed, its modules of instance 0 are bypassed (removing one means bypassing it, A19). Returns the number of modules that went. */
+int fxClearRack (const float* plain, int rack, std::vector<FxWrite>& writes);
+/** Pastes the clipboard at the end of a bus as new slots, as many as the pool has room for (the rest is left out). Returns the number of modules pasted. */
+int fxPasteRack (const float* plain, const FxRackClip& clip, int rack, std::vector<FxWrite>& writes);
+
 /** Applies writes to a plain value array (the tests, and the UI for its model). */
 void fxApply (float* plain, const std::vector<FxWrite>& writes) noexcept;
 } // namespace synthyboy

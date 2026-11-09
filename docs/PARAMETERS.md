@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2061 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2063 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -37,7 +37,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Random LFO 4 | 8 |
 | Macros | 8 |
 | Mod Matrix | 704 |
-| FX | 664 |
+| FX | 666 |
 | LFO 9 | 17 |
 | LFO 10 | 17 |
 | Mixer | 8 |
@@ -805,7 +805,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..39 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..906 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..908 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -1486,6 +1486,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `fxi16.p22` | FX Slot 16 P22 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
 | `fxi16.p23` | FX Slot 16 P23 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
 | `fxi16.p24` | FX Slot 16 P24 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `delay.offset_left` | Delay Offset Left | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod |  |
+| `reverb.feedback` | Reverb Feedback | 0 .. 100 % | 50 % | FX / Reverb | mod |  |
 
 ### LFO 9
 
@@ -2573,6 +2575,8 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 904 | `sub.phase` | Sub Phase |
 | 905 | `noise.stereo` | Noise Stereo |
 | 906 | `noise.filter` | Noise Filter |
+| 907 | `delay.offset_left` | Delay Offset Left |
+| 908 | `reverb.feedback` | Reverb Feedback |
 
 ## Built-in wavetables and LFO shapes
 

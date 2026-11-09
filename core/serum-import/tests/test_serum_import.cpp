@@ -374,6 +374,67 @@ TEST (serum_mpe_config_zero_is_no_mapping_and_other_values_are_reported)
     }
 }
 
+// GROUPA1 (WP-10, A351 / A352): the delay offset of each channel, and the FEEDBACK of Space (Nitrous) and Abyss (Basin) as reverb.feedback
+TEST (serum_delay_offsets_and_reverb_feedback_have_keys)
+{
+    const auto fx = [] (const std::string& name, const Bytes& pp, int type) { return map ({ { name, map ({ { "plainParams", pp } }) }, { "type", num (type) } }); };
+    const auto number = [] (int type, const char* key)
+    {
+        const FxTypeDescriptor& d = fxTypeDescriptor (type);
+        for (int q = 0; q < d.count; ++q)
+            if (d.source[q] == findParamIndex (hashKey (key))) return q;
+        return -1;
+    };
+    const auto slotOf = [] (const SerumImportResult& r)
+    {
+        const FxRacks racks = fxRacks (r.values.plain);
+        for (const FxRackItem& it : racks.rack[0]) if (it.pool) return it.index;
+        return -1;
+    };
+    {
+        Preset p;
+        p.set ("FXRack0", map ({ { "FX", arr ({ fx ("FXDelay", plain ({ { "kParamWet", 30 }, { "kParamOffsetL", 1.5 }, { "kParamOffsetR", 0.5 } }), 3) }) },
+                                 { "displayName", text ("") }, { "plainParams", dflt() } }));
+        const SerumImportResult r = run (p.file());
+        CHECK_EQ (r.report.unaccounted, 0);
+        const int slot = slotOf (r);
+        CHECK (slot >= 0);
+        if (slot >= 0)
+        {
+            const int left = number (kFxTypeDelay, "delay.offset_left"), right = number (kFxTypeDelay, "delay.offset");
+            CHECK (left >= 0 && right >= 0);
+            CHECK_NEAR (fxInstancePlain (kFxTypeDelay, left, r.values.plain[fxInstanceKeys (slot).p[left]]), 1.5, 1e-3);
+            CHECK_NEAR (fxInstancePlain (kFxTypeDelay, right, r.values.plain[fxInstanceKeys (slot).p[right]]), 0.5, 1e-3);
+        }
+        CHECK (entryWith (r, "delay_offset_left_only") < 0);
+    }
+    for (const char* kind : { "kSpace", "kAbyss", "kHall" })
+    {
+        Preset p;
+        p.set ("FXRack0", map ({ { "FX", arr ({ fx ("FXReverb", map (withText ({ { "kParamWet", 40 }, { "kParamFeedback", 70 } }, { { "kParamType", kind } })), 7) }) },
+                                 { "displayName", text ("") }, { "plainParams", dflt() } }));
+        const SerumImportResult r = run (p.file());
+        CHECK_EQ (r.report.unaccounted, 0);
+        const int slot = slotOf (r);
+        CHECK (slot >= 0);
+        if (slot < 0) continue;
+        const int feedback = number (kFxTypeReverb, "reverb.feedback"), decay = number (kFxTypeReverb, "reverb.decay");
+        CHECK (feedback >= 0 && decay >= 0);
+        const double fb = fxInstancePlain (kFxTypeReverb, feedback, r.values.plain[fxInstanceKeys (slot).p[feedback]]);
+        const double dc = fxInstancePlain (kFxTypeReverb, decay, r.values.plain[fxInstanceKeys (slot).p[decay]]);
+        if (std::string (kind) == "kHall")
+        {
+            CHECK_NEAR (fb, 50.0, 1e-3);          // the default: Hall has no FEEDBACK, its decay is the parameter
+            CHECK (std::fabs (dc - 1500.0) > 1.0);
+        }
+        else
+        {
+            CHECK_NEAR (fb, 70.0, 1e-3);          // Nitrous / Basin: the percent
+            CHECK_NEAR (dc, 1500.0, 1.0);         // the decay time stays its default
+        }
+    }
+}
+
 TEST (serum_effect_racks_become_pool_slots_in_order)
 {
     Preset p;

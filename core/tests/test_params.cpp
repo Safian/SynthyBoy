@@ -200,9 +200,9 @@ TEST (modulation_destinations_are_listed)
         CHECK (std::strcmp (choiceName (dest, choice), p.name) == 0);
         CHECK (labels.insert (p.name).second);
     }
-    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3)); // + 3 of B23 // 384: the 16 x 24 parameters fxiNN.pKK of block B22
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (519 + 384 + 3));
-    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (519 + 384 + 3));
+    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3 + 2)); // + 3 of B23, 2 of B25 // 384: the 16 x 24 parameters fxiNN.pKK of block B22
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (519 + 384 + 3 + 2));
+    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (519 + 384 + 3 + 2));
     CHECK (modulatable > 200);
     CHECK_EQ (modDestinationParamIndex (0), -1);
     CHECK_EQ (modDestinationParamIndex (modDestinationCount() + 1), -1);

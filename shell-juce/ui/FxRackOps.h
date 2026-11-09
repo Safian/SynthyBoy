@@ -27,6 +27,12 @@ bool removeSlot (UiContext& ctx, int slot);
     of the pool (the splitters). */
 int duplicate (UiContext& ctx, FxRackItem item);
 bool move (UiContext& ctx, FxRackItem item, int rack, int index);
+/** Cut / copy / paste / clear a bus (Serum 2 manual p.158). Copy reads the modules of `rack` (0 .. 2) into `clip`; clear removes them (slots) or bypasses them
+    (instance 0), returning how many went; paste adds the clipboard at the end of `rack`, returning how many fitted into the pool. */
+int copyBus (const UiContext& ctx, int rack, FxRackClip& clip);
+int clearBus (UiContext& ctx, int rack);
+int cutBus (UiContext& ctx, int rack, FxRackClip& clip);
+int pasteBus (UiContext& ctx, const FxRackClip& clip, int rack);
 /** Every module off (the powers are kept in `savedMask`: bit k = module k of instance 0, bit 16 + s = slot s); with nothing on, the saved ones come back
     (all of instance 0 if nothing was saved). */
 void bypassAll (UiContext& ctx, uint32_t& savedMask);

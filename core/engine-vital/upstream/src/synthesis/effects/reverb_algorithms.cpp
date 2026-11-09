@@ -209,7 +209,10 @@ namespace sbvital {
     const float rate = static_cast<float>(sample_rate_);
     const Settings& s = settings_;
     const float size_scale = std::exp2((std::min(std::max(s.size, 0.0f), 1.0f) - 0.5f) * 3.0f);
-    const float decay = std::max(s.decay_seconds, 0.05f);
+    // FEEDBACK (Serum 2 manual p.177): the loop gain of the two types that have it (Nitrous, Basin): the T60 of the decay time is scaled by 2^((f - 0.5) * 4),
+    // a quarter of it at 0 and four times at 1; 0.5 is the decay time itself (exp2 (0) is exactly 1: the sound of every earlier patch)
+    const bool has_feedback = s.type == kNitrous || s.type == kBasin;
+    const float decay = std::max(s.decay_seconds, 0.05f) * (has_feedback ? std::exp2((std::min(std::max(s.feedback, 0.0f), 1.0f) - 0.5f) * 4.0f) : 1.0f);
     const float a = std::min(std::max(s.diff_a, 0.0f), 1.0f);
     const float b = std::min(std::max(s.diff_b, 0.0f), 1.0f);
     er_scale_ = std::exp2((std::min(std::max(s.er_size, 0.0f), 1.0f) - 0.5f) * 3.0f);

@@ -33,7 +33,8 @@ public:
           duplicateButton ("Duplicate"),
           removeButton ("Remove"),
           addButton ("+ Add"),
-          presetsButton ("Presets")
+          presetsButton ("Presets"),
+          busButton ("Bus ...")
     {
         initRackPresets();
         // everything that decides the racks: the order, the power and the rack of the 16 modules, type / power / rack / order of the 16 slots
@@ -66,6 +67,7 @@ public:
         duplicateButton.onClick = [this] { if (hasSelection) duplicate (selection); };
         removeButton.onClick = [this] { if (hasSelection && selection.pool) removeSlot (selection.index); };
         addButton.onClick = [this] { showTypePicker (hasSelection ? juce::jmin (model.rackOf (selection), 2) : 0); };
+        busButton.onClick = [this] { showBusMenu (hasSelection ? juce::jmin (model.rackOf (selection), 2) : 0); };
         press.onLongPress = [this]
         {
             if (dragItemValid)
@@ -75,7 +77,7 @@ public:
             }
         };
 
-        for (auto* b : { &moveLeftButton, &moveRightButton, &powerButton, &bypassAllButton, &duplicateButton, &removeButton, &addButton, &presetsButton })
+        for (auto* b : { &moveLeftButton, &moveRightButton, &powerButton, &bypassAllButton, &duplicateButton, &removeButton, &addButton, &presetsButton, &busButton })
             addAndMakeVisible (*b);
         refresh();
     }
@@ -183,6 +185,62 @@ public:
         refresh();
         return done;
     }
+    // ---- the bus operations (GROUPA1, WP-10; Serum 2 manual p.158): the clipboard holds the modules of the last cut / copied bus ----------------------------
+    int copyBus (int rack)
+    {
+        return fx_ops::copyBus (ctx, rack, busClip);
+    }
+    int cutBus (int rack)
+    {
+        const int n = fx_ops::cutBus (ctx, rack, busClip);
+        refresh();
+        return n;
+    }
+    int pasteBus (int rack)
+    {
+        const int n = fx_ops::pasteBus (ctx, busClip, rack);
+        refresh();
+        return n;
+    }
+    int clearBus (int rack)
+    {
+        const int n = fx_ops::clearBus (ctx, rack);
+        refresh();
+        return n;
+    }
+    const FxRackClip& busClipboard() const noexcept { return busClip; }
+    juce::TextButton& busMenuButton() noexcept { return busButton; }
+    /** The bus menu: for each bus cut / copy / paste / clear; the buttons of the strip open it for the bus of the selected module (Main without one). */
+    void showBusMenu (int rack)
+    {
+        juce::PopupMenu menu;
+        for (int r = 0; r < kNumPoolRacks; ++r)
+        {
+            menu.addSectionHeader (kFxRackNames[r]);
+            int modules = 0;
+            for (const FxRackItem& item : model.racks.rack[static_cast<size_t> (r)])
+                modules += (item.pool || fxItemOn (model.values.plain, item)) && fxItemType (model.values.plain, item) != kFxTypeNone ? 1 : 0;
+            menu.addItem (100 + r * 4 + 0, juce::String ("Cut ") + kFxRackNames[r] + " FX Bus", modules > 0);
+            menu.addItem (100 + r * 4 + 1, juce::String ("Copy ") + kFxRackNames[r] + " FX Bus", modules > 0);
+            menu.addItem (100 + r * 4 + 2, juce::String ("Paste into ") + kFxRackNames[r] + " FX Bus", ! busClip.empty() && fxFirstFreeSlot (model.values.plain) >= 0);
+            menu.addItem (100 + r * 4 + 3, juce::String ("Clear ") + kFxRackNames[r] + " FX Bus", modules > 0);
+        }
+        (void) rack;
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (busButton), [this] (int chosen)
+        {
+            if (chosen < 100)
+                return;
+            const int r = (chosen - 100) / 4;
+            switch ((chosen - 100) % 4)
+            {
+                case 0: cutBus (r); break;
+                case 1: copyBus (r); break;
+                case 2: pasteBus (r); break;
+                default: clearBus (r); break;
+            }
+        });
+    }
+
     bool moveItem (FxRackItem item, int rack, int index)
     {
         const bool done = fx_ops::move (ctx, item, rack, index);
@@ -373,7 +431,7 @@ public:
             }
         };
         split (row1, { &moveLeftButton, &moveRightButton, &powerButton, &bypassAllButton });
-        split (row2, { &duplicateButton, &removeButton, &addButton, &presetsButton });
+        split (row2, { &duplicateButton, &removeButton, &addButton, &presetsButton, &busButton });
     }
 
     void paint (juce::Graphics& g) override
@@ -637,7 +695,8 @@ private:
     Layout layout;
     int lastHeight = 0;
 
-    juce::TextButton moveLeftButton, moveRightButton, powerButton, bypassAllButton, duplicateButton, removeButton, addButton, presetsButton;
+    juce::TextButton moveLeftButton, moveRightButton, powerButton, bypassAllButton, duplicateButton, removeButton, addButton, presetsButton, busButton;
+    FxRackClip busClip;
     std::shared_ptr<LibraryMenu> rackLibrary;
     LongPressDetector press;
     bool reorderArmed = false, isDragging = false;

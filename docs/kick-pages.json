@@ -2831,6 +2831,9 @@
         {"key": "delay.feedback", "shortLabel": "Feedback", "widget": "bipolar_knob"},
         {"key": "delay.mix", "shortLabel": "Mix", "widget": "knob"},
         {"key": "delay.on", "shortLabel": "On", "widget": "toggle"}
+      ],
+      "moreKeys": [
+        "delay.offset_left"
       ]
     },
     {
@@ -2876,6 +2879,9 @@
         {"key": "reverb.diff_b", "shortLabel": "Diffusion ", "widget": "knob"},
         {"key": "reverb.mix", "shortLabel": "Mix", "widget": "knob"},
         {"key": "reverb.on", "shortLabel": "On", "widget": "toggle"}
+      ],
+      "moreKeys": [
+        "reverb.feedback"
       ]
     },
     {

@@ -304,13 +304,19 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
                 }
                 if (! isNumber (v)) { entry (ItemKind::dropped, Reason::typeMismatch, area, p, valueText (v), rule.key, "", "number_expected"); consume (v); handled = true; continue; }
                 bool cl = false;
-                const double ours = put (rule.key, convert (rule, num (v)), &cl);
-                ItemKind kind = rule.fid == Fid::approx ? ItemKind::approximated : ItemKind::imported;
+                // GROUPA1 (WP-10, A352): the FEEDBACK of the two reverbs that have one (Space = Nitrous, Abyss = Basin) is reverb.feedback (a percent); the other
+                // types carry their decay in the same parameter (reverb.decay, a log scale)
+                const int reverbTypeNode = find ("kParamType");
+                const bool networkFeedback = type == kFxTypeReverb && rule.conv == Conv::logPercent && std::strcmp (rule.key, "reverb.decay") == 0 && isText (reverbTypeNode)
+                                             && (str (reverbTypeNode) == "kSpace" || str (reverbTypeNode) == "kAbyss");
+                const char* targetKey = networkFeedback ? "reverb.feedback" : rule.key;
+                const double ours = put (targetKey, networkFeedback ? num (v) : convert (rule, num (v)), &cl);
+                ItemKind kind = rule.fid == Fid::approx || networkFeedback ? ItemKind::approximated : ItemKind::imported;
                 Reason reason = Reason::exact;
-                std::string detail = rule.note;
+                std::string detail = networkFeedback ? std::string ("reverb_feedback_of_nitrous_and_basin") : rule.note;
                 if (cl) { kind = ItemKind::approximated; reason = Reason::clamped; if (detail.empty()) detail = "clamped_to_range"; }
                 if (limitDetent) { put ("compressor.limit", 1, nullptr); kind = ItemKind::approximated; detail = "compressor_ratio_max_is_limit_mode"; }
-                entry (kind, reason, area, p, valueText (v), rule.key, fmt (ours), detail);
+                entry (kind, reason, area, p, valueText (v), targetKey, fmt (ours), detail);
                 consume (v);
                 handled = true;
             }

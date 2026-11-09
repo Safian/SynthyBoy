@@ -33,6 +33,7 @@ namespace sbvital {
         float decay_seconds = 1.5f;   // T60
         float diff_a = 0.7f;          // 0 .. 1: input diffusion
         float diff_b = 0.6f;          // 0 .. 1: diffusion inside the loops
+        float feedback = 0.5f;        // 0 .. 1: FEEDBACK of Nitrous and Basin, the T60 times 2^((feedback - 0.5) * 4) (GROUPA1, WP-10); 0.5 changes nothing
         float er_size = 0.5f;         // 0 .. 1
         float mod_depth = 0.2f;       // 0 .. 1
         float mod_hz = 0.25f;

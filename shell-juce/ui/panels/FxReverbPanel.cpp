@@ -206,7 +206,7 @@ public:
             "reverb.on", "reverb.pre_low_cut", "reverb.pre_high_cut",
             "reverb.low_shelf_cutoff", "reverb.low_shelf_gain", "reverb.high_shelf_cutoff", "reverb.high_shelf_gain",
             "reverb.chorus_amount", "reverb.chorus_rate", "reverb.force_enable",
-            "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.level", "reverb.rack"
+            "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b", "reverb.feedback", "reverb.level", "reverb.rack"
         };
     }
 
@@ -238,6 +238,7 @@ public:
         addMoreControl ("reverb.er_size");
         addMoreControl ("reverb.diff_a");
         addMoreControl ("reverb.diff_b");
+        addMoreControl ("reverb.feedback"); // block B25 (WP-10): FEEDBACK of Nitrous and Basin
         addMoreControl ("reverb.level"); // block B16 (G72): the output trim of the module
         addMoreControl ("reverb.rack");
 
@@ -264,6 +265,8 @@ public:
                 applies = type == 3 || type == 4;
             else if (key == "reverb.room")
                 applies = type == 4;
+            else if (key == "reverb.feedback")
+                applies = type == 4 || type == 5; // Nitrous, Basin
             c->setAlpha (c->isAvailable() && applies ? 1.0f : 0.4f);
         }
     }

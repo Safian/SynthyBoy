@@ -464,6 +464,74 @@ TEST (fxui_copy_paste_swap_and_init_work_on_the_slots_of_the_pool)
 
 // ---- modulation by touch and automation ----------------------------------------------------------------------------------------------------------
 
+// GROUPA1 (WP-10): cut / copy / paste / clear a bus (Serum 2 manual p.158) through the rack view, on phone and tablet
+TEST (fxui_wp10_bus_operations_cut_copy_paste_and_clear_a_whole_bus)
+{
+    for (const auto& size : { std::pair<int, int> { 390, 844 }, std::pair<int, int> { 1024, 768 } })
+    {
+        Rig rig (size.first, size.second);
+        auto* view = rig.view();
+        CHECK (view != nullptr);
+        if (view == nullptr)
+            continue;
+        view->setBounds (0, 0, size.first, view->heightForWidth (size.first));
+        const int minTouch = rig.editor->theme().touch();
+        CHECK (view->busMenuButton().getHeight() >= minTouch && view->busMenuButton().getWidth() >= minTouch);
+
+        // Main gets three modules, Bus 1 one
+        const int chorus = view->addModule (kFxTypeChorus, 0);
+        const int reverb = view->addModule (kFxTypeReverb, 0);
+        const int dist = view->addModule (kFxTypeDistortion, 0);
+        const int delay = view->addModule (kFxTypeDelay, 1);
+        CHECK (chorus >= 0 && reverb >= 0 && dist >= 0 && delay >= 0);
+        rig.setParam (std::string ("fxi") + (reverb + 1 < 10 ? "0" : "") + std::to_string (reverb + 1) + ".p03", 0.77f);
+        view->refresh();
+        const auto count = [&] (int rack)
+        {
+            int n = 0;
+            for (const auto& item : view->racks().rack[static_cast<size_t> (rack)])
+                n += item.pool ? 1 : 0;
+            return n;
+        };
+        CHECK_EQ (count (0), 3);
+
+        // copy Main, paste into Bus 2: a duplicate of the three modules with their settings
+        CHECK_EQ (view->copyBus (0), 3);
+        CHECK_EQ (view->busClipboard().entries.size(), size_t { 3 });
+        CHECK_EQ (view->pasteBus (2), 3);
+        CHECK_EQ (count (0), 3);
+        CHECK_EQ (count (2), 3);
+        std::vector<FxRackItem> bus2;
+        for (const auto& item : view->racks().rack[2])
+            if (item.pool)
+                bus2.push_back (item);
+        CHECK_EQ (bus2.size(), size_t { 3 });
+        CHECK_EQ (fxItemType (fx_ops::values (rig.ctx()).plain, bus2[1]), kFxTypeReverb);
+        CHECK_NEAR (fx_ops::values (rig.ctx()).plain[fxInstanceKeys (bus2[1].index).p[2]], 0.77f, 1.0e-4f);
+
+        // cut Bus 2, paste into Bus 1 (move a whole bus): Bus 2 is empty, Bus 1 has its own module and the three
+        CHECK_EQ (view->cutBus (2), 3);
+        CHECK_EQ (count (2), 0);
+        CHECK_EQ (view->pasteBus (1), 3);
+        CHECK_EQ (count (1), 4);
+        CHECK_EQ (count (0), 3);
+
+        // clear Main
+        CHECK_EQ (view->clearBus (0), 3);
+        CHECK_EQ (count (0), 0);
+        CHECK_EQ (count (1), 4);
+        CHECK_EQ (view->clearBus (0), 0);
+
+        // the menu opens for the bus of the selection and the buttons stay inside the strip
+        view->busMenuButton().onClick();
+        CHECK (view->getLocalBounds().contains (view->busMenuButton().getBounds()));
+        for (auto* b : { &view->rackPresetsButton(), &view->busMenuButton() })
+            CHECK (b->getWidth() > 0);
+        CHECK (! view->rackPresetsButton().getBounds().intersects (view->busMenuButton().getBounds()));
+        rig.shot (size.first < 1000 ? "fxrack-bus-phone" : "fxrack-bus-tablet");
+    }
+}
+
 TEST (fxui_assign_by_touch_modulates_a_parameter_of_a_slot_and_refuses_one_that_is_not_modulatable)
 {
     Rig rig;

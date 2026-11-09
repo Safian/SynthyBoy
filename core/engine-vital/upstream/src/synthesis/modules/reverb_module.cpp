@@ -50,6 +50,7 @@ namespace sbvital {
     Value* reverb_er_size = createBaseControl("reverb_er_size");
     Output* reverb_diff_a = createMonoModControl("reverb_diff_a");
     Output* reverb_diff_b = createMonoModControl("reverb_diff_b");
+    Output* reverb_feedback = createMonoModControl("reverb_feedback");   // GROUPA1 (WP-10)
 
     reverb_->plug(reverb_decay_time, Reverb::kDecayTime);
     reverb_->plug(reverb_pre_low_cutoff, Reverb::kPreLowCutoff);
@@ -69,6 +70,7 @@ namespace sbvital {
     reverb_->plug(reverb_er_size, Reverb::kErSize);
     reverb_->plug(reverb_diff_a, Reverb::kDiffA);
     reverb_->plug(reverb_diff_b, Reverb::kDiffB);
+    reverb_->plug(reverb_feedback, Reverb::kFeedback);
 
     SynthModule::init();
   }

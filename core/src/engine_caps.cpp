@@ -142,6 +142,11 @@ EngineCapsMask classify (const char* key) noexcept
 
     if (startsWith (key, "fx.order."))
         return kCapFxRacks;
+    // block B25 (GROUPA1, WP-10), before the B17 prefixes
+    if (std::strcmp (key, "delay.offset_left") == 0)
+        return kCapFxDelayOffsetLeft;
+    if (std::strcmp (key, "reverb.feedback") == 0)
+        return kCapReverbFeedback;
     // block B17 (before the module prefixes of the version 2 effects)
     if (std::strcmp (key, "compressor.limit") == 0 || std::strcmp (key, "compressor.limit_latency_comp") == 0
         || endsWith (key, "compressor.crossover_low") || endsWith (key, "compressor.crossover_high"))
@@ -333,6 +338,8 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapNoiseColour:      return "noise_colour";
         case kCapNoiseSample:      return "noise_sample";
         case kCapMpeRouting:       return "mpe_routing";
+        case kCapFxDelayOffsetLeft: return "fx_delay_offset_left";
+        case kCapReverbFeedback:   return "reverb_feedback";
         case kCapNone:             break;
     }
     return "";

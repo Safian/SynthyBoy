@@ -758,10 +758,12 @@ namespace sbvital {
       { "compressor_limit", 0, 1, 0, ValueDetails::kIndexed }, { "compressor_limit_latency_comp", 0, 1, 1, ValueDetails::kIndexed },
       { "compressor_crossover_low", 20, 1000, 120, ValueDetails::kLinear }, { "compressor_crossover_high", 200, 16000, 2500, ValueDetails::kLinear },
       { "delay_hq", 0, 1, 0, ValueDetails::kIndexed }, { "delay_offset", 0.25f, 4, 1, ValueDetails::kLinear },
+      { "delay_offset_left", 0.25f, 4, 1, ValueDetails::kLinear },                                                      // GROUPA1 (B25, WP-10)
       { "distortion_filter_keytrack", -1, 1, 0, ValueDetails::kLinear }, { "phaser_depth2", -48, 48, 0, ValueDetails::kLinear },
       { "reverb_type", 0, 5, 0, ValueDetails::kIndexed }, { "reverb_room", 0, 4, 2, ValueDetails::kIndexed },
       { "reverb_width", 0, 2, 1, ValueDetails::kLinear }, { "reverb_er_size", 0, 1, 0.5f, ValueDetails::kLinear },
       { "reverb_diff_a", 0, 1, 0.7f, ValueDetails::kLinear }, { "reverb_diff_b", 0, 1, 0.6f, ValueDetails::kLinear },
+      { "reverb_feedback", 0, 1, 0.5f, ValueDetails::kLinear },                                                          // GROUPA1 (B25, WP-10)
     };
     for (const ExtraParameter& parameter : kExtraParameters)
       add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.scale);

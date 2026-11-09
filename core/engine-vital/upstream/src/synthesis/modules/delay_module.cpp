@@ -46,6 +46,7 @@ namespace sbvital {
     Value* style = createBaseControl("delay_style");
     Value* high_quality = createBaseControl("delay_hq");
     Output* offset = createMonoModControl("delay_offset");
+    Output* offset_left = createMonoModControl("delay_offset_left");
 
     delay_->plug(frequency, StereoDelay::kFrequency);
     delay_->plug(frequency_aux, StereoDelay::kFrequencyAux);
@@ -54,6 +55,7 @@ namespace sbvital {
     delay_->plug(style, StereoDelay::kStyle);
     delay_->plug(high_quality, StereoDelay::kHighQuality);
     delay_->plug(offset, StereoDelay::kOffset);
+    delay_->plug(offset_left, StereoDelay::kOffsetLeft);
     delay_->plug(filter_cutoff, StereoDelay::kFilterCutoff);
     delay_->plug(filter_spread, StereoDelay::kFilterSpread);
 

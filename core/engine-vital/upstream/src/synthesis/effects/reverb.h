@@ -67,6 +67,7 @@ namespace sbvital {
         kErSize,
         kDiffA,
         kDiffB,
+        kFeedback,      // GROUPA1 (WP-10): FEEDBACK of Nitrous and Basin (0 .. 1, 0.5 = the decay time as it is)
         kNumInputs
       };
 

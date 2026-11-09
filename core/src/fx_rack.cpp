@@ -328,6 +328,82 @@ void fxNormalise (const float* plain, std::vector<FxWrite>& writes)
         placeList (plain, racks.rack[static_cast<size_t> (r)], writes);
 }
 
+FxRackClip fxCopyRack (const float* plain, int rack)
+{
+    FxRackClip clip;
+    if (rack < 0 || rack >= kNumPoolRacks)
+        return clip;
+    const FxRacks racks = fxRacks (plain);
+    for (const FxRackItem& item : racks.rack[static_cast<size_t> (rack)])
+    {
+        const int type = fxItemType (plain, item);
+        if (type <= kFxTypeNone || type >= kNumFxInstanceTypes)
+            continue; // an empty slot, or a splitter
+        if (! item.pool && ! fxItemOn (plain, item))
+            continue; // a bypassed module of instance 0 is not in the rack
+        FxRackClip::Entry e;
+        e.type = type;
+        e.on = fxItemOn (plain, item);
+        for (int p = 0; p < kFxInstanceParams; ++p)
+        {
+            if (item.pool)
+                e.p[p] = plain[fxInstanceKeys (item.index).p[p]];
+            else if (const ParamInfo* src = fxInstanceSource (type, p))
+                e.p[p] = toNormalised (*src, plain[fxTypeDescriptor (type).source[p]]);
+        }
+        clip.entries.push_back (e);
+    }
+    return clip;
+}
+
+int fxClearRack (const float* plain, int rack, std::vector<FxWrite>& writes)
+{
+    if (rack < 0 || rack >= kNumPoolRacks)
+        return 0;
+    int removed = 0;
+    const FxRacks racks = fxRacks (plain);
+    for (const FxRackItem& item : racks.rack[static_cast<size_t> (rack)])
+    {
+        if (item.pool)
+            removed += fxRemoveSlot (plain, item.index, writes) ? 1 : 0;
+        else if (fxItemType (plain, item) != kFxTypeNone && fxItemOn (plain, item)) // (a splitter stays)
+        {
+            fxSetOn (plain, item, false, writes);
+            ++removed;
+        }
+    }
+    return removed;
+}
+
+int fxPasteRack (const float* plain, const FxRackClip& clip, int rack, std::vector<FxWrite>& writes)
+{
+    if (rack < 0 || rack >= kNumPoolRacks)
+        return 0;
+    // every module is added to the state the earlier ones left: the next free slot, the end of the rack
+    std::vector<float> state (plain, plain + paramCount());
+    int pasted = 0;
+    for (const FxRackClip::Entry& e : clip.entries)
+    {
+        std::vector<FxWrite> step;
+        const int slot = fxAddModule (state.data(), e.type, rack, step);
+        if (slot < 0)
+            break; // the pool is full
+        fxApply (state.data(), step);
+        const FxInstanceKeys& k = fxInstanceKeys (slot);
+        step.clear();
+        push (step, state.data(), k.on, e.on ? 1.0f : 0.0f);
+        for (int p = 0; p < kFxInstanceParams; ++p)
+            push (step, state.data(), k.p[p], e.p[p]);
+        fxApply (state.data(), step);
+        ++pasted;
+    }
+    // the writes that make `plain` into `state`
+    for (size_t i = 0; i < state.size(); ++i)
+        if (state[i] != plain[i])
+            writes.push_back ({ static_cast<int> (i), state[i] });
+    return pasted;
+}
+
 void fxApply (float* plain, const std::vector<FxWrite>& writes) noexcept
 {
     for (const FxWrite& w : writes)

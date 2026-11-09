@@ -383,3 +383,137 @@ TEST (fxrack_set_on_writes_the_power_of_instance_zero_and_of_a_slot)
     fxSetOn (v.plain, { true, 0 }, false, w);
     CHECK (w.empty()); // no write for no change
 }
+
+// ---- GROUPA1 (WP-10): cut / copy / paste / clear a bus (Serum 2 manual p.158) ----------------------------------------------------------------------
+
+namespace
+{
+/** Main: a chorus slot (power off), a reverb slot with a long decay and a distortion slot; Bus 1: one delay slot; instance 0 has the default modules on. */
+ParamValues rackWithModules()
+{
+    ParamValues v = ParamValues::defaults();
+    std::vector<FxWrite> w;
+    const int chorus = fxAddModule (v.plain, kFxTypeChorus, 0, w);
+    applyTo (v, w);
+    w.clear();
+    const int reverb = fxAddModule (v.plain, kFxTypeReverb, 0, w);
+    applyTo (v, w);
+    w.clear();
+    fxSetOn (v.plain, { true, chorus }, false, w);
+    applyTo (v, w);
+    w.clear();
+    v.plain[fxInstanceKeys (reverb).p[2]] = 0.77f;
+    const int dist = fxAddModule (v.plain, kFxTypeDistortion, 0, w);
+    applyTo (v, w);
+    w.clear();
+    CHECK (chorus >= 0 && reverb >= 0 && dist >= 0);
+    const int delay = fxAddModule (v.plain, kFxTypeDelay, 1, w);
+    applyTo (v, w);
+    CHECK (delay >= 0);
+    return v;
+}
+
+int poolModules (const ParamValues& v, int rack)
+{
+    int n = 0;
+    for (const FxRackItem& item : listOf (v, rack))
+        n += item.pool ? 1 : 0;
+    return n;
+}
+} // namespace
+
+TEST (fxrack_copy_paste_moves_the_modules_of_a_bus_to_another_bus_with_their_settings)
+{
+    ParamValues v = rackWithModules();
+    const FxRackClip clip = fxCopyRack (v.plain, 0);
+    // the slots of Main in order, and the modules of instance 0 that are on in Main (none by default: all sixteen are off)
+    CHECK_EQ (clip.entries.size(), size_t { 3 });
+    CHECK_EQ (clip.entries[0].type, kFxTypeChorus);
+    CHECK (! clip.entries[0].on);
+    CHECK_EQ (clip.entries[1].type, kFxTypeReverb);
+    CHECK_NEAR (clip.entries[1].p[2], 0.77f, 1.0e-6f);
+    CHECK_EQ (clip.entries[2].type, kFxTypeDistortion);
+    const int before = poolModules (v, 0);
+
+    std::vector<FxWrite> w;
+    const int pasted = fxPasteRack (v.plain, clip, 2, w);
+    CHECK_EQ (pasted, 3);
+    applyTo (v, w);
+    CHECK (consistent (v));
+    CHECK_EQ (poolModules (v, 0), before);   // a copy leaves the source
+    CHECK_EQ (poolModules (v, 2), 3);
+    const auto bus2 = listOf (v, 2);
+    std::vector<FxRackItem> slots;
+    for (const FxRackItem& item : bus2) if (item.pool) slots.push_back (item);
+    CHECK_EQ (slots.size(), size_t { 3 });
+    CHECK_EQ (fxItemType (v.plain, slots[0]), kFxTypeChorus);
+    CHECK (! fxItemOn (v.plain, slots[0]));
+    CHECK_EQ (fxItemType (v.plain, slots[1]), kFxTypeReverb);
+    CHECK_NEAR (v.plain[fxInstanceKeys (slots[1].index).p[2]], 0.77f, 1.0e-6f);
+    CHECK_EQ (fxItemType (v.plain, slots[2]), kFxTypeDistortion);
+    // a paste behind what is there: the pasted modules come after the old ones
+    w.clear();
+    CHECK_EQ (fxPasteRack (v.plain, clip, 2, w), 3);
+    applyTo (v, w);
+    CHECK (consistent (v));
+    CHECK_EQ (poolModules (v, 2), 6);
+}
+
+TEST (fxrack_cut_and_clear_remove_the_modules_of_the_bus)
+{
+    ParamValues v = rackWithModules();
+    std::vector<FxWrite> w;
+    // an instance 0 module that is on in Main is part of the bus; clearing the bus bypasses it (removing means bypassing, A19)
+    fxSetOn (v.plain, { false, 8 }, true, w);   // reverb of instance 0
+    applyTo (v, w);
+    w.clear();
+    const FxRackClip clip = fxCopyRack (v.plain, 0);
+    CHECK_EQ (clip.entries.size(), size_t { 4 });
+    CHECK_EQ (fxClearRack (v.plain, 0, w), 4);
+    applyTo (v, w);
+    CHECK (consistent (v));
+    CHECK_EQ (poolModules (v, 0), 0);
+    CHECK (! fxItemOn (v.plain, { false, 8 }));
+    CHECK (fxCopyRack (v.plain, 0).empty());
+    CHECK_EQ (poolModules (v, 1), 1);   // the other buses are not touched
+    w.clear();
+    CHECK_EQ (fxClearRack (v.plain, 0, w), 0);   // nothing left: nothing to write
+    CHECK (w.empty());
+    // the clipboard of the cut goes to Bus 2 (cut + paste = move the whole bus)
+    w.clear();
+    CHECK_EQ (fxPasteRack (v.plain, clip, 2, w), 4);
+    applyTo (v, w);
+    CHECK (consistent (v));
+    CHECK_EQ (poolModules (v, 2), 4);
+    // the pasted copy of the instance 0 module is a slot of the same type with the same parameters
+    bool reverbs = false;
+    for (const FxRackItem& item : listOf (v, 2))
+        reverbs = reverbs || (item.pool && fxItemType (v.plain, item) == kFxTypeReverb);
+    CHECK (reverbs);
+}
+
+TEST (fxrack_paste_stops_when_the_pool_is_full_and_ignores_the_splitter_racks)
+{
+    ParamValues v = ParamValues::defaults();
+    std::vector<FxWrite> w;
+    for (int i = 0; i < 14; ++i)
+    {
+        w.clear();
+        CHECK (fxAddModule (v.plain, kFxTypeEq, 1, w) >= 0);
+        applyTo (v, w);
+    }
+    const FxRackClip clip = fxCopyRack (v.plain, 1);
+    CHECK_EQ (clip.entries.size(), size_t { 14 });
+    w.clear();
+    CHECK_EQ (fxPasteRack (v.plain, clip, 0, w), 2);   // two free slots: the rest is left out
+    applyTo (v, w);
+    CHECK (consistent (v));
+    CHECK_EQ (fxFirstFreeSlot (v.plain), -1);
+    w.clear();
+    CHECK_EQ (fxPasteRack (v.plain, clip, 0, w), 0);
+    CHECK (w.empty());
+    // the racks of the splitter bands are not buses
+    CHECK (fxCopyRack (v.plain, 5).empty());
+    CHECK_EQ (fxClearRack (v.plain, 5, w), 0);
+    CHECK_EQ (fxPasteRack (v.plain, clip, 5, w), 0);
+}

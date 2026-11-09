@@ -669,6 +669,91 @@ TEST (compressor_limit_mode_makeup_gain_drives_into_the_limiter)
     CHECK (peak (slammed.left) < 1.1 * peak (hard.left));
 }
 
+// ---- GROUPA1 WP-10: delay.offset_left and reverb.feedback (13-new-keys.md 4.29) ----------------------------------------------------------------------
+
+TEST (delay_offset_left_multiplies_the_time_of_the_left_channel)
+{
+    auto e = makeVital();
+    base (*e);
+    setByKey (*e, "delay.on", 1.0f);
+    setByKey (*e, "delay.mix", 100.0f);
+    setByKey (*e, "delay.feedback", 0.0f);
+    setByKey (*e, "delay.sync", 0.0f);
+    setByKey (*e, "delay.style", 1.0f);
+    setByKey (*e, "delay.time", 203.0f);   // not a multiple of the period of the note
+    setByKey (*e, "delay.time2", 203.0f);
+    setByKey (*e, "delay.filter_cutoff", 20000.0f);
+    setByKey (*e, "delay.filter_spread", 0.0f);
+    const auto level = play (*e, 1.0, 57);
+    // the default is the old sound: left offset 1, bit for bit what it was
+    setByKey (*e, "delay.offset_left", 1.0f);
+    const auto same = play (*e, 1.0, 57);
+    CHECK (relativeDifference (level.left, same.left, 0.3, 0.9) < 1.0e-3 && relativeDifference (level.right, same.right, 0.3, 0.9) < 1.0e-3);
+    setByKey (*e, "delay.offset_left", 1.5f);
+    (void) play (*e, 1.0, 57);   // (the delay time slews to its new value: the second render is the settled one)
+    const auto shifted = play (*e, 1.0, 57);
+    CHECK (finite (shifted));
+    CHECK (relativeDifference (level.right, shifted.right, 0.3, 0.9) < 1.0e-3);       // the right channel is untouched
+    CHECK (relativeDifference (level.left, shifted.left, 0.3, 0.9) > 0.2);            // the left one moves
+    CHECK_NEAR (rms (shifted.left, 0.3, 0.9), rms (level.left, 0.3, 0.9), 0.3 * rms (level.left, 0.3, 0.9) + 1.0e-4);
+    // the two offsets are independent: both at 1.5 moves both channels, and the left time is the time times the offset
+    setByKey (*e, "delay.offset", 1.5f);
+    (void) play (*e, 1.0, 57);
+    const auto both = play (*e, 1.0, 57);
+    CHECK (relativeDifference (level.right, both.right, 0.3, 0.9) > 0.2);
+    CHECK (relativeDifference (shifted.left, both.left, 0.3, 0.9) < 1.0e-3);
+    // the first echo comes at time x offset: an impulse like note (short) and the position of the left echo
+    setByKey (*e, "delay.offset", 1.0f);
+    setByKey (*e, "delay.offset_left", 2.0f);
+    setByKey (*e, "osc1.unison.voices", 1.0f);
+    e->reset();
+    const auto click = sbtest::render (*e, { noteOn (0, 72), noteOff (static_cast<int> (0.01 * kSr), 72) }, static_cast<int> (0.8 * kSr), 256);
+    const auto energy = [&] (const std::vector<float>& v, double from, double to) { return rms (v, from, to); };
+    CHECK (energy (click.left, 0.40, 0.44) > 5.0 * energy (click.left, 0.20, 0.24) + 1.0e-6); // the left echo is at 406 ms, nothing at 203 ms
+    CHECK (energy (click.right, 0.20, 0.24) > 5.0 * energy (click.right, 0.40, 0.44) + 1.0e-6); // the right one stays at 203 ms
+}
+
+TEST (reverb_feedback_scales_the_tail_of_nitrous_and_basin_only)
+{
+    auto e = makeVital();
+    base (*e);
+    setByKey (*e, "reverb.on", 1.0f);
+    setByKey (*e, "reverb.mix", 100.0f);
+    setByKey (*e, "reverb.decay", 1500.0f);
+    setByKey (*e, "reverb.predelay", 0.0f);
+    const auto render = [&] { return play (*e, 3.2, 57, true); };
+    for (const int type : { 4, 5 }) // Nitrous, Basin
+    {
+        setByKey (*e, "reverb.type", static_cast<float> (type));
+        setByKey (*e, "reverb.feedback", 50.0f);
+        (void) render();   // (a new type clears the tail: the first render after it is the warm-up one)
+        const auto neutral = render();
+        CHECK (finite (neutral));
+        setByKey (*e, "reverb.feedback", 20.0f);
+        const auto low = render();
+        setByKey (*e, "reverb.feedback", 90.0f);
+        const auto high = render();
+        CHECK (finite (low) && finite (high));
+        const double lateNeutral = rms (neutral.left, 2.0, 3.0), lateLow = rms (low.left, 2.0, 3.0), lateHigh = rms (high.left, 2.0, 3.0);
+        if (! CHECK (lateLow < 0.6 * lateNeutral && lateHigh > 1.5 * lateNeutral))
+            std::printf ("    type %d: late tail low %g neutral %g high %g\n", type, lateLow, lateNeutral, lateHigh);
+        // 50 % is the old sound: the same as a patch that never had the key
+        setByKey (*e, "reverb.feedback", 50.0f);
+        CHECK (relativeDifference (neutral.left, render().left, 0.2, 3.0) < 5.0e-4);   // (two renders of the engine differ by about 1e-4 by themselves)
+        e->reset();
+    }
+    // the other types do not have it
+    for (const int type : { 1, 2, 3 }) // (the Vital reverb of type 0 modulates itself differently on every render)
+    {
+        setByKey (*e, "reverb.type", static_cast<float> (type));
+        setByKey (*e, "reverb.feedback", 50.0f);
+        const auto a = render();
+        setByKey (*e, "reverb.feedback", 95.0f);
+        CHECK (relativeDifference (a.left, render().left, 0.2, 3.0) < 5.0e-4);
+        e->reset();
+    }
+}
+
 // ---- numeric robustness of the effect chain (GROUPA1 item 0) -------------------------------------------------------------------------------
 // A Serum 2 preset (compressor makeup +13.5 dB on three bands, two EQs with gain and a high Q, a Diode 1 distortion at +12.7 dB) went to NaN:
 // the loud signal drove the exponent of futils::exp2 below -126, where the float exponent field wrapped (the chain case is

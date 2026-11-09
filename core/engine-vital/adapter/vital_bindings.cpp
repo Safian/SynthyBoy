@@ -457,6 +457,7 @@ std::vector<Binding> build()
     b.add ("compressor.crossover_high", "compressor_crossover_high", Conv::linear);
     b.choice ("delay.hq", "delay_hq");
     b.add ("delay.offset", "delay_offset", Conv::linear);
+    b.add ("delay.offset_left", "delay_offset_left", Conv::linear);   // block B25 (GROUPA1, WP-10)
     b.percent ("distortion.filter_keytrack", "distortion_filter_keytrack");
     b.add ("phaser.depth2", "phaser_depth2", Conv::linear);
     b.choice ("reverb.type", "reverb_type");
@@ -465,6 +466,7 @@ std::vector<Binding> build()
     b.percent ("reverb.er_size", "reverb_er_size");
     b.percent ("reverb.diff_a", "reverb_diff_a");
     b.percent ("reverb.diff_b", "reverb_diff_b");
+    b.percent ("reverb.feedback", "reverb_feedback");               // block B25 (GROUPA1, WP-10)
 
     // --- the Serum modules (WP7): every key is the control of the same name in its own unit ------------------------------------------
     struct Module { const char* key; int slot; std::initializer_list<const char*> params; };

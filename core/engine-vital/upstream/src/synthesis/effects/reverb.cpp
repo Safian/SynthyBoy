@@ -419,6 +419,7 @@ namespace sbvital {
     settings.decay_seconds = utils::clamp(input(kDecayTime)->at(0)[0], kMinDecayTime, kMaxDecayTime);
     settings.diff_a = utils::clamp(input(kDiffA)->at(0)[0], 0.0f, 1.0f);
     settings.diff_b = utils::clamp(input(kDiffB)->at(0)[0], 0.0f, 1.0f);
+    settings.feedback = utils::clamp(input(kFeedback)->at(0)[0], 0.0f, 1.0f);
     settings.er_size = utils::clamp(input(kErSize)->at(0)[0], 0.0f, 1.0f);
     settings.mod_depth = utils::clamp(input(kChorusAmount)->at(0)[0], 0.0f, 1.0f);
     settings.mod_hz = utils::clamp(input(kChorusFrequency)->at(0)[0], 0.0f, kMaxChorusFrequency);

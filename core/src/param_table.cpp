@@ -834,11 +834,15 @@ constexpr ParamInfo kRaw[] = {
     onOff ("master.mpe.y_modwheel", "MPE Y to Mod Wheel", "Master / MPE", false),
     onOff ("master.mpe.bend_to_x", "MPE Pitch Bend also to X", "Master / MPE", false),
     onOff ("master.mpe.y_bipolar", "MPE Y Bi-directional", "Master / MPE", false),
+
+    // --- B25: GROUPA1 WP-10: delay left offset and reverb feedback (13-new-keys.md 4.29, positions 2061..2062) ----------------------
+    cont ("delay.offset_left", "Delay Offset Left", "FX / Delay", 0.25f, 4.0f, 1.0f, Unit::none, kMod, 3, 0.5f),
+    SB_PCT ("reverb.feedback", "Reverb Feedback", "FX / Reverb", 50.0f, kMod),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2061, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24)");
+static_assert (kCount == 2063, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25)");
 
 struct Table
 {
@@ -868,7 +872,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

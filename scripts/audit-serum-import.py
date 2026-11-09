@@ -274,7 +274,7 @@ FX = {
                'kParamLevelOut': ('compressor.level', db)},
     'FXDelay': {'kParamWet': ('delay.mix', lin(1)), 'kParamTimeL': ('delay.time', lin(1000)), 'kParamTimeR': ('delay.time2', lin(1000)), 'kParamFeedback': ('delay.feedback', lin(1)),
                 'kParamFreq': ('delay.filter_cutoff', lin(1)), 'kParamBW': ('delay.filter_spread', lin(12.12)), 'kParamMode': ('delay.style', lin(1, 1)), 'kParamHQ': ('delay.hq', boolean),
-                'kParamOffsetL': ('delay.offset', lin(1)), 'kParamLevelOut': ('delay.level', db)},
+                'kParamOffsetL': ('delay.offset_left', lin(1)), 'kParamOffsetR': ('delay.offset', lin(1)), 'kParamLevelOut': ('delay.level', db)},
     'FXDistortion': {'kParamWet': ('distortion.mix', lin(1)), 'kParamDrive': ('distortion.drive', lin(0.3)), 'kParamMode': ('distortion.type', DISTORTION),
                      'kParamFreq': ('distortion.filter_cutoff', note_hz), 'kParamLPHP': ('distortion.filter_blend', lin(1)), 'kParamPrePost': ('distortion.filter_order', lin(1)),
                      'kParamLevelOut': ('distortion.level', db)},
@@ -661,6 +661,11 @@ class Audit:
         if not row:
             return
         key, fn = row
+        if fxname == 'FXReverb' and param == 'kParamFeedback':
+            # GROUPA1 (WP-10, A352): the FEEDBACK of Space (Nitrous) and Abyss (Basin) is reverb.feedback, a percent; the other reverbs carry the decay in it
+            kind = tree.get('FXRack%d' % r, {}).get('FX', [{}] * (j + 1))[j].get(fxname, {}).get('plainParams', {}).get('kParamType')
+            if kind in ('kSpace', 'kAbyss'):
+                key, fn = 'reverb.feedback', lin(1)
         if key != e['key'] and not (fxname == 'FXComp' and e['key'].startswith('compressor.')) and not fxname == 'FXEQ':
             self.err(name, '%s: importer wrote %s, expected %s' % (e['path'], e['key'], key))
             return
