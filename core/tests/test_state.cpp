@@ -276,7 +276,7 @@ TEST (state_nan_inf_and_huge_numbers)
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":0.4}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 0.0f);
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":0.6}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 1.0f);
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":5}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 5.0f);
-    CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":99}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 13.0f);
+    CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":99}}", v).status == LoadStatus::ok && v.plain[kWavetable] == static_cast<float> (kNumWavetableChoices - 1));
     CHECK (load ("{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"osc1.wavetable\":-5}}", v).status == LoadStatus::ok && v.plain[kWavetable] == 0.0f);
 }
 
