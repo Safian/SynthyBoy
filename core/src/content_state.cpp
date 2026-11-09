@@ -152,7 +152,7 @@ bool operator== (const StateContent& a, const StateContent& b) noexcept
                        { return x.osc == y.osc && x.slot == y.slot && x.name == y.name
                              && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); })
         && sameVector (a.modCurves, b.modCurves, [] (const ContentModCurve& x, const ContentModCurve& y)
-                       { return x.slot == y.slot
+                       { return x.slot == y.slot && x.riseMs == y.riseMs && x.fallMs == y.fallMs
                              && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); });
 }
 
@@ -255,7 +255,8 @@ bool validateContent (const StateContent& c) noexcept
         std::set<int> modCurveSlots;
         for (const auto& mc : c.modCurves)
             if (mc.slot < 1 || mc.slot > kMaxContentModCurves || ! modCurveSlots.insert (mc.slot).second
-                || ! pointsOk (mc.points, kMaxModCurvePoints, false, true))
+                || ! (mc.points.empty() ? (mc.riseMs > 0.0f || mc.fallMs > 0.0f) : pointsOk (mc.points, kMaxModCurvePoints, false, true))
+                || ! (mc.riseMs >= 0.0f && mc.riseMs <= kMaxModSlewMs && mc.fallMs >= 0.0f && mc.fallMs <= kMaxModSlewMs)) // (NaN fails both)
                 return false;
         return true;
     }

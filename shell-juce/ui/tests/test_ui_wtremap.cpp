@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -568,4 +569,98 @@ TEST (uim_screenshots_of_the_slot_curve_editor)
     }
     rig.shot ("mod-slot-curve-phone", 390, 844, Page::mod);
     rig.shot ("mod-slot-curve-tablet", 1024, 768, Page::mod);
+}
+
+// GROUPB (WP-08): RISE / FALL of the shown slot are two sliders of the slot curve panel, they write content.modCurves (with or without a drawn curve), the row of the
+// matrix marks the connection, and "Edit Custom Curve" of the control sheet opens the free curve editor of the slot
+TEST (uim_wp08_rise_fall_sliders_write_the_slot_record_and_the_sheet_opens_the_curve)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        Rig rig (Page::mod, sz.w, sz.h);
+        auto* panel = ModCurvePanelAccess::find (rig);
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        std::vector<juce::Slider*> sliders;
+        for (auto* c : panel->getChildren())
+            if (auto* s = dynamic_cast<juce::Slider*> (c))
+                sliders.push_back (s);
+        CHECK_EQ (sliders.size(), size_t { 2 });
+        if (sliders.size() != 2)
+            continue;
+        juce::Slider& rise = *sliders[0];
+        juce::Slider& fall = *sliders[1];
+        const int touch = rig.editor->theme().touch();
+        CHECK (rise.getHeight() >= touch && fall.getHeight() >= touch);
+        CHECK (rise.getRight() <= panel->getWidth() && fall.getRight() <= panel->getWidth());
+        CHECK_EQ (rise.getValue(), 0.0);
+
+        const auto recordOf = [&rig] (int slot) -> std::optional<ContentModCurve>
+        {
+            const auto content = rig.proc.content();   // by value: the record is copied out
+            const auto* found = modCurveOf (content, slot);
+            return found != nullptr ? std::optional<ContentModCurve> (*found) : std::nullopt;
+        };
+        rise.setValue (250.0, juce::sendNotificationSync);
+        auto record = recordOf (1);
+        CHECK (record.has_value() && record->points.empty() && std::fabs (record->riseMs - 250.0f) < 0.6f && record->fallMs == 0.0f);
+        CHECK (validateContent (rig.proc.content()));
+        fall.setValue (80.0, juce::sendNotificationSync);
+        record = recordOf (1);
+        CHECK (record.has_value() && std::fabs (record->fallMs - 80.0f) < 0.6f && std::fabs (record->riseMs - 250.0f) < 0.6f);
+
+        // the shown slot owns its times: the next slot starts at 0, going back finds them again
+        juce::TextButton* next = nullptr;
+        for (auto* c : panel->getChildren())
+            if (auto* b = dynamic_cast<juce::TextButton*> (c))
+                if (b->getButtonText() == ">")
+                    next = b;
+        CHECK (next != nullptr);
+        if (next != nullptr)
+        {
+            next->onClick();
+            CHECK_EQ (rise.getValue(), 0.0);
+            CHECK (! recordOf (2).has_value());
+            for (auto* c : panel->getChildren())
+                if (auto* b = dynamic_cast<juce::TextButton*> (c))
+                    if (b->getButtonText() == "<")
+                        b->onClick();
+            CHECK (std::fabs (rise.getValue() - 250.0) < 0.6);
+        }
+
+        // a drawn curve and a slew share the record; taking the times away keeps the curve, a record with neither is removed
+        {
+            auto content = rig.proc.content();
+            for (auto& m : content.modCurves)
+                if (m.slot == 1)
+                    m.points = { ContentPoint (0.0f, 0.0f, 0.0f), ContentPoint (1.0f, 1.0f, 0.0f) };
+            CHECK (rig.proc.setContent (content));
+            rise.setValue (0.0, juce::sendNotificationSync);
+            fall.setValue (0.0, juce::sendNotificationSync);
+            record = recordOf (1);
+            CHECK (record.has_value() && record->points.size() == 2 && record->riseMs == 0.0f && record->fallMs == 0.0f);
+            auto cleared = rig.proc.content();
+            cleared.modCurves.clear();
+            CHECK (rig.proc.setContent (cleared));
+            rise.setValue (30.0, juce::sendNotificationSync);
+            CHECK (recordOf (1).has_value());
+            rise.setValue (0.0, juce::sendNotificationSync);
+            CHECK (! recordOf (1).has_value());
+        }
+
+        // "Edit Custom Curve" on the control sheet: the matrix page, the slot, the free curve editor
+        rig.editor->panelHost().setPage (Page::osc);
+        CHECK (static_cast<bool> (rig.editor->context().view->openSlotCurve));
+        rig.editor->context().view->openSlotCurve (4);
+        auto* shown = ModCurvePanelAccess::find (rig);
+        CHECK (shown != nullptr);
+        if (shown != nullptr)
+        {
+            auto* ed = findChildOfType<RemapEditor> (*shown);
+            CHECK (ed != nullptr && ed->isVisible() && ed->slot() == 5);
+        }
+        rig.shot ("mod-slot-curve-wp08-" + juce::String (sz.name), sz.w, sz.h, Page::mod);
+    }
 }

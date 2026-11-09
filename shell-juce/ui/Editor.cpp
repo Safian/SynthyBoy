@@ -43,6 +43,13 @@ SynthyBoyEditor::SynthyBoyEditor (juce::AudioProcessor& owner, UiHost& h)
         panels->setPage (Page::glb);
     };
     tabs->onSelect = [this] (Page p) { panels->setPage (p); };
+    ctx.view->openSlotCurve = [this] (int slot0)
+    {
+        tabs->select (Page::mod, false);
+        panels->setPage (Page::mod);
+        for (const auto& panel : panels->allPanels())
+            panel->showModSlotCurve (slot0);
+    };
     for (int i = 0; i < kNumPages; ++i)
         tabs->setHasPanels (static_cast<Page> (i), panels->pageHasPanels (static_cast<Page> (i)));
 

@@ -86,6 +86,12 @@ namespace sbvital {
         extras_->glide_active = active;
         extras_->glide_seconds = seconds;
       }
+      // SynthyBoy (GROUPB, WP-08, docs/ui-design/13-new-keys.md 4.35): RISE / FALL, a slew limiter on the source in front of the curve. The times are the
+      // seconds in which the source covers 90 % of a step upwards / downwards (a one pole filter per voice); both 0 = off, the connection is untouched.
+      void setSlew(mono_float rise_seconds, mono_float fall_seconds) {
+        extras_->rise_seconds = rise_seconds;
+        extras_->fall_seconds = fall_seconds;
+      }
 
     protected:
       int index_;
@@ -103,10 +109,14 @@ namespace sbvital {
         mono_float aux_power = 0.0f, aux_output = 1.0f;
         bool glide_active = false;
         mono_float glide_seconds = 0.0f;
+        mono_float rise_seconds = 0.0f, fall_seconds = 0.0f;   // GROUPB WP-08
       };
       std::shared_ptr<Extras> extras_ = std::make_shared<Extras>();
       poly_float aux_factor_ = 1.0f;
       poly_float glide_value_ = 0.0f;
+      poly_float slew_value_ = 0.0f;                     // GROUPB WP-08: the slewed source (per voice)
+      std::shared_ptr<Output> slew_source_;              // the slewed copy of an audio rate source, read by the audio rate paths
+      poly_float slewStep(poly_float input, mono_float seconds_per_step);
       mono_float block_seconds_ = 0.0f;
       poly_float computeAuxFactor() const;
 

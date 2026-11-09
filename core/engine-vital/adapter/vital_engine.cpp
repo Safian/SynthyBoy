@@ -253,8 +253,9 @@ struct Snapshot
     std::array<std::array<RemapEntry, kNumRemapSlots>, 3> remap;  // the drawn wavetable position remaps (content.remaps): [osc][slot]
     struct ModCurveEntry
     {
-        bool present = false;
+        bool present = false;                 // a drawn curve
         std::vector<ContentPoint> points;
+        float riseMs = 0.0f, fallMs = 0.0f;   // GROUPB WP-08: RISE / FALL of the connection
     };
     std::array<ModCurveEntry, kNumModSlots> modCurves;            // the per-slot modulation curves (content.modCurves, G2)
     bool hasVelocity = false, hasNote = false;
@@ -447,11 +448,16 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
 
     for (const ContentModCurve& mc : content.modCurves)
     {
-        if (mc.slot >= 1 && mc.slot <= kNumModSlots && mc.points.size() >= 2)
+        if (mc.slot >= 1 && mc.slot <= kNumModSlots)
         {
             auto& e = s->modCurves[static_cast<size_t> (mc.slot - 1)];
-            e.present = true;
-            e.points = mc.points;
+            if (mc.points.size() >= 2)
+            {
+                e.present = true;
+                e.points = mc.points;
+            }
+            e.riseMs = mc.riseMs;
+            e.fallMs = mc.fallMs;
         }
     }
 
@@ -2313,6 +2319,10 @@ private:
         const bool glide = legatoParam >= 0 && params[static_cast<size_t> (legatoParam)].load (std::memory_order_relaxed) > 0.5f;
         const float seconds = portamentoParam >= 0 ? params[static_cast<size_t> (portamentoParam)].load (std::memory_order_relaxed) * 0.001f : 0.0f;
         slot.processor->setGlide (glide, seconds);
+        // RISE / FALL (GROUPB WP-08): the slew of the connection, 0 without a record
+        const bool slews = activeSnapshot != nullptr;
+        slot.processor->setSlew (slews ? activeSnapshot->modCurves[static_cast<size_t> (k)].riseMs * 0.001f : 0.0f,
+                                 slews ? activeSnapshot->modCurves[static_cast<size_t> (k)].fallMs * 0.001f : 0.0f);
     }
 
     void updateSlot (int k) noexcept

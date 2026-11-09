@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "alloc_hook.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
@@ -29,6 +30,27 @@ using sbtest::setByKey;
 namespace
 {
 constexpr double kSr = 48000.0;
+/** process () with the allocations of the audio thread counted into `allocs`. */
+void renderCounted (IEngine& engine, const std::vector<Event>& events, int totalFrames, int blockSize, unsigned long& allocs)
+{
+    std::vector<float> l (static_cast<size_t> (blockSize)), r (static_cast<size_t> (blockSize));
+    std::vector<Event> local;
+    size_t idx = 0;
+    for (int start = 0; start < totalFrames; start += blockSize)
+    {
+        local.clear();
+        while (idx < events.size() && events[idx].frame < start + blockSize)
+        {
+            auto e = events[idx++];
+            e.frame -= start;
+            local.push_back (e);
+        }
+        const auto before = g_allocations.load();
+        engine.process (local.data(), static_cast<int> (local.size()), l.data(), r.data(), blockSize);
+        allocs += g_allocations.load() - before;
+    }
+}
+
 
 std::unique_ptr<IEngine> makeVital (const Quality& q = Quality {})
 {
@@ -422,4 +444,33 @@ TEST (warp_modes_from_the_sub_and_a_filter_act_on_a_sample_oscillator)
         CHECK (sbtest::allFinite (out.left));
         CHECK (relativeDifference (none, out, 0.2, 0.5) > 0.01);
     }
+}
+
+TEST (the_new_sources_and_warp_modes_never_allocate_on_the_audio_thread)
+{
+    auto e = makeVital();
+    soundSources (*e);
+    unsigned long allocs = 0;
+    renderCounted (*e, { noteOn (0, 48) }, 2048, 256, allocs);   // warm up
+    allocs = 0;
+    const char* const sources[] = { "osc_a", "osc_b", "noise", "sub", "filter1", "filter2", "active_voices", "note_on_alt1", "note_on_rand2", "note_on_rand_discrete",
+                                    "release_velocity", "expression_x", "fixed" };
+    int slotNumber = 1;
+    for (const char* source : sources)
+    {
+        slot (*e, slotNumber, choiceOfSource (source), choiceOfDestination (slotNumber % 2 == 0 ? "osc1.pan" : "filter1.cutoff"), 30.0f);   // wired while playing
+        ++slotNumber;
+    }
+    setByKey (*e, "osc1.warp.type", 66.0f);   // PD from Filter 1
+    setByKey (*e, "osc2.warp.type", 61.0f);   // FM Linear from Sub
+    renderCounted (*e, { noteOn (0, 52), noteOn (4000, 55) }, 16384, 256, allocs);
+    setByKey (*e, "osc1.warp.type", 0.0f);
+    for (int n = 1; n < slotNumber; ++n)
+    {
+        char key[32];
+        std::snprintf (key, sizeof key, "mod%02d.source", n);
+        setByKey (*e, key, 0.0f);                   // and unwired while playing
+    }
+    renderCounted (*e, { noteOn (0, 40) }, 4096, 256, allocs);
+    CHECK_EQ (allocs, 0ul);
 }

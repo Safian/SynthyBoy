@@ -113,3 +113,7 @@ target_include_directories(synthyboy_test_vital_oscextra2 PRIVATE "${CMAKE_CURRE
 synthyboy_add_test(synthyboy_test_vital_modsources test_modsources.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_modsources PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
+synthyboy_add_test(synthyboy_test_vital_modslew test_modslew.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_modslew PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")

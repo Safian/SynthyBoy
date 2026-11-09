@@ -800,6 +800,8 @@ private:
                         h = true;
                         if (std::strcmp (k, "slot") == 0) return readInt (mc.slot, vd);
                         if (std::strcmp (k, "points") == 0) return readPoints (mc.points, static_cast<size_t> (kMaxModCurvePoints), vd, false);
+                        if (std::strcmp (k, "rise") == 0) return readFloat (mc.riseMs, vd);   // GROUPB WP-08
+                        if (std::strcmp (k, "fall") == 0) return readFloat (mc.fallMs, vd);
                         h = false;
                         return true;
                     });
@@ -1219,6 +1221,18 @@ void putContent (std::string& s, const StateContent& c)
             s += ',';
             putKey (s, "points");
             putPoints (s, mc.points);
+            if (mc.riseMs > 0.0f)   // GROUPB WP-08: only when set, so a document without a slew is byte for byte what it was
+            {
+                s += ',';
+                putKey (s, "rise");
+                putJsonFloat (s, mc.riseMs);
+            }
+            if (mc.fallMs > 0.0f)
+            {
+                s += ',';
+                putKey (s, "fall");
+                putJsonFloat (s, mc.fallMs);
+            }
             s += '}';
         }
         s += ']';

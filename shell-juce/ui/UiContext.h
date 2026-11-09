@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <functional>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -76,6 +78,8 @@ struct ViewState
     int oscTab = 0; // OscTabsPanel: 0..2 = oscillator 1..3
     int envTab = 0; // EnvelopePanel tabs E1..E6: 0..5
     std::shared_ptr<ContentCache> contentCache; // decoded samples / tables of the content library for the views (ContentIO.h), made on first use
+    /** GROUPB WP-08: opens the free curve editor of modulation slot `slot0` (0-based) on the matrix page (the control sheet's "Edit Custom Curve"); set by the editor. */
+    std::function<void (int slot0)> openSlotCurve;
 };
 
 /** What a control or panel gets: the host, the theme, the assign controller. Lives as long as the editor. */

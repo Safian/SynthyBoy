@@ -547,6 +547,7 @@ class Audit:
         self.audit_content(name, tree, sb, content_dir)
         self.audit_noise(name, tree, sb)
         self.audit_osc_extras(name, tree, sb)
+        self.audit_mod_slew(name, tree, sb)
         self.audit_voice_panel(name, tree, sb)
         self.audit_midi_map(name, tree, report)
 
@@ -656,6 +657,35 @@ class Audit:
             self.err(name, 'noise.filter set on a sample noise')
 
     RATIO_SOURCE = {0: 1, 1: 2, 2: 3, 3: 0, 4: 4}
+
+    def audit_mod_slew(self, name, tree, sb):
+        """GROUPB (WP-08, A408): a connected slot's kParamSmoothRise / Fall (0 .. 100) are content.mod_curves[slot].rise / fall in ms = 2000 x (v / 100)^2, a missing one follows the
+        other while kParamSmoothLink (absent: on) is on. A slot that was not connected has no record."""
+        params = sb['state']['params']
+        records = {m['slot']: m for m in sb['state'].get('content', {}).get('mod_curves', [])}
+        for k in range(64):
+            slot = tree.get('ModSlot%d' % k)
+            pp = slot.get('plainParams') if isinstance(slot, dict) and isinstance(slot.get('plainParams'), dict) else {}
+            rise, fall, link = pp.get('kParamSmoothRise'), pp.get('kParamSmoothFall'), pp.get('kParamSmoothLink')
+            connected = params.get('mod%02d.destination' % (k + 1), 0) != 0 and params.get('mod%02d.source' % (k + 1), 0) != 0
+            rec = records.get(k + 1)
+            if not connected or not isinstance(slot, dict) or (rise is None and fall is None):
+                if rec is not None and (rec.get('rise', 0) or rec.get('fall', 0)) and not (connected and rec.get('points')):
+                    if not (rise is None and fall is None):
+                        self.err(name, 'mod%02d: slew record for a slot that is not connected' % (k + 1))
+                continue
+            linked = True if link is None else link >= 0.5
+            r = rise if rise is not None else 0.0
+            f = fall if fall is not None else 0.0
+            if linked and rise is not None and fall is None:
+                f = r
+            if linked and fall is not None and rise is None:
+                r = f
+            want = tuple(min(5000.0, 2000.0 * (max(0.0, min(100.0, v)) / 100.0) ** 2) for v in (r, f))
+            got = (rec.get('rise', 0.0), rec.get('fall', 0.0)) if rec is not None else (0.0, 0.0)
+            self.stats['slew records'] += 1
+            if abs(got[0] - want[0]) > 1e-3 * max(1.0, want[0]) or abs(got[1] - want[1]) > 1e-3 * max(1.0, want[1]):
+                self.err(name, 'mod%02d: RISE / FALL expected %.4g / %.4g ms, got %.4g / %.4g' % (k + 1, want[0], want[1], got[0], got[1]))
 
     def audit_osc_extras(self, name, tree, sb):
         """GROUPB (WP-05, A398 / A399): kParamPitchSource (0 .. 2 = Osc A .. C, 3 = Noise, 4 = Sub) is osc#.ratio_src when the pitch mode is Ratio (an oscillator that names

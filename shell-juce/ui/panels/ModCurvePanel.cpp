@@ -6,6 +6,7 @@
 #include "RemapEditor.h"
 #include "synthyboy/shapes/shape.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -228,7 +229,8 @@ private:
 };
 } // namespace
 
-class ModCurvePanel final : public Panel
+class ModCurvePanel final : public Panel,
+                            private juce::Timer
 {
 public:
     explicit ModCurvePanel (UiContext& context)
@@ -237,6 +239,13 @@ public:
     }
 
     juce::String title() const override { return "Slot Curve & Remap"; }
+
+    /** The control sheet's "Edit Custom Curve": this slot, the free curve editor. */
+    void showModSlotCurve (int slot0) override
+    {
+        showSlot (slot0);
+        setCustomMode (true);
+    }
 
     std::vector<std::string> keys() const override
     {
@@ -307,8 +316,43 @@ public:
         editor->setVisible (false);
         addChildComponent (*editor);
 
+        // RISE / FALL of the connection (GROUPB WP-08, 13-new-keys.md 4.35): a slew limiter on the source in front of the curve, kept in content.modCurves
+        for (juce::Slider* slider : { &riseSlider, &fallSlider })
+        {
+            const bool rise = slider == &riseSlider;
+            slider->setSliderStyle (juce::Slider::LinearHorizontal);
+            slider->setRange (0.0, static_cast<double> (kMaxModSlewMs), 1.0);
+            slider->setSkewFactorFromMidPoint (300.0);
+            slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, ctx.theme.ipx (62.0f), ctx.theme.ipx (20.0f));
+            slider->setTextValueSuffix (" ms");
+            slider->setColour (juce::Slider::trackColourId, ctx.theme.colours.accent);
+            slider->setColour (juce::Slider::thumbColourId, ctx.theme.colours.accent);
+            slider->setColour (juce::Slider::backgroundColourId, ctx.theme.colours.track);
+            slider->setColour (juce::Slider::textBoxTextColourId, ctx.theme.colours.text);
+            slider->setColour (juce::Slider::textBoxOutlineColourId, ctx.theme.colours.outline);
+            slider->setTooltip (rise ? "RISE: the time the source needs to rise to 90 % of a step (0 = off)" : "FALL: the time the source needs to fall to 10 % of a step (0 = off)");
+            slider->onValueChange = [this, rise, slider]
+            {
+                if (! refreshingSlew)
+                    writeSlew (rise, static_cast<float> (slider->getValue()));
+            };
+            addAndMakeVisible (*slider);
+        }
+        riseLabel.setText ("RISE", juce::dontSendNotification);
+        fallLabel.setText ("FALL", juce::dontSendNotification);
+        for (juce::Label* label : { &riseLabel, &fallLabel })
+        {
+            label->setFont (ctx.theme.font (ctx.theme.px (12.0f), true));
+            label->setColour (juce::Label::textColourId, ctx.theme.colours.textDim);
+            addAndMakeVisible (*label);
+        }
+        startTimerHz (4);   // a preset or an undo changes the content behind our back
+
         updateRoutingDisplay();
+        refreshSlew();
     }
+
+    ~ModCurvePanel() override { stopTimer(); }
 
     /** One bar: [<] slot [>] .. [Custom] [Power Crv] routing. Narrower than that the right group drops to a second bar. */
     bool twoBars (int innerWidth) const
@@ -324,7 +368,8 @@ public:
         const int bars = twoBars (width - 4 * gap) ? 2 : 1;
         const int visualH = customMode && editor != nullptr ? editor->preferredHeight (width - 2 * gap) : ctx.theme.ipx (160.0f);
         const int controlsH = isMoreExpanded() ? ctx.theme.ipx (140.0f) : ctx.theme.ipx (70.0f);
-        return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + controlsH + gap;
+        const int slewH = slewOnTwoRows (width - 4 * gap) ? 2 * touch + gap : touch;
+        return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + slewH + gap + controlsH + gap;
     }
 
     void resized() override
@@ -369,10 +414,76 @@ public:
         }
 
         area.removeFromTop (gap);
+        {
+            // RISE and FALL: side by side, one under the other on a narrow panel
+            const bool slewTwoRows = slewOnTwoRows (area.getWidth());
+            auto riseRow = area.removeFromTop (h);
+            juce::Rectangle<int> fallRow;
+            if (slewTwoRows)
+            {
+                area.removeFromTop (gap);
+                fallRow = area.removeFromTop (h);
+            }
+            else
+            {
+                fallRow = riseRow.removeFromRight ((riseRow.getWidth() - gap) / 2);
+                riseRow.removeFromRight (gap);
+            }
+            const int labelW = ctx.theme.ipx (40.0f);
+            riseLabel.setBounds (riseRow.removeFromLeft (labelW));
+            riseSlider.setBounds (riseRow);
+            fallLabel.setBounds (fallRow.removeFromLeft (labelW));
+            fallSlider.setBounds (fallRow);
+            area.removeFromTop (gap);
+        }
         layoutControls (area, false);
     }
 
 private:
+    bool slewOnTwoRows (int innerWidth) const { return innerWidth < 2 * ctx.theme.ipx (190.0f) + ctx.theme.gap(); }
+
+    /** The RISE / FALL of the shown slot from the content (a slot without a record: 0 / 0). */
+    void refreshSlew()
+    {
+        float rise = 0.0f, fall = 0.0f;
+        for (const auto& mc : ctx.host.content().modCurves)
+            if (mc.slot == currentSlot + 1)
+            {
+                rise = mc.riseMs;
+                fall = mc.fallMs;
+            }
+        refreshingSlew = true;
+        if (! riseSlider.isMouseButtonDown())
+            riseSlider.setValue (static_cast<double> (rise), juce::dontSendNotification);
+        if (! fallSlider.isMouseButtonDown())
+            fallSlider.setValue (static_cast<double> (fall), juce::dontSendNotification);
+        refreshingSlew = false;
+    }
+
+    /** Stores one of the two times in the record of the shown slot (a record without points and without a time is removed again). */
+    void writeSlew (bool rise, float ms)
+    {
+        auto content = ctx.host.content();
+        const int wanted = currentSlot + 1;
+        auto it = std::find_if (content.modCurves.begin(), content.modCurves.end(), [wanted] (const ContentModCurve& m) { return m.slot == wanted; });
+        if (it == content.modCurves.end())
+        {
+            if (ms <= 0.0f)
+                return;
+            ContentModCurve mc;
+            mc.slot = wanted;
+            content.modCurves.push_back (mc);
+            it = content.modCurves.end() - 1;
+        }
+        (rise ? it->riseMs : it->fallMs) = juce::jlimit (0.0f, kMaxModSlewMs, ms);
+        if (it->points.size() < 2 && it->riseMs <= 0.0f && it->fallMs <= 0.0f)
+            content.modCurves.erase (it);
+        ctx.host.setContent (content);
+        ctx.assign.sendChangeMessage();   // the matrix row marks the connection
+    }
+
+    void timerCallback() override { refreshSlew(); }
+
     void stepSlot (int delta)
     {
         currentSlot = (currentSlot + delta + kNumModSlots) % kNumModSlots;
@@ -381,6 +492,7 @@ private:
         if (editor != nullptr)
             editor->setModSlot (currentSlot + 1);
         updateRoutingDisplay();
+        refreshSlew();
     }
 
 public:
@@ -404,6 +516,8 @@ public:
     }
     bool isCustomMode() const noexcept { return customMode; }
     RemapEditor* curveEditor() noexcept { return editor.get(); }
+    juce::Slider& riseControl() noexcept { return riseSlider; }
+    juce::Slider& fallControl() noexcept { return fallSlider; }
     int shownSlot() const noexcept { return currentSlot; }
     void showSlot (int slotIndex0)
     {
@@ -437,6 +551,9 @@ private:
     juce::Label routingLabel;
     juce::TextButton powerModeButton;
     juce::TextButton customButton;
+    juce::Slider riseSlider, fallSlider;
+    juce::Label riseLabel, fallLabel;
+    bool refreshingSlew = false;
     bool customMode = false;
     std::unique_ptr<RemapEditor> editor;
 

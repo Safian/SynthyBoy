@@ -751,6 +751,33 @@ void Importer::modSlots()
             }
             consume (flex);
         }
+        // RISE / FALL of the slot (GROUPB WP-08, A408): kParamSmoothRise / Fall are 0 .. 100 of the knob, read as 2000 ms x (v / 100)^2; kParamSmoothLink (absent: linked)
+        // makes the one the other when only one is stored. They live in the record of the slot in content.modCurves
+        {
+            const int riseNode = get (pp, "kParamSmoothRise"), fallNode = get (pp, "kParamSmoothFall"), linkNode = get (pp, "kParamSmoothLink");
+            if (riseNode >= 0 || fallNode >= 0)
+            {
+                double rise = riseNode >= 0 ? num (riseNode) : 0.0, fall = fallNode >= 0 ? num (fallNode) : 0.0;
+                const bool linked = linkNode >= 0 ? num (linkNode) >= 0.5 : true;
+                if (linked && riseNode >= 0 && fallNode < 0) fall = rise;
+                if (linked && fallNode >= 0 && riseNode < 0) rise = fall;
+                const auto toMs = [] (double v) { const double u = clampd (v, 0.0, 100.0) / 100.0; return static_cast<float> (std::min<double> (kMaxModSlewMs, 2000.0 * u * u)); };
+                ContentModCurve* record = nullptr;
+                for (ContentModCurve& mc : R.modCurves)
+                    if (mc.slot == k + 1) record = &mc;
+                if (record == nullptr)
+                {
+                    R.modCurves.emplace_back();
+                    record = &R.modCurves.back();
+                    record->slot = k + 1;
+                }
+                record->riseMs = toMs (rise);
+                record->fallMs = toMs (fall);
+                if (riseNode >= 0) { entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamSmoothRise", valueText (riseNode), pfx + ".source", fmt (record->riseMs) + " ms", "modulation_rise_stored_in_the_slot_record"); consume (riseNode); }
+                if (fallNode >= 0) { entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamSmoothFall", valueText (fallNode), pfx + ".source", fmt (record->fallMs) + " ms", "modulation_fall_stored_in_the_slot_record"); consume (fallNode); }
+                if (linkNode >= 0) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamSmoothLink", valueText (linkNode), "", "", "rise_fall_link_flag"); consume (linkNode); }
+            }
+        }
         if (mainFlag >= 0) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamMainCurveData", valueText (mainFlag), "", "", "curve_flag"); consume (mainFlag); }
         if (auxFlag >= 0) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamAuxCurveData", valueText (auxFlag), "", "", "curve_flag"); consume (auxFlag); }
         // what is left of the slot

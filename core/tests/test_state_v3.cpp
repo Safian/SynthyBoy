@@ -154,6 +154,12 @@ StateContent fullContent()
     c.modCurves.push_back (mc);
     mc.slot = 64;
     mc.points = { point (0.0f, 1.0f), point (1.0f, 0.0f) };
+    mc.riseMs = 120.5f; // GROUPB WP-08: RISE / FALL of the connection, with the curve ...
+    mc.fallMs = 40.0f;
+    c.modCurves.push_back (mc);
+    mc = {};
+    mc.slot = 12;       // ... and without one
+    mc.fallMs = 900.0f;
     c.modCurves.push_back (mc);
     return c;
 }
@@ -397,6 +403,10 @@ TEST (content_that_breaks_a_cap_is_rejected_but_the_parameters_apply)
         "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (3, 0.9, -0.4) + "}]}",                           // x descending
         "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (3, 0.0, 0.5, 2.0) + "}]}",                       // y > 1
         "{\"mod_curves\":{\"slot\":3}}",                                                                      // wrong container
+        "{\"mod_curves\":[{\"slot\":3,\"points\":[]}]}",                                                        // neither points nor a slew (GROUPB WP-08)
+        "{\"mod_curves\":[{\"slot\":3,\"points\":[],\"rise\":-1}]}",                                            // a negative time
+        "{\"mod_curves\":[{\"slot\":3,\"points\":[],\"fall\":5000.5}]}",                                        // beyond kMaxModSlewMs
+        "{\"mod_curves\":[{\"slot\":3,\"points\":" + pointsText (3, 0.0, 0.5) + ",\"rise\":1e999}]}",             // not finite
         "[1,2,3]",                                                                                              // the section is not an object
         "\"text\"",
         "7",

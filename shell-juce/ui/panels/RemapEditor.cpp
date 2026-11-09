@@ -230,8 +230,14 @@ void RemapEditor::commitNow()
         const auto mit = std::find_if (content.modCurves.begin(), content.modCurves.end(), [this] (const ContentModCurve& m) { return m.slot == current.slot; });
         if (! stored)
         {
+            // a record that also holds a RISE / FALL (GROUPB WP-08) stays without its points
             if (mit != content.modCurves.end())
-                content.modCurves.erase (mit);
+            {
+                if (mit->riseMs > 0.0f || mit->fallMs > 0.0f)
+                    mit->points.clear();
+                else
+                    content.modCurves.erase (mit);
+            }
         }
         else if (mit != content.modCurves.end())
             mit->points = current.points;

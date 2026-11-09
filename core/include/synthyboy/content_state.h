@@ -29,6 +29,7 @@ constexpr int kMaxContentRemaps = 12;            // 3 oscillators x 4 slots (osc
 constexpr int kNumRemapSlots = 4;
 constexpr int kMaxRemapPoints = 64;
 constexpr int kMaxContentModCurves = 64;         // one per modulation matrix slot (modNN, G2)
+constexpr float kMaxModSlewMs = 5000.0f;         // RISE / FALL of a modulation connection (GROUPB WP-08)
 constexpr int kMaxModCurvePoints = 100;
 constexpr size_t kMaxTuningSclBytes = 64 * 1024;
 constexpr size_t kMaxTuningKbmBytes = 4 * 1024;
@@ -99,7 +100,11 @@ struct ContentRemap
 struct ContentModCurve
 {
     int slot = 0; // 1..64
-    std::vector<ContentPoint> points; // 2 .. kMaxModCurvePoints, ascending x in 0..1
+    std::vector<ContentPoint> points; // 0 or 2 .. kMaxModCurvePoints, ascending x in 0..1 (no points: only the slew below)
+    /** GROUPB WP-08 (13-new-keys.md 4.35): RISE / FALL of the connection, a slew limiter on the source before the curve: the time (ms) in which the source reaches 90 % of
+        a step upwards / downwards, per voice for the voice sources. 0 = off (the sound of a connection without the record). A record holds points, a slew or both. */
+    float riseMs = 0.0f;
+    float fallMs = 0.0f;
 };
 
 struct ContentFilterCurvePoint

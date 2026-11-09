@@ -35,6 +35,7 @@ namespace sbvital {
 
     map_generator_ = std::make_shared<LineGenerator>();
     map_generator_->initLinear();
+    slew_source_ = std::make_shared<Output>(kMaxBufferSize, kMaxOversample);   // GROUPB WP-08: made here, never on the audio thread
   }
 
   void ModulationConnectionProcessor::init() {
@@ -66,6 +67,18 @@ namespace sbvital {
     return a * extras.aux_output;
   }
 
+  // One step of the RISE / FALL slew: a one pole towards the input, the time constant of the rise (input above the value) or of the fall; a time
+  // is the span of 90 % of a step (ln 10 time constants). A fresh voice starts on its value.
+  poly_float ModulationConnectionProcessor::slewStep(poly_float value_in, mono_float seconds_per_step) {
+    static constexpr mono_float kLn10 = 2.302585093f;
+    const mono_float rise = extras_->rise_seconds, fall = extras_->fall_seconds;
+    const poly_float rate_rise = rise > 0.0f ? poly_float(1.0f - std::exp(-seconds_per_step * kLn10 / rise)) : poly_float(1.0f);
+    const poly_float rate_fall = fall > 0.0f ? poly_float(1.0f - std::exp(-seconds_per_step * kLn10 / fall)) : poly_float(1.0f);
+    const poly_float rate = utils::maskLoad(rate_fall, rate_rise, poly_float::greaterThan(value_in, slew_value_));
+    slew_value_ = slew_value_ + (value_in - slew_value_) * rate;
+    return slew_value_;
+  }
+
   void ModulationConnectionProcessor::process(int num_samples) {
     const Output* source = input(kModulationInput)->source;
     aux_factor_ = computeAuxFactor();
@@ -79,8 +92,21 @@ namespace sbvital {
 
     if (isControlRate() || source->isControlRate())
       processControlRate(source);
-    else 
-      processAudioRate(num_samples, source);
+    else {
+      const bool slewing = extras_->rise_seconds > 0.0f || extras_->fall_seconds > 0.0f;
+      if (slewing) {
+        // GROUPB WP-08: the audio rate path reads a slewed copy of the source (a fresh voice starts on its value)
+        const poly_float* in = source->buffer;
+        poly_float* out = slew_source_->buffer;
+        const mono_float step = 1.0f / static_cast<mono_float>(getSampleRate());
+        slew_value_ = utils::maskLoad(slew_value_, in[0], getResetMask(kReset));
+        for (int i = 0; i < num_samples; ++i)
+          out[i] = slewStep(in[i], step);
+        processAudioRate(num_samples, slew_source_.get());
+      }
+      else
+        processAudioRate(num_samples, source);
+    }
   }
 
   void ModulationConnectionProcessor::processAudioRate(int num_samples, const Output* source) {
@@ -276,6 +302,12 @@ namespace sbvital {
       mono_float rate = 1.0f - std::exp(-block_seconds_ / std::max(extras_->glide_seconds, 0.0001f));
       glide_value_ = utils::maskLoad(glide_value_ + (modulation_input - glide_value_) * rate, modulation_input, getResetMask(kReset));
       modulation_input = glide_value_;
+    }
+
+    if (extras_->rise_seconds > 0.0f || extras_->fall_seconds > 0.0f) {
+      // GROUPB WP-08: RISE / FALL in front of the curve; a fresh voice (reset) starts on its value
+      slew_value_ = utils::maskLoad(slew_value_, modulation_input, getResetMask(kReset));
+      modulation_input = slewStep(modulation_input, block_seconds_);
     }
 
     if (!map_generator_->linear()) {

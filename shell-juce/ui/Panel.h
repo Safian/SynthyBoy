@@ -42,6 +42,10 @@ public:
     void setMoreExpanded (bool shouldExpand);
     int numMoreControls() const noexcept { return static_cast<int> (moreCount); }
 
+    /** GROUPB WP-08: "Edit Custom Curve" of a modulation row on the control sheet: the panel that holds the slot curve shows modulation slot `slot0` (0-based) and
+        its free curve editor. Every other panel ignores it. */
+    virtual void showModSlotCurve (int /*slot0*/) {}
+
     /** True while the panel is folded away by a tab chip row of its page (LFO tabs): the PanelHost does not lay it out. */
     virtual bool hiddenInLayout() const { return false; }
 

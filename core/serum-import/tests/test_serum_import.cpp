@@ -1081,3 +1081,32 @@ TEST (serum_warp_modes_from_the_noise_sub_and_filters_and_the_new_matrix_sources
     for (size_t i = 0; i < sizeof ids / sizeof ids[0]; ++i)
         CHECK_EQ (r.values.plain[modSlotParams (static_cast<int> (i)).source], expected[i]);
 }
+
+// GROUPB (WP-08, A408): RISE / FALL of a modulation slot are the slew of its record in content.modCurves (2000 ms x (v / 100)^2; absent link = linked)
+TEST (serum_modulation_slot_rise_and_fall_become_the_slot_record)
+{
+    const auto slot = [] (int source, const std::vector<std::pair<std::string, double>>& params)
+    {
+        std::vector<std::pair<std::string, double>> all { { "kParamAmount", 30 } };
+        all.insert (all.end(), params.begin(), params.end());
+        return map ({ { "source", nums ({ static_cast<double> (source), 0 }) }, { "destModuleTypeString", text ("Oscillator") }, { "destModuleID", num (1) },
+                      { "destModuleParamName", text ("kParamVolume") }, { "destModuleParamID", num (0) }, { "plainParams", plain (all) } });
+    };
+    Preset p;
+    p.set ("ModSlot0", slot (6, { { "kParamSmoothRise", 50 }, { "kParamSmoothFall", 100 } }));                    // both: 500 and 2000 ms
+    p.set ("ModSlot1", slot (7, { { "kParamSmoothRise", 50 } }));                                                  // linked by default: the fall follows
+    p.set ("ModSlot2", slot (8, { { "kParamSmoothRise", 50 }, { "kParamSmoothLink", 0 } }));                       // not linked: the fall stays 0
+    p.set ("ModSlot3", slot (9, { { "kParamSmoothFall", 20 } }));                                                  // only a fall, linked: the rise follows
+    p.set ("ModSlot4", slot (10, {}));                                                                              // no slew: no record
+    const SerumImportResult r = run (p.file());
+    CHECK_EQ (r.report.unaccounted, 0);
+    const auto record = [&r] (int slotNumber) -> const ContentModCurve* { for (const auto& m : r.modCurves) if (m.slot == slotNumber) return &m; return nullptr; };
+    CHECK (record (1) != nullptr && std::fabs (record (1)->riseMs - 500.0f) < 0.01f && std::fabs (record (1)->fallMs - 2000.0f) < 0.01f);
+    CHECK (record (2) != nullptr && std::fabs (record (2)->riseMs - 500.0f) < 0.01f && std::fabs (record (2)->fallMs - 500.0f) < 0.01f);
+    CHECK (record (3) != nullptr && std::fabs (record (3)->riseMs - 500.0f) < 0.01f && record (3)->fallMs == 0.0f);
+    CHECK (record (4) != nullptr && std::fabs (record (4)->riseMs - 80.0f) < 0.01f && std::fabs (record (4)->fallMs - 80.0f) < 0.01f);
+    CHECK (record (5) == nullptr);
+    CHECK (entryWith (r, "modulation_slew_not_modelled") < 0);
+    for (const auto& m : r.modCurves)
+        CHECK (m.points.empty());
+}

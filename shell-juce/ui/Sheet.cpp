@@ -30,6 +30,54 @@ public:
         addAndMakeVisible (remove);
     }
 
+    /** A tap on the row opens the connection's menu (the context menu of Serum 2, manual p.199): Aux Source, Edit Custom Curve. */
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (e.mouseWasDraggedSinceMouseDown())
+            return;
+        showConnectionMenu();
+    }
+
+    void showConnectionMenu()
+    {
+        const auto params = modSlotParams (entry.slot);
+        if (params.auxSource < 0)
+            return;
+        auto& matrix = sheet.ctx.assign.matrix();
+        const int current = juce::roundToInt (matrix.get (params.auxSource));
+        const int sourceKey = findParamIndex (hashKey ("mod01.aux_source"));
+        juce::PopupMenu aux;
+        aux.addItem (1000, "None", true, current == 0);
+        aux.addSeparator();
+        for (int s = 1; s <= kNumModSources; ++s)
+            aux.addItem (s, modSourceTable()[s - 1].name, capStateForValue (sourceKey, static_cast<float> (s), sheet.ctx.host.engineCaps()).available, s == current);
+        juce::PopupMenu menu;
+        menu.addSubMenu ("Aux Source", aux);
+        menu.addItem (2000, "Edit Custom Curve...", static_cast<bool> (sheet.ctx.view->openSlotCurve));
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                            [safe = juce::Component::SafePointer<ModRow> (this), slotIndex = entry.slot] (int result)
+                            {
+                                if (result <= 0 || safe == nullptr)
+                                    return;
+                                auto& sheetRef = safe->sheet;
+                                if (result == 2000)
+                                {
+                                    const auto openCurve = sheetRef.ctx.view->openSlotCurve;
+                                    sheetRef.close();   // the sheet is gone after this: the callback is a copy
+                                    if (openCurve)
+                                        openCurve (slotIndex);
+                                    return;
+                                }
+                                const auto p = modSlotParams (slotIndex);
+                                if (p.auxSource >= 0)
+                                {
+                                    sheetRef.ctx.assign.matrix().set (p.auxSource, static_cast<float> (result == 1000 ? 0 : result));
+                                    sheetRef.ctx.assign.refresh();
+                                    sheetRef.ctx.assign.sendChangeMessage();
+                                }
+                            });
+    }
+
     void paint (juce::Graphics& g) override
     {
         const auto& t = sheet.ctx.theme;
@@ -38,7 +86,14 @@ public:
         g.setColour (entry.bypass ? t.colours.textDim : t.colours.text);
         g.setFont (t.valueFont());
         const ParamInfo& amount = *findParamByKey ("mod01.amount");
-        g.drawFittedText (juce::String (modSourceTable()[entry.source - 1].name) + "   " + juce::String (displayText (amount, entry.amount)),
+        juce::String aux;   // the aux source of the connection, if it has one (GROUPB WP-08)
+        {
+            const auto params = modSlotParams (entry.slot);
+            const int auxChoice = params.auxSource >= 0 ? juce::roundToInt (sheet.ctx.assign.matrix().get (params.auxSource)) : 0;
+            if (auxChoice >= 1 && auxChoice <= kNumModSources)
+                aux = juce::String ("  x ") + modSourceTable()[auxChoice - 1].name;
+        }
+        g.drawFittedText (juce::String (modSourceTable()[entry.source - 1].name) + aux + "   " + juce::String (displayText (amount, entry.amount)),
                           getLocalBounds().withTrimmedLeft (t.ipx (16.0f)).withTrimmedRight (t.touch() * 2 + t.gap()),
                           juce::Justification::centredLeft, 1);
     }
