@@ -494,3 +494,46 @@ TEST (vital_import_inside_the_plugin_with_synthetic_fixtures)
     CHECK (! importVitalFileForPlugin ("x.txt", bytesOf ("hello"), store, user, kCapAllKnown).ok);
     CHECK (! importVitalFileForPlugin ("x.vitaltable", bytesOf ("{}"), store, user, kCapAllKnown).error.empty());
 }
+
+// GROUPA2 (WP-07): the voice control as an item of the user library
+TEST (library_item_voice_control_holds_the_62_keys_and_applies_a_complete_configuration)
+{
+    const auto setKey = [] (ParamValues& v, const char* key, float x) { v.plain[static_cast<size_t> (findParamIndex (findParamByKey (key)->id))] = x; };
+    const auto getKey = [] (const ParamValues& v, const char* key) { return v.plain[static_cast<size_t> (findParamIndex (findParamByKey (key)->id))]; };
+    ParamValues a = ParamValues::defaults();
+    setKey (a, "voicectl.length", 5.0f);
+    setKey (a, "voicectl.s3.detune", -12.5f);
+    setKey (a, "voicectl.s8.mod2", 100.0f);
+    setKey (a, "voicectl.rand.detune10x", 1.0f);
+    setKey (a, "voicectl.scale.lfo", 150.0f);
+    setKey (a, "voicectl.osc.sub", 0.0f);
+    setKey (a, "master.volume", -20.0f);
+    const std::string item = serializeVoiceControlPreset ("Wide \"drift\"", a);
+    int keys = 0;
+    for (size_t pos = item.find ("\"voicectl."); pos != std::string::npos; pos = item.find ("\"voicectl.", pos + 1)) ++keys;
+    CHECK_EQ (keys, 62);
+    CHECK (item.find ("master.volume") == std::string::npos);
+    CHECK (isVoiceControlKey ("voicectl.s1.pan") && ! isVoiceControlKey ("voice.phase_legato") && ! isVoiceControlKey (nullptr));
+
+    // applying: the voice control is replaced as a whole (what the item does not mention is the default), everything else stays
+    ParamValues b = ParamValues::defaults();
+    setKey (b, "voicectl.s1.pan", 77.0f);
+    setKey (b, "master.volume", -3.0f);
+    CHECK_EQ (applyVoiceControlPreset (item, b), 62);
+    CHECK_EQ (getKey (b, "voicectl.length"), 5.0f);
+    CHECK_NEAR (getKey (b, "voicectl.s3.detune"), -12.5f, 1.0e-4f);
+    CHECK_EQ (getKey (b, "voicectl.s8.mod2"), 100.0f);
+    CHECK_EQ (getKey (b, "voicectl.rand.detune10x"), 1.0f);
+    CHECK_NEAR (getKey (b, "voicectl.scale.lfo"), 150.0f, 1.0e-3f);
+    CHECK_EQ (getKey (b, "voicectl.osc.sub"), 0.0f);
+    CHECK_EQ (getKey (b, "voicectl.s1.pan"), 0.0f);
+    CHECK_EQ (getKey (b, "master.volume"), -3.0f);
+    CHECK_EQ (applyVoiceControlPreset ("{\"format\":\"synthyboy-fx-rack\"}", b), 0);
+    CHECK_EQ (applyVoiceControlPreset ("garbage", b), 0);
+    // a foreign key and an out of range value: skipped / clamped
+    ParamValues c = ParamValues::defaults();
+    CHECK_EQ (applyVoiceControlPreset ("{\"format\":\"synthyboy-voice-control\",\"version\":1,\"values\":{\"osc1.level\":5,\"voicectl.s1.pan\":1e9,\"voicectl.length\":0,\"nonsense\":1}}", c), 2);
+    CHECK_EQ (getKey (c, "voicectl.s1.pan"), 100.0f);
+    CHECK_EQ (getKey (c, "voicectl.length"), 1.0f);
+    CHECK_EQ (getKey (c, "osc1.level"), ParamValues::defaults().plain[static_cast<size_t> (findParamIndex (findParamByKey ("osc1.level")->id))]);
+}

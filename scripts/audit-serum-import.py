@@ -543,6 +543,45 @@ class Audit:
         self.stats['strays'] += len(strays)
         self.audit_content(name, tree, sb, content_dir)
         self.audit_noise(name, tree, sb)
+        self.audit_voice_panel(name, tree, sb)
+
+    VOICE_ROWS = {'Pan': 'pan', 'Detune': 'detune', 'FilterCutoff': 'cutoff', 'EnvTime': 'env', 'Mod1': 'mod1', 'Mod2': 'mod2'}
+    VOICE_OTHER = {'kParamVoiceCount': 'voicectl.length', 'kParamGlobalRandomOscPan': 'voicectl.rand.pan', 'kParamGlobalRandomOscDetune': 'voicectl.rand.detune',
+                   'kParamGlobalRandomOscDetune10x': 'voicectl.rand.detune10x', 'kParamGlobalRandomFilterCutoff': 'voicectl.rand.cutoff',
+                   'kParamGlobalRandomEnvTime': 'voicectl.rand.env', 'kParamGlobalScalingEnvTime': 'voicectl.scale.env', 'kParamGlobalScalingLfoTime': 'voicectl.scale.lfo',
+                   'kParamGlobalScalingLfoTimeSnap': 'voicectl.scale.lfo_mode', 'kParamOscA': 'voicectl.osc.a', 'kParamOscB': 'voicectl.osc.b', 'kParamOscC': 'voicectl.osc.c',
+                   'kParamOscN': 'voicectl.osc.noise', 'kParamOscS': 'voicectl.osc.sub'}
+
+    def audit_voice_panel(self, name, tree, sb):
+        """GROUPA2 (WP-07, A379): VoicePanel0/plainParams -> voicectl.*; what the panel does not mention is the default (all steps zero, 8 steps, scaling 100 %, every target)."""
+        params = sb['state']['params']
+        vp = tree.get('VoicePanel0')
+        pp = vp.get('plainParams') if isinstance(vp, dict) else None
+        if not isinstance(pp, dict):
+            pp = {}
+        want = {}
+        for pname, v in pp.items():
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                continue
+            m = re.match(r'kParamVoice([1-8])(Pan|Detune|FilterCutoff|EnvTime|Mod1|Mod2)$', pname)
+            if m:
+                want['voicectl.s%s.%s' % (m.group(1), self.VOICE_ROWS[m.group(2)])] = float(v)
+            elif pname in self.VOICE_OTHER:
+                key = self.VOICE_OTHER[pname]
+                if key.startswith('voicectl.osc.') or key in ('voicectl.rand.detune10x', 'voicectl.scale.lfo_mode'):
+                    v = 1.0 if v >= 0.5 else 0.0
+                want[key] = float(v)
+            else:
+                self.err(name, 'VoicePanel0 parameter %s has no row of the audit' % pname)
+        if want:
+            self.stats['voice panels checked'] += 1
+        for key, value in want.items():
+            self.check_value(name, 'VoicePanel0/plainParams', sb, key, value, 'VoicePanel0')
+        for key, info in T.by_key.items():
+            if key.startswith('voicectl.') and key not in want:
+                got = params.get(key)
+                if got is not None and abs(got - T.clamp(key, info['default'])) > 1e-6:
+                    self.err(name, '%s is %s, the panel does not mention it (default %s)' % (key, got, info['default']))
 
     SERUM_ROOT = ''
 
@@ -628,7 +667,7 @@ class Audit:
         got = sb['state']['params'].get('mod%02d.source' % slot)
         self.stats['mod sources'] += 1
         base = {1: 'mod_wheel', 2: 'env1', 3: 'env2', 4: 'env3', 5: 'env4', 16: 'velocity', 17: 'note', 18: 'aftertouch', 19: 'poly_aftertouch', 21: 'random', 22: 'random', 33: 'pitch_wheel',
-                35: 'slide', 36: 'poly_aftertouch', 37: 'lift', 59: 'random'}
+                35: 'slide', 36: 'poly_aftertouch', 37: 'lift', 56: 'voice_mod1', 57: 'voice_mod2', 58: 'voice_index', 59: 'random'}
         sid = src[0]
         if 6 <= sid <= 13:
             want_key = 'lfo%d' % (sid - 5)
@@ -775,7 +814,7 @@ def main():
     mutation_ok = True
     if a.selftest and first:
         rel, src, report, preset = first
-        muts = [('osc1.level', 3.0), ('filter1.cutoff', 77.0), ('env1.attack', 999.0), ('master.volume', 5.0), ('lfo1.rate', 17.0), ('mod01.amount', -77.0), ('osc1.unison.voices', 11.0)]
+        muts = [('osc1.level', 3.0), ('filter1.cutoff', 77.0), ('env1.attack', 999.0), ('master.volume', 5.0), ('lfo1.rate', 17.0), ('mod01.amount', -77.0), ('osc1.unison.voices', 11.0), ('voicectl.s1.pan', 33.0)]
         for key, val in muts:
             if key not in preset['state']['params']:
                 continue

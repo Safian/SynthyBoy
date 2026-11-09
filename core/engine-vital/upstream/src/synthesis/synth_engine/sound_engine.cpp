@@ -229,6 +229,8 @@ namespace sbvital {
     mapping.fold = fold;
     voice_handler_->setOscMapping(osc, mapping);
   }
+  void SoundEngine::setVoiceControl(const VoiceHandler::VoiceControl& control) { voice_handler_->setVoiceControl(control); }
+  void SoundEngine::setLfoRateScale(mono_float scale) { voice_handler_->setLfoRateScale(scale); }
   void SoundEngine::setNoteTable(const mono_float* table) { voice_handler_->setNoteTable(table); }
   void SoundEngine::retuneVoices(const mono_float* table) { voice_handler_->retuneVoices(table); }
   void SoundEngine::setNotePitchBend(int note, int channel, mono_float semitones) {

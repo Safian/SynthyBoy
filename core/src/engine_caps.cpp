@@ -39,6 +39,9 @@ int numberAfter (const char* s, const char* prefix) noexcept
 
 EngineCapsMask classify (const char* key) noexcept
 {
+    // block B26 (GROUPA2, WP-07): voice control
+    if (startsWith (key, "voicectl."))
+        return kCapVoiceControl;
     // block B22: the keys of the effect instance pool (fxiNN.type / on / rack / order / pKK)
     if (startsWith (key, "fxi") && key[3] >= '0' && key[3] <= '9')
         return kCapFxInstances;
@@ -202,6 +205,8 @@ EngineCapsMask sourceCaps (int choice) noexcept
         return kCapModSourcesExtra;
     if (choice == 39)
         return kCapModAmount;
+    if (choice <= 42)
+        return kCapVoiceSources;
     return kCapNone;
 }
 } // namespace
@@ -340,6 +345,8 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapMpeRouting:       return "mpe_routing";
         case kCapFxDelayOffsetLeft: return "fx_delay_offset_left";
         case kCapReverbFeedback:   return "reverb_feedback";
+        case kCapVoiceControl:     return "voice_control";
+        case kCapVoiceSources:     return "voice_sources";
         case kCapNone:             break;
     }
     return "";

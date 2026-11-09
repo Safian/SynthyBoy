@@ -113,6 +113,16 @@ namespace sbvital {
       osc_mute_[i].owner = &voice_router_;
       osc_fold_[i].owner = &voice_router_;
     }
+    voice_index_.owner = &voice_router_;
+    voice_cutoff_.owner = &voice_router_;
+    voice_env_time_.owner = &voice_router_;
+    voice_env_time_.trigger_value = 1.0f;
+    for (int i = 0; i < 2; ++i)
+      voice_mod_[i].owner = &voice_router_;
+    for (int i = 0; i < kVoiceControlTargets; ++i) {
+      voice_pan_[i].owner = &voice_router_;
+      voice_detune_[i].owner = &voice_router_;
+    }
     active_mask_.owner = &voice_router_;
     mod_wheel_.owner = &voice_router_;
     pitch_wheel_.owner = &voice_router_;
@@ -190,9 +200,55 @@ namespace sbvital {
     }
   }
 
+  namespace {
+    // a draw in [-1, 1) that depends on the seed, the note counter and the stream only
+    force_inline mono_float voiceControlDraw(unsigned int seed, unsigned int count, unsigned int stream) {
+      unsigned int x = seed ^ (count * 0x9e3779b1u) ^ (stream * 0x85ebca6bu);
+      x ^= x >> 16;
+      x *= 0x7feb352du;
+      x ^= x >> 15;
+      x *= 0x846ca68bu;
+      x ^= x >> 16;
+      return static_cast<mono_float>(x >> 8) * (1.0f / 8388608.0f) - 1.0f;
+    }
+
+    force_inline mono_float clampUnit(mono_float v) { return v < -1.0f ? -1.0f : (v > 1.0f ? 1.0f : v); }
+  }
+
+  VoiceHandler::VoiceControlValues VoiceHandler::evaluateVoiceControl(const VoiceControl& control, int sequence) {
+    VoiceControlValues out;
+    const int length = control.length < 1 ? 1 : (control.length > kVoiceControlSteps ? kVoiceControlSteps : control.length);
+    const unsigned int count = sequence > 0 ? static_cast<unsigned int>(sequence) : 1u;
+    const int step = static_cast<int>((count - 1u) % static_cast<unsigned int>(length));
+    out.index = length > 1 ? static_cast<mono_float>(step) / static_cast<mono_float>(length - 1) : 0.0f;
+    out.mod1 = clampUnit(control.mod1[step] * 0.01f);
+    out.mod2 = clampUnit(control.mod2[step] * 0.01f);
+
+    const mono_float pan = clampUnit((control.pan[step] + control.rand_pan * voiceControlDraw(control.seed, count, 1)) * 0.01f);
+    const mono_float cents = control.detune[step] + control.rand_detune * voiceControlDraw(control.seed, count, 2);
+    for (int i = 0; i < kVoiceControlTargets; ++i) {
+      out.pan[i] = control.target[i] ? pan : 0.0f;
+      out.semitones[i] = control.target[i] ? cents * 0.01f : 0.0f;
+    }
+    out.cutoff = (control.cutoff[step] + control.rand_cutoff * voiceControlDraw(control.seed, count, 3)) * 0.01f * kVoiceControlCutoffSemitones;
+    const mono_float env = clampUnit((control.env[step] + control.rand_env * voiceControlDraw(control.seed, count, 4)) * 0.01f);
+    out.env_time = control.env_scale * std::exp2(env * kVoiceControlEnvOctaves);
+    return out;
+  }
+
   void VoiceHandler::prepareVoiceValues(AggregateVoice* aggregate_voice) {
     for (Voice* voice : aggregate_voice->voices) {
       poly_mask mask = voice->voice_mask();
+      const VoiceControlValues control = evaluateVoiceControl(voice_control_, voice->state().sequence);
+      voice_index_.trigger_value = utils::maskLoad(voice_index_.trigger_value, control.index, mask);
+      voice_mod_[0].trigger_value = utils::maskLoad(voice_mod_[0].trigger_value, control.mod1, mask);
+      voice_mod_[1].trigger_value = utils::maskLoad(voice_mod_[1].trigger_value, control.mod2, mask);
+      voice_cutoff_.trigger_value = utils::maskLoad(voice_cutoff_.trigger_value, control.cutoff, mask);
+      voice_env_time_.trigger_value = utils::maskLoad(voice_env_time_.trigger_value, control.env_time, mask);
+      for (int i = 0; i < kVoiceControlTargets; ++i) {
+        voice_pan_[i].trigger_value = utils::maskLoad(voice_pan_[i].trigger_value, control.pan[i], mask);
+        voice_detune_[i].trigger_value = utils::maskLoad(voice_detune_[i].trigger_value, control.semitones[i], mask);
+      }
       int channel = voice->state().channel;
       poly_float note = utils::maskLoad(note_.trigger_value, voice->state().tuned_note, mask);
       note_.trigger_value = note;
@@ -236,7 +292,7 @@ namespace sbvital {
         }
         bool muted = !key_ok || velocity < vel_low || velocity > vel_high;
         osc_mute_[osc].trigger_value = utils::maskLoad(osc_mute_[osc].trigger_value, muted ? 1.0f : 0.0f, mask);
-        osc_fold_[osc].trigger_value = utils::maskLoad(osc_fold_[osc].trigger_value, fold, mask);
+        osc_fold_[osc].trigger_value = utils::maskLoad(osc_fold_[osc].trigger_value, fold + control.semitones[osc], mask);
       }
 
       bool dead = voice->key_state() == Voice::kDead;
@@ -498,6 +554,7 @@ namespace sbvital {
   }
 
   void VoiceHandler::allSoundsOff() {
+    sequence_ = 0;
     pressed_notes_.clear();
     last_played_note_ = -1.0f;
 
@@ -715,6 +772,7 @@ namespace sbvital {
 
     total_notes_++;
     voice->activate(note, tuned_note, velocity, last_note, pressed_notes_.size(), total_notes_, sample, channel);
+    voice->setSequence(++sequence_);
     voice->setLocalPitchBend(pitch_wheel_values_[channel]);
     voice->setAftertouch(pressure_values_[channel]);
     voice->setSlide(slide_values_[channel]);
@@ -760,6 +818,7 @@ namespace sbvital {
             total_notes_++;
             new_voice->activate(old_note, tuned_note, voice->state().velocity,
                                 last_played_note_, pressed_notes_.size() + 1, total_notes_, sample, old_channel);
+            new_voice->setSequence(++sequence_);
             voice->setLocalPitchBend(pitch_wheel_values_[channel]);
             voice->setAftertouch(pressure_values_[channel]);
             voice->setSlide(slide_values_[channel]);

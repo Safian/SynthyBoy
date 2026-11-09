@@ -37,6 +37,7 @@ namespace sbvital {
         kRawMidi,
         kVoicePhaseLegato,
         kNoteCount,
+        kVoicePan,     // SynthyBoy (GROUPA2, WP-07): per voice pan offset of the voice control, -1..1
         kNumInputs
       };
 

@@ -125,7 +125,8 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
             if (! out.ok) out.error = "the shape has fewer than two points";
             return out;
         }
-        if (r.kind != SerumFileKind::preset && r.kind != SerumFileKind::fxModule && r.kind != SerumFileKind::fxRack)
+        if (r.kind != SerumFileKind::preset && r.kind != SerumFileKind::fxModule && r.kind != SerumFileKind::fxRack
+            && r.kind != SerumFileKind::style)
         {
             out.ok = true; // the family has no equivalent: the report lists what the file holds
             out.error = "no equivalent in this synthesizer";

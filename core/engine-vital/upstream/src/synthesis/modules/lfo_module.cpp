@@ -18,6 +18,7 @@
 #include "lfo_module.h"
 
 #include "line_generator.h"
+#include "operators.h"
 #include "synth_lfo.h"
 
 namespace sbvital {
@@ -41,6 +42,14 @@ namespace sbvital {
     Output* smooth_time = createPolyModControl(prefix_ + "_smooth_time");
 
     Output* frequency = createTempoSyncSwitch(prefix_, free_frequency->owner, beats_per_second_, true, input(kMidi));
+    {
+      // SynthyBoy (GROUPA2, WP-07): the voice control scales the rate of free and tempo synced LFOs alike
+      cr::Multiply* scaled = new cr::Multiply();
+      scaled->plug(frequency, 0);
+      scaled->useInput(input(kRateScale), 1);
+      addProcessor(scaled);
+      frequency = scaled->output();
+    }
     lfo_->useInput(input(kNoteTrigger), SynthLfo::kNoteTrigger);
     lfo_->useInput(input(kNoteCount), SynthLfo::kNoteCount);
 

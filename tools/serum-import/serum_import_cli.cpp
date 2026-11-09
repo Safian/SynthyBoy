@@ -5,7 +5,7 @@
 //   --in           a .SerumPreset, .SerumFX / .SerumFXRack (an effect chain), .XferShape (an LFO shape or a curve), a .flac / .wav of an Impulses folder, any
 //                  other Serum 2 file (reported as not modelled), or a directory (searched recursively for all of these)
 //   --out          output directory (default ./serum-import-out): <name>.sbpreset + <name>.report.json for a preset or chain (the folder structure of a
-//                  directory input is kept), <name>.lfoshape.json for a shape
+//                  directory input is kept), <name>.lfoshape.json for a shape, <name>.voicecontrol.json for a .SerumStyle (an item of the user library)
 //   --serum-root   the Serum content folder (the parent of Tables / Samples / Multisamples / Impulses) the files of a preset are read from; default: the
 //                  nearest ancestor of the input file that has a Tables or Samples folder
 //   --content-dir  user content directory for the imported tables, samples and impulses (default OUT/content)
@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "synthyboy/engine_caps.h"
+#include "synthyboy/library_items.h"
 #include "synthyboy/serum_plugin_import.h"
 
 namespace fs = std::filesystem;
@@ -215,10 +216,12 @@ int main (int argc, char** argv)
             continue;
         }
         const bool notModelled = r.kind != SerumFileKind::preset && r.kind != SerumFileKind::fxModule && r.kind != SerumFileKind::fxRack && r.kind != SerumFileKind::shape
-                                 && r.kind != SerumFileKind::impulse;
+                                 && r.kind != SerumFileKind::impulse && r.kind != SerumFileKind::style;
         if (notModelled) ++t.notModelled;
         ++t.ok;
         if (! r.presetText.empty()) writeFile (fs::path (base).concat (".sbpreset"), r.presetText);
+        // a .SerumStyle is a voice control configuration: the item of the user library (category voice_control)
+        if (r.kind == SerumFileKind::style) writeFile (fs::path (base).concat (".voicecontrol.json"), serializeVoiceControlPreset (fs::path (fileName).stem().string(), r.values));
         if (r.kind == SerumFileKind::shape) writeFile (fs::path (base).concat (".lfoshape.json"), serializeLfoShapeFile (r.shape));
         if (! r.reportJson.empty()) writeFile (fs::path (base).concat (".report.json"), r.reportJson);
         const SerumImportReport& rep = r.report;

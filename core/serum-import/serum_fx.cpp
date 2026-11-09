@@ -932,6 +932,13 @@ void Importer::runShape()
     unmappedTopLevel();
 }
 
+void Importer::runStyle()
+{
+    meta();
+    voicePanel (true);
+    unmappedTopLevel();
+}
+
 void Importer::runUnmapped (const char* what)
 {
     meta();

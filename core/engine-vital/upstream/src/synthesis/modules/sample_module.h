@@ -27,6 +27,8 @@ namespace sbvital {
         kReset,
         kMidi,
         kNoteCount,
+        kVoicePan,     // SynthyBoy (GROUPA2, WP-07): per voice pan (-1..1) and detune (semitones) of the voice control
+        kVoiceDetune,
         kNumInputs
       };
 

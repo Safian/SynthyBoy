@@ -27,6 +27,7 @@ namespace sbvital {
       enum {
         kNoteTrigger,
         kMidi,
+        kRateScale,    // SynthyBoy (GROUPA2, WP-07): factor of the frequency, the LFO scaling of the voice control
         kNumInputs
       };
 

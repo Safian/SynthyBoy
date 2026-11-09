@@ -57,6 +57,7 @@ namespace sbvital {
       oscillators_[i]->useInput(input(kRawMidi), OscillatorModule::kRawMidi);
       oscillators_[i]->useInput(input(kVoicePhaseLegato), OscillatorModule::kVoicePhaseLegato);
       oscillators_[i]->useInput(input(kNoteCount), OscillatorModule::kNoteCount);
+      oscillators_[i]->useInput(input(kVoicePan1 + i), OscillatorModule::kVoicePan);
     }
 
     sample_destination_ = createBaseControl("sample_destination");
@@ -80,11 +81,15 @@ namespace sbvital {
     sampler_->useInput(input(kReset), SampleModule::kReset);
     sampler_->useInput(input(kNoteCount), SampleModule::kNoteCount);
     sampler_->useInput(input(kMidi), SampleModule::kMidi);
+    sampler_->useInput(input(kVoicePanNoise), SampleModule::kVoicePan);
+    sampler_->useInput(input(kVoiceDetuneNoise), SampleModule::kVoiceDetune);
 
     sub_module_->useInput(input(kReset), SubModule::kReset);
     sub_module_->useInput(input(kMidi), SubModule::kMidi);
     sub_module_->useInput(input(kActiveVoices), SubModule::kActiveVoices);
     sub_module_->useInput(input(kLowestNote), SubModule::kLowestNote);
+    sub_module_->useInput(input(kVoicePanSub), SubModule::kVoicePan);
+    sub_module_->useInput(input(kVoiceDetuneSub), SubModule::kVoiceDetune);
 
     SynthModule::init();
     for (int i = 0; i < kNumOscillators; ++i) {

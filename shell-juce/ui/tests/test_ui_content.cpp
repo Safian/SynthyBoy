@@ -23,6 +23,7 @@
 #include "ui/Editor.h"
 #include "ui/LibraryMenu.h"
 #include "ui/panels/FxRackView.h"
+#include "ui/panels/GlbVoiceControlPanel.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/NoisePanel.h"
 #include "ui/panels/OscWaveView.h"
@@ -925,4 +926,109 @@ TEST (content_wavetable_editor_imports_real_files_saves_and_exports)
     wtedit::Wavetable cycle;
     CHECK (wavetableFromWav (readFileBytes (juce::File (juce::String ((h.workDir() / "cycle.wav").string()))), "c", cycle));
     CHECK_EQ (cycle.numFrames(), static_cast<size_t> (1));
+}
+
+// GROUPA2 (WP-07): the voice control panel - the step grid, the sequence length, Init, the user library and a .SerumStyle file (phone and tablet)
+TEST (content_voice_control_panel_steps_length_init_presets_and_style_file)
+{
+    struct Size { int w; bool twoLines; };
+    for (const Size sz : { Size { 390, true }, Size { 1024, false } })
+    {
+        Host h ("voicectl");
+        GlbVoiceControlPanel panel (h.ctx);
+        panel.build();
+        panel.setBounds (0, 0, sz.w, panel.preferredHeight (sz.w));
+        CHECK_EQ (panel.controls().size(), size_t { 62 });
+        CHECK_EQ (panel.keys().size(), size_t { 62 });
+        const int touch = h.theme.touch();
+
+        // one row of eight cells is shown, every target is a 44 point target and inside the panel; a phone folds the grid into two lines of four
+        const auto check = [&] (int row)
+        {
+            for (int s = 0; s < 8; ++s)
+                for (int r = 0; r < 6; ++r)
+                    CHECK_EQ (panel.cell (s, r)->isVisible(), r == row);
+            for (int s = 0; s < 8; ++s)
+            {
+                const auto* c = panel.cell (s, row);
+                CHECK (c->getWidth() >= touch && c->getHeight() >= touch);
+                CHECK (c->getRight() <= panel.getWidth() && c->getX() >= 0);
+                CHECK (panel.numberButton (s).getWidth() >= touch && panel.numberButton (s).getHeight() >= touch);
+                CHECK_EQ (panel.numberButton (s).getX(), c->getX());
+            }
+            CHECK_EQ (panel.cell (4, row)->getY() > panel.cell (0, row)->getY(), sz.twoLines);
+        };
+        check (0);
+        for (int r = 0; r < 6; ++r)
+        {
+            CHECK (panel.rowButton (r).getWidth() >= touch && panel.rowButton (r).getHeight() >= touch);
+            panel.rowButton (r).onClick();
+            CHECK_EQ (panel.selectedRow(), r);
+            CHECK (panel.rowButton (r).getToggleState());
+            check (r);
+        }
+        CHECK (panel.initButtonRef().getHeight() >= touch && panel.presetsButtonRef().getHeight() >= touch);
+
+        // a drag on a cell is a gesture on its key; a double tap would reset it
+        panel.selectRow (1);
+        CHECK_NEAR (readParameter (h.proc, "voicectl.s2.detune"), 0.0, 1.0e-4);
+        panel.cell (1, 1)->nudgeNormalised (0.25f);
+        CHECK (readParameter (h.proc, "voicectl.s2.detune") > 20.0f);
+        panel.cell (3, 4)->nudgeNormalised (-0.2f);
+        CHECK (readParameter (h.proc, "voicectl.s4.mod1") < -10.0f);
+
+        // the numbers are the sequence length
+        CHECK_EQ (panel.sequenceLength(), 8);
+        panel.numberButton (2).onClick();
+        CHECK_EQ (static_cast<int> (readParameter (h.proc, "voicectl.length") + 0.5f), 3);
+        CHECK_EQ (panel.sequenceLength(), 3);
+        CHECK (panel.numberButton (1).getToggleState() && ! panel.numberButton (5).getToggleState());
+        setParameter (h.proc, "voicectl.length", 6.0f); // from outside (automation, a preset)
+        CHECK_EQ (panel.sequenceLength(), 6);
+        CHECK (panel.numberButton (5).getToggleState() && ! panel.numberButton (6).getToggleState());
+
+        // the user library: save, change, load
+        setParameter (h.proc, "voicectl.rand.pan", 40.0f);
+        CHECK (panel.presets().saveCurrent ("Mine"));
+        setParameter (h.proc, "voicectl.rand.pan", 0.0f);
+        setParameter (h.proc, "voicectl.s1.pan", 77.0f);
+        CHECK (panel.presets().load ("Mine"));
+        CHECK_NEAR (readParameter (h.proc, "voicectl.rand.pan"), 40.0, 1.0e-3);
+        CHECK_NEAR (readParameter (h.proc, "voicectl.s1.pan"), 0.0, 1.0e-3);         // a saved configuration is complete: the step it did not change is the default
+        CHECK (readParameter (h.proc, "voicectl.s2.detune") > 20.0f);
+        CHECK (! panel.presets().load ("Nothing"));
+        juce::PopupMenu menu;
+        panel.presets().addTo (menu, 1000);
+        CHECK (menu.getNumItems() >= 3);
+
+        // Init: every key is the default, the cells and the buttons follow
+        panel.initialise();
+        for (size_t i = 0; i < paramCount(); ++i)
+            if (isVoiceControlKey (paramTable()[i].key))
+                CHECK_NEAR (readParameter (h.proc, paramTable()[i].key), paramTable()[i].def, 1.0e-4);
+        CHECK_EQ (panel.sequenceLength(), 8);
+        CHECK (panel.numberButton (7).getToggleState());
+
+        // a .SerumStyle file ("Presets" -> Load from file...): the whole panel is written
+        const fs::path style = writeBytes (h.workDir() / "2 Voice Pan.SerumStyle",
+            sbserum::container ("SerumStyle", sbserum::map ({ { "VoicePanel0", sbserum::map ({ { "plainParams",
+                sbserum::plain ({ { "kParamVoiceCount", 2 }, { "kParamVoice1Pan", 50 }, { "kParamVoice2Pan", -50 } }) } }) } }), "2 Voice Pan"));
+        const SerumFlowResult styled = importSerumFile (h.ctx, juce::File (style.string()), 0);
+        CHECK (styled.flow.ok);
+        CHECK_EQ (static_cast<int> (readParameter (h.proc, "voicectl.length") + 0.5f), 2);
+        CHECK_NEAR (readParameter (h.proc, "voicectl.s1.pan"), 50.0, 1.0e-3);
+        CHECK_NEAR (readParameter (h.proc, "voicectl.s2.pan"), -50.0, 1.0e-3);
+        CHECK_EQ (panel.sequenceLength(), 2);
+        CHECK (styled.imported.kind == SerumFileKind::style);
+        // the patch around the panel was not touched
+        CHECK_NEAR (readParameter (h.proc, "osc1.level"), 100.0, 1.0e-3);
+
+        // More: the random amounts and the oscillator mask are controls, the layout keeps inside the panel
+        panel.setMoreExpanded (true);
+        panel.setBounds (0, 0, sz.w, panel.preferredHeight (sz.w));
+        for (const auto& c : panel.controls())
+            if (c->isVisible())
+                CHECK (c->getRight() <= panel.getWidth() && c->getBottom() <= panel.getHeight());
+        CHECK_EQ (panel.cell (0, panel.selectedRow())->isVisible(), true);
+    }
 }

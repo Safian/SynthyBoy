@@ -20,6 +20,7 @@
 #include "circular_queue.h"
 #include "synth_module.h"
 #include "note_handler.h"
+#include "voice_handler.h"
 
 class LineGenerator;
 class Tuning;
@@ -60,6 +61,9 @@ namespace sbvital {
 
       void setTuning(const Tuning* tuning);
       void setOscMapping(int osc, int key_low, int key_high, int vel_low, int vel_high, bool fold);
+      /** SynthyBoy (GROUPA2, WP-07): the voice control (per voice values by note counter) and the factor of the LFO rates. */
+      void setVoiceControl(const VoiceHandler::VoiceControl& control);
+      void setLfoRateScale(mono_float scale);
       void setNoteTable(const mono_float* table);
       void retuneVoices(const mono_float* table);
       void setNotePitchBend(int note, int channel, mono_float semitones);

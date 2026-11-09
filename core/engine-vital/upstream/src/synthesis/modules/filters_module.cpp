@@ -36,6 +36,7 @@ namespace sbvital {
     filter_1_->useInput(input(kReset), FilterModule::kReset);
     filter_1_->useInput(input(kKeytrack), FilterModule::kKeytrack);
     filter_1_->useInput(input(kMidi), FilterModule::kMidi);
+    filter_1_->useInput(input(kVoiceCutoff), FilterModule::kVoiceCutoff);
 
     filter_2_filter_input_ = createBaseControl("filter_2_filter_input");
     filter_2_ = new FilterModule("filter_2");
@@ -46,6 +47,7 @@ namespace sbvital {
     filter_2_->useInput(input(kReset), FilterModule::kReset);
     filter_2_->useInput(input(kKeytrack), FilterModule::kKeytrack);
     filter_2_->useInput(input(kMidi), FilterModule::kMidi);
+    filter_2_->useInput(input(kVoiceCutoff), FilterModule::kVoiceCutoff);
 
     SynthModule::init();
   }

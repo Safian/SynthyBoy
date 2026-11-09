@@ -29,7 +29,7 @@ namespace sbvital {
   // one baked table per voice of its voice pair and bakes it again only when a source it depends on has moved.
   class LfoPointModulation {
     public:
-      static constexpr int kMaxSources = 40;      // >= synthyboy::kNumModSources (checked by the adapter)
+      static constexpr int kMaxSources = 48;      // >= synthyboy::kNumModSources (checked by the adapter)
       static constexpr int kMaxResolution = 2048;
 
       virtual ~LfoPointModulation() { }

@@ -147,6 +147,8 @@ std::string vitalSourceName (int index)
     static const char* const extra[] = { "lift", "slide", "note_in_octave", "poly_aftertouch" };
     if (index < 38) return extra[index - 34];
     if (index == 38) return "stereo";
+    static const char* const voice[] = { "voice_index", "voice_mod1", "voice_mod2" }; // block B26 (GROUPA2, WP-07)
+    if (index >= 39 && index < 42) return voice[index - 39];
     return "";
 }
 
@@ -663,7 +665,8 @@ public:
              | kCapFxInstances // block B22: proven by core/engine-vital/tests/test_fxinstances.cpp (a slot of every type renders what instance 0 renders)
              | kCapSubPhase | kCapNoiseColour | kCapNoiseSample // block B23 (GROUPA1 WP-04): proven by core/engine-vital/tests/test_noisesample.cpp
              | kCapMpeRouting // block B24 (GROUPA1 WP-09): proven by core/engine-vital/tests/test_mpe.cpp
-             | kCapFxDelayOffsetLeft | kCapReverbFeedback; // block B25 (GROUPA1 WP-10): proven by core/engine-vital/tests/test_fxextra.cpp
+             | kCapFxDelayOffsetLeft | kCapReverbFeedback // block B25 (GROUPA1 WP-10): proven by core/engine-vital/tests/test_fxextra.cpp
+             | kCapVoiceControl | kCapVoiceSources; // block B26 (GROUPA2 WP-07): proven by core/engine-vital/tests/test_voicecontrol.cpp
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -1085,6 +1088,23 @@ private:
         tuningScaleParam = find ("master.tuning.scale");
         mtsParam = find ("master.tuning.mts_esp");
         mtsNoteOnParam = find ("master.tuning.mts_note_on_only");
+        // block B26 (GROUPA2, WP-07): the voice control
+        {
+            vcLengthParam = find ("voicectl.length");
+            static const char* const kRows[6] = { "pan", "detune", "cutoff", "env", "mod1", "mod2" };
+            for (int n = 1; n <= 8; ++n)
+                for (int r = 0; r < 6; ++r)
+                    vcStepParam[static_cast<size_t> ((n - 1) * 6 + r)] = find ("voicectl.s" + std::to_string (n) + "." + kRows[r]);
+            static const char* const kRand[5] = { "pan", "detune", "cutoff", "env", "detune10x" };
+            for (int r = 0; r < 5; ++r)
+                vcRandParam[static_cast<size_t> (r)] = find (std::string ("voicectl.rand.") + kRand[r]);
+            vcScaleEnvParam = find ("voicectl.scale.env");
+            vcScaleLfoParam = find ("voicectl.scale.lfo");
+            vcScaleLfoModeParam = find ("voicectl.scale.lfo_mode");
+            static const char* const kTargets[5] = { "a", "b", "c", "noise", "sub" };
+            for (int t = 0; t < 5; ++t)
+                vcTargetParam[static_cast<size_t> (t)] = find (std::string ("voicectl.osc.") + kTargets[t]);
+        }
         mpeOnParam = find ("master.mpe.on");
         mpeRangeParam = find ("master.mpe.bend_range");
         mpeXyzMacroParam = find ("master.mpe.xyz_macro");
@@ -1633,6 +1653,7 @@ private:
         applyRemaps();
         applyOscMapping();
         applyMpe();
+        applyVoiceControl();
 
         if (routingParam >= 0)
         {
@@ -1954,6 +1975,38 @@ private:
             if (vOscMapWarp[i] != nullptr)
                 vOscMapWarp[i]->set (now[5] != 0 ? 1.0f : 0.0f);
         }
+    }
+
+    /** Voice control (GROUPA2, WP-07): the sequence, the random amounts, the scaling and the targets go to the voice handler, which picks the step of
+        every note by its note counter. Nothing is cached: the 62 values are read and handed over in every block (a copy of a few hundred bytes). */
+    void applyVoiceControl() noexcept
+    {
+        if (vcLengthParam < 0)
+            return;
+        const auto get = [this] (int index, float fallback) noexcept
+        { return index >= 0 ? params[static_cast<size_t> (index)].load (std::memory_order_relaxed) : fallback; };
+        sbvital::VoiceHandler::VoiceControl c;
+        c.length = std::clamp (static_cast<int> (get (vcLengthParam, 8.0f) + 0.5f), 1, 8);
+        for (size_t n = 0; n < 8; ++n)
+        {
+            c.pan[n] = get (vcStepParam[n * 6 + 0], 0.0f);
+            c.detune[n] = get (vcStepParam[n * 6 + 1], 0.0f);
+            c.cutoff[n] = get (vcStepParam[n * 6 + 2], 0.0f);
+            c.env[n] = get (vcStepParam[n * 6 + 3], 0.0f);
+            c.mod1[n] = get (vcStepParam[n * 6 + 4], 0.0f);
+            c.mod2[n] = get (vcStepParam[n * 6 + 5], 0.0f);
+        }
+        c.rand_pan = get (vcRandParam[0], 0.0f);
+        c.rand_detune = get (vcRandParam[1], 0.0f) * (get (vcRandParam[4], 0.0f) > 0.5f ? 10.0f : 1.0f);
+        c.rand_cutoff = get (vcRandParam[2], 0.0f);
+        c.rand_env = get (vcRandParam[3], 0.0f);
+        c.env_scale = std::clamp (get (vcScaleEnvParam, 100.0f), 25.0f, 400.0f) * 0.01f;
+        for (size_t t = 0; t < 5; ++t)
+            c.target[t] = get (vcTargetParam[t], 1.0f) > 0.5f;
+        engine->setVoiceControl (c);
+        // the LFO scaling: a time (Percent: 200 % = half the rate) or a rate (Rate: 200 % = twice the rate), A374
+        const float lfo = std::clamp (get (vcScaleLfoParam, 100.0f), 25.0f, 400.0f);
+        engine->setLfoRateScale (get (vcScaleLfoModeParam, 0.0f) > 0.5f ? lfo * 0.01f : 100.0f / lfo);
     }
 
     /** MPE on/off or a new range: every channel's pitch is recomputed. */
@@ -2555,6 +2608,9 @@ private:
     int curveVelocityLegatoParam = -1, curveNoteLegatoParam = -1, portamentoParam = -1;
     int scaleKeyParam = -1, scaleTypeParam = -1, scaleModeParam = -1, a4Param = -1, tuningScaleParam = -1, mtsParam = -1, mtsNoteOnParam = -1;
     int mpeOnParam = -1, mpeRangeParam = -1, reverbForceParam = -1;
+    int vcLengthParam = -1, vcScaleEnvParam = -1, vcScaleLfoParam = -1, vcScaleLfoModeParam = -1; // block B26: the voice control
+    std::array<int, 48> vcStepParam {};
+    std::array<int, 5> vcRandParam {}, vcTargetParam {};
     int mpeXyzMacroParam = -1, mpeYModWheelParam = -1, mpeBendToXParam = -1, mpeYBipolarParam = -1;
     std::array<size_t, 8> macroResolved { SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX }; // index into `resolved` of macro 1 .. 8
     int appliedMpeMacroMap = 0;       // master.mpe.xyz_macro as of the last block: a change gives the macros back to their knobs

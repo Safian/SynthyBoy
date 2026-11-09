@@ -24,8 +24,8 @@ struct ModSourceInfo
 };
 
 /** Number of modulation sources (without "none"). */
-constexpr int kNumModSources = 39;
-/** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 39 were appended in version 3. */
+constexpr int kNumModSources = 42;
+/** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 39 were appended in version 3, 40 .. 42 (Voice Index, Voice Mod 1, Voice Mod 2) by block B26. */
 constexpr int kNumModSourcesV2 = 28;
 /** Size of the destination choice (modNN.destination): "none" plus every parameter flagged kParamModulatable and the appended destinations. */
 constexpr int kNumModDestinations = 909; // 453 after B15 + B20 stereo_routing (1 + 453 modulatable keys), + 64 mod amounts (454..517) + portamento time (518) + polyphony (519),

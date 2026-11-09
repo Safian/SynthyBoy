@@ -30,6 +30,7 @@ namespace sbvital {
         kKeytrack,
         kMidi,
         kReset,
+        kVoiceCutoff,   // SynthyBoy (GROUPA2, WP-07): per voice cutoff offset in semitones (voice control)
         kNumInputs
       };
 

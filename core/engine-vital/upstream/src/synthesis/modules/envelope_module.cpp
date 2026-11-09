@@ -18,6 +18,7 @@
 #include "envelope_module.h"
 
 #include "envelope.h"
+#include "operators.h"
 
 namespace sbvital {
 
@@ -42,6 +43,19 @@ namespace sbvital {
     Output* decay = createPolyModControl(prefix_ + "_decay");
     Output* sustain = createPolyModControl(prefix_ + "_sustain");
     Output* release = createPolyModControl(prefix_ + "_release");
+    // SynthyBoy (GROUPA2, WP-07): the voice control scales the times of every voice by the factor of its step (1 = the version 2 sound)
+    const auto scaled = [this](Output* time) {
+      cr::Multiply* product = new cr::Multiply();
+      product->plug(time, 0);
+      product->useInput(input(kTimeScale), 1);
+      addProcessor(product);
+      return product->output();
+    };
+    delay = scaled(delay);
+    attack = scaled(attack);
+    hold = scaled(hold);
+    decay = scaled(decay);
+    release = scaled(release);
 
     Value* attack_power = createBaseControl(prefix_ + "_attack_power");
     Value* decay_power = createBaseControl(prefix_ + "_decay_power");

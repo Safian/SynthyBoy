@@ -331,6 +331,9 @@ int sourceChoiceOf (int id, const char*& name, Fid& fid) noexcept
         case 35: return keyChoice ("slide");           // Expr Y (Timbre)
         case 36: fid = Fid::approx; return keyChoice ("poly_aftertouch"); // Expr Z (pressure)
         case 37: return keyChoice ("lift");
+        case 56: return keyChoice ("voice_mod1");      // GROUPA2 (WP-07): the sources of the voice control
+        case 57: return keyChoice ("voice_mod2");
+        case 58: return keyChoice ("voice_index");
         case 59: fid = Fid::approx; return keyChoice ("random"); // Rand (Discrete)
         default: break;
     }

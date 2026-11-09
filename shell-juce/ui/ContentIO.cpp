@@ -490,6 +490,14 @@ SerumFlowResult importSerumFile (UiContext& ctx, const juce::File& file, int lfo
         result.flow = done ("Imported " + juce::String (in.name) + ": " + counts + (in.missingFiles > 0 ? ", " + juce::String (in.missingFiles) + " files not found" : juce::String()));
         return result;
     }
+    if (in.kind == SerumFileKind::style)
+    {
+        // a voice control configuration (.SerumStyle, GROUPA2 WP-07): the whole panel goes onto the patch that is loaded now
+        for (const int index : in.touched)
+            setParameter (ctx.host, paramTable()[static_cast<size_t> (index)].key, in.values.plain[static_cast<size_t> (index)]);
+        result.flow = done ("Voice control " + juce::String (in.name) + ": " + counts);
+        return result;
+    }
     if (in.kind == SerumFileKind::fxModule || in.kind == SerumFileKind::fxRack)
     {
         // the chain goes onto the patch that is loaded now: only the parameters it holds are written

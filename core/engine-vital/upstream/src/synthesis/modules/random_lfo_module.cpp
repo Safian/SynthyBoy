@@ -18,6 +18,7 @@
 #include "random_lfo_module.h"
 
 #include "random_lfo.h"
+#include "operators.h"
 
 namespace sbvital {
 
@@ -34,6 +35,13 @@ namespace sbvital {
     Value* sync_type = createBaseControl(prefix_ + "_sync_type");
 
     Output* frequency = createTempoSyncSwitch(prefix_, free_frequency->owner, beats_per_second_, true, input(kMidi));
+    {
+      cr::Multiply* scaled = new cr::Multiply();
+      scaled->plug(frequency, 0);
+      scaled->useInput(input(kRateScale), 1);
+      addProcessor(scaled);
+      frequency = scaled->output();
+    }
     lfo_->useInput(input(kNoteTrigger), RandomLfo::kReset);
     lfo_->useOutput(output());
     lfo_->plug(frequency, RandomLfo::kFrequency);

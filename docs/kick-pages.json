@@ -3527,6 +3527,129 @@
         "fxi16.p23",
         "fxi16.p24"
       ]
+    },
+    {
+      "id": "voicectl_main",
+      "section": "Master",
+      "title": "Voice Control",
+      "knobs": [
+        {"key": "voicectl.length", "shortLabel": "Voice Cont", "widget": "knob"},
+        {"key": "voicectl.scale.env", "shortLabel": "Voice Cont", "widget": "knob"},
+        {"key": "voicectl.scale.lfo", "shortLabel": "Voice Cont", "widget": "knob"},
+        {"key": "voicectl.scale.lfo_mode", "shortLabel": "Voice Cont", "widget": "stepped"},
+        {"key": "voicectl.osc.a", "shortLabel": "Voice Cont", "widget": "stepped"},
+        {"key": "voicectl.osc.b", "shortLabel": "Voice Cont", "widget": "stepped"},
+        {"key": "voicectl.osc.c", "shortLabel": "Voice Cont", "widget": "stepped"},
+        {"key": "voicectl.osc.noise", "shortLabel": "Voice Cont", "widget": "stepped"}
+      ],
+      "moreKeys": [
+        "voicectl.osc.sub"
+      ]
+    },
+    {
+      "id": "voicectl_random",
+      "section": "Master",
+      "title": "Voice Control Random",
+      "knobs": [
+        {"key": "voicectl.rand.pan", "shortLabel": "Voice Cont", "widget": "knob"},
+        {"key": "voicectl.rand.detune", "shortLabel": "Voice Cont", "widget": "knob"},
+        {"key": "voicectl.rand.cutoff", "shortLabel": "Voice Cont", "widget": "knob"},
+        {"key": "voicectl.rand.env", "shortLabel": "Voice Cont", "widget": "knob"},
+        {"key": "voicectl.rand.detune10x", "shortLabel": "Voice Cont", "widget": "stepped"},
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "voicectl_pan",
+      "section": "Master",
+      "title": "Voice Control Pan",
+      "knobs": [
+        {"key": "voicectl.s1.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s2.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s3.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s4.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s5.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s6.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s7.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s8.pan", "shortLabel": "Voice Cont", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "voicectl_detune",
+      "section": "Master",
+      "title": "Voice Control Detune",
+      "knobs": [
+        {"key": "voicectl.s1.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s2.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s3.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s4.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s5.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s6.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s7.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s8.detune", "shortLabel": "Voice Cont", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "voicectl_cutoff",
+      "section": "Master",
+      "title": "Voice Control Cutoff",
+      "knobs": [
+        {"key": "voicectl.s1.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s2.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s3.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s4.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s5.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s6.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s7.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s8.cutoff", "shortLabel": "Voice Cont", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "voicectl_env",
+      "section": "Master",
+      "title": "Voice Control Envelope Time",
+      "knobs": [
+        {"key": "voicectl.s1.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s2.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s3.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s4.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s5.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s6.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s7.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s8.env", "shortLabel": "Voice Cont", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "voicectl_mod1",
+      "section": "Master",
+      "title": "Voice Control Mod 1",
+      "knobs": [
+        {"key": "voicectl.s1.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s2.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s3.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s4.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s5.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s6.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s7.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s8.mod1", "shortLabel": "Voice Cont", "widget": "bipolar_knob"}
+      ]
+    },
+    {
+      "id": "voicectl_mod2",
+      "section": "Master",
+      "title": "Voice Control Mod 2",
+      "knobs": [
+        {"key": "voicectl.s1.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s2.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s3.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s4.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s5.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s6.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s7.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"},
+        {"key": "voicectl.s8.mod2", "shortLabel": "Voice Cont", "widget": "bipolar_knob"}
+      ]
     }
   ]
 }

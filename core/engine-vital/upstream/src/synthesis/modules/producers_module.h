@@ -42,6 +42,15 @@ namespace sbvital {
         kRawMidi,
         kVoicePhaseLegato,
         kLowestNote,   // SynthyBoy: lowest active MIDI note (for mono sub)
+        // SynthyBoy (GROUPA2, WP-07): the voice control: pan (-1..1) of the three oscillators, the noise and the sub, and the detune (semitones) of the noise and the sub
+        // (the detune of the oscillators travels with kFold1 .. kFold3)
+        kVoicePan1,
+        kVoicePan2,
+        kVoicePan3,
+        kVoicePanNoise,
+        kVoicePanSub,
+        kVoiceDetuneNoise,
+        kVoiceDetuneSub,
         kNumInputs
       };
 

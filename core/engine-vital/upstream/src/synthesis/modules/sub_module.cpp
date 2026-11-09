@@ -5,6 +5,7 @@
  */
 
 #include "sub_module.h"
+#include "operators.h"
 
 namespace sbvital {
 
@@ -19,8 +20,22 @@ namespace sbvital {
     Value* mono = createBaseControl("sub_mono");
     Output* octave = createPolyModControl("sub_octave");
     Output* tune = createPolyModControl("sub_tune");
+    {
+      cr::Add* voice_tune = new cr::Add();
+      voice_tune->plug(tune, 0);
+      voice_tune->useInput(input(kVoiceDetune), 1);
+      addProcessor(voice_tune);
+      tune = voice_tune->output();
+    }
     Output* level = createPolyModControl("sub_level");
     Output* pan = createPolyModControl("sub_pan");
+    {
+      cr::Add* voice_pan = new cr::Add();
+      voice_pan->plug(pan, 0);
+      voice_pan->useInput(input(kVoicePan), 1);
+      addProcessor(voice_pan);
+      pan = voice_pan->output();
+    }
     Output* phase = createPolyModControl("sub_phase");                  // GROUPA1: sub.phase
     Value* phase_contiguous = createBaseControl("sub_phase_contiguous"); // GROUPA1: sub.phase_contiguous
 

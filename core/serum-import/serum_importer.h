@@ -36,6 +36,7 @@ public:
     void runPreset();
     void runFxFile();    // .SerumFX / .SerumFXRack
     void runShape();     // .XferShape
+    void runStyle();     // .SerumStyle (GROUPA2, WP-07): a voice control configuration
     void runUnmapped (const char* what); // the families without an equivalent
     void finish();       // the sweep of unconsumed leaves, counts, fidelity
 
@@ -112,6 +113,7 @@ public:
     void lfo (int i);
     void macro (int i);
     void global();
+    void voicePanel (bool resetAll);   // GROUPA2 WP-07: VoicePanel0 -> voicectl.* (resetAll: a style is a complete panel, absent values are the defaults)
     void modSlots();
     void curves();
     void unmappedTopLevel();

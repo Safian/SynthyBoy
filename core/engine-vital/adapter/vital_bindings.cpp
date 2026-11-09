@@ -523,7 +523,9 @@ bool isSpecialParam (size_t paramIndex)
         // B15 (G12, G14, G18): handled by the adapter (note on handling, the bend wheel, the quality controls of the thread)
         || std::strcmp (key, "master.voice.same_note") == 0
         || std::strcmp (key, "master.bend_down_range") == 0 || std::strcmp (key, "master.bend_down_link") == 0
-        || std::strcmp (key, "quality.oversample_4x") == 0 || std::strcmp (key, "quality.no_smoothing") == 0;
+        || std::strcmp (key, "quality.oversample_4x") == 0 || std::strcmp (key, "quality.no_smoothing") == 0
+        // B26 (GROUPA2, WP-07): the voice control: the adapter hands the whole configuration to the voice handler (applyVoiceControl)
+        || startsWith ("voicectl.");
 }
 
 double convertParam (const Binding& binding, double plain, double sampleRate, double bpm)

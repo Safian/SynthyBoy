@@ -22,6 +22,7 @@
 #include "diode_filter.h"
 #include "dirty_filter.h"
 #include "formant_module.h"
+#include "operators.h"
 #include "ladder_filter.h"
 #include "phaser_filter.h"
 #include "sallen_key_filter.h"
@@ -70,7 +71,12 @@ namespace sbvital {
     current_keytrack->useInput(input(kKeytrack), 0);
     current_keytrack->plug(keytrack_amount, 1);
 
-    Output* base_cutoff = createModControl(prefix_ + "_cutoff", true, true, current_keytrack->output());
+    // SynthyBoy (GROUPA2, WP-07): the voice control adds a per voice offset to the key tracking term of the cutoff
+    cr::Add* cutoff_offset_sum = new cr::Add();
+    cutoff_offset_sum->plug(current_keytrack->output(), 0);
+    cutoff_offset_sum->useInput(input(kVoiceCutoff), 1);
+    addProcessor(cutoff_offset_sum);
+    Output* base_cutoff = createModControl(prefix_ + "_cutoff", true, true, cutoff_offset_sum->output());
     // SynthyBoy (docs/ui-design/13-new-keys.md 4.11): var is the fourth knob of the new models, pan offsets the cutoff of the two channels in
     // opposite directions, level trims the output of the filter
     Output* var = createModControl(prefix_ + "_var");

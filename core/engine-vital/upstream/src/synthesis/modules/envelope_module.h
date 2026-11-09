@@ -29,6 +29,7 @@ namespace sbvital {
         kTrigger,
         kTriggerAlways,
         kPolyLegato,
+        kTimeScale,    // SynthyBoy (GROUPA2, WP-07): per voice factor of the delay, attack, hold, decay and release times (voice control)
         kNumInputs
       };
     

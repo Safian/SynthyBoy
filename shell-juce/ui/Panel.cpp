@@ -198,6 +198,11 @@ void Panel::setMoreExpanded (bool shouldExpand)
     resized();
 }
 
+bool Panel::isExcludedFromFlow (const ParamControl& control) const noexcept
+{
+    return std::find (flowExcluded.begin(), flowExcluded.end(), &control) != flowExcluded.end();
+}
+
 int Panel::layoutControls (juce::Rectangle<int> area, bool measureOnly)
 {
     const auto& t = ctx.theme;
@@ -207,6 +212,8 @@ int Panel::layoutControls (juce::Rectangle<int> area, bool measureOnly)
     int cellW = 0, cellH = 0;
     for (const auto& c : owned)
     {
+        if (isExcludedFromFlow (*c))
+            continue;
         if (c->spansRow())
             continue; // a control with a row of its own does not size the grid
         const auto s = c->preferredSize();
@@ -223,6 +230,8 @@ int Panel::layoutControls (juce::Rectangle<int> area, bool measureOnly)
     int x = 0, y = 0, col = 0;
     const auto place = [&] (ParamControl& c)
     {
+        if (isExcludedFromFlow (c))
+            return;
         if (c.spansRow())
         {
             if (col != 0)

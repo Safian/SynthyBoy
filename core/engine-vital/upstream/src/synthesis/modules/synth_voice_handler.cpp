@@ -252,6 +252,11 @@ namespace sbvital {
     producers_->plug(note_pressed(), ProducersModule::kNotePressed);
     // SynthyBoy Block B14:
     producers_->plug(current_midi_note_, ProducersModule::kRawMidi);
+    // SynthyBoy (GROUPA2, WP-07): the voice control (pan of every source, detune of the noise and the sub; the oscillators take the detune with the fold)
+    for (int i = 0; i < kVoiceControlTargets; ++i)
+      producers_->plug(voice_pan(i), ProducersModule::kVoicePan1 + i);
+    producers_->plug(voice_detune(3), ProducersModule::kVoiceDetuneNoise);
+    producers_->plug(voice_detune(4), ProducersModule::kVoiceDetuneSub);
     Value* voice_phase_legato = createBaseControl("voice_phase_legato");
     producers_->plug(voice_phase_legato, ProducersModule::kVoicePhaseLegato);
     for (int i = 0; i < 3; ++i) {
@@ -269,6 +274,8 @@ namespace sbvital {
   }
 
   void SynthVoiceHandler::createModulators() {
+    lfo_rate_scale_ = new cr::Value(1.0f);   // SynthyBoy (GROUPA2, WP-07): the LFO scaling of the voice control, set by the adapter
+    addIdleMonoProcessor(lfo_rate_scale_);
     for (int i = 0; i < kNumLfos; ++i) {
       lfo_sources_[i].setLoop(false);
       lfo_sources_[i].initTriangle();
@@ -280,6 +287,7 @@ namespace sbvital {
       lfo->plug(retrigger(), LfoModule::kNoteTrigger);
       lfo->plug(note_count(), LfoModule::kNoteCount);
       lfo->plug(bent_midi_, LfoModule::kMidi);
+      lfo->plug(lfo_rate_scale_, LfoModule::kRateScale);
 
       data_->mod_sources[prefix] = lfo->output(LfoModule::kValue);
       createStatusOutput(prefix, lfo->output(LfoModule::kValue));
@@ -295,6 +303,7 @@ namespace sbvital {
       envelope->plug(poly_legato, EnvelopeModule::kPolyLegato);
       envelope->plug(retrigger(), EnvelopeModule::kTrigger);
       envelope->plug(retrigger_always(), EnvelopeModule::kTriggerAlways);
+      envelope->plug(voice_env_time(), EnvelopeModule::kTimeScale);
       addSubmodule(envelope);
       addProcessor(envelope);
       envelopes_[i] = envelope;
@@ -313,12 +322,21 @@ namespace sbvital {
       random_lfos_[i] = new RandomLfoModule(name, beats_per_second_);
       random_lfos_[i]->plug(retrigger(), RandomLfoModule::kNoteTrigger);
       random_lfos_[i]->plug(bent_midi_, RandomLfoModule::kMidi);
+      random_lfos_[i]->plug(lfo_rate_scale_, RandomLfoModule::kRateScale);
       addSubmodule(random_lfos_[i]);
       addProcessor(random_lfos_[i]);
     }
 
     stereo_ = new cr::Value(constants::kLeftOne);
     addIdleMonoProcessor(stereo_);
+
+    // SynthyBoy (GROUPA2, WP-07): the per voice values of the voice control as modulation sources
+    data_->mod_sources["voice_index"] = voice_index();
+    data_->mod_sources["voice_mod1"] = voice_mod(0);
+    data_->mod_sources["voice_mod2"] = voice_mod(1);
+    createStatusOutput("voice_index", voice_index());
+    createStatusOutput("voice_mod1", voice_mod(0));
+    createStatusOutput("voice_mod2", voice_mod(1));
 
     data_->mod_sources["note"] = note_percentage_->output();
     data_->mod_sources["note_in_octave"] = note_in_octave();
@@ -355,6 +373,7 @@ namespace sbvital {
     filters_module_->plug(reset(), FiltersModule::kReset);
     filters_module_->plug(keytrack, FiltersModule::kKeytrack);
     filters_module_->plug(bent_midi_, FiltersModule::kMidi);
+    filters_module_->plug(voice_cutoff(), FiltersModule::kVoiceCutoff);   // SynthyBoy (GROUPA2, WP-07)
   }
 
   void SynthVoiceHandler::createNoteArticulation() {

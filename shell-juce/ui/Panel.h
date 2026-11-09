@@ -71,6 +71,9 @@ public:
 protected:
     /** Primary control for `key` (knob / toggle / choice by ParamInfo). Principle 1 of the brief: at most 4 of these next to a visual. */
     ParamControl& addControl (const std::string& key, const juce::String& label = {});
+    /** Takes a control out of the flow layout (layoutControls ignores it): a panel that places the control itself, as the step cells of the voice control. */
+    void excludeFromFlow (ParamControl& control) { flowExcluded.push_back (&control); }
+    bool isExcludedFromFlow (const ParamControl& control) const noexcept;
     /** Control behind the panel's "more" toggle. */
     ParamControl& addMoreControl (const std::string& key, const juce::String& label = {});
     /** A control of a custom class behind "More" (the OCT / SEM control, a grouped list ...). */
@@ -93,6 +96,7 @@ private:
     LongPressDetector headerPress;
     bool headerDown = false, headerDragging = false;
     std::vector<std::unique_ptr<ParamControl>> owned;
+    std::vector<const ParamControl*> flowExcluded;
     size_t moreCount = 0;
     bool moreExpanded = false;
     juce::TextButton moreButton { "More" };

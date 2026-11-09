@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2063 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2125 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -46,6 +46,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Oscillator 3 | 10 |
 | Sub | 14 |
 | Quality | 2 |
+| Voice Control | 62 |
 
 ## Default patch
 
@@ -804,14 +805,14 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
-| `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..39 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..42 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..908 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.stereo` | Mod NN Stereo (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.bypass` | Mod NN Bypass (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
-| `modNN.aux_source` | Mod NN Aux Source (NN = 01 .. 64) | 0 None, 1..39 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.aux_source` | Mod NN Aux Source (NN = 01 .. 64) | 0 None, 1..42 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_inv` | Mod NN Aux Invert (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_power` | Mod NN Aux Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_output` | Mod NN Output Scale (NN = 01 .. 64) | 0 .. 200 % | 100 % | Mod Matrix / Slot 01 |  |  |
@@ -1617,6 +1618,73 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `quality.oversample_4x` | Quality 4x Oversampling | 0 Off, 1 On | Off | Quality |  |  |
 | `quality.no_smoothing` | Quality No Smoothing | 0 Off, 1 On | Off | Quality |  |  |
 
+### Voice Control
+
+| Key | Name | Range | Default | Group | Mod | Own engine |
+|-----|------|-------|---------|-------|-----|------------|
+| `voicectl.length` | Voice Control Sequence Length | 1 .. 8 (steps of 1) | 8 | Voice Control |  |  |
+| `voicectl.s1.pan` | Voice Control Step 1 Pan | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
+| `voicectl.s1.detune` | Voice Control Step 1 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 1 |  |  |
+| `voicectl.s1.cutoff` | Voice Control Step 1 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
+| `voicectl.s1.env` | Voice Control Step 1 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
+| `voicectl.s1.mod1` | Voice Control Step 1 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
+| `voicectl.s1.mod2` | Voice Control Step 1 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
+| `voicectl.s2.pan` | Voice Control Step 2 Pan | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
+| `voicectl.s2.detune` | Voice Control Step 2 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 2 |  |  |
+| `voicectl.s2.cutoff` | Voice Control Step 2 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
+| `voicectl.s2.env` | Voice Control Step 2 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
+| `voicectl.s2.mod1` | Voice Control Step 2 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
+| `voicectl.s2.mod2` | Voice Control Step 2 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
+| `voicectl.s3.pan` | Voice Control Step 3 Pan | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
+| `voicectl.s3.detune` | Voice Control Step 3 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 3 |  |  |
+| `voicectl.s3.cutoff` | Voice Control Step 3 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
+| `voicectl.s3.env` | Voice Control Step 3 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
+| `voicectl.s3.mod1` | Voice Control Step 3 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
+| `voicectl.s3.mod2` | Voice Control Step 3 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
+| `voicectl.s4.pan` | Voice Control Step 4 Pan | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
+| `voicectl.s4.detune` | Voice Control Step 4 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 4 |  |  |
+| `voicectl.s4.cutoff` | Voice Control Step 4 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
+| `voicectl.s4.env` | Voice Control Step 4 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
+| `voicectl.s4.mod1` | Voice Control Step 4 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
+| `voicectl.s4.mod2` | Voice Control Step 4 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
+| `voicectl.s5.pan` | Voice Control Step 5 Pan | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
+| `voicectl.s5.detune` | Voice Control Step 5 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 5 |  |  |
+| `voicectl.s5.cutoff` | Voice Control Step 5 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
+| `voicectl.s5.env` | Voice Control Step 5 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
+| `voicectl.s5.mod1` | Voice Control Step 5 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
+| `voicectl.s5.mod2` | Voice Control Step 5 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
+| `voicectl.s6.pan` | Voice Control Step 6 Pan | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
+| `voicectl.s6.detune` | Voice Control Step 6 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 6 |  |  |
+| `voicectl.s6.cutoff` | Voice Control Step 6 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
+| `voicectl.s6.env` | Voice Control Step 6 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
+| `voicectl.s6.mod1` | Voice Control Step 6 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
+| `voicectl.s6.mod2` | Voice Control Step 6 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
+| `voicectl.s7.pan` | Voice Control Step 7 Pan | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
+| `voicectl.s7.detune` | Voice Control Step 7 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 7 |  |  |
+| `voicectl.s7.cutoff` | Voice Control Step 7 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
+| `voicectl.s7.env` | Voice Control Step 7 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
+| `voicectl.s7.mod1` | Voice Control Step 7 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
+| `voicectl.s7.mod2` | Voice Control Step 7 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
+| `voicectl.s8.pan` | Voice Control Step 8 Pan | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
+| `voicectl.s8.detune` | Voice Control Step 8 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 8 |  |  |
+| `voicectl.s8.cutoff` | Voice Control Step 8 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
+| `voicectl.s8.env` | Voice Control Step 8 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
+| `voicectl.s8.mod1` | Voice Control Step 8 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
+| `voicectl.s8.mod2` | Voice Control Step 8 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
+| `voicectl.rand.pan` | Voice Control Random Pan | 0 .. 100 % | 0 % | Voice Control / Random |  |  |
+| `voicectl.rand.detune` | Voice Control Random Detune | 0 .. 100 ct | 0 ct | Voice Control / Random |  |  |
+| `voicectl.rand.cutoff` | Voice Control Random Cutoff | 0 .. 100 % | 0 % | Voice Control / Random |  |  |
+| `voicectl.rand.env` | Voice Control Random Envelope Time | 0 .. 100 % | 0 % | Voice Control / Random |  |  |
+| `voicectl.rand.detune10x` | Voice Control Random Detune x10 | 0 Off, 1 On | Off | Voice Control / Random |  |  |
+| `voicectl.scale.env` | Voice Control Envelope Time Scaling | 25 .. 400 % (skew 0.430000007) | 100 % | Voice Control / Scaling |  |  |
+| `voicectl.scale.lfo` | Voice Control LFO Time Scaling | 25 .. 400 % (skew 0.430000007) | 100 % | Voice Control / Scaling |  |  |
+| `voicectl.scale.lfo_mode` | Voice Control LFO Scaling Mode | 0 Percent, 1 Rate | Percent | Voice Control / Scaling |  |  |
+| `voicectl.osc.a` | Voice Control Applies to Osc A | 0 Off, 1 On | On | Voice Control / Targets |  |  |
+| `voicectl.osc.b` | Voice Control Applies to Osc B | 0 Off, 1 On | On | Voice Control / Targets |  |  |
+| `voicectl.osc.c` | Voice Control Applies to Osc C | 0 Off, 1 On | On | Voice Control / Targets |  |  |
+| `voicectl.osc.noise` | Voice Control Applies to Noise | 0 Off, 1 On | On | Voice Control / Targets |  |  |
+| `voicectl.osc.sub` | Voice Control Applies to Sub | 0 Off, 1 On | On | Voice Control / Targets |  |  |
+
 ## Modulation sources
 
 Choice values of `modNN.source` (0 = None).
@@ -1662,6 +1730,9 @@ Choice values of `modNN.source` (0 = None).
 | 37 | `oct_note` | Oct Note | unipolar |
 | 38 | `poly_aftertouch` | Poly Aftertouch | unipolar |
 | 39 | `stereo` | Stereo | bipolar |
+| 40 | `voice_index` | Voice Index | unipolar |
+| 41 | `voice_mod1` | Voice Mod 1 | bipolar |
+| 42 | `voice_mod2` | Voice Mod 2 | bipolar |
 
 ## Modulation destinations
 

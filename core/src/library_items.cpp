@@ -209,4 +209,79 @@ int applyFxRackPreset (const std::string& json, ParamValues& values)
     }
     return taken;
 }
+
+bool isVoiceControlKey (const char* key) noexcept
+{
+    return key != nullptr && startsWith (key, "voicectl.");
+}
+
+std::string serializeVoiceControlPreset (const std::string& name, const ParamValues& values)
+{
+    std::string s = "{\"format\":\"synthyboy-voice-control\",\"version\":1,\"name\":";
+    appendEscaped (s, name);
+    s += ",\"values\":{";
+    bool first = true;
+    const ParamInfo* table = paramTable();
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        if (! isVoiceControlKey (table[i].key))
+            continue;
+        char buf[160];
+        std::snprintf (buf, sizeof buf, "%s\"%s\":%.9g", first ? "" : ",", table[i].key, static_cast<double> (values.plain[i]));
+        s += buf;
+        first = false;
+    }
+    s += "}}";
+    return s;
+}
+
+int applyVoiceControlPreset (const std::string& json, ParamValues& values)
+{
+    std::string format;
+    if (! stringMember (json, "format", format) || format != "synthyboy-voice-control")
+        return 0;
+    const size_t block = json.find ("\"values\"");
+    if (block == std::string::npos)
+        return 0;
+    size_t i = json.find ('{', block);
+    if (i == std::string::npos)
+        return 0;
+    ++i;
+    for (size_t k = 0; k < paramCount(); ++k)
+        if (isVoiceControlKey (paramTable()[k].key))
+            values.plain[k] = paramTable()[k].def;
+    int taken = 0;
+    while (i < json.size())
+    {
+        const size_t q1 = json.find ('"', i);
+        if (q1 == std::string::npos)
+            break;
+        const size_t q2 = json.find ('"', q1 + 1);
+        if (q2 == std::string::npos)
+            break;
+        const std::string key = json.substr (q1 + 1, q2 - q1 - 1);
+        const size_t colon = json.find (':', q2);
+        if (colon == std::string::npos)
+            break;
+        char* end = nullptr;
+        const double v = std::strtod (json.c_str() + colon + 1, &end);
+        if (end == json.c_str() + colon + 1)
+            break;
+        i = static_cast<size_t> (end - json.c_str());
+        if (const ParamInfo* info = findParamByKey (key.c_str()); info != nullptr && isVoiceControlKey (key.c_str()) && std::isfinite (v))
+        {
+            const int index = findParamIndex (info->id);
+            if (index >= 0)
+            {
+                values.plain[static_cast<size_t> (index)] = static_cast<float> (std::max (static_cast<double> (info->min), std::min (static_cast<double> (info->max), v)));
+                ++taken;
+            }
+        }
+        const size_t next = json.find_first_of (",}", i);
+        if (next == std::string::npos || json[next] == '}')
+            break;
+        i = next + 1;
+    }
+    return taken;
+}
 } // namespace synthyboy

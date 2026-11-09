@@ -109,6 +109,7 @@ constexpr const char* s_more_sub[] = {
     "sub.phase", "sub.phase_contiguous" // B23
 };
 
+constexpr const char* s_more_voicectl_targets[] = { "voicectl.osc.sub" };   // B26
 constexpr const char* s_more_delay_offset[] = { "delay.offset_left" };   // B25
 constexpr const char* s_more_reverb_feedback[] = { "reverb.feedback" };  // B25
 constexpr const char* s_more_mpe[] = {
@@ -484,7 +485,22 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Pages 120 - 135: the 16 slots of the effect instance pool (block B22)
     SB_KICK_FXI_PAGE (01), SB_KICK_FXI_PAGE (02), SB_KICK_FXI_PAGE (03), SB_KICK_FXI_PAGE (04), SB_KICK_FXI_PAGE (05), SB_KICK_FXI_PAGE (06),
     SB_KICK_FXI_PAGE (07), SB_KICK_FXI_PAGE (08), SB_KICK_FXI_PAGE (09), SB_KICK_FXI_PAGE (10), SB_KICK_FXI_PAGE (11), SB_KICK_FXI_PAGE (12),
-    SB_KICK_FXI_PAGE (13), SB_KICK_FXI_PAGE (14), SB_KICK_FXI_PAGE (15), SB_KICK_FXI_PAGE (16)
+    SB_KICK_FXI_PAGE (13), SB_KICK_FXI_PAGE (14), SB_KICK_FXI_PAGE (15), SB_KICK_FXI_PAGE (16),
+    // Pages 136 - 143: the voice control (block B26, GROUPA2 WP-07; 13-new-keys.md 4.30)
+    { "voicectl_main", "Voice Control", "Master", { "voicectl.length", "voicectl.scale.env", "voicectl.scale.lfo", "voicectl.scale.lfo_mode", "voicectl.osc.a", "voicectl.osc.b", "voicectl.osc.c", "voicectl.osc.noise" }, 8, s_more_voicectl_targets, 1 },
+    { "voicectl_random", "Voice Control Random", "Master", { "voicectl.rand.pan", "voicectl.rand.detune", "voicectl.rand.cutoff", "voicectl.rand.env", "voicectl.rand.detune10x", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    // Voice control, the Pan of the eight steps (block B26)
+    { "voicectl_pan", "Voice Control Pan", "Master", { "voicectl.s1.pan", "voicectl.s2.pan", "voicectl.s3.pan", "voicectl.s4.pan", "voicectl.s5.pan", "voicectl.s6.pan", "voicectl.s7.pan", "voicectl.s8.pan" }, 8, nullptr, 0 },
+    // Voice control, the Detune of the eight steps (block B26)
+    { "voicectl_detune", "Voice Control Detune", "Master", { "voicectl.s1.detune", "voicectl.s2.detune", "voicectl.s3.detune", "voicectl.s4.detune", "voicectl.s5.detune", "voicectl.s6.detune", "voicectl.s7.detune", "voicectl.s8.detune" }, 8, nullptr, 0 },
+    // Voice control, the Cutoff of the eight steps (block B26)
+    { "voicectl_cutoff", "Voice Control Cutoff", "Master", { "voicectl.s1.cutoff", "voicectl.s2.cutoff", "voicectl.s3.cutoff", "voicectl.s4.cutoff", "voicectl.s5.cutoff", "voicectl.s6.cutoff", "voicectl.s7.cutoff", "voicectl.s8.cutoff" }, 8, nullptr, 0 },
+    // Voice control, the Envelope Time of the eight steps (block B26)
+    { "voicectl_env", "Voice Control Envelope Time", "Master", { "voicectl.s1.env", "voicectl.s2.env", "voicectl.s3.env", "voicectl.s4.env", "voicectl.s5.env", "voicectl.s6.env", "voicectl.s7.env", "voicectl.s8.env" }, 8, nullptr, 0 },
+    // Voice control, the Mod 1 of the eight steps (block B26)
+    { "voicectl_mod1", "Voice Control Mod 1", "Master", { "voicectl.s1.mod1", "voicectl.s2.mod1", "voicectl.s3.mod1", "voicectl.s4.mod1", "voicectl.s5.mod1", "voicectl.s6.mod1", "voicectl.s7.mod1", "voicectl.s8.mod1" }, 8, nullptr, 0 },
+    // Voice control, the Mod 2 of the eight steps (block B26)
+    { "voicectl_mod2", "Voice Control Mod 2", "Master", { "voicectl.s1.mod2", "voicectl.s2.mod2", "voicectl.s3.mod2", "voicectl.s4.mod2", "voicectl.s5.mod2", "voicectl.s6.mod2", "voicectl.s7.mod2", "voicectl.s8.mod2" }, 8, nullptr, 0 }
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

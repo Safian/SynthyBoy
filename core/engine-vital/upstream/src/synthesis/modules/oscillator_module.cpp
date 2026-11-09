@@ -21,6 +21,7 @@
 #include <cmath>
 
 #include "synth_oscillator.h"
+#include "operators.h"
 #include "wavetable.h"
 
 namespace sbvital {
@@ -56,6 +57,14 @@ namespace sbvital {
     Output* detune_range = createPolyModControl(prefix_ + "_detune_range");
     Output* amplitude = createPolyModControl(prefix_ + "_level", true, true, nullptr, reset);
     Output* pan = createPolyModControl(prefix_ + "_pan");
+    {
+      // SynthyBoy (GROUPA2, WP-07): the voice control moves the pan of every voice (0 unless a step or the random part sets it)
+      cr::Add* voice_pan = new cr::Add();
+      voice_pan->plug(pan, 0);
+      voice_pan->useInput(input(kVoicePan), 1);
+      addProcessor(voice_pan);
+      pan = voice_pan->output();
+    }
     Output* phase = createPolyModControl(prefix_ + "_phase", true, true, nullptr, reset);
     Output* distortion_phase = createPolyModControl(prefix_ + "_distortion_phase");
     Output* rand_phase = createPolyModControl(prefix_ + "_random_phase");

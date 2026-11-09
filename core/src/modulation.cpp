@@ -29,7 +29,9 @@ constexpr ModSourceInfo kSources[kNumModSources] = {
     { "lift", "Lift", false },        { "slide", "Slide", false },      { "oct_note", "Oct Note", false },
     { "poly_aftertouch", "Poly Aftertouch", false },
     // appended in block B20 (choice value 39, G4)
-    { "stereo", "Stereo", true }
+    { "stereo", "Stereo", true },
+    // appended in block B26 (GROUPA2, WP-07; choice values 40 .. 42): the per voice values of the voice control
+    { "voice_index", "Voice Index", false }, { "voice_mod1", "Voice Mod 1", true }, { "voice_mod2", "Voice Mod 2", true }
 };
 
 int findIndexByKey (const char* key) noexcept

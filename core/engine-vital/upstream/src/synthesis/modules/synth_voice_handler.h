@@ -80,6 +80,8 @@ namespace sbvital {
       }
 
       void setNoteTable(const mono_float* table) override;
+      /** SynthyBoy (GROUPA2, WP-07): factor of the frequency of every LFO and random LFO (the LFO scaling of the voice control). */
+      void setLfoRateScale(mono_float scale) { if (lfo_rate_scale_) lfo_rate_scale_->set(scale); }
 
     private:
       void createNoteArticulation();
@@ -126,6 +128,7 @@ namespace sbvital {
       LineMap* pitch_wheel_mapping_;
 
       cr::Value* stereo_;
+      cr::Value* lfo_rate_scale_ = nullptr;   // SynthyBoy (GROUPA2, WP-07)
       cr::Value* lowest_active_note_;
       cr::Multiply* note_percentage_;
 

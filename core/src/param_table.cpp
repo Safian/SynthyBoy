@@ -129,6 +129,8 @@ constexpr const char* const kPoolRacks[] = { "Main", "Bus 1", "Bus 2" };
 constexpr const char* const kNoiseTypes[] = { "Noise", "Sample" };
 // B24 (GROUPA1, WP-09): the MPE axis mappings to the macros (Serum 2 manual p.326)
 constexpr const char* const kMpeMacroMaps[] = { "Off", "XYZ -> Macro 1, 2, 3", "YZ -> Macro 1, 2" };
+// B26 (GROUPA2, WP-07): the voice control LFO scaling is set as a percentage of the time or as a rate (Serum 2 manual p.318)
+constexpr const char* const kVoiceCtlLfoScaleModes[] = { "Percent", "Rate" };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // constructors of table entries
@@ -300,6 +302,15 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("eq." KEY ".cutoff", "EQ " NAME " Cutoff", "FX / EQ", 20.0f, 20000.0f, CUTOFF, Unit::Hz, kMod, 1, 0.3f),                               \
     cont ("eq." KEY ".gain", "EQ " NAME " Gain", "FX / EQ", -15.0f, 15.0f, 0.0f, Unit::dB, kMod),                                                \
     SB_PCT ("eq." KEY ".resonance", "EQ " NAME " Resonance", "FX / EQ", 30.0f, kMod)
+
+// B26 (GROUPA2, WP-07): one step of the voice control sequence (Serum 2 manual p.316 - 318): the six per voice values of step N
+#define SB_VCTL_STEP(N)                                                                                                                          \
+    SB_PCT_RANGE ("voicectl.s" #N ".pan", "Voice Control Step " #N " Pan", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto),            \
+    cont ("voicectl.s" #N ".detune", "Voice Control Step " #N " Detune", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, Unit::cents, kAuto), \
+    SB_PCT_RANGE ("voicectl.s" #N ".cutoff", "Voice Control Step " #N " Cutoff", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto),      \
+    SB_PCT_RANGE ("voicectl.s" #N ".env", "Voice Control Step " #N " Envelope Time", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto), \
+    SB_PCT_RANGE ("voicectl.s" #N ".mod1", "Voice Control Step " #N " Mod 1", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto),         \
+    SB_PCT_RANGE ("voicectl.s" #N ".mod2", "Voice Control Step " #N " Mod 2", "Voice Control / Step " #N, -100.0f, 100.0f, 0.0f, kAuto)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // repeated groups of the keys appended in state version 3 (docs/ui-design/13-new-keys.md, blocks B01 .. B12)
@@ -838,11 +849,27 @@ constexpr ParamInfo kRaw[] = {
     // --- B25: GROUPA1 WP-10: delay left offset and reverb feedback (13-new-keys.md 4.29, positions 2061..2062) ----------------------
     cont ("delay.offset_left", "Delay Offset Left", "FX / Delay", 0.25f, 4.0f, 1.0f, Unit::none, kMod, 3, 0.5f),
     SB_PCT ("reverb.feedback", "Reverb Feedback", "FX / Reverb", 50.0f, kMod),
+    // --- B26: GROUPA2 WP-07: voice control (13-new-keys.md 4.30, positions 2063..2124) ---------------------------------------------------
+    whole ("voicectl.length", "Voice Control Sequence Length", "Voice Control", 1.0f, 8.0f, 8.0f, Unit::none, kAuto),
+    SB_VCTL_STEP (1), SB_VCTL_STEP (2), SB_VCTL_STEP (3), SB_VCTL_STEP (4), SB_VCTL_STEP (5), SB_VCTL_STEP (6), SB_VCTL_STEP (7), SB_VCTL_STEP (8),
+    SB_PCT ("voicectl.rand.pan", "Voice Control Random Pan", "Voice Control / Random", 0.0f, kAuto),
+    cont ("voicectl.rand.detune", "Voice Control Random Detune", "Voice Control / Random", 0.0f, 100.0f, 0.0f, Unit::cents, kAuto),
+    SB_PCT ("voicectl.rand.cutoff", "Voice Control Random Cutoff", "Voice Control / Random", 0.0f, kAuto),
+    SB_PCT ("voicectl.rand.env", "Voice Control Random Envelope Time", "Voice Control / Random", 0.0f, kAuto),
+    onOff ("voicectl.rand.detune10x", "Voice Control Random Detune x10", "Voice Control / Random", false),
+    cont ("voicectl.scale.env", "Voice Control Envelope Time Scaling", "Voice Control / Scaling", 25.0f, 400.0f, 100.0f, Unit::percent, kAuto, 1, 0.43f),
+    cont ("voicectl.scale.lfo", "Voice Control LFO Time Scaling", "Voice Control / Scaling", 25.0f, 400.0f, 100.0f, Unit::percent, kAuto, 1, 0.43f),
+    pick ("voicectl.scale.lfo_mode", "Voice Control LFO Scaling Mode", "Voice Control / Scaling", kVoiceCtlLfoScaleModes, 0),
+    onOff ("voicectl.osc.a", "Voice Control Applies to Osc A", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.b", "Voice Control Applies to Osc B", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.c", "Voice Control Applies to Osc C", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.noise", "Voice Control Applies to Noise", "Voice Control / Targets", true),
+    onOff ("voicectl.osc.sub", "Voice Control Applies to Sub", "Voice Control / Targets", true),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2063, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25)");
+static_assert (kCount == 2125, "880 keys of state version 2 plus the 1177 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26)");
 
 struct Table
 {

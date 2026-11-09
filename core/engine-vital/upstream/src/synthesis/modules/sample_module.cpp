@@ -18,6 +18,7 @@
 #include "sample_module.h"
 
 #include "synth_constants.h"
+#include "operators.h"
 
 namespace sbvital {
 
@@ -35,8 +36,22 @@ namespace sbvital {
     Value* transpose_quantize = createBaseControl("sample_transpose_quantize");
     Output* transpose = createPolyModControl("sample_transpose");
     Output* tune = createPolyModControl("sample_tune");
+    {
+      cr::Add* voice_tune = new cr::Add();
+      voice_tune->plug(tune, 0);
+      voice_tune->useInput(input(kVoiceDetune), 1);
+      addProcessor(voice_tune);
+      tune = voice_tune->output();
+    }
     Output* level = createPolyModControl("sample_level", true, true);
     Output* pan = createPolyModControl("sample_pan");
+    {
+      cr::Add* voice_pan = new cr::Add();
+      voice_pan->plug(pan, 0);
+      voice_pan->useInput(input(kVoicePan), 1);
+      addProcessor(voice_pan);
+      pan = voice_pan->output();
+    }
     Output* phase = createPolyModControl("sample_phase");
     Output* stereo = createPolyModControl("sample_stereo");    // GROUPA1: noise.stereo
     Output* filter = createPolyModControl("sample_filter");    // GROUPA1: noise.filter

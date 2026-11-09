@@ -31,7 +31,7 @@ namespace sbvital {
   struct VoiceState {
     VoiceState() : event(kInvalid), midi_note(0), tuned_note(0.0f), last_note(0.0f), velocity(0.0f),
                    lift(0.0f), local_pitch_bend(0.0f), note_bend(0.0f), tuning_delta(0.0f), note_pressed(0), note_count(0),
-                   channel(0), sostenuto_pressed(false) { }
+                   channel(0), sostenuto_pressed(false), sequence(0) { }
 
     VoiceEvent event;
     int midi_note;
@@ -46,6 +46,7 @@ namespace sbvital {
     int note_count;
     int channel;
     bool sostenuto_pressed;
+    int sequence;   // SynthyBoy (GROUPA2, WP-07): the n-th note since the last allSoundsOff (1 ..): picks the step of the voice control
   };
 
   struct AggregateVoice;
@@ -105,6 +106,8 @@ namespace sbvital {
         slide_sample_ = 0;
         setKeyState(kTriggering);
       }
+
+      force_inline void setSequence(int sequence) { state_.sequence = sequence; }
 
       force_inline void setKeyState(KeyState key_state) {
         last_key_state_ = key_state_;
@@ -388,6 +391,45 @@ namespace sbvital {
         bool fold = false;
       };
       void setOscMapping(int osc, const OscMapping& mapping) { osc_mapping_[osc] = mapping; }
+      // SynthyBoy, voice control (GROUPA2, WP-07; Serum 2 manual p.316 - 318): the values of one step of the sequence for each note. The step is
+      // picked by the note counter of the voice (note_count modulo the length); the random parts are a hash of (seed, note counter, stream), so a
+      // note always gets the same draw and a render is repeatable. Set between two process() calls; the defaults change nothing.
+      static constexpr int kVoiceControlSteps = 8;
+      static constexpr int kVoiceControlTargets = 5;       // Osc A, B, C, Noise, Sub
+      static constexpr mono_float kVoiceControlCutoffSemitones = 36.0f; // the cutoff offset of +-100 %
+      static constexpr mono_float kVoiceControlEnvOctaves = 2.0f;       // the envelope time factor of +-100 % is 2^(+-2)
+      struct VoiceControl {
+        int length = kVoiceControlSteps;
+        mono_float pan[kVoiceControlSteps] = {};      // percent
+        mono_float detune[kVoiceControlSteps] = {};   // cents
+        mono_float cutoff[kVoiceControlSteps] = {};   // percent
+        mono_float env[kVoiceControlSteps] = {};      // percent
+        mono_float mod1[kVoiceControlSteps] = {};     // percent
+        mono_float mod2[kVoiceControlSteps] = {};     // percent
+        mono_float rand_pan = 0.0f;                   // percent
+        mono_float rand_detune = 0.0f;                // cents
+        mono_float rand_cutoff = 0.0f;                // percent
+        mono_float rand_env = 0.0f;                   // percent
+        mono_float env_scale = 1.0f;                  // factor of all envelope times
+        bool target[kVoiceControlTargets] = { true, true, true, true, true };
+        unsigned int seed = 0x5b17c0deu;
+      };
+      void setVoiceControl(const VoiceControl& control) { voice_control_ = control; }
+      /** The values of the voice control for the `sequence`-th note (>= 1), as the voice outputs carry them. */
+      struct VoiceControlValues {
+        mono_float index, mod1, mod2;                 // Voice Index 0..1, Voice Mod 1 / 2 -1..1
+        mono_float pan[kVoiceControlTargets];         // -1..1 (0 for a target that is masked out)
+        mono_float semitones[kVoiceControlTargets];   // detune of the target in semitones
+        mono_float cutoff;                            // semitones
+        mono_float env_time;                          // factor
+      };
+      static VoiceControlValues evaluateVoiceControl(const VoiceControl& control, int sequence);
+      force_inline Output* voice_index() { return &voice_index_; }
+      force_inline Output* voice_mod(int i) { return &voice_mod_[i]; }
+      force_inline Output* voice_pan(int target) { return &voice_pan_[target]; }
+      force_inline Output* voice_detune(int target) { return &voice_detune_[target]; }
+      force_inline Output* voice_cutoff() { return &voice_cutoff_; }
+      force_inline Output* voice_env_time() { return &voice_env_time_; }
       force_inline Output* osc_mute(int osc) { return &osc_mute_[osc]; }
       force_inline Output* osc_fold(int osc) { return &osc_fold_[osc]; }
       force_inline Output* poly_aftertouch() { return &poly_aftertouch_; }
@@ -496,6 +538,13 @@ namespace sbvital {
       OscMapping osc_mapping_[3];
       cr::Output osc_mute_[3];
       cr::Output osc_fold_[3];
+      VoiceControl voice_control_;
+      cr::Output voice_index_;
+      cr::Output voice_mod_[2];
+      cr::Output voice_pan_[kVoiceControlTargets];
+      cr::Output voice_detune_[kVoiceControlTargets];
+      cr::Output voice_cutoff_;
+      cr::Output voice_env_time_;
       cr::Output poly_aftertouch_;
       cr::Output active_mask_;
       cr::Output mod_wheel_;
@@ -517,6 +566,7 @@ namespace sbvital {
       VoiceOverride voice_override_;
 
       int total_notes_;
+      int sequence_ = 0;   // SynthyBoy (GROUPA2, WP-07): note counter of the voice control, restarts with allSoundsOff () (the warm-up notes do not count)
       CircularQueue<int> pressed_notes_;
       CircularQueue<std::unique_ptr<Voice>> all_voices_;
 

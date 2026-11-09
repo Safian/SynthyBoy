@@ -93,3 +93,7 @@ target_include_directories(synthyboy_test_vital_noisesample PRIVATE "${CMAKE_CUR
 synthyboy_add_test(synthyboy_test_vital_mpe test_mpe.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_mpe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
+synthyboy_add_test(synthyboy_test_vital_voicecontrol test_voicecontrol.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_voicecontrol PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")

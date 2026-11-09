@@ -77,7 +77,7 @@ TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
     }
     CHECK_EQ (position, 1558);
     CHECK_EQ (destination, 432);
-    CHECK_EQ (static_cast<int> (paramCount()), 2063); // + the 18 keys of B18, the 18 of B15, the 2 of B20, the 7 of B21, the 448 of B22, the 6 of B23, the 4 of B24 and the 2 of B25
+    CHECK_EQ (static_cast<int> (paramCount()), 2125); // + the 18 keys of B18, the 18 of B15, the 2 of B20, the 7 of B21, the 448 of B22, the 6 of B23, the 4 of B24, the 2 of B25 and the 62 of B26
     CHECK_EQ (modDestinationParamIndex (424), 1546);
     CHECK_EQ (modDestinationParamIndex (431), 1557);
     CHECK_EQ (positionOf ("splitter_ms.level"), 1483); // B12 is unchanged
@@ -107,7 +107,7 @@ TEST (b17_choice_lists_and_names)
 
 TEST (b17_kick_pages_reach_every_key)
 {
-    CHECK_EQ (kickPageCount(), static_cast<size_t> (135)); // B18 adds sub_main, B15 adds voice_global and quality_options, B21 adds mix_env1, B22 the 16 pages fxi01 .. fxi16
+    CHECK_EQ (kickPageCount(), static_cast<size_t> (143)); // B26 adds the 8 pages voicectl_*, B18 adds sub_main, B15 adds voice_global and quality_options, B21 adds mix_env1, B22 the 16 pages fxi01 .. fxi16
     const Page* pages = kickPageTable();
     for (const Key& k : kKeys)
     {

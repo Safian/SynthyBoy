@@ -427,6 +427,7 @@ void Importer::runPreset()
     for (int i = 0; i < 10 && ! cancelled(); ++i) lfo (i);
     for (int i = 0; i < 8; ++i) macro (i);
     global();
+    voicePanel (false);
     for (int r = 0; r < 3 && ! cancelled(); ++r) fxRack (r, false);
     modSlots();
     curves();
@@ -452,6 +453,95 @@ void Importer::macro (int i)
     if (isDefaultBlock (pp)) noteDefault (pp);
     else applyScope ({ "Macro" }, pp, n, area, name + "/plainParams", um, false);
     dropUnmapped (um, area, name + "/plainParams", "serum_feature_not_modelled");
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// GROUPA2 (WP-07): the voice panel, VoicePanel0 -> voicectl.* (13-new-keys.md 4.30, A379)
+// ---------------------------------------------------------------------------------------------------------------------------------------
+void Importer::voicePanel (bool resetAll)
+{
+    if (resetAll)
+    {
+        // a style is a complete configuration: what it does not mention is the Serum default, which is ours (all steps zero, 8 steps, scaling 100 %, every target)
+        for (size_t i = 0; i < paramCount(); ++i)
+            if (std::strncmp (paramTable()[i].key, "voicectl.", 9) == 0)
+                store (paramTable()[i].key, paramTable()[i].def);
+    }
+    const int vp = get (0, "VoicePanel0");
+    if (vp < 0) return;
+    const int dn = get (vp, "displayName");
+    if (dn >= 0)
+    {
+        entry (ItemKind::ignored, Reason::exact, "voice", "VoicePanel0/displayName", valueText (dn), "", "", "interface_state");
+        consume (dn);
+    }
+    const int pp = get (vp, "plainParams");
+    if (pp < 0) return;
+    const std::string path = "VoicePanel0/plainParams";
+    if (isDefaultBlock (pp)) { noteDefault (pp); return; }
+    std::vector<Unmapped> um;
+    if (isMap (pp))
+        forMap (pp, [&] (const std::string& name, int value, int keyNode)
+        {
+            std::string key, detail;
+            double v = isNumber (value) ? num (value) : 0.0;
+            ItemKind kind = ItemKind::imported;
+            Reason reason = Reason::exact;
+            static const struct { const char* suffix; const char* row; } rows[] = { { "Pan", "pan" }, { "Detune", "detune" }, { "FilterCutoff", "cutoff" }, { "EnvTime", "env" },
+                                                                                   { "Mod1", "mod1" }, { "Mod2", "mod2" } };
+            if (name == "kParamVoiceCount")
+                key = "voicectl.length";
+            else if (name.rfind ("kParamVoice", 0) == 0 && name.size() > 12 && name[11] >= '1' && name[11] <= '8')
+            {
+                for (const auto& r : rows)
+                    if (name.compare (12, std::string::npos, r.suffix) == 0)
+                        key = std::string ("voicectl.s") + name[11] + "." + r.row;
+            }
+            else if (name == "kParamGlobalRandomOscPan") key = "voicectl.rand.pan";
+            else if (name == "kParamGlobalRandomOscDetune") key = "voicectl.rand.detune";
+            else if (name == "kParamGlobalRandomOscDetune10x") { key = "voicectl.rand.detune10x"; v = v >= 0.5 ? 1.0 : 0.0; }
+            else if (name == "kParamGlobalRandomFilterCutoff") key = "voicectl.rand.cutoff";
+            else if (name == "kParamGlobalRandomEnvTime") key = "voicectl.rand.env";
+            else if (name == "kParamGlobalScalingEnvTime") key = "voicectl.scale.env";
+            else if (name == "kParamGlobalScalingLfoTime") key = "voicectl.scale.lfo";
+            else if (name == "kParamGlobalScalingLfoTimeSnap")
+            {
+                // the Snap switch of the LFO scaling field is read as "set by rate" (A374, question 72)
+                key = "voicectl.scale.lfo_mode";
+                v = v >= 0.5 ? 1.0 : 0.0;
+                kind = ItemKind::approximated;
+                reason = Reason::enumRemapped;
+                detail = "lfo_scaling_snap_as_rate_mode";
+            }
+            else if (name == "kParamOscA") { key = "voicectl.osc.a"; v = v >= 0.5 ? 1.0 : 0.0; }
+            else if (name == "kParamOscB") { key = "voicectl.osc.b"; v = v >= 0.5 ? 1.0 : 0.0; }
+            else if (name == "kParamOscC") { key = "voicectl.osc.c"; v = v >= 0.5 ? 1.0 : 0.0; }
+            else if (name == "kParamOscN") { key = "voicectl.osc.noise"; v = v >= 0.5 ? 1.0 : 0.0; }
+            else if (name == "kParamOscS") { key = "voicectl.osc.sub"; v = v >= 0.5 ? 1.0 : 0.0; }
+            const int idx = key.empty() ? -1 : indexOf (key);
+            if (idx < 0) return;
+            used[static_cast<size_t> (keyNode)] = 1;
+            if (! isNumber (value))
+            {
+                entry (ItemKind::dropped, Reason::typeMismatch, "voice", path + "/" + name, valueText (value), key, "", "number_expected");
+                consume (value);
+                return;
+            }
+            bool clamped = false;
+            const double stored = store (key, v, &clamped);
+            setByFile[static_cast<size_t> (idx)] = 1;
+            if (clamped) { kind = ItemKind::approximated; reason = Reason::clamped; detail = "clamped_to_range"; }
+            char text[64];
+            valueToText (paramTable()[idx], static_cast<float> (stored), text, sizeof text);
+            entry (kind, reason, "voice", path + "/" + name, valueText (value), key, text, detail);
+            consume (value);
+        });
+    // the names the lambda skipped (it returns before it marks them) are the unknown ones
+    forMap (pp, [&] (const std::string& name, int value, int keyNode)
+    {
+        if (! used[static_cast<size_t> (keyNode)]) um.push_back ({ name, value });
+    });
+    dropUnmapped (um, "voice", path, "voice_panel_parameter_unknown");
 }
 
 void Importer::global()

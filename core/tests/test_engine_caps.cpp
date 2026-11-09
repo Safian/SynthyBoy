@@ -53,14 +53,15 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
     }
     // block B17: its five bits sit apart from the work package bits
     for (const EngineCapsMask b : { kCapFxCompressorLimit, kCapFxDelayExtras, kCapFxDistortionExtras, kCapFxPhaserDepth2, kCapFxReverbAlgos, kCapSubOsc, kCapNoiseExtras,
-                                     kCapVoiceSteal, kCapPolyLegato, kCapBendDownRange, kCapStereoSpread, kCapLfoSwing, kCapQualityOptions, kCapModAmount, kCapEnv1Toggle, kCapFxInstances, kCapSubPhase, kCapNoiseColour, kCapNoiseSample, kCapMpeRouting, kCapFxDelayOffsetLeft, kCapReverbFeedback })
+                                     kCapVoiceSteal, kCapPolyLegato, kCapBendDownRange, kCapStereoSpread, kCapLfoSwing, kCapQualityOptions, kCapModAmount, kCapEnv1Toggle, kCapFxInstances, kCapSubPhase, kCapNoiseColour, kCapNoiseSample, kCapMpeRouting, kCapFxDelayOffsetLeft, kCapReverbFeedback, kCapVoiceControl })
     {
         CHECK (std::strlen (capName (b)) > 0);
         if (! CHECK ((all & b) != 0))
             std::printf ("    bit %s has no key\n", capName (b));
     }
     CHECK_EQ (all & ~kCapAllKnown, static_cast<EngineCapsMask> (0));
-    CHECK_EQ (all >> 58, static_cast<EngineCapsMask> (0)); // bits 44 .. 48 (the warp modes) are needed by values of a choice list only
+    CHECK_EQ (all >> 59, static_cast<EngineCapsMask> (0)); // bit 59 (the sources Voice Index / Mod) is needed by values of a choice list only; bit 58 by the voicectl keys
+    // bits 44 .. 48 (the warp modes) are needed by values of a choice list only
 
     struct Case { const char* key; EngineCapsMask caps; };
     const Case cases[] = {
@@ -170,6 +171,11 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (need ("mod01.source", 34.0f), static_cast<EngineCapsMask> (kCapLfo910));
     CHECK_EQ (need ("mod01.source", 38.0f), static_cast<EngineCapsMask> (kCapModSourcesExtra));
     CHECK_EQ (need ("mod01.source", 39.0f), static_cast<EngineCapsMask> (kCapModAmount));
+    CHECK_EQ (need ("mod01.source", 40.0f), static_cast<EngineCapsMask> (kCapVoiceSources));
+    CHECK_EQ (need ("mod01.source", 42.0f), static_cast<EngineCapsMask> (kCapVoiceSources));
+    CHECK_EQ (need ("mod01.aux_source", 41.0f), static_cast<EngineCapsMask> (kCapAuxSource | kCapVoiceSources));
+    CHECK_EQ (requiredCaps (static_cast<size_t> (findParamIndex (findParamByKey ("voicectl.s4.cutoff")->id))), static_cast<EngineCapsMask> (kCapVoiceControl));
+    CHECK_EQ (requiredCaps (static_cast<size_t> (findParamIndex (findParamByKey ("voicectl.osc.sub")->id))), static_cast<EngineCapsMask> (kCapVoiceControl));
     CHECK_EQ (need ("mod09.destination", 269.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("mod09.destination", 270.0f), static_cast<EngineCapsMask> (kCapMacros58));
     CHECK_EQ (need ("mod09.destination", 403.0f), static_cast<EngineCapsMask> (kCapFxSplitters));

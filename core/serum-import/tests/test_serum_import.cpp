@@ -888,3 +888,91 @@ TEST (serum_real_presets_import_without_a_failure_and_with_every_leaf_accounted)
     CHECK_EQ (validated, files);
     CHECK (slowest < 20.0);
 }
+
+// GROUPA2 (WP-07, A379 / A380): the voice panel of a preset and of a .SerumStyle file, and the sources Voice Mod 1 / 2 and Voice Index
+TEST (serum_voice_panel_is_imported_into_the_voice_control_keys_and_the_voice_sources_into_the_matrix)
+{
+    Preset p;
+    p.set ("VoicePanel0", map ({ { "displayName", text ("My Panel") },
+                                 { "plainParams", map (withText ({ { "kParamVoiceCount", 3 }, { "kParamVoice1Pan", -40 }, { "kParamVoice2Detune", 12.5 }, { "kParamVoice3FilterCutoff", 75 },
+                                                                   { "kParamVoice2EnvTime", -50 }, { "kParamVoice1Mod1", 30 }, { "kParamVoice3Mod2", -20 },
+                                                                   { "kParamGlobalRandomOscPan", 25 }, { "kParamGlobalRandomOscDetune", 40 }, { "kParamGlobalRandomOscDetune10x", 1 },
+                                                                   { "kParamGlobalRandomFilterCutoff", 10 }, { "kParamGlobalRandomEnvTime", 20 },
+                                                                   { "kParamGlobalScalingEnvTime", 150 }, { "kParamGlobalScalingLfoTime", 50 }, { "kParamGlobalScalingLfoTimeSnap", 1 },
+                                                                   { "kParamOscA", 0 }, { "kParamOscS", 0 }, { "kParamVoice4Wobble", 3 } },
+                                                                 {})) } }));
+    const auto slot = [] (int source, const char* param)
+    {
+        return map ({ { "source", nums ({ static_cast<double> (source), 0 }) }, { "destModuleTypeString", text ("Oscillator") }, { "destModuleID", num (0) },
+                      { "destModuleParamName", text (param) }, { "destModuleParamID", num (0) }, { "plainParams", plain ({ { "kParamAmount", 50 } }) } });
+    };
+    p.set ("ModSlot0", slot (56, "kParamVolume"));
+    p.set ("ModSlot1", slot (57, "kParamVolume"));
+    p.set ("ModSlot2", slot (58, "kParamVolume"));
+    p.set ("ModSlot3", slot (55, "kParamVolume")); // Active Voices: still no home
+    const SerumImportResult r = run (p.file());
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_EQ (value (r, "voicectl.length"), 3.0f);
+    CHECK_NEAR (value (r, "voicectl.s1.pan"), -40.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.s2.detune"), 12.5, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.s3.cutoff"), 75.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.s2.env"), -50.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.s1.mod1"), 30.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.s3.mod2"), -20.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.rand.pan"), 25.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.rand.detune"), 40.0, 1e-3);
+    CHECK_EQ (value (r, "voicectl.rand.detune10x"), 1.0f);
+    CHECK_NEAR (value (r, "voicectl.rand.cutoff"), 10.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.rand.env"), 20.0, 1e-3);
+    CHECK_NEAR (value (r, "voicectl.scale.env"), 150.0, 1e-2);
+    CHECK_NEAR (value (r, "voicectl.scale.lfo"), 50.0, 1e-2);
+    CHECK_EQ (value (r, "voicectl.scale.lfo_mode"), 1.0f);
+    CHECK_EQ (value (r, "voicectl.osc.a"), 0.0f);
+    CHECK_EQ (value (r, "voicectl.osc.b"), 1.0f);
+    CHECK_EQ (value (r, "voicectl.osc.sub"), 0.0f);
+    CHECK_EQ (value (r, "voicectl.s4.pan"), 0.0f);                                   // not mentioned: the default
+    CHECK (countKind (r, ItemKind::dropped, "VoicePanel0/plainParams/kParamVoice4Wobble") == 1); // a name we do not know is accounted, not lost
+    CHECK (entryWith (r, "voice_panel_parameter_unknown") >= 0);
+    CHECK (entryWith (r, "voice_panel_not_modelled") < 0);
+    CHECK_EQ (r.values.plain[modSlotParams (0).source], 41.0f); // voice_mod1
+    CHECK_EQ (r.values.plain[modSlotParams (1).source], 42.0f); // voice_mod2
+    CHECK_EQ (r.values.plain[modSlotParams (2).source], 40.0f); // voice_index
+    CHECK_EQ (r.values.plain[modSlotParams (3).source], 0.0f);  // Active Voices
+}
+
+TEST (serum_style_files_are_complete_voice_control_configurations)
+{
+    // "8 Voice Pan": two steps with a pan, the count absent (8), everything else the default
+    {
+        const Bytes style = container ("SerumStyle", map ({ { "VoicePanel0", map ({ { "plainParams", plain ({ { "kParamVoice3Pan", 50 }, { "kParamVoice6Pan", -50 } }) } }) } }), "8 Voice Pan");
+        const SerumImportResult r = run (style);
+        CHECK (r.status == ImportStatus::ok);
+        CHECK (r.kind == SerumFileKind::style);
+        CHECK_EQ (r.report.unaccounted, 0);
+        CHECK_EQ (value (r, "voicectl.length"), 8.0f);
+        CHECK_NEAR (value (r, "voicectl.s3.pan"), 50.0, 1e-3);
+        CHECK_NEAR (value (r, "voicectl.s6.pan"), -50.0, 1e-3);
+        CHECK_NEAR (value (r, "voicectl.s1.pan"), 0.0, 1e-3);
+        // every voice control key is part of what the style writes onto the patch (the rest of the patch is not touched)
+        int voice = 0, other = 0;
+        for (const int i : r.touched)
+            (std::string (paramTable()[static_cast<size_t> (i)].key).rfind ("voicectl.", 0) == 0 ? voice : other) += 1;
+        CHECK_EQ (voice, 62);
+        CHECK_EQ (other, 0);
+        CHECK (r.report.numDropped == 0);
+    }
+    // "Init": plainParams "default" resets every key
+    {
+        const Bytes init = container ("SerumStyle", map ({ { "VoicePanel0", map ({ { "plainParams", dflt() } }) } }), "Init");
+        const SerumImportResult r = run (init);
+        CHECK (r.kind == SerumFileKind::style);
+        CHECK_EQ (r.report.unaccounted, 0);
+        int voice = 0;
+        for (const int i : r.touched)
+            voice += std::string (paramTable()[static_cast<size_t> (i)].key).rfind ("voicectl.", 0) == 0 ? 1 : 0;
+        CHECK_EQ (voice, 62);
+        CHECK_EQ (value (r, "voicectl.length"), 8.0f);
+        CHECK_NEAR (value (r, "voicectl.scale.env"), 100.0, 1e-3);
+    }
+}
