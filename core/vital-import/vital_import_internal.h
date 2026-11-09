@@ -97,9 +97,9 @@ void builtinLfoShape (int shape, float* out) noexcept;
 /** Nearest built-in table by the spectral distance of the design (1.3.1): positions 0, .25, .5, .75, 1; the first 64 harmonics in dB
     (floor -90), mean absolute difference. `frames` is numFrames * 2048. Returns the index, distance in `distance`. */
 int nearestBuiltinWavetable (const float* frames, int numFrames, double& distance);
-/** 0..4 (Sine, Saw, Square, Triangle, Pulse 25%) if the table is a single cycle (or all frames equal) that matches within a
+/** 0..4 (Sine, Saw, Square, Triangle, Pulse 25%), or kWavetableSawDown (14) when `allowSawDown` is set, if the table is a single cycle (or all frames equal) that matches within a
     normalised RMS error of 0.01, else -1. */
-int matchBuiltinSingleCycle (const float* frames, int numFrames);
+int matchBuiltinSingleCycle (const float* frames, int numFrames, bool allowSawDown = false);
 /** The built-in LFO shape within an RMS error of 0.01, else -1; nearest and its error always returned. */
 int matchBuiltinLfoShape (const float* samples256, int& nearest, double& error);
 

@@ -266,6 +266,7 @@ int main (int argc, char** argv)
 
     ImportOptions opt;
     opt.caps.customWavetables = true;
+    opt.caps.sawDownTable = true;
     opt.caps.customLfoShapes = true;
     opt.caps.sampleOsc = true;
     opt.caps.noiseSample = true;

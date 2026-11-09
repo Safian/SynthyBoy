@@ -63,6 +63,10 @@ void spectrumOf (int table, double t, Spectrum& s)
         case 4: // Pulse, 25 % duty
             pulseSpectrum (s, 0.25);
             break;
+        case kSawDownSlot: // Saw Down (GROUPB WP-18): -saw (phase + 180 degrees), the falling ramp with its jump at mid cycle: b[k] = 2 (-1)^k / (pi k)
+            for (int k = 1; k <= kMaxHarmonic; ++k)
+                s.b[k] = 2.0 * (k % 2 == 0 ? 1.0 : -1.0) / (kPi * k);
+            break;
         case 5: // Saw to Square: the even harmonics fade out while the odd ones double
             for (int k = 1; k <= kMaxHarmonic; ++k)
                 s.b[k] = (2.0 / (kPi * k)) * (k % 2 == 1 ? 1.0 + t : 1.0 - t);
@@ -116,7 +120,7 @@ void spectrumOf (int table, double t, Spectrum& s)
 
 int framesOf (int table)
 {
-    return table <= 4 ? 1 : kMorphFrames;
+    return table <= 4 || table == kSawDownSlot ? 1 : kMorphFrames;
 }
 
 /** FM Sweep (table 10) is defined in the time domain: sin (phase + index * sin (2 phase)), index 0 .. 6 (band-limited by design). */
@@ -173,7 +177,7 @@ void makeFrame (int table, int frame, sbvital::WaveFrame& out)
 WavetableSet::WavetableSet()
 {
     auto frame = std::make_unique<sbvital::WaveFrame>();
-    for (int table = 0; table < kNumBuiltinWavetables; ++table)
+    for (int table = 0; table <= kSawDownSlot; ++table)   // the 13 built-in tables and Saw Down
     {
         const int frames = framesOf (table);
         auto wavetable = std::make_unique<sbvital::Wavetable> (frames);
@@ -217,7 +221,7 @@ sbvital::Wavetable::WavetableData* WavetableSet::data (int index) noexcept
 
 int WavetableSet::numFrames (int index) const noexcept
 {
-    return framesOf (std::clamp (index, 0, kNumBuiltinWavetables - 1));
+    return framesOf (std::clamp (index, 0, kSawDownSlot));
 }
 
 void renderFrame (int table, int frame, float* out2048)

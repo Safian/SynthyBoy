@@ -104,6 +104,11 @@ TEST (ui_cap_dimming_decisions)
     CHECK (capStateForValue (wt, 1.0f, kCapNone).available);
     CHECK (! capStateForValue (wt, static_cast<float> (kWavetablePresetTable), kCapNone).available);
     CHECK (capStateForValue (wt, static_cast<float> (kWavetablePresetTable), kCapUserWavetable).available);
+    // GROUPB WP-18: "Saw Down" needs its own bit, not the user table bit
+    CHECK (! capStateForValue (wt, static_cast<float> (kWavetableSawDown), kCapNone).available);
+    CHECK (! capStateForValue (wt, static_cast<float> (kWavetableSawDown), kCapUserWavetable).available);
+    CHECK (capStateForValue (wt, static_cast<float> (kWavetableSawDown), kCapWavetableSawDown).available);
+    CHECK_EQ (std::string (choiceName (paramTable()[wt], static_cast<size_t> (kWavetableSawDown))), std::string ("Saw Down"));
 
     // an invalid index never dims
     CHECK (capStateForKey (-1, kCapNone).available);

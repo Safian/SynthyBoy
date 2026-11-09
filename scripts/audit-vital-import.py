@@ -353,7 +353,8 @@ class Audit:
             elif key in ('pitch_bend_range', 'effect_chain_order', 'filter_1_filter_input', 'filter_2_filter_input', 'mpe_enabled',
                          'stereo_routing', 'voice_override',
                          'osc_1_transpose_quantize', 'osc_2_transpose_quantize', 'osc_3_transpose_quantize',
-                         'osc_1_smooth_interpolation', 'osc_2_smooth_interpolation', 'osc_3_smooth_interpolation'):
+                         'osc_1_smooth_interpolation', 'osc_2_smooth_interpolation', 'osc_3_smooth_interpolation',
+                         'osc_1_detune_range', 'osc_2_detune_range', 'osc_3_detune_range', 'osc_1_midi_track', 'osc_2_midi_track', 'osc_3_midi_track', 'voice_priority'):
                 kinds.append('imported')
             elif key in SAMPLE_CONSUMED and content.get('samples'):
                 kinds.append('imported')  # carried by the oscillator the sample was mapped to
@@ -417,10 +418,14 @@ class Audit:
             frames[w['osc']] = w['frames']
         wt_is_custom = {n: state.get('osc%d.wavetable' % n) == 13 for n in (1, 2, 3)}
         sample_target = 0
+        sample_noise = False   # GROUPA1 WP-04: the sample is the sample of the noise source (content.samples[] osc 4), no free oscillator
         for smp in content.get('samples', []):
-            sample_target = smp['osc']
+            if smp['osc'] == 4:
+                sample_noise = True
+            else:
+                sample_target = smp['osc']
         sample_obj = S.get('sample', {})
-        custom_sample = bool(sample_obj) and sample_obj.get('name') not in (None, '', 'White Noise')
+        custom_sample = bool(sample_obj) and sample_obj.get('name') not in (None, '', 'White Noise') and not sample_noise
 
         def check(key, want, how, raw=None, ctl=None):
             touched.add(key)
@@ -461,7 +466,7 @@ class Audit:
             check(key, want, how, raw, ctl)
 
         # specials
-        self.audit_specials(name, S, state, content, sb, items, mods, active_slots, slot_dropped, slot_items, check, touched, cls, by_name, sample_target)
+        self.audit_specials(name, S, state, content, sb, items, mods, active_slots, slot_dropped, slot_items, check, touched, cls, by_name, sample_target, sample_noise)
 
         # keys not addressed by the importer keep their default
         for key, p in P.items():
@@ -549,7 +554,7 @@ class Audit:
         return snap(p, want), how
 
     # ---------------------------------------------------------------------------------------------------------------
-    def audit_specials(self, name, S, state, content, sb, items, mods, active, dropped, slot_items, check, touched, cls, by_name, sample_target):
+    def audit_specials(self, name, S, state, content, sb, items, mods, active, dropped, slot_items, check, touched, cls, by_name, sample_target, sample_noise=False):
         P = self.params
         # ---- pitch bend range, voice amplitude, filter routing, effect order -------------------------------------
         if 'pitch_bend_range' in S:
@@ -575,12 +580,28 @@ class Audit:
                 check(pk, round_half_up(S[k]), k, S[k], k)
             else:
                 touched.add(pk)
+            k = 'osc_%d_detune_range' % n   # GROUPB WP-18: the unison range in semitones and the pitch tracking switch
+            pk = 'osc%d.unison.range' % n
+            if k in S:
+                check(pk, min(max(S[k], float(P[pk]['min'])), float(P[pk]['max'])), k, S[k], k)
+            else:
+                touched.add(pk)
+            k = 'osc_%d_midi_track' % n
+            pk = 'osc%d.pitch_track' % n
+            if k in S:
+                check(pk, 1.0 if S[k] else 0.0, k, S[k], k)
+            else:
+                touched.add(pk)
             k = 'osc_%d_smooth_interpolation' % n   # GROUPB WP-05
             pk = 'osc%d.smooth_interp' % n
             if k in S:
                 check(pk, 1.0 if S[k] >= 0.5 else 0.0, k, S[k], k)
             else:
                 touched.add(pk)
+        if 'voice_priority' in S:   # GROUPB WP-18 (A409): 4 Round Robin and 0 Newest -> Newest, 1 .. 3 one to one
+            check('master.voice.steal_priority', {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0, 4: 0.0}.get(int(round(S['voice_priority'])), 0.0), 'voice_priority (Vital 0 Newest 1 Oldest 2 Highest 3 Lowest 4 Round Robin)', S['voice_priority'], 'voice_priority')
+        else:
+            touched.add('master.voice.steal_priority')
         a, b = S.get('filter_1_filter_input'), S.get('filter_2_filter_input')
         if a is not None or b is not None:
             f1, f2 = bool(a), bool(b)
@@ -656,8 +677,23 @@ class Audit:
                 self.err(name, 'content', '%s changed without a shape in the file' % key)
 
         # ---- the sample oscillator -------------------------------------------------------------------------------
-        so = [s for s in content.get('samples', [])]
-        if so:
+        so = [s for s in content.get('samples', []) if s['osc'] != 4]
+        if sample_noise:
+            # GROUPA1 WP-04: noise.type = Sample; loop / bounce / key tracking / random phase / transpose / tune are the keys of the noise source
+            touched.update(['noise.type', 'noise.loop', 'noise.bounce', 'noise.keytrack', 'noise.random_phase', 'noise.pitch', 'noise.fine'])
+            check('noise.type', 1.0, 'a sample is the noise source', None, 'sample')
+            check('noise.loop', 1.0 if S.get('sample_loop', 0.0) else 0.0, 'sample_loop', None, 'sample_loop')
+            check('noise.bounce', 1.0 if S.get('sample_bounce', 0.0) else 0.0, 'sample_bounce', None, 'sample_bounce')
+            check('noise.keytrack', 1.0 if S.get('sample_keytrack', 1.0) else 0.0, 'sample_keytrack', None, 'sample_keytrack')
+            check('noise.random_phase', 1.0 if S.get('sample_random_phase', 0.0) else 0.0, 'sample_random_phase', None, 'sample_random_phase')
+            check('noise.pitch', float(round_half_up(S.get('sample_transpose', 0.0))), 'sample_transpose', None, 'sample_transpose')
+            check('noise.fine', S.get('sample_tune', 0.0) * 100.0, 'sample_tune x 100', None, 'sample_tune')
+            for n in (1, 2, 3):
+                for k in ('osc%d.type' % n, 'osc%d.sample.keytrack' % n, 'osc%d.sample.loop_mode' % n):
+                    if state[k] != P[k]['default']:
+                        self.err(name, 'sample', '%s differs from its default although the noise source plays the sample' % k)
+                    touched.add(k)
+        elif so:
             n = so[0]['osc']
             touched.update(['osc%d.type' % n, 'osc%d.sample.keytrack' % n, 'osc%d.sample.loop_mode' % n])
             if state['osc%d.type' % n] != 1:
@@ -694,7 +730,7 @@ class Audit:
             if i in active:
                 m = mods[i]
                 src = self.mod_source_key(m['source'])
-                dst = self.mod_dest_key(m['destination'], S, sample_target)
+                dst = self.mod_dest_key(m['destination'], S, sample_target, sample_noise)
                 if self.src_choice.get(src) is None:
                     self.err(name, 'mod', 'slot %d: source %r has no choice in our list but was imported' % (i + 1, m['source']))
                     continue
@@ -755,9 +791,11 @@ class Audit:
         if m: return 'macro' + m.group(1)
         return s
 
-    def mod_dest_key(self, dst, S, sample_target=0):
+    def mod_dest_key(self, dst, S, sample_target=0, sample_noise=False):
         if sample_target and dst in ('sample_level', 'sample_pan', 'sample_transpose', 'sample_tune'):
             dst = 'osc_%d_%s' % (sample_target, dst[len('sample_'):])
+        if sample_noise and dst in ('sample_transpose', 'sample_tune'):
+            return {'sample_transpose': 'noise.pitch', 'sample_tune': 'noise.fine'}[dst]
         if dst == 'stereo_routing':
             return 'master.stereo_routing'
         if dst in self.by_control:

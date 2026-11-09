@@ -95,6 +95,8 @@ enum EngineCaps : EngineCapsMask
     // GROUPB WP-06 (13-new-keys.md 4.34): choices only, no keys; bits 61 and 62
     kCapModSources2      = 1ull << 61, // WP-06: the modulation sources 43 .. 57 (Oscillator A .. Fixed)
     kCapWarpSources      = 1ull << 62, // WP-06: the warp modes 52 .. 75 (FM / PD / AM / RM from the Noise, Sub, Filter 1, Filter 2)
+    // GROUPB WP-18 (13-new-keys.md 4.36): a choice only; bit 63, the last one
+    kCapWavetableSawDown = 1ull << 63, // WP-18: oscN.wavetable = 14 "Saw Down" (the built-in falling saw of Vital's Init table)
 };
 
 /** The bits of block B21 that belong to the warp list (kCapEnv1Toggle is the switch of the mixer channels). */
@@ -104,7 +106,7 @@ constexpr EngineCapsMask kCapWarpAll = kCapWarpAlt | kCapWarpFilter | kCapWarpDi
 constexpr EngineCapsMask kCapFxExtrasAll = kCapFxCompressorLimit | kCapFxDelayExtras | kCapFxDistortionExtras | kCapFxPhaserDepth2 | kCapFxReverbAlgos;
 
 /** Every defined bit (for tests and for masking a capability word read from somewhere else). */
-constexpr EngineCapsMask kCapAllKnown = ~0ull >> (64 - 63);
+constexpr EngineCapsMask kCapAllKnown = ~0ull; // all 64 bits are defined
 
 /** The bits a key of the table needs to be live: 0 for the 880 keys of state version 2 (every engine knows them). Total, no allocation. */
 EngineCapsMask requiredCaps (size_t paramIndex) noexcept;

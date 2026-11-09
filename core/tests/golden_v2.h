@@ -54,7 +54,7 @@ inline size_t choicesInV2 (const synthyboy::ParamInfo& p)
     const std::string key = p.key;
     const auto endsWith = [&] (const char* s) { const size_t m = std::strlen (s); return key.size() >= m && key.compare (key.size() - m, m, s) == 0; };
     if (endsWith (".wavetable"))
-        n -= 1;
+        n -= 2; // "Preset table" (version 3) and "Saw Down" (GROUPB WP-18)
     else if (endsWith (".destination") && key.compare (0, 3, "mod") != 0)
         n -= 2; // oscN.destination, noise.destination
     else if (key.compare (0, 3, "lfo") == 0 && endsWith (".shape"))

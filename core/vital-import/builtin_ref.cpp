@@ -11,6 +11,7 @@
 
 #include "synthyboy/wavetable_render.h"
 #include "vital_import_internal.h"
+#include "synthyboy/params.h"
 
 namespace synthyboy
 {
@@ -51,6 +52,10 @@ void spectrumOf (int table, double t, Spectrum& s)
                 s.b[k] = (8.0 / (kPi * kPi)) * ((k / 2) % 2 == 0 ? 1.0 : -1.0) / (static_cast<double> (k) * k);
             break;
         case 4: pulseSpectrum (s, 0.25); break;
+        case 13: // Saw Down (GROUPB WP-18): -saw (phase + 180 degrees), b[k] = 2 (-1)^k / (pi k): the waveform of Vital's Init table
+            for (int k = 1; k <= kMaxHarmonic; ++k)
+                s.b[k] = 2.0 * (k % 2 == 0 ? 1.0 : -1.0) / (kPi * k);
+            break;
         case 5:
             for (int k = 1; k <= kMaxHarmonic; ++k)
                 s.b[k] = (2.0 / (kPi * k)) * (k % 2 == 1 ? 1.0 + t : 1.0 - t);
@@ -156,7 +161,7 @@ const BuiltinProfiles& profiles()
 }
 } // namespace
 
-int builtinWavetableFrames (int table) noexcept { return table <= 4 ? 1 : kMorphFrames; }
+int builtinWavetableFrames (int table) noexcept { return table <= 4 || table == 13 ? 1 : kMorphFrames; }
 
 void builtinWavetableFrame (int table, double t, float* out)
 {
@@ -238,7 +243,7 @@ int nearestBuiltinWavetable (const float* frames, int numFrames, double& distanc
     return best;
 }
 
-int matchBuiltinSingleCycle (const float* frames, int numFrames)
+int matchBuiltinSingleCycle (const float* frames, int numFrames, bool allowSawDown)
 {
     if (numFrames < 1)
         return -1;
@@ -258,9 +263,9 @@ int matchBuiltinSingleCycle (const float* frames, int numFrames)
     std::vector<float> ref (kN);
     int best = -1;
     double bestErr = 0.01;
-    for (int t = 0; t < 5; ++t)
+    for (int t = 0; t < (allowSawDown ? 6 : 5); ++t)
     {
-        builtinWavetableFrame (t, 0.0, ref.data());
+        builtinWavetableFrame (t == 5 ? 13 : t, 0.0, ref.data());   // candidate 5 is Saw Down (slot 13)
         wtrender::analyzeHarmonics (ref.data(), kCompare, bc.data(), bs.data());
         // SPEC-GAP: the level is not part of the comparison (a band limited reference has Gibbs overshoot, so a peak normalised naive table
         // would differ by its level alone): both coefficient vectors are scaled to unit energy over the compared harmonics.
@@ -282,7 +287,7 @@ int matchBuiltinSingleCycle (const float* frames, int numFrames)
         if (err <= bestErr)
         {
             bestErr = err;
-            best = t;
+            best = t == 5 ? kWavetableSawDown : t;
         }
     }
     return best;

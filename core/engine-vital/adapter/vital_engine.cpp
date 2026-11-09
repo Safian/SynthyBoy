@@ -698,7 +698,8 @@ public:
              | kCapFxDelayOffsetLeft | kCapReverbFeedback // block B25 (GROUPA1 WP-10): proven by core/engine-vital/tests/test_fxextra.cpp
              | kCapVoiceControl | kCapVoiceSources // block B26 (GROUPA2 WP-07): proven by core/engine-vital/tests/test_voicecontrol.cpp
              | kCapOscExtras2 // block B27 (GROUPB WP-05): proven by core/engine-vital/tests/test_oscextra2.cpp
-             | kCapModSources2 | kCapWarpSources; // GROUPB WP-06: proven by core/engine-vital/tests/test_modsources.cpp
+             | kCapModSources2 | kCapWarpSources // GROUPB WP-06: proven by core/engine-vital/tests/test_modsources.cpp
+             | kCapWavetableSawDown; // GROUPB WP-18: proven by core/engine-vital/tests/test_modsources.cpp (saw_down_*)
     }
 
     void setTransport (const TransportInfo& t) noexcept override
@@ -1622,7 +1623,9 @@ private:
             int index = static_cast<int> (params[static_cast<size_t> (p)].load (std::memory_order_relaxed) + 0.5f);
             sbvital::Wavetable* user = nullptr;
             int frames = 0;
-            if (index >= kNumBuiltinWavetables)
+            if (index == kWavetableSawDown)
+                index = vitaltables::kSawDownSlot; // GROUPB WP-18: the built-in falling saw sits in the slot behind the 13 tables
+            else if (index >= kNumBuiltinWavetables)
             {
                 if (activeSnapshot != nullptr && activeSnapshot->userTable[static_cast<size_t> (i)] != nullptr)
                 {

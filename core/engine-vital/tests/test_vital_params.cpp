@@ -386,9 +386,9 @@ TEST (quality_tiers_cap_without_touching_the_parameters)
 TEST (builtin_wavetables_are_clean_single_cycles)
 {
     vitaltables::WavetableSet set;
-    CHECK_EQ (set.size(), kNumBuiltinWavetables);
+    CHECK_EQ (set.size(), kNumBuiltinWavetables + 1); // + Saw Down (GROUPB WP-18)
     std::vector<float> frame (2048);
-    for (int table = 0; table < kNumBuiltinWavetables; ++table)
+    for (int table = 0; table <= vitaltables::kSawDownSlot; ++table)
     {
         CHECK (set.numFrames (table) == 1 || set.numFrames (table) == vitaltables::kMorphFrames);
         for (int f = 0; f < set.numFrames (table); f += std::max (1, set.numFrames (table) / 8))

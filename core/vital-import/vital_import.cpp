@@ -813,7 +813,7 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             if (st == wtrender::Status::budgetExceeded)
                 return ImportStatus::budgetExceeded;
             const size_t pidx = static_cast<size_t> (findParamIndex (pinfo->id));
-            const int shortcut = matchBuiltinSingleCycle (r.frames.data(), r.numFrames);
+            const int shortcut = matchBuiltinSingleCycle (r.frames.data(), r.numFrames, opt.caps.sawDownTable);
             if (shortcut >= 0)
             {
                 V.plain[pidx] = static_cast<float> (shortcut);
@@ -1388,7 +1388,29 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
             const bool on = isOn ((p + "on").c_str());
             const std::string area = "osc" + std::to_string (n);
             struct U { const char* tail; double expected; };
-            for (const U& u : { U { "detune_range", 2.0 }, U { "midi_track", 1.0 }, U { "spectral_unison", 1.0 } })
+            // GROUPB WP-18: the unison range in semitones (detune_range, default 2) and the pitch tracking switch (midi_track, default 1) have keys
+            for (const auto& d : { std::make_pair ("detune_range", "unison.range"), std::make_pair ("midi_track", "pitch_track") })
+            {
+                const std::string name = p + d.first;
+                double v;
+                bool m;
+                if (! c.number (c.member (name.c_str()), v, m))
+                    continue;
+                if (const ParamInfo* pi = findParamByKey ((area + "." + d.second).c_str()))
+                {
+                    const float want = std::strcmp (d.first, "midi_track") == 0 ? (v != 0.0 ? 1.0f : 0.0f) : static_cast<float> (v);
+                    const float val = constrainValue (*pi, want);
+                    V.plain[static_cast<size_t> (findParamIndex (pi->id))] = val;
+                    if (std::fabs (val - want) > 1.0e-4f)
+                        c.item (ItemKind::approximated, Reason::clamped, area, name, num (v), pi->key, valueText (*pi, val), "outside_our_range");
+                    else
+                    {
+                        ++rep.numImported;
+                        rep.imported.push_back ({ static_cast<uint16_t> (findParamIndex (pi->id)), static_cast<float> (v), val });
+                    }
+                }
+            }
+            for (const U& u : { U { "spectral_unison", 1.0 } })
             {
                 double v;
                 bool m;
@@ -1471,6 +1493,8 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                         ++rep.numImported;
                         rep.imported.push_back ({ 0xFFFF, static_cast<float> (v), static_cast<float> (v) });
                     }
+                    else   // GROUPB WP-18: the noise source has no transpose snap: accounted (it was silently left out before)
+                        c.item (v == 0.0 ? ItemKind::ignored : ItemKind::dropped, Reason::noEngineEquivalent, "noise", name, num (v), "", "", v == 0.0 ? "engine_fixed_value" : "no_engine_equivalent");
                 }
                 continue;
             }
@@ -1491,6 +1515,26 @@ ImportStatus importPresetImpl (Ctx& c, const void* data, size_t size, const char
                     }
                 }
                 continue;
+            }
+            if (std::strcmp (name, "voice_priority") == 0 && c.number (c.member (name), v, m))
+            {
+                // GROUPB WP-18 (A409): Vital's voice priority (0 Newest, 1 Oldest, 2 Highest, 3 Lowest, 4 Round Robin) is master.voice.steal_priority: Round Robin is the
+                // engine default and our "Newest" (the earliest note goes), Oldest, Highest and Lowest are ours one to one, Vital's Newest is the nearest of ours
+                static constexpr float kMap[5] = { 0.0f, 1.0f, 2.0f, 3.0f, 0.0f };
+                const int e = static_cast<int> (std::floor (v + 0.5));
+                if (const ParamInfo* pi = findParamByKey ("master.voice.steal_priority"); pi != nullptr && e >= 0 && e <= 4)
+                {
+                    const float val = constrainValue (*pi, kMap[e]);
+                    V.plain[static_cast<size_t> (findParamIndex (pi->id))] = val;
+                    if (e == 0)
+                        c.item (ItemKind::approximated, Reason::enumRemapped, "voice", name, num (v), pi->key, valueText (*pi, val), "voice_priority_newest_nearest_entry");
+                    else
+                    {
+                        ++rep.numImported;
+                        rep.imported.push_back ({ static_cast<uint16_t> (findParamIndex (pi->id)), static_cast<float> (v), val });
+                    }
+                    continue;
+                }
             }
             if (std::strcmp (name, "mpe_enabled") == 0 && c.number (c.member (name), v, m))
             {

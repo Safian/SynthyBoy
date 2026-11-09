@@ -22,7 +22,7 @@ constexpr const char* const kOffOn[] = { "Off", "On" };
 // choice lists that grew in version 3 only ever get entries appended (docs/ui-design/13-new-keys.md R3, section 3)
 constexpr const char* const kWavetables[kNumWavetableChoices] = {
     "Sine", "Saw", "Square", "Triangle", "Pulse 25%", "Saw to Square", "Sine to Saw", "Harmonic Series", "Odd Harmonics",
-    "Formant Sweep", "FM Sweep", "PWM Sweep", "Bell Partials", "Preset table"
+    "Formant Sweep", "FM Sweep", "PWM Sweep", "Bell Partials", "Preset table", "Saw Down" // "Saw Down": GROUPB WP-18, appended after the Preset table
 };
 constexpr const char* const kLfoShapes[kNumLfoShapes + 1] = {
     "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Pulse 25%", "Steps Up", "Steps Down", "Random Steps", "Exp Up", "Exp Down",

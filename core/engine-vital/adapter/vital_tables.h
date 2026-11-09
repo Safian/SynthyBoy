@@ -20,6 +20,8 @@ namespace vitaltables
 {
 /** Frames of the morphing wavetables (the single cycle shapes at the start of the list have one frame). */
 constexpr int kMorphFrames = 64;
+/** The slot of "Saw Down" (oscN.wavetable = kWavetableSawDown, GROUPB WP-18) in the set: the entries 0 .. 12 are the built-in tables of the same choice number. */
+constexpr int kSawDownSlot = 13;
 
 /** The built-in wavetables, built once by prepare() (allocation allowed there) and read-only afterwards. Each entry owns its data. */
 class WavetableSet

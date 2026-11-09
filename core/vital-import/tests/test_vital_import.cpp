@@ -1734,7 +1734,7 @@ TEST (vi_mapped_sample_settings_are_accounted)
     CHECK (findItem (lost, "sample_loop", ItemKind::ignored) != nullptr);
 }
 
-// A value that is not Vital's default for a behaviour setting we have no key for changes the sound: dropped, not ignored. MPE, stereo_routing and voice_override have keys.
+// A value that is not Vital's default for a behaviour setting we have no key for changes the sound: dropped, not ignored. MPE, stereo_routing, voice_override and (GROUPB WP-18) voice_priority have keys.
 TEST (vi_behaviour_settings_are_dropped_when_not_default_and_mpe_is_imported)
 {
     using namespace sbfx;
@@ -1744,7 +1744,8 @@ TEST (vi_behaviour_settings_are_dropped_when_not_default_and_mpe_is_imported)
     f.set ("voice_priority", 4);
     f.set ("mpe_enabled", 1);
     auto r = run (f, ImportOptions());
-    CHECK (findItem (r, "voice_priority", ItemKind::ignored) != nullptr);
+    CHECK (findItem (r, "voice_priority", ItemKind::ignored) == nullptr);
+    CHECK_EQ (val (r, "master.voice.steal_priority"), 0.0f);   // Round Robin: our Newest
     CHECK (findItem (r, "stereo_routing", ItemKind::ignored) == nullptr);
     CHECK (findItem (r, "voice_override", ItemKind::ignored) == nullptr);
     CHECK (findItem (r, "mpe_enabled", ItemKind::ignored) == nullptr);
@@ -1757,7 +1758,8 @@ TEST (vi_behaviour_settings_are_dropped_when_not_default_and_mpe_is_imported)
     f.set ("voice_priority", 1);
     f.set ("mpe_enabled", 0);
     r = run (f, ImportOptions());
-    CHECK (findItem (r, "voice_priority", ItemKind::dropped) != nullptr);
+    CHECK (findItem (r, "voice_priority", ItemKind::dropped) == nullptr);
+    CHECK_EQ (val (r, "master.voice.steal_priority"), 1.0f);   // Oldest
     CHECK (findItem (r, "stereo_routing", ItemKind::dropped) == nullptr);
     CHECK (findItem (r, "voice_override", ItemKind::dropped) == nullptr);
     CHECK_EQ (val (r, "master.mpe.on"), 0.0f);
@@ -1876,10 +1878,17 @@ TEST (vi_single_cycle_shortcut_needs_the_same_waveform)
         CHECK (r.wavetables.empty());
         CHECK_EQ (val (r, "osc1.wavetable"), static_cast<float> (builtin));
     }
-    // Vital's Init: -saw (n + half a cycle), a falling saw; (for the sine the same operation gives the same sine again)
+    // Vital's Init: -saw (n + half a cycle), a falling saw; (for the sine the same operation gives the same sine again). Without the "Saw Down" capability it is stored,
+    // with it (GROUPB WP-18) it is the built-in table 14 and nothing is stored
     const auto init = importTable (build (1, true, false));
     CHECK_EQ (init.wavetables.size(), static_cast<size_t> (1));
     CHECK_EQ (val (init, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
+    o.caps.sawDownTable = true;
+    const auto initSawDown = importTable (build (1, true, false));
+    CHECK (initSawDown.wavetables.empty());
+    CHECK_EQ (val (initSawDown, "osc1.wavetable"), static_cast<float> (kWavetableSawDown));
+    // the plain saw is still the saw, the shifted sine is still stored (a shift is not a built-in table)
+    CHECK_EQ (val (importTable (build (1, false, false)), "osc1.wavetable"), 1.0f);
     CHECK (importTable (build (0, true, false)).wavetables.empty());
     for (const int builtin : { 0, 1 })
     {
@@ -1887,6 +1896,42 @@ TEST (vi_single_cycle_shortcut_needs_the_same_waveform)
         CHECK_EQ (shifted.wavetables.size(), static_cast<size_t> (1));
         CHECK_EQ (val (shifted, "osc1.wavetable"), static_cast<float> (kWavetablePresetTable));
     }
+}
+
+// GROUPB WP-18: detune_range, midi_track and voice_priority have keys
+TEST (vi_detune_range_midi_track_and_voice_priority_are_imported)
+{
+    using namespace sbfx;
+    Fixture f = defaultPatch();
+    f.set ("osc_1_detune_range", 7.0);
+    f.set ("osc_2_detune_range", 0.0);
+    f.set ("osc_3_detune_range", 60.0);          // above our range: clamped and reported
+    f.set ("osc_1_midi_track", 0.0);
+    f.set ("osc_2_midi_track", 1.0);
+    f.set ("voice_priority", 2.0);
+    const auto r = run (f, ImportOptions());
+    CHECK_EQ (r.status, ImportStatus::ok);
+    CHECK_EQ (val (r, "osc1.unison.range"), 7.0f);
+    CHECK_EQ (val (r, "osc2.unison.range"), 0.0f);
+    CHECK_EQ (val (r, "osc3.unison.range"), 48.0f);
+    CHECK (findItem (r, "osc_3_detune_range", ItemKind::approximated) != nullptr);
+    CHECK_EQ (val (r, "osc1.pitch_track"), 0.0f);
+    CHECK_EQ (val (r, "osc2.pitch_track"), 1.0f);
+    CHECK_EQ (val (r, "master.voice.steal_priority"), 2.0f);   // Highest
+    CHECK (findItem (r, "voice_priority", ItemKind::dropped) == nullptr);
+    for (const auto& c : { std::make_pair (4.0, 0.0f), std::make_pair (1.0, 1.0f), std::make_pair (3.0, 3.0f), std::make_pair (0.0, 0.0f) })
+    {
+        Fixture g = defaultPatch();
+        g.set ("voice_priority", c.first);
+        const auto q = run (g, ImportOptions());
+        CHECK_EQ (val (q, "master.voice.steal_priority"), c.second);
+        CHECK_EQ (findItem (q, "voice_priority", ItemKind::approximated) != nullptr, c.first == 0.0);   // Vital's Newest is the nearest entry, Round Robin is our Newest
+    }
+    // the defaults stay the defaults
+    const auto d = run (defaultPatch(), ImportOptions());
+    CHECK_EQ (val (d, "osc1.unison.range"), 2.0f);
+    CHECK_EQ (val (d, "osc1.pitch_track"), 1.0f);
+    CHECK_EQ (val (d, "master.voice.steal_priority"), 0.0f);
 }
 
 // Block B21 (13-new-keys.md 4.22): the warp lists grew to 52 entries; an imported Vital choice stays in the eleven modes Vital has

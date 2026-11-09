@@ -95,11 +95,14 @@ constexpr uint32_t kParamFilter1Cutoff   = hashKey ("filter1.cutoff");
 
 /** The built-in wavetables of oscillator 1..3 (the first choice names of oscN.wavetable); index 0 = Sine, 1 = Saw. */
 constexpr int kNumBuiltinWavetables = 13;
-/** Choices of oscN.wavetable: the built-in tables plus index kNumBuiltinWavetables = "Preset table" (content.wavetables[]). */
-constexpr int kNumWavetableChoices = kNumBuiltinWavetables + 1;
+/** Choices of oscN.wavetable: the built-in tables plus index kNumBuiltinWavetables = "Preset table" (content.wavetables[]) and index 14 = "Saw Down" (GROUPB WP-18). */
+constexpr int kNumWavetableChoices = kNumBuiltinWavetables + 2;
 constexpr int kWavetableSine = 0;
 constexpr int kWavetableSaw  = 1;
 constexpr int kWavetablePresetTable = 13;
+/** GROUPB WP-18 (13-new-keys.md 4.36): the choice appended after "Preset table": "Saw Down", the falling saw whose jump is at mid cycle (-saw (phase + 180 degrees)), the waveform of
+    Vital's Init table, a built-in single cycle table (needs kCapWavetableSawDown). */
+constexpr int kWavetableSawDown = 14;
 /** The built-in LFO shapes (the first choice names of lfoN.shape). */
 constexpr int kNumLfoShapes = 12;
 /** The choice of lfoN.shape after the built-in ones: "Custom" (point list in content.lfo_shapes[]). */

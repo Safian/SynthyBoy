@@ -264,7 +264,9 @@ EngineCapsMask requiredCapsForValue (size_t paramIndex, float plain) noexcept
             return caps;
     }
 
-    if (endsWith (key, ".wavetable") && v >= kNumBuiltinWavetables)
+    if (endsWith (key, ".wavetable") && v == kWavetableSawDown)
+        caps |= kCapWavetableSawDown;   // GROUPB WP-18
+    else if (endsWith (key, ".wavetable") && v >= kNumBuiltinWavetables)
         caps |= kCapUserWavetable;
     else if (startsWith (key, "lfo") && endsWith (key, ".shape") && v >= kLfoShapeCustom)
         caps |= kCapCustomLfoShape;
@@ -355,6 +357,7 @@ const char* capName (EngineCapsMask bit) noexcept
         case kCapOscExtras2:       return "osc_extras2";
         case kCapModSources2:      return "mod_sources2";
         case kCapWarpSources:      return "warp_sources";
+        case kCapWavetableSawDown: return "wavetable_saw_down";
         case kCapNone:             break;
     }
     return "";

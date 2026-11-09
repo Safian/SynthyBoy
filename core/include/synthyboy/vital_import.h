@@ -82,6 +82,8 @@ struct ImportCaps
     bool sampleOsc = false;
     /** The noise source plays a content sample (noise.type = Sample, kCapNoiseSample): a Vital sample maps there, no free oscillator is needed. */
     bool noiseSample = false;
+    /** The built-in table "Saw Down" (oscN.wavetable = 14, kCapWavetableSawDown): Vital's Init table maps there instead of being stored (GROUPB WP-18). */
+    bool sawDownTable = false;
     int maxWavetableFrames = 257;
 };
 

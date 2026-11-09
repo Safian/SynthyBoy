@@ -63,7 +63,7 @@ TEST (counts_and_constants)
     CHECK_EQ (modSourceCount(), static_cast<size_t> (57));
     CHECK_EQ (modDestinationCount(), static_cast<size_t> (911));
     CHECK_EQ (kNumFxSlots, 16);
-    CHECK_EQ (kNumWavetableChoices, 14);
+    CHECK_EQ (kNumWavetableChoices, 15); // + "Saw Down" (GROUPB WP-18)
     CHECK_EQ (kLfoShapeCustom, 12);
     CHECK_EQ (kNumBuiltinWavetables, 13);
     CHECK_EQ (kNumLfoShapes, 12);
@@ -179,8 +179,8 @@ TEST (choice_lists_are_append_only)
     const auto head = [] (const std::vector<std::string>& names, size_t n) { return std::vector<std::string> (names.begin(), names.begin() + static_cast<long> (n)); };
 
     const auto wavetables = namesOf ("osc2.wavetable");
-    CHECK_EQ (wavetables.size(), static_cast<size_t> (14));
-    CHECK (wavetables[12] == "Bell Partials" && wavetables[13] == "Preset table");
+    CHECK_EQ (wavetables.size(), static_cast<size_t> (15));
+    CHECK (wavetables[12] == "Bell Partials" && wavetables[13] == "Preset table" && wavetables[14] == "Saw Down");
 
     for (const char* key : { "osc1.destination", "osc3.destination", "noise.destination" })
     {

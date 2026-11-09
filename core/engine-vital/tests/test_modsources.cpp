@@ -21,6 +21,7 @@
 #include "test_runner.h"
 #include "test_util.h"
 #include "vital_engine.h"
+#include "vital_tables.h"
 
 using namespace synthyboy;
 using sbtest::noteOff;
@@ -473,4 +474,51 @@ TEST (the_new_sources_and_warp_modes_never_allocate_on_the_audio_thread)
     }
     renderCounted (*e, { noteOn (0, 40) }, 4096, 256, allocs);
     CHECK_EQ (allocs, 0ul);
+}
+
+// GROUPB WP-18: oscN.wavetable = 14 "Saw Down" is the falling saw of Vital's Init table: -saw (phase + 180 degrees)
+TEST (saw_down_is_the_inverted_half_cycle_shifted_saw_and_sounds_different_from_the_saw)
+{
+    auto e = makeVital();
+    CHECK ((e->capabilities() & kCapWavetableSawDown) != 0);
+    CHECK_EQ (kWavetableSawDown, 14);
+    CHECK_EQ (kNumWavetableChoices, 15);
+    // the table itself: -saw (n + 1024) to the numerical accuracy of the band limited tables
+    std::vector<float> saw (2048), down (2048);
+    vitaltables::renderFrame (1, 0, saw.data());
+    vitaltables::renderFrame (vitaltables::kSawDownSlot, 0, down.data());
+    double worst = 0.0;
+    for (int n = 0; n < 2048; ++n)
+        worst = std::max (worst, static_cast<double> (std::fabs (down[static_cast<size_t> (n)] + saw[static_cast<size_t> ((n + 1024) % 2048)])));
+    std::printf ("    Saw Down against -saw (n + 1024): worst difference %g\n", worst);
+    CHECK (worst < 2.0e-3);
+    // played: the same harmonics as the saw (the same magnitudes) at another phase, so the waveform differs
+    const auto render = [] (float table)
+    {
+        auto engine = makeVital();
+        setByKey (*engine, "osc1.on", 1.0f);
+        setByKey (*engine, "osc1.wavetable", table);
+        setByKey (*engine, "osc1.level", 100.0f);
+        setByKey (*engine, "osc1.unison.voices", 1.0f);
+        setByKey (*engine, "osc1.random_phase", 0.0f);
+        setByKey (*engine, "osc1.destination", 3.0f);
+        setByKey (*engine, "filter1.on", 0.0f);
+        setByKey (*engine, "master.volume", -6.0f);
+        return play (*engine, 0.6, 45);
+    };
+    const auto a = render (1.0f), b = render (static_cast<float> (kWavetableSawDown)), c = render (static_cast<float> (kWavetablePresetTable));
+    CHECK (sbtest::allFinite (b.left));
+    CHECK (rms (b, 0.2, 0.5) > 0.05);
+    CHECK (relativeDifference (a, b) > 0.5);                       // the waveform differs ...
+    const auto spectrumA = sbtest::powerSpectrum (a.left, 12000, 32768, 131072), spectrumB = sbtest::powerSpectrum (b.left, 12000, 32768, 131072);
+    const double f0 = 110.0;
+    for (int harmonic = 1; harmonic <= 8; ++harmonic)               // ... the harmonic magnitudes do not
+    {
+        const double fa = sbtest::peakFrequency (spectrumA, 131072, kSr, f0 * harmonic), fb = sbtest::peakFrequency (spectrumB, 131072, kSr, f0 * harmonic);
+        CHECK_NEAR (fa, fb, 1.0);
+        const auto bin = [&] (double f) { return static_cast<size_t> (f / kSr * 131072.0 + 0.5); };
+        CHECK_NEAR (std::sqrt (spectrumB[bin (fb)] / std::max (1.0e-30, spectrumA[bin (fa)])), 1.0, 0.05);
+    }
+    // "Preset table" without a table in the content is still the saw, not the new table
+    CHECK_EQ (relativeDifference (a, c), 0.0);
 }
