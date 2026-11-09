@@ -25,4 +25,10 @@ if(SYNTHYBOY_BUILD_TESTS)
     target_compile_definitions(synthyboy_test_serum_container PRIVATE
         SB_SERUM_PRESETS_DIR="${PROJECT_SOURCE_DIR}/tests/serum-presets"
         SB_SERUM_PRESETS_MAIN="${PROJECT_SOURCE_DIR}/../../../tests/serum-presets")
+    # the importer: hand-built fixtures, robustness, and a gated run over tests/serum-presets
+    synthyboy_add_test(synthyboy_test_serum_import tests/test_serum_import.cpp)
+    target_include_directories(synthyboy_test_serum_import PRIVATE "${SB_SERUM_IMPORT_DIR}" "${PROJECT_SOURCE_DIR}/core/vital-import")
+    target_compile_definitions(synthyboy_test_serum_import PRIVATE
+        SB_SERUM_PRESETS_DIR="${PROJECT_SOURCE_DIR}/tests/serum-presets"
+        SB_SERUM_PRESETS_MAIN="${PROJECT_SOURCE_DIR}/../../../tests/serum-presets")
 endif()
