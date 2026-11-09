@@ -68,6 +68,13 @@ engine. Until a shell does that the key falls back to the scale (the engine beha
 first shell links the library:** read the licence text of the pinned `libMTSClient` revision and record revision and licence here; this
 work package did not fetch it, so nothing above is a verified copy of the licence.
 
+## Formats read without a library (own code, nothing copied)
+
+The Serum 2 importer (`core/serum-import`, WP-21) reads Zstandard (RFC 8878), zlib / DEFLATE (RFC 1950, 1951), CBOR (RFC 8949), UBJSON, FLAC (RFC 9639) and RIFF/WAVE
+with decoders written from those specifications; no zstd, zlib or FLAC library is linked and no third party source is part of the repository. The reference zstd
+command line tool is used by `scripts/audit-serum-import.py` and the tests only to cross-check the decoder (not distributed). The real Serum 2 files used for testing
+(`tests/serum-presets`, gitignored) are never committed.
+
 ## Tools used for verification only (not linked, not distributed)
 
 | Tool | Version | Licence | Used for |
