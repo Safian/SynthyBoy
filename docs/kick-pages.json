@@ -3875,6 +3875,63 @@
         "osc3.spec.y_axis",
         "osc3.spec.xy_y"
       ]
+    },
+    {
+      "id": "osc1_multi_1",
+      "section": "Osc",
+      "title": "Osc 1 Multisample",
+      "knobs": [
+        {"key": "osc1.multi.override", "shortLabel": "Multisampl", "widget": "stepped"},
+        {"key": "osc1.multi.delay", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc1.multi.attack", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc1.multi.hold", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc1.multi.decay", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc1.multi.sustain", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc1.multi.release", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc1.multi.vel_track", "shortLabel": "Multisampl", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "osc1.multi.vel_override",
+        "osc1.multi.timbre"
+      ]
+    },
+    {
+      "id": "osc2_multi_1",
+      "section": "Osc",
+      "title": "Osc 2 Multisample",
+      "knobs": [
+        {"key": "osc2.multi.override", "shortLabel": "Multisampl", "widget": "stepped"},
+        {"key": "osc2.multi.delay", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc2.multi.attack", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc2.multi.hold", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc2.multi.decay", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc2.multi.sustain", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc2.multi.release", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc2.multi.vel_track", "shortLabel": "Multisampl", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "osc2.multi.vel_override",
+        "osc2.multi.timbre"
+      ]
+    },
+    {
+      "id": "osc3_multi_1",
+      "section": "Osc",
+      "title": "Osc 3 Multisample",
+      "knobs": [
+        {"key": "osc3.multi.override", "shortLabel": "Multisampl", "widget": "stepped"},
+        {"key": "osc3.multi.delay", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc3.multi.attack", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc3.multi.hold", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc3.multi.decay", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc3.multi.sustain", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc3.multi.release", "shortLabel": "Multisampl", "widget": "knob"},
+        {"key": "osc3.multi.vel_track", "shortLabel": "Multisampl", "widget": "knob"}
+      ],
+      "moreKeys": [
+        "osc3.multi.vel_override",
+        "osc3.multi.timbre"
+      ]
     }
   ]
 }

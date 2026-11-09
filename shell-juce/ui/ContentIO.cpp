@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <map>
 
+#include "synthyboy/multisample/multisample.h"
 #include "synthyboy/params.h"
 #include "synthyboy/sampleosc/wav_reader.h"
 
@@ -174,8 +176,10 @@ FlowResult loadSampleFile (UiContext& ctx, int osc, const juce::File& file)
         const std::string o = "osc" + std::to_string (osc);
         if (probe.rootNote >= 0)
             setParameter (ctx.host, (o + ".sample.root").c_str(), static_cast<float> (probe.rootNote));
+        // a granular or spectral oscillator keeps its type (the sample is its content as well); any other type becomes Sample
+        const int current = juce::roundToInt (readParameter (ctx.host, (o + ".type").c_str()));
         const int sampleType = choiceIndexOf ((o + ".type").c_str(), "Sample");
-        if (sampleType >= 0)
+        if (sampleType >= 0 && current != kOscTypeGranular && current != kOscTypeSpectral)
             setParameter (ctx.host, (o + ".type").c_str(), static_cast<float> (sampleType));
         setParameter (ctx.host, (o + ".sample.start").c_str(), 0.0f);
         setParameter (ctx.host, (o + ".sample.end").c_str(), 100.0f);
@@ -184,6 +188,137 @@ FlowResult loadSampleFile (UiContext& ctx, int osc, const juce::File& file)
     }
     contentCache (ctx).clear();
     return done (msg);
+}
+
+FlowResult loadInstrumentFile (UiContext& ctx, int osc, const juce::File& sfzFile)
+{
+    auto* library = ctx.host.contentLibrary();
+    if (library == nullptr)
+        return fail ("this host keeps no content library");
+    if (osc < 1 || osc > kMaxContentInstruments)
+        return fail ("no such oscillator");
+    const std::vector<uint8_t> raw = readFileBytes (sfzFile);
+    if (raw.empty())
+        return fail ("the SFZ file cannot be read");
+    multisample::SfzInstrument sfz = multisample::parseSfz (std::string (raw.begin(), raw.end()));
+    if (sfz.regions.empty())
+        return fail ("the SFZ file has no regions");
+    std::map<std::string, std::string> converted;
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
+    int missing = 0;
+    size_t total = 0;
+    for (auto& region : sfz.regions)
+    {
+        auto it = converted.find (region.sample);
+        if (it == converted.end())
+        {
+            std::string path = multisample::storedSamplePath (region.sample, false);
+            const juce::File source = sfzFile.getParentDirectory().getChildFile (juce::String::fromUTF8 (region.sample.c_str()));
+            std::vector<uint8_t> wav = readFileBytes (source);
+            SampleFacts probe;
+            if (wav.empty() || total > (1u << 30))
+                ++missing;
+            else
+            {
+                if (! isWavBytes (wav) || ! probeSampleWav (wav, region.sample, probe))
+                {
+                    DecodedAudio audio;
+                    if (decodeAudioFile (source, audio))
+                        wav = encodeWav (audio.left.data(), audio.right.empty() ? nullptr : audio.right.data(), audio.left.size(), juce::roundToInt (audio.sampleRate), 24);
+                    else
+                        wav.clear();
+                }
+                if (wav.empty())
+                    ++missing;
+                else
+                {
+                    path = multisample::storedSamplePath (region.sample, true);
+                    total += wav.size();
+                    files.emplace_back (path, std::move (wav));
+                }
+            }
+            it = converted.emplace (region.sample, path).first;
+        }
+        region.sample = it->second;
+    }
+    if (files.empty())
+        return fail ("none of the samples of the instrument was found next to the SFZ file");
+    ContentFileRef ref;
+    if (! library->addInstrument (utf8 (sfzFile.getFileNameWithoutExtension()), multisample::writeSfz (sfz), files, ref))
+        return fail ("the instrument could not be stored in the library");
+    auto content = ctx.host.content();
+    attachInstrument (content, osc, ref, static_cast<int> (sfz.regions.size()));
+    if (! commit (ctx, content))
+        return fail ("the content was refused");
+    const std::string o = "osc" + std::to_string (osc);
+    const int type = choiceIndexOf ((o + ".type").c_str(), "Multisample");
+    if (type >= 0)
+        setParameter (ctx.host, (o + ".type").c_str(), static_cast<float> (type));
+    contentCache (ctx).clear();
+    juce::String message = "Loaded " + sfzFile.getFileNameWithoutExtension() + ": " + juce::String (static_cast<int> (sfz.regions.size())) + " zones, " + juce::String (static_cast<int> (files.size())) + " samples";
+    if (missing > 0)
+        message << ", " << missing << " files not found";
+    return done (message);
+}
+
+FlowResult switchToSingleSample (UiContext& ctx, int osc)
+{
+    auto* library = ctx.host.contentLibrary();
+    if (library == nullptr)
+        return fail ("this host keeps no content library");
+    LiveValues live;
+    if (osc < 1 || osc > 3 || ! ctx.host.copyReadout (live) || live.multisampleZone[osc - 1] < 0)
+        return fail ("play a note first: the sample is the zone of the last note");
+    const auto content = ctx.host.content();
+    const ContentInstrument* instrument = nullptr;
+    for (const auto& i : content.instruments)
+        if (i.osc == osc)
+            instrument = &i;
+    std::vector<uint8_t> bytes;
+    if (instrument == nullptr || ! library->readFile (instrument->ref, bytes))
+        return fail ("the instrument cannot be read");
+    const multisample::SfzInstrument sfz = multisample::parseSfz (std::string (bytes.begin(), bytes.end()));
+    const int zone = live.multisampleZone[osc - 1];
+    if (zone >= static_cast<int> (sfz.regions.size()))
+        return fail ("the zone is not in the instrument");
+    const multisample::Region& region = sfz.regions[static_cast<size_t> (zone)];
+    const size_t slash = instrument->ref.file.rfind ('/');
+    ContentFileRef sampleRef;
+    sampleRef.pack = instrument->ref.pack;
+    sampleRef.file = (slash == std::string::npos ? std::string() : instrument->ref.file.substr (0, slash + 1)) + region.sample;
+    if (! library->readFile (sampleRef, bytes))
+        return fail ("the sample of the zone cannot be read");
+    ContentFileRef stored;
+    if (! library->addFile (ContentKind::sample, region.sample, bytes, stored))
+        return fail ("the sample could not be stored in the library");
+    auto edited = ctx.host.content();
+    ParamValues rootOnly = ParamValues::defaults();
+    if (! attachStoredSample (edited, &rootOnly, osc, stored, *library))
+        return fail ("the stored sample cannot be read back");
+    if (! commit (ctx, edited))
+        return fail ("the content was refused");
+    const std::string o = "osc" + std::to_string (osc);
+    setParameter (ctx.host, (o + ".sample.root").c_str(), static_cast<float> (region.center));
+    if (std::fabs (region.tuneCents) > 1.0e-3f)
+        setParameter (ctx.host, (o + ".tune").c_str(), readParameter (ctx.host, (o + ".tune").c_str()) + juce::jlimit (-100.0f, 100.0f, region.tuneCents));
+    SampleFacts facts;
+    if (probeSampleWav (bytes, region.sample, facts) && facts.frames > 0)
+    {
+        const float frames = static_cast<float> (facts.frames);
+        setParameter (ctx.host, (o + ".sample.start").c_str(), 100.0f * juce::jlimit (0.0f, 1.0f, static_cast<float> (region.offset) / frames));
+        setParameter (ctx.host, (o + ".sample.end").c_str(), region.end > 0 ? 100.0f * juce::jlimit (0.0f, 1.0f, static_cast<float> (region.end + 1) / frames) : 100.0f);
+        if (region.loopMode == 2 || region.loopMode == 3)
+        {
+            setParameter (ctx.host, (o + ".sample.loop_mode").c_str(), 1.0f);
+            if (region.loopStart >= 0) setParameter (ctx.host, (o + ".sample.loop_start").c_str(), 100.0f * juce::jlimit (0.0f, 1.0f, static_cast<float> (region.loopStart) / frames));
+            if (region.loopEnd >= 0) setParameter (ctx.host, (o + ".sample.loop_end").c_str(), 100.0f * juce::jlimit (0.0f, 1.0f, static_cast<float> (region.loopEnd) / frames));
+        }
+    }
+    const int type = choiceIndexOf ((o + ".type").c_str(), "Sample");
+    if (type >= 0)
+        setParameter (ctx.host, (o + ".type").c_str(), static_cast<float> (type));
+    contentCache (ctx).clear();
+    return done ("Switched to the sample of the last note (zone " + juce::String (zone + 1) + ", root note " + juce::String (region.center) + ")");
 }
 
 std::vector<uint8_t> storedSampleBytes (UiHost& host, int osc)

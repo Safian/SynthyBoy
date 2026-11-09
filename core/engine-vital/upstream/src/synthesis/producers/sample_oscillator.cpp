@@ -87,7 +87,7 @@ namespace sbvital {
   SampleOscillator::SampleOscillator(const SampleOscShared* shared) :
       Processor(kNumInputs, kNumOutputs), shared_(shared) {
     synthyboy::sampleosc::SincTables::instance(); // built now, not on the audio thread
-    scratch_ = std::shared_ptr<float[]>(new float[3 * kMaxScratch]());
+    scratch_ = std::shared_ptr<float[]>(new float[5 * kMaxScratch]());
     scratch_size_ = kMaxScratch;
     for (int s = 0; s < kVoicesPerInstance; ++s)
       for (int u = 0; u < kMaxUnison; ++u)
@@ -136,6 +136,7 @@ namespace sbvital {
       case 1: for (int u = 0; u < slot.unison; ++u) if (slot.voices[u].isActive()) return true; return false;
       case 2: for (int u = 0; u < slot.unison; ++u) if (slot.gvoices[u].isActive()) return true; return false;
       case 3: for (int u = 0; u < std::min(slot.unison, kMaxSpectralUnison); ++u) if (slot.svoices[u].isActive()) return true; return false;
+      case 4: for (int u = 0; u < slot.unison; ++u) for (auto& layer : slot.layers[u]) if (layer.isActive()) return true; return false;
       default: return false;
     }
   }
@@ -148,6 +149,9 @@ namespace sbvital {
         slot.gvoices[u].reset();
       else if (kind == 3 && u < kMaxSpectralUnison)
         slot.svoices[u].reset();
+      else if (kind == 4)
+        for (auto& layer : slot.layers[u])
+          layer.reset();
     }
   }
 
@@ -163,6 +167,7 @@ namespace sbvital {
     slot.released = false;
     slot.unison = unison;
     slot.view = sh.view;
+    slot.instrument = sh.multi.instrument;
 
     // the region: the whole start..end range, or one slice of it (slice mode: the key picks the slice)
     float lo = std::min(sh.start, sh.end), hi = std::max(sh.start, sh.end);
@@ -230,6 +235,50 @@ namespace sbvital {
       return;
     }
 
+    if (kind == 4) {
+      // the zones of the note: the key looked up through the timbre, the velocity, a random number, the round robin counter, the key switch
+      const synthyboy::multisample::Instrument* instrument = sh.multi.instrument;
+      for (int u = 0; u < kMaxUnison; ++u)
+        for (auto& layer : slot.layers[u])
+          layer.reset();
+      if (instrument == nullptr)
+        return;
+      const int key = std::max(0, std::min(127, static_cast<int>(std::lround(input(kMidiNote)->at(0)[lane] + input(kFoldNote)->at(0)[lane]))));
+      if (instrument->isKeySwitchKey(key))
+        sh.multi.switch_last = key;
+      const int velocity = std::max(1, std::min(127, static_cast<int>(std::lround(input(kVelocity)->at(0)[lane] * 127.0f))));
+      const float timbre = utils::clamp(input(kMultiTimbre)->at(0)[lane], -1.0f, 1.0f);
+      const int lookup = synthyboy::multisample::Instrument::timbreKey(key, timbre);
+      const float rnd = (nextRandom() >> 8) * (1.0f / 16777216.0f);
+      int zones[synthyboy::multisample::kMaxLayers];
+      const uint32_t counter = sh.multi.round_robin++;
+      const int count = instrument->selectZones(lookup, velocity, rnd, counter, sh.multi.switch_last >= 0 ? sh.multi.switch_last : instrument->switchDefault(), zones, synthyboy::multisample::kMaxLayers);
+      sh.multi.last_zone = count > 0 ? zones[0] : -1;
+      sh.multi.last_key = key;
+      const synthyboy::sampleosc::QualityTier tier = sh.quality <= 0 ? QualityTier::low : (sh.quality == 1 ? QualityTier::medium : QualityTier::high);
+      slot.layer_count = count;
+      for (int l = 0; l < count; ++l) {
+        const auto& region = instrument->zone(zones[l]).region;
+        if (region.group > 0 && region.group < synthyboy::multisample::kMaxGroups)
+          sh.multi.group_trigger[region.group] = sh.multi.sequence + 1;
+      }
+      const uint32_t sequence = ++sh.multi.sequence;
+      for (int u = 0; u < unison; ++u) {
+        const float t = unison > 1 ? static_cast<float>(u) / static_cast<float>(unison - 1) : 0.0f;
+        const float rnd_u = (nextRandom() >> 8) * (1.0f / 16777216.0f);
+        slot.start_random[u] = rnd_u;
+        float fraction = phase + random_phase * rnd_phase + uni_start * rnd_u + uni_span * t;
+        fraction -= std::floor(fraction);
+        for (int l = 0; l < count; ++l) {
+          slot.layers[u][l].noteOn(*instrument, zones[l], key, velocity, sh.multi.envelope_override ? &sh.multi.envelope : nullptr,
+                                   sh.multi.vel_override ? sh.multi.vel_track : -1.0f, sequence, tier);
+          if (fraction > 0.0f && uni_start + uni_span + random_phase > 0.0f)
+            slot.layers[u][l].seekFraction(fraction);
+        }
+      }
+      return;
+    }
+
     if (kind == 3) {
       synthyboy::spectral::SpectralParams sp;
       float level = 1.0f;
@@ -294,7 +343,10 @@ namespace sbvital {
     if (pitch_tap_)
       pitch_tap_->buffer[0] = input(kMidiNote)->at(0) + input(kFoldNote)->at(0) + input(kTranspose)->at(0) + input(kTune)->at(0);
 
-    if (num_samples > scratch_size_ || sh.view == nullptr || ! sh.view->isValid()) {
+    const int type_now = std::max(1, std::min(4, static_cast<int>(std::lround(input(kType)->at(0)[0]))));
+    // a Multisample oscillator plays its instrument: it needs no sample; the other types need the sample of the content
+    const bool playable = type_now == 4 ? sh.multi.instrument != nullptr : (sh.view != nullptr && sh.view->isValid());
+    if (num_samples > scratch_size_ || ! playable) {
       for (Slot& slot : slots_)
         slot.running = false;
       return;
@@ -309,6 +361,9 @@ namespace sbvital {
           voice.prepare(static_cast<double>(prepared_rate_));
         for (synthyboy::spectral::SpectralVoice& voice : slot.svoices)
           voice.prepare(static_cast<double>(prepared_rate_));
+        for (auto& unison_layers : slot.layers)
+          for (auto& layer : unison_layers)
+            layer.prepare(static_cast<double>(prepared_rate_));
       }
     }
 
@@ -326,7 +381,7 @@ namespace sbvital {
         slot.running = false;
         continue;
       }
-      if (slot.running && slot.view != sh.view) { // the sample was replaced: the running voices must not read the old one
+      if (slot.running && (slot.view != sh.view || (slot.kind == 4 && slot.instrument != sh.multi.instrument))) { // the sample / the instrument was replaced: the running voices must not read the old one
         slot.running = false;
         stopKind(slot, slot.kind);
         if (slot.old_kind != 0)
@@ -362,6 +417,10 @@ namespace sbvital {
             if (u < kMaxSpectralUnison)
               slot.svoices[u].releaseLoop();
           }
+        if (slot.kind == 4 || slot.old_kind == 4)
+          for (int u = 0; u < slot.unison; ++u)
+            for (auto& layer : slot.layers[u])
+              layer.noteOff(false);
       }
       slot.pressed = pressed;
 
@@ -612,6 +671,7 @@ namespace sbvital {
     float* rate_mod = scratch_.get() + 2 * kMaxScratch;
     const bool granular = kind == 2;
     const bool spectral = kind == 3;
+    const bool multi = kind == 4;
 
     // pitch: the note of the voice (bend, portamento) + fold + transposition + tune relative to the root key; a slice or a switched off
     // key tracking plays at the recorded pitch (+ transposition + tune)
@@ -630,7 +690,7 @@ namespace sbvital {
       speed = -speed;
     if (sh.scan_lock_tempo)
       speed *= static_cast<float>(sh.bpm / 120.0);
-    if (sh.scan_to_bpm) {
+    if (sh.scan_to_bpm && sh.view != nullptr) {
       const double region_seconds = (slot.region_hi - slot.region_lo) * static_cast<double>(sh.view->numFrames) / sh.view->sampleRate;
       const double target_seconds = static_cast<double>(sh.length_beats) * 60.0 / std::max(1.0, sh.bpm);
       speed *= static_cast<float>(target_seconds > 1.0e-6 ? region_seconds / target_seconds : 1.0);
@@ -669,6 +729,13 @@ namespace sbvital {
       updateExternalSpectra(slot, lane, num_samples, warp_types);
     }
     const int voices = spectral ? std::min(unison, kMaxSpectralUnison) : unison;
+    if (multi) {
+      // choke groups: a layer whose off_by group was triggered after it started is released (off_mode: fast 10 ms / normal)
+      for (int u = 0; u < unison; ++u)
+        for (auto& layer : slot.layers[u])
+          if (layer.isActive() && layer.offBy() > 0 && layer.offBy() < synthyboy::multisample::kMaxGroups && sh.multi.group_trigger[layer.offBy()] > layer.startSequence())
+            layer.noteOff(layer.offFast());
+    }
 
     // unison weights (centre voice and detuned voices, normalised to equal power)
     const float centre_w = 1.0f - 0.5f * blend;
@@ -683,7 +750,12 @@ namespace sbvital {
     const float norm = sum_squares > 0.0f ? 1.0f / std::sqrt(sum_squares) : 1.0f;
 
     for (int u = 0; u < voices; ++u) {
-      const bool voice_active = spectral ? slot.svoices[u].isActive() : (granular ? slot.gvoices[u].isActive() : slot.voices[u].isActive());
+      bool voice_active = spectral ? slot.svoices[u].isActive() : (granular ? slot.gvoices[u].isActive() : slot.voices[u].isActive());
+      if (multi) {
+        voice_active = false;
+        for (auto& layer : slot.layers[u])
+          voice_active = voice_active || layer.isActive();
+      }
       if (! voice_active)
         continue;
       const float t = unison > 1 ? 2.0f * u / (unison - 1) - 1.0f : 0.0f;
@@ -706,7 +778,21 @@ namespace sbvital {
           }
           mod = rate_mod;
         }
-      if (spectral) {
+      if (multi) {
+        // every zone of the note at its own recorded pitch: the note relative to the key centre of the zone (the root key of the sample oscillator does not apply)
+        const bool tracks = tracksPitch(lane) && ! slot.sliced;
+        const float detune = shaped * detune_cents * 0.01f;
+        std::fill(sl, sl + num_samples, 0.0f);
+        std::fill(sr, sr + num_samples, 0.0f);
+        float* tmp_left = scratch_.get() + 3 * kMaxScratch;
+        float* tmp_right = scratch_.get() + 4 * kMaxScratch;
+        for (int l = 0; l < slot.layer_count; ++l) {
+          const auto& zone_region = sh.multi.instrument->zone(slot.layers[u][l].zoneIndex()).region;
+          const float relative = semitones + detune + (tracks ? static_cast<float>(sh.root - zone_region.center) : 0.0f);
+          slot.layers[u][l].processAdd(sl, sr, tmp_left, tmp_right, num_samples, relative, mod, 1.0f, 1.0f);
+        }
+      }
+      else if (spectral) {
         // Frequency Modulation of the read speed has no per sample meaning here: the block mean of the deviation scales the pitch
         float mean_rate = 1.0f;
         if (mod != nullptr) {

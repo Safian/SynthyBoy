@@ -38,6 +38,7 @@ namespace sbvital {
         kVoicePhaseLegato,
         kNoteCount,
         kVoicePan,     // SynthyBoy (GROUPA2, WP-07): per voice pan offset of the voice control, -1..1
+        kVelocity,     // GROUPC WP-13: the velocity of the voice, 0 .. 1 (the multisample oscillator picks its zones with it)
         kNumInputs
       };
 

@@ -53,6 +53,7 @@ namespace sbvital {
         kVoiceDetuneSub,
         kFilter1Tap,   // GROUPB WP-06: the output of filter 1 / 2 of the previous block (a Feedback node of the voice router): the source of FM / PD / AM / RM from a filter
         kFilter2Tap,
+        kVelocity,     // GROUPC WP-13: the velocity of the voice (0 .. 1), for the multisample oscillator
         kNumInputs
       };
 

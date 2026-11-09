@@ -30,6 +30,7 @@ enum class ContentKind : uint8_t { wavetable, sample, impulse };
 constexpr const char* kPackWavetables = "user.wavetables";
 constexpr const char* kPackSamples = "user.samples";
 constexpr const char* kPackImpulses = "user.impulses";
+constexpr const char* kPackInstruments = "user.instruments"; // GROUPC WP-13: <root>/instruments/<sha12>/<name>.sfz and the samples next to it
 constexpr const char* kPackEmbedded = "user.embedded";
 constexpr const char* kPackImportedVital = "user.imported-vital";
 
@@ -79,6 +80,10 @@ public:
         / above kMaxContentFileBytes. */
     bool addFile (ContentKind kind, const std::string& fileName, const std::vector<uint8_t>& bytes, ContentFileRef& ref, bool embedded = false);
 
+    /** GROUPC WP-13: stores a multisample instrument: the SFZ text as `<instruments>/<sha12>/<stem>.sfz` and every sample below the same folder under the (relative, safe) path it
+        has in the SFZ. `ref` becomes the SFZ file (pack user.instruments, file `<sha12>/<stem>.sfz`). Content addressed like addFile. */
+    bool addInstrument (const std::string& name, const std::string& sfzText, const std::vector<std::pair<std::string, std::vector<uint8_t>>>& samples, ContentFileRef& ref);
+
     /** The files of one kind: the user pack and (wavetables, samples) the `user.imported-vital` pack, ascending by name. */
     std::vector<UserContentItem> list (ContentKind kind) const;
     /** Deletes the file of a user pack (never an installed pack); true if it is gone afterwards. */
@@ -102,6 +107,8 @@ void attachImpulse (StateContent& content, const ContentFileRef& ref);
 void detachWavetable (StateContent& content, int osc);
 void detachSample (StateContent& content, int osc);
 void detachImpulse (StateContent& content);
+void attachInstrument (StateContent& content, int osc, const ContentFileRef& ref, int zones);
+void detachInstrument (StateContent& content, int osc);
 
 /** Reads the stored sample/table behind `ref`, fills the content entry of the oscillator (frames, rate, channels) and, for a sample, sets
     `osc<N>.sample.root` in `values` from the file name / WAV chunk (when it names a note; `values` may be null). False when the store cannot read it

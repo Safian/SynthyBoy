@@ -15,6 +15,7 @@
 #include "processor.h"
 #include "synthyboy/granular/granular.h"
 #include "synthyboy/sampleosc/sample_types.h"
+#include "synthyboy/multisample/multisample.h"
 #include "synthyboy/spectral/spectral.h"
 #include "synthyboy/sampleosc/sample_voice.h"
 
@@ -84,6 +85,21 @@ namespace sbvital {
       float filter_table[257] = {};
       uint32_t filter_id = 0;                                   // changes when the curve changes
     } spec;
+
+    // GROUPC WP-13 (13-new-keys.md 4.39): the multisample oscillator
+    struct Multi {
+      const synthyboy::multisample::Instrument* instrument = nullptr;  // the SFZ instrument of the content (decoded when the content was set), null: silent
+      bool envelope_override = false;                                  // OVERRIDE: the envelope of the keys replaces the SFZ's ampeg_*
+      synthyboy::multisample::EnvelopeSettings envelope;
+      float vel_track = 100.0f;                                        // percent
+      bool vel_override = false;                                       // the VEL TRACK of the keys replaces the SFZ's amp_veltrack
+      // state of the instrument, written by the audio thread (the voices of all clones are processed one after the other on it)
+      mutable int switch_last = -1;                                    // the last key switch key played
+      mutable uint32_t round_robin = 0;                                // counts the notes (seq_position)
+      mutable uint32_t sequence = 0;                                   // counts the layers started (choke groups)
+      mutable uint32_t group_trigger[synthyboy::multisample::kMaxGroups] = {};
+      mutable int last_zone = -1, last_key = -1;                       // the first zone and the key of the last note (the display / Switch to Single Sample)
+    } multi;
   };
 
   class SampleOscillator : public Processor {
@@ -125,6 +141,8 @@ namespace sbvital {
         kGranRandLength, kGranRandPan, kGranRandLevel, kGranRandWindow, kGranRandSkew, kGranRandWarp, kGranRandWarp2, kGranXyY,
         // GROUPC WP-12 (4.38): the modulatable keys of the spectral oscillator
         kSpecFreqLo, kSpecFreqHi, kSpecCut, kSpecMix, kSpecFreqShift, kSpecPosition, kSpecXyY,
+        kVelocity,         // GROUPC WP-13: the velocity of the voice, 0 .. 1
+        kMultiTimbre,      // oscN.multi.timbre, -1 .. 1
         kNumInputs
       };
 
@@ -162,6 +180,7 @@ namespace sbvital {
         synthyboy::sampleosc::SampleVoice voices[kMaxUnison];
         synthyboy::granular::GranularVoice gvoices[kMaxUnison];      // GROUPC WP-11: one grain cloud per unison voice
         synthyboy::spectral::SpectralVoice svoices[kMaxSpectralUnison]; // GROUPC WP-12: one resynthesis voice per unison voice
+        synthyboy::multisample::LayerVoice layers[kMaxUnison][synthyboy::multisample::kMaxLayers]; // GROUPC WP-13: the zones of the note, per unison voice
         // the signals of the other oscillators / the noise for the mask and vocode warps (a ring of the last 2048 samples of the lane and its magnitude spectrum)
         float ext_ring[3][synthyboy::spectral::kFftSize] = {};
         float ext_mag[3][synthyboy::spectral::kBins] = {};
@@ -169,6 +188,7 @@ namespace sbvital {
         float filter_gains[synthyboy::spectral::kBins] = {};
         uint32_t filter_key = 0;
         int kind = 1;                                                // the oscillator type this slot's voices were started for
+        int layer_count = 0;                                         // GROUPC WP-13: the zones of the note (kind 4)
         int old_kind = 0;                                            // GROUPC: the kind that fades out after a change of the type under a running note (0: none)
         int fade_pos = 0, fade_len = 1;
         float start_random[kMaxUnison] = {};
@@ -179,6 +199,7 @@ namespace sbvital {
         float region_lo = 0.0f, region_hi = 1.0f;
         bool sliced = false;
         const synthyboy::sampleosc::SampleView* view = nullptr; // the sample the running voices read
+        const synthyboy::multisample::Instrument* instrument = nullptr; // the instrument the running layers read (kind 4)
       };
 
       void noteOn(Slot& slot, int lane, int unison, int num_samples);

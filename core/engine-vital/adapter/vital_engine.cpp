@@ -53,6 +53,7 @@
 #include "synthyboy/content_store.h"
 #include "synthyboy/sampleosc/sample_data.h"
 #include "synthyboy/sampleosc/wav_reader.h"
+#include "synthyboy/multisample/multisample.h"
 #include "synthyboy/spectral/spectral.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/shapes/shapes.h"
@@ -248,6 +249,7 @@ struct Snapshot
         std::array<float, 257> table {};
         uint32_t id = 0;
     };
+    std::array<std::unique_ptr<multisample::Instrument>, 3> instrument;  // the SFZ instruments of the content (oscN.type = Multisample, GROUPC WP-13)
     std::array<SpectralFilterEntry, 3> spectralFilter;            // the drawn spectral filter masks (content.spectral_filters, GROUPC WP-12)
     std::array<std::unique_ptr<sbvital::Wavetable>, 3> userTable; // oscN.wavetable = Preset table (content.wavetables)
     std::array<int, 3> userFrames {};
@@ -454,6 +456,31 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
         auto& e = s->remap[static_cast<size_t> (r.osc - 1)][static_cast<size_t> (r.slot - 1)];
         shape.bake (e.table.data(), e.table.size());
         e.present = true;
+    }
+
+    if (store != nullptr)
+    {
+        // GROUPC WP-13: the instruments: the SFZ text and the samples its regions name (files of the same pack, relative to the folder of the SFZ file); decoded here, off the audio thread
+        for (const ContentInstrument& in : content.instruments)
+        {
+            std::vector<uint8_t> bytes;
+            if (in.osc < 1 || in.osc > 3 || ! store->readFile (in.ref, bytes))
+                continue;
+            const multisample::SfzInstrument sfz = multisample::parseSfz (std::string (bytes.begin(), bytes.end()));
+            const size_t slash = in.ref.file.rfind ('/');
+            const std::string folder = slash == std::string::npos ? std::string() : in.ref.file.substr (0, slash + 1);
+            auto instrument = std::make_unique<multisample::Instrument>();
+            const IContentStore* source = store;
+            const std::string pack = in.ref.pack;
+            instrument->build (sfz, [source, pack, folder] (const std::string& relative, std::vector<uint8_t>& out)
+                               {
+                                   ContentFileRef ref;
+                                   ref.pack = pack;
+                                   ref.file = folder + relative;
+                                   return source->readFile (ref, out);
+                               });
+            s->instrument[static_cast<size_t> (in.osc - 1)] = std::move (instrument);
+        }
     }
 
     static std::atomic<uint32_t> spectralFilterIds { 1 };
@@ -703,7 +730,8 @@ public:
     EngineCaps2Mask capabilities2() const noexcept override
     {
         return kCap2Granular   // GROUPC WP-11 (B28): proven by core/engine-vital/tests/test_granular_osc.cpp
-             | kCap2Spectral | kCap2SpectralWarps; // GROUPC WP-12 (B29): proven by core/engine-vital/tests/test_spectral_osc.cpp
+             | kCap2Spectral | kCap2SpectralWarps // GROUPC WP-12 (B29): proven by core/engine-vital/tests/test_spectral_osc.cpp
+             | kCap2Multisample; // GROUPC WP-13 (B30): proven by core/engine-vital/tests/test_multisample_osc.cpp
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -1124,7 +1152,8 @@ private:
                 "sample.scan_range", "sample.scan_reverse", "sample.scan_lock_tempo", "sample.scan_to_bpm", "sample.length_beats",
                 "gran.window_shape", "gran.density_mode", "gran.density_sync", "gran.density_grains", "gran.length_mode", "gran.length_sync", "gran.jump_start",
                 "gran.max_grains", "gran.loop_grains", "gran.manual", "gran.scan_keytrack", "gran.reverse_grains", "gran.spawn_pattern", "gran.y_axis",
-                "spec.lohi_smooth", "spec.lohi_post_warp", "spec.manual", "spec.scan_keytrack", "spec.phase_lock", "spec.transients", "spec.y_axis" };
+                "spec.lohi_smooth", "spec.lohi_post_warp", "spec.manual", "spec.scan_keytrack", "spec.phase_lock", "spec.transients", "spec.y_axis",
+                "multi.override", "multi.delay", "multi.attack", "multi.hold", "multi.decay", "multi.sustain", "multi.release", "multi.vel_track", "multi.vel_override" };
             for (int n = 1; n <= kNumOsc; ++n)
             {
                 const std::string k = "osc" + std::to_string (n) + ".";
@@ -1305,6 +1334,11 @@ private:
             out.envStage[n] = readoutEnvStage[static_cast<size_t> (n)].load (std::memory_order_relaxed);
             out.envPosition[n] = readoutEnvPosition[static_cast<size_t> (n)].load (std::memory_order_relaxed);
         }
+        for (int n = 0; n < kNumOsc; ++n)
+        {
+            out.multisampleZone[n] = readoutMultiZone[static_cast<size_t> (n)].load (std::memory_order_relaxed);
+            out.multisampleKey[n] = readoutMultiKey[static_cast<size_t> (n)].load (std::memory_order_relaxed);
+        }
         out.numTargets = std::min (readoutShown.load (std::memory_order_acquire), LiveValues::kMaxTargets);
         for (int i = 0; i < out.numTargets; ++i)
             out.target[i] = readoutValue[static_cast<size_t> (i)].load (std::memory_order_relaxed);
@@ -1316,6 +1350,12 @@ private:
     {
         const int voices = engine->getNumActiveVoices();
         readoutVoices.store (voices, std::memory_order_relaxed);
+        for (int n = 0; n < kNumOsc; ++n)
+            if (sampleShared[static_cast<size_t> (n)] != nullptr)
+            {
+                readoutMultiZone[static_cast<size_t> (n)].store (sampleShared[static_cast<size_t> (n)]->multi.last_zone, std::memory_order_relaxed);
+                readoutMultiKey[static_cast<size_t> (n)].store (sampleShared[static_cast<size_t> (n)]->multi.last_key, std::memory_order_relaxed);
+            }
         const auto clean = [] (float v) noexcept { return std::isfinite (v) && std::fabs (v) < 1.0e6f ? v : 0.0f; };
         for (int k = 0; k < kNumModSources; ++k)
         {
@@ -1754,6 +1794,7 @@ private:
             const SampleEntry* entry = activeSnapshot != nullptr && activeSnapshot->sample[static_cast<size_t> (i)].present ? &activeSnapshot->sample[static_cast<size_t> (i)] : nullptr;
             // The view stays set while the type is Wavetable: the sample oscillator keeps playing during the 10 ms crossfade of a type change
             // (OscillatorModule); Sample without a sample in the content: a silent oscillator
+            // a Multisample oscillator plays its instrument, not a sample: the view stays valid (it gates the processor), an instrument without a sample is a silent oscillator
             sh->view = entry != nullptr ? &entry->view : nullptr;
             sh->normalize_gain = entry != nullptr ? entry->data.normalizeGain() : 1.0f;
             sh->start = P (kSpStart) * 0.01f;
@@ -1808,6 +1849,18 @@ private:
                 g.phase_lock = P (kSpSpecPhaseLock) > 0.5f;
                 g.transients = P (kSpSpecTransients) > 0.5f;
                 g.y_axis = static_cast<int> (P (kSpSpecYAxis) + 0.5f);
+                auto& m = sh->multi;
+                m.instrument = activeSnapshot != nullptr && activeSnapshot->instrument[static_cast<size_t> (i)] != nullptr && activeSnapshot->instrument[static_cast<size_t> (i)]->numPlayable() > 0
+                                   ? activeSnapshot->instrument[static_cast<size_t> (i)].get() : nullptr;
+                m.envelope_override = P (kSpMultiOverride) > 0.5f;
+                m.envelope.delay = P (kSpMultiDelay) * 0.001f;
+                m.envelope.attack = P (kSpMultiAttack) * 0.001f;
+                m.envelope.hold = P (kSpMultiHold) * 0.001f;
+                m.envelope.decay = P (kSpMultiDecay) * 0.001f;
+                m.envelope.sustain = P (kSpMultiSustain) * 0.01f;
+                m.envelope.release = P (kSpMultiRelease) * 0.001f;
+                m.vel_track = P (kSpMultiVelTrack);
+                m.vel_override = P (kSpMultiVelOverride) > 0.5f;
                 const Snapshot::SpectralFilterEntry* filter = activeSnapshot != nullptr && activeSnapshot->spectralFilter[static_cast<size_t> (i)].present
                                                                   ? &activeSnapshot->spectralFilter[static_cast<size_t> (i)] : nullptr;
                 g.has_filter = filter != nullptr;
@@ -2833,7 +2886,9 @@ private:
            kSpGranWindowShape, kSpGranDensityMode, kSpGranDensitySync, kSpGranDensityGrains, kSpGranLengthMode, kSpGranLengthSync, kSpGranJumpStart,
            kSpGranMaxGrains, kSpGranLoopGrains, kSpGranManual, kSpGranScanKeytrack, kSpGranReverseGrains, kSpGranSpawnPattern, kSpGranYAxis,
            // GROUPC WP-12: the static keys of the spectral oscillator
-           kSpSpecLohiSmooth, kSpSpecLohiPostWarp, kSpSpecManual, kSpSpecScanKeytrack, kSpSpecPhaseLock, kSpSpecTransients, kSpSpecYAxis, kSpCount };
+           kSpSpecLohiSmooth, kSpSpecLohiPostWarp, kSpSpecManual, kSpSpecScanKeytrack, kSpSpecPhaseLock, kSpSpecTransients, kSpSpecYAxis,
+           // GROUPC WP-13: the static keys of the multisample oscillator
+           kSpMultiOverride, kSpMultiDelay, kSpMultiAttack, kSpMultiHold, kSpMultiDecay, kSpMultiSustain, kSpMultiRelease, kSpMultiVelTrack, kSpMultiVelOverride, kSpCount };
     std::array<std::array<int, kSpCount>, kNumOsc> sampleParams {};
     std::array<sbvital::SampleOscShared*, kNumOsc> sampleShared {};
     std::array<sbvital::FilterCurveShared*, 3> curveShared {};
@@ -2905,6 +2960,7 @@ private:
     std::array<std::atomic<float>, LiveValues::kMaxTargets> readoutValue {};
     std::array<std::atomic<float>, LiveValues::kMaxSources> readoutSource {};
     std::array<std::atomic<float>, LiveValues::kNumLfos> readoutLfoPhase {};
+    std::array<std::atomic<int>, kNumOsc> readoutMultiZone { { -1, -1, -1 } }, readoutMultiKey { { -1, -1, -1 } }; // GROUPC WP-13: the last zone / key of a multisample oscillator
     std::array<std::atomic<float>, LiveValues::kNumEnvs> readoutEnvStage {}, readoutEnvPosition {};
     std::atomic<uint32_t> readoutBlock { 0 };
     sbvital::Value* vFilter1Input = nullptr;

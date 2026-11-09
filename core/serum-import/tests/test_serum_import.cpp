@@ -11,6 +11,7 @@
 #include <random>
 
 #include "serum_fixtures.h"
+#include "synthyboy/multisample/multisample.h"
 #include "serum_map.h"
 #include "synthyboy/fx_rack.h"
 #include "synthyboy/modulation.h"
@@ -532,7 +533,7 @@ TEST (serum_content_tables_samples_multisamples_impulses)
     p.set ("FXRack0", map ({ { "FX", arr ({ map ({ { "FXConv", map ({ { "plainParams", plain ({ { "kParamWet", 40 }, { "kParamSize", 500 } }) }, { "relativePathToIR", text ("Factory/Hall/room.wav") },
                                                                           { "numChannels", num (1) }, { "numFrames", num (3000) } }) }, { "type", num (9) } }) }) },
                             { "plainParams", dflt() } }));
-    const SerumImportResult r = run (p.file(), &res);
+    const SerumImportResult r = run (p.file(), &res, false); // an engine without the multisample oscillator: the reduced path
     CHECK (r.status == ImportStatus::ok);
     CHECK_EQ (r.report.unaccounted, 0);
     CHECK_EQ (r.missingFiles, 0);
@@ -563,6 +564,69 @@ TEST (serum_content_tables_samples_multisamples_impulses)
     CHECK_EQ (norm (r, "convolve.ir"), 1.0f);
     CHECK_EQ (norm (r, "convolve.on"), 1.0f);
     CHECK_NEAR (norm (r, "convolve.mix"), 40.0, 1e-3);
+}
+
+// GROUPC (WP-13, A427 .. A434): the multisample oscillator keeps the instrument: the SFZ with all its zones, the samples as 24-bit WAV files, the envelope override, the velocity
+// tracking and the timbre of the block; a sample the Serum content does not hold is counted, the zone stays in the SFZ
+TEST (serum_multisample_oscillator_keeps_the_whole_instrument)
+{
+    MemResolver res;
+    std::vector<float> tone (4410);
+    for (size_t i = 0; i < tone.size(); ++i) tone[i] = 0.5f * static_cast<float> (std::sin (0.05 * static_cast<double> (i)));
+    res.files["Multisamples/Factory/Keys/Zone Samples/zone C1.flac"] = wavFloat (tone); // (the decoder goes by the content, not by the name)
+    res.files["Multisamples/Factory/Keys/Zone Samples/zone C3.wav"] = wavFloat (tone);
+    res.files["Multisamples/Factory/Keys/Zone Samples/../../../Samples/Factory/shared.wav"] = wavFloat (tone); // (the resolver of this fixture does not normalise the path)
+    Preset p;
+    p.set ("Oscillator0", map ({ { "plainParams", map (withText ({ { "kParamEnable", 1 } }, { { "kParamType", "kOsc_MultiSample" } })) },
+                                 { "MultiSampleOsc0",
+                                   map ({ { "sfzPathRelative", text ("Factory/Keys/Zone.sfz") },
+                                          { "embedded_sfz", text ("// SFZ\n<control> default_path=Zone Samples\\\n<group> amp_veltrack=40 ampeg_attack=0.01\n"
+                                                                   "<region> hikey=40 pitch_keycenter=36 sample=zone C1.flac\n"
+                                                                   "<region> lokey=41 hikey=72 pitch_keycenter=60 tune=-5 sample=zone C3.wav\n"
+                                                                   "<region> lokey=73 hikey=127 pitch_keycenter=84 sample=../../../Samples/Factory/shared.wav\n"
+                                                                   "<region> lokey=0 hikey=0 sample=not there.flac\n") },
+                                          { "plainParams", map (withText ({ { "kParamEnvOverride", 1 }, { "kParamEnvDelay", 0.01 }, { "kParamEnvAttack", 0.2 }, { "kParamEnvHold", 0.05 }, { "kParamEnvDecay", 0.4 },
+                                                                            { "kParamEnvSustain", 0.5 }, { "kParamEnvRelease", 1.5 }, { "kParamVelTrack", 25 }, { "kParamVelTrackOverride", 1 },
+                                                                            { "kParamTimbreShift", -0.5 }, { "kParamRandomPhase", 12 } }, {})) },
+                                          { "files", map ({ { "zone C3.wav", map ({ { "numChannels", num (1) } }) } }) },
+                                          { "defaultLoopMode", text ("no_loop") } }) } }));
+    const SerumImportResult r = run (p.file(), &res);
+    CHECK (r.status == ImportStatus::ok);
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_EQ (value (r, "osc1.type"), 4.0f);
+    CHECK_EQ (r.instruments.size(), static_cast<size_t> (1));
+    CHECK_EQ (r.samples.size(), static_cast<size_t> (0)); // no single sample: the instrument is the content
+    const ImportedInstrument& instrument = r.instruments[0];
+    CHECK_EQ (instrument.osc, 1);
+    CHECK_EQ (instrument.zones, 4);
+    CHECK_EQ (instrument.files.size(), static_cast<size_t> (3));
+    CHECK_EQ (instrument.missingFiles, 1);
+    CHECK_EQ (r.missingFiles, 1);
+    CHECK_EQ (instrument.files[0].first, std::string ("Zone Samples/zone C1.wav"));       // default_path applied, FLAC name becomes WAV
+    CHECK_EQ (instrument.files[2].first, std::string ("Samples/Factory/shared.wav"));     // ../ never climbs out of the instrument folder
+    CHECK (instrument.sfzText.find ("<region>") != std::string::npos && instrument.files[0].second.size() > 44);
+    const auto sfz = multisample::parseSfz (instrument.sfzText);
+    CHECK_EQ (sfz.regions.size(), static_cast<size_t> (4));
+    CHECK_EQ (sfz.regions[0].sample, std::string ("Zone Samples/zone C1.wav"));
+    CHECK_EQ (sfz.regions[1].center, 60);
+    CHECK_NEAR (sfz.regions[1].tuneCents, -5.0, 1.0e-6);
+    CHECK_NEAR (sfz.regions[1].velTrack, 40.0, 1.0e-6);
+    CHECK_NEAR (sfz.regions[1].attack, 0.01, 1.0e-6);
+    CHECK_EQ (sfz.regions[2].lokey, 73);
+    // the keys of the block
+    CHECK_EQ (value (r, "osc1.multi.override"), 1.0f);
+    CHECK_NEAR (value (r, "osc1.multi.delay"), 10.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.multi.attack"), 200.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.multi.hold"), 50.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.multi.decay"), 400.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.multi.sustain"), 50.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.multi.release"), 1500.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.multi.vel_track"), 25.0, 1.0e-3);
+    CHECK_EQ (value (r, "osc1.multi.vel_override"), 1.0f);
+    CHECK_NEAR (value (r, "osc1.multi.timbre"), -50.0, 1.0e-3);
+    CHECK_NEAR (value (r, "osc1.random_phase"), 12.0, 1.0e-3);
+    CHECK (entryWith (r, "multisample_instrument_stored_in_the_library") >= 0);
+    CHECK (entryWith (r, "multisample_samples_not_found") >= 0);
 }
 
 TEST (serum_single_cycle_sine_table_is_the_builtin_sine_and_missing_files_fall_back)

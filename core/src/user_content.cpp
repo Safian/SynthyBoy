@@ -200,6 +200,7 @@ const char* UserContentStore::directoryOfUserPack (const std::string& pack) noex
     if (pack == kPackSamples)    return "samples";
     if (pack == kPackImpulses)   return "impulses";
     if (pack == kPackEmbedded)   return "embedded";
+    if (pack == kPackInstruments) return "instruments";
     return "";
 }
 
@@ -246,6 +247,48 @@ bool UserContentStore::addFile (ContentKind kind, const std::string& fileName, c
         ref.pack = pack;
         ref.file = rel;
         ref.sha256 = sha;
+        ref.name = stem;
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+bool UserContentStore::addInstrument (const std::string& name, const std::string& sfzText, const std::vector<std::pair<std::string, std::vector<uint8_t>>>& samples, ContentFileRef& ref)
+{
+    if (root_.empty() || sfzText.empty() || sfzText.size() > kMaxContentFileBytes)
+        return false;
+    try
+    {
+        // one hash over the SFZ and every sample (path and bytes) names the folder
+        std::vector<uint8_t> all (sfzText.begin(), sfzText.end());
+        for (const auto& s : samples)
+        {
+            if (! safeRelative (s.first) || s.second.empty() || s.second.size() > kMaxContentFileBytes)
+                return false;
+            const std::string digest = Sha256::hashBufferHex (s.second.data(), s.second.size());
+            all.insert (all.end(), s.first.begin(), s.first.end());
+            all.insert (all.end(), digest.begin(), digest.end());
+        }
+        const std::string sha = Sha256::hashBufferHex (all.data(), all.size());
+        const std::string stem = sanitizeFileStem (fileStemOf (name));
+        const std::string folder = sha12 (sha) + "/";
+        const fs::path base = fs::path (root_) / directoryOfUserPack (kPackInstruments) / folder;
+        const std::vector<uint8_t> sfzBytes (sfzText.begin(), sfzText.end());
+        std::error_code ec;
+        if (! fs::is_regular_file (base / (stem + ".sfz"), ec))
+        {
+            for (const auto& s : samples)
+                if (! writeBytes (base / s.first, s.second))
+                    return false;
+            if (! writeBytes (base / (stem + ".sfz"), sfzBytes))
+                return false;
+        }
+        ref.pack = kPackInstruments;
+        ref.file = folder + stem + ".sfz";
+        ref.sha256 = Sha256::hashBufferHex (sfzBytes.data(), sfzBytes.size());
         ref.name = stem;
         return true;
     }
@@ -330,6 +373,22 @@ void detachWavetable (StateContent& content, int osc)
 {
     content.wavetables.erase (std::remove_if (content.wavetables.begin(), content.wavetables.end(), [osc] (const ContentWavetable& w) { return w.osc == osc; }),
                               content.wavetables.end());
+}
+
+void attachInstrument (StateContent& content, int osc, const ContentFileRef& ref, int zones)
+{
+    detachInstrument (content, osc);
+    ContentInstrument c;
+    c.osc = osc;
+    c.ref = ref;
+    c.zones = zones;
+    content.instruments.push_back (std::move (c));
+    std::sort (content.instruments.begin(), content.instruments.end(), [] (const ContentInstrument& a, const ContentInstrument& b) { return a.osc < b.osc; });
+}
+
+void detachInstrument (StateContent& content, int osc)
+{
+    content.instruments.erase (std::remove_if (content.instruments.begin(), content.instruments.end(), [osc] (const ContentInstrument& i) { return i.osc == osc; }), content.instruments.end());
 }
 
 void detachSample (StateContent& content, int osc)

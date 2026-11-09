@@ -95,6 +95,7 @@ namespace sbvital {
     Output* gran_controls[SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount + 1];
     for (int i = 0; i <= SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount; ++i)
       gran_controls[i] = createPolyModControl(prefix_ + kGranControls[i]);
+    Output* multi_timbre = createPolyModControl(prefix_ + "_multi_timbre"); // GROUPC WP-13 (4.39): the timbre of the multisample oscillator
     // GROUPC WP-12 (4.38): the modulatable keys of the spectral oscillator, in the order of SampleOscillator::kSpecFreqLo ..
     static const char* const kSpecControls[SampleOscillator::kSpecXyY - SampleOscillator::kSpecFreqLo + 1] = {
       "_spec_freq_lo", "_spec_freq_hi", "_spec_cut", "_spec_mix", "_spec_freq_shift", "_spec_position", "_spec_xy_y" };
@@ -190,6 +191,8 @@ namespace sbvital {
     so->plug(sample_uni_span, SampleOscillator::kUniSpan);
     so->plug(sample_slice, SampleOscillator::kSlice);
     so->plug(type_, SampleOscillator::kType);
+    so->useInput(input(kVelocity), SampleOscillator::kVelocity);
+    so->plug(multi_timbre, SampleOscillator::kMultiTimbre);
     for (int i = 0; i <= SampleOscillator::kGranXyY - SampleOscillator::kGranWindowAmount; ++i)
       so->plug(gran_controls[i], SampleOscillator::kGranWindowAmount + i);
     for (int i = 0; i <= SampleOscillator::kSpecXyY - SampleOscillator::kSpecFreqLo; ++i)

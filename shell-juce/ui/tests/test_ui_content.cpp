@@ -320,6 +320,79 @@ TEST (content_granular_and_spectral_types_play_the_loaded_sample_through_the_she
     CHECK (rms (render (h.proc, 69, 1.0), 0.3, 0.9) < 0.1 * rms (spectral, 0.3, 0.9));
 }
 
+// GROUPC (WP-13): Load SFZ through the shell: the instrument and its samples go to the library, the zone map shows the regions, the notes play the zones, and "Switch to Single Sample"
+// turns the zone of the last note into the sample of the oscillator
+TEST (content_multisample_instrument_loads_from_an_sfz_plays_and_switches_to_a_single_sample)
+{
+    Host h ("multisample");
+    const fs::path folder = h.workDir() / "Piano";
+    fs::create_directories (folder / "samples");
+    writeBytes (folder / "samples" / "low C3.wav", encodeWav (tone (220.0, 1.5).data(), nullptr, 48000, 48000, 16));
+    writeBytes (folder / "samples" / "high C4.wav", encodeWav (tone (880.0, 1.5).data(), nullptr, 48000, 48000, 16));
+    const std::string sfz = "<control> default_path=samples/\n<global> amp_veltrack=0 ampeg_release=0.05\n"
+                            "<region> sample=low C3.wav lokey=0 hikey=71 pitch_keycenter=57\n<region> sample=high C4.wav lokey=72 hikey=127 pitch_keycenter=81\n"
+                            "<region> sample=missing.flac lokey=120 hikey=121\n";
+    writeBytes (folder / "Piano.sfz", std::vector<uint8_t> (sfz.begin(), sfz.end()));
+
+    OscWaveView view (h.ctx, 1);
+    view.setBounds (0, 0, 390, 220);
+    setParameter (h.proc, "osc1.type", static_cast<float> (kOscTypeMultisample));
+    CHECK (view.isMultisample() && ! view.isSampleType());
+    CHECK (view.instrumentZones().empty());
+    CHECK (view.loadButton().getButtonText() == "Load SFZ");
+
+    const auto loaded = view.loadInstrument (juce::File ((folder / "Piano.sfz").string()));
+    CHECK (loaded.ok);
+    CHECK (loaded.message.contains ("3 zones") && loaded.message.contains ("2 samples") && loaded.message.contains ("1 files not found"));
+    const auto content = h.proc.content();
+    CHECK_EQ (content.instruments.size(), static_cast<size_t> (1));
+    CHECK_EQ (content.instruments[0].ref.pack, std::string (kPackInstruments));
+    CHECK_EQ (content.instruments[0].zones, 3);
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "osc1.type")), kOscTypeMultisample);
+    const auto& zones = view.instrumentZones();
+    CHECK_EQ (zones.size(), static_cast<size_t> (3));
+    CHECK (zones[0].sample.size() > 4 && zones[0].sample.substr (zones[0].sample.size() - 4) == ".wav");
+    // the zone map: the low zone is left, the high zone right of it, both full height
+    const auto low = view.zoneRect (zones[0]), high = view.zoneRect (zones[1]);
+    CHECK (low.getRight() <= high.getX() + 1.0f && low.getHeight() > 0.9f * view.zoneMapArea().getHeight());
+
+    // the notes play the zones at their recorded pitch (the library holds the 24-bit copies of the samples)
+    setParameter (h.proc, "osc1.random_phase", 0.0f);
+    CHECK_NEAR (hzOf (render (h.proc, 57, 1.0), 0.3, 0.9), 220.0, 6.0);
+    CHECK_NEAR (hzOf (render (h.proc, 81, 1.0), 0.3, 0.9), 880.0, 12.0);
+    juce::Image image (juce::Image::ARGB, 390, 220, true);
+    {
+        juce::Graphics g (image);
+        view.paint (g);
+    }
+    CHECK_EQ (view.lastPlayedZone(), 1);
+
+    // the envelope thumbnail switches OVERRIDE
+    const auto thumb = view.envThumbArea();
+    CHECK (thumb.getWidth() >= static_cast<float> (h.ctx.theme.touch()) && view.waveArea().contains (thumb));
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "osc1.multi.override")), 0);
+    view.mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), thumb.getCentre(), juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                      &view, &view, juce::Time::getCurrentTime(), thumb.getCentre(), juce::Time::getCurrentTime(), 1, false));
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "osc1.multi.override")), 1);
+
+    // Switch to Single Sample: the high zone of the last note becomes the sample (root 81), the type is Sample
+    const auto switched = view.switchToSample();
+    CHECK (switched.ok);
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "osc1.type")), choiceIndexOf ("osc1.type", "Sample"));
+    CHECK_EQ (static_cast<int> (readParameter (h.proc, "osc1.sample.root")), 81);
+    CHECK_EQ (h.proc.content().samples.size(), static_cast<size_t> (1));
+    CHECK_NEAR (hzOf (render (h.proc, 81, 1.0), 0.3, 0.9), 880.0, 12.0);
+    // without a played note the switch refuses
+    Host fresh ("multisample_fresh");
+    OscWaveView other (fresh.ctx, 1);
+    other.loadInstrument (juce::File ((folder / "Piano.sfz").string()));
+    CHECK (! other.switchToSample().ok);
+    // a SFZ without any sample file next to it is refused
+    const fs::path empty = h.workDir() / "empty.sfz";
+    writeBytes (empty, std::vector<uint8_t> (sfz.begin(), sfz.end()));
+    CHECK (! view.loadInstrument (juce::File (empty.string())).ok);
+}
+
 TEST (content_sample_load_plays_the_content_sample_at_the_key_pitch_through_the_shell)
 {
     Host h ("sample");

@@ -252,6 +252,7 @@ namespace sbvital {
     producers_->plug(active_mask(), ProducersModule::kActiveVoices);
     producers_->plug(lowest_active_note_, ProducersModule::kLowestNote);
     producers_->plug(note_pressed(), ProducersModule::kNotePressed);
+    producers_->plug(velocity(), ProducersModule::kVelocity); // GROUPC WP-13
     // SynthyBoy Block B14:
     producers_->plug(current_midi_note_, ProducersModule::kRawMidi);
     // SynthyBoy (GROUPA2, WP-07): the voice control (pan of every source, detune of the noise and the sub; the oscillators take the detune with the fold)

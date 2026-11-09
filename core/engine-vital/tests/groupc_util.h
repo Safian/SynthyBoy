@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -134,6 +135,19 @@ struct Content
         c.frames = static_cast<int> (audio.size());
         c.channels = 1;
         state.samples.push_back (c);
+    }
+    /** An instrument for oscillator `osc`: the SFZ text and its samples (name -> audio) in the pack "test", the folder "inst/". */
+    void instrument (const std::string& sfz, const std::map<std::string, std::vector<float>>& samples, int osc = 1)
+    {
+        store.add ("test", "inst/instrument.sfz", std::vector<uint8_t> (sfz.begin(), sfz.end()));
+        for (const auto& s : samples)
+            store.add ("test", "inst/" + s.first, wav16 (s.second));
+        ContentInstrument c;
+        c.osc = osc;
+        c.ref.pack = "test";
+        c.ref.file = "inst/instrument.sfz";
+        c.ref.name = "instrument";
+        state.instruments.push_back (c);
     }
     void apply (IEngine& e)
     {

@@ -16,6 +16,7 @@
 #include "../UiContext.h"
 #include "../model/GestureModel.h"
 
+#include "synthyboy/multisample/multisample.h"
 #include "synthyboy/user_content.h"
 
 namespace synthyboy::ui
@@ -45,6 +46,21 @@ public:
     bool isSampleType() const;
     bool isGranular() const { return oscType() == kOscTypeGranular; }
     bool isSpectral() const { return oscType() == kOscTypeSpectral; }
+    bool isMultisample() const { return oscType() == kOscTypeMultisample; }
+
+    // ---- multisample view (GROUPC WP-13, 13-new-keys.md 4.39): the zone map of the instrument (keys across, velocity up), the last played zone, the envelope thumbnail ----
+    /** The zones of the instrument of this oscillator (empty without one); read from the library when the content changed. */
+    const std::vector<multisample::Region>& instrumentZones();
+    /** The zone map and the cell of a zone / key / velocity inside it. */
+    juce::Rectangle<float> zoneMapArea() const;
+    juce::Rectangle<float> zoneRect (const multisample::Region& region) const;
+    /** The envelope thumbnail (bottom right): a tap switches OVERRIDE (the SFZ envelope against the envelope of the keys). */
+    juce::Rectangle<float> envThumbArea() const;
+    /** Load SFZ... and Switch to Single Sample, also as calls (the buttons and the menu use them). */
+    FlowResult loadInstrument (const juce::File& sfzFile);
+    FlowResult switchToSample();
+    /** The zone of the last note of this oscillator (-1: none yet), from the engine's read-out. */
+    int lastPlayedZone() const;
 
     // ---- spectral view (GROUPC WP-12, 13-new-keys.md 4.38): the spectrogram of the sample, the low / high frequency markers on its right edge ----
     /** The strip at the right edge of the display where the Freq Lo / Hi markers live (log axis 20 Hz .. 20 kHz, bottom to top). */
@@ -187,6 +203,11 @@ private:
     ParamHandle granPositionHandle, granXyYHandle, granManualHandle, granWindowAmountHandle, granWindowSkewHandle, granWindowShapeHandle, granDensityHandle,
         granLengthHandle, granRandOffsetHandle;
     bool windowTap = false;
+    std::vector<multisample::Region> zoneCache;
+    ContentFileRef zoneCacheRef;
+    bool zoneCacheValid = false;
+    ParamHandle multiOverrideHandle;
+    void paintMultisample (juce::Graphics& g, juce::Rectangle<float> area);
     void paintGranular (juce::Graphics& g, juce::Rectangle<float> area);
 
     ParamHandle sampleStartHandle;

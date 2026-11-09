@@ -47,7 +47,7 @@ ENUM (kWarpEnum, 0, "warp",
       { "kSpectralPhaseTwist", 88, C }, { "kSpread", 89, C }, { "kSpectralShift", 90, C }, { "kSmear", 91, C }, { "kMirror", 92, C },
       { "kMask_OSC", 93, C }, { "kMask_OSC2", 94, C }, { "kMask_NOISE", 95, C }, { "kVocode_OSC", 96, C }, { "kVocode_OSC2", 97, C }, { "kVocode_NOISE", 98, C });
 
-ENUM (kOscTypeEnum, 0, "osc.type", { "kOsc_WT", 0, X }, { "kOsc_Sample", 1, X }, { "kOsc_MultiSample", 1, A }, { "kOsc_Granular", 2, X }, { "kOsc_Spectral", 3, X });
+ENUM (kOscTypeEnum, 0, "osc.type", { "kOsc_WT", 0, X }, { "kOsc_Sample", 1, X }, { "kOsc_MultiSample", 4, X }, { "kOsc_Granular", 2, X }, { "kOsc_Spectral", 3, X });
 // GROUPC WP-11 (A412 .. A418): the granular oscillator. Only the names kWindowBlackmanHarris / ExpDec / Gaussian / Triangle / Tukey, kDensityFree / BPM, kLengthBPM, kEven /
 // kExponential / kRandom and kYAxisOscVolume occur in the 656 factory presets; the others are the names in the pattern of those (close, not verified against a file).
 ENUM (kGrainWindowEnum, 0, "gran.window", { "kWindowHann", 0, C }, { "kWindowWelch", 1, C }, { "kWindowGaussian", 2, X }, { "kWindowBlackmanHarris", 3, X }, { "kWindowSinc", 4, C },
@@ -137,6 +137,17 @@ const Rule kWt[] = {
 
 const Rule kMulti[] = {
     { "Multi", "kParamRandomPhase", "osc#.random_phase", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    // GROUPC WP-13 (A427 .. A434, 13-new-keys.md 4.39): the envelope override, the velocity tracking and the timbre of the multisample block
+    { "Multi", "kParamEnvOverride", "osc#.multi.override", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamEnvDelay", "osc#.multi.delay", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamEnvAttack", "osc#.multi.attack", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamEnvHold", "osc#.multi.hold", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamEnvDecay", "osc#.multi.decay", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamEnvSustain", "osc#.multi.sustain", Conv::lin, 100, 0, C, kNaN, nullptr, "multisample_sustain_is_a_fraction_assumed" },
+    { "Multi", "kParamEnvRelease", "osc#.multi.release", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamVelTrack", "osc#.multi.vel_track", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamVelTrackOverride", "osc#.multi.vel_override", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "Multi", "kParamTimbreShift", "osc#.multi.timbre", Conv::lin, 100, 0, C, kNaN, nullptr, "multisample_timbre_shift_is_minus_one_to_one_assumed" },
 };
 
 // GROUPC WP-11 (A412 .. A418, 13-new-keys.md 4.37): the type specific block of a granular oscillator. Density, grain length and their modes are read in code (serum_voice.cpp).

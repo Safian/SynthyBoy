@@ -214,6 +214,15 @@ std::string serializeSerumPreset (const SerumImportResult& result, const PresetM
         if (const auto* ref = contentRefs.findSample (is.osc)) { cs.ref.pack = ref->pack; cs.ref.file = ref->file; }
         content.samples.push_back (std::move (cs));
     }
+    for (const auto& ii : result.instruments)
+    {
+        ContentInstrument ci;
+        ci.osc = ii.osc;
+        ci.ref.name = ii.name;
+        ci.zones = ii.zones;
+        if (const auto* ref = contentRefs.findInstrument (ii.osc)) { ci.ref.pack = ref->pack; ci.ref.file = ref->file; ci.ref.sha256 = ref->sha256; }
+        content.instruments.push_back (std::move (ci));
+    }
     content.lfoShapes = result.lfoShapes;
     content.remaps = result.remaps;
     content.spectralFilters = result.spectralFilters;
@@ -231,6 +240,7 @@ std::string serializeSerumPreset (const SerumImportResult& result, const PresetM
         const auto ok = [] (StateContent c) { return validateContent (c); };
         for (const auto& w : content.wavetables) { StateContent t; t.wavetables.push_back (w); if (ok (t)) keep.wavetables.push_back (w); }
         for (const auto& w : content.samples) { StateContent t; t.samples.push_back (w); if (ok (t)) keep.samples.push_back (w); }
+        for (const auto& w : content.instruments) { StateContent t; t.instruments.push_back (w); if (ok (t)) keep.instruments.push_back (w); }
         for (const auto& w : content.lfoShapes) { StateContent t; t.lfoShapes.push_back (w); if (ok (t)) keep.lfoShapes.push_back (w); }
         for (const auto& w : content.remaps) { StateContent t; t.remaps.push_back (w); if (ok (t)) keep.remaps.push_back (w); }
         for (const auto& w : content.spectralFilters) { StateContent t; t.spectralFilters.push_back (w); if (ok (t)) keep.spectralFilters.push_back (w); }

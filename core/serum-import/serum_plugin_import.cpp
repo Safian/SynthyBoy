@@ -86,6 +86,7 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
         options.noiseSample = (caps & kCapNoiseSample) != 0;
         options.granularOsc = capsCover2 (caps2, kCap2Granular);
         options.spectralOsc = capsCover2 (caps2, kCap2Spectral);
+        options.multisampleOsc = capsCover2 (caps2, kCap2Multisample);
         options.customLfoShapes = (caps & kCapCustomLfoShape) != 0;
         options.categoryHint = categoryHint.empty() ? nullptr : categoryHint.c_str();
 
@@ -157,6 +158,13 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
             if (! store.addFile (ContentKind::sample, smp.name, smp.wavBytes, ref)) { out.error = "the content store refused a sample"; return out; }
             refs.samples.push_back ({ smp.osc, ref.pack, ref.file });
             ++out.storedFiles;
+        }
+        for (const auto& ii : r.instruments)
+        {
+            ContentFileRef ref;
+            if (! store.addInstrument (ii.name, ii.sfzText, ii.files, ref)) { out.error = "the content store refused an instrument"; return out; }
+            refs.instruments.push_back ({ ii.osc, ref.pack, ref.file, ref.sha256, ii.zones });
+            out.storedFiles += 1 + static_cast<int> (ii.files.size());
         }
         for (const auto& ir : r.impulses)
         {

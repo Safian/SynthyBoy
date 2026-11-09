@@ -100,6 +100,7 @@ struct SerumImportOptions
     const char* fallbackName = nullptr;                         // file stem when the preset has no name
     bool customWavetables = true;                               // the engine can play a stored table (kCapUserWavetable); false: the nearest built-in table
     bool customSamples = true;                                  // the engine has the sample oscillator (kCapSampleOsc)
+    bool multisampleOsc = true;                                 // the engine has the multisample oscillator (kCap2Multisample), otherwise an instrument is reduced to one zone played by a sample oscillator
     bool spectralOsc = true;                                    // the engine has the spectral oscillator (kCap2Spectral), otherwise a spectral oscillator is imported as a sample oscillator
     bool granularOsc = true;                                    // the engine has the granular oscillator (kCap2Granular); without it a granular oscillator is imported as a sample oscillator
     bool customLfoShapes = true;                                // the engine plays a drawn LFO shape (kCapCustomLfoShape)
@@ -115,6 +116,16 @@ struct SerumImportedImpulse
     std::vector<uint8_t> wavBytes; // 24-bit WAV
 };
 
+/** A multisample instrument of a preset (GROUPC WP-13): the SFZ text (the sample paths are the ones of `files`) and the samples as 24-bit WAV files, paths relative to the SFZ. */
+struct ImportedInstrument
+{
+    int osc = 0; // 1..3
+    std::string name;
+    std::string sfzText;
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
+    int zones = 0, missingFiles = 0;
+};
+
 struct SerumImportResult
 {
     ImportStatus status = ImportStatus::malformed;
@@ -127,6 +138,7 @@ struct SerumImportResult
     std::vector<SerumImportedImpulse> impulses;
     std::vector<ContentLfoShape> lfoShapes;
     std::vector<ContentRemap> remaps;
+    std::vector<ImportedInstrument> instruments; // GROUPC WP-13: the SFZ instruments of the multisample oscillators
     std::vector<ContentRemap> spectralFilters;   // GROUPC WP-12: the drawn filter mask of a spectral oscillator (flex)
     std::vector<ContentModCurve> modCurves;
     std::vector<ContentPoint> velocityCurve, noteCurve, shaperA, shaperB;

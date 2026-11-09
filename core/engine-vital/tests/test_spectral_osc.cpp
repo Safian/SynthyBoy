@@ -33,7 +33,7 @@ TEST (spectral_capability_type_list_and_warp_entries)
     auto e = makeVital();
     CHECK ((e->capabilities2() & kCap2Spectral) != 0 && (e->capabilities2() & kCap2SpectralWarps) != 0);
     const auto* type = findParamByKey ("osc1.type");
-    CHECK_EQ (type->max, 3.0f);
+    CHECK (type->max >= 3.0f);
     CHECK_EQ (std::string (choiceName (*type, 3)), "Spectral");
     const size_t typeIndex = static_cast<size_t> (findParamIndex (type->id));
     CHECK ((requiredCapsForValue2 (typeIndex, 3.0f) & kCap2Spectral) != 0);

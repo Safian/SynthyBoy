@@ -4,14 +4,14 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2269 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2299 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 35 |
-| Osc 1 | 117 |
-| Osc 2 | 117 |
-| Osc 3 | 117 |
+| Osc 1 | 127 |
+| Osc 2 | 127 |
+| Osc 3 | 127 |
 | Noise | 19 |
 | Filter 1 | 23 |
 | Filter 2 | 23 |
@@ -130,7 +130,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.map.vel_high` | Osc 1 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 1 / Mapping |  |  |
 | `osc1.map.key_fold` | Osc 1 Key Fold | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
 | `osc1.map.key_warp` | Osc 1 Key Warp | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
-| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral | Wavetable | Osc 1 |  |  |
+| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 1 |  |  |
 | `osc1.sample.start` | Osc 1 Sample Start | 0 .. 100 % | 0 % | Osc 1 / Sample |  |  |
 | `osc1.sample.end` | Osc 1 Sample End | 0 .. 100 % | 100 % | Osc 1 / Sample |  |  |
 | `osc1.sample.root` | Osc 1 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 1 / Sample |  |  |
@@ -217,6 +217,16 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.spec.transients` | Osc 1 Spectral Transients | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
 | `osc1.spec.y_axis` | Osc 1 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 1 / Spectral |  |  |
 | `osc1.spec.xy_y` | Osc 1 Spectral Y Position | 0 .. 100 % | 50 % | Osc 1 / Spectral | mod |  |
+| `osc1.multi.override` | Osc 1 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  |  |
+| `osc1.multi.delay` | Osc 1 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 1 / Multisample |  |  |
+| `osc1.multi.attack` | Osc 1 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 1 / Multisample |  |  |
+| `osc1.multi.hold` | Osc 1 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 1 / Multisample |  |  |
+| `osc1.multi.decay` | Osc 1 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 1 / Multisample |  |  |
+| `osc1.multi.sustain` | Osc 1 Multisample Sustain | 0 .. 100 % | 100 % | Osc 1 / Multisample |  |  |
+| `osc1.multi.release` | Osc 1 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 1 / Multisample |  |  |
+| `osc1.multi.vel_track` | Osc 1 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 1 / Multisample |  |  |
+| `osc1.multi.vel_override` | Osc 1 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  |  |
+| `osc1.multi.timbre` | Osc 1 Multisample Timbre | -100 .. 100 % | 0 % | Osc 1 / Multisample | mod |  |
 
 ### Osc 2
 
@@ -252,7 +262,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.map.vel_high` | Osc 2 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 2 / Mapping |  |  |
 | `osc2.map.key_fold` | Osc 2 Key Fold | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
 | `osc2.map.key_warp` | Osc 2 Key Warp | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
-| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral | Wavetable | Osc 2 |  |  |
+| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 2 |  |  |
 | `osc2.sample.start` | Osc 2 Sample Start | 0 .. 100 % | 0 % | Osc 2 / Sample |  |  |
 | `osc2.sample.end` | Osc 2 Sample End | 0 .. 100 % | 100 % | Osc 2 / Sample |  |  |
 | `osc2.sample.root` | Osc 2 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 2 / Sample |  |  |
@@ -339,6 +349,16 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.spec.transients` | Osc 2 Spectral Transients | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
 | `osc2.spec.y_axis` | Osc 2 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 2 / Spectral |  |  |
 | `osc2.spec.xy_y` | Osc 2 Spectral Y Position | 0 .. 100 % | 50 % | Osc 2 / Spectral | mod |  |
+| `osc2.multi.override` | Osc 2 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  |  |
+| `osc2.multi.delay` | Osc 2 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 2 / Multisample |  |  |
+| `osc2.multi.attack` | Osc 2 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 2 / Multisample |  |  |
+| `osc2.multi.hold` | Osc 2 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 2 / Multisample |  |  |
+| `osc2.multi.decay` | Osc 2 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 2 / Multisample |  |  |
+| `osc2.multi.sustain` | Osc 2 Multisample Sustain | 0 .. 100 % | 100 % | Osc 2 / Multisample |  |  |
+| `osc2.multi.release` | Osc 2 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 2 / Multisample |  |  |
+| `osc2.multi.vel_track` | Osc 2 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 2 / Multisample |  |  |
+| `osc2.multi.vel_override` | Osc 2 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  |  |
+| `osc2.multi.timbre` | Osc 2 Multisample Timbre | -100 .. 100 % | 0 % | Osc 2 / Multisample | mod |  |
 
 ### Osc 3
 
@@ -374,7 +394,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.map.vel_high` | Osc 3 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 3 / Mapping |  |  |
 | `osc3.map.key_fold` | Osc 3 Key Fold | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
 | `osc3.map.key_warp` | Osc 3 Key Warp | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
-| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral | Wavetable | Osc 3 |  |  |
+| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 3 |  |  |
 | `osc3.sample.start` | Osc 3 Sample Start | 0 .. 100 % | 0 % | Osc 3 / Sample |  |  |
 | `osc3.sample.end` | Osc 3 Sample End | 0 .. 100 % | 100 % | Osc 3 / Sample |  |  |
 | `osc3.sample.root` | Osc 3 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 3 / Sample |  |  |
@@ -461,6 +481,16 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.spec.transients` | Osc 3 Spectral Transients | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
 | `osc3.spec.y_axis` | Osc 3 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 3 / Spectral |  |  |
 | `osc3.spec.xy_y` | Osc 3 Spectral Y Position | 0 .. 100 % | 50 % | Osc 3 / Spectral | mod |  |
+| `osc3.multi.override` | Osc 3 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  |  |
+| `osc3.multi.delay` | Osc 3 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 3 / Multisample |  |  |
+| `osc3.multi.attack` | Osc 3 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 3 / Multisample |  |  |
+| `osc3.multi.hold` | Osc 3 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 3 / Multisample |  |  |
+| `osc3.multi.decay` | Osc 3 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 3 / Multisample |  |  |
+| `osc3.multi.sustain` | Osc 3 Multisample Sustain | 0 .. 100 % | 100 % | Osc 3 / Multisample |  |  |
+| `osc3.multi.release` | Osc 3 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 3 / Multisample |  |  |
+| `osc3.multi.vel_track` | Osc 3 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 3 / Multisample |  |  |
+| `osc3.multi.vel_override` | Osc 3 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  |  |
+| `osc3.multi.timbre` | Osc 3 Multisample Timbre | -100 .. 100 % | 0 % | Osc 3 / Multisample | mod |  |
 
 ### Noise
 
@@ -944,7 +974,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..983 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..986 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -2882,6 +2912,9 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 981 | `osc3.spec.freq_shift` | Osc 3 Spectral Frequency Shift |
 | 982 | `osc3.spec.position` | Osc 3 Spectral Position |
 | 983 | `osc3.spec.xy_y` | Osc 3 Spectral Y Position |
+| 984 | `osc1.multi.timbre` | Osc 1 Multisample Timbre |
+| 985 | `osc2.multi.timbre` | Osc 2 Multisample Timbre |
+| 986 | `osc3.multi.timbre` | Osc 3 Multisample Timbre |
 
 ## Built-in wavetables and LFO shapes
 

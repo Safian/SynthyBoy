@@ -125,6 +125,16 @@ constexpr const char* s_more_osc3_spec_1[] = {
     "osc3.spec.lohi_smooth", "osc3.spec.lohi_post_warp", "osc3.spec.scan_keytrack", "osc3.spec.transients", "osc3.spec.y_axis", "osc3.spec.xy_y"
 };
 
+constexpr const char* s_more_osc1_multi_1[] = {
+    "osc1.multi.vel_override", "osc1.multi.timbre"
+};
+constexpr const char* s_more_osc2_multi_1[] = {
+    "osc2.multi.vel_override", "osc2.multi.timbre"
+};
+constexpr const char* s_more_osc3_multi_1[] = {
+    "osc3.multi.vel_override", "osc3.multi.timbre"
+};
+
 constexpr const char* s_more_osc1_pitch_uni[] = {
     "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory",
     "osc1.ratio_src", "osc1.smooth_interp" // B27
@@ -549,7 +559,11 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Spectral, block B29 (GROUPC WP-12; 13-new-keys.md 4.38): pages 150 - 152
     { "osc1_spec_1", "Osc 1 Spectral", "Osc", { "osc1.spec.freq_lo", "osc1.spec.freq_hi", "osc1.spec.cut", "osc1.spec.mix", "osc1.spec.freq_shift", "osc1.spec.position", "osc1.spec.manual", "osc1.spec.phase_lock" }, 8, s_more_osc1_spec_1, 6 },
     { "osc2_spec_1", "Osc 2 Spectral", "Osc", { "osc2.spec.freq_lo", "osc2.spec.freq_hi", "osc2.spec.cut", "osc2.spec.mix", "osc2.spec.freq_shift", "osc2.spec.position", "osc2.spec.manual", "osc2.spec.phase_lock" }, 8, s_more_osc2_spec_1, 6 },
-    { "osc3_spec_1", "Osc 3 Spectral", "Osc", { "osc3.spec.freq_lo", "osc3.spec.freq_hi", "osc3.spec.cut", "osc3.spec.mix", "osc3.spec.freq_shift", "osc3.spec.position", "osc3.spec.manual", "osc3.spec.phase_lock" }, 8, s_more_osc3_spec_1, 6 }
+    { "osc3_spec_1", "Osc 3 Spectral", "Osc", { "osc3.spec.freq_lo", "osc3.spec.freq_hi", "osc3.spec.cut", "osc3.spec.mix", "osc3.spec.freq_shift", "osc3.spec.position", "osc3.spec.manual", "osc3.spec.phase_lock" }, 8, s_more_osc3_spec_1, 6 },
+    // Multisample, block B30 (GROUPC WP-13; 13-new-keys.md 4.39): pages 153 - 155
+    { "osc1_multi_1", "Osc 1 Multisample", "Osc", { "osc1.multi.override", "osc1.multi.delay", "osc1.multi.attack", "osc1.multi.hold", "osc1.multi.decay", "osc1.multi.sustain", "osc1.multi.release", "osc1.multi.vel_track" }, 8, s_more_osc1_multi_1, 2 },
+    { "osc2_multi_1", "Osc 2 Multisample", "Osc", { "osc2.multi.override", "osc2.multi.delay", "osc2.multi.attack", "osc2.multi.hold", "osc2.multi.decay", "osc2.multi.sustain", "osc2.multi.release", "osc2.multi.vel_track" }, 8, s_more_osc2_multi_1, 2 },
+    { "osc3_multi_1", "Osc 3 Multisample", "Osc", { "osc3.multi.override", "osc3.multi.delay", "osc3.multi.attack", "osc3.multi.hold", "osc3.multi.decay", "osc3.multi.sustain", "osc3.multi.release", "osc3.multi.vel_track" }, 8, s_more_osc3_multi_1, 2 }
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

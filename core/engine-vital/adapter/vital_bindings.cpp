@@ -203,6 +203,9 @@ std::vector<Binding> build()
         b.add (k + "spec.freq_lo", c + "spec_freq_lo", Conv::linear);
         b.add (k + "spec.freq_hi", c + "spec_freq_hi", Conv::linear);
         b.add (k + "spec.freq_shift", c + "spec_freq_shift", Conv::linear);
+
+        // Block B30 (GROUPC, WP-13): the timbre of the multisample oscillator (the other keys are read by the adapter)
+        b.percent (k + "multi.timbre", c + "multi_timbre", 0.01);
     }
 
     // --- noise (the engine's built-in noise sample and extras) --------------------------------------------------------
@@ -570,6 +573,7 @@ bool isSpecialParam (size_t paramIndex)
         // B28: the static keys of the granular oscillator (the modulatable ones are bound normally)
         || (startsWith ("osc") && std::strstr (key, ".gran.") != nullptr && ! isGranularModulatable (key))
         || (startsWith ("osc") && std::strstr (key, ".spec.") != nullptr && ! isSpectralModulatable (key))
+        || (startsWith ("osc") && std::strstr (key, ".multi.") != nullptr && ! endsWith (".multi.timbre"))
         // B13: noise sample choice (procedural noise buffers)
         || std::strcmp (key, "noise.sample") == 0 || std::strcmp (key, "noise.type") == 0
         // B22: the effect instance pool (type, on, rack, order and the normalised parameters of a slot): the adapter builds the module and drives its controls

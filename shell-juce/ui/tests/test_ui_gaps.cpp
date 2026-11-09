@@ -2686,6 +2686,79 @@ TEST (uig_wp12_spectral_view_frequency_markers_filter_graph_and_dimming)
     }
 }
 
+// GROUPC (WP-13): the multisample oscillator: the type list has five entries, the display is the zone map (no frame scrub), the envelope keys are dimmed until OVERRIDE, TIMBRE takes a source
+TEST (uig_wp13_multisample_view_dimming_and_assignment)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::osc, sz.w, sz.h);
+        rig.editor->context().view->oscTab = 2; // oscillator 3
+        rig.editor->panelHost().setPage (Page::osc);
+        Panel* panel = rig.panelTitled ("Oscillator 3");
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        const auto keys = panel->keys();
+        for (const char* key : { "osc3.multi.override", "osc3.multi.delay", "osc3.multi.release", "osc3.multi.vel_track", "osc3.multi.timbre" })
+            CHECK (std::find (keys.begin(), keys.end(), std::string (key)) != keys.end());
+        panel->setMoreExpanded (true);
+        const auto controlOf = [&] (const char* key) -> ParamControl*
+        {
+            for (const auto& c : panel->controls())
+                if (c->key() == key)
+                    return c.get();
+            return nullptr;
+        };
+        auto* type = dynamic_cast<ParamChoice*> (controlOf ("osc3.type"));
+        CHECK (type != nullptr);
+        if (type == nullptr)
+            continue;
+        const auto menu = type->buildOptionMenu();
+        int entries = 0;
+        bool anyDisabled = false;
+        juce::PopupMenu::MenuItemIterator it (menu);
+        while (it.next())
+            if (it.getItem().itemID >= 1 && it.getItem().itemID < ParamChoice::kExtraActionId)
+            {
+                ++entries;
+                anyDisabled = anyDisabled || ! it.getItem().isEnabled;
+            }
+        CHECK_EQ (entries, 5);                 // Wavetable, Sample, Granular, Spectral, Multisample
+        CHECK (! anyDisabled);                 // the engine has all the capability bits
+        rig.setParam ("osc3.type", 4.0f);
+        auto* view = rig.oscView (3);
+        CHECK (view != nullptr);
+        if (view == nullptr)
+            continue;
+        CHECK (view->isMultisample() && ! view->isSampleType());
+        CHECK (controlOf ("osc3.multi.timbre")->getAlpha() > 0.9f);
+        CHECK (controlOf ("osc3.multi.attack")->getAlpha() < 0.9f && controlOf ("osc3.multi.vel_track")->getAlpha() < 0.9f);
+        rig.setParam ("osc3.multi.override", 1.0f);
+        rig.setParam ("osc3.multi.vel_override", 1.0f);
+        CHECK (controlOf ("osc3.multi.attack")->getAlpha() > 0.9f && controlOf ("osc3.multi.vel_track")->getAlpha() > 0.9f);
+        CHECK (controlOf ("osc3.spec.cut")->getAlpha() < 0.9f && controlOf ("osc3.gran.density")->getAlpha() < 0.9f);
+        // the display keeps the frame: a drag does not scrub oscN.frame, the tap on the envelope thumbnail switches OVERRIDE
+        const float frame = rig.param ("osc3.frame");
+        const auto area = view->waveArea();
+        const juce::Point<float> a (area.getX() + 20.0f, area.getCentreY()), b (area.getCentreX(), area.getCentreY());
+        view->mouseDown (mouse (*view, a, a, false));
+        view->mouseDrag (mouse (*view, b, a, true));
+        view->mouseUp (mouse (*view, b, a, true));
+        CHECK_NEAR (rig.param ("osc3.frame"), frame, 1.0e-4);
+        const auto thumb = view->envThumbArea();
+        CHECK (thumb.getWidth() >= static_cast<float> (rig.editor->theme().touch()) && thumb.getHeight() >= static_cast<float> (rig.editor->theme().touch()) && area.contains (thumb));
+        view->mouseDown (mouse (*view, thumb.getCentre(), thumb.getCentre(), false));
+        CHECK_EQ (static_cast<int> (rig.param ("osc3.multi.override") + 0.5f), 0);
+        // TIMBRE takes a source by touch
+        const int slot = assignBySource (rig, 7, "osc3.multi.timbre", 50.0f);
+        CHECK (slot >= 0);
+        CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
+        rig.shot ("osc-wp13-multisample-" + n, sz.w, sz.h, true, Page::osc);
+    }
+}
+
 // GROUPB (WP-06): the 15 new sources are chips of the source bar and can be assigned by touch; the warp list offers the modes from the Noise, Sub and Filters in its groups
 TEST (uig_wp06_new_sources_are_chips_and_assignable_and_the_warp_list_has_the_new_modes)
 {

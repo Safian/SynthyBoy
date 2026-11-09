@@ -104,7 +104,11 @@ public:
             o + ".spec.freq_lo", o + ".spec.freq_hi", o + ".spec.lohi_smooth", o + ".spec.lohi_post_warp",
             o + ".spec.cut", o + ".spec.mix", o + ".spec.freq_shift", o + ".spec.manual",
             o + ".spec.position", o + ".spec.scan_keytrack", o + ".spec.phase_lock", o + ".spec.transients",
-            o + ".spec.y_axis", o + ".spec.xy_y"
+            o + ".spec.y_axis", o + ".spec.xy_y",
+            // Block B30 (GROUPC WP-13): the multisample oscillator
+            o + ".multi.override", o + ".multi.delay", o + ".multi.attack", o + ".multi.hold",
+            o + ".multi.decay", o + ".multi.sustain", o + ".multi.release", o + ".multi.vel_track",
+            o + ".multi.vel_override", o + ".multi.timbre"
         };
     }
 
@@ -140,7 +144,7 @@ public:
         // the pitch bend switch is for the sample types with pitch tracking off, the stack repeat (1-3x) belongs to the Octaves / Power Chord stacks
         const std::string o = "osc" + std::to_string (OscIndex);
         for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type", ".pitch_mode", ".sample.slice_mode", ".sample.slice_play",
-                                    ".gran.density_mode", ".gran.length_mode", ".gran.manual", ".spec.manual" })
+                                    ".gran.density_mode", ".gran.length_mode", ".gran.manual", ".spec.manual", ".multi.override", ".multi.vel_override" })
         {
             auto handle = std::make_unique<ParamHandle> (ctx, o + suffix);
             handle->onChange = [this] { updateControlDimming(); };
@@ -156,7 +160,7 @@ public:
             // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
             return h.valid() ? juce::roundToInt (h.info().min + h.normalised() * (h.info().max - h.info().min)) : 0;
         };
-        if (dimHandles.size() < 12)
+        if (dimHandles.size() < 14)
             return;
         const bool tracking = choiceOf (*dimHandles[0]) != 0;
         const int type = choiceOf (*dimHandles[1]);
@@ -169,6 +173,7 @@ public:
         const int densityMode = choiceOf (*dimHandles[8]), lengthMode = choiceOf (*dimHandles[9]);
         const bool granManual = choiceOf (*dimHandles[10]) != 0, granular = type == kOscTypeGranular, sampleClass = type >= kOscTypeSample && type <= kOscTypeSpectral;
         const bool specManual = choiceOf (*dimHandles[11]) != 0, spectral = type == kOscTypeSpectral;
+        const bool multiOverride = choiceOf (*dimHandles[12]) != 0, multiVelOverride = choiceOf (*dimHandles[13]) != 0, multisample = type == kOscTypeMultisample;
         if (specFilter != nullptr && specFilter->isVisible() != spectral)
         {
             specFilter->setVisible (spectral);
@@ -191,6 +196,16 @@ public:
                 applies = type == 0;                                       // the frame position of a wavetable
             else if (key == o + ".sample.slice")
                 applies = sampleClass && sliceMode != 0 && slicePlay == 1; // Play Single Slice only
+            else if (key.rfind (o + ".multi.", 0) == 0)
+            {
+                // the multisample keys apply to the Multisample type; the envelope only while OVERRIDE is on, the velocity tracking only with its override (manual p.61 - 62)
+                applies = multisample;
+                for (const char* tail : { "delay", "attack", "hold", "decay", "sustain", "release" })
+                    if (key == o + ".multi." + tail)
+                        applies = applies && multiOverride;
+                if (key == o + ".multi.vel_track")
+                    applies = applies && multiVelOverride;
+            }
             else if (key.rfind (o + ".spec.", 0) == 0)
                 applies = spectral && (key != o + ".spec.position" || specManual);   // the spectral keys apply to the Spectral type; the position only in the manual mode
             else if (key.rfind (o + ".gran.", 0) == 0)

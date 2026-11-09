@@ -110,7 +110,9 @@ constexpr const char* const kScaleModes[] = { "Conform", "Mark only" };
 constexpr const char* const kTuningScales[] = { "12-TET", "Pythagorean", "Just intonation", "User file" };
 constexpr const char* const kOscTypes[] = { "Wavetable", "Sample",
                                              // GROUPC WP-11 (B28): the granular oscillator, WP-12 (B29): the spectral oscillator
-                                             "Granular", "Spectral" };
+                                             "Granular", "Spectral",
+                                             // GROUPC WP-13 (B30): the multisample oscillator (an SFZ instrument)
+                                             "Multisample" };
 constexpr const char* const kLoopModes[] = { "One-shot", "Forward loop", "Reverse loop", "Forward/reverse loop", "Tailed" };
 constexpr const char* const kFadeEdges[] = { "None", "1 ms", "2 ms", "4 ms", "8 ms", "16 ms", "32 ms", "64 ms", "128 ms" };
 constexpr const char* const kSliceModes[] = { "Off", "Auto", "Manual" };
@@ -461,6 +463,20 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     onOff ("osc" #N ".spec.transients", "Osc " #N " Spectral Transients", "Osc " #N " / Spectral", false),                                       \
     pick ("osc" #N ".spec.y_axis", "Osc " #N " Spectral Y Axis", "Osc " #N " / Spectral", kSpecYAxes, 0),                                        \
     SB_PCT ("osc" #N ".spec.xy_y", "Osc " #N " Spectral Y Position", "Osc " #N " / Spectral", 50.0f, kMod)
+
+// B30 (GROUPC, WP-13): per oscillator the keys of the multisample oscillator (Serum 2 manual p.58 - 67; the instrument is content.instruments[], RAND is oscN.random_phase,
+// the pan, level, unison and warp keys are the oscillator's own)
+#define SB_OSC_MULTI(N)                                                                                                                          \
+    onOff ("osc" #N ".multi.override", "Osc " #N " Multisample Envelope Override", "Osc " #N " / Multisample", false),                          \
+    cont ("osc" #N ".multi.delay", "Osc " #N " Multisample Delay", "Osc " #N " / Multisample", 0.0f, 2000.0f, 0.0f, Unit::ms, kAuto, 1, 0.4f), \
+    cont ("osc" #N ".multi.attack", "Osc " #N " Multisample Attack", "Osc " #N " / Multisample", 0.0f, 10000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f), \
+    cont ("osc" #N ".multi.hold", "Osc " #N " Multisample Hold", "Osc " #N " / Multisample", 0.0f, 10000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f),  \
+    cont ("osc" #N ".multi.decay", "Osc " #N " Multisample Decay", "Osc " #N " / Multisample", 0.0f, 10000.0f, 500.0f, Unit::ms, kAuto, 1, 0.3f), \
+    SB_PCT ("osc" #N ".multi.sustain", "Osc " #N " Multisample Sustain", "Osc " #N " / Multisample", 100.0f, kAuto),                              \
+    cont ("osc" #N ".multi.release", "Osc " #N " Multisample Release", "Osc " #N " / Multisample", 0.0f, 10000.0f, 100.0f, Unit::ms, kAuto, 1, 0.3f), \
+    SB_PCT ("osc" #N ".multi.vel_track", "Osc " #N " Multisample Velocity Tracking", "Osc " #N " / Multisample", 100.0f, kAuto),                 \
+    onOff ("osc" #N ".multi.vel_override", "Osc " #N " Multisample Velocity Override", "Osc " #N " / Multisample", false),                        \
+    SB_PCT_RANGE ("osc" #N ".multi.timbre", "Osc " #N " Multisample Timbre", "Osc " #N " / Multisample", -100.0f, 100.0f, 0.0f, kMod)
 
 #define SB_SENDS(KEY, NAME, GROUP)                                                                                                               \
     SB_PCT (KEY ".bus1_send", NAME " Bus 1 Send", GROUP, 0.0f, kMod),                                                                            \
@@ -953,11 +969,13 @@ constexpr ParamInfo kRaw[] = {
     SB_OSC_GRAN (1), SB_OSC_GRAN (2), SB_OSC_GRAN (3),
     // --- B29: GROUPC WP-12: the spectral oscillator (13-new-keys.md 4.38, positions 2227..2268) ----------------------------------------------
     SB_OSC_SPEC (1), SB_OSC_SPEC (2), SB_OSC_SPEC (3),
+    // --- B30: GROUPC WP-13: the multisample oscillator (13-new-keys.md 4.39, positions 2269..2298) -------------------------------------------
+    SB_OSC_MULTI (1), SB_OSC_MULTI (2), SB_OSC_MULTI (3),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2269, "880 keys of state version 2 plus the 1312 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29)");
+static_assert (kCount == 2299, "880 keys of state version 2 plus the 1342 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30)");
 
 struct Table
 {
@@ -987,7 +1005,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

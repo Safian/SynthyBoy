@@ -158,11 +158,11 @@ void Importer::oscillator (int i)
     if (tn >= 0)
     {
         const bool known = kind != 0 || typeName == "kOsc_WT";
-        store (key ("type"), kind == 0 ? 0 : (kind == 3 && opt.granularOsc ? kOscTypeGranular : (kind == 4 && opt.spectralOsc ? kOscTypeSpectral : 1))); // GROUPC: Granular and Spectral are their own types (a sample oscillator on an engine without them)
+        store (key ("type"), kind == 0 ? 0 : (kind == 3 && opt.granularOsc ? kOscTypeGranular : (kind == 4 && opt.spectralOsc ? kOscTypeSpectral : (kind == 1 && opt.multisampleOsc ? kOscTypeMultisample : 1)))); // GROUPC: Granular and Spectral are their own types (a sample oscillator on an engine without them)
         setByFile[static_cast<size_t> (indexOf (key ("type")))] = 1;
-        entry (! known ? ItemKind::dropped : (kind <= 0 || kind == 2 || kind == 3 || kind == 4 ? ItemKind::imported : ItemKind::approximated), known ? Reason::exact : Reason::enumRemapped, area, on + "/plainParams/kParamType",
-               typeName, key ("type"), kind == 0 ? "Wavetable" : (kind == 3 && opt.granularOsc ? "Granular" : (kind == 4 && opt.spectralOsc ? "Spectral" : "Sample")),
-               kind == 1 ? "multisample_reduced_to_one_zone" : (kind == 4 && ! opt.spectralOsc ? "spectral_played_as_sample" : (kind == 3 && ! opt.granularOsc ? "granular_played_as_sample" : "")));
+        entry (! known ? ItemKind::dropped : (kind <= 0 || kind == 2 || kind == 3 || kind == 4 || (kind == 1 && opt.multisampleOsc) ? ItemKind::imported : ItemKind::approximated), known ? Reason::exact : Reason::enumRemapped, area, on + "/plainParams/kParamType",
+               typeName, key ("type"), kind == 0 ? "Wavetable" : (kind == 3 && opt.granularOsc ? "Granular" : (kind == 4 && opt.spectralOsc ? "Spectral" : (kind == 1 && opt.multisampleOsc ? "Multisample" : "Sample"))),
+               kind == 1 && ! opt.multisampleOsc ? "multisample_reduced_to_one_zone" : (kind == 4 && ! opt.spectralOsc ? "spectral_played_as_sample" : (kind == 3 && ! opt.granularOsc ? "granular_played_as_sample" : "")));
         consume (tn);
     }
     else store (key ("type"), 0);

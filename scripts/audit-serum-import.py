@@ -249,6 +249,10 @@ GRAN = {'kParamWindowParam': ('osc#.gran.window_amount', lin(1)), 'kParamWindowS
 SPECTRAL = {'kParamFreqLo': ('osc#.spec.freq_lo', lin(1)), 'kParamFreqHi': ('osc#.spec.freq_hi', lin(1)), 'kParamLoHiIsSmooth': ('osc#.spec.lohi_smooth', boolean),
             'kParamLoHiPostWarp': ('osc#.spec.lohi_post_warp', boolean), 'kParamPhaseLock': ('osc#.spec.phase_lock', boolean), 'kParamTransients': ('osc#.spec.transients', boolean),
             'kParamSpecFltShift': ('osc#.spec.cut', lin(1)), 'kParamSpecFltWetDry': ('osc#.spec.mix', lin(1))}
+MULTI = {'kParamRandomPhase': ('osc#.random_phase', lin(1)), 'kParamEnvOverride': ('osc#.multi.override', boolean), 'kParamEnvDelay': ('osc#.multi.delay', lin(1000)),
+         'kParamEnvAttack': ('osc#.multi.attack', lin(1000)), 'kParamEnvHold': ('osc#.multi.hold', lin(1000)), 'kParamEnvDecay': ('osc#.multi.decay', lin(1000)),
+         'kParamEnvSustain': ('osc#.multi.sustain', lin(100)), 'kParamEnvRelease': ('osc#.multi.release', lin(1000)), 'kParamVelTrack': ('osc#.multi.vel_track', lin(1)),
+         'kParamVelTrackOverride': ('osc#.multi.vel_override', boolean), 'kParamTimbreShift': ('osc#.multi.timbre', lin(100))}   # GROUPC WP-13
 WT = {'kParamInitialPhase': ('osc#.phase', lin(1)), 'kParamRandomPhase': ('osc#.random_phase', lin(1)), 'kParamUnisonWTPos': ('osc#.frame_spread', lin(1)),
       'kParamPhaseMemory': ('osc#.phase_memory', PHASEMEM)}
 NOISE = {'kParamVolume': ('noise.level', lin(100)), 'kParamPan': ('noise.pan', lin(2)), 'kParamEnable': ('noise.on', boolean), 'kParamPitch': ('noise.pitch', lin(1))}
@@ -399,7 +403,7 @@ class Audit:
                     if blk.startswith('SpectralOsc'):
                         table.update(SPECTRAL)
                     if blk.startswith('MultiSampleOsc'):
-                        table.update({'kParamRandomPhase': ('osc#.random_phase', lin(1))})
+                        table.update(MULTI)
                     return table, idx + 1, parts[3]
                 if blk.startswith('NoiseOsc') and idx == 3:
                     return NOISEOSC, 1, parts[3]
@@ -571,6 +575,7 @@ class Audit:
         self.audit_osc_extras(name, tree, sb)
         self.audit_granular(name, tree, sb)
         self.audit_spectral(name, tree, sb)
+        self.audit_multisample(name, tree, sb, content_dir)
         self.audit_mod_slew(name, tree, sb)
         self.audit_voice_panel(name, tree, sb)
         self.audit_midi_map(name, tree, report)
@@ -820,6 +825,57 @@ class Audit:
                 pts = stored[n]['points']
                 if len(pts) < 2 or pts[0]['x'] > 1e-3 or pts[-1]['x'] < 1 - 1e-3:
                     self.err(name, 'osc%d: the spectral filter does not span the axis' % n)
+
+    def audit_multisample(self, name, tree, sb, content_dir):
+        """GROUPC WP-13 (A427 .. A434): type Multisample (4); the block rows are in MULTI; here the instrument: content.instruments holds the SFZ of the preset, the stored SFZ has as many
+        regions as the original and names the same sample files (as .wav files that exist below its folder, except the ones the Serum content did not hold)."""
+        params = sb['state']['params']
+        stored = {e['osc']: e for e in sb['state'].get('content', {}).get('instruments', [])}
+        for i in range(3):
+            n = i + 1
+            o = tree.get('Oscillator%d' % i)
+            pp = o.get('plainParams') if isinstance(o, dict) and isinstance(o.get('plainParams'), dict) else {}
+            if pp.get('kParamType') != 'kOsc_MultiSample':
+                if params.get('osc%d.type' % n) == 4:
+                    self.err(name, 'osc%d.type is Multisample but the file says %s' % (n, pp.get('kParamType', 'kOsc_WT')))
+                if n in stored:
+                    self.err(name, 'osc%d has an instrument but is not a multisample oscillator' % n)
+                continue
+            self.stats['multisample oscillators'] += 1
+            blk = o.get('MultiSampleOsc%d' % i)
+            text = blk.get('embedded_sfz') if isinstance(blk, dict) else None
+            rel = blk.get('sfzPathRelative') if isinstance(blk, dict) else None
+            source = text if isinstance(text, str) else None
+            if source is None and isinstance(rel, str):
+                path = os.path.join(self.SERUM_ROOT, 'Multisamples', rel.replace('\\', '/'))
+                if os.path.isfile(path):
+                    source = open(path, errors='replace').read()
+            if not source or '<region>' not in source:
+                continue
+            want_regions = source.count('<region>')
+            if params.get('osc%d.type' % n) != 4 or n not in stored:
+                self.err(name, 'osc%d: a multisample instrument with %d regions was not imported (type %s)' % (n, want_regions, params.get('osc%d.type' % n)))
+                continue
+            ref = stored[n]
+            path = os.path.join(content_dir, 'instruments', ref['file'])
+            if not os.path.isfile(path):
+                self.err(name, 'osc%d: the stored SFZ is missing: %s' % (n, ref['file']))
+                continue
+            data = open(path, 'rb').read()
+            if hashlib.sha256(data).hexdigest() != ref['sha256']:
+                self.err(name, 'osc%d: the stored SFZ differs from its hash' % n)
+            got = data.decode('utf-8', 'replace')
+            if got.count('<region>') != want_regions or ref.get('zones') != want_regions:
+                self.err(name, 'osc%d: the stored SFZ has %d regions, the original %d (zones field %s)' % (n, got.count('<region>'), want_regions, ref.get('zones')))
+            self.stats['instrument regions'] += want_regions
+            base = os.path.dirname(path)
+            missing = 0
+            for sample in re.findall(r'^sample=(.*)$', got, re.M):
+                if not os.path.isfile(os.path.join(base, sample)):
+                    missing += 1
+            self.stats['instrument samples missing'] += missing
+            if missing > 0 and missing > want_regions // 2 and self.SERUM_ROOT:
+                self.err(name, 'osc%d: %d of %d sample files of the instrument are not stored' % (n, missing, want_regions))
 
     SERUM_DEFAULTS = [(r'osc(\d)\.on$', lambda m: 1.0 if m.group(1) == '1' else 0.0), (r'(noise|sub)\.on$', lambda m: 0.0), (r'filter\d\.on$', lambda m: 0.0),
                       (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.spread$', lambda m: 100.0),

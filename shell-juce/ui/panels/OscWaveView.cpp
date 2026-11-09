@@ -78,6 +78,7 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
       granDensityHandle (context, "osc" + std::to_string (oscIndex) + ".gran.density"),
       granLengthHandle (context, "osc" + std::to_string (oscIndex) + ".gran.length"),
       granRandOffsetHandle (context, "osc" + std::to_string (oscIndex) + ".gran.rand_offset"),
+      multiOverrideHandle (context, "osc" + std::to_string (oscIndex) + ".multi.override"),
       sampleStartHandle (context, "osc" + std::to_string (oscIndex) + ".sample.start"),
       sampleEndHandle (context, "osc" + std::to_string (oscIndex) + ".sample.end"),
       sampleLoopStartHandle (context, "osc" + std::to_string (oscIndex) + ".sample.loop_start"),
@@ -95,6 +96,7 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     warpAmountHandle.onChange = repaintCb;
     warpTypeHandle.onChange = repaintCb;
     unisonVoicesHandle.onChange = repaintCb;
+    multiOverrideHandle.onChange = repaintCb;
     for (ParamHandle* handle : { &specFreqLoHandle, &specFreqHiHandle, &specManualHandle, &specPositionHandle, &specXyYHandle, &granPositionHandle, &granXyYHandle, &granManualHandle, &granWindowAmountHandle, &granWindowSkewHandle, &granWindowShapeHandle,
                                  &granDensityHandle, &granLengthHandle, &granRandOffsetHandle })
         handle->onChange = repaintCb;
@@ -282,14 +284,16 @@ void OscWaveView::cycleViewMode()
 void OscWaveView::updateButtons()
 {
     const bool isSample = isSampleType();
-    prevWtButton.setVisible (! isSample);
-    nextWtButton.setVisible (! isSample);
-    viewModeButton.setVisible (! isSample);
-    loadSampleBtn.setVisible (isSample);
+    prevWtButton.setVisible (! isSample && ! isMultisample());
+    nextWtButton.setVisible (! isSample && ! isMultisample());
+    viewModeButton.setVisible (! isSample && ! isMultisample());
+    const bool multi = isMultisample();
+    loadSampleBtn.setVisible (isSample || multi);
+    loadSampleBtn.setButtonText (multi ? "Load SFZ" : "Load");
     snapBtn.setVisible (isSample);
-    sampleMenuBtn.setVisible (isSample);
-    editBtn.setVisible (! isSample);
-    sampleMenuBtn.setEnabled (preview() != nullptr);
+    sampleMenuBtn.setVisible (isSample || multi);
+    editBtn.setVisible (! isSample && ! multi);
+    sampleMenuBtn.setEnabled (multi ? ! ctx.host.content().instruments.empty() : preview() != nullptr);
     zoomInBtn.setVisible (isSample);
     zoomOutBtn.setVisible (isSample);
     fitBtn.setVisible (isSample);
@@ -374,6 +378,23 @@ FlowResult OscWaveView::loadSampleFile (const juce::File& file)
 
 void OscWaveView::requestSampleFile()
 {
+    if (isMultisample())
+    {
+        FileRequest sfzRequest;
+        sfzRequest.title = "Load a multisample instrument (SFZ) into oscillator " + juce::String (index);
+        sfzRequest.wildcards = "*.sfz";
+        sfzRequest.purpose = "instrument";
+        if (! ctx.host.requestFile (sfzRequest, [safe = juce::Component::SafePointer<OscWaveView> (this)] (const juce::File& file)
+            {
+                if (safe != nullptr)
+                    safe->loadInstrument (file);
+            }))
+        {
+            statusLine = "This host cannot ask for a file";
+            repaint();
+        }
+        return;
+    }
     FileRequest request;
     request.title = "Load a sample into oscillator " + juce::String (index);
     request.wildcards = audioFileWildcard();
@@ -417,8 +438,93 @@ FlowResult OscWaveView::reloadSample()
     return { ok, statusLine };
 }
 
+FlowResult OscWaveView::loadInstrument (const juce::File& sfzFile)
+{
+    const FlowResult result = synthyboy::ui::loadInstrumentFile (ctx, index, sfzFile);
+    statusLine = result.message;
+    zoneCacheValid = false;
+    updateButtons();
+    repaint();
+    return result;
+}
+
+FlowResult OscWaveView::switchToSample()
+{
+    const FlowResult result = synthyboy::ui::switchToSingleSample (ctx, index);
+    statusLine = result.message;
+    zoneCacheValid = false;
+    updateButtons();
+    repaint();
+    return result;
+}
+
+int OscWaveView::lastPlayedZone() const
+{
+    LiveValues live;
+    return index >= 1 && index <= 3 && ctx.host.copyReadout (live) ? live.multisampleZone[index - 1] : -1;
+}
+
+const std::vector<multisample::Region>& OscWaveView::instrumentZones()
+{
+    const auto content = ctx.host.content();
+    const ContentInstrument* instrument = nullptr;
+    for (const auto& i : content.instruments)
+        if (i.osc == index)
+            instrument = &i;
+    if (instrument == nullptr)
+    {
+        zoneCache.clear();
+        zoneCacheValid = false;
+        return zoneCache;
+    }
+    if (zoneCacheValid && zoneCacheRef.tie() == instrument->ref.tie())
+        return zoneCache;
+    zoneCache.clear();
+    std::vector<uint8_t> bytes;
+    if (auto* library = ctx.host.contentLibrary())
+        if (library->readFile (instrument->ref, bytes))
+            zoneCache = multisample::parseSfz (std::string (bytes.begin(), bytes.end())).regions;
+    zoneCacheRef = instrument->ref;
+    zoneCacheValid = true;
+    return zoneCache;
+}
+
+juce::Rectangle<float> OscWaveView::zoneMapArea() const
+{
+    return waveArea();
+}
+
+juce::Rectangle<float> OscWaveView::zoneRect (const multisample::Region& region) const
+{
+    const auto map = zoneMapArea();
+    const float x0 = map.getX() + map.getWidth() * static_cast<float> (region.lokey) / 128.0f, x1 = map.getX() + map.getWidth() * static_cast<float> (region.hikey + 1) / 128.0f;
+    const float y1 = map.getBottom() - map.getHeight() * static_cast<float> (region.lovel) / 128.0f, y0 = map.getBottom() - map.getHeight() * static_cast<float> (region.hivel + 1) / 128.0f;
+    return { x0, y0, x1 - x0, y1 - y0 };
+}
+
+juce::Rectangle<float> OscWaveView::envThumbArea() const
+{
+    const auto area = waveArea();
+    const float w = static_cast<float> (ctx.theme.touch()) * 1.9f, h = static_cast<float> (ctx.theme.touch()) * 1.1f;
+    return { area.getRight() - w - ctx.theme.px (4.0f), area.getBottom() - h - ctx.theme.px (4.0f), w, h };
+}
+
 void OscWaveView::showSampleMenu()
 {
+    if (isMultisample())
+    {
+        juce::PopupMenu instrumentMenu;
+        instrumentMenu.addItem (1, "Switch to Single Sample", ! ctx.host.content().instruments.empty());
+        instrumentMenu.addItem (2, "Load SFZ...", true);
+        instrumentMenu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&sampleMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
+        {
+            if (safe == nullptr)
+                return;
+            if (result == 1) safe->switchToSample();
+            else if (result == 2) safe->requestSampleFile();
+        });
+        return;
+    }
     juce::PopupMenu menu;
     const auto content = ctx.host.content();
     const ContentSample* sample = sampleOf (content, index);
@@ -758,6 +864,14 @@ void OscWaveView::mouseDown (const juce::MouseEvent& e)
     nameSwipe = false;
     activeMarker = SampleMarker::none;
     gestureOpen = true;
+    if (isMultisample())
+    {
+        // the multisample display has one control: the envelope thumbnail switches OVERRIDE
+        gestureOpen = false;
+        if (envThumbArea().contains (e.position) && multiOverrideHandle.valid())
+            multiOverrideHandle.setPlainComplete (multiOverrideHandle.plain() > 0.5f ? 0.0f : 1.0f);
+        return;
+    }
 
     if (isSampleType())
     {
@@ -1073,6 +1187,16 @@ void OscWaveView::paint (juce::Graphics& g)
                 wtName << "  " << juce::String (prev->seconds(), 2) << " s";
         }
     }
+    else if (isMultisample())
+    {
+        const auto content = ctx.host.content();
+        wtName = "Osc " + juce::String (index) + ": Multisample - ";
+        const ContentInstrument* instrument = nullptr;
+        for (const auto& i : content.instruments)
+            if (i.osc == index)
+                instrument = &i;
+        wtName << (instrument == nullptr ? juce::String ("no instrument (Load SFZ)") : juce::String (instrument->ref.name) + ", " + juce::String (instrument->zones) + " zones");
+    }
     else
     {
         const int wtIdx = wtHandle.valid() ? juce::roundToInt (wtHandle.plain()) : 0;
@@ -1127,6 +1251,8 @@ void OscWaveView::paint (juce::Graphics& g)
         else if (isSpectral())
             paintSpectral (g, area);
     }
+    else if (isMultisample())
+        paintMultisample (g, area);
     else
         paintWavetable (g, area);
 
@@ -1556,6 +1682,70 @@ void OscWaveView::paintSample (juce::Graphics& g, juce::Rectangle<float> area)
 }
 
 // ---- OscNoiseView -----------------------------------------------------------------------------------------------------------------
+
+void OscWaveView::paintMultisample (juce::Graphics& g, juce::Rectangle<float> area)
+{
+    const auto& t = ctx.theme;
+    const Palette& c = t.colours;
+    g.saveState();
+    g.reduceClipRegion (area.toNearestInt());
+    const auto& zones = instrumentZones();
+    // the keyboard under the map (octave lines) and the zones: keys across, velocity up
+    g.setColour (c.outline.withAlpha (0.4f));
+    for (int octave = 0; octave <= 10; ++octave)
+        g.drawVerticalLine (juce::roundToInt (area.getX() + area.getWidth() * static_cast<float> (octave * 12) / 128.0f), area.getY(), area.getBottom());
+    const int played = lastPlayedZone();
+    for (size_t i = 0; i < zones.size(); ++i)
+    {
+        const auto r = zoneRect (zones[i]).reduced (t.px (0.5f));
+        const bool hot = static_cast<int> (i) == played;
+        g.setColour ((hot ? c.accent : c.accentDim).withAlpha (hot ? 0.8f : 0.28f));
+        g.fillRect (r);
+        g.setColour (hot ? c.accent : c.accentDim);
+        g.drawRect (r, 1.0f);
+    }
+    if (zones.empty())
+    {
+        g.setColour (c.textDim);
+        g.setFont (t.labelFont());
+        g.drawText ("Load an SFZ instrument: the zones appear here (keys across, velocity up)", area.toNearestInt(), juce::Justification::centred, true);
+    }
+    // the envelope thumbnail: the shape of the keys when OVERRIDE is on, the SFZ's otherwise
+    const auto thumb = envThumbArea();
+    g.setColour (c.panel.withAlpha (0.85f));
+    g.fillRoundedRectangle (thumb, t.px (6.0f));
+    g.setColour (c.outline);
+    g.drawRoundedRectangle (thumb, t.px (6.0f), 1.0f);
+    const bool over = multiOverrideHandle.valid() && multiOverrideHandle.plain() > 0.5f;
+    g.setFont (t.labelFont());
+    g.setColour (over ? c.accent : c.textDim);
+    g.drawText (over ? "ENV OVERRIDE" : "ENV: SFZ", thumb.toNearestInt().removeFromTop (t.ipx (14.0f)), juce::Justification::centred, false);
+    if (over)
+    {
+        const auto plain = [&] (const char* tail, float fallback)
+        {
+            ParamHandle h (ctx, "osc" + std::to_string (index) + ".multi." + tail);
+            return h.valid() ? h.plain() : fallback;
+        };
+        const float delay = plain ("delay", 0.0f), attack = plain ("attack", 0.0f), hold = plain ("hold", 0.0f), decay = plain ("decay", 500.0f), release = plain ("release", 100.0f);
+        const float sustain = plain ("sustain", 100.0f) * 0.01f;
+        const float total = juce::jmax (1.0f, delay + attack + hold + decay + release) * 1.3f;
+        const auto inner = thumb.reduced (t.px (6.0f)).withTrimmedTop (t.px (14.0f));
+        const auto at = [&] (float ms, float level) { return juce::Point<float> (inner.getX() + inner.getWidth() * ms / total, inner.getBottom() - inner.getHeight() * level); };
+        juce::Path p;
+        float x = 0.0f;
+        p.startNewSubPath (at (0.0f, 0.0f));
+        p.lineTo (at (x += delay, 0.0f));
+        p.lineTo (at (x += attack, 1.0f));
+        p.lineTo (at (x += hold, 1.0f));
+        p.lineTo (at (x += decay, sustain));
+        p.lineTo (at (x += release * 0.0f + total * 0.12f, sustain));
+        p.lineTo (at (x += release, 0.0f));
+        g.setColour (c.accent);
+        g.strokePath (p, juce::PathStrokeType (t.px (1.5f)));
+    }
+    g.restoreState();
+}
 
 /** The spectral overlay: the spectrogram of the sample under the waveform, the frequency strip with the Lo / Hi markers and the band between them, the X|Y dot of the manual mode. */
 void OscWaveView::rebuildSpectrogram()

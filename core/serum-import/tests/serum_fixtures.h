@@ -127,10 +127,11 @@ struct Preset
     Bytes file (const std::string& name = "Fixture") const { return container ("SerumPreset", body(), name); }
 };
 
-inline synthyboy::SerumImportResult run (const Bytes& file, synthyboy::SerumContentResolver* r = nullptr)
+inline synthyboy::SerumImportResult run (const Bytes& file, synthyboy::SerumContentResolver* r = nullptr, bool multisampleOsc = true)
 {
     synthyboy::SerumImportOptions o;
     o.resolver = r;
+    o.multisampleOsc = multisampleOsc;
     return synthyboy::importSerumFile (file.data(), file.size(), o);
 }
 

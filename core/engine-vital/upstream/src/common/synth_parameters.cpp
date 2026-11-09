@@ -615,6 +615,9 @@ namespace sbvital {
       ValueDetails::kLinear, false, "%", "Spectral Position", nullptr },
     { "spec_xy_y", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Spectral Y Position", nullptr },
+    // SynthyBoy (GROUPC, WP-13): the timbre of the multisample oscillator (-1 .. 1)
+    { "multi_timbre", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Multisample Timbre", nullptr },
     { "warp2_type", 0x000000, 0.0, SynthOscillator::kNumDistortionTypes - 1, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Warp 2 Type", strings::kPhaseDistortionNames },
     { "warp2_amount", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,

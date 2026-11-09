@@ -54,6 +54,12 @@ struct FlowResult
 /** Sample: decode `file`, store it (a WAV file is stored as it is, any other format as 24-bit WAV), attach it to the oscillator, set the root note
     from the file name / WAV chunk, switch `oscN.type` to Sample. */
 FlowResult loadSampleFile (UiContext& ctx, int osc, const juce::File& file);
+/** Multisample (GROUPC WP-13): reads the SFZ file, converts every sample it names to a 24-bit WAV (any format the host decodes), stores instrument and samples in the user library
+    (`user.instruments`), attaches it as `content.instruments[osc]` and switches `oscN.type` to Multisample. Samples that are not there are counted in the message. */
+FlowResult loadInstrumentFile (UiContext& ctx, int osc, const juce::File& sfzFile);
+/** "Switch to Single Sample" (manual p.67): the zone the last note of the oscillator played becomes the sample of the oscillator (root note, tune, start / end and loop of the zone), the type
+    becomes Sample. Fails when no note was played yet. */
+FlowResult switchToSingleSample (UiContext& ctx, int osc);
 /** The stored sample behind the oscillator (a copy of its bytes), empty when there is none. */
 std::vector<uint8_t> storedSampleBytes (UiHost& host, int osc);
 /** Cuts the sample of the oscillator to its START .. END region: stores the new WAV, rescales the slices, resets START / END (and the loop markers). */

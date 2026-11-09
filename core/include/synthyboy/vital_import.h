@@ -145,8 +145,19 @@ struct ContentSampleRef
     std::string file;
 };
 
+/** Reference to a stored multisample instrument (the SFZ file) of an oscillator (GROUPC WP-13). */
+struct ContentInstrumentRef
+{
+    int osc = 0;
+    std::string pack;
+    std::string file;
+    std::string sha256;
+    int zones = 0;
+};
+
 struct ContentRefs
 {
+    std::vector<ContentInstrumentRef> instruments;
     std::vector<ContentWavetableRef> wavetables;
     std::vector<ContentSampleRef> samples;
 
@@ -155,6 +166,14 @@ struct ContentRefs
         for (const auto& w : wavetables)
             if (w.osc == osc)
                 return &w;
+        return nullptr;
+    }
+
+    const ContentInstrumentRef* findInstrument (int osc) const noexcept
+    {
+        for (const auto& i : instruments)
+            if (i.osc == osc)
+                return &i;
         return nullptr;
     }
 

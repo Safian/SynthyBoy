@@ -200,7 +200,7 @@ TEST (warpenv_capabilities_and_lists)
     const EngineCapsMask bits = kCapWarpAll | kCapEnv1Toggle;
     CHECK ((vital->capabilities() & bits) == bits);
     CHECK ((own->capabilities() & bits) == 0);
-    CHECK_EQ (kNumWarpTypes, 76); // 52 after block B21, 76 with the modes from the Noise, Sub and Filters (GROUPB WP-06, test_modsources.cpp)
+    CHECK_EQ (kNumWarpTypes, 99); // 52 after block B21, 76 with the modes from the Noise, Sub and Filters (GROUPB WP-06, test_modsources.cpp), 99 with the spectral warps (GROUPC WP-12)
     for (const char* key : { "osc1.warp.type", "osc2.warp.type", "osc3.warp.type", "osc1.warp2.type", "osc2.warp2.type", "osc3.warp2.type" })
     {
         const ParamInfo* info = findParamByKey (key);

@@ -1,6 +1,8 @@
 // SynthyBoy - core/serum-import: the content a Serum 2 preset carries or references (tables, samples, multisamples) and the audio helpers.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <map>
+#include "synthyboy/multisample/multisample.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -374,6 +376,67 @@ bool Importer::applyMultisample (int osc, int B, const std::string& path, int* r
     {
         std::vector<uint8_t> bytes;
         if (readContent ("Multisamples", str (sfzRel), bytes)) text.assign (bytes.begin(), bytes.end());
+    }
+    if (opt.multisampleOsc && ! text.empty())
+    {
+        // GROUPC WP-13: the whole instrument: the SFZ with every zone and the samples it names, converted to 24-bit WAV files below the folder of the SFZ
+        multisample::SfzInstrument sfz = multisample::parseSfz (text);
+        if (! sfz.regions.empty())
+        {
+            ImportedInstrument ins;
+            ins.osc = osc;
+            ins.name = isText (sfzRel) ? stemOf (normalisePath (str (sfzRel))) : std::string ("Serum instrument");
+            std::map<std::string, std::string> converted; // the path in the SFZ -> the path of the WAV
+            size_t totalBytes = 0;
+            for (multisample::Region& region : sfz.regions)
+            {
+                auto done = converted.find (region.sample);
+                if (done == converted.end())
+                {
+                    std::string newPath = multisample::storedSamplePath (region.sample, false);
+                    const std::string rel = dir.empty() ? normalisePath (region.sample) : dir + "/" + normalisePath (region.sample);
+                    std::vector<uint8_t> bytes;
+                    DecodedAudio a;
+                    if (readContent ("Multisamples", rel, bytes) && decodeAudio (bytes.data(), bytes.size(), opt.limits.maxAudioFrames, a) && a.frames() > 0 && totalBytes < (1u << 30))
+                    {
+                        const size_t n = a.frames();
+                        const int ch = a.channels >= 2 ? 2 : 1;
+                        std::vector<float> left (n), right (ch == 2 ? n : 0);
+                        for (size_t i = 0; i < n; ++i)
+                        {
+                            left[i] = a.data[i * static_cast<size_t> (a.channels)];
+                            if (ch == 2) right[i] = a.data[i * static_cast<size_t> (a.channels) + 1];
+                        }
+                        newPath = multisample::storedSamplePath (region.sample, true);
+                        std::vector<uint8_t> wav = encodeWav (left.data(), ch == 2 ? right.data() : nullptr, n, a.sampleRate, 24);
+                        totalBytes += wav.size();
+                        ins.files.emplace_back (newPath, std::move (wav));
+                    }
+                    else
+                    {
+                        ++ins.missingFiles;
+                        ++R.missingFiles;
+                    }
+                    done = converted.emplace (region.sample, newPath).first;
+                }
+                region.sample = done->second;
+            }
+            ins.zones = static_cast<int> (sfz.regions.size());
+            ins.sfzText = multisample::writeSfz (sfz);
+            R.instruments.erase (std::remove_if (R.instruments.begin(), R.instruments.end(), [osc] (const ImportedInstrument& x) { return x.osc == osc; }), R.instruments.end());
+            R.instruments.push_back (std::move (ins));
+            const ImportedInstrument& stored = R.instruments.back();
+            store (okey + ".type", kOscTypeMultisample);
+            if (isText (emb)) { entry (ItemKind::imported, Reason::exact, "content", path + "/embedded_sfz", "", okey + ".type", "Multisample", "multisample_instrument_stored_in_the_library"); consume (emb); }
+            if (isText (sfzRel)) { entry (ItemKind::imported, Reason::exact, "content", path + "/sfzPathRelative", str (sfzRel), okey + ".type", "Multisample", "multisample_instrument_stored_in_the_library"); consume (sfzRel); }
+            const int files = get (B, "files");
+            if (files >= 0) acctRest (files, ItemKind::ignored, Reason::exact, "content", path + "/files", "", "", "multisample_zone_list_from_the_sfz");
+            const int loopDefault = get (B, "defaultLoopMode");
+            if (loopDefault >= 0 && ! used[static_cast<size_t> (loopDefault)]) { entry (ItemKind::ignored, Reason::exact, "content", path + "/defaultLoopMode", valueText (loopDefault), "", "", "multisample_zone_option"); consume (loopDefault); }
+            if (stored.missingFiles > 0)
+                entry (ItemKind::approximated, Reason::renderFallback, "content", path, "", okey + ".type", "Multisample", "multisample_samples_not_found", 0);
+            return stored.missingFiles < stored.zones;
+        }
     }
     if (isText (emb)) { entry (ItemKind::imported, Reason::exact, "content", path + "/embedded_sfz", "", okey + ".type", "Sample", "sfz_text_read"); consume (emb); }
     if (isText (sfzRel)) { entry (ItemKind::approximated, Reason::tierNote, "content", path + "/sfzPathRelative", str (sfzRel), okey + ".type", "Sample", "multisample_reduced_to_one_zone"); consume (sfzRel); }
