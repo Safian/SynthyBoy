@@ -74,6 +74,7 @@ endif()
 # Packages with their own CMake (after the tests: they use synthyboy_add_test)
 add_subdirectory(wavetable-render)
 add_subdirectory(vital-import)
+add_subdirectory(serum-import)
 add_subdirectory(fx-serum-a)
 add_subdirectory(fx-serum-b)
 
