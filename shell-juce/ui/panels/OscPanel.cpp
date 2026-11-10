@@ -7,6 +7,8 @@
 #include "RemapEditor.h"
 #include "TransposeControl.h"
 
+#include "SpecFilterSource.h"
+
 namespace synthyboy::ui
 {
 template <int OscIndex>
@@ -20,7 +22,15 @@ public:
     {
         addAndMakeVisible (waveView);
         specFilter = std::make_unique<RemapEditor> (context, RemapEditor::SpectralFilterMode {}, OscIndex);
-        addChildComponent (*specFilter); // visible for the Spectral type
+        addChildComponent (*specFilter); // visible for the Spectral type with the drawn curve as the filter
+        specSource = std::make_unique<SpecFilterSource> (context, OscIndex);
+        addChildComponent (*specSource); // visible for the Spectral type
+        specSource->onChanged = [this]
+        {
+            updateControlDimming();
+            if (onHeightChanged)
+                onHeightChanged();
+        };
         onHandle.onChange = [this]
         {
             updateDimming();
@@ -43,6 +53,8 @@ public:
     OscWaveView& view() noexcept { return waveView; }
     /** The spectral filter graph (GROUPC WP-12), visible while the oscillator is a Spectral one. */
     RemapEditor& spectralFilter() noexcept { return *specFilter; }
+    /** The source of the spectral filter (curve or wavetable), REMAINDER item 2. */
+    SpecFilterSource& spectralFilterSource() noexcept { return *specSource; }
 
     /** Power dot off: the whole panel dims (design 02 section 3; the controls stay editable). */
     void updateDimming()
@@ -105,6 +117,8 @@ public:
             o + ".spec.cut", o + ".spec.mix", o + ".spec.freq_shift", o + ".spec.manual",
             o + ".spec.position", o + ".spec.scan_keytrack", o + ".spec.phase_lock", o + ".spec.transients",
             o + ".spec.y_axis", o + ".spec.xy_y",
+            // Block B32 (REMAINDER item 2): a wavetable as the spectral filter
+            o + ".spec.flt_use", o + ".spec.flt_table", o + ".spec.flt_frame",
             // Block B30 (GROUPC WP-13): the multisample oscillator
             o + ".multi.override", o + ".multi.delay", o + ".multi.attack", o + ".multi.hold",
             o + ".multi.decay", o + ".multi.sustain", o + ".multi.release", o + ".multi.vel_track",
@@ -144,7 +158,7 @@ public:
         // the pitch bend switch is for the sample types with pitch tracking off, the stack repeat (1-3x) belongs to the Octaves / Power Chord stacks
         const std::string o = "osc" + std::to_string (OscIndex);
         for (const char* suffix : { ".pitch_track", ".type", ".unison.stack", ".warp.type", ".warp2.type", ".pitch_mode", ".sample.slice_mode", ".sample.slice_play",
-                                    ".gran.density_mode", ".gran.length_mode", ".gran.manual", ".spec.manual", ".multi.override", ".multi.vel_override" })
+                                    ".gran.density_mode", ".gran.length_mode", ".gran.manual", ".spec.manual", ".multi.override", ".multi.vel_override", ".spec.flt_use" })
         {
             auto handle = std::make_unique<ParamHandle> (ctx, o + suffix);
             handle->onChange = [this] { updateControlDimming(); };
@@ -160,7 +174,7 @@ public:
             // (read the parameter itself: the raw atomic of the APVTS is updated after the callbacks)
             return h.valid() ? juce::roundToInt (h.info().min + h.normalised() * (h.info().max - h.info().min)) : 0;
         };
-        if (dimHandles.size() < 14)
+        if (dimHandles.size() < 15)
             return;
         const bool tracking = choiceOf (*dimHandles[0]) != 0;
         const int type = choiceOf (*dimHandles[1]);
@@ -174,11 +188,17 @@ public:
         const bool granManual = choiceOf (*dimHandles[10]) != 0, granular = type == kOscTypeGranular, sampleClass = type >= kOscTypeSample && type <= kOscTypeSpectral;
         const bool specManual = choiceOf (*dimHandles[11]) != 0, spectral = type == kOscTypeSpectral;
         const bool multiOverride = choiceOf (*dimHandles[12]) != 0, multiVelOverride = choiceOf (*dimHandles[13]) != 0, multisample = type == kOscTypeMultisample;
-        if (specFilter != nullptr && specFilter->isVisible() != spectral)
+        const bool fltTable = choiceOf (*dimHandles[14]) != 0;
+        // the filter editor (the drawn curve) is shown while the filter is the curve; with a wavetable as the filter it is not editable and gives way to the picture of the table
+        const bool showCurve = spectral && ! fltTable;
+        if (specFilter != nullptr && (specFilter->isVisible() != showCurve || (specSource != nullptr && specSource->isVisible() != spectral)))
         {
-            specFilter->setVisible (spectral);
+            specFilter->setVisible (showCurve);
+            if (specSource != nullptr)
+                specSource->setVisible (spectral);
             if (onHeightChanged)
                 onHeightChanged();
+            resized();
         }
         for (const auto& c : controls())
         {
@@ -206,6 +226,8 @@ public:
                 if (key == o + ".multi.vel_track")
                     applies = applies && multiVelOverride;
             }
+            else if (key == o + ".spec.flt_table" || key == o + ".spec.flt_frame")
+                applies = spectral && fltTable;                              // only while a wavetable is the filter
             else if (key.rfind (o + ".spec.", 0) == 0)
                 applies = spectral && (key != o + ".spec.position" || specManual);   // the spectral keys apply to the Spectral type; the position only in the manual mode
             else if (key.rfind (o + ".gran.", 0) == 0)
@@ -267,7 +289,8 @@ public:
         const auto& t = ctx.theme;
         const int visualH = t.ipx (180.0f);
         const juce::Rectangle<int> area (0, 0, width - 2 * t.gap(), 100000);
-        const int filterH = specFilter != nullptr && specFilter->isVisible() ? specFilter->preferredHeight (width - 2 * t.gap()) + t.gap() : 0;
+        const int filterH = (specSource != nullptr && specSource->isVisible() ? specSource->preferredHeight (width - 2 * t.gap()) + t.gap() : 0)
+                          + (specFilter != nullptr && specFilter->isVisible() ? specFilter->preferredHeight (width - 2 * t.gap()) + t.gap() : 0);
         return headerHeight() + visualH + 3 * t.gap() + filterH + const_cast<OscPanelBase*> (this)->layoutControls (area, true);
     }
 
@@ -279,6 +302,11 @@ public:
         auto topArea = area.removeFromTop (visualH);
         waveView.setBounds (topArea);
         area.removeFromTop (t.gap());
+        if (specSource != nullptr && specSource->isVisible())
+        {
+            specSource->setBounds (area.removeFromTop (specSource->preferredHeight (area.getWidth())));
+            area.removeFromTop (t.gap());
+        }
         if (specFilter != nullptr && specFilter->isVisible())
         {
             specFilter->setBounds (area.removeFromTop (specFilter->preferredHeight (area.getWidth())));
@@ -306,6 +334,7 @@ private:
     juce::String phaseLabel;
     OscWaveView waveView;
     std::unique_ptr<RemapEditor> specFilter;
+    std::unique_ptr<SpecFilterSource> specSource;
     ParamHandle onHandle;
     std::vector<std::unique_ptr<ParamHandle>> dimHandles;
 };

@@ -473,6 +473,13 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     pick ("osc" #N ".spec.y_axis", "Osc " #N " Spectral Y Axis", "Osc " #N " / Spectral", kSpecYAxes, 0),                                        \
     SB_PCT ("osc" #N ".spec.xy_y", "Osc " #N " Spectral Y Position", "Osc " #N " / Spectral", 50.0f, kMod)
 
+// B32 (REMAINDER item 2, 13-new-keys.md 4.42): per oscillator the wavetable as the spectral filter (Serum 2 manual p.120): the switch, the table (the list of oscN.wavetable, Preset table = the
+// table of the oscillator) and the frame position over its frames
+#define SB_OSC_SPECFLT(N)                                                                                                                        \
+    onOff ("osc" #N ".spec.flt_use", "Osc " #N " Spectral Filter From Wavetable", "Osc " #N " / Spectral", false),                              \
+    pick ("osc" #N ".spec.flt_table", "Osc " #N " Spectral Filter Wavetable", "Osc " #N " / Spectral", kWavetables, kWavetableSaw),             \
+    SB_PCT ("osc" #N ".spec.flt_frame", "Osc " #N " Spectral Filter Wavetable Frame", "Osc " #N " / Spectral", 0.0f, kMod)
+
 // B30 (GROUPC, WP-13): per oscillator the keys of the multisample oscillator (Serum 2 manual p.58 - 67; the instrument is content.instruments[], RAND is oscN.random_phase,
 // the pan, level, unison and warp keys are the oscillator's own)
 #define SB_OSC_MULTI(N)                                                                                                                          \
@@ -989,11 +996,13 @@ constexpr ParamInfo kRaw[] = {
     SB_SLOT_SLEW (41), SB_SLOT_SLEW (42), SB_SLOT_SLEW (43), SB_SLOT_SLEW (44), SB_SLOT_SLEW (45), SB_SLOT_SLEW (46), SB_SLOT_SLEW (47), SB_SLOT_SLEW (48),
     SB_SLOT_SLEW (49), SB_SLOT_SLEW (50), SB_SLOT_SLEW (51), SB_SLOT_SLEW (52), SB_SLOT_SLEW (53), SB_SLOT_SLEW (54), SB_SLOT_SLEW (55), SB_SLOT_SLEW (56),
     SB_SLOT_SLEW (57), SB_SLOT_SLEW (58), SB_SLOT_SLEW (59), SB_SLOT_SLEW (60), SB_SLOT_SLEW (61), SB_SLOT_SLEW (62), SB_SLOT_SLEW (63), SB_SLOT_SLEW (64),
+    // --- B32: REMAINDER item 2: a wavetable as the spectral filter (13-new-keys.md 4.42, positions 2619..2627) ----------------------------------------------
+    SB_OSC_SPECFLT (1), SB_OSC_SPECFLT (2), SB_OSC_SPECFLT (3),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2619, "880 keys of state version 2 plus the 1662 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31)");
+static_assert (kCount == 2628, "880 keys of state version 2 plus the 1671 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32)");
 
 struct Table
 {
@@ -1023,7 +1032,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31 + 3 of block B32) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

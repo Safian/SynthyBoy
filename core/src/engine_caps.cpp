@@ -307,6 +307,8 @@ EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept
         return kCap2None;
     if (std::strstr (key, ".gran.") != nullptr)
         return kCap2Granular;
+    if (std::strstr (key, ".spec.flt_") != nullptr)   // block B32: a wavetable as the spectral filter
+        return kCap2Spectral | kCap2SpectralFilterTable;
     if (std::strstr (key, ".spec.") != nullptr)
         return kCap2Spectral;
     if (std::strstr (key, ".multi.") != nullptr)
@@ -355,6 +357,7 @@ const char* capName2 (EngineCaps2Mask bit) noexcept
         case kCap2Multisample:   return "multisample";
         case kCap2ModSlew:       return "mod_slew";
         case kCap2ModDelay:      return "mod_delay";
+        case kCap2SpectralFilterTable: return "spectral_filter_table";
         case kCap2None:          break;
     }
     return "";

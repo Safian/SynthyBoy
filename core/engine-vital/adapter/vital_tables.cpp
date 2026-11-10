@@ -174,19 +174,42 @@ void makeFrame (int table, int frame, sbvital::WaveFrame& out)
 }
 } // namespace
 
+void frameToFilterCurve (const float* frame, float* out) noexcept
+{
+    for (int j = 0; j < kFilterCurvePoints; ++j)
+    {
+        const int centre = j * 8;
+        float sum = 0.0f;
+        for (int k = -4; k < 4; ++k)
+            sum += frame[std::clamp (centre + k, 0, kN - 1)];
+        out[j] = std::clamp ((sum * 0.125f + 1.0f) * 0.5f, 0.0f, 1.0f);
+    }
+}
+
+const float* WavetableSet::filterBank (int index, int& frames) const noexcept
+{
+    index = std::clamp (index, 0, size() - 1);
+    frames = framesOf (index);
+    return banks[static_cast<size_t> (index)].data();
+}
+
 WavetableSet::WavetableSet()
 {
     auto frame = std::make_unique<sbvital::WaveFrame>();
     for (int table = 0; table <= kSawDownSlot; ++table)   // the 13 built-in tables and Saw Down
     {
         const int frames = framesOf (table);
+        std::vector<float> bank;
         auto wavetable = std::make_unique<sbvital::Wavetable> (frames);
         wavetable->setNumFrames (frames);
         for (int f = 0; f < frames; ++f)
         {
             makeFrame (table, f, *frame);
             wavetable->loadWaveFrame (frame.get(), f);
+            bank.resize (static_cast<size_t> ((f + 1) * kFilterCurvePoints));
+            frameToFilterCurve (frame->time_domain, bank.data() + static_cast<size_t> (f * kFilterCurvePoints));
         }
+        banks.push_back (std::move (bank));
         wavetable->postProcess (0.0f);
         // every table has its own version number: an oscillator that is switched to another table notices it
         const_cast<sbvital::Wavetable::WavetableData*> (wavetable->getAllData())->version = 1000 + table;

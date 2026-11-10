@@ -637,12 +637,30 @@ namespace sbvital {
     level = axis == 1 ? y : 1.0f;
 
     // the spectral filter: the drawn curve (flat without one) shifted by CUT, mixed wet / dry
-    if (g.has_filter) {
-      const uint32_t key = g.filter_id * 2654435761u ^ static_cast<uint32_t>(std::lround((cut + 1.0f) * 4000.0f)) * 40503u ^ static_cast<uint32_t>(std::lround(mix * 1000.0f)) * 9973u ^ static_cast<uint32_t>(sh.view->sampleRate);
+    // (REMAINDER item 2: a wavetable can act as the filter instead of the drawn curve: the frame at the position, two neighbours blended)
+    const bool bank = g.flt_bank != nullptr && g.flt_frames > 0;
+    if (g.has_filter || bank) {
+      float frame_position = 0.0f;
+      if (bank)
+        frame_position = utils::clamp(in(kSpecFltFrame), 0.0f, 1.0f) * static_cast<float>(g.flt_frames - 1);
+      const uint32_t base = bank ? g.flt_bank_id : g.filter_id;
+      const uint32_t key = base * 2654435761u ^ static_cast<uint32_t>(std::lround((cut + 1.0f) * 4000.0f)) * 40503u ^ static_cast<uint32_t>(std::lround(mix * 1000.0f)) * 9973u ^ static_cast<uint32_t>(sh.view->sampleRate)
+                           ^ static_cast<uint32_t>(std::lround(frame_position * 256.0f)) * 69061u;
       if (key != slot.filter_key) {
         slot.filter_key = key;
         static const struct Axis { float x[257]; Axis() { for (int i = 0; i < 257; ++i) x[i] = static_cast<float>(i) / 256.0f; } } axis_table;
-        buildFilterGains(slot.filter_gains, axis_table.x, g.filter_table, 257, cut, mix, sh.view->sampleRate / kFftSize); // the filter acts on the bins of the sample (its own sample rate)
+        const float* table = g.filter_table;
+        if (bank) {
+          const int f0 = std::min(static_cast<int>(frame_position), g.flt_frames - 1);
+          const int f1 = std::min(f0 + 1, g.flt_frames - 1);
+          const float t = frame_position - static_cast<float>(f0);
+          const float* a = g.flt_bank + static_cast<size_t>(f0) * 257;
+          const float* b = g.flt_bank + static_cast<size_t>(f1) * 257;
+          for (int i = 0; i < 257; ++i)
+            slot.filter_blend[i] = a[i] + (b[i] - a[i]) * t;
+          table = slot.filter_blend;
+        }
+        buildFilterGains(slot.filter_gains, axis_table.x, table, 257, cut, mix, sh.view->sampleRate / kFftSize); // the filter acts on the bins of the sample (its own sample rate)
       }
       sp.filterGain = slot.filter_gains;
     }

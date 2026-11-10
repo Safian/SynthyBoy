@@ -114,9 +114,11 @@ enum EngineCaps2 : EngineCaps2Mask
     // block B31 (REMAINDER, 13-new-keys.md 4.41): the per slot RISE / FALL / DELAY of the modulation matrix
     kCap2ModSlew         = 1ull << 4, // REMAINDER item 1: modNN.rise, modNN.fall (a slew limiter on the source of the slot, modulatable)
     kCap2ModDelay        = 1ull << 5, // REMAINDER item 1: modNN.delay, modNN.delay_beats, modNN.delay_sync (the connection starts after the delay)
+    // block B32 (REMAINDER item 2, 13-new-keys.md 4.42)
+    kCap2SpectralFilterTable = 1ull << 6, // REMAINDER item 2: oscN.spec.flt_use / flt_table / flt_frame (a wavetable acts as the spectral filter)
 };
 
-constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay;
+constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay | kCap2SpectralFilterTable;
 
 /** The bits of the second word a key of the table needs (0 for every key that predates it). Total, no allocation. */
 EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept;

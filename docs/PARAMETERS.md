@@ -4,14 +4,14 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2619 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2628 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 35 |
-| Osc 1 | 127 |
-| Osc 2 | 127 |
-| Osc 3 | 127 |
+| Osc 1 | 130 |
+| Osc 2 | 130 |
+| Osc 3 | 130 |
 | Noise | 19 |
 | Filter 1 | 23 |
 | Filter 2 | 23 |
@@ -227,6 +227,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.multi.vel_track` | Osc 1 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 1 / Multisample |  |  |
 | `osc1.multi.vel_override` | Osc 1 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  |  |
 | `osc1.multi.timbre` | Osc 1 Multisample Timbre | -100 .. 100 % | 0 % | Osc 1 / Multisample | mod |  |
+| `osc1.spec.flt_use` | Osc 1 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
+| `osc1.spec.flt_table` | Osc 1 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 1 / Spectral |  |  |
+| `osc1.spec.flt_frame` | Osc 1 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 1 / Spectral | mod |  |
 
 ### Osc 2
 
@@ -359,6 +362,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.multi.vel_track` | Osc 2 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 2 / Multisample |  |  |
 | `osc2.multi.vel_override` | Osc 2 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  |  |
 | `osc2.multi.timbre` | Osc 2 Multisample Timbre | -100 .. 100 % | 0 % | Osc 2 / Multisample | mod |  |
+| `osc2.spec.flt_use` | Osc 2 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
+| `osc2.spec.flt_table` | Osc 2 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 2 / Spectral |  |  |
+| `osc2.spec.flt_frame` | Osc 2 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 2 / Spectral | mod |  |
 
 ### Osc 3
 
@@ -491,6 +497,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.multi.vel_track` | Osc 3 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 3 / Multisample |  |  |
 | `osc3.multi.vel_override` | Osc 3 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  |  |
 | `osc3.multi.timbre` | Osc 3 Multisample Timbre | -100 .. 100 % | 0 % | Osc 3 / Multisample | mod |  |
+| `osc3.spec.flt_use` | Osc 3 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
+| `osc3.spec.flt_table` | Osc 3 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 3 / Spectral |  |  |
+| `osc3.spec.flt_frame` | Osc 3 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 3 / Spectral | mod |  |
 
 ### Noise
 
@@ -974,7 +983,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..1242 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..1245 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -3176,6 +3185,9 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 1240 | `mod64.fall` | Mod 64 Fall |
 | 1241 | `mod64.delay` | Mod 64 Delay |
 | 1242 | `mod64.delay_beats` | Mod 64 Delay (Beats) |
+| 1243 | `osc1.spec.flt_frame` | Osc 1 Spectral Filter Wavetable Frame |
+| 1244 | `osc2.spec.flt_frame` | Osc 2 Spectral Filter Wavetable Frame |
+| 1245 | `osc3.spec.flt_frame` | Osc 3 Spectral Filter Wavetable Frame |
 
 ## Built-in wavetables and LFO shapes
 

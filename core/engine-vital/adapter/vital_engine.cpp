@@ -253,6 +253,8 @@ struct Snapshot
     std::array<SpectralFilterEntry, 3> spectralFilter;            // the drawn spectral filter masks (content.spectral_filters, GROUPC WP-12)
     std::array<std::unique_ptr<sbvital::Wavetable>, 3> userTable; // oscN.wavetable = Preset table (content.wavetables)
     std::array<int, 3> userFrames {};
+    std::array<std::vector<float>, 3> tableBank;                  // the filter curves of the frames of the user table (the spectral filter from a wavetable, REMAINDER item 2)
+    std::array<int, 3> tableBankFrames {};
     std::array<SampleEntry, 3> sample;                            // oscN.type = Sample (content.samples)
     std::unique_ptr<sbvital::Sample::SampleData> noiseSample;     // noise.type = Sample: content.samples[osc 4] as the band limited buffers of the noise source
     std::array<sbvital::FilterCurveShared, 3> filterCurve;        // PZ SVF curves of filter 1, filter 2 and the FX filter (content.filter_curves)
@@ -384,6 +386,11 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
                 continue;
             s->userTable[static_cast<size_t> (w.osc - 1)] = vitaltables::buildUserWavetable (frames.data(), numFrames, gTableVersion.fetch_add (1));
             s->userFrames[static_cast<size_t> (w.osc - 1)] = numFrames;
+            auto& bank = s->tableBank[static_cast<size_t> (w.osc - 1)];
+            bank.resize (static_cast<size_t> (numFrames) * vitaltables::kFilterCurvePoints);
+            for (int f = 0; f < numFrames; ++f)
+                vitaltables::frameToFilterCurve (frames.data() + static_cast<size_t> (f) * 2048, bank.data() + static_cast<size_t> (f) * vitaltables::kFilterCurvePoints);
+            s->tableBankFrames[static_cast<size_t> (w.osc - 1)] = numFrames;
         }
         for (const ContentSample& c : content.samples)
         {
@@ -729,7 +736,8 @@ public:
         return kCap2Granular   // GROUPC WP-11 (B28): proven by core/engine-vital/tests/test_granular_osc.cpp
              | kCap2Spectral | kCap2SpectralWarps // GROUPC WP-12 (B29): proven by core/engine-vital/tests/test_spectral_osc.cpp
              | kCap2Multisample // GROUPC WP-13 (B30): proven by core/engine-vital/tests/test_multisample_osc.cpp
-             | kCap2ModSlew | kCap2ModDelay; // REMAINDER item 1 (B31): proven by core/engine-vital/tests/test_modslew.cpp
+             | kCap2ModSlew | kCap2ModDelay // REMAINDER item 1 (B31): proven by core/engine-vital/tests/test_modslew.cpp
+             | kCap2SpectralFilterTable; // REMAINDER item 2 (B32): proven by core/engine-vital/tests/test_spectral_filter_table.cpp
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -1175,6 +1183,7 @@ private:
                 "gran.window_shape", "gran.density_mode", "gran.density_sync", "gran.density_grains", "gran.length_mode", "gran.length_sync", "gran.jump_start",
                 "gran.max_grains", "gran.loop_grains", "gran.manual", "gran.scan_keytrack", "gran.reverse_grains", "gran.spawn_pattern", "gran.y_axis",
                 "spec.lohi_smooth", "spec.lohi_post_warp", "spec.manual", "spec.scan_keytrack", "spec.phase_lock", "spec.transients", "spec.y_axis",
+                "spec.flt_use", "spec.flt_table",
                 "multi.override", "multi.delay", "multi.attack", "multi.hold", "multi.decay", "multi.sustain", "multi.release", "multi.vel_track", "multi.vel_override" };
             for (int n = 1; n <= kNumOsc; ++n)
             {
@@ -1891,6 +1900,28 @@ private:
                 {
                     g.filter_id = filter->id;
                     std::copy (filter->table.begin(), filter->table.end(), g.filter_table);
+                }
+                // a wavetable as the filter (REMAINDER item 2): the filter curves of the frames of the chosen table; the drawn curve answers while the table has none
+                g.flt_bank = nullptr;
+                g.flt_frames = 0;
+                if (P (kSpSpecFltUse) > 0.5f)
+                {
+                    const int choice = static_cast<int> (P (kSpSpecFltTable) + 0.5f);
+                    if (choice == kWavetablePresetTable)
+                    {
+                        if (activeSnapshot != nullptr && activeSnapshot->tableBankFrames[static_cast<size_t> (i)] > 0)
+                        {
+                            g.flt_bank = activeSnapshot->tableBank[static_cast<size_t> (i)].data();
+                            g.flt_frames = activeSnapshot->tableBankFrames[static_cast<size_t> (i)];
+                            g.flt_bank_id = 0x80000000u + snapshotId * 4u + static_cast<uint32_t> (i);
+                        }
+                    }
+                    else if (tables != nullptr)
+                    {
+                        const int slot = choice == kWavetableSawDown ? vitaltables::kSawDownSlot : std::clamp (choice, 0, kNumBuiltinWavetables - 1);
+                        g.flt_bank = tables->filterBank (slot, g.flt_frames);
+                        g.flt_bank_id = 3000u + static_cast<uint32_t> (slot);
+                    }
                 }
             }
 
@@ -2908,6 +2939,7 @@ private:
            kSpGranMaxGrains, kSpGranLoopGrains, kSpGranManual, kSpGranScanKeytrack, kSpGranReverseGrains, kSpGranSpawnPattern, kSpGranYAxis,
            // GROUPC WP-12: the static keys of the spectral oscillator
            kSpSpecLohiSmooth, kSpSpecLohiPostWarp, kSpSpecManual, kSpSpecScanKeytrack, kSpSpecPhaseLock, kSpSpecTransients, kSpSpecYAxis,
+           kSpSpecFltUse, kSpSpecFltTable,   // REMAINDER item 2: a wavetable as the spectral filter
            // GROUPC WP-13: the static keys of the multisample oscillator
            kSpMultiOverride, kSpMultiDelay, kSpMultiAttack, kSpMultiHold, kSpMultiDecay, kSpMultiSustain, kSpMultiRelease, kSpMultiVelTrack, kSpMultiVelOverride, kSpCount };
     std::array<std::array<int, kSpCount>, kNumOsc> sampleParams {};

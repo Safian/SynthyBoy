@@ -615,6 +615,9 @@ namespace sbvital {
       ValueDetails::kLinear, false, "%", "Spectral Position", nullptr },
     { "spec_xy_y", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Spectral Y Position", nullptr },
+    // SynthyBoy (REMAINDER item 2): the frame position of the wavetable that acts as the spectral filter
+    { "spec_flt_frame", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Spectral Filter Wavetable Frame", nullptr },
     // SynthyBoy (GROUPC, WP-13): the timbre of the multisample oscillator (-1 .. 1)
     { "multi_timbre", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Multisample Timbre", nullptr },

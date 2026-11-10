@@ -84,6 +84,11 @@ namespace sbvital {
       bool has_filter = false;                                  // a drawn spectral filter curve: 257 values of y (0 .. 1, 0.5 = unity) over the log frequency axis
       float filter_table[257] = {};
       uint32_t filter_id = 0;                                   // changes when the curve changes
+      // REMAINDER item 2 (13-new-keys.md 4.42): a wavetable as the filter: flt_frames curves of 257 values (y 0 .. 1) one after the other; the position (kSpecFltFrame) blends two
+      // neighbouring frames. Null: the drawn curve decides. flt_bank_id changes when the bank does.
+      const float* flt_bank = nullptr;
+      int flt_frames = 0;
+      uint32_t flt_bank_id = 0;
     } spec;
 
     // GROUPC WP-13 (13-new-keys.md 4.39): the multisample oscillator
@@ -143,6 +148,7 @@ namespace sbvital {
         kSpecFreqLo, kSpecFreqHi, kSpecCut, kSpecMix, kSpecFreqShift, kSpecPosition, kSpecXyY,
         kVelocity,         // GROUPC WP-13: the velocity of the voice, 0 .. 1
         kMultiTimbre,      // oscN.multi.timbre, -1 .. 1
+        kSpecFltFrame,     // REMAINDER item 2: oscN.spec.flt_frame, 0 .. 1 over the frames of the wavetable filter
         kNumInputs
       };
 
@@ -186,6 +192,7 @@ namespace sbvital {
         float ext_mag[3][synthyboy::spectral::kBins] = {};
         int ext_pos = 0;
         float filter_gains[synthyboy::spectral::kBins] = {};
+        float filter_blend[257] = {};   // REMAINDER item 2: the blended frame of the wavetable filter
         uint32_t filter_key = 0;
         int kind = 1;                                                // the oscillator type this slot's voices were started for
         int layer_count = 0;                                         // GROUPC WP-13: the zones of the note (kind 4)

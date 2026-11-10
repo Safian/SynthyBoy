@@ -198,7 +198,7 @@ std::vector<Binding> build()
         b.add (k + "gran.rand_pitch", c + "gran_rand_pitch", Conv::linear);
 
         // Block B29 (GROUPC, WP-12): the modulatable keys of the spectral oscillator
-        for (const char* name : { "cut", "mix", "position", "xy_y" })
+        for (const char* name : { "cut", "mix", "position", "xy_y", "flt_frame" })   // flt_frame: B32, REMAINDER item 2
             b.percent (k + "spec." + name, c + "spec_" + name);
         b.add (k + "spec.freq_lo", c + "spec_freq_lo", Conv::linear);
         b.add (k + "spec.freq_hi", c + "spec_freq_hi", Conv::linear);
@@ -544,7 +544,7 @@ bool isGranularModulatable (const char* key)
 /** The modulatable keys of oscN.spec.* (bound to controls; every other oscN.spec.* key is read by the adapter). */
 bool isSpectralModulatable (const char* key)
 {
-    for (const char* name : { "freq_lo", "freq_hi", "cut", "mix", "freq_shift", "position", "xy_y" })
+    for (const char* name : { "freq_lo", "freq_hi", "cut", "mix", "freq_shift", "position", "xy_y", "flt_frame" })
     {
         const std::string tail = std::string (".spec.") + name;
         const size_t n = std::strlen (key);
