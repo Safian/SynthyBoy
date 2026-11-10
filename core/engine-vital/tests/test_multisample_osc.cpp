@@ -6,6 +6,7 @@
 #include "synthyboy/state.h"
 
 using namespace groupc;
+using sbtest::noteOn;
 
 namespace
 {
@@ -264,4 +265,73 @@ TEST (multisample_instrument_content_survives_a_state_round_trip)
     StateContent bad = content.state;
     bad.instruments[0].ref.file = "../x.sfz";
     CHECK (! validateContent (bad));
+}
+
+// ---- REMAINDER item 4 (S12, 13-new-keys.md 4.43): the SFZ opcodes that were read and ignored: trigger=release, xfin_* / xfout_*, fil_* ------------------------------------------
+
+TEST (multisample_trigger_release_plays_a_zone_when_the_key_is_released)
+{
+    // a 440 Hz zone while the key is held, a 1760 Hz zone (trigger=release, one shot) after it
+    const char* sfz = "<control>\n<global> amp_veltrack=0 ampeg_release=0.05\n"
+                      "<region> sample=body.wav lokey=0 hikey=127 pitch_keycenter=69\n"
+                      "<region> sample=noise.wav lokey=0 hikey=127 pitch_keycenter=69 trigger=release loop_mode=one_shot\n";
+    Content c;
+    c.instrument (sfz, { { "body.wav", sine (440.0, 3.0) }, { "noise.wav", sine (1760.0, 2.0) } });
+    auto e = makeVital();
+    multiPatch (*e, c);
+    setByKey (*e, "env1.release", 1500.0f);   // the voice (ENV 1) lives on after the key: the release zone sounds as long as the voice does
+    const auto r = sbtest::render (*e, { noteOn (0, 69, 1.0f), sbtest::noteOff (static_cast<int> (0.6 * kSr), 69) }, static_cast<int> (1.6 * kSr), 256);
+    CHECK (sbtest::allFinite (r.left));
+    CHECK_NEAR (crossingFrequency (r, 0.2, 0.55), 440.0, 15.0);      // held: the body zone only
+    CHECK (rmsBetween (r, 0.2, 0.55) > 0.03);
+    CHECK_NEAR (crossingFrequency (r, 0.8, 1.4), 1760.0, 60.0);       // released: the release zone (the body has faded in 50 ms)
+    CHECK (rmsBetween (r, 0.8, 1.4) > 0.03);
+    // without trigger=release the same file is silent after the release
+    const char* plain = "<control>\n<global> amp_veltrack=0 ampeg_release=0.05\n<region> sample=body.wav lokey=0 hikey=127 pitch_keycenter=69\n";
+    Content p;
+    p.instrument (plain, { { "body.wav", sine (440.0, 3.0) } });
+    auto e2 = makeVital();
+    multiPatch (*e2, p);
+    setByKey (*e2, "env1.release", 1500.0f);
+    const auto s = sbtest::render (*e2, { noteOn (0, 69, 1.0f), sbtest::noteOff (static_cast<int> (0.6 * kSr), 69) }, static_cast<int> (1.6 * kSr), 256);
+    CHECK (rmsBetween (s, 0.8, 1.4) < 0.002);
+}
+
+TEST (multisample_crossfade_and_filter_opcodes_change_the_sound)
+{
+    // xfin / xfout by key: between key 60 and 72 the low zone fades out and the high zone fades in
+    const char* xf = "<control>\n<global> amp_veltrack=0\n"
+                     "<region> sample=low.wav lokey=0 hikey=127 pitch_keycenter=69 xfout_lokey=60 xfout_hikey=72\n"
+                     "<region> sample=high.wav lokey=0 hikey=127 pitch_keycenter=69 xfin_lokey=60 xfin_hikey=72\n";
+    const auto levelOf = [&] (const char* text, int key)
+    {
+        Content c;
+        c.instrument (text, { { "low.wav", sine (440.0, 2.0) }, { "high.wav", sine (440.0, 2.0) } });
+        auto e = makeVital();
+        multiPatch (*e, c);
+        return rmsBetween (play (*e, key, 0.8), 0.2, 0.7);
+    };
+    const double at60 = levelOf (xf, 60), at66 = levelOf (xf, 66), at72 = levelOf (xf, 72);
+    CHECK (at60 > 0.02 && at72 > 0.02);
+    // equal power: the two zones sum to the same level at the middle of the fade as at its ends (the zones are identical here, coherent sum, so the middle is above the ends by sin + cos)
+    CHECK (at66 > 0.9 * at60);
+    // a zone with fil_type=lpf_2p at a low cutoff removes the high partials of a bright sample
+    const auto bright = [] { std::vector<float> v (96000); for (size_t i = 0; i < v.size(); ++i) { const double t = static_cast<double> (i) / kSr; v[i] = 0.2f * static_cast<float> (std::sin (2.0 * kPi * 440.0 * t) + std::sin (2.0 * kPi * 4400.0 * t)); } return v; }();
+    const auto filtered = [&] (const char* fil)
+    {
+        const std::string text = std::string ("<control>\n<global> amp_veltrack=0\n<region> sample=b.wav lokey=0 hikey=127 pitch_keycenter=69 ") + fil + "\n";
+        Content c;
+        c.instrument (text, { { "b.wav", bright } });
+        auto e = makeVital();
+        multiPatch (*e, c);
+        return play (*e, 69, 0.8);
+    };
+    const auto open = filtered(""), low = filtered("fil_type=lpf_2p cutoff=700"), high = filtered("fil_type=hpf_2p cutoff=3000"), keytracked = filtered("fil_type=lpf_2p cutoff=700 fil_keytrack=1200 fil_keycenter=57");
+    CHECK (rmsBetween (open, 0.2, 0.7) > 0.05);
+    CHECK (rmsBetween (low, 0.2, 0.7) < 0.85 * rmsBetween (open, 0.2, 0.7));           // the 4.4 kHz partial is gone, the 440 Hz one stays
+    CHECK (rmsBetween (low, 0.2, 0.7) > 0.4 * rmsBetween (open, 0.2, 0.7));
+    CHECK (rmsBetween (high, 0.2, 0.7) < 0.85 * rmsBetween (open, 0.2, 0.7));
+    CHECK (relativeDifference (open, low, 0.2, 0.7) > 0.3);
+    CHECK (relativeDifference (low, keytracked, 0.2, 0.7) > 0.05);                      // 12 keys above the centre: the cutoff an octave up
+    CHECK (sbtest::allFinite (low.left) && sbtest::allFinite (high.left) && sbtest::allFinite (keytracked.left));
 }

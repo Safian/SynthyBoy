@@ -41,6 +41,9 @@ struct SerumPluginImport
     // a shape or curve (.XferShape)
     LfoShapeFile shape;
 
+    // a poles and zeros file (.XferFilterPZSingle / .XferFilterPZMulti, REMAINDER item 4): the response curve (filter empty: the caller picks the filter)
+    ContentFilterCurve pzCurve;
+
     // an impulse (.flac / .wav of the Impulses folder)
     ContentFileRef impulseRef;
 

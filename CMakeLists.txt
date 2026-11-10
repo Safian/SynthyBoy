@@ -84,14 +84,48 @@ if(SYNTHYBOY_BUILD_PLUGIN)
         GIT_TAG        8.0.17-security
         GIT_SHALLOW    TRUE)
 
-    # clap-juce-extensions (MIT). Pinned commit.
+    # clap-juce-extensions (MIT). Pinned commit. SOURCE_SUBDIR points at a folder without a CMakeLists.txt: FetchContent only fetches, the patched copy below is the one that is built.
     FetchContent_Declare(clap-juce-extensions
         GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
         GIT_TAG        7adee3a1bd4684d4caa5601100e364abccff4b4d
-        GIT_SUBMODULES_RECURSE TRUE)
+        GIT_SUBMODULES_RECURSE TRUE
+        SOURCE_SUBDIR  synthyboy-patched-copy-is-built)
 
     FetchContent_MakeAvailable(JUCE clap-juce-extensions)
-    set(CLAP_INCLUDE_DIR "${clap-juce-extensions_SOURCE_DIR}/clap-libs/clap/include" CACHE INTERNAL "CLAP include dir")
+
+    # The wrapper of clap-juce-extensions has no hook for a CLAP extension of the plug-in (the native shell offers "synthyboy.content", shell-clap/synthyboy_content_ext.h). The patch in
+    # third_party/patches adds one (clap_juce_audio_processor_capabilities::clapPluginExtension, called by the wrapper's extension ()); it is applied to a COPY of the fetched sources in the
+    # build directory, the fetched tree (which may be shared between build directories) is never modified. The copy is made again when the patch or the fetched sources change.
+    set(SYNTHYBOY_CJE_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/patches/clap-juce-extensions-extension-hook.patch")
+    set(SYNTHYBOY_CJE_PATCHED "${CMAKE_BINARY_DIR}/third_party/clap-juce-extensions-patched")
+    file(SHA256 "${SYNTHYBOY_CJE_PATCH}" SYNTHYBOY_CJE_PATCH_HASH)
+    file(SHA256 "${clap-juce-extensions_SOURCE_DIR}/src/wrapper/clap-juce-wrapper.cpp" SYNTHYBOY_CJE_WRAPPER_HASH)
+    set(SYNTHYBOY_CJE_STAMP "${SYNTHYBOY_CJE_PATCH_HASH} ${SYNTHYBOY_CJE_WRAPPER_HASH}")
+    set(SYNTHYBOY_CJE_STAMP_FILE "${SYNTHYBOY_CJE_PATCHED}/.synthyboy-patch-stamp")
+    set(SYNTHYBOY_CJE_CURRENT "")
+    if(EXISTS "${SYNTHYBOY_CJE_STAMP_FILE}")
+        file(READ "${SYNTHYBOY_CJE_STAMP_FILE}" SYNTHYBOY_CJE_CURRENT)
+    endif()
+    if(NOT SYNTHYBOY_CJE_CURRENT STREQUAL SYNTHYBOY_CJE_STAMP)
+        find_program(SYNTHYBOY_PATCH_PROGRAM patch REQUIRED)
+        message(STATUS "clap-juce-extensions: applying ${SYNTHYBOY_CJE_PATCH}")
+        file(REMOVE_RECURSE "${SYNTHYBOY_CJE_PATCHED}")
+        file(COPY "${clap-juce-extensions_SOURCE_DIR}/" DESTINATION "${SYNTHYBOY_CJE_PATCHED}" PATTERN ".git" EXCLUDE)
+        execute_process(COMMAND "${SYNTHYBOY_PATCH_PROGRAM}" -p1 -i "${SYNTHYBOY_CJE_PATCH}"
+                        WORKING_DIRECTORY "${SYNTHYBOY_CJE_PATCHED}" RESULT_VARIABLE SYNTHYBOY_CJE_PATCH_RESULT)
+        if(NOT SYNTHYBOY_CJE_PATCH_RESULT EQUAL 0)
+            file(REMOVE_RECURSE "${SYNTHYBOY_CJE_PATCHED}")
+            message(FATAL_ERROR "the patch ${SYNTHYBOY_CJE_PATCH} does not apply to the clap-juce-extensions sources in ${clap-juce-extensions_SOURCE_DIR}")
+        endif()
+        file(WRITE "${SYNTHYBOY_CJE_STAMP_FILE}" "${SYNTHYBOY_CJE_STAMP}")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SYNTHYBOY_CJE_PATCH}")
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.25)   # the headers of the clap libraries are system headers for our warning level
+        add_subdirectory("${SYNTHYBOY_CJE_PATCHED}" "${CMAKE_BINARY_DIR}/third_party/clap-juce-extensions-build" SYSTEM)
+    else()
+        add_subdirectory("${SYNTHYBOY_CJE_PATCHED}" "${CMAKE_BINARY_DIR}/third_party/clap-juce-extensions-build")
+    endif()
+    set(CLAP_INCLUDE_DIR "${SYNTHYBOY_CJE_PATCHED}/clap-libs/clap/include" CACHE INTERNAL "CLAP include dir")
 else()
     # Plugin OFF: fetch lightweight CLAP headers only (for synthyboy_static and tests)
     FetchContent_Declare(clap
@@ -165,7 +199,12 @@ add_subdirectory(shell-juce/ui)
 target_sources(SynthyBoy PRIVATE
     shell-juce/PluginProcessor.cpp
     shell-juce/PluginProcessor.h
+    shell-juce/ClapBridge.cpp                    # the CLAP extension synthyboy.content in the JUCE-wrapped CLAP build (REMAINDER item 3)
+    shell-clap/synthyboy_content_service.cpp     # ... shared with the native shell
+    shell-clap/synthyboy_content_service.h
     ${SYNTHYBOY_UI_SOURCES})
+target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_CLAP_BRIDGE=1)
+target_include_directories(SynthyBoy PRIVATE shell-clap "${CLAP_INCLUDE_DIR}")
 
 target_include_directories(SynthyBoy PRIVATE shell-juce)
 
@@ -186,6 +225,7 @@ target_link_libraries(SynthyBoy
     PRIVATE
         synthyboy_core
         synthyboy_ui_model
+        clap_juce_extensions
         juce::juce_audio_processors
         juce::juce_audio_utils
         juce::juce_gui_basics
@@ -205,6 +245,14 @@ if(NOT WIN32)
     target_include_directories(clap_smoke PRIVATE "${CLAP_INCLUDE_DIR}")
     target_link_libraries(clap_smoke PRIVATE synthyboy_core ${CMAKE_DL_LIBS})
     add_dependencies(clap_smoke SynthyBoy_CLAP)
+endif()
+
+# The CLAP extension "synthyboy.content" in the JUCE-wrapped CLAP build (REMAINDER item 3): the tests of the native shell (core/tests/test_clap_content.cpp) run against the .clap bundle
+# (the wrapper asks the processor for the extension, third_party/patches/clap-juce-extensions-extension-hook.patch).
+if(SYNTHYBOY_BUILD_TESTS AND TARGET synthyboy_test_clap_content AND TARGET SynthyBoy_CLAP)
+    add_dependencies(synthyboy_test_clap_content SynthyBoy_CLAP)
+    add_test(NAME synthyboy_test_clap_content_juce
+        COMMAND ${CMAKE_COMMAND} -E env "SYNTHYBOY_CLAP_UNDER_TEST=$<TARGET_BUNDLE_DIR:SynthyBoy_CLAP>" $<TARGET_FILE:synthyboy_test_clap_content>)
 endif()
 
 # ---------------------------------------------------------------------------

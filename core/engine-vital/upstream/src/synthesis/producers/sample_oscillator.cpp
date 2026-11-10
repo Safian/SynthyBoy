@@ -257,6 +257,11 @@ namespace sbvital {
       sh.multi.last_key = key;
       const synthyboy::sampleosc::QualityTier tier = sh.quality <= 0 ? QualityTier::low : (sh.quality == 1 ? QualityTier::medium : QualityTier::high);
       slot.layer_count = count;
+      slot.note_lookup = lookup;
+      slot.note_velocity = velocity;
+      slot.note_switch = sh.multi.switch_last >= 0 ? sh.multi.switch_last : instrument->switchDefault();
+      slot.note_counter = counter;
+      slot.release_started = false;
       for (int l = 0; l < count; ++l) {
         const auto& region = instrument->zone(zones[l]).region;
         if (region.group > 0 && region.group < synthyboy::multisample::kMaxGroups)
@@ -407,7 +412,11 @@ namespace sbvital {
         continue;
 
       // key released: exit the loop when the settings ask for it (and Tailed always plays its tail)
-      const bool pressed = input(kNotePressed)->at(0)[lane] > 0.5f;
+      // the key of the voice: held from the note on (the reset), let go at the voice event "off" (or "kill") of this lane; kNotePressed carries the voice events of the voice handler (REMAINDER
+      // item 4: it used to carry the number of keys held at the note on, which never went down at a release)
+      const Output* voice_event = input(kNotePressed)->source;
+      const bool let_go = voice_event->trigger_mask[lane] != 0 && (voice_event->trigger_value[lane] == static_cast<float>(kVoiceOff) || voice_event->trigger_value[lane] == static_cast<float>(kVoiceKill));
+      const bool pressed = reset_mask[lane] != 0 ? true : (slot.pressed && ! let_go);
       if (slot.pressed && ! pressed && ! slot.released) {
         slot.released = true;
         if (sh.loop_exit || sh.loop_mode == 4)
@@ -421,6 +430,21 @@ namespace sbvital {
           for (int u = 0; u < slot.unison; ++u)
             for (auto& layer : slot.layers[u])
               layer.noteOff(false);
+        // the zones with trigger=release play now (REMAINDER item 4): they start behind the layers of the note, one set per unison voice
+        if (slot.kind == 4 && slot.instrument != nullptr && slot.instrument == sh.multi.instrument && ! slot.release_started) {
+          slot.release_started = true;
+          int zones[synthyboy::multisample::kMaxLayers];
+          const float rnd = (nextRandom() >> 8) * (1.0f / 16777216.0f);
+          const int count = slot.instrument->selectReleaseZones(slot.note_lookup, slot.note_velocity, rnd, slot.note_counter, slot.note_switch, zones, synthyboy::multisample::kMaxLayers);
+          const synthyboy::sampleosc::QualityTier tier = sh.quality <= 0 ? QualityTier::low : (sh.quality == 1 ? QualityTier::medium : QualityTier::high);
+          const uint32_t sequence = ++sh.multi.sequence;
+          const int key = std::max(0, std::min(127, slot.note_lookup));
+          for (int u = 0; u < slot.unison; ++u)
+            for (int r = 0; r < count && slot.layer_count + r < synthyboy::multisample::kMaxLayerSlots; ++r)
+              slot.layers[u][slot.layer_count + r].noteOn(*slot.instrument, zones[r], key, slot.note_velocity, sh.multi.envelope_override ? &sh.multi.envelope : nullptr,
+                                                          sh.multi.vel_override ? sh.multi.vel_track : -1.0f, sequence, tier);
+          slot.layer_count = std::min(slot.layer_count + count, synthyboy::multisample::kMaxLayerSlots);
+        }
       }
       slot.pressed = pressed;
 
@@ -637,12 +661,30 @@ namespace sbvital {
     level = axis == 1 ? y : 1.0f;
 
     // the spectral filter: the drawn curve (flat without one) shifted by CUT, mixed wet / dry
-    if (g.has_filter) {
-      const uint32_t key = g.filter_id * 2654435761u ^ static_cast<uint32_t>(std::lround((cut + 1.0f) * 4000.0f)) * 40503u ^ static_cast<uint32_t>(std::lround(mix * 1000.0f)) * 9973u ^ static_cast<uint32_t>(sh.view->sampleRate);
+    // (REMAINDER item 2: a wavetable can act as the filter instead of the drawn curve: the frame at the position, two neighbours blended)
+    const bool bank = g.flt_bank != nullptr && g.flt_frames > 0;
+    if (g.has_filter || bank) {
+      float frame_position = 0.0f;
+      if (bank)
+        frame_position = utils::clamp(in(kSpecFltFrame), 0.0f, 1.0f) * static_cast<float>(g.flt_frames - 1);
+      const uint32_t base = bank ? g.flt_bank_id : g.filter_id;
+      const uint32_t key = base * 2654435761u ^ static_cast<uint32_t>(std::lround((cut + 1.0f) * 4000.0f)) * 40503u ^ static_cast<uint32_t>(std::lround(mix * 1000.0f)) * 9973u ^ static_cast<uint32_t>(sh.view->sampleRate)
+                           ^ static_cast<uint32_t>(std::lround(frame_position * 256.0f)) * 69061u;
       if (key != slot.filter_key) {
         slot.filter_key = key;
         static const struct Axis { float x[257]; Axis() { for (int i = 0; i < 257; ++i) x[i] = static_cast<float>(i) / 256.0f; } } axis_table;
-        buildFilterGains(slot.filter_gains, axis_table.x, g.filter_table, 257, cut, mix, sh.view->sampleRate / kFftSize); // the filter acts on the bins of the sample (its own sample rate)
+        const float* table = g.filter_table;
+        if (bank) {
+          const int f0 = std::min(static_cast<int>(frame_position), g.flt_frames - 1);
+          const int f1 = std::min(f0 + 1, g.flt_frames - 1);
+          const float t = frame_position - static_cast<float>(f0);
+          const float* a = g.flt_bank + static_cast<size_t>(f0) * 257;
+          const float* b = g.flt_bank + static_cast<size_t>(f1) * 257;
+          for (int i = 0; i < 257; ++i)
+            slot.filter_blend[i] = a[i] + (b[i] - a[i]) * t;
+          table = slot.filter_blend;
+        }
+        buildFilterGains(slot.filter_gains, axis_table.x, table, 257, cut, mix, sh.view->sampleRate / kFftSize); // the filter acts on the bins of the sample (its own sample rate)
       }
       sp.filterGain = slot.filter_gains;
     }

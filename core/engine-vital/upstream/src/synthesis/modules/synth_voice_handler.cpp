@@ -193,6 +193,13 @@ namespace sbvital {
       Output* modulation_power = createPolyModControl("modulation_" + number + "_power");
       processor->plug(modulation_power, ModulationConnectionProcessor::kModulationPower);
 
+      // REMAINDER item 1 (13-new-keys.md 4.41): RISE / FALL / DELAY of the slot, controls in the unit of the key (ms, beats) that other slots may modulate
+      processor->plug(createPolyModControl("modulation_" + number + "_rise"), ModulationConnectionProcessor::kRise);
+      processor->plug(createPolyModControl("modulation_" + number + "_fall"), ModulationConnectionProcessor::kFall);
+      processor->plug(createPolyModControl("modulation_" + number + "_delay"), ModulationConnectionProcessor::kDelay);
+      processor->plug(createPolyModControl("modulation_" + number + "_delay_beats"), ModulationConnectionProcessor::kDelayBeats);
+      processor->plug(beats_per_second_, ModulationConnectionProcessor::kBeatsPerSecond);
+
       addProcessor(processor);
       addSubmodule(processor);
       processor->enable(false);
@@ -251,7 +258,7 @@ namespace sbvital {
     producers_->plug(note_count(), ProducersModule::kNoteCount);
     producers_->plug(active_mask(), ProducersModule::kActiveVoices);
     producers_->plug(lowest_active_note_, ProducersModule::kLowestNote);
-    producers_->plug(note_pressed(), ProducersModule::kNotePressed);
+    producers_->plug(voice_event(), ProducersModule::kNotePressed);   // the voice events (on / off / kill): the oscillators of the sample types see the release of the key
     producers_->plug(velocity(), ProducersModule::kVelocity); // GROUPC WP-13
     // SynthyBoy Block B14:
     producers_->plug(current_midi_note_, ProducersModule::kRawMidi);

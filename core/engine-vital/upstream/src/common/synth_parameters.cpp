@@ -615,6 +615,9 @@ namespace sbvital {
       ValueDetails::kLinear, false, "%", "Spectral Position", nullptr },
     { "spec_xy_y", 0x000000, 0.0, 1.0, 0.5, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Spectral Y Position", nullptr },
+    // SynthyBoy (REMAINDER item 2): the frame position of the wavetable that acts as the spectral filter
+    { "spec_flt_frame", 0x000000, 0.0, 1.0, 0.0, 0.0, 100.0,
+      ValueDetails::kLinear, false, "%", "Spectral Filter Wavetable Frame", nullptr },
     // SynthyBoy (GROUPC, WP-13): the timbre of the multisample oscillator (-1 .. 1)
     { "multi_timbre", 0x000000, -1.0, 1.0, 0.0, 0.0, 100.0,
       ValueDetails::kLinear, false, "%", "Multisample Timbre", nullptr },
@@ -825,6 +828,14 @@ namespace sbvital {
     };
     for (const ExtraParameter& parameter : kExtraParameters)
       add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.scale);
+    // REMAINDER item 1 (13-new-keys.md 4.41): RISE / FALL (ms), DELAY (ms and beats) of every modulation slot, in the unit of the key
+    for (int slot = 1; slot <= kMaxModulationConnections; ++slot) {
+      const std::string prefix = "modulation_" + std::to_string(slot) + "_";
+      add(prefix + "rise", 0.0f, 5000.0f, 0.0f, ValueDetails::kLinear);
+      add(prefix + "fall", 0.0f, 5000.0f, 0.0f, ValueDetails::kLinear);
+      add(prefix + "delay", 0.0f, 4000.0f, 0.0f, ValueDetails::kLinear);
+      add(prefix + "delay_beats", 0.0f, 8.0f, 0.0f, ValueDetails::kLinear);
+    }
     for (int module = 0; module < 16; ++module) {
       add("fx_order_" + std::to_string(module + 1), 0.0, 15.0, static_cast<mono_float>(module), ValueDetails::kIndexed);
       add(std::string(kModuleNames[module]) + "_rack", 0.0, 9.0, 0.0, ValueDetails::kIndexed);

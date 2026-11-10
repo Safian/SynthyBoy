@@ -152,7 +152,11 @@ public:
         std::snprintf (crvBuf, sizeof crvBuf, "C:%+.1f", static_cast<double> (snap.power));
         // a star marks a drawn slot curve (content.modCurves, G2)
         const auto& drawn = ctx.host.content().modCurves;
-        const bool hasDrawn = std::any_of (drawn.begin(), drawn.end(), [this] (const ContentModCurve& m) { return m.slot == slot + 1 && (m.points.size() >= 2 || m.riseMs > 0.0f || m.fallMs > 0.0f); }); // a drawn curve or a RISE / FALL (GROUPB WP-08)
+        const bool hasCurve = std::any_of (drawn.begin(), drawn.end(), [this] (const ContentModCurve& m) { return m.slot == slot + 1 && m.points.size() >= 2; });
+        // ... and a RISE / FALL / DELAY of the slot (the keys modNN.rise / fall / delay / delay_beats, REMAINDER item 1)
+        const auto sp = modSlotParams (slot);
+        const auto above = [this] (int index) { return index >= 0 && ctx.assign.matrix().get (index) > 0.0f; };
+        const bool hasDrawn = hasCurve || above (sp.rise) || above (sp.fall) || above (sp.delay) || above (sp.delayBeats);
         curveButton.setButtonText (juce::String (crvBuf) + (hasDrawn ? "*" : ""));
 
         // Feedback loop check

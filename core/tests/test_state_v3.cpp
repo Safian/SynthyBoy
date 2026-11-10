@@ -154,12 +154,6 @@ StateContent fullContent()
     c.modCurves.push_back (mc);
     mc.slot = 64;
     mc.points = { point (0.0f, 1.0f), point (1.0f, 0.0f) };
-    mc.riseMs = 120.5f; // GROUPB WP-08: RISE / FALL of the connection, with the curve ...
-    mc.fallMs = 40.0f;
-    c.modCurves.push_back (mc);
-    mc = {};
-    mc.slot = 12;       // ... and without one
-    mc.fallMs = 900.0f;
     c.modCurves.push_back (mc);
     return c;
 }
@@ -741,4 +735,46 @@ TEST (version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_bo
 #endif
         sbtest::state().context = "";
     }
+}
+
+// REMAINDER item 1: the RISE / FALL of a slot were stored in content.mod_curves[] (GROUPB WP-08); they are the keys modNN.rise / fall now. An old document keeps its sound.
+TEST (legacy_rise_and_fall_records_become_the_keys_of_the_slot)
+{
+    const std::string section = "{\"mod_curves\":[{\"slot\":64,\"points\":" + pointsText (2, 0.0, 1.0) + ",\"rise\":120.5,\"fall\":40},{\"slot\":12,\"points\":[],\"fall\":900},"
+                                "{\"slot\":5,\"points\":[],\"rise\":250},{\"slot\":9,\"points\":" + pointsText (2, 0.0, 1.0) + "}]}";
+    StateContent out;
+    auto v = ParamValues::defaults();
+    const auto r = loadWithContentText (section, out, v);
+    CHECK (r.status == LoadStatus::ok && r.content == ContentStatus::ok);
+    const auto at = [&] (const char* key) { return v.plain[indexOfKey (key)]; };
+    CHECK_EQ (at ("mod64.rise"), 120.5f);
+    CHECK_EQ (at ("mod64.fall"), 40.0f);
+    CHECK_EQ (at ("mod12.fall"), 900.0f);
+    CHECK_EQ (at ("mod12.rise"), 0.0f);
+    CHECK_EQ (at ("mod05.rise"), 250.0f);
+    CHECK_EQ (at ("mod09.rise"), 0.0f);
+    // the records that held only a slew are gone, those with a curve keep it and carry no time any more
+    CHECK_EQ (out.modCurves.size(), size_t { 2 });
+    for (const auto& mc : out.modCurves)
+        CHECK (mc.points.size() == 2 && mc.riseMs == 0.0f && mc.fallMs == 0.0f && (mc.slot == 64 || mc.slot == 9));
+    CHECK (validateContent (out));
+    // a save writes the keys, never the old fields; saving what was loaded and loading it again changes nothing
+    const std::string saved = saveState (v, out);
+    CHECK (saved.find ("\"rise\":") == std::string::npos && saved.find ("\"fall\":") == std::string::npos);   // no old field (the keys are "mod64.rise" ...)
+    CHECK (saved.find ("\"mod64.rise\":120.5") != std::string::npos);
+    auto again = ParamValues::defaults();
+    StateContent againContent;
+    const auto r2 = loadStateWithContent (saved.data(), saved.size(), again, againContent);
+    CHECK (r2.status == LoadStatus::ok && againContent == out && sameValues (again, v));
+    // the key the document states itself wins over an old record
+    const std::string both = "{\"format\":\"synthyboy-state\",\"version\":3,\"params\":{\"mod05.rise\":75},\"content\":{\"mod_curves\":[{\"slot\":5,\"points\":[],\"rise\":250}]}}";
+    auto v3 = ParamValues::defaults();
+    StateContent c3;
+    CHECK (loadStateWithContent (both.data(), both.size(), v3, c3).content == ContentStatus::ok);
+    CHECK_EQ (v3.plain[indexOfKey ("mod05.rise")], 75.0f);
+    CHECK (c3.modCurves.empty());
+    // without the content (loadState) the old record is skipped like the rest of the section
+    auto v4 = ParamValues::defaults();
+    CHECK (loadState (both.data(), both.size(), v4).status == LoadStatus::ok);
+    CHECK_EQ (v4.plain[indexOfKey ("mod05.rise")], 75.0f);
 }

@@ -19,6 +19,7 @@
 #include "ui/panels/GlbScopePanel.h"
 #include "ui/panels/ModMatrixReorder.h"
 #include "ui/panels/RemapEditor.h"
+#include "ui/panels/SpecFilterSource.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/OscTabsPanel.h"
 #include "ui/panels/OscWaveView.h"
@@ -2683,6 +2684,76 @@ TEST (uig_wp12_spectral_view_frequency_markers_filter_graph_and_dimming)
         CHECK_EQ (static_cast<int> (m.get (modSlotParams (slot).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("osc1.spec.cut").index))));
         CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
         rig.shot ("osc-wp12-spectral-" + n, sz.w, sz.h, true, Page::osc);
+    }
+}
+
+// REMAINDER item 2 (Serum 2 manual p.120): a wavetable can act as the spectral filter. The bar menu lists "Curve Filter" and the tables, a table replaces the (then not editable) curve
+// graph with the picture of the filter and the FRAME slider, the keys follow, and the frame takes a source by touch
+TEST (uig_remainder_spectral_filter_from_a_wavetable)
+{
+    struct Size { int w, h; const char* name; };
+    for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
+    {
+        const juce::String n (sz.name);
+        Rig rig (Page::osc, sz.w, sz.h);
+        rig.editor->context().view->oscTab = 0;
+        rig.editor->panelHost().setPage (Page::osc);
+        Panel* panel = rig.panelTitled ("Oscillator 1");
+        CHECK (panel != nullptr);
+        if (panel == nullptr)
+            continue;
+        const auto keys = panel->keys();
+        for (const char* key : { "osc1.spec.flt_use", "osc1.spec.flt_table", "osc1.spec.flt_frame" })
+            CHECK (std::find (keys.begin(), keys.end(), std::string (key)) != keys.end());
+        panel->setMoreExpanded (true);
+        const auto controlOf = [&] (const char* key) -> ParamControl*
+        {
+            for (const auto& c : panel->controls())
+                if (c->key() == key)
+                    return c.get();
+            return nullptr;
+        };
+        auto* source = const_cast<SpecFilterSource*> (rig.find<SpecFilterSource> ([] (SpecFilterSource&) { return true; }));
+        CHECK (source != nullptr);
+        if (source == nullptr)
+            continue;
+        CHECK (! source->isVisible());                       // not a spectral oscillator yet
+        rig.setParam ("osc1.type", 3.0f);
+        CHECK (source->isVisible() && source->getHeight() >= rig.editor->theme().touch());
+        CHECK (rig.find<RemapEditor> ([] (RemapEditor& e) { return e.isSpectralFilter() && e.isVisible(); }) != nullptr);
+        CHECK (controlOf ("osc1.spec.flt_table")->getAlpha() < 0.9f && controlOf ("osc1.spec.flt_frame")->getAlpha() < 0.9f);
+        CHECK (source->button().getButtonText() == "Filter: Curve");
+
+        // the menu: Curve Filter, then every wavetable of the list; picking one switches the filter source
+        const auto menu = source->buildMenu();
+        CHECK_EQ (menu.getNumItems(), 1 + kNumWavetableChoices);   // Curve Filter and the tables (the separator is not counted)
+        source->select (1);                                   // Saw
+        CHECK_EQ (rig.param ("osc1.spec.flt_use"), 1.0f);
+        CHECK_EQ (rig.param ("osc1.spec.flt_table"), 1.0f);
+        CHECK (source->usesTable() && source->button().getButtonText().contains ("Saw"));
+        CHECK (rig.find<RemapEditor> ([] (RemapEditor& e) { return e.isSpectralFilter() && e.isVisible(); }) == nullptr);   // the graph gives way: it cannot be edited
+        CHECK (controlOf ("osc1.spec.flt_table")->getAlpha() > 0.9f && controlOf ("osc1.spec.flt_frame")->getAlpha() > 0.9f);
+        CHECK (source->frameControl().isVisible() && source->frameControl().getHeight() >= rig.editor->theme().touch());
+        std::array<float, 2048> curve {};
+        CHECK (source->filterFrame (curve) && curve[0] > 0.99f && curve[2047] < -0.99f);   // the falling saw
+        CHECK (panel->getHeight() >= panel->preferredHeight (panel->getWidth()) - 1);
+        rig.shot ("osc-remainder-spectral-filter-table-" + n, sz.w, sz.h, true, Page::osc);
+
+        // the Preset table of the oscillator: the stored table is the picture
+        source->select (kWavetablePresetTable);
+        CHECK_EQ (juce::roundToInt (rig.param ("osc1.spec.flt_table")), kWavetablePresetTable);
+        CHECK (! source->filterFrame (curve));              // no table stored for this oscillator: only the name is shown
+
+        // back to the drawn curve
+        source->select (-1);
+        CHECK_EQ (rig.param ("osc1.spec.flt_use"), 0.0f);
+        CHECK (rig.find<RemapEditor> ([] (RemapEditor& e) { return e.isSpectralFilter() && e.isVisible(); }) != nullptr);
+
+        // assign-by-touch: the frame takes a source
+        const int slot = assignBySource (rig, 7, "osc1.spec.flt_frame", 50.0f);
+        CHECK (slot >= 0);
+        auto& m = rig.editor->context().assign.matrix();
+        CHECK_EQ (static_cast<int> (m.get (modSlotParams (slot).destination)), static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (resolveKey ("osc1.spec.flt_frame").index))));
     }
 }
 

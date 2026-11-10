@@ -147,6 +147,25 @@ Region regionFrom (const std::vector<const Opcodes*>& layers, const std::string&
     if (has ("group")) r.group = static_cast<int> (number (get ("group"), 0.0));
     if (has ("off_by")) r.offBy = static_cast<int> (number (get ("off_by"), 0.0));
     if (has ("off_mode")) r.offMode = lower (get ("off_mode")) == "normal" ? 1 : 0;
+    if (has ("trigger")) r.releaseTrigger = lower (get ("trigger")) == "release";
+    const auto intOpcode = [&] (const char* name, int& target) { if (has (name)) target = std::max (-1, std::min (127, static_cast<int> (number (get (name), -1.0)))); };
+    const auto keyOpcode = [&] (const char* name, int& target) { if (has (name)) target = std::max (-1, std::min (127, noteOrNumber (get (name), -1))); };
+    keyOpcode ("xfin_lokey", r.xfInLoKey); keyOpcode ("xfin_hikey", r.xfInHiKey); keyOpcode ("xfout_lokey", r.xfOutLoKey); keyOpcode ("xfout_hikey", r.xfOutHiKey);
+    intOpcode ("xfin_lovel", r.xfInLoVel); intOpcode ("xfin_hivel", r.xfInHiVel); intOpcode ("xfout_lovel", r.xfOutLoVel); intOpcode ("xfout_hivel", r.xfOutHiVel);
+    if (has ("fil_type") || has ("fil1_type"))
+    {
+        const std::string t = lower (get (has ("fil_type") ? "fil_type" : "fil1_type"));
+        r.filType = t == "lpf_1p" ? 1 : t == "lpf_2p" ? 2 : t == "hpf_1p" ? 3 : t == "hpf_2p" ? 4 : t == "bpf_2p" ? 5 : t == "brf_2p" ? 6 : 0;
+    }
+    const auto filNumber = [&] (const char* name, const char* alternative, float& target)
+    {
+        const char* use = has (name) ? name : (has (alternative) ? alternative : nullptr);
+        if (use != nullptr) target = static_cast<float> (number (get (use), target));
+    };
+    filNumber ("cutoff", "cutoff", r.filCutoffHz); filNumber ("fil_cutoff", "cutoff", r.filCutoffHz);
+    filNumber ("resonance", "resonance", r.filResonanceDb); filNumber ("fil_resonance", "resonance", r.filResonanceDb);
+    filNumber ("fil_keytrack", "fil1_keytrack", r.filKeytrackCents); filNumber ("fil_veltrack", "fil1_veltrack", r.filVeltrackCents);
+    if (has ("fil_keycenter")) r.filKeycenter = noteOrNumber (get ("fil_keycenter"), 60);
     if (has ("seq_length")) r.seqLength = std::max (1, static_cast<int> (number (get ("seq_length"), 1.0)));
     if (has ("seq_position")) r.seqPosition = std::max (1, static_cast<int> (number (get ("seq_position"), 1.0)));
     if (has ("lorand")) r.lorand = static_cast<float> (std::max (0.0, std::min (1.0, number (get ("lorand"), 0.0))));
@@ -375,6 +394,16 @@ std::string writeSfz (const SfzInstrument& instrument)
             out += "seq_length=" + std::to_string (r.seqLength) + " seq_position=" + std::to_string (r.seqPosition) + "\n";
         if (r.lorand > 0.0f || r.hirand < 1.0f)
             out += "lorand=" + num (r.lorand) + " hirand=" + num (r.hirand) + "\n";
+        if (r.releaseTrigger) out += "trigger=release\n";
+        if (r.xfInLoKey >= 0 || r.xfInHiKey >= 0 || r.xfOutLoKey >= 0 || r.xfOutHiKey >= 0 || r.xfInLoVel >= 0 || r.xfInHiVel >= 0 || r.xfOutLoVel >= 0 || r.xfOutHiVel >= 0)
+            out += "xfin_lokey=" + std::to_string (r.xfInLoKey) + " xfin_hikey=" + std::to_string (r.xfInHiKey) + " xfout_lokey=" + std::to_string (r.xfOutLoKey) + " xfout_hikey=" + std::to_string (r.xfOutHiKey)
+                 + " xfin_lovel=" + std::to_string (r.xfInLoVel) + " xfin_hivel=" + std::to_string (r.xfInHiVel) + " xfout_lovel=" + std::to_string (r.xfOutLoVel) + " xfout_hivel=" + std::to_string (r.xfOutHiVel) + "\n";
+        if (r.filType > 0)
+        {
+            static const char* const types[] = { "none", "lpf_1p", "lpf_2p", "hpf_1p", "hpf_2p", "bpf_2p", "brf_2p" };
+            out += std::string ("fil_type=") + types[r.filType] + " cutoff=" + num (r.filCutoffHz) + " resonance=" + num (r.filResonanceDb) + " fil_keytrack=" + num (r.filKeytrackCents)
+                 + " fil_keycenter=" + std::to_string (r.filKeycenter) + " fil_veltrack=" + num (r.filVeltrackCents) + "\n";
+        }
         if (r.swLast >= 0) out += "sw_last=" + std::to_string (r.swLast) + "\n";
         if (r.swLokey >= 0) out += "sw_lokey=" + std::to_string (r.swLokey) + "\n";
         if (r.swHikey >= 0) out += "sw_hikey=" + std::to_string (r.swHikey) + "\n";
@@ -471,13 +500,54 @@ int Instrument::timbreKey (int key, float timbre) noexcept
     return std::max (0, std::min (127, static_cast<int> (std::lround (k))));
 }
 
+namespace
+{
+/** The gain at `x` of a rise from `lo` to `hi` (an equal power quarter sine; -1 on both: 1). */
+float riseGain (int x, int lo, int hi) noexcept
+{
+    if (lo < 0 && hi < 0)
+        return 1.0f;
+    if (x <= lo) return 0.0f;
+    if (x >= hi) return 1.0f;
+    return std::sin (1.57079633f * static_cast<float> (x - lo) / static_cast<float> (std::max (1, hi - lo)));
+}
+float fallGain (int x, int lo, int hi) noexcept
+{
+    if (lo < 0 && hi < 0)
+        return 1.0f;
+    if (x <= lo) return 1.0f;
+    if (x >= hi) return 0.0f;
+    return std::cos (1.57079633f * static_cast<float> (x - lo) / static_cast<float> (std::max (1, hi - lo)));
+}
+} // namespace
+
+float Instrument::crossfadeGain (int zoneIndex, int key, int velocity) const noexcept
+{
+    if (zoneIndex < 0 || zoneIndex >= static_cast<int> (zones_.size()))
+        return 1.0f;
+    const Region& r = zones_[static_cast<size_t> (zoneIndex)].region;
+    return riseGain (key, r.xfInLoKey, r.xfInHiKey) * fallGain (key, r.xfOutLoKey, r.xfOutHiKey) * riseGain (velocity, r.xfInLoVel, r.xfInHiVel) * fallGain (velocity, r.xfOutLoVel, r.xfOutHiVel);
+}
+
+int Instrument::selectReleaseZones (int key, int velocity, float rand, uint32_t counter, int switchKey, int* out, int maxOut) const noexcept
+{
+    return selectZonesOf (true, key, velocity, rand, counter, switchKey, out, maxOut);
+}
+
 int Instrument::selectZones (int key, int velocity, float rand, uint32_t counter, int switchKey, int* out, int maxOut) const noexcept
+{
+    return selectZonesOf (false, key, velocity, rand, counter, switchKey, out, maxOut);
+}
+
+int Instrument::selectZonesOf (bool release, int key, int velocity, float rand, uint32_t counter, int switchKey, int* out, int maxOut) const noexcept
 {
     int n = 0;
     for (int i = 0; i < static_cast<int> (zones_.size()) && n < maxOut; ++i)
     {
         const Zone& z = zones_[static_cast<size_t> (i)];
         const Region& r = z.region;
+        if (r.releaseTrigger != release)
+            continue;
         if (z.sample < 0 || key < r.lokey || key > r.hikey || velocity < r.lovel || velocity > r.hivel)
             continue;
         if (rand < r.lorand || (rand >= r.hirand && r.hirand < 1.0f))
@@ -571,7 +641,8 @@ void LayerVoice::noteOn (const Instrument& instrument, int zoneIndex, int key, i
     }
     const float track = (velTrackPercent >= 0.0f ? velTrackPercent : r.velTrack) * 0.01f;
     const float velocityGain = 1.0f - track + track * curve;
-    gain_ = std::pow (10.0f, (r.volumeDb + r.keyTrackDb * static_cast<float> (key - r.center)) / 20.0f) * std::max (0.0f, velocityGain);
+    gain_ = std::pow (10.0f, (r.volumeDb + r.keyTrackDb * static_cast<float> (key - r.center)) / 20.0f) * std::max (0.0f, velocityGain) * instrument.crossfadeGain (zoneIndex, key, velocity);
+    setupFilter (r, key, velocity);
     pan_ = r.pan;
     const float angle = (std::max (-1.0f, std::min (1.0f, pan_)) + 1.0f) * 0.78539816f;
     panL_ = std::cos (angle) * 1.41421356f;
@@ -605,6 +676,34 @@ void LayerVoice::noteOn (const Instrument& instrument, int zoneIndex, int key, i
     }
 }
 
+// The filter of a zone (fil_*): RBJ biquads (one pole sections as a one pole at the same cutoff); the cutoff follows the key and the velocity at the note start (fil_keytrack and fil_veltrack in cents),
+// the resonance is the Q in dB above 0.707. A zone without fil_type (or with a cutoff of 0) is not filtered.
+void LayerVoice::setupFilter (const Region& r, int key, int velocity) noexcept
+{
+    filType_ = 0;
+    fzl_[0] = fzl_[1] = fzr_[0] = fzr_[1] = 0.0f;
+    if (r.filType <= 0 || r.filCutoffHz <= 0.0f)
+        return;
+    const double cents = static_cast<double> (r.filKeytrackCents) * (key - r.filKeycenter) + static_cast<double> (r.filVeltrackCents) * velocity / 127.0;
+    const double cutoff = std::min (0.45 * rate_, std::max (10.0, static_cast<double> (r.filCutoffHz) * std::pow (2.0, cents / 1200.0)));
+    const double w0 = 6.283185307179586 * cutoff / rate_;
+    const double cosw = std::cos (w0), sinw = std::sin (w0);
+    const bool onePole = r.filType == 1 || r.filType == 3;
+    const double q = onePole ? 0.70710678 : 0.70710678 * std::pow (10.0, std::max (0.0, static_cast<double> (r.filResonanceDb)) / 20.0);
+    const double alpha = sinw / (2.0 * q);
+    double b0 = 1.0, b1 = 0.0, b2 = 0.0, a0 = 1.0, a1 = 0.0, a2 = 0.0;
+    switch (r.filType)
+    {
+        case 1: case 2: b0 = (1.0 - cosw) / 2.0; b1 = 1.0 - cosw; b2 = b0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                    // low pass
+        case 3: case 4: b0 = (1.0 + cosw) / 2.0; b1 = -(1.0 + cosw); b2 = b0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                // high pass
+        case 5: b0 = alpha; b1 = 0.0; b2 = -alpha; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                                           // band pass
+        default: b0 = 1.0; b1 = -2.0 * cosw; b2 = 1.0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                                       // band reject
+    }
+    filType_ = r.filType;
+    fb0_ = static_cast<float> (b0 / a0); fb1_ = static_cast<float> (b1 / a0); fb2_ = static_cast<float> (b2 / a0);
+    fa1_ = static_cast<float> (a1 / a0); fa2_ = static_cast<float> (a2 / a0);
+}
+
 void LayerVoice::noteOff (bool fast) noexcept
 {
     if (! active_ || released_)
@@ -625,6 +724,19 @@ void LayerVoice::processAdd (float* left, float* right, float* tmpLeft, float* t
     voice_.setSemitoneOffset (semitones + tuneSemitones_);
     voice_.setSpeedMultiplier (1.0);
     voice_.processModulated (tmpLeft, tmpRight, numFrames, rateMod);
+    if (filType_ > 0)
+        for (int i = 0; i < numFrames; ++i)   // transposed direct form II
+        {
+            const float xl = tmpLeft[i], xr = tmpRight[i];
+            const float yl = fb0_ * xl + fzl_[0];
+            fzl_[0] = fb1_ * xl - fa1_ * yl + fzl_[1];
+            fzl_[1] = fb2_ * xl - fa2_ * yl;
+            const float yr = fb0_ * xr + fzr_[0];
+            fzr_[0] = fb1_ * xr - fa1_ * yr + fzr_[1];
+            fzr_[1] = fb2_ * xr - fa2_ * yr;
+            tmpLeft[i] = yl;
+            tmpRight[i] = yr;
+        }
     for (int i = 0; i < numFrames; ++i)
     {
         // advance the envelope one sample

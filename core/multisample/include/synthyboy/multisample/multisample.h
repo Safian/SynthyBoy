@@ -22,6 +22,7 @@ namespace synthyboy
 namespace multisample
 {
 constexpr int kMaxLayers = 2;            // zones that play for one note (velocity layers that overlap, round robins are one of several)
+constexpr int kMaxLayerSlots = 2 * kMaxLayers; // ... and as many zones that play when the key is released (trigger=release)
 constexpr int kMaxGroups = 256;          // SFZ group / off_by numbers that are tracked
 constexpr int64_t kMaxInstrumentFrames = 24 * 1000 * 1000; // decoded frames of all samples of an instrument (about 100 MB with the mip levels); later zones are left out
 
@@ -47,6 +48,14 @@ struct Region
     int seqLength = 1, seqPosition = 1;       // round robin
     float lorand = 0.0f, hirand = 1.0f;       // random layers
     int swLokey = -1, swHikey = -1, swLast = -1; // key switches
+    // REMAINDER item 4 (S12, 13-new-keys.md 4.43): trigger=release (the zone plays when the key is released, with the velocity of the note), the crossfades by key and velocity
+    // (xfin_* rise from 0 at lo to 1 at hi, xfout_* fall from 1 at lo to 0 at hi; -1: not given) and the filter (fil_type, cutoff, resonance, fil_keytrack, fil_keycenter, fil_veltrack)
+    bool releaseTrigger = false;
+    int xfInLoKey = -1, xfInHiKey = -1, xfOutLoKey = -1, xfOutHiKey = -1;
+    int xfInLoVel = -1, xfInHiVel = -1, xfOutLoVel = -1, xfOutHiVel = -1;
+    int filType = 0;                          // 0 none, 1 lpf_1p, 2 lpf_2p, 3 hpf_1p, 4 hpf_2p, 5 bpf_2p, 6 brf_2p
+    float filCutoffHz = 0.0f, filResonanceDb = 0.0f, filKeytrackCents = 0.0f, filVeltrackCents = 0.0f;
+    int filKeycenter = 60;
 };
 
 struct SfzInstrument
@@ -97,11 +106,16 @@ public:
     /** The zones that play for `key` (already looked up through the timbre) at `velocity` (1 .. 127): inside the key and velocity range, the random range of `rand`, the
         round robin position of `counter`, the key switch `switchKey`. At most `maxOut` indices into the zones. Real time safe. */
     int selectZones (int key, int velocity, float rand, uint32_t counter, int switchKey, int* out, int maxOut) const noexcept;
+    /** The zones with trigger=release that play when the key of that note is released (same rules as selectZones, `velocity` is the one of the note). */
+    int selectReleaseZones (int key, int velocity, float rand, uint32_t counter, int switchKey, int* out, int maxOut) const noexcept;
+    /** The gain of the key / velocity crossfades (xfin_* / xfout_*) of a zone for a note: 1 for a zone without any. Equal power curves. */
+    float crossfadeGain (int zoneIndex, int key, int velocity) const noexcept;
 
     /** The key to look a zone up with: TIMBRE -1 .. 1 moves it against the pitch (1: the mapping is inverted: key 0 plays the highest zone), -1 stretches it (3 key - 127). */
     static int timbreKey (int key, float timbre) noexcept;
 
 private:
+    int selectZonesOf (bool release, int key, int velocity, float rand, uint32_t counter, int switchKey, int* out, int maxOut) const noexcept;
     std::vector<Zone> zones_;
     std::vector<std::unique_ptr<sampleosc::SampleData>> samples_;
     std::vector<sampleosc::SampleView> views_;
@@ -151,6 +165,11 @@ private:
     int group_ = 0, offBy_ = 0, offMode_ = 0, zone_ = -1;
     uint32_t startSequence_ = 0;
     float tuneSemitones_ = 0.0f;
+    // the filter of the zone (fil_*): a fixed cutoff (key and velocity tracked at the note start), 1 or 2 poles, no envelope
+    int filType_ = 0;
+    float fb0_ = 1.0f, fb1_ = 0.0f, fb2_ = 0.0f, fa1_ = 0.0f, fa2_ = 0.0f;
+    float fzl_[2] = {}, fzr_[2] = {};
+    void setupFilter (const Region& r, int key, int velocity) noexcept;
     void enter (Stage stage, double seconds) noexcept;
 };
 } // namespace multisample

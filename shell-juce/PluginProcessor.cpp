@@ -880,7 +880,15 @@ void SynthyBoyProcessor::injectMidiMessage (const juce::MidiMessage& msg)
 
 
 // This creates new instances of the plugin (entry point used by the VST3 and CLAP wrappers).
+#if SYNTHYBOY_CLAP_BRIDGE
+juce::AudioProcessor* createClapBridgeProcessorIfBuildingClap(); // shell-juce/ClapBridge.cpp: the processor with the CLAP extension synthyboy.content (REMAINDER item 3)
+#endif
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
+#if SYNTHYBOY_CLAP_BRIDGE
+    if (auto* clapProcessor = createClapBridgeProcessorIfBuildingClap())
+        return clapProcessor;
+#endif
     return new SynthyBoyProcessor();
 }

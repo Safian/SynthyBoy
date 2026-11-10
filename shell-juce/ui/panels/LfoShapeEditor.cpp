@@ -1334,8 +1334,8 @@ int LfoShapeEditor::armedSource() const { return ctx.assign.flow().armedSource()
 float& LfoShapeEditor::memoFor (int index, PointAxis axis)
 {
     if (depthMemo.size() != current.points.size())
-        depthMemo.assign (current.points.size(), { 0.0f, 0.0f });
-    return depthMemo[static_cast<size_t> (index)][axis == PointAxis::x ? 0 : 1];
+        depthMemo.assign (current.points.size(), { 0.0f, 0.0f, 0.0f });
+    return depthMemo[static_cast<size_t> (index)][axis == PointAxis::x ? 0 : axis == PointAxis::y ? 1 : 2];
 }
 
 bool LfoShapeEditor::assignPointMod (int index, PointAxis axis, int sourceChoice, float depth)
@@ -1408,12 +1408,12 @@ void LfoShapeEditor::showPointSheet (int index)
     const auto& p = current.points[static_cast<size_t> (index)];
     juce::PopupMenu menu;
     menu.addSectionHeader ("Point " + juce::String (index + 1) + " modulation");
-    for (const auto axis : { PointAxis::x, PointAxis::y })
+    for (const auto axis : { PointAxis::x, PointAxis::y, PointAxis::curve })
     {
         if (! canModulatePointAxis (static_cast<size_t> (index), static_cast<size_t> (n), axis))
             continue;
-        const int base = axis == PointAxis::x ? 100 : 200;
-        const juce::String name = axis == PointAxis::x ? "X" : "Y";
+        const int base = axis == PointAxis::x ? 100 : axis == PointAxis::y ? 200 : 300;
+        const juce::String name = axis == PointAxis::x ? "X" : axis == PointAxis::y ? "Y" : "Curve";
         const auto& m = pointModOf (p, axis);
         const int sourceNow = m.present ? pointModSourceChoice (m.source) : 0;
 
@@ -1438,7 +1438,7 @@ void LfoShapeEditor::showPointSheet (int index)
                         {
                             if (safe == nullptr || result <= 0)
                                 return;
-                            const auto axis = result >= 200 ? PointAxis::y : PointAxis::x;
+                            const auto axis = result >= 300 ? PointAxis::curve : result >= 200 ? PointAxis::y : PointAxis::x;
                             const int what = result % 100;
                             if (what == 0)
                                 safe->clearPointMod (index, axis);
@@ -1463,7 +1463,7 @@ void LfoShapeEditor::paintPointModulation (juce::Graphics& g)
         const auto pos = pointPosition (i);
         const float r = t.px (11.0f);
         bool any = false;
-        for (const auto axis : { PointAxis::x, PointAxis::y })
+        for (const auto axis : { PointAxis::x, PointAxis::y, PointAxis::curve })
         {
             const auto& m = pointModOf (pt, axis);
             if (! m.present)
@@ -1473,7 +1473,14 @@ void LfoShapeEditor::paintPointModulation (juce::Graphics& g)
             const auto colour = ! live ? c.modIdle : m.amount >= 0.0f ? c.mod : c.modNegative;
             g.setColour (colour.withAlpha (live ? 0.75f : 0.5f));
             // the swing of the source: from the point to point + depth (clamped to the plot), as a bar
-            if (axis == PointAxis::y)
+            if (axis == PointAxis::curve)
+            {
+                // the curve of the segment after the point swings the segment: a bar across half the segment, centred on its middle
+                const float next = i + 1 < static_cast<int> (current.points.size()) ? toX (current.points[static_cast<size_t> (i) + 1].x) : pos.x;
+                const float mid = 0.5f * (pos.x + next), half = juce::jmax (t.px (3.0f), 0.25f * (next - pos.x));
+                g.fillRoundedRectangle (juce::Rectangle<float> (mid - half, pos.y - t.px (2.5f) + t.px (8.0f), 2.0f * half * juce::jlimit (0.2f, 1.0f, std::abs (m.amount)), t.px (5.0f)), t.px (2.0f));
+            }
+            else if (axis == PointAxis::y)
             {
                 const float to = juce::jlimit (plot.getY(), plot.getBottom(), toY (pt.y + m.amount));
                 g.fillRoundedRectangle (juce::Rectangle<float> (pos.x - t.px (2.5f), juce::jmin (pos.y, to), t.px (5.0f), juce::jmax (t.px (2.0f), std::abs (to - pos.y))), t.px (2.0f));
@@ -1486,21 +1493,21 @@ void LfoShapeEditor::paintPointModulation (juce::Graphics& g)
         }
         if (any)
         {
-            const bool live = pointModActive (pt, PointAxis::x) || pointModActive (pt, PointAxis::y);
+            const bool live = pointModActive (pt, PointAxis::x) || pointModActive (pt, PointAxis::y) || pointModActive (pt, PointAxis::curve);
             g.setColour (live ? c.mod : c.modIdle);
             g.drawEllipse (pos.x - r, pos.y - r, 2.0f * r, 2.0f * r, t.px (2.0f));
             if (i == selected)
             {
                 g.setFont (t.labelFont());
-                for (const auto axis : { PointAxis::x, PointAxis::y })
+                for (const auto axis : { PointAxis::x, PointAxis::y, PointAxis::curve })
                 {
                     const auto& m = pointModOf (pt, axis);
                     if (! m.present)
                         continue;
                     const int choice = pointModSourceChoice (m.source);
-                    g.drawText ((axis == PointAxis::x ? "X " : "Y ") + juce::String (choice > 0 ? modSourceTable()[choice - 1].name : "?") + " "
+                    g.drawText ((axis == PointAxis::x ? "X " : axis == PointAxis::y ? "Y " : "C ") + juce::String (choice > 0 ? modSourceTable()[choice - 1].name : "?") + " "
                                     + juce::String (juce::roundToInt (m.amount * 100.0f)) + "%",
-                                juce::Rectangle<float> (pos.x + r + t.px (2.0f), pos.y + (axis == PointAxis::x ? -t.px (14.0f) : 0.0f), t.px (110.0f), t.px (14.0f)).toNearestInt(),
+                                juce::Rectangle<float> (pos.x + r + t.px (2.0f), pos.y + (axis == PointAxis::x ? -t.px (14.0f) : axis == PointAxis::y ? 0.0f : t.px (14.0f)), t.px (110.0f), t.px (14.0f)).toNearestInt(),
                                 juce::Justification::centredLeft, false);
                 }
             }

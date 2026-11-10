@@ -11,7 +11,9 @@
 #include <vector>
 
 #include "PluginProcessor.h"
+#include "ui/ContentIO.h"
 #include "ui/Editor.h"
+#include "ui/ParamControls.h"
 #include "ui/panels/ModLogic.h"
 #include "ui/panels/RemapEditor.h"
 #include "test_runner.h"
@@ -573,7 +575,8 @@ TEST (uim_screenshots_of_the_slot_curve_editor)
 
 // GROUPB (WP-08): RISE / FALL of the shown slot are two sliders of the slot curve panel, they write content.modCurves (with or without a drawn curve), the row of the
 // matrix marks the connection, and "Edit Custom Curve" of the control sheet opens the free curve editor of the slot
-TEST (uim_wp08_rise_fall_sliders_write_the_slot_record_and_the_sheet_opens_the_curve)
+// GROUPB WP-08, REMAINDER item 1: RISE / FALL / DELAY of the shown slot are the keys modNN.rise / fall / delay (real, modulatable controls)
+TEST (uim_wp08_rise_fall_delay_controls_write_the_slot_keys_and_the_sheet_opens_the_curve)
 {
     struct Size { int w, h; const char* name; };
     for (const auto& sz : { Size { 390, 844, "phone" }, Size { 1024, 768, "tablet" } })
@@ -583,33 +586,43 @@ TEST (uim_wp08_rise_fall_sliders_write_the_slot_record_and_the_sheet_opens_the_c
         CHECK (panel != nullptr);
         if (panel == nullptr)
             continue;
-        std::vector<juce::Slider*> sliders;
-        for (auto* c : panel->getChildren())
-            if (auto* s = dynamic_cast<juce::Slider*> (c))
-                sliders.push_back (s);
-        CHECK_EQ (sliders.size(), size_t { 2 });
-        if (sliders.size() != 2)
-            continue;
-        juce::Slider& rise = *sliders[0];
-        juce::Slider& fall = *sliders[1];
-        const int touch = rig.editor->theme().touch();
-        CHECK (rise.getHeight() >= touch && fall.getHeight() >= touch);
-        CHECK (rise.getRight() <= panel->getWidth() && fall.getRight() <= panel->getWidth());
-        CHECK_EQ (rise.getValue(), 0.0);
-
-        const auto recordOf = [&rig] (int slot) -> std::optional<ContentModCurve>
+        const auto visibleSliders = [panel]
         {
-            const auto content = rig.proc.content();   // by value: the record is copied out
-            const auto* found = modCurveOf (content, slot);
-            return found != nullptr ? std::optional<ContentModCurve> (*found) : std::nullopt;
+            std::vector<ParamSlider*> found;
+            for (auto* c : panel->getChildren())
+                if (auto* s = dynamic_cast<ParamSlider*> (c); s != nullptr && s->isVisible() && ! s->getBounds().isEmpty())
+                    found.push_back (s);
+            return found;
         };
-        rise.setValue (250.0, juce::sendNotificationSync);
-        auto record = recordOf (1);
-        CHECK (record.has_value() && record->points.empty() && std::fabs (record->riseMs - 250.0f) < 0.6f && record->fallMs == 0.0f);
+        auto sliders = visibleSliders();
+        CHECK_EQ (sliders.size(), size_t { 3 });   // RISE, FALL, DELAY of slot 1
+        if (sliders.size() != 3)
+            continue;
+        const int touch = rig.editor->theme().touch();
+        for (auto* c : sliders)
+            CHECK (c->getHeight() >= touch && c->getRight() <= panel->getWidth());
+        CHECK_EQ (sliders[0]->key(), std::string ("mod01.rise"));
+        CHECK_EQ (sliders[1]->key(), std::string ("mod01.fall"));
+        CHECK_EQ (sliders[2]->key(), std::string ("mod01.delay"));
+        const auto value = [&rig] (const char* key) { return readParameter (rig.proc, key); };
+        CHECK_EQ (value ("mod01.rise"), 0.0f);
+
+        sliders[0]->paramHandle().setPlainComplete (250.0f);
+        CHECK_NEAR (value ("mod01.rise"), 250.0f, 0.5f);
+        sliders[1]->paramHandle().setPlainComplete (80.0f);
+        CHECK_NEAR (value ("mod01.fall"), 80.0f, 0.5f);
         CHECK (validateContent (rig.proc.content()));
-        fall.setValue (80.0, juce::sendNotificationSync);
-        record = recordOf (1);
-        CHECK (record.has_value() && std::fabs (record->fallMs - 80.0f) < 0.6f && std::fabs (record->riseMs - 250.0f) < 0.6f);
+
+        // the tempo sync switch swaps the DELAY control for the one in beats
+        for (auto* c : panel->getChildren())
+            if (auto* t = dynamic_cast<ParamToggle*> (c); t != nullptr && t->isVisible() && t->key() == "mod01.delay_sync")
+                t->toggle();
+        CHECK_EQ (value ("mod01.delay_sync"), 1.0f);
+        panel->resized();
+        sliders = visibleSliders();
+        CHECK (sliders.size() == 3 && sliders[2]->key() == "mod01.delay_beats");
+        rig.setParam ("mod01.delay_sync", 0.0f);
+        panel->resized();
 
         // the shown slot owns its times: the next slot starts at 0, going back finds them again
         juce::TextButton* next = nullptr;
@@ -621,33 +634,20 @@ TEST (uim_wp08_rise_fall_sliders_write_the_slot_record_and_the_sheet_opens_the_c
         if (next != nullptr)
         {
             next->onClick();
-            CHECK_EQ (rise.getValue(), 0.0);
-            CHECK (! recordOf (2).has_value());
+            sliders = visibleSliders();
+            CHECK (sliders.size() == 3 && sliders[0]->key() == "mod02.rise" && sliders[0]->paramHandle().plain() == 0.0f);
             for (auto* c : panel->getChildren())
                 if (auto* b = dynamic_cast<juce::TextButton*> (c))
                     if (b->getButtonText() == "<")
                         b->onClick();
-            CHECK (std::fabs (rise.getValue() - 250.0) < 0.6);
+            sliders = visibleSliders();
+            CHECK (sliders.size() == 3 && sliders[0]->key() == "mod01.rise" && std::fabs (sliders[0]->paramHandle().plain() - 250.0f) < 0.6f);
         }
 
-        // a drawn curve and a slew share the record; taking the times away keeps the curve, a record with neither is removed
+        // a drawn curve and a slew are separate: the curve is content, the times are keys; no record is made for a slew alone
         {
-            auto content = rig.proc.content();
-            for (auto& m : content.modCurves)
-                if (m.slot == 1)
-                    m.points = { ContentPoint (0.0f, 0.0f, 0.0f), ContentPoint (1.0f, 1.0f, 0.0f) };
-            CHECK (rig.proc.setContent (content));
-            rise.setValue (0.0, juce::sendNotificationSync);
-            fall.setValue (0.0, juce::sendNotificationSync);
-            record = recordOf (1);
-            CHECK (record.has_value() && record->points.size() == 2 && record->riseMs == 0.0f && record->fallMs == 0.0f);
-            auto cleared = rig.proc.content();
-            cleared.modCurves.clear();
-            CHECK (rig.proc.setContent (cleared));
-            rise.setValue (30.0, juce::sendNotificationSync);
-            CHECK (recordOf (1).has_value());
-            rise.setValue (0.0, juce::sendNotificationSync);
-            CHECK (! recordOf (1).has_value());
+            const auto content = rig.proc.content();
+            CHECK (modCurveOf (content, 1) == nullptr);
         }
 
         // "Edit Custom Curve" on the control sheet: the matrix page, the slot, the free curve editor

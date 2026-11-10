@@ -38,7 +38,7 @@ TEST (every_new_key_needs_a_capability_and_no_old_key_does)
     for (size_t i = kNumKeysV2; i < paramCount(); ++i)
     {
         const auto caps = requiredCaps (i);
-        if (! CHECK (caps != kCapNone))
+        if (! CHECK (caps != kCapNone || requiredCaps2 (i) != kCap2None))   // the keys of the second word (B28 .. B31) need no bit of the first
             std::printf ("    %s\n", paramTable()[i].key);
         all |= caps;
     }

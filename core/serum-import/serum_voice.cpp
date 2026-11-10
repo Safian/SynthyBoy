@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <cstdio>
 #include <cstring>
 
@@ -455,6 +456,24 @@ void Importer::oscillator (int i)
                 consume (rel);
                 if (bn >= 0) { entry (ItemKind::imported, Reason::exact, area, bp + "/baseNote", valueText (bn), key ("sample.root"), fmt (base), "sample_root_note"); consume (bn); }
                 (void) sm;
+                // REMAINDER item 4 (S12, A458): trimHead / trimTail are the first and the last frame of the part of the file that Serum plays; START / END of the oscillator run inside it
+                {
+                    const int head = get (B, "trimHead"), tail = get (B, "trimTail"), numFramesNode = get (B, "numFrames");
+                    const double total = numFramesNode >= 0 ? num (numFramesNode) : static_cast<double> (frames);
+                    if ((head >= 0 || tail >= 0) && total > 0.0 && loaded)
+                    {
+                        const double lo = head >= 0 ? std::min (1.0, std::max (0.0, num (head) / total)) : 0.0, hi = tail >= 0 ? std::min (1.0, std::max (0.0, num (tail) / total)) : 1.0;
+                        if (hi > lo)
+                        {
+                            const double start = R.values.plain[static_cast<size_t> (indexOf (key ("sample.start")))] * 0.01, end = R.values.plain[static_cast<size_t> (indexOf (key ("sample.end")))] * 0.01;
+                            const double newStart = store (key ("sample.start"), 100.0 * (lo + start * (hi - lo))), newEnd = store (key ("sample.end"), 100.0 * (lo + end * (hi - lo)));
+                            setByFile[static_cast<size_t> (indexOf (key ("sample.start")))] = 1;
+                            setByFile[static_cast<size_t> (indexOf (key ("sample.end")))] = 1;
+                            if (head >= 0) { entry (ItemKind::approximated, Reason::tierNote, area, bp + "/trimHead", valueText (head), key ("sample.start"), fmt (newStart), "sample_trim_folded_into_start_and_end"); consume (head); }
+                            if (tail >= 0) { entry (ItemKind::approximated, Reason::tierNote, area, bp + "/trimTail", valueText (tail), key ("sample.end"), fmt (newEnd), "sample_trim_folded_into_start_and_end"); consume (tail); }
+                        }
+                    }
+                }
             }
             for (const char* meta : { "numFrames", "numChannels", "sampleRate" })
             {
@@ -827,7 +846,164 @@ void Importer::voiceFilter (int i)
         consume (u.node);
     }
     const int pz = get (V, "PZs");
-    if (pz >= 0) acctRest (pz, ItemKind::dropped, Reason::noEngineEquivalent, area, name + "/PZs", "", "", "pz_svf_poles_and_zeros_not_imported");
+    if (pz >= 0) pzFilter (pz, pp, area, isText (tp) && str (tp) == "PZ_SVF", area, name + "/PZs");
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// PZ SVF: poles and zeros -> the response curve (REMAINDER item 4, S4; 13-new-keys.md 4.43, A452 .. A455)
+// ---------------------------------------------------------------------------------------------------------------------------------------
+namespace
+{
+struct PzSet
+{
+    double fp[8] = {}, fz[8] = {}, qp[8] = {}, qz[8] = {};
+    int type[8] = {};
+    double gain = 0.5;
+};
+
+constexpr double kPzLow = 20.0, kPzRatio = 1000.0;   // the frequency axis of the curve: 20 Hz .. 20 kHz, logarithmic
+
+double pzFrequency (double x) { return kPzLow * std::pow (kPzRatio, std::min (1.0, std::max (0.0, x))); }
+double pzQuality (double q) { return 0.5 * std::pow (100.0, std::min (1.0, std::max (0.0, q))); }   // 0 .. 1 -> Q 0.5 .. 50
+
+/** The magnitude (dB) of one set at `f` Hz. The pair i is a second order section from the pole (fp, qp) and the zero (fz, qz); the type picks the shape: 0 high pass, 1 low pass, 2 off,
+    3 all pass (flat magnitude), 4 band pass, 5 notch (zero on fz, DC gain 1), 6 the general pole / zero pair (zero and pole as given, so fp = fz with qp > qz is a peak of qp / qz). */
+double pzSetDb (const PzSet& set, double f)
+{
+    using C = std::complex<double>;
+    const C s (0.0, f);
+    double db = (set.gain - 0.5) * 24.0;   // the set gain 0 .. 1: -12 .. +12 dB
+    for (int i = 0; i < 8; ++i)
+    {
+        const double wp = pzFrequency (set.fp[i]), wz = pzFrequency (set.fz[i]), qp = pzQuality (set.qp[i]), qz = pzQuality (set.qz[i]);
+        const C pole = s * s + s * (wp / qp) + wp * wp;
+        C h (1.0, 0.0);
+        switch (set.type[i])
+        {
+            case 0: h = s * s / pole; break;
+            case 1: h = C (wp * wp, 0.0) / pole; break;
+            case 3: h = std::conj (pole) / pole; break;
+            case 4: h = s * (wp / qp) / pole; break;
+            case 5: h = (s * s + wz * wz) / pole * (wp * wp / (wz * wz)); break;
+            case 6: h = (s * s + s * (wz / qz) + wz * wz) / pole; break;
+            default: break;
+        }
+        db += 20.0 * std::log10 (std::max (1.0e-9, std::abs (h)));
+    }
+    return db;
+}
+
+/** Ramer - Douglas - Peucker on (x, dB): the fewest points (at most `maxPoints`) that follow the curve. */
+void pzSimplify (const std::vector<ContentFilterCurvePoint>& in, size_t first, size_t last, double tolerance, std::vector<char>& keep)
+{
+    if (last <= first + 1) return;
+    double worst = 0.0;
+    size_t at = first;
+    for (size_t i = first + 1; i < last; ++i)
+    {
+        const double t = (in[i].x - in[first].x) / std::max (1.0e-9, static_cast<double> (in[last].x - in[first].x));
+        const double line = in[first].y + t * (in[last].y - in[first].y);
+        const double error = std::fabs (in[i].y - line);
+        if (error > worst) { worst = error; at = i; }
+    }
+    if (worst > tolerance)
+    {
+        keep[at] = 1;
+        pzSimplify (in, first, at, tolerance, keep);
+        pzSimplify (in, at, last, tolerance, keep);
+    }
+}
+
+std::vector<ContentFilterCurvePoint> pzReduce (const std::vector<ContentFilterCurvePoint>& in, size_t maxPoints)
+{
+    std::vector<ContentFilterCurvePoint> out;
+    for (double tolerance = 0.25; tolerance < 200.0; tolerance *= 1.4)
+    {
+        std::vector<char> keep (in.size(), 0);
+        keep.front() = keep.back() = 1;
+        pzSimplify (in, 0, in.size() - 1, tolerance, keep);
+        out.clear();
+        for (size_t i = 0; i < in.size(); ++i)
+            if (keep[i]) out.push_back (in[i]);
+        if (out.size() <= maxPoints) break;
+    }
+    return out;
+}
+} // namespace
+
+void Importer::pzFilter (int pzNode, int params, const std::string& filter, bool active, const std::string& area, const std::string& path)
+{
+    if (! active)
+    {
+        acctRest (pzNode, ItemKind::ignored, Reason::exact, area, path, "", "", "pz_set_of_a_filter_that_is_not_a_pz_svf");
+        return;
+    }
+    // the sets: the array of four (the corners of the X | Y control) or the one set of a Single file
+    std::vector<PzSet> sets;
+    const auto readSet = [&] (int node, PzSet& out) -> bool
+    {
+        if (! isMap (node)) return false;
+        const int fp = get (node, "fp"), fz = get (node, "fz"), qp = get (node, "qp"), qz = get (node, "qz"), ty = get (node, "types");
+        if (fp < 0 || fz < 0 || qp < 0 || qz < 0 || ty < 0) return false;
+        const auto fill = [&] (int arr, double* dest) -> bool
+        {
+            if (N (arr).type != cbor::Type::array || N (arr).count < 8) return false;
+            for (uint32_t i = 0; i < 8; ++i) dest[i] = d.arrayNumber (static_cast<uint32_t> (arr), i);
+            return true;
+        };
+        double types[8] = {};
+        if (! fill (fp, out.fp) || ! fill (fz, out.fz) || ! fill (qp, out.qp) || ! fill (qz, out.qz) || ! fill (ty, types)) return false;
+        for (int i = 0; i < 8; ++i) out.type[i] = static_cast<int> (std::lround (types[i]));
+        out.gain = num (get (node, "gain"), 0.5);
+        return true;
+    };
+    if (N (pzNode).type == cbor::Type::array)
+    {
+        for (uint32_t q = 0; q < N (pzNode).count && q < 4; ++q)
+        {
+            PzSet set;
+            if (readSet (static_cast<int> (d.kids[N (pzNode).first + q]), set)) sets.push_back (set);
+        }
+    }
+    else
+    {
+        PzSet set;
+        if (readSet (pzNode, set)) sets.push_back (set);
+    }
+    if (sets.empty())
+    {
+        acctRest (pzNode, ItemKind::dropped, Reason::noEngineEquivalent, area, path, "", "", "pz_set_unreadable");
+        return;
+    }
+    // blend: four sets are the corners of the X | Y square in the order (0,0) (1,0) (0,1) (1,1); a file without X and Y (a Multi file) takes the middle
+    const double x = std::min (1.0, std::max (0.0, num (get (params, "kParamX"), 0.5))), y = std::min (1.0, std::max (0.0, num (get (params, "kParamY"), 0.5)));
+    std::vector<double> weight (sets.size(), 1.0 / static_cast<double>(sets.size()));
+    if (sets.size() == 4)
+        weight = { (1.0 - x) * (1.0 - y), x * (1.0 - y), (1.0 - x) * y, x * y };
+    std::vector<ContentFilterCurvePoint> curve;
+    constexpr int kSamples = 129;
+    for (int k = 0; k < kSamples; ++k)
+    {
+        const double at = static_cast<double> (k) / (kSamples - 1);
+        double db = 0.0;
+        for (size_t s = 0; s < sets.size(); ++s)
+            db += weight[s] * pzSetDb (sets[s], pzFrequency (at));
+        ContentFilterCurvePoint p;
+        p.x = static_cast<float> (at);
+        p.y = static_cast<float> (std::min (60.0, std::max (-60.0, db)));
+        curve.push_back (p);
+    }
+    ContentFilterCurve result;
+    result.filter = filter;
+    result.points = pzReduce (curve, static_cast<size_t> (kMaxFilterCurvePoints));
+    if (filter.empty()) R.pzCurve = result;
+    else
+    {
+        R.filterCurves.erase (std::remove_if (R.filterCurves.begin(), R.filterCurves.end(), [&] (const ContentFilterCurve& c) { return c.filter == filter; }), R.filterCurves.end());
+        R.filterCurves.push_back (result);
+    }
+    acctRest (pzNode, ItemKind::approximated, Reason::tierNote, area, path, filter.empty() ? "" : filter + ".model", filter.empty() ? "" : "response curve",
+              sets.size() == 4 ? "pz_svf_four_sets_blended_as_a_response_curve" : "pz_svf_poles_and_zeros_as_a_response_curve");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
@@ -1123,7 +1299,21 @@ void Importer::lfo (int i)
             bool isUi = false;
             for (const char* u : ui) if (nm == u) isUi = true;
             if (isUi) entry (ItemKind::ignored, Reason::exact, area, base + nm, valueText (v), "", "", "interface_state");
-            else if (nm == "kParamSwing") entry (ItemKind::dropped, Reason::noEngineEquivalent, area, base + nm, valueText (v), "", "", "lfo_swing_flag_not_modelled");
+            else if (nm == "kParamSwing" && ! random && isNumber (v))
+            {
+                // REMAINDER item 4 (S13, A456): the flag says that the rate takes the global SWING (50 = straight .. 75 = full); ours is the swing of the LFO, 0 .. 100 %
+                const double global = num (get (get (get (0, "Global0"), "plainParams"), "kParamSwing"), 50.0);
+                if (num (v) >= 0.5)
+                {
+                    const std::string key = prefix + ".swing";
+                    bool cl = false;
+                    const double st = store (key, std::min (100.0, std::max (0.0, (global - 50.0) * 4.0)), &cl);
+                    setByFile[static_cast<size_t> (indexOf (key))] = 1;
+                    entry (ItemKind::approximated, Reason::tierNote, area, base + nm, valueText (v), key, fmt (st), "lfo_swing_flag_takes_the_global_swing");
+                }
+                else entry (ItemKind::ignored, Reason::exact, area, base + nm, valueText (v), "", "", "lfo_swing_flag_off");
+            }
+            else if (nm == "kParamSwing") entry (ItemKind::dropped, Reason::noEngineEquivalent, area, base + nm, valueText (v), "", "", "random_lfo_parameter_without_key");
             else if (nm == "kParamSmooth" || nm == "kParamPhase" || nm == "kParamRise" || nm == "kParamDelay" || nm == "kParamMono" || nm == "kParamAnchored" || nm == "kParamDirection")
                 entry (ItemKind::dropped, Reason::limitExceeded, area, base + nm, valueText (v), "", "", "random_lfo_parameter_without_key");
             else entry (ItemKind::dropped, Reason::noEngineEquivalent, area, base + nm, valueText (v), "", "", "serum_feature_not_modelled");

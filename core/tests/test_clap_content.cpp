@@ -1,15 +1,21 @@
-// SynthyBoy - tests of the CLAP extension "synthyboy.content" of the native shell (WP-01 g): import by path, list, attach, remove, and the audible result.
+// SynthyBoy - tests of the CLAP extension "synthyboy.content" (WP-01 g, GROUPD): import by path, list, attach, remove, and the audible result.
+// The tests run against the native shell (linked in) and, when SYNTHYBOY_CLAP_UNDER_TEST names a .clap bundle, against that module: the JUCE-wrapped CLAP build (REMAINDER item 3,
+// ctest synthyboy_test_clap_content_juce) answers the same extension with the same functions (shell-clap/synthyboy_content_service.cpp) through the patched wrapper.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
+
+#include <dlfcn.h>
+#include <unistd.h>
 
 #include "groupd_util.h"
 #include "synthyboy/params.h"
@@ -27,6 +33,9 @@ const clap_host_t s_host = { CLAP_VERSION, nullptr, "content-test-host", "Safian
                              [] (const clap_host_t*, const char*) -> const void* { return nullptr; }, [] (const clap_host_t*) {}, [] (const clap_host_t*) {},
                              [] (const clap_host_t*) {} };
 
+/** The output events: a wrapper (the JUCE one) writes parameter changes made by the plug-in itself; the test ignores them. */
+const clap_output_events_t s_outEvents = { nullptr, [] (const clap_output_events_t*, const clap_event_header_t*) -> bool { return true; } };
+
 struct Events
 {
     std::vector<const clap_event_header_t*> list;
@@ -38,6 +47,21 @@ struct Events
         in.get = [] (const clap_input_events_t* l, uint32_t i) -> const clap_event_header_t* { return static_cast<Events*> (l->ctx)->list[i]; };
     }
 };
+
+/** The JUCE-wrapped build reports every parameter as 0 .. 1 (clap-juce-extensions with "Use JUCE parameter ranges" OFF): its events carry the normalised value of the JUCE range
+    (start, end, skew), the native shell takes plain values. */
+bool s_normalisedEvents = false;
+
+double eventValueOf (const ParamInfo& info, double plain)
+{
+    if (! s_normalisedEvents)
+        return plain;
+    const double span = static_cast<double> (info.max) - static_cast<double> (info.min);
+    double proportion = span > 0.0 ? std::clamp ((plain - static_cast<double> (info.min)) / span, 0.0, 1.0) : 0.0;
+    if (info.scale == Scale::exp_skew && info.skew != 1.0f)
+        proportion = std::pow (proportion, static_cast<double> (info.skew));
+    return proportion;
+}
 
 clap_event_param_value_t paramEvent (const char* key, double value)
 {
@@ -51,8 +75,39 @@ clap_event_param_value_t paramEvent (const char* key, double value)
     e.port_index = -1;
     e.channel = -1;
     e.key = -1;
-    e.value = value;
+    e.value = eventValueOf (*findParamByKey (key), value);
     return e;
+}
+
+/** The plug-in factory under test: the module named by SYNTHYBOY_CLAP_UNDER_TEST (a .clap bundle, loaded once) or the native shell. */
+const clap_plugin_factory_t* openFactory (bool& wrapped)
+{
+    static const clap_plugin_entry_t* entry = nullptr;
+    static bool isWrapped = false;
+    if (entry == nullptr)
+    {
+        if (const char* bundle = std::getenv ("SYNTHYBOY_CLAP_UNDER_TEST"); bundle != nullptr && bundle[0] != '\0')
+        {
+            std::string path = bundle;
+            const std::string name = fs::path (path).stem().string();
+            path += "/Contents/MacOS/" + name;
+            void* lib = dlopen (path.c_str(), RTLD_NOW | RTLD_LOCAL);
+            if (lib == nullptr)
+                std::printf ("    dlopen %s: %s\n", path.c_str(), dlerror());
+            entry = lib != nullptr ? static_cast<const clap_plugin_entry_t*> (dlsym (lib, "clap_entry")) : nullptr;
+            isWrapped = entry != nullptr;
+            if (entry != nullptr)
+                entry->init (bundle);
+        }
+        else
+        {
+            entry = synthyboy_clap_get_entry();
+            entry->init ("synthyboy_static");
+        }
+    }
+    wrapped = isWrapped;
+    s_normalisedEvents = isWrapped;
+    return entry != nullptr ? static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID)) : nullptr;
 }
 
 /** Renders `seconds` of a held note and returns the left channel. The parameter events go in with the first block. */
@@ -87,6 +142,7 @@ std::vector<float> play (const clap_plugin_t* plugin, int key, double seconds, s
         proc.audio_outputs = &audio;
         proc.audio_outputs_count = 1;
         proc.in_events = &events.in;
+        proc.out_events = &s_outEvents;
         plugin->process (plugin, &proc);
         out.insert (out.end(), l.begin(), l.end());
     }
@@ -121,7 +177,7 @@ void writeFile (const fs::path& path, const std::vector<uint8_t>& bytes)
 
 TEST (clap_content_extension_imports_lists_attaches_and_removes)
 {
-    const fs::path dir = fs::temp_directory_path() / "sb_clap_content";
+    const fs::path dir = fs::temp_directory_path() / ("sb_clap_content_" + std::to_string (getpid()));
     fs::remove_all (dir);
     setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
 
@@ -131,9 +187,11 @@ TEST (clap_content_extension_imports_lists_attaches_and_removes)
     const fs::path file = dir / "in" / "Tone A3.wav";
     writeFile (file, encodeWav (tone.data(), nullptr, tone.size(), 48000, 16));
 
-    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
-    CHECK (entry->init ("synthyboy_static"));
-    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    bool wrapped = false;
+    const auto* factory = openFactory (wrapped);
+    CHECK (factory != nullptr);
+    if (factory == nullptr)
+        return;
     const clap_plugin_t* plugin = factory->create_plugin (factory, &s_host, "com.safian.synthyboy");
     CHECK (plugin != nullptr && plugin->init (plugin));
     const auto* ext = static_cast<const synthyboy_plugin_content_t*> (plugin->get_extension (plugin, SYNTHYBOY_EXT_CONTENT));
@@ -215,6 +273,7 @@ void setParams (const clap_plugin_t* plugin, std::vector<clap_event_param_value_
     proc.audio_outputs = &audio;
     proc.audio_outputs_count = 1;
     proc.in_events = &events.in;
+    proc.out_events = &s_outEvents;
     plugin->process (plugin, &proc);
 }
 
@@ -222,7 +281,7 @@ void setParams (const clap_plugin_t* plugin, std::vector<clap_event_param_value_
 // wavetable frame <-> LFO shape
 TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_lfo_shapes)
 {
-    const fs::path dir = fs::temp_directory_path() / "sb_clap_groupd";
+    const fs::path dir = fs::temp_directory_path() / ("sb_clap_groupd_" + std::to_string (getpid()));
     fs::remove_all (dir);
     setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
 
@@ -230,9 +289,11 @@ TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_
     const auto tone = groupd::sawTone (f0, 1.5, 48000.0, 16);
     writeFile (dir / "in" / "Saw A3.wav", encodeWav (tone.data(), nullptr, tone.size(), 48000, 16));
 
-    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
-    CHECK (entry->init ("synthyboy_static"));
-    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    bool wrapped = false;
+    const auto* factory = openFactory (wrapped);
+    CHECK (factory != nullptr);
+    if (factory == nullptr)
+        return;
     const clap_plugin_t* plugin = factory->create_plugin (factory, &s_host, "com.safian.synthyboy");
     CHECK (plugin != nullptr && plugin->init (plugin));
     const auto* ext = static_cast<const synthyboy_plugin_content_t*> (plugin->get_extension (plugin, SYNTHYBOY_EXT_CONTENT));

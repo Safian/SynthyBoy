@@ -398,7 +398,13 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
             consume (v);
         }
         else if (nm == "lfophasor" || nm == "lfo") acctRest (v, ItemKind::ignored, Reason::exact, area, p, "", "", "effect_lfo_runtime_state");
-        else if (nm == "PZs") acctRest (v, ItemKind::dropped, Reason::noEngineEquivalent, area, p, "", "", "pz_svf_poles_and_zeros_not_imported");
+        else if (nm == "PZs")
+        {
+            // REMAINDER item 4 (S4): the response curve of the FX filter (the main FX filter only: the curve of the content belongs to fxfilter)
+            const int typeNode = find ("kParamType");
+            const bool pzFilterType = instanceZero && type == kFxTypeFilter && isText (typeNode) && str (typeNode) == "PZ_SVF";
+            pzFilter (v, pp, instanceZero && type == kFxTypeFilter ? "fxfilter" : "", pzFilterType, area, p);
+        }
         else if (nm == "numChannels" || nm == "numFrames" || nm == "sampleRate" || nm == "sourceRate") acctRest (v, ItemKind::ignored, Reason::exact, area, p, "", "", "derived_from_the_impulse_data");
         else if (nm == "embeddedIR" || nm == "relativePathToIR") acctRest (v, ItemKind::dropped, Reason::limitExceeded, area, p, "", "", "only_one_impulse_response_per_patch");
     });
@@ -483,6 +489,18 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
     {
         if (param == "kParamVoiceAmp") { out.key = "master.volume"; out.ok = true; out.fid = Fid::approx; out.note = "voice_amp_as_master_volume"; out.dbLaw = true; out.srcKey = "master.volume"; return out; }
         if (fromRules ({ "Global" }, 1)) return out;
+    }
+    else if (type == "ModSlot")
+    {
+        // REMAINDER item 1 (A449): the RISE / FALL / DELAY of another slot are modulatable keys now (backlog S8); the depth is a share of the key's range (RISE / FALL: the Serum knob is
+        // quadratic in time, so the depth is approximate; DELAY: the destinations seen are tempo synced, so the beats key)
+        if (id >= 0 && id < kNumModSlots)
+        {
+            const std::string pfx = modPrefix (id);
+            if (param == "kParamSmoothRise") { out.key = pfx + ".rise"; out.ok = true; out.fid = Fid::approx; out.note = "slot_rise_destination_depth_is_a_share_of_the_range"; return out; }
+            if (param == "kParamSmoothFall") { out.key = pfx + ".fall"; out.ok = true; out.fid = Fid::approx; out.note = "slot_fall_destination_depth_is_a_share_of_the_range"; return out; }
+            if (param == "kParamDelayOffset") { out.key = pfx + ".delay_beats"; out.ok = true; out.fid = Fid::approx; out.note = "slot_delay_destination_depth_is_a_share_of_the_range"; return out; }
+        }
     }
     else if (type == "LFO")
     {
@@ -743,7 +761,7 @@ void Importer::modSlots()
                     ContentModCurve mc;
                     mc.slot = k + 1;
                     mc.points = reduce (pts, kMaxModCurvePoints);
-                    for (auto& p : mc.points) { p.modX = {}; p.modY = {}; }
+                    for (auto& p : mc.points) { p.modX = {}; p.modY = {}; p.modCurve = {}; }
                     R.modCurves.push_back (std::move (mc));
                     acctRest (c, ItemKind::imported, Reason::exact, area, name + "/flex/0", pfx + ".source", "curve", "modulation_curve_stored");
                 }
@@ -751,8 +769,8 @@ void Importer::modSlots()
             }
             consume (flex);
         }
-        // RISE / FALL of the slot (GROUPB WP-08, A408): kParamSmoothRise / Fall are 0 .. 100 of the knob, read as 2000 ms x (v / 100)^2; kParamSmoothLink (absent: linked)
-        // makes the one the other when only one is stored. They live in the record of the slot in content.modCurves
+        // RISE / FALL of the slot (GROUPB WP-08, A408; the keys modNN.rise / fall since REMAINDER item 1, A449): kParamSmoothRise / Fall are 0 .. 100 of the knob, read as
+        // 2000 ms x (v / 100)^2; kParamSmoothLink (absent: linked) makes a missing one follow the stored one
         {
             const int riseNode = get (pp, "kParamSmoothRise"), fallNode = get (pp, "kParamSmoothFall"), linkNode = get (pp, "kParamSmoothLink");
             if (riseNode >= 0 || fallNode >= 0)
@@ -761,21 +779,46 @@ void Importer::modSlots()
                 const bool linked = linkNode >= 0 ? num (linkNode) >= 0.5 : true;
                 if (linked && riseNode >= 0 && fallNode < 0) fall = rise;
                 if (linked && fallNode >= 0 && riseNode < 0) rise = fall;
-                const auto toMs = [] (double v) { const double u = clampd (v, 0.0, 100.0) / 100.0; return static_cast<float> (std::min<double> (kMaxModSlewMs, 2000.0 * u * u)); };
-                ContentModCurve* record = nullptr;
-                for (ContentModCurve& mc : R.modCurves)
-                    if (mc.slot == k + 1) record = &mc;
-                if (record == nullptr)
-                {
-                    R.modCurves.emplace_back();
-                    record = &R.modCurves.back();
-                    record->slot = k + 1;
-                }
-                record->riseMs = toMs (rise);
-                record->fallMs = toMs (fall);
-                if (riseNode >= 0) { entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamSmoothRise", valueText (riseNode), pfx + ".source", fmt (record->riseMs) + " ms", "modulation_rise_stored_in_the_slot_record"); consume (riseNode); }
-                if (fallNode >= 0) { entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamSmoothFall", valueText (fallNode), pfx + ".source", fmt (record->fallMs) + " ms", "modulation_fall_stored_in_the_slot_record"); consume (fallNode); }
+                const auto toMs = [] (double v) { const double u = clampd (v, 0.0, 100.0) / 100.0; return std::min<double> (kMaxModSlewMs, 2000.0 * u * u); };
+                const double riseMs = toMs (rise), fallMs = toMs (fall);
+                store (pfx + ".rise", riseMs);
+                store (pfx + ".fall", fallMs);
+                setByFile[static_cast<size_t> (indexOf (pfx + ".rise"))] = 1;
+                setByFile[static_cast<size_t> (indexOf (pfx + ".fall"))] = 1;
+                if (riseNode >= 0) { entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamSmoothRise", valueText (riseNode), pfx + ".rise", fmt (riseMs), "modulation_rise_knob_law_assumed"); consume (riseNode); }
+                if (fallNode >= 0) { entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamSmoothFall", valueText (fallNode), pfx + ".fall", fmt (fallMs), "modulation_fall_knob_law_assumed"); consume (fallNode); }
                 if (linkNode >= 0) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamSmoothLink", valueText (linkNode), "", "", "rise_fall_link_flag"); consume (linkNode); }
+            }
+        }
+        {
+            // the link flag of a slot that has no RISE / FALL: nothing to link
+            const int linkLeft = get (pp, "kParamSmoothLink");
+            if (linkLeft >= 0 && ! used[static_cast<size_t> (linkLeft)]) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamSmoothLink", valueText (linkLeft), "", "", "rise_fall_link_flag_without_a_time"); consume (linkLeft); }
+        }
+        // DELAY of the slot (REMAINDER item 1, A450): kParamDelayOffset 0 .. 1 with kParamDelayBeatSync: tempo synced one bar (4 beats) x the value, otherwise 4000 ms x the value
+        {
+            const int delayNode = get (pp, "kParamDelayOffset"), syncNode = get (pp, "kParamDelayBeatSync");
+            if (delayNode >= 0)
+            {
+                const double v = clampd (num (delayNode), 0.0, 1.0);
+                const bool sync = syncNode >= 0 && num (syncNode) >= 0.5;
+                const std::string key = pfx + (sync ? ".delay_beats" : ".delay");
+                bool cl = false;
+                const double st = store (key, sync ? 4.0 * v : 4000.0 * v, &cl);
+                setByFile[static_cast<size_t> (indexOf (key))] = 1;
+                if (sync)
+                {
+                    store (pfx + ".delay_sync", 1);
+                    setByFile[static_cast<size_t> (indexOf (pfx + ".delay_sync"))] = 1;
+                }
+                entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamDelayOffset", valueText (delayNode), key, fmt (st), "modulation_delay_scale_assumed");
+                consume (delayNode);
+            }
+            if (syncNode >= 0)
+            {
+                if (delayNode >= 0) entry (ItemKind::imported, Reason::exact, area, name + "/plainParams/kParamDelayBeatSync", valueText (syncNode), pfx + ".delay_sync", "", "modulation_delay_tempo_sync");
+                else entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamDelayBeatSync", valueText (syncNode), "", "", "delay_sync_without_delay");
+                consume (syncNode);
             }
         }
         if (mainFlag >= 0) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamMainCurveData", valueText (mainFlag), "", "", "curve_flag"); consume (mainFlag); }
@@ -801,20 +844,20 @@ void Importer::modSlots()
             const int bus = static_cast<int> (num (get (e, "busID"), -1)), lfoId = static_cast<int> (num (get (e, "lfoID"), -1)), type = static_cast<int> (num (get (e, "lfoType"), -1));
             const int point = static_cast<int> (num (get (e, "pointID"), -1)), target = static_cast<int> (num (get (e, "target"), -1));
             bool done = false;
-            if (bus >= 0 && bus < 16 && buses[bus].used && type == 0 && lfoId >= 0 && lfoId < 10 && target >= 0 && target <= 1)
+            if (bus >= 0 && bus < 16 && buses[bus].used && type == 0 && lfoId >= 0 && lfoId < 10 && target >= 0 && target <= 2)
                 for (ContentLfoShape& shape : R.lfoShapes)
                     if (shape.lfo == lfoId + 1 && lfoOrigPoints[lfoId] > 0 && static_cast<int> (shape.points.size()) == lfoOrigPoints[lfoId] + lfoPointOffset[lfoId])
                     {
                         const int at = point + lfoPointOffset[lfoId];
                         if (at < 0 || at >= static_cast<int> (shape.points.size())) break;
-                        ContentModRef& m = target == 0 ? shape.points[static_cast<size_t> (at)].modX : shape.points[static_cast<size_t> (at)].modY;
+                        ContentModRef& m = target == 0 ? shape.points[static_cast<size_t> (at)].modX : target == 1 ? shape.points[static_cast<size_t> (at)].modY : shape.points[static_cast<size_t> (at)].modCurve;
                         m.present = true;
                         m.source = buses[bus].source;
                         m.amount = static_cast<float> (buses[bus].amount);
                         done = true;
                     }
-            if (done) acctRest (e, ItemKind::approximated, Reason::tierNote, "lfo" + std::to_string (lfoId + 1), "lfoPointModAssignments/" + std::to_string (q), "", "", target == 0 ? "point_x_modulation" : "point_y_modulation");
-            else acctRest (e, ItemKind::dropped, Reason::noEngineEquivalent, "lfo", "lfoPointModAssignments/" + std::to_string (q), "", "", target == 2 ? "point_curve_modulation_not_modelled" : "point_modulation_target_not_modelled");
+            if (done) acctRest (e, ItemKind::approximated, Reason::tierNote, "lfo" + std::to_string (lfoId + 1), "lfoPointModAssignments/" + std::to_string (q), "", "", target == 0 ? "point_x_modulation" : target == 1 ? "point_y_modulation" : "point_curve_modulation");
+            else acctRest (e, ItemKind::dropped, Reason::noEngineEquivalent, "lfo", "lfoPointModAssignments/" + std::to_string (q), "", "", "point_modulation_target_not_modelled");
         }
         consume (as);
     }
@@ -838,7 +881,7 @@ void Importer::curves()
         if (pointsFromCurve (c, pts, true))
         {
             for (const ContentPoint& p : pts) if (std::fabs (p.y - p.x) > 1e-4 || std::fabs (p.power) > 1e-4) identity = false;
-            for (auto& p : pts) { p.modX = {}; p.modY = {}; }
+            for (auto& p : pts) { p.modX = {}; p.modY = {}; p.modCurve = {}; }
             if (! identity) (velo ? R.velocityCurve : R.noteCurve) = reduce (pts, kMaxCurvePoints);
         }
         const int lg = get (c, "legato");
@@ -954,7 +997,7 @@ void Importer::runShape()
         R.shape.smooth = false;
         const bool reduced = pts.size() > static_cast<size_t> (kMaxLfoShapePoints);
         R.shape.points = reduce (pts, kMaxLfoShapePoints);
-        for (auto& p : R.shape.points) { p.modX = {}; p.modY = {}; }
+        for (auto& p : R.shape.points) { p.modX = {}; p.modY = {}; p.modCurve = {}; }
         acctRest (lfo, reduced ? ItemKind::approximated : ItemKind::imported, reduced ? Reason::truncated : Reason::exact, "shape", "LFO", "", "", reduced ? "shape_resampled_to_128_points" : "shape_points_and_curves");
     }
     else if (lfo >= 0) acctRest (lfo, ItemKind::dropped, Reason::noEngineEquivalent, "shape", "LFO", "", "", "shape_unreadable");
@@ -972,6 +1015,15 @@ void Importer::runStyle()
 {
     meta();
     voicePanel (true);
+    unmappedTopLevel();
+}
+
+void Importer::runPzFile()
+{
+    meta();
+    const int single = get (0, "PZ"), multi = get (0, "PZs");
+    if (single >= 0) pzFilter (single, -1, "", true, "filter", "PZ");
+    else if (multi >= 0) pzFilter (multi, -1, "", true, "filter", "PZs");
     unmappedTopLevel();
 }
 

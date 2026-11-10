@@ -42,7 +42,7 @@
  * by the " / " hierarchy of ParamInfo::group), MIDI and parameter values are converted into synthyboy::Event /
  * IEngine::setParam each block (only the parameters whose value changed), and the state blob is synthyboy::saveState().
  */
-class SynthyBoyProcessor final : public juce::AudioProcessor,
+class SynthyBoyProcessor : public juce::AudioProcessor,
                                  public synthyboy::ui::UiHost,
                                  private juce::Timer
 {
@@ -78,6 +78,8 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept { return apvts; }
+    /** All parameters of the tree as a ParamValues (message thread). */
+    synthyboy::ParamValues allValues() const { return currentValues(); }
 
     // synthyboy::ui::UiHost (the editor's view of the processor; message thread)
     juce::AudioProcessorValueTreeState& parameters() override { return apvts; }

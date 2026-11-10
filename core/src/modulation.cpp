@@ -117,7 +117,7 @@ size_t modDestinationChoiceOf (size_t paramIndex) noexcept
 
 ModSlotParams modSlotParams (int slot) noexcept
 {
-    ModSlotParams p { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+    ModSlotParams p { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     if (slot < 0 || slot >= kNumModSlots)
         return p;
 
@@ -138,6 +138,11 @@ ModSlotParams modSlotParams (int slot) noexcept
     p.auxInv = find ("aux_inv");
     p.auxPower = find ("aux_power");
     p.auxOutput = find ("aux_output");
+    p.rise = find ("rise");
+    p.fall = find ("fall");
+    p.delay = find ("delay");
+    p.delayBeats = find ("delay_beats");
+    p.delaySync = find ("delay_sync");
     return p;
 }
 } // namespace synthyboy

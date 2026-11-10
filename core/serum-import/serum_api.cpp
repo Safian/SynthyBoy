@@ -111,6 +111,7 @@ SerumImportResult importSerumFile (const void* data, size_t size, const SerumImp
         else if (ft == "XferShape") { r.kind = SerumFileKind::shape; imp.runShape(); }
         else if (ft == "SerumStyle") { r.kind = SerumFileKind::style; imp.runStyle(); }
         else if (ft == "SerumMIDIMap") { r.kind = SerumFileKind::midiMap; imp.runMidiMap(); }
+        else if (ft.rfind ("XferFilterPZ", 0) == 0) { r.kind = SerumFileKind::filterPz; imp.runPzFile(); }
         else
         {
             r.kind = ft == "XferPath" ? SerumFileKind::path : ft == "XferClip" ? SerumFileKind::clip : ft == "XferClipBank" ? SerumFileKind::clipBank : ft == "XferArp" ? SerumFileKind::arp
@@ -227,6 +228,7 @@ std::string serializeSerumPreset (const SerumImportResult& result, const PresetM
     content.remaps = result.remaps;
     content.spectralFilters = result.spectralFilters;
     content.modCurves = result.modCurves;
+    content.filterCurves = result.filterCurves;
     content.velocityCurve = result.velocityCurve;
     content.noteCurve = result.noteCurve;
     content.shaperA = result.shaperA;
@@ -245,6 +247,7 @@ std::string serializeSerumPreset (const SerumImportResult& result, const PresetM
         for (const auto& w : content.remaps) { StateContent t; t.remaps.push_back (w); if (ok (t)) keep.remaps.push_back (w); }
         for (const auto& w : content.spectralFilters) { StateContent t; t.spectralFilters.push_back (w); if (ok (t)) keep.spectralFilters.push_back (w); }
         for (const auto& w : content.modCurves) { StateContent t; t.modCurves.push_back (w); if (ok (t)) keep.modCurves.push_back (w); }
+        for (const auto& w : content.filterCurves) { StateContent t; t.filterCurves.push_back (w); if (ok (t)) keep.filterCurves.push_back (w); }
         { StateContent t; t.velocityCurve = content.velocityCurve; if (ok (t)) keep.velocityCurve = content.velocityCurve; }
         { StateContent t; t.noteCurve = content.noteCurve; if (ok (t)) keep.noteCurve = content.noteCurve; }
         { StateContent t; t.shaperA = content.shaperA; if (ok (t)) keep.shaperA = content.shaperA; }

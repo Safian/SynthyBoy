@@ -40,6 +40,7 @@ public:
     void runMidiMap();   // .SerumMIDIMap (GROUPA2, WP-02)
     void midiMapSection (int arrayNode, const std::string& path); // `midiMap`: [{ccNum, paramIDs}]
     void runUnmapped (const char* what); // the families without an equivalent
+    void runPzFile();    // .XferFilterPZSingle / .XferFilterPZMulti (REMAINDER item 4): the response curve of the poles and zeros
     void finish();       // the sweep of unconsumed leaves, counts, fidelity
 
     // ---- infra ----
@@ -113,6 +114,10 @@ public:
     void subOsc();
     void routing();
     void voiceFilter (int i);
+    /** REMAINDER item 4 (S4): the poles and zeros (`pzNode`: the array `PZs` of 4 sets or the one set `PZ`) as the response curve of a PZ SVF filter. `params` is the plainParams map of the filter
+        (kParamX / kParamY blend the 4 sets), `filter` the name of the content entry ("filter1" / "filter2" / "fxfilter", empty: the curve of a file, R.pzCurve). The leaves of the node are
+        accounted: imported as a curve (approximated), or ignored when the filter is not a PZ SVF (`active` false). */
+    void pzFilter (int pzNode, int params, const std::string& filter, bool active, const std::string& area, const std::string& path);
     void envelope (int i);
     void lfo (int i);
     void macro (int i);

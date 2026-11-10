@@ -214,7 +214,7 @@ private:
     PointAxis modAxis = PointAxis::y;
     float modStartDepth = 0.0f;
     int lastArmed = 0;
-    std::vector<std::array<float, 2>> depthMemo; // depth before a bypass, per point and axis (0 = unknown)
+    std::vector<std::array<float, 3>> depthMemo; // depth before a bypass, per point and axis (0 = unknown)
     float dragStartPower = 0.0f;
     ContentLfoShape gestureStart;
     bool gestureChanged = false;

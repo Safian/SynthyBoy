@@ -692,6 +692,8 @@ bool canModulatePointAxis (size_t index, size_t pointCount, PointAxis axis) noex
 {
     if (index >= pointCount)
         return false;
+    if (axis == PointAxis::curve)
+        return index + 1 < pointCount;
     return axis == PointAxis::y || (index > 0 && index + 1 < pointCount);
 }
 

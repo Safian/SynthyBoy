@@ -634,6 +634,39 @@ TEST (custom_lfo_shapes_and_point_modulation)
     }
 }
 
+// REMAINDER item 4 (S13): the curve of the segment after a point takes a modulation source; at 1.0 the power moves by 10 (A457)
+TEST (lfo_point_curve_modulation_bends_the_segment_after_the_point)
+{
+    const auto render = [] (bool withMod, float macro)
+    {
+        auto e = makeVital();
+        sine (*e, 0.0f);
+        setByKey (*e, "lfo1.shape", 12.0f); // Custom
+        setByKey (*e, "lfo1.rate", 0.8f);
+        setByKey (*e, "lfo1.smooth", 0.0f);
+        setByKey (*e, "macro.1", macro);
+        route (*e, 1, "lfo1", "osc1.level", 100.0f);
+        prepare (*e);
+        StateContent content;
+        ContentLfoShape shape;
+        shape.lfo = 1;
+        shape.points = { { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f } };   // a straight rise over the cycle
+        if (withMod)
+            shape.points[0].modCurve = { true, "macro1", 1.0f };
+        content.lfoShapes.push_back (shape);
+        CHECK (validateContent (content));
+        e->setContent (content);
+        return renderWith (*e, { noteOn (0, 69) }, frames (1.0));
+    };
+    const auto plain = render (false, 100.0f);
+    const auto closed = render (true, 0.0f), bent = render (true, 100.0f);
+    // macro 0: the curve source adds nothing, the straight rise of the shape; macro 100: power +10 (the rise is held back, then jumps)
+    std::printf("    curve modulation: mid cycle level straight %.5f, macro 0 %.5f, macro 100 %.5f\n", rmsBetween (plain, 0.55, 0.6), rmsBetween (closed, 0.55, 0.6), rmsBetween (bent, 0.55, 0.6));
+    CHECK_NEAR (rmsBetween (closed, 0.55, 0.6), rmsBetween (plain, 0.55, 0.6), 0.02 * rmsBetween (plain, 0.55, 0.6));
+    CHECK (std::fabs (rmsBetween (bent, 0.55, 0.6) - rmsBetween (plain, 0.55, 0.6)) > 0.2 * rmsBetween (plain, 0.55, 0.6));
+    CHECK (sbtest::allFinite (bent.left));
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // WP3
 // ---------------------------------------------------------------------------------------------------------------------------------

@@ -13,7 +13,9 @@ endif()
 # Target: synthyboy_static (static library with synthyboy_clap_get_entry for iOS / MPC / embedded hosts)
 add_library(synthyboy_static STATIC
     synthyboy_clap.cpp
-    synthyboy_clap.h)
+    synthyboy_clap.h
+    synthyboy_content_service.cpp
+    synthyboy_content_service.h)
 
 target_include_directories(synthyboy_static
     PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -27,7 +29,9 @@ set_target_properties(synthyboy_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Target: synthyboy_clap (dynamic CLAP module .clap for standalone CLAP hosts like Kick)
 add_library(synthyboy_clap MODULE
     synthyboy_clap.cpp
-    synthyboy_clap.h)
+    synthyboy_clap.h
+    synthyboy_content_service.cpp
+    synthyboy_content_service.h)
 
 target_include_directories(synthyboy_clap
     PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}"

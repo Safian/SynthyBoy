@@ -141,6 +141,8 @@ struct SerumImportResult
     std::vector<ImportedInstrument> instruments; // GROUPC WP-13: the SFZ instruments of the multisample oscillators
     std::vector<ContentRemap> spectralFilters;   // GROUPC WP-12: the drawn filter mask of a spectral oscillator (flex)
     std::vector<ContentModCurve> modCurves;
+    std::vector<ContentFilterCurve> filterCurves; // REMAINDER item 4 (S4): the response curves of the PZ SVF filters of a preset ("filter1" / "filter2" / "fxfilter")
+    ContentFilterCurve pzCurve;                   // a .XferFilterPZ* file: its curve (filter empty: the caller picks the filter)
     std::vector<ContentPoint> velocityCurve, noteCurve, shaperA, shaperB;
     ContentTuning tuning;
     std::vector<std::pair<int, std::string>> midiMap; // the MIDI CC map of a preset (`midiMap`) or of a .SerumMIDIMap file: (CC, our parameter key), ascending by CC (GROUPA2 WP-02)

@@ -7,6 +7,7 @@
 #include "synthyboy/shapes/shape.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <memory>
@@ -249,7 +250,7 @@ public:
 
     std::vector<std::string> keys() const override
     {
-        return {
+        std::vector<std::string> list = {
             "mod01.amount",
             "mod01.power",
             "mod01.bipolar",
@@ -260,17 +261,47 @@ public:
             "mod01.aux_power",
             "mod01.aux_output"
         };
+        // RISE / FALL / DELAY of every slot (13-new-keys.md 4.41): the controls of the shown slot are placed in the panel, the others stay hidden
+        for (int slot = 1; slot <= kNumModSlots; ++slot)
+            for (const char* tail : { "rise", "fall", "delay", "delay_beats", "delay_sync" })
+            {
+                char buffer[32];
+                std::snprintf (buffer, sizeof buffer, "mod%02d.%s", slot, tail);
+                list.emplace_back (buffer);
+            }
+        return list;
     }
 
     void build() override
     {
         const auto all = keys();
-        for (size_t i = 0; i < all.size(); ++i)
+        for (size_t i = 0; i < 9; ++i)
         {
             if (i < 4)
                 addControl (all[i]);
             else
                 addMoreControl (all[i]);
+        }
+        for (int slot = 0; slot < kNumModSlots; ++slot)
+        {
+            const auto base = static_cast<size_t> (9 + 5 * slot);
+            const char* const labels[5] = { "RISE", "FALL", "DELAY", "DELAY", "SYNC" };
+            const char* const tips[5] = { "RISE: the time the source needs to rise to 90 % of a step (0 = off); modulatable",
+                                          "FALL: the time the source needs to fall to 10 % of a step (0 = off); modulatable",
+                                          "DELAY: the connection starts this long after the note-on (0 = off); modulatable",
+                                          "DELAY in beats of the host tempo (0 = off); modulatable", "DELAY in beats of the host tempo" };
+            for (size_t q = 0; q < 5; ++q)
+            {
+                std::unique_ptr<ParamControl> control;
+                if (q == 4)
+                    control = std::make_unique<ParamToggle> (ctx, all[base + q], labels[q]);
+                else
+                    control = std::make_unique<ParamSlider> (ctx, all[base + q], labels[q]);
+                control->setTooltip (tips[q]);
+                auto& added = addMoreControl (std::move (control));
+                excludeFromFlow (added);
+                slotControls[static_cast<size_t> (slot)][q] = &added;
+            }
         }
 
         prevSlotButton.setButtonText ("<");
@@ -316,40 +347,10 @@ public:
         editor->setVisible (false);
         addChildComponent (*editor);
 
-        // RISE / FALL of the connection (GROUPB WP-08, 13-new-keys.md 4.35): a slew limiter on the source in front of the curve, kept in content.modCurves
-        for (juce::Slider* slider : { &riseSlider, &fallSlider })
-        {
-            const bool rise = slider == &riseSlider;
-            slider->setSliderStyle (juce::Slider::LinearHorizontal);
-            slider->setRange (0.0, static_cast<double> (kMaxModSlewMs), 1.0);
-            slider->setSkewFactorFromMidPoint (300.0);
-            slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, ctx.theme.ipx (62.0f), ctx.theme.ipx (20.0f));
-            slider->setTextValueSuffix (" ms");
-            slider->setColour (juce::Slider::trackColourId, ctx.theme.colours.accent);
-            slider->setColour (juce::Slider::thumbColourId, ctx.theme.colours.accent);
-            slider->setColour (juce::Slider::backgroundColourId, ctx.theme.colours.track);
-            slider->setColour (juce::Slider::textBoxTextColourId, ctx.theme.colours.text);
-            slider->setColour (juce::Slider::textBoxOutlineColourId, ctx.theme.colours.outline);
-            slider->setTooltip (rise ? "RISE: the time the source needs to rise to 90 % of a step (0 = off)" : "FALL: the time the source needs to fall to 10 % of a step (0 = off)");
-            slider->onValueChange = [this, rise, slider]
-            {
-                if (! refreshingSlew)
-                    writeSlew (rise, static_cast<float> (slider->getValue()));
-            };
-            addAndMakeVisible (*slider);
-        }
-        riseLabel.setText ("RISE", juce::dontSendNotification);
-        fallLabel.setText ("FALL", juce::dontSendNotification);
-        for (juce::Label* label : { &riseLabel, &fallLabel })
-        {
-            label->setFont (ctx.theme.font (ctx.theme.px (12.0f), true));
-            label->setColour (juce::Label::textColourId, ctx.theme.colours.textDim);
-            addAndMakeVisible (*label);
-        }
         startTimerHz (4);   // a preset or an undo changes the content behind our back
 
         updateRoutingDisplay();
-        refreshSlew();
+        layoutSlotControls();
     }
 
     ~ModCurvePanel() override { stopTimer(); }
@@ -368,7 +369,8 @@ public:
         const int bars = twoBars (width - 4 * gap) ? 2 : 1;
         const int visualH = customMode && editor != nullptr ? editor->preferredHeight (width - 2 * gap) : ctx.theme.ipx (160.0f);
         const int controlsH = isMoreExpanded() ? ctx.theme.ipx (140.0f) : ctx.theme.ipx (70.0f);
-        const int slewH = slewOnTwoRows (width - 4 * gap) ? 2 * touch + gap : touch;
+        const int rowH = slotRowHeight();
+        const int slewH = slewOnTwoRows (width - 4 * gap) ? 3 * rowH + 2 * gap : 2 * rowH + gap;   // RISE | FALL, DELAY | SYNC
         return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + slewH + gap + controlsH + gap;
     }
 
@@ -415,26 +417,29 @@ public:
 
         area.removeFromTop (gap);
         {
-            // RISE and FALL: side by side, one under the other on a narrow panel
+            // RISE and FALL side by side (one under the other on a narrow panel), then DELAY with its tempo sync switch
+            const int rowH = slotRowHeight();
             const bool slewTwoRows = slewOnTwoRows (area.getWidth());
-            auto riseRow = area.removeFromTop (h);
+            auto riseRow = area.removeFromTop (rowH);
             juce::Rectangle<int> fallRow;
             if (slewTwoRows)
             {
                 area.removeFromTop (gap);
-                fallRow = area.removeFromTop (h);
+                fallRow = area.removeFromTop (rowH);
             }
             else
             {
                 fallRow = riseRow.removeFromRight ((riseRow.getWidth() - gap) / 2);
                 riseRow.removeFromRight (gap);
             }
-            const int labelW = ctx.theme.ipx (40.0f);
-            riseLabel.setBounds (riseRow.removeFromLeft (labelW));
-            riseSlider.setBounds (riseRow);
-            fallLabel.setBounds (fallRow.removeFromLeft (labelW));
-            fallSlider.setBounds (fallRow);
             area.removeFromTop (gap);
+            auto delayRow = area.removeFromTop (rowH);
+            const int syncW = juce::jmax (h, ctx.theme.ipx (96.0f));
+            auto syncRect = delayRow.removeFromRight (syncW);
+            delayRow.removeFromRight (gap);
+            slewRects = { riseRow, fallRow, delayRow, delayRow, syncRect };
+            area.removeFromTop (gap);
+            layoutSlotControls();
         }
         layoutControls (area, false);
     }
@@ -442,44 +447,35 @@ public:
 private:
     bool slewOnTwoRows (int innerWidth) const { return innerWidth < 2 * ctx.theme.ipx (190.0f) + ctx.theme.gap(); }
 
-    /** The RISE / FALL of the shown slot from the content (a slot without a record: 0 / 0). */
-    void refreshSlew()
+    int slotRowHeight() const { return ctx.theme.ipx (16.0f) + ctx.theme.touch(); }
+
+    bool delayIsSynced() const
     {
-        float rise = 0.0f, fall = 0.0f;
-        for (const auto& mc : ctx.host.content().modCurves)
-            if (mc.slot == currentSlot + 1)
-            {
-                rise = mc.riseMs;
-                fall = mc.fallMs;
-            }
-        refreshingSlew = true;
-        if (! riseSlider.isMouseButtonDown())
-            riseSlider.setValue (static_cast<double> (rise), juce::dontSendNotification);
-        if (! fallSlider.isMouseButtonDown())
-            fallSlider.setValue (static_cast<double> (fall), juce::dontSendNotification);
-        refreshingSlew = false;
+        const auto p = modSlotParams (currentSlot);
+        return p.delaySync >= 0 && ctx.assign.matrix().get (p.delaySync) >= 0.5f;
     }
 
-    /** Stores one of the two times in the record of the shown slot (a record without points and without a time is removed again). */
-    void writeSlew (bool rise, float ms)
+    /** Puts the RISE, FALL, DELAY (ms or beats, by the sync switch) and SYNC controls of the shown slot in their rows and hides those of the other slots. */
+    void layoutSlotControls()
     {
-        auto content = ctx.host.content();
-        const int wanted = currentSlot + 1;
-        auto it = std::find_if (content.modCurves.begin(), content.modCurves.end(), [wanted] (const ContentModCurve& m) { return m.slot == wanted; });
-        if (it == content.modCurves.end())
-        {
-            if (ms <= 0.0f)
-                return;
-            ContentModCurve mc;
-            mc.slot = wanted;
-            content.modCurves.push_back (mc);
-            it = content.modCurves.end() - 1;
-        }
-        (rise ? it->riseMs : it->fallMs) = juce::jlimit (0.0f, kMaxModSlewMs, ms);
-        if (it->points.size() < 2 && it->riseMs <= 0.0f && it->fallMs <= 0.0f)
-            content.modCurves.erase (it);
-        ctx.host.setContent (content);
-        ctx.assign.sendChangeMessage();   // the matrix row marks the connection
+        shownSynced = delayIsSynced();
+        for (int slot = 0; slot < kNumModSlots; ++slot)
+            for (size_t q = 0; q < 5; ++q)
+            {
+                ParamControl* control = slotControls[static_cast<size_t> (slot)][q];
+                if (control == nullptr)
+                    continue;
+                const bool shown = slot == currentSlot && (q != 2 || ! shownSynced) && (q != 3 || shownSynced);
+                control->setVisible (shown);
+                control->setBounds (shown ? slewRects[q] : juce::Rectangle<int>());
+            }
+    }
+
+    /** A preset, an undo or the sync switch changed the unit of the delay behind our back. */
+    void refreshSlew()
+    {
+        if (delayIsSynced() != shownSynced)
+            layoutSlotControls();
     }
 
     void timerCallback() override { refreshSlew(); }
@@ -492,7 +488,7 @@ private:
         if (editor != nullptr)
             editor->setModSlot (currentSlot + 1);
         updateRoutingDisplay();
-        refreshSlew();
+        layoutSlotControls();
     }
 
 public:
@@ -516,8 +512,8 @@ public:
     }
     bool isCustomMode() const noexcept { return customMode; }
     RemapEditor* curveEditor() noexcept { return editor.get(); }
-    juce::Slider& riseControl() noexcept { return riseSlider; }
-    juce::Slider& fallControl() noexcept { return fallSlider; }
+    /** The controls of a slot (0-based): RISE, FALL, DELAY (ms), DELAY (beats), SYNC. */
+    ParamControl* slotControl (int slot0, int which) noexcept { return slotControls[static_cast<size_t> (slot0)][static_cast<size_t> (which)]; }
     int shownSlot() const noexcept { return currentSlot; }
     void showSlot (int slotIndex0)
     {
@@ -551,9 +547,9 @@ private:
     juce::Label routingLabel;
     juce::TextButton powerModeButton;
     juce::TextButton customButton;
-    juce::Slider riseSlider, fallSlider;
-    juce::Label riseLabel, fallLabel;
-    bool refreshingSlew = false;
+    std::array<std::array<ParamControl*, 5>, kNumModSlots> slotControls {};   // owned by the panel (more controls, outside the flow)
+    std::array<juce::Rectangle<int>, 5> slewRects {};
+    bool shownSynced = false;
     bool customMode = false;
     std::unique_ptr<RemapEditor> editor;
 

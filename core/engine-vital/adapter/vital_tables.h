@@ -23,6 +23,11 @@ constexpr int kMorphFrames = 64;
 /** The slot of "Saw Down" (oscN.wavetable = kWavetableSawDown, GROUPB WP-18) in the set: the entries 0 .. 12 are the built-in tables of the same choice number. */
 constexpr int kSawDownSlot = 13;
 
+/** Points of the spectral filter curve (13-new-keys.md 4.42): the waveform of a frame seen as a gain curve over the log frequency axis. */
+constexpr int kFilterCurvePoints = 257;
+/** One frame (2048 samples, -1 .. 1) as a filter curve: point j is the mean of the samples around j * 8, mapped to 0 .. 1 (y = (v + 1) / 2; the filter gain is 2 y = v + 1). No allocation. */
+void frameToFilterCurve (const float* frame2048, float* out257) noexcept;
+
 /** The built-in wavetables, built once by prepare() (allocation allowed there) and read-only afterwards. Each entry owns its data. */
 class WavetableSet
 {
@@ -33,9 +38,12 @@ public:
     /** The data of entry index (clamped); valid as long as the set lives. */
     sbvital::Wavetable::WavetableData* data (int index) noexcept;
     int numFrames (int index) const noexcept;
+    /** The filter curves of all frames of an entry (frames x kFilterCurvePoints values), for the spectral filter from a wavetable. */
+    const float* filterBank (int index, int& frames) const noexcept;
 
 private:
     std::vector<std::unique_ptr<sbvital::Wavetable>> tables;
+    std::vector<std::vector<float>> banks;
 };
 
 /** A wavetable from user frames (the `Preset table` of oscN.wavetable, docs/ui-design/13-new-keys.md C1): numFrames (1 .. 256) frames of

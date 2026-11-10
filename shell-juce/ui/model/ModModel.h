@@ -135,12 +135,12 @@ bool swapModSlots (ModMatrixAccess& matrix, int slotA, int slotB);
 // Stored exactly as the data model defines: {present, source key, amount -1..1} per axis, one source per axis. There is no bypass field, so
 // a bypassed modulation is "present with amount 0" (the engine adds nothing); the editor remembers the amount to restore.
 
-enum class PointAxis { x, y };
+enum class PointAxis { x, y, curve };   // curve (REMAINDER item 4, S13): the power of the segment after the point
 
-inline ContentModRef& pointModOf (ContentPoint& p, PointAxis a) noexcept { return a == PointAxis::x ? p.modX : p.modY; }
-inline const ContentModRef& pointModOf (const ContentPoint& p, PointAxis a) noexcept { return a == PointAxis::x ? p.modX : p.modY; }
+inline ContentModRef& pointModOf (ContentPoint& p, PointAxis a) noexcept { return a == PointAxis::x ? p.modX : a == PointAxis::y ? p.modY : p.modCurve; }
+inline const ContentModRef& pointModOf (const ContentPoint& p, PointAxis a) noexcept { return a == PointAxis::x ? p.modX : a == PointAxis::y ? p.modY : p.modCurve; }
 
-/** The end points of a shape stay at x = 0 and x = 1 (the engine ignores mod_x there), so only Y can be modulated on them. */
+/** The end points of a shape stay at x = 0 and x = 1 (the engine ignores mod_x there), so only Y can be modulated on them; the last point has no segment after it, so no curve. */
 bool canModulatePointAxis (size_t index, size_t pointCount, PointAxis axis) noexcept;
 /** Source key of a choice value 1..kNumModSources (empty for anything else) and back (0 for an unknown key). */
 const char* pointModSourceKey (int sourceChoice) noexcept;

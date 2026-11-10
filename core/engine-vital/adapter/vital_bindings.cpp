@@ -198,7 +198,7 @@ std::vector<Binding> build()
         b.add (k + "gran.rand_pitch", c + "gran_rand_pitch", Conv::linear);
 
         // Block B29 (GROUPC, WP-12): the modulatable keys of the spectral oscillator
-        for (const char* name : { "cut", "mix", "position", "xy_y" })
+        for (const char* name : { "cut", "mix", "position", "xy_y", "flt_frame" })   // flt_frame: B32, REMAINDER item 2
             b.percent (k + "spec." + name, c + "spec_" + name);
         b.add (k + "spec.freq_lo", c + "spec_freq_lo", Conv::linear);
         b.add (k + "spec.freq_hi", c + "spec_freq_hi", Conv::linear);
@@ -360,6 +360,11 @@ std::vector<Binding> build()
         b.choice (k + "bipolar", c + "bipolar");
         b.choice (k + "stereo", c + "stereo");
         b.choice (k + "bypass", c + "bypass");
+        // REMAINDER item 1 (B31): RISE / FALL (ms) and DELAY (ms, beats) of the slot, the controls are in the unit of the key; delay_sync is the adapter's
+        b.add (k + "rise", c + "rise", Conv::linear);
+        b.add (k + "fall", c + "fall", Conv::linear);
+        b.add (k + "delay", c + "delay", Conv::linear);
+        b.add (k + "delay_beats", c + "delay_beats", Conv::linear);
     }
 
     // --- effects ---------------------------------------------------------------------------------------------------
@@ -539,7 +544,7 @@ bool isGranularModulatable (const char* key)
 /** The modulatable keys of oscN.spec.* (bound to controls; every other oscN.spec.* key is read by the adapter). */
 bool isSpectralModulatable (const char* key)
 {
-    for (const char* name : { "freq_lo", "freq_hi", "cut", "mix", "freq_shift", "position", "xy_y" })
+    for (const char* name : { "freq_lo", "freq_hi", "cut", "mix", "freq_shift", "position", "xy_y", "flt_frame" })
     {
         const std::string tail = std::string (".spec.") + name;
         const size_t n = std::strlen (key);
@@ -564,7 +569,7 @@ bool isSpecialParam (size_t paramIndex)
         || ((endsWith (".source") || endsWith (".destination")) && key[0] == 'm' && key[1] == 'o') || std::strcmp (key, "master.bend_range") == 0
         // state version 3: handled by the adapter (vital_engine.cpp), not one control each
         || (startsWith ("env") && endsWith (".units")) || (startsWith ("lfo") && (endsWith (".mono") || endsWith (".host")))
-        || (startsWith ("mod") && std::strstr (key, ".aux_") != nullptr) || startsWith ("curve.") || startsWith ("master.scale.")
+        || (startsWith ("mod") && std::strstr (key, ".aux_") != nullptr) || (startsWith ("mod") && endsWith (".delay_sync")) || startsWith ("curve.") || startsWith ("master.scale.")
         || startsWith ("master.tuning.") || startsWith ("master.mpe.") || (startsWith ("osc") && std::strstr (key, ".map.") != nullptr)
         // block B16: the wavetable position remap of an oscillator (on, slot, RISE, FALL) goes to its FrameRemap, not to a control
         || (startsWith ("osc") && std::strstr (key, ".remap.") != nullptr)

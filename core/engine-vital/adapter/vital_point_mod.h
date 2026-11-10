@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "synth_lfo.h"
+#include "synthyboy/content_state.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/shapes/shapes.h"
 
@@ -24,7 +25,11 @@ struct PointMod
     bool isX = false;
     int source = -1; // index into modSourceTable () (the key of the content), -1: unknown key, the modulation is ignored
     float amount = 0.0f;
+    bool isCurve = false; // REMAINDER item 4 (S13): the curve (power) of the segment after the point, not its position; amount 1 = kCurveModPower
 };
+
+/** The change of the power of a segment at |amount| 1 (REMAINDER item 4, 13-new-keys.md 4.43, A457): the power of a segment runs over -10 .. 10 in the editor. */
+constexpr float kCurveModPower = 10.0f;
 
 /** The sources whose value is the same for every voice: 1..8 macros, 9 mod wheel, 10 pitch wheel (-1..1), 11 channel pressure; 0 for a
     source that differs per voice (envelopes, LFOs, random, velocity, note, lift, slide, oct note, poly aftertouch). */
@@ -88,7 +93,9 @@ public:
                 continue;
             const float v = values[m.source] * m.amount;
             shapes::Point& point = out.points[static_cast<size_t> (m.point)];
-            if (m.isX)
+            if (m.isCurve)
+                point.curve = std::clamp (point.curve + v * kCurveModPower, -static_cast<float> (kMaxPointPower), static_cast<float> (kMaxPointPower));
+            else if (m.isX)
             {
                 const float low = out.points[static_cast<size_t> (m.point - 1)].x;
                 const float high = shape.points[static_cast<size_t> (m.point + 1)].x;
@@ -118,7 +125,7 @@ public:
         int done = 0; // first index not yet evaluated again (the intervals ascend)
         for (size_t p = 0; p < n; ++p)
         {
-            if (m.points[p].x == shape.points[p].x && m.points[p].y == shape.points[p].y)
+            if (m.points[p].x == shape.points[p].x && m.points[p].y == shape.points[p].y && m.points[p].curve == shape.points[p].curve)
                 continue;
             const float lo = p > 0 ? std::min (shape.points[p - 1].x, m.points[p - 1].x) : 0.0f;
             const float hi = p + 1 < n ? std::max (shape.points[p + 1].x, m.points[p + 1].x) : 1.0f;

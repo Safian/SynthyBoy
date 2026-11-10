@@ -128,6 +128,14 @@ SerumPluginImport importSerumFileForPlugin (const std::string& fileName, const s
             if (! out.ok) out.error = "the shape has fewer than two points";
             return out;
         }
+        if (r.kind == SerumFileKind::filterPz)
+        {
+            out.pzCurve = r.pzCurve;
+            out.name = stem;
+            out.ok = out.pzCurve.points.size() >= 2;
+            if (! out.ok) out.error = "the file holds no readable poles and zeros";
+            return out;
+        }
         if (r.kind == SerumFileKind::midiMap)
         {
             out.midiMap = r.midiMap;

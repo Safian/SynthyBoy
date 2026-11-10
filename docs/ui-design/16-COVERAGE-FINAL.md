@@ -188,7 +188,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S06-03 | S p.108-110 | Spectral operations, loop menu, crossfade | **DONE (GROUPC)** | GROUPC WP-12: shared loop keys, `manual`, `position` | - |
 | S06-04 | S p.111-113 | Spectral unison | **DONE (GROUPC)** | GROUPC WP-12: shared unison keys | - |
 | S06-05 | S p.114-115 | Spectral X\|Y control | **DONE (GROUPC)** | GROUPC WP-12: `oscN.spec.y_axis / xy_y` | - |
-| S06-06 | S p.116-121 | Spectral scan, cut, filter curve, mix, warp mode, pan, level | **DONE (GROUPC)** | GROUPC WP-12: `scan*`, `cut`, `mix`, the filter graph, `phase_lock`, `transients`, 23 spectral warps | - |
+| S06-06 | S p.116-121 | Spectral scan, cut, filter curve, filter preset or wavetable as the filter, mix, warp mode, pan, level | **DONE (GROUPC; the wavetable filter REMAINDER item 2)** | GROUPC WP-12: `scan*`, `cut`, `mix`, the filter graph, `phase_lock`, `transients`, 23 spectral warps; REMAINDER: `oscN.spec.flt_use / flt_table / flt_frame`, `SpecFilterSource` | 14 row 101 |
 | S06-07 | S p.122 | Spectral: switch to wavetable | **DONE (GROUPD WP-14)** | same flow for the Spectral type; test `groupd_switch_to_wavetable_...` type 3 | 14 row 93 |
 
 ### S07 Serum 2: sub and noise (p.123-132)
@@ -312,7 +312,7 @@ Key budget: `kMaxParams` = 2048 (core/include/synthyboy/params.h:77), 1594 keys 
 | S11-36 | S p.211 | Source Fixed (constant 1 with depth slider) | DONE (GROUPB WP-06) | modSource 57; same test |  |
 | S11-37 | S p.209 | 64 matrix slots, source / amount / polarity / stereo / destination / bypass | DONE | `modNN.*` (PT:301); t_vital_audio :635, :682; t_vital_params `modulation_slots_are_wired_and_unwired` :461; ModMatrixPanel.cpp:843 |  |
 | S11-38 | S p.211 | CRV curve of the source, editable curve | DONE (modamt B20) | `content.mod_curves`, `ModCurvePanel` Custom, `RemapEditor` mod curve mode; RISE / FALL beside it (GROUPB WP-08) |  |
-| S11-39 | S p.211, V p.25-26 | RISE / FALL slew limiter on the source (curve editor) | DONE (GROUPB WP-08) | `content.mod_curves[].rise / .fall` (0 keys), `slewStep` (`modulation_connection_processor.cpp:72`); `test_modslew.cpp`; sliders `ModCurvePanel.cpp:320` | the 128 key proposal not built (14 row 81) |
+| S11-39 | S p.211, V p.25-26 | RISE / FALL slew limiter on the source (curve editor) | DONE (GROUPB WP-08; keys since REMAINDER item 1) | `modNN.rise / .fall` (+ `delay`, `delay_beats`, `delay_sync`; modulatable), `ModulationConnectionProcessor::slewStep`; `test_modslew.cpp`; controls `ModCurvePanel.cpp:275 / :459` | 14 rows 81 (decided), 99 |
 | S11-40 | S p.211-212 | AUX SOURCE, INV, aux CRV, OUTPUT | DONE | `modNN.aux_source/inv/power/output`; t_wp123 `aux_source_multiplies_the_slot` :266 |  |
 | S11-41 | S p.212-213 | Matrix expand, move row, bypass, remove | DONE | ui_gaps `uig_mod_swap_slots_model_and_matrix_row_handle`; ModMatrixReorder.h |  |
 | S11-42 | S p.214 | Matrix ops: sort by source / destination, vibrato, Velo->Amp, bake macros, init | DONE | ModMatrixPanel.cpp:735-765; ModLogic.h:386; ui_model `ui_mod_snapshot_and_slot_editing` |  |

@@ -82,6 +82,7 @@ struct ContentPoint
 {
     float x = 0.0f, y = 0.0f, power = 0.0f;
     ContentModRef modX, modY; // only on LFO shape points
+    ContentModRef modCurve;   // REMAINDER item 4 (S13): the curve of the segment after the point; amount 1 = 10 power units (A457)
 
     ContentPoint() = default;
     ContentPoint (float xIn, float yIn, float powerIn = 0.0f) : x (xIn), y (yIn), power (powerIn) {}
@@ -112,8 +113,8 @@ struct ContentModCurve
 {
     int slot = 0; // 1..64
     std::vector<ContentPoint> points; // 0 or 2 .. kMaxModCurvePoints, ascending x in 0..1 (no points: only the slew below)
-    /** GROUPB WP-08 (13-new-keys.md 4.35): RISE / FALL of the connection, a slew limiter on the source before the curve: the time (ms) in which the source reaches 90 % of
-        a step upwards / downwards, per voice for the voice sources. 0 = off (the sound of a connection without the record). A record holds points, a slew or both. */
+    /** LEGACY (GROUPB WP-08, 13-new-keys.md 4.35): the RISE / FALL of the connection used to be stored here (ms). They are the keys modNN.rise / modNN.fall since REMAINDER
+        item 1 (4.41); the state loader moves a document's values into the keys and clears them, the writer never writes them. Kept so that old documents parse. */
     float riseMs = 0.0f;
     float fallMs = 0.0f;
 };

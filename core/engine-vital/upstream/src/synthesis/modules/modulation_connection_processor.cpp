@@ -67,22 +67,49 @@ namespace sbvital {
     return a * extras.aux_output;
   }
 
-  // One step of the RISE / FALL slew: a one pole towards the input, the time constant of the rise (input above the value) or of the fall; a time
-  // is the span of 90 % of a step (ln 10 time constants). A fresh voice starts on its value.
-  poly_float ModulationConnectionProcessor::slewStep(poly_float value_in, mono_float seconds_per_step) {
+  // The coefficients of the RISE / FALL slew for a step of `seconds_per_step`: a one pole towards the input, the time constant of the rise (input above
+  // the value) or of the fall; a time is the span of 90 % of a step (ln 10 time constants). Per voice (the times are controls and may be modulated).
+  bool ModulationConnectionProcessor::updateSlewRates(mono_float seconds_per_step) {
     static constexpr mono_float kLn10 = 2.302585093f;
-    const mono_float rise = extras_->rise_seconds, fall = extras_->fall_seconds;
-    const poly_float rate_rise = rise > 0.0f ? poly_float(1.0f - std::exp(-seconds_per_step * kLn10 / rise)) : poly_float(1.0f);
-    const poly_float rate_fall = fall > 0.0f ? poly_float(1.0f - std::exp(-seconds_per_step * kLn10 / fall)) : poly_float(1.0f);
-    const poly_float rate = utils::maskLoad(rate_fall, rate_rise, poly_float::greaterThan(value_in, slew_value_));
+    const poly_float rise = utils::clamp(input(kRise)->at(0), 0.0f, 5000.0f);
+    const poly_float fall = utils::clamp(input(kFall)->at(0), 0.0f, 5000.0f);
+    bool any = false;
+    for (size_t i = 0; i < poly_float::kSize; ++i) {
+      const mono_float r = rise[i] * 0.001f, f = fall[i] * 0.001f;
+      rate_rise_.set(i, r > 0.0f ? 1.0f - std::exp(-seconds_per_step * kLn10 / r) : 1.0f);
+      rate_fall_.set(i, f > 0.0f ? 1.0f - std::exp(-seconds_per_step * kLn10 / f) : 1.0f);
+      any = any || r > 0.0f || f > 0.0f;
+    }
+    return any;
+  }
+
+  // One step of the RISE / FALL slew with the coefficients of updateSlewRates. A fresh voice starts on its value.
+  poly_float ModulationConnectionProcessor::slewStep(poly_float value_in) {
+    const poly_float rate = utils::maskLoad(rate_fall_, rate_rise_, poly_float::greaterThan(value_in, slew_value_));
     slew_value_ = slew_value_ + (value_in - slew_value_) * rate;
     return slew_value_;
   }
 
+  // The DELAY of the slot: 0 for a voice that has not played for the delay yet, 1 after it (and always 1 with DELAY 0). The gate multiplies the amount of the
+  // connection, so it is ramped over a block like every change of the amount.
+  poly_float ModulationConnectionProcessor::computeDelayGate() {
+    poly_float delay;
+    if (extras_->delay_sync) {
+      const mono_float bps = std::max(input(kBeatsPerSecond)->at(0)[0], 0.01f);
+      delay = utils::clamp(input(kDelayBeats)->at(0), 0.0f, 8.0f) * (1.0f / bps);
+    }
+    else
+      delay = utils::clamp(input(kDelay)->at(0), 0.0f, 4000.0f) * 0.001f;
+    delay_elapsed_ = utils::maskLoad(delay_elapsed_, 0.0f, getResetMask(kReset));
+    const poly_float gate = utils::maskLoad(poly_float(1.0f), poly_float(0.0f), poly_float::lessThan(delay_elapsed_, delay));
+    delay_elapsed_ = utils::min(delay_elapsed_ + block_seconds_, 1000.0f);
+    return gate;
+  }
+
   void ModulationConnectionProcessor::process(int num_samples) {
     const Output* source = input(kModulationInput)->source;
-    aux_factor_ = computeAuxFactor();
     block_seconds_ = static_cast<mono_float>(num_samples) / static_cast<mono_float>(getSampleRate());
+    aux_factor_ = computeAuxFactor() * computeDelayGate();
     poly_float modulation_input = source->trigger_value;
     output(kModulationSource)->buffer[0] = modulation_input;
 
@@ -93,19 +120,20 @@ namespace sbvital {
     if (isControlRate() || source->isControlRate())
       processControlRate(source);
     else {
-      const bool slewing = extras_->rise_seconds > 0.0f || extras_->fall_seconds > 0.0f;
+      const bool slewing = updateSlewRates(1.0f / static_cast<mono_float>(getSampleRate()));
       if (slewing) {
         // GROUPB WP-08: the audio rate path reads a slewed copy of the source (a fresh voice starts on its value)
         const poly_float* in = source->buffer;
         poly_float* out = slew_source_->buffer;
-        const mono_float step = 1.0f / static_cast<mono_float>(getSampleRate());
         slew_value_ = utils::maskLoad(slew_value_, in[0], getResetMask(kReset));
         for (int i = 0; i < num_samples; ++i)
-          out[i] = slewStep(in[i], step);
+          out[i] = slewStep(in[i]);
         processAudioRate(num_samples, slew_source_.get());
       }
-      else
+      else {
+        slew_value_ = source->buffer[num_samples - 1];   // the slew starts from the source when RISE / FALL are switched on
         processAudioRate(num_samples, source);
+      }
     }
   }
 
@@ -304,11 +332,13 @@ namespace sbvital {
       modulation_input = glide_value_;
     }
 
-    if (extras_->rise_seconds > 0.0f || extras_->fall_seconds > 0.0f) {
+    if (updateSlewRates(block_seconds_)) {
       // GROUPB WP-08: RISE / FALL in front of the curve; a fresh voice (reset) starts on its value
       slew_value_ = utils::maskLoad(slew_value_, modulation_input, getResetMask(kReset));
-      modulation_input = slewStep(modulation_input, block_seconds_);
+      modulation_input = slewStep(modulation_input);
     }
+    else
+      slew_value_ = modulation_input;   // the slew starts from the source when RISE / FALL are switched on
 
     if (!map_generator_->linear()) {
       mono_float* buffer = map_generator_->getCubicInterpolationBuffer();
