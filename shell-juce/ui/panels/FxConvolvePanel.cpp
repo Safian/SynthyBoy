@@ -35,7 +35,8 @@ public:
             juce::PopupMenu menu;
             menu.addItem (1, "Load another impulse response...");
             menu.addItem (2, "Remove the impulse response");
-            menu.showMenuAsync (popupOptions (&loadIrButton), [safe = juce::Component::SafePointer<FxConvolveView> (this)] (int result)
+            juce::Component::SafePointer<FxConvolveView> safe (this); // MSVC: no init-capture of `this` in a nested lambda
+            menu.showMenuAsync (popupOptions (&loadIrButton), [safe] (int result)
             {
                 if (safe == nullptr)
                     return;

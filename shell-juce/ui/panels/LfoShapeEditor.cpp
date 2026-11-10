@@ -126,8 +126,9 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
         juce::PopupMenu menu;
         for (int i = 0; i < kNumBrushes; ++i)
             menu.addItem (i + 1, brushName (i), true, i == brush_);
+        juce::Component::SafePointer<LfoShapeEditor> safe (this); // MSVC: no init-capture of `this` in a nested lambda
         menu.showMenuAsync (popupOptions (&brushPickBtn),
-                            [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
+                            [safe] (int result)
                             {
                                 if (safe != nullptr && result > 0)
                                 {
@@ -148,8 +149,9 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
         const char* const names[] = { "Straight", "Ease in", "Ease out", "Hard in", "Hard out" };
         for (int i = 0; i < 5; ++i)
             menu.addItem (i + 1, names[i]);
+        juce::Component::SafePointer<LfoShapeEditor> safe (this); // MSVC: no init-capture of `this` in a nested lambda
         menu.showMenuAsync (popupOptions (&segBtn),
-                            [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
+                            [safe] (int result)
                             {
                                 if (safe != nullptr && result > 0)
                                     safe->setSegmentShape (result - 1);
@@ -244,8 +246,9 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
             menu.addItem (400 + osc, "LFO to Wavetable " + juce::String (osc == 1 ? "A" : (osc == 2 ? "B" : "C")), ctx.host.contentLibrary() != nullptr);
         menu.addSeparator();
         shapeLibrary->addTo (menu, 1000);
+        juce::Component::SafePointer<LfoShapeEditor> safe (this); // MSVC: no init-capture of `this` in a nested lambda
         menu.showMenuAsync (popupOptions (&presetBtn).withMinimumWidth (ctx.theme.ipx (160.0f)),
-                            [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
+                            [safe] (int result)
                             {
                                 if (safe == nullptr || result <= 0)
                                     return;

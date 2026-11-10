@@ -114,8 +114,9 @@ void RemapEditor::init()
         juce::PopupMenu menu;
         for (int i = 0; i < (specMode ? kNumSpectralPresets : kNumPresets); ++i)
             menu.addItem (i + 1, specMode ? spectralPresetName (i) : presetName (i));
+        juce::Component::SafePointer<RemapEditor> safe (this); // MSVC: no init-capture of `this` in a nested lambda
         menu.showMenuAsync (popupOptions (&presetBtn),
-                            [safe = juce::Component::SafePointer<RemapEditor> (this)] (int result)
+                            [safe] (int result)
                             {
                                 if (safe != nullptr && result > 0)
                                     safe->applyPreset (result - 1);
