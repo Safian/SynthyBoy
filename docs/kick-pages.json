@@ -4127,7 +4127,10 @@
         "osc1.spec.scan_keytrack",
         "osc1.spec.transients",
         "osc1.spec.y_axis",
-        "osc1.spec.xy_y"
+        "osc1.spec.xy_y",
+        "osc1.spec.flt_use",
+        "osc1.spec.flt_table",
+        "osc1.spec.flt_frame"
       ]
     },
     {
@@ -4150,7 +4153,10 @@
         "osc2.spec.scan_keytrack",
         "osc2.spec.transients",
         "osc2.spec.y_axis",
-        "osc2.spec.xy_y"
+        "osc2.spec.xy_y",
+        "osc2.spec.flt_use",
+        "osc2.spec.flt_table",
+        "osc2.spec.flt_frame"
       ]
     },
     {
@@ -4173,7 +4179,10 @@
         "osc3.spec.scan_keytrack",
         "osc3.spec.transients",
         "osc3.spec.y_axis",
-        "osc3.spec.xy_y"
+        "osc3.spec.xy_y",
+        "osc3.spec.flt_use",
+        "osc3.spec.flt_table",
+        "osc3.spec.flt_frame"
       ]
     },
     {
