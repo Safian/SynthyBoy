@@ -20,7 +20,7 @@ pattern='sbvital|Vital|vital::'
 # "User-imported wavetables from Vital presets"), the importer's error texts ("not a Vital file", "the bank holds no Vital preset"; the words
 # "Vital" + file / preset / bank / table / LFO) and the user-visible reverb type name "Vital" (core/src/param_table.cpp kReverbTypes, a
 # string in the parameter table, no engine code) are allowed. Anything else that mentions Vital still fails.
-allowed='vitalimport|importVital|isVitalBankName|VitalPluginImport|looksLikeVitalPreset|decodeVitalEffectOrder|Imported Vital Wavetables|imported wavetables from Vital presets|Vital (file|preset|bank|table|lfo)|^[[:space:]]*Vital$'
+allowed='kPackImportedVital|vitalimport|importVital|isVitalBankName|VitalPluginImport|looksLikeVitalPreset|decodeVitalEffectOrder|Imported Vital Wavetables|imported wavetables from Vital presets|Vital (file|preset|bank|table|lfo)|^[[:space:]]*Vital$'
 NM="${NM:-nm}"
 AR="${AR:-ar}"
 STRINGS="${STRINGS:-strings}"

@@ -35,7 +35,8 @@ void MissingFilesSheet::rebuild()
             request.title = "Locate the missing file";
             request.wildcards = rows.items()[i].kind == ContentKind::wavetable ? "*.wav;*.vitaltable;*.flac;*.aif;*.aiff" : audioFileWildcard();
             request.purpose = "locate";
-            if (! ctx.host.requestFile (request, [safe = juce::Component::SafePointer<MissingFilesSheet> (this), i] (const juce::File& file)
+            juce::Component::SafePointer<MissingFilesSheet> safe (this); // outside the lambda introducer: MSVC cannot init-capture a SafePointer built from `this` in a nested lambda
+            if (! ctx.host.requestFile (request, [safe, i] (const juce::File& file)
                 {
                     if (safe == nullptr)
                         return;
