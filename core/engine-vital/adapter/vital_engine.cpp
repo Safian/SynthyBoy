@@ -434,6 +434,8 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
                 l.mods.push_back ({ static_cast<int> (i), true, sourceIndexOf (c.points[i].modX.source), c.points[i].modX.amount });
             if (c.points[i].modY.present)
                 l.mods.push_back ({ static_cast<int> (i), false, sourceIndexOf (c.points[i].modY.source), c.points[i].modY.amount });
+            if (c.points[i].modCurve.present && i + 1 < l.shape.numPoints) // the curve of the segment after the point
+                l.mods.push_back ({ static_cast<int> (i), false, sourceIndexOf (c.points[i].modCurve.source), c.points[i].modCurve.amount, true });
         }
         if (! l.mods.empty())
             l.point = std::make_unique<CustomShapeModulation> (l.shape, l.mods);

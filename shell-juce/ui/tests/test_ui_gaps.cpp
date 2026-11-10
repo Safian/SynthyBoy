@@ -2741,7 +2741,7 @@ TEST (uig_remainder_spectral_filter_from_a_wavetable)
 
         // the Preset table of the oscillator: the stored table is the picture
         source->select (kWavetablePresetTable);
-        CHECK_EQ (rig.param ("osc1.spec.flt_table"), static_cast<float> (kWavetablePresetTable));
+        CHECK_EQ (juce::roundToInt (rig.param ("osc1.spec.flt_table")), kWavetablePresetTable);
         CHECK (! source->filterFrame (curve));              // no table stored for this oscillator: only the name is shown
 
         // back to the drawn curve

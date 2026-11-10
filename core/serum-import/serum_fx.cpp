@@ -398,7 +398,13 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
             consume (v);
         }
         else if (nm == "lfophasor" || nm == "lfo") acctRest (v, ItemKind::ignored, Reason::exact, area, p, "", "", "effect_lfo_runtime_state");
-        else if (nm == "PZs") acctRest (v, ItemKind::dropped, Reason::noEngineEquivalent, area, p, "", "", "pz_svf_poles_and_zeros_not_imported");
+        else if (nm == "PZs")
+        {
+            // REMAINDER item 4 (S4): the response curve of the FX filter (the main FX filter only: the curve of the content belongs to fxfilter)
+            const int typeNode = find ("kParamType");
+            const bool pzFilterType = instanceZero && type == kFxTypeFilter && isText (typeNode) && str (typeNode) == "PZ_SVF";
+            pzFilter (v, pp, instanceZero && type == kFxTypeFilter ? "fxfilter" : "", pzFilterType, area, p);
+        }
         else if (nm == "numChannels" || nm == "numFrames" || nm == "sampleRate" || nm == "sourceRate") acctRest (v, ItemKind::ignored, Reason::exact, area, p, "", "", "derived_from_the_impulse_data");
         else if (nm == "embeddedIR" || nm == "relativePathToIR") acctRest (v, ItemKind::dropped, Reason::limitExceeded, area, p, "", "", "only_one_impulse_response_per_patch");
     });
@@ -755,7 +761,7 @@ void Importer::modSlots()
                     ContentModCurve mc;
                     mc.slot = k + 1;
                     mc.points = reduce (pts, kMaxModCurvePoints);
-                    for (auto& p : mc.points) { p.modX = {}; p.modY = {}; }
+                    for (auto& p : mc.points) { p.modX = {}; p.modY = {}; p.modCurve = {}; }
                     R.modCurves.push_back (std::move (mc));
                     acctRest (c, ItemKind::imported, Reason::exact, area, name + "/flex/0", pfx + ".source", "curve", "modulation_curve_stored");
                 }
@@ -783,6 +789,11 @@ void Importer::modSlots()
                 if (fallNode >= 0) { entry (ItemKind::approximated, Reason::enumRemapped, area, name + "/plainParams/kParamSmoothFall", valueText (fallNode), pfx + ".fall", fmt (fallMs), "modulation_fall_knob_law_assumed"); consume (fallNode); }
                 if (linkNode >= 0) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamSmoothLink", valueText (linkNode), "", "", "rise_fall_link_flag"); consume (linkNode); }
             }
+        }
+        {
+            // the link flag of a slot that has no RISE / FALL: nothing to link
+            const int linkLeft = get (pp, "kParamSmoothLink");
+            if (linkLeft >= 0 && ! used[static_cast<size_t> (linkLeft)]) { entry (ItemKind::ignored, Reason::exact, area, name + "/plainParams/kParamSmoothLink", valueText (linkLeft), "", "", "rise_fall_link_flag_without_a_time"); consume (linkLeft); }
         }
         // DELAY of the slot (REMAINDER item 1, A450): kParamDelayOffset 0 .. 1 with kParamDelayBeatSync: tempo synced one bar (4 beats) x the value, otherwise 4000 ms x the value
         {
@@ -833,20 +844,20 @@ void Importer::modSlots()
             const int bus = static_cast<int> (num (get (e, "busID"), -1)), lfoId = static_cast<int> (num (get (e, "lfoID"), -1)), type = static_cast<int> (num (get (e, "lfoType"), -1));
             const int point = static_cast<int> (num (get (e, "pointID"), -1)), target = static_cast<int> (num (get (e, "target"), -1));
             bool done = false;
-            if (bus >= 0 && bus < 16 && buses[bus].used && type == 0 && lfoId >= 0 && lfoId < 10 && target >= 0 && target <= 1)
+            if (bus >= 0 && bus < 16 && buses[bus].used && type == 0 && lfoId >= 0 && lfoId < 10 && target >= 0 && target <= 2)
                 for (ContentLfoShape& shape : R.lfoShapes)
                     if (shape.lfo == lfoId + 1 && lfoOrigPoints[lfoId] > 0 && static_cast<int> (shape.points.size()) == lfoOrigPoints[lfoId] + lfoPointOffset[lfoId])
                     {
                         const int at = point + lfoPointOffset[lfoId];
                         if (at < 0 || at >= static_cast<int> (shape.points.size())) break;
-                        ContentModRef& m = target == 0 ? shape.points[static_cast<size_t> (at)].modX : shape.points[static_cast<size_t> (at)].modY;
+                        ContentModRef& m = target == 0 ? shape.points[static_cast<size_t> (at)].modX : target == 1 ? shape.points[static_cast<size_t> (at)].modY : shape.points[static_cast<size_t> (at)].modCurve;
                         m.present = true;
                         m.source = buses[bus].source;
                         m.amount = static_cast<float> (buses[bus].amount);
                         done = true;
                     }
-            if (done) acctRest (e, ItemKind::approximated, Reason::tierNote, "lfo" + std::to_string (lfoId + 1), "lfoPointModAssignments/" + std::to_string (q), "", "", target == 0 ? "point_x_modulation" : "point_y_modulation");
-            else acctRest (e, ItemKind::dropped, Reason::noEngineEquivalent, "lfo", "lfoPointModAssignments/" + std::to_string (q), "", "", target == 2 ? "point_curve_modulation_not_modelled" : "point_modulation_target_not_modelled");
+            if (done) acctRest (e, ItemKind::approximated, Reason::tierNote, "lfo" + std::to_string (lfoId + 1), "lfoPointModAssignments/" + std::to_string (q), "", "", target == 0 ? "point_x_modulation" : target == 1 ? "point_y_modulation" : "point_curve_modulation");
+            else acctRest (e, ItemKind::dropped, Reason::noEngineEquivalent, "lfo", "lfoPointModAssignments/" + std::to_string (q), "", "", "point_modulation_target_not_modelled");
         }
         consume (as);
     }
@@ -870,7 +881,7 @@ void Importer::curves()
         if (pointsFromCurve (c, pts, true))
         {
             for (const ContentPoint& p : pts) if (std::fabs (p.y - p.x) > 1e-4 || std::fabs (p.power) > 1e-4) identity = false;
-            for (auto& p : pts) { p.modX = {}; p.modY = {}; }
+            for (auto& p : pts) { p.modX = {}; p.modY = {}; p.modCurve = {}; }
             if (! identity) (velo ? R.velocityCurve : R.noteCurve) = reduce (pts, kMaxCurvePoints);
         }
         const int lg = get (c, "legato");
@@ -986,7 +997,7 @@ void Importer::runShape()
         R.shape.smooth = false;
         const bool reduced = pts.size() > static_cast<size_t> (kMaxLfoShapePoints);
         R.shape.points = reduce (pts, kMaxLfoShapePoints);
-        for (auto& p : R.shape.points) { p.modX = {}; p.modY = {}; }
+        for (auto& p : R.shape.points) { p.modX = {}; p.modY = {}; p.modCurve = {}; }
         acctRest (lfo, reduced ? ItemKind::approximated : ItemKind::imported, reduced ? Reason::truncated : Reason::exact, "shape", "LFO", "", "", reduced ? "shape_resampled_to_128_points" : "shape_points_and_curves");
     }
     else if (lfo >= 0) acctRest (lfo, ItemKind::dropped, Reason::noEngineEquivalent, "shape", "LFO", "", "", "shape_unreadable");
@@ -1004,6 +1015,15 @@ void Importer::runStyle()
 {
     meta();
     voicePanel (true);
+    unmappedTopLevel();
+}
+
+void Importer::runPzFile()
+{
+    meta();
+    const int single = get (0, "PZ"), multi = get (0, "PZs");
+    if (single >= 0) pzFilter (single, -1, "", true, "filter", "PZ");
+    else if (multi >= 0) pzFilter (multi, -1, "", true, "filter", "PZs");
     unmappedTopLevel();
 }
 

@@ -186,7 +186,7 @@ namespace sbvital {
         synthyboy::sampleosc::SampleVoice voices[kMaxUnison];
         synthyboy::granular::GranularVoice gvoices[kMaxUnison];      // GROUPC WP-11: one grain cloud per unison voice
         synthyboy::spectral::SpectralVoice svoices[kMaxSpectralUnison]; // GROUPC WP-12: one resynthesis voice per unison voice
-        synthyboy::multisample::LayerVoice layers[kMaxUnison][synthyboy::multisample::kMaxLayers]; // GROUPC WP-13: the zones of the note, per unison voice
+        synthyboy::multisample::LayerVoice layers[kMaxUnison][synthyboy::multisample::kMaxLayerSlots]; // GROUPC WP-13: the zones of the note, per unison voice (REMAINDER: and those that play at the release)
         // the signals of the other oscillators / the noise for the mask and vocode warps (a ring of the last 2048 samples of the lane and its magnitude spectrum)
         float ext_ring[3][synthyboy::spectral::kFftSize] = {};
         float ext_mag[3][synthyboy::spectral::kBins] = {};
@@ -196,6 +196,9 @@ namespace sbvital {
         uint32_t filter_key = 0;
         int kind = 1;                                                // the oscillator type this slot's voices were started for
         int layer_count = 0;                                         // GROUPC WP-13: the zones of the note (kind 4)
+        int note_lookup = 0, note_velocity = 1, note_switch = -1;     // REMAINDER item 4: the note as the zones of trigger=release see it at the release
+        uint32_t note_counter = 0;
+        bool release_started = false;
         int old_kind = 0;                                            // GROUPC: the kind that fades out after a change of the type under a running note (0: none)
         int fade_pos = 0, fade_len = 1;
         float start_random[kMaxUnison] = {};

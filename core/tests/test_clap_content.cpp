@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <dlfcn.h>
+#include <unistd.h>
 
 #include "groupd_util.h"
 #include "synthyboy/params.h"
@@ -176,7 +177,7 @@ void writeFile (const fs::path& path, const std::vector<uint8_t>& bytes)
 
 TEST (clap_content_extension_imports_lists_attaches_and_removes)
 {
-    const fs::path dir = fs::temp_directory_path() / "sb_clap_content";
+    const fs::path dir = fs::temp_directory_path() / ("sb_clap_content_" + std::to_string (getpid()));
     fs::remove_all (dir);
     setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
 
@@ -280,7 +281,7 @@ void setParams (const clap_plugin_t* plugin, std::vector<clap_event_param_value_
 // wavetable frame <-> LFO shape
 TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_lfo_shapes)
 {
-    const fs::path dir = fs::temp_directory_path() / "sb_clap_groupd";
+    const fs::path dir = fs::temp_directory_path() / ("sb_clap_groupd_" + std::to_string (getpid()));
     fs::remove_all (dir);
     setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
 

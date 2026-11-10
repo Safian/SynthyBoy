@@ -657,6 +657,8 @@ private:
                 return readMod (pt.modX, d);
             if (withMod && std::strcmp (key, "mod_y") == 0)
                 return readMod (pt.modY, d);
+            if (withMod && std::strcmp (key, "mod_curve") == 0)
+                return readMod (pt.modCurve, d);
             handled = false;
             return true;
         });
@@ -1064,6 +1066,7 @@ void putPoints (std::string& s, const std::vector<ContentPoint>& points)
         putJsonFloat (s, p.power);
         putMod (s, "mod_x", p.modX);
         putMod (s, "mod_y", p.modY);
+        putMod (s, "mod_curve", p.modCurve);
         s += '}';
     }
     s += ']';

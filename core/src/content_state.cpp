@@ -19,7 +19,7 @@ bool operator== (const ContentModRef& a, const ContentModRef& b) noexcept
 
 bool operator== (const ContentPoint& a, const ContentPoint& b) noexcept
 {
-    return a.x == b.x && a.y == b.y && a.power == b.power && a.modX == b.modX && a.modY == b.modY;
+    return a.x == b.x && a.y == b.y && a.power == b.power && a.modX == b.modX && a.modY == b.modY && a.modCurve == b.modCurve;
 }
 
 namespace
@@ -118,9 +118,9 @@ bool pointsOk (const std::vector<ContentPoint>& pts, int maxPoints, bool allowMo
     {
         if (! inRange (p.x, 0.0, 1.0) || ! inRange (p.y, 0.0, 1.0) || ! inRange (p.power, -kMaxPointPower, kMaxPointPower) || p.x < previousX)
             return false;
-        if (! allowMod && (p.modX.present || p.modY.present))
+        if (! allowMod && (p.modX.present || p.modY.present || p.modCurve.present))
             return false;
-        if (! modOk (p.modX) || ! modOk (p.modY))
+        if (! modOk (p.modX) || ! modOk (p.modY) || ! modOk (p.modCurve))
             return false;
         previousX = p.x;
     }

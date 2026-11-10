@@ -577,6 +577,7 @@ class Audit:
         self.audit_spectral(name, tree, sb)
         self.audit_multisample(name, tree, sb, content_dir)
         self.audit_mod_slew(name, tree, sb)
+        self.audit_remainder_item4(name, tree, sb, report)
         self.audit_voice_panel(name, tree, sb)
         self.audit_midi_map(name, tree, report)
 
@@ -734,6 +735,128 @@ class Audit:
                     self.err(name, 'mod%02d: DELAY expected %.4g ms, got %.4g ms (sync %s)' % (k + 1, 4000.0 * v, got('delay'), got('delay_sync')))
             elif abs(got('delay')) > 0 or abs(got('delay_beats')) > 0 or got('delay_sync') != 0:
                 self.err(name, 'mod%02d: DELAY set without a Serum value' % (k + 1))
+
+    # ---- REMAINDER item 4: PZ SVF response curves (S4), LFO swing flag / point curve modulation (S13), sample trim (S12) --------------------------------------------------------------
+    @staticmethod
+    def pz_db(sets, weights, x):
+        """The response in dB of the blended sets at the position x (0 .. 1) of the log frequency axis 20 Hz .. 20 kHz, restated here from 13-new-keys.md 4.43 (A452 .. A455)."""
+        def freq(v):
+            return 20.0 * 1000.0 ** min(1.0, max(0.0, v))
+
+        def quality(q):
+            return 0.5 * 100.0 ** min(1.0, max(0.0, q))
+        f = freq(x)
+        total = 0.0
+        for st, w in zip(sets, weights):
+            db = (st['gain'] - 0.5) * 24.0
+            sv = complex(0.0, f)
+            for i in range(8):
+                wp, wz, qp, qz = freq(st['fp'][i]), freq(st['fz'][i]), quality(st['qp'][i]), quality(st['qz'][i])
+                pole = sv * sv + sv * (wp / qp) + wp * wp
+                t = int(round(st['types'][i]))
+                h = 1.0
+                if t == 0: h = sv * sv / pole
+                elif t == 1: h = wp * wp / pole
+                elif t == 3: h = pole.conjugate() / pole
+                elif t == 4: h = sv * (wp / qp) / pole
+                elif t == 5: h = (sv * sv + wz * wz) / pole * (wp * wp / (wz * wz))
+                elif t == 6: h = (sv * sv + sv * (wz / qz) + wz * wz) / pole
+                db += 20.0 * math.log10(max(1e-9, abs(h)))
+            total += w * db
+        return min(60.0, max(-60.0, total))
+
+    def audit_remainder_item4(self, name, tree, sb, report):
+        params = sb['state']['params']
+        content = sb['state'].get('content', {})
+        # S4: the response curve of every VoiceFilter / FXFilter of type PZ_SVF equals the response computed here from the poles and zeros (within the reduction to 16 points)
+        curves = {c['filter']: c for c in content.get('filter_curves', [])}
+        expect = {}
+        for key, filt in (('filter1', tree.get('VoiceFilter0')), ('filter2', tree.get('VoiceFilter1'))):
+            if isinstance(filt, dict) and isinstance(filt.get('plainParams'), dict) and filt['plainParams'].get('kParamType') == 'PZ_SVF' and isinstance(filt.get('PZs'), list):
+                expect[key] = (filt['PZs'], filt['plainParams'])
+        for rack in range(3):
+            fx = tree.get('FXRack%d' % rack)
+            if isinstance(fx, dict) and isinstance(fx.get('FX'), list):
+                pass   # a pooled FX filter has no content entry; the main FX filter is covered by the report entries below
+        for key, (sets_raw, pp) in expect.items():
+            sets = [st for st in sets_raw if isinstance(st, dict) and all(k in st for k in ('fp', 'fz', 'qp', 'qz', 'types', 'gain'))][:4]
+            c = curves.get(key)
+            if c is None:
+                self.err(name, '%s: PZ SVF poles and zeros without a response curve' % key)
+                continue
+            xx, yy = min(1.0, max(0.0, pp.get('kParamX', 0.5))), min(1.0, max(0.0, pp.get('kParamY', 0.5)))
+            weights = [(1 - xx) * (1 - yy), xx * (1 - yy), (1 - xx) * yy, xx * yy] if len(sets) == 4 else [1.0 / len(sets)] * len(sets)
+            pts = c['points']
+            if not (2 <= len(pts) <= 16):
+                self.err(name, '%s: PZ curve has %d points' % (key, len(pts)))
+                continue
+            worst = 0.0
+            for k in range(129):
+                x = k / 128.0
+                got = None
+                for a, b in zip(pts, pts[1:]):
+                    if a['x'] <= x <= b['x']:
+                        t = (x - a['x']) / (b['x'] - a['x']) if b['x'] > a['x'] else 0.0
+                        got = a['y'] + t * (b['y'] - a['y'])
+                        break
+                if got is None:
+                    got = pts[0]['y'] if x < pts[0]['x'] else pts[-1]['y']
+                worst = max(worst, abs(got - self.pz_db(sets, weights, x)))
+            self.stats['pz curves'] += 1
+            if worst > 6.0:
+                self.err(name, '%s: PZ response curve deviates by %.2f dB from the poles and zeros' % (key, worst))
+        for key in curves:
+            if key not in expect and key != 'fxfilter':
+                self.err(name, '%s: a PZ response curve for a filter that is not a PZ SVF' % key)
+        # S13: the LFO swing flag takes the global swing: (global - 50) * 4, 0 .. 100 %
+        glob = tree.get('Global0')
+        gpp = glob.get('plainParams') if isinstance(glob, dict) and isinstance(glob.get('plainParams'), dict) else {}
+        gswing = gpp.get('kParamSwing', 50.0) if isinstance(gpp.get('kParamSwing', 50.0), (int, float)) else 50.0
+        rlfo_slots = set()
+        for i in range(10):
+            lfo = tree.get('LFO%d' % i)
+            pp = lfo.get('plainParams') if isinstance(lfo, dict) and isinstance(lfo.get('plainParams'), dict) else {}
+            if pp.get('kParamType') in ('RandomSH', 'Lorenz', 'Rossler'):
+                continue
+            key = 'lfo%d.swing' % (i + 1)
+            want = min(100.0, max(0.0, (gswing - 50.0) * 4.0)) if pp.get('kParamSwing', 0) and pp.get('kParamSwing') >= 0.5 else 0.0
+            got = params.get(key, 0.0)
+            if abs(got - want) > 1e-3:
+                self.err(name, '%s expected %.4g from the swing flag, got %.4g' % (key, want, got))
+            elif want > 0:
+                self.stats['lfo swings'] += 1
+        # S13: point modulation assignments with the curve target end up as mod_curve on a point
+        shapes = {s['lfo']: s for s in content.get('lfo_shapes', [])}
+        wanted = sum(1 for e in report['entries'] if e.get('detail') == 'point_curve_modulation')
+        present = sum(1 for s in shapes.values() for pt in s['points'] if 'mod_curve' in pt)
+        if wanted != present:
+            self.err(name, 'point curve modulation: %d entries, %d points carry mod_curve' % (wanted, present))
+        else:
+            self.stats['point curve modulations'] += present
+        # S12: trimHead / trimTail fold into START / END of the oscillator
+        for i in range(3):
+            o = tree.get('Oscillator%d' % i)
+            if not isinstance(o, dict):
+                continue
+            for b in ('SampleOsc', 'GranularOsc', 'SpectralOsc'):
+                blk = o.get('%s%d' % (b, i))
+                if not (isinstance(blk, dict) and ('trimHead' in blk or 'trimTail' in blk) and blk.get('numFrames')):
+                    continue
+                opp = o.get('plainParams') if isinstance(o.get('plainParams'), dict) else {}
+                if opp.get('kParamType') not in ('kOsc_Sample', 'kOsc_Granular', 'kOsc_Spectral') or not any(e['key'] == 'osc%d.sample.start' % (i + 1) for e in report['entries']):
+                    continue
+                total = float(blk['numFrames'])
+                lo = min(1.0, max(0.0, blk.get('trimHead', 0) / total)) if 'trimHead' in blk else 0.0
+                hi = min(1.0, max(0.0, blk.get('trimTail', total) / total)) if 'trimTail' in blk else 1.0
+                if hi <= lo:
+                    continue
+                start = opp.get('kParamStart', 0.0) * 0.01 if isinstance(opp.get('kParamStart', 0.0), (int, float)) else 0.0
+                end = opp.get('kParamEnd', 100.0) * 0.01 if isinstance(opp.get('kParamEnd', 100.0), (int, float)) else 1.0
+                for tail, want in (('start', 100.0 * (lo + start * (hi - lo))), ('end', 100.0 * (lo + end * (hi - lo)))):
+                    got = params.get('osc%d.sample.%s' % (i + 1, tail), 0.0 if tail == 'start' else 100.0)
+                    if abs(got - want) > 1e-2 * max(1.0, abs(want)) * 0.01 + 1e-3:
+                        self.err(name, 'osc%d.sample.%s expected %.5g from trimHead / trimTail, got %.5g' % (i + 1, tail, want, got))
+                self.stats['sample trims'] += 1
 
     def audit_osc_extras(self, name, tree, sb):
         """GROUPB (WP-05, A398 / A399): kParamPitchSource (0 .. 2 = Osc A .. C, 3 = Noise, 4 = Sub) is osc#.ratio_src when the pitch mode is Ratio (an oscillator that names

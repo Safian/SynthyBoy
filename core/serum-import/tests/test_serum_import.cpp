@@ -718,6 +718,79 @@ TEST (serum_lfo_point_modulation_and_path_lfo)
     CHECK_NEAR (r.lfoShapes[0].points[1].modY.amount, 0.5, 1e-6);
     CHECK_EQ (r.values.plain[modSlotParams (1).source], 0.0f);
     CHECK (entryWith (r, "path_lfo_not_modelled") >= 0);
+    CHECK (entryWith (r, "point_curve_modulation_not_modelled") < 0);
+}
+
+// REMAINDER item 4 (S13, A456 / A457): the curve target of the point modulation (target 2) and the swing flag of an LFO
+TEST (serum_lfo_point_curve_modulation_and_swing_flag)
+{
+    Preset p;
+    p.set ("LFO0", map ({ { "curveData", curveMap ({ 0, 0.5, 1 }, { 1, 0.2, 1 }, { 0.5, 0.5, 0.5 }) }, { "plainParams", plain ({ { "kParamBeatSync", 1 }, { "kParamRate", 3 }, { "kParamSwing", 1 } }) } }));
+    p.set ("LFO1", map ({ { "plainParams", plain ({ { "kParamBeatSync", 1 }, { "kParamRate", 3 }, { "kParamSwing", 0 } }) } }));
+    p.set ("Global0", map ({ { "plainParams", plain ({ { "kParamSwing", 62.5 } }) } }));
+    p.set ("LFOPointModBus0", map ({ { "plainParams", dflt() } }));
+    p.set ("ModSlot0", map ({ { "source", nums ({ 25, 0 }) }, { "destModuleTypeString", text ("LFOPointModBus") }, { "destModuleID", num (0) }, { "destModuleParamName", text ("kParamValue") },
+                              { "destModuleParamID", num (0) }, { "plainParams", plain ({ { "kParamAmount", 50 }, { "kParamBipolar", 1 } }) } }));
+    p.set ("lfoPointModAssignments", arr ({ map ({ { "busID", num (0) }, { "lfoID", num (0) }, { "lfoType", num (0) }, { "pointID", num (1) }, { "target", num (2) } }) }));
+    const SerumImportResult r = run (p.file());
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_EQ (r.lfoShapes.size(), size_t { 1 });
+    CHECK (r.lfoShapes[0].points[1].modCurve.present && ! r.lfoShapes[0].points[1].modY.present && ! r.lfoShapes[0].points[1].modX.present);
+    CHECK_EQ (r.lfoShapes[0].points[1].modCurve.source, std::string ("macro1"));
+    CHECK_NEAR (r.lfoShapes[0].points[1].modCurve.amount, 0.5, 1e-6);
+    CHECK (entryWith (r, "point_curve_modulation") >= 0 && entryWith (r, "point_curve_modulation_not_modelled") < 0);
+    // the flag takes the global swing: 62.5 of 50 .. 75 is half of the range, so 50 % here; LFO 2 has the flag off
+    CHECK_NEAR (value (r, "lfo1.swing"), 50.0, 1e-3);
+    CHECK_EQ (value (r, "lfo2.swing"), 0.0f);
+    CHECK (entryWith (r, "lfo_swing_flag_takes_the_global_swing") >= 0 && entryWith (r, "lfo_swing_flag_not_modelled") < 0);
+}
+
+// REMAINDER item 4 (S4): the poles and zeros of a PZ SVF filter become its response curve
+TEST (serum_pz_svf_poles_and_zeros_become_the_response_curve)
+{
+    const auto set = [] (double gain, double fp, double fz, double qp, double qz, double type)
+    {
+        std::vector<double> fps (8), fzs (8), qps (8), qzs (8), types (8, 2.0);
+        for (int i = 0; i < 8; ++i) { fps[i] = fzs[i] = (i + 0.5) / 8.0; qps[i] = qzs[i] = 0.5; }
+        fps[3] = fp; fzs[3] = fz; qps[3] = qp; qzs[3] = qz; types[3] = type;
+        return map ({ { "fp", nums (fps) }, { "fz", nums (fzs) }, { "qp", nums (qps) }, { "qz", nums (qzs) }, { "gain", num (gain) }, { "types", nums (types) } });
+    };
+    const auto filter = [&] (const char* typeName, const Bytes& sets)
+    {
+        Map plainMap = withText ({ { "kParamX", 0.0 }, { "kParamY", 0.0 } }, { { "kParamType", typeName } });
+        return map ({ { "plainParams", map (plainMap) }, { "PZs", sets } });
+    };
+    Preset p;
+    const Bytes four = arr ({ set (0.5, 0.5, 0.5, 0.8, 0.2, 6), set (0.5, 0.5, 0.5, 0.5, 0.5, 2), set (0.5, 0.5, 0.5, 0.5, 0.5, 2), set (0.5, 0.5, 0.5, 0.5, 0.5, 2) });
+    p.set ("VoiceFilter0", filter ("PZ_SVF", four));
+    p.set ("VoiceFilter1", filter ("H24", four));   // the poles and zeros of a filter that is not a PZ SVF are not used
+    const SerumImportResult r = run (p.file());
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_EQ (r.filterCurves.size(), size_t { 1 });
+    if (r.filterCurves.size() == 1)
+    {
+        const auto& c = r.filterCurves[0];
+        CHECK_EQ (c.filter, std::string ("filter1"));
+        CHECK (c.points.size() >= 2 && c.points.size() <= static_cast<size_t> (kMaxFilterCurvePoints));
+        float peak = -100.0f, at = 0.0f;
+        for (const auto& pt : c.points)
+            if (pt.y > peak) { peak = pt.y; at = pt.x; }
+        CHECK (peak > 15.0f && peak < 40.0f);              // a pole at Q 20 over a zero at Q 1.3 on the same frequency: about +24 dB
+        CHECK (std::fabs (at - 0.4375f) < 0.12f);          // the fourth pair sits at x = 3.5 / 8 of the log frequency axis
+        CHECK (c.points.front().y > -1.0f && c.points.front().y < 1.0f && c.points.back().y > -1.0f && c.points.back().y < 1.0f);   // the other pairs are neutral
+    }
+    CHECK (entryWith (r, "pz_svf_four_sets_blended_as_a_response_curve") >= 0 && entryWith (r, "pz_set_of_a_filter_that_is_not_a_pz_svf") >= 0);
+    CHECK (entryWith (r, "pz_svf_poles_and_zeros_not_imported") < 0);
+    // a Single file: the curve is the result of the file; the sets that are all neutral give a flat curve
+    const Bytes file = container ("XferFilterPZSingle", map ({ { "PZ", set (0.5, 0.5, 0.5, 0.2, 0.9, 5) } }), "Notch");
+    const SerumImportResult single = run (file);
+    CHECK (single.kind == SerumFileKind::filterPz);
+    CHECK_EQ (single.report.unaccounted, 0);
+    CHECK (single.pzCurve.points.size() >= 2);
+    float low = 100.0f;
+    for (const auto& pt : single.pzCurve.points)
+        low = std::min (low, pt.y);
+    CHECK (low < -10.0f);   // a notch pair (zero Q above the pole Q)
 }
 
 TEST (serum_report_json_lines_and_serialized_preset)

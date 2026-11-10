@@ -257,6 +257,11 @@ namespace sbvital {
       sh.multi.last_key = key;
       const synthyboy::sampleosc::QualityTier tier = sh.quality <= 0 ? QualityTier::low : (sh.quality == 1 ? QualityTier::medium : QualityTier::high);
       slot.layer_count = count;
+      slot.note_lookup = lookup;
+      slot.note_velocity = velocity;
+      slot.note_switch = sh.multi.switch_last >= 0 ? sh.multi.switch_last : instrument->switchDefault();
+      slot.note_counter = counter;
+      slot.release_started = false;
       for (int l = 0; l < count; ++l) {
         const auto& region = instrument->zone(zones[l]).region;
         if (region.group > 0 && region.group < synthyboy::multisample::kMaxGroups)
@@ -407,7 +412,11 @@ namespace sbvital {
         continue;
 
       // key released: exit the loop when the settings ask for it (and Tailed always plays its tail)
-      const bool pressed = input(kNotePressed)->at(0)[lane] > 0.5f;
+      // the key of the voice: held from the note on (the reset), let go at the voice event "off" (or "kill") of this lane; kNotePressed carries the voice events of the voice handler (REMAINDER
+      // item 4: it used to carry the number of keys held at the note on, which never went down at a release)
+      const Output* voice_event = input(kNotePressed)->source;
+      const bool let_go = voice_event->trigger_mask[lane] != 0 && (voice_event->trigger_value[lane] == static_cast<float>(kVoiceOff) || voice_event->trigger_value[lane] == static_cast<float>(kVoiceKill));
+      const bool pressed = reset_mask[lane] != 0 ? true : (slot.pressed && ! let_go);
       if (slot.pressed && ! pressed && ! slot.released) {
         slot.released = true;
         if (sh.loop_exit || sh.loop_mode == 4)
@@ -421,6 +430,21 @@ namespace sbvital {
           for (int u = 0; u < slot.unison; ++u)
             for (auto& layer : slot.layers[u])
               layer.noteOff(false);
+        // the zones with trigger=release play now (REMAINDER item 4): they start behind the layers of the note, one set per unison voice
+        if (slot.kind == 4 && slot.instrument != nullptr && slot.instrument == sh.multi.instrument && ! slot.release_started) {
+          slot.release_started = true;
+          int zones[synthyboy::multisample::kMaxLayers];
+          const float rnd = (nextRandom() >> 8) * (1.0f / 16777216.0f);
+          const int count = slot.instrument->selectReleaseZones(slot.note_lookup, slot.note_velocity, rnd, slot.note_counter, slot.note_switch, zones, synthyboy::multisample::kMaxLayers);
+          const synthyboy::sampleosc::QualityTier tier = sh.quality <= 0 ? QualityTier::low : (sh.quality == 1 ? QualityTier::medium : QualityTier::high);
+          const uint32_t sequence = ++sh.multi.sequence;
+          const int key = std::max(0, std::min(127, slot.note_lookup));
+          for (int u = 0; u < slot.unison; ++u)
+            for (int r = 0; r < count && slot.layer_count + r < synthyboy::multisample::kMaxLayerSlots; ++r)
+              slot.layers[u][slot.layer_count + r].noteOn(*slot.instrument, zones[r], key, slot.note_velocity, sh.multi.envelope_override ? &sh.multi.envelope : nullptr,
+                                                          sh.multi.vel_override ? sh.multi.vel_track : -1.0f, sequence, tier);
+          slot.layer_count = std::min(slot.layer_count + count, synthyboy::multisample::kMaxLayerSlots);
+        }
       }
       slot.pressed = pressed;
 

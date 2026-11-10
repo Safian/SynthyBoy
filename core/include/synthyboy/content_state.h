@@ -82,6 +82,7 @@ struct ContentPoint
 {
     float x = 0.0f, y = 0.0f, power = 0.0f;
     ContentModRef modX, modY; // only on LFO shape points
+    ContentModRef modCurve;   // REMAINDER item 4 (S13): the curve of the segment after the point; amount 1 = 10 power units (A457)
 
     ContentPoint() = default;
     ContentPoint (float xIn, float yIn, float powerIn = 0.0f) : x (xIn), y (yIn), power (powerIn) {}

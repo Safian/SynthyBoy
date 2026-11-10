@@ -682,6 +682,32 @@ SerumFlowResult importSerumFile (UiContext& ctx, const juce::File& file, int lfo
         result.flow = fail ("Choose an LFO to receive the shape");
         return result;
     }
+    if (in.kind == SerumFileKind::filterPz)
+    {
+        // poles and zeros (.XferFilterPZSingle / Multi, REMAINDER item 4): the response curve goes to the first filter that is a PZ SVF, otherwise to Filter 1 (which becomes a PZ SVF)
+        const int pzModel = std::max (0, choiceIndexOf ("filter1.model", "PZ SVF"));
+        int target = 1;
+        for (int n = 1; n <= 2; ++n)
+            if (juce::roundToInt (readParameter (ctx.host, ("filter" + std::to_string (n) + ".model").c_str())) == pzModel)
+            {
+                target = n;
+                break;
+            }
+        auto content = ctx.host.content();
+        ContentFilterCurve curve = in.pzCurve;
+        curve.filter = "filter" + std::to_string (target);
+        content.filterCurves.erase (std::remove_if (content.filterCurves.begin(), content.filterCurves.end(), [&curve] (const ContentFilterCurve& c) { return c.filter == curve.filter; }),
+                                    content.filterCurves.end());
+        content.filterCurves.push_back (std::move (curve));
+        if (! commit (ctx, content))
+        {
+            result.flow = fail ("The response curve could not be applied");
+            return result;
+        }
+        setParameter (ctx.host, ("filter" + std::to_string (target) + ".model").c_str(), static_cast<float> (pzModel));
+        result.flow = done ("Poles and zeros " + juce::String (in.name) + " are now the response curve of Filter " + juce::String (target));
+        return result;
+    }
     result.flow = done (juce::String (in.name) + ": this kind of file has no equivalent here (see the list)");
     return result;
 }

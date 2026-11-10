@@ -258,7 +258,7 @@ namespace sbvital {
     producers_->plug(note_count(), ProducersModule::kNoteCount);
     producers_->plug(active_mask(), ProducersModule::kActiveVoices);
     producers_->plug(lowest_active_note_, ProducersModule::kLowestNote);
-    producers_->plug(note_pressed(), ProducersModule::kNotePressed);
+    producers_->plug(voice_event(), ProducersModule::kNotePressed);   // the voice events (on / off / kill): the oscillators of the sample types see the release of the key
     producers_->plug(velocity(), ProducersModule::kVelocity); // GROUPC WP-13
     // SynthyBoy Block B14:
     producers_->plug(current_midi_note_, ProducersModule::kRawMidi);

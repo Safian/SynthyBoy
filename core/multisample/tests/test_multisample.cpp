@@ -342,3 +342,41 @@ TEST (multisample_sfz_writer_round_trips_every_opcode_the_parser_reads)
         CHECK (std::fabs (x.loopCrossfadeSec - y.loopCrossfadeSec) < 1.0e-6f);
     }
 }
+
+// REMAINDER item 4 (S12, 13-new-keys.md 4.43): trigger=release, xfin_* / xfout_*, fil_*
+TEST (multisample_release_trigger_crossfade_and_filter_opcodes_are_read_written_and_applied)
+{
+    const std::string text = "<region> sample=a.wav lokey=0 hikey=127 xfin_lokey=40 xfin_hikey=60 xfout_lokey=80 xfout_hikey=100 xfin_lovel=10 xfin_hivel=50 fil_type=lpf_2p cutoff=1500 resonance=6 "
+                             "fil_keytrack=100 fil_keycenter=c4 fil_veltrack=1200\n<region> sample=b.wav lokey=0 hikey=127 trigger=release\n";
+    const auto a = parseSfz (text);
+    CHECK_EQ (a.regions.size(), size_t { 2 });
+    const Region& r = a.regions[0];
+    CHECK (r.xfInLoKey == 40 && r.xfInHiKey == 60 && r.xfOutLoKey == 80 && r.xfOutHiKey == 100 && r.xfInLoVel == 10 && r.xfInHiVel == 50 && r.xfOutLoVel == -1);
+    CHECK (r.filType == 2 && std::fabs (r.filCutoffHz - 1500.0f) < 1.0e-3f && std::fabs (r.filResonanceDb - 6.0f) < 1.0e-3f && std::fabs (r.filKeytrackCents - 100.0f) < 1.0e-3f
+           && r.filKeycenter == 60 && std::fabs (r.filVeltrackCents - 1200.0f) < 1.0e-3f);
+    CHECK (! r.releaseTrigger && a.regions[1].releaseTrigger);
+    // the writer keeps all of it
+    const auto b = parseSfz (writeSfz (a));
+    CHECK_EQ (b.regions.size(), size_t { 2 });
+    CHECK (b.regions[0].xfInLoKey == 40 && b.regions[0].xfOutHiKey == 100 && b.regions[0].xfInHiVel == 50 && b.regions[0].filType == 2 && b.regions[0].filKeycenter == 60 && b.regions[1].releaseTrigger);
+
+    Files files;
+    files.bytes["a.wav"] = wav16 (sine (440.0, 0.5));
+    files.bytes["b.wav"] = wav16 (sine (880.0, 0.5));
+    Instrument inst;
+    CHECK_EQ (inst.build (a, files.reader()), 2);
+    int zones[4];
+    // the key down choice leaves the release zone out, the release choice has only that one
+    CHECK_EQ (inst.selectZones (70, 100, 0.5f, 0, -1, zones, 4), 1);
+    CHECK_EQ (zones[0], 0);
+    CHECK_EQ (inst.selectReleaseZones (70, 100, 0.5f, 0, -1, zones, 4), 1);
+    CHECK_EQ (zones[0], 1);
+    // the crossfades: key rise 40 .. 60, key fall 80 .. 100, velocity rise 10 .. 50 (equal power quarter sines)
+    CHECK_NEAR (inst.crossfadeGain (0, 40, 127), 0.0, 1.0e-6);
+    CHECK_NEAR (inst.crossfadeGain (0, 50, 127), std::sin (0.25 * kPi), 1.0e-4);
+    CHECK_NEAR (inst.crossfadeGain (0, 70, 127), 1.0, 1.0e-6);
+    CHECK_NEAR (inst.crossfadeGain (0, 90, 127), std::cos (0.25 * kPi), 1.0e-4);
+    CHECK_NEAR (inst.crossfadeGain (0, 100, 127), 0.0, 1.0e-6);
+    CHECK_NEAR (inst.crossfadeGain (0, 70, 30), std::sin (0.5 * kPi * 20.0 / 40.0), 1.0e-4);
+    CHECK_NEAR (inst.crossfadeGain (1, 10, 10), 1.0, 1.0e-6);   // a zone without crossfades
+}
