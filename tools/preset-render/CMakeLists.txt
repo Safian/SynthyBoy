@@ -16,9 +16,13 @@ endif()
 
 # The gate: every factory preset x 3 tiers passes the checks (the velocity sweep is off here, it is for the report).
 # Label `slow` like the other audio quality gates.
-add_test(NAME synthyboy_preset_sanity
-         COMMAND synthyboy_preset_render --presets "${PROJECT_SOURCE_DIR}/content/presets" --summary-only)
-set_tests_properties(synthyboy_preset_sanity PROPERTIES LABELS slow TIMEOUT 1500)
+# The factory presets are written for the Vital-derived engine (the own engine of builds without Vital, iOS, has no sample / granular / spectral
+# oscillators), so the gate runs only where that engine is built.
+if(SYNTHYBOY_WITH_VITAL)
+    add_test(NAME synthyboy_preset_sanity
+             COMMAND synthyboy_preset_render --presets "${PROJECT_SOURCE_DIR}/content/presets" --summary-only)
+    set_tests_properties(synthyboy_preset_sanity PROPERTIES LABELS slow TIMEOUT 1500)
+endif()
 
 # The shipped factory presets are exactly what scripts/gen-factory-presets.py generates (docs/params.json -> state v3, deterministic).
 find_package(Python3 COMPONENTS Interpreter QUIET)

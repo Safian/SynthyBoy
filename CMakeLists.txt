@@ -251,8 +251,14 @@ endif()
 # (the wrapper asks the processor for the extension, third_party/patches/clap-juce-extensions-extension-hook.patch).
 if(SYNTHYBOY_BUILD_TESTS AND TARGET synthyboy_test_clap_content AND TARGET SynthyBoy_CLAP)
     add_dependencies(synthyboy_test_clap_content SynthyBoy_CLAP)
+    # macOS: a .clap bundle (a directory); Linux / Windows: the module is a single file (TARGET_BUNDLE_DIR exists for bundles only)
+    if(APPLE)
+        set(_synthyboy_clap_under_test "$<TARGET_BUNDLE_DIR:SynthyBoy_CLAP>")
+    else()
+        set(_synthyboy_clap_under_test "$<TARGET_FILE:SynthyBoy_CLAP>")
+    endif()
     add_test(NAME synthyboy_test_clap_content_juce
-        COMMAND ${CMAKE_COMMAND} -E env "SYNTHYBOY_CLAP_UNDER_TEST=$<TARGET_BUNDLE_DIR:SynthyBoy_CLAP>" $<TARGET_FILE:synthyboy_test_clap_content>)
+        COMMAND ${CMAKE_COMMAND} -E env "SYNTHYBOY_CLAP_UNDER_TEST=${_synthyboy_clap_under_test}" $<TARGET_FILE:synthyboy_test_clap_content>)
 endif()
 
 # ---------------------------------------------------------------------------

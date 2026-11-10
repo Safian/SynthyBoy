@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "groupd_util.h"
+#include "synthyboy/engine.h"
 #include "synthyboy/params.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy_clap.h"
@@ -90,7 +91,8 @@ const clap_plugin_factory_t* openFactory (bool& wrapped)
         {
             std::string path = bundle;
             const std::string name = fs::path (path).stem().string();
-            path += "/Contents/MacOS/" + name;
+            if (fs::is_directory (path))                    // macOS: a bundle; elsewhere the module is the file itself
+                path += "/Contents/MacOS/" + name;
             void* lib = dlopen (path.c_str(), RTLD_NOW | RTLD_LOCAL);
             if (lib == nullptr)
                 std::printf ("    dlopen %s: %s\n", path.c_str(), dlerror());
@@ -222,22 +224,28 @@ TEST (clap_content_extension_imports_lists_attaches_and_removes)
     const auto base = [] { return std::vector<clap_event_param_value_t> {
         paramEvent ("osc1.type", 1.0), paramEvent ("osc1.unison.voices", 1.0), paramEvent ("osc1.random_phase", 0.0), paramEvent ("osc1.sample.loop_mode", 1.0),
         paramEvent ("filter1.on", 0.0), paramEvent ("osc1.level", 100.0) }; };
-    CHECK (rmsOf (play (plugin, 69, 0.8, base()), 0.3, 0.7) < 1.0e-4);
+    const bool sampleOsc = isEngineAvailable (EngineKind::vital); // the own engine (builds without Vital) has no Sample oscillator
+    if (sampleOsc)
+        CHECK (rmsOf (play (plugin, 69, 0.8, base()), 0.3, 0.7) < 1.0e-4);
     plugin->reset (plugin);
     CHECK_EQ (ext->attach (plugin, SYNTHYBOY_CONTENT_SAMPLE, 0, 4), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
     CHECK_EQ (ext->attach (plugin, SYNTHYBOY_CONTENT_SAMPLE, 0, 1), SYNTHYBOY_CONTENT_OK);
-    const auto a4 = play (plugin, 69, 1.0);
-    CHECK (rmsOf (a4, 0.3, 0.9) > 0.05);
-    CHECK_NEAR (crossingHz (a4, 0.3, 0.9), 440.0, 6.0);
-    plugin->reset (plugin);
-    CHECK_NEAR (crossingHz (play (plugin, 81, 1.0), 0.3, 0.9), 880.0, 12.0);
+    if (sampleOsc)
+    {
+        const auto a4 = play (plugin, 69, 1.0);
+        CHECK (rmsOf (a4, 0.3, 0.9) > 0.05);
+        CHECK_NEAR (crossingHz (a4, 0.3, 0.9), 440.0, 6.0);
+        plugin->reset (plugin);
+        CHECK_NEAR (crossingHz (play (plugin, 81, 1.0), 0.3, 0.9), 880.0, 12.0);
+    }
 
     // the reference is in the state, so a saved project finds the file again; removing the file makes it a missing one (silence)
     CHECK_EQ (ext->remove (plugin, SYNTHYBOY_CONTENT_SAMPLE, 3), SYNTHYBOY_CONTENT_ERR_ARGUMENT);
     CHECK_EQ (ext->remove (plugin, SYNTHYBOY_CONTENT_SAMPLE, 0), SYNTHYBOY_CONTENT_OK);
     CHECK_EQ (ext->count (plugin, SYNTHYBOY_CONTENT_SAMPLE), 0u);
     plugin->reset (plugin);
-    CHECK (rmsOf (play (plugin, 69, 0.8), 0.3, 0.7) < 1.0e-4);
+    if (sampleOsc)
+        CHECK (rmsOf (play (plugin, 69, 0.8), 0.3, 0.7) < 1.0e-4);
 
     // a wavetable by path (a WAV of 2048 sample cycles) and an impulse response
     std::vector<float> frames (2048 * 2);
