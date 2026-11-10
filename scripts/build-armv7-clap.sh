@@ -53,7 +53,7 @@ while [[ $# -gt 0 ]]; do
         --jobs) jobs="$2"; shift 2 ;;
         --build-dir) build_dir="$2"; shift 2 ;;
         --print-manual) print_manual=1; shift ;;
-        -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "build-armv7-clap.sh: unknown option: $1 (see --help)" >&2; exit 2 ;;
     esac
 done

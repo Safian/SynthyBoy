@@ -1,0 +1,86 @@
+# Releasing SynthyBoy
+
+How a release is cut, what is in it, what the Kick plugin manager reads from it, and how to test the same flow locally without GitHub.
+Design background: [ARCHITECTURE.md](ARCHITECTURE.md) sections 6 (content packs) and 7 (manifest).
+
+## What a release contains
+
+| Asset | Made by | Content |
+|-------|---------|---------|
+| `com.safian.synthyboy-<version>-<platform>.zip` for `linux-armv7`, `linux-aarch64`, `linux-x86_64`, `macos-universal`, `windows-x64` | `scripts/package-release.py` | `synthyboy.clap` (the native shell, no JUCE: the file Kick loads), `juce/SynthyBoy.clap` and `juce/SynthyBoy.vst3` for DAWs (all platforms except linux-armv7, which has the native shell only), `LICENSE`, `NOTICE`, `THIRD_PARTY.md`, `README.txt` |
+| `<packid>-<packversion>.zip` for every entry of `contentPacks` | `tools/contentpack/contentpack.py build-all` | `contentpack.json` + the files, all SHA-256 verified |
+| `plugin.json.release` | `scripts/fill-manifest.py` | the copy of `plugin.json` with status `released`, urls, SHA-256, sizes, `entry_point`, `assets[]` |
+| `SHA256SUMS` | `scripts/fill-manifest.py --sums` | `<sha256>  <file>` for every asset and the manifest |
+
+The zips are reproducible (sorted entries, fixed timestamps). `package-release.py` refuses a native binary of the wrong architecture for the platform name
+(ELF class / machine / ARM hard-float ABI, universal Mach-O with arm64 and x86_64, PE x86-64).
+
+## Cutting a release
+
+1. Set the version in `CMakeLists.txt` (`project(SynthyBoy VERSION x.y.z)`) and in `plugin.json` (`version`); `scripts/check-manifest.py` fails if they differ.
+   If a content pack changed, raise its version in its `contentpack.json` and in `plugin.json` (same check) and regenerate its file list
+   (`python3 tools/contentpack/contentpack.py manifest --dir content/presets`).
+2. Merge to the release commit, wait for the `build` workflow to be green on it. The release workflow refuses a tagged commit without a successful `build.yml` run.
+3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The tag must be `v<version of plugin.json>`. (Or run the `release` workflow by hand from the Actions tab: it uses the
+   tag name `v<version>`; GitHub creates the tag only when the draft is published.) The workflow never runs on a normal push or pull request.
+4. `.github/workflows/release.yml`: `verify` (tag, `check-manifest.py`, green build) -> `build` (five platform jobs in parallel; linux-armv7 is the Docker build of
+   `scripts/build-armv7-clap.sh`, Debian 12) and `packs` -> `draft`: downloads the zips, runs `fill-manifest.py --repo ... --tag ...` and `check-manifest.py --released --assets`,
+   creates the **draft** release with all assets.
+5. Open the draft, check the assets (`SHA256SUMS`, `plugin.json.release`), then publish it by hand. Nothing in the workflow publishes.
+6. Kick side: give the plugin manager the `plugin.json.release` of the release (Kick signs it with the project key, see below).
+
+A failed run leaves no release. A draft for a tag that already has a release is refused by `gh release create`; delete the old draft first.
+
+## What the Kick side reads
+
+Kick's `PluginManifest` (`Kick/clap_host/src/PluginManifest.cpp`) parses `plugin.json.release`:
+`id`, `name`, `version`, `author`, `license`, `homepage`, `description`, `kind`, `min_host_version`, `builds{platform: url, sha256, size, entry_point}`,
+`assets[]` (`id`, `name`, `version`, `url`, `sha256`, `size`, `required`, `type`, `license`), `permissions`, `key_id`, `signature`.
+It picks the build of the host platform (`macos-universal` serves arm64 and x86_64) and uses `entry_point` (the `.clap` inside the zip) to find the module; entries
+without a SHA-256 are rejected, which is why a partial (local) manifest lists only the platforms that were built. `assets[]` are the content packs
+(`required: false` packs are optional downloads); the plugin itself never downloads anything.
+
+Open point on the Kick side (not verifiable from this repo): the `PluginInstaller` in the Kick checkout this was written against (`fo-repo-mozgas-51f099`)
+installs from an unpacked directory that holds `manifest.json` and the `.clap`; fetching `url`, checking size / SHA-256 and unpacking the zip is not in that
+code. Until the downloader exists, test by hand: unzip the platform zip, save `plugin.json.release` next to `synthyboy.clap` as `manifest.json`.
+
+**Which fields Kick signs:** `canonicalSigningPayload()` is the manifest re-serialised from the fields above without `signature`, so `key_id`, `builds` (url, sha256, size,
+entry_point) and `assets[]` are covered. The fields Kick does not parse (`schemaVersion`, `clap_id`, `static`, `contentPacks`, `path`, `status`) are not signed
+and not used by Kick; they are for this repo's checks and the static (iOS / Android) loader. The repo never contains a signature or a key: the checked-in file
+has neither `key_id` nor `signature`, and `signature`, if present, must be 128 hex characters.
+
+## Testing the flow locally (no GitHub)
+
+```
+scripts/make-local-release.sh                 # linux-armv7 (Docker) + the host platform + the packs -> dist/
+scripts/make-local-release.sh --with-juce     # also the JUCE CLAP / VST3 of the host platform in its zip
+scripts/make-local-release.sh --no-armv7      # without Docker
+scripts/make-local-release.sh --file-urls     # absolute file:// urls instead of urls relative to dist/plugin.json.release
+```
+
+Result in `dist/` (git-ignored): the zips, `plugin.json.release` (urls relative to it, so the folder can be copied to a USB stick or served with
+`python3 -m http.server`), `SHA256SUMS`. The script clears old zips in the output folder first, and finishes with `check-manifest.py --local`.
+Docker not usable: the script prints the exact commands for a Debian 12 / Ubuntu Linux host (`scripts/build-armv7-clap.sh --print-manual`) and warns loudly
+that linux-armv7 was not built; `--require-armv7` makes that an error, `--armv7-clap FILE` takes a binary built elsewhere. Building the ARMv7 module on a
+newer distribution is not advised: its glibc is what the device needs (Debian 12: 2.36, the Kick app's toolchain). An image that already has the toolchain
+can be given with `ARMV7_IMAGE` (e.g. `kick-armv7-builder:latest`); missing packages are installed in the throw-away container.
+
+Nothing in these scripts talks to a device.
+
+## Content packs
+
+`plugin.json` `contentPacks` lists every pack: `path` is the pack directory (with its `contentpack.json`), `required` / `recommended` flags, and the placeholders
+the release fills. `check-manifest.py` verifies every declared pack (manifest against `schema/contentpack.schema.json`, same id / version / kind / licence as in
+`plugin.json`, `requires_plugin` satisfied by the plugin version, every file and SHA-256, total below 2 GB).
+Tool: `python3 tools/contentpack/contentpack.py {manifest,verify,build,build-all,split}` (`--help`). A pack larger than one asset is split per instrument with `split`
+(one pack per top level directory, id `<id>-<directory>`), every part is declared in `plugin.json`.
+
+Declared today: `com.safian.synthyboy.factory-presets` (CC0, 112 presets, 0.9 MB).
+Not declared, and why: there are no generated factory wavetables (the engine's built-in tables are computed at run time) and the factory multisample instruments
+(4.6 GB, morning question 91) exist only in a user library built from third party Serum factory files, which are not part of this repository and not
+redistributable; see `docs/ui-design/RELEASE-REPORT.md`.
+
+## Pins and secrets
+
+All actions in `release.yml` are pinned by commit SHA (checkout, upload-artifact), everything else is the preinstalled `gh` CLI with the job's `GITHUB_TOKEN`
+(`contents: write` only in the last job). The manifest and the scripts hold no secret.

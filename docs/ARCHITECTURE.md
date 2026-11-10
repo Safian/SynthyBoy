@@ -277,21 +277,30 @@ Content that is not a parameter is addressed by **pack id + file + SHA-256** (`C
 
 ## 7. Manifest and loading ("download-ready")
 
-`plugin.json` in the repo root (schema in `schema/plugin-manifest.schema.json`, validated in CI), consumed by the Kick-side `PluginManifest`:
+`plugin.json` in the repo root (schema in `schema/plugin-manifest.schema.json`, validated in CI by `scripts/check-manifest.py`), consumed by the Kick-side `PluginManifest` (`Kick/clap_host`):
 
 ```
 { "schemaVersion": 1, "id": "com.safian.synthyboy", "name": "SynthyBoy", "version": "0.1.0",
-  "kind": "instrument", "license": "AGPL-3.0-or-later", "homepage": "…", "min_host_version": "…",
+  "kind": "instrument", "author": "…", "description": "…", "license": "AGPL-3.0-or-later", "homepage": "…", "min_host_version": "…",
   "clap_id": "com.safian.synthyboy",   // must equal CLAP_ID in CMakeLists.txt (checked by scripts/check-manifest.py)
-  "builds": { "linux-armv7": {"status":"unbuilt","url":"…","sha256":"…","size":0}, "linux-aarch64": {…}, "linux-x86_64": {…},
+  "builds": { "linux-armv7": {"status":"unbuilt","url":"","sha256":"","size":0}, "linux-aarch64": {…}, "linux-x86_64": {…},
               "macos-universal": {…}, "windows-x64": {…} },
   "static": { "ios": {"status":"planned","library":"libsynthyboy_static.a"}, "android": {…},
               "entry": "synthyboy_clap_get_entry" },
-  "contentPacks": [ {…as §6, plus "url", "required": false, "recommended": true} ],
-  "signature": {…} }
+  "contentPacks": [ {"id","name","version","kind","license","required":false,"recommended":true,"path":"content/presets",
+                     "status":"unbuilt","url":"","sha256":"","size":0} ] }
 ```
 
-`builds[*].url/sha256/size` are filled by the release job (checked-in file has placeholders for CI-built targets); `signature` is produced by the Kick-side signing (official plugins are signed with the project key; not this repo's concern beyond leaving the field). The manifest holds no secret.
+The checked-in file keeps the placeholders (`status` "unbuilt", empty url / sha256, size 0). The release workflow (`.github/workflows/release.yml`, docs/RELEASE.md)
+builds and packs each platform as `<id>-<version>-<platform>.zip` and each pack as `<packid>-<packversion>.zip` and runs `scripts/fill-manifest.py`, which
+writes a COPY, `plugin.json.release`: every `builds[*]` and `contentPacks[*]` entry gets `status` "released", the GitHub asset url, the SHA-256 and the size computed
+from the file (builds also `entry_point`, the `.clap` inside the zip), and the fields Kick reads besides are derived: `assets[]` (id, name, version, url, sha256, size,
+required, type, license, from the content packs). `scripts/check-manifest.py --released` checks the result (https urls, asset names, the files' hashes and sizes,
+`assets` mirrors the packs); `--local` is the variant for `scripts/make-local-release.sh` (relative or `file://` urls, only the platforms that were built). Each pack
+zip is `contentpack.json` + the files at its root, verified by `tools/contentpack/contentpack.py` (every file, SHA-256, size, nothing unlisted) and below 2 GB
+(GitHub's limit per asset is 2 GiB; a larger pack is split per instrument with `contentpack.py split` and every part is declared). `key_id` and `signature`
+(128 hex characters, Ed25519) are produced by the Kick-side signing of the manifest (official plugins are signed with the project key; not this repo's concern
+beyond leaving the fields out of the checked-in file). The manifest holds no secret.
 
 The repo builds the same source into **both** CMake targets:
 

@@ -13,6 +13,9 @@
 #       verifies DIR and writes OUTDIR/<id>-<version>.zip (contentpack.json + the listed files at the zip root, byte for byte
 #       reproducible: sorted entries, fixed timestamps), verifies the zip again and refuses a zip over --max-size (default
 #       2e9 bytes, GitHub's limit per release asset is 2 GiB): split such a pack per instrument with `split`.
+#   contentpack.py build-all --manifest plugin.json --out OUTDIR
+#       builds every pack that plugin.json declares in "contentPacks" (from its "path", relative to the manifest's folder) and checks
+#       that the zip is the pack plugin.json names (same id and version); the release job and scripts/make-local-release.sh use it.
 #   contentpack.py split --dir DIR --out OUTDIR
 #       one pack per top level directory of DIR (an instrument per directory): OUTDIR/<slug>/ with its own contentpack.json
 #       (id "<id>-<slug>", same version / licence / attribution), files hard-linked (copied where that is not possible).
@@ -380,6 +383,25 @@ def cmd_build(args):
     return 0
 
 
+def cmd_build_all(args):
+    manifest_file = Path(args.manifest)
+    try:
+        plugin = json.loads(manifest_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise PackError("cannot read %s: %s" % (manifest_file, e))
+    packs = plugin.get("contentPacks", [])
+    if not packs:
+        raise PackError("%s declares no contentPacks" % manifest_file)
+    for cp in packs:
+        pack_dir = manifest_file.resolve().parent / cp["path"]
+        summary = build_pack(pack_dir, args.out, args.max_size)
+        if summary["id"] != cp["id"] or summary["version"] != cp["version"]:
+            raise PackError("%s declares %s %s but %s holds %s %s" % (manifest_file.name, cp["id"], cp["version"], cp["path"],
+                                                                      summary["id"], summary["version"]))
+        print("built %s: %d bytes, sha256 %s, %d files" % (summary["file"], summary["size"], summary["sha256"], summary["files"]))
+    return 0
+
+
 def cmd_split(args):
     for item in split_pack(args.dir, args.out):
         print("%s  %s  (%d files, %d bytes)" % (item["id"], item["path"], item["files"], item["bytes"]))
@@ -410,6 +432,12 @@ def main(argv=None):
     p.add_argument("--max-size", type=int, default=DEFAULT_MAX_BYTES)
     p.add_argument("--summary")
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser("build-all", help="build every pack that plugin.json declares")
+    p.add_argument("--manifest", default=str(ROOT / "plugin.json"))
+    p.add_argument("--out", required=True)
+    p.add_argument("--max-size", type=int, default=DEFAULT_MAX_BYTES)
+    p.set_defaults(func=cmd_build_all)
 
     p = sub.add_parser("split", help="one pack per top level directory")
     p.add_argument("--dir", required=True)

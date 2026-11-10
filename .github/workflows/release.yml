@@ -1,0 +1,199 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Safian Szabolcs
+#
+# Release: builds the native CLAP shell (the .clap that Kick loads) and, where the platform has them, the JUCE CLAP / VST3 builds for
+# linux-armv7, linux-aarch64, linux-x86_64, macos-universal and windows-x64, packs every platform as
+# <id>-<version>-<platform>.zip (scripts/package-release.py), builds the content packs of plugin.json (tools/contentpack), fills a COPY of
+# plugin.json with the release asset URLs, SHA-256 and sizes (scripts/fill-manifest.py -> plugin.json.release, checked by
+# scripts/check-manifest.py --released --assets) and creates the GitHub release as a DRAFT with all of it as assets.
+# docs/RELEASE.md describes the whole procedure.
+#
+# It runs ONLY for a pushed tag v*.*.* or by hand (workflow_dispatch), never for a normal push or pull request. The workflow does not
+# create a tag and does not publish: the draft is published by the owner. A manual run (no tag) uses the tag name v<version of plugin.json>;
+# GitHub creates that tag only when the owner publishes the draft.
+#
+# linux-armv7 has no JUCE build (no cross sysroot for the GUI libraries): only the native shell, built in the Debian 12 container of
+# scripts/build-armv7-clap.sh, the toolchain of the Kick app for the MPC.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PLUGIN: SynthyBoy
+
+jobs:
+  # The tag must be v<version of plugin.json>, plugin.json must pass the checks, and (for a tag) the commit must have a green build workflow.
+  verify:
+    name: verify tag and manifest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      # actions are pinned by commit SHA (checkout v7.0.1, upload-artifact v7.0.2); everything else uses the preinstalled gh CLI
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Tag name and plugin.json
+        id: tag
+        run: |
+          version=$(python3 -I -c 'import json; print(json.load(open("plugin.json"))["version"])')
+          tag="v${version}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "${tag}" ]; then
+            echo "The pushed tag ${GITHUB_REF_NAME} is not v<version of plugin.json> (${tag})"; exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          python3 -I scripts/check-manifest.py
+
+      - name: The commit passed the build workflow
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length)
+          if [ "${ok:-0}" -lt 1 ]; then
+            echo "No successful run of build.yml for ${GITHUB_SHA}: tag a commit whose build is green (docs/RELEASE.md)."; exit 1
+          fi
+
+  build:
+    name: ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+          - platform: linux-aarch64
+            os: ubuntu-24.04-arm
+          - platform: macos-universal
+            os: macos-latest
+          - platform: windows-x64
+            os: windows-latest
+          - platform: linux-armv7
+            os: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Linux build dependencies
+        if: startsWith(matrix.platform, 'linux-') && matrix.platform != 'linux-armv7'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build pkg-config \
+            libasound2-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libfreetype-dev libfontconfig1-dev \
+            libgl1-mesa-dev
+
+      # JUCE (VST3 + CLAP) and the native shell (shell-clap/synthyboy.clap); the tests are the business of build.yml
+      - name: Build (Linux x86_64 / AArch64)
+        if: startsWith(matrix.platform, 'linux-') && matrix.platform != 'linux-armv7'
+        run: scripts/build.sh -- -DSYNTHYBOY_BUILD_TESTS=OFF
+
+      - name: Build (macOS, universal arm64 + x86_64)
+        if: matrix.platform == 'macos-universal'
+        run: scripts/build.sh -- -DSYNTHYBOY_BUILD_TESTS=OFF "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+
+      - name: Build (Windows)
+        if: matrix.platform == 'windows-x64'
+        run: |
+          cmake -S . -B build -A x64 -DSYNTHYBOY_BUILD_TESTS=OFF
+          cmake --build build --config Release --parallel
+
+      # the native shell only, cross compiled in Debian 12 (glibc 2.36 like the Kick app on the MPC); checks the ELF header of the result
+      - name: Build (linux-armv7, native shell in Docker)
+        if: matrix.platform == 'linux-armv7'
+        run: scripts/build-armv7-clap.sh --jobs "$(nproc)" --out build-armv7-clap/synthyboy.clap
+
+      - name: Package
+        run: |
+          PY=python3; command -v python3 >/dev/null || PY=python
+          art="build/${PLUGIN}_artefacts/Release"
+          case "${{ matrix.platform }}" in
+            linux-armv7)     args=(--native build-armv7-clap/synthyboy.clap) ;;
+            windows-x64)     args=(--native build/shell-clap/Release/synthyboy.clap --juce-clap "$art/CLAP/${PLUGIN}.clap" --juce-vst3 "$art/VST3/${PLUGIN}.vst3") ;;
+            *)               args=(--native build/shell-clap/synthyboy.clap --juce-clap "$art/CLAP/${PLUGIN}.clap" --juce-vst3 "$art/VST3/${PLUGIN}.vst3") ;;
+          esac
+          "$PY" -I scripts/package-release.py --platform "${{ matrix.platform }}" "${args[@]}" --out dist
+          ls -l dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  packs:
+    name: content packs
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      # every pack that plugin.json declares: verified (every file, SHA-256, size), zipped reproducibly, verified again, below the 2 GB asset limit
+      - name: Build the content packs
+        run: python3 -I tools/contentpack/contentpack.py build-all --manifest plugin.json --out dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-packs
+          path: dist/*.zip
+          if-no-files-found: error
+
+  draft:
+    name: fill plugin.json.release and create the draft release
+    needs: [verify, build, packs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Download the build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p downloaded assets
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'release-*' --dir downloaded
+          find downloaded -type f -name '*.zip' -exec mv {} assets/ \;
+          ls -l assets
+
+      # size and SHA-256 are computed from the files here (not taken from the build jobs); the result is validated by
+      # scripts/check-manifest.py in released mode against the files themselves
+      - name: Fill plugin.json.release
+        env:
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          python3 -I scripts/fill-manifest.py --assets assets --repo "$GITHUB_REPOSITORY" --tag "$TAG" --sums assets/SHA256SUMS
+          python3 -I scripts/check-manifest.py --released --assets assets assets/plugin.json.release
+          cat assets/SHA256SUMS
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          notes="SynthyBoy ${TAG#v}, built from ${GITHUB_SHA} (workflow run ${GITHUB_RUN_ID}).
+
+          plugin.json.release is the manifest Kick's plugin manager reads (urls, SHA-256 and sizes of all assets); SHA256SUMS lists every asset.
+          Kick signs the manifest on its side. See docs/RELEASE.md."
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "SynthyBoy ${TAG#v}" --notes "$notes" \
+            assets/*.zip assets/plugin.json.release assets/SHA256SUMS

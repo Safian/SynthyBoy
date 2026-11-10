@@ -74,8 +74,9 @@ Both come from the same sources: JUCE builds the VST3, and
 | `tests/clap-smoke/` | `clap_smoke`: loads the built `.clap`, checks parameter parity with the core table, audio, state round trip |
 | `cmake/toolchains/` | `armv7-linux-gnueabihf`, `aarch64-linux-gnu` cross toolchain files |
 | `plugin.json`, `schema/` | plugin manifest and its JSON schema (`scripts/check-manifest.py`) |
+| `tools/contentpack/` | `contentpack.py`: builds, verifies and splits ContentPacks (zip + `contentpack.json`), see docs/RELEASE.md |
 | `bench/`, `tools/paramdump/`, `tools/preset-render/` | `synthyboy_bench`: real-time factor and block times of a default and a heavy patch per tier; `synthyboy_paramdump`: the parameter table as JSON (`docs/params.json`); `synthyboy_preset_render`: renders the factory presets at every tier, checks them and prints the level spread and the velocity curve (`--wav DIR` writes the renders for listening) |
-| `scripts/` | `build.sh`, `check-manifest.py`, `check-no-vital.sh` (the iOS rule), `gen-params-doc.py` / `check-params-doc.sh` (docs/PARAMETERS.md and params.json) |
+| `scripts/` | `build.sh`, `check-manifest.py`, release: `package-release.py`, `fill-manifest.py`, `build-armv7-clap.sh`, `make-local-release.sh` ([docs/RELEASE.md](docs/RELEASE.md)), `check-no-vital.sh` (the iOS rule), `gen-params-doc.py` / `check-params-doc.sh` (docs/PARAMETERS.md and params.json) |
 | `docs/ARCHITECTURE.md`, `PARAMETERS.md`, `QUALITY.md`, `UPSTREAM.md`, `PERFORMANCE.md` | design and phase plan, the parameter reference (generated), audio quality gates and their measurements, record of the Vital take-over, benchmark numbers |
 
 CMake options: `SYNTHYBOY_BUILD_PLUGIN` (ON; OFF builds only the core, no JUCE download), `SYNTHYBOY_BUILD_TESTS` (ON),
@@ -176,6 +177,8 @@ Copy the bundles to the usual plugin folders:
 - `core-armv7`: the core cross compiled for Linux ARMv7 hard-float, tests run under QEMU user mode (ABI/NEON attributes are printed).
 - `linux-aarch64`: full build, tests and `clap_smoke` on GitHub's native arm runner.
 - `manifest`: `plugin.json` against `schema/plugin-manifest.schema.json`.
+
+`.github/workflows/release.yml` runs only for a pushed tag `v*.*.*` (or by hand) and creates a **draft** release with the zips of all five platforms, the content packs and `plugin.json.release`: [docs/RELEASE.md](docs/RELEASE.md); `scripts/make-local-release.sh` does the same locally (Docker for linux-armv7) into `dist/`.
 - `ios-vital-free`: `-DSYNTHYBOY_WITH_VITAL=OFF`, core build + tests, `scripts/check-no-vital.sh` on `libsynthyboy_core.a` (and its `--self-test`).
 
 All other jobs build and test the Vital engine too; `build` (Linux) also builds the plugin with `-DSYNTHYBOY_SHELL_ENGINE=own` and runs `clap_smoke` on it (the default plugin runs it too), checks that `docs/params.json` and `docs/PARAMETERS.md` are current, `linux-aarch64` prints benchmark numbers.

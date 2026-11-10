@@ -192,6 +192,20 @@ class PackTests(unittest.TestCase):
         self.assertLess(summary["size"], cp.DEFAULT_MAX_BYTES)
         self.assertEqual(cp.verify_zip(self.tmp / "factory" / summary["file"], summary["id"], summary["version"]), [])
 
+    def test_build_all_builds_the_packs_of_plugin_json_and_checks_identity(self):
+        out = self.tmp / "all"
+        code, text, _ = run_quiet(["build-all", "--manifest", str(ROOT / "plugin.json"), "--out", str(out)])
+        self.assertEqual(code, 0, text)
+        self.assertEqual(sorted(p.name for p in out.glob("*.zip")), ["com.safian.synthyboy.factory-presets-1.2.0.zip"])
+        # a plugin.json that names another version than the pack holds is refused
+        plugin = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
+        plugin["contentPacks"][0]["version"] = "9.9.9"
+        (self.tmp / "plugin.json").write_text(json.dumps(plugin), encoding="utf-8")
+        (self.tmp / "content").symlink_to(ROOT / "content")
+        code, _, err = run_quiet(["build-all", "--manifest", str(self.tmp / "plugin.json"), "--out", str(self.tmp / "bad")])
+        self.assertEqual(code, 1)
+        self.assertIn("9.9.9", err)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,3 +16,5 @@ CMakeUserPresets.json
 docs/ui-design/_manuals/
 tests/vital-presets/
 tests/serum-presets/
+__pycache__/
+*.pyc
