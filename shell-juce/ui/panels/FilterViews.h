@@ -970,7 +970,7 @@ inline void showFilterTypePicker (UiContext& ctx, ParamHandle& model, ParamHandl
 {
     auto sheet = std::make_unique<FilterTypePickerSheet> (ctx, model, style, blend);
     sheet->setSize (sheet->preferredWidth(), sheet->preferredHeight());
-    juce::CallOutBox::launchAsynchronously (std::move (sheet), anchor.getScreenBounds(), anchor.getTopLevelComponent());
+    launchCallOut (std::move (sheet), anchor);
 }
 
 } // namespace synthyboy::ui

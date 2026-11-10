@@ -35,7 +35,7 @@ public:
             juce::PopupMenu menu;
             menu.addItem (1, "Load another impulse response...");
             menu.addItem (2, "Remove the impulse response");
-            menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&loadIrButton), [safe = juce::Component::SafePointer<FxConvolveView> (this)] (int result)
+            menu.showMenuAsync (popupOptions (&loadIrButton), [safe = juce::Component::SafePointer<FxConvolveView> (this)] (int result)
             {
                 if (safe == nullptr)
                     return;
@@ -48,9 +48,8 @@ public:
         addAndMakeVisible (loadIrButton);
         refreshImpulse();
 
-        #if defined(SYNTHYBOY_DEFAULT_TIER) && SYNTHYBOY_DEFAULT_TIER == low
+        if (ctx.host.qualityTier() == Tier::low)
             setTierBypassed (true);
-        #endif
     }
 
     void paint (juce::Graphics& g) override

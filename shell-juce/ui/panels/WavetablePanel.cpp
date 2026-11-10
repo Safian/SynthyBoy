@@ -718,7 +718,7 @@ void WavetablePanel::resized()
 
     if (editorSheet && editorSheet->isVisible())
     {
-        auto* topComp = getTopLevelComponent();
+        auto* topComp = overlayRootOf (*this);
         if (topComp != nullptr)
             editorSheet->setBounds (topComp->getLocalBounds());
         else

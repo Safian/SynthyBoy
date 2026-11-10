@@ -23,9 +23,8 @@ public:
         if ((tier.fxMask & kFxFlanger) == 0 && (ctx.host.engineCaps() & kCapNone) == 0)
         {
             // If the host environment indicates Tier::low
-            #if defined(SYNTHYBOY_DEFAULT_TIER) && SYNTHYBOY_DEFAULT_TIER == low
+            if (ctx.host.qualityTier() == Tier::low)
                 setTierBypassed (true);
-            #endif
         }
     }
 

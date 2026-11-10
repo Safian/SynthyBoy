@@ -126,7 +126,7 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
         juce::PopupMenu menu;
         for (int i = 0; i < kNumBrushes; ++i)
             menu.addItem (i + 1, brushName (i), true, i == brush_);
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&brushPickBtn),
+        menu.showMenuAsync (popupOptions (&brushPickBtn),
                             [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
                             {
                                 if (safe != nullptr && result > 0)
@@ -148,7 +148,7 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
         const char* const names[] = { "Straight", "Ease in", "Ease out", "Hard in", "Hard out" };
         for (int i = 0; i < 5; ++i)
             menu.addItem (i + 1, names[i]);
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&segBtn),
+        menu.showMenuAsync (popupOptions (&segBtn),
                             [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
                             {
                                 if (safe != nullptr && result > 0)
@@ -244,7 +244,7 @@ LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context
             menu.addItem (400 + osc, "LFO to Wavetable " + juce::String (osc == 1 ? "A" : (osc == 2 ? "B" : "C")), ctx.host.contentLibrary() != nullptr);
         menu.addSeparator();
         shapeLibrary->addTo (menu, 1000);
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetBtn).withMinimumWidth (ctx.theme.ipx (160.0f)),
+        menu.showMenuAsync (popupOptions (&presetBtn).withMinimumWidth (ctx.theme.ipx (160.0f)),
                             [safe = juce::Component::SafePointer<LfoShapeEditor> (this)] (int result)
                             {
                                 if (safe == nullptr || result <= 0)
@@ -1431,9 +1431,9 @@ void LfoShapeEditor::showPointSheet (int index)
         }
     }
     const auto at = pointPosition (index);
-    menu.showMenuAsync (juce::PopupMenu::Options()
-                            .withTargetScreenArea (localAreaToGlobal (juce::Rectangle<float> (at, at).expanded (ctx.theme.px (8.0f)).toNearestInt()))
-                            .withMinimumWidth (ctx.theme.ipx (180.0f)),
+    menu.showMenuAsync (withOverlayParent (juce::PopupMenu::Options()
+                                               .withTargetScreenArea (localAreaToGlobal (juce::Rectangle<float> (at, at).expanded (ctx.theme.px (8.0f)).toNearestInt()))
+                                               .withMinimumWidth (ctx.theme.ipx (180.0f)), *this),
                         [safe = juce::Component::SafePointer<LfoShapeEditor> (this), index] (int result)
                         {
                             if (safe == nullptr || result <= 0)

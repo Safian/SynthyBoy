@@ -369,7 +369,7 @@ private:
         }
         menu.addSubMenu ("Classic", classicSub);
 
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (modelButton),
+        menu.showMenuAsync (popupOptions (modelButton),
                             [this, itemMap] (int result) {
                                 if (result > 0 && result < static_cast<int> (itemMap.size()))
                                 {
@@ -395,7 +395,7 @@ private:
             menu.addItem (static_cast<int> (i + 1), styles[i], true,
                           styleHandle.valid() && static_cast<int> (styleHandle.plain()) == static_cast<int> (i));
         }
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (styleButton),
+        menu.showMenuAsync (popupOptions (styleButton),
                             [this] (int result) {
                                 if (result > 0 && styleHandle.valid())
                                 {

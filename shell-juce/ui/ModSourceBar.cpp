@@ -206,7 +206,7 @@ void ModSourceChip::showAssignmentsFor (UiContext& ctx, int sourceChoice, juce::
         menu.addItem (2005, "Init (reset to default)");
     }
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&anchor),
+    menu.showMenuAsync (popupOptions (&anchor),
                         [safe = juce::Component::SafePointer<juce::Component> (&anchor), ctxPtr = &ctx, list, prefix, familyName, familyCount] (int result)
                         {
                             if (result <= 0 || safe == nullptr)

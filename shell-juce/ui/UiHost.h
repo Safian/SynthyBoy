@@ -2,24 +2,27 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The UI never touches the engine or core internals: it reads and writes parameters through the APVTS, asks for the engine's capability
+// The UI never touches the engine or core internals: it reads and writes parameters through a ParameterStore, asks for the engine's capability
 // bits (dimming), plays notes through a MidiKeyboardState and calls the preset callbacks. SynthyBoyProcessor implements this
-// interface; the tests implement it with a stub.
+// interface (parameters: ApvtsParameterStore); the Kick app implements it over its CLAP plug-in instance (PlainParameterStore); the tests
+// implement it with a stub. The contract for implementers is in shell-juce/ui/README.md.
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_core/juce_core.h>
 
 #include <functional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "ParameterStore.h"
 #include "model/ModModel.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/offline_render.h"
 #include "synthyboy/engine_caps.h"
 #include "synthyboy/preferences.h"
+#include "synthyboy/quality.h"
 #include "synthyboy/readout.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
@@ -46,10 +49,16 @@ class UiHost
 public:
     virtual ~UiHost() = default;
 
-    /** Parameter access (message thread). Every table key is a parameter with ParameterID { key, 1 }. */
-    virtual juce::AudioProcessorValueTreeState& parameters() = 0;
+    /** Parameter access (message thread), by index into paramTable(). The store outlives the editor. */
+    virtual ParameterStore& parameterStore() = 0;
     /** IEngine::capabilities () of the engine behind the processor; constant for the life of the processor. */
     virtual EngineCapsMask engineCaps() const noexcept = 0;
+    /** The quality tier the host runs the engine with (core/include/synthyboy/quality.h): the effect displays of a tier that masks the effect say so.
+        A host that does not override it runs the full engine. */
+    virtual Tier qualityTier() const noexcept { return Tier::high; }
+    /** True when pop-up menus and call-outs open INSIDE the editor Component (OverlayHost.h): the choice for a host without native windows (the software framebuffer
+        of the Akai MPC, an embedded panel). The JUCE plug-in answers false: its menus are desktop level windows that may reach over the edge of the plug-in window. */
+    virtual bool overlaysInsideEditor() const noexcept { return true; }
     /** IEngine::capabilities2 () (GROUPC: granular, spectral, multisample); a host that does not override it reports every bit. */
     virtual EngineCaps2Mask engineCaps2() const noexcept { return kCap2AllKnown; }
     /** Notes played on the mini keyboard; the processor merges them into the MIDI input of the audio callback. */
@@ -177,6 +186,9 @@ public:
         False when the host has no way to share. */
     virtual bool shareFile (const juce::File& /*file*/, const juce::String& /*title*/, std::function<void (bool)> /*done*/ = {}) { return false; }
     virtual bool canShareFiles() const noexcept { return false; }
+    /** Drag-out of a file to the desktop (the "Last note as audio" chip): starts an OS drag of `file` from `source` (desktop: juce::DragAndDropContainer::performExternalDragDropOfFiles).
+        False when the host cannot (the sheet then points to Share and Save as WAV). Like requestFile / shareFile, one of the few ways out to the OS. */
+    virtual bool dragFileOut (const juce::File& /*file*/, juce::Component& /*source*/) { return false; }
 
     /** Injects a MIDI message from the UI (pitch bend, mod wheel, CC 64 sustain, etc.) into the audio callback. */
     virtual void injectMidiMessage (const juce::MidiMessage& /*msg*/) {}

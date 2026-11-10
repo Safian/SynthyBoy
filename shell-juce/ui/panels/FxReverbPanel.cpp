@@ -35,12 +35,10 @@ public:
 
     void updateTierState()
     {
-        #if defined(SYNTHYBOY_DEFAULT_TIER) && SYNTHYBOY_DEFAULT_TIER == low
-            const bool force = (forceEnableHandle.plain() >= 0.5f);
-            setTierBypassed (! force);
-        #else
+        if (ctx.host.qualityTier() == Tier::low)
+            setTierBypassed (forceEnableHandle.plain() < 0.5f);
+        else
             setTierBypassed (false);
-        #endif
     }
 
     void paint (juce::Graphics& g) override

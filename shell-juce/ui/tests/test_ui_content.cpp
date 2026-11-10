@@ -23,6 +23,7 @@
 #include "test_runner.h"
 #include "ui/ContentIO.h"
 #include "ui/ContentSheets.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/LibraryMenu.h"
 #include "ui/Sheet.h"
@@ -570,7 +571,7 @@ TEST (content_vital_import_inside_the_plugin_with_the_report_sheet)
 {
     Host h ("vital");
     std::unique_ptr<juce::AudioProcessorEditor> base (h.proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     CHECK (editor != nullptr);
     if (editor == nullptr)
         return;
@@ -642,7 +643,7 @@ TEST (content_serum_import_inside_the_plugin_with_the_report_sheet)
 {
     Host h ("serum");
     std::unique_ptr<juce::AudioProcessorEditor> base (h.proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     CHECK (editor != nullptr);
     if (editor == nullptr)
         return;
@@ -816,7 +817,7 @@ TEST (content_missing_files_dialog_logic_locate_remove_and_hash_check)
     // a new instance elsewhere: three references are missing; loading the state raises the revision and the editor opens the dialog
     Host b ("missing_b");
     std::unique_ptr<juce::AudioProcessorEditor> base (b.proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     editor->setSize (390, 844);
     const auto revision = b.proc.contentRevision();
     b.proc.setStateInformation (state.getData(), static_cast<int> (state.getSize()));

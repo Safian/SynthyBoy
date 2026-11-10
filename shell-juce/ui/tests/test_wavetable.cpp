@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "PluginProcessor.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/panels/WavetablePanel.h"
 #include "ui/panels/WavetableEditorSheet.h"
@@ -22,7 +23,8 @@ class CapsHost final : public UiHost
 {
 public:
     CapsHost (SynthyBoyProcessor& p, EngineCapsMask c) : inner (p), caps (c) {}
-    juce::AudioProcessorValueTreeState& parameters() override { return inner.parameters(); }
+    ParameterStore& parameterStore() override { return inner.parameterStore(); }
+    bool overlaysInsideEditor() const noexcept override { return inner.overlaysInsideEditor(); }
     EngineCapsMask engineCaps() const noexcept override { return caps; }
     juce::MidiKeyboardState& keyboardState() override { return inner.keyboardState(); }
     AbCompare& abCompare() override { return inner.abCompare(); }
@@ -338,7 +340,7 @@ TEST (ui_wavetable_headless_render_screenshots)
     proc.setPresetName ("Init Wavetable Preset");
 
     std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     CHECK (editor != nullptr);
     if (editor == nullptr)
         return;

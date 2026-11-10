@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "OverlayHost.h"
 #include "Theme.h"
 #include "model/FxKeySet.h"
 #include "LiveBus.h"
@@ -17,12 +18,12 @@
 
 namespace synthyboy::ui
 {
-/** ModMatrixAccess on the APVTS: reads the raw atomics, writes with setValueNotifyingHost, wraps every write in a host gesture
+/** ModMatrixAccess on a ParameterStore: reads the plain values, writes through the store and wraps every write in a gesture
     (begin / end) unless the caller holds one open. Message thread. */
-class ApvtsModMatrix final : public ModMatrixAccess
+class StoreModMatrix final : public ModMatrixAccess
 {
 public:
-    explicit ApvtsModMatrix (juce::AudioProcessorValueTreeState& apvts);
+    explicit StoreModMatrix (ParameterStore& store);
 
     float get (int paramIndex) const override;
     void set (int paramIndex, float plain) override;
@@ -30,10 +31,7 @@ public:
     void endGesture (int paramIndex) override;
 
 private:
-    juce::RangedAudioParameter* parameterAt (int index) const;
-
-    std::vector<juce::RangedAudioParameter*> parameters;
-    std::vector<std::atomic<float>*> raw;
+    ParameterStore& store;
     std::vector<char> inGesture;
 };
 
@@ -45,7 +43,7 @@ public:
     explicit ModAssignController (UiHost& host);
 
     AssignFlow& flow() noexcept { return assignFlow; }
-    ApvtsModMatrix& matrix() noexcept { return access; }
+    StoreModMatrix& matrix() noexcept { return access; }
     const ModSnapshot& snapshot() const noexcept { return current; }
 
     /** Source chip tapped (choice value 1..38). Returns the new phase. A chip whose cap bits the engine lacks is refused. */
@@ -64,7 +62,7 @@ public:
 private:
     UiHost& host;
     uint32_t lastMidiRevision = 0;
-    ApvtsModMatrix access;
+    StoreModMatrix access;
     AssignFlow assignFlow;
     ModSnapshot current;
     juce::String statusMessage;
@@ -78,6 +76,7 @@ struct ViewState
     int lfoTab = 0; // LfoTabsPanel: 0..9 = LFO 1..10, 10..13 = random LFO 1..4
     int oscTab = 0; // OscTabsPanel: 0..2 = oscillator 1..3
     int envTab = 0; // EnvelopePanel tabs E1..E6: 0..5
+    juce::Component::SafePointer<juce::Component> overlayRoot; // the editor (OverlayHost): where the text prompt opens; set by the editor
     std::shared_ptr<ContentCache> contentCache; // decoded samples / tables of the content library for the views (ContentIO.h), made on first use
     /** GROUPB WP-08: opens the free curve editor of modulation slot `slot0` (0-based) on the matrix page (the control sheet's "Edit Custom Curve"); set by the editor. */
     std::function<void (int slot0)> openSlotCurve;
@@ -96,7 +95,7 @@ struct UiContext
     /** The live values of the engine for the displays (GROUPA2 WP-17); shared by every context copy of the editor. */
     std::shared_ptr<LiveBus> live = std::make_shared<LiveBus> (host);
 
-    juce::AudioProcessorValueTreeState& apvts() const { return host.parameters(); }
+    ParameterStore& store() const { return host.parameterStore(); }
     /** The key of a control of a panel: resolveKey () for instance 0, the slot's key and the ParamInfo of the type's key for a pool slot. */
     KeyRef resolve (std::string_view key) const noexcept { return keys != nullptr ? keys->resolve (key) : resolveKey (key); }
 };

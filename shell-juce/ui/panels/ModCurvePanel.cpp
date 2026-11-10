@@ -368,7 +368,8 @@ public:
         const int gap = ctx.theme.gap();
         const int bars = twoBars (width - 4 * gap) ? 2 : 1;
         const int visualH = customMode && editor != nullptr ? editor->preferredHeight (width - 2 * gap) : ctx.theme.ipx (160.0f);
-        const int controlsH = isMoreExpanded() ? ctx.theme.ipx (140.0f) : ctx.theme.ipx (70.0f);
+        // the flow of the remaining controls (and More) as laid out at this width: it needs more than one row on a narrow tile
+        const int controlsH = const_cast<ModCurvePanel*> (this)->layoutControls (juce::Rectangle<int> (0, 0, width - 2 * gap, 100000), true);
         const int rowH = slotRowHeight();
         const int slewH = slewOnTwoRows (width - 4 * gap) ? 3 * rowH + 2 * gap : 2 * rowH + gap;   // RISE | FALL, DELAY | SYNC
         return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + slewH + gap + controlsH + gap;

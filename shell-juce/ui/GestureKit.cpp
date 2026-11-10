@@ -11,7 +11,7 @@ namespace synthyboy::ui
 
 void Loupe::show (juce::Component& source, juce::Point<int> localPoint)
 {
-    auto* top = source.getTopLevelComponent();
+    auto* top = overlayRootOf (source);
     if (top == nullptr)
         return;
     const int radius = theme.ipx (24.0f);
@@ -120,7 +120,7 @@ Toast::~Toast()
 
 void Toast::show (UiContext& context, juce::Component& anchor, const juce::String& text, int milliseconds)
 {
-    auto* top = anchor.getTopLevelComponent();
+    auto* top = overlayRootOf (anchor);
     if (top == nullptr)
         return;
     if (auto* old = toastSlot().getComponent())

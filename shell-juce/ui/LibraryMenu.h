@@ -17,10 +17,10 @@
 
 namespace synthyboy::ui
 {
-/** Asks for a line of text (a preset name). The shell shows a modal dialog; tests install a handler that answers at once. */
+/** Asks for a line of text (a preset name). The shell shows a modal prompt inside the editor (showTextPrompt); tests install a handler that answers at once. */
 using TextPromptHandler = std::function<void (const juce::String& title, const juce::String& initial, std::function<void (const juce::String&)> done)>;
 void setTextPromptHandler (TextPromptHandler handler);
-void askText (const juce::String& title, const juce::String& initial, std::function<void (const juce::String&)> done);
+void askText (UiContext& context, const juce::String& title, const juce::String& initial, std::function<void (const juce::String&)> done);
 
 struct LibraryMenuSpec
 {

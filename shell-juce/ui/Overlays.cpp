@@ -198,4 +198,146 @@ void ValueBubble::paint (juce::Graphics& g)
         g.drawText (names[i], cell, juce::Justification::centred, false);
     }
 }
+
+// ---- text prompt -------------------------------------------------------------------------------------------------------------------------
+
+namespace
+{
+class TextPromptSheet final : public juce::Component, private juce::ComponentListener
+{
+public:
+    TextPromptSheet (UiContext& context, const juce::String& titleText, const juce::String& labelText, const juce::String& initial, const juce::String& okText,
+                     std::function<void (const juce::String&)> doneCallback)
+        : theme (context.theme), title (titleText), label (labelText), done (std::move (doneCallback))
+    {
+        editor.setText (initial, false);
+        editor.setSelectAllWhenFocused (true);
+        editor.setFont (theme.titleFont());
+        editor.onReturnKey = [this] { finish (true); };
+        editor.onEscapeKey = [this] { finish (false); };
+        ok.setButtonText (okText);
+        ok.onClick = [this] { finish (true); };
+        cancel.setButtonText ("Cancel");
+        cancel.onClick = [this] { finish (false); };
+        addAndMakeVisible (editor);
+        addAndMakeVisible (ok);
+        addAndMakeVisible (cancel);
+
+        if (auto* root = context.view->overlayRoot.getComponent())
+        {
+            host = root;
+            root->addAndMakeVisible (this);
+            root->addComponentListener (this);
+            setBounds (root->getLocalBounds());
+            toFront (true);
+        }
+        else // a control outside an editor (never the shell): a window of its own
+        {
+            setSize (theme.ipx (420.0f), theme.ipx (260.0f));
+            addToDesktop (juce::ComponentPeer::windowHasDropShadow);
+            setVisible (true);
+        }
+        editor.grabKeyboardFocus();
+    }
+
+    ~TextPromptSheet() override
+    {
+        if (host != nullptr)
+            host->removeComponentListener (this);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto& c = theme.colours;
+        if (host != nullptr)
+            g.fillAll (c.background.withAlpha (0.75f));
+        else
+            g.fillAll (c.panel);
+        const auto box = panelBounds();
+        g.setColour (c.panelRaised);
+        g.fillRoundedRectangle (box.toFloat(), theme.px (8.0f));
+        g.setColour (c.outline);
+        g.drawRoundedRectangle (box.toFloat().reduced (0.5f), theme.px (8.0f), 1.0f);
+        g.setColour (c.text);
+        g.setFont (theme.titleFont());
+        g.drawText (title, titleArea, juce::Justification::centredLeft, true);
+        g.setColour (c.textDim);
+        g.setFont (theme.labelFont());
+        g.drawText (label, labelArea, juce::Justification::centredLeft, true);
+    }
+
+    void resized() override
+    {
+        const int gap = theme.gap();
+        auto box = panelBounds().reduced (gap);
+        titleArea = box.removeFromTop (theme.touch());
+        labelArea = box.removeFromTop (theme.ipx (20.0f));
+        editor.setBounds (box.removeFromTop (theme.touch()));
+        box.removeFromTop (gap);
+        auto buttons = box.removeFromTop (theme.touch());
+        cancel.setBounds (buttons.removeFromLeft ((buttons.getWidth() - gap) / 2));
+        buttons.removeFromLeft (gap);
+        ok.setBounds (buttons);
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (! panelBounds().contains (e.getPosition()))
+            finish (false);
+    }
+
+    bool keyPressed (const juce::KeyPress& key) override
+    {
+        if (key == juce::KeyPress::escapeKey)
+        {
+            finish (false);
+            return true;
+        }
+        return false;
+    }
+
+private:
+    juce::Rectangle<int> panelBounds() const
+    {
+        const int w = juce::jmin (getWidth() - 2 * theme.gap(), theme.ipx (420.0f));
+        const int h = juce::jmin (getHeight() - 2 * theme.gap(), 3 * theme.touch() + theme.ipx (20.0f) + 4 * theme.gap());
+        return getLocalBounds().withSizeKeepingCentre (w, h);
+    }
+
+    void finish (bool accepted)
+    {
+        if (finished)
+            return;
+        finished = true;
+        const auto text = editor.getText().trim();
+        auto callback = std::move (done);
+        setVisible (false);
+        // this sheet may be inside one of its own callbacks: it goes away on the next message
+        juce::MessageManager::callAsync ([self = SafePointer<TextPromptSheet> (this)] { delete self.getComponent(); });
+        if (accepted && callback)
+            callback (text);
+    }
+
+    void componentBeingDeleted (juce::Component&) override
+    {
+        host = nullptr;
+        delete this;
+    }
+
+    const Theme& theme;
+    juce::String title, label;
+    std::function<void (const juce::String&)> done;
+    juce::TextEditor editor;
+    juce::TextButton ok, cancel;
+    juce::Rectangle<int> titleArea, labelArea;
+    SafePointer<juce::Component> host;
+    bool finished = false;
+};
+} // namespace
+
+void showTextPrompt (UiContext& context, const juce::String& title, const juce::String& label, const juce::String& initial, const juce::String& okText,
+                     std::function<void (const juce::String&)> done)
+{
+    new TextPromptSheet (context, title, label, initial, okText, std::move (done)); // owns itself
+}
 } // namespace synthyboy::ui

@@ -6,12 +6,12 @@ view-model (decisions without a display) is JUCE-free in `model/` and unit teste
 
 ## Add a panel (one file, one registration line)
 
-1. Create `shell-juce/ui/panels/<Name>Panel.cpp` (CMake globs `panels/*.cpp`; re-run `cmake -S . -B build`, nothing else to edit).
+1. Create `shell-juce/ui/panels/<Name>Panel.cpp` (CMake globs `panels/*.cpp` and generates the explicit registration from the registration line; re-run `cmake -S . -B build`, nothing else to edit).
 2. Copy `panels/MasterVoicingPanel.cpp` (the template) and change title, keys, controls.
 3. End the file with the one registration line (page tab and order inside the page):
 
 ```cpp
-SYNTHYBOY_REGISTER_PANEL (MyPanel, Page::flt, 10)
+SYNTHYBOY_REGISTER_PANEL (MyPanel, Page::flt, 10)   // at namespace scope of synthyboy::ui, not inside an anonymous namespace; the line starts in column 0
 ```
 
 ```cpp
@@ -81,11 +81,75 @@ A/B (Q4): `AbCompare` holds two `ParamValues` snapshots in the processor; the fi
 Sizes: `Theme::touch()` = 44 points minimum for every interactive control at any UI scale (menu "UI size"); the test suite measures
 all visible controls at phone / tablet sizes. Dark / light palette: `Theme::dark()` / `light()`, one `SynthLookAndFeel`.
 
-## Host glue
+## The library and its hosts (contract for host implementers)
 
-`UiHost` (UiHost.h) is the only thing the kit needs from the processor: APVTS, engine caps, keyboard state, A/B, preset prev / next +
-name, MIDI learn, Save as Default, module locks (`canMidiLearn`, `saveAsDefault`, `initPatch`, `isModuleLocked`, `loadPatch`). `SynthyBoyProcessor` implements it (`setPresetStepHandler`, `setPresetName` for Kick's preset list).
-`createEditor()` returns `SynthyBoyEditor`; `SYNTHYBOY_GENERIC_UI=1` in the environment gives the generic JUCE editor back.
+`shell-juce/ui` builds as the static library **`synthyboy_ui`** (target in `shell-juce/ui/CMakeLists.txt`, with `synthyboy_ui_model`, the JUCE-free
+view-model). The same code renders in the JUCE plug-in, the Kick desktop and iOS app and the Akai MPC Key 61 (software framebuffer, 1024 x 600 logical):
+nothing in it knows the plug-in format. The plug-in side that is NOT in the library: `shell-juce/PluginProcessor.*` (the `UiHost`),
+`shell-juce/ApvtsParameterStore.*` (parameters on the APVTS) and `shell-juce/EditorAdapter.*` (the thin `juce::AudioProcessorEditor`).
+
+### Dependencies (what a host must provide to link and compile it)
+
+| What | Targets | Notes |
+|---|---|---|
+| Core + model | `synthyboy_core` (PUBLIC dependency of `synthyboy_ui`), `synthyboy_ui_model` | `synthyboy_core` carries the packages the Components include: `params.h`, `state.h`, `modulation.h`, `engine_caps.h`, `quality.h`, `readout.h`, `preferences.h`, `shell_features.h`, `content_state.h`, `user_content.h`, `user_library.h`, `library_items.h`, `offline_render.h`, `wave_convert.h`, `fx_rack.h`, `fx_types.h`, `formula.h`, `vital_plugin_import.h`, `serum_plugin_import.h`, `wavetable_edit.h`, `wavetable_render.h` and, through its PUBLIC links, `synthyboy_shapes`, `synthyboy_wtedit`, `synthyboy_filters_serum`, `synthyboy_sampleosc`, `synthyboy_granular`, `synthyboy_spectral`, `synthyboy_multisample`. `SYNTHYBOY_WITH_VITAL` may be OFF (the UI never includes the engine). The core CMake files use paths relative to their own folder: `add_subdirectory (core)` works from any parent project. |
+| JUCE modules | `juce::juce_gui_basics` (brings juce_graphics, juce_events, juce_core, juce_data_structures), `juce::juce_audio_basics`, `juce::juce_audio_formats`, `juce::juce_audio_utils` | `juce_audio_utils` only for `juce::MidiKeyboardComponent` (the keys of the strip); `juce_audio_formats` for decoding user samples (`ContentIO`). **`juce_audio_processors` is not used** (it comes along with `juce_audio_utils` but no library source touches an `AudioProcessor`, a `ParameterAttachment` or an APVTS), no `juce_audio_plugin_client`, no CLAP, no `juce_opengl`, no `juce_gui_extra` API. |
+| JUCE version | 7.0.12 (Kick) and 8.0.x (plug-in) | The library is compiled against both (UILIB-REPORT.md). Fonts and text width go through `JuceCompat.h`: new code that touches a font or another API that moved between 7 and 8 goes there too. |
+| Threads | `Threads::Threads` | the content decoders |
+
+A host adds `add_subdirectory (shell-juce/ui)` after `synthyboy_core` and the `juce::` targets exist and links `synthyboy_ui`. Panels register through
+**explicit registration**: CMake generates `PanelRegistration.cpp` (in the build directory) with one call per `SYNTHYBOY_REGISTER_PANEL` line of `panels/*.cpp`;
+`PanelRegistry::instance ()` calls it once. No static initialiser is involved, so a static library, a dylib or a different link order cannot lose a panel
+(`uph_panels_registered_explicitly_and_layout_at_the_mpc_size` checks the registry against the sources).
+
+### What a host implements
+
+1. **`UiHost`** (`UiHost.h`). Five pure virtuals besides the parameters: `engineCaps`, `keyboardState`, `abCompare`, `stepPreset`, `presetName`; and
+   `parameterStore ()`. Everything else has a default that says "this host cannot" (no MIDI learn, no locks, no content library, no file requests, no share ...): the UI
+   dims or hides what the host does not offer, it never assumes. A new method of `UiHost` MUST have such a default; a host written against an older header keeps compiling.
+   Defaults worth knowing: `qualityTier () = high`, `overlaysInsideEditor () = true`, `engineCaps2 () = everything`.
+2. **`ParameterStore`** (`ParameterStore.h`). The only parameter access of the UI, by index into `paramTable ()` (the key and id of the entry are
+   `paramTable ()[index].key / .id`). Message thread only: `contains`, `plain`, `normalised`, `toNormalised` / `fromNormalised` (the store's own conversion, the pair must round-trip),
+   `beginGesture` / `endGesture` (one per drag; `setPlainComplete` wraps a single edit), `setNormalised` (writes and tells the host), and listeners (`addListener (index, l)` / `addListener (l)`,
+   `parameterChanged`, `parameterGestureChanged`). A store whose values change on another thread (automation) marshals to the message thread before it calls `notifyChanged`.
+   Two implementations: `ApvtsParameterStore` (plug-in; JUCE parameters, host gestures) and **`PlainParameterStore`** (in the library): an in-memory table with the core's conversions,
+   `onUiChange` / `onUiGesture` callbacks to forward UI edits to the host (CLAP param events, ...) and `setFromHost` / `setAllFromHost` for changes coming from the host (no echo). Display text and
+   ranges are not the store's job: the UI formats with the core (`displayText`, `valueToText`) so every host shows the same strings.
+3. **The editor.** `SynthyBoyEditor (UiHost&)` is a plain `juce::Component` (default 1024 x 768, `kMinWidth` x `kMinHeight` .. `kMaxWidth` x `kMaxHeight`, layout follows the width: phone below
+   ~600, tablet, wide from 800; 1024 x 600 is a tested size). Put it anywhere: `addAndMakeVisible (editor); editor.setBounds (...)`. The plug-in wraps it in `SynthyBoyEditorAdapter`.
+   The editor is its own overlay root (`OverlayHost`): loupe, value bubble, toast, sheets, call-outs, the text prompt and (by default) pop-up menus are children of the editor, never of the host window.
+
+```cpp
+class MyHost final : public synthyboy::ui::UiHost            // what the Kick app writes over its CLAP plug-in instance
+{
+public:
+    ParameterStore& parameterStore() override { return store; }            // PlainParameterStore: onUiChange -> clap param event, setFromHost <- clap value changed
+    EngineCapsMask engineCaps() const noexcept override { return caps; }
+    juce::MidiKeyboardState& keyboardState() override { return keyboard; }   // merge into the MIDI input of the instance
+    AbCompare& abCompare() override { return ab; }
+    void stepPreset (int direction) override;
+    juce::String presetName() const override;
+    // optional: requestFile / canRequestFile, shareFile, content(), userLibrary(), preferences(), cpuLoad(), copyScope(), qualityTier() ...
+};
+```
+
+### The OS escapes
+
+The library never opens a native window, a native file chooser or a platform dialog. What leaves the component tree goes through `UiHost`:
+
+| Need | `UiHost` | On a host without native windows |
+|---|---|---|
+| Open / save a file | `requestFile` (+ `canRequestFile`) | menu entries dim; the buttons that need a file are disabled (Tuning load) |
+| Share / export | `shareFile` (+ `canShareFiles`) | the sheet says "This host has no share function" |
+| Drag a file out | `dragFileOut` | the sheet points to Share and Save as WAV |
+| Text entry (preset name, bin value) | in the editor: `showTextPrompt` (a sheet with a text field and two 44 pt buttons), not an `AlertWindow` | the on-screen keyboard of the host feeds the `TextEditor` |
+| Pop-up menus, call-outs (long-press sheets) | `overlaysInsideEditor ()` true: `PopupMenu::Options::withParentComponent (editor)` / `CallOutBox` with the editor as parent | menus are components of the editor and need no `ComponentPeer`; the plug-in answers false and keeps desktop level menus |
+| Tool tips | `juce::TooltipWindow` with the editor as parent | child component; hover-less hosts never show it |
+| Quality tier | `qualityTier ()` | the effect views of a masked effect say so |
+
+No `juce_opengl`: every component paints with `juce::Graphics` and renders in the software renderer (the tests render headless without a window).
+Components that need a window peer: **none** when `overlaysInsideEditor ()` is true; the editor itself needs to be in a tree that has a peer or a software-rendered root (the screenshot tests use
+`createComponentSnapshot` on an editor that is not on the desktop). Mouse input: touch, mouse and the two-finger gestures (pinch, pan) arrive as `juce::MouseEvent` / `mouseMagnify` of the host's peer.
 
 ## Tabbed pages and patch content
 
@@ -111,4 +175,5 @@ Module sheet (`ModuleSheet.*`, header long-press / `...` button / header drag in
 
 `synthyboy_test_ui_model` (pure logic), `synthyboy_test_ui_lfo` (LFO page: tab chips, chip copy, dimming, shape editor gestures and undo, content round trip, the gestures of the audit; screenshots to `/tmp/ui-shots/follow/`), `synthyboy_test_ui_render` (real Components without a window or display; the processor
 is the real one; writes the phone 390x844 and tablet 1024x768 screenshots to `ui-screenshots/` in the working directory or to
-`$SYNTHYBOY_UI_SCREENSHOT_DIR`). Both run in `ctest`. New panels are covered by the registry contract test without any test code.
+`$SYNTHYBOY_UI_SCREENSHOT_DIR`; phone, tablet and the 1024 x 600 of the Akai MPC: layout, 44 pt targets and "every control of every panel fits and does not overlap" are checked at all of them),
+`synthyboy_test_ui_plainhost` (the library alone: a real `SynthyBoyEditor` on a host that is no `AudioProcessor`, with a `PlainParameterStore`: parameter edits both ways, gestures, undo, external refresh, overlays inside an embedded editor, explicit panel registration). All run in `ctest`. New panels are covered by the registry contract test without any test code.

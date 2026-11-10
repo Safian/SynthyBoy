@@ -447,13 +447,14 @@ public:
 private:
     void drawScaleOverlay (int midiNote, juce::Graphics& g, juce::Rectangle<float> area)
     {
-        const auto* kRaw = ctx.apvts().getRawParameterValue ("master.scale.key");
-        const auto* tRaw = ctx.apvts().getRawParameterValue ("master.scale.type");
-        if (kRaw == nullptr || tRaw == nullptr)
+        static const int keyIndex = resolveKey ("master.scale.key").index;
+        static const int typeIndex = resolveKey ("master.scale.type").index;
+        auto& store = ctx.store();
+        if (! store.contains (keyIndex) || ! store.contains (typeIndex))
             return;
 
-        const int scaleKey = juce::roundToInt (kRaw->load());
-        const int scaleType = juce::roundToInt (tRaw->load());
+        const int scaleKey = juce::roundToInt (store.plain (keyIndex));
+        const int scaleType = juce::roundToInt (store.plain (typeIndex));
         if (scaleType <= 0)
             return;
 
@@ -608,7 +609,7 @@ void KeyboardStrip::showScaleMenu()
     modeMenu.addItem (301, "Mark only", true, currentMode == 1);
     menu.addSubMenu ("Mode", modeMenu);
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&scaleButton),
+    menu.showMenuAsync (popupOptions (&scaleButton),
                         [safe = juce::Component::SafePointer<KeyboardStrip> (this)] (int result)
                         {
                             if (safe == nullptr || result <= 0)

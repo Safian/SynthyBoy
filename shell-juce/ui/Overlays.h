@@ -62,4 +62,10 @@ private:
     juce::String text;
     FineZone zone = FineZone::normal;
 };
+
+/** A modal line-of-text prompt (a preset name, a bin value) inside the editor: a dimmed scrim, a title, a text field and two touch-size buttons. It replaces the
+    juce::AlertWindow, which is a desktop level window. `done` is called with the text when the user confirms (Return or the OK button), never when it is cancelled
+    (Escape, Cancel, a tap outside). Deletes itself afterwards or with the editor. Message thread. */
+void showTextPrompt (UiContext& context, const juce::String& title, const juce::String& label, const juce::String& initial, const juce::String& okText,
+                     std::function<void (const juce::String&)> done);
 } // namespace synthyboy::ui

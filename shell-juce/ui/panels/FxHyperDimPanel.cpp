@@ -22,9 +22,8 @@ public:
         mixHandle.onChange = [this] { repaint(); };
         dimMixHandle.onChange = [this] { repaint(); };
 
-        #if defined(SYNTHYBOY_DEFAULT_TIER) && SYNTHYBOY_DEFAULT_TIER == low
+        if (ctx.host.qualityTier() == Tier::low)
             setTierBypassed (true);
-        #endif
     }
 
     void paint (juce::Graphics& g) override

@@ -35,6 +35,7 @@
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/user_library.h"
+#include "ApvtsParameterStore.h"
 #include "ui/UiHost.h"
 
 /**
@@ -82,9 +83,13 @@ public:
     synthyboy::ParamValues allValues() const { return currentValues(); }
 
     // synthyboy::ui::UiHost (the editor's view of the processor; message thread)
-    juce::AudioProcessorValueTreeState& parameters() override { return apvts; }
+    synthyboy::ui::ParameterStore& parameterStore() override { return paramStore; }
+    /** The tree behind parameterStore () (tests and the shell; the UI library never sees it). */
+    juce::AudioProcessorValueTreeState& parameters() noexcept { return apvts; }
     synthyboy::EngineCapsMask engineCaps() const noexcept override { return caps; }
     synthyboy::EngineCaps2Mask engineCaps2() const noexcept override { return caps2; }
+    bool overlaysInsideEditor() const noexcept override { return false; }
+    synthyboy::Tier qualityTier() const noexcept override { return synthyboy::kDefaultTier; }
     juce::MidiKeyboardState& keyboardState() override { return keyboard; }
     synthyboy::ui::AbCompare& abCompare() override { return ab; }
     void stepPreset (int direction) override { if (presetStepHandler) presetStepHandler (direction); }
@@ -116,6 +121,7 @@ public:
     double tempoBpm() const noexcept override { return tempo.load (std::memory_order_relaxed); }
     bool shareFile (const juce::File& file, const juce::String& title, std::function<void (bool)> done) override;
     bool canShareFiles() const noexcept override { return true; }
+    bool dragFileOut (const juce::File& file, juce::Component& source) override;
     /** Tests and alternative shells answer the share request themselves (instead of the platform share sheet). */
     using ShareHandler = std::function<bool (const juce::File&, const juce::String&)>;
     void setShareHandler (ShareHandler handler) { shareHandler = std::move (handler); }
@@ -174,6 +180,7 @@ private:
     bool loadLegacyXml (const void* data, int sizeInBytes, synthyboy::ParamValues& values) const;
 
     juce::AudioProcessorValueTreeState apvts;
+    synthyboy::ui::ApvtsParameterStore paramStore { apvts }; // declared after the tree it listens to
     std::array<std::atomic<float>*, synthyboy::kMaxParams> rawParams {};
     std::array<juce::RangedAudioParameter*, synthyboy::kMaxParams> paramPtrs {}; // looked up once: the audio thread must not search by name
     std::array<float, synthyboy::kMaxParams> sentToEngine {}; // audio thread: the value the engine has, for change detection

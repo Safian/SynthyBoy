@@ -200,7 +200,7 @@ void ParamDragControl::showBubble (FineZone z)
     zone = z;
     if (! ctx.host.preferences().valueBubbles) // "Param value tooltips" off (S p.313)
         return;
-    auto* top = getTopLevelComponent();
+    auto* top = overlayRootOf (*this);
     if (top == nullptr || top == this || ! handle.valid())
         return;
     if (bubble == nullptr)
@@ -277,7 +277,7 @@ void ParamDragControl::showModulatorList()
     menu.addSectionHeader ("Modulators of " + juce::String (handle.info().name));
     for (const auto& e : entries)
         menu.addItem (e.slot + 1, juce::String (modSourceTable()[e.source - 1].name) + "   " + juce::String (juce::roundToInt (e.amount)) + " %");
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+    menu.showMenuAsync (popupOptions (this),
                         [safe = juce::Component::SafePointer<ParamDragControl> (this)] (int result)
                         {
                             if (result > 0 && safe != nullptr)
@@ -785,7 +785,7 @@ void ParamChoice::showOptions()
     if (! handle.valid())
         return;
     auto menu = buildOptionMenu();
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMinimumWidth (getWidth()),
+    menu.showMenuAsync (popupOptions (this).withMinimumWidth (getWidth()),
                         [safe = juce::Component::SafePointer<ParamChoice> (this)] (int result)
                         {
                             if (result == kExtraActionId && safe != nullptr)

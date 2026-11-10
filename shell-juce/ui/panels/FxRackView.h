@@ -226,7 +226,7 @@ public:
             menu.addItem (100 + r * 4 + 3, juce::String ("Clear ") + kFxRackNames[r] + " FX Bus", modules > 0);
         }
         (void) rack;
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (busButton), [this] (int chosen)
+        menu.showMenuAsync (popupOptions (busButton), [this] (int chosen)
         {
             if (chosen < 100)
                 return;
@@ -274,7 +274,7 @@ public:
             menu.addItem (t, fxTypeName (t), ! full);
         if (full)
             menu.addItem (1000, "All 16 slots are in use", false);
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this), [this, rack] (int chosen)
+        menu.showMenuAsync (popupOptions (this), [this, rack] (int chosen)
         {
             if (chosen >= 1 && chosen < kNumFxInstanceTypes)
                 addModule (chosen, rack);
@@ -291,7 +291,7 @@ public:
             menu.addItem (3, "Remove");
             menu.addItem (4, "Copy / Paste / Swap / Init / Lock ...");
         }
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this), [this, item] (int chosen)
+        menu.showMenuAsync (popupOptions (this), [this, item] (int chosen)
         {
             switch (chosen)
             {

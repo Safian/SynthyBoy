@@ -133,16 +133,18 @@ private:
     mutable bool sorted = true;
 };
 
-struct PanelRegistrar
-{
-    PanelRegistrar (const char* id, Page page, int order, PanelFactory factory)
-    {
-        PanelRegistry::instance().add ({ id, page, order, std::move (factory) });
-    }
-};
+/** Fills `registry` with every panel of the library: one call per SYNTHYBOY_REGISTER_PANEL line, in the file PanelRegistration.cpp that CMake generates from the sources
+    of panels/ (shell-juce/ui/CMakeLists.txt). Called once, by PanelRegistry::instance (): registration is explicit, it does not depend on static initialisation
+    or on the linker keeping object files of a static library. */
+void registerAllPanels (PanelRegistry& registry);
 } // namespace synthyboy::ui
 
-/** The one registration line of a panel file: class, page tab, order inside the page. */
+/** The one registration line of a panel file (at namespace scope of synthyboy::ui, not in an anonymous namespace): class, page tab, order inside the page.
+    It defines registerPanel_<PanelClass> (), which the generated registerAllPanels () calls. */
 #define SYNTHYBOY_REGISTER_PANEL(PanelClass, PageId, Order)                                                              \
-    static const ::synthyboy::ui::PanelRegistrar PanelClass##_registrar (#PanelClass, ::synthyboy::ui::PageId, Order,   \
-        [] (::synthyboy::ui::UiContext& context) -> std::unique_ptr<::synthyboy::ui::Panel> { return std::make_unique<PanelClass> (context); });
+    void registerPanel_##PanelClass (::synthyboy::ui::PanelRegistry& registry);                                          \
+    void registerPanel_##PanelClass (::synthyboy::ui::PanelRegistry& registry)                                           \
+    {                                                                                                                    \
+        registry.add ({ #PanelClass, ::synthyboy::ui::PageId, Order,                                                     \
+            [] (::synthyboy::ui::UiContext& context) -> std::unique_ptr<::synthyboy::ui::Panel> { return std::make_unique<PanelClass> (context); } }); \
+    }

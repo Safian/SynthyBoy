@@ -20,6 +20,7 @@
 #include "test_runner.h"
 #include "ui/ContentIO.h"
 #include "ui/ContentSheets.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/LfoTabsPanel.h"
@@ -355,7 +356,7 @@ TEST (groupd_last_note_as_audio_saves_shares_and_drags_out_without_disturbing_th
 
     SynthyBoyEditor* editorRaw = nullptr;
     std::unique_ptr<juce::AudioProcessorEditor> base (h.proc.createEditor());
-    editorRaw = dynamic_cast<SynthyBoyEditor*> (base.get());
+    editorRaw = innerEditor (base.get());
     CHECK (editorRaw != nullptr);
     if (editorRaw == nullptr)
         return;

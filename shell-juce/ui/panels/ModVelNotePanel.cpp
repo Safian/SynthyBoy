@@ -259,7 +259,8 @@ public:
         const int gap = ctx.theme.gap();
         const int bars = twoBars (width - 4 * gap) ? 2 : 1;
         const int visualH = ctx.theme.ipx (160.0f);
-        const int controlsH = ctx.theme.ipx (70.0f);
+        // the flow of the controls (and More) as laid out at this width: it needs more than one row on a narrow tile
+        const int controlsH = const_cast<ModVelNotePanel*> (this)->layoutControls (juce::Rectangle<int> (0, 0, width - 2 * gap, 100000), true);
         return headerHeight() + bars * touch + (bars - 1) * gap + gap + visualH + gap + controlsH + gap;
     }
 

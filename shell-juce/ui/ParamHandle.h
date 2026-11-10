@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Message thread only. All writes go through juce::ParameterAttachment (setValueNotifyingHost with begin / end gesture for host
-// automation); reads of the plain value use the parameter's atomic. Nothing here is ever called from the audio thread.
+// Message thread only. All reads and writes go through the host's ParameterStore (begin / end gesture around a drag, so host automation
+// records it). Nothing here is ever called from the audio thread.
 #pragma once
 
 #include <functional>
@@ -14,13 +14,16 @@
 
 namespace synthyboy::ui
 {
-class ParamHandle
+class ParamHandle final : private ParameterStore::Listener
 {
 public:
     /** An unknown key gives valid() == false: controls then draw a warning placeholder instead of crashing. */
     ParamHandle (UiContext& context, const std::string& key);
+    ~ParamHandle() override;
+    ParamHandle (const ParamHandle&) = delete;
+    ParamHandle& operator= (const ParamHandle&) = delete;
 
-    bool valid() const noexcept { return param != nullptr && ref.valid(); }
+    bool valid() const noexcept { return store != nullptr && ref.valid(); }
     const std::string& key() const noexcept { return keyText; }
     /** The parameter whose range, curve, unit and names apply (for a control of a pool slot: the key of instance 0 it stands for). */
     const ParamInfo& info() const noexcept { return *ref.info; }
@@ -51,9 +54,9 @@ private:
     UiContext& ctx;
     std::string keyText;
     KeyRef ref;
-    juce::RangedAudioParameter* param = nullptr;
-    std::atomic<float>* rawValue = nullptr;
-    std::unique_ptr<juce::ParameterAttachment> attachment;
+    ParameterStore* store = nullptr; // null when the key is unknown or the store lacks the parameter
+    std::weak_ptr<void> storeAlive;  // the store may be gone when a handle of an orphaned call-out is destroyed
+    void parameterChanged (int) override;
     bool gestureOpen = false;
 };
 } // namespace synthyboy::ui

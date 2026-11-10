@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "PluginProcessor.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/panels/EnvCurveView.h"
 #include "ui/panels/LfoShapeEditor.h"
@@ -44,7 +45,7 @@ struct Rig
 {
     SynthyBoyProcessor proc;
     std::unique_ptr<juce::AudioProcessorEditor> base { proc.createEditor() };
-    SynthyBoyEditor* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    SynthyBoyEditor* editor = innerEditor (base.get());
 
     explicit Rig (int w = 390, int h = 844)
     {

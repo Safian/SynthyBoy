@@ -222,7 +222,7 @@ public:
         menu.addItem (2, "Move down");
         menu.addSeparator();
         menu.addItem (3, "Remove");
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+        menu.showMenuAsync (popupOptions (this),
                             [safe = juce::Component::SafePointer<ModSlotRow> (this)] (int result)
                             {
                                 if (safe == nullptr || result <= 0)
@@ -383,7 +383,7 @@ private:
         addGroup ("Sound Sources", 43, 49);
         addGroup ("Note & Voice", 50, 57);
 
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&sourceButton),
+        menu.showMenuAsync (popupOptions (&sourceButton),
                             [this] (int result) {
             if (result == 0) return;
             const auto p = modSlotParams (slot);
@@ -441,7 +441,7 @@ private:
         for (auto& pair : subMenus)
             menu.addSubMenu (pair.first, pair.second);
 
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&destButton),
+        menu.showMenuAsync (popupOptions (&destButton),
                             [this] (int result) {
             if (result == 0) return;
             const auto p = modSlotParams (slot);
@@ -786,7 +786,7 @@ private:
         menu.addSeparator();
         menu.addItem (8, "Init Modulations (Clear All Slots)");
 
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&opsButton),
+        menu.showMenuAsync (popupOptions (&opsButton),
                             [this] (int result) {
             auto& m = ctx.assign.matrix();
             if (result == 1)
@@ -851,7 +851,7 @@ private:
             }
             menu.addSubMenu (juce::String::formatted ("Macro %d...", a), sub);
         }
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&opsButton),
+        menu.showMenuAsync (popupOptions (&opsButton),
                             [this] (int res) {
             if (res > 0)
             {

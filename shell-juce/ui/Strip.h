@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 
+#include <juce_audio_utils/juce_audio_utils.h> // MidiKeyboardComponent (the only use of juce_audio_utils)
+
 #include "ParamControls.h"
 #include "ParamHandle.h"
 #include "model/ModModel.h"

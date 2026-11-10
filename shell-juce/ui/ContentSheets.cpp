@@ -366,8 +366,7 @@ bool LastNoteSheet::startDragOut()
     const juce::File file = dragFile();
     if (! file.existsAsFile())
         return false;
-    const bool started = dragHandler ? dragHandler (file)
-                                     : juce::DragAndDropContainer::performExternalDragDropOfFiles (juce::StringArray (file.getFullPathName()), false, chip.get());
+    const bool started = dragHandler ? dragHandler (file) : ctx.host.dragFileOut (file, *chip);
     statusLine = started ? "Dragging " + file.getFileName() : juce::String ("This platform cannot drag files out: use Share or Save as WAV");
     repaint();
     return started;

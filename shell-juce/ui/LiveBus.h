@@ -7,7 +7,7 @@
 // anything listens (UiHost::copyReadout) and tells the listeners. It keeps the short history of the random LFOs for their traces. Message thread only.
 #pragma once
 
-#include <juce_events/juce_events.h>
+#include <juce_gui_basics/juce_gui_basics.h> // Component, ComponentListener (and juce_events)
 
 #include <array>
 #include <functional>

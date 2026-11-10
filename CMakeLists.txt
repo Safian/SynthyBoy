@@ -72,6 +72,12 @@ endif()
 include(CTest)
 enable_testing()
 
+# Apple ld reports every static library that two link lines name ("ignoring duplicate libraries"): the packages of core/ list each other and the targets
+# above them list core again, which is how CMake keeps static libraries in dependency order. The duplicates are harmless; the message is not a finding.
+if(APPLE)
+    add_link_options(-Wl,-no_warn_duplicate_libraries)
+endif()
+
 include(FetchContent)
 
 # ---------------------------------------------------------------------------
@@ -192,9 +198,15 @@ if(APPLE)
     endforeach()
 endif()
 
-# The custom GUI (shell-juce/ui, Phase 5): pure view-model library + Components compiled into the plugin
+# The custom GUI (shell-juce/ui, Phase 5): pure view-model library synthyboy_ui_model + the host independent Components library synthyboy_ui, which
+# the plug-in and the tests link. What ties it to the JUCE plug-in lives in shell-juce/ itself: the ParameterStore on the APVTS and the thin AudioProcessorEditor.
 find_package(Threads REQUIRED)
 add_subdirectory(shell-juce/ui)
+set(SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES
+    shell-juce/ApvtsParameterStore.cpp
+    shell-juce/ApvtsParameterStore.h
+    shell-juce/EditorAdapter.cpp
+    shell-juce/EditorAdapter.h)
 
 target_sources(SynthyBoy PRIVATE
     shell-juce/PluginProcessor.cpp
@@ -202,7 +214,7 @@ target_sources(SynthyBoy PRIVATE
     shell-juce/ClapBridge.cpp                    # the CLAP extension synthyboy.content in the JUCE-wrapped CLAP build (REMAINDER item 3)
     shell-clap/synthyboy_content_service.cpp     # ... shared with the native shell
     shell-clap/synthyboy_content_service.h
-    ${SYNTHYBOY_UI_SOURCES})
+    ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES})
 target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_CLAP_BRIDGE=1)
 target_include_directories(SynthyBoy PRIVATE shell-clap "${CLAP_INCLUDE_DIR}")
 
@@ -224,7 +236,7 @@ target_compile_definitions(SynthyBoy PUBLIC
 target_link_libraries(SynthyBoy
     PRIVATE
         synthyboy_core
-        synthyboy_ui_model
+        synthyboy_ui
         clap_juce_extensions
         juce::juce_audio_processors
         juce::juce_audio_utils
@@ -271,8 +283,8 @@ if(SYNTHYBOY_BUILD_TESTS)
         shell-juce/ui/tests/test_wavetable.cpp
         shell-juce/ui/tests/test_ui_render.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -289,11 +301,19 @@ if(SYNTHYBOY_BUILD_TESTS)
         target_compile_definitions(synthyboy_test_ui_render PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
     endif()
 
+    # the library alone: a real SynthyBoyEditor on a UiHost that is no AudioProcessor and has no APVTS (what the Kick app is); no PluginProcessor, no adapter
+    synthyboy_add_test(synthyboy_test_ui_plainhost
+        shell-juce/ui/tests/test_ui_plainhost.cpp
+        LINK synthyboy_ui
+             juce::juce_recommended_config_flags
+             juce::juce_recommended_warning_flags)
+    target_compile_definitions(synthyboy_test_ui_plainhost PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+
     synthyboy_add_test(synthyboy_test_glb
         shell-juce/ui/tests/test_glb.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -313,8 +333,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_fx
         shell-juce/ui/tests/test_fx.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -334,8 +354,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_fxinst
         shell-juce/ui/tests/test_fxinstances_ui.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -355,8 +375,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_panels
         shell-juce/ui/tests/test_ui_panels.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -377,8 +397,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_lfo
         shell-juce/ui/tests/test_ui_lfo.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -399,8 +419,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_wtremap
         shell-juce/ui/tests/test_ui_wtremap.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -421,8 +441,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_gaps
         shell-juce/ui/tests/test_ui_gaps.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -443,8 +463,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_shellfeat
         shell-juce/ui/tests/test_ui_shellfeat.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -467,8 +487,8 @@ if(SYNTHYBOY_BUILD_TESTS)
         shell-juce/ui/tests/test_ui_content.cpp
         core/vital-import/tests/fixtures.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics
@@ -489,8 +509,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_groupd
         shell-juce/ui/tests/test_ui_groupd.cpp
         shell-juce/PluginProcessor.cpp
-        ${SYNTHYBOY_UI_SOURCES}
-        LINK synthyboy_ui_model
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
              juce::juce_audio_processors
              juce::juce_audio_utils
              juce::juce_gui_basics

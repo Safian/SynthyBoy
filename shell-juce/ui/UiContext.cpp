@@ -5,67 +5,49 @@
 
 namespace synthyboy::ui
 {
-ApvtsModMatrix::ApvtsModMatrix (juce::AudioProcessorValueTreeState& apvts)
+StoreModMatrix::StoreModMatrix (ParameterStore& s) : store (s), inGesture (paramCount(), 0)
 {
-    const auto* table = paramTable();
-    const size_t n = paramCount();
-    parameters.resize (n, nullptr);
-    raw.resize (n, nullptr);
-    inGesture.assign (n, 0);
-    for (size_t i = 0; i < n; ++i)
-    {
-        parameters[i] = apvts.getParameter (table[i].key);
-        raw[i] = apvts.getRawParameterValue (table[i].key);
-    }
 }
 
-juce::RangedAudioParameter* ApvtsModMatrix::parameterAt (int index) const
+float StoreModMatrix::get (int paramIndex) const
 {
-    return index >= 0 && static_cast<size_t> (index) < parameters.size() ? parameters[static_cast<size_t> (index)] : nullptr;
+    return store.contains (paramIndex) ? store.plain (paramIndex) : 0.0f;
 }
 
-float ApvtsModMatrix::get (int paramIndex) const
+void StoreModMatrix::set (int paramIndex, float plain)
 {
-    if (paramIndex < 0 || static_cast<size_t> (paramIndex) >= raw.size() || raw[static_cast<size_t> (paramIndex)] == nullptr)
-        return 0.0f;
-    return raw[static_cast<size_t> (paramIndex)]->load();
-}
-
-void ApvtsModMatrix::set (int paramIndex, float plain)
-{
-    auto* p = parameterAt (paramIndex);
-    if (p == nullptr)
+    if (! store.contains (paramIndex))
         return;
     const bool wrap = inGesture[static_cast<size_t> (paramIndex)] == 0;
     if (wrap)
-        p->beginChangeGesture();
-    p->setValueNotifyingHost (p->convertTo0to1 (plain));
+        store.beginGesture (paramIndex);
+    store.setPlain (paramIndex, plain);
     if (wrap)
-        p->endChangeGesture();
+        store.endGesture (paramIndex);
 }
 
-void ApvtsModMatrix::beginGesture (int paramIndex)
+void StoreModMatrix::beginGesture (int paramIndex)
 {
-    if (auto* p = parameterAt (paramIndex); p != nullptr && inGesture[static_cast<size_t> (paramIndex)] == 0)
+    if (store.contains (paramIndex) && inGesture[static_cast<size_t> (paramIndex)] == 0)
     {
         inGesture[static_cast<size_t> (paramIndex)] = 1;
-        p->beginChangeGesture();
+        store.beginGesture (paramIndex);
     }
 }
 
-void ApvtsModMatrix::endGesture (int paramIndex)
+void StoreModMatrix::endGesture (int paramIndex)
 {
-    if (auto* p = parameterAt (paramIndex); p != nullptr && inGesture[static_cast<size_t> (paramIndex)] != 0)
+    if (store.contains (paramIndex) && inGesture[static_cast<size_t> (paramIndex)] != 0)
     {
         inGesture[static_cast<size_t> (paramIndex)] = 0;
-        p->endChangeGesture();
+        store.endGesture (paramIndex);
     }
 }
 
 // ---- ModAssignController ----------------------------------------------------------------------------------------------------------------
 
 ModAssignController::ModAssignController (UiHost& h)
-    : host (h), access (h.parameters()), assignFlow (access), current (ModSnapshot::build (access))
+    : host (h), access (h.parameterStore()), assignFlow (access), current (ModSnapshot::build (access))
 {
 }
 
@@ -116,31 +98,11 @@ void ModAssignController::setMessage (const juce::String& m)
 
 ParamValues readLiveValues (const UiContext& ctx)
 {
-    auto values = ParamValues::defaults();
-    const auto* table = paramTable();
-    const size_t count = paramCount();
-    auto& apvts = ctx.apvts();
-    for (size_t i = 0; i < count; ++i)
-        if (auto* raw = apvts.getRawParameterValue (table[i].key))
-            values.plain[i] = raw->load();
-    return values;
+    return readAllValues (ctx.store());
 }
 
 void applyValues (const UiContext& ctx, const ParamValues& values)
 {
-    const auto* table = paramTable();
-    const size_t count = paramCount();
-    auto& apvts = ctx.apvts();
-    for (size_t i = 0; i < count; ++i)
-        if (auto* p = apvts.getParameter (table[i].key))
-        {
-            const float target = p->convertTo0to1 (values.plain[i]);
-            if (std::abs (p->getValue() - target) > 1.0e-7f)
-            {
-                p->beginChangeGesture();
-                p->setValueNotifyingHost (target);
-                p->endChangeGesture();
-            }
-        }
+    writeAllValues (ctx.store(), values);
 }
 } // namespace synthyboy::ui

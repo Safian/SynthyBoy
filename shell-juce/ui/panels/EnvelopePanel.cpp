@@ -218,7 +218,7 @@ void SourceTabButton::mouseUp (const juce::MouseEvent& e)
     juce::TextButton::mouseUp (e);
     if (wasDragging)
     {
-        auto* top = getTopLevelComponent();
+        auto* top = overlayRootOf (*this);
         juce::Component* target = nullptr;
         if (top != nullptr)
             target = top->getComponentAt (top->getLocalPoint (this, e.getPosition()));

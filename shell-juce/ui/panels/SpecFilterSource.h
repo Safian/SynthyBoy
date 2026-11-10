@@ -159,7 +159,7 @@ private:
     std::string key (const char* tail) const { return "osc" + std::to_string (osc) + ".spec." + tail; }
     void showMenu()
     {
-        buildMenu().showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&menuButton), [safe = juce::Component::SafePointer<SpecFilterSource> (this)] (int result)
+        buildMenu().showMenuAsync (popupOptions (&menuButton), [safe = juce::Component::SafePointer<SpecFilterSource> (this)] (int result)
         {
             if (safe == nullptr || result == 0)
                 return;

@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "Theme.h"
 
+#include "JuceCompat.h"
+
 namespace synthyboy::ui
 {
 namespace
@@ -89,15 +91,12 @@ void Theme::setScale (float newScale) noexcept
 
 float Theme::textWidth (const juce::Font& f, const juce::String& text)
 {
-    return juce::GlyphArrangement::getStringWidth (f, text);
+    return compat::stringWidth (f, text);
 }
 
 juce::Font Theme::font (float height, bool bold) const
 {
-    auto options = juce::FontOptions().withHeight (height);
-    if (bold)
-        options = options.withStyle ("Bold");
-    return juce::Font (options);
+    return compat::makeFont (height, bold);
 }
 
 // ---- LookAndFeel --------------------------------------------------------------------------------------------------------------------

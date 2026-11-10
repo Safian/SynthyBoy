@@ -178,7 +178,7 @@ bool LfoTabsPanel::dropOnWavetable (int from, juce::Point<int> screenPos)
 {
     if (from < 0 || from >= 10)
         return false;
-    auto* top = getTopLevelComponent();
+    auto* top = overlayRootOf (*this);
     if (top == nullptr)
         return false;
     juce::Component* hit = top->getComponentAt (top->getLocalPoint (nullptr, screenPos));

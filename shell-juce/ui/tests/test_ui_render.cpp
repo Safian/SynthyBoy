@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "PluginProcessor.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/Sheet.h"
 #include "ui/panels/LfoTabsPanel.h"
@@ -30,7 +31,8 @@ class CapsHost final : public UiHost
 {
 public:
     CapsHost (SynthyBoyProcessor& p, EngineCapsMask c) : inner (p), caps (c) {}
-    juce::AudioProcessorValueTreeState& parameters() override { return inner.parameters(); }
+    ParameterStore& parameterStore() override { return inner.parameterStore(); }
+    bool overlaysInsideEditor() const noexcept override { return inner.overlaysInsideEditor(); }
     EngineCapsMask engineCaps() const noexcept override { return caps; }
     juce::MidiKeyboardState& keyboardState() override { return inner.keyboardState(); }
     AbCompare& abCompare() override { return inner.abCompare(); }
@@ -142,6 +144,47 @@ bool writePng (juce::Component& c, const juce::File& file)
     juce::FileOutputStream out (file);
     juce::PNGImageFormat png;
     return out.openedOk() && png.writeImageToStream (image, out);
+}
+/** Every control of every panel at the given size: touch size, inside its panel, and not on top of another control of the panel. */
+int checkPanelControls (SynthyBoyEditor& editor, const char* what)
+{
+    sbtest::Context ctx (what);
+    const int min = editor.theme().touch();
+    int checked = 0;
+    for (const auto& panel : editor.panelHost().allPanels())
+    {
+        if (panel->hiddenInLayout() || ! panel->isVisible() || panel->getWidth() == 0)
+            continue;
+        std::vector<juce::Component*> controls;
+        for (auto* child : panel->getChildren())
+            collectTouchTargets (*panel, *child, controls);
+        for (size_t i = 0; i < controls.size(); ++i)
+        {
+            auto* c = controls[i];
+            if (c->getWidth() == 0 || c->getHeight() == 0)
+                continue;
+            ++checked;
+            const auto inPanel = panel->getLocalArea (c->getParentComponent(), c->getBounds());
+            const bool fits = panel->getLocalBounds().contains (inPanel) && c->getWidth() >= min && c->getHeight() >= min;
+            if (! fits)
+                std::printf ("    %s: %s \"%s\" %dx%d at %d,%d in panel %s %dx%d\n", what, typeid (*c).name(), c->getName().toRawUTF8(), c->getWidth(), c->getHeight(),
+                             inPanel.getX(), inPanel.getY(), panel->title().toRawUTF8(), panel->getWidth(), panel->getHeight());
+            CHECK (fits);
+            for (size_t j = i + 1; j < controls.size(); ++j)
+            {
+                auto* d = controls[j];
+                if (d->getWidth() == 0 || d->getHeight() == 0 || c->isParentOf (d) || d->isParentOf (c))
+                    continue;
+                const auto other = panel->getLocalArea (d->getParentComponent(), d->getBounds());
+                const bool overlap = inPanel.reduced (1).intersects (other.reduced (1));
+                if (overlap)
+                    std::printf ("    %s: overlap %s \"%s\" and %s \"%s\" in panel %dx%d\n", what, typeid (*c).name(), c->getName().toRawUTF8(), typeid (*d).name(),
+                                 d->getName().toRawUTF8(), panel->getWidth(), panel->getHeight());
+                CHECK (! overlap);
+            }
+        }
+    }
+    return checked;
 }
 } // namespace
 
@@ -440,7 +483,7 @@ TEST (uir_editor_layout_touch_targets_and_modes)
 {
     SynthyBoyProcessor proc;
     std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     CHECK (editor != nullptr);
     if (editor == nullptr)
         return;
@@ -449,7 +492,8 @@ TEST (uir_editor_layout_touch_targets_and_modes)
     const Case cases[] = { { 390, 844, LayoutMode::phone, "phone portrait 390x844" },
                            { 844, 390, LayoutMode::tablet, "phone landscape 844x390" },
                            { 820, 1180, LayoutMode::tablet, "tablet portrait 820x1180" },
-                           { 1024, 768, LayoutMode::wide, "tablet landscape 1024x768" } };
+                           { 1024, 768, LayoutMode::wide, "tablet landscape 1024x768" },
+                           { 1024, 600, LayoutMode::wide, "Akai MPC Key 61 logical 1024x600" } };
     for (const auto& c : cases)
     {
         editor->setSize (c.w, c.h);
@@ -488,11 +532,38 @@ TEST (uir_editor_layout_touch_targets_and_modes)
     editor->setDarkMode (true);
 }
 
+TEST (uir_every_panel_control_fits_at_the_phone_tablet_and_mpc_sizes)
+{
+    SynthyBoyProcessor proc;
+    std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
+    auto* editor = innerEditor (base.get());
+    CHECK (editor != nullptr);
+    if (editor == nullptr)
+        return;
+    struct Case { int w, h; const char* name; };
+    for (const auto& c : { Case { 1024, 600, "Akai MPC Key 61 logical 1024x600" }, Case { 1024, 768, "tablet landscape 1024x768" }, Case { 390, 844, "phone portrait 390x844" } })
+    {
+        editor->setSize (c.w, c.h);
+        if (c.w < 800) // the phone shows one page at a time
+        {
+            int checked = 0;
+            for (int p = 0; p < kNumPages; ++p)
+            {
+                editor->pageTabs().select (static_cast<Page> (p));
+                checked += checkPanelControls (*editor, c.name);
+            }
+            CHECK (checked > 100);
+        }
+        else
+            CHECK (checkPanelControls (*editor, c.name) > 100);
+    }
+}
+
 TEST (uir_ab_compare_through_editor)
 {
     SynthyBoyProcessor proc;
     std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     CHECK (editor != nullptr);
     if (editor == nullptr)
         return;
@@ -516,7 +587,7 @@ TEST (uir_keyboard_notes_reach_the_engine)
     proc.setRateAndBufferSizeDetails (44100.0, 512);
     proc.prepareToPlay (44100.0, 512);
     std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     CHECK (editor != nullptr);
     if (editor == nullptr)
         return;
@@ -551,7 +622,7 @@ TEST (uir_preset_strip_and_screenshots)
     proc.setPresetName ("Factory Bass 01");
 
     std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     CHECK (editor != nullptr);
     if (editor == nullptr)
         return;
@@ -564,7 +635,7 @@ TEST (uir_preset_strip_and_screenshots)
 
     const auto dir = screenshotDir();
     struct Shot { int w, h; const char* file; };
-    const Shot shots[] = { { 390, 844, "phone-390x844.png" }, { 1024, 768, "tablet-1024x768.png" } };
+    const Shot shots[] = { { 390, 844, "phone-390x844.png" }, { 1024, 768, "tablet-1024x768.png" }, { 1024, 600, "mpc-1024x600.png" } };
     for (const auto& s : shots)
     {
         editor->setSize (s.w, s.h);

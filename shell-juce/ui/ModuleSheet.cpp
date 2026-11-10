@@ -358,7 +358,6 @@ void showModuleSheet (UiContext& context, const std::string& prefix, juce::Compo
         return;
     auto sheet = std::make_unique<ModuleSheet> (context, prefix);
     sheet->setSize (sheet->preferredWidth(), sheet->preferredHeight());
-    auto& box = juce::CallOutBox::launchAsynchronously (std::move (sheet), anchor.getScreenBounds(), nullptr);
-    (void) box;
+    launchCallOut (std::move (sheet), anchor);
 }
 } // namespace synthyboy::ui

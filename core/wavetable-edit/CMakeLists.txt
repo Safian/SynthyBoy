@@ -15,7 +15,7 @@ add_library(synthyboy_wtedit STATIC
     src/player.cpp)
 
 target_include_directories(synthyboy_wtedit
-    PUBLIC  "${PROJECT_SOURCE_DIR}/core/include"
+    PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}/../include"
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 target_compile_features(synthyboy_wtedit PUBLIC cxx_std_17)

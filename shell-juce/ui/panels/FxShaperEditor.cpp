@@ -195,7 +195,7 @@ void ShaperCurveEditor::showPresetMenu()
     juce::PopupMenu menu;
     for (int i = 0; i < static_cast<int> (CurvePreset::kNumPresets); ++i)
         menu.addItem (i + 1, curvePresetName (static_cast<CurvePreset> (i)));
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (button ("Preset")),
+    menu.showMenuAsync (popupOptions (button ("Preset")),
                         [this] (int result)
                         {
                             if (result > 0)

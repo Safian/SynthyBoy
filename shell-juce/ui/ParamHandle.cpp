@@ -8,20 +8,24 @@ namespace synthyboy::ui
 ParamHandle::ParamHandle (UiContext& context, const std::string& key) : ctx (context), keyText (key)
 {
     ref = ctx.resolve (key);
-    if (! ref.valid())
+    if (! ref.valid() || ! ctx.store().contains (ref.index))
         return;
 
-    const char* storedKey = paramTable()[static_cast<size_t> (ref.index)].key;
-    param = ctx.apvts().getParameter (storedKey);
-    rawValue = ctx.apvts().getRawParameterValue (storedKey);
-    if (param == nullptr)
-        return;
+    store = &ctx.store();
+    storeAlive = store->lifetime();
+    store->addListener (ref.index, this);
+}
 
-    attachment = std::make_unique<juce::ParameterAttachment> (*param, [this] (float)
-    {
-        if (onChange)
-            onChange();
-    });
+ParamHandle::~ParamHandle()
+{
+    if (store != nullptr && ! storeAlive.expired())
+        store->removeListener (ref.index, this);
+}
+
+void ParamHandle::parameterChanged (int)
+{
+    if (onChange)
+        onChange();
 }
 
 bool ParamHandle::modulatable() const noexcept
@@ -33,16 +37,16 @@ bool ParamHandle::modulatable() const noexcept
 
 float ParamHandle::plain() const
 {
-    if (rawValue == nullptr)
+    if (store == nullptr)
         return valid() ? info().def : 0.0f;
-    // read the parameter itself: inside an onChange callback the raw atomic of the tree may not have caught up with the new value yet
-    const float stored = param != nullptr ? param->convertFrom0to1 (param->getValue()) : rawValue->load();
+    // the store answers with the new value already inside an onChange callback
+    const float stored = store->plain (ref.index);
     return ref.storedNormalised ? fromNormalised (info(), stored) : stored;
 }
 
 float ParamHandle::normalised() const
 {
-    return param != nullptr ? param->getValue() : 0.0f;
+    return store != nullptr ? store->normalised (ref.index) : 0.0f;
 }
 
 CapState ParamHandle::caps() const
@@ -67,35 +71,34 @@ CapState ParamHandle::caps() const
 
 void ParamHandle::beginGesture()
 {
-    if (attachment != nullptr && ! gestureOpen)
+    if (store != nullptr && ! gestureOpen)
     {
         gestureOpen = true;
-        attachment->beginGesture();
+        store->beginGesture (ref.index);
     }
 }
 
 void ParamHandle::setNormalised (float n)
 {
-    if (attachment == nullptr)
-        return;
-    attachment->setValueAsPartOfGesture (param->convertFrom0to1 (juce::jlimit (0.0f, 1.0f, n)));
+    if (store != nullptr)
+        store->setNormalised (ref.index, juce::jlimit (0.0f, 1.0f, n));
 }
 
 void ParamHandle::endGesture()
 {
-    if (attachment != nullptr && gestureOpen)
+    if (store != nullptr && gestureOpen)
     {
         gestureOpen = false;
-        attachment->endGesture();
+        store->endGesture (ref.index);
     }
 }
 
 void ParamHandle::setPlainComplete (float value)
 {
-    if (attachment == nullptr)
+    if (store == nullptr)
         return;
     const float constrained = constrainValue (info(), value);
-    attachment->setValueAsCompleteGesture (ref.storedNormalised ? toNormalised (info(), constrained) : constrained);
+    store->setPlainComplete (ref.index, ref.storedNormalised ? toNormalised (info(), constrained) : constrained);
 }
 
 void ParamHandle::resetToDefault()

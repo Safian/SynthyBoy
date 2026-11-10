@@ -84,21 +84,19 @@ bool writeFileBytes (const juce::File& file, const std::vector<uint8_t>& bytes)
 
 bool setParameter (UiHost& host, const char* key, float plain)
 {
-    auto* parameter = host.parameters().getParameter (key);
-    if (parameter == nullptr)
+    const int index = resolveKey (key).index;
+    auto& store = host.parameterStore();
+    if (! store.contains (index))
         return false;
-    const float normalised = parameter->convertTo0to1 (plain);
-    parameter->beginChangeGesture();
-    parameter->setValueNotifyingHost (normalised);
-    parameter->endChangeGesture();
+    store.setPlainComplete (index, plain);
     return true;
 }
 
 float readParameter (UiHost& host, const char* key, float fallback)
 {
-    if (auto* raw = host.parameters().getRawParameterValue (key))
-        return raw->load();
-    return fallback;
+    const int index = resolveKey (key).index;
+    auto& store = host.parameterStore();
+    return store.contains (index) ? store.plain (index) : fallback;
 }
 
 int choiceIndexOf (const char* key, const char* name)
@@ -833,12 +831,7 @@ FlowResult MissingFilesModel::removeAll()
 
 ParamValues readAllValues (UiHost& host)
 {
-    ParamValues values = ParamValues::defaults();
-    const auto* table = paramTable();
-    for (size_t i = 0; i < paramCount(); ++i)
-        if (auto* raw = host.parameters().getRawParameterValue (table[i].key))
-            values.plain[i] = raw->load();
-    return values;
+    return synthyboy::ui::readAllValues (host.parameterStore());
 }
 
 convert::OfflineRunner offlineRunner (UiContext& ctx)

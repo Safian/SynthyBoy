@@ -81,7 +81,7 @@ void NoisePanel::showSampleMenu()
         menu.addItem (30, juce::String (loaded->ref.name), true, sample);
     menu.addItem (31, "Load Sample...", ctx.host.canRequestFile());
     menu.addItem (32, "Remove Sample", loaded != nullptr);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (sampleNameBtn),
+    menu.showMenuAsync (popupOptions (sampleNameBtn),
                         [safe = juce::Component::SafePointer<NoisePanel> (this)] (int result)
                         {
                             if (safe == nullptr || result <= 0 || ! safe->sampleHandle.valid())

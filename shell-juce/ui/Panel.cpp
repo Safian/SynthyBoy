@@ -11,7 +11,12 @@ namespace synthyboy::ui
 {
 PanelRegistry& PanelRegistry::instance()
 {
-    static PanelRegistry registry;
+    static PanelRegistry registry = [] // thread safe, runs on first use
+    {
+        PanelRegistry filled;
+        registerAllPanels (filled);
+        return filled;
+    }();
     return registry;
 }
 

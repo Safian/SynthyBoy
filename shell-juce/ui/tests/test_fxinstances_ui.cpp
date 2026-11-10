@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "PluginProcessor.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/FxRackOps.h"
 #include "ui/ModuleSheet.h"
@@ -28,7 +29,7 @@ struct Rig
 {
     SynthyBoyProcessor proc;
     std::unique_ptr<juce::AudioProcessorEditor> base { proc.createEditor() };
-    SynthyBoyEditor* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    SynthyBoyEditor* editor = innerEditor (base.get());
 
     explicit Rig (int w = 390, int h = 844)
     {
@@ -595,7 +596,7 @@ TEST (fxui_the_state_with_pool_modules_survives_a_save_and_a_load)
     CHECK_NEAR (other.parameters().getRawParameterValue ("fxi02.type")->load(), static_cast<float> (kFxTypePhaser), 1.0e-5);
     CHECK_NEAR (other.parameters().getRawParameterValue ("fxi02.p03")->load(), 0.42, 1.0e-6);
     std::unique_ptr<juce::AudioProcessorEditor> editor (other.createEditor());
-    auto* ed = dynamic_cast<SynthyBoyEditor*> (editor.get());
+    auto* ed = innerEditor (editor.get());
     CHECK (ed != nullptr);
     ed->setSize (390, 844);
     ed->panelHost().setPage (Page::fx);

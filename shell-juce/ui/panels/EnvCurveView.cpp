@@ -176,12 +176,11 @@ EnvCurveView::EnvValues EnvCurveView::readCurrentValues() const
 EnvCurveView::EnvValues EnvCurveView::readEnv1Values() const
 {
     EnvValues v;
-    auto& apvts = ctx.apvts();
+    auto& store = ctx.store();
     const auto getVal = [&] (const char* key, float def)
     {
-        if (auto* a = apvts.getRawParameterValue (key))
-            return a->load();
-        return def;
+        const int index = resolveKey (key).index;
+        return store.contains (index) ? store.plain (index) : def;
     };
     v.delay = getVal ("env1.delay", 0.0f);
     v.attack = getVal ("env1.attack", 5.0f);

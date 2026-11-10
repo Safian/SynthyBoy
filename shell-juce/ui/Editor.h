@@ -12,17 +12,27 @@
 
 namespace synthyboy::ui
 {
-class SynthyBoyEditor final : public juce::AudioProcessorEditor,
+/** The whole SynthyBoy editor as a plain juce::Component: it knows nothing of a plug-in format or of a host window. The plug-in wraps it in a thin
+    juce::AudioProcessorEditor (shell-juce/EditorAdapter.h); the Kick app puts it into its PluginPanel. Lays itself out for any size from
+    kMinWidth x kMinHeight (the default is 1024 x 768, the layout follows the width). */
+class SynthyBoyEditor final : public juce::Component,
+                              public OverlayHost,
                               private juce::Timer,
-                              private juce::AudioProcessorParameter::Listener
+                              private ParameterStore::Listener
 {
 public:
-    SynthyBoyEditor (juce::AudioProcessor& owner, UiHost& host);
+    static constexpr int kMinWidth = 360, kMinHeight = 480, kMaxWidth = 1800, kMaxHeight = 1400;
+
+    explicit SynthyBoyEditor (UiHost& host);
     ~SynthyBoyEditor() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress& key) override;
+
+    // OverlayHost: loupes, bubbles, toasts, sheets, call-outs and prompts live inside the editor
+    juce::Component& overlayRoot() noexcept override { return *this; }
+    bool confineOverlays() const noexcept override { return host.overlaysInsideEditor(); }
 
     UiContext& context() noexcept { return ctx; }
     Theme& theme() noexcept { return uiTheme; }
@@ -70,12 +80,11 @@ public:
 
 private:
     void timerCallback() override;
-    void parameterValueChanged (int, float) override {}
-    void parameterGestureChanged (int parameterIndex, bool starting) override;
+    void parameterGestureChanged (int index, bool starting) override;
     void showMenu();
     void updateAbLabel();
-    ParamValues readLiveValues() const;
-    void applyValues (const ParamValues& values);
+    ParamValues readLiveValues() const { return readAllValues (host.parameterStore()); }
+    void applyValues (const ParamValues& values) { writeAllValues (host.parameterStore(), values); }
 
     UiHost& host;
     Theme uiTheme;
@@ -84,6 +93,7 @@ private:
     UiContext ctx;
     UndoHistory undoHistory;
     int openGestures = 0;
+    bool replayingHistory = false;
     ParamValues gestureStartValues;
     juce::String lastPresetName;
 

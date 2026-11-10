@@ -521,7 +521,7 @@ void OscWaveView::showSampleMenu()
         juce::PopupMenu instrumentMenu;
         instrumentMenu.addItem (1, "Switch to Single Sample", ! ctx.host.content().instruments.empty());
         instrumentMenu.addItem (2, "Load SFZ...", true);
-        instrumentMenu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&sampleMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
+        instrumentMenu.showMenuAsync (popupOptions (&sampleMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
         {
             if (safe == nullptr)
                 return;
@@ -546,7 +546,7 @@ void OscWaveView::showSampleMenu()
     menu.addSubMenu ("Switch to Wavetable", toWavetable, sample != nullptr);
     menu.addSeparator();
     menu.addItem (5, "Show marker animation", true, markerAnimation);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&sampleMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
+    menu.showMenuAsync (popupOptions (&sampleMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
     {
         if (safe == nullptr)
             return;
@@ -639,7 +639,7 @@ void OscWaveView::showWaveMenu()
     }
     menu.addSubMenu ("Copy this frame to LFO", toLfo);
     menu.addSubMenu ("Copy LFO shape to this wavetable", fromLfo, ctx.host.contentLibrary() != nullptr);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&waveMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
+    menu.showMenuAsync (popupOptions (&waveMenuBtn), [safe = juce::Component::SafePointer<OscWaveView> (this)] (int result)
     {
         if (safe == nullptr || result <= 0)
             return;

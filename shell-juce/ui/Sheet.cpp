@@ -54,7 +54,7 @@ public:
         juce::PopupMenu menu;
         menu.addSubMenu ("Aux Source", aux);
         menu.addItem (2000, "Edit Custom Curve...", static_cast<bool> (sheet.ctx.view->openSlotCurve));
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+        menu.showMenuAsync (popupOptions (this),
                             [safe = juce::Component::SafePointer<ModRow> (this), slotIndex = entry.slot] (int result)
                             {
                                 if (result <= 0 || safe == nullptr)
@@ -292,7 +292,7 @@ void ParamSheet::showSourceMenu()
     }
     menu.addSubMenu ("Sound Sources", sound);
     menu.addSubMenu ("Note & Voice", note);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&assign),
+    menu.showMenuAsync (popupOptions (&assign),
                         [safe = juce::Component::SafePointer<ParamSheet> (this)] (int result)
                         {
                             if (result <= 0 || safe == nullptr)
@@ -345,8 +345,7 @@ void showParamSheet (UiContext& context, const std::string& key, juce::Component
 {
     auto sheet = std::make_unique<ParamSheet> (context, key);
     juce::Component::SafePointer<ParamSheet> safe (sheet.get());
-    auto& box = juce::CallOutBox::launchAsynchronously (std::move (sheet), anchor.getScreenBounds(), nullptr);
-    (void) box;
+    launchCallOut (std::move (sheet), anchor);
     if (focusValueBox)
         juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->focusValueBox(); });
 }

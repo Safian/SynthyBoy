@@ -5,6 +5,7 @@
 
 #include "../ContentIO.h"
 #include "../LibraryMenu.h"
+#include "../Overlays.h"
 #include "synthyboy/library_items.h"
 
 #include <algorithm>
@@ -395,18 +396,13 @@ public:
 private:
     void showBinEntry (int bin, bool phase)
     {
-        auto* w = new juce::AlertWindow (phase ? "Bin " + juce::String (bin) + " phase" : "Bin " + juce::String (bin) + " amplitude",
-                                         phase ? "degrees (0..360)" : "percent (0..100)", juce::MessageBoxIconType::NoIcon);
-        w->addTextEditor ("value", {}, {});
-        w->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
-        w->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
-        w->enterModalState (true,
-                            juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<SpectrumCanvas> (this), bin, phase, w] (int result)
-                                                                  {
-                                                                      if (result == 1 && safe != nullptr)
-                                                                          safe->owner.enterBinValue (bin, phase, w->getTextEditorContents ("value"));
-                                                                  }),
-                            true);
+        showTextPrompt (owner.ctx, phase ? "Bin " + juce::String (bin) + " phase" : "Bin " + juce::String (bin) + " amplitude",
+                        phase ? "degrees (0..360)" : "percent (0..100)", {}, "OK",
+                        [safe = juce::Component::SafePointer<SpectrumCanvas> (this), bin, phase] (const juce::String& value)
+                        {
+                            if (safe != nullptr)
+                                safe->owner.enterBinValue (bin, phase, value);
+                        });
     }
 
     void handleMouse (const juce::MouseEvent& e)
@@ -465,7 +461,7 @@ private:
         menu.addItem (10, "Octave Down");
         menu.addItem (11, "Repeat Bin Group");
 
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (fftMenuBtn),
+        menu.showMenuAsync (popupOptions (fftMenuBtn),
             [this] (int result)
             {
                 if (result <= 0 || owner.currentFrameIndex >= owner.wt.numFrames())
@@ -864,7 +860,7 @@ private:
         menu.addSubMenu ("Examples", examples);
         menu.addSeparator();
         formulaLibrary->addTo (menu, 1000);
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetsBtn),
+        menu.showMenuAsync (popupOptions (presetsBtn),
             [this, library = formulaLibrary] (int result)
             {
                 if (result >= 1000)
@@ -990,7 +986,7 @@ private:
         menu.addItem (6, "Wave Folder Modifier");
         menu.addItem (7, "Wave Warp Modifier");
 
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (addComponentBtn),
+        menu.showMenuAsync (popupOptions (addComponentBtn),
             [this] (int result)
             {
                 if (result <= 0)
@@ -1497,7 +1493,7 @@ WavetableEditorSheet::WavetableEditorSheet (UiContext& context, wtedit::Wavetabl
         for (int s : sizes)
             menu.addItem (s, "Grid " + juce::String (s));
 
-        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (gridBtn),
+        menu.showMenuAsync (popupOptions (gridBtn),
             [this] (int result)
             {
                 if (result > 0)
@@ -2112,7 +2108,7 @@ void WavetableEditorSheet::showOptionsMenu()
     menu.addItem (7, "Move frame left", currentFrameIndex > 0);
     menu.addItem (8, "Move frame right", currentFrameIndex + 1 < wt.numFrames());
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (menuBtn),
+    menu.showMenuAsync (popupOptions (menuBtn),
         [this] (int result)
         {
             switch (result)
@@ -2142,7 +2138,7 @@ void WavetableEditorSheet::showRemoveMenu()
     menu.addItem (7, "Reduce to Every 2nd Frame");
     menu.addItem (8, "Reduce to Every 4th Frame");
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (removeMenuBtn),
+    menu.showMenuAsync (popupOptions (removeMenuBtn),
         [this] (int result)
         {
             if (result <= 0)
@@ -2216,7 +2212,7 @@ void WavetableEditorSheet::showSortMenu()
     menu.addItem (7, "Randomize");
     menu.addItem (8, "Reverse Entire Table Order");
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (sortMenuBtn),
+    menu.showMenuAsync (popupOptions (sortMenuBtn),
         [this] (int result)
         {
             switch (result)
@@ -2243,7 +2239,7 @@ void WavetableEditorSheet::showMorphMenu()
     menu.addItem (4, "Spectral (Zero All Phases)");
     menu.addItem (5, "Remove Morph Tables");
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (morphMenuBtn),
+    menu.showMenuAsync (popupOptions (morphMenuBtn),
         [this] (int result)
         {
             switch (result)
@@ -2482,7 +2478,7 @@ WavetableEditorSheet& WavetableEditorSheet::open (UiContext& context, int osc, j
     }
     holder->onClosed = std::move (onClosedCallback);
     holder->onSaved = std::move (onSavedCallback);
-    auto* top = anchor.getTopLevelComponent();
+    auto* top = overlayRootOf (anchor);
     juce::Component& parent = top != nullptr ? *top : anchor;
     parent.addAndMakeVisible (*holder);
     holder->setBounds (parent.getLocalBounds());

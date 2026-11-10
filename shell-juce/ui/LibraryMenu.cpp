@@ -4,6 +4,7 @@
 #include "LibraryMenu.h"
 
 #include "ContentIO.h"
+#include "Overlays.h"
 
 namespace synthyboy::ui
 {
@@ -21,23 +22,14 @@ void setTextPromptHandler (TextPromptHandler handler)
     promptHandler() = std::move (handler);
 }
 
-void askText (const juce::String& title, const juce::String& initial, std::function<void (const juce::String&)> done)
+void askText (UiContext& context, const juce::String& title, const juce::String& initial, std::function<void (const juce::String&)> done)
 {
     if (promptHandler())
     {
         promptHandler() (title, initial, std::move (done));
         return;
     }
-    auto* window = new juce::AlertWindow (title, "Name", juce::MessageBoxIconType::NoIcon);
-    window->addTextEditor ("name", initial);
-    window->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
-    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
-    window->enterModalState (true, juce::ModalCallbackFunction::create ([window, callback = std::move (done)] (int result)
-    {
-        std::unique_ptr<juce::AlertWindow> owner (window);
-        if (result == 1)
-            callback (window->getTextEditorContents ("name").trim());
-    }), false);
+    showTextPrompt (context, title, "Name", initial, "Save", std::move (done));
 }
 
 LibraryMenu::LibraryMenu (UiContext& context, LibraryMenuSpec specIn) : ctx (context), spec (std::move (specIn)) {}
@@ -113,7 +105,7 @@ void LibraryMenu::addTo (juce::PopupMenu& menu, int firstId)
 
     menu.addItem (add ([this]
     {
-        askText ("Save " + spec.noun, spec.suggestedName, [self = shared_from_this()] (const juce::String& name) { self->saveCurrent (name); });
+        askText (ctx, "Save " + spec.noun, spec.suggestedName, [self = shared_from_this()] (const juce::String& name) { self->saveCurrent (name); });
     }), "Save current " + spec.noun + " as...", haveLibrary && spec.makeItem != nullptr);
 
     if (spec.fileWildcards.isNotEmpty() && spec.applyFile)
@@ -159,7 +151,7 @@ void LibraryMenu::show (juce::Component& target)
 {
     juce::PopupMenu menu;
     addTo (menu);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target), [self = shared_from_this()] (int result)
+    menu.showMenuAsync (popupOptions (&target), [self = shared_from_this()] (int result)
     {
         if (result > 0)
             self->run (result);

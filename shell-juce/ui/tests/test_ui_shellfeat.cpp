@@ -11,6 +11,7 @@
 #include <string>
 
 #include "PluginProcessor.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/GestureKit.h"
 #include "ui/ModuleSheet.h"
@@ -69,7 +70,7 @@ struct Rig
 {
     SynthyBoyProcessor proc;
     std::unique_ptr<juce::AudioProcessorEditor> base { proc.createEditor() };
-    SynthyBoyEditor* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    SynthyBoyEditor* editor = innerEditor (base.get());
 
     explicit Rig (Page page = Page::flt, int w = 390, int h = 844)
     {

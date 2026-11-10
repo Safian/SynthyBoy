@@ -118,6 +118,7 @@ public:
 
         loadButton.setButtonText ("Load .scl / .tun");
         loadButton.onClick = [this] { chooseAndLoadScaleFile(); };
+        loadButton.setEnabled (ctx.host.canRequestFile());
         addAndMakeVisible (loadButton);
 
         clearButton.setButtonText ("Clear Tuning");
@@ -271,20 +272,15 @@ public:
 private:
     void chooseAndLoadScaleFile()
     {
-        fileChooser = std::make_unique<juce::FileChooser> (
-            "Select Scala (.scl) or Tuning (.tun) file",
-            juce::File {},
-            "*.scl;*.tun;*.kbm");
-
-        const auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-        fileChooser->launchAsync (flags, [this] (const juce::FileChooser& chooser)
+        // the host's file request is the only way out to the OS (no juce::FileChooser in the UI library)
+        FileRequest request;
+        request.title = "Select Scala (.scl) or Tuning (.tun) file";
+        request.wildcards = "*.scl;*.tun;*.kbm";
+        request.purpose = "tuning";
+        ctx.host.requestFile (request, [safe = juce::Component::SafePointer<GlbTuningPitchView> (this)] (const juce::File& file)
         {
-            const auto file = chooser.getResult();
-            if (file.existsAsFile())
-            {
-                const auto content = file.loadFileAsString().toStdString();
-                loadScalaString (content);
-            }
+            if (safe != nullptr && file.existsAsFile())
+                safe->loadScalaString (file.loadFileAsString().toStdString());
         });
     }
 
@@ -297,7 +293,6 @@ private:
     juce::TextButton loadButton;
     juce::TextButton clearButton;
     juce::TextButton lockButton;
-    std::unique_ptr<juce::FileChooser> fileChooser;
 
     std::array<float, 12> userCents {};
     bool hasUserCents = false;

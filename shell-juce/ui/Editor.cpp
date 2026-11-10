@@ -5,18 +5,17 @@
 
 namespace synthyboy::ui
 {
-SynthyBoyEditor::SynthyBoyEditor (juce::AudioProcessor& owner, UiHost& h)
-    : juce::AudioProcessorEditor (owner),
-      host (h),
+SynthyBoyEditor::SynthyBoyEditor (UiHost& h)
+    : host (h),
       uiTheme (Theme::dark()),
       laf (uiTheme),
       assign (h),
       ctx { h, uiTheme, assign }
 {
     setLookAndFeel (&laf);
+    ctx.view->overlayRoot = this;
 
-    for (auto* param : host.parameters().processor.getParameters())
-        param->addListener (this);
+    host.parameterStore().addListener (this); // gestures of every parameter: the undo steps
 
     top = std::make_unique<TopBar> (ctx);
     macros = std::make_unique<MacroRow> (ctx);
@@ -62,8 +61,6 @@ SynthyBoyEditor::SynthyBoyEditor (juce::AudioProcessor& owner, UiHost& h)
             break;
         }
 
-    setResizable (true, false);
-    setResizeLimits (360, 480, 1800, 1400);
     setSize (1024, 768); // tablet landscape; the layout follows the width, so any host size works
     lastPresetName = host.presetName();
     top->setPresetName (lastPresetName);
@@ -76,8 +73,14 @@ SynthyBoyEditor::SynthyBoyEditor (juce::AudioProcessor& owner, UiHost& h)
 SynthyBoyEditor::~SynthyBoyEditor()
 {
     stopTimer();
-    for (auto* param : host.parameters().processor.getParameters())
-        param->removeListener (this);
+    // a call-out that is still open is a child of this editor (OverlayHost): it must not outlive the controls it shows
+    for (int i = getNumChildComponents(); --i >= 0;)
+        if (auto* box = dynamic_cast<juce::CallOutBox*> (getChildComponent (i)))
+        {
+            box->setVisible (false);
+            box->dismiss();
+        }
+    host.parameterStore().removeListener (this);
     setLookAndFeel (nullptr);
 }
 
@@ -136,16 +139,19 @@ void SynthyBoyEditor::timerCallback()
         updateUndoRedoButtons();
     }
     assign.refresh(); // host automation can move a mod slot
-    if (auto* poly = host.parameters().getRawParameterValue ("master.polyphony"))
+    static const int polyphonyIndex = resolveKey ("master.polyphony").index;
+    if (host.parameterStore().contains (polyphonyIndex))
     {
         const int voices = host.activeVoiceCount();
-        top->setVoiceBadge (voices, juce::roundToInt (poly->load()));
+        top->setVoiceBadge (voices, juce::roundToInt (host.parameterStore().plain (polyphonyIndex)));
         tabs->setBadge (Page::glb, voices > 0 ? juce::String (voices) : juce::String());
     }
 }
 
 void SynthyBoyEditor::parameterGestureChanged (int, bool starting)
 {
+    if (replayingHistory) // the writes of undo / redo themselves are no new undo steps (they would clear the redo stack)
+        return;
     if (starting)
     {
         if (openGestures++ == 0)
@@ -171,7 +177,9 @@ void SynthyBoyEditor::performUndo()
     ParamValues target;
     if (undoHistory.undo (readLiveValues(), target))
     {
+        replayingHistory = true;
         applyValues (target);
+        replayingHistory = false;
         updateUndoRedoButtons();
         assign.refresh();
     }
@@ -182,7 +190,9 @@ void SynthyBoyEditor::performRedo()
     ParamValues target;
     if (undoHistory.redo (readLiveValues(), target))
     {
+        replayingHistory = true;
         applyValues (target);
+        replayingHistory = false;
         updateUndoRedoButtons();
         assign.refresh();
     }
@@ -225,32 +235,6 @@ void SynthyBoyEditor::setSourceBarOpen (bool open)
     if (! open)
         assign.exitAssignMode();
     resized();
-}
-
-ParamValues SynthyBoyEditor::readLiveValues() const
-{
-    auto values = ParamValues::defaults();
-    const auto* table = paramTable();
-    for (size_t i = 0; i < paramCount(); ++i)
-        if (auto* raw = host.parameters().getRawParameterValue (table[i].key))
-            values.plain[i] = raw->load();
-    return values;
-}
-
-void SynthyBoyEditor::applyValues (const ParamValues& values)
-{
-    const auto* table = paramTable();
-    for (size_t i = 0; i < paramCount(); ++i)
-        if (auto* p = host.parameters().getParameter (table[i].key))
-        {
-            const float target = p->convertTo0to1 (values.plain[i]);
-            if (std::abs (p->getValue() - target) > 1.0e-7f)
-            {
-                p->beginChangeGesture();
-                p->setValueNotifyingHost (target);
-                p->endChangeGesture();
-            }
-        }
 }
 
 void SynthyBoyEditor::toggleAb()
@@ -439,7 +423,7 @@ void SynthyBoyEditor::showMenu()
         sizes.addItem (20 + i, juce::String (juce::roundToInt (steps[i] * 100.0f)) + " %", true, std::abs (uiTheme.scale() - steps[i]) < 0.01f);
     menu.addSubMenu ("UI size", sizes);
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&top->menu),
+    menu.showMenuAsync (popupOptions (&top->menu),
                         [safe = juce::Component::SafePointer<SynthyBoyEditor> (this), steps] (int result)
                         {
                             if (safe == nullptr || result <= 0)

@@ -20,7 +20,7 @@
 #include "PluginProcessor.h"
 
 #include "synthyboy/midi_events.h"
-#include "ui/Editor.h"
+#include "EditorAdapter.h"
 
 #include <algorithm>
 #include <cmath>
@@ -548,12 +548,17 @@ double SynthyBoyProcessor::getTailLengthSeconds() const
     return release + effects;
 }
 
+bool SynthyBoyProcessor::dragFileOut (const juce::File& file, juce::Component& source)
+{
+    return juce::DragAndDropContainer::performExternalDragDropOfFiles (juce::StringArray (file.getFullPathName()), false, &source);
+}
+
 juce::AudioProcessorEditor* SynthyBoyProcessor::createEditor()
 {
     // SYNTHYBOY_GENERIC_UI=1: the generic parameter editor (one section per parameter group) stays reachable for debugging
     if (juce::SystemStats::getEnvironmentVariable ("SYNTHYBOY_GENERIC_UI", {}).trim() == "1")
         return new juce::GenericAudioProcessorEditor (*this);
-    return new synthyboy::ui::SynthyBoyEditor (*this, *this);
+    return new synthyboy::ui::SynthyBoyEditorAdapter (*this, *this);
 }
 
 synthyboy::ParamValues SynthyBoyProcessor::currentValues() const

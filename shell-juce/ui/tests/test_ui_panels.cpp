@@ -12,6 +12,7 @@
 #include "PluginProcessor.h"
 #include "synthyboy/fx_types.h"
 #include "synthyboy/params.h"
+#include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "test_runner.h"
 
@@ -85,7 +86,7 @@ juce::String describe (juce::Component& c)
 std::unique_ptr<SynthyBoyEditor, std::function<void (SynthyBoyEditor*)>> makeEditor (SynthyBoyProcessor& proc)
 {
     std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
-    auto* editor = dynamic_cast<SynthyBoyEditor*> (base.get());
+    auto* editor = innerEditor (base.get());
     if (editor == nullptr)
         return { nullptr, [] (SynthyBoyEditor*) {} };
     auto* raw = base.release();
