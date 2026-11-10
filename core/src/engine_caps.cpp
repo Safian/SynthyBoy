@@ -295,6 +295,14 @@ EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept
     if (paramIndex < kNumKeysV2 || paramIndex >= paramCount())
         return kCap2None;
     const char* key = paramTable()[paramIndex].key;
+    if (startsWith (key, "mod") && std::strlen (key) > 6 && key[5] == '.')   // modNN.rise / fall / delay* (block B31)
+    {
+        if (std::strcmp (key + 6, "rise") == 0 || std::strcmp (key + 6, "fall") == 0)
+            return kCap2ModSlew;
+        if (startsWith (key + 6, "delay"))
+            return kCap2ModDelay;
+        return kCap2None;
+    }
     if (! startsWith (key, "osc"))
         return kCap2None;
     if (std::strstr (key, ".gran.") != nullptr)
@@ -345,6 +353,8 @@ const char* capName2 (EngineCaps2Mask bit) noexcept
         case kCap2Spectral:      return "spectral";
         case kCap2SpectralWarps: return "spectral_warps";
         case kCap2Multisample:   return "multisample";
+        case kCap2ModSlew:       return "mod_slew";
+        case kCap2ModDelay:      return "mod_delay";
         case kCap2None:          break;
     }
     return "";

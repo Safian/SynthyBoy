@@ -825,6 +825,14 @@ namespace sbvital {
     };
     for (const ExtraParameter& parameter : kExtraParameters)
       add(parameter.name, parameter.min, parameter.max, parameter.def, parameter.scale);
+    // REMAINDER item 1 (13-new-keys.md 4.41): RISE / FALL (ms), DELAY (ms and beats) of every modulation slot, in the unit of the key
+    for (int slot = 1; slot <= kMaxModulationConnections; ++slot) {
+      const std::string prefix = "modulation_" + std::to_string(slot) + "_";
+      add(prefix + "rise", 0.0f, 5000.0f, 0.0f, ValueDetails::kLinear);
+      add(prefix + "fall", 0.0f, 5000.0f, 0.0f, ValueDetails::kLinear);
+      add(prefix + "delay", 0.0f, 4000.0f, 0.0f, ValueDetails::kLinear);
+      add(prefix + "delay_beats", 0.0f, 8.0f, 0.0f, ValueDetails::kLinear);
+    }
     for (int module = 0; module < 16; ++module) {
       add("fx_order_" + std::to_string(module + 1), 0.0, 15.0, static_cast<mono_float>(module), ValueDetails::kIndexed);
       add(std::string(kModuleNames[module]) + "_rack", 0.0, 9.0, 0.0, ValueDetails::kIndexed);

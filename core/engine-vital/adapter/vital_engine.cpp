@@ -266,7 +266,6 @@ struct Snapshot
     {
         bool present = false;                 // a drawn curve
         std::vector<ContentPoint> points;
-        float riseMs = 0.0f, fallMs = 0.0f;   // GROUPB WP-08: RISE / FALL of the connection
     };
     std::array<ModCurveEntry, kNumModSlots> modCurves;            // the per-slot modulation curves (content.modCurves, G2)
     bool hasVelocity = false, hasNote = false;
@@ -505,8 +504,6 @@ std::unique_ptr<Snapshot> buildSnapshot (const StateContent& content, const ICon
                 e.present = true;
                 e.points = mc.points;
             }
-            e.riseMs = mc.riseMs;
-            e.fallMs = mc.fallMs;
         }
     }
 
@@ -731,7 +728,8 @@ public:
     {
         return kCap2Granular   // GROUPC WP-11 (B28): proven by core/engine-vital/tests/test_granular_osc.cpp
              | kCap2Spectral | kCap2SpectralWarps // GROUPC WP-12 (B29): proven by core/engine-vital/tests/test_spectral_osc.cpp
-             | kCap2Multisample; // GROUPC WP-13 (B30): proven by core/engine-vital/tests/test_multisample_osc.cpp
+             | kCap2Multisample // GROUPC WP-13 (B30): proven by core/engine-vital/tests/test_multisample_osc.cpp
+             | kCap2ModSlew | kCap2ModDelay; // REMAINDER item 1 (B31): proven by core/engine-vital/tests/test_modslew.cpp
     }
 
     EngineCapsMask capabilities() const noexcept override
@@ -923,6 +921,7 @@ private:
         int sourceParam = -1, destinationParam = -1, amountParam = -1;
         bool eligible = true;          // the destination is live (an envelope time of the selected unit)
         int auxSourceParam = -1, auxInvParam = -1, auxPowerParam = -1, auxOutputParam = -1;
+        int delaySyncParam = -1;   // REMAINDER item 1: modNN.delay_sync (rise, fall, delay and delay_beats are bound controls)
         int auxPlugged = 0;            // aux source choice that is plugged into the processor
         int curveKind = 0;             // 0: linear remap, 1: velocity curve, 2: note curve
         uint32_t curveId = 0;          // snapshot the curve comes from
@@ -1305,6 +1304,7 @@ private:
             s.auxInvParam = p.auxInv;
             s.auxPowerParam = p.auxPower;
             s.auxOutputParam = p.auxOutput;
+            s.delaySyncParam = p.delaySync;
         }
 
         resolveReadout();
@@ -2466,10 +2466,8 @@ private:
         const bool glide = legatoParam >= 0 && params[static_cast<size_t> (legatoParam)].load (std::memory_order_relaxed) > 0.5f;
         const float seconds = portamentoParam >= 0 ? params[static_cast<size_t> (portamentoParam)].load (std::memory_order_relaxed) * 0.001f : 0.0f;
         slot.processor->setGlide (glide, seconds);
-        // RISE / FALL (GROUPB WP-08): the slew of the connection, 0 without a record
-        const bool slews = activeSnapshot != nullptr;
-        slot.processor->setSlew (slews ? activeSnapshot->modCurves[static_cast<size_t> (k)].riseMs * 0.001f : 0.0f,
-                                 slews ? activeSnapshot->modCurves[static_cast<size_t> (k)].fallMs * 0.001f : 0.0f);
+        // RISE / FALL / DELAY (REMAINDER item 1): the times are bound controls (modNN.rise / fall / delay / delay_beats); the delay unit is the adapter's
+        slot.processor->setDelaySync (slot.delaySyncParam >= 0 && params[static_cast<size_t> (slot.delaySyncParam)].load (std::memory_order_relaxed) > 0.5f);
     }
 
     void updateSlot (int k) noexcept

@@ -54,14 +54,14 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (2299));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7 + 448 + 6 + 4 + 2 + 62 + 9 + 93 + 42 + 30); // 30: B30 (GROUPC WP-13: oscN.multi.*, 10 per oscillator), 42: B29 (GROUPC WP-12: oscN.spec.*, 14 per oscillator), 93: B28 (GROUPC WP-11: oscN.gran.*, 31 per oscillator), 9: B27 (GROUPB WP-05: oscN.ratio_src, oscN.smooth_interp, oscN.sample.slice), 62: B26 (GROUPA2 WP-07: the voice control voicectl.*), 2: B25 (GROUPA1 WP-10: delay.offset_left, reverb.feedback), 4: B24 (GROUPA1 WP-09: master.mpe.xyz_macro, y_modwheel, bend_to_x, y_bipolar), 6: B23 (GROUPA1 WP-04: sub.phase, sub.phase_contiguous, noise.stereo, noise.filter, noise.type, noise.bounce), 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV), 448: B22 (FXINST: 16 slots x 28 keys)
+    CHECK_EQ (paramCount(), static_cast<size_t> (2619));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7 + 448 + 6 + 4 + 2 + 62 + 9 + 93 + 42 + 30 + 320); // 320: B31 (REMAINDER item 1: modNN.rise / fall / delay / delay_beats / delay_sync, 5 per slot), 30: B30 (GROUPC WP-13: oscN.multi.*, 10 per oscillator), 42: B29 (GROUPC WP-12: oscN.spec.*, 14 per oscillator), 93: B28 (GROUPC WP-11: oscN.gran.*, 31 per oscillator), 9: B27 (GROUPB WP-05: oscN.ratio_src, oscN.smooth_interp, oscN.sample.slice), 62: B26 (GROUPA2 WP-07: the voice control voicectl.*), 2: B25 (GROUPA1 WP-10: delay.offset_left, reverb.feedback), 4: B24 (GROUPA1 WP-09: master.mpe.xyz_macro, y_modwheel, bend_to_x, y_bipolar), 6: B23 (GROUPA1 WP-04: sub.phase, sub.phase_contiguous, noise.stereo, noise.filter, noise.type, noise.bounce), 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV), 448: B22 (FXINST: 16 slots x 28 keys)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (4096)); // raised for block B22 (FX instance pool)
     CHECK_EQ (kNumModSources, 57);
-    CHECK_EQ (kNumModDestinations, 987);
+    CHECK_EQ (kNumModDestinations, 1243);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (57));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (986));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (1242));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 15); // + "Saw Down" (GROUPB WP-18)
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,8 +75,8 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3 + 2 + 3 + 51 + 21 + 3)); // 3: oscN.multi.timbre of B30, 21: the 7 modulatable keys of oscN.spec.* of B29, 51: the 17 modulatable keys of oscN.gran.* of B28 // 2: delay.offset_left, reverb.feedback of B25 // 3: sub.phase, noise.stereo, noise.filter of B23
-    CHECK_EQ (newModulatable, static_cast<size_t> (184 + 384 + 3 + 2 + 3 + 51 + 21 + 3)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18 + 11 of B15 + 1 of B20 (master.stereo_routing) + the 384 pool parameters of B22
+    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256)); // 256: the modulatable rise / fall / delay / delay_beats of the 64 slots of B31, 3: oscN.multi.timbre of B30, 21: the 7 modulatable keys of oscN.spec.* of B29, 51: the 17 modulatable keys of oscN.gran.* of B28 // 2: delay.offset_left, reverb.feedback of B25 // 3: sub.phase, noise.stereo, noise.filter of B23
+    CHECK_EQ (newModulatable, static_cast<size_t> (184 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18 + 11 of B15 + 1 of B20 (master.stereo_routing) + the 384 pool parameters of B22
 }
 
 TEST (keys_ids_and_names_are_unique_and_automatable)
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (2299));
+    CHECK_EQ (ids.size(), static_cast<size_t> (2619));
 }
 
 TEST (append_positions_golden)
@@ -247,8 +247,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (58));
         CHECK_EQ (byKey (key).max, 57.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (987));
-    CHECK_EQ (byKey ("mod64.destination").max, 986.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (1243));
+    CHECK_EQ (byKey ("mod64.destination").max, 1242.0f);
 
     // MANUALCHECK: the delay mode Tap->Delay of Serum 2 (manual p.166) is appended to the four Vital styles
     {

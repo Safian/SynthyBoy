@@ -1257,8 +1257,8 @@ TEST (serum_warp_modes_from_the_noise_sub_and_filters_and_the_new_matrix_sources
         CHECK_EQ (r.values.plain[modSlotParams (static_cast<int> (i)).source], expected[i]);
 }
 
-// GROUPB (WP-08, A408): RISE / FALL of a modulation slot are the slew of its record in content.modCurves (2000 ms x (v / 100)^2; absent link = linked)
-TEST (serum_modulation_slot_rise_and_fall_become_the_slot_record)
+// GROUPB (WP-08, A408) / REMAINDER item 1 (A449): RISE / FALL of a modulation slot are the keys modNN.rise / fall (2000 ms x (v / 100)^2; absent link = linked)
+TEST (serum_modulation_slot_rise_and_fall_become_the_slot_keys)
 {
     const auto slot = [] (int source, const std::vector<std::pair<std::string, double>>& params)
     {
@@ -1275,13 +1275,42 @@ TEST (serum_modulation_slot_rise_and_fall_become_the_slot_record)
     p.set ("ModSlot4", slot (10, {}));                                                                              // no slew: no record
     const SerumImportResult r = run (p.file());
     CHECK_EQ (r.report.unaccounted, 0);
-    const auto record = [&r] (int slotNumber) -> const ContentModCurve* { for (const auto& m : r.modCurves) if (m.slot == slotNumber) return &m; return nullptr; };
-    CHECK (record (1) != nullptr && std::fabs (record (1)->riseMs - 500.0f) < 0.01f && std::fabs (record (1)->fallMs - 2000.0f) < 0.01f);
-    CHECK (record (2) != nullptr && std::fabs (record (2)->riseMs - 500.0f) < 0.01f && std::fabs (record (2)->fallMs - 500.0f) < 0.01f);
-    CHECK (record (3) != nullptr && std::fabs (record (3)->riseMs - 500.0f) < 0.01f && record (3)->fallMs == 0.0f);
-    CHECK (record (4) != nullptr && std::fabs (record (4)->riseMs - 80.0f) < 0.01f && std::fabs (record (4)->fallMs - 80.0f) < 0.01f);
-    CHECK (record (5) == nullptr);
+    const auto ms = [&r] (int slotNumber, const char* tail) { char key[24]; std::snprintf (key, sizeof key, "mod%02d.%s", slotNumber, tail); return r.values.plain[findParamIndex (findParamByKey (key)->id)]; };
+    CHECK (std::fabs (ms (1, "rise") - 500.0f) < 0.01f && std::fabs (ms (1, "fall") - 2000.0f) < 0.01f);
+    CHECK (std::fabs (ms (2, "rise") - 500.0f) < 0.01f && std::fabs (ms (2, "fall") - 500.0f) < 0.01f);
+    CHECK (std::fabs (ms (3, "rise") - 500.0f) < 0.01f && ms (3, "fall") == 0.0f);
+    CHECK (std::fabs (ms (4, "rise") - 80.0f) < 0.01f && std::fabs (ms (4, "fall") - 80.0f) < 0.01f);
+    CHECK (ms (5, "rise") == 0.0f && ms (5, "fall") == 0.0f);
+    CHECK (r.modCurves.empty());
     CHECK (entryWith (r, "modulation_slew_not_modelled") < 0);
-    for (const auto& m : r.modCurves)
-        CHECK (m.points.empty());
+}
+
+// REMAINDER item 1 (A450): the DelayOffset / DelayBeatSync of a slot, and a modulation of another slot's RISE / FALL / DELAY (ModSlot destinations, backlog S8)
+TEST (serum_slot_delay_and_modulation_of_other_slots_smooth_and_delay)
+{
+    const auto slot = [] (int source, const char* type, int id, const char* param, const std::vector<std::pair<std::string, double>>& params)
+    {
+        std::vector<std::pair<std::string, double>> all { { "kParamAmount", 30 } };
+        all.insert (all.end(), params.begin(), params.end());
+        return map ({ { "source", nums ({ static_cast<double> (source), 0 }) }, { "destModuleTypeString", text (type) }, { "destModuleID", num (id) },
+                      { "destModuleParamName", text (param) }, { "destModuleParamID", num (0) }, { "plainParams", plain (all) } });
+    };
+    Preset p;
+    p.set ("ModSlot0", slot (6, "Oscillator", 1, "kParamVolume", { { "kParamDelayOffset", 0.5 }, { "kParamDelayBeatSync", 1 } }));   // 2 beats
+    p.set ("ModSlot1", slot (7, "Oscillator", 1, "kParamVolume", { { "kParamDelayOffset", 0.25 } }));                                // 1000 ms, not synced
+    p.set ("ModSlot2", slot (8, "ModSlot", 0, "kParamSmoothRise", {}));                                                              // modulates the RISE of slot 1
+    p.set ("ModSlot3", slot (9, "ModSlot", 5, "kParamSmoothFall", {}));
+    p.set ("ModSlot4", slot (10, "ModSlot", 1, "kParamDelayOffset", {}));
+    const SerumImportResult r = run (p.file());
+    CHECK_EQ (r.report.unaccounted, 0);
+    const auto value = [&r] (const char* key) { return r.values.plain[findParamIndex (findParamByKey (key)->id)]; };
+    CHECK_NEAR (value ("mod01.delay_beats"), 2.0f, 1.0e-4f);
+    CHECK_EQ (value ("mod01.delay_sync"), 1.0f);
+    CHECK_NEAR (value ("mod02.delay"), 1000.0f, 0.01f);
+    CHECK_EQ (value ("mod02.delay_sync"), 0.0f);
+    const auto destination = [&r] (int slotNumber) { char key[24]; std::snprintf (key, sizeof key, "mod%02d.destination", slotNumber); return static_cast<size_t> (r.values.plain[findParamIndex (findParamByKey (key)->id)]); };
+    CHECK_EQ (destination (3), modDestinationChoiceOf (static_cast<size_t> (findParamIndex (findParamByKey ("mod01.rise")->id))));
+    CHECK_EQ (destination (4), modDestinationChoiceOf (static_cast<size_t> (findParamIndex (findParamByKey ("mod06.fall")->id))));
+    CHECK_EQ (destination (5), modDestinationChoiceOf (static_cast<size_t> (findParamIndex (findParamByKey ("mod02.delay_beats")->id))));
+    CHECK (entryWith (r, "modulation_delay_not_modelled") < 0 && entryWith (r, "destination_not_modelled") < 0);
 }

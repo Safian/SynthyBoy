@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2299 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2619 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -36,7 +36,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Random LFO 3 | 8 |
 | Random LFO 4 | 8 |
 | Macros | 8 |
-| Mod Matrix | 704 |
+| Mod Matrix | 1024 |
 | FX | 666 |
 | LFO 9 | 17 |
 | LFO 10 | 17 |
@@ -974,7 +974,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..986 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..1242 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -984,6 +984,11 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `modNN.aux_inv` | Mod NN Aux Invert (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_power` | Mod NN Aux Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.aux_output` | Mod NN Output Scale (NN = 01 .. 64) | 0 .. 200 % | 100 % | Mod Matrix / Slot 01 |  |  |
+| `modNN.rise` | Mod NN Rise (NN = 01 .. 64) | 0 .. 5000 ms (skew 0.300000012) | 0 ms | Mod Matrix / Slot 01 | mod |  |
+| `modNN.fall` | Mod NN Fall (NN = 01 .. 64) | 0 .. 5000 ms (skew 0.300000012) | 0 ms | Mod Matrix / Slot 01 | mod |  |
+| `modNN.delay` | Mod NN Delay (NN = 01 .. 64) | 0 .. 4000 ms (skew 0.400000006) | 0 ms | Mod Matrix / Slot 01 | mod |  |
+| `modNN.delay_beats` | Mod NN Delay (Beats) (NN = 01 .. 64) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Mod Matrix / Slot 01 | mod |  |
+| `modNN.delay_sync` | Mod NN Delay Tempo Sync (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
 
 The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed). A slot with source *None* or destination *None* does nothing. *Bipolar* centres a 0..1 source around zero, *Stereo* inverts the amount in the right channel, *Bypass* mutes the slot, *Curve* bends the source (negative = fast start, positive = slow start).
 
@@ -2915,6 +2920,262 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 984 | `osc1.multi.timbre` | Osc 1 Multisample Timbre |
 | 985 | `osc2.multi.timbre` | Osc 2 Multisample Timbre |
 | 986 | `osc3.multi.timbre` | Osc 3 Multisample Timbre |
+| 987 | `mod01.rise` | Mod 01 Rise |
+| 988 | `mod01.fall` | Mod 01 Fall |
+| 989 | `mod01.delay` | Mod 01 Delay |
+| 990 | `mod01.delay_beats` | Mod 01 Delay (Beats) |
+| 991 | `mod02.rise` | Mod 02 Rise |
+| 992 | `mod02.fall` | Mod 02 Fall |
+| 993 | `mod02.delay` | Mod 02 Delay |
+| 994 | `mod02.delay_beats` | Mod 02 Delay (Beats) |
+| 995 | `mod03.rise` | Mod 03 Rise |
+| 996 | `mod03.fall` | Mod 03 Fall |
+| 997 | `mod03.delay` | Mod 03 Delay |
+| 998 | `mod03.delay_beats` | Mod 03 Delay (Beats) |
+| 999 | `mod04.rise` | Mod 04 Rise |
+| 1000 | `mod04.fall` | Mod 04 Fall |
+| 1001 | `mod04.delay` | Mod 04 Delay |
+| 1002 | `mod04.delay_beats` | Mod 04 Delay (Beats) |
+| 1003 | `mod05.rise` | Mod 05 Rise |
+| 1004 | `mod05.fall` | Mod 05 Fall |
+| 1005 | `mod05.delay` | Mod 05 Delay |
+| 1006 | `mod05.delay_beats` | Mod 05 Delay (Beats) |
+| 1007 | `mod06.rise` | Mod 06 Rise |
+| 1008 | `mod06.fall` | Mod 06 Fall |
+| 1009 | `mod06.delay` | Mod 06 Delay |
+| 1010 | `mod06.delay_beats` | Mod 06 Delay (Beats) |
+| 1011 | `mod07.rise` | Mod 07 Rise |
+| 1012 | `mod07.fall` | Mod 07 Fall |
+| 1013 | `mod07.delay` | Mod 07 Delay |
+| 1014 | `mod07.delay_beats` | Mod 07 Delay (Beats) |
+| 1015 | `mod08.rise` | Mod 08 Rise |
+| 1016 | `mod08.fall` | Mod 08 Fall |
+| 1017 | `mod08.delay` | Mod 08 Delay |
+| 1018 | `mod08.delay_beats` | Mod 08 Delay (Beats) |
+| 1019 | `mod09.rise` | Mod 09 Rise |
+| 1020 | `mod09.fall` | Mod 09 Fall |
+| 1021 | `mod09.delay` | Mod 09 Delay |
+| 1022 | `mod09.delay_beats` | Mod 09 Delay (Beats) |
+| 1023 | `mod10.rise` | Mod 10 Rise |
+| 1024 | `mod10.fall` | Mod 10 Fall |
+| 1025 | `mod10.delay` | Mod 10 Delay |
+| 1026 | `mod10.delay_beats` | Mod 10 Delay (Beats) |
+| 1027 | `mod11.rise` | Mod 11 Rise |
+| 1028 | `mod11.fall` | Mod 11 Fall |
+| 1029 | `mod11.delay` | Mod 11 Delay |
+| 1030 | `mod11.delay_beats` | Mod 11 Delay (Beats) |
+| 1031 | `mod12.rise` | Mod 12 Rise |
+| 1032 | `mod12.fall` | Mod 12 Fall |
+| 1033 | `mod12.delay` | Mod 12 Delay |
+| 1034 | `mod12.delay_beats` | Mod 12 Delay (Beats) |
+| 1035 | `mod13.rise` | Mod 13 Rise |
+| 1036 | `mod13.fall` | Mod 13 Fall |
+| 1037 | `mod13.delay` | Mod 13 Delay |
+| 1038 | `mod13.delay_beats` | Mod 13 Delay (Beats) |
+| 1039 | `mod14.rise` | Mod 14 Rise |
+| 1040 | `mod14.fall` | Mod 14 Fall |
+| 1041 | `mod14.delay` | Mod 14 Delay |
+| 1042 | `mod14.delay_beats` | Mod 14 Delay (Beats) |
+| 1043 | `mod15.rise` | Mod 15 Rise |
+| 1044 | `mod15.fall` | Mod 15 Fall |
+| 1045 | `mod15.delay` | Mod 15 Delay |
+| 1046 | `mod15.delay_beats` | Mod 15 Delay (Beats) |
+| 1047 | `mod16.rise` | Mod 16 Rise |
+| 1048 | `mod16.fall` | Mod 16 Fall |
+| 1049 | `mod16.delay` | Mod 16 Delay |
+| 1050 | `mod16.delay_beats` | Mod 16 Delay (Beats) |
+| 1051 | `mod17.rise` | Mod 17 Rise |
+| 1052 | `mod17.fall` | Mod 17 Fall |
+| 1053 | `mod17.delay` | Mod 17 Delay |
+| 1054 | `mod17.delay_beats` | Mod 17 Delay (Beats) |
+| 1055 | `mod18.rise` | Mod 18 Rise |
+| 1056 | `mod18.fall` | Mod 18 Fall |
+| 1057 | `mod18.delay` | Mod 18 Delay |
+| 1058 | `mod18.delay_beats` | Mod 18 Delay (Beats) |
+| 1059 | `mod19.rise` | Mod 19 Rise |
+| 1060 | `mod19.fall` | Mod 19 Fall |
+| 1061 | `mod19.delay` | Mod 19 Delay |
+| 1062 | `mod19.delay_beats` | Mod 19 Delay (Beats) |
+| 1063 | `mod20.rise` | Mod 20 Rise |
+| 1064 | `mod20.fall` | Mod 20 Fall |
+| 1065 | `mod20.delay` | Mod 20 Delay |
+| 1066 | `mod20.delay_beats` | Mod 20 Delay (Beats) |
+| 1067 | `mod21.rise` | Mod 21 Rise |
+| 1068 | `mod21.fall` | Mod 21 Fall |
+| 1069 | `mod21.delay` | Mod 21 Delay |
+| 1070 | `mod21.delay_beats` | Mod 21 Delay (Beats) |
+| 1071 | `mod22.rise` | Mod 22 Rise |
+| 1072 | `mod22.fall` | Mod 22 Fall |
+| 1073 | `mod22.delay` | Mod 22 Delay |
+| 1074 | `mod22.delay_beats` | Mod 22 Delay (Beats) |
+| 1075 | `mod23.rise` | Mod 23 Rise |
+| 1076 | `mod23.fall` | Mod 23 Fall |
+| 1077 | `mod23.delay` | Mod 23 Delay |
+| 1078 | `mod23.delay_beats` | Mod 23 Delay (Beats) |
+| 1079 | `mod24.rise` | Mod 24 Rise |
+| 1080 | `mod24.fall` | Mod 24 Fall |
+| 1081 | `mod24.delay` | Mod 24 Delay |
+| 1082 | `mod24.delay_beats` | Mod 24 Delay (Beats) |
+| 1083 | `mod25.rise` | Mod 25 Rise |
+| 1084 | `mod25.fall` | Mod 25 Fall |
+| 1085 | `mod25.delay` | Mod 25 Delay |
+| 1086 | `mod25.delay_beats` | Mod 25 Delay (Beats) |
+| 1087 | `mod26.rise` | Mod 26 Rise |
+| 1088 | `mod26.fall` | Mod 26 Fall |
+| 1089 | `mod26.delay` | Mod 26 Delay |
+| 1090 | `mod26.delay_beats` | Mod 26 Delay (Beats) |
+| 1091 | `mod27.rise` | Mod 27 Rise |
+| 1092 | `mod27.fall` | Mod 27 Fall |
+| 1093 | `mod27.delay` | Mod 27 Delay |
+| 1094 | `mod27.delay_beats` | Mod 27 Delay (Beats) |
+| 1095 | `mod28.rise` | Mod 28 Rise |
+| 1096 | `mod28.fall` | Mod 28 Fall |
+| 1097 | `mod28.delay` | Mod 28 Delay |
+| 1098 | `mod28.delay_beats` | Mod 28 Delay (Beats) |
+| 1099 | `mod29.rise` | Mod 29 Rise |
+| 1100 | `mod29.fall` | Mod 29 Fall |
+| 1101 | `mod29.delay` | Mod 29 Delay |
+| 1102 | `mod29.delay_beats` | Mod 29 Delay (Beats) |
+| 1103 | `mod30.rise` | Mod 30 Rise |
+| 1104 | `mod30.fall` | Mod 30 Fall |
+| 1105 | `mod30.delay` | Mod 30 Delay |
+| 1106 | `mod30.delay_beats` | Mod 30 Delay (Beats) |
+| 1107 | `mod31.rise` | Mod 31 Rise |
+| 1108 | `mod31.fall` | Mod 31 Fall |
+| 1109 | `mod31.delay` | Mod 31 Delay |
+| 1110 | `mod31.delay_beats` | Mod 31 Delay (Beats) |
+| 1111 | `mod32.rise` | Mod 32 Rise |
+| 1112 | `mod32.fall` | Mod 32 Fall |
+| 1113 | `mod32.delay` | Mod 32 Delay |
+| 1114 | `mod32.delay_beats` | Mod 32 Delay (Beats) |
+| 1115 | `mod33.rise` | Mod 33 Rise |
+| 1116 | `mod33.fall` | Mod 33 Fall |
+| 1117 | `mod33.delay` | Mod 33 Delay |
+| 1118 | `mod33.delay_beats` | Mod 33 Delay (Beats) |
+| 1119 | `mod34.rise` | Mod 34 Rise |
+| 1120 | `mod34.fall` | Mod 34 Fall |
+| 1121 | `mod34.delay` | Mod 34 Delay |
+| 1122 | `mod34.delay_beats` | Mod 34 Delay (Beats) |
+| 1123 | `mod35.rise` | Mod 35 Rise |
+| 1124 | `mod35.fall` | Mod 35 Fall |
+| 1125 | `mod35.delay` | Mod 35 Delay |
+| 1126 | `mod35.delay_beats` | Mod 35 Delay (Beats) |
+| 1127 | `mod36.rise` | Mod 36 Rise |
+| 1128 | `mod36.fall` | Mod 36 Fall |
+| 1129 | `mod36.delay` | Mod 36 Delay |
+| 1130 | `mod36.delay_beats` | Mod 36 Delay (Beats) |
+| 1131 | `mod37.rise` | Mod 37 Rise |
+| 1132 | `mod37.fall` | Mod 37 Fall |
+| 1133 | `mod37.delay` | Mod 37 Delay |
+| 1134 | `mod37.delay_beats` | Mod 37 Delay (Beats) |
+| 1135 | `mod38.rise` | Mod 38 Rise |
+| 1136 | `mod38.fall` | Mod 38 Fall |
+| 1137 | `mod38.delay` | Mod 38 Delay |
+| 1138 | `mod38.delay_beats` | Mod 38 Delay (Beats) |
+| 1139 | `mod39.rise` | Mod 39 Rise |
+| 1140 | `mod39.fall` | Mod 39 Fall |
+| 1141 | `mod39.delay` | Mod 39 Delay |
+| 1142 | `mod39.delay_beats` | Mod 39 Delay (Beats) |
+| 1143 | `mod40.rise` | Mod 40 Rise |
+| 1144 | `mod40.fall` | Mod 40 Fall |
+| 1145 | `mod40.delay` | Mod 40 Delay |
+| 1146 | `mod40.delay_beats` | Mod 40 Delay (Beats) |
+| 1147 | `mod41.rise` | Mod 41 Rise |
+| 1148 | `mod41.fall` | Mod 41 Fall |
+| 1149 | `mod41.delay` | Mod 41 Delay |
+| 1150 | `mod41.delay_beats` | Mod 41 Delay (Beats) |
+| 1151 | `mod42.rise` | Mod 42 Rise |
+| 1152 | `mod42.fall` | Mod 42 Fall |
+| 1153 | `mod42.delay` | Mod 42 Delay |
+| 1154 | `mod42.delay_beats` | Mod 42 Delay (Beats) |
+| 1155 | `mod43.rise` | Mod 43 Rise |
+| 1156 | `mod43.fall` | Mod 43 Fall |
+| 1157 | `mod43.delay` | Mod 43 Delay |
+| 1158 | `mod43.delay_beats` | Mod 43 Delay (Beats) |
+| 1159 | `mod44.rise` | Mod 44 Rise |
+| 1160 | `mod44.fall` | Mod 44 Fall |
+| 1161 | `mod44.delay` | Mod 44 Delay |
+| 1162 | `mod44.delay_beats` | Mod 44 Delay (Beats) |
+| 1163 | `mod45.rise` | Mod 45 Rise |
+| 1164 | `mod45.fall` | Mod 45 Fall |
+| 1165 | `mod45.delay` | Mod 45 Delay |
+| 1166 | `mod45.delay_beats` | Mod 45 Delay (Beats) |
+| 1167 | `mod46.rise` | Mod 46 Rise |
+| 1168 | `mod46.fall` | Mod 46 Fall |
+| 1169 | `mod46.delay` | Mod 46 Delay |
+| 1170 | `mod46.delay_beats` | Mod 46 Delay (Beats) |
+| 1171 | `mod47.rise` | Mod 47 Rise |
+| 1172 | `mod47.fall` | Mod 47 Fall |
+| 1173 | `mod47.delay` | Mod 47 Delay |
+| 1174 | `mod47.delay_beats` | Mod 47 Delay (Beats) |
+| 1175 | `mod48.rise` | Mod 48 Rise |
+| 1176 | `mod48.fall` | Mod 48 Fall |
+| 1177 | `mod48.delay` | Mod 48 Delay |
+| 1178 | `mod48.delay_beats` | Mod 48 Delay (Beats) |
+| 1179 | `mod49.rise` | Mod 49 Rise |
+| 1180 | `mod49.fall` | Mod 49 Fall |
+| 1181 | `mod49.delay` | Mod 49 Delay |
+| 1182 | `mod49.delay_beats` | Mod 49 Delay (Beats) |
+| 1183 | `mod50.rise` | Mod 50 Rise |
+| 1184 | `mod50.fall` | Mod 50 Fall |
+| 1185 | `mod50.delay` | Mod 50 Delay |
+| 1186 | `mod50.delay_beats` | Mod 50 Delay (Beats) |
+| 1187 | `mod51.rise` | Mod 51 Rise |
+| 1188 | `mod51.fall` | Mod 51 Fall |
+| 1189 | `mod51.delay` | Mod 51 Delay |
+| 1190 | `mod51.delay_beats` | Mod 51 Delay (Beats) |
+| 1191 | `mod52.rise` | Mod 52 Rise |
+| 1192 | `mod52.fall` | Mod 52 Fall |
+| 1193 | `mod52.delay` | Mod 52 Delay |
+| 1194 | `mod52.delay_beats` | Mod 52 Delay (Beats) |
+| 1195 | `mod53.rise` | Mod 53 Rise |
+| 1196 | `mod53.fall` | Mod 53 Fall |
+| 1197 | `mod53.delay` | Mod 53 Delay |
+| 1198 | `mod53.delay_beats` | Mod 53 Delay (Beats) |
+| 1199 | `mod54.rise` | Mod 54 Rise |
+| 1200 | `mod54.fall` | Mod 54 Fall |
+| 1201 | `mod54.delay` | Mod 54 Delay |
+| 1202 | `mod54.delay_beats` | Mod 54 Delay (Beats) |
+| 1203 | `mod55.rise` | Mod 55 Rise |
+| 1204 | `mod55.fall` | Mod 55 Fall |
+| 1205 | `mod55.delay` | Mod 55 Delay |
+| 1206 | `mod55.delay_beats` | Mod 55 Delay (Beats) |
+| 1207 | `mod56.rise` | Mod 56 Rise |
+| 1208 | `mod56.fall` | Mod 56 Fall |
+| 1209 | `mod56.delay` | Mod 56 Delay |
+| 1210 | `mod56.delay_beats` | Mod 56 Delay (Beats) |
+| 1211 | `mod57.rise` | Mod 57 Rise |
+| 1212 | `mod57.fall` | Mod 57 Fall |
+| 1213 | `mod57.delay` | Mod 57 Delay |
+| 1214 | `mod57.delay_beats` | Mod 57 Delay (Beats) |
+| 1215 | `mod58.rise` | Mod 58 Rise |
+| 1216 | `mod58.fall` | Mod 58 Fall |
+| 1217 | `mod58.delay` | Mod 58 Delay |
+| 1218 | `mod58.delay_beats` | Mod 58 Delay (Beats) |
+| 1219 | `mod59.rise` | Mod 59 Rise |
+| 1220 | `mod59.fall` | Mod 59 Fall |
+| 1221 | `mod59.delay` | Mod 59 Delay |
+| 1222 | `mod59.delay_beats` | Mod 59 Delay (Beats) |
+| 1223 | `mod60.rise` | Mod 60 Rise |
+| 1224 | `mod60.fall` | Mod 60 Fall |
+| 1225 | `mod60.delay` | Mod 60 Delay |
+| 1226 | `mod60.delay_beats` | Mod 60 Delay (Beats) |
+| 1227 | `mod61.rise` | Mod 61 Rise |
+| 1228 | `mod61.fall` | Mod 61 Fall |
+| 1229 | `mod61.delay` | Mod 61 Delay |
+| 1230 | `mod61.delay_beats` | Mod 61 Delay (Beats) |
+| 1231 | `mod62.rise` | Mod 62 Rise |
+| 1232 | `mod62.fall` | Mod 62 Fall |
+| 1233 | `mod62.delay` | Mod 62 Delay |
+| 1234 | `mod62.delay_beats` | Mod 62 Delay (Beats) |
+| 1235 | `mod63.rise` | Mod 63 Rise |
+| 1236 | `mod63.fall` | Mod 63 Fall |
+| 1237 | `mod63.delay` | Mod 63 Delay |
+| 1238 | `mod63.delay_beats` | Mod 63 Delay (Beats) |
+| 1239 | `mod64.rise` | Mod 64 Rise |
+| 1240 | `mod64.fall` | Mod 64 Fall |
+| 1241 | `mod64.delay` | Mod 64 Delay |
+| 1242 | `mod64.delay_beats` | Mod 64 Delay (Beats) |
 
 ## Built-in wavetables and LFO shapes
 

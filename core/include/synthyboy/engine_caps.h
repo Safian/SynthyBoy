@@ -111,9 +111,12 @@ enum EngineCaps2 : EngineCaps2Mask
     kCap2Spectral        = 1ull << 1, // WP-12 (B29): oscN.type = Spectral, oscN.spec.*
     kCap2SpectralWarps   = 1ull << 2, // WP-12: the spectral warp modes 76 .. 96 of the shared warp list
     kCap2Multisample     = 1ull << 3, // WP-13 (B30): oscN.type = Multisample, oscN.multi.*, content.instruments
+    // block B31 (REMAINDER, 13-new-keys.md 4.41): the per slot RISE / FALL / DELAY of the modulation matrix
+    kCap2ModSlew         = 1ull << 4, // REMAINDER item 1: modNN.rise, modNN.fall (a slew limiter on the source of the slot, modulatable)
+    kCap2ModDelay        = 1ull << 5, // REMAINDER item 1: modNN.delay, modNN.delay_beats, modNN.delay_sync (the connection starts after the delay)
 };
 
-constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample;
+constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay;
 
 /** The bits of the second word a key of the table needs (0 for every key that predates it). Total, no allocation. */
 EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept;

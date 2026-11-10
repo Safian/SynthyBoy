@@ -193,6 +193,13 @@ namespace sbvital {
       Output* modulation_power = createPolyModControl("modulation_" + number + "_power");
       processor->plug(modulation_power, ModulationConnectionProcessor::kModulationPower);
 
+      // REMAINDER item 1 (13-new-keys.md 4.41): RISE / FALL / DELAY of the slot, controls in the unit of the key (ms, beats) that other slots may modulate
+      processor->plug(createPolyModControl("modulation_" + number + "_rise"), ModulationConnectionProcessor::kRise);
+      processor->plug(createPolyModControl("modulation_" + number + "_fall"), ModulationConnectionProcessor::kFall);
+      processor->plug(createPolyModControl("modulation_" + number + "_delay"), ModulationConnectionProcessor::kDelay);
+      processor->plug(createPolyModControl("modulation_" + number + "_delay_beats"), ModulationConnectionProcessor::kDelayBeats);
+      processor->plug(beats_per_second_, ModulationConnectionProcessor::kBeatsPerSecond);
+
       addProcessor(processor);
       addSubmodule(processor);
       processor->enable(false);

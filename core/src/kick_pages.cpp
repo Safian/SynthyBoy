@@ -277,7 +277,67 @@ constexpr const char* s_more_mod_matrix[] = {
     "mod59.aux_source", "mod59.aux_inv", "mod59.aux_power", "mod59.aux_output", "mod60.aux_source", "mod60.aux_inv",
     "mod60.aux_power", "mod60.aux_output", "mod61.aux_source", "mod61.aux_inv", "mod61.aux_power", "mod61.aux_output",
     "mod62.aux_source", "mod62.aux_inv", "mod62.aux_power", "mod62.aux_output", "mod63.aux_source", "mod63.aux_inv",
-    "mod63.aux_power", "mod63.aux_output", "mod64.aux_source", "mod64.aux_inv", "mod64.aux_power", "mod64.aux_output"
+    "mod63.aux_power", "mod63.aux_output", "mod64.aux_source", "mod64.aux_inv", "mod64.aux_power", "mod64.aux_output",
+    "mod05.rise", "mod05.fall", "mod05.delay", "mod05.delay_beats", "mod05.delay_sync", // B31
+    "mod06.rise", "mod06.fall", "mod06.delay", "mod06.delay_beats", "mod06.delay_sync", // B31
+    "mod07.rise", "mod07.fall", "mod07.delay", "mod07.delay_beats", "mod07.delay_sync", // B31
+    "mod08.rise", "mod08.fall", "mod08.delay", "mod08.delay_beats", "mod08.delay_sync", // B31
+    "mod09.rise", "mod09.fall", "mod09.delay", "mod09.delay_beats", "mod09.delay_sync", // B31
+    "mod10.rise", "mod10.fall", "mod10.delay", "mod10.delay_beats", "mod10.delay_sync", // B31
+    "mod11.rise", "mod11.fall", "mod11.delay", "mod11.delay_beats", "mod11.delay_sync", // B31
+    "mod12.rise", "mod12.fall", "mod12.delay", "mod12.delay_beats", "mod12.delay_sync", // B31
+    "mod13.rise", "mod13.fall", "mod13.delay", "mod13.delay_beats", "mod13.delay_sync", // B31
+    "mod14.rise", "mod14.fall", "mod14.delay", "mod14.delay_beats", "mod14.delay_sync", // B31
+    "mod15.rise", "mod15.fall", "mod15.delay", "mod15.delay_beats", "mod15.delay_sync", // B31
+    "mod16.rise", "mod16.fall", "mod16.delay", "mod16.delay_beats", "mod16.delay_sync", // B31
+    "mod17.rise", "mod17.fall", "mod17.delay", "mod17.delay_beats", "mod17.delay_sync", // B31
+    "mod18.rise", "mod18.fall", "mod18.delay", "mod18.delay_beats", "mod18.delay_sync", // B31
+    "mod19.rise", "mod19.fall", "mod19.delay", "mod19.delay_beats", "mod19.delay_sync", // B31
+    "mod20.rise", "mod20.fall", "mod20.delay", "mod20.delay_beats", "mod20.delay_sync", // B31
+    "mod21.rise", "mod21.fall", "mod21.delay", "mod21.delay_beats", "mod21.delay_sync", // B31
+    "mod22.rise", "mod22.fall", "mod22.delay", "mod22.delay_beats", "mod22.delay_sync", // B31
+    "mod23.rise", "mod23.fall", "mod23.delay", "mod23.delay_beats", "mod23.delay_sync", // B31
+    "mod24.rise", "mod24.fall", "mod24.delay", "mod24.delay_beats", "mod24.delay_sync", // B31
+    "mod25.rise", "mod25.fall", "mod25.delay", "mod25.delay_beats", "mod25.delay_sync", // B31
+    "mod26.rise", "mod26.fall", "mod26.delay", "mod26.delay_beats", "mod26.delay_sync", // B31
+    "mod27.rise", "mod27.fall", "mod27.delay", "mod27.delay_beats", "mod27.delay_sync", // B31
+    "mod28.rise", "mod28.fall", "mod28.delay", "mod28.delay_beats", "mod28.delay_sync", // B31
+    "mod29.rise", "mod29.fall", "mod29.delay", "mod29.delay_beats", "mod29.delay_sync", // B31
+    "mod30.rise", "mod30.fall", "mod30.delay", "mod30.delay_beats", "mod30.delay_sync", // B31
+    "mod31.rise", "mod31.fall", "mod31.delay", "mod31.delay_beats", "mod31.delay_sync", // B31
+    "mod32.rise", "mod32.fall", "mod32.delay", "mod32.delay_beats", "mod32.delay_sync", // B31
+    "mod33.rise", "mod33.fall", "mod33.delay", "mod33.delay_beats", "mod33.delay_sync", // B31
+    "mod34.rise", "mod34.fall", "mod34.delay", "mod34.delay_beats", "mod34.delay_sync", // B31
+    "mod35.rise", "mod35.fall", "mod35.delay", "mod35.delay_beats", "mod35.delay_sync", // B31
+    "mod36.rise", "mod36.fall", "mod36.delay", "mod36.delay_beats", "mod36.delay_sync", // B31
+    "mod37.rise", "mod37.fall", "mod37.delay", "mod37.delay_beats", "mod37.delay_sync", // B31
+    "mod38.rise", "mod38.fall", "mod38.delay", "mod38.delay_beats", "mod38.delay_sync", // B31
+    "mod39.rise", "mod39.fall", "mod39.delay", "mod39.delay_beats", "mod39.delay_sync", // B31
+    "mod40.rise", "mod40.fall", "mod40.delay", "mod40.delay_beats", "mod40.delay_sync", // B31
+    "mod41.rise", "mod41.fall", "mod41.delay", "mod41.delay_beats", "mod41.delay_sync", // B31
+    "mod42.rise", "mod42.fall", "mod42.delay", "mod42.delay_beats", "mod42.delay_sync", // B31
+    "mod43.rise", "mod43.fall", "mod43.delay", "mod43.delay_beats", "mod43.delay_sync", // B31
+    "mod44.rise", "mod44.fall", "mod44.delay", "mod44.delay_beats", "mod44.delay_sync", // B31
+    "mod45.rise", "mod45.fall", "mod45.delay", "mod45.delay_beats", "mod45.delay_sync", // B31
+    "mod46.rise", "mod46.fall", "mod46.delay", "mod46.delay_beats", "mod46.delay_sync", // B31
+    "mod47.rise", "mod47.fall", "mod47.delay", "mod47.delay_beats", "mod47.delay_sync", // B31
+    "mod48.rise", "mod48.fall", "mod48.delay", "mod48.delay_beats", "mod48.delay_sync", // B31
+    "mod49.rise", "mod49.fall", "mod49.delay", "mod49.delay_beats", "mod49.delay_sync", // B31
+    "mod50.rise", "mod50.fall", "mod50.delay", "mod50.delay_beats", "mod50.delay_sync", // B31
+    "mod51.rise", "mod51.fall", "mod51.delay", "mod51.delay_beats", "mod51.delay_sync", // B31
+    "mod52.rise", "mod52.fall", "mod52.delay", "mod52.delay_beats", "mod52.delay_sync", // B31
+    "mod53.rise", "mod53.fall", "mod53.delay", "mod53.delay_beats", "mod53.delay_sync", // B31
+    "mod54.rise", "mod54.fall", "mod54.delay", "mod54.delay_beats", "mod54.delay_sync", // B31
+    "mod55.rise", "mod55.fall", "mod55.delay", "mod55.delay_beats", "mod55.delay_sync", // B31
+    "mod56.rise", "mod56.fall", "mod56.delay", "mod56.delay_beats", "mod56.delay_sync", // B31
+    "mod57.rise", "mod57.fall", "mod57.delay", "mod57.delay_beats", "mod57.delay_sync", // B31
+    "mod58.rise", "mod58.fall", "mod58.delay", "mod58.delay_beats", "mod58.delay_sync", // B31
+    "mod59.rise", "mod59.fall", "mod59.delay", "mod59.delay_beats", "mod59.delay_sync", // B31
+    "mod60.rise", "mod60.fall", "mod60.delay", "mod60.delay_beats", "mod60.delay_sync", // B31
+    "mod61.rise", "mod61.fall", "mod61.delay", "mod61.delay_beats", "mod61.delay_sync", // B31
+    "mod62.rise", "mod62.fall", "mod62.delay", "mod62.delay_beats", "mod62.delay_sync", // B31
+    "mod63.rise", "mod63.fall", "mod63.delay", "mod63.delay_beats", "mod63.delay_sync", // B31
+    "mod64.rise", "mod64.fall", "mod64.delay", "mod64.delay_beats", "mod64.delay_sync", // B31
 };
 
 // Block B22 (13-new-keys.md 4.23): one page per slot of the effect instance pool. The generic names are all Kick sees (the pages are static);
@@ -417,7 +477,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 60: Mod Amounts 1–8 (Matrix)
     { "mod_amounts_1_8", "Mod Amounts 1–8", "Matrix", { "mod01.amount", "mod02.amount", "mod03.amount", "mod04.amount", "mod05.amount", "mod06.amount", "mod07.amount", "mod08.amount" }, 8, nullptr, 0 },
     // Page 61: Mod Amounts 9–16 (Matrix)
-    { "mod_amounts_9_16", "Mod Amounts 9–16", "Matrix", { "mod09.amount", "mod10.amount", "mod11.amount", "mod12.amount", "mod13.amount", "mod14.amount", "mod15.amount", "mod16.amount" }, 8, s_more_mod_matrix, 648 },
+    { "mod_amounts_9_16", "Mod Amounts 9–16", "Matrix", { "mod09.amount", "mod10.amount", "mod11.amount", "mod12.amount", "mod13.amount", "mod14.amount", "mod15.amount", "mod16.amount" }, 8, s_more_mod_matrix, 948 },
     // Page 62: Macros 5–8 (Perf)
     { "macros_2", "Macros 5–8", "Perf", { "macro.5", "macro.6", "macro.7", "macro.8", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     // Page 63: LFO 9 (LFO)
@@ -563,7 +623,12 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Multisample, block B30 (GROUPC WP-13; 13-new-keys.md 4.39): pages 153 - 155
     { "osc1_multi_1", "Osc 1 Multisample", "Osc", { "osc1.multi.override", "osc1.multi.delay", "osc1.multi.attack", "osc1.multi.hold", "osc1.multi.decay", "osc1.multi.sustain", "osc1.multi.release", "osc1.multi.vel_track" }, 8, s_more_osc1_multi_1, 2 },
     { "osc2_multi_1", "Osc 2 Multisample", "Osc", { "osc2.multi.override", "osc2.multi.delay", "osc2.multi.attack", "osc2.multi.hold", "osc2.multi.decay", "osc2.multi.sustain", "osc2.multi.release", "osc2.multi.vel_track" }, 8, s_more_osc2_multi_1, 2 },
-    { "osc3_multi_1", "Osc 3 Multisample", "Osc", { "osc3.multi.override", "osc3.multi.delay", "osc3.multi.attack", "osc3.multi.hold", "osc3.multi.decay", "osc3.multi.sustain", "osc3.multi.release", "osc3.multi.vel_track" }, 8, s_more_osc3_multi_1, 2 }
+    { "osc3_multi_1", "Osc 3 Multisample", "Osc", { "osc3.multi.override", "osc3.multi.delay", "osc3.multi.attack", "osc3.multi.hold", "osc3.multi.decay", "osc3.multi.sustain", "osc3.multi.release", "osc3.multi.vel_track" }, 8, s_more_osc3_multi_1, 2 },
+    // Rise / Fall / Delay of the modulation slots, block B31 (REMAINDER item 1; 13-new-keys.md 4.41): slots 5 - 64 in the more keys of the Mod Amounts page
+    { "mod_slot_1_slew", "Mod Matrix Slot 1 Rise / Fall / Delay", "Matrix", { "mod01.rise", "mod01.fall", "mod01.delay", "mod01.delay_beats", "mod01.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "mod_slot_2_slew", "Mod Matrix Slot 2 Rise / Fall / Delay", "Matrix", { "mod02.rise", "mod02.fall", "mod02.delay", "mod02.delay_beats", "mod02.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "mod_slot_3_slew", "Mod Matrix Slot 3 Rise / Fall / Delay", "Matrix", { "mod03.rise", "mod03.fall", "mod03.delay", "mod03.delay_beats", "mod03.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    { "mod_slot_4_slew", "Mod Matrix Slot 4 Rise / Fall / Delay", "Matrix", { "mod04.rise", "mod04.fall", "mod04.delay", "mod04.delay_beats", "mod04.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

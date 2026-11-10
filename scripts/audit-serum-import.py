@@ -688,33 +688,52 @@ class Audit:
     RATIO_SOURCE = {0: 1, 1: 2, 2: 3, 3: 0, 4: 4}
 
     def audit_mod_slew(self, name, tree, sb):
-        """GROUPB (WP-08, A408): a connected slot's kParamSmoothRise / Fall (0 .. 100) are content.mod_curves[slot].rise / fall in ms = 2000 x (v / 100)^2, a missing one follows the
-        other while kParamSmoothLink (absent: on) is on. A slot that was not connected has no record."""
+        """GROUPB (WP-08, A408) / REMAINDER item 1 (A449, A450): a connected slot's kParamSmoothRise / Fall (0 .. 100) are the keys modNN.rise / fall in ms = 2000 x (v / 100)^2, a
+        missing one follows the other while kParamSmoothLink (absent: on) is on; kParamDelayOffset (0 .. 1) is modNN.delay_beats = 4 v with modNN.delay_sync on when kParamDelayBeatSync,
+        otherwise modNN.delay = 4000 v ms. A slot that was not connected has all of them at their defaults, and no record of content.mod_curves carries a time."""
         params = sb['state']['params']
-        records = {m['slot']: m for m in sb['state'].get('content', {}).get('mod_curves', [])}
+        for m in sb['state'].get('content', {}).get('mod_curves', []):
+            if m.get('rise') or m.get('fall'):
+                self.err(name, 'mod%02d: the old rise / fall fields of content.mod_curves were written' % m.get('slot', 0))
         for k in range(64):
             slot = tree.get('ModSlot%d' % k)
             pp = slot.get('plainParams') if isinstance(slot, dict) and isinstance(slot.get('plainParams'), dict) else {}
             rise, fall, link = pp.get('kParamSmoothRise'), pp.get('kParamSmoothFall'), pp.get('kParamSmoothLink')
+            delay, sync = pp.get('kParamDelayOffset'), pp.get('kParamDelayBeatSync')
             connected = params.get('mod%02d.destination' % (k + 1), 0) != 0 and params.get('mod%02d.source' % (k + 1), 0) != 0
-            rec = records.get(k + 1)
-            if not connected or not isinstance(slot, dict) or (rise is None and fall is None):
-                if rec is not None and (rec.get('rise', 0) or rec.get('fall', 0)) and not (connected and rec.get('points')):
-                    if not (rise is None and fall is None):
-                        self.err(name, 'mod%02d: slew record for a slot that is not connected' % (k + 1))
+            key = lambda tail: 'mod%02d.%s' % (k + 1, tail)
+            got = lambda tail: params.get(key(tail), T.by_key[key(tail)]['default'])
+            if not connected or not isinstance(slot, dict):
+                for tail in ('rise', 'fall', 'delay', 'delay_beats', 'delay_sync'):
+                    if abs(got(tail)) > 0:
+                        self.err(name, 'mod%02d: %s set for a slot that is not connected' % (k + 1, tail))
                 continue
-            linked = True if link is None else link >= 0.5
-            r = rise if rise is not None else 0.0
-            f = fall if fall is not None else 0.0
-            if linked and rise is not None and fall is None:
-                f = r
-            if linked and fall is not None and rise is None:
-                r = f
-            want = tuple(min(5000.0, 2000.0 * (max(0.0, min(100.0, v)) / 100.0) ** 2) for v in (r, f))
-            got = (rec.get('rise', 0.0), rec.get('fall', 0.0)) if rec is not None else (0.0, 0.0)
-            self.stats['slew records'] += 1
-            if abs(got[0] - want[0]) > 1e-3 * max(1.0, want[0]) or abs(got[1] - want[1]) > 1e-3 * max(1.0, want[1]):
-                self.err(name, 'mod%02d: RISE / FALL expected %.4g / %.4g ms, got %.4g / %.4g' % (k + 1, want[0], want[1], got[0], got[1]))
+            if rise is not None or fall is not None:
+                linked = True if link is None else link >= 0.5
+                r = rise if rise is not None else 0.0
+                f = fall if fall is not None else 0.0
+                if linked and rise is not None and fall is None:
+                    f = r
+                if linked and fall is not None and rise is None:
+                    r = f
+                want = tuple(min(5000.0, 2000.0 * (max(0.0, min(100.0, v)) / 100.0) ** 2) for v in (r, f))
+                have = (got('rise'), got('fall'))
+                self.stats['slew keys'] += 1
+                if abs(have[0] - want[0]) > 1e-3 * max(1.0, want[0]) or abs(have[1] - want[1]) > 1e-3 * max(1.0, want[1]):
+                    self.err(name, 'mod%02d: RISE / FALL expected %.4g / %.4g ms, got %.4g / %.4g' % (k + 1, want[0], want[1], have[0], have[1]))
+            elif abs(got('rise')) > 0 or abs(got('fall')) > 0:
+                self.err(name, 'mod%02d: RISE / FALL set without a Serum value' % (k + 1))
+            if delay is not None:
+                v = max(0.0, min(1.0, delay))
+                synced = sync is not None and sync >= 0.5
+                self.stats['slot delays'] += 1
+                if synced:
+                    if abs(got('delay_beats') - 4.0 * v) > 1e-3 or got('delay_sync') != 1.0 or got('delay') != 0.0:
+                        self.err(name, 'mod%02d: DELAY expected %.4g beats synced, got %.4g beats (sync %s, %.4g ms)' % (k + 1, 4.0 * v, got('delay_beats'), got('delay_sync'), got('delay')))
+                elif abs(got('delay') - 4000.0 * v) > 1e-2 or got('delay_sync') != 0.0 or got('delay_beats') != 0.0:
+                    self.err(name, 'mod%02d: DELAY expected %.4g ms, got %.4g ms (sync %s)' % (k + 1, 4000.0 * v, got('delay'), got('delay_sync')))
+            elif abs(got('delay')) > 0 or abs(got('delay_beats')) > 0 or got('delay_sync') != 0:
+                self.err(name, 'mod%02d: DELAY set without a Serum value' % (k + 1))
 
     def audit_osc_extras(self, name, tree, sb):
         """GROUPB (WP-05, A398 / A399): kParamPitchSource (0 .. 2 = Osc A .. C, 3 = Noise, 4 = Sub) is osc#.ratio_src when the pitch mode is Ratio (an oscillator that names
@@ -1133,6 +1152,30 @@ def main():
                 if not found:
                     mutation_ok = False
             break
+        # REMAINDER item 1: the RISE / FALL and DELAY keys of a slot are found as well (a connected slot with kParamSmoothRise / kParamDelayOffset)
+        for what, param, tail in (('RISE', 'kParamSmoothRise', 'rise'), ('DELAY', 'kParamDelayOffset', 'delay_beats')):
+            done = False
+            for rel, src, rep, sb in pairs:
+                _h, tree = load_serum(src)
+                preset = json.load(open(sb))
+                for k in range(64):
+                    slot = tree.get('ModSlot%d' % k)
+                    pp = slot.get('plainParams') if isinstance(slot, dict) and isinstance(slot.get('plainParams'), dict) else {}
+                    key = 'mod%02d.%s' % (k + 1, 'delay' if param == 'kParamDelayOffset' and not pp.get('kParamDelayBeatSync') else tail)
+                    if param in pp and preset['state']['params'].get('mod%02d.destination' % (k + 1), 0) != 0:
+                        report = json.load(open(rep))
+                        bad = json.loads(json.dumps({'state': preset['state']}))
+                        bad['state']['params'][key] = bad['state']['params'].get(key, 0.0) + 1.5
+                        t = Audit(False)
+                        t.audit_file(rel, src, report, bad, content_dir)
+                        found = any(('mod%02d:' % (k + 1)) in e for e in t.errors)
+                        print('selftest: mutation of %-22s %s' % (key, 'found' if found else 'NOT FOUND'))
+                        if not found:
+                            mutation_ok = False
+                        done = True
+                        break
+                if done:
+                    break
     print('audited %d files; %s' % (audit.stats['files'], ', '.join('%s %d' % (k, v) for k, v in sorted(audit.stats.items()) if k != 'files')))
     for e in audit.errors[:60]:
         print('ERROR', e)

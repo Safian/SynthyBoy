@@ -364,6 +364,15 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("env" #N ".release_beats", "Env " #N " Release (Beats)", "Envelope " #N " / Beat Units", 0.0f, 16.0f, 0.5f, Unit::beats, kMod, 3,    \
           0.3f)
 
+// B31 (REMAINDER item 1, 13-new-keys.md 4.41): per slot of the modulation matrix the RISE / FALL slew limiter on the source (Serum 2 manual p.211) and the DELAY before
+// the connection acts (the DelayOffset / DelayBeatSync of the Serum slots). All modulatable, like the other time controls.
+#define SB_SLOT_SLEW(S)                                                                                                                          \
+    cont ("mod" #S ".rise", "Mod " #S " Rise", "Mod Matrix / Slot " #S, 0.0f, 5000.0f, 0.0f, Unit::ms, kMod, 1, 0.3f),                           \
+    cont ("mod" #S ".fall", "Mod " #S " Fall", "Mod Matrix / Slot " #S, 0.0f, 5000.0f, 0.0f, Unit::ms, kMod, 1, 0.3f),                           \
+    cont ("mod" #S ".delay", "Mod " #S " Delay", "Mod Matrix / Slot " #S, 0.0f, 4000.0f, 0.0f, Unit::ms, kMod, 1, 0.4f),                        \
+    cont ("mod" #S ".delay_beats", "Mod " #S " Delay (Beats)", "Mod Matrix / Slot " #S, 0.0f, 8.0f, 0.0f, Unit::beats, kMod, 3, 0.4f),           \
+    onOff ("mod" #S ".delay_sync", "Mod " #S " Delay Tempo Sync", "Mod Matrix / Slot " #S, false)
+
 #define SB_SLOT_AUX(S)                                                                                                                           \
     modSource ("mod" #S ".aux_source", "Mod " #S " Aux Source", "Mod Matrix / Slot " #S),                                                        \
     onOff ("mod" #S ".aux_inv", "Mod " #S " Aux Invert", "Mod Matrix / Slot " #S, false),                                                        \
@@ -971,11 +980,20 @@ constexpr ParamInfo kRaw[] = {
     SB_OSC_SPEC (1), SB_OSC_SPEC (2), SB_OSC_SPEC (3),
     // --- B30: GROUPC WP-13: the multisample oscillator (13-new-keys.md 4.39, positions 2269..2298) -------------------------------------------
     SB_OSC_MULTI (1), SB_OSC_MULTI (2), SB_OSC_MULTI (3),
+    // --- B31: REMAINDER item 1: RISE / FALL / DELAY of every modulation slot (13-new-keys.md 4.41, positions 2299..2618) ---------------------------------
+    SB_SLOT_SLEW (01), SB_SLOT_SLEW (02), SB_SLOT_SLEW (03), SB_SLOT_SLEW (04), SB_SLOT_SLEW (05), SB_SLOT_SLEW (06), SB_SLOT_SLEW (07), SB_SLOT_SLEW (08),
+    SB_SLOT_SLEW (09), SB_SLOT_SLEW (10), SB_SLOT_SLEW (11), SB_SLOT_SLEW (12), SB_SLOT_SLEW (13), SB_SLOT_SLEW (14), SB_SLOT_SLEW (15), SB_SLOT_SLEW (16),
+    SB_SLOT_SLEW (17), SB_SLOT_SLEW (18), SB_SLOT_SLEW (19), SB_SLOT_SLEW (20), SB_SLOT_SLEW (21), SB_SLOT_SLEW (22), SB_SLOT_SLEW (23), SB_SLOT_SLEW (24),
+    SB_SLOT_SLEW (25), SB_SLOT_SLEW (26), SB_SLOT_SLEW (27), SB_SLOT_SLEW (28), SB_SLOT_SLEW (29), SB_SLOT_SLEW (30), SB_SLOT_SLEW (31), SB_SLOT_SLEW (32),
+    SB_SLOT_SLEW (33), SB_SLOT_SLEW (34), SB_SLOT_SLEW (35), SB_SLOT_SLEW (36), SB_SLOT_SLEW (37), SB_SLOT_SLEW (38), SB_SLOT_SLEW (39), SB_SLOT_SLEW (40),
+    SB_SLOT_SLEW (41), SB_SLOT_SLEW (42), SB_SLOT_SLEW (43), SB_SLOT_SLEW (44), SB_SLOT_SLEW (45), SB_SLOT_SLEW (46), SB_SLOT_SLEW (47), SB_SLOT_SLEW (48),
+    SB_SLOT_SLEW (49), SB_SLOT_SLEW (50), SB_SLOT_SLEW (51), SB_SLOT_SLEW (52), SB_SLOT_SLEW (53), SB_SLOT_SLEW (54), SB_SLOT_SLEW (55), SB_SLOT_SLEW (56),
+    SB_SLOT_SLEW (57), SB_SLOT_SLEW (58), SB_SLOT_SLEW (59), SB_SLOT_SLEW (60), SB_SLOT_SLEW (61), SB_SLOT_SLEW (62), SB_SLOT_SLEW (63), SB_SLOT_SLEW (64),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2299, "880 keys of state version 2 plus the 1342 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30)");
+static_assert (kCount == 2619, "880 keys of state version 2 plus the 1662 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31)");
 
 struct Table
 {
@@ -1005,7 +1023,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }
