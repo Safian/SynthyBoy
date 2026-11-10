@@ -110,6 +110,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tools/preset-render)
     add_subdirectory(tools/vital-import)
     add_subdirectory(tools/serum-import)
+    add_subdirectory(tools/contentpack)
+    add_subdirectory(scripts/tests)
 endif()
 
 if(NOT SYNTHYBOY_BUILD_PLUGIN)

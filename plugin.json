@@ -4,6 +4,8 @@
   "name": "SynthyBoy",
   "version": "0.1.0",
   "kind": "instrument",
+  "author": "Safian Szabolcs",
+  "description": "Wavetable synthesizer (CLAP and VST3) with an engine derived from Vital.",
   "license": "AGPL-3.0-or-later",
   "homepage": "https://github.com/Safian/SynthyBoy",
   "clap_id": "com.safian.synthyboy",
@@ -23,12 +25,16 @@
     {
       "id": "com.safian.synthyboy.factory-presets",
       "name": "Factory Presets",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "kind": "presets",
       "license": "CC0-1.0",
       "required": false,
       "recommended": true,
-      "path": "content/presets"
+      "path": "content/presets",
+      "status": "unbuilt",
+      "url": "",
+      "sha256": "",
+      "size": 0
     }
   ]
 }

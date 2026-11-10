@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SynthyBoy plugin manifest (plugin.json)",
-  "description": "Describes the plugin for the host-side PluginManifest, see docs/ARCHITECTURE.md section 7. builds[*].url/sha256/size are filled in by the release job; entries that are not built yet have status 'unbuilt' and empty placeholders.",
+  "description": "Describes the plugin for the host-side PluginManifest, see docs/ARCHITECTURE.md section 7. builds[*] and contentPacks[*] url/sha256/size are filled in by the release job (scripts/fill-manifest.py, docs/RELEASE.md); entries that are not built yet have status 'unbuilt' and empty placeholders. The optional author, description, assets, key_id and signature are the fields the Kick plugin manager reads besides the ones above.",
   "type": "object",
   "required": ["schemaVersion", "id", "name", "version", "kind", "license", "clap_id", "builds", "static", "contentPacks"],
   "additionalProperties": false,
@@ -14,6 +14,8 @@
     "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]+$" },
     "homepage": { "type": "string", "pattern": "^https://" },
     "min_host_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "author": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
     "clap_id": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$" },
     "builds": {
       "type": "object",
@@ -37,8 +39,10 @@
         "android": { "$ref": "#/$defs/staticBuild" }
       }
     },
-    "contentPacks": { "type": "array", "items": { "type": "object", "required": ["id"] } },
-    "signature": { "type": "object" }
+    "contentPacks": { "type": "array", "items": { "$ref": "#/$defs/contentPack" } },
+    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+    "key_id": { "type": "string", "minLength": 1 },
+    "signature": { "type": "string", "pattern": "^([0-9a-f]{128})?$" }
   },
   "$defs": {
     "build": {
@@ -49,7 +53,43 @@
         "status": { "type": "string", "enum": ["unbuilt", "released"] },
         "url": { "type": "string" },
         "sha256": { "type": "string", "pattern": "^([0-9a-f]{64})?$" },
+        "size": { "type": "integer", "minimum": 0 },
+        "entry_point": { "type": "string", "minLength": 1 }
+      }
+    },
+    "contentPack": {
+      "type": "object",
+      "required": ["id", "name", "version", "kind", "license", "required", "recommended", "path", "status", "url", "sha256", "size"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "kind": { "type": "string", "enum": ["presets", "wavetables", "samples"] },
+        "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]+$" },
+        "required": { "type": "boolean" },
+        "recommended": { "type": "boolean" },
+        "path": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["unbuilt", "released"] },
+        "url": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^([0-9a-f]{64})?$" },
         "size": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "required": ["id", "name", "version", "url", "sha256", "size", "required", "type", "license"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "url": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "required": { "type": "boolean" },
+        "type": { "type": "string", "enum": ["presets", "wavetables", "samples"] },
+        "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]+$" }
       }
     },
     "staticBuild": {
