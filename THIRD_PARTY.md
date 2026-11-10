@@ -12,6 +12,10 @@ the source files listed in the second table, which are copied into this reposito
 | clap-helpers (`clap-libs/clap-helpers`, submodule) | `a61bcdf0ecc2c8db1e80bfe8bf9cb7e8d9fd2bbc` | MIT | https://github.com/free-audio/clap-helpers |
 | Steinberg VST3 SDK (bundled inside JUCE) | 3.8.0 | MIT | https://github.com/steinbergmedia/vst3sdk |
 
+One patch is applied to a fetched component: `third_party/patches/clap-juce-extensions-extension-hook.patch` (MIT, the licence of the patched files) gives the wrapper of clap-juce-extensions a hook for a CLAP
+extension of the plug-in (`clap_juce_audio_processor_capabilities::clapPluginExtension`, called by the wrapper's `extension ()`), so that the JUCE-wrapped CLAP build offers `synthyboy.content` like the native shell. The
+top-level `CMakeLists.txt` applies it with `patch -p1` to a copy of the fetched sources in the build directory; the fetched tree is not modified.
+
 ## Source included in this repository
 
 Only in `core/engine-vital/` (built with `SYNTHYBOY_WITH_VITAL=ON`, never in iOS builds; see `docs/UPSTREAM.md` for the exact

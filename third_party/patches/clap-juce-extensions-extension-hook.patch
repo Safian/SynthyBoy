@@ -1,0 +1,41 @@
+# SynthyBoy: clap-juce-extensions (pinned commit 7adee3a1bd4684d4caa5601100e364abccff4b4d) gets a hook for a CLAP extension of the plug-in that the wrapper does not know.
+# The wrapper (clap-juce-wrapper.cpp) overrides clap::helpers::Plugin::extension () and asks the processor, a clap_juce_audio_processor_capabilities, for it: the host
+# reaches "synthyboy.content" (shell-clap/synthyboy_content_ext.h) through clap_plugin::get_extension in the JUCE-wrapped CLAP build as in the native shell.
+# Applied by CMakeLists.txt to a copy of the fetched sources in the build directory (patch -p1); the fetched source tree is never modified. Licence of the patched files: MIT (upstream).
+
+--- a/include/clap-juce-extensions/clap-juce-extensions.h
++++ b/include/clap-juce-extensions/clap-juce-extensions.h
+@@ -71,6 +71,16 @@
+     virtual ~clap_juce_audio_processor_capabilities() = default;
+ 
+     /*
++     * SynthyBoy patch (third_party/patches/clap-juce-extensions-extension-hook.patch): a CLAP extension of the plugin that the wrapper does not know, asked for by its id
++     * (for example "synthyboy.content"). `plugin` is the clap_plugin of the wrapper, the same pointer the host passes to the functions of the extension. Return the extension
++     * struct (it must outlive the plugin) or nullptr for an id you do not implement. Called on the main thread through clap_plugin::get_extension.
++     */
++    virtual const void *clapPluginExtension(const clap_plugin * /*plugin*/, const char * /*id*/) noexcept
++    {
++        return nullptr;
++    }
++
++    /*
+      * In some cases, there is no main input, and input 0 is not main. Allow your plugin
+      * to advertise that. (This case is usually for synths with sidechains).
+      */
+--- a/src/wrapper/clap-juce-wrapper.cpp
++++ b/src/wrapper/clap-juce-wrapper.cpp
+@@ -1072,6 +1072,14 @@
+     }
+     bool audioPortsSetConfig(clap_id /*configId*/) noexcept override { return false; }
+ 
++    // SynthyBoy patch: an extension of the processor that is not one of the standard ones (clapPluginExtension of clap_juce_audio_processor_capabilities)
++    const void *extension(const char *id) noexcept override
++    {
++        if (processorAsClapExtensions != nullptr)
++            return processorAsClapExtensions->clapPluginExtension(clapPlugin(), id);
++        return nullptr;
++    }
++
+     bool implementsNotePorts() const noexcept override { return true; }
+     uint32_t notePortsCount(bool is_input) const noexcept override
+     {
