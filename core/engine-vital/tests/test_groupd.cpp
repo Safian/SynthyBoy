@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include <atomic>
+#include <cstring>
 #include <thread>
 
 #include "groupc_util.h"
