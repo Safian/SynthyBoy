@@ -1,6 +1,6 @@
 # REFCOMPARE - the imported Serum 2 presets against the real Serum 2.1.5
 
-Owner request: "get reference outputs as WAV for the presets, and after loading the preset check that our waveform is the same as in Serum" and "fix them too". Everything here was measured against the Serum 2.1.5 plug-in installed on the Mac (VST3), offline, 48 kHz, 32 bit float stereo, blocks of 512. No Serum audio and none of the 656 presets is committed (`tests/serum-reference/` and `tests/serum-presets/` are gitignored); the committed numbers are `docs/ui-design/refcompare-baseline.json` (score and class per render) and `docs/ui-design/refcompare-variants.json` (the calibration). Entry point: `scripts/run-ref-compare.sh` (usage in its header). Assumptions A488 .. A500 are in `13-new-keys.md` 4.46, owner questions 117 .. 122 in `14-morning-questions.md`.
+Owner request: "get reference outputs as WAV for the presets, and after loading the preset check that our waveform is the same as in Serum" and "fix them too". Everything here was measured against the Serum 2.1.5 plug-in installed on the Mac (VST3), offline, 48 kHz, 32 bit float stereo, blocks of 512. No Serum audio and none of the 656 presets is committed (`tests/serum-reference/` and `tests/serum-presets/` are gitignored); the committed numbers are `docs/ui-design/refcompare-baseline.json` (score and class per render) and `docs/ui-design/refcompare-variants.json` (the calibration). Entry point: `scripts/run-ref-compare.sh` (usage in its header). Assumptions A488 .. A500 are in `13-new-keys.md` 4.46 (round 1) and A501 .. A507 in 4.47 (round 2, section 9), owner questions 117 .. 122 and 123 .. 128 in `14-morning-questions.md`.
 
 ## 1. Result
 
@@ -163,5 +163,50 @@ The effect cases are real effect entries of the presets (realistic units), the o
 
 ## 8. Files
 
-- `tools/serum-reference/` host (C++/JUCE) and `render_all.py`; `tools/ref-compare/` `ref_render.cpp` (our offline render), `ref_compare.py`, `metrics.py`, `score.py`, `scoring.json`, `report.py`, `experiment.py`, `catalog.py`, `ablate.py`, `make_doc.py`, `test_metrics.py`; `scripts/run-ref-compare.sh`.
+- `tools/serum-reference/` host (C++/JUCE) and `render_all.py`; `tools/ref-compare/` `ref_render.cpp` (our offline render), `ref_compare.py`, `metrics.py`, `score.py`, `scoring.json`, `report.py`, `experiment.py`, `catalog.py`, `ablate.py`, `make_doc.py`, `test_metrics.py`; round 2: `fit_filter.py`, `make_filter_laws.py` (tables `core/serum-import/serum_filter_laws.inc`, `serum_filter_drive_laws.inc` from `refcompare-filter-laws.json`), `fit_unison.py`, `make_doc_round2.py`; `scripts/run-ref-compare.sh`.
 - Reports of a run: `tests/serum-reference/report/<timestamp>/` (report.md, results.csv / json, summary.json, `ab/` with the reference and our render of the worst 30 and 20 random renders, `.ab.wav` = reference, 1 s gap, ours; `.lr.wav` = reference left, ours right).
+
+
+## 9. Round 2 (branch refcmp-a): level laws, the unison law of Serum as an engine capability
+
+Same scoring, same 956 renders, the Serum references of round 1 (not rendered again). Tip: 775ba09.
+
+| | before | after |
+|---|---:|---:|
+| MATCH | 1 | 2 |
+| CLOSE | 64 | 85 |
+| DIFFERENT | 884 | 862 |
+| FAILED | 7 | 7 |
+| mean score | 40.35 | 42.94 |
+| median score | 39.81 | 42.80 |
+| median loudness gap ours - Serum (LU) | -3.84 | -1.45 |
+| mean absolute loudness gap (LU) | 9.62 | 7.75 |
+| renders more than 6 LU off | 561 of 945 | 467 of 936 |
+| median log-mel distance (dB) | 15.73 | 15.06 |
+| median multi-resolution STFT loss | 1.71 | 1.70 |
+| median 10 ms envelope distance (dB) | 10.73 | 9.82 |
+| median spectral centroid distance (octaves) | 0.75 | 0.74 |
+
+| family (mean sub-score) | before | after |
+|---|---:|---:|
+| spectrum | 22.7 | 23.7 |
+| envelope | 46.3 | 49.9 |
+| loudness | 48.6 | 52.4 |
+| pitch | 50.5 | 53.3 |
+| stereo | 70.1 | 70.7 |
+
+### 9.1 What was found (measured on the real plug-in, controlled single parameter experiments; assumptions A501 .. A507 in `13-new-keys.md` 4.47, questions 123 .. 128)
+
+- **The 211 renders that got worse in round 1 were not the master level.** A master sweep 0.02 .. 1 on a crafted preset agrees with the plug-in within 0.1 dB above 0.1 (the linear gain law of A488 is right). They came from the same level law that was assumed wrongly in the rows of the filter and of every effect: the level knob `kParamLevelOut` is the gain **(2 v) ^ 2** in Serum (default 0.5 = unity, 1 = +12.04 dB), the importer had 20 log10 v (6 dB too quiet at the default value, 12 dB at 1): the presets with a high master (or any value of the knob above its default) came out too loud after the round 1 master fix, the others too quiet. Fixed for the voice filters and the 12 effect rows (A507). The DIRECT and BUS level knobs are linear gain x 2 (default 0.5) and the bus sends are cubic (a send of 50 % adds 1.02 dB), A502.
+- **A measurement artefact on every first note.** The offline render of our engine heard the smoothers ramp from the defaults to the loaded values for about 100 ms (a 25 dB thump on a closed filter that Serum, rendered after eight silent blocks, does not have). `synthyboy_ref_render` calls `engine->reset()` after the load (A504); every earlier first-note comparison was affected.
+- **Unison (A503).** The voices of Serum are evenly spaced, the outer ones at 200 x d ^ 1.25 cents (d = 0.25 by default); the level of the centre voice (one for an odd count, two for an even count) and of the outer voices follows the blend by two shapes that are the same for 3 .. 16 voices times a gain per voice count (0.4384 at 3, 0.3016 at 16, 0.32 each at 2); the stereo spread moves a voice into its own channel with the measured gains (2.52 at 100 %) and does not move or change the centre voice. Ours had the Vital law (the centre voice 6 dB too loud at high blend for odd counts, the voices not evenly spaced). This is now the engine capability `oscN.unison.law = Serum` (key block B33, `kCap2SerumUnison`, off / on proof and the measured levels in `core/engine-vital/tests/test_serum_unison.cpp`); the importer sets it and the linear detune; the level correction of A496 is gone. The experiments: `tools/ref-compare/fit_unison.py --what levels|pan|detune`.
+- **Filters (A501).** The resonance of the state variable types (L / H / B 12 .. 24) takes level (-6.5 dB at 30, -13 dB at 100: the 7 .. 8 dB difference at resonance 0 .. 20 for HP / LP in the earlier note was this and the first note artefact), the ladders keep their level with the resonance and get louder with the drive, DirtyMg gets quieter; `tools/ref-compare/fit_filter.py` measures a type on a grid, `make_filter_laws.py` writes the tables. The shapes of the MG and state variable types match (residual 0.2 .. 1.5 dB over 40 harmonics). LadderEMS and HP12 stay uncorrected (the static law made the real presets worse, question 123).
+- **Multisample instruments (A505):** 10.9 dB quieter than Serum at the same oscillator volume (30 instruments, spread 1.6 dB); the importer adds it to the zones.
+- **Checked and fine:** the master level law, the envelope sustain law (the amplitude squared in both), the filter cutoff scale and the modulation of the cutoff by an envelope (+100 / +50 / -50 % at the centroid within 5 %), unison detune of a single voice, the bus level law after the fix.
+
+### 9.2 What remains and why
+
+- **Effect chains.** Single effect modules are within 3 dB (catalog), but chains (two compressors and two EQs: 10 dB short; flanger, phaser, bode, utility, convolve, splitters have the largest per module level gaps) leave a median loudness bias and a wide scatter (mean absolute gap 7.8 LU); the effects round (questions 118, 120, 121, 124).
+- **Arpeggiator and clips (34 presets, question 127):** not modelled, the median loudness gap of those presets is about -9 LU.
+- **Sample, granular and spectral oscillators (question 125),** the start thump and the cutoff floor of a closed filter (question 126), the static filter law of LadderEMS / HP12 (question 123), warp modes (FM from the sub, tube distortion: 5 .. 10 LU) and the modulation matrix timing.
+- **No gate was lowered, no preset was special cased**; the scoring and the thresholds are those of round 1.
