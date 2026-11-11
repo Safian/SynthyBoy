@@ -16,7 +16,12 @@
 
 #ifdef _WIN32
  #include <process.h>
- #define NOMINMAX
+ #ifndef NOMINMAX
+  #define NOMINMAX
+ #endif
+ #ifndef WIN32_LEAN_AND_MEAN
+  #define WIN32_LEAN_AND_MEAN   // no winsock macros (s_host ...) that clash with the CLAP host structs
+ #endif
  #include <windows.h>
 #else
  #include <dlfcn.h>
