@@ -77,7 +77,10 @@ def make_baseline(rows, mode):
     for r in rows:
         mv = r.get("mod", {}).get("verdict", "n/a")
         q = quant(r)
-        keys[r["key"]] = {"v": r["verdict"], "m": mv, "h": checksum(q), "q": q}
+        entry = {"v": r["verdict"], "m": mv, "h": checksum(q), "q": q}
+        if r.get("noiseDb", -180.0) > -60.0:
+            entry["n"] = 1   # the context is random (noise above the floor): the curve is not comparable between runs, only the verdict is
+        keys[r["key"]] = entry
     return {"format": "synthyboy-param-audit-baseline", "version": 1, "mode": mode, "keys": keys}
 
 
@@ -95,7 +98,7 @@ def compare(base, rows, full_keyset):
             regress.append("%s: verdict %s/%s -> %s/%s" % (k, b["v"], b["m"], r["verdict"], mv))
             continue
         q = quant(r)
-        if checksum(q) == b["h"]:
+        if checksum(q) == b["h"] or b.get("n") or r.get("noiseDb", -180.0) > -60.0:
             continue
         bq = b["q"]
         if len(bq) != len(q):
