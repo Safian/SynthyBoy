@@ -307,7 +307,7 @@ jobs:
       - name: Build
         run: scripts/build.sh
 
-      - name: Core tests (ctest, under Xvfb + openbox: the GUI tests open desktop windows)
+      - name: Core tests (ctest under Xvfb + openbox, the GUI tests open desktop windows)
         run: |
           xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & sleep 2; ctest --test-dir build --output-on-failure'
 
