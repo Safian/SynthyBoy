@@ -4,6 +4,7 @@
 // not in the repository). Slow tests (the ones that sweep more than ~100 renders each) are named *_slow_* and labelled `slow` by the CMake file.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <cstring>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
