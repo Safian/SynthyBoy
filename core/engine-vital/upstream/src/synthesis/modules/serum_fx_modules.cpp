@@ -276,6 +276,7 @@ namespace sbvital {
           for (auto& slot : retired_)
             delete slot.exchange(nullptr);
           delete stash_;
+          delete active_;   // the convolver in use (taken over from the builder): it was the one object nothing freed
         }
 
         // false (the default): deterministic handover. A block that posts a rebuild (or follows a new impulse / sample rate) waits for the

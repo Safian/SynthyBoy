@@ -251,6 +251,7 @@ namespace sbvital {
 
   void SynthVoiceHandler::createProducers() {
     lowest_active_note_ = new cr::Value(0.0f);
+    addIdleMonoProcessor(lowest_active_note_);   // SynthyBoy: the router owns it (like lfo_rate_scale_); nothing else did, so every engine leaked this one Value (LeakSanitizer)
     producers_ = new ProducersModule();
     producers_->plug(reset(), ProducersModule::kReset);
     producers_->plug(retrigger(), ProducersModule::kRetrigger);
