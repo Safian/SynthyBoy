@@ -1,0 +1,209 @@
+# CLAP extension `com.safian.bitmap-gui/1` - a plug-in GUI that is a pixel buffer
+
+Status: implemented in SynthyBoy's native CLAP module (2026-11-11), header `shell-clap/bitmap_gui_ext.h`, report `ui-design/BITMAPGUI-REPORT.md`, design record `ui-design/13-new-keys.md` section 4.45.
+This document is meant to be enough for a host developer to implement the host side without reading anything else. The header is the normative layout; this text is the normative behaviour.
+
+## 1. What it is for
+
+Some hosts cannot (or must not) run a plug-in's own GUI toolkit inside their process: the Akai MPC Key 61 (Linux ARMv7, no X11, a software framebuffer, a 1024 x 600 touch screen and eight Q-Link
+encoders), a mobile app that already links another version of the same toolkit, a host that draws everything itself. With this extension the **plug-in draws its own GUI into memory** and the **host only**
+
+1. calls `create ()` with a size and a scale,
+2. calls `tick ()` regularly and `render ()` when something changed,
+3. copies the **dirty rectangles** of the returned frame to its screen,
+4. forwards touch / mouse / wheel / key input and the answers to the few requests the plug-in makes (files, text input, ...).
+
+Nothing of the plug-in's toolkit crosses the interface: pixels and plain C structs. The plug-in keeps its toolkit statically linked inside the module with hidden symbols, so it cannot clash with the host's own copy
+(SynthyBoy ships JUCE 8.0.17 inside the `.clap`; Kick links JUCE 7.0.12; the module exports `clap_entry` and `synthyboy_clap_get_entry` and nothing else, `scripts/check-clap-exports.sh`).
+The extension is generic: nothing in the header knows SynthyBoy, any plug-in can offer it.
+
+Two ids, both versioned. An incompatible change is a new id (`/2`); a plug-in may answer both.
+
+| Side | Id | Obtained with |
+|---|---|---|
+| plug-in | `com.safian.bitmap-gui/1` (`SAFIAN_EXT_BITMAP_GUI`) | `clap_plugin_t::get_extension ()` -> `const safian_plugin_bitmap_gui_t*` |
+| host | `com.safian.bitmap-gui.host/1` (`SAFIAN_EXT_BITMAP_GUI_HOST`) | `clap_host_t::get_extension ()` -> `const safian_host_bitmap_gui_t*`; **every function is optional** (NULL = "this host cannot") |
+
+## 2. Rules for every call
+
+* **Main thread only, on both sides.** The plug-in calls the host extension only from inside one of its own functions that the host called, or - when the host runs the platform event loop on the main thread
+  (section 5.3) - from a timer / async message of that loop: still the main thread, between `create ()` and `destroy ()`. The audio thread is never involved. Parameters change through ordinary CLAP parameter
+  events (section 9).
+* **Safe before `activate ()`** and after `deactivate ()`. The GUI does not depend on the audio engine running. Every function also tolerates "no GUI yet" (returns false / does nothing).
+* **One GUI per plug-in instance.** `create ()` before everything else; `destroy ()` before `clap_plugin::destroy ()` (a forgotten GUI is destroyed by the plug-in). `create ()` twice without `destroy ()` fails.
+* **Logical pixels** are the unit of sizes and input positions (origin top left, x right, y down). **Device pixels** are the unit of the frame and its dirty rectangles: `round (logical * scale)`.
+* **Strings are UTF-8**, owned by the caller; the callee copies what it keeps.
+* Struct layouts are frozen for `/1`.
+* No function throws; failures are `false` / ignored events.
+
+## 3. Life cycle and size
+
+```
+create (plugin, width, height, scale, flags)   // logical px; scale 1.0 / 2.0 / 1.5 ...; flags: CREATE_HOST_RUNS_EVENT_LOOP
+get_info / get_preferred_size / can_resize / get_size_limits   // valid before create ()
+get_size
+set_size (w, h)     // clamped into the limits; get_size () tells the result; next frame is FRAME_FULL with new pixel dimensions
+set_scale (s)       // the window moved to another display: same logical size, new pixel dimensions, FRAME_FULL
+destroy ()
+```
+
+SynthyBoy: preferred 1024 x 768, limits 360 x 480 .. 1800 x 1400, any aspect ratio, scale 0.5 .. 4.0. The layout follows the width: below ~600 logical pixels it is the phone layout (one column, 390 x 844 is
+the reference), 600 .. 999 the tablet layout, from 1000 the wide three-column layout (1024 x 768 and the MPC's 1024 x 600).
+
+`request_resize ()` (host side) is how the plug-in asks for another size (the user chose "UI size" in its menu, a sheet needs room). `true` means the host will call `set_size ()` (maybe with a different size, maybe later).
+
+## 4. Frames
+
+```c
+render (plugin, &frame)  ->  pixels, width, height, stride_bytes, pixel_format, frame_id,
+                              dirty_count + dirty[] (device px), flags, next_frame_ms
+```
+
+* **Pixel format** `SAFIAN_BITMAP_GUI_PIXEL_BGRA8888_PREMUL`: 32 bits per pixel, one pixel = the little-endian word `0xAARRGGBB`, i.e. the bytes in memory are **B, G, R, A** (the layout of a Windows DIB, of Core Graphics'
+  `kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst`, of Cairo `ARGB32` and of a Linux fbdev `ARGB8888`). Colour channels are **premultiplied** by alpha. SynthyBoy paints an opaque background, so alpha is 255 in every
+  pixel and premultiplied and straight alpha are the same bytes: a host may ignore the alpha byte (`XRGB8888` framebuffers work unchanged). Row 0 is the top row. Only little-endian plug-ins exist.
+* `stride_bytes >= width * 4`, a multiple of 4. The pointer is **read only and valid until the next `render ()`, `set_size ()`, `set_scale ()` or `destroy ()`** of this GUI.
+* **`frame_id`** starts at 1 and increases by exactly one for every `render ()` that changed pixels. The same id again = unchanged; `dirty_count` is then 0 and the pixels are still the valid previous frame.
+* **Dirty rectangles**: the rectangles that changed since the previous `render ()` of this GUI, in device pixels, disjoint, inside the frame, at most `info.max_dirty_rects` (SynthyBoy: 16; it merges). The host copies
+  **only these** to its screen. `FRAME_FULL` = the whole frame changed (first frame, resize, scale change); `dirty` then lists exactly one rectangle, the whole frame.
+* **`is_dirty ()`** is one flag read: nothing is run, nothing is drawn. An idle GUI costs one call per host frame. `tick ()` (section 5) runs what is due and returns the same answer afterwards.
+* **`FRAME_NEEDS_ANOTHER` / `next_frame_ms`**: the GUI is animating or shows live data (meters, scope, a drag in progress); the host should `tick ()` again within `next_frame_ms` (SynthyBoy: 16). Without the flag the
+  GUI is idle and a tick every 50 .. 100 ms is plenty (timers still have to run).
+
+Measured on the build machine (Apple M-series, software renderer, Release): idle `tick () + is_dirty ()` ~1 microsecond, a whole 1024 x 768 frame ~7 ms, the typical dirty update (a knob turning) well below 1 ms. The numbers
+for the ARMv7 module are in `ui-design/BITMAPGUI-REPORT.md`, clearly marked as emulated, not MPC.
+
+## 5. Running the GUI: `tick ()`
+
+The plug-in has no thread and no loop of its own. Its toolkit has timers (animations, long-press detection, meters, polling of the engine's live data) and asynchronous messages; `tick ()` runs them. The host calls it
+at its UI cadence while the GUI is visible and **at least every 100 ms** (every `next_frame_ms` while the last frame asked for it). `render ()` calls `tick ()` itself. Input events do their work synchronously and
+need no tick; what they queue (a deferred repaint, a long-press timer) runs at the next tick.
+
+### 5.1 What `tick ()` does
+
+1. runs the toolkit's pending timers and async messages (bounded: at most 256 messages per call, never waits),
+2. takes the parameter changes the host / the audio thread made since the last tick (host automation, a state load, MIDI learn) into the GUI's controls,
+3. checks whether the user moved to another panel (remote page, section 8),
+4. returns `true` when `render ()` would produce a frame.
+
+### 5.2 Which thread
+
+The calling thread **becomes the toolkit's message thread** at every entry point. A host may call from different threads over time (a plug-in scan thread, then the UI thread), never from two at once. Several plug-in
+instances share one toolkit instance (it is a singleton of the module), and several modules with different toolkit versions in one process do not see each other.
+
+### 5.3 `SAFIAN_BITMAP_GUI_CREATE_HOST_RUNS_EVENT_LOOP`
+
+* **Not set** (a framebuffer host, a test harness, a Linux host without a loop the toolkit can join): `tick ()` and `render ()` pump the toolkit's queue themselves (on Linux and Windows the toolkit's own message queue; on
+  macOS the run loop of the calling thread is run once for ready sources - this is the only case where the plug-in touches a loop of the host process, so a host that has one should set the flag).
+* **Set** (a macOS / Windows application whose native loop runs on the calling thread): the toolkit posts its timers and async messages into that loop and they are delivered by it; `tick ()` does not pump. The plug-in
+  may then call host functions at any time on the main thread (section 2).
+
+### 5.4 Several instances, a foreign toolkit
+
+All state of the toolkit is private to the module (statically linked, hidden symbols, class and window names with random suffixes). Another copy of the same toolkit of another version in the host process is unaffected,
+and the toolkit never opens a window, a native dialog, a display connection or a font service (section 10).
+
+## 6. Input
+
+Coordinates are logical pixels. Every function returns `true` when the GUI used the event (the host may then not pass it on).
+
+### 6.1 Pointers (`pointer_event`)
+
+`type`: `DOWN`, `MOVE` (while down), `UP`, `CANCEL`, `HOVER` (mouse / pen without a button), `LEAVE` (the pointer left the GUI area). `kind`: mouse, touch, pen. `pointer_id`: identifies one finger / pen / the mouse from
+`DOWN` to `UP` / `CANCEL` (any 32 bit value chosen by the host, reusable after `UP`, 0 for the mouse). `buttons` are the buttons down **after** the event (a touch is the primary button, the plug-in adds it when a
+touch event leaves it out), `modifiers` shift / ctrl / alt / meta, `pressure` 0..1 (0 = unknown).
+
+* **One finger** acts as the primary mouse button: press, drag, release, with the usual slop and long-press behaviour of the GUI (a long press on a control opens its value sheet; 400 ms with no movement). After
+  `UP` the pointer is gone: there is no hover state left behind on a touch screen.
+* **Two fingers** become the pinch and pan gestures of a desktop trackpad: when a second finger goes down the first stops acting as a mouse (its drag ends where it is) and for as long as two fingers are down every move
+  of either is delivered as pinch (the spreading of the pair) or pan (the travel of its middle), whichever the fingers did more of. A third finger is tracked but unused. The gesture ends with the last finger; a finger that
+  stays down afterwards does not start a drag. (The toolkit has independent touch input sources on iOS / Android / touch Windows only; this behaviour is the same on every platform, so it is the contract.)
+* `CANCEL` (palm rejection, a system gesture took the pointer) releases the pointer like `UP`; the toolkit has no cancel, so a half done gesture may or may not be committed by the control (SynthyBoy commits what the
+  drag already did: nothing is half-written, a drag is one undo step).
+* Mouse and pen: `HOVER`, `DOWN`, `MOVE`, `UP` with `buttons`; right button = secondary (opens the value sheet like a long press), middle = middle.
+* After a mouse event the plug-in calls the host's `set_cursor ()` when the shape under the pointer changed.
+
+### 6.2 Wheel (`wheel_event`)
+
+`delta_x`, `delta_y` in wheel notches (1.0 = one detent; trackpads send fractions with `WHEEL_PRECISE`); positive `delta_y` = wheel rolled away from the user = content moves down (reveals what is above). With
+Ctrl / Cmd held a wheel is a zoom where the GUI zooms. A wheel over a knob turns it.
+
+### 6.3 Keys (`key_event`, `text_input`, `set_focus`)
+
+`key_event`: `DOWN` / `UP`, `key_code`, `modifiers`, `flags` (`REPEAT`), `text`. A printable key has the Unicode code point of the character it makes **without shift, lower case** as its code (`'a'`, `'1'`, `' '`);
+the other keys have the stable codes `SAFIAN_BITMAP_GUI_KEY_*` (backspace, tab, enter, escape, delete, insert, home, end, page up / down, the arrows, F1 .. F12). `text` (UTF-8, only on `DOWN`) is what the key press
+produces with the current modifiers and layout and is what a text field inserts. Hosts without a physical keyboard send only `text_input ()` (committed text from a virtual keyboard or an IME, UTF-8, inserted into the
+focused text field) plus backspace / enter / escape / arrows as keys.
+
+Shortcuts of the GUI: Ctrl / Cmd + Z = undo, + Shift + Z or Ctrl / Cmd + Y = redo, Esc / Enter close sheets.
+
+`set_focus (true)` when the GUI (the window or the screen area it is in) gets the keyboard focus, `false` when it loses it. Losing it releases every pointer that is down and ends text editing. Exactly one GUI of the
+module should have the focus; a GUI that gets key events without having it takes the focus back from the other (a convenience, not a contract).
+
+## 7. Text input (virtual keyboard)
+
+A text field of the GUI (preset name, exact value entry, search) got the keyboard focus: `request_text_input (show = true, field, kind, text)` - `field` is its rectangle in logical pixels (so the host can scroll or
+shift the GUI above the keyboard), `kind` `TEXT` or `NUMBER` (digits and a few letters are enough: `1.5k`, `-12 dB`), `text` its current content. When it loses the focus: `request_text_input (false, NULL, ..., NULL)`.
+The host shows / hides its keyboard and sends `text_input ()` and `key_event ()`. A host without a virtual keyboard leaves the function NULL: the GUI still works with a physical keyboard, and a text field can be left
+with Esc / Enter.
+
+## 8. Files, sharing, URLs
+
+The plug-in opens no native file dialog and no native window of any kind. What leaves the GUI is a request to the host.
+
+* `request_file (request_id, {mode open | save, title, wildcards "*.wav;*.flac", suggested_name, purpose})`: the host asks the user and later calls the plug-in's `request_done (request_id, result, path)` **exactly once**:
+  `OK` with the chosen path (open: the file exists; save: the target), `CANCELLED`, or `FAILED`. Return `false` from the call when you cannot ask (then no answer comes). `purpose` ("sample", "wavetable", "impulse",
+  "vital", "lfoshape", "export") lets the host remember the last folder per purpose. The answer may come any time later, from any main-thread context, even before `request_file ()` has returned.
+* `share_file (request_id, path, title)`: hand an exported file (the rendered last note) to the platform's share / export function; `request_done (id, OK | FAILED, NULL)` follows.
+* `open_url (url)`: open a link in the system browser (no answer).
+* **Degrading**: a host that leaves these NULL gets a GUI that dims the entries that need them (the import / save menus, Share), says "This host has no share function" and otherwise works. Nothing blocks.
+
+Request ids are chosen by the plug-in, unique per GUI. A late answer for a destroyed GUI is ignored.
+
+## 9. Parameters, notes, state: through CLAP, not through this extension
+
+* The GUI changes **its own parameters through the normal CLAP parameter events**: an edit becomes `CLAP_EVENT_PARAM_GESTURE_BEGIN`, `CLAP_EVENT_PARAM_VALUE` (flag `IS_LIVE`) and `CLAP_EVENT_PARAM_GESTURE_END` in the output
+  events of the next `process ()` or `params.flush ()`, exactly like a hardware knob (the plug-in calls `clap_host_params::request_flush` after an edit so a host that does not process gets a flush). `params.get_value ()` returns
+  the new value immediately. The audio thread applies the edit like host automation (same code path, no allocation, no lock). There is no `request_parameter_gesture` in this extension.
+* Host automation and state loads reach the GUI the other way: the audio thread publishes the change lock-free and the next `tick ()` refreshes the controls (the changed knobs repaint, nothing else).
+* The on-screen keyboard, the pitch / mod wheels and the sustain pedal of the GUI reach the engine as MIDI through the same lock-free channel (`CLAP_EVENT_MIDI` handling of the note port); a destroyed GUI sends
+  note offs for held keys and "all notes off".
+* Presets: the prev / next arrows step through the presets installed on disk (`<user dir>/presets`, `<user dir>/packs/*`) with the core's preset code; the host's own browser is unaffected.
+
+## 10. Remote controls (Q-Link) follow the panel
+
+The page list is the plug-in's `clap.remote-controls` pages (the Kick pages, one page per module, `page_id` = the index). When the user moves to another panel - taps a tab, or starts a gesture on a control that is on
+another page - the plug-in calls `set_active_remote_page (page_id)` and the host's controller bank (the MPC's eight Q-Link encoders) switches to that page. The reverse, `show_remote_page (page_id)` (plug-in function):
+the host's bank moved; the GUI shows the panel that holds the page's parameters (returns false when it has none). Neither direction echoes.
+
+## 11. Host implementer's checklist
+
+1. `get_extension (SAFIAN_EXT_BITMAP_GUI)`; if NULL the plug-in has no bitmap GUI.
+2. Fill a `safian_host_bitmap_gui_t` for `clap_host::get_extension (SAFIAN_EXT_BITMAP_GUI_HOST)`; leave out what you cannot do (NULL functions are never called). Do it **before** `create ()`: the plug-in reads it there.
+3. `create (w, h, scale, flags)`; `can_resize` / `get_size_limits` for the window.
+4. Every UI frame: `tick ()`; `if (is_dirty ()) { render (&f); for each f.dirty: blit; }`. Keep the previous frame's pixels (your own surface), the plug-in only tells you what changed.
+5. Forward input in logical pixels; call `set_focus ()`.
+6. Answer `request_file` / `share_file` with `request_done ()`.
+7. On window resize `set_size ()`; on a display with another scale `set_scale ()`; on close `destroy ()` before you destroy the plug-in.
+8. Optional: show the virtual keyboard on `request_text_input`, move the Q-Link bank on `set_active_remote_page`, set the cursor on `set_cursor`.
+
+A complete working host, without any toolkit, is `tests/bitmap-gui/bitmap_gui_harness.h` (about 400 lines): load, create, tick / render, input, audio thread, parameter events.
+
+## 12. Guarantees of the SynthyBoy implementation (what the tests prove)
+
+| Property | Test (`tests/bitmap-gui/`) |
+|---|---|
+| Works before `activate ()`, double `create` / `destroy`, calls without a GUI are harmless | `bg_everything_is_harmless_without_a_gui`, `bg_gui_works_before_activate_and_creates_once` |
+| First frame is full, opaque, BGRA | `bg_first_frame_is_full_opaque_bgra` |
+| An idle GUI produces no pixels and `tick () + is_dirty ()` costs ~1 microsecond | `bg_idle_gui_produces_no_pixels` |
+| A drag on a knob changes the CLAP parameter (gesture + value events) and the audio | `bg_drag_on_a_knob_changes_the_clap_parameter_and_the_audio` |
+| An external parameter change refreshes exactly the controls that show it | `bg_external_parameter_change_refreshes_the_pixels` |
+| Golden images at 390 x 844, 1024 x 768, 1024 x 600 | `test_bitmap_golden.cpp` |
+| Text input, file requests, share, remote page, resize, scale, wheel, keys, two fingers, several instances, animation advances, host without the host extension | `test_bitmap_gui.cpp` |
+| The `.clap` exports only `clap_entry` and `synthyboy_clap_get_entry` | `scripts/check-clap-exports.sh` (ctest `synthyboy_clap_exports`) |
+| No leak after `destroy`, no data race between the GUI and the audio thread | ASan / UBSan and TSan builds of the same tests (`.github/workflows/build.yml`) |
+
+## 13. Not in `/1`
+
+OpenGL / GPU surfaces, native child windows, drag and drop of files into or out of the GUI, clipboard, IME composition (only committed text), accessibility, high dynamic range / wide gamut pixel formats. A plug-in that
+needs them offers `/2`.
