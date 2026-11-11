@@ -558,7 +558,11 @@ std::string ContentRegistry::resolvePresetPath (const std::string& relativePath)
     {
         std::filesystem::path cand = std::filesystem::path (sp) / relativePath;
         if (std::filesystem::exists (cand, ec) && std::filesystem::is_regular_file (cand, ec))
+        {
+            // a relative path of a preset is stored with '/' (portable); on Windows the joined path would keep it next to the '\\' of the search path
+            cand.make_preferred();
             return cand.string();
+        }
     }
 
     markMissingContent();

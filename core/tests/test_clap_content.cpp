@@ -211,7 +211,10 @@ void writeFile (const fs::path& path, const std::vector<uint8_t>& bytes)
 TEST (clap_content_extension_imports_lists_attaches_and_removes)
 {
     const fs::path dir = fs::temp_directory_path() / ("sb_clap_content_" + std::to_string (currentProcessId()));
-    fs::remove_all (dir);
+    {
+        std::error_code removeError;
+        fs::remove_all (dir, removeError);
+    }
     sbtest::setEnv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str());
 
     std::vector<float> tone (48000);
@@ -292,7 +295,10 @@ TEST (clap_content_extension_imports_lists_attaches_and_removes)
     plugin->stop_processing (plugin);
     plugin->deactivate (plugin);
     plugin->destroy (plugin);
-    fs::remove_all (dir);
+    {
+        std::error_code removeError;
+        fs::remove_all (dir, removeError);
+    }
     sbtest::unsetEnv ("SYNTHYBOY_USER_DIR");
 }
 
@@ -321,7 +327,10 @@ void setParams (const clap_plugin_t* plugin, std::vector<clap_event_param_value_
 TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_lfo_shapes)
 {
     const fs::path dir = fs::temp_directory_path() / ("sb_clap_groupd_" + std::to_string (currentProcessId()));
-    fs::remove_all (dir);
+    {
+        std::error_code removeError;
+        fs::remove_all (dir, removeError);
+    }
     sbtest::setEnv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str());
 
     const double f0 = 220.0;
@@ -388,11 +397,15 @@ TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_
 
     // the audio of the last note (A3, held 1.5 s so far) as a WAV file
     CHECK_EQ (ext->render_last_note (plugin, out.string().c_str(), summary, sizeof summary), SYNTHYBOY_CONTENT_OK);
-    std::ifstream wav (out, std::ios::binary);
-    std::string head (12, '\0');
-    wav.read (head.data(), 12);
-    CHECK (head.compare (0, 4, "RIFF") == 0 && head.compare (8, 4, "WAVE") == 0);
-    CHECK (fs::file_size (out) > 48000u * 6u);
+    {
+        // closed before the directory is removed at the end: Windows cannot delete a file that is still open (remove_all then throws, and an exception out of main() is a 0xc0000409 crash)
+        std::ifstream wav (out, std::ios::binary);
+        std::string head (12, '\0');
+        wav.read (head.data(), 12);
+        CHECK (head.compare (0, 4, "RIFF") == 0 && head.compare (8, 4, "WAVE") == 0);
+    }
+    std::error_code sizeError;
+    CHECK (fs::file_size (out, sizeError) > 48000u * 6u);
 
     // Resample: one bar of that note becomes the table of osc 2 (the plain wavetable oscillator turns into the captured sound), A + B takes both
     plugin->reset (plugin);
@@ -428,6 +441,9 @@ TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_
     plugin->stop_processing (plugin);
     plugin->deactivate (plugin);
     plugin->destroy (plugin);
-    fs::remove_all (dir);
+    {
+        std::error_code removeError;
+        fs::remove_all (dir, removeError);
+    }
     sbtest::unsetEnv ("SYNTHYBOY_USER_DIR");
 }

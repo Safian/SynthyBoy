@@ -3,6 +3,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -34,6 +35,50 @@ uint64_t fnv (const std::string& s)
         h *= 1099511628211ull;
     }
     return h;
+}
+
+/** The document with every non-integer number cut to 3 significant digits. The values of the "busy" patch come out of std::exp / std::log (skewed parameters), whose last
+    bit differs between the C libraries (glibc, MSVC, Apple, ARM glibc): the shortest text of such a float differs in length and digits there (Windows and ARMv7 did). The
+    exact text of the defaults (no libm involved) is fingerprinted as it is; the busy patch is fingerprinted by its structure (keys, order, integers, strings, rounded
+    numbers), and its values are compared exactly, on the platform's own numbers, by the round trip below. */
+std::string roundedNumbers (const std::string& text)
+{
+    std::string out;
+    size_t i = 0;
+    while (i < text.size())
+    {
+        const char c = text[i];
+        if (c == '"')
+        {
+            size_t j = i + 1;
+            while (j < text.size() && text[j] != '"')
+                j += text[j] == '\\' ? 2 : 1;
+            out.append (text, i, j + 1 - i);
+            i = j + 1;
+        }
+        else if (c == '-' || (c >= '0' && c <= '9'))
+        {
+            size_t j = i + 1;
+            while (j < text.size() && (std::isdigit (static_cast<unsigned char> (text[j])) || text[j] == '.' || text[j] == 'e' || text[j] == 'E' || text[j] == '+' || text[j] == '-'))
+                ++j;
+            const std::string token = text.substr (i, j - i);
+            if (token.find_first_of (".eE") == std::string::npos)
+                out += token;
+            else
+            {
+                char buffer[32];
+                std::snprintf (buffer, sizeof buffer, "%.3g", std::strtod (token.c_str(), nullptr));
+                out += buffer;
+            }
+            i = j;
+        }
+        else
+        {
+            out += c;
+            ++i;
+        }
+    }
+    return out;
 }
 
 bool sameValues (const ParamValues& a, const ParamValues& b)
@@ -171,8 +216,10 @@ TEST (version_2_document_loads_into_version_3_with_the_old_values)
     CHECK_EQ (fnv (defaults2), 0xac26fc69f32f2e64ull);
     CHECK_EQ (defaults2.size(), static_cast<size_t> (16637));
     const auto busy2 = asVersion2 (saveState (busyValues()));
-    CHECK_EQ (fnv (busy2), 0x83fd0940eca3bc0full);
-    CHECK_EQ (busy2.size(), static_cast<size_t> (20366));
+    const auto busy2Rounded = roundedNumbers (busy2);
+    std::printf ("    busy2 rounded: %zu bytes, fnv %llx\n", busy2Rounded.size(), static_cast<unsigned long long> (fnv (busy2Rounded)));
+    CHECK_EQ (fnv (busy2Rounded), 0x625f51a76b665871ull);
+    CHECK_EQ (busy2Rounded.size(), static_cast<size_t> (17976));
 
     // loaded into a ParamValues whose new keys all hold other values than their defaults (a previous version 3 patch)
     sbtest::Rng rng (77);
