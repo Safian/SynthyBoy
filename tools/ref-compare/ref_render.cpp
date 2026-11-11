@@ -159,6 +159,7 @@ int main (int argc, char** argv)
         engine->setContentStore (store.get());
         for (size_t i = 0; i < paramCount(); ++i) engine->setParam (paramTable()[i].id, values.plain[i]);
         engine->setContent (content);
+        engine->reset();   // the loaded values are the targets: the smoothers start there (the render of the first note must not hear a parameter ramp from the defaults)
 
         const int total = static_cast<int> (std::llround (std::atof (f[3].c_str()) * sr));
         std::vector<float> L (static_cast<size_t> (total)), R (static_cast<size_t> (total));
