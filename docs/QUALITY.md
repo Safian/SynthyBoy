@@ -172,7 +172,7 @@ Vital-derived engine (`tools/param-audit`, report and numbers: `docs/ui-design/P
 * **Stage 2, the semantics** (`synthyboy_test_param_semantics`, ctest label `slow;audit`): pitch in cents, levels in dB, the pan law, filter cutoff / resonance, envelope times, LFO rate,
   mod matrix amount (all 64 slots), delay time, EQ gain, effect mix 0 = dry, velocity law, portamento time ... against the expected function, point by point over the sweep.
 * **Baseline**: `docs/ui-design/param-audit-baseline.json` holds verdict + a compact metric curve (nine points) per key. A run reports REGRESSIONS (changed verdict or curve) with the old and
-  new numbers and exits 1; intended changes are accepted with `--update-baseline` and show up in `git diff`.
+  new numbers and exits 1; intended changes are accepted with `--update-baseline` and show up in `git diff`. Keys whose context holds a random source (granular grains, the reverb, the Random LFO; `curve:` lines of `tools/param-audit/exemptions.tsv`) are compared by verdict only.
 * **Mutation self test** (`--self-test`, ctest `synthyboy_param_audit_selftest`): seven faults are injected into the harness through `SYNTHYBOY_AUDIT_FAULT` (cutoff scaled, pan swapped, delay
   time x2, transpose 2 cents off, master volume in half the dB, attack halved, chorus controls unwired); every one must be caught.
 

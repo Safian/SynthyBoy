@@ -44,7 +44,9 @@ def explained(exemptions, key, kind):
         pat = rx.pattern
         if kind == "mod" and not pat.startswith("mod:"):
             continue
-        if kind != "mod" and pat.startswith("mod:"):
+        if kind != "mod" and pat.startswith(("mod:", "curve:")):
+            continue
+        if kind == "mod" and pat.startswith("curve:"):
             continue
         k = key
         if kind == "mod":
@@ -84,7 +86,11 @@ def make_baseline(rows, mode):
     return {"format": "synthyboy-param-audit-baseline", "version": 1, "mode": mode, "keys": keys}
 
 
-def compare(base, rows, full_keyset):
+def unstable_patterns(exemptions):
+    return [re.compile(rx.pattern[6:]) for rx, _, _ in exemptions if rx.pattern.startswith("curve:")]
+
+
+def compare(base, rows, full_keyset, unstable=()):
     """Returns (regressions, drifts, new_keys, missing). A regression is a changed verdict / mod verdict or a curve that moved by more than one quantum anywhere."""
     regress, drifts, new = [], [], []
     for r in rows:
@@ -93,6 +99,10 @@ def compare(base, rows, full_keyset):
         mv = r.get("mod", {}).get("verdict", "n/a")
         if b is None:
             new.append(k)
+            continue
+        if any(u.search(k) for u in unstable):   # a random context (grains, reverb ...): the same value sounds different at another position of the sweep, only the verdict counts
+            if b["v"] != r["verdict"]:
+                regress.append("%s: verdict %s -> %s" % (k, b["v"], r["verdict"]))
             continue
         if b["v"] != r["verdict"] or b["m"] != mv:
             regress.append("%s: verdict %s/%s -> %s/%s" % (k, b["v"], b["m"], r["verdict"], mv))
@@ -202,7 +212,7 @@ def main():
         base_note = "baseline updated (%d keys in the file)" % len(new_base["keys"])
     elif a.baseline and os.path.exists(a.baseline):
         base = json.load(open(a.baseline))
-        regress, drifts, new, missing = compare(base, rows, a.mode == 'full' and not a.keys_regex)
+        regress, drifts, new, missing = compare(base, rows, a.mode == 'full' and not a.keys_regex, unstable_patterns(exemptions))
         base_note = "compared with %s" % os.path.basename(a.baseline)
 
     # CSV / JSON
