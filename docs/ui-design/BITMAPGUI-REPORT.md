@@ -32,11 +32,11 @@ Verified = run, with the result shown. Everything below was run on this Mac (App
 | Exports | macOS and Linux (aarch64 and ARMv7): exactly `clap_entry` and `synthyboy_clap_get_entry` (`nm`), self test of the script green |
 | Linux aarch64 `readelf -d` | NEEDED: libstdc++, libm, libgcc_s, libc, the loader. No FreeType (static), fontconfig, ALSA, X11 |
 | ARMv7 hard-float module (Debian 12 cross toolchain, `scripts/build-armv7-clap.sh --run-tests`) | ELF32 ARM EABI5, `Tag_CPU_arch v7, VFPv3, NEONv1`, hard-float; NEEDED: libstdc++.so.6, libm.so.6, libgcc_s.so.1, libc.so.6, ld-linux-armhf.so.3; exports only the two entries; size 13,870,068 bytes (10,855,340 stripped). The build fails if anything else is NEEDED |
-| ARMv7 under qemu-user in a container with only the ARMv7 C / C++ runtime (no X11 / FreeType / ALSA, like the MPC's Buildroot) | see the table at the end of this report |
+| ARMv7 under qemu-user in a container with only the ARMv7 C / C++ runtime (no X11 / FreeType / ALSA, like the MPC's Buildroot) | 30 cases / 317 checks and the 5 golden cases green (the ARMv7 pixels equal the macOS goldens within the tolerance), 684 s with every wait scaled by 12; frame times below |
 | ASan + UBSan | macOS arm64: 28 cases clean (leak detection is not available on macOS arm64). Linux aarch64 (GCC, LSan on): clean up to the point where it found a real null dereference (below), fixed |
 | TSan | macOS arm64: 28 cases, no report |
 | `cmake --build build -j8` (macOS, plug-in + bitmap GUI + all tests) | zero warnings |
-| `ctest -j8` (macOS, full) | all green (94 tests before this work's late additions; the bitmap tests were run separately after) |
+| `ctest -j6` (macOS, full, after the rebase onto da9d553) | 97 / 97 passed |
 | `build-novital` (`SYNTHYBOY_BUILD_PLUGIN=OFF SYNTHYBOY_WITH_VITAL=OFF`) rebuilt, `ctest` 44 / 44, `scripts/check-no-vital.sh` on `libsynthyboy_core.a` and `libsynthyboy_static.a` clean (and its self test); `libsynthyboy_static.a` holds no JUCE / bitmap symbol | verified |
 | `scripts/gen-factory-presets.py --check` | factory presets up to date (112 presets) |
 | Message delivery without a display, inside `render ()` (Linux, no DISPLAY) | `bg_change_messages_and_async_calls_are_delivered_inside_render_without_a_display`: MOD, a source chip, a drag on a knob; the ChangeBroadcaster message of the assignment is delivered by the ticks and the knob repaints; also the `callAsync` of the value box (`bg_double_tap_opens_the_value_box...`) and the import worker (`bg_the_load_button_asks_the_host_for_a_file...`) |
@@ -73,4 +73,12 @@ macOS arm64 (this Mac), idle = `tick () + is_dirty ()`, knob drag = a drag on a 
 | 1024 x 768 | 63 ms | 21.8 ms | 1.3 us | 0.94 ms mean, 7.1 ms worst, 17,685 px^2 | 3.1 ms mean, 20.7 ms worst |
 | 390 x 844 | 64 ms | 7.4 ms | 1.5 us | - | - |
 
-ARMv7 under qemu-user (an emulated CPU, NOT an MPC): see the bench output at the end of this report.
+ARMv7 hard-float under qemu-user on the same Mac (an emulated CPU, 20 to 50 times slower than the real thing in general; **NOT an MPC, MPC speed is not measured**):
+
+| Size | create | first full frame | idle tick + is_dirty | knob drag | wavetable animation |
+|---|---:|---:|---:|---|---|
+| 1024 x 600 | 686 ms | 213 ms | 0.71 us | - | 17.0 ms mean, 64.7 ms worst, 70,163 px^2 |
+| 1024 x 768 | 739 ms | 351 ms | 0.93 us | 10.6 ms mean, 77 ms worst, 17,715 px^2 | 29.5 ms mean, 98.8 ms worst |
+| 390 x 844 | 723 ms | 271 ms | 0.85 us | - | - |
+
+The emulator's numbers only say that a frame is a few hundred milliseconds of emulated ARMv7 at worst and an update tens of milliseconds, and that an idle GUI costs one flag read.
