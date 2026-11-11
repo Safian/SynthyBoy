@@ -24,6 +24,7 @@ namespace serumimport
 namespace
 {
 double clampd (double v, double lo, double hi) { return std::max (lo, std::min (hi, v)); }
+constexpr double kSerumEqFreq1 = 209.6, kSerumEqFreq2 = 2040.7, kSerumEqReso = 60.0; // the Serum 2.1.5 defaults of the equalizer bands (measured: tools/ref-compare/eqdef.py)
 constexpr double kSerumLimitRatio = 1.0e5; // a Serum compressor RATIO from here on is the LIMIT detent (the file stores 1,000,000)
 
 std::string modPrefix (int slot0)
@@ -256,23 +257,33 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
     const int pp = get (fxMap, "plainParams");
     std::map<std::string, int> seen;
     const auto find = [&] (const char* name) { return get (pp, name); };
-    // the bands of the Serum EQ: the left band is our low band, the right band our high band; a band set to Peak uses the mid band (the first peak), a second
-    // peak falls back to the shelf of its side
+    // the bands of the Serum EQ (A508, 13-new-keys.md 4.48): the left band (Shelf | Peak | High pass) is our low band, the right band (Shelf | Peak | Low pass) our high band; a band set to Peak
+    // takes the mid band (the first peak) or the second peak band eq.mid2 (the second). The engine runs the EQ law of Serum (eq.law = Serum): RBJ biquads, the Q laws of the plug-in.
     std::string eqGroup[2];
-    bool eqShelfForPeak[2] = { false, false };
+    int eqType[2] = { 0, 0 };
     if (type == kFxTypeEq)
     {
-        const int t1 = find ("kParamType1") >= 0 ? static_cast<int> (num (find ("kParamType1"))) : 0, t2 = find ("kParamType2") >= 0 ? static_cast<int> (num (find ("kParamType2"))) : 0;
-        bool midTaken = false;
-        const int types[2] = { t1, t2 };
+        eqType[0] = find ("kParamType1") >= 0 ? static_cast<int> (num (find ("kParamType1"))) : 0;
+        eqType[1] = find ("kParamType2") >= 0 ? static_cast<int> (num (find ("kParamType2"))) : 0;
+        int peaks = 0;
         for (int b = 0; b < 2; ++b)
         {
-            const bool peak = types[b] == 1;
-            if (peak && ! midTaken) { eqGroup[b] = "mid"; midTaken = true; }
-            else { eqGroup[b] = b == 0 ? "low" : "high"; eqShelfForPeak[b] = peak; }
+            if (eqType[b] == 1) eqGroup[b] = peaks++ == 0 ? "mid" : "mid2";
+            else eqGroup[b] = b == 0 ? "low" : "high";
         }
         placed[rack].back().eq[0] = eqGroup[0];
         placed[rack].back().eq[1] = eqGroup[1];
+        put ("eq.law", 1, nullptr);
+        for (int b = 0; b < 2; ++b)
+        {
+            // the Serum defaults of the parameters the file leaves out (measured, tools/ref-compare/eqdef.py): the left band shelf at 209.6 Hz, the right band shelf at 2040.7 Hz, Q 60 %, no gain
+            const std::string g = "eq." + eqGroup[b] + ".";
+            const std::string n = std::to_string (b + 1);
+            if (find (("kParamFreq" + n).c_str()) < 0) put (g + "cutoff", b == 0 ? kSerumEqFreq1 : kSerumEqFreq2, nullptr);
+            if (find (("kParamReso" + n).c_str()) < 0) put (g + "resonance", kSerumEqReso, nullptr);
+            if (find (("kParamGain" + n).c_str()) < 0) put (g + "gain", 0.0, nullptr);
+            put (g + "mode", eqGroup[b] == "mid2" ? 1.0 : eqGroup[b] == "mid" ? 0.0 : (eqType[b] == 2 ? 1.0 : 0.0), nullptr);   // low: Shelf | High pass, high: Shelf | Low pass, mid: Peak, mid2: Peak (1)
+        }
     }
     if (isMap (pp))
         forMap (pp, [&] (const std::string& nm, int v, int)
@@ -352,29 +363,51 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
             else if (type == kFxTypeEq && isNumber (v) && (nm.rfind ("kParamFreq", 0) == 0 || nm.rfind ("kParamGain", 0) == 0 || nm.rfind ("kParamReso", 0) == 0 || nm.rfind ("kParamType", 0) == 0))
             {
                 const int band = nm.back() == '2' ? 2 : 1;
-                const int t = band == 1 ? (find ("kParamType1") >= 0 ? static_cast<int> (num (find ("kParamType1"))) : 0) : (find ("kParamType2") >= 0 ? static_cast<int> (num (find ("kParamType2"))) : 0);
                 const std::string& group = eqGroup[band - 1];
-                const bool asMid = group == "mid", shelfForPeak = eqShelfForPeak[band - 1];
                 std::string key;
-                double value = num (v);
                 if (nm.rfind ("kParamFreq", 0) == 0) key = "eq." + group + ".cutoff";
                 else if (nm.rfind ("kParamGain", 0) == 0) key = "eq." + group + ".gain";
                 else if (nm.rfind ("kParamReso", 0) == 0) key = "eq." + group + ".resonance";
+                if (key.empty())
+                {
+                    // the band type is the mode of its group, written above
+                    entry (ItemKind::imported, Reason::exact, area, p, valueText (v), "eq." + group + ".mode", fmt (group == "mid2" ? 1.0 : group == "mid" ? 0.0 : (eqType[band - 1] == 2 ? 1.0 : 0.0)), "");
+                }
                 else
                 {
-                    key = "eq." + group + ".mode";
-                    value = asMid ? 0.0 : (t == 2 ? 1.0 : 0.0); // low: Shelf | High pass, high: Shelf | Low pass, mid: Peak | Notch
+                    bool cl = false;
+                    const double st = put (key, num (v), &cl);
+                    entry (cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, p, valueText (v), key, fmt (st), cl ? "clamped_to_range" : "");
                 }
-                bool cl = false;
-                const double st = put (key, value, &cl);
-                entry (asMid || shelfForPeak || cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, p, valueText (v), key, fmt (st),
-                       asMid ? "eq_peak_band_on_the_mid_band" : shelfForPeak ? "eq_second_peak_as_shelf" : (cl ? "clamped_to_range" : ""));
                 consume (v);
             }
         });
+    // A508 (13-new-keys.md 4.48): a Serum file stores only the parameters that differ from the defaults of the module, so a parameter that is not in the file has the Serum default, not ours
+    // (measured on the real plug-in 2.1.5: tools/ref-compare/findef.py renders the module with the parameter absent and with candidate values and takes the value that gives the same render)
+    for (size_t r = 0; r < count; ++r)
+    {
+        const Rule& rule = rows[r];
+        if (! std::isfinite (rule.serumDefault) || rule.conv == Conv::enumName || find (rule.param) >= 0)
+            continue;
+        const bool networkFeedback = type == kFxTypeReverb && rule.conv == Conv::logPercent && std::strcmp (rule.key, "reverb.decay") == 0 && find ("kParamType") >= 0
+                                     && isText (find ("kParamType")) && (str (find ("kParamType")) == "kSpace" || str (find ("kParamType")) == "kAbyss");
+        put (networkFeedback ? "reverb.feedback" : rule.key, networkFeedback ? rule.serumDefault : convert (rule, rule.serumDefault), nullptr);
+    }
     // Serum defaults of enumerations the file leaves out
     if (type == kFxTypeDistortion && find ("kParamMode") < 0) put ("distortion.type", 6, nullptr);
     if (type == kFxTypeReverb && find ("kParamType") < 0) put ("reverb.type", 1, nullptr);
+    if (type == kFxTypeFilter && find ("kParamType") < 0)
+    {
+        int m = 0, s2 = 0;
+        Fid fid = Fid::exact;
+        if (filterTypeFromName ("MgL6", m, s2, fid)) { put ("fxfilter.model", m, nullptr); put ("fxfilter.style", s2, nullptr); }
+    }
+    if (type == kFxTypeCompressor)
+    {
+        // the compressor of Serum 2.1.5 is the peak compressor of the engine (compressor.limit = Serum); a ratio at the LIMIT detent is the look-ahead limiter
+        const int rn = find ("kParamRatio");
+        put ("compressor.limit", rn >= 0 && isNumber (rn) && num (rn) >= kSerumLimitRatio ? 1 : 2, nullptr);
+    }
     if (type == kFxTypeEq)
     {
         // an EQ band at Shelf with no gain is neutral; the Serum EQ default has no gain either

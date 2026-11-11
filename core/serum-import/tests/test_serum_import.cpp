@@ -294,7 +294,7 @@ TEST (serum_compressor_ratio_at_its_maximum_is_the_limit_mode)
         CHECK (slot >= 0);
         if (slot < 0) continue;
         const double limit = fxInstancePlain (kFxTypeCompressor, limitNumber, r.values.plain[fxInstanceKeys (slot).p[limitNumber]]);
-        CHECK_NEAR (limit, ratio >= 1.0e5 ? 1.0 : 0.0, 1e-4);
+        CHECK_NEAR (limit, ratio >= 1.0e5 ? 1.0 : 2.0, 1e-4);   // the ratio at its maximum is the look-ahead limiter (1), any other ratio the peak compressor of Serum (2, A508)
         CHECK ((entryWith (r, "compressor_ratio_max_is_limit_mode") >= 0) == (ratio >= 1.0e5));
     }
 }
@@ -516,9 +516,32 @@ TEST (serum_eq_bands_and_unsupported_effects)
     const SerumImportResult r = run (p.file());
     CHECK (r.status == ImportStatus::ok);
     CHECK_EQ (r.report.unaccounted, 0);
-    CHECK (entryWith (r, "eq_peak_band_on_the_mid_band") >= 0);
-    CHECK (entryWith (r, "eq_second_peak_as_shelf") >= 0);
     CHECK (entryWith (r, "unknown_effect_module") >= 0);
+    // A508: two peak bands are the mid band and the second peak band, the law of the module is Serum, the Serum defaults fill what the file leaves out (Q 60 %)
+    const FxRacks racks = fxRacks (r.values.plain);
+    int slot = -1;
+    for (const FxRackItem& it : racks.rack[0]) if (it.pool && fxTypeDescriptor (kFxTypeEq).count > 0) { slot = it.index; break; }
+    CHECK (slot >= 0);
+    if (slot >= 0)
+    {
+        const FxTypeDescriptor& d = fxTypeDescriptor (kFxTypeEq);
+        const auto plain = [&] (const char* key)
+        {
+            for (int q = 0; q < d.count; ++q)
+                if (d.source[q] == findParamIndex (hashKey (key)))
+                    return static_cast<double> (fxInstancePlain (kFxTypeEq, q, r.values.plain[fxInstanceKeys (slot).p[q]]));
+            return -9999.0;
+        };
+        CHECK_NEAR (plain ("eq.law"), 1.0, 1e-4);
+        CHECK_NEAR (plain ("eq.mid.cutoff"), 200.0, 0.5);
+        CHECK_NEAR (plain ("eq.mid.gain"), 6.0, 0.01);
+        CHECK_NEAR (plain ("eq.mid.resonance"), 60.0, 0.01);
+        CHECK_NEAR (plain ("eq.mid2.mode"), 1.0, 1e-4);
+        CHECK_NEAR (plain ("eq.mid2.cutoff"), 5000.0, 2.0);
+        CHECK_NEAR (plain ("eq.mid2.gain"), -4.0, 0.01);
+        CHECK_NEAR (plain ("eq.low.gain"), 0.0, 1e-4);      // both bands of the file are peaks: the shelves of the module stay flat
+        CHECK_NEAR (plain ("eq.high.gain"), 0.0, 1e-4);
+    }
 }
 
 TEST (serum_content_tables_samples_multisamples_impulses)
@@ -1452,7 +1475,7 @@ TEST (serum_unison_detune_follows_the_measured_power_law_and_the_serum_unison_la
     }
 }
 
-// tools/ref-compare against the real Serum 2.1.5: the compressor threshold is the opposite of a linear level (the measured ceiling of a limiter), the filter drive is a louder output
+// tools/ref-compare against the real Serum 2.1.5: the compressor threshold is the opposite of a linear level (the measured peak ceiling of the compressor), the filter drive is a louder output
 TEST (serum_compressor_threshold_and_filter_drive_follow_the_measured_curves)
 {
     size_t count = 0;
@@ -1463,11 +1486,15 @@ TEST (serum_compressor_threshold_and_filter_drive_follow_the_measured_curves)
     CHECK (thresh != nullptr);
     if (thresh != nullptr)
     {
-        CHECK_NEAR (serumimport::convert (*thresh, 0.2), 0.0, 1e-9);     // below 0.375 nothing happens
-        CHECK_NEAR (serumimport::convert (*thresh, 0.5), -13.6, 1e-9);   // the measured peak of a limiter
-        CHECK_NEAR (serumimport::convert (*thresh, 0.7), -41.5, 1e-9);
+        // REFCOMPARE round 3 (tools/ref-compare/compthr2.py): the peak ceiling of the Serum compressor threshold, measured to -105 dB
+        CHECK_NEAR (serumimport::convert (*thresh, 0.0), 12.0, 1e-9);    // above the measured range the law 13.58 + 59.73 log10 (1 - t), at most +12 dB
+        CHECK_NEAR (serumimport::convert (*thresh, 0.3), 4.4, 1e-9);
+        CHECK_NEAR (serumimport::convert (*thresh, 0.5), -4.36, 1e-9);
+        CHECK_NEAR (serumimport::convert (*thresh, 0.7), -17.67, 1e-9);
+        CHECK_NEAR (serumimport::convert (*thresh, 0.9), -46.29, 1e-9);
         CHECK (serumimport::convert (*thresh, 0.6) < serumimport::convert (*thresh, 0.5)); // monotonic
-        CHECK_NEAR (serumimport::convert (*thresh, 1.0), -42.3, 1e-9);   // and flat at the end
+        CHECK (serumimport::convert (*thresh, 0.99) < serumimport::convert (*thresh, 0.95));
+        CHECK_NEAR (serumimport::convert (*thresh, 1.0), -120.0, 1e-9);  // the end of the knob is the end of the key
     }
     CHECK_NEAR (serumimport::filterDriveMakeupDb (0.0), 0.0, 1e-9);
     CHECK_NEAR (serumimport::filterDriveMakeupDb (25.0), 7.7, 1e-9);

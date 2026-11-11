@@ -399,12 +399,15 @@ double convert (const Rule& r, double v) noexcept
         case Conv::curveDecay: return envCurveOurs (false, false, v);
         case Conv::compThresh:
         {
-            // measured against Serum 2.1.5: the output peak of a limiter (ratio 1e6, 0.1 ms attack) at the threshold t, saw input
-            static const double kT[] = { 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75 };
-            static const double kDb[] = { -0.5, -4.1, -6.0, -7.9, -10.6, -13.6, -16.6, -19.6, -22.7, -26.4, -30.3, -34.3, -38.5, -41.5, -42.0, -42.3 };
+            // measured against Serum 2.1.5 (tools/ref-compare/compthr2.py, REFCOMPARE-REPORT.md section 10): the peak ceiling in dB of the compressor threshold 0 .. 1 (the output peak of the limiter,
+            // ratio 1e6, of a saw; the same threshold is the knee of the peak detector of the compressor). Below 0.275 the ceiling is above the peak of the test signal: the law
+            // 13.58 + 59.73 log10 (1 - t) of the table, at most +12 dB; at 1 the threshold is -120 dB.
+            static const double kT[] = { 0.275, 0.3, 0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75, 0.775, 0.8, 0.825, 0.85, 0.875, 0.9, 0.9125, 0.925, 0.9375, 0.95, 0.96, 0.9625, 0.97, 0.975, 0.98, 0.9875, 0.99, 0.995 };
+            static const double kDb[] = { 5.31, 4.4, 3.45, 2.47, 1.45, 0.39, -0.72, -1.88, -3.09, -4.36, -5.7, -7.11, -8.59, -10.17, -11.86, -13.65, -15.58, -17.67, -19.94, -22.42, -25.17, -28.24, -31.71, -35.73, -40.48, -46.29, -49.76, -53.77, -58.51, -64.29, -70.04, -71.69, -77.35, -81.88, -87.21, -96.89, -100.28, -105.27 };
             constexpr int n = static_cast<int> (sizeof kT / sizeof kT[0]);
-            if (v <= kT[0]) return 0.0;
-            if (v >= kT[n - 1]) return kDb[n - 1] + (v - kT[n - 1]) * 0.0;
+            if (v >= 1.0) return -120.0;
+            if (v <= kT[0]) return std::min (12.0, 13.58 + 59.73 * std::log10 (std::max (1.0e-6, 1.0 - std::max (0.0, v))));
+            if (v >= kT[n - 1]) return std::max (-120.0, kDb[n - 1] + (-120.0 - kDb[n - 1]) * (v - kT[n - 1]) / (1.0 - kT[n - 1]));
             int i = 0;
             while (i + 2 < n && v > kT[i + 1]) ++i;
             return kDb[i] + (kDb[i + 1] - kDb[i]) * (v - kT[i]) / (kT[i + 1] - kT[i]);
@@ -559,124 +562,124 @@ int fxTypeOf (const std::string& n) noexcept
 namespace
 {
 const Rule kChorus[] = {
-    { "FX", "kParamWet", "chorus.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamRate", "chorus.rate", Conv::lin, 1, 0, C, kNaN, nullptr, "" },
-    { "FX", "kParamDelay", "chorus.delay1", Conv::lin, 1, 0, C, kNaN, nullptr, "" },
-    { "FX", "kParamDelay2", "chorus.delay2", Conv::lin, 1, 0, C, kNaN, nullptr, "" },
-    { "FX", "kParamDepth", "chorus.depth", Conv::lin, 4, 0, A, kNaN, nullptr, "chorus_depth_scale_assumed" },
-    { "FX", "kParamFeedback", "chorus.feedback", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamFilt", "chorus.filter_cutoff", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "chorus.mix", Conv::lin, 1, 0, X, 50, nullptr, "" },
+    { "FX", "kParamRate", "chorus.rate", Conv::lin, 1, 0, C, 0.078125, nullptr, "" },
+    { "FX", "kParamDelay", "chorus.delay1", Conv::lin, 1, 0, C, 5, nullptr, "" },
+    { "FX", "kParamDelay2", "chorus.delay2", Conv::lin, 1, 0, C, 0, nullptr, "" },
+    { "FX", "kParamDepth", "chorus.depth", Conv::lin, 4, 0, A, 26.458, nullptr, "chorus_depth_scale_assumed" },
+    { "FX", "kParamFeedback", "chorus.feedback", Conv::lin, 1, 0, X, 9.5, nullptr, "" },
+    { "FX", "kParamFilt", "chorus.filter_cutoff", Conv::lin, 1, 0, X, 1000, nullptr, "" },
     { "FX", "kParamLevelOut", "chorus.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kComp[] = {
-    { "FX", "kParamWet", "compressor.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamAttack", "compressor.attack", Conv::logToPercent, 0.1, 1000, A, kNaN, nullptr, "compressor_time_scale_assumed" },
-    { "FX", "kParamRelease", "compressor.release", Conv::logToPercent, 0.1, 1000, A, kNaN, nullptr, "compressor_time_scale_assumed" },
-    { "FX", "kParamMultiband", "compressor.bands", Conv::lin, -3, 3, A, kNaN, nullptr, "compressor_band_layout" },
-    { "FX", "kParamThresh", "compressor.low.upper_threshold", Conv::compThresh, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
-    { "FX", "kParamThresh", "compressor.mid.upper_threshold", Conv::compThresh, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
-    { "FX", "kParamThresh", "compressor.high.upper_threshold", Conv::compThresh, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
-    { "FX", "kParamRatio", "compressor.low.upper_ratio", Conv::ratioPercent, 1, 0, A, kNaN, nullptr, "compressor_ratio_scale_assumed" },
-    { "FX", "kParamRatio", "compressor.mid.upper_ratio", Conv::ratioPercent, 1, 0, A, kNaN, nullptr, "compressor_ratio_scale_assumed" },
-    { "FX", "kParamRatio", "compressor.high.upper_ratio", Conv::ratioPercent, 1, 0, A, kNaN, nullptr, "compressor_ratio_scale_assumed" },
-    { "FX", "kParamMakeup", "compressor.low.gain", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "compressor_makeup_to_bands" },
-    { "FX", "kParamMakeup", "compressor.mid.gain", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "compressor_makeup_to_bands" },
-    { "FX", "kParamMakeup", "compressor.high.gain", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "compressor_makeup_to_bands" },
-    { "FX", "kParamXoverLow", "compressor.crossover_low", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamXoverHi", "compressor.crossover_high", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "compressor.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
+    { "FX", "kParamAttack", "compressor.attack", Conv::logToPercent, 0.1, 1000, A, 90.13846, nullptr, "compressor_time_scale_assumed" },
+    { "FX", "kParamRelease", "compressor.release", Conv::logToPercent, 0.1, 1000, A, 90.08452, nullptr, "compressor_time_scale_assumed" },
+    { "FX", "kParamMultiband", "compressor.bands", Conv::lin, -3, 3, A, 0, nullptr, "compressor_band_layout" },
+    { "FX", "kParamThresh", "compressor.low.upper_threshold", Conv::compThresh, 1, 0, A, 0.5, nullptr, "compressor_single_band_to_all_bands" },
+    { "FX", "kParamThresh", "compressor.mid.upper_threshold", Conv::compThresh, 1, 0, A, 0.5, nullptr, "compressor_single_band_to_all_bands" },
+    { "FX", "kParamThresh", "compressor.high.upper_threshold", Conv::compThresh, 1, 0, A, 0.5, nullptr, "compressor_single_band_to_all_bands" },
+    { "FX", "kParamRatio", "compressor.low.upper_ratio", Conv::ratioPercent, 1, 0, A, 4, nullptr, "compressor_ratio_scale_assumed" },
+    { "FX", "kParamRatio", "compressor.mid.upper_ratio", Conv::ratioPercent, 1, 0, A, 4, nullptr, "compressor_ratio_scale_assumed" },
+    { "FX", "kParamRatio", "compressor.high.upper_ratio", Conv::ratioPercent, 1, 0, A, 4, nullptr, "compressor_ratio_scale_assumed" },
+    { "FX", "kParamMakeup", "compressor.low.gain", Conv::dbFromLin, 1, 0, A, 1, nullptr, "compressor_makeup_to_bands" },
+    { "FX", "kParamMakeup", "compressor.mid.gain", Conv::dbFromLin, 1, 0, A, 1, nullptr, "compressor_makeup_to_bands" },
+    { "FX", "kParamMakeup", "compressor.high.gain", Conv::dbFromLin, 1, 0, A, 1, nullptr, "compressor_makeup_to_bands" },
+    { "FX", "kParamXoverLow", "compressor.crossover_low", Conv::lin, 1, 0, X, 128.3, nullptr, "" },
+    { "FX", "kParamXoverHi", "compressor.crossover_high", Conv::lin, 1, 0, X, 2500, nullptr, "" },
     { "FX", "kParamLevelOut", "compressor.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kDelay[] = {
-    { "FX", "kParamWet", "delay.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamTimeL", "delay.time", Conv::ms, 1, 0, C, kNaN, nullptr, "delay_tempo_sync_flattened" },
-    { "FX", "kParamTimeR", "delay.time2", Conv::ms, 1, 0, C, kNaN, nullptr, "delay_tempo_sync_flattened" },
-    { "FX", "kParamFeedback", "delay.feedback", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamFreq", "delay.filter_cutoff", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamBW", "delay.filter_spread", Conv::lin, 12.12, 0, A, kNaN, nullptr, "delay_bandwidth_as_spread" },
-    { "FX", "kParamMode", "delay.style", Conv::lin, 1, 1, A, kNaN, nullptr, "delay_mode_nearest_style" },
-    { "FX", "kParamHQ", "delay.hq", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "delay.mix", Conv::lin, 1, 0, X, 30, nullptr, "" },
+    { "FX", "kParamTimeL", "delay.time", Conv::ms, 1, 0, C, 0.06236, nullptr, "delay_tempo_sync_flattened" },
+    { "FX", "kParamTimeR", "delay.time2", Conv::ms, 1, 0, C, 0.07642, nullptr, "delay_tempo_sync_flattened" },
+    { "FX", "kParamFeedback", "delay.feedback", Conv::lin, 1, 0, X, 40, nullptr, "" },
+    { "FX", "kParamFreq", "delay.filter_cutoff", Conv::lin, 1, 0, X, 848.52814, nullptr, "" },
+    { "FX", "kParamBW", "delay.filter_spread", Conv::lin, 12.12, 0, A, 6.74923, nullptr, "delay_bandwidth_as_spread" },
+    { "FX", "kParamMode", "delay.style", Conv::lin, 1, 1, A, 0, nullptr, "delay_mode_nearest_style" },
+    { "FX", "kParamHQ", "delay.hq", Conv::boolean, 1, 0, X, 1, nullptr, "" },
     // GROUPA1 (WP-10, A351): one scalar per channel (Serum manual p.166: 1.1 = 110 %), the same unit as ours
-    { "FX", "kParamOffsetL", "delay.offset_left", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamOffsetR", "delay.offset", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamOffsetL", "delay.offset_left", Conv::lin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamOffsetR", "delay.offset", Conv::lin, 1, 0, X, 1, nullptr, "" },
     { "FX", "kParamLevelOut", "delay.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kDist[] = {
-    { "FX", "kParamWet", "distortion.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamDrive", "distortion.drive", Conv::lin, 0.3, 0, A, kNaN, nullptr, "distortion_drive_scale_assumed" },
+    { "FX", "kParamWet", "distortion.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
+    { "FX", "kParamDrive", "distortion.drive", Conv::lin, 0.3, 0, A, 25, nullptr, "distortion_drive_scale_assumed" },
     { "FX", "kParamMode", "distortion.type", Conv::enumName, 1, 0, X, 6, &kFxDistortionEnum, "" },
     { "FX", "kParamFreq", "distortion.filter_cutoff", Conv::noteHz, 1, 0, C, kNaN, nullptr, "filter_frequency_scale_assumed" },
     { "FX", "kParamLPHP", "distortion.filter_blend", Conv::lin, 1, 0, A, kNaN, nullptr, "distortion_lphp_as_blend" },
-    { "FX", "kParamPrePost", "distortion.filter_order", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamPrePost", "distortion.filter_order", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "FX", "kParamLevelOut", "distortion.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kFxFilter[] = {
-    { "FX", "kParamWet", "fxfilter.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamFreq", "fxfilter.cutoff", Conv::noteHz, 1, 0, C, kNaN, nullptr, "filter_frequency_scale_assumed" },
-    { "FX", "kParamReso", "fxfilter.resonance", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamDrive", "fxfilter.drive", Conv::lin, 0.2, 0, C, kNaN, nullptr, "filter_drive_scale_assumed" },
+    { "FX", "kParamWet", "fxfilter.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
+    { "FX", "kParamFreq", "fxfilter.cutoff", Conv::noteHz, 1, 0, C, 0.5, nullptr, "filter_frequency_scale_assumed" },
+    { "FX", "kParamReso", "fxfilter.resonance", Conv::lin, 1, 0, X, 0, nullptr, "" },
+    { "FX", "kParamDrive", "fxfilter.drive", Conv::lin, 0.2, 0, C, 0, nullptr, "filter_drive_scale_assumed" },
     { "FX", "kParamVar", "fxfilter.var", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamStereo", "fxfilter.pan", Conv::lin, 2, -100, X, kNaN, nullptr, "" },
+    { "FX", "kParamStereo", "fxfilter.pan", Conv::lin, 2, -100, X, 50.9, nullptr, "" },
     { "FX", "kParamLevelOut", "fxfilter.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
-    { "FX", "kParamPad", "fxfilter.clean_mode", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamPad", "fxfilter.clean_mode", Conv::boolean, 1, 0, X, 0, nullptr, "" },
     { "FX", "kParamX", "fxfilter.formant.x", Conv::lin, 100, 0, C, kNaN, nullptr, "filter_xy_as_formant" },
     { "FX", "kParamY", "fxfilter.formant.y", Conv::lin, 100, 0, C, kNaN, nullptr, "filter_xy_as_formant" },
 };
 const Rule kFlanger[] = {
-    { "FX", "kParamWet", "flanger.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamRate", "flanger.rate", Conv::lin, 1, 0, C, kNaN, nullptr, "" },
-    { "FX", "kParamDepth", "flanger.depth", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamFeedback", "flanger.feedback", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamWidth", "flanger.phase_offset", Conv::lin, 1, 0, C, kNaN, nullptr, "flanger_width_as_phase_offset" },
+    { "FX", "kParamWet", "flanger.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
+    { "FX", "kParamRate", "flanger.rate", Conv::lin, 1, 0, C, 0.078125, nullptr, "" },
+    { "FX", "kParamDepth", "flanger.depth", Conv::lin, 1, 0, X, 100, nullptr, "" },
+    { "FX", "kParamFeedback", "flanger.feedback", Conv::lin, 1, 0, X, 50, nullptr, "" },
+    { "FX", "kParamWidth", "flanger.phase_offset", Conv::lin, 1, 0, C, 180, nullptr, "flanger_width_as_phase_offset" },
     { "FX", "kParamLevelOut", "flanger.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kPhaser[] = {
-    { "FX", "kParamWet", "phaser.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamRate", "phaser.rate", Conv::lin, 1, 0, C, kNaN, nullptr, "" },
-    { "FX", "kParamDepth", "phaser.depth", Conv::lin, 0.48, 0, A, kNaN, nullptr, "phaser_depth_scale_assumed" },
-    { "FX", "kParamFeedback", "phaser.feedback", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamFreq", "phaser.center", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamWidth", "phaser.phase_offset", Conv::lin, 1, 0, C, kNaN, nullptr, "phaser_width_as_phase_offset" },
+    { "FX", "kParamWet", "phaser.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
+    { "FX", "kParamRate", "phaser.rate", Conv::lin, 1, 0, C, 0.078125, nullptr, "" },
+    { "FX", "kParamDepth", "phaser.depth", Conv::lin, 0.48, 0, A, 50, nullptr, "phaser_depth_scale_assumed" },
+    { "FX", "kParamFeedback", "phaser.feedback", Conv::lin, 1, 0, X, 80, nullptr, "" },
+    { "FX", "kParamFreq", "phaser.center", Conv::lin, 1, 0, X, 600, nullptr, "" },
+    { "FX", "kParamWidth", "phaser.phase_offset", Conv::lin, 1, 0, C, 180, nullptr, "phaser_width_as_phase_offset" },
     { "FX", "kParamLevelOut", "phaser.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kReverb[] = {
-    { "FX", "kParamWet", "reverb.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "reverb.mix", Conv::lin, 1, 0, X, 20, nullptr, "" },
     { "FX", "kParamType", "reverb.type", Conv::enumName, 1, 0, X, 1, &kReverbTypeEnum, "" },
-    { "FX", "kParamSize", "reverb.size", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamPreDelay", "reverb.predelay", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamSize", "reverb.size", Conv::lin, 1, 0, X, 35, nullptr, "" },
+    { "FX", "kParamPreDelay", "reverb.predelay", Conv::ms, 1, 0, X, 0, nullptr, "" },
     { "FX", "kParamDelay", "reverb.predelay", Conv::lin, 1, 0, A, kNaN, nullptr, "reverb_delay_as_predelay" },
-    { "FX", "kParamFeedback", "reverb.decay", Conv::logPercent, 20, 30000, A, kNaN, nullptr, "reverb_feedback_as_decay" },
+    { "FX", "kParamFeedback", "reverb.decay", Conv::logPercent, 20, 30000, A, 25, nullptr, "reverb_feedback_as_decay" },
     { "FX", "kParamFreq", "reverb.pre_low_cut", Conv::logPercent, 20, 12000, A, kNaN, nullptr, "reverb_cut_scale_assumed" },
-    { "FX", "kParamFreqB", "reverb.pre_high_cut", Conv::logPercentInv, 20, 12000, A, kNaN, nullptr, "reverb_cut_scale_assumed" },
-    { "FX", "kParamWidth", "reverb.width", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamFreqB", "reverb.pre_high_cut", Conv::logPercentInv, 20, 12000, A, 35, nullptr, "reverb_cut_scale_assumed" },
+    { "FX", "kParamWidth", "reverb.width", Conv::lin, 1, 0, X, 20, nullptr, "" },
     { "FX", "kParamLevelOut", "reverb.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kHyper[] = {
-    { "FX", "kParamWet", "hyperdim.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamRate", "hyperdim.rate", Conv::lin, 0.1, 0, A, kNaN, nullptr, "hyper_rate_scale_assumed" },
-    { "FX", "kParamDetune", "hyperdim.detune", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamUnison", "hyperdim.unison", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamRetrig", "hyperdim.retrig", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "hyperdim.mix", Conv::lin, 1, 0, X, 50, nullptr, "" },
+    { "FX", "kParamRate", "hyperdim.rate", Conv::lin, 0.1, 0, A, 40, nullptr, "hyper_rate_scale_assumed" },
+    { "FX", "kParamDetune", "hyperdim.detune", Conv::lin, 1, 0, X, 25, nullptr, "" },
+    { "FX", "kParamUnison", "hyperdim.unison", Conv::lin, 1, 0, X, 4, nullptr, "" },
+    { "FX", "kParamRetrig", "hyperdim.retrig", Conv::boolean, 1, 0, X, 0, nullptr, "" },
     { "FX", "kParamDimESize", "hyperdim.dim_size", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamDimEWet", "hyperdim.dim_mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamLevelOut", "hyperdim.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kUtils[] = {
-    { "FX", "kParamWet", "utility.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "utility.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
     { "FX", "kParamWidth", "utility.width", Conv::lin, 1, 0, C, kNaN, nullptr, "" },
-    { "FX", "kParamBalance", "utility.pan", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamBalance", "utility.pan", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "FX", "kParamHPF", "utility.hpf", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLPF", "utility.lpf", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamLPF", "utility.lpf", Conv::lin, 1, 0, X, 20000, nullptr, "" },
     { "FX", "kParamLFMono", "utility.mono_bass", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamLFXover", "utility.mono_freq", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamPolarityL", "utility.polarity_l", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamPolarityR", "utility.polarity_r", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamPolarityL", "utility.polarity_l", Conv::boolean, 1, 0, X, 0, nullptr, "" },
+    { "FX", "kParamPolarityR", "utility.polarity_r", Conv::boolean, 1, 0, X, 0, nullptr, "" },
     { "FX", "kParamLevelOut", "utility.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kBode[] = {
-    { "FX", "kParamWet", "bode.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "bode.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
     { "FX", "kParamRange", "bode.range", Conv::lin, 1, 0, C, kNaN, nullptr, "" },
-    { "FX", "kParamBlur", "bode.blur", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamFeedback", "bode.feed", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamBlur", "bode.blur", Conv::lin, 1, 0, X, 0, nullptr, "" },
+    { "FX", "kParamFeedback", "bode.feed", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "FX", "kParamDelayTime", "bode.delay", Conv::ms, 1, 0, C, kNaN, nullptr, "delay_tempo_sync_flattened" },
     { "FX", "kParamDelayBalance", "bode.balance", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamOutputWidth", "bode.width", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -685,7 +688,7 @@ const Rule kBode[] = {
     { "FX", "kParamLevelOut", "bode.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kConv[] = {
-    { "FX", "kParamWet", "convolve.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamWet", "convolve.mix", Conv::lin, 1, 0, X, 20, nullptr, "" },
     { "FX", "kParamSize", "convolve.size", Conv::lin, 0.1, 0, A, kNaN, nullptr, "convolve_size_scale_assumed" },
     { "FX", "kParamTone", "convolve.tone", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamMinPhase", "convolve.phi_min", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },

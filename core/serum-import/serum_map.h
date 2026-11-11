@@ -32,7 +32,7 @@ enum class Conv : uint8_t
     curveDecay,   // Serum envelope decay / release curve 0 .. 100 -> env#.decay_curve / release_curve: the same, measured
     detuneLaw,    // Serum unison detune 0 .. 1 -> osc#.unison.detune: 100 * in ^ 1.25 (outer voices 200 * in ^ 1.25 cents with the range of 2 semitones; measured against Serum 2.1.5)
     cubicPercent, // Serum bus send 0 .. 100 % -> 100 * (in / 100) ^ 3: the measured send law of the real Serum 2.1.5 (a send of 50 % adds 1 dB, not 3.5 dB)
-    compThresh    // Serum compressor threshold 0 .. 1 -> dB: the measured ceiling of a limiter (tools/ref-compare, REFCOMPARE-REPORT.md), 0 dB up to 0.375 and falling to -42.5 dB
+    compThresh    // Serum compressor threshold 0 .. 1 -> dB: the measured peak ceiling (tools/ref-compare/compthr2.py): +12 dB at the top of the range, -120 dB at 1
 };
 
 enum class Fid : uint8_t { exact, close, approx }; // exact = the same quantity; close = the same quantity, range clamped / unit assumed; approx = nearest feature
