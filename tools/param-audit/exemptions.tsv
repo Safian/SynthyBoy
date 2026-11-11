@@ -1,0 +1,31 @@
+# Keys that the parameter audit (scripts/run-param-audit.sh) finds DEAD or MOD-DEAD for a reason that is not a defect. One entry per line: REGEX <TAB> CATEGORY <TAB> REASON.
+# The regex is searched in the key. A line whose regex starts with "mod:" is for the modulation sweep (the regex follows the prefix). A line with "find:" is for a finding
+# (the regex is searched in "<key> <finding word>"). Categories: UI-ONLY, CONTENT, HOST, NOOP-ENGINE (an engine specific no-op, documented), HARNESS (needs a state the harness cannot put in place).
+# Every entry must say WHY; the report lists them. Unexplained DEAD keys fail the run.
+^osc[123]\.sample\.loop_link$	UI-ONLY	editor action without DSP effect by design (13-new-keys.md A39: loop_link links the loop length to the region length in the editor)
+^quality\.no_smoothing$	TESTED-ELSEWHERE	switches the parameter smoothing off: the static sound is identical by design (the audit itself runs with it on); the transition after a jump is tested in synthyboy_test_param_semantics quality_no_smoothing_changes_how_a_jump_lands
+^reverb\.force_enable$	TESTED-ELSEWHERE	acts only where the quality tier masks the reverb (the low tier): the audit runs on the high tier; tested on the low tier in synthyboy_test_param_semantics reverb_force_enable_overrides_the_tier_mask
+^compressor\.limit_latency_comp$|^fxi(0[1-9]|1[0-6])\.p22$	TESTED-ELSEWHERE	reports the 1.5 ms look-ahead of the limiter as chain latency (IEngine::latencySamples, A142), the audio is the same; tested in synthyboy_test_param_semantics compressor_limit_latency_comp_reports_the_look_ahead
+^bode\.retrig$	OPEN-QUESTION	no context of the ladder (default / fast / long scripts, stereo input, shift 40 Hz, feed 50 %) makes the retrigger audible; owner question 115
+^fx\.order\.16$	OPEN-QUESTION	slot 16 of the chain: no combination of enabled modules and band racks tried makes a different module in it audible; owner question 115
+^fxi(0[1-9]|1[0-6])\.order$	OPEN-QUESTION	the order of two effect instances (distortion + filter at mid values) does not change the sound in the audit's contexts; owner question 115
+^master\.voice_override$	OPEN-QUESTION	Kill / Steal with polyphony 2 and eight notes at a 600 ms release renders the same; A202 says it is audible with polyphony 2 and three notes; owner question 115
+^osc[123]\.multi\.vel_override$	OPEN-QUESTION	no velocity difference between two notes of the audit's instrument changes with vel_override (the SFZ of the fixture has no amp_veltrack); owner question 115
+^osc[123]\.phase_memory$	OPEN-QUESTION	phase legato with three unison voices and legato notes renders the same for All voices / Contiguous / Per voice; owner question 115
+^osc[123]\.remap\.fall$	OPEN-QUESTION	RISE is audible (an LFO on the frame position) but FALL is not in the same context; owner question 115
+^osc[123]\.sample\.(loop_relative|scan_lock_tempo|slice_play)$	OPEN-QUESTION	no context of the ladder (looped / one-shot sample, slices, BPM 87, length in beats) makes the key audible; owner question 115
+^osc[123]\.spec\.(flt_frame|transients)$	OPEN-QUESTION	the spectral oscillator with the drawn filter table / the transient mode renders the same in the audit's contexts; owner question 115
+mod:^fxi(0[1-9]|1[0-6])\.p(15|16|18|20|21|22)$	OPEN-QUESTION	modulation of the high band parameters, level and limiter of the pool Compressor (and the Reverb room / width / diffusion, FX Filter var / pan) has no effect in the ladder although the direct sweep is audible; owner question 115
+mod:^osc[123]\.(sample\.slice|spec\.flt_frame)$	OPEN-QUESTION	the modulation of the slice / the filter table frame has no effect in the ladder; owner question 115
+mod:^reverb\.low_shelf_cutoff$	OPEN-QUESTION	modulation of the low shelf cutoff of the reverb is inaudible with the shelf at -6 dB; owner question 115
+mod:^rlfo[1-4]\.keytrack_tune$	OPEN-QUESTION	the key follow tune of a random LFO modulated by a macro has no audible effect; owner question 115
+^osc[23]\.sample\.slice$	QUICK-DENSITY	osc2 / osc3 run at the quick density in --full (nine values fall into few of the stepwise slice positions); osc1 (65 values) is alive; sweep them with --all-instances
+^rlfo[2-4]\.(sync_type|rate)$|mod:^rlfo[2-4]\.rate$	QUICK-DENSITY	random LFO instances 2 .. 4 run at the quick density; their twin rlfo1 is alive in the same keys (the verdict of a random context needs a change above the run to run noise)
+^osc[123]\.(frame|frame_spread) PLATEAU-MID	BY-MODEL	the frame position steps between the frames of the table unless oscN.smooth_interp is on (Serum's Smooth Interp, default Off): identical neighbours are the model
+^osc[123]\.(morph\.spread|multi\.timbre|sample\.slice|sample\.slice_threshold|gran\.rand_dir|spec\.freq_hi|sample\.loop_xfade) PLATEAU-MID	BY-MODEL	a stepwise or banded quantity (slice positions, instrument zones, grain direction, spectral band edges, crossfade length in samples): identical neighbours are the model
+^(chorus|delay)\.filter_cutoff PLATEAU-MID	BY-MODEL	the filter of the feedback path acts only above the content of the test note: no difference below about 780 Hz
+^(flanger\.phase_offset|env[1-6]\.[a-z_]*curve|lfo[0-9]+\.smooth_time) PLATEAU-MID	BY-MODEL	the quantity is quantised inside the engine (delay lines in whole samples, curve power in steps): identical neighbours at the 1/64 grid of the sweep
+^fxi(0[1-9]|1[0-6])\.p0[1-9] PLATEAU-MID	BY-MODEL	a normalised pool parameter that maps a choice (bands, modes): identical inside one choice
+^(convolve\.ir_gain|osc[123]\.fixed_pitch|osc[123]\.spec\.freq_lo|osc[123]\.spec\.freq_shift) CLICK	BY-MODEL	the sound at these values is a very high pitch (fixed pitch up to note 127) or a hard spectral cut: the step of the waveform is large by design, not a discontinuity in time
+^(osc[23]\.sample\.slice|rlfo[2-4]\.(sync_type|rate)) family	QUICK-DENSITY	the same key of instance 1 is alive; the instance runs at the quick density in --full (see the entries for these keys above)
+^fxi(0[2-9]|1[0-6])\.order family	OPEN-QUESTION	fxi02.order changes the sound (when the partner instance sits at the default order 1023) but fxi01.order and fxi16.order never do in the same arrangement; owner question 115
