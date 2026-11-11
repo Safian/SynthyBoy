@@ -39,6 +39,7 @@
         "android": { "$ref": "#/$defs/staticBuild" }
       }
     },
+    "gui": { "$ref": "#/$defs/gui" },
     "contentPacks": { "type": "array", "items": { "$ref": "#/$defs/contentPack" } },
     "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
     "key_id": { "type": "string", "minLength": 1 },
@@ -90,6 +91,25 @@
         "required": { "type": "boolean" },
         "type": { "type": "string", "enum": ["presets", "wavetables", "samples"] },
         "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]+$" }
+      }
+    },
+    "gui": {
+      "description": "The GUI the module itself offers to a host that cannot run the plug-in's toolkit: kind 'bitmap' = the CLAP extension in 'extension' (docs/BITMAP-GUI-EXTENSION.md), the plug-in renders into a pixel buffer. 'builds' names the builds above that contain it (the static iOS / Android library does not).",
+      "type": "object",
+      "required": ["kind", "extension", "builds"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["bitmap"] },
+        "extension": { "type": "string", "pattern": "^[a-z0-9.-]+/[0-9]+$" },
+        "host_extension": { "type": "string", "pattern": "^[a-z0-9.-]+/[0-9]+$" },
+        "pixel_format": { "type": "string", "enum": ["bgra8888-premul"] },
+        "preferred_width": { "type": "integer", "minimum": 1 },
+        "preferred_height": { "type": "integer", "minimum": 1 },
+        "min_width": { "type": "integer", "minimum": 1 },
+        "min_height": { "type": "integer", "minimum": 1 },
+        "max_width": { "type": "integer", "minimum": 1 },
+        "max_height": { "type": "integer", "minimum": 1 },
+        "builds": { "type": "array", "minItems": 1, "items": { "type": "string", "enum": ["linux-armv7", "linux-aarch64", "linux-x86_64", "macos-universal", "windows-x64"] } }
       }
     },
     "staticBuild": {

@@ -21,6 +21,19 @@
     "ios":     { "status": "planned", "library": "libsynthyboy_static.a" },
     "android": { "status": "planned", "library": "libsynthyboy_static.a" }
   },
+  "gui": {
+    "kind": "bitmap",
+    "extension": "com.safian.bitmap-gui/1",
+    "host_extension": "com.safian.bitmap-gui.host/1",
+    "pixel_format": "bgra8888-premul",
+    "preferred_width": 1024,
+    "preferred_height": 768,
+    "min_width": 360,
+    "min_height": 480,
+    "max_width": 1800,
+    "max_height": 1400,
+    "builds": ["linux-armv7", "linux-aarch64", "linux-x86_64", "macos-universal", "windows-x64"]
+  },
   "contentPacks": [
     {
       "id": "com.safian.synthyboy.factory-presets",

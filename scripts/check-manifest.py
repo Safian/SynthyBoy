@@ -272,6 +272,48 @@ def check_content_pack(cp, manifest, errors):
                       "(tools/contentpack/contentpack.py split) and declare every part" % (label, total, MAX_ASSET_BYTES))
 
 
+def header_constant(path, pattern, what, errors):
+    """The first capture group of `pattern` in the file, or None (and an error)."""
+    try:
+        text = (ROOT / path).read_text(encoding="utf-8")
+    except OSError as e:
+        errors.append("gui: cannot read %s: %s" % (path, e))
+        return None
+    m = re.search(pattern, text)
+    if not m:
+        errors.append("gui: %s not found in %s" % (what, path))
+        return None
+    return m.group(1)
+
+
+def check_gui(manifest, errors):
+    """The optional "gui" section must say what the module really offers: the extension ids of shell-clap/bitmap_gui_ext.h, the sizes of the editor and of the bitmap session, and only builds
+    the manifest declares."""
+    gui = manifest.get("gui")
+    if not isinstance(gui, dict):
+        return
+    ext = header_constant("shell-clap/bitmap_gui_ext.h", r'#define\s+SAFIAN_EXT_BITMAP_GUI\s+"([^"]+)"', "SAFIAN_EXT_BITMAP_GUI", errors)
+    host = header_constant("shell-clap/bitmap_gui_ext.h", r'#define\s+SAFIAN_EXT_BITMAP_GUI_HOST\s+"([^"]+)"', "SAFIAN_EXT_BITMAP_GUI_HOST", errors)
+    if ext is not None and gui.get("extension") != ext:
+        errors.append("gui.extension %r != SAFIAN_EXT_BITMAP_GUI %r (shell-clap/bitmap_gui_ext.h)" % (gui.get("extension"), ext))
+    if host is not None and gui.get("host_extension", host) != host:
+        errors.append("gui.host_extension %r != SAFIAN_EXT_BITMAP_GUI_HOST %r (shell-clap/bitmap_gui_ext.h)" % (gui.get("host_extension"), host))
+    editor = "shell-juce/ui/Editor.h"
+    for key, name in (("min_width", "kMinWidth"), ("min_height", "kMinHeight"), ("max_width", "kMaxWidth"), ("max_height", "kMaxHeight")):
+        value = header_constant(editor, r"%s\s*=\s*(\d+)" % name, name, errors)
+        if value is not None and key in gui and gui[key] != int(value):
+            errors.append("gui.%s %r != %s %s (%s)" % (key, gui[key], name, value, editor))
+    session = "shell-clap/bitmap/BitmapSession.h"
+    for key, name in (("preferred_width", "kDefaultWidth"), ("preferred_height", "kDefaultHeight")):
+        value = header_constant(session, r"%s\s*=\s*(\d+)" % name, name, errors)
+        if value is not None and key in gui and gui[key] != int(value):
+            errors.append("gui.%s %r != %s %s (%s)" % (key, gui[key], name, value, session))
+    declared = set((manifest.get("builds") or {}).keys())
+    for name in gui.get("builds", []):
+        if name not in declared:
+            errors.append("gui.builds: %r is not a build of this manifest" % name)
+
+
 def check_manifest(manifest_path, mode="checked-in", assets_dir=None):
     """Returns (manifest or None, list of problems)."""
     manifest_path = Path(manifest_path)
@@ -303,6 +345,8 @@ def check_manifest(manifest_path, mode="checked-in", assets_dir=None):
         errors.append("CMakeLists.txt: no CLAP_ID found")
     elif manifest.get("clap_id") != m.group(1):
         errors.append("clap_id %r != CLAP_ID in CMakeLists.txt %r" % (manifest.get("clap_id"), m.group(1)))
+
+    check_gui(manifest, errors)
 
     manifest_dir = manifest_path.resolve().parent
     assets_dir = Path(assets_dir) if assets_dir else None

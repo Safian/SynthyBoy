@@ -221,6 +221,15 @@ Why two shells: JUCE's Linux build pulls in X11/ALSA/freetype/fontconfig and its
 
 Which of these `clap-juce-extensions` already implements at the pinned commit is **(unverified)**; the clap-validator run (§10) is the arbiter, and anything missing is provided by the native shell.
 
+### 4.2 The bitmap GUI of the native module
+
+The native module (`shell-clap`, `synthyboy.clap`) can render the editor of `shell-juce/ui` itself, with JUCE's software renderer into a pixel buffer, and offer it through the generic CLAP extension
+`com.safian.bitmap-gui/1` (`shell-clap/bitmap_gui_ext.h`, spec `BITMAP-GUI-EXTENSION.md`, design record `ui-design/13-new-keys.md` 4.45, report `ui-design/BITMAPGUI-REPORT.md`). A host that cannot or must
+not run the plug-in's toolkit (Kick on the Akai MPC, a framebuffer; a host that links another version of JUCE) copies the dirty rectangles and forwards touch / mouse / key input. The module links its own JUCE 8.0.17
+statically with hidden symbols and exports `clap_entry` and `synthyboy_clap_get_entry` only (checked by `scripts/check-clap-exports.sh`). The GUI never touches the audio thread: edits travel through the lock free
+`UiLink` (`shell-clap/synthyboy_ui_link.h`) and are handled like host automation in `process ()` / `params.flush ()`. It is a CMake option, `SYNTHYBOY_BITMAP_GUI` (default ON with the JUCE plug-in, OFF for the static
+library: the iOS rule of 2.2 is unchanged; linking this module's JUCE 8 into an iOS binary that also contains Kick's JUCE 7 needs `JUCE_NAMESPACE`, an open point, `14-morning-questions.md` 110).
+
 ## 5. Parameters, state, presets (UI-independent)
 
 ### 5.1 `ParamInfo`

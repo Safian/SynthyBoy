@@ -12,8 +12,9 @@
 # create a tag and does not publish: the draft is published by the owner. A manual run (no tag) uses the tag name v<version of plugin.json>;
 # GitHub creates that tag only when the owner publishes the draft.
 #
-# linux-armv7 has no JUCE build (no cross sysroot for the GUI libraries): only the native shell, built in the Debian 12 container of
-# scripts/build-armv7-clap.sh, the toolchain of the Kick app for the MPC.
+# linux-armv7 has no JUCE plug-in build (no cross sysroot for the GUI libraries): only the native module, built in the Debian 12 container of
+# scripts/build-armv7-clap.sh, the toolchain of the Kick app for the MPC. Every native module (all five platforms) contains the bitmap GUI
+# (docs/BITMAP-GUI-EXTENSION.md, plugin.json "gui"); the build checks that it exports clap_entry and synthyboy_clap_get_entry only.
 
 name: release
 
@@ -116,6 +117,11 @@ jobs:
         run: |
           cmake -S . -B build -A x64 -DSYNTHYBOY_BUILD_TESTS=OFF
           cmake --build build --config Release --parallel
+
+      # the module's JUCE is private to it: nothing but clap_entry and synthyboy_clap_get_entry may be exported (nm; Linux and macOS)
+      - name: The native module exports clap_entry only
+        if: startsWith(matrix.platform, 'linux-') && matrix.platform != 'linux-armv7' || matrix.platform == 'macos-universal'
+        run: scripts/check-clap-exports.sh build/shell-clap/synthyboy.clap
 
       # the native shell only, cross compiled in Debian 12 (glibc 2.36 like the Kick app on the MPC); checks the ELF header of the result
       - name: Build (linux-armv7, native shell in Docker)

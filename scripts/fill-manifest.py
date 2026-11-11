@@ -132,6 +132,10 @@ def fill(manifest, assets_dir, url_for, partial=False):
     if not kept_builds and not problems:
         problems.append("no platform build found in %s" % assets_dir)
     out["builds"] = kept_builds
+    if isinstance(out.get("gui"), dict):
+        out["gui"]["builds"] = [name for name in out["gui"].get("builds", []) if name in kept_builds]  # the GUI is in the builds that exist
+        if not out["gui"]["builds"]:
+            del out["gui"]
 
     kept_packs = []
     for pack in manifest.get("contentPacks", []):

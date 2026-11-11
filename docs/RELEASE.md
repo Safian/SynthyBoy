@@ -7,13 +7,28 @@ Design background: [ARCHITECTURE.md](ARCHITECTURE.md) sections 6 (content packs)
 
 | Asset | Made by | Content |
 |-------|---------|---------|
-| `com.safian.synthyboy-<version>-<platform>.zip` for `linux-armv7`, `linux-aarch64`, `linux-x86_64`, `macos-universal`, `windows-x64` | `scripts/package-release.py` | `synthyboy.clap` (the native shell, no JUCE: the file Kick loads), `juce/SynthyBoy.clap` and `juce/SynthyBoy.vst3` for DAWs (all platforms except linux-armv7, which has the native shell only), `LICENSE`, `NOTICE`, `THIRD_PARTY.md`, `README.txt` |
+| `com.safian.synthyboy-<version>-<platform>.zip` for `linux-armv7`, `linux-aarch64`, `linux-x86_64`, `macos-universal`, `windows-x64` | `scripts/package-release.py` | `synthyboy.clap` (the native module: the file Kick loads. It contains the bitmap GUI, `plugin.json` "gui", and a private statically linked JUCE 8; no JUCE of its own is visible to the host), `juce/SynthyBoy.clap` and `juce/SynthyBoy.vst3` for DAWs (all platforms except linux-armv7, which has the native shell only), `LICENSE`, `NOTICE`, `THIRD_PARTY.md`, `README.txt` |
 | `<packid>-<packversion>.zip` for every entry of `contentPacks` | `tools/contentpack/contentpack.py build-all` | `contentpack.json` + the files, all SHA-256 verified |
 | `plugin.json.release` | `scripts/fill-manifest.py` | the copy of `plugin.json` with status `released`, urls, SHA-256, sizes, `entry_point`, `assets[]` |
 | `SHA256SUMS` | `scripts/fill-manifest.py --sums` | `<sha256>  <file>` for every asset and the manifest |
 
 The zips are reproducible (sorted entries, fixed timestamps). `package-release.py` refuses a native binary of the wrong architecture for the platform name
 (ELF class / machine / ARM hard-float ABI, universal Mach-O with arm64 and x86_64, PE x86-64).
+
+## The bitmap GUI in the native module
+
+`synthyboy.clap` of every platform renders the editor itself and offers it through the CLAP extension `com.safian.bitmap-gui/1` ([BITMAP-GUI-EXTENSION.md](BITMAP-GUI-EXTENSION.md)):
+a host that cannot run the plug-in's toolkit (the Kick app on the MPC, a framebuffer) copies pixels and forwards input. `plugin.json` says so in its `gui` section
+(`kind: bitmap`, the extension ids, the preferred / minimum / maximum size, the builds that contain it); `scripts/check-manifest.py` compares it with
+`shell-clap/bitmap_gui_ext.h`, `shell-juce/ui/Editor.h` and `shell-clap/bitmap/BitmapSession.h`, so the manifest cannot promise what the module does not do, and
+`fill-manifest.py` lists only the builds of the release in it. What the build checks for a module:
+
+* **Exports**: `scripts/check-clap-exports.sh synthyboy.clap` (ctest `synthyboy_clap_exports`, the release workflow, the ARMv7 script): only `clap_entry` and
+  `synthyboy_clap_get_entry` are visible (version script on Linux, exported symbols list on macOS, `__declspec(dllexport)` on Windows). The JUCE inside is private.
+* **Dependencies (Linux)**: the module needs only libc, libm, libstdc++ and libgcc_s (and the dynamic loader). FreeType is linked statically, the glyphs are the embedded Roboto
+  (no fontconfig), ALSA / JACK are compiled out, libX11 is not linked (JUCE loads it on demand and the GUI never opens a display). `scripts/build-armv7-clap.sh` fails the build otherwise.
+* **Option**: `SYNTHYBOY_BITMAP_GUI` (CMake) is ON with the JUCE plug-in and in the ARMv7 script, OFF otherwise (`--no-ui` of the script builds the JUCE free module without it). The static
+  library `synthyboy_static` (iOS, `SYNTHYBOY_WITH_VITAL=OFF`) never contains it: `scripts/check-no-vital.sh` stays clean.
 
 ## Cutting a release
 
@@ -24,7 +39,7 @@ The zips are reproducible (sorted entries, fixed timestamps). `package-release.p
 3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The tag must be `v<version of plugin.json>`. (Or run the `release` workflow by hand from the Actions tab: it uses the
    tag name `v<version>`; GitHub creates the tag only when the draft is published.) The workflow never runs on a normal push or pull request.
 4. `.github/workflows/release.yml`: `verify` (tag, `check-manifest.py`, green build) -> `build` (five platform jobs in parallel; linux-armv7 is the Docker build of
-   `scripts/build-armv7-clap.sh`, Debian 12) and `packs` -> `draft`: downloads the zips, runs `fill-manifest.py --repo ... --tag ...` and `check-manifest.py --released --assets`,
+   `scripts/build-armv7-clap.sh`, Debian 12, JUCE sources and helper tool fetched / built in the container) and `packs` -> `draft`: downloads the zips, runs `fill-manifest.py --repo ... --tag ...` and `check-manifest.py --released --assets`,
    creates the **draft** release with all assets.
 5. Open the draft, check the assets (`SHA256SUMS`, `plugin.json.release`), then publish it by hand. Nothing in the workflow publishes.
 6. Kick side: give the plugin manager the `plugin.json.release` of the release (Kick signs it with the project key, see below).

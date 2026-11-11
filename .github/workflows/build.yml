@@ -5,6 +5,8 @@
 # artifacts and runs pluginval (VST3) and clap-validator (CLAP). Further jobs: core tests (incl. the fuzz smoke and the factory
 # preset gate) under ASan/UBSan and TSan, the GUI tests under ASan/UBSan, core cross build + tests for Linux ARMv7 hard-float under QEMU, a native
 # Linux AArch64 build, the plugin manifest check, and the Vital-free static library check (iOS rule).
+# The native module synthyboy.clap carries the bitmap GUI (docs/BITMAP-GUI-EXTENSION.md): its tests (tests/bitmap-gui: a host without JUCE that loads the built .clap, golden images, the export
+# list of the module) run in the build job; the GUI tests also run under ASan + UBSan and under TSan, and the ARMv7 module is built and tested under QEMU in the bitmap-gui-armv7 job.
 # SYNTHYBOY_WITH_VITAL is ON by default, so every job except ios-vital-free builds and tests the Vital-derived engine
 # (core/engine-vital) as well; the shipped plugin uses it (the own engine is the fallback and the engine of Vital-free builds).
 #
@@ -222,14 +224,56 @@ jobs:
       - name: Build the GUI tests
         run: |
           cmake --build build-ui-san --parallel --target synthyboy_test_ui_model synthyboy_test_ui_render \
-            synthyboy_test_ui_panels synthyboy_test_glb synthyboy_test_fx
+            synthyboy_test_ui_panels synthyboy_test_glb synthyboy_test_fx \
+            synthyboy_clap synthyboy_test_bitmap_gui synthyboy_test_bitmap_golden
 
       - name: Run the GUI tests
         env:
           ASAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: print_stacktrace=1
           SYNTHYBOY_UI_SCREENSHOT_DIR: ${{ runner.temp }}/ui-shots
-        run: ctest --test-dir build-ui-san --output-on-failure -R 'synthyboy_test_(ui_model|ui_render|ui_panels|glb|fx)$'
+        run: ctest --test-dir build-ui-san --output-on-failure -R 'synthyboy_test_(ui_model|ui_render|ui_panels|glb|fx|bitmap_gui|bitmap_golden)$'
+
+  # The bitmap GUI of the native module (UI thread of the host against the audio thread, the toolkit's timer thread) under ThreadSanitizer: the module and the host harness only.
+  bitmap-gui-tsan:
+    name: bitmap GUI (tsan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build pkg-config \
+            libasound2-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libfreetype-dev libfontconfig1-dev
+          sudo sysctl vm.mmap_rnd_bits=28 || true
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-bg-tsan -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer"
+
+      - name: Build
+        run: cmake --build build-bg-tsan --parallel --target synthyboy_clap synthyboy_test_bitmap_gui
+
+      - name: Run the bitmap GUI tests
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: ctest --test-dir build-bg-tsan --output-on-failure -R 'synthyboy_test_bitmap_gui$'
+
+  # The ARMv7 hard-float module of the Akai MPC with the bitmap GUI: cross built in the Debian 12 container of scripts/build-armv7-clap.sh (JUCE sources and the helper tool are
+  # fetched / built in the container), NEEDED libraries and export list checked, the test hosts of tests/bitmap-gui run against it under qemu-user in the same container. Timing under
+  # QEMU means nothing (the tests scale their waits); it is correctness and the dependency list that count here.
+  bitmap-gui-armv7:
+    name: bitmap GUI (linux-armv7, qemu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Build the module and run the test hosts under QEMU
+        run: scripts/build-armv7-clap.sh --jobs "$(nproc)" --run-tests --out build-armv7-clap/synthyboy.clap
 
   # Linux ARMv7 hard-float (MPC Key 61 class): cross build of the core, tests run under QEMU user mode.
   # Timing is not measured here (QEMU); only correctness and the ABI of the produced binaries.
