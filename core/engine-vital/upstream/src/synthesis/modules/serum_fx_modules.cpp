@@ -58,6 +58,9 @@ namespace sbvital {
       Processor* clone() const override { VITAL_ASSERT(false); return nullptr; }
 
       void processWithInput(const poly_float* audio_in, int num_samples) override {
+        // runs the control processors of the module (the modulation sums of the mono mod controls): without it the modulation of the keys of
+        // these modules never reached the DSP (found by the parameter audit, docs/ui-design/PARAM-AUDIT-REPORT.md 3.1); the Vital modules do the same
+        SynthModule::process(num_samples);
         if (num_samples > kBlock) {
           utils::copyBuffer(output()->buffer, audio_in, num_samples);
           return;
@@ -477,6 +480,7 @@ namespace sbvital {
         }
         int bandRack(int band) const override { return ReorderableEffectChain::kLhLow + band; }
         void split(const poly_float* in, int n) override {
+          SynthModule::process(n);   // the control processors (modulation sums), as for the effect modules above
           update();
           gather(in, l_.data(), r_.data(), n);
           fx_.split(l_.data(), r_.data(), bl_[0].data(), br_[0].data(), bl_[1].data(), br_[1].data(), n);
@@ -516,6 +520,7 @@ namespace sbvital {
         }
         int bandRack(int band) const override { return ReorderableEffectChain::kLmhLow + band; }
         void split(const poly_float* in, int n) override {
+          SynthModule::process(n);   // the control processors (modulation sums), as for the effect modules above
           update();
           gather(in, l_.data(), r_.data(), n);
           fx_.split(l_.data(), r_.data(), bl_[0].data(), br_[0].data(), bl_[1].data(), br_[1].data(), bl_[2].data(), br_[2].data(), n);
@@ -555,6 +560,7 @@ namespace sbvital {
         }
         int bandRack(int band) const override { return ReorderableEffectChain::kMsMid + band; }
         void split(const poly_float* in, int n) override {
+          SynthModule::process(n);   // the control processors (modulation sums), as for the effect modules above
           update();
           gather(in, l_.data(), r_.data(), n);
           fx_.split(l_.data(), r_.data(), bl_[0].data(), br_[0].data(), bl_[1].data(), br_[1].data(), n);

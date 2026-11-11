@@ -417,6 +417,7 @@ namespace sbvital {
   }
 
   void ReorderableEffectChain::process(int num_samples) {
+    SynthModule::process(num_samples);   // the control processors of the chain (the modulation sums of the level trims and the buses)
     refreshConfiguration();
 
     const poly_float* main_in = input(kAudio)->source->buffer;

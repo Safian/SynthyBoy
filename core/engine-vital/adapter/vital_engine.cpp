@@ -648,6 +648,7 @@ public:
         if (noiseSample_ != nullptr)
             noiseSample_->setNoiseType (0);
         clockSeconds = 0.0;
+        engine->correctToTime (0.0); // the phases of the effect LFOs (chorus, flanger, phaser) start where they started after prepare (): a render after reset () is the same every time
         lastModWheel = lastAftertouch = 0.0f;
         lastBend = 0.0f;
         takeSnapshot();
