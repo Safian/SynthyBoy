@@ -10,6 +10,7 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_core/juce_core.h>
+#include <juce_gui_basics/juce_gui_basics.h> // dragFileOut () names juce::Component
 
 #include <functional>
 #include <string>
@@ -189,6 +190,12 @@ public:
     /** Drag-out of a file to the desktop (the "Last note as audio" chip): starts an OS drag of `file` from `source` (desktop: juce::DragAndDropContainer::performExternalDragDropOfFiles).
         False when the host cannot (the sheet then points to Share and Save as WAV). Like requestFile / shareFile, one of the few ways out to the OS. */
     virtual bool dragFileOut (const juce::File& /*file*/, juce::Component& /*source*/) { return false; }
+
+    /** Opens a link in the system's browser (a host without windows asks the platform through its own host: the bitmap GUI extension's open_url). `aboutUrl ()` is the project page the About
+        line of the Preferences links to ("" = no link). False / "" when the host cannot. */
+    virtual bool openUrl (const juce::String& /*url*/) { return false; }
+    virtual bool canOpenUrl() const noexcept { return false; }
+    virtual juce::String aboutUrl() const { return {}; }
 
     /** Injects a MIDI message from the UI (pitch bend, mod wheel, CC 64 sustain, etc.) into the audio callback. */
     virtual void injectMidiMessage (const juce::MidiMessage& /*msg*/) {}

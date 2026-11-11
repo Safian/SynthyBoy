@@ -49,7 +49,7 @@ EnvCurveView::EnvCurveView (UiContext& context, int envIndex)
       hReleaseBeats (context, "env" + std::to_string (envIdx) + ".release_beats")
 {
     setOpaque (false);
-    ctx.live->bind (*this, {}, [this] { repaint(); }); // WP-17: the playhead follows the heard voice while the view is on screen
+    ctx.live->bind (*this, {}, [this] { if (ctx.live->changed()) repaint(); }); // WP-17: the playhead follows the heard voice while the view is on screen
 }
 
 bool EnvCurveView::livePlayhead (juce::Point<float>& out) const

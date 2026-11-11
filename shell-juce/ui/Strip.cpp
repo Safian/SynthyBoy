@@ -26,7 +26,19 @@ void StereoMeter::refresh()
     const float pR = ctx.host.outputPeakR();
     levelL = juce::jmax (pL, levelL * 0.82f);
     levelR = juce::jmax (pR, levelR * 0.82f);
-    repaint();
+    // repaint only when the bars would look different (the meter of an idle plug-in must not cost a frame 30 times a second)
+    const auto bar = [] (float level)
+    {
+        const float db = juce::Decibels::gainToDecibels (level, -60.0f);
+        return juce::roundToInt (juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 66.0f) * 400.0f);
+    };
+    const int drawnL = bar (levelL), drawnR = bar (levelR);
+    if (drawnL != lastBarL || drawnR != lastBarR)
+    {
+        lastBarL = drawnL;
+        lastBarR = drawnR;
+        repaint();
+    }
 }
 
 void StereoMeter::timerCallback()

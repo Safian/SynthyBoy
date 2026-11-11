@@ -133,6 +133,15 @@ public:
 };
 ```
 
+### A host without windows: the bitmap GUI of the native module
+
+`shell-clap/bitmap/` is a fourth host of this library: the native CLAP module (`synthyboy.clap`) renders `SynthyBoyEditor` itself into a software image and offers the pixels through the CLAP extension
+`com.safian.bitmap-gui/1` (`docs/BITMAP-GUI-EXTENSION.md`). Its `UiHost` is `shell-clap/bitmap/NativeUiHost.*` (a `PlainParameterStore` whose edits reach the audio thread through the lock free `UiLink`, notes and
+wheels as raw MIDI, files / share / links through the host callbacks of the extension), its window is `BitmapPeer`, a `juce::ComponentPeer` that is a memory buffer (its `repaint (area)` is the dirty rectangle of a frame).
+Rules for components that follow from it: paint only what changed (an idle editor must not repaint: `LiveBus::changed ()` tells a display whether the engine's read-out brought anything new, `StereoMeter` repaints when
+its bars would look different), never open a native window / dialog (use `UiHost`), never use a system font by name (the module's default typeface is the embedded Roboto; `JuceCompat.h` `makeFont` already asks for the
+default one), and a call-out or pop-up menu needs `UiHost::overlaysInsideEditor ()` true.
+
 ### The OS escapes
 
 The library never opens a native window, a native file chooser or a platform dialog. What leaves the component tree goes through `UiHost`:
@@ -141,6 +150,7 @@ The library never opens a native window, a native file chooser or a platform dia
 |---|---|---|
 | Open / save a file | `requestFile` (+ `canRequestFile`) | menu entries dim; the buttons that need a file are disabled (Tuning load) |
 | Share / export | `shareFile` (+ `canShareFiles`) | the sheet says "This host has no share function" |
+| Open a link | `openUrl` (+ `canOpenUrl`, `aboutUrl`) | the About line of the Preferences is plain text |
 | Drag a file out | `dragFileOut` | the sheet points to Share and Save as WAV |
 | Text entry (preset name, bin value) | in the editor: `showTextPrompt` (a sheet with a text field and two 44 pt buttons), not an `AlertWindow` | the on-screen keyboard of the host feeds the `TextEditor` |
 | Pop-up menus, call-outs (long-press sheets) | `overlaysInsideEditor ()` true: `PopupMenu::Options::withParentComponent (editor)` / `CallOutBox` with the editor as parent | menus are components of the editor and need no `ComponentPeer`; the plug-in answers false and keeps desktop level menus |

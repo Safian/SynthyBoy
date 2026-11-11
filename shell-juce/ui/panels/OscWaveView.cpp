@@ -157,7 +157,7 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
     ctx.live->bind (*this,
                     [this] { return markerAnimation && sampleUniStartHandle.valid() && ! ctx.assign.snapshot().entriesFor (sampleUniStartHandle.index()).empty()
                                         ? std::vector<int> { sampleUniStartHandle.index() } : std::vector<int> {}; },
-                    [this] { repaint(); });
+                    [this] { if (ctx.live->changed()) repaint(); });
     setViewMode (ctx.host.preferences().waveform3d ? ViewMode::wave3D : ViewMode::wave2D); // "Default waveform view" (S p.314)
 }
 

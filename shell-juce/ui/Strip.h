@@ -31,6 +31,7 @@ private:
     UiContext& ctx;
     float levelL = 0.0f;
     float levelR = 0.0f;
+    int lastBarL = -1, lastBarR = -1; // what the bars show now (quantised), -1 before the first refresh
 };
 
 /** Preset name with prev / next (browsing is Kick's: the buttons only call UiHost::stepPreset), Undo/Redo, A/B compare, assign-mode toggle, menu. */

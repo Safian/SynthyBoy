@@ -39,6 +39,8 @@ void LiveBus::listen (const void* owner, std::function<void()> callback)
         owners_.push_back ({ owner, {}, nullptr });
         o = &owners_.back();
     }
+    if (! o->callback) // update () registers every shown display again at every poll: only a display that was not listening yet gets the extra call
+        deliverNext = true;
     o->callback = std::move (callback);
     updateTimer();
 }
@@ -169,6 +171,21 @@ void LiveBus::unbind (const juce::Component* component)
     updateTimer();
 }
 
+namespace
+{
+/** The content of two readouts that a display can show: everything except the block counter, which moves with every audio block. */
+bool sameLiveContent (const LiveValues& a, const LiveValues& b) noexcept
+{
+    return a.activeVoices == b.activeVoices && a.numTargets == b.numTargets && std::equal (std::begin (a.source), std::end (a.source), std::begin (b.source))
+           && std::equal (std::begin (a.lfoPhase), std::end (a.lfoPhase), std::begin (b.lfoPhase))
+           && std::equal (std::begin (a.envStage), std::end (a.envStage), std::begin (b.envStage))
+           && std::equal (std::begin (a.envPosition), std::end (a.envPosition), std::begin (b.envPosition))
+           && std::equal (std::begin (a.multisampleZone), std::end (a.multisampleZone), std::begin (b.multisampleZone))
+           && std::equal (std::begin (a.multisampleKey), std::end (a.multisampleKey), std::begin (b.multisampleKey))
+           && std::equal (a.target, a.target + std::max (0, std::min (a.numTargets, LiveValues::kMaxTargets)), b.target);
+}
+} // namespace
+
 void LiveBus::poll()
 {
     // the displays: shown or hidden now, and the knobs they want (a modulation may have come or gone)
@@ -177,10 +194,12 @@ void LiveBus::poll()
     if (targetsDirty)
         rebuildTargets();
     LiveValues fresh;
+    bool changed = false;
     if (host.copyReadout (fresh))
     {
         const bool newBlock = fresh.block != lastBlock_;
         lastBlock_ = fresh.block;
+        changed = ! sameLiveContent (fresh, values_);
         values_ = fresh;
         if (newBlock)
         {
@@ -192,6 +211,10 @@ void LiveBus::poll()
         }
     }
     ++updates_;
+    // The listeners are called after every update (the contract); whether there is anything new to draw is changed (): false for an idle engine and a still readout, true for the first
+    // update after a listener was added
+    changed_ = changed || deliverNext;
+    deliverNext = false;
     // a listener may unsubscribe while it is called: walk a copy of the callbacks
     std::vector<std::function<void()>> calls;
     for (const auto& o : owners_)

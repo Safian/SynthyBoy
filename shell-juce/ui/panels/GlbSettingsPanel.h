@@ -98,9 +98,23 @@ public:
 
         // Build and engine info at the bottom (S15-20): version and build date come from the host (CMake project version, __DATE__)
         g.setFont (t.font (t.px (10.0f)));
-        g.setColour (c.textDim);
+        g.setColour (linkEnabled() ? c.accent : c.textDim); // a host that can open links makes the line one (the project page)
         g.drawFittedText (aboutLine(), juce::Rectangle<float> (bounds.getX() + pad, bounds.getBottom() - pad - t.px (28.0f), bounds.getWidth() - 2 * pad, t.px (28.0f)).toNearestInt(),
                           juce::Justification::centred, 2);
+    }
+
+    bool linkEnabled() const { return ctx.host.canOpenUrl() && ctx.host.aboutUrl().isNotEmpty(); }
+    juce::Rectangle<int> aboutArea() const
+    {
+        const auto& t = ctx.theme;
+        const auto bounds = getLocalBounds().toFloat().reduced (t.px (2.0f));
+        const float pad = t.px (8.0f);
+        return juce::Rectangle<float> (bounds.getX() + pad, bounds.getBottom() - pad - t.px (28.0f), bounds.getWidth() - 2 * pad, t.px (28.0f)).toNearestInt();
+    }
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (linkEnabled() && e.mouseWasClicked() && aboutArea().contains (e.getPosition()))
+            ctx.host.openUrl (ctx.host.aboutUrl());
     }
 
     /** The About line: what the host says (version, build date, engine, content), "SynthyBoy" alone for a host that says nothing. */

@@ -141,7 +141,7 @@ public:
         divisionHandle.onChange = [this] { repaint(); };
         refresh();
         // WP-17: the playhead of the LFO (and the trace of a random LFO) follows the engine while the view is on screen
-        ctx.live->bind (*this, {}, [this] { repaint (plot); });
+        ctx.live->bind (*this, {}, [this] { if (ctx.live->changed()) repaint (plot); });
     }
 
     ~LfoShapeView() override

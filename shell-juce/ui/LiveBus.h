@@ -59,11 +59,16 @@ public:
     const std::vector<int>& targets() const noexcept { return targets_; }
     int listeners() const noexcept { return static_cast<int> (owners_.size()); }
     uint32_t updates() const noexcept { return updates_; }
+    /** True when the last update brought anything a display could show that the one before did not (or a listener was added since): a display repaints only then. An idle plug-in
+        therefore draws nothing at all, which is what a host that copies pixels (the bitmap GUI) needs. */
+    bool changed() const noexcept { return changed_; }
 
 private:
     void timerCallback() override { poll(); }
     void updateTimer();
     void rebuildTargets();
+    bool changed_ = true;
+    bool deliverNext = true; // the next poll () calls the listeners even if the values did not change (a listener has just been added)
 
     struct Owner
     {
