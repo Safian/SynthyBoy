@@ -252,7 +252,7 @@ def cmd_noise(a):
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 VARIANTS = [
     ('tune50', 'master.tune+=50', 'the whole preset 50 cents sharp'),
-    ('osc1_muted', 'osc1.level=0', 'oscillator A muted'),
+    ('osc1_muted', 'osc1.on=0', 'oscillator A switched off'),
     ('cutoff', 'filter1.cutoff*=0.125', 'filter 1 cutoff three octaves down (only where filter 1 is on)'),
     ('level6', 'master.volume+=-6', 'level 6 dB down'),
     ('detune', 'osc1.unison.detune*=4', 'unison detune of oscillator A four times wider'),
@@ -273,7 +273,9 @@ def cmd_variants(a):
     bases = []
     for r in cand:
         p = sbpreset_params(sbpreset_of(a.imported, r['rel']))
-        if p.get('osc1.on', 0) >= 0.5 and p.get('filter1.on', 0) >= 0.5 and p.get('osc1.level', 0) > 5:
+        # a base must be a render that matches in level (a 6 dB drop of a render that is 6 dB too loud would improve it) and must use the parts the breaks hit
+        if (abs(r['r_lufs_ours'] - r['r_lufs_ref']) < 2.0 and p.get('osc1.on', 0) >= 0.5 and p.get('filter1.on', 0) >= 0.5 and p.get('osc1.level', 0) > 5
+                and p.get('filter1.cutoff', 0) >= 800.0):
             bases.append(r)
         if len(bases) >= a.bases:
             break

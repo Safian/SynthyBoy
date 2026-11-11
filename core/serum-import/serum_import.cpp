@@ -600,6 +600,9 @@ void Importer::global()
     std::vector<Unmapped> um;
     if (isDefaultBlock (pp)) noteDefault (pp);
     {
+        // the velocity of a note does not scale the level in Serum (the level is the same at velocity 10 and 127, measured against Serum 2.1.5); a preset that wants it routes the velocity
+        // source through its matrix
+        store ("master.velocity_track", 0);
         applyScope ({ "Global" }, pp, 1, "voice", path, um, true);
         // the specials
         for (const Unmapped& u : um)

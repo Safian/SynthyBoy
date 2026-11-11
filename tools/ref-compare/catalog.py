@@ -115,6 +115,53 @@ def cases(group, root=''):
     return out
 
 
+CALIB_BASES = [
+    ('filter MgL24 f=0.45 r=30', {**BASE, 'VoiceFilter0.plainParams.kParamEnable': 1.0, 'VoiceFilter0.plainParams.kParamType': 'MgL24', 'VoiceFilter0.plainParams.kParamFreq': 0.6,
+                                  'VoiceFilter0.plainParams.kParamReso': 30.0}),
+    ('filter MgL12 f=0.7 r=30', {**BASE, 'VoiceFilter0.plainParams.kParamEnable': 1.0, 'VoiceFilter0.plainParams.kParamType': 'MgL12', 'VoiceFilter0.plainParams.kParamFreq': 0.7,
+                                 'VoiceFilter0.plainParams.kParamReso': 30.0}),
+    ('env1 a=0.05 d=1 s=0.7 r=1 + filter', {**BASE, 'Env0.plainParams.kParamAttack': 0.05, 'Env0.plainParams.kParamDecay': 1.0, 'Env0.plainParams.kParamSustain': 0.7, 'Env0.plainParams.kParamRelease': 1.0,
+                                           'VoiceFilter0.plainParams.kParamEnable': 1.0, 'VoiceFilter0.plainParams.kParamFreq': 0.65}),
+    ('osc WT pos 0.5 + filter', {**BASE, 'Oscillator0.WTOsc0.plainParams.kParamTablePos': 128.0, 'VoiceFilter0.plainParams.kParamEnable': 1.0, 'VoiceFilter0.plainParams.kParamFreq': 0.75}),
+    ('osc kParamPitch=3 + filter', {**BASE, 'Oscillator0.plainParams.kParamPitch': 3.0, 'VoiceFilter0.plainParams.kParamEnable': 1.0, 'VoiceFilter0.plainParams.kParamFreq': 0.7}),
+]
+CALIB_BREAKS = [('tune50', 'master.tune+=50', '50 cents sharp'), ('osc_off', 'osc1.on=0', 'oscillator A off'), ('cutoff', 'filter1.cutoff*=0.125', 'cutoff three octaves down'),
+                ('level6', 'master.volume+=-6', 'level 6 dB down')]
+
+
+def calib(a, e, cfg):
+    """The 20 broken variants: 5 crafted presets of which our render matches the Serum render (a catalog case each) and 4 breaks of OUR render each. Every break must score at least
+    scoring.json variants.min_drop points under the unbroken render and no variant may be a MATCH."""
+    need = cfg.get('variants', {}).get('min_drop', 10.0)
+    rows, bad = [], 0
+    for name, edits in CALIB_BASES:
+        p = e.preset('cal_' + re.sub(r'[^A-Za-z0-9]+', '_', name)[:50], edits)
+        s = e.render_serum(p, a.notes, 4.0)
+        base = None
+        for label, ov in [('base', '')] + [(b[0], b[1]) for b in CALIB_BREAKS]:
+            o = e.render_ours(p, a.notes, 4.0, overrides=ov)
+            n = min(len(s), len(o))
+            off, ok = metrics.estimate_offset(s[:n], o[:n])
+            o2 = metrics.shift(o[:n], off, n)
+            rec = {'id': name, 'script': 'c3', 'rel': name}
+            rec.update(metrics.compare_pair(s[:n], o2, 0.0, 2.5, 4.0))
+            rec['ours_silent'] = metrics.peak_db(o) < -80.0
+            score.apply(rec, cfg)
+            if label == 'base':
+                base = rec['score']
+                print('%-40s base %.1f %s' % (name, base, rec['class']))
+                continue
+            drop = base - rec['score']
+            ok_ = drop >= need and rec['class'] != 'MATCH'
+            bad += 0 if ok_ else 1
+            rows.append({'base': name, 'break': label, 'base_score': base, 'score': rec['score'], 'drop': round(drop, 1), 'class': rec['class'], 'ok': ok_})
+            print('   %-8s %.1f -> %.1f (drop %.1f, %s)%s' % (label, base, rec['score'], drop, rec['class'], '' if ok_ else '   NOT CLEARLY LOWER'))
+    if a.json:
+        json.dump(rows, open(a.json, 'w'), indent=1)
+    print('%d variants, %d not clearly lower' % (len(rows), bad))
+    return 1 if bad else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--root', required=True)
@@ -126,6 +173,8 @@ def main():
     a = ap.parse_args()
     e = ex.Experiment(a.root, a.build)
     cfg = score.load_config(os.path.join(HERE, 'scoring.json'))
+    if a.group == 'calib':
+        sys.exit(calib(a, e, cfg))
     rx = re.compile(a.only) if a.only else None
     t_on, t_off = 0.0, 2.5
     rows = []

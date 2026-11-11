@@ -10,6 +10,8 @@
 #   --render-only        only the renders (Serum reference where missing, ours always), no comparison
 #   --compare-only       only compare the renders that exist (no build, no import, no render)
 #   --preset REGEX       only the presets whose path below Presets/ matches REGEX (extended regex, searched in "Factory/Bass/Name.SerumPreset")
+#   --calibrate          the calibration of the score: 5 crafted presets x 4 deliberately broken renders of ours (50 cents sharp, oscillator off, cutoff three octaves down, 6 dB down) must score at least 10 points lower and not MATCH; exit 1 if not
+#   --catalog [GROUP]    score single module presets (filters, warps, fx, unison, env, osc; default all) against the real Serum 2: the worst modules in one table
 #   --list               print the renders the run would cover (id, note script, path) and exit
 #   --jobs N             parallel processes of our render and of the comparison (default 4; the Serum reference render is always one process at low priority)
 #   --scripts LIST       note scripts: c3 (C3 vel 100, all presets), c1 (C1 vel 64, basses), c5 (C5 vel 127, leads / plucks / chords...); default c3,c1,c5
@@ -36,6 +38,8 @@ root="$(cd "$here/.." && pwd)"
 mode=all
 regex=""
 list=0
+calibrate=0
+catalog=""
 jobs=4
 scripts="c3,c1,c5"
 baseline="$root/docs/ui-design/refcompare-baseline.json"
@@ -58,6 +62,8 @@ while [ $# -gt 0 ]; do
         --compare-only) mode=compare; dobuild=0 ;;
         --preset) regex="${2:?}"; shift ;;
         --list) list=1 ;;
+        --calibrate) calibrate=1 ;;
+        --catalog) catalog="all"; if [ $# -gt 1 ] && [[ "$2" != --* ]]; then catalog="$2"; shift; fi ;;
         --jobs) jobs="${2:?}"; shift ;;
         --scripts) scripts="${2:?}"; shift ;;
         --baseline) baseline="${2:?}"; shift ;;
@@ -87,6 +93,13 @@ ours="$work/ours"
 if [ ! -d "$presets" ]; then echo "no presets at $presets (tests/serum-presets is not part of the repository)" >&2; exit 2; fi
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 3; }
 python3 -c "import numpy, scipy" 2>/dev/null || { echo "python3 needs numpy and scipy" >&2; exit 3; }
+
+if [ "$calibrate" = 1 ] || [ -n "$catalog" ]; then
+    [ "$(uname)" = Darwin ] && [ -x "$render_ref" ] || { echo "the catalog and the calibration render the real Serum 2: macOS and $render_ref are required" >&2; exit 3; }
+    if [ "$dobuild" = 1 ]; then cmake --build "$build" --target synthyboy_ref_render synthyboy_serum_import synthyboy_serum_reference >/dev/null || exit 3; fi
+    if [ "$calibrate" = 1 ]; then exec python3 "$tools/ref-compare/catalog.py" --root "$root" --build "$build" --group calib; fi
+    exec python3 "$tools/ref-compare/catalog.py" --root "$root" --build "$build" --group "$catalog"
+fi
 
 if [ "$list" = 1 ]; then
     exec python3 -I "$tools/serum-reference/render_all.py" --host "$render_ref" --presets "$presets" --out "$refdir" --filter "$regex" --scripts "$scripts" --list

@@ -22,11 +22,12 @@ constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr Fid X = Fid::exact, C = Fid::close, A = Fid::approx;
 
 // Gain staging against the real Serum 2.1.5 (tools/ref-compare/experiment.py, REFCOMPARE-REPORT.md): in Serum the file values of the master, oscillator, sub and noise volume are linear
-// gains and the chain is wave * level * master. Our engine renders the same chain 7.18 dB (oscillators with a Serum table, whatever the table and the position), 3.53 dB (sub) and 0.22 dB (noise) quieter, so the master carries the +7.18 dB
-// and the sub and the noise level are trimmed by the difference (their percent knobs have the headroom; the master range ends at +6 dB, so a Serum master above 0.88 is limited).
-constexpr double kMasterTrimDb = 7.18;
-constexpr double kSubTrim = 0.6570;    // 10 ^ ((3.53 - 7.18) / 20)
-constexpr double kNoiseTrim = 1.0;     // the noise samples measured through the same chain (any sample): no trim
+// gains and the chain is wave * level * master; the velocity of a note does not scale it (the importer sets master.velocity_track to 0). Our engine renders the same chain 2.98 dB
+// (oscillators with a Serum table, whatever the table and the position; the noise samples: the same) and -0.67 dB (sub) quieter than that, so the master carries the +2.98 dB and the sub
+// level is trimmed by the difference (its percent knob has the headroom; the master range ends at +6 dB, a Serum master of up to 1 is +2.98 dB at most).
+constexpr double kMasterTrimDb = 2.98;
+constexpr double kSubTrim = 0.6570;    // 10 ^ ((-0.67 - 2.98) / 20)
+constexpr double kNoiseTrim = 1.057;   // the noise samples (10 samples, constant gap) measured through the same chain: +0.48 dB
 } // namespace
 
 // ----- enumerations ----------------------------------------------------------------------------------------------------------------------

@@ -685,7 +685,7 @@ TEST (serum_routing_global_mpe_and_curves)
     CHECK_EQ (norm (r, "osc2.destination"), 4.0f);
     CHECK_NEAR (norm (r, "osc2.bus2_send"), 60.0, 1e-3);
     CHECK_EQ (norm (r, "filter1.destination"), 2.0f);
-    CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25) + 7.18, 1e-2); // the gain staging against Serum 2.1.5 (serum_map.cpp, kMasterTrimDb)
+    CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25) + 2.98, 1e-2); // the gain staging against Serum 2.1.5 (serum_map.cpp, kMasterTrimDb)
     CHECK_EQ (norm (r, "master.polyphony"), 1.0f); // mono toggle wins
     CHECK_EQ (norm (r, "master.bend_range"), 12.0f);
     CHECK_EQ (norm (r, "master.bend_down_range"), 7.0f);
@@ -1402,7 +1402,7 @@ TEST (serum_absent_parameters_take_the_serum_defaults_and_the_gain_staging_is_th
     const SerumImportResult r = run (p.file());
     CHECK_EQ (r.report.unaccounted, 0);
     CHECK_NEAR (norm (r, "osc1.level"), 56.25, 1e-3);                                 // default 0.75^2 (the file value is the linear gain)
-    CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25) + 7.18, 1e-2);    // default 0.25, +7.18 dB engine calibration
+    CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25) + 2.98, 1e-2);    // default 0.25, +2.98 dB engine calibration
     CHECK_NEAR (norm (r, "env1.attack"), 1.0, 1e-3);                                  // envelope 1: 1 ms, envelopes 2 .. 4: 0.5 ms
     CHECK_NEAR (norm (r, "env2.attack"), 0.5, 1e-3);
     CHECK_NEAR (norm (r, "env1.release"), 15.0, 1e-3);
@@ -1418,7 +1418,8 @@ TEST (serum_absent_parameters_take_the_serum_defaults_and_the_gain_staging_is_th
     q.set ("Global0", map ({ { "plainParams", plain ({ { "kParamMasterVolume", 0.5 } }) } }));
     q.set ("Oscillator4", map ({ { "plainParams", plain ({ { "kParamEnable", 1 }, { "kParamVolume", 1.0 } }) } }));
     const SerumImportResult r2 = run (q.file());
-    CHECK_NEAR (norm (r2, "master.volume"), 20.0 * std::log10 (0.5) + 7.18, 1e-2);
+    CHECK_NEAR (norm (r2, "master.volume"), 20.0 * std::log10 (0.5) + 2.98, 1e-2);
+    CHECK_EQ (norm (r2, "master.velocity_track"), 0.0f);   // the velocity does not scale the level in Serum
     CHECK_NEAR (norm (r2, "sub.level"), 65.7, 1e-2);
 }
 
@@ -1433,3 +1434,25 @@ TEST (serum_unison_level_correction_follows_the_voice_count_parity_and_the_blend
     CHECK_NEAR (serumimport::unisonLevelCompDb (8, 50.0), 0.5 * (serumimport::unisonLevelCompDb (4, 50.0) + serumimport::unisonLevelCompDb (12, 50.0)), 1e-9); // between the measured even counts: linear in the voice count
 }
 
+
+// tools/ref-compare against the real Serum 2.1.5: the compressor threshold is the opposite of a linear level (the measured ceiling of a limiter), the filter drive is a louder output
+TEST (serum_compressor_threshold_and_filter_drive_follow_the_measured_curves)
+{
+    size_t count = 0;
+    const serumimport::Rule* rows = serumimport::fxRulesOf (kFxTypeCompressor, count);
+    const serumimport::Rule* thresh = nullptr;
+    for (size_t i = 0; i < count; ++i)
+        if (std::strcmp (rows[i].param, "kParamThresh") == 0) { thresh = rows + i; break; }
+    CHECK (thresh != nullptr);
+    if (thresh != nullptr)
+    {
+        CHECK_NEAR (serumimport::convert (*thresh, 0.2), 0.0, 1e-9);     // below 0.375 nothing happens
+        CHECK_NEAR (serumimport::convert (*thresh, 0.5), -13.6, 1e-9);   // the measured peak of a limiter
+        CHECK_NEAR (serumimport::convert (*thresh, 0.7), -41.5, 1e-9);
+        CHECK (serumimport::convert (*thresh, 0.6) < serumimport::convert (*thresh, 0.5)); // monotonic
+        CHECK_NEAR (serumimport::convert (*thresh, 1.0), -42.3, 1e-9);   // and flat at the end
+    }
+    CHECK_NEAR (serumimport::filterDriveMakeupDb (0.0), 0.0, 1e-9);
+    CHECK_NEAR (serumimport::filterDriveMakeupDb (25.0), 7.7, 1e-9);
+    CHECK_NEAR (serumimport::filterDriveMakeupDb (100.0), 10.2, 1e-9);
+}
