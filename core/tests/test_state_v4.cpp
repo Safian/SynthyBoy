@@ -4,6 +4,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#include <cstring>
 #include <cmath>
 #include <cstdlib>
 #include <string>
