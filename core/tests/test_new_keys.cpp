@@ -177,9 +177,9 @@ TEST (append_positions_golden)
 TEST (first_880_keys_are_byte_identical_to_state_version_2)
 {
     // computed with sbgolden::fingerprint (880) on commit 9c97a69 (golden_v2.h)
-    // REFCOMPARE round 3 (B34, 13-new-keys.md 4.48), deliberate: the plain ranges of eq.low / mid / high.gain (+-15 -> +-24 dB) and of the six compressor thresholds (-80 .. 0 -> -120 .. +12 dB)
+    // REFCOMPARE round 3 (B34, 13-new-keys.md 4.48), deliberate: the plain ranges of eq.low / mid / high.gain (+-15 -> +-24 dB), of the six compressor thresholds (-80 .. 0 -> -120 .. +12 dB) and of the three compressor gains (+-30 -> +-36 dB)
     // grew (the values of a v2 state stay valid); the fingerprint of the first 880 keys includes the ranges: 0xd0dcc938695354b2 before
-    CHECK_EQ (sbgolden::fingerprint (kNumKeysV2), 0x1eac094d78181286ull);
+    CHECK_EQ (sbgolden::fingerprint (kNumKeysV2), 0xc87e9fbe8ddc33caull);
 }
 
 TEST (choice_lists_are_append_only)

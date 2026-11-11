@@ -217,9 +217,9 @@ TEST (version_2_document_loads_into_version_3_with_the_old_values)
     CHECK_EQ (defaults2.size(), static_cast<size_t> (16637));
     const auto busy2 = asVersion2 (saveState (busyValues()));
     const auto busy2Rounded = roundedNumbers (busy2);
-    // REFCOMPARE round 3 (B34, deliberate): the busy values are drawn from the ranges, and the ranges of the EQ gains and of the compressor thresholds are wider: 0x625f51a76b665871 / 17976 bytes before
-    CHECK_EQ (fnv (busy2Rounded), 0xa3c90049178e7f62ull);
-    CHECK_EQ (busy2Rounded.size(), static_cast<size_t> (17973));
+    // REFCOMPARE round 3 (B34, deliberate): the busy values are drawn from the ranges, and the ranges of the EQ gains, of the compressor thresholds and of the compressor gains are wider: 0x625f51a76b665871 / 17976 bytes before
+    CHECK_EQ (fnv (busy2Rounded), 0xbf5c1c17b716191bull);
+    CHECK_EQ (busy2Rounded.size(), static_cast<size_t> (17975));
 
     // loaded into a ParamValues whose new keys all hold other values than their defaults (a previous version 3 patch)
     sbtest::Rng rng (77);
