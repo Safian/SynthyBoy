@@ -431,6 +431,7 @@ Audio Rig::renderOnce (const Script& script)
 {
     prepareIfNeeded();
     engine_->reset();
+    engine_->restartEffectPhases(); // the phases of the effect LFOs start at 0: a render does not depend on the renders before it (IEngine::restartEffectPhases)
     TransportInfo tr;
     tr.bpm = script.bpm;
     engine_->setTransport (tr);

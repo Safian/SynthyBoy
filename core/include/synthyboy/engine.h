@@ -51,6 +51,11 @@ public:
     /** Silences all voices and snaps smoothers to the current parameter values. */
     virtual void reset() = 0;
 
+    /** Restarts the free running phases of the effects (the LFOs of chorus, flanger, phaser) at the beginning of their cycle, as at time 0 (message thread or between two process () calls). reset ()
+        does not do it (the frozen goldens of the version 2 sound depend on the phase a reset leaves); a caller that wants a render that does not depend on the renders before it (the parameter
+        audit, docs/ui-design/PARAM-AUDIT-REPORT.md 4.3) calls it after reset (). The default does nothing (engine-own has no such effects). */
+    virtual void restartEffectPhases() noexcept {}
+
     /** Silences the sounding notes and flushes the tails of the effects at once (the host transport stopped, preferences.h silenceOnStop). Audio thread,
         between two process () calls: no allocation, the parameters, the controllers and the content stay as they are. The default does nothing (engine-own). */
     virtual void silence() noexcept {}

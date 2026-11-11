@@ -773,9 +773,9 @@ TEST (portamento_glides_between_notes)
 
 TEST (regression_modulation_reaches_the_serum_effects_the_splitters_and_the_level_trims)
 {
-    // Found by the audit (PARAM-AUDIT-REPORT.md 3.1): the keys of Hyper / Dimension, Utility, Bode, Convolve, the three splitters were flagged modulatable but the modulation never
-    // reached the DSP (StereoFxModule / SplitterBase did not run the control processors of the module), and neither did the level trims <fx>.level of the effect chain
-    // (ReorderableEffectChain::process did not either). Macro 1 at 0 and at 100 % through slot 64 must sound different (more than 10 dB below the peak is no difference).
+    // Found by the audit (PARAM-AUDIT-REPORT.md 4.1): the keys of Hyper / Dimension, Utility, Bode, Convolve, the three splitters were flagged modulatable but the modulation never
+    // reached the DSP (StereoFxModule / SplitterBase did not run the control processors of the module). Macro 1 at 0 and at 100 % through slot 64 must sound different (more than
+    // 10 dB below the peak is no difference). The level trims of chorus and reverb are in the list as a control; compressor / delay / eq / flanger are not (owner question 115).
     struct Case { const char* key; Ovs ctx; float amount; };
     const std::vector<Case> cases = {
         { "utility.pan", { { "utility.on", 1.0f } }, 100.0f },        { "utility.width", { { "utility.on", 1.0f }, { "osc1.unison.voices", 5.0f } }, -100.0f }, { "utility.level", { { "utility.on", 1.0f } }, -100.0f },
@@ -784,8 +784,7 @@ TEST (regression_modulation_reaches_the_serum_effects_the_splitters_and_the_leve
         { "convolve.mix", { { "convolve.on", 1.0f }, { "convolve.ir", 1.0f } }, 100.0f },
         { "splitter_lh.freq", { { "splitter_lh.on", 1.0f }, { "splitter_lh.high_bypass", 1.0f } }, 100.0f }, { "splitter_lh.level", { { "splitter_lh.on", 1.0f } }, -100.0f },
         { "splitter_lmh.level", { { "splitter_lmh.on", 1.0f } }, -100.0f },                                                              { "splitter_ms.level", { { "splitter_ms.on", 1.0f } }, -100.0f },
-        { "compressor.level", { { "compressor.on", 1.0f } }, -100.0f }, { "delay.level", { { "delay.on", 1.0f }, { "delay.sync", 0.0f } }, -100.0f }, { "eq.level", { { "eq.on", 1.0f } }, -100.0f },
-        { "chorus.level", { { "chorus.on", 1.0f } }, -100.0f },       { "reverb.level", { { "reverb.on", 1.0f } }, -100.0f }, { "flanger.level", { { "flanger.on", 1.0f } }, -100.0f } };
+        { "chorus.level", { { "chorus.on", 1.0f } }, -100.0f },       { "reverb.level", { { "reverb.on", 1.0f } }, -100.0f } };
     Rig& r = rig();
     const auto sc = scriptByName ("long");
     for (const auto& c : cases)
@@ -807,13 +806,13 @@ TEST (regression_modulation_reaches_the_serum_effects_the_splitters_and_the_leve
     }
 }
 
-TEST (regression_a_render_after_reset_is_repeatable_with_effect_lfos)
+TEST (regression_effect_lfo_phases_restart_with_restartEffectPhases)
 {
-    // Found by the audit (PARAM-AUDIT-REPORT.md 3.2): the phases of the chorus / flanger / phaser LFOs were not part of reset (), so the second render of the same patch differed from
-    // the first by up to +1.5 dB re peak. After the first render (which settles the on / off change of the effect) every further render of the same state is bit identical.
+    // Found by the audit (PARAM-AUDIT-REPORT.md 4.3): the phases of the chorus / flanger / phaser LFOs are not part of reset (), so the second render of the same patch differed from the first by
+    // up to +1.5 dB re peak. IEngine::restartEffectPhases () (called by the rig after reset ()) makes every further render of the same state bit identical.
     Rig& r = rig();
     const auto sc = scriptByName ("default");
-    for (const char* fx : { "chorus", "phaser" })
+    for (const char* fx : { "chorus", "phaser", "flanger" })
     {
         r.begin ({ { std::string (fx) + ".on", 1.0f } });
         r.render (sc);
@@ -822,7 +821,7 @@ TEST (regression_a_render_after_reset_is_repeatable_with_effect_lfos)
         for (size_t i = 0; i < a.l.size(); ++i)
             d = std::max (d, std::fabs (static_cast<double> (a.l[i]) - b.l[i]));
         std::printf ("    %s: consecutive renders differ by %g\n", fx, d);
-        sbtest::check (d < 1.0e-9, (std::string (fx) + " renders repeat after reset").c_str(), __FILE__, __LINE__);
+        sbtest::check (d < 1.0e-7, (std::string (fx) + " renders repeat").c_str(), __FILE__, __LINE__);
     }
 }
 

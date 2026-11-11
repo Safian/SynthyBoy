@@ -70,32 +70,32 @@ end of the range is saturation and is marked INFO).
 | ALIVE (the sound changes with the key beyond the noise floor) | 2561 |
 | DEAD | 65: explained 65 (open owner question 115: 42, tested by a dedicated semantic test: 18, editor only: 3, instance at the quick density with a live twin: 2), UNEXPLAINED 0 |
 | EXEMPT (needs an MTS-ESP master, the core has only the seam) | 2 |
-| modulatable keys swept through a routed macro: alive / dead | 1076 / 103 (dead: explained 103, unexplained 0; all in question 115, or the keys of the dead list) |
-| per value findings | 432, of which INFO 412 (saturation at an end of the range, nondeterministic context), unexplained 0 |
-| keys with a quantitative semantic assertion (stage 2) | 280 (89 named in a test, plus source / destination / amount of the 64 slots) in 31 test cases, 133 checks, 0 failed |
+| modulatable keys swept through a routed macro: alive / dead | 1067 / 112 (dead: explained 112, unexplained 0; all in question 115, or the keys of the dead list) |
+| per value findings | 434, of which INFO 413 (saturation at an end of the range, nondeterministic context), unexplained 0 |
+| keys with a quantitative semantic assertion (stage 2) | 280 (89 named in a test, plus source / destination / amount of the 64 slots) in 31 test cases, 0 failed |
 | regressions against the committed baseline | 0 |
-| defects fixed in the engine | 3 (section 4), 2 regression tests |
+| defects fixed in the engine | 1 (45 keys, section 4.1) + 1 additive API (4.3); 2 not fixable without an owner decision (4.2, 4.4); 2 regression tests |
 
 Per group (`osc1` is instance 1, `oscN` the group of osc2 / osc3 and so on):
 
 | group | keys | alive | dead | exempt | unsupported | modulation alive | modulation dead |
 |---|---|---|---|---|---|---|---|
 | bode | 16 | 15 | 1 | 0 | 0 | 10 | 0 |
-| bus1 | 3 | 3 | 0 | 0 | 0 | 1 | 0 |
-| bus2 | 3 | 3 | 0 | 0 | 0 | 1 | 0 |
-| chorus | 14 | 14 | 0 | 0 | 0 | 9 | 0 |
-| compressor | 26 | 25 | 1 | 0 | 0 | 9 | 0 |
+| bus1 | 3 | 3 | 0 | 0 | 0 | 0 | 1 |
+| bus2 | 3 | 3 | 0 | 0 | 0 | 0 | 1 |
+| chorus | 14 | 14 | 0 | 0 | 0 | 8 | 1 |
+| compressor | 26 | 25 | 1 | 0 | 0 | 8 | 1 |
 | convolve | 15 | 15 | 0 | 0 | 0 | 9 | 0 |
 | curve | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| delay | 16 | 16 | 0 | 0 | 0 | 9 | 0 |
-| direct | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
-| distortion | 11 | 11 | 0 | 0 | 0 | 7 | 0 |
+| delay | 16 | 16 | 0 | 0 | 0 | 8 | 1 |
+| direct | 1 | 1 | 0 | 0 | 0 | 0 | 1 |
+| distortion | 11 | 11 | 0 | 0 | 0 | 6 | 1 |
 | envN | 96 | 96 | 0 | 0 | 0 | 66 | 0 |
-| eq | 15 | 15 | 0 | 0 | 0 | 10 | 0 |
+| eq | 15 | 15 | 0 | 0 | 0 | 9 | 1 |
 | filter | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | filter1 | 23 | 23 | 0 | 0 | 0 | 17 | 0 |
 | filter2 | 23 | 23 | 0 | 0 | 0 | 17 | 0 |
-| flanger | 11 | 11 | 0 | 0 | 0 | 7 | 0 |
+| flanger | 11 | 11 | 0 | 0 | 0 | 6 | 1 |
 | fx | 16 | 15 | 1 | 0 | 0 | 0 | 0 |
 | fxfilter | 20 | 20 | 0 | 0 | 0 | 15 | 0 |
 | fxi (16 instances) | 448 | 417 | 31 | 0 | 0 | 288 | 96 |
@@ -109,9 +109,9 @@ Per group (`osc1` is instance 1, `oscN` the group of osc2 / osc3 and so on):
 | osc1 | 142 | 133 | 9 | 0 | 0 | 56 | 2 |
 | osc2 | 142 | 132 | 10 | 0 | 0 | 56 | 2 |
 | osc3 | 142 | 133 | 9 | 0 | 0 | 56 | 2 |
-| phaser | 13 | 13 | 0 | 0 | 0 | 9 | 0 |
+| phaser | 13 | 13 | 0 | 0 | 0 | 8 | 1 |
 | quality | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
-| reverb | 23 | 23 | 0 | 0 | 0 | 16 | 1 |
+| reverb | 23 | 23 | 0 | 0 | 0 | 17 | 0 |
 | rlfoN | 32 | 31 | 1 | 0 | 0 | 12 | 0 |
 | splitter_lh | 6 | 6 | 0 | 0 | 0 | 2 | 0 |
 | splitter_lmh | 8 | 8 | 0 | 0 | 0 | 3 | 0 |
@@ -124,7 +124,6 @@ Per group (`osc1` is instance 1, `oscN` the group of osc2 / osc3 and so on):
 The full per key table is generated (`keys.csv`, 650 KB, not committed); `docs/ui-design/param-audit-keys.csv` is the compact committed version (key, verdict, moved metrics, modulation verdict) and
 `docs/ui-design/param-audit-baseline.json` the baseline (verdict + a nine point curve of RMS / centroid / f0 / balance per key and of the modulation sweep, 430 KB).
 
-
 ## 4. What the audit found and what was fixed
 
 ### 4.1 FIXED: the modulation of the Serum effect modules and the splitters never reached the DSP
@@ -134,14 +133,17 @@ Cause: `StereoFxModule::processWithInput` and `SplitterBase::split` (core/engine
 `SynthModule` (the sums base value + modulation of the `createMonoModControl` controls), which every Vital module does (`SynthModule::process (num_samples)` at the start of `processWithInput`).
 Fix: that call. Regression test: `regression_modulation_reaches_the_serum_effects_the_splitters_and_the_level_trims` (macro 0 against macro 100 differ by more than -10 dB re peak for 19 keys).
 
-### 4.2 FIXED: the level trims `<fx>.level` of the effect chain were not modulated
-`compressor.level`, `delay.level`, `eq.level` did not follow a modulation source. Cause: `ReorderableEffectChain::process` did not run the control processors of its own router. Fix: `SynthModule::process (num_samples)`
-at its start. Same regression test (chorus, flanger, reverb, compressor, delay, eq levels).
+### 4.2 NOT fixed, owner question 115: the level trims of the effect chain and of the buses do not follow a modulation source
+`bus1.level`, `bus2.level`, `direct.level` and `chorus` / `compressor` / `delay` / `distortion` / `eq` / `flanger` / `phaser` `.level` (7 effect trims and 3 mixer levels; `reverb.level` works) are flagged modulatable but a routed macro does not move them: the control processors of the chain's router are not run.
+Calling `SynthModule::process (num_samples)` at the start of `ReorderableEffectChain::process` fixes all of them but runs the FX Filter module twice per block (it is a child of the router) and breaks `test_fxinstances` (instance 0 against the pool slot,
+0.5 relative difference), so the fix was backed out: the control processors have to be run selectively.
 
-### 4.3 FIXED: `reset ()` did not restart the effect LFOs
-The second render of the same patch with chorus / flanger / phaser differed from the first by up to +1.5 dB re peak (the free running phase of the effect LFO continued after the reset), so an
-offline render, a bounce and the steps of `renderOffline` were not independent of each other. Fix: `engine->correctToTime (0.0)` in `VitalEngine::reset ()` (the adapter already did it for the
-LFOs of the voices). Regression test: `regression_a_render_after_reset_is_repeatable_with_effect_lfos` (chorus and phaser repeat bit exactly). State version 3 content and the 112 factory presets are not touched.
+### 4.3 ADDED (additive API): `IEngine::restartEffectPhases ()`
+The second render of the same patch with chorus / flanger / phaser differed from the first by up to +1.5 dB re peak (the free running phase of the effect LFO continues after `reset ()`), so an
+offline render, a bounce and the steps of `renderOffline` are not independent of each other. `engine->correctToTime (0.0)` inside `VitalEngine::reset ()` fixes it, but it moves the starting phase of those LFOs and
+the frozen goldens `version_2_sound_is_unchanged_in_both_engines` / `version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_both_engines` (test_new_keys, test_state_v3) fail, so `reset ()` is untouched.
+Instead a new virtual `IEngine::restartEffectPhases ()` (default: nothing; Vital: `correctToTime (0.0)`) lets a caller that needs independent renders restart the phases; the audit's rig calls it after `reset ()`. `offline_render.cpp` does not call
+it yet (owner question 116). Regression test: `regression_effect_lfo_phases_restart_with_restartEffectPhases` (chorus, phaser, flanger repeat to 1e-7).
 
 ### 4.4 NOT fixed, owner question 116: renders are not bit repeatable
 After `reset ()` the random generators (one `RandomGenerator` per module: random LFOs, the Random source, noise) and the reverb's modulation are not restarted: two renders of the same reverb patch differ by up
@@ -169,7 +171,6 @@ Pitch is exact: `oscN.transpose` -48 .. +48 (97 values) 0.0001 cent, `oscN.tune`
 is the echo spacing to 1 ms; the modulation amount is exactly the fraction of the destination's range in its own scale (0.0004 cent) in all 64 slots; envelope times are proportional to the display (attack 0.95, release -40 dB at 0.49, decay 0.41 .. 0.49);
 portamento reaches its target after the displayed time (within 20 ms of 1.6 s); `osc1.phase` is the start phase to 2.1 degrees; effect mix 0 is the dry signal (bit exact for chorus, delay, flanger, phaser, distortion, hyperdim, convolve; level and spectrum
 for reverb, compressor, bode); every parameter jump in the middle of a note is click free with the smoothing on (10 keys) and the smoothing option changes the landing of three of them; all 2628 keys clamp to their range and ignore NaN.
-
 
 ## 5. Stage 2: the semantic checks
 
@@ -220,7 +221,6 @@ keytrack 100 %: cutoff ratio one octave up 2.059 (expected 2.000)
 latency: limiter + comp 72 samples, limiter without comp 0, comp without limiter 0 (1.5 ms = 72 samples)
 ```
 
-
 ## 6. Mutation proof
 
 `scripts/run-param-audit.sh --self-test` (ctest `synthyboy_param_audit_selftest`) injects each fault through `SYNTHYBOY_AUDIT_FAULT` into the value the harness hands to the engine and expects the audit to fail; the faults live in `faultFor ()`
@@ -238,8 +238,7 @@ latency: limiter + comp 72 samples, limiter without comp 0, comp without limiter
 
 The self test first checks that the clean run of the test passes.
 
-
-## 7. Owner questions (docs/ui-design/14-morning-questions.md rows 112 .. 114)
+## 7. Owner questions (docs/ui-design/14-morning-questions.md rows 112 .. 116)
 
 * 112: the envelope sustain follows Vital's law (amplitude = knob squared), Serum 2 shows dB. Kept (Vital).
 * 113: the filter cutoff is the pole frequency (resonance peak exactly at the display); the -3 dB point at resonance 0 sits at 0.52 .. 0.63 of it. Kept.
@@ -256,4 +255,3 @@ The self test first checks that the clean run of the test passes.
 * Where the manuals give no exact number the checks use physics or the measured Vital law (filter -3 dB point, EQ gain at low resonance, reverb RT60, compressor ratios, the spectra of the warps, the granular / spectral / multisample controls are covered by stage 1 only, not by new quantitative curves).
 * Time dependent keys (delay, release, hold ... of 2 s and longer) are measured inside a 1 .. 2 s render: values whose effect lies beyond it are reported as INFO plateaus.
 * The modulation sweep uses one source (macro 1) and one slot (64); other sources and the per slot RISE / FALL / DELAY are covered by their own tests (test_modslew, test_modamt) and by the key sweeps, not by new quantitative curves.
-

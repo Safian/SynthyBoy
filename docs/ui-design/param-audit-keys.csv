@@ -17,10 +17,10 @@ bode.sync,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 bode.width,ALIVE,rms_db peak_db centroid_hz decay_db,ALIVE
 bus1.destination,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 bus1.fx_bypass,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
-bus1.level,ALIVE,rms_db peak_db centroid_hz zc_rate,ALIVE
+bus1.level,ALIVE,rms_db peak_db centroid_hz zc_rate,DEAD
 bus2.destination,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 bus2.fx_bypass,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
-bus2.level,ALIVE,rms_db peak_db centroid_hz zc_rate,ALIVE
+bus2.level,ALIVE,rms_db peak_db centroid_hz zc_rate,DEAD
 chorus.delay1,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 chorus.delay2,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 chorus.depth,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
@@ -28,7 +28,7 @@ chorus.division,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 chorus.feedback,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 chorus.filter_cutoff,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 chorus.filter_spread,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
-chorus.level,ALIVE,rms_db peak_db b00 b01,ALIVE
+chorus.level,ALIVE,rms_db peak_db b00 b01,DEAD
 chorus.mix,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 chorus.on,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 chorus.rack,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
@@ -44,7 +44,7 @@ compressor.high.lower_ratio,ALIVE,,n/a
 compressor.high.lower_threshold,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 compressor.high.upper_ratio,ALIVE,centroid_hz jump b17 b18,n/a
 compressor.high.upper_threshold,ALIVE,rms_db peak_db centroid_hz zc_rate,n/a
-compressor.level,ALIVE,rms_db peak_db b00 b01,ALIVE
+compressor.level,ALIVE,rms_db peak_db b00 b01,DEAD
 compressor.limit,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 compressor.limit_latency_comp,DEAD,,n/a
 compressor.low.gain,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
@@ -84,7 +84,7 @@ delay.feedback,ALIVE,release_ms,ALIVE
 delay.filter_cutoff,ALIVE,peak_db centroid_hz attack_ms decay_db,ALIVE
 delay.filter_spread,ALIVE,rms_db peak_db centroid_hz decay_db,ALIVE
 delay.hq,ALIVE,zc_rate,n/a
-delay.level,ALIVE,rms_db peak_db b00 b01,ALIVE
+delay.level,ALIVE,rms_db peak_db b00 b01,DEAD
 delay.mix,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 delay.offset,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 delay.offset_left,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
@@ -94,14 +94,14 @@ delay.style,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 delay.sync,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 delay.time,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 delay.time2,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
-direct.level,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
+direct.level,ALIVE,rms_db peak_db centroid_hz balance_db,DEAD
 distortion.drive,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 distortion.filter_blend,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 distortion.filter_cutoff,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
 distortion.filter_keytrack,ALIVE,peak_db centroid_hz release_ms zc_rate,ALIVE
 distortion.filter_order,ALIVE,rms_db peak_db centroid_hz decay_db,n/a
 distortion.filter_resonance,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
-distortion.level,ALIVE,rms_db peak_db b00 b01,ALIVE
+distortion.level,ALIVE,rms_db peak_db b00 b01,DEAD
 distortion.mix,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 distortion.on,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 distortion.rack,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
@@ -206,7 +206,7 @@ eq.high.cutoff,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 eq.high.gain,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
 eq.high.mode,ALIVE,attack_ms zc_rate jump b17,n/a
 eq.high.resonance,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
-eq.level,ALIVE,rms_db peak_db b00 b01,ALIVE
+eq.level,ALIVE,rms_db peak_db b00 b01,DEAD
 eq.low.cutoff,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 eq.low.gain,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 eq.low.mode,ALIVE,rms_db centroid_hz attack_ms zc_rate,n/a
@@ -265,52 +265,52 @@ filter2.resonance,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 filter2.style,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 filter2.var,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 flanger.center,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
-flanger.depth,ALIVE,zc_rate,ALIVE
+flanger.depth,ALIVE,rms_db centroid_hz zc_rate,ALIVE
 flanger.division,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 flanger.feedback,ALIVE,,ALIVE
-flanger.level,ALIVE,rms_db peak_db b00 b01,ALIVE
+flanger.level,ALIVE,rms_db peak_db b00 b01,DEAD
 flanger.mix,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 flanger.on,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
-flanger.phase_offset,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
+flanger.phase_offset,ALIVE,rms_db peak_db centroid_hz decay_db,ALIVE
 flanger.rack,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 flanger.rate,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
-flanger.sync,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
+flanger.sync,ALIVE,rms_db centroid_hz attack_ms decay_db,n/a
 fx.order.1,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
-fx.order.10,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
-fx.order.11,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
-fx.order.12,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
-fx.order.13,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
-fx.order.14,ALIVE,peak_db decay_db release_ms zc_rate,n/a
-fx.order.15,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
+fx.order.10,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+fx.order.11,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+fx.order.12,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+fx.order.13,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+fx.order.14,ALIVE,peak_db centroid_hz decay_db release_ms,n/a
+fx.order.15,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 fx.order.16,DEAD,,n/a
 fx.order.2,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 fx.order.3,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 fx.order.4,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 fx.order.5,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
-fx.order.6,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
-fx.order.7,ALIVE,,n/a
-fx.order.8,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
-fx.order.9,ALIVE,peak_db centroid_hz attack_ms decay_db,n/a
+fx.order.6,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+fx.order.7,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+fx.order.8,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+fx.order.9,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 fxfilter.blend,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
-fxfilter.clean_mode,ALIVE,,n/a
-fxfilter.comb_offset,ALIVE,rms_db peak_db centroid_hz decay_db,ALIVE
-fxfilter.cutoff,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
+fxfilter.clean_mode,ALIVE,peak_db attack_ms release_ms b01,n/a
+fxfilter.comb_offset,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
+fxfilter.cutoff,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 fxfilter.drive,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 fxfilter.formant.resonance,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
 fxfilter.formant.spread,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
 fxfilter.formant.transpose,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
 fxfilter.formant.x,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
 fxfilter.formant.y,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
-fxfilter.keytrack,ALIVE,rms_db peak_db decay_db zc_rate,ALIVE
+fxfilter.keytrack,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 fxfilter.level,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
 fxfilter.mix,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 fxfilter.model,ALIVE,rms_db peak_db centroid_hz f0_hz,n/a
 fxfilter.on,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 fxfilter.pan,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 fxfilter.rack,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
-fxfilter.resonance,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
-fxfilter.style,ALIVE,rms_db peak_db centroid_hz f0_hz,n/a
-fxfilter.var,ALIVE,rms_db peak_db centroid_hz f0_hz,ALIVE
+fxfilter.resonance,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
+fxfilter.style,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
+fxfilter.var,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
 fxi01.on,ALIVE,rms_db peak_db centroid_hz attack_ms,n/a
 fxi01.order,DEAD,,n/a
 fxi01.p01,ALIVE,rms_db peak_db centroid_hz attack_ms,ALIVE
@@ -2455,13 +2455,13 @@ phaser.depth,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 phaser.depth2,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 phaser.division,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 phaser.feedback,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
-phaser.level,ALIVE,rms_db peak_db b00 b01,ALIVE
+phaser.level,ALIVE,rms_db peak_db b00 b01,DEAD
 phaser.mix,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 phaser.on,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 phaser.phase_offset,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 phaser.rack,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
 phaser.rate,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
-phaser.sync,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
+phaser.sync,ALIVE,rms_db centroid_hz balance_db attack_ms,n/a
 quality.no_smoothing,DEAD,,n/a
 quality.oversample_4x,ALIVE,peak_db zc_rate b00,n/a
 reverb.chorus_amount,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
@@ -2475,7 +2475,7 @@ reverb.force_enable,ALIVE,,n/a
 reverb.high_shelf_cutoff,ALIVE,zc_rate b00 b01 b02,ALIVE
 reverb.high_shelf_gain,ALIVE,zc_rate,ALIVE
 reverb.level,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
-reverb.low_shelf_cutoff,ALIVE,,DEAD
+reverb.low_shelf_cutoff,ALIVE,,ALIVE
 reverb.low_shelf_gain,ALIVE,attack_ms zc_rate b00 b01,ALIVE
 reverb.mix,ALIVE,rms_db peak_db centroid_hz balance_db,ALIVE
 reverb.on,ALIVE,rms_db peak_db centroid_hz balance_db,n/a
