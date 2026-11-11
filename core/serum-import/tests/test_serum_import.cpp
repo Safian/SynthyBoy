@@ -728,7 +728,11 @@ TEST (serum_content_tables_samples_multisamples_impulses)
     CHECK_EQ (r.impulses[0].numFrames, 3000);
     CHECK_EQ (norm (r, "convolve.ir"), 1.0f);
     CHECK_EQ (norm (r, "convolve.on"), 1.0f);
-    CHECK_NEAR (norm (r, "convolve.mix"), 40.0, 1e-3);
+    // the Wet knob 40 % goes through the measured mix law of the convolution (A518: dry 0.88 / wet 0.35 at 40 %), not 1:1
+    double lawWet = 0.0, lawLevel = 0.0;
+    CHECK (serumimport::fxMixRemap (kFxTypeConvolve, 0.4, 0.0, lawWet, lawLevel));
+    CHECK_NEAR (norm (r, "convolve.mix"), 100.0 * lawWet, 1e-2);
+    CHECK_EQ (norm (r, "convolve.law"), 1.0f);
 }
 
 // GROUPC (WP-13, A427 .. A434): the multisample oscillator keeps the instrument: the SFZ with all its zones, the samples as 24-bit WAV files, the envelope override, the velocity

@@ -255,3 +255,48 @@ Same scoring, same 956 renders, the Serum references of round 1 (not rendered ag
 - **Modulation opened closed filters, multisample scatter, LadderEMS / HP12 static law, the 15.5 / 57.6 ms delay steps in tempo mode.**
 - **Frozen goldens changed deliberately:** the fingerprints of the first 880 keys and of the busy states (widened EQ gain and compressor ranges), `docs/params.json`, PARAMETERS.md, kick-pages.json, the factory presets, `param-audit-baseline.json` (updated with --update-baseline: the new keys and the moved curves of the widened ranges), `refcompare-baseline.json`.
 - **No gate was lowered, no preset was special cased.**
+
+## 11. Round 3b (branch refcmp-b): the state migration, the convolution of Serum, the multisample budget
+
+Same scoring, same 956 renders, the Serum references of round 1. "Before" is the end of section 10 (the first part of round 3).
+
+| | before (section 10) | after |
+|---|---:|---:|
+| MATCH | 3 | 7 |
+| CLOSE | 138 | 165 |
+| DIFFERENT | 808 | 777 |
+| FAILED | 7 | 7 |
+| mean score | 46.63 | 48.42 |
+| median score | 47.40 | 49.56 |
+| median loudness gap ours - Serum (LU) | -0.77 | -1.10 |
+| mean absolute loudness gap (LU) | 6.53 | 6.13 |
+| renders more than 6 LU off | 362 of 937 | 343 of 941 |
+| median log-mel distance (dB) | 14.17 | 13.67 |
+| median multi-resolution STFT loss | 1.62 | 1.56 |
+| median 10 ms envelope distance (dB) | 8.37 | 7.54 |
+| median spectral centroid distance (octaves) | 0.69 | 0.68 |
+
+| family (mean sub-score) | before | after |
+|---|---:|---:|
+| spectrum | 25.8 | 27.1 |
+| envelope | 55.0 | 57.0 |
+| loudness | 59.5 | 61.8 |
+| pitch | 52.5 | 53.3 |
+| stereo | 72.4 | 74.4 |
+
+### 11.1 What was done
+
+- **State version 4 (question 129).** The widened normalised ranges changed what the stored pool values of EQ and compressor slots mean. `migrateV3ToV4` / `fxPoolMigrateFromV3` rescale them on load (states, `.sbpreset`, library rack presets of version 1), write the new keys at their defaults (no second EQ band, Vital law) and `test_state_v4.cpp` proves that an old document gives the same plain values. The plain keys of a state keep their dB values. Open: host automation lanes of the widened plain keys are normalised by the host.
+- **Convolution of Serum (A518, `convolve.law`).** Measured on the library impulses and on noise impulses: the impulse is peak normalised, times IR GAIN (default -18 dB), host rate scaling, DECAY = T60 in seconds, SIZE^0.7, TONE one pole at measured corners, DAMP time dependent, ATTACK ramp, minimum phase normalised after the conversion, measured mix law. The wet level of 28 library impulses: mean absolute error 15.3 dB -> 1.1 dB; 
+- **Multisample budget (A519).** 9 of 113 instruments exceed the 24 M frame budget; the later zones were silent (5 presets at -75 LU). Decoding from the middle of the keyboard outwards and the nearest decoded zone for the rest.
+- **Audit.** `param_audit` contexts start a pool slot from the defaults of its type (the module level minimum mutes since round 3), the second EQ band has a context, and the CLICK of boosted bands (EQ up to +24 dB, compressor gain +36 dB) is explained BY-MODEL (measured). The baseline was updated once.
+
+### 11.2 What was measured and not changed (and why)
+
+- **The effect modules are not where the remaining scatter is.** Presets without a compressor have the same mean absolute loudness gap (5.9 LU) as the others (7.5 LU with one, 10.2 with three or more), the modules of the catalog are within 3 dB; the 36 % of renders more than 6 LU off are spread over all categories and effect counts.
+- **FX Filter level by type.** A per type level table (50 types, measured with the default settings) and the level laws of the voice filters reduced the level error of the isolated module, but lowered the mean score of the 956 presets (48.42 -> 48.29 and 47.68): reverted. Isolated settings do not transfer to the presets.
+- **Utility HPF modulation depth (Tape Keys, silent).** The Serum high pass reaches 400 Hz, ours 20 kHz: a modulation of the normalised value of 65 % opens ours to the top. The depth of a modulation across keys with other ranges needs a per key scale; one preset family, not done.
+- **EQ above 10 kHz** (question 130): the cramped Serum curve at 48 kHz against ours at the oversampled rate: no exact mapping of the biquad to the double rate exists; remains.
+- **Delay tempo steps 15.5 / 57.6 ms:** measured at 120 BPM only (the reference host has no tempo input); remains in milliseconds.
+- **Not reached:** reverb density and tone, flanger / phaser / chorus shapes (catalog 77 .. 85), the global stage and +12 dB cap of the multiband compressor, LadderEMS / HP12, closed filters opened by modulation (143 renders, median gap -1.25, no bias). Each of them is below the scatter that is left; every one needs its own measured law.
+- **Arpeggiator.** Decision Q1 (`12-decisions.md`, "Decided" table, session of 2026-11-08, `00-BRIEF.md`): Clips and Arpeggiator are excluded, Kick provides sequencing. The importer drops the arp cleanly (`arpeggiator_not_modelled` / `clip_player_not_modelled`, the fidelity is not lowered by them). 57 renders (36 presets) have a median loudness gap of -7.2 LU. If the owner reopens Q1 the engine work is: a note generator between the MIDI input and the voices (pattern of steps with note offset, gate, velocity, octave range, rate in beats with swing and the host transport, hold / latch and retrigger), about 40 keys plus a pattern editor, and the importer mapping of `Arp0` / `ArpClip0 .. 11`.

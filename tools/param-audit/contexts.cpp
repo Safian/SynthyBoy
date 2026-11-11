@@ -467,6 +467,8 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
                     ladder ("style", "delay.style", 0, 4, on, "long");
                 if (G == "eq")
                     add ("eq+modes", cat (on, { { "eq.low.mode", 1.0f }, { "eq.mid.mode", 1.0f }, { "eq.high.mode", 1.0f }, { "eq.mid.gain", 9.0f }, { "eq.high.gain", 9.0f } }));
+                if (G == "eq")
+                    add ("eq+band2", cat (on, { { "eq.mid2.mode", 1.0f }, { "eq.mid2.gain", 12.0f } }));   // block B34: the second band acts when its mode is not Off
                 if (G == "chorus" || G == "flanger" || G == "phaser" || G == "delay" || G == "bode" || G == "convolve")
                     for (int s = 1; s <= 3; ++s)
                         add ("sync" + std::to_string(s), cat (on, { { G + ".sync", static_cast<float> (s) } }), script);
@@ -513,7 +515,16 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
         const int number = std::atoi (sub.c_str() + 1) - 1; // p01 -> 0
         for (int t = 1; t < kNumFxInstanceTypes; ++t)
             if (fxTypeDescriptor (t).count > number)   // only the effect types that map this parameter
-                add ("fxi-type" + std::to_string (t), { { P + "on", 1.0f }, { P + "type", static_cast<float> (t) } }, "long");
+            {
+                // a slot whose type is set through its key holds the zero values of the pool; the UI (and fxInstanceDefaults) sets the defaults of the type, with the module level at 0 dB (the level
+                // minimum of a module mutes since REFCOMPARE round 3): the audit starts from the defaults
+                Ovs ov { { P + "on", 1.0f }, { P + "type", static_cast<float> (t) } };
+                float defaults[kFxInstanceParams];
+                fxInstanceDefaults (t, defaults);
+                for (int q = 0; q < fxTypeDescriptor (t).count; ++q)
+                    ov.push_back ({ P + "p" + two (q + 1), defaults[q] });
+                add ("fxi-type" + std::to_string (t), std::move (ov), "long");
+            }
         return out;
     }
 
@@ -626,22 +637,52 @@ std::vector<Context> contextsFor (const ParamInfo& info)
     {
         const std::string P = k.substr (0, 6);
         for (int t : { 1, 2, 3, 5, 8 })
-            add ("fxi-type" + std::to_string (t), { { P + "type", static_cast<float> (t) }, { P + "on", 1.0f }, { P + "p03", 0.9f }, { P + "p01", 0.8f }, { P + "p02", 0.8f } }, "long");
+        {
+            Ovs ov { { P + "type", static_cast<float> (t) }, { P + "on", 1.0f } };
+            float defaults[kFxInstanceParams];
+            fxInstanceDefaults (t, defaults);
+            for (int q = 0; q < fxTypeDescriptor (t).count; ++q)
+                ov.push_back ({ P + "p" + two (q + 1), defaults[q] });
+            ov.push_back ({ P + "p03", 0.9f });
+            ov.push_back ({ P + "p01", 0.8f });
+            ov.push_back ({ P + "p02", 0.8f });
+            add ("fxi-type" + std::to_string (t), std::move (ov), "long");
+        }
     }
     if (starts (k, "fxi") && k.size() > 6 && k[5] == '.' && k[6] == 'p')
     {
         const std::string P = k.substr (0, 6);
         auto pv = [&] (int n, float v) { char b[8]; std::snprintf (b, sizeof b, "p%02d", n); return Ov { P + b, v }; };
+        // the pool of a slot whose type is set through its key holds zeros: the module level would sit at its minimum, which mutes since REFCOMPARE round 3. Every context starts from the defaults of the type.
+        auto addPool = [&] (const std::string& name, Ovs ov, const char* script)
+        {
+            int type = 0;
+            for (const auto& o : ov)
+                if (o.key == P + "type")
+                    type = static_cast<int> (o.value);
+            Ovs full;
+            for (const auto& o : ov)
+                if (o.key == P + "on" || o.key == P + "type")
+                    full.push_back (o);
+            float defaults[kFxInstanceParams];
+            fxInstanceDefaults (type, defaults);
+            for (int q = 0; q < fxTypeDescriptor (type).count; ++q)
+                full.push_back ({ P + "p" + two (q + 1), defaults[q] });
+            for (const auto& o : ov)
+                if (! (o.key == P + "on" || o.key == P + "type"))
+                    full.push_back (o);
+            add (name, std::move (full), script);
+        };
         for (int bands = 0; bands <= 3; ++bands)
-            add ("fxi-compressor-bands" + std::to_string (bands), { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 1.0f), pv (4, static_cast<float> (bands) / 3.0f), pv (7, 0.8f), pv (12, 0.8f), pv (17, 0.8f), pv (5, 0.9f), pv (10, 0.9f), pv (15, 0.9f), pv (8, 0.9f), pv (13, 0.9f), pv (18, 0.9f), pv (9, 0.8f), pv (14, 0.8f), pv (19, 0.8f), pv (21, bands == 3 ? 1.0f : 0.0f), pv (22, 1.0f), { "master.volume", -30.0f } }, "long");
-        add ("fxi-compressor", { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 1.0f), pv (4, 1.0f), pv (21, 1.0f), pv (7, 0.8f), pv (12, 0.8f), pv (17, 0.8f), pv (5, 0.9f), pv (10, 0.9f), pv (15, 0.9f), { "master.volume", -40.0f } }, "long");
-        add ("fxi-compressor-loud", { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 1.0f), pv (4, 1.0f), pv (21, 1.0f), pv (2, 0.2f), pv (3, 0.2f), pv (9, 0.8f), pv (14, 0.8f), pv (19, 0.8f), pv (6, 0.5f), pv (11, 0.5f), pv (16, 0.5f), pv (8, 0.9f), pv (13, 0.9f), pv (18, 0.9f), { "master.volume", -6.0f }, { "osc1.level", 100.0f } }, "long");
-        add ("fxi-compressor-latency", { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 0.5f), pv (21, 1.0f), pv (22, 1.0f) }, "long");
+            addPool ("fxi-compressor-bands" + std::to_string (bands), { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 1.0f), pv (4, static_cast<float> (bands) / 3.0f), pv (7, 0.8f), pv (12, 0.8f), pv (17, 0.8f), pv (5, 0.9f), pv (10, 0.9f), pv (15, 0.9f), pv (8, 0.9f), pv (13, 0.9f), pv (18, 0.9f), pv (9, 0.8f), pv (14, 0.8f), pv (19, 0.8f), pv (21, bands == 3 ? 1.0f : 0.0f), pv (22, 1.0f), { "master.volume", -30.0f } }, "long");
+        addPool ("fxi-compressor", { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 1.0f), pv (4, 1.0f), pv (21, 1.0f), pv (7, 0.8f), pv (12, 0.8f), pv (17, 0.8f), pv (5, 0.9f), pv (10, 0.9f), pv (15, 0.9f), { "master.volume", -40.0f } }, "long");
+        addPool ("fxi-compressor-loud", { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 1.0f), pv (4, 1.0f), pv (21, 1.0f), pv (2, 0.2f), pv (3, 0.2f), pv (9, 0.8f), pv (14, 0.8f), pv (19, 0.8f), pv (6, 0.5f), pv (11, 0.5f), pv (16, 0.5f), pv (8, 0.9f), pv (13, 0.9f), pv (18, 0.9f), { "master.volume", -6.0f }, { "osc1.level", 100.0f } }, "long");
+        addPool ("fxi-compressor-latency", { { P + "on", 1.0f }, { P + "type", 2.0f }, pv (1, 0.5f), pv (21, 1.0f), pv (22, 1.0f) }, "long");
         for (int m = 0; m <= 26; ++m)
-            add ("fxi-filter-model" + std::to_string (m), { { P + "on", 1.0f }, { P + "type", 6.0f }, pv (1, static_cast<float> (m) / 26.0f), pv (4, 0.6f), pv (3, 0.4f), pv (7, 1.0f) }, "long");
+            addPool ("fxi-filter-model" + std::to_string (m), { { P + "on", 1.0f }, { P + "type", 6.0f }, pv (1, static_cast<float> (m) / 26.0f), pv (4, 0.6f), pv (3, 0.4f), pv (7, 1.0f) }, "long");
         for (int t = 0; t <= 5; ++t)
             for (int room : { 0, 2, 4 })
-                add ("fxi-reverb-type" + std::to_string (t) + "-room" + std::to_string (room), { { P + "on", 1.0f }, { P + "type", 9.0f }, pv (1, 0.6f), pv (14, static_cast<float> (t) / 5.0f), pv (15, static_cast<float> (room) / 4.0f), pv (16, 1.0f), pv (3, 0.5f) }, "long");
+                addPool ("fxi-reverb-type" + std::to_string (t) + "-room" + std::to_string (room), { { P + "on", 1.0f }, { P + "type", 9.0f }, pv (1, 0.6f), pv (14, static_cast<float> (t) / 5.0f), pv (15, static_cast<float> (room) / 4.0f), pv (16, 1.0f), pv (3, 0.5f) }, "long");
     }
     if (starts (k, "fxi") && k.size() > 9 && k[5] == '.' && ends (k, ".order"))
     {
