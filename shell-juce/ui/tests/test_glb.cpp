@@ -69,9 +69,15 @@ bool writePng (juce::Component& c, const juce::File& file)
     juce::Image image (juce::Image::ARGB, c.getWidth(), c.getHeight(), true);
     juce::Graphics g (image);
     c.paintEntireComponent (g, true);
-    juce::FileOutputStream out (file);
-    juce::PNGImageFormat png;
-    return out.openedOk() && png.writeImageToStream (image, out);
+    // the stream is closed (flushed) before the caller looks at the file size: Windows reports the size of what reached the disk
+    bool ok = false;
+    {
+        juce::FileOutputStream out (file);
+        juce::PNGImageFormat png;
+        ok = out.openedOk() && png.writeImageToStream (image, out);
+        out.flush();
+    }
+    return ok;
 }
 
 void collectInteractiveTargets (juce::Component& c, std::vector<juce::Component*>& out)
