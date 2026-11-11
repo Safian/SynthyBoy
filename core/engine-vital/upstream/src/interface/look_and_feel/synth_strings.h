@@ -282,6 +282,11 @@ namespace strings {
     "Serum"
   };
 
+  const std::string kConvolveLawNames[] = {
+    "Vital",
+    "Serum"
+  };
+
   const std::string kEqLowModeNames[] = {
     "Shelf",
     "High Pass"

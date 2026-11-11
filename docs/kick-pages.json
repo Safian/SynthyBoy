@@ -2874,7 +2874,7 @@
         {"key": "convolve.ir_gain", "shortLabel": "IR Gain", "widget": "bipolar_knob"},
         {"key": "convolve.mix", "shortLabel": "Mix", "widget": "knob"},
         {"key": "convolve.level", "shortLabel": "Level", "widget": "bipolar_knob"},
-        null,
+        {"key": "convolve.law", "shortLabel": "Law", "widget": "stepped"},
         null
       ]
     },

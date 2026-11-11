@@ -380,3 +380,25 @@ TEST (multisample_release_trigger_crossfade_and_filter_opcodes_are_read_written_
     CHECK_NEAR (inst.crossfadeGain (0, 70, 30), std::sin (0.5 * kPi * 20.0 / 40.0), 1.0e-4);
     CHECK_NEAR (inst.crossfadeGain (1, 10, 10), 1.0, 1.0e-6);   // a zone without crossfades
 }
+
+TEST (multisample_instrument_over_budget_keeps_the_middle_of_the_keyboard_and_plays_the_nearest_zone_elsewhere)
+{
+    // four zones of 0.5 s (24000 frames); the budget of 40000 frames decodes two of them (the check is made before a sample: 24000, then 48000): the ones nearest to the middle (C3 = 60), the others play those
+    Files files;
+    for (const char* n : { "a.wav", "b.wav", "c.wav", "d.wav" })
+        files.bytes[n] = wav16 (sine (440.0, 0.5));
+    const auto sfz = parseSfz ("<region> sample=a.wav lokey=0 hikey=29 pitch_keycenter=24\n"
+                               "<region> sample=b.wav lokey=30 hikey=65 pitch_keycenter=60\n"
+                               "<region> sample=c.wav lokey=66 hikey=89 pitch_keycenter=72\n"
+                               "<region> sample=d.wav lokey=90 hikey=127 pitch_keycenter=96\n");
+    Instrument inst;
+    CHECK_EQ (inst.build (sfz, files.reader(), 40000), 4);   // every zone has audio
+    CHECK_EQ (inst.numSkipped(), 2);
+    CHECK_EQ (inst.numMissing(), 0);
+    CHECK_EQ (inst.zone (1).sample >= 0, true);
+    CHECK_EQ (inst.zone (2).sample >= 0, true);
+    CHECK_EQ (inst.zone (0).sample, inst.zone (1).sample);   // the lowest zone plays the sample of the zone nearest to it
+    CHECK_EQ (inst.zone (3).sample, inst.zone (2).sample);
+    CHECK_EQ (inst.zone (0).region.center, 60);              // with that zone's root, so that the pitch is right
+    CHECK_EQ (inst.zone (3).region.center, 72);
+}

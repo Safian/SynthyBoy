@@ -103,6 +103,23 @@ TEST (version_3_pool_values_keep_their_plain_meaning)
             }
 }
 
+TEST (version_3_convolve_ir_gain_keeps_its_plain_meaning)
+{
+    auto v = ParamValues::defaults();
+    v.plain[indexOfKey ("fxi04.type")] = static_cast<float> (kFxTypeConvolve);
+    std::string text = asVersion3 (saveState (v));
+    const int k = numberOf (kFxTypeConvolve, "convolve.ir_gain");
+    CHECK (k >= 0);
+    setNumber (text, poolKey (3, k), (6.0 + 24.0) / 48.0);   // +6 dB in the range -24 .. 24 of version 3
+    auto loaded = ParamValues::defaults();
+    CHECK (loadState (text.data(), text.size(), loaded).status == LoadStatus::ok);
+    CHECK_NEAR (fxInstancePlain (kFxTypeConvolve, k, loaded.plain[static_cast<size_t> (indexOfKey (poolKey (3, k).c_str()))]), 6.0f, 1.0e-3f);
+    // the law of the convolution (block B35) comes with its default: the Vital law
+    const int law = numberOf (kFxTypeConvolve, "convolve.law");
+    CHECK (law >= 0);
+    CHECK_EQ (loaded.plain[static_cast<size_t> (indexOfKey ("convolve.law"))], 0.0f);
+}
+
 TEST (version_3_document_gets_the_version_4_keys_at_their_defaults)
 {
     // a previous patch with the second EQ band on and the Serum EQ law, and an EQ slot whose unused parameters hold leftovers

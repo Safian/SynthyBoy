@@ -32,6 +32,7 @@ enum class Conv : uint8_t
     curveDecay,   // Serum envelope decay / release curve 0 .. 100 -> env#.decay_curve / release_curve: the same, measured
     detuneLaw,    // Serum unison detune 0 .. 1 -> osc#.unison.detune: 100 * in ^ 1.25 (outer voices 200 * in ^ 1.25 cents with the range of 2 semitones; measured against Serum 2.1.5)
     cubicPercent, // Serum bus send 0 .. 100 % -> 100 * (in / 100) ^ 3: the measured send law of the real Serum 2.1.5 (a send of 50 % adds 1 dB, not 3.5 dB)
+    sizeLog,      // Serum convolve SIZE 10 .. 1000 (%) -> convolve.size 0 .. 100: 50 + 50 log10 (in / 100), the factor 0.1 .. 10 of convolve.law = Serum (13-new-keys.md 4.49)
     compThresh    // Serum compressor threshold 0 .. 1 -> dB: the measured peak ceiling (tools/ref-compare/compthr2.py): +12 dB at the top of the range, -120 dB at 1
 };
 

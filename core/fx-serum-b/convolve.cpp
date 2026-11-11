@@ -193,6 +193,54 @@ void Convolve::convertToMinimumPhase (std::vector<float>& ir, const Radix2FFT& f
         ir[i] = buf[i].r;
 }
 
+namespace
+{
+/** The damping of Serum 2.1.5 (measured with an impulse of exponentially decaying noise: the wet signal at times 0.4 .. 4 s for the knob 0 .. 100 %, bands 300 Hz .. 17 kHz, fitted with three equal
+    one pole low passes): the corner (log10 Hz) by knob and time. Below 50 % the corner stays above 20 kHz for the first seconds (the effect starts around 30 %). */
+double serumDampLogCorner (double knob, double t) noexcept
+{
+    static const double kD[] = { 0.0, 30.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0 };
+    static const double kT[] = { 0.4, 1.0, 2.0, 3.0, 4.0 };
+    static const double kL[8][5] = {
+        { 9.0, 9.0, 9.0, 9.0, 9.0 },                       // 0 %: no damping
+        { 6.5, 5.96, 5.38, 5.05, 4.81 },
+        { 6.16, 5.41, 4.865, 4.60, 4.417 },
+        { 5.94, 5.19, 4.68, 4.44, 4.277 },
+        { 5.72, 4.98, 4.52, 4.30, 4.148 },
+        { 5.49, 4.78, 4.365, 4.16, 4.01 },
+        { 5.21, 4.56, 4.19, 3.99, 3.83 },
+        { 4.69, 4.18, 3.82, 3.55, 3.31 } };
+    const double d = std::max (0.0, std::min (100.0, knob));
+    int di = 0;
+    while (di < 6 && d > kD[di + 1])
+        ++di;
+    const double fd = (d - kD[di]) / (kD[di + 1] - kD[di]);
+    const auto at = [&] (int row)
+    {
+        if (t <= kT[0])
+            return kL[row][0];
+        int ti = 0;
+        while (ti < 3 && t > kT[ti + 1])
+            ++ti;
+        const double ft = (t - kT[ti]) / (kT[ti + 1] - kT[ti]);   // beyond 4 s the last slope goes on
+        return kL[row][ti] + (kL[row][ti + 1] - kL[row][ti]) * ft;
+    };
+    return at (di) + (at (di + 1) - at (di)) * fd;
+}
+
+/** The level offset that goes with the damping of Serum (dB). */
+double serumDampGainDb (double knob) noexcept
+{
+    static const double kD[] = { 0.0, 25.0, 50.0, 75.0, 90.0, 100.0 };
+    static const double kG[] = { 0.0, -0.1, -0.7, -1.1, -1.4, -1.7 };
+    const double d = std::max (0.0, std::min (100.0, knob));
+    int i = 0;
+    while (i < 4 && d > kD[i + 1])
+        ++i;
+    return kG[i] + (kG[i + 1] - kG[i]) * (d - kD[i]) / (kD[i + 1] - kD[i]);
+}
+} // namespace
+
 void Convolve::rebuildPartitions()
 {
     if (m_rawIr.empty() || m_rawFrames <= 0)
@@ -209,8 +257,23 @@ void Convolve::rebuildPartitions()
         return;
     }
 
+    // 0. The Serum law: the impulse is normalised to the peak 1 over both channels (measured: the level of the wet signal is the level of the convolution with the peak
+    //    normalised impulse times IR GAIN, whatever the level of the file; the default IR GAIN of Serum is -18 dB)
+    float normalise = 1.0f;
+    if (params.serumLaw)
+    {
+        float peak = 0.0f;
+        for (const float v : m_rawIr)
+            peak = std::max (peak, std::fabs (v));
+        if (peak > 1.0e-9f)
+            normalise = 1.0f / peak;
+        // Serum convolves at the rate of the host; the engine at the oversampled rate: an impulse resampled to twice the rate has twice the samples, so it is scaled to keep the gain
+        if (params.hostRate > 0.0)
+            normalise *= static_cast<float> (params.hostRate / m_sampleRate);
+    }
+
     // 1. Resample raw IR to engine sample rate and stretch/contract by params.size
-    const float sizeParam = std::clamp (params.size, 0.25f, 4.0f);
+    const float sizeParam = params.serumLaw ? std::clamp (params.size, 0.1f, 10.0f) : std::clamp (params.size, 0.25f, 4.0f);
     const double resampleRatio = (m_rawIrRate / m_sampleRate) / static_cast<double> (sizeParam);
     const int targetFrames = std::clamp (static_cast<int> (std::round (static_cast<double> (m_rawFrames) / resampleRatio)),
                                          1,
@@ -238,8 +301,18 @@ void Convolve::rebuildPartitions()
         resampleSignal (srcR.data(), m_rawFrames, irR.data(), targetFrames, resampleRatio);
     }
 
-    // 2. Attack fade-in
-    if (params.attack > 0.0f)
+    // 2. Attack fade-in (the Serum law: an amplitude ramp (t / attack) ^ 0.6, measured)
+    if (params.attack > 0.0f && params.serumLaw)
+    {
+        const int attFrames = std::min (targetFrames, static_cast<int> (std::round (params.attack * m_sampleRate)));
+        for (int i = 0; i < attFrames; ++i)
+        {
+            const float ramp = std::pow (static_cast<float> (i) / static_cast<float> (attFrames), 0.6f);
+            irL[static_cast<size_t> (i)] *= ramp;
+            irR[static_cast<size_t> (i)] *= ramp;
+        }
+    }
+    else if (params.attack > 0.0f)
     {
         const int attFrames = std::min (targetFrames, static_cast<int> (std::round (params.attack * m_sampleRate)));
         for (int i = 0; i < attFrames; ++i)
@@ -250,11 +323,11 @@ void Convolve::rebuildPartitions()
         }
     }
 
-    // 3. Decay shortening
+    // 3. Decay shortening (the Serum law: exp (-6.9078 t / T60) with the T60 = decay, measured on Serum 2.1.5; ours: -26 dB after `decay` seconds)
     if (params.decay > 0.0f)
     {
-        const double decaySec = std::max (0.001, static_cast<double> (params.decay));
-        const double decayFactor = 3.0 / (decaySec * m_sampleRate);
+        const double decaySec = std::max (params.serumLaw ? 0.0005 : 0.001, static_cast<double> (params.decay));
+        const double decayFactor = (params.serumLaw ? 6.907755278982137 : 3.0) / (decaySec * m_sampleRate);
         for (int i = 0; i < targetFrames; ++i)
         {
             const float env = static_cast<float> (std::exp (-decayFactor * static_cast<double> (i)));
@@ -263,8 +336,33 @@ void Convolve::rebuildPartitions()
         }
     }
 
-    // 4. Damp (high frequency damping across time)
-    if (params.damp > 0.0f)
+    // 4. Damp (high frequency damping across time; the Serum law: three one pole low passes whose corner falls with the time of the impulse, measured)
+    if (params.damp > 0.0f && params.serumLaw)
+    {
+        const double knob = static_cast<double> (std::clamp (params.damp, 0.0f, 1.0f)) * 100.0;
+        const float gain = static_cast<float> (std::pow (10.0, serumDampGainDb (knob) / 20.0));
+        float sL[3] = { 0.0f, 0.0f, 0.0f }, sR[3] = { 0.0f, 0.0f, 0.0f };
+        float alpha = 1.0f;
+        for (int i = 0; i < targetFrames; ++i)
+        {
+            if ((i & 255) == 0)
+            {
+                const double fc = std::min (std::pow (10.0, serumDampLogCorner (knob, static_cast<double> (i) / m_sampleRate)), 0.45 * m_sampleRate);
+                alpha = static_cast<float> (1.0 - std::exp (-kTwoPi * fc / m_sampleRate));
+            }
+            float xL = irL[static_cast<size_t> (i)], xR = irR[static_cast<size_t> (i)];
+            for (int k = 0; k < 3; ++k)
+            {
+                sL[k] += alpha * (xL - sL[k]);
+                sR[k] += alpha * (xR - sR[k]);
+                xL = sL[k];
+                xR = sR[k];
+            }
+            irL[static_cast<size_t> (i)] = xL * gain;
+            irR[static_cast<size_t> (i)] = xR * gain;
+        }
+    }
+    else if (params.damp > 0.0f)
     {
         const float dampAmount = std::clamp (params.damp, 0.0f, 1.0f);
         float stateL = 0.0f;
@@ -285,15 +383,30 @@ void Convolve::rebuildPartitions()
     {
         // Find next power of 2 >= targetFrames
         int minFftSize = 256;
-        while (minFftSize < targetFrames && minFftSize < 65536)
-            minFftSize <<= 1;
+        if (params.serumLaw)
+        {
+            while (minFftSize < 2 * targetFrames && minFftSize < (1 << 21))   // the whole impulse and room for the cepstrum (no time aliasing)
+                minFftSize <<= 1;
+        }
+        else
+            while (minFftSize < targetFrames && minFftSize < 65536)
+                minFftSize <<= 1;
         Radix2FFT minFft (minFftSize);
         convertToMinimumPhase (irL, minFft);
         convertToMinimumPhase (irR, minFft);
+        if (params.serumLaw)
+        {
+            // Serum normalises the impulse after the minimum phase conversion (measured: the level of the wet signal falls by the ratio of the peaks, 0 .. 17 dB)
+            float peak = 0.0f;
+            for (int i = 0; i < targetFrames; ++i)
+                peak = std::max ({ peak, std::fabs (irL[static_cast<size_t> (i)]), std::fabs (irR[static_cast<size_t> (i)]) });
+            if (peak > 1.0e-9f)
+                normalise = (params.hostRate > 0.0 ? static_cast<float> (params.hostRate / m_sampleRate) : 1.0f) / peak;
+        }
     }
 
     // 6. IR Gain
-    const float irGainFactor = std::pow (10.0f, std::clamp (params.irGain, -24.0f, 24.0f) / 20.0f);
+    const float irGainFactor = std::pow (10.0f, std::clamp (params.irGain, -40.0f, 24.0f) / 20.0f) * normalise;
     for (int i = 0; i < targetFrames; ++i)
     {
         irL[static_cast<size_t> (i)] *= irGainFactor;
@@ -392,6 +505,32 @@ void Convolve::computeTailFftBlock() noexcept
     m_tailFftHistHead = (m_tailFftHistHead + 1) % m_numTailPartitions;
 }
 
+namespace
+{
+/** The corner of the TONE filter of Serum 2.1.5 (measured with an impulse of exponentially decaying noise: first order filters, fitted to the transfer function of the wet signal): TONE < 0 a low pass,
+    TONE > 0 a high pass, log10 (Hz) piecewise linear over the knob (-100 .. 100); 0 is off. */
+double serumToneCorner (double toneKnob) noexcept
+{
+    static const double kKnob[] = { -100.0, -80.0, -70.0, -60.0, -40.0, -20.0, -10.0, 0.0, 20.0, 40.0, 60.0, 80.0, 90.0, 95.0, 100.0 };
+    static const double kLog[]  = {   1.497,  2.374,  2.70, 3.019, 3.613, 4.178, 4.471, 5.0, 1.50, 2.305, 2.797, 3.508, 3.846, 4.123, 4.561 };
+    const double t = std::max (-100.0, std::min (100.0, toneKnob));
+    if (t > 0.0)
+    {
+        // the high pass starts at 5 Hz (log10 0.7) at the middle of the knob
+        if (t < 20.0)
+            return std::pow (10.0, 0.7 + (kLog[8] - 0.7) * t / 20.0);
+        for (int i = 8; i < 14; ++i)
+            if (t <= kKnob[i + 1])
+                return std::pow (10.0, kLog[i] + (kLog[i + 1] - kLog[i]) * (t - kKnob[i]) / (kKnob[i + 1] - kKnob[i]));
+        return std::pow (10.0, kLog[14]);
+    }
+    for (int i = 0; i < 7; ++i)
+        if (t <= kKnob[i + 1])
+            return std::pow (10.0, kLog[i] + (kLog[i + 1] - kLog[i]) * (t - kKnob[i]) / (kKnob[i + 1] - kKnob[i]));
+    return std::pow (10.0, kLog[7]);
+}
+} // namespace
+
 void Convolve::process (float* l, float* r, int n) noexcept
 {
     if (l == nullptr || r == nullptr || n <= 0)
@@ -406,6 +545,8 @@ void Convolve::process (float* l, float* r, int n) noexcept
     const float highGain = std::pow (10.0f, (tone * 6.0f) / 20.0f);
     // Filter coefficient for 1 kHz tilt center
     const float tiltAlpha = static_cast<float> (1.0 - std::exp (-kTwoPi * 1000.0 / m_sampleRate));
+    // the Serum law: a first order low pass (TONE < 0) or high pass (TONE > 0) at the measured corner
+    const float serumAlpha = params.serumLaw ? static_cast<float> (1.0 - std::exp (-kTwoPi * std::min (serumToneCorner (static_cast<double> (tone) * 100.0), 0.45 * m_sampleRate) / m_sampleRate)) : 0.0f;
 
     // Pre-delay in samples
     double preDelaySec = 0.0;
@@ -459,8 +600,26 @@ void Convolve::process (float* l, float* r, int n) noexcept
             m_blockPos = 0;
         }
 
-        // Apply Tone (1-pole spectral tilt)
-        if (tone != 0.0f)
+        // Apply Tone (1-pole spectral tilt; the Serum law: a 1-pole low / high pass)
+        if (params.serumLaw)
+        {
+            if (tone != 0.0f)
+            {
+                m_toneStateL += serumAlpha * (wetL - m_toneStateL);
+                m_toneStateR += serumAlpha * (wetR - m_toneStateR);
+                if (tone < 0.0f)
+                {
+                    wetL = m_toneStateL;
+                    wetR = m_toneStateR;
+                }
+                else
+                {
+                    wetL -= m_toneStateL;
+                    wetR -= m_toneStateR;
+                }
+            }
+        }
+        else if (tone != 0.0f)
         {
             m_toneStateL += tiltAlpha * (wetL - m_toneStateL);
             m_toneStateR += tiltAlpha * (wetR - m_toneStateR);

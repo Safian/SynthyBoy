@@ -522,6 +522,10 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
             put (levelRule->key, levelDb + extraDb, nullptr);
         }
     }
+    // A518 (13-new-keys.md 4.49): the convolution of Serum 2.1.5 (measured on the real plug-in with the impulse files of the library): the impulse is normalised to the peak 1 and then multiplied by
+    // IR GAIN (the knob is -34 .. +6 dB, default -18 dB), the DECAY is the T60 of an exponential envelope, the SIZE stretches the impulse by SIZE / 100: the engine runs the law convolve.law = Serum
+    if (type == kFxTypeConvolve)
+        put ("convolve.law", 1, nullptr);
     // A511 (13-new-keys.md 4.48): the multiband mode of the Serum compressor (measured on a sine in a band and on a saw): three bands (the crossovers of the module), each with a threshold (the UD knob 0 .. 200:
     // the knee is the peak ceiling -51 / -33.6 / -20.3 / -7.9 dB at 0 / 50 / 100 / 150, +0.25 dB per step beyond; the global THRESH shifts all the knees: +9 dB at 0.42, 0 at 0.5, -15 at 0.6, -28 at 0.7, -41 at 0.8,
     // no compression above +20 dB under 0.3), a ratio knob 0 .. 1 that goes from 1:1 to the global RATIO (the amplitude exponent is r ^ 0.9 (1 - 1 / R), at most 0.8, 0.78 for the limit detent: the slopes above the knee 0.93 / 0.64 /

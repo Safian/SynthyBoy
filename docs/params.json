@@ -1,4 +1,4 @@
-{"format":"synthyboy-params","version":1,"stateVersion":4,"count":2636,
+{"format":"synthyboy-params","version":1,"stateVersion":4,"count":2637,
 "modSources":[
   {"choice":1,"key":"env1","name":"Env 1","bipolar":false},
   {"choice":2,"key":"env2","name":"Env 2","bipolar":false},
@@ -2774,7 +2774,7 @@
   {"key":"convolve.attack","id":3594007926,"name":"Convolve Attack","group":"FX / Convolve","min":0,"max":2000,"default":0,"scale":"exp_skew","skew":0.400000006,"interval":0,"decimals":1,"unit":"ms","flags":["automatable","modulatable"],"modulatable":392,"ownEngine":false},
   {"key":"convolve.decay","id":1088074444,"name":"Convolve Decay","group":"FX / Convolve","min":0,"max":100,"default":100,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"percent","flags":["automatable","modulatable"],"modulatable":393,"ownEngine":false},
   {"key":"convolve.damp","id":1420568974,"name":"Convolve Damping","group":"FX / Convolve","min":0,"max":100,"default":0,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"percent","flags":["automatable","modulatable"],"modulatable":394,"ownEngine":false},
-  {"key":"convolve.ir_gain","id":2473682791,"name":"Convolve IR Gain","group":"FX / Convolve","min":-24,"max":24,"default":0,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"dB","flags":["automatable","modulatable"],"modulatable":395,"ownEngine":false},
+  {"key":"convolve.ir_gain","id":2473682791,"name":"Convolve IR Gain","group":"FX / Convolve","min":-40,"max":24,"default":0,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"dB","flags":["automatable","modulatable"],"modulatable":395,"ownEngine":false},
   {"key":"convolve.mix","id":45833710,"name":"Convolve Mix","group":"FX / Convolve","min":0,"max":100,"default":30,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"percent","flags":["automatable","modulatable"],"modulatable":396,"ownEngine":false},
   {"key":"convolve.level","id":1095480982,"name":"Convolve Level","group":"FX / Convolve","min":-24,"max":12,"default":0,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"dB","flags":["automatable","modulatable"],"modulatable":397,"ownEngine":false},
   {"key":"splitter_lh.on","id":865629209,"name":"Splitter L/H On","group":"FX / Splitter L/H","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Off","On"],"modulatable":0,"ownEngine":false},
@@ -3944,5 +3944,6 @@
   {"key":"eq.mid2.cutoff","id":3278722351,"name":"EQ Mid 2 Cutoff","group":"FX / EQ","min":20,"max":20000,"default":3000,"scale":"exp_skew","skew":0.300000012,"interval":0,"decimals":1,"unit":"Hz","flags":["automatable","modulatable"],"modulatable":1246,"ownEngine":false},
   {"key":"eq.mid2.gain","id":1706302785,"name":"EQ Mid 2 Gain","group":"FX / EQ","min":-24,"max":24,"default":0,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"dB","flags":["automatable","modulatable"],"modulatable":1247,"ownEngine":false},
   {"key":"eq.mid2.resonance","id":228949964,"name":"EQ Mid 2 Resonance","group":"FX / EQ","min":0,"max":100,"default":30,"scale":"linear","skew":1,"interval":0,"decimals":1,"unit":"percent","flags":["automatable","modulatable"],"modulatable":1248,"ownEngine":false},
-  {"key":"eq.law","id":2997379424,"name":"EQ Law","group":"FX / EQ","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Vital","Serum"],"modulatable":0,"ownEngine":false}
+  {"key":"eq.law","id":2997379424,"name":"EQ Law","group":"FX / EQ","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Vital","Serum"],"modulatable":0,"ownEngine":false},
+  {"key":"convolve.law","id":45832500,"name":"Convolve Law","group":"FX / Convolve","min":0,"max":1,"default":0,"scale":"stepped","skew":1,"interval":1,"decimals":0,"unit":"none","flags":["automatable","stepped"],"choices":["Vital","Serum"],"modulatable":0,"ownEngine":false}
 ]}

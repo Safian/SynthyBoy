@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 4 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2636 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2637 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -37,7 +37,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Random LFO 4 | 8 |
 | Macros | 8 |
 | Mod Matrix | 1024 |
-| FX | 671 |
+| FX | 672 |
 | LFO 9 | 17 |
 | LFO 10 | 17 |
 | Mixer | 8 |
@@ -1183,7 +1183,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `convolve.attack` | Convolve Attack | 0 .. 2000 ms (skew 0.400000006) | 0 ms | FX / Convolve | mod |  |
 | `convolve.decay` | Convolve Decay | 0 .. 100 % | 100 % | FX / Convolve | mod |  |
 | `convolve.damp` | Convolve Damping | 0 .. 100 % | 0 % | FX / Convolve | mod |  |
-| `convolve.ir_gain` | Convolve IR Gain | -24 .. 24 dB | 0 dB | FX / Convolve | mod |  |
+| `convolve.ir_gain` | Convolve IR Gain | -40 .. 24 dB | 0 dB | FX / Convolve | mod |  |
 | `convolve.mix` | Convolve Mix | 0 .. 100 % | 30 % | FX / Convolve | mod |  |
 | `convolve.level` | Convolve Level | -24 .. 12 dB | 0 dB | FX / Convolve | mod |  |
 | `splitter_lh.on` | Splitter L/H On | 0 Off, 1 On | Off | FX / Splitter L/H |  |  |
@@ -1679,6 +1679,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `eq.mid2.gain` | EQ Mid 2 Gain | -24 .. 24 dB | 0 dB | FX / EQ | mod |  |
 | `eq.mid2.resonance` | EQ Mid 2 Resonance | 0 .. 100 % | 30 % | FX / EQ | mod |  |
 | `eq.law` | EQ Law | 0 Vital, 1 Serum | Vital | FX / EQ |  |  |
+| `convolve.law` | Convolve Law | 0 Vital, 1 Serum | Vital | FX / Convolve |  |  |
 
 ### LFO 9
 

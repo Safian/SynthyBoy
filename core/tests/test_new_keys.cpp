@@ -54,8 +54,8 @@ std::vector<std::string> namesOf (const char* key)
 
 TEST (counts_and_constants)
 {
-    CHECK_EQ (paramCount(), static_cast<size_t> (2636));
-    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7 + 448 + 6 + 4 + 2 + 62 + 9 + 93 + 42 + 30 + 320 + 9 + 3 + 5); // 5: B34 (REFCOMPARE round 3: eq.mid2.mode / cutoff / gain / resonance, eq.law), 3: B33 (REFCOMPARE: oscN.unison.law), 9: B32 (REMAINDER item 2: oscN.spec.flt_use / flt_table / flt_frame), 320: B31 (REMAINDER item 1: modNN.rise / fall / delay / delay_beats / delay_sync, 5 per slot), 30: B30 (GROUPC WP-13: oscN.multi.*, 10 per oscillator), 42: B29 (GROUPC WP-12: oscN.spec.*, 14 per oscillator), 93: B28 (GROUPC WP-11: oscN.gran.*, 31 per oscillator), 9: B27 (GROUPB WP-05: oscN.ratio_src, oscN.smooth_interp, oscN.sample.slice), 62: B26 (GROUPA2 WP-07: the voice control voicectl.*), 2: B25 (GROUPA1 WP-10: delay.offset_left, reverb.feedback), 4: B24 (GROUPA1 WP-09: master.mpe.xyz_macro, y_modwheel, bend_to_x, y_bipolar), 6: B23 (GROUPA1 WP-04: sub.phase, sub.phase_contiguous, noise.stereo, noise.filter, noise.type, noise.bounce), 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV), 448: B22 (FXINST: 16 slots x 28 keys)
+    CHECK_EQ (paramCount(), static_cast<size_t> (2637));
+    CHECK_EQ (paramCount(), kNumKeysV2 + 604 + 23 + 37 + 14 + 18 + 18 + 2 + 7 + 448 + 6 + 4 + 2 + 62 + 9 + 93 + 42 + 30 + 320 + 9 + 3 + 5 + 1); // 1: B35 (REFCOMPARE round 3: convolve.law), 5: B34 (REFCOMPARE round 3: eq.mid2.mode / cutoff / gain / resonance, eq.law), 3: B33 (REFCOMPARE: oscN.unison.law), 9: B32 (REMAINDER item 2: oscN.spec.flt_use / flt_table / flt_frame), 320: B31 (REMAINDER item 1: modNN.rise / fall / delay / delay_beats / delay_sync, 5 per slot), 30: B30 (GROUPC WP-13: oscN.multi.*, 10 per oscillator), 42: B29 (GROUPC WP-12: oscN.spec.*, 14 per oscillator), 93: B28 (GROUPC WP-11: oscN.gran.*, 31 per oscillator), 9: B27 (GROUPB WP-05: oscN.ratio_src, oscN.smooth_interp, oscN.sample.slice), 62: B26 (GROUPA2 WP-07: the voice control voicectl.*), 2: B25 (GROUPA1 WP-10: delay.offset_left, reverb.feedback), 4: B24 (GROUPA1 WP-09: master.mpe.xyz_macro, y_modwheel, bend_to_x, y_bipolar), 6: B23 (GROUPA1 WP-04: sub.phase, sub.phase_contiguous, noise.stereo, noise.filter, noise.type, noise.bounce), 23: block B16 (WTREMAP), 37: B14 (PITCHUNI), 14: B17 (fx-extras), 18: B18 (osc-extras), 18: B15 (voiceglb), 2: B20 (MODAMT), 7: B21 (WARPENV), 448: B22 (FXINST: 16 slots x 28 keys)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (4096)); // raised for block B22 (FX instance pool)
     CHECK_EQ (kNumModSources, 57);
@@ -102,7 +102,7 @@ TEST (keys_ids_and_names_are_unique_and_automatable)
                 CHECK (own.insert (choiceName (p, k)).second);
         }
     }
-    CHECK_EQ (ids.size(), static_cast<size_t> (2636));
+    CHECK_EQ (ids.size(), static_cast<size_t> (2637));
 }
 
 TEST (append_positions_golden)

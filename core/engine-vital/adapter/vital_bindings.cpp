@@ -446,6 +446,8 @@ std::vector<Binding> build()
     b.add ("eq.mid2.gain", "eq_band2_gain", Conv::linear);
     b.add ("eq.mid2.resonance", "eq_band2_resonance", Conv::sqrtScaled, 0.01);
     b.choice ("eq.law", "eq_law");
+    // block B35 (13-new-keys.md 4.49): the convolution law (1 = Serum 2.1.5: the impulse is normalised to the peak 1, decay is a T60, size 0.1 .. 10x)
+    b.choice ("convolve.law", "convolve_law");
 
     on ("flanger", "flanger", 6);
     b.percent ("flanger.mix", "flanger_dry_wet", 0.005);

@@ -244,8 +244,8 @@ TEST (kick_remote_control_pages_and_reachability)
         }
     }
 
-    // Asserts all 2636 keys in paramTable() are reachable
-    CHECK_EQ (allReachableKeys.size(), 2636u);
+    // Asserts all 2637 keys in paramTable() are reachable
+    CHECK_EQ (allReachableKeys.size(), 2637u);
     CHECK_EQ (allReachableKeys.size(), paramCount());
 
     // Macro defaults check

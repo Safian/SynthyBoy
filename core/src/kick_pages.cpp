@@ -554,7 +554,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 95: Convolver 1 (FX)
     { "fx_convolve_1", "Convolver 1", "FX", { "convolve.on", "convolve.ir", "convolve.size", "convolve.tone", "convolve.phi_min", "convolve.predelay", "convolve.sync", "convolve.division" }, 8, nullptr, 0 },
     // Page 96: Convolver 2 (FX)
-    { "fx_convolve_2", "Convolver 2", "FX", { "convolve.attack", "convolve.decay", "convolve.damp", "convolve.ir_gain", "convolve.mix", "convolve.level", nullptr, nullptr }, 6, nullptr, 0 },
+    { "fx_convolve_2", "Convolver 2", "FX", { "convolve.attack", "convolve.decay", "convolve.damp", "convolve.ir_gain", "convolve.mix", "convolve.level", "convolve.law", nullptr }, 7, nullptr, 0 },
     // Page 97: Splitter Low / High (FX)
     { "fx_splitter_lh", "Splitter Low / High", "FX", { "splitter_lh.on", "splitter_lh.freq", "splitter_lh.low_bypass", "splitter_lh.high_bypass", "splitter_lh.level", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
     // Page 98: Splitter Low / Mid / High (FX)

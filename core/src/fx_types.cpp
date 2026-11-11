@@ -196,6 +196,7 @@ constexpr OldRange kOldRanges[] = {
     { "compressor.mid.lower_threshold", -80.0f, 0.0f }, { "compressor.mid.upper_threshold", -80.0f, 0.0f },
     { "compressor.high.lower_threshold", -80.0f, 0.0f }, { "compressor.high.upper_threshold", -80.0f, 0.0f },
     { "compressor.low.gain", -30.0f, 30.0f }, { "compressor.mid.gain", -30.0f, 30.0f }, { "compressor.high.gain", -30.0f, 30.0f },
+    { "convolve.ir_gain", -24.0f, 24.0f },
     { "compressor.limit", 0.0f, 1.0f }, // On / Off in version 3: the value 1 (Limit) is the index 1 of the three modes now
 };
 } // namespace

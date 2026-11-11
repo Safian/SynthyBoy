@@ -137,6 +137,10 @@ synthyboy_add_test(synthyboy_test_vital_serum_unison test_serum_unison.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_serum_unison PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
 
+synthyboy_add_test(synthyboy_test_vital_serum_convolve test_serum_convolve.cpp
+    LINK synthyboy_engine_vital)
+target_include_directories(synthyboy_test_vital_serum_convolve PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
+
 synthyboy_add_test(synthyboy_test_vital_serum_eq test_serum_eq.cpp
     LINK synthyboy_engine_vital)
 target_include_directories(synthyboy_test_vital_serum_eq PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")

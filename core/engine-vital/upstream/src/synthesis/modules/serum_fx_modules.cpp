@@ -256,6 +256,7 @@ namespace sbvital {
       public:
         ConvolveModule(const Output* bps, const int* counter) : StereoFxModule(bps, counter) {
           ir_ = createBaseControl("convolve_ir");
+          law_ = createBaseControl("convolve_law");
           size_ = createMonoModControl("convolve_size");
           tone_ = createMonoModControl("convolve_tone");
           phi_min_ = createBaseControl("convolve_phi_min");
@@ -300,6 +301,7 @@ namespace sbvital {
       protected:
         void prepareStereo(double sr) override {
           rate_.store(static_cast<float>(sr));
+          host_rate_.store(static_cast<float>(sr / std::max(1, getOversampleAmount())));
           rate_version_.fetch_add(1);
         }
         void resetStereo() override {
@@ -312,12 +314,14 @@ namespace sbvital {
           const bool use_ir = value(ir_) > 0.5f;
           const float size = mod(size_), attack = mod(attack_), decay = mod(decay_), damp = mod(damp_), gain = mod(ir_gain_);
           const bool phi = value(phi_min_) > 0.5f;
-          if (!posted_ || use_ir != post_use_ || std::fabs(size - post_size_) > 0.05f || std::fabs(attack - post_attack_) > 0.5f ||
+          const bool serum_law = value(law_) > 0.5f;
+          if (!posted_ || serum_law != post_law_ || use_ir != post_use_ || std::fabs(size - post_size_) > 0.05f || std::fabs(attack - post_attack_) > 0.5f ||
               std::fabs(decay - post_decay_) > 0.05f || std::fabs(damp - post_damp_) > 0.05f || std::fabs(gain - post_gain_) > 0.02f ||
               phi != post_phi_) {
             posted_ = true;
-            post_use_ = use_ir; post_size_ = size; post_attack_ = attack; post_decay_ = decay; post_damp_ = damp; post_gain_ = gain; post_phi_ = phi;
+            post_use_ = use_ir; post_law_ = serum_law; post_size_ = size; post_attack_ = attack; post_decay_ = decay; post_damp_ = damp; post_gain_ = gain; post_phi_ = phi;
             want_use_.store(use_ir);
+            want_law_.store(serum_law);
             want_size_.store(size);
             want_attack_.store(attack);
             want_decay_.store(decay);
@@ -382,15 +386,19 @@ namespace sbvital {
             const uint32_t want = want_version_.load(), ir_version = impulse_version_.load(), rate_version = rate_version_.load();
             if ((want != built_want || ir_version != built_ir || rate_version != built_rate) && rate_.load() > 0.0f && want_version_.load() != 0) {
               // consistent read of the posted settings (the audio thread may post again while we read: then we build again)
-              const bool use = want_use_.load(), phi = want_phi_.load();
+              const bool use = want_use_.load(), phi = want_phi_.load(), law = want_law_.load();
               const float size = want_size_.load(), attack = want_attack_.load(), decay = want_decay_.load(), damp = want_damp_.load(), gain = want_gain_.load();
               auto impulse = std::atomic_load(&impulse_);
               auto fx = std::make_unique<synthyboy::fx::Convolve>();
               fx->prepare(static_cast<double>(rate_.load()), kBlock);
-              fx->params.size = 0.25f * std::pow(16.0f, size * 0.01f);   // 50 % = the original length, 0 .. 100 % = 0.25x .. 4x
+              fx->params.serumLaw = law;
+              fx->params.hostRate = static_cast<double>(host_rate_.load());
+              // 50 % = the original length; 0 .. 100 % = 0.25x .. 4x (ours) or 0.2x .. 5x (Serum: the impulse is stretched by (SIZE / 100) ^ 0.7 over the knob range 10 .. 1000 %, measured)
+              fx->params.size = law ? 0.2f * std::pow(25.0f, size * 0.01f) : 0.25f * std::pow(16.0f, size * 0.01f);
               fx->params.minimumPhase = phi;
               fx->params.attack = attack * 0.001f;
-              fx->params.decay = (100.0f - decay) * 0.01f;
+              // decay: ours 100 % = the whole impulse, less shortens it to (100 - decay) % of a second; Serum: the T60 of the envelope, 0 .. 40 s over 0 .. 100 %, 100 % = no envelope
+              fx->params.decay = law ? (decay >= 99.99f ? 0.0f : std::max(0.0005f, decay * 0.4f)) : (100.0f - decay) * 0.01f;
               fx->params.damp = damp * 0.01f;
               fx->params.irGain = gain;
               if (use && impulse != nullptr && impulse->frames > 0)
@@ -417,13 +425,13 @@ namespace sbvital {
         }
 
         using Convolve = synthyboy::fx::Convolve;
-        Value *ir_, *phi_min_, *sync_, *division_;
+        Value *ir_, *law_, *phi_min_, *sync_, *division_;
         Output *size_, *tone_, *predelay_, *attack_, *decay_, *damp_, *ir_gain_, *mix_, *level_;
 
         // audio thread
         Convolve* active_ = nullptr;
         Convolve* stash_ = nullptr;
-        bool posted_ = false, post_use_ = false, post_phi_ = false;
+        bool posted_ = false, post_use_ = false, post_phi_ = false, post_law_ = false;
         float post_size_ = 0, post_attack_ = 0, post_decay_ = 0, post_damp_ = 0, post_gain_ = 0;
 
         // between the threads
@@ -432,8 +440,8 @@ namespace sbvital {
         std::atomic<uint32_t> want_version_ { 0 }, impulse_version_ { 0 }, rate_version_ { 0 };
         std::atomic<uint32_t> done_want_ { ~0u }, done_ir_ { ~0u }, done_rate_ { ~0u };   // versions of the last published build
         std::atomic<bool> realtime_ { false };
-        std::atomic<bool> want_use_ { false }, want_phi_ { false }, stop_ { false };
-        std::atomic<float> want_size_ { 50.0f }, want_attack_ { 0.0f }, want_decay_ { 100.0f }, want_damp_ { 0.0f }, want_gain_ { 0.0f }, rate_ { 0.0f };
+        std::atomic<bool> want_use_ { false }, want_phi_ { false }, want_law_ { false }, stop_ { false };
+        std::atomic<float> want_size_ { 50.0f }, want_attack_ { 0.0f }, want_decay_ { 100.0f }, want_damp_ { 0.0f }, want_gain_ { 0.0f }, rate_ { 0.0f }, host_rate_ { 0.0f };
         std::shared_ptr<const ImpulseData> impulse_;
         std::mutex wake_mutex_;
         std::condition_variable wake_;

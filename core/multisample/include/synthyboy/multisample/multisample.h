@@ -24,7 +24,7 @@ namespace multisample
 constexpr int kMaxLayers = 2;            // zones that play for one note (velocity layers that overlap, round robins are one of several)
 constexpr int kMaxLayerSlots = 2 * kMaxLayers; // ... and as many zones that play when the key is released (trigger=release)
 constexpr int kMaxGroups = 256;          // SFZ group / off_by numbers that are tracked
-constexpr int64_t kMaxInstrumentFrames = 24 * 1000 * 1000; // decoded frames of all samples of an instrument (about 100 MB with the mip levels); later zones are left out
+constexpr int64_t kMaxInstrumentFrames = 24 * 1000 * 1000; // decoded frames of all samples of an instrument (about 100 MB with the mip levels); the samples are decoded from the middle of the keyboard outwards, a zone whose sample does not fit plays the nearest decoded zone (its root and loop)
 
 /** One SFZ region with the opcodes of its <control>, <global>, <master> and <group> headers applied. The sample is a path relative to the folder of the SFZ file. */
 struct Region
@@ -90,7 +90,7 @@ public:
     };
 
     /** Decodes the samples the regions name. Returns the number of zones that have audio (0: nothing playable). */
-    int build (const SfzInstrument& sfz, const SampleReader& reader);
+    int build (const SfzInstrument& sfz, const SampleReader& reader, int64_t maxFrames = kMaxInstrumentFrames);
 
     int numZones() const noexcept { return static_cast<int> (zones_.size()); }
     int numPlayable() const noexcept { return playable_; }

@@ -304,6 +304,11 @@ def boolean(v):
     return 1.0 if v >= 0.5 else 0.0
 
 
+def size_log(v):
+    """A518: the convolve SIZE 10 .. 1000 (%) on the knob 0 .. 100 (50 = the original length): 50 + 50 log10 (v / 100); the engine stretches by (SIZE / 100) ^ 0.7 over 0.2 .. 5."""
+    return max(0.0, min(100.0, 50.0 + 50.0 * math.log10(max(1e-6, v) / 100.0)))
+
+
 WARP = {'kNoWarp': 0, 'kSync': 1, 'kQuantize': 3, 'kPWM': 6, 'kBendPos': 12, 'kBendNeg': 13, 'kBendPosNeg': 14, 'kASYMPos': 15, 'kASYMNeg': 16, 'kASYMPosNeg': 17, 'kFlip': 18,
         'kDLM': 19, 'kRemap_1': 20, 'kRemap_2': 21, 'kRemap_3': 22, 'kRemap_4': 23, 'kEvenOdd': 24, 'kFilterLPF': 25, 'kFilterHPF': 26, 'kDistTube': 27, 'kDistSoftClip': 28,
         'kDistHardClip': 29, 'kDistDiode1': 30, 'kDistDiode2': 31, 'kDistLinFold': 32, 'kDistSinFold': 33, 'kDistZeroSquare': 34, 'kDistAsym': 35, 'kDistRectify': 36,
@@ -430,7 +435,7 @@ FX = {
                'kParamDelayTime': ('bode.delay', lin(1000)), 'kParamDelayBalance': ('bode.balance', lin(1)), 'kParamOutputWidth': ('bode.width', lin(1)), 'kParamRetrig': ('bode.retrig', boolean),
                'kParamMonoInput': ('bode.mono_input', boolean), 'kParamLevelOut': ('bode.level', level_out)},
     'FXEQ': {},
-    'FXConv': {'kParamWet': ('convolve.mix', lin(1)), 'kParamSize': ('convolve.size', lin(0.1)), 'kParamTone': ('convolve.tone', lin(1)), 'kParamMinPhase': ('convolve.phi_min', boolean),
+    'FXConv': {'kParamWet': ('convolve.mix', lin(1)), 'kParamSize': ('convolve.size', size_log), 'kParamTone': ('convolve.tone', lin(1)), 'kParamMinPhase': ('convolve.phi_min', boolean),
                'kParamPredelay': ('convolve.predelay', lin(1000)), 'kParamAttack': ('convolve.attack', lin(1000)), 'kParamDecay': ('convolve.decay', lin(2.5)),
                'kParamDamping': ('convolve.damp', lin(1)), 'kParamIpTrim': ('convolve.ir_gain', lin(1)), 'kParamLevelOut': ('convolve.level', level_out)},
 }
@@ -497,7 +502,7 @@ FX_DEFAULTS = {
     'FXHyperD': {'kParamDetune': 25.0, 'kParamLevelOut': 0.5, 'kParamRate': 40.0, 'kParamRetrig': 0.0, 'kParamUnison': 4.0, 'kParamWet': 50.0},
     'FXUtils': {'kParamBalance': 0.0, 'kParamLPF': 20000.0, 'kParamLevelOut': 0.5, 'kParamWet': 100.0},
     'FXBode': {'kParamBlur': 0.0, 'kParamFeedback': 0.0, 'kParamLevelOut': 0.5, 'kParamWet': 100.0},
-    'FXConv': {'kParamLevelOut': 0.5, 'kParamWet': 20.0},
+    'FXConv': {'kParamLevelOut': 0.5, 'kParamWet': 20.0, 'kParamSize': 100.0, 'kParamDecay': 40.0, 'kParamIpTrim': -18.0},
     'FXReverb': {'kParamSize': 35.0, 'kParamWet': 20.0, 'kParamFeedback': 25.0, 'kParamFreqB': 35.0, 'kParamWidth': 20.0, 'kParamPreDelay': 0.0, 'kParamLevelOut': 0.5},
 }
 _FXLAWS = None
@@ -695,6 +700,8 @@ def fx_expected(fxname, pp):
         gain = {'kHall': -6.7, 'kVintage': -5.0, 'kSpace': -13.0, 'kAbyss': 4.5}.get(typ if isinstance(typ, str) else 'kPlate', 0.8)
     else:
         gain = FX_WET_GAIN.get(fxname, 0.0)
+    if fxname == 'FXConv':
+        vals['convolve.law'] = 1.0   # A518
     prefix = POOL_PREFIX[fxname]
     mixkey, levelkey = prefix + '.mix', prefix + '.level'
     wetp = FX[fxname].get('kParamWet')

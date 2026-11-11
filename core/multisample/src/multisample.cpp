@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <set>
 
 namespace synthyboy
 {
@@ -413,7 +414,7 @@ std::string writeSfz (const SfzInstrument& instrument)
 
 // ---- instrument --------------------------------------------------------------------------------------------------------------------
 
-int Instrument::build (const SfzInstrument& sfz, const SampleReader& reader)
+int Instrument::build (const SfzInstrument& sfz, const SampleReader& reader, int64_t maxFrames)
 {
     zones_.clear();
     samples_.clear();
@@ -424,35 +425,78 @@ int Instrument::build (const SfzInstrument& sfz, const SampleReader& reader)
     switchLo_ = 127;
     switchHi_ = 0;
     std::map<std::string, int> loaded; // path -> sample index (-1: missing / skipped)
+    std::set<std::string> overBudget;  // the paths that were not decoded because the instrument is too large (their zones play the nearest decoded zone, below)
     int64_t total = 0;
     std::vector<uint8_t> bytes;
+    // the samples are decoded from the middle of the keyboard outwards (a large instrument loses the extreme keys, not the keys that come last in the file)
+    std::vector<size_t> order (sfz.regions.size());
+    for (size_t i = 0; i < order.size(); ++i)
+        order[i] = i;
+    std::stable_sort (order.begin(), order.end(), [&] (size_t x, size_t y) { return std::abs (sfz.regions[x].center - 60) < std::abs (sfz.regions[y].center - 60); });
+    for (const size_t idx : order)
+    {
+        const Region& r = sfz.regions[idx];
+        if (loaded.find (r.sample) != loaded.end())
+            continue;
+        int index = -1;
+        if (total >= maxFrames)
+            overBudget.insert (r.sample);
+        else if (reader (r.sample, bytes))
+        {
+            auto data = std::make_unique<sampleosc::SampleData>();
+            if (data->loadFromMemory (bytes.data(), bytes.size(), r.sample.c_str()) && data->isValid())
+            {
+                total += data->numFrames();
+                index = static_cast<int> (samples_.size());
+                samples_.push_back (std::move (data));
+            }
+            else
+                ++missing_;
+        }
+        else
+            ++missing_;
+        loaded.emplace (r.sample, index);
+    }
     for (const Region& r : sfz.regions)
     {
         Zone z;
         z.region = r;
-        auto it = loaded.find (r.sample);
-        if (it == loaded.end())
+        const auto it = loaded.find (r.sample);
+        if (overBudget.count (r.sample) != 0)
         {
-            int index = -1;
-            if (total >= kMaxInstrumentFrames)
-                ++skipped_;
-            else if (reader (r.sample, bytes))
+            // too large to decode: the zone plays the sample of the decoded zone that is nearest in key (and overlaps in velocity), with that zone's root and loop
+            int best = -1, bestScore = 1 << 30;
+            for (size_t j = 0; j < sfz.regions.size(); ++j)
             {
-                auto data = std::make_unique<sampleosc::SampleData>();
-                if (data->loadFromMemory (bytes.data(), bytes.size(), r.sample.c_str()) && data->isValid())
+                const auto lj = loaded.find (sfz.regions[j].sample);
+                if (lj == loaded.end() || lj->second < 0)
+                    continue;
+                const Region& c = sfz.regions[j];
+                const int score = std::abs (c.center - r.center) + (c.lovel <= r.hivel && c.hivel >= r.lovel ? 0 : 1000) + std::abs ((c.lovel + c.hivel) - (r.lovel + r.hivel)) / 8;
+                if (score < bestScore)
                 {
-                    total += data->numFrames();
-                    index = static_cast<int> (samples_.size());
-                    samples_.push_back (std::move (data));
+                    bestScore = score;
+                    best = static_cast<int> (j);
                 }
-                else
-                    ++missing_;
             }
-            else
-                ++missing_;
-            it = loaded.emplace (r.sample, index).first;
+            if (best >= 0)
+            {
+                const Region& c = sfz.regions[static_cast<size_t> (best)];
+                z.region.sample = c.sample;
+                z.region.center = c.center;
+                z.region.tuneCents = c.tuneCents;
+                z.region.transpose = c.transpose;
+                z.region.offset = c.offset;
+                z.region.end = c.end;
+                z.region.loopMode = c.loopMode;
+                z.region.loopStart = c.loopStart;
+                z.region.loopEnd = c.loopEnd;
+                z.region.loopCrossfadeSec = c.loopCrossfadeSec;
+            }
+            ++skipped_;
         }
-        z.sample = it->second;
+        const auto sampleOf = loaded.find (z.region.sample);
+        z.sample = sampleOf != loaded.end() ? sampleOf->second : (it != loaded.end() ? it->second : -1);
         if (z.sample >= 0)
         {
             const sampleosc::SampleData& d = *samples_[static_cast<size_t> (z.sample)];

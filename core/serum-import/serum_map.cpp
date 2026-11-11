@@ -467,6 +467,7 @@ double convert (const Rule& r, double v) noexcept
         }
         case Conv::curveAttack: return envCurveOurs (true, false, v);
         case Conv::curveDecay: return envCurveOurs (false, false, v);
+        case Conv::sizeLog: return std::max (0.0, std::min (100.0, 50.0 + 50.0 * std::log10 (std::max (1.0e-6, v) / 100.0)));
         case Conv::compThresh:
         {
             // measured against Serum 2.1.5 (tools/ref-compare/compthr2.py, REFCOMPARE-REPORT.md section 10; the output peak minus the 2.98 dB of the master volume 1.0 of the experiment): the peak ceiling in dB of the compressor threshold 0 .. 1 (the output peak of the limiter,
@@ -759,14 +760,14 @@ const Rule kBode[] = {
 };
 const Rule kConv[] = {
     { "FX", "kParamWet", "convolve.mix", Conv::lin, 1, 0, X, 20, nullptr, "" },
-    { "FX", "kParamSize", "convolve.size", Conv::lin, 0.1, 0, A, kNaN, nullptr, "convolve_size_scale_assumed" },
+    { "FX", "kParamSize", "convolve.size", Conv::sizeLog, 1, 0, X, 100, nullptr, "" },   // measured: the impulse is stretched by SIZE / 100 (default 100 %); convolve.law = Serum reaches 0.1 .. 10
     { "FX", "kParamTone", "convolve.tone", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamMinPhase", "convolve.phi_min", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamPredelay", "convolve.predelay", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamAttack", "convolve.attack", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamDecay", "convolve.decay", Conv::lin, 2.5, 0, A, kNaN, nullptr, "convolve_decay_scale_assumed" },
+    { "FX", "kParamDecay", "convolve.decay", Conv::lin, 2.5, 0, X, 40, nullptr, "" },   // measured: an exponential envelope with the T60 = DECAY seconds (default 40 s = none); convolve.law = Serum: 0 .. 100 % = 0 .. 40 s
     { "FX", "kParamDamping", "convolve.damp", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamIpTrim", "convolve.ir_gain", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
+    { "FX", "kParamIpTrim", "convolve.ir_gain", Conv::lin, 1, 0, X, -18, nullptr, "" },   // measured: the impulse is normalised to the peak 1, then this gain (default -18 dB, the knob reaches -34 .. +6)
     { "FX", "kParamLevelOut", "convolve.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 #define FXTAB(a) { a, sizeof (a) / sizeof (Rule) }

@@ -96,6 +96,7 @@ constexpr const char* const kEqHighModes[] = { "Shelf", "Low pass" };
 constexpr const char* const kCompressorModes[] = { "Compress", "Limit", "Serum" }; // B17 / B34
 constexpr const char* const kEqBand2Modes[] = { "Off", "Peak", "Notch" };   // B34
 constexpr const char* const kEqLaws[] = { "Vital", "Serum" };               // B34
+constexpr const char* const kConvolveLaws[] = { "Vital", "Serum" };         // B35
 constexpr const char* const kFilterRouting[] = { "Parallel", "Series 1 to 2", "Series 2 to 1" };
 constexpr const char* const kFxNames[kNumFxSlots] = { "Chorus", "Compressor", "Delay", "Distortion", "EQ", "FX Filter", "Flanger", "Phaser",
                                                       "Reverb", "Hyper/Dimension", "Utility", "Bode", "Convolve", "Splitter L/H",
@@ -842,7 +843,7 @@ constexpr ParamInfo kRaw[] = {
     cont ("convolve.attack", "Convolve Attack", "FX / Convolve", 0.0f, 2000.0f, 0.0f, Unit::ms, kMod, 1, 0.4f),
     SB_PCT ("convolve.decay", "Convolve Decay", "FX / Convolve", 100.0f, kMod),
     SB_PCT ("convolve.damp", "Convolve Damping", "FX / Convolve", 0.0f, kMod),
-    cont ("convolve.ir_gain", "Convolve IR Gain", "FX / Convolve", -24.0f, 24.0f, 0.0f, Unit::dB, kMod),
+    cont ("convolve.ir_gain", "Convolve IR Gain", "FX / Convolve", -40.0f, 24.0f, 0.0f, Unit::dB, kMod),   // REFCOMPARE round 3: -24 .. 24 before (the knob of Serum reaches -34 dB)
     SB_PCT ("convolve.mix", "Convolve Mix", "FX / Convolve", 30.0f, kMod),
     cont ("convolve.level", "Convolve Level", "FX / Convolve", -24.0f, 12.0f, 0.0f, Unit::dB, kMod),
 
@@ -1011,11 +1012,13 @@ constexpr ParamInfo kRaw[] = {
     // --- B34: REFCOMPARE round 3: the second peak band of the EQ and the EQ law of Serum 2.1.5 (13-new-keys.md 4.48, positions 2631..2635) ---------------------
     SB_EQ ("mid2", "Mid 2", kEqBand2Modes, 3000.0f),
     pick ("eq.law", "EQ Law", "FX / EQ", kEqLaws, 0),
+    // --- B35: REFCOMPARE round 3: the convolution of Serum 2.1.5 (13-new-keys.md 4.49, position 2636) ---------------------------------------------------------
+    pick ("convolve.law", "Convolve Law", "FX / Convolve", kConvolveLaws, 0),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2636, "880 keys of state version 2 plus the 1679 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32 + 3 B33 + 5 B34)");
+static_assert (kCount == 2637, "880 keys of state version 2 plus the 1680 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32 + 3 B33 + 5 B34)");
 
 struct Table
 {

@@ -267,7 +267,8 @@ public:
         return {
             "convolve.size", "convolve.tone", "convolve.predelay", "convolve.mix",
             "convolve.on", "convolve.ir", "convolve.phi_min", "convolve.sync", "convolve.division",
-            "convolve.attack", "convolve.decay", "convolve.damp", "convolve.ir_gain", "convolve.level", "convolve.rack"
+            "convolve.attack", "convolve.decay", "convolve.damp", "convolve.ir_gain", "convolve.level", "convolve.rack",
+            "convolve.law" // block B35
         };
     }
 
@@ -294,6 +295,7 @@ public:
         addMoreControl ("convolve.ir_gain");
         addMoreControl ("convolve.level");
         addMoreControl ("convolve.rack");
+        addMoreControl ("convolve.law");   // block B35 (REFCOMPARE round 3): Vital | Serum (the convolution of Serum 2.1.5)
     }
 
     int preferredHeight (int width) const override

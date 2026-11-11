@@ -121,10 +121,11 @@ enum EngineCaps2 : EngineCaps2Mask
     // block B34 (REFCOMPARE round 3, 13-new-keys.md 4.48)
     kCap2EqBand2         = 1ull << 8, // REFCOMPARE round 3: eq.mid2.* (the second peak / notch band of the EQ)
     kCap2SerumEq         = 1ull << 9, // REFCOMPARE round 3: eq.law = Serum (the RBJ biquads of Serum 2.1.5: shelf / peak / high pass / low pass with the measured Q laws, gains to +-24 dB)
+    kCap2SerumConvolve   = 1ull << 11, // REFCOMPARE round 3: convolve.law = Serum (the impulse is normalised to the peak 1, decay is a T60 in seconds, size 0.1 .. 10x)
     kCap2SerumCompressor = 1ull << 10, // REFCOMPARE round 3: compressor.limit = Serum (the peak compressor of Serum 2.1.5: peak detector, dB gain smoothing, thresholds to -120 dB)
 };
 
-constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay | kCap2SpectralFilterTable | kCap2SerumUnison | kCap2EqBand2 | kCap2SerumEq | kCap2SerumCompressor;
+constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay | kCap2SpectralFilterTable | kCap2SerumUnison | kCap2EqBand2 | kCap2SerumEq | kCap2SerumCompressor | kCap2SerumConvolve;
 
 /** The bits of the second word a key of the table needs (0 for every key that predates it). Total, no allocation. */
 EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept;

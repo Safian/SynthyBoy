@@ -748,7 +748,8 @@ public:
              | kCap2SpectralFilterTable // REMAINDER item 2 (B32): proven by core/engine-vital/tests/test_spectral_filter_table.cpp
              | kCap2SerumUnison // REFCOMPARE (B33): proven by core/engine-vital/tests/test_serum_unison.cpp
              | kCap2EqBand2 | kCap2SerumEq // REFCOMPARE round 3 (B34): proven by core/engine-vital/tests/test_serum_eq.cpp
-             | kCap2SerumCompressor; // REFCOMPARE round 3 (B34): proven by core/engine-vital/tests/test_serum_compressor.cpp
+             | kCap2SerumCompressor // REFCOMPARE round 3 (B34): proven by core/engine-vital/tests/test_serum_compressor.cpp
+             | kCap2SerumConvolve; // REFCOMPARE round 3 (B35): proven by core/engine-vital/tests/test_serum_convolve.cpp
     }
 
     EngineCapsMask capabilities() const noexcept override

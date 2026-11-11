@@ -21,7 +21,7 @@ namespace synthyboy::fx
       - ATTACK: Impulse attack / fade-in time
       - DECAY: Impulse decay / shortening
       - DAMP: High-frequency damping over time
-      - IR GAIN: Impulse gain in dB (-24 .. +24 dB)
+      - IR GAIN: Impulse gain in dB (-40 .. +24 dB)
       - MIX: Wet/dry mix (0.0 .. 1.0)
       - LEVEL: Output trim in dB
     Partitions: Uniform partitions of size 128 (head FIR) + size 256 radix-2 FFT (tail).
@@ -48,9 +48,11 @@ public:
         float attack = 0.0f;       // seconds (fade-in)
         float decay = 0.0f;        // 0.0 = full decay, >0 shortens IR
         float damp = 0.0f;         // 0.0 .. 1.0 HF damping
-        float irGain = 0.0f;       // dB (-24 .. +24)
+        float irGain = 0.0f;       // dB (-40 .. +24)
         float mix = 1.0f;          // 0.0 (dry) .. 1.0 (wet)
         float level = 0.0f;        // output level in dB
+        double hostRate = 0.0;     // the rate of the host (the engine runs the effects oversampled): the Serum law scales the impulse by hostRate / sampleRate, the level of Serum, which convolves at the host rate
+        bool serumLaw = false;     // convolve.law = Serum (13-new-keys.md 4.49): the impulse is normalised to the peak 1 before IR GAIN, `decay` is the T60 of an exponential envelope in seconds, `size` reaches 0.1 .. 10
     };
 
     Params params;

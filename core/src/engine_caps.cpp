@@ -307,6 +307,8 @@ EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept
         return kCap2EqBand2;
     if (std::strcmp (key, "eq.law") == 0)
         return kCap2SerumEq;
+    if (std::strcmp (key, "convolve.law") == 0)   // block B35
+        return kCap2SerumConvolve;
     if (! startsWith (key, "osc"))
         return kCap2None;
     if (std::strstr (key, ".unison.law") != nullptr)   // block B33
@@ -370,6 +372,7 @@ const char* capName2 (EngineCaps2Mask bit) noexcept
         case kCap2EqBand2:       return "eq_band2";
         case kCap2SerumEq:       return "serum_eq";
         case kCap2SerumCompressor: return "serum_compressor";
+        case kCap2SerumConvolve:   return "serum_convolve";
         case kCap2None:          break;
     }
     return "";
