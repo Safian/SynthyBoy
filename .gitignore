@@ -18,3 +18,6 @@ tests/vital-presets/
 tests/serum-presets/
 __pycache__/
 *.pyc
+
+# Serum reference renders (licensed plug-in output, never committed) and comparison reports
+tests/serum-reference/

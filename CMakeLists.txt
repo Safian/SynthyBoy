@@ -172,11 +172,16 @@ if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tools/preset-render)
     if(SYNTHYBOY_WITH_VITAL)
         add_subdirectory(tools/param-audit)
+        add_subdirectory(tools/ref-compare)
     endif()
     add_subdirectory(tools/vital-import)
     add_subdirectory(tools/serum-import)
     add_subdirectory(tools/contentpack)
     add_subdirectory(scripts/tests)
+    # The reference renderer hosts the real Serum 2 plug-in (macOS, needs the JUCE audio processors module).
+    if(APPLE AND SYNTHYBOY_NEEDS_JUCE AND NOT IOS)
+        add_subdirectory(tools/serum-reference)
+    endif()
 endif()
 
 # The tests of the bitmap GUI of the native module (tests/bitmap-gui): a CLAP host without JUCE that loads the built synthyboy.clap. With the JUCE plug-in they are added at the end of this
