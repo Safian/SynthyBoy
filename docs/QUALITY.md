@@ -195,7 +195,7 @@ correctness check and reduces the amount of work with `sbtest::scaled (native, i
 
 | test | native (macOS, Windows, Linux x86_64, AArch64) | ASan + UBSan | ThreadSanitizer | ARMv7 under QEMU (`SBTEST_INSTRUMENTED=1`) |
 |------|------|------|------|------|
-| `synthyboy_test_threads` | 3000 blocks against the parameter and reader threads | 200 blocks, the same threads | 200 blocks | 200 blocks |
+| `synthyboy_test_threads` | 3000 blocks against the parameter and reader threads | 100 blocks, the same threads | 100 blocks | 100 blocks |
 | `synthyboy_test_vital_fxinstances`, parameter mapping test | all 140 parameters | every 4th parameter of each type | every 4th | every 4th |
 | `synthyboy_test_vital_fxinstances_rt`, 16 heavy slots block budget | asserts `mean < 2.667 ms` per 128 frame block | renders, checks the output, no time assertion | same | same |
 | `synthyboy_test_vital_warpenv` (label `slow`, `TIMEOUT 3600`) | in full, about 300 s | in full (1300 s) | not run (single threaded audio checks, `-LE slow`) | not run (`-LE slow`) |

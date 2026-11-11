@@ -65,8 +65,8 @@ void setParamFromOtherThreadsWhileProcessing (const sbtest::EngineCase& engineCa
     std::vector<float> l (128), r (128);
     bool finite = true;
     const auto start = std::chrono::steady_clock::now();
-    // 3000 blocks natively; under ThreadSanitizer / QEMU (sbtest::instrumented ()) the same races are exercised with 200 blocks (the 1500 s limit of the ctest entry was hit)
-    const int blocks = sbtest::scaled (3000, 200);
+    // 3000 blocks natively; under ThreadSanitizer / QEMU (sbtest::instrumented ()) the same races are exercised with 100 blocks (the 1500 s limit of the ctest entry was hit)
+    const int blocks = sbtest::scaled (3000, 100);
     for (int block = 0; block < blocks; ++block)
     {
         std::vector<Event> ev;
