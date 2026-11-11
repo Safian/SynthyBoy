@@ -180,6 +180,18 @@ void Importer::oscillator (int i)
         store (key ("unison.detune_curve"), 0);
     }
 
+    {
+        // A517 (13-new-keys.md 4.48): a sample, a granular and a spectral oscillator of ours plays quieter than the Serum one at the same volume (controlled experiments: the same sample in both, C3, the
+        // default volume: -3.0 dB for 8 of 8 samples of the sample oscillator, -4.9 dB median for the granular one (-4.6 .. -5.2 for 6 of 8), -14.6 dB median for the spectral one (-12.0 .. -18.3, a constant of the engine: it does not fit the
+        // range of the level); the multisample instrument has its own trim in the zones). The level of the oscillator is raised by it as far as its range goes (100 %)
+        if (kind >= 2)
+        {
+            const double trimDb = kind == 2 ? 3.0 : (kind == 3 ? 4.9 : 0.0);   // the spectral oscillator carries its 14.6 dB in the engine
+            const int li = indexOf (key ("level"));
+            if (li >= 0) store (key ("level"), std::min (100.0, static_cast<double> (R.values.plain[static_cast<size_t> (li)]) * std::pow (10.0, trimDb / 20.0)));
+        }
+    }
+
     // on / off (OSC A is on in the init state)
     {
         const int en = get (pp, "kParamEnable");

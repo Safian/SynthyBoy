@@ -210,3 +210,48 @@ Same scoring, same 956 renders, the Serum references of round 1 (not rendered ag
 - **Arpeggiator and clips (34 presets, question 127):** not modelled, the median loudness gap of those presets is about -9 LU.
 - **Sample, granular and spectral oscillators (question 125),** the start thump and the cutoff floor of a closed filter (question 126), the static filter law of LadderEMS / HP12 (question 123), warp modes (FM from the sub, tube distortion: 5 .. 10 LU) and the modulation matrix timing.
 - **No gate was lowered, no preset was special cased**; the scoring and the thresholds are those of round 1.
+
+## 10. Round 3 (branch refcmp-b): effects, the EQ and the compressor of Serum 2.1.5, oscillator level constants
+
+Same scoring, same 956 renders, the Serum references of round 1 (not rendered again). "Before" is the end of round 2 (section 9).
+
+| | before | after |
+|---|---:|---:|
+| MATCH | 2 | 3 |
+| CLOSE | 85 | 138 |
+| DIFFERENT | 862 | 808 |
+| FAILED | 7 | 7 |
+| mean score | 42.94 | 46.63 |
+| median score | 42.80 | 47.40 |
+| median loudness gap ours - Serum (LU) | -1.45 | -0.77 |
+| mean absolute loudness gap (LU) | 7.75 | 6.53 |
+| renders more than 6 LU off | 467 of 936 | 362 of 937 |
+| median log-mel distance (dB) | 15.06 | 14.17 |
+| median multi-resolution STFT loss | 1.70 | 1.62 |
+| median 10 ms envelope distance (dB) | 9.82 | 8.37 |
+| median spectral centroid distance (octaves) | 0.74 | 0.69 |
+
+| family (mean sub-score) | before | after |
+|---|---:|---:|
+| spectrum | 23.7 | 25.8 |
+| envelope | 49.9 | 55.0 |
+| loudness | 52.4 | 59.5 |
+| pitch | 53.3 | 52.5 |
+| stereo | 70.7 | 72.4 |
+
+### 10.1 What was found (assumptions A508 .. A517 in `13-new-keys.md` 4.48, questions 129 .. 132)
+
+- **The effect chain level bias was the defaults of absent parameters.** A Serum file stores only parameters that differ from the module defaults; the importer filled the absent ones with the engine defaults. The Serum defaults were measured per module (render with the parameter absent against candidate values, bit identical match) and are now applied.
+- **EQ:** the Serum EQ is RBJ biquads (measured Q laws); the engine has it as `eq.law`, plus the second peak band `eq.mid2.*` (question 118), gains to +-24 dB. Above 10 kHz the Serum curve is cramped and ours analogue (remains).
+- **Compressor:** a peak compressor (1 ms peak hold, dB smoothing, Serum attack and release laws), the threshold is a peak ceiling (table of the knob measured, range -120 .. +12 dB, question 120), limiter makeup law applied after the limiter, multiband with UD knees and the band ratio law.
+- **Wet / dry and wet gain laws** were measured per module by decomposing renders into the dry and the fully wet signal; the importer remaps (mix, level) into our raw law, with wet gains for reverb (by type), hyper (by unison), distortion (drive law). Delay BeatSync note values and the reverb decay by type were measured too. A level at the key minimum is silence.
+- **Oscillator level constants (A517):** spectral 14.6 dB (engine), sample +3.0 dB and granular +4.9 dB (importer).
+
+### 10.2 What remains and why
+
+- **Arpeggiator (36 presets, median loudness gap -7.4 LU):** the engine has no arpeggiator (decision Q1), so the importer cannot map the arp; nothing is dropped silently beyond that. Not implemented without that decision.
+- **Convolve level (about 15 LU),** reverb density and tone, flanger / phaser / chorus shapes: the measured laws are not yet fitted (only level and mix laws are).
+- **Multiband compressor:** the global stage and the +12 dB output cap are not modelled.
+- **Modulation opened closed filters, multisample scatter, LadderEMS / HP12 static law, the 15.5 / 57.6 ms delay steps in tempo mode.**
+- **Frozen goldens changed deliberately:** the fingerprints of the first 880 keys and of the busy states (widened EQ gain and compressor ranges), `docs/params.json`, PARAMETERS.md, kick-pages.json, the factory presets, `param-audit-baseline.json` (updated with --update-baseline: the new keys and the moved curves of the widened ranges), `refcompare-baseline.json`.
+- **No gate was lowered, no preset was special cased.**

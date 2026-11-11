@@ -394,6 +394,11 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
         const Rule& rule = rows[r];
         if (! std::isfinite (rule.serumDefault) || rule.conv == Conv::enumName || find (rule.param) >= 0)
             continue;
+        bool keyGivenByTheFile = false;   // another parameter of the file writes the same key (reverb: PreDelay and Delay): the default of the absent one must not overwrite it
+        for (size_t q = 0; q < count; ++q)
+            if (q != r && std::strcmp (rows[q].key, rule.key) == 0 && find (rows[q].param) >= 0) keyGivenByTheFile = true;
+        if (keyGivenByTheFile)
+            continue;
         const bool networkFeedback = type == kFxTypeReverb && rule.conv == Conv::logPercent && std::strcmp (rule.key, "reverb.decay") == 0 && find ("kParamType") >= 0
                                      && isText (find ("kParamType")) && (str (find ("kParamType")) == "kSpace" || str (find ("kParamType")) == "kAbyss");
         put (networkFeedback ? "reverb.feedback" : rule.key, networkFeedback ? rule.serumDefault : convert (rule, rule.serumDefault), nullptr);

@@ -276,10 +276,21 @@ def filter_drive_makeup(v):
     return interp([0, 10, 25, 50, 75, 100], [0.0, 3.3, 7.7, 10.7, 11.0, 10.2], v)
 
 
+COMP_T = [0.275, 0.3, 0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75, 0.775, 0.8, 0.825, 0.85, 0.875, 0.9, 0.9125,
+          0.925, 0.9375, 0.95, 0.96, 0.9625, 0.97, 0.975, 0.98, 0.9875, 0.99, 0.995]
+COMP_DB = [5.31, 4.4, 3.45, 2.47, 1.45, 0.39, -0.72, -1.88, -3.09, -4.36, -5.7, -7.11, -8.59, -10.17, -11.86, -13.65, -15.58, -17.67, -19.94, -22.42, -25.17, -28.24, -31.71, -35.73,
+           -40.48, -46.29, -49.76, -53.77, -58.51, -64.29, -70.04, -71.69, -77.35, -81.88, -87.21, -96.89, -100.28, -105.27]
+
+
 def comp_threshold(v):
-    t = [0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75]
-    d = [-0.5, -4.1, -6.0, -7.9, -10.6, -13.6, -16.6, -19.6, -22.7, -26.4, -30.3, -34.3, -38.5, -41.5, -42.0, -42.3]
-    return 0.0 if v <= t[0] else interp(t, d, v)
+    """A514: the peak ceiling in dB of the Serum compressor threshold (compthr2.py: the output peak of the limiter of a saw with the master volume 1.0, whose +2.98 dB are taken off)."""
+    if v >= 1.0:
+        return -120.0
+    if v <= COMP_T[0]:
+        return min(12.0, 10.60 + 59.73 * math.log10(max(1e-6, 1.0 - max(0.0, v))))
+    if v >= COMP_T[-1]:
+        return max(-120.0, COMP_DB[-1] - 2.98 + (-120.0 - (COMP_DB[-1] - 2.98)) * (v - COMP_T[-1]) / (1.0 - COMP_T[-1]))
+    return interp(COMP_T, [x - 2.98 for x in COMP_DB], v)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------
@@ -418,6 +429,7 @@ FX = {
     'FXBode': {'kParamWet': ('bode.mix', lin(1)), 'kParamRange': ('bode.range', lin(1)), 'kParamBlur': ('bode.blur', lin(1)), 'kParamFeedback': ('bode.feed', lin(1)),
                'kParamDelayTime': ('bode.delay', lin(1000)), 'kParamDelayBalance': ('bode.balance', lin(1)), 'kParamOutputWidth': ('bode.width', lin(1)), 'kParamRetrig': ('bode.retrig', boolean),
                'kParamMonoInput': ('bode.mono_input', boolean), 'kParamLevelOut': ('bode.level', level_out)},
+    'FXEQ': {},
     'FXConv': {'kParamWet': ('convolve.mix', lin(1)), 'kParamSize': ('convolve.size', lin(0.1)), 'kParamTone': ('convolve.tone', lin(1)), 'kParamMinPhase': ('convolve.phi_min', boolean),
                'kParamPredelay': ('convolve.predelay', lin(1000)), 'kParamAttack': ('convolve.attack', lin(1000)), 'kParamDecay': ('convolve.decay', lin(2.5)),
                'kParamDamping': ('convolve.damp', lin(1)), 'kParamIpTrim': ('convolve.ir_gain', lin(1)), 'kParamLevelOut': ('convolve.level', level_out)},
@@ -470,11 +482,243 @@ def expected(fn, v, n=1):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------
+# the effect modules of REFCOMPARE round 3 (A508 .. A513), stated again from docs/ui-design/13-new-keys.md 4.48 and the measured data of docs/ui-design/refcompare-fx-laws.json
+# ---------------------------------------------------------------------------------------------------------------------------------------
+FX_DEFAULTS = {
+    'FXChorus': {'kParamDelay': 5.0, 'kParamDelay2': 0.0, 'kParamDepth': 26.458, 'kParamFeedback': 9.5, 'kParamFilt': 1000.0, 'kParamLevelOut': 0.5, 'kParamRate': 0.078125, 'kParamWet': 50.0},
+    'FXComp': {'kParamAttack': 90.13846, 'kParamRelease': 90.08452, 'kParamThresh': 0.5, 'kParamRatio': 4.0, 'kParamMakeup': 1.0, 'kParamWet': 100.0, 'kParamMultiband': 0.0, 'kParamLevelOut': 0.5,
+               'kParamXoverLow': 128.3, 'kParamXoverHi': 2500.0},
+    'FXDelay': {'kParamBW': 6.74923, 'kParamFeedback': 40.0, 'kParamFreq': 848.52814, 'kParamHQ': 1.0, 'kParamLevelOut': 0.5, 'kParamMode': 0.0, 'kParamOffsetL': 1.0, 'kParamOffsetR': 1.0,
+                'kParamTimeL': 0.06236, 'kParamTimeR': 0.07642, 'kParamWet': 30.0},
+    'FXDistortion': {'kParamDrive': 25.0, 'kParamPrePost': 0.0, 'kParamWet': 100.0, 'kParamLevelOut': 0.5},
+    'FXFilter': {'kParamDrive': 0.0, 'kParamReso': 0.0, 'kParamFreq': 0.5, 'kParamWet': 100.0, 'kParamLevelOut': 0.5, 'kParamPad': 0.0, 'kParamStereo': 50.9},
+    'FXFlanger': {'kParamDepth': 100.0, 'kParamFeedback': 50.0, 'kParamLevelOut': 0.5, 'kParamRate': 0.078125, 'kParamWet': 100.0, 'kParamWidth': 180.0},
+    'FXPhaser': {'kParamDepth': 50.0, 'kParamFeedback': 80.0, 'kParamFreq': 600.0, 'kParamLevelOut': 0.5, 'kParamRate': 0.078125, 'kParamWet': 100.0, 'kParamWidth': 180.0},
+    'FXHyperD': {'kParamDetune': 25.0, 'kParamLevelOut': 0.5, 'kParamRate': 40.0, 'kParamRetrig': 0.0, 'kParamUnison': 4.0, 'kParamWet': 50.0},
+    'FXUtils': {'kParamBalance': 0.0, 'kParamLPF': 20000.0, 'kParamLevelOut': 0.5, 'kParamWet': 100.0},
+    'FXBode': {'kParamBlur': 0.0, 'kParamFeedback': 0.0, 'kParamLevelOut': 0.5, 'kParamWet': 100.0},
+    'FXConv': {'kParamLevelOut': 0.5, 'kParamWet': 20.0},
+    'FXReverb': {'kParamSize': 35.0, 'kParamWet': 20.0, 'kParamFeedback': 25.0, 'kParamFreqB': 35.0, 'kParamWidth': 20.0, 'kParamPreDelay': 0.0, 'kParamLevelOut': 0.5},
+}
+_FXLAWS = None
+FX_WET_GAIN = {'FXChorus': -4.8, 'FXDelay': 0.0, 'FXFlanger': 1.5, 'FXPhaser': -1.2, 'FXFilter': 1.3, 'FXBode': 1.5}
+FX_MIX_TYPE = ['FXChorus', 'FXComp', 'FXDelay', 'FXDistortion', 'FXEQ', 'FXFilter', 'FXFlanger', 'FXPhaser', 'FXReverb', 'FXHyperD', 'FXUtils', 'FXBode', 'FXConv']
+
+
+def fx_laws():
+    global _FXLAWS
+    if _FXLAWS is None:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'docs', 'ui-design', 'refcompare-fx-laws.json')) as f:
+            _FXLAWS = json.load(f)
+    return _FXLAWS
+
+
+def distortion_law(mode, drive):
+    rows = fx_laws()['distortion'].get(mode)
+    if rows is None:
+        return None
+    pts = []
+    for r in rows:
+        ok = r['err'] <= 2.5
+        pts.append((r['d'], round(r['k'] if ok else 0.3 * r['d'], 1), round(max(-60.0, min(24.0, r['gain'] if ok else r['id_gain'])), 1)))   # the table of the importer has one decimal
+    d = max(0.0, min(100.0, drive))
+    i = 0
+    while i + 2 < len(pts) and d > pts[i + 1][0]:
+        i += 1
+    t = (d - pts[i][0]) / (pts[i + 1][0] - pts[i][0])
+    return pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t, pts[i][2] + (pts[i + 1][2] - pts[i][2]) * t
+
+
+def mix_remap(fxname, w, gain_db):
+    """the mix knob (0 .. 1) and the extra level (dB) of our module for the Serum Wet knob w and a wet signal gain_db stronger than ours (None: no law of the module)."""
+    law = fx_laws().get('mix', {}).get(fxname)
+    if law is None:
+        return None
+    s, o = law['serum'], law['ours']
+    x = max(0.0, min(1.0, w)) * 20.0
+    i = min(19, int(x))
+    f = x - i
+    dt = s[i][1] + (s[i + 1][1] - s[i][1]) * f
+    et = (s[i][2] + (s[i + 1][2] - s[i][2]) * f) * 10.0 ** (gain_db / 20.0)
+    ang = math.atan2(et, dt)
+    k = 0
+    while k < 19 and math.atan2(o[k + 1][2], o[k + 1][1]) < ang:
+        k += 1
+    a0, a1 = math.atan2(o[k][2], o[k][1]), math.atan2(o[k + 1][2], o[k + 1][1])
+    t = max(0.0, min(1.0, (ang - a0) / (a1 - a0))) if a1 > a0 else 0.0
+    d_o, e_o = o[k][1] + (o[k + 1][1] - o[k][1]) * t, o[k][2] + (o[k + 1][2] - o[k][2]) * t
+    length = math.hypot(d_o, e_o)
+    return (o[k][0] + (o[k + 1][0] - o[k][0]) * t) * 0.01, (20.0 * math.log10(max(1e-6, math.hypot(dt, et) / length)) if length > 1e-6 else 0.0)
+
+
+def fx_expected(fxname, pp):
+    """the plain values of the keys of the pool slot of one effect module (a dict key -> value; keys the audit does not model are missing)."""
+    rows = FX[fxname]
+    vals = {}
+    given = set()
+
+    def has(param):
+        return param in pp
+
+    def num(param, default):
+        v = pp.get(param, default)
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else default
+
+    typ = pp.get('kParamType')
+    for param, node in pp.items():
+        row = rows.get(param)
+        if not row:
+            continue
+        key, fn = row
+        if fxname == 'FXReverb' and param == 'kParamFeedback' and typ in ('kSpace', 'kAbyss'):
+            key, fn = 'reverb.feedback', lin(1)
+        if fxname == 'FXEQ':
+            continue
+        ex = expected(fn, node)
+        if ex is None:
+            continue
+        if fxname == 'FXComp' and param in ('kParamThresh', 'kParamRatio', 'kParamMakeup'):
+            for band in ('low', 'mid', 'high'):
+                vals[key.replace('.mid.', '.%s.' % band)] = ex
+        else:
+            vals[key] = ex
+        given.add(key)
+    # the Serum defaults of the parameters the file leaves out (a key that another parameter of the file gives is not overwritten)
+    for param, dv in FX_DEFAULTS.get(fxname, {}).items():
+        if has(param):
+            continue
+        row = rows.get(param)
+        if not row:
+            continue
+        key, fn = row
+        if fxname == 'FXReverb' and param == 'kParamFeedback' and typ in ('kSpace', 'kAbyss'):
+            key, fn = 'reverb.feedback', lin(1)
+            ex = dv
+        else:
+            ex = expected(fn, dv)
+        if ex is None or key in given:
+            continue
+        if fxname == 'FXComp' and param in ('kParamThresh', 'kParamRatio', 'kParamMakeup'):
+            for band in ('low', 'mid', 'high'):
+                vals[key.replace('.mid.', '.%s.' % band)] = ex
+        else:
+            vals[key] = ex
+    # ---- the compressor
+    if fxname == 'FXComp':
+        mb = num('kParamMultiband', 0.0) >= 0.5
+        ratio = num('kParamRatio', 4.0)
+        limit = ratio >= 1.0e5
+        vals['compressor.limit'] = 1.0 if (limit and not mb) else 2.0
+        mk = num('kParamMakeup', 1.0)
+        if limit and not mb:
+            for band in ('low', 'mid', 'high'):
+                vals['compressor.%s.gain' % band] = 36.0 * math.log(max(1.0, 2.0 * mk - 1.0)) / math.log(61.0)
+        if mb:
+            knee_ud = [-51.0, -33.6, -20.3, -7.9, 4.5]
+            ud_def = [72.533, 100.0, 100.0]
+            t_at = [0.0, 0.3, 0.42, 0.5, 0.6, 0.7, 0.8, 1.0]
+            shift_db = [30.0, 22.0, 9.1, 0.0, -15.1, -27.8, -41.0, -70.0]
+            thresh = max(0.0, min(1.0, num('kParamThresh', 0.5)))
+            shift = interp(t_at, shift_db, thresh)
+            gr = max(1.0, ratio)
+            strength = 0.78 if gr >= 1.0e5 else min(0.8, 1.0 - 1.0 / gr)
+            for b, band in enumerate(('low', 'mid', 'high')):
+                ud = max(0.0, min(200.0, num('kParamThreshUD%d' % b, ud_def[b])))
+                knee = interp([0.0, 50.0, 100.0, 150.0, 200.0], knee_ud, ud) + shift
+                r = max(0.0, min(1.0, num('kParamRatio%d' % b, 1.0)))
+                vals['compressor.%s.upper_threshold' % band] = max(-120.0, knee)
+                vals['compressor.%s.upper_ratio' % band] = 100.0 * strength * r ** 0.9
+                vals['compressor.%s.gain' % band] = 20.0 * math.log10(max(1.0, mk)) + num('kParamGain%d' % b, 0.0)
+    # ---- the equalizer: low = shelf | high pass, mid = peak, mid 2 = second peak, high = shelf | low pass; the Serum law
+    if fxname == 'FXEQ':
+        t = [int(num('kParamType1', 0.0)), int(num('kParamType2', 0.0))]
+        groups, peaks = [], 0
+        for b in range(2):
+            if t[b] == 1:
+                groups.append('mid' if peaks == 0 else 'mid2')
+                peaks += 1
+            else:
+                groups.append('low' if b == 0 else 'high')
+        vals['eq.law'] = 1.0
+        for b in range(2):
+            g = groups[b]
+            n = str(b + 1)
+            vals['eq.%s.cutoff' % g] = num('kParamFreq' + n, 209.6 if b == 0 else 2040.7)
+            vals['eq.%s.resonance' % g] = num('kParamReso' + n, 60.0)
+            vals['eq.%s.gain' % g] = num('kParamGain' + n, 0.0)
+            vals['eq.%s.mode' % g] = 1.0 if g == 'mid2' else 0.0 if g == 'mid' else (1.0 if t[b] == 2 else 0.0)
+    # ---- the delay
+    if fxname == 'FXDelay':
+        sync = num('kParamBeatSync', 1.0) >= 0.5
+        if not sync:
+            vals['delay.sync'] = 0.0
+        else:
+            steps = [(0.0023, 0.2, -1), (0.0062, 15.5, -1), (0.015, 57.6, -1), (0.0322, 125.0, 6), (0.062, 250.0, 5), (0.110, 500.0, 4), (0.179, 1000.0, 3), (0.2775, 2000.0, 2), (1e9, 4000.0, 1)]
+            sl = next(s for s in steps if num('kParamTimeL', 0.06236) < s[0])
+            sr = next(s for s in steps if num('kParamTimeR', 0.07642) < s[0])
+            if sl[2] >= 0 and sr[2] >= 0:
+                vals['delay.sync'] = 1.0
+                vals['delay.division'] = float(sl[2])
+                vals['delay.division2'] = float(sr[2])
+            else:
+                vals['delay.sync'] = 0.0
+                vals['delay.time'] = sl[1]
+                vals['delay.time2'] = sr[1]
+    # ---- the reverb decay
+    if fxname == 'FXReverb':
+        tn = typ if isinstance(typ, str) else 'kPlate'
+        sec = None
+        if tn == 'kPlate':
+            sec = interp([0, 8, 10, 15, 18, 20, 25, 28, 30, 35, 40, 50, 60, 70, 80], [0.36, 0.30, 0.48, 0.46, 0.77, 1.0, 1.6, 2.1, 2.2, 3.5, 4.6, 8.4, 10.6, 11.1, 12.0], num('kParamSize', 35.0))
+        elif tn == 'kHall':
+            sec = 3.2
+        elif tn == 'kVintage':
+            sec = interp([0, 50, 100], [0.93, 2.04, 3.9], num('kParamVintageScale', 0.0))
+        if sec is not None:
+            vals['reverb.decay'] = sec * 1000.0
+    # ---- the wet signal: the mix and the level of our module so that the dry and the wet gain of the Serum law come out
+    gain = 0.0
+    if fxname == 'FXDistortion':
+        mode = typ if False else pp.get('kParamMode', 'kTube')
+        law = distortion_law(mode if isinstance(mode, str) else 'kTube', num('kParamDrive', 25.0))
+        if law is not None:
+            vals['distortion.drive'] = law[0]
+            gain = law[1]
+    elif fxname == 'FXHyperD':
+        u = max(0.0, min(7.0, num('kParamUnison', 4.0)))
+        hg = [float(x) for x in fx_laws()['hyper'].values()] if False else [round(fx_laws()['hyper'][str(n)], 1) for n in range(8)]
+        i = min(6, int(u))
+        gain = hg[i] + (hg[i + 1] - hg[i]) * (u - i)
+        if u < 0.5:
+            vals['hyperdim.mix'] = 0.0
+    elif fxname == 'FXReverb':
+        gain = {'kHall': -6.7, 'kVintage': -5.0, 'kSpace': -13.0, 'kAbyss': 4.5}.get(typ if isinstance(typ, str) else 'kPlate', 0.8)
+    else:
+        gain = FX_WET_GAIN.get(fxname, 0.0)
+    prefix = POOL_PREFIX[fxname]
+    mixkey, levelkey = prefix + '.mix', prefix + '.level'
+    wetp = FX[fxname].get('kParamWet')
+    levp = FX[fxname].get('kParamLevelOut')
+    if wetp and levp and not (fxname == 'FXHyperD' and num('kParamUnison', 4.0) < 0.5):
+        w = max(0.0, min(1.0, num('kParamWet', FX_DEFAULTS.get(fxname, {}).get('kParamWet', 100.0)) * 0.01))
+        r = mix_remap(fxname, w, gain)
+        if r is not None or abs(gain) > 0.05:
+            if r is None:
+                rr = 10.0 ** (gain / 20.0)
+                big = (1.0 - w) + w * rr
+                r = (w * rr / big, 20.0 * math.log10(big))
+            vals[mixkey] = 100.0 * r[0]
+            vals[levelkey] = level_out(num('kParamLevelOut', 0.5)) + r[1]
+    return vals
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------
 class Audit:
     def __init__(self, verbose):
         self.verbose = verbose
         self.errors = []
         self.stats = collections.Counter()
+        self.fx_done = set()
 
     def err(self, name, msg):
         self.errors.append('%s: %s' % (name, msg))
@@ -1154,6 +1398,9 @@ class Audit:
                 return pp['kParamPitchRatio']
             if key.endswith('.tune') and pp.get('kParamType') == 'kOsc_MultiSample':
                 return None
+            if key.endswith('.level') and pp.get('kParamType') in ('kOsc_Sample', 'kOsc_Granular'):
+                # A517: a sample / granular oscillator of ours plays quieter than the Serum one (3.0 / 4.9 dB, controlled experiments): the level goes up as far as its range
+                return min(100.0, exp * 10.0 ** ((3.0 if pp.get('kParamType') == 'kOsc_Sample' else 4.9) / 20.0))
         m = re.match(r'filter(\d)\.level$', key)
         if m:   # A492: the louder output of the Serum drive stage goes into the level of the filter
             f = tree.get('VoiceFilter%d' % (int(m.group(1)) - 1), {})
@@ -1204,50 +1451,29 @@ class Audit:
             self.err(name, 'mod%02d.source: expected %d (%s) got %s' % (slot, want, want_key, got))
 
     def audit_fx_entry(self, name, e, node, tree, sb, fx_slots):
+        """REFCOMPARE round 3 (13-new-keys.md 4.48): the effect module is audited as a whole: the keys of its pool slot are recomputed from the file values, the Serum defaults of the absent
+        parameters and the measured laws (stated here again in fx_expected), once per module."""
         parts = e['path'].split('/')
         r = int(parts[0][6:])
         j = int(parts[2])
         fxname = parts[3]
-        param = parts[5]
-        table = FX.get(fxname, {})
-        row = table.get(param)
-        if not row:
+        if (name, r, j) in self.fx_done or fxname not in FX:
             return
-        key, fn = row
-        if fxname == 'FXReverb' and param == 'kParamFeedback':
-            # GROUPA1 (WP-10, A352): the FEEDBACK of Space (Nitrous) and Abyss (Basin) is reverb.feedback, a percent; the other reverbs carry the decay in it
-            kind = tree.get('FXRack%d' % r, {}).get('FX', [{}] * (j + 1))[j].get(fxname, {}).get('plainParams', {}).get('kParamType')
-            if kind in ('kSpace', 'kAbyss'):
-                key, fn = 'reverb.feedback', lin(1)
-        if key != e['key'] and not (fxname == 'FXComp' and e['key'].startswith('compressor.')) and not fxname == 'FXEQ':
-            self.err(name, '%s: importer wrote %s, expected %s' % (e['path'], e['key'], key))
-            return
-        exp = expected(fn, node)
-        if exp is None:
-            return
+        self.fx_done.add((name, r, j))
         pp = tree.get('FXRack%d' % r, {}).get('FX', [{}] * (j + 1))[j].get(fxname, {}).get('plainParams', {})
-        if key == 'reverb.predelay' and 'kParamPreDelay' in pp and 'kParamDelay' in pp:
-            return  # both write the pre-delay: the one that comes later in the file wins
+        if not isinstance(pp, dict):
+            pp = {}
         slot = fx_slots.get((r, j))
+        want = fx_expected(fxname, pp)
         if slot is None:
-            if fxname == 'FXConv':
-                self.check_value(name, e['path'], sb, key, exp, e['path'])
             return
         own = T.pool_own_keys(POOL_PREFIX[fxname])
-        if fxname == 'FXComp' and param in ('kParamThresh', 'kParamRatio', 'kParamMakeup'):
-            for band in ('low', 'mid', 'high'):
-                bkey = key.replace('.mid.', '.%s.' % band)
-                self.fx_slot_value(name, sb, slot, own.index(bkey), bkey, exp)
-            if param == 'kParamRatio':
-                # A347: the maximum ratio (1,000,000) is the Serum LIMIT detent: limit mode on, else off
-                limit = 1.0 if float(node) >= 1.0e5 else 0.0
-                self.fx_slot_value(name, sb, slot, own.index('compressor.limit'), 'compressor.limit', limit)
-            return
-        if key not in own:
-            self.err(name, '%s: %s is not a parameter of the pool type' % (e['path'], key))
-            return
-        # the compressor rule writes three bands: the value of the key written last is what stays
-        self.fx_slot_value(name, sb, slot, own.index(key), key, exp)
+        for key, plain in want.items():
+            if key not in own:
+                continue
+            if plain is None:
+                continue
+            self.fx_slot_value(name, sb, slot, own.index(key), key, plain)
 
     def audit_content(self, name, tree, sb, content_dir):
         content = sb.get('state', {}).get('content', {})

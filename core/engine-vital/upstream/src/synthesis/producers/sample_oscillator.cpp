@@ -14,6 +14,10 @@
 #include "synthyboy/granular/granular.h"
 
 namespace sbvital {
+
+  namespace {
+    constexpr float kSpectralTrim = 5.3703f;   // 14.6 dB
+  } // namespace
   namespace {
     using synthyboy::sampleosc::LoopMode;
     using synthyboy::sampleosc::QualityTier;
@@ -844,7 +848,7 @@ namespace sbvital {
           mean_rate = std::max(0.1f, sum / static_cast<float>(std::max(1, num_samples)));
         }
         sp.pitchRatio = std::exp2((semitones + shaped * detune_cents * 0.01f) / 12.0f) * mean_rate;
-        sp.gain = spec_level;
+        sp.gain = spec_level * kSpectralTrim;   // REFCOMPARE round 3 (A517): the spectral oscillator of Serum is 14.6 dB louder than the raw output of the engine at the same volume (median of 8 samples)
         slot.svoices[u].process(sp, sl, sr, num_samples);
       }
       else if (granular) {
