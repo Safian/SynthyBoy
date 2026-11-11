@@ -2,6 +2,7 @@
 // over the real presets (tests/serum-presets, never committed) when the folder exists.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -89,12 +90,14 @@ TEST (serum_oscillator_values_and_the_accounting_identity)
     CHECK_EQ (r.report.unaccounted, 0);
     CHECK (r.report.leaves > 20);
     CHECK_EQ (norm (r, "osc1.on"), 1.0f);
-    CHECK_NEAR (norm (r, "osc1.level"), 50.0 * std::pow (10.0, serumimport::unisonLevelCompDb (5, 60.0) / 20.0), 1e-2);   // 5 unison voices at blend 60: the measured unison level correction
+    CHECK_NEAR (norm (r, "osc1.level"), 50.0, 1e-2);   // the unison level is the engine's Serum law (oscN.unison.law), not a correction of the level
+    CHECK_EQ (norm (r, "osc1.unison.law"), 1.0f);
+    CHECK_EQ (norm (r, "osc1.unison.detune_curve"), 0.0f);
     CHECK_NEAR (norm (r, "osc1.pan"), 50.0, 1e-3);
     CHECK_NEAR (norm (r, "osc1.transpose"), -9.0, 1e-3);
     CHECK_NEAR (norm (r, "osc1.tune"), 12.0, 1e-3);
     CHECK_EQ (norm (r, "osc1.unison.voices"), 5.0f);
-    CHECK_NEAR (norm (r, "osc1.unison.detune"), 25.0, 1e-3);
+    CHECK_NEAR (norm (r, "osc1.unison.detune"), 100.0 * std::pow (0.25, 1.25), 1e-3);   // the detune law of Serum 2.1.5: 200 * d ^ 1.25 cents at the outer voices (file value 0.25 here)
     CHECK_NEAR (norm (r, "osc1.unison.blend"), 60.0, 1e-3);
     CHECK_NEAR (norm (r, "osc1.unison.spread"), 80.0, 1e-3);
     CHECK_EQ (norm (r, "osc1.pitch_track"), 0.0f);
@@ -165,7 +168,10 @@ TEST (serum_filter_envelope_lfo_macro_values)
     CHECK_NEAR (norm (r, "filter1.var"), 30.0, 1e-3);
     CHECK_NEAR (norm (r, "filter1.mix"), 80.0, 1e-3);
     CHECK_NEAR (norm (r, "filter1.keytrack"), 100.0, 1e-3);
-    CHECK_NEAR (norm (r, "filter1.level"), 20.0 * std::log10 (0.5) + serumimport::filterDriveMakeupDb (50.0), 1e-2);
+    CHECK_NEAR (norm (r, "filter1.level"), std::min (12.0, 40.0 * std::log10 (2.0 * 0.5) + serumimport::filterDriveMakeupDb (50.0) + serumimport::filterResoLevelDb ("LadderMg", 0.5, 40.0) + serumimport::filterDriveLevelDb ("LadderMg", 50.0, 40.0)), 1e-2);   // the drive makeup and the resonance / drive levels of the filter type (measured against Serum 2.1.5)
+    CHECK (serumimport::filterResoLevelDb ("LadderMg", 0.5, 40.0) > 5.0);   // a Serum ladder keeps its level with the resonance, ours loses it
+    CHECK (serumimport::filterResoLevelDb ("H12", 0.5, 60.0) < -3.0);   // a Serum state variable filter takes level with the resonance
+    CHECK_EQ (serumimport::filterResoLevelDb ("NoSuchType", 0.5, 60.0), 0.0);
     CHECK_NEAR (norm (r, "filter1.pan"), 20.0, 1e-3);
     CHECK_EQ (norm (r, "filter1.model"), 26.0f); // New: MG Ladder is style 0
     CHECK_EQ (norm (r, "filter1.style"), 0.0f);
@@ -681,9 +687,9 @@ TEST (serum_routing_global_mpe_and_curves)
     CHECK_EQ (r.report.unaccounted, 0);
     CHECK_EQ (norm (r, "osc1.destination"), 5.0f);
     CHECK_NEAR (norm (r, "osc1.filter_blend"), 50.0, 1e-3);
-    CHECK_NEAR (norm (r, "osc1.bus1_send"), 25.0, 1e-3);
+    CHECK_NEAR (norm (r, "osc1.bus1_send"), 100.0 * 0.25 * 0.25 * 0.25, 1e-3);   // the send law of Serum is cubic (measured against Serum 2.1.5)
     CHECK_EQ (norm (r, "osc2.destination"), 4.0f);
-    CHECK_NEAR (norm (r, "osc2.bus2_send"), 60.0, 1e-3);
+    CHECK_NEAR (norm (r, "osc2.bus2_send"), 100.0 * 0.6 * 0.6 * 0.6, 1e-3);
     CHECK_EQ (norm (r, "filter1.destination"), 2.0f);
     CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25) + 2.98, 1e-2); // the gain staging against Serum 2.1.5 (serum_map.cpp, kMasterTrimDb)
     CHECK_EQ (norm (r, "master.polyphony"), 1.0f); // mono toggle wins
@@ -1428,17 +1434,23 @@ TEST (serum_absent_parameters_take_the_serum_defaults_and_the_gain_staging_is_th
     CHECK_NEAR (norm (r2, "sub.level"), 65.7, 1e-2);
 }
 
-// the unison level correction (measured against Serum 2.1.5): none for one voice, the odd and the even voice counts differ, and the blend moves the level
-TEST (serum_unison_level_correction_follows_the_voice_count_parity_and_the_blend)
+// the unison of Serum 2.1.5: the detune of the voices is 200 * d ^ 1.25 cents at the outer voices (ours: 100 * d ^ 1.25 with the range of 2 semitones), the law is the Serum one
+TEST (serum_unison_detune_follows_the_measured_power_law_and_the_serum_unison_law_is_on)
 {
-    CHECK_EQ (serumimport::unisonLevelCompDb (1, 75.0), 0.0);
-    CHECK_NEAR (serumimport::unisonLevelCompDb (5, 0.0), -7.6, 1e-9);
-    CHECK_NEAR (serumimport::unisonLevelCompDb (5, 100.0), -1.0, 1e-9);
-    CHECK_NEAR (serumimport::unisonLevelCompDb (4, 0.0), 0.6, 1e-9);
-    CHECK (serumimport::unisonLevelCompDb (5, 25.0) < serumimport::unisonLevelCompDb (5, 75.0)); // more blend, louder
-    CHECK_NEAR (serumimport::unisonLevelCompDb (8, 50.0), 0.5 * (serumimport::unisonLevelCompDb (4, 50.0) + serumimport::unisonLevelCompDb (12, 50.0)), 1e-9); // between the measured even counts: linear in the voice count
+    size_t n = 0;
+    const serumimport::Rule* rules = serumimport::rulesOf ("Osc", n);
+    const serumimport::Rule* detune = nullptr;
+    for (size_t i = 0; i < n; ++i)
+        if (std::string (rules[i].param) == "kParamDetune")
+            detune = &rules[i];
+    CHECK (detune != nullptr);
+    if (detune != nullptr)
+    {
+        for (double d : { 0.0, 0.05, 0.25, 0.5, 1.0 })
+            CHECK_NEAR (serumimport::convert (*detune, d), 100.0 * std::pow (d, 1.25), 1e-9);
+        CHECK_NEAR (detune->serumDefault, 0.25, 1e-12);   // the default of the plug-in: outer voices at 35 cents
+    }
 }
-
 
 // tools/ref-compare against the real Serum 2.1.5: the compressor threshold is the opposite of a linear level (the measured ceiling of a limiter), the filter drive is a louder output
 TEST (serum_compressor_threshold_and_filter_drive_follow_the_measured_curves)

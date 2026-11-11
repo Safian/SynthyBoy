@@ -30,6 +30,8 @@ enum class Conv : uint8_t
     filterDrive,  // Serum filter drive 0 .. 100 -> filter#.drive in dB: piecewise linear through the values measured against Serum 2.1.5; the level makeup that goes with it is added to filter#.level (serum_voice.cpp)
     curveAttack,  // Serum envelope attack curve 0 .. 100 -> env#.attack_curve: piecewise linear through the values measured against Serum 2.1.5 (the sign is the opposite of the decay)
     curveDecay,   // Serum envelope decay / release curve 0 .. 100 -> env#.decay_curve / release_curve: the same, measured
+    detuneLaw,    // Serum unison detune 0 .. 1 -> osc#.unison.detune: 100 * in ^ 1.25 (outer voices 200 * in ^ 1.25 cents with the range of 2 semitones; measured against Serum 2.1.5)
+    cubicPercent, // Serum bus send 0 .. 100 % -> 100 * (in / 100) ^ 3: the measured send law of the real Serum 2.1.5 (a send of 50 % adds 1 dB, not 3.5 dB)
     compThresh    // Serum compressor threshold 0 .. 1 -> dB: the measured ceiling of a limiter (tools/ref-compare, REFCOMPARE-REPORT.md), 0 dB up to 0.375 and falling to -42.5 dB
 };
 
@@ -56,11 +58,17 @@ struct Rule
 const Rule* rulesOf (const char* scope, size_t& count) noexcept;
 
 /** The level makeup (dB) of a Serum filter drive of `v` percent: the louder output of the Serum drive stage, measured against Serum 2.1.5, on top of the drive in dB. */
+/** The level difference (dB, Serum 2.1.5 - ours) of a voice filter type by its Serum cutoff (file value 0 .. 1) and resonance (0 .. 100): the resonance of the Serum filters takes level (SVF types) or
+    adds it (ladders) in a way ours does not, measured per type; 0 for a type that matches. */
+double filterResoLevelDb (const std::string& type, double freq, double reso) noexcept;
+
+/** The level (dB, Serum 2.1.5 - ours) the drive adds on top of the two corrections above, by the Serum drive and resonance (0 .. 100): the ladders get louder with both, DirtyMg quieter. */
+double filterDriveLevelDb (const std::string& type, double drive, double reso) noexcept;
+
 double filterDriveMakeupDb (double v) noexcept;
 
 /** Level (dB) to add to the oscillator level for `voices` unison voices at `blend` percent: Serum 2.1.5 normalises the unison differently from our engine (the level follows the blend and
     the parity of the voice count; measured, tools/ref-compare/experiment.py). 0 for one voice. */
-double unisonLevelCompDb (int voices, double blend) noexcept;
 
 /** The curve of our envelope that gives the Serum envelope curve `v` (0 .. 100): the amplitude envelope (envelope 1) and the envelopes that modulate (2 .. 4) need different tables, both
     measured against Serum 2.1.5. `attack` selects the attack curve, else the decay / release curve. */

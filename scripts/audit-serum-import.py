@@ -185,6 +185,11 @@ def db(x):
     return -120.0 if x <= 1e-6 else 20.0 * math.log10(x)
 
 
+def level_out(x):
+    """A507: the level knob of a filter or an effect (kParamLevelOut) is the gain (2 v) ^ 2 in Serum 2.1.5: default 0.5 = unity, 1 = +12.04 dB."""
+    return -120.0 if x <= 1e-6 else 40.0 * math.log10(2.0 * x)
+
+
 # The laws measured against the real Serum 2.1.5 (tools/ref-compare, docs/ui-design/13-new-keys.md 4.46, A488 .. A496), stated here again from that table:
 def interp(xs, ys, v):
     if v <= xs[0]:
@@ -195,6 +200,56 @@ def interp(xs, ys, v):
     while i + 2 < len(xs) and v > xs[i + 1]:
         i += 1
     return ys[i] + (ys[i + 1] - ys[i]) * (v - xs[i]) / (xs[i + 1] - xs[i])
+
+
+_FILTER_LAWS = None
+
+
+def filter_reso_level(typ, freq, reso):
+    """A501: the level difference (Serum - ours, dB) of a filter type by cutoff and resonance, bilinear on the measured grid (docs/ui-design/refcompare-filter-laws.json)."""
+    global _FILTER_LAWS
+    if _FILTER_LAWS is None:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'docs', 'ui-design', 'refcompare-filter-laws.json')) as f:
+            _FILTER_LAWS = json.load(f)
+    grid = _FILTER_LAWS['types'].get(typ)
+    if grid is None:
+        return 0.0
+    fs, rs = _FILTER_LAWS['freqs'], _FILTER_LAWS['resonances']
+    edge = 1.0 if freq >= fs[0] else max(0.0, (freq - 0.2) / (fs[0] - 0.2))   # below the grid the correction fades out to 0 at the cutoff 0.2
+    f = min(fs[-1], max(fs[0], freq))
+    r = min(rs[-1], max(rs[0], reso))
+    fi = 0
+    while fi < len(fs) - 2 and f > fs[fi + 1]:
+        fi += 1
+    ri = 0
+    while ri < len(rs) - 2 and r > rs[ri + 1]:
+        ri += 1
+    tf, tr = (f - fs[fi]) / (fs[fi + 1] - fs[fi]), (r - rs[ri]) / (rs[ri + 1] - rs[ri])
+    a = grid[fi][ri] + (grid[fi][ri + 1] - grid[fi][ri]) * tr
+    b = grid[fi + 1][ri] + (grid[fi + 1][ri + 1] - grid[fi + 1][ri]) * tr
+    return (a + (b - a) * tf) * edge
+
+
+def filter_drive_level(typ, drive, reso):
+    """A501: the level the drive adds on top (docs/ui-design/refcompare-filter-laws.json, 'drive'), bilinear."""
+    filter_reso_level(typ, 0.5, 0.0)   # loads the table
+    d = _FILTER_LAWS.get('drive', {})
+    grid = d.get('types', {}).get(typ)
+    if grid is None:
+        return 0.0
+    ds, rs = d['drives'], d['resonances']
+    x = min(ds[-1], max(ds[0], drive))
+    r = min(rs[-1], max(rs[0], reso))
+    di = 0
+    while di < len(ds) - 2 and x > ds[di + 1]:
+        di += 1
+    ri = 0
+    while ri < len(rs) - 2 and r > rs[ri + 1]:
+        ri += 1
+    td, tr = (x - ds[di]) / (ds[di + 1] - ds[di]), (r - rs[ri]) / (rs[ri + 1] - rs[ri])
+    a = grid[di][ri] + (grid[di][ri + 1] - grid[di][ri]) * tr
+    b = grid[di + 1][ri] + (grid[di + 1][ri + 1] - grid[di + 1][ri]) * tr
+    return a + (b - a) * td
 
 
 def note_hz_voice_filter(x):
@@ -225,17 +280,6 @@ def comp_threshold(v):
     t = [0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75]
     d = [-0.5, -4.1, -6.0, -7.9, -10.6, -13.6, -16.6, -19.6, -22.7, -26.4, -30.3, -34.3, -38.5, -41.5, -42.0, -42.3]
     return 0.0 if v <= t[0] else interp(t, d, v)
-
-
-def unison_comp_db(voices, blend):
-    if voices <= 1:
-        return 0.0
-    b = [0, 25, 50, 75, 100]
-    odd = {3: [-7.1, -7.1, -5.7, -3.6, -3.3], 5: [-7.6, -7.2, -4.5, -1.5, -1.0], 7: [-8.0, -7.3, -3.8, -0.4, 0.3], 9: [-8.5, -7.6, -3.6, 0.1, 0.8]}
-    even = {2: [-1.9] * 5, 4: [0.6, 0.4, -0.1, -0.5, -1.9], 12: [-1.3, -1.3, -0.4, 1.4, 1.6], 16: [-2.3, -2.1, -0.5, 1.8, 2.0]}
-    tab = odd if voices % 2 else even
-    ns = sorted(tab)
-    return interp(ns, [interp(b, tab[n], blend) for n in ns], float(voices))
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------
@@ -280,7 +324,7 @@ REVERB = {'kPlate': 1, 'kHall': 2, 'kVintage': 3, 'kSpace': 4, 'kAbyss': 5}
 
 OSC = {
     'kParamVolume': ('osc#.level', lin(100)), 'kParamPan': ('osc#.pan', lin(2)), 'kParamFine': ('osc#.tune', lin(1)), 'kParamCoarsePit': ('osc#.pitch_coarse', lin(1)),
-    'kParamUnison': ('osc#.unison.voices', lin(1)), 'kParamDetune': ('osc#.unison.detune', lin(100)), 'kParamDetuneWid': ('osc#.unison.blend', lin(1)),
+    'kParamUnison': ('osc#.unison.voices', lin(1)), 'kParamDetune': ('osc#.unison.detune', lambda v: 100.0 * max(0.0, v) ** 1.25), 'kParamDetuneWid': ('osc#.unison.blend', lin(1)),
     'kParamUnisonStereo': ('osc#.unison.spread', lin(1)), 'kParamUnisonRange': ('osc#.unison.range', lin(1)), 'kParamUnisonStack': ('osc#.unison.stack', STACK),
     'kParamDetuneMode': ('osc#.unison.mode', DETUNE), 'kParamPitchMode': ('osc#.pitch_mode', PITCHMODE), 'kParamPitchTrack': ('osc#.pitch_track', boolean),
     'kParamPitchBendTrack': ('osc#.pitch_bend_track', boolean), 'kParamKeyZoneMin': ('osc#.map.key_low', lin(1)), 'kParamKeyZoneMax': ('osc#.map.key_high', lin(1)),
@@ -314,7 +358,7 @@ NOISEOSC = {'kParamFine': ('noise.fine', lin(100)), 'kParamInitialPhase': ('nois
 SUB = {'kParamVolume': ('sub.level', lin(65.7)), 'kParamPan': ('sub.pan', lin(2)), 'kParamEnable': ('sub.on', boolean), 'kParamOctave': ('sub.octave', lin(1))}
 SUBOSC = {'kParamShape': ('sub.waveform', SUBSHAPE), 'kParamInitialPhase': ('sub.phase', lin(100.0 / 360.0)), 'kParamContiguousPhase': ('sub.phase_contiguous', boolean)}
 FILTER = {'kParamEnable': ('filter#.on', boolean), 'kParamFreq': ('filter#.cutoff', note_hz_voice_filter), 'kParamReso': ('filter#.resonance', lin(1)), 'kParamDrive': ('filter#.drive', filter_drive),
-          'kParamVar': ('filter#.var', lin(1)), 'kParamWet': ('filter#.mix', lin(1)), 'kParamKeyTrack': ('filter#.keytrack', lin(100)), 'kParamLevelOut': ('filter#.level', db),
+          'kParamVar': ('filter#.var', lin(1)), 'kParamWet': ('filter#.mix', lin(1)), 'kParamKeyTrack': ('filter#.keytrack', lin(100)), 'kParamLevelOut': ('filter#.level', level_out),
           'kParamStereo': ('filter#.pan', lin(2, -100)), 'kParamPad': ('filter#.clean_mode', boolean), 'kParamX': ('filter#.formant.x', lin(100)), 'kParamY': ('filter#.formant.y', lin(100))}
 ENV = {'kParamAttack': ('env#.attack', lin(1000)), 'kParamHold': ('env#.hold', lin(1000)), 'kParamDecay': ('env#.decay', lin(1000)), 'kParamSustain': ('env#.sustain', lin(100)),
        'kParamRelease': ('env#.release', lin(1000)), 'kParamCurve1': ('env#.attack_curve', env_curve(True)), 'kParamCurve2': ('env#.decay_curve', env_curve(False)),
@@ -323,7 +367,7 @@ MACRO = {'kParamValue': ('macro.#', lin(1))}
 GLOBAL = {'kParamMasterVolume': ('master.volume', lambda v: db(v) + 2.98), 'kParamVoiceAmp': ('master.volume', db), 'kParamPolyCount': ('master.polyphony', lin(1)), 'kParamBendRangeUp': ('master.bend_range', lin(1)),
           'kParamLegato': ('master.legato', boolean), 'kParamPortamentoTime': ('master.portamento.time', lin(1000)), 'kParamPortamentoCurve': ('master.portamento.slope', lin(0.08)),
           'kParamPortaAlways': ('master.portamento.always', boolean), 'kParamPortaScaled': ('master.portamento.scaled', boolean), 'kParamTranspose': ('master.transpose', lin(1)),
-          'kParamGlobalTuning': ('master.tuning.a4', lin(1)), 'kParamDirectVol': ('direct.level', db), 'kParamFXBus1Vol': ('bus1.level', db), 'kParamFXBus2Vol': ('bus2.level', db),
+          'kParamGlobalTuning': ('master.tuning.a4', lin(1)), 'kParamDirectVol': ('direct.level', lambda v: db(v) + 6.0206), 'kParamFXBus1Vol': ('bus1.level', lambda v: db(v) + 6.0206), 'kParamFXBus2Vol': ('bus2.level', lambda v: db(v) + 6.0206),
           'kParamFXBus1Dest': ('bus1.destination', lin(1)), 'kParamFXBus2Dest': ('bus2.destination', lin(1))}
 
 
@@ -345,38 +389,38 @@ def ratio_pct(v):
 
 FX = {
     'FXChorus': {'kParamWet': ('chorus.mix', lin(1)), 'kParamRate': ('chorus.rate', lin(1)), 'kParamDelay': ('chorus.delay1', lin(1)), 'kParamDelay2': ('chorus.delay2', lin(1)),
-                 'kParamDepth': ('chorus.depth', lin(4)), 'kParamFeedback': ('chorus.feedback', lin(1)), 'kParamFilt': ('chorus.filter_cutoff', lin(1)), 'kParamLevelOut': ('chorus.level', db)},
+                 'kParamDepth': ('chorus.depth', lin(4)), 'kParamFeedback': ('chorus.feedback', lin(1)), 'kParamFilt': ('chorus.filter_cutoff', lin(1)), 'kParamLevelOut': ('chorus.level', level_out)},
     'FXComp': {'kParamWet': ('compressor.mix', lin(1)), 'kParamAttack': ('compressor.attack', logpct(0.1, 1000)), 'kParamRelease': ('compressor.release', logpct(0.1, 1000)),
                'kParamMultiband': ('compressor.bands', lin(-3, 3)), 'kParamThresh': ('compressor.mid.upper_threshold', comp_threshold), 'kParamRatio': ('compressor.mid.upper_ratio', ratio_pct),
                'kParamMakeup': ('compressor.mid.gain', db), 'kParamXoverLow': ('compressor.crossover_low', lin(1)), 'kParamXoverHi': ('compressor.crossover_high', lin(1)),
-               'kParamLevelOut': ('compressor.level', db)},
+               'kParamLevelOut': ('compressor.level', level_out)},
     'FXDelay': {'kParamWet': ('delay.mix', lin(1)), 'kParamTimeL': ('delay.time', lin(1000)), 'kParamTimeR': ('delay.time2', lin(1000)), 'kParamFeedback': ('delay.feedback', lin(1)),
                 'kParamFreq': ('delay.filter_cutoff', lin(1)), 'kParamBW': ('delay.filter_spread', lin(12.12)), 'kParamMode': ('delay.style', lin(1, 1)), 'kParamHQ': ('delay.hq', boolean),
-                'kParamOffsetL': ('delay.offset_left', lin(1)), 'kParamOffsetR': ('delay.offset', lin(1)), 'kParamLevelOut': ('delay.level', db)},
+                'kParamOffsetL': ('delay.offset_left', lin(1)), 'kParamOffsetR': ('delay.offset', lin(1)), 'kParamLevelOut': ('delay.level', level_out)},
     'FXDistortion': {'kParamWet': ('distortion.mix', lin(1)), 'kParamDrive': ('distortion.drive', lin(0.3)), 'kParamMode': ('distortion.type', DISTORTION),
                      'kParamFreq': ('distortion.filter_cutoff', note_hz), 'kParamLPHP': ('distortion.filter_blend', lin(1)), 'kParamPrePost': ('distortion.filter_order', lin(1)),
-                     'kParamLevelOut': ('distortion.level', db)},
+                     'kParamLevelOut': ('distortion.level', level_out)},
     'FXFilter': {'kParamWet': ('fxfilter.mix', lin(1)), 'kParamFreq': ('fxfilter.cutoff', note_hz), 'kParamReso': ('fxfilter.resonance', lin(1)), 'kParamDrive': ('fxfilter.drive', lin(0.2)),
-                 'kParamVar': ('fxfilter.var', lin(1)), 'kParamStereo': ('fxfilter.pan', lin(2, -100)), 'kParamLevelOut': ('fxfilter.level', db), 'kParamPad': ('fxfilter.clean_mode', boolean),
+                 'kParamVar': ('fxfilter.var', lin(1)), 'kParamStereo': ('fxfilter.pan', lin(2, -100)), 'kParamLevelOut': ('fxfilter.level', level_out), 'kParamPad': ('fxfilter.clean_mode', boolean),
                  'kParamX': ('fxfilter.formant.x', lin(100)), 'kParamY': ('fxfilter.formant.y', lin(100))},
     'FXFlanger': {'kParamWet': ('flanger.mix', lin(1)), 'kParamRate': ('flanger.rate', lin(1)), 'kParamDepth': ('flanger.depth', lin(1)), 'kParamFeedback': ('flanger.feedback', lin(1)),
-                  'kParamWidth': ('flanger.phase_offset', lin(1)), 'kParamLevelOut': ('flanger.level', db)},
+                  'kParamWidth': ('flanger.phase_offset', lin(1)), 'kParamLevelOut': ('flanger.level', level_out)},
     'FXPhaser': {'kParamWet': ('phaser.mix', lin(1)), 'kParamRate': ('phaser.rate', lin(1)), 'kParamDepth': ('phaser.depth', lin(0.48)), 'kParamFeedback': ('phaser.feedback', lin(1)),
-                 'kParamFreq': ('phaser.center', lin(1)), 'kParamWidth': ('phaser.phase_offset', lin(1)), 'kParamLevelOut': ('phaser.level', db)},
+                 'kParamFreq': ('phaser.center', lin(1)), 'kParamWidth': ('phaser.phase_offset', lin(1)), 'kParamLevelOut': ('phaser.level', level_out)},
     'FXReverb': {'kParamWet': ('reverb.mix', lin(1)), 'kParamType': ('reverb.type', REVERB), 'kParamSize': ('reverb.size', lin(1)), 'kParamPreDelay': ('reverb.predelay', lin(1000)),
                  'kParamDelay': ('reverb.predelay', lin(1)), 'kParamFeedback': ('reverb.decay', logp(20, 30000)), 'kParamFreq': ('reverb.pre_low_cut', logp(20, 12000)),
-                 'kParamFreqB': ('reverb.pre_high_cut', logpi(20, 12000)), 'kParamWidth': ('reverb.width', lin(1)), 'kParamLevelOut': ('reverb.level', db)},
+                 'kParamFreqB': ('reverb.pre_high_cut', logpi(20, 12000)), 'kParamWidth': ('reverb.width', lin(1)), 'kParamLevelOut': ('reverb.level', level_out)},
     'FXHyperD': {'kParamWet': ('hyperdim.mix', lin(1)), 'kParamRate': ('hyperdim.rate', lin(0.1)), 'kParamDetune': ('hyperdim.detune', lin(1)), 'kParamUnison': ('hyperdim.unison', lin(1)),
-                 'kParamRetrig': ('hyperdim.retrig', boolean), 'kParamDimESize': ('hyperdim.dim_size', lin(1)), 'kParamDimEWet': ('hyperdim.dim_mix', lin(1)), 'kParamLevelOut': ('hyperdim.level', db)},
+                 'kParamRetrig': ('hyperdim.retrig', boolean), 'kParamDimESize': ('hyperdim.dim_size', lin(1)), 'kParamDimEWet': ('hyperdim.dim_mix', lin(1)), 'kParamLevelOut': ('hyperdim.level', level_out)},
     'FXUtils': {'kParamWet': ('utility.mix', lin(1)), 'kParamWidth': ('utility.width', lin(1)), 'kParamBalance': ('utility.pan', lin(1)), 'kParamHPF': ('utility.hpf', lin(1)),
                 'kParamLPF': ('utility.lpf', lin(1)), 'kParamLFMono': ('utility.mono_bass', boolean), 'kParamLFXover': ('utility.mono_freq', lin(1)), 'kParamPolarityL': ('utility.polarity_l', boolean),
-                'kParamPolarityR': ('utility.polarity_r', boolean), 'kParamLevelOut': ('utility.level', db)},
+                'kParamPolarityR': ('utility.polarity_r', boolean), 'kParamLevelOut': ('utility.level', level_out)},
     'FXBode': {'kParamWet': ('bode.mix', lin(1)), 'kParamRange': ('bode.range', lin(1)), 'kParamBlur': ('bode.blur', lin(1)), 'kParamFeedback': ('bode.feed', lin(1)),
                'kParamDelayTime': ('bode.delay', lin(1000)), 'kParamDelayBalance': ('bode.balance', lin(1)), 'kParamOutputWidth': ('bode.width', lin(1)), 'kParamRetrig': ('bode.retrig', boolean),
-               'kParamMonoInput': ('bode.mono_input', boolean), 'kParamLevelOut': ('bode.level', db)},
+               'kParamMonoInput': ('bode.mono_input', boolean), 'kParamLevelOut': ('bode.level', level_out)},
     'FXConv': {'kParamWet': ('convolve.mix', lin(1)), 'kParamSize': ('convolve.size', lin(0.1)), 'kParamTone': ('convolve.tone', lin(1)), 'kParamMinPhase': ('convolve.phi_min', boolean),
                'kParamPredelay': ('convolve.predelay', lin(1000)), 'kParamAttack': ('convolve.attack', lin(1000)), 'kParamDecay': ('convolve.decay', lin(2.5)),
-               'kParamDamping': ('convolve.damp', lin(1)), 'kParamIpTrim': ('convolve.ir_gain', lin(1)), 'kParamLevelOut': ('convolve.level', db)},
+               'kParamDamping': ('convolve.damp', lin(1)), 'kParamIpTrim': ('convolve.ir_gain', lin(1)), 'kParamLevelOut': ('convolve.level', level_out)},
 }
 
 
@@ -388,7 +432,7 @@ def db_keys():
     tables = [OSC, WARPKEYS, WT, NOISE, NOISEOSC, SUB, SUBOSC, FILTER, ENV, MACRO, GLOBAL] + list(FX.values())
     for t in tables:
         for key, fn in t.values():
-            if fn is db:
+            if fn is db or fn is level_out:
                 keys.add(key)
     for n in (1, 2):
         keys.add('filter%d.level' % n)
@@ -1075,7 +1119,7 @@ class Audit:
                 self.err(name, 'osc%d: %d of %d sample files of the instrument are not stored' % (n, missing, want_regions))
 
     SERUM_DEFAULTS = [(r'osc(\d)\.on$', lambda m: 1.0 if m.group(1) == '1' else 0.0), (r'(noise|sub)\.on$', lambda m: 0.0), (r'filter\d\.on$', lambda m: 0.0),
-                      (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.spread$', lambda m: 100.0),
+                      (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.law$', lambda m: 1.0), (r'osc\d\.unison\.detune_curve$', lambda m: 0.0), (r'osc\d\.unison\.detune$', lambda m: 100.0 * 0.25 ** 1.25), (r'osc\d\.unison\.law$', lambda m: 1.0), (r'osc\d\.unison\.detune_curve$', lambda m: 0.0), (r'osc\d\.unison\.detune$', lambda m: 100.0 * 0.25 ** 1.25), (r'osc\d\.unison\.spread$', lambda m: 100.0),
                       (r'osc(\d)\.destination$', lambda m: 5.0 if m.group(1) == '1' else 3.0), (r'(noise|sub)\.destination$', lambda m: 3.0),
                       (r'filter\d\.destination$', lambda m: 0.0), (r'filter\d\.model$', lambda m: 22.0), (r'filter\d\.style$', lambda m: 0.0),
                       (r'osc\d\.type$', lambda m: 0.0), (r'master\.bend_range$', lambda m: 2.0), (r'master\.bend_down_range$', lambda m: 2.0),
@@ -1106,9 +1150,6 @@ class Audit:
         if m:
             o = tree.get('Oscillator%d' % (int(m.group(1)) - 1), {})
             pp = o.get('plainParams') if isinstance(o.get('plainParams'), dict) else {}
-            if key.endswith('.level'):   # A496: the unison level correction of Serum 2.1.5 (voices as the importer stores them: rounded, 1 .. 16)
-                voices = min(16, max(1, int(round(float(pp.get('kParamUnison', 1.0))))))
-                return exp * 10.0 ** (unison_comp_db(voices, min(100.0, max(0.0, float(pp.get('kParamDetuneWid', 75.0))))) / 20.0)
             if key.endswith('.pitch_coarse') and pp.get('kParamPitchMode') in ('Ratio', 'Harmonics') and 'kParamPitchRatio' in pp:
                 return pp['kParamPitchRatio']
             if key.endswith('.tune') and pp.get('kParamType') == 'kOsc_MultiSample':
@@ -1117,8 +1158,19 @@ class Audit:
         if m:   # A492: the louder output of the Serum drive stage goes into the level of the filter
             f = tree.get('VoiceFilter%d' % (int(m.group(1)) - 1), {})
             fp = f.get('plainParams') if isinstance(f.get('plainParams'), dict) else {}
-            if isinstance(fp.get('kParamDrive'), (int, float)) and exp > -59.99:
-                return exp + filter_drive_makeup(float(fp['kParamDrive']))
+            if exp > -59.99:
+                # A492 / A501: the louder output of the drive stage and the level the resonance takes or adds (per filter type, cutoff, resonance) go into the level of the filter
+                clamp = lambda x: min(12.0, max(-60.0, x))   # the importer stores in three steps (the rule, the drive makeup, the laws of the type), each clamped to the range of filterN.level
+                lv = clamp(exp)
+                if isinstance(fp.get('kParamDrive'), (int, float)):
+                    mk = filter_drive_makeup(float(fp['kParamDrive']))
+                    if mk > 0.0 and lv > -59.99:
+                        lv = clamp(lv + mk)
+                typ = fp.get('kParamType') if isinstance(fp.get('kParamType'), str) else 'MgL12'
+                fr = float(fp['kParamFreq']) if isinstance(fp.get('kParamFreq'), (int, float)) else 0.5
+                rs = float(fp['kParamReso']) if isinstance(fp.get('kParamReso'), (int, float)) else 0.0
+                law = filter_reso_level(typ, fr, rs) + filter_drive_level(typ, float(fp['kParamDrive']) if isinstance(fp.get('kParamDrive'), (int, float)) else 0.0, rs)
+                return clamp(lv + law) if law != 0.0 and lv > -59.99 else lv
         return exp
 
     def check_source(self, name, sb, slot, src, key, aux):

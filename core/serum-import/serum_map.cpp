@@ -27,6 +27,8 @@ constexpr Fid X = Fid::exact, C = Fid::close, A = Fid::approx;
 // level is trimmed by the difference (its percent knob has the headroom; the master range ends at +6 dB, a Serum master of up to 1 is +2.98 dB at most).
 constexpr double kMasterTrimDb = 2.98;
 constexpr double kSubTrim = 0.6570;    // 10 ^ ((-0.67 - 2.98) / 20)
+constexpr double kLevelOutDb = 12.0412;   // 40 log10 (2): the filter output level of Serum is (2 v) ^ 2
+constexpr double kLevelKnobDb = 6.0206;   // 20 log10 (2): the direct / bus level knobs of Serum are a linear gain times 2 (default 0.5 = unity), measured against Serum 2.1.5
 constexpr double kNoiseTrim = 1.057;   // the noise samples (10 samples, constant gap) measured through the same chain: +0.48 dB
 } // namespace
 
@@ -92,7 +94,7 @@ const Rule kOsc[] = {
     { "Osc", "kParamFine", "osc#.tune", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "Osc", "kParamCoarsePit", "osc#.pitch_coarse", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "Osc", "kParamUnison", "osc#.unison.voices", Conv::lin, 1, 0, X, 1, nullptr, "" },
-    { "Osc", "kParamDetune", "osc#.unison.detune", Conv::lin, 100, 0, C, kNaN, nullptr, "unison_detune_scale_assumed" },
+    { "Osc", "kParamDetune", "osc#.unison.detune", Conv::detuneLaw, 1, 0, X, 0.25, nullptr, "" },   // measured against Serum 2.1.5: the outer voices are 200 * d ^ 1.25 cents (d = 0.25 by default), the voices evenly spaced
     { "Osc", "kParamDetuneWid", "osc#.unison.blend", Conv::lin, 1, 0, X, 75, nullptr, "" },
     { "Osc", "kParamUnisonStereo", "osc#.unison.spread", Conv::lin, 1, 0, C, 100, nullptr, "unison_stereo_sign_lost" },
     { "Osc", "kParamUnisonRange", "osc#.unison.range", Conv::lin, 1, 0, X, 2, nullptr, "" },
@@ -222,7 +224,7 @@ const Rule kFilter[] = {
     { "Filter", "kParamVar", "filter#.var", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "Filter", "kParamWet", "filter#.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
     { "Filter", "kParamKeyTrack", "filter#.keytrack", Conv::lin, 100, 0, X, 0, nullptr, "" },
-    { "Filter", "kParamLevelOut", "filter#.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "Filter", "kParamLevelOut", "filter#.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },   // measured against Serum 2.1.5: the gain is (2 v) ^ 2 (default 0.5 = unity, 1 = +12.04 dB, 0.25 = -12.04 dB)
     { "Filter", "kParamStereo", "filter#.pan", Conv::lin, 2, -100, X, 50, nullptr, "" },
     { "Filter", "kParamPad", "filter#.clean_mode", Conv::boolean, 1, 0, X, 0, nullptr, "" },
     { "Filter", "kParamX", "filter#.formant.x", Conv::lin, 100, 0, C, kNaN, nullptr, "filter_xy_as_formant" },
@@ -255,16 +257,16 @@ const Rule kGlobal[] = {
     { "Global", "kParamTranspose", "master.transpose", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "Global", "kParamMasterTuning", "master.tune", Conv::lin, 1, 0, C, 0, nullptr, "master_tuning_unit_assumed" },
     { "Global", "kParamGlobalTuning", "master.tuning.a4", Conv::lin, 1, 0, X, 440, nullptr, "" },
-    { "Global", "kParamDirectVol", "direct.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
-    { "Global", "kParamFXBus1Vol", "bus1.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
-    { "Global", "kParamFXBus2Vol", "bus2.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "Global", "kParamDirectVol", "direct.level", Conv::dbFromLin, 1, kLevelKnobDb, X, 0.5, nullptr, "" },   // the knob is a linear gain times 2: 0.5 (the default) is unity, 1 is +6.02 dB (measured against Serum 2.1.5)
+    { "Global", "kParamFXBus1Vol", "bus1.level", Conv::dbFromLin, 1, kLevelKnobDb, X, 0.5, nullptr, "" },
+    { "Global", "kParamFXBus2Vol", "bus2.level", Conv::dbFromLin, 1, kLevelKnobDb, X, 0.5, nullptr, "" },
     { "Global", "kParamFXBus1Dest", "bus1.destination", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "Global", "kParamFXBus2Dest", "bus2.destination", Conv::lin, 1, 0, X, 0, nullptr, "" },
 };
 
 const Rule kRouting[] = {
-    { "Routing", "kParamFXBus1Level", "osc#.bus1_send", Conv::lin, 1, 0, X, 0, nullptr, "" },
-    { "Routing", "kParamFXBus2Level", "osc#.bus2_send", Conv::lin, 1, 0, X, 0, nullptr, "" },
+    { "Routing", "kParamFXBus1Level", "osc#.bus1_send", Conv::cubicPercent, 1, 0, X, 0, nullptr, "" },
+    { "Routing", "kParamFXBus2Level", "osc#.bus2_send", Conv::cubicPercent, 1, 0, X, 0, nullptr, "" },
     { "Routing", "kParamFilterBalance", "osc#.filter_blend", Conv::lin, 0.5, 50, X, -100, nullptr, "" },
 };
 
@@ -314,23 +316,62 @@ double envCurveOurs (bool attack, bool modulation, double v) noexcept
     return interp (kV, k, 8, v);
 }
 
-double unisonLevelCompDb (int voices, double blend) noexcept
+namespace
 {
-    if (voices <= 1) return 0.0;
-    // gap (Serum - ours, dB) of the same crafted preset at blend 0 / 25 / 50 / 75 / 100 %; odd voice counts and even ones behave differently
-    static const double kB[5] = { 0, 25, 50, 75, 100 };
-    static const int kOddN[4] = { 3, 5, 7, 9 };
-    static const double kOdd[4][5] = { { -7.1, -7.1, -5.7, -3.6, -3.3 }, { -7.6, -7.2, -4.5, -1.5, -1.0 }, { -8.0, -7.3, -3.8, -0.4, 0.3 }, { -8.5, -7.6, -3.6, 0.1, 0.8 } };
-    static const int kEvenN[4] = { 2, 4, 12, 16 };
-    static const double kEven[4][5] = { { -1.9, -1.9, -1.9, -1.9, -1.9 }, { 0.6, 0.4, -0.1, -0.5, -1.9 }, { -1.3, -1.3, -0.4, 1.4, 1.6 }, { -2.3, -2.1, -0.5, 1.8, 2.0 } };
-    const bool odd = (voices % 2) != 0;
-    const int* ns = odd ? kOddN : kEvenN;
-    const double(*tab)[5] = odd ? kOdd : kEven;
-    double col[4];
-    for (int i = 0; i < 4; ++i) col[i] = interp (kB, tab[i], 5, blend);
-    double n[4];
-    for (int i = 0; i < 4; ++i) n[i] = ns[i];
-    return interp (n, col, 4, static_cast<double> (voices));
+struct FilterLawRow { const char* type; float db[4][7]; };
+const FilterLawRow kFilterLaws[] = {
+#include "serum_filter_laws.inc"
+};
+} // namespace
+
+double filterResoLevelDb (const std::string& type, double freq, double reso) noexcept
+{
+    // the level difference (Serum - ours) of the filter type by cutoff and resonance, measured on a C3 saw (tools/ref-compare/fit_filter.py, make_filter_laws.py): bilinear between the grid points
+    static const double kF[4] = { 0.35, 0.5, 0.65, 0.8 };
+    static const double kR[7] = { 0, 10, 20, 35, 50, 75, 100 };
+    for (const FilterLawRow& row : kFilterLaws)
+    {
+        if (type != row.type) continue;
+        // below the grid (cutoff under 0.35) the measurement is the level of a stop band (a few harmonics, some of them at the resonance peak): the correction fades out to 0 at 0.2
+        const double edge = freq >= kF[0] ? 1.0 : std::max (0.0, (freq - 0.2) / (kF[0] - 0.2));
+        const double f = std::min (kF[3], std::max (kF[0], freq)), r = std::min (kR[6], std::max (kR[0], reso));
+        int fi = 0, ri = 0;
+        while (fi < 2 && f > kF[fi + 1]) ++fi;
+        while (ri < 5 && r > kR[ri + 1]) ++ri;
+        const double tf = (f - kF[fi]) / (kF[fi + 1] - kF[fi]), tr = (r - kR[ri]) / (kR[ri + 1] - kR[ri]);
+        const double a = row.db[fi][ri] + (row.db[fi][ri + 1] - row.db[fi][ri]) * tr;
+        const double b = row.db[fi + 1][ri] + (row.db[fi + 1][ri + 1] - row.db[fi + 1][ri]) * tr;
+        return (a + (b - a) * tf) * edge;
+    }
+    return 0.0;
+}
+
+namespace
+{
+struct FilterDriveLawRow { const char* type; float db[5][4]; };
+const FilterDriveLawRow kFilterDriveLaws[] = {
+#include "serum_filter_drive_laws.inc"
+};
+} // namespace
+
+double filterDriveLevelDb (const std::string& type, double drive, double reso) noexcept
+{
+    // the level the drive adds on top of filterResoLevelDb and filterDriveMakeupDb (the ladders get much louder with drive and resonance together): bilinear between the grid points
+    static const double kD[5] = { 0, 25, 50, 75, 100 };
+    static const double kR[4] = { 0, 30, 60, 100 };
+    for (const FilterDriveLawRow& row : kFilterDriveLaws)
+    {
+        if (type != row.type) continue;
+        const double d = std::min (kD[4], std::max (kD[0], drive)), r = std::min (kR[3], std::max (kR[0], reso));
+        int di = 0, ri = 0;
+        while (di < 3 && d > kD[di + 1]) ++di;
+        while (ri < 2 && r > kR[ri + 1]) ++ri;
+        const double td = (d - kD[di]) / (kD[di + 1] - kD[di]), tr = (r - kR[ri]) / (kR[ri + 1] - kR[ri]);
+        const double a = row.db[di][ri] + (row.db[di][ri + 1] - row.db[di][ri]) * tr;
+        const double b = row.db[di + 1][ri] + (row.db[di + 1][ri + 1] - row.db[di + 1][ri]) * tr;
+        return a + (b - a) * td;
+    }
+    return 0.0;
 }
 
 double filterDriveMakeupDb (double v) noexcept
@@ -368,6 +409,8 @@ double convert (const Rule& r, double v) noexcept
             while (i + 2 < n && v > kT[i + 1]) ++i;
             return kDb[i] + (kDb[i + 1] - kDb[i]) * (v - kT[i]) / (kT[i + 1] - kT[i]);
         }
+        case Conv::detuneLaw: return 100.0 * std::pow (std::max (0.0, v), 1.25);
+        case Conv::cubicPercent: { const double x = v / 100.0; return 100.0 * x * x * x; }
         case Conv::noteHz: return 440.0 * std::pow (2.0, (135.0 * v - 69.0 + r.b) / 12.0);   // b = offset in semitones
         case Conv::boolean: return v >= 0.5 ? 1.0 : 0.0;
         case Conv::curve50: return (50.0 - v) * r.a;
@@ -523,7 +566,7 @@ const Rule kChorus[] = {
     { "FX", "kParamDepth", "chorus.depth", Conv::lin, 4, 0, A, kNaN, nullptr, "chorus_depth_scale_assumed" },
     { "FX", "kParamFeedback", "chorus.feedback", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamFilt", "chorus.filter_cutoff", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "chorus.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "chorus.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kComp[] = {
     { "FX", "kParamWet", "compressor.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -541,7 +584,7 @@ const Rule kComp[] = {
     { "FX", "kParamMakeup", "compressor.high.gain", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "compressor_makeup_to_bands" },
     { "FX", "kParamXoverLow", "compressor.crossover_low", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamXoverHi", "compressor.crossover_high", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "compressor.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "compressor.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kDelay[] = {
     { "FX", "kParamWet", "delay.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -555,7 +598,7 @@ const Rule kDelay[] = {
     // GROUPA1 (WP-10, A351): one scalar per channel (Serum manual p.166: 1.1 = 110 %), the same unit as ours
     { "FX", "kParamOffsetL", "delay.offset_left", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamOffsetR", "delay.offset", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "delay.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "delay.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kDist[] = {
     { "FX", "kParamWet", "distortion.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -564,7 +607,7 @@ const Rule kDist[] = {
     { "FX", "kParamFreq", "distortion.filter_cutoff", Conv::noteHz, 1, 0, C, kNaN, nullptr, "filter_frequency_scale_assumed" },
     { "FX", "kParamLPHP", "distortion.filter_blend", Conv::lin, 1, 0, A, kNaN, nullptr, "distortion_lphp_as_blend" },
     { "FX", "kParamPrePost", "distortion.filter_order", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "distortion.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "distortion.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kFxFilter[] = {
     { "FX", "kParamWet", "fxfilter.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -573,7 +616,7 @@ const Rule kFxFilter[] = {
     { "FX", "kParamDrive", "fxfilter.drive", Conv::lin, 0.2, 0, C, kNaN, nullptr, "filter_drive_scale_assumed" },
     { "FX", "kParamVar", "fxfilter.var", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamStereo", "fxfilter.pan", Conv::lin, 2, -100, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "fxfilter.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "fxfilter.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
     { "FX", "kParamPad", "fxfilter.clean_mode", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamX", "fxfilter.formant.x", Conv::lin, 100, 0, C, kNaN, nullptr, "filter_xy_as_formant" },
     { "FX", "kParamY", "fxfilter.formant.y", Conv::lin, 100, 0, C, kNaN, nullptr, "filter_xy_as_formant" },
@@ -584,7 +627,7 @@ const Rule kFlanger[] = {
     { "FX", "kParamDepth", "flanger.depth", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamFeedback", "flanger.feedback", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamWidth", "flanger.phase_offset", Conv::lin, 1, 0, C, kNaN, nullptr, "flanger_width_as_phase_offset" },
-    { "FX", "kParamLevelOut", "flanger.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "flanger.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kPhaser[] = {
     { "FX", "kParamWet", "phaser.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -593,7 +636,7 @@ const Rule kPhaser[] = {
     { "FX", "kParamFeedback", "phaser.feedback", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamFreq", "phaser.center", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamWidth", "phaser.phase_offset", Conv::lin, 1, 0, C, kNaN, nullptr, "phaser_width_as_phase_offset" },
-    { "FX", "kParamLevelOut", "phaser.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "phaser.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kReverb[] = {
     { "FX", "kParamWet", "reverb.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -605,7 +648,7 @@ const Rule kReverb[] = {
     { "FX", "kParamFreq", "reverb.pre_low_cut", Conv::logPercent, 20, 12000, A, kNaN, nullptr, "reverb_cut_scale_assumed" },
     { "FX", "kParamFreqB", "reverb.pre_high_cut", Conv::logPercentInv, 20, 12000, A, kNaN, nullptr, "reverb_cut_scale_assumed" },
     { "FX", "kParamWidth", "reverb.width", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "reverb.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "reverb.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kHyper[] = {
     { "FX", "kParamWet", "hyperdim.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -615,7 +658,7 @@ const Rule kHyper[] = {
     { "FX", "kParamRetrig", "hyperdim.retrig", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamDimESize", "hyperdim.dim_size", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamDimEWet", "hyperdim.dim_mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "hyperdim.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "hyperdim.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kUtils[] = {
     { "FX", "kParamWet", "utility.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -627,7 +670,7 @@ const Rule kUtils[] = {
     { "FX", "kParamLFXover", "utility.mono_freq", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamPolarityL", "utility.polarity_l", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamPolarityR", "utility.polarity_r", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "utility.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "utility.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kBode[] = {
     { "FX", "kParamWet", "bode.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -639,7 +682,7 @@ const Rule kBode[] = {
     { "FX", "kParamOutputWidth", "bode.width", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamRetrig", "bode.retrig", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamMonoInput", "bode.mono_input", Conv::boolean, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "bode.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "bode.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 const Rule kConv[] = {
     { "FX", "kParamWet", "convolve.mix", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -651,7 +694,7 @@ const Rule kConv[] = {
     { "FX", "kParamDecay", "convolve.decay", Conv::lin, 2.5, 0, A, kNaN, nullptr, "convolve_decay_scale_assumed" },
     { "FX", "kParamDamping", "convolve.damp", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "FX", "kParamIpTrim", "convolve.ir_gain", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "FX", "kParamLevelOut", "convolve.level", Conv::dbFromLin, 1, 0, X, 1, nullptr, "" },
+    { "FX", "kParamLevelOut", "convolve.level", Conv::dbFromLin, 2, kLevelOutDb, X, 0.5, nullptr, "" },
 };
 #define FXTAB(a) { a, sizeof (a) / sizeof (Rule) }
 struct Tab { const Rule* r; size_t n; };

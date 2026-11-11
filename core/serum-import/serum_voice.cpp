@@ -174,13 +174,10 @@ void Importer::oscillator (int i)
                 { "kParamType", "kParamOctave", "kParamPitch", "kParamPitchRatio", "kParamScanRate", "kParamLoopCrossfade", "kParamEnable" });
 
     {
-        // the unison level follows the blend and the voice count in Serum, not in our engine (measured, serum_map.cpp)
-        const int vi = indexOf (key ("unison.voices")), bi = indexOf (key ("unison.blend")), li = indexOf (key ("level"));
-        if (vi >= 0 && bi >= 0 && li >= 0)
-        {
-            const double comp = unisonLevelCompDb (static_cast<int> (std::lround (R.values.plain[static_cast<size_t> (vi)])), static_cast<double> (R.values.plain[static_cast<size_t> (bi)]));
-            if (comp != 0.0) store (key ("level"), static_cast<double> (R.values.plain[static_cast<size_t> (li)]) * std::pow (10.0, comp / 20.0));
-        }
+        // the unison of Serum 2.1.5: the level of the centre and the outer voices by blend and voice count, the stereo spread and the evenly spaced voices are the engine's Serum law
+        // (oscN.unison.law, 13-new-keys.md 4.47); the detune of the voices is linear (no Vital curve)
+        store (key ("unison.law"), 1);
+        store (key ("unison.detune_curve"), 0);
     }
 
     // on / off (OSC A is on in the init state)
@@ -795,7 +792,8 @@ void Importer::routing()
             if (bl >= 0)
             {
                 bool cl = false;
-                const double st = store (key, num (bl), &cl);
+                const double x = std::clamp (num (bl), 0.0, 100.0) / 100.0;   // the send law of Serum is cubic (measured against Serum 2.1.5: 50 % adds 1.02 dB)
+                const double st = store (key, 100.0 * x * x * x, &cl);
                 setByFile[static_cast<size_t> (indexOf (key))] = 1;
                 entry (cl ? ItemKind::approximated : ItemKind::imported, cl ? Reason::clamped : Reason::exact, area, base + pn, valueText (bl), key, fmt (st), "");
                 consume (bl);
@@ -868,6 +866,21 @@ void Importer::voiceFilter (int i)
             const double mk = filterDriveMakeupDb (num (dn));
             const double cur = static_cast<double> (R.values.plain[static_cast<size_t> (li)]);
             if (mk > 0.0 && cur > -59.99) store (area + ".level", cur + mk);   // a muted filter (level 0) stays muted
+        }
+    }
+    {
+        // the resonance of the Serum filter types takes or adds level (measured against Serum 2.1.5, per type, cutoff and resonance): the difference goes into the level of the filter
+        const int fn = get (pp, "kParamFreq"), rn = get (pp, "kParamReso");
+        const int li = indexOf (area + ".level");
+        const std::string typeName = isText (tp) ? str (tp) : std::string ("MgL12");
+        if (li >= 0)
+        {
+            const int dn2 = get (pp, "kParamDrive");
+            const double resoV = rn >= 0 && isNumber (rn) ? num (rn) : 0.0;
+            const double mk = filterResoLevelDb (typeName, fn >= 0 && isNumber (fn) ? num (fn) : 0.5, resoV)
+                              + filterDriveLevelDb (typeName, dn2 >= 0 && isNumber (dn2) ? num (dn2) : 0.0, resoV);
+            const double cur = static_cast<double> (R.values.plain[static_cast<size_t> (li)]);
+            if (mk != 0.0 && cur > -59.99) store (area + ".level", cur + mk);
         }
     }
     for (const Unmapped& u : um)

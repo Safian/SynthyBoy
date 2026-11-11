@@ -19,6 +19,7 @@ namespace serumimport
 {
 namespace
 {
+constexpr float kMultisampleTrimDb = 10.9f;
 constexpr int kCycle = 2048;
 constexpr int kMaxFrames = 256;
 
@@ -420,6 +421,7 @@ bool Importer::applyMultisample (int osc, int B, const std::string& path, int* r
                     done = converted.emplace (region.sample, newPath).first;
                 }
                 region.sample = done->second;
+                region.volumeDb += kMultisampleTrimDb;   // our zone plays the Serum instrument 10.9 dB quieter at the same oscillator volume (30 instruments, spread 1.6 dB; REFCOMPARE-REPORT.md)
             }
             ins.zones = static_cast<int> (sfz.regions.size());
             ins.sfzText = multisample::writeSfz (sfz);
