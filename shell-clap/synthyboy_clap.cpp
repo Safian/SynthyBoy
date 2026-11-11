@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -28,6 +29,13 @@
 #include "synthyboy/vital_plugin_import.h"
 #include "synthyboy_content_ext.h"
 #include "synthyboy_content_service.h"
+#include "synthyboy_plugin.h"
+#ifndef SYNTHYBOY_BITMAP_GUI
+ #define SYNTHYBOY_BITMAP_GUI 0
+#endif
+#if SYNTHYBOY_BITMAP_GUI
+ #include "bitmap/BitmapGuiPlugin.h"
+#endif
 #include <clap/ext/remote-controls.h>
 #include <clap/ext/render.h>
 
@@ -65,108 +73,18 @@ const clap_plugin_descriptor_t s_descriptor = {
     kPluginFeatures
 };
 
-struct SynthyBoyClap
-{
-    clap_plugin_t plugin {};
-    const clap_host_t* host = nullptr;
-    std::unique_ptr<IEngine> engine;
-    UserContentStore contentStore { userDataDirectory() }; // the user content library (WP-01): the engine resolves the references of `content` through it
-    ParamValues values;
-    StateContent content; // the `content` section of the state (not parameters): custom LFO shapes, curves and the tuning go to the engine (setContent), main thread only
-    MidiCcMap midiMap;                // MIDI learn table (G07): CC -> parameter, read on the audio thread; saved in the `shell` section
-    std::vector<std::string> locks;   // module locks (G08), main thread; kept for the round trip with the editor shell
-    Preferences prefs;                // the global preferences (GROUPA2 WP-02): read once when the plug-in is created (the editor shell writes the file)
-    TransportStopWatch stopWatch;     // audio thread: the host transport stops -> silence () when prefs.silenceOnStop
-    bool offlineRender = false;       // clap_plugin_render: the host renders offline
-    // the last note (audio thread writes, the main thread reads: Resample, the audio of the last note) and the host tempo
-    std::atomic<int> lastKey { -1 };
-    std::atomic<float> lastVelocity { 0.8f };
-    std::atomic<int64_t> lastOnSample { 0 }, lastOffSample { -1 }, samplesDone { 0 };
-    std::atomic<double> tempo { 120.0 };
-    Quality quality;
-    std::vector<Event> events;
-    double sampleRate = 48000.0;
-    uint32_t maxBlockSize = 512;
-    bool active = false;
-    std::atomic<int> reportedLatency { 0 };   // the latency the host was told (ext_latency_get)
-    bool processing = false;
-    std::unique_ptr<ContentHost> contentHost; // the view of this plug-in for the extension synthyboy.content (synthyboy_content_service.h)
-
-    ~SynthyBoyClap()
-    {
-        if (engine)
-            engine->setContentStore (nullptr); // the store is destroyed before the engine (member order)
-    }
-
-    SynthyBoyClap (const clap_host_t* h)
-        : host (h), values (ParamValues::defaults()), quality (qualityForTier (Tier::high))
-    {
-        events.reserve (256);
-        quality.realtime = true; // live: the audio thread never waits for the engine's helper thread (Quality::realtime)
-#if SYNTHYBOY_HAS_VITAL
-        engine = createEngine (EngineKind::vital);
-#else
-        engine = createEngine (EngineKind::own);
-#endif
-
-        contentStore.addPackRoot ((std::filesystem::path (userDataDirectory()) / "packs").string()); // installed content packs
-        if (engine)
-            engine->setContentStore (&contentStore); // before the first setContent: the references of the content decode against the library
-
-        prefs = loadPreferences (userDataDirectory());
-
-        // Save as Default (G02): a new instance starts from the user's default patch (written by the editor shell), if there is one
-        ShellState defaultShell;
-        if (loadUserDefault (userDataDirectory(), values, content, &defaultShell))
-        {
-            midiMap.setBindings (defaultShell.midiCc);
-            locks = defaultShell.locks;
-            if (engine)
-            {
-                for (size_t i = 0; i < paramCount(); ++i)
-                    engine->setParam (paramTable()[i].id, values.plain[i]);
-                engine->setContent (content);
-            }
-        }
-        else
-        {
-            // the preferences of a new instance (S p.314, A383): MPE on, pitch bend also to X, Y bi-directional
-            const auto set = [this] (const char* key, bool on)
-            {
-                if (const ParamInfo* info = findParamByKey (key); info != nullptr && on)
-                {
-                    values.plain[static_cast<size_t> (findParamIndex (info->id))] = 1.0f;
-                    if (engine) engine->setParam (info->id, 1.0f);
-                }
-            };
-            set ("master.mpe.on", prefs.mpeByDefault);
-            set ("master.mpe.bend_to_x", prefs.mpeBendToX);
-            set ("master.mpe.y_bipolar", prefs.mpeYBipolar);
-        }
-        applyDefaultMidiMap (false);
-    }
-
-    /** The default MIDI CC map file (S p.325): when `force`, it replaces the table; else only an empty table takes it (a new instance). */
-    void applyDefaultMidiMap (bool force)
-    {
-        std::vector<std::pair<int, std::string>> bindings;
-        if ((force || midiMap.numMappings() == 0) && loadDefaultMidiMap (userDataDirectory(), bindings))
-            midiMap.setBindings (bindings);
-    }
-};
-
-inline SynthyBoyClap* toClap (const clap_plugin_t* p) noexcept
-{
-    return static_cast<SynthyBoyClap*> (p->plugin_data);
-}
-
 /** The plug-in as the ContentHost of the extension synthyboy.content: the values and the content are the plug-in's own, so begin () has nothing to refresh. */
 class NativeContentHost final : public ContentHost
 {
 public:
     explicit NativeContentHost (SynthyBoyClap& plugin) : self (plugin) {}
 
-    void begin() override {}
+    void begin() override
+    {
+        // the audio thread owns `values` while it processes: the extension works on the mirror, which every change of a value updates
+        for (size_t i = 0; i < paramCount(); ++i)
+            self.values.plain[i] = self.ui.value (i);
+    }
     UserContentStore& store() override { return self.contentStore; }
     EngineCapsMask engineCaps() override { return self.engine ? self.engine->capabilities() : kCapNone; }
     ParamValues& values() override { return self.values; }
@@ -175,25 +93,28 @@ public:
 
     void setValue (const ParamInfo& info, float constrained) override
     {
-        self.values.plain[static_cast<size_t> (findParamIndex (info.id))] = constrained;
+        const int index = findParamIndex (info.id);
+        self.values.plain[static_cast<size_t> (index)] = constrained;
         if (self.engine)
             self.engine->setParam (info.id, constrained);
+        self.ui.publish (static_cast<size_t> (index), constrained);
     }
 
     void applyAllValues() override
     {
-        if (self.engine)
-            for (size_t i = 0; i < paramCount(); ++i)
+        for (size_t i = 0; i < paramCount(); ++i)
+        {
+            if (self.engine)
                 self.engine->setParam (paramTable()[i].id, self.values.plain[i]);
+            self.ui.publish (i, self.values.plain[i]);
+        }
     }
 
     void contentChanged() override
     {
         contentRefresh();
-        if (self.host != nullptr && self.host->get_extension != nullptr)
-            if (const auto* state = static_cast<const clap_host_state_t*> (self.host->get_extension (self.host, CLAP_EXT_STATE)))
-                if (state->mark_dirty != nullptr)
-                    state->mark_dirty (self.host);
+        self.contentRev.fetch_add (1, std::memory_order_relaxed);
+        self.markStateDirty();
     }
 
     void contentRefresh() override
@@ -202,13 +123,7 @@ public:
             self.engine->setContent (self.content);
     }
 
-    void valuesRescan() override
-    {
-        if (self.host != nullptr && self.host->get_extension != nullptr)
-            if (const auto* params = static_cast<const clap_host_params_t*> (self.host->get_extension (self.host, CLAP_EXT_PARAMS)))
-                if (params->rescan != nullptr)
-                    params->rescan (self.host, CLAP_PARAM_RESCAN_VALUES);
-    }
+    void valuesRescan() override { self.rescanValues(); }
 
     bool renderOffline (const OfflineRequest& request, OfflineAudio& audio) override
     {
@@ -313,6 +228,11 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
 
     self->events.clear();
 
+    // 0. The GUI (docs/BITMAP-GUI-EXTENSION.md): its parameter edits are handled like host automation and reported to the host; its keyboard and wheels arrive as MIDI
+    self->drainUiEdits (process->out_events, 0);
+    for (uint8_t midi[3]; self->ui.popMidi (midi);)
+        self->handleMidi (midi, 0, process->out_events);
+
     // 1. Process incoming events
     if (process->in_events != nullptr)
     {
@@ -386,37 +306,7 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                 {
                     // the MIDI dialect of the note port: CC 64 sustain pedal, CC 1, CC 74, pressure, bend, note on/off
                     const auto* ev = reinterpret_cast<const clap_event_midi_t*> (hdr);
-                    // a controller that is in the MIDI learn table sets its parameter (G07) and is reported to the host
-                    if ((ev->data[0] & 0xF0) == 0xB0)
-                    {
-                        const auto hit = self->midiMap.handleCc (ev->data[1] & 0x7F, ev->data[2] & 0x7F);
-                        if (hit.apply)
-                        {
-                            const auto& info = paramTable()[hit.paramIndex];
-                            self->values.plain[hit.paramIndex] = hit.plain;
-                            self->engine->setParam (info.id, hit.plain);
-                            if (process->out_events != nullptr)
-                            {
-                                clap_event_param_value_t out {};
-                                out.header.size = sizeof out;
-                                out.header.time = ev->header.time;
-                                out.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
-                                out.header.type = CLAP_EVENT_PARAM_VALUE;
-                                out.header.flags = 0;
-                                out.param_id = info.id;
-                                out.cookie = nullptr;
-                                out.note_id = -1;
-                                out.port_index = -1;
-                                out.channel = -1;
-                                out.key = -1;
-                                out.value = static_cast<double> (hit.plain);
-                                process->out_events->try_push (process->out_events, &out.header);
-                            }
-                        }
-                    }
-                    Event e {};
-                    if (translateMidiMessage (ev->data, 3, static_cast<int32_t> (ev->header.time), e))
-                        self->events.push_back (e);
+                    self->handleMidi (ev->data, ev->header.time, process->out_events);
                     break;
                 }
                 case CLAP_EVENT_PARAM_VALUE:
@@ -424,12 +314,7 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
                     const auto* ev = reinterpret_cast<const clap_event_param_value_t*> (hdr);
                     const int idx = findParamIndex (ev->param_id);
                     if (idx >= 0)
-                    {
-                        const auto& info = paramTable()[idx];
-                        const float val = constrainValue (info, static_cast<float> (ev->value));
-                        self->values.plain[idx] = val;
-                        self->engine->setParam (ev->param_id, val);
-                    }
+                        self->applyHostValue (idx, constrainValue (paramTable()[idx], static_cast<float> (ev->value)));
                     break;
                 }
                 default:
@@ -465,9 +350,29 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
         float* outL = process->audio_outputs[0].data32[0];
         float* outR = (process->audio_outputs[0].channel_count > 1) ? process->audio_outputs[0].data32[1] : outL;
 
+        const bool meters = self->ui.guiActive.load (std::memory_order_relaxed);
+        const auto processStart = meters ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
         self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
                                outL, outR, static_cast<int> (process->frames_count));
         self->samplesDone.fetch_add (process->frames_count, std::memory_order_relaxed);
+        if (meters)
+        {
+            // the live displays of a GUI: load of this block (smoothed), peaks, voices and the scope ring; nothing of this runs without a GUI
+            const double spent = std::chrono::duration<double> (std::chrono::steady_clock::now() - processStart).count();
+            const double budget = self->sampleRate > 0.0 ? static_cast<double> (process->frames_count) / self->sampleRate : 0.0;
+            if (budget > 0.0)
+                self->ui.cpu.store (self->ui.cpu.load (std::memory_order_relaxed) * 0.9f + static_cast<float> (spent / budget) * 0.1f, std::memory_order_relaxed);
+            float magL = 0.0f, magR = 0.0f;
+            for (uint32_t i = 0; i < process->frames_count; ++i)
+            {
+                magL = std::max (magL, std::fabs (outL[i]));
+                magR = std::max (magR, std::fabs (outR[i]));
+            }
+            self->ui.peakL.store (magL, std::memory_order_relaxed);
+            self->ui.peakR.store (magR, std::memory_order_relaxed);
+            self->ui.voiceCount.store (self->engine->activeVoices(), std::memory_order_relaxed);
+            self->ui.writeScope (outL, outR, static_cast<int> (process->frames_count));
+        }
         // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
         if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
             self->host->request_restart (self->host);
@@ -578,7 +483,7 @@ bool ext_params_get_value (const clap_plugin_t* p, clap_id param_id, double* out
     if (idx < 0)
         return false;
 
-    *out_value = toClap (p)->values.plain[idx];
+    *out_value = toClap (p)->ui.value (static_cast<size_t> (idx));
     return true;
 }
 
@@ -613,12 +518,13 @@ bool ext_params_text_to_value (const clap_plugin_t*, clap_id param_id, const cha
     return false;
 }
 
-void ext_params_flush (const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t*) noexcept
+void ext_params_flush (const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t* out) noexcept
 {
+    auto* self = toClap (p);
+    self->drainUiEdits (out, 0); // the edits of the GUI while the plug-in is not processing
     if (in == nullptr)
         return;
 
-    auto* self = toClap (p);
     const uint32_t numEvents = in->size (in);
     for (uint32_t i = 0; i < numEvents; ++i)
     {
@@ -628,13 +534,7 @@ void ext_params_flush (const clap_plugin_t* p, const clap_input_events_t* in, co
             const auto* ev = reinterpret_cast<const clap_event_param_value_t*> (hdr);
             const int idx = findParamIndex (ev->param_id);
             if (idx >= 0)
-            {
-                const auto& info = paramTable()[idx];
-                const float val = constrainValue (info, static_cast<float> (ev->value));
-                self->values.plain[idx] = val;
-                if (self->engine)
-                    self->engine->setParam (ev->param_id, val);
-            }
+                self->applyHostValue (idx, constrainValue (paramTable()[idx], static_cast<float> (ev->value)));
         }
     }
 }
@@ -655,10 +555,7 @@ bool ext_state_save (const clap_plugin_t* p, const clap_ostream_t* stream) noexc
         return false;
 
     auto* self = toClap (p);
-    ShellState shell;
-    shell.midiCc = self->midiMap.bindings();
-    shell.locks = self->locks;
-    const std::string s = withShellSection (saveState (self->values, self->content), shell);
+    const std::string s = self->stateText();
     const int64_t written = stream->write (stream, s.data(), s.size());
     return (written == static_cast<int64_t> (s.size()));
 }
@@ -682,38 +579,23 @@ bool ext_state_load (const clap_plugin_t* p, const clap_istream_t* stream) noexc
     if (buffer.empty())
         return false;
 
-    const ParamValues before = self->values;
-    const StateContent contentBefore = self->content;
-    const LoadResult res = loadStateWithContent (buffer.data(), buffer.size(), self->values, self->content);
+    ParamValues loaded = self->currentValues();
+    StateContent loadedContent = self->content;
+    const LoadResult res = loadStateWithContent (buffer.data(), buffer.size(), loaded, loadedContent);
     if (res.status == LoadStatus::ok || res.status == LoadStatus::newer_version)
     {
         // a session of ours carries the `shell` section (MIDI map, locks) and is restored as it is; a document without it is a preset
         // change and the locked modules of this instance survive it (G08)
         ShellState shell;
         const ShellStatus shellStatus = loadShellSection (buffer.data(), buffer.size(), shell);
-        if (shellStatus == ShellStatus::ok || shellStatus == ShellStatus::rejected)
-        {
-            self->midiMap.setBindings (shell.midiCc);
-            self->locks = shell.locks;
-        }
+        const bool session = shellStatus == ShellStatus::ok || shellStatus == ShellStatus::rejected;
+        if (session)
+            self->applyShell (shell);
         else
-        {
             self->applyDefaultMidiMap (true); // a preset change loads the default MIDI map (S p.315)
-            if (! self->locks.empty())
-            {
-                keepLockedValues (self->values, before, self->locks);
-                StateContent merged = self->content;
-                keepLockedContent (merged, contentBefore, self->locks);
-                if (validateContent (merged))
-                    self->content = std::move (merged);
-            }
-        }
-        if (self->engine)
-        {
-            for (size_t i = 0; i < paramCount(); ++i)
-                self->engine->setParam (paramTable()[i].id, self->values.plain[i]);
-            self->engine->setContent (self->content); // main thread: allocates, handed to the audio thread lock free
-        }
+        // main thread: allocates, handed to the audio thread lock free; the GUI (if any) refreshes from the mirror
+        self->installPatch (loaded, std::move (loadedContent), ! session);
+        self->rememberSaved();
         return true;
     }
 
@@ -841,6 +723,9 @@ const void* clap_get_extension (const clap_plugin_t*, const char* id) noexcept
     if (std::strcmp (id, CLAP_EXT_TAIL) == 0) return &s_tail;
     if (std::strcmp (id, CLAP_EXT_RENDER) == 0) return &s_render;
     if (std::strcmp (id, SYNTHYBOY_EXT_CONTENT) == 0) return contentExtension();
+   #if SYNTHYBOY_BITMAP_GUI
+    if (std::strcmp (id, SAFIAN_EXT_BITMAP_GUI) == 0) return bitmapGuiExtension();
+   #endif
     if (std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS) == 0 ||
         std::strcmp (id, CLAP_EXT_REMOTE_CONTROLS_COMPAT) == 0 ||
         std::strcmp (id, "clap.remote-controls") == 0) return &s_remote_controls;
@@ -899,7 +784,12 @@ bool entry_init (const char*) noexcept
     return true;
 }
 
-void entry_deinit (void) noexcept {}
+void entry_deinit (void) noexcept
+{
+   #if SYNTHYBOY_BITMAP_GUI
+    bitmapGuiShutdown(); // the toolkit of the GUI (a process wide singleton of this module) goes with the module
+   #endif
+}
 
 const void* entry_get_factory (const char* factory_id) noexcept
 {
