@@ -11,7 +11,7 @@
 
 namespace synthyboy
 {
-constexpr int kStateVersion = 3;
+constexpr int kStateVersion = 4;
 
 /** Largest accepted state document. */
 constexpr size_t kMaxStateBytes = 1u << 20;
@@ -50,7 +50,7 @@ struct LoadResult
     ContentStatus content = ContentStatus::absent;
 };
 
-/** Deterministic text: {"format":"synthyboy-state","version":3,"params":{"master.volume":-12,...}}, parameters in table order,
+/** Deterministic text: {"format":"synthyboy-state","version":4,"params":{"master.volume":-12,...}}, parameters in table order,
     floats as "%.9g" (locale independent), no white space. Allocates: not for the audio thread. */
 std::string saveState (const ParamValues& values);
 

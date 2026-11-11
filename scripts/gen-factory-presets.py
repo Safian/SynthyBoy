@@ -5,7 +5,7 @@
 #
 #   gen-factory-presets.py [--out DIR] [--check]
 #
-# Writes every factory preset as a .sbpreset (preset format 1) holding a state of version 3 with all keys of docs/params.json
+# Writes every factory preset as a .sbpreset (preset format 1) holding a state of version 4 with all keys of docs/params.json
 # explicit (table order, %.9g text exactly like formatG9), and the content pack manifest. Deterministic: the same inputs give the
 # same bytes (no clock, no randomness, no dict-order dependence). --check writes nothing and exits 1 if DIR (default
 # content/presets) differs from what the script generates.
@@ -29,7 +29,7 @@ with open(PARAMS_JSON_PATH, "r", encoding="utf-8") as f:
     _doc = json.load(f)
 
 STATE_VERSION = int(_doc["stateVersion"])
-assert STATE_VERSION == 3, "this generator writes state version 3"
+assert STATE_VERSION == 4, "this generator writes state version 4"
 params_data = _doc["params"]
 param_table_keys = [p["key"] for p in params_data]
 param_info = {p["key"]: p for p in params_data}

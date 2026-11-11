@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <vector>
 
 #include "synthyboy/formula.h"
 #include "synthyboy/fx_types.h"
@@ -145,7 +147,7 @@ bool isFxChainKey (const char* key) noexcept
 
 std::string serializeFxRackPreset (const std::string& name, const ParamValues& values)
 {
-    std::string s = "{\"format\":\"synthyboy-fx-rack\",\"version\":1,\"name\":";
+    std::string s = "{\"format\":\"synthyboy-fx-rack\",\"version\":2,\"name\":";
     appendEscaped (s, name);
     s += ",\"values\":{";
     bool first = true;
@@ -175,7 +177,10 @@ int applyFxRackPreset (const std::string& json, ParamValues& values)
     if (i == std::string::npos)
         return 0;
     ++i;
-    int taken = 0;
+
+    // what the document states, by table index (the migration of version 1 needs all of it before anything is written)
+    std::vector<double> value (paramCount(), 0.0);
+    std::vector<char> inDocument (paramCount(), 0);
     while (i < json.size())
     {
         const size_t q1 = json.find ('"', i);
@@ -198,14 +203,53 @@ int applyFxRackPreset (const std::string& json, ParamValues& values)
             const int index = findParamIndex (info->id);
             if (index >= 0)
             {
-                values.plain[static_cast<size_t> (index)] = static_cast<float> (std::max (static_cast<double> (info->min), std::min (static_cast<double> (info->max), v)));
-                ++taken;
+                value[static_cast<size_t> (index)] = v;
+                inDocument[static_cast<size_t> (index)] = 1;
             }
         }
         const size_t next = json.find_first_of (",}", i);
         if (next == std::string::npos || json[next] == '}')
             break;
         i = next + 1;
+    }
+
+    // version 1 (no "version" member counts as 1): the pool values of the EQ and the compressor were stored in the ranges of state version 3 (fxPoolMigrateFromV3)
+    int version = 1;
+    if (const size_t at = json.find ("\"version\""); at != std::string::npos && at < block)
+        if (const size_t colon = json.find (':', at); colon != std::string::npos)
+            version = static_cast<int> (std::strtol (json.c_str() + colon + 1, nullptr, 10));
+    const size_t count = paramCount();
+    std::unique_ptr<bool[]> hasArr (new bool[count]), derivedArr (new bool[count]);
+    for (size_t k = 0; k < count; ++k)
+    {
+        hasArr[k] = inDocument[k] != 0;
+        derivedArr[k] = false;
+    }
+    if (version < 2)
+    {
+        // a slot whose type the document does not state keeps the type of `values`
+        for (int slot = 0; slot < kNumFxInstances; ++slot)
+        {
+            const int t = fxInstanceKeys (slot).type;
+            if (t >= 0 && ! hasArr[static_cast<size_t> (t)])
+            {
+                value[static_cast<size_t> (t)] = static_cast<double> (values.plain[static_cast<size_t> (t)]);
+                hasArr[static_cast<size_t> (t)] = true;
+            }
+        }
+        fxPoolMigrateFromV3 (value.data(), hasArr.get(), derivedArr.get());
+    }
+
+    int taken = 0;
+    const ParamInfo* table = paramTable();
+    for (size_t k = 0; k < count; ++k)
+    {
+        if (! inDocument[k] && ! (derivedArr[k] && hasArr[k]))
+            continue;
+        const ParamInfo& info = table[k];
+        values.plain[k] = static_cast<float> (std::max (static_cast<double> (info.min), std::min (static_cast<double> (info.max), value[k])));
+        if (inDocument[k])
+            ++taken;
     }
     return taken;
 }

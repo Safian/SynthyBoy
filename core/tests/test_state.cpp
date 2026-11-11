@@ -64,7 +64,7 @@ TEST (state_save_format_is_exact_and_deterministic)
 {
     const auto v = ParamValues::defaults();
     const auto s = saveState (v);
-    const std::string head = "{\"format\":\"synthyboy-state\",\"version\":3,\"params\":{\"master.volume\":-12,\"master.polyphony\":16,";
+    const std::string head = "{\"format\":\"synthyboy-state\",\"version\":4,\"params\":{\"master.volume\":-12,\"master.polyphony\":16,";
     CHECK (s.compare (0, head.size(), head) == 0);
     CHECK (s.size() > 10 * 1024 && s.size() < 64 * 1024); // about 20 KiB for the whole table, far below kMaxStateBytes
     std::printf ("    default state: %zu bytes, %zu parameters\n", s.size(), paramCount());
@@ -441,7 +441,7 @@ TEST (state_v1_documents_are_migrated)
     ParamValues v = marker();
     load (kV1Documents[1], v);
     const auto saved = saveState (v);
-    CHECK (saved.find ("\"version\":3") != std::string::npos);
+    CHECK (saved.find ("\"version\":4") != std::string::npos);
     ParamValues again = marker();
     CHECK (load (saved, again).status == LoadStatus::ok && sameValues (v, again));
 }

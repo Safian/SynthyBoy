@@ -4,6 +4,8 @@
 
 #include "synthyboy/fx_types.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -176,6 +178,69 @@ void fxInstanceDefaults (int type, float* out) noexcept
     {
         const ParamInfo* src = fxInstanceSource (type, k);
         out[k] = src != nullptr ? toNormalised (*src, src->def) : 0.0f;
+    }
+}
+
+namespace
+{
+struct OldRange
+{
+    const char* key;
+    float min, max;
+};
+
+/** The plain ranges that state version 3 had, of the keys whose range grew. */
+constexpr OldRange kOldRanges[] = {
+    { "eq.low.gain", -15.0f, 15.0f }, { "eq.mid.gain", -15.0f, 15.0f }, { "eq.high.gain", -15.0f, 15.0f },
+    { "compressor.low.lower_threshold", -80.0f, 0.0f }, { "compressor.low.upper_threshold", -80.0f, 0.0f },
+    { "compressor.mid.lower_threshold", -80.0f, 0.0f }, { "compressor.mid.upper_threshold", -80.0f, 0.0f },
+    { "compressor.high.lower_threshold", -80.0f, 0.0f }, { "compressor.high.upper_threshold", -80.0f, 0.0f },
+    { "compressor.low.gain", -30.0f, 30.0f }, { "compressor.mid.gain", -30.0f, 30.0f }, { "compressor.high.gain", -30.0f, 30.0f },
+    { "compressor.limit", 0.0f, 1.0f }, // On / Off in version 3: the value 1 (Limit) is the index 1 of the three modes now
+};
+} // namespace
+
+void fxPoolMigrateFromV3 (double* value, bool* has, bool* derived) noexcept
+{
+    const ParamInfo* table = paramTable();
+    const size_t n = paramCount();
+    for (size_t i = kNumKeysV3; i < n; ++i)
+        if (! has[i])
+        {
+            value[i] = static_cast<double> (table[i].def);
+            has[i] = true;
+            derived[i] = true;
+        }
+    for (int slot = 0; slot < kNumFxInstances; ++slot)
+    {
+        const FxInstanceKeys& keys = fxInstanceKeys (slot);
+        if (keys.type < 0 || ! has[keys.type])
+            continue;
+        const int type = static_cast<int> (std::lround (value[keys.type]));
+        const FxTypeDescriptor& d = fxTypeDescriptor (type);
+        for (int k = 0; k < d.count; ++k)
+        {
+            const int index = keys.p[k];
+            const size_t source = static_cast<size_t> (d.source[k]);
+            if (index < 0)
+                continue;
+            if (source >= kNumKeysV3)
+            {
+                value[index] = static_cast<double> (toNormalised (table[source], table[source].def));
+                has[index] = true;
+                derived[index] = true;
+                continue;
+            }
+            if (! has[index])
+                continue;
+            for (const OldRange& r : kOldRanges)
+                if (std::strcmp (r.key, table[source].key) == 0)
+                {
+                    const float old = r.min + std::min (1.0f, std::max (0.0f, static_cast<float> (value[index]))) * (r.max - r.min);
+                    value[index] = static_cast<double> (toNormalised (table[source], old));
+                    break;
+                }
+        }
     }
 }
 

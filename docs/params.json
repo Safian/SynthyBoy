@@ -1,4 +1,4 @@
-{"format":"synthyboy-params","version":1,"stateVersion":3,"count":2636,
+{"format":"synthyboy-params","version":1,"stateVersion":4,"count":2636,
 "modSources":[
   {"choice":1,"key":"env1","name":"Env 1","bipolar":false},
   {"choice":2,"key":"env2","name":"Env 2","bipolar":false},

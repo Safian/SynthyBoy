@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#include "synthyboy/fx_types.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/state.h"
 
@@ -98,6 +99,14 @@ void migrateV2ToV3 (Parsed& p) noexcept
     }
 }
 
+/** Version 3 -> 4 (REFCOMPARE round 3, question 129): the ranges of the EQ gains and of the compressor thresholds and gains grew and `compressor.limit` got a third
+    value; the pool of effect instances stores normalised values, so those are rescaled, and the keys that are new in version 4 are written at their defaults
+    (fxPoolMigrateFromV3, fx_types.h). The plain keys keep their values (a plain dB value means the same in the wider range). */
+void migrateV3ToV4 (Parsed& p) noexcept
+{
+    fxPoolMigrateFromV3 (p.value, p.has, p.derived);
+}
+
 /** A migration upgrades `Parsed` from version `from` to `from + 1` (rename keys, rescale values, ...). Later versions
     append entries here. */
 using MigrateFn = void (*) (Parsed&) noexcept;
@@ -106,7 +115,7 @@ struct Migration
     int from;
     MigrateFn apply;
 };
-constexpr std::array<Migration, 2> kMigrations { { { 1, migrateV1ToV2 }, { 2, migrateV2ToV3 } } };
+constexpr std::array<Migration, 3> kMigrations { { { 1, migrateV1ToV2 }, { 2, migrateV2ToV3 }, { 3, migrateV3ToV4 } } };
 
 void migrate (Parsed& parsed) noexcept
 {

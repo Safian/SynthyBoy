@@ -85,6 +85,18 @@ float fxInstancePlain (int type, int number, float normalised) noexcept;
 /** Writes the normalised defaults of a type (the source keys' defaults) into out[kFxInstanceParams]; unused entries 0. */
 void fxInstanceDefaults (int type, float* out) noexcept;
 
+/** Keys of state version 3 (the table grew by block B34 after it: the keys from this index on are new in state version 4). */
+constexpr size_t kNumKeysV3 = 2631;
+
+/** State version 3 -> 4 for the effect instance pool (REFCOMPARE round 3, question 129). The plain ranges of the EQ gains (+-15 -> +-24 dB), of the compressor
+    thresholds (-80 .. 0 -> -120 .. +12 dB) and gains (+-30 -> +-36 dB) grew and `compressor.limit` got a third value, so a stored normalised value fxiNN.pKK of an
+    EQ or compressor slot meant another plain value: it is rescaled here so that the document sounds as before. The keys that are new in version 4 (kNumKeysV3 on,
+    the second EQ band and the EQ law) are written at their defaults when the document does not have them, and the parameters of an EQ slot that now map to them are
+    written at the default (an old document stored whatever the slot held there): the old sound has no second band and the Vital EQ law.
+    value / has / derived are indexed by table index (the arrays of at least paramCount () entries: the loader's own, state.cpp, or a rack preset's, library_items.cpp);
+    `derived` is set for what the migration adds (not counted as taken from the document). Documents of version 4 and later must not go through it. */
+void fxPoolMigrateFromV3 (double* value, bool* has, bool* derived) noexcept;
+
 /** The type picker names: type t as in fxiNN.type (0 = "None"). */
 const char* fxTypeName (int type) noexcept;
 } // namespace synthyboy
