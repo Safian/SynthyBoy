@@ -116,9 +116,11 @@ enum EngineCaps2 : EngineCaps2Mask
     kCap2ModDelay        = 1ull << 5, // REMAINDER item 1: modNN.delay, modNN.delay_beats, modNN.delay_sync (the connection starts after the delay)
     // block B32 (REMAINDER item 2, 13-new-keys.md 4.42)
     kCap2SpectralFilterTable = 1ull << 6, // REMAINDER item 2: oscN.spec.flt_use / flt_table / flt_frame (a wavetable acts as the spectral filter)
+    // block B33 (REFCOMPARE, 13-new-keys.md 4.47)
+    kCap2SerumUnison     = 1ull << 7, // REFCOMPARE: oscN.unison.law = Serum (the level of the centre / outer voices by blend and voice count, the stereo spread of Serum 2.1.5)
 };
 
-constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay | kCap2SpectralFilterTable;
+constexpr EngineCaps2Mask kCap2AllKnown = kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2ModSlew | kCap2ModDelay | kCap2SpectralFilterTable | kCap2SerumUnison;
 
 /** The bits of the second word a key of the table needs (0 for every key that predates it). Total, no allocation. */
 EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept;

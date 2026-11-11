@@ -105,6 +105,7 @@ namespace sbvital {
         kUnisonMode,
         kUnisonBlendShape,
         kUnisonStackRepeat,
+        kSerumUnison,
         kPhaseLegato,
         kPhaseMemory,
         kVoicePhaseLegato,

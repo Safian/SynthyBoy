@@ -644,6 +644,8 @@ namespace sbvital {
       ValueDetails::kLinear, false, "%", "Unison Blend Shape", nullptr },
     { "unison_stack_repeat", 0x000000, 0.0, 2.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Unison Stack Repeat", nullptr },
+    { "unison_law", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
+      ValueDetails::kIndexed, false, "", "Unison Law", strings::kOffOnNames },
     { "phase_legato", 0x000000, 0.0, 1.0, 0.0, 0.0, 1.0,
       ValueDetails::kIndexed, false, "", "Phase Legato", strings::kOffOnNames },
     { "phase_memory", 0x000000, 0.0, 2.0, 0.0, 0.0, 1.0,

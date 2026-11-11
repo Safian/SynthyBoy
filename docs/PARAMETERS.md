@@ -4,14 +4,14 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2628 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2631 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
 | Master | 35 |
-| Osc 1 | 130 |
-| Osc 2 | 130 |
-| Osc 3 | 130 |
+| Osc 1 | 131 |
+| Osc 2 | 131 |
+| Osc 3 | 131 |
 | Noise | 19 |
 | Filter 1 | 23 |
 | Filter 2 | 23 |
@@ -230,6 +230,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.spec.flt_use` | Osc 1 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
 | `osc1.spec.flt_table` | Osc 1 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 1 / Spectral |  |  |
 | `osc1.spec.flt_frame` | Osc 1 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 1 / Spectral | mod |  |
+| `osc1.unison.law` | Osc 1 Unison Law | 0 Vital, 1 Serum | Vital | Osc 1 / Unison |  |  |
 
 ### Osc 2
 
@@ -365,6 +366,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.spec.flt_use` | Osc 2 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
 | `osc2.spec.flt_table` | Osc 2 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 2 / Spectral |  |  |
 | `osc2.spec.flt_frame` | Osc 2 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 2 / Spectral | mod |  |
+| `osc2.unison.law` | Osc 2 Unison Law | 0 Vital, 1 Serum | Vital | Osc 2 / Unison |  |  |
 
 ### Osc 3
 
@@ -500,6 +502,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.spec.flt_use` | Osc 3 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
 | `osc3.spec.flt_table` | Osc 3 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 3 / Spectral |  |  |
 | `osc3.spec.flt_frame` | Osc 3 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 3 / Spectral | mod |  |
+| `osc3.unison.law` | Osc 3 Unison Law | 0 Vital, 1 Serum | Vital | Osc 3 / Unison |  |  |
 
 ### Noise
 

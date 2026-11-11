@@ -745,7 +745,8 @@ public:
              | kCap2Spectral | kCap2SpectralWarps // GROUPC WP-12 (B29): proven by core/engine-vital/tests/test_spectral_osc.cpp
              | kCap2Multisample // GROUPC WP-13 (B30): proven by core/engine-vital/tests/test_multisample_osc.cpp
              | kCap2ModSlew | kCap2ModDelay // REMAINDER item 1 (B31): proven by core/engine-vital/tests/test_modslew.cpp
-             | kCap2SpectralFilterTable; // REMAINDER item 2 (B32): proven by core/engine-vital/tests/test_spectral_filter_table.cpp
+             | kCap2SpectralFilterTable // REMAINDER item 2 (B32): proven by core/engine-vital/tests/test_spectral_filter_table.cpp
+             | kCap2SerumUnison; // REFCOMPARE (B33): proven by core/engine-vital/tests/test_serum_unison.cpp
     }
 
     EngineCapsMask capabilities() const noexcept override

@@ -99,7 +99,7 @@ public:
             // Block B14: Pitch & unison modes, transpose snap, phase legato (76 keys total)
             o + ".pitch_mode", o + ".pitch_coarse", o + ".pitch_track", o + ".fixed_pitch",
             o + ".pitch_bend_track", o + ".transpose_snap",
-            o + ".unison.mode", o + ".unison.range", o + ".unison.blend_shape", o + ".unison.stack_repeat",
+            o + ".unison.mode", o + ".unison.range", o + ".unison.blend_shape", o + ".unison.stack_repeat", o + ".unison.law" /* B33 */,
             o + ".phase_legato", o + ".phase_memory",
             // Block B27 (GROUPB WP-05): Ratio SRC, smooth interpolation of the frame position, the slice destination of Play Single Slice
             o + ".ratio_src", o + ".smooth_interp", o + ".sample.slice",

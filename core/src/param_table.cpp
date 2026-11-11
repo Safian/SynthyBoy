@@ -127,6 +127,7 @@ constexpr const char* const kRemapSlots[] = { "Curve 1", "Curve 2", "Curve 3", "
 constexpr const char* const kPitchModes[] = { "Semitones", "Harmonics", "Ratio", "Step" };
 constexpr const char* const kUnisonModes[] = { "Linear", "Super", "Exp", "Inv", "Random" };
 constexpr const char* const kUnisonStackRepeats[] = { "1x", "2x", "3x" };
+constexpr const char* const kUnisonLaws[] = { "Vital", "Serum" };
 constexpr const char* const kPhaseMemories[] = { "All Voices", "Contiguous", "Per Voice" };
 // B17: reverb algorithms and room modes (13-new-keys.md 4.17, G77)
 constexpr const char* const kReverbTypes[] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
@@ -475,6 +476,10 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
 
 // B32 (REMAINDER item 2, 13-new-keys.md 4.42): per oscillator the wavetable as the spectral filter (Serum 2 manual p.120): the switch, the table (the list of oscN.wavetable, Preset table = the
 // table of the oscillator) and the frame position over its frames
+// B33 (REFCOMPARE, 13-new-keys.md 4.47): per oscillator the unison law: Vital (the centre / detuned weights of the Vital oscillator) or the law measured on the real Serum 2.1.5
+#define SB_OSC_UNILAW(N)                                                                                                                         \
+    pick ("osc" #N ".unison.law", "Osc " #N " Unison Law", "Osc " #N " / Unison", kUnisonLaws, 0)
+
 #define SB_OSC_SPECFLT(N)                                                                                                                        \
     onOff ("osc" #N ".spec.flt_use", "Osc " #N " Spectral Filter From Wavetable", "Osc " #N " / Spectral", false),                              \
     pick ("osc" #N ".spec.flt_table", "Osc " #N " Spectral Filter Wavetable", "Osc " #N " / Spectral", kWavetables, kWavetableSaw),             \
@@ -998,11 +1003,13 @@ constexpr ParamInfo kRaw[] = {
     SB_SLOT_SLEW (57), SB_SLOT_SLEW (58), SB_SLOT_SLEW (59), SB_SLOT_SLEW (60), SB_SLOT_SLEW (61), SB_SLOT_SLEW (62), SB_SLOT_SLEW (63), SB_SLOT_SLEW (64),
     // --- B32: REMAINDER item 2: a wavetable as the spectral filter (13-new-keys.md 4.42, positions 2619..2627) ----------------------------------------------
     SB_OSC_SPECFLT (1), SB_OSC_SPECFLT (2), SB_OSC_SPECFLT (3),
+    // --- B33: REFCOMPARE: the unison law of Serum 2.1.5 (13-new-keys.md 4.47, positions 2628..2630) ---------------------------------------------------------
+    SB_OSC_UNILAW (1), SB_OSC_UNILAW (2), SB_OSC_UNILAW (3),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2628, "880 keys of state version 2 plus the 1671 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32)");
+static_assert (kCount == 2631, "880 keys of state version 2 plus the 1674 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32 + 3 B33)");
 
 struct Table
 {

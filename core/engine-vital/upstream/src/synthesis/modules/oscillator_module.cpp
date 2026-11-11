@@ -111,6 +111,7 @@ namespace sbvital {
     Value* unison_mode = createBaseControl(prefix_ + "_unison_mode");
     Output* unison_blend_shape = createPolyModControl(prefix_ + "_unison_blend_shape");
     Value* unison_stack_repeat = createBaseControl(prefix_ + "_unison_stack_repeat");
+    Value* unison_law = createBaseControl(prefix_ + "_unison_law");
     Value* phase_legato = createBaseControl(prefix_ + "_phase_legato");
     Value* phase_memory = createBaseControl(prefix_ + "_phase_memory");
 
@@ -157,6 +158,7 @@ namespace sbvital {
     oscillator_->plug(unison_mode, SynthOscillator::kUnisonMode);
     oscillator_->plug(unison_blend_shape, SynthOscillator::kUnisonBlendShape);
     oscillator_->plug(unison_stack_repeat, SynthOscillator::kUnisonStackRepeat);
+    oscillator_->plug(unison_law, SynthOscillator::kSerumUnison);
     oscillator_->plug(phase_legato, SynthOscillator::kPhaseLegato);
     oscillator_->plug(phase_memory, SynthOscillator::kPhaseMemory);
     oscillator_->useInput(input(kRawMidi), SynthOscillator::kRawMidiNote);

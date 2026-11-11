@@ -23,6 +23,7 @@
 #include "matrix.h"
 #include "wavetable.h"
 
+#include <algorithm>
 #include <climits>
 #include <cmath>
 
@@ -47,6 +48,35 @@ namespace sbvital {
 
     constexpr mono_float kCenterLowAmplitude = 0.4f;
     constexpr mono_float kDetunedHighAmplitude = 0.6f;
+
+    // The unison law of Serum 2.1.5 (SynthyBoy, oscN.unison.law = Serum; REFCOMPARE-REPORT.md, tools/ref-compare/fit_unison.py): the amplitude of a voice in each output channel at stereo
+    // spread 0, relative to a single voice, measured on the real plug-in by the line of every voice in the spectrum of a detuned saw. The centre voice (one for an odd count, the two middle
+    // voices for an even count) is kSerumCentre (blend) and the outer ones kSerumOuter (blend), both times the gain of the voice count; the shapes are the same for every count (the spread
+    // over 3 .. 16 voices is below 1e-4). The blend axis is 0, 10 .. 100 %.
+    constexpr mono_float kSerumCentre[11] = { 1.0000f, 0.9945f, 0.9778f, 0.9501f, 0.9112f, 0.8613f, 0.8003f, 0.7281f, 0.6449f, 0.5506f, 0.4451f };
+    constexpr mono_float kSerumOuter[11] = { 0.0445f, 0.0573f, 0.0948f, 0.1543f, 0.2314f, 0.3200f, 0.4119f, 0.4975f, 0.5653f, 0.6018f, 0.5921f };
+    // gain of the voice count at blend 0 (index = number of voices; 1 = the single voice, 2 = both voices of the pair, whatever the blend)
+    constexpr mono_float kSerumCountGain[17] = { 0.0f, 1.0f, 0.3200f, 0.4384f, 0.4260f, 0.4139f, 0.4021f, 0.3907f, 0.3796f, 0.3689f, 0.3584f, 0.3482f, 0.3384f, 0.3288f, 0.3194f, 0.3104f, 0.3016f };
+    // The stereo spread: a voice that sits in one channel (the sharp ones in the left lane, the flat ones in the right lane of the pair) is heard in its own channel with the gain
+    // kSerumPanOwn and in the other channel with kSerumPanOther, relative to its gain at spread 0 (where both are 1); the centre voice of an odd count does not move.
+    constexpr mono_float kSerumPanAt[7] = { 0.0f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f };
+    constexpr mono_float kSerumPanOwn[7] = { 1.0000f, 1.1286f, 1.3315f, 1.6955f, 2.0925f, 2.3461f, 2.5217f };
+    constexpr mono_float kSerumPanOther[7] = { 1.0000f, 0.8766f, 0.7010f, 0.4346f, 0.2011f, 0.0764f, 0.0000f };
+
+    mono_float serumTable(const mono_float* xs, const mono_float* ys, int n, mono_float x) {
+      if (x <= xs[0])
+        return ys[0];
+      for (int i = 0; i + 1 < n; ++i)
+        if (x <= xs[i + 1])
+          return ys[i] + (ys[i + 1] - ys[i]) * (x - xs[i]) / (xs[i + 1] - xs[i]);
+      return ys[n - 1];
+    }
+
+    mono_float serumBlendTable(const mono_float* ys, mono_float blend) {
+      const mono_float pos = utils::clamp(blend, 0.0f, 1.0f) * 10.0f;
+      const int i = std::min(9, static_cast<int>(pos));
+      return ys[i] + (ys[i + 1] - ys[i]) * (pos - i);
+    }
     constexpr mono_float kWavetableFadeTime = 0.007f;
 
     constexpr int kMaxSyncPower = 4;
@@ -1247,6 +1277,31 @@ namespace sbvital {
   }
 
   force_inline void SynthOscillator::setAmplitude() {
+    if (input(kSerumUnison) && input(kSerumUnison)->at(0)[0] >= 0.5f) {
+      // The unison law of Serum 2.1.5: the centre voice and the outer voices have their own gain by blend and voice count. The voices of a pair sit in the two channels of a lane, the stereo
+      // blend (stereoBlend) mixes them with the Serum pan law; the engine amplitude of a voice that moves is the gain it has in its own channel divided by the share of that channel.
+      poly_float blend = input(kBlend)->at(0);
+      poly_float spread = utils::clamp(input(kStereoSpread)->at(0), 0.0f, 1.0f);
+      poly_float center, detuned;
+      const int count = unison_;
+      for (int i = 0; i < poly_float::kSize; ++i) {
+        const mono_float total = serumTable(kSerumPanAt, kSerumPanOwn, 7, spread[i]) + serumTable(kSerumPanAt, kSerumPanOther, 7, spread[i]);
+        mono_float c = 1.0f, d = 0.0f;
+        if (count == 2)
+          c = kSerumCountGain[2] * total;
+        else if (count > 2) {
+          const mono_float gain = kSerumCountGain[count];
+          c = gain * serumBlendTable(kSerumCentre, blend[i]) * ((count % 2) ? 1.0f : total);
+          d = gain * serumBlendTable(kSerumOuter, blend[i]) * total;
+        }
+        center.set(i, c);
+        detuned.set(i, d);
+      }
+      center_amplitude_ = center;
+      detuned_amplitude_ = detuned;
+      return;
+    }
+
     if (unison_ <= 2) {
       center_amplitude_ = 1.0f;
       detuned_amplitude_ = 0.0f;
@@ -1459,6 +1514,15 @@ namespace sbvital {
     poly_float current_center_mult = blend_center_multiply_;
     blend_stereo_multiply_ = futils::equalPowerFade(stereo_spread * 0.5f + 0.5f);
     blend_center_multiply_ = futils::equalPowerFadeInverse(stereo_spread * 0.5f + 0.5f);
+    if (input(kSerumUnison) && input(kSerumUnison)->at(0)[0] >= 0.5f) {
+      // the Serum pan law (setAmplitude): the own channel and the other channel get their share of the total, which is 1 for the centre voice
+      for (int i = 0; i < poly_float::kSize; ++i) {
+        const mono_float own = serumTable(kSerumPanAt, kSerumPanOwn, 7, stereo_spread[i]);
+        const mono_float other = serumTable(kSerumPanAt, kSerumPanOther, 7, stereo_spread[i]);
+        blend_stereo_multiply_.set(i, own / (own + other));
+        blend_center_multiply_.set(i, other / (own + other));
+      }
+    }
 
     current_stereo_mult = utils::maskLoad(current_stereo_mult, blend_stereo_multiply_, reset_mask);
     current_center_mult = utils::maskLoad(current_center_mult, blend_center_multiply_, reset_mask);

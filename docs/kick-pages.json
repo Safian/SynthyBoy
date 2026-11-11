@@ -3063,7 +3063,8 @@
         "osc1.phase_legato",
         "osc1.phase_memory",
         "osc1.ratio_src",
-        "osc1.smooth_interp"
+        "osc1.smooth_interp",
+        "osc1.unison.law"
       ]
     },
     {
@@ -3086,7 +3087,8 @@
         "osc2.phase_legato",
         "osc2.phase_memory",
         "osc2.ratio_src",
-        "osc2.smooth_interp"
+        "osc2.smooth_interp",
+        "osc2.unison.law"
       ]
     },
     {
@@ -3109,7 +3111,8 @@
         "osc3.phase_legato",
         "osc3.phase_memory",
         "osc3.ratio_src",
-        "osc3.smooth_interp"
+        "osc3.smooth_interp",
+        "osc3.unison.law"
       ]
     },
     {

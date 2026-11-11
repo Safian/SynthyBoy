@@ -140,15 +140,18 @@ constexpr const char* s_more_osc3_multi_1[] = {
 
 constexpr const char* s_more_osc1_pitch_uni[] = {
     "osc1.pitch_bend_track", "osc1.transpose_snap", "osc1.phase_legato", "osc1.phase_memory",
-    "osc1.ratio_src", "osc1.smooth_interp" // B27
+    "osc1.ratio_src", "osc1.smooth_interp", // B27
+    "osc1.unison.law" // B33
 };
 constexpr const char* s_more_osc2_pitch_uni[] = {
     "osc2.pitch_bend_track", "osc2.transpose_snap", "osc2.phase_legato", "osc2.phase_memory",
-    "osc2.ratio_src", "osc2.smooth_interp" // B27
+    "osc2.ratio_src", "osc2.smooth_interp", // B27
+    "osc2.unison.law" // B33
 };
 constexpr const char* s_more_osc3_pitch_uni[] = {
     "osc3.pitch_bend_track", "osc3.transpose_snap", "osc3.phase_legato", "osc3.phase_memory",
-    "osc3.ratio_src", "osc3.smooth_interp" // B27
+    "osc3.ratio_src", "osc3.smooth_interp", // B27
+    "osc3.unison.law" // B33
 };
 
 constexpr const char* s_more_reverb1[] = {
@@ -572,11 +575,11 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "osc3_remap", "Osc 3 Remap", "Osc", { "osc3.remap.on", "osc3.remap.slot", "osc3.remap.rise", "osc3.remap.fall", nullptr, nullptr, nullptr, nullptr }, 4, nullptr, 0 },
     { "fx_levels", "FX Levels", "FX", { "chorus.level", "compressor.level", "delay.level", "distortion.level", "eq.level", "flanger.level", "phaser.level", "reverb.level" }, 8, nullptr, 0 },
     // Page 104: Osc 1 Pitch & Unison (Osc)
-    { "osc1_pitch_uni", "Osc 1 Pitch & Unison", "Osc", { "osc1.pitch_mode", "osc1.pitch_coarse", "osc1.pitch_track", "osc1.fixed_pitch", "osc1.unison.mode", "osc1.unison.range", "osc1.unison.blend_shape", "osc1.unison.stack_repeat" }, 8, s_more_osc1_pitch_uni, 6 },
+    { "osc1_pitch_uni", "Osc 1 Pitch & Unison", "Osc", { "osc1.pitch_mode", "osc1.pitch_coarse", "osc1.pitch_track", "osc1.fixed_pitch", "osc1.unison.mode", "osc1.unison.range", "osc1.unison.blend_shape", "osc1.unison.stack_repeat" }, 8, s_more_osc1_pitch_uni, 7 },
     // Page 105: Osc 2 Pitch & Unison (Osc)
-    { "osc2_pitch_uni", "Osc 2 Pitch & Unison", "Osc", { "osc2.pitch_mode", "osc2.pitch_coarse", "osc2.pitch_track", "osc2.fixed_pitch", "osc2.unison.mode", "osc2.unison.range", "osc2.unison.blend_shape", "osc2.unison.stack_repeat" }, 8, s_more_osc2_pitch_uni, 6 },
+    { "osc2_pitch_uni", "Osc 2 Pitch & Unison", "Osc", { "osc2.pitch_mode", "osc2.pitch_coarse", "osc2.pitch_track", "osc2.fixed_pitch", "osc2.unison.mode", "osc2.unison.range", "osc2.unison.blend_shape", "osc2.unison.stack_repeat" }, 8, s_more_osc2_pitch_uni, 7 },
     // Page 106: Osc 3 Pitch & Unison (Osc)
-    { "osc3_pitch_uni", "Osc 3 Pitch & Unison", "Osc", { "osc3.pitch_mode", "osc3.pitch_coarse", "osc3.pitch_track", "osc3.fixed_pitch", "osc3.unison.mode", "osc3.unison.range", "osc3.unison.blend_shape", "osc3.unison.stack_repeat" }, 8, s_more_osc3_pitch_uni, 6 },
+    { "osc3_pitch_uni", "Osc 3 Pitch & Unison", "Osc", { "osc3.pitch_mode", "osc3.pitch_coarse", "osc3.pitch_track", "osc3.fixed_pitch", "osc3.unison.mode", "osc3.unison.range", "osc3.unison.blend_shape", "osc3.unison.stack_repeat" }, 8, s_more_osc3_pitch_uni, 7 },
     // Page 110: Compressor Limit & Crossovers (FX), block B17 (13-new-keys.md 4.17)
     { "fx_comp_limit", "Compressor Limit & Crossovers", "FX", { "compressor.limit", "compressor.limit_latency_comp", "compressor.crossover_low", "compressor.crossover_high", "compressor.mix", "compressor.attack", "compressor.release", "compressor.on" }, 8, nullptr, 0 },
     // Page 111: Delay Quality & Offset (FX)

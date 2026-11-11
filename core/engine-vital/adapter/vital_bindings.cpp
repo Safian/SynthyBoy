@@ -180,6 +180,7 @@ std::vector<Binding> build()
         b.add (k + "unison.range", c + "detune_range", Conv::linear);
         b.percent (k + "unison.blend_shape", c + "unison_blend_shape");
         b.choice (k + "unison.stack_repeat", c + "unison_stack_repeat");
+        b.choice (k + "unison.law", c + "unison_law");   // block B33: 1 = the unison law of Serum 2 (level of the centre / outer voices by blend and voice count, stereo spread, 13-new-keys.md 4.47)
         b.choice (k + "phase_legato", c + "phase_legato");
         b.choice (k + "phase_memory", c + "phase_memory");
 

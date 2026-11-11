@@ -106,7 +106,7 @@ EngineCapsMask classify (const char* key) noexcept
         if (std::strstr (key, ".pitch_") != nullptr || std::strstr (key, ".fixed_pitch") != nullptr
             || std::strstr (key, ".transpose_snap") != nullptr || std::strstr (key, ".unison.mode") != nullptr
             || std::strstr (key, ".unison.range") != nullptr || std::strstr (key, ".unison.blend_shape") != nullptr
-            || std::strstr (key, ".unison.stack_repeat") != nullptr || std::strstr (key, ".phase_legato") != nullptr
+            || std::strstr (key, ".unison.stack_repeat") != nullptr || std::strstr (key, ".unison.law") != nullptr || std::strstr (key, ".phase_legato") != nullptr
             || std::strstr (key, ".phase_memory") != nullptr)
             return kCapPitchUnison;
         if (std::strstr (key, ".map.") != nullptr)
@@ -305,6 +305,8 @@ EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept
     }
     if (! startsWith (key, "osc"))
         return kCap2None;
+    if (std::strstr (key, ".unison.law") != nullptr)   // block B33
+        return kCap2SerumUnison;
     if (std::strstr (key, ".gran.") != nullptr)
         return kCap2Granular;
     if (std::strstr (key, ".spec.flt_") != nullptr)   // block B32: a wavetable as the spectral filter
@@ -358,6 +360,7 @@ const char* capName2 (EngineCaps2Mask bit) noexcept
         case kCap2ModSlew:       return "mod_slew";
         case kCap2ModDelay:      return "mod_delay";
         case kCap2SpectralFilterTable: return "spectral_filter_table";
+        case kCap2SerumUnison:   return "serum_unison";
         case kCap2None:          break;
     }
     return "";
