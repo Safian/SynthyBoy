@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -257,6 +258,7 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
     const int pp = get (fxMap, "plainParams");
     std::map<std::string, int> seen;
     const auto find = [&] (const char* name) { return get (pp, name); };
+    const auto fileOrZero = [&] (const char* name) { const int n = find (name); return n >= 0 && isNumber (n) ? num (n) : 0.0; };
     // the bands of the Serum EQ (A508, 13-new-keys.md 4.48): the left band (Shelf | Peak | High pass) is our low band, the right band (Shelf | Peak | Low pass) our high band; a band set to Peak
     // takes the mid band (the first peak) or the second peak band eq.mid2 (the second). The engine runs the EQ law of Serum (eq.law = Serum): RBJ biquads, the Q laws of the plug-in.
     std::string eqGroup[2];
@@ -295,7 +297,10 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
             {
                 const Rule& rule = rows[r];
                 if (nm != rule.param) continue;
-                if (handled) { if (rule.conv != Conv::enumName && isNumber (v)) put (rule.key, convert (rule, num (v)), nullptr); continue; }
+                const bool limitedModule = type == kFxTypeCompressor && find ("kParamRatio") >= 0 && isNumber (find ("kParamRatio")) && num (find ("kParamRatio")) >= kSerumLimitRatio;
+                // A512: the makeup of the limiter of Serum is 36 ln (2 m - 1) / ln 61 dB (the knob range 1 .. 31 is 0 .. 36 dB; the compressor has 20 log10 m), applied after the limiter
+                const auto makeupLaw = [&] (const Rule& r, double value) { return limitedModule && nm == "kParamMakeup" ? 36.0 * std::log (std::max (1.0, 2.0 * value - 1.0)) / std::log (61.0) : convert (r, value); };
+                if (handled) { if (rule.conv != Conv::enumName && isNumber (v)) put (rule.key, makeupLaw (rule, num (v)), nullptr); continue; }
                 // A347: a Serum compressor RATIO at its maximum (1,000,000) is the LIMIT detent, a true peak limiter (manual p.163): limit mode, the
                 // makeup gain drives into the limiter
                 const bool limitDetent = type == kFxTypeCompressor && nm == "kParamRatio" && isNumber (v) && num (v) >= kSerumLimitRatio;
@@ -321,7 +326,7 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
                 const bool networkFeedback = type == kFxTypeReverb && rule.conv == Conv::logPercent && std::strcmp (rule.key, "reverb.decay") == 0 && isText (reverbTypeNode)
                                              && (str (reverbTypeNode) == "kSpace" || str (reverbTypeNode) == "kAbyss");
                 const char* targetKey = networkFeedback ? "reverb.feedback" : rule.key;
-                const double ours = put (targetKey, networkFeedback ? num (v) : convert (rule, num (v)), &cl);
+                const double ours = put (targetKey, networkFeedback ? num (v) : makeupLaw (rule, num (v)), &cl);
                 ItemKind kind = rule.fid == Fid::approx || networkFeedback ? ItemKind::approximated : ItemKind::imported;
                 Reason reason = Reason::exact;
                 std::string detail = networkFeedback ? std::string ("reverb_feedback_of_nitrous_and_basin") : rule.note;
@@ -393,6 +398,157 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
                                      && isText (find ("kParamType")) && (str (find ("kParamType")) == "kSpace" || str (find ("kParamType")) == "kAbyss");
         put (networkFeedback ? "reverb.feedback" : rule.key, networkFeedback ? rule.serumDefault : convert (rule, rule.serumDefault), nullptr);
     }
+    // A510 (13-new-keys.md 4.48): the delay time of Serum with BeatSync on (the default of the module): the file value 0 .. 0.34 is a position on a scale of note values, not a time (measured on the
+    // plug-in: the onset of the echo of a delay at 100 % wet, 120 BPM); the steps are 15.5 ms, 57.6 ms, 1/16, 1/8, 1/4, 1/2, 1 bar and 2 bars. The divisions of ours follow the tempo of the host like
+    // Serum does; the two short steps and the zero have no division in ours and take the time in milliseconds
+    if (type == kFxTypeDelay)
+    {
+        const auto position = [&] (const char* param, double fallback)
+        {
+            const int n = find (param);
+            return n >= 0 && isNumber (n) ? num (n) : fallback;
+        };
+        const bool beatSync = position ("kParamBeatSync", 1.0) >= 0.5;
+        if (! beatSync) put ("delay.sync", 0, nullptr);
+        else
+        {
+            struct Step { double upTo, ms; int division; };   // division: index in the list of delay.division, -1 = none
+            static const Step kSteps[] = { { 0.0023, 0.2, -1 }, { 0.0062, 15.5, -1 }, { 0.015, 57.6, -1 }, { 0.0322, 125.0, 6 }, { 0.062, 250.0, 5 }, { 0.110, 500.0, 4 }, { 0.179, 1000.0, 3 },
+                                           { 0.2775, 2000.0, 2 }, { 1.0e9, 4000.0, 1 } };
+            const auto stepOf = [&] (double x) -> const Step& { for (const Step& s : kSteps) if (x < s.upTo) return s; return kSteps[8]; };
+            const Step& l = stepOf (position ("kParamTimeL", 0.06236));
+            const Step& r = stepOf (position ("kParamTimeR", 0.07642));
+            if (l.division >= 0 && r.division >= 0)
+            {
+                put ("delay.sync", 1, nullptr);
+                put ("delay.division", l.division, nullptr);
+                put ("delay.division2", r.division, nullptr);
+            }
+            else
+            {
+                put ("delay.sync", 0, nullptr);
+                put ("delay.time", l.ms, nullptr);
+                put ("delay.time2", r.ms, nullptr);
+            }
+        }
+    }
+    // A513 (13-new-keys.md 4.48): the decay of the Serum reverbs (measured: the energy decay of the wet signal of an impulse, T60 by the slope between -4 and -25 dB): Plate follows the SIZE knob (0.36 s up to
+    // size 8, 1.0 s at 20, 2.2 s at 30, 4.6 s at 40, 8.4 s at 50, 11 s at 70, 12 s from 80; FEEDBACK has no effect), Hall is 3.2 s whatever the size, Vintage follows VintageScale (0.93 s at 0, 2.0 s at 50,
+    // 3.9 s at 100); Space and Abyss keep their feedback. The earlier mapping took the FEEDBACK knob of the Plate for the decay (0.12 s at its default)
+    if (type == kFxTypeReverb)
+    {
+        const int tn = find ("kParamType");
+        const std::string typeName = tn >= 0 && isText (tn) ? str (tn) : std::string ("kPlate");
+        const auto position = [&] (const char* param, double fallback) { const int n = find (param); return n >= 0 && isNumber (n) ? num (n) : fallback; };
+        const auto lerp = [] (const double* xs, const double* ys, int n, double v) { int i = 0; while (i + 2 < n && v > xs[i + 1]) ++i; const double t = std::max (0.0, std::min (1.0, (v - xs[i]) / (xs[i + 1] - xs[i]))); return ys[i] + (ys[i + 1] - ys[i]) * t; };
+        double seconds = -1.0;
+        if (typeName == "kPlate")
+        {
+            static const double kSize[] = { 0, 8, 10, 15, 18, 20, 25, 28, 30, 35, 40, 50, 60, 70, 80 };
+            static const double kT60[] = { 0.36, 0.30, 0.48, 0.46, 0.77, 1.0, 1.6, 2.1, 2.2, 3.5, 4.6, 8.4, 10.6, 11.1, 12.0 };
+            seconds = lerp (kSize, kT60, 15, position ("kParamSize", 35.0));
+        }
+        else if (typeName == "kHall") seconds = 3.2;
+        else if (typeName == "kVintage")
+        {
+            static const double kScale[] = { 0, 50, 100 };
+            static const double kT60[] = { 0.93, 2.04, 3.9 };
+            seconds = lerp (kScale, kT60, 3, position ("kParamVintageScale", 0.0));
+        }
+        if (seconds > 0.0) put ("reverb.decay", seconds * 1000.0, nullptr);
+    }
+    // A509 (13-new-keys.md 4.48): the wet signal of a Serum module has another level than ours (measured, tools/ref-compare/make_fx_laws.py: a C3 saw at 100 % wet, Serum minus ours); the dry signal
+    // stays at unity: the mix and the level of our module are remapped so that dry * (1 - w) + wet * w * r comes out of it (L = (1 - w) + w r, mix = w r / L, level + 20 log10 L). The distortion
+    // also takes its drive from the measured law of the mode (the harmonic shapes of the modes follow ours, the drive scale does not)
+    {
+        const auto fileOrDefault = [&] (const char* param, double fallback)
+        {
+            const int n = find (param);
+            return n >= 0 && isNumber (n) ? num (n) : fallback;
+        };
+        const Rule* wetRule = nullptr;
+        const Rule* levelRule = nullptr;
+        for (size_t r = 0; r < count; ++r)
+        {
+            if (std::strcmp (rows[r].param, "kParamWet") == 0) wetRule = &rows[r];
+            if (std::strcmp (rows[r].param, "kParamLevelOut") == 0) levelRule = &rows[r];
+        }
+        double wetGain = 0.0;
+        if (type == kFxTypeDistortion)
+        {
+            const int mn = find ("kParamMode");
+            const std::string mode = mn >= 0 && isText (mn) ? str (mn) : std::string ("kTube");
+            double ourDrive = 0.0, gain = 0.0;
+            if (fxDistortionLaw (mode, fileOrDefault ("kParamDrive", 25.0), ourDrive, gain))
+            {
+                put ("distortion.drive", ourDrive, nullptr);
+                wetGain = gain;
+            }
+        }
+        else if (type == kFxTypeHyperDimension)
+        {
+            const double unison = fileOrDefault ("kParamUnison", 4.0);
+            wetGain = hyperWetGainDb (unison);
+            if (unison < 0.5) put ("hyperdim.mix", 0.0, nullptr);   // no voices: the module passes the dry signal
+        }
+        else if (type == kFxTypeReverb)
+        {
+            // the level of the wet signal by reverb type, measured on the default parameters of each type (Serum minus ours; the Vintage level varies with VintageScale by 4 dB around this)
+            const int tn = find ("kParamType");
+            const std::string typeName = tn >= 0 && isText (tn) ? str (tn) : std::string ("kPlate");
+            wetGain = typeName == "kHall" ? -6.7 : typeName == "kVintage" ? -5.0 : typeName == "kSpace" ? -13.0 : typeName == "kAbyss" ? 4.5 : 0.8;
+        }
+        else wetGain = fxWetGainDb (type);
+        double probeWet = 0.0, probeLevel = 0.0;
+        const bool haveLaw = fxMixRemap (type, 0.5, 0.0, probeWet, probeLevel);
+        if ((std::fabs (wetGain) > 0.05 || haveLaw) && wetRule != nullptr && levelRule != nullptr && ! (type == kFxTypeHyperDimension && fileOrDefault ("kParamUnison", 4.0) < 0.5))
+        {
+            const double w = std::max (0.0, std::min (1.0, fileOrDefault ("kParamWet", wetRule->serumDefault) * 0.01));
+            const double levelDb = convert (*levelRule, fileOrDefault ("kParamLevelOut", levelRule->serumDefault));
+            double oursWet = 0.0, extraDb = 0.0;
+            if (! fxMixRemap (type, w, wetGain, oursWet, extraDb))
+            {
+                const double r = std::pow (10.0, wetGain / 20.0);
+                const double L = (1.0 - w) + w * r;
+                oursWet = w * r / L;
+                extraDb = 20.0 * std::log10 (L);
+            }
+            put (wetRule->key, 100.0 * oursWet, nullptr);
+            put (levelRule->key, levelDb + extraDb, nullptr);
+        }
+    }
+    // A511 (13-new-keys.md 4.48): the multiband mode of the Serum compressor (measured on a sine in a band and on a saw): three bands (the crossovers of the module), each with a threshold (the UD knob 0 .. 200:
+    // the knee is the peak ceiling -51 / -33.6 / -20.3 / -7.9 dB at 0 / 50 / 100 / 150, +0.25 dB per step beyond; the global THRESH shifts all the knees: +9 dB at 0.42, 0 at 0.5, -15 at 0.6, -28 at 0.7, -41 at 0.8,
+    // no compression above +20 dB under 0.3), a ratio knob 0 .. 1 that goes from 1:1 to the global RATIO (the amplitude exponent is r ^ 0.9 (1 - 1 / R), at most 0.8, 0.78 for the limit detent: the slopes above the knee 0.93 / 0.64 /
+    // 0.28 at 0.1 / 0.5 / 1 for R = 4) and a gain after the compression; the makeup of the module comes on top of the gains. The global threshold and ratio do not compress by themselves in this mode
+    if (type == kFxTypeCompressor && fileOrZero ("kParamMultiband") >= 0.5)
+    {
+        static const double kUdKnee[] = { -51.0, -33.6, -20.3, -7.9, 4.5 };   // at UD 0, 50, 100, 150, 200 (measured at the output with the master 1.0 of +2.98 dB, taken off)
+        static const double kUdDefault[3] = { 72.533, 100.0, 100.0 };
+        static const double kThreshAt[] = { 0.0, 0.3, 0.42, 0.5, 0.6, 0.7, 0.8, 1.0 };
+        static const double kShiftDb[] = { 30.0, 22.0, 9.1, 0.0, -15.1, -27.8, -41.0, -70.0 };
+        static const char* const kBand[3] = { "low", "mid", "high" };
+        const auto fileOr = [&] (const char* param, double fallback) { const int n = find (param); return n >= 0 && isNumber (n) ? num (n) : fallback; };
+        const double makeupDb = 20.0 * std::log10 (std::max (1.0, fileOr ("kParamMakeup", 1.0)));
+        const double thresh = std::max (0.0, std::min (1.0, fileOr ("kParamThresh", 0.5)));
+        int ti = 0;
+        while (ti + 2 < 8 && thresh > kThreshAt[ti + 1]) ++ti;
+        const double shift = kShiftDb[ti] + (kShiftDb[ti + 1] - kShiftDb[ti]) * (thresh - kThreshAt[ti]) / (kThreshAt[ti + 1] - kThreshAt[ti]);
+        const double globalRatio = std::max (1.0, fileOr ("kParamRatio", 4.0));
+        const double strength = globalRatio >= 1.0e5 ? 0.78 : std::min (0.8, (1.0 - 1.0 / globalRatio) * 1.0);
+        for (int b = 0; b < 3; ++b)
+        {
+            const std::string n = std::to_string (b);
+            const double ud = std::max (0.0, std::min (200.0, fileOr (("kParamThreshUD" + n).c_str(), kUdDefault[b])));
+            const int seg = std::min (3, static_cast<int> (ud / 50.0));
+            const double knee = kUdKnee[seg] + (kUdKnee[seg + 1] - kUdKnee[seg]) * (ud - 50.0 * seg) / 50.0 + shift;
+            const double ratio = std::max (0.0, std::min (1.0, fileOr (("kParamRatio" + n).c_str(), 1.0)));
+            const std::string g = std::string ("compressor.") + kBand[b] + ".";
+            put (g + "upper_threshold", std::max (-120.0, knee), nullptr);
+            put (g + "upper_ratio", 100.0 * strength * std::pow (ratio, 0.9), nullptr);
+            put (g + "gain", makeupDb + fileOr (("kParamGain" + n).c_str(), 0.0), nullptr);
+        }
+    }
     // Serum defaults of enumerations the file leaves out
     if (type == kFxTypeDistortion && find ("kParamMode") < 0) put ("distortion.type", 6, nullptr);
     if (type == kFxTypeReverb && find ("kParamType") < 0) put ("reverb.type", 1, nullptr);
@@ -406,7 +562,7 @@ void Importer::fxEntry (int rack, int index, int node, const std::string& path)
     {
         // the compressor of Serum 2.1.5 is the peak compressor of the engine (compressor.limit = Serum); a ratio at the LIMIT detent is the look-ahead limiter
         const int rn = find ("kParamRatio");
-        put ("compressor.limit", rn >= 0 && isNumber (rn) && num (rn) >= kSerumLimitRatio ? 1 : 2, nullptr);
+        put ("compressor.limit", rn >= 0 && isNumber (rn) && num (rn) >= kSerumLimitRatio && fileOrZero ("kParamMultiband") < 0.5 ? 1 : 2, nullptr);   // in the multiband mode the ratio at the limit detent is the ceiling of the band ratios
     }
     if (type == kFxTypeEq)
     {

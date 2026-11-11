@@ -326,7 +326,7 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
     cont ("compressor." KEY ".upper_threshold", "Compressor " NAME " Upper Threshold", "FX / Compressor", -120.0f, 12.0f, -20.0f, Unit::dB, kAuto), \
     SB_PCT_RANGE ("compressor." KEY ".lower_ratio", "Compressor " NAME " Lower Ratio", "FX / Compressor", -100.0f, 100.0f, 0.0f, kAuto),        \
     SB_PCT ("compressor." KEY ".upper_ratio", "Compressor " NAME " Upper Ratio", "FX / Compressor", 50.0f, kAuto),                              \
-    cont ("compressor." KEY ".gain", "Compressor " NAME " Gain", "FX / Compressor", -30.0f, 30.0f, 0.0f, Unit::dB, kMod)
+    cont ("compressor." KEY ".gain", "Compressor " NAME " Gain", "FX / Compressor", -36.0f, 36.0f, 0.0f, Unit::dB, kMod)
 
 #define SB_EQ(KEY, NAME, MODES, CUTOFF)                                                                                                          \
     pick ("eq." KEY ".mode", "EQ " NAME " Mode", "FX / EQ", MODES, 0),                                                                           \

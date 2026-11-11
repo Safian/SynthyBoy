@@ -489,7 +489,10 @@ TEST (serum_effect_racks_become_pool_slots_in_order)
         if (rd.source[q] == findParamIndex (hashKey ("reverb.type"))) typeNumber = q;
     }
     CHECK (mixNumber >= 0 && typeNumber >= 0);
-    CHECK_NEAR (r.values.plain[k0.p[mixNumber]], 0.4, 1e-4);
+    // A509: the mix knob of the module is the one that gives the dry and wet gain of the Serum law at 40 % (Hall: the wet signal 6.7 dB under ours)
+    double expectedMix = 0.0, expectedLevel = 0.0;
+    CHECK (serumimport::fxMixRemap (kFxTypeReverb, 0.4, -6.7, expectedMix, expectedLevel));
+    CHECK_NEAR (fxInstancePlain (kFxTypeReverb, mixNumber, r.values.plain[k0.p[mixNumber]]), 100.0 * expectedMix, 0.05);
     CHECK_NEAR (fxInstancePlain (kFxTypeReverb, typeNumber, r.values.plain[k0.p[typeNumber]]), 2.0, 1e-4); // Hall
     // the delay time 0.25 s is 250 ms
     const FxTypeDescriptor& dd = fxTypeDescriptor (kFxTypeDelay);
@@ -504,6 +507,126 @@ TEST (serum_effect_racks_become_pool_slots_in_order)
     int wetNumber = -1;
     for (int q = 0; q < dd.count; ++q) if (dd.source[q] == findParamIndex (hashKey ("delay.mix"))) wetNumber = q;
     CHECK_EQ (destIdx, fxInstanceKeys (pool0[1].index).p[wetNumber]);
+}
+
+// REFCOMPARE round 3 (13-new-keys.md 4.48): the effect laws measured on the real Serum 2.1.5 (A508 .. A513)
+namespace
+{
+/** One effect module in rack 0 (plainParams `pp`, Serum type code `type`) imported; returns the plain value of our key `key` in its pool slot (-9999 when the key is not one of the type's). */
+struct OneFx
+{
+    SerumImportResult r;
+    int slot = -1, type = 0;
+    double operator() (const char* key) const
+    {
+        if (slot < 0) return -9999.0;
+        const FxTypeDescriptor& d = fxTypeDescriptor (type);
+        for (int q = 0; q < d.count; ++q)
+            if (d.source[q] == findParamIndex (hashKey (key)))
+                return static_cast<double> (fxInstancePlain (type, q, r.values.plain[fxInstanceKeys (slot).p[q]]));
+        return -9999.0;
+    }
+};
+OneFx importOne (const std::string& name, int serumType, int ourType, const Bytes& pp)
+{
+    Preset p;
+    p.set ("FXRack0", map ({ { "FX", arr ({ map ({ { name, map ({ { "plainParams", pp } }) }, { "type", num (serumType) } }) }) }, { "displayName", text ("") }, { "plainParams", dflt() } }));
+    OneFx o;
+    o.r = run (p.file());
+    o.type = ourType;
+    const FxRacks racks = fxRacks (o.r.values.plain);
+    for (const FxRackItem& it : racks.rack[0]) if (it.pool) o.slot = it.index;
+    return o;
+}
+} // namespace
+
+TEST (serum_absent_effect_parameters_take_the_serum_defaults)
+{
+    // a Serum file stores only what differs from the module defaults (measured: tools/ref-compare/findef.py)
+    const OneFx chorus = importOne ("FXChorus", 3, kFxTypeChorus, plain ({ { "kParamWet", 50 } }));
+    CHECK (chorus.slot >= 0);
+    CHECK_NEAR (chorus ("chorus.rate"), 0.078125, 1e-4);
+    CHECK_NEAR (chorus ("chorus.feedback"), 9.5, 1e-3);
+    CHECK_NEAR (chorus ("chorus.filter_cutoff"), 1000.0, 1.0);
+    const OneFx comp = importOne ("FXComp", 5, kFxTypeCompressor, plain ({ { "kParamWet", 100 } }));
+    CHECK_NEAR (comp ("compressor.bands"), 3.0, 1e-4);              // single band: the Multiband switch is off by default
+    CHECK_NEAR (comp ("compressor.high.upper_ratio"), 75.0, 0.05);   // 4:1
+    CHECK_NEAR (comp ("compressor.high.upper_threshold"), serumimport::convert (*[] { size_t n = 0; const serumimport::Rule* rows = serumimport::fxRulesOf (kFxTypeCompressor, n); for (size_t i = 0; i < n; ++i) if (std::strcmp (rows[i].param, "kParamThresh") == 0) return rows + i; return rows; }(), 0.5), 0.01);
+    CHECK_NEAR (comp ("compressor.limit"), 2.0, 1e-4);               // the peak compressor of Serum
+}
+
+TEST (serum_delay_with_beat_sync_reads_the_time_as_a_note_value)
+{
+    // BeatSync is on by default; the file value is a position on a scale of note values (measured: the onset of the echo at 120 BPM)
+    const OneFx quarter = importOne ("FXDelay", 4, kFxTypeDelay, plain ({ { "kParamTimeL", 0.0624 }, { "kParamTimeR", 0.09 } }));
+    CHECK_NEAR (quarter ("delay.sync"), 1.0, 1e-4);
+    CHECK_NEAR (quarter ("delay.division"), 4.0, 1e-4);    // 1/4
+    CHECK_NEAR (quarter ("delay.division2"), 4.0, 1e-4);
+    const OneFx half = importOne ("FXDelay", 4, kFxTypeDelay, plain ({ { "kParamTimeL", 0.13 }, { "kParamTimeR", 0.15 } }));
+    CHECK_NEAR (half ("delay.division"), 3.0, 1e-4);       // 1/2
+    const OneFx free = importOne ("FXDelay", 4, kFxTypeDelay, plain ({ { "kParamBeatSync", 0 }, { "kParamTimeL", 0.2 }, { "kParamTimeR", 0.3 } }));
+    CHECK_NEAR (free ("delay.sync"), 0.0, 1e-4);
+    CHECK_NEAR (free ("delay.time"), 200.0, 0.5);
+    CHECK_NEAR (free ("delay.time2"), 300.0, 0.5);
+    const OneFx tiny = importOne ("FXDelay", 4, kFxTypeDelay, plain ({ { "kParamTimeL", 0.004 }, { "kParamTimeR", 0.004 } }));   // the 15.5 ms step has no division: free time
+    CHECK_NEAR (tiny ("delay.sync"), 0.0, 1e-4);
+    CHECK_NEAR (tiny ("delay.time"), 15.5, 0.5);
+}
+
+TEST (serum_wet_dry_law_and_wet_gain_of_the_modules)
+{
+    // the mix law of Serum (dry 1 - s^2, wet s = sin^2 (pi w / 2) for most modules): our module is driven so that the dry and the wet gain come out right
+    for (const double w : { 0.0, 0.25, 0.5, 0.75, 1.0 })
+        for (const int type : { kFxTypeChorus, kFxTypeDistortion, kFxTypeReverb, kFxTypeFlanger, kFxTypeBode, kFxTypeHyperDimension })
+        {
+            double mix = -1.0, level = 0.0;
+            CHECK (serumimport::fxMixRemap (type, w, 0.0, mix, level));
+            CHECK (mix >= 0.0 && mix <= 1.0);
+            if (w == 0.0) { CHECK_NEAR (mix, 0.0, 1e-9); CHECK_NEAR (level, 0.0, 1e-6); }
+            if (w == 1.0) CHECK_NEAR (mix, 1.0, 1e-9);
+        }
+    double a = 0.0, la = 0.0, b = 0.0, lb = 0.0;
+    CHECK (serumimport::fxMixRemap (kFxTypeDistortion, 0.5, 0.0, a, la));   // the Serum Distortion at 50 %: dry 0.75, wet 0.5; ours is linear (dry 1 - m, wet m): m = 0.4, level +2.5 dB
+    CHECK_NEAR (a, 0.4, 0.02);
+    CHECK_NEAR (la, 20.0 * std::log10 (1.25), 0.2);
+    CHECK (serumimport::fxMixRemap (kFxTypeDistortion, 0.5, 6.0, b, lb));   // a wet signal 6 dB stronger than ours needs more mix
+    CHECK (b > a);
+    // the laws of the distortion modes: the Serum drive is mapped to ours with a level (kTube at drive 0 is 4.8 dB under ours at its minimum)
+    double drive = 0.0, gain = 0.0;
+    CHECK (serumimport::fxDistortionLaw ("kTube", 0.0, drive, gain));
+    CHECK_NEAR (gain, -4.8, 0.05);
+    CHECK (! serumimport::fxDistortionLaw ("kNoSuchMode", 10.0, drive, gain));
+    CHECK_NEAR (serumimport::hyperWetGainDb (4.0), 9.2, 1e-9);        // four unison voices: the wet signal is sqrt (4) = 6 dB over the dry one in Serum, ours is normalised
+    // end to end: a Chorus at 100 % wet has the wet gain of the table in its level (the dry part is gone, only the level moves)
+    const OneFx chorus = importOne ("FXChorus", 3, kFxTypeChorus, plain ({ { "kParamWet", 100 } }));
+    CHECK_NEAR (chorus ("chorus.mix"), 100.0, 0.05);
+    CHECK_NEAR (chorus ("chorus.level"), serumimport::fxWetGainDb (kFxTypeChorus), 0.2);
+}
+
+TEST (serum_reverb_decay_follows_size_vintage_scale_and_type)
+{
+    const OneFx plate = importOne ("FXReverb", 6, kFxTypeReverb, plain ({ { "kParamSize", 30 }, { "kParamFeedback", 90 } }));
+    CHECK_NEAR (plate ("reverb.decay"), 2200.0, 5.0);     // the Feedback knob has no effect on a Plate
+    const OneFx big = importOne ("FXReverb", 6, kFxTypeReverb, plain ({ { "kParamSize", 50 } }));
+    CHECK_NEAR (big ("reverb.decay"), 8400.0, 20.0);
+    const OneFx vintage = importOne ("FXReverb", 6, kFxTypeReverb, map ({ { "kParamType", text ("kVintage") }, { "kParamVintageScale", num (50) } }));
+    CHECK_NEAR (vintage ("reverb.decay"), 2040.0, 5.0);
+    const OneFx hall = importOne ("FXReverb", 6, kFxTypeReverb, map ({ { "kParamType", text ("kHall") }, { "kParamSize", num (10) } }));
+    CHECK_NEAR (hall ("reverb.decay"), 3200.0, 5.0);   // the Hall has 3.2 s whatever the size
+}
+
+TEST (serum_multiband_compressor_maps_the_bands_and_the_limiter_makeup)
+{
+    const OneFx mb = importOne ("FXComp", 5, kFxTypeCompressor, plain ({ { "kParamMultiband", 1 }, { "kParamThreshUD1", 50 }, { "kParamRatio1", 0.5 }, { "kParamGain1", 6 }, { "kParamMakeup", 2.0 } }));
+    CHECK_NEAR (mb ("compressor.bands"), 0.0, 1e-4);                 // Multiband
+    CHECK_NEAR (mb ("compressor.mid.upper_threshold"), -33.6, 0.05);   // UD 50
+    CHECK_NEAR (mb ("compressor.mid.upper_ratio"), 100.0 * 0.75 * std::pow (0.5, 0.9), 0.05);   // the band ratio goes from 1:1 to the global ratio (4:1)
+    CHECK_NEAR (mb ("compressor.mid.gain"), 6.0 + 20.0 * std::log10 (2.0), 0.05);   // the band gain and the makeup
+    CHECK_NEAR (mb ("compressor.low.upper_threshold"), -33.6 + 13.3 * (72.533 - 50.0) / 50.0, 0.05);   // the low band has the default UD 72.5
+    // the makeup of the limiter is 36 ln (2 m - 1) / ln 61 dB, after the limiter
+    const OneFx lim = importOne ("FXComp", 5, kFxTypeCompressor, plain ({ { "kParamRatio", 1.0e6 }, { "kParamMakeup", 4.0 } }));
+    CHECK_NEAR (lim ("compressor.high.gain"), 36.0 * std::log (7.0) / std::log (61.0), 0.05);   // 17.0 dB (20 log10 4 = 12 dB for the compressor)
+    CHECK_NEAR (lim ("compressor.limit"), 1.0, 1e-4);
 }
 
 TEST (serum_eq_bands_and_unsupported_effects)
@@ -1487,11 +1610,11 @@ TEST (serum_compressor_threshold_and_filter_drive_follow_the_measured_curves)
     if (thresh != nullptr)
     {
         // REFCOMPARE round 3 (tools/ref-compare/compthr2.py): the peak ceiling of the Serum compressor threshold, measured to -105 dB
-        CHECK_NEAR (serumimport::convert (*thresh, 0.0), 12.0, 1e-9);    // above the measured range the law 13.58 + 59.73 log10 (1 - t), at most +12 dB
-        CHECK_NEAR (serumimport::convert (*thresh, 0.3), 4.4, 1e-9);
-        CHECK_NEAR (serumimport::convert (*thresh, 0.5), -4.36, 1e-9);
-        CHECK_NEAR (serumimport::convert (*thresh, 0.7), -17.67, 1e-9);
-        CHECK_NEAR (serumimport::convert (*thresh, 0.9), -46.29, 1e-9);
+        CHECK_NEAR (serumimport::convert (*thresh, 0.0), 10.6, 1e-9);    // above the measured range the law 10.60 + 59.73 log10 (1 - t), at most +12 dB
+        CHECK_NEAR (serumimport::convert (*thresh, 0.3), 1.42, 1e-9);
+        CHECK_NEAR (serumimport::convert (*thresh, 0.5), -7.34, 1e-9);
+        CHECK_NEAR (serumimport::convert (*thresh, 0.7), -20.65, 1e-9);
+        CHECK_NEAR (serumimport::convert (*thresh, 0.9), -49.27, 1e-9);
         CHECK (serumimport::convert (*thresh, 0.6) < serumimport::convert (*thresh, 0.5)); // monotonic
         CHECK (serumimport::convert (*thresh, 0.99) < serumimport::convert (*thresh, 0.95));
         CHECK_NEAR (serumimport::convert (*thresh, 1.0), -120.0, 1e-9);  // the end of the knob is the end of the key

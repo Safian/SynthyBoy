@@ -6,6 +6,7 @@
 // NoiseOsc, Sub (Oscillator4), SubOsc, Filter (VoiceFilter0..1), Env (Env0..3), Macro, Global. The names are the ones of the binary format (19-serum-preset-format.md).
 #include "serum_map.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -316,6 +317,75 @@ double envCurveOurs (bool attack, bool modulation, double v) noexcept
     return interp (kV, k, 8, v);
 }
 
+// ----- the effect laws (A509) -------------------------------------------------------------------------------------------------------------
+#include "serum_fx_laws.inc"
+namespace
+{
+struct DistPoint { double d, k, g; };
+struct DistRow { const char* mode; DistPoint pts[11]; };
+const DistRow kDistRows[] = { SB_DIST_ROWS };
+const double kHyperGains[8] = { SB_HYPER_GAINS };
+struct MixRow { int type; double w[21], D[21], E[21], d[21], e[21]; };
+const MixRow kMixRows[] = { SB_MIX_TABLES };
+const double kWetGains[kNumFxInstanceTypes] = { 0.0, SB_WET_GAINS };
+} // namespace
+
+bool fxDistortionLaw (const std::string& mode, double serumDrive, double& ourDrive, double& wetGainDb) noexcept
+{
+    for (const DistRow& row : kDistRows)
+        if (mode == row.mode)
+        {
+            const double d = std::max (0.0, std::min (100.0, serumDrive));
+            int i = 0;
+            while (i + 2 < 11 && d > row.pts[i + 1].d) ++i;
+            const DistPoint& a = row.pts[i];
+            const DistPoint& b = row.pts[i + 1];
+            const double t = b.d > a.d ? (d - a.d) / (b.d - a.d) : 0.0;
+            ourDrive = a.k + (b.k - a.k) * t;
+            wetGainDb = a.g + (b.g - a.g) * t;
+            return true;
+        }
+    return false;
+}
+
+bool fxMixRemap (int fxType, double serumWet, double wetGainDb, double& oursWet, double& levelDb) noexcept
+{
+    // the Serum law gives the dry gain D and the wet gain E (relative to the 100 % wet signal) by the Wet knob; the wet signal of Serum is r = 10 ^ (wetGainDb / 20) times ours: the pair (D, E r) is what
+    // our module has to deliver, with its own raw law (d, e by our mix knob) and its level: the mix knob is where the angle of (d, e) is the one of (D, E r), the level the ratio of the lengths
+    const MixRow* row = nullptr;
+    for (const MixRow& r : kMixRows)
+        if (r.type == fxType && r.w[20] > 0.0) row = &r;
+    if (row == nullptr)
+        return false;
+    const double w = std::max (0.0, std::min (1.0, serumWet)) * 20.0;
+    const int i = std::min (19, static_cast<int> (w));
+    const double f = w - i;
+    const double dTarget = row->D[i] + (row->D[i + 1] - row->D[i]) * f;
+    const double eTarget = (row->E[i] + (row->E[i + 1] - row->E[i]) * f) * std::pow (10.0, wetGainDb / 20.0);
+    const double angle = std::atan2 (eTarget, dTarget);
+    int k = 0;
+    while (k < 19 && std::atan2 (row->e[k + 1], row->d[k + 1]) < angle) ++k;
+    const double a0 = std::atan2 (row->e[k], row->d[k]), a1 = std::atan2 (row->e[k + 1], row->d[k + 1]);
+    const double t = a1 > a0 ? std::max (0.0, std::min (1.0, (angle - a0) / (a1 - a0))) : 0.0;
+    const double dOurs = row->d[k] + (row->d[k + 1] - row->d[k]) * t, eOurs = row->e[k] + (row->e[k + 1] - row->e[k]) * t;
+    const double lengthOurs = std::hypot (dOurs, eOurs);
+    oursWet = (row->w[k] + (row->w[k + 1] - row->w[k]) * t) * 0.01;
+    levelDb = lengthOurs > 1.0e-6 ? 20.0 * std::log10 (std::max (1.0e-6, std::hypot (dTarget, eTarget) / lengthOurs)) : 0.0;
+    return true;
+}
+
+double fxWetGainDb (int fxType) noexcept
+{
+    return fxType > 0 && fxType < kNumFxInstanceTypes ? kWetGains[fxType] : 0.0;
+}
+
+double hyperWetGainDb (double unison) noexcept
+{
+    const double u = std::max (0.0, std::min (7.0, unison));
+    const int i = std::min (6, static_cast<int> (u));
+    return kHyperGains[i] + (kHyperGains[i + 1] - kHyperGains[i]) * (u - i);
+}
+
 namespace
 {
 struct FilterLawRow { const char* type; float db[4][7]; };
@@ -399,14 +469,14 @@ double convert (const Rule& r, double v) noexcept
         case Conv::curveDecay: return envCurveOurs (false, false, v);
         case Conv::compThresh:
         {
-            // measured against Serum 2.1.5 (tools/ref-compare/compthr2.py, REFCOMPARE-REPORT.md section 10): the peak ceiling in dB of the compressor threshold 0 .. 1 (the output peak of the limiter,
+            // measured against Serum 2.1.5 (tools/ref-compare/compthr2.py, REFCOMPARE-REPORT.md section 10; the output peak minus the 2.98 dB of the master volume 1.0 of the experiment): the peak ceiling in dB of the compressor threshold 0 .. 1 (the output peak of the limiter,
             // ratio 1e6, of a saw; the same threshold is the knee of the peak detector of the compressor). Below 0.275 the ceiling is above the peak of the test signal: the law
-            // 13.58 + 59.73 log10 (1 - t) of the table, at most +12 dB; at 1 the threshold is -120 dB.
+            // 10.60 + 59.73 log10 (1 - t) of the table, at most +12 dB; at 1 the threshold is -120 dB.
             static const double kT[] = { 0.275, 0.3, 0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75, 0.775, 0.8, 0.825, 0.85, 0.875, 0.9, 0.9125, 0.925, 0.9375, 0.95, 0.96, 0.9625, 0.97, 0.975, 0.98, 0.9875, 0.99, 0.995 };
-            static const double kDb[] = { 5.31, 4.4, 3.45, 2.47, 1.45, 0.39, -0.72, -1.88, -3.09, -4.36, -5.7, -7.11, -8.59, -10.17, -11.86, -13.65, -15.58, -17.67, -19.94, -22.42, -25.17, -28.24, -31.71, -35.73, -40.48, -46.29, -49.76, -53.77, -58.51, -64.29, -70.04, -71.69, -77.35, -81.88, -87.21, -96.89, -100.28, -105.27 };
+            static const double kDb[] = { 2.33, 1.42, 0.47, -0.51, -1.53, -2.59, -3.7, -4.86, -6.07, -7.34, -8.68, -10.09, -11.57, -13.15, -14.84, -16.63, -18.56, -20.65, -22.92, -25.4, -28.15, -31.22, -34.69, -38.71, -43.46, -49.27, -52.74, -56.75, -61.49, -67.27, -73.02, -74.67, -80.33, -84.86, -90.19, -99.87, -103.26, -108.25 };
             constexpr int n = static_cast<int> (sizeof kT / sizeof kT[0]);
             if (v >= 1.0) return -120.0;
-            if (v <= kT[0]) return std::min (12.0, 13.58 + 59.73 * std::log10 (std::max (1.0e-6, 1.0 - std::max (0.0, v))));
+            if (v <= kT[0]) return std::min (12.0, 10.60 + 59.73 * std::log10 (std::max (1.0e-6, 1.0 - std::max (0.0, v))));
             if (v >= kT[n - 1]) return std::max (-120.0, kDb[n - 1] + (-120.0 - kDb[n - 1]) * (v - kT[n - 1]) / (1.0 - kT[n - 1]));
             int i = 0;
             while (i + 2 < n && v > kT[i + 1]) ++i;

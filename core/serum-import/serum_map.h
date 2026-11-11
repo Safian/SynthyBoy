@@ -67,6 +67,16 @@ double filterDriveLevelDb (const std::string& type, double drive, double reso) n
 
 double filterDriveMakeupDb (double v) noexcept;
 
+/** A509 (13-new-keys.md 4.48): the effect laws measured against Serum 2.1.5 (tools/ref-compare/make_fx_laws.py). The distortion of a Serum mode and drive (0 .. 100): our drive in dB
+    and the gain (dB, Serum minus ours) of the wet signal; false for a mode the table does not know. */
+bool fxDistortionLaw (const std::string& mode, double serumDrive, double& ourDrive, double& wetGainDb) noexcept;
+/** The gain (dB, Serum minus ours) of the wet signal of a module type (kFxType*) at 100 % wet; the wet gain of the Hyper module by its unison count. */
+double fxWetGainDb (int fxType) noexcept;
+double hyperWetGainDb (double unison) noexcept;
+/** The mix knob (0 .. 1) and the extra level (dB) of our module that give the dry and the wet gain of the Serum module at the Wet knob `serumWet` (0 .. 1) with the wet signal `wetGainDb` stronger than ours;
+    false when no law of the module type is measured. */
+bool fxMixRemap (int fxType, double serumWet, double wetGainDb, double& oursWet, double& levelDb) noexcept;
+
 /** Level (dB) to add to the oscillator level for `voices` unison voices at `blend` percent: Serum 2.1.5 normalises the unison differently from our engine (the level follows the blend and
     the parity of the voice count; measured, tools/ref-compare/experiment.py). 0 for one voice. */
 

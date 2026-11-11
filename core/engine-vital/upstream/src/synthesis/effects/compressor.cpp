@@ -34,8 +34,8 @@ namespace sbvital {
     constexpr mono_float kBandReleaseMs = 28.0f;
     constexpr mono_float kHighReleaseMs = 15.0f;
 
-    constexpr mono_float kMinGain = -30.0f;
-    constexpr mono_float kMaxGain = 30.0f;
+    constexpr mono_float kMinGain = -36.0f;   // the makeup of the limiter of Serum reaches +36 dB
+    constexpr mono_float kMaxGain = 36.0f;
     constexpr mono_float kMinThreshold = -100.0f;
     constexpr mono_float kPeakHoldMs = 1.0f;            // peak mode: decay of the peak detector
     constexpr mono_float kMinPeakThreshold = -120.0f;   // peak mode (Serum): the threshold knob of the plug-in reaches -106 dB
@@ -210,19 +210,9 @@ namespace sbvital {
     lower_threshold *= lower_threshold;
     poly_float lower_ratio = utils::clamp(input(kLowerRatio)->at(0), -1.0f, 1.0f) * 0.5f;
 
-    // GROUPA1 (A347): in limit mode the makeup gain drives the signal INTO the limiter (Serum 2 manual p.163: the limiter has a makeup range of
-    // 0-36 dB), so the output never exceeds the ceiling; scaleOutput () only follows the ramp and does not multiply again
-    {
-      const poly_float from = output_mult_;
-      const poly_float target = futils::dbToMagnitude(utils::clamp(input(kOutputGain)->at(0), kMinGain, kMaxGain));
-      const poly_float step = (target - from) * (1.0f / num_samples);
-      poly_float g = from;
-      for (int i = 0; i < num_samples; ++i) {
-        g += step;
-        pre_gain_[i] = g;
-      }
-    }
-    limiter_.process(audio_in, num_samples, ceiling, release_scale, limited_.data(), delayed_.data(), pre_gain_.data());
+    // REFCOMPARE round 3 (13-new-keys.md 4.48, A512): the makeup gain of the limiter comes AFTER it (measured on Serum 2.1.5: with a makeup of 18 dB the output peaks sit 18 dB over the ceiling; the
+    // earlier reading of the manual, "the makeup drives into the limiter" (A347), was wrong); scaleOutput () applies it
+    limiter_.process(audio_in, num_samples, ceiling, release_scale, limited_.data(), delayed_.data());
 
     poly_float low_enveloped_mean_squared = low_enveloped_mean_squared_;
     for (int i = 0; i < num_samples; ++i) {
@@ -358,8 +348,7 @@ namespace sbvital {
     for (int i = 0; i < num_samples; ++i) {
       current_output_mult += delta_output_mult;
       current_mix += delta_mix;
-      // limit mode: the gain was applied before the limiter (processLimit)
-      audio_out[i] = utils::interpolate(audio_input[i], limit_ ? audio_out[i] : audio_out[i] * current_output_mult, current_mix);
+      audio_out[i] = utils::interpolate(audio_input[i], audio_out[i] * current_output_mult, current_mix);
       VITAL_ASSERT(utils::isContained(audio_out[i]));
     }
   }

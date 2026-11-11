@@ -640,33 +640,30 @@ TEST (b17_keys_survive_random_settings_and_type_changes)
 
 
 
-// GROUPA1 (A347): in limit mode the makeup gain drives INTO the limiter (Serum 2 manual p.163): the peaks stay at the ceiling for any gain, and
-// more gain only makes the limited signal louder. Before, the gain came after the limiter and moved the peaks over the ceiling.
-TEST (compressor_limit_mode_makeup_gain_drives_into_the_limiter)
+// REFCOMPARE round 3 (13-new-keys.md 4.48, A512): in limit mode the makeup gain comes AFTER the limiter, as in the real Serum 2.1.5 (measured: the output peaks of a limiter at -28 dB with a makeup of
+// 18 dB are at -4 dB). GROUPA1 (A347) had read the manual as "the makeup drives into the limiter" (the peaks stayed at the ceiling); the limited signal now moves with the gain, peak and rms alike.
+TEST (compressor_limit_mode_makeup_gain_comes_after_the_limiter)
 {
     auto e = makeVital();
     base (*e);
-    setByKey (*e, "osc1.level", 8.0f);                                    // below the ceiling at gain 0 (a saw peaks near the level)
+    setByKey (*e, "osc1.level", 40.0f);                                   // over the ceiling: the limiter works
     setByKey (*e, "compressor.on", 1.0f);
     setByKey (*e, "compressor.bands", 3.0f);
     setByKey (*e, "compressor.mid.upper_ratio", 0.0f);
     setByKey (*e, "compressor.mid.lower_ratio", 0.0f);
-    setByKey (*e, "compressor.mid.upper_threshold", -6.0f);
+    setByKey (*e, "compressor.mid.upper_threshold", -30.0f);
     setByKey (*e, "compressor.mid.lower_threshold", -80.0f);
     setByKey (*e, "compressor.limit", 1.0f);
     setByKey (*e, "compressor.mid.gain", 0.0f);
     const auto flat = play (*e);
     setByKey (*e, "compressor.mid.gain", 12.0f);
     const auto driven = play (*e);
-    setByKey (*e, "compressor.mid.gain", 24.0f);
-    const auto hard = play (*e);
-    setByKey (*e, "compressor.mid.gain", 30.0f);
+    setByKey (*e, "compressor.mid.gain", 36.0f);
     const auto slammed = play (*e);
-    CHECK (finite (flat) && finite (driven) && finite (slammed) && finite (hard));
-    CHECK (rms (driven.left) > 1.5 * rms (flat.left));                     // the makeup is drive: the limited signal gets louder
-    CHECK (peak (driven.left) > 1.5 * peak (flat.left));
-    // 6 dB more drive on a signal that is limited already does not move the peaks (a gain after the limiter would: a factor of 2)
-    CHECK (peak (slammed.left) < 1.1 * peak (hard.left));
+    CHECK (finite (flat) && finite (driven) && finite (slammed));
+    CHECK_NEAR (peak (driven.left) / peak (flat.left), 3.98, 0.4);        // +12 dB: the peaks sit 12 dB over the ceiling
+    CHECK (peak (slammed.left) > 20.0 * peak (flat.left));                 // the range reaches +36 dB
+    CHECK (rms (driven.left) > 3.0 * rms (flat.left));
 }
 
 // ---- GROUPA1 WP-10: delay.offset_left and reverb.feedback (13-new-keys.md 4.29) ----------------------------------------------------------------------
