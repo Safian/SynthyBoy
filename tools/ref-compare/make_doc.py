@@ -48,6 +48,8 @@ def main():
     ap.add_argument('--variants', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--tip', default='')
+    ap.add_argument('--ref2-before', default='')
+    ap.add_argument('--ref2-after', default='')
     a = ap.parse_args()
     B, A = summarize(load(a.before)), summarize(load(a.after))
     noise = json.load(open(a.noise))
@@ -68,7 +70,12 @@ def main():
         w('| %s | %d | %d |' % (c, B['counts'][c], A['counts'][c]))
     w('\nMean score %.1f -> %.1f, median %.1f -> %.1f (0 .. 100).\n' % (B['mean'], A['mean'], B['median'], A['median']))
     w('FAILED renders are the presets whose Serum render is silent with the note script (%s): %s.\n' % (', '.join('%s %d' % kv for kv in A['failed'].items()) or 'none',
-                                                                                                    'drums / loops that need other keys or a held pattern'))
+                                                                                                    'the seven drum kits, whose key zones do not contain C3 (MIDI 60)'))
+    if a.ref2_before and a.ref2_after:
+        B2, A2 = summarize(load(a.ref2_before)), summarize(load(a.ref2_after))
+        w('The baseline and these tables are the default run (global floors). With the second Serum render of every preset as a per-preset floor (`--ref2-dir`, random presets are not punished for Serum\'s own '
+          'noise) the same renders give MATCH %d -> %d, CLOSE %d -> %d, DIFFERENT %d -> %d, mean %.1f -> %.1f.\n' % (B2['counts']['MATCH'], A2['counts']['MATCH'], B2['counts']['CLOSE'], A2['counts']['CLOSE'],
+                                                                                                           B2['counts']['DIFFERENT'], A2['counts']['DIFFERENT'], B2['mean'], A2['mean']))
     w('| score | before | after |\n|---|---:|---:|')
     for k in A['hist']:
         w('| %s | %d | %d |' % (k, B['hist'][k], A['hist'][k]))
@@ -84,6 +91,7 @@ def main():
     w('| family | before | after |\n|---|---:|---:|')
     for f in A['fam']:
         w('| %s | %.1f | %.1f |' % (f, B['fam'][f], A['fam'][f]))
+    w('\nThe fixes moved the loudness, the envelopes and the levels (median loudness difference %.1f -> %.1f LU, envelope %.1f -> %.1f dB); the spectra did not move (the spectrum family %.1f -> %.1f, the median STFT loss %.2f -> %.2f): what keeps the spectra apart is listed in section 6, not a level or a scale.' % (B['med']['d_lufs'], A['med']['d_lufs'], B['med']['d_env_db'], A['med']['d_env_db'], B['fam']['spectrum'], A['fam']['spectrum'], B['med']['d_stft'], A['med']['d_stft']))
     w('\nMean score per category (the folder below Factory, User = the owner folder):\n')
     w('| category | n | before | after |\n|---|---:|---:|---:|')
     for c in sorted(A['cat']):
@@ -94,7 +102,7 @@ def main():
       'body is the same CBOR map as a preset file. Route (a) with the raw file bytes does nothing; with the file wrapped as a state it is refused while the preset body carries the interface '
       'members (Osc, WTOsc, Filter, SerumGUI, preset name ..). The working route: take the members of the plug-in\'s own processor state, put in the preset\'s value for each (the plug-in\'s '
       'own value where the preset has none), pack the body as a zstd frame of raw blocks, write the MD5 of that into the header and put the container into the wrapper of the state the plug-in '
-      'reported. The plug-in loads headless, needs no licence dialog, reports a latency of 0 samples and renders about 2.5 times faster than real time. The host is a JUCE console program '
+      'reported. The plug-in loads headless, needs no licence dialog, reports a latency of 0 samples and renders much faster than real time (a 4 s note in 0.02 .. 0.7 s, the load of the plug-in 1.3 s). The host is a JUCE console program '
       '(`synthyboy_serum_reference`, macOS only, not built elsewhere), the batch runner (`render_all.py`) starts one process per render with a timeout, runs at nice 19, skips what has a sidecar '
       'with the same preset hash, and records a failure per render (`.fail.json`) instead of stopping. 956 renders took 22 minutes; 2 failed once through an exit race of the first host '
       'version (fixed, retried).\n')
@@ -142,11 +150,12 @@ def main():
             'high / low pass has another resonance law (7 .. 8 dB off at resonance 0 .. 20) (question 118).',
             '**Unison.** The level is corrected, the spectra are not: at low blend Serum silences the outer voices, ours does not (mel distance 3 .. 14 dB) (question 119).',
             '**Compressor depth.** Our compressor stays 3 .. 10 dB short of Serum\'s reduction above threshold 0.6 (19 % of the compressor modules) (question 120).',
-            '**Modulation timing.** An envelope used as a modulation source decays slower in our engine than the Serum envelope of the same settings (the centroid of an envelope swept filter '
-            'is 200 .. 400 Hz higher 0.3 s after the note on); the amplitude envelope is fitted, the modulation path is not.',
+            '**Modulation timing and depth.** The amplitude envelope and the modulating envelopes are fitted (A493), the swept filter is not exact: with an envelope on the cutoff the centroid is '
+            '1.2 .. 1.7 times too bright in the first frames at 25 .. 50 % depth and, at 100 %, 220 Hz too high 0.6 s after the note on; a negative cutoff depth (-50 %) reaches only 220 Hz where Serum '
+            'closes to 22 Hz. The law of a modulation of the oscillator volume differs too (an envelope at 100 % on an oscillator volume of 0 settles at sustain 0.2 where Serum is 55 dB under its peak and ours 27 dB) and is not fitted.',
             '**Randomness.** Serum itself differs between two renders for 11.3 % of the presets; the scores of those presets have that noise built in (the floor above).',
-            '**Spectra of complex presets.** After the loudness is matched the median log-mel distance is still 13 dB (15 dB before): effects, warp modes (PWM / quantize / ring-mod / self-PD '
-            '30 .. 50 points under the catalog mean), sample / granular / spectral oscillators and the modulation matrix together; these are not single causes.'):
+            '**Spectra of complex presets.** After the loudness is matched the median log-mel distance is still 13 dB (15 dB before): effects, warp modes (ring-mod, self-PD, linear fold and sync '
+            '15 .. 30 points under the catalog mean of 79), sample / granular / spectral oscillators and the modulation matrix together; these are not single causes.'):
         w('- ' + t)
     cats = []
     for spec in a.catalog:

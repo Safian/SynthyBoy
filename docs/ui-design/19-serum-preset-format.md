@@ -119,3 +119,17 @@ distortion).
 The units that the file does not state and the manual does not give are listed with their defaults in `13-new-keys.md` 4.26 (assumptions A325 ..) and in the morning
 questions 54 ..: the filter frequency scale, the LFO rate in tempo mode, the curve bend scale, the oscillator level law, the effect parameter ranges of the reverb and
 compressor, the point modulation targets, and the key frame interpolation of embedded tables.
+
+Update (REFCOMPARE, `13-new-keys.md` 4.46): with the Serum 2.1.5 plug-in installed, the units listed above were measured; the filter frequency scale (+2 semitones on the 135 note law), the
+oscillator / master / sub / noise level law (linear gain, defaults 0.5625 / 0.25 / 0.5625 / 0.0625), the envelope curve knobs, the compressor threshold, the wavetable position (position / 256) and the
+unison level are no longer assumptions.
+
+## 5. The plug-in state of Serum 2 (VST3)
+
+Found while loading presets into the real plug-in (`tools/serum-reference`): `getStateInformation` of the VST3 returns a JUCE wrapper (`VC2!`, the size of the text, an XML text `<VST3PluginState>` with the
+elements `IComponent` and `IEditController`, each the JUCE base64 text `<size>.<data>` of the plug-in's own state, a terminating NUL). Both states are XferJson containers like a preset file (section 1), with the
+header member `component` (`processor` / `controller`) in place of `fileType`, `product`, `productVersion`, `version` (11.0 in 2.1.5), `url`, `vendor`, `hash` (MD5 of the compressed body); the controller
+header also has `presetName`, `presetAuthor`, `presetComment`, `presetDescription`. The processor body is the preset body restricted to its 164 processor members (no `Osc`, `WTOsc`, `GranularOsc`,
+`MultiSampleOsc`, `SpectralOsc`, `Filter`, `ClipPlayer` (UI form), `SerumGUI`, `presetName`, `presetAuthor`, `presetDescription`, `fileType`, `arpBankDisplayName`, `clipBankDisplayName`; plus
+`modMatrixLocked` and `scalarCurvesLocked`), the controller body holds the interface members and copies of several processor members (LFO, FXRack, clips). A processor state that still has the interface members is refused without a message; an older `version` in the header
+is accepted (the plug-in migrates). The body may be stored as a zstd frame of raw blocks.
