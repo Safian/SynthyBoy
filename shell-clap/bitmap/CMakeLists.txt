@@ -48,6 +48,39 @@ if(TARGET juce::juce_recommended_config_flags)
     target_link_libraries(synthyboy_bitmap_gui INTERFACE juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 endif()
 
+# True when every member of the archive can be linked into a shared object: the archive is passed whole (--whole-archive) to a link of a tiny shared library. By default with -z text, so
+# that a text relocation (the archive is not position independent) is an error and not a warning that produces a module with TEXTREL (a desktop module must not have one). A cross build for
+# a device (the ARMv7 module of the Kick app: Debian's armhf archives carry text relocations, the module has always been linked with them and the device accepts them) allows them, so that it
+# keeps FreeType inside and needs no library besides libc, libm, libstdc++ and libgcc_s. Only the linker is asked, the answer is cached per archive.
+if(CMAKE_CROSSCOMPILING)
+    set(_textrel_default ON)
+else()
+    set(_textrel_default OFF)
+endif()
+option(SYNTHYBOY_ALLOW_TEXTREL "Static archives with text relocations may go into the module (default: only when cross compiling)" ${_textrel_default})
+function(synthyboy_archive_is_pic archive result)
+    if(SYNTHYBOY_ALLOW_TEXTREL)
+        set(_text_option "")
+    else()
+        set(_text_option -Wl,-z,text)
+    endif()
+    string(MD5 _key "${archive}${_text_option}")
+    set(_var SYNTHYBOY_ARCHIVE_PIC_${_key})
+    if(NOT DEFINED ${_var})
+        set(_probe_dir "${CMAKE_BINARY_DIR}/CMakeFiles/archive-pic-probe")
+        file(WRITE "${_probe_dir}/probe.c" "int synthyboy_pic_probe(void) { return 0; }\n")
+        try_compile(_probe_ok "${_probe_dir}/${_key}" SOURCES "${_probe_dir}/probe.c"
+            COMPILE_DEFINITIONS -fPIC
+            LINK_OPTIONS -shared ${_text_option} -Wl,--whole-archive "${archive}" -Wl,--no-whole-archive
+            OUTPUT_VARIABLE _probe_log)
+        set(${_var} ${_probe_ok} CACHE INTERNAL "the archive ${archive} can be linked into a shared object")
+        if(NOT _probe_ok)
+            file(WRITE "${_probe_dir}/${_key}.log" "${_probe_log}")
+        endif()
+    endif()
+    set(${result} ${${_var}} PARENT_SCOPE)
+endfunction()
+
 function(synthyboy_bitmap_module_options target)
     # One JUCE per module (this one, 8.0.17), invisible to the host and to every other JUCE in the process (the Kick app links JUCE 7): hidden symbols everywhere, an export list
     # for the linker, no section of an archive exported by accident.
@@ -61,6 +94,8 @@ function(synthyboy_bitmap_module_options target)
     elseif(UNIX)
         # FreeType (the one library JUCE needs for the glyph outlines on Linux) is linked statically when its archives are installed (libfreetype-dev has them): the .clap then needs no library
         # that the Kick app does not link already (the MPC's Buildroot). The archives come BEFORE the shared libraries of JUCE's package list on the link line, which --as-needed then drops.
+        # An archive that cannot go into a shared object (not position independent: the x86_64 archives of Debian / Ubuntu) is probed out and its shared library is linked instead, see
+        # synthyboy_archive_is_pic.
         option(SYNTHYBOY_STATIC_FREETYPE "Link FreeType statically into the module (Linux)" ON)
         if(SYNTHYBOY_STATIC_FREETYPE AND NOT APPLE)
             find_package(PkgConfig QUIET)
@@ -68,6 +103,7 @@ function(synthyboy_bitmap_module_options target)
                 pkg_check_modules(SYNTHYBOY_FT2 QUIET freetype2)
             endif()
             set(_ft_archives "")
+            set(_ft_shared "")
             if(SYNTHYBOY_FT2_FOUND)
                 set(_ft_ok TRUE)
                 foreach(_lib IN LISTS SYNTHYBOY_FT2_STATIC_LIBRARIES)
@@ -81,14 +117,25 @@ function(synthyboy_bitmap_module_options target)
                         find_library(SYNTHYBOY_FT2_ARCHIVE_${_lib} NAMES "lib${_lib}.a" HINTS ${SYNTHYBOY_FT2_STATIC_LIBRARY_DIRS})
                     endif()
                     if(SYNTHYBOY_FT2_ARCHIVE_${_lib})
-                        list(APPEND _ft_archives "${SYNTHYBOY_FT2_ARCHIVE_${_lib}}")
+                        # A distribution's static archives are position DEPENDENT or position independent EXECUTABLE code (Debian / Ubuntu: libpng16.a and libbz2.a of x86_64 reference
+                        # stderr / stdout directly), which cannot go into a shared module (ld: "relocation R_X86_64_PC32 ... recompile with -fPIC"). Such an archive is not used: the
+                        # module then links the shared library of that name instead (a dependency every desktop FreeType has anyway). Archives that pass the probe, which is how the
+                        # ARMv7 module of the Kick app stays free of any library besides libc, libm, libstdc++ and libgcc_s, are linked statically as before.
+                        synthyboy_archive_is_pic("${SYNTHYBOY_FT2_ARCHIVE_${_lib}}" _archive_pic)
+                        if(_archive_pic)
+                            list(APPEND _ft_archives "${SYNTHYBOY_FT2_ARCHIVE_${_lib}}")
+                        else()
+                            message(STATUS "bitmap GUI: ${SYNTHYBOY_FT2_ARCHIVE_${_lib}} is not position independent, linking lib${_lib} dynamically")
+                            list(APPEND _ft_shared "${_lib}")
+                        endif()
                     else()
                         set(_ft_ok FALSE)
                     endif()
                 endforeach()
                 if(_ft_ok AND _ft_archives)
-                    target_link_libraries(${target} PRIVATE ${_ft_archives})
-                    message(STATUS "bitmap GUI: FreeType linked statically (${_ft_archives})")
+                    # the archives first, the shared libraries of the ones that cannot be linked statically after them (a linker resolves from left to right)
+                    target_link_libraries(${target} PRIVATE ${_ft_archives} ${_ft_shared})
+                    message(STATUS "bitmap GUI: FreeType side: static archives (${_ft_archives}), shared libraries (${_ft_shared})")
                 else()
                     message(STATUS "bitmap GUI: no static FreeType archives found, linking it dynamically")
                 endif()
