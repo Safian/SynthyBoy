@@ -71,7 +71,7 @@ enum
 /** get_info () flags: what this GUI understands. */
 enum
 {
-    SAFIAN_BITMAP_GUI_CAP_MULTITOUCH = 1u << 0,   /* several pointers at once (pointer ids), pinch / two finger pan are built from them */
+    SAFIAN_BITMAP_GUI_CAP_MULTITOUCH = 1u << 0,   /* several pointers at once (pointer ids): one finger is the primary button, two fingers are a pinch / pan gesture */
     SAFIAN_BITMAP_GUI_CAP_KEYBOARD = 1u << 1,     /* key_event () is used */
     SAFIAN_BITMAP_GUI_CAP_TEXT_INPUT = 1u << 2,   /* text fields exist: the host should offer a keyboard when request_text_input (show) arrives */
     SAFIAN_BITMAP_GUI_CAP_FILE_REQUESTS = 1u << 3 /* the GUI asks the host for files (and degrades when the host cannot) */
@@ -93,7 +93,7 @@ enum
     SAFIAN_BITMAP_GUI_POINTER_DOWN = 1,   /* a button went down / a finger touched */
     SAFIAN_BITMAP_GUI_POINTER_MOVE = 2,   /* moved while down (a drag) */
     SAFIAN_BITMAP_GUI_POINTER_UP = 3,     /* released / lifted */
-    SAFIAN_BITMAP_GUI_POINTER_CANCEL = 4, /* the host took the pointer away (palm rejection, a system gesture): treated like UP without any action */
+    SAFIAN_BITMAP_GUI_POINTER_CANCEL = 4, /* the host took the pointer away (palm rejection, a system gesture): the pointer is released like UP (the toolkit has no cancel) */
     SAFIAN_BITMAP_GUI_POINTER_HOVER = 5,  /* moved with no button down (mouse, pen in range); never sent for touch */
     SAFIAN_BITMAP_GUI_POINTER_LEAVE = 6   /* the pointer left the GUI area (hover state is cleared) */
 };

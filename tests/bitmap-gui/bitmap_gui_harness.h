@@ -301,6 +301,17 @@ public:
         pointer (SAFIAN_BITMAP_GUI_POINTER_DOWN, x, y, id, kind);
         pointer (SAFIAN_BITMAP_GUI_POINTER_UP, x, y, id, kind);
     }
+    /** A mouse press as a user makes it: the pointer comes, rests, the button is down for a while, goes up. Pop-up menus take their entry from the pointer position and the button state they poll
+        with a timer: a click that is over within one tick is invisible to them. */
+    void press (double x, double y, int restMs = 200, int holdMs = 300)
+    {
+        pointer (SAFIAN_BITMAP_GUI_POINTER_HOVER, x, y, 0, SAFIAN_BITMAP_GUI_POINTER_KIND_MOUSE);
+        tickFor (restMs);
+        pointer (SAFIAN_BITMAP_GUI_POINTER_DOWN, x, y, 0, SAFIAN_BITMAP_GUI_POINTER_KIND_MOUSE);
+        tickFor (holdMs);
+        pointer (SAFIAN_BITMAP_GUI_POINTER_UP, x, y, 0, SAFIAN_BITMAP_GUI_POINTER_KIND_MOUSE);
+        tickFor (restMs);
+    }
     /** A drag of the touch pointer from (x, y) by (dx, dy) in steps, ticking between the steps. */
     void drag (double x, double y, double dx, double dy, int steps = 8, uint32_t id = 0)
     {

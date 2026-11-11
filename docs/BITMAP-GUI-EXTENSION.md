@@ -187,7 +187,7 @@ the host's bank moved; the GUI shows the panel that holds the page's parameters 
 7. On window resize `set_size ()`; on a display with another scale `set_scale ()`; on close `destroy ()` before you destroy the plug-in.
 8. Optional: show the virtual keyboard on `request_text_input`, move the Q-Link bank on `set_active_remote_page`, set the cursor on `set_cursor`.
 
-A complete working host, without any toolkit, is `tests/bitmap-gui/bitmap_gui_harness.h` (about 400 lines): load, create, tick / render, input, audio thread, parameter events.
+A complete working host, without any toolkit, is `tests/bitmap-gui/bitmap_gui_harness.h` (about 450 lines): load, create, tick / render, input, audio thread, parameter events.
 
 ## 12. Guarantees of the SynthyBoy implementation (what the tests prove)
 
@@ -199,7 +199,7 @@ A complete working host, without any toolkit, is `tests/bitmap-gui/bitmap_gui_ha
 | A drag on a knob changes the CLAP parameter (gesture + value events) and the audio | `bg_drag_on_a_knob_changes_the_clap_parameter_and_the_audio` |
 | An external parameter change refreshes exactly the controls that show it | `bg_external_parameter_change_refreshes_the_pixels` |
 | Golden images at 390 x 844, 1024 x 768, 1024 x 600 | `test_bitmap_golden.cpp` |
-| Text input, file requests, share, remote page, resize, scale, wheel, keys, two fingers, several instances, animation advances, host without the host extension | `test_bitmap_gui.cpp` |
+| Text input (double tap -> value box -> the host keyboard types), file request through the Load button (request, cancel, unknown id, import), open_url, remote page both ways, resize, scale, wheel, undo keys, two fingers, preset arrows, keyboard to audio, several instances, animation advances and settles, ChangeBroadcaster / async delivery inside render without a display, host without the host extension, host without file functions, the toolkit of another JUCE in the process, menus and choice lists open inside the frame | `test_bitmap_gui.cpp` |
 | The `.clap` exports only `clap_entry` and `synthyboy_clap_get_entry` | `scripts/check-clap-exports.sh` (ctest `synthyboy_clap_exports`) |
 | No leak after `destroy`, no data race between the GUI and the audio thread | ASan / UBSan and TSan builds of the same tests (`.github/workflows/build.yml`) |
 

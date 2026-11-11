@@ -22,7 +22,7 @@
 # not usable (the manual commands are printed), 1 build / check failed.
 #
 # The module with the bitmap GUI links its own JUCE (the version pinned in CMakeLists.txt): it needs the JUCE sources (cloned in the container, no
-# binary is downloaded), JUCE's helper tool juceaide built for the container's own CPU (JUCE cross builds need it), the development packages of
+# binary is downloaded; JUCE builds its helper tool for the container by itself), the development packages of
 # FreeType (linked statically into the module), X11 (headers only: the module does not link libX11, JUCE loads it on demand and the GUI never
 # opens a display) and ALSA (headers only, compiled out) for armhf, and checks that the module needs nothing but libc, libm, libstdc++ and libgcc_s
 # (the libraries the Kick binary has) and exports only clap_entry and synthyboy_clap_get_entry.
@@ -33,7 +33,7 @@ IMAGE_DEFAULT="debian:12-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out_file="$repo_root/build-armv7-clap/synthyboy.clap"
-build_dir="$repo_root/build-armv7-clap/tree"  # the CMake build tree, plus _juce-src / _juce-host / _juce-tools (the JUCE sources and the helper tool built for the container)
+build_dir="$repo_root/build-armv7-clap/tree"  # the CMake build tree, plus _juce-src (the JUCE sources)
 jobs=2
 print_manual=0
 with_ui=1
@@ -50,15 +50,13 @@ Docker is not usable. On a Debian 12 / Ubuntu x86_64 or aarch64 Linux host run (
       libfreetype-dev libfontconfig-dev libx11-dev libasound2-dev \
       libfreetype-dev:armhf libfontconfig-dev:armhf libx11-dev:armhf libxext-dev:armhf libxcomposite-dev:armhf libxcursor-dev:armhf \
       libxinerama-dev:armhf libxrandr-dev:armhf libxrender-dev:armhf libasound2-dev:armhf
-  # JUCE (the tag of CMakeLists.txt) and its helper tool for this machine, then the module for ARMv7
+  # JUCE (the tag of CMakeLists.txt); its configure step builds its helper tool juceaide for this machine by itself (the host libraries above)
   git clone --depth 1 --branch 8.0.17-security https://github.com/juce-framework/JUCE.git juce-src
-  cmake -S juce-src -B juce-host -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/juce-tools -DJUCE_BUILD_EXTRAS=OFF -DJUCE_BUILD_EXAMPLES=OFF
-  cmake --build juce-host --target juceaide && cmake --install juce-host
   PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig \
   cmake -S . -B build-armv7-clap/tree -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/armv7-linux-gnueabihf.cmake \
       -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=ON -DSYNTHYBOY_BUILD_TESTS=OFF \
-      -DFETCHCONTENT_SOURCE_DIR_JUCE=$PWD/juce-src -DJUCE_TOOL_INSTALL_DIR=$PWD/juce-tools/bin/JUCE-8.0.17
+      -DFETCHCONTENT_SOURCE_DIR_JUCE=$PWD/juce-src
   cmake --build build-armv7-clap/tree --target synthyboy_clap --parallel 2
   # the result: build-armv7-clap/tree/shell-clap/synthyboy.clap
   file build-armv7-clap/tree/shell-clap/synthyboy.clap     # ELF 32-bit LSB shared object, ARM, EABI5, hard-float
@@ -124,7 +122,6 @@ docker run --rm \
                    libxinerama-dev:armhf libxrandr-dev:armhf libxrender-dev:armhf libasound2-dev:armhf)
             command -v git >/dev/null || need+=(git)
         fi
-        if [ "$RUN_TESTS" = 1 ]; then need+=(qemu-user); fi
         if [ "${#need[@]}" -gt 0 ]; then
             apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${need[@]}" ca-certificates
@@ -137,17 +134,11 @@ docker run --rm \
             if [ ! -f /build/_juce-src/CMakeLists.txt ]; then
                 git clone --depth 1 --branch "$juce_tag" https://github.com/juce-framework/JUCE.git /build/_juce-src
             fi
-            if [ ! -x /build/_juce-tools/bin/JUCE-${juce_tag%-security}/juceaide ]; then
-                cmake -S /build/_juce-src -B /build/_juce-host -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/build/_juce-tools \
-                    -DJUCE_BUILD_EXTRAS=OFF -DJUCE_BUILD_EXAMPLES=OFF > /dev/null
-                cmake --build /build/_juce-host --target juceaide --parallel "$JOBS"
-                cmake --install /build/_juce-host > /dev/null
-            fi
-            extra_cmake=(-DSYNTHYBOY_BITMAP_GUI=ON -DFETCHCONTENT_SOURCE_DIR_JUCE=/build/_juce-src "-DJUCE_TOOL_INSTALL_DIR=/build/_juce-tools/bin/JUCE-${juce_tag%-security}")
+            extra_cmake=(-DSYNTHYBOY_BITMAP_GUI=ON -DFETCHCONTENT_SOURCE_DIR_JUCE=/build/_juce-src)
         fi
         export PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig
         tests=OFF; targets=(synthyboy_clap)
-        if [ "$RUN_TESTS" = 1 ]; then tests=ON; targets+=(synthyboy_test_bitmap_gui synthyboy_test_bitmap_golden); fi
+        if [ "$RUN_TESTS" = 1 ]; then tests=ON; targets+=(synthyboy_test_bitmap_gui synthyboy_test_bitmap_golden synthyboy_bitmap_gui_bench); fi
         cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=/src/cmake/toolchains/armv7-linux-gnueabihf.cmake \
             -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=$tests "${extra_cmake[@]}"
@@ -167,14 +158,24 @@ docker run --rm \
             echo "size: $(stat -c %s "$clap") bytes, stripped $(arm-linux-gnueabihf-strip -o /tmp/stripped.clap "$clap" && stat -c %s /tmp/stripped.clap) bytes"
         fi
         cp "$clap" "/out/$OUT_NAME"
-        if [ "$RUN_TESTS" = 1 ]; then
-            # the test hosts run on an emulated ARMv7 CPU; every wait of the tests is scaled
-            export SYNTHYBOY_CLAP_UNDER_TEST="$clap" SYNTHYBOY_USER_DIR=/tmp/sbuser SYNTHYBOY_TEST_TIME_SCALE=${SYNTHYBOY_TEST_TIME_SCALE:-12}
-            for t in synthyboy_test_bitmap_gui synthyboy_test_bitmap_golden; do
-                qemu-arm -L /usr/arm-linux-gnueabihf /build/tests/bitmap-gui/$t
-            done
-        fi
     '
+
+# The test hosts of tests/bitmap-gui against the ARMv7 module under qemu-user, in a SECOND container that has nothing but the ARMv7 C / C++ runtime libraries (what the MPC has): no X11, no
+# FreeType, no ALSA. That is also the proof that the module loads and runs with exactly the libraries it lists as NEEDED. (A container with the armhf X11 libraries installed, like the build
+# container, makes qemu-user crash inside libX11 when there is no X server: not the case on a native CPU, not on the MPC.) The emulated CPU is 20 to 50 times slower than an MPC: correctness,
+# not speed; the tests scale their waits.
+if [[ "$run_tests" == 1 ]]; then
+    docker run --rm -v "$repo_root":/src:ro -v "$build_dir":/build:ro -e SCALE="${SYNTHYBOY_TEST_TIME_SCALE:-12}" "$image" bash -euo pipefail -c '
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends qemu-user libc6-armhf-cross libstdc++6-armhf-cross libgcc-s1-armhf-cross ca-certificates
+        export SYNTHYBOY_CLAP_UNDER_TEST=/build/shell-clap/synthyboy.clap SYNTHYBOY_USER_DIR=/tmp/sbuser SYNTHYBOY_TEST_TIME_SCALE="$SCALE"
+        for t in synthyboy_test_bitmap_gui synthyboy_test_bitmap_golden; do
+            qemu-arm -L /usr/arm-linux-gnueabihf /build/tests/bitmap-gui/$t
+        done
+        echo "frame times under qemu-user (an emulated CPU, NOT an MPC):"
+        SYNTHYBOY_TEST_TIME_SCALE=1 qemu-arm -L /usr/arm-linux-gnueabihf /build/tests/bitmap-gui/synthyboy_bitmap_gui_bench
+    '
+fi
 
 # the same checks on the host, from the file itself (no tool of the container needed)
 python3 - "$out_file" <<'EOF'
