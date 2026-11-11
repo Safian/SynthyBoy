@@ -303,6 +303,10 @@ EngineCaps2Mask requiredCaps2 (size_t paramIndex) noexcept
             return kCap2ModDelay;
         return kCap2None;
     }
+    if (startsWith (key, "eq.mid2."))   // block B34
+        return kCap2EqBand2;
+    if (std::strcmp (key, "eq.law") == 0)
+        return kCap2SerumEq;
     if (! startsWith (key, "osc"))
         return kCap2None;
     if (std::strstr (key, ".unison.law") != nullptr)   // block B33
@@ -346,6 +350,8 @@ EngineCaps2Mask requiredCapsForValue2 (size_t paramIndex, float plain) noexcept
     }
     else if (startsWith (key, "osc") && (endsWith (key, ".warp.type") || endsWith (key, ".warp2.type")) && v >= kFirstSpectralWarp)
         caps |= kCap2SpectralWarps;
+    else if (std::strcmp (key, "compressor.limit") == 0 && v >= 2)   // block B34: the peak compressor of Serum 2.1.5
+        caps |= kCap2SerumCompressor;
     return caps;
 }
 
@@ -361,6 +367,9 @@ const char* capName2 (EngineCaps2Mask bit) noexcept
         case kCap2ModDelay:      return "mod_delay";
         case kCap2SpectralFilterTable: return "spectral_filter_table";
         case kCap2SerumUnison:   return "serum_unison";
+        case kCap2EqBand2:       return "eq_band2";
+        case kCap2SerumEq:       return "serum_eq";
+        case kCap2SerumCompressor: return "serum_compressor";
         case kCap2None:          break;
     }
     return "";

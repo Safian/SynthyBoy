@@ -88,6 +88,11 @@ namespace sbvital {
       return db <= -59.9f ? 0.0f : std::pow(10.0f, db * 0.05f);
     }
 
+    /** The LEVEL trim of an effect module (-24 .. +12 dB): the minimum is off, silence (Serum 2.1.5: a level of 0 mutes the module; 13-new-keys.md 4.48). */
+    float fxLevelToGain(float db) {
+      return db <= -23.99f ? 0.0f : dbToGain(db);
+    }
+
     bool isSilent(const poly_float* buffer, int num_samples) {
       poly_float peak = 0.0f;
       for (int i = 0; i < num_samples; ++i)
@@ -234,7 +239,7 @@ namespace sbvital {
     if (scrubNonFinite(audio, num_samples))
       effect_->hardReset();
     if (level_ != nullptr) { // the LEVEL trim of the module, ramped over the block; 0 dB leaves the signal untouched (as in the chain)
-      const float target = dbToGain(level_->buffer[0][0]);
+      const float target = fxLevelToGain(level_->buffer[0][0]);
       const float from = last_level_gain_;
       if (from != 1.0f || target != 1.0f) {
         const float step_gain = (target - from) / static_cast<float>(num_samples);
@@ -398,7 +403,7 @@ namespace sbvital {
         if (scrubNonFinite(effects_[index]->output(0)->buffer, num_samples))
           effects_[index]->hardReset();
         if (level_controls_[index] != nullptr) { // the LEVEL trim of the module, ramped over the block; 0 dB leaves the signal untouched
-          const float target = dbToGain(level_controls_[index]->buffer[0][0]);
+          const float target = fxLevelToGain(level_controls_[index]->buffer[0][0]);
           const float from = last_level_gain_[index];
           if (from != 1.0f || target != 1.0f) {
             poly_float* audio = effects_[index]->output(0)->buffer;

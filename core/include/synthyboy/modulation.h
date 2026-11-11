@@ -28,7 +28,7 @@ constexpr int kNumModSources = 57;
 /** Modulation sources of state version 2 (choice values 1 .. 28); the sources 29 .. 39 were appended in version 3, 40 .. 42 (Voice Index, Voice Mod 1, Voice Mod 2) by block B26, 43 .. 57 (the outputs of the sound sources, Active Voices, Note-On Alt 1 / 2 / Rand 2 / Rand (Discrete), Release Velocity, Expression X, Fixed) by GROUPB WP-06. */
 constexpr int kNumModSourcesV2 = 28;
 /** Size of the destination choice (modNN.destination): "none" plus every parameter flagged kParamModulatable and the appended destinations. */
-constexpr int kNumModDestinations = 1246; // 453 after B15 + B20 stereo_routing (1 + 453 modulatable keys), + 64 mod amounts (454..517) + portamento time (518) + polyphony (519),
+constexpr int kNumModDestinations = 1249; // 453 after B15 + B20 stereo_routing (1 + 453 modulatable keys), + 64 mod amounts (454..517) + portamento time (518) + polyphony (519),
                                          // + the 384 parameters fxiNN.pKK of the effect instance pool (B22: choice values 520 .. 903)
                                          // + sub.phase, noise.stereo, noise.filter (B23, GROUPA1: 904 .. 906), delay.offset_left, reverb.feedback (B25: 907, 908)
                                          // + osc1 / 2 / 3 .sample.slice (B27, GROUPB: 909 .. 911)
@@ -37,6 +37,7 @@ constexpr int kNumModDestinations = 1246; // 453 after B15 + B20 stereo_routing 
                                          // + oscN.multi.timbre of block B30 (GROUPC, 984 .. 986)
                                          // + the 256 modulatable keys modNN.rise / fall / delay / delay_beats of block B31 (REMAINDER, 4 x 64: 987 .. 1242)
                                          // + oscN.spec.flt_frame of block B32 (REMAINDER, 3: 1243 .. 1245)
+                                         // + eq.mid2.cutoff / gain / resonance of block B34 (REFCOMPARE round 3: 1246 .. 1248)
 
 /** Source k (0-based) has the choice value k + 1; the order is the one of the list in docs/PARAMETERS.md. */
 const ModSourceInfo* modSourceTable() noexcept;

@@ -23,6 +23,30 @@
 namespace sbvital {
   class DigitalSvf;
 
+  /** The equalizer of the Serum 2.1.5 law (13-new-keys.md 4.48): RBJ biquads, measured to 0.00 dB against the real plug-in. One stage of the cascade. */
+  struct SerumEqStage {
+    enum Kind { kPeak, kLowShelf, kHighShelf, kHighPass, kLowPass, kNotch, kOff };
+    struct Coefficients {
+      mono_float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
+    };
+
+    /** The resonance percent (0 .. 1) as the quality factor: peak, high / low pass and notch 0.1 + 18.9053 x^4, shelf 0.4 + 1.7417 x^3 (measured against Serum 2.1.5). */
+    static mono_float qualityOf(Kind kind, mono_float resonance);
+    static Coefficients design(Kind kind, mono_float frequency, mono_float resonance, mono_float decibels, mono_float sample_rate);
+
+    void reset() {
+      z1 = 0.0f;
+      z2 = 0.0f;
+      initialised = false;
+    }
+    /** Filters in -> out over num_samples (may be the same buffer), the coefficients move linearly from the last block's to `target`. */
+    void process(const poly_float* in, poly_float* out, int num_samples, const Coefficients& target);
+
+    poly_float z1 = 0.0f, z2 = 0.0f;
+    Coefficients current;
+    bool initialised = false;
+  };
+
   class EqualizerModule : public SynthModule {
     public:
       EqualizerModule();
@@ -39,9 +63,29 @@ namespace sbvital {
       const StereoMemory* getAudioMemory() { return audio_memory_.get(); }
 
     protected:
+      void processSerumLaw(const poly_float* audio_in, int num_samples);
+
       Value* low_mode_;
       Value* band_mode_;
       Value* high_mode_;
+      Value* band2_mode_ = nullptr;      // 0 Off, 1 Peak, 2 Notch (block B34)
+      Value* law_ = nullptr;             // 0 Vital (the SVF filters), 1 Serum (RBJ biquads of Serum 2.1.5) (block B34)
+      Output* low_cutoff_ = nullptr;
+      Output* band_cutoff_ = nullptr;
+      Output* band2_cutoff_ = nullptr;
+      Output* high_cutoff_ = nullptr;
+      Output* low_resonance_ = nullptr;
+      Output* band_resonance_ = nullptr;
+      Output* band2_resonance_ = nullptr;
+      Output* high_resonance_ = nullptr;
+      Output* low_decibels_ = nullptr;
+      Output* band_decibels_ = nullptr;
+      Output* band2_decibels_ = nullptr;
+      Output* high_decibels_ = nullptr;
+      DigitalSvf* band2_shelf_ = nullptr;
+      DigitalSvf* band2_notch_ = nullptr;
+      SerumEqStage serum_low_, serum_band_, serum_band2_, serum_high_;
+      bool was_serum_ = false;
 
       DigitalSvf* high_pass_;
       DigitalSvf* low_shelf_;

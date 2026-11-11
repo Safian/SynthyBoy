@@ -92,6 +92,10 @@ namespace sbvital {
       virtual void processWithInput(const poly_float* audio_in, int num_samples) override;
       void processRms(const poly_float* audio_in, int num_samples);
       void processLimit(const poly_float* audio_in, int num_samples);
+      /** SynthyBoy (13-new-keys.md 4.48): the compressor of Serum 2.1.5. The detector is the peak of the stereo pair, the gain reduction (dB) of a hard knee is smoothed with the attack / release
+          of Serum (attack 0.1 .. 1000 ms, release 0.1 .. 1000 ms on a log scale of the 0 .. 1 control), the upper threshold is a peak ceiling in dB, the ratio the amplitude exponent
+          (1 - 1 / R). Measured against the real plug-in: tools/ref-compare/compmodel*.py. The lower (upward) stage does not exist in this mode. */
+      void processPeak(const poly_float* audio_in, int num_samples);
       void scaleOutput(const poly_float* audio_input, int num_samples);
       void reset(poly_mask reset_mask) override;
       void setSampleRate(int sample_rate) override;
@@ -100,6 +104,9 @@ namespace sbvital {
       /** SynthyBoy: limit mode. The upper stage becomes a look-ahead limiter at the upper threshold; the lower (upward) stage stays. */
       void setLimit(bool limit);
       bool limit() const { return limit_; }
+      /** SynthyBoy: the peak detector of Serum 2.1.5 (compressor.limit = Serum). Ignored in limit mode. */
+      void setPeak(bool peak);
+      bool peak() const { return peak_; }
       int limiterLatency() const { return limit_ ? limiter_.lookahead() : 0; }
 
       force_inline poly_float getInputMeanSquared() { return input_mean_squared_; }
@@ -121,6 +128,9 @@ namespace sbvital {
       poly_float output_mult_;
 
       bool limit_ = false;
+      bool peak_ = false;
+      poly_float peak_reduction_db_ = 0.0f;   // peak mode: the smoothed gain reduction in dB (positive)
+      poly_float peak_held_ = 0.0f;           // peak mode: the held peak of the detector
       LookaheadLimiter limiter_;
       std::vector<poly_float> limited_;   // the limiter output and its delayed input, one block each
       std::vector<poly_float> delayed_;
@@ -201,6 +211,7 @@ namespace sbvital {
 
       bool was_low_enabled_;
       bool was_high_enabled_;
+      bool was_peak_ = false;
       bool was_limit_;
 
       cr::Output low_band_upper_ratio_;

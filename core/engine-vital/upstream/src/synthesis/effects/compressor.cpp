@@ -37,6 +37,8 @@ namespace sbvital {
     constexpr mono_float kMinGain = -30.0f;
     constexpr mono_float kMaxGain = 30.0f;
     constexpr mono_float kMinThreshold = -100.0f;
+    constexpr mono_float kPeakHoldMs = 1.0f;            // peak mode: decay of the peak detector
+    constexpr mono_float kMinPeakThreshold = -120.0f;   // peak mode (Serum): the threshold knob of the plug-in reaches -106 dB
     constexpr mono_float kMaxThreshold = 12.0f;
     constexpr mono_float kMinSampleEnvelope = 5.0f;
   } // namespace
@@ -150,6 +152,8 @@ namespace sbvital {
   void Compressor::processWithInput(const poly_float* audio_in, int num_samples) {
     if (limit_)
       processLimit(audio_in, num_samples);
+    else if (peak_)
+      processPeak(audio_in, num_samples);
     else
       processRms(audio_in, num_samples);
 
@@ -166,6 +170,14 @@ namespace sbvital {
     limiter_.reset();
     high_enveloped_mean_squared_ = 0.0f;
     low_enveloped_mean_squared_ = 0.0f;
+  }
+
+  void Compressor::setPeak(bool peak) {
+    if (peak == peak_)
+      return;
+    peak_ = peak;
+    peak_reduction_db_ = 0.0f;
+    peak_held_ = 0.0f;
   }
 
   void Compressor::setSampleRate(int sample_rate) {
@@ -225,6 +237,48 @@ namespace sbvital {
       VITAL_ASSERT(utils::isContained(audio_out[i]));
     }
     low_enveloped_mean_squared_ = low_enveloped_mean_squared;
+  }
+
+  void Compressor::processPeak(const poly_float* audio_in, int num_samples) {
+    poly_float* audio_out = output(kAudioOut)->buffer;
+
+    const mono_float sample_rate = static_cast<mono_float>(getSampleRate());
+    const mono_float attack_x = utils::clamp(input(kAttack)->at(0)[0], 0.0f, 1.0f);
+    const mono_float release_x = utils::clamp(input(kRelease)->at(0)[0], 0.0f, 1.0f);
+    const mono_float attack_ms = 0.1f * powf(10000.0f, attack_x);
+    const mono_float release_ms = 0.1f * powf(10000.0f, release_x);
+    // the time constants of the gain reduction fitted to the real plug-in (tools/ref-compare/compfit2.py, 0.2 - 0.5 dB rms over the gain reduction curves): attack 0.37 att^2 / (att + 4) ms, release = the
+    // release time; the detector holds a peak with the decay of 1 ms
+    const mono_float attack_time_ms = 0.37f * attack_ms * attack_ms / (attack_ms + 4.0f);
+    const mono_float attack_samples = std::max(attack_time_ms * 0.001f * sample_rate, 1.0f);
+    const mono_float release_samples = std::max(release_ms * 0.001f * sample_rate, 1.0f);
+    const poly_float attack_coefficient = 1.0f - expf(-1.0f / attack_samples);
+    const poly_float release_coefficient = 1.0f - expf(-1.0f / release_samples);
+
+    const poly_float threshold = futils::dbToMagnitude(utils::clamp(input(kUpperThreshold)->at(0), kMinPeakThreshold, kMaxThreshold));
+    const poly_float inverse_threshold = poly_float(1.0f) / threshold;
+    const poly_float ratio = utils::clamp(input(kUpperRatio)->at(0), 0.0f, 1.0f);
+    const poly_float hold_decay = expf(-1.0f / std::max(kPeakHoldMs * 0.001f * sample_rate, 1.0f));
+    constexpr mono_float kDbPerOctave = 6.0205999f;
+    constexpr mono_float kOctavesPerDb = 1.0f / 6.0205999f;
+
+    poly_float reduction = peak_reduction_db_;
+    poly_float held = peak_held_;
+    for (int i = 0; i < num_samples; ++i) {
+      const poly_float sample = audio_in[i];
+      poly_float level = poly_float::abs(sample);
+      level = utils::max(level, utils::swapStereo(level));
+      held = utils::max(level, held * hold_decay);   // the detector keeps a peak for a moment: the gain follows the peaks of a cycle, not its rectified waveform
+      level = held;
+      const poly_float over_db = utils::max(futils::log2(utils::max(level * inverse_threshold, 1.0e-9f)) * kDbPerOctave, 0.0f);
+      const poly_float needed = over_db * ratio;
+      const poly_mask rising = poly_float::greaterThan(needed, reduction);
+      reduction += (needed - reduction) * utils::maskLoad(release_coefficient, attack_coefficient, rising);
+      audio_out[i] = sample * futils::exp2(reduction * (-kOctavesPerDb));
+      VITAL_ASSERT(utils::isContained(audio_out[i]));
+    }
+    peak_reduction_db_ = reduction;
+    peak_held_ = held;
   }
 
   void Compressor::processRms(const poly_float* audio_in, int num_samples) {
@@ -318,6 +372,8 @@ namespace sbvital {
 
     high_enveloped_mean_squared_ = 0.0f;
     low_enveloped_mean_squared_ = 0.0f;
+    peak_reduction_db_ = 0.0f;
+    peak_held_ = 0.0f;
     limiter_.reset();
   }
 
@@ -475,14 +531,20 @@ namespace sbvital {
     low_band_filter_.setCutoff(low_crossover);
     band_high_filter_.setCutoff(high_crossover);
 
-    const bool limit = input(kLimit)->at(0)[0] > 0.5f;
-    if (limit != was_limit_) {
+    // compressor.limit: 0 compress (the RMS compressor of Vital), 1 limit (the look-ahead peak limiter), 2 the peak compressor of Serum 2.1.5 (13-new-keys.md 4.48)
+    const int mode = static_cast<int>(input(kLimit)->at(0)[0] + 0.5f);
+    const bool limit = mode == 1;
+    const bool peak = mode >= 2;
+    if (limit != was_limit_ || peak != was_peak_) {
       was_limit_ = limit;
+      was_peak_ = peak;
       low_band_filter_.reset(constants::kFullMask);
       band_high_filter_.reset(constants::kFullMask);
     }
     low_band_compressor_.setLimit(limit);
     band_high_compressor_.setLimit(limit);
+    low_band_compressor_.setPeak(peak);
+    band_high_compressor_.setPeak(peak);
 
     if (low_enabled != was_low_enabled_ || high_enabled != was_high_enabled_) {
       low_band_filter_.reset(constants::kFullMask);

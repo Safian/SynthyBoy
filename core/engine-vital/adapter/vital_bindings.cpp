@@ -440,6 +440,12 @@ std::vector<Binding> build()
         b.add (k + "gain", c + "gain", Conv::linear);
         b.add (k + "resonance", c + "resonance", Conv::sqrtScaled, 0.01);
     }
+    // block B34 (13-new-keys.md 4.48): the second peak / notch band (Off by default) and the EQ law (1 = the RBJ biquads of Serum 2.1.5)
+    b.choice ("eq.mid2.mode", "eq_band2_mode");
+    b.hzNote ("eq.mid2.cutoff", "eq_band2_cutoff");
+    b.add ("eq.mid2.gain", "eq_band2_gain", Conv::linear);
+    b.add ("eq.mid2.resonance", "eq_band2_resonance", Conv::sqrtScaled, 0.01);
+    b.choice ("eq.law", "eq_law");
 
     on ("flanger", "flanger", 6);
     b.percent ("flanger.mix", "flanger_dry_wet", 0.005);

@@ -91,7 +91,7 @@ TEST (fxi_defaults_are_neutral_and_the_names_generic)
 TEST (fxi_descriptor_maps_every_type_to_its_own_keys)
 {
     // parameters per type: all of them fit into the 24 of a slot (decision P = 24: with 16 the compressor (24), the reverb (19) and the FX filter (18) did not)
-    const int expected[kNumFxInstanceTypes] = { 0, 12, 24, 14, 9, 13, 18, 9, 11, 20, 8, 10, 14, 13 }; // (delay 14 with delay.offset_left, reverb 20 with reverb.feedback: B25)
+    const int expected[kNumFxInstanceTypes] = { 0, 12, 24, 14, 9, 18, 18, 9, 11, 20, 8, 10, 14, 13 }; // (EQ 18 with eq.mid2.* and eq.law: B34; delay 14 with delay.offset_left, reverb 20 with reverb.feedback: B25)
     int total = 0;
     for (int t = 0; t < kNumFxInstanceTypes; ++t)
     {
@@ -126,7 +126,7 @@ TEST (fxi_descriptor_maps_every_type_to_its_own_keys)
             CHECK (fxInstanceSource (t, k) == nullptr);
         }
     }
-    CHECK_EQ (total, 12 + 24 + 14 + 9 + 13 + 18 + 9 + 11 + 20 + 8 + 10 + 14 + 13);
+    CHECK_EQ (total, 12 + 24 + 14 + 9 + 18 + 18 + 9 + 11 + 20 + 8 + 10 + 14 + 13);
 
     // every key of every type of instance 0 is covered (nothing but .on, .rack and the reverb's force switch is left out)
     std::set<int> covered;

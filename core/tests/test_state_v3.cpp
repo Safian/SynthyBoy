@@ -217,9 +217,9 @@ TEST (version_2_document_loads_into_version_3_with_the_old_values)
     CHECK_EQ (defaults2.size(), static_cast<size_t> (16637));
     const auto busy2 = asVersion2 (saveState (busyValues()));
     const auto busy2Rounded = roundedNumbers (busy2);
-    std::printf ("    busy2 rounded: %zu bytes, fnv %llx\n", busy2Rounded.size(), static_cast<unsigned long long> (fnv (busy2Rounded)));
-    CHECK_EQ (fnv (busy2Rounded), 0x625f51a76b665871ull);
-    CHECK_EQ (busy2Rounded.size(), static_cast<size_t> (17976));
+    // REFCOMPARE round 3 (B34, deliberate): the busy values are drawn from the ranges, and the ranges of the EQ gains and of the compressor thresholds are wider: 0x625f51a76b665871 / 17976 bytes before
+    CHECK_EQ (fnv (busy2Rounded), 0xa3c90049178e7f62ull);
+    CHECK_EQ (busy2Rounded.size(), static_cast<size_t> (17973));
 
     // loaded into a ParamValues whose new keys all hold other values than their defaults (a previous version 3 patch)
     sbtest::Rng rng (77);
@@ -757,7 +757,7 @@ TEST (version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_bo
     // golden hashes of golden_audio.h (commit 9c97a69): the default patch and the busy patch
     const struct { EngineKind kind; bool busy; uint64_t hash; } golden[] = {
         { EngineKind::own, false, 0xc3e433c23a7f89a5ull }, { EngineKind::own, true, 0x44f50232b180c48dull },
-        { EngineKind::vital, false, 0x765f4bc243b189c1ull }, { EngineKind::vital, true, 0x5bdf422e5abd940cull },
+        { EngineKind::vital, false, 0x765f4bc243b189c1ull }, { EngineKind::vital, true, 0x199ba135a1fd977full },
     };
     sbtest::Rng rng (9);
     for (const auto& g : golden)

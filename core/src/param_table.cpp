@@ -93,6 +93,9 @@ constexpr const char* const kDistortionFilterOrder[] = { "None", "Pre", "Post" }
 constexpr const char* const kEqLowModes[] = { "Shelf", "High pass" };
 constexpr const char* const kEqBandModes[] = { "Peak", "Notch" };
 constexpr const char* const kEqHighModes[] = { "Shelf", "Low pass" };
+constexpr const char* const kCompressorModes[] = { "Compress", "Limit", "Serum" }; // B17 / B34
+constexpr const char* const kEqBand2Modes[] = { "Off", "Peak", "Notch" };   // B34
+constexpr const char* const kEqLaws[] = { "Vital", "Serum" };               // B34
 constexpr const char* const kFilterRouting[] = { "Parallel", "Series 1 to 2", "Series 2 to 1" };
 constexpr const char* const kFxNames[kNumFxSlots] = { "Chorus", "Compressor", "Delay", "Distortion", "EQ", "FX Filter", "Flanger", "Phaser",
                                                       "Reverb", "Hyper/Dimension", "Utility", "Bode", "Convolve", "Splitter L/H",
@@ -319,8 +322,8 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
 #define SB_DEST(N) pick ("osc" #N ".destination", "Osc " #N " Destination", "Osc " #N, kOscDestinations, 0)
 
 #define SB_COMP(KEY, NAME)                                                                                                                       \
-    cont ("compressor." KEY ".lower_threshold", "Compressor " NAME " Lower Threshold", "FX / Compressor", -80.0f, 0.0f, -40.0f, Unit::dB, kAuto), \
-    cont ("compressor." KEY ".upper_threshold", "Compressor " NAME " Upper Threshold", "FX / Compressor", -80.0f, 0.0f, -20.0f, Unit::dB, kAuto), \
+    cont ("compressor." KEY ".lower_threshold", "Compressor " NAME " Lower Threshold", "FX / Compressor", -120.0f, 12.0f, -40.0f, Unit::dB, kAuto), \
+    cont ("compressor." KEY ".upper_threshold", "Compressor " NAME " Upper Threshold", "FX / Compressor", -120.0f, 12.0f, -20.0f, Unit::dB, kAuto), \
     SB_PCT_RANGE ("compressor." KEY ".lower_ratio", "Compressor " NAME " Lower Ratio", "FX / Compressor", -100.0f, 100.0f, 0.0f, kAuto),        \
     SB_PCT ("compressor." KEY ".upper_ratio", "Compressor " NAME " Upper Ratio", "FX / Compressor", 50.0f, kAuto),                              \
     cont ("compressor." KEY ".gain", "Compressor " NAME " Gain", "FX / Compressor", -30.0f, 30.0f, 0.0f, Unit::dB, kMod)
@@ -328,7 +331,7 @@ constexpr ParamInfo modDestination (const char* key, const char* name, const cha
 #define SB_EQ(KEY, NAME, MODES, CUTOFF)                                                                                                          \
     pick ("eq." KEY ".mode", "EQ " NAME " Mode", "FX / EQ", MODES, 0),                                                                           \
     cont ("eq." KEY ".cutoff", "EQ " NAME " Cutoff", "FX / EQ", 20.0f, 20000.0f, CUTOFF, Unit::Hz, kMod, 1, 0.3f),                               \
-    cont ("eq." KEY ".gain", "EQ " NAME " Gain", "FX / EQ", -15.0f, 15.0f, 0.0f, Unit::dB, kMod),                                                \
+    cont ("eq." KEY ".gain", "EQ " NAME " Gain", "FX / EQ", -24.0f, 24.0f, 0.0f, Unit::dB, kMod),                                                \
     SB_PCT ("eq." KEY ".resonance", "EQ " NAME " Resonance", "FX / EQ", 30.0f, kMod)
 
 // B27 (GROUPB, WP-05): per oscillator the Ratio SRC, the smooth interpolation and the slice destination of Play Single Slice
@@ -877,7 +880,7 @@ constexpr ParamInfo kRaw[] = {
     SB_OSC_PITCH_UNI (3),
     onOff ("voice.phase_legato", "Voice Phase Legato", "Master / Voicing", false),
     // --- B17: compressor / delay / distortion / phaser / reverb extras (1544..1557) ------------------------------------------------------
-    onOff ("compressor.limit", "Compressor Limit", "FX / Compressor", false),
+    pick ("compressor.limit", "Compressor Mode", "FX / Compressor", kCompressorModes, 0),   // B17 On / Off, REFCOMPARE round 3: Compress | Limit | Serum (peak compressor of Serum 2.1.5, 13-new-keys.md 4.48)
     onOff ("compressor.limit_latency_comp", "Compressor Limiter Latency Comp", "FX / Compressor", true),
     cont ("compressor.crossover_low", "Compressor Low Crossover", "FX / Compressor", 20.0f, 1000.0f, 120.0f, Unit::Hz, kMod, 0, 0.4f),
     cont ("compressor.crossover_high", "Compressor High Crossover", "FX / Compressor", 200.0f, 16000.0f, 2500.0f, Unit::Hz, kMod, 0, 0.4f),
@@ -1005,11 +1008,14 @@ constexpr ParamInfo kRaw[] = {
     SB_OSC_SPECFLT (1), SB_OSC_SPECFLT (2), SB_OSC_SPECFLT (3),
     // --- B33: REFCOMPARE: the unison law of Serum 2.1.5 (13-new-keys.md 4.47, positions 2628..2630) ---------------------------------------------------------
     SB_OSC_UNILAW (1), SB_OSC_UNILAW (2), SB_OSC_UNILAW (3),
+    // --- B34: REFCOMPARE round 3: the second peak band of the EQ and the EQ law of Serum 2.1.5 (13-new-keys.md 4.48, positions 2631..2635) ---------------------
+    SB_EQ ("mid2", "Mid 2", kEqBand2Modes, 3000.0f),
+    pick ("eq.law", "EQ Law", "FX / EQ", kEqLaws, 0),
 };
 
 constexpr size_t kCount = sizeof (kRaw) / sizeof (kRaw[0]);
 static_assert (kCount <= kMaxParams, "parameter table larger than kMaxParams");
-static_assert (kCount == 2631, "880 keys of state version 2 plus the 1674 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32 + 3 B33)");
+static_assert (kCount == 2636, "880 keys of state version 2 plus the 1679 keys appended in version 3 (604 WP0 + 23 B16 + 37 B14 + 14 B17 + 18 B18 + 18 B15 + 2 B20 + 7 B21 + 448 B22 + 6 B23 + 4 B24 + 2 B25 + 62 B26 + 9 B27 + 93 B28 + 42 B29 + 30 B30 + 320 B31 + 9 B32 + 3 B33 + 5 B34)");
 
 struct Table
 {
@@ -1039,7 +1045,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31 + 3 of block B32) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31 + 3 of block B32 + 3 of block B34) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

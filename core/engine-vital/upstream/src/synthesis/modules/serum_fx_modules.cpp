@@ -33,6 +33,8 @@ namespace sbvital {
     /** A control of the module: its natural unit (Hz, %, ms, dB) is the value of the engine's control. */
     float value(const Value* v) { return v->value(); }
     float mod(const Output* o) { return o->buffer[0][0]; }
+    /** The LEVEL of a module in dB; the minimum of the key (-24 dB) is off: silence (Serum 2.1.5: a level of 0 mutes the module; 13-new-keys.md 4.48). */
+    float levelDbOf(const Output* o) { const float db = o->buffer[0][0]; return db <= -23.99f ? -100.0f : db; }
 
     void gather(const poly_float* in, float* l, float* r, int n) {
       for (int i = 0; i < n; ++i) {
@@ -136,7 +138,7 @@ namespace sbvital {
           p.hyperMix = mod(mix_) * 0.01f;
           p.dimSize = mod(dim_size_) * 0.01f;
           p.dimMix = mod(dim_mix_) * 0.01f;
-          p.levelDb = mod(level_);
+          p.levelDb = levelDbOf(level_);
           if (noteOnSinceLastBlock() && p.hyperRetrig)
             fx_.retrigger();
           fx_.setParams(p);
@@ -182,7 +184,7 @@ namespace sbvital {
           p.width = mod(width_) * 0.01f;
           p.pan = mod(pan_) * 0.01f;
           p.mix = mod(mix_) * 0.01f;
-          p.levelDb = mod(level_);
+          p.levelDb = levelDbOf(level_);
           fx_.setParams(p);
           fx_.process(l, r, n);
         }
@@ -234,7 +236,7 @@ namespace sbvital {
           p.balance = mod(balance_) * 0.01f;
           p.blur = mod(blur_) * 0.01f;
           p.mix = mod(mix_) * 0.01f;
-          p.level = mod(level_);
+          p.level = levelDbOf(level_);
           if (noteOnSinceLastBlock() && value(retrig_) > 0.5f)
             fx_.retrig();
           fx_.process(l, r, n);
@@ -367,7 +369,7 @@ namespace sbvital {
           p.preDelayBeats = kDivisionBeats[std::max(0, std::min(8, static_cast<int>(value(division_) + 0.5f)))] * kSyncFactor[sync];
           p.preDelay = mod(predelay_) * 0.001f;
           p.mix = mod(mix_) * 0.01f;
-          p.level = mod(level_);
+          p.level = levelDbOf(level_);
           active_->process(l, r, n);
         }
 
@@ -510,7 +512,7 @@ namespace sbvital {
           p.splitFreq = mod(freq_);
           p.lowBypass = value(low_bypass_) > 0.5f;
           p.highBypass = value(high_bypass_) > 0.5f;
-          p.levelDb = mod(level_);
+          p.levelDb = levelDbOf(level_);
           fx_.setParams(p);
         }
         synthyboy::fx::SplitterLH fx_;
@@ -553,7 +555,7 @@ namespace sbvital {
           p.lowBypass = value(low_bypass_) > 0.5f;
           p.midBypass = value(mid_bypass_) > 0.5f;
           p.highBypass = value(high_bypass_) > 0.5f;
-          p.levelDb = mod(level_);
+          p.levelDb = levelDbOf(level_);
           fx_.setParams(p);
         }
         synthyboy::fx::SplitterLMH fx_;
@@ -589,7 +591,7 @@ namespace sbvital {
           synthyboy::fx::SplitterMS::Params p;
           p.midBypass = value(mid_bypass_) > 0.5f;
           p.sideBypass = value(side_bypass_) > 0.5f;
-          p.levelDb = mod(level_);
+          p.levelDb = levelDbOf(level_);
           fx_.setParams(p);
         }
         synthyboy::fx::SplitterMS fx_;

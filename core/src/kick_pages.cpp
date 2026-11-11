@@ -635,6 +635,8 @@ constexpr Page s_kickPages[kKickPageCount] = {
     { "mod_slot_2_slew", "Mod Matrix Slot 2 Rise / Fall / Delay", "Matrix", { "mod02.rise", "mod02.fall", "mod02.delay", "mod02.delay_beats", "mod02.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
     { "mod_slot_3_slew", "Mod Matrix Slot 3 Rise / Fall / Delay", "Matrix", { "mod03.rise", "mod03.fall", "mod03.delay", "mod03.delay_beats", "mod03.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
     { "mod_slot_4_slew", "Mod Matrix Slot 4 Rise / Fall / Delay", "Matrix", { "mod04.rise", "mod04.fall", "mod04.delay", "mod04.delay_beats", "mod04.delay_sync", nullptr, nullptr, nullptr }, 5, nullptr, 0 },
+    // Page 160: the second EQ peak band and the EQ law, block B34 (REFCOMPARE round 3; 13-new-keys.md 4.48)
+    { "fx_eq_band2", "EQ Mid 2 & Law", "FX", { "eq.mid2.mode", "eq.mid2.cutoff", "eq.mid2.gain", "eq.mid2.resonance", "eq.law", "eq.on", "eq.level", "eq.rack" }, 8, nullptr, 0 },
 };
 constexpr MacroTarget s_macro_targets_bass_1[] = { { "filter1.cutoff", 45.0f, false }, { "filter2.cutoff", 45.0f, false } };
 constexpr MacroTarget s_macro_targets_bass_2[] = { { "filter1.drive", 50.0f, false }, { "distortion.drive", 35.0f, false }, { "osc1.warp.amount", 25.0f, false } };

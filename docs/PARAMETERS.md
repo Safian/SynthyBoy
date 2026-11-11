@@ -4,7 +4,7 @@
 
 The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITECTURE.md 2.2 and 5.1): keys are lowercase and dotted, ranges are in our units (Hz, ms, dB, cents, semitones, percent, degrees, beats) and are inside what the engines can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version 3 stores every parameter by key (docs/ARCHITECTURE.md 5.2).
 
-**2631 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
+**2636 parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP (`core/engine-vital`) acts on all of them.
 
 | Section | Parameters |
 |---------|------------|
@@ -37,7 +37,7 @@ The parameter table is our own design (`core/src/param_table.cpp`, docs/ARCHITEC
 | Random LFO 4 | 8 |
 | Macros | 8 |
 | Mod Matrix | 1024 |
-| FX | 666 |
+| FX | 671 |
 | LFO 9 | 17 |
 | LFO 10 | 17 |
 | Mixer | 8 |
@@ -986,7 +986,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  |  |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..1245 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..1248 destinations (list below) | None | Mod Matrix / Slot 01 |  |  |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod |  |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  |  |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
@@ -1034,18 +1034,18 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `compressor.attack` | Compressor Attack | 0 .. 100 % | 50 % | FX / Compressor | mod |  |
 | `compressor.release` | Compressor Release | 0 .. 100 % | 50 % | FX / Compressor | mod |  |
 | `compressor.bands` | Compressor Bands | 0 Multiband, 1 Low band, 2 High band, 3 Single band | Multiband | FX / Compressor |  |  |
-| `compressor.low.lower_threshold` | Compressor Low Lower Threshold | -80 .. 0 dB | -40 dB | FX / Compressor |  |  |
-| `compressor.low.upper_threshold` | Compressor Low Upper Threshold | -80 .. 0 dB | -20 dB | FX / Compressor |  |  |
+| `compressor.low.lower_threshold` | Compressor Low Lower Threshold | -120 .. 12 dB | -40 dB | FX / Compressor |  |  |
+| `compressor.low.upper_threshold` | Compressor Low Upper Threshold | -120 .. 12 dB | -20 dB | FX / Compressor |  |  |
 | `compressor.low.lower_ratio` | Compressor Low Lower Ratio | -100 .. 100 % | 0 % | FX / Compressor |  |  |
 | `compressor.low.upper_ratio` | Compressor Low Upper Ratio | 0 .. 100 % | 50 % | FX / Compressor |  |  |
 | `compressor.low.gain` | Compressor Low Gain | -30 .. 30 dB | 0 dB | FX / Compressor | mod |  |
-| `compressor.mid.lower_threshold` | Compressor Mid Lower Threshold | -80 .. 0 dB | -40 dB | FX / Compressor |  |  |
-| `compressor.mid.upper_threshold` | Compressor Mid Upper Threshold | -80 .. 0 dB | -20 dB | FX / Compressor |  |  |
+| `compressor.mid.lower_threshold` | Compressor Mid Lower Threshold | -120 .. 12 dB | -40 dB | FX / Compressor |  |  |
+| `compressor.mid.upper_threshold` | Compressor Mid Upper Threshold | -120 .. 12 dB | -20 dB | FX / Compressor |  |  |
 | `compressor.mid.lower_ratio` | Compressor Mid Lower Ratio | -100 .. 100 % | 0 % | FX / Compressor |  |  |
 | `compressor.mid.upper_ratio` | Compressor Mid Upper Ratio | 0 .. 100 % | 50 % | FX / Compressor |  |  |
 | `compressor.mid.gain` | Compressor Mid Gain | -30 .. 30 dB | 0 dB | FX / Compressor | mod |  |
-| `compressor.high.lower_threshold` | Compressor High Lower Threshold | -80 .. 0 dB | -40 dB | FX / Compressor |  |  |
-| `compressor.high.upper_threshold` | Compressor High Upper Threshold | -80 .. 0 dB | -20 dB | FX / Compressor |  |  |
+| `compressor.high.lower_threshold` | Compressor High Lower Threshold | -120 .. 12 dB | -40 dB | FX / Compressor |  |  |
+| `compressor.high.upper_threshold` | Compressor High Upper Threshold | -120 .. 12 dB | -20 dB | FX / Compressor |  |  |
 | `compressor.high.lower_ratio` | Compressor High Lower Ratio | -100 .. 100 % | 0 % | FX / Compressor |  |  |
 | `compressor.high.upper_ratio` | Compressor High Upper Ratio | 0 .. 100 % | 50 % | FX / Compressor |  |  |
 | `compressor.high.gain` | Compressor High Gain | -30 .. 30 dB | 0 dB | FX / Compressor | mod |  |
@@ -1071,15 +1071,15 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `eq.on` | EQ On | 0 Off, 1 On | Off | FX / EQ |  |  |
 | `eq.low.mode` | EQ Low Mode | 0 Shelf, 1 High pass | Shelf | FX / EQ |  |  |
 | `eq.low.cutoff` | EQ Low Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 100 Hz | FX / EQ | mod |  |
-| `eq.low.gain` | EQ Low Gain | -15 .. 15 dB | 0 dB | FX / EQ | mod |  |
+| `eq.low.gain` | EQ Low Gain | -24 .. 24 dB | 0 dB | FX / EQ | mod |  |
 | `eq.low.resonance` | EQ Low Resonance | 0 .. 100 % | 30 % | FX / EQ | mod |  |
 | `eq.mid.mode` | EQ Mid Mode | 0 Peak, 1 Notch | Peak | FX / EQ |  |  |
 | `eq.mid.cutoff` | EQ Mid Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 1000 Hz | FX / EQ | mod |  |
-| `eq.mid.gain` | EQ Mid Gain | -15 .. 15 dB | 0 dB | FX / EQ | mod |  |
+| `eq.mid.gain` | EQ Mid Gain | -24 .. 24 dB | 0 dB | FX / EQ | mod |  |
 | `eq.mid.resonance` | EQ Mid Resonance | 0 .. 100 % | 30 % | FX / EQ | mod |  |
 | `eq.high.mode` | EQ High Mode | 0 Shelf, 1 Low pass | Shelf | FX / EQ |  |  |
 | `eq.high.cutoff` | EQ High Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 8000 Hz | FX / EQ | mod |  |
-| `eq.high.gain` | EQ High Gain | -15 .. 15 dB | 0 dB | FX / EQ | mod |  |
+| `eq.high.gain` | EQ High Gain | -24 .. 24 dB | 0 dB | FX / EQ | mod |  |
 | `eq.high.resonance` | EQ High Resonance | 0 .. 100 % | 30 % | FX / EQ | mod |  |
 | `flanger.on` | Flanger On | 0 Off, 1 On | Off | FX / Flanger |  |  |
 | `flanger.mix` | Flanger Mix | 0 .. 100 % | 50 % | FX / Flanger | mod |  |
@@ -1210,7 +1210,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `flanger.level` | Flanger Level | -24 .. 12 dB | 0 dB | FX / Flanger | mod |  |
 | `phaser.level` | Phaser Level | -24 .. 12 dB | 0 dB | FX / Phaser | mod |  |
 | `reverb.level` | Reverb Level | -24 .. 12 dB | 0 dB | FX / Reverb | mod |  |
-| `compressor.limit` | Compressor Limit | 0 Off, 1 On | Off | FX / Compressor |  |  |
+| `compressor.limit` | Compressor Mode | 0 Compress, 1 Limit, 2 Serum | Compress | FX / Compressor |  |  |
 | `compressor.limit_latency_comp` | Compressor Limiter Latency Comp | 0 Off, 1 On | On | FX / Compressor |  |  |
 | `compressor.crossover_low` | Compressor Low Crossover | 20 .. 1000 Hz (skew 0.400000006) | 120 Hz | FX / Compressor | mod |  |
 | `compressor.crossover_high` | Compressor High Crossover | 200 .. 16000 Hz (skew 0.400000006) | 2500 Hz | FX / Compressor | mod |  |
@@ -1674,6 +1674,11 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `fxi16.p24` | FX Slot 16 P24 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
 | `delay.offset_left` | Delay Offset Left | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod |  |
 | `reverb.feedback` | Reverb Feedback | 0 .. 100 % | 50 % | FX / Reverb | mod |  |
+| `eq.mid2.mode` | EQ Mid 2 Mode | 0 Off, 1 Peak, 2 Notch | Off | FX / EQ |  |  |
+| `eq.mid2.cutoff` | EQ Mid 2 Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 3000 Hz | FX / EQ | mod |  |
+| `eq.mid2.gain` | EQ Mid 2 Gain | -24 .. 24 dB | 0 dB | FX / EQ | mod |  |
+| `eq.mid2.resonance` | EQ Mid 2 Resonance | 0 .. 100 % | 30 % | FX / EQ | mod |  |
+| `eq.law` | EQ Law | 0 Vital, 1 Serum | Vital | FX / EQ |  |  |
 
 ### LFO 9
 
@@ -3191,6 +3196,9 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 1243 | `osc1.spec.flt_frame` | Osc 1 Spectral Filter Wavetable Frame |
 | 1244 | `osc2.spec.flt_frame` | Osc 2 Spectral Filter Wavetable Frame |
 | 1245 | `osc3.spec.flt_frame` | Osc 3 Spectral Filter Wavetable Frame |
+| 1246 | `eq.mid2.cutoff` | EQ Mid 2 Cutoff |
+| 1247 | `eq.mid2.gain` | EQ Mid 2 Gain |
+| 1248 | `eq.mid2.resonance` | EQ Mid 2 Resonance |
 
 ## Built-in wavetables and LFO shapes
 

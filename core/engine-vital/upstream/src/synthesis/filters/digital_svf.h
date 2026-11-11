@@ -27,8 +27,8 @@ namespace sbvital {
       static constexpr mono_float kDefaultMinResonance = 0.5f;
       static constexpr mono_float kDefaultMaxResonance = 16.0f;
       static constexpr mono_float kMinCutoff = 1.0f;
-      static constexpr mono_float kMaxGain = 15.0f;
-      static constexpr mono_float kMinGain = -15.0f;
+      static constexpr mono_float kMaxGain = 24.0f;   // SynthyBoy: 24 dB like the Serum equalizer (13-new-keys.md 4.48); the clamp only
+      static constexpr mono_float kMinGain = -24.0f;
 
       static force_inline mono_float computeSvfOnePoleFilterCoefficient(mono_float frequency_ratio) {
         static constexpr float kMaxRatio = 0.499f;

@@ -220,7 +220,7 @@ TEST (fxi_every_parameter_of_every_type_is_mapped_to_the_right_control)
     }
     CHECK_EQ (mapped, expected);
     if (stride == 1)
-        CHECK_EQ (mapped, 12 + 24 + 14 + 9 + 13 + 18 + 9 + 11 + 20 + 8 + 10 + 14 + 13);
+        CHECK_EQ (mapped, 12 + 24 + 14 + 9 + 18 + 18 + 9 + 11 + 20 + 8 + 10 + 14 + 13);
 }
 
 // ---- several instances, order, racks ------------------------------------------------------------------------------------------------------

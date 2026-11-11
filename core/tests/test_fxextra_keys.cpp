@@ -36,7 +36,7 @@ int positionOf (const char* key)
 
 struct Key { const char* key; float def, min, max; bool mod; };
 const Key kKeys[] = {
-    { "compressor.limit", 0.0f, 0.0f, 1.0f, false },
+    { "compressor.limit", 0.0f, 0.0f, 2.0f, false },   // REFCOMPARE round 3: Compress | Limit | Serum (B34, 13-new-keys.md 4.48)
     { "compressor.limit_latency_comp", 1.0f, 0.0f, 1.0f, false },
     { "compressor.crossover_low", 120.0f, 20.0f, 1000.0f, true },
     { "compressor.crossover_high", 2500.0f, 200.0f, 16000.0f, true },
@@ -77,7 +77,7 @@ TEST (b17_keys_are_appended_in_order_with_neutral_defaults)
     }
     CHECK_EQ (position, 1558);
     CHECK_EQ (destination, 432);
-    CHECK_EQ (static_cast<int> (paramCount()), 2631); // + the 18 keys of B18, the 18 of B15, the 2 of B20, the 7 of B21, the 448 of B22, the 6 of B23, the 4 of B24, the 2 of B25 and the 62 of B26
+    CHECK_EQ (static_cast<int> (paramCount()), 2636); // + the 18 keys of B18, the 18 of B15, the 2 of B20, the 7 of B21, the 448 of B22, the 6 of B23, the 4 of B24, the 2 of B25 and the 62 of B26
     CHECK_EQ (modDestinationParamIndex (424), 1546);
     CHECK_EQ (modDestinationParamIndex (431), 1557);
     CHECK_EQ (positionOf ("splitter_ms.level"), 1483); // B12 is unchanged
@@ -107,7 +107,7 @@ TEST (b17_choice_lists_and_names)
 
 TEST (b17_kick_pages_reach_every_key)
 {
-    CHECK_EQ (kickPageCount(), static_cast<size_t> (159)); // REMAINDER B31 adds the 4 pages mod_slot_N_slew; // GROUPC B28 adds the 6 pages oscN_gran_1 / 2, B29 the 3 pages oscN_spec_1, B30 the 3 pages oscN_multi_1, B26 adds the 8 pages voicectl_*, B18 adds sub_main, B15 adds voice_global and quality_options, B21 adds mix_env1, B22 the 16 pages fxi01 .. fxi16
+    CHECK_EQ (kickPageCount(), static_cast<size_t> (160)); // REFCOMPARE B34 adds the page fx_eq_band2; REMAINDER B31 adds the 4 pages mod_slot_N_slew; // GROUPC B28 adds the 6 pages oscN_gran_1 / 2, B29 the 3 pages oscN_spec_1, B30 the 3 pages oscN_multi_1, B26 adds the 8 pages voicectl_*, B18 adds sub_main, B15 adds voice_global and quality_options, B21 adds mix_env1, B22 the 16 pages fxi01 .. fxi16
     const Page* pages = kickPageTable();
     for (const Key& k : kKeys)
     {

@@ -3120,7 +3120,7 @@
       "section": "FX",
       "title": "Compressor Limit & Crossovers",
       "knobs": [
-        {"key": "compressor.limit", "shortLabel": "Limit", "widget": "stepped"},
+        {"key": "compressor.limit", "shortLabel": "Mode", "widget": "stepped"},
         {"key": "compressor.limit_latency_comp", "shortLabel": "Limiter La", "widget": "stepped"},
         {"key": "compressor.crossover_low", "shortLabel": "Low Crosso", "widget": "knob"},
         {"key": "compressor.crossover_high", "shortLabel": "High Cross", "widget": "knob"},
@@ -4303,6 +4303,21 @@
         null,
         null,
         null
+      ]
+    },
+    {
+      "id": "fx_eq_band2",
+      "section": "FX",
+      "title": "EQ Mid 2 & Law",
+      "knobs": [
+        {"key": "eq.mid2.mode", "shortLabel": "Mid 2 Mode", "widget": "stepped"},
+        {"key": "eq.mid2.cutoff", "shortLabel": "Mid 2 Cuto", "widget": "knob"},
+        {"key": "eq.mid2.gain", "shortLabel": "Mid 2 Gain", "widget": "bipolar_knob"},
+        {"key": "eq.mid2.resonance", "shortLabel": "Mid 2 Reso", "widget": "knob"},
+        {"key": "eq.law", "shortLabel": "Law", "widget": "stepped"},
+        {"key": "eq.on", "shortLabel": "On", "widget": "toggle"},
+        {"key": "eq.level", "shortLabel": "Level", "widget": "bipolar_knob"},
+        {"key": "eq.rack", "shortLabel": "Rack", "widget": "stepped"}
       ]
     }
   ]

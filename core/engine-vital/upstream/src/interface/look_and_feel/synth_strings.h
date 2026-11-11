@@ -271,6 +271,17 @@ namespace strings {
     "Notch"
   };
 
+  const std::string kEqBand2ModeNames[] = {
+    "Off",
+    "Peak",
+    "Notch"
+  };
+
+  const std::string kEqLawNames[] = {
+    "Vital",
+    "Serum"
+  };
+
   const std::string kEqLowModeNames[] = {
     "Shelf",
     "High Pass"

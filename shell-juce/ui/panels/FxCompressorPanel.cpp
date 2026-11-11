@@ -106,7 +106,7 @@ public:
         }
 
         // limit mode (G73): the upper threshold lines are the ceilings of look-ahead limiters
-        if (limitHandle.plain() >= 0.5f)
+        if (juce::roundToInt (limitHandle.plain()) == 1)
         {
             const auto badge = juce::Rectangle<float> (area.getRight() - t.px (46.0f), area.getBottom() - t.px (26.0f), t.px (42.0f), t.px (14.0f));
             g.setColour (t.colours.warn);
