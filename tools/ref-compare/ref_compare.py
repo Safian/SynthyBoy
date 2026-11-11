@@ -95,7 +95,7 @@ def cmd_render_ours(a):
     os.makedirs(a.ours, exist_ok=True)
     rows = []
     for j in jobs:
-        rows.append('\t'.join([key(j), sbpreset_of(a.imported, j['rel']), j['notes'], str(j['length']), os.path.join(a.ours, key(j) + '.wav')]))
+        rows.append('\t'.join([key(j), sbpreset_of(a.imported, j['rel']), j['notes'], str(j['length']), os.path.join(a.ours, key(j) + '.wav')] + ([a.override] if a.override else [])))
     shards = max(1, a.jobs)
     procs = []
     for s in range(shards):
@@ -349,6 +349,7 @@ def main():
     p.add_argument('--imported', required=True)
     p.add_argument('--ours', required=True)
     p.add_argument('--render-bin', required=True)
+    p.add_argument('--override', default='', help='parameter edits applied to every render (key=v;key+=d;key*=f), for experiments')
     p.set_defaults(fn=cmd_render_ours)
     p = sub.add_parser('compare')
     common(p)
