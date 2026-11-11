@@ -45,6 +45,16 @@ endif()
 option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
 option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
 option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" ON)
+# SYNTHYBOY_BITMAP_GUI: the native CLAP module (shell-clap, synthyboy.clap) renders the editor of shell-juce/ui into a pixel buffer and offers it through the CLAP extension
+# com.safian.bitmap-gui/1 (docs/BITMAP-GUI-EXTENSION.md). It links its own JUCE (fetched, statically, hidden symbols), so it needs JUCE even when the JUCE plug-in is not built.
+# ON with the plug-in (desktop builds); OFF without it unless asked for (the ARMv7 module build, scripts/build-armv7-clap.sh, asks). Never part of the static library
+# synthyboy_static (iOS, docs/ARCHITECTURE.md 2.2): nothing of JUCE or of the UI is linked into it, scripts/check-no-vital.sh stays clean.
+option(SYNTHYBOY_BITMAP_GUI "Native CLAP module with the bitmap GUI extension (needs JUCE)" ${SYNTHYBOY_BUILD_PLUGIN})
+if(SYNTHYBOY_BUILD_PLUGIN OR SYNTHYBOY_BITMAP_GUI)
+    set(SYNTHYBOY_NEEDS_JUCE ON)
+else()
+    set(SYNTHYBOY_NEEDS_JUCE OFF)
+endif()
 
 # Engine of the JUCE shell (the plugin that ships). The Vital-derived engine is the default whenever it is part of the build; "own"
 # is the fallback (and the engine of builds without Vital, e.g. iOS) and can be forced with -DSYNTHYBOY_SHELL_ENGINE=own.
@@ -83,12 +93,15 @@ include(FetchContent)
 # ---------------------------------------------------------------------------
 # Dependencies - exact versions are pinned (see THIRD_PARTY.md).
 # ---------------------------------------------------------------------------
-if(SYNTHYBOY_BUILD_PLUGIN)
+if(SYNTHYBOY_NEEDS_JUCE)
     # JUCE, used under its AGPL-3.0 option. 8.0.17-security is the newest 8.x release.
     FetchContent_Declare(JUCE
         GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
         GIT_TAG        8.0.17-security
         GIT_SHALLOW    TRUE)
+endif()
+
+if(SYNTHYBOY_BUILD_PLUGIN)
 
     # clap-juce-extensions (MIT). Pinned commit. SOURCE_SUBDIR points at a folder without a CMakeLists.txt: FetchContent only fetches, the patched copy below is the one that is built.
     FetchContent_Declare(clap-juce-extensions
@@ -133,7 +146,10 @@ if(SYNTHYBOY_BUILD_PLUGIN)
     endif()
     set(CLAP_INCLUDE_DIR "${SYNTHYBOY_CJE_PATCHED}/clap-libs/clap/include" CACHE INTERNAL "CLAP include dir")
 else()
-    # Plugin OFF: fetch lightweight CLAP headers only (for synthyboy_static and tests)
+    # Plugin OFF: fetch lightweight CLAP headers only (for synthyboy_static and tests); JUCE too when the module has the bitmap GUI
+    if(SYNTHYBOY_BITMAP_GUI)
+        FetchContent_MakeAvailable(JUCE)
+    endif()
     FetchContent_Declare(clap
         GIT_REPOSITORY https://github.com/free-audio/clap.git
         GIT_TAG        1.2.7
@@ -143,6 +159,12 @@ else()
 endif()
 
 add_subdirectory(core)
+find_package(Threads REQUIRED)
+if(SYNTHYBOY_NEEDS_JUCE)
+    # The custom GUI (shell-juce/ui, Phase 5): pure view-model library synthyboy_ui_model + the host independent Components library synthyboy_ui, which the JUCE plug-in, the native
+    # module's bitmap GUI and the tests link. What ties it to the JUCE plug-in lives in shell-juce/ itself: the ParameterStore on the APVTS and the thin AudioProcessorEditor.
+    add_subdirectory(shell-juce/ui)
+endif()
 add_subdirectory(shell-clap)
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(bench)
@@ -154,7 +176,12 @@ if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(scripts/tests)
 endif()
 
+# The tests of the bitmap GUI of the native module (tests/bitmap-gui): a CLAP host without JUCE that loads the built synthyboy.clap. With the JUCE plug-in they are added at the end of this
+# file (the coexistence test loads SynthyBoy.clap too, its target must exist).
 if(NOT SYNTHYBOY_BUILD_PLUGIN)
+    if(SYNTHYBOY_BITMAP_GUI AND SYNTHYBOY_BUILD_TESTS AND NOT WIN32)
+        add_subdirectory(tests/bitmap-gui)
+    endif()
     return()
 endif()
 
@@ -198,10 +225,7 @@ if(APPLE)
     endforeach()
 endif()
 
-# The custom GUI (shell-juce/ui, Phase 5): pure view-model library synthyboy_ui_model + the host independent Components library synthyboy_ui, which
-# the plug-in and the tests link. What ties it to the JUCE plug-in lives in shell-juce/ itself: the ParameterStore on the APVTS and the thin AudioProcessorEditor.
-find_package(Threads REQUIRED)
-add_subdirectory(shell-juce/ui)
+# The UI library itself was added above (shell-juce/ui). The adapters of the JUCE plug-in:
 set(SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES
     shell-juce/ApvtsParameterStore.cpp
     shell-juce/ApvtsParameterStore.h
@@ -526,4 +550,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     else()
         target_compile_definitions(synthyboy_test_ui_groupd PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
     endif()
+endif()
+
+if(SYNTHYBOY_BITMAP_GUI AND SYNTHYBOY_BUILD_TESTS AND NOT WIN32)
+    add_subdirectory(tests/bitmap-gui)
 endif()

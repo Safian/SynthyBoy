@@ -29,6 +29,13 @@ file list, the changes and what was not taken).
 
 Vital's presets, wavetables, skins, tunings, fonts, icons, GUI and network code are not included and must not be added.
 
+## Fonts of the bitmap GUI
+
+`shell-clap/bitmap/fonts/Roboto-Regular.ttf` and `Roboto-Bold.ttf`: Roboto 2.137 (2017), Copyright 2011 Google Inc., licensed under the Apache License, Version 2.0
+(`shell-clap/bitmap/fonts/LICENSE-Roboto-Apache-2.0.txt`). They are compiled into the native module as data (the glyphs of the bitmap GUI, `docs/BITMAP-GUI-EXTENSION.md`) so that the GUI does not depend
+on the fonts of the machine. The Apache License 2.0 is compatible with the AGPL-3.0-or-later of this project (the combined work is AGPL). The Linux module also links FreeType (FTL / GPL-2.0, used
+under the FreeType License) and its dependencies libpng, zlib, bzip2 and Brotli statically, from the system's development packages; nothing of them is stored in this repository.
+
 JUCE itself bundles further third-party code inside its modules (for example HarfBuzz in
 `juce_graphics`, libpng and libjpeg image codecs, FLAC in `juce_audio_formats`); their licences are
 listed in JUCE's own `LICENSE.md` and the respective module directories, and are not repeated here.

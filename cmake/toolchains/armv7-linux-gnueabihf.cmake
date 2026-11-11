@@ -17,7 +17,9 @@ set(SYNTHYBOY_ARM_FLAGS "-march=armv7-a -mfpu=neon -mfloat-abi=hard")
 set(CMAKE_C_FLAGS_INIT   "${SYNTHYBOY_ARM_FLAGS}")
 set(CMAKE_CXX_FLAGS_INIT "${SYNTHYBOY_ARM_FLAGS}")
 
-set(CMAKE_FIND_ROOT_PATH /usr/arm-linux-gnueabihf)
+# /usr: the multiarch development packages (libfreetype-dev:armhf ...) of the bitmap GUI module live in /usr/lib/arm-linux-gnueabihf and /usr/include
+set(CMAKE_LIBRARY_ARCHITECTURE arm-linux-gnueabihf)
+set(CMAKE_FIND_ROOT_PATH /usr/arm-linux-gnueabihf /usr)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)

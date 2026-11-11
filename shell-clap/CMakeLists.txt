@@ -14,6 +14,9 @@ endif()
 add_library(synthyboy_static STATIC
     synthyboy_clap.cpp
     synthyboy_clap.h
+    synthyboy_plugin.cpp
+    synthyboy_plugin.h
+    synthyboy_ui_link.h
     synthyboy_content_service.cpp
     synthyboy_content_service.h)
 
@@ -30,6 +33,9 @@ set_target_properties(synthyboy_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(synthyboy_clap MODULE
     synthyboy_clap.cpp
     synthyboy_clap.h
+    synthyboy_plugin.cpp
+    synthyboy_plugin.h
+    synthyboy_ui_link.h
     synthyboy_content_service.cpp
     synthyboy_content_service.h)
 
@@ -52,4 +58,17 @@ if(MSVC)
 else()
     target_compile_options(synthyboy_static PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(synthyboy_clap PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# The bitmap GUI (docs/BITMAP-GUI-EXTENSION.md): the module renders shell-juce/ui itself and exports it through com.safian.bitmap-gui/1. Only the .clap has it, never the static library.
+if(SYNTHYBOY_BITMAP_GUI)
+    add_subdirectory(bitmap)
+    target_link_libraries(synthyboy_clap PRIVATE synthyboy_bitmap_gui)
+    target_compile_definitions(synthyboy_clap PRIVATE SYNTHYBOY_BITMAP_GUI=1)
+    synthyboy_bitmap_module_options(synthyboy_clap)
+endif()
+
+# On Windows the module exports clap_entry (and only that: SYNTHYBOY_CLAP_API is __declspec(dllexport) with this define)
+if(WIN32)
+    target_compile_definitions(synthyboy_clap PRIVATE SYNTHYBOY_CLAP_EXPORT=1)
 endif()

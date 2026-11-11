@@ -25,6 +25,8 @@ This product includes software developed by third parties:
     MIT licence, Copyright (c) 2021 Alexandre BIQUE.
   * Steinberg VST 3 SDK 3.8.0 (bundled with JUCE), MIT licence, Copyright (c) 2025 Steinberg Media
     Technologies GmbH.
+  * Roboto Regular and Bold 2.137, Apache License 2.0, Copyright 2011 Google Inc. (embedded in the native
+    module as the font of the bitmap GUI; shell-clap/bitmap/fonts).
 
 Not linked and not distributed: the ODDSound MTS-ESP client library (the tuning seam in core/tuning has no MTS-ESP code).
 Written for this project and under its licence, without third-party source: core/tuning, core/formula, core/shapes,
