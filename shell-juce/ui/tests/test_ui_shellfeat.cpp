@@ -35,7 +35,7 @@ const std::filesystem::path& userDir()
 const bool userDirSet = []
 {
     std::filesystem::remove_all (userDir());
-    setenv ("SYNTHYBOY_USER_DIR", userDir().string().c_str(), 1);
+    sbtest::setEnv ("SYNTHYBOY_USER_DIR", userDir().string().c_str());
     return true;
 }();
 

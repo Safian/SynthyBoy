@@ -499,9 +499,9 @@ void setUserDir (const char* value)
     _putenv_s ("SYNTHYBOY_USER_DIR", value);
    #else
     if (value[0] != '\0')
-        setenv ("SYNTHYBOY_USER_DIR", value, 1);
+        sbtest::setEnv ("SYNTHYBOY_USER_DIR", value);
     else
-        unsetenv ("SYNTHYBOY_USER_DIR");
+        sbtest::unsetEnv ("SYNTHYBOY_USER_DIR");
    #endif
 }
 

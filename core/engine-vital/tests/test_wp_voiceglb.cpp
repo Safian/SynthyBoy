@@ -584,7 +584,7 @@ TEST (no_smoothing_makes_a_parameter_jump_instant)
     // osc 1 level drops from 100 % to 5 % between two blocks. With smoothing the gain glides down over some 100 ms (a 5 Hz one pole
     // filter); without it the first cycle after the jump is already at the new level.
     constexpr int kBlock = 2400, kTail = 19200;
-    auto jump = [] (float noSmoothing)
+    auto jump = [=] (float noSmoothing)
     {
         Synth s;
         s.set ("quality.no_smoothing", noSmoothing);

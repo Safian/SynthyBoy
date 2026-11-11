@@ -8,9 +8,30 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 namespace sbtest
 {
+/** setenv / unsetenv that also build with MSVC (the CRT has _putenv_s only). */
+inline void setEnv (const char* name, const char* value)
+{
+#ifdef _WIN32
+    _putenv_s (name, value);
+#else
+    setenv (name, value, 1);
+#endif
+}
+
+inline void unsetEnv (const char* name)
+{
+#ifdef _WIN32
+    _putenv_s (name, "");
+#else
+    unsetenv (name);
+#endif
+}
+
+
 struct Case
 {
     const char* name;

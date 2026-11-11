@@ -5,6 +5,7 @@
 #include "convolve.h"
 
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "test_runner.h"
@@ -260,8 +261,8 @@ TEST (convolve_nan_inf_safety)
     Convolve c;
     c.prepare (48000.0, 512);
 
-    float l[16] = { 0.0f / 0.0f, 1.0f / 0.0f, -1.0f / 0.0f, 0.0f };
-    float r[16] = { 1.0f / 0.0f, 0.0f / 0.0f, 0.0f, -1.0f / 0.0f };
+    float l[16] = { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), 0.0f };
+    float r[16] = { std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN(), 0.0f, -std::numeric_limits<float>::infinity() };
 
     c.process (l, r, 16);
 

@@ -8,6 +8,7 @@
 #include "synthyboy/sampleosc/wav_reader.h"
 
 #include <algorithm>
+#include <limits>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -606,7 +607,7 @@ TEST (sampleosc_unison_and_denormal_safety)
     std::vector<float> frames (500, 0.5f);
     // Inject denormals and NaNs into sample
     frames[100] = 1.0e-30f;
-    frames[101] = 0.0f / 0.0f; // NaN
+    frames[101] = std::numeric_limits<float>::quiet_NaN(); // NaN
 
     SampleData sd;
     CHECK (sd.loadFromFrames (frames.data(), nullptr, static_cast<int64_t> (frames.size()), 44100.0, 60));

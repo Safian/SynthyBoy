@@ -5,6 +5,7 @@
 #include "bode.h"
 
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "test_dsp.h"
@@ -205,8 +206,8 @@ TEST (bode_nan_inf_safety)
     bode.params.feedback = 0.5f;
     bode.params.delay = 0.01f;
 
-    float l[16] = { 0.0f / 0.0f, 1.0f / 0.0f, -1.0f / 0.0f, 0.0f };
-    float r[16] = { 1.0f / 0.0f, 0.0f / 0.0f, 0.0f, -1.0f / 0.0f };
+    float l[16] = { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), 0.0f };
+    float r[16] = { std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN(), 0.0f, -std::numeric_limits<float>::infinity() };
 
     bode.process (l, r, 16);
 

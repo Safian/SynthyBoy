@@ -14,8 +14,14 @@
 #include <string>
 #include <vector>
 
-#include <dlfcn.h>
-#include <unistd.h>
+#ifdef _WIN32
+ #include <process.h>
+ #define NOMINMAX
+ #include <windows.h>
+#else
+ #include <dlfcn.h>
+ #include <unistd.h>
+#endif
 
 #include "groupd_util.h"
 #include "synthyboy/engine.h"
@@ -80,6 +86,15 @@ clap_event_param_value_t paramEvent (const char* key, double value)
     return e;
 }
 
+long currentProcessId()
+{
+#ifdef _WIN32
+    return static_cast<long> (_getpid());
+#else
+    return static_cast<long> (getpid());
+#endif
+}
+
 /** The plug-in factory under test: the module named by SYNTHYBOY_CLAP_UNDER_TEST (a .clap bundle, loaded once) or the native shell. */
 const clap_plugin_factory_t* openFactory (bool& wrapped)
 {
@@ -93,10 +108,21 @@ const clap_plugin_factory_t* openFactory (bool& wrapped)
             const std::string name = fs::path (path).stem().string();
             if (fs::is_directory (path))                    // macOS: a bundle; elsewhere the module is the file itself
                 path += "/Contents/MacOS/" + name;
-            void* lib = dlopen (path.c_str(), RTLD_NOW | RTLD_LOCAL);
-            if (lib == nullptr)
-                std::printf ("    dlopen %s: %s\n", path.c_str(), dlerror());
-            entry = lib != nullptr ? static_cast<const clap_plugin_entry_t*> (dlsym (lib, "clap_entry")) : nullptr;
+            const auto loadEntry = [] (const std::string& modulePath) -> const clap_plugin_entry_t*
+            {
+#ifdef _WIN32
+                HMODULE lib = LoadLibraryA (modulePath.c_str());
+                if (lib == nullptr)
+                    std::printf ("    LoadLibrary %s: error %lu\n", modulePath.c_str(), static_cast<unsigned long> (GetLastError()));
+                return lib != nullptr ? reinterpret_cast<const clap_plugin_entry_t*> (GetProcAddress (lib, "clap_entry")) : nullptr;
+#else
+                void* lib = dlopen (modulePath.c_str(), RTLD_NOW | RTLD_LOCAL);
+                if (lib == nullptr)
+                    std::printf ("    dlopen %s: %s\n", modulePath.c_str(), dlerror());
+                return lib != nullptr ? static_cast<const clap_plugin_entry_t*> (dlsym (lib, "clap_entry")) : nullptr;
+#endif
+            };
+            entry = loadEntry (path);
             isWrapped = entry != nullptr;
             if (entry != nullptr)
                 entry->init (bundle);
@@ -179,9 +205,9 @@ void writeFile (const fs::path& path, const std::vector<uint8_t>& bytes)
 
 TEST (clap_content_extension_imports_lists_attaches_and_removes)
 {
-    const fs::path dir = fs::temp_directory_path() / ("sb_clap_content_" + std::to_string (getpid()));
+    const fs::path dir = fs::temp_directory_path() / ("sb_clap_content_" + std::to_string (currentProcessId()));
     fs::remove_all (dir);
-    setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
+    sbtest::setEnv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str());
 
     std::vector<float> tone (48000);
     for (size_t i = 0; i < tone.size(); ++i)
@@ -262,7 +288,7 @@ TEST (clap_content_extension_imports_lists_attaches_and_removes)
     plugin->deactivate (plugin);
     plugin->destroy (plugin);
     fs::remove_all (dir);
-    unsetenv ("SYNTHYBOY_USER_DIR");
+    sbtest::unsetEnv ("SYNTHYBOY_USER_DIR");
 }
 
 /** One block with parameter events only (no note): the shell's stored values and the engine take them. */
@@ -289,9 +315,9 @@ void setParams (const clap_plugin_t* plugin, std::vector<clap_event_param_value_
 // wavetable frame <-> LFO shape
 TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_lfo_shapes)
 {
-    const fs::path dir = fs::temp_directory_path() / ("sb_clap_groupd_" + std::to_string (getpid()));
+    const fs::path dir = fs::temp_directory_path() / ("sb_clap_groupd_" + std::to_string (currentProcessId()));
     fs::remove_all (dir);
-    setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
+    sbtest::setEnv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str());
 
     const double f0 = 220.0;
     const auto tone = groupd::sawTone (f0, 1.5, 48000.0, 16);
@@ -398,5 +424,5 @@ TEST (clap_content_extension_switches_to_wavetable_renders_resamples_and_copies_
     plugin->deactivate (plugin);
     plugin->destroy (plugin);
     fs::remove_all (dir);
-    unsetenv ("SYNTHYBOY_USER_DIR");
+    sbtest::unsetEnv ("SYNTHYBOY_USER_DIR");
 }

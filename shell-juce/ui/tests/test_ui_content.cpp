@@ -65,7 +65,7 @@ struct UserDirScope
             fs::remove_all (dir, ec);
         }
         fs::create_directories (dir);
-        setenv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str(), 1);
+        sbtest::setEnv ("SYNTHYBOY_USER_DIR", (dir / "user").string().c_str());
     }
     fs::path dir;
 };
