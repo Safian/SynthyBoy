@@ -26,7 +26,11 @@ enum class Conv : uint8_t
     logPercent, // 0..100 % -> value a * (b / a) ^ (in / 100)
     logPercentInv,// 0..100 % -> value b * (a / b) ^ (in / 100): the high cut (0 % = b, 100 % = a)
     logToPercent, // value -> 0..100 % on a log scale between a (0 %) and b (100 %): the compressor attack / release
-    ratioPercent  // compressor ratio r >= 1 -> 100 * (1 - 1 / r)
+    ratioPercent, // compressor ratio r >= 1 -> 100 * (1 - 1 / r)
+    filterDrive,  // Serum filter drive 0 .. 100 -> filter#.drive in dB: piecewise linear through the values measured against Serum 2.1.5; the level makeup that goes with it is added to filter#.level (serum_voice.cpp)
+    curveAttack,  // Serum envelope attack curve 0 .. 100 -> env#.attack_curve: piecewise linear through the values measured against Serum 2.1.5 (the sign is the opposite of the decay)
+    curveDecay,   // Serum envelope decay / release curve 0 .. 100 -> env#.decay_curve / release_curve: the same, measured
+    compThresh    // Serum compressor threshold 0 .. 1 -> dB: the measured ceiling of a limiter (tools/ref-compare, REFCOMPARE-REPORT.md), 0 dB up to 0.375 and falling to -42.5 dB
 };
 
 enum class Fid : uint8_t { exact, close, approx }; // exact = the same quantity; close = the same quantity, range clamped / unit assumed; approx = nearest feature
@@ -50,6 +54,13 @@ struct Rule
 
 /** The rules of a scope (null/0 for an unknown scope). */
 const Rule* rulesOf (const char* scope, size_t& count) noexcept;
+
+/** The level makeup (dB) of a Serum filter drive of `v` percent: the louder output of the Serum drive stage, measured against Serum 2.1.5, on top of the drive in dB. */
+double filterDriveMakeupDb (double v) noexcept;
+
+/** Level (dB) to add to the oscillator level for `voices` unison voices at `blend` percent: Serum 2.1.5 normalises the unison differently from our engine (the level follows the blend and
+    the parity of the voice count; measured, tools/ref-compare/experiment.py). 0 for one voice. */
+double unisonLevelCompDb (int voices, double blend) noexcept;
 
 /** Value of `rule` applied to the number `v`. */
 double convert (const Rule& rule, double v) noexcept;

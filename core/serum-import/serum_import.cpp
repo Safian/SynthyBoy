@@ -599,9 +599,8 @@ void Importer::global()
     const std::string path = "Global0/plainParams";
     std::vector<Unmapped> um;
     if (isDefaultBlock (pp)) noteDefault (pp);
-    else
     {
-        applyScope ({ "Global" }, pp, 1, "voice", path, um, false);
+        applyScope ({ "Global" }, pp, 1, "voice", path, um, true);
         // the specials
         for (const Unmapped& u : um)
         {

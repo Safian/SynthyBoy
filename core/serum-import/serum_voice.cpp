@@ -173,6 +173,16 @@ void Importer::oscillator (int i)
     applyScope ({ "Osc" }, pp, n, area, on + "/plainParams", um, true,
                 { "kParamType", "kParamOctave", "kParamPitch", "kParamPitchRatio", "kParamScanRate", "kParamLoopCrossfade", "kParamEnable" });
 
+    {
+        // the unison level follows the blend and the voice count in Serum, not in our engine (measured, serum_map.cpp)
+        const int vi = indexOf (key ("unison.voices")), bi = indexOf (key ("unison.blend")), li = indexOf (key ("level"));
+        if (vi >= 0 && bi >= 0 && li >= 0)
+        {
+            const double comp = unisonLevelCompDb (static_cast<int> (std::lround (R.values.plain[static_cast<size_t> (vi)])), static_cast<double> (R.values.plain[static_cast<size_t> (bi)]));
+            if (comp != 0.0) store (key ("level"), static_cast<double> (R.values.plain[static_cast<size_t> (li)]) * std::pow (10.0, comp / 20.0));
+        }
+    }
+
     // on / off (OSC A is on in the init state)
     {
         const int en = get (pp, "kParamEnable");
@@ -339,7 +349,7 @@ void Importer::oscillator (int i)
             const int tp = get (bplain, "kParamTablePos");
             const double pos = tp >= 0 ? num (tp) : 1.0;
             bool cl = false;
-            const double st = store (key ("frame"), (pos - 1.0) / 255.0 * 100.0, &cl);
+            const double st = store (key ("frame"), pos / 256.0 * 100.0, &cl);   // measured against Serum 2.1.5 (tools/ref-compare): position / 256 of the table, not (position - 1) / 255
             if (tp >= 0)
             {
                 setByFile[static_cast<size_t> (indexOf (key ("frame")))] = 1;
@@ -819,7 +829,7 @@ void Importer::voiceFilter (int i)
     const int pp = get (V, "plainParams");
     std::vector<Unmapped> um;
     if (isDefaultBlock (pp)) noteDefault (pp);
-    else applyScope ({ "Filter" }, pp, n, area, name + "/plainParams", um, true, { "kParamType" });
+    applyScope ({ "Filter" }, pp, n, area, name + "/plainParams", um, true, { "kParamType" });   // also for "default": the Serum defaults of the rows apply
     const int tp = get (pp, "kParamType");
     if (isText (tp))
     {
@@ -837,6 +847,27 @@ void Importer::voiceFilter (int i)
         }
         else entry (ItemKind::dropped, Reason::enumRemapped, area, name + "/plainParams/kParamType", str (tp), area + ".model", "", "filter_type_unknown");
         consume (tp);
+    }
+    else
+    {
+        // no type in the file = the Serum default "MG Low 12" (Serum 2.1.5, the type of a filter that was only switched on)
+        Fid fid = Fid::exact;
+        int m = 0, s = 0;
+        if (filterTypeFromName ("MgL12", m, s, fid))
+        {
+            store (area + ".model", m);
+            store (area + ".style", s);
+        }
+    }
+    {
+        // the Serum drive stage is also louder (measured against Serum 2.1.5): the makeup goes into the level of the filter
+        const int dn = get (pp, "kParamDrive");
+        const int li = indexOf (area + ".level");
+        if (dn >= 0 && isNumber (dn) && li >= 0)
+        {
+            const double mk = filterDriveMakeupDb (num (dn));
+            if (mk > 0.0) store (area + ".level", static_cast<double> (R.values.plain[static_cast<size_t> (li)]) + mk);
+        }
     }
     for (const Unmapped& u : um)
     {
@@ -1018,7 +1049,12 @@ void Importer::envelope (int i)
     const int pp = get (E, "plainParams");
     std::vector<Unmapped> um;
     if (isDefaultBlock (pp)) noteDefault (pp);
-    else applyScope ({ "Env" }, pp, n, area, name + "/plainParams", um);
+    applyScope ({ "Env" }, pp, n, area, name + "/plainParams", um);   // also for "default": the Serum defaults of the rows apply
+    {
+        // Serum 2.1.5: the attack of envelope 1 is 1 ms, of envelopes 2 .. 4 0.5 ms (the row default is the first)
+        const int a = indexOf (keyOf ("env#.attack", n));
+        if (n > 1 && a >= 0 && ! setByFile[static_cast<size_t> (a)]) store (keyOf ("env#.attack", n), 0.5);
+    }
     for (const Unmapped& u : um)
     {
         if (used[static_cast<size_t> (u.node)]) continue;

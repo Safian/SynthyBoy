@@ -396,7 +396,7 @@ def compare_pair(ref, ours, t_on=0.0, t_off=2.5, total=4.0):
         out['f0_octave_error'] = bool(octave)
         out['r_f0_cents'] = raw
         # only when the reference is tonal; a tonal reference that we render as noise is a miss of 600 cents
-        out['d_f0_cents'] = (abs(folded) if tb else 600.0) if ta else None
+        out['d_f0_cents'] = (min(abs(raw), 600.0) if tb else 600.0) if ta else None   # an octave is an error of 600 cents and more: it is capped, not folded
     ba, sma, ca_ = stereo_stats(ref)
     bb, smb, cb_ = stereo_stats(ours)
     out['r_balance_ref'], out['r_balance_ours'] = ba, bb

@@ -89,7 +89,7 @@ TEST (serum_oscillator_values_and_the_accounting_identity)
     CHECK_EQ (r.report.unaccounted, 0);
     CHECK (r.report.leaves > 20);
     CHECK_EQ (norm (r, "osc1.on"), 1.0f);
-    CHECK_NEAR (norm (r, "osc1.level"), 50.0, 1e-3);
+    CHECK_NEAR (norm (r, "osc1.level"), 50.0 * std::pow (10.0, serumimport::unisonLevelCompDb (5, 60.0) / 20.0), 1e-2);   // 5 unison voices at blend 60: the measured unison level correction
     CHECK_NEAR (norm (r, "osc1.pan"), 50.0, 1e-3);
     CHECK_NEAR (norm (r, "osc1.transpose"), -9.0, 1e-3);
     CHECK_NEAR (norm (r, "osc1.tune"), 12.0, 1e-3);
@@ -100,7 +100,7 @@ TEST (serum_oscillator_values_and_the_accounting_identity)
     CHECK_EQ (norm (r, "osc1.pitch_track"), 0.0f);
     CHECK_EQ (norm (r, "osc1.unison.stack"), 3.0f); // Octaves
     CHECK_EQ (norm (r, "osc1.unison.mode"), 1.0f);  // Super
-    CHECK_NEAR (norm (r, "osc1.frame"), (129.0 - 1.0) / 255.0 * 100.0, 1e-2);
+    CHECK_NEAR (norm (r, "osc1.frame"), 129.0 / 256.0 * 100.0, 1e-2);   // position / 256 (measured against Serum 2.1.5)
     CHECK_NEAR (norm (r, "osc1.warp.amount"), 40.0, 1e-3);
     CHECK_EQ (norm (r, "osc1.warp.type"), 1.0f); // Sync
     CHECK_NEAR (norm (r, "osc1.phase"), 90.0, 1e-3);
@@ -135,7 +135,7 @@ TEST (serum_defaults_of_an_empty_patch)
     CHECK_EQ (norm (r, "osc1.on"), 1.0f);
     CHECK_EQ (norm (r, "master.bend_range"), 2.0f);
     CHECK_EQ (norm (r, "master.bend_down_link"), 1.0f);
-    // the Init filter type is MG Low 6 = model Slope (9), style 0
+    // a patch without a filter module keeps the defaults of our engine (the Serum default type of a filter that is switched on is tested below)
     CHECK_EQ (norm (r, "filter1.model"), 9.0f);
     CHECK_EQ (norm (r, "filter1.style"), 0.0f);
     // an LFO without a shape is a triangle
@@ -159,13 +159,13 @@ TEST (serum_filter_envelope_lfo_macro_values)
     CHECK (r.status == ImportStatus::ok);
     CHECK_EQ (r.report.unaccounted, 0);
     CHECK_EQ (norm (r, "filter1.on"), 1.0f);
-    CHECK_NEAR (norm (r, "filter1.cutoff"), 440.0 * std::pow (2.0, (135.0 * 0.5 - 69.0) / 12.0), 0.5);
+    CHECK_NEAR (norm (r, "filter1.cutoff"), 440.0 * std::pow (2.0, (135.0 * 0.5 - 69.0 + 2.0) / 12.0), 0.5); // measured against Serum 2.1.5: +2 semitones on the 135 note scale
     CHECK_NEAR (norm (r, "filter1.resonance"), 40.0, 1e-3);
-    CHECK_NEAR (norm (r, "filter1.drive"), 10.0, 1e-3);
+    CHECK_NEAR (norm (r, "filter1.drive"), 2.0, 1e-3);   // Serum drive 50: the drive of our filter that gives the same harmonic shape (measured), the makeup goes to the level
     CHECK_NEAR (norm (r, "filter1.var"), 30.0, 1e-3);
     CHECK_NEAR (norm (r, "filter1.mix"), 80.0, 1e-3);
     CHECK_NEAR (norm (r, "filter1.keytrack"), 100.0, 1e-3);
-    CHECK_NEAR (norm (r, "filter1.level"), 20.0 * std::log10 (0.5), 1e-2);
+    CHECK_NEAR (norm (r, "filter1.level"), 20.0 * std::log10 (0.5) + serumimport::filterDriveMakeupDb (50.0), 1e-2);
     CHECK_NEAR (norm (r, "filter1.pan"), 20.0, 1e-3);
     CHECK_EQ (norm (r, "filter1.model"), 26.0f); // New: MG Ladder is style 0
     CHECK_EQ (norm (r, "filter1.style"), 0.0f);
@@ -174,9 +174,9 @@ TEST (serum_filter_envelope_lfo_macro_values)
     CHECK_NEAR (norm (r, "env1.decay"), 1500.0, 1e-2);
     CHECK_NEAR (norm (r, "env1.sustain"), 50.0, 1e-3);
     CHECK_NEAR (norm (r, "env1.release"), 2000.0, 1e-2);
-    CHECK_NEAR (norm (r, "env1.attack_curve"), 0.0, 1e-3);
-    CHECK_NEAR (norm (r, "env1.decay_curve"), -3.0, 0.02);
-    CHECK_NEAR (norm (r, "env1.release_curve"), 1.8, 1e-3);
+    CHECK_NEAR (norm (r, "env1.attack_curve"), 2.5, 1e-3);   // curve 50: the measured envelope shape (Serum 50 is not our 0)
+    CHECK_NEAR (norm (r, "env1.decay_curve"), -1.0, 0.02);
+    CHECK_NEAR (norm (r, "env1.release_curve"), 5.5, 1e-3);
     CHECK_NEAR (norm (r, "macro.3"), 42.0, 1e-3);
     CHECK_EQ (r.macroNames[2], std::string ("CUTOFF"));
     // LFO 1: a drawn shape, Hz mode, free running
@@ -685,7 +685,7 @@ TEST (serum_routing_global_mpe_and_curves)
     CHECK_EQ (norm (r, "osc2.destination"), 4.0f);
     CHECK_NEAR (norm (r, "osc2.bus2_send"), 60.0, 1e-3);
     CHECK_EQ (norm (r, "filter1.destination"), 2.0f);
-    CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25), 1e-2);
+    CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25) + 7.18, 1e-2); // the gain staging against Serum 2.1.5 (serum_map.cpp, kMasterTrimDb)
     CHECK_EQ (norm (r, "master.polyphony"), 1.0f); // mono toggle wins
     CHECK_EQ (norm (r, "master.bend_range"), 12.0f);
     CHECK_EQ (norm (r, "master.bend_down_range"), 7.0f);
@@ -1388,3 +1388,48 @@ TEST (serum_slot_delay_and_modulation_of_other_slots_smooth_and_delay)
     CHECK_EQ (destination (5), modDestinationChoiceOf (static_cast<size_t> (findParamIndex (findParamByKey ("mod02.delay_beats")->id))));
     CHECK (entryWith (r, "modulation_delay_not_modelled") < 0 && entryWith (r, "destination_not_modelled") < 0);
 }
+
+// tools/ref-compare against the real Serum 2.1.5: the values of the parameters a file does not mention are the Serum defaults, not ours, and the gain staging is the measured one
+// (REFCOMPARE-REPORT.md). The numbers are the ones measured with tools/ref-compare/experiment.py (levels of the same crafted preset in Serum and in our engine).
+TEST (serum_absent_parameters_take_the_serum_defaults_and_the_gain_staging_is_the_measured_one)
+{
+    Preset p;
+    p.set ("Oscillator0", map ({ { "plainParams", dflt() } }));
+    p.set ("Global0", map ({ { "plainParams", dflt() } }));
+    p.set ("Env0", map ({ { "plainParams", dflt() } }));
+    p.set ("Env1", map ({ { "plainParams", dflt() } }));
+    p.set ("VoiceFilter0", map ({ { "plainParams", plain ({ { "kParamEnable", 1 } }) } }));
+    const SerumImportResult r = run (p.file());
+    CHECK_EQ (r.report.unaccounted, 0);
+    CHECK_NEAR (norm (r, "osc1.level"), 56.25, 1e-3);                                 // default 0.75^2 (the file value is the linear gain)
+    CHECK_NEAR (norm (r, "master.volume"), 20.0 * std::log10 (0.25) + 7.18, 1e-2);    // default 0.25, +7.18 dB engine calibration
+    CHECK_NEAR (norm (r, "env1.attack"), 1.0, 1e-3);                                  // envelope 1: 1 ms, envelopes 2 .. 4: 0.5 ms
+    CHECK_NEAR (norm (r, "env2.attack"), 0.5, 1e-3);
+    CHECK_NEAR (norm (r, "env1.release"), 15.0, 1e-3);
+    CHECK_NEAR (norm (r, "env2.decay"), 1000.0, 1e-3);
+    CHECK_NEAR (norm (r, "filter1.cutoff"), 440.0 * std::pow (2.0, (135.0 * 0.5 - 69.0 + 2.0) / 12.0), 0.5);   // default 0.5 on the measured scale (about 480 Hz)
+    int mgModel = -1, mgStyle = -1;   // no type in the file: the Serum default MG Low 12
+    serumimport::Fid mgFid = serumimport::Fid::exact;
+    CHECK (serumimport::filterTypeFromName ("MgL12", mgModel, mgStyle, mgFid));
+    CHECK_EQ (norm (r, "filter1.model"), static_cast<float> (mgModel));
+    CHECK_EQ (norm (r, "filter1.style"), static_cast<float> (mgStyle));
+    // a file value is the linear gain: 0.5 of the master is -6.02 dB on top of the calibration, the sub is trimmed
+    Preset q;
+    q.set ("Global0", map ({ { "plainParams", plain ({ { "kParamMasterVolume", 0.5 } }) } }));
+    q.set ("Oscillator4", map ({ { "plainParams", plain ({ { "kParamEnable", 1 }, { "kParamVolume", 1.0 } }) } }));
+    const SerumImportResult r2 = run (q.file());
+    CHECK_NEAR (norm (r2, "master.volume"), 20.0 * std::log10 (0.5) + 7.18, 1e-2);
+    CHECK_NEAR (norm (r2, "sub.level"), 65.7, 1e-2);
+}
+
+// the unison level correction (measured against Serum 2.1.5): none for one voice, the odd and the even voice counts differ, and the blend moves the level
+TEST (serum_unison_level_correction_follows_the_voice_count_parity_and_the_blend)
+{
+    CHECK_EQ (serumimport::unisonLevelCompDb (1, 75.0), 0.0);
+    CHECK_NEAR (serumimport::unisonLevelCompDb (5, 0.0), -7.6, 1e-9);
+    CHECK_NEAR (serumimport::unisonLevelCompDb (5, 100.0), -1.0, 1e-9);
+    CHECK_NEAR (serumimport::unisonLevelCompDb (4, 0.0), 0.6, 1e-9);
+    CHECK (serumimport::unisonLevelCompDb (5, 25.0) < serumimport::unisonLevelCompDb (5, 75.0)); // more blend, louder
+    CHECK_NEAR (serumimport::unisonLevelCompDb (8, 50.0), 0.5 * (serumimport::unisonLevelCompDb (4, 50.0) + serumimport::unisonLevelCompDb (12, 50.0)), 1e-9); // between the measured even counts: linear in the voice count
+}
+

@@ -1,23 +1,136 @@
 {
  "version": 1,
- "classes": {"match": 85.0, "close": 65.0},
+ "classes": {
+  "match": 85.0,
+  "close": 65.0
+ },
  "features": {
-  "mel":        {"d": "d_mel",         "floor": 0.5, "span": 10.0, "weight": 10, "unit": "dB"},
-  "stft":       {"d": "d_stft",        "floor": 0.1, "span": 2.0,  "weight": 8, "unit": "sc+log"},
-  "env_corr":   {"d": "d_env_corr",    "floor": 0.0, "span": 0.5,  "weight": 8,  "unit": "1-r"},
-  "env_db":     {"d": "d_env_db",      "floor": 0.5, "span": 12.0, "weight": 6,  "unit": "dB"},
-  "seg_attack": {"d": "d_seg_attack",  "floor": 0.5, "span": 12.0, "weight": 4,  "unit": "dB"},
-  "seg_sustain":{"d": "d_seg_sustain", "floor": 0.5, "span": 12.0, "weight": 6,  "unit": "dB"},
-  "seg_release":{"d": "d_seg_release", "floor": 0.5, "span": 12.0, "weight": 4,  "unit": "dB"},
-  "lufs":       {"d": "d_lufs",        "floor": 0.3, "span": 10.0, "weight": 10, "unit": "LU"},
-  "peak":       {"d": "d_peak",        "floor": 0.5, "span": 12.0, "weight": 3,  "unit": "dB"},
-  "centroid":   {"d": "d_centroid",    "floor": 0.05,"span": 1.0,  "weight": 6,  "unit": "oct"},
-  "rolloff":    {"d": "d_rolloff",     "floor": 0.05,"span": 1.0,  "weight": 4,  "unit": "oct"},
-  "f0":         {"d": "d_f0_cents",    "floor": 3.0, "span": 40.0, "weight": 16,  "unit": "cents"},
-  "balance":    {"d": "d_balance",     "floor": 0.5, "span": 6.0,  "weight": 3,  "unit": "dB"},
-  "sidemid":    {"d": "d_sidemid",     "floor": 1.0, "span": 12.0, "weight": 4,  "unit": "dB"},
-  "corr":       {"d": "d_corr",        "floor": 0.05,"span": 0.6,  "weight": 3,  "unit": "r"},
-  "tail":       {"d": "d_tail",        "floor": 0.05,"span": 1.0,  "weight": 3,  "unit": "s"},
-  "floor":      {"d": "d_floor",       "floor": 3.0, "span": 40.0, "weight": 2,  "unit": "dB"}
+  "mel": {
+   "d": "d_mel",
+   "floor": 1.309,
+   "span": 10.0,
+   "weight": 10,
+   "unit": "dB"
+  },
+  "stft": {
+   "d": "d_stft",
+   "floor": 0.141,
+   "span": 2.0,
+   "weight": 8,
+   "unit": "sc+log"
+  },
+  "env_corr": {
+   "d": "d_env_corr",
+   "floor": 0.004,
+   "span": 0.5,
+   "weight": 8,
+   "unit": "1-r"
+  },
+  "env_db": {
+   "d": "d_env_db",
+   "floor": 0.799,
+   "span": 12.0,
+   "weight": 6,
+   "unit": "dB"
+  },
+  "seg_attack": {
+   "d": "d_seg_attack",
+   "floor": 0.127,
+   "span": 12.0,
+   "weight": 4,
+   "unit": "dB"
+  },
+  "seg_sustain": {
+   "d": "d_seg_sustain",
+   "floor": 0.262,
+   "span": 12.0,
+   "weight": 6,
+   "unit": "dB"
+  },
+  "seg_release": {
+   "d": "d_seg_release",
+   "floor": 0.26,
+   "span": 12.0,
+   "weight": 4,
+   "unit": "dB"
+  },
+  "lufs": {
+   "d": "d_lufs",
+   "floor": 0.196,
+   "span": 10.0,
+   "weight": 10,
+   "unit": "LU"
+  },
+  "peak": {
+   "d": "d_peak",
+   "floor": 0.143,
+   "span": 12.0,
+   "weight": 3,
+   "unit": "dB"
+  },
+  "centroid": {
+   "d": "d_centroid",
+   "floor": 0.05,
+   "span": 1.0,
+   "weight": 6,
+   "unit": "oct"
+  },
+  "rolloff": {
+   "d": "d_rolloff",
+   "floor": 0.057,
+   "span": 1.0,
+   "weight": 4,
+   "unit": "oct"
+  },
+  "f0": {
+   "d": "d_f0_cents",
+   "floor": 0.726,
+   "span": 40.0,
+   "weight": 16,
+   "unit": "cents"
+  },
+  "balance": {
+   "d": "d_balance",
+   "floor": 0.184,
+   "span": 6.0,
+   "weight": 3,
+   "unit": "dB"
+  },
+  "sidemid": {
+   "d": "d_sidemid",
+   "floor": 0.207,
+   "span": 12.0,
+   "weight": 4,
+   "unit": "dB"
+  },
+  "corr": {
+   "d": "d_corr",
+   "floor": 0.007,
+   "span": 0.6,
+   "weight": 3,
+   "unit": "r"
+  },
+  "tail": {
+   "d": "d_tail",
+   "floor": 0.001,
+   "span": 1.0,
+   "weight": 3,
+   "unit": "s"
+  },
+  "floor": {
+   "d": "d_floor",
+   "floor": 0.188,
+   "span": 40.0,
+   "weight": 2,
+   "unit": "dB"
+  }
+ },
+ "noise_floor": {
+  "source": "Serum 2.1.5 vs Serum 2.1.5, 949 render pairs of the same presets (tools/ref-compare noise), 88.7 % bit identical; floor = 95th percentile of each distance",
+  "pairs": 949
+ },
+ "variants": {
+  "min_drop": 10.0,
+  "note": "the 20 broken variants (4 breaks of our 5 best renders: 50 cents sharp, oscillator A muted, filter cutoff three octaves down, level 6 dB down) must score at least this many points under the unbroken render"
  }
 }

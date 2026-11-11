@@ -20,6 +20,13 @@ namespace
 {
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr Fid X = Fid::exact, C = Fid::close, A = Fid::approx;
+
+// Gain staging against the real Serum 2.1.5 (tools/ref-compare/experiment.py, REFCOMPARE-REPORT.md): in Serum the file values of the master, oscillator, sub and noise volume are linear
+// gains and the chain is wave * level * master. Our engine renders the same chain 7.18 dB (oscillators with a Serum table, whatever the table and the position), 3.53 dB (sub) and 0.22 dB (noise) quieter, so the master carries the +7.18 dB
+// and the sub and the noise level are trimmed by the difference (their percent knobs have the headroom; the master range ends at +6 dB, so a Serum master above 0.88 is limited).
+constexpr double kMasterTrimDb = 7.18;
+constexpr double kSubTrim = 0.6570;    // 10 ^ ((3.53 - 7.18) / 20)
+constexpr double kNoiseTrim = 1.0;     // the noise samples measured through the same chain (any sample): no trim
 } // namespace
 
 // ----- enumerations ----------------------------------------------------------------------------------------------------------------------
@@ -79,7 +86,7 @@ ENUM (kRoutingDestEnum, 5, "routing", { "kRoutingDestFilter", 5, X }, { "kRoutin
 namespace
 {
 const Rule kOsc[] = {
-    { "Osc", "kParamVolume", "osc#.level", Conv::lin, 100, 0, C, kNaN, nullptr, "level_linear_assumed" },
+    { "Osc", "kParamVolume", "osc#.level", Conv::lin, 100, 0, X, 0.5625, nullptr, "" },   // measured against Serum 2.1.5: the file value is the linear gain, default 0.75^2
     { "Osc", "kParamPan", "osc#.pan", Conv::lin, 2, 0, X, 0, nullptr, "" },
     { "Osc", "kParamFine", "osc#.tune", Conv::lin, 1, 0, X, 0, nullptr, "" },
     { "Osc", "kParamCoarsePit", "osc#.pitch_coarse", Conv::lin, 1, 0, X, 0, nullptr, "" },
@@ -182,7 +189,7 @@ const Rule kSpectral[] = {
 };
 
 const Rule kNoise[] = {
-    { "Noise", "kParamVolume", "noise.level", Conv::lin, 100, 0, C, kNaN, nullptr, "level_linear_assumed" },
+    { "Noise", "kParamVolume", "noise.level", Conv::lin, 100 * kNoiseTrim, 0, X, 0.0625, nullptr, "" },   // default 0.25^2
     { "Noise", "kParamPan", "noise.pan", Conv::lin, 2, 0, X, 0, nullptr, "" },
     { "Noise", "kParamEnable", "noise.on", Conv::boolean, 1, 0, X, 0, nullptr, "" },
     { "Noise", "kParamPitch", "noise.pitch", Conv::lin, 1, 0, X, 0, nullptr, "" },
@@ -195,7 +202,7 @@ const Rule kNoise[] = {
 };
 
 const Rule kSub[] = {
-    { "Sub", "kParamVolume", "sub.level", Conv::lin, 100, 0, C, kNaN, nullptr, "level_linear_assumed" },
+    { "Sub", "kParamVolume", "sub.level", Conv::lin, 100 * kSubTrim, 0, X, 0.5625, nullptr, "" },
     { "Sub", "kParamPan", "sub.pan", Conv::lin, 2, 0, X, 0, nullptr, "" },
     { "Sub", "kParamEnable", "sub.on", Conv::boolean, 1, 0, X, 0, nullptr, "" },
     { "Sub", "kParamOctave", "sub.octave", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
@@ -208,9 +215,9 @@ const Rule kSub[] = {
 
 const Rule kFilter[] = {
     { "Filter", "kParamEnable", "filter#.on", Conv::boolean, 1, 0, X, 0, nullptr, "" },
-    { "Filter", "kParamFreq", "filter#.cutoff", Conv::noteHz, 1, 0, C, kNaN, nullptr, "filter_frequency_scale_assumed" },
+    { "Filter", "kParamFreq", "filter#.cutoff", Conv::noteHz, 1, 2.0, X, 0.5, nullptr, "" },   // measured against Serum 2.1.5 (MG Low 12, harmonic levels of a saw): 2 semitones above the 135 note scale, default 0.5
     { "Filter", "kParamReso", "filter#.resonance", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
-    { "Filter", "kParamDrive", "filter#.drive", Conv::lin, 0.2, 0, C, kNaN, nullptr, "filter_drive_scale_assumed" },
+    { "Filter", "kParamDrive", "filter#.drive", Conv::filterDrive, 1, 0, C, 0, nullptr, "filter_drive_fitted" },
     { "Filter", "kParamVar", "filter#.var", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "Filter", "kParamWet", "filter#.mix", Conv::lin, 1, 0, X, 100, nullptr, "" },
     { "Filter", "kParamKeyTrack", "filter#.keytrack", Conv::lin, 100, 0, X, 0, nullptr, "" },
@@ -222,21 +229,21 @@ const Rule kFilter[] = {
 };
 
 const Rule kEnv[] = {
-    { "Env", "kParamAttack", "env#.attack", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "Env", "kParamAttack", "env#.attack", Conv::ms, 1, 0, X, 0.001, nullptr, "" },   // Serum 2.1.5 default of envelope 1 (envelopes 2 .. 4: 0.5 ms, serum_voice.cpp)
     { "Env", "kParamHold", "env#.hold", Conv::ms, 1, 0, X, 0, nullptr, "" },
-    { "Env", "kParamDecay", "env#.decay", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
+    { "Env", "kParamDecay", "env#.decay", Conv::ms, 1, 0, X, 1.0, nullptr, "" },
     { "Env", "kParamSustain", "env#.sustain", Conv::lin, 100, 0, C, 1, nullptr, "sustain_linear_assumed" },
-    { "Env", "kParamRelease", "env#.release", Conv::ms, 1, 0, X, kNaN, nullptr, "" },
-    { "Env", "kParamCurve1", "env#.attack_curve", Conv::curve50, 0.18, 0, C, 50, nullptr, "env_curve_scale_assumed" },
-    { "Env", "kParamCurve2", "env#.decay_curve", Conv::curve50, 0.18, 0, C, 66.6, nullptr, "env_curve_scale_assumed" },
-    { "Env", "kParamCurve3", "env#.release_curve", Conv::curve50, 0.18, 0, C, 66.6, nullptr, "env_curve_scale_assumed" },
+    { "Env", "kParamRelease", "env#.release", Conv::ms, 1, 0, X, 0.015, nullptr, "" },
+    { "Env", "kParamCurve1", "env#.attack_curve", Conv::curveAttack, 1, 0, C, 50, nullptr, "env_curve_fitted" },
+    { "Env", "kParamCurve2", "env#.decay_curve", Conv::curveDecay, 1, 0, C, 66.6, nullptr, "env_curve_fitted" },
+    { "Env", "kParamCurve3", "env#.release_curve", Conv::curveDecay, 1, 0, C, 66.6, nullptr, "env_curve_fitted" },
     { "Env", "kParamLegatoInverted", "env#.legato_inverted", Conv::boolean, 1, 0, X, 0, nullptr, "" },
 };
 
 const Rule kMacro[] = { { "Macro", "kParamValue", "macro.#", Conv::lin, 1, 0, X, 0, nullptr, "" } };
 
 const Rule kGlobal[] = {
-    { "Global", "kParamMasterVolume", "master.volume", Conv::dbFromLin, 1, 0, C, kNaN, nullptr, "master_volume_linear_assumed" },
+    { "Global", "kParamMasterVolume", "master.volume", Conv::dbFromLin, 1, kMasterTrimDb, X, 0.25, nullptr, "" },
     { "Global", "kParamPolyCount", "master.polyphony", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "Global", "kParamBendRangeUp", "master.bend_range", Conv::lin, 1, 0, X, kNaN, nullptr, "" },
     { "Global", "kParamLegato", "master.legato", Conv::boolean, 1, 0, X, 0, nullptr, "" },
@@ -281,6 +288,44 @@ const Rule* rulesOf (const char* scope, size_t& count) noexcept
     return nullptr;
 }
 
+namespace
+{
+double interp (const double* xs, const double* ys, int n, double v) noexcept
+{
+    if (v <= xs[0]) return ys[0];
+    if (v >= xs[n - 1]) return ys[n - 1];
+    int i = 0;
+    while (i + 2 < n && v > xs[i + 1]) ++i;
+    return ys[i] + (ys[i + 1] - ys[i]) * (v - xs[i]) / (xs[i + 1] - xs[i]);
+}
+} // namespace
+
+double unisonLevelCompDb (int voices, double blend) noexcept
+{
+    if (voices <= 1) return 0.0;
+    // gap (Serum - ours, dB) of the same crafted preset at blend 0 / 25 / 50 / 75 / 100 %; odd voice counts and even ones behave differently
+    static const double kB[5] = { 0, 25, 50, 75, 100 };
+    static const int kOddN[4] = { 3, 5, 7, 9 };
+    static const double kOdd[4][5] = { { -7.1, -7.1, -5.7, -3.6, -3.3 }, { -7.6, -7.2, -4.5, -1.5, -1.0 }, { -8.0, -7.3, -3.8, -0.4, 0.3 }, { -8.5, -7.6, -3.6, 0.1, 0.8 } };
+    static const int kEvenN[4] = { 2, 4, 12, 16 };
+    static const double kEven[4][5] = { { -1.9, -1.9, -1.9, -1.9, -1.9 }, { 0.6, 0.4, -0.1, -0.5, -1.9 }, { -1.3, -1.3, -0.4, 1.4, 1.6 }, { -2.3, -2.1, -0.5, 1.8, 2.0 } };
+    const bool odd = (voices % 2) != 0;
+    const int* ns = odd ? kOddN : kEvenN;
+    const double(*tab)[5] = odd ? kOdd : kEven;
+    double col[4];
+    for (int i = 0; i < 4; ++i) col[i] = interp (kB, tab[i], 5, blend);
+    double n[4];
+    for (int i = 0; i < 4; ++i) n[i] = ns[i];
+    return interp (n, col, 4, static_cast<double> (voices));
+}
+
+double filterDriveMakeupDb (double v) noexcept
+{
+    static const double kV[] = { 0, 10, 25, 50, 75, 100 };
+    static const double kL[] = { 0.0, 3.3, 7.7, 10.7, 11.0, 10.2 };   // the level gap that remained after the drive was matched by shape
+    return interp (kV, kL, 6, v);
+}
+
 double convert (const Rule& r, double v) noexcept
 {
     switch (r.conv)
@@ -288,7 +333,41 @@ double convert (const Rule& r, double v) noexcept
         case Conv::lin: return v * r.a + r.b;
         case Conv::dbFromLin: return v <= 1e-6 ? -120.0 : 20.0 * std::log10 (v) * r.a + r.b;
         case Conv::ms: return v * 1000.0;
-        case Conv::noteHz: return 440.0 * std::pow (2.0, (135.0 * v - 69.0) / 12.0);
+        case Conv::filterDrive:
+        {
+            // measured against Serum 2.1.5 (saw through MG Low 12, harmonic shape): the drive of our filter that gives the same harmonic shape; the level goes with filterDriveMakeupDb
+            static const double kV[] = { 0, 10, 25, 50, 75, 100 };
+            static const double kD[] = { 0.0, 0.0, 0.0, 2.0, 6.0, 12.0 };
+            return interp (kV, kD, 6, v);
+        }
+        case Conv::curveAttack:
+        case Conv::curveDecay:
+        {
+            // measured against Serum 2.1.5 (tools/ref-compare, the envelope shape of crafted presets): the curve value of our envelope that gives the same dB envelope
+            static const double kV[] = { 0, 10, 30, 50, 66.6, 80, 95, 100 };
+            static const double kAtt[] = { -7.0, -5.0, -1.5, 2.5, 7.8, 12.0, 14.0, 14.5 };
+            static const double kDec[] = { 13.0, 12.0, 8.5, 2.5, -1.0, -3.0, -8.0, -9.5 };
+            const double* k = r.conv == Conv::curveAttack ? kAtt : kDec;
+            constexpr int n = static_cast<int> (sizeof kV / sizeof kV[0]);
+            if (v <= kV[0]) return k[0];
+            if (v >= kV[n - 1]) return k[n - 1];
+            int i = 0;
+            while (i + 2 < n && v > kV[i + 1]) ++i;
+            return k[i] + (k[i + 1] - k[i]) * (v - kV[i]) / (kV[i + 1] - kV[i]);
+        }
+        case Conv::compThresh:
+        {
+            // measured against Serum 2.1.5: the output peak of a limiter (ratio 1e6, 0.1 ms attack) at the threshold t, saw input
+            static const double kT[] = { 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75 };
+            static const double kDb[] = { -0.5, -4.1, -6.0, -7.9, -10.6, -13.6, -16.6, -19.6, -22.7, -26.4, -30.3, -34.3, -38.5, -41.5, -42.0, -42.3 };
+            constexpr int n = static_cast<int> (sizeof kT / sizeof kT[0]);
+            if (v <= kT[0]) return 0.0;
+            if (v >= kT[n - 1]) return kDb[n - 1] + (v - kT[n - 1]) * 0.0;
+            int i = 0;
+            while (i + 2 < n && v > kT[i + 1]) ++i;
+            return kDb[i] + (kDb[i + 1] - kDb[i]) * (v - kT[i]) / (kT[i + 1] - kT[i]);
+        }
+        case Conv::noteHz: return 440.0 * std::pow (2.0, (135.0 * v - 69.0 + r.b) / 12.0);   // b = offset in semitones
         case Conv::boolean: return v >= 0.5 ? 1.0 : 0.0;
         case Conv::curve50: return (50.0 - v) * r.a;
         case Conv::logPercent: return r.a * std::pow (r.b / r.a, v / 100.0);
@@ -450,9 +529,9 @@ const Rule kComp[] = {
     { "FX", "kParamAttack", "compressor.attack", Conv::logToPercent, 0.1, 1000, A, kNaN, nullptr, "compressor_time_scale_assumed" },
     { "FX", "kParamRelease", "compressor.release", Conv::logToPercent, 0.1, 1000, A, kNaN, nullptr, "compressor_time_scale_assumed" },
     { "FX", "kParamMultiband", "compressor.bands", Conv::lin, -3, 3, A, kNaN, nullptr, "compressor_band_layout" },
-    { "FX", "kParamThresh", "compressor.low.upper_threshold", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
-    { "FX", "kParamThresh", "compressor.mid.upper_threshold", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
-    { "FX", "kParamThresh", "compressor.high.upper_threshold", Conv::dbFromLin, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
+    { "FX", "kParamThresh", "compressor.low.upper_threshold", Conv::compThresh, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
+    { "FX", "kParamThresh", "compressor.mid.upper_threshold", Conv::compThresh, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
+    { "FX", "kParamThresh", "compressor.high.upper_threshold", Conv::compThresh, 1, 0, A, kNaN, nullptr, "compressor_single_band_to_all_bands" },
     { "FX", "kParamRatio", "compressor.low.upper_ratio", Conv::ratioPercent, 1, 0, A, kNaN, nullptr, "compressor_ratio_scale_assumed" },
     { "FX", "kParamRatio", "compressor.mid.upper_ratio", Conv::ratioPercent, 1, 0, A, kNaN, nullptr, "compressor_ratio_scale_assumed" },
     { "FX", "kParamRatio", "compressor.high.upper_ratio", Conv::ratioPercent, 1, 0, A, kNaN, nullptr, "compressor_ratio_scale_assumed" },
