@@ -2498,7 +2498,7 @@ rlfo1.sync_type,ALIVE,,n/a
 rlfo2.division,ALIVE,,n/a
 rlfo2.keytrack_transpose,ALIVE,,ALIVE
 rlfo2.keytrack_tune,ALIVE,,ALIVE
-rlfo2.rate,ALIVE,,ALIVE
+rlfo2.rate,ALIVE,,DEAD
 rlfo2.stereo,ALIVE,,n/a
 rlfo2.style,ALIVE,,n/a
 rlfo2.sync,ALIVE,,n/a

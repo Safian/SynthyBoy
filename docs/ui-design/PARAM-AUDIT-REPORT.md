@@ -61,7 +61,7 @@ Finite output; peak below +12 dBFS; no click (a step of more than half the peak 
 default renders the same after the sweep (up to the floor); plateaus: neighbouring values of an alive continuous key that render identically are reported (a plateau inside the range is a finding, one at an
 end of the range is saturation and is marked INFO).
 
-## 3. Numbers (full run, engine vital, all capability bits, 3700 s on 8 processes)
+## 3. Numbers (full run, engine vital, all capability bits, 3555 s on 8 processes)
 
 | | |
 |---|---|
@@ -70,9 +70,9 @@ end of the range is saturation and is marked INFO).
 | ALIVE (the sound changes with the key beyond the noise floor) | 2561 |
 | DEAD | 65: explained 65 (open owner question 115: 42, tested by a dedicated semantic test: 18, editor only: 3, instance at the quick density with a live twin: 2), UNEXPLAINED 0 |
 | EXEMPT (needs an MTS-ESP master, the core has only the seam) | 2 |
-| modulatable keys swept through a routed macro: alive / dead | 1067 / 112 (dead: explained 112, unexplained 0; all in question 115, or the keys of the dead list) |
-| per value findings | 434, of which INFO 413 (saturation at an end of the range, nondeterministic context), unexplained 0 |
-| keys with a quantitative semantic assertion (stage 2) | 280 (89 named in a test, plus source / destination / amount of the 64 slots) in 31 test cases, 0 failed |
+| modulatable keys swept through a routed macro: alive / dead | 1066 / 113 (dead: explained 113, unexplained 0; all in question 115, or the keys of the dead list) |
+| per value findings | 448, of which INFO 426 (saturation at an end of the range, nondeterministic context), unexplained 0 |
+| keys with a quantitative semantic assertion (stage 2) | 280 (89 named in a test, plus source / destination / amount of the 64 slots) in 31 test cases, 130 checks, 0 failed |
 | regressions against the committed baseline | 0 |
 | defects fixed in the engine | 1 (45 keys, section 4.1) + 1 additive API (4.3); 2 not fixable without an owner decision (4.2, 4.4); 2 regression tests |
 
@@ -112,7 +112,7 @@ Per group (`osc1` is instance 1, `oscN` the group of osc2 / osc3 and so on):
 | phaser | 13 | 13 | 0 | 0 | 0 | 8 | 1 |
 | quality | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
 | reverb | 23 | 23 | 0 | 0 | 0 | 17 | 0 |
-| rlfoN | 32 | 31 | 1 | 0 | 0 | 12 | 0 |
+| rlfoN | 32 | 31 | 1 | 0 | 0 | 11 | 1 |
 | splitter_lh | 6 | 6 | 0 | 0 | 0 | 2 | 0 |
 | splitter_lmh | 8 | 8 | 0 | 0 | 0 | 3 | 0 |
 | splitter_ms | 5 | 5 | 0 | 0 | 0 | 1 | 0 |
@@ -174,7 +174,7 @@ for reverb, compressor, bode); every parameter jump in the middle of a note is c
 
 ## 5. Stage 2: the semantic checks
 
-Thirty-one test cases in `tools/param-audit/test_param_semantics.cpp` (ctest `synthyboy_test_param_semantics`, label `slow;audit`, 57 s). Each asserts a measured curve against the expected function point by point, with the tolerance
+31 test cases in `tools/param-audit/test_param_semantics.cpp` (ctest `synthyboy_test_param_semantics`, label `slow;audit`, 57 s). Each asserts a measured curve against the expected function point by point, with the tolerance
 and its reason at the check. The printed lines of a run (worst deviation and tolerance per curve):
 
 ```
@@ -208,8 +208,9 @@ velocity at track +100 % (dB): 18 points, end to end +39.1089 (min 6)
 velocity at track +100 % (dB below velocity 1): 18 points, worst deviation 0.0000 dB at 0.1 (tolerance 0.5)
 portamento 100 ms: within 10 cents after 95 ms
 portamento 1600 ms: within 10 cents after 1580 ms
-chorus: consecutive renders differ by 1.42109e-14
+chorus: consecutive renders differ by 9.31323e-10
 phaser: consecutive renders differ by 0
+flanger: consecutive renders differ by 0
 osc1.phase: 25 points, worst deviation 2.10 degrees (tolerance 4); phase 0 fitted at 176.3 degrees
 [ RUN  ] filter_keytrack_follows_the_note_octave_per_octave
 keytrack -100 %: cutoff ratio one octave up 0.500 (expected 0.500)
@@ -219,6 +220,7 @@ keytrack 50 %: cutoff ratio one octave up 1.456 (expected 1.414)
 keytrack 100 %: cutoff ratio one octave up 2.059 (expected 2.000)
 [  OK  ] filter_keytrack_follows_the_note_octave_per_octave
 latency: limiter + comp 72 samples, limiter without comp 0, comp without limiter 0 (1.5 ms = 72 samples)
+2628 keys, 0 not clamped
 ```
 
 ## 6. Mutation proof
