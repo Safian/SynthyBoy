@@ -24,7 +24,9 @@ using namespace synthyboy::ui;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI* juceInitShell = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInitShell = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInitShell, [] { juceInitShell = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInitShell; juceInitShell = nullptr; });
 
 /** The user data directory of every processor of this test: a temp directory, never the real one. Set before any processor exists. */
 const std::filesystem::path& userDir()

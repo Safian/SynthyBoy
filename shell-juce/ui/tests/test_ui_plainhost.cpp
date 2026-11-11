@@ -22,7 +22,9 @@ using namespace synthyboy::ui;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI* juceInit = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInit = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInit, [] { juceInit = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInit; juceInit = nullptr; });
 
 /** A host as the Kick app would write it: the parameter values live in a PlainParameterStore, everything else is the UiHost default. */
 class MemoryHost final : public UiHost

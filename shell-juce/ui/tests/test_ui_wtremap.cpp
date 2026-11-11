@@ -24,7 +24,9 @@ using namespace synthyboy::ui;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI* juceInitRemap = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInitRemap = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInitRemap, [] { juceInitRemap = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInitRemap; juceInitRemap = nullptr; });
 
 juce::File shotDir()
 {

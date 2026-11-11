@@ -39,7 +39,9 @@ using namespace synthyboy::ui;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI* juceInitGaps = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInitGaps = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInitGaps, [] { juceInitGaps = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInitGaps; juceInitGaps = nullptr; });
 
 juce::File shotDir()
 {

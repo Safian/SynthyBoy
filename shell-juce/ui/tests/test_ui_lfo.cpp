@@ -22,7 +22,9 @@ using namespace synthyboy::ui;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI* juceInitLfo = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInitLfo = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInitLfo, [] { juceInitLfo = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInitLfo; juceInitLfo = nullptr; });
 
 juce::File shotDir()
 {

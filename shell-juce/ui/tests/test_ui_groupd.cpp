@@ -33,7 +33,9 @@ namespace fs = std::filesystem;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI* juceInitGroupD = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInitGroupD = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInitGroupD, [] { juceInitGroupD = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInitGroupD; juceInitGroupD = nullptr; });
 
 fs::path baseDir()
 {

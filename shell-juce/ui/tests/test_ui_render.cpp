@@ -24,7 +24,9 @@ using namespace synthyboy::ui;
 namespace
 {
 // message manager for the Components; released by the last test, so JUCE shuts down before the static destructors run
-juce::ScopedJuceInitialiser_GUI* juceInit = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInit = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInit, [] { juceInit = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInit; juceInit = nullptr; });
 
 /** The real processor, with the engine caps the test wants the UI to see. */
 class CapsHost final : public UiHost

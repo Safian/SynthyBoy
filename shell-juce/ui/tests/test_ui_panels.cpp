@@ -21,7 +21,9 @@ using namespace synthyboy::ui;
 
 namespace
 {
-juce::ScopedJuceInitialiser_GUI* juceInitPanels = new juce::ScopedJuceInitialiser_GUI();
+juce::ScopedJuceInitialiser_GUI* juceInitPanels = nullptr;
+// started in main() (sbtest::runStartups), never during static initialisation: that crashes on Windows
+SBTEST_STARTUP (juceInitPanels, [] { juceInitPanels = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInitPanels; juceInitPanels = nullptr; });
 
 const char* pageName (Page p)
 {
