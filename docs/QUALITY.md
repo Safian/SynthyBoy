@@ -158,3 +158,31 @@ preset: the factory presets use one oscillator, one filter and at most the uniso
   SCL / KBM / TUN, formula compiler and renderer, three WAV readers, garbled state through both engines. Clean at 20x.
 * `synthyboy_preset_sanity` (label `slow`, about 50 s native): every factory preset at every tier renders finite, is not silent (peak of a single note at least -60 dBFS),
   stays below +3 dBFS with a four-note chord at velocity 1.0, and its tail ends (below -90 dBFS for 250 ms within 12 s of the note off). Numbers: SWEEP-REPORT.
+
+## Parameter effect audit (2026-11-11)
+
+Does the sound at the output really change, and the way it should, when a value changes? `scripts/run-param-audit.sh` answers that for the whole parameter table of the
+Vital-derived engine (`tools/param-audit`, report and numbers: `docs/ui-design/PARAM-AUDIT-REPORT.md`):
+
+* **Stage 1, the scan** (`synthyboy_param_audit`): every key the engine supports is put into its context (the first state of a ladder in which it is audible: effect on, oscillator
+  type, routed LFO / envelope, filter model ...), rendered offline at every value (`--full`: every step of a stepped key, 65 points + default, both neighbours and the edges of a
+  continuous one; `--quick`: nine) and measured (RMS, peak, centroid, 24 bands, balance, f0, envelope, zero crossings, click, level modulation). Modulatable keys are swept again
+  through a routed source (macro 1 in a modulation slot). A key is ALIVE if the audio changes by more than the noise floor of the harness (-60 dB re peak, or 3 dB above the run to run
+  noise of a random context), DEAD if not in any context of the ladder; DEAD keys need an entry with a reason in `tools/param-audit/exemptions.tsv` or the run fails.
+* **Stage 2, the semantics** (`synthyboy_test_param_semantics`, ctest label `slow;audit`): pitch in cents, levels in dB, the pan law, filter cutoff / resonance, envelope times, LFO rate,
+  mod matrix amount (all 64 slots), delay time, EQ gain, effect mix 0 = dry, velocity law, portamento time ... against the expected function, point by point over the sweep.
+* **Baseline**: `docs/ui-design/param-audit-baseline.json` holds verdict + a compact metric curve (nine points) per key. A run reports REGRESSIONS (changed verdict or curve) with the old and
+  new numbers and exits 1; intended changes are accepted with `--update-baseline` and show up in `git diff`.
+* **Mutation self test** (`--self-test`, ctest `synthyboy_param_audit_selftest`): seven faults are injected into the harness through `SYNTHYBOY_AUDIT_FAULT` (cutoff scaled, pan swapped, delay
+  time x2, transpose 2 cents off, master volume in half the dB, attack halved, chorus controls unwired); every one must be caught.
+
+```
+scripts/run-param-audit.sh --quick                  # minutes: the CI subset (job `param-audit`, ctest `synthyboy_param_audit_scan`)
+scripts/run-param-audit.sh --full --jobs 8          # every value of every key (hours)
+scripts/run-param-audit.sh --group filter1. --full  # only a part;  --keys REGEX also works
+scripts/run-param-audit.sh --keys '^filter1\.cutoff$' --keep-wavs /tmp/w   # listen to what a key does
+scripts/run-param-audit.sh --quick --update-baseline                       # accept an intended change
+```
+
+Output: `build/param-audit/<UTC timestamp>/` (+ `latest`): `report.md`, `keys.csv`, `keys.json` (with the curves), `semantics.log`. Exit codes: 0 clean, 1 regression / unexplained DEAD /
+failed semantic check, 2 usage, 3 build problem.
