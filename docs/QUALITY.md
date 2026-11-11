@@ -186,3 +186,24 @@ scripts/run-param-audit.sh --quick --update-baseline                       # acc
 
 Output: `build/param-audit/<UTC timestamp>/` (+ `latest`): `report.md`, `keys.csv`, `keys.json` (with the curves), `semantics.log`. Exit codes: 0 clean, 1 regression / unexplained DEAD /
 failed semantic check, 2 usage, 3 build problem.
+
+## CI: what runs where (2026-11-11, `ci-repair`)
+
+Tests that are slower than a native run by an order of magnitude (ThreadSanitizer, ASan, QEMU user mode) use `sbtest::instrumented ()` (`core/tests/test_runner.h`): true when the
+executable is built with a sanitizer, or when `SBTEST_INSTRUMENTED=1` is in the environment (the `core tests (linux-armv7, qemu)` job sets it). An instrumented run keeps every
+correctness check and reduces the amount of work with `sbtest::scaled (native, instrumented)`; wall clock budgets are not asserted. The native jobs run everything in full.
+
+| test | native (macOS, Windows, Linux x86_64, AArch64) | ASan + UBSan | ThreadSanitizer | ARMv7 under QEMU (`SBTEST_INSTRUMENTED=1`) |
+|------|------|------|------|------|
+| `synthyboy_test_threads` | 3000 blocks against the parameter and reader threads | 200 blocks, the same threads | 200 blocks | 200 blocks |
+| `synthyboy_test_vital_fxinstances`, parameter mapping test | all 140 parameters | every 4th parameter of each type | every 4th | every 4th |
+| `synthyboy_test_vital_fxinstances_rt`, 16 heavy slots block budget | asserts `mean < 2.667 ms` per 128 frame block | renders, checks the output, no time assertion | same | same |
+| `synthyboy_test_vital_warpenv` (label `slow`, `TIMEOUT 3600`) | in full, about 300 s | in full (1300 s) | not run (single threaded audio checks, `-LE slow`) | not run (`-LE slow`) |
+| the other `slow` tests | in full | in full | not run | not run |
+
+Platform differences that were found by these jobs and are fixed in the code, not in the tests: the oscillator frame index used `toInt`, which rounds to nearest on x86 and
+truncates on ARM (now `floorToInt` in `synth_oscillator.cpp`, reproduced on x86_64 with the old code and gone with the new); the Convolve module never freed its active convolver and
+every engine leaked one `Value` (`lowest_active_note_`), both found by LeakSanitizer; `ContentRegistry::resolvePresetPath` returned a path with mixed separators on Windows. The
+exact text of the busy patch in `test_state_v3.cpp` depends on the C library's `exp` / `log` (Windows, ARMv7), so it is fingerprinted with the numbers rounded to 3 digits (the
+same value on macOS arm64, Linux x86_64 and ARMv7; the defaults keep the byte exact fingerprint). Byte-exact generated files (`content/presets/**`, `docs/params.json`, `docs/PARAMETERS.md`, `docs/kick-pages.json`) are `eol=lf` in
+`.gitattributes` so that a Windows checkout does not change the bytes the generators and tests compare.

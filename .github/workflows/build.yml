@@ -213,7 +213,9 @@ jobs:
         run: cmake --build build-san --parallel
 
       # the audio quality gates (label `slow`, about 25 s native) run under ASan + UBSan; ThreadSanitizer skips them: that executable is single
-      # threaded (the thread test is what TSan is for) and would take minutes
+      # threaded (the thread test is what TSan is for) and would take minutes. LeakSanitizer is on (ASan default on Linux): the leak it found in
+      # the Convolve module was real and is fixed, there is no suppression file. The tests are built with the sanitizer, so sbtest::instrumented ()
+      # is true by itself (reduced workload of the thread / engine tests, no wall clock budgets): see "CI: what runs where" in docs/QUALITY.md.
       - name: Run tests
         env:
           UBSAN_OPTIONS: print_stacktrace=1
@@ -331,7 +333,12 @@ jobs:
 
       # Only the fast subset under QEMU: the audio quality gates (label `slow`, about 25 s native, QEMU is 20 to 50 times slower, that is
       # more than 10 minutes) run natively on x86_64 (build job, sanitizers) and AArch64 (linux-aarch64 job). Everything else runs here.
+      # SBTEST_INSTRUMENTED=1 (core/tests/test_runner.h, sbtest::instrumented ()): the emulator is 20 to 50 times slower, so the thread / engine tests that
+      # scale their workload run the reduced one and the wall clock budget of fxinstances_rt (a speed gate, meaningless under QEMU) is not asserted; the
+      # native jobs (macOS, Windows, Linux x86_64, AArch64) assert it.
       - name: Run tests (QEMU user mode, without the slow audio gates)
+        env:
+          SBTEST_INSTRUMENTED: "1"
         run: ctest --test-dir build-armv7 --output-on-failure -LE slow
 
       # Statically linked benchmark for the Akai MPC (see docs/MPC-BENCH-REQUEST.md): no dependency on the

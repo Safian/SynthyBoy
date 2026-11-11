@@ -69,6 +69,9 @@ target_include_directories(synthyboy_test_vital_modamt PRIVATE "${CMAKE_CURRENT_
 
 synthyboy_add_test(synthyboy_test_vital_warpenv test_warpenv.cpp
     LINK synthyboy_engine_vital)
+# 99 warp modes x 2 slots x several renders: 300 s native, 1300 s under ASan. A single threaded audio check (ThreadSanitizer finds nothing in it, QEMU is 20 to 50 times
+# slower): label `slow` (the TSan and ARMv7 QEMU jobs run -LE slow; macOS, Windows, Linux x86_64, AArch64 and ASan + UBSan run it) and a limit above the ASan time.
+set_tests_properties(synthyboy_test_vital_warpenv PROPERTIES LABELS slow TIMEOUT 3600)
 target_include_directories(synthyboy_test_vital_warpenv PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../adapter")
 
 synthyboy_add_test(synthyboy_test_vital_fxinstances test_fxinstances.cpp

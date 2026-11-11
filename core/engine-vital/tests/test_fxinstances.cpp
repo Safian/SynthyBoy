@@ -181,13 +181,17 @@ TEST (fxi_slot_of_every_type_renders_what_instance_zero_renders)
 TEST (fxi_every_parameter_of_every_type_is_mapped_to_the_right_control)
 {
     // each parameter alone away from its default (the descriptor maps the k-th key of the type: a wrong source would show as a difference)
-    int mapped = 0;
+    // 140 parameters, two engines each: 175 s native. A sanitizer / QEMU run (sbtest::instrumented ()) takes every 4th parameter of each type (the first of each
+    // type included), the native jobs all of them.
+    const int stride = sbtest::scaled (1, 4);
+    int mapped = 0, expected = 0;
     for (int type = 1; type < kNumFxInstanceTypes; ++type)
     {
         const FxTypeDescriptor& d = fxTypeDescriptor (type);
+        expected += (d.count + stride - 1) / stride;
         float defaults[kFxInstanceParams];
         fxInstanceDefaults (type, defaults);
-        for (int k = 0; k < d.count; ++k)
+        for (int k = 0; k < d.count; k += stride)
         {
             float norm[kFxInstanceParams];
             std::copy (defaults, defaults + kFxInstanceParams, norm);
@@ -214,7 +218,9 @@ TEST (fxi_every_parameter_of_every_type_is_mapped_to_the_right_control)
             ++mapped;
         }
     }
-    CHECK_EQ (mapped, 12 + 24 + 14 + 9 + 13 + 18 + 9 + 11 + 20 + 8 + 10 + 14 + 13);
+    CHECK_EQ (mapped, expected);
+    if (stride == 1)
+        CHECK_EQ (mapped, 12 + 24 + 14 + 9 + 13 + 18 + 9 + 11 + 20 + 8 + 10 + 14 + 13);
 }
 
 // ---- several instances, order, racks ------------------------------------------------------------------------------------------------------

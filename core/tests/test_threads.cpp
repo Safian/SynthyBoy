@@ -40,6 +40,7 @@ void setParamFromOtherThreadsWhileProcessing (const sbtest::EngineCase& engineCa
                 engine->setParam (info.id, info.min + static_cast<float> (rng.uniform()) * (info.max - info.min));
                 ++calls;
             }
+            std::this_thread::yield(); // a sweep of every parameter at a time: the audio thread below must get its share on a two core machine (TSan CI runner)
         }
         setterCalls.store (calls);
     });
@@ -54,6 +55,7 @@ void setParamFromOtherThreadsWhileProcessing (const sbtest::EngineCase& engineCa
             for (size_t i = 0; i < paramCount(); ++i)
                 sum += engine->getParam (paramTable()[i].id) > 0.0f ? 1 : 0;
             sum += engine->activeVoices();
+            std::this_thread::yield();
         }
         readerSum.store (sum);
     });
@@ -63,7 +65,9 @@ void setParamFromOtherThreadsWhileProcessing (const sbtest::EngineCase& engineCa
     std::vector<float> l (128), r (128);
     bool finite = true;
     const auto start = std::chrono::steady_clock::now();
-    for (int block = 0; block < 3000; ++block)
+    // 3000 blocks natively; under ThreadSanitizer / QEMU (sbtest::instrumented ()) the same races are exercised with 200 blocks (the 1500 s limit of the ctest entry was hit)
+    const int blocks = sbtest::scaled (3000, 200);
+    for (int block = 0; block < blocks; ++block)
     {
         std::vector<Event> ev;
         if (block % 4 == 0)

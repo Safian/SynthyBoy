@@ -26,17 +26,7 @@ using namespace synthyboy;
 using sbtest::noteOn;
 using sbtest::setByKey;
 
-// the timing check is meaningless under a sanitizer (5 to 15 times slower)
-#if defined (__SANITIZE_THREAD__) || defined (__SANITIZE_ADDRESS__)
- #define SBTEST_INSTRUMENTED 1
-#elif defined (__has_feature)
- #if __has_feature (thread_sanitizer) || __has_feature (address_sanitizer)
-  #define SBTEST_INSTRUMENTED 1
- #endif
-#endif
-#ifndef SBTEST_INSTRUMENTED
- #define SBTEST_INSTRUMENTED 0
-#endif
+// the timing check is meaningless under a sanitizer (5 to 15 times slower) or an emulator (QEMU user mode: SBTEST_INSTRUMENTED=1, see sbtest::instrumented ()); the native jobs run it
 
 namespace
 {
@@ -169,7 +159,7 @@ TEST (fxi_sixteen_heavy_slots_fit_the_block_budget_of_the_high_tier)
     const double budget = 1000.0 * kBlock / kSr;   // 2.667 ms per block of 128 frames at 48 kHz
     std::printf ("    16 heavy slots, 3 unison voices: mean %.3f ms, p99 %.3f ms, worst %.3f ms per block of %d frames (budget %.3f ms)\n",
                  mean, ms[ms.size() * 99 / 100], ms.back(), kBlock, budget);
-    CHECK (mean < budget || SBTEST_INSTRUMENTED);
+    CHECK (mean < budget || sbtest::instrumented());
 }
 
 TEST (fxi_handover_while_the_audio_thread_runs_and_parameters_change_from_another_thread)
