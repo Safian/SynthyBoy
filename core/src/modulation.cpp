@@ -4,6 +4,7 @@
 
 #include "synthyboy/modulation.h"
 
+#include <array>
 #include <cstdio>
 #include <cstring>
 
@@ -115,12 +116,12 @@ size_t modDestinationChoiceOf (size_t paramIndex) noexcept
     return paramIndex < paramCount() ? destinations().choiceOfParam[paramIndex] : 0;
 }
 
-ModSlotParams modSlotParams (int slot) noexcept
+namespace
+{
+/** Looks the 64 slots' parameters up by key (a table search per key), once: the UI asks for them on every timer tick. */
+ModSlotParams lookUpModSlotParams (int slot) noexcept
 {
     ModSlotParams p { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-    if (slot < 0 || slot >= kNumModSlots)
-        return p;
-
     char key[32];
     const auto find = [&] (const char* field) noexcept
     {
@@ -144,5 +145,20 @@ ModSlotParams modSlotParams (int slot) noexcept
     p.delayBeats = find ("delay_beats");
     p.delaySync = find ("delay_sync");
     return p;
+}
+} // namespace
+
+ModSlotParams modSlotParams (int slot) noexcept
+{
+    static const std::array<ModSlotParams, kNumModSlots> table = []
+    {
+        std::array<ModSlotParams, kNumModSlots> t {};
+        for (int i = 0; i < kNumModSlots; ++i)
+            t[static_cast<size_t> (i)] = lookUpModSlotParams (i);
+        return t;
+    }();
+    if (slot < 0 || slot >= kNumModSlots)
+        return ModSlotParams { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+    return table[static_cast<size_t> (slot)];
 }
 } // namespace synthyboy
