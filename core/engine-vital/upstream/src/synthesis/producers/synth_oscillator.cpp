@@ -1418,7 +1418,9 @@ namespace sbvital {
         poly_float t = v * t_inc;
         poly_float frame = wave_frame + t * frame_spread;
         poly_float clamped_frame = utils::clamp(frame, 0.0f, kNumOscillatorWaveFrames - 1);
-        poly_int wave_index = utils::toInt(clamped_frame);
+        // floor, not toInt: toInt rounds to nearest on x86 (_mm_cvtps_epi32) and truncates on ARM (vcvtq_s32_f32), so frame 31.5 would be frame 32 with a negative
+        // fraction on x86 (no smooth interpolation, another frame than the one the position names) and frame 31 + 0.5 on ARM
+        poly_int wave_index = utils::floorToInt(clamped_frame);
 
         computeSpectralWaveBufferPair<spectralMorph>(v, index, formant_shift, phase_inc_adjustment,
                                                      wave_index, voice_increment, morph_amount,
@@ -1432,7 +1434,9 @@ namespace sbvital {
       poly_float morph_amount = spectral_morph_values_[0];
       poly_float voice_increment = phase_inc * detunings_[0] * frequency_mult;
       poly_float clamped_frame = utils::clamp(wave_frame, 0.0f, kNumOscillatorWaveFrames - 1);
-      poly_int wave_index = utils::toInt(clamped_frame);
+      // floor, not toInt: toInt rounds to nearest on x86 (_mm_cvtps_epi32) and truncates on ARM (vcvtq_s32_f32), so frame 31.5 would be frame 32 with a negative
+      // fraction on x86 (no smooth interpolation, another frame than the one the position names) and frame 31 + 0.5 on ARM
+      poly_int wave_index = utils::floorToInt(clamped_frame);
 
       computeSpectralWaveBufferPair<spectralMorph>(0, index, formant_shift, phase_inc_adjustment,
                                                    wave_index, voice_increment, morph_amount,
