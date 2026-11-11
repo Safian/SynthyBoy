@@ -866,7 +866,8 @@ void Importer::voiceFilter (int i)
         if (dn >= 0 && isNumber (dn) && li >= 0)
         {
             const double mk = filterDriveMakeupDb (num (dn));
-            if (mk > 0.0) store (area + ".level", static_cast<double> (R.values.plain[static_cast<size_t> (li)]) + mk);
+            const double cur = static_cast<double> (R.values.plain[static_cast<size_t> (li)]);
+            if (mk > 0.0 && cur > -59.99) store (area + ".level", cur + mk);   // a muted filter (level 0) stays muted
         }
     }
     for (const Unmapped& u : um)
@@ -1050,6 +1051,19 @@ void Importer::envelope (int i)
     std::vector<Unmapped> um;
     if (isDefaultBlock (pp)) noteDefault (pp);
     applyScope ({ "Env" }, pp, n, area, name + "/plainParams", um);   // also for "default": the Serum defaults of the rows apply
+    if (n > 1)
+    {
+        // envelopes 2 .. 4 modulate: their curve knobs map through the table measured on a swept filter, not the one of the amplitude envelope (the rows hold that one)
+        const char* names[3] = { "kParamCurve1", "kParamCurve2", "kParamCurve3" };
+        const char* keys[3] = { "env#.attack_curve", "env#.decay_curve", "env#.release_curve" };
+        const double defaults[3] = { 50.0, 66.6, 66.6 };
+        for (int c = 0; c < 3; ++c)
+        {
+            const int node = get (pp, names[c]);
+            const double v = node >= 0 && isNumber (node) ? num (node) : defaults[c];
+            store (keyOf (keys[c], n), envCurveOurs (c == 0, true, v));
+        }
+    }
     {
         // Serum 2.1.5: the attack of envelope 1 is 1 ms, of envelopes 2 .. 4 0.5 ms (the row default is the first)
         const int a = indexOf (keyOf ("env#.attack", n));

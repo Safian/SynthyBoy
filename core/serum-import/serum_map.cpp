@@ -301,6 +301,19 @@ double interp (const double* xs, const double* ys, int n, double v) noexcept
 }
 } // namespace
 
+double envCurveOurs (bool attack, bool modulation, double v) noexcept
+{
+    // the curve value of our envelope that gives the same shape as the Serum curve knob v; amplitude = the dB envelope of envelope 1 (crafted presets, env time constants), modulation = the
+    // centroid trajectory of a filter swept by envelope 2 (tools/ref-compare/experiment.py); Serum 50 is not our 0 in the amplitude path, it is in the modulation path
+    static const double kV[] = { 0, 10, 30, 50, 66.6, 80, 95, 100 };
+    static const double kAmpAttack[] = { -7.0, -5.0, -1.5, 2.5, 7.8, 12.0, 14.0, 14.5 };
+    static const double kAmpDecay[] = { 13.0, 12.0, 8.5, 2.5, -1.0, -3.0, -8.0, -9.5 };
+    static const double kModAttack[] = { -11.0, -9.0, -4.5, 0.5, 4.0, 8.0, 12.0, 13.0 };
+    static const double kModDecay[] = { 12.0, 9.0, 5.0, 0.0, -3.5, -9.5, -15.0, -17.0 };
+    const double* k = attack ? (modulation ? kModAttack : kAmpAttack) : (modulation ? kModDecay : kAmpDecay);
+    return interp (kV, k, 8, v);
+}
+
 double unisonLevelCompDb (int voices, double blend) noexcept
 {
     if (voices <= 1) return 0.0;
@@ -341,21 +354,8 @@ double convert (const Rule& r, double v) noexcept
             static const double kD[] = { 0.0, 0.0, 0.0, 2.0, 6.0, 12.0 };
             return interp (kV, kD, 6, v);
         }
-        case Conv::curveAttack:
-        case Conv::curveDecay:
-        {
-            // measured against Serum 2.1.5 (tools/ref-compare, the envelope shape of crafted presets): the curve value of our envelope that gives the same dB envelope
-            static const double kV[] = { 0, 10, 30, 50, 66.6, 80, 95, 100 };
-            static const double kAtt[] = { -7.0, -5.0, -1.5, 2.5, 7.8, 12.0, 14.0, 14.5 };
-            static const double kDec[] = { 13.0, 12.0, 8.5, 2.5, -1.0, -3.0, -8.0, -9.5 };
-            const double* k = r.conv == Conv::curveAttack ? kAtt : kDec;
-            constexpr int n = static_cast<int> (sizeof kV / sizeof kV[0]);
-            if (v <= kV[0]) return k[0];
-            if (v >= kV[n - 1]) return k[n - 1];
-            int i = 0;
-            while (i + 2 < n && v > kV[i + 1]) ++i;
-            return k[i] + (k[i + 1] - k[i]) * (v - kV[i]) / (kV[i + 1] - kV[i]);
-        }
+        case Conv::curveAttack: return envCurveOurs (true, false, v);
+        case Conv::curveDecay: return envCurveOurs (false, false, v);
         case Conv::compThresh:
         {
             // measured against Serum 2.1.5: the output peak of a limiter (ratio 1e6, 0.1 ms attack) at the threshold t, saw input

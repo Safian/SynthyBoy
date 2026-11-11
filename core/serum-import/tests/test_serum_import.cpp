@@ -1407,6 +1407,11 @@ TEST (serum_absent_parameters_take_the_serum_defaults_and_the_gain_staging_is_th
     CHECK_NEAR (norm (r, "env2.attack"), 0.5, 1e-3);
     CHECK_NEAR (norm (r, "env1.release"), 15.0, 1e-3);
     CHECK_NEAR (norm (r, "env2.decay"), 1000.0, 1e-3);
+    // envelope 1 is the amplitude envelope (curves measured on its dB envelope), envelopes 2 .. 4 modulate (curves measured on a filter they sweep): different tables, Serum 50 is not our 0 in the first
+    CHECK_NEAR (norm (r, "env1.attack_curve"), 2.5, 1e-3);
+    CHECK_NEAR (norm (r, "env2.attack_curve"), 0.5, 1e-3);
+    CHECK_NEAR (norm (r, "env2.decay_curve"), -3.5, 1e-3);
+    CHECK_NEAR (norm (r, "env2.release_curve"), -3.5, 1e-3);
     CHECK_NEAR (norm (r, "filter1.cutoff"), 440.0 * std::pow (2.0, (135.0 * 0.5 - 69.0 + 2.0) / 12.0), 0.5);   // default 0.5 on the measured scale (about 480 Hz)
     int mgModel = -1, mgStyle = -1;   // no type in the file: the Serum default MG Low 12
     serumimport::Fid mgFid = serumimport::Fid::exact;

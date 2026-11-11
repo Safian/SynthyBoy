@@ -207,3 +207,13 @@ every engine leaked one `Value` (`lowest_active_note_`), both found by LeakSanit
 exact text of the busy patch in `test_state_v3.cpp` depends on the C library's `exp` / `log` (Windows, ARMv7), so it is fingerprinted with the numbers rounded to 3 digits (the
 same value on macOS arm64, Linux x86_64 and ARMv7; the defaults keep the byte exact fingerprint). Byte-exact generated files (`content/presets/**`, `docs/params.json`, `docs/PARAMETERS.md`, `docs/kick-pages.json`) are `eol=lf` in
 `.gitattributes` so that a Windows checkout does not change the bytes the generators and tests compare.
+
+## Reference comparison against the real Serum 2 (2026-11-11)
+
+Is an imported Serum 2 preset the same sound as in Serum? `scripts/run-ref-compare.sh` (macOS, needs the Serum 2 plug-in and `tests/serum-presets/`; report and numbers:
+`docs/ui-design/REFCOMPARE-REPORT.md`) renders the 656 presets through the installed plug-in (`tools/serum-reference`, a JUCE host: the preset goes in as a plug-in state, offline,
+sample accurate), imports them, renders the imported presets through the engine with the same notes (`tools/ref-compare`) and scores every pair 0 .. 100 (envelope, log-mel and
+multi-resolution STFT, centroid / rolloff, f0 in cents, stereo, LUFS / peak, noise floor, tail) with the Serum-vs-Serum noise floor as tolerance; classes MATCH / CLOSE / DIFFERENT /
+FAILED. `--update-baseline` / `--baseline` (`docs/ui-design/refcompare-baseline.json`) report a class that got worse or a score that dropped by more than 2 points and exit 1;
+`--calibrate` checks that 20 deliberately broken renders score at least 10 points lower; `--catalog` scores single module presets. The Serum audio is licensed plug-in output and
+is never committed (`tests/serum-reference/` is gitignored); on other platforms the committed baseline and the synthetic self test (`synthyboy_ref_compare_metrics`) remain.

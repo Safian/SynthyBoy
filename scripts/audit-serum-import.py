@@ -185,6 +185,59 @@ def db(x):
     return -120.0 if x <= 1e-6 else 20.0 * math.log10(x)
 
 
+# The laws measured against the real Serum 2.1.5 (tools/ref-compare, docs/ui-design/13-new-keys.md 4.46, A488 .. A496), stated here again from that table:
+def interp(xs, ys, v):
+    if v <= xs[0]:
+        return ys[0]
+    if v >= xs[-1]:
+        return ys[-1]
+    i = 0
+    while i + 2 < len(xs) and v > xs[i + 1]:
+        i += 1
+    return ys[i] + (ys[i + 1] - ys[i]) * (v - xs[i]) / (xs[i + 1] - xs[i])
+
+
+def note_hz_voice_filter(x):
+    return 440.0 * 2.0 ** ((135.0 * x - 69.0 + 2.0) / 12.0)
+
+
+_CURVE_V = [0, 10, 30, 50, 66.6, 80, 95, 100]
+_CURVES = {(True, False): [-7.0, -5.0, -1.5, 2.5, 7.8, 12.0, 14.0, 14.5], (False, False): [13.0, 12.0, 8.5, 2.5, -1.0, -3.0, -8.0, -9.5],
+           (True, True): [-11.0, -9.0, -4.5, 0.5, 4.0, 8.0, 12.0, 13.0], (False, True): [12.0, 9.0, 5.0, 0.0, -3.5, -9.5, -15.0, -17.0]}
+
+
+def env_curve(attack):
+    def f(v, n=1):
+        return interp(_CURVE_V, _CURVES[(attack, n > 1)], v)
+    f.n_aware = True
+    return f
+
+
+def filter_drive(v):
+    return interp([0, 10, 25, 50, 75, 100], [0.0, 0.0, 0.0, 2.0, 6.0, 12.0], v)
+
+
+def filter_drive_makeup(v):
+    return interp([0, 10, 25, 50, 75, 100], [0.0, 3.3, 7.7, 10.7, 11.0, 10.2], v)
+
+
+def comp_threshold(v):
+    t = [0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.525, 0.55, 0.575, 0.6, 0.625, 0.65, 0.675, 0.7, 0.725, 0.75]
+    d = [-0.5, -4.1, -6.0, -7.9, -10.6, -13.6, -16.6, -19.6, -22.7, -26.4, -30.3, -34.3, -38.5, -41.5, -42.0, -42.3]
+    return 0.0 if v <= t[0] else interp(t, d, v)
+
+
+def unison_comp_db(voices, blend):
+    if voices <= 1:
+        return 0.0
+    b = [0, 25, 50, 75, 100]
+    odd = {3: [-7.1, -7.1, -5.7, -3.6, -3.3], 5: [-7.6, -7.2, -4.5, -1.5, -1.0], 7: [-8.0, -7.3, -3.8, -0.4, 0.3], 9: [-8.5, -7.6, -3.6, 0.1, 0.8]}
+    even = {2: [-1.9] * 5, 4: [0.6, 0.4, -0.1, -0.5, -1.9], 12: [-1.3, -1.3, -0.4, 1.4, 1.6], 16: [-2.3, -2.1, -0.5, 1.8, 2.0]}
+    tab = odd if voices % 2 else even
+    ns = sorted(tab)
+    return interp(ns, [interp(b, tab[n], blend) for n in ns], float(voices))
+
+
 # ---------------------------------------------------------------------------------------------------------------------------------------
 # the conversions (13-new-keys.md 4.26), one table per scope: parameter -> (key pattern, function or enumeration)
 # ---------------------------------------------------------------------------------------------------------------------------------------
@@ -255,19 +308,19 @@ MULTI = {'kParamRandomPhase': ('osc#.random_phase', lin(1)), 'kParamEnvOverride'
          'kParamVelTrackOverride': ('osc#.multi.vel_override', boolean), 'kParamTimbreShift': ('osc#.multi.timbre', lin(100))}   # GROUPC WP-13
 WT = {'kParamInitialPhase': ('osc#.phase', lin(1)), 'kParamRandomPhase': ('osc#.random_phase', lin(1)), 'kParamUnisonWTPos': ('osc#.frame_spread', lin(1)),
       'kParamPhaseMemory': ('osc#.phase_memory', PHASEMEM)}
-NOISE = {'kParamVolume': ('noise.level', lin(100)), 'kParamPan': ('noise.pan', lin(2)), 'kParamEnable': ('noise.on', boolean), 'kParamPitch': ('noise.pitch', lin(1))}
+NOISE = {'kParamVolume': ('noise.level', lin(105.7)), 'kParamPan': ('noise.pan', lin(2)), 'kParamEnable': ('noise.on', boolean), 'kParamPitch': ('noise.pitch', lin(1))}
 NOISEOSC = {'kParamFine': ('noise.fine', lin(100)), 'kParamInitialPhase': ('noise.phase', lin(1)), 'kParamRandomPhase': ('noise.random_phase', boolean),
             'kParamOneShot': ('noise.loop', lin(-1, 1)), 'kParamColor': ('noise.filter', lin(200, -100))}
-SUB = {'kParamVolume': ('sub.level', lin(100)), 'kParamPan': ('sub.pan', lin(2)), 'kParamEnable': ('sub.on', boolean), 'kParamOctave': ('sub.octave', lin(1))}
+SUB = {'kParamVolume': ('sub.level', lin(65.7)), 'kParamPan': ('sub.pan', lin(2)), 'kParamEnable': ('sub.on', boolean), 'kParamOctave': ('sub.octave', lin(1))}
 SUBOSC = {'kParamShape': ('sub.waveform', SUBSHAPE), 'kParamInitialPhase': ('sub.phase', lin(100.0 / 360.0)), 'kParamContiguousPhase': ('sub.phase_contiguous', boolean)}
-FILTER = {'kParamEnable': ('filter#.on', boolean), 'kParamFreq': ('filter#.cutoff', note_hz), 'kParamReso': ('filter#.resonance', lin(1)), 'kParamDrive': ('filter#.drive', lin(0.2)),
+FILTER = {'kParamEnable': ('filter#.on', boolean), 'kParamFreq': ('filter#.cutoff', note_hz_voice_filter), 'kParamReso': ('filter#.resonance', lin(1)), 'kParamDrive': ('filter#.drive', filter_drive),
           'kParamVar': ('filter#.var', lin(1)), 'kParamWet': ('filter#.mix', lin(1)), 'kParamKeyTrack': ('filter#.keytrack', lin(100)), 'kParamLevelOut': ('filter#.level', db),
           'kParamStereo': ('filter#.pan', lin(2, -100)), 'kParamPad': ('filter#.clean_mode', boolean), 'kParamX': ('filter#.formant.x', lin(100)), 'kParamY': ('filter#.formant.y', lin(100))}
 ENV = {'kParamAttack': ('env#.attack', lin(1000)), 'kParamHold': ('env#.hold', lin(1000)), 'kParamDecay': ('env#.decay', lin(1000)), 'kParamSustain': ('env#.sustain', lin(100)),
-       'kParamRelease': ('env#.release', lin(1000)), 'kParamCurve1': ('env#.attack_curve', lambda v: (50 - v) * 0.18), 'kParamCurve2': ('env#.decay_curve', lambda v: (50 - v) * 0.18),
-       'kParamCurve3': ('env#.release_curve', lambda v: (50 - v) * 0.18), 'kParamLegatoInverted': ('env#.legato_inverted', boolean)}
+       'kParamRelease': ('env#.release', lin(1000)), 'kParamCurve1': ('env#.attack_curve', env_curve(True)), 'kParamCurve2': ('env#.decay_curve', env_curve(False)),
+       'kParamCurve3': ('env#.release_curve', env_curve(False)), 'kParamLegatoInverted': ('env#.legato_inverted', boolean)}
 MACRO = {'kParamValue': ('macro.#', lin(1))}
-GLOBAL = {'kParamMasterVolume': ('master.volume', db), 'kParamVoiceAmp': ('master.volume', db), 'kParamPolyCount': ('master.polyphony', lin(1)), 'kParamBendRangeUp': ('master.bend_range', lin(1)),
+GLOBAL = {'kParamMasterVolume': ('master.volume', lambda v: db(v) + 2.98), 'kParamVoiceAmp': ('master.volume', db), 'kParamPolyCount': ('master.polyphony', lin(1)), 'kParamBendRangeUp': ('master.bend_range', lin(1)),
           'kParamLegato': ('master.legato', boolean), 'kParamPortamentoTime': ('master.portamento.time', lin(1000)), 'kParamPortamentoCurve': ('master.portamento.slope', lin(0.08)),
           'kParamPortaAlways': ('master.portamento.always', boolean), 'kParamPortaScaled': ('master.portamento.scaled', boolean), 'kParamTranspose': ('master.transpose', lin(1)),
           'kParamGlobalTuning': ('master.tuning.a4', lin(1)), 'kParamDirectVol': ('direct.level', db), 'kParamFXBus1Vol': ('bus1.level', db), 'kParamFXBus2Vol': ('bus2.level', db),
@@ -294,7 +347,7 @@ FX = {
     'FXChorus': {'kParamWet': ('chorus.mix', lin(1)), 'kParamRate': ('chorus.rate', lin(1)), 'kParamDelay': ('chorus.delay1', lin(1)), 'kParamDelay2': ('chorus.delay2', lin(1)),
                  'kParamDepth': ('chorus.depth', lin(4)), 'kParamFeedback': ('chorus.feedback', lin(1)), 'kParamFilt': ('chorus.filter_cutoff', lin(1)), 'kParamLevelOut': ('chorus.level', db)},
     'FXComp': {'kParamWet': ('compressor.mix', lin(1)), 'kParamAttack': ('compressor.attack', logpct(0.1, 1000)), 'kParamRelease': ('compressor.release', logpct(0.1, 1000)),
-               'kParamMultiband': ('compressor.bands', lin(-3, 3)), 'kParamThresh': ('compressor.mid.upper_threshold', db), 'kParamRatio': ('compressor.mid.upper_ratio', ratio_pct),
+               'kParamMultiband': ('compressor.bands', lin(-3, 3)), 'kParamThresh': ('compressor.mid.upper_threshold', comp_threshold), 'kParamRatio': ('compressor.mid.upper_ratio', ratio_pct),
                'kParamMakeup': ('compressor.mid.gain', db), 'kParamXoverLow': ('compressor.crossover_low', lin(1)), 'kParamXoverHi': ('compressor.crossover_high', lin(1)),
                'kParamLevelOut': ('compressor.level', db)},
     'FXDelay': {'kParamWet': ('delay.mix', lin(1)), 'kParamTimeL': ('delay.time', lin(1000)), 'kParamTimeR': ('delay.time2', lin(1000)), 'kParamFeedback': ('delay.feedback', lin(1)),
@@ -360,13 +413,15 @@ def source_key(sb, key):
     return own[int(m.group(2)) - 1] if int(m.group(2)) - 1 < len(own) else key
 
 
-def expected(fn, v):
+def expected(fn, v, n=1):
     if isinstance(fn, dict):
         return float(fn[v]) if isinstance(v, str) and v in fn else None
     if isinstance(v, bool):
         v = float(v)
     if not isinstance(v, (int, float)):
         return None
+    if getattr(fn, 'n_aware', False):
+        return float(fn(float(v), n))
     return float(fn(float(v)))
 
 
@@ -495,7 +550,7 @@ class Audit:
                 else:
                     self.err(name, '%s: importer wrote %s, expected %s' % (e['path'], e['key'], key))
                 continue
-            exp = expected(row[1], node)
+            exp = expected(row[1], node, n)
             if exp is None:
                 self.err(name, '%s: no expected value for %r' % (e['path'], node))
                 continue
@@ -1022,19 +1077,21 @@ class Audit:
     SERUM_DEFAULTS = [(r'osc(\d)\.on$', lambda m: 1.0 if m.group(1) == '1' else 0.0), (r'(noise|sub)\.on$', lambda m: 0.0), (r'filter\d\.on$', lambda m: 0.0),
                       (r'osc\d\.unison\.voices$', lambda m: 1.0), (r'osc\d\.unison\.blend$', lambda m: 75.0), (r'osc\d\.unison\.spread$', lambda m: 100.0),
                       (r'osc(\d)\.destination$', lambda m: 5.0 if m.group(1) == '1' else 3.0), (r'(noise|sub)\.destination$', lambda m: 3.0),
-                      (r'filter\d\.destination$', lambda m: 0.0), (r'filter\d\.model$', lambda m: 9.0), (r'filter\d\.style$', lambda m: 0.0),
+                      (r'filter\d\.destination$', lambda m: 0.0), (r'filter\d\.model$', lambda m: 22.0), (r'filter\d\.style$', lambda m: 0.0),
                       (r'osc\d\.type$', lambda m: 0.0), (r'master\.bend_range$', lambda m: 2.0), (r'master\.bend_down_range$', lambda m: 2.0),
                       (r'osc\d\.sample\.root$', lambda m: 60.0), (r'noise\.loop$', lambda m: 1.0), (r'osc\d\.env1$|(noise|sub|filter\d)\.env1$', lambda m: 1.0),
                       (r'distortion\.type$', lambda m: 6.0), (r'reverb\.type$', lambda m: 1.0)]
 
     def default_rule(self, key, tree, value=None):
+        if re.match(r'filter\d\.model$', key) and value is not None and abs(value - 9.0) < 1e-6:
+            return True   # a filter module that is not in the file keeps the model of our engine (the Serum default MG Low 12 is written for a module that is)
         for pat, fn in self.SERUM_DEFAULTS:
             m = re.match(pat, key)
             if m and value is not None:
                 return abs(value - fn(m)) < 1e-6
 
         """keys the importer sets to the Serum default when the file does not say (and the families it always sets)."""
-        pats = [r'osc[123]\.(on|destination|filter_blend|bus[12]_send|env1|type)$', r'(noise|sub)\.(on|destination|filter_blend|bus[12]_send|env1)$', r'filter[12]\.(on|model|style|destination|bus[12]_send|env1)$',
+        pats = [r'master\.velocity_track$', r'osc\d\.level$', r'(noise|sub)\.level$', r'env\d\.(attack|decay|release)$', r'osc[123]\.(on|destination|filter_blend|bus[12]_send|env1|type)$', r'(noise|sub)\.(on|destination|filter_blend|bus[12]_send|env1)$', r'filter[12]\.(on|model|style|destination|bus[12]_send|env1)$',
                 r'filter\.routing$', r'lfo\d+\.(shape|smooth|host|sync|division|sync_type|direction)$', r'rlfo\d\.', r'master\.(bend_range|bend_down_range|bend_down_link|polyphony|voice\.same_note)$',
                 r'quality\.', r'osc\d\.frame$', r'osc\d\.wavetable$', r'filter\d\.(mix|keytrack|level|pan|cutoff|resonance|drive|var)$', r'env\d\.(attack_curve|decay_curve|release_curve|sustain|hold)$',
                 r'osc\d\.(unison\.(blend|spread|voices|range)|map\.(key_high|vel_high|vel_low)|sample\.(end|loop_end|slice_threshold)|random_phase)$',
@@ -1049,10 +1106,19 @@ class Audit:
         if m:
             o = tree.get('Oscillator%d' % (int(m.group(1)) - 1), {})
             pp = o.get('plainParams') if isinstance(o.get('plainParams'), dict) else {}
+            if key.endswith('.level'):   # A496: the unison level correction of Serum 2.1.5 (voices as the importer stores them: rounded, 1 .. 16)
+                voices = min(16, max(1, int(round(float(pp.get('kParamUnison', 1.0))))))
+                return exp * 10.0 ** (unison_comp_db(voices, min(100.0, max(0.0, float(pp.get('kParamDetuneWid', 75.0))))) / 20.0)
             if key.endswith('.pitch_coarse') and pp.get('kParamPitchMode') in ('Ratio', 'Harmonics') and 'kParamPitchRatio' in pp:
                 return pp['kParamPitchRatio']
             if key.endswith('.tune') and pp.get('kParamType') == 'kOsc_MultiSample':
                 return None
+        m = re.match(r'filter(\d)\.level$', key)
+        if m:   # A492: the louder output of the Serum drive stage goes into the level of the filter
+            f = tree.get('VoiceFilter%d' % (int(m.group(1)) - 1), {})
+            fp = f.get('plainParams') if isinstance(f.get('plainParams'), dict) else {}
+            if isinstance(fp.get('kParamDrive'), (int, float)) and exp > -59.99:
+                return exp + filter_drive_makeup(float(fp['kParamDrive']))
         return exp
 
     def check_source(self, name, sb, slot, src, key, aux):

@@ -453,7 +453,7 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
                     out.fid = rows[i].fid;
                     out.note = rows[i].note;
                     out.ok = true;
-                    out.dbLaw = rows[i].conv == Conv::dbFromLin;
+                    out.dbLaw = rows[i].conv == Conv::dbFromLin || rows[i].conv == Conv::compThresh;   // the measured threshold is a dB value too
                     out.srcKey = out.key;
                     return true;
                 }
@@ -566,7 +566,7 @@ Importer::Dest Importer::destOf (const std::string& type, int id, const std::str
                 for (size_t i = 0; i < count; ++i)
                     if (param == rows[i].param)
                     {
-                        out.dbLaw = rows[i].conv == Conv::dbFromLin;
+                        out.dbLaw = rows[i].conv == Conv::dbFromLin || rows[i].conv == Conv::compThresh;   // the measured threshold is a dB value too
                         out.srcKey = rows[i].key;
                         if (pf.slot < 0) { out.key = rows[i].key; out.ok = true; out.fid = rows[i].fid; return out; }
                         const FxTypeDescriptor& desc = fxTypeDescriptor (pf.type);

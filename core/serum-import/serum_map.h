@@ -62,6 +62,10 @@ double filterDriveMakeupDb (double v) noexcept;
     the parity of the voice count; measured, tools/ref-compare/experiment.py). 0 for one voice. */
 double unisonLevelCompDb (int voices, double blend) noexcept;
 
+/** The curve of our envelope that gives the Serum envelope curve `v` (0 .. 100): the amplitude envelope (envelope 1) and the envelopes that modulate (2 .. 4) need different tables, both
+    measured against Serum 2.1.5. `attack` selects the attack curve, else the decay / release curve. */
+double envCurveOurs (bool attack, bool modulation, double v) noexcept;
+
 /** Value of `rule` applied to the number `v`. */
 double convert (const Rule& rule, double v) noexcept;
 
