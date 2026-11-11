@@ -1038,17 +1038,17 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `compressor.low.upper_threshold` | Compressor Low Upper Threshold | -120 .. 12 dB | -20 dB | FX / Compressor |  |  |
 | `compressor.low.lower_ratio` | Compressor Low Lower Ratio | -100 .. 100 % | 0 % | FX / Compressor |  |  |
 | `compressor.low.upper_ratio` | Compressor Low Upper Ratio | 0 .. 100 % | 50 % | FX / Compressor |  |  |
-| `compressor.low.gain` | Compressor Low Gain | -30 .. 30 dB | 0 dB | FX / Compressor | mod |  |
+| `compressor.low.gain` | Compressor Low Gain | -36 .. 36 dB | 0 dB | FX / Compressor | mod |  |
 | `compressor.mid.lower_threshold` | Compressor Mid Lower Threshold | -120 .. 12 dB | -40 dB | FX / Compressor |  |  |
 | `compressor.mid.upper_threshold` | Compressor Mid Upper Threshold | -120 .. 12 dB | -20 dB | FX / Compressor |  |  |
 | `compressor.mid.lower_ratio` | Compressor Mid Lower Ratio | -100 .. 100 % | 0 % | FX / Compressor |  |  |
 | `compressor.mid.upper_ratio` | Compressor Mid Upper Ratio | 0 .. 100 % | 50 % | FX / Compressor |  |  |
-| `compressor.mid.gain` | Compressor Mid Gain | -30 .. 30 dB | 0 dB | FX / Compressor | mod |  |
+| `compressor.mid.gain` | Compressor Mid Gain | -36 .. 36 dB | 0 dB | FX / Compressor | mod |  |
 | `compressor.high.lower_threshold` | Compressor High Lower Threshold | -120 .. 12 dB | -40 dB | FX / Compressor |  |  |
 | `compressor.high.upper_threshold` | Compressor High Upper Threshold | -120 .. 12 dB | -20 dB | FX / Compressor |  |  |
 | `compressor.high.lower_ratio` | Compressor High Lower Ratio | -100 .. 100 % | 0 % | FX / Compressor |  |  |
 | `compressor.high.upper_ratio` | Compressor High Upper Ratio | 0 .. 100 % | 50 % | FX / Compressor |  |  |
-| `compressor.high.gain` | Compressor High Gain | -30 .. 30 dB | 0 dB | FX / Compressor | mod |  |
+| `compressor.high.gain` | Compressor High Gain | -36 .. 36 dB | 0 dB | FX / Compressor | mod |  |
 | `delay.on` | Delay On | 0 Off, 1 On | Off | FX / Delay |  |  |
 | `delay.mix` | Delay Mix | 0 .. 100 % | 30 % | FX / Delay | mod |  |
 | `delay.feedback` | Delay Feedback | -100 .. 100 % | 40 % | FX / Delay | mod |  |
