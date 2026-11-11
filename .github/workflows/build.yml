@@ -51,7 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ninja-build pkg-config xvfb \
+            ninja-build pkg-config xvfb xauth openbox \
             libasound2-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
             libxinerama-dev libxrandr-dev libxrender-dev libfreetype-dev libfontconfig1-dev \
             libgl1-mesa-dev
@@ -67,8 +67,15 @@ jobs:
           cmake --build build --config Release --parallel
 
       - name: Core tests (ctest)
-        if: runner.os != 'Windows'
+        if: runner.os == 'macOS'
         run: ctest --test-dir build --output-on-failure
+
+      # The GUI tests open real (temporary) desktop windows: Linux needs an X server and a window manager (JUCE sets EWMH atoms; a bare Xvfb
+      # answers BadAtom). The software-only tests do not care.
+      - name: Core tests (ctest, Linux under Xvfb + openbox)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & sleep 2; ctest --test-dir build --output-on-failure'
 
       - name: Core tests (ctest, Windows)
         if: runner.os == 'Windows'
@@ -292,7 +299,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ninja-build pkg-config \
+            ninja-build pkg-config xvfb xauth openbox \
             libasound2-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
             libxinerama-dev libxrandr-dev libxrender-dev libfreetype-dev libfontconfig1-dev \
             libgl1-mesa-dev
@@ -300,8 +307,9 @@ jobs:
       - name: Build
         run: scripts/build.sh
 
-      - name: Core tests (ctest)
-        run: ctest --test-dir build --output-on-failure
+      - name: Core tests (ctest, under Xvfb + openbox: the GUI tests open desktop windows)
+        run: |
+          xvfb-run -a bash -c 'openbox >/dev/null 2>&1 & sleep 2; ctest --test-dir build --output-on-failure'
 
       - name: CLAP smoke host (state / parameter round trip)
         run: build/clap_smoke "build/${PLUGIN}_artefacts/Release/CLAP/${PLUGIN}.clap"

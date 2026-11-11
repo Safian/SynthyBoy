@@ -1949,7 +1949,9 @@ TEST (content_a_modulated_knob_shows_the_live_value_and_costs_nothing_when_hidde
 
     routeSlot (h.proc, 1, "macro1", "filter1.cutoff", 60.0f);
     h.ctx.assign.refresh();
-    h.ctx.assign.dispatchPendingMessages();      // the knobs hear about a changed matrix through a change message
+    // the knobs hear about a changed matrix through a change message. Delivered synchronously: on Linux without a running message loop (the
+    // CI, a software-framebuffer host) the asynchronous post of a ChangeBroadcaster is not delivered to a test process (docs/ui-design/UILIB-REPORT.md)
+    h.ctx.assign.sendSynchronousChangeMessage();
     CHECK (knob.liveSubscription());
     setParameter (h.proc, "filter1.cutoff", 1000.0f);
     setParameter (h.proc, "macro.1", 0.0f);
@@ -1983,7 +1985,7 @@ TEST (content_a_modulated_knob_shows_the_live_value_and_costs_nothing_when_hidde
     // the modulation removed: nothing to show, the knob leaves the bus
     clearSlot (h.ctx.assign.matrix(), 0);
     h.ctx.assign.refresh();
-    h.ctx.assign.dispatchPendingMessages();
+    h.ctx.assign.sendSynchronousChangeMessage();
     CHECK (! knob.liveSubscription());
     CHECK (knob.liveNormalisedValue() < 0.0f);
     CHECK (bus.targets().empty());

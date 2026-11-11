@@ -57,6 +57,13 @@ inline juce::CallOutBox& launchCallOut (std::unique_ptr<juce::Component> content
         auto& root = host->overlayRoot();
         return juce::CallOutBox::launchAsynchronously (std::move (content), root.getLocalArea (&anchor, anchor.getLocalBounds()), &root);
     }
+    // No overlay host above the anchor. A call-out on the desktop needs a display (JUCE dereferences the display of the area): on a host
+    // without any (Linux without X11, a software framebuffer) it opens inside the top-level component instead.
+    if (juce::Desktop::getInstance().getDisplays().getPrimaryDisplay() == nullptr)
+    {
+        auto& root = *anchor.getTopLevelComponent();
+        return juce::CallOutBox::launchAsynchronously (std::move (content), root.getLocalArea (&anchor, anchor.getLocalBounds()), &root);
+    }
     return juce::CallOutBox::launchAsynchronously (std::move (content), anchor.getScreenBounds(), nullptr);
 }
 } // namespace synthyboy::ui
