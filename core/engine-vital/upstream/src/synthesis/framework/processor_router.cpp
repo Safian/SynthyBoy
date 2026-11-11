@@ -21,9 +21,15 @@
 #include "synth_constants.h"
 
 #include <algorithm>
+#include <atomic>
 #include <vector>
 
 namespace sbvital {
+
+  namespace {
+    // one counter for every router: a mark left on a processor by a query of another router (or of an earlier query) never equals the epoch of the current one
+    std::atomic<uint64_t> g_dependency_epoch { 0 };
+  }
 
   ProcessorRouter::ProcessorRouter(int num_inputs, int num_outputs, bool control_rate) :
       Processor(num_inputs, num_outputs, control_rate),
@@ -231,7 +237,7 @@ namespace sbvital {
 
     for (int i = 0; i < num_processors; ++i) {
       Processor* current_processor = global_order_->at(i);
-      if (current_processor != processor && dependencies_->contains(current_processor))
+      if (current_processor != processor && current_processor->dependency_mark_ == dependency_epoch_)
         global_reorder_->push_back(current_processor);
     }
 
@@ -240,7 +246,7 @@ namespace sbvital {
 
     for (int i = 0; i < num_processors; ++i) {
       Processor* current_processor = global_order_->at(i);
-      if (current_processor != processor && !dependencies_->contains(current_processor))
+      if (current_processor != processor && current_processor->dependency_mark_ != dependency_epoch_)
         global_reorder_->push_back(current_processor);
     }
 
@@ -253,7 +259,7 @@ namespace sbvital {
 
   bool ProcessorRouter::isDownstream(const Processor* first, const Processor* second) const {
     getDependencies(second);
-    return dependencies_->contains(first);
+    return first->dependency_mark_ == dependency_epoch_;
   }
 
   bool ProcessorRouter::areOrdered(const Processor* first, const Processor* second) const {
@@ -403,6 +409,7 @@ namespace sbvital {
     dependencies_->clear();
     dependencies_visited_->clear();
     dependency_inputs_->clear();
+    dependency_epoch_ = ++g_dependency_epoch;
     const Processor* context = getContext(processor);
 
     dependency_inputs_->ensureSpace();
@@ -411,26 +418,28 @@ namespace sbvital {
       const Processor* dependency = getContext(dependency_inputs_->at(i));
 
       if (dependency) {
-        if (!dependencies_->contains(dependency)) {
+        if (dependency->dependency_mark_ != dependency_epoch_) {
+          dependency->dependency_mark_ = dependency_epoch_;
           dependencies_->ensureSpace();
           dependencies_->push_back(dependency);
         }
 
         for (int j = 0; j < dependency_inputs_->at(i)->numInputs(); ++j) {
           const Input* input = dependency_inputs_->at(i)->ownedInput(j);
-          if (input->source && input->source->owner && !dependencies_visited_->contains(input->source->owner)) {
+          if (input->source && input->source->owner && input->source->owner->visited_mark_ != dependency_epoch_) {
             dependency_inputs_->ensureSpace();
             dependency_inputs_->push_back(input->source->owner);
 
-            if (!dependencies_visited_->contains(input->source->owner)) {
-              dependencies_visited_->ensureSpace();
-              dependencies_visited_->push_back(input->source->owner);
-            }
+            input->source->owner->visited_mark_ = dependency_epoch_;
+            dependencies_visited_->ensureSpace();
+            dependencies_visited_->push_back(input->source->owner);
           }
         }
       }
     }
 
     dependencies_->removeAll(context);
+    if (context)
+      context->dependency_mark_ = 0;
   }
 } // namespace sbvital

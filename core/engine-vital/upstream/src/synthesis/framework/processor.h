@@ -320,6 +320,13 @@ namespace sbvital {
 
       static const Output null_source_;
 
+    public:
+      // SynthyBoy: membership marks of the router's dependency search (ProcessorRouter::getDependencies): a processor is in the set of a query when its mark equals the epoch of that
+      // query. O(1) instead of the linear CircularQueue::contains, which made every connection of a modulation slot cost O(graph size ^ 2) (2600 parameters set at once took seconds).
+      mutable uint64_t dependency_mark_ = 0;
+      mutable uint64_t visited_mark_ = 0;
+
+    private:
       JUCE_LEAK_DETECTOR(Processor)
   };
 } // namespace sbvital

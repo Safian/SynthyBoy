@@ -15,6 +15,7 @@
  */
 // Modified for SynthyBoy (AGPL-3.0-or-later combined work), 2026
 
+#include <mutex>
 #include "sample_source.h"
 #include "futils.h"
 #include "synth_constants.h"
@@ -412,6 +413,25 @@ namespace sbvital {
   }
   } // namespace
 
+  std::shared_ptr<Sample::SampleData> Sample::noiseSet(int t, mono_float* buffer, mono_float* other) {
+    static std::mutex mutex;
+    static std::shared_ptr<SampleData> cache[kNumNoiseTypes];
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!cache[t]) {
+      generateNoiseBuffer(t, buffer, kDefaultSampleLength);
+      const bool colour = t <= kGeiger;
+      auto set = std::make_shared<SampleData>(kDefaultSampleLength, kDefaultSampleRate, colour);
+      set->colour = colour;
+      createBandLimitedBuffers(set->left_buffers, set->left_loop_buffers, buffer, kDefaultSampleLength);
+      if (colour) {
+        generateNoiseBuffer(t, other, kDefaultSampleLength, 0x51ED2701u);
+        createBandLimitedBuffers(set->right_buffers, set->right_loop_buffers, other, kDefaultSampleLength);
+      }
+      cache[t] = std::move(set);
+    }
+    return cache[t];
+  }
+
   void Sample::init() {
     name_ = kDefaultName;
     mono_float buffer[kDefaultSampleLength];
@@ -428,20 +448,11 @@ namespace sbvital {
     data_->colour = true;
     noise_data_[kWhite] = nullptr;
 
-    // Remaining 8 procedural noise sets (1..8)
-    for (int t = 1; t < kNumNoiseTypes; ++t) {
-      generateNoiseBuffer(t, buffer, kDefaultSampleLength);
-      const bool colour = t <= kGeiger;
-      noise_data_[t] = std::make_unique<SampleData>(kDefaultSampleLength, kDefaultSampleRate, colour);
-      noise_data_[t]->colour = colour;
-      createBandLimitedBuffers(noise_data_[t]->left_buffers, noise_data_[t]->left_loop_buffers,
-                               buffer, kDefaultSampleLength);
-      if (colour) {
-        generateNoiseBuffer(t, other, kDefaultSampleLength, 0x51ED2701u);
-        createBandLimitedBuffers(noise_data_[t]->right_buffers, noise_data_[t]->right_loop_buffers,
-                                 other, kDefaultSampleLength);
-      }
-    }
+    // Remaining 8 procedural noise sets (1..8). They come from fixed seeds and are never changed after they are built, so every engine shares one copy: building the band
+    // limited buffers (up and down sampling filters over 44100 samples, two channels, eight sets) took more than half of an engine's construction, and a host (the CLAP
+    // validator's param-fuzz) activates the plug-in 50 times.
+    for (int t = 1; t < kNumNoiseTypes; ++t)
+      noise_data_[t] = noiseSet(t, buffer, other);
 
     current_data_ = data_.get();
     markUsed();

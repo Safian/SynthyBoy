@@ -15,10 +15,12 @@
 #include <dlfcn.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -82,7 +84,7 @@ void destroyInstance (Instance& inst)
 }
 
 // pushes the values through process(), like the validator does
-void setValues (Instance& inst, const std::vector<double>& values)
+void setValues (Instance& inst, const std::vector<double>& values, bool viaFlush = false)
 {
     struct Events { std::vector<clap_event_param_value_t> ev; } events;
     for (size_t i = 0; i < values.size(); ++i)
@@ -100,6 +102,12 @@ void setValues (Instance& inst, const std::vector<double>& values)
         [] (const clap_input_events_t* l, uint32_t i) -> const clap_event_header_t* { return &static_cast<Events*> (l->ctx)->ev[i].header; } };
     clap_output_events_t out { nullptr, [] (const clap_output_events_t*, const clap_event_header_t*) { return true; } };
 
+    if (viaFlush)
+    {
+        inst.params->flush (inst.plugin, &in, &out);
+        return;
+    }
+
     std::vector<float> l (512, 0.0f), r (512, 0.0f);
     float* ch[2] = { l.data(), r.data() };
     clap_audio_buffer_t ab {}; ab.data32 = ch; ab.channel_count = 2;
@@ -110,7 +118,7 @@ void setValues (Instance& inst, const std::vector<double>& values)
 }
 
 // one process() call with optional CLAP note events; returns the left output channel
-std::vector<float> processBlock (Instance& inst, const std::vector<clap_event_note_t>& notes, std::vector<float>* rightOut = nullptr)
+std::vector<float> processBlock (Instance& inst, const std::vector<clap_event_note_t>& notes, std::vector<float>* rightOut = nullptr, uint32_t frames = 512)
 {
     struct Events { const std::vector<clap_event_note_t>* ev; } events { &notes };
     clap_input_events_t in { &events,
@@ -122,7 +130,7 @@ std::vector<float> processBlock (Instance& inst, const std::vector<clap_event_no
     float* ch[2] = { l.data(), r.data() };
     clap_audio_buffer_t ab {}; ab.data32 = ch; ab.channel_count = 2;
     clap_process_t p {};
-    p.frames_count = 512; p.audio_outputs = &ab; p.audio_outputs_count = 1;
+    p.frames_count = frames; p.audio_outputs = &ab; p.audio_outputs_count = 1;
     p.in_events = &in; p.out_events = &out; p.steady_time = -1;
     inst.plugin->process (inst.plugin, &p);
     if (rightOut) *rightOut = r;
@@ -293,16 +301,47 @@ int main (int argc, char** argv)
         uint64_t rng = 0x9e3779b97f4a7c15ull;
         const auto next = [&] { rng ^= rng >> 12; rng ^= rng << 25; rng ^= rng >> 27; return (double) ((rng * 0x2545f4914f6cdd1dull) >> 11) / 9007199254740992.0; };
         bool finite = true;
-        for (int round = 0; round < 30; ++round)
+        // the validator's param-fuzz-basic: 50 sets of random values, 5 buffers each; it gives the whole test 45 s, which a host's CI machine used up when setting the
+        // modulation slots re-ordered the engine's processor graph in a quadratic search (ProcessorRouter::getDependencies)
+        for (const uint32_t frames : { 1u, 32u, 512u })
         {
-            std::vector<double> values;
-            for (auto& p : c.list)
-                values.push_back (p.info.min_value + next() * (p.info.max_value - p.info.min_value));
-            setValues (c, values);
-            const auto out = processBlock (c, { noteOnEvent ((int16_t) (36 + round * 2), 0.5 + 0.5 * next()) });
-            finite = finite && allFinite (out);
+            const auto t0 = std::chrono::steady_clock::now();
+            for (int i = 0; i < 200; ++i)
+                processBlock (c, {}, nullptr, frames);
+            std::printf ("idle process() of %u frames: %.3f ms per call\n", frames, 1000.0 * std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count() / 200.0);
         }
+        double fuzzSeconds = 0.0;
+        // on a thread of its own, the main thread idle: a validator calls process() from its audio thread while the main thread does not run a message loop
+        std::thread audioThread ([&] {
+        for (int pass = 0; pass < 3; ++pass) // 0: random values (param-fuzz-basic), 1: every value at its minimum or maximum (param-fuzz-bounds)
+        {
+            const auto fuzzStart = std::chrono::steady_clock::now();
+            for (int round = 0; round < 50; ++round)
+            {
+                // the validator activates and starts processing for every permutation (ProcessScope::new) and stops and deactivates after it
+                c.plugin->stop_processing (c.plugin);
+                c.plugin->deactivate (c.plugin);
+                c.active = c.plugin->activate (c.plugin, 44100.0, 1, 512) && c.plugin->start_processing (c.plugin);
+                std::vector<double> values;
+                for (auto& p : c.list)
+                    values.push_back (pass == 0 ? p.info.min_value + next() * (p.info.max_value - p.info.min_value) : (next() < 0.5 ? p.info.min_value : p.info.max_value));
+                setValues (c, values, pass == 2);
+                for (int b = 0; b < 5; ++b)
+                {
+                    std::vector<clap_event_note_t> notes;
+                    for (int n = 0; n < 4; ++n)
+                        notes.push_back (noteOnEvent ((int16_t) (24 + (int) (next() * 70)), 0.3 + 0.7 * next()));
+                    finite = finite && allFinite (processBlock (c, notes));
+                }
+            }
+            const double seconds = std::chrono::duration<double> (std::chrono::steady_clock::now() - fuzzStart).count();
+            std::printf ("param fuzz (%s): 50 rounds of %zu values and 5 buffers with 4 note-ons each in %.2f s\n", pass == 0 ? "random" : (pass == 1 ? "bounds" : "random via params.flush"), c.list.size(), seconds);
+            fuzzSeconds = std::max (fuzzSeconds, seconds);
+        }
+        });
+        audioThread.join();
         if (! finite) { std::printf ("FAIL fuzz: non-finite audio after random parameters\n"); ++failures; }
+        if (fuzzSeconds > 15.0) { std::printf ("FAIL fuzz: %.1f s for the validator's param-fuzz-basic workload (limit 15 s, the validator's is 45 s on a slower machine)\n", fuzzSeconds); ++failures; }
         destroyInstance (c);
     }
 

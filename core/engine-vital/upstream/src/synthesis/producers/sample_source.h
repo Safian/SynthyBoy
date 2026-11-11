@@ -120,6 +120,7 @@ namespace sbvital {
       /** GROUPA1 (noise.type = Sample): a user sample as the noise source. `makeUserData` builds the band limited buffers on any thread
           (right may be null = mono); `useUserData` (audio thread, a pointer swap like setNoiseType) plays it, nullptr goes back to the
           generator last selected with setNoiseType. The caller keeps the data alive while it is selected. */
+      static std::shared_ptr<SampleData> noiseSet(int type, mono_float* buffer, mono_float* other);
       static std::unique_ptr<SampleData> makeUserData(const mono_float* left, const mono_float* right, int size, int sample_rate);
       void useUserData(SampleData* data);
       bool activeIsColour() const { auto* d = active_audio_data_.load(); return d != nullptr && d->colour; }
@@ -133,7 +134,7 @@ namespace sbvital {
       SampleData* current_data_;
       std::atomic<SampleData*> active_audio_data_;
       std::unique_ptr<SampleData> data_;
-      std::unique_ptr<SampleData> noise_data_[kNumNoiseTypes];
+      std::shared_ptr<SampleData> noise_data_[kNumNoiseTypes];   // SynthyBoy: types 1 .. 8 are the same for every engine and shared (sample_source.cpp, noiseSet)
       int noise_type_ = 0;
 
       JUCE_LEAK_DETECTOR(Sample)

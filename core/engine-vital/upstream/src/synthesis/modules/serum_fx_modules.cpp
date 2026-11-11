@@ -9,6 +9,8 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
 #include "synth_constants.h"
@@ -271,6 +273,10 @@ namespace sbvital {
 
         ~ConvolveModule() override {
           stop_.store(true);
+          {
+            std::lock_guard<std::mutex> lock(wake_mutex_);
+          }
+          wake_.notify_all();   // the builder sleeps 10 ms between two looks in live mode: do not wait for the end of that sleep
           builder_.join();
           delete pending_.exchange(nullptr);
           for (auto& slot : retired_)
@@ -403,7 +409,8 @@ namespace sbvital {
               done_ir_.store(ir_version);
               done_rate_.store(rate_version);
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(realtime_.load() ? 10 : 1));
+            std::unique_lock<std::mutex> lock(wake_mutex_);
+            wake_.wait_for(lock, std::chrono::milliseconds(realtime_.load() ? 10 : 1), [this] { return stop_.load(); });
           }
         }
 
@@ -426,6 +433,8 @@ namespace sbvital {
         std::atomic<bool> want_use_ { false }, want_phi_ { false }, stop_ { false };
         std::atomic<float> want_size_ { 50.0f }, want_attack_ { 0.0f }, want_decay_ { 100.0f }, want_damp_ { 0.0f }, want_gain_ { 0.0f }, rate_ { 0.0f };
         std::shared_ptr<const ImpulseData> impulse_;
+        std::mutex wake_mutex_;
+        std::condition_variable wake_;
         std::thread builder_;
     };
 

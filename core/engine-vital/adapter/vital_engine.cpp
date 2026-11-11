@@ -1637,7 +1637,10 @@ private:
     {
         if (pool == nullptr)
             return;
-        const bool synchronous = force || ! qRealtime.load (std::memory_order_relaxed);
+        // deterministic quality (offline renders, tests): the audio thread waits for every module, also in prepare / reset. Live quality never waits, not even in prepare: the modules of the
+        // slots are built by the pool thread while the host already runs the engine, and each slot is dry until its module is ready (10 ms crossfade), as for a type change while playing. A host that
+        // activates the plug-in again and again (the CLAP validator's param-fuzz does it 50 times with 16 slots set to random effects) waited for 16 settled modules every time.
+        const bool synchronous = ! qRealtime.load (std::memory_order_relaxed);
         for (int s = 0; s < kNumFxInstances; ++s)
         {
             const FxInstanceKeys& keys = fxInstanceKeys (s);

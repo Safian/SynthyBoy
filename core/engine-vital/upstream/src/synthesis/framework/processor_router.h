@@ -118,6 +118,7 @@ namespace sbvital {
       std::shared_ptr<CircularQueue<const Processor*>> dependencies_;
       std::shared_ptr<CircularQueue<const Processor*>> dependencies_visited_;
       std::shared_ptr<CircularQueue<const Processor*>> dependency_inputs_;
+      mutable uint64_t dependency_epoch_ = 0;   // the query that dependencies_ / dependencies_visited_ belong to (Processor::dependency_mark_ / visited_mark_)
 
       JUCE_LEAK_DETECTOR(ProcessorRouter)
   };
