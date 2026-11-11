@@ -154,9 +154,12 @@ void Toast::timerCallback()
     delete this;
 }
 
-void Toast::componentBeingDeleted (juce::Component&)
+void Toast::componentBeingDeleted (juce::Component& deleted)
 {
-    host = nullptr; // the editor goes first: nothing to remove from
+    // the editor goes first. Leave its listener list BEFORE deleting: ~Component of this toast removes it from the parent, and the parent's listeners are called for that
+    // ("children changed"); a listener that is half destroyed (this) must not be among them (UBSan: invalid vptr in juce_Component.cpp internalChildrenChanged)
+    deleted.removeComponentListener (this);
+    host = nullptr;
     delete this;
 }
 
