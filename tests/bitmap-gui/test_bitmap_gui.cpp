@@ -155,6 +155,34 @@ bool findKnob (Instance& host, const char* key, Rect area, double& foundX, doubl
 const Rect kOsc1Level { 560, 470, 70, 60 }; // the "Level" knob of oscillator 1 on the first page at 1024 x 768 (the probe scans this area)
 } // namespace
 
+/** A host with hardware keys (the MPC) passes CREATE_NO_ONSCREEN_KEYBOARD: the piano strip (white keys) is not drawn and its area goes to the panels. */
+TEST (bg_no_onscreen_keyboard_flag_hides_the_piano_strip)
+{
+    auto whiteInBottom = [] (uint32_t flags) -> uint64_t
+    {
+        Instance host;
+        if (! host.ok() || ! host.create (1024, 600, 1.0, flags))
+            return ~uint64_t { 0 };
+        FrameInfo f;
+        Image img;
+        if (! host.render (f, &img))
+            return ~uint64_t { 0 };
+        uint64_t white = 0;
+        for (uint32_t y = img.height - 70; y < img.height; ++y)
+            for (uint32_t x = 0; x < img.width; ++x)
+            {
+                const uint32_t p = img.pixels[static_cast<size_t> (y) * img.width + x];
+                white += (p & 0xFF) > 0xE0 && ((p >> 8) & 0xFF) > 0xE0 && ((p >> 16) & 0xFF) > 0xE0;
+            }
+        return white;
+    };
+    const auto withKeys = whiteInBottom (0);
+    const auto without = whiteInBottom (SAFIAN_BITMAP_GUI_CREATE_NO_ONSCREEN_KEYBOARD);
+    CHECK (withKeys != ~uint64_t { 0 } && without != ~uint64_t { 0 });
+    CHECK (withKeys > 5000);        // the white keys are there by default
+    CHECK (without < withKeys / 10); // and gone with the flag
+}
+
 TEST (bg_idle_gui_produces_no_pixels)
 {
     Instance host;

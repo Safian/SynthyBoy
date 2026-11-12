@@ -65,7 +65,10 @@ enum
     /** The host runs the platform's native event loop on the calling thread (a macOS / Windows application with its own message loop, a GTK / Qt main
         loop): the plug-in's toolkit posts its timers and async messages into that loop and the host must NOT expect tick () to pump them. Without this flag
         (a framebuffer host, a test harness, a Linux host without a loop the toolkit can join) tick () and render () run the toolkit's own queue. */
-    SAFIAN_BITMAP_GUI_CREATE_HOST_RUNS_EVENT_LOOP = 1u << 0
+    SAFIAN_BITMAP_GUI_CREATE_HOST_RUNS_EVENT_LOOP = 1u << 0,
+    /** The host has its own keys (a hardware keyboard or pads, an MPC / keyboard controller): the plug-in does not draw its on-screen piano strip and gives
+        that area to the rest of the GUI. A plug-in without such a strip ignores the flag. */
+    SAFIAN_BITMAP_GUI_CREATE_NO_ONSCREEN_KEYBOARD = 1u << 1
 };
 
 /** get_info () flags: what this GUI understands. */

@@ -60,6 +60,8 @@ BitmapSession::BitmapSession (SynthyBoyClap& owner, uint32_t width, uint32_t hei
     root = std::make_unique<Root> (static_cast<BitmapPeer::Client&> (*this));
     root->setBounds (0, 0, logicalWidth, logicalHeight);
     editor = std::make_unique<ui::SynthyBoyEditor> (*uiHost);
+    if (flags & SAFIAN_BITMAP_GUI_CREATE_NO_ONSCREEN_KEYBOARD)
+        editor->setKeyboardVisible (false);
     root->addAndMakeVisible (*editor);
     editor->setBounds (root->getLocalBounds());
     root->addToDesktop (0);

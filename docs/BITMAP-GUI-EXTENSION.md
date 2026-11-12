@@ -92,6 +92,10 @@ need no tick; what they queue (a deferred repaint, a long-press timer) runs at t
 The calling thread **becomes the toolkit's message thread** at every entry point. A host may call from different threads over time (a plug-in scan thread, then the UI thread), never from two at once. Several plug-in
 instances share one toolkit instance (it is a singleton of the module), and several modules with different toolkit versions in one process do not see each other.
 
+### 5.4 `SAFIAN_BITMAP_GUI_CREATE_NO_ONSCREEN_KEYBOARD`
+
+The host has hardware keys of its own (an MPC, a keyboard controller): the plug-in omits its on-screen piano strip and gives the space to the rest of the GUI. Unknown flags are ignored, so a host may always pass it.
+
 ### 5.3 `SAFIAN_BITMAP_GUI_CREATE_HOST_RUNS_EVENT_LOOP`
 
 * **Not set** (a framebuffer host, a test harness, a Linux host without a loop the toolkit can join): `tick ()` and `render ()` pump the toolkit's queue themselves (on Linux and Windows the toolkit's own message queue; on

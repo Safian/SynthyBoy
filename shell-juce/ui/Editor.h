@@ -41,6 +41,8 @@ public:
     MacroRow& macroRow() noexcept { return *macros; }
     PageTabs& pageTabs() noexcept { return *tabs; }
     KeyboardStrip& keyboardStrip() noexcept { return *keyboard; }
+    /** Hide / show the on-screen piano strip (a host with hardware keys hides it); the space goes to the panels. */
+    void setKeyboardVisible (bool visible);
     ModSourceBar& sourceBar() noexcept { return *sources; }
     bool isSourceBarOpen() const noexcept { return sourcesOpen; }
 
@@ -103,6 +105,7 @@ private:
     std::unique_ptr<PageTabs> tabs;
     std::unique_ptr<PanelHost> panels;
     std::unique_ptr<KeyboardStrip> keyboard;
+    bool keyboardVisible = true;
     juce::TooltipWindow tooltips { this, 600 };
     bool sourcesOpen = false;
     std::unique_ptr<juce::Component> sheet;

@@ -94,6 +94,15 @@ void SynthyBoyEditor::paint (juce::Graphics& g)
     g.fillAll (uiTheme.colours.background);
 }
 
+void SynthyBoyEditor::setKeyboardVisible (bool visible)
+{
+    if (keyboardVisible == visible)
+        return;
+    keyboardVisible = visible;
+    keyboard->setVisible (visible);
+    resized();
+}
+
 void SynthyBoyEditor::resized()
 {
     auto r = getLocalBounds();
@@ -101,7 +110,8 @@ void SynthyBoyEditor::resized()
     const bool shareRow = r.getWidth() >= 800;
     const bool compact = r.getHeight() < 500;
 
-    keyboard->setBounds (r.removeFromBottom (t.keyboardHeight (compact)));
+    if (keyboardVisible)
+        keyboard->setBounds (r.removeFromBottom (t.keyboardHeight (compact)));
 
     if (shareRow)
     {
