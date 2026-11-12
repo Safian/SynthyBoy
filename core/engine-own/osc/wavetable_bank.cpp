@@ -189,41 +189,78 @@ int Wavetable::levelFor (float nyquistOverFundamental) noexcept
 void Wavetable::build (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff)
 {
     frames = static_cast<int> (cosCoeff.size());
-    data.assign (static_cast<size_t> (frames) * kNumLevels * kStride, 0.0f);
-    std::vector<std::complex<double>> a (kCycle);
+    size_t off = 0;
+    for (int m = 0; m < kNumLevels; ++m)
+    {
+        levelOffset[m] = off;
+        off += static_cast<size_t> (size (m)) + 4;
+    }
+    frameStride = off;
+    data.assign (static_cast<size_t> (frames) * frameStride, 0.0f);
+    spec.assign (static_cast<size_t> (frames) * 2 * kHarmonics, 0.0f);
+    std::vector<std::complex<double>> a;
     for (int f = 0; f < frames; ++f)
     {
-        // normalise the full band cycle to a peak of 1
         double scale = 1.0;
         for (int m = 0; m < kNumLevels; ++m)
         {
+            const int n = size (m);
             const int top = maxHarmonics (m);
-            std::fill (a.begin(), a.end(), std::complex<double> (0.0, 0.0));
-            for (int h = 1; h <= top && h < kHarm; ++h)
+            a.assign (static_cast<size_t> (n), std::complex<double> (0.0, 0.0));
+            for (int h = 1; h <= top && h < kHarm && h < n / 2; ++h)
             {
                 // x[i] = sum c cos (h t) + s sin (h t); inverse FFT bin = (c - i s) / 2 and its mirror
                 const std::complex<double> v (0.5 * cosCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)],
                                               -0.5 * sinCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)]);
                 a[static_cast<size_t> (h)] = v;
-                a[static_cast<size_t> (kCycle - h)] = std::conj (v);
+                a[static_cast<size_t> (n - h)] = std::conj (v);
             }
             fft (a, +1);
             if (m == 0)
             {
                 double peak = 1.0e-9;
-                for (int i = 0; i < kCycle; ++i)
+                for (int i = 0; i < n; ++i)
                     peak = std::max (peak, std::fabs (a[static_cast<size_t> (i)].real()));
                 scale = 1.0 / peak;
             }
-            float* dst = data.data() + (static_cast<size_t> (f) * kNumLevels + static_cast<size_t> (m)) * kStride + 1;
-            for (int i = 0; i < kCycle; ++i)
+            float* dst = data.data() + static_cast<size_t> (f) * frameStride + levelOffset[m] + 1;
+            for (int i = 0; i < n; ++i)
                 dst[i] = static_cast<float> (a[static_cast<size_t> (i)].real() * scale);
-            dst[-1] = dst[kCycle - 1];
-            dst[kCycle] = dst[0];
-            dst[kCycle + 1] = dst[1];
-            dst[kCycle + 2] = dst[2];
+            dst[-1] = dst[n - 1];
+            dst[n] = dst[0];
+            dst[n + 1] = dst[1];
+            dst[n + 2] = dst[2];
+        }
+        float* sp = spec.data() + static_cast<size_t> (f) * 2 * kHarmonics;
+        for (int h = 1; h < kHarm; ++h)
+        {
+            sp[h] = static_cast<float> (cosCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)] * scale);
+            sp[kHarmonics + h] = static_cast<float> (sinCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)] * scale);
         }
     }
+}
+
+std::unique_ptr<Wavetable> makeWavetableFromSamples (const float* samples, int numFrames)
+{
+    if (samples == nullptr || numFrames < 1)
+        return nullptr;
+    std::vector<std::vector<float>> cc, ss;
+    std::vector<double> x (static_cast<size_t> (Wavetable::kCycle));
+    for (int f = 0; f < numFrames; ++f)
+    {
+        double mean = 0.0;
+        for (int i = 0; i < Wavetable::kCycle; ++i)
+            mean += samples[static_cast<size_t> (f) * Wavetable::kCycle + static_cast<size_t> (i)];
+        mean /= Wavetable::kCycle;
+        for (int i = 0; i < Wavetable::kCycle; ++i)
+            x[static_cast<size_t> (i)] = samples[static_cast<size_t> (f) * Wavetable::kCycle + static_cast<size_t> (i)] - mean;
+        const FramePair fp = spectrumOf (x);
+        cc.push_back (fp.c);
+        ss.push_back (fp.s);
+    }
+    auto t = std::make_unique<Wavetable>();
+    t->build (cc, ss);
+    return t;
 }
 
 namespace
@@ -251,6 +288,15 @@ struct Bank
     }
 };
 } // namespace
+
+size_t builtinBankBytes() noexcept
+{
+    size_t total = 0;
+    for (int c = 0; c <= kNumWavetableChoices; ++c)
+        if (const Wavetable* t = builtinWavetable (c))
+            total += t->memoryBytes();
+    return total;
+}
 
 const Wavetable* builtinWavetable (int choice) noexcept
 {

@@ -37,6 +37,8 @@ synthyboy_add_test(synthyboy_test_shell_clap test_shell_clap.cpp LINK synthyboy_
 synthyboy_add_test(synthyboy_test_engine     test_engine.cpp)
 synthyboy_add_test(synthyboy_test_own_engine test_own_engine.cpp)
 target_include_directories(synthyboy_test_own_engine PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
+synthyboy_add_test(synthyboy_test_own_osc_types test_own_osc_types.cpp)
+target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete
 synthyboy_add_test(synthyboy_test_threads    test_threads.cpp)    # run under ThreadSanitizer in CI
 

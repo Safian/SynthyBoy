@@ -38,9 +38,62 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     const auto* table = paramTable();
     for (size_t i = 0; i < kMaxParams; ++i)
         params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
+    for (auto& k : switchKeyAtomic)
+        k.store (-1, std::memory_order_relaxed);
+    spectralScratch = std::make_unique<spectral::Scratch>();
+    publishContent (ContentSet::build (StateContent {}, nullptr));
 }
 
 OwnEngine::~OwnEngine() = default;
+
+void OwnEngine::publishContent (std::unique_ptr<ContentSet> set)
+{
+    std::lock_guard<std::mutex> lock (contentMutex);
+    const ContentSet* raw = set.get();
+    contentOwned.push_back (std::move (set));
+    contentCurrent.store (raw); // seq_cst: the audio thread re-validates the pointer it announced in contentInUse
+    const ContentSet* inUse = contentInUse.load();
+    for (size_t i = 0; i < contentOwned.size();)
+    {
+        const ContentSet* p = contentOwned[i].get();
+        if (p != raw && p != inUse)
+            contentOwned.erase (contentOwned.begin() + static_cast<std::ptrdiff_t> (i));
+        else
+            ++i;
+    }
+    for (auto& k : switchKeyAtomic)
+        k.store (-1, std::memory_order_relaxed);
+}
+
+void OwnEngine::rebuildContent()
+{
+    StateContent copy;
+    const IContentStore* st;
+    {
+        std::lock_guard<std::mutex> lock (contentMutex);
+        copy = contentState;
+        st = contentStore;
+    }
+    publishContent (ContentSet::build (copy, st));
+}
+
+void OwnEngine::setContent (const StateContent& content)
+{
+    {
+        std::lock_guard<std::mutex> lock (contentMutex);
+        contentState = content;
+    }
+    rebuildContent();
+}
+
+void OwnEngine::setContentStore (const IContentStore* store)
+{
+    {
+        std::lock_guard<std::mutex> lock (contentMutex);
+        contentStore = store;
+    }
+    rebuildContent();
+}
 
 float OwnEngine::readParam (uint32_t id) const noexcept
 {
@@ -84,6 +137,7 @@ void OwnEngine::setQuality (const Quality& q) noexcept
 {
     voiceCap.store (std::clamp (q.maxVoices, 1, kMaxVoices), std::memory_order_relaxed);
     unisonCap.store (std::clamp (q.maxUnison, 1, kMaxUnisonVoices), std::memory_order_relaxed);
+    qualityTier.store (q.oversampling <= 1 ? 0 : (q.interpolation == Interpolation::spectral ? 2 : 1), std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
 }
 
@@ -206,6 +260,14 @@ void OwnEngine::noteOn (const Event& e) noexcept
     ns.noteId = e.noteId;
     ns.velocity = velocity;
     ns.serial = noteCounter++;
+    // a key switch of a multisample instrument selects the articulation of the zones that follow
+    if (globals.content != nullptr)
+        for (int o = 0; o < 3; ++o)
+            if (globals.content->instrument[o] != nullptr && globals.content->instrument[o]->isKeySwitchKey (e.key))
+            {
+                switchKeyAtomic[o].store (e.key, std::memory_order_relaxed);
+                switchKeySnap[o] = e.key;
+            }
     const bool glideAlways = base[static_cast<size_t> (mi.portAlways)] >= 0.5f;
 
     // a key that is already held
@@ -460,6 +522,21 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.lfoPhase = lfoPhase;
     globals.rlfoValue = rlfoValue;
     globals.maxUnison = unisonCap.load (std::memory_order_relaxed);
+    // announce the content set this block reads (hazard pointer: the message thread frees a set only when it is neither current nor announced)
+    {
+        const ContentSet* cs;
+        do
+        {
+            cs = contentCurrent.load();
+            contentInUse.store (cs);
+        } while (cs != contentCurrent.load());
+        globals.content = cs;
+    }
+    for (int o = 0; o < 3; ++o)
+        switchKeySnap[o] = switchKeyAtomic[o].load (std::memory_order_relaxed);
+    globals.switchKey = switchKeySnap;
+    globals.quality = qualityTier.load (std::memory_order_relaxed);
+    globals.spectralScratch = spectralScratch.get();
 
     if (voiceCap.load (std::memory_order_relaxed) < kMaxVoices)
     {

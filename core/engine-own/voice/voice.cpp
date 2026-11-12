@@ -75,6 +75,11 @@ void Voice::prepare (double sampleRate)
     modR.assign (paramCount(), 0.0f);
     filt[0].prepare (sampleRate);
     filt[1].prepare (sampleRate);
+    for (int o = 0; o < 3; ++o)
+    {
+        osc[o].prepareMorph();
+        lib[o].prepare (sampleRate);
+    }
 }
 
 void Voice::reset() noexcept
@@ -167,10 +172,13 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
         std::fill (std::begin (oscMono[o]), std::end (oscMono[o]), 0.0f);
     filt[0].reset();
     filt[1].reset();
-    osc[0] = WtOsc();
-    osc[1] = WtOsc();
-    osc[2] = WtOsc();
-    sub = WtOsc();
+    for (auto& o : osc)
+        o.clearState();
+    for (auto& l : lib)
+        l.resetForNote();
+    for (int i = 0; i < 4; ++i)
+        pitchTapOn[i] = false;
+    sub.clearState();
     fresh = true;
 }
 
@@ -195,6 +203,9 @@ void Voice::release (float velocity) noexcept
     releaseVel = velocity;
     for (auto& e : env)
         e.noteOff();
+    if (gl != nullptr)
+        for (int o = 0; o < 3; ++o)
+            lib[o].noteOff (P (libKeys (o).idx[lk_sLoopExit]) >= 0.5f);
 }
 
 void Voice::kill() noexcept
@@ -435,10 +446,15 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             osc[o].start (P (pi.osc[o].phase) * (1.0f / 360.0f), clamp01 (P (pi.osc[o].randomPhase) * 0.01f), rng);
         sub.start (P (pi.sub.phase) * 0.01f, 0.0f, rng);
     }
+    // a content set that replaced the one a sample-type player reads stops that player
     for (int o = 0; o < 3; ++o)
     {
         const OscIdx& oi = pi.osc[o];
-        oscOn[o] = P (oi.on) >= 0.5f && static_cast<int> (P (oi.type) + 0.5f) == kOscTypeWavetable;
+        const LibKeys& lk = libKeys (o);
+        const int type = std::clamp (static_cast<int> (P (oi.type) + 0.5f), 0, 4);
+        lib[o].setType (type, fresh);
+        const bool fadingFromWt = lib[o].fadingFromWavetable();
+        oscOn[o] = P (oi.on) >= 0.5f;
         if (oscOn[o])
         {
             const int kl = static_cast<int> (g.base[oi.keyLow] + 0.5f), kh = static_cast<int> (g.base[oi.keyHigh] + 0.5f);
@@ -455,15 +471,53 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             t.level = 0.0f;
             osc[o].update (t, g.sampleRate, rng);
+            pitchTapOn[o] = false;
+            lib[o].update (t, LibParams(), g.content, o);
             continue;
         }
-        t.wt = builtinWavetable (std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1));
+        const ContentSet* cs = g.content;
+        int wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
+        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : builtinWavetable (wtChoice);
         if (t.wt == nullptr)
-            t.wt = builtinWavetable (kWavetableSaw); // the preset table needs the content store (not implemented yet): the saw
+            t.wt = builtinWavetable (kWavetableSaw); // the preset table needs its content (a missing file: the saw)
+        // ---- pitch: the coarse term of the pitch mode and the Ratio source
         const bool track = P (oi.pitchTrack) >= 0.5f;
         const bool bendTrack = P (oi.bendTrack) >= 0.5f;
-        const float base = track ? noteSemis - (bendTrack ? 0.0f : bend) : 60.0f;
-        t.semis = base + P (oi.transpose) + P (oi.tune) * 0.01f + P (oi.pitchCoarse);
+        float base = track ? noteSemis - (bendTrack ? 0.0f : bend) : 60.0f;
+        const int pmode = static_cast<int> (P (lk.idx[lk_pitchMode]) + 0.5f);
+        const float coarse = P (oi.pitchCoarse);
+        float coarseSemis = coarse;
+        if (pmode == 1)
+            coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + std::floor (coarse)));
+        else if (pmode == 2)
+            coarseSemis = coarse >= 0.0f ? 12.0f * std::log2 (1.0f + coarse) : 12.0f * std::log2 (1.0f / (1.0f - coarse));
+        if (pmode == 2)
+        {
+            // Ratio SRC: the pitch of another source (as of the last period) replaces the note; a loop, itself or a source that is off is the note
+            const int srcIdx = static_cast<int> (P (lk.idx[lk_ratioSrc]) + 0.5f) - 1; // 0 .. 2 oscillators, 3 sub
+            bool ok = srcIdx >= 0 && srcIdx != o && srcIdx < 4 && pitchTapOn[srcIdx];
+            for (int s = srcIdx, hops = 0; ok && s < 3; ++hops)
+            {
+                if (hops >= 4)
+                    ok = false;
+                else if (g.base[libKeys (s).idx[lk_pitchMode]] < 1.5f)
+                    break; // the chain ends at a source that plays its own note
+                else
+                {
+                    const int next = static_cast<int> (g.base[libKeys (s).idx[lk_ratioSrc]] + 0.5f) - 1;
+                    if (next < 0 || next >= 4)
+                        break;
+                    if (next == o)
+                        ok = false;
+                    s = next;
+                }
+            }
+            if (ok)
+                base = pitchTap[srcIdx];
+        }
+        t.semis = base + P (oi.transpose) + P (oi.tune) * 0.01f + coarseSemis;
+        pitchTap[o] = t.semis;
+        pitchTapOn[o] = true;
         t.frame = clamp01 (P (oi.frame) * 0.01f);
         t.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
         t.level = std::max (0.0f, P (oi.level) * 0.01f);
@@ -485,8 +539,49 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.warp[1] = static_cast<int> (P (oi.warp2Type) + 0.5f);
         t.warpAmount[1] = clamp01 (P (oi.warp2Amount) * 0.01f);
         t.warpPhase[1] = P (oi.warp2Phase) * (1.0f / 360.0f);
-        // the cross modulation entries of the list name the other two oscillators in order
-        osc[o].update (t, g.sampleRate, rng);
+        t.morphType = static_cast<int> (P (lk.idx[lk_morphType]) + 0.5f);
+        t.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
+        t.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
+        t.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
+        t.remap = nullptr;
+        if (cs != nullptr)
+        {
+            const int slot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+            if (cs->remap[o][slot].size() == 257)
+                t.remap = cs->remap[o][slot].data();
+        }
+        const bool wtRuns = type == kOscTypeWavetable || fadingFromWt;
+        if (wtRuns)
+        {
+            // the cross modulation entries of the list name the other two oscillators in order
+            osc[o].update (t, g.sampleRate, rng);
+            osc[o].updateMorph (g.sampleRate, fresh);
+        }
+        else
+        {
+            t.active = false;
+        }
+        if (type != kOscTypeWavetable || lib[o].libraryRunning())
+        {
+            LibParams lp;
+            for (int i = 0; i < kLibKeyCount; ++i)
+                lp.v[i] = lk.idx[i] >= 0 ? P (lk.idx[i]) : 0.0f;
+            lp.type = type;
+            lp.noteSemis = noteSemis;
+            lp.noteRaw = static_cast<float> (keyNum);
+            lp.transposeTune = P (oi.transpose) + P (oi.tune) * 0.01f;
+            lp.pitchTrack = track;
+            lp.bendTrack = bendTrack;
+            lp.velocity = vel;
+            lp.bpm = static_cast<float> (g.bpm);
+            lp.hostRate = g.sampleRate;
+            lp.quality = g.quality;
+            lp.key = keyNum;
+            lp.serial = noteSerial;
+            lp.switchKey = g.switchKey != nullptr ? g.switchKey[o] : -1;
+            lp.scratch = g.spectralScratch;
+            lib[o].update (t, lp, cs, o);
+        }
     }
 
     // ---- sub oscillator
@@ -506,6 +601,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         subTick.blend = 1.0f;
         subTick.frame = 0.0f;
         sub.update (subTick, g.sampleRate, rng);
+        pitchTap[3] = subTick.semis;
+        pitchTapOn[3] = subCh.on;
     }
     // ---- noise
     {
@@ -600,7 +697,35 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         for (int j = 0; j < 3; ++j)
             if (j != o)
                 cross[c++] = oscMono[j];
-        osc[o].render (t0, n, oscL[o], oscR[o], cross, gl->sampleRate);
+        float w0 = 1.0f, w1 = 1.0f;
+        if (lib[o].type() != kOscTypeWavetable || lib[o].libraryRunning())
+            lib[o].wavetableWeights (t0, n, w0, w1);
+        if (w0 > 0.0f || w1 > 0.0f)
+        {
+            osc[o].render (t0, n, oscL[o], oscR[o], cross, gl->sampleRate);
+            if (w0 != 1.0f || w1 != 1.0f)
+                for (int k = 0; k < n; ++k)
+                {
+                    const float g = lerp (w0, w1, static_cast<float> (k + 1) / static_cast<float> (n));
+                    oscL[o][k] *= g;
+                    oscR[o][k] *= g;
+                }
+        }
+        else
+        {
+            std::fill (oscL[o], oscL[o] + n, 0.0f);
+            std::fill (oscR[o], oscR[o] + n, 0.0f);
+        }
+        if (lib[o].libraryRunning())
+        {
+            float tl[kControlPeriod], tr[kControlPeriod];
+            lib[o].render (t0, n, tl, tr, cross);
+            for (int k = 0; k < n; ++k)
+            {
+                oscL[o][k] += tl[k];
+                oscR[o][k] += tr[k];
+            }
+        }
         for (int k = 0; k < n; ++k)
             oscMono[o][k] = 0.5f * (oscL[o][k] + oscR[o][k]);
         srcLevel[o] = oscMono[o][n - 1];

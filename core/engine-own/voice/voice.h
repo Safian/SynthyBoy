@@ -10,6 +10,8 @@
 #include "../env_lfo/envelope.h"
 #include "../env_lfo/lfo.h"
 #include "../matrix/mod_matrix.h"
+#include "../osc/content_set.h"
+#include "../osc/lib_osc.h"
 #include "../osc/wt_osc.h"
 #include "filter_unit.h"
 #include "param_index.h"
@@ -35,6 +37,10 @@ struct TickGlobals
     int activeVoices = 0;
     float concertA = 440.0f;
     int maxUnison = kMaxUnisonVoices;
+    const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
+    int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
+    spectral::Scratch* spectralScratch = nullptr;
+    const int* switchKey = nullptr;          // [3] last key switch of the multisample instrument of each oscillator, -1 = default
 };
 
 struct NoteStart
@@ -58,6 +64,8 @@ public:
     void legatoTo (const NoteStart& n) noexcept;
     void release (float velocity) noexcept;
     void kill() noexcept;
+    /** Choke groups of the multisample instruments: another voice started a zone of this group. */
+    void chokeGroup (int osc, int group) noexcept { if (osc >= 0 && osc < 3) lib[osc].chokeGroup (group); }
 
     bool isActive() const noexcept { return active; }
     bool isReleased() const noexcept { return released; }
@@ -120,6 +128,9 @@ private:
 
     // sound sources
     WtOsc osc[3], sub;
+    LibOsc lib[3];
+    float pitchTap[4] = {};   // pitch of oscillators 1 .. 3 and the sub of the last period (Ratio SRC)
+    bool pitchTapOn[4] = {};
     OscTick oscTick[3], subTick;
     float oscMono[3][kControlPeriod] = {};
     float noiseState[2][4] = {}; // left and right generator

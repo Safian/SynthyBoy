@@ -6,10 +6,13 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "dsp/util.h"
 #include "matrix/mod_matrix.h"
+#include "osc/content_set.h"
+#include "synthyboy/content_state.h"
 #include "synthyboy/engine.h"
 #include "fx/fx_chain.h"
 #include "voice/voice.h"
@@ -35,6 +38,8 @@ public:
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
+    void setContent (const StateContent& content) override;
+    void setContentStore (const IContentStore* store) override;
 
 private:
     static constexpr int numChannels = 16;
@@ -46,6 +51,8 @@ private:
     void controlTick() noexcept;
     Voice* allocateVoice (int key, int channel, float velocity) noexcept;
     float readParam (uint32_t id) const noexcept;
+    void rebuildContent();
+    void publishContent (std::unique_ptr<ContentSet> set);
 
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> voiceCap { 8 }, unisonCap { kMaxUnisonVoices };
@@ -53,6 +60,17 @@ private:
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };
     std::atomic<bool> tpPlaying { false };
+
+    // the decoded content (message thread builds, audio thread reads without a lock; a set is freed only when the audio thread no longer uses it)
+    std::mutex contentMutex;
+    StateContent contentState;
+    const IContentStore* contentStore = nullptr;
+    std::vector<std::unique_ptr<ContentSet>> contentOwned;
+    std::atomic<const ContentSet*> contentCurrent { nullptr }, contentInUse { nullptr };
+    std::atomic<int> switchKeyAtomic[3];
+    int switchKeySnap[3] = { -1, -1, -1 };
+    std::atomic<int> qualityTier { 2 };
+    std::unique_ptr<spectral::Scratch> spectralScratch;
 
     std::vector<std::unique_ptr<Voice>> voices;
     std::vector<uint8_t> sustainPending;

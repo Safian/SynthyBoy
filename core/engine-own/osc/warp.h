@@ -15,7 +15,7 @@ enum WarpType : int
     kWarpNone = 0, kWarpSync, kWarpFormant, kWarpQuantize, kWarpBend, kWarpSqueeze, kWarpPulse,
     kWarpFmA, kWarpFmB, kWarpRmA, kWarpRmB,
     kWarpSyncVar = 11, kWarpBendPlus, kWarpBendMinus, kWarpBendBoth, kWarpAsymPlus, kWarpAsymMinus, kWarpAsymBoth, kWarpFlip, kWarpMirror,
-    kWarpOddEven = 24,
+    kWarpRemap1 = 20, kWarpRemap2, kWarpRemap3, kWarpRemap4, kWarpOddEven = 24, kWarpFilterLpf = 25, kWarpFilterHpf = 26,
     kWarpDistTube = 27, kWarpDistSoftClip, kWarpDistHardClip, kWarpDistDiode1, kWarpDistDiode2, kWarpDistLinearFold, kWarpDistSineFold,
     kWarpDistZeroSquare, kWarpDistAsym, kWarpDistRectify, kWarpDistSineShaper, kWarpDistStomp, kWarpDistTape, kWarpDistSoftSat,
     kWarpFmTzA = 41, kWarpFmTzB, kWarpFmExpA, kWarpFmExpB, kWarpFmLinA, kWarpFmLinB, kWarpPdA, kWarpPdB, kWarpPdSelf, kWarpAmA, kWarpAmB
@@ -45,6 +45,8 @@ inline float warpBandwidthFactor (int type, float a) noexcept
         case kWarpFmA: case kWarpFmB: case kWarpFmTzA: case kWarpFmTzB: case kWarpFmExpA: case kWarpFmExpB: case kWarpFmLinA: case kWarpFmLinB:
             return 1.0f + 7.0f * a;
         case kWarpPdA: case kWarpPdB: case kWarpPdSelf: return 1.0f + 3.0f * a;
+        case kWarpRemap1: case kWarpRemap2: case kWarpRemap4: return 1.0f + 3.0f * a;
+        case kWarpRemap3: return 1.0f + 0.5f * a;
         default: return 1.0f;
     }
 }
@@ -54,13 +56,43 @@ inline float frac (float x) noexcept
     return x - std::floor (x);
 }
 
+/** True for the warps that can create content far above the pitch (they make the oscillator run oversampled). Odd/Even and the two filters are
+    linear in the table and do not. */
+inline bool warpNeedsOversampling (int type) noexcept
+{
+    return type != kWarpNone && type != kWarpOddEven && type != kWarpFilterLpf && type != kWarpFilterHpf;
+}
+
+/** The drawn remap curve (257 points, 0 .. 1 to 0 .. 1) at u; null = the identity. */
+inline float remapCurveAt (const float* curve, float u) noexcept
+{
+    if (curve == nullptr)
+        return u;
+    const float x = std::clamp (u, 0.0f, 1.0f) * 256.0f;
+    const int i = std::min (static_cast<int> (x), 255);
+    return lerp (curve[i], curve[i + 1], x - static_cast<float> (i));
+}
+
+/** The remap applied on each of `parts` equal parts of the cycle (1 = whole cycle). */
+inline float remapParts (const float* curve, float p, float a, int parts) noexcept
+{
+    const float h = p * static_cast<float> (parts);
+    const float whole = std::floor (h);
+    const float u = h - whole;
+    return (whole + u + a * (remapCurveAt (curve, u) - u)) / static_cast<float> (parts);
+}
+
 /** Phase domain stage. p = cycle phase 0 .. 1, a = amount 0 .. 1, ph = the phase knob 0 .. 1, m = signal of the other oscillator (-1 .. 1).
     Returns the phase to read the table at (0 .. 1) and sets `window` to a factor applied to the sample. */
-inline float warpPhase (int type, float p, float a, float ph, float m, float& window) noexcept
+inline float warpPhase (int type, float p, float a, float ph, float m, float& window, const float* remap = nullptr) noexcept
 {
     window = 1.0f;
     switch (type)
     {
+        case kWarpRemap1: return remapParts (remap, p, a, 1);
+        case kWarpRemap2: return remapParts (remap, p, a, 2);
+        case kWarpRemap3: return p - a * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
+        case kWarpRemap4: return remapParts (remap, p, a, 4);
         case kWarpSync:
             return frac (p * (1.0f + a * 11.0f));
         case kWarpSyncVar:

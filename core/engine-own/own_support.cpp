@@ -41,8 +41,18 @@ bool implementedKey (const std::string& k)
             return true;
         if (rest.rfind ("map.", 0) == 0)
             return inList (rest.substr (4), { "key_low", "key_high", "vel_low", "vel_high" });
+        if (rest.rfind ("morph.", 0) == 0)
+            return inList (rest.substr (6), { "type", "amount", "spread" });
+        if (rest.rfind ("sample.", 0) == 0)
+            return !inList (rest.substr (7), { "loop_link" }); // loop_link is an editing aid of the UI (keeps the loop length when a marker moves)
+        if (rest.rfind ("gran.", 0) == 0)
+            return !inList (rest.substr (5), { "y_axis", "xy_y" });
+        if (rest.rfind ("spec.", 0) == 0)
+            return !inList (rest.substr (5), { "y_axis", "xy_y", "flt_use", "flt_table", "flt_frame" });
+        if (rest.rfind ("multi.", 0) == 0)
+            return true;
         return inList (rest, { "on", "level", "pan", "transpose", "tune", "wavetable", "frame", "frame_spread", "phase", "random_phase", "destination", "env1",
-                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type" });
+                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type", "pitch_mode", "ratio_src", "smooth_interp" });
     }
     if (head == "sub")
         return inList (rest, { "on", "waveform", "octave", "tune", "level", "pan", "destination", "env1", "phase" });
@@ -107,13 +117,13 @@ EngineCapsMask ownCapabilities() noexcept
 {
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
-         | kCapModSources2 | kCapWavetableSawDown
+         | kCapModSources2 | kCapWavetableSawDown | kCapSampleOsc | kCapUserWavetable | kCapOscExtras2 | kCapWarpAlt | kCapWarpFilter
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
 }
 
 EngineCaps2Mask ownCapabilities2() noexcept
 {
-    return kCap2EqBand2;
+    return kCap2EqBand2 | kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample;
 }
 } // namespace own
 } // namespace synthyboy
