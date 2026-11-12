@@ -685,8 +685,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.style = static_cast<int> (P (fi.style) + 0.5f);
         const float kt = semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
         const float vcCut = semitonesToRatio (vc.cutoffSemis);
-        s.cutoffHz = P (fi.cutoff) * kt * vcCut;
-        s.cutoffHzR = PR (fi.cutoff) * kt * vcCut;
+        const float panShift = fi.pan >= 0 ? P (fi.pan) * 0.01f : 0.0f; // +-100 % = +-12 semitones, opposite in the two channels (document 05, 1.2)
+        s.cutoffHz = P (fi.cutoff) * kt * vcCut * std::exp2 (-panShift);
+        s.cutoffHzR = PR (fi.cutoff) * kt * vcCut * std::exp2 (panShift);
+        s.clean = fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f;
         s.resonance = P (fi.resonance) * 0.01f;
         s.drive = P (fi.drive) * (1.0f / 20.0f);
         s.driveDb = P (fi.drive);

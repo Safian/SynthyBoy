@@ -73,7 +73,43 @@ int main (int argc, char** argv)
         n.length = len;
         const Stereo s = render (kind, ov, { n }, secs, sr);
         const size_t a = static_cast<size_t> (0.3 * sr), b = static_cast<size_t> (len * sr);
-        if (report == "summary")
+        if (report == "response")
+        {
+            // gain of noise through the patch relative to the same noise with filter1 / the effect off, Welch average of 8192 point spectra, bins +-6 around 125 .. 16k Hz
+            Overrides refOv = ov;
+            refOv.push_back ({ "filter1.on", 0.0f });
+            for (const char* fxk : { "chorus.on", "delay.on", "distortion.on", "eq.on", "fxfilter.on", "flanger.on", "phaser.on", "reverb.on", "compressor.on" })
+                refOv.push_back ({ fxk, 0.0f });
+            const Stereo ref = render (kind, refOv, { n }, secs, sr);
+            const size_t N = 8192;
+            auto avg = [&] (const std::vector<float>& x)
+            {
+                std::vector<double> acc (N / 2, 0.0);
+                int cnt = 0;
+                for (size_t pos = static_cast<size_t> (0.3 * sr); pos + N <= x.size(); pos += N / 2, ++cnt)
+                {
+                    const auto ps = powerSpectrum (x, pos, N);
+                    for (size_t i = 0; i < N / 2; ++i)
+                        acc[i] += ps[i];
+                }
+                return acc;
+            };
+            const auto a = avg (s.l), b = avg (ref.l);
+            std::printf ("%-5s", name);
+            for (double f : { 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0 })
+            {
+                const size_t c = static_cast<size_t> (f / (sr / static_cast<double> (N)) + 0.5);
+                double pa = 0, pb = 0;
+                for (size_t i = c - 6; i <= c + 6; ++i)
+                {
+                    pa += a[i];
+                    pb += b[i];
+                }
+                std::printf(" %6.1f", 10.0 * std::log10 ((pa + 1e-30) / (pb + 1e-30)));
+            }
+            std::printf ("\n");
+        }
+        else if (report == "summary")
             std::printf ("%-5s rmsL %.2f dB rmsR %.2f dB peak %.2f dB\n", name, toDb (rms (s.l, a, b)), toDb (rms (s.r, a, b)), toDb (peak (s.l, 0, s.l.size())));
         else if (report == "peaks" || report == "spectrum")
         {

@@ -15,7 +15,8 @@ struct FilterSettings
 {
     int model = 3, style = 0;
     float cutoffHz = 12000.0f, resonance = 0.2f, drive = 0.0f, blend = 0.0f, mix = 1.0f, var = 0.5f;
-    float cutoffHzR = -1.0f, driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
+    bool clean = false;
+    float cutoffHzR = -1.0f, level = 1.0f, driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
 };
 
 class FilterUnit
@@ -95,6 +96,10 @@ public:
         if (s.cutoffHzR > 0.0f)
             curPR.cutoffHz = s.cutoffHzR;
         classic = s.model < filters::kFirstSerumModel;
+        prevMix = curMix;
+        curMix = clamp01 (s.mix);
+        prevClean = curClean;
+        curClean = (s.clean && s.model != 5 && s.model != 6) ? 1.0f : 0.0f; // not for the Formant and Comb models (no drive stage)
         if (classic)
             return;
         float morph = -1.0f;
@@ -127,17 +132,68 @@ public:
     {
         if (classic)
         {
-            cl[0].process (inL, outL, n, prevP, curP, t0);
-            cl[1].process (inR, outR, n, prevPR, curPR, t0);
+            // clean mode: the model sees its input at -24 dB and the +24 dB follow it (the drive saturates less), ramped across the block
+            const float invP = 1.0f / static_cast<float> (kControlPeriod);
+            float tmpL[kControlPeriod], tmpR[kControlPeriod];
+            const bool cleaning = curClean > 0.5f || prevClean > 0.5f;
+            const float* srcL = inL;
+            const float* srcR = inR;
+            if (cleaning)
+            {
+                for (int k = 0; k < n; ++k)
+                {
+                    const float c = lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP);
+                    const float g = dbToGain (-24.0f * c);
+                    tmpL[k] = inL[k] * g;
+                    tmpR[k] = inR[k] * g;
+                }
+                srcL = tmpL;
+                srcR = tmpR;
+            }
+            cl[0].process (srcL, outL, n, prevP, curP, t0);
+            cl[1].process (srcR, outR, n, prevPR, curPR, t0);
             for (int k = 0; k < n; ++k)
             {
-                outL[k] = std::clamp (outL[k], -16.0f, 16.0f);
-                outR[k] = std::clamp (outR[k], -16.0f, 16.0f);
+                const float t = static_cast<float> (t0 + k + 1) * invP;
+                const float c = cleaning ? dbToGain (24.0f * lerp (prevClean, curClean, t)) : 1.0f;
+                const float m = lerp (prevMix, curMix, t);
+                outL[k] = std::clamp (outL[k] * c, -16.0f, 16.0f);
+                outR[k] = std::clamp (outR[k] * c, -16.0f, 16.0f);
+                if (m < 1.0f)
+                {
+                    outL[k] = inL[k] + (outL[k] - inL[k]) * m;
+                    outR[k] = inR[k] + (outR[k] - inR[k]) * m;
+                }
             }
             return;
         }
-        left.process (inL, outL, n);
-        right.process (inR, outR, n);
+        {
+            const bool cleaning = curClean > 0.5f || prevClean > 0.5f;
+            const float invP = 1.0f / static_cast<float> (kControlPeriod);
+            float tmpL[kControlPeriod], tmpR[kControlPeriod];
+            if (cleaning)
+            {
+                for (int k = 0; k < n; ++k)
+                {
+                    const float g = dbToGain (-24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
+                    tmpL[k] = inL[k] * g;
+                    tmpR[k] = inR[k] * g;
+                }
+                left.process (tmpL, outL, n);
+                right.process (tmpR, outR, n);
+                for (int k = 0; k < n; ++k)
+                {
+                    const float g = dbToGain (24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
+                    outL[k] *= g;
+                    outR[k] *= g;
+                }
+            }
+            else
+            {
+                left.process (inL, outL, n);
+                right.process (inR, outR, n);
+            }
+        }
         bool runaway = false;
         for (int k = 0; k < n; ++k)
             runaway = runaway || !(std::fabs (outL[k]) < 200.0f) || !(std::fabs (outR[k]) < 200.0f);
@@ -163,6 +219,7 @@ private:
     filters::FilterParams paramsR;
     bool classic = false;
     float trim = 1.0f;
+    float prevMix = 1.0f, curMix = 1.0f, prevClean = 0.0f, curClean = 0.0f;
 };
 } // namespace own
 } // namespace synthyboy

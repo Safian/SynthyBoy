@@ -30,7 +30,7 @@ struct NoiseIdx
 
 struct FilterIdx
 {
-    int on, model, style, cutoff, resonance, drive, blend, mix, keytrack, var, pan, level, env1, destination, combOffset, formantX, formantY, formantRes, formantSpread, formantTranspose;
+    int on, model, style, cutoff, resonance, drive, blend, mix, keytrack, var, pan, level, env1, destination, combOffset, formantX, formantY, formantRes, formantSpread, formantTranspose, cleanMode, bus1Send, bus2Send;
 };
 
 struct EnvIdx

@@ -531,3 +531,108 @@ TEST (ownv_voice_control_envelope_scaling_random_and_sources)
     };
     CHECK (level (100) > 1.3 * level (0));
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// filters: the vectors F1 .. F7 of document 05, clean mode, the shelving style, the formant tract style
+
+namespace
+{
+/** Gain of noise through the own engine relative to the same patch with `refOff` keys switched off: 125 .. 16k Hz, bins +-6 of 8192 point Welch averages. */
+std::vector<double> engineResponse (const oracle::Overrides& ov, const oracle::Overrides& refOv, bool rightChannel = false, int note = 69)
+{
+    oracle::Note n;
+    n.key = note;
+    n.length = 3.5;
+    const auto a = oracle::render (EngineKind::own, ov, { n }, 3.6, kSr);
+    const auto b = oracle::render (EngineKind::own, refOv, { n }, 3.6, kSr);
+    const size_t N = 8192;
+    auto avg = [&] (const std::vector<float>& x)
+    {
+        std::vector<double> acc (N / 2, 0.0);
+        for (size_t pos = static_cast<size_t> (0.3 * kSr); pos + N <= x.size(); pos += N / 2)
+        {
+            const auto ps = oracle::powerSpectrum (x, pos, N);
+            for (size_t i = 0; i < N / 2; ++i)
+                acc[i] += ps[i];
+        }
+        return acc;
+    };
+    const auto pa = avg (rightChannel ? a.r : a.l), pb = avg (rightChannel ? b.r : b.l);
+    std::vector<double> g;
+    for (double f : { 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0 })
+    {
+        const size_t c = static_cast<size_t> (f / (kSr / static_cast<double> (N)) + 0.5);
+        double x = 0, y = 0;
+        for (size_t i = c - 6; i <= c + 6; ++i)
+        {
+            x += pa[i];
+            y += pb[i];
+        }
+        g.push_back (10.0 * std::log10 (x / y));
+    }
+    return g;
+}
+
+oracle::Overrides noisePatch (std::vector<std::pair<std::string, float>> extra = {})
+{
+    oracle::Overrides ov = { { "osc1.on", 0 }, { "noise.on", 1 }, { "noise.level", 100 }, { "filter1.on", 1 }, { "filter1.model", 3 }, { "filter1.style", 0 }, { "filter1.cutoff", 1000 },
+                             { "filter1.resonance", 0 }, { "filter1.keytrack", 0 }, { "filter1.drive", 0 }, { "filter1.blend", 0 }, { "filter1.mix", 100 }, { "filter1.level", 0 },
+                             { "master.volume", -6 }, { "env1.attack", 0 }, { "env1.release", 50 } };
+    for (auto& e : extra)
+        ov.push_back (e);
+    return ov;
+}
+
+void expectRow (const std::vector<double>& got, const double (&want)[8], double tol, const char* what)
+{
+    for (int i = 0; i < 8; ++i)
+    {
+        if (want[i] < -40.0)
+        {
+            CHECK (got[static_cast<size_t> (i)] < -40.0 + 4.0);
+            continue;
+        }
+        // deep in the stopband a stronger attenuation than the reference is better (the reference's decimator and tables leave a floor)
+        const bool ok = want[i] < -20.0 ? got[static_cast<size_t> (i)] <= want[i] + tol : std::fabs (got[static_cast<size_t> (i)] - want[i]) <= tol;
+        if (!CHECK (ok))
+            std::printf ("    %s bin %d: %.1f dB, spec %.1f dB\n", what, i, got[static_cast<size_t> (i)], want[i]);
+    }
+}
+} // namespace
+
+TEST (ownv_filter_vectors_f1_f4_f6_f7)
+{
+    const oracle::Overrides ref = noisePatch ({ { "filter1.on", 0 } });
+    // F1: blend 0 / 50 / 100 % = LP / BP / HP
+    expectRow (engineResponse (noisePatch (), ref), { -0.1, -0.5, -1.9, -6.0, -14.0, -24.7, -36.6, -49.9 }, 1.5, "F1 LP");
+    expectRow (engineResponse (noisePatch ({ { "filter1.blend", 50 } }), ref), { -18.6, -12.4, -8.0, -6.0, -8.0, -12.6, -18.4, -25.0 }, 2.0, "F1 BP");
+    expectRow (engineResponse (noisePatch ({ { "filter1.blend", 100 } }), ref), { -27.8, -23.9, -14.5, -6.5, -2.2, -0.7, -0.4, -0.2 }, 6.0, "F1 HP");
+    // F2: mix 50 %: the dry signal comes through at -6 dB
+    expectRow (engineResponse (noisePatch ({ { "filter1.mix", 50 } }), ref), { -0.1, -0.5, -1.9, -5.1, -7.0, -6.5, -6.1, -6.0 }, 1.5, "F2 mix");
+    // F3: level -6 dB
+    expectRow (engineResponse (noisePatch ({ { "filter1.level", -6 } }), ref), { -6.1, -6.5, -7.9, -12.0, -20.0, -30.7, -42.6, -55.9 }, 1.5, "F3 level");
+    // F4: keytrack 100 % at note 72 doubles the corner
+    expectRow (engineResponse (noisePatch ({ { "filter1.keytrack", 100 } }), ref, false, 72), { -0.0, -0.1, -0.5, -1.9, -6.0, -14.0, -25.0, -37.9 }, 1.5, "F4 keytrack");
+    // F5: drive 12 dB adds about 5.6 dB in the passband; clean mode keeps it (5.9)
+    expectRow (engineResponse (noisePatch ({ { "filter1.drive", 12 } }), ref), { 5.6, 5.3, 3.8, -0.2, -8.0, -18.7, -30.7, -44.2 }, 2.5, "F5 drive");
+    expectRow (engineResponse (noisePatch ({ { "filter1.drive", 12 }, { "filter1.clean_mode", 1 } }), ref), { 5.9, 5.5, 4.1, -0.0, -8.0, -18.7, -30.6, -43.9 }, 2.5, "F5 clean");
+    // F6: pan +100 %: the left corner 12 st down (500 Hz), the right one 12 st up (2 kHz)
+    expectRow (engineResponse (noisePatch ({ { "filter1.pan", 100 } }), ref, false), { -0.5, -2.0, -6.0, -14.0, -24.6, -36.3, -48.6, -61.9 }, 1.5, "F6 pan left");
+    expectRow (engineResponse (noisePatch ({ { "filter1.pan", 100 } }), ref, true), { -0.0, -0.1, -0.5, -1.9, -6.0, -14.0, -25.0, -37.9 }, 1.5, "F6 pan right");
+    // F7: both filters low pass 1 kHz, the source in filter 1 only, series 1 to 2: two 12 dB stages
+    oracle::Overrides f7 = noisePatch ({ { "filter2.on", 1 }, { "filter2.model", 3 }, { "filter2.cutoff", 1000 }, { "filter2.resonance", 0 }, { "filter.routing", 1 }, { "noise.destination", 0 } });
+    expectRow (engineResponse (f7, ref), { -0.2, -1.1, -3.9, -12.1, -27.9, -49.4, -73.3, -99.8 }, 2.0, "F7 series");
+}
+
+TEST (ownv_shelving_style_is_the_identity_and_formant_tract_style_sounds)
+{
+    const oracle::Overrides ref = noisePatch ({ { "filter1.on", 0 } });
+    const auto g = engineResponse (noisePatch ({ { "filter1.style", 5 } }), ref);
+    for (double x : g)
+        CHECK (std::fabs (x) < 0.6);
+    const auto f2 = engineResponse (noisePatch ({ { "filter1.model", 5 }, { "filter1.style", 2 } }), ref);
+    double sum = 0;
+    for (double x : f2)
+        sum += std::fabs (x);
+    CHECK (sum > 20.0); // not a pass-through: four resonances
+}
