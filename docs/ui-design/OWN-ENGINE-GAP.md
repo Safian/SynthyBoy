@@ -68,10 +68,10 @@ Areas are the groups of the parameter table (`group` field of `params.json`), `E
 | Modulation matrix (64 slots) | 1024 | 640 | 320 | 64 | Acts: source, destination, amount, power, bipolar, bypass, aux source (inv, power, output). Missing: stereo lanes, rise / fall / delay of a slot, cycle check. |
 | FX chain: order, racks, slots (16 instances) | 480 | 9 | 471 | 0 | The racks, the 16 instance slots and the modules 12 .. 16 (Bode, Convolve, splitters); the nine standard modules, Hyper/Dimension and Utility run in the fx.order chain on the main bus. |
 | FX: chorus, flanger, phaser | 35 | 34 | 1 | 0 | Acts (written from public DSP knowledge, levels matched to the oracle). |
-| FX: delay, reverb | 37 | 25 | 10 | 2 | Acts: delay (all styles, sync, filter), reverb (one feedback delay network for all types). Missing: delay offset / hq, reverb algorithms are variants of one network, low shelf, er size. |
+| FX: delay, reverb | 37 | 24 | 11 | 2 | Acts: delay (all styles, sync, filter), reverb (one feedback delay network for all types). Missing: delay offset / hq, reverb algorithms are variants of one network, low shelf, er size. |
 | FX: compressor, distortion, EQ | 54 | 50 | 1 | 3 | Acts. Missing: the Serum compressor law, the distortion filter keytrack, the Serum EQ law. |
 | FX: hyper dimension, utility, Bode, convolve, splitters | 66 | 19 | 46 | 1 | Acts: Hyper/Dimension, Utility (fx-serum-a). Missing: Bode, Convolve, the splitters and racks. |
-| **All** | **2637** | **1120** | **1398** | **119** | |
+| **All** | **2637** | **1119** | **1399** | **119** | |
 
 <!-- END GENERATED TABLE -->
 

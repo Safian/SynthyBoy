@@ -602,6 +602,28 @@ TEST (own_every_capability_bit_has_an_audible_probe)
     }
 }
 
+// kCapVoiceSteal: the same-note rule changes what a repeated key does.
+TEST (own_same_note_rule_has_an_audible_effect)
+{
+    Out o[2];
+    for (int k = 0; k < 2; ++k)
+    {
+        auto e = make();
+        set (*e, "master.voice.same_note", k == 0 ? 0.0f : 2.0f);
+        o[k].l.assign (24000, 0.0f);
+        o[k].r.assign (24000, 0.0f);
+        for (int b = 0; b < 24000 / 256; ++b)
+        {
+            Event ev[1];
+            int n = 0;
+            if (b == 0) ev[n++] = sbtest::noteOn (0, 60);
+            if (b == 20) ev[n++] = sbtest::noteOn (0, 60);
+            e->process (ev, n, o[k].l.data() + b * 256, o[k].r.data() + b * 256, 256);
+        }
+    }
+    CHECK (o[0].l != o[1].l);
+}
+
 // The factory behaviour of the default patch: a saw at the pitch of the key, level within 1 dB of the measured Vital default (-24.5 dB rms at A4).
 TEST (own_default_patch_pitch_and_level)
 {

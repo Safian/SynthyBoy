@@ -1136,7 +1136,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `splitter_lh.rack` | Splitter L/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
 | `splitter_lmh.rack` | Splitter L/M/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
 | `splitter_ms.rack` | Splitter M/S Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `reverb.force_enable` | Reverb Force Enable | 0 Off, 1 On | Off | FX / Reverb |  | yes |
+| `reverb.force_enable` | Reverb Force Enable | 0 Off, 1 On | Off | FX / Reverb |  |  |
 | `hyperdim.on` | Hyper Dimension On | 0 Off, 1 On | Off | FX / Hyper Dimension |  | yes |
 | `hyperdim.rate` | Hyper Rate | 0.0500000007 .. 10 Hz (skew 0.300000012) | 0.5 Hz | FX / Hyper Dimension | mod | yes |
 | `hyperdim.unison` | Hyper Unison | 0 .. 7 voices (steps of 1) | 4 voices | FX / Hyper Dimension |  | yes |
