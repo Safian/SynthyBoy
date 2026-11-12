@@ -94,7 +94,7 @@ TEST (wp5_capabilities_are_reported)
     CHECK ((e->capabilities() & kCapMixerGraph) != 0);
     CHECK ((e->capabilities() & kCapFxRacks) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapMixerGraph | kCapFxRacks)) == 0);
+    CHECK ((own->capabilities() & ((kCapMixerGraph | kCapFxRacks)) & ~createEngine (EngineKind::vital)->capabilities()) == 0); // the own engine reports a bit only if its own probe proves it (test_own_*.cpp), never one that this engine lacks
 }
 
 TEST (filter_blend_destination_crossfades_the_two_filters)

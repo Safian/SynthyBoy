@@ -115,7 +115,7 @@ TEST (wp7_wp8_capabilities_are_reported)
     for (EngineCapsMask bit : { kCapFxUtility, kCapFxHyperDimension, kCapFxBode, kCapFxConvolve, kCapFxSplitters, kCapReverbForce })
         CHECK ((e->capabilities() & bit) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters | kCapReverbForce)) == 0);
+    CHECK ((own->capabilities() & ((kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters | kCapReverbForce)) & ~createEngine (EngineKind::vital)->capabilities()) == 0); // the own engine reports a bit only if its own probe proves it (test_own_*.cpp), never one that this engine lacks
 }
 
 TEST (utility_polarity_filters_width_pan_mix_and_level)

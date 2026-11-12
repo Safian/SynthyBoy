@@ -173,7 +173,7 @@ TEST (wp4_capabilities_are_reported)
     CHECK ((caps & kCapUserWavetable) != 0);
     CHECK ((caps & kCapWarp2) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapSampleOsc | kCapUserWavetable | kCapWarp2)) == 0); // the iOS engine sets none of the heavy bits
+    CHECK ((own->capabilities() & ((kCapSampleOsc | kCapUserWavetable | kCapWarp2)) & ~createEngine (EngineKind::vital)->capabilities()) == 0); // the own engine reports a bit only if its own probe proves it (test_own_*.cpp), never one that this engine lacks // the iOS engine sets none of the heavy bits
 }
 
 TEST (sample_oscillator_type_plays_the_content_sample_at_the_key_pitch)

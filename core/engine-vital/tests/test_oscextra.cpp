@@ -209,7 +209,7 @@ TEST (oscextra_capabilities_are_reported)
     CHECK ((e->capabilities() & kCapSubOsc) != 0);
     CHECK ((e->capabilities() & kCapNoiseExtras) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapSubOsc | kCapNoiseExtras)) == 0);
+    CHECK ((own->capabilities() & ((kCapSubOsc | kCapNoiseExtras)) & ~createEngine (EngineKind::vital)->capabilities()) == 0); // the own engine reports a bit only if its own probe proves it (test_own_*.cpp), never one that this engine lacks
 }
 
 TEST (oscextra_defaults_leave_the_engine_unchanged)

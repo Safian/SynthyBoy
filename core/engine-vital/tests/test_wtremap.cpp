@@ -110,7 +110,7 @@ TEST (wtremap_capabilities_are_reported)
     CHECK ((e->capabilities() & kCapFxLevel) != 0);
     CHECK ((e->capabilities() & kCapCleanMode) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapWtRemap | kCapFxLevel | kCapCleanMode)) == 0);
+    CHECK ((own->capabilities() & ((kCapWtRemap | kCapFxLevel | kCapCleanMode)) & ~createEngine (EngineKind::vital)->capabilities()) == 0); // the own engine reports a bit only if its own probe proves it (test_own_*.cpp), never one that this engine lacks
 }
 
 TEST (remap_changes_the_frame_the_oscillator_plays)

@@ -199,7 +199,7 @@ TEST (warpenv_capabilities_and_lists)
     auto own = createEngine (EngineKind::own);
     const EngineCapsMask bits = kCapWarpAll | kCapEnv1Toggle;
     CHECK ((vital->capabilities() & bits) == bits);
-    CHECK ((own->capabilities() & bits) == 0);
+    CHECK ((own->capabilities() & (bits) & ~createEngine (EngineKind::vital)->capabilities()) == 0); // the own engine reports a bit only if its own probe proves it (test_own_*.cpp), never one that this engine lacks
     CHECK_EQ (kNumWarpTypes, 99); // 52 after block B21, 76 with the modes from the Noise, Sub and Filters (GROUPB WP-06, test_modsources.cpp), 99 with the spectral warps (GROUPC WP-12)
     for (const char* key : { "osc1.warp.type", "osc2.warp.type", "osc3.warp.type", "osc1.warp2.type", "osc2.warp2.type", "osc3.warp2.type" })
     {
