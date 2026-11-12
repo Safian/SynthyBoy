@@ -34,7 +34,7 @@ ParamIndex build()
         K (frame, "frame"); K (frameSpread, "frame_spread"); K (phase, "phase"); K (randomPhase, "random_phase"); K (destination, "destination");
         K (env1, "env1"); K (pitchCoarse, "pitch_coarse"); K (pitchTrack, "pitch_track"); K (bendTrack, "pitch_bend_track");
         K (uniVoices, "unison.voices"); K (uniDetune, "unison.detune"); K (uniCurve, "unison.detune_curve"); K (uniSpread, "unison.spread");
-        K (uniBlend, "unison.blend"); K (uniMode, "unison.mode"); K (uniRange, "unison.range"); K (uniLaw, "unison.law"); K (uniBlendShape, "unison.blend_shape");
+        K (uniBlend, "unison.blend"); K (uniMode, "unison.mode"); K (uniRange, "unison.range"); K (uniLaw, "unison.law"); K (uniBlendShape, "unison.blend_shape"); K (uniStack, "unison.stack"); K (uniStackRepeat, "unison.stack_repeat");
         K (warpType, "warp.type"); K (warpAmount, "warp.amount"); K (warpPhase, "warp.phase"); K (warpSpread, "warp.spread");
         K (warp2Type, "warp2.type"); K (warp2Amount, "warp2.amount"); K (warp2Phase, "warp2.phase"); K (warp2Spread, "warp2.spread");
         K (keyLow, "map.key_low"); K (keyHigh, "map.key_high"); K (velLow, "map.vel_low"); K (velHigh, "map.vel_high"); K (type, "type");

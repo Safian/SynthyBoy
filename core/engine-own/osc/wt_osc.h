@@ -19,9 +19,11 @@ struct OscTick
     float frame = 0.0f, frameSpread = 0.0f; // 0 .. 1, -1 .. 1
     float level = 0.0f, pan = 0.0f;       // amplitude (linear), -1 .. 1
     int voices = 1;
-    float detuneSemis = 0.0f;             // offset of the outermost voice
-    float curveExp = 1.0f;                // exponent of the detune law
+    float detuneSemis = 0.0f;             // offset of the outermost voice (range * detune)
+    float curve = 0.0f;                   // detune curve (power scale parameter)
     int mode = 0;                         // unison mode
+    int stack = 0, stackRepeat = 0;       // stack style
+    float blendShape = 0.0f;
     float spread = 1.0f, blend = 1.0f;    // 0 .. 1
     int warp[2] = { 0, 0 };
     float warpAmount[2] = { 0, 0 }, warpPhase[2] = { 0, 0 }, warpSpread[2] = { 0, 0 };
@@ -93,7 +95,9 @@ public:
                 x = 0.0f;
     }
 
-    /** Computes the per voice frequencies, levels and pans of the period that ends now (call once per control period). */
+    /** Computes the per voice frequencies, levels and pans of the period that ends now (call once per control period). The layout follows
+        docs/engine-spec/01-voice-management.md 9: voices come in left / right pairs (an odd count has a single centre voice), the pair i is detuned by
+        P (t, curve) of the outermost range, sharp and flat alternate, amplitudes by the blend law with power normalisation, then the stereo spread. */
     void update (const OscTick& t, double sampleRate, Rng& rng) noexcept
     {
         prevCount = curCount;
@@ -105,51 +109,72 @@ public:
         }
         prevFrame = curFrame;
         tick = t;
-        const int n = std::clamp (t.voices, 1, kMaxVoices);
-        curCount = n;
-        float sumW = 0.0f;
-        float wl[kMaxVoices], wr[kMaxVoices];
+        const int U = std::clamp (t.voices, 1, kMaxVoices);
+        const bool odd = (U & 1) != 0;
+        const int pairs = (U + 1) / 2;
         const double nyq = 0.5 * sampleRate;
-        for (int i = 0; i < n; ++i)
+        // blend law (Vital): amplitudes of the centre pair and of the others, normalised to unit power
+        float ac = 1.0f, ad = 0.0f;
+        if (U >= 3)
         {
-            const float u = n > 1 ? 2.0f * static_cast<float> (i) / static_cast<float> (n - 1) - 1.0f : 0.0f;
-            float shaped;
-            const float au = std::fabs (u);
+            const float b = clamp01 (t.blend), s = std::clamp (t.blendShape, -1.0f, 1.0f);
+            const float c0 = 1.0f - 0.6f * b, d0 = 0.6f * (1.0f - (1.0f - b) * (1.0f - b));
+            const float c1 = c0 * (1.0f - 0.5f * s), d1 = d0 * (1.0f + 0.5f * s);
+            const float norm = 1.0f / std::sqrt (std::max (c1 * c1 + static_cast<float> (pairs - 1) * d1 * d1, 1.0e-12f));
+            ac = c1 * norm;
+            ad = d1 * norm;
+        }
+        // stereo spread: own channel a, other channel b (equal power)
+        const float w = clamp01 (t.spread);
+        const float sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w)), sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+        // oscillator pan, constant power with 0 dB at the centre
+        const float pan = std::clamp (t.pan, -1.0f, 1.0f);
+        const float panL = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan)), panR = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + pan));
+        const int bump = odd ? 0 : 1;
+        const float divisor = static_cast<float> (std::max (1, U - 1));
+        int n = 0;
+        auto addVoice = [&] (float semis, float amp, float gainL, float gainR, float framePos) noexcept
+        {
+            const double f = 440.0 * std::exp2 ((static_cast<double> (semis) - 69.0) / 12.0);
+            curInc[n] = static_cast<float> (std::min (f, nyq) / sampleRate);
+            curGainL[n] = amp * gainL * panL * t.level;
+            curGainR[n] = amp * gainR * panR * t.level;
+            curFrameOf[n] = std::clamp (t.frame + t.frameSpread * framePos, 0.0f, 1.0f);
+            ++n;
+        };
+        for (int i = 0; i < pairs; ++i)
+        {
+            const float amp = i == 0 ? ac : ad;
+            const float stack = stackRatioSemis (t.stack, i, t.stackRepeat);
+            if (odd && i == 0)
+            {
+                addVoice (t.semis + stack, amp, sa + sb, sa + sb, 0.0f);
+                continue;
+            }
+            float tt = (static_cast<float> (2 * i + bump)) / divisor;
+            tt = std::clamp (tt, 0.0f, 1.0f);
             switch (t.mode)
             {
-                case 1: shaped = std::copysign (std::pow (au, t.curveExp * 0.6f + 0.4f), u); break;
-                case 2: shaped = std::copysign (std::pow (au, t.curveExp * 1.8f), u); break;
-                case 3: shaped = std::copysign (1.0f - std::pow (1.0f - au, t.curveExp), u); break;
+                case 1: tt = tt * tt * tt; break;
+                case 2: tt = (std::exp (2.0f * tt) - 1.0f) / (std::exp (2.0f) - 1.0f); break;
+                case 3: tt = 1.0f - (1.0f - tt) * (1.0f - tt) * (1.0f - tt); break;
                 case 4:
                 {
                     Rng r;
                     r.seed (static_cast<uint32_t> (i) * 7919u + 13u);
-                    shaped = r.bi();
+                    tt = r.uni();
                     break;
                 }
-                default: shaped = std::copysign (std::pow (au, t.curveExp), u); break;
+                default: break;
             }
-            const float semis = t.semis + t.detuneSemis * shaped;
-            const double f = 440.0 * std::exp2 ((static_cast<double> (semis) - 69.0) / 12.0);
-            curInc[i] = static_cast<float> (std::min (f, nyq) / sampleRate);
-            // blend: the centre voice(s) at full weight, the others at `blend`
-            const float centre = n > 1 ? 1.0f / static_cast<float> (n - 1) : 1.0f;
-            const float w = (au <= centre + 1.0e-4f || n == 1) ? 1.0f : t.blend;
-            const float pan = std::clamp (t.pan + t.spread * u, -1.0f, 1.0f);
-            const float ang = (pan + 1.0f) * (kPif * 0.25f);
-            wr[i] = w * 1.41421356f * std::sin (ang);
-            wl[i] = w * 1.41421356f * std::sin (kPif * 0.5f - ang); // identical bits for both sides at the centre
-            sumW += w * w;
+            const float semisOff = powerShape (tt, t.curve) * t.detuneSemis;
+            const bool leftFlat = (i % 2) == 0;
+            const float leftSemis = leftFlat ? -semisOff : semisOff;
+            const float pos = divisor > 0.0f ? (static_cast<float> (2 * i + bump)) / divisor : 0.0f;
+            addVoice (t.semis + stack + leftSemis, amp, sa, sb, -pos);   // the left channel voice
+            addVoice (t.semis + stack - leftSemis, amp, sb, sa, pos);    // the right channel voice
         }
-        // equal power: the sum of the squared weights of the voices (a single voice keeps its pan law, hard panned it is 3 dB louder than centred)
-        const float norm = t.level / std::sqrt (std::max (sumW, 1.0e-6f));
-        for (int i = 0; i < n; ++i)
-        {
-            curGainL[i] = wl[i] * norm;
-            curGainR[i] = wr[i] * norm;
-            const float u = n > 1 ? 2.0f * static_cast<float> (i) / static_cast<float> (n - 1) - 1.0f : 0.0f;
-            curFrameOf[i] = std::clamp (t.frame + t.frameSpread * u, 0.0f, 1.0f);
-        }
+        curCount = n;
         for (int i = n; i < kMaxVoices; ++i)
         {
             curGainL[i] = curGainR[i] = 0.0f;
@@ -168,6 +193,28 @@ public:
             havePrev = true;
         }
         (void) rng;
+    }
+
+    /** Semitone offset of the stack style (pair index based, document 01, 9.3). */
+    static float stackRatioSemis (int style, int pair, int repeat) noexcept
+    {
+        static const float kPower[8] = { 0.0f, 7.0f, 12.0f, 19.0f, 24.0f, 0.0f, 7.0f, 12.0f };
+        const int i = pair;
+        auto ratioToSemis = [] (float ratio) { return 12.0f * std::log2 (ratio); };
+        switch (style)
+        {
+            case 1: return i == 0 ? -12.0f : 0.0f;                     // Center Drop 12
+            case 2: return i == 0 ? -24.0f : 0.0f;                     // Center Drop 24
+            case 3: return 12.0f * static_cast<float> ((repeat >= 0 ? (i % (repeat + 2)) : (i % 2)));   // Octaves (n = repeat + 1 octaves)
+            case 4: return ratioToSemis (static_cast<float> (1 + (i % 3)));                             // 2 Octaves: 1x, 2x, 3x
+            case 5: { const int sstep = i % (2 * (repeat + 1) + 1); return 12.0f * static_cast<float> (sstep / 2) + ((sstep & 1) ? 7.0f : 0.0f); } // Power Chord
+            case 6: return kPower[i % 8];                              // Power Chord x2: 1 1.4983 2 2.9966 4
+            case 7: { static const float m[4] = { 0.0f, 4.0f, 7.0f, 12.0f }; return m[i % 4]; }      // Major
+            case 8: { static const float m[4] = { 0.0f, 3.0f, 7.0f, 12.0f }; return m[i % 4]; }      // Minor
+            case 9: return ratioToSemis (static_cast<float> (1 + (i % 8)));                          // Harmonic series
+            case 10: return ratioToSemis (static_cast<float> (1 + 2 * (i % 8)));                     // Odd harmonics
+            default: return 0.0f;
+        }
     }
 
     /** Renders samples t0 .. t0 + n - 1 of the period into L and R (overwritten). `cross` are the signals of the other two oscillators (may be null). */

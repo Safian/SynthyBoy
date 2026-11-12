@@ -23,14 +23,14 @@ inline float lfoShape (int shape, float p, uint32_t stepSeed) noexcept
         case 5: return p < 0.25f ? 1.0f : -1.0f;                                // pulse 25 %
         case 6: return 2.0f * std::floor (p * 4.0f) / 3.0f - 1.0f;             // 4 steps up
         case 7: return 1.0f - 2.0f * std::floor (p * 4.0f) / 3.0f;             // 4 steps down
-        case 8:
+        case 8: // eight fixed levels over eighths of a cycle (docs/engine-spec/03-envelopes-lfos.md 3.2)
         {
-            Rng r;
-            r.seed (stepSeed * 977u + static_cast<uint32_t> (p * 8.0f));
-            return r.bi();
+            static const float kLevels[8] = { 0.2f, 0.9f, 0.5f, 1.0f, 0.1f, 0.7f, 0.35f, 0.8f };
+            (void) stepSeed;
+            return 2.0f * kLevels[std::min (static_cast<int> (p * 8.0f), 7)] - 1.0f;
         }
-        case 9: return 2.0f * std::pow (p, 3.2f) - 1.0f;                        // exp up
-        case 10: return 2.0f * std::pow (1.0f - p, 3.2f) - 1.0f;                // exp down
+        case 9: return 2.0f * p * p * p - 1.0f;                        // exp up
+        case 10: return 2.0f * (1.0f - p) * (1.0f - p) * (1.0f - p) - 1.0f;                // exp down
         case 11: return std::sin (kPif * p) * 2.0f - 1.0f;                      // half sine (rectified), spans -1 .. 1
         default: return 0.0f;
     }

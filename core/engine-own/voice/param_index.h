@@ -13,7 +13,7 @@ namespace own
 struct OscIdx
 {
     int on, level, pan, transpose, tune, wavetable, frame, frameSpread, phase, randomPhase, destination, env1, pitchCoarse, pitchTrack, bendTrack;
-    int uniVoices, uniDetune, uniCurve, uniSpread, uniBlend, uniMode, uniRange, uniLaw, uniBlendShape;
+    int uniVoices, uniDetune, uniCurve, uniSpread, uniBlend, uniMode, uniRange, uniLaw, uniBlendShape, uniStack, uniStackRepeat;
     int warpType, warpAmount, warpPhase, warpSpread, warp2Type, warp2Amount, warp2Phase, warp2Spread;
     int keyLow, keyHigh, velLow, velHigh, type;
 };

@@ -32,23 +32,26 @@ inline int srcLfo (int i) noexcept { return i < 8 ? kSrcLfo1 + i : kSrcLfo9 + (i
 inline int srcRlfo (int i) noexcept { return kSrcRlfo1 + i; }
 inline int srcMacro (int i) noexcept { return i < 4 ? kSrcMacro1 + i : kSrcMacro5 + (i - 4); }
 
-/** True for the sources whose natural range is -1 .. 1 (all the others are 0 .. 1). */
-inline bool sourceIsBipolar (int id) noexcept
+/** How the control value of a destination relates to its knob (docs/engine-spec/04-modulation-matrix.md 3): the modulation is summed in the control domain. */
+enum class DestKind : uint8_t { lin, sqrtLevel, quart, log2Seconds, log2Hz, note, volume };
+
+struct DestLaw
 {
-    return id == kSrcPitchWheel || id == kSrcStereo || id == kSrcVoiceMod1 || id == kSrcVoiceMod2 || (id >= kSrcOscA && id <= kSrcFilter2) || id == kSrcExpressionX;
-}
+    DestKind kind = DestKind::lin;
+    float scale = 1.0f; // lin: control = plain * scale
+    float width = 1.0f; // width D of the control range
+};
 
-/** How the modulation of a destination is added: in the domain in which the knob is scaled. */
-enum class ModDomain : uint8_t { normalised, quadratic, logarithmic };
-ModDomain modDomainOf (const ParamInfo& info) noexcept;
+/** Law of the table entry (computed once per index, cached). */
+const DestLaw& destLawOf (size_t paramIndex) noexcept;
 
-/** The value of the parameter with `delta` (units of the knob range, domain per modDomainOf) added to its base value; continuous (the interval is not applied). */
-float modulatedValue (const ParamInfo& info, ModDomain domain, float base, float delta) noexcept;
+/** The plain value of the parameter after `delta` (in control units) was added in the control domain. */
+float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, float delta) noexcept;
 
 struct CompiledSlot
 {
     int source = 0, aux = 0, dest = -1;   // dest = table index
-    float amount = 0.0f, power = 0.0f, auxPower = 0.0f, auxOut = 1.0f;
+    float amount = 0.0f, power = 0.0f, auxPower = 0.0f, auxOut = 1.0f, width = 1.0f;
     bool bipolar = false, auxInv = false;
     bool global = false;                  // the destination is not a per voice parameter
 };

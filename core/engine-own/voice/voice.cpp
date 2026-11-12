@@ -11,19 +11,6 @@ namespace own
 {
 namespace
 {
-/** Domain of every table entry (cached): how modulation adds to the knob. */
-const std::vector<ModDomain>& domains()
-{
-    static const std::vector<ModDomain> d = []
-    {
-        std::vector<ModDomain> v (paramCount());
-        for (size_t i = 0; i < v.size(); ++i)
-            v[i] = modDomainOf (paramTable()[i]);
-        return v;
-    }();
-    return d;
-}
-
 constexpr float kDivisionBeats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 0.0625f };
 
 float noiseSample (int colour, float* s, Rng& r, float level) noexcept
@@ -87,7 +74,6 @@ void Voice::prepare (double sampleRate)
     mod.assign (paramCount(), 0.0f);
     filt[0].prepare (sampleRate);
     filt[1].prepare (sampleRate);
-    (void) domains();
 }
 
 void Voice::reset() noexcept
@@ -118,7 +104,7 @@ float Voice::P (int idx) const noexcept
 {
     const float b = gl->base[idx];
     const float d = mod[static_cast<size_t> (idx)];
-    return d == 0.0f ? b : modulatedValue (paramTable()[idx], domains()[static_cast<size_t> (idx)], b, d);
+    return d == 0.0f ? b : modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d);
 }
 
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
@@ -269,8 +255,11 @@ float Voice::lfoValue (int l, const TickGlobals& g) noexcept
     v = 2.0f * (0.5f + 0.5f * v) * gain - 1.0f; // delay and fade in scale the 0 .. 1 output (the source is 0 during the delay)
     if (P (li.smooth) >= 0.5f)
     {
-        const float tau = std::max (P (li.smoothTime) * 0.001f, 1.0e-4f);
-        st.smoothed += (v - st.smoothed) * (1.0f - std::exp (-dt / tau));
+        const float half = 0.2f * P (li.smoothTime) * 0.001f; // half life of the one pole (document 03, 3.4)
+        if (half >= 0.0002f)
+            st.smoothed += (v - st.smoothed) * (1.0f - std::exp2 (-dt / half));
+        else
+            st.smoothed = v;
         v = st.smoothed;
     }
     else
@@ -367,11 +356,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     src[kSrcVelocity] = vel;
     src[kSrcNote] = static_cast<float> (keyNum) * (1.0f / 127.0f);
     src[kSrcAftertouch] = g.channelAftertouch != nullptr ? g.channelAftertouch[chan & 15] : 0.0f;
-    src[kSrcPitchWheel] = mi.bendRange >= 0 && g.base[mi.bendRange] > 0.0f && g.channelBendSemis != nullptr ? std::clamp (bend / g.base[mi.bendRange], -1.0f, 1.0f) : 0.0f;
+    src[kSrcPitchWheel] = 0.5f + 0.5f * (mi.bendRange >= 0 && g.base[mi.bendRange] > 0.0f && g.channelBendSemis != nullptr ? std::clamp (bend / g.base[mi.bendRange], -1.0f, 1.0f) : 0.0f);
     src[kSrcModWheel] = g.channelModWheel != nullptr ? g.channelModWheel[chan & 15] : 0.0f;
     src[kSrcRandom] = randomPerNote;
-    src[kSrcLift] = releaseVel;
-    src[kSrcReleaseVelocity] = releaseVel;
+    src[kSrcLift] = released ? releaseVel : 0.5f;
+    src[kSrcReleaseVelocity] = released ? releaseVel : 0.5f;
     src[kSrcSlide] = slide;
     src[kSrcOctNote] = static_cast<float> (keyNum % 12) * (1.0f / 12.0f);
     src[kSrcPolyAftertouch] = polyPressure;
@@ -383,12 +372,13 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     src[kSrcSub] = srcLevel[4];
     src[kSrcFilter1] = srcLevel[5];
     src[kSrcFilter2] = srcLevel[6];
+    src[kSrcStereo] = 1.0f;
     src[kSrcActiveVoices] = static_cast<float> (g.activeVoices) * (1.0f / 32.0f);
     src[kSrcNoteOnAlt1] = altParity ? 1.0f : 0.0f;
     src[kSrcNoteOnAlt2] = altParity ? 0.0f : 1.0f;
     src[kSrcNoteOnRand2] = rand2;
     src[kSrcNoteOnRandDiscrete] = randDiscrete;
-    src[kSrcExpressionX] = exprX;
+    src[kSrcExpressionX] = 0.5f + 0.5f * exprX;
     src[kSrcFixed] = 1.0f;
 
     // ---- matrix
@@ -469,10 +459,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.pan = std::clamp (P (oi.pan) * 0.01f, -1.0f, 1.0f);
         t.voices = std::clamp (static_cast<int> (P (oi.uniVoices) + 0.5f), 1, std::max (1, g.maxUnison));
         const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
-        const int law = static_cast<int> (P (oi.uniLaw) + 0.5f);
-        t.detuneSemis = detune * (law == 1 ? P (oi.uniRange) : 2.0f);
-        const float curve = P (oi.uniCurve);
-        t.curveExp = curve >= 0.0f ? 1.0f + 0.45f * curve : 1.0f / (1.0f - 0.45f * curve);
+        t.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
+        t.curve = P (oi.uniCurve);
+        t.blendShape = std::clamp (P (oi.uniBlendShape) * 0.01f, -1.0f, 1.0f);
+        t.stack = static_cast<int> (P (oi.uniStack) + 0.5f);
+        t.stackRepeat = static_cast<int> (P (oi.uniStackRepeat) + 0.5f);
         t.mode = static_cast<int> (P (oi.uniMode) + 0.5f);
         t.spread = clamp01 (P (oi.uniSpread) * 0.01f) * clamp01 (g.base[mi.stereoSpread] * 0.01f);
         t.blend = clamp01 (P (oi.uniBlend) * 0.01f);

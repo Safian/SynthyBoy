@@ -256,6 +256,137 @@ TEST (own_engine_rt_sequence_is_finite)
     }
 }
 
+// ---- the acceptance vectors M1 .. M9 and E1 of docs/engine-spec/04-modulation-matrix.md and 03-envelopes-lfos.md (reproduced against engine-vital, tolerance 0.1 dB)
+
+namespace
+{
+/** Amplitude of the line at `hz` in a window (Goertzel), as a linear peak value. */
+double lineAmplitude (const std::vector<float>& x, size_t a, size_t b, double hz, double sr = 48000.0)
+{
+    double re = 0.0, im = 0.0;
+    for (size_t i = a; i < b && i < x.size(); ++i)
+    {
+        const double ph = 2.0 * 3.14159265358979323846 * hz * static_cast<double> (i) / sr;
+        re += x[i] * std::cos (ph);
+        im += x[i] * std::sin (ph);
+    }
+    return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (b - a);
+}
+
+double dbOf (double v) { return 20.0 * std::log10 (std::max (v, 1.0e-12)); }
+
+/** The setup of the matrix vectors: Sine, filter off, volume 0 dB, attack 0, release 50 ms. */
+std::unique_ptr<IEngine> matrixBase()
+{
+    auto e = make();
+    set (*e, "osc1.wavetable", 0.0f);
+    set (*e, "filter1.on", 0.0f);
+    set (*e, "master.volume", 0.0f);
+    set (*e, "env1.attack", 0.0f);
+    set (*e, "env1.release", 50.0f);
+    return e;
+}
+
+void slotMacroTo (IEngine& e, const char* dst, float amount)
+{
+    set (e, "mod01.source", srcChoice ("macro1"));
+    set (e, "mod01.destination", dstChoice (dst));
+    set (e, "mod01.amount", amount);
+}
+} // namespace
+
+TEST (own_matrix_vectors_m1_to_m5_level_laws)
+{
+    struct Case { float level, macro, amount, bipolar, power, expectedDb; };
+    const Case cases[] = {
+        { 50, 100, 50, 0, 0, 3.28f },    // M1
+        { 50, 100, 50, 1, 0, -0.75f },   // M2
+        { 50, 50, 100, 0, 0, 3.28f },    // M3
+        { 100, 50, -50, 0, 0, -4.99f },  // M4
+        { 100, 50, -100, 0, -5, -1.36f },// M5 (power -5)
+        { 100, 50, -100, 0, 5, -44.79f } // M5 (power +5)
+    };
+    for (const Case& c : cases)
+    {
+        auto e = matrixBase();
+        set (*e, "osc1.level", c.level);
+        set (*e, "macro.1", c.macro);
+        slotMacroTo (*e, "osc1.level", c.amount);
+        set (*e, "mod01.bipolar", c.bipolar);
+        set (*e, "mod01.power", c.power);
+        const Out o = renderNote (*e, 69, 1.0f, 1.0, 1.2);
+        CHECK_NEAR (dbOf (lineAmplitude (o.l, 14400, 38400, 440.0)), static_cast<double> (c.expectedDb), 0.12);
+    }
+}
+
+TEST (own_matrix_vectors_m6_to_m9_transpose_and_pan)
+{
+    {
+        auto e = matrixBase();
+        set (*e, "macro.1", 50.0f);
+        slotMacroTo (*e, "osc1.transpose", 25.0f); // M6: +12 st
+        const Out o = renderNote (*e, 69, 1.0f, 1.0, 1.2);
+        CHECK (lineAmplitude (o.l, 14400, 38400, 880.0) > 5.0 * lineAmplitude (o.l, 14400, 38400, 440.0));
+    }
+    {
+        auto e = matrixBase();
+        set (*e, "macro.1", 100.0f);
+        set (*e, "mod01.bipolar", 1.0f);
+        slotMacroTo (*e, "osc1.transpose", 50.0f); // M7: +24 st
+        const Out o = renderNote (*e, 69, 1.0f, 1.0, 1.2);
+        CHECK (lineAmplitude (o.l, 14400, 38400, 1760.0) > 5.0 * lineAmplitude (o.l, 14400, 38400, 440.0));
+    }
+    for (const float stereo : { 0.0f, 1.0f })
+    {
+        auto e = matrixBase();
+        set (*e, "macro.1", 100.0f);
+        slotMacroTo (*e, "osc1.pan", 100.0f); // M8 / M9
+        set (*e, "mod01.stereo", stereo);
+        const Out o = renderNote (*e, 69, 1.0f, 1.0, 1.2);
+        const double l = lineAmplitude (o.l, 14400, 38400, 440.0), r = lineAmplitude (o.r, 14400, 38400, 440.0);
+        CHECK (l < 1.0e-3);
+        if (stereo == 0.0f)
+            CHECK_NEAR (dbOf (r), -3.01, 0.12);
+        // M9 (stereo On): the right lane gets -1 so the pan lanes are +1 / -1. A voice has one pan value in this engine (the left lane is used), see the report.
+    }
+}
+
+TEST (own_envelope_vector_e1)
+{
+    auto e = make();
+    set (*e, "osc1.wavetable", 0.0f);
+    set (*e, "osc1.level", 100.0f);
+    set (*e, "osc1.phase", 90.0f);
+    set (*e, "filter1.on", 0.0f);
+    set (*e, "master.volume", 0.0f);
+    set (*e, "env1.delay", 0.0f);
+    set (*e, "env1.attack", 100.0f);
+    set (*e, "env1.hold", 50.0f);
+    set (*e, "env1.decay", 200.0f);
+    set (*e, "env1.sustain", 50.0f);
+    set (*e, "env1.release", 300.0f);
+    set (*e, "env1.attack_curve", 0.0f);
+    set (*e, "env1.decay_curve", -2.0f);
+    set (*e, "env1.release_curve", -2.0f);
+    const Out o = renderNote (*e, 69, 1.0f, 0.75, 1.5);
+    auto peakAt = [&] (double t) // peak of the waveform in a +-1.25 ms window, t after the note on
+    {
+        double p = 0.0;
+        const size_t c = static_cast<size_t> (t * 48000.0);
+        for (size_t i = c - 60; i < c + 60; ++i)
+            p = std::max (p, static_cast<double> (std::fabs (o.l[i])));
+        return p;
+    };
+    const double times[] = { 0.010, 0.050, 0.090, 0.120, 0.160, 0.200, 0.300, 0.350, 0.500 };
+    const double expected[] = { 0.0097, 0.256, 0.821, 0.998, 0.930, 0.619, 0.309, 0.253, 0.250 };
+    for (size_t i = 0; i < 9; ++i)
+        CHECK_NEAR (peakAt (times[i]), expected[i], 0.06 * expected[i] + 0.005);
+    const double relTimes[] = { 0.010, 0.050, 0.100, 0.200 }; // after the note off at 0.75 s
+    const double relExpected[] = { 0.217, 0.115, 0.049, 0.0057 };
+    for (size_t i = 0; i < 4; ++i)
+        CHECK_NEAR (peakAt (0.75 + relTimes[i]), relExpected[i], 0.06 * relExpected[i] + 0.005);
+}
+
 // The factory behaviour of the default patch: a saw at the pitch of the key, level within 1 dB of the measured Vital default (-24.5 dB rms at A4).
 TEST (own_default_patch_pitch_and_level)
 {

@@ -365,11 +365,19 @@ void OwnEngine::controlTick() noexcept
         }
         rlfoValue[r] = rlfo[r].advance (static_cast<int> (base[static_cast<size_t> (ri.style)] + 0.5f), rate * fdt);
     }
+    globals.activeVoices = activeCount.load (std::memory_order_relaxed);
+    for (size_t i = 0; i < voices.size(); ++i)
+        if (voices[i]->isActive())
+            voices[i]->tick (globals, static_cast<int> (i));
     // the global modulation (sources that do not belong to a voice) of the global parameters
     for (int i = 0; i < gnumTouched; ++i)
         gdelta[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
     gnumTouched = 0;
     float gsrc[kNumSourceIds] = {};
+    const Voice* newest = nullptr; // a voice source on a global destination reads the most recently started active voice (document 04, 3.1)
+    for (const auto& v : voices)
+        if (v->isActive() && (newest == nullptr || v->serial() > newest->serial()))
+            newest = v.get();
     for (int m = 0; m < 8; ++m)
         gsrc[srcMacro (m)] = globals.macro[m];
     for (int l = 0; l < 10; ++l)
@@ -395,12 +403,8 @@ void OwnEngine::controlTick() noexcept
     gsrc[kSrcNote] = lastNoteSemis * (1.0f / 127.0f);
     gsrc[kSrcActiveVoices] = static_cast<float> (activeCount.load (std::memory_order_relaxed)) * (1.0f / 32.0f);
     gsrc[kSrcFixed] = 1.0f;
-    matrix.evaluate (gsrc, true, gdelta.data(), gtouched.data(), gnumTouched, kNumModSlots);
+    matrix.evaluate (newest != nullptr ? newest->sourceValues() : gsrc, true, gdelta.data(), gtouched.data(), gnumTouched, kNumModSlots);
 
-    globals.activeVoices = activeCount.load (std::memory_order_relaxed);
-    for (size_t i = 0; i < voices.size(); ++i)
-        if (voices[i]->isActive())
-            voices[i]->tick (globals, static_cast<int> (i));
 }
 
 void OwnEngine::process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept
@@ -468,7 +472,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             const size_t vi = static_cast<size_t> (mi.volume);
             float db = base[vi];
             if (gdelta[vi] != 0.0f)
-                db = modulatedValue (paramTable()[vi], modDomainOf (paramTable()[vi]), db, gdelta[vi]);
+                db = modulatedValue (paramTable()[vi], destLawOf (vi), db, gdelta[vi]);
             smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
         }
         while (ei < numEvents && events[ei].frame <= pos)

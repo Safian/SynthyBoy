@@ -74,6 +74,8 @@ public:
     void setSlide (float v) noexcept { slide = v; }
     void setExpressionX (float v) noexcept { exprX = v; }
     float currentSemitones() const noexcept { return lastSemis; }
+    /** The values of all modulation sources of the last period (index = source id, 0 .. 1). */
+    const float* sourceValues() const noexcept { return src; }
 
     /** Advances envelopes, LFOs and the matrix by one control period and computes the parameters of the period. */
     void tick (const TickGlobals& g, int voiceIndex) noexcept;

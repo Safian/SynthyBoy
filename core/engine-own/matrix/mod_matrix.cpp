@@ -4,6 +4,7 @@
 #include "mod_matrix.h"
 
 #include <cstring>
+#include <vector>
 
 #include "../dsp/util.h"
 
@@ -29,45 +30,133 @@ bool isVoiceParam (const ParamInfo& info) noexcept
 }
 } // namespace
 
-ModDomain modDomainOf (const ParamInfo& info) noexcept
+namespace
 {
-    const size_t len = std::strlen (info.key);
-    if (len > 6 && std::strcmp (info.key + len - 6, ".level") == 0 && info.unit == Unit::percent)
-        return ModDomain::quadratic;
-    if (info.unit == Unit::Hz && info.min > 0.0f && info.max > 4.0f * info.min)
-        return ModDomain::logarithmic;
-    return ModDomain::normalised;
+bool endsWith (const char* s, const char* suffix) noexcept
+{
+    const size_t n = std::strlen (s), m = std::strlen (suffix);
+    return n >= m && std::strcmp (s + n - m, suffix) == 0;
 }
 
-float modulatedValue (const ParamInfo& info, ModDomain domain, float base, float delta) noexcept
+DestLaw computeLaw (const ParamInfo& info) noexcept
 {
+    DestLaw law;
+    const char* k = info.key;
     const float range = info.max - info.min;
-    if (!(range > 0.0f))
-        return base;
-    switch (domain)
+    if (std::strcmp (k, "master.volume") == 0)
     {
-        case ModDomain::quadratic:
+        law.kind = DestKind::volume;
+        law.width = 7399.44f;
+        return law;
+    }
+    // envelope times: fourth root of seconds
+    if (startsWith (k, "env") && info.unit == Unit::ms)
+    {
+        law.kind = DestKind::quart;
+        law.width = (endsWith (k, ".delay") || endsWith (k, ".hold")) ? 1.41421f : 2.37842f;
+        return law;
+    }
+    if (std::strcmp (k, "master.portamento.time") == 0 || endsWith (k, ".smooth_time"))
+    {
+        law.kind = DestKind::log2Seconds;
+        law.width = std::strcmp (k, "master.portamento.time") == 0 ? 14.0f : 14.0f;
+        return law;
+    }
+    if (info.unit == Unit::Hz && (endsWith (k, ".rate")))
+    {
+        law.kind = DestKind::log2Hz;
+        law.width = std::log2 (info.max / info.min);
+        return law;
+    }
+    if (info.unit == Unit::Hz && (endsWith (k, "cutoff") || endsWith (k, ".center")))
+    {
+        law.kind = DestKind::note;
+        law.width = 128.0f;
+        return law;
+    }
+    if ((endsWith (k, ".level") && info.unit == Unit::percent) || endsWith (k, "unison.detune") || (endsWith (k, ".resonance") && startsWith (k, "eq.")))
+    {
+        law.kind = DestKind::sqrtLevel;
+        law.scale = 0.01f;
+        law.width = endsWith (k, "unison.detune") ? 10.0f : 1.0f;
+        return law;
+    }
+    law.kind = DestKind::lin;
+    switch (info.unit)
+    {
+        case Unit::percent: law.scale = 0.01f; break;
+        case Unit::degrees: law.scale = 1.0f / 360.0f; break;
+        case Unit::cents: law.scale = 0.01f; break;
+        default: law.scale = 1.0f; break;
+    }
+    law.width = range * law.scale;
+    if (endsWith (k, ".frame") && startsWith (k, "osc"))
+    {
+        law.scale = 0.63f;
+        law.width = 63.0f;
+    }
+    else if (endsWith (k, ".frame_spread"))
+    {
+        law.scale = 0.63f;
+        law.width = 126.0f;
+    }
+    return law;
+}
+} // namespace
+
+const DestLaw& destLawOf (size_t paramIndex) noexcept
+{
+    static const std::vector<DestLaw> laws = []
+    {
+        std::vector<DestLaw> v (paramCount());
+        for (size_t i = 0; i < v.size(); ++i)
+            v[i] = computeLaw (paramTable()[i]);
+        return v;
+    }();
+    return laws[paramIndex < laws.size() ? paramIndex : 0];
+}
+
+float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, float delta) noexcept
+{
+    switch (law.kind)
+    {
+        case DestKind::volume:
         {
-            const float n = std::sqrt (std::max (0.0f, (base - info.min) / range)) + delta;
-            return info.min + range * std::min (std::max (n, 0.0f), 1.5f) * std::min (std::max (n, 0.0f), 1.5f);
+            const float db0 = std::min (base, 6.0f);
+            const float c = (db0 <= -60.0f ? 0.0f : (db0 + 80.0f) * (db0 + 80.0f)) + delta;
+            return c <= 0.0f ? -120.0f : std::sqrt (c) - 80.0f;
         }
-        case ModDomain::logarithmic:
+        case DestKind::sqrtLevel:
         {
-            const float l = std::log (info.max / info.min);
-            const float n = std::clamp (std::log (std::max (base, info.min) / info.min) / l + delta, 0.0f, 1.0f);
-            return info.min * std::exp (n * l);
+            const float c = std::sqrt (std::max (base * 0.01f * (law.width > 1.5f ? 100.0f : 1.0f), 0.0f)) + delta; // detune: sqrt of the percent
+            const float v = c > 0.0f ? c * c : 0.0f;
+            return law.width > 1.5f ? v : v * 100.0f;
+        }
+        case DestKind::quart:
+        {
+            const float c = std::sqrt (std::sqrt (std::max (base, 0.0f) * 0.001f)) + delta;
+            const float c2 = c > 0.0f ? c * c : 0.0f;
+            return c2 * c2 * 1000.0f;
+        }
+        case DestKind::log2Seconds:
+        {
+            const float c = std::log2 (std::max (base, 1.0e-3f) * 0.001f) + delta;
+            return std::exp2 (std::clamp (c, -30.0f, 10.0f)) * 1000.0f;
+        }
+        case DestKind::log2Hz:
+        {
+            const float c = std::log2 (std::max (base, 1.0e-4f)) + delta;
+            return std::exp2 (std::clamp (c, -14.0f, 14.0f));
+        }
+        case DestKind::note:
+        {
+            const float c = 12.0f * std::log2 (std::max (base, 1.0f) * (1.0f / 8.1757989156f)) + delta;
+            return 8.1757989156f * std::exp2 (std::clamp (c, 0.0f, 160.0f) * (1.0f / 12.0f));
         }
         default:
-        {
-            float prop = std::clamp ((base - info.min) / range, 0.0f, 1.0f);
-            if (info.scale == Scale::exp_skew && info.skew > 0.0f)
-                prop = std::pow (prop, info.skew);
-            prop = std::clamp (prop + delta, 0.0f, 1.0f);
-            if (info.scale == Scale::exp_skew && info.skew > 0.0f)
-                prop = std::pow (prop, 1.0f / info.skew);
-            return info.min + range * prop;
-        }
+            return base + delta / law.scale;
     }
+    (void) info;
 }
 
 void ModMatrix::compile (const float* base) noexcept
@@ -90,7 +179,7 @@ void ModMatrix::compile (const float* base) noexcept
         CompiledSlot& c = slots[count++];
         c.source = src;
         c.dest = dest;
-        c.amount = base[sp.amount] * 0.01f;
+        c.amount = std::clamp (base[sp.amount] * 0.01f, -1.0f, 1.0f);
         c.power = sp.power >= 0 ? base[sp.power] : 0.0f;
         c.bipolar = sp.bipolar >= 0 && base[sp.bipolar] >= 0.5f;
         c.aux = sp.auxSource >= 0 ? std::clamp (static_cast<int> (base[sp.auxSource] + 0.5f), 0, kNumSourceIds - 1) : 0;
@@ -98,6 +187,7 @@ void ModMatrix::compile (const float* base) noexcept
         c.auxPower = sp.auxPower >= 0 ? base[sp.auxPower] : 0.0f;
         c.auxOut = sp.auxOutput >= 0 ? base[sp.auxOutput] * 0.01f : 1.0f;
         c.global = !isVoiceParam (table[dest]);
+        c.width = destLawOf (static_cast<size_t> (dest)).width;
     }
 }
 
@@ -108,23 +198,21 @@ void ModMatrix::evaluate (const float* src, bool global, float* delta, int* touc
         const CompiledSlot& c = slots[i];
         if (c.global != global || c.amount == 0.0f)
             continue;
-        float v = src[c.source];
-        if (sourceIsBipolar (c.source))
+        const float x = clamp01 (src[c.source]);
+        float v;
+        if (c.bipolar)
         {
-            v = std::copysign (powerShape (std::fabs (v), c.power), v);
+            const float y = 2.0f * x - 1.0f;
+            v = 0.5f * std::copysign (powerShape (std::fabs (y), -c.power), y); // swings +-0.5 of the full range
         }
         else
-        {
-            v = powerShape (clamp01 (v), c.power);
-            if (c.bipolar)
-                v -= 0.5f;
-        }
-        float d = v * c.amount;
+            v = powerShape (x, -c.power);
+        float d = v * c.amount * c.width;
         if (c.aux != 0)
         {
-            float a = src[c.aux];
-            a = sourceIsBipolar (c.aux) ? 0.5f + 0.5f * a : clamp01 (a);
-            a = powerShape (a, c.auxPower);
+            float a = clamp01 (src[c.aux]);
+            if (c.auxPower != 0.0f)
+                a = powerShape (a, -c.auxPower);
             if (c.auxInv)
                 a = 1.0f - a;
             d *= a * c.auxOut;
