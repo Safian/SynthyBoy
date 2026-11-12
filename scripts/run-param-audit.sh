@@ -14,6 +14,7 @@
 #   --all-instances      with --full: every instance at full density
 #   --keys REGEX         only the keys matching REGEX (extended regex, searched in the key)
 #   --group PREFIX       only the keys starting with PREFIX (filter1.  chorus.  osc2.  mod01.)
+#   --part I/N           only every N-th key (the I-th share, 0 <= I < N): one of N machines of a CI matrix; the report then compares these keys with the baseline only
 #   --jobs N             parallel processes by key shard (default: number of CPUs); the result does not depend on N
 #   --baseline FILE      compare with this baseline (default docs/ui-design/param-audit-baseline.json); regressions = a changed verdict or curve
 #   --update-baseline    write the baseline from this run (intended changes show up in git diff)
@@ -40,6 +41,7 @@ mode=full
 keys=""
 group=""
 jobs=""
+part=""
 baseline="$root/docs/ui-design/param-audit-baseline.json"
 update_baseline=0
 engine=vital
@@ -64,6 +66,7 @@ while [ $# -gt 0 ]; do
         --all-instances) all_instances=1 ;;
         --keys) [ $# -ge 2 ] || die_usage "--keys needs a value"; keys="$2"; shift ;;
         --group) [ $# -ge 2 ] || die_usage "--group needs a value"; group="$2"; shift ;;
+        --part) [ $# -ge 2 ] || die_usage "--part needs a value"; part="$2"; shift ;;
         --jobs) [ $# -ge 2 ] || die_usage "--jobs needs a value"; jobs="$2"; shift ;;
         --baseline) [ $# -ge 2 ] || die_usage "--baseline needs a value"; baseline="$2"; shift ;;
         --update-baseline) update_baseline=1 ;;
@@ -175,11 +178,18 @@ if [ "$stage1" -eq 1 ]; then
     [ "$all_instances" -eq 1 ] && shard_args+=(--all-instances)
     [ -n "$keys" ] && shard_args+=(--keys "$keys")
     [ -n "$group" ] && shard_args+=(--group "$group")
+    [ -n "$part" ] && shard_args+=(--part "$part")
     [ -n "$wavs" ] && shard_args+=(--keep-wavs "$wavs")
+    # quick: the shards take the keys from a shared queue (a claim directory per key) instead of a fixed share, so that they finish together; the result of a key does not depend on the shard
+    claims=""
+    if [ "$mode" = quick ] && [ "$jobs" -gt 1 ]; then
+        claims="$out/claims"
+        rm -rf "$claims"
+    fi
     pids=""
     i=0
     while [ "$i" -lt "$jobs" ]; do
-        "$audit" "${shard_args[@]}" --shard "$i/$jobs" >"$out/shard-$i.log" 2>&1 &
+        "$audit" "${shard_args[@]}" --shard "$i/$jobs" ${claims:+--claims "$claims"} >"$out/shard-$i.log" 2>&1 &
         pids="$pids $!"
         i=$((i + 1))
     done

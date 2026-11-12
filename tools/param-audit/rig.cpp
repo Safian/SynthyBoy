@@ -180,6 +180,12 @@ Fixtures::Fixtures()
     content.shaperB = { ContentPoint (0.0f, 0.0f), ContentPoint (0.6f, 0.3f), ContentPoint (1.0f, 1.0f) };
 }
 
+Fixtures& Fixtures::shared()
+{
+    static Fixtures instance;
+    return instance;
+}
+
 // ---- scripts --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 namespace
@@ -358,7 +364,7 @@ float faultFor (const std::string& key, float value)
 
 // ---- rig ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-Rig::Rig (EngineKind kind, double sampleRate, Tier tier) : sr_ (sampleRate), tier_ (tier)
+Rig::Rig (EngineKind kind, double sampleRate, Tier tier) : fixtures_ (Fixtures::shared()), sr_ (sampleRate), tier_ (tier)
 {
     engine_ = createEngine (kind);
     if (engine_ == nullptr)
@@ -427,8 +433,16 @@ Audio Rig::render (const Script& script)
     return renderOnce (script);
 }
 
+namespace
+{
+long gRenders = 0;
+}
+
+long Rig::renderCount() { return gRenders; }
+
 Audio Rig::renderOnce (const Script& script)
 {
+    ++gRenders;
     prepareIfNeeded();
     engine_->reset();
     engine_->restartEffectPhases(); // the phases of the effect LFOs start at 0: a render does not depend on the renders before it (IEngine::restartEffectPhases)

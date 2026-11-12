@@ -74,6 +74,8 @@ struct Fixtures
     synthyboy::MemoryContentStore store;
     synthyboy::StateContent content;
     Fixtures();
+    /** The process wide instance. */
+    static Fixtures& shared();
 };
 
 /** One engine instance with the fixtures, prepared at the offline quality; every sweep starts from the defaults of the table. */
@@ -93,10 +95,12 @@ public:
     Audio renderWith (const Ovs& ov, const Script& script);
     bool supports (const std::string& key) const;
     double sampleRate() const { return sr_; }
+    /** Renders made by all rigs of the process so far (the cost measure of the audit: a render is a second of audio). */
+    static long renderCount();
 
 private:
     std::unique_ptr<synthyboy::IEngine> engine_;
-    Fixtures fixtures_;
+    Fixtures& fixtures_; // one set for the process (built once, read only: every key of the audit builds its own Rig)
     double sr_;
     synthyboy::Tier tier_;
     void prepareIfNeeded();

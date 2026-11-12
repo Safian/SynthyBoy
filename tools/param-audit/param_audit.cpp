@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_param_audit [--engine vital|own] [--quick | --full] [--keys REGEX] [--group PREFIX] [--shard I/N] [--out DIR] [--keep-wavs DIR]
+//   synthyboy_param_audit [--engine vital|own] [--quick | --full] [--keys REGEX] [--group PREFIX] [--shard I/N [--claims DIR]] [--part I/N] [--out DIR] [--keep-wavs DIR]
 //                         [--seed N] [--list-keys] [--list-contexts KEY] [--verbose]
 //
 // For every key of the table that the engine supports: put the key's context in place (tools/param-audit/contexts.cpp: the first state of a ladder in which the key is audible),
@@ -37,7 +37,8 @@ struct Options
 {
     EngineKind engine = EngineKind::vital;
     Density density = Density::full;
-    std::string keysRegex, group, out = ".", wavs, listContexts;
+    std::string keysRegex, group, out = ".", wavs, listContexts, claims, repeatKey;
+    int repeatContext = 0, part = 0, parts = 1;
     int shard = 0, shards = 1;
     unsigned seed = 1;
     bool list = false, verbose = false, allInstances = false;
@@ -279,6 +280,7 @@ KeyResult auditKey (Rig& rig, size_t index, const Options& o)
     const auto& info = paramTable()[index];
     KeyResult r;
     const auto t0 = std::chrono::steady_clock::now();
+    const long renders0 = Rig::renderCount();
     r.caps = capsText (index);
     if (! rig.engine().supportsParam (info.id))
     {
@@ -473,6 +475,7 @@ KeyResult auditKey (Rig& rig, size_t index, const Options& o)
             r.modVerdict = "DEAD";
     }
     r.seconds = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
+    r.renders = static_cast<int> (Rig::renderCount() - renders0); // counted by the rig
     return r;
 }
 
@@ -533,10 +536,23 @@ int main (int argc, char** argv)
             const auto t = next();
             std::sscanf (t.c_str(), "%d/%d", &o.shard, &o.shards);
         }
+        else if (a == "--claims") // a directory shared by the shards: a key is run by the shard that creates its claim directory first (the result of a key does not depend on who runs it)
+            o.claims = next();
+        else if (a == "--part") // I/N: only every N-th key (from the I-th): the keys of one of N machines (CI matrix); the shards of a machine divide these
+        {
+            const auto t = next();
+            std::sscanf (t.c_str(), "%d/%d", &o.part, &o.parts);
+        }
         else if (a == "--all-instances")
             o.allInstances = true;
         else if (a == "--determinism")
             determinism = true;
+        else if (a == "--repeat-context") // KEY [INDEX]: see the diagnostic below
+        {
+            o.repeatKey = next();
+            if (i + 1 < argc && argv[i + 1][0] != '-')
+                o.repeatContext = std::atoi (argv[++i]);
+        }
         else if (a == "--list-contexts")
             o.listContexts = next();
         else
@@ -544,6 +560,11 @@ int main (int argc, char** argv)
             std::fprintf (stderr, "unknown option %s\n", a.c_str());
             return 2;
         }
+    }
+    if (o.parts < 1 || o.part < 0 || o.part >= o.parts)
+    {
+        std::fprintf (stderr, "bad --part\n");
+        return 2;
     }
     if (o.shards < 1 || o.shard < 0 || o.shard >= o.shards)
     {
@@ -647,6 +668,23 @@ int main (int argc, char** argv)
             continue; // --quick: instance 1 and the last instance of every family (the others are the same code; --full covers them at the quick density)
         selected.push_back (i);
     }
+    if (o.parts > 1)
+    {
+        // the part of a key comes from a hash of its name without the instance number, so that the instances of a family (osc1.x, osc3.x ...) are in the same part and the report's check
+        // that they agree still sees them together; the hash (FNV-1a) is the same on every platform
+        static const std::regex instanceRx ("^(osc|lfo|rlfo|env|mod|fxi)[0-9]+\\.");
+        std::vector<size_t> mine;
+        for (size_t i : selected)
+        {
+            const std::string name = std::regex_replace (std::string (paramTable()[i].key), instanceRx, "$1N.");
+            uint64_t h = 1469598103934665603ull;
+            for (char c : name)
+                h = (h ^ static_cast<unsigned char> (c)) * 1099511628211ull;
+            if (static_cast<int> (h % static_cast<uint64_t> (o.parts)) == o.part)
+                mine.push_back (i);
+        }
+        selected = std::move (mine);
+    }
     if (o.list)
     {
         Rig rig (o.engine);
@@ -654,6 +692,35 @@ int main (int argc, char** argv)
         {
             const auto& p = paramTable()[i];
             std::printf ("%s\t%s\t%s\n", p.key, rig.engine().supportsParam (p.id) ? "supported" : "unsupported", capsText (i).c_str());
+        }
+        return 0;
+    }
+    if (! o.repeatKey.empty())
+    {
+        // diagnostic: the first context of a key rendered at the default several times in a row, then after every value of the quick sweep once, then at the default again (peak of the
+        // difference to the first render). The engine's output depends on the number of renders since the last parameter change (the first renders after a change differ from the later ones),
+        // which is why the sweeps of this tool warm up and why a shorter procedure gives other numbers (docs/QUALITY.md).
+        const auto* info = findParamByKey (o.repeatKey.c_str());
+        if (info == nullptr)
+            return 2;
+        Rig rig (o.engine);
+        const auto ctxs = contextsFor (*info);
+        if (ctxs.empty())
+            return 2;
+        const auto& ctx = ctxs[static_cast<size_t> (std::min<int> (std::max (0, o.repeatContext), static_cast<int> (ctxs.size()) - 1))];
+        const auto script = scriptByName (ctx.script);
+        rig.begin (ctx.ov);
+        rig.set (info->key, info->def);
+        const Audio first = rig.render (script);
+        std::printf ("context %s [%s]\n", ctx.name.c_str(), ctx.script.c_str());
+        for (int i = 0; i < 8; ++i)
+            std::printf ("  default again %d: %.1f dB\n", i, diffDbOf (rig.render (script), first));
+        for (float v : sweepValues (*info, Density::quick))
+        {
+            rig.set (info->key, v);
+            rig.render (script);
+            rig.set (info->key, info->def);
+            std::printf ("  after value %g: default differs by %.1f dB\n", static_cast<double> (v), diffDbOf (rig.render (script), first));
         }
         return 0;
     }
@@ -672,14 +739,25 @@ int main (int argc, char** argv)
         return 0;
     }
     std::filesystem::create_directories (o.out);
+    if (! o.claims.empty())
+        std::filesystem::create_directories (o.claims);
     const std::string file = o.out + "/keys" + (o.shards > 1 ? "-" + std::to_string (o.shard) : std::string()) + ".jsonl";
     std::ofstream out (file);
     const auto t0 = std::chrono::steady_clock::now();
     size_t done = 0;
     for (size_t n = 0; n < selected.size(); ++n)
     {
-        if (static_cast<int> (n % static_cast<size_t> (o.shards)) != o.shard)
-            continue;
+        if (o.claims.empty())
+        {
+            if (static_cast<int> (n % static_cast<size_t> (o.shards)) != o.shard)
+                continue;
+        }
+        else
+        {
+            std::error_code ec;
+            if (! std::filesystem::create_directory (o.claims + "/" + std::to_string (n), ec) || ec)
+                continue;
+        }
         const size_t index = selected[n];
         Rig rig (o.engine); // a fresh engine per key: the result of a key never depends on the keys before it (or on the shard it ran in)
         if (! rig.ok())
