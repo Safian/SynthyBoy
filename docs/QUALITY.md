@@ -176,6 +176,30 @@ Vital-derived engine (`tools/param-audit`, report and numbers: `docs/ui-design/P
 * **Mutation self test** (`--self-test`, ctest `synthyboy_param_audit_selftest`): seven faults are injected into the harness through `SYNTHYBOY_AUDIT_FAULT` (cutoff scaled, pan swapped, delay
   time x2, transpose 2 cents off, master volume in half the dB, attack halved, chorus controls unwired); every one must be caught.
 
+**What the quick run costs, and why it is not made cheaper by doing less (2026-11-12, `audit-fast`).** A render is one second of audio (about 50 ms CPU); a key costs 30 .. 100 renders
+(the ladder of contexts, the warm-up and the repeats, the sweep, the modulation sweep) plus about 0.7 s CPU to build and warm up its own engine, 910 keys in all: about 4000 CPU seconds
+(`renders` per key in `keys.jsonl`, counted by the rig, is the cost measure; wall time depends on what else the machine does). This was tried and measured, and rejected: stopping the
+fast probe of the ladder at the first value that sounds different, using the sweep of the ladder as the key's sweep, warming up fewer values, fewer repeats for the noise estimate,
+five instead of nine values, three values for the last instance of a family, one engine for several keys. Each saves 20 .. 40 % of the renders, and each changes verdicts or curves
+of 10 .. 35 keys against the committed baseline (eq.law, the level trims, the multisample and sample keys, rlfo4.sync_type, osc3.multi.* ...). The cause is in the engine, not in
+the harness: **the output of a render depends on the renders before it** (`synthyboy_param_audit --repeat-context eq.law`: the first render after a parameter change differs from the
+later ones by -16 dB, the fifth differs from the fourth by -9 dB, all the others are equal), so a sweep that follows a shorter history measures another state. The long procedure is
+what makes the numbers settled, and the baseline is a function of it. A cheaper quick run needs a render that does not depend on the one before it (the effect state of the engine
+cleared by `reset ()`); then the procedure can be shortened and the baseline re-pinned once. Until then the quick run keeps its procedure bit for bit (checked: the same grids as before
+for every key of a sample of 31) and gets its speed from the machine:
+
+* the shards take the keys from a shared queue (`--claims DIR`, a claim directory per key) instead of every n-th key, so that they finish together (the shards of a run used to end 648 .. 783 s apart);
+  the result of a key does not depend on which shard ran it;
+* the content fixtures (wavetables, samples, instruments, IRs) are built once per process, not once per key;
+* `--part I/N` runs one of N shares of the keys (a hash of the name without the instance number, so that osc1.x and osc3.x are in the same share and the report's agreement check between
+  the instances still sees them): the CI job `parameter effect audit (quick)` is a matrix of eight machines, each with its share; the semantic checks and the mutation self test run on share 0.
+
+**Baseline across platforms.** The baseline records the platform that made it (`platform`: `darwin-arm64`). On that platform the curves compare to one quantum (1 dB, a quarter octave, a
+semitone); on another (Linux x86_64 in CI) to two quanta, the verdicts always exactly: the same code rounds differently on another CPU and compiler (an oscillator's `floorToInt`, a
+pitch detector at a bin boundary). Points whose rms is below -100 dBFS compare as silence: the centroid, f0 and balance of rounding noise are not a property of the engine, and an rms
+of -170 dB against -166 dB is a different amount of nothing (this was the whole of the two CI differences, `osc1.pitch_coarse` at +100 % modulation, where the pitch leaves the audible
+range and the output is silent, and `osc3.wavetable`). A baseline made on another platform is a `--update-baseline` away; two baselines are not needed.
+
 ```
 scripts/run-param-audit.sh --quick                  # minutes: the CI subset (job `param-audit`, ctest `synthyboy_param_audit_scan`)
 scripts/run-param-audit.sh --full --jobs 8          # every value of every key (hours)

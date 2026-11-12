@@ -151,27 +151,36 @@ jobs:
 
   # The parameter effect audit (docs/ui-design/PARAM-AUDIT-REPORT.md, scripts/run-param-audit.sh): does the sound change, and the way it should, when a value changes?
   # The quick run (representative values of every key + the modulation sweep) against the committed baseline, the semantic checks and the mutation self test; a core only build
-  # (no plug-in), in parallel to the build matrix. The full run (every value of every key) is `scripts/run-param-audit.sh --full` (hours).
+  # (no plug-in), in parallel to the build matrix. The quick run is about 4000 CPU seconds: it is divided over eight machines (--part I/8: a hash of the key name without the instance
+  # number, so that the instances of a family stay together), share 0 also runs the semantic checks and the mutation self test. The full run (every value of every key) is
+  # `scripts/run-param-audit.sh --full` (hours). docs/QUALITY.md "Parameter effect audit".
   param-audit:
-    name: parameter effect audit (quick)
+    name: parameter effect audit (quick, share ${{ matrix.part }} of 8)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ninja-build
-      - name: Quick audit, semantic checks and mutation self test
+      - name: Quick audit, share ${{ matrix.part }} of 8
         run: |
           cmake -S . -B build-audit -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF
-          scripts/run-param-audit.sh --quick --build-dir build-audit --jobs 4
-          scripts/run-param-audit.sh --self-test --no-build --build-dir build-audit
+          if [ "${{ matrix.part }}" = 0 ]; then extra=""; else extra="--no-semantics"; fi
+          scripts/run-param-audit.sh --quick --build-dir build-audit --jobs 4 --part "${{ matrix.part }}/8" $extra
+      - name: Mutation self test
+        if: matrix.part == 0
+        run: scripts/run-param-audit.sh --self-test --no-build --build-dir build-audit
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: param-audit-report
+          name: param-audit-report-${{ matrix.part }}
           path: build-audit/param-audit/latest/
 
   manifest:
