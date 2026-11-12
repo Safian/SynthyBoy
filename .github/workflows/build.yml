@@ -19,6 +19,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'   # nightly: the slow jobs (see HEAVY below) run for every branch state of main
 
 permissions:
   contents: read
@@ -156,6 +158,7 @@ jobs:
   # `scripts/run-param-audit.sh --full` (hours). docs/QUALITY.md "Parameter effect audit".
   param-audit:
     name: parameter effect audit (quick, share ${{ matrix.part }} of 8)
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'   # HEAVY: not on every develop / branch push (hours under sanitizers / QEMU)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -194,6 +197,7 @@ jobs:
   # The core (no JUCE) with sanitizers: ASan + UBSan, and TSan (audio thread vs. parameter thread).
   core-sanitizers:
     name: core tests (${{ matrix.name }})
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'   # HEAVY: not on every develop / branch push (hours under sanitizers / QEMU)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -315,6 +319,7 @@ jobs:
   # Timing is not measured here (QEMU); only correctness and the ABI of the produced binaries.
   core-armv7:
     name: core tests (linux-armv7, qemu)
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'   # HEAVY: not on every develop / branch push (hours under sanitizers / QEMU)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
