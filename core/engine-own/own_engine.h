@@ -38,6 +38,8 @@ public:
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
+    bool copyReadout (LiveValues& out) const noexcept override;
+    void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;
     void setContentStore (const IContentStore* store) override;
 
@@ -70,6 +72,9 @@ private:
     std::atomic<int> switchKeyAtomic[3];
     int switchKeySnap[3] = { -1, -1, -1 };
     std::atomic<int> qualityTier { 2 };
+    std::atomic<bool> ultraRender { false };
+    std::atomic<int> multiZone[3], multiKey[3];   // the zone and key of the last multisample note (read-out)
+    std::atomic<uint32_t> blockCounter { 0 };
     std::unique_ptr<spectral::Scratch> spectralScratch;
 
     std::vector<std::unique_ptr<Voice>> voices;
@@ -96,6 +101,7 @@ private:
     int heldKeys = 0;
     float lastVelocity = 0.0f;
     const int fxReverbForceIndex;
+    const int fxOversampleIndex;
     std::vector<float> scratchRight;
 };
 } // namespace own

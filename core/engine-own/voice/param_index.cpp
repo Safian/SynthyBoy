@@ -43,7 +43,8 @@ ParamIndex build()
     p.sub = { find ("sub.on"), find ("sub.waveform"), find ("sub.octave"), find ("sub.tune"), find ("sub.level"), find ("sub.pan"),
               find ("sub.destination"), find ("sub.env1"), find ("sub.phase") };
     p.noise = { find ("noise.on"), find ("noise.level"), find ("noise.pan"), find ("noise.destination"), find ("noise.env1"), find ("noise.sample"),
-                find ("noise.stereo"), find ("noise.keytrack"), find ("noise.pitch"), find ("noise.fine") };
+                find ("noise.stereo"), find ("noise.keytrack"), find ("noise.pitch"), find ("noise.fine"),
+                find ("noise.type"), find ("noise.phase"), find ("noise.random_phase"), find ("noise.loop"), find ("noise.bounce") };
     for (int n = 1; n <= 2; ++n)
     {
         FilterIdx& f = p.filter[n - 1];

@@ -39,6 +39,7 @@ struct TickGlobals
     int maxUnison = kMaxUnisonVoices;
     const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
+    bool oversample = false;                 // ultra render / quality.oversample_4x: every wavetable oscillator runs 4x oversampled
     spectral::Scratch* spectralScratch = nullptr;
     const int* switchKey = nullptr;          // [3] last key switch of the multisample instrument of each oscillator, -1 = default
 };
@@ -64,6 +65,8 @@ public:
     void legatoTo (const NoteStart& n) noexcept;
     void release (float velocity) noexcept;
     void kill() noexcept;
+    int multisampleZone (int osc) const noexcept { return lib[osc].lastZone(); }
+    int multisampleKey (int osc) const noexcept { return lib[osc].lastKey(); }
     /** Choke groups of the multisample instruments: another voice started a zone of this group. */
     void chokeGroup (int osc, int group) noexcept { if (osc >= 0 && osc < 3) lib[osc].chokeGroup (group); }
 
@@ -133,8 +136,12 @@ private:
     bool pitchTapOn[4] = {};
     OscTick oscTick[3], subTick;
     float oscMono[3][kControlPeriod] = {};
+    float extMono[4][kControlPeriod] = {};   // Noise, Sub, Filter 1, Filter 2 of the last chunk: the modulators of the warps from those sources
     float noiseState[2][4] = {}; // left and right generator
     Rng noiseRng;
+    sampleosc::SampleVoice noiseSv;   // noise.type = Sample: the content sample of the noise source
+    const ContentSet* noiseBound = nullptr;
+    bool noiseUseSample = false;
     float noiseGain = 0.0f, noiseGainPrev = 0.0f, noisePan = 0.0f, noiseStereo = 0.0f;
     int noiseColour = 0;
     struct Chan { float level = 0, levelPrev = 0, gl = 0, gr = 0, glPrev = 0, grPrev = 0; int dest = 3; bool env1 = true, on = false; };

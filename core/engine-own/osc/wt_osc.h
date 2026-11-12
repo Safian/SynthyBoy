@@ -30,12 +30,14 @@ struct OscTick
     float blendShape = 0.0f;
     float spread = 1.0f, blend = 1.0f;    // 0 .. 1
     int warp[2] = { 0, 0 };
+    int warpSrc[2] = { -1, -1 };          // index in the cross list of the modulator of each slot (set by update ())
     float warpAmount[2] = { 0, 0 }, warpPhase[2] = { 0, 0 }, warpSpread[2] = { 0, 0 };
     float startPhase = 0.0f;              // only used when a note starts
     bool active = false;
     const float* remap = nullptr;         // the drawn remap curve of the oscillator for the warps Remap 1 .. 4 (257 points) or null (identity)
     int morphType = 0;                    // oscN.morph.type
     float morphAmount = 0.0f, morphSpread = 0.0f; // 0 .. 1, -1 .. 1
+    bool oversample = false;              // run 4x oversampled even without a warp (ultra quality)
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
 };
 
@@ -72,7 +74,7 @@ public:
                     }
                     return sum;
                 };
-                const double cutoff = 0.098, beta = 7.5; // in cycles per sample of the 4x signal (18.8 kHz at 48 kHz)
+                const double cutoff = 0.106, beta = 7.5; // in cycles per sample of the 4x signal (20.4 kHz at 48 kHz)
                 double total = 0.0;
                 double tmp[kTaps];
                 for (int i = 0; i < kTaps; ++i)
@@ -123,6 +125,11 @@ public:
         }
         prevFrame = curFrame;
         tick = t;
+        for (int s = 0; s < 2; ++s)
+        {
+            tick.warpSrc[s] = warpCrossSource (t.warp[s]);
+            tick.warp[s] = warpFamily (t.warp[s]);
+        }
         const int U = std::clamp (t.voices, 1, kMaxVoices);
         const bool odd = (U & 1) != 0;
         const int pairs = (U + 1) / 2;
@@ -269,8 +276,8 @@ public:
             const int pairs = (curCount + 1) / 2;
             const int groups = std::min (kMorphGroups, std::max (1, pairs));
             morphGroups = groups;
-            const bool warped = tick.warp[0] != 0 || tick.warp[1] != 0;
-            const float nyq = static_cast<float> (0.5 * sampleRate * ((warped && (warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]))) ? 4.0 : 1.0));
+            const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
+            const float nyq = static_cast<float> (warped ? 3.6 * sampleRate : 0.5 * sampleRate);
             float fmax = 1.0f, incMax = 0.0f;
             for (int v = 0; v < curCount; ++v)
             {
@@ -308,8 +315,8 @@ public:
         const float invP = 1.0f / static_cast<float> (kControlPeriod);
         const float a0 = tick.warpAmount[0], a1 = tick.warpAmount[1];
         // a warp can create content far above the pitch: the oscillator then runs at four times the rate, with a band limited decimation
-        const bool warped = warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
-        const int cs0 = warpCrossSource (tick.warp[0]), cs1 = warpCrossSource (tick.warp[1]);
+        const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
+        const int cs0 = tick.warpSrc[0], cs1 = tick.warpSrc[1];
         const bool morphing = morphActive;
         const int morphPairs = std::max (1, (curCount + 1) / 2);
         for (int v = 0; v < count; ++v)
@@ -326,7 +333,7 @@ public:
             const float fmax = std::max (curInc[v], prevInc[v]) * static_cast<float> (sampleRate) * bw;
             const double rateI = sampleRate * (warped ? kOversample : 1);
             // band limit: the coarsest level that keeps the highest harmonic below Nyquist (of the rate the oscillator runs at)
-            const int level = Wavetable::levelFor (static_cast<float> (nyq) * (warped ? 4.0f : 1.0f) / std::max (fmax, 1.0f));
+            const int level = Wavetable::levelFor (static_cast<float> (warped ? 3.6 * sampleRate : nyq) / std::max (fmax, 1.0f));
             int N = Wavetable::size (level);
             // two cycles and the weight of the second one at the start / end of this chunk
             const float* cA = nullptr;
@@ -357,7 +364,7 @@ public:
                 else
                 {
                     // the frame steps (the integer part of the position); the change is cross-faded over the control period so that it does not click
-                    const int fnew = std::min (static_cast<int> (fpos), frames - 1);
+                    const int fnew = std::min (static_cast<int> (fpos + 1.0e-3f), frames - 1); // the tolerance keeps 40 % of 256 frames on frame 102 (float rounding of the knob)
                     const int fold = std::clamp (frameIdx[v] < 0 ? fnew : frameIdx[v], 0, frames - 1);
                     cA = wt.cycle (fold, level);
                     cB = fnew != fold ? wt.cycle (fnew, level) : nullptr;
@@ -480,7 +487,7 @@ public:
             phase[v] = ph;
         }
         if (cross != nullptr)
-            for (int c = 0; c < 2; ++c)
+            for (int c = 0; c < 6; ++c)
                 if (cross[c] != nullptr)
                     lastCross[c] = cross[c][n - 1];
         // the morph age advances at the end of the period
@@ -510,7 +517,7 @@ private:
     float prevInc[kMaxVoices] = {}, curInc[kMaxVoices] = {}, prevGainL[kMaxVoices] = {}, curGainL[kMaxVoices] = {}, prevGainR[kMaxVoices] = {},
           curGainR[kMaxVoices] = {}, curFrameOf[kMaxVoices] = {};
     float prevFrame = 0.0f, curFrame = 0.0f;
-    float lastCross[2] = {};
+    float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
     bool havePrev = false;
 };

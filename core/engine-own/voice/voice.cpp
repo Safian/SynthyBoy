@@ -80,6 +80,7 @@ void Voice::prepare (double sampleRate)
         osc[o].prepareMorph();
         lib[o].prepare (sampleRate);
     }
+    noiseSv.prepare (sampleRate, 64);
 }
 
 void Voice::reset() noexcept
@@ -543,6 +544,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
         t.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
         t.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
+        t.oversample = g.oversample;
         t.remap = nullptr;
         if (cs != nullptr)
         {
@@ -615,6 +617,29 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         noisePan = std::clamp (P (ni.pan) * 0.01f, -1.0f, 1.0f);
         noiseStereo = clamp01 (P (ni.stereo) * 0.01f);
         noiseColour = std::clamp (static_cast<int> (P (ni.sample) + 0.5f), 0, 8);
+        // noise.type = Sample: a content sample is the source (a missing file plays the generator)
+        const ContentSet* ncs = g.content;
+        noiseUseSample = noiseCh.on && ni.type >= 0 && P (ni.type) >= 0.5f && ncs != nullptr && ncs->sample[3].valid;
+        if (noiseUseSample)
+        {
+            sampleosc::SampleOscParams sp;
+            sp.loopMode = P (ni.bounce) >= 0.5f ? sampleosc::LoopMode::pingPong : (P (ni.loop) >= 0.5f ? sampleosc::LoopMode::forward : sampleosc::LoopMode::none);
+            sp.startOffset = clamp01 (P (ni.phase));
+            sp.endOffset = 1.0f;
+            sp.loopStart = 0.0f;
+            sp.loopEnd = 1.0f;
+            sp.quality = sampleosc::QualityTier::high;
+            if (fresh || noiseBound != ncs)
+            {
+                noiseBound = ncs;
+                noiseSv.reset();
+                if (P (ni.randomPhase) >= 0.5f)
+                    sp.startOffset = noiseRng.uni();
+                noiseSv.noteOn (60, 1.0f, &ncs->sample[3].view, sp);
+            }
+            noiseSv.setParams (sp);
+            noiseSv.setSemitoneOffset (P (ni.pitch) + P (ni.fine) * 0.01f + (P (ni.keytrack) >= 0.5f ? noteSemis - 60.0f : 0.0f));
+        }
     }
     // ---- filters
     routing = static_cast<int> (g.base[pi.filterRouting] + 0.5f);
@@ -661,6 +686,7 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
     float oscL[3][kControlPeriod], oscR[3][kControlPeriod];
     float mainE_L[kControlPeriod] = {}, mainE_R[kControlPeriod] = {}, mainN_L[kControlPeriod] = {}, mainN_R[kControlPeriod] = {};
     float fin_L[2][kControlPeriod] = {}, fin_R[2][kControlPeriod] = {};
+    float extNext[4][kControlPeriod] = {};
     float fout_L[2][kControlPeriod], fout_R[2][kControlPeriod];
 
     auto route = [&] (int dest, bool env1, const float* a, const float* b)
@@ -692,11 +718,13 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
             std::fill (oscR[o], oscR[o] + n, 0.0f);
             continue;
         }
-        const float* cross[2];
+        const float* cross[6];
         int c = 0;
         for (int j = 0; j < 3; ++j)
             if (j != o)
                 cross[c++] = oscMono[j];
+        for (int j = 0; j < 4; ++j)
+            cross[2 + j] = extMono[j]; // Noise, Sub, Filter 1, Filter 2: the last chunk (the filters run after the oscillators)
         float w0 = 1.0f, w1 = 1.0f;
         if (lib[o].type() != kOscTypeWavetable || lib[o].libraryRunning())
             lib[o].wavetableWeights (t0, n, w0, w1);
@@ -735,6 +763,8 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
     {
         float sl[kControlPeriod], sr2[kControlPeriod];
         sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate);
+        for (int k = 0; k < n; ++k)
+            extNext[1][k] = 0.5f * (sl[k] + sr2[k]);
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
         route (subCh.dest, subCh.env1, sl, sr2);
     }
@@ -743,6 +773,18 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         float nl[kControlPeriod], nr[kControlPeriod];
         float gl2, gr2;
         panGains (noisePan, gl2, gr2);
+        if (noiseUseSample)
+        {
+            noiseSv.process (nl, nr, n);
+            for (int k = 0; k < n; ++k)
+            {
+                const float t = static_cast<float> (t0 + k + 1) * invP;
+                const float g = lerp (noiseGainPrev, noiseGain, t);
+                nl[k] *= g * 2.0f * gl2; // the sample voice's own centre pan law (-3 dB) is undone
+                nr[k] *= g * 2.0f * gr2;
+            }
+        }
+        else
         for (int k = 0; k < n; ++k)
         {
             const float t = static_cast<float> (t0 + k + 1) * invP;
@@ -752,6 +794,8 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
             nl[k] = a * g * 1.41421356f * gl2;
             nr[k] = b * g * 1.41421356f * gr2;
         }
+        for (int k = 0; k < n; ++k)
+            extNext[0][k] = 0.5f * (nl[k] + nr[k]);
         srcLevel[3] = 0.5f * (nl[n - 1] + nr[n - 1]);
         route (noiseCh.dest, noiseCh.env1, nl, nr);
     }
@@ -773,6 +817,8 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
             fout_L[f][k] *= g;
             fout_R[f][k] *= g;
         }
+        for (int k = 0; k < n; ++k)
+            extNext[2 + f][k] = 0.5f * (fout_L[f][k] + fout_R[f][k]);
         srcLevel[5 + f] = 0.5f * (fout_L[f][n - 1] + fout_R[f][n - 1]);
     };
     auto toMain = [&] (int f, bool suppress)
@@ -817,6 +863,11 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         toMain (1, false);
     }
 
+    for (int j = 0; j < 4; ++j)
+    {
+        std::copy (extNext[j], extNext[j] + n, extMono[j]);
+        std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
+    }
     // ---- amplitude, velocity, declick, fade
     float lastL = 0.0f, lastR = 0.0f;
     for (int k = 0; k < n; ++k)

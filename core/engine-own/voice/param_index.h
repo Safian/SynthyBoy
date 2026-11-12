@@ -26,6 +26,7 @@ struct SubIdx
 struct NoiseIdx
 {
     int on, level, pan, destination, env1, sample, stereo, keytrack, pitch, fine;
+    int type, phase, randomPhase, loop, bounce;
 };
 
 struct FilterIdx

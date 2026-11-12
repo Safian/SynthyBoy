@@ -42,7 +42,7 @@ namespace own
     X (pPhaseLock, "spec.phase_lock") X (pTransients, "spec.transients") \
     X (mOverride, "multi.override") X (mDelay, "multi.delay") X (mAttack, "multi.attack") X (mHold, "multi.hold") X (mDecay, "multi.decay") \
     X (mSustain, "multi.sustain") X (mRelease, "multi.release") X (mVelTrack, "multi.vel_track") X (mVelOverride, "multi.vel_override") X (mTimbre, "multi.timbre") \
-    X (morphType, "morph.type") X (morphAmount, "morph.amount") X (morphSpread, "morph.spread") X (smooth, "smooth_interp") X (phase, "phase") X (randomPhase, "random_phase") X (remapSlot, "remap.slot") X (ratioSrc, "ratio_src") X (pitchMode, "pitch_mode")
+    X (morphType, "morph.type") X (morphAmount, "morph.amount") X (morphSpread, "morph.spread") X (smooth, "smooth_interp") X (fltUse, "spec.flt_use") X (fltTable, "spec.flt_table") X (fltFrame, "spec.flt_frame") X (phase, "phase") X (randomPhase, "random_phase") X (remapSlot, "remap.slot") X (ratioSrc, "ratio_src") X (pitchMode, "pitch_mode")
 
 enum LibKey : int
 {
@@ -116,6 +116,9 @@ public:
     /** Renders samples t0 .. t0 + n - 1 of the period into L / R (overwritten). `cross` = the signals of the other two oscillators (may be null). */
     void render (int t0, int n, float* L, float* R, const float* const* cross) noexcept;
     float pitchTap() const noexcept { return tapSemis; }
+    /** The first zone and the key of the last note of the multisample type (-1 before one was played): the read-out of the display. */
+    int lastZone() const noexcept { return lastZone_; }
+    int lastKey() const noexcept { return lastKey_; }
 
 private:
     struct Unison
@@ -154,7 +157,9 @@ private:
     std::vector<spectral::SpectralVoice> specVoices;
     spectral::SpectralParams specParams;
     std::vector<float> filterGain;
-    float lastCut = 1.0e9f, lastMix = 1.0e9f;
+    float lastCut = 1.0e9f, lastMix = 1.0e9f, lastFltPos = -1.0f;
+    int lastFltTable = -1;
+    float fltX[257], fltY[257];
     int lastFilterOsc = -1;
     // Multisample
     struct Layer
@@ -166,6 +171,7 @@ private:
     int layerCount[kSlots] = {};
     int heldZones[kSlots] = {};
     int numHeld = 0;
+    int lastZone_ = -1, lastKey_ = -1;
     int noteVelocity127 = 100;
     std::vector<float> tmpL, tmpR, mixL, mixR, modBuf, rateBuf;
 };

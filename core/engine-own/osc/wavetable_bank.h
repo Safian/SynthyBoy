@@ -13,9 +13,9 @@ namespace synthyboy
 namespace own
 {
 /** One wavetable: `numFrames` single cycles, each stored as kNumLevels band-limited copies (mip levels). Level m keeps the harmonics
-    1 .. maxHarmonics (m): octave steps from 1024 harmonics (level 0) down to 1. Memory: a level is stored with only as many samples as its band needs
-    (level 0 and 1: 2048, then 1024, 512 ... 16: four times its highest harmonic, so the 4 point interpolation stays more accurate than at level 0) - the eleven
-    levels cost 3.0 times one cycle instead of 11 (the eight 64 frame tables of the bank: 12 MB instead of 46 MB, measured by `own_wavetable_memory`).
+    1 .. maxHarmonics (m): half octave steps from 1024 harmonics (level 0) down to 1. Memory: a level is stored with only as many samples as its band needs
+    (twice its highest harmonic, at most 2048, at least 16: the 4 point interpolation keeps the 2x oversampling of level 0) - the 21 levels cost 4.0 times one cycle
+    instead of 21 (the eight 64 frame tables of the bank: 21 MB instead of 46 MB with only the octave levels, measured by `own_wavetable_bank_memory`).
     A cycle is stored with one guard sample in front and two behind (the 4 point interpolation never wraps: indices -1 .. size (level) + 2 are valid).
     The spectrum of every frame (cosine / sine coefficients, harmonics 1 .. 1023) is kept too: the spectral morph rebuilds a cycle from it.
     Immutable after construction: shared by all voices and engines. */
@@ -23,11 +23,11 @@ class Wavetable
 {
 public:
     static constexpr int kCycle = 2048;
-    static constexpr int kNumLevels = 11;
+    static constexpr int kNumLevels = 21; // half octave steps: 1024 harmonics (level 0) down to 1
     static constexpr int kHarmonics = kCycle / 2; // spectrum arrays are indexed 0 .. kHarmonics - 1 (0 unused)
 
     /** Samples per cycle of a level (power of two). */
-    static int size (int level) noexcept { return level <= 1 ? kCycle : std::max (16, (2 * kCycle) >> level); }
+    static int size (int level) noexcept;
 
     int numFrames() const noexcept { return frames; }
 
@@ -47,8 +47,8 @@ public:
     size_t memoryBytes() const noexcept { return (data.size() + spec.size()) * sizeof (float); }
 
     /** Builds a table from per frame harmonic spectra: sine[h] and cosine[h] coefficients (h = 1 .. 1024) of  sum a_h cos (h t) + b_h sin (h t),
-        every frame normalised to a peak of 1. */
-    void build (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff);
+        every frame normalised to a peak of 1 when `normalizePeak` (the built-in tables; user tables keep their level: the bake of Render OSC Warp relies on it). */
+    void build (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff, bool normalizePeak = true);
 
 private:
     int frames = 0;

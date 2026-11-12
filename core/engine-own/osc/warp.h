@@ -21,9 +21,23 @@ enum WarpType : int
     kWarpFmTzA = 41, kWarpFmTzB, kWarpFmExpA, kWarpFmExpB, kWarpFmLinA, kWarpFmLinB, kWarpPdA, kWarpPdB, kWarpPdSelf, kWarpAmA, kWarpAmB
 };
 
-/** True if the mode needs the signal of another oscillator (its index in the cross list: 0 = first other oscillator, 1 = second). */
+/** The warp list entries 52 .. 75 (FM Thru-Zero / Exp / Linear, PD, AM, RM from the Noise, the Sub, Filter 1 and Filter 2) behave as the entries of the same family
+    with another modulator: group = (type - 52) / 4, source = (type - 52) % 4. */
+inline int warpFamily (int type) noexcept
+{
+    if (type >= 52 && type <= 75)
+    {
+        static const int kFamily[6] = { kWarpFmTzA, kWarpFmExpA, kWarpFmLinA, kWarpPdA, kWarpAmA, kWarpRmA };
+        return kFamily[(type - 52) / 4];
+    }
+    return type;
+}
+
+/** The modulator of a warp in the cross list: 0 = first other oscillator, 1 = second, 2 = Noise, 3 = Sub, 4 = Filter 1, 5 = Filter 2; -1 = none. */
 inline int warpCrossSource (int type) noexcept
 {
+    if (type >= 52 && type <= 75)
+        return 2 + (type - 52) % 4;
     switch (type)
     {
         case kWarpFmA: case kWarpRmA: case kWarpFmTzA: case kWarpFmExpA: case kWarpFmLinA: case kWarpPdA: case kWarpAmA: return 0;

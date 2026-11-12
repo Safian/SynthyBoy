@@ -167,6 +167,11 @@ void LibOsc::wavetableWeights (int /*t0*/, int n, float& w0, float& w1) const no
 void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* content, int oscIndex) noexcept
 {
     tick = t;
+    for (int s = 0; s < 2; ++s)
+    {
+        tick.warpSrc[s] = warpCrossSource (t.warp[s]);
+        tick.warp[s] = warpFamily (t.warp[s]);
+    }
     lp = p;
     oscIdx = oscIndex;
     if (boundSet != content)
@@ -408,11 +413,47 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
             s.external[0] = s.external[1] = s.external[2] = nullptr;
         }
         s.gain = 1.0f;
-        // the drawn filter mask
-        const std::vector<float>& fx = content != nullptr ? content->specFilterX[oscIndex] : filterGain;
-        if (content != nullptr && !fx.empty() && haveSample)
+        // the spectral filter: a wavetable frame (flt_use) or the drawn mask
+        const float cut = std::clamp (v[lk_pCut] * 0.01f, -1.0f, 1.0f), mix = clamp01 (v[lk_pMix] * 0.01f);
+        const Wavetable* fwt = nullptr;
+        int fltTableChoice = -1;
+        if (v[lk_fltUse] >= 0.5f && haveSample)
         {
-            const float cut = std::clamp (v[lk_pCut] * 0.01f, -1.0f, 1.0f), mix = clamp01 (v[lk_pMix] * 0.01f);
+            fltTableChoice = std::clamp (static_cast<int> (v[lk_fltTable] + 0.5f), 0, kNumWavetableChoices - 1);
+            fwt = fltTableChoice == kWavetablePresetTable ? (content != nullptr ? content->userTable[oscIndex].get() : nullptr) : builtinWavetable (fltTableChoice);
+        }
+        if (fwt != nullptr)
+        {
+            const float pos = std::round (clamp01 (v[lk_fltFrame] * 0.01f) * static_cast<float> (std::max (fwt->numFrames() - 1, 0)) * 256.0f) / 256.0f;
+            if (pos != lastFltPos || fltTableChoice != lastFltTable || cut != lastCut || mix != lastMix || lastFilterOsc != -2 - oscIndex)
+            {
+                const int f0 = std::min (static_cast<int> (pos), std::max (fwt->numFrames() - 2, 0));
+                const float u = fwt->numFrames() > 1 ? pos - static_cast<float> (f0) : 0.0f;
+                const float* a = fwt->cycle (f0, 0);
+                const float* b = u > 0.0f ? fwt->cycle (f0 + 1, 0) : nullptr;
+                for (int j = 0; j < 257; ++j)
+                {
+                    float sum = 0.0f;
+                    for (int k = -4; k < 4; ++k)
+                    {
+                        const int idx = (j * 8 + k + Wavetable::kCycle) % Wavetable::kCycle;
+                        sum += b != nullptr ? lerp (a[idx], b[idx], u) : a[idx];
+                    }
+                    fltX[j] = static_cast<float> (j) / 256.0f;
+                    fltY[j] = clamp01 ((sum * 0.125f + 1.0f) * 0.5f);
+                }
+                spectral::buildFilterGains (filterGain.data(), fltX, fltY, 257, cut, mix, smp->analysis.fileRate() / spectral::kFftSize);
+                lastFltPos = pos;
+                lastFltTable = fltTableChoice;
+                lastCut = cut;
+                lastMix = mix;
+                lastFilterOsc = -2 - oscIndex;
+            }
+            s.filterGain = filterGain.data();
+        }
+        else if (content != nullptr && !content->specFilterX[oscIndex].empty() && haveSample)
+        {
+            const std::vector<float>& fx = content->specFilterX[oscIndex];
             if (cut != lastCut || mix != lastMix || lastFilterOsc != oscIndex)
             {
                 spectral::buildFilterGains (filterGain.data(), fx.data(), content->specFilterY[oscIndex].data(), static_cast<int> (fx.size()), cut, mix,
@@ -420,6 +461,7 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
                 lastCut = cut;
                 lastMix = mix;
                 lastFilterOsc = oscIndex;
+                lastFltTable = -1;
             }
             s.filterGain = filterGain.data();
         }
@@ -521,6 +563,11 @@ void LibOsc::beginType (int type) noexcept
         env.sustain = clamp01 (v[lk_mSustain] * 0.01f);
         env.release = v[lk_mRelease] * 0.001f;
         const float velTrack = v[lk_mVelOverride] >= 0.5f ? v[lk_mVelTrack] : -1.0f;
+        if (numHeld > 0)
+        {
+            lastZone_ = zones[0];
+            lastKey_ = lp.key;
+        }
         for (int h = 0; h < numHeld; ++h)
         {
             heldZones[h] = zones[h];
@@ -570,9 +617,9 @@ void LibOsc::noteOff (bool loopExit) noexcept
     }
 }
 
-float LibOsc::modulator (int warpType, int /*slot*/, const float* const* cross, int k, float& m) const noexcept
+float LibOsc::modulator (int /*warpType*/, int slot, const float* const* cross, int k, float& m) const noexcept
 {
-    const int cs = warpCrossSource (warpType);
+    const int cs = tick.warpSrc[slot];
     m = cs >= 0 && cross != nullptr && cross[cs] != nullptr ? cross[cs][k] : 0.0f;
     return m;
 }

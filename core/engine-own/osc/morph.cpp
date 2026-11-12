@@ -96,6 +96,7 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
         sc_c[i] = b != nullptr ? lerp (a[i], b[i], u) : a[i];
         sc_s[i] = b != nullptr ? lerp (a[kH + i], b[kH + i], u) : a[kH + i];
     }
+    const float dc = sc_c[0];
     sc_c[0] = sc_s[0] = 0.0f;
     sc_c[kH] = sc_s[kH] = sc_c[kH + 1] = sc_s[kH + 1] = 0.0f;
     const int K = std::clamp (maxHarmonic, 0, kH - 1);
@@ -281,6 +282,7 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
                 put (i, sc_c[i], sc_s[i]);
             break;
     }
+    sc.re[0] = dc; // the mean of the frame is kept by every morph type
     inverseFft (sc.re, sc.im);
     float* dst = out;
     for (int i = 0; i < kN; ++i)

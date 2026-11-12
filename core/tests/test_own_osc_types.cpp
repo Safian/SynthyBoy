@@ -12,7 +12,10 @@
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
+#include "synthyboy/offline_render.h"
+#include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
+#include "synthyboy/wave_convert.h"
 #include "test_runner.h"
 #include "test_util.h"
 
@@ -379,4 +382,87 @@ TEST (own_wavetable_bank_memory)
     const size_t bytes = own::builtinBankBytes();
     std::printf ("    built-in wavetable bank: %.1f MB (the eight 64 frame tables with all mip levels and spectra)\n", static_cast<double>(bytes) / 1048576.0);
     CHECK (bytes < 24u * 1024u * 1024u);
+}
+
+// Render OSC Warp bakes the warp of the oscillator into a 256 frame table; the table played at the same warp position sounds like the warp
+TEST (own_render_osc_warp_bake_matches_the_live_warp)
+{
+    ParamValues vals = ParamValues::defaults();
+    auto setv = [&] (const char* key, float v)
+    {
+        const ParamInfo* p = findParamByKey (key);
+        CHECK (p != nullptr);
+        if (p != nullptr)
+            vals.plain[static_cast<size_t> (findParamIndex (p->id))] = v;
+    };
+    setv ("osc1.warp.type", 1.0f);
+    setv ("osc1.warp.amount", 40.0f);
+    setv ("filter1.on", 0.0f);
+    convert::OfflineRunner run = [] (const OfflineRequest& r, OfflineAudio& a)
+    {
+        auto twin = createOwnEngine();
+        return runOfflineRequest (*twin, r, a);
+    };
+    wtedit::Wavetable table;
+    convert::WarpRenderOptions opt;
+    std::string err;
+    float scale = 1.0f;
+    CHECK (convert::renderOscWarp (run, &vals, opt, "bake", table, &err, &scale));
+    CHECK_EQ (static_cast<int> (table.numFrames()), 256);
+    // the live warp at 40 %
+    auto live = createOwnEngine();
+    live->prepare (kSr, 256, qualityForTier (Tier::high));
+    auto render = [] (IEngine& e)
+    {
+        std::vector<float> l (48000), rr (48000);
+        Event ev[1] = { sbtest::noteOn (0, 57, 1.0f) };
+        e.process (ev, 1, l.data(), rr.data(), 256);
+        e.process (nullptr, 0, l.data() + 256, rr.data() + 256, 48000 - 256);
+        return l;
+    };
+    for (const char* k : { "filter1.on", "master.volume", "osc1.random_phase", "osc1.level" })
+        set (*live, k, std::string (k) == "osc1.level" ? 100.0f : 0.0f);
+    set (*live, "osc1.warp.type", 1.0f);
+    set (*live, "osc1.warp.amount", 40.0f);
+    const auto ref = render (*live);
+    auto baked = createOwnEngine();
+    baked->prepare (kSr, 256, qualityForTier (Tier::high));
+    for (const char* k : { "filter1.on", "master.volume", "osc1.random_phase", "osc1.level" })
+        set (*baked, k, std::string (k) == "osc1.level" ? 100.0f : 0.0f);
+    std::vector<uint8_t> bytes;
+    {
+        std::vector<float> all;
+        for (size_t f = 0; f < table.numFrames(); ++f)
+            all.insert (all.end(), table.getFrame (f).data.begin(), table.getFrame (f).data.end());
+        bytes = encodeWav (all.data(), nullptr, all.size(), 44100, 16);
+    }
+    MemoryContentStore store;
+    store.add ("t", "b.wav", bytes);
+    StateContent c;
+    ContentFileRef ref2;
+    ref2.pack = "t";
+    ref2.file = "b.wav";
+    attachWavetable (c, 1, ref2, "x", 256);
+    baked->setContentStore (&store);
+    baked->setContent (c);
+    set (*baked, "osc1.wavetable", 13.0f);
+    set (*baked, "osc1.frame", 40.0f);
+    set (*baked, "osc1.level", 100.0f);
+    const auto bk = render (*baked);
+    double worst = 0.0;
+    for (int k = 1; k <= 24; ++k)
+    {
+        const double a = db (lineAmplitude (ref, 9600, 38400, 220.0 * k)), b = db (lineAmplitude (bk, 9600, 38400, 220.0 * k));
+        if (a > -30.0)
+            worst = std::max (worst, std::fabs (a - b));
+        if (k <= 24)
+            std::printf ("    h%d live %.2f baked %.2f\n", k, a, b);
+    }
+    {
+        double rl = 0, rb = 0;
+        for (size_t i = 9600; i < 38400; ++i) { rl += ref[i] * ref[i]; rb += bk[i] * bk[i]; }
+        std::printf ("    live peak %.4f rms %.4f | baked peak %.4f rms %.4f\n", peakOf (ref, 9600, 38400), std::sqrt (rl / 28800), peakOf (bk, 9600, 38400), std::sqrt (rb / 28800));
+    }
+    std::printf ("    bake vs live warp: worst difference %.3f dB, scale %.4f\n", worst, scale);
+    CHECK (worst < 0.1);
 }

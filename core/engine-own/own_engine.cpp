@@ -33,13 +33,18 @@ inline float outputLimit (float y) noexcept
 }
 } // namespace
 
-OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable")))
+OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x")))
 {
     const auto* table = paramTable();
     for (size_t i = 0; i < kMaxParams; ++i)
         params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
     for (auto& k : switchKeyAtomic)
         k.store (-1, std::memory_order_relaxed);
+    for (int o = 0; o < 3; ++o)
+    {
+        multiZone[o].store (-1, std::memory_order_relaxed);
+        multiKey[o].store (-1, std::memory_order_relaxed);
+    }
     spectralScratch = std::make_unique<spectral::Scratch>();
     publishContent (ContentSet::build (StateContent {}, nullptr));
 }
@@ -305,6 +310,12 @@ void OwnEngine::noteOn (const Event& e) noexcept
         return;
     chosen->start (ns, chosen->lastL(), chosen->lastR());
     chosen->tick (globals, static_cast<int> (std::find_if (voices.begin(), voices.end(), [&] (const auto& p) { return p.get() == chosen; }) - voices.begin()));
+    for (int o = 0; o < 3; ++o)
+        if (chosen->multisampleZone (o) >= 0)
+        {
+            multiZone[o].store (chosen->multisampleZone (o), std::memory_order_relaxed);
+            multiKey[o].store (chosen->multisampleKey (o), std::memory_order_relaxed);
+        }
     lastNoteSemis = static_cast<float> (e.key);
     haveLastNote = true;
     ++heldKeys;
@@ -536,6 +547,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         switchKeySnap[o] = switchKeyAtomic[o].load (std::memory_order_relaxed);
     globals.switchKey = switchKeySnap;
     globals.quality = qualityTier.load (std::memory_order_relaxed);
+    globals.oversample = ultraRender.load (std::memory_order_relaxed) || (fxOversampleIndex >= 0 && base[static_cast<size_t> (fxOversampleIndex)] >= 0.5f);
     globals.spectralScratch = spectralScratch.get();
 
     if (voiceCap.load (std::memory_order_relaxed) < kMaxVoices)
@@ -592,6 +604,20 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     for (const auto& v : voices)
         count += v->isActive() ? 1 : 0;
     activeCount.store (count, std::memory_order_relaxed);
+    blockCounter.fetch_add (1, std::memory_order_relaxed);
+}
+
+bool OwnEngine::copyReadout (LiveValues& out) const noexcept
+{
+    // the part of the read-out that belongs to the sample-type oscillators (zone and key of the last multisample note); the sources, LFO phases and envelope stages are filled by the live bus of the engine
+    out.block = blockCounter.load (std::memory_order_relaxed);
+    out.activeVoices = activeCount.load (std::memory_order_relaxed);
+    for (int o = 0; o < 3; ++o)
+    {
+        out.multisampleZone[o] = multiZone[o].load (std::memory_order_relaxed);
+        out.multisampleKey[o] = multiKey[o].load (std::memory_order_relaxed);
+    }
+    return true;
 }
 } // namespace own
 } // namespace synthyboy
