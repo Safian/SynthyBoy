@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../dsp/util.h"
+#include "synthyboy/shapes/shape.h"
 
 namespace synthyboy
 {
@@ -160,11 +161,71 @@ float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, flo
     (void) info;
 }
 
+namespace
+{
+/** The node of the dependency graph that owns a destination key (a modulator or the amount of a slot), -1 if the key is not a modulator. */
+int ownerNode (const ParamInfo& info) noexcept
+{
+    const char* k = info.key;
+    auto num = [&] (const char* prefix, int digits) -> int
+    {
+        const size_t n = std::strlen (prefix);
+        if (std::strncmp (k, prefix, n) != 0)
+            return -1;
+        int v = 0, d = 0;
+        for (const char* q = k + n; *q >= '0' && *q <= '9'; ++q, ++d)
+            v = v * 10 + (*q - '0');
+        return d > 0 && d <= digits ? v : -1;
+    };
+    int n;
+    if (std::strncmp (k, "rlfo", 4) == 0 && (n = num ("rlfo", 1)) >= 1 && n <= 4)
+        return srcRlfo (n - 1);
+    if (std::strncmp (k, "lfo", 3) == 0 && (n = num ("lfo", 2)) >= 1 && n <= 10)
+        return srcLfo (n - 1);
+    if (std::strncmp (k, "env", 3) == 0 && (n = num ("env", 1)) >= 1 && n <= 6)
+        return srcEnv (n - 1);
+    if (std::strncmp (k, "macro.", 6) == 0 && (n = num ("macro.", 1)) >= 1 && n <= 8)
+        return srcMacro (n - 1);
+    if (std::strncmp (k, "mod", 3) == 0 && endsWith (k, ".amount") && (n = num ("mod", 2)) >= 1 && n <= 64)
+        return 100 + n - 1;
+    return -1;
+}
+
+/** True if `to` can be reached from `from` along the edges (source -> dependent). */
+bool reaches (const std::vector<std::vector<int>>& adj, int from, int to) noexcept
+{
+    if (from == to)
+        return true;
+    bool seen[200] = {};
+    int stack[200], sp = 0;
+    stack[sp++] = from;
+    seen[from] = true;
+    while (sp > 0)
+    {
+        const int u = stack[--sp];
+        for (int v : adj[static_cast<size_t> (u)])
+            if (!seen[v])
+            {
+                if (v == to)
+                    return true;
+                seen[v] = true;
+                stack[sp++] = v;
+            }
+    }
+    return false;
+}
+} // namespace
+
 void ModMatrix::compile (const float* base) noexcept
 {
     const ParamIndex& pi = paramIndex();
     const ParamInfo* table = paramTable();
     count = 0;
+    static thread_local std::vector<std::vector<int>> adj;
+    if (adj.size() != 200)
+        adj.assign (200, std::vector<int>());
+    for (auto& a : adj)
+        a.clear();
     for (int s = 0; s < kNumModSlots; ++s)
     {
         const ModSlotParams& sp = pi.slot[s];
@@ -177,55 +238,159 @@ void ModMatrix::compile (const float* base) noexcept
         const int dest = modDestinationParamIndex (static_cast<size_t> (dstChoice));
         if (dest < 0)
             continue;
+        const int aux = sp.auxSource >= 0 ? std::clamp (static_cast<int> (base[sp.auxSource] + 0.5f), 0, kNumSourceIds - 1) : 0;
+        // a connection that would close a loop is not wired (document 04, 6)
+        const int owner = ownerNode (table[dest]);
+        if (owner >= 0)
+        {
+            const int me = 100 + s;
+            if (reaches (adj, owner, src) || (aux != 0 && reaches (adj, owner, aux)) || owner == me || reaches (adj, owner, me))
+                continue;
+            adj[static_cast<size_t> (src)].push_back (me);
+            if (aux != 0)
+                adj[static_cast<size_t> (aux)].push_back (me);
+            adj[static_cast<size_t> (me)].push_back (owner);
+        }
         CompiledSlot& c = slots[count++];
+        c = CompiledSlot();
+        c.index = s;
         c.source = src;
         c.dest = dest;
         c.amount = std::clamp (base[sp.amount] * 0.01f, -1.0f, 1.0f);
         c.power = sp.power >= 0 ? base[sp.power] : 0.0f;
         c.bipolar = sp.bipolar >= 0 && base[sp.bipolar] >= 0.5f;
         c.stereo = sp.stereo >= 0 && base[sp.stereo] >= 0.5f;
-        c.aux = sp.auxSource >= 0 ? std::clamp (static_cast<int> (base[sp.auxSource] + 0.5f), 0, kNumSourceIds - 1) : 0;
+        c.aux = aux;
         c.auxInv = sp.auxInv >= 0 && base[sp.auxInv] >= 0.5f;
         c.auxPower = sp.auxPower >= 0 ? base[sp.auxPower] : 0.0f;
         c.auxOut = sp.auxOutput >= 0 ? base[sp.auxOutput] * 0.01f : 1.0f;
         c.global = !isVoiceParam (table[dest]);
         c.width = destLawOf (static_cast<size_t> (dest)).width;
+        c.riseMs = sp.rise >= 0 ? base[sp.rise] : 0.0f;
+        c.fallMs = sp.fall >= 0 ? base[sp.fall] : 0.0f;
+        c.delayMs = sp.delay >= 0 ? base[sp.delay] : 0.0f;
+        c.delayBeats = sp.delayBeats >= 0 ? base[sp.delayBeats] : 0.0f;
+        c.delaySync = sp.delaySync >= 0 && base[sp.delaySync] >= 0.5f;
+        if (owner >= 100 && owner < 164)
+        {
+            c.amountDest = true;
+            c.amountSlot = owner - 100;
+        }
+        c.curve = (content != nullptr && content->modCurve[static_cast<size_t> (s)].present) ? &content->modCurve[static_cast<size_t> (s)] : nullptr;
     }
 }
 
-void ModMatrix::evaluate (const float* src, bool global, float* delta, int* touched, int& numTouched, int maxTouched, float* deltaRight) const noexcept
+void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
 {
+    // the amounts of the slots that are modulated by other slots (a slot on `modNN.amount`): first, then everything else
+    float amountDeltaL[kNumModSlots], amountDeltaR[kNumModSlots];
+    bool anyAmountDest = false;
+    for (int i = 0; i < count; ++i)
+        anyAmountDest = anyAmountDest || slots[i].amountDest;
+    if (anyAmountDest)
+        for (int i = 0; i < kNumModSlots; ++i)
+            amountDeltaL[i] = amountDeltaR[i] = 0.0f;
+
+    const float* srcR = ctx.srcR != nullptr ? ctx.srcR : ctx.src;
+    auto one = [&] (const CompiledSlot& c, float amountL, float amountR, float& outL, float& outR)
+    {
+        float xl = clamp01 (ctx.src[c.source]), xr = clamp01 (srcR[c.source]);
+        if (c.curve != nullptr)
+        {
+            auto curved = [&] (float x) { return std::clamp (shapes::ShapeData::evaluateTable (c.curve->table.data(), c.curve->table.size(), x), -1.0f, 1.0f); };
+            xl = curved (xl);
+            xr = curved (xr);
+        }
+        if (ctx.state != nullptr && (c.riseMs > 0.0f || c.fallMs > 0.0f))
+        {
+            SlotState& st = ctx.state[c.index];
+            if (!st.init)
+            {
+                st.heldL = xl;
+                st.heldR = xr;
+                st.init = true;
+            }
+            auto slew = [&] (float held, float x)
+            {
+                const float t = x > held ? c.riseMs : c.fallMs;
+                if (!(t > 0.0f))
+                    return x;
+                return held + (x - held) * (1.0f - std::exp (-ctx.dt * 2.302585f / (t * 0.001f)));
+            };
+            st.heldL = slew (st.heldL, xl);
+            st.heldR = slew (st.heldR, xr);
+            xl = st.heldL;
+            xr = st.heldR;
+        }
+        auto law = [&] (float x)
+        {
+            if (c.bipolar)
+            {
+                const float y = 2.0f * x - 1.0f;
+                return 0.5f * std::copysign (powerShape (std::fabs (y), -c.power), y); // swings +-0.5 of the full range
+            }
+            return std::copysign (powerShape (std::fabs (x), -c.power), x);
+        };
+        float gate = 1.0f;
+        const float delay = c.delaySync ? c.delayBeats * static_cast<float> (60.0 / std::max (ctx.bpm, 1.0)) : c.delayMs * 0.001f;
+        if (ctx.state != nullptr && delay > 0.0f && ctx.voiceAge < delay)
+            gate = 0.0f;
+        float auxL = 1.0f, auxR = 1.0f;
+        if (c.aux != 0)
+        {
+            auto a = [&] (const float* s)
+            {
+                float v = clamp01 (s[c.aux]);
+                if (c.auxPower != 0.0f)
+                    v = powerShape (v, -c.auxPower);
+                if (c.auxInv)
+                    v = 1.0f - v;
+                return v * c.auxOut;
+            };
+            auxL = a (ctx.src);
+            auxR = a (srcR);
+        }
+        outL = law (xl) * amountL * c.width * auxL * gate;
+        outR = law (xr) * amountR * c.width * auxR * gate;
+        if (c.stereo)
+            outR = -outR; // the stereo flag turns the right lane around (document 04, 3.2)
+    };
+    if (anyAmountDest)
+        for (int i = 0; i < count; ++i)
+        {
+            const CompiledSlot& c = slots[i];
+            if (!c.amountDest || c.amount == 0.0f)
+                continue;
+            float dl, dr;
+            one (c, c.amount, c.amount, dl, dr);
+            // the control domain of an amount is the fraction (width 2): the sum is added to the amount of the target
+            amountDeltaL[c.amountSlot] += dl;
+            amountDeltaR[c.amountSlot] += dr;
+        }
     for (int i = 0; i < count; ++i)
     {
         const CompiledSlot& c = slots[i];
-        if (c.global != global || c.amount == 0.0f)
+        if (c.amountDest)
             continue;
-        const float x = clamp01 (src[c.source]);
-        float v;
-        if (c.bipolar)
-        {
-            const float y = 2.0f * x - 1.0f;
-            v = 0.5f * std::copysign (powerShape (std::fabs (y), -c.power), y); // swings +-0.5 of the full range
-        }
-        else
-            v = powerShape (x, -c.power);
-        float d = v * c.amount * c.width;
-        if (c.aux != 0)
-        {
-            float a = clamp01 (src[c.aux]);
-            if (c.auxPower != 0.0f)
-                a = powerShape (a, -c.auxPower);
-            if (c.auxInv)
-                a = 1.0f - a;
-            d *= a * c.auxOut;
-        }
-        if (d == 0.0f)
+        if (c.global != ctx.global)
             continue;
-        if (delta[c.dest] == 0.0f && numTouched < maxTouched)
-            touched[numTouched++] = c.dest;
-        delta[c.dest] += d;
-        if (deltaRight != nullptr)
-            deltaRight[c.dest] += c.stereo ? -d : d; // the stereo flag turns the right lane around (document 04, 3.2)
+        float amL = c.amount, amR = c.amount;
+        if (anyAmountDest)
+        {
+            amL = std::clamp (amL + amountDeltaL[c.index], -1.0f, 1.0f);
+            amR = std::clamp (amR + amountDeltaR[c.index], -1.0f, 1.0f);
+        }
+        if (amL == 0.0f && amR == 0.0f)
+            continue;
+        float dl, dr;
+        one (c, amL, amR, dl, dr);
+        if (dl == 0.0f && dr == 0.0f)
+            continue;
+        if (ctx.delta[c.dest] == 0.0f && (ctx.deltaRight == nullptr || ctx.deltaRight[c.dest] == 0.0f) && *ctx.numTouched < ctx.maxTouched)
+            ctx.touched[(*ctx.numTouched)++] = c.dest;
+        ctx.delta[c.dest] += dl;
+        if (ctx.deltaRight != nullptr)
+            ctx.deltaRight[c.dest] += dr;
     }
 }
 } // namespace own

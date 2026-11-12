@@ -70,7 +70,7 @@ ParamIndex build()
 #define K(field, key) l.field = find ("lfo%d." key, n)
         K (shape, "shape"); K (rate, "rate"); K (sync, "sync"); K (division, "division"); K (syncType, "sync_type"); K (phase, "phase");
         K (fadeIn, "fade_in"); K (delay, "delay"); K (smooth, "smooth"); K (smoothTime, "smooth_time"); K (stereo, "stereo");
-        K (keyTranspose, "keytrack_transpose"); K (keyTune, "keytrack_tune"); K (mono, "mono"); K (direction, "direction");
+        K (keyTranspose, "keytrack_transpose"); K (keyTune, "keytrack_tune"); K (mono, "mono"); K (direction, "direction"); K (host, "host"); K (swing, "swing");
 #undef K
     }
     for (int n = 1; n <= 4; ++n)

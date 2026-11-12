@@ -118,6 +118,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     sustainPending.assign (static_cast<size_t> (kPoolVoices), static_cast<uint8_t> (0));
     base.assign (paramCount(), 0.0f);
     gdelta.assign (paramCount(), 0.0f);
+    gdeltaR.assign (paramCount(), 0.0f);
     gtouched.assign (static_cast<size_t> (kNumModSlots), 0);
     fx.prepare (sampleRate, maxBlockFrames);
     smoothedGain.reset (sampleRate, 0.02);
@@ -150,7 +151,10 @@ void OwnEngine::reset()
         rlfoValue[i] = 0.0f;
     }
     for (int i = 0; i < gnumTouched; ++i)
+    {
         gdelta[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
+        gdeltaR[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
+    }
     gnumTouched = 0;
     smoothedGain.setCurrentAndTarget (dbToGain (readParam (kParamMasterVolume)) * (readParam (kParamMasterVolume) > -60.0f ? 1.0f : 0.0f));
     activeCount.store (0, std::memory_order_relaxed);
@@ -331,6 +335,15 @@ void OwnEngine::noteOn (const Event& e) noexcept
     if (!(tunedNotes[n.key] == tunedNotes[n.key]))
         return; // the tuning does not map this key
     const int sameNote = static_cast<int> (base[static_cast<size_t> (mi.sameNote)] + 0.5f);
+    {
+        // a note on while no key and no pedal is down starts a new group: the mono LFOs restart (document 03, 3.7)
+        bool anyDown = numPressed > 0;
+        for (int c = 0; c < numChannels && !anyDown; ++c)
+            anyDown = sustainDown[c];
+        if (!anyDown)
+            for (int l = 0; l < 10; ++l)
+                monoCore[l].restart();
+    }
 
     // a key that is already held
     for (auto& v : voices)
@@ -529,32 +542,28 @@ void OwnEngine::controlTick() noexcept
     const float fdt = static_cast<float> (dt);
     const ParamIndex& pi = paramIndex();
     globals.songBeats += globals.playing ? dt * globals.bpm / 60.0 : 0.0;
-    // global LFO phases (free running; the voices read them for the free-run / mono LFOs)
+    // global LFO phases (free running; the voices read them for the free-run LFOs) and the shared instance of the mono LFOs
+    bool anyDown = numPressed > 0;
+    for (int c = 0; c < numChannels && !anyDown; ++c)
+        anyDown = sustainDown[c];
     for (int l = 0; l < 10; ++l)
     {
         const LfoIdx& li = pi.lfo[l];
         const int sync = static_cast<int> (base[static_cast<size_t> (li.sync)] + 0.5f);
-        float rate = base[static_cast<size_t> (li.rate)];
-        if (sync >= 1 && sync <= 3)
-        {
-            static const float beats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 0.0625f };
-            const float b = beats[std::clamp (static_cast<int> (base[static_cast<size_t> (li.division)] + 0.5f), 0, 12)];
-            rate = b > 0.0f ? static_cast<float> (globals.bpm / 60.0) / b * (sync == 2 ? 1.0f / 1.5f : (sync == 3 ? 1.5f : 1.0f)) : 0.0f;
-        }
+        const float rate = lfoRateHz (sync, base[static_cast<size_t> (li.rate)], static_cast<int> (base[static_cast<size_t> (li.division)] + 0.5f), globals.bpm, 440.0f, lastNoteSemis,
+                                      base[static_cast<size_t> (li.keyTranspose)], base[static_cast<size_t> (li.keyTune)]);
         lfoPhase[l] += rate * fdt;
         lfoPhase[l] -= std::floor (lfoPhase[l]);
+        const int syncType = static_cast<int> (base[static_cast<size_t> (li.syncType)] + 0.5f);
+        if (syncType >= 2 && li.mono >= 0 && base[static_cast<size_t> (li.mono)] >= 0.5f)
+            monoCore[l].advance (syncType, base[static_cast<size_t> (li.phase)] * (1.0f / 360.0f), rate, base[static_cast<size_t> (li.delay)] * 0.001f, fdt, anyDown);
     }
     for (int r = 0; r < 4; ++r)
     {
         const RlfoIdx& ri = pi.rlfo[r];
-        float rate = base[static_cast<size_t> (ri.rate)];
         const int sync = static_cast<int> (base[static_cast<size_t> (ri.sync)] + 0.5f);
-        if (sync >= 1 && sync <= 3)
-        {
-            static const float beats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 0.0625f };
-            const float b = beats[std::clamp (static_cast<int> (base[static_cast<size_t> (ri.division)] + 0.5f), 0, 12)];
-            rate = b > 0.0f ? static_cast<float> (globals.bpm / 60.0) / b * (sync == 2 ? 1.0f / 1.5f : (sync == 3 ? 1.5f : 1.0f)) : 0.0f;
-        }
+        const float rate = lfoRateHz (sync, base[static_cast<size_t> (ri.rate)], static_cast<int> (base[static_cast<size_t> (ri.division)] + 0.5f), globals.bpm, 440.0f, lastNoteSemis,
+                                      base[static_cast<size_t> (ri.keyTranspose)], base[static_cast<size_t> (ri.keyTune)]);
         rlfoValue[r] = rlfo[r].advance (static_cast<int> (base[static_cast<size_t> (ri.style)] + 0.5f), rate * fdt);
     }
     killExcess();
@@ -569,7 +578,10 @@ void OwnEngine::controlTick() noexcept
             voices[i]->tick (globals, static_cast<int> (i));
     // the global modulation (sources that do not belong to a voice) of the global parameters
     for (int i = 0; i < gnumTouched; ++i)
+    {
         gdelta[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
+        gdeltaR[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
+    }
     gnumTouched = 0;
     float gsrc[kNumSourceIds] = {};
     const Voice* newest = nullptr; // a voice source on a global destination reads the most recently started active voice (document 04, 3.1)
@@ -601,7 +613,19 @@ void OwnEngine::controlTick() noexcept
     gsrc[kSrcNote] = lastNoteSemis * (1.0f / 127.0f);
     gsrc[kSrcActiveVoices] = static_cast<float> (activeCount.load (std::memory_order_relaxed)) * (1.0f / 32.0f);
     gsrc[kSrcFixed] = 1.0f;
-    matrix.evaluate (newest != nullptr ? newest->sourceValues() : gsrc, true, gdelta.data(), gtouched.data(), gnumTouched, kNumModSlots);
+    {
+        EvalContext ctx;
+        ctx.src = newest != nullptr ? newest->sourceValues() : gsrc;
+        ctx.global = true;
+        ctx.delta = gdelta.data();
+        ctx.deltaRight = gdeltaR.data();
+        ctx.touched = gtouched.data();
+        ctx.numTouched = &gnumTouched;
+        ctx.maxTouched = kNumModSlots;
+        ctx.dt = fdt;
+        ctx.bpm = globals.bpm;
+        matrix.evaluate (ctx);
+    }
 
 }
 
@@ -629,10 +653,15 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     // ---- block snapshot
     for (size_t i = 0; i < base.size(); ++i)
         base[i] = params[i].load (std::memory_order_relaxed);
+    contentNow = content.get();
+    matrix.setContent (contentNow);
     matrix.compile (base.data());
     const ParamIndex& pi = paramIndex();
     globals.base = base.data();
     globals.matrix = &matrix;
+    globals.content = contentNow;
+    globals.monoCore = monoCore;
+    globals.songSeconds = globals.songBeats * 60.0 / std::max (globals.bpm, 1.0);
     globals.sampleRate = sampleRate;
     globals.bpm = tpBpm.load (std::memory_order_relaxed);
     if (tpPlaying.load (std::memory_order_relaxed))

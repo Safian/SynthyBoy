@@ -11,7 +11,6 @@ namespace own
 {
 namespace
 {
-constexpr float kDivisionBeats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 0.0625f };
 
 float noiseSample (int colour, float* s, Rng& r, float level) noexcept
 {
@@ -149,16 +148,24 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     for (int i = 0; i < 4; ++i)
     {
         rlfo[i].seed (n.serial * 101u + static_cast<uint32_t> (i) * 13u + 3u);
+        rlfoR[i].seed (n.serial * 211u + static_cast<uint32_t> (i) * 29u + 7u);
         rlfoOut[i] = 0.0f;
     }
-    for (auto& l : lfo)
-        l = LfoState();
+    for (int l = 0; l < 10; ++l)
+    {
+        lfoCore[l].restart();
+        lfoAge[l] = 0.0f;
+        lfoSmoothL[l] = lfoSmoothR[l] = 0.0f;
+    }
     for (auto& g : noiseState)
         for (auto& x : g)
             x = 0.0f;
     for (auto& e : env)
         e.noteOn (0.0f);
     clearMod();
+    for (auto& st : slotState)
+        st = SlotState();
+    voiceAge = 0.0f;
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
@@ -216,74 +223,135 @@ void Voice::kill() noexcept
     lastLevel = 0.0f;
 }
 
-float Voice::lfoValue (int l, const TickGlobals& g) noexcept
+float Voice::customShape (const CompiledShape& cs, float u) noexcept
+{
+    if (!cs.anyMod)
+        return cs.fixed.evaluate (u);
+    // the points move by amount * source (y clamped to 0 .. 1, x between the neighbours, the end points keep x): 13-new-keys.md A45
+    auto srcValue = [&] (int choice)
+    {
+        const float v = src[std::clamp (choice, 0, kNumSourceIds - 1)];
+        const bool bipolar = (choice >= kSrcLfo1 && choice < kSrcLfo1 + 8) || (choice >= kSrcRlfo1 && choice < kSrcRlfo1 + 4) || choice == kSrcLfo9 || choice == kSrcLfo10;
+        return bipolar ? 2.0f * v - 1.0f : v;
+    };
+    scratchShape.numPoints = static_cast<size_t> (cs.num);
+    for (int i = 0; i < cs.num; ++i)
+    {
+        const CompiledPoint& p = cs.points[static_cast<size_t> (i)];
+        shapes::Point q = p.point;
+        if (p.y.source != 0)
+            q.y = clamp01 (q.y + p.y.amount * srcValue (p.y.source));
+        if (p.x.source != 0 && i > 0 && i + 1 < cs.num)
+            q.x = std::clamp (q.x + p.x.amount * srcValue (p.x.source), scratchShape.points[static_cast<size_t> (i - 1)].x, cs.points[static_cast<size_t> (i + 1)].point.x);
+        if (p.curve.source != 0)
+            q.curve = std::clamp (q.curve + 10.0f * p.curve.amount * srcValue (p.curve.source), -20.0f, 20.0f);
+        scratchShape.points[static_cast<size_t> (i)] = q;
+    }
+    return scratchShape.evaluate (u);
+}
+
+float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight) noexcept
 {
     const LfoIdx& li = paramIndex().lfo[l];
-    LfoState& st = lfo[l];
     const float dt = static_cast<float> (kControlPeriod / g.sampleRate);
     const int shape = static_cast<int> (P (li.shape) + 0.5f);
     const int sync = static_cast<int> (P (li.sync) + 0.5f);
-    const int syncType = static_cast<int> (P (li.syncType) + 0.5f);
-    const bool freeRun = syncType == 1 || P (li.mono) >= 0.5f;
-    float rate;
-    float beats = 0.0f;
-    if (sync == 0)
-        rate = P (li.rate);
-    else if (sync == 4) // key follow: the LFO runs at the pitch of the note (transposed)
-    {
-        const float semis = lastSemis + P (li.keyTranspose) + P (li.keyTune) * 0.01f;
-        rate = g.concertA * semitonesToRatio (semis - 69.0f);
-    }
-    else
-    {
-        const int div = std::clamp (static_cast<int> (P (li.division) + 0.5f), 0, 12);
-        beats = kDivisionBeats[div];
-        rate = beats > 0.0f ? static_cast<float> (g.bpm / 60.0) / beats : 0.0f;
-        if (sync == 2)
-            rate /= 1.5f;
-        else if (sync == 3)
-            rate *= 1.5f;
-    }
-    float phaseNow;
-    if (freeRun && g.lfoPhase != nullptr)
-        phaseNow = g.lfoPhase[l];
-    else
-    {
-        st.phase += rate * dt;
-        st.phase -= std::floor (st.phase);
-        phaseNow = st.phase;
-    }
-    st.age += dt;
-    float p = phaseNow + P (li.phase) * (1.0f / 360.0f);
-    p -= std::floor (p);
-    const int dir = static_cast<int> (P (li.direction) + 0.5f);
-    if (dir == 1)
-        p = 1.0f - p;
-    else if (dir == 2)
-        p = p < 0.5f ? p * 2.0f : 2.0f - p * 2.0f;
-    float v = lfoShape (shape, p, noteSerial + static_cast<uint32_t> (l));
-    if (rate <= 0.0f && sync != 0)
-        v = lfoShape (shape, std::fmod (P (li.phase) / 360.0f + 1.0f, 1.0f), noteSerial); // Freeze
-    // delay, fade in
+    const int syncType = std::clamp (static_cast<int> (P (li.syncType) + 0.5f), 0, 5);
+    const float rate = lfoRateHz (sync, P (li.rate), static_cast<int> (P (li.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (li.keyTranspose), P (li.keyTune));
+    const float knob = P (li.phase) * (1.0f / 360.0f);
     const float delay = P (li.delay) * 0.001f, fade = P (li.fadeIn) * 0.001f;
-    float gain = 1.0f;
-    if (st.age < delay)
-        gain = 0.0f;
-    else if (fade > 0.0f)
-        gain = clamp01 ((st.age - delay) / fade);
-    v = 2.0f * (0.5f + 0.5f * v) * gain - 1.0f; // delay and fade in scale the 0 .. 1 output (the source is 0 during the delay)
-    if (P (li.smooth) >= 0.5f)
+    const float stereo = P (li.stereo) * (1.0f / 720.0f);
+    const bool mono = syncType >= 2 && li.mono >= 0 && g.base[li.mono] >= 0.5f && g.monoCore != nullptr;
+    const bool host = li.host >= 0 && g.base[li.host] >= 0.5f;
+
+    float pos, pos0;
+    if (syncType == 1)
     {
-        const float half = 0.2f * P (li.smoothTime) * 0.001f; // half life of the one pole (document 03, 3.4)
-        if (half >= 0.0002f)
-            st.smoothed += (v - st.smoothed) * (1.0f - std::exp2 (-dt / half));
+        // free-run: every voice reads the same clock (the engine's, or the host song position with the HOST lock)
+        float clock;
+        if (host && g.playing && sync != 4)
+        {
+            const double c = static_cast<double> (rate) * g.songSeconds;
+            clock = static_cast<float> (c - std::floor (c));
+        }
+        else if (sync == 4)
+        {
+            lfoCore[l].advance (0, 0.0f, rate, 0.0f, dt, true);
+            clock = lfoCore[l].offset;
+        }
         else
-            st.smoothed = v;
-        v = st.smoothed;
+            clock = g.lfoPhase != nullptr ? g.lfoPhase[l] : lfoCore[l].offset;
+        pos = clock + knob;
+        pos -= std::floor (pos);
+        pos0 = pos;
     }
     else
-        st.smoothed = v;
-    return v;
+    {
+        if (mono)
+        {
+            pos = g.monoCore[l].position (syncType, knob);
+        }
+        else
+        {
+            lfoCore[l].advance (syncType, knob, rate, delay, dt, !released);
+            pos = lfoCore[l].position (syncType, knob);
+        }
+        pos0 = syncType == 0 ? knob - std::floor (knob) : (syncType == 2 ? std::min (knob, 1.0f) : 0.0f);
+    }
+    lfoAge[l] += dt;
+    const bool smooth = P (li.smooth) >= 0.5f;
+    float fadeAmount = 1.0f;
+    if (!smooth)
+    {
+        if (lfoAge[l] < delay)
+            fadeAmount = 0.0f;
+        else if (fade > 0.0f)
+            fadeAmount = clamp01 ((lfoAge[l] - delay) / fade);
+    }
+    const float swing = li.swing >= 0 ? clamp01 (P (li.swing) * 0.01f) : 0.0f;
+    const int dir = static_cast<int> (P (li.direction) + 0.5f);
+    const CompiledShape* custom = (shape == 12 && g.content != nullptr && g.content->lfo[static_cast<size_t> (l)].present) ? &g.content->lfo[static_cast<size_t> (l)] : nullptr;
+    auto shapeAt = [&] (float u, bool wrap) -> float // 0 .. 1
+    {
+        if (wrap)
+            u -= std::floor (u);
+        else
+            u = clamp01 (u);
+        u = lfoSwing (u, swing);
+        if (dir == 1)
+            u = 1.0f - u;
+        else if (dir == 2)
+            u = 1.0f - std::fabs (2.0f * u - 1.0f);
+        if (custom != nullptr)
+            return clamp01 (customShape (*custom, u));
+        return 0.5f + 0.5f * lfoShape (shape, u, noteSerial + static_cast<uint32_t> (l));
+    };
+    const bool wrap = syncType <= 1;
+    auto lane = [&] (float sign, float& smoothed) -> float
+    {
+        const float s = shapeAt (pos + sign * stereo, wrap);
+        float out = s;
+        if (fadeAmount < 1.0f)
+            out = lerp (shapeAt (pos0 + sign * stereo, wrap), s, fadeAmount);
+        float v = 2.0f * out - 1.0f;
+        if (smooth)
+        {
+            const float half = 0.2f * P (li.smoothTime) * 0.001f; // half life of the one pole (document 03, 3.4)
+            if (half >= 0.0002f)
+                smoothed += (v - smoothed) * (1.0f - std::exp2 (-dt / half));
+            else
+                smoothed = v;
+            v = smoothed;
+        }
+        else
+            smoothed = v;
+        return v;
+    };
+    const float left = lane (1.0f, lfoSmoothL[l]);
+    valueRight = stereo != 0.0f ? lane (-1.0f, lfoSmoothR[l]) : left;
+    if (stereo == 0.0f)
+        lfoSmoothR[l] = lfoSmoothL[l];
+    return left;
 }
 
 void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
@@ -360,25 +428,21 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     }
     // ---- LFOs
     for (int l = 0; l < 10; ++l)
-        lfoOut[l] = lfoValue (l, g);
+        lfoOut[l] = lfoValue (l, g, lfoOutR[l]);
     for (int r = 0; r < 4; ++r)
     {
         const RlfoIdx& ri = pi.rlfo[r];
         const int syncType = static_cast<int> (P (ri.syncType) + 0.5f);
         if (syncType == 1 && g.rlfoValue != nullptr)
-            rlfoOut[r] = g.rlfoValue[r];
+            rlfoOut[r] = rlfoOutR[r] = g.rlfoValue[r];
         else
         {
             const int sync = static_cast<int> (P (ri.sync) + 0.5f);
-            float rate = P (ri.rate);
-            if (sync == 4)
-                rate = g.concertA * semitonesToRatio (lastSemis + P (ri.keyTranspose) + P (ri.keyTune) * 0.01f - 69.0f);
-            else if (sync != 0)
-            {
-                const float beats = kDivisionBeats[std::clamp (static_cast<int> (P (ri.division) + 0.5f), 0, 12)];
-                rate = beats > 0.0f ? static_cast<float> (g.bpm / 60.0) / beats * (sync == 2 ? 1.0f / 1.5f : (sync == 3 ? 1.5f : 1.0f)) : 0.0f;
-            }
-            rlfoOut[r] = rlfo[r].advance (static_cast<int> (P (ri.style) + 0.5f), rate * fdt);
+            const float rate = lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
+            const int style = static_cast<int> (P (ri.style) + 0.5f);
+            rlfoOut[r] = rlfo[r].advance (style, rate * fdt);
+            // stereo: the right lane has random numbers of its own
+            rlfoOutR[r] = (ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f) ? rlfoR[r].advance (style, rate * fdt) : rlfoOut[r];
         }
     }
 
@@ -422,7 +486,29 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
 
     // ---- matrix
     clearMod();
-    g.matrix->evaluate (src, false, mod.data(), touched, numTouched, kNumModSlots, modR.data());
+    {
+        std::copy (std::begin (src), std::end (src), std::begin (srcR));
+        for (int l = 0; l < 10; ++l)
+            srcR[srcLfo (l)] = 0.5f + 0.5f * lfoOutR[l];
+        for (int r = 0; r < 4; ++r)
+            srcR[srcRlfo (r)] = 0.5f + 0.5f * rlfoOutR[r];
+        srcR[kSrcStereo] = 0.0f;
+        voiceAge += fdt;
+        EvalContext ctx;
+        ctx.src = src;
+        ctx.srcR = srcR;
+        ctx.global = false;
+        ctx.delta = mod.data();
+        ctx.deltaRight = modR.data();
+        ctx.touched = touched;
+        ctx.numTouched = &numTouched;
+        ctx.maxTouched = kNumModSlots;
+        ctx.state = slotState;
+        ctx.dt = fdt;
+        ctx.bpm = g.bpm;
+        ctx.voiceAge = voiceAge;
+        g.matrix->evaluate (ctx);
+    }
 
     // ---- amplitude: envelope 1, velocity
     float killGain = 1.0f;

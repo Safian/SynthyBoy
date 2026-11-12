@@ -59,9 +59,9 @@ bool implementedKey (const std::string& k)
                                "delay_beats", "attack_beats", "hold_beats", "decay_beats", "release_beats" });
     if (head.rfind ("lfo", 0) == 0 && head.size() >= 4)
         return inList (rest, { "shape", "rate", "sync", "division", "sync_type", "phase", "fade_in", "delay", "smooth", "smooth_time", "keytrack_transpose",
-                               "keytrack_tune", "mono", "direction" });
+                               "keytrack_tune", "mono", "direction", "host", "swing", "stereo" });
     if (head.rfind ("rlfo", 0) == 0)
-        return inList (rest, { "style", "rate", "sync", "division", "sync_type", "keytrack_transpose", "keytrack_tune" });
+        return inList (rest, { "style", "rate", "sync", "division", "sync_type", "keytrack_transpose", "keytrack_tune", "stereo" });
     if (head == "macro")
         return true;
     // ---- the effect chain (fx/)
@@ -89,7 +89,7 @@ bool implementedKey (const std::string& k)
     if (head == "fx" && rest.rfind ("order.", 0) == 0)
         return true;
     if (head.rfind ("mod", 0) == 0 && head.size() == 5)
-        return inList (rest, { "source", "destination", "amount", "power", "bipolar", "bypass", "aux_source", "aux_inv", "aux_power", "aux_output" });
+        return inList (rest, { "source", "destination", "amount", "power", "bipolar", "bypass", "aux_source", "aux_inv", "aux_power", "aux_output", "stereo", "rise", "fall", "delay", "delay_beats", "delay_sync" });
     return false;
 }
 } // namespace
@@ -111,13 +111,13 @@ EngineCapsMask ownCapabilities() noexcept
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
          | kCapModSources2 | kCapWavetableSawDown
-         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats
+         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
 }
 
 EngineCaps2Mask ownCapabilities2() noexcept
 {
-    return kCap2EqBand2;
+    return kCap2EqBand2 | kCap2ModSlew | kCap2ModDelay;
 }
 } // namespace own
 } // namespace synthyboy

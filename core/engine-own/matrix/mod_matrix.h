@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "../voice/own_content.h"
 #include "../voice/param_index.h"
 #include "synthyboy/modulation.h"
 
@@ -54,6 +55,36 @@ struct CompiledSlot
     float amount = 0.0f, power = 0.0f, auxPower = 0.0f, auxOut = 1.0f, width = 1.0f;
     bool bipolar = false, auxInv = false, stereo = false;
     bool global = false;                  // the destination is not a per voice parameter
+    bool amountDest = false;              // the destination is the amount of another slot (modNN.amount)
+    int amountSlot = -1;                  // ... of this slot (0 .. 63)
+    int index = 0;                        // this slot's number (0 .. 63)
+    float riseMs = 0.0f, fallMs = 0.0f;   // slew of the source
+    float delayMs = 0.0f, delayBeats = 0.0f;
+    bool delaySync = false;
+    const CompiledModCurve* curve = nullptr;
+};
+
+/** The per voice state of the slots (slew, delay timer): reset at a note start. */
+struct SlotState
+{
+    float heldL = 0.0f, heldR = 0.0f;
+    bool init = false;
+};
+
+struct EvalContext
+{
+    const float* src = nullptr;       // source values, left lane (index = source id)
+    const float* srcR = nullptr;      // right lane (nullptr = the same)
+    bool global = false;              // evaluate the global slots (destinations that are not voice parameters)
+    float* delta = nullptr;           // control domain sums per table index (left lane)
+    float* deltaRight = nullptr;      // right lane or nullptr
+    int* touched = nullptr;
+    int* numTouched = nullptr;
+    int maxTouched = 0;
+    SlotState* state = nullptr;       // per voice slot state or nullptr
+    float dt = 0.0f;                  // the control period in seconds
+    double bpm = 120.0;
+    float voiceAge = 0.0f;            // seconds since the note start
 };
 
 class ModMatrix
@@ -63,13 +94,15 @@ public:
     void compile (const float* base) noexcept;
 
     int size() const noexcept { return count; }
+    void setContent (const OwnContent* c) noexcept { content = c; }
 
     /** Adds the modulation of every slot of the requested scope to delta[] (table index) and records the touched entries. */
-    void evaluate (const float* src, bool global, float* delta, int* touched, int& numTouched, int maxTouched, float* deltaRight = nullptr) const noexcept;
+    void evaluate (const EvalContext& ctx) const noexcept;
 
 private:
     CompiledSlot slots[kNumModSlots];
     int count = 0;
+    const OwnContent* content = nullptr;
 };
 } // namespace own
 } // namespace synthyboy

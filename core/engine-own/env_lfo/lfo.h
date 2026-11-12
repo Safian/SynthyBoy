@@ -36,6 +36,99 @@ inline float lfoShape (int shape, float p, uint32_t stepSeed) noexcept
     }
 }
 
+/** The rate in Hz of an LFO or random LFO from its sync mode (docs/engine-spec/03-envelopes-lfos.md 2): 0 free, 1 tempo, 2 dotted, 3 triplet, 4 key follow. */
+inline float lfoRateHz (int sync, float rateHz, int division, double bpm, float concertA, float keyNote, float keyTranspose, float keyTuneCents) noexcept
+{
+    static const float kBeats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 0.0625f };
+    if (sync == 0)
+        return rateHz;
+    if (sync == 4)
+        return concertA * std::exp2 ((keyNote + keyTranspose + keyTuneCents * 0.01f - 69.0f) * (1.0f / 12.0f));
+    const float b = kBeats[std::clamp (division, 0, 12)];
+    if (!(b > 0.0f))
+        return 0.0f; // Freeze
+    const float bps = static_cast<float> (std::max (bpm, 0.0) / 60.0);
+    return bps / b * (sync == 2 ? 1.0f / 1.5f : (sync == 3 ? 1.5f : 1.0f));
+}
+
+/** Swing (document 03, 3.3): the cycle is four pairs of slots; inside a pair the boundary between the two halves moves from 1/2 to 1/2 + sw / 4. */
+inline float lfoSwing (float u, float sw) noexcept
+{
+    if (!(sw > 0.0f))
+        return u;
+    const float b = 0.5f + 0.25f * std::min(sw, 1.0f);
+    const float x = u * 4.0f;
+    const float k = std::floor (x);
+    const float w = x - k;
+    const float w2 = w < b ? 0.5f * w / b : 0.5f + 0.5f * (w - b) / (1.0f - b);
+    return (k + w2) * 0.25f;
+}
+
+/** The running offset of an LFO in its sync type (document 03, 3.4): 0 retrigger, 1 free-run (the clock decides, see Voice), 2 envelope,
+    3 sustain envelope, 4 loop at point, 5 loop and hold. `position()` is the position on the cycle that the shape is read at (before swing and direction). */
+struct LfoCore
+{
+    float offset = 0.0f, age = 0.0f;
+
+    void restart() noexcept { offset = 0.0f; age = 0.0f; }
+
+    /** `knob` is the phase knob in cycles (0 .. 1), `held` is the key (or pedal) state. */
+    void advance (int syncType, float knob, float rateHz, float delaySeconds, float dt, bool held) noexcept
+    {
+        age += dt;
+        if (age < delaySeconds)
+            return; // the offset does not advance during the delay
+        const float inc = rateHz * dt;
+        switch (syncType)
+        {
+            case 2:
+                offset = std::min (offset + inc, 1.0f);
+                break;
+            case 3:
+                if (held)
+                {
+                    if (offset < knob)
+                        offset = std::min (offset + inc, knob); // waits at the sustain point
+                }
+                else
+                    offset = std::min (offset + inc, 1.0f);
+                break;
+            case 4:
+                offset += inc;
+                if (offset >= 1.0f)
+                    offset = std::min (offset - 1.0f + knob, 1.0f);
+                break;
+            case 5:
+                if (held)
+                {
+                    offset += inc;
+                    if (knob > 1.0e-4f)
+                    {
+                        while (offset >= knob)
+                            offset -= knob;
+                    }
+                }
+                else
+                    offset = std::min (offset + inc, 1.0f);
+                break;
+            default:
+                offset += inc;
+                offset -= std::floor (offset);
+                break;
+        }
+    }
+
+    float position (int syncType, float knob) const noexcept
+    {
+        switch (syncType)
+        {
+            case 2: return std::min (offset + knob, 1.0f);
+            case 3: case 4: case 5: return std::min (offset, 1.0f);
+            default: { const float u = offset + knob; return u - std::floor (u); }
+        }
+    }
+};
+
 /** The random LFO styles of rlfoN.style, one value per control period. */
 class RandomLfo
 {

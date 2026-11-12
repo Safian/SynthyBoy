@@ -78,12 +78,6 @@ sbtest::Rendered run (IEngine& e, const std::vector<Event>& ev, double seconds)
     return sbtest::render (e, ev, static_cast<int> (seconds * kSr), 256);
 }
 
-Event frameAt (double t, Event e)
-{
-    e.frame = static_cast<int32_t> (t * kSr);
-    return e;
-}
-
 Event expression (double t, int key, Event::Expression ex, float value, int channel = 0)
 {
     Event e = sbtest::noteOn (static_cast<int> (t * kSr), key, 0.0f, channel);
@@ -93,12 +87,6 @@ Event expression (double t, int key, Event::Expression ex, float value, int chan
     return e;
 }
 
-Event aftertouchEvent (double t, float value, int channel)
-{
-    Event e = sbtest::noteOn (static_cast<int> (t * kSr), 0, value, channel);
-    e.type = Event::Aftertouch;
-    return e;
-}
 } // namespace
 
 // ------------------------------------------------------------------------------------------------------------------------------------
@@ -263,4 +251,203 @@ TEST (ownv_poly_legato_continues_the_envelope)
         return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (n);
     };
     CHECK (level (1.0f) > 8.0 * level (0.0f)); // the new voice starts half way up the attack instead of at zero
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// LFO sync types, swing, stereo, slot rise / fall / delay, amount destinations, stereo source (document 03 and 04)
+
+namespace
+{
+/** LFO 1 on the pan of the sine oscillator (+25 %, document 03 L1): the left peak gives the pan control, 2 * pan = the LFO value. */
+struct PanProbe
+{
+    sbtest::Rendered out;
+    static double panOfGain (double g) { return 1.0 - 4.0 / M_PI * std::asin(std::min(g / 1.41421356, 1.0)); }
+    double peakAt (const std::vector<float>& x, double t) const
+    {
+        const size_t a = static_cast<size_t> ((t - 0.002) * kSr), b = static_cast<size_t> ((t + 0.002) * kSr);
+        float p = 0.0f;
+        for (size_t i = a; i < b && i < x.size(); ++i)
+            p = std::max (p, std::fabs (x[i]));
+        return p;
+    }
+    double left (double t) const { return panOfGain (peakAt (out.left, t)); }
+    double right (double t) const { return (4.0 / M_PI) * std::asin (std::min (peakAt (out.right, t) / 1.41421356, 1.0)) - 1.0; }
+    /** The pan from the level ratio of the channels (independent of the amplitude envelope), both lanes alike. */
+    double both (double t) const
+    {
+        const double r = peakAt (out.left, t) / std::max (peakAt (out.right, t), 1.0e-9);
+        double lo = -1.0, hi = 1.0;
+        for (int i = 0; i < 40; ++i)
+        {
+            const double p = 0.5 * (lo + hi);
+            const double ratio = std::sin (M_PI / 4.0 * (1.0 - p)) / std::max (std::sin (M_PI / 4.0 * (1.0 + p)), 1.0e-9);
+            (ratio > r ? lo : hi) = p;
+        }
+        return 0.5 * (lo + hi);
+    }
+};
+
+std::unique_ptr<IEngine> lfoPan (int shape, float rate)
+{
+    auto e = make();
+    sinePatch (*e);
+    set (*e, "env1.release", 3000);
+    set (*e, "lfo1.shape", static_cast<float> (shape));
+    set (*e, "lfo1.rate", rate);
+    set (*e, "lfo1.smooth", 0);
+    set (*e, "mod01.source", srcChoice ("lfo1"));
+    set (*e, "mod01.destination", dstChoice ("osc1.pan"));
+    set (*e, "mod01.amount", 25);
+    return e;
+}
+} // namespace
+
+TEST (ownv_lfo_swing_warps_the_shape_position)
+{
+    for (float swing : { 0.0f, 100.0f })
+    {
+        auto e = lfoPan (2, 1.0f); // saw up, 1 Hz
+        set (*e, "lfo1.swing", swing);
+        PanProbe p;
+        p.out = run (*e, { sbtest::noteOn (0, 69) }, 1.1);
+        const double sw = swing * 0.01;
+        auto expect = [&] (double u)
+        {
+            const double x = u * 4.0, k = std::floor (x), w = x - k, b = 0.5 + 0.25 * sw;
+            const double w2 = w < b ? 0.5 * w / b : 0.5 + 0.5 * (w - b) / (1.0 - b);
+            return (k + w2) * 0.25;
+        };
+        for (double u : { 0.125, 0.25, 0.375, 0.6 })
+        {
+            const double s = 2.0 * p.left (0.0 + u);
+            if (!CHECK (std::fabs (s - expect (u)) < 0.03))
+                std::printf ("    swing %.0f u %.3f: %.3f expected %.3f\n", swing, u, s, expect (u));
+        }
+    }
+}
+
+TEST (ownv_lfo_sync_types_envelope_sustain_loop_and_hold)
+{
+    // 2: the envelope plays once and holds the end value
+    {
+        auto e = lfoPan (2, 2.0f);
+        set (*e, "lfo1.sync_type", 2);
+        PanProbe p;
+        p.out = run (*e, { sbtest::noteOn (0, 69) }, 1.6);
+        CHECK (std::fabs (2.0 * p.left (0.25) - 0.5) < 0.04);
+        CHECK (std::fabs (2.0 * p.left (0.9) - 1.0) < 0.04);
+        CHECK (std::fabs (2.0 * p.left (1.4) - 1.0) < 0.04);
+    }
+    // 3: the sustain envelope waits at the phase knob while the key is down and plays on after the release
+    {
+        auto e = lfoPan (2, 1.0f);
+        set (*e, "lfo1.sync_type", 3);
+        set (*e, "lfo1.phase", 90);
+        PanProbe p;
+        p.out = run (*e, { sbtest::noteOn (0, 69), sbtest::noteOff (static_cast<int> (1.0 * kSr), 69) }, 1.8);
+        CHECK (std::fabs (2.0 * p.left (0.6) - 0.25) < 0.04);
+        CHECK (std::fabs (2.0 * p.left (0.9) - 0.25) < 0.04);
+        CHECK (std::fabs (2.0 * p.both (1.5) - 0.75) < 0.05);
+    }
+    // 4: loop at point: after the end the position returns to the phase knob
+    {
+        auto e = lfoPan (2, 1.0f);
+        set (*e, "lfo1.sync_type", 4);
+        set (*e, "lfo1.phase", 180);
+        PanProbe p;
+        p.out = run (*e, { sbtest::noteOn (0, 69) }, 1.8);
+        CHECK (std::fabs (2.0 * p.left (0.5) - 0.5) < 0.04);
+        CHECK (std::fabs (2.0 * p.left (1.25) - 0.75) < 0.05);
+    }
+    // 5: loop and hold: the position loops over [0, knob) while the key is down, then plays to the end and holds
+    {
+        auto e = lfoPan (2, 1.0f);
+        set (*e, "lfo1.sync_type", 5);
+        set (*e, "lfo1.phase", 180);
+        PanProbe p;
+        p.out = run (*e, { sbtest::noteOn (0, 69), sbtest::noteOff (static_cast<int> (1.2 * kSr), 69) }, 2.4);
+        CHECK (std::fabs (2.0 * p.left (0.75) - 0.25) < 0.05);
+        CHECK (std::fabs (2.0 * p.both (2.2) - 1.0) < 0.05);
+    }
+}
+
+TEST (ownv_lfo_stereo_offset_puts_the_lanes_half_a_cycle_apart)
+{
+    auto e = lfoPan (2, 1.0f);
+    set (*e, "lfo1.stereo", 180);
+    PanProbe p;
+    p.out = run (*e, { sbtest::noteOn (0, 69) }, 1.1);
+    // left u + 0.25, right u - 0.25 (pan of the right lane is read from its gain)
+    CHECK (std::fabs (2.0 * p.left (0.5) - 0.75) < 0.05);
+    CHECK (std::fabs (2.0 * p.right (0.5) - 0.25) < 0.05);
+}
+
+TEST (ownv_slot_rise_fall_and_delay)
+{
+    auto base = [&] (float rise, float delay)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "env1.release", 3000);
+        set (*e, "mod01.source", srcChoice ("mod_wheel"));
+        set (*e, "mod01.destination", dstChoice ("osc1.pan"));
+        set (*e, "mod01.amount", 25);
+        set (*e, "mod01.rise", rise);
+        set (*e, "mod01.delay", delay);
+        Event mw = sbtest::noteOn (static_cast<int> (0.3 * kSr), 0, 1.0f, 0);
+        mw.type = Event::ModWheel;
+        PanProbe p;
+        p.out = run (*e, { sbtest::noteOn (0, 69), mw }, 1.0);
+        return p;
+    };
+    // without a slew the control jumps to 0.5 at 0.3 s (pan control = 2 * 0.25 * x), with a rise of 200 ms it covers 90 % of the step after 200 ms
+    const PanProbe plain = base (0, 0), slow = base (200, 0), late = base (0, 400);
+    CHECK (std::fabs (plain.left (0.35) - 0.5) < 0.03);
+    CHECK (std::fabs (slow.left (0.5) - 0.45) < 0.04);
+    CHECK (std::fabs (slow.left (0.35) - 0.5) > 0.1);
+    CHECK (std::fabs (late.left (0.35)) < 0.03 && std::fabs (late.left (0.35)) < std::fabs (late.left (0.6))); // the connection starts 400 ms after the note on
+    CHECK (std::fabs (late.left (0.6) - 0.5) < 0.04);
+}
+
+TEST (ownv_slot_amount_destination_stereo_source_and_loops)
+{
+    // mod 2: macro 1 -> amount of mod 1 (width 2 = a full -100 .. 100 %): macro 100 % brings the amount from 0 to 50 % x 2
+    auto pan = [&] (bool amountSlot, bool loop)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "macro.1", 100);
+        set (*e, "macro.2", 100);
+        set (*e, "mod01.source", srcChoice ("macro2"));
+        set (*e, "mod01.destination", dstChoice ("osc1.pan"));
+        set (*e, "mod01.amount", 0);
+        if (amountSlot)
+        {
+            set (*e, "mod02.source", srcChoice ("macro1"));
+            set (*e, "mod02.destination", dstChoice ("mod01.amount"));
+            set (*e, "mod02.amount", 25); // +0.25 * width 2 = +0.5 -> the amount of slot 1 is 50 %
+        }
+        if (loop) // slot 3 would feed lfo1 from lfo1: not wired
+        {
+            set (*e, "mod03.source", srcChoice ("lfo1"));
+            set (*e, "mod03.destination", dstChoice ("lfo1.rate"));
+            set (*e, "mod03.amount", 100);
+        }
+        PanProbe p;
+        p.out = run (*e, { sbtest::noteOn (0, 69) }, 0.5);
+        return p;
+    };
+    CHECK (std::fabs (pan (false, false).left (0.3)) < 0.02);
+    CHECK (std::fabs (pan (true, false).left (0.3) - 1.0) < 0.05); // pan control = 0.5 x 2
+    // the stereo source is (1, 0): pan control +1 in the left lane, 0 in the right
+    auto e = make();
+    sinePatch (*e);
+    set (*e, "mod01.source", srcChoice ("stereo"));
+    set (*e, "mod01.destination", dstChoice ("osc1.pan"));
+    set (*e, "mod01.amount", 50);
+    PanProbe p;
+    p.out = run (*e, { sbtest::noteOn (0, 69) }, 0.5);
+    CHECK (std::fabs (p.left (0.3) - 1.0) < 0.05);
+    CHECK (std::fabs (p.right (0.3)) < 0.05);
 }

@@ -41,7 +41,7 @@ struct EnvIdx
 
 struct LfoIdx
 {
-    int shape, rate, sync, division, syncType, phase, fadeIn, delay, smooth, smoothTime, stereo, keyTranspose, keyTune, mono, direction;
+    int shape, rate, sync, division, syncType, phase, fadeIn, delay, smooth, smoothTime, stereo, keyTranspose, keyTune, mono, direction, host, swing;
 };
 
 struct RlfoIdx

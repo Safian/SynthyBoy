@@ -11,6 +11,7 @@
 #include "../env_lfo/lfo.h"
 #include "../matrix/mod_matrix.h"
 #include "../osc/wt_osc.h"
+#include "own_content.h"
 #include "filter_unit.h"
 #include "param_index.h"
 
@@ -35,6 +36,9 @@ struct TickGlobals
     const float* rlfoValue = nullptr;     // [4] global random LFO values -1 .. 1
     int activeVoices = 0;
     float concertA = 440.0f;
+    const OwnContent* content = nullptr;  // custom LFO shapes, modulation curves
+    const LfoCore* monoCore = nullptr;    // [10] the shared instance of the mono LFOs (sync types 2 .. 5)
+    double songSeconds = 0.0;             // the host song position in seconds (the clock of the HOST lock)
     int maxUnison = kMaxUnisonVoices;
 };
 
@@ -98,7 +102,8 @@ private:
     float P (int idx) const noexcept;
     float PR (int idx) const noexcept; // the right lane (differs from P () where a slot has the stereo flag)
     void clearMod() noexcept;
-    float lfoValue (int l, const TickGlobals& g) noexcept;
+    float lfoValue (int l, const TickGlobals& g, float& valueRight) noexcept;
+    float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;
     double sr = 48000.0;
@@ -120,13 +125,15 @@ private:
 
     Envelope env[6];
     float envOut[6] = {};
-    struct LfoState
-    {
-        float phase = 0.0f, smoothed = 0.0f, age = 0.0f, value = 0.0f;
-        bool oneShotDone = false;
-    } lfo[10];
-    RandomLfo rlfo[4];
-    float rlfoOut[4] = {};
+    LfoCore lfoCore[10];
+    float lfoAge[10] = {}, lfoSmoothL[10] = {}, lfoSmoothR[10] = {};
+    float lfoOutR[10] = {};
+    float srcR[kNumSourceIds] = {};
+    SlotState slotState[kNumModSlots];
+    float voiceAge = 0.0f;
+    shapes::ShapeData scratchShape;
+    RandomLfo rlfo[4], rlfoR[4];
+    float rlfoOut[4] = {}, rlfoOutR[4] = {};
     float lfoOut[10] = {};
 
     std::vector<float> mod, modR;

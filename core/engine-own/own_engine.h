@@ -34,7 +34,7 @@ public:
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     void setTransport (const TransportInfo& t) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
-    void setContent (const StateContent& c) override { noteTuning.setContent (c.tuning); }
+    void setContent (const StateContent& c) override { noteTuning.setContent (c.tuning); content.publish (c); }
     void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
@@ -70,7 +70,7 @@ private:
     std::vector<std::unique_ptr<Voice>> voices;
     std::vector<uint8_t> sustainPending;
     std::vector<float> base;       // snapshot of all parameters for the block
-    std::vector<float> gdelta;     // modulation of the global parameters
+    std::vector<float> gdelta, gdeltaR;     // modulation of the global parameters
     std::vector<int> gtouched;
     int gnumTouched = 0;
     ModMatrix matrix;
@@ -78,6 +78,9 @@ private:
     std::atomic<uint32_t> fxMask { kFxAll };
     TickGlobals globals;
     NoteTuning noteTuning;
+    ContentHub content;
+    const OwnContent* contentNow = nullptr;
+    LfoCore monoCore[10];
     float tunedNotes[128] = {};
     Pressed pressed[64];
     int numPressed = 0;
