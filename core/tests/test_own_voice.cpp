@@ -13,6 +13,9 @@
 #include "test_runner.h"
 #include "test_util.h"
 
+// MSVC does not define M_PI without _USE_MATH_DEFINES: portable constant.
+static constexpr double kTestPi = 3.14159265358979323846;
+
 using namespace synthyboy;
 
 namespace
@@ -204,8 +207,8 @@ TEST (ownv_kill_mode_fades_the_excess_voice_in_50_ms)
         double re = 0, im = 0;
         for (size_t i = 0; i < n; ++i)
         {
-            re += o.left[a + i] * std::cos (2.0 * M_PI * hz * static_cast<double> (i) / kSr);
-            im += o.left[a + i] * std::sin (2.0 * M_PI * hz * static_cast<double> (i) / kSr);
+            re += o.left[a + i] * std::cos (2.0 * kTestPi * hz * static_cast<double> (i) / kSr);
+            im += o.left[a + i] * std::sin (2.0 * kTestPi * hz * static_cast<double> (i) / kSr);
         }
         return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (n);
     };
@@ -245,8 +248,8 @@ TEST (ownv_poly_legato_continues_the_envelope)
         double re = 0, im = 0;
         for (size_t i = 0; i < n; ++i)
         {
-            re += o.left[a + i] * std::cos (2.0 * M_PI * 523.2511 * static_cast<double> (i) / kSr);
-            im += o.left[a + i] * std::sin (2.0 * M_PI * 523.2511 * static_cast<double> (i) / kSr);
+            re += o.left[a + i] * std::cos (2.0 * kTestPi * 523.2511 * static_cast<double> (i) / kSr);
+            im += o.left[a + i] * std::sin (2.0 * kTestPi * 523.2511 * static_cast<double> (i) / kSr);
         }
         return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (n);
     };
@@ -262,7 +265,7 @@ namespace
 struct PanProbe
 {
     sbtest::Rendered out;
-    static double panOfGain (double g) { return 1.0 - 4.0 / M_PI * std::asin(std::min(g / 1.41421356, 1.0)); }
+    static double panOfGain (double g) { return 1.0 - 4.0 / kTestPi * std::asin(std::min(g / 1.41421356, 1.0)); }
     double peakAt (const std::vector<float>& x, double t) const
     {
         const size_t a = static_cast<size_t> ((t - 0.002) * kSr), b = static_cast<size_t> ((t + 0.002) * kSr);
@@ -272,7 +275,7 @@ struct PanProbe
         return p;
     }
     double left (double t) const { return panOfGain (peakAt (out.left, t)); }
-    double right (double t) const { return (4.0 / M_PI) * std::asin (std::min (peakAt (out.right, t) / 1.41421356, 1.0)) - 1.0; }
+    double right (double t) const { return (4.0 / kTestPi) * std::asin (std::min (peakAt (out.right, t) / 1.41421356, 1.0)) - 1.0; }
     /** The pan from the level ratio of the channels (independent of the amplitude envelope), both lanes alike. */
     double both (double t) const
     {
@@ -281,7 +284,7 @@ struct PanProbe
         for (int i = 0; i < 40; ++i)
         {
             const double p = 0.5 * (lo + hi);
-            const double ratio = std::sin (M_PI / 4.0 * (1.0 - p)) / std::max (std::sin (M_PI / 4.0 * (1.0 + p)), 1.0e-9);
+            const double ratio = std::sin (kTestPi / 4.0 * (1.0 - p)) / std::max (std::sin (kTestPi / 4.0 * (1.0 + p)), 1.0e-9);
             (ratio > r ? lo : hi) = p;
         }
         return 0.5 * (lo + hi);
@@ -463,8 +466,8 @@ double lineAt (const std::vector<float>& x, double t0, double hz, size_t n = 480
     double re = 0, im = 0;
     for (size_t i = 0; i < n; ++i)
     {
-        re += x[a + i] * std::cos (2.0 * M_PI * hz * static_cast<double> (i) / kSr);
-        im += x[a + i] * std::sin (2.0 * M_PI * hz * static_cast<double> (i) / kSr);
+        re += x[a + i] * std::cos (2.0 * kTestPi * hz * static_cast<double> (i) / kSr);
+        im += x[a + i] * std::sin (2.0 * kTestPi * hz * static_cast<double> (i) / kSr);
     }
     return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (n);
 }

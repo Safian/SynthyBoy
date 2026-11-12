@@ -17,6 +17,9 @@
 #include "synthyboy/engine.h"
 #include "synthyboy/params.h"
 
+// MSVC does not define M_PI without _USE_MATH_DEFINES: portable constant.
+static constexpr double kOraclePi = 3.14159265358979323846;
+
 namespace oracle
 {
 using Overrides = std::vector<std::pair<std::string, float>>;
@@ -122,7 +125,7 @@ inline std::vector<double> powerSpectrum (const std::vector<float>& x, size_t a,
     std::vector<std::complex<double>> v (n);
     for (size_t i = 0; i < n; ++i)
     {
-        const double w = 0.5 - 0.5 * std::cos (2.0 * M_PI * static_cast<double> (i) / static_cast<double> (n));
+        const double w = 0.5 - 0.5 * std::cos (2.0 * kOraclePi * static_cast<double> (i) / static_cast<double> (n));
         v[i] = (a + i < x.size() ? x[a + i] : 0.0f) * w;
     }
     for (size_t i = 1, j = 0; i < n; ++i)
@@ -136,7 +139,7 @@ inline std::vector<double> powerSpectrum (const std::vector<float>& x, size_t a,
     }
     for (size_t len = 2; len <= n; len <<= 1)
     {
-        const double ang = -2.0 * M_PI / static_cast<double> (len);
+        const double ang = -2.0 * kOraclePi / static_cast<double> (len);
         const std::complex<double> wl (std::cos (ang), std::sin (ang));
         for (size_t i = 0; i < n; i += len)
         {
