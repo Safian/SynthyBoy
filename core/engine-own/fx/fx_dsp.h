@@ -110,6 +110,17 @@ struct Svf
     }
 };
 
+/** The all-pass stages of the phaser (effect and filter model 7): the pole of a stage sits at this factor above the cutoff the key names. Measured on the notches of the
+    12 and 4 stage chains (document 06, 8.1, P1 / P2: the notches at 451 / 2625 Hz for a centre of 1 kHz are those of a pole at 1088 Hz). */
+constexpr float kPhaserPoleScale = 1.0884f;
+
+/** Coefficient g = tan (pi f / sr) of a phaser stage whose cutoff is `hz`. */
+inline float phaserStageG (float hz, double sr) noexcept
+{
+    const float f = std::min (hz * kPhaserPoleScale, static_cast<float> (sr) * 0.45f);
+    return std::tan (kPif * f / static_cast<float> (sr));
+}
+
 /** Trapezoidal (zero delay) one pole low pass. */
 struct TrapLp
 {

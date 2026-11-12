@@ -298,16 +298,14 @@ public:
                     // depth 2: the stage cutoffs spread linearly in semitones over [-depth2 / 2, +depth2 / 2] around the centre (stage 0 lowest for a positive value)
                     for (int s = 0; s < kStages; ++s)
                     {
-                        const float hs = std::clamp (hz * std::exp2 (p.depth2 * (static_cast<float> (s) / 11.0f - 0.5f) * (1.0f / 12.0f)), 5.0f, 0.45f * sr);
-                        const float x0 = kPif * hs / sr;
-                        const float g = std::tan (std::min (0.499f * kPif, x0 / (1.0f + x0)));
+                        const float hs = std::max (hz * std::exp2 (p.depth2 * (static_cast<float> (s) / 11.0f - 0.5f) * (1.0f / 12.0f)), 5.0f);
+                        const float g = phaserStageG (hs, sampleRate);
                         aS[s] = g / (1.0f + g);
                     }
                 }
                 else
                 {
-                    const float x0 = kPif * hz / sr;
-                    const float g = std::tan (std::min (0.499f * kPif, x0 / (1.0f + x0)));
+                    const float g = phaserStageG (hz, sampleRate);
                     const float a0 = g / (1.0f + g);
                     for (int s = 0; s < kStages; ++s)
                         aS[s] = a0;

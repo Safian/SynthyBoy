@@ -313,8 +313,7 @@ private:
 
     void phaserFilter (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p) noexcept
     {
-        const float x0 = 3.14159265f * f / static_cast<float> (sr);
-        const float g = std::tan (std::min (0.499f * 3.14159265f, x0 / (1.0f + x0)));
+        const float g = phaserStageG (f, sr);
         const float a = g / (1.0f + g);
         const float b = clamp01 (p.blendRaw);
         const float braw = std::clamp (p.blendRaw, 0.0f, 2.0f);

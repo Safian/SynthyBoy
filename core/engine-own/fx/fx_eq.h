@@ -131,7 +131,7 @@ private:
             wl = lerp (A, 1.0f, std::clamp (blend + 1.0f, 0.0f, 1.0f));
             wh = lerp (1.0f, A, std::clamp (blend, 0.0f, 1.0f));
             wb = R * std::sqrt (A) * lerp (1.0f, std::sqrt (A), 1.0f - blend * blend);
-            hz *= std::exp2 (3.0f * blend * std::log2 (A) / 12.0f);
+            // (document 06 5 / 05 2.1 state a corner shift of 3 b log2 A semitones; the measured vectors E3 and E4 match the response WITHOUT it, see QUESTIONS.md)
         }
         Sv& s0 = svf[0][band];
         const float nyq = static_cast<float> (sampleRate);

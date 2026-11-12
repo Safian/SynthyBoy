@@ -98,18 +98,22 @@ bool implementedKey (const std::string& k)
     if (head == "chorus")
         return inList (rest, { "on", "mix", "rate", "sync", "division", "depth", "feedback", "delay1", "delay2", "voices", "filter_cutoff", "filter_spread", "level" });
     if (head == "compressor")
-        return rest.rfind ("low.", 0) == 0 || rest.rfind ("mid.", 0) == 0 || rest.rfind ("high.", 0) == 0 || inList (rest, { "on", "mix", "attack", "release", "bands", "level", "crossover_low", "crossover_high" });
+        return rest.rfind ("low.", 0) == 0 || rest.rfind ("mid.", 0) == 0 || rest.rfind ("high.", 0) == 0 || inList (rest, { "on", "mix", "attack", "release", "bands", "level", "crossover_low", "crossover_high", "limit", "limit_latency_comp" });
     if (head == "delay")
         return inList (rest, { "on", "mix", "feedback", "time", "time2", "sync", "division", "division2", "style", "filter_cutoff", "filter_spread", "level", "hq", "offset", "offset_left" });
     if (head == "distortion")
-        return inList (rest, { "on", "type", "drive", "mix", "filter_order", "filter_cutoff", "filter_resonance", "filter_blend", "level" });
+        return inList (rest, { "on", "type", "drive", "mix", "filter_order", "filter_cutoff", "filter_resonance", "filter_blend", "filter_keytrack", "level" });
     if (head == "eq")
-        return rest.rfind ("low.", 0) == 0 || rest.rfind ("mid.", 0) == 0 || rest.rfind ("high.", 0) == 0 || rest.rfind ("mid2.", 0) == 0 || inList (rest, { "on", "level" });
+        return rest.rfind ("low.", 0) == 0 || rest.rfind ("mid.", 0) == 0 || rest.rfind ("high.", 0) == 0 || rest.rfind ("mid2.", 0) == 0 || inList (rest, { "on", "level", "law" });
     if (head == "flanger" || head == "phaser")
-        return inList (rest, { "on", "mix", "feedback", "rate", "sync", "division", "depth", "center", "phase_offset", "blend", "level" });
+        return inList (rest, { "on", "mix", "feedback", "rate", "sync", "division", "depth", "center", "phase_offset", "blend", "level" }) || (head == "phaser" && rest == "depth2");
     if (head == "reverb")
-        return inList (rest, { "on", "mix", "size", "decay", "predelay", "pre_low_cut", "pre_high_cut", "high_shelf_cutoff", "high_shelf_gain", "chorus_amount", "chorus_rate",
-                               "type", "width", "diff_a", "diff_b", "level", "force_enable" });
+        return inList (rest, { "on", "mix", "size", "decay", "predelay", "pre_low_cut", "pre_high_cut", "high_shelf_cutoff", "high_shelf_gain", "low_shelf_cutoff", "low_shelf_gain", "chorus_amount", "chorus_rate",
+                               "type", "room", "width", "er_size", "diff_a", "diff_b", "feedback", "level", "force_enable" });
+    if (head == "convolve")
+        return inList (rest, { "on", "ir", "size", "tone", "phi_min", "predelay", "sync", "division", "attack", "decay", "damp", "ir_gain", "mix", "level", "law", "rack" });
+    if (head.size() == 5 && head.rfind ("fxi", 0) == 0 && head[3] >= '0' && head[3] <= '9')
+        return true;
     if (head == "fxfilter")
         return inList (rest, { "on", "model", "style", "cutoff", "resonance", "drive", "blend", "mix", "var", "level" });
     if (head == "hyperdim")
@@ -142,12 +146,13 @@ EngineCapsMask ownCapabilities() noexcept
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
          | kCapModSources2 | kCapWavetableSawDown
          | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft | kCapMixerGraph | kCapFxRacks | kCapFxBode | kCapFxSplitters | kCapSampleOsc | kCapUserWavetable | kCapOscExtras2 | kCapWarpAlt | kCapWarpFilter | kCapNoiseSample | kCapWarpSources | kCapNoiseExtras | kCapNoiseColour | kCapWtRemap
-         | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
+         | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras
+         | kCapFxConvolve | kCapFxInstances | kCapFxPhaserDepth2 | kCapFxReverbAlgos | kCapReverbForce | kCapReverbFeedback;
 }
 
 EngineCaps2Mask ownCapabilities2() noexcept
 {
-    return kCap2EqBand2 | kCap2ModSlew | kCap2ModDelay | kCap2SerumUnison | kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2SpectralFilterTable;
+    return kCap2EqBand2 | kCap2ModSlew | kCap2ModDelay | kCap2SerumUnison | kCap2Granular | kCap2Spectral | kCap2SpectralWarps | kCap2Multisample | kCap2SpectralFilterTable | kCap2SerumEq | kCap2SerumCompressor | kCap2SerumConvolve;
 }
 } // namespace own
 } // namespace synthyboy

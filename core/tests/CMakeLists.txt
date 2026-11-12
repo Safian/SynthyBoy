@@ -39,6 +39,8 @@ synthyboy_add_test(synthyboy_test_own_engine test_own_engine.cpp)
 target_include_directories(synthyboy_test_own_engine PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_voice test_own_voice.cpp)
 target_include_directories(synthyboy_test_own_voice PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
+synthyboy_add_test(synthyboy_test_own_fx test_own_fx.cpp)
+target_include_directories(synthyboy_test_own_fx PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_osc_types test_own_osc_types.cpp)
 target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete

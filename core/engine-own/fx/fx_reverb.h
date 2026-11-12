@@ -167,7 +167,7 @@ public:
                 fdnSample (bp[0] * 0.25f, bp[1] * 0.25f, wl, wr);
             else
             {
-                const float mono = 0.5f * (bp[0] + bp[1]);
+                const float mono = 0.5f * (bp[0] + bp[1]) * kCoreIn;
                 coreSample (type, mono, wl, wr);
             }
             float m = 0.5f * (wl + wr), sd = 0.5f * (wl - wr);
@@ -477,7 +477,8 @@ private:
 
 public:
     // output scale calibration of the cores (tuned against the level vectors of document 06, 9.5)
-    static inline float kOutFdn = 0.46f, kOutHall = 1.6f, kOutNitrous = 1.5f, kOutBasin = 1.1f, kOutPlate = 1.0f, kOutVintage = 1.0f;
+    static inline float kCoreIn = 0.3548f; // the mono input of the cores of 9.4 (calibrated on the level vectors of 9.5)
+    static inline float kOutFdn = 0.44f, kOutHall = 1.546f, kOutNitrous = 1.5f, kOutBasin = 1.1f, kOutPlate = 1.02f, kOutVintage = 1.08f;
 
 private:
     Params p;
