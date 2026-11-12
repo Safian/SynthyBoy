@@ -29,6 +29,9 @@ public:
         value = startValue;
         startLevel = startValue;
         gate = true;
+        delayStarted = false;
+        delayProgress = 0.0;
+        delaySteps = 0;
     }
 
     void noteOff() noexcept
@@ -62,7 +65,8 @@ public:
     double stageSeconds() const noexcept { return pos; }
     float current() const noexcept { return value; }
 
-    /** Advances `seconds` and returns the value at the end of the step. */
+    /** Advances `seconds` and returns the value at the end of the step. The delay stage follows document 03 1.3a: the delay time is read once per chunk (four steps of 32
+        samples = 128 samples, counted from the note start) and the stage can only end at the end of a chunk, where the attack starts at the next step. */
     float advance (const EnvSettings& s, double seconds) noexcept
     {
         double left = seconds;
@@ -76,16 +80,36 @@ public:
                     value = 0.0f;
                     return value;
                 case Stage::delay:
-                    if (!(s.delay > 0.0f) || pos + left >= s.delay)
+                {
+                    if (!delayStarted)
                     {
-                        left -= std::max (0.0, s.delay - pos);
-                        stage = Stage::attack;
-                        pos = 0.0;
-                        break;
+                        // whether there is a delay stage at all is decided at the note start: exactly 0 means the attack starts at once
+                        if (!(s.delay > 0.0f))
+                        {
+                            stage = Stage::attack;
+                            pos = 0.0;
+                            break;
+                        }
+                        delayStarted = true;
+                        delayProgress = 0.0;
+                        heldDelay = std::max (static_cast<double> (s.delay), 1.0e-7);
                     }
-                    pos += left;
+                    else if (left > 0.0 && (delaySteps & 3) == 0)
+                        heldDelay = std::max (static_cast<double> (s.delay), 1.0e-7);
+                    delayProgress += left / heldDelay;
                     value = startLevel;
+                    if (left > 0.0)
+                    {
+                        const bool chunkEnd = (delaySteps & 3) == 3;
+                        ++delaySteps;
+                        if (chunkEnd && delayProgress >= 1.0)
+                        {
+                            stage = Stage::attack;
+                            pos = 0.0;
+                        }
+                    }
                     return value;
+                }
                 case Stage::attack:
                     if (!(s.attack > 0.0f) || pos + left >= s.attack)
                     {
@@ -149,7 +173,9 @@ public:
 private:
     Stage stage = Stage::idle;
     bool gate = false;
-    double pos = 0.0;
+    double pos = 0.0, delayProgress = 0.0, heldDelay = 1.0e-7;
+    bool delayStarted = false;
+    int delaySteps = 0;
     float value = 0.0f, startLevel = 0.0f, releaseFrom = 0.0f;
 };
 } // namespace own

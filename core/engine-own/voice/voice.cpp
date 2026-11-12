@@ -450,11 +450,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     lastSemis = tuneTrack + glideOffset;
 
     evaluateVoiceControl (g);
-    // ---- envelopes (times read with last period's modulation)
-    for (int e = 0; e < 6; ++e)
+    auto envSettings = [&] (int e, EnvSettings& s, bool finalise)
     {
         const EnvIdx& ei = pi.env[e];
-        EnvSettings s;
         legatoInv[e] = ei.legatoInverted >= 0 && g.base[ei.legatoInverted] >= 0.5f;
         if (ei.units >= 0 && g.base[ei.units] >= 0.5f) // beat units: the times follow the host tempo
         {
@@ -477,12 +475,69 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.attackCurve = -P (ei.attackCurve);
         s.decayCurve = P (ei.decayCurve);
         s.releaseCurve = P (ei.releaseCurve);
-        envLen[e][0] = s.attack + s.delay; envLen[e][1] = s.hold; envLen[e][2] = s.decay; envLen[e][3] = s.release;
+        if (finalise)
+            envLen[e][0] = s.attack + s.delay, envLen[e][1] = s.hold, envLen[e][2] = s.decay, envLen[e][3] = s.release;
         s.delay *= vc.envFactor;
         s.attack *= vc.envFactor;
         s.hold *= vc.envFactor;
         s.decay *= vc.envFactor;
         s.release *= vc.envFactor;
+    };
+    // ---- a note starts with its constant sources already in the matrix (document 03 1.3a, document 04: the interpolation of a voice is reset to the new value at a note
+    //      start), so an envelope time that a macro or the velocity modulates is read modulated at the very first period
+    if (fresh)
+    {
+        clearMod();
+        std::fill (std::begin (src), std::end (src), 0.0f);
+        for (int m = 0; m < 8; ++m)
+            src[srcMacro (m)] = g.macro[m];
+        src[kSrcVelocity] = vel;
+        src[kSrcNote] = std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f);
+        src[kSrcAftertouch] = g.channelAftertouch != nullptr ? g.channelAftertouch[chan & 15] : 0.0f;
+        src[kSrcModWheel] = g.channelModWheel != nullptr ? g.channelModWheel[chan & 15] : 0.0f;
+        src[kSrcRandom] = randomPerNote;
+        src[kSrcSlide] = slide;
+        src[kSrcVoiceIndex] = vc.index;
+        src[kSrcVoiceMod1] = 0.5f + 0.5f * vc.mod1;
+        src[kSrcVoiceMod2] = 0.5f + 0.5f * vc.mod2;
+        src[kSrcNoteOnAlt1] = altParity ? 1.0f : 0.0f;
+        src[kSrcNoteOnAlt2] = altParity ? 0.0f : 1.0f;
+        src[kSrcNoteOnRand2] = rand2;
+        src[kSrcNoteOnRandDiscrete] = randDiscrete;
+        src[kSrcFixed] = 1.0f;
+        std::copy (std::begin (src), std::end (src), std::begin (srcR));
+        EvalContext ctx;
+        ctx.src = src;
+        ctx.srcR = srcR;
+        ctx.global = false;
+        ctx.delta = mod.data();
+        ctx.deltaRight = modR.data();
+        ctx.touched = touched;
+        ctx.numTouched = &numTouched;
+        ctx.maxTouched = kNumModSlots;
+        ctx.state = slotState;
+        ctx.dt = 0.0f;
+        ctx.bpm = g.bpm;
+        ctx.voiceAge = voiceAge;
+        g.matrix->evaluate (ctx);
+        // the control rate envelopes are evaluated for the same chunk as the note start: as sources they already have their value at the end of the first step
+        for (int e = 0; e < 6; ++e)
+        {
+            Envelope tmp = env[e];
+            EnvSettings es;
+            envSettings (e, es, false);
+            const float v = tmp.advance (es, dt);
+            src[srcEnv (e)] = v * v;
+        }
+        std::copy (std::begin (src), std::end (src), std::begin (srcR));
+        clearMod();
+        g.matrix->evaluate (ctx);
+    }
+    // ---- envelopes (times read with last period's modulation)
+    for (int e = 0; e < 6; ++e)
+    {
+        EnvSettings s;
+        envSettings (e, s, true);
         if (fresh && e == 0)
         {
             const float v0 = env[0].advance (s, 0.0); // the level at the note's first sample

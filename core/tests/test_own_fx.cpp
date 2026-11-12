@@ -885,3 +885,75 @@ TEST (fx_svf_styles_2_to_5_vectors)
         CHECK (worst <= 0.0);
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// envelope delay under modulation (document 03, 1.3a)
+
+namespace
+{
+double envOnsetMs (const KV& cfg)
+{
+    auto e = make();
+    set (*e, "osc1.wavetable", 0);
+    set (*e, "osc1.level", 100);
+    set (*e, "filter1.on", 0);
+    set (*e, "master.volume", 0);
+    set (*e, "env1.attack", 0);
+    set (*e, "env1.sustain", 100);
+    for (auto& kv : cfg)
+        set (*e, kv.first.c_str(), kv.second);
+    const int start = static_cast<int> (0.1 * kSr);
+    const auto r = sbtest::render (*e, { sbtest::noteOn (start, 60) }, static_cast<int> (3.0 * kSr), 512);
+    for (size_t i = static_cast<size_t> (start); i < r.left.size(); ++i)
+        if (std::fabs (r.left[i]) > 1.0e-4f)
+            return (static_cast<double> (i) - start) * 1000.0 / kSr;
+    return -1.0;
+}
+
+float srcChoiceFx (const char* key)
+{
+    for (size_t i = 0; i < modSourceCount(); ++i)
+        if (std::string (modSourceTable()[i].key) == key)
+            return static_cast<float> (i + 1);
+    return 0.0f;
+}
+
+float dstChoiceFx (const char* key)
+{
+    const ParamInfo* p = findParamByKey (key);
+    return p != nullptr ? static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (p->id)))) : 0.0f;
+}
+} // namespace
+
+TEST (fx_envelope_delay_quantised_to_the_chunk)
+{
+    struct Row { float delayMs; double onset; };
+    const Row rows[] = { { 0, 0.04 }, { 3, 5.35 }, { 15, 17.35 }, { 50, 52.02 }, { 100, 102.69 }, { 202, 204.02 }, { 250, 252.02 } };
+    for (const Row& r : rows)
+    {
+        const double ms = envOnsetMs ({ { "env1.delay", r.delayMs } });
+        if (verbose())
+            std::printf ("    static delay %g ms: onset %.2f ms (spec %.2f)\n", r.delayMs, ms, r.onset);
+        CHECK (std::fabs (ms - r.onset) <= 1.6);
+        CHECK (ms >= r.delayMs - 0.1); // the stage lasts at least its time
+    }
+    // a macro as the source of the delay: 25 % of the range -> 15.6 ms, 50 % -> 250 ms (the target is read at the note start)
+    const KV macro = { { "mod01.source", srcChoiceFx ("macro1") }, { "mod01.destination", dstChoiceFx ("env1.delay") }, { "macro.1", 100 } };
+    for (auto [amount, want] : { std::pair<float, double> { 25, 17.35 }, { 50, 252.02 } })
+    {
+        KV k = macro;
+        k.push_back ({ "mod01.amount", amount });
+        const double ms = envOnsetMs (k);
+        if (verbose())
+            std::printf ("    macro -> delay %g %%: onset %.2f ms (spec %.2f)\n", amount, ms, want);
+        CHECK (std::fabs (ms - want) <= 2.0);
+    }
+    // a control rate modulator that is still at its start value when the note begins: the stage lasts one chunk, not the target time
+    {
+        KV k = { { "mod01.source", srcChoiceFx ("env2") }, { "mod01.destination", dstChoiceFx ("env1.delay") }, { "mod01.amount", 50 }, { "env2.attack", 500 }, { "env2.sustain", 100 } };
+        const double ms = envOnsetMs (k);
+        if (verbose())
+            std::printf ("    env2 (attack 500 ms) -> delay: onset %.2f ms (spec 2.69)\n", ms);
+        CHECK (ms < 6.0);
+    }
+}
