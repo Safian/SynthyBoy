@@ -93,3 +93,5 @@ add_subdirectory(spectral)
 add_subdirectory(multisample)
 # the user content library decodes WAV files with the sample oscillator's reader (also in the own-engine-only build)
 target_link_libraries(synthyboy_core PUBLIC synthyboy_sampleosc synthyboy_granular synthyboy_spectral synthyboy_multisample)
+# the own engine runs Hyper/Dimension and Utility of fx-serum-a (and, later, Bode and Convolve of fx-serum-b) in its effect chain
+target_link_libraries(synthyboy_core PUBLIC synthyboy_fx_serum_a)

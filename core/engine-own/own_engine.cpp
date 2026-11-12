@@ -33,7 +33,7 @@ inline float outputLimit (float y) noexcept
 }
 } // namespace
 
-OwnEngine::OwnEngine()
+OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable")))
 {
     const auto* table = paramTable();
     for (size_t i = 0; i < kMaxParams; ++i)
@@ -101,6 +101,11 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     scratchRight.assign (static_cast<size_t> (std::max (maxBlockFrames, 4096)), 0.0f);
     for (int c = 0; c <= kNumWavetableChoices; ++c)
         builtinWavetable (c); // builds the shared bank (allocates): not on the audio thread
+    // the lazily built tables of the keys (they allocate on first use): build them here
+    (void) paramIndex();
+    (void) fxIndex();
+    (void) destLawOf (0);
+    (void) WtOsc::decimatorTaps();
 
     voices.clear();
     for (int i = 0; i < kMaxVoices; ++i)
@@ -465,7 +470,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     }
 
     const MasterIdx& mi = pi.master;
-    static const int fxReverbForce = findParamIndex (hashKey ("reverb.force_enable"));
+    const int fxReverbForce = fxReverbForceIndex;
     int pos = 0, ei = 0;
     while (pos < numFrames)
     {

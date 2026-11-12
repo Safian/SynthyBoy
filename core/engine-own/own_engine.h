@@ -77,6 +77,7 @@ private:
     bool haveLastNote = false;
     int heldKeys = 0;
     float lastVelocity = 0.0f;
+    const int fxReverbForceIndex;
     std::vector<float> scratchRight;
 };
 } // namespace own
