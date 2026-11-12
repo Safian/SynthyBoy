@@ -36,6 +36,7 @@ namespace sbvital {
 
     delay_ = new StereoDelay(kMaxSamples);
     addIdleProcessor(delay_);
+    delay_->setSampleRate(getSampleRate() / getOversampleAmount());
     phase_ = 0.0f;
     delay_->useOutput(output(kAudioOutput));
 
@@ -54,6 +55,12 @@ namespace sbvital {
     delay_->plug(&kDelayStyle, StereoDelay::kStyle);
 
     SynthModule::init();
+  }
+
+  void FlangerModule::setSampleRate(int sample_rate) {
+    SynthModule::setSampleRate(sample_rate);
+    if (delay_ != nullptr)
+      delay_->setSampleRate(sample_rate);
   }
 
   void FlangerModule::processWithInput(const poly_float* audio_in, int num_samples) {

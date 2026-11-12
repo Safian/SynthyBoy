@@ -1,5 +1,5 @@
 // SynthyBoy - fx-oracle: the effects of engine-own against engine-vital through IEngine (black box): level, tail and RT60 of a burst, one table row per effect setting.
-// usage: synthyboy_fx_oracle [reverb|modules|all]   (a markdown table on stdout)
+// usage: synthyboy_fx_oracle [reverb|modules|flanger|all]   (a markdown table on stdout)
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cstdio>
@@ -72,11 +72,60 @@ void row (const std::string& name, const Overrides& ov, double secs, double note
     const Metrics a = measure (EngineKind::own, ov, secs, noteLen), b = measure (EngineKind::vital, ov, secs, noteLen);
     std::printf ("| %-34s | %6.1f | %6.1f | %+5.1f | %5.2f | %5.2f | %6.1f | %6.1f |\n", name.c_str(), a.peakDb, b.peakDb, a.peakDb - b.peakDb, a.rt60, b.rt60, a.tail1, b.tail1);
 }
+
+/** The flanger vectors F1 of docs/engine-spec/06-effects.md section 7 / 8.1 on both engines: a Sine burst (dry window, the copy at 1 / center = 3.03 ms, the second one at 6.06 ms) and the RMS of a held saw (note 45) against the dry saw. */
+void flangerVectors (double kStart)
+{
+    const Overrides fl = { { "flanger.on", 1 }, { "flanger.mix", 100 }, { "flanger.depth", 0 }, { "flanger.center", 329.63f } };
+    const auto peakIn = [] (const std::vector<float>& x, double t0, double t1)
+    {
+        float p = 0;
+        for (size_t i = static_cast<size_t> (t0 * kSr); i < static_cast<size_t> (t1 * kSr) && i < x.size(); ++i)
+            p = std::max (p, std::fabs (x[i]));
+        return static_cast<double> (p);
+    };
+    std::printf ("| flanger F1 | burst dry window own / vital | copy 3.03 ms own / vital | copy 6.06 ms own / vital | saw RMS vs dry own / vital |\n|---|---|---|---|---|\n");
+    for (float feedback : { 0.0f, 50.0f, -50.0f })
+    {
+        double bd[2], c1[2], c2[2], sr[2];
+        for (int k = 0; k < 2; ++k)
+        {
+            const EngineKind kind = k == 0 ? EngineKind::own : EngineKind::vital;
+            Overrides ov = { { "osc1.wavetable", 0 }, { "osc1.level", 100 }, { "osc1.phase", 90 }, { "filter1.on", 0 }, { "master.volume", 0 }, { "env1.attack", 0 }, { "env1.decay", 5 }, { "env1.sustain", 0 }, { "env1.release", 5 } };
+            ov.insert (ov.end(), fl.begin(), fl.end());
+            ov.push_back ({ "flanger.feedback", feedback });
+            Note n;
+            n.start = kStart;
+            n.length = 0.02;
+            n.key = 69;
+            const Stereo b = render (kind, ov, { n }, kStart + 0.3, kSr);
+            bd[k] = peakIn (b.l, kStart, kStart + 0.0029);
+            c1[k] = peakIn (b.l, kStart + 0.0029, kStart + 0.0036);
+            c2[k] = peakIn (b.l, kStart + 0.006, kStart + 0.0066);
+            Overrides saw = { { "osc1.wavetable", 1 }, { "osc1.level", 100 }, { "filter1.on", 0 }, { "master.volume", -6 }, { "osc1.unison.voices", 1 } };
+            Overrides sawFx = saw;
+            sawFx.insert (sawFx.end(), fl.begin(), fl.end());
+            sawFx.push_back ({ "flanger.feedback", feedback });
+            Note h;
+            h.start = 0.0;
+            h.length = 1.0;
+            h.key = 45;
+            const Stereo d = render (kind, saw, { h }, 0.8, kSr), w = render (kind, sawFx, { h }, 0.8, kSr);
+            sr[k] = rms (w.l, static_cast<size_t> (0.3 * kSr), static_cast<size_t> (0.7 * kSr)) / rms (d.l, static_cast<size_t> (0.3 * kSr), static_cast<size_t> (0.7 * kSr));
+        }
+        std::printf ("| feedback %+.0f | %.3f / %.3f | %.3f / %.3f | %.3f / %.3f | %.3f / %.3f |\n", static_cast<double> (feedback), bd[0], bd[1], c1[0], c1[1], c2[0], c2[1], sr[0], sr[1]);
+    }
+}
 } // namespace
 
 int main (int argc, char** argv)
 {
     const std::string what = argc > 1 ? argv[1] : "all";
+    if (what == "flanger")
+    {
+        flangerVectors (argc > 2 ? std::atof (argv[2]) : 0.1);
+        return 0;
+    }
     if (argc > 3)
         gLevel = static_cast<float> (std::atof (argv[3]));
     const float mix = argc > 2 ? static_cast<float> (std::atof (argv[2])) : 100.0f;

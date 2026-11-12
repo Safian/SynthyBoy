@@ -756,6 +756,86 @@ TEST (reverb_feedback_scales_the_tail_of_nitrous_and_basin_only)
 // the loud signal drove the exponent of futils::exp2 below -126, where the float exponent field wrapped (the chain case is
 // fxi_loud_compressor_eq_diode_chain_stays_finite in test_fxinstances.cpp). The values here are synthetic (no preset file).
 
+// The flanger vectors of docs/engine-spec/06-effects.md section 7 / 8.1 (F1). The flanger plugs the internal delay style kClampedUnfiltered; the
+// style control was once clamped to the user styles, which put the flanger on TAP-> DELAY (no feedback, no wet): feedback had no effect and the wet
+// part was almost absent (RMS of a saw at note 45: 0.490 dry, 0.437 at mix 50, 0.321 at mix 100).
+TEST (flanger_vectors_f1_feedback_works_and_the_wet_copy_is_there)
+{
+    const auto flangerSetup = [] (IEngine& e, float feedback)
+    {
+        setByKey (e, "flanger.on", 1.0f);
+        setByKey (e, "flanger.mix", 100.0f);
+        setByKey (e, "flanger.depth", 0.0f);
+        setByKey (e, "flanger.center", 329.63f);
+        setByKey (e, "flanger.feedback", feedback);
+    };
+    // 1. a Sine burst: a copy delayed by 1 / center = 3.03 ms (146 samples at 48 kHz: the delay must run at the real sample rate), the dry burst at -3 dB
+    {
+        auto e = makeVital();
+        setByKey (*e, "osc1.wavetable", 0.0f);
+        setByKey (*e, "osc1.level", 100.0f);
+        setByKey (*e, "osc1.phase", 90.0f);
+        setByKey (*e, "osc1.unison.voices", 1.0f);
+        setByKey (*e, "osc1.random_phase", 0.0f);
+        setByKey (*e, "osc1.destination", 3.0f);
+        setByKey (*e, "filter1.on", 0.0f);
+        setByKey (*e, "master.volume", 0.0f);
+        setByKey (*e, "env1.attack", 0.0f);
+        setByKey (*e, "env1.decay", 5.0f);
+        setByKey (*e, "env1.sustain", 0.0f);
+        setByKey (*e, "env1.release", 5.0f);
+        const auto burst = [&] (double t0, double t1)
+        {
+            e->reset();
+            const auto r = sbtest::render (*e, { noteOn (static_cast<int> (0.1 * kSr), 69), noteOff (static_cast<int> (0.12 * kSr), 69) }, static_cast<int> (0.4 * kSr), 256);
+            return std::make_pair (peak (r.left, 0.1, 0.1 + 0.0029), peak (r.left, 0.1 + t0, 0.1 + t1));
+        };
+        flangerSetup (*e, 0.0f);
+        (void) burst (0.0029, 0.0036);   // (the first render after a parameter change settles the slewed delay time)
+        const auto got = burst (0.0029, 0.0036);
+        CHECK (got.second > 0.5);        // the delayed copy
+        // the copy sits at 3.03 ms, not at the 2.79 ms of a delay that kept 44.1 kHz: nothing in 2.4 .. 2.8 ms but the decayed dry burst
+        CHECK (burst (0.0024, 0.0028).second < 0.15);
+        std::printf ("    flanger burst: dry window %.3f, delayed copy %.3f\n", got.first, got.second);
+        // feedback adds the second copy at 2 / center = 6.06 ms, nothing without it
+        setByKey (*e, "flanger.feedback", 0.0f);
+        (void) burst (0.006, 0.0066);
+        const auto none = burst (0.006, 0.0066);
+        setByKey (*e, "flanger.feedback", 70.0f);
+        (void) burst (0.006, 0.0066);
+        const auto fed = burst (0.006, 0.0066);
+        CHECK (none.second < 0.05);
+        CHECK (fed.second > 0.4 && fed.second < 0.7);   // the first copy (0.78) x feedback 0.7
+    }
+    // 2. noise / saw: the feedback changes the output, the wet part is present (RMS at mix 100 is not the 0.66 of the dry one of the defect)
+    {
+        const auto level = [&] (float feedback, float mix, bool on)
+        {
+            auto e = makeVital();
+            base (*e);
+            if (on)
+            {
+                flangerSetup (*e, feedback);
+                setByKey (*e, "flanger.mix", mix);
+            }
+            return play (*e, 0.8, 45);
+        };
+        const auto dry = level (0.0f, 0.0f, false);
+        const auto fb0 = level (0.0f, 100.0f, true);
+        const auto fb50 = level (50.0f, 100.0f, true);
+        const auto fbm50 = level (-50.0f, 100.0f, true);
+        CHECK (finite (fb50) && finite (fbm50));
+        CHECK (relativeDifference (fb0.left, fb50.left) > 0.05);      // feedback has an effect
+        CHECK (relativeDifference (fb0.left, fbm50.left) > 0.05);
+        CHECK (relativeDifference (fb50.left, fbm50.left) > 0.05);
+        // the wet copy is present: 0.81 of the dry RMS at feedback 0 (0.66 in the defect: only the dry path at -3 dB and a trace of wet)
+        const double ratio = rms (fb0.left) / rms (dry.left);
+        std::printf ("    flanger saw RMS ratio at mix 100 against dry: %.3f\n", ratio);
+        CHECK (ratio > 0.75 && ratio < 0.87);
+        CHECK (rms (fbm50.left) / rms (dry.left) > 1.0);   // negative feedback raises the odd harmonics of the comb
+    }
+}
+
 TEST (robust_exp2_stays_finite_and_monotone_for_any_exponent)
 {
     using namespace sbvital;

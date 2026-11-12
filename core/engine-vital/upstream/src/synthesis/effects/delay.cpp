@@ -71,8 +71,11 @@ namespace sbvital {
 
     poly_float target_frequency = input(kFrequency)->at(0);
 
-    // a value outside the enumerators is undefined behaviour for the enum: clamp the control first
-    Style style = static_cast<Style>(utils::iclamp(static_cast<int>(input(kStyle)->at(0)[0]), 0, kNumStyles - 1));
+    // a value outside the enumerators is undefined behaviour for the enum: clamp the control first. The range is the whole enum
+    // including the internal styles (kClampedDampened .. kUnclampedUnfiltered, plugged by the flanger as kClampedUnfiltered):
+    // clamping to kNumStyles - 1 mapped the flanger onto kTapDelay (flanger defect F1, 06-effects.md 8.1). kNumStyles itself is a
+    // sentinel and takes the default (unfiltered) branch like before.
+    Style style = static_cast<Style>(utils::iclamp(static_cast<int>(input(kStyle)->at(0)[0]), 0, kUnclampedUnfiltered));
     if (style == kStereo || style == kPingPong || style == kMidPingPong || style == kTapDelay)
       target_frequency = utils::maskLoad(target_frequency, input(kFrequencyAux)->at(0), constants::kRightMask);
 

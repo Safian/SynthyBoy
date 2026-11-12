@@ -47,6 +47,9 @@ namespace sbvital {
           delay_->hardReset();
       }
 
+      // the idle delay is not reached by ProcessorRouter::setSampleRate (only by setOversampleAmount): without this it kept the default 44.1 kHz
+      // and every delay time was 8 % short at 48 kHz (flanger defect F1, 06-effects.md 8.1)
+      void setSampleRate(int sample_rate) override;
       void processWithInput(const poly_float* audio_in, int num_samples) override;
       void correctToTime(double seconds) override;
 
