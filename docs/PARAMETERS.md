@@ -73,28 +73,28 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `master.portamento.scaled` | Portamento Scaled By Interval | 0 Off, 1 On | Off | Master / Portamento |  | yes |
 | `curve.velocity.legato` | Velocity Curve Legato | 0 Off, 1 On | Off | Master / Curves |  |  |
 | `curve.note.legato` | Note Curve Legato | 0 Off, 1 On | Off | Master / Curves |  |  |
-| `master.scale.key` | Scale Key | 12 choices: 0 C, 1 C#, 2 D, ... , 11 B | C | Master / Scale |  |  |
-| `master.scale.type` | Scale Type | 20 choices: 0 Chromatic (off), 1 Major, 2 Natural Minor, ... , 19 Hirajoshi | Chromatic (off) | Master / Scale |  |  |
-| `master.scale.mode` | Scale Mode | 0 Conform, 1 Mark only | Conform | Master / Scale |  |  |
-| `master.tuning.a4` | Concert Pitch A4 | 400 .. 480 Hz | 440 Hz | Master / Tuning |  |  |
-| `master.tuning.scale` | Tuning Scale | 0 12-TET, 1 Pythagorean, 2 Just intonation, 3 User file | 12-TET | Master / Tuning |  |  |
-| `master.tuning.mts_esp` | Tuning MTS-ESP | 0 Off, 1 On | Off | Master / Tuning |  |  |
-| `master.tuning.mts_note_on_only` | Tuning MTS-ESP Note-On Only | 0 Off, 1 On | Off | Master / Tuning |  |  |
-| `master.mpe.on` | MPE On | 0 Off, 1 On | Off | Master / MPE |  |  |
-| `master.mpe.bend_range` | MPE Pitch Bend Range | 1 .. 96 st (steps of 1) | 48 st | Master / MPE |  |  |
+| `master.scale.key` | Scale Key | 12 choices: 0 C, 1 C#, 2 D, ... , 11 B | C | Master / Scale |  | yes |
+| `master.scale.type` | Scale Type | 20 choices: 0 Chromatic (off), 1 Major, 2 Natural Minor, ... , 19 Hirajoshi | Chromatic (off) | Master / Scale |  | yes |
+| `master.scale.mode` | Scale Mode | 0 Conform, 1 Mark only | Conform | Master / Scale |  | yes |
+| `master.tuning.a4` | Concert Pitch A4 | 400 .. 480 Hz | 440 Hz | Master / Tuning |  | yes |
+| `master.tuning.scale` | Tuning Scale | 0 12-TET, 1 Pythagorean, 2 Just intonation, 3 User file | 12-TET | Master / Tuning |  | yes |
+| `master.tuning.mts_esp` | Tuning MTS-ESP | 0 Off, 1 On | Off | Master / Tuning |  | yes |
+| `master.tuning.mts_note_on_only` | Tuning MTS-ESP Note-On Only | 0 Off, 1 On | Off | Master / Tuning |  | yes |
+| `master.mpe.on` | MPE On | 0 Off, 1 On | Off | Master / MPE |  | yes |
+| `master.mpe.bend_range` | MPE Pitch Bend Range | 1 .. 96 st (steps of 1) | 48 st | Master / MPE |  | yes |
 | `voice.phase_legato` | Voice Phase Legato | 0 Off, 1 On | Off | Master / Voicing |  |  |
 | `master.voice.same_note` | Master Same Note Mode | 0 Steal, 1 Stack, 2 Ignore | Steal | Master / Voicing |  | yes |
 | `master.voice.steal_priority` | Master Voice Steal Priority | 0 Newest, 1 Oldest, 2 Highest, 3 Lowest, 4 Velocity | Newest | Master / Voicing |  | yes |
-| `master.poly_legato` | Master Poly Legato | 0 Off, 1 On | Off | Master |  |  |
+| `master.poly_legato` | Master Poly Legato | 0 Off, 1 On | Off | Master |  | yes |
 | `master.bend_down_range` | Master Pitch Bend Down Range | 0 .. 24 st (steps of 1) | 2 st | Master |  | yes |
 | `master.bend_down_link` | Master Pitch Bend Down Same As Up | 0 Off, 1 On | On | Master |  | yes |
 | `master.stereo_spread` | Master Stereo Spread | 0 .. 100 % | 100 % | Master | mod | yes |
-| `master.stereo_routing` | Master Stereo Routing | 0 .. 100 % | 100 % | Master / Voicing | mod |  |
-| `master.voice_override` | Master Voice Override | 0 Kill, 1 Steal | Kill | Master / Voicing |  |  |
-| `master.mpe.xyz_macro` | MPE XYZ to Macros | 0 Off, 1 XYZ -> Macro 1, 2, 3, 2 YZ -> Macro 1, 2 | Off | Master / MPE |  |  |
-| `master.mpe.y_modwheel` | MPE Y to Mod Wheel | 0 Off, 1 On | Off | Master / MPE |  |  |
-| `master.mpe.bend_to_x` | MPE Pitch Bend also to X | 0 Off, 1 On | Off | Master / MPE |  |  |
-| `master.mpe.y_bipolar` | MPE Y Bi-directional | 0 Off, 1 On | Off | Master / MPE |  |  |
+| `master.stereo_routing` | Master Stereo Routing | 0 .. 100 % | 100 % | Master / Voicing | mod | yes |
+| `master.voice_override` | Master Voice Override | 0 Kill, 1 Steal | Kill | Master / Voicing |  | yes |
+| `master.mpe.xyz_macro` | MPE XYZ to Macros | 0 Off, 1 XYZ -> Macro 1, 2, 3, 2 YZ -> Macro 1, 2 | Off | Master / MPE |  | yes |
+| `master.mpe.y_modwheel` | MPE Y to Mod Wheel | 0 Off, 1 On | Off | Master / MPE |  | yes |
+| `master.mpe.bend_to_x` | MPE Pitch Bend also to X | 0 Off, 1 On | Off | Master / MPE |  | yes |
+| `master.mpe.y_bipolar` | MPE Y Bi-directional | 0 Off, 1 On | Off | Master / MPE |  | yes |
 
 ### Osc 1
 
@@ -161,9 +161,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.warp2.amount` | Osc 1 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 1 / Warp 2 | mod | yes |
 | `osc1.warp2.phase` | Osc 1 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp 2 | mod | yes |
 | `osc1.warp2.spread` | Osc 1 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 1 / Warp 2 | mod | yes |
-| `osc1.filter_blend` | Osc 1 Filter Blend | 0 .. 100 % | 0 % | Osc 1 | mod |  |
-| `osc1.bus1_send` | Osc 1 Bus 1 Send | 0 .. 100 % | 0 % | Osc 1 | mod |  |
-| `osc1.bus2_send` | Osc 1 Bus 2 Send | 0 .. 100 % | 0 % | Osc 1 | mod |  |
+| `osc1.filter_blend` | Osc 1 Filter Blend | 0 .. 100 % | 0 % | Osc 1 | mod | yes |
+| `osc1.bus1_send` | Osc 1 Bus 1 Send | 0 .. 100 % | 0 % | Osc 1 | mod | yes |
+| `osc1.bus2_send` | Osc 1 Bus 2 Send | 0 .. 100 % | 0 % | Osc 1 | mod | yes |
 | `osc1.remap.on` | Osc 1 Remap On | 0 Off, 1 On | Off | Osc 1 / Remap |  |  |
 | `osc1.remap.slot` | Osc 1 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 1 / Remap |  |  |
 | `osc1.remap.rise` | Osc 1 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
@@ -297,9 +297,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.warp2.amount` | Osc 2 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 2 / Warp 2 | mod | yes |
 | `osc2.warp2.phase` | Osc 2 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp 2 | mod | yes |
 | `osc2.warp2.spread` | Osc 2 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 2 / Warp 2 | mod | yes |
-| `osc2.filter_blend` | Osc 2 Filter Blend | 0 .. 100 % | 0 % | Osc 2 | mod |  |
-| `osc2.bus1_send` | Osc 2 Bus 1 Send | 0 .. 100 % | 0 % | Osc 2 | mod |  |
-| `osc2.bus2_send` | Osc 2 Bus 2 Send | 0 .. 100 % | 0 % | Osc 2 | mod |  |
+| `osc2.filter_blend` | Osc 2 Filter Blend | 0 .. 100 % | 0 % | Osc 2 | mod | yes |
+| `osc2.bus1_send` | Osc 2 Bus 1 Send | 0 .. 100 % | 0 % | Osc 2 | mod | yes |
+| `osc2.bus2_send` | Osc 2 Bus 2 Send | 0 .. 100 % | 0 % | Osc 2 | mod | yes |
 | `osc2.remap.on` | Osc 2 Remap On | 0 Off, 1 On | Off | Osc 2 / Remap |  |  |
 | `osc2.remap.slot` | Osc 2 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 2 / Remap |  |  |
 | `osc2.remap.rise` | Osc 2 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
@@ -433,9 +433,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.warp2.amount` | Osc 3 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 3 / Warp 2 | mod | yes |
 | `osc3.warp2.phase` | Osc 3 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp 2 | mod | yes |
 | `osc3.warp2.spread` | Osc 3 Warp 2 Spread | -100 .. 100 % | 0 % | Osc 3 / Warp 2 | mod | yes |
-| `osc3.filter_blend` | Osc 3 Filter Blend | 0 .. 100 % | 0 % | Osc 3 | mod |  |
-| `osc3.bus1_send` | Osc 3 Bus 1 Send | 0 .. 100 % | 0 % | Osc 3 | mod |  |
-| `osc3.bus2_send` | Osc 3 Bus 2 Send | 0 .. 100 % | 0 % | Osc 3 | mod |  |
+| `osc3.filter_blend` | Osc 3 Filter Blend | 0 .. 100 % | 0 % | Osc 3 | mod | yes |
+| `osc3.bus1_send` | Osc 3 Bus 1 Send | 0 .. 100 % | 0 % | Osc 3 | mod | yes |
+| `osc3.bus2_send` | Osc 3 Bus 2 Send | 0 .. 100 % | 0 % | Osc 3 | mod | yes |
 | `osc3.remap.on` | Osc 3 Remap On | 0 Off, 1 On | Off | Osc 3 / Remap |  |  |
 | `osc3.remap.slot` | Osc 3 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 3 / Remap |  |  |
 | `osc3.remap.rise` | Osc 3 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
@@ -512,9 +512,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `noise.level` | Noise Level | 0 .. 100 % | 25 % | Noise | mod | yes |
 | `noise.pan` | Noise Pan | -100 .. 100 % | 0 % | Noise | mod | yes |
 | `noise.destination` | Noise Destination | 7 choices: 0 Filter 1, 1 Filter 2, 2 Filters 1+2, ... , 6 None | Filter 1 | Noise |  | yes |
-| `noise.filter_blend` | Noise Filter Blend | 0 .. 100 % | 0 % | Noise | mod |  |
-| `noise.bus1_send` | Noise Bus 1 Send | 0 .. 100 % | 0 % | Noise | mod |  |
-| `noise.bus2_send` | Noise Bus 2 Send | 0 .. 100 % | 0 % | Noise | mod |  |
+| `noise.filter_blend` | Noise Filter Blend | 0 .. 100 % | 0 % | Noise | mod | yes |
+| `noise.bus1_send` | Noise Bus 1 Send | 0 .. 100 % | 0 % | Noise | mod | yes |
+| `noise.bus2_send` | Noise Bus 2 Send | 0 .. 100 % | 0 % | Noise | mod | yes |
 | `noise.sample` | Noise Sample | 9 choices: 0 White Noise, 1 Pink Noise, 2 Brown Noise, ... , 8 Atmosphere | White Noise | Noise |  |  |
 | `noise.pitch` | Noise Pitch | -48 .. 48 st (steps of 1) | 0 st | Noise | mod |  |
 | `noise.fine` | Noise Fine | -100 .. 100 ct | 0 ct | Noise | mod |  |
@@ -541,19 +541,19 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `filter1.blend` | Filter 1 Blend | 0 .. 100 % | 0 % | Filter 1 | mod | yes |
 | `filter1.mix` | Filter 1 Mix | 0 .. 100 % | 100 % | Filter 1 | mod | yes |
 | `filter1.keytrack` | Filter 1 Key Tracking | -100 .. 100 % | 0 % | Filter 1 | mod | yes |
-| `filter1.comb_offset` | Filter 1 Comb Blend Offset | 0 .. 84 st | 42 st | Filter 1 / Model Settings | mod |  |
-| `filter1.formant.x` | Filter 1 Formant X | 0 .. 100 % | 50 % | Filter 1 / Model Settings | mod |  |
-| `filter1.formant.y` | Filter 1 Formant Y | 0 .. 100 % | 50 % | Filter 1 / Model Settings | mod |  |
-| `filter1.formant.resonance` | Filter 1 Formant Resonance | 30 .. 100 % | 85 % | Filter 1 / Model Settings | mod |  |
-| `filter1.formant.spread` | Filter 1 Formant Spread | -100 .. 100 % | 0 % | Filter 1 / Model Settings | mod |  |
-| `filter1.formant.transpose` | Filter 1 Formant Transpose | -12 .. 12 st | 0 st | Filter 1 / Model Settings | mod |  |
-| `filter1.bus1_send` | Filter 1 Bus 1 Send | 0 .. 100 % | 0 % | Filter 1 | mod |  |
-| `filter1.bus2_send` | Filter 1 Bus 2 Send | 0 .. 100 % | 0 % | Filter 1 | mod |  |
-| `filter1.destination` | Filter 1 Destination | 0 Effects only, 1 Direct out, 2 None | Effects only | Filter 1 |  |  |
-| `filter1.var` | Filter 1 Var | 0 .. 100 % | 50 % | Filter 1 | mod |  |
-| `filter1.pan` | Filter 1 Pan | -100 .. 100 % | 0 % | Filter 1 | mod |  |
-| `filter1.level` | Filter 1 Level | -60 .. 12 dB | 0 dB | Filter 1 | mod |  |
-| `filter1.clean_mode` | Filter 1 Clean Mode | 0 Off, 1 On | Off | Filter 1 |  |  |
+| `filter1.comb_offset` | Filter 1 Comb Blend Offset | 0 .. 84 st | 42 st | Filter 1 / Model Settings | mod | yes |
+| `filter1.formant.x` | Filter 1 Formant X | 0 .. 100 % | 50 % | Filter 1 / Model Settings | mod | yes |
+| `filter1.formant.y` | Filter 1 Formant Y | 0 .. 100 % | 50 % | Filter 1 / Model Settings | mod | yes |
+| `filter1.formant.resonance` | Filter 1 Formant Resonance | 30 .. 100 % | 85 % | Filter 1 / Model Settings | mod | yes |
+| `filter1.formant.spread` | Filter 1 Formant Spread | -100 .. 100 % | 0 % | Filter 1 / Model Settings | mod | yes |
+| `filter1.formant.transpose` | Filter 1 Formant Transpose | -12 .. 12 st | 0 st | Filter 1 / Model Settings | mod | yes |
+| `filter1.bus1_send` | Filter 1 Bus 1 Send | 0 .. 100 % | 0 % | Filter 1 | mod | yes |
+| `filter1.bus2_send` | Filter 1 Bus 2 Send | 0 .. 100 % | 0 % | Filter 1 | mod | yes |
+| `filter1.destination` | Filter 1 Destination | 0 Effects only, 1 Direct out, 2 None | Effects only | Filter 1 |  | yes |
+| `filter1.var` | Filter 1 Var | 0 .. 100 % | 50 % | Filter 1 | mod | yes |
+| `filter1.pan` | Filter 1 Pan | -100 .. 100 % | 0 % | Filter 1 | mod | yes |
+| `filter1.level` | Filter 1 Level | -60 .. 12 dB | 0 dB | Filter 1 | mod | yes |
+| `filter1.clean_mode` | Filter 1 Clean Mode | 0 Off, 1 On | Off | Filter 1 |  | yes |
 | `filter1.env1` | Filter 1 Env 1 | 0 Off, 1 On | On | Filter 1 |  | yes |
 
 ### Filter 2
@@ -569,19 +569,19 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `filter2.blend` | Filter 2 Blend | 0 .. 100 % | 0 % | Filter 2 | mod | yes |
 | `filter2.mix` | Filter 2 Mix | 0 .. 100 % | 100 % | Filter 2 | mod | yes |
 | `filter2.keytrack` | Filter 2 Key Tracking | -100 .. 100 % | 0 % | Filter 2 | mod | yes |
-| `filter2.comb_offset` | Filter 2 Comb Blend Offset | 0 .. 84 st | 42 st | Filter 2 / Model Settings | mod |  |
-| `filter2.formant.x` | Filter 2 Formant X | 0 .. 100 % | 50 % | Filter 2 / Model Settings | mod |  |
-| `filter2.formant.y` | Filter 2 Formant Y | 0 .. 100 % | 50 % | Filter 2 / Model Settings | mod |  |
-| `filter2.formant.resonance` | Filter 2 Formant Resonance | 30 .. 100 % | 85 % | Filter 2 / Model Settings | mod |  |
-| `filter2.formant.spread` | Filter 2 Formant Spread | -100 .. 100 % | 0 % | Filter 2 / Model Settings | mod |  |
-| `filter2.formant.transpose` | Filter 2 Formant Transpose | -12 .. 12 st | 0 st | Filter 2 / Model Settings | mod |  |
-| `filter2.bus1_send` | Filter 2 Bus 1 Send | 0 .. 100 % | 0 % | Filter 2 | mod |  |
-| `filter2.bus2_send` | Filter 2 Bus 2 Send | 0 .. 100 % | 0 % | Filter 2 | mod |  |
-| `filter2.destination` | Filter 2 Destination | 0 Effects only, 1 Direct out, 2 None | Effects only | Filter 2 |  |  |
-| `filter2.var` | Filter 2 Var | 0 .. 100 % | 50 % | Filter 2 | mod |  |
-| `filter2.pan` | Filter 2 Pan | -100 .. 100 % | 0 % | Filter 2 | mod |  |
-| `filter2.level` | Filter 2 Level | -60 .. 12 dB | 0 dB | Filter 2 | mod |  |
-| `filter2.clean_mode` | Filter 2 Clean Mode | 0 Off, 1 On | Off | Filter 2 |  |  |
+| `filter2.comb_offset` | Filter 2 Comb Blend Offset | 0 .. 84 st | 42 st | Filter 2 / Model Settings | mod | yes |
+| `filter2.formant.x` | Filter 2 Formant X | 0 .. 100 % | 50 % | Filter 2 / Model Settings | mod | yes |
+| `filter2.formant.y` | Filter 2 Formant Y | 0 .. 100 % | 50 % | Filter 2 / Model Settings | mod | yes |
+| `filter2.formant.resonance` | Filter 2 Formant Resonance | 30 .. 100 % | 85 % | Filter 2 / Model Settings | mod | yes |
+| `filter2.formant.spread` | Filter 2 Formant Spread | -100 .. 100 % | 0 % | Filter 2 / Model Settings | mod | yes |
+| `filter2.formant.transpose` | Filter 2 Formant Transpose | -12 .. 12 st | 0 st | Filter 2 / Model Settings | mod | yes |
+| `filter2.bus1_send` | Filter 2 Bus 1 Send | 0 .. 100 % | 0 % | Filter 2 | mod | yes |
+| `filter2.bus2_send` | Filter 2 Bus 2 Send | 0 .. 100 % | 0 % | Filter 2 | mod | yes |
+| `filter2.destination` | Filter 2 Destination | 0 Effects only, 1 Direct out, 2 None | Effects only | Filter 2 |  | yes |
+| `filter2.var` | Filter 2 Var | 0 .. 100 % | 50 % | Filter 2 | mod | yes |
+| `filter2.pan` | Filter 2 Pan | -100 .. 100 % | 0 % | Filter 2 | mod | yes |
+| `filter2.level` | Filter 2 Level | -60 .. 12 dB | 0 dB | Filter 2 | mod | yes |
+| `filter2.clean_mode` | Filter 2 Clean Mode | 0 Off, 1 On | Off | Filter 2 |  | yes |
 | `filter2.env1` | Filter 2 Env 1 | 0 Off, 1 On | On | Filter 2 |  | yes |
 
 ### Filters
@@ -609,9 +609,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `fxfilter.formant.resonance` | FX Filter Formant Resonance | 30 .. 100 % | 85 % | FX Filter / Model Settings | mod |  |
 | `fxfilter.formant.spread` | FX Filter Formant Spread | -100 .. 100 % | 0 % | FX Filter / Model Settings | mod |  |
 | `fxfilter.formant.transpose` | FX Filter Formant Transpose | -12 .. 12 st | 0 st | FX Filter / Model Settings | mod |  |
-| `fxfilter.var` | FX Filter Var | 0 .. 100 % | 50 % | FX Filter | mod |  |
+| `fxfilter.var` | FX Filter Var | 0 .. 100 % | 50 % | FX Filter | mod | yes |
 | `fxfilter.pan` | FX Filter Pan | -100 .. 100 % | 0 % | FX Filter | mod |  |
-| `fxfilter.level` | FX Filter Level | -60 .. 12 dB | 0 dB | FX Filter | mod |  |
+| `fxfilter.level` | FX Filter Level | -60 .. 12 dB | 0 dB | FX Filter | mod | yes |
 | `fxfilter.clean_mode` | FX Filter Clean Mode | 0 Off, 1 On | Off | FX Filter |  |  |
 
 ### Envelope 1
@@ -627,13 +627,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `env1.attack_curve` | Env 1 Attack Curve | -20 .. 20 | 0 | Envelope 1 / Curves |  | yes |
 | `env1.decay_curve` | Env 1 Decay Curve | -20 .. 20 | -3 | Envelope 1 / Curves |  | yes |
 | `env1.release_curve` | Env 1 Release Curve | -20 .. 20 | -3 | Envelope 1 / Curves |  | yes |
-| `env1.units` | Env 1 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 1 / Beat Units |  |  |
-| `env1.legato_inverted` | Env 1 Legato Inverted | 0 Off, 1 On | Off | Envelope 1 / Beat Units |  |  |
-| `env1.delay_beats` | Env 1 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 1 / Beat Units | mod |  |
-| `env1.attack_beats` | Env 1 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 1 / Beat Units | mod |  |
-| `env1.hold_beats` | Env 1 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 1 / Beat Units | mod |  |
-| `env1.decay_beats` | Env 1 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 1 / Beat Units | mod |  |
-| `env1.release_beats` | Env 1 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 1 / Beat Units | mod |  |
+| `env1.units` | Env 1 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 1 / Beat Units |  | yes |
+| `env1.legato_inverted` | Env 1 Legato Inverted | 0 Off, 1 On | Off | Envelope 1 / Beat Units |  | yes |
+| `env1.delay_beats` | Env 1 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 1 / Beat Units | mod | yes |
+| `env1.attack_beats` | Env 1 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 1 / Beat Units | mod | yes |
+| `env1.hold_beats` | Env 1 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 1 / Beat Units | mod | yes |
+| `env1.decay_beats` | Env 1 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 1 / Beat Units | mod | yes |
+| `env1.release_beats` | Env 1 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 1 / Beat Units | mod | yes |
 
 ### Envelope 2
 
@@ -648,13 +648,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `env2.attack_curve` | Env 2 Attack Curve | -20 .. 20 | 0 | Envelope 2 / Curves |  | yes |
 | `env2.decay_curve` | Env 2 Decay Curve | -20 .. 20 | -3 | Envelope 2 / Curves |  | yes |
 | `env2.release_curve` | Env 2 Release Curve | -20 .. 20 | -3 | Envelope 2 / Curves |  | yes |
-| `env2.units` | Env 2 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 2 / Beat Units |  |  |
-| `env2.legato_inverted` | Env 2 Legato Inverted | 0 Off, 1 On | Off | Envelope 2 / Beat Units |  |  |
-| `env2.delay_beats` | Env 2 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 2 / Beat Units | mod |  |
-| `env2.attack_beats` | Env 2 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 2 / Beat Units | mod |  |
-| `env2.hold_beats` | Env 2 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 2 / Beat Units | mod |  |
-| `env2.decay_beats` | Env 2 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 2 / Beat Units | mod |  |
-| `env2.release_beats` | Env 2 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 2 / Beat Units | mod |  |
+| `env2.units` | Env 2 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 2 / Beat Units |  | yes |
+| `env2.legato_inverted` | Env 2 Legato Inverted | 0 Off, 1 On | Off | Envelope 2 / Beat Units |  | yes |
+| `env2.delay_beats` | Env 2 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 2 / Beat Units | mod | yes |
+| `env2.attack_beats` | Env 2 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 2 / Beat Units | mod | yes |
+| `env2.hold_beats` | Env 2 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 2 / Beat Units | mod | yes |
+| `env2.decay_beats` | Env 2 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 2 / Beat Units | mod | yes |
+| `env2.release_beats` | Env 2 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 2 / Beat Units | mod | yes |
 
 ### Envelope 3
 
@@ -669,13 +669,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `env3.attack_curve` | Env 3 Attack Curve | -20 .. 20 | 0 | Envelope 3 / Curves |  | yes |
 | `env3.decay_curve` | Env 3 Decay Curve | -20 .. 20 | -3 | Envelope 3 / Curves |  | yes |
 | `env3.release_curve` | Env 3 Release Curve | -20 .. 20 | -3 | Envelope 3 / Curves |  | yes |
-| `env3.units` | Env 3 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 3 / Beat Units |  |  |
-| `env3.legato_inverted` | Env 3 Legato Inverted | 0 Off, 1 On | Off | Envelope 3 / Beat Units |  |  |
-| `env3.delay_beats` | Env 3 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 3 / Beat Units | mod |  |
-| `env3.attack_beats` | Env 3 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 3 / Beat Units | mod |  |
-| `env3.hold_beats` | Env 3 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 3 / Beat Units | mod |  |
-| `env3.decay_beats` | Env 3 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 3 / Beat Units | mod |  |
-| `env3.release_beats` | Env 3 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 3 / Beat Units | mod |  |
+| `env3.units` | Env 3 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 3 / Beat Units |  | yes |
+| `env3.legato_inverted` | Env 3 Legato Inverted | 0 Off, 1 On | Off | Envelope 3 / Beat Units |  | yes |
+| `env3.delay_beats` | Env 3 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 3 / Beat Units | mod | yes |
+| `env3.attack_beats` | Env 3 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 3 / Beat Units | mod | yes |
+| `env3.hold_beats` | Env 3 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 3 / Beat Units | mod | yes |
+| `env3.decay_beats` | Env 3 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 3 / Beat Units | mod | yes |
+| `env3.release_beats` | Env 3 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 3 / Beat Units | mod | yes |
 
 ### Envelope 4
 
@@ -690,13 +690,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `env4.attack_curve` | Env 4 Attack Curve | -20 .. 20 | 0 | Envelope 4 / Curves |  | yes |
 | `env4.decay_curve` | Env 4 Decay Curve | -20 .. 20 | -3 | Envelope 4 / Curves |  | yes |
 | `env4.release_curve` | Env 4 Release Curve | -20 .. 20 | -3 | Envelope 4 / Curves |  | yes |
-| `env4.units` | Env 4 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 4 / Beat Units |  |  |
-| `env4.legato_inverted` | Env 4 Legato Inverted | 0 Off, 1 On | Off | Envelope 4 / Beat Units |  |  |
-| `env4.delay_beats` | Env 4 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 4 / Beat Units | mod |  |
-| `env4.attack_beats` | Env 4 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 4 / Beat Units | mod |  |
-| `env4.hold_beats` | Env 4 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 4 / Beat Units | mod |  |
-| `env4.decay_beats` | Env 4 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 4 / Beat Units | mod |  |
-| `env4.release_beats` | Env 4 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 4 / Beat Units | mod |  |
+| `env4.units` | Env 4 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 4 / Beat Units |  | yes |
+| `env4.legato_inverted` | Env 4 Legato Inverted | 0 Off, 1 On | Off | Envelope 4 / Beat Units |  | yes |
+| `env4.delay_beats` | Env 4 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 4 / Beat Units | mod | yes |
+| `env4.attack_beats` | Env 4 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 4 / Beat Units | mod | yes |
+| `env4.hold_beats` | Env 4 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 4 / Beat Units | mod | yes |
+| `env4.decay_beats` | Env 4 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 4 / Beat Units | mod | yes |
+| `env4.release_beats` | Env 4 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 4 / Beat Units | mod | yes |
 
 ### Envelope 5
 
@@ -711,13 +711,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `env5.attack_curve` | Env 5 Attack Curve | -20 .. 20 | 0 | Envelope 5 / Curves |  | yes |
 | `env5.decay_curve` | Env 5 Decay Curve | -20 .. 20 | -3 | Envelope 5 / Curves |  | yes |
 | `env5.release_curve` | Env 5 Release Curve | -20 .. 20 | -3 | Envelope 5 / Curves |  | yes |
-| `env5.units` | Env 5 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 5 / Beat Units |  |  |
-| `env5.legato_inverted` | Env 5 Legato Inverted | 0 Off, 1 On | Off | Envelope 5 / Beat Units |  |  |
-| `env5.delay_beats` | Env 5 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 5 / Beat Units | mod |  |
-| `env5.attack_beats` | Env 5 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 5 / Beat Units | mod |  |
-| `env5.hold_beats` | Env 5 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 5 / Beat Units | mod |  |
-| `env5.decay_beats` | Env 5 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 5 / Beat Units | mod |  |
-| `env5.release_beats` | Env 5 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 5 / Beat Units | mod |  |
+| `env5.units` | Env 5 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 5 / Beat Units |  | yes |
+| `env5.legato_inverted` | Env 5 Legato Inverted | 0 Off, 1 On | Off | Envelope 5 / Beat Units |  | yes |
+| `env5.delay_beats` | Env 5 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 5 / Beat Units | mod | yes |
+| `env5.attack_beats` | Env 5 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 5 / Beat Units | mod | yes |
+| `env5.hold_beats` | Env 5 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 5 / Beat Units | mod | yes |
+| `env5.decay_beats` | Env 5 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 5 / Beat Units | mod | yes |
+| `env5.release_beats` | Env 5 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 5 / Beat Units | mod | yes |
 
 ### Envelope 6
 
@@ -732,13 +732,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `env6.attack_curve` | Env 6 Attack Curve | -20 .. 20 | 0 | Envelope 6 / Curves |  | yes |
 | `env6.decay_curve` | Env 6 Decay Curve | -20 .. 20 | -3 | Envelope 6 / Curves |  | yes |
 | `env6.release_curve` | Env 6 Release Curve | -20 .. 20 | -3 | Envelope 6 / Curves |  | yes |
-| `env6.units` | Env 6 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 6 / Beat Units |  |  |
-| `env6.legato_inverted` | Env 6 Legato Inverted | 0 Off, 1 On | Off | Envelope 6 / Beat Units |  |  |
-| `env6.delay_beats` | Env 6 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 6 / Beat Units | mod |  |
-| `env6.attack_beats` | Env 6 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 6 / Beat Units | mod |  |
-| `env6.hold_beats` | Env 6 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 6 / Beat Units | mod |  |
-| `env6.decay_beats` | Env 6 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 6 / Beat Units | mod |  |
-| `env6.release_beats` | Env 6 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 6 / Beat Units | mod |  |
+| `env6.units` | Env 6 Time Units | 0 Milliseconds, 1 Beats | Milliseconds | Envelope 6 / Beat Units |  | yes |
+| `env6.legato_inverted` | Env 6 Legato Inverted | 0 Off, 1 On | Off | Envelope 6 / Beat Units |  | yes |
+| `env6.delay_beats` | Env 6 Delay (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 6 / Beat Units | mod | yes |
+| `env6.attack_beats` | Env 6 Attack (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.0625 beats | Envelope 6 / Beat Units | mod | yes |
+| `env6.hold_beats` | Env 6 Hold (Beats) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Envelope 6 / Beat Units | mod | yes |
+| `env6.decay_beats` | Env 6 Decay (Beats) | 0 .. 16 beats (skew 0.300000012) | 1 beats | Envelope 6 / Beat Units | mod | yes |
+| `env6.release_beats` | Env 6 Release (Beats) | 0 .. 16 beats (skew 0.300000012) | 0.5 beats | Envelope 6 / Beat Units | mod | yes |
 
 ### LFO 1
 
@@ -754,13 +754,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo1.delay` | LFO 1 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 1 | mod | yes |
 | `lfo1.smooth` | LFO 1 Smooth | 0 Off, 1 On | On | LFO 1 |  | yes |
 | `lfo1.smooth_time` | LFO 1 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 1 | mod | yes |
-| `lfo1.stereo` | LFO 1 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 1 | mod |  |
+| `lfo1.stereo` | LFO 1 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 1 | mod | yes |
 | `lfo1.keytrack_transpose` | LFO 1 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 1 / Key Follow | mod | yes |
 | `lfo1.keytrack_tune` | LFO 1 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 1 / Key Follow | mod | yes |
-| `lfo1.mono` | LFO 1 Mono | 0 Off, 1 On | Off | LFO 1 |  |  |
-| `lfo1.direction` | LFO 1 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 1 |  |  |
-| `lfo1.host` | LFO 1 Host Sync | 0 Off, 1 On | Off | LFO 1 |  |  |
-| `lfo1.swing` | LFO 1 Swing | 0 .. 100 % | 0 % | LFO 1 | mod |  |
+| `lfo1.mono` | LFO 1 Mono | 0 Off, 1 On | Off | LFO 1 |  | yes |
+| `lfo1.direction` | LFO 1 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 1 |  | yes |
+| `lfo1.host` | LFO 1 Host Sync | 0 Off, 1 On | Off | LFO 1 |  | yes |
+| `lfo1.swing` | LFO 1 Swing | 0 .. 100 % | 0 % | LFO 1 | mod | yes |
 
 ### LFO 2
 
@@ -776,13 +776,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo2.delay` | LFO 2 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 2 | mod | yes |
 | `lfo2.smooth` | LFO 2 Smooth | 0 Off, 1 On | On | LFO 2 |  | yes |
 | `lfo2.smooth_time` | LFO 2 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 2 | mod | yes |
-| `lfo2.stereo` | LFO 2 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 2 | mod |  |
+| `lfo2.stereo` | LFO 2 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 2 | mod | yes |
 | `lfo2.keytrack_transpose` | LFO 2 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 2 / Key Follow | mod | yes |
 | `lfo2.keytrack_tune` | LFO 2 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 2 / Key Follow | mod | yes |
-| `lfo2.mono` | LFO 2 Mono | 0 Off, 1 On | Off | LFO 2 |  |  |
-| `lfo2.direction` | LFO 2 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 2 |  |  |
-| `lfo2.host` | LFO 2 Host Sync | 0 Off, 1 On | Off | LFO 2 |  |  |
-| `lfo2.swing` | LFO 2 Swing | 0 .. 100 % | 0 % | LFO 2 | mod |  |
+| `lfo2.mono` | LFO 2 Mono | 0 Off, 1 On | Off | LFO 2 |  | yes |
+| `lfo2.direction` | LFO 2 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 2 |  | yes |
+| `lfo2.host` | LFO 2 Host Sync | 0 Off, 1 On | Off | LFO 2 |  | yes |
+| `lfo2.swing` | LFO 2 Swing | 0 .. 100 % | 0 % | LFO 2 | mod | yes |
 
 ### LFO 3
 
@@ -798,13 +798,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo3.delay` | LFO 3 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 3 | mod | yes |
 | `lfo3.smooth` | LFO 3 Smooth | 0 Off, 1 On | On | LFO 3 |  | yes |
 | `lfo3.smooth_time` | LFO 3 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 3 | mod | yes |
-| `lfo3.stereo` | LFO 3 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 3 | mod |  |
+| `lfo3.stereo` | LFO 3 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 3 | mod | yes |
 | `lfo3.keytrack_transpose` | LFO 3 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 3 / Key Follow | mod | yes |
 | `lfo3.keytrack_tune` | LFO 3 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 3 / Key Follow | mod | yes |
-| `lfo3.mono` | LFO 3 Mono | 0 Off, 1 On | Off | LFO 3 |  |  |
-| `lfo3.direction` | LFO 3 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 3 |  |  |
-| `lfo3.host` | LFO 3 Host Sync | 0 Off, 1 On | Off | LFO 3 |  |  |
-| `lfo3.swing` | LFO 3 Swing | 0 .. 100 % | 0 % | LFO 3 | mod |  |
+| `lfo3.mono` | LFO 3 Mono | 0 Off, 1 On | Off | LFO 3 |  | yes |
+| `lfo3.direction` | LFO 3 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 3 |  | yes |
+| `lfo3.host` | LFO 3 Host Sync | 0 Off, 1 On | Off | LFO 3 |  | yes |
+| `lfo3.swing` | LFO 3 Swing | 0 .. 100 % | 0 % | LFO 3 | mod | yes |
 
 ### LFO 4
 
@@ -820,13 +820,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo4.delay` | LFO 4 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 4 | mod | yes |
 | `lfo4.smooth` | LFO 4 Smooth | 0 Off, 1 On | On | LFO 4 |  | yes |
 | `lfo4.smooth_time` | LFO 4 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 4 | mod | yes |
-| `lfo4.stereo` | LFO 4 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 4 | mod |  |
+| `lfo4.stereo` | LFO 4 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 4 | mod | yes |
 | `lfo4.keytrack_transpose` | LFO 4 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 4 / Key Follow | mod | yes |
 | `lfo4.keytrack_tune` | LFO 4 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 4 / Key Follow | mod | yes |
-| `lfo4.mono` | LFO 4 Mono | 0 Off, 1 On | Off | LFO 4 |  |  |
-| `lfo4.direction` | LFO 4 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 4 |  |  |
-| `lfo4.host` | LFO 4 Host Sync | 0 Off, 1 On | Off | LFO 4 |  |  |
-| `lfo4.swing` | LFO 4 Swing | 0 .. 100 % | 0 % | LFO 4 | mod |  |
+| `lfo4.mono` | LFO 4 Mono | 0 Off, 1 On | Off | LFO 4 |  | yes |
+| `lfo4.direction` | LFO 4 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 4 |  | yes |
+| `lfo4.host` | LFO 4 Host Sync | 0 Off, 1 On | Off | LFO 4 |  | yes |
+| `lfo4.swing` | LFO 4 Swing | 0 .. 100 % | 0 % | LFO 4 | mod | yes |
 
 ### LFO 5
 
@@ -842,13 +842,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo5.delay` | LFO 5 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 5 | mod | yes |
 | `lfo5.smooth` | LFO 5 Smooth | 0 Off, 1 On | On | LFO 5 |  | yes |
 | `lfo5.smooth_time` | LFO 5 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 5 | mod | yes |
-| `lfo5.stereo` | LFO 5 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 5 | mod |  |
+| `lfo5.stereo` | LFO 5 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 5 | mod | yes |
 | `lfo5.keytrack_transpose` | LFO 5 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 5 / Key Follow | mod | yes |
 | `lfo5.keytrack_tune` | LFO 5 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 5 / Key Follow | mod | yes |
-| `lfo5.mono` | LFO 5 Mono | 0 Off, 1 On | Off | LFO 5 |  |  |
-| `lfo5.direction` | LFO 5 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 5 |  |  |
-| `lfo5.host` | LFO 5 Host Sync | 0 Off, 1 On | Off | LFO 5 |  |  |
-| `lfo5.swing` | LFO 5 Swing | 0 .. 100 % | 0 % | LFO 5 | mod |  |
+| `lfo5.mono` | LFO 5 Mono | 0 Off, 1 On | Off | LFO 5 |  | yes |
+| `lfo5.direction` | LFO 5 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 5 |  | yes |
+| `lfo5.host` | LFO 5 Host Sync | 0 Off, 1 On | Off | LFO 5 |  | yes |
+| `lfo5.swing` | LFO 5 Swing | 0 .. 100 % | 0 % | LFO 5 | mod | yes |
 
 ### LFO 6
 
@@ -864,13 +864,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo6.delay` | LFO 6 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 6 | mod | yes |
 | `lfo6.smooth` | LFO 6 Smooth | 0 Off, 1 On | On | LFO 6 |  | yes |
 | `lfo6.smooth_time` | LFO 6 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 6 | mod | yes |
-| `lfo6.stereo` | LFO 6 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 6 | mod |  |
+| `lfo6.stereo` | LFO 6 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 6 | mod | yes |
 | `lfo6.keytrack_transpose` | LFO 6 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 6 / Key Follow | mod | yes |
 | `lfo6.keytrack_tune` | LFO 6 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 6 / Key Follow | mod | yes |
-| `lfo6.mono` | LFO 6 Mono | 0 Off, 1 On | Off | LFO 6 |  |  |
-| `lfo6.direction` | LFO 6 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 6 |  |  |
-| `lfo6.host` | LFO 6 Host Sync | 0 Off, 1 On | Off | LFO 6 |  |  |
-| `lfo6.swing` | LFO 6 Swing | 0 .. 100 % | 0 % | LFO 6 | mod |  |
+| `lfo6.mono` | LFO 6 Mono | 0 Off, 1 On | Off | LFO 6 |  | yes |
+| `lfo6.direction` | LFO 6 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 6 |  | yes |
+| `lfo6.host` | LFO 6 Host Sync | 0 Off, 1 On | Off | LFO 6 |  | yes |
+| `lfo6.swing` | LFO 6 Swing | 0 .. 100 % | 0 % | LFO 6 | mod | yes |
 
 ### LFO 7
 
@@ -886,13 +886,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo7.delay` | LFO 7 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 7 | mod | yes |
 | `lfo7.smooth` | LFO 7 Smooth | 0 Off, 1 On | On | LFO 7 |  | yes |
 | `lfo7.smooth_time` | LFO 7 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 7 | mod | yes |
-| `lfo7.stereo` | LFO 7 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 7 | mod |  |
+| `lfo7.stereo` | LFO 7 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 7 | mod | yes |
 | `lfo7.keytrack_transpose` | LFO 7 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 7 / Key Follow | mod | yes |
 | `lfo7.keytrack_tune` | LFO 7 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 7 / Key Follow | mod | yes |
-| `lfo7.mono` | LFO 7 Mono | 0 Off, 1 On | Off | LFO 7 |  |  |
-| `lfo7.direction` | LFO 7 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 7 |  |  |
-| `lfo7.host` | LFO 7 Host Sync | 0 Off, 1 On | Off | LFO 7 |  |  |
-| `lfo7.swing` | LFO 7 Swing | 0 .. 100 % | 0 % | LFO 7 | mod |  |
+| `lfo7.mono` | LFO 7 Mono | 0 Off, 1 On | Off | LFO 7 |  | yes |
+| `lfo7.direction` | LFO 7 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 7 |  | yes |
+| `lfo7.host` | LFO 7 Host Sync | 0 Off, 1 On | Off | LFO 7 |  | yes |
+| `lfo7.swing` | LFO 7 Swing | 0 .. 100 % | 0 % | LFO 7 | mod | yes |
 
 ### LFO 8
 
@@ -908,13 +908,13 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `lfo8.delay` | LFO 8 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 8 | mod | yes |
 | `lfo8.smooth` | LFO 8 Smooth | 0 Off, 1 On | On | LFO 8 |  | yes |
 | `lfo8.smooth_time` | LFO 8 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 8 | mod | yes |
-| `lfo8.stereo` | LFO 8 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 8 | mod |  |
+| `lfo8.stereo` | LFO 8 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 8 | mod | yes |
 | `lfo8.keytrack_transpose` | LFO 8 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 8 / Key Follow | mod | yes |
 | `lfo8.keytrack_tune` | LFO 8 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 8 / Key Follow | mod | yes |
-| `lfo8.mono` | LFO 8 Mono | 0 Off, 1 On | Off | LFO 8 |  |  |
-| `lfo8.direction` | LFO 8 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 8 |  |  |
-| `lfo8.host` | LFO 8 Host Sync | 0 Off, 1 On | Off | LFO 8 |  |  |
-| `lfo8.swing` | LFO 8 Swing | 0 .. 100 % | 0 % | LFO 8 | mod |  |
+| `lfo8.mono` | LFO 8 Mono | 0 Off, 1 On | Off | LFO 8 |  | yes |
+| `lfo8.direction` | LFO 8 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 8 |  | yes |
+| `lfo8.host` | LFO 8 Host Sync | 0 Off, 1 On | Off | LFO 8 |  | yes |
+| `lfo8.swing` | LFO 8 Swing | 0 .. 100 % | 0 % | LFO 8 | mod | yes |
 
 ### Random LFO 1
 
@@ -925,7 +925,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `rlfo1.sync` | Random LFO 1 Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet, 4 Key follow | Free (Hz) | Random LFO 1 |  | yes |
 | `rlfo1.division` | Random LFO 1 Division | 13 choices: 0 Freeze, 1 32 bars, 2 16 bars, ... , 12 1/64 note | 1/8 note | Random LFO 1 |  | yes |
 | `rlfo1.sync_type` | Random LFO 1 Trigger | 0 Retrigger, 1 Free-run | Retrigger | Random LFO 1 |  | yes |
-| `rlfo1.stereo` | Random LFO 1 Stereo | 0 Off, 1 On | Off | Random LFO 1 |  |  |
+| `rlfo1.stereo` | Random LFO 1 Stereo | 0 Off, 1 On | Off | Random LFO 1 |  | yes |
 | `rlfo1.keytrack_transpose` | Random LFO 1 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | Random LFO 1 / Key Follow | mod | yes |
 | `rlfo1.keytrack_tune` | Random LFO 1 Key Follow Tune | -100 .. 100 ct | 0 ct | Random LFO 1 / Key Follow | mod | yes |
 
@@ -938,7 +938,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `rlfo2.sync` | Random LFO 2 Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet, 4 Key follow | Free (Hz) | Random LFO 2 |  | yes |
 | `rlfo2.division` | Random LFO 2 Division | 13 choices: 0 Freeze, 1 32 bars, 2 16 bars, ... , 12 1/64 note | 1/8 note | Random LFO 2 |  | yes |
 | `rlfo2.sync_type` | Random LFO 2 Trigger | 0 Retrigger, 1 Free-run | Retrigger | Random LFO 2 |  | yes |
-| `rlfo2.stereo` | Random LFO 2 Stereo | 0 Off, 1 On | Off | Random LFO 2 |  |  |
+| `rlfo2.stereo` | Random LFO 2 Stereo | 0 Off, 1 On | Off | Random LFO 2 |  | yes |
 | `rlfo2.keytrack_transpose` | Random LFO 2 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | Random LFO 2 / Key Follow | mod | yes |
 | `rlfo2.keytrack_tune` | Random LFO 2 Key Follow Tune | -100 .. 100 ct | 0 ct | Random LFO 2 / Key Follow | mod | yes |
 
@@ -951,7 +951,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `rlfo3.sync` | Random LFO 3 Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet, 4 Key follow | Free (Hz) | Random LFO 3 |  | yes |
 | `rlfo3.division` | Random LFO 3 Division | 13 choices: 0 Freeze, 1 32 bars, 2 16 bars, ... , 12 1/64 note | 1/8 note | Random LFO 3 |  | yes |
 | `rlfo3.sync_type` | Random LFO 3 Trigger | 0 Retrigger, 1 Free-run | Retrigger | Random LFO 3 |  | yes |
-| `rlfo3.stereo` | Random LFO 3 Stereo | 0 Off, 1 On | Off | Random LFO 3 |  |  |
+| `rlfo3.stereo` | Random LFO 3 Stereo | 0 Off, 1 On | Off | Random LFO 3 |  | yes |
 | `rlfo3.keytrack_transpose` | Random LFO 3 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | Random LFO 3 / Key Follow | mod | yes |
 | `rlfo3.keytrack_tune` | Random LFO 3 Key Follow Tune | -100 .. 100 ct | 0 ct | Random LFO 3 / Key Follow | mod | yes |
 
@@ -964,7 +964,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `rlfo4.sync` | Random LFO 4 Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet, 4 Key follow | Free (Hz) | Random LFO 4 |  | yes |
 | `rlfo4.division` | Random LFO 4 Division | 13 choices: 0 Freeze, 1 32 bars, 2 16 bars, ... , 12 1/64 note | 1/8 note | Random LFO 4 |  | yes |
 | `rlfo4.sync_type` | Random LFO 4 Trigger | 0 Retrigger, 1 Free-run | Retrigger | Random LFO 4 |  | yes |
-| `rlfo4.stereo` | Random LFO 4 Stereo | 0 Off, 1 On | Off | Random LFO 4 |  |  |
+| `rlfo4.stereo` | Random LFO 4 Stereo | 0 Off, 1 On | Off | Random LFO 4 |  | yes |
 | `rlfo4.keytrack_transpose` | Random LFO 4 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | Random LFO 4 / Key Follow | mod | yes |
 | `rlfo4.keytrack_tune` | Random LFO 4 Key Follow Tune | -100 .. 100 ct | 0 ct | Random LFO 4 / Key Follow | mod | yes |
 
@@ -990,17 +990,17 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod | yes |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  | yes |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  | yes |
-| `modNN.stereo` | Mod NN Stereo (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
+| `modNN.stereo` | Mod NN Stereo (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  | yes |
 | `modNN.bypass` | Mod NN Bypass (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  | yes |
 | `modNN.aux_source` | Mod NN Aux Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  | yes |
 | `modNN.aux_inv` | Mod NN Aux Invert (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  | yes |
 | `modNN.aux_power` | Mod NN Aux Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  | yes |
 | `modNN.aux_output` | Mod NN Output Scale (NN = 01 .. 64) | 0 .. 200 % | 100 % | Mod Matrix / Slot 01 |  | yes |
-| `modNN.rise` | Mod NN Rise (NN = 01 .. 64) | 0 .. 5000 ms (skew 0.300000012) | 0 ms | Mod Matrix / Slot 01 | mod |  |
-| `modNN.fall` | Mod NN Fall (NN = 01 .. 64) | 0 .. 5000 ms (skew 0.300000012) | 0 ms | Mod Matrix / Slot 01 | mod |  |
-| `modNN.delay` | Mod NN Delay (NN = 01 .. 64) | 0 .. 4000 ms (skew 0.400000006) | 0 ms | Mod Matrix / Slot 01 | mod |  |
-| `modNN.delay_beats` | Mod NN Delay (Beats) (NN = 01 .. 64) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Mod Matrix / Slot 01 | mod |  |
-| `modNN.delay_sync` | Mod NN Delay Tempo Sync (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  |  |
+| `modNN.rise` | Mod NN Rise (NN = 01 .. 64) | 0 .. 5000 ms (skew 0.300000012) | 0 ms | Mod Matrix / Slot 01 | mod | yes |
+| `modNN.fall` | Mod NN Fall (NN = 01 .. 64) | 0 .. 5000 ms (skew 0.300000012) | 0 ms | Mod Matrix / Slot 01 | mod | yes |
+| `modNN.delay` | Mod NN Delay (NN = 01 .. 64) | 0 .. 4000 ms (skew 0.400000006) | 0 ms | Mod Matrix / Slot 01 | mod | yes |
+| `modNN.delay_beats` | Mod NN Delay (Beats) (NN = 01 .. 64) | 0 .. 8 beats (skew 0.400000006) | 0 beats | Mod Matrix / Slot 01 | mod | yes |
+| `modNN.delay_sync` | Mod NN Delay Tempo Sync (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  | yes |
 
 The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed). A slot with source *None* or destination *None* does nothing. *Bipolar* centres a 0..1 source around zero, *Stereo* inverts the amount in the right channel, *Bypass* mutes the slot, *Curve* bends the source (negative = fast start, positive = slow start).
 
@@ -1113,29 +1113,29 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `reverb.high_shelf_gain` | Reverb High Shelf Gain | -6 .. 0 dB | -1 dB | FX / Reverb | mod | yes |
 | `reverb.chorus_amount` | Reverb Chorus Amount | 0 .. 100 % | 20 % | FX / Reverb | mod | yes |
 | `reverb.chorus_rate` | Reverb Chorus Rate | 0.00999999978 .. 8 Hz (skew 0.300000012) | 0.25 Hz | FX / Reverb | mod | yes |
-| `fx.order.10` | FX Order 10 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Hyper/Dimension | FX / Order |  |  |
-| `fx.order.11` | FX Order 11 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Utility | FX / Order |  |  |
-| `fx.order.12` | FX Order 12 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Bode | FX / Order |  |  |
-| `fx.order.13` | FX Order 13 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Convolve | FX / Order |  |  |
-| `fx.order.14` | FX Order 14 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Splitter L/H | FX / Order |  |  |
-| `fx.order.15` | FX Order 15 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Splitter L/M/H | FX / Order |  |  |
-| `fx.order.16` | FX Order 16 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Splitter M/S | FX / Order |  |  |
-| `chorus.rack` | Chorus Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `compressor.rack` | Compressor Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `delay.rack` | Delay Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `distortion.rack` | Distortion Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `eq.rack` | EQ Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `fxfilter.rack` | FX Filter Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `flanger.rack` | Flanger Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `phaser.rack` | Phaser Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `reverb.rack` | Reverb Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `hyperdim.rack` | Hyper Dimension Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `utility.rack` | Utility Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `bode.rack` | Bode Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
+| `fx.order.10` | FX Order 10 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Hyper/Dimension | FX / Order |  | yes |
+| `fx.order.11` | FX Order 11 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Utility | FX / Order |  | yes |
+| `fx.order.12` | FX Order 12 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Bode | FX / Order |  | yes |
+| `fx.order.13` | FX Order 13 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Convolve | FX / Order |  | yes |
+| `fx.order.14` | FX Order 14 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Splitter L/H | FX / Order |  | yes |
+| `fx.order.15` | FX Order 15 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Splitter L/M/H | FX / Order |  | yes |
+| `fx.order.16` | FX Order 16 | 16 choices: 0 Chorus, 1 Compressor, 2 Delay, ... , 15 Splitter M/S | Splitter M/S | FX / Order |  | yes |
+| `chorus.rack` | Chorus Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `compressor.rack` | Compressor Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `delay.rack` | Delay Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `distortion.rack` | Distortion Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `eq.rack` | EQ Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `fxfilter.rack` | FX Filter Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `flanger.rack` | Flanger Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `phaser.rack` | Phaser Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `reverb.rack` | Reverb Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `hyperdim.rack` | Hyper Dimension Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `utility.rack` | Utility Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `bode.rack` | Bode Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
 | `convolve.rack` | Convolve Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `splitter_lh.rack` | Splitter L/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `splitter_lmh.rack` | Splitter L/M/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
-| `splitter_ms.rack` | Splitter M/S Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
+| `splitter_lh.rack` | Splitter L/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `splitter_lmh.rack` | Splitter L/M/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
+| `splitter_ms.rack` | Splitter M/S Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
 | `reverb.force_enable` | Reverb Force Enable | 0 Off, 1 On | Off | FX / Reverb |  |  |
 | `hyperdim.on` | Hyper Dimension On | 0 Off, 1 On | Off | FX / Hyper Dimension |  | yes |
 | `hyperdim.rate` | Hyper Rate | 0.0500000007 .. 10 Hz (skew 0.300000012) | 0.5 Hz | FX / Hyper Dimension | mod | yes |
@@ -1157,21 +1157,21 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `utility.pan` | Utility Pan | -100 .. 100 % | 0 % | FX / Utility | mod | yes |
 | `utility.mix` | Utility Mix | 0 .. 100 % | 100 % | FX / Utility | mod | yes |
 | `utility.level` | Utility Level | -24 .. 12 dB | 0 dB | FX / Utility | mod | yes |
-| `bode.on` | Bode On | 0 Off, 1 On | Off | FX / Bode |  |  |
-| `bode.mono_input` | Bode Mono Input | 0 Off, 1 On | Off | FX / Bode |  |  |
-| `bode.shift` | Bode Shift | 0 .. 100 % | 0 % | FX / Bode | mod |  |
-| `bode.range` | Bode Range | 1 .. 5000 Hz (skew 0.300000012) | 100 Hz | FX / Bode | mod |  |
-| `bode.dir` | Bode Direction | -100 .. 100 % | 100 % | FX / Bode | mod |  |
-| `bode.width` | Bode Width | 0 .. 100 % | 100 % | FX / Bode | mod |  |
-| `bode.delay` | Bode Delay | 1 .. 2000 ms (skew 0.300000012) | 100 ms | FX / Bode | mod |  |
-| `bode.sync` | Bode Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet | Free (Hz) | FX / Bode |  |  |
-| `bode.division` | Bode Division | 9 choices: 0 4 bars, 1 2 bars, 2 1 bar, ... , 8 1/64 note | 1/8 note | FX / Bode |  |  |
-| `bode.feed` | Bode Feedback | 0 .. 100 % | 0 % | FX / Bode | mod |  |
-| `bode.balance` | Bode Balance | -100 .. 100 % | 0 % | FX / Bode | mod |  |
-| `bode.blur` | Bode Blur | 0 .. 100 % | 0 % | FX / Bode | mod |  |
+| `bode.on` | Bode On | 0 Off, 1 On | Off | FX / Bode |  | yes |
+| `bode.mono_input` | Bode Mono Input | 0 Off, 1 On | Off | FX / Bode |  | yes |
+| `bode.shift` | Bode Shift | 0 .. 100 % | 0 % | FX / Bode | mod | yes |
+| `bode.range` | Bode Range | 1 .. 5000 Hz (skew 0.300000012) | 100 Hz | FX / Bode | mod | yes |
+| `bode.dir` | Bode Direction | -100 .. 100 % | 100 % | FX / Bode | mod | yes |
+| `bode.width` | Bode Width | 0 .. 100 % | 100 % | FX / Bode | mod | yes |
+| `bode.delay` | Bode Delay | 1 .. 2000 ms (skew 0.300000012) | 100 ms | FX / Bode | mod | yes |
+| `bode.sync` | Bode Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet | Free (Hz) | FX / Bode |  | yes |
+| `bode.division` | Bode Division | 9 choices: 0 4 bars, 1 2 bars, 2 1 bar, ... , 8 1/64 note | 1/8 note | FX / Bode |  | yes |
+| `bode.feed` | Bode Feedback | 0 .. 100 % | 0 % | FX / Bode | mod | yes |
+| `bode.balance` | Bode Balance | -100 .. 100 % | 0 % | FX / Bode | mod | yes |
+| `bode.blur` | Bode Blur | 0 .. 100 % | 0 % | FX / Bode | mod | yes |
 | `bode.retrig` | Bode Retrigger | 0 Off, 1 On | Off | FX / Bode |  |  |
-| `bode.mix` | Bode Mix | 0 .. 100 % | 50 % | FX / Bode | mod |  |
-| `bode.level` | Bode Level | -24 .. 12 dB | 0 dB | FX / Bode | mod |  |
+| `bode.mix` | Bode Mix | 0 .. 100 % | 50 % | FX / Bode | mod | yes |
+| `bode.level` | Bode Level | -24 .. 12 dB | 0 dB | FX / Bode | mod | yes |
 | `convolve.on` | Convolve On | 0 Off, 1 On | Off | FX / Convolve |  |  |
 | `convolve.ir` | Convolve Impulse | 0 None, 1 Preset IR | None | FX / Convolve |  |  |
 | `convolve.size` | Convolve Size | 0 .. 100 % | 50 % | FX / Convolve | mod |  |
@@ -1186,22 +1186,22 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `convolve.ir_gain` | Convolve IR Gain | -40 .. 24 dB | 0 dB | FX / Convolve | mod |  |
 | `convolve.mix` | Convolve Mix | 0 .. 100 % | 30 % | FX / Convolve | mod |  |
 | `convolve.level` | Convolve Level | -24 .. 12 dB | 0 dB | FX / Convolve | mod |  |
-| `splitter_lh.on` | Splitter L/H On | 0 Off, 1 On | Off | FX / Splitter L/H |  |  |
-| `splitter_lh.freq` | Splitter L/H Split Frequency | 20 .. 20000 Hz (skew 0.300000012) | 500 Hz | FX / Splitter L/H | mod |  |
-| `splitter_lh.low_bypass` | Splitter L/H Low Bypass | 0 Off, 1 On | Off | FX / Splitter L/H |  |  |
-| `splitter_lh.high_bypass` | Splitter L/H High Bypass | 0 Off, 1 On | Off | FX / Splitter L/H |  |  |
-| `splitter_lh.level` | Splitter L/H Level | -24 .. 12 dB | 0 dB | FX / Splitter L/H | mod |  |
-| `splitter_lmh.on` | Splitter L/M/H On | 0 Off, 1 On | Off | FX / Splitter L/M/H |  |  |
-| `splitter_lmh.freq_low` | Splitter L/M/H Low Split Frequency | 20 .. 20000 Hz (skew 0.300000012) | 200 Hz | FX / Splitter L/M/H | mod |  |
-| `splitter_lmh.freq_high` | Splitter L/M/H High Split Frequency | 20 .. 20000 Hz (skew 0.300000012) | 3000 Hz | FX / Splitter L/M/H | mod |  |
-| `splitter_lmh.low_bypass` | Splitter L/M/H Low Bypass | 0 Off, 1 On | Off | FX / Splitter L/M/H |  |  |
-| `splitter_lmh.mid_bypass` | Splitter L/M/H Mid Bypass | 0 Off, 1 On | Off | FX / Splitter L/M/H |  |  |
-| `splitter_lmh.high_bypass` | Splitter L/M/H High Bypass | 0 Off, 1 On | Off | FX / Splitter L/M/H |  |  |
-| `splitter_lmh.level` | Splitter L/M/H Level | -24 .. 12 dB | 0 dB | FX / Splitter L/M/H | mod |  |
-| `splitter_ms.on` | Splitter M/S On | 0 Off, 1 On | Off | FX / Splitter M/S |  |  |
-| `splitter_ms.mid_bypass` | Splitter M/S Mid Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  |  |
-| `splitter_ms.side_bypass` | Splitter M/S Side Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  |  |
-| `splitter_ms.level` | Splitter M/S Level | -24 .. 12 dB | 0 dB | FX / Splitter M/S | mod |  |
+| `splitter_lh.on` | Splitter L/H On | 0 Off, 1 On | Off | FX / Splitter L/H |  | yes |
+| `splitter_lh.freq` | Splitter L/H Split Frequency | 20 .. 20000 Hz (skew 0.300000012) | 500 Hz | FX / Splitter L/H | mod | yes |
+| `splitter_lh.low_bypass` | Splitter L/H Low Bypass | 0 Off, 1 On | Off | FX / Splitter L/H |  | yes |
+| `splitter_lh.high_bypass` | Splitter L/H High Bypass | 0 Off, 1 On | Off | FX / Splitter L/H |  | yes |
+| `splitter_lh.level` | Splitter L/H Level | -24 .. 12 dB | 0 dB | FX / Splitter L/H | mod | yes |
+| `splitter_lmh.on` | Splitter L/M/H On | 0 Off, 1 On | Off | FX / Splitter L/M/H |  | yes |
+| `splitter_lmh.freq_low` | Splitter L/M/H Low Split Frequency | 20 .. 20000 Hz (skew 0.300000012) | 200 Hz | FX / Splitter L/M/H | mod | yes |
+| `splitter_lmh.freq_high` | Splitter L/M/H High Split Frequency | 20 .. 20000 Hz (skew 0.300000012) | 3000 Hz | FX / Splitter L/M/H | mod | yes |
+| `splitter_lmh.low_bypass` | Splitter L/M/H Low Bypass | 0 Off, 1 On | Off | FX / Splitter L/M/H |  | yes |
+| `splitter_lmh.mid_bypass` | Splitter L/M/H Mid Bypass | 0 Off, 1 On | Off | FX / Splitter L/M/H |  | yes |
+| `splitter_lmh.high_bypass` | Splitter L/M/H High Bypass | 0 Off, 1 On | Off | FX / Splitter L/M/H |  | yes |
+| `splitter_lmh.level` | Splitter L/M/H Level | -24 .. 12 dB | 0 dB | FX / Splitter L/M/H | mod | yes |
+| `splitter_ms.on` | Splitter M/S On | 0 Off, 1 On | Off | FX / Splitter M/S |  | yes |
+| `splitter_ms.mid_bypass` | Splitter M/S Mid Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  | yes |
+| `splitter_ms.side_bypass` | Splitter M/S Side Bypass | 0 Off, 1 On | Off | FX / Splitter M/S |  | yes |
+| `splitter_ms.level` | Splitter M/S Level | -24 .. 12 dB | 0 dB | FX / Splitter M/S | mod | yes |
 | `chorus.level` | Chorus Level | -24 .. 12 dB | 0 dB | FX / Chorus | mod | yes |
 | `compressor.level` | Compressor Level | -24 .. 12 dB | 0 dB | FX / Compressor | mod | yes |
 | `delay.level` | Delay Level | -24 .. 12 dB | 0 dB | FX / Delay | mod | yes |
@@ -1214,8 +1214,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `compressor.limit_latency_comp` | Compressor Limiter Latency Comp | 0 Off, 1 On | On | FX / Compressor |  |  |
 | `compressor.crossover_low` | Compressor Low Crossover | 20 .. 1000 Hz (skew 0.400000006) | 120 Hz | FX / Compressor | mod | yes |
 | `compressor.crossover_high` | Compressor High Crossover | 200 .. 16000 Hz (skew 0.400000006) | 2500 Hz | FX / Compressor | mod | yes |
-| `delay.hq` | Delay High Quality | 0 Off, 1 On | Off | FX / Delay |  |  |
-| `delay.offset` | Delay Offset | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod |  |
+| `delay.hq` | Delay High Quality | 0 Off, 1 On | Off | FX / Delay |  | yes |
+| `delay.offset` | Delay Offset | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod | yes |
 | `distortion.filter_keytrack` | Distortion Filter Key Track | -100 .. 100 % | 0 % | FX / Distortion | mod |  |
 | `phaser.depth2` | Phaser Depth 2 | -48 .. 48 st | 0 st | FX / Phaser | mod |  |
 | `reverb.type` | Reverb Type | 0 Vital, 1 Plate, 2 Hall, 3 Vintage, 4 Nitrous, 5 Basin | Vital | FX / Reverb |  |  |
@@ -1672,7 +1672,7 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `fxi16.p22` | FX Slot 16 P22 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
 | `fxi16.p23` | FX Slot 16 P23 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
 | `fxi16.p24` | FX Slot 16 P24 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `delay.offset_left` | Delay Offset Left | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod |  |
+| `delay.offset_left` | Delay Offset Left | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod | yes |
 | `reverb.feedback` | Reverb Feedback | 0 .. 100 % | 50 % | FX / Reverb | mod |  |
 | `eq.mid2.mode` | EQ Mid 2 Mode | 0 Off, 1 Peak, 2 Notch | Off | FX / EQ |  | yes |
 | `eq.mid2.cutoff` | EQ Mid 2 Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 3000 Hz | FX / EQ | mod | yes |
@@ -1695,13 +1695,13 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `lfo9.delay` | LFO 9 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 9 | mod | yes |
 | `lfo9.smooth` | LFO 9 Smooth | 0 Off, 1 On | On | LFO 9 |  | yes |
 | `lfo9.smooth_time` | LFO 9 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 9 | mod | yes |
-| `lfo9.stereo` | LFO 9 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 9 | mod |  |
+| `lfo9.stereo` | LFO 9 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 9 | mod | yes |
 | `lfo9.keytrack_transpose` | LFO 9 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 9 / Key Follow | mod | yes |
 | `lfo9.keytrack_tune` | LFO 9 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 9 / Key Follow | mod | yes |
-| `lfo9.mono` | LFO 9 Mono | 0 Off, 1 On | Off | LFO 9 |  |  |
-| `lfo9.direction` | LFO 9 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 9 |  |  |
-| `lfo9.host` | LFO 9 Host Sync | 0 Off, 1 On | Off | LFO 9 |  |  |
-| `lfo9.swing` | LFO 9 Swing | 0 .. 100 % | 0 % | LFO 9 | mod |  |
+| `lfo9.mono` | LFO 9 Mono | 0 Off, 1 On | Off | LFO 9 |  | yes |
+| `lfo9.direction` | LFO 9 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 9 |  | yes |
+| `lfo9.host` | LFO 9 Host Sync | 0 Off, 1 On | Off | LFO 9 |  | yes |
+| `lfo9.swing` | LFO 9 Swing | 0 .. 100 % | 0 % | LFO 9 | mod | yes |
 
 ### LFO 10
 
@@ -1717,26 +1717,26 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `lfo10.delay` | LFO 10 Delay | 0 .. 4000 ms (skew 0.400000006) | 0 ms | LFO 10 | mod | yes |
 | `lfo10.smooth` | LFO 10 Smooth | 0 Off, 1 On | On | LFO 10 |  | yes |
 | `lfo10.smooth_time` | LFO 10 Smooth Time | 1 .. 1000 ms (skew 0.300000012) | 5 ms | LFO 10 | mod | yes |
-| `lfo10.stereo` | LFO 10 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 10 | mod |  |
+| `lfo10.stereo` | LFO 10 Stereo Offset | -180 .. 180 deg | 0 deg | LFO 10 | mod | yes |
 | `lfo10.keytrack_transpose` | LFO 10 Key Follow Transpose | -60 .. 36 st (steps of 1) | -12 st | LFO 10 / Key Follow | mod | yes |
 | `lfo10.keytrack_tune` | LFO 10 Key Follow Tune | -100 .. 100 ct | 0 ct | LFO 10 / Key Follow | mod | yes |
-| `lfo10.mono` | LFO 10 Mono | 0 Off, 1 On | Off | LFO 10 |  |  |
-| `lfo10.direction` | LFO 10 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 10 |  |  |
-| `lfo10.host` | LFO 10 Host Sync | 0 Off, 1 On | Off | LFO 10 |  |  |
-| `lfo10.swing` | LFO 10 Swing | 0 .. 100 % | 0 % | LFO 10 | mod |  |
+| `lfo10.mono` | LFO 10 Mono | 0 Off, 1 On | Off | LFO 10 |  | yes |
+| `lfo10.direction` | LFO 10 Direction | 0 Forward, 1 Reverse, 2 Ping pong | Forward | LFO 10 |  | yes |
+| `lfo10.host` | LFO 10 Host Sync | 0 Off, 1 On | Off | LFO 10 |  | yes |
+| `lfo10.swing` | LFO 10 Swing | 0 .. 100 % | 0 % | LFO 10 | mod | yes |
 
 ### Mixer
 
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
-| `bus1.level` | Bus 1 Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer / Bus 1 | mod |  |
-| `bus2.level` | Bus 2 Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer / Bus 2 | mod |  |
-| `bus1.destination` | Bus 1 Destination | 0 Main, 1 Direct, 2 Other bus | Main | Mixer / Bus 1 |  |  |
-| `bus2.destination` | Bus 2 Destination | 0 Main, 1 Direct, 2 Other bus | Main | Mixer / Bus 2 |  |  |
-| `bus1.fx_bypass` | Bus 1 FX Bypass | 0 Off, 1 On | Off | Mixer / Bus 1 |  |  |
-| `bus2.fx_bypass` | Bus 2 FX Bypass | 0 Off, 1 On | Off | Mixer / Bus 2 |  |  |
-| `direct.level` | Direct Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer | mod |  |
-| `main.fx_bypass` | Main FX Bypass | 0 Off, 1 On | Off | Mixer |  |  |
+| `bus1.level` | Bus 1 Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer / Bus 1 | mod | yes |
+| `bus2.level` | Bus 2 Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer / Bus 2 | mod | yes |
+| `bus1.destination` | Bus 1 Destination | 0 Main, 1 Direct, 2 Other bus | Main | Mixer / Bus 1 |  | yes |
+| `bus2.destination` | Bus 2 Destination | 0 Main, 1 Direct, 2 Other bus | Main | Mixer / Bus 2 |  | yes |
+| `bus1.fx_bypass` | Bus 1 FX Bypass | 0 Off, 1 On | Off | Mixer / Bus 1 |  | yes |
+| `bus2.fx_bypass` | Bus 2 FX Bypass | 0 Off, 1 On | Off | Mixer / Bus 2 |  | yes |
+| `direct.level` | Direct Level | -60 .. 6 dB (skew 2.5) | 0 dB | Mixer | mod | yes |
+| `main.fx_bypass` | Main FX Bypass | 0 Off, 1 On | Off | Mixer |  | yes |
 
 ### Oscillator 1
 
@@ -1801,9 +1801,9 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `sub.pan` | Sub Pan | -100 .. 100 % | 0 % | Sub | mod | yes |
 | `sub.destination` | Sub Destination | 7 choices: 0 Filter 1, 1 Filter 2, 2 Filters 1+2, ... , 6 None | Effects only | Sub |  | yes |
 | `sub.mono` | Sub Mono | 0 Off, 1 On | Off | Sub |  |  |
-| `sub.filter_blend` | Sub Filter Blend | 0 .. 100 % | 0 % | Sub | mod |  |
-| `sub.bus1_send` | Sub Bus 1 Send | 0 .. 100 % | 0 % | Sub | mod |  |
-| `sub.bus2_send` | Sub Bus 2 Send | 0 .. 100 % | 0 % | Sub | mod |  |
+| `sub.filter_blend` | Sub Filter Blend | 0 .. 100 % | 0 % | Sub | mod | yes |
+| `sub.bus1_send` | Sub Bus 1 Send | 0 .. 100 % | 0 % | Sub | mod | yes |
+| `sub.bus2_send` | Sub Bus 2 Send | 0 .. 100 % | 0 % | Sub | mod | yes |
 | `sub.env1` | Sub Env 1 | 0 Off, 1 On | On | Sub |  | yes |
 | `sub.phase` | Sub Phase | 0 .. 100 % | 0 % | Sub | mod |  |
 | `sub.phase_contiguous` | Sub Phase Contiguous | 0 Off, 1 On | Off | Sub |  |  |
@@ -1819,68 +1819,68 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
-| `voicectl.length` | Voice Control Sequence Length | 1 .. 8 (steps of 1) | 8 | Voice Control |  |  |
-| `voicectl.s1.pan` | Voice Control Step 1 Pan | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
-| `voicectl.s1.detune` | Voice Control Step 1 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 1 |  |  |
-| `voicectl.s1.cutoff` | Voice Control Step 1 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
-| `voicectl.s1.env` | Voice Control Step 1 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
-| `voicectl.s1.mod1` | Voice Control Step 1 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
-| `voicectl.s1.mod2` | Voice Control Step 1 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 1 |  |  |
-| `voicectl.s2.pan` | Voice Control Step 2 Pan | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
-| `voicectl.s2.detune` | Voice Control Step 2 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 2 |  |  |
-| `voicectl.s2.cutoff` | Voice Control Step 2 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
-| `voicectl.s2.env` | Voice Control Step 2 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
-| `voicectl.s2.mod1` | Voice Control Step 2 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
-| `voicectl.s2.mod2` | Voice Control Step 2 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 2 |  |  |
-| `voicectl.s3.pan` | Voice Control Step 3 Pan | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
-| `voicectl.s3.detune` | Voice Control Step 3 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 3 |  |  |
-| `voicectl.s3.cutoff` | Voice Control Step 3 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
-| `voicectl.s3.env` | Voice Control Step 3 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
-| `voicectl.s3.mod1` | Voice Control Step 3 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
-| `voicectl.s3.mod2` | Voice Control Step 3 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 3 |  |  |
-| `voicectl.s4.pan` | Voice Control Step 4 Pan | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
-| `voicectl.s4.detune` | Voice Control Step 4 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 4 |  |  |
-| `voicectl.s4.cutoff` | Voice Control Step 4 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
-| `voicectl.s4.env` | Voice Control Step 4 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
-| `voicectl.s4.mod1` | Voice Control Step 4 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
-| `voicectl.s4.mod2` | Voice Control Step 4 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 4 |  |  |
-| `voicectl.s5.pan` | Voice Control Step 5 Pan | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
-| `voicectl.s5.detune` | Voice Control Step 5 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 5 |  |  |
-| `voicectl.s5.cutoff` | Voice Control Step 5 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
-| `voicectl.s5.env` | Voice Control Step 5 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
-| `voicectl.s5.mod1` | Voice Control Step 5 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
-| `voicectl.s5.mod2` | Voice Control Step 5 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 5 |  |  |
-| `voicectl.s6.pan` | Voice Control Step 6 Pan | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
-| `voicectl.s6.detune` | Voice Control Step 6 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 6 |  |  |
-| `voicectl.s6.cutoff` | Voice Control Step 6 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
-| `voicectl.s6.env` | Voice Control Step 6 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
-| `voicectl.s6.mod1` | Voice Control Step 6 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
-| `voicectl.s6.mod2` | Voice Control Step 6 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 6 |  |  |
-| `voicectl.s7.pan` | Voice Control Step 7 Pan | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
-| `voicectl.s7.detune` | Voice Control Step 7 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 7 |  |  |
-| `voicectl.s7.cutoff` | Voice Control Step 7 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
-| `voicectl.s7.env` | Voice Control Step 7 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
-| `voicectl.s7.mod1` | Voice Control Step 7 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
-| `voicectl.s7.mod2` | Voice Control Step 7 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 7 |  |  |
-| `voicectl.s8.pan` | Voice Control Step 8 Pan | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
-| `voicectl.s8.detune` | Voice Control Step 8 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 8 |  |  |
-| `voicectl.s8.cutoff` | Voice Control Step 8 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
-| `voicectl.s8.env` | Voice Control Step 8 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
-| `voicectl.s8.mod1` | Voice Control Step 8 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
-| `voicectl.s8.mod2` | Voice Control Step 8 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 8 |  |  |
-| `voicectl.rand.pan` | Voice Control Random Pan | 0 .. 100 % | 0 % | Voice Control / Random |  |  |
-| `voicectl.rand.detune` | Voice Control Random Detune | 0 .. 100 ct | 0 ct | Voice Control / Random |  |  |
-| `voicectl.rand.cutoff` | Voice Control Random Cutoff | 0 .. 100 % | 0 % | Voice Control / Random |  |  |
-| `voicectl.rand.env` | Voice Control Random Envelope Time | 0 .. 100 % | 0 % | Voice Control / Random |  |  |
-| `voicectl.rand.detune10x` | Voice Control Random Detune x10 | 0 Off, 1 On | Off | Voice Control / Random |  |  |
-| `voicectl.scale.env` | Voice Control Envelope Time Scaling | 25 .. 400 % (skew 0.430000007) | 100 % | Voice Control / Scaling |  |  |
-| `voicectl.scale.lfo` | Voice Control LFO Time Scaling | 25 .. 400 % (skew 0.430000007) | 100 % | Voice Control / Scaling |  |  |
-| `voicectl.scale.lfo_mode` | Voice Control LFO Scaling Mode | 0 Percent, 1 Rate | Percent | Voice Control / Scaling |  |  |
-| `voicectl.osc.a` | Voice Control Applies to Osc A | 0 Off, 1 On | On | Voice Control / Targets |  |  |
-| `voicectl.osc.b` | Voice Control Applies to Osc B | 0 Off, 1 On | On | Voice Control / Targets |  |  |
-| `voicectl.osc.c` | Voice Control Applies to Osc C | 0 Off, 1 On | On | Voice Control / Targets |  |  |
-| `voicectl.osc.noise` | Voice Control Applies to Noise | 0 Off, 1 On | On | Voice Control / Targets |  |  |
-| `voicectl.osc.sub` | Voice Control Applies to Sub | 0 Off, 1 On | On | Voice Control / Targets |  |  |
+| `voicectl.length` | Voice Control Sequence Length | 1 .. 8 (steps of 1) | 8 | Voice Control |  | yes |
+| `voicectl.s1.pan` | Voice Control Step 1 Pan | -100 .. 100 % | 0 % | Voice Control / Step 1 |  | yes |
+| `voicectl.s1.detune` | Voice Control Step 1 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 1 |  | yes |
+| `voicectl.s1.cutoff` | Voice Control Step 1 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 1 |  | yes |
+| `voicectl.s1.env` | Voice Control Step 1 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 1 |  | yes |
+| `voicectl.s1.mod1` | Voice Control Step 1 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 1 |  | yes |
+| `voicectl.s1.mod2` | Voice Control Step 1 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 1 |  | yes |
+| `voicectl.s2.pan` | Voice Control Step 2 Pan | -100 .. 100 % | 0 % | Voice Control / Step 2 |  | yes |
+| `voicectl.s2.detune` | Voice Control Step 2 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 2 |  | yes |
+| `voicectl.s2.cutoff` | Voice Control Step 2 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 2 |  | yes |
+| `voicectl.s2.env` | Voice Control Step 2 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 2 |  | yes |
+| `voicectl.s2.mod1` | Voice Control Step 2 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 2 |  | yes |
+| `voicectl.s2.mod2` | Voice Control Step 2 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 2 |  | yes |
+| `voicectl.s3.pan` | Voice Control Step 3 Pan | -100 .. 100 % | 0 % | Voice Control / Step 3 |  | yes |
+| `voicectl.s3.detune` | Voice Control Step 3 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 3 |  | yes |
+| `voicectl.s3.cutoff` | Voice Control Step 3 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 3 |  | yes |
+| `voicectl.s3.env` | Voice Control Step 3 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 3 |  | yes |
+| `voicectl.s3.mod1` | Voice Control Step 3 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 3 |  | yes |
+| `voicectl.s3.mod2` | Voice Control Step 3 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 3 |  | yes |
+| `voicectl.s4.pan` | Voice Control Step 4 Pan | -100 .. 100 % | 0 % | Voice Control / Step 4 |  | yes |
+| `voicectl.s4.detune` | Voice Control Step 4 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 4 |  | yes |
+| `voicectl.s4.cutoff` | Voice Control Step 4 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 4 |  | yes |
+| `voicectl.s4.env` | Voice Control Step 4 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 4 |  | yes |
+| `voicectl.s4.mod1` | Voice Control Step 4 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 4 |  | yes |
+| `voicectl.s4.mod2` | Voice Control Step 4 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 4 |  | yes |
+| `voicectl.s5.pan` | Voice Control Step 5 Pan | -100 .. 100 % | 0 % | Voice Control / Step 5 |  | yes |
+| `voicectl.s5.detune` | Voice Control Step 5 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 5 |  | yes |
+| `voicectl.s5.cutoff` | Voice Control Step 5 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 5 |  | yes |
+| `voicectl.s5.env` | Voice Control Step 5 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 5 |  | yes |
+| `voicectl.s5.mod1` | Voice Control Step 5 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 5 |  | yes |
+| `voicectl.s5.mod2` | Voice Control Step 5 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 5 |  | yes |
+| `voicectl.s6.pan` | Voice Control Step 6 Pan | -100 .. 100 % | 0 % | Voice Control / Step 6 |  | yes |
+| `voicectl.s6.detune` | Voice Control Step 6 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 6 |  | yes |
+| `voicectl.s6.cutoff` | Voice Control Step 6 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 6 |  | yes |
+| `voicectl.s6.env` | Voice Control Step 6 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 6 |  | yes |
+| `voicectl.s6.mod1` | Voice Control Step 6 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 6 |  | yes |
+| `voicectl.s6.mod2` | Voice Control Step 6 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 6 |  | yes |
+| `voicectl.s7.pan` | Voice Control Step 7 Pan | -100 .. 100 % | 0 % | Voice Control / Step 7 |  | yes |
+| `voicectl.s7.detune` | Voice Control Step 7 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 7 |  | yes |
+| `voicectl.s7.cutoff` | Voice Control Step 7 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 7 |  | yes |
+| `voicectl.s7.env` | Voice Control Step 7 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 7 |  | yes |
+| `voicectl.s7.mod1` | Voice Control Step 7 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 7 |  | yes |
+| `voicectl.s7.mod2` | Voice Control Step 7 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 7 |  | yes |
+| `voicectl.s8.pan` | Voice Control Step 8 Pan | -100 .. 100 % | 0 % | Voice Control / Step 8 |  | yes |
+| `voicectl.s8.detune` | Voice Control Step 8 Detune | -100 .. 100 ct | 0 ct | Voice Control / Step 8 |  | yes |
+| `voicectl.s8.cutoff` | Voice Control Step 8 Cutoff | -100 .. 100 % | 0 % | Voice Control / Step 8 |  | yes |
+| `voicectl.s8.env` | Voice Control Step 8 Envelope Time | -100 .. 100 % | 0 % | Voice Control / Step 8 |  | yes |
+| `voicectl.s8.mod1` | Voice Control Step 8 Mod 1 | -100 .. 100 % | 0 % | Voice Control / Step 8 |  | yes |
+| `voicectl.s8.mod2` | Voice Control Step 8 Mod 2 | -100 .. 100 % | 0 % | Voice Control / Step 8 |  | yes |
+| `voicectl.rand.pan` | Voice Control Random Pan | 0 .. 100 % | 0 % | Voice Control / Random |  | yes |
+| `voicectl.rand.detune` | Voice Control Random Detune | 0 .. 100 ct | 0 ct | Voice Control / Random |  | yes |
+| `voicectl.rand.cutoff` | Voice Control Random Cutoff | 0 .. 100 % | 0 % | Voice Control / Random |  | yes |
+| `voicectl.rand.env` | Voice Control Random Envelope Time | 0 .. 100 % | 0 % | Voice Control / Random |  | yes |
+| `voicectl.rand.detune10x` | Voice Control Random Detune x10 | 0 Off, 1 On | Off | Voice Control / Random |  | yes |
+| `voicectl.scale.env` | Voice Control Envelope Time Scaling | 25 .. 400 % (skew 0.430000007) | 100 % | Voice Control / Scaling |  | yes |
+| `voicectl.scale.lfo` | Voice Control LFO Time Scaling | 25 .. 400 % (skew 0.430000007) | 100 % | Voice Control / Scaling |  | yes |
+| `voicectl.scale.lfo_mode` | Voice Control LFO Scaling Mode | 0 Percent, 1 Rate | Percent | Voice Control / Scaling |  | yes |
+| `voicectl.osc.a` | Voice Control Applies to Osc A | 0 Off, 1 On | On | Voice Control / Targets |  | yes |
+| `voicectl.osc.b` | Voice Control Applies to Osc B | 0 Off, 1 On | On | Voice Control / Targets |  | yes |
+| `voicectl.osc.c` | Voice Control Applies to Osc C | 0 Off, 1 On | On | Voice Control / Targets |  | yes |
+| `voicectl.osc.noise` | Voice Control Applies to Noise | 0 Off, 1 On | On | Voice Control / Targets |  | yes |
+| `voicectl.osc.sub` | Voice Control Applies to Sub | 0 Off, 1 On | On | Voice Control / Targets |  | yes |
 
 ## Modulation sources
 

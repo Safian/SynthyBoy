@@ -48,30 +48,30 @@ Areas are the groups of the parameter table (`group` field of `params.json`), `E
 
 | UI area (panel) | Keys | Own engine acts | Drawn dimmed (capability missing) | Editable, no effect | What is missing |
 |---|---:|---:|---:|---:|---|
-| Top bar: master volume, bend range, transpose, tune | 11 | 10 | 1 | 0 | Acts: volume, polyphony, bend range, velocity tracking, transpose, tune, legato, bend down range / link, stereo spread. Missing: the velocity and note curves, poly legato. |
+| Top bar: master volume, bend range, transpose, tune | 11 | 11 | 0 | 0 | Acts: volume, polyphony, bend range, velocity tracking, transpose, tune, legato, poly legato, bend down range / link, stereo spread, stereo routing. Missing: the velocity and note curves (legato options). |
 | Master / Portamento (Glide) | 4 | 4 | 0 | 0 | Acts (time, slope, always, scaled by interval). |
-| Master / Curves, Voicing | 7 | 2 | 5 | 0 | Acts: same note rule, steal priority. Missing: velocity and note curves, voice override kill / steal, stereo routing. |
-| Master / Scale, Tuning, MPE | 13 | 0 | 13 | 0 | Key scale conforming, concert pitch, Scala / tuning files, MPE routing (step 6 of the engine work list; the own engine has the per-note tuning expression and the pedal of the event contract). |
+| Master / Curves, Voicing | 7 | 4 | 3 | 0 | Acts: same note rule, steal priority, voice override Kill (50 ms fade) / Steal, note recall, stereo routing. Missing: velocity and note curves. |
+| Master / Scale, Tuning, MPE | 13 | 13 | 0 | 0 | Acts: key scale conforming, concert pitch A4, Pythagorean / Just / user Scala tuning, the MTS-ESP seam, MPE (member channel bend, axes to macros, Y to mod wheel, bend to X). |
 | Quality | 2 | 0 | 2 | 0 | 4x oversampling and the no-smoothing switch (warped oscillators run 4x oversampled internally). |
-| Voice Control | 62 | 0 | 62 | 0 | Per voice pan / detune / cutoff / envelope time, randomisation, scaling, the oscillator mask. |
-| Oscillators: wavetable choice, frame, warp, level, pan, pitch | 81 | 27 | 54 | 0 | Acts: oscillators 1 .. 3 (level, pan, pitch, frame, phase, destination, env 1). Missing: the pitch modes, transpose snap, fixed pitch, filter blend and sends, the frame remap, smooth interpolation. |
+| Voice Control | 62 | 62 | 0 | 0 | Acts: per voice pan / detune / cutoff / envelope time steps, randomisation, scaling, the oscillator mask, the three sources. |
+| Oscillators: wavetable choice, frame, warp, level, pan, pitch | 81 | 36 | 45 | 0 | Acts: oscillators 1 .. 3 (level, pan, pitch, frame, phase, destination, env 1). Missing: the pitch modes, transpose snap, fixed pitch, filter blend and sends, the frame remap, smooth interpolation. |
 | Oscillators: wavetable table, unison, spectral morph, warp lists | 93 | 48 | 33 | 12 | Acts: the 15 built-in tables, unison (voices, detune, curve, blend, spread, mode, range), warp 1 and 2 (Sync .. Squeeze, FM / RM / PD / AM from the other oscillators, bends, asymmetry, the distortion warps), key and velocity mapping. Missing: user tables (Preset table), spectral morph, warps Remap 1-4, Odd/Even, Filter LPF / HPF, the warps from noise / sub / filters, the spectral warps, the Serum unison law, stack styles, the frame remap. |
 | Oscillators: sample, granular, spectral, multisample types | 255 | 0 | 255 | 0 | The sample, granular, spectral and multisample oscillator types (step 5: the libraries synthyboy_sampleosc, _granular, _spectral, _multisample are in the iOS build, the own engine does not use them yet). |
-| Sub oscillator | 14 | 8 | 2 | 4 | Acts: waveform, octave, tune, level, pan, destination, env 1, phase. Missing: direct out, contiguous phase, bus sends, filter blend. |
-| Noise oscillator | 19 | 5 | 14 | 0 | Acts: colours, level, pan, destination, env 1, stereo. Missing: the sample noise type, pitch, fine, phase, keytrack, loop, bounce. |
-| Mixer (buses, sends, destinations) | 8 | 0 | 8 | 0 | The mixer graph: filter blend, buses, sends, direct output. |
-| Filter 1 (cutoff, on) | 17 | 10 | 7 | 0 | Acts: on, model, style, cutoff, resonance, drive, blend, mix, keytrack, var, level, env 1, destination (the models map onto the filters-serum types). Missing: pan, clean mode, buses, filter blend. |
-| Filter 2, FX filter, model settings | 49 | 19 | 11 | 19 | Acts: filter 2 (same keys), routing, the FX filter. Missing: the formant / comb offset settings of the models, pan, clean mode. |
-| Envelopes 1 .. 6 | 96 | 54 | 42 | 0 | Acts: all times, sustain and the three curves (squared amplitude, DAHDSR). Missing: the beat units and legato inverted. |
-| LFOs 1 .. 10, random LFOs | 202 | 148 | 40 | 14 | Acts: the 12 shapes, rate, tempo sync, key follow, sync types (retrigger / free-run), delay, fade, smooth, direction, the five random styles. Missing: the custom shape, swing, host lock, stereo offset, the envelope-like sync types (2 .. 5 run as retrigger). |
+| Sub oscillator | 14 | 11 | 2 | 1 | Acts: waveform, octave, tune, level, pan, destination, env 1, phase. Missing: direct out, contiguous phase, bus sends, filter blend. |
+| Noise oscillator | 19 | 8 | 11 | 0 | Acts: colours, level, pan, destination, env 1, stereo. Missing: the sample noise type, pitch, fine, phase, keytrack, loop, bounce. |
+| Mixer (buses, sends, destinations) | 8 | 8 | 0 | 0 | Acts: filter blend, sends, Bus 1 / 2 (rack, level, destination, bypass), Direct, Main bypass. |
+| Filter 1 (cutoff, on) | 17 | 17 | 0 | 0 | Acts: on, model, style, cutoff, resonance, drive, blend, mix, keytrack, var, pan, level, clean mode, env 1, destination, bus sends (the models map onto the filters-serum types; Diode, Formant, Comb, Phaser written here). |
+| Filter 2, FX filter, model settings | 49 | 40 | 0 | 9 | Acts: filter 2 (same keys), routing, the formant / comb offset settings, the FX filter (without pan, clean mode, keytrack). |
+| Envelopes 1 .. 6 | 96 | 96 | 0 | 0 | Acts: all times (ms or beats), sustain and the three curves (squared amplitude, DAHDSR), legato inverted. |
+| LFOs 1 .. 10, random LFOs | 202 | 202 | 0 | 0 | Acts: the 12 shapes and the custom shape with point modulation, rate, tempo sync, key follow, all six sync types, delay, fade, smooth, direction, swing, stereo offset, host lock, mono, the five random styles (stereo). |
 | Macros 1 .. 8 | 8 | 8 | 0 | 0 | Acts. |
-| Modulation matrix (64 slots) | 1024 | 640 | 320 | 64 | Acts: source, destination, amount, power, bipolar, bypass, aux source (inv, power, output). Missing: stereo lanes, rise / fall / delay of a slot, cycle check. |
-| FX chain: order, racks, slots (16 instances) | 480 | 9 | 471 | 0 | The racks, the 16 instance slots and the modules 12 .. 16 (Bode, Convolve, splitters); the nine standard modules, Hyper/Dimension and Utility run in the fx.order chain on the main bus. |
+| Modulation matrix (64 slots) | 1024 | 1024 | 0 | 0 | Acts: source, destination, amount, power, bipolar, stereo lanes, bypass, aux source (inv, power, output), rise / fall / delay of a slot, the amount of a slot as destination, per slot curves, cycle check. |
+| FX chain: order, racks, slots (16 instances) | 480 | 31 | 448 | 1 | Acts: the order, the racks Main / Bus 1 / Bus 2 and the bands of the splitters. Missing: the pool of 16 instance slots (fxiNN). |
 | FX: chorus, flanger, phaser | 35 | 34 | 1 | 0 | Acts (written from public DSP knowledge, levels matched to the oracle). |
-| FX: delay, reverb | 37 | 24 | 11 | 2 | Acts: delay (all styles, sync, filter), reverb (one feedback delay network for all types). Missing: delay offset / hq, reverb algorithms are variants of one network, low shelf, er size. |
+| FX: delay, reverb | 37 | 27 | 8 | 2 | Acts: delay (all styles, sync, tape glide, filter, offset, hq), reverb (one feedback delay network for all types). Missing: reverb algorithms are variants of one network, er size, reverb feedback. |
 | FX: compressor, distortion, EQ | 54 | 50 | 1 | 3 | Acts. Missing: the Serum compressor law, the distortion filter keytrack, the Serum EQ law. |
-| FX: hyper dimension, utility, Bode, convolve, splitters | 66 | 19 | 46 | 1 | Acts: Hyper/Dimension, Utility (fx-serum-a). Missing: Bode, Convolve, the splitters and racks. |
-| **All** | **2637** | **1119** | **1399** | **119** | |
+| FX: hyper dimension, utility, Bode, convolve, splitters | 66 | 49 | 15 | 2 | Acts: Hyper/Dimension, Utility, Bode, the three splitters with their band racks. Missing: Convolve (needs the impulse store), hyper / bode retrigger. |
+| **All** | **2637** | **1783** | **824** | **30** | |
 
 <!-- END GENERATED TABLE -->
 
