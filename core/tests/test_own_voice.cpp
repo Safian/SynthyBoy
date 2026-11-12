@@ -967,7 +967,7 @@ TEST (ownv_serum_unison_law_gains)
 
 TEST (ownv_phaser_vector_p1_notches)
 {
-    // P1: white noise, mix 100, depth 0, centre 1 kHz, feedback 0: the notches of 4 stages are at 451 and 2625 Hz, of 12 stages at 141, 451, 838, 1418, 2625, 8080 Hz
+    // P1: white noise, mix 100, depth 0, centre 1 kHz, feedback 0: the notches of 4 stages are at 416 and 2414 Hz (0.4142 and 2.4142 times the centre), of 12 stages at 135, 416, 768, 1301, 2414, 7447 Hz
     auto gainAt = [&] (float blend, const std::vector<double>& freqs)
     {
         oracle::Overrides ov = { { "osc1.on", 0 }, { "noise.on", 1 }, { "noise.level", 100 }, { "filter1.on", 0 }, { "master.volume", -6 }, { "env1.attack", 0 }, { "env1.release", 50 },
@@ -1008,9 +1008,9 @@ TEST (ownv_phaser_vector_p1_notches)
         }
         return g;
     };
-    const auto four = gainAt (0, { 451, 2625, 1000 });
+    const auto four = gainAt (0, { 416, 2414, 1000 });
     CHECK (four[0] < -12.0 && four[1] < -12.0);
-    const auto twelve = gainAt (100, { 141, 451, 838, 1418, 2625, 8080, 1000 });
+    const auto twelve = gainAt (100, { 135, 416, 768, 1301, 2414, 7447, 1000 });
     int deep = 0;
     for (int i = 0; i < 6; ++i)
         deep += twelve[static_cast<size_t> (i)] < -10.0 ? 1 : 0;

@@ -466,8 +466,8 @@ TEST (fx_phaser_depth2_notches_p2)
 {
     const KV base = { { "phaser.on", 1 }, { "phaser.mix", 100 }, { "phaser.depth", 0 }, { "phaser.center", 1000 }, { "phaser.feedback", 0 }, { "phaser.blend", 100 }, { "phaser.rate", 0.04f } };
     struct Row { float d2; std::vector<double> hz; };
-    const Row rows[] = { { 0, { 146, 451, 838, 1418, 2625, 8080 } }, { 12, { 141, 445, 832, 1430, 2666, 8262 } }, { -12, { 141, 445, 832, 1430, 2666, 8262 } },
-                         { 24, { 129, 422, 814, 1453, 2801, 8801 } } };
+    const Row rows[] = { { 0, { 135, 416, 768, 1301, 2414, 7447 } }, { 12, { 129, 410, 762, 1312, 2455, 7617 } }, { -12, { 129, 410, 762, 1312, 2455, 7617 } },
+                         { 24, { 123, 387, 750, 1336, 2572, 8121 } } };
     for (const Row& row : rows)
     {
         KV k = base;
@@ -483,7 +483,7 @@ TEST (fx_phaser_depth2_notches_p2)
         CHECK_EQ (got.size(), row.hz.size());
         if (got.size() == row.hz.size())
             for (size_t i = 0; i < got.size(); ++i)
-                // +-4 % (+-10 Hz for the lowest); the notch above 7 kHz is 6 .. 7 % low: the reference runs the chain at twice the rate (document 06 1: the host rate is allowed), the bilinear transform cramps the top octave
+                // +-4 % (+-10 Hz for the lowest); the notch above 7 kHz is 5 .. 6 % low: the reference runs the chain at twice the rate (document 06 1: the host rate is allowed), the bilinear transform cramps the top octave
                 CHECK (std::fabs (got[i] - row.hz[i]) < (row.hz[i] > 7000 ? row.hz[i] * 0.075 : std::max (row.hz[i] * 0.04, i == 0 ? 10.0 : 0.0)));
     }
 }
