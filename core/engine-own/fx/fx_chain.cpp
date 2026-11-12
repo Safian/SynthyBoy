@@ -200,8 +200,8 @@ void FxChain::update (const float* base, const float* delta, double bpm, uint32_
         p.attack = clamp01 (pct (f.cpAttack));
         p.release = clamp01 (pct (f.cpRelease));
         p.bands = static_cast<int> (base[f.cpBands] + 0.5f);
-        p.crossLow = base[f.cpXLow];
-        p.crossHigh = base[f.cpXHigh];
+        p.crossLow = G (base, delta, f.cpXLow);
+        p.crossHigh = G (base, delta, f.cpXHigh);
         for (int b = 0; b < 3; ++b)
         {
             p.band[b].lowerDb = base[f.cpBand[b][0]];

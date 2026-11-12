@@ -573,6 +573,17 @@ void OwnEngine::controlTick() noexcept
                                       base[static_cast<size_t> (ri.keyTranspose)], base[static_cast<size_t> (ri.keyTune)]);
         rlfoValue[r] = rlfo[r].advance (static_cast<int> (base[static_cast<size_t> (ri.style)] + 0.5f), rate * fdt);
     }
+    // the macros are destinations too: the modulation of the last period moves their control (an MPE axis that drives a macro wins)
+    for (int m = 0; m < 8; ++m)
+    {
+        const int idx = pi.macro[m];
+        if (idx < 0 || macroOverridden[m])
+            continue;
+        const float knob = clamp01 (base[static_cast<size_t> (idx)] * 0.01f);
+        globals.macro[m] = gdelta[static_cast<size_t> (idx)] != 0.0f
+            ? clamp01 (modulatedValue (paramTable()[static_cast<size_t> (idx)], destLawOf (static_cast<size_t> (idx)), base[static_cast<size_t> (idx)], gdelta[static_cast<size_t> (idx)]) * 0.01f)
+            : knob;
+    }
     killExcess();
     {
         const bool mpe = base[static_cast<size_t> (pi.master.mpeOn)] >= 0.5f;
