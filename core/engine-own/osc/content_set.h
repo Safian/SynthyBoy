@@ -37,6 +37,14 @@ struct ContentSet
     std::unique_ptr<multisample::Instrument> instrument[3];
     std::vector<float> remap[3][4];                           // 257 points or empty (identity)
     std::vector<float> specFilterX[3], specFilterY[3];        // the drawn spectral filter mask (empty = flat)
+    /** The impulse response of Convolve (content.impulses[0]): interleaved stereo float frames. Shared so a rebuild running on the helper thread keeps it alive. */
+    struct Impulse
+    {
+        std::vector<float> data;
+        int frames = 0;
+        double rate = 48000.0;
+    };
+    std::shared_ptr<const Impulse> impulse;
     size_t bytes = 0;                                         // rough memory use
 
     ContentSet() = default;

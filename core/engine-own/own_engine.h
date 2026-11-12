@@ -15,6 +15,7 @@
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine.h"
 #include "fx/fx_chain.h"
+#include "fx/fx_latency.h"
 #include "voice/note_tuning.h"
 #include "voice/voice.h"
 
@@ -38,6 +39,7 @@ public:
     void setTransport (const TransportInfo& t) noexcept override;
     void setReadoutTargets (const int* idx, int count) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
+    int latencySamples() const noexcept override { return reportedLatency.load (std::memory_order_relaxed); }
     void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
@@ -106,6 +108,11 @@ private:
     int gnumTouched = 0;
     ModMatrix matrix;
     FxChain fx[3];                 // the racks Main, Bus 1, Bus 2
+    FxPool fxPool;                 // the 16 slots of the effect instance pool
+    int fxiTypeIndex[kNumFxInstances] = {};
+    IntDelay dlVoices, dlBusOut[2], dlBusIn[2], dlMainOut, dlDirect;  // latency compensation (document 06, 11)
+    std::atomic<int> reportedLatency { 0 };
+    bool realtimeFlag = false;
     float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period
     float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};

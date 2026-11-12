@@ -46,6 +46,19 @@ public:
         const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
         return ((c3 * t + c2) * t + c1) * t + y1;
     }
+    /** 4 point (cubic) Lagrange interpolation, `d` samples back from the newest sample (d >= 1). */
+    float readLagrange4 (float d) const noexcept
+    {
+        const float dd = std::max (d, 1.0f);
+        const int i = static_cast<int> (dd);
+        const float t = dd - static_cast<float> (i);
+        const float y0 = buf[static_cast<size_t> ((pos - i + 1) & mask)], y1 = buf[static_cast<size_t> ((pos - i) & mask)];
+        const float y2 = buf[static_cast<size_t> ((pos - i - 1) & mask)], y3 = buf[static_cast<size_t> ((pos - i - 2) & mask)];
+        // nodes at -1, 0, 1, 2 around y1
+        const float c0 = -t * (t - 1.0f) * (t - 2.0f) * (1.0f / 6.0f), c1 = (t + 1.0f) * (t - 1.0f) * (t - 2.0f) * 0.5f,
+                    c2 = -(t + 1.0f) * t * (t - 2.0f) * 0.5f, c3 = (t + 1.0f) * t * (t - 1.0f) * (1.0f / 6.0f);
+        return c0 * y0 + c1 * y1 + c2 * y2 + c3 * y3;
+    }
     /** 8 point Lagrange interpolation (the high quality mode of the delay). */
     float readLagrange8 (float d) const noexcept
     {
@@ -97,6 +110,25 @@ struct Svf
     }
 };
 
+/** Trapezoidal (zero delay) one pole low pass. */
+struct TrapLp
+{
+    float s = 0.0f;
+    void reset() noexcept { s = 0.0f; }
+    static float coefficient (float hz, double sr) noexcept
+    {
+        const float g = std::tan (kPif * std::clamp (hz, 5.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+        return g / (1.0f + g);
+    }
+    float process (float x, float a) noexcept
+    {
+        const float v = (x - s) * a;
+        const float lp = v + s;
+        s = flushDenormal (lp + v);
+        return lp;
+    }
+};
+
 /** One pole low pass. */
 struct OnePole
 {
@@ -125,9 +157,9 @@ struct Biquad
         b0 = nb0 / na0; b1 = nb1 / na0; b2 = nb2 / na0; a1 = na1 / na0; a2 = na2 / na0;
     }
     enum Type { lowpass, highpass, peak, notch, lowShelf, highShelf };
-    void design (Type type, float hz, float q, float gainDb, double sr) noexcept
+    void design (Type type, float hz, float q, float gainDb, double sr, float maxFrac = 0.45f) noexcept
     {
-        const float w0 = kTwoPif * std::clamp (hz, 10.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr);
+        const float w0 = kTwoPif * std::clamp (hz, 10.0f, static_cast<float> (sr) * maxFrac) / static_cast<float> (sr);
         const float cs = std::cos (w0), sn = std::sin (w0);
         const float alpha = sn / (2.0f * std::max (q, 0.05f));
         const float A = std::pow (10.0f, gainDb / 40.0f);

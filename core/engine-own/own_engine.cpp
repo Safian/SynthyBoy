@@ -41,6 +41,8 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     const auto* table = paramTable();
     for (size_t i = 0; i < kMaxParams; ++i)
         params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
+    for (int i = 0; i < kNumFxInstances; ++i)
+        fxiTypeIndex[i] = fxInstanceKeys (i).type;
     for (auto& k : switchKeyAtomic)
         k.store (-1, std::memory_order_relaxed);
     for (int o = 0; o < 3; ++o)
@@ -116,7 +118,20 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
     const int i = findParamIndex (id);
     if (i < 0 || std::isnan (plain))
         return;
-    params[static_cast<size_t> (i)].store (constrainValue (paramTable()[i], plain), std::memory_order_relaxed);
+    const float v = constrainValue (paramTable()[i], plain);
+    params[static_cast<size_t> (i)].store (v, std::memory_order_relaxed);
+    for (int s = 0; s < kNumFxInstances; ++s)
+        if (fxiTypeIndex[s] == i)
+        {
+            try
+            {
+                fxPool.typeChanged (s, static_cast<int> (v + 0.5f)); // creates the module of the slot off the audio thread
+            }
+            catch (...)
+            {
+            }
+            break;
+        }
 }
 
 float OwnEngine::getParam (uint32_t id) const noexcept
@@ -182,9 +197,17 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     gdelta.assign (paramCount(), 0.0f);
     gdeltaR.assign (paramCount(), 0.0f);
     gtouched.assign (static_cast<size_t> (kNumModSlots), 0);
+    realtimeFlag = quality.realtime;
+    {
+        int types[kNumFxInstances];
+        for (int s = 0; s < kNumFxInstances; ++s) // the types set before prepare ()
+            types[s] = static_cast<int> (params[static_cast<size_t> (fxiTypeIndex[s])].load (std::memory_order_relaxed) + 0.5f);
+        fxPool.prepare (sampleRate, maxBlockFrames, types);
+    }
     for (int i = 0; i < 3; ++i)
     {
         fx[i].setRack (i);
+        fx[i].setPool (&fxPool);
         fx[i].prepare (sampleRate, maxBlockFrames);
     }
     smoothedGain.reset (sampleRate, 0.02);
@@ -845,8 +868,15 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 routeSin = std::sin (phi);
             }
             const uint32_t mask = effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f);
+            FxFrame frame;
+            frame.bpm = globals.bpm;
+            frame.period = kControlPeriod;
+            frame.lastNote = lastNoteSemis;
+            frame.songBeats = globals.songBeats;
+            frame.content = globals.content;
+            frame.realtime = realtimeFlag;
             for (auto& f : fx)
-                f.update (base.data(), gdelta.data(), globals.bpm, mask, kControlPeriod);
+                f.update (base.data(), gdelta.data(), frame, mask);
             // the mixer: the levels of the buses and of the Direct output, their destinations and the rack bypasses
             auto levelOf = [&] (int idx) -> float
             {
@@ -868,6 +898,24 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             busBypass[0] = pi.bus1Bypass >= 0 && base[static_cast<size_t> (pi.bus1Bypass)] >= 0.5f;
             busBypass[1] = pi.bus2Bypass >= 0 && base[static_cast<size_t> (pi.bus2Bypass)] >= 0.5f;
             mainBypass = pi.mainBypass >= 0 && base[static_cast<size_t> (pi.mainBypass)] >= 0.5f;
+            // the latency of the racks (configuration only) and the delays that line the paths up (document 06, 11)
+            {
+                const int dest[2] = { busDest[0], busDest[0] == 2 && busDest[1] == 2 ? 0 : busDest[1] };
+                const int lat[2] = { busBypass[0] ? 0 : fx[1].rackLatency (1, false), busBypass[1] ? 0 : fx[2].rackLatency (2, false) };
+                const int lat0 = mainBypass ? 0 : fx[0].rackLatency (0, false);
+                const LatencyPlan plan = LatencyPlan::compute (lat0, lat, dest);
+                dlVoices.set (plan.voicesToMain);
+                for (int b = 0; b < 2; ++b)
+                {
+                    dlBusOut[b].set (plan.busOut[b]);
+                    dlBusIn[b].set (plan.busIn[b]);
+                }
+                dlMainOut.set (plan.mainOut);
+                dlDirect.set (plan.direct);
+                const int latR[2] = { busBypass[0] ? 0 : fx[1].rackLatency (1, true), busBypass[1] ? 0 : fx[2].rackLatency (2, true) };
+                const LatencyPlan rep = LatencyPlan::compute (mainBypass ? 0 : fx[0].rackLatency (0, true), latR, dest);
+                reportedLatency.store (rep.total, std::memory_order_relaxed);
+            }
         }
         while (ei < numEvents && events[ei].frame <= pos)
             handleEvent (events[ei++]);
@@ -890,17 +938,28 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         for (auto& v : voices)
             if (v->isActive())
                 v->render (mo, n, controlPos);
+        dlVoices.process (mixL[0], mixR[0], n);
+        dlDirect.process (mixL[3], mixR[3], n);
+        dlBusIn[0].process (mixL[1], mixR[1], n); // a bus that is fed by the other waits for what the first sends into it
+        dlBusIn[1].process (mixL[2], mixR[2], n);
         auto runBus = [&] (int b) // b = 1, 2
         {
             if (!busBypass[b - 1])
-                fx[b].process (mixL[b], mixR[b], n);
+                fx[b].process (mixL[b], mixR[b], n, controlPos);
+            float outL[kControlPeriod], outR[kControlPeriod];
+            for (int i = 0; i < n; ++i)
+            {
+                const float g = lerp (busGainPrev[b], busGain[b], static_cast<float> (controlPos + i + 1) * (1.0f / static_cast<float> (kControlPeriod)));
+                outL[i] = mixL[b][i] * g;
+                outR[i] = mixR[b][i] * g;
+            }
+            dlBusOut[b - 1].process (outL, outR, n);
             const int dest = busDest[b - 1] == 2 && b == 2 && busDest[0] == 2 ? 0 : busDest[b - 1]; // both choose Other bus: bus 2 acts as Main (no feedback)
             const int to = dest == 1 ? 3 : (dest == 2 ? 3 - b : 0);
             for (int i = 0; i < n; ++i)
             {
-                const float g = lerp (busGainPrev[b], busGain[b], static_cast<float> (controlPos + i + 1) * (1.0f / static_cast<float> (kControlPeriod)));
-                mixL[to][i] += mixL[b][i] * g;
-                mixR[to][i] += mixR[b][i] * g;
+                mixL[to][i] += outL[i];
+                mixR[to][i] += outR[i];
             }
         };
         if (busDest[1] == 2 && busDest[0] != 2) // bus 2 feeds bus 1: it runs first
@@ -914,7 +973,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             runBus (2);
         }
         if (!mainBypass)
-            fx[0].process (mixL[0], mixR[0], n);
+            fx[0].process (mixL[0], mixR[0], n, controlPos);
+        dlMainOut.process (mixL[0], mixR[0], n);
         std::copy (mixL[0], mixL[0] + n, left + pos);
         std::copy (mixR[0], mixR[0] + n, rightOut + pos);
         for (int i = pos; i < end; ++i)

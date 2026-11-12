@@ -78,6 +78,25 @@ std::unique_ptr<ContentSet> ContentSet::build (const StateContent& content, cons
         if (set->userTable[w.osc - 1])
             set->bytes += set->userTable[w.osc - 1]->memoryBytes();
     }
+    if (!content.impulses.empty() && store->readFile (content.impulses[0], bytes))
+    {
+        std::vector<float> l, r;
+        sampleosc::WavInfo info;
+        if (sampleosc::readWav (bytes.data(), bytes.size(), l, r, info, nullptr) && !l.empty())
+        {
+            auto imp = std::make_shared<ContentSet::Impulse>();
+            imp->frames = static_cast<int> (l.size());
+            imp->rate = info.sampleRate > 0 ? static_cast<double> (info.sampleRate) : 48000.0;
+            imp->data.resize (l.size() * 2);
+            for (size_t i = 0; i < l.size(); ++i)
+            {
+                imp->data[i * 2] = l[i];
+                imp->data[i * 2 + 1] = i < r.size() ? r[i] : l[i];
+            }
+            set->bytes += imp->data.size() * sizeof (float);
+            set->impulse = std::move (imp);
+        }
+    }
     for (const ContentSample& s : content.samples)
     {
         if (s.osc < 1 || s.osc > 4 || !store->readFile (s.ref, bytes))
