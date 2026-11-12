@@ -72,6 +72,7 @@ void Voice::prepare (double sampleRate)
 {
     sr = sampleRate;
     mod.assign (paramCount(), 0.0f);
+    modR.assign (paramCount(), 0.0f);
     filt[0].prepare (sampleRate);
     filt[1].prepare (sampleRate);
 }
@@ -96,8 +97,18 @@ void Voice::reset() noexcept
 void Voice::clearMod() noexcept
 {
     for (int i = 0; i < numTouched; ++i)
+    {
         mod[static_cast<size_t> (touched[i])] = 0.0f;
+        modR[static_cast<size_t> (touched[i])] = 0.0f;
+    }
     numTouched = 0;
+}
+
+float Voice::PR (int idx) const noexcept
+{
+    const float b = gl->base[idx];
+    const float d = modR[static_cast<size_t> (idx)];
+    return d == 0.0f ? b : modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d);
 }
 
 float Voice::P (int idx) const noexcept
@@ -383,7 +394,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
 
     // ---- matrix
     clearMod();
-    g.matrix->evaluate (src, false, mod.data(), touched, numTouched, kNumModSlots);
+    g.matrix->evaluate (src, false, mod.data(), touched, numTouched, kNumModSlots, modR.data());
 
     // ---- amplitude: envelope 1, velocity
     ampPrev = ampCur;
@@ -457,6 +468,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
         t.level = std::max (0.0f, P (oi.level) * 0.01f);
         t.pan = std::clamp (P (oi.pan) * 0.01f, -1.0f, 1.0f);
+        t.panRight = std::clamp (PR (oi.pan) * 0.01f, -1.0f, 1.0f);
         t.voices = std::clamp (static_cast<int> (P (oi.uniVoices) + 0.5f), 1, std::max (1, g.maxUnison));
         const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
         t.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
@@ -518,7 +530,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         FilterSettings& s = filtSet[f];
         s.model = static_cast<int> (P (fi.model) + 0.5f);
         s.style = static_cast<int> (P (fi.style) + 0.5f);
-        s.cutoffHz = P (fi.cutoff) * semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
+        const float kt = semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
+        s.cutoffHz = P (fi.cutoff) * kt;
+        s.cutoffHzR = PR (fi.cutoff) * kt;
         s.resonance = P (fi.resonance) * 0.01f;
         s.drive = P (fi.drive) * (1.0f / 20.0f);
         s.driveDb = P (fi.drive);

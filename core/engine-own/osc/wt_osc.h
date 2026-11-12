@@ -17,7 +17,7 @@ struct OscTick
     const Wavetable* wt = nullptr;
     float semis = 69.0f;                  // pitch in MIDI semitones (fractional) without the unison offsets
     float frame = 0.0f, frameSpread = 0.0f; // 0 .. 1, -1 .. 1
-    float level = 0.0f, pan = 0.0f;       // amplitude (linear), -1 .. 1
+    float level = 0.0f, pan = 0.0f, panRight = 0.0f; // amplitude (linear), -1 .. 1 (left lane, right lane of the pan)
     int voices = 1;
     float detuneSemis = 0.0f;             // offset of the outermost voice (range * detune)
     float curve = 0.0f;                   // detune curve (power scale parameter)
@@ -129,7 +129,8 @@ public:
         const float sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w)), sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
         // oscillator pan, constant power with 0 dB at the centre
         const float pan = std::clamp (t.pan, -1.0f, 1.0f);
-        const float panL = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan)), panR = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + pan));
+        const float panRt = std::clamp (t.panRight, -1.0f, 1.0f);
+        const float panL = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan)), panR = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + panRt));
         const int bump = odd ? 0 : 1;
         const float divisor = static_cast<float> (std::max (1, U - 1));
         int n = 0;

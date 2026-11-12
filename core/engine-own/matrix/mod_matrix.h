@@ -52,7 +52,7 @@ struct CompiledSlot
 {
     int source = 0, aux = 0, dest = -1;   // dest = table index
     float amount = 0.0f, power = 0.0f, auxPower = 0.0f, auxOut = 1.0f, width = 1.0f;
-    bool bipolar = false, auxInv = false;
+    bool bipolar = false, auxInv = false, stereo = false;
     bool global = false;                  // the destination is not a per voice parameter
 };
 
@@ -65,7 +65,7 @@ public:
     int size() const noexcept { return count; }
 
     /** Adds the modulation of every slot of the requested scope to delta[] (table index) and records the touched entries. */
-    void evaluate (const float* src, bool global, float* delta, int* touched, int& numTouched, int maxTouched) const noexcept;
+    void evaluate (const float* src, bool global, float* delta, int* touched, int& numTouched, int maxTouched, float* deltaRight = nullptr) const noexcept;
 
 private:
     CompiledSlot slots[kNumModSlots];

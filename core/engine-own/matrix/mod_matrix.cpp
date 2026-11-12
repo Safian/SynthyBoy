@@ -182,6 +182,7 @@ void ModMatrix::compile (const float* base) noexcept
         c.amount = std::clamp (base[sp.amount] * 0.01f, -1.0f, 1.0f);
         c.power = sp.power >= 0 ? base[sp.power] : 0.0f;
         c.bipolar = sp.bipolar >= 0 && base[sp.bipolar] >= 0.5f;
+        c.stereo = sp.stereo >= 0 && base[sp.stereo] >= 0.5f;
         c.aux = sp.auxSource >= 0 ? std::clamp (static_cast<int> (base[sp.auxSource] + 0.5f), 0, kNumSourceIds - 1) : 0;
         c.auxInv = sp.auxInv >= 0 && base[sp.auxInv] >= 0.5f;
         c.auxPower = sp.auxPower >= 0 ? base[sp.auxPower] : 0.0f;
@@ -191,7 +192,7 @@ void ModMatrix::compile (const float* base) noexcept
     }
 }
 
-void ModMatrix::evaluate (const float* src, bool global, float* delta, int* touched, int& numTouched, int maxTouched) const noexcept
+void ModMatrix::evaluate (const float* src, bool global, float* delta, int* touched, int& numTouched, int maxTouched, float* deltaRight) const noexcept
 {
     for (int i = 0; i < count; ++i)
     {
@@ -222,6 +223,8 @@ void ModMatrix::evaluate (const float* src, bool global, float* delta, int* touc
         if (delta[c.dest] == 0.0f && numTouched < maxTouched)
             touched[numTouched++] = c.dest;
         delta[c.dest] += d;
+        if (deltaRight != nullptr)
+            deltaRight[c.dest] += c.stereo ? -d : d; // the stereo flag turns the right lane around (document 04, 3.2)
     }
 }
 } // namespace own

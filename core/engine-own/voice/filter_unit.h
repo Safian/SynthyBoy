@@ -15,7 +15,7 @@ struct FilterSettings
 {
     int model = 3, style = 0;
     float cutoffHz = 12000.0f, resonance = 0.2f, drive = 0.0f, blend = 0.0f, mix = 1.0f, var = 0.5f;
-    float driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
+    float cutoffHzR = -1.0f, driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
 };
 
 class FilterUnit
@@ -36,6 +36,7 @@ public:
         cl[0].reset();
         cl[1].reset();
         prevP = curP;
+        prevPR = curPR;
     }
 
     /** The FilterType of a (model, style) pair; the classic models 0 .. 7 map onto the closest types of the collection. */
@@ -77,6 +78,7 @@ public:
     void set (const FilterSettings& s) noexcept
     {
         prevP = curP;
+        prevPR = curPR;
         curP.model = s.model;
         curP.style = s.style;
         curP.cutoffHz = s.cutoffHz;
@@ -89,6 +91,9 @@ public:
         curP.fres = s.formantRes;
         curP.fspread = s.formantSpread;
         curP.ftranspose = s.formantTranspose;
+        curPR = curP;
+        if (s.cutoffHzR > 0.0f)
+            curPR.cutoffHz = s.cutoffHzR;
         classic = s.model < filters::kFirstSerumModel;
         if (classic)
             return;
@@ -107,6 +112,8 @@ public:
         p.blend = clamp01 (s.blend);
         p.mix = clamp01 (s.mix);
         left.setParams (p);
+        if (s.cutoffHzR > 0.0f)
+            p.cutoff = std::clamp (s.cutoffHzR, 20.0f, 20000.0f);
         right.setParams (p);
         // loudness of the classic models matched to the reference engine's by measurement (tools/own-oracle), dB
         static const float kTrimDb[8] = { 1.5f, -11.5f, 3.5f, 0.0f, 4.0f, 2.0f, 0.5f, 1.0f };
@@ -121,7 +128,7 @@ public:
         if (classic)
         {
             cl[0].process (inL, outL, n, prevP, curP, t0);
-            cl[1].process (inR, outR, n, prevP, curP, t0);
+            cl[1].process (inR, outR, n, prevPR, curPR, t0);
             for (int k = 0; k < n; ++k)
             {
                 outL[k] = std::clamp (outL[k], -16.0f, 16.0f);
@@ -152,7 +159,8 @@ public:
 private:
     filters::Filter left, right;
     ClassicFilter cl[2];
-    ClassicParams prevP, curP;
+    ClassicParams prevP, curP, prevPR, curPR;
+    filters::FilterParams paramsR;
     bool classic = false;
     float trim = 1.0f;
 };

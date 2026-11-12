@@ -84,6 +84,7 @@ public:
 
 private:
     float P (int idx) const noexcept;
+    float PR (int idx) const noexcept; // the right lane (differs from P () where a slot has the stereo flag)
     void clearMod() noexcept;
     float lfoValue (int l, const TickGlobals& g) noexcept;
 
@@ -112,7 +113,7 @@ private:
     float rlfoOut[4] = {};
     float lfoOut[10] = {};
 
-    std::vector<float> mod;
+    std::vector<float> mod, modR;
     int touched[kNumModSlots] = {};
     int numTouched = 0;
     float src[kNumSourceIds] = {};

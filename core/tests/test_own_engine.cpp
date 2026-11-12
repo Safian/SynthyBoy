@@ -349,7 +349,8 @@ TEST (own_matrix_vectors_m6_to_m9_transpose_and_pan)
         CHECK (l < 1.0e-3);
         if (stereo == 0.0f)
             CHECK_NEAR (dbOf (r), -3.01, 0.12);
-        // M9 (stereo On): the right lane gets -1 so the pan lanes are +1 / -1. A voice has one pan value in this engine (the left lane is used), see the report.
+        else
+            CHECK (r < 1.0e-3); // M9: the pan lanes are +1 / -1, both channels silent
     }
 }
 
