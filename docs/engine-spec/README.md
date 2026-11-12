@@ -68,7 +68,7 @@ and runs the vectors against `EngineKind::own`.
 | 2 | [02-oscillator.md](02-oscillator.md) | final | wavetable reading, band-limiting, frame interpolation, phase, pitch laws, every warp mode, spectral morph, sub, noise |
 | 3 | [03-envelopes-lfos.md](03-envelopes-lfos.md) | final | envelope stages and curves, timing, retrigger/loop, LFO shapes, sync, fade, delay, random LFOs |
 | 4 | [04-modulation-matrix.md](04-modulation-matrix.md) | final | sources, destinations, amount/power/bipolar/stereo law, ramp, macros, evaluation order |
-| 5 | 05-filters.md | pending | filter models not in `core/filters-serum`, oversampling, drive, keytrack, blend, formant/comb/phaser |
+| 5 | [05-filters.md](05-filters.md) | final | filter models not in `core/filters-serum`, oversampling, drive, keytrack, blend, formant/comb/phaser |
 | 6 | 06-effects.md | pending | chorus, delay, reverb, distortion, EQ, compressor, phaser, flanger, filter FX, chain order and mix laws |
 | 7 | 07-sample-granular-spectral.md | pending | how the sample/granular/spectral/multisample oscillators plug into the voice |
 
