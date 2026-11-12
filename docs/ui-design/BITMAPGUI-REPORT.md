@@ -60,7 +60,7 @@ Verified = run, with the result shown. Everything below was run on this Mac (App
 * **TSan on Linux** and **ASan on the final tree on Linux**: the ASan run on Linux was done on the tree before the last test additions; TSan was run on macOS only. The CI jobs `ui-sanitizers` and `bitmap-gui-tsan` are written for them and not run here.
 * **MPC speed**: not measured. The ARMv7 numbers are under qemu-user on an Apple CPU: correctness only.
 * A segmentation fault of qemu-user inside the armhf libX11 when the container has the armhf X11 libraries but there is no X server (the build container): not reproduced on a native CPU (Linux aarch64 with libX11 and no server is green) and not with only the C / C++ runtime (the MPC case); the test stage of the script therefore runs in a second container without them.
-* **iOS**: the static library is untouched and checked; whether the UI goes into the iOS binary next to Kick's JUCE 7 is not decided (question 110): it needs `JUCE_NAMESPACE`.
+* **iOS**: decided and done on 2026-11-12 (question 110, branch `ios-ui`): the same UI on iOS, from the static library `synthyboy_static_ui` with JUCE 8 in the namespace `synthyboy_juce8`, an Objective-C class prefix and one partial link that exports `synthyboy_clap_get_entry` only (`ARCHITECTURE.md` 4.3, `BITMAP-GUI-EXTENSION.md` section 14, `OWN-ENGINE-GAP.md`). `synthyboy_static` itself is unchanged and stays free of JUCE.
 * The deviation from "link only gui_basics, graphics, events, core, audio_basics": the UI library itself needs `juce_audio_formats` and `juce_audio_utils` (`MidiKeyboardComponent`), so the module also compiles audio_processors / audio_devices / gui_extra of JUCE (question 109).
 
 ## Frame times (software renderer, Release)

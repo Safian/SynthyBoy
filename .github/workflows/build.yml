@@ -4,7 +4,8 @@
 # Builds VST3 + CLAP on Linux, macOS and Windows, runs the core tests (CTest), uploads the plugins as
 # artifacts and runs pluginval (VST3) and clap-validator (CLAP). Further jobs: core tests (incl. the fuzz smoke and the factory
 # preset gate) under ASan/UBSan and TSan, the GUI tests under ASan/UBSan, core cross build + tests for Linux ARMv7 hard-float under QEMU, a native
-# Linux AArch64 build, the plugin manifest check, and the Vital-free static library check (iOS rule).
+# Linux AArch64 build, the plugin manifest check, and the Vital-free static library check (iOS rule), and the iOS SDK build of the static library with the bitmap GUI (JUCE 8 in its own namespace, tested in the
+# iOS simulator and next to JUCE 7).
 # The native module synthyboy.clap carries the bitmap GUI (docs/BITMAP-GUI-EXTENSION.md): its tests (tests/bitmap-gui: a host without JUCE that loads the built .clap, golden images, the export
 # list of the module) run in the build job; the GUI tests also run under ASan + UBSan and under TSan, and the ARMv7 module is built and tested under QEMU in the bitmap-gui-armv7 job.
 # SYNTHYBOY_WITH_VITAL is ON by default, so every job except ios-vital-free builds and tests the Vital-derived engine
@@ -441,3 +442,32 @@ jobs:
 
       - name: The check fails on a library that contains Vital-derived code (self-test)
         run: scripts/check-no-vital.sh --self-test
+
+      - name: The own-engine table of the UI is up to date (docs/ui-design/OWN-ENGINE-GAP.md)
+        run: python3 scripts/gen-own-engine-gap.py build-novital/tools/paramdump/synthyboy_paramdump --check
+
+  # The static library of the bitmap GUI for the iOS SDK (docs/ARCHITECTURE.md 4.3, docs/BITMAP-GUI-EXTENSION.md section 14): SYNTHYBOY_STATIC_UI=ON, own engine (SYNTHYBOY_WITH_VITAL=OFF), JUCE 8 in the namespace
+  # synthyboy_juce8, one partial link that leaves synthyboy_clap_get_entry as the only exported symbol. scripts/test-ios-static-ui.sh builds it, checks the symbols and the Vital rule (scripts/check-no-vital.sh
+  # over the library and every archive it links: the iOS rule stays in force with the UI in), runs the tests of the bitmap GUI IN the iOS simulator, and links the library with the real JUCE 7.0.12 (pinned
+  # tag, the version of the Kick app) linked whole into one test program that is run too. A second configuration builds the device library (arm64); a third the simulator library for arm64 + x86_64.
+  ios-static-ui:
+    name: Static UI library for the iOS SDK (JUCE 8 next to JUCE 7)
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install build dependencies
+        run: command -v ninja >/dev/null || brew install ninja
+
+      - name: JUCE 7.0.12 (the JUCE of the Kick app; test stand-in)
+        run: git clone --depth 1 --branch 7.0.12 https://github.com/juce-framework/JUCE.git juce7
+
+      - name: Simulator build, symbols, Vital rule, tests in the iOS simulator, JUCE 7 next to it
+        run: scripts/test-ios-static-ui.sh --sdk iphonesimulator --archs arm64 --build-dir build-ios-sim --juce7 "$PWD/juce7"
+
+      - name: Device build (arm64), symbols, Vital rule, link next to JUCE 7
+        run: scripts/test-ios-static-ui.sh --sdk iphoneos --archs arm64 --build-dir build-ios-device --juce7 "$PWD/juce7"
+
+      - name: Simulator build for arm64 + x86_64 (compile and link)
+        run: scripts/test-ios-static-ui.sh --sdk iphonesimulator --archs "arm64;x86_64" --no-run --build-dir build-ios-sim-universal --juce7 "$PWD/juce7"

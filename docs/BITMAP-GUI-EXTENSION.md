@@ -1,6 +1,6 @@
 # CLAP extension `com.safian.bitmap-gui/1` - a plug-in GUI that is a pixel buffer
 
-Status: implemented in SynthyBoy's native CLAP module (2026-11-11), header `shell-clap/bitmap_gui_ext.h`, report `ui-design/BITMAPGUI-REPORT.md`, design record `ui-design/13-new-keys.md` section 4.45.
+Status: implemented in SynthyBoy's native CLAP module (2026-11-11) and, for statically linked hosts (iOS), in the static library `synthyboy_static_ui` (2026-11-12, section 14); header `shell-clap/bitmap_gui_ext.h`, report `ui-design/BITMAPGUI-REPORT.md`, design record `ui-design/13-new-keys.md` section 4.45.
 This document is meant to be enough for a host developer to implement the host side without reading anything else. The header is the normative layout; this text is the normative behaviour.
 
 ## 1. What it is for
@@ -14,7 +14,8 @@ encoders), a mobile app that already links another version of the same toolkit, 
 4. forwards touch / mouse / wheel / key input and the answers to the few requests the plug-in makes (files, text input, ...).
 
 Nothing of the plug-in's toolkit crosses the interface: pixels and plain C structs. The plug-in keeps its toolkit statically linked inside the module with hidden symbols, so it cannot clash with the host's own copy
-(SynthyBoy ships JUCE 8.0.17 inside the `.clap`; Kick links JUCE 7.0.12; the module exports `clap_entry` and `synthyboy_clap_get_entry` and nothing else, `scripts/check-clap-exports.sh`).
+(SynthyBoy ships JUCE 8.0.17 inside the `.clap`; Kick links JUCE 7.0.12; the module exports `clap_entry` and `synthyboy_clap_get_entry` and nothing else, `scripts/check-clap-exports.sh`.
+Where the plug-in is not a module but a static library in the host's binary, iOS, hidden symbols are not enough and the toolkit lives in a namespace of its own: section 14).
 The extension is generic: nothing in the header knows SynthyBoy, any plug-in can offer it.
 
 Two ids, both versioned. An incompatible change is a new id (`/2`); a plug-in may answer both.
@@ -207,3 +208,65 @@ A complete working host, without any toolkit, is `tests/bitmap-gui/bitmap_gui_ha
 
 OpenGL / GPU surfaces, native child windows, drag and drop of files into or out of the GUI, clipboard, IME composition (only committed text), accessibility, high dynamic range / wide gamut pixel formats. A plug-in that
 needs them offers `/2`.
+
+## 14. Statically linked hosts: the iOS library `synthyboy_static_ui`
+
+The Kick app on iOS cannot load a `.clap` (no `dlopen` of plug-ins) and is a JUCE 7.0.12 application, so SynthyBoy is linked into its binary, and so is SynthyBoy's JUCE 8.0.17. Decision of the owner
+(`ui-design/14-morning-questions.md` 110): the iOS app has **the same UI as every platform, drawn by the plug-in through this extension**, with the own engine (no Vital-derived code in any iOS build,
+`ARCHITECTURE.md` 2.2, `scripts/check-no-vital.sh`). Design and proof: `ARCHITECTURE.md` 4.3. What is on offer, and what a host does with it:
+
+### 14.1 What the library is
+
+| | |
+|---|---|
+| Library | `libsynthyboy_static_ui.a` (CMake target `synthyboy_static_ui`), built by `-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos | iphonesimulator -DSYNTHYBOY_STATIC_UI=ON -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF` (`scripts/test-ios-static-ui.sh` is the reference invocation). arm64 for the device, arm64 + x86_64 for the simulator, deployment target 15.0 (the lowest the current SDK's libc++ supports without a warning; the Kick app's 16.0 is above it). |
+| Entry | `const clap_plugin_entry_t* synthyboy_clap_get_entry (void)` (`shell-clap/synthyboy_clap.h`): **the only symbol the archive exports.** No `clap_entry`. `clap_entry.init (path)` ignores the path, `deinit ()` shuts the toolkit down. |
+| Extension | `com.safian.bitmap-gui/1` through `clap_plugin::get_extension ()` of the plug-in the factory creates, exactly as in sections 1 to 11. Nothing in this document changes for a static host. |
+| Engine | the own engine (`core/engine-own`): 7 of the 2637 keys are live, the rest is drawn (dimmed when a capability bit is missing) and stored. `ui-design/OWN-ENGINE-GAP.md`. |
+| Contents | the plug-in (`synthyboy_clap.cpp`, content service), the bitmap GUI module, the UI kit (`shell-juce/ui`), the view-model, the JUCE 8 modules that the UI needs (gui_basics, graphics, events, core, data_structures, audio_basics, audio_formats, audio_utils and what these pull in), the embedded Roboto. Software renderer only: the frame is a memory buffer, no OpenGL, no Metal view, no window. |
+| Not in it | `synthyboy_core` and its packages (`synthyboy_filters_serum`, `_wtedit`, `_shapes`, `_sampleosc`, `_granular`, `_spectral`, `_multisample`: no JUCE, no Vital): they are separate archives, the same as for `synthyboy_static`; their list in link order and the frameworks JUCE needs are in `<build>/shell-clap/synthyboy_static_ui.link.txt` (generated). |
+| Frameworks | Foundation, UIKit, CoreGraphics, CoreImage, CoreText, QuartzCore, CoreServices, Accelerate, AudioToolbox, AVFoundation, CoreAudio, CoreAudioKit, CoreMIDI, WebKit (declared by `juce_gui_extra`, which `juce_audio_utils` pulls in; no web view is created); weakly Metal, MetalKit, UniformTypeIdentifiers, UserNotifications. The file lists them exactly. |
+
+### 14.2 Two JUCE versions in one binary: why it works
+
+Three layers (`ARCHITECTURE.md` 4.3): JUCE 8 is compiled in the C++ namespace `synthyboy_juce8` (JUCE 8 has no namespace switch; the build renames `juce` with a compiler definition), its Objective-C classes carry the
+prefix `synthyboy_juce8_`, and one partial link turns every symbol of the archive into a local symbol except `synthyboy_clap_get_entry`. Kick's JUCE 7 needs nothing: it stays what it is, unnamespaced. The fonts are a namespace of
+their own (`synthyboy_embedded_fonts`), the toolkit's singletons (message manager, desktop, look and feel) are private to the namespace. Kick's `juce::Desktop`, message manager and look and feel are not
+touched, and the toolkit of SynthyBoy never opens a window, a native dialog or an audio device.
+
+### 14.3 Integration note for the Kick side
+
+What Kick calls is **what it already calls for a `.clap` on the desktop**: `Kick/clap_host` has the generic client (`BitmapGuiClient`, `BitmapGuiComponent`, `PluginPanel`) of this extension; it needs the plug-in
+entry from the static library instead of `dlopen` + `clap_entry`.
+
+1. **Link.** Add `libsynthyboy_static_ui.a` (device or simulator build), the archives of `synthyboy_static_ui.link.txt` and the frameworks of that file to the iOS target. The library **replaces `synthyboy_static`** and also replaces the vendored
+   copy of the plug-in sources that `Kick/clap_host/CMakeLists.txt` compiles into its own `synthyboy_core` (`builtin/synthyboy`, with `SYNTHYBOY_STATIC_ONLY=1`): both define `synthyboy_clap_get_entry` and the core
+   symbols, so linking both is a duplicate symbol error. Either take the archives of this repository for iOS (recommended: one source of truth, the UI is in it), or keep the vendored sources for every other target and
+   leave them out of the iOS target. The two archive sets must be built from the same revision (the library calls the core by name).
+   For an Xcode project with prebuilt libraries: one archive per platform is enough, `libtool -static -o libsynthyboy_all.a libsynthyboy_static_ui.a <the archives of the list>`, then
+   `xcodebuild -create-xcframework -library libsynthyboy_all.a -headers <shell-clap headers> -output SynthyBoy.xcframework` for the device and the simulator library.
+2. **Entry.** `StaticPluginLoader` calls `synthyboy_clap_get_entry ()` as before (`plugin.json`: `static.entry`), `init`, `get_factory (CLAP_PLUGIN_FACTORY_ID)`, `create_plugin (..., "com.safian.synthyboy")`. The static library
+   exports no `clap_entry`, so it cannot collide with another statically linked plug-in's.
+3. **The extension.** `plugin->get_extension (plugin, SAFIAN_EXT_BITMAP_GUI)` is non-NULL; `BitmapGuiClient::supported (host)` is true. Fill the host table (`SAFIAN_EXT_BITMAP_GUI_HOST`) **before** `create ()`:
+   `request_render` / `request_tick` (a `CADisplayLink` or the existing JUCE timer of `BitmapGuiComponent`), `request_text_input` (Kick's on-screen keyboard; on iOS the system keyboard works the same: send `text_input ()` and
+   backspace / enter as keys), `request_file` (`juce::FileChooser` of Kick's JUCE 7, answer with `request_done ()`), `share_file` (the share sheet), `open_url`, `set_active_remote_page` (Q-Link pages are irrelevant on iOS: leave it NULL).
+4. **`create ()` with `SAFIAN_BITMAP_GUI_CREATE_HOST_RUNS_EVENT_LOOP`** (section 5.3): the app's main run loop runs on the main thread, the toolkit posts its timers and asynchronous messages into it and `tick ()` does not
+   pump. Without the flag `tick ()` pumps the run loop of the calling thread once per call (`CFRunLoopRunInMode`), which inside a UIKit callback is not what an app wants.
+   Sizes: logical points, the scale is `UIScreen.scale` of the screen the component is on (`set_scale ()` when it changes); phone layout below 600 pt (390 x 844 is the reference), tablet 600 .. 999, wide from 1000 (section 3).
+5. **Touch.** One `pointer_event` per touch with `kind = TOUCH` and `pointer_id` per finger, `CANCEL` for `touchesCancelled`; two fingers are pinch / pan (section 6.1). Hardware keyboard: `key_event`.
+6. **Threads.** Main thread for every GUI call (section 2); the audio thread only runs the plug-in's `process ()` and changes travel through the CLAP parameter events as on every host (section 9).
+7. **Data.** The user directory is `$SYNTHYBOY_USER_DIR`, else `$HOME/Library/Application Support/SynthyBoy`, which on iOS is inside the app's container (`Library/Application Support`, writable). Set `SYNTHYBOY_USER_DIR` with `setenv`
+   before the first `create_plugin` to put it elsewhere (a shared container of a Kick extension, say). Presets and packs the app installs go to `<user dir>/presets` and `<user dir>/packs/*` (section 9).
+8. **Destroy order.** `destroy ()` of the GUI before `clap_plugin::destroy ()`, `entry->deinit ()` when the last plug-in is gone (it shuts JUCE 8 down); Kick's own JUCE 7 shutdown is independent of it, in any order.
+9. **What the user sees.** The same UI as on the desktop; with the own engine most knobs are inert (`ui-design/OWN-ENGINE-GAP.md`): that is a property of the engine, not of the integration.
+
+### 14.4 What is verified, and what is not
+
+| Claim | Evidence |
+|---|---|
+| The archive builds for the iOS SDK without a warning: device arm64, simulator arm64 and arm64 + x86_64 | `scripts/test-ios-static-ui.sh --sdk iphoneos` / `--archs "arm64;x86_64"`, CI job `ios-static-ui` |
+| The only exported symbol is `synthyboy_clap_get_entry`; before the partial link every C++ name is in `synthyboy_juce8` / `synthyboy`, every JUCE Objective-C class is prefixed | `scripts/check-static-ui-symbols.py` (self-testing) |
+| No Vital-derived object, symbol or string in the library and in every archive it links | `scripts/check-no-vital.sh` in the same script |
+| The extension works through the linked library: the 31 tests (input, frames, parameters, state, files, menus, resize, scale, ...) and the golden pictures of the own engine at 390 x 844, 1024 x 768 and 1024 x 600 | the test programs of `tests/bitmap-gui` built for the simulator SDK and **run in the iOS simulator** (`xcrun simctl spawn`); the same programs run on macOS arm64 against the same static library (`-DSYNTHYBOY_STATIC_UI=ON` without `CMAKE_SYSTEM_NAME`) |
+| Next to the real JUCE 7.0.12 (Kick's source tree, not renamed, linked whole with `-force_load`) in one binary: no duplicate symbol, both JUCEs run, no class "implemented in both" | `tests/ios-juce7` (run in the simulator). Without the partial link the same link has 336 duplicate symbols (the audio codecs' C names): the control of the test |
+| Not verified | a run on a device (built and linked, not run: no signing identity and no device here); Kick's own iOS project and its link (a stand-in program, not the app); the app on the App Store review; the golden pictures on a device (the simulator renders them identical to macOS to 0.0000 % of the pixels, the device uses the same software renderer); Android (the target is Apple only) |

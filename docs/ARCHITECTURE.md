@@ -85,6 +85,7 @@ a top-level `NOTICE` that names Vital and its author.
        engine-specific (a flag in `ParamInfo`).
      - Content is data authored by us (§2.3). Offline authoring tools may use Vital-derived code on a developer machine; the data
        they produce is ours, and no Vital-derived code ships in the iOS binary.
+     The iOS app has the same UI as every platform, drawn by the plug-in (4.3); the static library with the GUI, `synthyboy_static_ui`, is under the same rule (the CI job greps it too).
      Android: the same switch applies; whether it is used there is decided when the Android build exists.
 - **Trademark / name:** the product is called **SynthyBoy** (owner decision 2026-11-04; "VST" is Steinberg's trademark and not part of the name, only the compatibility statement "VST is a registered trademark of Steinberg Media Technologies GmbH" is used). Name screening and the open clearance steps are in [NAMING.md](NAMING.md) **(owner: official registers not yet searched)**. Steinberg's VST3 SDK 3.8 is MIT; no separate VST3 licence agreement is needed, the VST3 logo is not used.
 - **Trade dress:** the UI is original; it does not copy Vital's layout, colours or graphics.
@@ -229,7 +230,39 @@ The native module (`shell-clap`, `synthyboy.clap`) can render the editor of `she
 not run the plug-in's toolkit (Kick on the Akai MPC, a framebuffer; a host that links another version of JUCE) copies the dirty rectangles and forwards touch / mouse / key input. The module links its own JUCE 8.0.17
 statically with hidden symbols and exports `clap_entry` and `synthyboy_clap_get_entry` only (checked by `scripts/check-clap-exports.sh`). The GUI never touches the audio thread: edits travel through the lock free
 `UiLink` (`shell-clap/synthyboy_ui_link.h`) and are handled like host automation in `process ()` / `params.flush ()`. It is a CMake option, `SYNTHYBOY_BITMAP_GUI` (default ON with the JUCE plug-in, OFF for the static
-library: the iOS rule of 2.2 is unchanged; linking this module's JUCE 8 into an iOS binary that also contains Kick's JUCE 7 needs `JUCE_NAMESPACE`, an open point, `14-morning-questions.md` 110).
+library `synthyboy_static`, which stays free of JUCE and of the UI: the iOS rule of 2.2 is unchanged). The iOS app gets the same GUI from a second static library, `synthyboy_static_ui` (4.3).
+
+### 4.3 The bitmap GUI in a static library (iOS): two JUCE versions in one binary
+
+Owner decision (2026-11-12, `14-morning-questions.md` 110): SynthyBoy on iOS has the same UI as everywhere, drawn by the plug-in through the bitmap GUI extension, with the own engine (no Vital-derived
+code, 2.2). The Kick app on iOS is a JUCE 7.0.12 application and links SynthyBoy statically, so JUCE 7 (Kick) and JUCE 8.0.17 (SynthyBoy's UI) are in one binary. That is not a matter of symbol
+visibility: a static link sees hidden symbols, and the Objective-C runtime registers classes by name. The target `synthyboy_static_ui` (CMake: `-DCMAKE_SYSTEM_NAME=iOS -DSYNTHYBOY_STATIC_UI=ON
+-DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF`, `shell-clap/CMakeLists.txt`, `cmake/StaticUi.cmake`) therefore keeps the two apart in three layers:
+
+1. **A C++ namespace of its own for JUCE 8.** JUCE 8 has no namespace switch (`JUCE_NAMESPACE` is a deprecated macro that does nothing), so the build renames it: every translation unit of the build is
+   compiled with `-Djuce=synthyboy_juce8` (`SYNTHYBOY_JUCE_NAMESPACE`, `cmake/JuceNamespace.cmake`). Every `juce::X` of the modules, of the third party code inside them (zlib, libpng, libjpeg, HarfBuzz, SheenBidi, the codecs) that
+   lives in JUCE's namespace, and of our own sources becomes `synthyboy_juce8::X`; header names, the `JUCE_` macros and strings are other tokens and stay.
+2. **A prefix for the Objective-C classes.** JUCE declares some classes with a plain `@interface` (`JuceUIView`, `JuceUIViewController`, `JuceUIWindow`, `JuceAppStartupDelegate`, `FileChooserControllerClass`,
+   `iOSAudioSessionNative`, ...: 15 in 8.0.17). The list is read from the fetched JUCE sources at configure time (so it follows a JUCE update) and every name gets the prefix `synthyboy_juce8_` by a macro.
+   JUCE's other classes are created at run time with a random suffix and cannot collide.
+3. **One partial link.** `ld -r` over every member of the archives (our sources, the JUCE module sources, the UI, the view-model) into one object file in which **every symbol is local except
+   `synthyboy_clap_get_entry`** (`cmake/FinishStaticUi.cmake`). This is what handles what the namespace cannot: the C symbols of the audio codecs in `juce_audio_formats` (`FLAC__*`, `vorbis_*`, `oggpack_*`: 336
+   of them, identical in JUCE 7), HarfBuzz and SheenBidi (global names), the VST3 SDK namespace of `juce_audio_processors`.
+   `libsynthyboy_static_ui.a` is that object in an archive; the archives it needs below it (`synthyboy_core` and its packages, no JUCE, no Vital) are the same as for `synthyboy_static`
+   and are listed in `shell-clap/synthyboy_static_ui.link.txt` (generated, with the frameworks JUCE needs).
+
+Everything else the module needs is the same as the desktop's: the software renderer (the frame is a memory buffer), the embedded Roboto (`synthyboy_embedded_fonts`, a namespace of its own: Kick has a `BinaryData`),
+no `dlopen`, no message loop of its own: the host calls `tick ()` and `render ()`, and with `CREATE_HOST_RUNS_EVENT_LOOP` the toolkit uses the main run loop of the app (`JuceRuntime`). The only exported symbol
+is `synthyboy_clap_get_entry` (not `clap_entry`: the target is built with `SYNTHYBOY_STATIC_ONLY`). It **replaces** `synthyboy_static` in the link, it is not linked next to it. No Vital-derived code is in it
+(`scripts/check-no-vital.sh` over the library and every archive of the link list, the `ios-static-ui` CI job).
+
+What proves it (`scripts/test-ios-static-ui.sh`, CI job `ios-static-ui`): `scripts/check-static-ui-symbols.py` (the library exports one symbol; the parts before the partial link have every C++ name in `synthyboy_juce8` or
+`synthyboy` and every Objective-C class prefixed); the 31 tests of the bitmap GUI and the golden pictures **run in the iOS simulator** against the linked library; a test program that links the real JUCE 7.0.12 (Kick's
+source, as it has it: unnamespaced, `-force_load`, with the GUI, audio device and format modules) and the library into one binary, runs JUCE 7, SynthyBoy's GUI beside it, JUCE 7 again, and fails on a duplicate symbol or on
+"implemented in both" of the Objective-C runtime. Negative control: the same link with the archive before the partial link (the namespace alone) has 336 duplicate symbols, all of them the codecs' C names. What cannot be
+proved here: a run on a device (the device build is compiled and linked, not run) and Kick's own iOS project (the integration note is `BITMAP-GUI-EXTENSION.md` section 14).
+
+The own engine behind this UI implements 7 of the 2637 keys the UI shows; `ui-design/OWN-ENGINE-GAP.md` is the work list.
 
 ## 5. Parameters, state, presets (UI-independent)
 
@@ -319,6 +352,9 @@ The repo builds the same source into **both** CMake targets:
 
 Both go through the same CLAP entry, so Kick's Plugin-manager, state, content packs and project references take one code path.
 
+A third library exists for iOS with the GUI: `synthyboy_static_ui` (`libsynthyboy_static_ui.a`, 4.3) exports the same `synthyboy_clap_get_entry` and the bitmap GUI extension behind it; it takes the place of `synthyboy_static`
+in the link. `plugin.json` is unchanged (`static.ios.library` names the library without the GUI; the Kick side chooses).
+
 ## 8. GUI framework decision
 
 **Experience from the spike:** JUCE 8 + clap-juce-extensions gave a working VST3 + CLAP from one `AudioProcessor` in one configure/build (≈40 s clean, macOS arm64), with the generic parameter GUI. Not yet tested: a custom GUI, GUI inside a DAW window for either format, Linux/Windows runs.
@@ -371,7 +407,7 @@ Target matrix, added in Phase 1 unless noted:
 | Linux ARMv7 hard-float | cross toolchain (`arm-linux-gnueabihf`) + `qemu-arm` for core/native-shell tests; real timing only on the MPC | core build + tests with NEON, `.clap` symbol check (`clap_entry`), `file`/`readelf` ABI check |
 | macOS | `macos-latest` arm64 (+ universal build job) | build, `codesign --verify`, pluginval, clap-validator |
 | Windows | `windows-latest` x64 | build, pluginval, clap-validator |
-| iOS | Xcode toolchain, static library of core + native shell only | compile check, no plugin run |
+| iOS | Xcode toolchain, static library of core + native shell only (`ios-vital-free`); the static library with the bitmap GUI for the iOS SDK, device and simulator (`ios-static-ui`) | compile check and the Vital rule on the first; the second also runs the GUI tests in the iOS simulator and links next to JUCE 7 |
 | Android | NDK (arm64-v8a, armeabi-v7a), static library | compile check, no plugin run |
 
 Vital-derived code in CI: all jobs except `ios-vital-free` build and test it (`SYNTHYBOY_WITH_VITAL=ON` is the default): the shared engine tests run for both engines, the allocation test and the TSan thread test cover the Vital engine, the ported Vital unit tests and the adapter's measurements run on every target (ARMv7 under QEMU), and a Linux job builds the plugin with `-DSYNTHYBOY_SHELL_ENGINE=vital` and runs the CLAP smoke host on it. `ios-vital-free` configures `-DSYNTHYBOY_WITH_VITAL=OFF`, builds and tests the core and runs `scripts/check-no-vital.sh` on `libsynthyboy_core.a` (fails on any `sbvital`/`Vital`/`vital::` object, symbol or string; the script tests itself with `--self-test`).
