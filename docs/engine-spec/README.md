@@ -32,7 +32,7 @@ that source.
    deviation must preserve.
 5. **Order and commits.** The documents are committed one by one, in the order of the table; the implementer picks them up as they
    appear. A document that is marked `draft` can still change; `final` is stable (later corrections are listed at its end).
-6. **Question channel.** The implementer writes questions into `docs/engine-spec/QUESTIONS.md` (a table: number, document, question).
+6. **Question channel.** The implementer writes questions into [QUESTIONS.md](QUESTIONS.md) (a table: number, document, question).
    The spec author answers in the document (never in chat) and marks the row answered.
 
 ## The probe (how the test vectors were made)
@@ -70,7 +70,7 @@ and runs the vectors against `EngineKind::own`.
 | 4 | [04-modulation-matrix.md](04-modulation-matrix.md) | final | sources, destinations, amount/power/bipolar/stereo law, ramp, macros, evaluation order |
 | 5 | [05-filters.md](05-filters.md) | final | filter models not in `core/filters-serum`, oversampling, drive, keytrack, blend, formant/comb/phaser |
 | 6 | [06-effects.md](06-effects.md) | final | chorus, delay, reverb, distortion, EQ, compressor, phaser, flanger, filter FX, chain order and mix laws |
-| 7 | 07-sample-granular-spectral.md | pending | how the sample/granular/spectral/multisample oscillators plug into the voice |
+| 7 | [07-sample-granular-spectral.md](07-sample-granular-spectral.md) | final | how the sample/granular/spectral/multisample oscillators plug into the voice |
 
 ## Scope note: what "the Vital engine" means here
 
