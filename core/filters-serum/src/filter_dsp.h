@@ -93,8 +93,10 @@ struct SVFTPT
         const float d = 1.0f / (1.0f + 2.0f * R * gSafe + gSafe * gSafe);
         // FAT: the damping grows with the band-pass amplitude (a dissipative nonlinearity in the feedback path), so the resonance saturates instead
         // of growing; the earlier version clipped the integrator input, which broke the trapezoidal relation and ran away at high resonance
-        const float damping = 2.0f * R * (1.0f + (fat > 0.001f ? 4.0f * fat * s1 * s1 : 0.0f));
-        const float hp_val = (in - (damping + gSafe) * s1 - s2) * d;
+        const float damping = 2.0f * R * (1.0f + (fat > 0.001f ? std::min (4.0f * fat * s1 * s1, 30.0f) : 0.0f));
+        const float dEff = 1.0f / (1.0f + damping * gSafe + gSafe * gSafe); // the same linear filter with the momentary damping: stable for any damping > 0
+        const float hp_val = (in - (damping + gSafe) * s1 - s2) * dEff;
+        (void) d;
         const float v1 = gSafe * hp_val;
         float bp_val = v1 + s1;
         s1 = sanitize (v1 + bp_val);
