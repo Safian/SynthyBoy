@@ -957,3 +957,164 @@ TEST (fx_envelope_delay_quantised_to_the_chunk)
         CHECK (ms < 6.0);
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// Convolve: the impulse from the content store, both laws
+
+namespace
+{
+std::vector<uint8_t> wavBytes (const std::vector<float>& mono, int rate)
+{
+    std::vector<uint8_t> b;
+    auto put32 = [&] (uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back (static_cast<uint8_t> (v >> (8 * i))); };
+    auto put16 = [&] (uint16_t v) { b.push_back (static_cast<uint8_t> (v)); b.push_back (static_cast<uint8_t> (v >> 8)); };
+    const uint32_t dataBytes = static_cast<uint32_t> (mono.size() * 2);
+    b.insert (b.end(), { 'R', 'I', 'F', 'F' });
+    put32 (36 + dataBytes);
+    b.insert (b.end(), { 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ' });
+    put32 (16);
+    put16 (1);
+    put16 (1);
+    put32 (static_cast<uint32_t> (rate));
+    put32 (static_cast<uint32_t> (rate * 2));
+    put16 (2);
+    put16 (16);
+    b.insert (b.end(), { 'd', 'a', 't', 'a' });
+    put32 (dataBytes);
+    for (float v : mono)
+        put16 (static_cast<uint16_t> (static_cast<int16_t> (std::lround (std::clamp (v, -1.0f, 1.0f) * 32767.0f))));
+    return b;
+}
+} // namespace
+
+TEST (fx_convolve_impulse_from_the_store_and_the_two_laws)
+{
+    // an impulse response: a single click 100 ms in, then exponentially decaying noise
+    std::vector<float> ir (static_cast<size_t> (0.4 * kSr), 0.0f);
+    sbtest::Rng rng (7);
+    for (size_t i = static_cast<size_t> (0.1 * kSr); i < ir.size(); ++i)
+        ir[i] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.3f * std::exp (-static_cast<float> (i - 0.1 * kSr) / 4000.0f);
+    ir[static_cast<size_t> (0.1 * kSr)] = 0.8f;
+    MemoryContentStore store;
+    store.add ("user.impulses", "ir.wav", wavBytes (ir, static_cast<int> (kSr)));
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "user.impulses";
+    ref.file = "ir.wav";
+    ref.name = "test";
+    content.impulses.push_back (ref);
+
+    auto run = [&] (int on, int ir_, int law, float gain, bool withContent)
+    {
+        auto e = make();
+        if (withContent)
+        {
+            e->setContentStore (&store);
+            e->setContent (content);
+        }
+        burstPatch (*e, 0);
+        set (*e, "convolve.on", static_cast<float> (on));
+        set (*e, "convolve.ir", static_cast<float> (ir_));
+        set (*e, "convolve.mix", 100);
+        set (*e, "convolve.law", static_cast<float> (law));
+        set (*e, "convolve.ir_gain", gain);
+        set (*e, "convolve.decay", 100);
+        return sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69), sbtest::noteOff (static_cast<int> (0.13 * kSr), 69) }, static_cast<int> (1.0 * kSr), 256);
+    };
+    auto energy = [&] (const sbtest::Rendered& r, double from, double to)
+    {
+        double s = 0;
+        for (size_t i = static_cast<size_t> (from * kSr); i < static_cast<size_t> (to * kSr); ++i)
+            s += static_cast<double> (r.left[i]) * r.left[i];
+        return s;
+    };
+    const auto none = run (1, 0, 0, 0, true);                 // convolve.ir = None: no impulse, no wet signal
+    const auto vital = run (1, 1, 0, 0, true);
+    const auto serum = run (1, 1, 1, -18, true);
+    CHECK (energy (none, 0.35, 0.8) < 1.0e-9);
+    // the click of the impulse arrives 100 ms after the note and a tail follows
+    CHECK (energy (vital, 0.35, 0.8) > 1.0e-6);
+    CHECK (energy (vital, 0.0, 0.2) < 1.0e-12); // nothing before the note
+    const double ev = energy (vital, 0.2, 0.8), es = energy (serum, 0.2, 0.8);
+    if (verbose())
+        std::printf ("    wet energy: Vital law %.3g, Serum law (-18 dB) %.3g\n", ev, es);
+    CHECK (es > 0.0 && std::fabs (es - ev) > 1.0e-3 * ev); // the laws differ
+    // the helper thread: an offline render is the same twice (the audio thread waits for the build)
+    const auto again = run (1, 1, 1, -18, true);
+    for (size_t i = 0; i < again.left.size(); i += 97)
+        CHECK_EQ (again.left[i], serum.left[i]);
+    // without the content store the key has nothing to convolve with: the dry signal only
+    const auto missing = run (1, 1, 0, 0, false);
+    CHECK (energy (missing, 0.35, 0.8) < 1.0e-9);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// every capability bit this branch reports has an audible off / on probe (the rule R5 of 13-new-keys.md)
+
+TEST (fx_every_new_capability_bit_has_an_audible_probe)
+{
+    struct Set { const char* key; float v; };
+    struct Probe { const char* bit; std::vector<Set> common; const char* key; float off, on; int note; Tier tier; bool content; bool slot; };
+    const std::vector<Probe> probes = {
+        { "fx_instances", { { "fxi01.p02", 1.0f } }, "fxi01.on", 0, 1, 60, Tier::high, false, true },
+        { "fx_phaser_depth2", { { "phaser.on", 1 }, { "phaser.mix", 100 }, { "phaser.blend", 100 }, { "phaser.feedback", 0 }, { "phaser.depth", 0 } }, "phaser.depth2", 0, 24, 60, Tier::high, false, false },
+        { "fx_reverb_algos", { { "reverb.on", 1 }, { "reverb.mix", 60 }, { "reverb.decay", 1500 } }, "reverb.type", 0, 2, 60, Tier::high, false, false },
+        { "reverb_feedback", { { "reverb.on", 1 }, { "reverb.mix", 60 }, { "reverb.decay", 2000 }, { "reverb.type", 4 } }, "reverb.feedback", 0, 100, 60, Tier::high, false, false },
+        { "reverb_force", { { "reverb.on", 1 }, { "reverb.mix", 60 } }, "reverb.force_enable", 0, 1, 60, Tier::low, false, false },
+        { "fx_compressor_limit", { { "compressor.on", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", -20 }, { "compressor.mid.upper_ratio", 100 } }, "compressor.limit", 0, 1, 60, Tier::high, false, false },
+        { "fx_distortion_extras", { { "distortion.on", 1 }, { "distortion.filter_order", 1 }, { "distortion.filter_cutoff", 400 }, { "distortion.drive", 12 } }, "distortion.filter_keytrack", 0, 100, 84, Tier::high, false, false },
+        { "fx_convolve", { { "convolve.on", 1 }, { "convolve.mix", 80 } }, "convolve.ir", 0, 1, 60, Tier::high, true, false },
+        { "serum_eq (word 2)", { { "eq.on", 1 }, { "eq.mid.gain", 12 }, { "eq.mid.cutoff", 400 }, { "eq.mid.resonance", 60 } }, "eq.law", 0, 1, 60, Tier::high, false, false },
+        { "serum_compressor (word 2)", { { "compressor.on", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", -20 }, { "compressor.mid.upper_ratio", 75 } }, "compressor.limit", 0, 2, 60, Tier::high, false, false },
+        { "serum_convolve (word 2)", { { "convolve.on", 1 }, { "convolve.ir", 1 }, { "convolve.mix", 80 } }, "convolve.law", 0, 1, 60, Tier::high, true, false },
+        { "eq_band2 (word 2)", { { "eq.on", 1 }, { "eq.mid2.gain", 12 }, { "eq.mid2.cutoff", 500 }, { "eq.mid2.resonance", 60 } }, "eq.mid2.mode", 0, 1, 60, Tier::high, false, false },
+    };
+    std::vector<float> ir (static_cast<size_t> (0.3 * kSr), 0.0f);
+    sbtest::Rng rng (3);
+    for (size_t i = 0; i < ir.size(); ++i)
+        ir[i] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.2f * std::exp (-static_cast<float> (i) / 5000.0f);
+    MemoryContentStore store;
+    store.add ("user.impulses", "ir.wav", wavBytes (ir, static_cast<int> (kSr)));
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "user.impulses";
+    ref.file = "ir.wav";
+    content.impulses.push_back (ref);
+    for (const Probe& p : probes)
+    {
+        sbtest::Rendered outs[2];
+        for (int k = 0; k < 2; ++k)
+        {
+            auto e = createOwnEngine();
+            e->setParam (kParamMasterPolyphony, 32.0f);
+            e->prepare (kSr, 256, qualityForTier (p.tier));
+            if (p.content)
+            {
+                e->setContentStore (&store);
+                e->setContent (content);
+            }
+            sawPatch (*e);
+            if (p.slot)
+                setSlot (*e, 1, kFxTypeDistortion, 0, 1023, false);
+            for (const Set& c : p.common)
+                set (*e, c.key, c.v);
+            set (*e, p.key, k == 0 ? p.off : p.on);
+            const ParamInfo* info = findParamByKey (p.key);
+            CHECK (info != nullptr && e->supportsParam (info->id));
+            outs[k] = sbtest::render (*e, { sbtest::noteOn (0, p.note) }, static_cast<int> (0.8 * kSr), 256);
+        }
+        double diff = 0.0, ref2 = 1.0e-9;
+        for (size_t i = 0; i < outs[0].left.size(); ++i)
+        {
+            diff = std::max (diff, static_cast<double> (std::fabs (outs[0].left[i] - outs[1].left[i])));
+            ref2 = std::max (ref2, static_cast<double> (std::fabs (outs[0].left[i])));
+        }
+        if (!CHECK (diff > 1.0e-3 * ref2))
+            std::printf ("    capability %s: no audible difference (key %s)\n", p.bit, p.key);
+    }
+    auto e = make();
+    const EngineCapsMask need = kCapFxConvolve | kCapFxInstances | kCapFxPhaserDepth2 | kCapFxReverbAlgos | kCapReverbFeedback | kCapReverbForce | kCapFxCompressorLimit | kCapFxDistortionExtras;
+    CHECK ((e->capabilities() & need) == need);
+    const EngineCaps2Mask need2 = kCap2SerumEq | kCap2SerumCompressor | kCap2SerumConvolve | kCap2EqBand2;
+    CHECK ((e->capabilities2() & need2) == need2);
+}
