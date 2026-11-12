@@ -78,6 +78,20 @@ knob value). A source is per-voice (envelopes, LFOs, random LFOs, velocity, note
   voices die, until the next note). Sources of the global kind are evaluated even with no voices.
 * The `stereo` flag of such a slot still produces a left/right difference.
 
+### 3.2 The stereo lane model (answer to implementer question 3, M9)
+
+Everything in the voice and in the effect rack carries **two lanes**, left and right (the two channels of the voice are the two lanes; every control value of a voice is a pair `(v_L, v_R)`). A modulation contribution is a pair too: unipolar/bipolar law of section 2 on each lane, then the stereo flag multiplies
+the **right** lane by -1. The destination control is then `c_L = c0 + sum c_slot,L`, `c_R = c0 + sum c_slot,R`, and the DSP that consumes the control uses `c_L` for the left channel and `c_R` for the right. A consumer that reads only one value (a scalar) uses the left lane.
+
+* **Oscillator pan** (`oscN.pan`): lanes `p_L`, `p_R`; channel gains `g_L = sqrt2 sin(pi/4 (1 - p_L))`, `g_R = sqrt2 sin(pi/4 (1 + p_R))` (the right channel's gain uses its own lane with the opposite sign convention). A slot with `+100 %` on pan and the stereo flag gives `p_L = +1`, `p_R = -1`: `g_L = 0` and `g_R = sqrt2 sin(0) = 0`: **both channels silent** (M9).
+  Without the flag `p_L = p_R = +1`: left silent, right `+3.01 dB` (M8). With `-100 %` and the flag: `p_L = -1`, `p_R = +1`: `g_L = sqrt2 sin(pi/2) = 1.414`, `g_R = sqrt2 sin(pi/2) = 1.414`: both channels at +3.01 dB.
+* **Filters** (voice filters and the FX filter): the cutoff, resonance, drive, blend lanes drive the filter state of the left and right channel separately: with the flag a positive cutoff modulation raises the left cutoff and lowers the right one by the same number of semitones. Measured (FX filter, Digital, 12 dB low-pass, cutoff 1 kHz, `macro.1 100`,
+  slot `macro1 -> fxfilter.cutoff` +25 % = +32 semitones; white noise; gain relative to the unfiltered noise at 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz): no modulation L and R: -0.1 -0.5 -1.9 -6.0 -14.0 -24.7 -36.6 -49.9; modulation without the flag, L and R: -0.0 0.0 -0.1 -0.2 -0.8 -2.9 -8.3 -18.6
+  (corner at about 6.0 kHz); **with the flag** L: -0.0 0.0 -0.1 -0.2 -0.8 -2.9 -8.3 -18.6 (up), R: -3.7 -10.9 -20.8 -32.3 -44.2 -56.3 -68.6 -82.0 (corner at about 170 Hz, 32 semitones down). (M9b)
+* **Effects**: effect parameters are also lane pairs; whether the left/right difference is audible depends on whether the effect uses a value per channel: yes for the filter models, the EQ bands, the delay times, the chorus/flanger/phaser LFO-derived delays, the compressor band parameters (lanes are used as band pairs there: do not apply the flag to them);
+  no for scalar-read controls (reverb size/decay/mix, master volume, polyphony, macros).
+* The stereo sources: "Stereo" is `(1, 0)` as (L, R); with `bipolar` it is `(+0.5, -0.5)`; with the stereo flag as well the right lane flips again.
+
 ## 4. Rate
 
 A slot is evaluated at **audio rate** if (and only if) its destination is an audio-rate control and its source is able to run at audio rate; otherwise at control rate (once per chunk of at most 128 samples at the host rate).
@@ -160,6 +174,7 @@ Setup for all: Sine, filter off, `master.volume 0`, `env1.attack 0`, `env1.relea
 | M7 | `macro.1 100`, `bipolar 1`, `macro1 -> osc1.transpose` +50 % | 1760.0 Hz (`+0.5 * 0.5 * 96 = 24` st) |
 | M8 | `macro.1 100`, `macro1 -> osc1.pan` +100 % | left channel silent, right channel -3.01 dB (pan control +1 -> pan +1) |
 | M9 | M8 with `mod01.stereo 1` | both channels silent (the right lane gets -1: pan lanes +1 / -1) |
+| M9b | FX filter stereo cutoff modulation | see section 3.2: with the flag the left channel's low-pass corner moves up 32 st, the right one down 32 st |
 | M10 | LFO to pan: see document 3 L1 .. L4 | |
 
 Tolerance +-0.1 dB; frequencies +-0.2 Hz.

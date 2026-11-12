@@ -79,3 +79,9 @@ warp modes, voice control, oscillator mapping, buses, rack, ...). The documents 
 are our own design (`docs/ui-design/13-new-keys.md` is the authoritative description of what they must do, with the Serum 2 manual
 as the public reference); a document covers an addition only where the Vital code path is what defines its sound, or where the
 addition changes the behaviour of the baseline. The own-engine gap list is `docs/ui-design/OWN-ENGINE-GAP.md`.
+
+## Measurement status (2026-11-12, second pass)
+
+Everything numeric that a document calls a vector was produced by the probe, except: doc 7 S3 (type switch while sounding: the offline probe cannot change a parameter mid-note) and the internals of the Dirty, Diode, Phaser, Comb filter models (described from the structure; their behaviour is
+pinned by the response vectors of document 5 sections 10 and 10.1). Document 6 section 8.1 reports a **defect of engine-vital's flanger**; the spec follows the intended design.
+Answers to the implementer's first three questions: table frames, document 2 section 1.1; Sine LFO start and L1, document 3 section 3.9; stereo lane model and M9, document 4 section 3.2.

@@ -178,6 +178,15 @@ note-ons and note-offs neither restart nor release it. In other modes `mono` has
 A custom shape's points may be modulated by up to 64 sources (`core/shapes`); the shape is re-baked per voice (2048 points) when a source moved by more than 1/4096, at most a few shapes per
 chunk (a budget; a table that waited 4 chunks is baked regardless). Voices without a baked table read the shared one. Not part of the baseline.
 
+### 3.9 Start value and phase of the Sine LFO (answer to implementer question 2, confirms L1)
+
+* The Sine LFO is the **unipolar** function `S(u) = 0.5 - 0.5 cos(2 pi u)`: it starts at **0** at `u = 0` (a note on in Retrigger mode with `lfo.phase 0`), reaches 1 at `u = 0.5`, and returns to 0. It is never negative. With the slot's `bipolar` flag the value used is `2 S - 1 = -cos(2 pi u)` times 0.5 of the amount (document 4 sec 2).
+* `lfo.phase` adds to `u` (90 deg = +0.25 cycle: the LFO starts at `S(0.25) = 0.5`, rising); the stereo knob adds `+-stereo/720` cycles to the left/right channel.
+* Re-measured with the note starting at 0.1 s (so that the measurement does not overlap the start-up of the output stage), `lfo1.rate 4`, slot `lfo1 -> osc1.pan` +25 %, left-channel peak in a 2 ms window starting 0.5 ms after each time since the note on (model value in brackets):
+  0 ms 0.977 (1.000), 10: 0.979 (0.993), 20: 0.968 (0.973), 30: 0.944 (0.942), 40: 0.907 (0.900), 50: 0.865 (0.850), 60: 0.811 (0.794), 70: 0.753 (0.736), 80: 0.694 (0.679), 90: 0.640 (0.628), 100: 0.599 (0.586), 110: 0.564 (0.557),
+  120: 0.545 (0.542), 130: 0.542 (0.544), 140: 0.555 (0.562), 150: 0.585 (0.594). The measured curve lags the ideal one by about 1 ms (output-stage group delay plus the default LFO smoothing). With `lfo1.smooth 0` the result is the same to within 0.003.
+  The earlier readings of L1 below 60 ms after a note on were disturbed by the measurement window overlapping the note's start-up; the values of L1 from 0.12 s on stand.
+
 ## 4. Random LFOs (`rlfoN.*`)
 
 Style (`rlfoN.style`): Perlin, Sample and hold, Sine interpolate, Lorenz attractor, Rossler attractor. `rate`, `sync`, `division`, `sync_type` (Retrigger / Free-run), `stereo` (Off/On), keytrack

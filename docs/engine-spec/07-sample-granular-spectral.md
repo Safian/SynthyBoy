@@ -90,12 +90,12 @@ This is **not** the Vital unison law of document 1 section 9 (no pair layout, no
 
 ## 8. Test vectors
 
-The libraries carry their own acceptance tests (`core/sample-osc/tests`, `core/granular/tests`, `core/spectral/tests`, `core/multisample/tests`); the glue rules are tested black box:
+The libraries carry their own acceptance tests; the glue is measured black box with a generated content pack (a mono 16-bit WAV, 440 Hz sine of amplitude 0.8, 44.1 kHz, 2 s, loaded as the sample of osc 1 through the content store; `osc1.sample.root 69`, `sample.loop_mode` Forward loop, `osc1.level 100`, filter off, `master.volume 0`, `env1.attack 0`, `random_phase 0`):
 
-| # | Setup | Expectation |
-|---|-------|-------------|
-| S1 | `osc1.type 1` with a sine sample of root key 69 (440 Hz), note 69, unison 1 | 440 Hz; note 81: 880 Hz; `osc1.transpose 12`: 880 Hz; `pitch_track` Off: 440 Hz whatever the key |
-| S2 | as S1, `unison.voices 2`, `detune 100`, `range 2`, `detune_curve 0`, spread 100, blend 100 | voice 0 at -200 ct hard left (pan t = -1), voice 1 at +200 ct hard right; each at `1/sqrt2` of the single voice (equal weights `detuned_w`, `norm = 1/sqrt2`) times the pan factor `sqrt2` of a hard-panned voice -> 1.0 in its channel (0 dB) |
-| S3 | `osc1.type` changed from Wavetable to Sample while a note sounds | no click; the old sound fades out and the new fades in over 10 ms |
-| S4 | `osc1.type 3` (Spectral) vs `osc1.type 1` with the same sample at the same level | the spectral one is 14.6 dB louder (+-1 dB) |
-| S5 | `type 1` with no sample loaded | silence from that oscillator; other oscillators unaffected |
+| # | Setup | Measured |
+|---|-------|----------|
+| S1 | `osc1.type 1` (Sample), unison 1, note 69 / 81 | 440.0 Hz / 880.0 Hz; `osc1.transpose 12` at note 69: 880.0 Hz; `sample.keytrack` Off at note 81: 440.0 Hz. The level of the 440 Hz line is **-4.93 dB** (waveform peak 0.567 for a sample peak of 0.8: the sample voice's centre pan law costs a mono sample 3.0 dB; a stereo sample is not attenuated by it) |
+| S2 | as S1, `unison.voices 2`, `detune 100`, `range 2`, `detune_curve 0`, `spread 100`, `blend 100` | left channel only 392.03 Hz (-200 ct), right channel only 493.91 Hz (+200 ct), each at -4.94 dB: the same level as the single voice (weights `detuned_w` equal, `norm = 1/sqrt2`, hard-pan gain `sqrt2`) |
+| S3 | `osc1.type` changed while a note sounds | 10 ms crossfade (derived from the engine rules; the offline probe cannot change a parameter in the middle of a note, so this one is **not measured**) |
+| S4 | `osc1.type` 1 / 2 (Granular) / 3 (Spectral) with the same sample, unison 1 | level of the 440 Hz line: **-4.93 / -1.49 / -2.90 dB**, waveform peaks 0.567 / 0.851 / 0.871. The spectral voice additionally shows weak sidebands at 252.5 / 353.9 / 526.1 / 627.5 Hz (-24 .. -29 dB: the resynthesis). The internal gain factor 5.3703 (+14.6 dB) of the spectral type is a calibration inside the glue; the net level relative to the Sample type is +2.0 dB for this sample |
+| S5 | `osc1.type 1` without a loaded sample | silence (exact zero) |

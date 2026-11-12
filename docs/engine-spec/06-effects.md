@@ -82,6 +82,9 @@ The filter is a 12 dB state variable filter (the Digital model of document 5 in 
 Final: `lerp(dry, wet, mix)`. Measured (Sine, level 50 % -> input peak 0.5006, filter None, mix 100): Soft clip drive 0 / 12 / 24 dB: peak 0.462 / 0.963 / 1.000 (= `tanh(0.5 d)`); Hard clip 0.501 / 1.014 / 1.077 (the excess over 1 is the ringing of the output decimator);
 Linear fold 0.501 / 0.971 / 0.946; Sine fold 0.709 / 1.000 / 1.005.
 
+**Bit crush** (Sine, input peak 0.5, RMS 0.354; filter None, mix 100; q = ((drive_dB + 30)/60)^2): drive -30 dB (q 0): output = input (error RMS 0.0000); -12 dB (q 0.09): RMS 0.355, error RMS 0.026; 0 dB (q 0.25): RMS 0.372, error RMS 0.063, peak 0.565; +12 dB (q 0.49): RMS 0.401, error RMS 0.119, peak 0.607;
++30 dB (q 1): RMS 0.173, peak 1.07 (the sine of peak 0.5 rounds to 0 and +-1 steps: a square-ish wave of reduced RMS). **Down sample** (Sine 110 Hz): drive -30 / 0 / +12 dB (effective rate 88200 / 22050 / 7938 Hz): fundamental -6.0 dB and no visible sidebands; +24 dB (882 Hz): fundamental -6.9 dB with images at 335 / 555 / 781 / 1001 Hz at -17 / -21 / -26 / -28 dB.
+
 ## 5. Equalizer (`eq.*`)
 
 Three bands in series: low, mid, high. Keys per band: `mode`, `cutoff` (note), `gain` (dB, -24 .. 24), `resonance` (0 .. 1, stored as the square root); optional `eq.mid2.*` (our fourth band, Off/Peak/Notch). `eq.law` chooses the filter family:
@@ -135,6 +138,13 @@ gain       = clamp(g_hi g_lo, 0, 32)                        ;   y = gain x
   Sine input peak 0 dB: upper ratio 0 / 50 % / 100 % -> output peak 0 / -10.0 / -19.9 dB; input -10.4 dB: -10.4 / -15.2 / -19.9; input -20 dB and below: untouched. (Law: `out = in + rho (thr - in)` in dB for a steady level above the threshold; the sine peak is what is compared.)
 * `compressor.limit`: Compress (above), Limit (our addition): the upper stage becomes a look-ahead brickwall limiter (1.5 ms look-ahead, ceiling = the upper threshold, makeup after the limiter, latency reported), Serum (peak detector, hard knee, smoothed gain reduction in dB with time constants 0.1 .. 1000 ms on
   the log scale of the knob, upper ratio as `1 - 1/R`). They are our additions defined by `docs/ui-design/13-new-keys.md` 4.17 / 4.48.
+
+### 6.1 Further compressor vectors (C1 .. C2)
+
+Single band, mid band parameters, upper threshold +12 dB (inactive), attack 0, release 50 %, mix 100, gain 0, a Sine at input peak levels -50.4 / -40 / -30.4 / -20 / -10.4 / 0 dB:
+
+* **Upward compression** (C1), lower threshold -30 dB: lower ratio 0: output = input; 50 %: -40.2 / -35.0 / -30.2 / -20 / -10.4 / 0 (below the threshold `out = in + rho (thr - in)`: -50.4 -> -40.2); 100 %: -29.9 / -29.9 / -29.9 / -20 / -10.4 / 0 (everything below the threshold is lifted to it);
+  lower ratio -50 % (**downward expansion**, C2): -60.7 / -45.0 / -30.7 / -20 / -10.4 / 0 (`-50.4 -> -60.6`). Above the lower threshold nothing changes.
 
 ## 7. Flanger (`flanger.*`)
 
@@ -217,6 +227,23 @@ White-ish burst through the reverb (osc1 Saw, env short, mix 100 %, `high_shelf_
 Tail loudness: the wet level of a loud note at `mix 100`, size 50 %: about -29 dB (energy) relative to the dry burst. The default stereo width is the full width of the lanes (L-in feeds L lines).
 
 **Better:** a 16-line FDN with a modulated delay network is standard; the own engine can use 8 or 12 lines at the 44.1k delay values scaled by 16/N for cost, if RT60 and density hold; run it at the host rate.
+
+### 9.3 Further reverb vectors (R2)
+
+Saw burst (20 ms, loud), `reverb.on 1`, `decay 2000`, `size 50`, `chorus_amount 0`, shelves 0 dB, mix 100; 10 ms energy windows, absolute dB (the dry burst peaks at -19.8 dB):
+* **Pre-delay 0**: the wet signal rises with the burst at 0.12 s and peaks at **-38.1 dB** (about 18 dB below the dry burst); the tail at 0.2 / 0.5 / 1 / 2 / 3 / 4 s after the note on: -47.9 / -51.5 / -58.1 / -74.6 / -96.3 / -113.1 dB (about -17 dB per second between 1 and 3 s, RT60 about 3.5 s for the energy slope).
+* **Pre-delay 100 ms**: the onset moves to 0.22 s (the silence before it is exact), the peak is -37.3 dB, the tail at 0.5 / 1 / 2 / 3 / 4 s: -49.6 / -64.0 / -77.5 / -93.7 / -110.6 dB.
+* **High shelf -6 dB at note 90** (instead of 0 dB): the tail at 0.5 / 1 / 2 s: -59.1 / -71.2 / -96.6 dB (lower and faster decaying than the flat case: the high frequencies are cut each pass).
+* `mix 50`: the dry burst reaches 0.812 of full scale (equal power -3 dB).
+
+### 8.1 Phaser, chorus and flanger vectors (P1, CH1, F1)
+
+* **P1 (phaser)**, white noise, `phaser.mix 100`, `rate 0.04`, `depth 0`, `center 1000 Hz`, `feedback 0`: notches at 451 Hz and 2625 Hz for `blend` 0 (4 stages); 217, 727, 1629, 5420 Hz for 50 % (8 stages); 141, 451, 838, 1418, 2625, 8080 Hz for 100 % (12 stages).
+* **CH1 (chorus)**, Sine burst (osc1 level 100, env attack 0 / decay 5 ms / sustain 0, note 69 at 0.1 s), `chorus.depth 0`, `feedback 0`, `voices 1`: `mix 100`, `delay1 = delay2 = 5 ms`: the burst appears delayed by 5 ms (first window above 0.05 at 4.5 .. 5 ms) with the same peak as the dry burst (1.11 against 1.15); with 12 ms the delay is 11.5 .. 12 ms; `mix 50`: dry 0.81 and the delayed copy at -3 dB;
+  `voices 2`, `delay1 5`, `delay2 15` (mix 100): two copies at 5 ms and 15 ms, each at half the single-voice level (0.556 / 0.277 .. 0.128 in the windows). White noise through the chorus at `mix 100` and depth 0 is spectrally flat (no comb: the dry is not in the output).
+* **F1 (flanger): known defect of engine-vital.** In the engine as built the flanger does not behave as section 7 describes: with `depth 0`, `center 329.63`, `mix 100`, `feedback` 0 / 50 / -50 % the noise spectrum is identical (feedback has **no effect**) and shows only a ripple of about 1 dB around -3 dB (the dry path at -3 dB; the wet part
+  is almost absent); the RMS of a saw at note 45 is 0.490 without the effect, 0.437 at `mix 50`, 0.321 at `mix 100`. A Sine burst through it shows no delayed copy. The cause is that the delay mode of the flanger is out of range of the delay's style list and falls onto an unrelated style whose right-hand delay time is unset.
+  **The own engine should implement the flanger of section 7 (the intended design); the presets will not sound identical to engine-vital's current flanger.** Decision for the coordinator: either fix engine-vital too (then the vectors of section 7 hold) or keep the defect as the sound reference; this spec follows the intended design.
 
 ## 10. Chain order law (one more time)
 
