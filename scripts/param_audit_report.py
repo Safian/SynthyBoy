@@ -11,7 +11,7 @@
 # Exit code 0: clean; 1: a regression against the baseline or an unexplained DEAD / MOD-DEAD / finding key.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
-import argparse, csv, glob, json, math, os, re, sys, zlib
+import argparse, csv, glob, json, math, os, platform, re, sys, zlib
 
 
 def load(indir):
@@ -70,6 +70,32 @@ def quant(row):
     return q
 
 
+SILENCE_DB = -100
+
+
+def this_platform():
+    """The platform the numbers of a run come from (a baseline records it: float code differs in the last bits between compilers and CPUs, so curves compare strictly only on the platform that made them)."""
+    return "%s-%s" % (sys.platform, platform.machine().lower())
+
+
+def normalise(q, mod_points):
+    """The quantised curve with the silent points made comparable: the spectral numbers (centroid, f0, balance) of a signal below -100 dB are those of rounding noise and differ between platforms,
+    and an rms below -100 dB is only a different amount of nothing. Layout: 4 numbers per direct grid point (rms, centroid, f0, balance), then 2 per modulation point (rms, centroid)."""
+    q = list(q)
+    n_direct = (len(q) - 2 * mod_points) // 4 * 4
+    for i in range(0, n_direct, 4):
+        if q[i] <= SILENCE_DB:
+            q[i:i + 4] = [SILENCE_DB, 0, 0, 0]
+    for i in range(n_direct, len(q) - 1, 2):
+        if q[i] <= SILENCE_DB:
+            q[i:i + 2] = [SILENCE_DB, 0]
+    return q
+
+
+def mod_points_of(verdict, grid_len):
+    return grid_len if verdict != "n/a" else 0
+
+
 def checksum(q):
     return "%08x" % (zlib.crc32(",".join(map(str, q)).encode()) & 0xffffffff)
 
@@ -83,14 +109,14 @@ def make_baseline(rows, mode):
         if r.get("noiseDb", -180.0) > -60.0:
             entry["n"] = 1   # the context is random (noise above the floor): the curve is not comparable between runs, only the verdict is
         keys[r["key"]] = entry
-    return {"format": "synthyboy-param-audit-baseline", "version": 1, "mode": mode, "keys": keys}
+    return {"format": "synthyboy-param-audit-baseline", "version": 1, "mode": mode, "platform": this_platform(), "keys": keys}
 
 
 def unstable_patterns(exemptions):
     return [re.compile(rx.pattern[6:]) for rx, _, _ in exemptions if rx.pattern.startswith("curve:")]
 
 
-def compare(base, rows, full_keyset, unstable=()):
+def compare(base, rows, full_keyset, unstable=(), tolerance=1):
     """Returns (regressions, drifts, new_keys, missing). A regression is a changed verdict / mod verdict or a curve that moved by more than one quantum anywhere."""
     regress, drifts, new = [], [], []
     for r in rows:
@@ -107,17 +133,17 @@ def compare(base, rows, full_keyset, unstable=()):
         if b["v"] != r["verdict"] or b["m"] != mv:
             regress.append("%s: verdict %s/%s -> %s/%s" % (k, b["v"], b["m"], r["verdict"], mv))
             continue
-        q = quant(r)
-        if checksum(q) == b["h"] or b.get("n") or r.get("noiseDb", -180.0) > -60.0:
+        q = normalise(quant(r), mod_points_of(mv, len(r.get("mod", {}).get("grid", []))))
+        bq = normalise(b["q"], mod_points_of(b["m"], 5))
+        if q == bq or b.get("n") or r.get("noiseDb", -180.0) > -60.0:
             continue
-        bq = b["q"]
         if len(bq) != len(q):
             regress.append("%s: curve has %d points, baseline %d" % (k, len(q), len(bq)))
             continue
         worst = max(abs(a - c) for a, c in zip(q, bq)) if q else 0
-        if worst > 1:
+        if worst > tolerance:
             idx = max(range(len(q)), key=lambda i: abs(q[i] - bq[i]))
-            regress.append("%s: curve moved (point %d: baseline %d, now %d, quanta of 1 dB / quarter octave / semitone)" % (k, idx, bq[idx], q[idx]))
+            regress.append("%s: curve moved (point %d: baseline %d, now %d, quanta of 1 dB / quarter octave / semitone; tolerance %d)" % (k, idx, bq[idx], q[idx], tolerance))
         else:
             drifts.append(k)
     missing = [k for k in base["keys"] if k not in {r["key"] for r in rows}] if full_keyset else []
@@ -212,8 +238,10 @@ def main():
         base_note = "baseline updated (%d keys in the file)" % len(new_base["keys"])
     elif a.baseline and os.path.exists(a.baseline):
         base = json.load(open(a.baseline))
-        regress, drifts, new, missing = compare(base, rows, a.mode == 'full' and not a.keys_regex, unstable_patterns(exemptions))
-        base_note = "compared with %s" % os.path.basename(a.baseline)
+        # the curves compare to one quantum on the platform that made the baseline, to two on another (x86 / arm64, compiler: the same code rounds differently); the verdicts always compare exactly
+        same = base.get("platform") == this_platform()
+        regress, drifts, new, missing = compare(base, rows, a.mode == 'full' and not a.keys_regex, unstable_patterns(exemptions), 1 if same else 2)
+        base_note = "compared with %s (%s baseline, curve tolerance %d quantum/quanta)" % (os.path.basename(a.baseline), "same platform" if same else "other platform", 1 if same else 2)
 
     # CSV / JSON
     with open(os.path.join(a.out, "keys.csv"), "w", newline="") as fh:
