@@ -39,6 +39,7 @@ public:
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
     bool copyReadout (LiveValues& out) const noexcept override;
+    void silence() noexcept override;
     void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;
     void setContentStore (const IContentStore* store) override;

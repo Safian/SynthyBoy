@@ -244,7 +244,7 @@ void Wavetable::build (const std::vector<std::vector<float>>& cosCoeff, const st
                 // the top fifth of every mip level (not level 0) is tapered with a raised cosine: a brickwall at the edge of the band rings (Gibbs, 9 % overshoot) and
                 // the ringing is what makes a baked table sound louder in its peaks than the live signal it was rendered from
                 double taper = 1.0;
-                if (false && m > 0 && top > 4 && h > top * 4 / 5)
+                if (m > 0 && top > 4 && h > top * 4 / 5)
                     taper = 0.5 + 0.5 * std::cos (kPi * static_cast<double> (h - top * 85 / 100) / static_cast<double> (top - top * 85 / 100 + 1));
                 const std::complex<double> v (0.5 * taper * cosCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)],
                                               -0.5 * taper * sinCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)]);

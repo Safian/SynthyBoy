@@ -182,6 +182,16 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     reset();
 }
 
+void OwnEngine::silence() noexcept
+{
+    // the host transport stopped: notes and effect tails end at once, parameters, controllers and content stay
+    for (auto& v : voices)
+        v->kill();
+    fx.reset();
+    std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
+    heldKeys = 0;
+}
+
 void OwnEngine::reset()
 {
     for (auto& v : voices)

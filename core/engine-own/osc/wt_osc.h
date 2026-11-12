@@ -74,7 +74,7 @@ public:
                     }
                     return sum;
                 };
-                const double cutoff = 0.110, beta = 7.5; // in cycles per sample of the 4x signal
+                const double cutoff = 0.100, beta = 7.5; // in cycles per sample of the 4x signal
                 double total = 0.0;
                 double tmp[kTaps];
                 for (int i = 0; i < kTaps; ++i)
@@ -277,7 +277,7 @@ public:
             const int groups = std::min (kMorphGroups, std::max (1, pairs));
             morphGroups = groups;
             const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
-            const float nyq = static_cast<float> (warped ? 3.6 * sampleRate : 0.5 * sampleRate);
+            const float nyq = static_cast<float> (warped ? 3.2 * sampleRate : 0.5 * sampleRate);
             float fmax = 1.0f, incMax = 0.0f;
             for (int v = 0; v < curCount; ++v)
             {
@@ -333,7 +333,7 @@ public:
             const float fmax = std::max (curInc[v], prevInc[v]) * static_cast<float> (sampleRate) * bw;
             const double rateI = sampleRate * (warped ? kOversample : 1);
             // band limit: the coarsest level that keeps the highest harmonic below Nyquist (of the rate the oscillator runs at)
-            const int level = Wavetable::levelFor (static_cast<float> (warped ? 3.6 * sampleRate : nyq) / std::max (fmax, 1.0f));
+            const int level = Wavetable::levelFor (static_cast<float> (warped ? 3.2 * sampleRate : nyq) / std::max (fmax, 1.0f));
             int N = Wavetable::size (level);
             // two cycles and the weight of the second one at the start / end of this chunk
             const float* cA = nullptr;
