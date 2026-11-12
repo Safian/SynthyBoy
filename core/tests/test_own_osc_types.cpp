@@ -381,7 +381,7 @@ TEST (own_wavetable_bank_memory)
 {
     const size_t bytes = own::builtinBankBytes();
     std::printf ("    built-in wavetable bank: %.1f MB (the eight 64 frame tables with all mip levels and spectra)\n", static_cast<double>(bytes) / 1048576.0);
-    CHECK (bytes < 24u * 1024u * 1024u);
+    CHECK (bytes < 32u * 1024u * 1024u);
 }
 
 // Render OSC Warp bakes the warp of the oscillator into a 256 frame table; the table played at the same warp position sounds like the warp

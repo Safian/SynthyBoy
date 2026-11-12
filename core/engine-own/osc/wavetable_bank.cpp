@@ -180,9 +180,10 @@ struct LevelTable
     {
         for (int m = 0; m < Wavetable::kNumLevels; ++m)
         {
-            harmonics[m] = std::max (1, static_cast<int> (std::floor (1024.0 * std::pow (2.0, -0.5 * m) + 1.0e-9)));
+            static const int kHarmonics[Wavetable::kNumLevels] = { 1024, 512, 256, 181, 128, 91, 64, 45, 32, 23, 16, 11, 8, 6, 4, 3, 2, 1 };
+            harmonics[m] = kHarmonics[m];
             int n = 16;
-            while (n < 2 * harmonics[m] && n < Wavetable::kCycle)
+            while (n < 8 * harmonics[m] && n < Wavetable::kCycle)
                 n <<= 1;
             size[m] = m == 0 ? Wavetable::kCycle : n;
         }

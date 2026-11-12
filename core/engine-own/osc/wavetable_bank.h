@@ -13,9 +13,11 @@ namespace synthyboy
 namespace own
 {
 /** One wavetable: `numFrames` single cycles, each stored as kNumLevels band-limited copies (mip levels). Level m keeps the harmonics
-    1 .. maxHarmonics (m): half octave steps from 1024 harmonics (level 0) down to 1. Memory: a level is stored with only as many samples as its band needs
-    (twice its highest harmonic, at most 2048, at least 16: the 4 point interpolation keeps the 2x oversampling of level 0) - the 21 levels cost 4.0 times one cycle
-    instead of 21 (the eight 64 frame tables of the bank: 21 MB instead of 46 MB with only the octave levels, measured by `own_wavetable_bank_memory`).
+    1 .. maxHarmonics (m): octave steps from 1024 down to 256 harmonics, half octave steps below (that is where the pitches of music are: from about 94 Hz up). Memory: a level is
+    stored with only as many samples as its band needs (eight times its highest harmonic, at most 2048, at least 16: the interpolation images of the 4 point read
+    stay as low as they were with 2048 samples at every level - at 4 times the oversampling they alias into the audible band, measured at -43 dB against -58 dB)
+    - the 18 levels cost 6.0 times one cycle instead of 18 (the eight 64 frame tables of the bank: 29 MB instead of 46 MB with the 11 octave levels of 2048
+    samples, measured by `own_wavetable_bank_memory`).
     A cycle is stored with one guard sample in front and two behind (the 4 point interpolation never wraps: indices -1 .. size (level) + 2 are valid).
     The spectrum of every frame (cosine / sine coefficients, harmonics 1 .. 1023) is kept too: the spectral morph rebuilds a cycle from it.
     Immutable after construction: shared by all voices and engines. */
@@ -23,7 +25,7 @@ class Wavetable
 {
 public:
     static constexpr int kCycle = 2048;
-    static constexpr int kNumLevels = 21; // half octave steps: 1024 harmonics (level 0) down to 1
+    static constexpr int kNumLevels = 18; // 1024, 512, 256 harmonics, then half octave steps (181, 128, 91 ... 1)
     static constexpr int kHarmonics = kCycle / 2; // spectrum arrays are indexed 0 .. kHarmonics - 1 (0 unused)
 
     /** Samples per cycle of a level (power of two). */

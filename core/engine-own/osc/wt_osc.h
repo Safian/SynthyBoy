@@ -74,7 +74,7 @@ public:
                     }
                     return sum;
                 };
-                const double cutoff = 0.106, beta = 7.5; // in cycles per sample of the 4x signal (20.4 kHz at 48 kHz)
+                const double cutoff = 0.110, beta = 7.5; // in cycles per sample of the 4x signal
                 double total = 0.0;
                 double tmp[kTaps];
                 for (int i = 0; i < kTaps; ++i)
