@@ -30,7 +30,7 @@ struct FxIndex
     int eqMid2[4];
     int flMix, flFeedback, flRate, flSync, flDivision, flDepth, flCenter, flPhase;
     int phMix, phFeedback, phRate, phSync, phDivision, phDepth, phCenter, phBlend, phPhase;
-    int rvMix, rvSize, rvDecay, rvPre, rvLowCut, rvHighCut, rvHsCut, rvHsGain, rvChAmount, rvChRate, rvType, rvWidth, rvDiffA, rvDiffB;
+    int rvMix, rvSize, rvDecay, rvPre, rvLowCut, rvHighCut, rvHsCut, rvHsGain, rvLsCut, rvLsGain, rvChAmount, rvChRate, rvType, rvWidth, rvDiffA, rvDiffB;
     int hdRate, hdUnison, hdDetune, hdMix, hdDimSize, hdDimMix, hdLevel;
     int utPolL, utPolR, utLpf, utHpf, utMonoBass, utMonoFreq, utWidth, utPan, utMix, utLevel;
     int ffOn, ffModel, ffStyle, ffCutoff, ffRes, ffDrive, ffBlend, ffMix, ffVar, ffLevel;

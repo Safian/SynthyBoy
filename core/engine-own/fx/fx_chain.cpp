@@ -61,7 +61,7 @@ FxIndex build()
     f.phMix = K ("phaser.mix"); f.phFeedback = K ("phaser.feedback"); f.phRate = K ("phaser.rate"); f.phSync = K ("phaser.sync"); f.phDivision = K ("phaser.division");
     f.phDepth = K ("phaser.depth"); f.phCenter = K ("phaser.center"); f.phBlend = K ("phaser.blend"); f.phPhase = K ("phaser.phase_offset");
     f.rvMix = K ("reverb.mix"); f.rvSize = K ("reverb.size"); f.rvDecay = K ("reverb.decay"); f.rvPre = K ("reverb.predelay"); f.rvLowCut = K ("reverb.pre_low_cut");
-    f.rvHighCut = K ("reverb.pre_high_cut"); f.rvHsCut = K ("reverb.high_shelf_cutoff"); f.rvHsGain = K ("reverb.high_shelf_gain");
+    f.rvHighCut = K ("reverb.pre_high_cut"); f.rvHsCut = K ("reverb.high_shelf_cutoff"); f.rvLsCut = K ("reverb.low_shelf_cutoff"); f.rvLsGain = K ("reverb.low_shelf_gain"); f.rvHsGain = K ("reverb.high_shelf_gain");
     f.rvChAmount = K ("reverb.chorus_amount"); f.rvChRate = K ("reverb.chorus_rate"); f.rvType = K ("reverb.type"); f.rvWidth = K ("reverb.width");
     f.rvDiffA = K ("reverb.diff_a"); f.rvDiffB = K ("reverb.diff_b");
     f.hdRate = K ("hyperdim.rate"); f.hdUnison = K ("hyperdim.unison"); f.hdDetune = K ("hyperdim.detune"); f.hdMix = K ("hyperdim.mix");
@@ -284,6 +284,8 @@ void FxChain::update (const float* base, const float* delta, double bpm, uint32_
         p.highCut = G (base, delta, f.rvHighCut);
         p.highShelfDb = base[f.rvHsGain];
         p.highShelfHz = G (base, delta, f.rvHsCut);
+        p.lowShelfDb = base[f.rvLsGain];
+        p.lowShelfHz = G (base, delta, f.rvLsCut);
         p.chorusAmount = clamp01 (pct (f.rvChAmount));
         p.chorusRate = G (base, delta, f.rvChRate);
         p.type = static_cast<int> (base[f.rvType] + 0.5f);

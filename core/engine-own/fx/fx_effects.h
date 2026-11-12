@@ -179,8 +179,8 @@ public:
             const float wl = line[0].read (dL), wr = line[1].read (dR);
             fb[0] = wl;
             fb[1] = wr;
-            l[i] = mixLaw (l[i], wl * 0.7f, p.mix);
-            r[i] = mixLaw (r[i], wr * 0.7f, p.mix);
+            l[i] = mixLaw (l[i], wl * 0.8f, 0.5f * p.mix); // the flanger mix runs over 0 .. 0.5 of the equal power law
+            r[i] = mixLaw (r[i], wr * 0.8f, 0.5f * p.mix);
         }
     }
 
@@ -225,7 +225,7 @@ public:
                 fb[c] = x;
                 // blend: 0 = the all pass chain adds to the dry signal (notches), 1 = it replaces it (all pass, no notches in the sum)
                 const float wet = lerp (0.5f * (dry + x), x, clamp01 (p.blend));
-                io[c][i] = dry * (1.0f - p.mix) + wet * p.mix;
+                io[c][i] = dry * (1.0f - p.mix) + wet * p.mix; // linear crossfade (document 06, section 1)
             }
         }
     }
@@ -270,31 +270,50 @@ private:
         const float b = std::clamp (p.blend, 0.0f, 2.0f);
         return b < 1.0f ? lerp (svf[c].lp, svf[c].bp * k, b) : lerp (svf[c].bp * k, svf[c].hp, b - 1.0f);
     }
-    float shape (int c, float x) noexcept
+    float shape (int c, float v) noexcept
     {
+        // v = x * drive; the laws of docs/engine-spec/06-effects.md section 4
+        const float u = clamp01 ((p.driveDb + 30.0f) / 60.0f);
+        const float d = std::pow (10.0f, std::clamp (p.driveDb, -30.0f, 30.0f) * 0.05f);
+        const float x = d != 0.0f ? v / d : v; // the unscaled input
+        float y;
         switch (p.type)
         {
-            case 0: return std::tanh (x);
-            case 1: return std::clamp (x, -1.0f, 1.0f);
-            case 2: { float v = std::fmod (x + 1.0f, 4.0f); if (v < 0.0f) v += 4.0f; return v < 2.0f ? v - 1.0f : 3.0f - v; }
-            case 3: return std::sin (x * kPif * 0.5f);
-            case 4: { const float steps = std::max (2.0f, 256.0f / (1.0f + std::fabs (x) * 0.0f)); return std::round (std::clamp (x, -1.0f, 1.0f) * steps * 0.5f) / (steps * 0.5f) ; }
-            case 5: { if ((counter++ & 3) == 0) held[c] = x; return std::clamp (held[c], -1.5f, 1.5f); }
-            case 6: return std::tanh (x + 0.2f) - std::tanh (0.2f);
-            case 7: return x > 0.0f ? std::tanh (x) : 0.4f * std::tanh (x);
-            case 8: return x / (1.0f + std::fabs (x));
-            case 9: return x >= 0.0f ? 1.0f : -1.0f;
-            case 10: return std::tanh (x + 0.5f) - std::tanh (0.5f);
-            case 11: return std::fabs (x) * 2.0f - 0.6366f;
-            case 12: return x / std::sqrt (1.0f + x * x);
-            case 13: return (x + 0.3f) / std::sqrt (1.0f + (x + 0.3f) * (x + 0.3f)) - 0.3f / std::sqrt (1.09f);
-            default: return x;
+            case 0: y = std::tanh (v); break;
+            case 1: y = std::clamp (v, -1.0f, 1.0f); break;
+            case 2: { const float t = 0.25f * v + 0.75f; y = std::fabs (-4.0f * (t - std::floor (t)) + 2.0f) - 1.0f; break; }
+            case 3: { const float t = 0.5f - 0.25f * v; y = std::sin (kTwoPif * (t - std::floor (t))); break; }
+            case 4: { const float q = std::clamp (u * u, 1.5e-8f, 1.0f); y = std::round (x / q) * q; break; }
+            case 5:
+            {
+                const float period = std::max (static_cast<float> (sampleRate) * std::max (0.99f / std::max ((1.0f - u) * (1.0f - u), 1.0e-4f), 1.0f) / 88200.0f, 1.0f);
+                holdPhase[c] += 1.0f;
+                if (holdPhase[c] >= period) { holdPhase[c] -= period; held[c] = x; }
+                y = held[c];
+                break;
+            }
+            case 6: y = std::tanh (v + 0.3f) - std::tanh (0.3f); break;
+            case 7: { const float vp = std::max (v, 0.0f), vn = std::min (v, 0.0f); y = (1.0f - std::exp (-vp)) - 0.5f * (1.0f - std::exp (2.0f * vn)); break; }
+            case 8: y = std::exp (std::min (v, 0.0f)) - std::exp (-std::max (v, 0.0f)); break;
+            case 9: y = std::tanh (32.0f * v); break;
+            case 10: y = std::tanh (std::max (v, 0.0f)) + std::max (std::min (v, 0.0f), -0.5f); break;
+            case 11: y = std::fabs (std::clamp (v, -1.0f, 1.0f)); break;
+            case 12: y = std::clamp (v, -1.0f, 1.0f); break; // X-Shaper: the drawn curves default to the identity
+            default: y = std::clamp (v, -1.0f, 1.0f); break;
         }
+        const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
+        if (asym) // 10 Hz DC blocker
+        {
+            const float a = 1.0f - std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate));
+            dc[c] += a * (y - dc[c]);
+            y -= dc[c];
+        }
+        return y;
     }
     Params p;
     double sampleRate = 48000.0;
     Svf svf[2];
-    float held[2] = {};
+    float held[2] = {}, holdPhase[2] = {}, dc[2] = {};
     unsigned counter = 0;
 };
 
@@ -344,67 +363,81 @@ public:
     struct Band { float lowerDb = -40, upperDb = -20, lowerRatio = 0, upperRatio = 0.5f, gainDb = 0; };
     struct Params { float mix = 1.0f, attack = 0.5f, release = 0.5f, crossLow = 120.0f, crossHigh = 2500.0f; int bands = 0; Band band[3]; };
     void prepare (double sr) { sampleRate = sr; reset(); }
-    void reset() noexcept { for (auto& c : lr) for (auto& b : c) b.reset(); for (auto& e : env) e = 0.0f; }
+    void reset() noexcept
+    {
+        for (auto& c : lr) for (auto& b : c) b.reset();
+        for (auto& e : envHi) e = 0.0f;
+        for (auto& e : envLo) e = 1.0f;
+    }
     void set (const Params& np) noexcept
     {
         p = np;
+        // one split (two bands) for the Low / High band modes, two splits for Multiband
+        const float f1 = p.bands == 2 ? p.crossHigh : p.crossLow, f2 = p.crossHigh;
         for (int c = 0; c < 2; ++c)
         {
-            lr[c][0].design (Biquad::lowpass, p.crossLow, 0.7071f, 0.0f, sampleRate);
+            lr[c][0].design (Biquad::lowpass, f1, 0.7071f, 0.0f, sampleRate);
             lr[c][1].copyCoefficients (lr[c][0]);
-            lr[c][2].design (Biquad::highpass, p.crossLow, 0.7071f, 0.0f, sampleRate);
+            lr[c][2].design (Biquad::highpass, f1, 0.7071f, 0.0f, sampleRate);
             lr[c][3].copyCoefficients (lr[c][2]);
-            lr[c][4].design (Biquad::lowpass, p.crossHigh, 0.7071f, 0.0f, sampleRate);
+            lr[c][4].design (Biquad::lowpass, f2, 0.7071f, 0.0f, sampleRate);
             lr[c][5].copyCoefficients (lr[c][4]);
-            lr[c][6].design (Biquad::highpass, p.crossHigh, 0.7071f, 0.0f, sampleRate);
+            lr[c][6].design (Biquad::highpass, f2, 0.7071f, 0.0f, sampleRate);
             lr[c][7].copyCoefficients (lr[c][6]);
         }
     }
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
-        const float atk = 1.0f - std::exp (-1.0f / (sr * (0.0002f + 0.05f * p.attack * p.attack)));
-        const float rel = 1.0f - std::exp (-1.0f / (sr * (0.01f + 1.5f * p.release * p.release)));
+        static const float kAtk[3] = { 2.8f, 1.4f, 0.7f }, kRel[3] = { 40.0f, 28.0f, 15.0f };
+        // which parameter set each signal band uses
+        int use[3] = { 0, 1, 2 };
+        if (p.bands == 1) { use[0] = 0; use[1] = 1; use[2] = 1; }
+        if (p.bands == 2) { use[0] = 1; use[1] = 2; use[2] = 2; }
+        if (p.bands == 3) { use[0] = use[1] = use[2] = 1; }
         for (int i = 0; i < n; ++i)
         {
-            float in[2] = { l[i], r[i] }, out[2] = { 0.0f, 0.0f };
-            float bandSig[3][2];
+            const float in[2] = { l[i], r[i] };
+            float sig[3][2], out[2] = { 0.0f, 0.0f };
             for (int c = 0; c < 2; ++c)
             {
                 const float x = in[c];
-                // Linkwitz-Riley 4 split (two biquads each)
                 float lowS = lr[c][1].process (lr[c][0].process (x));
                 float restS = lr[c][3].process (lr[c][2].process (x));
-                float midS = lr[c][5].process (lr[c][4].process (restS));
-                float highS = lr[c][7].process (lr[c][6].process (restS));
-                if (p.bands == 3) { lowS = 0.0f; midS = x; highS = 0.0f; }
-                bandSig[0][c] = lowS; bandSig[1][c] = midS; bandSig[2][c] = highS;
+                float midS = 0.0f, highS = 0.0f;
+                if (p.bands == 0)
+                {
+                    midS = lr[c][5].process (lr[c][4].process (restS));
+                    highS = lr[c][7].process (lr[c][6].process (restS));
+                }
+                else if (p.bands == 3) { lowS = 0.0f; midS = x; }
+                else midS = restS; // two bands: low | rest
+                sig[0][c] = lowS; sig[1][c] = midS; sig[2][c] = highS;
             }
             for (int b = 0; b < 3; ++b)
             {
-                const Band& bd = p.band[p.bands == 3 ? 1 : b];
-                const bool active = !(p.bands == 1 && b != 0) && !(p.bands == 2 && b != 2);
-                // linked detector
-                const float power = 0.5f * (bandSig[b][0] * bandSig[b][0] + bandSig[b][1] * bandSig[b][1]); // mean square detector (a sine of peak 1 reads 0.5)
-                float& e = env[b];
-                e += (power > e ? atk : rel) * (power - e);
-                e = flushDenormal (e);
-                float gainDb = bd.gainDb;
-                if (active)
-                {
-                    const float ldb = 10.0f * std::log10 (std::max (e, 1.0e-12f)) + 3.0f; // dB of the equivalent sine peak
-                    if (ldb > bd.upperDb)
-                        gainDb += -(ldb - bd.upperDb) * clamp01 (bd.upperRatio);
-                    else if (ldb < bd.lowerDb)
-                        gainDb += (bd.lowerDb - ldb) * std::clamp (bd.lowerRatio, -1.0f, 1.0f);
-                    gainDb = std::clamp (gainDb, -80.0f, 60.0f);
-                }
-                const float gain = std::pow (10.0f, gainDb * 0.05f);
-                out[0] += bandSig[b][0] * (active ? gain : 1.0f);
-                out[1] += bandSig[b][1] * (active ? gain : 1.0f);
+                const Band& bd = p.band[use[b]];
+                const float x2 = 0.5f * (sig[b][0] * sig[b][0] + sig[b][1] * sig[b][1]);
+                const float thrU = std::pow (10.0f, std::clamp (bd.upperDb, -100.0f, 12.0f) * 0.1f), thrL = std::pow (10.0f, std::clamp (bd.lowerDb, -100.0f, 12.0f) * 0.1f);
+                const int tb = use[b];
+                const float expo = std::exp (8.0f * p.attack - 4.0f), expr = std::exp (8.0f * p.release - 4.0f);
+                const float Na = std::max (5.0f, kAtk[tb] * sr * 0.001f * expo), Nr = std::max (5.0f, kRel[tb] * sr * 0.001f * expr);
+                float& eh = envHi[b];
+                float& el = envLo[b];
+                const float Nh = x2 > eh ? Na : Nr, Nl = x2 > el ? Na : Nr;
+                eh = (x2 + eh * Nh) / (Nh + 1.0f);
+                el = (x2 + el * Nl) / (Nl + 1.0f);
+                eh = flushDenormal (eh);
+                const float envH = std::max (eh, thrU), envL = std::min (std::max (el, 1.0e-20f), thrL);
+                const float gHi = std::pow (thrU / envH, clamp01 (bd.upperRatio) * 0.5f);
+                const float gLo = std::pow (thrL / envL, std::clamp (bd.lowerRatio, -1.0f, 1.0f) * 0.5f);
+                const float gain = std::clamp (gHi * gLo, 0.0f, 32.0f) * std::pow (10.0f, bd.gainDb * 0.05f);
+                const bool skip = (p.bands == 1 && b == 2) || (p.bands == 2 && b == 2) || (p.bands == 3 && b != 1);
+                for (int c = 0; c < 2; ++c)
+                    if (!skip) out[c] += sig[b][c] * gain;
             }
-            l[i] = in[0] * (1.0f - p.mix) + out[0] * p.mix;
-            r[i] = in[1] * (1.0f - p.mix) + out[1] * p.mix;
+            l[i] = in[0] + (out[0] - in[0]) * p.mix;
+            r[i] = in[1] + (out[1] - in[1]) * p.mix;
         }
     }
 
@@ -412,115 +445,127 @@ private:
     Params p;
     double sampleRate = 48000.0;
     Biquad lr[2][8];
-    float env[3] = {};
+    float envHi[3] = {}, envLo[3] = { 1.0f, 1.0f, 1.0f };
 };
 
+/** The reverb: a 16 line feedback delay network with Schroeder all-pass diffusers in the lines (docs/engine-spec/06-effects.md 9). */
 class Reverb
 {
 public:
-    static constexpr int kLines = 8;
+    static constexpr int kLines = 16;
     struct Params { float mix = 0.25f, size = 0.5f, decay = 1.5f, predelay = 0.0f, lowCut = 20.0f, highCut = 8000.0f, highShelfDb = -1.0f, highShelfHz = 1400.0f,
-                          chorusAmount = 0.2f, chorusRate = 0.25f, width = 1.0f, diffA = 0.7f, diffB = 0.6f; int type = 0; };
+                          lowShelfDb = 0.0f, lowShelfHz = 100.0f, chorusAmount = 0.2f, chorusRate = 0.25f, width = 1.0f, diffA = 0.7f, diffB = 0.6f; int type = 0; };
     void prepare (double sr)
     {
         sampleRate = sr;
-        for (int i = 0; i < kLines; ++i)
-            line[i].prepare (static_cast<int> (sr * 0.5));
+        scale = 1;
+        while (static_cast<double> (scale) < sr / 44100.0)
+            scale <<= 1;
+        for (int k = 0; k < kLines; ++k)
+        {
+            line[k].prepare (static_cast<int> (sr / 44100.0 * 2.0 * 11400.0) + 4096);
+            apLine[k].prepare (1100 * scale);
+        }
         pre[0].prepare (static_cast<int> (sr * 0.32));
         pre[1].prepare (static_cast<int> (sr * 0.32));
-        for (int c = 0; c < 2; ++c)
-            for (int s = 0; s < 4; ++s)
-                ap[c][s].prepare (static_cast<int> (sr * 0.05));
         reset();
     }
     void reset() noexcept
     {
         for (auto& d : line) d.reset();
+        for (auto& d : apLine) d.reset();
         for (auto& d : pre) d.reset();
-        for (auto& c : ap) for (auto& d : c) d.reset();
-        for (auto& x : damp) x = 0.0f;
-        for (auto& x : lpIn) x = 0.0f;
-        for (auto& f : hpIn) f.reset();
+        for (auto& x : hsLp) x = 0.0f;
+        for (auto& x : lsLp) x = 0.0f;
+        for (auto& x : inLp) x = 0.0f;
         phase = 0.0f;
+        for (auto& x : stored) x = 0.0f;
     }
     void set (const Params& np) noexcept { p = np; }
     void process (float* l, float* r, int n) noexcept
     {
-        const float sr = static_cast<float> (sampleRate);
-        // delay lengths (ms) of the late field, scaled by the size and the type
-        static const float kBase[kLines] = { 29.7f, 37.1f, 41.1f, 43.7f, 53.3f, 59.9f, 67.1f, 73.7f };
-        const float typeScale = p.type == 1 ? 0.6f : (p.type == 2 ? 1.5f : (p.type == 3 ? 1.1f : (p.type == 4 ? 0.8f : (p.type == 5 ? 2.0f : 1.0f))));
-        const float scale = (0.25f + 1.5f * p.size) * typeScale;
-        float len[kLines], g[kLines];
-        for (int i = 0; i < kLines; ++i)
+        static const float kD[kLines] = { 6753.2f, 9278.4f, 7704.5f, 11328.5f, 9701.12f, 5512.5f, 8480.45f, 5638.65f,
+                                          3120.73f, 3429.5f, 3626.37f, 7713.52f, 4521.54f, 6518.97f, 5265.56f, 5630.25f };
+        static const float kA[kLines] = { 1001, 799, 933, 876, 895, 807, 907, 853, 957, 1019, 711, 567, 833, 779, 663, 997 };
+        const float sr = static_cast<float> (sampleRate), rate = sr / 44100.0f;
+        const float sizeMult = std::exp2 (4.0f * p.size - 3.0f) * (p.type == 5 ? 1.5f : (p.type == 1 ? 0.7f : 1.0f));
+        const float T = std::clamp (p.decay, 0.1f, 100.0f);
+        float len[kLines], gain[kLines];
+        for (int k = 0; k < kLines; ++k)
         {
-            len[i] = std::clamp (kBase[i] * 0.001f * scale * sr, 8.0f, sr * 0.45f);
-            g[i] = std::pow (10.0f, -3.0f * len[i] / (sr * std::max (p.decay * 1.45f, 0.05f))); // decay knob -> RT60 matched to the oracle
+            len[k] = sizeMult * kD[k] * rate;
+            gain[k] = std::pow (0.001f, sizeMult * kD[k] / (T * 44100.0f));
         }
-        const float lpA = OnePole::coefficient (std::clamp (p.highShelfHz * std::exp2 (-p.highShelfDb * 0.25f), 500.0f, 16000.0f), sampleRate);
-        const float inLp = OnePole::coefficient (p.highCut, sampleRate), inHp = Svf::coefficient (p.lowCut, sampleRate);
+        const float aHs = std::pow (10.0f, std::clamp (p.highShelfDb, -24.0f, 0.0f) * 0.05f);
+        const float aLs = 1.0f - std::pow (10.0f, std::clamp (p.lowShelfDb, -24.0f, 0.0f) * 0.05f);
+        const float cHs = OnePole::coefficient (p.highShelfHz, sampleRate), cLs = OnePole::coefficient (p.lowShelfHz, sampleRate);
+        const float cHi = OnePole::coefficient (p.highCut, sampleRate), cLo = OnePole::coefficient (p.lowCut, sampleRate);
+        const float depth = p.chorusAmount * p.chorusAmount * 2500.0f * rate;
         const float pd = p.predelay * sr;
-        const float dif = 0.2f + 0.5f * p.diffA;
         for (int i = 0; i < n; ++i)
         {
-            phase += p.chorusRate / sr;
+            phase += std::min (p.chorusRate, 16.0f) / sr;
             phase -= std::floor (phase);
-            const float mono = 0.5f * (l[i] + r[i]);
-            pre[0].push (mono);
-            float x = pd > 0.5f ? pre[0].read (pd) : mono;
-            hpIn[0].process (x, inHp, 1.4142f);
-            x = lpIn[0] += inLp * (hpIn[0].hp - lpIn[0]);
-            lpIn[0] = flushDenormal (lpIn[0]);
-            // input diffusion
-            static const float kAp[4] = { 5.3f, 7.9f, 11.3f, 13.7f };
-            for (int s = 0; s < 4; ++s)
+            // input: inverted band pass between the two cuts, scaled
+            float in[2] = { l[i], r[i] }, bp[2];
+            for (int c = 0; c < 2; ++c)
             {
-                const float d = kAp[s] * 0.001f * sr * (0.5f + p.size);
-                const float delayed = ap[0][s].read (d);
-                const float v = x - dif * delayed;
-                ap[0][s].push (v);
-                x = delayed + dif * v;
+                inLp[c] += cHi * (in[c] - inLp[c]);
+                inLp[c + 2] += cLo * (in[c] - inLp[c + 2]);
+                bp[c] = (inLp[c + 2] - inLp[c]) * 0.25f;
             }
-            float tap[kLines];
+            float v[kLines];
             for (int k = 0; k < kLines; ++k)
             {
-                const float mod = 1.0f + 0.0035f * p.chorusAmount * std::sin (kTwoPif * (phase + 0.125f * static_cast<float> (k)));
-                tap[k] = line[k].read (len[k] * mod);
+                const int group = k / 4, lane = k % 4;
+                const float ph = kTwoPif * (phase + static_cast<float> (lane) / 16.0f);
+                const float mod = depth * (group == 0 ? std::cos (ph) : (group == 1 ? -std::cos (ph) : (group == 2 ? std::sin (ph) : -std::sin (ph))));
+                const float rd = line[k].read (std::max (len[k] + mod, 32.0f));
+                const float aRead = apLine[k].read (kA[k] * static_cast<float> (scale));
+                const float w = rd - 0.6f * aRead;
+                apLine[k].push (bp[k < 8 ? 0 : 1] + w);
+                v[k] = aRead + 0.6f * w;
             }
-            // Hadamard feedback matrix (orthogonal, energy preserving)
-            float mixed[kLines];
-            hadamard8 (tap, mixed);
+            float S = 0.0f, C[4] = {}, R[4] = {};
+            for (int g = 0; g < 4; ++g)
+                for (int j = 0; j < 4; ++j)
+                {
+                    S += v[g * 4 + j];
+                    C[j] += v[g * 4 + j];
+                    R[g] += v[g * 4 + j];
+                }
+            float outSide[2] = { 0.0f, 0.0f };
             for (int k = 0; k < kLines; ++k)
             {
-                float v = mixed[k] * g[k] + x * kInjection[k];
-                damp[k] += lpA * (v - damp[k]);
-                damp[k] = flushDenormal (damp[k]);
-                line[k].push (damp[k]);
+                const int g = k / 4, j = k % 4;
+                float y = v[k] + 0.25f * S - 0.5f * C[j] - 0.5f * R[g];
+                hsLp[k] += cHs * (y - hsLp[k]);
+                y = hsLp[k] + aHs * (y - hsLp[k]) * 0.0f + aHs * (y - hsLp[k]);
+                lsLp[k] += cLs * (y - lsLp[k]);
+                y -= aLs * lsLp[k];
+                hsLp[k] = flushDenormal (hsLp[k]);
+                lsLp[k] = flushDenormal (lsLp[k]);
+                y *= gain[k];
+                line[k].push (y);
+                outSide[k < 8 ? 0 : 1] += y;
             }
-            const float outL = (tap[0] + tap[2] + tap[4] + tap[6]) * 0.35f, outR = (tap[1] + tap[3] + tap[5] + tap[7]) * 0.35f;
-            const float m = 0.5f * (outL + outR), s = 0.5f * (outL - outR) * p.width;
-            const float wl = m + s, wr = m - s;
+            const float wl0 = outSide[0] * kOutGain, wr0 = outSide[1] * kOutGain;
+            const float m = 0.5f * (wl0 + wr0), sd = 0.5f * (wl0 - wr0) * p.width;
+            pre[0].push (m + sd);
+            pre[1].push (m - sd);
+            const float wl = pd > 0.5f ? pre[0].read (pd) : m + sd, wr = pd > 0.5f ? pre[1].read (pd) : m - sd;
             l[i] = mixLaw (l[i], wl, p.mix);
             r[i] = mixLaw (r[i], wr, p.mix);
         }
     }
 
 private:
-    static constexpr float kInjection[kLines] = { 0.6f, -0.5f, 0.45f, -0.4f, 0.55f, -0.35f, 0.4f, -0.5f };
-    static void hadamard8 (const float* in, float* out) noexcept
-    {
-        float a[8];
-        for (int i = 0; i < 8; i += 2) { a[i] = in[i] + in[i + 1]; a[i + 1] = in[i] - in[i + 1]; }
-        float b[8];
-        for (int i = 0; i < 8; i += 4) { b[i] = a[i] + a[i + 2]; b[i + 1] = a[i + 1] + a[i + 3]; b[i + 2] = a[i] - a[i + 2]; b[i + 3] = a[i + 1] - a[i + 3]; }
-        for (int i = 0; i < 4; ++i) { out[i] = (b[i] + b[i + 4]) * 0.35355339f; out[i + 4] = (b[i] - b[i + 4]) * 0.35355339f; }
-    }
+    static constexpr float kOutGain = 1.6f;
     Params p;
     double sampleRate = 48000.0;
-    DelayLine line[kLines], pre[2], ap[2][4];
-    float damp[kLines] = {};
-    float lpIn[1] = {};
-    Svf hpIn[1];
+    int scale = 2;
+    DelayLine line[kLines], apLine[kLines], pre[2];
+    float hsLp[kLines] = {}, lsLp[kLines] = {}, inLp[4] = {}, stored[kLines] = {};
     float phase = 0.0f;
 };
 } // namespace own
