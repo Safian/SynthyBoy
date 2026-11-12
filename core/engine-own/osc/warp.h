@@ -39,9 +39,11 @@ inline float warpBandwidthFactor (int type, float a) noexcept
     {
         case kWarpSync: case kWarpSyncVar: return 1.0f + a * 11.0f;
         case kWarpFormant: return 1.0f + a * 7.0f;
-        case kWarpPulse: case kWarpSqueeze: return 1.0f / (1.0f - 0.9f * a);
+        case kWarpPulse: return 1.0f / (1.0f - 0.9f * a);
+        case kWarpSqueeze: return 1.0f / (1.0f - 0.7f * a);
         case kWarpBend: case kWarpBendPlus: case kWarpBendMinus: case kWarpBendBoth: return 1.0f + 1.5f * std::fabs (a - 0.5f);
         case kWarpFmA: case kWarpFmB: case kWarpFmTzA: case kWarpFmTzB: case kWarpFmExpA: case kWarpFmExpB: case kWarpFmLinA: case kWarpFmLinB:
+            return 1.0f + 7.0f * a;
         case kWarpPdA: case kWarpPdB: case kWarpPdSelf: return 1.0f + 3.0f * a;
         default: return 1.0f;
     }
@@ -68,41 +70,36 @@ inline float warpPhase (int type, float p, float a, float ph, float m, float& wi
             window = 0.5f - 0.5f * std::cos (kTwoPif * p); // raised cosine over the cycle keeps the seam closed
             return frac (p * (1.0f + a * 7.0f) + ph - 0.5f);
         }
-        case kWarpBend: case kWarpBendBoth:
-            return std::pow (p, std::exp2 (4.0f * (0.5f - a)));
+        case kWarpBend: case kWarpBendBoth: // smooth, periodic phase maps: the slope never jumps, so they create little high frequency content
+            return p - (a - 0.5f) * 1.9f * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
         case kWarpBendPlus:
-            return std::pow (p, std::exp2 (-3.0f * a));
+            return p + a * 0.95f * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
         case kWarpBendMinus:
-            return std::pow (p, std::exp2 (3.0f * a));
+            return p - a * 0.95f * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
         case kWarpAsymPlus:
-        {
-            const float k = 0.5f + 0.45f * a; // the first part of the cycle takes k of the table
-            return p < 0.5f ? p * 2.0f * k : k + (p - 0.5f) * 2.0f * (1.0f - k);
-        }
+            return p - a * 0.95f * (std::cos (kTwoPif * p) - 1.0f) * (1.0f / kTwoPif);
         case kWarpAsymMinus:
-        {
-            const float k = 0.5f - 0.45f * a;
-            return p < 0.5f ? p * 2.0f * k : k + (p - 0.5f) * 2.0f * (1.0f - k);
-        }
+            return p + a * 0.95f * (std::cos (kTwoPif * p) - 1.0f) * (1.0f / kTwoPif);
         case kWarpAsymBoth:
-        {
-            const float k = 0.5f + 0.45f * (a - 0.5f) * 2.0f;
-            return p < 0.5f ? p * 2.0f * k : k + (p - 0.5f) * 2.0f * (1.0f - k);
-        }
+            return p - (a - 0.5f) * 1.9f * (std::cos (kTwoPif * p) - 1.0f) * (1.0f / kTwoPif);
         case kWarpFlip:
             return p < 0.5f ? p : lerp (p, 1.0f - p, a);
         case kWarpMirror:
             return p < 0.5f ? p * 2.0f * (1.0f - 0.5f * a) : (1.0f - p) * 2.0f * (1.0f - 0.5f * a);
         case kWarpSqueeze:
-            return std::clamp ((p - 0.5f) / (1.0f - 0.95f * a) + 0.5f, 0.0f, 1.0f);
+        {
+            const float u = std::clamp ((p - 0.5f) * 2.0f / (1.0f - 0.7f * a), -1.0f, 1.0f); // the ends are flat, with a smooth (zero slope) arrival
+            const float u2 = u * u;
+            return 0.5f + 0.5f * u * (35.0f - u2 * (35.0f - u2 * (21.0f - 5.0f * u2))) * (1.0f / 16.0f); // three derivatives are zero at the ends
+        }
         case kWarpPulse:
-            return std::min (p / (1.0f - 0.95f * a), 1.0f);
+            return std::min (p / (1.0f - 0.7f * a), 1.0f);
         case kWarpFmA: case kWarpFmB: case kWarpFmTzA: case kWarpFmTzB:
-            return frac (p + m * a * 2.0f);
+            return frac (p + m * a * 0.3f);
         case kWarpFmExpA: case kWarpFmExpB:
-            return frac (p + std::copysign (std::expm1 (std::fabs (m) * 2.0f) * (1.0f / 6.389f), m) * a * 2.0f);
+            return frac (p + std::copysign (std::expm1 (std::fabs (m) * 2.0f) * (1.0f / 6.389f), m) * a * 0.3f);
         case kWarpFmLinA: case kWarpFmLinB:
-            return frac (p + m * a * 0.5f);
+            return frac (p + m * a * 0.3f);
         case kWarpPdA: case kWarpPdB:
             return frac (p + m * a * 0.25f * (1.0f - p));
         case kWarpPdSelf:

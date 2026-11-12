@@ -85,6 +85,9 @@ public:
         p.mix = clamp01 (s.mix);
         left.setParams (p);
         right.setParams (p);
+        // loudness of the classic models matched to the reference engine's by measurement (tools/own-oracle), dB
+        static const float kTrimDb[8] = { 1.5f, -11.5f, 3.5f, 0.0f, 4.0f, 2.0f, 0.5f, 1.0f };
+        trim = s.model >= 0 && s.model < 8 ? std::pow (10.0f, kTrimDb[s.model] * 0.05f) : 1.0f;
     }
 
     /** Filters a stereo block. Some of the collection's types can run away at extreme settings (resonance and drive at the maximum on loud input): a
@@ -106,13 +109,14 @@ public:
         }
         for (int k = 0; k < n; ++k)
         {
-            outL[k] = std::clamp (outL[k], -16.0f, 16.0f);
-            outR[k] = std::clamp (outR[k], -16.0f, 16.0f);
+            outL[k] = std::clamp (outL[k] * trim, -16.0f, 16.0f);
+            outR[k] = std::clamp (outR[k] * trim, -16.0f, 16.0f);
         }
     }
 
 private:
     filters::Filter left, right;
+    float trim = 1.0f;
 };
 } // namespace own
 } // namespace synthyboy

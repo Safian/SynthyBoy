@@ -15,22 +15,22 @@ inline float lfoShape (int shape, float p, uint32_t stepSeed) noexcept
 {
     switch (shape)
     {
-        case 0: return std::sin (kTwoPif * p);
+        case 0: return -std::cos (kTwoPif * p);                                   // starts at the bottom
         case 1: return p < 0.5f ? 4.0f * p - 1.0f : 3.0f - 4.0f * p;           // triangle starting at -1
         case 2: return 2.0f * p - 1.0f;                                         // saw up
         case 3: return 1.0f - 2.0f * p;                                         // saw down
         case 4: return p < 0.5f ? 1.0f : -1.0f;                                 // square
         case 5: return p < 0.25f ? 1.0f : -1.0f;                                // pulse 25 %
-        case 6: return std::floor (p * 8.0f) / 3.5f - 1.0f;                     // 8 steps up
-        case 7: return 1.0f - std::floor (p * 8.0f) / 3.5f;                     // 8 steps down
+        case 6: return 2.0f * std::floor (p * 4.0f) / 3.0f - 1.0f;             // 4 steps up
+        case 7: return 1.0f - 2.0f * std::floor (p * 4.0f) / 3.0f;             // 4 steps down
         case 8:
         {
             Rng r;
             r.seed (stepSeed * 977u + static_cast<uint32_t> (p * 8.0f));
             return r.bi();
         }
-        case 9: return 2.0f * ((std::exp (4.0f * p) - 1.0f) / (std::exp (4.0f) - 1.0f)) - 1.0f; // exp up
-        case 10: return 1.0f - 2.0f * ((std::exp (4.0f * p) - 1.0f) / (std::exp (4.0f) - 1.0f)); // exp down
+        case 9: return 2.0f * std::pow (p, 3.2f) - 1.0f;                        // exp up
+        case 10: return 2.0f * std::pow (1.0f - p, 3.2f) - 1.0f;                // exp down
         case 11: return std::sin (kPif * p) * 2.0f - 1.0f;                      // half sine (rectified), spans -1 .. 1
         default: return 0.0f;
     }

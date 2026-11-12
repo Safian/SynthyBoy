@@ -28,7 +28,8 @@ constexpr float kDivisionBeats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 
 
 float noiseSample (int colour, float* s, Rng& r, float level) noexcept
 {
-    const float w = r.bi();
+    // approximately Gaussian white noise (sum of six uniform numbers), level matched to the reference engine by measurement
+    const float w = (r.uni() + r.uni() + r.uni() + r.uni() + r.uni() + r.uni() - 3.0f) * 0.7189f;
     switch (colour)
     {
         case 1: // pink (three pole filter of white noise)
@@ -36,13 +37,13 @@ float noiseSample (int colour, float* s, Rng& r, float level) noexcept
             s[0] = 0.99765f * s[0] + w * 0.0990460f;
             s[1] = 0.96300f * s[1] + w * 0.2965164f;
             s[2] = 0.57000f * s[2] + w * 1.0526913f;
-            return (s[0] + s[1] + s[2] + w * 0.1848f) * 0.25f;
+            return (s[0] + s[1] + s[2] + w * 0.1848f) * 0.25f * 0.82f;
         }
         case 2: // brown
             s[0] = (s[0] + 0.02f * w) / 1.02f;
-            return s[0] * 3.5f;
+            return s[0] * 3.5f * 1.12f;
         case 3: // Geiger counter: sparse clicks
-            return r.uni() < 0.0008f ? r.bi() : 0.0f;
+            return r.uni() < 0.0008f ? r.bi() * 6.3f : 0.0f;
         case 4: // tape hiss: high passed white noise
         {
             const float y = (w - s[0]) * 0.5f;
@@ -54,7 +55,7 @@ float noiseSample (int colour, float* s, Rng& r, float level) noexcept
             if (r.uni() < 0.0004f)
                 s[0] = r.bi();
             s[0] *= 0.96f;
-            return s[0] + (r.uni() < 0.02f ? w * 0.05f : 0.0f);
+            return (s[0] + (r.uni() < 0.02f ? w * 0.05f : 0.0f)) * 1.93f;
         }
         case 6: // digital hash: sample and hold at a sixth of the rate
         {
@@ -66,7 +67,7 @@ float noiseSample (int colour, float* s, Rng& r, float level) noexcept
             return s[0];
         }
         case 7: // velvet noise
-            return r.uni() < 0.015f ? (r.next() & 1u ? 1.0f : -1.0f) : 0.0f;
+            return r.uni() < 0.015f ? (r.next() & 1u ? 1.76f : -1.76f) : 0.0f;
         case 8: // atmosphere: low passed noise
         {
             s[0] += 0.02f * (w - s[0]);
@@ -265,7 +266,7 @@ float Voice::lfoValue (int l, const TickGlobals& g) noexcept
         gain = 0.0f;
     else if (fade > 0.0f)
         gain = clamp01 ((st.age - delay) / fade);
-    v *= gain;
+    v = 2.0f * (0.5f + 0.5f * v) * gain - 1.0f; // delay and fade in scale the 0 .. 1 output (the source is 0 during the delay)
     if (P (li.smooth) >= 0.5f)
     {
         const float tau = std::max (P (li.smoothTime) * 0.001f, 1.0e-4f);

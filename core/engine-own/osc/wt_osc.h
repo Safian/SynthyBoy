@@ -42,6 +42,43 @@ class WtOsc
 {
 public:
     static constexpr int kMaxVoices = 16;
+    static constexpr int kOversample = 4, kTaps = 64;
+
+    /** Linear phase low pass of the 4x decimator (Kaiser window), computed once. */
+    static const float* decimatorTaps() noexcept
+    {
+        static const struct Taps
+        {
+            float c[kTaps];
+            Taps()
+            {
+                auto bessel0 = [] (double x)
+                {
+                    double sum = 1.0, term = 1.0;
+                    for (int k = 1; k < 30; ++k)
+                    {
+                        term *= (x / (2.0 * k)) * (x / (2.0 * k));
+                        sum += term;
+                    }
+                    return sum;
+                };
+                const double cutoff = 0.098, beta = 7.5; // in cycles per sample of the 4x signal (18.8 kHz at 48 kHz)
+                double total = 0.0;
+                double tmp[kTaps];
+                for (int i = 0; i < kTaps; ++i)
+                {
+                    const double x = i - 0.5 * (kTaps - 1);
+                    const double sinc = std::fabs (x) < 1.0e-9 ? 2.0 * cutoff : std::sin (2.0 * 3.14159265358979323846 * cutoff * x) / (3.14159265358979323846 * x);
+                    const double r = 2.0 * i / (kTaps - 1) - 1.0;
+                    tmp[i] = sinc * bessel0 (beta * std::sqrt (std::max (0.0, 1.0 - r * r))) / bessel0 (beta);
+                    total += tmp[i];
+                }
+                for (int i = 0; i < kTaps; ++i)
+                    c[i] = static_cast<float> (tmp[i] / total);
+            }
+        } taps;
+        return taps.c;
+    }
 
     void start (float startPhase, float randomPhase, Rng& rng) noexcept
     {
@@ -51,6 +88,9 @@ public:
             phase[i] = static_cast<uint32_t> (static_cast<double> (p - std::floor (p)) * 4294967296.0);
         }
         havePrev = false;
+        for (auto& h : history)
+            for (auto& x : h)
+                x = 0.0f;
     }
 
     /** Computes the per voice frequencies, levels and pans of the period that ends now (call once per control period). */
@@ -67,7 +107,7 @@ public:
         tick = t;
         const int n = std::clamp (t.voices, 1, kMaxVoices);
         curCount = n;
-        float sumL = 0.0f, sumR = 0.0f;
+        float sumW = 0.0f;
         float wl[kMaxVoices], wr[kMaxVoices];
         const double nyq = 0.5 * sampleRate;
         for (int i = 0; i < n; ++i)
@@ -99,10 +139,10 @@ public:
             const float ang = (pan + 1.0f) * (kPif * 0.25f);
             wr[i] = w * 1.41421356f * std::sin (ang);
             wl[i] = w * 1.41421356f * std::sin (kPif * 0.5f - ang); // identical bits for both sides at the centre
-            sumL += wl[i] * wl[i];
-            sumR += wr[i] * wr[i];
+            sumW += w * w;
         }
-        const float norm = t.level / std::sqrt (std::max (std::max (sumL, sumR), 1.0e-6f));
+        // equal power: the sum of the squared weights of the voices (a single voice keeps its pan law, hard panned it is 3 dB louder than centred)
+        const float norm = t.level / std::sqrt (std::max (sumW, 1.0e-6f));
         for (int i = 0; i < n; ++i)
         {
             curGainL[i] = wl[i] * norm;
@@ -136,79 +176,109 @@ public:
         std::fill (L, L + n, 0.0f);
         std::fill (R, R + n, 0.0f);
         if (tick.wt == nullptr || tick.level <= 0.0f)
-        {
-            // keep the phases running (cheap) so that a level modulation from zero does not restart the cycle
             return;
-        }
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
         const double nyq = 0.5 * sampleRate;
         const int count = std::max (curCount, prevCount);
         const float invP = 1.0f / static_cast<float> (kControlPeriod);
         const float a0 = tick.warpAmount[0], a1 = tick.warpAmount[1];
+        // a warp can create content far above the pitch: the oscillator then runs at four times the rate, with a band limited decimation
+        const bool warped = tick.warp[0] != 0 || tick.warp[1] != 0;
+        const int cs0 = warpCrossSource (tick.warp[0]), cs1 = warpCrossSource (tick.warp[1]);
         for (int v = 0; v < count; ++v)
         {
             if (curGainL[v] == 0.0f && curGainR[v] == 0.0f && prevGainL[v] == 0.0f && prevGainR[v] == 0.0f)
             {
                 // silent voice: advance the phase only
-                const float inc = curInc[v];
-                phase[v] += static_cast<uint32_t> (static_cast<uint64_t> (static_cast<double> (inc) * 4294967296.0 * n));
+                phase[v] += static_cast<uint32_t> (static_cast<uint64_t> (static_cast<double> (curInc[v]) * 4294967296.0 * n));
                 continue;
             }
-            // band limit: the coarsest level that keeps the highest harmonic (including what the warps create) below Nyquist
             float bw = 1.0f;
             for (int w = 0; w < 2; ++w)
                 bw = std::max (bw, warpBandwidthFactor (tick.warp[w], tick.warpAmount[w]));
             const float fmax = std::max (curInc[v], prevInc[v]) * static_cast<float> (sampleRate) * bw;
-            const int level = Wavetable::levelFor (static_cast<float> (nyq) / std::max (fmax, 1.0f));
-            const float frameV = curFrameOf[v];
-            const float fpos = frameV * static_cast<float> (frames - 1);
+            // band limit: the coarsest level that keeps the highest harmonic below Nyquist (of the rate the oscillator runs at)
+            const int level = Wavetable::levelFor (static_cast<float> (nyq) * (warped ? 4.0f : 1.0f) / std::max (fmax, 1.0f));
+            const float fpos = curFrameOf[v] * static_cast<float> (frames - 1);
             const int f0 = std::min (static_cast<int> (fpos), std::max (frames - 2, 0));
             const float ff = frames > 1 ? fpos - static_cast<float> (f0) : 0.0f;
             const float* c0 = wt.cycle (f0, level);
             const float* c1 = frames > 1 && ff > 1.0e-4f ? wt.cycle (f0 + 1, level) : nullptr;
-            uint32_t ph = phase[v];
-            for (int k = 0; k < n; ++k)
+            // one sample of the oscillator at the (32 bit) phase `ph`; k selects the sample of the cross signals
+            auto sampleAt = [&] (uint32_t ph, int k, float fk) noexcept
             {
-                const float t = static_cast<float> (t0 + k + 1) * invP;
-                const float inc = lerp (prevInc[v], curInc[v], t);
                 const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
                 float window = 1.0f, w2 = 1.0f, pp = p;
+                // the other oscillator is interpolated between its samples (fk = position inside the sample k, 1 = at k)
+                const float m0 = cs0 >= 0 && cross != nullptr && cross[cs0] ? lerp (k > 0 ? cross[cs0][k - 1] : lastCross[cs0], cross[cs0][k], fk) : 0.0f;
+                const float m1 = cs1 >= 0 && cross != nullptr && cross[cs1] ? lerp (k > 0 ? cross[cs1][k - 1] : lastCross[cs1], cross[cs1][k], fk) : 0.0f;
                 if (tick.warp[0] != 0)
-                {
-                    const int cs = warpCrossSource (tick.warp[0]);
-                    pp = warpPhase (tick.warp[0], pp, a0, tick.warpPhase[0], cs >= 0 && cross != nullptr && cross[cs] ? cross[cs][k] : 0.0f, window);
-                }
+                    pp = warpPhase (tick.warp[0], pp, a0, tick.warpPhase[0], m0, window);
                 if (tick.warp[1] != 0)
                 {
-                    const int cs = warpCrossSource (tick.warp[1]);
-                    pp = warpPhase (tick.warp[1], pp, a1, tick.warpPhase[1], cs >= 0 && cross != nullptr && cross[cs] ? cross[cs][k] : 0.0f, w2);
+                    pp = warpPhase (tick.warp[1], pp, a1, tick.warpPhase[1], m1, w2);
                     window *= w2;
                 }
                 const float pos = pp * static_cast<float> (Wavetable::kCycle);
-                int idx = static_cast<int> (pos);
-                idx = std::clamp (idx, 0, Wavetable::kCycle);
+                const int idx = std::clamp (static_cast<int> (pos), 0, Wavetable::kCycle);
                 const float fr = pos - static_cast<float> (idx);
                 float y = hermite (c0 + idx, fr);
                 if (c1 != nullptr)
                     y = lerp (y, hermite (c1 + idx, fr), ff);
                 y *= window;
                 if (tick.warp[0] != 0)
-                {
-                    const int cs = warpCrossSource (tick.warp[0]);
-                    y = warpSample (tick.warp[0], y, a0, cs >= 0 && cross != nullptr && cross[cs] ? cross[cs][k] : 0.0f);
-                }
+                    y = warpSample (tick.warp[0], y, a0, m0);
                 if (tick.warp[1] != 0)
+                    y = warpSample (tick.warp[1], y, a1, m1);
+                return y;
+            };
+            uint32_t ph = phase[v];
+            if (!warped)
+            {
+                for (int k = 0; k < n; ++k)
                 {
-                    const int cs = warpCrossSource (tick.warp[1]);
-                    y = warpSample (tick.warp[1], y, a1, cs >= 0 && cross != nullptr && cross[cs] ? cross[cs][k] : 0.0f);
+                    const float t = static_cast<float> (t0 + k + 1) * invP;
+                    const float y = sampleAt (ph, k, 1.0f);
+                    L[k] += y * lerp (prevGainL[v], curGainL[v], t);
+                    R[k] += y * lerp (prevGainR[v], curGainR[v], t);
+                    ph += static_cast<uint32_t> (static_cast<double> (lerp (prevInc[v], curInc[v], t)) * 4294967296.0);
                 }
-                L[k] += y * lerp (prevGainL[v], curGainL[v], t);
-                R[k] += y * lerp (prevGainR[v], curGainR[v], t);
-                ph += static_cast<uint32_t> (static_cast<double> (inc) * 4294967296.0);
+            }
+            else
+            {
+                const float* taps = decimatorTaps();
+                float* hist = history[v]; // the last kTaps - 1 samples of the 4x signal, then this period's
+                float buf[kTaps - 1 + kOversample * kControlPeriod];
+                std::copy (hist, hist + kTaps - 1, buf);
+                for (int k = 0; k < n; ++k)
+                {
+                    const float t = static_cast<float> (t0 + k + 1) * invP;
+                    const uint32_t inc4 = static_cast<uint32_t> (static_cast<double> (lerp (prevInc[v], curInc[v], t)) * (4294967296.0 / kOversample));
+                    for (int j = 0; j < kOversample; ++j)
+                    {
+                        buf[kTaps - 1 + k * kOversample + j] = sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / kOversample));
+                        ph += inc4;
+                    }
+                }
+                for (int k = 0; k < n; ++k)
+                {
+                    const float t = static_cast<float> (t0 + k + 1) * invP;
+                    const float* x = buf + k * kOversample + 1; // the newest sample of the group is x[kTaps - 1]
+                    float acc = 0.0f;
+                    for (int i = 0; i < kTaps; ++i)
+                        acc += taps[i] * x[kTaps - 1 - i];
+                    L[k] += acc * lerp (prevGainL[v], curGainL[v], t);
+                    R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
+                }
+                std::copy (buf + n * kOversample, buf + n * kOversample + kTaps - 1, hist);
             }
             phase[v] = ph;
         }
+        if (cross != nullptr)
+            for (int c = 0; c < 2; ++c)
+                if (cross[c] != nullptr)
+                    lastCross[c] = cross[c][n - 1];
     }
 
     /** Phase of the first voice in cycles (for the "osc" sources and the phase legato). */
@@ -222,9 +292,11 @@ public:
 private:
     OscTick tick;
     uint32_t phase[kMaxVoices] = {};
+    float history[kMaxVoices][kTaps - 1] = {};
     float prevInc[kMaxVoices] = {}, curInc[kMaxVoices] = {}, prevGainL[kMaxVoices] = {}, curGainL[kMaxVoices] = {}, prevGainR[kMaxVoices] = {},
           curGainR[kMaxVoices] = {}, curFrameOf[kMaxVoices] = {};
     float prevFrame = 0.0f, curFrame = 0.0f;
+    float lastCross[2] = {};
     int curCount = 1, prevCount = 1;
     bool havePrev = false;
 };
