@@ -555,30 +555,12 @@ TEST (fx_pool_slot_renders_what_instance_zero_renders)
 
 TEST (fx_pool_order_rack_bypass_and_crossfade)
 {
-    // order: a slot with order 0 runs before the first module, the default 1023 after the last one; two Utility slots with a polarity flip each cancel to the identity in either order
     auto e = make();
     sawPatch (*e);
     const std::vector<Event> ev = { sbtest::noteOn (0, 60) };
     const auto plain = sbtest::render (*e, ev, static_cast<int> (0.5 * kSr), 256);
-    // distortion (instance 0, hard clip, +24 dB) then a delay slot after it: sorting matters
-    auto render = [&] (int slotOrder)
-    {
-        auto x = make();
-        sawPatch (*x);
-        set (*x, "distortion.on", 1);
-        set (*x, "distortion.type", 1);
-        set (*x, "distortion.drive", 24);
-        setSlot (*x, 1, kFxTypeUtility, 0, slotOrder);
-        set (*x, poolKey (1, "p09").c_str(), 0.0f); // (whatever the key is: the level of the slot stays at the default)
-        return sbtest::render (*x, ev, static_cast<int> (0.5 * kSr), 256);
-    };
-    const auto before = render (0), after = render (1023);
-    double diff = 0;
-    for (size_t i = 0; i < before.left.size(); ++i)
-        diff = std::max (diff, static_cast<double> (std::fabs (before.left[i] - after.left[i])));
-    (void) plain;
-    CHECK (diff >= 0.0); // (both orders are valid for a pure level slot; the real order test is below)
-    // a mono-bass filter (Utility lpf at 200 Hz) before a hard clip leaves a rounder wave than after it
+    // order: a slot with order 0 runs before the first module, the default 1023 after the last one
+    // a low pass (Utility lpf at 300 Hz) before a hard clip leaves a rounder wave than after it
     auto spectrum = [&] (int slotOrder)
     {
         auto x = make();
@@ -1117,4 +1099,55 @@ TEST (fx_every_new_capability_bit_has_an_audible_probe)
     CHECK ((e->capabilities() & need) == need);
     const EngineCaps2Mask need2 = kCap2SerumEq | kCap2SerumCompressor | kCap2SerumConvolve | kCap2EqBand2;
     CHECK ((e->capabilities2() & need2) == need2);
+}
+
+TEST (fx_reverb_feedback_scales_the_decay_of_nitrous_and_basin)
+{
+    // decay 2000 ms, size 50 %: RT60 0.51 / 2.01 / 8.06 s for feedback 0 / 50 / 100 % (Nitrous), 0.50 / 2.05 / 8.24 s (Basin); the other types ignore the key
+    auto run = [&] (int type, int feedback)
+    {
+        auto e = make();
+        burstPatch (*e);
+        set (*e, "reverb.on", 1);
+        set (*e, "reverb.mix", 100);
+        set (*e, "reverb.decay", 2000);
+        set (*e, "reverb.size", 50);
+        set (*e, "reverb.type", static_cast<float> (type));
+        set (*e, "reverb.high_shelf_gain", 0);
+        set (*e, "reverb.chorus_amount", 0);
+        set (*e, "reverb.feedback", static_cast<float> (feedback));
+        const auto o = sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 60), sbtest::noteOff (static_cast<int> (0.12 * kSr), 60) }, static_cast<int> (20.0 * kSr), 512);
+        return rt60 (o.left, static_cast<size_t> (0.1 * kSr));
+    };
+    const double want[2][3] = { { 0.51, 2.01, 8.06 }, { 0.50, 2.05, 8.24 } };
+    for (int k = 0; k < 2; ++k)
+        for (int f = 0; f < 3; ++f)
+        {
+            const double rt = run(k == 0 ? 4 : 5, f * 50);
+            if (verbose())
+                std::printf ("    type %d feedback %d: RT60 %.2f (spec %.2f)\n", k == 0 ? 4 : 5, f * 50, rt, want[k][f]);
+            CHECK (rt > want[k][f] * 0.8 && rt < want[k][f] * 1.2);
+        }
+    CHECK (std::fabs (run (2, 0) - run (2, 100)) < 0.05); // Hall ignores it
+}
+
+TEST (fx_pool_parameters_are_modulation_destinations)
+{
+    auto render = [&] (float macro)
+    {
+        auto e = make();
+        sawPatch (*e);
+        setSlot (*e, 1, kFxTypeDistortion);
+        set (*e, "fxi01.p02", 0.5f);
+        set (*e, "mod01.source", srcChoiceFx ("macro1"));
+        set (*e, "mod01.destination", dstChoiceFx ("fxi01.p02"));
+        set (*e, "mod01.amount", 100);
+        set (*e, "macro.1", macro);
+        return sbtest::render (*e, { sbtest::noteOn (0, 60) }, static_cast<int> (0.4 * kSr), 256);
+    };
+    const auto a = render (0), b = render (100);
+    double diff = 0;
+    for (size_t i = static_cast<size_t> (0.2 * kSr); i < a.left.size(); ++i)
+        diff = std::max (diff, static_cast<double> (std::fabs (a.left[i] - b.left[i])));
+    CHECK (diff > 0.05);
 }
