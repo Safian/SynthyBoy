@@ -646,6 +646,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.mode = static_cast<int> (P (oi.uniMode) + 0.5f);
         t.spread = clamp01 (P (oi.uniSpread) * 0.01f) * clamp01 (g.base[mi.stereoSpread] * 0.01f);
         t.blend = clamp01 (P (oi.uniBlend) * 0.01f);
+        t.law = oi.uniLaw >= 0 ? static_cast<int> (g.base[oi.uniLaw] + 0.5f) : 0;
         t.warp[0] = static_cast<int> (P (oi.warpType) + 0.5f);
         t.warpAmount[0] = clamp01 (P (oi.warpAmount) * 0.01f);
         t.warpPhase[0] = P (oi.warpPhase) * (1.0f / 360.0f);

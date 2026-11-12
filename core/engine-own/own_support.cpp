@@ -137,7 +137,7 @@ EngineCapsMask ownCapabilities() noexcept
 
 EngineCaps2Mask ownCapabilities2() noexcept
 {
-    return kCap2EqBand2 | kCap2ModSlew | kCap2ModDelay;
+    return kCap2EqBand2 | kCap2ModSlew | kCap2ModDelay | kCap2SerumUnison;
 }
 } // namespace own
 } // namespace synthyboy

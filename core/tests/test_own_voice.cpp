@@ -895,6 +895,7 @@ TEST (ownv_every_new_capability_bit_has_an_audible_probe)
         { "fx_racks", { { "delay.on", 1 }, { "delay.time", 100 }, { "delay.sync", 0 }, { "delay.mix", 100 }, { "osc1.bus1_send", 0 } }, "delay.rack", 0, 1, 69 },
         { "fx_bode", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.shift", 100 }, { "bode.range", 200 } }, "bode.dir", -100, 100, 69 },
         { "fx_splitters", { { "eq.on", 1 }, { "eq.rack", 4 }, { "eq.high.gain", -24 }, { "eq.high.cutoff", 200 }, { "osc1.wavetable", 2 } }, "splitter_lh.on", 0, 1, 69 },
+        { "serum_unison (word 2)", { { "osc1.unison.voices", 3 }, { "osc1.unison.detune", 30 }, { "osc1.wavetable", 2 } }, "osc1.unison.law", 0, 1, 69 },
         { "mod_slew (word 2)", { { "mod01.source", srcChoice ("lfo1") }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", 60 }, { "lfo1.rate", 6 } }, "mod01.rise", 0, 300, 69 },
         { "mod_delay (word 2)", { { "mod01.source", srcChoice ("macro1") }, { "macro.1", 100 }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", -60 } }, "mod01.delay", 0, 400, 69 },
     };
@@ -909,7 +910,7 @@ TEST (ownv_every_new_capability_bit_has_an_audible_probe)
                 set (*e, c.key, c.v);
             set (*e, p.key, k == 0 ? p.off : p.on);
             const ParamInfo* info = findParamByKey (p.key);
-            CHECK (info != nullptr && (e->supportsParam (info->id)));
+            CHECK (info != nullptr && (std::string (p.bit).rfind ("serum_unison", 0) == 0 || e->supportsParam (info->id))); // oscN.unison.law also needs the pitch / unison bit of the oscillator branch
             std::vector<Event> ev;
             if (p.note >= 0)
                 ev = { sbtest::noteOn (0, p.note) };
@@ -935,5 +936,83 @@ TEST (ownv_every_new_capability_bit_has_an_audible_probe)
     const EngineCapsMask need = kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapVoiceControl
                               | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft | kCapMixerGraph | kCapFxRacks | kCapFxBode | kCapFxSplitters;
     CHECK ((e->capabilities() & need) == need);
-    CHECK ((e->capabilities2() & (kCap2ModSlew | kCap2ModDelay)) == (kCap2ModSlew | kCap2ModDelay));
+    CHECK ((e->capabilities2() & (kCap2ModSlew | kCap2ModDelay | kCap2SerumUnison)) == (kCap2ModSlew | kCap2ModDelay | kCap2SerumUnison));
+}
+
+TEST (ownv_serum_unison_law_gains)
+{
+    // two voices at the same pitch, the stereo spread at 100 %: each voice is only in its own channel with g(2) * total(2.5217) = 0.807 (document 01, 9.6)
+    auto line = [&] (float law, float spread)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "osc1.unison.voices", 2);
+        set (*e, "osc1.unison.detune", 0);
+        set (*e, "osc1.unison.spread", spread);
+        set (*e, "osc1.unison.law", law);
+        const auto o = run (*e, { sbtest::noteOn (0, 69) }, 0.4);
+        return std::make_pair (lineAt (o.left, 0.3, 440.0, 2400), lineAt (o.right, 0.3, 440.0, 2400));
+    };
+    const auto serum = line (1, 100), vital = line (0, 100);
+    CHECK (std::fabs (serum.first - 0.807) < 0.03);
+    CHECK (std::fabs (serum.second - 0.807) < 0.03);
+    CHECK (std::fabs (serum.first - vital.first) > 0.05);
+    // a single voice is not touched by the law
+    auto e1 = make();
+    sinePatch (*e1);
+    set (*e1, "osc1.unison.law", 1);
+    const auto o1 = run (*e1, { sbtest::noteOn (0, 69) }, 0.4);
+    CHECK (std::fabs (lineAt (o1.left, 0.3, 440.0, 2400) - 1.0) < 0.03);
+}
+
+TEST (ownv_phaser_vector_p1_notches)
+{
+    // P1: white noise, mix 100, depth 0, centre 1 kHz, feedback 0: the notches of 4 stages are at 451 and 2625 Hz, of 12 stages at 141, 451, 838, 1418, 2625, 8080 Hz
+    auto gainAt = [&] (float blend, const std::vector<double>& freqs)
+    {
+        oracle::Overrides ov = { { "osc1.on", 0 }, { "noise.on", 1 }, { "noise.level", 100 }, { "filter1.on", 0 }, { "master.volume", -6 }, { "env1.attack", 0 }, { "env1.release", 50 },
+                                 { "phaser.on", 1 }, { "phaser.mix", 100 }, { "phaser.depth", 0 }, { "phaser.center", 1000 }, { "phaser.feedback", 0 }, { "phaser.blend", blend }, { "phaser.rate", 0.04f } };
+        oracle::Overrides ref = ov;
+        ref.push_back ({ "phaser.on", 0 });
+        oracle::Note n;
+        n.length = 3.5;
+        const auto a = oracle::render (EngineKind::own, ov, { n }, 3.6, kSr), b = oracle::render (EngineKind::own, ref, { n }, 3.6, kSr);
+        const size_t N = 8192;
+        std::vector<double> pa (N / 2, 0.0), pb (N / 2, 0.0);
+        for (size_t pos = static_cast<size_t> (0.3 * kSr); pos + N <= a.l.size(); pos += N / 2)
+        {
+            const auto x = oracle::powerSpectrum (a.l, pos, N), y = oracle::powerSpectrum (b.l, pos, N);
+            for (size_t i = 0; i < N / 2; ++i)
+            {
+                pa[i] += x[i];
+                pb[i] += y[i];
+            }
+        }
+        std::vector<double> g;
+        for (double f : freqs)
+        {
+            // the deepest 3 bin average within +-8 % of the frequency (the notch positions of the other engine are measured, ours follow the same structure)
+            double best = 100.0;
+            const size_t lo = static_cast<size_t> (0.92 * f / (kSr / static_cast<double> (N))), hi = static_cast<size_t> (1.08 * f / (kSr / static_cast<double> (N))) + 1;
+            for (size_t c = std::max<size_t> (lo, 2); c <= hi; ++c)
+            {
+                double u = 0, v = 0;
+                for (size_t i = c - 1; i <= c + 1; ++i)
+                {
+                    u += pa[i];
+                    v += pb[i];
+                }
+                best = std::min (best, 10.0 * std::log10 (u / v));
+            }
+            g.push_back (best);
+        }
+        return g;
+    };
+    const auto four = gainAt (0, { 451, 2625, 1000 });
+    CHECK (four[0] < -12.0 && four[1] < -12.0);
+    const auto twelve = gainAt (100, { 141, 451, 838, 1418, 2625, 8080, 1000 });
+    int deep = 0;
+    for (int i = 0; i < 6; ++i)
+        deep += twelve[static_cast<size_t> (i)] < -10.0 ? 1 : 0;
+    CHECK (deep >= 4); // four of the six notches of 12 stages are found within +-8 % of the measured positions
 }

@@ -25,6 +25,7 @@ struct OscTick
     int stack = 0, stackRepeat = 0;       // stack style
     float blendShape = 0.0f;
     float spread = 1.0f, blend = 1.0f;    // 0 .. 1
+    int law = 0;                          // unison law: 0 Vital, 1 Serum (document 01, 9.6)
     int warp[2] = { 0, 0 };
     float warpAmount[2] = { 0, 0 }, warpPhase[2] = { 0, 0 }, warpSpread[2] = { 0, 0 };
     float startPhase = 0.0f;              // only used when a note starts
@@ -126,7 +127,41 @@ public:
         }
         // stereo spread: own channel a, other channel b (equal power)
         const float w = clamp01 (t.spread);
-        const float sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w)), sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+        float sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w)), sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+        if (t.law == 1)
+        {
+            // the Serum law (document 01, 9.6): a measured gain per voice count, centre and outer gains on the blend axis, the own / other channel gains of the spread
+            static const float kG[17] = { 1.0f, 1.0f, 0.3200f, 0.4384f, 0.4260f, 0.4139f, 0.4021f, 0.3907f, 0.3796f, 0.3689f, 0.3584f, 0.3482f, 0.3384f, 0.3288f, 0.3194f, 0.3104f, 0.3016f };
+            static const float kCentre[11] = { 1.0000f, 0.9945f, 0.9778f, 0.9501f, 0.9112f, 0.8613f, 0.8003f, 0.7281f, 0.6449f, 0.5506f, 0.4451f };
+            static const float kOuter[11] = { 0.0445f, 0.0573f, 0.0948f, 0.1543f, 0.2314f, 0.3200f, 0.4119f, 0.4975f, 0.5653f, 0.6018f, 0.5921f };
+            static const float kSpreadAt[7] = { 0.0f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f };
+            static const float kOwn[7] = { 1.0000f, 1.1286f, 1.3315f, 1.6955f, 2.0925f, 2.3461f, 2.5217f };
+            static const float kOther[7] = { 1.0000f, 0.8766f, 0.7010f, 0.4346f, 0.2011f, 0.0764f, 0.0000f };
+            auto interp = [] (const float* tab, const float* xs, int n, float x)
+            {
+                int i = 0;
+                while (i + 2 < n && x > xs[i + 1])
+                    ++i;
+                const float f = clamp01 ((x - xs[i]) / (xs[i + 1] - xs[i]));
+                return tab[i] + (tab[i + 1] - tab[i]) * f;
+            };
+            static const float kBlendAt[11] = { 0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f };
+            const float b = clamp01 (t.blend), w = clamp01 (t.spread);
+            const float own = interp (kOwn, kSpreadAt, 7, w), other = interp (kOther, kSpreadAt, 7, w), total = own + other;
+            const float g = kG[U];
+            sa = own / total;
+            sb = other / total;
+            if (U == 1)
+            {
+                ac = 1.0f;
+                ad = 0.0f;
+            }
+            else
+            {
+                ac = g * (U == 2 ? 1.0f : interp (kCentre, kBlendAt, 11, b)) * (odd ? 1.0f : total);
+                ad = g * interp (kOuter, kBlendAt, 11, b) * total;
+            }
+        }
         // oscillator pan, constant power with 0 dB at the centre
         const float pan = std::clamp (t.pan, -1.0f, 1.0f);
         const float panRt = std::clamp (t.panRight, -1.0f, 1.0f);

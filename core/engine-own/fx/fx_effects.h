@@ -269,15 +269,20 @@ private:
 class Phaser
 {
 public:
-    static constexpr int kStages = 8;
+    static constexpr int kStages = 12;
     struct Params { float mix = 0.5f, feedback = 0.5f, rate = 0.12f, depthSemis = 24.0f, centerHz = 2000.0f, blend = 0.5f, phaseOffset = 120.0f / 360.0f; };
     void prepare (double sr) { sampleRate = sr; reset(); }
-    void reset() noexcept { for (auto& c : z) for (auto& x : c) x = 0.0f; phase = 0.0f; fb[0] = fb[1] = 0.0f; }
+    void reset() noexcept { for (auto& c : z) for (auto& x : c) x = 0.0f; phase = 0.0f; fb[0] = fb[1] = 0.0f; for (auto& x : bpA) x = 0.0f; for (auto& x : bpB) x = 0.0f; }
     void set (const Params& np) noexcept { p = np; }
+    /** The phaser of document 06, 8: the twelve stage all-pass filter of document 05, 7 (taps after 4, 8 and 12 stages by the blend), fed with a cutoff that follows a
+        triangle LFO (the right channel offset by the phase offset), a band passed feedback with tanh, output (x + all-pass) / 2, linear dry / wet. */
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
-        const float f = std::clamp (p.feedback, 0.0f, 0.97f);
+        const float fbk = clamp01 (p.feedback);
+        const float braw = clamp01 (p.blend) * 2.0f;
+        const float p1 = clamp01 (1.0f - braw), p5 = clamp01 (braw - 1.0f), p3 = 1.0f - p1 - p5;
+        const float centreNote = 12.0f * std::log2 (std::max (p.centerHz, 1.0f) / 8.1757989f);
         float* io[2] = { l, r };
         for (int i = 0; i < n; ++i)
         {
@@ -285,21 +290,32 @@ public:
             phase -= std::floor (phase);
             for (int c = 0; c < 2; ++c)
             {
-                const float mod = std::sin (kTwoPif * (phase + (c == 1 ? p.phaseOffset : 0.0f)));
-                const float hz = std::clamp (p.centerHz * std::exp2 (p.depthSemis * mod / 12.0f), 20.0f, 0.45f * sr);
-                const float t = std::tan (kPif * hz / sr);
-                const float a = (t - 1.0f) / (t + 1.0f);
-                float x = io[c][i] + f * fb[c];
+                const float ph = phase + (c == 1 ? p.phaseOffset : -p.phaseOffset) * 0.5f;
+                const float x01 = ph - std::floor (ph);
+                const float v = 2.0f * std::fabs (2.0f * x01 - 1.0f) - 1.0f; // triangle -1 .. 1
+                const float hz = std::clamp (8.1757989f * std::exp2 ((centreNote + p.depthSemis * v) * (1.0f / 12.0f)), 20.0f, 0.45f * sr);
+                const float x0 = kPif * hz / sr;
+                const float g = std::tan (std::min (0.499f * kPif, x0 / (1.0f + x0)));
+                const float a = g / (1.0f + g);
+                const float c1 = OnePole::coefficient (hz / 20.0f, sampleRate), c2 = OnePole::coefficient (hz * 20.0f, sampleRate);
                 const float dry = io[c][i];
+                float x = dry * (1.0f + 0.5f * fbk) + fb[c];
+                float tap[3] = { 0.0f, 0.0f, 0.0f };
                 for (int s = 0; s < kStages; ++s)
                 {
-                    const float y = a * x + z[c][s];
-                    z[c][s] = flushDenormal (x - a * y);
-                    x = y;
+                    const float vv = (x - z[c][s]) * a;
+                    const float lp = vv + z[c][s];
+                    z[c][s] = flushDenormal (lp + vv);
+                    x = x - 2.0f * lp;
+                    if (s == 3) tap[0] = x;
+                    if (s == 7) tap[1] = x;
+                    if (s == 11) tap[2] = x;
                 }
-                fb[c] = x;
-                // blend: 0 = the all pass chain adds to the dry signal (notches), 1 = it replaces it (all pass, no notches in the sum)
-                const float wet = lerp (0.5f * (dry + x), x, clamp01 (p.blend));
+                const float ap = p1 * tap[0] + p3 * tap[1] + p5 * tap[2];
+                bpA[c] += c2 * (ap - bpA[c]);
+                bpB[c] += c1 * (bpA[c] - bpB[c]);
+                fb[c] = std::tanh (fbk * (bpA[c] - bpB[c]));
+                const float wet = 0.5f * (dry + ap);
                 io[c][i] = dry * (1.0f - p.mix) + wet * p.mix; // linear crossfade (document 06, section 1)
             }
         }
@@ -309,7 +325,7 @@ private:
     Params p;
     double sampleRate = 48000.0;
     float z[2][kStages] = {};
-    float phase = 0.0f, fb[2] = {};
+    float phase = 0.0f, fb[2] = {}, bpA[2] = {}, bpB[2] = {};
 };
 
 class Distortion
