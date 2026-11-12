@@ -117,7 +117,7 @@ otherwise the blend moves the high-pass cutoff. The output is stage 4: a 24 dB/o
 Twelve first-order all-pass stages (`y = x - 2 lp(x)`, one-pole `lp` at the cutoff coefficient) in a chain of 4 + 4 + 4, with taps after stage 4 ("peak 1"), 8 ("peak 3") and 12 ("peak 5"):
 `out_ap = p1 T4 + p3 T8 + p5 T12` with `p1 = clamp(1 - b_raw)`, `p5 = clamp(b_raw - 1)`, `p3 = 1 - p1 - p5` (b_raw = blend percent * 0.02: 0 -> 4 stages, 1 -> 8, 2 -> 12 stages: more stages = more notches).
 Feedback: `fb = k * (lp_a(out_ap) - lp_b(lp_a(out_ap)))` (a band-pass of the all-pass output with corners at `cutoff/20` and `20 cutoff`; `k = r` in 0..1), not saturated; the stage input is `hardtanh(d (1 + r/2) x + inv * fb)`; `inv = +1` (style 0) or `-1` (style 1);
-the filter output is `0.5 (x + inv * out_ap)` (so phase cancellation yields notches at 1x, 3x, 5x the cutoff for style 0). The spread (`stage_spread`, used by the Phaser *effect*, document 6) spreads the stage cutoffs over `+-spread/2` semitones.
+the filter output is `0.5 (x + inv * out_ap)`: notches appear where the all-pass chain has turned the phase by an odd multiple of 180 degrees (style 0). Measured with the phaser *effect* at its centre 1000 Hz, depth 0, feedback 0: blend 0 (4 stages) notches at 451 Hz and 2625 Hz; blend 50 % (8 stages) at 217, 727, 1629, 5420 Hz (and a weak one at 2631 Hz); blend 100 % (12 stages) at 141, 451, 838, 1418, 2625, 8080 Hz, each -25 .. -60 dB deep (measured on white noise; the first notch is therefore at roughly 0.45 times the centre). The spread (`stage_spread`, used by the Phaser *effect*, document 6) spreads the stage cutoffs over `+-spread/2` semitones.
 
 ## 8. Comb (model 6) -- the feedback comb / flanger filter
 
@@ -187,6 +187,20 @@ low-pass at a **lower** corner than the knob (-29 dB at 1 kHz): the diode ladder
 The numbers above come from the default `filterN.style` choices 0 and 1 of each model and `filterN.resonance` 0 / 50 %; model 5 ignores resonance.
 
 Tolerances for the acceptance test: +-1.5 dB for the models 0, 2, 3 (Analog, Ladder, Digital) at |gain| < 30 dB, +-3 dB for Dirty, Diode, Formant, Phaser, Comb and everywhere the resonance peak is within 6 dB of the cutoff, and "below -40 dB" for the deep stopband.
+
+### 10.1 Further measured vectors (Digital model, 12 dB, cutoff 1 kHz, resonance 0, drive 0, noise source)
+
+Same method and columns as the table above (125 Hz .. 16 kHz). Tolerance +-1 dB.
+
+| # | Setup | Gain (dB) |
+|---|-------|-----------|
+| F1 | `blend` 0 / 50 / 100 % (LP / BP / HP) | LP: -0.1 -0.5 -1.9 -6.0 -14.0 -24.7 -36.6 -49.9; BP: -18.6 -12.4 -8.0 -6.0 -8.0 -12.6 -18.4 -25.0; HP: -27.8 -23.9 -14.5 -6.5 -2.2 -0.7 -0.4 -0.2 |
+| F2 | `mix` 50 % | -0.1 -0.5 -1.9 -5.1 -7.0 -6.5 -6.1 -6.0 (the dry signal comes through at -6 dB) |
+| F3 | `level` -6 dB | the F1-LP row minus 6 dB |
+| F4 | `keytrack` 100 % at note 72 (12 st above the reference note 60) | -0.0 -0.1 -0.5 -1.9 -6.0 -14.0 -25.0 -37.9 (the corner doubled to 2 kHz); keytrack 0 at note 72: the unmodified row |
+| F5 | `drive` 12 dB | 5.6 5.3 3.8 -0.2 -8.0 -18.7 -30.7 -44.2 (about +5.6 dB in the passband: the post gain only partly compensates); with `clean_mode` On: 5.9 5.5 4.1 -0.0 -8.0 -18.7 -30.6 -43.9 |
+| F6 | `pan` +100 % | left (corner 12 st down, 500 Hz): -0.5 -2.0 -6.0 -14.0 -24.6 -36.3 -48.6 -61.9; right (12 st up, 2 kHz): -0.0 -0.1 -0.5 -1.9 -6.0 -14.0 -25.0 -37.9 |
+| F7 | both filters low-pass 1 kHz, source routed to filter 1 only, `filter.routing` Series 1 to 2 | -0.2 -1.1 -3.9 -12.1 -27.9 -49.4 -73.3 -99.8 (two 12 dB stages); Series 2 to 1 or Parallel with the source only in filter 1: the single-filter row |
 
 ## 11. Self-oscillation and stability
 

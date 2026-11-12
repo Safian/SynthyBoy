@@ -40,6 +40,62 @@ fractional part; "signed phase" `s` means the phase taken into [-0.5, 0.5) (0.5 
 
   (The sign convention above is verified: with `oscN.phase = 0` the Sine plays `-sin(2 pi t)`, section 4.)
 
+### 1.1 Exact frame definitions (answer to implementer question 1)
+
+The recipes of the table in section 1 define every frame **exactly**; they were verified numerically against the engine's frames (all 581 frames of the built-in set, maximum deviation below 1.1e-6). The construction of one frame:
+
+1. Frame `f` of a table with 64 frames has the parameter `t = f/63` (0 .. 1); single-frame tables use `t = 0`. (So frame 0 of "Saw to Square" is the pure Saw, frame 63 the pure square; the "first frames agree" with the single-cycle tables.)
+2. Form the unnormalised periodic signal over 2048 samples, `n = 0 .. 2047`, phase `n/2048`: `x[n] = sum_k a_k cos(2 pi k n/2048) + b_k sin(2 pi k n/2048)` for the harmonics `k = 1 .. 1023` listed in the recipe (the 1023-harmonic band limit is part of the definition: the Saw and Square carry their Gibbs ripple). Harmonic 1024 and DC are zero.
+   Entry 10 (FM Sweep) is defined in the time domain instead: `x[n] = sin(2 pi n/2048 + 6 t sin(4 pi n/2048))`.
+3. Remove the mean: `x[n] -= mean(x)`.
+4. Normalise the peak: `x[n] /= max |x[n]|` (so the largest absolute sample of every frame is exactly 1; frames are never normalised against each other, e.g. the sweep tables change loudness with `t` only through their spectra).
+5. The spectrum of the oscillator (section 1) is the DFT of this final frame.
+
+Entries and `t` per frame: 5 and 6: `t = f/63`; 7 and 8: harmonic count `1 + 63 t` (the last partial fades in linearly: `clamp(count - k + 1, 0, 1)`), amplitude `1/k`, `k <= 64`; 9: formant centres `c1 = 2 + 10 t`, `c2 = 6 + 26 t` (harmonic numbers), Gaussian widths `1 + 0.4 c`; 11: duty `0.05 + 0.45 t`; 12: the partial list with weights moving with `t` (formulas in the table). The sign convention: `b_k > 0` is `+ sin`, i.e. the Sine entry is `+sin(2 pi n/2048)` starting at 0 and rising; the engine's read adds the half-cycle offset of section 4.
+
+Checkpoint samples (final, normalised frames; `x[i]` at the sample index `i`; tolerance 2e-4) for a regression test:
+
+| Entry | Frame | x[0] x[128] x[256] x[384] x[512] x[640] x[768] x[896] x[1024] x[1280] x[1536] x[1792] |
+|---|---|---|
+| 0 Sine | 0 | 0.0000 0.3827 0.7071 0.9239 1.0000 0.9239 0.7071 0.3827 0.0000 -0.7071 -1.0000 -0.7071 |
+| 1 Saw | 0 | 0.0000 -0.7415 -0.6360 -0.5302 -0.4242 -0.3182 -0.2121 -0.1061 0.0000 0.2121 0.4242 0.6360 |
+| 2 Square | 0 | 0.0000 0.8468 0.8474 0.8476 0.8477 0.8476 0.8474 0.8468 0.0000 -0.8474 -0.8477 -0.8474 |
+| 3 Triangle | 0 | 0.0000 0.2501 0.5002 0.7503 1.0000 0.7503 0.5002 0.2501 0.0000 -0.5002 -1.0000 -0.5002 |
+| 4 Pulse 25 % | 0 | 0.2976 0.8920 0.8923 0.8920 0.2976 -0.2969 -0.2974 -0.2975 -0.2976 -0.2976 -0.2976 -0.2974 |
+| 14 Saw Down | 0 | -0.0000 -0.1061 -0.2121 -0.3182 -0.4242 -0.5302 -0.6360 -0.7415 -0.0000 0.6360 0.4242 0.2121 |
+| 5 Saw to Square | 0 | -0.0000 0.7415 0.6360 0.5302 0.4242 0.3182 0.2121 0.1061 -0.0000 -0.2121 -0.4242 -0.6360 |
+| 5 Saw to Square | 21 | -0.0000 0.7766 0.7065 0.6360 0.5654 0.4947 0.4240 0.3531 -0.0000 -0.4240 -0.5654 -0.7065 |
+| 5 Saw to Square | 42 | -0.0000 0.8117 0.7770 0.7419 0.7066 0.6712 0.6358 0.6000 -0.0000 -0.6358 -0.7066 -0.7770 |
+| 5 Saw to Square | 63 | 0.0000 0.8468 0.8474 0.8476 0.8477 0.8476 0.8474 0.8468 0.0000 -0.8474 -0.8477 -0.8474 |
+| 6 Sine to Saw | 0 | 0.0000 0.3827 0.7071 0.9239 1.0000 0.9239 0.7071 0.3827 0.0000 -0.7071 -1.0000 -0.7071 |
+| 6 Sine to Saw | 21 | -0.0000 0.6488 0.8566 0.9788 0.9897 0.8800 0.6588 0.3525 -0.0000 -0.6588 -0.9897 -0.8566 |
+| 6 Sine to Saw | 42 | -0.0000 0.9027 0.9349 0.9211 0.8475 0.7094 0.5116 0.2681 -0.0000 -0.5116 -0.8475 -0.9349 |
+| 6 Sine to Saw | 63 | -0.0000 0.7415 0.6360 0.5302 0.4242 0.3182 0.2121 0.1061 -0.0000 -0.2121 -0.4242 -0.6360 |
+| 7 Harmonic Series | 0 | 0.0000 0.3827 0.7071 0.9239 1.0000 0.9239 0.7071 0.3827 0.0000 -0.7071 -1.0000 -0.7071 |
+| 7 Harmonic Series | 21 | 0.0000 0.8191 0.6499 0.5455 0.4532 0.3156 0.2327 0.1031 0.0000 -0.2327 -0.4532 -0.6499 |
+| 7 Harmonic Series | 42 | 0.0000 0.7650 0.6639 0.5342 0.4263 0.3307 0.2188 0.1018 0.0000 -0.2188 -0.4263 -0.6639 |
+| 7 Harmonic Series | 63 | 0.0000 0.7307 0.6344 0.5309 0.4255 0.3195 0.2131 0.1066 0.0000 -0.2131 -0.4255 -0.6344 |
+| 8 Odd Harmonics | 0 | 0.0000 0.3827 0.7071 0.9239 1.0000 0.9239 0.7071 0.3827 0.0000 -0.7071 -1.0000 -0.7071 |
+| 8 Odd Harmonics | 21 | 0.0000 0.8874 0.8493 0.8287 0.8722 0.8287 0.8493 0.8874 0.0000 -0.8493 -0.8722 -0.8493 |
+| 8 Odd Harmonics | 42 | 0.0000 0.8499 0.8655 0.8480 0.8359 0.8480 0.8655 0.8499 0.0000 -0.8655 -0.8359 -0.8655 |
+| 8 Odd Harmonics | 63 | 0.0000 0.8262 0.8362 0.8390 0.8397 0.8390 0.8362 0.8262 0.0000 -0.8362 -0.8397 -0.8362 |
+| 9 Formant Sweep | 0 | 0.0000 0.9493 0.6069 0.4377 0.2153 0.1280 0.0892 0.0478 0.0000 -0.0892 -0.2153 -0.6069 |
+| 9 Formant Sweep | 21 | -0.0000 0.4967 -0.0397 0.0568 0.0661 0.0566 0.0420 0.0224 -0.0000 -0.0420 -0.0661 0.0397 |
+| 9 Formant Sweep | 42 | 0.0000 0.0306 0.0433 0.0460 0.0474 0.0425 0.0320 0.0172 0.0000 -0.0320 -0.0474 -0.0433 |
+| 9 Formant Sweep | 63 | -0.0000 -0.1591 0.0331 0.0382 0.0398 0.0361 0.0274 0.0147 -0.0000 -0.0274 -0.0398 -0.0331 |
+| 10 FM Sweep | 0 | 0.0000 0.3827 0.7071 0.9239 1.0000 0.9239 0.7071 0.3827 0.0000 -0.7071 -1.0000 -0.7071 |
+| 10 FM Sweep | 21 | 0.0000 0.9723 0.3487 0.5221 1.0000 0.5221 0.3487 0.9723 0.0000 -0.3487 -1.0000 -0.3487 |
+| 10 FM Sweep | 42 | 0.0000 -0.0794 -0.9973 -0.7611 1.0000 -0.7611 -0.9973 -0.0794 0.0000 0.9973 -1.0000 0.9973 |
+| 10 FM Sweep | 63 | 0.0000 -0.9970 0.4814 -0.7594 1.0000 -0.7594 0.4814 -0.9970 0.0000 -0.4814 -1.0000 -0.4814 |
+| 11 PWM Sweep | 0 | 0.4323 -0.0478 -0.0484 -0.0483 -0.0483 -0.0483 -0.0483 -0.0482 -0.0482 -0.0482 -0.0481 -0.0479 |
+| 11 PWM Sweep | 21 | 0.3374 0.8986 0.8990 0.8981 -0.2245 -0.2247 -0.2247 -0.2247 -0.2247 -0.2246 -0.2245 -0.2243 |
+| 11 PWM Sweep | 42 | 0.2028 0.8779 0.8785 0.8788 0.8791 0.8801 -0.4757 -0.4741 -0.4737 -0.4735 -0.4733 -0.4729 |
+| 11 PWM Sweep | 63 | -0.0000 0.8468 0.8474 0.8476 0.8477 0.8476 0.8474 0.8468 -0.0000 -0.8474 -0.8477 -0.8474 |
+| 12 Bell Partials | 0 | 0.0343 0.6858 0.5367 0.2763 0.0430 0.0633 0.1718 -0.0185 0.5615 -0.2613 -0.1649 -0.6996 |
+| 12 Bell Partials | 21 | 0.0402 0.3403 0.6141 0.0594 -0.3500 -0.0131 0.2377 -0.3072 0.7200 -0.3092 0.2738 -0.5234 |
+| 12 Bell Partials | 42 | -0.0064 0.3813 0.7055 -0.0285 -0.5582 -0.1382 0.1253 -0.1629 0.8199 -0.2195 0.3891 -0.6516 |
+| 12 Bell Partials | 63 | 0.0552 0.3649 0.8197 -0.0090 -0.5539 -0.0781 0.0478 -0.1594 0.8282 -0.1646 0.3187 -0.7323 |
+
 ## 2. Reading a table: the ideal oscillator
 
 For one unison voice and channel, per output sample `i` at the internal (oversampled) rate `sr_i`:
