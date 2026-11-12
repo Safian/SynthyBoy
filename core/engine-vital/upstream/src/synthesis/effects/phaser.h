@@ -55,6 +55,9 @@ namespace sbvital {
       void init() override;
       void hardReset() override;
       void correctToTime(double seconds);
+      // the idle phaser filter is not reached by ProcessorRouter::setSampleRate (only by setOversampleAmount): without this the all-pass stages kept the
+      // default 44.1 kHz and every notch / cutoff frequency was 8 % high at 48 kHz (phaser defect P2, 06-effects.md 8.1)
+      void setSampleRate(int sample_rate) override;
       void setOversampleAmount(int oversample) override {
         ProcessorRouter::setOversampleAmount(oversample);
         cutoff_.ensureBufferSize(oversample * kMaxBufferSize);

@@ -33,6 +33,10 @@ namespace sbvital {
       void init() override;
       void enable(bool enable) override;
 
+      // the idle delay lines are not reached by ProcessorRouter::setSampleRate (only by setOversampleAmount): without this they kept the default 44.1 kHz
+      // and every delay time was 8 % short at 48 kHz (chorus defect CH1, 06-effects.md 8.1)
+      void setSampleRate(int sample_rate) override;
+
       void processWithInput(const poly_float* audio_in, int num_samples) override;
       void correctToTime(double seconds) override;
       Processor* clone() const override { VITAL_ASSERT(false); return nullptr; }

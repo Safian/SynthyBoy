@@ -760,7 +760,7 @@ TEST (version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_bo
     // golden hashes of golden_audio.h (commit 9c97a69): the default patch and the busy patch
     const struct { EngineKind kind; bool busy; uint64_t hash; } golden[] = {
         { EngineKind::own, false, 0xc3e433c23a7f89a5ull }, { EngineKind::own, true, 0x44f50232b180c48dull },
-        { EngineKind::vital, false, 0x765f4bc243b189c1ull }, { EngineKind::vital, true, 0x199ba135a1fd977full },
+        { EngineKind::vital, false, 0x765f4bc243b189c1ull }, { EngineKind::vital, true, 0x0ecaf6456c563d02ull },
     };
     for (const auto& g : golden)
     {

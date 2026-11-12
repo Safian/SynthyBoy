@@ -836,6 +836,179 @@ TEST (flanger_vectors_f1_feedback_works_and_the_wet_copy_is_there)
     }
 }
 
+// The chorus vectors CH1 of docs/engine-spec/06-effects.md section 8.1. The delay lines of the chorus module are idle processors of its router, which
+// ProcessorRouter::setSampleRate skips: they kept the default 44.1 kHz, so every delay time was 8 % short at 48 kHz (the same defect as the flanger F1).
+TEST (chorus_vectors_ch1_delay_times_run_at_the_real_sample_rate)
+{
+    auto e = makeVital();
+    setByKey (*e, "osc1.wavetable", 0.0f);
+    setByKey (*e, "osc1.level", 100.0f);
+    setByKey (*e, "osc1.phase", 90.0f);
+    setByKey (*e, "osc1.unison.voices", 1.0f);
+    setByKey (*e, "osc1.random_phase", 0.0f);
+    setByKey (*e, "osc1.destination", 3.0f);
+    setByKey (*e, "filter1.on", 0.0f);
+    setByKey (*e, "master.volume", 0.0f);
+    setByKey (*e, "env1.attack", 0.0f);
+    setByKey (*e, "env1.decay", 5.0f);
+    setByKey (*e, "env1.sustain", 0.0f);
+    setByKey (*e, "env1.release", 5.0f);
+    setByKey (*e, "chorus.on", 1.0f);
+    setByKey (*e, "chorus.mix", 100.0f);
+    setByKey (*e, "chorus.depth", 0.0f);
+    setByKey (*e, "chorus.feedback", 0.0f);
+    setByKey (*e, "chorus.voices", 1.0f);
+    const auto burst = [&] (double t0, double t1)
+    {
+        e->reset();
+        const auto r = sbtest::render (*e, { noteOn (static_cast<int> (0.1 * kSr), 69), noteOff (static_cast<int> (0.12 * kSr), 69) }, static_cast<int> (0.4 * kSr), 256);
+        return peak (r.left, 0.1 + t0, 0.1 + t1);
+    };
+    // the first sample (in ms after the note on) whose absolute value is above 0.05 in 0.1 ms steps
+    const auto onset = [&]
+    {
+        (void) burst (0.0, 0.001);   // (the first render after a parameter change settles the slewed delay time)
+        for (double t = 0.0; t < 0.03; t += 0.0001)
+            if (burst (t, t + 0.0001) > 0.05)
+                return t * 1000.0;
+        return -1.0;
+    };
+    for (const float ms : { 5.0f, 12.0f })
+    {
+        setByKey (*e, "chorus.delay1", ms);
+        setByKey (*e, "chorus.delay2", ms);
+        const double t = onset();
+        std::printf ("    chorus delay %.0f ms: first window above 0.05 at %.2f ms\n", static_cast<double> (ms), t);
+        // the copy starts at the set delay (the window before it holds nothing); a delay that kept 44.1 kHz would start 8 % early
+        CHECK (t > ms - 0.25 && t <= ms + 0.05);
+    }
+}
+
+// Rate invariance of the effects: the steady-state spectrum of a held saw (note 45 = 110 Hz) through an effect with no modulation is a function of
+// the frequency, not of the sample rate. The effect modules keep idle processors (delay lines, filters) that ProcessorRouter::setSampleRate skips; one
+// that is not forwarded by hand keeps the default 44.1 kHz (chorus CH1, flanger F1). Per harmonic k of 110 Hz up to 7 kHz the gain (wet / dry, dB)
+// at 44.1 kHz and at 48 kHz must agree.
+namespace
+{
+using FxSettings = std::vector<std::pair<const char*, float>>;
+
+std::vector<double> harmonicGains (double sr, const FxSettings& fx)
+{
+    auto e = createEngine (EngineKind::vital);
+    e->setParam (kParamMasterPolyphony, 32.0f);
+    e->prepare (sr, 256, Quality {});
+    (void) sbtest::render (*e, { noteOn (0, 60), noteOff (200, 60) }, 2048, 256);
+    base (*e);
+    setByKey (*e, "master.volume", -12.0f);
+    for (const auto& kv : fx)
+        setByKey (*e, kv.first, kv.second);
+    e->reset();
+    const auto r = sbtest::render (*e, { noteOn (0, 45) }, static_cast<int> (1.0 * sr), 256);
+    const size_t i0 = static_cast<size_t> (0.4 * sr), n = static_cast<size_t> (0.5 * sr);   // 55 whole cycles of 110 Hz
+    std::vector<double> mag;
+    for (int k = 1; k <= 63; ++k)
+    {
+        double re = 0.0, im = 0.0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            const double ph = 2.0 * 3.14159265358979323846 * 110.0 * k * static_cast<double> (i) / sr;
+            re += r.left[i0 + i] * std::cos (ph);
+            im += r.left[i0 + i] * std::sin (ph);
+        }
+        mag.push_back (std::sqrt (re * re + im * im) * 2.0 / static_cast<double> (n));
+    }
+    return mag;
+}
+
+/** The largest disagreement in dB over the harmonics where both the dry and the wet value are above -70 dB of the dry fundamental. */
+double rateDisagreementDb (const FxSettings& fx)
+{
+    const auto dry44 = harmonicGains (44100.0, {}), dry48 = harmonicGains (48000.0, {});
+    const auto wet44 = harmonicGains (44100.0, fx), wet48 = harmonicGains (48000.0, fx);
+    const double floor44 = dry44[0] * 3.0e-4, floor48 = dry48[0] * 3.0e-4;
+    double worst = 0.0;
+    for (size_t k = 0; k < dry44.size(); ++k)
+    {
+        if (dry44[k] < floor44 || dry48[k] < floor48 || wet44[k] < floor44 || wet48[k] < floor48)
+            continue;
+        const double g44 = 20.0 * std::log10 (wet44[k] / dry44[k]), g48 = 20.0 * std::log10 (wet48[k] / dry48[k]);
+        worst = std::max (worst, std::fabs (g44 - g48));
+    }
+    return worst;
+}
+} // namespace
+
+TEST (fx_rate_invariance_of_the_effect_modules)
+{
+    struct Case { const char* name; FxSettings fx; double toleranceDb; };
+    const std::vector<Case> cases = {
+        { "chorus", { { "chorus.on", 1 }, { "chorus.mix", 100 }, { "chorus.depth", 0 }, { "chorus.voices", 2 }, { "chorus.feedback", 40 }, { "chorus.delay1", 5 }, { "chorus.delay2", 9 }, { "chorus.sync", 0 } }, 2.5 },   // (the feedback loop sharpens the Catmull-Rom interpolation loss near the notches: 1.5 dB fixed, 24.8 dB with the 44.1 kHz delays)
+        { "flanger", { { "flanger.on", 1 }, { "flanger.mix", 100 }, { "flanger.depth", 0 }, { "flanger.center", 329.63f }, { "flanger.feedback", 50 }, { "flanger.sync", 0 } }, 0.5 },
+        { "delay", { { "delay.on", 1 }, { "delay.sync", 0 }, { "delay.mix", 100 }, { "delay.time", 7 }, { "delay.time2", 7 }, { "delay.feedback", 50 }, { "delay.filter_cutoff", 100 }, { "delay.filter_spread", 100 } }, 0.5 },
+        { "phaser", { { "phaser.on", 1 }, { "phaser.sync", 0 }, { "phaser.mix", 100 }, { "phaser.depth", 0 }, { "phaser.center", 900 }, { "phaser.feedback", 60 }, { "phaser.blend", 50 } }, 0.5 },
+        { "eq", { { "eq.on", 1 }, { "eq.low.gain", 6 }, { "eq.mid.gain", -9 }, { "eq.mid.cutoff", 1500 }, { "eq.mid.resonance", 70 }, { "eq.high.gain", 8 }, { "eq.high.cutoff", 5000 } }, 0.5 },
+        { "distortion", { { "distortion.on", 1 }, { "distortion.drive", 6 }, { "distortion.filter_order", 1 }, { "distortion.filter_cutoff", 1800 }, { "distortion.filter_resonance", 60 } }, 1.0 },
+        { "compressor", { { "compressor.on", 1 }, { "compressor.low.gain", 3 }, { "compressor.high.gain", -3 }, { "compressor.crossover_low", 200 }, { "compressor.crossover_high", 2500 } }, 0.5 },
+        { "filter model Phaser", { { "filter1.on", 1 }, { "filter1.model", 7 }, { "filter1.cutoff", 1000 }, { "filter1.resonance", 40 }, { "filter1.blend", 100 } }, 0.5 },
+        { "fxfilter", { { "fxfilter.on", 1 }, { "fxfilter.cutoff", 1500 }, { "fxfilter.resonance", 60 } }, 0.5 },
+    };
+    for (const auto& c : cases)
+    {
+        const double d = rateDisagreementDb (c.fx);
+        std::printf ("    rate invariance %-11s worst per-harmonic gain disagreement 44.1 vs 48 kHz: %.2f dB\n", c.name, d);
+        CHECK (d < c.toleranceDb);
+    }
+    // the reverb has no steady-state response comparable across rates (its delay lengths are scaled and rounded): its decay time is: the RT60 of the
+    // backward integrated energy of a burst (-5 .. -35 dB, x2) at 44.1 and at 48 kHz. The module forwards the rate correctly; the remaining 18 % are the
+    // upstream design (the diffusion all-passes are scaled by powers of two, 1 at 44.1 kHz and 2 at 48 kHz, the feedback delays by the exact ratio), the
+    // tolerance is the +-25 % of the reverb vectors of 06-effects.md 9.3
+    {
+        const auto rt60 = [] (double sr)
+        {
+            auto e = createEngine (EngineKind::vital);
+            e->setParam (kParamMasterPolyphony, 32.0f);
+            e->prepare (sr, 256, Quality {});
+            (void) sbtest::render (*e, { noteOn (0, 60), noteOff (200, 60) }, 2048, 256);
+            base (*e);
+            setByKey (*e, "env1.attack", 0.0f);
+            setByKey (*e, "env1.decay", 20.0f);
+            setByKey (*e, "env1.sustain", 0.0f);
+            setByKey (*e, "reverb.on", 1.0f);
+            setByKey (*e, "reverb.mix", 100.0f);
+            setByKey (*e, "reverb.decay", 1500.0f);
+            setByKey (*e, "reverb.chorus_amount", 0.0f);
+            setByKey (*e, "reverb.high_shelf_gain", 0.0f);
+            e->reset();
+            const auto r = sbtest::render (*e, { noteOn (static_cast<int> (0.1 * sr), 60), noteOff (static_cast<int> (0.12 * sr), 60) }, static_cast<int> (4.0 * sr), 256);
+            std::vector<double> edc (r.left.size());
+            double acc = 0.0;
+            for (size_t i = r.left.size(); i-- > static_cast<size_t> (0.1 * sr);)
+            {
+                acc += static_cast<double> (r.left[i]) * r.left[i];
+                edc[i] = acc;
+            }
+            const double total = edc[static_cast<size_t> (0.1 * sr)];
+            double t5 = -1.0, t35 = -1.0;
+            for (size_t i = static_cast<size_t> (0.1 * sr); i < edc.size(); ++i)
+            {
+                const double db = 10.0 * std::log10 (std::max (edc[i] / total, 1.0e-30));
+                if (t5 < 0.0 && db <= -5.0)
+                    t5 = static_cast<double> (i) / sr;
+                if (t35 < 0.0 && db <= -35.0)
+                {
+                    t35 = static_cast<double> (i) / sr;
+                    break;
+                }
+            }
+            return (t5 >= 0.0 && t35 >= 0.0) ? 2.0 * (t35 - t5) : -1.0;
+        };
+        const double a = rt60 (44100.0), b = rt60 (48000.0);
+        std::printf ("    rate invariance reverb RT60: %.3f s at 44.1 kHz, %.3f s at 48 kHz\n", a, b);
+        CHECK (a > 0.0 && b > 0.0);
+        CHECK (std::fabs (a - b) < 0.25 * std::max (a, b));
+    }
+}
+
 TEST (robust_exp2_stays_finite_and_monotone_for_any_exponent)
 {
     using namespace sbvital;

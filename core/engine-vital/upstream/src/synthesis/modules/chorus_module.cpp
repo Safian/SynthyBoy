@@ -36,6 +36,7 @@ namespace sbvital {
       registerOutput(&delay_status_outputs_[i]);
       delays_[i] = new MultiDelay(max_samples);
       addIdleProcessor(delays_[i]);
+      delays_[i]->setSampleRate(getSampleRate() / getOversampleAmount());
     }
   }
 
@@ -65,6 +66,14 @@ namespace sbvital {
     }
 
     SynthModule::init();
+  }
+
+  void ChorusModule::setSampleRate(int sample_rate) {
+    SynthModule::setSampleRate(sample_rate);
+    for (int i = 0; i < kMaxDelayPairs; ++i) {
+      if (delays_[i] != nullptr)
+        delays_[i]->setSampleRate(sample_rate);
+    }
   }
 
   void ChorusModule::enable(bool enable) {

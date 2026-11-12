@@ -28,6 +28,13 @@ namespace sbvital {
                      mod_depth_(0.0f), phase_offset_(0.0f), phase_(0) {
     phaser_filter_ = new PhaserFilter(true);
     addIdleProcessor(phaser_filter_);
+    phaser_filter_->setSampleRate(getSampleRate() / getOversampleAmount());
+  }
+
+  void Phaser::setSampleRate(int sample_rate) {
+    ProcessorRouter::setSampleRate(sample_rate);
+    if (phaser_filter_ != nullptr)
+      phaser_filter_->setSampleRate(sample_rate);
   }
 
   void Phaser::init() {
