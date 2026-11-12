@@ -35,9 +35,7 @@ Tests: `core/tests/test_own_voice.cpp` (vectors M1 .., L1 .., D1 / D2, F1 .. F7,
 
 ## What is not there yet (see docs/ui-design/OWN-ENGINE-GAP.md, generated)
 
-Sample / granular / spectral / multisample oscillators, user wavetables (Preset table), spectral morph (branch engine-own-b), the 16 slot effect instance pool (`fxiNN.*`), Convolve
-(needs the impulse content of the store), the audio rate evaluation of the matrix (the control period is 32 samples), the Serum EQ / compressor / convolve laws, latency compensation of Bode
-across the buses, the SVF styles 2 .. 4 exactly (question 4 of `docs/engine-spec/QUESTIONS.md`).
+The audio rate evaluation of the matrix (the control period is 32 samples). The effects of branch `engine-own-d` are listed below.
 ## Content and the sample-type oscillators
 
 `setContent` / `setContentStore` (message thread) decode the content section into one immutable `ContentSet` (user wavetables = Preset table, samples with their spectral analysis,
@@ -56,3 +54,11 @@ Tuning / scale / MPE (step 6), the mixer graph (buses, sends), voice control, th
 Wavetable names with several frames (Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials) are defined
 here, not matched frame by frame. The warps are original definitions; they alias less than engine-vital (measured, see the report of the work).
 The filters-serum types can run away at resonance and drive 100 %: `voice/filter_unit.h` guards the output.
+
+## The effects (branch engine-own-d)
+
+Every effect is an `FxModule` (`fx/fx_module.h`, `fx_modules.cpp`): instance 0 of the chain and the 16 slots of the instance pool (`fxiNN`, `FxPool` in `fx_chain.*`) run the same
+code. The reverb has its six algorithms (`fx_reverb.h`), the EQ both laws (`fx_eq.h`), the compressor the Compress / Limit / Serum modes (`fx_compressor.h`), Convolve builds its
+convolver on a helper thread from the impulse of the content store. `fx_latency.h` holds the compensation delays between the paths of the mixer (Bode, the limiter). The SVF styles
+2 .. 5 of the four SVF models are in `voice/classic_filters.h`, the envelope delay in chunks in `env_lfo/envelope.h`. The vectors of documents 03, 05 and 06 are tests in
+`core/tests/test_own_fx.cpp`; assumptions A714 .. A725 in `docs/ui-design/13-new-keys.md` 4.51, open points in `docs/engine-spec/QUESTIONS.md` (rows 9 .. 13).
