@@ -246,7 +246,7 @@ Amount smoothing: the amount (and `delta`) is interpolated linearly per sample a
 | Asym +, Asym -, Asym +/- | `read = u^(1 + 3b)` for b >= 0, `1 - (1 - u)^(1 + 3(-b))` for b < 0; b = a, -a, `2a - 1` |
 | Flip | window `-1` for `u >= 1 - a`, else +1 (the last fraction `a` of the cycle is inverted) |
 | Mirror | `h = 2u` / `2(1-u)` as above; `read = 0.5 * asym(h, 2a - 1)` (the second half plays the first backwards) |
-| Remap 1 | `read = u + a (C(u) - u)`, `C` = the drawn remap curve of the oscillator (257 points, linear interpolation, default the identity) |
+| Remap 1 | `read = u + a (C(u) - u)`, `C` = **the curve of the oscillator's remap slot** (`oscN.remap.slot`: the same drawn curve the frame-position remap of section 6.7 uses, 257 points over 0 .. 1, linear interpolation; the identity when the slot holds no drawn curve). The curve is read **whether or not `oscN.remap.on` is set** (`on` only gates the frame-position remap); both warp slots read the same curve |
 | Remap 2 | the same on each half cycle |
 | Remap 3 | `read = u - a sin(2 pi u)/(2 pi)` |
 | Remap 4 | the same as Remap 1 on each quarter cycle |
@@ -296,6 +296,20 @@ type only**; a wavetable oscillator ignores them. They are specified in `core/sp
 4. value stages (6.3) of slot 1 then slot 2.
 
 A mode of the value family in slot 1 leaves the phase untouched in step 1.
+
+### 6.7 Frame-position remap with RISE / FALL (`oscN.remap.*`)
+
+`oscN.remap.on` Off: nothing. On: the frame position of each unison pair is passed through the oscillator's drawn curve `C` (slot `remap.slot` 0 .. 3, 257 points over x = 0 .. 1, linear interpolation, identity when no curve is stored) and then slewed:
+```
+x      = clamp(frame_position / max_frame, 0, 1)            -- max_frame = number of frames - 1 (63 for the built-in morphing tables; the user table's frame count - 1)
+target = C(x) * max_frame
+every wave-buffer rebuild (every 7 ms, per lane):  time = rise_ms if target > current else fall_ms
+   if the lane was off, or the note just started (reset / retrigger), or time <= 0:  current = target           -- a jump
+   else  current += (target - current) * (1 - exp(-7 / time_ms))                                            -- one pole, time constant = time_ms
+frame_used = current
+```
+`remap.rise` / `remap.fall`: 0 .. 2000 ms. The slewed position replaces the frame position before unison frame spread, smooth interpolation and clamping. Measured (Saw to Square, osc frame modulated by a 0.5 Hz square LFO between 0 and 100 %, second-harmonic level re the fundamental): without the remap it switches at once (-6.0 dB -> -46 dB); with `remap.on`, `rise = fall = 500 ms`
+it glides: -9.5, -12.2, -14.6, -16.9, -19.0, -21.0, -23.0 ... -28.5 dB at 0.1 s steps after the switch to square, and rises from -32.4 dB to -8.5 dB over the first 0.9 s of the note (the note starts from the position the first block saw, here the previous end value of the retriggered LFO, then glides to the real target: a first-block quirk; time constant about 0.5 s).
 
 ## 7. Spectral morph (`oscN.morph.*`)
 
@@ -363,12 +377,24 @@ Not part of the Vital baseline (SynthyBoy addition, original design). Per voice 
 * `noise.phase` (0..1) the start position, `noise.random_phase` On random start per voice (both channels), `noise.bounce` ping-pongs.
 * Level: audio-rate smoothed (5 Hz) like the oscillators, gain `noise.level/100` (clamped to 2), pan as in doc 1. The raw output is also the
   FM/RM source "Noise".
+* **`noise.filter`** (colour generators only: White, Pink, Brown, Geiger; the other generators and user samples are untouched): two cascaded one-pole low-pass filters (`y1 += c (x - y1)`, `y2 += c (y1 - y2)`, `c = min(0.99, 1 - exp(-2 pi f/sr_i))`, `f` limited to 0.45 sr_i) on the raw noise after resampling and the stereo stage: for `a = noise.filter/100 < 0` a **low-pass** (output `y2`) at `f = 20000 * 0.002^|a|` Hz (-100 % = 40 Hz); for `a > 0` the complement
+  **`x - y2`** at `f = 20 * 800^a` Hz (+100 % = 16 kHz); `|a| < 1e-4`: off (the states follow the signal while off, so engaging is click free). Measured on white noise (re 500 Hz): -100 %: -24 dB at 2 kHz, -40 at 5k, -54 at 11k, -65 at 21k, RMS 0.020; -50 %: -13 / -28 / -42 / -52, RMS 0.093; +50 %: flat within 1.7 dB, RMS 0.506; +100 %: +11.7 / +19 / +23 / +25 dB, RMS 0.27.
+* **`noise.stereo`**: the colour generators have independent left and right noise; `c = 1 - stereo/100`, `right = c * left + sqrt(1 - c^2) * right_buffer` (left unchanged): measured correlation 1.000 / 0.499 / -0.002 at 0 / 50 / 100 %, both channels RMS 0.510.
+* **Generator noise pitch** (`noise.pitch`, `noise.fine`, `noise.keytrack`): the generator buffer (1 s at 44.1 kHz, band-limited to 22.05 kHz) is played at the rate `2^(semitones/12) * 44100/sr_i` through a chain of 2:1 half-band down-sampled copies (rate > 1) and one 2x up-sampled copy (rate < 1), so
+  **transposing down low-passes the noise**: white noise at -12 st has its energy up to about 12 kHz (48 kHz host; 14 kHz is -61 dB), at -24 st up to about 6 kHz; **transposing up stays white to the top but loses level**: RMS 0.5025 at 0, 0.3803 at +12 st (-2.4 dB), 0.3156 at +24 st (-4.0 dB). Pink / brown at pitch 0: -5.4 / -9.6 / -12.1 / -17.4 dB (pink) and -10.5 / -19.2 / -24.9 / -29.1 dB (brown) at 2 / 5 / 11 / 21 kHz re 500 Hz; RMS pink 0.310, brown 0.194, white 0.5025.
 * When off, outputs are cleared once.
 
 ## 11. Oscillator type switch
 
 `oscN.type` changes between the wavetable oscillator and the sample-type oscillators (document 7). While the oscillator is sounding a change
 **cross-fades over 10 ms** (both run; raw and levelled mixed linearly), otherwise it switches at once.
+
+### 11.1 Why the Filter HPF/LPF warps stay clean in engine-vital
+
+The filters are linear, so they create no new components; the noise floor of the warped oscillator is the floor of the plain oscillator, and **the high-pass only removes harmonic energy**. Measured on the Saw table, note 57 (220 Hz), `osc1.level 100`, a Blackman-windowed 1 s analysis,
+energy outside +-1 % of the harmonics relative to the total power: no warp -98.9 dB (an absolute floor of about -105 dB re an amplitude-1 sine, RMS 0.489); Filter HPF 0 / 25 / 50 / 100 %: -97.7 / -93.5 / -88.6 / -84.9 dB with the RMS falling to 0.423 / 0.254 / 0.130 / 0.018 (the absolute floor stays at about -105 dB; the relative floor rises only because the signal falls); Filter LPF 0 / 25 / 50 / 100 %: -123.6 / -122.8 / -112.5 / -100.3 dB.
+What keeps the floor this low (there is no special interpolation-image treatment beyond this): (1) the wave buffer holds only harmonics up to the 22 .. 24 kHz band limit of section 3.1; (2) the table is read with **cubic (Catmull-Rom) interpolation** at 2048 points per cycle and at 2x the host rate; (3) the output decimator attenuates everything above 0.45 sr by about 60 dB; (4) the warp filter runs per sample at that internal rate with the corner at `ratio * f0` (`ratio = 0.5 * 2^(7 a)` for the HPF: 1.68 for a = 25 %, 370 Hz at 220 Hz), `g = x/(1 + x)`, `x = 2 pi ratio f0/sr_i`, two cascaded one-pole high-pass stages.
+An implementation that reads with linear interpolation, at the host rate, or from a table band-limited only at the host Nyquist has a higher absolute floor, which the high-pass then makes 5 .. 9 dB more audible against the quieter signal. The acceptance criterion is an **absolute inharmonic floor of -100 dB or lower** (power re 1) for this setup.
 
 ## 12. Cost and quality notes ("better")
 
