@@ -433,9 +433,9 @@ public:
         p.predelay = V (b, d, pre) * 0.001f;
         p.lowCut = V (b, d, lowCut);
         p.highCut = V (b, d, highCut);
-        p.highShelfDb = b[hsGain];
+        p.highShelfDb = V (b, d, hsGain);
         p.highShelfHz = V (b, d, hsCut);
-        p.lowShelfDb = b[lsGain];
+        p.lowShelfDb = V (b, d, lsGain);
         p.lowShelfHz = V (b, d, lsCut);
         p.chorusAmount = clamp01 (pct (b, d, chAmount));
         p.chorusRate = V (b, d, chRate);
