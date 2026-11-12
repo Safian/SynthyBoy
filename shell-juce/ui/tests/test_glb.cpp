@@ -62,13 +62,47 @@ void setPlain (SynthyBoyProcessor& p, const char* key, float v)
     param->setValueNotifyingHost (param->convertTo0to1 (v));
 }
 
-bool writePng (juce::Component& c, const juce::File& file)
+/** What was painted: the size of the image and how many of its pixels are not transparent black / differ from the first pixel (a blank render shows 0 / 0). */
+struct PaintStats
+{
+    int width = 0, height = 0;
+    long long painted = 0, differing = 0;
+};
+
+PaintStats inspect (const juce::Image& image)
+{
+    PaintStats s;
+    s.width = image.getWidth();
+    s.height = image.getHeight();
+    if (! image.isValid())
+        return s;
+    const juce::Image::BitmapData data (image, juce::Image::BitmapData::readOnly);
+    const auto first = data.getPixelColour (0, 0);
+    for (int y = 0; y < s.height; ++y)
+        for (int x = 0; x < s.width; ++x)
+        {
+            const auto px = data.getPixelColour (x, y);
+            s.painted += px.getAlpha() != 0 ? 1 : 0;
+            s.differing += px != first ? 1 : 0;
+        }
+    return s;
+}
+
+/** Paints the component into an image and writes it as a PNG; `stats` receives what the image holds. Two things keep this the same on every platform:
+    - the image is a software image (as the bitmap GUI of the CLAP module uses, shell-clap/bitmap/BitmapSession.cpp): the default image type of Windows can be a Direct2D bitmap,
+      which is not drawn into by a software Graphics read back through the pixel data;
+    - the Graphics is gone (the drawing is complete and flushed) before the image is read. */
+bool writePng (juce::Component& c, const juce::File& file, PaintStats* stats = nullptr)
 {
     file.getParentDirectory().createDirectory();
     file.deleteFile();
-    juce::Image image (juce::Image::ARGB, c.getWidth(), c.getHeight(), true);
-    juce::Graphics g (image);
-    c.paintEntireComponent (g, true);
+    juce::Image image (juce::Image::ARGB, c.getWidth(), c.getHeight(), true, juce::SoftwareImageType());
+    {
+        juce::Graphics g (image);
+        c.paintEntireComponent (g, true);
+    }
+    if (stats != nullptr)
+        *stats = inspect (image);
     // the stream is closed (flushed) before the caller looks at the file size: Windows reports the size of what reached the disk
     bool ok = false;
     {
@@ -619,21 +653,25 @@ TEST (glb_headless_render_to_png)
     const juce::File outDir ("/tmp/ui-shots/glb");
     outDir.createDirectory();
 
-    // 1. Phone portrait 390x844
-    editor->setSize (390, 844);
-    const juce::File phoneFile = outDir.getChildFile ("phone-390x844.png");
-    CHECK (writePng (*editor, phoneFile));
-    CHECK (phoneFile.getSize() > 2000);
-    std::printf ("    Saved phone shot: %s (%lld bytes)\n",
-                 phoneFile.getFullPathName().toRawUTF8(), static_cast<long long> (phoneFile.getSize()));
+    const auto shoot = [&] (int w, int h, const char* what, const juce::File& file)
+    {
+        editor->setSize (w, h);
+        PaintStats stats;
+        CHECK (writePng (*editor, file, &stats));
+        // the diagnostics go to the log first: when a platform renders a blank editor the CI log says what the image held (bounds of the image and the editor, painted and differing pixels)
+        std::printf ("    %s shot: %s (%lld bytes), image %dx%d, editor %dx%d showing %d visible %d, %lld painted / %lld differing pixels\n", what,
+                     file.getFullPathName().toRawUTF8(), static_cast<long long> (file.getSize()), stats.width, stats.height, editor->getWidth(), editor->getHeight(),
+                     editor->isShowing() ? 1 : 0, editor->isVisible() ? 1 : 0, stats.painted, stats.differing);
+        CHECK (stats.width == editor->getWidth() && stats.height == editor->getHeight());
+        CHECK (stats.painted > 0);
+        CHECK (stats.differing > static_cast<long long> (w) * h / 20); // a rendered editor is more than a flat colour
+        CHECK (file.getSize() > 2000);
+    };
 
+    // 1. Phone portrait 390x844
+    shoot (390, 844, "phone", outDir.getChildFile ("phone-390x844.png"));
     // 2. Tablet landscape 1024x768
-    editor->setSize (1024, 768);
-    const juce::File tabletFile = outDir.getChildFile ("tablet-1024x768.png");
-    CHECK (writePng (*editor, tabletFile));
-    CHECK (tabletFile.getSize() > 2000);
-    std::printf ("    Saved tablet shot: %s (%lld bytes)\n",
-                 tabletFile.getFullPathName().toRawUTF8(), static_cast<long long> (tabletFile.getSize()));
+    shoot (1024, 768, "tablet", outDir.getChildFile ("tablet-1024x768.png"));
 }
 
 TEST (glb_zz_shutdown)
