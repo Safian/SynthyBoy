@@ -60,6 +60,39 @@ phaser center), then they too run at audio rate. At audio rate the stage transit
 are interpolated linearly across the chunk, and the note-on position inside the chunk is honoured. **Better:** run every envelope sample accurately
 (cost is small), or at least at 32-sample chunks.
 
+### 1.3a The envelope times under modulation: the delay at the note start (audio rate against the control period)
+
+Question answered: what does the Vital engine do for a matrix-modulated `envN.delay` when a note starts, and does "audio rate" change it?
+
+* **The time keys are read once per chunk, whatever the rate.** `delay`, `attack`, `hold`, `decay`, `release` (base value plus the matrix, summed in the control domain of the key: `c = c_base + sum(amount * width * source)`, `seconds = max(c, 0)^4`, times the voice time factor of doc 1 sec 11) are per-voice **control-rate** values: one number per voice and chunk (a chunk is at most 128 samples at the host rate and is cut at every note event, doc 1).
+  The envelope uses the **first value of the chunk** as the time for the whole chunk, **also when the envelope runs at audio rate** (envelope 1, or any envelope connected to an audio-rate destination, 1.3). Audio rate changes only (a) where the envelope's own output moves sample by sample, and (b) the position of the note-on inside the chunk; it does **not** make the time inputs audio rate.
+  There is no 32-sample period: the sampling period of a modulated time is the engine chunk, 128 samples at most (2.7 ms at 48 kHz); 32 samples or sample-accurate reading would only move the results within the quantisation shown below.
+* **Whether there is a delay stage at all** is decided at the note-on from the delay value of the chunk that contains the note-on: exactly 0 means the note starts in attack at once (no delay stage, onset = the note-on); anything above 0 (even a modulation that is a tiny fraction of a millisecond) enters the delay stage, which then lasts at least until the end of that chunk.
+* **Progress.** In the delay stage the position advances by `chunk_time / T` per chunk, `T` the delay value read for that chunk (clamped to >= 1e-7 s); the stage is over when the position reaches 1, and **the attack starts at the next chunk boundary** -- also for the audio-rate envelope 1. So the onset is quantised up to the chunk grid (in the probe's 512-sample blocks the chunk ends are the multiples of 128 samples of the stream, and the chunk with the note-on is cut short at the note; the grid of a real host follows its own block starts).
+  With a constant modulation the delay is therefore `T = (c_base + amount * width * source)^4 s`, plus a quantisation of **0 .. +2.7 ms** (up to one chunk: the wait for the next chunk boundary; measured below). With a moving modulator the position integrates `chunk_time / T(chunk)`: the stage ends when that sum reaches 1.
+* **A control-rate source is seen with its value for the chunk it is computed in.** An envelope (2 .. 6) or LFO used as the modulator is evaluated for the same chunk as the note start, so at the first chunk it already has its value at the **end** of that chunk (a slow attack of 500 ms gives about 0.005 after 2.7 ms): a delay driven by such an envelope with base 0 is `(0.5 * 1.4142 * 0.005)^4` of a second, which is practically 0, so the stage lasts exactly one chunk (onset +2.69 ms), not 250 ms. The delay must come from a source that is at its final value at the note start (macro, velocity, a fast envelope) or from a non-zero base value.
+* **Constant sources reach their value at once** (no per-note ramp from 0: the matrix interpolation of a voice is reset to the new value at a note start, doc 4), so a macro/velocity modulated delay equals the static delay of the same time.
+
+Vectors (Sine note 60 at 0.1 s, `env1.attack 0`, `sustain 100`, `osc1.level 100`, filter off; onset = first sample above 1e-4, in ms after the note on; `macro.1 100 %` unless stated; `modNN.amount` in % of the key's range width 1.41421, as in doc 4; the "target" is `(c_base + amount * 1.41421)^4`):
+
+| Setup | target delay (ms) | onset (ms) |
+|-------|-------------------|------------|
+| `env1.delay 0` | 0 | 0.04 |
+| static `env1.delay` 3 / 15 / 50 / 100 / 202 / 250 ms | 3 / 15 / 50 / 100 / 202 / 250 | 5.35 / 17.35 / 52.02 / 102.69 / 204.02 / 252.02 |
+| base 0, macro1 -> delay 25 % | 15.6 | 17.35 |
+| base 0, macro1 -> delay 50 % | 250.0 | 252.02 |
+| base 0, macro1 50 % (value 0.5), amount 50 % | 15.6 | 17.35 |
+| base 0, velocity 1 -> delay 50 % | 250.0 | 252.02 |
+| base 1 ms, macro1 -> delay 25 % / 50 % | 79.7 / 613.3 | 81.35 / 614.69 |
+| base 10 ms, macro1 -> delay 25 % / 50 % | 201.2 / 1096.6 | 201.35 / 1097.35 |
+| base 50 ms, macro1 -> delay 25 % / 50 % | 466.5 / 1938.6 | 468.02 / 1940.02 |
+| base 0, env2 (attack 500 ms, sustain 100 %) -> delay 50 % | ~0 | 2.69 (one chunk) |
+| base 1 ms, env2 (attack 500 ms) -> delay 50 % | ~1 | 2.69 |
+| base 0, env2 (attack 5 ms) -> delay 50 % | 250 at the end of the attack | 220.02 |
+| base 1 ms, env2 (attack 5 ms) -> delay 50 % | 250 + 1 | 601.35 |
+
+Tolerance: +-1.5 ms on the constant-source rows (+-3 ms above 1 s); +-10 % on the env2 rows (they depend on the chunk grid). An implementation that reads the delay at the audio rate or with a 32-sample period reproduces the constant rows within that tolerance; only the env2 rows (a moving modulator at the note start) separate the methods.
+
 ### 1.4 `envN.legato_inverted`
 
 Normally an envelope does not retrigger on a legato note-on (doc 1 sec 5); with this switch On it listens to the unconditional note stream

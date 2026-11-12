@@ -3,7 +3,7 @@
 Status: final (2026-11-12). Covers the nine effects of the Vital engine and the frame they sit in: chain order, on/off, the dry/wet law, the output trim,
 the rate they run at, then chorus, compressor, delay, distortion, EQ, flanger, phaser, reverb (the FX filter is the filter bank of document 5 with its own page).
 **Not in this document** (they exist as Vital-free libraries the own engine links): Hyper/Dimension, Utility, the three splitters (`core/fx-serum-a`), Bode, Convolve (`core/fx-serum-b`).
-The rack/bus/pool structure (Main, Bus 1, Bus 2, the splitter band racks, the effect instance pool) is our design, described in `docs/ui-design/08-effects.md` and `18-FX-INSTANCES.md`; only the chain law that defines the sound is here.
+The rack/bus/pool structure (Main, Bus 1, Bus 2, the splitter band racks, the effect instance pool) is our design, described in `docs/ui-design/08-effects.md` and `18-FX-INSTANCES.md`; the parts of it that define the sound or the timing are here: the chain law (section 1), the latency compensation across the buses (section 11) and the behaviour of the instance pool (section 12).
 
 ## 1. The frame
 
@@ -17,7 +17,7 @@ The rack/bus/pool structure (Main, Bus 1, Bus 2, the splitter band racks, the ef
 * **State.** Switching an effect on clears its delay lines and filters and starts the mix at 0 (a one-chunk fade-in); a module that is off costs nothing. `reset()` / "all sounds off" clear every module.
 * **Parameter smoothing** (nothing is stepped): the delay-type effects glide (3.3), the others interpolate linearly across the chunk; the cutoffs listed in doc 1 sec 10 are smoothed with the 5 Hz one-pole.
 * **Tempo.** Effects with `sync` use the host tempo like the LFOs (doc 3 sec 2): chorus, delay, flanger, phaser (`*.division`: the same table; the delay's `division` has 9 entries: 4 bars .. 1/64 note = indices 4 .. 12 of the table).
-* **Latency.** Bode and the compressor's limit mode add latency (reported to the host); everything else is zero latency.
+* **Latency.** Bode and the compressor's limit mode add latency (reported to the host); everything else is zero latency. Every other signal path is delayed to match: section 11.
 
 ## 2. Chorus (`chorus.*`)
 
@@ -169,15 +169,20 @@ The phaser filter of document 5 section 7 in its "clean" variant (tanh on the re
 tri_int(t)  = |2 fract(t) - 1|-style triangle in the integer phase domain of period 1, in [-1, 1] after the map v = 2 tri - 1
 cutoff      = center_note + depth_semitones * v(phase_L / phase_R)       -- depth 0..48 st; the right channel's LFO phase is offset by +- phase_offset (cycles) in opposite directions; phase_offset smoothed across the chunk
 feedback    = phaser.feedback 0..1; blend (poles) = phaser.blend: 0 -> 4 stages, 50 % -> 8, 100 % -> 12 (cross-fading the taps, document 5 sec 7)
-depth2      = our "Depth 2": semitones of stage-to-stage cutoff spread
+depth2      = our "Depth 2" (-48 .. 48 semitones): the cutoffs of the 12 all-pass stages are spread evenly around the cutoff above (law below)
 y           = lerp(dry, filter output, mix)                               -- linear crossfade
 ```
+
+**Depth 2 (`phaser.depth2`).** Stage `s` (s = 0 .. 11, the first stage of the chain is 0) runs at the cutoff of the LFO-modulated centre multiplied by `2^(depth2 (s/11 - 0.5) / 12)`: the stages are spread **linearly in semitones over `[-depth2/2, +depth2/2]`** around the centre, stage 0 lowest for a positive value
+(a negative value reverses the order). `depth2 = 0` puts every stage at the same cutoff (the behaviour of the plain phaser filter); the spread is applied on top of the `depth` LFO movement and of the filter's key/modulation offsets, per sample, and a stage frequency is limited to the Nyquist.
+`blend` takes the output after the 4th, 8th or 12th stage, so with fewer active stages only the **lowest** stages of the spread take part (with a positive `depth2`). Because all-pass stages commute, the notch pattern of the full 12-stage chain does not depend on the sign of `depth2`.
+Measured with the vectors of 8.1 (P2): the notches spread apart as the stage cutoffs separate; at `depth2 = 24` the lowest notches move down by about 12 % and the highest up by about 9 %.
 
 Rate Hz or sync (`phaser.division`). Reset at the host position when synced. The phaser filter output is `(x + y_ap)/2` (so the mix of 100 % still contains the dry half: notches, not a pure all-pass).
 
 ## 9. Reverb (`reverb.*`)
 
-Keys (`type` 0 "Vital" is this section; types 1 .. 5 are our Serum-style algorithms): `size` (0 .. 1), `decay` (stored as log2 seconds, 0.0156 .. 64), `predelay` (0 .. 0.3 s), `pre_low_cut`, `pre_high_cut` (notes), `low_shelf_cutoff/gain` (notes, -6 .. 0 dB), `high_shelf_cutoff/gain`, `chorus_amount` (0 .. 1, squared),
+Keys (`type` 0 "Vital" is sections 9.1 .. 9.3; types 1 .. 5 (Plate, Hall, Vintage, Nitrous, Basin) are the algorithms of 9.4, with `room`, `diff_a`, `diff_b`, `er_size` and `feedback`): `size` (0 .. 1), `decay` (stored as log2 seconds, 0.0156 .. 64), `predelay` (0 .. 0.3 s), `pre_low_cut`, `pre_high_cut` (notes), `low_shelf_cutoff/gain` (notes, -6 .. 0 dB), `high_shelf_cutoff/gain`, `chorus_amount` (0 .. 1, squared),
 `chorus_rate` (log2 Hz, 0.0039 .. 8), `mix`, `width` (our addition, mid/side width of the wet).
 
 ### 9.1 Structure (a 16-line feedback delay network)
@@ -207,7 +212,9 @@ Keys (`type` 0 "Vital" is this section; types 1 .. 5 are our Serum-style algorit
 * **Damping.** After the matrix, per line: a **high shelf** `y_hs = hp + A_h (y - hp)` with `hp = onepole_lowpass(y, high_cutoff)` and `A_h = 10^(high_gain/20)`, then a **low shelf** `y -= A_l' lp(y, low_cutoff)` with `A_l' = 1 - 10^(low_gain/20)` (gains clamped to [-24, 0] dB: they only attenuate).
 * **Decay.** The signal of line k is multiplied by `g_k = 0.001^(L_k / (T 44100 ...))`: more exactly `g_k = 0.001 ^ (size_mult D_k / (T * 44100))` where `T` = `decay` seconds (clamped 0.1 .. 100): each pass through a line of length `l` seconds loses `60 l/T` dB. (The all-pass delay adds to the round trip without losing gain, so
   the effective RT60 is longer than `T`, most for small sizes; the measured table below is the reference.)
-* **Output.** The stored lines (after the decay) are summed per side with the mixed outputs: `out = sum(write_k) + 0.125 sum(feed_forward_k g_k)` where `feed_forward` is the same mixing matrix applied to the stored values; left and right sides are the lane pairs. The result goes into a stereo memory and is read back
+* **Output.** The stored lines (after the decay) are summed per side with the mixed outputs: `out = sum(write_k) + 0.125 sum(feed_forward_k g_k)` where `feed_forward` is the same mixing matrix applied to the stored values; left and right sides are the lane pairs. **The output taps the lines before the decay gain** (`write_k`, the mixed and shelved values, not the stored `g_k write_k`): the direct, diffused first pass of the input is always in the output at full level, so the **wet level does not depend on `decay` or `size`**
+  (only on how long the tail then lasts; see 9.5 for the measured peak: -8.5 dB at decay 500 ms / size 100 %, -8.6 dB at 500 ms / 50 %, -8.8 dB at 2000 ms / 50 %). An implementation that applies the decay gain to the signal it sends to the output is quieter by the whole per-pass loss (for the long lines of size 100 % and decay 500 ms: `g_k` is -17 .. -62 dB per line) -- that is the level difference to avoid.
+  The result goes into a stereo memory and is read back
   at the **pre-delay** (`predelay` seconds; the read position moves slowly toward its target, a few percent of the error per chunk with a smooth acceleration, so a change of the pre-delay bends the tail's pitch briefly) -- i.e. the pre-delay delays the whole wet signal. Final `out = wet * mem + dry * input`, `wet = sin(pi/2 m)`, `dry = cos(pi/2 m)`.
 * **Chorus** (`chorus_amount`, `chorus_rate`): the read position of the lines is modulated by a complex rotating oscillator of rate `chorus_rate` (max 16 Hz): group 1 reads at `L + cos(phi) m`, group 2 at `L - cos(phi) m`, group 3 `L + sin(phi) m`, group 4 `L - sin(phi) m`, with `phi = 2 pi (rate t + j/16)` for lane `j` (0 .. 3) of the group,
   depth `m = chorus_amount (the stored value, squared knob) * 2500 samples (44.1k)`, limited to `L - 32` samples: it breaks up the metallic ringing of the loops.
@@ -236,9 +243,90 @@ Saw burst (20 ms, loud), `reverb.on 1`, `decay 2000`, `size 50`, `chorus_amount 
 * **High shelf -6 dB at note 90** (instead of 0 dB): the tail at 0.5 / 1 / 2 s: -59.1 / -71.2 / -96.6 dB (lower and faster decaying than the flat case: the high frequencies are cut each pass).
 * `mix 50`: the dry burst reaches 0.812 of full scale (equal power -3 dB).
 
+### 9.4 The other five reverbs (`reverb.type` 1 .. 5)
+
+All five share the pipeline of the Vital reverb around them and differ only in the core:
+
+* **Input.** The stereo input is band-limited by the same pre-filter pair (`pre_low_cut`, `pre_high_cut`: the polarity-inverted band-pass of 9.1) and summed to **mono: `0.5 (L + R)`**. The core is mono in, stereo out.
+* **After the core.** The stereo result goes into the same wet memory (pre-delay glide of 9.1), then the optional `width` (mid/side, only when `reverb.width` is not 100 %), then the equal-power mix of the module (`wet = sin(pi/2 m)`, `dry = cos(pi/2 m)`). The shelves, size, decay, chorus controls are shared in meaning; there is no chorus law as in 9.1.
+* **Controls used.** `size` 0 .. 1 -> `size_scale = 2^((size - 0.5) 3)` (0.354 .. 2.83; **not** the `2^(4 size - 3)` of type 0); `decay` seconds `T` (clamped 0.1 .. 100, and never below 0.05 inside the cores); `diff_a`, `diff_b` 0 .. 1 (input diffusion, loop diffusion); `er_size` 0 .. 1 -> `er_scale = 2^((er_size - 0.5) 3)`;
+  `chorus_amount` (the stored 0 .. 1 value) is the modulation depth and `chorus_rate` (0 .. 16 Hz) the modulation rate; the damping shelves (below); `room` (Nitrous only); `feedback` (Nitrous and Basin only).
+* **`reverb.feedback` (0 .. 100 %, default 50 %).** For **Nitrous and Basin only** the decay time used for the loop gains is `T' = T 2^((feedback - 0.5) 4)`: a quarter of `T` at 0 %, `T` at 50 % (so a stored patch is unchanged), four times `T` at 100 %. The other types, including type 0, ignore it.
+  Measured at `decay` 2000 ms, `size` 50 %: RT60 0.51 / 2.01 / 8.06 s for feedback 0 / 50 / 100 % (Nitrous), 0.50 / 2.05 / 8.24 s (Basin); Tolerance +-15 % on the RT60.
+* **Loop gain law (all cores).** A recirculating path whose total round-trip time is `l` seconds gets the gain `g = min(exp(-ln(1000) l / T'), 0.9996)`, i.e. exactly -60 dB after `T'` seconds of round trips, and a hard ceiling 0.9996 (so `T'` of 100 s cannot run away). `l` includes the all-pass delays in the loop.
+* **Damping (all cores except the plate's variant noted).** A stage in each recirculating path: a trapezoidal (zero-delay) one-pole low-pass `lp` of the stage input (coefficient from `high_shelf_cutoff`) gives the high shelf `y = lp + A_h (x - lp)` with `A_h = 10^(high_shelf_gain/20)` (gain clamped to -24 .. 0 dB), followed by the low shelf `y - lpl (1 - 10^(low_shelf_gain/20))` with `lpl` the same kind of one-pole low-pass of `y` at `low_shelf_cutoff`. Nitrous and Basin brighten the shelf: Basin uses `A_h' = 1 - (1 - A_h) 0.35`; Nitrous `A_h' = 1 - (1 - A_h) k_room` with `k_room` Space 1.45, Marble 0.40, Rectangle 1.0, Hexagon 1.0, Box 0.80.
+* **Early reflections (every type).** Six taps from the mono input: left at 7.3, 13.1, 19.7, 29.3, 37.9, 47.1 ms, right at 9.1, 15.7, 23.3, 31.9, 41.3, 53.3 ms (times multiplied by `er_scale`), gains `0.8, -0.7, 0.6, -0.5, 0.4, -0.35` on the left and the negated values on the right; the sum is multiplied by `0.5 er_level` and added to the core's output. `er_level`: Plate 0.30, Hall 0.45, Vintage 0.25, Basin 0.25, Nitrous by room Space 0.15, Marble 0.60, Rectangle 0.40, Hexagon 0.40, Box 0.45.
+
+**Network cores: Hall, Nitrous, Basin (8 lines).**
+Input: the mono input goes through four series all-passes with delays `i1 .. i4` ms and the coefficient `0.30 + 0.40 diff_a` (Hall, Nitrous) or `0.55 + 0.40 diff_a` (Basin) (all-pass: `z = read(delay)`, `v = x - c z` stored, output `z + c v`). Eight lines `k = 0 .. 7`: line `k` holds a delay of `D_k = clamp(base_k size_scale, 4 samples, 0.5 s)` seconds, read with a cubic (Catmull-Rom) interpolation at `D_k + depth sin(2 pi (ph + k/8))` samples,
+`ph` a free-running phase at `chorus_rate`; the delay itself glides toward its target by 0.2 % of the error per sample (a size change bends the tail). Per sample: `y_k` = the line outputs; the left output `l = 0.5 sum_k a_k y_k`, the right `r = 0.5 sum_k b_k y_k` with the +-1 sign patterns
+`a = (+ + - - + + - -)`, `b = (+ - + - - + - +)`; the feedback `m = H y / sqrt(8)` with `H` the 8 x 8 Walsh-Hadamard (Sylvester) matrix (orthonormal, lossless); the line input `v_k = m_k + c_k x` with `x` the diffused input and `c_k = sigma_k (-1)^k / sqrt(8)`, `sigma = (+ + + + - - - -)`;
+then the line's all-pass (delay `ap_k`, coefficient `0.2 + 0.5 diff_b`), the damping stage, and the store `g_k` times the value, `g_k` by the loop gain law with `l_k = D_k + ap_k` seconds. Output `(l, r)` multiplied by `output_scale` (Hall 1.6, Nitrous 1.5, Basin 1.1), then the early reflections.
+`depth` (samples) = `chorus_amount` times 1.2 ms (Hall), 0.6 ms (Nitrous), 2.4 ms (Basin).
+
+| Core | line delays at size_scale 1 (ms) | line all-pass delays (ms) | input all-pass delays (ms) |
+|------|----------------------------------|---------------------------|---------------------------|
+| Hall | 41.7, 53.9, 61.3, 71.1, 79.7, 89.9, 101.3, 113.9 | 4.3, 5.1, 6.7, 7.9, 9.1, 10.9, 12.7, 14.3 | 5.3, 7.9, 11.3, 13.7 |
+| Basin | 17.3, 21.1, 23.9, 27.7, 31.3, 34.9, 39.1, 43.7 | 2.3, 3.1, 3.7, 4.3, 5.3, 6.1, 7.1, 8.3 | 2.9, 4.1, 5.7, 7.3 |
+| Nitrous | from the room, below | half the Hall values (2.15, 2.55, 3.35, 3.95, 4.55, 5.45, 6.35, 7.15) | the Hall values |
+
+Nitrous derives the eight line lengths from a room of the dimensions `(a, b, c)` metres (`reverb.room`): the path lengths `2a, 2b, 2c, 2 sqrt(a^2+b^2), 2 sqrt(a^2+c^2), 2 sqrt(b^2+c^2), 2 sqrt(a^2+b^2+c^2), a+b+c` divided by 343 m/s, each multiplied by `1 + 0.0113 k` (so that a cube does not give equal lines).
+Rooms: Space (24, 32, 18), Marble (6.3, 4.1, 3.0), Rectangle (9.0, 5.5, 3.5) (default), Hexagon (7.5, 6.5, 3.8), Box (5, 5, 5).
+
+**Plate (Dattorro-style).** Reference rate 29 761 Hz, `scale = sr/29761 size_scale` (all delays below are in samples at the reference rate, multiplied by `scale`, at least 2): the input `0.5 x` through four all-passes of 142, 107, 379, 277 with the coefficients `0.45 + 0.40 diff_a` (first two), `0.35 + 0.40 diff_a` (last two). Two branches `b = 0, 1`, each fed by the diffused input plus the output of the **other** branch (one sample old):
+a modulated all-pass (delay 672 / 908 plus `depth sin(2 pi (ph + b/2))` with `depth = chorus_amount 16 sr/29761`, coefficient `-(0.4 + 0.45 diff_b)`), a delay of 4453 / 4217, the damping stage times the decay gain, an all-pass of 1800 / 2656 (coefficient `0.75 (0.4 + 0.45 diff_b)`), a delay of 3720 / 3163 (its output is the branch output).
+The decay gain per pass is `min(exp(-ln(1000) p / T), 0.9996)` with `p` = the mean over the two branches of the branch's round trip in seconds, `(672 + 4453 + 1800 + 3720)/29761 size_scale` (branch 0) and `(908 + 4217 + 2656 + 3163)/29761 size_scale` (branch 1) -- about 0.36 s at `size_scale` 1.
+The stereo output is the sum of seven taps per side (positions in reference samples, times `scale`; the sign is the sign in the sum), left: +266 and +2974 of branch 0's first delay, -606.5 of its modulated all-pass, +1996 of its second delay, -1990 of branch 1's first delay, -187 of branch 1's second all-pass, -1066 of branch 1's second delay;
+right: +353 and +3627 of branch 1's first delay, -1228 of its second all-pass, +2673 of its second delay, -2111 of branch 0's first delay, -335 of branch 0's second all-pass, -121 of branch 0's second delay. Multiplied by 0.75. (Dattorro's published output taps; any equivalent plate tank within the vectors of 9.5 is acceptable.)
+
+**Vintage (Freeverb-like).** Per channel `c` (0 left, 1 right; the right channel's delays are +23 samples at 44.1 kHz), all delays scaled by `sr/44100 size_scale`: an input all-pass of 142 samples (coefficient `0.3 + 0.4 diff_a`), eight parallel feedback combs of 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 samples with the read position modulated by `chorus_amount 0.8 ms sin(2 pi (ph + k/8 + c/2))`;
+each comb: `store = input + damping(read) g_k`, with `g_k` by the loop gain law with `l_k` = the comb delay (the sum of the comb outputs `read` -- the undamped values -- is what leaves); then four series all-passes of 556, 441, 341, 225 samples (coefficient `0.3 + 0.4 diff_b`), then a one-pole low-pass at 7 kHz, multiplied by 0.14. The output is darker than the other types by the 7 kHz low-pass.
+
+### 9.5 Level and tail vectors of all six types (R3)
+
+Setup as 9.3: Saw burst (osc1 level 100, env attack 0 / decay 20 ms / sustain 0, one note on at 0.1 s, released at 0.12 s), `reverb.on 1`, `mix 100`, shelves 0 dB, pre cuts 128 / 20, `chorus_amount 0`, `predelay 0`, `room` default, `diff_a` 70 %, `diff_b` 60 %, `er_size` 50 %, `feedback` 50 %. Values are the sum of squares of the left output in 10 ms windows,
+in dB; the dry burst peaks at **+11.4 dB** (reverb off). Columns: the highest window (and its time), then the window 0.1 / 0.25 / 0.5 / 1 / 2 s after the note on, the RT60 from the backward-integrated energy between -5 and -35 dB (seconds; tolerance +-25 %).
+
+| decay / size | type | peak (time) | +0.1 s | +0.25 s | +0.5 s | +1 s | +2 s | RT60 |
+|--------------|------|-------------|--------|---------|--------|------|------|------|
+| 500 ms / 100 % | 0 Vital | -8.5 (0.13 s) | -20.2 | -36.9 | -59.9 | -103 | -182 | 0.61 |
+| | 1 Plate | -11.6 (0.27) | -17.9 | -18.7 | -19.6 | -43.2 | -84.3 | 1.28 |
+| | 2 Hall | -11.8 (0.11) | -89.6 | -38.4 | -69.1 | -128 | -200 | 0.75 |
+| | 3 Vintage | -13.4 (0.28) | -29.0 | -21.8 | -45.5 | -110 | -200 | 0.58 |
+| | 4 Nitrous | -12.9 (0.11) | -21.7 | -39.3 | -65.5 | -132 | -200 | 0.59 |
+| | 5 Basin | -16.9 (0.11) | -22.3 | -44.2 | -68.5 | -130 | -200 | 0.55 |
+| 500 ms / 50 % | 0 | -8.6 (0.13) | -20.2 | -26.4 | -43.4 | -77.2 | -130 | 0.93 |
+| | 1 | -8.7 (0.14) | -13.0 | -26.9 | -58.8 | -86.9 | -156 | 0.44 |
+| | 2 | -11.8 (0.11) | -16.9 | -31.1 | -64.7 | -122 | -200 | 0.53 |
+| | 3 | -11.6 (0.19) | -14.9 | -34.1 | -66.7 | -120 | -200 | 0.52 |
+| | 4 | -12.8 (0.19) | -21.1 | -29.5 | -62.6 | -124 | -200 | 0.51 |
+| | 5 | -12.6 (0.18) | -18.4 | -33.9 | -63.4 | -119 | -200 | 0.50 |
+| 1000 ms / 100 % | 0 | -8.5 (0.13) | -20.2 | -32.9 | -43.8 | -64.3 | -115 | 1.19 |
+| | 1 | -11.6 (0.27) | -17.9 | -18.7 | -19.6 | -43.2 | -82.6 | 1.28 |
+| | 2 | -11.8 (0.11) | -89.6 | -26.5 | -42.5 | -72.3 | -131 | 1.05 |
+| | 3 | -13.6 (0.28) | -29.0 | -22.0 | -31.2 | -65.0 | -126 | 0.99 |
+| | 4 | -12.9 (0.11) | -17.8 | -27.4 | -38.1 | -75.0 | -131 | 1.00 |
+| | 5 | -15.5 (0.18) | -17.5 | -29.5 | -41.2 | -72.0 | -130 | 1.00 |
+| 2000 ms / 50 % | 0 | -8.8 (0.13) | -17.5 | -15.6 | -21.9 | -34.8 | -48.7 | 3.19 |
+| | 1 | -8.7 (0.14) | -13.0 | -23.9 | -29.4 | -40.2 | -63.1 | 2.17 |
+| | 2 | -10.5 (0.24) | -11.5 | -12.3 | -24.8 | -37.1 | -71.0 | 2.01 |
+| | 3 | -9.9 (0.19) | -12.8 | -17.0 | -30.3 | -37.1 | -69.0 | 1.94 |
+| | 4 | -7.6 (0.19) | -15.2 | -10.8 | -21.0 | -40.1 | -67.1 | 1.99 |
+| | 5 | -7.2 (0.18) | -12.3 | -14.5 | -20.8 | -37.6 | -69.6 | 2.01 |
+
+Reading the table for the two things that were reported as different in the own engine (decay 500 ms, size 100 %):
+
+1. **Level.** In the Vital reverb (type 0) the highest 10 ms window is **-8.5 dB** at 500 ms / 100 %, the same as at 500 ms / 50 % (-8.6) and 2000 ms / 50 % (-8.8): it is the direct first pass (about 20 dB below the dry burst) and does not depend on decay or size, because the output is taken before the decay gain (9.1). A core that attenuates its output by the line gain is
+   tens of dB too quiet at a short decay and a large size (the per-line gain at 500 ms / size 100 % is `0.001^(2 D_k/(0.5 * 44100))`, between -17 dB and -62 dB per pass). The six types differ in absolute level at equal settings (the peaks of types 1 .. 5 lie between 1.2 dB above and 8.4 dB below type 0); the numbers of the table are the reference, tolerance +-2 dB on the peak and +-4 dB on the later windows.
+2. **Tail.** At 500 ms / 100 % the Vital reverb's tail falls from -20 dB (0.1 s after the note on) to -60 dB at 0.5 s and -103 dB at 1 s: **RT60 0.47 s (9.2) .. 0.61 s (this table: a different burst)**, about `T`. At size 50 % the same decay gives 0.93 s, at 20 % 1.8 s (9.2): the effective RT60 is `T` times a factor that grows as the lines get shorter, because the all-pass delays in the loop add round-trip time without loss (loop gain law of 9.1 with the all-pass included).
+   For types 1 .. 5 the RT60 follows the loop gain law with the loop times of 9.4 and is 0.5 .. 0.75 s at 500 ms (types 2 .. 5) and 1.28 s for the plate, identical at 500 and 1000 ms: at size 100 % (`size_scale` 2.83) one pass through the tank takes about 1.0 s, longer than `T`, so the loop gain is practically zero and the tail is the single pass of the tank (the same two rows).
+   If the own tail decays faster than these numbers, the usual cause is a loop gain computed from the line delay alone (without the all-pass delay in `l`), or a gain that is applied twice per round trip.
+
 ### 8.1 Phaser, chorus and flanger vectors (P1, CH1, F1)
 
 * **P1 (phaser)**, white noise, `phaser.mix 100`, `rate 0.04`, `depth 0`, `center 1000 Hz`, `feedback 0`: notches at 451 Hz and 2625 Hz for `blend` 0 (4 stages); 217, 727, 1629, 5420 Hz for 50 % (8 stages); 141, 451, 838, 1418, 2625, 8080 Hz for 100 % (12 stages).
+* **P2 (phaser, `depth2`)**, the P1 setup with `blend` 100 % (12 stages), white noise, `phaser.mix 100`, `feedback 0`, `depth 0`, `center 1000 Hz`; notch frequencies (Hz; the lowest notch is only resolved to +-6 Hz by the 5.9 Hz bins, the measurement is a 5-bin smoothed noise spectrum, notch depths -20 .. -55 dB):
+  `depth2` 0: 146 / 451 / 838 / 1418 / 2625 / 8080; `depth2` +12 and -12 (identical): 141 / 445 / 832 / 1430 / 2666 / 8262; `depth2` +24: 129 / 422 / 814 / 1453 / 2801 / 8801. Tolerance +-3 % (+-8 Hz for the lowest).
 * **CH1 (chorus)**, Sine burst (osc1 level 100, env attack 0 / decay 5 ms / sustain 0, note 69 at 0.1 s), `chorus.depth 0`, `feedback 0`, `voices 1`: `mix 100`, `delay1 = delay2 = 5 ms`: the burst appears delayed by 5 ms (first window above 0.05 at 4.5 .. 5 ms) with the same peak as the dry burst (1.11 against 1.15); with 12 ms the delay is 11.5 .. 12 ms; `mix 50`: dry 0.81 and the delayed copy at -3 dB;
   `voices 2`, `delay1 5`, `delay2 15` (mix 100): two copies at 5 ms and 15 ms, each at half the single-voice level (0.556 / 0.277 .. 0.128 in the windows). White noise through the chorus at `mix 100` and depth 0 is spectrally flat (no comb: the dry is not in the output).
 * **F1 (flanger): known defect of engine-vital.** In the engine as built the flanger does not behave as section 7 describes: with `depth 0`, `center 329.63`, `mix 100`, `feedback` 0 / 50 / -50 % the noise spectrum is identical (feedback has **no effect**) and shows only a ripple of about 1 dB around -3 dB (the dry path at -3 dB; the wet part
@@ -249,3 +337,66 @@ Saw burst (20 ms, loud), `reverb.on 1`, `decay 2000`, `size 50`, `chorus_amount 
 
 The order of modules in a rack is the permutation `fx.order`; two modules never share a position (a repeated choice is repaired: the lowest free module takes the position). Modules whose `*.rack` is not Main belong to the other racks of the structure of `08-effects.md`.
 The **Direct out** destination bypasses the racks, the buses and their effects (it is added after the racks). `main.fx_bypass` / `busN.fx_bypass` mute the effects of a rack (the dry bus passes). Level trims come last in each module.
+
+## 11. Latency and its compensation across the buses
+
+**Who has latency.** Bode: the Hilbert filter delays by 64 frames of the chain rate (Bode's own dry path is delayed by the same amount, so its mix does not comb); at the default 2x oversampling that is **32 samples at the host rate**, at 1x 64. The compressor in Limit mode: the look-ahead of 1.5 ms,
+**72 samples at 48 kHz** (measured, the same at 1x, 2x, 4x); with `compressor.limit_latency_comp` Off the **reported** latency is 0, **but the look-ahead delay is still in the signal** (a note's onset is 72 samples late): the key only decides whether the host is told (and so compensates). Everything else (Hyper/Dimension, Utility, Convolve, the three splitters -- their crossovers are phase compensated -- and all nine Vital effects) has zero latency.
+The latency reported to the host is the chain's longest path, rounded **up** to host samples: `ceil(frames / oversample)`.
+
+**How it is counted (configuration, not signal).** The latency of a rack is the **sum of the latencies of the modules that are On and in that rack** (instance 0 and pool slots that are on), in series; a splitter adds the **slowest of its band racks** (the bands wait for it, so they stay phase aligned when summed); a rack whose `fx_bypass` is set (Main, Bus 1, Bus 2) contributes 0. The number is computed from the switches and does **not** depend on whether signal is flowing,
+so it does not jump with the music; switching a latency module on or off changes the reported latency (and the delays below) at once.
+
+**Where the paths come together.** The paths are: the voices into Main; Bus 1 and Bus 2 (their sends, then their rack, then the bus level); the **Direct** output (no rack); and the destination choices `busN.destination`: Main (the bus is added to the Main bus before the Main rack), Direct (added at the end, after the Main rack, with the direct level), Other bus (the bus feeds the other bus's input; if both say "other", bus 2 goes to Main).
+Let `LB1`, `LB2` be the latency of the output of each bus (a bus that feeds the other bus adds its latency to the other's: the first bus runs first), `LM_in` the largest `LB` of the buses that go to Main, `LM = LM_in + latency(Main rack)`, and `Ltot = max(LM, LB of the buses that go to Direct)`. The compensation delays, integer samples at the chain rate, are exactly:
+
+* the voices into Main wait `LM_in` before the Main rack (they meet the late buses there);
+* a bus that goes to Main waits `LM_in - LB`; a bus that goes to Direct waits `Ltot - LB`;
+* after the Main rack the Main bus waits `Ltot - LM`;
+* the Direct input waits `Ltot`;
+* the second bus waits for what the first one sends into it (the first bus's latency) before the sum;
+* every band of a splitter waits `slowest - own`.
+
+The result is that **every path reaches the output delayed by the same `Ltot`**: the dry/direct signal and the processed signal stay in phase. A compensation delay is at most 255 samples at the chain rate (a longer one is clamped to 255 and that path is then early by the difference: e.g. two Bode modules and a limiter at 2x are 128 + 144 = 272 frames, and the Direct input, which waits the full `Ltot`, would be 17 frames short), and **a change of a delay clears its history**: switching a latency module on or off while sounding makes the aligned paths glitch once.
+
+**Measured** (the offline probe; onset of a Sine note with attack 0, filter off, samples after the note on; "latency" is what the engine reports; plain onset = 2 samples):
+
+| Setup | reported latency (host samples) | onset delay vs plain |
+|-------|---------------------------------|----------------------|
+| none | 0 | 0 |
+| Bode on in Main | 32 | +32 |
+| Bode on in Bus 1 (nothing sent), destination Main | 32 | +32 (the voices into Main are delayed to meet the bus) |
+| Bode in Bus 1, destination Direct | 32 | +32 (the Main path waits) |
+| Bode in Bus 1 with `bus1.fx_bypass`; or Bode in Main with `main.fx_bypass` | 0 | 0 |
+| a filter routed to Direct out, Bode in Main / in Bus 1 | 32 | +32 (the Direct path waits) |
+| Compressor limit mode | 72 | +72 |
+| Compressor limit mode, `limit_latency_comp` Off | 0 | +72 |
+| Bode in Main + limiter | 104 | |
+| Bode in Bus 1 + limiter in Main (destination Main) | 104 | |
+| Bode in Bus 1 (destination Other bus), limiter in Bus 2 | 104 | |
+| 1x oversampling: Bode in Main | 64 | |
+
+Tolerance: the reported number exactly; the onsets within 1 sample.
+
+## 12. The effect instance pool (`fxi01` .. `fxi16`)
+
+On top of the 16 modules of the chain (instance 0: `chorus.*`, `delay.*`, ... the keys of sections 2 to 9 and of the Serum modules) there are **16 pool slots**, each holding one more instance of an effect. A slot is a generic container: a type, an on switch, a rack, an order and 24 normalised parameters.
+
+* **Keys per slot `NN` = 01 .. 16.** `fxiNN.type`: 0 None, then 1 Chorus, 2 Compressor, 3 Delay, 4 Distortion, 5 EQ, 6 FX Filter, 7 Flanger, 8 Phaser, 9 Reverb, 10 Hyper/Dimension, 11 Utility, 12 Bode, 13 Convolve (type `t` is module `t - 1` of the chain; **the splitters are not in the pool**).
+  `fxiNN.on` (default Off), `fxiNN.rack` (Main, Bus 1, Bus 2; **never a splitter band rack**), `fxiNN.order` (0 .. 1023, default 1023), and `fxiNN.p01 .. p24`, each 0 .. 1.
+* **Parameter map.** Parameter `p_k` (k = 1 .. 24) is the `k`-th key of the type's own key list in table order **without** the type's `.on` and `.rack` keys (the compressor has 24 such keys, the FX filter 20, the reverb 19). Its range, curve, unit, labels and default are those of that source key (so `fxi03.p01` of a Delay slot is the first Delay key after `delay.on`), the plain value is
+  `plain = fromNormalised(source, norm)` with the source key's own mapping (including its curve and choice snapping), then clamped to the range the module accepts. Entries beyond the type's key count do nothing. **Choosing a type writes the type's normalised defaults into `p01 .. p24` (the unused entries 0); the engine itself does not reset the values on a type change**, and a slot whose values are all 0 sounds at the minimum of every key (including the level trim at -24 dB); measured: a Delay slot with all 24 values 0 reduces a note's peak from 0.125 to 0.049.
+* **The module.** A slot of a type renders **exactly what instance 0 of that module renders** for the same key values (same code, same laws, sections 1 .. 9 and the Serum modules): stereo in, stereo out, the module's own `*.level` output trim applied (the FX filter has its own level), the non-finite protection (a NaN/Inf output is replaced by 0 and the module is cleared). Each instance has its own state (delay lines, LFO phases) and follows the host tempo and key track of the engine like instance 0;
+  a note that sounded **before** the module was created does not retrigger it (the retrigger of Hyper and Bode counts only the notes from the module's first block on). Every instance of a Bode or limiter adds its latency (section 11): two Bode slots in Main report 64.
+* **Order within a rack.** The items of a rack are processed in ascending **sort key**: a module of instance 0 at position `q` (0 .. 15) of `fx.order` has the key `64 q + 32`, a pool slot its `order` value (0 .. 1023). On a tie the module of instance 0 comes first, then the slots by number. So `order` 0 .. 31 puts a slot before the first module, `64 q + 33 .. 64 q + 95` between the modules at positions `q` and `q + 1`, and `order` 992 (the tie with the last module: the module first) up to the default 1023 after the last module; slots with the same order run in slot-number order.
+  The rack of a slot is Main, Bus 1 or Bus 2 only (`rack` is clamped to 0 .. 2).
+* **Bypass and on/off.** An Off slot is skipped (cost zero; the module is idle and its state is cleared the next time it is switched on). `main.fx_bypass` / `busN.fx_bypass` skip every item of that rack, the slots included. A type that the quality tier switches off (the tier's effect mask) is treated as Off.
+  **Crossfade.** When the module of a slot changes (type change), or the slot is switched on or off, the output is a **linear 10 ms crossfade** (`sr_i x 0.01` samples, `t` rising linearly from 0 to 1): `out = from (1 - t) + to t`, where `from` is the old module's output (or the dry input when the slot was Off) and `to` the new one (or the dry input when it goes Off); both run on the same input during the fade.
+  A change within 10 ms of the previous one drops the earlier outgoing module at once. Parameter changes inside a running module are not crossfaded (they are smoothed like instance 0's, sections 1 .. 9).
+* **Modulation.** The 24 values are modulation destinations like any other `mod` key (the mod matrix adds in the normalised 0 .. 1 domain of `p_k` and the result is converted through the source key's mapping and clamped); the connections to a slot's destinations are dropped when its module is replaced and re-made for the new type.
+* **Cost/scope.** A slot costs nothing while Off; the engine does not limit the number of slots of one type.
+
+Vectors: a slot of a type, with the defaults of the type, switched on at the start and played with the same note as instance 0 (Saw note 60 at 0.1 s, 0.3 .. 0.7 s compared), renders **the same samples** for the deterministic effects: Bode and Distortion differ by at most 4e-8; Delay and Flanger by 1e-3 .. 2e-3 (their tempo/LFO state starts with the slot);
+for the effects with a free-running modulation (Chorus: difference up to 0.31 against a 0.24 peak; Phaser 0.044; Reverb 0.053, all with the same peak level within 1 dB) the sample values differ because the LFO phase of a slot starts when the slot is created, not with the engine -- match slot against instance 0 by level and spectrum, not by sample, for these.
+Latency vectors: Bode slot in Main: 32; two Bode slots in Main: 64; Bode slot + instance 0 Bode in Main: 64; a Bode slot in Bus 2: 32; a Compressor slot (defaults, no limiter): 0.
+
