@@ -538,6 +538,70 @@ TEST (own_builtin_tables_match_the_checkpoints)
     }
 }
 
+// The capability test of the rulebook: a bit is only set when an off / on render proves an audible difference. One probe per bit: the same patch with one
+// key changed from an "off" to an "on" value must render differently, and the key must be supported by the engine.
+TEST (own_every_capability_bit_has_an_audible_probe)
+{
+    struct Set { const char* key; float v; };
+    struct Probe { const char* bit; std::vector<Set> common; const char* key; float off, on; int note; };
+    const std::vector<Probe> probes = {
+        { "macros58", { { "mod01.source", srcChoice ("macro5") }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", 80 } }, "macro.5", 0, 100, 60 },
+        { "lfo910", { { "mod01.source", srcChoice ("lfo9") }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", 80 }, { "lfo9.rate", 3 } }, "mod01.amount", 0, 80, 60 },
+        { "mod_sources_extra", { { "mod01.source", srcChoice ("oct_note") }, { "mod01.destination", dstChoice ("osc1.level") } }, "mod01.amount", 0, 90, 66 },
+        { "aux_source", { { "mod01.source", srcChoice ("macro1") }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", 80 }, { "macro.1", 100 }, { "mod01.aux_source", srcChoice ("macro2") } }, "macro.2", 0, 100, 60 },
+        { "sub_osc", { { "sub.level", 100 } }, "sub.on", 0, 1, 60 },
+        { "env1_toggle", { { "env1.attack", 400 }, { "osc1.destination", 3 } }, "osc1.env1", 1, 0, 60 },
+        { "bend_down_range", { { "master.bend_down_link", 0 } }, "master.bend_down_range", 2, 12, -1 },
+        { "stereo_spread", { { "osc1.unison.voices", 4 }, { "osc1.unison.detune", 40 } }, "master.stereo_spread", 100, 0, 60 },
+        { "warp2", { { "osc1.warp2.type", 1 } }, "osc1.warp2.amount", 0, 80, 60 },
+        { "warp_dist", { { "osc1.warp.type", 28 } }, "osc1.warp.amount", 0, 100, 60 },
+        { "warp_fm", { { "osc1.warp.type", 43 }, { "osc2.on", 1 }, { "osc2.destination", 6 }, { "osc2.transpose", 7 } }, "osc1.warp.amount", 0, 100, 60 },
+        { "warp_pdam", { { "osc1.warp.type", 49 } }, "osc1.warp.amount", 0, 100, 60 },
+        { "filter_models", {}, "filter1.model", 3, 9, 48 },
+        { "filter_models2", {}, "filter1.model", 3, 22, 48 },
+        { "mod_sources2", { { "osc2.on", 1 }, { "osc2.destination", 6 }, { "mod01.source", srcChoice ("osc_b") }, { "mod01.destination", dstChoice ("filter1.cutoff") }, { "filter1.cutoff", 400 } }, "mod01.amount", 0, 100, 48 },
+        { "wavetable_saw_down", {}, "osc1.wavetable", 1, 14, 60 },
+        { "fx_level", { { "chorus.on", 1 } }, "chorus.level", 0, 6, 60 },
+        { "fx_utility", { { "utility.on", 1 }, { "osc1.unison.voices", 4 }, { "osc1.unison.detune", 40 } }, "utility.width", 100, 0, 60 },
+        { "fx_hyperdim", { { "hyperdim.on", 1 } }, "hyperdim.mix", 0, 100, 60 },
+        { "fx_compressor_limit", { { "compressor.on", 1 }, { "compressor.mid.upper_threshold", -40 }, { "compressor.mid.upper_ratio", 90 }, { "compressor.high.upper_threshold", -40 }, { "compressor.high.upper_ratio", 90 } }, "compressor.crossover_high", 2500, 400, 60 },
+        { "fx_distortion_extras", { { "distortion.on", 1 }, { "distortion.drive", 12 } }, "distortion.type", 0, 7, 60 },
+        { "eq_band2 (word 2)", { { "eq.on", 1 }, { "eq.mid2.mode", 1 }, { "eq.mid2.cutoff", 400 } }, "eq.mid2.gain", 0, 18, 48 },
+    };
+    for (const Probe& p : probes)
+    {
+        Out outs[2];
+        for (int k = 0; k < 2; ++k)
+        {
+            auto e = make();
+            for (const Set& c : p.common)
+                set (*e, c.key, c.v);
+            set (*e, p.key, k == 0 ? p.off : p.on);
+            const ParamInfo* info = findParamByKey (p.key);
+            CHECK (info != nullptr && e->supportsParam (info->id));
+            if (p.note < 0) // the bend probe: a note with the wheel down
+            {
+                const size_t total = 24000;
+                outs[k].l.assign (total, 0.0f);
+                outs[k].r.assign (total, 0.0f);
+                Event ev[2] = { sbtest::noteOn (0, 60), sbtest::pitchBend (1, -1.0f) };
+                e->process (ev, 2, outs[k].l.data(), outs[k].r.data(), 256);
+                e->process (nullptr, 0, outs[k].l.data() + 256, outs[k].r.data() + 256, 20000);
+            }
+            else
+                outs[k] = renderNote (*e, p.note, 1.0f, 0.5, 0.6);
+        }
+        double diff = 0.0, ref = 1.0e-9;
+        for (size_t i = 0; i < outs[0].l.size(); ++i)
+        {
+            diff = std::max (diff, static_cast<double> (std::fabs (outs[0].l[i] - outs[1].l[i])) + std::fabs (outs[0].r[i] - outs[1].r[i]));
+            ref = std::max (ref, static_cast<double> (std::fabs (outs[0].l[i])));
+        }
+        if (!CHECK (diff > 1.0e-3 * ref))
+            std::printf ("    capability %s: no audible difference (key %s)\n", p.bit, p.key);
+    }
+}
+
 // The factory behaviour of the default patch: a saw at the pitch of the key, level within 1 dB of the measured Vital default (-24.5 dB rms at A4).
 TEST (own_default_patch_pitch_and_level)
 {
