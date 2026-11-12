@@ -35,7 +35,7 @@ delay(i)   = mod * 0.03 depth + lerp(base(voice), avg, t_i)                     
 
 Each line: a feedback delay with the loop filter of section 3 (a band-pass: low-pass at `cutoff + radius`, minus a low-pass at `cutoff - radius`, `radius = spread * 96` semitones, gain compensated by `f_lo/f_hi + 1`), the saturation `hardtanh(v/8)*8`
 in the loop, feedback `chorus.feedback`, wet 1, dry 0 (the dry signal is added at the end). The loop filter gain is `f_lo/f_hi + 1` (see section 3). Reading is Catmull-Rom interpolated, the period clamped to [3, 0.08 sr] samples. The pair outputs are summed with a factor 0.5; **A and B are summed into both channels per side**
-(`out = 0.5 sum_i (A_i + B_i)` per channel). Final: `mix` equal power. The LFO phase restarts at the host song position (`correctToTime`) when the transport is synced.
+(`out = 0.5 sum_i (A_i + B_i)` per channel). Final: `mix` equal power. The LFO phase is set from the host song position when the transport is synced.
 
 ## 3. Delay (`delay.*`)
 
@@ -45,10 +45,10 @@ Keys: `time` (left), `time2` (right) -- stored as frequency `2^c` Hz; `sync`/`di
 * **Time.** `T_L, T_R` seconds (Mono uses the left time for both channels; Stereo/Ping pong/Tap use `time2` for the right). The delay time **glides**: the target frequency is smoothed with a half-life of 20 ms
   (`f_last = lerp(f_target, f_last, 0.5^(n/(0.02 sr)))` per chunk, n = chunk samples), the period (samples) is `sr/f_last` clamped to [3, 4 s * sr], and moves half way to its new value each chunk, interpolated linearly across the chunk. So changes of the time bend the
   pitch of the echoes (tape-like). Mid ping pong adds the swapped left period to the left side (`T_L' = T_L + T_R`).
-* **Core (Mono, Stereo).** per channel: `read = delay(period)` (Catmull-Rom, or 8-point if `hq`); `write = saturateLarge(x + fb * read)`; `saturateLarge(v) = 8 hardtanh(v/8)` (a soft limiter at 8x full scale); the written signal passes the loop filter and is stored; `out = dry x + wet read`.
+* **Core (Mono, Stereo).** per channel: `read = delay(period)` (Catmull-Rom, or 8-point if `hq`); `write = L(x + fb * read)` with `L(v) = 8 hardtanh(v/8)` (a soft limiter at 8x full scale); the written signal passes the loop filter and is stored; `out = dry x + wet read`.
 * **Loop filter** (not applied for the clamped/unfiltered variants): `lp = onepole_lowpass(write * g, f_hi)`, `stored = lp - onepole_lowpass(lp, f_lo)` where `f_hi = freq(cutoff + radius)`, `f_lo = freq(cutoff - radius)`, `radius = spread * 96 st`
   (clamped to [1 Hz, 0.4535 sr]) and `g = f_lo/f_hi + 1` (between 1 and 2): a band-pass in the feedback path whose width grows with the spread (spread 100 % at the default cutoff is wide open; a narrow spread rolls off lows and highs of the repeats).
-* **Ping pong** (right-lane feedback forced to 1, left to the knob): the written value is channel-swapped, `stored = swap(filter(saturateLarge(x + fb read)))`: an echo alternates between the channels. **Mid ping pong**: mono-sum input on the left, same swap. **Tap->Delay**
+* **Ping pong** (right-lane feedback forced to 1, left to the knob): the written value is channel-swapped, `stored = swap(filter(L(x + fb read)))`: an echo alternates between the channels. **Mid ping pong**: mono-sum input on the left, same swap. **Tap->Delay**
   (our addition, Serum 2): the left side is a tap (mono input `(L + R)/sqrt2` at the left time, no feedback), the right side is a delay fed by the tap and by itself; the output is the sum of both on both channels.
 * `mix` equal power (wet = `sin`, dry = `cos`). The first echo has amplitude `wet`, then `fb` per repeat.
 

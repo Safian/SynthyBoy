@@ -63,7 +63,7 @@ At the voice's reset (a new voice) the engine calls the library voice's note-on 
 centre_w = 1 - 0.5 blend;   detuned_w = max(0.25, 1 - (1 - blend)^2)          -- blend 0..1
 w_u      = centre_w if (U odd and t_u = 0) or U = 1, else detuned_w
 norm     = 1 / sqrt(sum_u w_u^2)                                                -- equal power
-pos_u    = panAmplitude(t_u * spread)                                           -- constant power pan, spread = unison.spread 0..1: voice 0 (t = -1) at the far left, the last at the far right; document 1 sec 8 pan law
+pos_u    = pan_law(t_u * spread)                                                -- constant power pan, spread = unison.spread 0..1: voice 0 (t = -1) at the far left, the last at the far right; document 1 sec 8 pan law
 raw_L += sl_u * pos_u,L * norm * w_u * g ; raw_R += sr_u * pos_u,R * norm * w_u * g       -- sl, sr: the library voice's stereo output (a mono sample gives sl = sr)
 g = 1 (or the normalisation gain of the sample when the sample's "normalize" is on)
 ```
