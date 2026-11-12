@@ -130,7 +130,7 @@ All in 0 .. 1 unless noted. "Per voice" unless noted.
 
 * **Aux source** (`aux_source`, `aux_inv`, `aux_power`, `aux_output`): `aux = a * aux_output/100` with `a = clamp(aux_x, 0, 1)` (a bipolar aux source first mapped `(x + 1)/2`), inverted `1 - a` if `aux_inv`,
   and if `aux_power != 0` `a = P(a, -aux_power)`. The slot amount is multiplied by `aux`. Without an aux source `aux = 1`.
-* **Curve** (`updateCurve`, velocity and note curves and per-slot maps): before the bipolar mapping the source value `x` is replaced by `C(x)` where `C` is the drawn curve (2048 points, Catmull-Rom, clamped to
+* **Curve** (velocity and note curves, per-slot maps): before the bipolar mapping the source value `x` is replaced by `C(x)` where `C` is the drawn curve (2048 points, Catmull-Rom, clamped to
   -1 .. 1); for the velocity and note sources the curve (`curve.velocity.*`, `curve.note.*`) is applied this way. With `curve.*.legato` On a legato note does not jump: the curved value glides from the old to the new one with the
   one-pole time constant `master.portamento.time` (coefficient `1 - exp(-chunk/time)`).
 * **Rise / Fall**: a slew limiter on the source in front of the curve: a one-pole towards the input whose time `T` (ms) is the span in which the source covers 90 % of a step (`coefficient = 1 - exp(-dt * ln10 / T)`, `dt` = chunk or sample),
