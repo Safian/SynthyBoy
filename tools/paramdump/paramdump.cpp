@@ -5,6 +5,8 @@
 //
 //   synthyboy_paramdump            writes the parameter table JSON to stdout
 //   synthyboy_paramdump --kick-pages  writes the Kick remote-control pages JSON to stdout
+//   synthyboy_paramdump --own-engine-gap  one line per key (tab separated): key, group, live (the own engine acts on it), dimmed (the UI draws it dimmed with the own engine's
+//                                     capability words), the capability bits it lacks (comma separated); input of scripts/gen-own-engine-gap.py
 //
 // Keys: key, id, name, group, min, max, default, scale (linear | exp_skew | stepped), skew, interval, decimals, unit,
 // flags, choices (stepped parameters with a name list) or choiceSet ("modSource" | "modDestination", the lists are at the top
@@ -403,10 +405,37 @@ int dumpKickPages()
     std::fputs (out.c_str(), stdout);
     return 0;
 }
+/** What the bitmap GUI shows with the own engine, key by key (docs/ui-design/OWN-ENGINE-GAP.md): "live" = IEngine::supportsParam, "dimmed" = the rule of the UI (shell-juce/ui/model/ControlModel.cpp,
+    capStateForKey): a key whose required capability bits the engine does not report is drawn dimmed. A key that is neither live nor dimmed is editable, stored and has no effect. */
+int dumpOwnEngineGap()
+{
+    const auto engine = createOwnEngine();
+    const EngineCapsMask caps = engine->capabilities();
+    const EngineCaps2Mask caps2 = engine->capabilities2();
+    for (size_t i = 0; i < paramCount(); ++i)
+    {
+        const auto& p = paramTable()[i];
+        const EngineCapsMask missing = requiredCaps (i) & ~caps;
+        const EngineCaps2Mask missing2 = requiredCaps2 (i) & ~caps2;
+        std::string names;
+        for (int bit = 0; bit < 64; ++bit)
+        {
+            if ((missing >> bit) & 1ull)
+                names += (names.empty() ? "" : ",") + std::string (capName (1ull << bit));
+            if ((missing2 >> bit) & 1ull)
+                names += (names.empty() ? "" : ",") + std::string (capName2 (1ull << bit));
+        }
+        std::printf ("%s\t%s\t%d\t%d\t%s\n", p.key, p.group, engine->supportsParam (p.id) ? 1 : 0, (missing != 0 || missing2 != 0) ? 1 : 0, names.c_str());
+    }
+    return 0;
+}
 } // namespace
 
 int main (int argc, char** argv)
 {
+    if (argc > 1 && std::strcmp (argv[1], "--own-engine-gap") == 0)
+        return dumpOwnEngineGap();
+
     if (argc > 1 && std::strcmp (argv[1], "--kick-pages") == 0)
         return dumpKickPages();
 
