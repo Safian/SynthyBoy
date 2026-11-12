@@ -254,7 +254,13 @@ TEST (bg_drag_on_a_knob_changes_the_clap_parameter_and_the_audio)
     CHECK (lowered < defaultLevel - 0.1);
     host.queueNote (true, 60);
     const double quiet = host.rms (6000);
+   #if defined (SYNTHYBOY_HARNESS_OWN_ENGINE)
+    // The own engine (iOS) does not act on osc1.level (docs/ui-design/OWN-ENGINE-GAP.md, row "Oscillator level"): the parameter moved, the sound stays what it was. That it stays is part of
+    // the contract of the gap table, so the test says it instead of skipping it.
+    CHECK (quiet > loud * 0.8);
+   #else
     CHECK (quiet < loud * 0.8);
+   #endif
     std::printf ("    osc1.level %.3f -> %.3f, rms %.4f -> %.4f\n", defaultLevel, lowered, loud, quiet);
 }
 
@@ -739,7 +745,12 @@ TEST (bg_animated_views_advance_while_a_note_sounds_and_settle_afterwards)
             meterRepainted = meterRepainted || (r.x + static_cast<int64_t> (r.w) > 1000 && r.y < 64); // the MAIN meter
         sleepMs (16);
     }
+   #if defined (SYNTHYBOY_HARNESS_OWN_ENGINE)
+    // the voice of the own engine settles into its sustain after 150 ms (fixed envelope, no modulation), so the meter stops moving earlier: 4 .. 6 frames measured (macOS, iOS simulator)
+    CHECK (changedFrames >= 3);
+   #else
     CHECK (changedFrames >= 5);   // meters and voice counter move while the sound plays
+   #endif
     CHECK (needsAnother >= 1);    // and the frames say so
     CHECK (meterRepainted);
     host.queueNote (false, 60);
@@ -1171,6 +1182,40 @@ TEST (bg_change_messages_and_async_calls_are_delivered_inside_render_without_a_d
     host.tickFor (250); // the change message of the assignment arrives with the ticks, nothing else happens
     CHECK (host.render (f, &afterTick));
     CHECK (differingPixels (beforeUp, afterTick) > 20); // the knob shows the ring of its new modulation, drawn after the message
+}
+
+TEST (bg_every_tab_renders_phone_and_tablet_whatever_the_engine_can_do)
+{
+    // The same UI on every engine (docs/ui-design/OWN-ENGINE-GAP.md): the own engine of iOS reports almost no capability, so most keys are drawn dimmed. Every top level page must still
+    // render, differ from the page before it and stay quiet afterwards (no crash, no asserting component, a settled frame), at the phone and at the tablet size.
+    struct Layout { uint32_t w, h; double tabY; double firstX, step; const char* name; };
+    const Layout layouts[] = { { 390, 844, 128.0, 24.0, 48.0, "phone" }, { 1024, 768, 86.0, 64.0, 128.0, "tablet" } };
+    for (const auto& layout : layouts)
+    {
+        Instance host;
+        if (! CHECK (host.ok()))
+            return;
+        host.activate();
+        CHECK (host.create (layout.w, layout.h, 1.0));
+        Image previous = settle (host);
+        int changed = 0;
+        for (int tab = 1; tab < 8; ++tab) // OSC is the page the GUI starts on: MIX, FLT, ENV, LFO, MOD, FX, GLB
+        {
+            host.tap (layout.firstX + layout.step * tab, layout.tabY);
+            Image now = settle (host, 400);
+            CHECK_EQ (now.width, layout.w);
+            CHECK_EQ (now.height, layout.h);
+            if (now.pixels != previous.pixels)
+                ++changed;
+            previous = std::move (now);
+            FrameInfo f;
+            Image again;
+            host.render (f, &again);
+            CHECK (f.dirty.empty() || (f.flags & SAFIAN_BITMAP_GUI_FRAME_NEEDS_ANOTHER) != 0); // settled, or a live display is moving
+        }
+        std::printf ("    %s: %d of 7 tab taps changed the picture\n", layout.name, changed);
+        CHECK_EQ (changed, 7);
+    }
 }
 
 TEST (bg_zz_module_shutdown)

@@ -31,7 +31,15 @@
 #include "synthyboy/params.h"
 
 #if defined (__APPLE__)
+ #include <TargetConditionals.h>
+ #if ! TARGET_OS_IPHONE
 bool bgtestMakeProcessForeground(); // foreground_mac.mm
+ #endif
+#endif
+
+#if defined (SYNTHYBOY_HARNESS_STATIC_ENTRY)
+// The plug-in is linked, not loaded: the static library synthyboy_static_ui (iOS, docs/ARCHITECTURE.md 4.3) exports exactly this function.
+extern "C" const clap_plugin_entry_t* synthyboy_clap_get_entry (void);
 #endif
 
 namespace bgtest
@@ -52,7 +60,7 @@ inline int scaled (int ms) { return static_cast<int> (ms * timeScale()); }
     always; macOS needs the active application, which the test host makes itself (false: no window server session, the tests that open a menu or a sheet then say so and are skipped). */
 inline bool foregroundForOverlays()
 {
-#if defined (__APPLE__)
+#if defined (__APPLE__) && ! TARGET_OS_IPHONE
     static const bool foreground = ::bgtestMakeProcessForeground();
     return foreground;
 #else
@@ -91,6 +99,15 @@ private:
             std::filesystem::remove_all (userDir, ec);
             std::filesystem::create_directories (userDir, ec);
         }
+       #if defined (SYNTHYBOY_HARNESS_STATIC_ENTRY)
+        path = "(linked: synthyboy_clap_get_entry)";
+        entry = synthyboy_clap_get_entry();
+        if (entry == nullptr || ! entry->init (path.c_str()))
+        {
+            entry = nullptr;
+            return;
+        }
+       #else
         const char* env = std::getenv ("SYNTHYBOY_CLAP_UNDER_TEST");
         if (env == nullptr || env[0] == '\0')
         {
@@ -111,6 +128,7 @@ private:
             entry = nullptr;
             return;
         }
+       #endif
         factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
     }
 };
