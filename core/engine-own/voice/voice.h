@@ -56,6 +56,13 @@ struct NoteStart
     uint32_t serial = 0;         // note counter (random seeds, alternation)
 };
 
+/** Where a voice adds its sound: the Main bus, Bus 1, Bus 2 and the Direct output, left and right (the buffers of the engine, one control period long). */
+struct MixOut
+{
+    float* l[4];
+    float* r[4];
+};
+
 class Voice
 {
 public:
@@ -97,7 +104,7 @@ public:
     /** Advances envelopes, LFOs and the matrix by one control period and computes the parameters of the period. */
     void tick (const TickGlobals& g, int voiceIndex) noexcept;
     /** Adds samples t0 .. t0 + n - 1 of the current period to L / R. */
-    void render (float* L, float* R, int n, int t0) noexcept;
+    void render (const MixOut& out, int n, int t0) noexcept;
 
 private:
     float P (int idx) const noexcept;
@@ -158,6 +165,7 @@ private:
     struct Chan { float level = 0, levelPrev = 0, gl = 0, gr = 0, glPrev = 0, grPrev = 0; int dest = 3; bool env1 = true, on = false; };
     Chan subCh, noiseCh;
     int oscDest[3] = { 0, 0, 0 };
+    float oscBlend[3] = {}, oscSend[3][2] = {}, subBlend = 0.0f, subSend[2] = {}, noiseBlend = 0.0f, noiseSend[2] = {}, filtSend[2][2] = {};
     bool oscEnv1[3] = { true, true, true };
     bool oscOn[3] = { true, false, false };
     FilterUnit filt[2];

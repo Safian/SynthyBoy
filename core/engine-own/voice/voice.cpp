@@ -611,6 +611,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
                 oscOn[o] = false;
         }
         oscDest[o] = static_cast<int> (P (oi.destination) + 0.5f);
+        oscBlend[o] = oi.filterBlend >= 0 ? clamp01 (P (oi.filterBlend) * 0.01f) : 0.0f;
+        oscSend[o][0] = oi.bus1Send >= 0 ? std::max (0.0f, P (oi.bus1Send) * 0.01f) : 0.0f;
+        oscSend[o][1] = oi.bus2Send >= 0 ? std::max (0.0f, P (oi.bus2Send) * 0.01f) : 0.0f;
         oscEnv1[o] = P (oi.env1) >= 0.5f;
         OscTick& t = oscTick[o];
         t.active = oscOn[o];
@@ -658,6 +661,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const SubIdx& si = pi.sub;
         subCh.on = P (si.on) >= 0.5f;
         subCh.dest = static_cast<int> (P (si.destination) + 0.5f);
+        subBlend = si.filterBlend >= 0 ? clamp01 (P (si.filterBlend) * 0.01f) : 0.0f;
+        subSend[0] = si.bus1Send >= 0 ? std::max (0.0f, P (si.bus1Send) * 0.01f) : 0.0f;
+        subSend[1] = si.bus2Send >= 0 ? std::max (0.0f, P (si.bus2Send) * 0.01f) : 0.0f;
         subCh.env1 = P (si.env1) >= 0.5f;
         subTick.active = subCh.on;
         static const int kSubTable[6] = { 0, kRoundedRectTable, 3, 1, 2, 4 };
@@ -676,6 +682,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const NoiseIdx& ni = pi.noise;
         noiseCh.on = P (ni.on) >= 0.5f;
         noiseCh.dest = static_cast<int> (P (ni.destination) + 0.5f);
+        noiseBlend = ni.filterBlend >= 0 ? clamp01 (P (ni.filterBlend) * 0.01f) : 0.0f;
+        noiseSend[0] = ni.bus1Send >= 0 ? std::max (0.0f, P (ni.bus1Send) * 0.01f) : 0.0f;
+        noiseSend[1] = ni.bus2Send >= 0 ? std::max (0.0f, P (ni.bus2Send) * 0.01f) : 0.0f;
         noiseCh.env1 = P (ni.env1) >= 0.5f;
         noiseGainPrev = noiseGain;
         noiseGain = noiseCh.on ? std::max (0.0f, P (ni.level) * 0.01f) : 0.0f;
@@ -691,6 +700,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         filtOn[f] = P (fi.on) >= 0.5f;
         filtEnv1[f] = P (fi.env1) >= 0.5f;
         filtDest[f] = static_cast<int> (P (fi.destination) + 0.5f);
+        filtSend[f][0] = fi.bus1Send >= 0 ? std::max (0.0f, P (fi.bus1Send) * 0.01f) : 0.0f;
+        filtSend[f][1] = fi.bus2Send >= 0 ? std::max (0.0f, P (fi.bus2Send) * 0.01f) : 0.0f;
         FilterSettings& s = filtSet[f];
         s.model = static_cast<int> (P (fi.model) + 0.5f);
         s.style = static_cast<int> (P (fi.style) + 0.5f);
@@ -723,34 +734,49 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     fresh = false;
 }
 
-void Voice::render (float* L, float* R, int n, int t0) noexcept
+void Voice::render (const MixOut& out, int n, int t0) noexcept
 {
     if (!active)
         return;
     const float invP = 1.0f / static_cast<float> (kControlPeriod);
     float oscL[3][kControlPeriod], oscR[3][kControlPeriod];
-    float mainE_L[kControlPeriod] = {}, mainE_R[kControlPeriod] = {}, mainN_L[kControlPeriod] = {}, mainN_R[kControlPeriod] = {};
+    // the targets: 0 Main, 1 Bus 1, 2 Bus 2, 3 Direct; "E" = through the amplitude envelope (env 1 on), "N" = past it
+    float tE_L[4][kControlPeriod] = {}, tE_R[4][kControlPeriod] = {}, tN_L[4][kControlPeriod] = {}, tN_R[4][kControlPeriod] = {};
     float fin_L[2][kControlPeriod] = {}, fin_R[2][kControlPeriod] = {};
     float fout_L[2][kControlPeriod], fout_R[2][kControlPeriod];
 
-    auto route = [&] (int dest, bool env1, const float* a, const float* b)
+    auto addScaled = [&] (float* dl, float* dr, const float* a, const float* b, float g)
     {
-        auto add = [&] (float* dl, float* dr)
+        for (int k = 0; k < n; ++k)
         {
-            for (int k = 0; k < n; ++k)
-            {
-                dl[k] += a[k];
-                dr[k] += b[k];
-            }
-        };
+            dl[k] += a[k] * g;
+            dr[k] += b[k] * g;
+        }
+    };
+    auto toTarget = [&] (int target, bool env1, const float* a, const float* b, float g)
+    {
+        addScaled (env1 ? tE_L[target] : tN_L[target], env1 ? tE_R[target] : tN_R[target], a, b, g);
+    };
+    // a source: its destination (0 Filter 1, 1 Filter 2, 2 both, 3 Effects only, 4 Direct out, 5 Filter blend, 6 None) and its taps to the buses
+    auto route = [&] (int dest, bool env1, const float* a, const float* b, float blend, float send1, float send2)
+    {
         switch (dest)
         {
-            case 0: case 5: add (fin_L[0], fin_R[0]); break;
-            case 1: add (fin_L[1], fin_R[1]); break;
-            case 2: add (fin_L[0], fin_R[0]); add (fin_L[1], fin_R[1]); break;
-            case 3: case 4: if (env1) add (mainE_L, mainE_R); else add (mainN_L, mainN_R); break;
+            case 0: addScaled (fin_L[0], fin_R[0], a, b, 1.0f); break;
+            case 1: addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
+            case 2: addScaled (fin_L[0], fin_R[0], a, b, 1.0f); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
+            case 3: toTarget (0, env1, a, b, 1.0f); break;
+            case 4: toTarget (3, env1, a, b, 1.0f); break;
+            case 5: // filter blend: an equal power crossfade between the filters (0 = Filter 1 only)
+                addScaled (fin_L[0], fin_R[0], a, b, std::cos (blend * 1.5707963f));
+                addScaled (fin_L[1], fin_R[1], a, b, std::sin (blend * 1.5707963f));
+                break;
             default: break;
         }
+        if (send1 > 0.0f)
+            toTarget (1, env1, a, b, send1);
+        if (send2 > 0.0f)
+            toTarget (2, env1, a, b, send2);
     };
 
     // ---- sources
@@ -771,14 +797,14 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         for (int k = 0; k < n; ++k)
             oscMono[o][k] = 0.5f * (oscL[o][k] + oscR[o][k]);
         srcLevel[o] = oscMono[o][n - 1];
-        route (oscDest[o], oscEnv1[o], oscL[o], oscR[o]);
+        route (oscDest[o], oscEnv1[o], oscL[o], oscR[o], oscBlend[o], oscSend[o][0], oscSend[o][1]);
     }
     if (subCh.on)
     {
         float sl[kControlPeriod], sr2[kControlPeriod];
         sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate);
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
-        route (subCh.dest, subCh.env1, sl, sr2);
+        route (subCh.dest, subCh.env1, sl, sr2, subBlend, subSend[0], subSend[1]);
     }
     if (noiseCh.on && (noiseGain > 0.0f || noiseGainPrev > 0.0f))
     {
@@ -795,7 +821,7 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
             nr[k] = b * g * 1.41421356f * gr2;
         }
         srcLevel[3] = 0.5f * (nl[n - 1] + nr[n - 1]);
-        route (noiseCh.dest, noiseCh.env1, nl, nr);
+        route (noiseCh.dest, noiseCh.env1, nl, nr, noiseBlend, noiseSend[0], noiseSend[1]);
     }
 
     // ---- filters (series routing feeds one into the other)
@@ -819,15 +845,13 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
     };
     auto toMain = [&] (int f, bool suppress)
     {
-        if (suppress || filtDest[f] == 2)
-            return;
-        float* dl = filtEnv1[f] ? mainE_L : mainN_L;
-        float* dr = filtEnv1[f] ? mainE_R : mainN_R;
-        for (int k = 0; k < n; ++k)
-        {
-            dl[k] += fout_L[f][k];
-            dr[k] += fout_R[f][k];
-        }
+        // the output of a filter: Effects only (Main), Direct out or None; the taps to the buses stay whatever the destination is
+        if (!suppress && filtDest[f] != 2)
+            toTarget (filtDest[f] == 1 ? 3 : 0, filtEnv1[f], fout_L[f], fout_R[f], 1.0f);
+        if (filtSend[f][0] > 0.0f)
+            toTarget (1, filtEnv1[f], fout_L[f], fout_R[f], filtSend[f][0]);
+        if (filtSend[f][1] > 0.0f)
+            toTarget (2, filtEnv1[f], fout_L[f], fout_R[f], filtSend[f][1]);
     };
     if (routing == 2) // series 2 -> 1
     {
@@ -839,6 +863,7 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         }
         runFilter (0);
         toMain (0, false);
+        toMain (1, true); // the output of the first filter went on into the second: only its taps stay
     }
     else if (routing == 1) // series 1 -> 2
     {
@@ -850,6 +875,7 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         }
         runFilter (1);
         toMain (1, false);
+        toMain (0, true);
     }
     else
     {
@@ -866,19 +892,33 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         const float t = static_cast<float> (t0 + k + 1) * invP;
         const float amp = lerp (ampPrev, ampCur, t);
         const float vg = lerp (velGainPrev, velGain, t);
-        float l = (mainE_L[k] * amp + mainN_L[k]) * vg;
-        float r = (mainE_R[k] * amp + mainN_R[k]) * vg;
-        if (declickPos > 0)
+        float mainL = 0.0f, mainR = 0.0f;
+        for (int tg = 0; tg < 4; ++tg)
         {
-            const float w = static_cast<float> (declickPos) * (1.0f / 64.0f);
-            l += declickL * w;
-            r += declickR * w;
-            --declickPos;
+            const float l = (tE_L[tg][k] * amp + tN_L[tg][k]) * vg;
+            const float r = (tE_R[tg][k] * amp + tN_R[tg][k]) * vg;
+            if (tg == 0)
+            {
+                mainL = l;
+                mainR = r;
+                if (declickPos > 0)
+                {
+                    const float w = static_cast<float> (declickPos) * (1.0f / 64.0f);
+                    mainL += declickL * w;
+                    mainR += declickR * w;
+                    --declickPos;
+                }
+                out.l[0][k] += mainL;
+                out.r[0][k] += mainR;
+            }
+            else
+            {
+                out.l[tg][k] += l;
+                out.r[tg][k] += r;
+            }
         }
-        L[k] += l;
-        R[k] += r;
-        lastL = l;
-        lastR = r;
+        lastL = mainL;
+        lastR = mainR;
     }
     outL = lastL;
     outR = lastR;

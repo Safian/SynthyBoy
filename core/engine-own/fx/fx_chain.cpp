@@ -27,10 +27,14 @@ FxIndex build()
     FxIndex f {};
     for (int i = 0; i < 16; ++i)
         f.order[i] = K ("fx.order.%d", i + 1);
+    static const char* const prefixes[16] = { "chorus", "compressor", "delay", "distortion", "eq", "fxfilter", "flanger", "phaser", "reverb", "hyperdim", "utility",
+                                              "bode", "convolve", "splitter_lh", "splitter_lmh", "splitter_ms" };
+    for (int i = 0; i < 16; ++i)
+        f.rack[i] = K ("%s.rack", prefixes[i]);
     const char* onKeys[16] = { "chorus.on", "compressor.on", "delay.on", "distortion.on", "eq.on", "fxfilter.on", "flanger.on", "phaser.on", "reverb.on",
                                "hyperdim.on", "utility.on", "bode.on", "convolve.on", "splitter_lh.on", "splitter_lmh.on", "splitter_ms.on" };
     const char* levelKeys[16] = { "chorus.level", "compressor.level", "delay.level", "distortion.level", "eq.level", "fxfilter.level", "flanger.level",
-                                  "phaser.level", "reverb.level", "hyperdim.level", "utility.level", "bode.level", "convolve.level", "", "", "" };
+                                  "phaser.level", "reverb.level", "hyperdim.level", "utility.level", "bode.level", "convolve.level", "splitter_lh.level", "splitter_lmh.level", "splitter_ms.level" };
     for (int i = 0; i < 16; ++i)
     {
         f.on[i] = K ("%s", onKeys[i]);
@@ -69,6 +73,12 @@ FxIndex build()
     f.utPolL = K ("utility.polarity_l"); f.utPolR = K ("utility.polarity_r"); f.utLpf = K ("utility.lpf"); f.utHpf = K ("utility.hpf");
     f.utMonoBass = K ("utility.mono_bass"); f.utMonoFreq = K ("utility.mono_freq"); f.utWidth = K ("utility.width"); f.utPan = K ("utility.pan");
     f.utMix = K ("utility.mix"); f.utLevel = K ("utility.level");
+    f.boMono = K ("bode.mono_input"); f.boShift = K ("bode.shift"); f.boRange = K ("bode.range"); f.boDir = K ("bode.dir"); f.boWidth = K ("bode.width");
+    f.boDelay = K ("bode.delay"); f.boSync = K ("bode.sync"); f.boDivision = K ("bode.division"); f.boFeed = K ("bode.feed"); f.boBalance = K ("bode.balance");
+    f.boBlur = K ("bode.blur"); f.boMix = K ("bode.mix");
+    f.lhFreq = K ("splitter_lh.freq"); f.lhLow = K ("splitter_lh.low_bypass"); f.lhHigh = K ("splitter_lh.high_bypass");
+    f.lmhFreqLow = K ("splitter_lmh.freq_low"); f.lmhFreqHigh = K ("splitter_lmh.freq_high"); f.lmhLow = K ("splitter_lmh.low_bypass");
+    f.lmhMid = K ("splitter_lmh.mid_bypass"); f.lmhHigh = K ("splitter_lmh.high_bypass"); f.msMid = K ("splitter_ms.mid_bypass"); f.msSide = K ("splitter_ms.side_bypass");
     f.ffOn = K ("fxfilter.on"); f.ffModel = K ("fxfilter.model"); f.ffStyle = K ("fxfilter.style"); f.ffCutoff = K ("fxfilter.cutoff");
     f.ffRes = K ("fxfilter.resonance"); f.ffDrive = K ("fxfilter.drive"); f.ffBlend = K ("fxfilter.blend"); f.ffMix = K ("fxfilter.mix");
     f.ffVar = K ("fxfilter.var"); f.ffLevel = K ("fxfilter.level");
@@ -116,13 +126,17 @@ void FxChain::prepare (double sampleRate, int maxBlock)
     reverb.prepare (sr);
     hyper.prepare (sr, std::max (maxBlock, kControlPeriod));
     utility.prepare (sr, std::max (maxBlock, kControlPeriod));
+    bode.prepare (sr, std::max (maxBlock, kControlPeriod));
+    splitLh.prepare (sr, std::max (maxBlock, kControlPeriod));
+    splitLmh.prepare (sr, std::max (maxBlock, kControlPeriod));
+    splitMs.prepare (sr, std::max (maxBlock, kControlPeriod));
     reset();
 }
 
 void FxChain::reset() noexcept
 {
     chorus.reset(); compressor.reset(); delay.reset(); distortion.reset(); eq.reset(); fxFilter.reset(); flanger.reset(); phaser.reset(); reverb.reset();
-    hyper.reset(); utility.reset();
+    hyper.reset(); utility.reset(); bode.reset(); splitLh.reset(); splitLmh.reset(); splitMs.reset();
     for (int i = 0; i < 16; ++i)
         levelGain[i] = levelGainPrev[i] = 1.0f;
 }
@@ -138,15 +152,30 @@ void FxChain::update (const float* base, const float* delta, double bpm, uint32_
         const uint32_t bit = 1u << order[i];
         on[order[i]] = f.on[order[i]] >= 0 && base[f.on[order[i]]] >= 0.5f && (fxMask & bit) != 0;
     }
-    // the modules that exist
-    static const bool implemented[16] = { true, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false };
+    // the rack of every module (the splitters only sit in a bus: a band value clamps to Main) and who owns it: this chain, if the module sits in this rack, or
+    // in the band of a splitter that is on and sits in this rack
     for (int m = 0; m < 16; ++m)
     {
-        on[m] = on[m] && implemented[m];
+        int r = f.rack[m] >= 0 ? std::clamp (static_cast<int> (base[f.rack[m]] + 0.5f), 0, 9) : 0;
+        if (m >= 13 && r >= 3)
+            r = 0;
+        moduleRack[m] = r;
+    }
+    bool splitterHere[3] = {};
+    for (int s = 0; s < 3; ++s)
+        splitterHere[s] = on[13 + s] && moduleRack[13 + s] == rackId;
+    for (int m = 0; m < 16; ++m)
+    {
+        const int r = moduleRack[m];
+        bool mine = r == rackId;
+        if (r >= 3)
+            mine = (r <= 4 && splitterHere[0]) || (r >= 5 && r <= 7 && splitterHere[1]) || (r >= 8 && splitterHere[2]);
+        on[m] = on[m] && mine;
         levelGainPrev[m] = levelGain[m];
         levelGain[m] = f.level[m] >= 0 ? dbToGain (G (base, delta, f.level[m])) : 1.0f;
         active = active || on[m];
     }
+    bodeActive = on[11];
     if (!active)
         return;
     auto pct = [&] (int idx) { return G (base, delta, idx) * 0.01f; };
@@ -328,54 +357,143 @@ void FxChain::update (const float* base, const float* delta, double bpm, uint32_
         p.levelDb = 0.0f;
         utility.setParams (p);
     }
+    if (on[11])
+    {
+        fx::Bode::Params p;
+        p.monoInput = base[f.boMono] >= 0.5f;
+        p.shift = pct (f.boShift);
+        p.range = G (base, delta, f.boRange);
+        p.dir = pct (f.boDir);
+        p.width = clamp01 (pct (f.boWidth));
+        const int sync = static_cast<int> (base[f.boSync] + 0.5f);
+        p.bpm = sync != 0;
+        p.tempoBpm = bpm;
+        p.delay = G (base, delta, f.boDelay) * 0.001f;
+        p.delayBeats = 16.0 / std::exp2 (std::clamp (base[f.boDivision], 0.0f, 8.0f)) * (sync == 2 ? 1.5 : (sync == 3 ? 2.0 / 3.0 : 1.0));
+        p.feedback = clamp01 (pct (f.boFeed)) * 0.95f;
+        p.balance = std::clamp (pct (f.boBalance), -1.0f, 1.0f);
+        p.blur = clamp01 (pct (f.boBlur));
+        p.mix = clamp01 (pct (f.boMix));
+        p.level = 0.0f;
+        bode.params = p;
+    }
+    if (on[13])
+    {
+        fx::SplitterLH::Params p;
+        p.enabled = true;
+        p.splitFreq = G (base, delta, f.lhFreq);
+        p.lowBypass = base[f.lhLow] >= 0.5f;
+        p.highBypass = base[f.lhHigh] >= 0.5f;
+        splitLh.setParams (p);
+    }
+    if (on[14])
+    {
+        fx::SplitterLMH::Params p;
+        p.enabled = true;
+        p.splitFreq1 = G (base, delta, f.lmhFreqLow);
+        p.splitFreq2 = G (base, delta, f.lmhFreqHigh);
+        p.lowBypass = base[f.lmhLow] >= 0.5f;
+        p.midBypass = base[f.lmhMid] >= 0.5f;
+        p.highBypass = base[f.lmhHigh] >= 0.5f;
+        splitLmh.setParams (p);
+    }
+    if (on[15])
+    {
+        fx::SplitterMS::Params p;
+        p.enabled = true;
+        p.midBypass = base[f.msMid] >= 0.5f;
+        p.sideBypass = base[f.msSide] >= 0.5f;
+        splitMs.setParams (p);
+    }
+}
+
+void FxChain::runModule (int m, float* l, float* r, int n, float invP, int depth) noexcept
+{
+    switch (m)
+    {
+        case 0: chorus.process (l, r, n); break;
+        case 1: compressor.process (l, r, n); break;
+        case 2: delay.process (l, r, n); break;
+        case 3: distortion.process (l, r, n); break;
+        case 4: eq.process (l, r, n); break;
+        case 5:
+        {
+            float wl[kControlPeriod], wr[kControlPeriod];
+            fxFilter.process (l, r, wl, wr, n);
+            for (int i = 0; i < n; ++i)
+            {
+                l[i] = mixLaw (l[i], wl[i], fxFilterMix);
+                r[i] = mixLaw (r[i], wr[i], fxFilterMix);
+            }
+            break;
+        }
+        case 6: flanger.process (l, r, n); break;
+        case 7: phaser.process (l, r, n); break;
+        case 8: reverb.process (l, r, n); break;
+        case 9: hyper.process (l, r, n); break;
+        case 10: utility.process (l, r, n); break;
+        case 11: bode.process (l, r, n); break;
+        case 13: // splitter L/H: the bands run through their racks (3 low, 4 high) and are summed again
+        {
+            float bl[2][kControlPeriod], br[2][kControlPeriod];
+            splitLh.split (l, r, bl[0], br[0], bl[1], br[1], n);
+            runRack (3, bl[0], br[0], n, depth + 1);
+            runRack (4, bl[1], br[1], n, depth + 1);
+            splitLh.merge (bl[0], br[0], bl[1], br[1], l, r, n);
+            break;
+        }
+        case 14:
+        {
+            float bl[3][kControlPeriod], br[3][kControlPeriod];
+            splitLmh.split (l, r, bl[0], br[0], bl[1], br[1], bl[2], br[2], n);
+            runRack (5, bl[0], br[0], n, depth + 1);
+            runRack (6, bl[1], br[1], n, depth + 1);
+            runRack (7, bl[2], br[2], n, depth + 1);
+            splitLmh.merge (bl[0], br[0], bl[1], br[1], bl[2], br[2], l, r, n);
+            break;
+        }
+        case 15:
+        {
+            float bl[2][kControlPeriod], br[2][kControlPeriod];
+            splitMs.split (l, r, bl[0], br[0], bl[1], br[1], n);
+            runRack (8, bl[0], br[0], n, depth + 1);
+            runRack (9, bl[1], br[1], n, depth + 1);
+            splitMs.merge (bl[0], br[0], bl[1], br[1], l, r, n);
+            break;
+        }
+        default: break;
+    }
+    if (levelGain[m] != 1.0f || levelGainPrev[m] != 1.0f)
+        for (int i = 0; i < n; ++i)
+        {
+            const float g = lerp (levelGainPrev[m], levelGain[m], static_cast<float> (i + 1) * invP);
+            l[i] *= g;
+            r[i] *= g;
+        }
+}
+
+/** The modules of one rack in the order of fx.order (a position holds one module; a repeated choice is repaired in update ()). */
+void FxChain::runRack (int rack, float* l, float* r, int n, int depth) noexcept
+{
+    if (depth > 2)
+        return;
+    bool done[16] = {};
+    const float invP = 1.0f / static_cast<float> (period);
+    for (int pos = 0; pos < 16; ++pos)
+    {
+        const int m = order[pos];
+        if (done[m] || !on[m] || moduleRack[m] != rack)
+            continue;
+        done[m] = true;
+        runModule (m, l, r, n, invP, depth);
+    }
 }
 
 void FxChain::process (float* l, float* r, int n) noexcept
 {
     if (!active)
         return;
-    bool done[16] = {};
-    const float invP = 1.0f / static_cast<float> (period);
-    (void) invP;
-    for (int pos = 0; pos < 16; ++pos)
-    {
-        const int m = order[pos];
-        if (done[m] || !on[m])
-            continue;
-        done[m] = true;
-        switch (m)
-        {
-            case 0: chorus.process (l, r, n); break;
-            case 1: compressor.process (l, r, n); break;
-            case 2: delay.process (l, r, n); break;
-            case 3: distortion.process (l, r, n); break;
-            case 4: eq.process (l, r, n); break;
-            case 5:
-            {
-                float wl[kControlPeriod], wr[kControlPeriod];
-                fxFilter.process (l, r, wl, wr, n);
-                for (int i = 0; i < n; ++i)
-                {
-                    l[i] = mixLaw (l[i], wl[i], fxFilterMix);
-                    r[i] = mixLaw (r[i], wr[i], fxFilterMix);
-                }
-                break;
-            }
-            case 6: flanger.process (l, r, n); break;
-            case 7: phaser.process (l, r, n); break;
-            case 8: reverb.process (l, r, n); break;
-            case 9: hyper.process (l, r, n); break;
-            case 10: utility.process (l, r, n); break;
-            default: break;
-        }
-        if (levelGain[m] != 1.0f || levelGainPrev[m] != 1.0f)
-            for (int i = 0; i < n; ++i)
-            {
-                const float g = lerp (levelGainPrev[m], levelGain[m], static_cast<float> (i + 1) * invP);
-                l[i] *= g;
-                r[i] *= g;
-            }
-    }
+    runRack (rackId, l, r, n, 0);
 }
 } // namespace own
 } // namespace synthyboy

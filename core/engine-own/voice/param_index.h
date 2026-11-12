@@ -16,16 +16,19 @@ struct OscIdx
     int uniVoices, uniDetune, uniCurve, uniSpread, uniBlend, uniMode, uniRange, uniLaw, uniBlendShape, uniStack, uniStackRepeat;
     int warpType, warpAmount, warpPhase, warpSpread, warp2Type, warp2Amount, warp2Phase, warp2Spread;
     int keyLow, keyHigh, velLow, velHigh, type;
+    int filterBlend, bus1Send, bus2Send;
 };
 
 struct SubIdx
 {
     int on, waveform, octave, tune, level, pan, destination, env1, phase;
+    int filterBlend, bus1Send, bus2Send;
 };
 
 struct NoiseIdx
 {
     int on, level, pan, destination, env1, sample, stereo, keytrack, pitch, fine;
+    int filterBlend, bus1Send, bus2Send;
 };
 
 struct FilterIdx
@@ -79,6 +82,7 @@ struct ParamIndex
     int macro[8];
     int filterRouting;
     MasterIdx master;
+    int bus1Level, bus2Level, directLevel, bus1Dest, bus2Dest, bus1Bypass, bus2Bypass, mainBypass;
     VoiceCtlIdx vctl;
     ModSlotParams slot[kNumModSlots];
     int count = 0; // paramCount ()

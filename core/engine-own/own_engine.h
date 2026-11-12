@@ -74,7 +74,10 @@ private:
     std::vector<int> gtouched;
     int gnumTouched = 0;
     ModMatrix matrix;
-    FxChain fx;
+    FxChain fx[3];                 // the racks Main, Bus 1, Bus 2
+    float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period
+    float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;
+    int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };
     TickGlobals globals;
     NoteTuning noteTuning;

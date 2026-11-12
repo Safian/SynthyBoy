@@ -44,15 +44,29 @@ bool implementedKey (const std::string& k)
         if (rest.rfind ("map.", 0) == 0)
             return inList (rest.substr (4), { "key_low", "key_high", "vel_low", "vel_high" });
         return inList (rest, { "on", "level", "pan", "transpose", "tune", "wavetable", "frame", "frame_spread", "phase", "random_phase", "destination", "env1",
-                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type" });
+                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type", "filter_blend", "bus1_send", "bus2_send" });
     }
     if (head == "sub")
-        return inList (rest, { "on", "waveform", "octave", "tune", "level", "pan", "destination", "env1", "phase" });
+        return inList (rest, { "on", "waveform", "octave", "tune", "level", "pan", "destination", "env1", "phase", "filter_blend", "bus1_send", "bus2_send" });
     if (head == "noise")
-        return inList (rest, { "on", "level", "pan", "destination", "env1", "sample", "stereo" });
+        return inList (rest, { "on", "level", "pan", "destination", "env1", "sample", "stereo", "filter_blend", "bus1_send", "bus2_send" });
     if (head == "filter1" || head == "filter2")
         return inList (rest, { "on", "model", "style", "cutoff", "resonance", "drive", "blend", "mix", "keytrack", "var", "level", "env1", "destination", "pan", "clean_mode",
-                               "comb_offset", "formant.x", "formant.y", "formant.resonance", "formant.spread", "formant.transpose" });
+                               "comb_offset", "formant.x", "formant.y", "formant.resonance", "formant.spread", "formant.transpose", "bus1_send", "bus2_send" });
+    if (head == "bus1" || head == "bus2")
+        return inList (rest, { "level", "destination", "fx_bypass" });
+    if (head == "direct")
+        return rest == "level";
+    if (head == "main")
+        return rest == "fx_bypass";
+    if (head == "bode")
+        return inList (rest, { "on", "mono_input", "shift", "range", "dir", "width", "delay", "sync", "division", "feed", "balance", "blur", "mix", "level", "rack" });
+    if (head == "splitter_lh")
+        return inList (rest, { "on", "freq", "low_bypass", "high_bypass", "level", "rack" });
+    if (head == "splitter_lmh")
+        return inList (rest, { "on", "freq_low", "freq_high", "low_bypass", "mid_bypass", "high_bypass", "level", "rack" });
+    if (head == "splitter_ms")
+        return inList (rest, { "on", "mid_bypass", "side_bypass", "level", "rack" });
     if (head == "filter")
         return rest == "routing";
     if (head == "voicectl")
@@ -68,6 +82,9 @@ bool implementedKey (const std::string& k)
     if (head == "macro")
         return true;
     // ---- the effect chain (fx/)
+    if (rest == "rack" && (head == "chorus" || head == "compressor" || head == "delay" || head == "distortion" || head == "eq" || head == "fxfilter" || head == "flanger"
+                           || head == "phaser" || head == "reverb" || head == "hyperdim" || head == "utility"))
+        return true;
     if (head == "chorus")
         return inList (rest, { "on", "mix", "rate", "sync", "division", "depth", "feedback", "delay1", "delay2", "voices", "filter_cutoff", "filter_spread", "level" });
     if (head == "compressor")
@@ -114,7 +131,7 @@ EngineCapsMask ownCapabilities() noexcept
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
          | kCapModSources2 | kCapWavetableSawDown
-         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft
+         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft | kCapMixerGraph | kCapFxRacks | kCapFxBode | kCapFxSplitters
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
 }
 

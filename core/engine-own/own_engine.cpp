@@ -120,7 +120,11 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     gdelta.assign (paramCount(), 0.0f);
     gdeltaR.assign (paramCount(), 0.0f);
     gtouched.assign (static_cast<size_t> (kNumModSlots), 0);
-    fx.prepare (sampleRate, maxBlockFrames);
+    for (int i = 0; i < 3; ++i)
+    {
+        fx[i].setRack (i);
+        fx[i].prepare (sampleRate, maxBlockFrames);
+    }
     smoothedGain.reset (sampleRate, 0.02);
     prepared = true;
     reset();
@@ -130,7 +134,8 @@ void OwnEngine::reset()
 {
     for (auto& v : voices)
         v->kill();
-    fx.reset();
+    for (auto& f : fx)
+        f.reset();
     for (int c = 0; c < numChannels; ++c)
     {
         bendSemis[c] = modWheel[c] = aftertouch[c] = 0.0f;
@@ -718,7 +723,30 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 routeCos = std::cos (phi);
                 routeSin = std::sin (phi);
             }
-            fx.update (base.data(), gdelta.data(), globals.bpm, effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f), kControlPeriod);
+            const uint32_t mask = effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f);
+            for (auto& f : fx)
+                f.update (base.data(), gdelta.data(), globals.bpm, mask, kControlPeriod);
+            // the mixer: the levels of the buses and of the Direct output, their destinations and the rack bypasses
+            auto levelOf = [&] (int idx) -> float
+            {
+                if (idx < 0)
+                    return 1.0f;
+                float db = base[static_cast<size_t> (idx)];
+                if (gdelta[static_cast<size_t> (idx)] != 0.0f)
+                    db += gdelta[static_cast<size_t> (idx)];
+                return db > -59.99f ? dbToGain (std::min (db, 6.0f)) : 0.0f;
+            };
+            busGainPrev[1] = busGain[1];
+            busGainPrev[2] = busGain[2];
+            directGainPrev = directGain;
+            busGain[1] = levelOf (pi.bus1Level);
+            busGain[2] = levelOf (pi.bus2Level);
+            directGain = levelOf (pi.directLevel);
+            busDest[0] = pi.bus1Dest >= 0 ? static_cast<int> (base[static_cast<size_t> (pi.bus1Dest)] + 0.5f) : 0;
+            busDest[1] = pi.bus2Dest >= 0 ? static_cast<int> (base[static_cast<size_t> (pi.bus2Dest)] + 0.5f) : 0;
+            busBypass[0] = pi.bus1Bypass >= 0 && base[static_cast<size_t> (pi.bus1Bypass)] >= 0.5f;
+            busBypass[1] = pi.bus2Bypass >= 0 && base[static_cast<size_t> (pi.bus2Bypass)] >= 0.5f;
+            mainBypass = pi.mainBypass >= 0 && base[static_cast<size_t> (pi.mainBypass)] >= 0.5f;
         }
         while (ei < numEvents && events[ei].frame <= pos)
             handleEvent (events[ei++]);
@@ -726,10 +754,48 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         if (ei < numEvents)
             end = std::min (end, std::max (events[ei].frame, pos + 1));
         const int n = end - pos;
+        // the voices add to Main, Bus 1, Bus 2 and Direct; the buses run through their racks and go to their destination, Main through the Main rack
+        for (int t = 0; t < 4; ++t)
+        {
+            std::fill (mixL[t], mixL[t] + n, 0.0f);
+            std::fill (mixR[t], mixR[t] + n, 0.0f);
+        }
+        MixOut mo;
+        for (int t = 0; t < 4; ++t)
+        {
+            mo.l[t] = mixL[t];
+            mo.r[t] = mixR[t];
+        }
         for (auto& v : voices)
             if (v->isActive())
-                v->render (left + pos, rightOut + pos, n, controlPos);
-        fx.process (left + pos, rightOut + pos, n);
+                v->render (mo, n, controlPos);
+        auto runBus = [&] (int b) // b = 1, 2
+        {
+            if (!busBypass[b - 1])
+                fx[b].process (mixL[b], mixR[b], n);
+            const int dest = busDest[b - 1] == 2 && b == 2 && busDest[0] == 2 ? 0 : busDest[b - 1]; // both choose Other bus: bus 2 acts as Main (no feedback)
+            const int to = dest == 1 ? 3 : (dest == 2 ? 3 - b : 0);
+            for (int i = 0; i < n; ++i)
+            {
+                const float g = lerp (busGainPrev[b], busGain[b], static_cast<float> (controlPos + i + 1) * (1.0f / static_cast<float> (kControlPeriod)));
+                mixL[to][i] += mixL[b][i] * g;
+                mixR[to][i] += mixR[b][i] * g;
+            }
+        };
+        if (busDest[1] == 2 && busDest[0] != 2) // bus 2 feeds bus 1: it runs first
+        {
+            runBus (2);
+            runBus (1);
+        }
+        else
+        {
+            runBus (1);
+            runBus (2);
+        }
+        if (!mainBypass)
+            fx[0].process (mixL[0], mixR[0], n);
+        std::copy (mixL[0], mixL[0] + n, left + pos);
+        std::copy (mixR[0], mixR[0] + n, rightOut + pos);
         for (int i = pos; i < end; ++i)
         {
             const float g = smoothedGain.next();
@@ -741,6 +807,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             }
             left[i] = outputLimit (left[i] * g);
             rightOut[i] = outputLimit (rightOut[i] * g);
+            // Direct: past every rack and the master volume, scaled by its own level
+            const float dg = lerp (directGainPrev, directGain, static_cast<float> (controlPos + (i - pos) + 1) * (1.0f / static_cast<float> (kControlPeriod)));
+            left[i] += mixL[3][i - pos] * dg;
+            rightOut[i] += mixR[3][i - pos] * dg;
         }
         controlPos = (controlPos + n) % kControlPeriod;
         pos = end;

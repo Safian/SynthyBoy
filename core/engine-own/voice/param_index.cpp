@@ -38,12 +38,15 @@ ParamIndex build()
         K (warpType, "warp.type"); K (warpAmount, "warp.amount"); K (warpPhase, "warp.phase"); K (warpSpread, "warp.spread");
         K (warp2Type, "warp2.type"); K (warp2Amount, "warp2.amount"); K (warp2Phase, "warp2.phase"); K (warp2Spread, "warp2.spread");
         K (keyLow, "map.key_low"); K (keyHigh, "map.key_high"); K (velLow, "map.vel_low"); K (velHigh, "map.vel_high"); K (type, "type");
+        K (filterBlend, "filter_blend"); K (bus1Send, "bus1_send"); K (bus2Send, "bus2_send");
 #undef K
     }
     p.sub = { find ("sub.on"), find ("sub.waveform"), find ("sub.octave"), find ("sub.tune"), find ("sub.level"), find ("sub.pan"),
-              find ("sub.destination"), find ("sub.env1"), find ("sub.phase") };
+              find ("sub.destination"), find ("sub.env1"), find ("sub.phase"), find ("sub.filter_blend"), find ("sub.bus1_send"), find ("sub.bus2_send") };
     p.noise = { find ("noise.on"), find ("noise.level"), find ("noise.pan"), find ("noise.destination"), find ("noise.env1"), find ("noise.sample"),
-                find ("noise.stereo"), find ("noise.keytrack"), find ("noise.pitch"), find ("noise.fine") };
+                find ("noise.stereo"), find ("noise.keytrack"), find ("noise.pitch"), find ("noise.fine"), find ("noise.filter_blend"), find ("noise.bus1_send"), find ("noise.bus2_send") };
+    p.bus1Level = find ("bus1.level"); p.bus2Level = find ("bus2.level"); p.directLevel = find ("direct.level"); p.bus1Dest = find ("bus1.destination");
+    p.bus2Dest = find ("bus2.destination"); p.bus1Bypass = find ("bus1.fx_bypass"); p.bus2Bypass = find ("bus2.fx_bypass"); p.mainBypass = find ("main.fx_bypass");
     for (int n = 1; n <= 2; ++n)
     {
         FilterIdx& f = p.filter[n - 1];

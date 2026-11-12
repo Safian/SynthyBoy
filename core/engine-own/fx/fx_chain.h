@@ -8,7 +8,11 @@
 #include "../matrix/mod_matrix.h"
 #include "fx_effects.h"
 #include "synthyboy/fx/hyper_dimension.h"
+#include "synthyboy/fx/splitter_lh.h"
+#include "synthyboy/fx/splitter_lmh.h"
+#include "synthyboy/fx/splitter_ms.h"
 #include "synthyboy/fx/utility.h"
+#include "bode.h"
 #include "synthyboy/quality.h"
 
 namespace synthyboy
@@ -19,6 +23,7 @@ namespace own
 struct FxIndex
 {
     int order[16];
+    int rack[16];
     int on[16]; // by module (the fx.order choices 0 .. 15); -1 for modules without an on key
     int level[16];
     // chorus
@@ -34,6 +39,8 @@ struct FxIndex
     int rvMix, rvSize, rvDecay, rvPre, rvLowCut, rvHighCut, rvHsCut, rvHsGain, rvLsCut, rvLsGain, rvChAmount, rvChRate, rvType, rvWidth, rvDiffA, rvDiffB;
     int hdRate, hdUnison, hdDetune, hdMix, hdDimSize, hdDimMix, hdLevel;
     int utPolL, utPolR, utLpf, utHpf, utMonoBass, utMonoFreq, utWidth, utPan, utMix, utLevel;
+    int boMono, boShift, boRange, boDir, boWidth, boDelay, boSync, boDivision, boFeed, boBalance, boBlur, boMix;
+    int lhFreq, lhLow, lhHigh, lmhFreqLow, lmhFreqHigh, lmhLow, lmhMid, lmhHigh, msMid, msSide;
     int ffOn, ffModel, ffStyle, ffCutoff, ffRes, ffDrive, ffBlend, ffMix, ffVar, ffLevel;
 };
 const FxIndex& fxIndex() noexcept;
@@ -43,10 +50,13 @@ class FxChain
 public:
     void prepare (double sampleRate, int maxBlock);
     void reset() noexcept;
+    /** Which rack this chain is: 0 Main, 1 Bus 1, 2 Bus 2 (the modules whose `rack` key names it, and the band racks of the splitters that sit in it). */
+    void setRack (int id) noexcept { rackId = id; }
     /** Reads the parameters (once per control period). `delta` is the global modulation in control units (may be zero), `bpm` the host tempo. */
     void update (const float* base, const float* delta, double bpm, uint32_t fxMask, int periodSamples) noexcept;
     void process (float* l, float* r, int n) noexcept;
     bool anyActive() const noexcept { return active; }
+    int latencySamples() const noexcept { return bodeActive ? bode.latency() : 0; }
 
 private:
     float G (const float* base, const float* delta, int idx) const noexcept;
@@ -71,6 +81,15 @@ private:
     fx::HyperDimension hyper;
     fx::Utility utility;
     int period = 32;
+    int rackId = 0;
+    int moduleRack[16] = {};
+    bool bodeActive = false;
+    fx::Bode bode;
+    fx::SplitterLH splitLh;
+    fx::SplitterLMH splitLmh;
+    fx::SplitterMS splitMs;
+    void runRack (int rack, float* l, float* r, int n, int depth) noexcept;
+    void runModule (int m, float* l, float* r, int n, float invP, int depth) noexcept;
 };
 } // namespace own
 } // namespace synthyboy

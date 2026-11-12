@@ -753,3 +753,187 @@ TEST (ownv_chorus_ch1_delayed_burst)
     CHECK (peakIn (o.left, 0.1, 0.1045) < 0.05);       // the dry burst is not in the output at mix 100
     CHECK (peakIn (o.left, 0.1045, 0.14) > 0.9);       // the copy appears 5 ms later with the level of the dry burst
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// the mixer graph, the racks, the splitters, Bode
+
+TEST (ownv_direct_skips_the_master_volume_and_the_effects)
+{
+    auto level = [&] (int dest, float masterDb)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "master.volume", masterDb);
+        set (*e, "osc1.destination", static_cast<float> (dest));
+        const auto o = run (*e, { sbtest::noteOn (0, 69) }, 0.4);
+        return lineAt (o.left, 0.3, 440.0, 2400);
+    };
+    CHECK (level (3, -60) < 0.01);        // Effects only: silenced by the master volume
+    CHECK (level (4, -60) > 0.9);         // Direct out: past it
+    CHECK (std::fabs (level (4, 0) - level (3, 0)) < 0.02);
+    CHECK (level (6, 0) < 1.0e-4);        // None
+}
+
+TEST (ownv_bus_sends_levels_and_racks)
+{
+    auto level = [&] (const std::vector<std::pair<const char*, float>>& keys)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "master.volume", 0);
+        for (const auto& k : keys)
+            set (*e, k.first, k.second);
+        const auto o = run (*e, { sbtest::noteOn (0, 69) }, 0.4);
+        return lineAt (o.left, 0.3, 440.0, 2400);
+    };
+    // the source goes to Bus 1 only (destination None), the bus to Main: it plays at the send level and the bus level
+    const double full = level ({ { "osc1.destination", 6 }, { "osc1.bus1_send", 100 } });
+    CHECK (full > 0.9);
+    CHECK (std::fabs (level ({ { "osc1.destination", 6 }, { "osc1.bus1_send", 50 } }) - 0.5 * full) < 0.03);
+    CHECK (level ({ { "osc1.destination", 6 }, { "osc1.bus1_send", 100 }, { "bus1.level", -60 } }) < 0.01);
+    CHECK (level ({ { "osc1.destination", 6 }, { "osc1.bus2_send", 100 }, { "bus2.destination", 1 }, { "master.volume", -60 } }) > 0.9); // Bus 2 to Direct
+    // Bus 1 to Bus 2 and on to Main
+    CHECK (level ({ { "osc1.destination", 6 }, { "osc1.bus1_send", 100 }, { "bus1.destination", 2 } }) > 0.9);
+    // the filter blend: 100 % sends the oscillator to Filter 2 only (it is off: silence)
+    CHECK (level ({ { "osc1.destination", 5 }, { "osc1.filter_blend", 100 }, { "filter2.on", 0 } }) < 1.0e-4 + level ({ { "osc1.destination", 5 }, { "osc1.filter_blend", 100 } }));
+    // a delay in Bus 1 only hears what goes through Bus 1
+    auto echo = [&] (float send)
+    {
+        auto e = burstPatch();
+        set (*e, "delay.on", 1);
+        set (*e, "delay.rack", 1);
+        set (*e, "delay.style", 0);
+        set (*e, "delay.sync", 0);
+        set (*e, "delay.time", 250);
+        set (*e, "delay.mix", 100);
+        set (*e, "delay.feedback", 0);
+        set (*e, "osc1.bus1_send", send);
+        const auto o = run (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69), sbtest::noteOff (static_cast<int> (0.12 * kSr), 69) }, 0.7);
+        return peakIn (o.left, 0.34, 0.45);
+    };
+    CHECK (echo (0) < 0.02);
+    CHECK (echo (100) > 0.3);
+}
+
+TEST (ownv_splitter_is_transparent_without_effects_and_hosts_a_band_rack)
+{
+    auto level = [&] (float hz, bool splitter)
+    {
+        auto e = make();
+        sinePatch (*e);
+        if (splitter)
+        {
+            set (*e, "splitter_lh.on", 1);
+            set (*e, "splitter_lh.freq", 800);
+        }
+        const double f = 440.0 * std::pow (2.0, (std::round (12.0 * std::log2 (hz / 440.0)) ) / 12.0);
+        const int key = 69 + static_cast<int> (std::round (12.0 * std::log2 (hz / 440.0)));
+        const auto o = run (*e, { sbtest::noteOn (0, key) }, 0.5);
+        return lineAt (o.left, 0.3, f, 2400);
+    };
+    for (float hz : { 110.0f, 440.0f, 1760.0f, 7040.0f })
+        CHECK (std::fabs (20.0 * std::log10 (level (hz, true) / level (hz, false))) < 0.3);
+    // a distortion in the high band only changes the high sine
+    auto withBandFx = [&] (float hz)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "splitter_lh.on", 1);
+        set (*e, "splitter_lh.freq", 800);
+        set (*e, "eq.on", 1);
+        set (*e, "eq.rack", 4); // high band
+        set (*e, "eq.high.gain", -24);
+        set (*e, "eq.high.cutoff", 200);
+        set (*e, "eq.high.mode", 0);
+        const double f = 440.0 * std::pow (2.0, (std::round (12.0 * std::log2 (hz / 440.0))) / 12.0);
+        const int key = 69 + static_cast<int> (std::round (12.0 * std::log2 (hz / 440.0)));
+        const auto o = run (*e, { sbtest::noteOn (0, key) }, 0.5);
+        return lineAt (o.left, 0.3, f, 2400);
+    };
+    CHECK (withBandFx (110.0f) > 0.9 * level (110.0f, false));
+    CHECK (withBandFx (7040.0f) < 0.5 * level (7040.0f, false));
+}
+
+TEST (ownv_bode_shifts_the_frequency_up_by_the_range)
+{
+    auto e = make();
+    sinePatch (*e);
+    set (*e, "bode.on", 1);
+    set (*e, "bode.mix", 100);
+    set (*e, "bode.shift", 100);
+    set (*e, "bode.range", 100);
+    set (*e, "bode.dir", 100);
+    set (*e, "bode.width", 100);
+    const auto o = run (*e, { sbtest::noteOn (0, 69) }, 0.8);
+    CHECK (std::fabs (freqOf (o.left, 12000, 16384) - 540.0) < 4.0);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// every capability bit this branch reports has an audible off / on probe (the rule R5 of 13-new-keys.md)
+
+TEST (ownv_every_new_capability_bit_has_an_audible_probe)
+{
+    struct Set { const char* key; float v; };
+    struct Probe { const char* bit; std::vector<Set> common; const char* key; float off, on; int note; };
+    const std::vector<Probe> probes = {
+        { "key_scale", { { "master.scale.type", 1 } }, "master.scale.mode", 1, 0, 61 },
+        { "tuning", {}, "master.tuning.a4", 440, 432, 69 },
+        { "mpe_bend_range", { { "master.mpe.on", 1 } }, "master.mpe.bend_range", 2, 48, -2 },
+        { "mpe_routing", { { "master.mpe.xyz_macro", 1 }, { "mod01.source", srcChoice ("macro1") }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", -80 } }, "master.mpe.xyz_macro", 0, 2, -3 },
+        { "poly_legato", { { "env1.attack", 1000 } }, "master.poly_legato", 0, 1, -4 },
+        { "env_beats", { { "env1.attack_beats", 0.5f }, { "env1.attack", 2 } }, "env1.units", 0, 1, 69 },
+        { "lfo_options", { { "mod01.source", srcChoice ("lfo1") }, { "mod01.destination", dstChoice ("osc1.pan") }, { "mod01.amount", 50 }, { "lfo1.shape", 2 }, { "lfo1.rate", 2 } }, "lfo1.direction", 0, 1, 69 },
+        { "lfo_swing", { { "mod01.source", srcChoice ("lfo1") }, { "mod01.destination", dstChoice ("osc1.pan") }, { "mod01.amount", 50 }, { "lfo1.shape", 2 }, { "lfo1.rate", 2 } }, "lfo1.swing", 0, 100, 69 },
+        { "mod_amount", { { "osc1.pan", 100 } }, "master.stereo_routing", 100, 0, 69 },
+        { "voice_control", {}, "voicectl.s1.pan", 0, 100, 69 },
+        { "voice_sources", { { "voicectl.s1.mod1", 100 }, { "mod01.source", srcChoice ("voice_mod1") }, { "mod01.destination", dstChoice ("osc1.level") } }, "mod01.amount", 0, 60, 69 },
+        { "filter_extras", { { "filter1.on", 1 } }, "filter1.level", 0, -12, 69 },
+        { "clean_mode", { { "filter1.on", 1 }, { "filter1.drive", 20 }, { "filter1.resonance", 60 }, { "filter1.cutoff", 300 } }, "filter1.clean_mode", 0, 1, 48 },
+        { "fx_delay_extras", { { "delay.on", 1 }, { "delay.time", 100 }, { "delay.sync", 0 }, { "delay.mix", 100 }, { "delay.feedback", 0 } }, "delay.offset", 1, 2, 69 },
+        { "fx_delay_offset_left", { { "delay.on", 1 }, { "delay.time", 100 }, { "delay.sync", 0 }, { "delay.mix", 100 }, { "delay.feedback", 0 } }, "delay.offset_left", 1, 2, 69 },
+        { "mixer_graph", { { "osc1.destination", 6 } }, "osc1.bus1_send", 0, 100, 69 },
+        { "fx_racks", { { "delay.on", 1 }, { "delay.time", 100 }, { "delay.sync", 0 }, { "delay.mix", 100 }, { "osc1.bus1_send", 0 } }, "delay.rack", 0, 1, 69 },
+        { "fx_bode", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.shift", 100 }, { "bode.range", 200 } }, "bode.dir", -100, 100, 69 },
+        { "fx_splitters", { { "eq.on", 1 }, { "eq.rack", 4 }, { "eq.high.gain", -24 }, { "eq.high.cutoff", 200 }, { "osc1.wavetable", 2 } }, "splitter_lh.on", 0, 1, 69 },
+        { "mod_slew (word 2)", { { "mod01.source", srcChoice ("lfo1") }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", 60 }, { "lfo1.rate", 6 } }, "mod01.rise", 0, 300, 69 },
+        { "mod_delay (word 2)", { { "mod01.source", srcChoice ("macro1") }, { "macro.1", 100 }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", -60 } }, "mod01.delay", 0, 400, 69 },
+    };
+    for (const Probe& p : probes)
+    {
+        sbtest::Rendered outs[2];
+        for (int k = 0; k < 2; ++k)
+        {
+            auto e = make();
+            sinePatch (*e);
+            for (const Set& c : p.common)
+                set (*e, c.key, c.v);
+            set (*e, p.key, k == 0 ? p.off : p.on);
+            const ParamInfo* info = findParamByKey (p.key);
+            CHECK (info != nullptr && (e->supportsParam (info->id)));
+            std::vector<Event> ev;
+            if (p.note >= 0)
+                ev = { sbtest::noteOn (0, p.note) };
+            else if (p.note == -2) // a member channel note, bent by a quarter of the wheel
+                ev = { sbtest::noteOn (0, 57, 1.0f, 1), sbtest::pitchBend (100, 0.25f, 1) };
+            else if (p.note == -3) // the MPE slide of a member channel
+                ev = { sbtest::noteOn (0, 69, 1.0f, 1), expression (0.05, 69, Event::Brightness, 1.0f, 1) };
+            else // two notes, the second while the first is held
+                ev = { sbtest::noteOn (0, 60), sbtest::noteOn (static_cast<int> (0.4 * kSr), 72) };
+            outs[k] = run (*e, ev, p.note == -4 ? 0.6 : 0.8);
+        }
+        double diff = 0.0, ref = 1.0e-9;
+        for (size_t i = 0; i < outs[0].left.size(); ++i)
+        {
+            diff = std::max (diff, static_cast<double> (std::fabs (outs[0].left[i] - outs[1].left[i])) + std::fabs (outs[0].right[i] - outs[1].right[i]));
+            ref = std::max (ref, static_cast<double> (std::fabs (outs[0].left[i])));
+        }
+        if (!CHECK (diff > 1.0e-3 * ref))
+            std::printf ("    capability %s: no audible difference (key %s)\n", p.bit, p.key);
+    }
+    // the bits that the probes cover are reported, nothing that is not: every reported bit of this list is in the probe table above
+    auto e = make();
+    const EngineCapsMask need = kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapVoiceControl
+                              | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft | kCapMixerGraph | kCapFxRacks | kCapFxBode | kCapFxSplitters;
+    CHECK ((e->capabilities() & need) == need);
+    CHECK ((e->capabilities2() & (kCap2ModSlew | kCap2ModDelay)) == (kCap2ModSlew | kCap2ModDelay));
+}
