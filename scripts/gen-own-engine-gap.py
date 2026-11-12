@@ -45,11 +45,16 @@ AREAS = [
     ("LFOs 1 .. 10, random LFOs", r"^(LFO \d+|Random LFO \d)", "Acts: the 12 shapes and the custom shape with point modulation, rate, tempo sync, key follow, all six sync types, delay, fade, smooth, direction, swing, stereo offset, host lock, mono, the five random styles (stereo)."),
     ("Macros 1 .. 8", r"^Macros$", "Acts."),
     ("Modulation matrix (64 slots)", r"^Mod Matrix", "Acts: source, destination, amount, power, bipolar, stereo lanes, bypass, aux source (inv, power, output), rise / fall / delay of a slot, the amount of a slot as destination, per slot curves, cycle check."),
-    ("FX chain: order, racks, slots (16 instances)", r"^FX / (Order|Racks|Slot \d+)$", "Acts: the order, the racks Main / Bus 1 / Bus 2 and the bands of the splitters. Missing: the pool of 16 instance slots (fxiNN)."),
-    ("FX: chorus, flanger, phaser", r"^FX / (Chorus|Flanger|Phaser)$", "Acts (written from public DSP knowledge, levels matched to the oracle)."),
-    ("FX: delay, reverb", r"^FX / (Delay|Reverb)$", "Acts: delay (all styles, sync, tape glide, filter, offset, hq), reverb (one feedback delay network for all types). Missing: reverb algorithms are variants of one network, er size, reverb feedback."),
-    ("FX: compressor, distortion, EQ", r"^FX / (Compressor|Distortion|EQ)$", "Acts. Missing: the Serum compressor law, the distortion filter keytrack, the Serum EQ law."),
-    ("FX: hyper dimension, utility, Bode, convolve, splitters", r"^FX / (Hyper Dimension|Utility|Bode|Convolve|Splitter .*)$", "Acts: Hyper/Dimension, Utility, Bode, the three splitters with their band racks. Missing: Convolve (needs the impulse store), hyper / bode retrigger."),
+    ("FX chain: order, racks, slots (16 instances)", r"^FX / (Order|Racks|Slot \d+)$",
+     "Acts: the order (a repeated choice is repaired), the racks Main / Bus 1 / Bus 2 and the bands of the splitters, the pool of 16 instance slots (fxiNN: type, on, rack, order, 24 modulatable values, 10 ms crossfade) and the latency compensation between the paths of the mixer."),
+    ("FX: chorus, flanger, phaser", r"^FX / (Chorus|Flanger|Phaser)$",
+     "Acts: chorus, flanger (the intended design of document 06), phaser (12 stages, depth 2, blend, feedback)."),
+    ("FX: delay, reverb", r"^FX / (Delay|Reverb)$",
+     "Acts: delay (all styles, sync, tape glide, filter, offset, hq), reverb (the six algorithms with room, ER size, diffusion A / B, feedback, width, force enable)."),
+    ("FX: compressor, distortion, EQ", r"^FX / (Compressor|Distortion|EQ)$",
+     "Acts: compressor (multiband, upward and downward stages, Limit mode with look-ahead, Serum mode, crossovers, limiter latency), distortion (all 14 types with the filter key track), EQ (Vital and Serum law, second peak band)."),
+    ("FX: hyper dimension, utility, Bode, convolve, splitters", r"^FX / (Hyper Dimension|Utility|Bode|Convolve|Splitter L/H|Splitter L/M/H|Splitter M/S)$",
+     "Acts: Hyper/Dimension, Utility, Bode, Convolve (impulse of the content store, both laws), the three splitters with their band racks. Missing: hyper / bode retrigger."),
 ]
 
 

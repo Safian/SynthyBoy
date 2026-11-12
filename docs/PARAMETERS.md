@@ -117,9 +117,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.unison.spread` | Osc 1 Unison Stereo Spread | 0 .. 100 % | 100 % | Osc 1 / Unison | mod | yes |
 | `osc1.unison.blend` | Osc 1 Unison Blend | 0 .. 100 % | 80 % | Osc 1 / Unison | mod | yes |
 | `osc1.unison.stack` | Osc 1 Unison Stack | 11 choices: 0 Unison, 1 Center Drop 12, 2 Center Drop 24, ... , 10 Odd Harmonics | Unison | Osc 1 / Unison |  |  |
-| `osc1.morph.type` | Osc 1 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 1 / Spectral Morph |  |  |
-| `osc1.morph.amount` | Osc 1 Morph Amount | 0 .. 100 % | 50 % | Osc 1 / Spectral Morph | mod |  |
-| `osc1.morph.spread` | Osc 1 Morph Spread | -100 .. 100 % | 0 % | Osc 1 / Spectral Morph | mod |  |
+| `osc1.morph.type` | Osc 1 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 1 / Spectral Morph |  | yes |
+| `osc1.morph.amount` | Osc 1 Morph Amount | 0 .. 100 % | 50 % | Osc 1 / Spectral Morph | mod | yes |
+| `osc1.morph.spread` | Osc 1 Morph Spread | -100 .. 100 % | 0 % | Osc 1 / Spectral Morph | mod | yes |
 | `osc1.warp.type` | Osc 1 Warp Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 1 / Warp |  | yes |
 | `osc1.warp.amount` | Osc 1 Warp Amount | 0 .. 100 % | 50 % | Osc 1 / Warp | mod | yes |
 | `osc1.warp.phase` | Osc 1 Warp Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp | mod | yes |
@@ -130,33 +130,33 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.map.vel_high` | Osc 1 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 1 / Mapping |  |  |
 | `osc1.map.key_fold` | Osc 1 Key Fold | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
 | `osc1.map.key_warp` | Osc 1 Key Warp | 0 Off, 1 On | Off | Osc 1 / Mapping |  |  |
-| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 1 |  |  |
-| `osc1.sample.start` | Osc 1 Sample Start | 0 .. 100 % | 0 % | Osc 1 / Sample |  |  |
-| `osc1.sample.end` | Osc 1 Sample End | 0 .. 100 % | 100 % | Osc 1 / Sample |  |  |
-| `osc1.sample.root` | Osc 1 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 1 / Sample |  |  |
-| `osc1.sample.keytrack` | Osc 1 Sample Pitch Tracking | 0 Off, 1 On | On | Osc 1 / Sample |  |  |
-| `osc1.sample.loop_mode` | Osc 1 Sample Loop Mode | 0 One-shot, 1 Forward loop, 2 Reverse loop, 3 Forward/reverse loop, 4 Tailed | One-shot | Osc 1 / Sample |  |  |
-| `osc1.sample.loop_start` | Osc 1 Sample Loop Start | 0 .. 100 % | 0 % | Osc 1 / Sample |  |  |
-| `osc1.sample.loop_end` | Osc 1 Sample Loop End | 0 .. 100 % | 100 % | Osc 1 / Sample |  |  |
-| `osc1.sample.loop_xfade` | Osc 1 Sample Loop Crossfade | 0 .. 1000 ms (skew 0.400000006) | 0 ms | Osc 1 / Sample |  |  |
-| `osc1.sample.loop_relative` | Osc 1 Sample Relative Loop | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
+| `osc1.type` | Osc 1 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 1 |  | yes |
+| `osc1.sample.start` | Osc 1 Sample Start | 0 .. 100 % | 0 % | Osc 1 / Sample |  | yes |
+| `osc1.sample.end` | Osc 1 Sample End | 0 .. 100 % | 100 % | Osc 1 / Sample |  | yes |
+| `osc1.sample.root` | Osc 1 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 1 / Sample |  | yes |
+| `osc1.sample.keytrack` | Osc 1 Sample Pitch Tracking | 0 Off, 1 On | On | Osc 1 / Sample |  | yes |
+| `osc1.sample.loop_mode` | Osc 1 Sample Loop Mode | 0 One-shot, 1 Forward loop, 2 Reverse loop, 3 Forward/reverse loop, 4 Tailed | One-shot | Osc 1 / Sample |  | yes |
+| `osc1.sample.loop_start` | Osc 1 Sample Loop Start | 0 .. 100 % | 0 % | Osc 1 / Sample |  | yes |
+| `osc1.sample.loop_end` | Osc 1 Sample Loop End | 0 .. 100 % | 100 % | Osc 1 / Sample |  | yes |
+| `osc1.sample.loop_xfade` | Osc 1 Sample Loop Crossfade | 0 .. 1000 ms (skew 0.400000006) | 0 ms | Osc 1 / Sample |  | yes |
+| `osc1.sample.loop_relative` | Osc 1 Sample Relative Loop | 0 Off, 1 On | Off | Osc 1 / Sample |  | yes |
 | `osc1.sample.loop_link` | Osc 1 Sample Link Loop Length | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.loop_exit` | Osc 1 Sample Exit Loop On Release | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.fade_edges` | Osc 1 Sample Fade Edges | 9 choices: 0 None, 1 1 ms, 2 2 ms, ... , 8 128 ms | None | Osc 1 / Sample |  |  |
-| `osc1.sample.normalize` | Osc 1 Sample Normalize | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.reverse` | Osc 1 Sample Reverse | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.slice_mode` | Osc 1 Sample Slice Mode | 0 Off, 1 Auto, 2 Manual | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.slice_threshold` | Osc 1 Sample Slice Threshold | 0 .. 100 % | 50 % | Osc 1 / Sample |  |  |
-| `osc1.sample.slice_play` | Osc 1 Sample Slice Playback | 0 Play slice to end, 1 Play single slice | Play slice to end | Osc 1 / Sample |  |  |
-| `osc1.sample.slice_root` | Osc 1 Sample Slice Root Note | 0 .. 127 (steps of 1) | 36 | Osc 1 / Sample |  |  |
-| `osc1.sample.scan` | Osc 1 Sample Scan | -100 .. 100 % | 100 % | Osc 1 / Sample | mod |  |
-| `osc1.sample.scan_range` | Osc 1 Sample Scan Range | 0 +-100 %, 1 +-200 %, 2 +-400 %, 3 +-800 % | +-100 % | Osc 1 / Sample |  |  |
-| `osc1.sample.scan_reverse` | Osc 1 Sample Scan Reverse | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.scan_lock_tempo` | Osc 1 Sample Scan Lock To Tempo | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.scan_to_bpm` | Osc 1 Sample Length To BPM | 0 Off, 1 On | Off | Osc 1 / Sample |  |  |
-| `osc1.sample.length_beats` | Osc 1 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 1 / Sample |  |  |
-| `osc1.sample.uni_start` | Osc 1 Sample Unison Start | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
-| `osc1.sample.uni_span` | Osc 1 Sample Unison Span | 0 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
+| `osc1.sample.loop_exit` | Osc 1 Sample Exit Loop On Release | 0 Off, 1 On | Off | Osc 1 / Sample |  | yes |
+| `osc1.sample.fade_edges` | Osc 1 Sample Fade Edges | 9 choices: 0 None, 1 1 ms, 2 2 ms, ... , 8 128 ms | None | Osc 1 / Sample |  | yes |
+| `osc1.sample.normalize` | Osc 1 Sample Normalize | 0 Off, 1 On | Off | Osc 1 / Sample |  | yes |
+| `osc1.sample.reverse` | Osc 1 Sample Reverse | 0 Off, 1 On | Off | Osc 1 / Sample |  | yes |
+| `osc1.sample.slice_mode` | Osc 1 Sample Slice Mode | 0 Off, 1 Auto, 2 Manual | Off | Osc 1 / Sample |  | yes |
+| `osc1.sample.slice_threshold` | Osc 1 Sample Slice Threshold | 0 .. 100 % | 50 % | Osc 1 / Sample |  | yes |
+| `osc1.sample.slice_play` | Osc 1 Sample Slice Playback | 0 Play slice to end, 1 Play single slice | Play slice to end | Osc 1 / Sample |  | yes |
+| `osc1.sample.slice_root` | Osc 1 Sample Slice Root Note | 0 .. 127 (steps of 1) | 36 | Osc 1 / Sample |  | yes |
+| `osc1.sample.scan` | Osc 1 Sample Scan | -100 .. 100 % | 100 % | Osc 1 / Sample | mod | yes |
+| `osc1.sample.scan_range` | Osc 1 Sample Scan Range | 0 +-100 %, 1 +-200 %, 2 +-400 %, 3 +-800 % | +-100 % | Osc 1 / Sample |  | yes |
+| `osc1.sample.scan_reverse` | Osc 1 Sample Scan Reverse | 0 Off, 1 On | Off | Osc 1 / Sample |  | yes |
+| `osc1.sample.scan_lock_tempo` | Osc 1 Sample Scan Lock To Tempo | 0 Off, 1 On | Off | Osc 1 / Sample |  | yes |
+| `osc1.sample.scan_to_bpm` | Osc 1 Sample Length To BPM | 0 Off, 1 On | Off | Osc 1 / Sample |  | yes |
+| `osc1.sample.length_beats` | Osc 1 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 1 / Sample |  | yes |
+| `osc1.sample.uni_start` | Osc 1 Sample Unison Start | 0 .. 100 % | 0 % | Osc 1 / Sample | mod | yes |
+| `osc1.sample.uni_span` | Osc 1 Sample Unison Span | 0 .. 100 % | 0 % | Osc 1 / Sample | mod | yes |
 | `osc1.warp2.type` | Osc 1 Warp 2 Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 1 / Warp 2 |  | yes |
 | `osc1.warp2.amount` | Osc 1 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 1 / Warp 2 | mod | yes |
 | `osc1.warp2.phase` | Osc 1 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 1 / Warp 2 | mod | yes |
@@ -164,72 +164,72 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.filter_blend` | Osc 1 Filter Blend | 0 .. 100 % | 0 % | Osc 1 | mod | yes |
 | `osc1.bus1_send` | Osc 1 Bus 1 Send | 0 .. 100 % | 0 % | Osc 1 | mod | yes |
 | `osc1.bus2_send` | Osc 1 Bus 2 Send | 0 .. 100 % | 0 % | Osc 1 | mod | yes |
-| `osc1.remap.on` | Osc 1 Remap On | 0 Off, 1 On | Off | Osc 1 / Remap |  |  |
-| `osc1.remap.slot` | Osc 1 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 1 / Remap |  |  |
-| `osc1.remap.rise` | Osc 1 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
-| `osc1.remap.fall` | Osc 1 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  |  |
+| `osc1.remap.on` | Osc 1 Remap On | 0 Off, 1 On | Off | Osc 1 / Remap |  | yes |
+| `osc1.remap.slot` | Osc 1 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 1 / Remap |  | yes |
+| `osc1.remap.rise` | Osc 1 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  | yes |
+| `osc1.remap.fall` | Osc 1 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 1 / Remap |  | yes |
 | `osc1.unison.blend_shape` | Osc 1 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 1 | mod |  |
 | `osc1.unison.stack_repeat` | Osc 1 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 1 |  |  |
 | `osc1.env1` | Osc 1 Env 1 | 0 Off, 1 On | On | Osc 1 |  | yes |
-| `osc1.sample.slice` | Osc 1 Sample Slice Select | -100 .. 100 % | 0 % | Osc 1 / Sample | mod |  |
-| `osc1.gran.window_amount` | Osc 1 Grain Window Amount | 0 .. 100 % | 50 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.window_skew` | Osc 1 Grain Window Skew | -100 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.window_shape` | Osc 1 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 1 / Granular |  |  |
-| `osc1.gran.density_mode` | Osc 1 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 1 / Granular |  |  |
-| `osc1.gran.density` | Osc 1 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 1 / Granular | mod |  |
-| `osc1.gran.density_sync` | Osc 1 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 1 / Granular |  |  |
-| `osc1.gran.density_grains` | Osc 1 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 1 / Granular |  |  |
-| `osc1.gran.length_mode` | Osc 1 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 1 / Granular |  |  |
-| `osc1.gran.length` | Osc 1 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 1 / Granular | mod |  |
-| `osc1.gran.length_sync` | Osc 1 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 1 / Granular |  |  |
-| `osc1.gran.length_percent` | Osc 1 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.jump_start` | Osc 1 Grain Jump Start | 0 Off, 1 On | On | Osc 1 / Granular |  |  |
-| `osc1.gran.max_grains` | Osc 1 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 1 / Granular |  |  |
-| `osc1.gran.loop_grains` | Osc 1 Grain Loop Grains | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
-| `osc1.gran.manual` | Osc 1 Grain Manual Position | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
-| `osc1.gran.position` | Osc 1 Grain Position | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.scan_keytrack` | Osc 1 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
-| `osc1.gran.rand_offset` | Osc 1 Grain Random Offset | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_dir` | Osc 1 Grain Random Direction | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.reverse_grains` | Osc 1 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 1 / Granular |  |  |
-| `osc1.gran.rand_pitch` | Osc 1 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_length` | Osc 1 Grain Random Length | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_pan` | Osc 1 Grain Random Pan | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_level` | Osc 1 Grain Random Level | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_window` | Osc 1 Grain Random Window | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_skew` | Osc 1 Grain Random Skew | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_warp` | Osc 1 Grain Random Warp | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.rand_warp2` | Osc 1 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 1 / Granular | mod |  |
-| `osc1.gran.spawn_pattern` | Osc 1 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 1 / Granular |  |  |
+| `osc1.sample.slice` | Osc 1 Sample Slice Select | -100 .. 100 % | 0 % | Osc 1 / Sample | mod | yes |
+| `osc1.gran.window_amount` | Osc 1 Grain Window Amount | 0 .. 100 % | 50 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.window_skew` | Osc 1 Grain Window Skew | -100 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.window_shape` | Osc 1 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 1 / Granular |  | yes |
+| `osc1.gran.density_mode` | Osc 1 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 1 / Granular |  | yes |
+| `osc1.gran.density` | Osc 1 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 1 / Granular | mod | yes |
+| `osc1.gran.density_sync` | Osc 1 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 1 / Granular |  | yes |
+| `osc1.gran.density_grains` | Osc 1 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 1 / Granular |  | yes |
+| `osc1.gran.length_mode` | Osc 1 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 1 / Granular |  | yes |
+| `osc1.gran.length` | Osc 1 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 1 / Granular | mod | yes |
+| `osc1.gran.length_sync` | Osc 1 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 1 / Granular |  | yes |
+| `osc1.gran.length_percent` | Osc 1 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.jump_start` | Osc 1 Grain Jump Start | 0 Off, 1 On | On | Osc 1 / Granular |  | yes |
+| `osc1.gran.max_grains` | Osc 1 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 1 / Granular |  | yes |
+| `osc1.gran.loop_grains` | Osc 1 Grain Loop Grains | 0 Off, 1 On | Off | Osc 1 / Granular |  | yes |
+| `osc1.gran.manual` | Osc 1 Grain Manual Position | 0 Off, 1 On | Off | Osc 1 / Granular |  | yes |
+| `osc1.gran.position` | Osc 1 Grain Position | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.scan_keytrack` | Osc 1 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 1 / Granular |  | yes |
+| `osc1.gran.rand_offset` | Osc 1 Grain Random Offset | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_dir` | Osc 1 Grain Random Direction | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.reverse_grains` | Osc 1 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 1 / Granular |  | yes |
+| `osc1.gran.rand_pitch` | Osc 1 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_length` | Osc 1 Grain Random Length | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_pan` | Osc 1 Grain Random Pan | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_level` | Osc 1 Grain Random Level | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_window` | Osc 1 Grain Random Window | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_skew` | Osc 1 Grain Random Skew | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_warp` | Osc 1 Grain Random Warp | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.rand_warp2` | Osc 1 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
+| `osc1.gran.spawn_pattern` | Osc 1 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 1 / Granular |  | yes |
 | `osc1.gran.y_axis` | Osc 1 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 1 / Granular |  |  |
 | `osc1.gran.xy_y` | Osc 1 Grain Y Position | 0 .. 100 % | 50 % | Osc 1 / Granular | mod |  |
-| `osc1.spec.freq_lo` | Osc 1 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 1 / Spectral | mod |  |
-| `osc1.spec.freq_hi` | Osc 1 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 1 / Spectral | mod |  |
-| `osc1.spec.lohi_smooth` | Osc 1 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 1 / Spectral |  |  |
-| `osc1.spec.lohi_post_warp` | Osc 1 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
-| `osc1.spec.cut` | Osc 1 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 1 / Spectral | mod |  |
-| `osc1.spec.mix` | Osc 1 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 1 / Spectral | mod |  |
-| `osc1.spec.freq_shift` | Osc 1 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 1 / Spectral | mod |  |
-| `osc1.spec.manual` | Osc 1 Spectral Manual Position | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
-| `osc1.spec.position` | Osc 1 Spectral Position | 0 .. 100 % | 0 % | Osc 1 / Spectral | mod |  |
-| `osc1.spec.scan_keytrack` | Osc 1 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
-| `osc1.spec.phase_lock` | Osc 1 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
-| `osc1.spec.transients` | Osc 1 Spectral Transients | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
+| `osc1.spec.freq_lo` | Osc 1 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 1 / Spectral | mod | yes |
+| `osc1.spec.freq_hi` | Osc 1 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 1 / Spectral | mod | yes |
+| `osc1.spec.lohi_smooth` | Osc 1 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 1 / Spectral |  | yes |
+| `osc1.spec.lohi_post_warp` | Osc 1 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
+| `osc1.spec.cut` | Osc 1 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 1 / Spectral | mod | yes |
+| `osc1.spec.mix` | Osc 1 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 1 / Spectral | mod | yes |
+| `osc1.spec.freq_shift` | Osc 1 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 1 / Spectral | mod | yes |
+| `osc1.spec.manual` | Osc 1 Spectral Manual Position | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
+| `osc1.spec.position` | Osc 1 Spectral Position | 0 .. 100 % | 0 % | Osc 1 / Spectral | mod | yes |
+| `osc1.spec.scan_keytrack` | Osc 1 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
+| `osc1.spec.phase_lock` | Osc 1 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
+| `osc1.spec.transients` | Osc 1 Spectral Transients | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
 | `osc1.spec.y_axis` | Osc 1 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 1 / Spectral |  |  |
 | `osc1.spec.xy_y` | Osc 1 Spectral Y Position | 0 .. 100 % | 50 % | Osc 1 / Spectral | mod |  |
-| `osc1.multi.override` | Osc 1 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  |  |
-| `osc1.multi.delay` | Osc 1 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 1 / Multisample |  |  |
-| `osc1.multi.attack` | Osc 1 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 1 / Multisample |  |  |
-| `osc1.multi.hold` | Osc 1 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 1 / Multisample |  |  |
-| `osc1.multi.decay` | Osc 1 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 1 / Multisample |  |  |
-| `osc1.multi.sustain` | Osc 1 Multisample Sustain | 0 .. 100 % | 100 % | Osc 1 / Multisample |  |  |
-| `osc1.multi.release` | Osc 1 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 1 / Multisample |  |  |
-| `osc1.multi.vel_track` | Osc 1 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 1 / Multisample |  |  |
-| `osc1.multi.vel_override` | Osc 1 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  |  |
-| `osc1.multi.timbre` | Osc 1 Multisample Timbre | -100 .. 100 % | 0 % | Osc 1 / Multisample | mod |  |
-| `osc1.spec.flt_use` | Osc 1 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 1 / Spectral |  |  |
-| `osc1.spec.flt_table` | Osc 1 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 1 / Spectral |  |  |
-| `osc1.spec.flt_frame` | Osc 1 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 1 / Spectral | mod |  |
+| `osc1.multi.override` | Osc 1 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  | yes |
+| `osc1.multi.delay` | Osc 1 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 1 / Multisample |  | yes |
+| `osc1.multi.attack` | Osc 1 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 1 / Multisample |  | yes |
+| `osc1.multi.hold` | Osc 1 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 1 / Multisample |  | yes |
+| `osc1.multi.decay` | Osc 1 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 1 / Multisample |  | yes |
+| `osc1.multi.sustain` | Osc 1 Multisample Sustain | 0 .. 100 % | 100 % | Osc 1 / Multisample |  | yes |
+| `osc1.multi.release` | Osc 1 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 1 / Multisample |  | yes |
+| `osc1.multi.vel_track` | Osc 1 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 1 / Multisample |  | yes |
+| `osc1.multi.vel_override` | Osc 1 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  | yes |
+| `osc1.multi.timbre` | Osc 1 Multisample Timbre | -100 .. 100 % | 0 % | Osc 1 / Multisample | mod | yes |
+| `osc1.spec.flt_use` | Osc 1 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
+| `osc1.spec.flt_table` | Osc 1 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 1 / Spectral |  | yes |
+| `osc1.spec.flt_frame` | Osc 1 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 1 / Spectral | mod | yes |
 | `osc1.unison.law` | Osc 1 Unison Law | 0 Vital, 1 Serum | Vital | Osc 1 / Unison |  |  |
 
 ### Osc 2
@@ -253,9 +253,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.unison.spread` | Osc 2 Unison Stereo Spread | 0 .. 100 % | 100 % | Osc 2 / Unison | mod | yes |
 | `osc2.unison.blend` | Osc 2 Unison Blend | 0 .. 100 % | 80 % | Osc 2 / Unison | mod | yes |
 | `osc2.unison.stack` | Osc 2 Unison Stack | 11 choices: 0 Unison, 1 Center Drop 12, 2 Center Drop 24, ... , 10 Odd Harmonics | Unison | Osc 2 / Unison |  |  |
-| `osc2.morph.type` | Osc 2 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 2 / Spectral Morph |  |  |
-| `osc2.morph.amount` | Osc 2 Morph Amount | 0 .. 100 % | 50 % | Osc 2 / Spectral Morph | mod |  |
-| `osc2.morph.spread` | Osc 2 Morph Spread | -100 .. 100 % | 0 % | Osc 2 / Spectral Morph | mod |  |
+| `osc2.morph.type` | Osc 2 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 2 / Spectral Morph |  | yes |
+| `osc2.morph.amount` | Osc 2 Morph Amount | 0 .. 100 % | 50 % | Osc 2 / Spectral Morph | mod | yes |
+| `osc2.morph.spread` | Osc 2 Morph Spread | -100 .. 100 % | 0 % | Osc 2 / Spectral Morph | mod | yes |
 | `osc2.warp.type` | Osc 2 Warp Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 2 / Warp |  | yes |
 | `osc2.warp.amount` | Osc 2 Warp Amount | 0 .. 100 % | 50 % | Osc 2 / Warp | mod | yes |
 | `osc2.warp.phase` | Osc 2 Warp Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp | mod | yes |
@@ -266,33 +266,33 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.map.vel_high` | Osc 2 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 2 / Mapping |  |  |
 | `osc2.map.key_fold` | Osc 2 Key Fold | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
 | `osc2.map.key_warp` | Osc 2 Key Warp | 0 Off, 1 On | Off | Osc 2 / Mapping |  |  |
-| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 2 |  |  |
-| `osc2.sample.start` | Osc 2 Sample Start | 0 .. 100 % | 0 % | Osc 2 / Sample |  |  |
-| `osc2.sample.end` | Osc 2 Sample End | 0 .. 100 % | 100 % | Osc 2 / Sample |  |  |
-| `osc2.sample.root` | Osc 2 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 2 / Sample |  |  |
-| `osc2.sample.keytrack` | Osc 2 Sample Pitch Tracking | 0 Off, 1 On | On | Osc 2 / Sample |  |  |
-| `osc2.sample.loop_mode` | Osc 2 Sample Loop Mode | 0 One-shot, 1 Forward loop, 2 Reverse loop, 3 Forward/reverse loop, 4 Tailed | One-shot | Osc 2 / Sample |  |  |
-| `osc2.sample.loop_start` | Osc 2 Sample Loop Start | 0 .. 100 % | 0 % | Osc 2 / Sample |  |  |
-| `osc2.sample.loop_end` | Osc 2 Sample Loop End | 0 .. 100 % | 100 % | Osc 2 / Sample |  |  |
-| `osc2.sample.loop_xfade` | Osc 2 Sample Loop Crossfade | 0 .. 1000 ms (skew 0.400000006) | 0 ms | Osc 2 / Sample |  |  |
-| `osc2.sample.loop_relative` | Osc 2 Sample Relative Loop | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
+| `osc2.type` | Osc 2 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 2 |  | yes |
+| `osc2.sample.start` | Osc 2 Sample Start | 0 .. 100 % | 0 % | Osc 2 / Sample |  | yes |
+| `osc2.sample.end` | Osc 2 Sample End | 0 .. 100 % | 100 % | Osc 2 / Sample |  | yes |
+| `osc2.sample.root` | Osc 2 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 2 / Sample |  | yes |
+| `osc2.sample.keytrack` | Osc 2 Sample Pitch Tracking | 0 Off, 1 On | On | Osc 2 / Sample |  | yes |
+| `osc2.sample.loop_mode` | Osc 2 Sample Loop Mode | 0 One-shot, 1 Forward loop, 2 Reverse loop, 3 Forward/reverse loop, 4 Tailed | One-shot | Osc 2 / Sample |  | yes |
+| `osc2.sample.loop_start` | Osc 2 Sample Loop Start | 0 .. 100 % | 0 % | Osc 2 / Sample |  | yes |
+| `osc2.sample.loop_end` | Osc 2 Sample Loop End | 0 .. 100 % | 100 % | Osc 2 / Sample |  | yes |
+| `osc2.sample.loop_xfade` | Osc 2 Sample Loop Crossfade | 0 .. 1000 ms (skew 0.400000006) | 0 ms | Osc 2 / Sample |  | yes |
+| `osc2.sample.loop_relative` | Osc 2 Sample Relative Loop | 0 Off, 1 On | Off | Osc 2 / Sample |  | yes |
 | `osc2.sample.loop_link` | Osc 2 Sample Link Loop Length | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.loop_exit` | Osc 2 Sample Exit Loop On Release | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.fade_edges` | Osc 2 Sample Fade Edges | 9 choices: 0 None, 1 1 ms, 2 2 ms, ... , 8 128 ms | None | Osc 2 / Sample |  |  |
-| `osc2.sample.normalize` | Osc 2 Sample Normalize | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.reverse` | Osc 2 Sample Reverse | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.slice_mode` | Osc 2 Sample Slice Mode | 0 Off, 1 Auto, 2 Manual | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.slice_threshold` | Osc 2 Sample Slice Threshold | 0 .. 100 % | 50 % | Osc 2 / Sample |  |  |
-| `osc2.sample.slice_play` | Osc 2 Sample Slice Playback | 0 Play slice to end, 1 Play single slice | Play slice to end | Osc 2 / Sample |  |  |
-| `osc2.sample.slice_root` | Osc 2 Sample Slice Root Note | 0 .. 127 (steps of 1) | 36 | Osc 2 / Sample |  |  |
-| `osc2.sample.scan` | Osc 2 Sample Scan | -100 .. 100 % | 100 % | Osc 2 / Sample | mod |  |
-| `osc2.sample.scan_range` | Osc 2 Sample Scan Range | 0 +-100 %, 1 +-200 %, 2 +-400 %, 3 +-800 % | +-100 % | Osc 2 / Sample |  |  |
-| `osc2.sample.scan_reverse` | Osc 2 Sample Scan Reverse | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.scan_lock_tempo` | Osc 2 Sample Scan Lock To Tempo | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.scan_to_bpm` | Osc 2 Sample Length To BPM | 0 Off, 1 On | Off | Osc 2 / Sample |  |  |
-| `osc2.sample.length_beats` | Osc 2 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 2 / Sample |  |  |
-| `osc2.sample.uni_start` | Osc 2 Sample Unison Start | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
-| `osc2.sample.uni_span` | Osc 2 Sample Unison Span | 0 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
+| `osc2.sample.loop_exit` | Osc 2 Sample Exit Loop On Release | 0 Off, 1 On | Off | Osc 2 / Sample |  | yes |
+| `osc2.sample.fade_edges` | Osc 2 Sample Fade Edges | 9 choices: 0 None, 1 1 ms, 2 2 ms, ... , 8 128 ms | None | Osc 2 / Sample |  | yes |
+| `osc2.sample.normalize` | Osc 2 Sample Normalize | 0 Off, 1 On | Off | Osc 2 / Sample |  | yes |
+| `osc2.sample.reverse` | Osc 2 Sample Reverse | 0 Off, 1 On | Off | Osc 2 / Sample |  | yes |
+| `osc2.sample.slice_mode` | Osc 2 Sample Slice Mode | 0 Off, 1 Auto, 2 Manual | Off | Osc 2 / Sample |  | yes |
+| `osc2.sample.slice_threshold` | Osc 2 Sample Slice Threshold | 0 .. 100 % | 50 % | Osc 2 / Sample |  | yes |
+| `osc2.sample.slice_play` | Osc 2 Sample Slice Playback | 0 Play slice to end, 1 Play single slice | Play slice to end | Osc 2 / Sample |  | yes |
+| `osc2.sample.slice_root` | Osc 2 Sample Slice Root Note | 0 .. 127 (steps of 1) | 36 | Osc 2 / Sample |  | yes |
+| `osc2.sample.scan` | Osc 2 Sample Scan | -100 .. 100 % | 100 % | Osc 2 / Sample | mod | yes |
+| `osc2.sample.scan_range` | Osc 2 Sample Scan Range | 0 +-100 %, 1 +-200 %, 2 +-400 %, 3 +-800 % | +-100 % | Osc 2 / Sample |  | yes |
+| `osc2.sample.scan_reverse` | Osc 2 Sample Scan Reverse | 0 Off, 1 On | Off | Osc 2 / Sample |  | yes |
+| `osc2.sample.scan_lock_tempo` | Osc 2 Sample Scan Lock To Tempo | 0 Off, 1 On | Off | Osc 2 / Sample |  | yes |
+| `osc2.sample.scan_to_bpm` | Osc 2 Sample Length To BPM | 0 Off, 1 On | Off | Osc 2 / Sample |  | yes |
+| `osc2.sample.length_beats` | Osc 2 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 2 / Sample |  | yes |
+| `osc2.sample.uni_start` | Osc 2 Sample Unison Start | 0 .. 100 % | 0 % | Osc 2 / Sample | mod | yes |
+| `osc2.sample.uni_span` | Osc 2 Sample Unison Span | 0 .. 100 % | 0 % | Osc 2 / Sample | mod | yes |
 | `osc2.warp2.type` | Osc 2 Warp 2 Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 2 / Warp 2 |  | yes |
 | `osc2.warp2.amount` | Osc 2 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 2 / Warp 2 | mod | yes |
 | `osc2.warp2.phase` | Osc 2 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 2 / Warp 2 | mod | yes |
@@ -300,72 +300,72 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.filter_blend` | Osc 2 Filter Blend | 0 .. 100 % | 0 % | Osc 2 | mod | yes |
 | `osc2.bus1_send` | Osc 2 Bus 1 Send | 0 .. 100 % | 0 % | Osc 2 | mod | yes |
 | `osc2.bus2_send` | Osc 2 Bus 2 Send | 0 .. 100 % | 0 % | Osc 2 | mod | yes |
-| `osc2.remap.on` | Osc 2 Remap On | 0 Off, 1 On | Off | Osc 2 / Remap |  |  |
-| `osc2.remap.slot` | Osc 2 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 2 / Remap |  |  |
-| `osc2.remap.rise` | Osc 2 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
-| `osc2.remap.fall` | Osc 2 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  |  |
+| `osc2.remap.on` | Osc 2 Remap On | 0 Off, 1 On | Off | Osc 2 / Remap |  | yes |
+| `osc2.remap.slot` | Osc 2 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 2 / Remap |  | yes |
+| `osc2.remap.rise` | Osc 2 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  | yes |
+| `osc2.remap.fall` | Osc 2 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 2 / Remap |  | yes |
 | `osc2.unison.blend_shape` | Osc 2 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 2 | mod |  |
 | `osc2.unison.stack_repeat` | Osc 2 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 2 |  |  |
 | `osc2.env1` | Osc 2 Env 1 | 0 Off, 1 On | On | Osc 2 |  | yes |
-| `osc2.sample.slice` | Osc 2 Sample Slice Select | -100 .. 100 % | 0 % | Osc 2 / Sample | mod |  |
-| `osc2.gran.window_amount` | Osc 2 Grain Window Amount | 0 .. 100 % | 50 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.window_skew` | Osc 2 Grain Window Skew | -100 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.window_shape` | Osc 2 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 2 / Granular |  |  |
-| `osc2.gran.density_mode` | Osc 2 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 2 / Granular |  |  |
-| `osc2.gran.density` | Osc 2 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 2 / Granular | mod |  |
-| `osc2.gran.density_sync` | Osc 2 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 2 / Granular |  |  |
-| `osc2.gran.density_grains` | Osc 2 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 2 / Granular |  |  |
-| `osc2.gran.length_mode` | Osc 2 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 2 / Granular |  |  |
-| `osc2.gran.length` | Osc 2 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 2 / Granular | mod |  |
-| `osc2.gran.length_sync` | Osc 2 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 2 / Granular |  |  |
-| `osc2.gran.length_percent` | Osc 2 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.jump_start` | Osc 2 Grain Jump Start | 0 Off, 1 On | On | Osc 2 / Granular |  |  |
-| `osc2.gran.max_grains` | Osc 2 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 2 / Granular |  |  |
-| `osc2.gran.loop_grains` | Osc 2 Grain Loop Grains | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
-| `osc2.gran.manual` | Osc 2 Grain Manual Position | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
-| `osc2.gran.position` | Osc 2 Grain Position | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.scan_keytrack` | Osc 2 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
-| `osc2.gran.rand_offset` | Osc 2 Grain Random Offset | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_dir` | Osc 2 Grain Random Direction | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.reverse_grains` | Osc 2 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 2 / Granular |  |  |
-| `osc2.gran.rand_pitch` | Osc 2 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_length` | Osc 2 Grain Random Length | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_pan` | Osc 2 Grain Random Pan | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_level` | Osc 2 Grain Random Level | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_window` | Osc 2 Grain Random Window | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_skew` | Osc 2 Grain Random Skew | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_warp` | Osc 2 Grain Random Warp | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.rand_warp2` | Osc 2 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 2 / Granular | mod |  |
-| `osc2.gran.spawn_pattern` | Osc 2 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 2 / Granular |  |  |
+| `osc2.sample.slice` | Osc 2 Sample Slice Select | -100 .. 100 % | 0 % | Osc 2 / Sample | mod | yes |
+| `osc2.gran.window_amount` | Osc 2 Grain Window Amount | 0 .. 100 % | 50 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.window_skew` | Osc 2 Grain Window Skew | -100 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.window_shape` | Osc 2 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 2 / Granular |  | yes |
+| `osc2.gran.density_mode` | Osc 2 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 2 / Granular |  | yes |
+| `osc2.gran.density` | Osc 2 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 2 / Granular | mod | yes |
+| `osc2.gran.density_sync` | Osc 2 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 2 / Granular |  | yes |
+| `osc2.gran.density_grains` | Osc 2 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 2 / Granular |  | yes |
+| `osc2.gran.length_mode` | Osc 2 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 2 / Granular |  | yes |
+| `osc2.gran.length` | Osc 2 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 2 / Granular | mod | yes |
+| `osc2.gran.length_sync` | Osc 2 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 2 / Granular |  | yes |
+| `osc2.gran.length_percent` | Osc 2 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.jump_start` | Osc 2 Grain Jump Start | 0 Off, 1 On | On | Osc 2 / Granular |  | yes |
+| `osc2.gran.max_grains` | Osc 2 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 2 / Granular |  | yes |
+| `osc2.gran.loop_grains` | Osc 2 Grain Loop Grains | 0 Off, 1 On | Off | Osc 2 / Granular |  | yes |
+| `osc2.gran.manual` | Osc 2 Grain Manual Position | 0 Off, 1 On | Off | Osc 2 / Granular |  | yes |
+| `osc2.gran.position` | Osc 2 Grain Position | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.scan_keytrack` | Osc 2 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 2 / Granular |  | yes |
+| `osc2.gran.rand_offset` | Osc 2 Grain Random Offset | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_dir` | Osc 2 Grain Random Direction | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.reverse_grains` | Osc 2 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 2 / Granular |  | yes |
+| `osc2.gran.rand_pitch` | Osc 2 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_length` | Osc 2 Grain Random Length | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_pan` | Osc 2 Grain Random Pan | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_level` | Osc 2 Grain Random Level | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_window` | Osc 2 Grain Random Window | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_skew` | Osc 2 Grain Random Skew | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_warp` | Osc 2 Grain Random Warp | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.rand_warp2` | Osc 2 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
+| `osc2.gran.spawn_pattern` | Osc 2 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 2 / Granular |  | yes |
 | `osc2.gran.y_axis` | Osc 2 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 2 / Granular |  |  |
 | `osc2.gran.xy_y` | Osc 2 Grain Y Position | 0 .. 100 % | 50 % | Osc 2 / Granular | mod |  |
-| `osc2.spec.freq_lo` | Osc 2 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 2 / Spectral | mod |  |
-| `osc2.spec.freq_hi` | Osc 2 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 2 / Spectral | mod |  |
-| `osc2.spec.lohi_smooth` | Osc 2 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 2 / Spectral |  |  |
-| `osc2.spec.lohi_post_warp` | Osc 2 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
-| `osc2.spec.cut` | Osc 2 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 2 / Spectral | mod |  |
-| `osc2.spec.mix` | Osc 2 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 2 / Spectral | mod |  |
-| `osc2.spec.freq_shift` | Osc 2 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 2 / Spectral | mod |  |
-| `osc2.spec.manual` | Osc 2 Spectral Manual Position | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
-| `osc2.spec.position` | Osc 2 Spectral Position | 0 .. 100 % | 0 % | Osc 2 / Spectral | mod |  |
-| `osc2.spec.scan_keytrack` | Osc 2 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
-| `osc2.spec.phase_lock` | Osc 2 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
-| `osc2.spec.transients` | Osc 2 Spectral Transients | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
+| `osc2.spec.freq_lo` | Osc 2 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 2 / Spectral | mod | yes |
+| `osc2.spec.freq_hi` | Osc 2 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 2 / Spectral | mod | yes |
+| `osc2.spec.lohi_smooth` | Osc 2 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 2 / Spectral |  | yes |
+| `osc2.spec.lohi_post_warp` | Osc 2 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
+| `osc2.spec.cut` | Osc 2 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 2 / Spectral | mod | yes |
+| `osc2.spec.mix` | Osc 2 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 2 / Spectral | mod | yes |
+| `osc2.spec.freq_shift` | Osc 2 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 2 / Spectral | mod | yes |
+| `osc2.spec.manual` | Osc 2 Spectral Manual Position | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
+| `osc2.spec.position` | Osc 2 Spectral Position | 0 .. 100 % | 0 % | Osc 2 / Spectral | mod | yes |
+| `osc2.spec.scan_keytrack` | Osc 2 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
+| `osc2.spec.phase_lock` | Osc 2 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
+| `osc2.spec.transients` | Osc 2 Spectral Transients | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
 | `osc2.spec.y_axis` | Osc 2 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 2 / Spectral |  |  |
 | `osc2.spec.xy_y` | Osc 2 Spectral Y Position | 0 .. 100 % | 50 % | Osc 2 / Spectral | mod |  |
-| `osc2.multi.override` | Osc 2 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  |  |
-| `osc2.multi.delay` | Osc 2 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 2 / Multisample |  |  |
-| `osc2.multi.attack` | Osc 2 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 2 / Multisample |  |  |
-| `osc2.multi.hold` | Osc 2 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 2 / Multisample |  |  |
-| `osc2.multi.decay` | Osc 2 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 2 / Multisample |  |  |
-| `osc2.multi.sustain` | Osc 2 Multisample Sustain | 0 .. 100 % | 100 % | Osc 2 / Multisample |  |  |
-| `osc2.multi.release` | Osc 2 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 2 / Multisample |  |  |
-| `osc2.multi.vel_track` | Osc 2 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 2 / Multisample |  |  |
-| `osc2.multi.vel_override` | Osc 2 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  |  |
-| `osc2.multi.timbre` | Osc 2 Multisample Timbre | -100 .. 100 % | 0 % | Osc 2 / Multisample | mod |  |
-| `osc2.spec.flt_use` | Osc 2 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 2 / Spectral |  |  |
-| `osc2.spec.flt_table` | Osc 2 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 2 / Spectral |  |  |
-| `osc2.spec.flt_frame` | Osc 2 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 2 / Spectral | mod |  |
+| `osc2.multi.override` | Osc 2 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  | yes |
+| `osc2.multi.delay` | Osc 2 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 2 / Multisample |  | yes |
+| `osc2.multi.attack` | Osc 2 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 2 / Multisample |  | yes |
+| `osc2.multi.hold` | Osc 2 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 2 / Multisample |  | yes |
+| `osc2.multi.decay` | Osc 2 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 2 / Multisample |  | yes |
+| `osc2.multi.sustain` | Osc 2 Multisample Sustain | 0 .. 100 % | 100 % | Osc 2 / Multisample |  | yes |
+| `osc2.multi.release` | Osc 2 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 2 / Multisample |  | yes |
+| `osc2.multi.vel_track` | Osc 2 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 2 / Multisample |  | yes |
+| `osc2.multi.vel_override` | Osc 2 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  | yes |
+| `osc2.multi.timbre` | Osc 2 Multisample Timbre | -100 .. 100 % | 0 % | Osc 2 / Multisample | mod | yes |
+| `osc2.spec.flt_use` | Osc 2 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
+| `osc2.spec.flt_table` | Osc 2 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 2 / Spectral |  | yes |
+| `osc2.spec.flt_frame` | Osc 2 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 2 / Spectral | mod | yes |
 | `osc2.unison.law` | Osc 2 Unison Law | 0 Vital, 1 Serum | Vital | Osc 2 / Unison |  |  |
 
 ### Osc 3
@@ -389,9 +389,9 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.unison.spread` | Osc 3 Unison Stereo Spread | 0 .. 100 % | 100 % | Osc 3 / Unison | mod | yes |
 | `osc3.unison.blend` | Osc 3 Unison Blend | 0 .. 100 % | 80 % | Osc 3 / Unison | mod | yes |
 | `osc3.unison.stack` | Osc 3 Unison Stack | 11 choices: 0 Unison, 1 Center Drop 12, 2 Center Drop 24, ... , 10 Odd Harmonics | Unison | Osc 3 / Unison |  |  |
-| `osc3.morph.type` | Osc 3 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 3 / Spectral Morph |  |  |
-| `osc3.morph.amount` | Osc 3 Morph Amount | 0 .. 100 % | 50 % | Osc 3 / Spectral Morph | mod |  |
-| `osc3.morph.spread` | Osc 3 Morph Spread | -100 .. 100 % | 0 % | Osc 3 / Spectral Morph | mod |  |
+| `osc3.morph.type` | Osc 3 Morph Type | 12 choices: 0 None, 1 Vocode, 2 Formant Scale, ... , 11 Time Skew | None | Osc 3 / Spectral Morph |  | yes |
+| `osc3.morph.amount` | Osc 3 Morph Amount | 0 .. 100 % | 50 % | Osc 3 / Spectral Morph | mod | yes |
+| `osc3.morph.spread` | Osc 3 Morph Spread | -100 .. 100 % | 0 % | Osc 3 / Spectral Morph | mod | yes |
 | `osc3.warp.type` | Osc 3 Warp Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 3 / Warp |  | yes |
 | `osc3.warp.amount` | Osc 3 Warp Amount | 0 .. 100 % | 50 % | Osc 3 / Warp | mod | yes |
 | `osc3.warp.phase` | Osc 3 Warp Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp | mod | yes |
@@ -402,33 +402,33 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.map.vel_high` | Osc 3 Velocity High | 1 .. 127 (steps of 1) | 127 | Osc 3 / Mapping |  |  |
 | `osc3.map.key_fold` | Osc 3 Key Fold | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
 | `osc3.map.key_warp` | Osc 3 Key Warp | 0 Off, 1 On | Off | Osc 3 / Mapping |  |  |
-| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 3 |  |  |
-| `osc3.sample.start` | Osc 3 Sample Start | 0 .. 100 % | 0 % | Osc 3 / Sample |  |  |
-| `osc3.sample.end` | Osc 3 Sample End | 0 .. 100 % | 100 % | Osc 3 / Sample |  |  |
-| `osc3.sample.root` | Osc 3 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 3 / Sample |  |  |
-| `osc3.sample.keytrack` | Osc 3 Sample Pitch Tracking | 0 Off, 1 On | On | Osc 3 / Sample |  |  |
-| `osc3.sample.loop_mode` | Osc 3 Sample Loop Mode | 0 One-shot, 1 Forward loop, 2 Reverse loop, 3 Forward/reverse loop, 4 Tailed | One-shot | Osc 3 / Sample |  |  |
-| `osc3.sample.loop_start` | Osc 3 Sample Loop Start | 0 .. 100 % | 0 % | Osc 3 / Sample |  |  |
-| `osc3.sample.loop_end` | Osc 3 Sample Loop End | 0 .. 100 % | 100 % | Osc 3 / Sample |  |  |
-| `osc3.sample.loop_xfade` | Osc 3 Sample Loop Crossfade | 0 .. 1000 ms (skew 0.400000006) | 0 ms | Osc 3 / Sample |  |  |
-| `osc3.sample.loop_relative` | Osc 3 Sample Relative Loop | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
+| `osc3.type` | Osc 3 Type | 0 Wavetable, 1 Sample, 2 Granular, 3 Spectral, 4 Multisample | Wavetable | Osc 3 |  | yes |
+| `osc3.sample.start` | Osc 3 Sample Start | 0 .. 100 % | 0 % | Osc 3 / Sample |  | yes |
+| `osc3.sample.end` | Osc 3 Sample End | 0 .. 100 % | 100 % | Osc 3 / Sample |  | yes |
+| `osc3.sample.root` | Osc 3 Sample Root Note | 0 .. 127 (steps of 1) | 60 | Osc 3 / Sample |  | yes |
+| `osc3.sample.keytrack` | Osc 3 Sample Pitch Tracking | 0 Off, 1 On | On | Osc 3 / Sample |  | yes |
+| `osc3.sample.loop_mode` | Osc 3 Sample Loop Mode | 0 One-shot, 1 Forward loop, 2 Reverse loop, 3 Forward/reverse loop, 4 Tailed | One-shot | Osc 3 / Sample |  | yes |
+| `osc3.sample.loop_start` | Osc 3 Sample Loop Start | 0 .. 100 % | 0 % | Osc 3 / Sample |  | yes |
+| `osc3.sample.loop_end` | Osc 3 Sample Loop End | 0 .. 100 % | 100 % | Osc 3 / Sample |  | yes |
+| `osc3.sample.loop_xfade` | Osc 3 Sample Loop Crossfade | 0 .. 1000 ms (skew 0.400000006) | 0 ms | Osc 3 / Sample |  | yes |
+| `osc3.sample.loop_relative` | Osc 3 Sample Relative Loop | 0 Off, 1 On | Off | Osc 3 / Sample |  | yes |
 | `osc3.sample.loop_link` | Osc 3 Sample Link Loop Length | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.loop_exit` | Osc 3 Sample Exit Loop On Release | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.fade_edges` | Osc 3 Sample Fade Edges | 9 choices: 0 None, 1 1 ms, 2 2 ms, ... , 8 128 ms | None | Osc 3 / Sample |  |  |
-| `osc3.sample.normalize` | Osc 3 Sample Normalize | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.reverse` | Osc 3 Sample Reverse | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.slice_mode` | Osc 3 Sample Slice Mode | 0 Off, 1 Auto, 2 Manual | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.slice_threshold` | Osc 3 Sample Slice Threshold | 0 .. 100 % | 50 % | Osc 3 / Sample |  |  |
-| `osc3.sample.slice_play` | Osc 3 Sample Slice Playback | 0 Play slice to end, 1 Play single slice | Play slice to end | Osc 3 / Sample |  |  |
-| `osc3.sample.slice_root` | Osc 3 Sample Slice Root Note | 0 .. 127 (steps of 1) | 36 | Osc 3 / Sample |  |  |
-| `osc3.sample.scan` | Osc 3 Sample Scan | -100 .. 100 % | 100 % | Osc 3 / Sample | mod |  |
-| `osc3.sample.scan_range` | Osc 3 Sample Scan Range | 0 +-100 %, 1 +-200 %, 2 +-400 %, 3 +-800 % | +-100 % | Osc 3 / Sample |  |  |
-| `osc3.sample.scan_reverse` | Osc 3 Sample Scan Reverse | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.scan_lock_tempo` | Osc 3 Sample Scan Lock To Tempo | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.scan_to_bpm` | Osc 3 Sample Length To BPM | 0 Off, 1 On | Off | Osc 3 / Sample |  |  |
-| `osc3.sample.length_beats` | Osc 3 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 3 / Sample |  |  |
-| `osc3.sample.uni_start` | Osc 3 Sample Unison Start | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
-| `osc3.sample.uni_span` | Osc 3 Sample Unison Span | 0 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
+| `osc3.sample.loop_exit` | Osc 3 Sample Exit Loop On Release | 0 Off, 1 On | Off | Osc 3 / Sample |  | yes |
+| `osc3.sample.fade_edges` | Osc 3 Sample Fade Edges | 9 choices: 0 None, 1 1 ms, 2 2 ms, ... , 8 128 ms | None | Osc 3 / Sample |  | yes |
+| `osc3.sample.normalize` | Osc 3 Sample Normalize | 0 Off, 1 On | Off | Osc 3 / Sample |  | yes |
+| `osc3.sample.reverse` | Osc 3 Sample Reverse | 0 Off, 1 On | Off | Osc 3 / Sample |  | yes |
+| `osc3.sample.slice_mode` | Osc 3 Sample Slice Mode | 0 Off, 1 Auto, 2 Manual | Off | Osc 3 / Sample |  | yes |
+| `osc3.sample.slice_threshold` | Osc 3 Sample Slice Threshold | 0 .. 100 % | 50 % | Osc 3 / Sample |  | yes |
+| `osc3.sample.slice_play` | Osc 3 Sample Slice Playback | 0 Play slice to end, 1 Play single slice | Play slice to end | Osc 3 / Sample |  | yes |
+| `osc3.sample.slice_root` | Osc 3 Sample Slice Root Note | 0 .. 127 (steps of 1) | 36 | Osc 3 / Sample |  | yes |
+| `osc3.sample.scan` | Osc 3 Sample Scan | -100 .. 100 % | 100 % | Osc 3 / Sample | mod | yes |
+| `osc3.sample.scan_range` | Osc 3 Sample Scan Range | 0 +-100 %, 1 +-200 %, 2 +-400 %, 3 +-800 % | +-100 % | Osc 3 / Sample |  | yes |
+| `osc3.sample.scan_reverse` | Osc 3 Sample Scan Reverse | 0 Off, 1 On | Off | Osc 3 / Sample |  | yes |
+| `osc3.sample.scan_lock_tempo` | Osc 3 Sample Scan Lock To Tempo | 0 Off, 1 On | Off | Osc 3 / Sample |  | yes |
+| `osc3.sample.scan_to_bpm` | Osc 3 Sample Length To BPM | 0 Off, 1 On | Off | Osc 3 / Sample |  | yes |
+| `osc3.sample.length_beats` | Osc 3 Sample Length (Beats) | 0.25 .. 64 beats (skew 0.400000006) | 4 beats | Osc 3 / Sample |  | yes |
+| `osc3.sample.uni_start` | Osc 3 Sample Unison Start | 0 .. 100 % | 0 % | Osc 3 / Sample | mod | yes |
+| `osc3.sample.uni_span` | Osc 3 Sample Unison Span | 0 .. 100 % | 0 % | Osc 3 / Sample | mod | yes |
 | `osc3.warp2.type` | Osc 3 Warp 2 Type | 99 choices: 0 None, 1 Sync, 2 Formant, ... , 98 Vocode from Noise | None | Osc 3 / Warp 2 |  | yes |
 | `osc3.warp2.amount` | Osc 3 Warp 2 Amount | 0 .. 100 % | 50 % | Osc 3 / Warp 2 | mod | yes |
 | `osc3.warp2.phase` | Osc 3 Warp 2 Phase | 0 .. 360 deg | 180 deg | Osc 3 / Warp 2 | mod | yes |
@@ -436,72 +436,72 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.filter_blend` | Osc 3 Filter Blend | 0 .. 100 % | 0 % | Osc 3 | mod | yes |
 | `osc3.bus1_send` | Osc 3 Bus 1 Send | 0 .. 100 % | 0 % | Osc 3 | mod | yes |
 | `osc3.bus2_send` | Osc 3 Bus 2 Send | 0 .. 100 % | 0 % | Osc 3 | mod | yes |
-| `osc3.remap.on` | Osc 3 Remap On | 0 Off, 1 On | Off | Osc 3 / Remap |  |  |
-| `osc3.remap.slot` | Osc 3 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 3 / Remap |  |  |
-| `osc3.remap.rise` | Osc 3 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
-| `osc3.remap.fall` | Osc 3 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  |  |
+| `osc3.remap.on` | Osc 3 Remap On | 0 Off, 1 On | Off | Osc 3 / Remap |  | yes |
+| `osc3.remap.slot` | Osc 3 Remap Slot | 0 Curve 1, 1 Curve 2, 2 Curve 3, 3 Curve 4 | Curve 1 | Osc 3 / Remap |  | yes |
+| `osc3.remap.rise` | Osc 3 Remap Rise | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  | yes |
+| `osc3.remap.fall` | Osc 3 Remap Fall | 0 .. 2000 ms (skew 0.300000012) | 0 ms | Osc 3 / Remap |  | yes |
 | `osc3.unison.blend_shape` | Osc 3 Unison Blend Shape | -100 .. 100 % | 0 % | Osc 3 | mod |  |
 | `osc3.unison.stack_repeat` | Osc 3 Unison Stack Repeat | 0 1x, 1 2x, 2 3x | 1x | Osc 3 |  |  |
 | `osc3.env1` | Osc 3 Env 1 | 0 Off, 1 On | On | Osc 3 |  | yes |
-| `osc3.sample.slice` | Osc 3 Sample Slice Select | -100 .. 100 % | 0 % | Osc 3 / Sample | mod |  |
-| `osc3.gran.window_amount` | Osc 3 Grain Window Amount | 0 .. 100 % | 50 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.window_skew` | Osc 3 Grain Window Skew | -100 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.window_shape` | Osc 3 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 3 / Granular |  |  |
-| `osc3.gran.density_mode` | Osc 3 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 3 / Granular |  |  |
-| `osc3.gran.density` | Osc 3 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 3 / Granular | mod |  |
-| `osc3.gran.density_sync` | Osc 3 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 3 / Granular |  |  |
-| `osc3.gran.density_grains` | Osc 3 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 3 / Granular |  |  |
-| `osc3.gran.length_mode` | Osc 3 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 3 / Granular |  |  |
-| `osc3.gran.length` | Osc 3 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 3 / Granular | mod |  |
-| `osc3.gran.length_sync` | Osc 3 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 3 / Granular |  |  |
-| `osc3.gran.length_percent` | Osc 3 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.jump_start` | Osc 3 Grain Jump Start | 0 Off, 1 On | On | Osc 3 / Granular |  |  |
-| `osc3.gran.max_grains` | Osc 3 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 3 / Granular |  |  |
-| `osc3.gran.loop_grains` | Osc 3 Grain Loop Grains | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
-| `osc3.gran.manual` | Osc 3 Grain Manual Position | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
-| `osc3.gran.position` | Osc 3 Grain Position | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.scan_keytrack` | Osc 3 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
-| `osc3.gran.rand_offset` | Osc 3 Grain Random Offset | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_dir` | Osc 3 Grain Random Direction | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.reverse_grains` | Osc 3 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 3 / Granular |  |  |
-| `osc3.gran.rand_pitch` | Osc 3 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_length` | Osc 3 Grain Random Length | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_pan` | Osc 3 Grain Random Pan | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_level` | Osc 3 Grain Random Level | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_window` | Osc 3 Grain Random Window | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_skew` | Osc 3 Grain Random Skew | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_warp` | Osc 3 Grain Random Warp | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.rand_warp2` | Osc 3 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 3 / Granular | mod |  |
-| `osc3.gran.spawn_pattern` | Osc 3 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 3 / Granular |  |  |
+| `osc3.sample.slice` | Osc 3 Sample Slice Select | -100 .. 100 % | 0 % | Osc 3 / Sample | mod | yes |
+| `osc3.gran.window_amount` | Osc 3 Grain Window Amount | 0 .. 100 % | 50 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.window_skew` | Osc 3 Grain Window Skew | -100 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.window_shape` | Osc 3 Grain Window Shape | 10 choices: 0 Hann, 1 Welch, 2 Gaussian, ... , 9 Exp Dec Rev | Hann | Osc 3 / Granular |  | yes |
+| `osc3.gran.density_mode` | Osc 3 Grain Density Mode | 0 Free, 1 BPM Sync, 2 Grains | Free | Osc 3 / Granular |  | yes |
+| `osc3.gran.density` | Osc 3 Grain Density | 0.100000001 .. 1000 Hz (skew 0.300000012) | 20 Hz | Osc 3 / Granular | mod | yes |
+| `osc3.gran.density_sync` | Osc 3 Grain Density Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 3 / Granular |  | yes |
+| `osc3.gran.density_grains` | Osc 3 Grain Density Grains | 1 .. 64 (steps of 1) | 8 | Osc 3 / Granular |  | yes |
+| `osc3.gran.length_mode` | Osc 3 Grain Length Mode | 0 Free, 1 BPM Sync, 2 Percent | Free | Osc 3 / Granular |  | yes |
+| `osc3.gran.length` | Osc 3 Grain Length | 1 .. 4000 ms (skew 0.300000012) | 100 ms | Osc 3 / Granular | mod | yes |
+| `osc3.gran.length_sync` | Osc 3 Grain Length Division | 24 choices: 0 1/1, 1 1/1T, 2 1/1., ... , 23 1/128. | 1/16 | Osc 3 / Granular |  | yes |
+| `osc3.gran.length_percent` | Osc 3 Grain Length Percent | 5 .. 1000 % (skew 0.5) | 200 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.jump_start` | Osc 3 Grain Jump Start | 0 Off, 1 On | On | Osc 3 / Granular |  | yes |
+| `osc3.gran.max_grains` | Osc 3 Grain Max Grains | 1 .. 128 (steps of 1) | 64 | Osc 3 / Granular |  | yes |
+| `osc3.gran.loop_grains` | Osc 3 Grain Loop Grains | 0 Off, 1 On | Off | Osc 3 / Granular |  | yes |
+| `osc3.gran.manual` | Osc 3 Grain Manual Position | 0 Off, 1 On | Off | Osc 3 / Granular |  | yes |
+| `osc3.gran.position` | Osc 3 Grain Position | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.scan_keytrack` | Osc 3 Grain Scan Key Track | 0 Off, 1 On | Off | Osc 3 / Granular |  | yes |
+| `osc3.gran.rand_offset` | Osc 3 Grain Random Offset | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_dir` | Osc 3 Grain Random Direction | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.reverse_grains` | Osc 3 Grain Reverse Grains | 0 Off, 1 On | Off | Osc 3 / Granular |  | yes |
+| `osc3.gran.rand_pitch` | Osc 3 Grain Random Pitch | 0 .. 24 st (skew 0.400000006) | 0 st | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_length` | Osc 3 Grain Random Length | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_pan` | Osc 3 Grain Random Pan | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_level` | Osc 3 Grain Random Level | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_window` | Osc 3 Grain Random Window | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_skew` | Osc 3 Grain Random Skew | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_warp` | Osc 3 Grain Random Warp | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.rand_warp2` | Osc 3 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
+| `osc3.gran.spawn_pattern` | Osc 3 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 3 / Granular |  | yes |
 | `osc3.gran.y_axis` | Osc 3 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 3 / Granular |  |  |
 | `osc3.gran.xy_y` | Osc 3 Grain Y Position | 0 .. 100 % | 50 % | Osc 3 / Granular | mod |  |
-| `osc3.spec.freq_lo` | Osc 3 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 3 / Spectral | mod |  |
-| `osc3.spec.freq_hi` | Osc 3 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 3 / Spectral | mod |  |
-| `osc3.spec.lohi_smooth` | Osc 3 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 3 / Spectral |  |  |
-| `osc3.spec.lohi_post_warp` | Osc 3 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
-| `osc3.spec.cut` | Osc 3 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 3 / Spectral | mod |  |
-| `osc3.spec.mix` | Osc 3 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 3 / Spectral | mod |  |
-| `osc3.spec.freq_shift` | Osc 3 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 3 / Spectral | mod |  |
-| `osc3.spec.manual` | Osc 3 Spectral Manual Position | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
-| `osc3.spec.position` | Osc 3 Spectral Position | 0 .. 100 % | 0 % | Osc 3 / Spectral | mod |  |
-| `osc3.spec.scan_keytrack` | Osc 3 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
-| `osc3.spec.phase_lock` | Osc 3 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
-| `osc3.spec.transients` | Osc 3 Spectral Transients | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
+| `osc3.spec.freq_lo` | Osc 3 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 3 / Spectral | mod | yes |
+| `osc3.spec.freq_hi` | Osc 3 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 3 / Spectral | mod | yes |
+| `osc3.spec.lohi_smooth` | Osc 3 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 3 / Spectral |  | yes |
+| `osc3.spec.lohi_post_warp` | Osc 3 Spectral Band After Warp | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
+| `osc3.spec.cut` | Osc 3 Spectral Filter Cut | -100 .. 100 % | 0 % | Osc 3 / Spectral | mod | yes |
+| `osc3.spec.mix` | Osc 3 Spectral Filter Mix | 0 .. 100 % | 100 % | Osc 3 / Spectral | mod | yes |
+| `osc3.spec.freq_shift` | Osc 3 Spectral Frequency Shift | -2000 .. 2000 Hz | 0 Hz | Osc 3 / Spectral | mod | yes |
+| `osc3.spec.manual` | Osc 3 Spectral Manual Position | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
+| `osc3.spec.position` | Osc 3 Spectral Position | 0 .. 100 % | 0 % | Osc 3 / Spectral | mod | yes |
+| `osc3.spec.scan_keytrack` | Osc 3 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
+| `osc3.spec.phase_lock` | Osc 3 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
+| `osc3.spec.transients` | Osc 3 Spectral Transients | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
 | `osc3.spec.y_axis` | Osc 3 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 3 / Spectral |  |  |
 | `osc3.spec.xy_y` | Osc 3 Spectral Y Position | 0 .. 100 % | 50 % | Osc 3 / Spectral | mod |  |
-| `osc3.multi.override` | Osc 3 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  |  |
-| `osc3.multi.delay` | Osc 3 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 3 / Multisample |  |  |
-| `osc3.multi.attack` | Osc 3 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 3 / Multisample |  |  |
-| `osc3.multi.hold` | Osc 3 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 3 / Multisample |  |  |
-| `osc3.multi.decay` | Osc 3 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 3 / Multisample |  |  |
-| `osc3.multi.sustain` | Osc 3 Multisample Sustain | 0 .. 100 % | 100 % | Osc 3 / Multisample |  |  |
-| `osc3.multi.release` | Osc 3 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 3 / Multisample |  |  |
-| `osc3.multi.vel_track` | Osc 3 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 3 / Multisample |  |  |
-| `osc3.multi.vel_override` | Osc 3 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  |  |
-| `osc3.multi.timbre` | Osc 3 Multisample Timbre | -100 .. 100 % | 0 % | Osc 3 / Multisample | mod |  |
-| `osc3.spec.flt_use` | Osc 3 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 3 / Spectral |  |  |
-| `osc3.spec.flt_table` | Osc 3 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 3 / Spectral |  |  |
-| `osc3.spec.flt_frame` | Osc 3 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 3 / Spectral | mod |  |
+| `osc3.multi.override` | Osc 3 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  | yes |
+| `osc3.multi.delay` | Osc 3 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 3 / Multisample |  | yes |
+| `osc3.multi.attack` | Osc 3 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 3 / Multisample |  | yes |
+| `osc3.multi.hold` | Osc 3 Multisample Hold | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 3 / Multisample |  | yes |
+| `osc3.multi.decay` | Osc 3 Multisample Decay | 0 .. 10000 ms (skew 0.300000012) | 500 ms | Osc 3 / Multisample |  | yes |
+| `osc3.multi.sustain` | Osc 3 Multisample Sustain | 0 .. 100 % | 100 % | Osc 3 / Multisample |  | yes |
+| `osc3.multi.release` | Osc 3 Multisample Release | 0 .. 10000 ms (skew 0.300000012) | 100 ms | Osc 3 / Multisample |  | yes |
+| `osc3.multi.vel_track` | Osc 3 Multisample Velocity Tracking | 0 .. 100 % | 100 % | Osc 3 / Multisample |  | yes |
+| `osc3.multi.vel_override` | Osc 3 Multisample Velocity Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  | yes |
+| `osc3.multi.timbre` | Osc 3 Multisample Timbre | -100 .. 100 % | 0 % | Osc 3 / Multisample | mod | yes |
+| `osc3.spec.flt_use` | Osc 3 Spectral Filter From Wavetable | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
+| `osc3.spec.flt_table` | Osc 3 Spectral Filter Wavetable | 15 choices: 0 Sine, 1 Saw, 2 Square, ... , 14 Saw Down | Saw | Osc 3 / Spectral |  | yes |
+| `osc3.spec.flt_frame` | Osc 3 Spectral Filter Wavetable Frame | 0 .. 100 % | 0 % | Osc 3 / Spectral | mod | yes |
 | `osc3.unison.law` | Osc 3 Unison Law | 0 Vital, 1 Serum | Vital | Osc 3 / Unison |  |  |
 
 ### Noise
@@ -515,18 +515,18 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `noise.filter_blend` | Noise Filter Blend | 0 .. 100 % | 0 % | Noise | mod | yes |
 | `noise.bus1_send` | Noise Bus 1 Send | 0 .. 100 % | 0 % | Noise | mod | yes |
 | `noise.bus2_send` | Noise Bus 2 Send | 0 .. 100 % | 0 % | Noise | mod | yes |
-| `noise.sample` | Noise Sample | 9 choices: 0 White Noise, 1 Pink Noise, 2 Brown Noise, ... , 8 Atmosphere | White Noise | Noise |  |  |
-| `noise.pitch` | Noise Pitch | -48 .. 48 st (steps of 1) | 0 st | Noise | mod |  |
-| `noise.fine` | Noise Fine | -100 .. 100 ct | 0 ct | Noise | mod |  |
-| `noise.phase` | Noise Phase | 0 .. 100 % | 0 % | Noise | mod |  |
-| `noise.random_phase` | Noise Random Phase | 0 Off, 1 On | Off | Noise |  |  |
-| `noise.keytrack` | Noise Keytrack | 0 Off, 1 On | Off | Noise |  |  |
-| `noise.loop` | Noise Loop | 0 Off, 1 On | On | Noise |  |  |
+| `noise.sample` | Noise Sample | 9 choices: 0 White Noise, 1 Pink Noise, 2 Brown Noise, ... , 8 Atmosphere | White Noise | Noise |  | yes |
+| `noise.pitch` | Noise Pitch | -48 .. 48 st (steps of 1) | 0 st | Noise | mod | yes |
+| `noise.fine` | Noise Fine | -100 .. 100 ct | 0 ct | Noise | mod | yes |
+| `noise.phase` | Noise Phase | 0 .. 100 % | 0 % | Noise | mod | yes |
+| `noise.random_phase` | Noise Random Phase | 0 Off, 1 On | Off | Noise |  | yes |
+| `noise.keytrack` | Noise Keytrack | 0 Off, 1 On | Off | Noise |  | yes |
+| `noise.loop` | Noise Loop | 0 Off, 1 On | On | Noise |  | yes |
 | `noise.env1` | Noise Env 1 | 0 Off, 1 On | On | Noise |  | yes |
-| `noise.stereo` | Noise Stereo | 0 .. 100 % | 0 % | Noise | mod |  |
-| `noise.filter` | Noise Filter | -100 .. 100 % | 0 % | Noise | mod |  |
-| `noise.type` | Noise Type | 0 Noise, 1 Sample | Noise | Noise |  |  |
-| `noise.bounce` | Noise Bounce | 0 Off, 1 On | Off | Noise |  |  |
+| `noise.stereo` | Noise Stereo | 0 .. 100 % | 0 % | Noise | mod | yes |
+| `noise.filter` | Noise Filter | -100 .. 100 % | 0 % | Noise | mod | yes |
+| `noise.type` | Noise Type | 0 Noise, 1 Sample | Noise | Noise |  | yes |
+| `noise.bounce` | Noise Bounce | 0 Off, 1 On | Off | Noise |  | yes |
 
 ### Filter 1
 
@@ -1107,8 +1107,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `reverb.predelay` | Reverb Pre-delay | 0 .. 300 ms | 0 ms | FX / Reverb | mod | yes |
 | `reverb.pre_low_cut` | Reverb Pre Low Cut | 20 .. 12000 Hz (skew 0.300000012) | 20 Hz | FX / Reverb | mod | yes |
 | `reverb.pre_high_cut` | Reverb Pre High Cut | 20 .. 12000 Hz (skew 0.300000012) | 8000 Hz | FX / Reverb | mod | yes |
-| `reverb.low_shelf_cutoff` | Reverb Low Shelf Cutoff | 20 .. 12000 Hz (skew 0.300000012) | 100 Hz | FX / Reverb | mod |  |
-| `reverb.low_shelf_gain` | Reverb Low Shelf Gain | -6 .. 0 dB | 0 dB | FX / Reverb | mod |  |
+| `reverb.low_shelf_cutoff` | Reverb Low Shelf Cutoff | 20 .. 12000 Hz (skew 0.300000012) | 100 Hz | FX / Reverb | mod | yes |
+| `reverb.low_shelf_gain` | Reverb Low Shelf Gain | -6 .. 0 dB | 0 dB | FX / Reverb | mod | yes |
 | `reverb.high_shelf_cutoff` | Reverb High Shelf Cutoff | 20 .. 12000 Hz (skew 0.300000012) | 1400 Hz | FX / Reverb | mod | yes |
 | `reverb.high_shelf_gain` | Reverb High Shelf Gain | -6 .. 0 dB | -1 dB | FX / Reverb | mod | yes |
 | `reverb.chorus_amount` | Reverb Chorus Amount | 0 .. 100 % | 20 % | FX / Reverb | mod | yes |
@@ -1132,11 +1132,11 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `hyperdim.rack` | Hyper Dimension Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
 | `utility.rack` | Utility Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
 | `bode.rack` | Bode Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
-| `convolve.rack` | Convolve Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  |  |
+| `convolve.rack` | Convolve Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
 | `splitter_lh.rack` | Splitter L/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
 | `splitter_lmh.rack` | Splitter L/M/H Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
 | `splitter_ms.rack` | Splitter M/S Rack | 10 choices: 0 Main, 1 Bus 1, 2 Bus 2, ... , 9 Splitter M/S side | Main | FX / Racks |  | yes |
-| `reverb.force_enable` | Reverb Force Enable | 0 Off, 1 On | Off | FX / Reverb |  |  |
+| `reverb.force_enable` | Reverb Force Enable | 0 Off, 1 On | Off | FX / Reverb |  | yes |
 | `hyperdim.on` | Hyper Dimension On | 0 Off, 1 On | Off | FX / Hyper Dimension |  | yes |
 | `hyperdim.rate` | Hyper Rate | 0.0500000007 .. 10 Hz (skew 0.300000012) | 0.5 Hz | FX / Hyper Dimension | mod | yes |
 | `hyperdim.unison` | Hyper Unison | 0 .. 7 voices (steps of 1) | 4 voices | FX / Hyper Dimension |  | yes |
@@ -1172,20 +1172,20 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `bode.retrig` | Bode Retrigger | 0 Off, 1 On | Off | FX / Bode |  |  |
 | `bode.mix` | Bode Mix | 0 .. 100 % | 50 % | FX / Bode | mod | yes |
 | `bode.level` | Bode Level | -24 .. 12 dB | 0 dB | FX / Bode | mod | yes |
-| `convolve.on` | Convolve On | 0 Off, 1 On | Off | FX / Convolve |  |  |
-| `convolve.ir` | Convolve Impulse | 0 None, 1 Preset IR | None | FX / Convolve |  |  |
-| `convolve.size` | Convolve Size | 0 .. 100 % | 50 % | FX / Convolve | mod |  |
-| `convolve.tone` | Convolve Tone | -100 .. 100 % | 0 % | FX / Convolve | mod |  |
-| `convolve.phi_min` | Convolve Minimum Phase | 0 Off, 1 On | Off | FX / Convolve |  |  |
-| `convolve.predelay` | Convolve Pre-delay | 0 .. 500 ms (skew 0.400000006) | 0 ms | FX / Convolve | mod |  |
-| `convolve.sync` | Convolve Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet | Free (Hz) | FX / Convolve |  |  |
-| `convolve.division` | Convolve Division | 9 choices: 0 4 bars, 1 2 bars, 2 1 bar, ... , 8 1/64 note | 1/8 note | FX / Convolve |  |  |
-| `convolve.attack` | Convolve Attack | 0 .. 2000 ms (skew 0.400000006) | 0 ms | FX / Convolve | mod |  |
-| `convolve.decay` | Convolve Decay | 0 .. 100 % | 100 % | FX / Convolve | mod |  |
-| `convolve.damp` | Convolve Damping | 0 .. 100 % | 0 % | FX / Convolve | mod |  |
-| `convolve.ir_gain` | Convolve IR Gain | -40 .. 24 dB | 0 dB | FX / Convolve | mod |  |
-| `convolve.mix` | Convolve Mix | 0 .. 100 % | 30 % | FX / Convolve | mod |  |
-| `convolve.level` | Convolve Level | -24 .. 12 dB | 0 dB | FX / Convolve | mod |  |
+| `convolve.on` | Convolve On | 0 Off, 1 On | Off | FX / Convolve |  | yes |
+| `convolve.ir` | Convolve Impulse | 0 None, 1 Preset IR | None | FX / Convolve |  | yes |
+| `convolve.size` | Convolve Size | 0 .. 100 % | 50 % | FX / Convolve | mod | yes |
+| `convolve.tone` | Convolve Tone | -100 .. 100 % | 0 % | FX / Convolve | mod | yes |
+| `convolve.phi_min` | Convolve Minimum Phase | 0 Off, 1 On | Off | FX / Convolve |  | yes |
+| `convolve.predelay` | Convolve Pre-delay | 0 .. 500 ms (skew 0.400000006) | 0 ms | FX / Convolve | mod | yes |
+| `convolve.sync` | Convolve Sync | 0 Free (Hz), 1 Tempo, 2 Tempo dotted, 3 Tempo triplet | Free (Hz) | FX / Convolve |  | yes |
+| `convolve.division` | Convolve Division | 9 choices: 0 4 bars, 1 2 bars, 2 1 bar, ... , 8 1/64 note | 1/8 note | FX / Convolve |  | yes |
+| `convolve.attack` | Convolve Attack | 0 .. 2000 ms (skew 0.400000006) | 0 ms | FX / Convolve | mod | yes |
+| `convolve.decay` | Convolve Decay | 0 .. 100 % | 100 % | FX / Convolve | mod | yes |
+| `convolve.damp` | Convolve Damping | 0 .. 100 % | 0 % | FX / Convolve | mod | yes |
+| `convolve.ir_gain` | Convolve IR Gain | -40 .. 24 dB | 0 dB | FX / Convolve | mod | yes |
+| `convolve.mix` | Convolve Mix | 0 .. 100 % | 30 % | FX / Convolve | mod | yes |
+| `convolve.level` | Convolve Level | -24 .. 12 dB | 0 dB | FX / Convolve | mod | yes |
 | `splitter_lh.on` | Splitter L/H On | 0 Off, 1 On | Off | FX / Splitter L/H |  | yes |
 | `splitter_lh.freq` | Splitter L/H Split Frequency | 20 .. 20000 Hz (skew 0.300000012) | 500 Hz | FX / Splitter L/H | mod | yes |
 | `splitter_lh.low_bypass` | Splitter L/H Low Bypass | 0 Off, 1 On | Off | FX / Splitter L/H |  | yes |
@@ -1210,476 +1210,476 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `flanger.level` | Flanger Level | -24 .. 12 dB | 0 dB | FX / Flanger | mod | yes |
 | `phaser.level` | Phaser Level | -24 .. 12 dB | 0 dB | FX / Phaser | mod | yes |
 | `reverb.level` | Reverb Level | -24 .. 12 dB | 0 dB | FX / Reverb | mod | yes |
-| `compressor.limit` | Compressor Mode | 0 Compress, 1 Limit, 2 Serum | Compress | FX / Compressor |  |  |
-| `compressor.limit_latency_comp` | Compressor Limiter Latency Comp | 0 Off, 1 On | On | FX / Compressor |  |  |
+| `compressor.limit` | Compressor Mode | 0 Compress, 1 Limit, 2 Serum | Compress | FX / Compressor |  | yes |
+| `compressor.limit_latency_comp` | Compressor Limiter Latency Comp | 0 Off, 1 On | On | FX / Compressor |  | yes |
 | `compressor.crossover_low` | Compressor Low Crossover | 20 .. 1000 Hz (skew 0.400000006) | 120 Hz | FX / Compressor | mod | yes |
 | `compressor.crossover_high` | Compressor High Crossover | 200 .. 16000 Hz (skew 0.400000006) | 2500 Hz | FX / Compressor | mod | yes |
 | `delay.hq` | Delay High Quality | 0 Off, 1 On | Off | FX / Delay |  | yes |
 | `delay.offset` | Delay Offset | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod | yes |
-| `distortion.filter_keytrack` | Distortion Filter Key Track | -100 .. 100 % | 0 % | FX / Distortion | mod |  |
-| `phaser.depth2` | Phaser Depth 2 | -48 .. 48 st | 0 st | FX / Phaser | mod |  |
-| `reverb.type` | Reverb Type | 0 Vital, 1 Plate, 2 Hall, 3 Vintage, 4 Nitrous, 5 Basin | Vital | FX / Reverb |  |  |
-| `reverb.room` | Reverb Room | 0 Space, 1 Marble, 2 Rectangle, 3 Hexagon, 4 Box | Rectangle | FX / Reverb |  |  |
-| `reverb.width` | Reverb Width | 0 .. 200 % | 100 % | FX / Reverb | mod |  |
-| `reverb.er_size` | Reverb ER Size | 0 .. 100 % | 50 % | FX / Reverb |  |  |
-| `reverb.diff_a` | Reverb Diffusion A | 0 .. 100 % | 70 % | FX / Reverb | mod |  |
-| `reverb.diff_b` | Reverb Diffusion B | 0 .. 100 % | 60 % | FX / Reverb | mod |  |
-| `fxi01.type` | FX Slot 01 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 01 |  |  |
-| `fxi01.on` | FX Slot 01 On | 0 Off, 1 On | Off | FX / Slot 01 |  |  |
-| `fxi01.rack` | FX Slot 01 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 01 |  |  |
-| `fxi01.order` | FX Slot 01 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 01 |  |  |
-| `fxi01.p01` | FX Slot 01 P01 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p02` | FX Slot 01 P02 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p03` | FX Slot 01 P03 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p04` | FX Slot 01 P04 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p05` | FX Slot 01 P05 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p06` | FX Slot 01 P06 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p07` | FX Slot 01 P07 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p08` | FX Slot 01 P08 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p09` | FX Slot 01 P09 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p10` | FX Slot 01 P10 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p11` | FX Slot 01 P11 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p12` | FX Slot 01 P12 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p13` | FX Slot 01 P13 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p14` | FX Slot 01 P14 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p15` | FX Slot 01 P15 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p16` | FX Slot 01 P16 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p17` | FX Slot 01 P17 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p18` | FX Slot 01 P18 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p19` | FX Slot 01 P19 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p20` | FX Slot 01 P20 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p21` | FX Slot 01 P21 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p22` | FX Slot 01 P22 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p23` | FX Slot 01 P23 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi01.p24` | FX Slot 01 P24 | 0 .. 1 | 0 | FX / Slot 01 | mod |  |
-| `fxi02.type` | FX Slot 02 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 02 |  |  |
-| `fxi02.on` | FX Slot 02 On | 0 Off, 1 On | Off | FX / Slot 02 |  |  |
-| `fxi02.rack` | FX Slot 02 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 02 |  |  |
-| `fxi02.order` | FX Slot 02 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 02 |  |  |
-| `fxi02.p01` | FX Slot 02 P01 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p02` | FX Slot 02 P02 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p03` | FX Slot 02 P03 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p04` | FX Slot 02 P04 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p05` | FX Slot 02 P05 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p06` | FX Slot 02 P06 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p07` | FX Slot 02 P07 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p08` | FX Slot 02 P08 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p09` | FX Slot 02 P09 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p10` | FX Slot 02 P10 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p11` | FX Slot 02 P11 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p12` | FX Slot 02 P12 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p13` | FX Slot 02 P13 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p14` | FX Slot 02 P14 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p15` | FX Slot 02 P15 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p16` | FX Slot 02 P16 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p17` | FX Slot 02 P17 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p18` | FX Slot 02 P18 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p19` | FX Slot 02 P19 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p20` | FX Slot 02 P20 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p21` | FX Slot 02 P21 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p22` | FX Slot 02 P22 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p23` | FX Slot 02 P23 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi02.p24` | FX Slot 02 P24 | 0 .. 1 | 0 | FX / Slot 02 | mod |  |
-| `fxi03.type` | FX Slot 03 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 03 |  |  |
-| `fxi03.on` | FX Slot 03 On | 0 Off, 1 On | Off | FX / Slot 03 |  |  |
-| `fxi03.rack` | FX Slot 03 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 03 |  |  |
-| `fxi03.order` | FX Slot 03 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 03 |  |  |
-| `fxi03.p01` | FX Slot 03 P01 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p02` | FX Slot 03 P02 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p03` | FX Slot 03 P03 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p04` | FX Slot 03 P04 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p05` | FX Slot 03 P05 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p06` | FX Slot 03 P06 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p07` | FX Slot 03 P07 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p08` | FX Slot 03 P08 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p09` | FX Slot 03 P09 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p10` | FX Slot 03 P10 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p11` | FX Slot 03 P11 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p12` | FX Slot 03 P12 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p13` | FX Slot 03 P13 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p14` | FX Slot 03 P14 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p15` | FX Slot 03 P15 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p16` | FX Slot 03 P16 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p17` | FX Slot 03 P17 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p18` | FX Slot 03 P18 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p19` | FX Slot 03 P19 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p20` | FX Slot 03 P20 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p21` | FX Slot 03 P21 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p22` | FX Slot 03 P22 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p23` | FX Slot 03 P23 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi03.p24` | FX Slot 03 P24 | 0 .. 1 | 0 | FX / Slot 03 | mod |  |
-| `fxi04.type` | FX Slot 04 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 04 |  |  |
-| `fxi04.on` | FX Slot 04 On | 0 Off, 1 On | Off | FX / Slot 04 |  |  |
-| `fxi04.rack` | FX Slot 04 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 04 |  |  |
-| `fxi04.order` | FX Slot 04 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 04 |  |  |
-| `fxi04.p01` | FX Slot 04 P01 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p02` | FX Slot 04 P02 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p03` | FX Slot 04 P03 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p04` | FX Slot 04 P04 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p05` | FX Slot 04 P05 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p06` | FX Slot 04 P06 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p07` | FX Slot 04 P07 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p08` | FX Slot 04 P08 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p09` | FX Slot 04 P09 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p10` | FX Slot 04 P10 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p11` | FX Slot 04 P11 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p12` | FX Slot 04 P12 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p13` | FX Slot 04 P13 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p14` | FX Slot 04 P14 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p15` | FX Slot 04 P15 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p16` | FX Slot 04 P16 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p17` | FX Slot 04 P17 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p18` | FX Slot 04 P18 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p19` | FX Slot 04 P19 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p20` | FX Slot 04 P20 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p21` | FX Slot 04 P21 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p22` | FX Slot 04 P22 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p23` | FX Slot 04 P23 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi04.p24` | FX Slot 04 P24 | 0 .. 1 | 0 | FX / Slot 04 | mod |  |
-| `fxi05.type` | FX Slot 05 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 05 |  |  |
-| `fxi05.on` | FX Slot 05 On | 0 Off, 1 On | Off | FX / Slot 05 |  |  |
-| `fxi05.rack` | FX Slot 05 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 05 |  |  |
-| `fxi05.order` | FX Slot 05 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 05 |  |  |
-| `fxi05.p01` | FX Slot 05 P01 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p02` | FX Slot 05 P02 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p03` | FX Slot 05 P03 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p04` | FX Slot 05 P04 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p05` | FX Slot 05 P05 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p06` | FX Slot 05 P06 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p07` | FX Slot 05 P07 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p08` | FX Slot 05 P08 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p09` | FX Slot 05 P09 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p10` | FX Slot 05 P10 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p11` | FX Slot 05 P11 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p12` | FX Slot 05 P12 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p13` | FX Slot 05 P13 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p14` | FX Slot 05 P14 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p15` | FX Slot 05 P15 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p16` | FX Slot 05 P16 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p17` | FX Slot 05 P17 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p18` | FX Slot 05 P18 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p19` | FX Slot 05 P19 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p20` | FX Slot 05 P20 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p21` | FX Slot 05 P21 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p22` | FX Slot 05 P22 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p23` | FX Slot 05 P23 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi05.p24` | FX Slot 05 P24 | 0 .. 1 | 0 | FX / Slot 05 | mod |  |
-| `fxi06.type` | FX Slot 06 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 06 |  |  |
-| `fxi06.on` | FX Slot 06 On | 0 Off, 1 On | Off | FX / Slot 06 |  |  |
-| `fxi06.rack` | FX Slot 06 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 06 |  |  |
-| `fxi06.order` | FX Slot 06 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 06 |  |  |
-| `fxi06.p01` | FX Slot 06 P01 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p02` | FX Slot 06 P02 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p03` | FX Slot 06 P03 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p04` | FX Slot 06 P04 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p05` | FX Slot 06 P05 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p06` | FX Slot 06 P06 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p07` | FX Slot 06 P07 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p08` | FX Slot 06 P08 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p09` | FX Slot 06 P09 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p10` | FX Slot 06 P10 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p11` | FX Slot 06 P11 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p12` | FX Slot 06 P12 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p13` | FX Slot 06 P13 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p14` | FX Slot 06 P14 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p15` | FX Slot 06 P15 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p16` | FX Slot 06 P16 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p17` | FX Slot 06 P17 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p18` | FX Slot 06 P18 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p19` | FX Slot 06 P19 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p20` | FX Slot 06 P20 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p21` | FX Slot 06 P21 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p22` | FX Slot 06 P22 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p23` | FX Slot 06 P23 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi06.p24` | FX Slot 06 P24 | 0 .. 1 | 0 | FX / Slot 06 | mod |  |
-| `fxi07.type` | FX Slot 07 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 07 |  |  |
-| `fxi07.on` | FX Slot 07 On | 0 Off, 1 On | Off | FX / Slot 07 |  |  |
-| `fxi07.rack` | FX Slot 07 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 07 |  |  |
-| `fxi07.order` | FX Slot 07 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 07 |  |  |
-| `fxi07.p01` | FX Slot 07 P01 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p02` | FX Slot 07 P02 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p03` | FX Slot 07 P03 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p04` | FX Slot 07 P04 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p05` | FX Slot 07 P05 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p06` | FX Slot 07 P06 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p07` | FX Slot 07 P07 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p08` | FX Slot 07 P08 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p09` | FX Slot 07 P09 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p10` | FX Slot 07 P10 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p11` | FX Slot 07 P11 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p12` | FX Slot 07 P12 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p13` | FX Slot 07 P13 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p14` | FX Slot 07 P14 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p15` | FX Slot 07 P15 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p16` | FX Slot 07 P16 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p17` | FX Slot 07 P17 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p18` | FX Slot 07 P18 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p19` | FX Slot 07 P19 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p20` | FX Slot 07 P20 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p21` | FX Slot 07 P21 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p22` | FX Slot 07 P22 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p23` | FX Slot 07 P23 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi07.p24` | FX Slot 07 P24 | 0 .. 1 | 0 | FX / Slot 07 | mod |  |
-| `fxi08.type` | FX Slot 08 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 08 |  |  |
-| `fxi08.on` | FX Slot 08 On | 0 Off, 1 On | Off | FX / Slot 08 |  |  |
-| `fxi08.rack` | FX Slot 08 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 08 |  |  |
-| `fxi08.order` | FX Slot 08 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 08 |  |  |
-| `fxi08.p01` | FX Slot 08 P01 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p02` | FX Slot 08 P02 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p03` | FX Slot 08 P03 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p04` | FX Slot 08 P04 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p05` | FX Slot 08 P05 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p06` | FX Slot 08 P06 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p07` | FX Slot 08 P07 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p08` | FX Slot 08 P08 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p09` | FX Slot 08 P09 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p10` | FX Slot 08 P10 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p11` | FX Slot 08 P11 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p12` | FX Slot 08 P12 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p13` | FX Slot 08 P13 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p14` | FX Slot 08 P14 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p15` | FX Slot 08 P15 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p16` | FX Slot 08 P16 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p17` | FX Slot 08 P17 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p18` | FX Slot 08 P18 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p19` | FX Slot 08 P19 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p20` | FX Slot 08 P20 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p21` | FX Slot 08 P21 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p22` | FX Slot 08 P22 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p23` | FX Slot 08 P23 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi08.p24` | FX Slot 08 P24 | 0 .. 1 | 0 | FX / Slot 08 | mod |  |
-| `fxi09.type` | FX Slot 09 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 09 |  |  |
-| `fxi09.on` | FX Slot 09 On | 0 Off, 1 On | Off | FX / Slot 09 |  |  |
-| `fxi09.rack` | FX Slot 09 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 09 |  |  |
-| `fxi09.order` | FX Slot 09 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 09 |  |  |
-| `fxi09.p01` | FX Slot 09 P01 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p02` | FX Slot 09 P02 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p03` | FX Slot 09 P03 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p04` | FX Slot 09 P04 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p05` | FX Slot 09 P05 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p06` | FX Slot 09 P06 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p07` | FX Slot 09 P07 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p08` | FX Slot 09 P08 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p09` | FX Slot 09 P09 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p10` | FX Slot 09 P10 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p11` | FX Slot 09 P11 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p12` | FX Slot 09 P12 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p13` | FX Slot 09 P13 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p14` | FX Slot 09 P14 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p15` | FX Slot 09 P15 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p16` | FX Slot 09 P16 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p17` | FX Slot 09 P17 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p18` | FX Slot 09 P18 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p19` | FX Slot 09 P19 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p20` | FX Slot 09 P20 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p21` | FX Slot 09 P21 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p22` | FX Slot 09 P22 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p23` | FX Slot 09 P23 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi09.p24` | FX Slot 09 P24 | 0 .. 1 | 0 | FX / Slot 09 | mod |  |
-| `fxi10.type` | FX Slot 10 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 10 |  |  |
-| `fxi10.on` | FX Slot 10 On | 0 Off, 1 On | Off | FX / Slot 10 |  |  |
-| `fxi10.rack` | FX Slot 10 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 10 |  |  |
-| `fxi10.order` | FX Slot 10 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 10 |  |  |
-| `fxi10.p01` | FX Slot 10 P01 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p02` | FX Slot 10 P02 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p03` | FX Slot 10 P03 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p04` | FX Slot 10 P04 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p05` | FX Slot 10 P05 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p06` | FX Slot 10 P06 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p07` | FX Slot 10 P07 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p08` | FX Slot 10 P08 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p09` | FX Slot 10 P09 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p10` | FX Slot 10 P10 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p11` | FX Slot 10 P11 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p12` | FX Slot 10 P12 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p13` | FX Slot 10 P13 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p14` | FX Slot 10 P14 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p15` | FX Slot 10 P15 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p16` | FX Slot 10 P16 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p17` | FX Slot 10 P17 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p18` | FX Slot 10 P18 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p19` | FX Slot 10 P19 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p20` | FX Slot 10 P20 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p21` | FX Slot 10 P21 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p22` | FX Slot 10 P22 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p23` | FX Slot 10 P23 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi10.p24` | FX Slot 10 P24 | 0 .. 1 | 0 | FX / Slot 10 | mod |  |
-| `fxi11.type` | FX Slot 11 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 11 |  |  |
-| `fxi11.on` | FX Slot 11 On | 0 Off, 1 On | Off | FX / Slot 11 |  |  |
-| `fxi11.rack` | FX Slot 11 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 11 |  |  |
-| `fxi11.order` | FX Slot 11 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 11 |  |  |
-| `fxi11.p01` | FX Slot 11 P01 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p02` | FX Slot 11 P02 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p03` | FX Slot 11 P03 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p04` | FX Slot 11 P04 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p05` | FX Slot 11 P05 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p06` | FX Slot 11 P06 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p07` | FX Slot 11 P07 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p08` | FX Slot 11 P08 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p09` | FX Slot 11 P09 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p10` | FX Slot 11 P10 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p11` | FX Slot 11 P11 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p12` | FX Slot 11 P12 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p13` | FX Slot 11 P13 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p14` | FX Slot 11 P14 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p15` | FX Slot 11 P15 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p16` | FX Slot 11 P16 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p17` | FX Slot 11 P17 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p18` | FX Slot 11 P18 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p19` | FX Slot 11 P19 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p20` | FX Slot 11 P20 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p21` | FX Slot 11 P21 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p22` | FX Slot 11 P22 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p23` | FX Slot 11 P23 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi11.p24` | FX Slot 11 P24 | 0 .. 1 | 0 | FX / Slot 11 | mod |  |
-| `fxi12.type` | FX Slot 12 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 12 |  |  |
-| `fxi12.on` | FX Slot 12 On | 0 Off, 1 On | Off | FX / Slot 12 |  |  |
-| `fxi12.rack` | FX Slot 12 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 12 |  |  |
-| `fxi12.order` | FX Slot 12 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 12 |  |  |
-| `fxi12.p01` | FX Slot 12 P01 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p02` | FX Slot 12 P02 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p03` | FX Slot 12 P03 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p04` | FX Slot 12 P04 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p05` | FX Slot 12 P05 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p06` | FX Slot 12 P06 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p07` | FX Slot 12 P07 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p08` | FX Slot 12 P08 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p09` | FX Slot 12 P09 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p10` | FX Slot 12 P10 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p11` | FX Slot 12 P11 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p12` | FX Slot 12 P12 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p13` | FX Slot 12 P13 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p14` | FX Slot 12 P14 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p15` | FX Slot 12 P15 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p16` | FX Slot 12 P16 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p17` | FX Slot 12 P17 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p18` | FX Slot 12 P18 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p19` | FX Slot 12 P19 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p20` | FX Slot 12 P20 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p21` | FX Slot 12 P21 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p22` | FX Slot 12 P22 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p23` | FX Slot 12 P23 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi12.p24` | FX Slot 12 P24 | 0 .. 1 | 0 | FX / Slot 12 | mod |  |
-| `fxi13.type` | FX Slot 13 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 13 |  |  |
-| `fxi13.on` | FX Slot 13 On | 0 Off, 1 On | Off | FX / Slot 13 |  |  |
-| `fxi13.rack` | FX Slot 13 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 13 |  |  |
-| `fxi13.order` | FX Slot 13 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 13 |  |  |
-| `fxi13.p01` | FX Slot 13 P01 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p02` | FX Slot 13 P02 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p03` | FX Slot 13 P03 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p04` | FX Slot 13 P04 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p05` | FX Slot 13 P05 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p06` | FX Slot 13 P06 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p07` | FX Slot 13 P07 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p08` | FX Slot 13 P08 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p09` | FX Slot 13 P09 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p10` | FX Slot 13 P10 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p11` | FX Slot 13 P11 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p12` | FX Slot 13 P12 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p13` | FX Slot 13 P13 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p14` | FX Slot 13 P14 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p15` | FX Slot 13 P15 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p16` | FX Slot 13 P16 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p17` | FX Slot 13 P17 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p18` | FX Slot 13 P18 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p19` | FX Slot 13 P19 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p20` | FX Slot 13 P20 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p21` | FX Slot 13 P21 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p22` | FX Slot 13 P22 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p23` | FX Slot 13 P23 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi13.p24` | FX Slot 13 P24 | 0 .. 1 | 0 | FX / Slot 13 | mod |  |
-| `fxi14.type` | FX Slot 14 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 14 |  |  |
-| `fxi14.on` | FX Slot 14 On | 0 Off, 1 On | Off | FX / Slot 14 |  |  |
-| `fxi14.rack` | FX Slot 14 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 14 |  |  |
-| `fxi14.order` | FX Slot 14 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 14 |  |  |
-| `fxi14.p01` | FX Slot 14 P01 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p02` | FX Slot 14 P02 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p03` | FX Slot 14 P03 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p04` | FX Slot 14 P04 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p05` | FX Slot 14 P05 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p06` | FX Slot 14 P06 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p07` | FX Slot 14 P07 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p08` | FX Slot 14 P08 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p09` | FX Slot 14 P09 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p10` | FX Slot 14 P10 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p11` | FX Slot 14 P11 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p12` | FX Slot 14 P12 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p13` | FX Slot 14 P13 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p14` | FX Slot 14 P14 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p15` | FX Slot 14 P15 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p16` | FX Slot 14 P16 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p17` | FX Slot 14 P17 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p18` | FX Slot 14 P18 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p19` | FX Slot 14 P19 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p20` | FX Slot 14 P20 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p21` | FX Slot 14 P21 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p22` | FX Slot 14 P22 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p23` | FX Slot 14 P23 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi14.p24` | FX Slot 14 P24 | 0 .. 1 | 0 | FX / Slot 14 | mod |  |
-| `fxi15.type` | FX Slot 15 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 15 |  |  |
-| `fxi15.on` | FX Slot 15 On | 0 Off, 1 On | Off | FX / Slot 15 |  |  |
-| `fxi15.rack` | FX Slot 15 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 15 |  |  |
-| `fxi15.order` | FX Slot 15 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 15 |  |  |
-| `fxi15.p01` | FX Slot 15 P01 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p02` | FX Slot 15 P02 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p03` | FX Slot 15 P03 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p04` | FX Slot 15 P04 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p05` | FX Slot 15 P05 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p06` | FX Slot 15 P06 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p07` | FX Slot 15 P07 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p08` | FX Slot 15 P08 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p09` | FX Slot 15 P09 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p10` | FX Slot 15 P10 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p11` | FX Slot 15 P11 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p12` | FX Slot 15 P12 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p13` | FX Slot 15 P13 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p14` | FX Slot 15 P14 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p15` | FX Slot 15 P15 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p16` | FX Slot 15 P16 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p17` | FX Slot 15 P17 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p18` | FX Slot 15 P18 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p19` | FX Slot 15 P19 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p20` | FX Slot 15 P20 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p21` | FX Slot 15 P21 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p22` | FX Slot 15 P22 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p23` | FX Slot 15 P23 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi15.p24` | FX Slot 15 P24 | 0 .. 1 | 0 | FX / Slot 15 | mod |  |
-| `fxi16.type` | FX Slot 16 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 16 |  |  |
-| `fxi16.on` | FX Slot 16 On | 0 Off, 1 On | Off | FX / Slot 16 |  |  |
-| `fxi16.rack` | FX Slot 16 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 16 |  |  |
-| `fxi16.order` | FX Slot 16 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 16 |  |  |
-| `fxi16.p01` | FX Slot 16 P01 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p02` | FX Slot 16 P02 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p03` | FX Slot 16 P03 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p04` | FX Slot 16 P04 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p05` | FX Slot 16 P05 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p06` | FX Slot 16 P06 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p07` | FX Slot 16 P07 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p08` | FX Slot 16 P08 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p09` | FX Slot 16 P09 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p10` | FX Slot 16 P10 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p11` | FX Slot 16 P11 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p12` | FX Slot 16 P12 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p13` | FX Slot 16 P13 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p14` | FX Slot 16 P14 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p15` | FX Slot 16 P15 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p16` | FX Slot 16 P16 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p17` | FX Slot 16 P17 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p18` | FX Slot 16 P18 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p19` | FX Slot 16 P19 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p20` | FX Slot 16 P20 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p21` | FX Slot 16 P21 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p22` | FX Slot 16 P22 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p23` | FX Slot 16 P23 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
-| `fxi16.p24` | FX Slot 16 P24 | 0 .. 1 | 0 | FX / Slot 16 | mod |  |
+| `distortion.filter_keytrack` | Distortion Filter Key Track | -100 .. 100 % | 0 % | FX / Distortion | mod | yes |
+| `phaser.depth2` | Phaser Depth 2 | -48 .. 48 st | 0 st | FX / Phaser | mod | yes |
+| `reverb.type` | Reverb Type | 0 Vital, 1 Plate, 2 Hall, 3 Vintage, 4 Nitrous, 5 Basin | Vital | FX / Reverb |  | yes |
+| `reverb.room` | Reverb Room | 0 Space, 1 Marble, 2 Rectangle, 3 Hexagon, 4 Box | Rectangle | FX / Reverb |  | yes |
+| `reverb.width` | Reverb Width | 0 .. 200 % | 100 % | FX / Reverb | mod | yes |
+| `reverb.er_size` | Reverb ER Size | 0 .. 100 % | 50 % | FX / Reverb |  | yes |
+| `reverb.diff_a` | Reverb Diffusion A | 0 .. 100 % | 70 % | FX / Reverb | mod | yes |
+| `reverb.diff_b` | Reverb Diffusion B | 0 .. 100 % | 60 % | FX / Reverb | mod | yes |
+| `fxi01.type` | FX Slot 01 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 01 |  | yes |
+| `fxi01.on` | FX Slot 01 On | 0 Off, 1 On | Off | FX / Slot 01 |  | yes |
+| `fxi01.rack` | FX Slot 01 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 01 |  | yes |
+| `fxi01.order` | FX Slot 01 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 01 |  | yes |
+| `fxi01.p01` | FX Slot 01 P01 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p02` | FX Slot 01 P02 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p03` | FX Slot 01 P03 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p04` | FX Slot 01 P04 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p05` | FX Slot 01 P05 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p06` | FX Slot 01 P06 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p07` | FX Slot 01 P07 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p08` | FX Slot 01 P08 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p09` | FX Slot 01 P09 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p10` | FX Slot 01 P10 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p11` | FX Slot 01 P11 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p12` | FX Slot 01 P12 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p13` | FX Slot 01 P13 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p14` | FX Slot 01 P14 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p15` | FX Slot 01 P15 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p16` | FX Slot 01 P16 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p17` | FX Slot 01 P17 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p18` | FX Slot 01 P18 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p19` | FX Slot 01 P19 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p20` | FX Slot 01 P20 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p21` | FX Slot 01 P21 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p22` | FX Slot 01 P22 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p23` | FX Slot 01 P23 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi01.p24` | FX Slot 01 P24 | 0 .. 1 | 0 | FX / Slot 01 | mod | yes |
+| `fxi02.type` | FX Slot 02 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 02 |  | yes |
+| `fxi02.on` | FX Slot 02 On | 0 Off, 1 On | Off | FX / Slot 02 |  | yes |
+| `fxi02.rack` | FX Slot 02 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 02 |  | yes |
+| `fxi02.order` | FX Slot 02 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 02 |  | yes |
+| `fxi02.p01` | FX Slot 02 P01 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p02` | FX Slot 02 P02 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p03` | FX Slot 02 P03 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p04` | FX Slot 02 P04 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p05` | FX Slot 02 P05 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p06` | FX Slot 02 P06 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p07` | FX Slot 02 P07 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p08` | FX Slot 02 P08 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p09` | FX Slot 02 P09 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p10` | FX Slot 02 P10 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p11` | FX Slot 02 P11 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p12` | FX Slot 02 P12 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p13` | FX Slot 02 P13 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p14` | FX Slot 02 P14 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p15` | FX Slot 02 P15 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p16` | FX Slot 02 P16 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p17` | FX Slot 02 P17 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p18` | FX Slot 02 P18 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p19` | FX Slot 02 P19 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p20` | FX Slot 02 P20 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p21` | FX Slot 02 P21 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p22` | FX Slot 02 P22 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p23` | FX Slot 02 P23 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi02.p24` | FX Slot 02 P24 | 0 .. 1 | 0 | FX / Slot 02 | mod | yes |
+| `fxi03.type` | FX Slot 03 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 03 |  | yes |
+| `fxi03.on` | FX Slot 03 On | 0 Off, 1 On | Off | FX / Slot 03 |  | yes |
+| `fxi03.rack` | FX Slot 03 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 03 |  | yes |
+| `fxi03.order` | FX Slot 03 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 03 |  | yes |
+| `fxi03.p01` | FX Slot 03 P01 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p02` | FX Slot 03 P02 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p03` | FX Slot 03 P03 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p04` | FX Slot 03 P04 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p05` | FX Slot 03 P05 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p06` | FX Slot 03 P06 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p07` | FX Slot 03 P07 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p08` | FX Slot 03 P08 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p09` | FX Slot 03 P09 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p10` | FX Slot 03 P10 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p11` | FX Slot 03 P11 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p12` | FX Slot 03 P12 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p13` | FX Slot 03 P13 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p14` | FX Slot 03 P14 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p15` | FX Slot 03 P15 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p16` | FX Slot 03 P16 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p17` | FX Slot 03 P17 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p18` | FX Slot 03 P18 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p19` | FX Slot 03 P19 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p20` | FX Slot 03 P20 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p21` | FX Slot 03 P21 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p22` | FX Slot 03 P22 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p23` | FX Slot 03 P23 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi03.p24` | FX Slot 03 P24 | 0 .. 1 | 0 | FX / Slot 03 | mod | yes |
+| `fxi04.type` | FX Slot 04 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 04 |  | yes |
+| `fxi04.on` | FX Slot 04 On | 0 Off, 1 On | Off | FX / Slot 04 |  | yes |
+| `fxi04.rack` | FX Slot 04 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 04 |  | yes |
+| `fxi04.order` | FX Slot 04 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 04 |  | yes |
+| `fxi04.p01` | FX Slot 04 P01 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p02` | FX Slot 04 P02 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p03` | FX Slot 04 P03 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p04` | FX Slot 04 P04 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p05` | FX Slot 04 P05 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p06` | FX Slot 04 P06 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p07` | FX Slot 04 P07 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p08` | FX Slot 04 P08 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p09` | FX Slot 04 P09 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p10` | FX Slot 04 P10 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p11` | FX Slot 04 P11 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p12` | FX Slot 04 P12 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p13` | FX Slot 04 P13 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p14` | FX Slot 04 P14 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p15` | FX Slot 04 P15 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p16` | FX Slot 04 P16 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p17` | FX Slot 04 P17 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p18` | FX Slot 04 P18 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p19` | FX Slot 04 P19 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p20` | FX Slot 04 P20 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p21` | FX Slot 04 P21 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p22` | FX Slot 04 P22 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p23` | FX Slot 04 P23 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi04.p24` | FX Slot 04 P24 | 0 .. 1 | 0 | FX / Slot 04 | mod | yes |
+| `fxi05.type` | FX Slot 05 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 05 |  | yes |
+| `fxi05.on` | FX Slot 05 On | 0 Off, 1 On | Off | FX / Slot 05 |  | yes |
+| `fxi05.rack` | FX Slot 05 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 05 |  | yes |
+| `fxi05.order` | FX Slot 05 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 05 |  | yes |
+| `fxi05.p01` | FX Slot 05 P01 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p02` | FX Slot 05 P02 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p03` | FX Slot 05 P03 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p04` | FX Slot 05 P04 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p05` | FX Slot 05 P05 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p06` | FX Slot 05 P06 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p07` | FX Slot 05 P07 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p08` | FX Slot 05 P08 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p09` | FX Slot 05 P09 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p10` | FX Slot 05 P10 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p11` | FX Slot 05 P11 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p12` | FX Slot 05 P12 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p13` | FX Slot 05 P13 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p14` | FX Slot 05 P14 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p15` | FX Slot 05 P15 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p16` | FX Slot 05 P16 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p17` | FX Slot 05 P17 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p18` | FX Slot 05 P18 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p19` | FX Slot 05 P19 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p20` | FX Slot 05 P20 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p21` | FX Slot 05 P21 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p22` | FX Slot 05 P22 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p23` | FX Slot 05 P23 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi05.p24` | FX Slot 05 P24 | 0 .. 1 | 0 | FX / Slot 05 | mod | yes |
+| `fxi06.type` | FX Slot 06 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 06 |  | yes |
+| `fxi06.on` | FX Slot 06 On | 0 Off, 1 On | Off | FX / Slot 06 |  | yes |
+| `fxi06.rack` | FX Slot 06 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 06 |  | yes |
+| `fxi06.order` | FX Slot 06 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 06 |  | yes |
+| `fxi06.p01` | FX Slot 06 P01 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p02` | FX Slot 06 P02 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p03` | FX Slot 06 P03 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p04` | FX Slot 06 P04 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p05` | FX Slot 06 P05 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p06` | FX Slot 06 P06 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p07` | FX Slot 06 P07 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p08` | FX Slot 06 P08 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p09` | FX Slot 06 P09 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p10` | FX Slot 06 P10 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p11` | FX Slot 06 P11 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p12` | FX Slot 06 P12 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p13` | FX Slot 06 P13 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p14` | FX Slot 06 P14 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p15` | FX Slot 06 P15 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p16` | FX Slot 06 P16 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p17` | FX Slot 06 P17 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p18` | FX Slot 06 P18 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p19` | FX Slot 06 P19 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p20` | FX Slot 06 P20 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p21` | FX Slot 06 P21 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p22` | FX Slot 06 P22 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p23` | FX Slot 06 P23 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi06.p24` | FX Slot 06 P24 | 0 .. 1 | 0 | FX / Slot 06 | mod | yes |
+| `fxi07.type` | FX Slot 07 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 07 |  | yes |
+| `fxi07.on` | FX Slot 07 On | 0 Off, 1 On | Off | FX / Slot 07 |  | yes |
+| `fxi07.rack` | FX Slot 07 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 07 |  | yes |
+| `fxi07.order` | FX Slot 07 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 07 |  | yes |
+| `fxi07.p01` | FX Slot 07 P01 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p02` | FX Slot 07 P02 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p03` | FX Slot 07 P03 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p04` | FX Slot 07 P04 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p05` | FX Slot 07 P05 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p06` | FX Slot 07 P06 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p07` | FX Slot 07 P07 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p08` | FX Slot 07 P08 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p09` | FX Slot 07 P09 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p10` | FX Slot 07 P10 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p11` | FX Slot 07 P11 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p12` | FX Slot 07 P12 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p13` | FX Slot 07 P13 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p14` | FX Slot 07 P14 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p15` | FX Slot 07 P15 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p16` | FX Slot 07 P16 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p17` | FX Slot 07 P17 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p18` | FX Slot 07 P18 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p19` | FX Slot 07 P19 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p20` | FX Slot 07 P20 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p21` | FX Slot 07 P21 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p22` | FX Slot 07 P22 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p23` | FX Slot 07 P23 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi07.p24` | FX Slot 07 P24 | 0 .. 1 | 0 | FX / Slot 07 | mod | yes |
+| `fxi08.type` | FX Slot 08 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 08 |  | yes |
+| `fxi08.on` | FX Slot 08 On | 0 Off, 1 On | Off | FX / Slot 08 |  | yes |
+| `fxi08.rack` | FX Slot 08 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 08 |  | yes |
+| `fxi08.order` | FX Slot 08 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 08 |  | yes |
+| `fxi08.p01` | FX Slot 08 P01 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p02` | FX Slot 08 P02 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p03` | FX Slot 08 P03 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p04` | FX Slot 08 P04 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p05` | FX Slot 08 P05 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p06` | FX Slot 08 P06 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p07` | FX Slot 08 P07 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p08` | FX Slot 08 P08 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p09` | FX Slot 08 P09 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p10` | FX Slot 08 P10 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p11` | FX Slot 08 P11 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p12` | FX Slot 08 P12 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p13` | FX Slot 08 P13 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p14` | FX Slot 08 P14 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p15` | FX Slot 08 P15 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p16` | FX Slot 08 P16 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p17` | FX Slot 08 P17 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p18` | FX Slot 08 P18 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p19` | FX Slot 08 P19 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p20` | FX Slot 08 P20 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p21` | FX Slot 08 P21 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p22` | FX Slot 08 P22 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p23` | FX Slot 08 P23 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi08.p24` | FX Slot 08 P24 | 0 .. 1 | 0 | FX / Slot 08 | mod | yes |
+| `fxi09.type` | FX Slot 09 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 09 |  | yes |
+| `fxi09.on` | FX Slot 09 On | 0 Off, 1 On | Off | FX / Slot 09 |  | yes |
+| `fxi09.rack` | FX Slot 09 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 09 |  | yes |
+| `fxi09.order` | FX Slot 09 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 09 |  | yes |
+| `fxi09.p01` | FX Slot 09 P01 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p02` | FX Slot 09 P02 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p03` | FX Slot 09 P03 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p04` | FX Slot 09 P04 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p05` | FX Slot 09 P05 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p06` | FX Slot 09 P06 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p07` | FX Slot 09 P07 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p08` | FX Slot 09 P08 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p09` | FX Slot 09 P09 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p10` | FX Slot 09 P10 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p11` | FX Slot 09 P11 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p12` | FX Slot 09 P12 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p13` | FX Slot 09 P13 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p14` | FX Slot 09 P14 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p15` | FX Slot 09 P15 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p16` | FX Slot 09 P16 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p17` | FX Slot 09 P17 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p18` | FX Slot 09 P18 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p19` | FX Slot 09 P19 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p20` | FX Slot 09 P20 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p21` | FX Slot 09 P21 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p22` | FX Slot 09 P22 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p23` | FX Slot 09 P23 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi09.p24` | FX Slot 09 P24 | 0 .. 1 | 0 | FX / Slot 09 | mod | yes |
+| `fxi10.type` | FX Slot 10 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 10 |  | yes |
+| `fxi10.on` | FX Slot 10 On | 0 Off, 1 On | Off | FX / Slot 10 |  | yes |
+| `fxi10.rack` | FX Slot 10 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 10 |  | yes |
+| `fxi10.order` | FX Slot 10 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 10 |  | yes |
+| `fxi10.p01` | FX Slot 10 P01 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p02` | FX Slot 10 P02 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p03` | FX Slot 10 P03 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p04` | FX Slot 10 P04 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p05` | FX Slot 10 P05 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p06` | FX Slot 10 P06 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p07` | FX Slot 10 P07 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p08` | FX Slot 10 P08 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p09` | FX Slot 10 P09 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p10` | FX Slot 10 P10 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p11` | FX Slot 10 P11 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p12` | FX Slot 10 P12 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p13` | FX Slot 10 P13 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p14` | FX Slot 10 P14 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p15` | FX Slot 10 P15 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p16` | FX Slot 10 P16 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p17` | FX Slot 10 P17 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p18` | FX Slot 10 P18 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p19` | FX Slot 10 P19 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p20` | FX Slot 10 P20 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p21` | FX Slot 10 P21 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p22` | FX Slot 10 P22 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p23` | FX Slot 10 P23 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi10.p24` | FX Slot 10 P24 | 0 .. 1 | 0 | FX / Slot 10 | mod | yes |
+| `fxi11.type` | FX Slot 11 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 11 |  | yes |
+| `fxi11.on` | FX Slot 11 On | 0 Off, 1 On | Off | FX / Slot 11 |  | yes |
+| `fxi11.rack` | FX Slot 11 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 11 |  | yes |
+| `fxi11.order` | FX Slot 11 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 11 |  | yes |
+| `fxi11.p01` | FX Slot 11 P01 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p02` | FX Slot 11 P02 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p03` | FX Slot 11 P03 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p04` | FX Slot 11 P04 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p05` | FX Slot 11 P05 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p06` | FX Slot 11 P06 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p07` | FX Slot 11 P07 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p08` | FX Slot 11 P08 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p09` | FX Slot 11 P09 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p10` | FX Slot 11 P10 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p11` | FX Slot 11 P11 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p12` | FX Slot 11 P12 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p13` | FX Slot 11 P13 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p14` | FX Slot 11 P14 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p15` | FX Slot 11 P15 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p16` | FX Slot 11 P16 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p17` | FX Slot 11 P17 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p18` | FX Slot 11 P18 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p19` | FX Slot 11 P19 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p20` | FX Slot 11 P20 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p21` | FX Slot 11 P21 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p22` | FX Slot 11 P22 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p23` | FX Slot 11 P23 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi11.p24` | FX Slot 11 P24 | 0 .. 1 | 0 | FX / Slot 11 | mod | yes |
+| `fxi12.type` | FX Slot 12 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 12 |  | yes |
+| `fxi12.on` | FX Slot 12 On | 0 Off, 1 On | Off | FX / Slot 12 |  | yes |
+| `fxi12.rack` | FX Slot 12 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 12 |  | yes |
+| `fxi12.order` | FX Slot 12 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 12 |  | yes |
+| `fxi12.p01` | FX Slot 12 P01 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p02` | FX Slot 12 P02 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p03` | FX Slot 12 P03 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p04` | FX Slot 12 P04 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p05` | FX Slot 12 P05 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p06` | FX Slot 12 P06 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p07` | FX Slot 12 P07 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p08` | FX Slot 12 P08 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p09` | FX Slot 12 P09 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p10` | FX Slot 12 P10 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p11` | FX Slot 12 P11 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p12` | FX Slot 12 P12 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p13` | FX Slot 12 P13 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p14` | FX Slot 12 P14 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p15` | FX Slot 12 P15 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p16` | FX Slot 12 P16 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p17` | FX Slot 12 P17 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p18` | FX Slot 12 P18 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p19` | FX Slot 12 P19 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p20` | FX Slot 12 P20 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p21` | FX Slot 12 P21 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p22` | FX Slot 12 P22 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p23` | FX Slot 12 P23 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi12.p24` | FX Slot 12 P24 | 0 .. 1 | 0 | FX / Slot 12 | mod | yes |
+| `fxi13.type` | FX Slot 13 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 13 |  | yes |
+| `fxi13.on` | FX Slot 13 On | 0 Off, 1 On | Off | FX / Slot 13 |  | yes |
+| `fxi13.rack` | FX Slot 13 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 13 |  | yes |
+| `fxi13.order` | FX Slot 13 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 13 |  | yes |
+| `fxi13.p01` | FX Slot 13 P01 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p02` | FX Slot 13 P02 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p03` | FX Slot 13 P03 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p04` | FX Slot 13 P04 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p05` | FX Slot 13 P05 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p06` | FX Slot 13 P06 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p07` | FX Slot 13 P07 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p08` | FX Slot 13 P08 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p09` | FX Slot 13 P09 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p10` | FX Slot 13 P10 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p11` | FX Slot 13 P11 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p12` | FX Slot 13 P12 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p13` | FX Slot 13 P13 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p14` | FX Slot 13 P14 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p15` | FX Slot 13 P15 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p16` | FX Slot 13 P16 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p17` | FX Slot 13 P17 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p18` | FX Slot 13 P18 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p19` | FX Slot 13 P19 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p20` | FX Slot 13 P20 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p21` | FX Slot 13 P21 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p22` | FX Slot 13 P22 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p23` | FX Slot 13 P23 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi13.p24` | FX Slot 13 P24 | 0 .. 1 | 0 | FX / Slot 13 | mod | yes |
+| `fxi14.type` | FX Slot 14 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 14 |  | yes |
+| `fxi14.on` | FX Slot 14 On | 0 Off, 1 On | Off | FX / Slot 14 |  | yes |
+| `fxi14.rack` | FX Slot 14 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 14 |  | yes |
+| `fxi14.order` | FX Slot 14 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 14 |  | yes |
+| `fxi14.p01` | FX Slot 14 P01 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p02` | FX Slot 14 P02 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p03` | FX Slot 14 P03 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p04` | FX Slot 14 P04 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p05` | FX Slot 14 P05 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p06` | FX Slot 14 P06 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p07` | FX Slot 14 P07 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p08` | FX Slot 14 P08 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p09` | FX Slot 14 P09 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p10` | FX Slot 14 P10 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p11` | FX Slot 14 P11 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p12` | FX Slot 14 P12 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p13` | FX Slot 14 P13 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p14` | FX Slot 14 P14 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p15` | FX Slot 14 P15 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p16` | FX Slot 14 P16 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p17` | FX Slot 14 P17 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p18` | FX Slot 14 P18 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p19` | FX Slot 14 P19 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p20` | FX Slot 14 P20 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p21` | FX Slot 14 P21 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p22` | FX Slot 14 P22 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p23` | FX Slot 14 P23 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi14.p24` | FX Slot 14 P24 | 0 .. 1 | 0 | FX / Slot 14 | mod | yes |
+| `fxi15.type` | FX Slot 15 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 15 |  | yes |
+| `fxi15.on` | FX Slot 15 On | 0 Off, 1 On | Off | FX / Slot 15 |  | yes |
+| `fxi15.rack` | FX Slot 15 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 15 |  | yes |
+| `fxi15.order` | FX Slot 15 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 15 |  | yes |
+| `fxi15.p01` | FX Slot 15 P01 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p02` | FX Slot 15 P02 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p03` | FX Slot 15 P03 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p04` | FX Slot 15 P04 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p05` | FX Slot 15 P05 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p06` | FX Slot 15 P06 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p07` | FX Slot 15 P07 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p08` | FX Slot 15 P08 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p09` | FX Slot 15 P09 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p10` | FX Slot 15 P10 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p11` | FX Slot 15 P11 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p12` | FX Slot 15 P12 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p13` | FX Slot 15 P13 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p14` | FX Slot 15 P14 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p15` | FX Slot 15 P15 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p16` | FX Slot 15 P16 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p17` | FX Slot 15 P17 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p18` | FX Slot 15 P18 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p19` | FX Slot 15 P19 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p20` | FX Slot 15 P20 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p21` | FX Slot 15 P21 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p22` | FX Slot 15 P22 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p23` | FX Slot 15 P23 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi15.p24` | FX Slot 15 P24 | 0 .. 1 | 0 | FX / Slot 15 | mod | yes |
+| `fxi16.type` | FX Slot 16 Type | 14 choices: 0 None, 1 Chorus, 2 Compressor, ... , 13 Convolve | None | FX / Slot 16 |  | yes |
+| `fxi16.on` | FX Slot 16 On | 0 Off, 1 On | Off | FX / Slot 16 |  | yes |
+| `fxi16.rack` | FX Slot 16 Rack | 0 Main, 1 Bus 1, 2 Bus 2 | Main | FX / Slot 16 |  | yes |
+| `fxi16.order` | FX Slot 16 Order | 0 .. 1023 (steps of 1) | 1023 | FX / Slot 16 |  | yes |
+| `fxi16.p01` | FX Slot 16 P01 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p02` | FX Slot 16 P02 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p03` | FX Slot 16 P03 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p04` | FX Slot 16 P04 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p05` | FX Slot 16 P05 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p06` | FX Slot 16 P06 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p07` | FX Slot 16 P07 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p08` | FX Slot 16 P08 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p09` | FX Slot 16 P09 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p10` | FX Slot 16 P10 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p11` | FX Slot 16 P11 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p12` | FX Slot 16 P12 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p13` | FX Slot 16 P13 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p14` | FX Slot 16 P14 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p15` | FX Slot 16 P15 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p16` | FX Slot 16 P16 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p17` | FX Slot 16 P17 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p18` | FX Slot 16 P18 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p19` | FX Slot 16 P19 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p20` | FX Slot 16 P20 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p21` | FX Slot 16 P21 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p22` | FX Slot 16 P22 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p23` | FX Slot 16 P23 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
+| `fxi16.p24` | FX Slot 16 P24 | 0 .. 1 | 0 | FX / Slot 16 | mod | yes |
 | `delay.offset_left` | Delay Offset Left | 0.25 .. 4 (skew 0.5) | 1 | FX / Delay | mod | yes |
-| `reverb.feedback` | Reverb Feedback | 0 .. 100 % | 50 % | FX / Reverb | mod |  |
+| `reverb.feedback` | Reverb Feedback | 0 .. 100 % | 50 % | FX / Reverb | mod | yes |
 | `eq.mid2.mode` | EQ Mid 2 Mode | 0 Off, 1 Peak, 2 Notch | Off | FX / EQ |  | yes |
 | `eq.mid2.cutoff` | EQ Mid 2 Cutoff | 20 .. 20000 Hz (skew 0.300000012) | 3000 Hz | FX / EQ | mod | yes |
 | `eq.mid2.gain` | EQ Mid 2 Gain | -24 .. 24 dB | 0 dB | FX / EQ | mod | yes |
 | `eq.mid2.resonance` | EQ Mid 2 Resonance | 0 .. 100 % | 30 % | FX / EQ | mod | yes |
-| `eq.law` | EQ Law | 0 Vital, 1 Serum | Vital | FX / EQ |  |  |
-| `convolve.law` | Convolve Law | 0 Vital, 1 Serum | Vital | FX / Convolve |  |  |
+| `eq.law` | EQ Law | 0 Vital, 1 Serum | Vital | FX / EQ |  | yes |
+| `convolve.law` | Convolve Law | 0 Vital, 1 Serum | Vital | FX / Convolve |  | yes |
 
 ### LFO 9
 
@@ -1752,8 +1752,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc1.unison.range` | Osc 1 Unison Range | 0 .. 48 st | 2 st | Oscillator 1 | mod |  |
 | `osc1.phase_legato` | Osc 1 Phase Legato | 0 Off, 1 On | Off | Oscillator 1 |  |  |
 | `osc1.phase_memory` | Osc 1 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 1 |  |  |
-| `osc1.ratio_src` | Osc 1 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 1 |  |  |
-| `osc1.smooth_interp` | Osc 1 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 1 |  |  |
+| `osc1.ratio_src` | Osc 1 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 1 |  | yes |
+| `osc1.smooth_interp` | Osc 1 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 1 |  | yes |
 
 ### Oscillator 2
 
@@ -1769,8 +1769,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc2.unison.range` | Osc 2 Unison Range | 0 .. 48 st | 2 st | Oscillator 2 | mod |  |
 | `osc2.phase_legato` | Osc 2 Phase Legato | 0 Off, 1 On | Off | Oscillator 2 |  |  |
 | `osc2.phase_memory` | Osc 2 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 2 |  |  |
-| `osc2.ratio_src` | Osc 2 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 2 |  |  |
-| `osc2.smooth_interp` | Osc 2 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 2 |  |  |
+| `osc2.ratio_src` | Osc 2 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 2 |  | yes |
+| `osc2.smooth_interp` | Osc 2 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 2 |  | yes |
 
 ### Oscillator 3
 
@@ -1786,8 +1786,8 @@ The matrix has %d identical slots `mod01` .. `mod64` (only the first is listed).
 | `osc3.unison.range` | Osc 3 Unison Range | 0 .. 48 st | 2 st | Oscillator 3 | mod |  |
 | `osc3.phase_legato` | Osc 3 Phase Legato | 0 Off, 1 On | Off | Oscillator 3 |  |  |
 | `osc3.phase_memory` | Osc 3 Phase Memory | 0 All Voices, 1 Contiguous, 2 Per Voice | All Voices | Oscillator 3 |  |  |
-| `osc3.ratio_src` | Osc 3 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 3 |  |  |
-| `osc3.smooth_interp` | Osc 3 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 3 |  |  |
+| `osc3.ratio_src` | Osc 3 Ratio Source | 0 Base note, 1 Osc 1, 2 Osc 2, 3 Osc 3, 4 Sub | Base note | Oscillator 3 |  | yes |
+| `osc3.smooth_interp` | Osc 3 Smooth Interpolation | 0 Off, 1 On | Off | Oscillator 3 |  | yes |
 
 ### Sub
 
