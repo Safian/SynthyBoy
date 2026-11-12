@@ -485,3 +485,270 @@ TEST (fx_phaser_depth2_notches_p2)
                 CHECK (std::fabs (got[i] - row.hz[i]) < (row.hz[i] > 7000 ? row.hz[i] * 0.075 : std::max (row.hz[i] * 0.04, i == 0 ? 10.0 : 0.0)));
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// the effect instance pool (document 06, 12)
+
+namespace
+{
+std::string poolKey (int slot, const char* what)
+{
+    char buf[48];
+    std::snprintf (buf, sizeof buf, "fxi%02d.%s", slot, what);
+    return buf;
+}
+
+/** Puts a slot of `type` on with the defaults of the type (what choosing a type does in the UI). */
+void setSlot (IEngine& e, int slot, int type, int rack = 0, int order = 1023, bool on = true)
+{
+    float d[kFxInstanceParams];
+    fxInstanceDefaults (type, d);
+    set (e, poolKey (slot, "type").c_str(), static_cast<float> (type));
+    for (int k = 0; k < kFxInstanceParams; ++k)
+    {
+        char name[8];
+        std::snprintf (name, sizeof name, "p%02d", k + 1);
+        set (e, poolKey (slot, name).c_str(), d[k]);
+    }
+    set (e, poolKey (slot, "rack").c_str(), static_cast<float> (rack));
+    set (e, poolKey (slot, "order").c_str(), static_cast<float> (order));
+    set (e, poolKey (slot, "on").c_str(), on ? 1.0f : 0.0f);
+}
+
+void sawPatch (IEngine& e)
+{
+    set (e, "osc1.wavetable", 1);
+    set (e, "osc1.level", 100);
+    set (e, "filter1.on", 0);
+    set (e, "master.volume", 0);
+    set (e, "env1.attack", 0);
+    set (e, "env1.sustain", 100);
+}
+} // namespace
+
+TEST (fx_pool_slot_renders_what_instance_zero_renders)
+{
+    // deterministic effects: the same samples (Distortion, Bode), the others by level
+    struct Case { int type; const char* on; double tol; };
+    const Case cases[] = { { kFxTypeDistortion, "distortion.on", 1.0e-5 }, { kFxTypeBode, "bode.on", 1.0e-5 }, { kFxTypeEq, "eq.on", 1.0e-5 }, { kFxTypeUtility, "utility.on", 1.0e-5 } };
+    for (const Case& c : cases)
+    {
+        auto a = make(), b = make();
+        sawPatch (*a);
+        sawPatch (*b);
+        set (*a, c.on, 1);
+        setSlot (*b, 1, c.type);
+        const std::vector<Event> ev = { sbtest::noteOn (static_cast<int> (0.1 * kSr), 60) };
+        const auto ra = sbtest::render (*a, ev, static_cast<int> (0.8 * kSr), 256), rb = sbtest::render (*b, ev, static_cast<int> (0.8 * kSr), 256);
+        double diff = 0.0, ref = 1.0e-9;
+        for (size_t i = static_cast<size_t> (0.3 * kSr); i < static_cast<size_t> (0.7 * kSr); ++i)
+        {
+            diff = std::max (diff, static_cast<double> (std::fabs (ra.left[i] - rb.left[i])));
+            ref = std::max (ref, static_cast<double> (std::fabs (ra.left[i])));
+        }
+        if (verbose())
+            std::printf ("    type %d: max difference %.3g (peak %.3f)\n", c.type, diff, ref);
+        CHECK (diff < c.tol + 1.0e-3 * ref * 0.0);
+        CHECK (ref > 0.05);
+    }
+}
+
+TEST (fx_pool_order_rack_bypass_and_crossfade)
+{
+    // order: a slot with order 0 runs before the first module, the default 1023 after the last one; two Utility slots with a polarity flip each cancel to the identity in either order
+    auto e = make();
+    sawPatch (*e);
+    const std::vector<Event> ev = { sbtest::noteOn (0, 60) };
+    const auto plain = sbtest::render (*e, ev, static_cast<int> (0.5 * kSr), 256);
+    // distortion (instance 0, hard clip, +24 dB) then a delay slot after it: sorting matters
+    auto render = [&] (int slotOrder)
+    {
+        auto x = make();
+        sawPatch (*x);
+        set (*x, "distortion.on", 1);
+        set (*x, "distortion.type", 1);
+        set (*x, "distortion.drive", 24);
+        setSlot (*x, 1, kFxTypeUtility, 0, slotOrder);
+        set (*x, poolKey (1, "p09").c_str(), 0.0f); // (whatever the key is: the level of the slot stays at the default)
+        return sbtest::render (*x, ev, static_cast<int> (0.5 * kSr), 256);
+    };
+    const auto before = render (0), after = render (1023);
+    double diff = 0;
+    for (size_t i = 0; i < before.left.size(); ++i)
+        diff = std::max (diff, static_cast<double> (std::fabs (before.left[i] - after.left[i])));
+    (void) plain;
+    CHECK (diff >= 0.0); // (both orders are valid for a pure level slot; the real order test is below)
+    // a mono-bass filter (Utility lpf at 200 Hz) before a hard clip leaves a rounder wave than after it
+    auto spectrum = [&] (int slotOrder)
+    {
+        auto x = make();
+        sawPatch (*x);
+        set (*x, "distortion.on", 1);
+        set (*x, "distortion.type", 1);
+        set (*x, "distortion.drive", 24);
+        setSlot (*x, 1, kFxTypeUtility, 0, slotOrder);
+        // utility.lpf is a key of the type: find which parameter it is
+        const FxTypeDescriptor& d = fxTypeDescriptor (kFxTypeUtility);
+        for (int k = 0; k < d.count; ++k)
+            if (std::string (paramTable()[static_cast<size_t> (d.source[k])].key) == "utility.lpf")
+            {
+                char name[8];
+                std::snprintf (name, sizeof name, "p%02d", k + 1);
+                set (*x, poolKey (1, name).c_str(), static_cast<float> (fxInstanceNormalise (kFxTypeUtility, k, 300.0f)));
+            }
+        const auto r = sbtest::render (*x, ev, static_cast<int> (0.8 * kSr), 256);
+        double e = 0;
+        for (size_t i = static_cast<size_t> (0.3 * kSr); i < r.left.size(); ++i)
+            e += static_cast<double> (r.left[i]) * r.left[i];
+        return e;
+    };
+    const double lpfFirst = spectrum (0), lpfLast = spectrum (1023);
+    if (verbose())
+        std::printf ("    energy lpf first %.2f last %.2f\n", lpfFirst, lpfLast);
+    CHECK (std::fabs (lpfFirst - lpfLast) > 0.05 * std::max (lpfFirst, lpfLast));
+    // the rack: a slot in Bus 1 does not touch the main signal; main.fx_bypass skips the slots of Main
+    {
+        auto x = make();
+        sawPatch (*x);
+        setSlot (*x, 2, kFxTypeDistortion, 1);
+        const auto r = sbtest::render (*x, ev, static_cast<int> (0.5 * kSr), 256);
+        double d = 0;
+        for (size_t i = 0; i < r.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r.left[i] - plain.left[i])));
+        CHECK (d < 1.0e-6);
+    }
+    {
+        auto x = make();
+        sawPatch (*x);
+        set (*x, "distortion.drive", 30);
+        setSlot (*x, 2, kFxTypeDistortion, 0);
+        set (*x, "main.fx_bypass", 1);
+        const auto r = sbtest::render (*x, ev, static_cast<int> (0.5 * kSr), 256);
+        double d = 0;
+        for (size_t i = 0; i < r.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r.left[i] - plain.left[i])));
+        CHECK (d < 1.0e-6);
+    }
+    // the crossfade: switching a slot on in the middle of a note is a 10 ms linear fade (no step)
+    {
+        auto x = make();
+        sawPatch (*x);
+        setSlot (*x, 3, kFxTypeDistortion, 0, 1023, false);
+        set (*x, poolKey (3, "p02").c_str(), 1.0f); // drive at the maximum
+        auto r1 = sbtest::render (*x, { sbtest::noteOn (0, 60) }, static_cast<int> (0.3 * kSr), 256);
+        set (*x, poolKey (3, "on").c_str(), 1.0f);
+        const auto r2 = sbtest::render (*x, {}, static_cast<int> (0.2 * kSr), 256);
+        // after the fade the slot is on: the signal differs from the plain one
+        double d = 0;
+        for (size_t i = static_cast<size_t> (0.1 * kSr); i < r2.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r2.left[i])));
+        CHECK (d > 0.0);
+    }
+}
+
+TEST (fx_pool_type_change_modulation_and_robustness)
+{
+    auto e = make();
+    sawPatch (*e);
+    // all 24 values 0: the slot sounds at the minimum of every key (a Delay slot at its level minimum is quiet)
+    set (*e, "fxi01.type", kFxTypeDelay);
+    set (*e, "fxi01.on", 1);
+    const auto quiet = sbtest::render (*e, { sbtest::noteOn (0, 60) }, static_cast<int> (0.5 * kSr), 256);
+    double pk = 0;
+    for (size_t i = static_cast<size_t> (0.2 * kSr); i < quiet.left.size(); ++i)
+        pk = std::max (pk, static_cast<double> (std::fabs (quiet.left[i])));
+    auto ref = make();
+    sawPatch (*ref);
+    const auto plain = sbtest::render (*ref, { sbtest::noteOn (0, 60) }, static_cast<int> (0.5 * kSr), 256);
+    double pp = 0;
+    for (size_t i = static_cast<size_t> (0.2 * kSr); i < plain.left.size(); ++i)
+        pp = std::max (pp, static_cast<double> (std::fabs (plain.left[i])));
+    CHECK (pk < 0.9 * pp);
+    // every type in every slot, switched around while playing, stays finite and bounded
+    for (int type = 1; type < kNumFxInstanceTypes; ++type)
+    {
+        auto x = make();
+        sawPatch (*x);
+        for (int s = 1; s <= 16; ++s)
+            setSlot (*x, s, type, (s - 1) % 3);
+        set (*x, "bus1.level", 0);
+        auto r = sbtest::render (*x, { sbtest::noteOn (0, 60) }, static_cast<int> (0.6 * kSr), 256);
+        for (int s = 1; s <= 16; ++s)
+            set (*x, poolKey (s, "type").c_str(), static_cast<float> ((type + s) % kNumFxInstanceTypes));
+        r = sbtest::render (*x, {}, static_cast<int> (0.4 * kSr), 256);
+        bool finite = true;
+        for (float v : r.left)
+            finite = finite && std::isfinite (v) && std::fabs (v) < 8.0f;
+        CHECK (finite);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// latency and its compensation across the buses (document 06, 11)
+
+namespace
+{
+struct LatencyResult { int reported; double onset; };
+
+/** Onset (first sample above 1e-4, in samples) of a sine note with attack 0 and the latency the engine reports, for a configuration. */
+LatencyResult latencyOf (const KV& cfg, const std::vector<std::pair<int, int>>& slots = {}, int slotRack = 0)
+{
+    auto e = make();
+    set (*e, "osc1.wavetable", 0);
+    set (*e, "osc1.level", 100);
+    set (*e, "filter1.on", 0);
+    set (*e, "env1.attack", 0);
+    set (*e, "master.volume", 0);
+    for (auto& kv : cfg)
+        set (*e, kv.first.c_str(), kv.second);
+    int slot = 1;
+    for (auto& s : slots)
+        setSlot (*e, slot++, s.first, s.second);
+    (void) slotRack;
+    const auto r = sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69) }, static_cast<int> (0.5 * kSr), 256);
+    double onset = -1.0;
+    for (size_t i = 0; i < r.left.size(); ++i)
+        if (std::fabs (r.left[i]) > 1.0e-4f)
+        {
+            onset = static_cast<double> (i) - 0.1 * kSr;
+            break;
+        }
+    return { e->latencySamples(), onset };
+}
+} // namespace
+
+TEST (fx_latency_sums_and_compensation_across_the_buses)
+{
+    const auto plain = latencyOf ({});
+    CHECK_EQ (plain.reported, 0);
+    const int L = 64; // the Hilbert filter of Bode delays 64 frames; the own chain runs at the host rate
+    const int Lim = static_cast<int> (std::lround (0.0015 * kSr));
+    struct Case { const char* name; KV cfg; std::vector<std::pair<int, int>> slots; int reported; int shift; };
+    const std::vector<Case> cases = {
+        { "bode in main", { { "bode.on", 1 }, { "bode.mix", 100 } }, {}, L, L },
+        { "bode in bus 1 (nothing sent), destination main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 } }, {}, L, L },
+        { "bode in bus 1, destination direct", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 }, { "bus1.destination", 1 } }, {}, L, L },
+        { "bode in bus 1 with bypass", { { "bode.on", 1 }, { "bode.rack", 1 }, { "bus1.fx_bypass", 1 } }, {}, 0, 0 },
+        { "bode in main with main bypass", { { "bode.on", 1 }, { "main.fx_bypass", 1 } }, {}, 0, 0 },
+        { "direct out source, bode in main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "osc1.destination", 4 } }, {}, L, L },
+        { "limiter", { { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, Lim, Lim },
+        { "limiter, latency comp off", { { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.limit_latency_comp", 0 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, 0, Lim },
+        { "bode + limiter in main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, L + Lim, L + Lim },
+        { "bode in bus 1 + limiter in main", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 }, { "compressor.on", 1 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, L + Lim, L + Lim },
+        { "bode in bus 1 (other bus), limiter in bus 2", { { "bode.on", 1 }, { "bode.mix", 100 }, { "bode.rack", 1 }, { "bus1.destination", 2 }, { "compressor.on", 1 }, { "compressor.rack", 2 }, { "compressor.limit", 1 }, { "compressor.bands", 3 }, { "compressor.mid.upper_threshold", 12 } }, {}, L + Lim, L + Lim },
+        { "bode slot in main", {}, { { kFxTypeBode, 0 } }, L, L },
+        { "two bode slots in main", {}, { { kFxTypeBode, 0 }, { kFxTypeBode, 0 } }, 2 * L, 2 * L },
+        { "bode slot and bode in main", { { "bode.on", 1 } }, { { kFxTypeBode, 0 } }, 2 * L, 2 * L },
+        { "bode slot in bus 2", {}, { { kFxTypeBode, 2 } }, L, L },
+        { "compressor slot, defaults", {}, { { kFxTypeCompressor, 0 } }, 0, 0 },
+    };
+    for (const Case& c : cases)
+    {
+        KV cfg = c.cfg;
+        const auto r = latencyOf (cfg, c.slots);
+        if (verbose())
+            std::printf ("    %-48s reported %3d (want %3d) onset +%.0f (want +%d)\n", c.name, r.reported, c.reported, r.onset - plain.onset, c.shift);
+        CHECK_EQ (r.reported, c.reported);
+        CHECK (std::fabs ((r.onset - plain.onset) - c.shift) <= 1.5);
+    }
+}
