@@ -46,6 +46,20 @@ public:
 
     bool finished() const noexcept { return stage == Stage::done || stage == Stage::idle; }
     bool held() const noexcept { return gate; }
+    /** 0 idle, 1 delay / attack, 2 hold, 3 decay / sustain, 4 release, 5 finished (read-out of the display). */
+    int stageCode() const noexcept
+    {
+        switch (stage)
+        {
+            case Stage::delay: case Stage::attack: return 1;
+            case Stage::hold: return 2;
+            case Stage::decay: case Stage::sustain: return 3;
+            case Stage::release: return 4;
+            case Stage::done: return 5;
+            default: return 0;
+        }
+    }
+    double stageSeconds() const noexcept { return pos; }
     float current() const noexcept { return value; }
 
     /** Advances `seconds` and returns the value at the end of the step. */

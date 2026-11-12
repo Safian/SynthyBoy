@@ -29,6 +29,9 @@ add_library(synthyboy_core STATIC
     engine-own/own_support.cpp
     engine-own/fx/fx_chain.cpp
     engine-own/osc/wavetable_bank.cpp
+    engine-own/osc/morph.cpp
+    engine-own/osc/content_set.cpp
+    engine-own/osc/lib_osc.cpp
     engine-own/matrix/mod_matrix.cpp
     engine-own/voice/param_index.cpp
     engine-own/voice/voice.cpp)

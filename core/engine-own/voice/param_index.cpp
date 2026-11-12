@@ -44,7 +44,8 @@ ParamIndex build()
     p.sub = { find ("sub.on"), find ("sub.waveform"), find ("sub.octave"), find ("sub.tune"), find ("sub.level"), find ("sub.pan"),
               find ("sub.destination"), find ("sub.env1"), find ("sub.phase"), find ("sub.filter_blend"), find ("sub.bus1_send"), find ("sub.bus2_send") };
     p.noise = { find ("noise.on"), find ("noise.level"), find ("noise.pan"), find ("noise.destination"), find ("noise.env1"), find ("noise.sample"),
-                find ("noise.stereo"), find ("noise.keytrack"), find ("noise.pitch"), find ("noise.fine"), find ("noise.filter_blend"), find ("noise.bus1_send"), find ("noise.bus2_send") };
+                find ("noise.stereo"), find ("noise.keytrack"), find ("noise.pitch"), find ("noise.fine"), find ("noise.filter_blend"), find ("noise.bus1_send"), find ("noise.bus2_send"),
+                find ("noise.type"), find ("noise.phase"), find ("noise.random_phase"), find ("noise.loop"), find ("noise.bounce") };
     p.bus1Level = find ("bus1.level"); p.bus2Level = find ("bus2.level"); p.directLevel = find ("direct.level"); p.bus1Dest = find ("bus1.destination");
     p.bus2Dest = find ("bus2.destination"); p.bus1Bypass = find ("bus1.fx_bypass"); p.bus2Bypass = find ("bus2.fx_bypass"); p.mainBypass = find ("main.fx_bypass");
     for (int n = 1; n <= 2; ++n)

@@ -171,9 +171,39 @@ std::vector<FramePair> makeFrames (int choice)
 }
 } // namespace
 
+namespace
+{
+struct LevelTable
+{
+    int harmonics[Wavetable::kNumLevels], size[Wavetable::kNumLevels];
+    LevelTable()
+    {
+        for (int m = 0; m < Wavetable::kNumLevels; ++m)
+        {
+            static const int kHarmonics[Wavetable::kNumLevels] = { 1024, 512, 256, 181, 128, 91, 64, 45, 32, 23, 16, 11, 8, 6, 4, 3, 2, 1 };
+            harmonics[m] = kHarmonics[m];
+            int n = 256; // never fewer than 256 samples: at the high pitches the interpolation images of a tiny table are what is left to hear
+            while (n < 8 * harmonics[m] && n < Wavetable::kCycle)
+                n <<= 1;
+            size[m] = m == 0 ? Wavetable::kCycle : n;
+        }
+    }
+};
+const LevelTable& levels()
+{
+    static const LevelTable t;
+    return t;
+}
+} // namespace
+
 int Wavetable::maxHarmonics (int level) noexcept
 {
-    return std::max (1, (kHarm - 1 + 1) >> level); // octave steps: 1024, 512, ... 1 (memory: 64 frame tables x 11 levels)
+    return levels().harmonics[std::clamp (level, 0, kNumLevels - 1)];
+}
+
+int Wavetable::size (int level) noexcept
+{
+    return levels().size[std::clamp (level, 0, kNumLevels - 1)];
 }
 
 int Wavetable::levelFor (float nyquistOverFundamental) noexcept
@@ -186,44 +216,89 @@ int Wavetable::levelFor (float nyquistOverFundamental) noexcept
     return kNumLevels - 1;
 }
 
-void Wavetable::build (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff)
+void Wavetable::build (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff, bool normalizePeak)
 {
     frames = static_cast<int> (cosCoeff.size());
-    data.assign (static_cast<size_t> (frames) * kNumLevels * kStride, 0.0f);
-    std::vector<std::complex<double>> a (kCycle);
+    size_t off = 0;
+    for (int m = 0; m < kNumLevels; ++m)
+    {
+        levelOffset[m] = off;
+        off += static_cast<size_t> (size (m)) + 4;
+    }
+    frameStride = off;
+    data.assign (static_cast<size_t> (frames) * frameStride, 0.0f);
+    spec.assign (static_cast<size_t> (frames) * 2 * kHarmonics, 0.0f);
+    std::vector<std::complex<double>> a;
     for (int f = 0; f < frames; ++f)
     {
-        // normalise the full band cycle to a peak of 1
         double scale = 1.0;
         for (int m = 0; m < kNumLevels; ++m)
         {
+            const int n = size (m);
             const int top = maxHarmonics (m);
-            std::fill (a.begin(), a.end(), std::complex<double> (0.0, 0.0));
-            for (int h = 1; h <= top && h < kHarm; ++h)
+            a.assign (static_cast<size_t> (n), std::complex<double> (0.0, 0.0));
+            a[0] = cosCoeff[static_cast<size_t> (f)][0]; // the mean of the frame (user tables keep it; the built-in tables have none)
+            for (int h = 1; h <= top && h < kHarm && h < n / 2; ++h)
             {
                 // x[i] = sum c cos (h t) + s sin (h t); inverse FFT bin = (c - i s) / 2 and its mirror
-                const std::complex<double> v (0.5 * cosCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)],
-                                              -0.5 * sinCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)]);
+                // the top fifth of every mip level (not level 0) is tapered with a raised cosine: a brickwall at the edge of the band rings (Gibbs, 9 % overshoot) and
+                // the ringing is what makes a baked table sound louder in its peaks than the live signal it was rendered from
+                double taper = 1.0;
+                if (m > 0 && top > 4 && h > top * 4 / 5)
+                    taper = 0.5 + 0.5 * std::cos (kPi * static_cast<double> (h - top * 85 / 100) / static_cast<double> (top - top * 85 / 100 + 1));
+                const std::complex<double> v (0.5 * taper * cosCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)],
+                                              -0.5 * taper * sinCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)]);
                 a[static_cast<size_t> (h)] = v;
-                a[static_cast<size_t> (kCycle - h)] = std::conj (v);
+                a[static_cast<size_t> (n - h)] = std::conj (v);
             }
             fft (a, +1);
-            if (m == 0)
+            if (m == 0 && normalizePeak)
             {
                 double peak = 1.0e-9;
-                for (int i = 0; i < kCycle; ++i)
+                for (int i = 0; i < n; ++i)
                     peak = std::max (peak, std::fabs (a[static_cast<size_t> (i)].real()));
                 scale = 1.0 / peak;
             }
-            float* dst = data.data() + (static_cast<size_t> (f) * kNumLevels + static_cast<size_t> (m)) * kStride + 1;
-            for (int i = 0; i < kCycle; ++i)
+            float* dst = data.data() + static_cast<size_t> (f) * frameStride + levelOffset[m] + 1;
+            for (int i = 0; i < n; ++i)
                 dst[i] = static_cast<float> (a[static_cast<size_t> (i)].real() * scale);
-            dst[-1] = dst[kCycle - 1];
-            dst[kCycle] = dst[0];
-            dst[kCycle + 1] = dst[1];
-            dst[kCycle + 2] = dst[2];
+            dst[-1] = dst[n - 1];
+            dst[n] = dst[0];
+            dst[n + 1] = dst[1];
+            dst[n + 2] = dst[2];
+        }
+        float* sp = spec.data() + static_cast<size_t> (f) * 2 * kHarmonics;
+        sp[0] = static_cast<float> (cosCoeff[static_cast<size_t> (f)][0] * scale);
+        for (int h = 1; h < kHarm; ++h)
+        {
+            sp[h] = static_cast<float> (cosCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)] * scale);
+            sp[kHarmonics + h] = static_cast<float> (sinCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)] * scale);
         }
     }
+}
+
+std::unique_ptr<Wavetable> makeWavetableFromSamples (const float* samples, int numFrames)
+{
+    if (samples == nullptr || numFrames < 1)
+        return nullptr;
+    std::vector<std::vector<float>> cc, ss;
+    std::vector<double> x (static_cast<size_t> (Wavetable::kCycle));
+    for (int f = 0; f < numFrames; ++f)
+    {
+        double mean = 0.0;
+        for (int i = 0; i < Wavetable::kCycle; ++i)
+            mean += samples[static_cast<size_t> (f) * Wavetable::kCycle + static_cast<size_t> (i)];
+        mean /= Wavetable::kCycle;
+        for (int i = 0; i < Wavetable::kCycle; ++i)
+            x[static_cast<size_t> (i)] = samples[static_cast<size_t> (f) * Wavetable::kCycle + static_cast<size_t> (i)] - mean;
+        FramePair fp = spectrumOf (x);
+        fp.c[0] = static_cast<float> (mean); // a user table keeps its DC (the mean of the frame)
+        cc.push_back (fp.c);
+        ss.push_back (fp.s);
+    }
+    auto t = std::make_unique<Wavetable>();
+    t->build (cc, ss, false);
+    return t;
 }
 
 namespace
@@ -251,6 +326,15 @@ struct Bank
     }
 };
 } // namespace
+
+size_t builtinBankBytes() noexcept
+{
+    size_t total = 0;
+    for (int c = 0; c <= kNumWavetableChoices; ++c)
+        if (const Wavetable* t = builtinWavetable (c))
+            total += t->memoryBytes();
+    return total;
+}
 
 const Wavetable* builtinWavetable (int choice) noexcept
 {

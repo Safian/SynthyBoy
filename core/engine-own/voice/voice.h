@@ -10,6 +10,8 @@
 #include "../env_lfo/envelope.h"
 #include "../env_lfo/lfo.h"
 #include "../matrix/mod_matrix.h"
+#include "../osc/content_set.h"
+#include "../osc/lib_osc.h"
 #include "../osc/wt_osc.h"
 #include "own_content.h"
 #include "filter_unit.h"
@@ -36,10 +38,17 @@ struct TickGlobals
     const float* rlfoValue = nullptr;     // [4] global random LFO values -1 .. 1
     int activeVoices = 0;
     float concertA = 440.0f;
-    const OwnContent* content = nullptr;  // custom LFO shapes, modulation curves
+    const OwnContent* lfoContent = nullptr;  // custom LFO shapes, modulation curves
     const LfoCore* monoCore = nullptr;    // [10] the shared instance of the mono LFOs (sync types 2 .. 5)
     double songSeconds = 0.0;             // the host song position in seconds (the clock of the HOST lock)
     int maxUnison = kMaxUnisonVoices;
+    const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
+    int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
+    bool oversample = false;                 // ultra render / quality.oversample_4x: every wavetable oscillator runs 4x oversampled
+    spectral::Scratch* spectralScratch = nullptr;
+    uint32_t* chokeLatest = nullptr;         // [3][256] choke groups of the multisample oscillators (engine wide per slot)
+    uint32_t* chokeCounter = nullptr;        // [3]
+    const int* switchKey = nullptr;          // [3] last key switch of the multisample instrument of each oscillator, -1 = default
 };
 
 struct NoteStart
@@ -73,6 +82,8 @@ public:
     void legatoTo (const NoteStart& n) noexcept;
     void release (float velocity) noexcept;
     void kill() noexcept;
+    int multisampleZone (int osc) const noexcept { return lib[osc].lastZone(); }
+    int multisampleKey (int osc) const noexcept { return lib[osc].lastKey(); }
 
     bool isActive() const noexcept { return active; }
     bool isReleased() const noexcept { return released; }
@@ -100,6 +111,16 @@ public:
     float currentSemitones() const noexcept { return lastSemis; }
     /** The values of all modulation sources of the last period (index = source id, 0 .. 1). */
     const float* sourceValues() const noexcept { return src; }
+    /** Read-out: stage and position (0 .. 1) of envelope e, the cycle position of LFO l, and a parameter as this voice hears it. */
+    void envReadout (int e, float& stage, float& position) const noexcept
+    {
+        stage = static_cast<float> (env[e].stageCode());
+        const int st = env[e].stageCode();
+        const float len = st == 1 ? envLen[e][0] : (st == 2 ? envLen[e][1] : (st == 3 ? envLen[e][2] : (st == 4 ? envLen[e][3] : 0.0f)));
+        position = len > 0.0f ? clamp01 (static_cast<float> (env[e].stageSeconds()) / len) : 0.0f;
+    }
+    float lfoReadout (int l) const noexcept { return lfoCore[l].offset - std::floor (lfoCore[l].offset); }
+    float modulatedParam (int idx) const noexcept { return gl != nullptr ? P (idx) : 0.0f; }
 
     /** Advances envelopes, LFOs and the matrix by one control period and computes the parameters of the period. */
     void tick (const TickGlobals& g, int voiceIndex) noexcept;
@@ -139,6 +160,7 @@ private:
     Envelope env[6];
     float envOut[6] = {};
     LfoCore lfoCore[10];
+    float envLen[6][4] = {};
     float lfoAge[10] = {}, lfoSmoothL[10] = {}, lfoSmoothR[10] = {};
     float lfoOutR[10] = {};
     float srcR[kNumSourceIds] = {};
@@ -156,10 +178,21 @@ private:
 
     // sound sources
     WtOsc osc[3], sub;
+    LibOsc lib[3];
+    float remapCur[3] = {};
+    bool remapInit[3] = {};
+    float pitchTap[4] = {};   // pitch of oscillators 1 .. 3 and the sub of the last period (Ratio SRC)
+    bool pitchTapOn[4] = {};
     OscTick oscTick[3], subTick;
     float oscMono[3][kControlPeriod] = {};
+    float extMono[4][kControlPeriod] = {};   // Noise, Sub, Filter 1, Filter 2 of the last chunk: the modulators of the warps from those sources
     float noiseState[2][4] = {}; // left and right generator
     Rng noiseRng;
+    sampleosc::SampleVoice noiseSv;   // noise.type = Sample: the content sample of the noise source
+    const ContentSet* noiseBound = nullptr;
+    bool noiseUseSample = false;
+    float noiseFilt[2][2] = {}, noiseLp[2][4] = {}; // noise.filter poles, generator pitch low pass
+    float noiseFilterAmount = 0.0f, noisePitchSemis = 0.0f;
     float noiseGain = 0.0f, noiseGainPrev = 0.0f, noisePan = 0.0f, noiseStereo = 0.0f;
     int noiseColour = 0;
     struct Chan { float level = 0, levelPrev = 0, gl = 0, gr = 0, glPrev = 0, grPrev = 0; int dest = 3; bool env1 = true, on = false; };

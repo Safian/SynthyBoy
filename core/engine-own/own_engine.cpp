@@ -23,26 +23,87 @@ namespace own
 {
 namespace
 {
-/** The output safety stage: the identity up to +-1, above it a smooth knee that approaches +-2 (any patch stays bounded, a normal patch never reaches it). */
+/** The output safety stage: the identity up to +-1.8 (a loud patch with a boosting warp or filter passes unchanged, like the headroom of engine-vital), above it a smooth knee that
+    approaches +-2 (any patch stays bounded). A knee that starts at 1 distorts a signal with peaks of 1.5 and aliases the distortion (a high-pass warp measured -58 dB). */
 inline float outputLimit (float y) noexcept
 {
     const float a = std::fabs (y);
-    if (!(a > 1.0f))
+    if (!(a > 1.8f))
         return y == y ? y : 0.0f;
-    return std::copysign (1.0f + std::tanh (a - 1.0f), y);
+    return std::copysign (1.8f + 0.2f * std::tanh ((a - 1.8f) * 5.0f), y);
 }
 } // namespace
 
-OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable")))
+OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x")))
 {
     for (int k = 0; k < 128; ++k)
         tunedNotes[k] = static_cast<float> (k);
     const auto* table = paramTable();
     for (size_t i = 0; i < kMaxParams; ++i)
         params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
+    for (auto& k : switchKeyAtomic)
+        k.store (-1, std::memory_order_relaxed);
+    for (int o = 0; o < 3; ++o)
+    {
+        multiZone[o].store (-1, std::memory_order_relaxed);
+        multiKey[o].store (-1, std::memory_order_relaxed);
+    }
+    spectralScratch = std::make_unique<spectral::Scratch>();
+    publishContent (ContentSet::build (StateContent {}, nullptr));
 }
 
 OwnEngine::~OwnEngine() = default;
+
+void OwnEngine::publishContent (std::unique_ptr<ContentSet> set)
+{
+    std::lock_guard<std::mutex> lock (contentMutex);
+    const ContentSet* raw = set.get();
+    contentOwned.push_back (std::move (set));
+    contentCurrent.store (raw); // seq_cst: the audio thread re-validates the pointer it announced in contentInUse
+    const ContentSet* inUse = contentInUse.load();
+    for (size_t i = 0; i < contentOwned.size();)
+    {
+        const ContentSet* p = contentOwned[i].get();
+        if (p != raw && p != inUse)
+            contentOwned.erase (contentOwned.begin() + static_cast<std::ptrdiff_t> (i));
+        else
+            ++i;
+    }
+    for (auto& k : switchKeyAtomic)
+        k.store (-1, std::memory_order_relaxed);
+}
+
+void OwnEngine::rebuildContent()
+{
+    StateContent copy;
+    const IContentStore* st;
+    {
+        std::lock_guard<std::mutex> lock (contentMutex);
+        copy = contentState;
+        st = contentStore;
+    }
+    publishContent (ContentSet::build (copy, st));
+}
+
+void OwnEngine::setContent (const StateContent& content)
+{
+    noteTuning.setContent (content.tuning);
+    ownContent.publish (content);
+    {
+        std::lock_guard<std::mutex> lock (contentMutex);
+        contentState = content;
+    }
+    rebuildContent();
+}
+
+void OwnEngine::setContentStore (const IContentStore* store)
+{
+    {
+        std::lock_guard<std::mutex> lock (contentMutex);
+        contentStore = store;
+    }
+    rebuildContent();
+}
 
 float OwnEngine::readParam (uint32_t id) const noexcept
 {
@@ -86,6 +147,7 @@ void OwnEngine::setQuality (const Quality& q) noexcept
 {
     voiceCap.store (std::clamp (q.maxVoices, 1, kMaxVoices), std::memory_order_relaxed);
     unisonCap.store (std::clamp (q.maxUnison, 1, kMaxUnisonVoices), std::memory_order_relaxed);
+    qualityTier.store (q.oversampling <= 1 ? 0 : (q.interpolation == Interpolation::spectral ? 2 : 1), std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
 }
 
@@ -130,6 +192,17 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     reset();
 }
 
+void OwnEngine::silence() noexcept
+{
+    // the host transport stopped: notes and effect tails end at once, parameters, controllers and content stay
+    for (auto& v : voices)
+        v->kill();
+    for (auto& f : fx)
+        f.reset();
+    std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
+    numPressed = 0;
+}
+
 void OwnEngine::reset()
 {
     for (auto& v : voices)
@@ -144,6 +217,11 @@ void OwnEngine::reset()
     std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
     noteCounter = 0;
     voiceCtlCounter = 0;
+    for (auto& row : chokeLatest)
+        for (auto& x : row)
+            x = 0;
+    for (auto& x : chokeCounter)
+        x = 0;
     controlPos = 0;
     numPressed = 0;
     haveLastNote = false;
@@ -322,6 +400,12 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
     if (heldVoice != nullptr)
         chosen->inheritEnvelopes (*heldVoice);
     chosen->tick (globals, static_cast<int> (std::find_if (voices.begin(), voices.end(), [&] (const auto& p) { return p.get() == chosen; }) - voices.begin()));
+    for (int o = 0; o < 3; ++o)
+        if (chosen->multisampleZone (o) >= 0)
+        {
+            multiZone[o].store (chosen->multisampleZone (o), std::memory_order_relaxed);
+            multiKey[o].store (chosen->multisampleKey (o), std::memory_order_relaxed);
+        }
     lastNoteSemis = ns.tunedNote;
     haveLastNote = true;
     lastVelocity = n.velocity;
@@ -351,6 +435,14 @@ void OwnEngine::noteOn (const Event& e) noexcept
             for (int l = 0; l < 10; ++l)
                 monoCore[l].restart();
     }
+    // a key switch of a multisample instrument selects the articulation of the zones that follow
+    if (globals.content != nullptr)
+        for (int o = 0; o < 3; ++o)
+            if (globals.content->instrument[o] != nullptr && globals.content->instrument[o]->isKeySwitchKey (e.key))
+            {
+                switchKeyAtomic[o].store (e.key, std::memory_order_relaxed);
+                switchKeySnap[o] = e.key;
+            }
 
     // a key that is already held
     for (auto& v : voices)
@@ -671,13 +763,13 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     // ---- block snapshot
     for (size_t i = 0; i < base.size(); ++i)
         base[i] = params[i].load (std::memory_order_relaxed);
-    contentNow = content.get();
+    contentNow = ownContent.get();
     matrix.setContent (contentNow);
     matrix.compile (base.data());
     const ParamIndex& pi = paramIndex();
     globals.base = base.data();
     globals.matrix = &matrix;
-    globals.content = contentNow;
+    globals.lfoContent = contentNow;
     globals.monoCore = monoCore;
     globals.songSeconds = globals.songBeats * 60.0 / std::max (globals.bpm, 1.0);
     globals.sampleRate = sampleRate;
@@ -709,6 +801,24 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.lfoPhase = lfoPhase;
     globals.rlfoValue = rlfoValue;
     globals.maxUnison = unisonCap.load (std::memory_order_relaxed);
+    // announce the content set this block reads (hazard pointer: the message thread frees a set only when it is neither current nor announced)
+    {
+        const ContentSet* cs;
+        do
+        {
+            cs = contentCurrent.load();
+            contentInUse.store (cs);
+        } while (cs != contentCurrent.load());
+        globals.content = cs;
+    }
+    for (int o = 0; o < 3; ++o)
+        switchKeySnap[o] = switchKeyAtomic[o].load (std::memory_order_relaxed);
+    globals.switchKey = switchKeySnap;
+    globals.quality = qualityTier.load (std::memory_order_relaxed);
+    globals.oversample = ultraRender.load (std::memory_order_relaxed) || (fxOversampleIndex >= 0 && base[static_cast<size_t> (fxOversampleIndex)] >= 0.5f);
+    globals.spectralScratch = spectralScratch.get();
+    globals.chokeLatest = &chokeLatest[0][0];
+    globals.chokeCounter = chokeCounter;
 
     const MasterIdx& mi = pi.master;
     const int fxReverbForce = fxReverbForceIndex;
@@ -836,6 +946,95 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     for (const auto& v : voices)
         count += (v->isActive() && !v->killing()) ? 1 : 0; // a voice in its 50 ms kill fade is on its way out: the count stays within the polyphony
     activeCount.store (count, std::memory_order_relaxed);
+    writeReadout();
+    blockCounter.fetch_add (1, std::memory_order_relaxed);
+}
+
+void OwnEngine::setReadoutTargets (const int* idx, int count) noexcept
+{
+    const int n = std::clamp (count, 0, LiveValues::kMaxTargets);
+    for (int i = 0; i < n; ++i)
+        pendingTargets[i].store (idx[i], std::memory_order_relaxed);
+    pendingCount.store (n, std::memory_order_release);
+}
+
+bool OwnEngine::copyReadout (LiveValues& out) const noexcept
+{
+    out.block = blockCounter.load (std::memory_order_relaxed);
+    out.activeVoices = activeCount.load (std::memory_order_relaxed);
+    for (int i = 0; i < LiveValues::kMaxSources; ++i)
+        out.source[i] = liveSource[i].load (std::memory_order_relaxed);
+    for (int i = 0; i < LiveValues::kNumLfos; ++i)
+        out.lfoPhase[i] = liveLfo[i].load (std::memory_order_relaxed);
+    for (int i = 0; i < LiveValues::kNumEnvs; ++i)
+    {
+        out.envStage[i] = liveEnvStage[i].load (std::memory_order_relaxed);
+        out.envPosition[i] = liveEnvPos[i].load (std::memory_order_relaxed);
+    }
+    out.numTargets = liveNumTargets.load (std::memory_order_relaxed);
+    for (int i = 0; i < out.numTargets; ++i)
+        out.target[i] = liveTarget[i].load (std::memory_order_relaxed);
+    for (int o = 0; o < 3; ++o)
+    {
+        out.multisampleZone[o] = multiZone[o].load (std::memory_order_relaxed);
+        out.multisampleKey[o] = multiKey[o].load (std::memory_order_relaxed);
+    }
+    return true;
+}
+
+/** End of a block: the display gets the sources of the voice played last (the global sources when none sounds), the LFO cycle positions, the envelope stages and the modulated knobs. */
+void OwnEngine::writeReadout() noexcept
+{
+    const ParamIndex& pi = paramIndex();
+    const Voice* newest = nullptr;
+    for (const auto& v : voices)
+        if (v->isActive() && (newest == nullptr || v->serial() > newest->serial()))
+            newest = v.get();
+    const int tc = pendingCount.load (std::memory_order_acquire);
+    if (tc != activeTargetCount)
+        activeTargetCount = tc;
+    for (int i = 0; i < activeTargetCount; ++i)
+        activeTargets[i] = pendingTargets[i].load (std::memory_order_relaxed);
+    for (int i = 0; i < LiveValues::kMaxSources; ++i)
+    {
+        const int id = i + 1; // index k = choice value k + 1
+        float v = 0.0f;
+        if (newest != nullptr && id < kNumSourceIds)
+            v = newest->sourceValues()[id];
+        else if (id >= kSrcMacro1 && id < kSrcMacro1 + 4)
+            v = globals.macro[id - kSrcMacro1];
+        else if (id >= kSrcMacro5 && id < kSrcMacro5 + 4)
+            v = globals.macro[4 + id - kSrcMacro5];
+        else if (id == kSrcPitchWheel)
+            v = 0.5f;
+        const bool lfo = (id >= kSrcLfo1 && id < kSrcLfo1 + 8) || id == kSrcLfo9 || id == kSrcLfo10;
+        liveSource[i].store (lfo ? 2.0f * v - 1.0f : v, std::memory_order_relaxed);
+    }
+    for (int l = 0; l < LiveValues::kNumLfos; ++l)
+        liveLfo[l].store (newest != nullptr ? newest->lfoReadout (l) : -1.0f, std::memory_order_relaxed);
+    for (int e = 0; e < LiveValues::kNumEnvs; ++e)
+    {
+        float st = 0.0f, ps = 0.0f;
+        if (newest != nullptr)
+            newest->envReadout (e, st, ps);
+        liveEnvStage[e].store (st, std::memory_order_relaxed);
+        liveEnvPos[e].store (ps, std::memory_order_relaxed);
+    }
+    for (int i = 0; i < activeTargetCount; ++i)
+    {
+        const int idx = activeTargets[i];
+        float v = idx >= 0 && static_cast<size_t> (idx) < base.size() ? base[static_cast<size_t> (idx)] : 0.0f;
+        if (idx >= 0 && static_cast<size_t> (idx) < base.size())
+        {
+            if (gdelta[static_cast<size_t> (idx)] != 0.0f)
+                v = modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), v, gdelta[static_cast<size_t> (idx)]);
+            else if (newest != nullptr)
+                v = newest->modulatedParam (idx);
+        }
+        liveTarget[i].store (v, std::memory_order_relaxed);
+    }
+    liveNumTargets.store (activeTargetCount, std::memory_order_relaxed);
+    (void) pi;
 }
 } // namespace own
 } // namespace synthyboy

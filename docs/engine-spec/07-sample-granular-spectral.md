@@ -88,6 +88,53 @@ This is **not** the Vital unison law of document 1 section 9 (no pair layout, no
 * The spectral oscillator is the most expensive; the engine caps its unison at 4.
 * A sample change (loading a file) must not happen on the audio thread: the content store hands the new view over between blocks (document 13-new-keys.md 5).
 
+## 7a. Details added after implementer questions 4 and 6
+
+### 7a.1 The spectral output gain: what 5.3703 is relative to (question 4)
+
+The factor `5.3703` multiplies the output gain of the `core/spectral` voice, and the voice's raw output level **depends on the host rate it is prepared with** (the rate of the engine's internal processing, `sr_i`): for the same 0.8-amplitude 440 Hz sine sample the voice at gain 1 gives an RMS of **0.2601 at 48 000 Hz** and **0.0948 at 96 000 Hz**
+(ratio 0.364, i.e. -8.8 dB; the level is not simply proportional to the rate). engine-vital runs the voices at `sr_i = 96 000` (2x oversampling at 48 kHz): `0.0948 * 5.3703 = 0.509`, which is the measured engine RMS 0.5106 (S4). **`5.3703` is therefore a calibration for `sr_i = 96 kHz`.** An engine that prepares the voice at 48 kHz needs
+`5.3703 * 0.364 = 1.95` for the same level: exactly the implementer's factor. Consequences, measured in engine-vital:
+* with the `low` tier (1x oversampling, `sr_i = 48 kHz`) the spectral oscillator is **2.74 times (8.8 dB) louder** than with 2x (sine sample: RMS 1.4005 against 0.5106) because the calibration is not rate-aware. This is a quirk; the **level target is the 2x value**, whatever the own engine's internal rate is.
+* the level of the spectral type relative to the Sample type depends on the **content**: RMS ratio spectral/sample for a sine 1.27, for a sawtooth (220 Hz, amplitude 0.6) 2.33, for white noise 4.01 (granular/sample: 1.49, 1.47, 1.43 for the same contents). The resynthesis has no fixed gain relative to the input; implement the library as it is and calibrate only the constant. RMS values at 2x oversampling, note 69, root 69, Forward loop, level 100:
+  sine 0.8: sample 0.401, granular 0.596, spectral 0.511; sine 0.4: 0.2005 / 0.2981 / 0.2553; saw 220 Hz 0.6: 0.2453 / 0.3613 / 0.5718; white noise (uniform +-0.8): 0.3031 / 0.4328 / 1.2142.
+
+### 7a.2 The X|Y control: `y_axis` and `xy_y` (granular and spectral)
+
+The oscillator has a two-dimensional pad: **X is the play head** (`gran.position` / `spec.position`, 0 .. 100 %, used while `manual` is On) and **Y is `xy_y`** (0 .. 100 % = 0 .. 1, modulatable, clamped to 0 .. 1). `y_axis` picks which parameter the Y value takes over; while an axis is assigned the normal knob of that parameter is **ignored** and the value below is used instead (axis 0 = None: the knobs act).
+
+| Granular `y_axis` | Value taken from Y (`y` = 0 .. 1) |
+|---|---|
+| 1 Level | output gain of the type = `y` (0 mutes) |
+| 2 Warp / 3 Warp 2 | warp 1 / warp 2 amount = `y` |
+| 4 Density | `0.1 * 10^(4 y)` grains per second (0.1 .. 1000 Hz) (free-rate mode; the tempo and grain-count modes keep their own rules) |
+| 5 Grain Length | `4000^y` ms (1 ms .. 4 s) |
+| 6 Window Amt / 7 Window Skew | window amount = `y`; skew = `2 y - 1` |
+| 8 Rand Offset, 9 Rand Dir, 11 Rand Length, 12 Rand Pan, 13 Rand Gain, 14 Rand Window, 15 Rand Skew, 16 Rand Warp, 17 Rand Warp 2 | that randomisation depth = `y` |
+| 10 Rand Pitch | `24 y` semitones |
+
+| Spectral `y_axis` | Value taken from Y |
+|---|---|
+| 1 Level | output gain = `y` (times the trim of 7a.1) |
+| 2 Warp / 3 Warp 2 | warp amount = `y` |
+| 4 Spec Flt Cutoff | the spectral filter's shift (`cut`) = `2 y - 1` |
+| 5 Spec Flt Wet/Dry | the spectral filter's mix = `y` |
+| 6 Freq Lo / 7 Freq Hi | the low / high band edge = `20 * 1000^y` Hz (20 Hz .. 20 kHz) |
+
+### 7a.3 Mask and Vocode warps from the Noise and the other oscillators (spectral type)
+
+The warps `Mask from Osc 2 / Osc 3 / Noise` and `Vocode from Osc 2 / Osc 3 / Noise` (list order: first other oscillator, second other oscillator, noise) use the **magnitude spectrum of the external source's current signal**:
+* every block (only when a warp needs it) the engine appends the block of the source's **raw output (the left lane of the voice)** to a ring of the last 2048 samples **at the engine's internal rate**, applies a Hann window `0.5 - 0.5 cos(2 pi n/2048)`, takes a 2048-point FFT and keeps the 1025 magnitudes. No scaling, no rate conversion: **bin `k` of the external spectrum is paired with bin `k` of the sample's analysis** (the sample's bins are `file_rate/2048` apart, the external ones `sr_i/2048`: they only coincide when the rates are equal; engine-vital pairs bin indices regardless). The other oscillators must have been rendered first (as for FM).
+* **Mask**: `mx = max(external)`; every magnitude `m[k] *= (1 - a) + a * min(1, 6 external[k] / mx)` (`a` = warp amount): a soft gate that passes the bins where the source is within -15.6 dB of its peak, and fully attenuates a silent source at `a = 1`.
+* **Vocode**: `level = sum(m)/sum(external)` (loudness match); per bin the envelopes over `k-4 .. k+4` are compared: `ratio = min(10, sum(external * level)/sum(m))`, `m[k] *= (1 - a) + a * ratio`: the source's spectral envelope is imposed on the sample's partials (gain limited to +20 dB).
+Both are scale-free in the external level (normalised by its maximum or its sum). These are exactly the formulas of `core/spectral`; what the engine adds is the external magnitudes above.
+
+### 7a.4 Choke groups (question 6)
+
+Layers (zones of a multisample instrument) carry a group number (`group`) and a choke target (`off_by`). **Scope: all voices of the same oscillator slot** (every voice and every unison voice of that oscillator; not across `osc1` / `osc2` / `osc3`): the oscillator has one counter of started notes and one table `latest[group]`. At a note start with zones: for every zone with `0 < group < max`, `latest[group] = counter + 1`;
+then `counter += 1`, and that value is the note's sequence number, stored by all its layers (all unison voices). In every block, for each active layer with `off_by > 0`: if `latest[off_by] > layer.sequence` (a **later** note started a zone of the group the layer is choked by) the layer receives its note off, **fast** (10 ms) if its `off_mode` is fast, else the normal release.
+A note therefore never chokes its own layers (equal sequence) but chokes the layers of earlier notes of any voice. The test happens when the layer's voice is next rendered (at most one chunk later). Release-trigger zones (started at a note off) get a new sequence but do not update `latest`.
+
 ## 8. Test vectors
 
 The libraries carry their own acceptance tests; the glue is measured black box with a generated content pack (a mono 16-bit WAV, 440 Hz sine of amplitude 0.8, 44.1 kHz, 2 s, loaded as the sample of osc 1 through the content store; `osc1.sample.root 69`, `sample.loop_mode` Forward loop, `osc1.level 100`, filter off, `master.volume 0`, `env1.attack 0`, `random_phase 0`):

@@ -74,6 +74,12 @@ void Voice::prepare (double sampleRate)
     modR.assign (paramCount(), 0.0f);
     filt[0].prepare (sampleRate);
     filt[1].prepare (sampleRate);
+    for (int o = 0; o < 3; ++o)
+    {
+        osc[o].prepareMorph();
+        lib[o].prepare (sampleRate);
+    }
+    noiseSv.prepare (sampleRate, 64);
 }
 
 void Voice::reset() noexcept
@@ -169,6 +175,12 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     for (auto& g : noiseState)
         for (auto& x : g)
             x = 0.0f;
+    for (auto& g : noiseFilt)
+        for (auto& x : g)
+            x = 0.0f;
+    for (auto& g : noiseLp)
+        for (auto& x : g)
+            x = 0.0f;
     for (auto& e : env)
         e.noteOn (0.0f);
     clearMod();
@@ -185,10 +197,13 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
         std::fill (std::begin (oscMono[o]), std::end (oscMono[o]), 0.0f);
     filt[0].reset();
     filt[1].reset();
-    osc[0] = WtOsc();
-    osc[1] = WtOsc();
-    osc[2] = WtOsc();
-    sub = WtOsc();
+    for (auto& o : osc)
+        o.clearState();
+    for (auto& l : lib)
+        l.resetForNote();
+    for (int i = 0; i < 4; ++i)
+        pitchTapOn[i] = false;
+    sub.clearState();
     fresh = true;
 }
 
@@ -220,6 +235,9 @@ void Voice::release (float velocity) noexcept
     releaseVel = velocity;
     for (auto& e : env)
         e.noteOff();
+    if (gl != nullptr)
+        for (int o = 0; o < 3; ++o)
+            lib[o].noteOff (P (libKeys (o).idx[lk_sLoopExit]) >= 0.5f);
 }
 
 void Voice::kill() noexcept
@@ -320,7 +338,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight) noexcept
     }
     const float swing = li.swing >= 0 ? clamp01 (P (li.swing) * 0.01f) : 0.0f;
     const int dir = static_cast<int> (P (li.direction) + 0.5f);
-    const CompiledShape* custom = (shape == 12 && g.content != nullptr && g.content->lfo[static_cast<size_t> (l)].present) ? &g.content->lfo[static_cast<size_t> (l)] : nullptr;
+    const CompiledShape* custom = (shape == 12 && g.lfoContent != nullptr && g.lfoContent->lfo[static_cast<size_t> (l)].present) ? &g.lfoContent->lfo[static_cast<size_t> (l)] : nullptr;
     auto shapeAt = [&] (float u, bool wrap) -> float // 0 .. 1
     {
         if (wrap)
@@ -459,6 +477,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.attackCurve = -P (ei.attackCurve);
         s.decayCurve = P (ei.decayCurve);
         s.releaseCurve = P (ei.releaseCurve);
+        envLen[e][0] = s.attack + s.delay; envLen[e][1] = s.hold; envLen[e][2] = s.decay; envLen[e][3] = s.release;
         s.delay *= vc.envFactor;
         s.attack *= vc.envFactor;
         s.hold *= vc.envFactor;
@@ -598,10 +617,15 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             osc[o].start (P (pi.osc[o].phase) * (1.0f / 360.0f), clamp01 (P (pi.osc[o].randomPhase) * 0.01f), rng);
         sub.start (P (pi.sub.phase) * 0.01f, 0.0f, rng);
     }
+    // a content set that replaced the one a sample-type player reads stops that player
     for (int o = 0; o < 3; ++o)
     {
         const OscIdx& oi = pi.osc[o];
-        oscOn[o] = P (oi.on) >= 0.5f && static_cast<int> (P (oi.type) + 0.5f) == kOscTypeWavetable;
+        const LibKeys& lk = libKeys (o);
+        const int type = std::clamp (static_cast<int> (P (oi.type) + 0.5f), 0, 4);
+        lib[o].setType (type, fresh);
+        const bool fadingFromWt = lib[o].fadingFromWavetable();
+        oscOn[o] = P (oi.on) >= 0.5f;
         if (oscOn[o])
         {
             const int kl = static_cast<int> (g.base[oi.keyLow] + 0.5f), kh = static_cast<int> (g.base[oi.keyHigh] + 0.5f);
@@ -621,15 +645,53 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             t.level = 0.0f;
             osc[o].update (t, g.sampleRate, rng);
+            pitchTapOn[o] = false;
+            lib[o].update (t, LibParams(), g.content, o);
             continue;
         }
-        t.wt = builtinWavetable (std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1));
+        const ContentSet* cs = g.content;
+        int wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
+        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : builtinWavetable (wtChoice);
         if (t.wt == nullptr)
-            t.wt = builtinWavetable (kWavetableSaw); // the preset table needs the content store (not implemented yet): the saw
+            t.wt = builtinWavetable (kWavetableSaw); // the preset table needs its content (a missing file: the saw)
+        // ---- pitch: the coarse term of the pitch mode and the Ratio source
         const bool track = P (oi.pitchTrack) >= 0.5f;
         const bool bendTrack = P (oi.bendTrack) >= 0.5f;
-        const float base = track ? noteSemis - (bendTrack ? 0.0f : bend) : 60.0f;
-        t.semis = base + P (oi.transpose) + P (oi.tune) * 0.01f + P (oi.pitchCoarse) + (vc.mask[o] && track ? vc.detuneSemis : 0.0f);
+        float base = track ? noteSemis - (bendTrack ? 0.0f : bend) : 60.0f;
+        const int pmode = static_cast<int> (P (lk.idx[lk_pitchMode]) + 0.5f);
+        const float coarse = P (oi.pitchCoarse);
+        float coarseSemis = coarse;
+        if (pmode == 1)
+            coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + std::floor (coarse)));
+        else if (pmode == 2)
+            coarseSemis = coarse >= 0.0f ? 12.0f * std::log2 (1.0f + coarse) : 12.0f * std::log2 (1.0f / (1.0f - coarse));
+        if (pmode == 2)
+        {
+            // Ratio SRC: the pitch of another source (as of the last period) replaces the note; a loop, itself or a source that is off is the note
+            const int srcIdx = static_cast<int> (P (lk.idx[lk_ratioSrc]) + 0.5f) - 1; // 0 .. 2 oscillators, 3 sub
+            bool ok = srcIdx >= 0 && srcIdx != o && srcIdx < 4 && pitchTapOn[srcIdx];
+            for (int s = srcIdx, hops = 0; ok && s < 3; ++hops)
+            {
+                if (hops >= 4)
+                    ok = false;
+                else if (g.base[libKeys (s).idx[lk_pitchMode]] < 1.5f)
+                    break; // the chain ends at a source that plays its own note
+                else
+                {
+                    const int next = static_cast<int> (g.base[libKeys (s).idx[lk_ratioSrc]] + 0.5f) - 1;
+                    if (next < 0 || next >= 4)
+                        break;
+                    if (next == o)
+                        ok = false;
+                    s = next;
+                }
+            }
+            if (ok)
+                base = pitchTap[srcIdx];
+        }
+        t.semis = base + P (oi.transpose) + P (oi.tune) * 0.01f + coarseSemis + (vc.mask[o] && track ? vc.detuneSemis : 0.0f);
+        pitchTap[o] = t.semis;
+        pitchTapOn[o] = true;
         t.frame = clamp01 (P (oi.frame) * 0.01f);
         t.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
         t.level = std::max (0.0f, P (oi.level) * 0.01f);
@@ -653,8 +715,73 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.warp[1] = static_cast<int> (P (oi.warp2Type) + 0.5f);
         t.warpAmount[1] = clamp01 (P (oi.warp2Amount) * 0.01f);
         t.warpPhase[1] = P (oi.warp2Phase) * (1.0f / 360.0f);
-        // the cross modulation entries of the list name the other two oscillators in order
-        osc[o].update (t, g.sampleRate, rng);
+        t.morphType = static_cast<int> (P (lk.idx[lk_morphType]) + 0.5f);
+        t.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
+        t.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
+        t.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
+        if (P (lk.idx[lk_remapOn]) >= 0.5f)
+        {
+            // frame position remap (02 6.7): the drawn curve of the slot, then a one pole slew with RISE (up) / FALL (down)
+            const int rslot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+            float target = t.frame;
+            if (cs != nullptr && cs->remap[o][rslot].size() == 257)
+            {
+                const float xx = clamp01 (t.frame) * 256.0f;
+                const int ci = std::min (static_cast<int> (xx), 255);
+                target = lerp (cs->remap[o][rslot][static_cast<size_t> (ci)], cs->remap[o][rslot][static_cast<size_t> (ci) + 1], xx - static_cast<float> (ci));
+            }
+            const float ms = target > remapCur[o] ? P (lk.idx[lk_remapRise]) : P (lk.idx[lk_remapFall]);
+            if (fresh || !remapInit[o] || ms <= 0.0f)
+                remapCur[o] = target;
+            else
+                remapCur[o] += (target - remapCur[o]) * (1.0f - std::exp (-fdt * 1000.0f / ms));
+            remapInit[o] = true;
+            t.frame = clamp01 (remapCur[o]);
+        }
+        else
+            remapInit[o] = false;
+        t.oversample = g.oversample;
+        t.remap = nullptr;
+        if (cs != nullptr)
+        {
+            const int slot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+            if (cs->remap[o][slot].size() == 257)
+                t.remap = cs->remap[o][slot].data();
+        }
+        const bool wtRuns = type == kOscTypeWavetable || fadingFromWt;
+        if (wtRuns)
+        {
+            // the cross modulation entries of the list name the other two oscillators in order
+            osc[o].update (t, g.sampleRate, rng);
+            osc[o].updateMorph (g.sampleRate, fresh);
+        }
+        else
+        {
+            t.active = false;
+        }
+        if (type != kOscTypeWavetable || lib[o].libraryRunning())
+        {
+            LibParams lp;
+            for (int i = 0; i < kLibKeyCount; ++i)
+                lp.v[i] = lk.idx[i] >= 0 ? P (lk.idx[i]) : 0.0f;
+            lp.type = type;
+            lp.noteSemis = noteSemis;
+            lp.noteRaw = static_cast<float> (keyNum);
+            lp.transposeTune = P (oi.transpose) + P (oi.tune) * 0.01f;
+            lp.pitchTrack = track;
+            lp.bendTrack = bendTrack;
+            lp.velocity = vel;
+            lp.bpm = static_cast<float> (g.bpm);
+            lp.hostRate = g.sampleRate;
+            lp.quality = g.quality;
+            lp.key = keyNum;
+            lp.serial = noteSerial;
+            lp.switchKey = g.switchKey != nullptr ? g.switchKey[o] : -1;
+            lp.scratch = g.spectralScratch;
+            lp.chokeLatest = g.chokeLatest != nullptr ? g.chokeLatest + o * 256 : nullptr;
+            lp.chokeCounter = g.chokeCounter != nullptr ? g.chokeCounter + o : nullptr;
+            lib[o].update (t, lp, cs, o);
+        }
     }
 
     // ---- sub oscillator
@@ -677,6 +804,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         subTick.blend = 1.0f;
         subTick.frame = 0.0f;
         sub.update (subTick, g.sampleRate, rng);
+        pitchTap[3] = subTick.semis;
+        pitchTapOn[3] = subCh.on;
     }
     // ---- noise
     {
@@ -692,6 +821,32 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         noisePan = std::clamp (P (ni.pan) * 0.01f + (vc.mask[3] ? vc.pan : 0.0f), -1.0f, 1.0f);
         noiseStereo = clamp01 (P (ni.stereo) * 0.01f);
         noiseColour = std::clamp (static_cast<int> (P (ni.sample) + 0.5f), 0, 8);
+        static const int kNoiseFilterKey = findParamIndex (hashKey ("noise.filter"));
+        noiseFilterAmount = kNoiseFilterKey >= 0 ? clamp01 (std::fabs (P (kNoiseFilterKey) * 0.01f)) * (P (kNoiseFilterKey) < 0.0f ? -1.0f : 1.0f) : 0.0f;
+        noisePitchSemis = P (ni.pitch) + P (ni.fine) * 0.01f + (P (ni.keytrack) >= 0.5f ? noteSemis - 60.0f : 0.0f);
+        // noise.type = Sample: a content sample is the source (a missing file plays the generator)
+        const ContentSet* ncs = g.content;
+        noiseUseSample = noiseCh.on && ni.type >= 0 && P (ni.type) >= 0.5f && ncs != nullptr && ncs->sample[3].valid;
+        if (noiseUseSample)
+        {
+            sampleosc::SampleOscParams sp;
+            sp.loopMode = P (ni.bounce) >= 0.5f ? sampleosc::LoopMode::pingPong : (P (ni.loop) >= 0.5f ? sampleosc::LoopMode::forward : sampleosc::LoopMode::none);
+            sp.startOffset = clamp01 (P (ni.phase));
+            sp.endOffset = 1.0f;
+            sp.loopStart = 0.0f;
+            sp.loopEnd = 1.0f;
+            sp.quality = sampleosc::QualityTier::high;
+            if (fresh || noiseBound != ncs)
+            {
+                noiseBound = ncs;
+                noiseSv.reset();
+                if (P (ni.randomPhase) >= 0.5f)
+                    sp.startOffset = noiseRng.uni();
+                noiseSv.noteOn (60, 1.0f, &ncs->sample[3].view, sp);
+            }
+            noiseSv.setParams (sp);
+            noiseSv.setSemitoneOffset (P (ni.pitch) + P (ni.fine) * 0.01f + (P (ni.keytrack) >= 0.5f ? noteSemis - 60.0f : 0.0f));
+        }
     }
     // ---- filters
     routing = static_cast<int> (g.base[pi.filterRouting] + 0.5f);
@@ -744,6 +899,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     // the targets: 0 Main, 1 Bus 1, 2 Bus 2, 3 Direct; "E" = through the amplitude envelope (env 1 on), "N" = past it
     float tE_L[4][kControlPeriod] = {}, tE_R[4][kControlPeriod] = {}, tN_L[4][kControlPeriod] = {}, tN_R[4][kControlPeriod] = {};
     float fin_L[2][kControlPeriod] = {}, fin_R[2][kControlPeriod] = {};
+    float extNext[4][kControlPeriod] = {};
     float fout_L[2][kControlPeriod], fout_R[2][kControlPeriod];
 
     auto addScaled = [&] (float* dl, float* dr, const float* a, const float* b, float g)
@@ -789,12 +945,42 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
             std::fill (oscR[o], oscR[o] + n, 0.0f);
             continue;
         }
-        const float* cross[2];
+        const float* cross[6];
         int c = 0;
         for (int j = 0; j < 3; ++j)
             if (j != o)
                 cross[c++] = oscMono[j];
-        osc[o].render (t0, n, oscL[o], oscR[o], cross, gl->sampleRate);
+        for (int j = 0; j < 4; ++j)
+            cross[2 + j] = extMono[j]; // Noise, Sub, Filter 1, Filter 2: the last chunk (the filters run after the oscillators)
+        float w0 = 1.0f, w1 = 1.0f;
+        if (lib[o].type() != kOscTypeWavetable || lib[o].libraryRunning())
+            lib[o].wavetableWeights (t0, n, w0, w1);
+        if (w0 > 0.0f || w1 > 0.0f)
+        {
+            osc[o].render (t0, n, oscL[o], oscR[o], cross, gl->sampleRate);
+            if (w0 != 1.0f || w1 != 1.0f)
+                for (int k = 0; k < n; ++k)
+                {
+                    const float g = lerp (w0, w1, static_cast<float> (k + 1) / static_cast<float> (n));
+                    oscL[o][k] *= g;
+                    oscR[o][k] *= g;
+                }
+        }
+        else
+        {
+            std::fill (oscL[o], oscL[o] + n, 0.0f);
+            std::fill (oscR[o], oscR[o] + n, 0.0f);
+        }
+        if (lib[o].libraryRunning())
+        {
+            float tl[kControlPeriod], tr[kControlPeriod];
+            lib[o].render (t0, n, tl, tr, cross);
+            for (int k = 0; k < n; ++k)
+            {
+                oscL[o][k] += tl[k];
+                oscR[o][k] += tr[k];
+            }
+        }
         for (int k = 0; k < n; ++k)
             oscMono[o][k] = 0.5f * (oscL[o][k] + oscR[o][k]);
         srcLevel[o] = oscMono[o][n - 1];
@@ -804,23 +990,70 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         float sl[kControlPeriod], sr2[kControlPeriod];
         sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate);
+        for (int k = 0; k < n; ++k)
+            extNext[1][k] = 0.5f * (sl[k] + sr2[k]);
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
         route (subCh.dest, subCh.env1, sl, sr2, subBlend, subSend[0], subSend[1]);
     }
     if (noiseCh.on && (noiseGain > 0.0f || noiseGainPrev > 0.0f))
     {
+        // noise.pitch: the generator played at another rate (down: the band shrinks, up: white but quieter) and noise.filter (docs/engine-spec/02 section 10)
+        const float rate = std::exp2 (noisePitchSemis * (1.0f / 12.0f));
+        const float oct = std::log2 (std::max (rate, 1.0e-3f));
+        const float pitchGain = oct <= 0.0f ? 1.0f : (oct <= 1.0f ? lerp (1.0f, 0.757f, oct) : (oct <= 2.0f ? lerp (0.757f, 0.628f, oct - 1.0f) : 0.628f * std::pow (0.83f, oct - 2.0f)));
+        const float lpC = rate < 0.999f ? 1.0f - std::exp (-kTwoPif * std::min (0.45f, 0.4f * rate) * 1.0f) : 1.0f;
+        const float fa = noiseFilterAmount;
+        const float fHz = fa < 0.0f ? 20000.0f * std::pow (0.002f, -fa) : 20.0f * std::pow (800.0f, std::max (fa, 0.0f));
+        const float fC = std::min (0.99f, 1.0f - std::exp (-kTwoPif * std::min (fHz, 0.45f * static_cast<float> (gl->sampleRate)) / static_cast<float> (gl->sampleRate)));
+        auto shapeNoiseCh = [&] (int ch, float x) noexcept
+        {
+            float* lp = noiseLp[ch];
+            if (lpC < 1.0f)
+                for (int i = 0; i < 4; ++i)
+                    x = (lp[i] += lpC * (x - lp[i]));
+            x *= pitchGain;
+            float* f = noiseFilt[ch];
+            f[0] += fC * (x - f[0]);
+            f[1] += fC * (f[0] - f[1]);
+            if (fa < -1.0e-4f)
+                return f[1];
+            if (fa > 1.0e-4f)
+                return x - f[1];
+            return x;
+        };
+        auto shapeNoise = [&] (float& l, float& r) noexcept
+        {
+            l = shapeNoiseCh (0, l);
+            r = shapeNoiseCh (1, r);
+        };
         float nl[kControlPeriod], nr[kControlPeriod];
         float gl2, gr2;
         panGains (noisePan, gl2, gr2);
+        if (noiseUseSample)
+        {
+            noiseSv.process (nl, nr, n);
+            for (int k = 0; k < n; ++k)
+            {
+                const float t = static_cast<float> (t0 + k + 1) * invP;
+                const float g = lerp (noiseGainPrev, noiseGain, t);
+                nl[k] *= g * 2.0f * gl2; // the sample voice's own centre pan law (-3 dB) is undone
+                nr[k] *= g * 2.0f * gr2;
+            }
+        }
+        else
         for (int k = 0; k < n; ++k)
         {
             const float t = static_cast<float> (t0 + k + 1) * invP;
             const float g = lerp (noiseGainPrev, noiseGain, t);
-            const float a = noiseSample (noiseColour, noiseState[0], noiseRng, g);
-            const float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g), noiseStereo) : a;
+            float a = noiseSample (noiseColour, noiseState[0], noiseRng, g);
+            float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g), noiseStereo) : a;
+            if (noiseColour <= 3)
+                shapeNoise (a, b);
             nl[k] = a * g * 1.41421356f * gl2;
             nr[k] = b * g * 1.41421356f * gr2;
         }
+        for (int k = 0; k < n; ++k)
+            extNext[0][k] = 0.5f * (nl[k] + nr[k]);
         srcLevel[3] = 0.5f * (nl[n - 1] + nr[n - 1]);
         route (noiseCh.dest, noiseCh.env1, nl, nr, noiseBlend, noiseSend[0], noiseSend[1]);
     }
@@ -842,6 +1075,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
             fout_L[f][k] *= g;
             fout_R[f][k] *= g;
         }
+        for (int k = 0; k < n; ++k)
+            extNext[2 + f][k] = 0.5f * (fout_L[f][k] + fout_R[f][k]);
         srcLevel[5 + f] = 0.5f * (fout_L[f][n - 1] + fout_R[f][n - 1]);
     };
     auto toMain = [&] (int f, bool suppress)
@@ -886,6 +1121,11 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         toMain (1, false);
     }
 
+    for (int j = 0; j < 4; ++j)
+    {
+        std::copy (extNext[j], extNext[j] + n, extMono[j]);
+        std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
+    }
     // ---- amplitude, velocity, declick, fade
     float lastL = 0.0f, lastR = 0.0f;
     for (int k = 0; k < n; ++k)

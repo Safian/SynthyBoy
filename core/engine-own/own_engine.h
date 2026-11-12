@@ -6,10 +6,13 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "dsp/util.h"
 #include "matrix/mod_matrix.h"
+#include "osc/content_set.h"
+#include "synthyboy/content_state.h"
 #include "synthyboy/engine.h"
 #include "fx/fx_chain.h"
 #include "voice/note_tuning.h"
@@ -33,11 +36,16 @@ public:
     bool supportsParam (uint32_t id) const noexcept override;
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     void setTransport (const TransportInfo& t) noexcept override;
+    void setReadoutTargets (const int* idx, int count) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
-    void setContent (const StateContent& c) override { noteTuning.setContent (c.tuning); content.publish (c); }
     void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
+    bool copyReadout (LiveValues& out) const noexcept override;
+    void silence() noexcept override;
+    void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
+    void setContent (const StateContent& content) override;
+    void setContentStore (const IContentStore* store) override;
 
 private:
     static constexpr int numChannels = 16;
@@ -56,9 +64,12 @@ private:
     Voice* pickVictim (bool includeKilling) noexcept;
     void applyAxes (int channel, int axis, float value) noexcept;
     void killExcess() noexcept;
+    void writeReadout() noexcept;
     void controlTick() noexcept;
     Voice* allocateVoice (bool legato) noexcept;
     float readParam (uint32_t id) const noexcept;
+    void rebuildContent();
+    void publishContent (std::unique_ptr<ContentSet> set);
 
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> voiceCap { 8 }, unisonCap { kMaxUnisonVoices };
@@ -66,6 +77,26 @@ private:
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };
     std::atomic<bool> tpPlaying { false };
+
+    // the decoded content (message thread builds, audio thread reads without a lock; a set is freed only when the audio thread no longer uses it)
+    std::mutex contentMutex;
+    StateContent contentState;
+    const IContentStore* contentStore = nullptr;
+    std::vector<std::unique_ptr<ContentSet>> contentOwned;
+    std::atomic<const ContentSet*> contentCurrent { nullptr }, contentInUse { nullptr };
+    std::atomic<int> switchKeyAtomic[3];
+    int switchKeySnap[3] = { -1, -1, -1 };
+    uint32_t chokeLatest[3][256] = {}, chokeCounter[3] = {};
+    std::atomic<int> qualityTier { 2 };
+    std::atomic<bool> ultraRender { false };
+    std::atomic<int> multiZone[3], multiKey[3];   // the zone and key of the last multisample note (read-out)
+    std::atomic<uint32_t> blockCounter { 0 };
+    // the live read-out (written at the end of a block, read by the display)
+    std::atomic<float> liveSource[LiveValues::kMaxSources], liveLfo[LiveValues::kNumLfos], liveEnvStage[LiveValues::kNumEnvs], liveEnvPos[LiveValues::kNumEnvs], liveTarget[LiveValues::kMaxTargets];
+    std::atomic<int> liveNumTargets { 0 }, pendingTargets[LiveValues::kMaxTargets];
+    std::atomic<int> pendingCount { 0 };
+    int activeTargets[LiveValues::kMaxTargets] = {}, activeTargetCount = 0;
+    std::unique_ptr<spectral::Scratch> spectralScratch;
 
     std::vector<std::unique_ptr<Voice>> voices;
     std::vector<uint8_t> sustainPending;
@@ -81,7 +112,7 @@ private:
     std::atomic<uint32_t> fxMask { kFxAll };
     TickGlobals globals;
     NoteTuning noteTuning;
-    ContentHub content;
+    ContentHub ownContent;
     const OwnContent* contentNow = nullptr;
     LfoCore monoCore[10];
     float tunedNotes[128] = {};
@@ -105,6 +136,7 @@ private:
     float routeCos = 1.0f, routeSin = 0.0f;
     float lastVelocity = 0.0f;
     const int fxReverbForceIndex;
+    const int fxOversampleIndex;
     std::vector<float> scratchRight;
 };
 } // namespace own
