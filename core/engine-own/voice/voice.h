@@ -27,7 +27,8 @@ struct TickGlobals
     double bpm = 120.0, songBeats = 0.0;
     bool playing = false;
     float macro[8] = {};                  // 0 .. 1
-    const float* channelBendSemis = nullptr; // [16]
+    const float* channelBendSemis = nullptr; // [16] the effective bend of the channel in semitones (MPE: manager + member channel)
+    const float* tunedNotes = nullptr;    // [128] the tuned note (fractional MIDI note, A4 = 69) of every key now (scale, tuning, A4, MTS-ESP)
     const float* channelModWheel = nullptr;  // [16] 0 .. 1
     const float* channelAftertouch = nullptr; // [16] 0 .. 1
     const float* lfoPhase = nullptr;      // [10] free running phases in cycles (global instance)
@@ -42,7 +43,9 @@ struct NoteStart
     int key = 60, channel = 0;
     int32_t noteId = -1;
     float velocity = 1.0f;
+    float tunedNote = 60.0f;     // the tuned note of the key (fractional MIDI note)
     float glideFromSemis = 0.0f; // pitch to glide from (absolute semitones), only if glide
+    int playedKey = -1;          // the key as the player pressed it (key is the one after the scale conforming)
     bool glide = false;
     bool retrigger = true;
     uint32_t serial = 0;         // note counter (random seeds, alternation)
@@ -62,6 +65,15 @@ public:
     bool isActive() const noexcept { return active; }
     bool isReleased() const noexcept { return released; }
     int key() const noexcept { return keyNum; }
+    int playedKey() const noexcept { return played; }
+    bool killing() const noexcept { return killFading; }
+    /** Kill mode (document 01, 3.2): the envelopes fade to zero linearly in 50 ms, then the voice ends. */
+    void startKill() noexcept { if (active && !killFading) { killFading = true; killElapsed = 0.0f; } }
+    /** Poly legato: the envelopes continue at the stage, position and value of the held voice's envelopes. */
+    void inheritEnvelopes (const Voice& from) noexcept { for (int i = 0; i < 6; ++i) env[i] = from.env[i]; }
+    bool envelopeHeld() const noexcept { return active && !released && !env[0].finished(); }
+    void setExpressionXRaw (float v) noexcept { exprX = v; }
+    float tunedKeyNote() const noexcept { return tunedKey; }
     int channel() const noexcept { return chan; }
     int32_t noteId() const noexcept { return id; }
     uint32_t serial() const noexcept { return noteSerial; }
@@ -91,7 +103,11 @@ private:
     const TickGlobals* gl = nullptr;
     double sr = 48000.0;
     bool active = false, released = false;
-    int keyNum = 60, chan = 0;
+    int keyNum = 60, chan = 0, played = 60;
+    float tunedKey = 60.0f, tuneTrack = 60.0f;
+    bool killFading = false;
+    float killElapsed = 0.0f;
+    bool legatoInv[6] = {};
     int32_t id = -1;
     uint32_t noteSerial = 0;
     float vel = 1.0f, releaseVel = 0.0f, tuneExpr = 0.0f, polyPressure = 0.0f, slide = 0.0f, exprX = 0.0f;
@@ -143,9 +159,8 @@ private:
     float outL = 0.0f, outR = 0.0f, lastLevel = 0.0f;
     float declickL = 0.0f, declickR = 0.0f;
     int declickPos = 0;
-    bool fadeOut = false, fresh = true;
+    bool fresh = true;
     float glideStart = 0.0f;
-    float fadeGain = 1.0f;
 };
 } // namespace own
 } // namespace synthyboy

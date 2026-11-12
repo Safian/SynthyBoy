@@ -60,6 +60,8 @@ ParamIndex build()
 #define K(field, key) e.field = find ("env%d." key, n)
         K (delay, "delay"); K (attack, "attack"); K (hold, "hold"); K (decay, "decay"); K (sustain, "sustain"); K (release, "release");
         K (attackCurve, "attack_curve"); K (decayCurve, "decay_curve"); K (releaseCurve, "release_curve");
+        K (units, "units"); K (legatoInverted, "legato_inverted"); K (delayBeats, "delay_beats"); K (attackBeats, "attack_beats"); K (holdBeats, "hold_beats");
+        K (decayBeats, "decay_beats"); K (releaseBeats, "release_beats");
 #undef K
     }
     for (int n = 1; n <= 10; ++n)
@@ -86,7 +88,11 @@ ParamIndex build()
                  find ("master.tune"), find ("master.legato"), find ("master.portamento.time"), find ("master.portamento.slope"),
                  find ("master.portamento.always"), find ("master.portamento.scaled"), find ("master.bend_down_range"), find ("master.bend_down_link"),
                  find ("master.stereo_spread"), find ("master.voice.same_note"), find ("master.voice.steal_priority"), find ("master.voice_override"),
-                 find ("master.poly_legato") };
+                 find ("master.poly_legato"),
+                 find ("master.scale.key"), find ("master.scale.type"), find ("master.scale.mode"), find ("master.tuning.a4"), find ("master.tuning.scale"),
+                 find ("master.tuning.mts_esp"), find ("master.mpe.on"), find ("master.mpe.bend_range"), find ("master.mpe.xyz_macro"),
+                 find ("master.mpe.y_modwheel"), find ("master.mpe.bend_to_x"), find ("master.mpe.y_bipolar"), find ("master.stereo_routing"),
+                 find ("curve.velocity.legato"), find ("curve.note.legato") };
     for (int s = 0; s < kNumModSlots; ++s)
         p.slot[s] = modSlotParams (s);
     return p;

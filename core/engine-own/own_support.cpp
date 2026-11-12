@@ -32,7 +32,9 @@ bool implementedKey (const std::string& k)
     if (head == "master")
         return inList (rest, { "volume", "polyphony", "bend_range", "bend_down_range", "bend_down_link", "velocity_track", "transpose", "tune", "legato",
                                "portamento.time", "portamento.slope", "portamento.always", "portamento.scaled", "stereo_spread", "voice.same_note",
-                               "voice.steal_priority" });
+                               "voice.steal_priority", "poly_legato", "stereo_routing", "voice_override", "scale.key", "scale.type", "scale.mode",
+                               "tuning.a4", "tuning.scale", "tuning.mts_esp", "tuning.mts_note_on_only", "mpe.on", "mpe.bend_range", "mpe.xyz_macro",
+                               "mpe.y_modwheel", "mpe.bend_to_x", "mpe.y_bipolar" });
     if (head == "osc1" || head == "osc2" || head == "osc3")
     {
         if (rest.rfind ("unison.", 0) == 0)
@@ -53,7 +55,8 @@ bool implementedKey (const std::string& k)
     if (head == "filter")
         return rest == "routing";
     if (head.size() == 4 && head.rfind ("env", 0) == 0 && head[3] >= '1' && head[3] <= '6')
-        return inList (rest, { "delay", "attack", "hold", "decay", "sustain", "release", "attack_curve", "decay_curve", "release_curve" });
+        return inList (rest, { "delay", "attack", "hold", "decay", "sustain", "release", "attack_curve", "decay_curve", "release_curve", "units", "legato_inverted",
+                               "delay_beats", "attack_beats", "hold_beats", "decay_beats", "release_beats" });
     if (head.rfind ("lfo", 0) == 0 && head.size() >= 4)
         return inList (rest, { "shape", "rate", "sync", "division", "sync_type", "phase", "fade_in", "delay", "smooth", "smooth_time", "keytrack_transpose",
                                "keytrack_tune", "mono", "direction" });
@@ -108,6 +111,7 @@ EngineCapsMask ownCapabilities() noexcept
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
          | kCapModSources2 | kCapWavetableSawDown
+         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
 }
 

@@ -50,10 +50,11 @@ DestLaw computeLaw (const ParamInfo& info) noexcept
         return law;
     }
     // envelope times: fourth root of seconds
-    if (startsWith (k, "env") && info.unit == Unit::ms)
+    if (startsWith (k, "env") && (info.unit == Unit::ms || endsWith (k, "_beats")))
     {
         law.kind = DestKind::quart;
-        law.width = (endsWith (k, ".delay") || endsWith (k, ".hold")) ? 1.41421f : 2.37842f;
+        law.scale = info.unit == Unit::ms ? 0.001f : 1.0f; // seconds or beats
+        law.width = (endsWith (k, "delay") || endsWith (k, "hold") || endsWith (k, "delay_beats") || endsWith (k, "hold_beats")) ? 1.41421f : 2.37842f;
         return law;
     }
     if (std::strcmp (k, "master.portamento.time") == 0 || endsWith (k, ".smooth_time"))
@@ -134,9 +135,9 @@ float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, flo
         }
         case DestKind::quart:
         {
-            const float c = std::sqrt (std::sqrt (std::max (base, 0.0f) * 0.001f)) + delta;
+            const float c = std::sqrt (std::sqrt (std::max (base, 0.0f) * law.scale)) + delta;
             const float c2 = c > 0.0f ? c * c : 0.0f;
-            return c2 * c2 * 1000.0f;
+            return c2 * c2 / law.scale;
         }
         case DestKind::log2Seconds:
         {

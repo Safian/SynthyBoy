@@ -12,6 +12,7 @@
 #include "matrix/mod_matrix.h"
 #include "synthyboy/engine.h"
 #include "fx/fx_chain.h"
+#include "voice/note_tuning.h"
 #include "voice/voice.h"
 
 namespace synthyboy
@@ -33,18 +34,30 @@ public:
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     void setTransport (const TransportInfo& t) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
+    void setContent (const StateContent& c) override { noteTuning.setContent (c.tuning); }
+    void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
 
 private:
     static constexpr int numChannels = 16;
+    static constexpr int kPoolVoices = kMaxVoices + 4; // the spare voices of the Kill mode (document 01, 3.1)
 
     void handleEvent (const Event& e) noexcept;
     void noteOn (const Event& e) noexcept;
     void noteOff (const Event& e) noexcept;
     void setSustain (int channel, bool down) noexcept;
+    struct Pressed { int playedKey = 0, key = 0, channel = 0; float velocity = 0.0f; int32_t noteId = -1; uint32_t order = 0; };
+    void startNote (const Pressed& n, bool fromRecall, const Voice* releasing) noexcept;
+    void removePressed (int playedKey, int channel) noexcept;
+    bool hasVoice (const Pressed& n) const noexcept;
+    int polyphonyLimit() const noexcept;
+    Voice* freeVoice() noexcept;
+    Voice* pickVictim (bool includeKilling) noexcept;
+    void applyAxes (int channel, int axis, float value) noexcept;
+    void killExcess() noexcept;
     void controlTick() noexcept;
-    Voice* allocateVoice (int key, int channel, float velocity) noexcept;
+    Voice* allocateVoice (bool legato) noexcept;
     float readParam (uint32_t id) const noexcept;
 
     std::array<std::atomic<float>, kMaxParams> params;
@@ -64,6 +77,14 @@ private:
     FxChain fx;
     std::atomic<uint32_t> fxMask { kFxAll };
     TickGlobals globals;
+    NoteTuning noteTuning;
+    float tunedNotes[128] = {};
+    Pressed pressed[64];
+    int numPressed = 0;
+    float effBend[numChannels] = {};
+    float macroOverride[8] = {};
+    bool macroOverridden[8] = {};
+    int lastXyzMode = 0;
     bool sustainDown[numChannels] = {};
     float bendSemis[numChannels] = {}, modWheel[numChannels] = {}, aftertouch[numChannels] = {};
     float lfoPhase[10] = {}, rlfoValue[4] = {};
@@ -75,7 +96,7 @@ private:
     int controlPos = 0;
     float lastNoteSemis = 60.0f;
     bool haveLastNote = false;
-    int heldKeys = 0;
+    float routeCos = 1.0f, routeSin = 0.0f;
     float lastVelocity = 0.0f;
     const int fxReverbForceIndex;
     std::vector<float> scratchRight;

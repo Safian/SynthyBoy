@@ -36,6 +36,7 @@ struct FilterIdx
 struct EnvIdx
 {
     int delay, attack, hold, decay, sustain, release, attackCurve, decayCurve, releaseCurve;
+    int units, legatoInverted, delayBeats, attackBeats, holdBeats, decayBeats, releaseBeats;
 };
 
 struct LfoIdx
@@ -51,7 +52,9 @@ struct RlfoIdx
 struct MasterIdx
 {
     int volume, polyphony, bendRange, velocityTrack, transpose, tune, legato, portTime, portSlope, portAlways, portScaled, bendDownRange, bendDownLink,
-        stereoSpread, sameNote, stealPriority, voiceOverride, polyLegato;
+        stereoSpread, sameNote, stealPriority, voiceOverride, polyLegato,
+        scaleKey, scaleType, scaleMode, tuningA4, tuningScale, tuningMts, mpeOn, mpeBendRange, mpeXyz, mpeYModwheel, mpeBendToX, mpeYBipolar, stereoRouting,
+        curveVelLegato, curveNoteLegato;
 };
 
 /** Positions in paramTable() of every key the engine reads (-1 when a key does not exist). Built once, immutable. */

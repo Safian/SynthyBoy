@@ -89,8 +89,8 @@ void Voice::reset() noexcept
     outL = outR = 0.0f;
     declickL = declickR = 0.0f;
     declickPos = 0;
-    fadeOut = false;
-    fadeGain = 1.0f;
+    killFading = false;
+    killElapsed = 0.0f;
     lastLevel = 0.0f;
 }
 
@@ -122,9 +122,11 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
 {
     active = true;
     released = false;
-    fadeOut = false;
-    fadeGain = 1.0f;
+    killFading = false;
+    killElapsed = 0.0f;
     keyNum = n.key;
+    played = n.playedKey >= 0 ? n.playedKey : n.key;
+    tunedKey = tuneTrack = n.tunedNote;
     chan = n.channel;
     id = n.noteId;
     noteSerial = n.serial;
@@ -140,10 +142,10 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     rand2 = rng.uni();
     randDiscrete = static_cast<float> (rng.next() % 8u) / 7.0f;
     altParity = static_cast<int> (n.serial & 1u);
-    glideOffset = n.glide ? n.glideFromSemis - static_cast<float> (n.key) : 0.0f;
+    glideOffset = n.glide ? n.glideFromSemis - n.tunedNote : 0.0f;
     glideTime = -1.0f; // set at the first tick from the portamento parameters
     glideElapsed = 0.0f;
-    lastSemis = static_cast<float> (n.key);
+    lastSemis = n.tunedNote;
     for (int i = 0; i < 4; ++i)
     {
         rlfo[i].seed (n.serial * 101u + static_cast<uint32_t> (i) * 13u + 3u);
@@ -176,10 +178,16 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
 
 void Voice::legatoTo (const NoteStart& n) noexcept
 {
-    glideOffset = (lastSemis - static_cast<float> (n.key));
+    glideOffset = (lastSemis - n.tunedNote);
     glideElapsed = 0.0f;
     glideTime = -1.0f;
     keyNum = n.key;
+    played = n.playedKey >= 0 ? n.playedKey : n.key;
+    tunedKey = tuneTrack = n.tunedNote;
+    // envelopes marked "legato inverted" listen to every note: they restart from their current value
+    for (int i = 0; i < 6; ++i)
+        if (legatoInv[i])
+            env[i].noteOn (env[i].current());
     chan = n.channel;
     id = n.noteId;
     noteSerial = n.serial;
@@ -310,20 +318,40 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             glideOffset = 0.0f;
     }
     const float bend = g.channelBendSemis != nullptr ? g.channelBendSemis[chan & 15] : 0.0f;
-    const float noteSemis = static_cast<float> (keyNum) + glideOffset + bend + tuneExpr + g.base[mi.transpose] + g.base[mi.tune] * 0.01f;
-    lastSemis = static_cast<float> (keyNum) + glideOffset;
+    // the tuned note follows the tuning (A4, scale, MTS-ESP) with a 20 ms one pole: a retuned note glides, a new note starts on its value
+    if (g.tunedNotes != nullptr)
+    {
+        const float target = g.tunedNotes[keyNum & 127];
+        if (target == target)
+            tuneTrack += (target - tuneTrack) * (1.0f - std::exp (-fdt / 0.02f));
+    }
+    const float noteSemis = tuneTrack + glideOffset + bend + tuneExpr + g.base[mi.transpose] + g.base[mi.tune] * 0.01f;
+    lastSemis = tuneTrack + glideOffset;
 
     // ---- envelopes (times read with last period's modulation)
     for (int e = 0; e < 6; ++e)
     {
         const EnvIdx& ei = pi.env[e];
         EnvSettings s;
-        s.delay = P (ei.delay) * 0.001f;
-        s.attack = P (ei.attack) * 0.001f;
-        s.hold = P (ei.hold) * 0.001f;
-        s.decay = P (ei.decay) * 0.001f;
+        legatoInv[e] = ei.legatoInverted >= 0 && g.base[ei.legatoInverted] >= 0.5f;
+        if (ei.units >= 0 && g.base[ei.units] >= 0.5f) // beat units: the times follow the host tempo
+        {
+            const float spb = 60.0f / static_cast<float> (std::max (g.bpm, 1.0));
+            s.delay = P (ei.delayBeats) * spb;
+            s.attack = P (ei.attackBeats) * spb;
+            s.hold = P (ei.holdBeats) * spb;
+            s.decay = P (ei.decayBeats) * spb;
+            s.release = P (ei.releaseBeats) * spb;
+        }
+        else
+        {
+            s.delay = P (ei.delay) * 0.001f;
+            s.attack = P (ei.attack) * 0.001f;
+            s.hold = P (ei.hold) * 0.001f;
+            s.decay = P (ei.decay) * 0.001f;
+            s.release = P (ei.release) * 0.001f;
+        }
         s.sustain = clamp01 (P (ei.sustain) * 0.01f);
-        s.release = P (ei.release) * 0.001f;
         s.attackCurve = -P (ei.attackCurve);
         s.decayCurve = P (ei.decayCurve);
         s.releaseCurve = P (ei.releaseCurve);
@@ -365,7 +393,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     for (int m = 0; m < 8; ++m)
         src[srcMacro (m)] = g.macro[m];
     src[kSrcVelocity] = vel;
-    src[kSrcNote] = static_cast<float> (keyNum) * (1.0f / 127.0f);
+    src[kSrcNote] = std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f);
     src[kSrcAftertouch] = g.channelAftertouch != nullptr ? g.channelAftertouch[chan & 15] : 0.0f;
     src[kSrcPitchWheel] = 0.5f + 0.5f * (mi.bendRange >= 0 && g.base[mi.bendRange] > 0.0f && g.channelBendSemis != nullptr ? std::clamp (bend / g.base[mi.bendRange], -1.0f, 1.0f) : 0.0f);
     src[kSrcModWheel] = g.channelModWheel != nullptr ? g.channelModWheel[chan & 15] : 0.0f;
@@ -373,7 +401,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     src[kSrcLift] = released ? releaseVel : 0.5f;
     src[kSrcReleaseVelocity] = released ? releaseVel : 0.5f;
     src[kSrcSlide] = slide;
-    src[kSrcOctNote] = static_cast<float> (keyNum % 12) * (1.0f / 12.0f);
+    { const float n12 = (lastSemis + bend) * (1.0f / 12.0f); src[kSrcOctNote] = n12 - std::floor (n12); }
     src[kSrcPolyAftertouch] = polyPressure;
     src[kSrcVoiceIndex] = static_cast<float> (index) * (1.0f / 31.0f);
     src[kSrcOscA] = srcLevel[0];
@@ -397,29 +425,24 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     g.matrix->evaluate (src, false, mod.data(), touched, numTouched, kNumModSlots, modR.data());
 
     // ---- amplitude: envelope 1, velocity
+    float killGain = 1.0f;
+    if (killFading)
+    {
+        killElapsed += fdt;
+        killGain = std::max (0.0f, 1.0f - killElapsed * (1.0f / 0.05f)); // linear fade of the envelope value in 50 ms (document 01, 3.2)
+    }
     ampPrev = ampCur;
-    ampCur = envOut[0];
+    ampCur = envOut[0] * killGain * killGain;
     velGainPrev = velGain;
     {
         const float track = g.base[mi.velocityTrack] * 0.01f;
         const float v2 = vel * vel;
         velGain = track >= 0.0f ? lerp (1.0f, v2, track) : lerp (1.0f, 1.0f - v2, -track);
     }
-    if (env[0].finished() || fadeOut)
+    if (env[0].finished() || killFading)
     {
         // the voice ends when the amplitude envelope is done (the last period still fades to zero)
-        if (ampCur <= 0.0f && ampPrev <= 0.0f)
-        {
-            active = false;
-            outL = outR = 0.0f;
-            lastLevel = 0.0f;
-            return;
-        }
-    }
-    if (fadeOut)
-    {
-        fadeGain = std::max (0.0f, fadeGain - 1.0f / 3.0f);
-        if (fadeGain <= 0.0f)
+        if ((ampCur <= 0.0f && ampPrev <= 0.0f) || (killFading && killGain <= 0.0f && ampPrev <= 0.0f))
         {
             active = false;
             outL = outR = 0.0f;
@@ -698,7 +721,7 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
     {
         const float t = static_cast<float> (t0 + k + 1) * invP;
         const float amp = lerp (ampPrev, ampCur, t);
-        const float vg = lerp (velGainPrev, velGain, t) * (fadeOut ? fadeGain : 1.0f);
+        const float vg = lerp (velGainPrev, velGain, t);
         float l = (mainE_L[k] * amp + mainN_L[k]) * vg;
         float r = (mainE_R[k] * amp + mainN_R[k]) * vg;
         if (declickPos > 0)
