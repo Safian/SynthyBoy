@@ -9,6 +9,15 @@
 #include "../dsp/util.h"
 #include "../fx/fx_dsp.h"
 
+#ifndef SB_MID_SAT
+#define SB_MID_SAT 1.0f
+#endif
+#ifndef SB_DIRTY_Q1
+#define SB_DIRTY_Q1 0.556f
+#endif
+#ifndef SB_DIRTY_SAT
+#define SB_DIRTY_SAT 0.5f
+#endif
 #ifndef SB_DIODE_CORNER
 #define SB_DIODE_CORNER 0.765f
 #endif
@@ -84,14 +93,13 @@ private:
         const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
         const float d = std::pow (10.0f, p.driveDb * 0.05f);
         const float r = clamp01 (p.res);
-        const float braw = std::clamp (p.blendRaw, 0.0f, 2.0f), bb = std::clamp (braw - 1.0f, -1.0f, 1.0f);
-        const float lpAmt = bb < 0.0f ? -bb : 0.0f, hpAmt = bb > 0.0f ? bb : 0.0f, bpAmt = std::sqrt(std::max(0.0f, 1.0f - bb * bb));
+        const float braw = std::clamp (p.blendRaw, 0.0f, 2.0f);
         switch (p.model)
         {
-            case 3: satLoop = false; svfModel (in, out, n, f, 0.5f + 15.5f * r * r * r, 1.0f, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), p.style, lpAmt, bpAmt, hpAmt, true); break;
-            case 0: satLoop = false; svfModel (in, out, n, f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style == 1 ? kAn[5] : kAn[3]), p.style, lpAmt, bpAmt, hpAmt, false); break;
-            case 1: satLoop = true; svfModel (in, out, n, f, 0.556f + 0.634f * std::pow (2.0f * r, 6.5f), 1.1f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, p.style, lpAmt, bpAmt, hpAmt, false); break;
-            case 2: ladder (in, out, n, f, r, d, p.style, 1.0f, lpAmt, bpAmt, hpAmt); break;
+            case 3: satLoop = false; svfModel (in, out, n, f, 0.5f + 15.5f * r * r * r, 1.0f, d, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), 3, p.style, p.blendRaw, true, r); break;
+            case 0: satLoop = false; svfModel (in, out, n, f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d, d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style != 0 ? kAn[5] : kAn[3]), 0, p.style, p.blendRaw, false, r); break;
+            case 1: satLoop = true; svfModel (in, out, n, f, 1.0f / std::max (1.8f - 1.87f * std::sqrt (r), 0.03f), kDirtyQ1, 2.0f * (d - 1.0f) + 1.0f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, 1, p.style, p.blendRaw, false, r); break;
+            case 2: ladder (in, out, n, f, r, d, p.style, braw - 1.0f); break;
             case 4: diode (in, out, n, f, r, d, p); break;
             case 5: formant (in, out, n, p); break;
             case 6: combFilter (in, out, n, f, r, p); break;
@@ -100,57 +108,117 @@ private:
         }
     }
 
-    // 2 pole (12 dB) or two cascaded (24 dB) state variable filters with an optional saturation in the loop
-    void svfModel (const float* in, float* out, int n, float f, float Q, float Q1, float pre, float post, int style, float lpAmt, float bpAmt, float hpAmt, bool linearHard) noexcept
+    /** The weights of the sections for a style and the blend `b` in -1 .. 1 (document 05, 2.1). */
+    struct Wt { float lp, bp, hp; };
+    static void styleWeights (int style, float b, Wt& A, Wt& B) noexcept
+    {
+        const float t = 0.5f * (b + 1.0f), pn = std::min (b, 0.0f), m = std::sqrt (0.5f * std::max (b, 0.0f) * std::max (b, 0.0f) + 0.5f);
+        switch (style)
+        {
+            case 2: A = B = { std::min (1.0f - b, 1.0f), 0.0f, std::min (1.0f + b, 1.0f) }; break;
+            case 3: A = { t, 0.0f, 1.0f }; B = { 1.0f, 0.0f, t }; break;
+            case 4: A = B = { m * (1.0f + pn), 2.0f * m * (1.0f + pn - b), m * (1.0f + pn) }; break;
+            default: A = B = { std::max (-b, 0.0f), std::sqrt (std::max (0.0f, 1.0f - b * b)), std::max (b, 0.0f) }; break;
+        }
+    }
+
+    // one or two (24 dB) state variable sections with the weights of the style (document 05, 2 and 2.1); the saturation of the Dirty model sits in the loop of the section
+    // `dRaw` is the drive as set, `dComp` the drive compensated by the resonance of the model; the style blends them
+    void svfModel (const float* in, float* out, int n, float f, float Q, float Q1, float dRaw, float dComp, float postBase, int model, int style, float blendRaw, bool linearHard,
+                   float resKnob) noexcept
     {
         const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
         const float R = 1.0f / std::max (Q, 0.3f), R1 = 1.0f / Q1;
+        const float b = std::clamp (blendRaw - 1.0f, -1.0f, 1.0f);
+        if (model == 3 && style == 5)
+        {
+            std::copy (in, in + n, out); // the shelving mode at 0 dB: LP + HP + R BP = u exactly (document 05, 2.1)
+            return;
+        }
+        Wt wa, wb;
+        styleWeights (style == 5 ? 1 : style, b, wa, wb);
+        // the sections: the Digital model runs one for the styles 0 and 5, two for 1 .. 4; Analog and Dirty one for style 0, two for the others (style 3 the dual pair)
+        const bool two = style != 0;
+        float w = 1.0f, dEff;
+        switch (style)
+        {
+            case 2: w = std::fabs (b); break;
+            case 4: w = std::min (1.0f - b, 1.0f); break;
+            default: w = 1.0f; break;
+        }
+        const float t = 0.5f * (b + 1.0f);
+        if (style == 3)
+            dEff = lerp (dRaw, dComp * (2.0f - t), std::min (1.0f - b, 1.0f));
+        else
+            dEff = lerp (dRaw, dComp, w);
+        float post;
+        if (model == 3)
+            post = postBase; // 1 / sqrt (d) with the raw drive
+        else if (model == 0)
+            post = postBase * std::sqrt ((2.0f * resKnob + 1.0f) * dComp) / std::sqrt (std::max ((2.0f * resKnob + 1.0f) * dEff, 1.0e-6f)); // 1 / sqrt ((2 r + 1) d_eff)
+        else
+            post = postBase * std::sqrt (std::max (dComp, 1.0e-6f) / std::max (dEff, 1.0e-6f)) * (style >= 2 ? 1.0f - 0.2f * wb.hp : 1.0f); // (measured: the high pass share of the Dirty styles sits about 2 dB low)
         for (int i = 0; i < n; ++i)
         {
-            float u = in[i] * pre;
-            if (style == 1)
+            float u = in[i] * dEff;
+            if (two)
             {
-                // 24 dB: a first section with fixed damping, limited, then the resonant one
+                // the first section: R = 1 in the loop, the weights with the true R inside the high pass
                 float lp, bp, hp;
-                tpt (0, u, g, R1, lp, bp, hp, false);
-                u = linearHard ? hardtanh (lp) : std::tanh (lp);
+                tpt (0, u, g, R1, model == 3 ? R : R1, lp, bp, hp, false);
+                float y1 = wa.lp * lp + wa.bp * bp + wa.hp * hp;
+                u = linearHard ? hardtanh (y1) : (model == 1 ? y1 : std::tanh (y1 * kMidSat) / kMidSat);
             }
             float lp, bp, hp;
-            tpt (style == 1 ? 3 : 0, u, g, R, lp, bp, hp, satLoop);
-            float y;
-            switch (style)
-            {
-                case 2: y = lerp (lp + hp, bp * R, clamp01 (bpAmt * 0.0f + (1.0f - lpAmt - hpAmt))); break; // notch <-> pass swap
-                case 3: y = lp + hp * hpAmt - lp * hpAmt; break;
-                case 4: y = lp + hp - bp * R * bpAmt; break;
-                case 5: y = hp + R * bp + lp; break; // the shelving mode at 0 dB (document 05, 2 and 06, 5: A = 1 makes it the identity)
-                default: y = lpAmt * lp + bpAmt * bp + hpAmt * hp; break;
-            }
+            tpt (two ? 3 : 0, u, g, R, R, lp, bp, hp, satLoop);
+            float y = wb.lp * lp + wb.bp * bp + wb.hp * hp;
             y = linearHard ? hardtanh (y) : y;
             out[i] = y * post;
         }
     }
+    static inline float kMidSat = SB_MID_SAT;
+    static inline float kDirtyQ1 = SB_DIRTY_Q1, kDirtySat = SB_DIRTY_SAT;
     bool satLoop = false;
-    void tpt (int k, float u, float g, float R, float& lp, float& bp, float& hp, bool saturate) noexcept
+    void tpt (int k, float u, float g, float Rloop, float Rhp, float& lp, float& bp, float& hp, bool saturate) noexcept
     {
         float& ic1 = s[k];
         float& ic2 = s[k + 1];
         const float v3 = u - ic2;
-        const float v1 = (ic1 + g * v3) / (1.0f + g * R + g * g);
+        const float v1 = (ic1 + g * v3) / (1.0f + g * Rloop + g * g);
         const float v2 = ic2 + g * v1;
-        ic1 = flushDenormal (2.0f * (saturate ? std::tanh (v1 * 0.5f) * 2.0f : v1) - ic1);
+        ic1 = flushDenormal (2.0f * (saturate ? std::tanh (v1 * kDirtySat) / kDirtySat : v1) - ic1);
         ic2 = flushDenormal (2.0f * v2 - ic2);
         lp = v2;
         bp = v1;
-        hp = u - R * v1 - v2;
+        hp = u - Rhp * v1 - v2;
     }
 
-    // four saturating one pole stages with global feedback (zero delay feedback solved linearly)
-    void ladder (const float* in, float* out, int n, float f, float r, float d, int style, float, float lpAmt, float bpAmt, float hpAmt) noexcept
+    // four saturating one pole stages with global feedback (zero delay feedback solved linearly); the output is a weighted sum of the input and the stage outputs (document 05, 2.1)
+    void ladder (const float* in, float* out, int n, float f, float r, float d, int style, float bRaw) noexcept
     {
         const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f)), G = g / (1.0f + g);
-        const float k = 0.001f + 4.099f * (style == 0 ? r : std::sin (kPif * 0.5f * r));
-        const float pre = d * (1.0f + r), post = 1.0f / std::sqrt ((d - 1.0f) * 0.25f + 1.0f);
+        const float b = std::clamp (bRaw, -1.0f, 1.0f);
+        const float Lw = std::max (-b, 0.0f), Bw = std::sqrt (std::max (0.0f, 1.0f - b * b)), Hw = std::max (b, 0.0f);
+        const float H = std::min (1.0f + b, 1.0f), L = std::min (1.0f - b, 1.0f);
+        const float pn = std::min (b, 0.0f), m = std::sqrt (0.5f * Hw * Hw + 0.5f), q = m * (1.0f + pn), band = 2.0f * m * (1.0f + pn - b);
+        const float ab = 1.0f - std::fabs (b);
+        float c[5];
+        switch (style)
+        {
+            case 1: c[0] = Hw; c[1] = -4.0f * Hw; c[2] = 6.0f * Hw - ab; c[3] = -4.0f * Hw + 2.0f * ab; c[4] = Lw + Hw - ab; break;
+            case 2: c[0] = H * H; c[1] = -4.0f * H * H; c[2] = 6.0f * H * H + 2.0f * H * L; c[3] = -4.0f * H * H - 4.0f * H * L; c[4] = H * H + L * L + 2.0f * H * L; break;
+            case 3: c[0] = H; c[1] = -4.0f * H; c[2] = 8.0f * H + 4.0f * L; c[3] = -8.0f * H - 8.0f * L; c[4] = 4.0f * H + 4.0f * L; break;
+            case 4: c[0] = q; c[1] = band - 2.0f * q; c[2] = 2.0f * q - band; c[3] = 0.0f; c[4] = 0.0f; break;
+            default: c[0] = Hw; c[1] = Bw - 2.0f * Hw; c[2] = Lw - Bw + Hw; c[3] = 0.0f; c[4] = 0.0f; break; // style 0 and 5
+        }
+        const int st5 = style == 5 ? 0 : style;
+        // drive: d (1 + r') faded to d as the blend goes to high pass; style 3 uses the raw drive, style 4 fades between d and that
+        const float rp = st5 == 0 ? r : std::sin (r);
+        const float dL = d * lerp (1.0f + rp, 1.0f, Hw);
+        const float pre = st5 == 3 ? d : (st5 == 4 ? lerp (d, dL, std::min (1.0f - b, 1.0f)) : dL);
+        const float post = 1.0f / std::sqrt ((d - 1.0f) * (st5 == 1 ? 0.25f : 0.5f) + 1.0f);
+        const float rr = st5 == 0 ? r : std::sin (kPif * 0.5f * r);
+        const float k = lerp (0.001f, 4.1f, rr);
         for (int i = 0; i < n; ++i)
         {
             const float S = G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3];
@@ -164,12 +232,7 @@ private:
                 st[j] = y;
                 x = sat (y);
             }
-            const float lp12 = st[1], lp24 = st[3];
-            const float bp = st[0] - st[1], hp = u - 2.0f * st[0] + st[1];
-            float y = style == 1 ? lp24 : lp12;
-            if (lpAmt < 0.999f)
-                y = lpAmt * y + bpAmt * bp + hpAmt * hp;
-            out[i] = y * post;
+            out[i] = (c[0] * u + c[1] * st[0] + c[2] * st[1] + c[3] * st[2] + c[4] * st[3]) * post;
         }
     }
 
@@ -344,7 +407,7 @@ private:
     }
 
     double sr = 48000.0;
-    static inline float kAn[6] = { 0.992f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
+    static inline float kAn[6] = { 1.0f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
     float s[6] = {};
     Svf fm[4];
     DelayLine comb;

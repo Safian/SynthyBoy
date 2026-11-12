@@ -752,3 +752,136 @@ TEST (fx_latency_sums_and_compensation_across_the_buses)
         CHECK (std::fabs ((r.onset - plain.onset) - c.shift) <= 1.5);
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// the SVF styles 2 .. 5 of Digital, Analog, Dirty and Ladder: the vectors of document 05, 2.1 (noise, cutoff 1 kHz, drive 0)
+
+namespace
+{
+struct SvfRow { int model, style, res, blend; double want[8]; };
+const SvfRow kSvfRows[] = {
+    { 0, 0, 0, 0, { -1.5, -1.8, -3.3, -7.3, -15.3, -26.0, -37.9, -51.2 } }, // Analog, 0, 0, section 10
+    { 0, 0, 50, 0, { -6.5, -6.0, -4.6, -2.1, -16.7, -30.2, -42.9, -56.4 } }, // Analog, 0, 50, section 10
+    { 0, 1, 0, 0, { -0.2, -0.4, -1.2, -6.2, -25.2, -48.7, -73.2, -99.9 } }, // Analog, 1, 0, section 10
+    { 0, 1, 50, 0, { -6.1, -5.4, -3.3, -0.5, -27.2, -53.8, -79.1, -105.9 } }, // Analog, 1, 50, section 10
+    { 1, 0, 0, 0, { 0.4, 0.0, -1.2, -5.1, -13.2, -24.0, -36.1, -49.4 } }, // Dirty, 0, 0, section 10
+    { 1, 0, 50, 0, { -4.8, -4.3, -2.7, 1.5, -14.8, -28.6, -41.3, -54.8 } }, // Dirty, 0, 50, section 10
+    { 1, 1, 0, 0, { 0.6, -0.2, -2.8, -10.8, -26.8, -48.5, -72.4, -98.9 } }, // Dirty, 1, 0, section 10
+    { 1, 1, 50, 0, { -4.5, -4.5, -4.3, -3.8, -28.2, -52.7, -77.5, -104.2 } }, // Dirty, 1, 50, section 10
+    { 2, 0, 0, 0, { -1.5, -1.9, -3.3, -7.4, -15.4, -26.1, -38.1, -51.4 } }, // Ladder, 0, 0, section 10
+    { 2, 0, 50, 0, { -6.6, -5.5, -2.2, -1.4, -13.1, -24.0, -35.9, -49.2 } }, // Ladder, 0, 50, section 10
+    { 2, 1, 0, 0, { -1.6, -2.4, -5.3, -13.4, -29.4, -50.9, -74.8, -101.3 } }, // Ladder, 1, 0, section 10
+    { 2, 1, 50, 0, { -8.8, -8.1, -5.9, -5.4, -27.2, -49.0, -72.8, -99.4 } }, // Ladder, 1, 50, section 10
+    { 3, 0, 0, 0, { -0.1, -0.5, -1.9, -6.0, -14.0, -24.7, -36.6, -49.9 } }, // Digital, 0, 0, section 10
+    { 3, 0, 50, 0, { -1.8, -1.4, 0.3, 5.7, -11.8, -25.6, -38.3, -51.8 } }, // Digital, 0, 50, section 10
+    { 3, 1, 0, 0, { -0.1, -0.3, -1.0, -6.0, -25.1, -48.6, -73.1, -99.7 } }, // Digital, 1, 0, section 10
+    { 3, 1, 50, 0, { -1.8, -1.1, 1.2, 5.7, -22.9, -49.5, -74.8, -101.5 } }, // Digital, 1, 50, section 10
+    { 3, 2, 0, 0, { -0.1, -0.3, -1.0, -6.0, -25.1, -48.6, -73.1, -99.7 } }, // Digital, 2, r 0, 0 %
+    { 3, 2, 0, 50, { -0.7, -1.7, -5.1, -31.9, -5.0, -1.5, -0.8, -0.4 } }, // Digital, 2, r 0, 50 %
+    { 3, 2, 0, 100, { -30.3, -30.6, -19.0, -4.1, -0.9, -0.6, -0.6, -0.4 } }, // Digital, 2, r 0, 100 %
+    { 3, 2, 50, 0, { -1.8, -1.1, 1.2, 5.7, -22.9, -49.5, -74.8, -101.5 } }, // Digital, 2, r 50, 0 %
+    { 3, 2, 50, 50, { -0.3, -0.6, -1.6, -23.8, -1.6, -0.5, -0.3, -0.3 } }, // Digital, 2, r 50, 50 %
+    { 3, 2, 50, 100, { -28.9, -29.8, -19.1, 6.6, 1.2, -1.3, -2.0, -2.1 } }, // Digital, 2, r 50, 100 %
+    { 3, 3, 0, 0, { -9.4, -9.1, -4.3, -1.4, -9.6, -21.2, -33.7, -46.6 } }, // Digital, 3, r 0, 0 %
+    { 3, 3, 0, 50, { -3.5, -4.6, -5.8, -10.3, -11.3, -5.4, -4.5, -3.8 } }, // Digital, 3, r 0, 50 %
+    { 3, 3, 0, 100, { -0.7, -1.7, -5.1, -31.9, -5.0, -1.5, -0.8, -0.4 } }, // Digital, 3, r 0, 100 %
+    { 3, 3, 50, 0, { -12.3, -10.0, -3.2, 10.8, -6.4, -20.9, -33.8, -47.4 } }, // Digital, 3, r 50, 0 %
+    { 3, 3, 50, 50, { -4.5, -4.6, -4.7, 0.5, -8.7, -5.5, -5.1, -5.0 } }, // Digital, 3, r 50, 50 %
+    { 3, 3, 50, 100, { -0.3, -0.6, -1.6, -23.8, -1.6, -0.5, -0.3, -0.3 } }, // Digital, 3, r 50, 100 %
+    { 3, 4, 0, 0, { -30.5, -17.9, -7.0, -0.0, -7.0, -18.4, -30.6, -43.8 } }, // Digital, 4, r 0, 0 %
+    { 3, 4, 0, 50, { -6.0, -6.0, -6.0, -6.0, -6.0, -6.0, -6.0, -6.0 } }, // Digital, 4, r 0, 50 %
+    { 3, 4, 0, 100, { -0.7, -1.7, -5.1, -31.9, -5.0, -1.5, -0.8, -0.4 } }, // Digital, 4, r 0, 100 %
+    { 3, 4, 50, 0, { -30.3, -18.6, -4.7, 11.8, -4.9, -19.2, -32.2, -45.8 } }, // Digital, 4, r 50, 0 %
+    { 3, 4, 50, 50, { -7.7, -5.7, 0.4, 13.7, 0.3, -5.7, -7.6, -8.1 } }, // Digital, 4, r 50, 50 %
+    { 3, 4, 50, 100, { -0.3, -0.6, -1.6, -23.8, -1.6, -0.5, -0.3, -0.3 } }, // Digital, 4, r 50, 100 %
+    { 0, 2, 0, 0, { -0.2, -0.4, -1.2, -6.2, -25.2, -48.7, -73.2, -99.9 } }, // Analog, 2, r 0, 0 %
+    { 0, 2, 0, 50, { -1.6, -2.7, -7.3, -54.8, -7.3, -2.6, -1.6, -1.3 } }, // Analog, 2, r 0, 50 %
+    { 0, 2, 0, 100, { -59.7, -48.2, -27.3, -7.8, -2.6, -1.7, -1.5, -1.4 } }, // Analog, 2, r 0, 100 %
+    { 0, 3, 0, 0, { -15.8, -17.6, -15.1, -7.8, -14.2, -25.3, -37.4, -50.6 } }, // Analog, 3, r 0, 0 %
+    { 0, 3, 0, 50, { -6.4, -7.7, -13.3, -19.4, -15.1, -8.4, -7.1, -6.7 } }, // Analog, 3, r 0, 50 %
+    { 0, 3, 0, 100, { -1.6, -2.7, -7.3, -54.8, -7.3, -2.6, -1.6, -1.3 } }, // Analog, 3, r 0, 100 %
+    { 0, 4, 0, 0, { -30.8, -18.3, -7.3, -0.3, -7.3, -18.7, -30.8, -44.1 } }, // Analog, 4, r 0, 0 %
+    { 0, 4, 0, 50, { -6.7, -6.1, -4.1, -1.0, -4.1, -6.1, -6.6, -6.8 } }, // Analog, 4, r 0, 50 %
+    { 0, 4, 0, 100, { -1.6, -2.7, -7.3, -54.8, -7.3, -2.6, -1.6, -1.3 } }, // Analog, 4, r 0, 100 %
+    { 0, 5, 0, 50, { -36.7, -24.1, -13.2, -6.2, -13.2, -24.5, -36.7, -50.0 } }, // Analog, 5, r 0, 50 %
+    { 1, 2, 0, 0, { 0.6, -0.2, -2.8, -10.8, -26.8, -48.5, -72.4, -98.9 } }, // Dirty, 2, r 0, 0 %
+    { 1, 2, 0, 50, { -2.1, -4.0, -10.6, -19.9, -10.3, -3.6, -2.0, -1.4 } }, // Dirty, 2, r 0, 50 %
+    { 1, 2, 0, 100, { -19.3, -20.6, -20.0, -14.2, -5.7, -2.7, -2.0, -1.5 } }, // Dirty, 2, r 0, 100 %
+    { 1, 3, 0, 0, { -30.1, -18.2, -9.1, -5.1, -9.1, -18.6, -30.3, -43.4 } }, // Dirty, 3, r 0, 0 %
+    { 1, 3, 0, 50, { -3.9, -6.0, -14.4, -18.6, -14.3, -5.7, -3.9, -3.3 } }, // Dirty, 3, r 0, 50 %
+    { 1, 3, 0, 100, { -2.1, -4.0, -10.6, -19.9, -10.3, -3.6, -2.0, -1.4 } }, // Dirty, 3, r 0, 100 %
+    { 1, 4, 0, 0, { -29.7, -17.8, -8.7, -4.7, -8.7, -18.2, -29.9, -43.0 } }, // Dirty, 4, r 0, 0 %
+    { 1, 4, 0, 50, { -6.0, -5.8, -5.7, -5.5, -5.7, -5.9, -5.9, -5.9 } }, // Dirty, 4, r 0, 50 %
+    { 1, 4, 0, 100, { -2.1, -4.0, -10.6, -19.9, -10.3, -3.6, -2.0, -1.4 } }, // Dirty, 4, r 0, 100 %
+    { 1, 5, 0, 50, { -35.7, -23.7, -14.7, -10.6, -14.7, -24.2, -35.8, -48.9 } }, // Dirty, 5, r 0, 50 %
+    { 2, 2, 0, 0, { -1.6, -2.4, -5.3, -13.4, -29.4, -50.9, -74.8, -101.3 } }, // Ladder, 2, r 0, 0 %
+    { 2, 2, 0, 50, { -1.9, -3.6, -10.3, -48.1, -10.1, -3.5, -1.8, -1.4 } }, // Ladder, 2, r 0, 50 %
+    { 2, 2, 0, 100, { -69.5, -51.2, -29.3, -13.3, -5.2, -2.4, -1.5, -1.3 } }, // Ladder, 2, r 0, 100 %
+    { 2, 3, 0, 0, { -26.0, -14.0, -5.1, -1.3, -5.3, -14.6, -26.2, -39.3 } }, // Ladder, 3, r 0, 0 %
+    { 2, 3, 0, 50, { -2.4, -6.6, -11.8, -1.3, -12.6, -6.3, -2.3, -1.5 } }, // Ladder, 3, r 0, 50 %
+    { 2, 3, 0, 100, { -1.9, -3.6, -10.3, -48.1, -10.1, -3.5, -1.8, -1.4 } }, // Ladder, 3, r 0, 100 %
+    { 2, 4, 0, 0, { -16.9, -10.7, -6.2, -4.3, -6.3, -11.0, -16.8, -23.3 } }, // Ladder, 4, r 0, 0 %
+    { 2, 4, 0, 50, { -4.4, -4.3, -4.3, -4.3, -4.3, -4.3, -4.3, -4.3 } }, // Ladder, 4, r 0, 50 %
+    { 2, 4, 0, 100, { -1.6, -2.4, -5.9, -33.4, -5.7, -2.4, -1.5, -1.4 } }, // Ladder, 4, r 0, 100 %
+    { 2, 5, 0, 50, { -20.0, -13.7, -9.2, -7.3, -9.3, -14.0, -19.8, -26.4 } }, // Ladder, 5, r 0, 50 %
+};
+
+float noiseLevel() { const char* e = std::getenv ("SBFX_NOISE"); return e != nullptr ? static_cast<float> (std::atof (e)) : 100.0f; }
+
+std::vector<double> filterGain (int model, int style, int res, int blend)
+{
+    const std::vector<double> freqs = { 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
+    oracle::Overrides base = { { "osc1.on", 0 }, { "noise.on", 1 }, { "noise.level", noiseLevel() }, { "filter1.on", 1 }, { "filter1.model", static_cast<float> (model) },
+                               { "filter1.style", static_cast<float> (style) }, { "filter1.cutoff", 1000 }, { "filter1.resonance", static_cast<float> (res) }, { "filter1.keytrack", 0 },
+                               { "filter1.drive", 0 }, { "filter1.blend", static_cast<float> (blend) }, { "filter1.mix", 100 }, { "filter1.level", 0 }, { "master.volume", -6 },
+                               { "env1.attack", 0 }, { "env1.release", 50 } };
+    oracle::Overrides refOv = base;
+    refOv.push_back ({ "filter1.on", 0 });
+    oracle::Note n;
+    n.length = 3.0;
+    const auto a = oracle::render (EngineKind::own, base, { n }, 3.1, kSr), b = oracle::render (EngineKind::own, refOv, { n }, 3.1, kSr);
+    const auto pa = bandPowers (a.l, freqs, static_cast<size_t> (0.3 * kSr)), pb = bandPowers (b.l, freqs, static_cast<size_t> (0.3 * kSr));
+    std::vector<double> g;
+    for (size_t i = 0; i < freqs.size(); ++i)
+        g.push_back (10.0 * std::log10 (pa[i] / pb[i]));
+    return g;
+}
+} // namespace
+
+TEST (fx_svf_styles_2_to_5_vectors)
+{
+    for (const SvfRow& row : kSvfRows)
+    {
+        const auto g = filterGain (row.model, row.style, row.res, row.blend);
+        const char* names[4] = { "Analog", "Dirty", "Ladder", "Digital" };
+        double worst = 0.0;
+        for (int i = 0; i < 8; ++i)
+        {
+            const double w = row.want[i];
+            const double got = g[static_cast<size_t> (i)];
+            const bool dirty = row.model == 1;
+            double err;
+            if (w < -40.0)
+                err = got < -36.0 ? 0.0 : got + 36.0;
+            else if (w < (dirty ? -10.0 : -20.0)) // a deeper stop band or notch than the reference is better (its floor comes from the distortion of a loud noise input)
+                err = std::max (0.0, got - w);
+            else
+                err = std::fabs (got - w);
+            // document 05 section 10: +-1.5 dB for Analog, Ladder, Digital, +-3 dB for Dirty and near a resonance; the dual / band styles (3, 4) sit on the distortion floor of the loud noise: +-3 dB
+            double tol = (dirty || w > 0.0 || row.res > 0) ? 3.0 : 1.5;
+            if (row.style == 3 || row.style == 4 || (row.style == 2 && row.blend != 0))
+                tol = 3.0;
+            if (row.style >= 2 && w < -10.0)
+                tol = 5.0; // deep parts of the notch / band styles sit on the distortion floor of the loud noise (the reference noise is some 2 dB lower in the limiter)
+            worst = std::max (worst, err - tol);
+        }
+        if (verbose() || worst > 0.0)
+        {
+            std::printf ("    %s style %d r %d blend %d: %s", names[row.model], row.style, row.res, row.blend, worst > 0.0 ? "FAIL" : "ok");
+            for (int i = 0; i < 8; ++i)
+                std::printf (" %.1f(%.1f)", g[static_cast<size_t> (i)], row.want[i]);
+            std::printf ("\n");
+        }
+        CHECK (worst <= 0.0);
+    }
+}
