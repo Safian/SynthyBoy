@@ -191,29 +191,44 @@ int ownerNode (const ParamInfo& info) noexcept
     return -1;
 }
 
-/** True if `to` can be reached from `from` along the edges (source -> dependent). */
-bool reaches (const std::vector<std::vector<int>>& adj, int from, int to) noexcept
+/** The dependency graph of the modulators as a plain edge list (no allocation: compile () runs on the audio thread). */
+struct EdgeList
 {
-    if (from == to)
-        return true;
-    bool seen[200] = {};
-    int stack[200], sp = 0;
-    stack[sp++] = from;
-    seen[from] = true;
-    while (sp > 0)
+    int from[256], to[256];
+    int n = 0;
+    void add (int a, int b) noexcept
     {
-        const int u = stack[--sp];
-        for (int v : adj[static_cast<size_t> (u)])
-            if (!seen[v])
-            {
-                if (v == to)
-                    return true;
-                seen[v] = true;
-                stack[sp++] = v;
-            }
+        if (n < 256)
+        {
+            from[n] = a;
+            to[n] = b;
+            ++n;
+        }
     }
-    return false;
-}
+    /** True if `target` can be reached from `start` along the edges (source -> dependent). */
+    bool reaches (int start, int target) const noexcept
+    {
+        if (start == target)
+            return true;
+        bool seen[200] = {};
+        int stack[200], sp = 0;
+        stack[sp++] = start;
+        seen[start] = true;
+        while (sp > 0)
+        {
+            const int u = stack[--sp];
+            for (int e = 0; e < n; ++e)
+                if (from[e] == u && !seen[to[e]])
+                {
+                    if (to[e] == target)
+                        return true;
+                    seen[to[e]] = true;
+                    stack[sp++] = to[e];
+                }
+        }
+        return false;
+    }
+};
 } // namespace
 
 void ModMatrix::compile (const float* base) noexcept
@@ -221,11 +236,7 @@ void ModMatrix::compile (const float* base) noexcept
     const ParamIndex& pi = paramIndex();
     const ParamInfo* table = paramTable();
     count = 0;
-    static thread_local std::vector<std::vector<int>> adj;
-    if (adj.size() != 200)
-        adj.assign (200, std::vector<int>());
-    for (auto& a : adj)
-        a.clear();
+    EdgeList adj;
     for (int s = 0; s < kNumModSlots; ++s)
     {
         const ModSlotParams& sp = pi.slot[s];
@@ -244,12 +255,12 @@ void ModMatrix::compile (const float* base) noexcept
         if (owner >= 0)
         {
             const int me = 100 + s;
-            if (reaches (adj, owner, src) || (aux != 0 && reaches (adj, owner, aux)) || owner == me || reaches (adj, owner, me))
+            if (adj.reaches (owner, src) || (aux != 0 && adj.reaches (owner, aux)) || owner == me || adj.reaches (owner, me))
                 continue;
-            adj[static_cast<size_t> (src)].push_back (me);
+            adj.add (src, me);
             if (aux != 0)
-                adj[static_cast<size_t> (aux)].push_back (me);
-            adj[static_cast<size_t> (me)].push_back (owner);
+                adj.add (aux, me);
+            adj.add (me, owner);
         }
         CompiledSlot& c = slots[count++];
         c = CompiledSlot();

@@ -805,12 +805,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 left[i] = l0 * routeCos + r0 * routeSin;
                 rightOut[i] = r0 * routeCos + l0 * routeSin;
             }
-            left[i] = outputLimit (left[i] * g);
-            rightOut[i] = outputLimit (rightOut[i] * g);
-            // Direct: past every rack and the master volume, scaled by its own level
+            // Direct: past every rack and the master volume, scaled by its own level; the sum goes through the safety stage
             const float dg = lerp (directGainPrev, directGain, static_cast<float> (controlPos + (i - pos) + 1) * (1.0f / static_cast<float> (kControlPeriod)));
-            left[i] += mixL[3][i - pos] * dg;
-            rightOut[i] += mixR[3][i - pos] * dg;
+            left[i] = outputLimit (left[i] * g + mixL[3][i - pos] * dg);
+            rightOut[i] = outputLimit (rightOut[i] * g + mixR[3][i - pos] * dg);
         }
         controlPos = (controlPos + n) % kControlPeriod;
         pos = end;
@@ -822,9 +820,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         for (int i = 0; i < numFrames; ++i)
             left[i] = 0.5f * (left[i] + rightOut[i]);
 
+    killExcess(); // the overflow of the Kill mode is resolved before the count is reported
     int count = 0;
     for (const auto& v : voices)
-        count += v->isActive() ? 1 : 0;
+        count += (v->isActive() && !v->killing()) ? 1 : 0; // a voice in its 50 ms kill fade is on its way out: the count stays within the polyphony
     activeCount.store (count, std::memory_order_relaxed);
 }
 } // namespace own
