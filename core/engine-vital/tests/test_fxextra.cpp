@@ -950,6 +950,7 @@ TEST (fx_rate_invariance_of_the_effect_modules)
         { "distortion", { { "distortion.on", 1 }, { "distortion.drive", 6 }, { "distortion.filter_order", 1 }, { "distortion.filter_cutoff", 1800 }, { "distortion.filter_resonance", 60 } }, 1.0 },
         { "compressor", { { "compressor.on", 1 }, { "compressor.low.gain", 3 }, { "compressor.high.gain", -3 }, { "compressor.crossover_low", 200 }, { "compressor.crossover_high", 2500 } }, 0.5 },
         { "filter model Phaser", { { "filter1.on", 1 }, { "filter1.model", 7 }, { "filter1.cutoff", 1000 }, { "filter1.resonance", 40 }, { "filter1.blend", 100 } }, 0.5 },
+        { "convolve", { { "convolve.on", 1 }, { "convolve.ir", 1 }, { "convolve.mix", 100 }, { "convolve.size", 30 }, { "convolve.law", 1 } }, 0.5 },
         { "fxfilter", { { "fxfilter.on", 1 }, { "fxfilter.cutoff", 1500 }, { "fxfilter.resonance", 60 } }, 0.5 },
     };
     for (const auto& c : cases)
