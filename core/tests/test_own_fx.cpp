@@ -164,7 +164,9 @@ TEST (fx_reverb_levels_and_tails_of_the_six_types)
             if (w[i] > w[pk])
                 pk = i;
         auto at = [&] (double s) { const size_t i = static_cast<size_t> ((0.1 + s) / 0.01); return i < w.size() ? static_cast<double> (w[i]) : -300.0; };
-        const double rel = dryPeak - 11.4; // our dry burst against the one of the document: the table is shifted by the same amount
+        // our dry burst against the one of the document: the table is shifted by the same amount; and the live engine-vital is 8.3 dB hotter than the absolute numbers of the table
+        // (every type, every setting; measured with tools/own-oracle/fx_oracle.cpp; QUESTIONS.md row 14): the own engine follows the live engine
+        const double rel = dryPeak - 11.4 + 8.3;
         const double rt = rt60 (raw, static_cast<size_t> (0.1 * kSr));
         if (verbose())
             std::printf ("    d%4d s%3d t%d: peak %6.1f @%.2f (%6.1f)  +.1 %6.1f (%6.1f)  +.25 %6.1f (%6.1f)  +.5 %6.1f (%6.1f)  +1 %6.1f (%6.1f)  rt60 %.2f (%.2f)\n", row.decay, row.size, row.type,

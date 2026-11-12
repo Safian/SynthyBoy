@@ -14,9 +14,11 @@ namespace
 {
 constexpr double kSr = 48000.0;
 
+float gLevel = 100.0f;
+
 Overrides burst()
 {
-    return { { "osc1.wavetable", 1 }, { "osc1.level", 100 }, { "filter1.on", 0 }, { "master.volume", 0 }, { "env1.attack", 0 }, { "env1.decay", 20 }, { "env1.sustain", 0 }, { "env1.release", 5 } };
+    return { { "osc1.wavetable", 1 }, { "osc1.level", gLevel }, { "filter1.on", 0 }, { "master.volume", 0 }, { "env1.attack", 0 }, { "env1.decay", 20 }, { "env1.sustain", 0 }, { "env1.release", 5 } };
 }
 
 struct Metrics { double peakDb, rt60, tail1, tail2, rms; };
@@ -75,7 +77,11 @@ void row (const std::string& name, const Overrides& ov, double secs, double note
 int main (int argc, char** argv)
 {
     const std::string what = argc > 1 ? argv[1] : "all";
+    if (argc > 3)
+        gLevel = static_cast<float> (std::atof (argv[3]));
+    const float mix = argc > 2 ? static_cast<float> (std::atof (argv[2])) : 100.0f;
     std::printf ("| setting | peak own (dB) | peak vital (dB) | diff | RT60 own (s) | RT60 vital (s) | tail 0.5 s own (dB) | tail 0.5 s vital (dB) |\n|---|---|---|---|---|---|---|---|\n");
+    row ("dry burst (no effect)", burst(), 2.0);
     if (what == "reverb" || what == "all")
     {
         static const char* names[6] = { "Vital", "Plate", "Hall", "Vintage", "Nitrous", "Basin" };
@@ -83,7 +89,7 @@ int main (int argc, char** argv)
             for (auto [decay, size] : { std::pair<int, int> { 500, 100 }, { 500, 50 }, { 2000, 50 } })
             {
                 Overrides ov = burst();
-                for (auto& kv : Overrides { { "reverb.on", 1 }, { "reverb.mix", 100 }, { "reverb.decay", (float) decay }, { "reverb.size", (float) size }, { "reverb.type", (float) type },
+                for (auto& kv : Overrides { { "reverb.on", 1 }, { "reverb.mix", mix }, { "reverb.decay", (float) decay }, { "reverb.size", (float) size }, { "reverb.type", (float) type },
                                             { "reverb.high_shelf_gain", 0 }, { "reverb.low_shelf_gain", 0 }, { "reverb.pre_high_cut", 12000 }, { "reverb.pre_low_cut", 20 }, { "reverb.chorus_amount", 0 } })
                     ov.push_back (kv);
                 char label[64];

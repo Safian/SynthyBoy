@@ -112,6 +112,7 @@ private:
     int fxiTypeIndex[kNumFxInstances] = {};
     IntDelay dlVoices, dlBusOut[2], dlBusIn[2], dlMainOut, dlDirect;  // latency compensation (document 06, 11)
     std::atomic<int> reportedLatency { 0 };
+    void clearLatencyDelays() noexcept;
     bool realtimeFlag = false;
     float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period
     float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;

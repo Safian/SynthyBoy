@@ -477,8 +477,8 @@ private:
 
 public:
     // output scale calibration of the cores (tuned against the level vectors of document 06, 9.5)
-    static inline float kCoreIn = 0.3548f; // the mono input of the cores of 9.4 (calibrated on the level vectors of 9.5)
-    static inline float kOutFdn = 0.44f, kOutHall = 1.546f, kOutNitrous = 1.5f, kOutBasin = 1.1f, kOutPlate = 1.02f, kOutVintage = 1.08f;
+    static inline float kCoreIn = 0.922f; // the mono input of the cores of 9.4 (calibrated on the live level of engine-vital, see QUESTIONS.md row 14)
+    static inline float kOutFdn = 1.17f, kOutHall = 1.546f, kOutNitrous = 1.5f, kOutBasin = 1.1f, kOutPlate = 1.02f, kOutVintage = 1.08f;
 
 private:
     Params p;

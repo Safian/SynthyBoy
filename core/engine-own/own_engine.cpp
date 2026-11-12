@@ -222,8 +222,21 @@ void OwnEngine::silence() noexcept
         v->kill();
     for (auto& f : fx)
         f.reset();
+    clearLatencyDelays();
     std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
     numPressed = 0;
+}
+
+void OwnEngine::clearLatencyDelays() noexcept
+{
+    dlVoices.clear();
+    dlMainOut.clear();
+    dlDirect.clear();
+    for (int b = 0; b < 2; ++b)
+    {
+        dlBusOut[b].clear();
+        dlBusIn[b].clear();
+    }
 }
 
 void OwnEngine::reset()
@@ -232,6 +245,7 @@ void OwnEngine::reset()
         v->kill();
     for (auto& f : fx)
         f.reset();
+    clearLatencyDelays();
     for (int c = 0; c < numChannels; ++c)
     {
         bendSemis[c] = modWheel[c] = aftertouch[c] = 0.0f;
