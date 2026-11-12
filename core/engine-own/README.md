@@ -1,25 +1,37 @@
 # engine-own
 
-The engine written for this project (original code, no Vital-derived content): the spike's 8-voice synth behind `synthyboy::IEngine`.
-It is always built and the only engine of iOS builds (docs/ARCHITECTURE.md 2.2). It implements a small subset of the parameter
-table; everything else is stored and read back (`getParam`) like in every engine but has no effect (`supportsParam` is false).
+The engine written for this project (original code, no Vital-derived content, clean-room process of `docs/ARCHITECTURE.md` 2.2): a Serum-class
+subtractive wavetable synth behind `synthyboy::IEngine`. It is always built and the only engine of iOS builds. Its sources are the public
+documents (`docs/engine-spec/*.md` of branch `engine-spec`, `docs/ui-design/*`, the manuals), DSP literature and black-box measurements of
+engine-vital through `IEngine` (`tools/own-oracle`); it never reads `core/engine-vital`.
 
-## Parameters the own engine acts on (`IEngine::supportsParam`)
+## Layout
 
-| Key | What it does here |
-|-----|-------------------|
-| `master.volume` | master gain in dB (-60 dB and below = silence), ramped over 20 ms |
-| `master.bend_range` | semitones of a full pitch bend |
-| `master.transpose`, `master.tune` | pitch offset of NEW notes (semitones + cents) |
-| `osc1.wavetable` | entry 0 (Sine) plays a sine, every other entry plays the band-limited saw (the table's entry 1 is the Saw) |
-| `filter1.on`, `filter1.cutoff` | two cascaded one-pole low-pass filters (12 dB/oct); off = bypassed |
+| Directory | Contents |
+|-----------|----------|
+| `dsp/` | helpers shared by all modules (control period, power curve, pan law, RNG, smoother) |
+| `osc/` | band-limited built-in wavetables (additive spectra, inverse FFT, half-octave mip levels), the unison wavetable oscillator, the warp modes (4x oversampled with a decimator when a warp is active) |
+| `env_lfo/` | DAHDSR envelope (output squared as the amplitude, power curves), the LFO shape table, the random LFOs |
+| `matrix/` | the 64 slot modulation matrix: slot law, aux source, destination control domains (`DestLaw`: lin / sqrt / fourth root / log2 / note / volume) |
+| `voice/` | the voice (3 oscillators, sub, noise, 2 filters on `core/filters-serum`, 6 envelopes, 10 LFOs, 4 random LFOs, sources), the table positions of the keys |
+| `fx/` | the master bus effect chain in `fx.order` order: chorus, compressor, delay, distortion, EQ, FX filter, flanger, phaser, reverb (written here), Hyper/Dimension and Utility (`core/fx-serum-a`) |
+| `own_engine.*` | events, voice allocation (polyphony, same-note rule, steal priority, legato, portamento), the control grid, the master stage |
+| `own_support.*` | which keys the engine acts on (`supportsParam`) and the capability bits it reports |
 
-Event contract (state version 3, `capabilities () == kCapEventContract`): the sustain pedal (per channel) and the per-note tuning expression
-act; the pressure and brightness expressions and the release velocity are accepted and have no destination without a modulation matrix. The
-other capability bits (macros 5-8, LFO 9-10, aux sources, scale / tuning / MPE, oscillator mapping, ...) are not set: engine-own implements
-none of them and `supportsParam` is false for those keys. Differences to engine-vital: no modulation, no tuning, no scale.
+## Timing
 
-The voice has a fixed envelope (5 ms attack, 150 ms decay, sustain 0.7, 250 ms release), one oscillator, no unison, no modulation, no
-effects. `Quality::maxVoices` is the only quality setting it uses (`setQuality` changes it while playing: voices above a lowered cap
-are released, new notes take a voice below the cap). The generated list of what each parameter does in which engine is the column
-"own engine" of docs/PARAMETERS.md.
+Envelopes, LFOs and the matrix advance in control periods of 32 samples **on the absolute sample count** (never on the host block), audio rate values
+(pitch, level, pan, cutoff) are interpolated linearly across the period: the output does not depend on how the host splits the stream into blocks
+(`own_output_does_not_depend_on_the_block_size`). Parameters are read once per `process()` call. No allocation in `process()` (the wavetable bank is
+built in `prepare()`).
+
+## What is not there yet (see docs/ui-design/OWN-ENGINE-GAP.md, generated)
+
+Sample / granular / spectral / multisample oscillators (step 5), user wavetables (Preset table), spectral morph, the per slot stereo lane, rise / fall / delay of a
+slot, tuning / scale / MPE (step 6), the mixer graph (buses, sends), voice control, the effect racks, Bode, Convolve and the splitters.
+
+## Known differences to engine-vital
+
+Wavetable names with several frames (Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials) are defined
+here, not matched frame by frame. The warps are original definitions; they alias less than engine-vital (measured, see the report of the work).
+The filters-serum types can run away at resonance and drive 100 %: `voice/filter_unit.h` guards the output.

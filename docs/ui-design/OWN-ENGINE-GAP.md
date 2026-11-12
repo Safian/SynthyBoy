@@ -1,8 +1,7 @@
 # The own engine against the UI: what the iOS app shows and what it can do
 
 Date 2026-11-12, branch `ios-ui`. Owner decision (question 110): SynthyBoy on iOS has the **same UI as everywhere**, drawn by the plug-in through the bitmap GUI extension
-(`BITMAP-GUI-EXTENSION.md` section 14), with the **own engine** (`core/engine-own`, no Vital-derived code, `ARCHITECTURE.md` 2.2). The own engine is the spike's synth
-plus the event contract: it acts on 7 of the 2637 keys the UI shows. This file is the work list for the own-engine parity task: every area of the UI, how much of it the own
+(`BITMAP-GUI-EXTENSION.md` section 14), with the **own engine** (`core/engine-own`, no Vital-derived code, `ARCHITECTURE.md` 2.2). The own engine (state after the parity work, branch `engine-own-impl`) acts on the keys of the generated table below (the spike's engine acted on 7 of 2637). This file is the work list for the own-engine parity task: every area of the UI, how much of it the own
 engine implements, and what is missing. The table is generated (`scripts/gen-own-engine-gap.py`, numbers from `synthyboy_paramdump --own-engine-gap`).
 
 ## 1. What the UI does with the own engine (verified)
@@ -49,30 +48,30 @@ Areas are the groups of the parameter table (`group` field of `params.json`), `E
 
 | UI area (panel) | Keys | Own engine acts | Drawn dimmed (capability missing) | Editable, no effect | What is missing |
 |---|---:|---:|---:|---:|---|
-| Top bar: master volume, bend range, transpose, tune | 11 | 4 | 4 | 3 | master.volume, bend_range, transpose, tune act. Missing: polyphony (the engine has a fixed voice cap from the quality tier), velocity tracking, legato, bend-down range / link, stereo spread. |
-| Master / Portamento (Glide) | 4 | 0 | 0 | 4 | Pitch glide between notes: time, slope, always, scaled by interval. No glide in the voice. |
-| Master / Curves, Voicing | 7 | 0 | 7 | 0 | Velocity and note curves, voice override (kill / steal), steal priority, same note rule, stereo routing. |
-| Master / Scale, Tuning, MPE | 13 | 0 | 13 | 0 | Key scale conforming, concert pitch, Scala / tuning files, MPE routing (the own engine has only the per-note tuning expression and the pedal of the event contract). |
-| Quality | 2 | 0 | 2 | 0 | 4x oversampling and the no-smoothing switch (the own engine has no oversampling). |
+| Top bar: master volume, bend range, transpose, tune | 11 | 10 | 1 | 0 | Acts: volume, polyphony, bend range, velocity tracking, transpose, tune, legato, bend down range / link, stereo spread. Missing: the velocity and note curves, poly legato. |
+| Master / Portamento (Glide) | 4 | 4 | 0 | 0 | Acts (time, slope, always, scaled by interval). |
+| Master / Curves, Voicing | 7 | 2 | 5 | 0 | Acts: same note rule, steal priority. Missing: velocity and note curves, voice override kill / steal, stereo routing. |
+| Master / Scale, Tuning, MPE | 13 | 0 | 13 | 0 | Key scale conforming, concert pitch, Scala / tuning files, MPE routing (step 6 of the engine work list; the own engine has the per-note tuning expression and the pedal of the event contract). |
+| Quality | 2 | 0 | 2 | 0 | 4x oversampling and the no-smoothing switch (warped oscillators run 4x oversampled internally). |
 | Voice Control | 62 | 0 | 62 | 0 | Per voice pan / detune / cutoff / envelope time, randomisation, scaling, the oscillator mask. |
-| Oscillators: wavetable choice, frame, warp, level, pan, pitch | 81 | 0 | 57 | 24 | Nothing acts: the oscillators 2 and 3, level, pan, pitch, frame position, warp amounts, the oscillator type switch (the voice has one oscillator and plays a saw or a sine, the wavetable the UI draws is not the one that sounds). |
-| Oscillators: wavetable table, unison, spectral morph, warp lists | 93 | 1 | 45 | 47 | osc1.wavetable acts as Sine / Saw. Missing: wavetable scanning and the user tables, unison (voices, detune, blend, laws), spectral morph, the 96 warp modes, the oscillator mapping keys, the frame remap curves. |
-| Oscillators: sample, granular, spectral, multisample types | 255 | 0 | 255 | 0 | The sample, granular, spectral and multisample oscillator types (the libraries synthyboy_sampleosc, _granular, _spectral, _multisample are in the iOS build, the own engine does not use them yet). |
-| Sub oscillator | 14 | 0 | 14 | 0 | The whole sub oscillator (waveform, level, pan, octave, coarse, phase, direct out). |
-| Noise oscillator | 19 | 0 | 15 | 4 | The noise generator (type, colour, level, pan, pitch, sample noise, keytrack). |
-| Mixer (buses, sends, destinations) | 8 | 0 | 8 | 0 | The mixer graph: filter blend, buses, sends, direct output, oscillator destinations. |
-| Filter 1 (cutoff, on) | 17 | 2 | 8 | 7 | filter1.on and cutoff act (two cascaded one-pole low passes). Missing: resonance, drive, mix, keytrack, model and style (the 80 models), blend, pan, level, the clean mode. |
-| Filter 2, FX filter, model settings | 49 | 0 | 12 | 37 | A second filter, the filter models, the formant / comb / phaser settings, the serial / parallel switch, the filter of the effect chain. |
-| Envelopes 1 .. 6 | 96 | 0 | 42 | 54 | The voice has a fixed envelope (5 ms attack, 150 ms decay, 0.7 sustain, 250 ms release); no envelope module, no curves, no beat units, no routing to the destinations. |
-| LFOs 1 .. 10, random LFOs | 202 | 0 | 66 | 136 | No LFO of any kind: shapes, sync, rate, delay, fade, key follow, the custom shape editor, the random LFO styles. |
-| Macros 1 .. 8 | 8 | 0 | 4 | 4 | The macro knobs are stored; nothing is routed from them (no modulation matrix). |
-| Modulation matrix (64 slots) | 1024 | 0 | 576 | 448 | No modulation matrix: sources, destinations, amount, curve, stereo, aux sources, rise / fall / delay, per voice override. |
-| FX chain: order, racks, slots (16 instances) | 480 | 0 | 471 | 9 | The effect chain, the 16 instance slots, the racks and the order. The own engine has no effect at all. |
-| FX: chorus, flanger, phaser | 35 | 0 | 4 | 31 | The modulation effects. |
-| FX: delay, reverb | 37 | 0 | 13 | 24 | Delay (sync, offset, filter) and the reverb algorithms. |
-| FX: compressor, distortion, EQ | 54 | 0 | 13 | 41 | Dynamics, the distortion types and shaper curves, the EQ (bands, laws). |
-| FX: hyper dimension, utility, Bode, convolve, splitters | 66 | 0 | 66 | 0 | The remaining effects and the band splitters. |
-| **All** | **2637** | **7** | **1757** | **873** | |
+| Oscillators: wavetable choice, frame, warp, level, pan, pitch | 81 | 27 | 54 | 0 | Acts: oscillators 1 .. 3 (level, pan, pitch, frame, phase, destination, env 1). Missing: the pitch modes, transpose snap, fixed pitch, filter blend and sends, the frame remap, smooth interpolation. |
+| Oscillators: wavetable table, unison, spectral morph, warp lists | 93 | 48 | 33 | 12 | Acts: the 15 built-in tables, unison (voices, detune, curve, blend, spread, mode, range), warp 1 and 2 (Sync .. Squeeze, FM / RM / PD / AM from the other oscillators, bends, asymmetry, the distortion warps), key and velocity mapping. Missing: user tables (Preset table), spectral morph, warps Remap 1-4, Odd/Even, Filter LPF / HPF, the warps from noise / sub / filters, the spectral warps, the Serum unison law, stack styles, the frame remap. |
+| Oscillators: sample, granular, spectral, multisample types | 255 | 0 | 255 | 0 | The sample, granular, spectral and multisample oscillator types (step 5: the libraries synthyboy_sampleosc, _granular, _spectral, _multisample are in the iOS build, the own engine does not use them yet). |
+| Sub oscillator | 14 | 8 | 2 | 4 | Acts: waveform, octave, tune, level, pan, destination, env 1, phase. Missing: direct out, contiguous phase, bus sends, filter blend. |
+| Noise oscillator | 19 | 5 | 14 | 0 | Acts: colours, level, pan, destination, env 1, stereo. Missing: the sample noise type, pitch, fine, phase, keytrack, loop, bounce. |
+| Mixer (buses, sends, destinations) | 8 | 0 | 8 | 0 | The mixer graph: filter blend, buses, sends, direct output. |
+| Filter 1 (cutoff, on) | 17 | 10 | 7 | 0 | Acts: on, model, style, cutoff, resonance, drive, blend, mix, keytrack, var, level, env 1, destination (the models map onto the filters-serum types). Missing: pan, clean mode, buses, filter blend. |
+| Filter 2, FX filter, model settings | 49 | 19 | 11 | 19 | Acts: filter 2 (same keys), routing, the FX filter. Missing: the formant / comb offset settings of the models, pan, clean mode. |
+| Envelopes 1 .. 6 | 96 | 54 | 42 | 0 | Acts: all times, sustain and the three curves (squared amplitude, DAHDSR). Missing: the beat units and legato inverted. |
+| LFOs 1 .. 10, random LFOs | 202 | 148 | 40 | 14 | Acts: the 12 shapes, rate, tempo sync, key follow, sync types (retrigger / free-run), delay, fade, smooth, direction, the five random styles. Missing: the custom shape, swing, host lock, stereo offset, the envelope-like sync types (2 .. 5 run as retrigger). |
+| Macros 1 .. 8 | 8 | 8 | 0 | 0 | Acts. |
+| Modulation matrix (64 slots) | 1024 | 640 | 320 | 64 | Acts: source, destination, amount, power, bipolar, bypass, aux source (inv, power, output). Missing: stereo lanes, rise / fall / delay of a slot, cycle check. |
+| FX chain: order, racks, slots (16 instances) | 480 | 9 | 471 | 0 | The racks, the 16 instance slots and the modules 12 .. 16 (Bode, Convolve, splitters); the nine standard modules, Hyper/Dimension and Utility run in the fx.order chain on the main bus. |
+| FX: chorus, flanger, phaser | 35 | 34 | 1 | 0 | Acts (written from public DSP knowledge, levels matched to the oracle). |
+| FX: delay, reverb | 37 | 25 | 10 | 2 | Acts: delay (all styles, sync, filter), reverb (one feedback delay network for all types). Missing: delay offset / hq, reverb algorithms are variants of one network, low shelf, er size. |
+| FX: compressor, distortion, EQ | 54 | 50 | 1 | 3 | Acts. Missing: the Serum compressor law, the distortion filter keytrack, the Serum EQ law. |
+| FX: hyper dimension, utility, Bode, convolve, splitters | 66 | 19 | 46 | 1 | Acts: Hyper/Dimension, Utility (fx-serum-a). Missing: Bode, Convolve, the splitters and racks. |
+| **All** | **2637** | **1120** | **1398** | **119** | |
 
 <!-- END GENERATED TABLE -->
 

@@ -84,6 +84,7 @@ void OwnEngine::setQuality (const Quality& q) noexcept
 {
     voiceCap.store (std::clamp (q.maxVoices, 1, kMaxVoices), std::memory_order_relaxed);
     unisonCap.store (std::clamp (q.maxUnison, 1, kMaxUnisonVoices), std::memory_order_relaxed);
+    fxMask.store (q.fxMask, std::memory_order_relaxed);
 }
 
 void OwnEngine::setTransport (const TransportInfo& t) noexcept
@@ -111,6 +112,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     base.assign (paramCount(), 0.0f);
     gdelta.assign (paramCount(), 0.0f);
     gtouched.assign (static_cast<size_t> (kNumModSlots), 0);
+    fx.prepare (sampleRate, maxBlockFrames);
     smoothedGain.reset (sampleRate, 0.02);
     prepared = true;
     reset();
@@ -120,6 +122,7 @@ void OwnEngine::reset()
 {
     for (auto& v : voices)
         v->kill();
+    fx.reset();
     for (int c = 0; c < numChannels; ++c)
     {
         bendSemis[c] = modWheel[c] = aftertouch[c] = 0.0f;
@@ -462,6 +465,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     }
 
     const MasterIdx& mi = pi.master;
+    static const int fxReverbForce = findParamIndex (hashKey ("reverb.force_enable"));
     int pos = 0, ei = 0;
     while (pos < numFrames)
     {
@@ -474,6 +478,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             if (gdelta[vi] != 0.0f)
                 db = modulatedValue (paramTable()[vi], destLawOf (vi), db, gdelta[vi]);
             smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
+            fx.update (base.data(), gdelta.data(), globals.bpm, effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f), kControlPeriod);
         }
         while (ei < numEvents && events[ei].frame <= pos)
             handleEvent (events[ei++]);
@@ -484,6 +489,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         for (auto& v : voices)
             if (v->isActive())
                 v->render (left + pos, rightOut + pos, n, controlPos);
+        fx.process (left + pos, rightOut + pos, n);
         for (int i = pos; i < end; ++i)
         {
             const float g = smoothedGain.next();

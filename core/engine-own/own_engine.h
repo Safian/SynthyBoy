@@ -11,6 +11,7 @@
 #include "dsp/util.h"
 #include "matrix/mod_matrix.h"
 #include "synthyboy/engine.h"
+#include "fx/fx_chain.h"
 #include "voice/voice.h"
 
 namespace synthyboy
@@ -60,6 +61,8 @@ private:
     std::vector<int> gtouched;
     int gnumTouched = 0;
     ModMatrix matrix;
+    FxChain fx;
+    std::atomic<uint32_t> fxMask { kFxAll };
     TickGlobals globals;
     bool sustainDown[numChannels] = {};
     float bendSemis[numChannels] = {}, modWheel[numChannels] = {}, aftertouch[numChannels] = {};

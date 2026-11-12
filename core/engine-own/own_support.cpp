@@ -61,6 +61,30 @@ bool implementedKey (const std::string& k)
         return inList (rest, { "style", "rate", "sync", "division", "sync_type", "keytrack_transpose", "keytrack_tune" });
     if (head == "macro")
         return true;
+    // ---- the effect chain (fx/)
+    if (head == "chorus")
+        return inList (rest, { "on", "mix", "rate", "sync", "division", "depth", "feedback", "delay1", "delay2", "voices", "filter_cutoff", "filter_spread", "level" });
+    if (head == "compressor")
+        return rest.rfind ("low.", 0) == 0 || rest.rfind ("mid.", 0) == 0 || rest.rfind ("high.", 0) == 0 || inList (rest, { "on", "mix", "attack", "release", "bands", "level", "crossover_low", "crossover_high" });
+    if (head == "delay")
+        return inList (rest, { "on", "mix", "feedback", "time", "time2", "sync", "division", "division2", "style", "filter_cutoff", "filter_spread", "level" });
+    if (head == "distortion")
+        return inList (rest, { "on", "type", "drive", "mix", "filter_order", "filter_cutoff", "filter_resonance", "filter_blend", "level" });
+    if (head == "eq")
+        return rest.rfind ("low.", 0) == 0 || rest.rfind ("mid.", 0) == 0 || rest.rfind ("high.", 0) == 0 || rest.rfind ("mid2.", 0) == 0 || inList (rest, { "on", "level" });
+    if (head == "flanger" || head == "phaser")
+        return inList (rest, { "on", "mix", "feedback", "rate", "sync", "division", "depth", "center", "phase_offset", "blend", "level" });
+    if (head == "reverb")
+        return inList (rest, { "on", "mix", "size", "decay", "predelay", "pre_low_cut", "pre_high_cut", "high_shelf_cutoff", "high_shelf_gain", "chorus_amount", "chorus_rate",
+                               "type", "width", "diff_a", "diff_b", "level", "force_enable" });
+    if (head == "fxfilter")
+        return inList (rest, { "on", "model", "style", "cutoff", "resonance", "drive", "blend", "mix", "var", "level" });
+    if (head == "hyperdim")
+        return inList (rest, { "on", "rate", "unison", "detune", "mix", "dim_size", "dim_mix", "level" });
+    if (head == "utility")
+        return inList (rest, { "on", "polarity_l", "polarity_r", "lpf", "hpf", "mono_bass", "mono_freq", "width", "pan", "mix", "level" });
+    if (head == "fx" && rest.rfind ("order.", 0) == 0)
+        return true;
     if (head.rfind ("mod", 0) == 0 && head.size() == 5)
         return inList (rest, { "source", "destination", "amount", "power", "bipolar", "bypass", "aux_source", "aux_inv", "aux_power", "aux_output" });
     return false;
@@ -83,12 +107,13 @@ EngineCapsMask ownCapabilities() noexcept
 {
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
-         | kCapModSources2 | kCapWavetableSawDown;
+         | kCapModSources2 | kCapWavetableSawDown
+         | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras | kCapReverbForce;
 }
 
 EngineCaps2Mask ownCapabilities2() noexcept
 {
-    return kCap2None;
+    return kCap2EqBand2;
 }
 } // namespace own
 } // namespace synthyboy

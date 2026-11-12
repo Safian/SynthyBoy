@@ -27,6 +27,7 @@ add_library(synthyboy_core STATIC
     src/wave_convert.cpp
     engine-own/own_engine.cpp
     engine-own/own_support.cpp
+    engine-own/fx/fx_chain.cpp
     engine-own/osc/wavetable_bank.cpp
     engine-own/matrix/mod_matrix.cpp
     engine-own/voice/param_index.cpp

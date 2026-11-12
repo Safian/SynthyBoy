@@ -254,13 +254,7 @@ TEST (bg_drag_on_a_knob_changes_the_clap_parameter_and_the_audio)
     CHECK (lowered < defaultLevel - 0.1);
     host.queueNote (true, 60);
     const double quiet = host.rms (6000);
-   #if defined (SYNTHYBOY_HARNESS_OWN_ENGINE)
-    // The own engine (iOS) does not act on osc1.level (docs/ui-design/OWN-ENGINE-GAP.md, row "Oscillator level"): the parameter moved, the sound stays what it was. That it stays is part of
-    // the contract of the gap table, so the test says it instead of skipping it.
-    CHECK (quiet > loud * 0.8);
-   #else
-    CHECK (quiet < loud * 0.8);
-   #endif
+    CHECK (quiet < loud * 0.8); // the own engine (iOS) acts on osc1.level since the parity work: the sound follows on every engine
     std::printf ("    osc1.level %.3f -> %.3f, rms %.4f -> %.4f\n", defaultLevel, lowered, loud, quiet);
 }
 
@@ -745,12 +739,7 @@ TEST (bg_animated_views_advance_while_a_note_sounds_and_settle_afterwards)
             meterRepainted = meterRepainted || (r.x + static_cast<int64_t> (r.w) > 1000 && r.y < 64); // the MAIN meter
         sleepMs (16);
     }
-   #if defined (SYNTHYBOY_HARNESS_OWN_ENGINE)
-    // the voice of the own engine settles into its sustain after 150 ms (fixed envelope, no modulation), so the meter stops moving earlier: 4 .. 6 frames measured (macOS, iOS simulator)
-    CHECK (changedFrames >= 3);
-   #else
     CHECK (changedFrames >= 5);   // meters and voice counter move while the sound plays
-   #endif
     CHECK (needsAnother >= 1);    // and the frames say so
     CHECK (meterRepainted);
     host.queueNote (false, 60);
