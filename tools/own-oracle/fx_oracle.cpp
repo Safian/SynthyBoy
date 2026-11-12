@@ -2,6 +2,9 @@
 // usage: synthyboy_fx_oracle [reverb|modules|flanger|chorus|phaser|phasernotches|all]   (a markdown table on stdout)
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <cmath>
+#include <vector>
 #include <cstdio>
 #include <string>
 

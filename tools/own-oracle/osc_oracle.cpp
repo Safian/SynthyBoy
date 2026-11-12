@@ -3,6 +3,8 @@
 // usage: synthyboy_osc_oracle [note]
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <cstdint>
 #include <cmath>
 #include <complex>
 #include <cstdio>

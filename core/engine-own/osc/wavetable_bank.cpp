@@ -1,6 +1,8 @@
 // SynthyBoy - own engine: the built-in band-limited wavetables.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <vector>
 #include "wavetable_bank.h"
 
 #include <array>

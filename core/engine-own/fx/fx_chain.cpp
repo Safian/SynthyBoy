@@ -1,6 +1,9 @@
 // SynthyBoy - own engine: the effect racks and the instance pool.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <cmath>
+#include <cstdint>
+#include <memory>
 #include "fx_chain.h"
 
 #include <algorithm>

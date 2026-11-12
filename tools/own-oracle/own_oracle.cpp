@@ -3,6 +3,10 @@
 //   reports: summary | peaks | env | alias | spectrum
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
 #include "own_oracle.h"
 
 #include "synthyboy/modulation.h"

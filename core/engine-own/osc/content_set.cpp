@@ -1,6 +1,10 @@
 // SynthyBoy - own engine: the decoded content of a state.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 #include "content_set.h"
 
 #include <algorithm>

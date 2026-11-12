@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "../dsp/util.h"

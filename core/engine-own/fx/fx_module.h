@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <memory>

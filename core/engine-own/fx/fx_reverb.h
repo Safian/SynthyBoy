@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <array>
 
 #include "fx_dsp.h"
@@ -390,7 +392,7 @@ private:
         {
             float s = 0.0f;
             for (int j = 0; j < 8; ++j)
-                s += (__builtin_popcount (static_cast<unsigned> (i & j)) & 1 ? -y[j] : y[j]);
+                s += (((((i & j) & 1) + (((i & j) >> 1) & 1) + (((i & j) >> 2) & 1)) & 1) ? -y[j] : y[j]);
             h[i] = s * 0.35355339f;
         }
         for (int k = 0; k < 8; ++k)

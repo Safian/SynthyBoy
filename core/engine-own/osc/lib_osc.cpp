@@ -1,6 +1,10 @@
 // SynthyBoy - own engine: the sample, granular, spectral and multisample oscillator types of one oscillator slot of a voice.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <vector>
 #include "lib_osc.h"
 
 #include <cstdio>

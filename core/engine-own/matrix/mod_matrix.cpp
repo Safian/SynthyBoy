@@ -1,6 +1,8 @@
 // SynthyBoy - own engine: the modulation matrix.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <cmath>
 #include "mod_matrix.h"
 
 #include <cstring>

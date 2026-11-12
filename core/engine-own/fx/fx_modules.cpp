@@ -1,6 +1,11 @@
 // SynthyBoy - own engine: the 13 effect modules as objects (key reading + DSP), shared by instance 0 of the chain and the slots of the instance pool.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <memory>
+#include <mutex>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>

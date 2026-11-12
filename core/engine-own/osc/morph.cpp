@@ -1,6 +1,7 @@
 // SynthyBoy - own engine: spectral morph of a wavetable frame.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
 #include "morph.h"
 
 #include <cmath>
