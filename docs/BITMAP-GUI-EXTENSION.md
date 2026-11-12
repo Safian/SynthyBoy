@@ -219,7 +219,7 @@ The Kick app on iOS cannot load a `.clap` (no `dlopen` of plug-ins) and is a JUC
 
 | | |
 |---|---|
-| Library | `libsynthyboy_static_ui.a` (CMake target `synthyboy_static_ui`), built by `-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos | iphonesimulator -DSYNTHYBOY_STATIC_UI=ON -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF` (`scripts/test-ios-static-ui.sh` is the reference invocation). arm64 for the device, arm64 + x86_64 for the simulator, deployment target 15.0 (the lowest the current SDK's libc++ supports without a warning; the Kick app's 16.0 is above it). |
+| Library | `libsynthyboy_static_ui.a` (CMake target `synthyboy_static_ui`), built by `-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos (or iphonesimulator) -DSYNTHYBOY_STATIC_UI=ON -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF` (`scripts/test-ios-static-ui.sh` is the reference invocation). arm64 for the device, arm64 + x86_64 for the simulator, deployment target 15.0 (the lowest the current SDK's libc++ supports without a warning; the Kick app's 16.0 is above it). |
 | Entry | `const clap_plugin_entry_t* synthyboy_clap_get_entry (void)` (`shell-clap/synthyboy_clap.h`): **the only symbol the archive exports.** No `clap_entry`. `clap_entry.init (path)` ignores the path, `deinit ()` shuts the toolkit down. |
 | Extension | `com.safian.bitmap-gui/1` through `clap_plugin::get_extension ()` of the plug-in the factory creates, exactly as in sections 1 to 11. Nothing in this document changes for a static host. |
 | Engine | the own engine (`core/engine-own`): 7 of the 2637 keys are live, the rest is drawn (dimmed when a capability bit is missing) and stored. `ui-design/OWN-ENGINE-GAP.md`. |
