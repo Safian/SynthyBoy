@@ -4,6 +4,7 @@
 #pragma once
 
 #include "../dsp/util.h"
+#include "classic_filters.h"
 #include "synthyboy/filters/filter.h"
 
 namespace synthyboy
@@ -14,6 +15,7 @@ struct FilterSettings
 {
     int model = 3, style = 0;
     float cutoffHz = 12000.0f, resonance = 0.2f, drive = 0.0f, blend = 0.0f, mix = 1.0f, var = 0.5f;
+    float driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
 };
 
 class FilterUnit
@@ -23,12 +25,17 @@ public:
     {
         left.prepare (sampleRate);
         right.prepare (sampleRate);
+        cl[0].prepare (sampleRate);
+        cl[1].prepare (sampleRate);
     }
 
     void reset() noexcept
     {
         left.reset();
         right.reset();
+        cl[0].reset();
+        cl[1].reset();
+        prevP = curP;
     }
 
     /** The FilterType of a (model, style) pair; the classic models 0 .. 7 map onto the closest types of the collection. */
@@ -69,6 +76,22 @@ public:
 
     void set (const FilterSettings& s) noexcept
     {
+        prevP = curP;
+        curP.model = s.model;
+        curP.style = s.style;
+        curP.cutoffHz = s.cutoffHz;
+        curP.res = s.resonance;
+        curP.driveDb = s.driveDb;
+        curP.blendRaw = s.blend * 2.0f;
+        curP.combOffset = s.combOffset;
+        curP.fx = s.formantX;
+        curP.fy = s.formantY;
+        curP.fres = s.formantRes;
+        curP.fspread = s.formantSpread;
+        curP.ftranspose = s.formantTranspose;
+        classic = s.model < filters::kFirstSerumModel;
+        if (classic)
+            return;
         float morph = -1.0f;
         const int type = typeFor (s.model, s.style, s.blend, morph);
         if (type != left.getType())
@@ -87,13 +110,25 @@ public:
         right.setParams (p);
         // loudness of the classic models matched to the reference engine's by measurement (tools/own-oracle), dB
         static const float kTrimDb[8] = { 1.5f, -11.5f, 3.5f, 0.0f, 4.0f, 2.0f, 0.5f, 1.0f };
-        trim = s.model >= 0 && s.model < 8 ? std::pow (10.0f, kTrimDb[s.model] * 0.05f) : 1.0f;
+        trim = 1.0f;
+        (void) kTrimDb;
     }
 
     /** Filters a stereo block. Some of the collection's types can run away at extreme settings (resonance and drive at the maximum on loud input): a
         runaway (non finite, or beyond 200) resets the filter and plays silence for that block, everything else is limited to +-16 (+24 dB). */
-    void process (const float* inL, const float* inR, float* outL, float* outR, int n) noexcept
+    void process (const float* inL, const float* inR, float* outL, float* outR, int n, int t0 = 0) noexcept
     {
+        if (classic)
+        {
+            cl[0].process (inL, outL, n, prevP, curP, t0);
+            cl[1].process (inR, outR, n, prevP, curP, t0);
+            for (int k = 0; k < n; ++k)
+            {
+                outL[k] = std::clamp (outL[k], -16.0f, 16.0f);
+                outR[k] = std::clamp (outR[k], -16.0f, 16.0f);
+            }
+            return;
+        }
         left.process (inL, outL, n);
         right.process (inR, outR, n);
         bool runaway = false;
@@ -116,6 +151,9 @@ public:
 
 private:
     filters::Filter left, right;
+    ClassicFilter cl[2];
+    ClassicParams prevP, curP;
+    bool classic = false;
     float trim = 1.0f;
 };
 } // namespace own

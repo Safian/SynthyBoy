@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "own_oracle.h"
 #include "voice/filter_unit.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
@@ -385,6 +386,83 @@ TEST (own_envelope_vector_e1)
     const double relExpected[] = { 0.217, 0.115, 0.049, 0.0057 };
     for (size_t i = 0; i < 4; ++i)
         CHECK_NEAR (peakAt (0.75 + relTimes[i]), relExpected[i], 0.06 * relExpected[i] + 0.005);
+}
+
+// ---- docs/engine-spec/05-filters.md section 10: the gain of white noise through the models at cutoff 1 kHz (8 frequencies, dB)
+namespace
+{
+std::vector<double> noiseGainDb (int model, int style, float res)
+{
+    own::FilterUnit f;
+    f.prepare (48000.0);
+    own::FilterSettings s;
+    s.model = model;
+    s.style = style;
+    s.cutoffHz = 1000.0f;
+    s.resonance = res;
+    s.blend = 0.0f;
+    f.set (s);
+    f.set (s);
+    f.reset();
+    own::Rng rng;
+    rng.seed (5);
+    const size_t N = 1 << 17;
+    std::vector<float> in (N), out (N);
+    for (auto& x : in)
+        x = rng.bi();
+    for (size_t i = 0; i < N; i += 32)
+    {
+        float dl[32];
+        f.process (in.data() + i, in.data() + i, out.data() + i, dl, 32, 0);
+    }
+    std::vector<double> g;
+    const double freqs[8] = { 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
+    const size_t seg = 8192;
+    std::vector<double> pin (seg / 2, 0.0), pout (seg / 2, 0.0);
+    for (size_t a = 4096; a + seg <= N; a += seg)
+    {
+        const auto i1 = oracle::powerSpectrum (in, a, seg), o1 = oracle::powerSpectrum (out, a, seg);
+        for (size_t k = 0; k < seg / 2; ++k) { pin[k] += i1[k]; pout[k] += o1[k]; }
+    }
+    for (const double hz : freqs)
+    {
+        const size_t c = static_cast<size_t> (hz / 48000.0 * seg);
+        double a = 0, b = 0;
+        for (size_t k = c - 6; k <= c + 6; ++k) { a += pin[k]; b += pout[k]; }
+        g.push_back (10.0 * std::log10 (b / a));
+    }
+    return g;
+}
+} // namespace
+
+TEST (own_filter_responses_match_document_05)
+{
+    struct Row { int model, style; float res; double db[8]; double tol; };
+    const Row rows[] = {
+        { 0, 0, 0.0f, { -1.5, -1.8, -3.3, -7.3, -15.3, -26.0, -37.9, -51.2 }, 1.5 },
+        { 0, 0, 0.5f, { -6.5, -6.0, -4.6, -2.1, -16.7, -30.2, -42.9, -56.4 }, 1.5 },
+        { 0, 1, 0.0f, { -0.2, -0.4, -1.2, -6.2, -25.2, -48.7, -73.2, -99.9 }, 1.5 },
+        { 1, 0, 0.0f, { 0.4, 0.0, -1.2, -5.1, -13.2, -24.0, -36.1, -49.4 }, 3.0 },
+        { 2, 0, 0.0f, { -1.5, -1.9, -3.3, -7.4, -15.4, -26.1, -38.1, -51.4 }, 1.5 },
+        { 2, 1, 0.0f, { -1.6, -2.4, -5.3, -13.4, -29.4, -50.9, -74.8, -101.3 }, 1.5 },
+        { 2, 1, 0.5f, { -8.8, -8.1, -5.9, -5.4, -27.2, -49.0, -72.8, -99.4 }, 3.0 },
+        { 3, 0, 0.0f, { -0.1, -0.5, -1.9, -6.0, -14.0, -24.7, -36.6, -49.9 }, 1.5 },
+        { 3, 0, 0.5f, { -1.8, -1.4, 0.3, 5.7, -11.8, -25.6, -38.3, -51.8 }, 1.5 },
+        { 3, 1, 0.0f, { -0.1, -0.3, -1.0, -6.0, -25.1, -48.6, -73.1, -99.7 }, 1.5 },
+        { 4, 0, 0.0f, { 0.3, -7.4, -16.8, -29.2, -45.5, -66.1, -89.6, -116.0 }, 3.0 },
+        { 5, 0, 0.0f, { -12.9, -2.8, 2.6, 4.2, -27.6, -9.5, -18.4, -26.0 }, 5.0 },
+    };
+    for (const Row& r : rows)
+    {
+        const auto g = noiseGainDb (r.model, r.style, r.res);
+        for (int i = 0; i < 8; ++i)
+        {
+            if (r.db[i] < -40.0) // the deep stopband: below -40 dB (document 05, section 10)
+                { CHECK (g[static_cast<size_t> (i)] < -40.0); continue; }
+            if (!CHECK (std::fabs (g[static_cast<size_t> (i)] - r.db[i]) <= r.tol))
+                std::printf ("    model %d style %d res %.1f bin %d: %.1f dB, spec %.1f dB\n", r.model, r.style, static_cast<double> (r.res), i, g[static_cast<size_t> (i)], r.db[i]);
+        }
+    }
 }
 
 // The factory behaviour of the default patch: a saw at the pitch of the key, level within 1 dB of the measured Vital default (-24.5 dB rms at A4).

@@ -521,6 +521,13 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.cutoffHz = P (fi.cutoff) * semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
         s.resonance = P (fi.resonance) * 0.01f;
         s.drive = P (fi.drive) * (1.0f / 20.0f);
+        s.driveDb = P (fi.drive);
+        s.combOffset = P (fi.combOffset);
+        s.formantX = P (fi.formantX) * 0.01f;
+        s.formantY = P (fi.formantY) * 0.01f;
+        s.formantRes = P (fi.formantRes) * 0.01f;
+        s.formantSpread = P (fi.formantSpread) * 0.01f;
+        s.formantTranspose = P (fi.formantTranspose);
         s.blend = P (fi.blend) * 0.01f;
         s.mix = P (fi.mix) * 0.01f;
         s.var = P (fi.var) * 0.01f;
@@ -614,7 +621,7 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
     auto runFilter = [&] (int f)
     {
         if (filtOn[f])
-            filt[f].process (fin_L[f], fin_R[f], fout_L[f], fout_R[f], n);
+            filt[f].process (fin_L[f], fin_R[f], fout_L[f], fout_R[f], n, t0);
         else
         {
             std::copy (fin_L[f], fin_L[f] + n, fout_L[f]);

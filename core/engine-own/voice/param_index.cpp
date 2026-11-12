@@ -50,6 +50,8 @@ ParamIndex build()
 #define K(field, key) f.field = find ("filter%d." key, n)
         K (on, "on"); K (model, "model"); K (style, "style"); K (cutoff, "cutoff"); K (resonance, "resonance"); K (drive, "drive"); K (blend, "blend");
         K (mix, "mix"); K (keytrack, "keytrack"); K (var, "var"); K (pan, "pan"); K (level, "level"); K (env1, "env1"); K (destination, "destination");
+        K (combOffset, "comb_offset"); K (formantX, "formant.x"); K (formantY, "formant.y"); K (formantRes, "formant.resonance");
+        K (formantSpread, "formant.spread"); K (formantTranspose, "formant.transpose");
 #undef K
     }
     for (int n = 1; n <= 6; ++n)
