@@ -65,7 +65,7 @@ and runs the vectors against `EngineKind::own`.
 | # | Document | Status | Contents |
 |---|----------|--------|----------|
 | 1 | [01-voice-management.md](01-voice-management.md) | final | polyphony, stealing, portamento, legato, unison laws, note on/off, retrigger, velocity, aftertouch, MPE, smoothing, level laws |
-| 2 | 02-oscillator.md | pending | wavetable reading, band-limiting, frame interpolation, phase, pitch laws, every warp mode, spectral morph, sub, noise |
+| 2 | [02-oscillator.md](02-oscillator.md) | final | wavetable reading, band-limiting, frame interpolation, phase, pitch laws, every warp mode, spectral morph, sub, noise |
 | 3 | 03-envelopes-lfos.md | pending | envelope stages and curves, timing, retrigger/loop, LFO shapes, sync, fade, delay, random LFOs |
 | 4 | 04-modulation-matrix.md | pending | sources, destinations, amount/power/bipolar/stereo law, ramp, macros, evaluation order |
 | 5 | 05-filters.md | pending | filter models not in `core/filters-serum`, oversampling, drive, keytrack, blend, formant/comb/phaser |
