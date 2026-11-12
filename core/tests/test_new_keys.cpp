@@ -428,7 +428,7 @@ TEST (version_2_sound_is_unchanged_in_both_engines)
 {
     for (const auto& g : kAudioGolden)
     {
-        if (! isEngineAvailable (g.kind))
+        if (! isEngineAvailable (g.kind) || g.kind == EngineKind::own) // the own engine's sound is no longer frozen (it implements the engine, oracle tests in test_own_engine.cpp)
             continue;
         const auto r = sbgolden::audioRender (g.kind, g.busy);
         const auto rms = sbgolden::segmentRms (r);
@@ -455,10 +455,13 @@ TEST (engines_ignore_the_new_keys)
         if (e == nullptr)
             continue;
 
-        // the engine claims exactly the keys whose capability bits it reports (the own engine acts on none of them)
+        // the engine claims exactly the keys whose capability bits it reports (the own engine acts on a subset)
         const auto* t = paramTable();
         for (size_t i = kNumKeysV2; i < paramCount(); ++i)
-            CHECK_EQ (e->supportsParam (t[i].id), c.kind != EngineKind::own && capsCover (e->capabilities(), requiredCaps (i)));
+            if (c.kind == EngineKind::own) // the own engine acts on a subset of what its bits allow (own_support.cpp), never on more
+                CHECK (! e->supportsParam (t[i].id) || (capsCover (e->capabilities(), requiredCaps (i)) && capsCover2 (e->capabilities2(), requiredCaps2 (i))));
+            else
+                CHECK_EQ (e->supportsParam (t[i].id), capsCover (e->capabilities(), requiredCaps (i)));
 
         // every new key at random values (also the extremes, and the new mod sources / destinations of a slot): no crash, finite audio
         sbtest::Rng rng (0x4e57ull);

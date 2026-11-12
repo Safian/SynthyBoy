@@ -762,7 +762,6 @@ TEST (version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_bo
         { EngineKind::own, false, 0xc3e433c23a7f89a5ull }, { EngineKind::own, true, 0x44f50232b180c48dull },
         { EngineKind::vital, false, 0x765f4bc243b189c1ull }, { EngineKind::vital, true, 0x199ba135a1fd977full },
     };
-    sbtest::Rng rng (9);
     for (const auto& g : golden)
     {
         if (! isEngineAvailable (g.kind))
@@ -770,7 +769,7 @@ TEST (version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_bo
         const auto doc = asVersion2 (saveState (g.busy ? busyValues() : ParamValues::defaults()));
         // a previous version 3 patch: every new key holds some other value. An engine that acts on the new keys (engine-vital since WP2/WP3)
         // would sound different with them, so it is loaded over the defaults (R5: the defaults reproduce the version 2 sound)
-        auto values = g.kind == EngineKind::own ? randomValues (rng) : ParamValues::defaults();
+        auto values = ParamValues::defaults(); // both engines act on the keys of version 3 now (the own engine since the parity work)
         CHECK (loadState (doc.data(), doc.size(), values).status == LoadStatus::ok);
 
         const auto r = renderLoaded (g.kind, values, ! g.busy);
@@ -779,7 +778,8 @@ TEST (version_2_document_loaded_into_version_3_renders_the_version_2_audio_in_bo
         const auto fresh = sbgolden::audioRender (g.kind, g.busy);
         CHECK (fresh.left == r.audio.left && fresh.right == r.audio.right); // identical to the engine fed with the old values only
 #if defined(__APPLE__) && defined(__aarch64__) && defined(NDEBUG)
-        CHECK_EQ (sbgolden::audioFnv (r.audio), g.hash);
+        if (g.kind != EngineKind::own) // the own engine's sound is no longer frozen (oracle tests in test_own_engine.cpp)
+            CHECK_EQ (sbgolden::audioFnv (r.audio), g.hash);
 #else
         (void) g.hash;
 #endif
