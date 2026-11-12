@@ -77,18 +77,6 @@ FramePair spectrumOf (const std::vector<double>& x)
 
 constexpr double kPi = 3.14159265358979323846;
 
-void addSaw (FramePair& f, float w, int maxH = kHarm)
-{
-    for (int h = 1; h <= maxH && h < kHarm; ++h)
-        f.s[static_cast<size_t> (h)] += w * static_cast<float> (-2.0 / (kPi * h)); // rising ramp, -1 at the start of the cycle, jump at the start
-}
-
-void addSquare (FramePair& f, float w)
-{
-    for (int h = 1; h < kHarm; h += 2)
-        f.s[static_cast<size_t> (h)] += w * static_cast<float> (4.0 / (kPi * h));
-}
-
 void addPulse (FramePair& f, double duty)
 {
     // +1 for the first `duty` of the cycle, -1 for the rest, without the DC offset
@@ -102,127 +90,18 @@ void addPulse (FramePair& f, double duty)
 
 std::vector<FramePair> makeFrames (int choice)
 {
+    // the recipes of docs/engine-spec/02-oscillator.md section 1 (verified there against the reference frames): 64 frames, t = f / 63, harmonics 1 .. 1023
     std::vector<FramePair> out;
-    constexpr int kMorph = 16;
+    constexpr int kMorph = 64;
+    auto sineB = [] (FramePair& f, int k, double v) { f.s[static_cast<size_t> (k)] += static_cast<float> (v); };
     switch (choice)
     {
-        case 0: // Sine
-        {
-            FramePair f;
-            f.s[1] = 1.0f;
-            out.push_back (f);
-            break;
-        }
-        case 1: // Saw
-        {
-            FramePair f;
-            addSaw (f, 1.0f);
-            out.push_back (f);
-            break;
-        }
-        case 2: // Square
-        {
-            FramePair f;
-            addSquare (f, 1.0f);
-            out.push_back (f);
-            break;
-        }
-        case 3: // Triangle
-        {
-            FramePair f;
-            for (int h = 1; h < kHarm; h += 2)
-                f.s[static_cast<size_t> (h)] = static_cast<float> (((h / 2) % 2 == 0 ? 1.0 : -1.0) * 8.0 / (kPi * kPi * h * h));
-            out.push_back (f);
-            break;
-        }
-        case 4: // Pulse 25%
-        {
-            FramePair f;
-            addPulse (f, 0.25);
-            out.push_back (f);
-            break;
-        }
-        case 5: // Saw to Square
-        case 6: // Sine to Saw
-            for (int k = 0; k < kMorph; ++k)
-            {
-                const float m = static_cast<float> (k) / (kMorph - 1);
-                FramePair f;
-                if (choice == 5)
-                {
-                    addSaw (f, 1.0f - m);
-                    addSquare (f, m);
-                }
-                else
-                {
-                    f.s[1] = -(1.0f - m) * static_cast<float> (2.0 / kPi); // the sine (in phase with the fundamental of the saw) fades out while the saw comes in
-                    addSaw (f, m);
-                }
-                out.push_back (f);
-            }
-            break;
-        case 7: // Harmonic Series: the first n harmonics at 1/h
-        case 8: // Odd Harmonics
-            for (int k = 0; k < kMorph; ++k)
-            {
-                const int count = static_cast<int> (std::lround (std::pow (2.0, k * 8.0 / (kMorph - 1)))); // 1 .. 256
-                FramePair f;
-                for (int h = 1, n = 0; h < kHarm && n < count; h += (choice == 8 ? 2 : 1), ++n)
-                    f.s[static_cast<size_t> (h)] = 1.0f / static_cast<float> (h);
-                out.push_back (f);
-            }
-            break;
-        case 9: // Formant Sweep: a resonant bump moving up the harmonics
-            for (int k = 0; k < kMorph; ++k)
-            {
-                const double centre = 2.0 + 38.0 * k / (kMorph - 1);
-                FramePair f;
-                for (int h = 1; h < kHarm; ++h)
-                {
-                    const double d = (h - centre) / (1.0 + 0.25 * centre);
-                    f.s[static_cast<size_t> (h)] = static_cast<float> (std::exp (-d * d) / std::sqrt (static_cast<double> (h)));
-                }
-                out.push_back (f);
-            }
-            break;
-        case 10: // FM Sweep: sin (t + index * sin (t)), the index rises over the frames
-            for (int k = 0; k < kMorph; ++k)
-            {
-                const double index = 8.0 * k / (kMorph - 1);
-                std::vector<double> x (Wavetable::kCycle);
-                for (int i = 0; i < Wavetable::kCycle; ++i)
-                {
-                    const double t = kTwoPi * i / Wavetable::kCycle;
-                    x[static_cast<size_t> (i)] = std::sin (t + index * std::sin (t));
-                }
-                out.push_back (spectrumOf (x));
-            }
-            break;
-        case 11: // PWM Sweep: pulse width from 50% to 5%
-            for (int k = 0; k < kMorph; ++k)
-            {
-                FramePair f;
-                addPulse (f, 0.5 - 0.45 * k / (kMorph - 1));
-                out.push_back (f);
-            }
-            break;
-        case 12: // Bell Partials: Fibonacci harmonics, the brightness grows over the frames
-            for (int k = 0; k < kMorph; ++k)
-            {
-                FramePair f;
-                const double decay = 2.0 + 6.0 * k / (kMorph - 1);
-                int a = 1, b = 2, idx = 0;
-                while (a < kHarm)
-                {
-                    f.s[static_cast<size_t> (a)] += static_cast<float> (std::exp (-idx / decay));
-                    const int c = a + b;
-                    a = b;
-                    b = c;
-                    ++idx;
-                }
-                out.push_back (f);
-            }
-            break;
+        case 0: { FramePair f; sineB (f, 1, 1.0); out.push_back (f); break; }
+        case 1: { FramePair f; for (int k = 1; k < kHarm; ++k) sineB (f, k, -2.0 / (kPi * k)); out.push_back (f); break; }
+        case 2: { FramePair f; for (int k = 1; k < kHarm; k += 2) sineB (f, k, 4.0 / (kPi * k)); out.push_back (f); break; }
+        case 3: { FramePair f; for (int k = 1; k < kHarm; k += 2) sineB (f, k, 8.0 / (kPi * kPi * k * k) * (((k - 1) / 2) % 2 == 0 ? 1.0 : -1.0)); out.push_back (f); break; }
+        case 4: { FramePair f; addPulse (f, 0.25); out.push_back (f); break; }
+        case 14: { FramePair f; for (int k = 1; k < kHarm; ++k) sineB (f, k, 2.0 * ((k & 1) ? -1.0 : 1.0) / (kPi * k)); out.push_back (f); break; }
         case 15: // internal: Rounded Rect (the sub oscillator), a square with softened edges
         {
             std::vector<double> x (Wavetable::kCycle);
@@ -231,14 +110,60 @@ std::vector<FramePair> makeFrames (int choice)
             out.push_back (spectrumOf (x));
             break;
         }
-        case 14: // Saw Down: -saw (t + 180 degrees), the jump sits at mid cycle
-        {
-            FramePair f;
-            for (int h = 1; h < kHarm; ++h)
-                f.s[static_cast<size_t> (h)] = static_cast<float> (2.0 / (kPi * h) * ((h & 1) ? -1.0 : 1.0));
-            out.push_back (f);
+        case 5: case 6: case 7: case 8: case 9: case 10: case 11: case 12:
+            for (int fr = 0; fr < kMorph; ++fr)
+            {
+                const double t = static_cast<double> (fr) / (kMorph - 1);
+                FramePair f;
+                switch (choice)
+                {
+                    case 5: for (int k = 1; k < kHarm; ++k) sineB (f, k, 2.0 / (kPi * k) * ((k & 1) ? 1.0 + t : 1.0 - t)); break;
+                    case 6: for (int k = 1; k < kHarm; ++k) sineB (f, k, k == 1 ? (1.0 - t) + t * 2.0 / kPi : t * 2.0 / (kPi * k)); break;
+                    case 7: case 8:
+                    {
+                        const double count = 1.0 + 63.0 * t;
+                        for (int k = 1; k <= 64; ++k)
+                            if (choice == 7 || (k & 1))
+                                sineB (f, k, std::clamp (count - k + 1.0, 0.0, 1.0) / k);
+                        break;
+                    }
+                    case 9:
+                    {
+                        const double c1 = 2.0 + 10.0 * t, c2 = 6.0 + 26.0 * t;
+                        for (int k = 1; k < kHarm; ++k)
+                        {
+                            const double g1 = std::exp (-std::pow ((k - c1) / (1.0 + 0.4 * c1), 2.0)), g2 = 0.6 * std::exp (-std::pow ((k - c2) / (1.0 + 0.4 * c2), 2.0));
+                            sineB (f, k, (g1 + g2) / std::sqrt (static_cast<double> (k)) + (k == 1 ? 0.15 : 0.0));
+                        }
+                        break;
+                    }
+                    case 10:
+                    {
+                        std::vector<double> x (Wavetable::kCycle);
+                        for (int i = 0; i < Wavetable::kCycle; ++i)
+                        {
+                            const double ph = 2.0 * kPi * i / Wavetable::kCycle;
+                            x[static_cast<size_t> (i)] = std::sin (ph + 6.0 * t * std::sin (2.0 * ph));
+                        }
+                        f = spectrumOf (x);
+                        break;
+                    }
+                    case 11: addPulse (f, 0.05 + 0.45 * t); break;
+                    default:
+                    {
+                        static const int kPartials[] = { 1, 2, 3, 4, 6, 8, 11, 15, 19, 26, 34 };
+                        for (const int k : kPartials)
+                        {
+                            const double w = std::exp (-k / (4.0 + 40.0 * t)) + 0.3 * std::exp (-std::pow ((k - 3.0 - 20.0 * t) / 4.0, 2.0));
+                            f.s[static_cast<size_t> (k)] += static_cast<float> (w * (k % 3 == 0 ? 0.8 : 1.0));
+                            f.c[static_cast<size_t> (k)] += static_cast<float> (0.4 * w * ((k & 1) ? -1.0 : 1.0));
+                        }
+                        break;
+                    }
+                }
+                out.push_back (f);
+            }
             break;
-        }
         default:
             break;
     }
@@ -248,7 +173,7 @@ std::vector<FramePair> makeFrames (int choice)
 
 int Wavetable::maxHarmonics (int level) noexcept
 {
-    return std::max (1, static_cast<int> (std::floor (kHarm * std::pow (2.0, -0.5 * level))));
+    return std::max (1, (kHarm - 1 + 1) >> level); // octave steps: 1024, 512, ... 1 (memory: 64 frame tables x 11 levels)
 }
 
 int Wavetable::levelFor (float nyquistOverFundamental) noexcept

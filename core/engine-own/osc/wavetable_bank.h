@@ -18,7 +18,7 @@ class Wavetable
 public:
     static constexpr int kCycle = 2048;
     static constexpr int kStride = kCycle + 4;
-    static constexpr int kNumLevels = 22;
+    static constexpr int kNumLevels = 11;
 
     int numFrames() const noexcept { return frames; }
 

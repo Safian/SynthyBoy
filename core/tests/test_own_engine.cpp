@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "own_oracle.h"
+#include "osc/wavetable_bank.h"
 #include "voice/filter_unit.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
@@ -508,6 +509,32 @@ TEST (own_filters_serum_raw_stays_bounded)
                 }
             }
     CHECK_EQ (bad, 0);
+}
+
+// Checkpoint samples of the built-in tables (docs/engine-spec/02-oscillator.md 1.1), tolerance 2e-4.
+TEST (own_builtin_tables_match_the_checkpoints)
+{
+    struct Row { int entry, frame; double x[12]; };
+    const int idx[12] = { 0, 128, 256, 384, 512, 640, 768, 896, 1024, 1280, 1536, 1792 };
+    const Row rows[] = {
+        { 1, 0, { 0.0, -0.7415, -0.6360, -0.5302, -0.4242, -0.3182, -0.2121, -0.1061, 0.0, 0.2121, 0.4242, 0.6360 } },
+        { 2, 0, { 0.0, 0.8468, 0.8474, 0.8476, 0.8477, 0.8476, 0.8474, 0.8468, 0.0, -0.8474, -0.8477, -0.8474 } },
+        { 4, 0, { 0.2976, 0.8920, 0.8923, 0.8920, 0.2976, -0.2969, -0.2974, -0.2975, -0.2976, -0.2976, -0.2976, -0.2974 } },
+        { 5, 21, { 0.0, 0.7766, 0.7065, 0.6360, 0.5654, 0.4947, 0.4240, 0.3531, 0.0, -0.4240, -0.5654, -0.7065 } },
+        { 9, 21, { 0.0, 0.4967, -0.0397, 0.0568, 0.0661, 0.0566, 0.0420, 0.0224, 0.0, -0.0420, -0.0661, 0.0397 } },
+        { 10, 42, { 0.0, -0.0794, -0.9973, -0.7611, 1.0, -0.7611, -0.9973, -0.0794, 0.0, 0.9973, -1.0, 0.9973 } },
+        { 12, 63, { 0.0552, 0.3649, 0.8197, -0.0090, -0.5539, -0.0781, 0.0478, -0.1594, 0.8282, -0.1646, 0.3187, -0.7323 } },
+    };
+    for (const Row& r : rows)
+    {
+        const own::Wavetable* wt = own::builtinWavetable (r.entry);
+        CHECK (wt != nullptr);
+        if (wt == nullptr)
+            continue;
+        for (int i = 0; i < 12; ++i)
+            if (!CHECK_NEAR (wt->cycle (r.frame, 0)[idx[i]], r.x[i], 2.0e-4))
+                std::printf ("    entry %d frame %d sample %d\n", r.entry, r.frame, idx[i]);
+    }
 }
 
 // The factory behaviour of the default patch: a saw at the pitch of the key, level within 1 dB of the measured Vital default (-24.5 dB rms at A4).
