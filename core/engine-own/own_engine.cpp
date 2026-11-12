@@ -1,4 +1,4 @@
-// SynthyBoy - own engine: the spike's 8-voice synth behind IEngine, without JUCE.
+// SynthyBoy - own engine: engine glue (events, voice allocation, control grid, master).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -6,6 +6,9 @@
 
 #include <algorithm>
 #include <cmath>
+
+#include "own_support.h"
+#include "osc/wavetable_bank.h"
 
 namespace synthyboy
 {
@@ -18,6 +21,18 @@ std::unique_ptr<IEngine> createOwnEngine()
 
 namespace own
 {
+namespace
+{
+/** The output safety stage: the identity up to +-1, above it a smooth knee that approaches +-2 (any patch stays bounded, a normal patch never reaches it). */
+inline float outputLimit (float y) noexcept
+{
+    const float a = std::fabs (y);
+    if (!(a > 1.0f))
+        return y == y ? y : 0.0f;
+    return std::copysign (1.0f + std::tanh (a - 1.0f), y);
+}
+} // namespace
+
 OwnEngine::OwnEngine()
 {
     const auto* table = paramTable();
@@ -25,10 +40,7 @@ OwnEngine::OwnEngine()
         params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
 }
 
-float OwnEngine::gainFromDb (float db) noexcept
-{
-    return db > -60.0f ? std::pow (10.0f, db * 0.05f) : 0.0f; // juce::Decibels::decibelsToGain (db, -60)
-}
+OwnEngine::~OwnEngine() = default;
 
 float OwnEngine::readParam (uint32_t id) const noexcept
 {
@@ -51,28 +63,54 @@ float OwnEngine::getParam (uint32_t id) const noexcept
 
 bool OwnEngine::supportsParam (uint32_t id) const noexcept
 {
-    // the subset this engine implements (core/engine-own/README.md)
-    return id == kParamMasterVolume || id == kParamMasterBendRange || id == kParamMasterTranspose || id == kParamMasterTune
-        || id == kParamOsc1Wavetable || id == kParamFilter1On || id == kParamFilter1Cutoff;
+    const int i = findParamIndex (id);
+    if (i < 0)
+        return false;
+    return isImplemented (static_cast<size_t> (i)) && capsCover (capabilities(), requiredCaps (static_cast<size_t> (i)))
+        && capsCover2 (capabilities2(), requiredCaps2 (static_cast<size_t> (i)));
 }
 
-void OwnEngine::setQuality (const Quality& newQuality) noexcept
+EngineCapsMask OwnEngine::capabilities() const noexcept
 {
-    // the own engine only uses the voice cap (it has no unison, oversampling, wavetable interpolation or effects)
-    voiceCap.store (std::clamp (newQuality.maxVoices, 1, kMaxVoices), std::memory_order_relaxed);
+    return ownCapabilities();
 }
 
-void OwnEngine::prepare (double newSampleRate, int /*maxBlockFrames*/, const Quality& quality)
+EngineCaps2Mask OwnEngine::capabilities2() const noexcept
+{
+    return ownCapabilities2();
+}
+
+void OwnEngine::setQuality (const Quality& q) noexcept
+{
+    voiceCap.store (std::clamp (q.maxVoices, 1, kMaxVoices), std::memory_order_relaxed);
+    unisonCap.store (std::clamp (q.maxUnison, 1, kMaxUnisonVoices), std::memory_order_relaxed);
+}
+
+void OwnEngine::setTransport (const TransportInfo& t) noexcept
+{
+    tpBpm.store (t.bpm > 0.0 ? t.bpm : 120.0, std::memory_order_relaxed);
+    tpPos.store (t.songPosBeats, std::memory_order_relaxed);
+    tpPlaying.store (t.playing, std::memory_order_relaxed);
+}
+
+void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality& quality)
 {
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+    setQuality (quality);
+    scratchRight.assign (static_cast<size_t> (std::max (maxBlockFrames, 4096)), 0.0f);
+    for (int c = 0; c <= kNumWavetableChoices; ++c)
+        builtinWavetable (c); // builds the shared bank (allocates): not on the audio thread
 
-    const int numVoices = std::clamp (quality.maxVoices, 1, kMaxVoices);
-    voiceCap.store (numVoices, std::memory_order_relaxed);
-    voices.assign (static_cast<size_t> (kMaxVoices), Voice());
+    voices.clear();
+    for (int i = 0; i < kMaxVoices; ++i)
+    {
+        voices.push_back (std::make_unique<Voice>());
+        voices.back()->prepare (sampleRate);
+    }
     sustainPending.assign (static_cast<size_t> (kMaxVoices), static_cast<uint8_t> (0));
-    for (auto& v : voices)
-        v.prepare (sampleRate);
-
+    base.assign (paramCount(), 0.0f);
+    gdelta.assign (paramCount(), 0.0f);
+    gtouched.assign (static_cast<size_t> (kNumModSlots), 0);
     smoothedGain.reset (sampleRate, 0.02);
     prepared = true;
     reset();
@@ -81,179 +119,387 @@ void OwnEngine::prepare (double newSampleRate, int /*maxBlockFrames*/, const Qua
 void OwnEngine::reset()
 {
     for (auto& v : voices)
-        v.kill();
-    for (auto& b : bendSemitones)
-        b = 0.0f;
-    for (auto& d : sustainDown)
-        d = false;
+        v->kill();
+    for (int c = 0; c < numChannels; ++c)
+    {
+        bendSemis[c] = modWheel[c] = aftertouch[c] = 0.0f;
+        sustainDown[c] = false;
+    }
     std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
     noteCounter = 0;
-    smoothedGain.setCurrentAndTarget (gainFromDb (readParam (kParamMasterVolume)));
+    controlPos = 0;
+    heldKeys = 0;
+    haveLastNote = false;
+    for (auto& p : lfoPhase)
+        p = 0.0f;
+    for (int i = 0; i < 4; ++i)
+    {
+        rlfo[i].seed (static_cast<uint32_t> (i) * 4093u + 1u);
+        rlfoValue[i] = 0.0f;
+    }
+    for (int i = 0; i < gnumTouched; ++i)
+        gdelta[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
+    gnumTouched = 0;
+    smoothedGain.setCurrentAndTarget (dbToGain (readParam (kParamMasterVolume)) * (readParam (kParamMasterVolume) > -60.0f ? 1.0f : 0.0f));
     activeCount.store (0, std::memory_order_relaxed);
+}
+
+Voice* OwnEngine::allocateVoice (int key, int channel, float velocity) noexcept
+{
+    const MasterIdx& mi = paramIndex().master;
+    const int cap = std::clamp (std::min (voiceCap.load (std::memory_order_relaxed), static_cast<int> (base[static_cast<size_t> (mi.polyphony)] + 0.5f)), 1, kMaxVoices);
+    for (int i = 0; i < cap; ++i)
+        if (!voices[static_cast<size_t> (i)]->isActive())
+            return voices[static_cast<size_t> (i)].get();
+    // out of voices: steal. Released voices go first (the quietest, then the oldest), then by the priority of the parameter.
+    const int priority = static_cast<int> (base[static_cast<size_t> (mi.stealPriority)] + 0.5f);
+    Voice* best = nullptr;
+    auto worse = [&] (const Voice& a, const Voice& b) // true if a is a better victim than b
+    {
+        if (a.isReleased() != b.isReleased())
+            return a.isReleased();
+        if (a.isReleased())
+            return a.level() < b.level();
+        switch (priority)
+        {
+            case 1: return a.serial() > b.serial();      // Oldest priority: keep the oldest, steal the newest
+            case 2: return a.key() < b.key();            // Highest: steal the lowest
+            case 3: return a.key() > b.key();            // Lowest: steal the highest
+            case 4: return a.velocity() < b.velocity();  // Velocity: steal the softest
+            default: return a.serial() < b.serial();     // Newest: steal the oldest
+        }
+    };
+    for (int i = 0; i < cap; ++i)
+    {
+        Voice* v = voices[static_cast<size_t> (i)].get();
+        if (best == nullptr || worse (*v, *best))
+            best = v;
+    }
+    // a lowered cap leaves voices above it sounding until they end; they do not count
+    (void) key;
+    (void) channel;
+    (void) velocity;
+    return best;
 }
 
 void OwnEngine::noteOn (const Event& e) noexcept
 {
     if (e.key < 0 || e.key > 127)
         return;
+    const MasterIdx& mi = paramIndex().master;
     const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
+    const float velocity = std::isnan (e.value) ? 0.0f : std::clamp (e.value, 0.0f, 1.0f);
+    const bool legato = base[static_cast<size_t> (mi.legato)] >= 0.5f;
+    const int sameNote = static_cast<int> (base[static_cast<size_t> (mi.sameNote)] + 0.5f);
 
-    // hitting a key that still rings: let the old note fade out first (as the spike's juce::Synthesiser did)
-    noteOff (e.key, channel);
+    NoteStart ns;
+    ns.key = e.key;
+    ns.channel = channel;
+    ns.noteId = e.noteId;
+    ns.velocity = velocity;
+    ns.serial = noteCounter++;
+    const bool glideAlways = base[static_cast<size_t> (mi.portAlways)] >= 0.5f;
 
-    // the pool has kMaxVoices voices, at most voiceCap of them sound (a lowered cap releases the surplus lazily: a new note
-    // takes a free voice below the cap, else steals the oldest one)
-    const size_t cap = static_cast<size_t> (std::clamp (voiceCap.load (std::memory_order_relaxed), 1, kMaxVoices));
-    Voice* chosen = nullptr;
-    for (size_t i = 0; i < cap; ++i)
-        if (! voices[i].isActive())
+    // a key that is already held
+    for (auto& v : voices)
+        if (v->isActive() && !v->isReleased() && v->key() == e.key && v->channel() == channel)
         {
-            chosen = &voices[i];
-            break;
+            if (sameNote == 2) // Ignore
+                return;
+            if (sameNote == 0) // Steal: the old note fades out before the new one starts
+                v->release (0.0f);
         }
 
-    if (chosen == nullptr) // steal the oldest voice
+    if (legato)
     {
-        chosen = &voices.front();
-        for (size_t i = 0; i < cap; ++i)
-            if (voices[i].getAge() < chosen->getAge())
-                chosen = &voices[i];
+        // legato: a held note is taken over without retriggering the envelopes (pitch glides if the portamento time is set)
+        Voice* held = nullptr;
+        for (auto& v : voices)
+            if (v->isActive() && !v->isReleased() && (held == nullptr || v->serial() > held->serial()))
+                held = v.get();
+        if (held != nullptr)
+        {
+            ns.glide = true;
+            held->legatoTo (ns);
+            lastNoteSemis = static_cast<float> (e.key);
+            haveLastNote = true;
+            ++heldKeys;
+            lastVelocity = velocity;
+            return;
+        }
     }
-
-    const float velocity = std::isnan (e.value) ? 0.0f : std::clamp (e.value, 0.0f, 1.0f);
-    chosen->start (e.key, channel, e.noteId, velocity, bendSemitones[channel], noteCounter++, noteOffsetSemitones);
+    ns.glide = haveLastNote && (glideAlways || heldKeys > 0);
+    ns.glideFromSemis = lastNoteSemis;
+    Voice* chosen = allocateVoice (e.key, channel, velocity);
+    if (chosen == nullptr)
+        return;
+    chosen->start (ns, chosen->lastL(), chosen->lastR());
+    chosen->tick (globals, static_cast<int> (std::find_if (voices.begin(), voices.end(), [&] (const auto& p) { return p.get() == chosen; }) - voices.begin()));
+    lastNoteSemis = static_cast<float> (e.key);
+    haveLastNote = true;
+    ++heldKeys;
+    lastVelocity = velocity;
 }
 
-void OwnEngine::noteOff (int key, int channel) noexcept
+void OwnEngine::noteOff (const Event& e) noexcept
 {
-    for (auto& v : voices)
-        if (v.isHeld() && v.getKey() == key && v.getChannel() == channel)
-        {
-            if (sustainDown[channel])
-                sustainPending[static_cast<size_t> (&v - voices.data())] = 1; // the pedal keeps the note until it is lifted
-            else
-                v.release();
-        }
+    const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
+    if (heldKeys > 0)
+        --heldKeys;
+    for (size_t i = 0; i < voices.size(); ++i)
+    {
+        Voice& v = *voices[i];
+        if (!v.isActive() || v.isReleased() || v.key() != e.key || v.channel() != channel)
+            continue;
+        if (e.noteId >= 0 && v.noteId() >= 0 && v.noteId() != e.noteId)
+            continue;
+        if (sustainDown[channel])
+            sustainPending[i] = 1;
+        else
+            v.release (std::isnan (e.value) ? 0.0f : std::clamp (e.value, 0.0f, 1.0f));
+        break;
+    }
 }
 
 void OwnEngine::setSustain (int channel, bool down) noexcept
 {
-    const int first = channel < 0 ? 0 : channel, last = channel < 0 ? numChannels - 1 : channel;
+    const int first = channel < 0 ? 0 : channel;
+    const int last = channel < 0 ? numChannels - 1 : channel;
     for (int c = first; c <= last; ++c)
         sustainDown[c] = down;
     if (down)
         return;
     for (size_t i = 0; i < voices.size(); ++i)
-        if (sustainPending[i] != 0 && (channel < 0 || voices[i].getChannel() == channel))
+        if (sustainPending[i] != 0 && (channel < 0 || voices[i]->channel() == channel))
         {
             sustainPending[i] = 0;
-            voices[i].release();
+            voices[i]->release (0.0f);
         }
 }
 
 void OwnEngine::handleEvent (const Event& e) noexcept
 {
+    const MasterIdx& mi = paramIndex().master;
     switch (e.type)
     {
         case Event::NoteOn:
             noteOn (e);
             break;
         case Event::NoteOff:
-            noteOff (e.key, std::clamp<int> (e.channel, 0, numChannels - 1));
+            noteOff (e);
             break;
         case Event::PitchBend:
         {
             const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
-            const float bend = std::isnan (e.value) ? 0.0f : std::clamp (e.value, -1.0f, 1.0f) * bendRange;
-            bendSemitones[channel] = bend;
-            for (auto& v : voices)
-                if (v.isActive() && v.getChannel() == channel)
-                    v.setBend (bend);
+            const float v = std::isnan (e.value) ? 0.0f : std::clamp (e.value, -1.0f, 1.0f);
+            const float up = base[static_cast<size_t> (mi.bendRange)];
+            const float down = base[static_cast<size_t> (mi.bendDownLink)] >= 0.5f ? up : base[static_cast<size_t> (mi.bendDownRange)];
+            bendSemis[channel] = v * (v >= 0.0f ? up : down);
             break;
         }
         case Event::AllNotesOff:
-            for (auto& v : voices)
-                if (e.channel < 0 || v.getChannel() == e.channel)
-                    v.release();
+            for (size_t i = 0; i < voices.size(); ++i)
+                if (e.channel < 0 || voices[i]->channel() == e.channel)
+                    voices[i]->release (0.0f);
             std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
+            heldKeys = 0;
             break;
         case Event::SustainPedal:
             setSustain (e.channel < 0 ? -1 : std::clamp<int> (e.channel, 0, numChannels - 1), e.value >= 0.5f);
             break;
         case Event::NoteExpression:
-            // the only expression this engine can use: the per-note pitch (semitones on top of the channel bend); pressure and slide have
-            // no destination without a modulation matrix
-            if (e.expression == Event::Tuning && std::isfinite (e.value))
+            if (std::isfinite (e.value))
             {
                 const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
                 for (auto& v : voices)
-                    if (v.isActive() && v.getChannel() == channel && (e.key < 0 || v.getKey() == e.key))
-                        v.setBend (bendSemitones[channel] + std::clamp (e.value, -96.0f, 96.0f));
+                    if (v->isActive() && v->channel() == channel && (e.key < 0 || v->key() == e.key))
+                        switch (e.expression)
+                        {
+                            case Event::Tuning: v->setTuningExpression (std::clamp (e.value, -96.0f, 96.0f)); break;
+                            case Event::Pressure: v->setPressure (clamp01 (e.value)); break;
+                            case Event::Brightness: v->setSlide (clamp01 (e.value)); break;
+                            case Event::Pan: v->setExpressionX (std::clamp (e.value * 2.0f - 1.0f, -1.0f, 1.0f)); break;
+                        }
             }
             break;
-        case Event::ModWheel:   // no modulation in this engine
+        case Event::ModWheel:
+            modWheel[std::clamp<int> (e.channel, 0, numChannels - 1)] = std::isfinite (e.value) ? clamp01 (e.value) : 0.0f;
+            break;
         case Event::Aftertouch:
+            aftertouch[std::clamp<int> (e.channel, 0, numChannels - 1)] = std::isfinite (e.value) ? clamp01 (e.value) : 0.0f;
             break;
     }
 }
 
-void OwnEngine::renderVoices (float* out, int numFrames) noexcept
+void OwnEngine::controlTick() noexcept
 {
-    for (auto& v : voices)
-        v.render (out, numFrames, waveform, filterCoeff);
+    const double dt = kControlPeriod / sampleRate;
+    const float fdt = static_cast<float> (dt);
+    const ParamIndex& pi = paramIndex();
+    globals.songBeats += globals.playing ? dt * globals.bpm / 60.0 : 0.0;
+    // global LFO phases (free running; the voices read them for the free-run / mono LFOs)
+    for (int l = 0; l < 10; ++l)
+    {
+        const LfoIdx& li = pi.lfo[l];
+        const int sync = static_cast<int> (base[static_cast<size_t> (li.sync)] + 0.5f);
+        float rate = base[static_cast<size_t> (li.rate)];
+        if (sync >= 1 && sync <= 3)
+        {
+            static const float beats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 0.0625f };
+            const float b = beats[std::clamp (static_cast<int> (base[static_cast<size_t> (li.division)] + 0.5f), 0, 12)];
+            rate = b > 0.0f ? static_cast<float> (globals.bpm / 60.0) / b * (sync == 2 ? 1.0f / 1.5f : (sync == 3 ? 1.5f : 1.0f)) : 0.0f;
+        }
+        lfoPhase[l] += rate * fdt;
+        lfoPhase[l] -= std::floor (lfoPhase[l]);
+    }
+    for (int r = 0; r < 4; ++r)
+    {
+        const RlfoIdx& ri = pi.rlfo[r];
+        float rate = base[static_cast<size_t> (ri.rate)];
+        const int sync = static_cast<int> (base[static_cast<size_t> (ri.sync)] + 0.5f);
+        if (sync >= 1 && sync <= 3)
+        {
+            static const float beats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 0.0625f };
+            const float b = beats[std::clamp (static_cast<int> (base[static_cast<size_t> (ri.division)] + 0.5f), 0, 12)];
+            rate = b > 0.0f ? static_cast<float> (globals.bpm / 60.0) / b * (sync == 2 ? 1.0f / 1.5f : (sync == 3 ? 1.5f : 1.0f)) : 0.0f;
+        }
+        rlfoValue[r] = rlfo[r].advance (static_cast<int> (base[static_cast<size_t> (ri.style)] + 0.5f), rate * fdt);
+    }
+    // the global modulation (sources that do not belong to a voice) of the global parameters
+    for (int i = 0; i < gnumTouched; ++i)
+        gdelta[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
+    gnumTouched = 0;
+    float gsrc[kNumSourceIds] = {};
+    for (int m = 0; m < 8; ++m)
+        gsrc[srcMacro (m)] = globals.macro[m];
+    for (int l = 0; l < 10; ++l)
+    {
+        const LfoIdx& li = pi.lfo[l];
+        gsrc[srcLfo (l)] = 0.5f + 0.5f * lfoShape (static_cast<int> (base[static_cast<size_t> (li.shape)] + 0.5f), lfoPhase[l], 1u);
+    }
+    for (int r = 0; r < 4; ++r)
+        gsrc[srcRlfo (r)] = 0.5f + 0.5f * rlfoValue[r];
+    float mw = 0.0f, at = 0.0f, pb = 0.0f;
+    for (int c = 0; c < numChannels; ++c)
+    {
+        mw = std::max (mw, modWheel[c]);
+        at = std::max (at, aftertouch[c]);
+        if (std::fabs (bendSemis[c]) > std::fabs (pb))
+            pb = bendSemis[c];
+    }
+    const float bendRange = base[static_cast<size_t> (pi.master.bendRange)];
+    gsrc[kSrcModWheel] = mw;
+    gsrc[kSrcAftertouch] = at;
+    gsrc[kSrcPitchWheel] = bendRange > 0.0f ? std::clamp (pb / bendRange, -1.0f, 1.0f) : 0.0f;
+    gsrc[kSrcVelocity] = lastVelocity;
+    gsrc[kSrcNote] = lastNoteSemis * (1.0f / 127.0f);
+    gsrc[kSrcActiveVoices] = static_cast<float> (activeCount.load (std::memory_order_relaxed)) * (1.0f / 32.0f);
+    gsrc[kSrcFixed] = 1.0f;
+    matrix.evaluate (gsrc, true, gdelta.data(), gtouched.data(), gnumTouched, kNumModSlots);
+
+    globals.activeVoices = activeCount.load (std::memory_order_relaxed);
+    for (size_t i = 0; i < voices.size(); ++i)
+        if (voices[i]->isActive())
+            voices[i]->tick (globals, static_cast<int> (i));
 }
 
 void OwnEngine::process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept
 {
     if (left == nullptr || numFrames <= 0)
         return;
-
     std::fill (left, left + numFrames, 0.0f);
-
-    if (prepared)
+    float* rightOut = right;
+    if (!prepared)
     {
-        // parameters are read once per block
-        // the sine and the saw are the first two built-in wavetables; every other entry plays the saw in this engine
-        waveform = readParam (kParamOsc1Wavetable) < 0.5f ? Waveform::sine : Waveform::saw;
-        const double fc = std::clamp (static_cast<double> (readParam (kParamFilter1Cutoff)), 20.0, std::max (20.0, 0.45 * sampleRate));
-        filterCoeff = readParam (kParamFilter1On) < 0.5f ? 1.0f // filter off: the one-pole follows its input exactly
-                                                         : static_cast<float> (1.0 - std::exp (-kTwoPi * fc / sampleRate));
-        smoothedGain.setTarget (gainFromDb (readParam (kParamMasterVolume)));
-        bendRange = readParam (kParamMasterBendRange);
-        noteOffsetSemitones = readParam (kParamMasterTranspose) + readParam (kParamMasterTune) * 0.01f;
-        if (voiceCap.load (std::memory_order_relaxed) < kMaxVoices)
-        {
-            // a lowered cap: voices above it are released (they fade out), they are not cut
-            const size_t cap = static_cast<size_t> (std::clamp (voiceCap.load (std::memory_order_relaxed), 1, kMaxVoices));
-            for (size_t i = cap; i < voices.size(); ++i)
-                voices[i].release();
-        }
+        if (right != nullptr)
+            std::fill (right, right + numFrames, 0.0f);
+        return;
+    }
+    // right may be null (mono output): render into a scratch right channel that is dropped. The scratch is a member to avoid allocation.
+    if (rightOut == nullptr)
+    {
+        if (static_cast<int> (scratchRight.size()) < numFrames)
+            scratchRight.assign (static_cast<size_t> (numFrames), 0.0f); // a block larger than prepare () announced: grows once
+        rightOut = scratchRight.data();
+    }
+    std::fill (rightOut, rightOut + numFrames, 0.0f);
 
-        int pos = 0;
-        for (int i = 0; i < numEvents; ++i)
-        {
-            const int frame = std::clamp (events[i].frame, pos, numFrames); // tolerate unsorted / out of range input
-            if (frame > pos)
-            {
-                renderVoices (left + pos, frame - pos);
-                pos = frame;
-            }
-            handleEvent (events[i]);
-        }
-        if (pos < numFrames)
-            renderVoices (left + pos, numFrames - pos);
+    // ---- block snapshot
+    for (size_t i = 0; i < base.size(); ++i)
+        base[i] = params[i].load (std::memory_order_relaxed);
+    matrix.compile (base.data());
+    const ParamIndex& pi = paramIndex();
+    globals.base = base.data();
+    globals.matrix = &matrix;
+    globals.sampleRate = sampleRate;
+    globals.bpm = tpBpm.load (std::memory_order_relaxed);
+    if (tpPlaying.load (std::memory_order_relaxed))
+    {
+        globals.playing = true;
+        globals.songBeats = tpPos.load (std::memory_order_relaxed);
+    }
+    else
+        globals.playing = false;
+    for (int m = 0; m < 8; ++m)
+        globals.macro[m] = pi.macro[m] >= 0 ? clamp01 (base[static_cast<size_t> (pi.macro[m])] * 0.01f) : 0.0f;
+    globals.channelBendSemis = bendSemis;
+    globals.channelModWheel = modWheel;
+    globals.channelAftertouch = aftertouch;
+    globals.lfoPhase = lfoPhase;
+    globals.rlfoValue = rlfoValue;
+    globals.maxUnison = unisonCap.load (std::memory_order_relaxed);
 
-        for (int i = 0; i < numFrames; ++i)
-            left[i] *= smoothedGain.next();
-
-        int count = 0;
-        for (const auto& v : voices)
-            count += v.isActive() ? 1 : 0;
-        activeCount.store (count, std::memory_order_relaxed);
+    if (voiceCap.load (std::memory_order_relaxed) < kMaxVoices)
+    {
+        // a lowered cap: voices above it are released (they fade out), they are not cut
+        const size_t cap = static_cast<size_t> (std::clamp (voiceCap.load (std::memory_order_relaxed), 1, kMaxVoices));
+        for (size_t i = cap; i < voices.size(); ++i)
+            voices[i]->release (0.0f);
     }
 
-    if (right != nullptr)
-        std::copy (left, left + numFrames, right);
+    const MasterIdx& mi = pi.master;
+    int pos = 0, ei = 0;
+    while (pos < numFrames)
+    {
+        if (controlPos == 0)
+        {
+            controlTick();
+            // master volume with the global modulation
+            const size_t vi = static_cast<size_t> (mi.volume);
+            float db = base[vi];
+            if (gdelta[vi] != 0.0f)
+                db = modulatedValue (paramTable()[vi], modDomainOf (paramTable()[vi]), db, gdelta[vi]);
+            smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
+        }
+        while (ei < numEvents && events[ei].frame <= pos)
+            handleEvent (events[ei++]);
+        int end = std::min (numFrames, pos + (kControlPeriod - controlPos));
+        if (ei < numEvents)
+            end = std::min (end, std::max (events[ei].frame, pos + 1));
+        const int n = end - pos;
+        for (auto& v : voices)
+            if (v->isActive())
+                v->render (left + pos, rightOut + pos, n, controlPos);
+        for (int i = pos; i < end; ++i)
+        {
+            const float g = smoothedGain.next();
+            left[i] = outputLimit (left[i] * g);
+            rightOut[i] = outputLimit (rightOut[i] * g);
+        }
+        controlPos = (controlPos + n) % kControlPeriod;
+        pos = end;
+    }
+    while (ei < numEvents)
+        handleEvent (events[ei++]);
+
+    if (right == nullptr)
+        for (int i = 0; i < numFrames; ++i)
+            left[i] = 0.5f * (left[i] + rightOut[i]);
+
+    int count = 0;
+    for (const auto& v : voices)
+        count += v->isActive() ? 1 : 0;
+    activeCount.store (count, std::memory_order_relaxed);
 }
 } // namespace own
 } // namespace synthyboy

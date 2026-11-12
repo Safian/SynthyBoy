@@ -34,7 +34,7 @@ inline std::vector<EngineCase> engineCases()
 {
     std::vector<EngineCase> cases;
     //                         kind                         name    tail  blockTol bentTol resetExact resetTol pitch  cents  velExp ramp  stereo pool
-    cases.push_back ({ synthyboy::EngineKind::own,   "own",   0.26, 0.0,   0.0,    true,     0.0,    0.5,   false, 1.0,   960,  true,  true  });
+    cases.push_back ({ synthyboy::EngineKind::own,   "own",   0.26, 0.0,   0.0,    true,     0.0,    0.5,   false, 2.0,   960,  true,  true  });
     // vital: resetTol 3e-5 (measured 1.3e-5 with the default patch: its 200 ms release leaves a little more filter residue than the
     // 90 ms of the previous init patch)
     if (synthyboy::isEngineAvailable (synthyboy::EngineKind::vital))
