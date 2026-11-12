@@ -4,7 +4,7 @@ Status: final (2026-11-12). Covers the two voice filters and the effect-rack fil
 composition, keytrack, drive, blend, mix, level, clean mode, routing, series/parallel), the eight models of the Vital engine (`*.model` 0 .. 7:
 Analog, Dirty, Ladder, Digital, Diode, Formant, Comb, Phaser) and the oversampling / decimation of the whole engine.
 The models 8 and up (`Multi SVF`, `Slope`, ..., the Serum 2 families) are **not** in this document: `core/filters-serum` implements them (see its `CATALOGUE.md`) and the own engine links it.
-Which of the Serum families the product offers is a `filters-serum` matter. The 12 `*.style` choices mean different things per model (7.0).
+Which of the Serum families the product offers is a `filters-serum` matter. The `*.style` choices mean different things per model (section 2.1 for the SVF-based models, the model sections for the others).
 
 Conventions: cutoff is a MIDI note number `n` (fractional); frequency `f = 8.1757989 * 2^(n/12)` Hz; `P` power scale, README. `sr_i` = the internal sample rate (document 6, section 1).
 
@@ -44,9 +44,9 @@ partly compensated (post gain `~1/sqrt(d)`) so that higher drive does not blow t
 
 ### 1.4 Blend and styles
 
-`filterN.blend` (0 .. 100 %) is `b_raw = percent * 0.02` in 0 .. 2, `b = clamp(b_raw - 1, -1, 1)`. For the multimode models in their normal style (7.0):
+`filterN.blend` (0 .. 100 %) is `b_raw = percent * 0.02` in 0 .. 2, `b = clamp(b_raw - 1, -1, 1)`. For the multimode models in their normal style (styles 0 and 1; the others in section 2.1):
 `lowpass amount = -b` for `b < 0`, `highpass amount = b` for `b > 0`, `bandpass amount = sqrt(1 - b^2)`; output `= lp * LP + bp * BP + hp * HP`. So blend 0 = low-pass, 50 % = band-pass, 100 % = high-pass, the transitions
-keep the power. The other styles use the blend differently (7.0).
+keep the power. The other styles use the blend differently (section 2.1).
 
 ### 1.4a Routing
 
@@ -79,11 +79,120 @@ y = hardtanh(output) * gain/sqrt(d)
 hardtanh(v) = v within +-0.66, beyond: 0.66 sgn + 0.34 tanh((|v| - 0.66)/0.34)   (a soft knee, never exceeds 1)
 ```
 
-Styles (`filterN.style`): 0 = 12 dB (one SVF); 1 = 24 dB (a second SVF; the first has fixed Q = 1 (R = 1) and its output goes through hardtanh before the second; the drive acts on the first); 2 = Notch/Pass swap; 3 = Dual notch/band
-(two SVF in series: LP then HP, blend moves the pair of cutoffs); 4 = Band/Peak/Notch; 5 = Shelving (`blend` moves between low shelf, peak, high shelf, the gain `*.gain`-like term is the +-24 dB gain of the EQ use: the voice filter
-uses gain 0 dB).
+Styles (`filterN.style`): 0 = 12 dB (one SVF section); 1 = 24 dB (two sections in series; the first has the fixed Q = 1 (R = 1) in its integrator loop and its output goes through hardtanh before the second; the drive acts on the first);
+2 = Notch/Pass swap; 3 = Dual notch/band; 4 = Band/Peak/Notch; 5 = Shelving. Styles 2 to 5 are defined in section 2.1.
 
 The cutoff coefficients and the resonance are interpolated linearly across the block. The model is stable at all settings.
+
+### 2.1 Styles 2 to 5 of the SVF-based models (Digital, Analog, Dirty, Ladder)
+
+This section is the complete definition of what `filterN.style` and `filterN.blend` do for the styles 2 .. 5 of the four SVF-family models (the Diode, Formant, Comb, Phaser models have their own meaning, sections 6 to 9).
+Everything below is measured black-box and derived from the structure; there is no further hidden term.
+
+**The weight model.** One filter *section* delivers three outputs of the same input `u`: `LP`, `BP` and `HP = u - R BP - LP` (R = 1/Q of the true resonance, section 2). The section output is
+`a_LP LP + a_BP BP + a_HP HP`, so the styles differ only in the three weights (and the drive, and the number of sections). With `b = clamp(blend_raw - 1, -1, 1)` (1.4), `t = (b + 1)/2` (0 .. 1) and `m(b) = sqrt(0.5 max(b,0)^2 + 0.5)`:
+
+| style | name | `a_LP` | `a_BP` | `a_HP` | sections |
+|-------|------|--------|--------|--------|----------|
+| 0, 1 | 12 dB, 24 dB | `max(-b, 0)` | `sqrt(1 - b^2)` | `max(b, 0)` | 1 (style 0), 2 (style 1) |
+| 2 | Notch / Pass swap | `min(1 - b, 1)` | 0 | `min(1 + b, 1)` | 2, both with these weights |
+| 3 | Dual notch / band | section A: `t`; section B: 1 | 0 | section A: 1; section B: `t` | 2 different ones, see below |
+| 4 | Band / Peak / Notch | `m (1 + p)` | `2 m (1 + p - b)` | `m (1 + p)` | 2, both with these weights; `p = min(b, 0)` |
+| 5 | Shelving | `lerp(A, 1, clamp(b + 1, 0, 1))` | `R sqrt(A) lerp(1, sqrt(A), 1 - b^2)` | `lerp(1, A, clamp(b, 0, 1))` | 1 |
+
+Reading the table: style 2 sweeps **low-pass (blend 0) -> notch (blend 50 %) -> high-pass (blend 100 %)** (`LP + HP = u - R BP` is the notch); style 3 sweeps **band-pass (blend 0) -> a mixed state (50 %) -> notch (100 %)**
+(section A is a high-pass with a low-pass share `t`, section B the mirror image: a low-pass with a high-pass share `t`; at `t = 0` HP followed by LP is a band-pass, at `t = 1` the two notches in series are one deep notch at the cutoff); style 4 sweeps **band-pass (blend 0, weight 1.414) ->
+peak (50 %: `LP + HP + 1.414 BP`, flat -6 dB with an up-bump of the resonance) -> notch (100 %)**. The weights are interpolated linearly across the block like the other filter settings. At the blend ends the weights are exactly those of the neighbouring plain shapes, so a modulated blend is click free.
+
+**Structure per model** (what decides the number of sections):
+
+* **Digital.** Style 0 and style 5: one section. Style 1, 2, 4: two sections: the first one (the "pre" section) has R = 1 in its integrator loop but the *weights above* (with the true R inside `HP`); its output is hardtanh-limited and is the input of the second section, which has the true R and its own hardtanh at the output. Style 3: the same two sections, but with the two different weight sets of the table (A first, then B); the drive acts at the input of section A, the limiter sits after A and after B.
+  The consequence of "weights with the true R but a pre section with R = 1" is visible in the vectors: the deep stopband of the style 2 high-pass at resonance 0 is **not** a 24 dB/oct slope (it flattens at about -30 dB, table below): quirk, reproduce it by using exactly this structure.
+* **Analog (Sallen-Key) and Dirty.** Style 0: one section; style 3: the dual pair; **every other style (1, 2, 4 and 5) runs the two-section 24 dB structure with the weights of its row** (so style 5, Shelving, is *not* a shelf in these models: it is the 24 dB structure with the plain `LP/BP/HP` weights of style 1; the vectors show it).
+* **Ladder.** The weights are applied to the stage taps (below); style 0: 12 dB tap set, style 1: 24 dB tap set, styles 2 and 3 have their own tap sets, style 4 weights the 12 dB tap set, **style 5 is the same as style 0**.
+
+**Drive law of the styles** (`d` = linear drive, `d_c` = the resonance-compensated drive of the model: Digital `d/(2 r^3 + 1)`, Analog `d/(2 r + 1)`, Dirty and Ladder: their own compensation, sections 4 and 5; `r` = the resonance knob 0 .. 1). The drive is blended between the raw drive and the compensated one with a weight `w` that follows the blend:
+`d_eff = lerp(d, d_c, w)` with `w = 1` (styles 0, 1), `w = |b|` (style 2: no compensation at the notch), `w = min(1 - b, 1)` (style 4), and for style 3 `d_eff = lerp(d, d_c (2 - t), min(1 - b, 1))`. The post gain is `gain/sqrt(d)` (Digital, using the raw `d`); in the Analog model `1/sqrt((2r + 1) d_eff)`, which equals `1/sqrt(d)` in the normal styles and is lower by `sqrt(2r + 1)` where `d_eff` is the raw drive.
+With drive 0 dB and resonance 0 (all the vectors below) the compensation is 1 and these laws do not show.
+
+**Style 5, Shelving (Digital).** A single section without drive and without post gain (`d = 1`, gain 1). With the shelf gain `G` (dB, clamped to +-24; **in every voice filter and in the FX filter the gain is 0 dB**, so `A = 10^(G/20) = 1`):
+the weights above with `A = 1` are `a_LP = a_HP = 1`, `a_BP = R`: the output is `LP + HP + R BP = u` exactly -- **style 5 is a bit-exact identity at 0 dB whatever the blend, cutoff and resonance** (measured: 0.0 dB at all eight frequencies, resonance 0 and 50 %).
+For a gain `G != 0` (the Serum equalizer use; not reachable from a voice filter) the weights above give: at `b = -1` a **low shelf** (`a_LP = A`, `a_HP = 1`, `a_BP = R sqrt(A)`), at `b = 0` a **bell** (`a_LP = a_HP = 1`, `a_BP = R A`, i.e. `u + (A - 1) R BP`: gain `A` at the cutoff, the width set by the resonance),
+at `b = +1` a **high shelf** (`a_LP = 1`, `a_HP = A`, `a_BP = R sqrt(A)`), crossfading in between; the cutoff is moved by `3 b log2(A)` semitones (down for a low shelf boost, up for a high shelf boost) so that the shelf corner stays near the audible edge of the gain.
+
+**Ladder tap sets.** The ladder has the (drive-scaled, saturated) input `x` and the four stage outputs `s1 .. s4`; the output is `c_0 x + c_1 s1 + c_2 s2 + c_3 s3 + c_4 s4` times the post gain. Let `Lw = max(-b, 0)`, `Bw = sqrt(1 - b^2)`, `Hw = max(b, 0)`, `H = min(1 + b, 1)`, `L = min(1 - b, 1)`,
+and `q = m(b)(1 + p)`, `band = 2 m(b)(1 + p - b)` with `m`, `p` of the table above:
+
+| style | `c_0` | `c_1` | `c_2` | `c_3` | `c_4` |
+|-------|-------|-------|-------|-------|-------|
+| 0 (12 dB) | `Hw` | `Bw - 2 Hw` | `Lw - Bw + Hw` | 0 | 0 |
+| 1 (24 dB; band weight `1 - |b|`, not `Bw`) | `Hw` | `-4 Hw` | `6 Hw - (1 - |b|)` | `-4 Hw + 2 (1 - |b|)` | `Lw + Hw - (1 - |b|)` |
+| 2 | `H^2` | `-4 H^2` | `6 H^2 + 2 H L` | `-4 H^2 - 4 H L` | `H^2 + L^2 + 2 H L` |
+| 3 | `H` | `-4 H` | `8 H + 4 L` | `-8 H - 8 L` | `4 H + 4 L` |
+| 4 | `q` | `band - 2 q` | `2 q - band` | 0 | 0 |
+| 5 | as style 0 | | | | |
+
+(Rows 0, 1, 4 are the 12 dB (`LP = s2`, `BP = s1 - s2`, `HP = x - 2 s1 + s2`) or 24 dB (`LP = s4`, `BP = -s2 + 2 s3 - s4`, `HP = x - 4 s1 + 6 s2 - 4 s3 + s4`) tap sets weighted by the weights of the table; rows 2 and 3 are written out because their products of shares are not a weighted sum of the plain shapes.
+Check: row 2 at `b = -1` is the 24 dB low-pass (only `c_4`), at `b = 1` the 24 dB high-pass; row 3 at `b = 1` is `(1, -4, 8, -8, 4)`: a deep notch made of the stage taps.)
+Drive of the ladder: `d_L = d (1 + r')` for the normal blend, faded to `d` as the blend goes to high-pass: `d_L = d lerp(1 + r', 1, Hw)` with `r' = r` (style 0) or `sin(r)` (r in radians, styles 1 .. 5); style 3 uses the raw `d`; style 4 uses `lerp(d, d_L, min(1 - b, 1))`.
+Post gain `1/sqrt((d - 1)/2 + 1)`; for style 1 `1/sqrt((d - 1)/4 + 1)`. The ladder's resonance law is `k = lerp(0.001, 4.1, r'')` with `r'' = r` (style 0) or `sin(pi/2 r)` (every other style): styles 1 .. 5 have a stronger low half of the resonance knob than style 0.
+
+**Vectors** (noise source, cutoff 1 kHz, keytrack 0, drive 0, level 0 dB, mix 100 %; same method and columns as section 10: 125 Hz .. 16 kHz; narrow notches are smeared by the +-6 bin averaging, so a measured notch depth of -32 dB is the bin-limited value; tolerance +-1.5 dB, +-3 dB near a resonance peak):
+
+| Model, style, resonance, blend | 125 | 250 | 500 | 1k | 2k | 4k | 8k | 16k |
+|---|---|---|---|---|---|---|---|---|
+| Digital, 2, r 0, 0 % | -0.1 | -0.3 | -1.0 | -6.0 | -25.1 | -48.6 | -73.1 | -99.7 |
+| Digital, 2, r 0, 50 % | -0.7 | -1.7 | -5.1 | -31.9 | -5.0 | -1.5 | -0.8 | -0.4 |
+| Digital, 2, r 0, 100 % | -30.3 | -30.6 | -19.0 | -4.1 | -0.9 | -0.6 | -0.6 | -0.4 |
+| Digital, 2, r 50, 0 % | -1.8 | -1.1 | 1.2 | 5.7 | -22.9 | -49.5 | -74.8 | -101.5 |
+| Digital, 2, r 50, 50 % | -0.3 | -0.6 | -1.6 | -23.8 | -1.6 | -0.5 | -0.3 | -0.3 |
+| Digital, 2, r 50, 100 % | -28.9 | -29.8 | -19.1 | 6.6 | 1.2 | -1.3 | -2.0 | -2.1 |
+| Digital, 3, r 0, 0 % | -9.4 | -9.1 | -4.3 | -1.4 | -9.6 | -21.2 | -33.7 | -46.6 |
+| Digital, 3, r 0, 50 % | -3.5 | -4.6 | -5.8 | -10.3 | -11.3 | -5.4 | -4.5 | -3.8 |
+| Digital, 3, r 0, 100 % | -0.7 | -1.7 | -5.1 | -31.9 | -5.0 | -1.5 | -0.8 | -0.4 |
+| Digital, 3, r 50, 0 % | -12.3 | -10.0 | -3.2 | 10.8 | -6.4 | -20.9 | -33.8 | -47.4 |
+| Digital, 3, r 50, 50 % | -4.5 | -4.6 | -4.7 | 0.5 | -8.7 | -5.5 | -5.1 | -5.0 |
+| Digital, 3, r 50, 100 % | -0.3 | -0.6 | -1.6 | -23.8 | -1.6 | -0.5 | -0.3 | -0.3 |
+| Digital, 4, r 0, 0 % | -30.5 | -17.9 | -7.0 | -0.0 | -7.0 | -18.4 | -30.6 | -43.8 |
+| Digital, 4, r 0, 50 % | -6.0 | -6.0 | -6.0 | -6.0 | -6.0 | -6.0 | -6.0 | -6.0 |
+| Digital, 4, r 0, 100 % | -0.7 | -1.7 | -5.1 | -31.9 | -5.0 | -1.5 | -0.8 | -0.4 |
+| Digital, 4, r 50, 0 % | -30.3 | -18.6 | -4.7 | 11.8 | -4.9 | -19.2 | -32.2 | -45.8 |
+| Digital, 4, r 50, 50 % | -7.7 | -5.7 | 0.4 | 13.7 | 0.3 | -5.7 | -7.6 | -8.1 |
+| Digital, 4, r 50, 100 % | -0.3 | -0.6 | -1.6 | -23.8 | -1.6 | -0.5 | -0.3 | -0.3 |
+| Digital, 5, r 0 and 50, any blend | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Analog, 2, r 0, 0 % | -0.2 | -0.4 | -1.2 | -6.2 | -25.2 | -48.7 | -73.2 | -99.9 |
+| Analog, 2, r 0, 50 % | -1.6 | -2.7 | -7.3 | -54.8 | -7.3 | -2.6 | -1.6 | -1.3 |
+| Analog, 2, r 0, 100 % | -59.7 | -48.2 | -27.3 | -7.8 | -2.6 | -1.7 | -1.5 | -1.4 |
+| Analog, 3, r 0, 0 % | -15.8 | -17.6 | -15.1 | -7.8 | -14.2 | -25.3 | -37.4 | -50.6 |
+| Analog, 3, r 0, 50 % | -6.4 | -7.7 | -13.3 | -19.4 | -15.1 | -8.4 | -7.1 | -6.7 |
+| Analog, 3, r 0, 100 % | -1.6 | -2.7 | -7.3 | -54.8 | -7.3 | -2.6 | -1.6 | -1.3 |
+| Analog, 4, r 0, 0 % | -30.8 | -18.3 | -7.3 | -0.3 | -7.3 | -18.7 | -30.8 | -44.1 |
+| Analog, 4, r 0, 50 % | -6.7 | -6.1 | -4.1 | -1.0 | -4.1 | -6.1 | -6.6 | -6.8 |
+| Analog, 4, r 0, 100 % | -1.6 | -2.7 | -7.3 | -54.8 | -7.3 | -2.6 | -1.6 | -1.3 |
+| Analog, 5, r 0, 50 % (= the 24 dB band-pass) | -36.7 | -24.1 | -13.2 | -6.2 | -13.2 | -24.5 | -36.7 | -50.0 |
+| Dirty, 2, r 0, 0 % | 0.6 | -0.2 | -2.8 | -10.8 | -26.8 | -48.5 | -72.4 | -98.9 |
+| Dirty, 2, r 0, 50 % | -2.1 | -4.0 | -10.6 | -19.9 | -10.3 | -3.6 | -2.0 | -1.4 |
+| Dirty, 2, r 0, 100 % | -19.3 | -20.6 | -20.0 | -14.2 | -5.7 | -2.7 | -2.0 | -1.5 |
+| Dirty, 3, r 0, 0 % | -30.1 | -18.2 | -9.1 | -5.1 | -9.1 | -18.6 | -30.3 | -43.4 |
+| Dirty, 3, r 0, 50 % | -3.9 | -6.0 | -14.4 | -18.6 | -14.3 | -5.7 | -3.9 | -3.3 |
+| Dirty, 3, r 0, 100 % | -2.1 | -4.0 | -10.6 | -19.9 | -10.3 | -3.6 | -2.0 | -1.4 |
+| Dirty, 4, r 0, 0 % | -29.7 | -17.8 | -8.7 | -4.7 | -8.7 | -18.2 | -29.9 | -43.0 |
+| Dirty, 4, r 0, 50 % | -6.0 | -5.8 | -5.7 | -5.5 | -5.7 | -5.9 | -5.9 | -5.9 |
+| Dirty, 4, r 0, 100 % | -2.1 | -4.0 | -10.6 | -19.9 | -10.3 | -3.6 | -2.0 | -1.4 |
+| Dirty, 5, r 0, 50 % (= the 24 dB band-pass) | -35.7 | -23.7 | -14.7 | -10.6 | -14.7 | -24.2 | -35.8 | -48.9 |
+| Ladder, 2, r 0, 0 % | -1.6 | -2.4 | -5.3 | -13.4 | -29.4 | -50.9 | -74.8 | -101.3 |
+| Ladder, 2, r 0, 50 % | -1.9 | -3.6 | -10.3 | -48.1 | -10.1 | -3.5 | -1.8 | -1.4 |
+| Ladder, 2, r 0, 100 % | -69.5 | -51.2 | -29.3 | -13.3 | -5.2 | -2.4 | -1.5 | -1.3 |
+| Ladder, 3, r 0, 0 % | -26.0 | -14.0 | -5.1 | -1.3 | -5.3 | -14.6 | -26.2 | -39.3 |
+| Ladder, 3, r 0, 50 % | -2.4 | -6.6 | -11.8 | -1.3 | -12.6 | -6.3 | -2.3 | -1.5 |
+| Ladder, 3, r 0, 100 % | -1.9 | -3.6 | -10.3 | -48.1 | -10.1 | -3.5 | -1.8 | -1.4 |
+| Ladder, 4, r 0, 0 % | -16.9 | -10.7 | -6.2 | -4.3 | -6.3 | -11.0 | -16.8 | -23.3 |
+| Ladder, 4, r 0, 50 % | -4.4 | -4.3 | -4.3 | -4.3 | -4.3 | -4.3 | -4.3 | -4.3 |
+| Ladder, 4, r 0, 100 % | -1.6 | -2.4 | -5.9 | -33.4 | -5.7 | -2.4 | -1.5 | -1.4 |
+| Ladder, 5, r 0, 50 % (= style 0, the 12 dB band-pass) | -20.0 | -13.7 | -9.2 | -7.3 | -9.3 | -14.0 | -19.8 | -26.4 |
+
+Notes on the vectors: (1) At resonance 0 the notch of style 2 at 50 %, of style 3 at 100 % and of style 4 at 100 % is the same curve in the Digital, Analog, Dirty and Ladder (styles 2, 3) models (identical rows). (2) The Ladder 3 / 50 % row is a band-pass-like peak at 1 kHz (-1.3 dB) between two shoulders (-11.8 / -12.6 dB at 500 Hz / 2 kHz) that rise again outwards (-2.4 dB at 125 Hz): the dual tap set is a notch-with-bandpass mixture, not a band-pass.
+(3) The style 4 / 50 % row of Digital is flat -6.0 dB at resonance 0 (a peak filter whose bump needs resonance): at resonance 50 % the bump is +13.7 dB at the cutoff.
 
 ## 3. Analog (model 0) -- the Sallen-Key style 12 / 24 dB
 
@@ -149,7 +258,9 @@ The per-vowel data (formant 1 .. 4: gain dB, resonance share, centre note):
 * The centre note of each formant is shifted by `formant.transpose` (-12 .. 12 st) and pulled toward the middle note 80 by `formant.spread` (`lerp(note, 80, spread)`, spread -1 .. 1: negative moves away).
 * The resonance of each band: `r_band = formant.resonance (0.3 .. 1, default 0.85) * vowel resonance share`, mapped to Q with the SVF bounds **4 .. 30** (`Q = 4 + 26 r^3`); the band gain is the vowel gain in dB, the sum of the four bands is the output.
 * The filter has no cutoff knob, no drive and no resonance knob of the filter (`filterN.cutoff`, `resonance` do nothing in this model; the measured responses are identical for resonance 0 and 50 %); `blend` is unused.
-* Style 2 (the vocal-tract style) is **not implemented** in the Vital engine (the block is a placeholder that leaves its output untouched, i.e. silence); the own engine may implement a real tract model or pass the signal through.
+* Style 2 (the vocal-tract style) is **not implemented** in the Vital engine: the block does not write its output, the model is silent (measured: the filtered noise is 105 .. 143 dB below the unfiltered one at 125 Hz .. 16 kHz; what remains audible in the engine is only the other, unfiltered sources). There is therefore no reference behaviour for style 2.
+  **Decision (answers the implementer's question on style 2): the own engine's vocal-tract style (vowels E, U, O, A at the corners, narrower resonators, a glottal tilt) is accepted as the definition of style 2.** Constraints so that it fits the family: the same XY pad (`formant.x`, `formant.y`: bilinear between the four corner vowels, in the corner order of style 0), the same `formant.transpose` / `formant.spread` / `formant.resonance` semantics as styles 0 and 1,
+  no dependence on `cutoff`, `resonance`, `drive`, `blend` (as styles 0 and 1), the output level at the pad centre within +-3 dB of style 0 at the same setting (noise source), and the states cleared at a note start. The glottal tilt is a fixed spectral tilt of the source (a low-pass of about -6 dB/oct above 1 kHz is right for a tract model) and must not be steered by a key.
 
 ## 10. Filter responses (reference measurements)
 

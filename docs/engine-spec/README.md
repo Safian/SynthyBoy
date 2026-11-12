@@ -86,4 +86,6 @@ Everything numeric that a document calls a vector was produced by the probe, exc
 pinned by the response vectors of document 5 sections 10 and 10.1). Document 6 section 8.1 reports a **defect of engine-vital's flanger**; the spec follows the intended design.
 Answers to the implementer's first three questions: table frames, document 2 section 1.1; Sine LFO start and L1, document 3 section 3.9; stereo lane model and M9, document 4 section 3.2.
 
+Answers to the C implementer's batch (SVF styles, reverb, pool): document 5 section 2.1 (weights, structure and vectors of the styles 2 .. 5 of the Digital, Analog, Dirty and Ladder models; Formant style 2 decision in section 9); document 6 sections 8 (phaser `depth2` law, vector P2), 9.1 / 9.4 / 9.5 (the output tap before the decay gain, the five other reverb types, `reverb.feedback`, level and tail vectors R3), 11 (latency and its compensation across the buses) and 12 (the effect instance pool); document 3 section 1.3a (the envelope delay under modulation, audio rate against the control period).
+
 Answers to implementer questions 4 - 6 and the added topics: document 7 section 7a (spectral output gain basis, X|Y control, Mask/Vocode external spectra, choke-group scope); document 2 sections 6.2 (Remap curve), 6.7 (frame remap RISE/FALL), 10 (noise filter, stereo, generator pitch) and 11.1 (Filter HPF/LPF warp floor).
