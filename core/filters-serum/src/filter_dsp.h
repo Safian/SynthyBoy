@@ -91,12 +91,11 @@ struct SVFTPT
         // Clamping g to avoid extreme numerical issues near Nyquist
         const float gSafe = std::max (1e-5f, std::min (g, 50.0f));
         const float d = 1.0f / (1.0f + 2.0f * R * gSafe + gSafe * gSafe);
-        float hp_val = (in - (2.0f * R + gSafe) * s1 - s2) * d;
-
-        float v1 = gSafe * hp_val;
-        if (fat > 0.001f)
-            v1 = softClip (v1) / (1.0f + 2.0f * fat * (v1 * v1));
-
+        // FAT: the damping grows with the band-pass amplitude (a dissipative nonlinearity in the feedback path), so the resonance saturates instead
+        // of growing; the earlier version clipped the integrator input, which broke the trapezoidal relation and ran away at high resonance
+        const float damping = 2.0f * R * (1.0f + (fat > 0.001f ? 4.0f * fat * s1 * s1 : 0.0f));
+        const float hp_val = (in - (damping + gSafe) * s1 - s2) * d;
+        const float v1 = gSafe * hp_val;
         float bp_val = v1 + s1;
         s1 = sanitize (v1 + bp_val);
 

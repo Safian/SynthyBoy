@@ -465,6 +465,51 @@ TEST (own_filter_responses_match_document_05)
     }
 }
 
+// The filters-serum collection itself (no guard): every type stays bounded at the extreme settings on loud noise.
+TEST (own_filters_serum_raw_stays_bounded)
+{
+    int bad = 0;
+    for (int type = 0; type < filters::kFilterTypeCount; ++type)
+        for (const float cutoff : { 20.0f, 300.0f, 5000.0f, 20000.0f })
+            for (const float res : { 0.0f, 0.5f, 1.0f })
+            {
+                filters::Filter f;
+                f.prepare (48000.0);
+                f.setType (type);
+                filters::FilterParams p;
+                p.cutoff = cutoff;
+                p.resonance = res;
+                p.drive = 1.0f;
+                p.var = 1.0f;
+                p.blend = 0.5f;
+                p.mix = 1.0f;
+                f.setParams (p);
+                f.reset();
+                own::Rng rng;
+                rng.seed (static_cast<uint32_t> (type));
+                float in[32], out[32], peak = 0.0f;
+                for (int b = 0; b < 400; ++b)
+                {
+                    for (auto& x : in)
+                        x = 1.4f * rng.bi();
+                    if (b % 50 == 0)
+                    {
+                        p.cutoff = 20.0f * std::pow (1000.0f, static_cast<float> (rng.uni()));
+                        f.setParams (p);
+                    }
+                    f.process (in, out, 32);
+                    for (const float v : out)
+                        peak = std::max (peak, std::isfinite (v) ? std::fabs (v) : 1.0e30f);
+                }
+                if (!(peak <= 128.0f))
+                {
+                    ++bad;
+                    std::printf ("    type %d (%s) cutoff %g res %g: peak %g\n", type, filters::getFilterTypeName (type), static_cast<double> (cutoff), static_cast<double> (res), static_cast<double> (peak));
+                }
+            }
+    CHECK_EQ (bad, 0);
+}
+
 // The factory behaviour of the default patch: a saw at the pitch of the key, level within 1 dB of the measured Vital default (-24.5 dB rms at A4).
 TEST (own_default_patch_pitch_and_level)
 {
