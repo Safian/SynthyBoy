@@ -23,7 +23,7 @@ set(_font_old "")
 if(EXISTS "${_font_stamp_file}")
     file(READ "${_font_stamp_file}" _font_old)
 endif()
-if(NOT _font_old STREQUAL _font_stamp OR NOT EXISTS "${_font_dir}/BinaryData.cpp")
+if(NOT _font_old STREQUAL _font_stamp OR NOT EXISTS "${_font_dir}/EmbeddedFonts.cpp")
     message(STATUS "bitmap GUI: embedding the fonts")
     execute_process(COMMAND "${CMAKE_COMMAND}" "-DOUT_DIR=${_font_dir}" "-DFILES=${_font_files}" -P "${CMAKE_CURRENT_SOURCE_DIR}/embed_fonts.cmake" RESULT_VARIABLE _font_result)
     if(NOT _font_result EQUAL 0)
@@ -39,7 +39,7 @@ set(_bitmap_sources BitmapGuiPlugin.cpp BitmapPeer.cpp BitmapSession.cpp JuceRun
 list(TRANSFORM _bitmap_sources PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
 add_library(synthyboy_bitmap_gui INTERFACE)
 target_sources(synthyboy_bitmap_gui INTERFACE ${_bitmap_sources})
-target_sources(synthyboy_bitmap_gui INTERFACE "${_font_dir}/BinaryData.cpp")
+target_sources(synthyboy_bitmap_gui INTERFACE "${_font_dir}/EmbeddedFonts.cpp")
 target_include_directories(synthyboy_bitmap_gui INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/.." "${_font_dir}" "${CLAP_INCLUDE_DIR}")
 target_link_libraries(synthyboy_bitmap_gui INTERFACE synthyboy_ui)
 target_compile_features(synthyboy_bitmap_gui INTERFACE cxx_std_17)
@@ -85,9 +85,15 @@ function(synthyboy_bitmap_module_options target)
     # One JUCE per module (this one, 8.0.17), invisible to the host and to every other JUCE in the process (the Kick app links JUCE 7): hidden symbols everywhere, an export list
     # for the linker, no section of an archive exported by accident.
     set_target_properties(${target} PROPERTIES CXX_VISIBILITY_PRESET hidden C_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+    # A static library (synthyboy_static_ui, iOS) has no linker step of its own: hidden symbols and the compile definitions below are all it needs from this function, the export list and the
+    # section options belong to the link of the host app. Its names are protected by the JUCE namespace (cmake/JuceNamespace.cmake) and checked by scripts/check-static-ui-symbols.py.
+    get_target_property(_target_type ${target} TYPE)
     # The glyphs are the embedded Roboto: no system font lookup (fontconfig) in the module, nothing to find on a machine without fonts. No ALSA / JACK either: the GUI never opens an audio
     # device (juce_audio_utils pulls juce_audio_devices in, whose code is compiled out), so the .clap does not need libasound.
     target_compile_definitions(${target} PRIVATE JUCE_USE_FONTCONFIG=0 JUCE_ALSA=0 JUCE_JACK=0)
+    if(_target_type STREQUAL "STATIC_LIBRARY")
+        return()
+    endif()
     if(APPLE)
         target_link_options(${target} PRIVATE
             "-Wl,-exported_symbols_list,${CMAKE_CURRENT_FUNCTION_LIST_DIR}/clap_exports_macos.txt" -Wl,-dead_strip)

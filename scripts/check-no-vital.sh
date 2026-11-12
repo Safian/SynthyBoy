@@ -20,7 +20,11 @@ pattern='sbvital|Vital|vital::'
 # "User-imported wavetables from Vital presets"), the importer's error texts ("not a Vital file", "the bank holds no Vital preset"; the words
 # "Vital" + file / preset / bank / table / LFO) and the user-visible reverb type name "Vital" (core/src/param_table.cpp kReverbTypes, a
 # string in the parameter table, no engine code) are allowed. Anything else that mentions Vital still fails.
-allowed='kPackImportedVital|vitalimport|importVital|isVitalBankName|VitalPluginImport|looksLikeVitalPreset|decodeVitalEffectOrder|Imported Vital Wavetables|imported wavetables from Vital presets|Vital (file|preset|bank|table|lfo)|^[[:space:]]*Vital$'
+# The UI library of the static plug-in with the bitmap GUI (synthyboy_static_ui, docs/ARCHITECTURE.md 4.3) adds the user interface of that importer: the result type of its flow (VitalFlowResult,
+# shell-juce/ui/ContentIO.h), the texts "Vital import" and "(Vital line mapping)" and "Vital Group: ..." (an explanation of the editor's group model), and its references to the editor model
+# synthyboy::wtedit::vital:: of core/wavetable-edit (the non-UI model of a wavetable group of components and keyframes, in the core of every platform since the editor exists; see
+# docs/ui-design/OWN-ENGINE-GAP.md, "Open question for the owner").
+allowed='kPackImportedVital|vitalimport|importVital|isVitalBankName|VitalPluginImport|looksLikeVitalPreset|decodeVitalEffectOrder|Imported Vital Wavetables|imported wavetables from Vital presets|Vital (file|preset|bank|table|lfo)|^[[:space:]]*Vital$|VitalFlowResult|Vital import|Vital line mapping|Vital Group:|wtedit::vital::'
 NM="${NM:-nm}"
 AR="${AR:-ar}"
 STRINGS="${STRINGS:-strings}"

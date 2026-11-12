@@ -11,6 +11,12 @@ if(Python3_Interpreter_FOUND)
     # the checked-in plugin.json against schema/plugin-manifest.schema.json, CMakeLists.txt and the content packs it declares
     add_test(NAME synthyboy_manifest_check
              COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/scripts/check-manifest.py")
+
+    # the checker of the static UI library (iOS): it rejects JUCE 7 style names, global names and plain C symbols and accepts ours (Apple's nm: the script reads Mach-O archives)
+    if(APPLE)
+        add_test(NAME synthyboy_static_ui_symbol_check_self_test
+                 COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/scripts/check-static-ui-symbols.py" --self-test)
+    endif()
 endif()
 
 find_program(SYNTHYBOY_BASH bash)

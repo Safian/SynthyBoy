@@ -21,7 +21,12 @@ cmake_minimum_required(VERSION 3.22)
 
 # Must be set before project(). macOS builds target the host architecture by default
 # (arm64 on Apple Silicon); pass -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" for a universal build.
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment target")
+# iOS (-DCMAKE_SYSTEM_NAME=iOS): 15.0, the lowest target the libc++ of the current SDK still supports without a warning (and JUCE 8 needs 12).
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum iOS deployment target")
+else()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment target")
+endif()
 
 project(SynthyBoy VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -49,7 +54,25 @@ option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital
 # com.safian.bitmap-gui/1 (docs/BITMAP-GUI-EXTENSION.md). It links its own JUCE (fetched, statically, hidden symbols), so it needs JUCE even when the JUCE plug-in is not built.
 # ON with the plug-in (desktop builds); OFF without it unless asked for (the ARMv7 module build, scripts/build-armv7-clap.sh, asks). Never part of the static library
 # synthyboy_static (iOS, docs/ARCHITECTURE.md 2.2): nothing of JUCE or of the UI is linked into it, scripts/check-no-vital.sh stays clean.
+#   SYNTHYBOY_STATIC_UI     the static library WITH the bitmap GUI for hosts that link the plug-in (iOS: the Kick app, whose own JUCE 7 is in the same binary): synthyboy_static_ui
+#                           (shell-clap/CMakeLists.txt, docs/ARCHITECTURE.md 4.3). Needs SYNTHYBOY_BITMAP_GUI, and a JUCE of its own in a C++ namespace (SYNTHYBOY_JUCE_NAMESPACE, below).
+#   SYNTHYBOY_JUCE_NAMESPACE  the name that "juce" gets in this build (cmake/JuceNamespace.cmake). Default: none on the desktop (hidden symbols are enough in a dynamic module),
+#                           "synthyboy_juce8" whenever SYNTHYBOY_STATIC_UI is ON (a static link sees hidden symbols too).
 option(SYNTHYBOY_BITMAP_GUI "Native CLAP module with the bitmap GUI extension (needs JUCE)" ${SYNTHYBOY_BUILD_PLUGIN})
+option(SYNTHYBOY_STATIC_UI "Static library synthyboy_static_ui: synthyboy_static with the bitmap GUI and its own namespaced JUCE (iOS)" OFF)
+if(SYNTHYBOY_STATIC_UI)
+    set(SYNTHYBOY_BITMAP_GUI ON CACHE BOOL "Native CLAP module with the bitmap GUI extension (needs JUCE)" FORCE)
+    set(SYNTHYBOY_JUCE_NAMESPACE_DEFAULT "synthyboy_juce8")
+else()
+    set(SYNTHYBOY_JUCE_NAMESPACE_DEFAULT "")
+endif()
+set(SYNTHYBOY_JUCE_NAMESPACE "${SYNTHYBOY_JUCE_NAMESPACE_DEFAULT}" CACHE STRING "C++ namespace that JUCE is built in (empty: juce)")
+if(SYNTHYBOY_STATIC_UI AND NOT SYNTHYBOY_JUCE_NAMESPACE)
+    message(FATAL_ERROR "SYNTHYBOY_STATIC_UI=ON needs SYNTHYBOY_JUCE_NAMESPACE: the host links its own JUCE next to this one")
+endif()
+if(SYNTHYBOY_STATIC_UI AND SYNTHYBOY_BUILD_PLUGIN)
+    message(FATAL_ERROR "SYNTHYBOY_STATIC_UI=ON is the build for a host app (iOS): without the JUCE plug-in (-DSYNTHYBOY_BUILD_PLUGIN=OFF)")
+endif()
 if(SYNTHYBOY_BUILD_PLUGIN OR SYNTHYBOY_BITMAP_GUI)
     set(SYNTHYBOY_NEEDS_JUCE ON)
 else()
@@ -111,6 +134,9 @@ if(SYNTHYBOY_BUILD_PLUGIN)
         SOURCE_SUBDIR  synthyboy-patched-copy-is-built)
 
     FetchContent_MakeAvailable(JUCE clap-juce-extensions)
+    if(SYNTHYBOY_JUCE_NAMESPACE)
+        message(FATAL_ERROR "SYNTHYBOY_JUCE_NAMESPACE is for the build without the JUCE plug-in (clap-juce-extensions and the plug-in wrappers say juce::)")
+    endif()
 
     # The wrapper of clap-juce-extensions has no hook for a CLAP extension of the plug-in (the native shell offers "synthyboy.content", shell-clap/synthyboy_content_ext.h). The patch in
     # third_party/patches adds one (clap_juce_audio_processor_capabilities::clapPluginExtension, called by the wrapper's extension ()); it is applied to a COPY of the fetched sources in the
@@ -149,6 +175,10 @@ else()
     # Plugin OFF: fetch lightweight CLAP headers only (for synthyboy_static and tests); JUCE too when the module has the bitmap GUI
     if(SYNTHYBOY_BITMAP_GUI)
         FetchContent_MakeAvailable(JUCE)
+        if(SYNTHYBOY_JUCE_NAMESPACE)
+            include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/JuceNamespace.cmake")
+            synthyboy_juce_namespace("${SYNTHYBOY_JUCE_NAMESPACE}" "${juce_SOURCE_DIR}")
+        endif()
     endif()
     FetchContent_Declare(clap
         GIT_REPOSITORY https://github.com/free-audio/clap.git

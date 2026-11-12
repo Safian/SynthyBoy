@@ -8,7 +8,7 @@
 
 #include <mutex>
 
-#include "BinaryData.h"
+#include "EmbeddedFonts.h"
 
 #if JUCE_MAC || JUCE_IOS
  #include <CoreFoundation/CoreFoundation.h>
@@ -53,8 +53,8 @@ class EmbeddedFontLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
     EmbeddedFontLookAndFeel()
-        : regular (juce::Typeface::createSystemTypefaceFor (BinaryData::RobotoRegular_ttf, static_cast<size_t> (BinaryData::RobotoRegular_ttfSize))),
-          bold (juce::Typeface::createSystemTypefaceFor (BinaryData::RobotoBold_ttf, static_cast<size_t> (BinaryData::RobotoBold_ttfSize)))
+        : regular (juce::Typeface::createSystemTypefaceFor (synthyboy_embedded_fonts::RobotoRegular_ttf, static_cast<size_t> (synthyboy_embedded_fonts::RobotoRegular_ttfSize))),
+          bold (juce::Typeface::createSystemTypefaceFor (synthyboy_embedded_fonts::RobotoBold_ttf, static_cast<size_t> (synthyboy_embedded_fonts::RobotoBold_ttfSize)))
     {
     }
 

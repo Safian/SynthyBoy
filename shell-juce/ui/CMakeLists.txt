@@ -49,7 +49,7 @@ if(NOT _registrationOld STREQUAL _registrationText)
     file(WRITE "${_registrationFile}" "${_registrationText}")
 endif()
 
-add_library(synthyboy_ui STATIC
+set(SYNTHYBOY_UI_SOURCES
     ${UI_DIR}/Theme.cpp
     ${UI_DIR}/UiContext.cpp
     ${UI_DIR}/ParameterStore.cpp
@@ -71,23 +71,37 @@ add_library(synthyboy_ui STATIC
     ${UI_DIR}/Editor.cpp
     ${SYNTHYBOY_UI_PANEL_SOURCES}
     "${_registrationFile}")
+
+# SYNTHYBOY_STATIC_UI (iOS, docs/ARCHITECTURE.md 4.3): synthyboy_ui is an INTERFACE library whose sources are compiled in synthyboy_static_ui, next to the JUCE module sources, with its definitions
+# (hidden symbols, the JUCE namespace). A static library of its own would compile every JUCE module a second time (a static library that links a JUCE module gets the module's sources), and two
+# copies of JUCE in one archive set are what this build exists to avoid. Same mechanism as synthyboy_bitmap_gui. Every other build: the static library.
+if(SYNTHYBOY_STATIC_UI)
+    set(_ui_scope INTERFACE)
+    set(_ui_own INTERFACE)
+    add_library(synthyboy_ui INTERFACE)
+    target_sources(synthyboy_ui INTERFACE ${SYNTHYBOY_UI_SOURCES})
+else()
+    set(_ui_scope PUBLIC)
+    set(_ui_own PRIVATE)
+    add_library(synthyboy_ui STATIC ${SYNTHYBOY_UI_SOURCES})
+    set_target_properties(synthyboy_ui PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_EXTENSIONS OFF)
+endif()
 # The includes of the sources are relative to ui/ ("panels/Foo.h", "model/ModModel.h"), the includes of consumers to shell-juce/ ("ui/Editor.h")
-target_include_directories(synthyboy_ui PUBLIC ${UI_DIR} ${UI_DIR}/..)
-target_compile_features(synthyboy_ui PUBLIC cxx_std_17)
-set_target_properties(synthyboy_ui PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_EXTENSIONS OFF)
+target_include_directories(synthyboy_ui ${_ui_scope} ${UI_DIR} ${UI_DIR}/..)
+target_compile_features(synthyboy_ui ${_ui_scope} cxx_std_17)
 
 # Dependency list (README.md "Dependencies"): the core library (it carries the model, content, import, shapes, wavetable and sample packages the Components
 # use) and the JUCE modules juce_gui_basics (with juce_graphics, juce_events, juce_core below it), juce_audio_basics, juce_audio_formats (decoding of user
 # samples) and juce_audio_utils (MidiKeyboardComponent). JUCE 7.0.12 and 8.x both work (shell-juce/ui/JuceCompat.h).
 # juce_audio_processors is NOT used by the library, although juce_audio_utils pulls it in.
 target_link_libraries(synthyboy_ui
-    PUBLIC  synthyboy_ui_model synthyboy_core
-            juce::juce_gui_basics juce::juce_audio_basics juce::juce_audio_formats juce::juce_audio_utils
-            Threads::Threads)
+    ${_ui_scope} synthyboy_ui_model synthyboy_core
+                 juce::juce_gui_basics juce::juce_audio_basics juce::juce_audio_formats juce::juce_audio_utils
+                 Threads::Threads)
 # the JUCE module configuration the sources are compiled with (the headers of juce_audio_utils include juce_gui_extra, whose web browser needs nothing here)
-target_compile_definitions(synthyboy_ui PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_compile_definitions(synthyboy_ui ${_ui_own} JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
 if(TARGET juce::juce_recommended_config_flags)
-    target_link_libraries(synthyboy_ui PRIVATE juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    target_link_libraries(synthyboy_ui ${_ui_own} juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 endif()
 
 if(SYNTHYBOY_BUILD_TESTS)
