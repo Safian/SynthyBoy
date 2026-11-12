@@ -13,7 +13,7 @@
 #define SB_DIODE_CORNER 0.765f
 #endif
 #ifndef SB_DIODE_GAIN
-#define SB_DIODE_GAIN 9.7f
+#define SB_DIODE_GAIN 9.8f
 #endif
 #ifndef SB_DIODE_FB
 #define SB_DIODE_FB 0.28f
@@ -90,7 +90,7 @@ private:
         {
             case 3: satLoop = false; svfModel (in, out, n, f, 0.5f + 15.5f * r * r * r, 1.0f, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), p.style, lpAmt, bpAmt, hpAmt, true); break;
             case 0: satLoop = false; svfModel (in, out, n, f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style == 1 ? kAn[5] : kAn[3]), p.style, lpAmt, bpAmt, hpAmt, false); break;
-            case 1: satLoop = true; svfModel (in, out, n, f, 0.556f + 0.634f * std::pow (2.0f * r, 6.5f), 1.1f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 0.9f, p.style, lpAmt, bpAmt, hpAmt, false); break;
+            case 1: satLoop = true; svfModel (in, out, n, f, 0.556f + 0.634f * std::pow (2.0f * r, 6.5f), 1.1f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, p.style, lpAmt, bpAmt, hpAmt, false); break;
             case 2: ladder (in, out, n, f, r, d, p.style, 1.0f, lpAmt, bpAmt, hpAmt); break;
             case 4: diode (in, out, n, f, r, d, p); break;
             case 5: formant (in, out, n, p); break;
@@ -280,7 +280,7 @@ private:
             {
                 const float hz = 8.1757989f * std::exp2 (note[k] / 12.0f);
                 fm[k].process (in[i], Svf::coefficient (hz, sr), 1.0f / q[k]);
-                y += fm[k].bp * gain[k] * (1.0f / q[k]) * 7.0f;
+                y += fm[k].bp * gain[k] * (1.0f / q[k]) * 8.0f;
             }
             if (p.style >= 2)
             {
@@ -345,7 +345,7 @@ private:
     }
 
     double sr = 48000.0;
-    static inline float kAn[6] = { 0.992f, 0.462f, 1.088f, 0.98f, 1.249f, 1.03f };
+    static inline float kAn[6] = { 0.992f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
     float s[6] = {};
     Svf fm[4];
     DelayLine comb;

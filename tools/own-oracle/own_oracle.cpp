@@ -109,6 +109,35 @@ int main (int argc, char** argv)
             }
             std::printf ("\n");
         }
+        else if (report == "bands")
+        {
+            // the power of the left channel in bands (dB re the whole spectrum): 20-250, 250-1k, 1-4k, 4-10k, 10-20k Hz
+            const size_t N = 8192;
+            std::vector<double> acc (N / 2, 0.0);
+            for (size_t pos = static_cast<size_t> (0.3 * sr); pos + N <= s.l.size(); pos += N / 2)
+            {
+                const auto ps = powerSpectrum (s.l, pos, N);
+                for (size_t i = 0; i < N / 2; ++i)
+                    acc[i] += ps[i];
+            }
+            double total = 0;
+            for (double v : acc)
+                total += v;
+            std::printf ("%-5s", name);
+            const double edges[6] = { 20, 250, 1000, 4000, 10000, 20000 };
+            for (int b = 0; b < 5; ++b)
+            {
+                double e = 0;
+                for (size_t i = 0; i < N / 2; ++i)
+                {
+                    const double hz = static_cast<double> (i) * sr / static_cast<double> (N);
+                    if (hz >= edges[b] && hz < edges[b + 1])
+                        e += acc[i];
+                }
+                std::printf (" %6.2f", 10.0 * std::log10 (e / total + 1e-30));
+            }
+            std::printf ("\n");
+        }
         else if (report == "tail")
         {
             // 10 ms energy windows (dB re full scale) of the left channel: the peak of the first 0.5 s and the level at 0.2 / 0.5 / 1 / 2 / 3 / 4 s after the note on, each averaged over 50 ms

@@ -15,7 +15,7 @@ namespace
 float noiseSample (int colour, float* s, Rng& r, float level) noexcept
 {
     // approximately Gaussian white noise (sum of six uniform numbers), level matched to the reference engine by measurement
-    const float w = (r.uni() + r.uni() + r.uni() + r.uni() + r.uni() + r.uni() - 3.0f) * 0.7189f;
+    const float w = (r.uni() + r.uni() + r.uni() + r.uni() + r.uni() + r.uni() - 3.0f) * 0.78f; // in band density of the reference (its noise is band limited at the top: bands 20 .. 20 kHz measured +0.7 dB at equal total power)
     switch (colour)
     {
         case 1: // pink (three pole filter of white noise)
