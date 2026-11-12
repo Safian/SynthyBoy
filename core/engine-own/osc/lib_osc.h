@@ -42,7 +42,7 @@ namespace own
     X (pPhaseLock, "spec.phase_lock") X (pTransients, "spec.transients") \
     X (mOverride, "multi.override") X (mDelay, "multi.delay") X (mAttack, "multi.attack") X (mHold, "multi.hold") X (mDecay, "multi.decay") \
     X (mSustain, "multi.sustain") X (mRelease, "multi.release") X (mVelTrack, "multi.vel_track") X (mVelOverride, "multi.vel_override") X (mTimbre, "multi.timbre") \
-    X (morphType, "morph.type") X (morphAmount, "morph.amount") X (morphSpread, "morph.spread") X (smooth, "smooth_interp") X (fltUse, "spec.flt_use") X (fltTable, "spec.flt_table") X (fltFrame, "spec.flt_frame") X (phase, "phase") X (randomPhase, "random_phase") X (remapSlot, "remap.slot") X (ratioSrc, "ratio_src") X (pitchMode, "pitch_mode")
+    X (morphType, "morph.type") X (morphAmount, "morph.amount") X (morphSpread, "morph.spread") X (smooth, "smooth_interp") X (fltUse, "spec.flt_use") X (fltTable, "spec.flt_table") X (fltFrame, "spec.flt_frame") X (gYAxis, "gran.y_axis") X (gXyY, "gran.xy_y") X (pYAxis, "spec.y_axis") X (pXyY, "spec.xy_y") X (remapOn, "remap.on") X (remapRise, "remap.rise") X (remapFall, "remap.fall") X (phase, "phase") X (randomPhase, "random_phase") X (remapSlot, "remap.slot") X (ratioSrc, "ratio_src") X (pitchMode, "pitch_mode")
 
 enum LibKey : int
 {
@@ -78,6 +78,8 @@ struct LibParams
     int switchKey = -1;         // the last key switch of the instrument
     float fixedSemis = 0.0f;
     spectral::Scratch* scratch = nullptr;
+    uint32_t* chokeLatest = nullptr;   // [256] of this oscillator slot: the latest note sequence that started a zone of each group (engine wide for the slot)
+    uint32_t* chokeCounter = nullptr;  // notes started on this slot
 };
 
 class LibOsc
@@ -107,8 +109,6 @@ public:
     /** Per control period: computes pitch, unison and the parameters of the active type. `t` carries level, pan, unison and warp values of the slot. */
     void update (const OscTick& t, const LibParams& p, const ContentSet* content, int oscIndex) noexcept;
     void noteOff (bool loopExit) noexcept;
-    /** Key release of the instrument (zones with trigger=release). */
-    void chokeGroup (int group) noexcept;
     /** The content under the voices changed: stop every player (they point into the old set). */
     void stopAll() noexcept;
     bool hasContentFor (const ContentSet* c) const noexcept { return c == boundSet; }
@@ -174,6 +174,10 @@ private:
     int lastZone_ = -1, lastKey_ = -1;
     int noteVelocity127 = 100;
     std::vector<float> tmpL, tmpR, mixL, mixR, modBuf, rateBuf;
+    // Mask / Vocode warps: the last 2048 samples of the other oscillators and the noise, and their magnitude spectra
+    std::vector<float> ring, extMag;
+    int ringPos = 0;
+    bool ringDirty = false;
 };
 } // namespace own
 } // namespace synthyboy

@@ -160,6 +160,12 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     for (auto& g : noiseState)
         for (auto& x : g)
             x = 0.0f;
+    for (auto& g : noiseFilt)
+        for (auto& x : g)
+            x = 0.0f;
+    for (auto& g : noiseLp)
+        for (auto& x : g)
+            x = 0.0f;
     for (auto& e : env)
         e.noteOn (0.0f);
     clearMod();
@@ -544,6 +550,27 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
         t.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
         t.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
+        if (P (lk.idx[lk_remapOn]) >= 0.5f)
+        {
+            // frame position remap (02 6.7): the drawn curve of the slot, then a one pole slew with RISE (up) / FALL (down)
+            const int rslot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+            float target = t.frame;
+            if (cs != nullptr && cs->remap[o][rslot].size() == 257)
+            {
+                const float xx = clamp01 (t.frame) * 256.0f;
+                const int ci = std::min (static_cast<int> (xx), 255);
+                target = lerp (cs->remap[o][rslot][static_cast<size_t> (ci)], cs->remap[o][rslot][static_cast<size_t> (ci) + 1], xx - static_cast<float> (ci));
+            }
+            const float ms = target > remapCur[o] ? P (lk.idx[lk_remapRise]) : P (lk.idx[lk_remapFall]);
+            if (fresh || !remapInit[o] || ms <= 0.0f)
+                remapCur[o] = target;
+            else
+                remapCur[o] += (target - remapCur[o]) * (1.0f - std::exp (-fdt * 1000.0f / ms));
+            remapInit[o] = true;
+            t.frame = clamp01 (remapCur[o]);
+        }
+        else
+            remapInit[o] = false;
         t.oversample = g.oversample;
         t.remap = nullptr;
         if (cs != nullptr)
@@ -582,6 +609,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             lp.serial = noteSerial;
             lp.switchKey = g.switchKey != nullptr ? g.switchKey[o] : -1;
             lp.scratch = g.spectralScratch;
+            lp.chokeLatest = g.chokeLatest != nullptr ? g.chokeLatest + o * 256 : nullptr;
+            lp.chokeCounter = g.chokeCounter != nullptr ? g.chokeCounter + o : nullptr;
             lib[o].update (t, lp, cs, o);
         }
     }
@@ -617,6 +646,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         noisePan = std::clamp (P (ni.pan) * 0.01f, -1.0f, 1.0f);
         noiseStereo = clamp01 (P (ni.stereo) * 0.01f);
         noiseColour = std::clamp (static_cast<int> (P (ni.sample) + 0.5f), 0, 8);
+        static const int kNoiseFilterKey = findParamIndex (hashKey ("noise.filter"));
+        noiseFilterAmount = kNoiseFilterKey >= 0 ? clamp01 (std::fabs (P (kNoiseFilterKey) * 0.01f)) * (P (kNoiseFilterKey) < 0.0f ? -1.0f : 1.0f) : 0.0f;
+        noisePitchSemis = P (ni.pitch) + P (ni.fine) * 0.01f + (P (ni.keytrack) >= 0.5f ? noteSemis - 60.0f : 0.0f);
         // noise.type = Sample: a content sample is the source (a missing file plays the generator)
         const ContentSet* ncs = g.content;
         noiseUseSample = noiseCh.on && ni.type >= 0 && P (ni.type) >= 0.5f && ncs != nullptr && ncs->sample[3].valid;
@@ -770,6 +802,35 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
     }
     if (noiseCh.on && (noiseGain > 0.0f || noiseGainPrev > 0.0f))
     {
+        // noise.pitch: the generator played at another rate (down: the band shrinks, up: white but quieter) and noise.filter (docs/engine-spec/02 section 10)
+        const float rate = std::exp2 (noisePitchSemis * (1.0f / 12.0f));
+        const float oct = std::log2 (std::max (rate, 1.0e-3f));
+        const float pitchGain = oct <= 0.0f ? 1.0f : (oct <= 1.0f ? lerp (1.0f, 0.757f, oct) : (oct <= 2.0f ? lerp (0.757f, 0.628f, oct - 1.0f) : 0.628f * std::pow (0.83f, oct - 2.0f)));
+        const float lpC = rate < 0.999f ? 1.0f - std::exp (-kTwoPif * std::min (0.45f, 0.4f * rate) * 1.0f) : 1.0f;
+        const float fa = noiseFilterAmount;
+        const float fHz = fa < 0.0f ? 20000.0f * std::pow (0.002f, -fa) : 20.0f * std::pow (800.0f, std::max (fa, 0.0f));
+        const float fC = std::min (0.99f, 1.0f - std::exp (-kTwoPif * std::min (fHz, 0.45f * static_cast<float> (gl->sampleRate)) / static_cast<float> (gl->sampleRate)));
+        auto shapeNoiseCh = [&] (int ch, float x) noexcept
+        {
+            float* lp = noiseLp[ch];
+            if (lpC < 1.0f)
+                for (int i = 0; i < 4; ++i)
+                    x = (lp[i] += lpC * (x - lp[i]));
+            x *= pitchGain;
+            float* f = noiseFilt[ch];
+            f[0] += fC * (x - f[0]);
+            f[1] += fC * (f[0] - f[1]);
+            if (fa < -1.0e-4f)
+                return f[1];
+            if (fa > 1.0e-4f)
+                return x - f[1];
+            return x;
+        };
+        auto shapeNoise = [&] (float& l, float& r) noexcept
+        {
+            l = shapeNoiseCh (0, l);
+            r = shapeNoiseCh (1, r);
+        };
         float nl[kControlPeriod], nr[kControlPeriod];
         float gl2, gr2;
         panGains (noisePan, gl2, gr2);
@@ -789,8 +850,10 @@ void Voice::render (float* L, float* R, int n, int t0) noexcept
         {
             const float t = static_cast<float> (t0 + k + 1) * invP;
             const float g = lerp (noiseGainPrev, noiseGain, t);
-            const float a = noiseSample (noiseColour, noiseState[0], noiseRng, g);
-            const float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g), noiseStereo) : a;
+            float a = noiseSample (noiseColour, noiseState[0], noiseRng, g);
+            float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g), noiseStereo) : a;
+            if (noiseColour <= 3)
+                shapeNoise (a, b);
             nl[k] = a * g * 1.41421356f * gl2;
             nr[k] = b * g * 1.41421356f * gr2;
         }

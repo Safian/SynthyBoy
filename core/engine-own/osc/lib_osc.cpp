@@ -14,7 +14,7 @@ namespace own
 {
 namespace
 {
-constexpr float kSpectralGain = 1.9498f; // calibrated on vector S4 (-2.90 dB): the library voice is 8.7 dB below the sample level, the vector wants -2.90 (the +14.6 dB of the spec is relative to Vital's own wrapper)
+constexpr float kSpectralGain = 1.957f; // calibrated on vector S4 (-2.90 dB): the library voice is 8.7 dB below the sample level, the vector wants -2.90 (the +14.6 dB of the spec is relative to Vital's own wrapper)
 constexpr float kGranularGain = 1.0f; // S4: -1.52 dB measured against the vector -1.49 dB
 constexpr int kFirstSpectralWarp = 76, kLastSpectralWarp = 98;
 
@@ -93,6 +93,9 @@ void LibOsc::prepare (double sampleRate)
     for (auto* b : { &tmpL, &tmpR, &mixL, &mixR, &modBuf, &rateBuf })
         b->assign (static_cast<size_t> (kControlPeriod), 0.0f);
     fadeTotal = std::max (1, static_cast<int> (0.010 * sampleRate));
+    ring.assign (3 * 2048, 0.0f);
+    extMag.assign (3 * (spectral::kBins), 0.0f);
+    ringPos = 0;
 }
 
 void LibOsc::stopAll() noexcept
@@ -186,6 +189,53 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     const ContentSet::Sample* smp = content != nullptr && oscIndex >= 0 && oscIndex < 3 ? &content->sample[oscIndex] : nullptr;
     const bool haveSample = smp != nullptr && smp->valid;
     const int type = cur;
+    // ---- the X|Y control: the Y value takes over the parameter of the axis (docs/engine-spec/07 7a.2)
+    float yLevel = 1.0f;
+    {
+        const bool gr = type == kOscTypeGranular, sp = type == kOscTypeSpectral;
+        const int axis = gr ? static_cast<int> (lp.v[lk_gYAxis] + 0.5f) : (sp ? static_cast<int> (lp.v[lk_pYAxis] + 0.5f) : 0);
+        const float y = clamp01 ((gr ? lp.v[lk_gXyY] : lp.v[lk_pXyY]) * 0.01f);
+        if (axis > 0)
+        {
+            float* w = lp.v;
+            if (axis == 1)
+                yLevel = y;
+            else if (axis == 2 || axis == 3)
+                tick.warpAmount[axis - 2] = y;
+            else if (gr)
+            {
+                switch (axis)
+                {
+                    case 4: w[lk_gDensity] = 0.1f * std::pow (10.0f, 4.0f * y); break;
+                    case 5: w[lk_gLength] = std::pow (4000.0f, y); break;
+                    case 6: w[lk_gWindowAmount] = 100.0f * y; break;
+                    case 7: w[lk_gWindowSkew] = 100.0f * (2.0f * y - 1.0f); break;
+                    case 8: w[lk_gRandOffset] = 100.0f * y; break;
+                    case 9: w[lk_gRandDir] = 100.0f * y; break;
+                    case 10: w[lk_gRandPitch] = 24.0f * y; break;
+                    case 11: w[lk_gRandLength] = 100.0f * y; break;
+                    case 12: w[lk_gRandPan] = 100.0f * y; break;
+                    case 13: w[lk_gRandLevel] = 100.0f * y; break;
+                    case 14: w[lk_gRandWindow] = 100.0f * y; break;
+                    case 15: w[lk_gRandSkew] = 100.0f * y; break;
+                    case 16: w[lk_gRandWarp] = 100.0f * y; break;
+                    case 17: w[lk_gRandWarp2] = 100.0f * y; break;
+                    default: break;
+                }
+            }
+            else
+            {
+                switch (axis)
+                {
+                    case 4: w[lk_pCut] = 100.0f * (2.0f * y - 1.0f); break;
+                    case 5: w[lk_pMix] = 100.0f * y; break;
+                    case 6: w[lk_pFreqLo] = 20.0f * std::pow (1000.0f, y); break;
+                    case 7: w[lk_pFreqHi] = 20.0f * std::pow (1000.0f, y); break;
+                    default: break;
+                }
+            }
+        }
+    }
     if (cur == kOscTypeSample && !noteStarted[kOscTypeSample])
     {
         // slices: the key chooses a slice and pitch tracking is off
@@ -253,10 +303,13 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
         sumSq += w[u] * w[u];
     }
     const float norm = 1.0f / std::sqrt (std::max (sumSq, 1.0e-9f));
-    const float typeGain = type == kOscTypeGranular ? kGranularGain : (type == kOscTypeSpectral ? kSpectralGain : 1.0f);
-    float gNorm = 1.0f;
+    // the spectral voice's raw level depends on the rate it runs at; the spec's factor 5.3703 is for 96 kHz, the level target is the 2x value (docs/engine-spec/07 7a.1):
+    // 0.2601 RMS at 48 kHz and 0.0948 at 96 kHz fit raw ~ rate^-1.457, so the factor for the host rate is kSpectralGain * (rate / 48 kHz)^1.457
+    const float spectralGain = kSpectralGain * std::pow (static_cast<float> (sr / 48000.0), 1.457f);
+    const float typeGain = type == kOscTypeGranular ? kGranularGain : (type == kOscTypeSpectral ? spectralGain : 1.0f);
+    float gNorm = yLevel;
     if (type != kOscTypeMultisample && v[lk_sNormalize] >= 0.5f && haveSample)
-        gNorm = smp->data.normalizeGain();
+        gNorm *= smp->data.normalizeGain();
     for (int u = 0; u < U; ++u)
     {
         Unison& un = uni[u];
@@ -410,8 +463,30 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
             s.warpType[k] = wt >= kFirstSpectralWarp && wt <= kLastSpectralWarp ? wt - kFirstSpectralWarp : -1;
             s.warpAmount[k] = tick.warpAmount[k];
             s.warpVar[k] = clamp01 (tick.warpPhase[k]);
-            s.external[0] = s.external[1] = s.external[2] = nullptr;
         }
+        for (int e = 0; e < 3; ++e)
+            s.external[e] = nullptr;
+        for (int k = 0; k < 2; ++k)
+            if (s.warpType[k] >= 0 && spectral::isExternalWarp (s.warpType[k]))
+            {
+                const int e = spectral::externalSource (s.warpType[k]);
+                if (ringDirty || e >= 0)
+                {
+                    // the magnitudes of the last 2048 samples of the source (Hann window, 2048 point FFT), one FFT per period
+                    float re[spectral::kFftSize], im[spectral::kFftSize];
+                    const float* r = ring.data() + e * 2048;
+                    for (int i = 0; i < 2048; ++i)
+                    {
+                        re[i] = r[(ringPos + i) & 2047] * (0.5f - 0.5f * std::cos (kTwoPif * static_cast<float> (i) / 2048.0f));
+                        im[i] = 0.0f;
+                    }
+                    spectral::Fft::instance().forward (re, im);
+                    float* mag = extMag.data() + e * spectral::kBins;
+                    for (int i = 0; i < spectral::kBins; ++i)
+                        mag[i] = std::sqrt (re[i] * re[i] + im[i] * im[i]);
+                    s.external[e] = mag;
+                }
+            }
         s.gain = 1.0f;
         // the spectral filter: a wavetable frame (flt_use) or the drawn mask
         const float cut = std::clamp (v[lk_pCut] * 0.01f, -1.0f, 1.0f), mix = clamp01 (v[lk_pMix] * 0.01f);
@@ -487,6 +562,10 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
             sv.setSpeedMultiplier (rateSpeed);
         }
     }
+    if (type == kOscTypeMultisample && lp.chokeLatest != nullptr)
+        for (auto& l : layers)
+            if (l.voice.isActive() && l.voice.offBy() > 0 && l.voice.offBy() < multisample::kMaxGroups && lp.chokeLatest[l.voice.offBy()] > l.voice.startSequence())
+                l.voice.noteOff (l.voice.offFast());
     anyPlaying = true;
 }
 
@@ -568,26 +647,27 @@ void LibOsc::beginType (int type) noexcept
             lastZone_ = zones[0];
             lastKey_ = lp.key;
         }
+        // choke groups (07 7a.4): the slot has one counter of started notes and one table of the latest note that started a zone of each group
+        uint32_t seq = lp.serial;
+        if (lp.chokeLatest != nullptr && lp.chokeCounter != nullptr)
+        {
+            for (int h = 0; h < numHeld; ++h)
+            {
+                const int grp = inst.zone (zones[h]).region.group;
+                if (grp > 0 && grp < multisample::kMaxGroups)
+                    lp.chokeLatest[grp] = *lp.chokeCounter + 1;
+            }
+            seq = ++*lp.chokeCounter;
+        }
         for (int h = 0; h < numHeld; ++h)
         {
             heldZones[h] = zones[h];
             layerCount[h] = U;
             for (int u = 0; u < U; ++u)
-                layers[static_cast<size_t> (h * kMaxU + u)].voice.noteOn (inst, zones[h], lp.key, noteVelocity127, over ? &env : nullptr, velTrack, lp.serial,
+                layers[static_cast<size_t> (h * kMaxU + u)].voice.noteOn (inst, zones[h], lp.key, noteVelocity127, over ? &env : nullptr, velTrack, seq,
                                                                           static_cast<sampleosc::QualityTier> (std::clamp (lp.quality, 0, 2)));
-            // choke: a zone with a group releases the other layers of this voice that it chokes
-            const int grp = inst.zone (zones[h]).region.group;
-            if (grp > 0)
-                chokeGroup (grp);
         }
     }
-}
-
-void LibOsc::chokeGroup (int group) noexcept
-{
-    for (auto& l : layers)
-        if (l.voice.isActive() && l.voice.offBy() == group)
-            l.voice.noteOff (l.voice.offFast());
 }
 
 void LibOsc::noteOff (bool loopExit) noexcept
@@ -612,7 +692,7 @@ void LibOsc::noteOff (bool loopExit) noexcept
                                                multisample::kMaxLayers);
         for (int h = 0; h < n; ++h)
             for (int u = 0; u < U; ++u)
-                layers[static_cast<size_t> ((multisample::kMaxLayers + h) * kMaxU + u)].voice.noteOn (inst, zones[h], lp.key, noteVelocity127, nullptr, -1.0f, lp.serial,
+                layers[static_cast<size_t> ((multisample::kMaxLayers + h) * kMaxU + u)].voice.noteOn (inst, zones[h], lp.key, noteVelocity127, nullptr, -1.0f, lp.chokeCounter != nullptr ? ++*lp.chokeCounter : lp.serial,
                                                                                                    static_cast<sampleosc::QualityTier> (std::clamp (lp.quality, 0, 2)));
     }
 }
@@ -784,6 +864,15 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
 
 void LibOsc::render (int t0, int n, float* L, float* R, const float* const* cross) noexcept
 {
+    if (cur == kOscTypeSpectral || from == kOscTypeSpectral)
+    {
+        // the sources of the Mask / Vocode warps: the last 2048 samples of the first and second other oscillator and of the noise
+        for (int k = 0; k < n; ++k)
+            for (int e = 0; e < 3; ++e)
+                ring[static_cast<size_t> (e * 2048 + ((ringPos + k) & 2047))] = cross != nullptr && cross[e] != nullptr ? cross[e][k] : 0.0f;
+        ringPos = (ringPos + n) & 2047;
+        ringDirty = true;
+    }
     std::fill (L, L + n, 0.0f);
     std::fill (R, R + n, 0.0f);
     if (cur == 0 && from <= 0)

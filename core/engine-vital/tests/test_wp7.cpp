@@ -115,7 +115,9 @@ TEST (wp7_wp8_capabilities_are_reported)
     for (EngineCapsMask bit : { kCapFxUtility, kCapFxHyperDimension, kCapFxBode, kCapFxConvolve, kCapFxSplitters, kCapReverbForce })
         CHECK ((e->capabilities() & bit) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapFxUtility | kCapFxHyperDimension | kCapFxBode | kCapFxConvolve | kCapFxSplitters | kCapReverbForce)) == 0);
+    for (size_t i = 0; i < paramCount(); ++i) // the own engine never claims more than its capability words say
+        if (own->supportsParam (paramTable()[i].id))
+            CHECK (capsCover (own->capabilities(), requiredCaps (i)) && capsCover2 (own->capabilities2(), requiredCaps2 (i)));
 }
 
 TEST (utility_polarity_filters_width_pan_mix_and_level)

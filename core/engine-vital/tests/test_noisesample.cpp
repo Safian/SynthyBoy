@@ -184,7 +184,9 @@ TEST (b23_capabilities_and_keys_exist)
     auto e = createEngine (EngineKind::vital);
     CHECK ((e->capabilities() & (kCapSubPhase | kCapNoiseColour | kCapNoiseSample)) == (kCapSubPhase | kCapNoiseColour | kCapNoiseSample));
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapSubPhase | kCapNoiseColour | kCapNoiseSample)) == 0);
+    for (size_t i = 0; i < paramCount(); ++i) // the own engine never claims more than its capability words say
+        if (own->supportsParam (paramTable()[i].id))
+            CHECK (capsCover (own->capabilities(), requiredCaps (i)) && capsCover2 (own->capabilities2(), requiredCaps2 (i)));
     for (const char* key : { "sub.phase", "sub.phase_contiguous", "noise.stereo", "noise.filter", "noise.type", "noise.bounce" })
         CHECK (findParamByKey (key) != nullptr);
 }

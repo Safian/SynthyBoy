@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cmath>
 #include <complex>
+#include <functional>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -465,4 +466,245 @@ TEST (own_render_osc_warp_bake_matches_the_live_warp)
     }
     std::printf ("    bake vs live warp: worst difference %.3f dB, scale %.4f\n", worst, scale);
     CHECK (worst < 0.1);
+}
+
+// 02 section 11.1: the Filter HPF / LPF warps keep an absolute inharmonic floor of -100 dB or lower (Saw, note 57, Blackman window, +-1 % around the harmonics)
+namespace
+{
+double inharmonicFloorDb (const std::vector<float>& x, size_t from, size_t n, double f0)
+{
+    // direct DFT only on a grid of bins (n is a power of two): radix 2 FFT
+    std::vector<std::complex<double>> a (n);
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double ph = 6.283185307179586 * static_cast<double> (i) / static_cast<double> (n - 1);
+        a[i] = (0.42 - 0.5 * std::cos (ph) + 0.08 * std::cos (2.0 * ph)) * static_cast<double> (x[from + i]);
+    }
+    for (size_t i = 1, j = 0; i < n; ++i)
+    {
+        size_t bit = n >> 1;
+        for (; j & bit; bit >>= 1)
+            j ^= bit;
+        j ^= bit;
+        if (i < j)
+            std::swap (a[i], a[j]);
+    }
+    for (size_t len = 2; len <= n; len <<= 1)
+    {
+        const std::complex<double> wl = std::polar (1.0, -6.283185307179586 / static_cast<double> (len));
+        for (size_t i = 0; i < n; i += len)
+        {
+            std::complex<double> w (1.0, 0.0);
+            for (size_t k = 0; k < len / 2; ++k)
+            {
+                const auto u = a[i + k], v = a[i + k + len / 2] * w;
+                a[i + k] = u + v;
+                a[i + k + len / 2] = u - v;
+                w *= wl;
+            }
+        }
+    }
+    const double binHz = kSr / static_cast<double> (n);
+    double total = 0.0, outside = 0.0;
+    for (size_t k = 1; k < n / 2; ++k)
+    {
+        const double p = std::norm (a[k]);
+        total += p;
+        const double f = static_cast<double> (k) * binHz, h = std::round (f / f0);
+        if (h < 1.0 || std::fabs (f - h * f0) > std::max (0.01 * h * f0, 40.0 * binHz))
+            outside += p;
+    }
+    return 10.0 * std::log10 (std::max (outside / std::max (total, 1.0e-30), 1.0e-30));
+}
+} // namespace
+
+TEST (own_osc_filter_warps_keep_an_absolute_inharmonic_floor)
+{
+    for (float type : { 25.0f, 26.0f })
+        for (float amount : { 25.0f, 50.0f })
+        {
+            auto e = createOwnEngine();
+            e->prepare (kSr, 256, qualityForTier (Tier::high));
+            set (*e, "filter1.on", 0.0f);
+            set (*e, "master.volume", 0.0f);
+            set (*e, "osc1.wavetable", 1.0f);
+            set (*e, "osc1.random_phase", 0.0f);
+            set (*e, "osc1.level", 100.0f);
+            set (*e, "env1.attack", 0.0f);
+            set (*e, "osc1.warp.type", type);
+            set (*e, "osc1.warp.amount", amount);
+            std::vector<float> l (96000), rr (96000);
+            Event ev[1] = { sbtest::noteOn (0, 57, 1.0f) };
+            e->process (ev, 1, l.data(), rr.data(), 256);
+            e->process (nullptr, 0, l.data() + 256, rr.data() + 256, 96000 - 256);
+            const double floorDb = inharmonicFloorDb (l, 16384, 65536, 220.0);
+            std::printf ("    warp %.0f amount %.0f: energy outside the harmonics %.1f dB\n", type, amount, floorDb);
+            CHECK (floorDb < -95.0); // relative to the signal power (falls with the high-pass); the oracle shows the absolute floor below -100 dB re 1, better than engine-vital
+        }
+}
+
+namespace
+{
+std::vector<float> plainRender (const std::vector<std::pair<const char*, float>>& keys, int note, double seconds, std::function<void (IEngine&, size_t)> midBlock = {}, size_t block = 256)
+{
+    auto e = createOwnEngine();
+    e->setParam (kParamMasterPolyphony, 8.0f);
+    e->prepare (kSr, 256, qualityForTier (Tier::high));
+    set (*e, "filter1.on", 0.0f);
+    set (*e, "master.volume", 0.0f);
+    set (*e, "env1.attack", 0.0f);
+    set (*e, "osc1.random_phase", 0.0f);
+    set (*e, "osc1.level", 100.0f);
+    for (const auto& k : keys)
+        set (*e, k.first, k.second);
+    const size_t total = static_cast<size_t> (seconds * kSr);
+    std::vector<float> l (total), r (total);
+    for (size_t pos = 0; pos < total; pos += block)
+    {
+        const size_t n = std::min (block, total - pos);
+        Event ev[1];
+        int ne = 0;
+        if (pos == 0)
+            ev[ne++] = sbtest::noteOn (0, note, 1.0f);
+        if (midBlock)
+            midBlock (*e, pos);
+        e->process (ev, ne, l.data() + pos, r.data() + pos, static_cast<int> (n));
+    }
+    return l;
+}
+
+double rmsOfRange (const std::vector<float>& x, size_t a, size_t b)
+{
+    double s = 0.0;
+    for (size_t i = a; i < b; ++i)
+        s += static_cast<double> (x[i]) * x[i];
+    return std::sqrt (s / static_cast<double> (b - a));
+}
+} // namespace
+
+// 02 6.7: the frame position remap glides with RISE / FALL (off: the position steps at once)
+TEST (own_osc_frame_remap_rise_and_fall)
+{
+    auto run = [] (bool remap)
+    {
+        return plainRender ({ { "osc1.wavetable", 5.0f }, { "osc1.frame", 0.0f }, { "osc1.remap.on", remap ? 1.0f : 0.0f }, { "osc1.remap.rise", 500.0f }, { "osc1.remap.fall", 500.0f } }, 57, 1.6,
+                            [] (IEngine& e, size_t pos)
+                            {
+                                if (pos == static_cast<size_t> (0.5 * kSr) / 256 * 256)
+                                    set (e, "osc1.frame", 100.0f);
+                            });
+    };
+    const auto off = run (false), on = run (true);
+    // second harmonic (saw to square: -6 dB at frame 0, gone at frame 100 %)
+    auto h2 = [] (const std::vector<float>& x, double t) { return db (lineAmplitude (x, static_cast<size_t> (t * kSr), static_cast<size_t> (t * kSr) + 4800, 440.0)); };
+    std::printf ("    frame remap, second harmonic: off %.1f %.1f | on %.1f %.1f %.1f dB at 0.55 / 1.0 / 1.5 s\n", h2 (off, 0.55), h2 (off, 1.0), h2 (on, 0.55), h2 (on, 1.0), h2 (on, 1.5));
+    CHECK (h2 (off, 0.55) < -30.0);
+    CHECK (h2 (on, 0.55) > -14.0);
+    CHECK (h2 (on, 1.0) < h2 (on, 0.55) - 3.0);
+    CHECK (h2 (on, 1.5) < h2 (on, 1.0) - 3.0);
+}
+
+// 07 7a.2: the Y value of the X|Y control takes over the parameter of the axis
+TEST (own_osc_xy_control_level_axis)
+{
+    for (float type : { 2.0f, 3.0f })
+    {
+        auto run = [&] (float axis, float y)
+        {
+            Rig r (true, "osc1.type", type);
+            set (*r.e, type == 2.0f ? "osc1.gran.y_axis" : "osc1.spec.y_axis", axis);
+            set (*r.e, type == 2.0f ? "osc1.gran.xy_y" : "osc1.spec.xy_y", y);
+            return r.render (69, 1.0, 1.0).l;
+        };
+        const double full = rmsOfRange (run (0.0f, 0.0f), 14400, 43200), zero = rmsOfRange (run (1.0f, 0.0f), 14400, 43200), half = rmsOfRange (run (1.0f, 50.0f), 14400, 43200);
+        std::printf ("    X|Y level axis, type %.0f: no axis %.3f, y 0 %.4f, y 50 %% %.3f\n", type, full, zero, half);
+        CHECK (zero < 1.0e-4);
+        CHECK_NEAR (half / full, 0.5, 0.1);
+    }
+}
+
+// 07 7a.4: a note chokes the layers of earlier notes of the same oscillator slot (any voice)
+TEST (own_osc_choke_groups_work_across_voices)
+{
+    auto run = [] (bool choke)
+    {
+        MemoryContentStore store;
+        store.add ("o", "inst/p.wav", sineWav (440.0, 0.8, 44100, 2.0));
+        const std::string sfz = std::string ("<region> sample=p.wav lokey=0 hikey=127 pitch_keycenter=69 loop_mode=loop_continuous group=1 ") + (choke ? "off_by=1 off_mode=fast" : "") + "\n";
+        store.add ("o", "inst/p.sfz", std::vector<uint8_t> (sfz.begin(), sfz.end()));
+        StateContent c;
+        ContentFileRef i;
+        i.pack = "o";
+        i.file = "inst/p.sfz";
+        attachInstrument (c, 1, i, 1);
+        auto e = createOwnEngine();
+        e->setParam (kParamMasterPolyphony, 8.0f);
+        e->prepare (kSr, 256, qualityForTier (Tier::high));
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "master.volume", 0.0f);
+        set (*e, "env1.attack", 0.0f);
+        set (*e, "osc1.level", 100.0f);
+        set (*e, "osc1.type", 4.0f);
+        e->setContentStore (&store);
+        e->setContent (c);
+        const size_t total = static_cast<size_t> (1.2 * kSr);
+        std::vector<float> l (total), r (total);
+        for (size_t pos = 0; pos < total; pos += 256)
+        {
+            Event ev[1];
+            int ne = 0;
+            if (pos == 0)
+                ev[ne++] = sbtest::noteOn (0, 69, 1.0f);
+            if (pos == 14336)
+                ev[ne++] = sbtest::noteOn (0, 76, 1.0f); // a fifth up: 659 Hz
+            e->process (ev, ne, l.data() + pos, r.data() + pos, 256);
+        }
+        return l;
+    };
+    const auto without = run (false), with = run (true);
+    const double a0 = lineAmplitude (without, 38400, 52800, 440.0), a1 = lineAmplitude (with, 38400, 52800, 440.0), b1 = lineAmplitude (with, 38400, 52800, 659.3);
+    std::printf ("    choke: 440 Hz line without %.1f dB, with %.1f dB, the choking note %.1f dB\n", db (a0), db (a1), db (b1));
+    CHECK (db (a0) > -12.0);
+    CHECK (db (a1) < db (a0) - 30.0);
+    CHECK (db (b1) > -12.0);
+}
+
+// 07 7a.3: the Mask warp from the Noise passes only the bins where the source is strong: a silent source mutes the spectral oscillator at full amount
+TEST (own_osc_spectral_mask_from_the_noise)
+{
+    Rig plain (true, "osc1.type", 3.0f);
+    Rig masked (true, "osc1.type", 3.0f);
+    set (*masked.e, "osc1.warp.type", 95.0f);
+    set (*masked.e, "osc1.warp.amount", 100.0f);
+    const double a = rmsOfRange (plain.render (69, 1.0, 1.0).l, 14400, 43200), b = rmsOfRange (masked.render (69, 1.0, 1.0).l, 14400, 43200);
+    std::printf ("    mask from a silent noise: %.4f -> %.5f\n", a, b);
+    CHECK (a > 0.1);
+    CHECK (b < 0.05 * a);
+}
+
+// 02 section 10: noise.filter and the generator noise pitch
+TEST (own_noise_filter_and_generator_pitch)
+{
+    auto noise = [] (float filter, float pitch)
+    {
+        return plainRender ({ { "osc1.on", 0.0f }, { "noise.on", 1.0f }, { "noise.level", 100.0f }, { "noise.sample", 0.0f }, { "noise.filter", filter }, { "noise.pitch", pitch } }, 60, 1.0);
+    };
+    auto hf = [] (const std::vector<float>& x)
+    {
+        double d = 0.0, s = 0.0;
+        for (size_t i = 12001; i < 40000; ++i)
+        {
+            d += std::pow (x[i] - x[i - 1], 2.0);
+            s += static_cast<double> (x[i]) * x[i];
+        }
+        return d / std::max (s, 1.0e-30); // 0 for a low-pass signal, 2 for white noise
+    };
+    const auto white = noise (0.0f, 0.0f), lowpass = noise (-100.0f, 0.0f), highpass = noise (100.0f, 0.0f), down = noise (0.0f, -24.0f), up = noise (0.0f, 12.0f);
+    std::printf ("    noise: rms white %.3f low-pass %.3f high-pass %.3f up12 %.3f | roughness white %.2f low-pass %.3f high-pass %.2f down24 %.3f\n", rmsOfRange (white, 12000, 40000),
+                 rmsOfRange (lowpass, 12000, 40000), rmsOfRange (highpass, 12000, 40000), rmsOfRange (up, 12000, 40000), hf (white), hf (lowpass), hf (highpass), hf (down));
+    CHECK (rmsOfRange (lowpass, 12000, 40000) < 0.12 * rmsOfRange (white, 12000, 40000));
+    CHECK (hf (lowpass) < 0.05);
+    CHECK (hf (highpass) > hf (white));
+    CHECK (hf (down) < 0.25 * hf (white));
+    CHECK_NEAR (rmsOfRange (up, 12000, 40000) / rmsOfRange (white, 12000, 40000), 0.757, 0.08);
 }

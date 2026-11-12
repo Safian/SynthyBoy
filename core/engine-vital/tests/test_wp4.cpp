@@ -173,7 +173,9 @@ TEST (wp4_capabilities_are_reported)
     CHECK ((caps & kCapUserWavetable) != 0);
     CHECK ((caps & kCapWarp2) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapSampleOsc | kCapUserWavetable | kCapWarp2)) == 0); // the iOS engine sets none of the heavy bits
+    for (size_t i = 0; i < paramCount(); ++i) // the own engine never claims more than its capability words say
+        if (own->supportsParam (paramTable()[i].id))
+            CHECK (capsCover (own->capabilities(), requiredCaps (i)) && capsCover2 (own->capabilities2(), requiredCaps2 (i)));
 }
 
 TEST (sample_oscillator_type_plays_the_content_sample_at_the_key_pitch)

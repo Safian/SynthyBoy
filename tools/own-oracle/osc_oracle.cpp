@@ -23,6 +23,7 @@ constexpr double kSr = 48000.0;
 
 struct Metrics
 {
+    double floorRel = -200.0, floorAbs = -200.0; // Blackman 1 s, outside max (1 %, 4 bins) of the harmonics: relative to the total power, and re an amplitude 1 sine (power 0.5)
     double rmsDb = -200.0, peak = 0.0, outsideDb = -200.0, h[4] = { -200, -200, -200, -200 };
 };
 
@@ -55,9 +56,42 @@ void fft (std::vector<std::complex<double>>& a)
     }
 }
 
+void floorMetrics (const std::vector<float>& x, double f0, Metrics& m)
+{
+    const size_t n = 65536, from = static_cast<size_t> (0.3 * kSr);
+    if (x.size() < from + n)
+        return;
+    std::vector<std::complex<double>> a (n);
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double ph = 6.283185307179586 * static_cast<double> (i) / static_cast<double> (n - 1);
+        a[i] = (0.42 - 0.5 * std::cos (ph) + 0.08 * std::cos (2.0 * ph)) * static_cast<double> (x[from + i]);
+    }
+    fft (a);
+    const double binHz = kSr / static_cast<double> (n);
+    double total = 0.0, outside = 0.0, wsum2 = 0.0;
+    for (size_t i = 0; i < n; ++i)
+    {
+        const double ph = 6.283185307179586 * static_cast<double> (i) / static_cast<double> (n - 1);
+        const double w = 0.42 - 0.5 * std::cos (ph) + 0.08 * std::cos (2.0 * ph);
+        wsum2 += w * w;
+    }
+    for (size_t k = 1; k < n / 2; ++k)
+    {
+        const double p = std::norm (a[k]), f = static_cast<double> (k) * binHz, h = std::round (f / f0);
+        total += p;
+        if (h < 1.0 || std::fabs (f - h * f0) > std::max (0.01 * h * f0, 40.0 * binHz))
+            outside += p;
+    }
+    m.floorRel = 10.0 * std::log10 (std::max (outside / std::max (total, 1.0e-30), 1.0e-30));
+    // power per sample of the outside part (Parseval over the one sided spectrum) re 0.5
+    m.floorAbs = 10.0 * std::log10 (std::max (2.0 * outside / (static_cast<double> (n) * wsum2) / 0.5, 1.0e-30));
+}
+
 Metrics measure (const std::vector<float>& x, double f0)
 {
     Metrics m;
+    floorMetrics (x, f0, m);
     const size_t n = 32768, from = static_cast<size_t> (0.25 * kSr);
     if (x.size() < from + n)
         return m;
@@ -122,7 +156,7 @@ oracle::Stereo run (EngineKind kind, const oracle::Overrides& ov, Content& c, in
     e->setContent (c.state);
     e->reset();
     oracle::Stereo out;
-    const size_t total = static_cast<size_t> (1.5 * kSr);
+    const size_t total = static_cast<size_t> (2.0 * kSr);
     out.l.assign (total, 0.0f);
     out.r.assign (total, 0.0f);
     size_t pos = 0;
@@ -195,14 +229,14 @@ int main (int argc, char** argv)
     for (int m = 1; m < 12; ++m)
         for (int amount : { 25, 75 })
             cases.push_back ({ std::string ("Morph ") + morphNames[m] + " " + std::to_string (amount), { { "osc1.wavetable", 9 }, { "osc1.frame", 50 }, { "osc1.morph.type", static_cast<float> (m) }, { "osc1.morph.amount", static_cast<float> (amount) } }, noteArg });
-    std::printf ("%-34s | %8s %8s %6s | %8s %8s %6s | %7s\n", "case (note 57 unless stated)", "own dB", "own out", "peak", "vital dB", "vital out", "peak", "d level");
+    std::printf ("%-34s | %8s %8s %6s | %8s %8s %6s | %7s | floor rel/abs own, vital\n", "case (note 57 unless stated)", "own dB", "own out", "peak", "vital dB", "vital out", "peak", "d level");
     for (const auto& cs : cases)
     {
         const int note = cs.note;
         const double f0 = 8.1757989156 * std::pow (2.0, note / 12.0);
         const Metrics own = measure (run (EngineKind::own, cs.ov, c, note).l, f0);
         const Metrics vit = measure (run (EngineKind::vital, cs.ov, c, note).l, f0);
-        std::printf ("%-34s | %8.2f %8.1f %6.3f | %8.2f %8.1f %6.3f | %+7.2f\n", cs.name.c_str(), own.rmsDb, own.outsideDb, own.peak, vit.rmsDb, vit.outsideDb, vit.peak, own.rmsDb - vit.rmsDb);
+        std::printf ("%-34s | %8.2f %8.1f %6.3f | %8.2f %8.1f %6.3f | %+7.2f | %7.1f %7.1f, %7.1f %7.1f\n", cs.name.c_str(), own.rmsDb, own.outsideDb, own.peak, vit.rmsDb, vit.outsideDb, vit.peak, own.rmsDb - vit.rmsDb, own.floorRel, own.floorAbs, vit.floorRel, vit.floorAbs);
     }
     return 0;
 }

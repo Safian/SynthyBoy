@@ -41,6 +41,8 @@ struct TickGlobals
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
     bool oversample = false;                 // ultra render / quality.oversample_4x: every wavetable oscillator runs 4x oversampled
     spectral::Scratch* spectralScratch = nullptr;
+    uint32_t* chokeLatest = nullptr;         // [3][256] choke groups of the multisample oscillators (engine wide per slot)
+    uint32_t* chokeCounter = nullptr;        // [3]
     const int* switchKey = nullptr;          // [3] last key switch of the multisample instrument of each oscillator, -1 = default
 };
 
@@ -67,8 +69,6 @@ public:
     void kill() noexcept;
     int multisampleZone (int osc) const noexcept { return lib[osc].lastZone(); }
     int multisampleKey (int osc) const noexcept { return lib[osc].lastKey(); }
-    /** Choke groups of the multisample instruments: another voice started a zone of this group. */
-    void chokeGroup (int osc, int group) noexcept { if (osc >= 0 && osc < 3) lib[osc].chokeGroup (group); }
 
     bool isActive() const noexcept { return active; }
     bool isReleased() const noexcept { return released; }
@@ -132,6 +132,8 @@ private:
     // sound sources
     WtOsc osc[3], sub;
     LibOsc lib[3];
+    float remapCur[3] = {};
+    bool remapInit[3] = {};
     float pitchTap[4] = {};   // pitch of oscillators 1 .. 3 and the sub of the last period (Ratio SRC)
     bool pitchTapOn[4] = {};
     OscTick oscTick[3], subTick;
@@ -142,6 +144,8 @@ private:
     sampleosc::SampleVoice noiseSv;   // noise.type = Sample: the content sample of the noise source
     const ContentSet* noiseBound = nullptr;
     bool noiseUseSample = false;
+    float noiseFilt[2][2] = {}, noiseLp[2][4] = {}; // noise.filter poles, generator pitch low pass
+    float noiseFilterAmount = 0.0f, noisePitchSemis = 0.0f;
     float noiseGain = 0.0f, noiseGainPrev = 0.0f, noisePan = 0.0f, noiseStereo = 0.0f;
     int noiseColour = 0;
     struct Chan { float level = 0, levelPrev = 0, gl = 0, gr = 0, glPrev = 0, grPrev = 0; int dest = 3; bool env1 = true, on = false; };

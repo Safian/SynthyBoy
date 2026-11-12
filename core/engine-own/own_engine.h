@@ -72,6 +72,7 @@ private:
     std::atomic<const ContentSet*> contentCurrent { nullptr }, contentInUse { nullptr };
     std::atomic<int> switchKeyAtomic[3];
     int switchKeySnap[3] = { -1, -1, -1 };
+    uint32_t chokeLatest[3][256] = {}, chokeCounter[3] = {};
     std::atomic<int> qualityTier { 2 };
     std::atomic<bool> ultraRender { false };
     std::atomic<int> multiZone[3], multiKey[3];   // the zone and key of the last multisample note (read-out)

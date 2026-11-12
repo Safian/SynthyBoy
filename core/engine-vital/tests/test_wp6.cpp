@@ -127,7 +127,9 @@ TEST (wp6_capabilities_are_reported)
     CHECK ((e->capabilities() & kCapFilterModels) != 0);
     CHECK ((e->capabilities() & kCapFilterModels2) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapFilterExtras | kCapFilterModels | kCapFilterModels2)) == 0);
+    for (size_t i = 0; i < paramCount(); ++i) // the own engine never claims more than its capability words say
+        if (own->supportsParam (paramTable()[i].id))
+            CHECK (capsCover (own->capabilities(), requiredCaps (i)) && capsCover2 (own->capabilities2(), requiredCaps2 (i)));
     CHECK (sizeof (kTypes) / sizeof (kTypes[0]) == 37);
     CHECK (sizeof (kNewTypes43) / sizeof (kNewTypes43[0]) == 43);
     CHECK ((sizeof (kTypes) + sizeof (kNewTypes43)) / sizeof (kTypes[0]) == 80);

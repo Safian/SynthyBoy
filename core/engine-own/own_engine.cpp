@@ -23,13 +23,14 @@ namespace own
 {
 namespace
 {
-/** The output safety stage: the identity up to +-1, above it a smooth knee that approaches +-2 (any patch stays bounded, a normal patch never reaches it). */
+/** The output safety stage: the identity up to +-1.8 (a loud patch with a boosting warp or filter passes unchanged, like the headroom of engine-vital), above it a smooth knee that
+    approaches +-2 (any patch stays bounded). A knee that starts at 1 distorts a signal with peaks of 1.5 and aliases the distortion (a high-pass warp measured -58 dB). */
 inline float outputLimit (float y) noexcept
 {
     const float a = std::fabs (y);
-    if (!(a > 1.0f))
+    if (!(a > 1.8f))
         return y == y ? y : 0.0f;
-    return std::copysign (1.0f + std::tanh (a - 1.0f), y);
+    return std::copysign (1.8f + 0.2f * std::tanh ((a - 1.8f) * 5.0f), y);
 }
 } // namespace
 
@@ -204,6 +205,11 @@ void OwnEngine::reset()
     }
     std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
     noteCounter = 0;
+    for (auto& row : chokeLatest)
+        for (auto& x : row)
+            x = 0;
+    for (auto& x : chokeCounter)
+        x = 0;
     controlPos = 0;
     heldKeys = 0;
     haveLastNote = false;
@@ -559,6 +565,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.quality = qualityTier.load (std::memory_order_relaxed);
     globals.oversample = ultraRender.load (std::memory_order_relaxed) || (fxOversampleIndex >= 0 && base[static_cast<size_t> (fxOversampleIndex)] >= 0.5f);
     globals.spectralScratch = spectralScratch.get();
+    globals.chokeLatest = &chokeLatest[0][0];
+    globals.chokeCounter = chokeCounter;
 
     if (voiceCap.load (std::memory_order_relaxed) < kMaxVoices)
     {

@@ -52,12 +52,12 @@ bool implementedKey (const std::string& k)
         if (rest.rfind ("multi.", 0) == 0)
             return true;
         return inList (rest, { "on", "level", "pan", "transpose", "tune", "wavetable", "frame", "frame_spread", "phase", "random_phase", "destination", "env1",
-                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type", "pitch_mode", "ratio_src", "smooth_interp" });
+                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type", "pitch_mode", "ratio_src", "smooth_interp", "remap.on", "remap.slot", "remap.rise", "remap.fall" });
     }
     if (head == "sub")
         return inList (rest, { "on", "waveform", "octave", "tune", "level", "pan", "destination", "env1", "phase" });
     if (head == "noise")
-        return inList (rest, { "on", "level", "pan", "destination", "env1", "sample", "stereo", "type", "pitch", "fine", "keytrack", "phase", "random_phase", "loop", "bounce" });
+        return inList (rest, { "on", "level", "pan", "destination", "env1", "sample", "stereo", "type", "pitch", "fine", "keytrack", "phase", "random_phase", "loop", "bounce", "filter" });
     if (head == "filter1" || head == "filter2")
         return inList (rest, { "on", "model", "style", "cutoff", "resonance", "drive", "blend", "mix", "keytrack", "var", "level", "env1", "destination" });
     if (head == "filter")
@@ -117,7 +117,7 @@ EngineCapsMask ownCapabilities() noexcept
 {
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
-         | kCapModSources2 | kCapWavetableSawDown | kCapSampleOsc | kCapUserWavetable | kCapOscExtras2 | kCapWarpAlt | kCapWarpFilter | kCapNoiseSample | kCapWarpSources
+         | kCapModSources2 | kCapWavetableSawDown | kCapSampleOsc | kCapUserWavetable | kCapOscExtras2 | kCapWarpAlt | kCapWarpFilter | kCapNoiseSample | kCapWarpSources | kCapNoiseExtras | kCapNoiseColour | kCapWtRemap
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
 }
 

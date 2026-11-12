@@ -36,9 +36,7 @@ type change. Memory of the library voices (granular clouds, spectral voices, mul
 
 ## What is not there yet (see docs/ui-design/OWN-ENGINE-GAP.md, generated)
 
-The per slot stereo lane is there, but not: the frame position remap with RISE / FALL (`remap.on`), the X|Y control of the granular and spectral oscillators (`y_axis`), the Mask /
-Vocode spectral warps from the Noise (Osc A / B are fed), choke groups across voices, tuning / scale / MPE (step 6), the mixer graph (buses, sends), voice control, the effect racks,
-Bode, Convolve and the splitters.
+Tuning / scale / MPE (step 6), the mixer graph (buses, sends), voice control, the effect racks, Bode, Convolve and the splitters, the Serum unison law, stack styles, transpose snap.
 
 ## Known differences to engine-vital
 

@@ -136,7 +136,9 @@ TEST (b17_capabilities_are_reported)
     auto e = createEngine (EngineKind::vital);
     CHECK ((e->capabilities() & kCapFxExtrasAll) == kCapFxExtrasAll);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & kCapFxExtrasAll) == 0);
+    for (size_t i = 0; i < paramCount(); ++i) // the own engine never claims more than its capability words say
+        if (own->supportsParam (paramTable()[i].id))
+            CHECK (capsCover (own->capabilities(), requiredCaps (i)) && capsCover2 (own->capabilities2(), requiredCaps2 (i)));
     for (const char* key : { "compressor.limit", "compressor.crossover_high", "delay.hq", "delay.offset", "distortion.filter_keytrack", "phaser.depth2",
                              "reverb.type", "reverb.room", "reverb.width", "reverb.er_size", "reverb.diff_a", "reverb.diff_b" })
     {
@@ -145,7 +147,7 @@ TEST (b17_capabilities_are_reported)
         if (info != nullptr)
         {
             CHECK (e->supportsParam (info->id));
-            CHECK (! own->supportsParam (info->id));
+            CHECK (! own->supportsParam (info->id) || capsCover (own->capabilities(), requiredCaps (static_cast<size_t> (findParamIndex (info->id)))));
         }
     }
 }

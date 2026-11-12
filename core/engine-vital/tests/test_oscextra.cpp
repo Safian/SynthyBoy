@@ -209,7 +209,9 @@ TEST (oscextra_capabilities_are_reported)
     CHECK ((e->capabilities() & kCapSubOsc) != 0);
     CHECK ((e->capabilities() & kCapNoiseExtras) != 0);
     auto own = createEngine (EngineKind::own);
-    CHECK ((own->capabilities() & (kCapSubOsc | kCapNoiseExtras)) == 0);
+    for (size_t i = 0; i < paramCount(); ++i) // the own engine never claims more than its capability words say
+        if (own->supportsParam (paramTable()[i].id))
+            CHECK (capsCover (own->capabilities(), requiredCaps (i)) && capsCover2 (own->capabilities2(), requiredCaps2 (i)));
 }
 
 TEST (oscextra_defaults_leave_the_engine_unchanged)

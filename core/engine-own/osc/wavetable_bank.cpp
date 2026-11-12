@@ -182,7 +182,7 @@ struct LevelTable
         {
             static const int kHarmonics[Wavetable::kNumLevels] = { 1024, 512, 256, 181, 128, 91, 64, 45, 32, 23, 16, 11, 8, 6, 4, 3, 2, 1 };
             harmonics[m] = kHarmonics[m];
-            int n = 16;
+            int n = 256; // never fewer than 256 samples: at the high pitches the interpolation images of a tiny table are what is left to hear
             while (n < 8 * harmonics[m] && n < Wavetable::kCycle)
                 n <<= 1;
             size[m] = m == 0 ? Wavetable::kCycle : n;
