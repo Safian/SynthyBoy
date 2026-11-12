@@ -85,3 +85,5 @@ addition changes the behaviour of the baseline. The own-engine gap list is `docs
 Everything numeric that a document calls a vector was produced by the probe, except: doc 7 S3 (type switch while sounding: the offline probe cannot change a parameter mid-note) and the internals of the Dirty, Diode, Phaser, Comb filter models (described from the structure; their behaviour is
 pinned by the response vectors of document 5 sections 10 and 10.1). Document 6 section 8.1 reports a **defect of engine-vital's flanger**; the spec follows the intended design.
 Answers to the implementer's first three questions: table frames, document 2 section 1.1; Sine LFO start and L1, document 3 section 3.9; stereo lane model and M9, document 4 section 3.2.
+
+Answers to implementer questions 4 - 6 and the added topics: document 7 section 7a (spectral output gain basis, X|Y control, Mask/Vocode external spectra, choke-group scope); document 2 sections 6.2 (Remap curve), 6.7 (frame remap RISE/FALL), 10 (noise filter, stereo, generator pitch) and 11.1 (Filter HPF/LPF warp floor).
