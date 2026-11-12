@@ -54,6 +54,8 @@ bool implementedKey (const std::string& k)
         return inList (rest, { "on", "model", "style", "cutoff", "resonance", "drive", "blend", "mix", "keytrack", "var", "level", "env1", "destination" });
     if (head == "filter")
         return rest == "routing";
+    if (head == "voicectl")
+        return true;
     if (head.size() == 4 && head.rfind ("env", 0) == 0 && head[3] >= '1' && head[3] <= '6')
         return inList (rest, { "delay", "attack", "hold", "decay", "sustain", "release", "attack_curve", "decay_curve", "release_curve", "units", "legato_inverted",
                                "delay_beats", "attack_beats", "hold_beats", "decay_beats", "release_beats" });
@@ -111,7 +113,7 @@ EngineCapsMask ownCapabilities() noexcept
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
          | kCapModSources2 | kCapWavetableSawDown
-         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape
+         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
 }
 

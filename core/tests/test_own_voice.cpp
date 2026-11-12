@@ -451,3 +451,83 @@ TEST (ownv_slot_amount_destination_stereo_source_and_loops)
     CHECK (std::fabs (p.left (0.3) - 1.0) < 0.05);
     CHECK (std::fabs (p.right (0.3)) < 0.05);
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// voice control
+
+namespace
+{
+double lineAt (const std::vector<float>& x, double t0, double hz, size_t n = 4800)
+{
+    const size_t a = static_cast<size_t> (t0 * kSr);
+    double re = 0, im = 0;
+    for (size_t i = 0; i < n; ++i)
+    {
+        re += x[a + i] * std::cos (2.0 * M_PI * hz * static_cast<double> (i) / kSr);
+        im += x[a + i] * std::sin (2.0 * M_PI * hz * static_cast<double> (i) / kSr);
+    }
+    return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (n);
+}
+} // namespace
+
+TEST (ownv_voice_control_steps_pan_and_detune_alternate_per_note)
+{
+    auto e = make();
+    sinePatch (*e);
+    set (*e, "voicectl.length", 2);
+    set (*e, "voicectl.s1.pan", 100);
+    set (*e, "voicectl.s2.pan", -100);
+    set (*e, "voicectl.s2.detune", 100);
+    const auto o = run (*e, { sbtest::noteOn (0, 60), sbtest::noteOn (static_cast<int> (0.1 * kSr), 72) }, 0.5);
+    const double f1 = 261.6256, f2 = 523.2511 * std::pow (2.0, 1.0 / 12.0);
+    CHECK (lineAt (o.left, 0.3, f1) < 0.05 && lineAt (o.right, 0.3, f1) > 1.0);   // step 1 pans right
+    CHECK (lineAt (o.right, 0.3, f2) < 0.05 && lineAt (o.left, 0.3, f2) > 1.0);   // step 2 pans left and detunes by a semitone
+    // the mask: a target that is off ignores the step values
+    auto e2 = make();
+    sinePatch (*e2);
+    set (*e2, "voicectl.s1.pan", 100);
+    set (*e2, "voicectl.osc.a", 0);
+    const auto o2 = run (*e2, { sbtest::noteOn (0, 60) }, 0.4);
+    CHECK (std::fabs (lineAt (o2.left, 0.3, f1) - lineAt (o2.right, 0.3, f1)) < 0.02);
+}
+
+TEST (ownv_voice_control_envelope_scaling_random_and_sources)
+{
+    // the envelope time scaling stretches the attack: at 400 % a 100 ms attack takes 400 ms
+    auto rise = [&] (float scale)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "env1.attack", 100);
+        set (*e, "voicectl.scale.env", scale);
+        const auto o = run (*e, { sbtest::noteOn (0, 69) }, 0.6);
+        return lineAt (o.left, 0.15, 440.0, 2400);
+    };
+    CHECK (rise (100) > 0.9);
+    CHECK (rise (400) < 0.5);
+    // the random pan is the same in every render of the same note counter
+    auto pan = [&]
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "voicectl.rand.pan", 100);
+        const auto o = run (*e, { sbtest::noteOn (0, 69) }, 0.3);
+        return lineAt (o.left, 0.2, 440.0, 2400);
+    };
+    CHECK (pan() == pan());
+    CHECK (std::fabs (pan() - 1.0) > 0.01);
+    // Voice Mod 1 is a source: step value 100 % moves the level
+    auto level = [&] (float mod1)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "osc1.level", 50);
+        set (*e, "voicectl.s1.mod1", mod1);
+        set (*e, "mod01.source", srcChoice ("voice_mod1"));
+        set (*e, "mod01.destination", dstChoice ("osc1.level"));
+        set (*e, "mod01.amount", 50);
+        const auto o = run (*e, { sbtest::noteOn (0, 69) }, 0.4);
+        return lineAt (o.left, 0.3, 440.0, 2400);
+    };
+    CHECK (level (100) > 1.3 * level (0));
+}

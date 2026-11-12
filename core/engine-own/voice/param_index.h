@@ -57,6 +57,15 @@ struct MasterIdx
         curveVelLegato, curveNoteLegato;
 };
 
+/** The per voice panel (docs/ui-design/13-new-keys.md 4.30). */
+struct VoiceCtlIdx
+{
+    int length;
+    int step[8][6];  // pan, detune, cutoff, env, mod1, mod2
+    int randPan, randCutoff, randEnv, randDetune, rand10x, scaleEnv, scaleLfo, scaleLfoMode;
+    int osc[5];      // A, B, C, noise, sub
+};
+
 /** Positions in paramTable() of every key the engine reads (-1 when a key does not exist). Built once, immutable. */
 struct ParamIndex
 {
@@ -70,6 +79,7 @@ struct ParamIndex
     int macro[8];
     int filterRouting;
     MasterIdx master;
+    VoiceCtlIdx vctl;
     ModSlotParams slot[kNumModSlots];
     int count = 0; // paramCount ()
 };

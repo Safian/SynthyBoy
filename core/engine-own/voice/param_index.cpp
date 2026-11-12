@@ -93,6 +93,20 @@ ParamIndex build()
                  find ("master.tuning.mts_esp"), find ("master.mpe.on"), find ("master.mpe.bend_range"), find ("master.mpe.xyz_macro"),
                  find ("master.mpe.y_modwheel"), find ("master.mpe.bend_to_x"), find ("master.mpe.y_bipolar"), find ("master.stereo_routing"),
                  find ("curve.velocity.legato"), find ("curve.note.legato") };
+    {
+        VoiceCtlIdx& v = p.vctl;
+        v.length = find ("voicectl.length");
+        static const char* const kStepKeys[6] = { "pan", "detune", "cutoff", "env", "mod1", "mod2" };
+        for (int n = 0; n < 8; ++n)
+            for (int k = 0; k < 6; ++k)
+                v.step[n][k] = find ("voicectl.s%d.%s", n + 1, kStepKeys[k]);
+        v.randPan = find ("voicectl.rand.pan"); v.randCutoff = find ("voicectl.rand.cutoff"); v.randEnv = find ("voicectl.rand.env");
+        v.randDetune = find ("voicectl.rand.detune"); v.rand10x = find ("voicectl.rand.detune10x");
+        v.scaleEnv = find ("voicectl.scale.env"); v.scaleLfo = find ("voicectl.scale.lfo"); v.scaleLfoMode = find ("voicectl.scale.lfo_mode");
+        static const char* const kOscKeys[5] = { "a", "b", "c", "noise", "sub" };
+        for (int k = 0; k < 5; ++k)
+            v.osc[k] = find ("voicectl.osc.%s", kOscKeys[k]);
+    }
     for (int s = 0; s < kNumModSlots; ++s)
         p.slot[s] = modSlotParams (s);
     return p;

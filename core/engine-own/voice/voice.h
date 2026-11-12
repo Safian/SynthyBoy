@@ -50,6 +50,7 @@ struct NoteStart
     float tunedNote = 60.0f;     // the tuned note of the key (fractional MIDI note)
     float glideFromSemis = 0.0f; // pitch to glide from (absolute semitones), only if glide
     int playedKey = -1;          // the key as the player pressed it (key is the one after the scale conforming)
+    uint32_t sequence = 1;       // the note counter of the voice control (starts at 1, restarts at all sounds off)
     bool glide = false;
     bool retrigger = true;
     uint32_t serial = 0;         // note counter (random seeds, alternation)
@@ -113,6 +114,11 @@ private:
     bool killFading = false;
     float killElapsed = 0.0f;
     bool legatoInv[6] = {};
+    uint32_t sequence = 1;
+    float vcRand[4] = {};  // the draws of the voice control: pan, cutoff, env, detune (-1 .. 1), fixed per note
+    // the values of the voice control for this note (evaluated in every tick: edits reach sounding notes)
+    struct VoiceCtl { float pan = 0, detuneSemis = 0, cutoffSemis = 0, envFactor = 1, lfoFactor = 1, mod1 = 0, mod2 = 0, index = 0; bool mask[5] = { true, true, true, true, true }; } vc;
+    void evaluateVoiceControl (const TickGlobals& g) noexcept;
     int32_t id = -1;
     uint32_t noteSerial = 0;
     float vel = 1.0f, releaseVel = 0.0f, tuneExpr = 0.0f, polyPressure = 0.0f, slide = 0.0f, exprX = 0.0f;

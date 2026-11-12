@@ -95,7 +95,7 @@ private:
     LinearSmoother smoothedGain;
     double sampleRate = 0.0;
     bool prepared = false;
-    uint32_t noteCounter = 0;
+    uint32_t noteCounter = 0, voiceCtlCounter = 0;
     int controlPos = 0;
     float lastNoteSemis = 60.0f;
     bool haveLastNote = false;

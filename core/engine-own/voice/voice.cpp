@@ -137,6 +137,15 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     exprX = 0.0f;
     rng.seed (n.serial * 31u + static_cast<uint32_t> (n.key) * 7u + 1u);
     noiseRng.seed (n.serial * 17u + 5u);
+    sequence = n.sequence;
+    {
+        Rng vr;
+        for (int i = 0; i < 4; ++i)
+        {
+            vr.seed (n.sequence * 2654435761u + static_cast<uint32_t> (i) * 40503u + 17u);
+            vcRand[i] = vr.bi();
+        }
+    }
     randomPerNote = rng.uni();
     rand2 = rng.uni();
     randDiscrete = static_cast<float> (rng.next() % 8u) / 7.0f;
@@ -185,6 +194,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
 
 void Voice::legatoTo (const NoteStart& n) noexcept
 {
+    sequence = n.sequence;
     glideOffset = (lastSemis - n.tunedNote);
     glideElapsed = 0.0f;
     glideTime = -1.0f;
@@ -257,7 +267,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight) noexcept
     const int shape = static_cast<int> (P (li.shape) + 0.5f);
     const int sync = static_cast<int> (P (li.sync) + 0.5f);
     const int syncType = std::clamp (static_cast<int> (P (li.syncType) + 0.5f), 0, 5);
-    const float rate = lfoRateHz (sync, P (li.rate), static_cast<int> (P (li.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (li.keyTranspose), P (li.keyTune));
+    const float rate = vc.lfoFactor * lfoRateHz (sync, P (li.rate), static_cast<int> (P (li.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (li.keyTranspose), P (li.keyTune));
     const float knob = P (li.phase) * (1.0f / 360.0f);
     const float delay = P (li.delay) * 0.001f, fade = P (li.fadeIn) * 0.001f;
     const float stereo = P (li.stereo) * (1.0f / 720.0f);
@@ -354,6 +364,31 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight) noexcept
     return left;
 }
 
+void Voice::evaluateVoiceControl (const TickGlobals& g) noexcept
+{
+    const VoiceCtlIdx& v = paramIndex().vctl;
+    if (v.length < 0)
+        return;
+    const int length = std::clamp (static_cast<int> (g.base[v.length] + 0.5f), 1, 8);
+    const int step = static_cast<int> ((sequence - 1u) % static_cast<uint32_t> (length));
+    auto val = [&] (int k) { return g.base[v.step[step][k]]; };
+    const float rp = g.base[v.randPan] * 0.01f, rc = g.base[v.randCutoff] * 0.01f, re = g.base[v.randEnv] * 0.01f;
+    const float rd = g.base[v.randDetune] * (g.base[v.rand10x] >= 0.5f ? 10.0f : 1.0f);
+    vc.pan = val (0) * 0.01f + vcRand[0] * rp;
+    vc.detuneSemis = (val (1) + vcRand[3] * rd) * 0.01f;
+    vc.cutoffSemis = (val (2) * 0.01f + vcRand[1] * rc) * 36.0f;
+    vc.envFactor = std::pow (4.0f, val (3) * 0.01f + vcRand[2] * re);
+    vc.mod1 = val (4) * 0.01f;
+    vc.mod2 = val (5) * 0.01f;
+    vc.index = length > 1 ? static_cast<float> (step) / static_cast<float> (length - 1) : 0.0f;
+    for (int k = 0; k < 5; ++k)
+        vc.mask[k] = g.base[v.osc[k]] >= 0.5f;
+    // the scalings (25 .. 400 %): the envelope times follow the percentage, the LFO rate is the inverse of it in Percent mode and the percentage in Rate mode
+    vc.envFactor *= g.base[v.scaleEnv] * 0.01f;
+    const float lf = g.base[v.scaleLfo] * 0.01f;
+    vc.lfoFactor = g.base[v.scaleLfoMode] >= 0.5f ? lf : 1.0f / std::max (lf, 0.01f);
+}
+
 void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
 {
     gl = &g;
@@ -396,6 +431,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     const float noteSemis = tuneTrack + glideOffset + bend + tuneExpr + g.base[mi.transpose] + g.base[mi.tune] * 0.01f;
     lastSemis = tuneTrack + glideOffset;
 
+    evaluateVoiceControl (g);
     // ---- envelopes (times read with last period's modulation)
     for (int e = 0; e < 6; ++e)
     {
@@ -423,6 +459,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.attackCurve = -P (ei.attackCurve);
         s.decayCurve = P (ei.decayCurve);
         s.releaseCurve = P (ei.releaseCurve);
+        s.delay *= vc.envFactor;
+        s.attack *= vc.envFactor;
+        s.hold *= vc.envFactor;
+        s.decay *= vc.envFactor;
+        s.release *= vc.envFactor;
         const float v = env[e].advance (s, dt);
         envOut[e] = v * v;
     }
@@ -438,7 +479,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
         {
             const int sync = static_cast<int> (P (ri.sync) + 0.5f);
-            const float rate = lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
+            const float rate = vc.lfoFactor * lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
             const int style = static_cast<int> (P (ri.style) + 0.5f);
             rlfoOut[r] = rlfo[r].advance (style, rate * fdt);
             // stereo: the right lane has random numbers of its own
@@ -467,7 +508,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     src[kSrcSlide] = slide;
     { const float n12 = (lastSemis + bend) * (1.0f / 12.0f); src[kSrcOctNote] = n12 - std::floor (n12); }
     src[kSrcPolyAftertouch] = polyPressure;
-    src[kSrcVoiceIndex] = static_cast<float> (index) * (1.0f / 31.0f);
+    src[kSrcVoiceIndex] = vc.index;
+    src[kSrcVoiceMod1] = 0.5f + 0.5f * vc.mod1;
+    src[kSrcVoiceMod2] = 0.5f + 0.5f * vc.mod2;
     src[kSrcOscA] = srcLevel[0];
     src[kSrcOscB] = srcLevel[1];
     src[kSrcOscC] = srcLevel[2];
@@ -572,12 +615,13 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const bool track = P (oi.pitchTrack) >= 0.5f;
         const bool bendTrack = P (oi.bendTrack) >= 0.5f;
         const float base = track ? noteSemis - (bendTrack ? 0.0f : bend) : 60.0f;
-        t.semis = base + P (oi.transpose) + P (oi.tune) * 0.01f + P (oi.pitchCoarse);
+        t.semis = base + P (oi.transpose) + P (oi.tune) * 0.01f + P (oi.pitchCoarse) + (vc.mask[o] && track ? vc.detuneSemis : 0.0f);
         t.frame = clamp01 (P (oi.frame) * 0.01f);
         t.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
         t.level = std::max (0.0f, P (oi.level) * 0.01f);
-        t.pan = std::clamp (P (oi.pan) * 0.01f, -1.0f, 1.0f);
-        t.panRight = std::clamp (PR (oi.pan) * 0.01f, -1.0f, 1.0f);
+        const float vcPan = vc.mask[o] ? vc.pan : 0.0f;
+        t.pan = std::clamp (P (oi.pan) * 0.01f + vcPan, -1.0f, 1.0f);
+        t.panRight = std::clamp (PR (oi.pan) * 0.01f + vcPan, -1.0f, 1.0f);
         t.voices = std::clamp (static_cast<int> (P (oi.uniVoices) + 0.5f), 1, std::max (1, g.maxUnison));
         const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
         t.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
@@ -607,9 +651,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         subTick.active = subCh.on;
         static const int kSubTable[6] = { 0, kRoundedRectTable, 3, 1, 2, 4 };
         subTick.wt = builtinWavetable (kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)]);
-        subTick.semis = noteSemis + std::round (P (si.octave)) * 12.0f + P (si.tune);
+        subTick.semis = noteSemis + std::round (P (si.octave)) * 12.0f + P (si.tune) + (vc.mask[4] ? vc.detuneSemis : 0.0f);
         subTick.level = subCh.on ? std::max (0.0f, P (si.level) * 0.01f) : 0.0f;
-        subTick.pan = std::clamp (P (si.pan) * 0.01f, -1.0f, 1.0f);
+        subTick.pan = std::clamp (P (si.pan) * 0.01f + (vc.mask[4] ? vc.pan : 0.0f), -1.0f, 1.0f);
         subTick.voices = 1;
         subTick.spread = 0.0f;
         subTick.blend = 1.0f;
@@ -624,7 +668,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         noiseCh.env1 = P (ni.env1) >= 0.5f;
         noiseGainPrev = noiseGain;
         noiseGain = noiseCh.on ? std::max (0.0f, P (ni.level) * 0.01f) : 0.0f;
-        noisePan = std::clamp (P (ni.pan) * 0.01f, -1.0f, 1.0f);
+        noisePan = std::clamp (P (ni.pan) * 0.01f + (vc.mask[3] ? vc.pan : 0.0f), -1.0f, 1.0f);
         noiseStereo = clamp01 (P (ni.stereo) * 0.01f);
         noiseColour = std::clamp (static_cast<int> (P (ni.sample) + 0.5f), 0, 8);
     }
@@ -640,8 +684,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.model = static_cast<int> (P (fi.model) + 0.5f);
         s.style = static_cast<int> (P (fi.style) + 0.5f);
         const float kt = semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
-        s.cutoffHz = P (fi.cutoff) * kt;
-        s.cutoffHzR = PR (fi.cutoff) * kt;
+        const float vcCut = semitonesToRatio (vc.cutoffSemis);
+        s.cutoffHz = P (fi.cutoff) * kt * vcCut;
+        s.cutoffHzR = PR (fi.cutoff) * kt * vcCut;
         s.resonance = P (fi.resonance) * 0.01f;
         s.drive = P (fi.drive) * (1.0f / 20.0f);
         s.driveDb = P (fi.drive);

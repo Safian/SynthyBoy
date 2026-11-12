@@ -138,6 +138,7 @@ void OwnEngine::reset()
     }
     std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
     noteCounter = 0;
+    voiceCtlCounter = 0;
     controlPos = 0;
     numPressed = 0;
     haveLastNote = false;
@@ -275,6 +276,7 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
     ns.velocity = n.velocity;
     ns.tunedNote = tunedNotes[n.key & 127];
     ns.serial = noteCounter++;
+    ns.sequence = ++voiceCtlCounter;
     const int others = fromRecall ? 1 : std::max (0, numPressed - 1); // the pressed notes besides this one
     if (legato)
     {
