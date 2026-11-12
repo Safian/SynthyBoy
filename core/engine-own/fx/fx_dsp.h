@@ -35,6 +35,34 @@ public:
         const float a = buf[static_cast<size_t> ((pos - i) & mask)], b = buf[static_cast<size_t> ((pos - i - 1) & mask)];
         return a + (b - a) * f;
     }
+    /** Catmull-Rom (cubic) interpolation, `d` samples back from the newest sample (d >= 1 for the full four points). */
+    float readCubic (float d) const noexcept
+    {
+        const float dd = std::max (d, 1.0f);
+        const int i = static_cast<int> (dd);
+        const float t = dd - static_cast<float> (i);
+        const float y0 = buf[static_cast<size_t> ((pos - i + 1) & mask)], y1 = buf[static_cast<size_t> ((pos - i) & mask)];
+        const float y2 = buf[static_cast<size_t> ((pos - i - 1) & mask)], y3 = buf[static_cast<size_t> ((pos - i - 2) & mask)];
+        const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+        return ((c3 * t + c2) * t + c1) * t + y1;
+    }
+    /** 8 point Lagrange interpolation (the high quality mode of the delay). */
+    float readLagrange8 (float d) const noexcept
+    {
+        const float dd = std::max (d, 4.0f);
+        const int i = static_cast<int> (dd);
+        const float t = dd - static_cast<float> (i);
+        float acc = 0.0f;
+        for (int k = -3; k <= 4; ++k)
+        {
+            float w = 1.0f;
+            for (int m = -3; m <= 4; ++m)
+                if (m != k)
+                    w *= (t - static_cast<float> (m)) / static_cast<float> (k - m);
+            acc += w * buf[static_cast<size_t> ((pos - i - k) & mask)];
+        }
+        return acc;
+    }
     int capacity() const noexcept { return mask; }
 
 private:

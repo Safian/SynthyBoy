@@ -53,7 +53,7 @@ FxIndex build()
     f.eqMid2[0] = K ("eq.mid2.mode"); f.eqMid2[1] = K ("eq.mid2.cutoff"); f.eqMid2[2] = K ("eq.mid2.gain"); f.eqMid2[3] = K ("eq.mid2.resonance");
     f.dlMix = K ("delay.mix"); f.dlFeedback = K ("delay.feedback"); f.dlTime = K ("delay.time"); f.dlTime2 = K ("delay.time2"); f.dlSync = K ("delay.sync");
     f.dlDivision = K ("delay.division"); f.dlDivision2 = K ("delay.division2"); f.dlStyle = K ("delay.style"); f.dlCutoff = K ("delay.filter_cutoff");
-    f.dlSpread = K ("delay.filter_spread");
+    f.dlSpread = K ("delay.filter_spread"); f.dlOffset = K ("delay.offset"); f.dlOffsetLeft = K ("delay.offset_left"); f.dlHq = K ("delay.hq");
     f.diType = K ("distortion.type"); f.diDrive = K ("distortion.drive"); f.diMix = K ("distortion.mix"); f.diOrder = K ("distortion.filter_order");
     f.diCutoff = K ("distortion.filter_cutoff"); f.diRes = K ("distortion.filter_resonance"); f.diBlend = K ("distortion.filter_blend");
     f.flMix = K ("flanger.mix"); f.flFeedback = K ("flanger.feedback"); f.flRate = K ("flanger.rate"); f.flSync = K ("flanger.sync"); f.flDivision = K ("flanger.division");
@@ -205,6 +205,9 @@ void FxChain::update (const float* base, const float* delta, double bpm, uint32_
         p.cutoff = G (base, delta, f.dlCutoff);
         p.spread = clamp01 (pct (f.dlSpread));
         p.style = static_cast<int> (base[f.dlStyle] + 0.5f);
+        p.offsetR = f.dlOffset >= 0 ? G (base, delta, f.dlOffset) : 1.0f;
+        p.offsetL = f.dlOffsetLeft >= 0 ? G (base, delta, f.dlOffsetLeft) : 1.0f;
+        p.hq = f.dlHq >= 0 && base[f.dlHq] >= 0.5f;
         delay.set (p);
     }
     if (on[3])

@@ -464,6 +464,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.hold *= vc.envFactor;
         s.decay *= vc.envFactor;
         s.release *= vc.envFactor;
+        if (fresh && e == 0)
+        {
+            const float v0 = env[0].advance (s, 0.0); // the level at the note's first sample
+            envStart = v0 * v0;
+        }
         const float v = env[e].advance (s, dt);
         envOut[e] = v * v;
     }
@@ -567,6 +572,12 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const float track = g.base[mi.velocityTrack] * 0.01f;
         const float v2 = vel * vel;
         velGain = track >= 0.0f ? lerp (1.0f, v2, track) : lerp (1.0f, 1.0f - v2, -track);
+    }
+    if (fresh)
+    {
+        // a note starts at its sample at the level of its envelope: no ramp from zero across the first period (an attack of 0 ms is instant)
+        ampPrev = envStart;
+        velGainPrev = velGain;
     }
     if (env[0].finished() || killFading)
     {

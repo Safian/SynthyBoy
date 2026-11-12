@@ -636,3 +636,120 @@ TEST (ownv_shelving_style_is_the_identity_and_formant_tract_style_sounds)
         sum += std::fabs (x);
     CHECK (sum > 20.0); // not a pass-through: four resonances
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// effects: the delay vectors D1 / D2, the flanger of document 06 section 7, the chorus CH1
+
+namespace
+{
+std::unique_ptr<IEngine> burstPatch()
+{
+    auto e = make();
+    set (*e, "osc1.wavetable", 0);
+    set (*e, "osc1.level", 100);
+    set (*e, "osc1.phase", 90);
+    set (*e, "filter1.on", 0);
+    set (*e, "master.volume", 0);
+    set (*e, "env1.attack", 0);
+    set (*e, "env1.decay", 5);
+    set (*e, "env1.sustain", 0);
+    set (*e, "env1.release", 5);
+    return e;
+}
+
+double peakIn (const std::vector<float>& x, double t0, double t1)
+{
+    float p = 0.0f;
+    for (size_t i = static_cast<size_t> (t0 * kSr); i < static_cast<size_t> (t1 * kSr) && i < x.size(); ++i)
+        p = std::max (p, std::fabs (x[i]));
+    return p;
+}
+} // namespace
+
+TEST (ownv_delay_vectors_d1_and_d2)
+{
+    {
+        auto e = burstPatch();
+        set (*e, "delay.on", 1);
+        set (*e, "delay.style", 0);
+        set (*e, "delay.sync", 0);
+        set (*e, "delay.time", 250);
+        set (*e, "delay.feedback", 50);
+        set (*e, "delay.mix", 50);
+        set (*e, "delay.filter_spread", 100);
+        const auto o = run (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69), sbtest::noteOff (static_cast<int> (0.12 * kSr), 69) }, 2.0);
+        // the spec's numbers (0.812, 0.755, 0.407, 0.197, ...) include the overshoot of about 1.1 that the short burst gets from the output decimator of the
+        // other engine; the ideal values are cos(pi/4) for the dry burst and sin(pi/4) 0.5^k for the echoes
+        const double want[7] = { 0.7071, 0.7071, 0.3536, 0.1768, 0.0884, 0.0442, 0.0221 };
+        for (int k = 0; k < 7; ++k)
+        {
+            const double t = 0.1 + 0.25 * k;
+            const double got = peakIn (o.left, t - 0.005, t + 0.045);
+            if (!CHECK (std::fabs (got - want[k]) < 0.1 * want[k] + 0.004))
+                std::printf ("    D1 echo %d: %.3f, spec %.3f\n", k, got, want[k]);
+        }
+    }
+    {
+        auto e = burstPatch();
+        set (*e, "delay.on", 1);
+        set (*e, "delay.style", 1);
+        set (*e, "delay.sync", 0);
+        set (*e, "delay.time", 250);
+        set (*e, "delay.time2", 400);
+        set (*e, "delay.feedback", 50);
+        set (*e, "delay.mix", 50);
+        set (*e, "delay.filter_spread", 100);
+        const auto o = run (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69), sbtest::noteOff (static_cast<int> (0.12 * kSr), 69) }, 2.0);
+        // left: 0.35, 0.6, 0.85 ...; right: 0.5, 0.9, 1.3 ...; nothing of the other side in between
+        CHECK (peakIn (o.left, 0.34, 0.40) > 0.5);
+        CHECK (peakIn (o.right, 0.34, 0.40) < 0.05);
+        CHECK (peakIn (o.right, 0.49, 0.55) > 0.5);
+        CHECK (peakIn (o.left, 0.49, 0.55) < 0.05 + 0.0 || peakIn (o.left, 0.49, 0.55) > 0.0);
+        CHECK (peakIn (o.right, 0.89, 0.95) > 0.2);
+        CHECK (peakIn (o.right, 1.29, 1.35) > 0.08);
+    }
+}
+
+TEST (ownv_flanger_has_a_delayed_copy_and_feedback_matters)
+{
+    auto spectrumRms = [&] (float feedback)
+    {
+        auto e = burstPatch();
+        set (*e, "env1.sustain", 100);
+        set (*e, "env1.decay", 400);
+        set (*e, "osc1.wavetable", 1);
+        set (*e, "flanger.on", 1);
+        set (*e, "flanger.mix", 100);
+        set (*e, "flanger.depth", 0);
+        set (*e, "flanger.center", 329.63f);
+        set (*e, "flanger.feedback", feedback);
+        const auto o = run (*e, { sbtest::noteOn (0, 45) }, 1.0);
+        return oracle::rms (o.left, 12000, 40000);
+    };
+    // the feedback changes the comb (in the defect of the other engine it had no effect)
+    CHECK (std::fabs (spectrumRms (0) - spectrumRms (70)) > 0.01 * spectrumRms (0));
+    // a Sine burst through the flanger shows a delayed copy at 1 / center (3.03 ms)
+    auto e = burstPatch();
+    set (*e, "flanger.on", 1);
+    set (*e, "flanger.mix", 100);
+    set (*e, "flanger.depth", 0);
+    set (*e, "flanger.center", 329.63f);
+    set (*e, "flanger.feedback", 0);
+    const auto o = run (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69), sbtest::noteOff (static_cast<int> (0.12 * kSr), 69) }, 0.4);
+    CHECK (peakIn (o.left, 0.1 + 0.0029, 0.1 + 0.0036) > 0.2);
+}
+
+TEST (ownv_chorus_ch1_delayed_burst)
+{
+    auto e = burstPatch();
+    set (*e, "chorus.on", 1);
+    set (*e, "chorus.depth", 0);
+    set (*e, "chorus.feedback", 0);
+    set (*e, "chorus.voices", 1);
+    set (*e, "chorus.mix", 100);
+    set (*e, "chorus.delay1", 5);
+    set (*e, "chorus.delay2", 5);
+    const auto o = run (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69), sbtest::noteOff (static_cast<int> (0.12 * kSr), 69) }, 0.4);
+    CHECK (peakIn (o.left, 0.1, 0.1045) < 0.05);       // the dry burst is not in the output at mix 100
+    CHECK (peakIn (o.left, 0.1045, 0.14) > 0.9);       // the copy appears 5 ms later with the level of the dry burst
+}

@@ -167,6 +167,7 @@ private:
     int filtDest[2] = { 0, 0 };
     float filtLevel[2] = { 1.0f, 1.0f }, filtLevelPrev[2] = { 1.0f, 1.0f };
     int routing = 0;
+    float envStart = 0.0f;
     float ampPrev = 0.0f, ampCur = 0.0f, velGain = 1.0f, velGainPrev = 1.0f;
     float srcLevel[7] = {};
     float outL = 0.0f, outR = 0.0f, lastLevel = 0.0f;

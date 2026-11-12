@@ -109,6 +109,26 @@ int main (int argc, char** argv)
             }
             std::printf ("\n");
         }
+        else if (report == "tail")
+        {
+            // 10 ms energy windows (dB re full scale) of the left channel: the peak of the first 0.5 s and the level at 0.2 / 0.5 / 1 / 2 / 3 / 4 s after the note on, each averaged over 50 ms
+            auto energyDb = [&] (double t0, double len)
+            {
+                const size_t a = static_cast<size_t> (t0 * sr), b = std::min (s.l.size(), static_cast<size_t> ((t0 + len) * sr));
+                double e = 0;
+                for (size_t i = a; i < b; ++i)
+                    e += static_cast<double> (s.l[i]) * s.l[i];
+                return 10.0 * std::log10 (e / std::max<double> (1.0, static_cast<double> (b - a)) + 1e-30);
+            };
+            double pk = -300;
+            for (double t = 0.0; t < 0.5; t += 0.005)
+                pk = std::max (pk, energyDb (t, 0.010));
+            std::printf ("%-5s peak %.1f |", name, pk);
+            for (double t : { 0.2, 0.5, 1.0, 2.0, 3.0, 4.0 })
+                if (t + 0.05 < secs)
+                    std::printf (" %.1f", energyDb (t, 0.05));
+            std::printf ("\n");
+        }
         else if (report == "summary")
             std::printf ("%-5s rmsL %.2f dB rmsR %.2f dB peak %.2f dB\n", name, toDb (rms (s.l, a, b)), toDb (rms (s.r, a, b)), toDb (peak (s.l, 0, s.l.size())));
         else if (report == "peaks" || report == "spectrum")

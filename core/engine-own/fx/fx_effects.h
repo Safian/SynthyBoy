@@ -21,11 +21,45 @@ inline float mixLaw (float dry, float wet, float mix) noexcept
     return dry * std::cos (a) + wet * std::sin (a);
 }
 
+/** The soft limit inside the feedback loops (document 06): hardtanh with a knee at 1/8 of the range. */
+inline float loopLimit (float v) noexcept
+{
+    return 8.0f * std::clamp (v * 0.125f, -1.0f, 1.0f);
+}
+
+/** The loop filter of the delay type effects (document 06, 3): a band pass in the feedback path, a low pass at the upper corner minus a low pass at the lower one, with the
+    compensation gain f_lo / f_hi + 1. */
+struct LoopBand
+{
+    OnePole hi, lo;
+    float aHi = 1.0f, aLo = 1.0f, gain = 1.0f;
+    void reset() noexcept { hi.reset(); lo.reset(); }
+    void set (float cutoffHz, float spread, double sr) noexcept
+    {
+        const float radius = spread * 96.0f;
+        const float nyq = static_cast<float> (sr) * 0.4535f;
+        const float fHi = std::clamp (cutoffHz * std::exp2 ((radius) / 12.0f), 1.0f, nyq), fLo = std::clamp (cutoffHz * std::exp2 (-radius / 12.0f), 1.0f, nyq);
+        aHi = OnePole::coefficient (fHi, sr);
+        aLo = OnePole::coefficient (fLo, sr);
+        gain = fLo / fHi + 1.0f;
+    }
+    float process (float x) noexcept
+    {
+        const float l = hi.process (x * gain, aHi);
+        return l - lo.process (l, aLo);
+    }
+};
+
 /** Every effect: prepare once, setParams once per control period, process in place. `mix` is 0 .. 1; the level (dB) is applied by the chain. */
 class Delay
 {
 public:
-    struct Params { float mix = 0.3f, feedback = 0.4f, timeL = 0.3f, timeR = 0.3f, cutoff = 260.0f, spread = 1.0f; int style = 1; };
+    struct Params
+    {
+        float mix = 0.3f, feedback = 0.4f, timeL = 0.3f, timeR = 0.3f, cutoff = 260.0f, spread = 1.0f, offsetL = 1.0f, offsetR = 1.0f;
+        int style = 1;
+        bool hq = false;
+    };
     void prepare (double sr)
     {
         sampleRate = sr;
@@ -36,43 +70,76 @@ public:
     void reset() noexcept
     {
         for (auto& d : line) d.reset();
-        for (auto& f : hp) f.reset();
-        for (auto& f : lp) f.reset();
-        timeSmooth[0].snap (p.timeL * static_cast<float> (sampleRate));
-        timeSmooth[1].snap (p.timeR * static_cast<float> (sampleRate));
+        for (auto& b : band) b.reset();
+        fbRead[0] = fbRead[1] = 0.0f;
+        primed = false;
     }
     void set (const Params& np) noexcept { p = np; }
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
-        timeSmooth[0].target (std::clamp (p.timeL, 0.002f, 4.0f) * sr, n);
-        timeSmooth[1].target (std::clamp (p.timeR, 0.002f, 4.0f) * sr, n);
-        const float hpHz = p.cutoff / std::exp2 (p.spread * 3.6f), lpHz = p.cutoff * std::exp2 (p.spread * 6.3f);
-        const float ghp = Svf::coefficient (hpHz, sampleRate), alp = OnePole::coefficient (lpHz, sampleRate);
-        const float fb = std::clamp (p.feedback, -0.98f, 0.98f);
+        // the target periods (seconds) of the two sides; Mid ping pong adds the right time to the left side
+        float tL = p.timeL * p.offsetL, tR = (p.style == 0 ? p.timeL : p.timeR) * p.offsetR;
+        if (p.style == 0)
+            tR = p.timeL * p.offsetR;
+        if (p.style == 3)
+            tL = tL + tR;
+        const float fTarget[2] = { 1.0f / std::clamp (tL, 3.0f / sr, 4.0f), 1.0f / std::clamp (tR, 3.0f / sr, 4.0f) };
+        if (!primed)
+        {
+            fLast[0] = fTarget[0];
+            fLast[1] = fTarget[1];
+            primed = true;
+        }
+        const float glide = 1.0f - std::pow (0.5f, 1.0f / (0.02f * sr)); // half life of 20 ms: a change of the time bends the echoes like a tape
+        for (auto& b : band)
+            b.set (p.cutoff, p.spread, sampleRate);
+        const float fb = std::clamp (p.feedback, -1.0f, 1.0f);
         for (int i = 0; i < n; ++i)
         {
-            const float dl = timeSmooth[0].next(), dr = timeSmooth[1].next();
-            float tl = line[0].read (dl - 1.0f), tr = line[1].read (dr - 1.0f);
-            // feedback path: high pass and low pass at the band of the filter
-            hp[0].process (tl, ghp, 1.4142f); tl = lp[0].process (hp[0].hp, alp);
-            hp[1].process (tr, ghp, 1.4142f); tr = lp[1].process (hp[1].hp, alp);
-            float inL = l[i], inR = r[i], wl = tl, wr = tr;
-            float feedL, feedR;
+            for (int c = 0; c < 2; ++c)
+                fLast[c] += (fTarget[c] - fLast[c]) * glide;
+            const float period[2] = { std::clamp (sr / fLast[0], 3.0f, 4.0f * sr), std::clamp (sr / fLast[1], 3.0f, 4.0f * sr) };
+            float rd[2];
+            for (int c = 0; c < 2; ++c)
+                rd[c] = p.hq ? line[c].readLagrange8 (period[c]) : line[c].readCubic (period[c]);
+            const float xl = l[i], xr = r[i];
+            float wl = 0.0f, wr = 0.0f, outL = 0.0f, outR = 0.0f;
             switch (p.style)
             {
-                case 0: { const float m = 0.5f * (inL + inR); feedL = m + fb * 0.5f * (tl + tr); feedR = feedL; break; }       // mono
-                case 2: feedL = 0.5f * (inL + inR) + fb * tr; feedR = fb * tl; break;                                          // ping pong
-                case 3: feedL = 0.5f * (inL + inR) + fb * tr; feedR = fb * tl; break;                                          // mid ping pong
-                case 4: feedL = 0.5f * (inL + inR); feedR = 0.0f + fb * tl; break;                                             // tap -> delay
-                default: feedL = inL + fb * tl; feedR = inR + fb * tr; break;                                                  // stereo
+                case 4: // tap -> delay: the left side is a tap of the mono input, the right side is a delay fed by the tap and by itself
+                {
+                    const float mono = 0.70710678f * (xl + xr);
+                    wl = mono;
+                    wr = loopLimit (rd[0] + fb * rd[1]);
+                    outL = outR = rd[0] + rd[1];
+                    line[0].push (band[0].process (wl));
+                    line[1].push (band[1].process (wr));
+                    l[i] = mixLaw (xl, outL, p.mix);
+                    r[i] = mixLaw (xr, outR, p.mix);
+                    continue;
+                }
+                case 2: // ping pong: the written values change the channel (the right lane feedback is 1, the left one the knob)
+                    wl = loopLimit (xl + fb * rd[0]);
+                    wr = loopLimit (xr + rd[1]);
+                    line[0].push (band[0].process (wr));
+                    line[1].push (band[1].process (wl));
+                    break;
+                case 3: // mid ping pong: the mono sum on the left
+                    wl = loopLimit (0.70710678f * (xl + xr) + fb * rd[0]);
+                    wr = loopLimit (rd[1]);
+                    line[0].push (band[0].process (wr));
+                    line[1].push (band[1].process (wl));
+                    break;
+                default: // mono, stereo
+                    wl = loopLimit (xl + fb * rd[0]);
+                    wr = loopLimit (xr + fb * rd[1]);
+                    line[0].push (band[0].process (wl));
+                    line[1].push (band[1].process (wr));
+                    break;
             }
-            line[0].push (feedL);
-            line[1].push (feedR);
-            if (p.style == 0)
-                wr = wl;
-            l[i] = mixLaw (inL, wl, p.mix);
-            r[i] = mixLaw (inR, wr, p.mix);
+            l[i] = mixLaw (xl, rd[0], p.mix);
+            r[i] = mixLaw (xr, rd[1], p.mix);
         }
     }
 
@@ -80,75 +147,77 @@ private:
     Params p;
     double sampleRate = 48000.0;
     std::array<DelayLine, 2> line;
-    Svf hp[2];
-    OnePole lp[2];
-    Ramp timeSmooth[2];
+    LoopBand band[2];
+    float fLast[2] = {}, fbRead[2] = {};
+    bool primed = false;
 };
 
 class Chorus
 {
 public:
     struct Params { float mix = 0.5f, rate = 0.4f, depth = 0.5f, feedback = 0.4f, delay1 = 0.002f, delay2 = 0.008f, cutoff = 260.0f, spread = 1.0f; int voices = 4; };
+    static constexpr int kMaxPairs = 4;
     void prepare (double sr)
     {
         sampleRate = sr;
         for (auto& d : line)
-            d.prepare (static_cast<int> (sr * 0.06));
+            d.prepare (static_cast<int> (sr * 0.085));
         reset();
     }
     void reset() noexcept
     {
         for (auto& d : line) d.reset();
-        for (auto& f : hp) f.reset();
-        for (auto& f : lp) f.reset();
+        for (auto& b : band) b.reset();
         phase = 0.0f;
-        fbState[0] = fbState[1] = 0.0f;
     }
     void set (const Params& np) noexcept { p = np; }
+    /** `voices` pairs of two delay lines (A with delay 1, B with delay 2), each with a left and a right side (document 06, 2). */
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
-        const float hpHz = p.cutoff / std::exp2 (p.spread * 3.6f), lpHz = p.cutoff * std::exp2 (p.spread * 6.3f);
-        const float ghp = Svf::coefficient (hpHz, sampleRate), alp = OnePole::coefficient (lpHz, sampleRate);
+        const int V = std::clamp (p.voices, 1, kMaxPairs);
         const float fb = std::clamp (p.feedback, -0.95f, 0.95f);
-        const int V = std::clamp (p.voices, 1, 4);
-        for (int i = 0; i < n; ++i)
+        const float avg = 0.5f * (p.delay1 + p.delay2);
+        for (int k = 0; k < kMaxPairs * 4; ++k)
+            band[k].set (p.cutoff, p.spread, sampleRate);
+        for (int s = 0; s < n; ++s)
         {
             phase += p.rate / sr;
             phase -= std::floor (phase);
-            line[0].push (l[i] + fb * fbState[0]);
-            line[1].push (r[i] + fb * fbState[1]);
-            float wl = 0.0f, wr = 0.0f;
-            for (int v = 0; v < V; ++v)
+            const float in[2] = { l[s], r[s] };
+            float acc[2] = { 0.0f, 0.0f };
+            for (int i = 0; i < V; ++i)
             {
-                // delay between delay1 and delay2, modulated by depth around the mean; voices are spread over the LFO cycle
-                const float base = (v & 1) ? p.delay2 : p.delay1;
-                const float lfoPh = phase + static_cast<float> (v) / static_cast<float> (V);
-                const float modL = std::sin (kTwoPif * lfoPh), modR = std::sin (kTwoPif * (lfoPh + 0.25f));
-                const float dL = base * (1.0f + 0.5f * p.depth * modL) * sr, dR = base * (1.0f + 0.5f * p.depth * modR) * sr;
-                wl += line[0].read (dL);
-                wr += line[1].read (dR);
+                const float t = (i > 0 && V > 1) ? static_cast<float> (i) / static_cast<float> (V - 1) : 0.0f;
+                for (int vi = 0; vi < 2; ++vi)
+                    for (int c = 0; c < 2; ++c)
+                    {
+                        const int k = ((i * 2 + vi) * 2) + c;
+                        float ph = phase + (c == 1 ? 0.25f : 0.0f) + (vi == 1 ? 0.5f : 0.0f) + 0.25f * static_cast<float> (i) / static_cast<float> (V);
+                        ph -= std::floor (ph);
+                        const float mod = 1.0f + 0.5f * std::sin (kTwoPif * ph);
+                        const float base = vi == 0 ? p.delay1 : p.delay2;
+                        const float delay = mod * 0.03f * p.depth + lerp (base, avg, t);
+                        const float period = std::clamp (delay * sr, 3.0f, 0.08f * sr);
+                        const float rd = line[k].readCubic (period);
+                        line[k].push (band[k].process (loopLimit (in[c] + fb * rd)));
+                        acc[c] += rd;
+                    }
             }
-            wl /= static_cast<float> (V);
-            wr /= static_cast<float> (V);
-            hp[0].process (wl, ghp, 1.4142f); wl = lp[0].process (hp[0].hp, alp);
-            hp[1].process (wr, ghp, 1.4142f); wr = lp[1].process (hp[1].hp, alp);
-            fbState[0] = wl;
-            fbState[1] = wr;
-            l[i] += 2.4f * p.mix * wl; // the wet voices add to the dry signal (level matched to the oracle)
-            r[i] += 2.4f * p.mix * wr;
+            l[s] = mixLaw (in[0], 0.53f * acc[0], p.mix);
+            r[s] = mixLaw (in[1], 0.53f * acc[1], p.mix);
         }
     }
 
 private:
     Params p;
     double sampleRate = 48000.0;
-    std::array<DelayLine, 2> line;
-    Svf hp[2];
-    OnePole lp[2];
-    float phase = 0.0f, fbState[2] = {};
+    std::array<DelayLine, kMaxPairs * 4> line;
+    LoopBand band[kMaxPairs * 4];
+    float phase = 0.0f;
 };
 
+/** The flanger of document 06, 7 (the intended design): a stereo feedback delay whose time follows a triangle LFO around the note `center`. */
 class Flanger
 {
 public:
@@ -157,30 +226,36 @@ public:
     {
         sampleRate = sr;
         for (auto& d : line)
-            d.prepare (static_cast<int> (sr * 0.06));
+            d.prepare (static_cast<int> (sr * 0.9));
         reset();
     }
-    void reset() noexcept { for (auto& d : line) d.reset(); phase = 0.0f; fb[0] = fb[1] = 0.0f; }
+    void reset() noexcept { for (auto& d : line) d.reset(); phase = 0.0f; }
     void set (const Params& np) noexcept { p = np; }
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
-        const float f = std::clamp (p.feedback, -0.97f, 0.97f);
+        const float f = std::clamp (p.feedback, -1.0f, 1.0f);
+        const float dc = 1.0f / std::clamp (p.centerHz, 20.0f, 16000.0f);
+        const float m = 0.5f * clamp01 (p.mix); // the mix knob runs over half of the equal power law
+        const float wetG = std::sin (m * kPif * 0.5f), dryG = std::cos (m * kPif * 0.5f);
+        float* io[2] = { l, r };
         for (int i = 0; i < n; ++i)
         {
             phase += p.rate / sr;
             phase -= std::floor (phase);
-            const float modL = std::sin (kTwoPif * phase), modR = std::sin (kTwoPif * (phase + p.phaseOffset));
-            // the comb notch pattern is centred at `center`: delay = 1 / (2 f); depth moves it by up to two octaves
-            const float fL = p.centerHz * std::exp2 (2.0f * p.depth * modL), fR = p.centerHz * std::exp2 (2.0f * p.depth * modR);
-            const float dL = std::clamp (sr / (2.0f * std::clamp (fL, 20.0f, 20000.0f)), 1.0f, sr * 0.05f), dR = std::clamp (sr / (2.0f * std::clamp (fR, 20.0f, 20000.0f)), 1.0f, sr * 0.05f);
-            line[0].push (l[i] + f * fb[0]);
-            line[1].push (r[i] + f * fb[1]);
-            const float wl = line[0].read (dL), wr = line[1].read (dR);
-            fb[0] = wl;
-            fb[1] = wr;
-            l[i] = mixLaw (l[i], wl * 0.8f, 0.5f * p.mix); // the flanger mix runs over 0 .. 0.5 of the equal power law
-            r[i] = mixLaw (r[i], wr * 0.8f, 0.5f * p.mix);
+            for (int c = 0; c < 2; ++c)
+            {
+                const float ph = phase - 0.5f * p.phaseOffset + (c == 1 ? p.phaseOffset : 0.0f);
+                const float x = ph + 0.75f;
+                const float tri = std::fabs (2.0f * (x - std::floor (x)) - 1.0f);
+                const float mod = p.depth * (2.0f * tri - 1.0f) + 1.0f;
+                const float delay = std::max ((dc - 0.0005f) * mod + 0.0005f, 1.0f / 20000.0f);
+                const float period = std::clamp (delay * sr, 2.0f, 0.85f * sr);
+                const float rd = line[c].readCubic (period);
+                const float in = io[c][i];
+                line[c].push (std::clamp (in + f * rd, -1.0f, 1.0f) * 1.0f);
+                io[c][i] = dryG * in + wetG * rd;
+            }
         }
     }
 
@@ -188,7 +263,7 @@ private:
     Params p;
     double sampleRate = 48000.0;
     std::array<DelayLine, 2> line;
-    float phase = 0.0f, fb[2] = {};
+    float phase = 0.0f;
 };
 
 class Phaser
@@ -560,7 +635,7 @@ public:
     }
 
 private:
-    static constexpr float kOutGain = 1.6f;
+    static constexpr float kOutGain = 0.46f;
     Params p;
     double sampleRate = 48000.0;
     int scale = 2;

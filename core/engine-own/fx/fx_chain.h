@@ -24,6 +24,7 @@ struct FxIndex
     // chorus
     int chMix, chRate, chSync, chDivision, chDepth, chFeedback, chDelay1, chDelay2, chVoices, chCutoff, chSpread;
     int cpMix, cpAttack, cpRelease, cpBands, cpXLow, cpXHigh, cpBand[3][5]; // lower thr, upper thr, lower ratio, upper ratio, gain
+    int dlOffset, dlOffsetLeft, dlHq;
     int dlMix, dlFeedback, dlTime, dlTime2, dlSync, dlDivision, dlDivision2, dlStyle, dlCutoff, dlSpread;
     int diType, diDrive, diMix, diOrder, diCutoff, diRes, diBlend;
     int eqBand[3][4]; // mode, cutoff, gain, resonance (low, mid, high)

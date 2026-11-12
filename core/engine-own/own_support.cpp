@@ -51,7 +51,8 @@ bool implementedKey (const std::string& k)
     if (head == "noise")
         return inList (rest, { "on", "level", "pan", "destination", "env1", "sample", "stereo" });
     if (head == "filter1" || head == "filter2")
-        return inList (rest, { "on", "model", "style", "cutoff", "resonance", "drive", "blend", "mix", "keytrack", "var", "level", "env1", "destination" });
+        return inList (rest, { "on", "model", "style", "cutoff", "resonance", "drive", "blend", "mix", "keytrack", "var", "level", "env1", "destination", "pan", "clean_mode",
+                               "comb_offset", "formant.x", "formant.y", "formant.resonance", "formant.spread", "formant.transpose" });
     if (head == "filter")
         return rest == "routing";
     if (head == "voicectl")
@@ -72,7 +73,7 @@ bool implementedKey (const std::string& k)
     if (head == "compressor")
         return rest.rfind ("low.", 0) == 0 || rest.rfind ("mid.", 0) == 0 || rest.rfind ("high.", 0) == 0 || inList (rest, { "on", "mix", "attack", "release", "bands", "level", "crossover_low", "crossover_high" });
     if (head == "delay")
-        return inList (rest, { "on", "mix", "feedback", "time", "time2", "sync", "division", "division2", "style", "filter_cutoff", "filter_spread", "level" });
+        return inList (rest, { "on", "mix", "feedback", "time", "time2", "sync", "division", "division2", "style", "filter_cutoff", "filter_spread", "level", "hq", "offset", "offset_left" });
     if (head == "distortion")
         return inList (rest, { "on", "type", "drive", "mix", "filter_order", "filter_cutoff", "filter_resonance", "filter_blend", "level" });
     if (head == "eq")
@@ -113,7 +114,7 @@ EngineCapsMask ownCapabilities() noexcept
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
          | kCapModSources2 | kCapWavetableSawDown
-         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources
+         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras;
 }
 
