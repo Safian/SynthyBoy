@@ -88,6 +88,7 @@ OscWaveView::OscWaveView (UiContext& context, int oscIndex)
       sliceModeHandle (context, "osc" + std::to_string (oscIndex) + ".sample.slice_mode"),
       sliceThresholdHandle (context, "osc" + std::to_string (oscIndex) + ".sample.slice_threshold")
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     const auto repaintCb = [this] { repaint(); };
     frameHandle.onChange = repaintCb;
     typeHandle.onChange = [this] { updateButtons(); repaint(); };
@@ -1973,6 +1974,7 @@ OscNoiseView::OscNoiseView (UiContext& context)
       sampleHandle (context, "noise.sample"),
       typeHandle (context, "noise.type")
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     const auto repaintCb = [this] { repaint(); };
     typeHandle.onChange = repaintCb;
     levelHandle.onChange = repaintCb;
@@ -2198,6 +2200,7 @@ OscMixConsoleView::OscMixConsoleView (UiContext& context)
       o3On (context, "osc3.on"),
       noiseOn (context, "noise.on")
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     const auto repaintCb = [this] { repaint(); };
     for (size_t i = 0; i < panHandles.size(); ++i)
     {

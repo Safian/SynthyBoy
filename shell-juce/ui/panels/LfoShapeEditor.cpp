@@ -108,6 +108,7 @@ bool copyLfoSettings (UiContext& ctx, bool random, int from, int to)
 
 LfoShapeEditor::LfoShapeEditor (UiContext& context, int lfoIndex) : ctx (context), lfo (lfoIndex)
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     current = lfoShapePreset (lfo, 1);
     buttons = { &pointBtn, &drawBtn, &stepsBtn, &brushBtn, &brushPickBtn, &snapBtn, &smoothBtn, &propBtn, &allCurvesBtn, &addBtn, &deleteBtn,
                 &undoBtn, &redoBtn, &presetBtn, &xField, &yField, &loopBtn, &startBtn, &segBtn, &colsMinus, &colsField, &colsPlus, &rowsMinus,

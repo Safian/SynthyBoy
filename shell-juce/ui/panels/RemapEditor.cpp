@@ -78,18 +78,21 @@ const char* RemapEditor::presetName (int preset) noexcept
 RemapEditor::RemapEditor (UiContext& context, int oscIndex)
     : ctx (context), oscN (oscIndex), slotHandle (std::make_unique<ParamHandle> (context, "osc" + std::to_string (oscIndex) + ".remap.slot"))
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     init();
 }
 
 RemapEditor::RemapEditor (UiContext& context, ModCurveMode, int modSlot)
     : ctx (context), oscN (0), modMode (true), modSlotNumber (juce::jlimit (1, kMaxContentModCurves, modSlot)), maxPoints (static_cast<size_t> (kMaxModCurvePoints))
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     init();
 }
 
 RemapEditor::RemapEditor (UiContext& context, SpectralFilterMode, int oscIndex)
     : ctx (context), oscN (oscIndex), specMode (true)
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     init();
 }
 

@@ -36,6 +36,7 @@ public:
           scaledHandle (context, "master.portamento.scaled"),
           polyHandle (context, "master.polyphony")
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         const auto update = [this] { repaint(); };
         timeHandle.onChange = update;
         slopeHandle.onChange = update;

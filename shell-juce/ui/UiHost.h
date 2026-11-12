@@ -60,6 +60,11 @@ public:
     /** True when pop-up menus and call-outs open INSIDE the editor Component (OverlayHost.h): the choice for a host without native windows (the software framebuffer
         of the Akai MPC, an embedded panel). The JUCE plug-in answers false: its menus are desktop level windows that may reach over the edge of the plug-in window. */
     virtual bool overlaysInsideEditor() const noexcept { return true; }
+    /** True when one finger on a touch screen reaches the editor as a plain mouse (the bitmap GUI host of the Akai MPC: no touch input source of the toolkit): the scrolling
+        areas then scroll on a drag that starts on anything that does not use the drag itself (a card, a title, a gap; a control marks itself with
+        Component::setViewportIgnoreDragFlag, see UiContext.h scrollOnDrag ()). The JUCE plug-in answers false: a mouse drag on a background must not scroll, and a touch
+        screen of the operating system has real touch sources. */
+    virtual bool dragScrollsPanels() const noexcept { return false; }
     /** IEngine::capabilities2 () (GROUPC: granular, spectral, multisample); a host that does not override it reports every bit. */
     virtual EngineCaps2Mask engineCaps2() const noexcept { return kCap2AllKnown; }
     /** Notes played on the mini keyboard; the processor merges them into the MIDI input of the audio callback. */

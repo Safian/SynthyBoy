@@ -18,6 +18,7 @@ SubWaveView::SubWaveView (UiContext& context)
       phaseHandle (context, "sub.phase"),
       contiguousHandle (context, "sub.phase_contiguous")
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     const auto repaintCb = [this] { repaint(); };
     phaseHandle.onChange = repaintCb;
     contiguousHandle.onChange = repaintCb;

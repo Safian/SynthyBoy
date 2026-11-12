@@ -13,6 +13,7 @@ ModSourceChip::ModSourceChip (UiContext& context, int source) : ctx (context), s
     const CapState caps = capStateForValue (sourceKey, static_cast<float> (source), ctx.host.engineCaps());
     available = caps.available;
     setAlpha (available ? 1.0f : 0.4f);
+    setViewportIgnoreDragFlag (macroOfSourceChoice (source) != 0); // only a macro chip uses the drag (swap two macros): the other chips let the bar scroll
     setTooltip (available ? juce::String (modSourceTable()[source - 1].name) : juce::String (caps.tooltip));
     ctx.assign.addChangeListener (this);
 }

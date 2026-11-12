@@ -50,6 +50,10 @@ public:
     void showValueBox();
     std::function<void()> onValueBox;
 
+    /** A finger that travels beyond the slop is no long-press (a control that is only tapped lets the area it sits in scroll under the finger; the knob and the
+        slider have their own drag). */
+    void mouseDrag (const juce::MouseEvent&) override; // drag-flag-exempt: it only cancels the long press
+
 protected:
     virtual void valueChanged() { repaint(); }
     virtual void assignStateChanged() { repaint(); }
@@ -78,7 +82,8 @@ private:
 class ParamDragControl : public ParamControl
 {
 public:
-    using ParamControl::ParamControl;
+    /** A knob or slider uses the drag: a drag that starts on it never scrolls the area it sits in (setViewportIgnoreDragFlag). */
+    ParamDragControl (UiContext& context, const std::string& key, const juce::String& labelOverride = {});
     ~ParamDragControl() override;
 
     void mouseDown (const juce::MouseEvent&) override;

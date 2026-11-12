@@ -11,7 +11,10 @@ namespace synthyboy::ui
 class LfoTabsPanel::Chip final : public juce::Component
 {
 public:
-    Chip (LfoTabsPanel& owner, int tabIndex) : panel (owner), tab (tabIndex) {}
+    Chip (LfoTabsPanel& owner, int tabIndex) : panel (owner), tab (tabIndex)
+    {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
+    }
 
     void paint (juce::Graphics& g) override
     {

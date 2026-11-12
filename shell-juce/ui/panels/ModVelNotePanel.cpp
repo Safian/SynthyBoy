@@ -19,6 +19,7 @@ public:
     explicit ModResponseCurveView (UiContext& context)
         : ctx (context)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         resetPoints();
     }
 

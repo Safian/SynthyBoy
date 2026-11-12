@@ -120,6 +120,9 @@ touch event leaves it out), `modifiers` shift / ctrl / alt / meta, `pressure` 0.
 
 * **One finger** acts as the primary mouse button: press, drag, release, with the usual slop and long-press behaviour of the GUI (a long press on a control opens its value sheet; 400 ms with no movement). After
   `UP` the pointer is gone: there is no hover state left behind on a touch screen.
+  A drag of one finger that starts on something that does not use the drag itself (the background of a card, a title, a label, a gap) scrolls the panel area, with momentum; a drag that starts on a control (knob,
+  slider, curve / envelope / LFO / remap / wavetable / filter / shaper editor, modulation chip or row handle, effect rack, key scale, a button or a text field) belongs to that control and never scrolls, and a tap on
+  a control still acts (a press that travelled beyond the slop is no tap). A drag that starts on a control and ends on a background does not scroll either.
 * **Two fingers** become the pinch and pan gestures of a desktop trackpad: when a second finger goes down the first stops acting as a mouse (its drag ends where it is) and for as long as two fingers are down every move
   of either is delivered as pinch (the spreading of the pair) or pan (the travel of its middle), whichever the fingers did more of. A third finger is tracked but unused. The gesture ends with the last finger; a finger that
   stays down afterwards does not start a drag. (The toolkit has independent touch input sources on iOS / Android / touch Windows only; this behaviour is the same on every platform, so it is the contract.)

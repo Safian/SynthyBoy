@@ -17,6 +17,7 @@ constexpr float kPixelsPerSemitone = 14.0f;
 TransposeControl::TransposeControl (UiContext& context, const std::string& key, const juce::String& labelOverride)
     : ParamControl (context, key, labelOverride)
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
 }
 
 juce::Point<int> TransposeControl::preferredSize() const

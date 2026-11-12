@@ -26,6 +26,7 @@ public:
     explicit ModCurveView (UiContext& context)
         : ctx (context)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         startTimerHz (30); // 30 FPS animated playback preview
     }
 

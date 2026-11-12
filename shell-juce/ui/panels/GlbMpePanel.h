@@ -26,6 +26,7 @@ public:
           bendToXHandle (context, "master.mpe.bend_to_x"),
           yBipolarHandle (context, "master.mpe.y_bipolar")
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         const auto update = [this] { syncButtons(); repaint(); };
         xyzHandle.onChange = update;
         yWheelHandle.onChange = update;

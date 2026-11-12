@@ -40,6 +40,7 @@ public:
     EngineCapsMask engineCaps() const noexcept override { return plugin.engine ? plugin.engine->capabilities() : kCapNone; }
     EngineCaps2Mask engineCaps2() const noexcept override { return plugin.engine ? plugin.engine->capabilities2() : kCap2None; }
     Tier qualityTier() const noexcept override { return kDefaultTier; }
+    bool dragScrollsPanels() const noexcept override { return true; } // one finger arrives as a mouse (BitmapSession::fingerEvent)
     juce::MidiKeyboardState& keyboardState() override { return keyboard; }
     ui::AbCompare& abCompare() override { return ab; }
     void stepPreset (int direction) override;

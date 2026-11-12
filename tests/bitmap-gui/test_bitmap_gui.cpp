@@ -1235,6 +1235,139 @@ TEST (bg_every_tab_renders_phone_and_tablet_whatever_the_engine_can_do)
     }
 }
 
+namespace
+{
+/** The touch drag of one finger: `host.drag` ends with a release, the momentum of the scroll runs out while the GUI ticks (`settle`). */
+const char* const kScrollWatchedKeys[] = { "osc1.level", "osc1.frame", "osc1.warp.amount", "osc1.morph.amount", "sub.level", "sub.octave", "sub.tune", "sub.pan", "sub.waveform" };
+
+struct WatchedValues
+{
+    explicit WatchedValues (Instance& host)
+    {
+        for (const char* key : kScrollWatchedKeys)
+            values.push_back (host.param (key));
+    }
+    bool sameAs (const WatchedValues& other) const { return values == other.values; }
+    std::vector<double> values;
+};
+} // namespace
+
+TEST (bg_one_finger_drag_on_a_card_background_scrolls_the_panels)
+{
+    Instance host;
+    if (! CHECK (host.ok()))
+        return;
+    host.activate();
+    CHECK (host.create (1024, 768, 1.0));
+    Image before = settle (host);
+    const WatchedValues valuesBefore (host);
+    const Rect panels { 0, 112, 1024, 548 }; // the panel area between the tabs and the piano strip
+
+    // empty space of the Oscillator 1 card (right of its "More" button): nothing there uses the drag; one finger up by 240 points scrolls the panels down
+    // (the toolkit's drag scrolling keeps a momentum after the release: the content ends at least where the finger stopped, how much further depends on the speed of the moves)
+    const uint32_t touch = SAFIAN_BITMAP_GUI_POINTER_KIND_TOUCH;
+    host.pointer (SAFIAN_BITMAP_GUI_POINTER_DOWN, 530, 582, 1, touch);
+    for (int i = 1; i <= 12; ++i)
+    {
+        host.pointer (SAFIAN_BITMAP_GUI_POINTER_MOVE, 530, 582 - 20 * i, 1, touch);
+        host.tickFor (16);
+    }
+    host.pointer (SAFIAN_BITMAP_GUI_POINTER_UP, 530, 342, 1, touch);
+    Image after = settle (host, 900);
+    host.processBlock (64);
+    CHECK (differingPixels (before, after, &panels) > 60000); // most of the panel area is other content now
+    CHECK (valuesBefore.sameAs (WatchedValues (host)));       // and no parameter was touched on the way
+
+    // the content moved as a whole, by about the finger's travel (plus the momentum of the release): some row offset of the first column of panels (the Sub card, static) maps the old picture onto the new one
+    int bestShift = 0;
+    uint64_t bestDiff = ~0ull;
+    for (int shift = 100; shift <= 520; ++shift)
+    {
+        uint64_t diff = 0;
+        const int height = 650 - shift - 124;
+        for (int y = 124; y < 124 + height; ++y)
+            for (int x = 16; x < 330; ++x)
+                diff += before.at (static_cast<uint32_t> (x), static_cast<uint32_t> (y + shift)) != after.at (static_cast<uint32_t> (x), static_cast<uint32_t> (y));
+        if (diff < bestDiff)
+        {
+            bestDiff = diff;
+            bestShift = shift;
+        }
+    }
+    std::printf ("    the panels moved up by %d pixels (finger 240), %llu pixels differ after the shift\n", bestShift, static_cast<unsigned long long> (bestDiff));
+    CHECK (bestShift >= 236); // the content followed the finger (240, not 240 less the 8 point threshold)
+    CHECK_EQ (bestDiff, 0u);
+}
+
+TEST (bg_one_finger_drag_on_a_knob_changes_the_parameter_and_does_not_scroll)
+{
+    Instance host;
+    if (! CHECK (host.ok()))
+        return;
+    host.activate();
+    CHECK (host.create (1024, 768, 1.0));
+    Image before = settle (host);
+    // two columns of panels that the Level knob of Oscillator 1 is in neither of (the Sub panel at the left, the Oscillator 1 Remap panel at the right): they stay where they are
+    const Rect leftColumn { 8, 118, 330, 540 };
+    const Rect rightColumn { 684, 118, 316, 540 };
+    const double level = host.param ("osc1.level");
+
+    host.drag (587, 498, 0, -70, 10);
+    host.processBlock (64);
+    Image after = settle (host, 900);
+    CHECK (host.param ("osc1.level") > level + 0.05);
+    CHECK_EQ (differingPixels (before, after, &leftColumn), 0u);
+    CHECK_EQ (differingPixels (before, after, &rightColumn), 0u);
+
+    // a drag that starts on the knob and ends on a background (far to the side and up) is still the knob's: no scroll
+    const double level2 = host.param ("osc1.level");
+    host.drag (587, 498, -70, 60, 10); // ends on the Oscillator 1 Morph Amount knob and below it: a background
+    host.processBlock (64);
+    Image ended = settle (host, 900);
+    CHECK (host.param ("osc1.level") < level2 - 0.01);
+    CHECK_EQ (differingPixels (before, ended, &leftColumn), 0u);
+    CHECK_EQ (differingPixels (before, ended, &rightColumn), 0u);
+}
+
+TEST (bg_a_tap_acts_a_drag_from_a_button_does_not_scroll_and_a_drag_from_a_toggle_scrolls_without_a_click)
+{
+    Instance host;
+    if (! CHECK (host.ok()))
+        return;
+    host.activate();
+    CHECK (host.create (1024, 768, 1.0));
+    Image before = settle (host);
+    const Rect panels { 0, 112, 1024, 548 };
+    const double wave = host.param ("sub.waveform");
+
+    // a drag that starts on the SQR button of the Sub panel and ends on the card: the panels stay, the button does not click
+    host.drag (203, 269, 0, -150, 10);
+    host.processBlock (64);
+    Image dragged = settle (host, 900);
+    CHECK_NEAR (host.param ("sub.waveform"), wave, 1.0e-9);
+    CHECK_EQ (differingPixels (before, dragged, &panels), 0u);
+
+    // a short touch is a tap: SQR acts
+    host.tap (203, 269);
+    host.processBlock (64);
+    CHECK (std::fabs (host.param ("sub.waveform") - wave) > 1.0e-6);
+
+    // a control that is only tapped (the "Osc 1 Remap On" toggle) toggles for a tap ...
+    const double remapOn = host.param ("osc1.remap.on");
+    host.tap (740, 480);
+    host.processBlock (64);
+    CHECK (std::fabs (host.param ("osc1.remap.on") - remapOn) > 1.0e-6);
+    host.tap (740, 480);
+    host.processBlock (64);
+    CHECK_NEAR (host.param ("osc1.remap.on"), remapOn, 1.0e-9);
+    // ... and does not use the drag: a drag that starts on it scrolls the panels, and the release is no tap
+    host.drag (740, 480, 0, -60, 10);
+    host.processBlock (64);
+    Image scrolled = settle (host, 900);
+    CHECK_NEAR (host.param ("osc1.remap.on"), remapOn, 1.0e-9);
+    CHECK (differingPixels (dragged, scrolled, &panels) > 20000);
+}
+
 TEST (bg_zz_module_shutdown)
 {
     Module::get().shutdown(); // clap_entry.deinit (): the toolkit of the module goes with it

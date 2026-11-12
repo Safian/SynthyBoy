@@ -19,6 +19,7 @@ public:
           reverbForceHandle (context, "reverb.force_enable"),
           mainFxBypassHandle (context, "main.fx_bypass")
     {
+        setViewportIgnoreDragFlag (true); // a card acts on the press: a drag that starts on it is not a scroll
         const auto update = [this] { repaint(); };
         polyHandle.onChange = update;
         reverbForceHandle.onChange = update;

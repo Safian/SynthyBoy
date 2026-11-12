@@ -122,6 +122,7 @@ public:
           rateHandle (context, prefix + ".rate"),
           divisionHandle (context, prefix + ".division")
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         prev.setButtonText ("<");
         next.setButtonText (">");
         prev.onClick = [this] { stepShape (-1); };

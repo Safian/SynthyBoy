@@ -229,7 +229,10 @@ void MessageSheet::resized()
 class LastNoteSheet::Chip final : public juce::Component, public juce::SettableTooltipClient
 {
 public:
-    explicit Chip (LastNoteSheet& owner) : sheet (owner) {}
+    explicit Chip (LastNoteSheet& owner) : sheet (owner)
+    {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
+    }
 
     void paint (juce::Graphics& g) override
     {

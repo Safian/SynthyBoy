@@ -12,6 +12,7 @@ class OscTabsPanel::Chip final : public juce::Component
 public:
     Chip (OscTabsPanel& owner, int tabIndex) : panel (owner), tab (tabIndex)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         press.onLongPress = [this]
         {
             longPressed = true;
@@ -122,7 +123,7 @@ public:
 
     void mouseUp (const juce::MouseEvent& e) override
     {
-        if (getLocalBounds().contains (e.getPosition()))
+        if (getLocalBounds().contains (e.getPosition()) && static_cast<float> (e.getDistanceFromDragStart()) <= kLongPressSlopPx)
             panel.togglePower (tab);
     }
 

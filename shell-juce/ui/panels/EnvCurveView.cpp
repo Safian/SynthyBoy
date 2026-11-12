@@ -48,6 +48,7 @@ EnvCurveView::EnvCurveView (UiContext& context, int envIndex)
       hDecayBeats (context, "env" + std::to_string (envIdx) + ".decay_beats"),
       hReleaseBeats (context, "env" + std::to_string (envIdx) + ".release_beats")
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     setOpaque (false);
     ctx.live->bind (*this, {}, [this] { if (ctx.live->changed()) repaint(); }); // WP-17: the playhead follows the heard voice while the view is on screen
 }

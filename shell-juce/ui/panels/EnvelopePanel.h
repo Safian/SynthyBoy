@@ -18,7 +18,10 @@ namespace synthyboy::ui
 class SourceTabButton final : public juce::TextButton
 {
 public:
-    SourceTabButton (UiContext& context, int sourceChoiceIn) : ctx (context), sourceChoice (sourceChoiceIn) {}
+    SourceTabButton (UiContext& context, int sourceChoiceIn) : ctx (context), sourceChoice (sourceChoiceIn)
+    {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
+    }
 
     std::function<void()> onLongPress;
     /** The drag ended over `target` (may be null). */

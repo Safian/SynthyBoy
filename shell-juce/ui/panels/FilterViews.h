@@ -150,6 +150,7 @@ public:
           ftParam (formantTranspose),
           filterPrefix (prefix)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         setOpaque (false);
 
         modeButton.setButtonText ("RESP");

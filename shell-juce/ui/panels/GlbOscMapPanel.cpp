@@ -51,6 +51,7 @@ public:
           osc2 (context, 2),
           osc3 (context, 3)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         const auto update = [this] { repaint(); };
         for (auto* osc : { &osc1, &osc2, &osc3 })
         {

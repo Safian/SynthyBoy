@@ -120,6 +120,7 @@ WavetableView::WavetableView (UiContext& context, std::function<void()> onOpenEd
       handleMorphType (context, "osc1.morph.type"),
       handleMorphAmount (context, "osc1.morph.amount")
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     handleWavetable.onChange = [this] { updateTableFromChoice(); repaint(); };
     handleFrame.onChange = [this] { repaint(); };
     handleFrameSpread.onChange = [this] { repaint(); };

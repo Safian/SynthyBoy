@@ -35,6 +35,7 @@ shapes::ShapeData toShapeData (const std::vector<ContentPoint>& points)
 
 ShaperCurveEditor::ShaperCurveEditor (UiContext& context) : ctx (context)
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     const auto add = [this] (const juce::String& text, const juce::String& tip, std::function<void()> action)
     {
         auto b = std::make_unique<juce::TextButton> (text);

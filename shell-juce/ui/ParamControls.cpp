@@ -67,6 +67,13 @@ void ParamControl::cancelLongPress()
     stopTimer();
 }
 
+void ParamControl::mouseDrag (const juce::MouseEvent& e)
+{
+    // measured from where the press began on the screen: it does not change when the area scrolls under the finger
+    if (static_cast<float> (e.getDistanceFromDragStart()) > kLongPressSlopPx)
+        cancelLongPress();
+}
+
 void ParamControl::timerCallback()
 {
     stopTimer();
@@ -97,6 +104,12 @@ void ParamControl::paintUnknownKey (juce::Graphics& g) const
 }
 
 // ---- ParamDragControl -------------------------------------------------------------------------------------------------------------
+
+ParamDragControl::ParamDragControl (UiContext& context, const std::string& key, const juce::String& labelOverride)
+    : ParamControl (context, key, labelOverride)
+{
+    setViewportIgnoreDragFlag (true);
+}
 
 ParamDragControl::~ParamDragControl()
 {
@@ -702,7 +715,8 @@ void ParamChoice::mouseUp (const juce::MouseEvent& e)
     if (! pressed)
         return;
     pressed = false;
-    if (consumedByMenu || (e.position - downPos).getDistanceFromOrigin() > kLongPressSlopPx || ! handle.valid())
+    // a press that travelled (the area scrolled under it) is no tap: the distance from the press on the screen does not change with the scrolling
+    if (consumedByMenu || (e.position - downPos).getDistanceFromOrigin() > kLongPressSlopPx || static_cast<float> (e.getDistanceFromDragStart()) > kLongPressSlopPx || ! handle.valid())
         return;
 
     const auto p = e.getPosition();
@@ -854,7 +868,7 @@ void ParamToggle::mouseUp (const juce::MouseEvent& e)
     if (! pressed)
         return;
     pressed = false;
-    if (! consumedByMenu && getLocalBounds().contains (e.getPosition()))
+    if (! consumedByMenu && getLocalBounds().contains (e.getPosition()) && static_cast<float> (e.getDistanceFromDragStart()) <= kLongPressSlopPx)
         toggle();
 }
 

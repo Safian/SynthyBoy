@@ -177,7 +177,7 @@ MacroRow::MacroRow (UiContext& context) : ctx (context)
 
     viewport.setViewedComponent (&macroStrip, false);
     viewport.setScrollBarsShown (false, false, false, true);
-    viewport.setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::nonHover);
+    scrollOnDrag (viewport, ctx.host);
     addAndMakeVisible (viewport);
 
     mainKnob = std::make_unique<ParamKnob> (ctx, "master.volume", "MAIN");
@@ -213,6 +213,7 @@ void MacroRow::resized()
 
 PitchWheel::PitchWheel (UiContext& context) : ctx (context)
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     setTooltip ("Pitch bend wheel (spring to centre, range: master.bend_range)");
 }
 
@@ -301,6 +302,7 @@ void PitchWheel::mouseDoubleClick (const juce::MouseEvent&)
 
 ModWheel::ModWheel (UiContext& context) : ctx (context)
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     setTooltip ("Modulation wheel (CC 1)");
 }
 
@@ -385,6 +387,7 @@ public:
           ctx (context),
           keyState (state)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     }
 
     void setHoldActive (bool active)

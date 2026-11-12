@@ -130,6 +130,8 @@ void Panel::mouseDown (const juce::MouseEvent& e)
 {
     headerDown = ! modulePrefix().empty() && headerBounds().contains (e.getPosition());
     headerDragging = false;
+    // the header of a module is dragged onto another one (swap / copy): that press is not a scroll; a press on the rest of the card (background, a title of a panel that is no module) is
+    setViewportIgnoreDragFlag (headerDown);
     if (headerDown)
         headerPress.press (e.position);
 }
@@ -146,6 +148,7 @@ void Panel::mouseDrag (const juce::MouseEvent& e)
 void Panel::mouseUp (const juce::MouseEvent& e)
 {
     headerPress.cancel();
+    setViewportIgnoreDragFlag (false);
     if (headerDown && headerDragging)
         dropModuleOn (e.getEventRelativeTo (getParentComponent()).getPosition(), e.mods.isAltDown(), e.mods.isShiftDown());
     headerDown = headerDragging = false;

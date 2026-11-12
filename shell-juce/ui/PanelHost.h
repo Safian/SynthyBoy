@@ -63,6 +63,34 @@ private:
         void paint (juce::Graphics&) override {}
     };
 
+    /** The toolkit's own widgets (buttons, sliders, combo boxes, text fields) use the press and the drag, and a button clicks on the release if the finger is still over it:
+        a drag that starts on one must not scroll the area (the content would follow the finger, the release would click). They cannot mark themselves (they are JUCE
+        classes, made anywhere in the panels), so the press is watched for the whole content, nested areas included, and marks the widget it landed on
+        (Component::setViewportIgnoreDragFlag, read when the drag starts). The components of this project that use the drag mark themselves in their constructors. */
+    class StockWidgetGuard final : private juce::MouseListener
+    {
+    public:
+        explicit StockWidgetGuard (juce::Component& rootToWatch) : root (rootToWatch) { root.addMouseListener (this, true); }
+        ~StockWidgetGuard() override { root.removeMouseListener (this); }
+
+        static bool isStockWidget (const juce::Component& c) noexcept
+        {
+            return dynamic_cast<const juce::Button*> (&c) != nullptr || dynamic_cast<const juce::Slider*> (&c) != nullptr
+                   || dynamic_cast<const juce::ComboBox*> (&c) != nullptr || dynamic_cast<const juce::TextEditor*> (&c) != nullptr
+                   || dynamic_cast<const juce::ScrollBar*> (&c) != nullptr;
+        }
+
+    private:
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            for (auto* c = e.originalComponent; c != nullptr && c != &root; c = c->getParentComponent())
+                if (isStockWidget (*c))
+                    c->setViewportIgnoreDragFlag (true);
+        }
+
+        juce::Component& root;
+    };
+
     void layoutPanels();
 
     UiContext& ctx;
@@ -70,6 +98,7 @@ private:
     std::vector<Page> panelPages;
     juce::Viewport viewport;
     Content content;
+    StockWidgetGuard stockWidgetGuard { content };
     Page currentPage = Page::glb;
     LayoutMode layoutMode = LayoutMode::wide;
 };

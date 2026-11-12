@@ -11,6 +11,7 @@ namespace synthyboy::ui
 {
 ScopeView::ScopeView (UiContext& context) : ctx (context)
 {
+    setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
     fingers.onGesture = [this] (const TouchTracker::Gesture& g) { handleTouchGesture (g); };
     startTimerHz (30);
 }

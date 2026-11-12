@@ -122,7 +122,10 @@ class FxVisualBase : public juce::Component
 {
 public:
     FxVisualBase (UiContext& context, const juce::String& visualTitle)
-        : ctx (context), title (visualTitle) {}
+        : ctx (context), title (visualTitle)
+    {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
+    }
 
     void setTierBypassed (bool bypassed)
     {

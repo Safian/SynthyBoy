@@ -106,4 +106,11 @@ endif()
 
 if(SYNTHYBOY_BUILD_TESTS)
     synthyboy_add_test(synthyboy_test_ui_model tests/test_ui_model.cpp LINK synthyboy_ui_model)
+
+    # a component that uses the drag marks itself (Component::setViewportIgnoreDragFlag), or one finger on the bitmap GUI host scrolls the page under it (scripts/check-drag-flags.sh)
+    find_program(SYNTHYBOY_BASH bash)
+    if(SYNTHYBOY_BASH)
+        add_test(NAME synthyboy_ui_drag_flags COMMAND "${SYNTHYBOY_BASH}" "${PROJECT_SOURCE_DIR}/scripts/check-drag-flags.sh")
+        add_test(NAME synthyboy_ui_drag_flags_self_test COMMAND "${SYNTHYBOY_BASH}" "${PROJECT_SOURCE_DIR}/scripts/check-drag-flags.sh" --self-test)
+    endif()
 endif()

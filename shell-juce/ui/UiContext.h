@@ -103,6 +103,14 @@ struct UiContext
 /** The text of a value as the controls show it: displayText () with the frequency units preference (cutoff readouts in semitones, GROUPA2 WP-02). */
 inline std::string valueText (const UiContext& ctx, const ParamInfo& info, float plain) { return displayText (info, plain, ctx.host.preferences().freqSemitones); }
 
+/** The drag-to-scroll mode of a scrolling area: a drag on anything scrolls where UiHost::dragScrollsPanels () (one finger arrives as a mouse), only touch and pen input
+    scrolls otherwise (a mouse drag on a background does not). A control that uses the drag itself calls setViewportIgnoreDragFlag (true) in its constructor, so a drag
+    that starts on it never scrolls (the flag is read for the component the press landed on and its parents below the viewport). */
+inline void scrollOnDrag (juce::Viewport& viewport, const UiHost& host)
+{
+    viewport.setScrollOnDragMode (host.dragScrollsPanels() ? juce::Viewport::ScrollOnDragMode::all : juce::Viewport::ScrollOnDragMode::nonHover);
+}
+
 ParamValues readLiveValues (const UiContext& ctx);
 void applyValues (const UiContext& ctx, const ParamValues& values);
 } // namespace synthyboy::ui

@@ -12,6 +12,7 @@ PageTabs::PageTabs (UiContext& context) : ctx (context)
         auto b = std::make_unique<juce::TextButton> (pageLabel (static_cast<Page> (i)));
         b->setClickingTogglesState (false);
         b->onClick = [this, i] { select (static_cast<Page> (i)); };
+        b->setViewportIgnoreDragFlag (true); // a swipe that starts on a tab must not click it on release
         strip.addAndMakeVisible (*b);
         buttons.push_back (std::move (b));
     }
@@ -70,7 +71,7 @@ PanelHost::PanelHost (UiContext& context) : ctx (context)
     }
     viewport.setViewedComponent (&content, false);
     viewport.setScrollBarsShown (true, false);
-    viewport.setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::nonHover);
+    scrollOnDrag (viewport, ctx.host);
     addAndMakeVisible (viewport);
 }
 

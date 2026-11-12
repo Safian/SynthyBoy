@@ -74,6 +74,7 @@ public:
           typeHandle (context, "master.scale.type"),
           modeHandle (context, "master.scale.mode")
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         const auto update = [this] { repaint(); };
         keyHandle.onChange = update;
         typeHandle.onChange = update;

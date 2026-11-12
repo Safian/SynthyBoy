@@ -107,7 +107,7 @@ A host adds `add_subdirectory (shell-juce/ui)` after `synthyboy_core` and the `j
 1. **`UiHost`** (`UiHost.h`). Five pure virtuals besides the parameters: `engineCaps`, `keyboardState`, `abCompare`, `stepPreset`, `presetName`; and
    `parameterStore ()`. Everything else has a default that says "this host cannot" (no MIDI learn, no locks, no content library, no file requests, no share ...): the UI
    dims or hides what the host does not offer, it never assumes. A new method of `UiHost` MUST have such a default; a host written against an older header keeps compiling.
-   Defaults worth knowing: `qualityTier () = high`, `overlaysInsideEditor () = true`, `engineCaps2 () = everything`.
+   Defaults worth knowing: `qualityTier () = high`, `overlaysInsideEditor () = true`, `engineCaps2 () = everything`, `dragScrollsPanels () = false` (true: one finger arrives as a mouse and a drag on a background scrolls the panels; a component that uses the drag itself calls `setViewportIgnoreDragFlag (true)` in its constructor).
 2. **`ParameterStore`** (`ParameterStore.h`). The only parameter access of the UI, by index into `paramTable ()` (the key and id of the entry are
    `paramTable ()[index].key / .id`). Message thread only: `contains`, `plain`, `normalised`, `toNormalised` / `fromNormalised` (the store's own conversion, the pair must round-trip),
    `beginGesture` / `endGesture` (one per drag; `setPlainComplete` wraps a single edit), `setNormalised` (writes and tells the host), and listeners (`addListener (index, l)` / `addListener (l)`,

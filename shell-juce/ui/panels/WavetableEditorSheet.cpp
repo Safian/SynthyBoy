@@ -29,6 +29,7 @@ public:
     WaveCanvas (WavetableEditorSheet& ownerSheet)
         : owner (ownerSheet)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         setOpaque (false);
         zoomInBtn.onClick = [this] { owner.zoomWave (0.5f, 2.0f); };
         zoomOutBtn.onClick = [this] { owner.zoomWave (0.5f, 0.5f); };
@@ -233,6 +234,7 @@ public:
     SpectrumCanvas (WavetableEditorSheet& ownerSheet)
         : owner (ownerSheet)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         evenBtn.setClickingTogglesState (true);
         oddBtn.setClickingTogglesState (true);
         snapBtn.setClickingTogglesState (true);
@@ -1060,6 +1062,7 @@ public:
     ThumbnailsStrip (WavetableEditorSheet& ownerSheet)
         : owner (ownerSheet)
     {
+        setViewportIgnoreDragFlag (true); // it uses the drag itself: the panel does not scroll under it
         setOpaque (false);
         press.onLongPress = [this]
         {

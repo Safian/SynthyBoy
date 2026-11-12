@@ -182,6 +182,7 @@ public:
     void mouseDown (const juce::MouseEvent& e) override
     {
         handleDown = handleBounds().contains (e.getPosition());
+        setViewportIgnoreDragFlag (handleDown); // the handle is dragged to reorder; the rest of the row lets the list scroll
         handleMoved = false;
         dragSlot = slot;
         anchorY = e.position.y;
@@ -210,6 +211,7 @@ public:
     {
         const bool tap = handleDown && ! handleMoved && e.getDistanceFromDragStart() < ctx.theme.ipx (8.0f);
         handleDown = false;
+        setViewportIgnoreDragFlag (false);
         if (tap)
             showRowMenu();
     }
@@ -612,7 +614,7 @@ public:
 
         viewport.setViewedComponent (&container, false);
         viewport.setScrollBarsShown (true, false);
-        viewport.setScrollOnDragMode (juce::Viewport::ScrollOnDragMode::nonHover);
+        scrollOnDrag (viewport, ctx.host);
         addAndMakeVisible (viewport);
 
         updateStatus();
@@ -743,6 +745,8 @@ private:
         }
 
         container.setSize (w, y);
+        // a list that fits scrolls nothing: a drag in it then belongs to the panel area around it (which scrolls); a list that is taller scrolls by itself and the area does not move with it
+        viewport.setViewportIgnoreDragFlag (y > viewport.getHeight());
     }
 
     void addNewSlot()
