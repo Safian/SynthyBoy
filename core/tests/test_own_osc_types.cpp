@@ -451,11 +451,12 @@ TEST (own_render_osc_warp_bake_matches_the_live_warp)
     set (*baked, "osc1.level", 100.0f);
     const auto bk = render (*baked);
     double worst = 0.0;
+    const double a1 = db (lineAmplitude (ref, 9600, 38400, 220.0)), b1 = db (lineAmplitude (bk, 9600, 38400, 220.0)); // relative to the fundamental: the bake may scale the table down
     for (int k = 1; k <= 24; ++k)
     {
         const double a = db (lineAmplitude (ref, 9600, 38400, 220.0 * k)), b = db (lineAmplitude (bk, 9600, 38400, 220.0 * k));
-        if (a > -30.0)
-            worst = std::max (worst, std::fabs (a - b));
+        if (a - a1 > -30.0)
+            worst = std::max (worst, std::fabs ((a - a1) - (b - b1)));
         if (k <= 24)
             std::printf ("    h%d live %.2f baked %.2f\n", k, a, b);
     }

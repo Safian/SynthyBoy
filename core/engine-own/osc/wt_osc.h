@@ -54,7 +54,7 @@ class WtOsc
 {
 public:
     static constexpr int kMaxVoices = 16;
-    static constexpr int kOversample = 4, kTaps = 64;
+    static constexpr int kOversample = 4, kTaps = 128;
 
     /** Linear phase low pass of the 4x decimator (Kaiser window), computed once. */
     static const float* decimatorTaps() noexcept
@@ -74,7 +74,7 @@ public:
                     }
                     return sum;
                 };
-                const double cutoff = 0.100, beta = 7.5; // in cycles per sample of the 4x signal
+                const double cutoff = 0.105, beta = 7.5; // in cycles per sample of the 4x signal
                 double total = 0.0;
                 double tmp[kTaps];
                 for (int i = 0; i < kTaps; ++i)

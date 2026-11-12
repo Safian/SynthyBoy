@@ -217,6 +217,8 @@ int main (int argc, char** argv)
         cases.push_back ({ "Saw no warp note " + std::to_string (note), { { "osc1.wavetable", 1 } }, note });
         cases.push_back ({ "Saw smooth interp note " + std::to_string (note), { { "osc1.wavetable", 1 }, { "osc1.smooth_interp", 1 } }, note });
     }
+    cases.push_back ({ "Sine ultra (4x) note 93", { { "osc1.wavetable", 0 }, { "quality.oversample_4x", 1 } }, 93 });
+    cases.push_back ({ "Sine ultra (4x) note 57", { { "osc1.wavetable", 0 }, { "quality.oversample_4x", 1 } }, 57 });
     cases.push_back ({ "Saw ultra (4x) note 93", { { "osc1.wavetable", 1 }, { "quality.oversample_4x", 1 } }, 93 });
     cases.push_back ({ "Saw bend (warp 4) 50 note 93", { { "osc1.wavetable", 1 }, { "osc1.warp.type", 4 }, { "osc1.warp.amount", 50 } }, 93 });
     cases.push_back ({ "Saw Remap 3 25 note 93", { { "osc1.wavetable", 1 }, { "osc1.warp.type", 23 }, { "osc1.warp.amount", 25 } }, 93 });
