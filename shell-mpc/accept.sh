@@ -44,6 +44,29 @@ c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp
 python3 scripts/tests/test_gen_mpc_manifest.py > $B/manifest-test.log 2>&1 || { tail -25 $B/manifest-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_manifest.py"; exit 1; }
 python3 scripts/tests/test_gen_mpc_package.py > $B/package-test.log 2>&1 || { tail -30 $B/package-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_package.py"; exit 1; }
 [ -f scripts/build-armv7-mpc.sh ] && bash -n scripts/build-armv7-mpc.sh || { echo "ACCEPT FAIL: scripts/build-armv7-mpc.sh missing or not valid bash"; exit 1; }
+# factory presets as programs: the list header, then the library inside a plugin folder (Content/presets) and outside one
+INC="-I core/include -I $MPC_SDK/framework"
+c++ -std=c++17 -O1 -Wall -Wextra $INC -o $B/programs_test shell-mpc/tests/programs_test.cpp $B/core/libsynthyboy_core.a > $B/programs-build.log 2>&1 || { grep -E "error" -A4 $B/programs-build.log | head -30; echo "ACCEPT FAIL: programs_test build (shell-mpc/program_list.h)"; exit 1; }
+$B/programs_test content/presets > $B/programs.log 2>&1 || { grep -E "^FAIL" $B/programs.log; echo "ACCEPT FAIL: programs_test"; exit 1; }
+PK="$B/pkg/Safian - VST - SynthyBoy"
+rm -rf $B/pkg; mkdir -p "$PK/VST" "$PK/Content"; cp -R content/presets "$PK/Content/presets"; cp "$LIB" "$PK/VST/"; echo '{}' > "$PK/plugin.json"
+PLIB="$PK/VST/$(basename "$LIB")"
+c++ -std=c++17 -O1 -Wall -Wextra $INC -o $B/programs_host shell-mpc/tests/programs_host.cpp $B/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: programs_host build"; exit 1; }
+BARE=$(mktemp -d); cp "$LIB" "$BARE/"   # outside the repository: its root has a plugin.json (and content/ answers to Content/ on a case-insensitive disk)
+$B/programs_host "$BARE/$(basename "$LIB")" none > $B/programs-none.log 2>&1; nrc=$?; rm -rf "$BARE"
+[ $nrc -eq 0 ] || { grep -E "^FAIL|^      " $B/programs-none.log | head -12; echo "ACCEPT FAIL: programs_host (library outside a plugin folder)"; exit 1; }
+$B/programs_host "$PLIB" content/presets > $B/programs-pkg.log 2>&1 || { grep -E "^FAIL|^      " $B/programs-pkg.log | head -20; echo "ACCEPT FAIL: programs_host (library in a plugin folder with Content/presets)"; exit 1; }
+$B/host_sim "$PLIB" dump > $B/dump-pkg.json 2> $B/dump-pkg.err || { tail -20 $B/dump-pkg.err; echo "ACCEPT FAIL: host_sim dump of the packaged library"; exit 1; }
+python3 - $B/dump-pkg.json <<'PY' || { echo "ACCEPT FAIL: program list in the host_sim dump"; exit 1; }
+import json, sys
+d = json.load(open(sys.argv[1])); pr = d.get("programs", [])
+ok = len(pr) == 113 and pr[0] == "Init" and "808 Boom" in pr
+if not ok: print("programs in the dump:", len(pr), pr[:5])
+sys.exit(0 if ok else 1)
+PY
+$B/host_sim "$PLIB" test --seconds 2 --notes 48,55 > $B/test-pkg.log 2>&1 || { grep -E "^(FAIL|WARN)|Result" $B/test-pkg.log; echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
+grep -qE "^FAIL|produced silence" $B/test-pkg.log && { echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
+grep -q 'Content/presets' scripts/build-armv7-mpc.sh || { echo "ACCEPT FAIL: scripts/build-armv7-mpc.sh does not copy content/presets to Content/presets"; exit 1; }
 # stub host: state round trip with content, re-prepare on rate change, two-thread parameter writes (plain build, then ThreadSanitizer)
 INC="-I core/include -I $MPC_SDK/framework"
 c++ -std=c++17 -O1 $INC -o $B/stub_host shell-mpc/tests/stub_host.cpp $B/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: stub_host build"; exit 1; }
@@ -59,4 +82,14 @@ if grep -q "WARNING: ThreadSanitizer" $T/stub.log; then
     echo "ACCEPT FAIL: data races (full report: $T/stub.log)"; exit 1
 fi
 grep -q "stub_host: OK" $T/stub.log || { tail -15 $T/stub.log; echo "ACCEPT FAIL: tsan stub_host"; exit 1; }
+TPK="$T/pkg/Safian - VST - SynthyBoy"
+rm -rf $T/pkg; mkdir -p "$TPK/VST" "$TPK/Content"; cp -R content/presets "$TPK/Content/presets"; cp "$TLIB" "$TPK/VST/"; echo '{}' > "$TPK/plugin.json"
+c++ -std=c++17 -O1 -g -fsanitize=thread $INC -o $T/programs_host shell-mpc/tests/programs_host.cpp $T/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: tsan programs_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $T/programs_host "$TPK/VST/$(basename "$TLIB")" content/presets > $T/programs.log 2>&1
+if grep -q "WARNING: ThreadSanitizer" $T/programs.log; then
+    echo "ThreadSanitizer reports in programs_host: $(grep -c 'WARNING: ThreadSanitizer' $T/programs.log); innermost frames:"
+    grep -A14 "WARNING: ThreadSanitizer" $T/programs.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+    echo "ACCEPT FAIL: data races while changing programs (full report: $T/programs.log)"; exit 1
+fi
+grep -q "programs_host: OK" $T/programs.log || { grep -E "^FAIL|^      " $T/programs.log | head; echo "ACCEPT FAIL: tsan programs_host"; exit 1; }
 echo "ACCEPT OK"

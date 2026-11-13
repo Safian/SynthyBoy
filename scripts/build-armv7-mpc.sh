@@ -131,6 +131,10 @@ cp "$build_dir/shell-mpc/synthyboy_mpc.so" "$plugin_folder/VST/synthyboy-arm32.s
 # Create Content/ folder (empty if nothing to put there)
 mkdir -p "$plugin_folder/Content"
 
+# Copy factory presets
+rm -rf "$plugin_folder/Content/presets"
+cp -R "$repo_root/content/presets" "$plugin_folder/Content/presets"
+
 # Copy Plugin Skins/ if --skins DIR was given
 if [[ -n "$skins_dir" ]]; then
     rm -rf "$plugin_folder/Plugin Skins"

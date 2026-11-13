@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <dlfcn.h>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -22,6 +23,7 @@
 
 #include "mpc_vst2_abi.h"
 #include "plugin_paths.h"
+#include "program_list.h"
 
 // ---------------------------------------------------------------------------
 // Denormal flush helpers (cross-platform)
@@ -176,9 +178,15 @@ struct PluginInstance
     bool prepared = false; // true after the first successful prepare
 
     // Programs
-    int currentProgram = 0;
-    static constexpr int kNumPrograms = 1;
-    static constexpr const char* kProgramNames[kNumPrograms] = { "Init" };
+    std::vector<synthyboy_mpc::ProgramEntry> programs;
+    std::atomic<int> currentProgram {0};
+    // The "chunk wins" protection: the MPC saves the program number in the project
+    // and may select that program again right after restoring the chunk; that selection
+    // must not overwrite the restored (possibly edited) state.
+    // Host order: loads program 0, restores the chunk (which arms protection), then
+    // may re-select the saved program number. Disarmed by any effSetProgram or
+    // parameter write; armed by effSetChunk when the chunk contains a valid program index.
+    std::atomic<int> protectedProgram {-1};
 
     // Chunk buffer: owned by the plugin instance, reused across effGetChunk calls.
     std::vector<char> chunkBuffer;
@@ -219,6 +227,10 @@ struct PluginInstance
                 engine->setContentStore (contentStore.get());
         }
 
+        // Scan factory presets (never on the audio thread).
+        if (!contentDir.empty())
+            programs = synthyboy_mpc::scanPrograms (contentDir + "/presets");
+
         // Apply default values to engine and mirror
         if (engine)
         {
@@ -246,6 +258,25 @@ struct PluginInstance
 static PluginInstance* getInstance(AEffect* e) noexcept
 {
     return static_cast<PluginInstance*>(e->object);
+}
+
+// ---------------------------------------------------------------------------
+// Apply a complete state to the engine and mirror
+// ---------------------------------------------------------------------------
+
+static void applyState (PluginInstance* inst, const synthyboy::ParamValues& values, synthyboy::StateContent&& content)
+{
+    const auto* table = synthyboy::paramTable();
+    size_t count = synthyboy::paramCount();
+    for (size_t i = 0; i < count; ++i)
+    {
+        inst->paramMirror[i].store(values.plain[i], std::memory_order_relaxed);
+        if (inst->engine)
+            inst->engine->setParam(table[i].id, values.plain[i]);
+    }
+    inst->content = std::move(content);
+    if (inst->engine)
+        inst->engine->setContent(inst->content);
 }
 
 // ---------------------------------------------------------------------------
@@ -286,18 +317,59 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
     case effSetProgram:
     {
         if (!inst) return 0;
-        // Clamp program index to valid range
-        int prog = static_cast<int>(index);
-        if (prog < 0) prog = 0;
-        if (prog >= PluginInstance::kNumPrograms) prog = PluginInstance::kNumPrograms - 1;
-        inst->currentProgram = prog;
+        // VST2: value is the program index, index is unused
+        int prog = static_cast<int>(value);
+        int numProgs = static_cast<int> (inst->programs.size()) + 1;
+        // Out of range: do nothing
+        if (prog < 0 || prog >= numProgs) return 1;
+
+        // Check if protection is armed for this index BEFORE disarming
+        bool wasProtected = (inst->protectedProgram.load (std::memory_order_relaxed) == prog);
+        // Disarm protection (any effSetProgram disarms it)
+        inst->protectedProgram.store (-1, std::memory_order_relaxed);
+
+        // If protection was armed for this index, just set it and return
+        if (wasProtected)
+        {
+            inst->currentProgram.store (prog, std::memory_order_relaxed);
+            return 1;
+        }
+
+        if (prog == 0)
+        {
+            // Program 0: Init (default values, empty content)
+            applyState (inst, synthyboy::ParamValues::defaults (), synthyboy::StateContent {});
+        }
+        else
+        {
+            // Program >= 1: load preset file
+            const auto& entry = inst->programs[static_cast<size_t> (prog - 1)];
+            std::ifstream in (entry.path, std::ios::binary);
+            if (!in) return 1; // file cannot be read
+            std::string data ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char> ());
+            if (data.empty()) return 1;
+
+            synthyboy::PresetMeta meta;
+            synthyboy::StateContent content;
+            synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
+            synthyboy::LoadResult result = synthyboy::loadPreset (data.data(), data.size(), meta, values, content);
+            if (result.status != synthyboy::LoadStatus::ok && result.status != synthyboy::LoadStatus::newer_version)
+                return 1; // load failed
+
+            applyState (inst, values, std::move(content));
+        }
+
+        inst->currentProgram.store (prog, std::memory_order_relaxed);
+        // Request display update from host
+        if (inst->audioMaster)
+            inst->audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
         return 1;
     }
 
     case effGetProgram:
     {
         if (!inst) return 0;
-        return inst->currentProgram;
+        return inst->currentProgram.load (std::memory_order_relaxed);
     }
 
     case effSetProgramName:
@@ -310,28 +382,23 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         char* name = static_cast<char*>(ptr);
-        if (name)
-        {
-            // Clamp program index to valid range
-            int prog = inst->currentProgram;
-            if (prog < 0) prog = 0;
-            if (prog >= PluginInstance::kNumPrograms) prog = PluginInstance::kNumPrograms - 1;
-            copyString(name, kVstMaxProgNameLen + 1, PluginInstance::kProgramNames[prog]);
-            name[kVstMaxProgNameLen] = '\0';
-        }
+        if (!name) return 0;
+        int prog = inst->currentProgram.load (std::memory_order_relaxed);
+        if (prog < 0 || prog >= static_cast<int> (inst->programs.size()) + 1) return 0;
+        const std::string& progName = (prog == 0) ? std::string ("Init") : inst->programs[static_cast<size_t> (prog - 1)].name;
+        copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
         return 1;
     }
 
     case effGetProgramNameIndexed:
     {
         char* name = static_cast<char*>(ptr);
-        if (name && index >= 0 && index < PluginInstance::kNumPrograms)
-        {
-            copyString(name, kVstMaxProgNameLen + 1, PluginInstance::kProgramNames[index]);
-            name[kVstMaxProgNameLen] = '\0';
-            return 1;
-        }
-        return 0;
+        if (!inst || !name || index < 0) return 0;
+        int numProgs = static_cast<int> (inst->programs.size()) + 1;
+        if (index >= numProgs) return 0;
+        const std::string& progName = (index == 0) ? std::string ("Init") : inst->programs[static_cast<size_t> (index - 1)].name;
+        copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
+        return 1;
     }
 
     case effGetParamName:
@@ -456,12 +523,13 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
         for (size_t i = 0; i < synthyboy::paramCount(); ++i)
             values.plain[i] = inst->paramMirror[i].load(std::memory_order_relaxed);
         std::string state = synthyboy::saveState(values, inst->content);
+        std::string chunk = synthyboy_mpc::chunkWithProgram (state, inst->currentProgram.load (std::memory_order_relaxed));
         // Reuse the plugin-owned chunk buffer (VST2: host does not free chunk memory)
-        inst->chunkBuffer.resize(state.size());
-        std::memcpy(inst->chunkBuffer.data(), state.data(), state.size());
+        inst->chunkBuffer.resize(chunk.size());
+        std::memcpy(inst->chunkBuffer.data(), chunk.data(), chunk.size());
         if (ptr)
             *static_cast<void**>(ptr) = inst->chunkBuffer.data();
-        return static_cast<VstInt32>(state.size());
+        return static_cast<VstInt32>(chunk.size());
     }
 
     case effSetChunk:
@@ -479,18 +547,28 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
 
             if (result.status == synthyboy::LoadStatus::ok || result.status == synthyboy::LoadStatus::newer_version)
             {
-                const auto* table = synthyboy::paramTable();
-                size_t count = synthyboy::paramCount();
-                for (size_t i = 0; i < count; ++i)
+                // Try to extract program number from chunk
+                int p = synthyboy_mpc::programFromChunk(chunk, static_cast<size_t>(size));
+                if (0 <= p && p < static_cast<int>(inst->programs.size()) + 1)
                 {
-                    inst->paramMirror[i].store(newValues.plain[i], std::memory_order_relaxed);
-                    if (inst->engine)
-                        inst->engine->setParam(table[i].id, newValues.plain[i]);
+                    // Apply the state
+                    applyState (inst, newValues, std::move(newContent));
+                    // Arm protection for this program
+                    inst->currentProgram.store (p, std::memory_order_relaxed);
+                    inst->protectedProgram.store (p, std::memory_order_relaxed);
                 }
-                // Set content on the engine
-                inst->content = std::move(newContent);
-                if (inst->engine)
-                    inst->engine->setContent(inst->content);
+                else
+                {
+                    // No valid program in chunk: disarm protection
+                    inst->protectedProgram.store (-1, std::memory_order_relaxed);
+                    // Still apply the state
+                    applyState (inst, newValues, std::move(newContent));
+                }
+            }
+            else
+            {
+                // Load failed: disarm protection
+                inst->protectedProgram.store (-1, std::memory_order_relaxed);
             }
         }
         return 1;
@@ -696,6 +774,9 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
 
     inst->paramMirror[index].store(plain, std::memory_order_relaxed);
 
+    // Disarm protection: any parameter write from the host disarms it
+    inst->protectedProgram.store (-1, std::memory_order_relaxed);
+
     // Call engine directly (IEngine::setParam is lock-free, any thread)
     if (inst->engine)
         inst->engine->setParam(info->id, plain);
@@ -809,7 +890,7 @@ extern "C"
         effect->processReplacing = pluginProcessReplacing;
         effect->setParameter = pluginSetParameter;
         effect->getParameter = pluginGetParameter;
-        effect->numPrograms = PluginInstance::kNumPrograms;
+        effect->numPrograms = static_cast<VstInt32>(inst->programs.size()) + 1;
         effect->numParams = static_cast<VstInt32>(synthyboy::paramCount());
         effect->numInputs = 0;
         effect->numOutputs = 2;
