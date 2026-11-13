@@ -21,3 +21,4 @@ __pycache__/
 
 # Serum reference renders (licensed plug-in output, never committed) and comparison reports
 tests/serum-reference/
+build-mpc*.log

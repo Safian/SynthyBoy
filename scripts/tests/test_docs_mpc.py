@@ -134,7 +134,8 @@ class MpcDocTests(unittest.TestCase):
         observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
         unverified = (section("Known host behaviour") or "").split("### Per the SDK documentation")[-1]
         for value in ("2026-11-13", "`91f2d75`", "`17d6e11`", "0.87 ms", "0.666 ms", "0.715 ms", "1.018", "0.359 to 0.201", "33.3", "Diffusor Cloud Pad 1.75 / 1.96 / 2.74",
-                      "`bc0f3ce`", "`e3abe08`", "`178316e`", "`e596f94`", "no new measurement of the heavy patch"):
+                      "`bc0f3ce`", "`e3abe08`", "`178316e`", "`e596f94`", "3.354 / 3.691 / 3.959 ms", "2.637 / 2.868 / 3.781 ms", "2.059 / 2.595 / 3.205 ms",
+                      "0.474 / 0.703 / 0.965 ms", "does not fit safely with 8 or 6 notes"):
             self.assertIn(value, observed)
         self.assertIn("nobody has listened", unverified)
         body = section("Sound differences at tier low") or ""
