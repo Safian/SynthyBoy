@@ -42,7 +42,7 @@ if(APPLE)
 endif()
 
 # Linux: use version script + exclude-libs (no leading underscore).
-# The ARM build for the MPC is made with GCC (scripts/build-armv7-mpc.sh);
+# The ARM build for the MPC is made with GCC (scripts/build-mpc.sh, both architectures);
 # --exclude-libs,ALL is not understood by zig's linker, and a zig-built module crashed at host exit on the device.
 if(UNIX AND NOT APPLE)
     set(VERSION_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/mpc_exports.map")

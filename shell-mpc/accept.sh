@@ -43,7 +43,7 @@ c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp
 # MPC manifest: only binaries that exist, version.xml
 python3 scripts/tests/test_gen_mpc_manifest.py > $B/manifest-test.log 2>&1 || { tail -25 $B/manifest-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_manifest.py"; exit 1; }
 python3 scripts/tests/test_gen_mpc_package.py > $B/package-test.log 2>&1 || { tail -30 $B/package-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_package.py"; exit 1; }
-[ -f scripts/build-armv7-mpc.sh ] && bash -n scripts/build-armv7-mpc.sh || { echo "ACCEPT FAIL: scripts/build-armv7-mpc.sh missing or not valid bash"; exit 1; }
+for f in scripts/build-mpc.sh scripts/build-armv7-mpc.sh scripts/mpc-container-build.sh; do [ -f $f ] && bash -n $f || { echo "ACCEPT FAIL: $f missing or not valid bash"; exit 1; }; done
 # factory presets as programs: the list header, then the library inside a plugin folder (Content/presets) and outside one
 INC="-I core/include -I $MPC_SDK/framework"
 c++ -std=c++17 -O1 -Wall -Wextra $INC -o $B/programs_test shell-mpc/tests/programs_test.cpp $B/core/libsynthyboy_core.a > $B/programs-build.log 2>&1 || { grep -E "error" -A4 $B/programs-build.log | head -30; echo "ACCEPT FAIL: programs_test build (shell-mpc/program_list.h)"; exit 1; }
@@ -74,7 +74,7 @@ sys.exit(0 if ok else 1)
 PY
 $B/host_sim "$PLIB" test --seconds 2 --notes 48,55 > $B/test-pkg.log 2>&1 || { grep -E "^(FAIL|WARN)|Result" $B/test-pkg.log; echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
 grep -qE "^FAIL|produced silence" $B/test-pkg.log && { echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
-grep -q 'Content/presets' scripts/build-armv7-mpc.sh || { echo "ACCEPT FAIL: scripts/build-armv7-mpc.sh does not copy content/presets to Content/presets"; exit 1; }
+grep -q 'Content/presets' scripts/build-mpc.sh || { echo "ACCEPT FAIL: scripts/build-mpc.sh does not copy content/presets to Content/presets"; exit 1; }
 # stub host: state round trip with content, re-prepare on rate change, two-thread parameter writes (plain build, then ThreadSanitizer)
 INC="-I core/include -I $MPC_SDK/framework"
 c++ -std=c++17 -O1 $INC -o $B/stub_host shell-mpc/tests/stub_host.cpp $B/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: stub_host build"; exit 1; }

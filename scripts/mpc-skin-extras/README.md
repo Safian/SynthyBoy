@@ -1,7 +1,7 @@
 # MPC skin extras
 
 Modules in this folder post-process the generated MPC skin (`Plugin Skins/TUI.json` and `Q-Links.json`).
-`scripts/apply-mpc-skin-extras.py` runs after the SDK `gen_ui.py` (see `scripts/build-armv7-mpc.sh`), loads every
+`scripts/apply-mpc-skin-extras.py` runs after the SDK `gen_ui.py` (see `scripts/build-mpc.sh`), loads every
 `*.py` file here in name order (`10_env.py`, `20_osc.py`, `30_lfo.py`, ...) and calls
 
     def apply(tui: dict, qlinks: dict, ctx) -> None
