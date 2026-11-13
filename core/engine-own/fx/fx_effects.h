@@ -324,7 +324,8 @@ private:
         {
             float& hy = hiY[k0 + j];
             float& ly = loY[k0 + j];
-            hy += cf.aHi * (x[j] * cf.gain - hy);
+            const float xg = x[j] * cf.gain; // (a separate statement, as the argument of LoopBand::process was: the compiler may not fuse it with the subtraction)
+            hy += cf.aHi * (xg - hy);
             hy = flushDenormal (hy);
             ly += cf.aLo * (hy - ly);
             ly = flushDenormal (ly);
