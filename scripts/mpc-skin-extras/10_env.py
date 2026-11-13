@@ -15,7 +15,7 @@ import copy
 COLS = (23, 343, 663, 983)
 ROWS = (45, 196, 346, 497)
 KNOB_W, KNOB_H = 278, 107
-ENV_BOUNDS = (23, 45, 1238, 290)
+ENV_BOUNDS = (23, 6, 1238, 290)   # above the Q-Link badge zone's frame top (the frame of the lower two rows starts at y 301)
 # order of the knobs in the grid cells (row 2, then row 3): (name suffix, params.json suffix, template knob)
 KNOBS = (
     ("Delay", "delay"), ("Attack", "attack"), ("Hold", "hold"), ("Decay", "decay"),
@@ -27,7 +27,7 @@ STAGES = (  # handle name inside the envelope components, params.json suffix (al
 )
 DUP = "\x00"  # second "version" key of the overlay widgets (see mpc-skin-extras/README.md)
 SHAPES = (("AttackShape", "attack_curve"), ("DecayShape", "decay_curve"), ("ReleaseShape", "release_curve"))
-QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 336, 288
+QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
 
 
 def _style(big):
@@ -131,7 +131,7 @@ def apply(tui, qlinks, ctx):
             links[_qlink(row, col)] = ctx.param_index("env%d.%s" % (n, key))
             items.append(knob)
         row_map["Q-Links"] = links
-        # the Q-Link frames mark the lower two rows only
+        # the Q-Link frames mark the lower two rows only (below the orange badge, which sits at the top left corner of a frame)
         tab["qlinkBoundsData"] = ["%s %d %s %d" % (b.split()[0], QLINK_BOUNDS_Y, b.split()[2], QLINK_BOUNDS_H)
                                   for b in tab["qlinkBoundsData"]]
         display = _add_definitions(ctx, n)

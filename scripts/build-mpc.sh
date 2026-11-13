@@ -4,15 +4,20 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--bench] [--no-validate]
+# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--cmake-arg ARG]... [--bench] [--no-validate]
 #
 #   --arch A         arm32 (VST/synthyboy-arm32.so, "file32"), arm64 (VST/synthyboy-arm64.so, "file64") or all (default: both)
 #   --out DIR        where the finished plugin folder is assembled (default: <repo>/build-mpc)
 #   --jobs N         parallel compile jobs inside the container (default 2)
 #   --build-dir DIR  root of the CMake trees on the host; one sub directory per architecture (default: <repo>/build-mpc/tree)
 #   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder instead of generating it
-#                    (default: generated from scripts/mpc-ui-pages.json with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py,
+#                    (default: generated from the layout file with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py (through scripts/run-gen-ui.py),
 #                    then scripts/apply-mpc-skin-extras.py)
+#   --skin-layout F  the layout file of the generated skin (default: scripts/mpc-ui-pages.json, 34 tabs, which the Key 61 loads;
+#                    scripts/mpc-ui-pages-v32.json is the 32 tab fallback)
+#   --cmake-arg ARG  an extra argument of the CMake configure step of the plugin module, e.g. --cmake-arg -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25 (repeatable; no
+#                    spaces inside an argument). A CMake tree keeps the options of earlier runs in its cache: when one tree is used for several variants
+#                    (--build-dir), pass every option of the variant each time. Not applied to the --bench trees.
 #   --bench          also build synthyboy_bench and synthyboy_noteon_bench for each architecture (own CMake tree with SYNTHYBOY_BUILD_TESTS=ON, libstdc++
 #                    linked statically) into <out>/bench-<arch>/; they are measurement tools and not part of the plugin folder
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
@@ -36,8 +41,10 @@ out_dir="$repo_root/build-mpc"
 build_dir="$repo_root/build-mpc/tree"
 jobs=2
 skins_dir=""
+skin_layout="$repo_root/scripts/mpc-ui-pages.json"
 with_bench=0
 validate=1
+cmake_args=()
 image="${MPC_BUILD_IMAGE:-${ARMV7_IMAGE:-$IMAGE_DEFAULT}}"
 docker_cmd="${MPC_DOCKER:-docker}"
 
@@ -45,7 +52,7 @@ usage() { sed -n '/^# Usage/,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; 
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --arch|--out|--jobs|--build-dir|--skins)
+        --arch|--out|--jobs|--build-dir|--skins|--skin-layout|--cmake-arg)
             [[ $# -ge 2 ]] || { echo "$me: $1 needs a value" >&2; exit 2; }
             case "$1" in
                 --arch) arch="$2" ;;
@@ -53,6 +60,16 @@ while [[ $# -gt 0 ]]; do
                 --jobs) jobs="$2" ;;
                 --build-dir) build_dir="$2" ;;
                 --skins) skins_dir="$2" ;;
+                --skin-layout) skin_layout="$2" ;;
+                --cmake-arg)
+                    case "$2" in
+                        -D?*|-U?*|-G?*|-T?*|-A?*) ;;
+                        *) echo "$me: --cmake-arg needs a CMake option (for example -DNAME=VALUE), got: $2" >&2; exit 2 ;;
+                    esac
+                    case "$2" in
+                        *[[:space:]]*) echo "$me: --cmake-arg: no spaces inside an argument: $2" >&2; exit 2 ;;
+                    esac
+                    cmake_args+=("$2") ;;
             esac
             shift 2 ;;
         --bench) with_bench=1; shift ;;
@@ -113,7 +130,7 @@ for a in "${archs[@]}"; do
     echo "$me: === building $a ==="
     "$docker_cmd" run --rm \
         -v "$repo_root":/src:ro -v "$build_dir/$a":/build -v "$build_dir/$a-bench":/build-bench -v "$out_dir":/out -v "$MPC_SDK":/mpc-sdk:ro \
-        -e ARCH="$a" -e JOBS="$jobs" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
+        -e ARCH="$a" -e JOBS="$jobs" -e CMAKE_EXTRA_ARGS="${cmake_args[*]:-}" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
         "$image" bash /src/scripts/mpc-container-build.sh
 done
 
@@ -140,10 +157,11 @@ if [[ -n "$skins_dir" ]]; then
 else
     ui_tmp="$(mktemp -d)"
     python3 "$repo_root/scripts/gen-mpc-ui.py" --params "$repo_root/docs/params.json" --pages "$repo_root/docs/kick-pages.json" \
-        --layout "$repo_root/scripts/mpc-ui-pages.json" --out "$ui_tmp"
-    python3 "$MPC_SDK/tools/gen_ui.py" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
+        --layout "$skin_layout" --out "$ui_tmp"
+    python3 "$repo_root/scripts/run-gen-ui.py" --sdk "$MPC_SDK" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
     # Graphical extras (scripts/mpc-skin-extras/*.py) on top of the generated skin; not for a given --skins directory
-    python3 "$repo_root/scripts/apply-mpc-skin-extras.py" --skins "$plugin_folder/Plugin Skins" --params "$repo_root/docs/params.json"
+    python3 "$repo_root/scripts/apply-mpc-skin-extras.py" --skins "$plugin_folder/Plugin Skins" --params "$repo_root/docs/params.json" \
+        --meta "$ui_tmp/skin-meta.json"
     rm -rf "$ui_tmp"
 fi
 
@@ -154,6 +172,8 @@ python3 "$repo_root/scripts/gen-mpc-manifest.py" --plugin-dir "$plugin_folder"
 # Its schema lists both file32 and file64 as required, while docs/plugin-folder-format.md of the SDK says a 32-bit MPC uses only file32 and a 64-bit one
 # only file64. With both binaries built there is nothing to accept. A single-architecture build accepts exactly the one finding about the key of the
 # architecture that was not built; any other error fails the build.
+# Second accepted finding: the default skin has 34 tabs (sub-tabs included) and the validator reports exactly "34 tabs; at most 32 are supported". The Key 61
+# (MPC 3.10.1.12) loads such a skin (docs/MPC.md); the 32 tab fallback is scripts/mpc-ui-pages-v32.json (--skin-layout), which has no such finding.
 if [[ "$validate" == 1 ]]; then
     echo "$me: running SDK validator on $plugin_folder"
     report="$(python3 "$MPC_SDK/tools/validate.py" "$plugin_folder" 2>&1 || true)"
@@ -162,6 +182,7 @@ if [[ "$validate" == 1 ]]; then
     [[ "$arch" == arm32 ]] && expected_missing="file64"
     [[ "$arch" == arm64 ]] && expected_missing="file32"
     other="$(echo "$report" | grep '^ERROR' || true)"
+    other="$(echo "$other" | grep -v '^ERROR  TUI.json: 34 tabs; at most 32 are supported$' || true)"
     if [[ -n "$expected_missing" ]]; then other="$(echo "$other" | grep -v "plugin.json is missing required keys: $expected_missing\$" || true)"; fi
     if [[ -n "$other" ]] || ! echo "$report" | grep -q '^OK'; then echo "$me: SDK validator failed" >&2; exit 1; fi
     if [[ -n "$expected_missing" ]] && echo "$report" | grep -q '^ERROR'; then

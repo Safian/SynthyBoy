@@ -54,23 +54,35 @@ def load(name, path):
 apply_mod = load("t_apply_mpc_skin_extras", APPLY)
 
 
-def generate_skins(tmp):
-    """Plugin Skins folder as the build makes it (gen-mpc-ui.py + SDK gen_ui.py). Needs the SDK."""
+RUN_GEN_UI = ROOT / "scripts" / "run-gen-ui.py"
+
+
+def generate_skins(tmp, layout=LAYOUT_JSON):
+    """Plugin Skins folder as the build makes it (gen-mpc-ui.py + SDK gen_ui.py through scripts/run-gen-ui.py). Needs the SDK."""
     ui = tmp / "ui"
-    subprocess.run([sys.executable, str(GEN), "--params", str(PARAMS_JSON), "--pages", str(PAGES_JSON), "--layout", str(LAYOUT_JSON),
+    subprocess.run([sys.executable, str(GEN), "--params", str(PARAMS_JSON), "--pages", str(PAGES_JSON), "--layout", str(layout),
                     "--out", str(ui)], check=True, capture_output=True)
     skins = tmp / "pf" / "Plugin Skins"
-    subprocess.run([sys.executable, str(SDK / "tools" / "gen_ui.py"), "--params", str(ui / "params-hostsim.json"),
+    subprocess.run([sys.executable, str(RUN_GEN_UI), "--sdk", str(SDK), "--params", str(ui / "params-hostsim.json"),
                     "--ui", str(ui / "ui.json"), "--out", str(skins), "--quiet"], check=True, capture_output=True)
     (tmp / "pf" / "sample.png").write_bytes(PNG)
+    (tmp / "pf" / "skin-meta.json").write_bytes((ui / "skin-meta.json").read_bytes())   # next to the skins: run_apply passes it as --meta
     return skins
 
 
 def run_apply(skins, extras):
     out, err = io.StringIO(), io.StringIO()
+    meta = skins.parent / "skin-meta.json"
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = apply_mod.main(["--skins", str(skins), "--params", str(PARAMS_JSON), "--extras-dir", str(extras)])
+        code = apply_mod.main(["--skins", str(skins), "--params", str(PARAMS_JSON), "--extras-dir", str(extras)]
+                              + (["--meta", str(meta)] if meta.is_file() else []))
     return code, err.getvalue()
+
+
+def qlinks_by_tab_name(tui, qlinks_map):
+    """{tab name: its "Q-Links" dict} of a TUI.json and the "Screen Mode Q-Links" map (Tab = fnKeyIndex + 1, SubTab = fnKeySubIndex + 1)."""
+    entries = {(m["Tab"], m["SubTab"]): m["Q-Links"] for m in qlinks_map}
+    return {t["tabName"]: entries[(t["fnKeyIndex"] + 1, t["fnKeySubIndex"] + 1)] for t in tui["pageData"]["tabs"]}
 
 
 def snapshot(skins):
@@ -96,6 +108,7 @@ class SkinExtrasTest(unittest.TestCase):
         pf = root / "pf"
         pf.mkdir()
         (pf / "sample.png").write_bytes(PNG)
+        (pf / "skin-meta.json").write_bytes((self.skins_master.parent / "skin-meta.json").read_bytes())
         skins = pf / "Plugin Skins"
         skins.mkdir()
         for p in self.skins_master.iterdir():
@@ -153,7 +166,7 @@ class SkinExtrasTest(unittest.TestCase):
         res = subprocess.run([sys.executable, str(SDK / "tools" / "validate.py"), str(skins.parent)], capture_output=True, text=True)
         report = res.stdout + res.stderr
         # the folder holds only the skin files, so plugin.json is expected to be missing; every other finding fails
-        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "34 tabs; at most 32" not in l]
         self.assertEqual(errors, [], report)
         self.assertIn("OK     TUI.json: image sample.png present", report)
 

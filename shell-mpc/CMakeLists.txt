@@ -35,7 +35,7 @@ target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 # The skin of scripts/mpc-skin-extras/30_lfo.py refers to them, so the MPC package needs the plugin built with this ON (the default of this shell).
 # SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
 option(SYNTHYBOY_MPC_LFO_LIVE "MPC shell: the live LFO display parameters" ON)
-set(SYNTHYBOY_MPC_LFO_LIVE_HZ 25 CACHE STRING "MPC shell: refresh rate of the LFO display thread while a voice sounds")
+set(SYNTHYBOY_MPC_LFO_LIVE_HZ 10 CACHE STRING "MPC shell: refresh rate of the LFO display thread (ticks a second; 10 = every 100 ms)")
 option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "MPC shell: tell the host (audioMasterAutomate) when a cursor moves; OFF = CPU baseline, the host never redraws" ON)
 option(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST "MPC shell: sweep the four cursors without a voice (host-side measurements only)" OFF)
 if(SYNTHYBOY_MPC_LFO_LIVE)
@@ -50,6 +50,30 @@ if(SYNTHYBOY_MPC_LFO_LIVE)
         target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE_SELFTEST=1)
     endif()
     target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
+endif()
+
+# Diagnostics: statistics of the audio callback (gap between two calls, time inside the call) written to a text file by a low priority thread
+# (docs/MPC.md "LFO pictures"). OFF = the plugin is byte for byte the one without this code. Not for the package.
+option(SYNTHYBOY_MPC_CALLBACK_STATS "MPC shell: measure the audio callback and write /tmp/synthyboy-callback-stats.txt (diagnostics only)" OFF)
+if(SYNTHYBOY_MPC_CALLBACK_STATS)
+    find_package(Threads REQUIRED)
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_CALLBACK_STATS=1)
+    target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
+endif()
+
+# Live spectrum (docs/MPC.md "Spectrum"): 32 more display-only parameters "Spectrum 1" .. "Spectrum 32" after the four LFO cursors, written by the same display thread from an FFT of
+# the plugin's own output (the audio thread only copies samples into a lock-free ring). The skin of scripts/mpc-skin-extras/40_spectrum.py refers to them, so the MPC package needs
+# the plugin built with this ON (the default of this shell). The source default is 0; OFF builds the plugin byte for byte as it was without this code. Needs SYNTHYBOY_MPC_LFO_LIVE.
+option(SYNTHYBOY_MPC_SPECTRUM "MPC shell: the live spectrum display parameters (needs SYNTHYBOY_MPC_LFO_LIVE)" ON)
+option(SYNTHYBOY_MPC_SPECTRUM_SELFTEST "MPC shell: a travelling wave over the 32 columns without a sound (host-side measurements only)" OFF)
+if(SYNTHYBOY_MPC_SPECTRUM)
+    if(NOT SYNTHYBOY_MPC_LFO_LIVE)
+        message(FATAL_ERROR "SYNTHYBOY_MPC_SPECTRUM needs SYNTHYBOY_MPC_LFO_LIVE (the spectrum runs on the display thread)")
+    endif()
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_SPECTRUM=1)
+    if(SYNTHYBOY_MPC_SPECTRUM_SELFTEST)
+        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_SPECTRUM_SELFTEST=1)
+    endif()
 endif()
 
 # macOS: use export list + dead_strip to remove unreferenced symbols

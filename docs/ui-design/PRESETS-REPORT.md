@@ -14,12 +14,12 @@ Branch cut from develop `c44ce1f`. Generator: `scripts/gen-factory-presets.py` (
 
 Every preset: macro 1 .. 4 routed to the destinations of its category (09 section 2.3; `chorus.mix` etc. are the table keys of the same name) in mod slots after the highest slot the preset already uses (Space Wobble Bass keeps its own `mod01.amount`), source `macroN`, amount = the percentage of the table, unipolar, power 0. Macros stay 0 at default, so the sound at the default positions is the sound without the wiring. Macros 5 .. 8, sparingly: 5 unison stereo spread (osc 1 / 2 with more than one unison voice), 6 filter 1 resonance +30 (filter on, not in Pad), 7 osc 2 detune and warp (osc 2 on), 8 noise level (noise on). Where a macro opens an effect that the preset has off (almost all, see the dead spellings above), the effect is switched on with its mix at 0 and the macro also opens its mix (distortion +100, delay and reverb +40, FX filter +70), otherwise "Space" or "Drive" would do nothing. Rendered at the macro defaults the wired presets equal the unwired ones except two plucks (Acoustic Style Pluck, Bell Mallet Pluck: peak -1.1 dB, RMS -0.3 dB; any enabled effect module shifts the first transient of the engine by that much, reproduced with delay and with reverb at mix 0).
 
-Macro audibility test (macro N set to 100, chord RMS against -29.0 dBFS): Acid Saw Reso macro 1 -9.1 dB, 2 +8.1 dB, 4 +1.3 dB (reverb), 6 +1.6 dB; Solid Sub macros 1, 2, 4, 6 +1.9 .. +5.3 dB; Vibraphone Bars macros 2, 4, 6; Hyper Saw Lead macros 3, 4, 6. Macros 3, 5, 7, 8 are inert where the preset has no LFO routing, one unison voice, no second oscillator or no noise.
+Macro audibility test (macro N set to 100, chord RMS against the then target of -29.0 dBFS): Acid Saw Reso macro 1 -9.1 dB, 2 +8.1 dB, 4 +1.3 dB (reverb), 6 +1.6 dB; Solid Sub macros 1, 2, 4, 6 +1.9 .. +5.3 dB; Vibraphone Bars macros 2, 4, 6; Hyper Saw Lead macros 3, 4, 6. Macros 3, 5, 7, 8 are inert where the preset has no LFO routing, one unison voice, no second oscillator or no noise.
 `lfo1.rate` / `rlfo1.rate` macros (Bass 3, Pad 3, Keys 2, FX 2): since pack 1.2.0 every preset whose macro opens an LFO rate routes that LFO (own routes kept; otherwise LFO 1 to `filter1.cutoff`, 12 % Bass, 15 % Pad at 0.4 Hz, 8 % Keys, 30 % FX; FX also `rlfo1` to cutoff 30 %), and Lead macro 3 got `filter1.drive` so a one-voice lead has a live macro 3. The generator checks every wired macro (`check_macros`): a macro with no live route (zero amount, bypassed, effect/oscillator/filter off, unison voices 1, or an LFO rate of an unrouted LFO) is a build error. The three old stray `mod01.amount` values without source/destination (Space Wobble Bass, Vibraphone Bars, Alien Communication) became real LFO 1 routes.
 
 ## 3. Level normalisation
 
-Note: the per-preset volumes below are those of pack 1.1.0; pack 1.2.0 re-tuned them (section 6).
+Note: the per-preset volumes and the -29 dBFS target below are those of pack 1.1.0; pack 1.2.0 re-tuned them (section 6) and the target is now -20 dBFS (section 7).
 
 Measure: RMS of the loudest 300 ms of the four-note chord (velocity 1.0, held 1 s, C1 root for Bass else C3), master.volume moved 1:1 (the stage is last in the path; one round converges). Target -29 dBFS, tolerance +-3 dB, chord peaks held below -1.5 dBFS (none needed holding).
 
@@ -295,3 +295,17 @@ Changed presets (99 of 112; the 13 others are showcase presets whose macros need
 | Electric Mute Pluck | Pluck | distortion.on 0->1, distortion.drive 0->10 | -3.0 dB |
 | Harp Drops | Pluck | delay.mix 0->30, reverb.mix 0->25 | +0.7 dB |
 | Trance Short Pluck | Pluck | delay.mix 0->30 | +0.0 dB |
+
+## 7. Level target -20 dBFS (2026-11-14)
+
+The owner found the instruments too quiet, so the chord level target went from -29 to -20 dBFS RMS (the default of `scripts/tune-preset-levels.py`). Only `master.volume` changed (112 of 112 presets, one value each, checked by comparing the parsed files with the earlier ones; `contentpack.json` carries the new hashes). `tune-preset-levels.py` got `--engine vital|own` (the own engine build without Vital needs `--engine own`) and now holds the chord peak at `--max-peak` (-1.5 dBFS) on tier low as well as on tier high. Tuned with the own engine, 48 kHz, tier high, six rounds (`master.volume` -27.8 .. +2.9 dB).
+
+Measured afterwards with `synthyboy_preset_render --engine own` (chord RMS of the loudest 300 ms, four notes, velocity 1.0):
+
+| | tier high | tier low |
+|---|---|---|
+| chord RMS min / median / max | -22.5 / -20.0 / -20.0 dBFS | -22.5 / -20.0 / -13.8 dBFS (Hyper Dimension Pad: the low tier skips the effect) |
+| presets within +-0.5 dB of -20 | 108 of 112 | 90 of 112 |
+| highest chord peak | -1.5 dBFS | -1.5 dBFS |
+
+Held back by the peak limit (chord RMS / chord peak / highest single-note peak, tier high): Fast Arp Bass -22.5 / -1.5 / -12.0, Pizzicato Strings -22.3 / -1.9 / -16.6, Digital Glass Tap -21.4 / -1.5 / -16.4, Comb Zither -20.6 / -1.5 / -13.0. On tier low Pizzicato Strings is also at the limit (-22.0 / -1.5) and Lush Analog Pad is at -22.1 (its chord has peak -8.2: the low tier skips an effect, the high tier is at -20.0). Dirty Distortion Bass has a DC offset of -0.042 (the render gate passes; it is the sound of the preset). Nobody has listened to the new levels on a machine or in a host.

@@ -1,8 +1,8 @@
 # MPC skin extras
 
 Modules in this folder post-process the generated MPC skin (`Plugin Skins/TUI.json` and `Q-Links.json`).
-`scripts/apply-mpc-skin-extras.py` runs after the SDK `gen_ui.py` (see `scripts/build-mpc.sh`), loads every
-`*.py` file here in name order (`10_env.py`, `20_osc.py`, `30_lfo.py`, ...) and calls
+`scripts/apply-mpc-skin-extras.py` runs after the SDK `gen_ui.py` (see `scripts/build-mpc.sh`; `--meta skin-meta.json` is the file `scripts/gen-mpc-ui.py --layout` writes next to ui.json), loads every
+`*.py` file here in name order (`10_env.py`, `20_osc.py`, `30_lfo.py`, `80_layout.py`, `85_names.py`, `90_frames.py`, `95_subtabs.py`, ...) and calls
 
     def apply(tui: dict, qlinks: dict, ctx) -> None
 
@@ -15,6 +15,8 @@ leaves everything alone; if no module changes anything the two JSON files are no
 | --- | --- |
 | `ctx.param_index(key)` | 0-based parameter index of a `docs/params.json` key (the N of `Parameter N`). Unknown key: error naming the key. Never write indexes by hand. |
 | `ctx.tab(title)` | The tab object whose `tabName` is `title` (the dict inside `tui["pageData"]["tabs"]`). Unknown or ambiguous title: error listing the tab names. |
+| `ctx.param_key(index)` | The `docs/params.json` key of a parameter index (the inverse of `param_index`). |
+| `ctx.meta` | The parsed `skin-meta.json` (`fnKeys`: function keys and their tab names; `tabs`: per tab the short names of its controls) or `None` without `--meta`; `85_names.py` and `95_subtabs.py` raise without it. |
 | `ctx.skins_dir` | `pathlib.Path` of the `Plugin Skins` folder; put PNGs here, reference them by bare file name. |
 | `ctx.add_component_definition(name, obj)` | Appends `{"key": name, "value": obj}` to `pageData.componentDefinitions.localComponentDefinitions`. Name clash: error. |
 

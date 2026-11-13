@@ -28,9 +28,12 @@
 // Live LFO display (docs/MPC.md "LFO pictures"). Compile switch SYNTHYBOY_MPC_LFO_LIVE (CMake option of the same name; the source default is 0:
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). When 1 the plugin has four display-only
 // parameters after the engine's list (index paramCount() + n - 1 for LFO n): the cursor of the LFO picture of the skin (lfo_live.h).
-// Never in the mirror, the state or a preset, not automatable. A low priority thread (not the audio thread) reads the engine's live values about
+// Never in the mirror, the state or a preset, not automatable. A helper thread (not the audio thread) reads the engine's live values about
 // SYNTHYBOY_MPC_LFO_LIVE_HZ times a second and, when a cursor cell changed, tells the host with audioMasterAutomate (the host redraws only then).
-//   SYNTHYBOY_MPC_LFO_LIVE_HZ        refresh rate of that thread while a voice sounds (default 25); it checks every 100 ms when all four are idle
+// Thread model: the thread is a normal SCHED_OTHER thread (nice 0, all CPUs; thread_policy.h sets that itself, whatever thread created it), one report
+// per changed cursor and tick, in index order, the position always read at the moment of the tick. The audio thread (processReplacing) does nothing
+// for the display: the engine's own relaxed atomic stores are all there is; this thread only reads them.
+//   SYNTHYBOY_MPC_LFO_LIVE_HZ        refresh rate of that thread (default 10 = a tick every 100 ms, the rate of the community wrapper Open MPC)
 //   SYNTHYBOY_MPC_LFO_LIVE_NOTIFY    1 (default): call audioMasterAutomate; 0: update the values only (the host never redraws: a CPU baseline)
 //   SYNTHYBOY_MPC_LFO_LIVE_SELFTEST  0 (default); 1: ignore the engine and sweep the four cursors at 0.25 / 0.5 / 1 / 2 cycles a second (measuring the host
 //                                    side - recording, modified flag, CPU - without playing a note)
@@ -39,7 +42,7 @@
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
 #ifndef SYNTHYBOY_MPC_LFO_LIVE_HZ
-#define SYNTHYBOY_MPC_LFO_LIVE_HZ 25
+#define SYNTHYBOY_MPC_LFO_LIVE_HZ 10
 #endif
 #ifndef SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
 #define SYNTHYBOY_MPC_LFO_LIVE_NOTIFY 1
@@ -50,13 +53,45 @@
 #include <chrono>
 #include <cstdio>
 #include <thread>
-#if defined(__linux__)
-#include <sys/resource.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-#endif
 #include "lfo_live.h"
+#include "thread_policy.h"
 #include "synthyboy/readout.h"
+#endif
+
+// Live spectrum (docs/MPC.md "Spectrum"). Compile switch SYNTHYBOY_MPC_SPECTRUM (CMake option of the same name; the source default is 0: with 0 nothing below the switch is
+// compiled and the plugin is exactly the one without this code). Needs SYNTHYBOY_MPC_LFO_LIVE: it runs on that display thread. 32 more display-only parameters "Spectrum 1" ..
+// "Spectrum 32" follow the four LFO cursors (index paramCount() + 4 .. + 35), never in the mirror, the state or a preset, not automatable, writes are ignored. The audio
+// thread copies the mono sum of its output into a lock-free ring (spectrum.h) and does nothing else; on every tick of the display thread the newest 2048 samples go through
+// an FFT, 32 logarithmic bands (30 Hz .. 18 kHz) and the smoothing, are quantised to 1/64 and every changed column is reported with audioMasterAutomate (at most 32 calls a
+// tick, none while all columns are at the floor).
+//   SYNTHYBOY_MPC_SPECTRUM_SELFTEST  0 (default); 1: ignore the audio and sweep a travelling wave over the 32 columns (measuring the host side without a note)
+#ifndef SYNTHYBOY_MPC_SPECTRUM
+#define SYNTHYBOY_MPC_SPECTRUM 0
+#endif
+#if SYNTHYBOY_MPC_SPECTRUM
+#if !SYNTHYBOY_MPC_LFO_LIVE
+#error "SYNTHYBOY_MPC_SPECTRUM needs SYNTHYBOY_MPC_LFO_LIVE (it runs on the display thread)"
+#endif
+#ifndef SYNTHYBOY_MPC_SPECTRUM_SELFTEST
+#define SYNTHYBOY_MPC_SPECTRUM_SELFTEST 0
+#endif
+#include "spectrum.h"
+#endif
+
+// Callback statistics (docs/MPC.md "LFO pictures"; diagnostics only, the source default is 0: with 0 nothing of it is compiled). Compile switch
+// SYNTHYBOY_MPC_CALLBACK_STATS (CMake option of the same name). The audio callback measures the time between two calls and its own duration into
+// preallocated atomics (callback_stats.h); a low priority thread writes a text file every 5 seconds and at shutdown.
+//   SYNTHYBOY_MPC_CALLBACK_STATS_FILE         environment variable: the file (default /tmp/synthyboy-callback-stats.txt; a second plugin instance
+//                                             writes <file>.2, a third <file>.3 ...)
+//   SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS  environment variable: pause between two writes (default 5000)
+//   SYNTHYBOY_MPC_CALLBACK_STATS_RESET_FILE   environment variable: the file whose existence makes the writer thread zero the MIDI statistics before its next
+//                                             write and delete it (default /tmp/synthyboy-stats-reset)
+// The file also reports (format 2) the MIDI messages of effProcessEvents and what the host asks: effCanDo texts, dispatcher opcodes, our audioMaster calls.
+#ifndef SYNTHYBOY_MPC_CALLBACK_STATS
+#define SYNTHYBOY_MPC_CALLBACK_STATS 0
+#endif
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+#include "callback_stats.h"
 #endif
 
 // ---------------------------------------------------------------------------
@@ -239,26 +274,58 @@ struct PluginInstance
 
     // Host callback (for transport queries)
     audioMasterCallback audioMaster = nullptr;
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+    audioMasterCallback hostCallback = nullptr; // the host's own callback; `audioMaster` is the counting one in this build (see countingHostCallback)
+#endif
     synthyboy::TransportInfo transport { 120.0, 0.0, false };
 
 #if SYNTHYBOY_MPC_LFO_LIVE
     std::atomic<float> liveValue[synthyboy_mpc::kLfoLiveCount] { { 0.0f }, { 0.0f }, { 0.0f }, { 0.0f } };
     std::atomic<bool> liveStop { false };
     std::thread liveThread;
+#if SYNTHYBOY_MPC_SPECTRUM
+    synthyboy_mpc::SpectrumRing spectrumRing;                                  // written by the audio thread, read by the display thread
+    std::atomic<double> spectrumRate { 44100.0 };                              // the sample rate for the display thread (sampleRate itself is the host thread's)
+    std::atomic<float> spectrumValue[synthyboy_mpc::kSpectrumCount] {};        // the quantised column values, 0 .. 1
+    static constexpr int kLiveParams = synthyboy_mpc::kLfoLiveCount + synthyboy_mpc::kSpectrumCount;
+#else
+    static constexpr int kLiveParams = synthyboy_mpc::kLfoLiveCount;
+#endif
+
+    /** Display parameter n (0 .. kLiveParams - 1; the LFO cursors first, then the spectrum columns): the value the host reads. */
+    float liveRead (int n) const noexcept
+    {
+#if SYNTHYBOY_MPC_SPECTRUM
+        if (n >= synthyboy_mpc::kLfoLiveCount)
+            return spectrumValue[n - synthyboy_mpc::kLfoLiveCount].load (std::memory_order_relaxed);
+#endif
+        return liveValue[n].load (std::memory_order_relaxed);
+    }
+
+    /** Steps of display parameter n: 32 for the LFO cursors, 64 for the spectrum columns. */
+    static constexpr int liveSteps (int n) noexcept
+    {
+#if SYNTHYBOY_MPC_SPECTRUM
+        return n < synthyboy_mpc::kLfoLiveCount ? synthyboy_mpc::kLfoLiveSteps : synthyboy_mpc::kSpectrumSteps;
+#else
+        (void) n;
+        return synthyboy_mpc::kLfoLiveSteps;
+#endif
+    }
 
     bool isLive (VstInt32 index) const noexcept
     {
         const auto count = static_cast<VstInt32> (synthyboy::paramCount());
-        return index >= count && index < count + synthyboy_mpc::kLfoLiveCount;
+        return index >= count && index < count + kLiveParams;
     }
 
     void startLive (AEffect* e)
     {
         liveThread = std::thread ([this, e]
         {
-#if defined(__linux__)
-            setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 10); // this thread only: the audio thread must never wait for it
-#endif
+            // Own scheduling, set here (not inherited): normal policy, nice 0, all CPUs. Not lower than normal: this thread holds host locks while it is inside
+            // audioMasterAutomate, and a starved holder would make the host's own threads wait for it.
+            synthyboy_mpc::useNormalScheduling (0, "sb-lfo-display");
             const int first = static_cast<int> (synthyboy::paramCount());
             int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
             for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
@@ -270,14 +337,25 @@ struct PluginInstance
                 phaseIdx[l] = phase ? synthyboy::findParamIndex (phase->id) : -1;
             }
             const auto active = std::chrono::milliseconds (1000 / (SYNTHYBOY_MPC_LFO_LIVE_HZ > 0 ? SYNTHYBOY_MPC_LFO_LIVE_HZ : 1));
-            const auto idle = std::chrono::milliseconds (100);
+            const auto idle = std::chrono::milliseconds (100); // nothing sounds: a look ten times a second, no call to the host
             const auto start = std::chrono::steady_clock::now();
             auto next = start;
             int last[synthyboy_mpc::kLfoLiveCount] = {};
             bool anyActive = false;
+#if SYNTHYBOY_MPC_SPECTRUM
+            synthyboy_mpc::SpectrumAnalyser analyser;   // allocates here, once, on this thread
+            float specLast[synthyboy_mpc::kSpectrumCount] = {};
+#endif
             while (!liveStop.load (std::memory_order_relaxed))
             {
+#if SYNTHYBOY_MPC_SPECTRUM
+                next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || SYNTHYBOY_MPC_SPECTRUM_SELFTEST || anyActive ? active : idle;
+#else
                 next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || anyActive ? active : idle;
+#endif
+                const auto now = std::chrono::steady_clock::now();
+                if (next < now)
+                    next = now; // a tick that was late (the host call blocked): no catch-up burst of calls, one tick now and the grid goes on from here
                 std::this_thread::sleep_until (next);
                 if (liveStop.load (std::memory_order_relaxed))
                     break;
@@ -316,8 +394,79 @@ struct PluginInstance
                     (void) first;
 #endif
                 }
+#if SYNTHYBOY_MPC_SPECTRUM
+                {
+                    float q[synthyboy_mpc::kSpectrumCount];
+#if SYNTHYBOY_MPC_SPECTRUM_SELFTEST
+                    // a wave that runs over the 32 columns, one turn in 4 seconds, 2 crests: every column moves on every tick
+                    const double ts = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
+                    for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
+                        q[k] = synthyboy_mpc::spectrumQuantize (static_cast<float> (0.5 + 0.5 * std::sin (6.283185307179586 * (0.25 * ts - 2.0 * k / synthyboy_mpc::kSpectrumCount))));
+#else
+                    analyser.tick (spectrumRing, spectrumRate.load (std::memory_order_relaxed), q);
+#endif
+                    for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
+                    {
+                        anyActive = anyActive || q[k] != 0.0f;
+                        if (q[k] == specLast[k])
+                            continue;
+                        specLast[k] = q[k];
+                        spectrumValue[k].store (q[k], std::memory_order_relaxed);
+#if SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
+                        if (audioMaster)
+                            audioMaster (e, audioMasterAutomate, first + synthyboy_mpc::kLfoLiveCount + k, 0, nullptr, q[k]);
+#endif
+                    }
+                }
+#endif
             }
         });
+    }
+#endif
+
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+    synthyboy_mpc::CallbackStats callbackStats;
+
+    /** The variant of this build, for the first lines of the statistics file. */
+    static std::string buildDescription()
+    {
+        std::string b;
+        size_t extraParams = 0;
+#if SYNTHYBOY_MPC_LFO_LIVE
+        extraParams = PluginInstance::kLiveParams;
+        b += "LFO_LIVE=ON LFO_LIVE_HZ=" + std::to_string (SYNTHYBOY_MPC_LFO_LIVE_HZ)
+           + " LFO_LIVE_NOTIFY=" + (SYNTHYBOY_MPC_LFO_LIVE_NOTIFY ? "ON" : "OFF")
+           + " LFO_LIVE_SELFTEST=" + (SYNTHYBOY_MPC_LFO_LIVE_SELFTEST ? "ON" : "OFF");
+#if SYNTHYBOY_MPC_SPECTRUM
+        b += std::string (" SPECTRUM=ON SPECTRUM_SELFTEST=") + (SYNTHYBOY_MPC_SPECTRUM_SELFTEST ? "ON" : "OFF");
+#endif
+#else
+        b += "LFO_LIVE=OFF";
+#endif
+        b += " params=" + std::to_string (synthyboy::paramCount() + extraParams);
+#if defined(__aarch64__)
+        b += " arch=arm64";
+#elif defined(__arm__)
+        b += " arch=arm32";
+#elif defined(__x86_64__)
+        b += " arch=x86_64";
+#endif
+        return b;
+    }
+
+    void startStats()
+    {
+        static std::atomic<int> instances { 0 };
+        const char* envPath = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_FILE");
+        std::string path = envPath != nullptr && *envPath != 0 ? envPath : "/tmp/synthyboy-callback-stats.txt";
+        const int n = ++instances;
+        if (n > 1)
+            path += "." + std::to_string (n);
+        const char* envMs = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS");
+        const int ms = envMs != nullptr ? std::atoi (envMs) : 0;
+        const char* envReset = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_RESET_FILE");
+        callbackStats.setResetFile (envReset != nullptr && *envReset != 0 ? envReset : "/tmp/synthyboy-stats-reset");
+        callbackStats.start (path, buildDescription(), ms > 0 ? ms : 5000);
     }
 #endif
 
@@ -371,6 +520,9 @@ struct PluginInstance
 
     ~PluginInstance()
     {
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        callbackStats.stop(); // writes the file one last time
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         liveStop.store (true, std::memory_order_relaxed);
         if (liveThread.joinable())
@@ -389,6 +541,18 @@ static PluginInstance* getInstance(AEffect* e) noexcept
 {
     return static_cast<PluginInstance*>(e->object);
 }
+
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+// What the plugin does towards the host is counted by opcode, then passed on unchanged (every call goes through inst->audioMaster).
+static VstIntPtr countingHostCallback(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
+{
+    PluginInstance* inst = e ? getInstance(e) : nullptr;
+    if (!inst || !inst->hostCallback)
+        return 0;
+    inst->callbackStats.hostCall(opcode);
+    return inst->hostCallback(e, opcode, index, value, ptr, opt);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Helper: current program name (handles the "no program" state)
@@ -440,8 +604,46 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
     catch (...) { return 0; }
 }
 
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+static VstIntPtr dispatchHandled(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt);
+
+// What the host asks and sends, recorded (callback_stats.h) around the handling of every call; the handling itself is dispatchHandled, unchanged.
+static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
+{
+    PluginInstance* inst = e ? getInstance(e) : nullptr;
+    if (!inst)
+        return dispatchHandled(e, opcode, index, value, ptr, opt);
+    synthyboy_mpc::CallbackStats& stats = inst->callbackStats;
+    stats.dispatcherCall(opcode, index, value, opt, ptr != nullptr);
+    if (opcode == effProcessEvents && ptr)
+    {
+        const VstEvents* events = static_cast<const VstEvents*>(ptr);
+        for (VstInt32 i = 0; i < events->numEvents; ++i)
+        {
+            const VstEvent* ev = events->events[i];
+            if (!ev)
+                continue;
+            if (ev->type != kVstMidiType)
+            {
+                stats.otherEvent(ev->type);
+                continue;
+            }
+            const VstMidiEvent* m = reinterpret_cast<const VstMidiEvent*>(ev);
+            stats.midiMessage(static_cast<uint8_t>(m->midiData[0]), static_cast<uint8_t>(m->midiData[1]), static_cast<uint8_t>(m->midiData[2]), m->deltaFrames);
+        }
+    }
+    const VstIntPtr result = dispatchHandled(e, opcode, index, value, ptr, opt);
+    if (opcode == effCanDo && ptr)
+        stats.canDo(static_cast<const char*>(ptr), static_cast<int>(result));
+    return result;
+}
+
+static VstIntPtr dispatchHandled(AEffect* e, VstInt32 opcode, VstInt32 index,
+                                 VstIntPtr value, void* ptr, float opt)
+#else
 static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                           VstIntPtr value, void* ptr, float opt)
+#endif
 {
     if (opcode == effGetVstVersion)
         return 2400;
@@ -571,6 +773,24 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_LFO_LIVE
         if (inst->isLive (index))
         {
+#if SYNTHYBOY_MPC_SPECTRUM
+            const int n = index - static_cast<int> (synthyboy::paramCount());
+            const int steps = PluginInstance::liveSteps (n);
+            const int step = static_cast<int> (inst->liveRead (n) * static_cast<float> (steps) + 0.5f);
+            if (opcode == effGetParamName)
+            {
+                if (n >= synthyboy_mpc::kLfoLiveCount)
+                    std::snprintf (buf, 64, "Spectrum %d", n - synthyboy_mpc::kLfoLiveCount + 1);
+                else
+                    std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
+            }
+            else if (opcode == effGetParamLabel)
+                buf[0] = '\0';
+            else if (step == 0)
+                copyString (buf, 64, n < synthyboy_mpc::kLfoLiveCount ? "idle" : "0");
+            else
+                std::snprintf (buf, 64, "%d/%d", step, steps);
+#else
             const int n = index - static_cast<int> (synthyboy::paramCount());
             const int step = static_cast<int> (inst->liveValue[n].load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::kLfoLiveSteps) + 0.5f);
             if (opcode == effGetParamName)
@@ -581,6 +801,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 copyString (buf, 64, "idle");
             else
                 std::snprintf (buf, 64, "%d/%d", step, synthyboy_mpc::kLfoLiveSteps);
+#endif
             buf[63] = '\0';
             return 1;
         }
@@ -616,6 +837,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         inst->sampleRate = opt;
+#if SYNTHYBOY_MPC_SPECTRUM
+        inst->spectrumRate.store (opt, std::memory_order_relaxed);
+#endif
         // Only store the rate; prepare is called in effMainsChanged
         return 1;
     }
@@ -632,6 +856,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         inst->mainsOn = (value != 0);
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        inst->callbackStats.restartGaps();
+#endif
         // Prepare when mains go on if sample rate or block size changed since last prepare
         if (inst->mainsOn && inst->engine)
         {
@@ -786,7 +1013,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (inst->isLive (index))
         {
             std::memset(props, 0, sizeof(*props));
+#if SYNTHYBOY_MPC_SPECTRUM
+            props->stepFloat = 1.0f / static_cast<float> (PluginInstance::liveSteps (index - static_cast<VstInt32> (synthyboy::paramCount())));
+#else
             props->stepFloat = 1.0f / static_cast<float> (synthyboy_mpc::kLfoLiveSteps);
+#endif
             props->smallStepFloat = props->stepFloat;
             props->largeStepFloat = props->stepFloat;
             return 1;
@@ -997,7 +1228,11 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
 
 #if SYNTHYBOY_MPC_LFO_LIVE
     if (inst->isLive (index))
+#if SYNTHYBOY_MPC_SPECTRUM
+        return inst->liveRead (index - static_cast<VstInt32> (synthyboy::paramCount()));
+#else
         return inst->liveValue[index - static_cast<VstInt32> (synthyboy::paramCount())].load (std::memory_order_relaxed);
+#endif
 #endif
     size_t paramCount = synthyboy::paramCount();
     if (static_cast<size_t>(index) >= paramCount)
@@ -1029,6 +1264,17 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     if (sampleFrames <= 0)
         return;
 
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+    // Measures the gap to the previous call and, at the end of the scope, the time spent in this one (atomics only, see callback_stats.h)
+    struct StatsScope
+    {
+        synthyboy_mpc::CallbackStats& s;
+        uint64_t t0;
+        StatsScope (synthyboy_mpc::CallbackStats& stats, int frames, double rate) noexcept : s (stats), t0 (stats.begin (frames, rate)) {}
+        ~StatsScope() { s.end (t0); }
+    } statsScope (inst->callbackStats, sampleFrames, inst->sampleRate);
+#endif
+
     // Save and flush denormals
     uint32_t savedFz = flushDenormalsSave();
     flushDenormalsOn();
@@ -1059,6 +1305,9 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     inst->engine->process(inst->events.count > 0 ? inst->events.slots : nullptr,
                           static_cast<int>(inst->events.count),
                           outputs[0], outputs[1], sampleFrames);
+#if SYNTHYBOY_MPC_SPECTRUM
+    inst->spectrumRing.push (outputs[0], outputs[1], sampleFrames); // the only thing the audio thread does for the display: atomic stores into a preallocated ring
+#endif
 
     // Clear remaining events
     inst->events.clear();
@@ -1104,7 +1353,11 @@ extern "C"
         effect->numPrograms = static_cast<VstInt32>(inst->programs.size()) + 1;
         effect->numParams = static_cast<VstInt32>(synthyboy::paramCount());
 #if SYNTHYBOY_MPC_LFO_LIVE
+#if SYNTHYBOY_MPC_SPECTRUM
+        effect->numParams += PluginInstance::kLiveParams;
+#else
         effect->numParams += synthyboy_mpc::kLfoLiveCount;
+#endif
 #endif
         effect->numInputs = 0;
         effect->numOutputs = 2;
@@ -1119,7 +1372,13 @@ extern "C"
         effect->version = 1000;
 
         // Store the host callback for transport queries
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        inst->hostCallback = audioMaster;
+        inst->audioMaster = audioMaster ? countingHostCallback : nullptr;
+        audioMaster = inst->audioMaster; // the identification call below is counted as well
+#else
         inst->audioMaster = audioMaster;
+#endif
 
         // Call the host callback to let the host identify itself
         if (audioMaster)
@@ -1128,6 +1387,10 @@ extern "C"
 #if SYNTHYBOY_MPC_LFO_LIVE
         try { inst->startLive (effect); }
         catch (...) {} // no thread: the cursors stay idle
+#endif
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        try { inst->startStats(); }
+        catch (...) {} // no file: the statistics are only collected
 #endif
 
         return effect;

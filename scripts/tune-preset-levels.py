@@ -3,11 +3,11 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-#   tune-preset-levels.py --render build/tools/preset-render/synthyboy_preset_render [--target -29] [--max-peak -1.5] [--rounds 4]
+#   tune-preset-levels.py --render build/tools/preset-render/synthyboy_preset_render [--engine vital|own] [--target -20] [--max-peak -1.5] [--rounds 4]
 #
 # Renders content/presets with synthyboy_preset_render (tier high), and moves master.volume of every preset so that the RMS of the
 # loudest 300 ms of its four-note chord (velocity 1.0, the measure printed as chordRms) is the target; a preset whose chord peak
-# would then exceed --max-peak is held back at that peak. master.volume is the last stage of the voice path, so the level follows
+# would then exceed --max-peak (on tier high or on tier low, which skips some effects) is held back at that peak. master.volume is the last stage of the voice path, so the level follows
 # it 1:1 in dB and a few rounds converge. Writes the levels file, regenerates the presets after every round, prints the result.
 
 import argparse
@@ -23,8 +23,8 @@ GEN = os.path.join(SCRIPT_DIR, "gen-factory-presets.py")
 PRESETS = os.path.join(ROOT_DIR, "content", "presets")
 
 
-def run_render(binary: str) -> dict:
-    out = subprocess.run([binary, "--presets", PRESETS, "--tier", "high"], capture_output=True, text=True, check=False).stdout
+def run_render(binary: str, engine: str, tier: str) -> dict:
+    out = subprocess.run([binary, "--presets", PRESETS, "--engine", engine, "--tier", tier], capture_output=True, text=True, check=False).stdout
     rows = {}
     for line in out.splitlines():
         t = line.split()
@@ -36,7 +36,8 @@ def run_render(binary: str) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--render", required=True)
-    ap.add_argument("--target", type=float, default=-29.0)
+    ap.add_argument("--engine", choices=("vital", "own"), default="vital")
+    ap.add_argument("--target", type=float, default=-20.0)
     ap.add_argument("--max-peak", type=float, default=-1.5)
     ap.add_argument("--rounds", type=int, default=4)
     args = ap.parse_args()
@@ -45,7 +46,8 @@ def main() -> int:
 
     for rnd in range(args.rounds):
         subprocess.run([sys.executable, "-I", GEN], check=True, capture_output=True)
-        rows = run_render(args.render)
+        rows = run_render(args.render, args.engine, "high")
+        low = run_render(args.render, args.engine, "low")
         worst = 0.0
         changed = 0
         for fname, r in sorted(rows.items()):
@@ -54,6 +56,8 @@ def main() -> int:
             current = float(doc["state"]["params"]["master.volume"])
             delta = args.target - r["chord_rms"]
             delta = min(delta, args.max_peak - r["chord_peak"], args.max_peak - r["peak"])
+            if fname in low:
+                delta = min(delta, args.max_peak - low[fname]["chord_peak"], args.max_peak - low[fname]["peak"])
             new = max(-60.0, min(6.0, round(current + delta, 1)))
             worst = max(worst, abs(args.target - r["chord_rms"]))
             if abs(new - current) >= 0.05:

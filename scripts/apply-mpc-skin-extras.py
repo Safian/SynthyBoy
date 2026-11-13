@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: python3 scripts/apply-mpc-skin-extras.py --skins <Plugin Skins dir> --params docs/params.json [--extras-dir DIR]
+# Usage: python3 scripts/apply-mpc-skin-extras.py --skins <Plugin Skins dir> --params docs/params.json [--meta skin-meta.json] [--extras-dir DIR]
 #
 # Runs after the SDK gen_ui.py. Every DIR/*.py (name order) defines apply(tui, qlinks, ctx); see DIR/README.md.
 # TUI.json and Q-Links.json are rewritten only if a module changed them. Exit 0 ok, 1 on any error (message on stderr).
@@ -61,10 +61,17 @@ def dump_json(value, indent=0):
 
 
 class Context:
-    def __init__(self, tui, params, skins_dir):
+    def __init__(self, tui, params, skins_dir, meta=None):
         self._tui = tui
         self._index = {p["key"]: i for i, p in enumerate(params["params"])}
+        self._keys = [p["key"] for p in params["params"]]
         self.skins_dir = Path(skins_dir)
+        self.meta = meta   # skin-meta.json of gen-mpc-ui.py (names of the controls, tab structure) or None
+
+    def param_key(self, index):
+        if not 0 <= index < len(self._keys):
+            raise ExtrasError("parameter index %r is not in params.json" % (index,))
+        return self._keys[index]
 
     def param_index(self, key):
         if key not in self._index:
@@ -95,7 +102,7 @@ def load_module(path):
     return module
 
 
-def run(skins_dir, params_path, extras_dir=DEFAULT_EXTRAS):
+def run(skins_dir, params_path, extras_dir=DEFAULT_EXTRAS, meta_path=None):
     skins_dir, extras_dir = Path(skins_dir), Path(extras_dir)
     tui_path, ql_path = skins_dir / "TUI.json", skins_dir / "Q-Links.json"
     for p in (tui_path, ql_path, Path(params_path)):
@@ -106,7 +113,12 @@ def run(skins_dir, params_path, extras_dir=DEFAULT_EXTRAS):
     tui_text, ql_text = tui_path.read_text(encoding="utf-8"), ql_path.read_text(encoding="utf-8")
     tui, qlinks = load_json(tui_text), load_json(ql_text)
     params = json.loads(Path(params_path).read_text(encoding="utf-8"))
-    ctx = Context(tui, params, skins_dir)
+    meta = None
+    if meta_path:
+        if not Path(meta_path).is_file():
+            raise ExtrasError("missing file %s" % meta_path)
+        meta = json.loads(Path(meta_path).read_text(encoding="utf-8"))
+    ctx = Context(tui, params, skins_dir, meta)
     for path in sorted(extras_dir.glob("*.py")):
         try:
             load_module(path).apply(tui, qlinks, ctx)
@@ -125,10 +137,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Apply scripts/mpc-skin-extras/*.py modules to a generated MPC Plugin Skins folder.")
     ap.add_argument("--skins", required=True, help="the generated 'Plugin Skins' folder")
     ap.add_argument("--params", required=True, help="docs/params.json")
+    ap.add_argument("--meta", default=None, help="skin-meta.json written by gen-mpc-ui.py --layout (the modules that need it fail without)")
     ap.add_argument("--extras-dir", default=str(DEFAULT_EXTRAS), help="folder of modules (default scripts/mpc-skin-extras)")
     args = ap.parse_args(argv)
     try:
-        run(args.skins, args.params, args.extras_dir)
+        run(args.skins, args.params, args.extras_dir, args.meta)
     except ExtrasError as e:
         print("apply-mpc-skin-extras.py: error: %s" % e, file=sys.stderr)
         return 1

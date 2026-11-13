@@ -23,8 +23,8 @@ PARAMS_JSON = HERE.parent.parent / "docs" / "params.json"
 
 COLS = (23, 343, 663, 983)
 ROWS = (45, 196, 346, 497)
-PICTURE = (384, 70, 512, 240)   # x y w h: centred in the 1238 x 290 area of rows 1-2 (the PNG frames are exactly 512 x 240)
-QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 336, 288
+PICTURE = (384, 30, 512, 240)   # x y w h: centred across the 4 columns, above the frames of the lower two rows (they start at y 301); the PNG frames are exactly 512 x 240
+QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
 
 
 def file_name(choice):

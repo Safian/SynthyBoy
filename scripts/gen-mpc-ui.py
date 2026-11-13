@@ -23,6 +23,8 @@ import sys
 MAX_CONTROLS_PER_PAGE = 16
 MAX_PAGES = 32
 MAX_PAGE_NAME = 8
+MAX_KICK_PER_PAGE = 4   # layout mode: Kick pages on one MPC page (together at most 16 controls, rows of 4)
+MAX_SUBTABS = 8         # SDK ui-reference 3.5: at most 8 sub-tabs per function key
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -54,8 +56,26 @@ def _normalize(p):
     return (d - mn) / (mx - mn)
 
 
-def _widget_for_param(p):
-    """Choose widget for a parameter based on the ui-guide table."""
+def _is_continuous(p):
+    """A parameter that is not stepped (a knob or a fader), as opposed to a switch or a selector."""
+    return p.get("scale", "linear") != "stepped"
+
+
+def _is_level_page(kick_page, params_by_key):
+    """True if the page of docs/kick-pages.json has a continuous own-engine control and every one of them is a level or a mix.
+
+    The fader rule: only on such a page do the continuous controls become faders. A level among knobs (Osc 1 Level) or a volume among
+    macros is a knob like its neighbours, so a page never has a lone fader between knobs."""
+    continuous = []
+    for knob in kick_page.get("knobs", []):
+        p = params_by_key.get(knob.get("key", "")) if knob else None
+        if p is not None and p.get("ownEngine") and _is_continuous(p):
+            continuous.append(p)
+    return bool(continuous) and all(_is_level_or_mix(p["name"]) for p in continuous)
+
+
+def _widget_for_param(p, level_page=False):
+    """Choose widget for a parameter based on the ui-guide table; level_page: the Kick page of the control is a level page (_is_level_page)."""
     choices = p.get("choices")
     n_choices = len(choices) if choices else 0
     scale = p.get("scale", "linear")
@@ -69,15 +89,11 @@ def _widget_for_param(p):
     if scale == "stepped" and n_choices >= 5:
         return "slider"
 
-    # level/mix → fader
-    if _is_level_or_mix(p["name"]):
+    # continuous control on a page of levels and mixes only → fader
+    if level_page and _is_continuous(p):
         return "fader"
 
-    # zero-centred → bipolar knob
-    if _is_zero_centred(p):
-        return "knob"
-
-    # default → knob
+    # zero-centred or any other continuous parameter → knob
     return "knob"
 
 
@@ -223,6 +239,81 @@ def _unique_page_name(name, used_names):
 
 
 # ---------------------------------------------------------------------------
+# Names of the controls (MPC skin)
+# ---------------------------------------------------------------------------
+# The tab already says which module a control belongs to, so the name drawn over a control is the short name of the Kick page
+# (docs/kick-pages.json "shortLabel", "Detune" instead of "Osc 1 Unison Detune"), unless scripts/mpc-short-names.json overrides the key
+# (cut-off or ambiguous shortLabels). Two controls of one tab with the same name get the leading words of their full parameter names
+# that are not shared ("Osc 1 Filt Blend", "Osc 2 Filt Blend"): the longest common word suffix of the full names is dropped, what is left in front is the prefix.
+# The names are drawn upper case in a bold font (scripts/mpc-skin-extras/85_names.py); name_width() estimates the width.
+
+NAME_AREA_W = 272          # inner width of a Q-Link column frame (frame 288, 8 px each side)
+DEFAULT_SHORT_NAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mpc-short-names.json")
+# Advance widths in 1/1000 em of Titillium Web Bold (the font of the skin) for the upper case letters, digits and the punctuation of the names, measured with
+# Pillow on TitilliumWeb-Bold.ttf (an OFL font file that is not part of this repository). name_width() sums them; the host's own layout may differ by
+# kerning and rounding, which is why the test keeps every name under 95 percent of the area.
+ADVANCE = {
+    ' ': 220, 'A': 602, 'B': 609, 'C': 543, 'D': 638, 'E': 554, 'F': 531, 'G': 611, 'H': 677, 'I': 286, 'J': 302, 'K': 593, 'L': 472,
+    'M': 858, 'N': 693, 'O': 652, 'P': 589, 'Q': 652, 'R': 620, 'S': 544, 'T': 526, 'U': 654, 'V': 603, 'W': 930, 'X': 569, 'Y': 557,
+    'Z': 532, '0': 560, '1': 560, '2': 560, '3': 560, '4': 560, '5': 560, '6': 560, '7': 560, '8': 560, '9': 560, '-': 408, '+': 560,
+    '/': 466, '.': 256, ',': 263, '(': 308, ')': 308, '&': 701, "'": 239,
+}
+
+
+def name_width(name, font_px):
+    """Upper bound of the width in pixels of `name` drawn upper case with a bold font of font_px pixels (ADVANCE; unknown character: error)."""
+    total = 0
+    for ch in name.upper():
+        if ch not in ADVANCE:
+            raise ValueError("character %r of the name %r has no entry in ADVANCE" % (ch, name))
+        total += ADVANCE[ch]
+    return total * font_px / 1000.0
+
+
+def load_short_names(path):
+    if not path:
+        return {}
+    with open(path, encoding="utf-8") as f:
+        doc = json.load(f)
+    if doc.get("format") != "synthyboy-mpc-short-names":
+        raise ValueError("%s: format is not 'synthyboy-mpc-short-names'" % path)
+    return dict(doc.get("names", {}))
+
+
+def resolve_tab_names(entries, placed, overrides):
+    """Names of the controls of one tab.
+
+    entries: [(key, full parameter name, shortLabel)] of every knob of the Kick pages of the tab (the first one wins for a repeated key);
+    placed:  the keys that really are controls of the tab (only these have to differ); overrides: key -> name.
+    Returns {key: name}. A clash between placed controls that the prefix rule cannot resolve raises ValueError."""
+    first = {}
+    for key, full, short in entries:
+        first.setdefault(key, (full, short))
+    out = {key: overrides.get(key, short) for key, (_, short) in first.items()}
+    groups = {}
+    for key in first:
+        if key in placed:
+            groups.setdefault(out[key], []).append(key)
+    for name, keys in sorted(groups.items()):
+        if len(keys) < 2:
+            continue
+        if any(k in overrides for k in keys):
+            raise ValueError("the keys %s of one tab all get the name %r and one of them is an override: give each its own override"
+                             % (", ".join(keys), name))
+        words = {k: first[k][0].split() for k in keys}
+        common = 0
+        while all(len(w) > common and w[-1 - common] == words[keys[0]][-1 - common] for w in words.values()):
+            common += 1
+        heads = {k: " ".join(words[k][:len(words[k]) - common]) for k in keys}
+        if common == 0 or any(not h for h in heads.values()) or len(set(heads.values())) != len(keys):
+            raise ValueError("the keys %s of one tab all get the name %r and the full names share no word suffix to tell them apart: add overrides to %s"
+                             % (", ".join(keys), name, os.path.basename(DEFAULT_SHORT_NAMES)))
+        for k in keys:
+            out[k] = heads[k] + " " + name
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Main logic
 # ---------------------------------------------------------------------------
 
@@ -288,9 +379,9 @@ def _split_into_qlink_blocks(knobs, params_by_key):
     return blocks
 
 
-def _build_control_from_param(p, params_by_key):
+def _build_control_from_param(p, params_by_key, level_page=False):
     """Build a control dict from a parameter dict."""
-    widget = _widget_for_param(p)
+    widget = _widget_for_param(p, level_page)
     ctrl = {"param": p["name"], "widget": widget}
     if widget in ("knob", "fader") and _polarity_for_param(p) == "bipolar":
         ctrl["polarity"] = "bipolar"
@@ -299,7 +390,7 @@ def _build_control_from_param(p, params_by_key):
     return ctrl
 
 
-def _knob_to_control(knob, params_by_key, seen_params):
+def _knob_to_control(knob, params_by_key, seen_params, level_page=False):
     """Convert a knob dict to a control dict, or 'empty'.
     
     Deduplicates by parameter name. Skips unknown keys and 'empty' keys.
@@ -316,7 +407,7 @@ def _knob_to_control(knob, params_by_key, seen_params):
         return "empty"
     seen_params.add(param_name)
 
-    return _build_control_from_param(p, params_by_key)
+    return _build_control_from_param(p, params_by_key, level_page)
 
 
 def _write_hostsim(params_doc, out_dir):
@@ -424,7 +515,7 @@ def generate(params_path, pages_path, out_dir, page_ids=None):
                     if knob == "empty":
                         controls.append("empty")
                     else:
-                        ctrl = _knob_to_control(knob, params_by_key, dropped_keys)
+                        ctrl = _knob_to_control(knob, params_by_key, dropped_keys, _is_level_page(kick_page, params_by_key))
                         controls.append(ctrl)
 
             # Pad to 16 if needed
@@ -462,7 +553,7 @@ def generate(params_path, pages_path, out_dir, page_ids=None):
     return 0
 
 
-def generate_layout(params_path, layout_path, pages_path, out_dir):
+def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DEFAULT_SHORT_NAMES):
     """Generate ui.json and params-hostsim.json from a layout file.
     
     The layout file specifies which Kick pages (from docs/kick-pages.json)
@@ -499,9 +590,14 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
 
     layout_pages = layout_doc.get("pages", [])
 
-    # b. more than 32 pages
-    if len(layout_pages) > MAX_PAGES:
-        print("gen-mpc-ui: ERROR: more than 32 pages in layout", file=sys.stderr)
+    # b. more tabs than the limit: 32 (SDK ui-reference 3.5), or the "tabLimit" of the layout file (a variant that tries a larger number on a device;
+    #    the SDK gen_ui.py and validate.py refuse more than 32 tabs: scripts/run-gen-ui.py lifts the limit of gen_ui.py)
+    tab_limit = layout_doc.get("tabLimit", MAX_PAGES)
+    if not isinstance(tab_limit, int) or tab_limit < MAX_PAGES:
+        print("gen-mpc-ui: ERROR: tabLimit must be an integer of at least %d" % MAX_PAGES, file=sys.stderr)
+        return 2
+    if len(layout_pages) > tab_limit:
+        print("gen-mpc-ui: ERROR: more than %d pages in layout" % tab_limit, file=sys.stderr)
         return 2
 
     # c & d. page name validation (empty/long + duplicate)
@@ -517,12 +613,33 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
             return 2
         seen_page_names.add(name)
 
-    # e. kick list must have one or two ids
+    # e. kick list must have one to four ids (their controls must fit the 16 slots of the page, see the slot rule below)
     for page_entry in layout_pages:
         kick_ids = page_entry.get("kick", [])
-        if not isinstance(kick_ids, list) or len(kick_ids) < 1 or len(kick_ids) > 2:
-            print("gen-mpc-ui: ERROR: page '%s' kick must contain one or two ids"
-                  % page_entry.get("name", "?"), file=sys.stderr)
+        if not isinstance(kick_ids, list) or len(kick_ids) < 1 or len(kick_ids) > MAX_KICK_PER_PAGE:
+            print("gen-mpc-ui: ERROR: page '%s' kick must contain one to %d ids"
+                  % (page_entry.get("name", "?"), MAX_KICK_PER_PAGE), file=sys.stderr)
+            return 2
+
+    # e2. function keys: "fn" names the function key (button) a page is a sub-tab of; the pages of one key follow each other,
+    #     a key has at most MAX_SUBTABS sub-tabs. A page without "fn" is a function key of its own.
+    fn_keys = []   # [{"name": key name, "tabs": [page names]}]
+    for page_entry in layout_pages:
+        fn = page_entry.get("fn", page_entry["name"])
+        if not isinstance(fn, str) or not fn:
+            print("gen-mpc-ui: ERROR: page '%s' fn must be a non-empty string" % page_entry["name"], file=sys.stderr)
+            return 2
+        if fn_keys and fn_keys[-1]["name"] == fn:
+            fn_keys[-1]["tabs"].append(page_entry["name"])
+        elif any(k["name"] == fn for k in fn_keys):
+            print("gen-mpc-ui: ERROR: the pages of function key '%s' must follow each other (page '%s')" % (fn, page_entry["name"]),
+                  file=sys.stderr)
+            return 2
+        else:
+            fn_keys.append({"name": fn, "tabs": [page_entry["name"]]})
+    for k in fn_keys:
+        if len(k["tabs"]) > MAX_SUBTABS:
+            print("gen-mpc-ui: ERROR: function key '%s' has %d sub-tabs (at most %d)" % (k["name"], len(k["tabs"]), MAX_SUBTABS), file=sys.stderr)
             return 2
 
     # f. each kick id must exist in kick-pages.json
@@ -559,7 +676,13 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
     # ---- Build pages (rule 4) ----
     
     ui_pages = []
+    meta_tabs = []
     all_seen_names = set()  # Track all placed parameter names across pages
+    overrides = load_short_names(names_path)
+    for key in overrides:
+        if key not in params_by_key:
+            print("gen-mpc-ui: ERROR: %s: unknown parameter key '%s'" % (os.path.basename(names_path), key), file=sys.stderr)
+            return 2
 
     for page_entry in layout_pages:
         page_name = page_entry.get("name", "")
@@ -567,8 +690,11 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
 
         # Build 16 slots for this page
         slots = []
+        name_entries, placed_keys = [], set()
+        fader_names = set()  # parameters taken from a level page (_is_level_page): their continuous controls are faders
         for kid in kick_ids:
             kick_page = kick_by_id[kid]
+            level_page = _is_level_page(kick_page, params_by_key)
             knob_params = []
             for knob in kick_page.get("knobs", []):
                 if knob is None:
@@ -579,13 +705,21 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
                 p = params_by_key[key]
                 if not p.get("ownEngine"):
                     continue
+                name_entries.append((key, p["name"], knob.get("shortLabel", "")))
                 param_name = p["name"]
                 if param_name in all_seen_names:
                     continue
                 all_seen_names.add(param_name)
+                placed_keys.add(key)
+                if level_page:
+                    fader_names.add(param_name)
                 knob_params.append(p)
-            # Pad to 8 slots
-            slots += [p["name"] for p in knob_params] + [None] * (8 - len(knob_params))
+            # a Kick page takes whole Q-Link rows: its controls, padded to a multiple of 4 slots (a page of 8 controls fills two rows)
+            slots += [p["name"] for p in knob_params] + [None] * (-len(knob_params) % 4)
+        if len(slots) > MAX_CONTROLS_PER_PAGE:
+            print("gen-mpc-ui: ERROR: page '%s': the Kick pages %s need %d slots (rows of 4), a page has %d"
+                  % (page_name, ", ".join(kick_ids), len(slots), MAX_CONTROLS_PER_PAGE), file=sys.stderr)
+            return 2
         # Pad to 16 slots total
         slots += [None] * (16 - len(slots))
 
@@ -596,9 +730,15 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
                 controls.append("empty")
             else:
                 p = params_by_name[slot_name]
-                controls.append(_build_control_from_param(p, params_by_key))
+                controls.append(_build_control_from_param(p, params_by_key, slot_name in fader_names))
 
         ui_pages.append({"name": page_name, "controls": controls})
+        try:
+            names = resolve_tab_names(name_entries, placed_keys, overrides)
+        except ValueError as e:
+            print("gen-mpc-ui: ERROR: page '%s': %s" % (page_name, e), file=sys.stderr)
+            return 2
+        meta_tabs.append({"name": page_name, "placed": sorted(placed_keys), "names": names})
 
     # i. after applying rule 4, no page with no control at all
     for page_entry in layout_pages:
@@ -617,6 +757,12 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
     ui_path = os.path.join(out_dir, "ui.json")
     with open(ui_path, "w", encoding="utf-8") as f:
         json.dump(ui_doc, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+    # skin-meta.json: what the MPC skin extras (scripts/mpc-skin-extras/) need to know that ui.json cannot carry
+    meta_path = os.path.join(out_dir, "skin-meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump({"format": "synthyboy-mpc-skin-meta", "version": 1, "fnKeys": fn_keys, "tabs": meta_tabs}, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
     # Report omitted own-engine parameters
@@ -644,6 +790,8 @@ def main(argv=None):
                     help="Comma-separated list of page ids to emit in order (default: first pages)")
     ap.add_argument("--layout", default=None,
                     help="Layout file (synthyboy-mpc-ui-pages format) for own-engine MPC pages")
+    ap.add_argument("--short-names", default=DEFAULT_SHORT_NAMES,
+                    help="names of controls that override the Kick shortLabel (--layout mode; default scripts/mpc-short-names.json)")
     args = ap.parse_args(argv)
 
     # Validate: --layout and --page-ids are mutually exclusive
@@ -654,7 +802,7 @@ def main(argv=None):
     os.makedirs(args.out, exist_ok=True)
 
     if args.layout:
-        return generate_layout(args.params, args.layout, args.pages, args.out)
+        return generate_layout(args.params, args.layout, args.pages, args.out, args.short_names)
     else:
         # Parse page_ids if provided
         page_ids = None

@@ -1,0 +1,252 @@
+{
+  "format": "synthyboy-mpc-ui-pages",
+  "version": 2,
+  "pages": [
+    {
+      "name": "Macros",
+      "fn": "Macros",
+      "kick": [
+        "macros",
+        "macros_2"
+      ]
+    },
+    {
+      "name": "Osc 1",
+      "fn": "Osc",
+      "kick": [
+        "osc1_main"
+      ]
+    },
+    {
+      "name": "Osc1 Shp",
+      "fn": "Osc",
+      "kick": [
+        "osc1_unison",
+        "osc1_shaping"
+      ]
+    },
+    {
+      "name": "Osc 2",
+      "fn": "Osc",
+      "kick": [
+        "osc2_main"
+      ]
+    },
+    {
+      "name": "Osc2 Shp",
+      "fn": "Osc",
+      "kick": [
+        "osc2_unison",
+        "osc2_shaping"
+      ]
+    },
+    {
+      "name": "Osc 3",
+      "fn": "Osc",
+      "kick": [
+        "osc3_main"
+      ]
+    },
+    {
+      "name": "Osc3 Shp",
+      "fn": "Osc",
+      "kick": [
+        "osc3_unison",
+        "osc3_shaping"
+      ]
+    },
+    {
+      "name": "Sub/Nois",
+      "fn": "Mix",
+      "kick": [
+        "sub_main",
+        "noise"
+      ]
+    },
+    {
+      "name": "Mixer",
+      "fn": "Mix",
+      "kick": [
+        "mix_routing",
+        "mix_bus"
+      ]
+    },
+    {
+      "name": "Filter 1",
+      "fn": "Filter",
+      "kick": [
+        "filter1_main",
+        "filter1_model"
+      ]
+    },
+    {
+      "name": "Filter 2",
+      "fn": "Filter",
+      "kick": [
+        "filter2_main",
+        "filter2_model"
+      ]
+    },
+    {
+      "name": "Env 1",
+      "fn": "Env",
+      "kick": [
+        "env1"
+      ]
+    },
+    {
+      "name": "Env 2",
+      "fn": "Env",
+      "kick": [
+        "env2"
+      ]
+    },
+    {
+      "name": "Env 3",
+      "fn": "Env",
+      "kick": [
+        "env3"
+      ]
+    },
+    {
+      "name": "Env 4",
+      "fn": "Env",
+      "kick": [
+        "env4"
+      ]
+    },
+    {
+      "name": "LFO 1",
+      "fn": "LFO",
+      "kick": [
+        "lfo1"
+      ]
+    },
+    {
+      "name": "LFO 2",
+      "fn": "LFO",
+      "kick": [
+        "lfo2"
+      ]
+    },
+    {
+      "name": "LFO 3",
+      "fn": "LFO",
+      "kick": [
+        "lfo3"
+      ]
+    },
+    {
+      "name": "LFO 4",
+      "fn": "LFO",
+      "kick": [
+        "lfo4"
+      ]
+    },
+    {
+      "name": "Mod 1-2",
+      "fn": "Mod",
+      "kick": [
+        "mod_slot_1",
+        "mod_slot_2"
+      ]
+    },
+    {
+      "name": "Mod 3-4",
+      "fn": "Mod",
+      "kick": [
+        "mod_slot_3",
+        "mod_slot_4"
+      ]
+    },
+    {
+      "name": "Mod Amt",
+      "fn": "Mod",
+      "kick": [
+        "mod_amounts_1_8",
+        "mod_amounts_9_16"
+      ]
+    },
+    {
+      "name": "FX Chain",
+      "fn": "FX",
+      "kick": [
+        "fx_order_1",
+        "fx_switches"
+      ]
+    },
+    {
+      "name": "Flt+Dist",
+      "fn": "FX",
+      "kick": [
+        "fx_filter_1",
+        "fx_distortion"
+      ]
+    },
+    {
+      "name": "Comp 1",
+      "fn": "FX",
+      "kick": [
+        "fx_comp_main",
+        "fx_comp_low"
+      ]
+    },
+    {
+      "name": "Cmp2+Lvl",
+      "fn": "FX",
+      "kick": [
+        "fx_comp_mid",
+        "fx_comp_high",
+        "fx_levels"
+      ]
+    },
+    {
+      "name": "EQ",
+      "fn": "FX",
+      "kick": [
+        "fx_eq_low_mid",
+        "fx_eq_high"
+      ]
+    },
+    {
+      "name": "Chorus",
+      "fn": "FX 2",
+      "kick": [
+        "fx_chorus_1",
+        "fx_chorus_2"
+      ]
+    },
+    {
+      "name": "Delay",
+      "fn": "FX 2",
+      "kick": [
+        "fx_delay_1",
+        "fx_delay_2"
+      ]
+    },
+    {
+      "name": "Phaser",
+      "fn": "FX 2",
+      "kick": [
+        "fx_phaser_1",
+        "fx_phaser_2"
+      ]
+    },
+    {
+      "name": "Master",
+      "fn": "Master",
+      "kick": [
+        "master_voicing",
+        "master_porta"
+      ]
+    },
+    {
+      "name": "Voice",
+      "fn": "Master",
+      "kick": [
+        "voice_global",
+        "voicectl_main"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Usage: lfo_live_host <plugin library> off|on|selftest|quiet
+// Usage: lfo_live_host <plugin library> off|on|selftest|quiet [HZ]
+//   HZ is the refresh rate the plugin was built with (SYNTHYBOY_MPC_LFO_LIVE_HZ, default 10): the number of audioMasterAutomate calls per cursor and second is
+//   at most HZ (the default build: <= 21 in 2 s), and about HZ for a cursor that changes cell at every tick.
 //   off:      built with SYNTHYBOY_MPC_LFO_LIVE=0: numParams is the engine's count, nothing exists after it.
 //   on:       built with it (default settings): four display-only parameters "LFO n Cursor" after the engine's list, idle (0, no audioMasterAutomate)
 //             while no voice sounds; with a note held they follow the LFO cycle and the plugin calls audioMasterAutomate for them (and for nothing else).
@@ -18,6 +20,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
@@ -25,8 +28,16 @@
 #include <string>
 #include <thread>
 #include <vector>
+#if defined(__linux__)
+#include <dirent.h>
+#include <sched.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
-static std::atomic<int> automate[4], automateOther { 0 };
+static std::atomic<int> automate[4], automateOther { 0 }, automateSpectrum { 0 };   // the cursors; anything else; the spectrum columns (they follow the four cursors when the build has them)
+static std::atomic<int> spectrumColumns { 0 };
 static std::atomic<int> firstIndex { -1 };
 static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstIntPtr, void*, float)
 {
@@ -34,6 +45,7 @@ static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstInt
     {
         const int k = index - firstIndex.load();
         if (k >= 0 && k < 4) automate[k].fetch_add (1);
+        else if (k >= 4 && k < 4 + spectrumColumns.load()) automateSpectrum.fetch_add (1);
         else automateOther.fetch_add (1);
         return 1;
     }
@@ -97,6 +109,11 @@ int main (int argc, char** argv)
 {
     if (argc < 3) { std::fprintf (stderr, "usage: lfo_live_host <plugin> off|on|selftest|quiet\n"); return 2; }
     const std::string mode = argv[2];
+    const int hz = argc > 3 ? std::max (1, std::atoi (argv[3])) : 10;
+    const auto started = std::chrono::steady_clock::now();
+    // one call per tick and parameter at the most, counted from the creation of the plugin (the display thread ticks from then on): HZ * elapsed seconds + 2
+    const auto maxCallsSince = [&] (std::chrono::steady_clock::time_point t, int extra) { return static_cast<int> (std::chrono::duration<double> (std::chrono::steady_clock::now() - t).count() * hz) + extra; };
+    const int minFast = (2 * hz * 3) / 4;  // a cursor that changes cell at every tick: nearly all ticks call
 
     // the pure function first: the mapping of the engine's readout to a cursor step
     using synthyboy_mpc::lfoLiveStep;
@@ -124,7 +141,63 @@ int main (int argc, char** argv)
 
     const int n = static_cast<int> (synthyboy::paramCount());
     firstIndex.store (n);
+#if defined(__linux__)
+    // The plugin is created by a thread that is as unlike a normal thread as an unprivileged test can make it: nice 5 (when this process may lower it again,
+    // CAP_SYS_NICE or root; the MPC host runs as root) and pinned to one CPU. The display thread of the plugin ("sb-lfo-display") must not inherit that:
+    // policy SCHED_OTHER, nice 0, every CPU. (The same code undoes an inherited SCHED_FIFO: the plugin sets its policy itself.)
+    bool mayLowerNice = false;
+    std::thread probe ([&] { setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 5); mayLowerNice = setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 0) == 0; });
+    probe.join();
+    AEffect* e = nullptr;
+    bool creatorFifo = false;
+    std::thread creator ([&]
+    {
+        if (mayLowerNice) setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 5);
+        cpu_set_t one; CPU_ZERO (&one);
+        cpu_set_t now; CPU_ZERO (&now);
+        sched_getaffinity (0, sizeof (now), &now);
+        for (int c = 0; c < CPU_SETSIZE; ++c) if (CPU_ISSET (c, &now)) { CPU_SET (c, &one); break; }
+        sched_setaffinity (0, sizeof (one), &one);
+        if (mayLowerNice) { sched_param fifo {}; fifo.sched_priority = 1; if (sched_setscheduler (0, SCHED_FIFO, &fifo) == 0) creatorFifo = true; } // privileged: a real-time creator too
+        e = entry (hostCallback);
+    });
+    creator.join();
+    if (mode != "off")
+    {
+        // the thread sets its scheduling as its first act: poll up to 2 s for it to be there and to have been set
+        const long cpusOnline = sysconf (_SC_NPROCESSORS_ONLN);
+        int found = 0; bool normal = false;
+        for (int attempt = 0; attempt < 200 && ! normal; ++attempt)
+        {
+            found = 0; normal = true;
+            if (DIR* d = opendir ("/proc/self/task"))
+            {
+                while (dirent* de = readdir (d))
+                {
+                    if (de->d_name[0] == '.') continue;
+                    const int id = std::atoi (de->d_name);
+                    char path[64]; std::snprintf (path, sizeof (path), "/proc/self/task/%d/comm", id);
+                    char comm[32] = {};
+                    if (FILE* f = std::fopen (path, "r")) { if (! std::fgets (comm, sizeof (comm), f)) comm[0] = 0; std::fclose (f); }
+                    if (std::strncmp (comm, "sb-lfo-display", 14) != 0) continue;
+                    ++found;
+                    cpu_set_t m; CPU_ZERO (&m);
+                    const bool aff = sched_getaffinity (id, sizeof (m), &m) == 0 && (CPU_COUNT (&m) > 1 || cpusOnline == 1);
+                    const bool policy = sched_getscheduler (id) == SCHED_OTHER;
+                    const int nice = getpriority (PRIO_PROCESS, static_cast<id_t> (id));
+                    normal = normal && aff && policy && (nice == 0 || ! mayLowerNice);
+                    if (attempt == 199 || normal) std::printf ("INFO  display thread %d: policy %d, nice %d, cpus %d (creator: nice %d, 1 cpu%s)\n", id, sched_getscheduler (id), nice, CPU_COUNT (&m), mayLowerNice ? 5 : 0, creatorFifo ? ", SCHED_FIFO" : "");
+                }
+                closedir (d);
+            }
+            if (found == 0) normal = false;
+            if (! normal) std::this_thread::sleep_for (std::chrono::milliseconds (10));
+        }
+        check (normal && found == 1, "threads: the display thread is SCHED_OTHER, nice 0, on all CPUs although its creator is nice 5 on one CPU");
+    }
+#else
     AEffect* e = entry (hostCallback);
+#endif
     if (! e) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
     e->dispatcher (e, effOpen, 0, 0, nullptr, 0.0f);
     e->dispatcher (e, effSetSampleRate, 0, 0, nullptr, 44100.0f);
@@ -147,10 +220,13 @@ int main (int argc, char** argv)
         return fails ? 1 : 0;
     }
 
-    check (e->numParams == n + 4, "numParams is the engine's count + 4");
+    const int extra = e->numParams - (n + 4);   // the spectrum columns of the build (shell-mpc/spectrum.h): none or 32 ("Spectrum 1" .. "Spectrum 32", spectrum_live_host checks them)
+    spectrumColumns.store (extra);
+    std::printf ("INFO  display parameters after the four cursors: %d\n", extra);
+    check (extra == 0 || extra == 32, "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them)");
     bool ok[5] = {};
     const std::string names[5] = { text (e, effGetParamName, n, ok), text (e, effGetParamName, n + 1, ok + 1), text (e, effGetParamName, n + 2, ok + 2),
-                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4, ok + 4) };
+                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4 + extra, ok + 4) };
     check (ok[0] && ok[1] && ok[2] && ok[3] && ! ok[4] && names[0] == "LFO 1 Cursor" && names[3] == "LFO 4 Cursor", "the four names, nothing after them");
     bool allOff = true, propsOk = true;
     VstParameterProperties props;
@@ -160,7 +236,7 @@ int main (int argc, char** argv)
         propsOk = propsOk && e->dispatcher (e, effGetParameterProperties, n + k, 0, &props, 0.0f) == 1;
     }
     check (allOff && e->dispatcher (e, effCanBeAutomated, 0, 0, nullptr, 0.0f) == 1, "display parameters are not automatable, engine parameters are");
-    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4, 0, &props, 0.0f) == 0, "parameter properties exist for the four only");
+    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4 + extra, 0, &props, 0.0f) == 0, "parameter properties exist for the four (and the spectrum columns) only");
 
     if (mode == "on")
     {
@@ -168,15 +244,20 @@ int main (int argc, char** argv)
         bool zero = true;
         for (int k = 0; k < 4; ++k) zero = zero && idle.hi[k] == 0.0f;
         check (zero, "on: idle (0) while no voice sounds");
-        check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther == 0, "on: no audioMasterAutomate while idle");
+        check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther + automateSpectrum == 0, "on: no audioMasterAutomate while idle");
         check (text (e, effGetParamDisplay, n) == "idle", "on: display text of an idle cursor");
         noteOn (e, 60);
+        const auto noteAt = std::chrono::steady_clock::now();
         Sweep s = run (e, n, 2000, true);
         std::printf ("INFO  note held 2 s: LFO 1 %zu distinct cursor values, automate calls %d %d %d %d, other %d\n", s.seen[0].size(), automate[0].load(),
                      automate[1].load(), automate[2].load(), automate[3].load(), automateOther.load());
-        check (s.lo[0] > 0.0f && s.hi[0] <= 1.0f && s.seen[0].size() >= 20, "on: LFO 1 cursor follows the cycle (>= 20 different cells in 2 s, never idle)");
-        check (automate[0].load() >= 30 && automate[0].load() <= 65, "on: about 25 calls a second for a fast LFO (30 .. 65 in 2 s)");
-        check (automateOther.load() == 0, "on: audioMasterAutomate only for the display parameters");
+        check (s.lo[0] > 0.0f && s.hi[0] <= 1.0f && static_cast<int> (s.seen[0].size()) >= std::min (minFast, 8), "on: LFO 1 cursor follows the cycle (several different cells in 2 s, never idle)");
+        const int maxCalls = maxCallsSince (noteAt, 1); // 21 for the default 10 a second (the note is held for 2 s)
+        bool few = true;
+        for (int k = 0; k < 4; ++k) few = few && automate[k].load() <= maxCalls;
+        check (few, "on: at most HZ calls a second for every cursor: <= 21 per cursor in the 2 s of the default");
+        check (automate[0].load() >= minFast && automate[0].load() <= maxCalls, "on: about HZ calls a second for a fast LFO (3/4 of the ticks of 2 s up to the limit)");
+        check (automateOther.load() == 0, "on: audioMasterAutomate only for the display parameters");   // the spectrum columns are display parameters too
         check (text (e, effGetParamDisplay, n).find ('/') != std::string::npos, "on: display text of a cursor cell");
     }
     else
@@ -185,14 +266,19 @@ int main (int argc, char** argv)
         std::printf ("INFO  selftest 2 s: distinct values %zu %zu %zu %zu, automate calls %d %d %d %d, other %d\n", s.seen[0].size(), s.seen[1].size(), s.seen[2].size(),
                      s.seen[3].size(), automate[0].load(), automate[1].load(), automate[2].load(), automate[3].load(), automateOther.load());
         bool sweeps = true;
-        for (int k = 0; k < 4; ++k) sweeps = sweeps && s.seen[k].size() >= 8 && s.lo[k] > 0.0f && s.hi[k] <= 1.0f;
+        for (int k = 0; k < 4; ++k) sweeps = sweeps && s.seen[k].size() >= (hz >= 25 ? 8u : 4u) && s.lo[k] > 0.0f && s.hi[k] <= 1.0f;
         check (sweeps, "selftest: all four cursors move within 1/32 .. 1");
-        check (s.seen[3].size() > s.seen[0].size(), "selftest: LFO 4 is faster than LFO 1");
+        // at 10 ticks a second LFO 4 (64 cells a second) steps 6.4 cells per tick and shows few different cells (the cursor aliases): the call counts tell the speeds apart
+        check (hz >= 25 ? s.seen[3].size() > s.seen[0].size() : automate[3].load() >= automate[0].load(), "selftest: LFO 4 is faster than LFO 1");
         if (mode == "quiet")
-            check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther == 0, "quiet: audioMasterAutomate is never called");
+            check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther + automateSpectrum == 0, "quiet: audioMasterAutomate is never called");
         else
         {
-            check (automate[0].load() >= 8 && automate[3].load() >= 30 && automate[3].load() <= 65 && automateOther.load() == 0, "selftest: audioMasterAutomate per changed cell, display parameters only");
+            const int maxCalls = maxCallsSince (started, 2);
+            bool few = true;
+            for (int k = 0; k < 4; ++k) few = few && automate[k].load() <= maxCalls;
+            check (few, "selftest: at most HZ calls a second for every cursor (+2)");
+            check (automate[0].load() >= std::min (8, minFast) && automate[3].load() >= minFast && automateOther.load() == 0, "selftest: audioMasterAutomate per changed cell, display parameters only");
         }
     }
 

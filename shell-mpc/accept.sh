@@ -4,27 +4,31 @@ set -u
 : "${MPC_SDK:?MPC_SDK must point at mpc-plugin-builder-sdk}"
 cd "$(dirname "$0")/.." || exit 1
 B=build-mpc
-cmake -S . -B $B -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
+# Every build below names every option of the display and the statistics itself: a build directory keeps the options of earlier runs in its CMake cache (a tree that was
+# configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
+BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF"
+cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
 LIB=$(find $B -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 [ -n "$LIB" ] || { echo "ACCEPT FAIL: built library not found under $B"; exit 1; }
 [ -x $B/host_sim ] || c++ -std=c++17 -O2 -o $B/host_sim "$MPC_SDK/tools/host-sim/host_sim.cpp" || { echo "ACCEPT FAIL: host_sim build"; exit 1; }
-$B/host_sim "$LIB" test --seconds 3 --notes 48,52,55 --wav $B/test.wav > $B/test.log 2>&1; rc=$?
+ENGINE_N=$(python3 -c "import json;print(json.load(open('docs/params.json'))['count'])")
+HSR="sh shell-mpc/host-sim-run.sh $B/host_sim"   # accepts a state round-trip failure about display parameters only (LFO n Cursor, Spectrum n: live values, not state)
+$HSR "$LIB" $ENGINE_N $B/test.log test --seconds 3 --notes 48,52,55 --wav $B/test.wav; rc=$?
 grep -E "^(FAIL|WARN)|Result|main pass" $B/test.log | head -40
 [ $rc -eq 0 ] || { tail -25 $B/test.log; echo "ACCEPT FAIL: host_sim test exit $rc"; exit 1; }
-grep -q "^FAIL" $B/test.log && { echo "ACCEPT FAIL: FAIL lines"; exit 1; }
 grep -qE "produced silence|extremely quiet" $B/test.log && { echo "ACCEPT FAIL: silent output"; exit 1; }
-$B/host_sim "$LIB" test --seconds 2 --block 32 --notes 60 > $B/test32.log 2>&1 || { grep -E "^(FAIL|WARN)|Result" $B/test32.log; echo "ACCEPT FAIL: host_sim test with --block 32"; exit 1; }
-grep -qE "^FAIL|produced silence" $B/test32.log && { echo "ACCEPT FAIL: block 32 run"; exit 1; }
+$HSR "$LIB" $ENGINE_N $B/test32.log test --seconds 2 --block 32 --notes 60 || { grep -E "^(FAIL|WARN)|Result" $B/test32.log; echo "ACCEPT FAIL: host_sim test with --block 32"; exit 1; }
+grep -qE "produced silence" $B/test32.log && { echo "ACCEPT FAIL: block 32 run"; exit 1; }
 $B/host_sim "$LIB" dump > $B/dump.json 2> $B/dump.err || { tail -20 $B/dump.err; echo "ACCEPT FAIL: host_sim dump"; exit 1; }
 python3 - $B/dump.json docs/params.json <<'PY' || { echo "ACCEPT FAIL: parameter table"; exit 1; }
 import json, sys
 d = json.load(open(sys.argv[1])); p = json.load(open(sys.argv[2]))
 a = [x["name"] for x in d["params"]]; b = [x["name"] for x in p["params"]]
 ok = True
-extra = ["LFO %d Cursor" % n for n in (1, 2, 3, 4)]   # SYNTHYBOY_MPC_LFO_LIVE (default ON): four display-only parameters after the engine's list
-if len(a) != p["count"] + len(extra) or a[p["count"]:] != extra: print(f"param count {len(a)} != {p['count']} + 4 display parameters {a[p['count']:]}"); ok = False
+extra = ["LFO %d Cursor" % n for n in (1, 2, 3, 4)] + ["Spectrum %d" % n for n in range(1, 33)]   # SYNTHYBOY_MPC_LFO_LIVE and SYNTHYBOY_MPC_SPECTRUM (default ON): display-only parameters after the engine's list
+if len(a) != p["count"] + len(extra) or a[p["count"]:] != extra: print(f"param count {len(a)} != {p['count']} + 36 display parameters {a[p['count']:]}"); ok = False
 for i, (x, y) in enumerate(zip(a, b)):
     if x != y: print(f"param {i}: plugin '{x}' != docs '{y}'"); ok = False; break
 for k, v in (("name", "SynthyBoy"), ("vendor", "Safian"), ("uid", "SfSB"), ("isInstrument", True), ("numInputs", 0), ("numOutputs", 2)):
@@ -36,7 +40,7 @@ EXP=$(nm -gU "$LIB" | awk '{print $NF}' | sort | tr '\n' ' ')
 [ "$EXP" = "_VSTPluginMain " ] || { echo "exports: $EXP" | cut -c1-600; echo "ACCEPT FAIL: exported symbols must be only _VSTPluginMain"; exit 1; }
 # engine selection follows SYNTHYBOY_SHELL_ENGINE (configure-only checks of the compile definition)
 grep -q -- "-DSYNTHYBOY_MPC_ENGINE_VITAL=1" $B/build.ninja || { echo "ACCEPT FAIL: default build (SYNTHYBOY_SHELL_ENGINE=vital) must compile shell-mpc with -DSYNTHYBOY_MPC_ENGINE_VITAL=1"; exit 1; }
-cmake -S . -B $B-own -G Ninja -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" > $B-own.configure.log 2>&1 || { tail -20 $B-own.configure.log; echo "ACCEPT FAIL: configure with SYNTHYBOY_SHELL_ENGINE=own"; exit 1; }
+cmake -S . -B $B-own -G Ninja $BASE_OPTS -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" > $B-own.configure.log 2>&1 || { tail -20 $B-own.configure.log; echo "ACCEPT FAIL: configure with SYNTHYBOY_SHELL_ENGINE=own"; exit 1; }
 grep -q -- "-DSYNTHYBOY_MPC_ENGINE_VITAL=0" $B-own/build.ninja || { echo "ACCEPT FAIL: with -DSYNTHYBOY_SHELL_ENGINE=own (and Vital in the build) shell-mpc must be compiled with -DSYNTHYBOY_MPC_ENGINE_VITAL=0"; exit 1; }
 grep -q "SYNTHYBOY_MPC_ENGINE_VITAL" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not use SYNTHYBOY_MPC_ENGINE_VITAL"; exit 1; }
 # plugin folder / content path logic
@@ -73,15 +77,15 @@ ok = len(pr) == 113 and pr[0] == "Init" and "808 Boom" in pr
 if not ok: print("programs in the dump:", len(pr), pr[:5])
 sys.exit(0 if ok else 1)
 PY
-$B/host_sim "$PLIB" test --seconds 2 --notes 48,55 > $B/test-pkg.log 2>&1 || { grep -E "^(FAIL|WARN)|Result" $B/test-pkg.log; echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
-grep -qE "^FAIL|produced silence" $B/test-pkg.log && { echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
+$HSR "$PLIB" $ENGINE_N $B/test-pkg.log test --seconds 2 --notes 48,55 || { grep -E "^(FAIL|WARN)|Result" $B/test-pkg.log; echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
+grep -qE "produced silence" $B/test-pkg.log && { echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
 grep -q 'Content/presets' scripts/build-mpc.sh || { echo "ACCEPT FAIL: scripts/build-mpc.sh does not copy content/presets to Content/presets"; exit 1; }
 # stub host: state round trip with content, re-prepare on rate change, two-thread parameter writes (plain build, then ThreadSanitizer)
 INC="-I core/include -I $MPC_SDK/framework"
 c++ -std=c++17 -O1 $INC -o $B/stub_host shell-mpc/tests/stub_host.cpp $B/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: stub_host build"; exit 1; }
 $B/stub_host "$LIB" > $B/stub.log 2>&1 || { tail -15 $B/stub.log; echo "ACCEPT FAIL: stub_host"; exit 1; }
 T=build-mpc-tsan
-cmake -S . -B $T -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $T.configure.log 2>&1 && cmake --build $T --target synthyboy_mpc > $T.build.log 2>&1 || { tail -30 $T.build.log; echo "ACCEPT FAIL: ThreadSanitizer build"; exit 1; }
+cmake -S . -B $T -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $T.configure.log 2>&1 && cmake --build $T --target synthyboy_mpc > $T.build.log 2>&1 || { tail -30 $T.build.log; echo "ACCEPT FAIL: ThreadSanitizer build"; exit 1; }
 TLIB=$(find $T -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 c++ -std=c++17 -O1 -g -fsanitize=thread $INC -o $T/stub_host shell-mpc/tests/stub_host.cpp $T/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: tsan stub_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $T/stub_host "$TLIB" > $T/stub.log 2>&1
@@ -108,20 +112,52 @@ grep -q "programs_host: OK" $T/programs.log || { grep -E "^FAIL|^      " $T/prog
 LIVEINC="-I core/include -I shell-mpc -I $MPC_SDK/framework"
 live_build() { # name, cmake options...
     n=$1; shift
-    cmake -S . -B build-mpc-live-$n -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "$@" > build-mpc-live-$n.configure.log 2>&1 && cmake --build build-mpc-live-$n --target synthyboy_mpc > build-mpc-live-$n.build.log 2>&1 || { tail -30 build-mpc-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
+    cmake -S . -B build-mpc-live-$n -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "$@" > build-mpc-live-$n.configure.log 2>&1 && cmake --build build-mpc-live-$n --target synthyboy_mpc > build-mpc-live-$n.build.log 2>&1 || { tail -30 build-mpc-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
 }
-live_build off -DSYNTHYBOY_MPC_LFO_LIVE=OFF
+live_build off -DSYNTHYBOY_MPC_LFO_LIVE=OFF -DSYNTHYBOY_MPC_SPECTRUM=OFF
 live_build on
 live_build self -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON
 live_build quiet -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=OFF
+live_build hz25 -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
+live_build stats -DSYNTHYBOY_MPC_CALLBACK_STATS=ON
+live_build specoff -DSYNTHYBOY_MPC_SPECTRUM=OFF
+live_build specself -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON
+live_build specself25 -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: lfo_live_host build"; exit 1; }
-for v in off:off on:on self:selftest quiet:quiet; do
-    d=${v%%:*}; m=${v##*:}
-    $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m)"; exit 1; }
+# the refresh rate: the default is 10 a second (at most 21 calls per cursor in 2 s), SYNTHYBOY_MPC_LFO_LIVE_HZ=25 still changes it (the checks scale with HZ)
+for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do
+    d=${v%%:*}; r=${v#*:}; m=${r%%:*}; hz=${r##*:}
+    $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m, $hz Hz)"; exit 1; }
 done
+# live spectrum (SYNTHYBOY_MPC_SPECTRUM, default ON): the band mapping and the analyser on known signals, then the plugin in four variants (off, on, the self-test wave at 10 and 25 a second).
+# The switched-off build has no trace of it; the state chunk is the same in every variant.
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -o $B/spectrum_bands_host shell-mpc/tests/spectrum_bands_host.cpp || { echo "ACCEPT FAIL: spectrum_bands_host build"; exit 1; }
+$B/spectrum_bands_host > $B/spectrum-bands.log 2>&1 || { grep -E "^FAIL" $B/spectrum-bands.log; echo "ACCEPT FAIL: spectrum_bands_host"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -o $B/spectrum_host shell-mpc/tests/spectrum_host.cpp -lpthread || { echo "ACCEPT FAIL: spectrum_host build"; exit 1; }
+$B/spectrum_host > $B/spectrum-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-host.log; echo "ACCEPT FAIL: spectrum_host"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/spectrum_live_host shell-mpc/tests/spectrum_live_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: spectrum_live_host build"; exit 1; }
+for v in specoff:off:10 on:on:10 specself:selftest:10 specself25:selftest:25; do
+    d=${v%%:*}; r=${v#*:}; m=${r%%:*}; hz=${r##*:}
+    $B/spectrum_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/spectrum-live-$d.log 2>&1 || { grep -E "^FAIL" $B/spectrum-live-$d.log; echo "ACCEPT FAIL: spectrum_live_host ($m, $hz Hz)"; exit 1; }
+done
+for d in specoff specself specself25; do
+    [ "$(grep -h '^chunk ' $B/spectrum-live-on.log)" = "$(grep -h '^chunk ' $B/spectrum-live-$d.log)" ] || { echo "ACCEPT FAIL: the state chunk differs in the spectrum variant $d"; exit 1; }
+done
+grep -q "Spectrum %d" "$(find build-mpc-live-on -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" || { echo "ACCEPT FAIL: the spectrum build has no spectrum code"; exit 1; }
+grep -q "Spectrum %d" "$(find build-mpc-live-specoff -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" && { echo "ACCEPT FAIL: trace of the spectrum in the build with SYNTHYBOY_MPC_SPECTRUM=OFF"; exit 1; }
+# callback statistics (SYNTHYBOY_MPC_CALLBACK_STATS, diagnostics): off in the default build (no trace of it in the module), on in the stats variant
+STATSLIB="$(find build-mpc-live-stats -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+grep -q "dispatcher_opcodes:" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no host statistics (format 2)"; exit 1; }
+grep -q "synthyboy-callback-stats" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no statistics code"; exit 1; }
+for f in "$LIB" "$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"; do
+    grep -q "synthyboy-callback-stats" "$f" && { echo "ACCEPT FAIL: statistics code in a build without SYNTHYBOY_MPC_CALLBACK_STATS"; exit 1; }
+    grep -q "dispatcher_opcodes:" "$f" && { echo "ACCEPT FAIL: host statistics (format 2) in a build without SYNTHYBOY_MPC_CALLBACK_STATS"; exit 1; }
+done
+c++ -std=c++17 -O1 -Wall -Wextra -I $MPC_SDK/framework -I shell-mpc -o $B/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: callback_stats_host build"; exit 1; }
+$B/callback_stats_host "$STATSLIB" $B/callback-stats.txt > $B/callback-stats.log 2>&1 || { grep -E "^FAIL" $B/callback-stats.log; echo "ACCEPT FAIL: callback_stats_host"; exit 1; }
 [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-on.log)" ] && [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-self.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the LFO display variants"; exit 1; }
 TL=build-mpc-live-tsan
-cmake -S . -B $TL -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
+cmake -S . -B $TL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
 TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan lfo_live_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on > $TL/live.log 2>&1
@@ -130,4 +166,24 @@ if grep -q "WARNING: ThreadSanitizer" $TL/live.log; then
     echo "ACCEPT FAIL: data races in the LFO display (full report: $TL/live.log)"; exit 1
 fi
 grep -q "^FAIL" $TL/live.log && { grep "^FAIL" $TL/live.log; echo "ACCEPT FAIL: tsan lfo_live_host"; exit 1; }
+# the spectrum ring (audio thread writes, display thread reads) and the plugin with the spectrum under ThreadSanitizer
+c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/spectrum_host shell-mpc/tests/spectrum_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan spectrum_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/spectrum_host > $TL/spectrum-host.log 2>&1
+c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/spectrum_live_host shell-mpc/tests/spectrum_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan spectrum_live_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/spectrum_live_host "$TLLIB" on > $TL/spectrum-live.log 2>&1
+for f in $TL/spectrum-host.log $TL/spectrum-live.log; do
+    if grep -q "WARNING: ThreadSanitizer" $f; then
+        grep -A14 "WARNING: ThreadSanitizer" $f | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+        echo "ACCEPT FAIL: data races in the spectrum (full report: $f)"; exit 1
+    fi
+    grep -q "^FAIL" $f && { grep "^FAIL" $f; echo "ACCEPT FAIL: tsan spectrum test ($f)"; exit 1; }
+done
+# the same ThreadSanitizer build has the statistics switched on: the display thread and the writer thread read what the audio thread writes
+c++ -std=c++17 -O1 -g -fsanitize=thread -I $MPC_SDK/framework -I shell-mpc -o $TL/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan callback_stats_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/callback_stats_host "$TLLIB" $TL/callback-stats.txt > $TL/stats.log 2>&1
+if grep -q "WARNING: ThreadSanitizer" $TL/stats.log; then
+    grep -A14 "WARNING: ThreadSanitizer" $TL/stats.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+    echo "ACCEPT FAIL: data races in the callback statistics (full report: $TL/stats.log)"; exit 1
+fi
+grep -q "^FAIL" $TL/stats.log && { grep "^FAIL" $TL/stats.log; echo "ACCEPT FAIL: tsan callback_stats_host"; exit 1; }
 echo "ACCEPT OK"
