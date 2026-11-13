@@ -88,8 +88,47 @@ class MpcDocTests(unittest.TestCase):
         low = observed.lower()
         for phrase in ("stock mpc app", "30 pages", "by ear"):
             self.assertIn(phrase, low, "the device observations do not say: %s" % phrase)
-        for phrase in ("saving a project", "during playback"):
-            self.assertIn(phrase, unverified.lower(), "still unverified and must be listed as such: %s" % phrase)
+        self.assertIn("during playback", unverified.lower(), "the CPU load during playback is still unverified and must be listed as such")
+
+    def test_heavy_patch_ran_four_unison_voices(self):
+        observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
+        self.assertIn("asks for 7 unison voices per oscillator, tier low ran 4", observed)
+        self.assertNotIn("7 unison voices each, 2 filters", observed)
+
+    def test_project_save_and_load_is_an_observation(self):
+        body = section("Known host behaviour") or ""
+        observed, unverified = body.split("### Per the SDK documentation")
+        for value in ("Sbtest", "Acid Saw Reso *", "79.4", "450", "78", "Nobody listened", "4 to 7 %"):
+            self.assertIn(value, observed)
+        self.assertNotIn("has not been tried", unverified)
+        self.assertNotIn("still not verified on the device: saving", unverified.lower())
+
+    def test_unison_cap_measurement_and_conclusions(self):
+        observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
+        for value in ("`c3a2065`", "`4cd77ce`", "3.73 / 5.46 / 6.04", "4.16 / 5.43 / 5.67", "5.36 / 8.27 / 8.98", "5.97 / 9.00 / 9.62",
+                      "4.64 / 5.52 / 5.66", "3.64 / 4.85 / 5.40", "0.559 / 0.781 / 1.016", "does not fit into the 2.902 ms block",
+                      "default of the unison cap is 3", "No decision has been made about a cap on the number of notes",
+                      "14 of the 112 factory presets", "2 oscillators with 7 unison voices each"):
+            self.assertIn(value, observed)
+
+    def test_presets_named_as_affected_match_the_report(self):
+        # the names in the document are the presets whose largest unison on an active oscillator is above 3
+        import json
+        observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
+        line = next(l for l in observed.splitlines() if "14 of the 112 factory presets" in l)
+        files = sorted((ROOT / "content" / "presets").rglob("*.sbpreset"))
+        self.assertEqual(len(files), 112)
+        affected = []
+        for f in files:
+            d = json.loads(f.read_text(encoding="utf-8"))
+            p = d["state"]["params"]
+            top = max([int(round(p.get("osc%d.unison.voices" % n, 1))) for n in (1, 2, 3) if p.get("osc%d.on" % n, 0)] or [0])
+            (affected if top > 3 else []).append(d["meta"]["name"])
+            if top <= 3:
+                self.assertNotIn(d["meta"]["name"] + ",", line)
+        self.assertEqual(len(affected), 14)
+        for name in affected:
+            self.assertIn(name, line)
 
     def test_no_placeholders(self):
         for word in ("TODO", "TBD", "FIXME", "lorem"):

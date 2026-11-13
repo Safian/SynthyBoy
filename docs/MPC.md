@@ -60,12 +60,31 @@ Measured on 2026-11-13 with the bench on the device (MPC Key 61, 44.1 kHz, 128 f
 - Idle (no notes): 0.022 ms per block. Each additional note costs about 0.070 ms per block.
 - Note-on of 8 notes: average 0.97 ms, worst 1.34 ms.
 - Preparing the engine (prepare) takes 542 ms.
-- Heavy patch (3 oscillators with 7 unison voices each, 2 filters, effects, 8 notes): average 5.41 ms, 99th percentile 8.09 ms, worst 9.20 ms, which is longer than one block.
+- Heavy patch (3 oscillators, 2 filters, effects, 8 notes; the patch asks for 7 unison voices per oscillator, tier low ran 4): average 5.41 ms, 99th percentile 8.09 ms, worst 9.20 ms, which is longer than one block.
 - The bench option `--ftz` makes no difference to these times.
+
+Measured on 2026-11-13 in the afternoon with a unison cap in the engine (engine commit `c3a2065`), the same heavy patch with 8 notes, block time average / 99th percentile / worst:
+
+- Cap 1: 3.73 / 5.46 / 6.04 ms.
+- Cap 2: 4.16 / 5.43 / 5.67 ms.
+- Cap 3: 5.36 / 8.27 / 8.98 ms.
+- Cap 4: 5.97 / 9.00 / 9.62 ms.
+- After one optimisation round (engine commit `4cd77ce`): cap 3: 4.64 / 5.52 / 5.66 ms; cap 1: 3.64 / 4.85 / 5.40 ms; the basic patch with 8 notes: 0.559 / 0.781 / 1.016 ms.
+
+What follows from these numbers:
+
+- The heavy patch with 8 notes does not fit into the 2.902 ms block even without unison (cap 1).
+- The default of the unison cap is 3; that there is a cap is the owner's decision. No decision has been made about a cap on the number of notes.
+- A cap of 3 affects 14 of the 112 factory presets (`scripts/preset-unison-report.py` lists every preset): Fat Reese, Cosmic Drift Lead, Hyper Saw Lead, Diffusor Cloud Pad, Ethereal Glass, Frozen Aurora, Harmonic Cloud, Infinite Horizon, Lush Analog Pad, Space Odyssey Pad, Tri-Band Split Texture, Velvet Strings, Vintage Brass Pad, Pizzicato Strings. The heaviest factory preset has 2 oscillators with 7 unison voices each (Hyper Saw Lead).
+
+Saving a project and loading it again, tried on 2026-11-13 in the afternoon:
+
+- After the MPC application was restarted, the project (Sbtest) loaded with the preset name "Acid Saw Reso *" and the edited values: Osc 1 Level 79.4, Filter 1 Cutoff 450, Resonance 78. Nobody listened to the sound after loading.
+- With the plugin loaded and idle, the MPC process uses 4 to 7 % of the CPU.
 
 ### Per the SDK documentation / not yet verified on the device
 
-These statements come from the SDK's documents (host-contract.md, install-and-test.md). Two things are still not verified on the device: saving a project and loading it again (so the host side of the program handling below is unconfirmed), and the CPU load during playback in the MPC app.
+These statements come from the SDK's documents (host-contract.md, install-and-test.md). A project was saved and loaded once (see above), but in which order the host restores the program and the chunk was not observed, so the host side of the program handling below is unconfirmed. Still not verified on the device: the CPU load during playback in the MPC app.
 
 - The sample rate is fixed, and the user can choose other block sizes (32, 64, 96, 192, 256, 512) in Preferences; the announced block size is a maximum. The shell handles any smaller count.
 - The host has no crash protection for plugins: a crash in the plugin takes the MPC application down.
