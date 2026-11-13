@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Usage: programs_host <plugin library> <presets dir | none>
+// Usage: programs_host <plugin library> <presets dir | none> [<second plugin library> <its presets dir>]
+//   second library: a copy of the plugin in another plugin folder whose Content/presets has FEWER presets (a later package with a
+//   different list): chunks saved by the first one are loaded into it.
 //   <presets dir>: the library sits in a plugin folder whose Content/presets is a copy of this directory;
 //   none:          the library is outside any plugin folder: exactly one program, "Init".
 // Links the core to read the preset files itself. Run the ThreadSanitizer build of it too.
@@ -193,9 +195,83 @@ int main (int argc, char** argv)
         select (e, pa);
         e->dispatcher (e, effSetChunk, 0, static_cast<VstIntPtr> (plain.size()), const_cast<char*> (plain.data()), 0.0f);
         check (program (e) == pa && matches (e, defaults, "plain chunk"), "a chunk without a program number loads its values and keeps the current program number");
+        const std::string oldStyle = "{\"mpcProgram\":" + std::to_string (pb) + "," + plain.substr (1);
+        e->dispatcher (e, effSetChunk, 0, static_cast<VstIntPtr> (oldStyle.size()), const_cast<char*> (oldStyle.data()), 0.0f);
+        check (program (e) == pb, "an older chunk with only the program number still restores that program number");
+        check (saved.find ("\"mpcProgramName\":\"" + want[static_cast<size_t> (pa - 1)].meta.name + "\",") != std::string::npos, "the chunk carries the program's name");
+
+        // "no program": the chunk names a program this plugin does not have
+        auto currentName = [&] { char buf[64] = {}; e->dispatcher (e, effGetProgramName, 0, 0, buf, 0.0f); return std::string (buf); };
+        const std::string gone = "{\"mpcProgram\":3,\"mpcProgramName\":\"No Such Preset\"," + saved.substr (saved.find ("\"format\""));
+        select (e, pb);
+        e->dispatcher (e, effSetChunk, 0, static_cast<VstIntPtr> (gone.size()), const_cast<char*> (gone.data()), 0.0f);
+        check (program (e) == 0, "a chunk whose program name is unknown: effGetProgram returns 0 (a valid index)");
+        check (currentName() == "No Such Preset", "... and effGetProgramName shows the saved name");
+        check (std::fabs (e->getParameter (e, 0) - edited) < 1.0e-3f, "... and the sound comes from the chunk");
+        const std::string again = getChunk (e);
+        check (again.rfind ("{\"mpcProgram\":0,\"mpcProgramName\":\"No Such Preset\",", 0) == 0, "... and the next chunk keeps that name with index 0");
+        select (e, 0);
+        check (program (e) == 0 && currentName() == "Init" && matches (e, defaults, "Init after no-program"), "... and selecting program 0 then loads Init (no protection in the no-program state)");
         const std::string wild = "{\"mpcProgram\":100000," + plain.substr (1);
+        select (e, pa);
         e->dispatcher (e, effSetChunk, 0, static_cast<VstIntPtr> (wild.size()), const_cast<char*> (wild.data()), 0.0f);
-        check (program (e) == pa, "a chunk with a program number beyond the list keeps the current program number");
+        check (program (e) == 0 && currentName() == "Init", "an old chunk with a number beyond the list: no program (index 0, shown as Init)");
+
+        // a second plugin whose preset list differs (fewer presets, so the indices moved)
+        if (argc >= 5)
+        {
+            void* lib2 = dlopen (argv[3], RTLD_NOW | RTLD_LOCAL);
+            auto entry2 = lib2 != nullptr ? reinterpret_cast<MainProc> (dlsym (lib2, "VSTPluginMain")) : nullptr;
+            AEffect* e2 = entry2 != nullptr ? entry2 (hostCallback) : nullptr;
+            check (e2 != nullptr && e2 != e, "the second plugin loads");
+            if (e2 != nullptr)
+            {
+                e2->dispatcher (e2, effOpen, 0, 0, nullptr, 0.0f);
+                e2->dispatcher (e2, effSetSampleRate, 0, 0, nullptr, 48000.0f);
+                e2->dispatcher (e2, effSetBlockSize, 0, 256, nullptr, 0.0f);
+                e2->dispatcher (e2, effMainsChanged, 0, 1, nullptr, 0.0f);
+                std::vector<synthyboy::PresetEntry> want2 = synthyboy::scanPresetDirectory (argv[4]);
+                check (! want2.empty() && e2->numPrograms == 1 + static_cast<int> (want2.size()) && e2->numPrograms < e->numPrograms, "the second plugin has fewer programs");
+                auto indexIn2 = [&] (const std::string& name) { for (int i = 1; i < e2->numPrograms; ++i) if (nameOf (e2, i) == name.substr (0, kVstMaxProgNameLen)) return i; return -1; };
+                // a program both have, at a different index
+                int both = -1, onlyFirst = -1;
+                for (int i = count; i >= 1; --i)
+                {
+                    const int j = indexIn2 (want[static_cast<size_t> (i - 1)].meta.name);
+                    if (both < 0 && j > 0 && j != i) both = i;
+                    if (onlyFirst < 0 && j < 0) onlyFirst = i;
+                }
+                check (both > 0 && onlyFirst > 0, "the test found a program at a different index and one that is missing in the second plugin");
+                if (both > 0 && onlyFirst > 0)
+                {
+                    select (e, both);
+                    const float ed = e->getParameter (e, 0) > 0.5f ? 0.125f : 0.875f;
+                    e->setParameter (e, 0, ed);
+                    const std::string c1 = getChunk (e);
+                    e2->dispatcher (e2, effSetChunk, 0, static_cast<VstIntPtr> (c1.size()), const_cast<char*> (c1.data()), 0.0f);
+                    const int j = indexIn2 (want[static_cast<size_t> (both - 1)].meta.name);
+                    check (static_cast<int> (e2->dispatcher (e2, effGetProgram, 0, 0, nullptr, 0.0f)) == j, "the program is found by its name at its new index");
+                    check (std::fabs (e2->getParameter (e2, 0) - ed) < 1.0e-3f, "... with the edited value from the chunk");
+                    e2->dispatcher (e2, effSetProgram, 0, j, nullptr, 0.0f);
+                    check (std::fabs (e2->getParameter (e2, 0) - ed) < 1.0e-3f, "... and the protection is armed for the new index");
+
+                    select (e, onlyFirst);
+                    const std::string c2 = getChunk (e);
+                    e2->dispatcher (e2, effSetChunk, 0, static_cast<VstIntPtr> (c2.size()), const_cast<char*> (c2.data()), 0.0f);
+                    char buf[64] = {}; e2->dispatcher (e2, effGetProgramName, 0, 0, buf, 0.0f);
+                    check (static_cast<int> (e2->dispatcher (e2, effGetProgram, 0, 0, nullptr, 0.0f)) == 0
+                           && std::string (buf) == want[static_cast<size_t> (onlyFirst - 1)].meta.name.substr (0, kVstMaxProgNameLen),
+                           "a program the second plugin does not have: index 0, the saved name is shown");
+                    synthyboy::ParamValues vm; load (onlyFirst, vm);
+                    bool sound = true;
+                    for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+                        sound = sound && std::fabs (e2->getParameter (e2, static_cast<VstInt32> (i)) - synthyboy::toNormalised (synthyboy::paramTable()[i], vm.plain[i])) < 1.0e-5f;
+                    check (sound, "... and its sound is the chunk's");
+                }
+                e2->dispatcher (e2, effMainsChanged, 0, 0, nullptr, 0.0f);
+                e2->dispatcher (e2, effClose, 0, 0, nullptr, 0.0f);
+            }
+        }
 
         // program changes from the UI thread while the audio thread processes
         std::vector<float> left (256), right (256);

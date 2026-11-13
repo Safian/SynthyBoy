@@ -188,6 +188,12 @@ struct PluginInstance
     // parameter write; armed by effSetChunk when the chunk contains a valid program index.
     std::atomic<int> protectedProgram {-1};
 
+    // "no program" state = the loaded chunk names a program this package does not have;
+    // the sound is the chunk's, the host is given index 0, the saved name is shown
+    // and saved again.  Only the UI thread touches these.
+    bool noProgram = false;
+    std::string noProgramName;
+
     // Chunk buffer: owned by the plugin instance, reused across effGetChunk calls.
     std::vector<char> chunkBuffer;
 
@@ -263,6 +269,22 @@ struct PluginInstance
 static PluginInstance* getInstance(AEffect* e) noexcept
 {
     return static_cast<PluginInstance*>(e->object);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: current program name (handles the "no program" state)
+// ---------------------------------------------------------------------------
+
+static std::string currentProgramName (PluginInstance* inst)
+{
+    if (inst->noProgram)
+        return inst->noProgramName.empty() ? "Init" : inst->noProgramName;
+    int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
+    if (prog == 0)
+        return "Init";
+    if (prog >= 1 && prog <= static_cast<int> (inst->programs.size()))
+        return inst->programs[static_cast<size_t> (prog - 1)].name;
+    return "Init";
 }
 
 // ---------------------------------------------------------------------------
@@ -348,6 +370,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (wasProtected)
         {
             inst->currentProgram.store (prog, std::memory_order_relaxed);
+            inst->noProgram = false;
+            inst->noProgramName.clear();
             return 1;
         }
 
@@ -376,6 +400,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         }
 
         inst->currentProgram.store (prog, std::memory_order_relaxed);
+        inst->noProgram = false;
+        inst->noProgramName.clear();
         // Request display update from host
         if (inst->audioMaster)
             inst->audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
@@ -399,9 +425,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!inst) return 0;
         char* name = static_cast<char*>(ptr);
         if (!name) return 0;
-        int prog = inst->currentProgram.load (std::memory_order_relaxed);
-        if (prog < 0 || prog >= static_cast<int> (inst->programs.size()) + 1) return 0;
-        const std::string& progName = (prog == 0) ? std::string ("Init") : inst->programs[static_cast<size_t> (prog - 1)].name;
+        const std::string& progName = currentProgramName (inst);
         copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
         return 1;
     }
@@ -539,7 +563,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         for (size_t i = 0; i < synthyboy::paramCount(); ++i)
             values.plain[i] = inst->paramMirror[i].load(std::memory_order_relaxed);
         std::string state = synthyboy::saveState(values, inst->content);
-        std::string chunk = synthyboy_mpc::chunkWithProgram (state, inst->currentProgram.load (std::memory_order_relaxed));
+        int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
+        std::string chunk = synthyboy_mpc::chunkWithProgram (state, prog, currentProgramName (inst));
         // Reuse the plugin-owned chunk buffer (VST2: host does not free chunk memory)
         inst->chunkBuffer.resize(chunk.size());
         std::memcpy(inst->chunkBuffer.data(), chunk.data(), chunk.size());
@@ -564,21 +589,37 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (result.status == synthyboy::LoadStatus::ok || result.status == synthyboy::LoadStatus::newer_version)
             {
                 // Try to extract program number from chunk
-                int p = synthyboy_mpc::programFromChunk(chunk, static_cast<size_t>(size));
-                if (0 <= p && p < static_cast<int>(inst->programs.size()) + 1)
+                int idx = synthyboy_mpc::programFromChunk(chunk, static_cast<size_t>(size));
+
+                applyState (inst, newValues, std::move(newContent));
+
+                if (idx == -1)
                 {
-                    // Apply the state
-                    applyState (inst, newValues, std::move(newContent));
-                    // Arm protection for this program
-                    inst->currentProgram.store (p, std::memory_order_relaxed);
-                    inst->protectedProgram.store (p, std::memory_order_relaxed);
+                    // Plain state document without a program number: leave currentProgram / noProgram / noProgramName as they are
+                    inst->protectedProgram.store (-1, std::memory_order_relaxed);
                 }
                 else
                 {
-                    // No valid program in chunk: disarm protection
-                    inst->protectedProgram.store (-1, std::memory_order_relaxed);
-                    // Still apply the state
-                    applyState (inst, newValues, std::move(newContent));
+                    // Has a program number: try to read the name
+                    std::string name;
+                    bool hasName = synthyboy_mpc::programNameFromChunk(chunk, static_cast<size_t>(size), name);
+                    int r = synthyboy_mpc::resolveProgram (inst->programs, idx, hasName, name);
+
+                    if (r >= 0)
+                    {
+                        inst->currentProgram.store (r, std::memory_order_relaxed);
+                        inst->noProgram = false;
+                        inst->noProgramName.clear();
+                        inst->protectedProgram.store (r, std::memory_order_relaxed);
+                    }
+                    else
+                    {
+                        // Program not found: no-program state
+                        inst->currentProgram.store (0, std::memory_order_relaxed);
+                        inst->noProgram = true;
+                        inst->noProgramName = hasName ? name : "";
+                        inst->protectedProgram.store (-1, std::memory_order_relaxed);
+                    }
                 }
             }
             else

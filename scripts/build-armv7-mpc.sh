@@ -8,7 +8,8 @@
 #   --out DIR        where the finished plugin folder is assembled (default: <repo>/build-armv7-mpc)
 #   --jobs N         parallel compile jobs inside the container (default 2)
 #   --build-dir DIR  CMake build tree on the host (default: <repo>/build-armv7-mpc/tree)
-#   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder
+#   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder instead of generating it
+#                    (default: generated from scripts/mpc-ui-pages.json with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py)
 #
 # Environment: MPC_SDK (required: path to the MPC plugin SDK), ARMV7_IMAGE (default: the pinned Debian 12 image below).
 #
@@ -135,10 +136,16 @@ mkdir -p "$plugin_folder/Content"
 rm -rf "$plugin_folder/Content/presets"
 cp -R "$repo_root/content/presets" "$plugin_folder/Content/presets"
 
-# Copy Plugin Skins/ if --skins DIR was given
+# Plugin Skins/: the given directory, or generated from the page list
+rm -rf "$plugin_folder/Plugin Skins"
 if [[ -n "$skins_dir" ]]; then
-    rm -rf "$plugin_folder/Plugin Skins"
     cp -R "$skins_dir" "$plugin_folder/Plugin Skins"
+else
+    ui_tmp="$(mktemp -d)"
+    python3 "$repo_root/scripts/gen-mpc-ui.py" --params "$repo_root/docs/params.json" --pages "$repo_root/docs/kick-pages.json" \
+        --layout "$repo_root/scripts/mpc-ui-pages.json" --out "$ui_tmp"
+    python3 "$MPC_SDK/tools/gen_ui.py" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
+    rm -rf "$ui_tmp"
 fi
 
 # Generate plugin.json and version.xml

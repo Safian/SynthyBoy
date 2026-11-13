@@ -61,7 +61,9 @@ $B/programs_host "$NC/VST/$(basename "$LIB")" none > $B/programs-nocontent.log 2
 echo x > "$NC/Content"
 $B/programs_host "$NC/VST/$(basename "$LIB")" none > $B/programs-badcontent.log 2>&1 || { grep -E "^FAIL|^      " $B/programs-badcontent.log | head -12; echo "ACCEPT FAIL: programs_host (plugin folder whose Content is a file)"; exit 1; }
 grep -q "catch (...)" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: no exception barrier in the shell"; exit 1; }
-$B/programs_host "$PLIB" content/presets > $B/programs-pkg.log 2>&1 || { grep -E "^FAIL|^      " $B/programs-pkg.log | head -20; echo "ACCEPT FAIL: programs_host (library in a plugin folder with Content/presets)"; exit 1; }
+# a second package with fewer presets (a later version whose list differs): chunks of the first are loaded into it
+P2="$B/pkg2/Safian - VST - SynthyBoy"; rm -rf $B/pkg2; mkdir -p "$P2/VST" "$P2/Content"; cp -R content/presets "$P2/Content/presets"; rm -rf "$P2/Content/presets/Bass"; cp "$LIB" "$P2/VST/"; echo '{}' > "$P2/plugin.json"
+$B/programs_host "$PLIB" content/presets "$P2/VST/$(basename "$LIB")" "$P2/Content/presets" > $B/programs-pkg.log 2>&1 || { grep -E "^FAIL|^      " $B/programs-pkg.log | head -20; echo "ACCEPT FAIL: programs_host (library in a plugin folder with Content/presets)"; exit 1; }
 $B/host_sim "$PLIB" dump > $B/dump-pkg.json 2> $B/dump-pkg.err || { tail -20 $B/dump-pkg.err; echo "ACCEPT FAIL: host_sim dump of the packaged library"; exit 1; }
 python3 - $B/dump-pkg.json <<'PY' || { echo "ACCEPT FAIL: program list in the host_sim dump"; exit 1; }
 import json, sys
@@ -91,7 +93,8 @@ grep -q "stub_host: OK" $T/stub.log || { tail -15 $T/stub.log; echo "ACCEPT FAIL
 TPK="$T/pkg/Safian - VST - SynthyBoy"
 rm -rf $T/pkg; mkdir -p "$TPK/VST" "$TPK/Content"; cp -R content/presets "$TPK/Content/presets"; cp "$TLIB" "$TPK/VST/"; echo '{}' > "$TPK/plugin.json"
 c++ -std=c++17 -O1 -g -fsanitize=thread $INC -o $T/programs_host shell-mpc/tests/programs_host.cpp $T/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: tsan programs_host build"; exit 1; }
-TSAN_OPTIONS="halt_on_error=0 exitcode=0" $T/programs_host "$TPK/VST/$(basename "$TLIB")" content/presets > $T/programs.log 2>&1
+T2="$T/pkg2/Safian - VST - SynthyBoy"; rm -rf $T/pkg2; mkdir -p "$T2/VST" "$T2/Content"; cp -R content/presets "$T2/Content/presets"; rm -rf "$T2/Content/presets/Bass"; cp "$TLIB" "$T2/VST/"; echo '{}' > "$T2/plugin.json"
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $T/programs_host "$TPK/VST/$(basename "$TLIB")" content/presets "$T2/VST/$(basename "$TLIB")" "$T2/Content/presets" > $T/programs.log 2>&1
 if grep -q "WARNING: ThreadSanitizer" $T/programs.log; then
     echo "ThreadSanitizer reports in programs_host: $(grep -c 'WARNING: ThreadSanitizer' $T/programs.log); innermost frames:"
     grep -A14 "WARNING: ThreadSanitizer" $T/programs.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
