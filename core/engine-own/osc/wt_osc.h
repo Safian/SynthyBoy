@@ -45,6 +45,18 @@ struct OscTick
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
 };
 
+/** True if every field of the two ticks is equal (floats compared as values: a NaN is never equal, which only costs the shortcut). */
+inline bool sameOscTick (const OscTick& a, const OscTick& b) noexcept
+{
+    return a.wt == b.wt && a.semis == b.semis && a.frame == b.frame && a.frameSpread == b.frameSpread && a.level == b.level && a.pan == b.pan && a.panRight == b.panRight
+        && a.voices == b.voices && a.detuneSemis == b.detuneSemis && a.curve == b.curve && a.mode == b.mode && a.stack == b.stack && a.stackRepeat == b.stackRepeat
+        && a.blendShape == b.blendShape && a.spread == b.spread && a.blend == b.blend && a.law == b.law && a.warp[0] == b.warp[0] && a.warp[1] == b.warp[1]
+        && a.warpSrc[0] == b.warpSrc[0] && a.warpSrc[1] == b.warpSrc[1] && a.warpAmount[0] == b.warpAmount[0] && a.warpAmount[1] == b.warpAmount[1]
+        && a.warpPhase[0] == b.warpPhase[0] && a.warpPhase[1] == b.warpPhase[1] && a.warpSpread[0] == b.warpSpread[0] && a.warpSpread[1] == b.warpSpread[1]
+        && a.startPhase == b.startPhase && a.active == b.active && a.remap == b.remap && a.morphType == b.morphType && a.morphAmount == b.morphAmount
+        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth;
+}
+
 /** Hermite interpolation of the four samples x[-1], x[0], x[1], x[2] at x[0] + f. */
 inline float hermite (const float* x, float f) noexcept
 {
@@ -104,6 +116,7 @@ public:
             phase[i] = static_cast<uint32_t> (static_cast<double> (p - std::floor (p)) * 4294967296.0);
         }
         havePrev = false;
+        haveLast = false;
         morphAge = kMorphRebuild;
         for (auto& f : frameIdx)
             f = -1;
@@ -128,6 +141,12 @@ public:
             prevGainR[i] = curGainR[i];
         }
         prevFrame = curFrame;
+        // the same inputs as the previous period (the usual case of a held note): the voices below would be computed again to the same values
+        if (haveLast && lastRate == sampleRate && sameOscTick (t, lastT))
+            return;
+        lastT = t;
+        lastRate = sampleRate;
+        haveLast = true;
         tick = t;
         for (int s = 0; s < 2; ++s)
         {
@@ -560,6 +579,9 @@ private:
     float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
     bool havePrev = false;
+    bool haveLast = false;      // lastT / lastRate describe the inputs of the last full update ()
+    OscTick lastT;
+    double lastRate = 0.0;
 };
 } // namespace own
 } // namespace synthyboy

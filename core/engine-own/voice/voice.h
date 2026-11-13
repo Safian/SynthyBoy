@@ -46,6 +46,7 @@ struct TickGlobals
     int maxUnison = kMaxUnisonVoices;
     const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
+    uint64_t usedSources = ~uint64_t (0);    // bit k: some modulation slot (or custom shape point) reads source id k; the economy mode of tier low updates the LFOs nothing reads less often
     bool oversample = false;                 // ultra render / quality.oversample_4x: every wavetable oscillator runs 4x oversampled
     spectral::Scratch* spectralScratch = nullptr;
     uint32_t* chokeLatest = nullptr;         // [3][256] choke groups of the multisample oscillators (engine wide per slot)
@@ -133,7 +134,7 @@ private:
     float P (int idx) const noexcept;
     float PR (int idx) const noexcept; // the right lane (differs from P () where a slot has the stereo flag)
     void clearMod() noexcept;
-    float lfoValue (int l, const TickGlobals& g, float& valueRight) noexcept;
+    float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;
     float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;
@@ -168,6 +169,7 @@ private:
     float srcR[kNumSourceIds] = {};
     SlotState slotState[kNumModSlots];
     float voiceAge = 0.0f;
+    uint32_t tickCount = 0;   // control periods of this note so far (the phase of the decimation of unused LFOs)
     shapes::ShapeData scratchShape;
     RandomLfo rlfo[4], rlfoR[4];
     float rlfoOut[4] = {}, rlfoOutR[4] = {};
@@ -206,6 +208,7 @@ private:
     FilterUnit filt[2];
     FilterSettings filtSet[2];
     bool filtOn[2] = { true, false };
+    bool filtStale[2] = { false, false };
     bool filtEnv1[2] = { true, true };
     int filtDest[2] = { 0, 0 };
     float filtLevel[2] = { 1.0f, 1.0f }, filtLevelPrev[2] = { 1.0f, 1.0f };

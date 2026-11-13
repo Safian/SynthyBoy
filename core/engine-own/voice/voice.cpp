@@ -190,6 +190,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     for (auto& st : slotState)
         st = SlotState();
     voiceAge = 0.0f;
+    tickCount = 0;
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
@@ -281,10 +282,10 @@ float Voice::customShape (const CompiledShape& cs, float u) noexcept
     return scratchShape.evaluate (u);
 }
 
-float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight) noexcept
+float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps) noexcept
 {
     const LfoIdx& li = paramIndex().lfo[l];
-    const float dt = static_cast<float> (kControlPeriod / g.sampleRate);
+    const float dt = static_cast<float> (steps * kControlPeriod / g.sampleRate);
     const int shape = static_cast<int> (P (li.shape) + 0.5f);
     const int sync = static_cast<int> (P (li.sync) + 0.5f);
     const int syncType = std::clamp (static_cast<int> (P (li.syncType) + 0.5f), 0, 5);
@@ -550,8 +551,20 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         envOut[e] = v * v;
     }
     // ---- LFOs
+    // Tier low (g.quality == 0, "economy"): an LFO that no slot reads only feeds the display, so it is evaluated every fourth period (staggered) over four periods' time
+    // instead of every period: the phase and the fade keep their pace, the display gets a value 1.4 ms old at most.
+    ++tickCount;
     for (int l = 0; l < 10; ++l)
+    {
+        if (g.quality == 0 && !fresh && ((g.usedSources >> srcLfo (l)) & 1u) == 0)
+        {
+            if (((tickCount + static_cast<uint32_t> (l)) & 3u) != 0u)
+                continue; // lfoOut / lfoOutR keep their last values
+            lfoOut[l] = lfoValue (l, g, lfoOutR[l], 4);
+            continue;
+        }
         lfoOut[l] = lfoValue (l, g, lfoOutR[l]);
+    }
     for (int r = 0; r < 4; ++r)
     {
         const RlfoIdx& ri = pi.rlfo[r];
@@ -916,30 +929,42 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         filtDest[f] = static_cast<int> (P (fi.destination) + 0.5f);
         filtSend[f][0] = fi.bus1Send >= 0 ? std::max (0.0f, P (fi.bus1Send) * 0.01f) : 0.0f;
         filtSend[f][1] = fi.bus2Send >= 0 ? std::max (0.0f, P (fi.bus2Send) * 0.01f) : 0.0f;
-        FilterSettings& s = filtSet[f];
-        s.model = static_cast<int> (P (fi.model) + 0.5f);
-        s.style = static_cast<int> (P (fi.style) + 0.5f);
-        const float kt = semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
-        const float vcCut = semitonesToRatio (vc.cutoffSemis);
-        const float panShift = fi.pan >= 0 ? P (fi.pan) * 0.01f : 0.0f; // +-100 % = +-12 semitones, opposite in the two channels (document 05, 1.2)
-        s.cutoffHz = P (fi.cutoff) * kt * vcCut * std::exp2 (-panShift);
-        s.cutoffHzR = PR (fi.cutoff) * kt * vcCut * std::exp2 (panShift);
-        s.clean = fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f;
-        s.resonance = P (fi.resonance) * 0.01f;
-        s.drive = P (fi.drive) * (1.0f / 20.0f);
-        s.driveDb = P (fi.drive);
-        s.combOffset = P (fi.combOffset);
-        s.formantX = P (fi.formantX) * 0.01f;
-        s.formantY = P (fi.formantY) * 0.01f;
-        s.formantRes = P (fi.formantRes) * 0.01f;
-        s.formantSpread = P (fi.formantSpread) * 0.01f;
-        s.formantTranspose = P (fi.formantTranspose);
-        s.blend = P (fi.blend) * 0.01f;
-        s.mix = P (fi.mix) * 0.01f;
-        s.var = P (fi.var) * 0.01f;
-        filt[f].set (s);
-        if (fresh)
-            filt[f].reset(); // the smoothers start at the targets of this note, not at the ones of the note this voice played before
+        // a filter that is off (and was not just started with the note) is not configured: nothing reads its settings, and when it is switched on the settings
+        // of that period are taken twice (the smoothing starts at them, as at a note start)
+        if (!filtOn[f] && !fresh)
+            filtStale[f] = true;
+        else
+        {
+            FilterSettings& s = filtSet[f];
+            s.model = static_cast<int> (P (fi.model) + 0.5f);
+            s.style = static_cast<int> (P (fi.style) + 0.5f);
+            const float kt = semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
+            const float vcCut = semitonesToRatio (vc.cutoffSemis);
+            const float panShift = fi.pan >= 0 ? P (fi.pan) * 0.01f : 0.0f; // +-100 % = +-12 semitones, opposite in the two channels (document 05, 1.2)
+            s.cutoffHz = P (fi.cutoff) * kt * vcCut * std::exp2 (-panShift);
+            s.cutoffHzR = PR (fi.cutoff) * kt * vcCut * std::exp2 (panShift);
+            s.clean = fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f;
+            s.resonance = P (fi.resonance) * 0.01f;
+            s.drive = P (fi.drive) * (1.0f / 20.0f);
+            s.driveDb = P (fi.drive);
+            s.combOffset = P (fi.combOffset);
+            s.formantX = P (fi.formantX) * 0.01f;
+            s.formantY = P (fi.formantY) * 0.01f;
+            s.formantRes = P (fi.formantRes) * 0.01f;
+            s.formantSpread = P (fi.formantSpread) * 0.01f;
+            s.formantTranspose = P (fi.formantTranspose);
+            s.blend = P (fi.blend) * 0.01f;
+            s.mix = P (fi.mix) * 0.01f;
+            s.var = P (fi.var) * 0.01f;
+            filt[f].set (s);
+            if (fresh)
+                filt[f].reset(); // the smoothers start at the targets of this note, not at the ones of the note this voice played before
+            if (filtStale[f])
+            {
+                filt[f].set (s);
+                filtStale[f] = false;
+            }
+        }
         filtLevelPrev[f] = filtLevel[f];
         filtLevel[f] = dbToGain (P (fi.level));
         if (fresh)

@@ -296,6 +296,17 @@ void ModMatrix::compile (const float* base) noexcept
         if (c.global)
             globalSrcMask |= bits;
     }
+    // the points of a custom LFO shape that follow a source read that source too
+    if (content != nullptr)
+        for (const CompiledShape& cs : content->lfo)
+            if (cs.present && cs.anyMod)
+                for (int i = 0; i < cs.num; ++i)
+                {
+                    const CompiledPoint& pt = cs.points[static_cast<size_t> (i)];
+                    for (const int source : { pt.x.source, pt.y.source, pt.curve.source })
+                        if (source > 0 && source < kNumSourceIds)
+                            srcMask |= uint64_t (1) << source;
+                }
 }
 
 void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
