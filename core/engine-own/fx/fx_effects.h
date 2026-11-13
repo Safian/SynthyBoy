@@ -168,6 +168,16 @@ public:
         for (auto& b : band) b.reset();
         phase = 0.0f;
     }
+    /** The LFO runs on while the module is skipped on silence (FxChain, tier low): the same per sample steps as process (). */
+    void idle (int n) noexcept
+    {
+        const float sr = static_cast<float> (sampleRate);
+        for (int s = 0; s < n; ++s)
+        {
+            phase += p.rate / sr;
+            phase -= std::floor (phase);
+        }
+    }
     void set (const Params& np) noexcept { p = np; }
     /** `voices` pairs of two delay lines (A with delay 1, B with delay 2), each with a left and a right side (document 06, 2). */
     void process (float* l, float* r, int n) noexcept
@@ -228,6 +238,16 @@ public:
         reset();
     }
     void reset() noexcept { for (auto& d : line) d.reset(); phase = 0.0f; }
+    /** The LFO runs on while the module is skipped on silence (FxChain, tier low): the same per sample steps as process (). */
+    void idle (int n) noexcept
+    {
+        const float sr = static_cast<float> (sampleRate);
+        for (int s = 0; s < n; ++s)
+        {
+            phase += p.rate / sr;
+            phase -= std::floor (phase);
+        }
+    }
     void set (const Params& np) noexcept { p = np; }
     void process (float* l, float* r, int n) noexcept
     {
@@ -271,6 +291,16 @@ public:
     struct Params { float mix = 0.5f, feedback = 0.5f, rate = 0.12f, depthSemis = 24.0f, centerHz = 2000.0f, blend = 0.5f, phaseOffset = 120.0f / 360.0f, depth2 = 0.0f; };
     void prepare (double sr) { sampleRate = sr; reset(); }
     void reset() noexcept { for (auto& c : z) for (auto& x : c) x = 0.0f; phase = 0.0f; fb[0] = fb[1] = 0.0f; for (auto& x : bpA) x = 0.0f; for (auto& x : bpB) x = 0.0f; }
+    /** The LFO runs on while the module is skipped on silence (FxChain, tier low): the same per sample steps as process (). */
+    void idle (int n) noexcept
+    {
+        const float sr = static_cast<float> (sampleRate);
+        for (int s = 0; s < n; ++s)
+        {
+            phase += p.rate / sr;
+            phase -= std::floor (phase);
+        }
+    }
     void set (const Params& np) noexcept { p = np; }
     /** The phaser of document 06, 8: the twelve stage all-pass filter of document 05, 7 (taps after 4, 8 and 12 stages by the blend), fed with a cutoff that follows a
         triangle LFO (the right channel offset by the phase offset), a band passed feedback with tanh, output (x + all-pass) / 2, linear dry / wet. */

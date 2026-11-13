@@ -920,7 +920,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
             for (auto& f : fx)
+            {
+                f.setLowCost (globals.quality == 0);
                 f.update (base.data(), gdelta.data(), frame, mask, inputsSame);
+            }
             // the mixer: the levels of the buses and of the Direct output, their destinations and the rack bypasses
             auto levelOf = [&] (int idx) -> float
             {

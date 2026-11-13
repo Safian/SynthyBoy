@@ -76,6 +76,8 @@ public:
     /** Reads the keys once per control period. */
     virtual void configure (const FxFrame& f, const float* base, const float* delta) noexcept = 0;
     virtual void run (float* l, float* r, int n) noexcept = 0;
+    /** Advances what runs on its own (the LFO phase) by n samples without processing audio: the module is skipped while its input is silent and its tail is gone (tier low). */
+    virtual void idleAdvance (int /*n*/) noexcept {}
     /** Latency in frames of the chain rate, a function of the configuration only (document 06 section 11). */
     virtual int latency() const noexcept { return 0; }
     /** false: the host is not told about this module's latency (limiter with limit_latency_comp off); the signal is delayed all the same. */

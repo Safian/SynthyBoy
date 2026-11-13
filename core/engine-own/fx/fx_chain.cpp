@@ -406,6 +406,14 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         splitMs.setParams (p);
     }
     buildPlan (base);
+    {
+        // the longest gap between two echoes: a delay (4 s, times the offset up to 4) or a pool slot that may hold one; everything else repeats within a second
+        bool echoes = on[2];
+        if (pool != nullptr)
+            for (int s = 0; s < FxPool::kSlots && !echoes; ++s)
+                echoes = slotMine[s] && pool->slot (s).running != nullptr;
+        holdSamples = static_cast<int> ((echoes ? 20.0 : 1.0) * sr);
+    }
     idleSettled = (inputsSame && !active) ? idleSettled + 1 : 0;
 }
 
@@ -579,11 +587,58 @@ void FxChain::runRack (int rack, float* l, float* r, int n, int t0, int depth) n
     }
 }
 
+void FxChain::idleRack (int rack, int n, int depth) noexcept
+{
+    if (depth > 2)
+        return;
+    const Plan& p = plan[static_cast<size_t> (rack)];
+    for (int i = 0; i < p.count; ++i)
+    {
+        const Item& it = p.item[static_cast<size_t> (i)];
+        if (it.pool)
+        {
+            if (pool->slot (it.index).running != nullptr)
+                pool->slot (it.index).running->idleAdvance (n);
+        }
+        else if (it.index < kNumFxModules)
+            inst[it.index]->idleAdvance (n);
+        else if (it.index == 13)
+            idleRack (3, n, depth + 1), idleRack (4, n, depth + 1);
+        else if (it.index == 14)
+            idleRack (5, n, depth + 1), idleRack (6, n, depth + 1), idleRack (7, n, depth + 1);
+        else if (it.index == 15)
+            idleRack (8, n, depth + 1), idleRack (9, n, depth + 1);
+    }
+}
+
 void FxChain::process (float* l, float* r, int n, int t0) noexcept
 {
     if (!active)
         return;
+    if (!lowCost)
+    {
+        runRack (rackId, l, r, n, t0, 0);
+        return;
+    }
+    float peakIn = 0.0f;
+    for (int i = 0; i < n; ++i)
+        peakIn = std::max (peakIn, std::max (std::fabs (l[i]), std::fabs (r[i])));
+    bool settling = false; // a crossfade of a slot or a fade in of a module in progress needs every block
+    for (int m = 0; m < 16 && !settling; ++m)
+        settling = fadeIn[m];
+    if (pool != nullptr)
+        for (int s = 0; s < FxPool::kSlots && !settling; ++s)
+            settling = slotMine[s] && pool->slot (s).fading;
+    if (peakIn == 0.0f && !settling && quietRun >= holdSamples)
+    {
+        idleRack (rackId, n, 0); // the input is zero, the output would be below -120 dBFS: it stays as it is (zero)
+        return;
+    }
     runRack (rackId, l, r, n, t0, 0);
+    float peakOut = 0.0f;
+    for (int i = 0; i < n; ++i)
+        peakOut = std::max (peakOut, std::max (std::fabs (l[i]), std::fabs (r[i])));
+    quietRun = (peakIn == 0.0f && peakOut < 1.0e-6f) ? std::min (quietRun + n, holdSamples + kControlPeriod) : 0;
 }
 } // namespace own
 } // namespace synthyboy

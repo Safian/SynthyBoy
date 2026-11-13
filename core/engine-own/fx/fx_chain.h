@@ -101,6 +101,9 @@ public:
     /** `t0`: the position of this call in the control period (the output trims and the EQ interpolate across the period). */
     void process (float* l, float* r, int n, int t0 = 0) noexcept;
     bool anyActive() const noexcept { return active; }
+    /** Tier low: a rack whose input has been exactly zero and whose output has stayed below -120 dBFS for longer than the longest gap between echoes is not run (its LFOs keep
+        their pace); the first non zero input wakes it. */
+    void setLowCost (bool on) noexcept { lowCost = on; }
     /** True if the last update () did the work (it did not return early): latency and plan may have changed. */
     bool configuredNow() const noexcept { return configured; }
     /** The latency of rack `rack` (0 .. 9) in samples of the chain rate: the sum of the modules that are on in it, in series; a splitter adds the slowest of its bands
@@ -120,6 +123,9 @@ private:
     double sr = 48000.0;
     bool active = false;
     bool configured = true;
+    bool lowCost = false;
+    int quietRun = 0, holdSamples = 0;   // samples of silence in and out so far, and how many are needed
+    void idleRack (int rack, int n, int depth) noexcept;
     int idleSettled = 0;            // consecutive updates with the same inputs that ended with nothing on
     int order[16] = {};
     bool on[16] = {};

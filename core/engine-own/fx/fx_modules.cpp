@@ -122,6 +122,7 @@ public:
         p.spread = clamp01 (pct (b, d, spread));
         fx.set (p);
     }
+    void idleAdvance (int n) noexcept override { fx.idle (n); }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
 
 private:
@@ -376,6 +377,7 @@ public:
         p.phaseOffset = V (b, d, phase) / 360.0f;
         fx.set (p);
     }
+    void idleAdvance (int n) noexcept override { fx.idle (n); }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
 
 private:
@@ -408,6 +410,7 @@ public:
         p.depth2 = depth2 >= 0 ? V (b, d, depth2) : 0.0f;
         fx.set (p);
     }
+    void idleAdvance (int n) noexcept override { fx.idle (n); }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
 
 private:
