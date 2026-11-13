@@ -1,0 +1,65 @@
+# SynthyBoy MPC Build Guide
+
+## Build
+
+The MPC build is a 32-bit ARMv7 (hard-float, NEON) VST2 module for the Akai MPC Key 61. The build script is `scripts/build-armv7-mpc.sh`; the host needs Docker. The environment variable `MPC_SDK` must point at a checkout of the MPC plugin SDK (it is not part of this repository and must not be copied into it). The environment variable `ARMV7_IMAGE` selects the Docker image (default: the pinned Debian 12 image in the script); an image that already has the cross toolchain installed is faster because the script skips the `apt-get install` step inside the container.
+
+The exact command line is `scripts/build-armv7-mpc.sh [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR]`. The script does the following, step by step:
+
+1. It runs a `docker run` container mounting the source tree read-only, the build directory, the output directory, and the SDK.
+2. Inside the container it installs missing packages (the cross compiler, `binutils-arm-linux-gnueabihf`, `cmake`, `file`, `git`, `ninja` or `make`).
+3. It runs `cmake` with the toolchain file `cmake/toolchains/armv7-linux-gnueabihf.cmake`, with `-DSYNTHYBOY_BUILD_PLUGIN=OFF`, `-DSYNTHYBOY_BUILD_TESTS=OFF`, `-DSYNTHYBOY_BUILD_MPC_SHELL=ON`, `-DSYNTHYBOY_WITH_VITAL=OFF`, and `-DSYNTHYBOY_SHELL_ENGINE=own`. The package is the own engine; Vital is not built.
+4. It builds the `synthyboy_mpc` target.
+5. It checks that the resulting `.so` is an ARMv7 hard-float ELF file (using `file` and `readelf`).
+6. It checks that the `.so` needs only `libc`, `libm`, `libdl`, `libpthread`, and `ld-linux-armhf` (no other shared libraries).
+7. It checks that `VSTPluginMain` is the only exported symbol (using `nm -D`).
+8. It produces a stripped copy (`synthyboy_mpc.stripped.so`) for the package; the unstripped module stays in the build tree for profiling.
+9. On the host it assembles the plugin folder `Safian - VST - SynthyBoy` with `VST/synthyboy-arm32.so` (the stripped copy) and `Content/presets` (a copy of `content/presets`).
+10. It generates the Plugin Skins from `scripts/mpc-ui-pages.json` (using `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`), unless `--skins DIR` is given.
+11. It generates `plugin.json` and `version.xml` via `scripts/gen-mpc-manifest.py`.
+12. It runs the SDK's `tools/validate.py` on the finished folder. The validator's schema lists `file64` as required, while the SDK's `plugin-folder-format.md` says a 32-bit MPC uses only `file32`; the build script accepts exactly that one finding and fails on any other error.
+
+The module must be built with GCC, not with Zig: `--exclude-libs,ALL` is not understood by Zig's linker and a Zig-built module crashed at host exit on the device.
+
+The native acceptance is `sh shell-mpc/accept.sh` with `MPC_SDK` set. It builds the module natively on the development machine, runs the SDK host simulator with tests, checks the parameter table against `docs/params.json`, verifies the exported symbols, tests the factory presets as programs, runs the stub host for state round-trips, and builds and runs with ThreadSanitizer to check for data races.
+
+## Package layout
+
+The output folder is named `Safian - VST - SynthyBoy` and contains:
+
+- `plugin.json` — the MPC manifest. It has only `file32` (pointing to `VST/synthyboy-arm32.so`); there is no 64-bit build, so `file64` is absent. The SDK validator reports the missing `file64` and the build script accepts exactly that finding.
+- `version.xml` — the content version of the package (the root manifest version with a fourth part) and, when `Plugin Skins` is present, the `uiversion` of the skins.
+- `VST/synthyboy-arm32.so` — the stripped 32-bit ARMv7 shared object that exports only `VSTPluginMain`.
+- `Content/presets` — the factory presets from `content/presets`, shown as programs in the MPC's preset browser.
+- `Plugin Skins` — the touch-screen UI and Q-Links knob mapping, generated from `scripts/mpc-ui-pages.json` via `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`.
+
+The plugin finds its own folder by walking up from the binary's path (obtained via `dladdr` on `VSTPluginMain`) to the first directory that contains a file named `plugin.json`. This logic is in `shell-mpc/plugin_paths.h`.
+
+## Install on the MPC
+
+Copy the whole folder `Safian - VST - SynthyBoy` into a folder named exactly `VST2 Plugins` at the root of a USB drive, SD card, or the MPC's internal drive. The MPC must be running MPC OS 3.10.1 or later. In **Preferences → Enhancements (Beta)** turn on both **Enable Enhancements** and **External Plugin Support**; the plugin stays hidden until both switches are on. After inserting the drive, open the plugin browser (instrument track → plugin program → browse, or an insert slot). The plugin is listed under **External Plugins**.
+
+Replacing a plugin: copy the new folder over the old one, then remove and re-add the plugin on the track (or restart the MPC if the skins changed). Uninstalling: delete the folder from `VST2 Plugins`. Projects that used it will load without the plugin.
+
+## Known host behaviour
+
+The following facts were observed on an MPC Key 61 with firmware 3.10.1:
+
+- The host runs plugins at 44.1 kHz with 128 frame blocks. According to the SDK the sample rate is fixed and the user can choose other block sizes (32, 64, 96, 192, 256, 512) in Preferences; the announced block size is a maximum and the plugin handles any smaller count.
+- There is no plugin GUI. The screen pages come from Plugin Skins (`TUI.json`), and the hardware knobs are mapped from `Q-Links.json`.
+- A newly copied plugin appears only after the MPC application is restarted.
+- The plugin runs inside the MPC's process without crash protection (no sandbox). A crash in the plugin crashes the MPC. The shell wraps every dispatch call in `catch (...)` and returns 0 on any exception, so no exception may leave the plugin.
+- The host selects program 0 ("Init") after loading. The shell stores the current program number and name in the chunk: `effGetChunk` builds a JSON string starting with `{"mpcProgram":N,"mpcProgramName":"<escaped name>",` followed by the engine state. On `effSetChunk` the shell reads the program number and name from the chunk, then calls `resolveProgram` to map them to the current preset list. The name decides: the stored index is used only if the program at that index has that name (or to choose between programs of the same name), otherwise the first program of that name is taken, so a project still finds its program when a later package has a different preset list. A chunk from an older build that has only the number still loads. If the name is not in the list, `resolveProgram` returns -1 and the shell enters a "no program" state: the sound is the one stored in the chunk, the host is given index 0, the saved name is shown as the program name and written into the next chunk again. Because the host may select the saved program number again right after restoring the chunk, that one selection is ignored (the chunk wins); any other program selection or a parameter edit ends this protection, and it is never armed in the "no program" state.
+
+## Sound differences at tier low
+
+The MPC build runs the engine at `Tier::low` (`core/include/synthyboy/quality.h`). The following things sound or behave differently from the desktop tiers:
+
+- **Oversampling**: the tier sets the engine's oversampling to 1 (the other tiers use 2). Warped oscillators run at 2× oversampling with a 32-tap decimator instead of 4× with 128 taps (commit `419b4d9`). The spectral morph is rebuilt every 512 samples instead of every control period. The consequence is less aliasing protection on warped oscillators and a coarser spectral morph movement.
+- **Classic filters**: the `tanh` saturation in the classic filter models (Diode Ladder, etc.) is replaced by a [7/6] Pade rational approximation with absolute error below 1e-4 (commit `068f03f`). The Ladder L/R pair is processed in a single loop for better throughput. The saturation character is very close to the original but computationally cheaper.
+- **Economy LFOs**: at tier low, LFOs that no modulation slot reads are updated less often (every fourth control period instead of every period), using a tick counter to phase the decimation (commit `4a04871`). Unread LFO outputs keep their last values.
+- **Effect racks on silence**: effect racks whose input has been exactly zero and whose output has stayed below a very low threshold for longer than the longest gap between echoes (4 seconds for delay or pool slots, 1 second for everything else) are not processed — their audio path is skipped entirely. Their LFOs keep their pace through `idleAdvance` calls so that when sound returns the effect is in the correct phase (commit `930a2d6`).
+- **Fast math**: per-sample calls to `tanh`, `sin`, `cos`, `exp`, `exp2`, and `pow` in the chorus, phaser, distortion, and warp functions are replaced by cheaper approximations from `core/engine-own/dsp/fastmath.h` (commit `26234bd`). The chorus and phaser LFO phase updates use the fast `sin` and `cos`. The warp phase and sample functions use the fast `tanh` and `sin`. Each approximation states its error bound in that header.
+- **Bypassed effects**: `Tier::low` bypasses reverb, flanger, Hyper/Dimension, Bode, and Convolve (the bit mask in `quality.h`). A preset that uses them plays without them. The remaining effects (chorus, compressor, delay, distortion, EQ, the effect filter, phaser) are still active. The tier also caps polyphony at 8 voices and unison at 4 voices per oscillator; stored parameter values are never changed, so a preset keeps its shape.
+- **A plain table read loop**: for oscillators without warps and without a cross signal, the engine uses a straight sample-at loop without the branch overhead of the general path (commit `419b4d9`).
+- **Filter stale handling**: an unconfigured filter that was turned off is not re-configured until it is switched on again, saving the filter setup work (commit `4a04871`).
