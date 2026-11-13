@@ -14,7 +14,7 @@
 # Slots: x = 21 + 320 c (the frame is x 16 .. 304, so 5 px on each side, centre 160 + 320 c).
 # Rows (tab coordinates, the tab is 628 high, the frame 624): plain tabs 44 / 188 / 332 / 476 (pitch 144, rows 138 high, the frame top badge
 # zone y < 40 stays empty); tabs with a picture above (frames from y 301, badge zone to y 341): rows 3 and 4 at 343 and 483 (end 621).
-# Slots of 100 px sit in the middle of the 138 px row (19 px above and below), so the LFO picture (208 x 38) fits between two selectors.
+# Slots of 100 px sit in the middle of the 138 px row (19 px above and below).
 # Touch and focus behaviour (actions, handles, Q-Link and overlay) are those of the generator: only geometry and justification change here.
 
 import copy
@@ -35,9 +35,6 @@ VALUE_FONT = 24.0
 CENTRED = "horizontallyCentred verticallyCentred"
 SEG_DY = 54                      # the text over a radio button: y of the buttons inside the radio slot
 RADIO4_DX = 2
-PICTURE_W = 208
-PICTURE_H = 38
-PICTURE_GAP = 2
 
 
 def _child(definition, name):
@@ -158,10 +155,3 @@ def apply(tui, qlinks, ctx):
                 x, y, w, h = _rect(c)
                 dx = RADIO4_DX if kinds[owner] == "radio4" else 0
                 _set(c, (x - (OLD_COLS[0] - SLOT_X[0]) + dx, y + new_y - old_y, w, h))
-        for c in items:   # the LFO pictures: centred over the column of their selector, directly above it
-            name = c["componentData"]["name"]
-            if c["componentData"]["type"] == "Image" and name.startswith("LFO ") and " Picture" in name:
-                lfo = name.split(" Picture")[0]
-                selector = next(s for s in items if s["componentData"]["name"] == lfo + " Shape")
-                sx, sy, _, _ = _rect(selector)
-                _set(c, (sx + AXIS - PICTURE_W // 2, sy - PICTURE_H - PICTURE_GAP, PICTURE_W, PICTURE_H))

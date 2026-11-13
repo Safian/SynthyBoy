@@ -116,18 +116,30 @@
       ]
     },
     {
-      "name": "LFO 1-2",
+      "name": "LFO 1",
       "fn": "LFO",
       "kick": [
-        "lfo1",
+        "lfo1"
+      ]
+    },
+    {
+      "name": "LFO 2",
+      "fn": "LFO",
+      "kick": [
         "lfo2"
       ]
     },
     {
-      "name": "LFO 3-4",
+      "name": "LFO 3",
       "fn": "LFO",
       "kick": [
-        "lfo3",
+        "lfo3"
+      ]
+    },
+    {
+      "name": "LFO 4",
+      "fn": "LFO",
+      "kick": [
         "lfo4"
       ]
     },

@@ -18,7 +18,7 @@ import test_mpc_skin_extras as base  # noqa: E402
 FRAME_X = (16, 336, 656, 976)
 FRAME_W = 288
 BADGE = 40
-GRAPHIC_TABS = ("Env 1", "Env 2", "Env 3", "Env 4", "Osc 1", "Osc 2", "Osc 3")
+GRAPHIC_TABS = ("Env 1", "Env 2", "Env 3", "Env 4", "Osc 1", "Osc 2", "Osc 3", "LFO 1", "LFO 2", "LFO 3", "LFO 4")
 
 
 def _load(name):
@@ -152,13 +152,15 @@ class FramesTest(unittest.TestCase):
 
     def test_no_two_controls_overlap(self):
         for tab in self.tabs():
-            items = [(c["componentData"]["name"], c["componentData"]["type"], rect(c)) for c in tab["componentDefinition"]["componentsData"]
+            items = [(c["componentData"]["name"], c["componentData"]["type"], rect(c), tuple(c["bounds"].get("additionalInvalidatingHandles", ()))) for c in tab["componentDefinition"]["componentsData"]
                      if not (c["componentData"]["type"] == "Label" and (" seg " in c["componentData"]["name"]
                                                                          or c["componentData"]["name"].endswith(" name")))]
-            for i, (na, ta, ra) in enumerate(items):
-                for nb, tb, rb in items[i + 1:]:
+            for i, (na, ta, ra, ha) in enumerate(items):
+                for nb, tb, rb, hb in items[i + 1:]:
                     if ra == rb and ta == tb == "Image":
                         continue   # the pictures of one element (one per choice) share their place
+                    if ra == rb and ha and hb and ha != hb:
+                        continue   # copies of one control, each valid for another value of the same parameter (the LFO division): never visible together
                     hit = ra[0] < rb[0] + rb[2] and rb[0] < ra[0] + ra[2] and ra[1] < rb[1] + rb[3] and rb[1] < ra[1] + ra[3]
                     self.assertFalse(hit, "%s: %s overlaps %s" % (tab["tabName"], na, nb))
 
