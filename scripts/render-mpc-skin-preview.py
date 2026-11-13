@@ -8,17 +8,20 @@
 # What is drawn: the tab background, the controls of the shared component definitions (film strip frame 0 of knobs and faders, the buttons, the labels with
 # the parameter name, a sample value and the fixed texts), the images of the tab (film strip frame 0; elements that are valid for one choice of another parameter
 # only when that choice is 0, the default of every such parameter on the skin), the Q-Link frames, a box for envelopes. The fonts are the closest ones of
-# this machine (Arial), so the text widths are only indicative (docs/MPC.md "Names").
+# this machine (Arial, or Titillium Web from the folder of the environment variable MPC_PREVIEW_FONTS), so the text widths are indicative only.
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 TAB_W, TAB_H = 1280, 628
-FONTS = {"Bold": "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "Regular": "/System/Library/Fonts/Supplemental/Arial.ttf"}
+FONT_DIR = os.environ.get("MPC_PREVIEW_FONTS")   # a folder with TitilliumWeb-Bold.ttf and TitilliumWeb-Regular.ttf (the skin font); else Arial
+FONTS = ({"Bold": os.path.join(FONT_DIR, "TitilliumWeb-Bold.ttf"), "Regular": os.path.join(FONT_DIR, "TitilliumWeb-Regular.ttf")} if FONT_DIR else
+         {"Bold": "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "Regular": "/System/Library/Fonts/Supplemental/Arial.ttf"})
 
 
 def argb(text):

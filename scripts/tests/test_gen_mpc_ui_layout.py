@@ -64,7 +64,8 @@ def level_page(kid):
 
 def expected_pages(layout):
     """The rule, written independently of the generator: per Kick page the knobs in order, without null knobs, unknown keys,
-    parameters that are not ownEngine and parameters already placed; padded with "empty" to 8 slots; a second Kick page fills slots 8-15."""
+    parameters that are not ownEngine and parameters already placed; every Kick page takes whole rows of 4 slots (padded with "empty" to a
+    multiple of 4), the Kick pages of a page follow each other; the page is padded to 16 slots."""
     seen, pages = set(), []
     for page in layout["pages"]:
         slots = []
@@ -78,7 +79,8 @@ def expected_pages(layout):
                     continue
                 seen.add(p["name"])
                 names.append(p["name"])
-            slots += names + [None] * (8 - len(names))
+            slots += names + [None] * (-len(names) % 4)
+        assert len(slots) <= 16, page["name"]
         slots += [None] * (16 - len(slots))
         pages.append((page["name"], slots))
     return pages, seen
@@ -244,11 +246,14 @@ class LayoutErrorTests(unittest.TestCase):
     def test_duplicate_name(self):
         self.bad([{"name": "A", "kick": ["macros"]}, {"name": "A", "kick": ["env1"]}], "duplicate")
 
-    def test_three_kick_pages(self):
-        self.bad([{"name": "A", "kick": ["env1", "env2", "env3"]}], "one or two")
+    def test_five_kick_pages(self):
+        self.bad([{"name": "A", "kick": ["env1", "env2", "env3", "env4", "lfo1"]}], "one to 4")
 
     def test_no_kick_page(self):
-        self.bad([{"name": "A", "kick": []}], "one or two")
+        self.bad([{"name": "A", "kick": []}], "one to 4")
+
+    def test_kick_pages_that_do_not_fit_16_slots(self):
+        self.bad([{"name": "A", "kick": ["env2", "env3", "env4"]}], "slots")
 
     def test_sections_differ(self):
         self.bad([{"name": "A", "kick": ["env1", "lfo1"]}], "section")

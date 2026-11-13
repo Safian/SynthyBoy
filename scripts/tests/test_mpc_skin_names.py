@@ -64,7 +64,7 @@ class ResolveTests(unittest.TestCase):
             gen.resolve_tab_names(entries, {"a", "b"}, {"a": "Same"})
 
     def test_width_is_upper_case_and_checks_characters(self):
-        self.assertAlmostEqual(gen.name_width("Ab", 20), (722 + 722) * 20 / 1000.0)
+        self.assertAlmostEqual(gen.name_width("Ab", 20), (602 + 609) * 20 / 1000.0)
         with self.assertRaises(ValueError):
             gen.name_width("a#b", 20)
 

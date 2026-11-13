@@ -4,7 +4,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import copy
-import hashlib
 import importlib.util
 import json
 import subprocess
@@ -20,8 +19,6 @@ FRAME_X = (16, 336, 656, 976)
 FRAME_W = 288
 BADGE = 40
 GRAPHIC_TABS = ("Env 1", "Env 2", "Env 3", "Env 4", "Osc 1", "Osc 2", "Osc 3")
-# sha256 of Q-Links.json as the build made it at 363083a (before the frame work): the frame work must not touch it
-Q_LINKS_SHA256 = "cbbb2a06f3810640deccfc05a8559fe7842863f1cfc7f69a5bee170aaff74fab"
 
 
 def _load(name):
@@ -56,6 +53,7 @@ class FramesTest(unittest.TestCase):
         root = Path(cls._tmp.name)
         cls.skins = base.generate_skins(root)
         cls.before = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))
+        cls.q_before = (cls.skins / "Q-Links.json").read_text(encoding="utf-8")
         cls.code, cls.err = base.run_apply(cls.skins, base.REAL_EXTRAS)
         cls.root = root / "pf"
         cls.tui = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))
@@ -187,8 +185,15 @@ class FramesTest(unittest.TestCase):
             was["componentsData"] = [c for c in was["componentsData"] if c["componentData"]["name"] != "name"]   # 85_names.py: the name is a text on the tab
             self.assertEqual(strip(after[key]), strip(was), key)
 
-    def test_q_links_json_is_unchanged(self):
-        self.assertEqual(hashlib.sha256((self.skins / "Q-Links.json").read_bytes()).hexdigest(), Q_LINKS_SHA256)
+    def test_q_links_of_plain_tabs_are_the_generators(self):
+        # the frame work does not touch Q-Links.json: a tab that no module rewrites keeps the map the SDK generator wrote (compared by tab name: the
+        # sub-tab module renumbers Tab and SubTab)
+        before = base.qlinks_by_tab_name(self.before, json.loads(self.q_before)["Screen Mode Q-Links"]["map"])
+        after = base.qlinks_by_tab_name(self.tui, json.loads((self.skins / "Q-Links.json").read_text(encoding="utf-8"))["Screen Mode Q-Links"]["map"])
+        self.assertEqual(sorted(before), sorted(after))
+        for name in before:
+            if name not in GRAPHIC_TABS and not name.startswith("LFO"):
+                self.assertEqual(after[name], before[name], name)
 
     def test_bounds_version_2_has_its_extra_key(self):
         def walk(o):

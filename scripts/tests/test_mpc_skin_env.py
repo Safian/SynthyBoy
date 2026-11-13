@@ -25,6 +25,7 @@ class EnvSkinTest(unittest.TestCase):
         root = Path(cls._tmp.name)
         cls.skins = base.generate_skins(root)
         cls.before_q = (cls.skins / "Q-Links.json").read_text(encoding="utf-8")
+        cls.before_tui = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))
         cls.code, cls.err = base.run_apply(cls.skins, base.REAL_EXTRAS)
         cls.root = root / "pf"
         cls.tui = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))
@@ -47,7 +48,7 @@ class EnvSkinTest(unittest.TestCase):
 
     def test_four_env_tabs_replace_the_pair_tabs(self):
         names = [t["tabName"] for t in self.tui["pageData"]["tabs"]]
-        self.assertEqual(len(names), 32)
+        self.assertEqual(len(names), len(set(names)))
         for n in (1, 2, 3, 4):
             self.assertIn("Env %d" % n, names)
         self.assertNotIn("Env 1-2", names)
@@ -94,7 +95,7 @@ class EnvSkinTest(unittest.TestCase):
             tab = self.tab(n)
             knobs = [c for c in tab["componentDefinition"]["componentsData"] if c["componentData"]["type"].startswith("knob")]
             self.assertEqual(len(knobs), 8)
-            qmap = next(m for m in self.qlinks if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1)["Q-Links"]
+            qmap = base.qlinks_by_tab_name(self.tui, self.qlinks)[tab["tabName"]]
             for c in knobs:
                 x, y, w, h = map(int, c["bounds"]["bounds"].split())
                 self.assertGreaterEqual(y, 301)  # below the envelope (it ends at y 296)
@@ -108,10 +109,13 @@ class EnvSkinTest(unittest.TestCase):
 
     def test_other_tabs_qlinks_unchanged(self):
         # the Osc tabs are rewritten by 20_osc.py (its own test checks them); every other tab must keep the generator's map
-        tabs = {t["fnKeyIndex"] + 1 for t in self.tui["pageData"]["tabs"] if t["tabName"].startswith(("Env ", "Osc"))}
-        before = json.loads(self.before_q)["Screen Mode Q-Links"]["map"]
-        after = self.qlinks
-        self.assertEqual([m for m in after if m["Tab"] not in tabs], [m for m in before if m["Tab"] not in tabs])
+        # (the generator numbers the tabs in the order of its pages, one function key each; the sub-tab module renumbers: compare by tab name)
+        before = base.qlinks_by_tab_name(self.before_tui, json.loads(self.before_q)["Screen Mode Q-Links"]["map"])
+        after = base.qlinks_by_tab_name(self.tui, self.qlinks)
+        self.assertEqual(sorted(before), sorted(after))
+        for name in before:
+            if not name.startswith(("Env ", "Osc ", "LFO ")) or name.endswith("Shp"):
+                self.assertEqual(after[name], before[name], name)
 
     def test_bounds_version_2_has_its_extra_key(self):
         # validate.py does not check this; the MPC drops the whole TUI.json when the key is missing.
@@ -139,7 +143,7 @@ class EnvSkinTest(unittest.TestCase):
         report = res.stdout + res.stderr
         errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
         self.assertEqual(errors, [], report)
-        self.assertIn("OK     TUI.json: 32 tabs", report)
+        self.assertIn("OK     TUI.json: %d tabs" % len(self.tui["pageData"]["tabs"]), report)
 
 
 if __name__ == "__main__":

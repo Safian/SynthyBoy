@@ -23,6 +23,8 @@ import sys
 MAX_CONTROLS_PER_PAGE = 16
 MAX_PAGES = 32
 MAX_PAGE_NAME = 8
+MAX_KICK_PER_PAGE = 4   # layout mode: Kick pages on one MPC page (together at most 16 controls, rows of 4)
+MAX_SUBTABS = 8         # SDK ui-reference 3.5: at most 8 sub-tabs per function key
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -247,13 +249,14 @@ def _unique_page_name(name, used_names):
 
 NAME_AREA_W = 272          # inner width of a Q-Link column frame (frame 288, 8 px each side)
 DEFAULT_SHORT_NAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mpc-short-names.json")
-# Advance widths in 1/1000 em of Arial Bold for the upper case characters (measured on the build machine, Arial Bold.ttf). Titillium Web Bold, the font
-# of the skin, is narrower for every one of these characters, so the sum is an upper bound of the width the host draws.
+# Advance widths in 1/1000 em of Titillium Web Bold (the font of the skin) for the upper case letters, digits and the punctuation of the names, measured with
+# Pillow on TitilliumWeb-Bold.ttf (an OFL font file that is not part of this repository). name_width() sums them; the host's own layout may differ by
+# kerning and rounding, which is why the test keeps every name under 95 percent of the area.
 ADVANCE = {
-    " ": 278, "A": 722, "B": 722, "C": 722, "D": 722, "E": 667, "F": 611, "G": 778, "H": 722, "I": 278, "J": 556, "K": 722, "L": 611,
-    "M": 833, "N": 722, "O": 778, "P": 667, "Q": 778, "R": 722, "S": 667, "T": 611, "U": 722, "V": 667, "W": 944, "X": 667, "Y": 667,
-    "Z": 611, "0": 556, "1": 556, "2": 556, "3": 556, "4": 556, "5": 556, "6": 556, "7": 556, "8": 556, "9": 556, "-": 333, "+": 584,
-    "/": 278, ".": 278, ",": 278, "(": 333, ")": 333, "&": 722, "'": 238,
+    ' ': 220, 'A': 602, 'B': 609, 'C': 543, 'D': 638, 'E': 554, 'F': 531, 'G': 611, 'H': 677, 'I': 286, 'J': 302, 'K': 593, 'L': 472,
+    'M': 858, 'N': 693, 'O': 652, 'P': 589, 'Q': 652, 'R': 620, 'S': 544, 'T': 526, 'U': 654, 'V': 603, 'W': 930, 'X': 569, 'Y': 557,
+    'Z': 532, '0': 560, '1': 560, '2': 560, '3': 560, '4': 560, '5': 560, '6': 560, '7': 560, '8': 560, '9': 560, '-': 408, '+': 560,
+    '/': 466, '.': 256, ',': 263, '(': 308, ')': 308, '&': 701, "'": 239,
 }
 
 
@@ -587,9 +590,14 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
 
     layout_pages = layout_doc.get("pages", [])
 
-    # b. more than 32 pages
-    if len(layout_pages) > MAX_PAGES:
-        print("gen-mpc-ui: ERROR: more than 32 pages in layout", file=sys.stderr)
+    # b. more tabs than the limit: 32 (SDK ui-reference 3.5), or the "tabLimit" of the layout file (a variant that tries a larger number on a device;
+    #    the SDK gen_ui.py and validate.py refuse more than 32 tabs: scripts/run-gen-ui.py lifts the limit of gen_ui.py)
+    tab_limit = layout_doc.get("tabLimit", MAX_PAGES)
+    if not isinstance(tab_limit, int) or tab_limit < MAX_PAGES:
+        print("gen-mpc-ui: ERROR: tabLimit must be an integer of at least %d" % MAX_PAGES, file=sys.stderr)
+        return 2
+    if len(layout_pages) > tab_limit:
+        print("gen-mpc-ui: ERROR: more than %d pages in layout" % tab_limit, file=sys.stderr)
         return 2
 
     # c & d. page name validation (empty/long + duplicate)
@@ -605,12 +613,33 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
             return 2
         seen_page_names.add(name)
 
-    # e. kick list must have one or two ids
+    # e. kick list must have one to four ids (their controls must fit the 16 slots of the page, see the slot rule below)
     for page_entry in layout_pages:
         kick_ids = page_entry.get("kick", [])
-        if not isinstance(kick_ids, list) or len(kick_ids) < 1 or len(kick_ids) > 2:
-            print("gen-mpc-ui: ERROR: page '%s' kick must contain one or two ids"
-                  % page_entry.get("name", "?"), file=sys.stderr)
+        if not isinstance(kick_ids, list) or len(kick_ids) < 1 or len(kick_ids) > MAX_KICK_PER_PAGE:
+            print("gen-mpc-ui: ERROR: page '%s' kick must contain one to %d ids"
+                  % (page_entry.get("name", "?"), MAX_KICK_PER_PAGE), file=sys.stderr)
+            return 2
+
+    # e2. function keys: "fn" names the function key (button) a page is a sub-tab of; the pages of one key follow each other,
+    #     a key has at most MAX_SUBTABS sub-tabs. A page without "fn" is a function key of its own.
+    fn_keys = []   # [{"name": key name, "tabs": [page names]}]
+    for page_entry in layout_pages:
+        fn = page_entry.get("fn", page_entry["name"])
+        if not isinstance(fn, str) or not fn:
+            print("gen-mpc-ui: ERROR: page '%s' fn must be a non-empty string" % page_entry["name"], file=sys.stderr)
+            return 2
+        if fn_keys and fn_keys[-1]["name"] == fn:
+            fn_keys[-1]["tabs"].append(page_entry["name"])
+        elif any(k["name"] == fn for k in fn_keys):
+            print("gen-mpc-ui: ERROR: the pages of function key '%s' must follow each other (page '%s')" % (fn, page_entry["name"]),
+                  file=sys.stderr)
+            return 2
+        else:
+            fn_keys.append({"name": fn, "tabs": [page_entry["name"]]})
+    for k in fn_keys:
+        if len(k["tabs"]) > MAX_SUBTABS:
+            print("gen-mpc-ui: ERROR: function key '%s' has %d sub-tabs (at most %d)" % (k["name"], len(k["tabs"]), MAX_SUBTABS), file=sys.stderr)
             return 2
 
     # f. each kick id must exist in kick-pages.json
@@ -685,8 +714,12 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
                 if level_page:
                     fader_names.add(param_name)
                 knob_params.append(p)
-            # Pad to 8 slots
-            slots += [p["name"] for p in knob_params] + [None] * (8 - len(knob_params))
+            # a Kick page takes whole Q-Link rows: its controls, padded to a multiple of 4 slots (a page of 8 controls fills two rows)
+            slots += [p["name"] for p in knob_params] + [None] * (-len(knob_params) % 4)
+        if len(slots) > MAX_CONTROLS_PER_PAGE:
+            print("gen-mpc-ui: ERROR: page '%s': the Kick pages %s need %d slots (rows of 4), a page has %d"
+                  % (page_name, ", ".join(kick_ids), len(slots), MAX_CONTROLS_PER_PAGE), file=sys.stderr)
+            return 2
         # Pad to 16 slots total
         slots += [None] * (16 - len(slots))
 
@@ -729,7 +762,7 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
     # skin-meta.json: what the MPC skin extras (scripts/mpc-skin-extras/) need to know that ui.json cannot carry
     meta_path = os.path.join(out_dir, "skin-meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump({"format": "synthyboy-mpc-skin-meta", "version": 1, "tabs": meta_tabs}, f, indent=2, ensure_ascii=False)
+        json.dump({"format": "synthyboy-mpc-skin-meta", "version": 1, "fnKeys": fn_keys, "tabs": meta_tabs}, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
     # Report omitted own-engine parameters

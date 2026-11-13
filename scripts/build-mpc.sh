@@ -4,15 +4,17 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--bench] [--no-validate]
+# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--bench] [--no-validate]
 #
 #   --arch A         arm32 (VST/synthyboy-arm32.so, "file32"), arm64 (VST/synthyboy-arm64.so, "file64") or all (default: both)
 #   --out DIR        where the finished plugin folder is assembled (default: <repo>/build-mpc)
 #   --jobs N         parallel compile jobs inside the container (default 2)
 #   --build-dir DIR  root of the CMake trees on the host; one sub directory per architecture (default: <repo>/build-mpc/tree)
 #   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder instead of generating it
-#                    (default: generated from scripts/mpc-ui-pages.json with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py,
+#                    (default: generated from the layout file with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py (through scripts/run-gen-ui.py),
 #                    then scripts/apply-mpc-skin-extras.py)
+#   --skin-layout F  the layout file of the generated skin (default: scripts/mpc-ui-pages.json, 32 tabs; scripts/mpc-ui-pages-v34.json is the variant
+#                    with 34 tabs that tries the sub-tabs beyond the limit of 32 tabs)
 #   --bench          also build synthyboy_bench and synthyboy_noteon_bench for each architecture (own CMake tree with SYNTHYBOY_BUILD_TESTS=ON, libstdc++
 #                    linked statically) into <out>/bench-<arch>/; they are measurement tools and not part of the plugin folder
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
@@ -36,6 +38,7 @@ out_dir="$repo_root/build-mpc"
 build_dir="$repo_root/build-mpc/tree"
 jobs=2
 skins_dir=""
+skin_layout="$repo_root/scripts/mpc-ui-pages.json"
 with_bench=0
 validate=1
 image="${MPC_BUILD_IMAGE:-${ARMV7_IMAGE:-$IMAGE_DEFAULT}}"
@@ -45,7 +48,7 @@ usage() { sed -n '/^# Usage/,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; 
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --arch|--out|--jobs|--build-dir|--skins)
+        --arch|--out|--jobs|--build-dir|--skins|--skin-layout)
             [[ $# -ge 2 ]] || { echo "$me: $1 needs a value" >&2; exit 2; }
             case "$1" in
                 --arch) arch="$2" ;;
@@ -53,6 +56,7 @@ while [[ $# -gt 0 ]]; do
                 --jobs) jobs="$2" ;;
                 --build-dir) build_dir="$2" ;;
                 --skins) skins_dir="$2" ;;
+                --skin-layout) skin_layout="$2" ;;
             esac
             shift 2 ;;
         --bench) with_bench=1; shift ;;
@@ -140,8 +144,8 @@ if [[ -n "$skins_dir" ]]; then
 else
     ui_tmp="$(mktemp -d)"
     python3 "$repo_root/scripts/gen-mpc-ui.py" --params "$repo_root/docs/params.json" --pages "$repo_root/docs/kick-pages.json" \
-        --layout "$repo_root/scripts/mpc-ui-pages.json" --out "$ui_tmp"
-    python3 "$MPC_SDK/tools/gen_ui.py" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
+        --layout "$skin_layout" --out "$ui_tmp"
+    python3 "$repo_root/scripts/run-gen-ui.py" --sdk "$MPC_SDK" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
     # Graphical extras (scripts/mpc-skin-extras/*.py) on top of the generated skin; not for a given --skins directory
     python3 "$repo_root/scripts/apply-mpc-skin-extras.py" --skins "$plugin_folder/Plugin Skins" --params "$repo_root/docs/params.json" \
         --meta "$ui_tmp/skin-meta.json"
