@@ -221,7 +221,7 @@ public:
                             const float delay = mod * 0.03f * p.depth + lerp (baseOf[vi], avg, tOf[i]);
                             period[k] = std::clamp (delay * sr, 3.0f, 0.08f * sr);
                         }
-                        const float rd = line[k].readCubic (period[k]);
+                        const float rd = fast ? line[k].read (period[k]) : line[k].readCubic (period[k]); // tier low: linear interpolation of the delay (about -0.5 dB at 5 kHz, -2.3 dB at 10 kHz at the worst fraction)
                         line[k].push (band[k].process (loopLimit (in[c] + fb * rd)));
                         acc[c] += rd;
                     }

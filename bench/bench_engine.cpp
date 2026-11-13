@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--sr 48000] [--retrigger S]
+//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--csv FILE] [--sr 48000] [--retrigger S]
 //
 // K notes are held and retriggered every S seconds (default 1). The first second is rendered but not measured. Prints,
 // for the requested configuration and then once per quality tier (the tier's quality: voices, unison, oversampling, ...), the
@@ -139,6 +139,7 @@ struct Options
     int voices = 8;
     bool voicesGiven = false; // --voices K: K notes are played (tier runs: at most the voices of the tier)
     const char* presetFile = nullptr; // --preset FILE: a .sbpreset instead of the default / heavy patch
+    const char* csvFile = nullptr;    // --csv FILE: with --preset-dir, a line "name,mean,p99,worst" per preset
     const char* presetDir = nullptr;  // --preset-dir DIR: every .sbpreset below DIR, one line each
     double sampleRate = 48000.0;
     double retrigger = 1.0;
@@ -401,6 +402,7 @@ int main (int argc, char** argv)
         else if (a == "--voices")    { o.voices = std::atoi (next()); o.voicesGiven = true; }
         else if (a == "--preset")    o.presetFile = next();
         else if (a == "--preset-dir") o.presetDir = next();
+        else if (a == "--csv")        o.csvFile = next();
         else if (a == "--sr")        o.sampleRate = std::atof (next());
         else if (a == "--retrigger") o.retrigger = std::atof (next());
         else if (a == "--profile")   o.profileFile = next();
@@ -468,6 +470,14 @@ int main (int argc, char** argv)
             rows.push_back ({ pd.name, r });
             std::printf ("%-44s voices %2d: mean %.4f  p99 %.4f  worst %.4f ms%s\n", pd.name.c_str(), notes, r.meanMs, r.p99Ms, r.worstMs, r.worstMs > budgetMs ? "   OVER" : "");
         }
+        if (o.csvFile != nullptr)
+            if (FILE* csv = std::fopen (o.csvFile, "w"))
+            {
+                std::fprintf (csv, "name,mean_ms,p99_ms,worst_ms\n");
+                for (const auto& r : rows)
+                    std::fprintf (csv, "\"%s\",%.4f,%.4f,%.4f\n", r.name.c_str(), r.r.meanMs, r.r.p99Ms, r.r.worstMs);
+                std::fclose (csv);
+            }
         std::printf ("\npresets over the block budget (%.3f ms) in the worst block:\n", budgetMs);
         int over = 0;
         for (const auto& r : rows)

@@ -579,7 +579,15 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             const float v0 = env[0].advance (s, 0.0); // the level at the note's first sample
             envStart = v0 * v0;
         }
-        const float v = env[e].advance (s, dt);
+        // tier low: an envelope (not the amplitude envelope) that no slot reads is advanced every fourth period (staggered) by four periods
+        double stepDt = dt;
+        if (g.quality == 0 && !fresh && e > 0 && ((g.usedSources >> srcEnv (e)) & 1u) == 0)
+        {
+            if (((tickCount + static_cast<uint32_t> (e)) & 3u) != 0u)
+                continue; // envOut keeps its last value
+            stepDt = 4.0 * dt;
+        }
+        const float v = env[e].advance (s, stepDt);
         envOut[e] = v * v;
     }
     if (!envFromCache)
@@ -605,6 +613,15 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     }
     for (int r = 0; r < 4; ++r)
     {
+        // tier low: a random LFO that no slot reads is stepped every fourth period (staggered) by four periods' worth of cycles
+        int steps = 1;
+        if (g.quality == 0 && !fresh && ((g.usedSources >> srcRlfo (r)) & 1u) == 0)
+        {
+            if (((tickCount + static_cast<uint32_t> (r)) & 3u) != 0u)
+                continue; // rlfoOut / rlfoOutR keep their last values
+            steps = 4;
+        }
+        const float fdtS = fdt * static_cast<float> (steps);
         const RlfoIdx& ri = pi.rlfo[r];
         const int syncType = static_cast<int> (P (ri.syncType) + 0.5f);
         if (syncType == 1 && g.rlfoValue != nullptr)
@@ -614,9 +631,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             const int sync = static_cast<int> (P (ri.sync) + 0.5f);
             const float rate = vc.lfoFactor * lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
             const int style = static_cast<int> (P (ri.style) + 0.5f);
-            rlfoOut[r] = rlfo[r].advance (style, rate * fdt);
+            rlfoOut[r] = rlfo[r].advance (style, rate * fdtS);
             // stereo: the right lane has random numbers of its own
-            rlfoOutR[r] = (ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f) ? rlfoR[r].advance (style, rate * fdt) : rlfoOut[r];
+            rlfoOutR[r] = (ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f) ? rlfoR[r].advance (style, rate * fdtS) : rlfoOut[r];
         }
     }
 
@@ -759,7 +776,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
                 SB_SECTION (sections::tickOscUpdate);
                 osc[o].update (t, g.sampleRate, rng);
                 pitchTapOn[o] = false;
-                lib[o].update (t, LibParams(), g.content, o);
+                lib[o].updateOff (g.content);
             }
             continue;
         }
@@ -926,6 +943,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         pitchTapOn[3] = subCh.on;
     }
     // ---- noise
+    if (!noiseCh.on && noiseGain == 0.0f && noiseGainPrev == 0.0f && P (pi.noise.on) < 0.5f)
+    {
+        // off and settled: the rest of the block only prepares what an active noise source needs, and it does all of it again in the period in which the source is switched on
+    }
+    else
     {
         const NoiseIdx& ni = pi.noise;
         noiseCh.on = P (ni.on) >= 0.5f;
@@ -1092,11 +1114,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     for (int o = 0; o < 3; ++o)
     {
         if (!oscOn[o])
-        {
-            std::fill (oscL[o], oscL[o] + n, 0.0f);
-            std::fill (oscR[o], oscR[o] + n, 0.0f);
-            continue;
-        }
+            continue; // nothing reads oscL / oscR of an oscillator that is off (route () is not reached)
         const float* cross[6];
         int c = 0;
         for (int j = 0; j < 3; ++j)

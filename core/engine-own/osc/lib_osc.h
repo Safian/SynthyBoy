@@ -109,6 +109,22 @@ public:
 
     /** Per control period: computes pitch, unison and the parameters of the active type. `t` carries level, pan, unison and warp values of the slot. */
     void update (const OscTick& t, const LibParams& p, const ContentSet* content, int oscIndex) noexcept;
+    /** update () for an oscillator that is off: only what the full call does before its early return for a wavetable slot (the content set it is bound to); the copies of the
+        tick and of the parameters are not needed because a slot that plays library material gets a full update () before it renders. */
+    void updateOff (const ContentSet* content) noexcept
+    {
+        if (cur == 0 && from <= 0)
+        {
+            if (boundSet != content)
+            {
+                if (boundSet != nullptr)
+                    stopAll();
+                boundSet = content;
+            }
+            return;
+        }
+        update (OscTick(), LibParams(), content, oscIdx);
+    }
     void noteOff (bool loopExit) noexcept;
     /** The content under the voices changed: stop every player (they point into the old set). */
     void stopAll() noexcept;

@@ -52,6 +52,7 @@ public:
         sr = sampleRate;
         memoValid = false;
         rampValid = false;
+        svfRampValid = false;
         comb.prepare (static_cast<int> (sampleRate * 0.1));
         reset();
     }
@@ -83,10 +84,18 @@ public:
             block (in, out, n, b);
             return;
         }
-        if (b.fast && b.model == 2 && a.model == 2 && a.style == b.style && a.fast)
+        if (b.fast && a.fast && a.model == b.model && a.style == b.style)
         {
-            ladderRamp (in, out, n, a, b, t0);
-            return;
+            if (b.model == 2)
+            {
+                ladderRamp (in, out, n, a, b, t0);
+                return;
+            }
+            if (b.model == 0 || b.model == 1 || b.model == 3)
+            {
+                svfRamp (in, out, n, a, b, t0);
+                return;
+            }
         }
         for (int i = 0; i < n;)
         {
@@ -253,14 +262,18 @@ private:
 
     void svfModel (const float* in, float* out, int n, int model, bool linearHard) noexcept
     {
-        if (svf.shelf)
+        svfRun (svf, in, out, n, model, linearHard);
+    }
+    void svfRun (const SvfSetup& z, const float* in, float* out, int n, int model, bool linearHard) noexcept
+    {
+        if (z.shelf)
         {
             std::copy (in, in + n, out); // the shelving mode at 0 dB: LP + HP + R BP = u exactly (document 05, 2.1)
             return;
         }
-        const float g = svf.g, R = svf.R, R1 = svf.R1, dEff = svf.dEff, post = svf.post;
-        const Wt wa = svf.wa, wb = svf.wb;
-        const bool two = svf.two;
+        const float g = z.g, R = z.R, R1 = z.R1, dEff = z.dEff, post = z.post;
+        const Wt wa = z.wa, wb = z.wb;
+        const bool two = z.two;
         for (int i = 0; i < n; ++i)
         {
             float u = in[i] * dEff;
@@ -279,6 +292,53 @@ private:
             out[i] = y * post;
         }
     }
+    /** The setup of the state variable models for parameters p, without touching the memo of block (). */
+    SvfSetup svfSetupFor (const ClassicParams& p) const noexcept
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float d = p.fast ? fastmath::pow10 (p.driveDb * 0.05f) : std::pow (10.0f, p.driveDb * 0.05f);
+        const float r = clamp01 (p.res);
+        switch (p.model)
+        {
+            case 3: return svfSetup (f, 0.5f + 15.5f * r * r * r, 1.0f, d, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), 3, p.style, p.blendRaw, r);
+            case 0: return svfSetup (f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d, d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style != 0 ? kAn[5] : kAn[3]), 0, p.style, p.blendRaw, r);
+            default: return svfSetup (f, 1.0f / std::max (1.8f - 1.87f * std::sqrt (r), 0.03f), kDirtyQ1, 2.0f * (d - 1.0f) + 1.0f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, 1, p.style, p.blendRaw, r);
+        }
+    }
+    /** Tier low, state variable models with moving parameters: the setup (tan, pow, sqrt, divisions) is computed at the two ends of the period, its coefficients are
+        interpolated linearly over the four pieces of 8 samples (see ladderRamp). */
+    void svfRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        fastMath = true;
+        satLoop = b.model == 1;
+        if (!svfRampValid || !sameParams (svfRampP, a))
+            svfRampA = svfSetupFor (a);
+        else
+            svfRampA = svfRampB;
+        svfRampB = svfSetupFor (b);
+        svfRampP = b;
+        svfRampValid = true;
+        const bool linearHard = b.model == 3;
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            SvfSetup z = svfRampB; // the flags (two, shelf) are those of the end of the period
+            z.g = lerp (svfRampA.g, svfRampB.g, t);
+            z.R = lerp (svfRampA.R, svfRampB.R, t);
+            z.R1 = lerp (svfRampA.R1, svfRampB.R1, t);
+            z.dEff = lerp (svfRampA.dEff, svfRampB.dEff, t);
+            z.post = lerp (svfRampA.post, svfRampB.post, t);
+            z.wa = { lerp (svfRampA.wa.lp, svfRampB.wa.lp, t), lerp (svfRampA.wa.bp, svfRampB.wa.bp, t), lerp (svfRampA.wa.hp, svfRampB.wa.hp, t) };
+            z.wb = { lerp (svfRampA.wb.lp, svfRampB.wb.lp, t), lerp (svfRampA.wb.bp, svfRampB.wb.bp, t), lerp (svfRampA.wb.hp, svfRampB.wb.hp, t) };
+            svfRun (z, in + i, out + i, m, b.model, linearHard);
+            i += m;
+        }
+    }
+    SvfSetup svfRampA, svfRampB;
+    ClassicParams svfRampP;
+    bool svfRampValid = false;
     SvfSetup svfSetup (float f, float Q, float Q1, float dRaw, float dComp, float postBase, int model, int style, float blendRaw, float resKnob) const noexcept
     {
         SvfSetup z;
@@ -582,14 +642,23 @@ private:
             const float rr = clamp01 (p.fres * mixv (1));
             q[k] = (4.0f + 26.0f * rr * rr * rr) * tract;
         }
+        // the four resonators keep their frequency and Q for the whole block: the coefficients (an exp2, a tan, a division each) are computed once, not for every sample
+        Svf::Coef cf[4];
+        float kq[4], bpGain[4];
+        for (int k = 0; k < 4; ++k)
+        {
+            const float hz = 8.1757989f * std::exp2 (note[k] / 12.0f);
+            kq[k] = 1.0f / q[k];
+            cf[k] = Svf::coefficients (Svf::coefficient (hz, sr), kq[k]);
+            bpGain[k] = 1.0f / q[k];
+        }
         for (int i = 0; i < n; ++i)
         {
             float y = 0.0f;
             for (int k = 0; k < 4; ++k)
             {
-                const float hz = 8.1757989f * std::exp2 (note[k] / 12.0f);
-                fm[k].process (in[i], Svf::coefficient (hz, sr), 1.0f / q[k]);
-                y += fm[k].bp * gain[k] * (1.0f / q[k]) * 8.0f;
+                fm[k].step (in[i], cf[k], kq[k]);
+                y += fm[k].bp * gain[k] * bpGain[k] * 8.0f;
             }
             if (p.style >= 2)
             {

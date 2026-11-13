@@ -106,6 +106,28 @@ struct Svf
         bp = v1;
         hp = x - k * v1 - v2;
     }
+    /** The three coefficients of process () for the same g and k: `process (x, g, k)` is `step (x, c, k)` with c = coefficients (g, k), so a band that runs with the same g and k
+        for many samples computes them (a division) once. */
+    struct Coef { float a1, a2, a3; };
+    static Coef coefficients (float g, float k) noexcept
+    {
+        Coef c;
+        c.a1 = 1.0f / (1.0f + g * (g + k));
+        c.a2 = g * c.a1;
+        c.a3 = g * c.a2;
+        return c;
+    }
+    void step (float x, const Coef& c, float k) noexcept
+    {
+        const float v3 = x - s2;
+        const float v1 = c.a1 * s1 + c.a2 * v3;
+        const float v2 = s2 + c.a2 * s1 + c.a3 * v3;
+        s1 = flushDenormal (2.0f * v1 - s1);
+        s2 = flushDenormal (2.0f * v2 - s2);
+        lp = v2;
+        bp = v1;
+        hp = x - k * v1 - v2;
+    }
     static float coefficient (float hz, double sr) noexcept
     {
         return std::tan (kPif * std::clamp (hz, 10.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
