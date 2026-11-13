@@ -2,10 +2,11 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Per tab: a full-width Envelope (rows 1-2 of the 4 x 4 grid) in a display component that opens a full-screen
-# EnvelopeOverlay on double tap / Enter; the 8 knobs of the envelope sit in rows 3-4, and the tab's Q-Link map is rewritten
+# Per tab: a full-width Envelope (rows 1-2 of the 4 x 4 grid) in a display component; the 8 knobs of the envelope sit in
+# rows 3-4, and the tab's Q-Link map is rewritten
 # so that those knobs are Q-Link 1-8 (Bank Direction "Column": Q-Link 4*(3-row)+col+1, row 0 = top, col 0 = left).
 # The Envelope draws straight segments between the stage handles; the curve parameters stay knobs. Layout: docs/MPC.md.
+# There is no EnvelopeOverlay: its definition makes the MPC 3.10.1.12 host drop the whole TUI.json (docs/MPC.md).
 
 import copy
 
@@ -22,15 +23,14 @@ STAGES = (  # handle name inside the envelope components, params.json suffix (al
     ("Delay", "delay"), ("Attack", "attack"), ("Hold", "hold"),
     ("Decay", "decay"), ("Sustain", "sustain"), ("Release", "release"),
 )
-DUP = "\x00"  # second "version" key of the overlay widgets (see mpc-skin-extras/README.md)
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 336, 288
 
 
-def _style(big):
+def _style():
     return {
         "backgroundColour": "ff1e1d1e", "scaleColour": "0", "lineColour": "ffd31145", "fillColour": "40d31145",
-        "highlightColour": "ffffffff", "lineWidth": 4 if not big else 6, "handleWidth": 44 if not big else 64,
-        "handleHeight": 32 if not big else 46, "handleShape": "Circle",
+        "highlightColour": "ffffffff", "lineWidth": 4, "handleWidth": 44,
+        "handleHeight": 32, "handleShape": "Circle",
         "handleLineWidth": 2, "handleLineColour": "ffffffff", "handleFillColour": "ff1e1d1e", "handleTextColour": "ffffffff",
         "handleLineWidthOnPressed": 2, "handleLineColourOnPressed": "ffffffff", "handleFillColourOnPressed": "ffd31145",
         "handleTextColourOnPressed": "ffffffff", "handleArrowLineColourOnPressed": "ffffffff",
@@ -38,20 +38,13 @@ def _style(big):
     }
 
 
-def _envelope_data(n, overlay):
-    data = {"version": 1}
-    if overlay:
-        data[("version" + DUP) + "1"] = 1
-        data["actions"] = [{"version": 1, "onAction": "Focus Lost", "handler": "Focus Lost", "handleName": "Focus Lost",
-                            "additionalData": ""}]
-    data.update({"envelopeType": "DAHDSR", "envelopeStyle": "WithHeader", "envelopeName": "ENV %d" % n})
-    data.update(_style(overlay))
+def _envelope_data(n):
+    data = {"version": 1, "envelopeType": "DAHDSR", "envelopeStyle": "WithHeader", "envelopeName": "ENV %d" % n}
+    data.update(_style())
     for handle, _ in STAGES:
         data[handle[0].lower() + handle[1:] + "Handle"] = handle
-    if not overlay:
-        data.update({"attackShapeHandle": "Invalid", "decayShapeHandle": "Invalid", "releaseShapeHandle": "Invalid",
-                     "forceHideShapeHandles": True, "forceCurveShape": 0.5})
-    data["curveType"] = "Quadratic"
+    data.update({"attackShapeHandle": "Invalid", "decayShapeHandle": "Invalid", "releaseShapeHandle": "Invalid",
+                 "forceHideShapeHandles": True, "forceCurveShape": 0.5, "curveType": "Quadratic"})
     return data
 
 
@@ -76,21 +69,12 @@ def _definition(children, actions, ignore_mouse):
             "componentsData": children}
 
 
-def _overlay_actions(overlay_name):
-    return [{"version": 2, "onAction": action, "handler": "Show Overlay", "handleName": "", "additionalData": overlay_name,
-             "handle remapping": {"version": 1, "map": []}} for action in ("Double Click", "Enter Pressed")]
-
-
-def _add_definitions(ctx, n):
-    display, overlay = "envDisplay%d" % n, "envOverlay%d" % n
+def _add_definition(ctx, n):
+    name = "envDisplay%d" % n
     w, h = ENV_BOUNDS[2:]
-    ctx.add_component_definition(display, _definition(
-        [_entry("Envelope", "Envelope", _envelope_data(n, False), [], _bounds((0, 0, w, h), 2))],
-        _overlay_actions(overlay), False))
-    ctx.add_component_definition(overlay, _definition(
-        [_entry("Envelope Overlay", "EnvelopeOverlay", _envelope_data(n, True), [],
-                _bounds((0, 0, 1280, 800), 2, "Yes", "Show"))], [], True))
-    return display
+    ctx.add_component_definition(name, _definition(
+        [_entry("Envelope", "Envelope", _envelope_data(n), [], _bounds((0, 0, w, h), 2))], [], False))
+    return name
 
 
 def _qlink(row, col):
@@ -130,6 +114,6 @@ def apply(tui, qlinks, ctx):
         # the Q-Link frames mark the lower two rows only
         tab["qlinkBoundsData"] = ["%s %d %s %d" % (b.split()[0], QLINK_BOUNDS_Y, b.split()[2], QLINK_BOUNDS_H)
                                   for b in tab["qlinkBoundsData"]]
-        display = _add_definitions(ctx, n)
+        display = _add_definition(ctx, n)
         remap = [{"key": handle, "value": "Parameter %d" % ctx.param_index("env%d.%s" % (n, key))} for handle, key in STAGES]
         items.append(_entry("Env %d Curve" % n, display, {"version": 1, "handleName": "Attack"}, remap, _bounds(ENV_BOUNDS, 1)))

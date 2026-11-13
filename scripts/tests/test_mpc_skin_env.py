@@ -62,11 +62,12 @@ class EnvSkinTest(unittest.TestCase):
             self.assertEqual(envelope["type"], "Envelope")
             self.assertEqual(envelope["data"]["envelopeType"], "DAHDSR")
             self.assertEqual([envelope["data"][h] for h in HANDLES], [s.capitalize() for s in STAGES])
-            overlay = defs["envOverlay%d" % n]["componentsData"][0]["componentData"]
-            self.assertEqual(overlay["type"], "EnvelopeOverlay")
-            self.assertEqual([overlay["data"][h] for h in HANDLES], [s.capitalize() for s in STAGES])
-            actions = {a["onAction"]: a["additionalData"] for a in defs["envDisplay%d" % n]["actions"]}
-            self.assertEqual(actions, {"Double Click": "envOverlay%d" % n, "Enter Pressed": "envOverlay%d" % n})
+
+    def test_no_envelope_overlay_anywhere(self):
+        # an EnvelopeOverlay definition makes the MPC 3.10.1.12 host drop the whole TUI.json (docs/MPC.md)
+        self.assertNotIn("EnvelopeOverlay", json.dumps(self.tui))
+        self.assertEqual([k for k in self.defs() if k.startswith("envOverlay")], [])
+        self.assertEqual([d["actions"] for k, d in self.defs().items() if k.startswith("envDisplay")], [[]] * 4)
 
     def test_knobs_and_qlinks_match(self):
         for n in (1, 2, 3, 4):

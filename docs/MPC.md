@@ -119,12 +119,18 @@ What the shell does with programs and the chunk is its own behaviour and is cove
 The generated skin has 32 tabs; the four envelopes have a tab each (`Env 1` .. `Env 4`). `scripts/mpc-skin-extras/10_env.py`
 (run after the SDK `gen_ui.py` by `scripts/apply-mpc-skin-extras.py`) puts a full-width editable curve (SDK `Envelope`,
 `envelopeType` `DAHDSR`) on the top two rows of each tab. Dragging a stage handle sets `envN.delay`, `attack`, `hold`, `decay`, `sustain`
-or `release`; double tap (or Enter) opens the curve full screen (`EnvelopeOverlay`).
+or `release`.
 
 - The curve draws straight segments between the handles. The curvature parameters (`attack_curve`, `decay_curve`) stay knobs.
-- The time axis is linear over the whole parameter range (no skew or per-stage width key exists in the SDK `Envelope`), so short times are narrow.
-- The eight knobs sit in the lower two rows and are Q-Link 1-8 (the generator's own Q-Link map of the tab is rewritten to match).
+- The stage widths are proportional to the normalized parameter value (a linear scale over the whole parameter range; the SDK `Envelope`
+  has no skew or per-stage width key, checked in the SDK reference and in all five factory skins), so short times are narrow.
+- The eight knobs sit in the lower two rows and are Q-Link 1-8 (the generator's own Q-Link map of the tab is rewritten to match; the Q frames mark the lower two rows).
   `Env 1 Release` has a knob on this tab as well as on `Macros` (the generator places a parameter once; the module adds the second knob).
+- `scaleColour` is `0`: with a visible scale colour the host draws a column of scale lines at the right edge, far from the curve.
+- There is no full-screen envelope editor. Observed on the Key 61 (MPC 3.10.1.12): a skin whose `localComponentDefinitions` holds an
+  `EnvelopeOverlay` definition is dropped completely by the host (empty plugin page, no log message), even when nothing refers to it,
+  with the minimal key set, and with the structure of the generated `knob overlay`. A `Show Overlay` action on an existing overlay
+  definition loads fine. So the curve is edited on the tab itself, over the full width.
 
 ## Sound differences at tier low
 
