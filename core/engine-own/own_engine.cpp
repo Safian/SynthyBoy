@@ -24,6 +24,15 @@ std::unique_ptr<IEngine> createOwnEngine()
     return std::make_unique<own::OwnEngine>();
 }
 
+bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept
+{
+    auto* own = dynamic_cast<own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return false;
+    own->setLowTierKillFade (seconds);
+    return true;
+}
+
 bool setOwnLowTierMorphSpread (IEngine& engine, bool keep) noexcept
 {
     auto* own = dynamic_cast<own::OwnEngine*> (&engine);
@@ -904,6 +913,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.quality = qualityTier.load (std::memory_order_relaxed);
     globals.usedSources = matrix.sourceMask();
     globals.morphCache = &morphCache;
+    globals.killSeconds = qualityTier.load (std::memory_order_relaxed) == 0 ? lowKillSeconds.load (std::memory_order_relaxed) : 0.05f;
     globals.lowShareMorph = !lowKeepMorphSpread.load (std::memory_order_relaxed);
     globals.baseEpoch = baseEpoch;
     globals.oversample = ultraRender.load (std::memory_order_relaxed) || (fxOversampleIndex >= 0 && base[static_cast<size_t> (fxOversampleIndex)] >= 0.5f);

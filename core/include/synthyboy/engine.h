@@ -149,6 +149,8 @@ double ownSectionClockCostNs() noexcept;
 bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept;
 /** Own engine only: keep (default) or drop the spectral morph spread across the unison voices at tier low (see OwnEngine::setLowTierMorphSpread). */
 bool setOwnLowTierMorphSpread (IEngine& engine, bool keep) noexcept;
+/** Own engine only: the fade of a stolen voice at tier low in seconds (default 0.003; 0.05 = as at medium / high). */
+bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept;
 
 enum class EngineKind
 {

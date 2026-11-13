@@ -117,6 +117,8 @@ struct SVFTPT
 struct Ladder4Pole
 {
     float s[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    float lastG = 0.0f, cG = 0.0f, cG0 = 0.0f, cG2 = 0.0f, cG3 = 0.0f, cG4 = 0.0f;
+    bool haveG = false;
 
     void reset() noexcept
     {
@@ -130,12 +132,19 @@ struct Ladder4Pole
         for (int i = 0; i < 4; ++i)
             s[i] = sanitize (s[i]);
 
-        const float gSafe = std::max (1e-5f, std::min (g, 0.95f));
-        const float G = gSafe / (1.0f + gSafe);
-        const float G0 = 1.0f / (1.0f + gSafe);
-        const float G2 = G * G;
-        const float G3 = G2 * G;
-        const float G4 = G3 * G;
+        // the coefficients are a function of g alone: kept while g stays the same (a held or constant cutoff)
+        if (!(haveG && g == lastG))
+        {
+            const float gSafe = std::max (1e-5f, std::min (g, 0.95f));
+            cG = gSafe / (1.0f + gSafe);
+            cG0 = 1.0f / (1.0f + gSafe);
+            cG2 = cG * cG;
+            cG3 = cG2 * cG;
+            cG4 = cG3 * cG;
+            lastG = g;
+            haveG = true;
+        }
+        const float G = cG, G0 = cG0, G2 = cG2, G3 = cG3, G4 = cG4;
 
         // Exact ZDF feedback prediction
         const float S = G0 * (G3 * s[0] + G2 * s[1] + G * s[2] + s[3]);
@@ -329,7 +338,9 @@ public:
             return;
         written_ = true;
         buffer_[writeIndex_] = sanitize (in);
-        writeIndex_ = (writeIndex_ + 1) % buffer_.size();
+        // (writeIndex_ + 1) % size without the integer division, which 32 bit ARM makes through a library call
+        if (++writeIndex_ == buffer_.size())
+            writeIndex_ = 0;
     }
 
     float read (float delaySamples) const noexcept
@@ -343,8 +354,13 @@ public:
         const float frac = d - static_cast<float> (intD);
 
         const size_t size = buffer_.size();
-        const size_t i1 = (writeIndex_ + size - intD) % size;
-        const size_t i2 = (writeIndex_ + size - intD - 1) % size;
+        // intD <= size - 2 and writeIndex_ < size, so both sums are in [1, 2 size): one subtraction is the same as the remainder
+        size_t i1 = writeIndex_ + size - intD;
+        if (i1 >= size)
+            i1 -= size;
+        size_t i2 = writeIndex_ + size - intD - 1;
+        if (i2 >= size)
+            i2 -= size;
 
         return buffer_[i1] * (1.0f - frac) + buffer_[i2] * frac;
     }

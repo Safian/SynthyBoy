@@ -714,7 +714,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     if (killFading)
     {
         killElapsed += fdt;
-        killGain = std::max (0.0f, 1.0f - killElapsed * (1.0f / 0.05f)); // linear fade of the envelope value in 50 ms (document 01, 3.2)
+        killGain = std::max (0.0f, 1.0f - killElapsed * (1.0f / g.killSeconds)); // linear fade of the envelope value in 50 ms (document 01, 3.2; tier low: shorter)
     }
     ampPrev = ampCur;
     ampCur = envOut[0] * killGain * killGain;

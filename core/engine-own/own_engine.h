@@ -26,6 +26,8 @@ namespace own
 {
 /** The default of OwnEngine::setLowTierUnisonCap: the one place of the number. */
 constexpr int kDefaultLowTierUnisonCap = 3;
+/** The default of OwnEngine::setLowTierKillFade: a stolen voice (Kill mode) fades out in 3 ms at tier low instead of 50 ms, so it stops costing a full voice after a few control periods. */
+constexpr float kDefaultLowTierKillSeconds = 0.003f;
 /** The default of OwnEngine::setLowTierMorphSpread: keep the morph spread across the unison voices at tier low (two morph cycles instead of one shared one). */
 constexpr bool kDefaultLowTierMorphSpread = true;
 
@@ -44,6 +46,8 @@ public:
     /** Tier low: true keeps the spectral morph spread across the unison voices (two morph cycles, as at medium / high), false shares one cycle between them (about half the
         morph build cost, the morph spread knob then does nothing at tier low). Any thread, lock free. */
     void setLowTierMorphSpread (bool keep) noexcept { lowKeepMorphSpread.store (keep, std::memory_order_relaxed); }
+    /** Tier low: the fade of a stolen voice in seconds (0.05 = the 50 ms of medium / high). Any thread, lock free. */
+    void setLowTierKillFade (float seconds) noexcept { lowKillSeconds.store (std::max (0.0005f, seconds), std::memory_order_relaxed); }
     int lowTierUnisonCap() const noexcept { return lowUnisonCap.load (std::memory_order_relaxed); }
     void reset() override;
     void setParam (uint32_t id, float plain) noexcept override;
@@ -90,6 +94,7 @@ private:
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> voiceCap { 8 }, unisonCap { kMaxUnisonVoices };
     std::atomic<int> lowUnisonCap { kDefaultLowTierUnisonCap };
+    std::atomic<float> lowKillSeconds { kDefaultLowTierKillSeconds };
     std::atomic<bool> lowKeepMorphSpread { kDefaultLowTierMorphSpread };
     std::atomic<int> activeCount { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)

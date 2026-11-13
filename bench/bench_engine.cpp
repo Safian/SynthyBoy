@@ -147,6 +147,7 @@ struct Options
     const char* profileFile = nullptr;
     std::string tier = "all"; // requested | low | medium | high | all
     bool ftz = false;
+    float killFadeMs = -1.0f; // --kill-fade MS: tier low fade of a stolen voice in ms (-1 = the engine default)
     int morphSpread = -1; // --morph-spread 0|1: keep the morph spread across the unison voices at tier low (-1 = the engine default)
     int unisonCap = -1; // --unison-cap N: tier low unison voices per oscillator of the own engine (0 = none, -1 = the engine default)
     bool sections = false; // --sections: the time of a block by section (a build with SYNTHYBOY_SECTION_TIMING=ON)
@@ -267,6 +268,8 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
         set (*engine, "master.polyphony", 32.0f);
     if (o.unisonCap >= 0)
         setOwnLowTierUnisonCap (*engine, o.unisonCap);
+    if (o.killFadeMs >= 0.0f)
+        setOwnLowTierKillFade (*engine, o.killFadeMs * 0.001f);
     if (o.morphSpread >= 0)
         setOwnLowTierMorphSpread (*engine, o.morphSpread != 0);
     engine->prepare (o.sampleRate, o.block, quality);
@@ -280,9 +283,10 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
     const long long retriggerBlocks = std::max<long long> (1, static_cast<long long> (o.retrigger * o.sampleRate / o.block));
 
     // --sections: the sections of every measured block, to be able to show the slowest 1 % of the blocks apart
-    struct BlockSections { double seconds = 0.0; double ms[64] = {}; int voices = 0; bool events = false; };
+    struct BlockSections { double seconds = 0.0; double ms[64] = {}; unsigned long long calls[64] = {}; int voices = 0; bool events = false; };
     std::vector<BlockSections> perBlock;
     double lastTotals[64] = {};
+    unsigned long long lastCalls[64] = {};
     std::vector<double> blockSeconds;
     blockSeconds.reserve (static_cast<size_t> (measuredBlocks));
 
@@ -338,13 +342,18 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
                 unsigned long long c = 0;
                 ownSectionRead (i, total, c);
                 bs.ms[i] = total - lastTotals[i];
+                bs.calls[i] = c - lastCalls[i];
                 lastTotals[i] = total;
+                lastCalls[i] = c;
             }
             if (b >= warmupBlocks)
                 perBlock.push_back (bs);
             else
                 for (int i = 0; i < cnt; ++i)
+                {
                     lastTotals[i] = 0.0; // the totals are reset at the end of the warm-up
+                    lastCalls[i] = 0;
+                }
         }
     }
     if (sink == 12345.678f)
@@ -382,6 +391,7 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
             std::sort (secs.begin(), secs.end());
             const double threshold = secs[static_cast<size_t> (0.99 * static_cast<double> (secs.size() - 1))];
             double worstMs[64] = {};
+            double worstCalls[64] = {};
             double worstTotal = 0.0, voicesAll = 0.0, voicesWorst = 0.0, eventsWorst = 0.0, eventsAll = 0.0, timeAll = 0.0, timeWorst = 0.0;
             size_t nWorst = 0;
             for (const auto& bs : perBlock)
@@ -398,6 +408,7 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
                 for (int i = 0; i < count; ++i)
                 {
                     worstMs[i] += bs.ms[i];
+                    worstCalls[i] += static_cast<double> (bs.calls[i]);
                     worstTotal += bs.ms[i];
                 }
             }
@@ -405,10 +416,13 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
             const double na = static_cast<double> (perBlock.size());
             std::printf ("    slowest 1 %% of the blocks (%zu blocks, block time >= %.4f ms): mean %.4f ms (all blocks %.4f), active voices %.1f (all %.1f), with events %.0f %% (all %.1f %%)\n",
                          nWorst, threshold * 1000.0, timeWorst / nw, timeAll / na, voicesWorst / nw, voicesAll / na, 100.0 * eventsWorst / nw, 100.0 * eventsAll / na);
-            std::printf ("    %-52s %12s %8s\n", "section", "ms / block", "share");
+            // voice ticks and voice render calls: what runs per voice (a voice that was stolen and still fades, and the chunks that events cut a block into, show here)
+            std::printf ("    per block: voice ticks %.1f, voice render calls %.1f (all blocks: %.1f, %.1f)\n", worstCalls[1] / nw, worstCalls[6] / nw,
+                         static_cast<double> (totalCalls) > 0.0 ? static_cast<double> (calls[1]) / blocks : 0.0, static_cast<double> (calls[6]) / blocks);
+            std::printf ("    %-52s %12s %8s %12s\n", "section", "ms / block", "share", "calls / blk");
             for (int i = 0; i < count; ++i)
                 if (worstMs[i] > 0.0)
-                    std::printf ("    %-52s %12.4f %7.1f%%\n", ownSectionName (i), worstMs[i] / nw, worstTotal > 0.0 ? 100.0 * worstMs[i] / worstTotal : 0.0);
+                    std::printf ("    %-52s %12.4f %7.1f%% %12.1f\n", ownSectionName (i), worstMs[i] / nw, worstTotal > 0.0 ? 100.0 * worstMs[i] / worstTotal : 0.0, worstCalls[i] / nw);
         }
     }
 
@@ -434,7 +448,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--tier requested|low|medium|high|all]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--kill-fade MS] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -474,6 +488,7 @@ int main (int argc, char** argv)
         else if (a == "--sections")  o.sections = true;
         else if (a == "--unison-cap") o.unisonCap = std::atoi (next());
         else if (a == "--morph-spread") o.morphSpread = std::atoi (next());
+        else if (a == "--kill-fade") o.killFadeMs = static_cast<float> (std::atof (next()));
         else if (a == "--tier")      o.tier = next();
         else usage ("unknown argument");
     }

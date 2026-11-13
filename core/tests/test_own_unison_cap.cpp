@@ -201,3 +201,41 @@ TEST (morph_spread_switch_of_tier_low)
     CHECK (!same (keepOn, keepOff)); // sharing one cycle changes the sound of a patch with a morph spread
     CHECK (same (run (Tier::high, 1), run (Tier::high, 0))); // medium / high never share
 }
+
+TEST (kill_fade_of_a_stolen_voice_at_tier_low)
+{
+    // a chord played twice with the voice limit of tier low: the stolen voices fade in 3 ms at tier low (setLowTierKillFade), in 50 ms at medium / high
+    auto run = [] (Tier tier, float fade)
+    {
+        auto e = make (1, 0);
+        bench::ownSet (*e, "master.polyphony", 8.0f);
+        if (fade > 0.0f)
+            setOwnLowTierKillFade (*e, fade);
+        e->prepare (44100.0, 128, qualityForTier (tier));
+        std::vector<float> out, l (128), r (128);
+        for (int b = 0; b < 60; ++b)
+        {
+            std::vector<Event> ev;
+            if (b == 0 || b == 20)
+                for (int k = 0; k < 8; ++k)
+                {
+                    Event n;
+                    n.type = Event::NoteOn;
+                    n.key = static_cast<int16_t> (40 + k * 3 + (b == 20 ? 1 : 0));
+                    n.value = 0.7f;
+                    ev.push_back (n);
+                }
+            e->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 128);
+            out.insert (out.end(), l.begin(), l.end());
+        }
+        return out;
+    };
+    const auto def = run (Tier::low, 0.0f), slow = run (Tier::low, 0.05f);
+    CHECK (finite (def));
+    float step = 0.0f;
+    for (size_t i = 1; i < def.size(); ++i)
+        step = std::max (step, std::fabs (def[i] - def[i - 1]));
+    CHECK (step < 1.5f);        // the short fade does not click
+    CHECK (!same (def, slow));  // and it is a different sound from the 50 ms fade
+    CHECK (same (run (Tier::high, 0.0f), run (Tier::high, 0.003f))); // medium / high keep the 50 ms
+}

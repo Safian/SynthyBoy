@@ -689,6 +689,12 @@ private:
         for (int j = 1; j < 4; ++j)
             cp[j] = (j < 3 ? -g * up : 0.0f) / (bb + g * lo * cp[j - 1]);
         (void) inv;
+        // tier low: the divisions by constants of the block become multiplications by their reciprocals (a few units in the last place)
+        const bool quick = fastMath;
+        const float invBb = 1.0f / bb, hpA = gh / (1.0f + gh), hfA = gf / (1.0f + gf);
+        float invD[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        for (int j = 1; j < 4; ++j)
+            invD[j] = 1.0f / (bb + g * lo * cp[j - 1]);
         for (int i = 0; i < n; ++i)
         {
             const float x = in[i];
@@ -696,14 +702,14 @@ private:
             float h = x;
             for (int j = 0; j < 2; ++j)
             {
-                const float v = (h - dHp[j]) * gh / (1.0f + gh);
+                const float v = quick ? (h - dHp[j]) * hpA : (h - dHp[j]) * gh / (1.0f + gh);
                 const float lp = v + dHp[j];
                 dHp[j] = flushDenormal (lp + v);
                 h = h - lp;
             }
             const float xin = lerp (x, h, amount);
             // 20 Hz high pass of the fed back fourth stage
-            const float vf = (dv[3] - dFb) * gf / (1.0f + gf);
+            const float vf = quick ? (dv[3] - dFb) * hfA : (dv[3] - dFb) * gf / (1.0f + gf);
             const float lpf = vf + dFb;
             dFb = flushDenormal (lpf + vf);
             const float fb = dv[3] - lpf;
@@ -721,9 +727,9 @@ private:
             float rhs[4] = { (1.0f - g) * dv[0] + g * in0 + g * lo * u, (1.0f - g) * dv[1] + g * in1, (1.0f - g) * dv[2] + g * in2, (1.0f - g) * dv[3] + g * in3 };
             dU = u;
             float dp[4];
-            dp[0] = rhs[0] / bb;
+            dp[0] = quick ? rhs[0] * invBb : rhs[0] / bb;
             for (int j = 1; j < 4; ++j)
-                dp[j] = (rhs[j] + g * lo * dp[j - 1]) / (bb + g * lo * cp[j - 1]);
+                dp[j] = quick ? (rhs[j] + g * lo * dp[j - 1]) * invD[j] : (rhs[j] + g * lo * dp[j - 1]) / (bb + g * lo * cp[j - 1]);
             float v[4];
             v[3] = dp[3];
             for (int j = 2; j >= 0; --j)
