@@ -762,15 +762,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             if (keyNum < kl || keyNum > kh || v127 < vl || v127 > vh)
                 oscOn[o] = false;
         }
-        oscDest[o] = static_cast<int> (P (oi.destination) + 0.5f);
-        oscBlend[o] = oi.filterBlend >= 0 ? clamp01 (P (oi.filterBlend) * 0.01f) : 0.0f;
-        oscSend[o][0] = oi.bus1Send >= 0 ? std::max (0.0f, P (oi.bus1Send) * 0.01f) : 0.0f;
-        oscSend[o][1] = oi.bus2Send >= 0 ? std::max (0.0f, P (oi.bus2Send) * 0.01f) : 0.0f;
-        oscEnv1[o] = P (oi.env1) >= 0.5f;
         OscTick& t = oscTick[o];
         t.active = oscOn[o];
         if (!oscOn[o])
         {
+            // an oscillator that is off: no routing parameters are read (nothing routes it), and no update beyond the minimum
             t.level = 0.0f;
             {
                 SB_SECTION (sections::tickOscUpdate);
@@ -780,6 +776,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             }
             continue;
         }
+        oscDest[o] = static_cast<int> (P (oi.destination) + 0.5f);
+        oscBlend[o] = oi.filterBlend >= 0 ? clamp01 (P (oi.filterBlend) * 0.01f) : 0.0f;
+        oscSend[o][0] = oi.bus1Send >= 0 ? std::max (0.0f, P (oi.bus1Send) * 0.01f) : 0.0f;
+        oscSend[o][1] = oi.bus2Send >= 0 ? std::max (0.0f, P (oi.bus2Send) * 0.01f) : 0.0f;
+        oscEnv1[o] = P (oi.env1) >= 0.5f;
         const ContentSet* cs = g.content;
         int wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
         t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : builtinWavetable (wtChoice);
@@ -887,7 +888,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             // the cross modulation entries of the list name the other two oscillators in order
             SB_SECTION (sections::tickOscUpdate);
             osc[o].update (t, g.sampleRate, rng);
-            osc[o].updateMorph (g.sampleRate, fresh);
+            osc[o].updateMorph (g.sampleRate, fresh, g.morphCache);
         }
         else
         {

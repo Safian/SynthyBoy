@@ -279,6 +279,10 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
     const long long measuredBlocks = std::max<long long> (1, static_cast<long long> (o.seconds * o.sampleRate / o.block));
     const long long retriggerBlocks = std::max<long long> (1, static_cast<long long> (o.retrigger * o.sampleRate / o.block));
 
+    // --sections: the sections of every measured block, to be able to show the slowest 1 % of the blocks apart
+    struct BlockSections { double seconds = 0.0; double ms[64] = {}; int voices = 0; bool events = false; };
+    std::vector<BlockSections> perBlock;
+    double lastTotals[64] = {};
     std::vector<double> blockSeconds;
     blockSeconds.reserve (static_cast<size_t> (measuredBlocks));
 
@@ -321,6 +325,27 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
         sink += left[static_cast<size_t> (o.block / 2)];
         if (b >= warmupBlocks)
             blockSeconds.push_back (std::chrono::duration<double> (t1 - t0).count());
+        if (o.sections)
+        {
+            BlockSections bs;
+            bs.seconds = std::chrono::duration<double> (t1 - t0).count();
+            bs.voices = engine->activeVoices();
+            bs.events = !events.empty();
+            const int cnt = std::min (ownSectionCount(), 64);
+            for (int i = 0; i < cnt; ++i)
+            {
+                double total = 0.0;
+                unsigned long long c = 0;
+                ownSectionRead (i, total, c);
+                bs.ms[i] = total - lastTotals[i];
+                lastTotals[i] = total;
+            }
+            if (b >= warmupBlocks)
+                perBlock.push_back (bs);
+            else
+                for (int i = 0; i < cnt; ++i)
+                    lastTotals[i] = 0.0; // the totals are reset at the end of the warm-up
+        }
     }
     if (sink == 12345.678f)
         std::puts ("");
@@ -347,6 +372,44 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, 
             if (calls[i] > 0)
                 std::printf ("    %-52s %12.4f %7.1f%% %12.1f\n", ownSectionName (i), ms[i] / blocks, total > 0.0 ? 100.0 * ms[i] / total : 0.0, static_cast<double> (calls[i]) / blocks);
         std::printf ("    %-52s %12.4f %7.1f%%\n", "sum of the sections", total / blocks, 100.0);
+
+        // the slowest 1 % of the blocks (the blocks at and above the 99th percentile of the block time), the same table
+        if (!perBlock.empty())
+        {
+            std::vector<double> secs;
+            for (const auto& bs : perBlock)
+                secs.push_back (bs.seconds);
+            std::sort (secs.begin(), secs.end());
+            const double threshold = secs[static_cast<size_t> (0.99 * static_cast<double> (secs.size() - 1))];
+            double worstMs[64] = {};
+            double worstTotal = 0.0, voicesAll = 0.0, voicesWorst = 0.0, eventsWorst = 0.0, eventsAll = 0.0, timeAll = 0.0, timeWorst = 0.0;
+            size_t nWorst = 0;
+            for (const auto& bs : perBlock)
+            {
+                voicesAll += bs.voices;
+                eventsAll += bs.events ? 1.0 : 0.0;
+                timeAll += bs.seconds * 1000.0;
+                if (bs.seconds < threshold)
+                    continue;
+                ++nWorst;
+                voicesWorst += bs.voices;
+                eventsWorst += bs.events ? 1.0 : 0.0;
+                timeWorst += bs.seconds * 1000.0;
+                for (int i = 0; i < count; ++i)
+                {
+                    worstMs[i] += bs.ms[i];
+                    worstTotal += bs.ms[i];
+                }
+            }
+            const double nw = static_cast<double> (std::max<size_t> (nWorst, 1));
+            const double na = static_cast<double> (perBlock.size());
+            std::printf ("    slowest 1 %% of the blocks (%zu blocks, block time >= %.4f ms): mean %.4f ms (all blocks %.4f), active voices %.1f (all %.1f), with events %.0f %% (all %.1f %%)\n",
+                         nWorst, threshold * 1000.0, timeWorst / nw, timeAll / na, voicesWorst / nw, voicesAll / na, 100.0 * eventsWorst / nw, 100.0 * eventsAll / na);
+            std::printf ("    %-52s %12s %8s\n", "section", "ms / block", "share");
+            for (int i = 0; i < count; ++i)
+                if (worstMs[i] > 0.0)
+                    std::printf ("    %-52s %12.4f %7.1f%%\n", ownSectionName (i), worstMs[i] / nw, worstTotal > 0.0 ? 100.0 * worstMs[i] / worstTotal : 0.0);
+        }
     }
 
     Result r;

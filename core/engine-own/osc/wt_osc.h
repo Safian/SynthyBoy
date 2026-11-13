@@ -371,7 +371,7 @@ public:
     }
 
     /** Called once per control period (after update ()): rebuilds the morphed cycles every kMorphRebuild samples. */
-    void updateMorph (double sampleRate, bool firstOfNote) noexcept
+    void updateMorph (double sampleRate, bool firstOfNote, MorphCache* cache = nullptr) noexcept
     {
         morphActive = tick.morphType != kMorphNone && tick.wt != nullptr && !morphBuf.empty();
         if (!morphActive)
@@ -413,8 +413,22 @@ public:
                 }
                 else
                 {
-                    SB_SECTION (sections::oscMorphBuild);
-                    buildMorphCycle (wt, framePos, true, tick.morphType, clamp01 (tick.morphAmount + spreadShift), K, incMax, sampleRate, b, *morphScratch, tick.lowCost);
+                    MorphCache::Key key;
+                    key.wt = &wt;
+                    key.framePos = framePos;
+                    key.m = clamp01 (tick.morphAmount + spreadShift);
+                    key.phaseInc = incMax;
+                    key.type = tick.morphType;
+                    key.maxHarmonic = K;
+                    key.hostRate = sampleRate;
+                    key.fast = tick.lowCost;
+                    if (cache == nullptr || !cache->fetch (key, b - 1))
+                    {
+                        SB_SECTION (sections::oscMorphBuild);
+                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowCost);
+                        if (cache != nullptr)
+                            cache->store (key, b - 1);
+                    }
                 }
                 if (firstOfNote)
                     std::copy (b - 1, b - 1 + kMorphStride, a - 1);

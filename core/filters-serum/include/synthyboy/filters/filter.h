@@ -19,6 +19,7 @@ struct FilterParams
     float var = 0.0f;       // Contextual Var parameter [0.0f, 1.0f] (FAT, FREQ, MORPH, etc.)
     float blend = 0.0f;     // Blend / morph / style parameter [0.0f, 1.0f]
     float mix = 1.0f;       // Dry/wet mix [0.0f, 1.0f] (1.0f = 100% wet)
+    int coefHold = 1;       // Tier low (engine-own): the smoothed cutoff and resonance that the filter runs on are updated every coefHold samples (1 = every sample)
 };
 
 class FilterImpl;

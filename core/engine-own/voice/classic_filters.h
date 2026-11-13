@@ -47,12 +47,27 @@ struct ClassicParams
 class ClassicFilter
 {
 public:
+    /** The weights of the sections for a style and the blend `b` in -1 .. 1 (document 05, 2.1). */
+    struct Wt { float lp, bp, hp; };
+    /** Everything an svfModel call derives from its arguments (tan, divisions, weights, square roots): computed when the parameters change. */
+    struct SvfSetup
+    {
+        float g = 0.0f, R = 0.0f, R1 = 0.0f, dEff = 1.0f, post = 1.0f;
+        Wt wa {}, wb {};
+        bool two = false, shelf = false;
+    };
+    struct LadderSetup
+    {
+        float G = 0.0f, k = 0.0f, pre = 1.0f, post = 1.0f, invDen = 1.0f, c[5] = {};
+    };
     void prepare (double sampleRate)
     {
         sr = sampleRate;
         memoValid = false;
         rampValid = false;
         svfRampValid = false;
+        rampKey = false;
+        svfKey = false;
         comb.prepare (static_cast<int> (sampleRate * 0.1));
         reset();
     }
@@ -112,7 +127,13 @@ public:
         }
     }
 
-private:
+public:
+    /** The ramp setups of another channel with the same parameters (the right channel of a filter whose two cutoffs are equal needs what the left one just computed). */
+    void adoptRamp (const ClassicFilter& o) noexcept
+    {
+        rampA = o.rampA; rampB = o.rampB; rampP = o.rampP; rampPa = o.rampPa; rampPb = o.rampPb; rampValid = o.rampValid; rampKey = o.rampKey;
+        svfRampA = o.svfRampA; svfRampB = o.svfRampB; svfRampP = o.svfRampP; svfRampPa = o.svfRampPa; svfRampPb = o.svfRampPb; svfRampValid = o.svfRampValid; svfKey = o.svfKey;
+    }
     static bool sameParams (const ClassicParams& a, const ClassicParams& b) noexcept
     {
         return a.model == b.model && a.style == b.style && a.cutoffHz == b.cutoffHz && a.res == b.res && a.driveDb == b.driveDb && a.blendRaw == b.blendRaw
@@ -181,26 +202,10 @@ private:
 public:
     /** Two channels of the state variable models with parameters that stay put across the period, in one loop: the two recurrences are independent, so they overlap
         instead of running one after the other. The samples are those of two separate process () calls. False (nothing done) if the case does not apply. */
-    static bool processPair (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& aA, const ClassicParams& bA,
-                             const ClassicParams& aB, const ClassicParams& bB) noexcept
+    /** Two channels of the state variable models in one loop, the setups given (the two chains are independent and overlap). */
+    static void svfPairLoop (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n, int model) noexcept
     {
-        if (!(sameParams (aA, bA) && aA.cutoffHz >= 1.0f && sameParams (aB, bB) && aB.cutoffHz >= 1.0f))
-            return false;
-        const int model = bA.model;
-        if (bB.model != model || bB.style != bA.style || !(model == 0 || model == 1 || model == 2 || model == 3))
-            return false;
-        if (model == 2)
-            return processPairLadder (A, B, inA, outA, inB, outB, n, bA, bB);
-        A.remember (bA);
-        B.remember (bB);
-        A.ensureSvf (bA);
-        B.ensureSvf (bB);
-        if (A.svf.shelf || B.svf.shelf || A.svf.two != B.svf.two)
-            return false;
-        A.satLoop = B.satLoop = model == 1;
         const bool linearHard = model == 3;
-        const SvfSetup& za = A.svf;
-        const SvfSetup& zb = B.svf;
         const bool two = za.two;
         const bool sat = A.satLoop;
         for (int i = 0; i < n; ++i)
@@ -226,6 +231,61 @@ public:
             outA[i] = ya * za.post;
             outB[i] = yb * zb.post;
         }
+    }
+    /** Tier low, two channels with the same moving parameters: one setup for both, the four pieces of the period in the paired loops. False if the case does not apply. */
+    static bool processRampPair (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& a, const ClassicParams& b,
+                                 int t0) noexcept
+    {
+        if (!(a.fast && b.fast && a.model == b.model && a.style == b.style && (b.model == 0 || b.model == 1 || b.model == 2 || b.model == 3)))
+            return false;
+        A.fastMath = B.fastMath = true;
+        const bool ladder = b.model == 2;
+        if (ladder)
+            A.ensureLadderRamp (a, b);
+        else
+        {
+            A.ensureSvfRamp (a, b);
+            if (A.svfRampB.shelf || A.svfRampA.shelf)
+                return false;
+            A.satLoop = B.satLoop = b.model == 1;
+        }
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            if (ladder)
+            {
+                const LadderSetup z = rampAt (A.rampA, A.rampB, t);
+                ladderPairLoop (A, B, z, z, inA + i, outA + i, inB + i, outB + i, m);
+            }
+            else
+            {
+                const SvfSetup z = svfRampAt (A.svfRampA, A.svfRampB, t);
+                svfPairLoop (A, B, z, z, inA + i, outA + i, inB + i, outB + i, m, b.model);
+            }
+            i += m;
+        }
+        return true;
+    }
+    static bool processPair (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& aA, const ClassicParams& bA,
+                             const ClassicParams& aB, const ClassicParams& bB) noexcept
+    {
+        if (!(sameParams (aA, bA) && aA.cutoffHz >= 1.0f && sameParams (aB, bB) && aB.cutoffHz >= 1.0f))
+            return false;
+        const int model = bA.model;
+        if (bB.model != model || bB.style != bA.style || !(model == 0 || model == 1 || model == 2 || model == 3))
+            return false;
+        if (model == 2)
+            return processPairLadder (A, B, inA, outA, inB, outB, n, bA, bB);
+        A.remember (bA);
+        B.remember (bB);
+        A.ensureSvf (bA);
+        B.ensureSvf (bB);
+        if (A.svf.shelf || B.svf.shelf || A.svf.two != B.svf.two)
+            return false;
+        A.satLoop = B.satLoop = model == 1;
+        svfPairLoop (A, B, A.svf, B.svf, inA, outA, inB, outB, n, model);
         return true;
     }
 
@@ -234,8 +294,6 @@ private:
     bool memoValid = false;
     float mf = 0.0f, md = 1.0f, mr = 0.0f, mbraw = 0.0f;
 
-    /** The weights of the sections for a style and the blend `b` in -1 .. 1 (document 05, 2.1). */
-    struct Wt { float lp, bp, hp; };
     static void styleWeights (int style, float b, Wt& A, Wt& B) noexcept
     {
         const float t = 0.5f * (b + 1.0f), pn = std::min (b, 0.0f), m = std::sqrt (0.5f * std::max (b, 0.0f) * std::max (b, 0.0f) + 0.5f);
@@ -250,13 +308,6 @@ private:
 
     // one or two (24 dB) state variable sections with the weights of the style (document 05, 2 and 2.1); the saturation of the Dirty model sits in the loop of the section
     // `dRaw` is the drive as set, `dComp` the drive compensated by the resonance of the model; the style blends them
-    /** Everything an svfModel call derives from its arguments (tan, divisions, weights, square roots): computed when the parameters change. */
-    struct SvfSetup
-    {
-        float g = 0.0f, R = 0.0f, R1 = 0.0f, dEff = 1.0f, post = 1.0f;
-        Wt wa {}, wb {};
-        bool two = false, shelf = false;
-    };
     SvfSetup svf;
     bool svfValid = false;
 
@@ -307,17 +358,44 @@ private:
     }
     /** Tier low, state variable models with moving parameters: the setup (tan, pow, sqrt, divisions) is computed at the two ends of the period, its coefficients are
         interpolated linearly over the four pieces of 8 samples (see ladderRamp). */
-    void svfRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    void ensureSvfRamp (const ClassicParams& a, const ClassicParams& b) noexcept
     {
         fastMath = true;
         satLoop = b.model == 1;
-        if (!svfRampValid || !sameParams (svfRampP, a))
-            svfRampA = svfSetupFor (a);
-        else
-            svfRampA = svfRampB;
-        svfRampB = svfSetupFor (b);
-        svfRampP = b;
-        svfRampValid = true;
+        if (!(svfKey && sameParams (svfRampPa, a) && sameParams (svfRampPb, b)))
+        {
+            const SvfSetup startSetup = (svfRampValid && sameParams (svfRampP, a)) ? svfRampB : svfSetupFor (a);
+            svfRampA = startSetup;
+            if (onlyCutoffDiffers (a, b))
+            {
+                svfRampB = startSetup; // only the cutoff moved: g is the only part of the setup that depends on it
+                const float f = std::clamp (b.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+                svfRampB.g = std::tan (kPif * std::min ((b.model == 0 ? f * kAn[0] : f) / static_cast<float> (sr), 0.499f));
+            }
+            else
+                svfRampB = svfSetupFor (b);
+            svfRampP = b;
+            svfRampValid = true;
+            svfRampPa = a;
+            svfRampPb = b;
+            svfKey = true;
+        }
+    }
+    static SvfSetup svfRampAt (const SvfSetup& A, const SvfSetup& B, float t) noexcept
+    {
+        SvfSetup z = B; // the flags (two, shelf) are those of the end of the period
+        z.g = lerp (A.g, B.g, t);
+        z.R = lerp (A.R, B.R, t);
+        z.R1 = lerp (A.R1, B.R1, t);
+        z.dEff = lerp (A.dEff, B.dEff, t);
+        z.post = lerp (A.post, B.post, t);
+        z.wa = { lerp (A.wa.lp, B.wa.lp, t), lerp (A.wa.bp, B.wa.bp, t), lerp (A.wa.hp, B.wa.hp, t) };
+        z.wb = { lerp (A.wb.lp, B.wb.lp, t), lerp (A.wb.bp, B.wb.bp, t), lerp (A.wb.hp, B.wb.hp, t) };
+        return z;
+    }
+    void svfRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        ensureSvfRamp (a, b);
         const bool linearHard = b.model == 3;
         for (int i = 0; i < n;)
         {
@@ -337,8 +415,8 @@ private:
         }
     }
     SvfSetup svfRampA, svfRampB;
-    ClassicParams svfRampP;
-    bool svfRampValid = false;
+    ClassicParams svfRampP, svfRampPa, svfRampPb;
+    bool svfRampValid = false, svfKey = false;
     SvfSetup svfSetup (float f, float Q, float Q1, float dRaw, float dComp, float postBase, int model, int style, float blendRaw, float resKnob) const noexcept
     {
         SvfSetup z;
@@ -395,10 +473,6 @@ private:
     }
 
     // four saturating one pole stages with global feedback (zero delay feedback solved linearly); the output is a weighted sum of the input and the stage outputs (document 05, 2.1)
-    struct LadderSetup
-    {
-        float G = 0.0f, k = 0.0f, pre = 1.0f, post = 1.0f, invDen = 1.0f, c[5] = {};
-    };
     LadderSetup lad;
     bool ladValid = false;
 
@@ -470,16 +544,45 @@ private:
     }
     /** Tier low, Ladder with moving parameters: the setup (tan, sin, sqrt) is computed at the two ends of the period and its coefficients are interpolated linearly over the
         four pieces of 8 samples, instead of the cutoff by a power and the whole setup again for every piece. The end of one period is the start of the next. */
-    void ladderRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    void ensureLadderRamp (const ClassicParams& a, const ClassicParams& b) noexcept
     {
         fastMath = true;
-        if (!rampValid || !sameParams (rampP, a))
-            rampA = ladderSetupFor (a);
-        else
-            rampA = rampB;
-        rampB = ladderSetupFor (b);
-        rampP = b;
-        rampValid = true;
+        if (!(rampKey && sameParams (rampPa, a) && sameParams (rampPb, b)))
+        {
+            // the setup is computed once for a pair of parameter sets: a second call in the same period (the period was cut by an event) and the other channel
+            // (adoptRamp) find it again; the start of this period is the end of the last one
+            const LadderSetup startSetup = (rampValid && sameParams (rampP, a)) ? rampB : ladderSetupFor (a);
+            rampA = startSetup;
+            if (onlyCutoffDiffers (a, b))
+            {
+                rampB = startSetup; // only the cutoff moved: everything but G (and what follows from it) is the setup of a
+                rampB.G = cutoffToG (b);
+                rampB.invDen = 1.0f / (1.0f + rampB.k * rampB.G * rampB.G * rampB.G * rampB.G);
+            }
+            else
+                rampB = ladderSetupFor (b);
+            rampP = b;
+            rampValid = true;
+            rampPa = a;
+            rampPb = b;
+            rampKey = true;
+        }
+    }
+    static LadderSetup rampAt (const LadderSetup& A, const LadderSetup& B, float t) noexcept
+    {
+        LadderSetup z;
+        z.G = lerp (A.G, B.G, t);
+        z.k = lerp (A.k, B.k, t);
+        z.pre = lerp (A.pre, B.pre, t);
+        z.post = lerp (A.post, B.post, t);
+        z.invDen = lerp (A.invDen, B.invDen, t);
+        for (int j = 0; j < 5; ++j)
+            z.c[j] = lerp (A.c[j], B.c[j], t);
+        return z;
+    }
+    void ladderRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        ensureLadderRamp (a, b);
         for (int i = 0; i < n;)
         {
             const int pos = t0 + i;
@@ -498,25 +601,26 @@ private:
         }
     }
     LadderSetup rampA, rampB;
-    ClassicParams rampP;
-    bool rampValid = false;
+    ClassicParams rampP, rampPa, rampPb;
+    bool rampValid = false, rampKey = false;
+    static bool onlyCutoffDiffers (const ClassicParams& a, const ClassicParams& b) noexcept
+    {
+        ClassicParams t = a;
+        t.cutoffHz = b.cutoffHz;
+        return sameParams (t, b);
+    }
+    /** g / (1 + g) of the Ladder for the cutoff of p (what ladderSetup () computes from f). */
+    float cutoffToG (const ClassicParams& p) const noexcept
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
+        return g / (1.0f + g);
+    }
 public:
     /** Two channels of the Ladder model in one loop (see processPair). */
-    static bool processPairLadder (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& bA, const ClassicParams& bB) noexcept
+    /** Two channels of the Ladder in one loop, the setups given. */
+    static void ladderPairLoop (ClassicFilter& A, ClassicFilter& B, const LadderSetup& za, const LadderSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
     {
-        A.remember (bA);
-        B.remember (bB);
-        if (!A.ladValid)
-        {
-            A.lad = A.ladderSetup (A.mf, A.mr, A.md, bA.style, A.mbraw - 1.0f);
-            A.ladValid = true;
-        }
-        if (!B.ladValid)
-        {
-            B.lad = B.ladderSetup (B.mf, B.mr, B.md, bB.style, B.mbraw - 1.0f);
-            B.ladValid = true;
-        }
-        const LadderSetup za = A.lad, zb = B.lad;
         for (int i = 0; i < n; ++i)
         {
             const float Sa = za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3];
@@ -538,6 +642,22 @@ public:
             outA[i] = (za.c[0] * ua + za.c[1] * sta[0] + za.c[2] * sta[1] + za.c[3] * sta[2] + za.c[4] * sta[3]) * za.post;
             outB[i] = (zb.c[0] * ub + zb.c[1] * stb[0] + zb.c[2] * stb[1] + zb.c[3] * stb[2] + zb.c[4] * stb[3]) * zb.post;
         }
+    }
+    static bool processPairLadder (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& bA, const ClassicParams& bB) noexcept
+    {
+        A.remember (bA);
+        B.remember (bB);
+        if (!A.ladValid)
+        {
+            A.lad = A.ladderSetup (A.mf, A.mr, A.md, bA.style, A.mbraw - 1.0f);
+            A.ladValid = true;
+        }
+        if (!B.ladValid)
+        {
+            B.lad = B.ladderSetup (B.mf, B.mr, B.md, bB.style, B.mbraw - 1.0f);
+            B.ladValid = true;
+        }
+        ladderPairLoop (A, B, A.lad, B.lad, inA, outA, inB, outB, n);
         return true;
     }
 private:

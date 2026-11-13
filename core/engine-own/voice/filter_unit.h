@@ -121,6 +121,7 @@ public:
         p.var = clamp01 (morph >= 0.0f ? morph : s.var);
         p.blend = clamp01 (s.blend);
         p.mix = clamp01 (s.mix);
+        p.coefHold = s.fast ? 4 : 1; // tier low: the coefficients follow the smoothed cutoff every fourth sample (the memo of the transcendental functions then hits)
         left.setParams (p);
         if (s.cutoffHzR > 0.0f)
             p.cutoff = std::clamp (s.cutoffHzR, 20.0f, 20000.0f);
@@ -157,8 +158,19 @@ public:
             }
             if (!ClassicFilter::processPair (cl[0], cl[1], srcL, outL, srcR, outR, n, prevP, curP, prevPR, curPR))
             {
+                const bool sameLR = ClassicFilter::sameParams (prevP, prevPR) && ClassicFilter::sameParams (curP, curPR);
+                if (sameLR && ClassicFilter::processRampPair (cl[0], cl[1], srcL, outL, srcR, outR, n, prevP, curP, t0))
+                {
+                    // done: the two channels ran in one loop with one setup
+                }
+                else
+                {
                 cl[0].process (srcL, outL, n, prevP, curP, t0);
+                // both channels with the same parameters (the pan of the filter is 0): the right one finds the setup the left one just computed (tier low ramps)
+                if (ClassicFilter::sameParams (prevP, prevPR) && ClassicFilter::sameParams (curP, curPR))
+                    cl[1].adoptRamp (cl[0]);
                 cl[1].process (srcR, outR, n, prevPR, curPR, t0);
+                }
             }
             if (!cleaning && prevMix == 1.0f && curMix == 1.0f)
             {

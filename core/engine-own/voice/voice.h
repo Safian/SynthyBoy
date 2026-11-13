@@ -46,6 +46,7 @@ struct TickGlobals
     int maxUnison = kMaxUnisonVoices;
     const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
+    MorphCache* morphCache = nullptr;        // the engine's cache of morph cycles (may be null)
     bool lowShareMorph = false;              // tier low: the unison voices share one spectral morph cycle (OwnEngine::setLowTierMorphSpread (false))
     uint32_t baseEpoch = 0;                  // changes whenever `base` was rebuilt from the parameters (a voice may keep what it derived from them while it is the same)
     uint64_t usedSources = ~uint64_t (0);    // bit k: some modulation slot (or custom shape point) reads source id k; the economy mode of tier low updates the LFOs nothing reads less often

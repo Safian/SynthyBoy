@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 namespace synthyboy::filters
@@ -132,6 +133,7 @@ public:
     {
         const auto srFloat = static_cast<float> (sampleRate_);
         const float smoothCoeff = std::min (0.05f, 180.0f / srFloat);
+        const int hold = params_.coefHold;
 
         for (int i = 0; i < numSamples; ++i)
         {
@@ -147,14 +149,64 @@ public:
 
             smoothedCutoff_ += smoothCoeff * (targetCutoff - smoothedCutoff_);
             smoothedRes_ += smoothCoeff * (targetRes - smoothedRes_);
+            if (hold <= 1 || (i % hold) == 0)
+            {
+                heldCutoff_ = smoothedCutoff_;
+                heldRes_ = smoothedRes_;
+            }
 
             const float sampleIn = sanitize (in[i]);
-            out[i] = sanitize (processInternal (sampleIn, smoothedCutoff_, smoothedRes_));
+            out[i] = sanitize (processInternal (sampleIn, hold <= 1 ? smoothedCutoff_ : heldCutoff_, hold <= 1 ? smoothedRes_ : heldRes_));
         }
     }
 
 private:
     float processInternal (float in, float cutoff, float res) noexcept;
+
+    // A small cache of the transcendental functions of the coefficients (the same argument gives the same result: nothing changes in the output). Cutoff and resonance move
+    // slowly or not at all, so most samples ask for the arguments of the sample before.
+    struct MemoEntry { float x = 0.0f, y = 0.0f; bool valid = false; };
+    static constexpr int kMemo = 16;
+    MemoEntry tanMemo_[kMemo], pow2Memo_[kMemo], pow10Memo_[kMemo];
+    static int memoSlot (float x) noexcept
+    {
+        uint32_t u;
+        std::memcpy (&u, &x, 4);
+        return static_cast<int> ((u ^ (u >> 11) ^ (u >> 19)) % kMemo);
+    }
+    float tanM (float x) noexcept
+    {
+        MemoEntry& e = tanMemo_[memoSlot (x)];
+        if (!(e.valid && e.x == x))
+        {
+            e.x = x;
+            e.y = std::tan (x);
+            e.valid = true;
+        }
+        return e.y;
+    }
+    float pow2M (float x) noexcept
+    {
+        MemoEntry& e = pow2Memo_[memoSlot (x)];
+        if (!(e.valid && e.x == x))
+        {
+            e.x = x;
+            e.y = std::pow (2.0f, x);
+            e.valid = true;
+        }
+        return e.y;
+    }
+    float pow10M (float x) noexcept
+    {
+        MemoEntry& e = pow10Memo_[memoSlot (x)];
+        if (!(e.valid && e.x == x))
+        {
+            e.x = x;
+            e.y = std::pow (10.0f, x);
+            e.valid = true;
+        }
+        return e.y;
+    }
 
     double sampleRate_ = 44100.0;
     FilterType type_ = FilterType::MGLow24;
@@ -162,6 +214,7 @@ private:
 
     float smoothedCutoff_ = 1000.0f;
     float smoothedRes_ = 0.0f;
+    float heldCutoff_ = 1000.0f, heldRes_ = 0.0f; // what processBlock runs on while coefHold > 1
 
     // Filter DSP modules
     SVFTPT svf1_;
@@ -194,7 +247,7 @@ private:
 float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
 {
     const auto srFloat = static_cast<float> (sampleRate_);
-    const float g = std::tan (kPi * cutoff / srFloat);
+    const float g = tanM (kPi * cutoff / srFloat);
     const float R = 1.0f - 0.96f * res;
     const float drive = std::max (0.0f, std::min (params_.drive, 1.0f));
     const float var = std::max (0.0f, std::min (params_.var, 1.0f));
@@ -357,8 +410,8 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     case FilterType::NN:
     {
         // Second cutoff shifted by Var (FREQ: -4 to +4 octaves)
-        const float fc2 = std::max (20.0f, std::min (cutoff * std::pow (2.0f, (var - 0.5f) * 8.0f), srFloat * 0.49f));
-        const float g2 = std::tan (kPi * fc2 / srFloat);
+        const float fc2 = std::max (20.0f, std::min (cutoff * pow2M ((var - 0.5f) * 8.0f), srFloat * 0.49f));
+        const float g2 = tanM (kPi * fc2 / srFloat);
 
         float lp1 = 0.0f, bp1 = 0.0f, hp1 = 0.0f, notch1 = 0.0f, peak1 = 0.0f;
         svf1_.process (drivenIn, g, R, 0.0f, lp1, bp1, hp1, notch1, peak1);
@@ -462,13 +515,13 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
             if (type_ == FilterType::CmbL || type_ == FilterType::FlgL)
             {
                 const float fLP = 50.0f + 18000.0f * var;
-                const float gLP = std::tan (kPi * std::min (fLP, srFloat * 0.49f) / srFloat);
+                const float gLP = tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat);
                 fbFiltered = combFeedbackLP_.processLPOnly (delayed, gLP);
             }
             else if (type_ == FilterType::CmbH || type_ == FilterType::FlgH)
             {
                 const float fHP = 20.0f + 12000.0f * var;
-                const float gHP = std::tan (kPi * std::min (fHP, srFloat * 0.49f) / srFloat);
+                const float gHP = tanM (kPi * std::min (fHP, srFloat * 0.49f) / srFloat);
                 fbFiltered = combFeedbackHP_.processHPOnly (delayed, gHP);
             }
             else // HL
@@ -477,8 +530,8 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
                 const float bwFactor = 0.1f + 1.8f * var;
                 const float fLP = std::min (fCenter * (1.0f + bwFactor), srFloat * 0.49f);
                 const float fHP = std::max (20.0f, fCenter / (1.0f + bwFactor));
-                const float gLP = std::tan (kPi * fLP / srFloat);
-                const float gHP = std::tan (kPi * fHP / srFloat);
+                const float gLP = tanM (kPi * fLP / srFloat);
+                const float gHP = tanM (kPi * fHP / srFloat);
                 fbFiltered = combFeedbackHP_.processHPOnly (combFeedbackLP_.processLPOnly (delayed, gLP), gHP);
             }
 
@@ -504,13 +557,13 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
             if (type_ == FilterType::PhsL)
             {
                 const float fLP = 50.0f + 18000.0f * var;
-                const float gLP = std::tan (kPi * std::min (fLP, srFloat * 0.49f) / srFloat);
+                const float gLP = tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat);
                 fbFiltered = combFeedbackLP_.processLPOnly (ap, gLP);
             }
             else if (type_ == FilterType::PhsH)
             {
                 const float fHP = 20.0f + 12000.0f * var;
-                const float gHP = std::tan (kPi * std::min (fHP, srFloat * 0.49f) / srFloat);
+                const float gHP = tanM (kPi * std::min (fHP, srFloat * 0.49f) / srFloat);
                 fbFiltered = combFeedbackHP_.processHPOnly (ap, gHP);
             }
             else // Phs HL
@@ -519,8 +572,8 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
                 const float bwFactor = 0.1f + 1.8f * var;
                 const float fLP = std::min (fCenter * (1.0f + bwFactor), srFloat * 0.49f);
                 const float fHP = std::max (20.0f, fCenter / (1.0f + bwFactor));
-                const float gLP = std::tan (kPi * fLP / srFloat);
-                const float gHP = std::tan (kPi * fHP / srFloat);
+                const float gLP = tanM (kPi * fLP / srFloat);
+                const float gHP = tanM (kPi * fHP / srFloat);
                 fbFiltered = combFeedbackHP_.processHPOnly (combFeedbackLP_.processLPOnly (ap, gLP), gHP);
             }
 
@@ -535,7 +588,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     case FilterType::LowEQ6:
     {
         const float gainDb = (var - 0.5f) * 48.0f;
-        const float A = std::pow (10.0f, gainDb / 20.0f);
+        const float A = pow10M (gainDb / 20.0f);
         const float lp = onePole1_.processLPOnly (drivenIn, g);
         rawOut = drivenIn + (A - 1.0f) * lp;
         break;
@@ -551,7 +604,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     case FilterType::BandEQ6:
     {
         const float gainDb = (var - 0.5f) * 48.0f;
-        const float A = std::pow (10.0f, gainDb / 20.0f);
+        const float A = pow10M (gainDb / 20.0f);
         float lp = 0.0f, bp = 0.0f, hp = 0.0f, notch = 0.0f, peak = 0.0f;
         svf1_.process (drivenIn, g, 1.0f, 0.0f, lp, bp, hp, notch, peak);
         rawOut = drivenIn + (A - 1.0f) * bp;
@@ -568,7 +621,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     case FilterType::HighEQ6:
     {
         const float gainDb = (var - 0.5f) * 48.0f;
-        const float A = std::pow (10.0f, gainDb / 20.0f);
+        const float A = pow10M (gainDb / 20.0f);
         const float hp = onePole1_.processHPOnly (drivenIn, g);
         rawOut = drivenIn + (A - 1.0f) * hp;
         break;
@@ -592,7 +645,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     }
     case FilterType::RingModX2:
     {
-        const float fc2 = std::max (20.0f, std::min (cutoff * std::pow (2.0f, (var - 0.5f) * 4.0f), srFloat * 0.49f));
+        const float fc2 = std::max (20.0f, std::min (cutoff * pow2M ((var - 0.5f) * 4.0f), srFloat * 0.49f));
         ringModPhase1_ += 2.0f * kPi * cutoff / srFloat;
         if (ringModPhase1_ >= 2.0f * kPi)
             ringModPhase1_ -= 2.0f * kPi;
@@ -631,7 +684,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
         static constexpr float kCombRatios[4] = { 1.0f, 1.33f, 1.67f, 2.11f };
         const float baseDelay = std::max (2.0f, srFloat / std::max (20.0f, cutoff));
         float sum = 0.0f;
-        const float dampG = std::tan (kPi * std::max (100.0f, srFloat * (0.45f - 0.4f * var)) / srFloat);
+        const float dampG = tanM (kPi * std::max (100.0f, srFloat * (0.45f - 0.4f * var)) / srFloat);
         for (int i = 0; i < 4; ++i)
         {
             const float d = std::max (2.0f, std::min (baseDelay * kCombRatios[i], static_cast<float> (sampleRate_ * 0.05)));
@@ -662,7 +715,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     {
         // 4 combs into 2 allpasses
         float sum = 0.0f;
-        const float dampG = std::tan (kPi * std::max (200.0f, srFloat * (0.4f - 0.35f * var)) / srFloat);
+        const float dampG = tanM (kPi * std::max (200.0f, srFloat * (0.4f - 0.35f * var)) / srFloat);
         static constexpr float kRevDelayMs[4] = { 25.0f, 32.0f, 37.0f, 41.0f };
         for (int i = 0; i < 4; ++i)
         {
@@ -681,7 +734,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     {
         // Steiner-Parker diode LP with secondary BOEUF resonance
         const float boeufFreq = std::min (cutoff * (1.0f + 0.8f * var), srFloat * 0.49f);
-        const float g2 = std::tan (kPi * boeufFreq / srFloat);
+        const float g2 = tanM (kPi * boeufFreq / srFloat);
 
         float lp1 = 0.0f, bp1 = 0.0f, hp1 = 0.0f, notch1 = 0.0f, peak1 = 0.0f;
         float lp2 = 0.0f, bp2 = 0.0f, hp2 = 0.0f, notch2 = 0.0f, peak2 = 0.0f;
@@ -708,7 +761,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
         svf1_.process (drivenIn, g, R, 0.0f, lp, bp, hp, notch, peak);
 
         // 90 deg allpass rotation around 150 Hz
-        const float gAp = std::tan (kPi * 150.0f / srFloat);
+        const float gAp = tanM (kPi * 150.0f / srFloat);
         float apLp = 0.0f, apHp = 0.0f;
         onePole1_.processLP (drivenIn, gAp, apLp, apHp);
         const float rotatedDry = apLp - apHp;
@@ -761,14 +814,14 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
         const size_t i1 = i0 + 1;
 
         // Formant shift from Var (FORMNT: -1 to +1 octave)
-        const float shift = std::pow (2.0f, (var - 0.5f) * 2.0f);
+        const float shift = pow2M ((var - 0.5f) * 2.0f);
         const float f1 = (f1Table[i0] * (1.0f - vFrac) + f1Table[i1] * vFrac) * shift;
         const float f2 = (f2Table[i0] * (1.0f - vFrac) + f2Table[i1] * vFrac) * shift;
         const float f3 = (f3Table[i0] * (1.0f - vFrac) + f3Table[i1] * vFrac) * shift;
 
-        const float g1 = std::tan (kPi * std::min (f1, srFloat * 0.49f) / srFloat);
-        const float g2_f = std::tan (kPi * std::min (f2, srFloat * 0.49f) / srFloat);
-        const float g3 = std::tan (kPi * std::min (f3, srFloat * 0.49f) / srFloat);
+        const float g1 = tanM (kPi * std::min (f1, srFloat * 0.49f) / srFloat);
+        const float g2_f = tanM (kPi * std::min (f2, srFloat * 0.49f) / srFloat);
+        const float g3 = tanM (kPi * std::min (f3, srFloat * 0.49f) / srFloat);
 
         const float formR = 1.0f - 0.98f * (0.3f + 0.7f * res);
         float lpA = 0.0f, bpA = 0.0f, hpA = 0.0f, nA = 0.0f, pA = 0.0f;
@@ -820,8 +873,8 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     case FilterType::ScreamBP:
     {
         // High feedback filter effect (screams when drive > 0.5)
-        const float screamFreq = std::max (20.0f, std::min (cutoff * std::pow (2.0f, (var - 0.5f) * 4.0f), srFloat * 0.49f));
-        const float screamG = std::tan (kPi * screamFreq / srFloat);
+        const float screamFreq = std::max (20.0f, std::min (cutoff * pow2M ((var - 0.5f) * 4.0f), srFloat * 0.49f));
+        const float screamG = tanM (kPi * screamFreq / srFloat);
 
         float lp = 0.0f, bp = 0.0f, hp = 0.0f, notch = 0.0f, peak = 0.0f;
         svf1_.process (drivenIn, g, R, 0.0f, lp, bp, hp, notch, peak);
@@ -870,7 +923,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
         {
             // Low-pass side
             const float lpCutoff = 20.0f * std::pow (1000.0f / 20.0f, normC / 0.48f);
-            const float lpG = std::tan (kPi * lpCutoff / srFloat);
+            const float lpG = tanM (kPi * lpCutoff / srFloat);
             float lp1 = 0.0f, bp1 = 0.0f, hp1 = 0.0f, notch1 = 0.0f, peak1 = 0.0f;
             float lp2 = 0.0f, bp2 = 0.0f, hp2 = 0.0f, notch2 = 0.0f, peak2 = 0.0f;
             svf1_.process (drivenIn, lpG, R, 0.0f, lp1, bp1, hp1, notch1, peak1);
@@ -881,7 +934,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
         {
             // High-pass side
             const float hpCutoff = 1000.0f * std::pow (20000.0f / 1000.0f, (normC - 0.52f) / 0.48f);
-            const float hpG = std::tan (kPi * hpCutoff / srFloat);
+            const float hpG = tanM (kPi * hpCutoff / srFloat);
             float lp1 = 0.0f, bp1 = 0.0f, hp1 = 0.0f, notch1 = 0.0f, peak1 = 0.0f;
             float lp2 = 0.0f, bp2 = 0.0f, hp2 = 0.0f, notch2 = 0.0f, peak2 = 0.0f;
             svf1_.process (drivenIn, hpG, R, 0.0f, lp1, bp1, hp1, notch1, peak1);
@@ -957,7 +1010,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
     {
         // Dual-tap resonant comb filter
         const float delay1 = srFloat / std::max (20.0f, cutoff);
-        const float fc2 = std::max (20.0f, std::min (cutoff * std::pow (2.0f, (var - 0.5f) * 4.0f), srFloat * 0.49f));
+        const float fc2 = std::max (20.0f, std::min (cutoff * pow2M ((var - 0.5f) * 4.0f), srFloat * 0.49f));
         const float delay2 = srFloat / fc2;
 
         const float tap1 = combDelay1_.read (delay1);

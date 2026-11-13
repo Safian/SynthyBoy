@@ -236,6 +236,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
         fx[i].prepare (sampleRate, maxBlockFrames);
     }
     smoothedGain.reset (sampleRate, 0.02);
+    morphCache.prepare();
     snapValid = false;
     mixCached = latCached = false;
     prepared = true;
@@ -838,6 +839,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             base[i] = params[i].load (std::memory_order_relaxed);
         matrix.setContent (contentNow);
         matrix.compile (base.data());
+        if (contentNow != snapContent)
+            morphCache.clear(); // a changed content set can bring another wavetable at the address of an old one
         snapGen = gen;
         snapContent = contentNow;
         snapValid = true;
@@ -900,6 +903,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.switchKey = switchKeySnap;
     globals.quality = qualityTier.load (std::memory_order_relaxed);
     globals.usedSources = matrix.sourceMask();
+    globals.morphCache = &morphCache;
     globals.lowShareMorph = !lowKeepMorphSpread.load (std::memory_order_relaxed);
     globals.baseEpoch = baseEpoch;
     globals.oversample = ultraRender.load (std::memory_order_relaxed) || (fxOversampleIndex >= 0 && base[static_cast<size_t> (fxOversampleIndex)] >= 0.5f);
