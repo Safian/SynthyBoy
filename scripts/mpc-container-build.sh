@@ -4,7 +4,8 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Environment (all set by build-mpc.sh): ARCH (arm32 | arm64), JOBS, MPC_SDK_DIR, WITH_BENCH (0 | 1), HOST_UID, HOST_GID.
+# Environment (all set by build-mpc.sh): ARCH (arm32 | arm64), JOBS, MPC_SDK_DIR, WITH_BENCH (0 | 1), HOST_UID, HOST_GID, CMAKE_EXTRA_ARGS (optional:
+# space separated extra arguments of the module's cmake configure, from --cmake-arg).
 # Mounts: /src (read-only source tree), /build (CMake tree of this architecture), /build-bench (bench tree), /out (output directory), /mpc-sdk.
 #
 # Results: /build/shell-mpc/synthyboy_mpc.so (unstripped, kept for profiling), /build/shell-mpc/synthyboy_mpc.stripped.so (the one that is packaged) and,
@@ -84,9 +85,10 @@ check_elf() {
 }
 
 # ---- the plugin module ----------------------------------------------------------------------------------------------------------------------------
+read -r -a extra_args <<< "${CMAKE_EXTRA_ARGS:-}"
 cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
     -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON \
-    -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK_DIR"
+    -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
 cmake --build /build --target synthyboy_mpc --parallel "$JOBS"
 so=/build/shell-mpc/synthyboy_mpc.so
 check_elf "$so" module

@@ -174,6 +174,36 @@ class BuildMpcTest(unittest.TestCase):
         self.assertIn("WITH_BENCH=1", self.runs()[0])
         self.assertIn(str(self.tree / "arm64-bench") + ":/build-bench", self.runs()[0])
 
+    def test_cmake_args_reach_every_container(self):
+        r = self.build("--no-validate", "--cmake-arg", "-DSYNTHYBOY_MPC_CALLBACK_STATS=ON", "--cmake-arg", "-DSYNTHYBOY_MPC_LFO_LIVE_HZ=25")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        runs = self.runs()
+        self.assertEqual(len(runs), 2)
+        for run in runs:
+            self.assertIn("CMAKE_EXTRA_ARGS=-DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25", run)
+
+    def test_no_cmake_arg_leaves_the_environment_value_empty(self):
+        self.assertEqual(self.build("--arch", "arm32", "--no-validate").returncode, 0)
+        self.assertIn("CMAKE_EXTRA_ARGS= ", self.runs()[0] + " ")
+
+    def test_cmake_arg_must_be_an_option_without_spaces(self):
+        for bad in ("SYNTHYBOY_MPC_LFO_LIVE=OFF", "-DA=B C", ""):
+            r = self.build("--no-validate", "--cmake-arg", bad)
+            self.assertEqual(r.returncode, 2, bad)
+            self.assertIn("--cmake-arg", r.stderr)
+        r = self.build("--no-validate", "--cmake-arg")
+        self.assertEqual(r.returncode, 2)
+        self.assertFalse(self.runs())
+
+    def test_help_lists_cmake_arg(self):
+        self.assertIn("--cmake-arg", self.run_script(BUILD_MPC, "--help").stdout)
+
+    def test_container_script_passes_the_extra_arguments_to_the_module_configure(self):
+        text = CONTAINER.read_text()
+        self.assertIn('read -r -a extra_args <<< "${CMAKE_EXTRA_ARGS:-}"', text)
+        configure = text[text.index("# ---- the plugin module"):text.index("# ---- the benchmarks")]
+        self.assertIn('${extra_args[@]+"${extra_args[@]}"}', configure)
+
     def test_failed_container_fails_the_build_and_leaves_no_folder(self):
         r = self.build("--no-validate", STUB_FAIL_ARCH="arm64")
         self.assertNotEqual(r.returncode, 0)

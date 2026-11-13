@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--bench] [--no-validate]
+# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--cmake-arg ARG]... [--bench] [--no-validate]
 #
 #   --arch A         arm32 (VST/synthyboy-arm32.so, "file32"), arm64 (VST/synthyboy-arm64.so, "file64") or all (default: both)
 #   --out DIR        where the finished plugin folder is assembled (default: <repo>/build-mpc)
@@ -15,6 +15,9 @@
 #                    then scripts/apply-mpc-skin-extras.py)
 #   --skin-layout F  the layout file of the generated skin (default: scripts/mpc-ui-pages.json, 34 tabs, which the Key 61 loads;
 #                    scripts/mpc-ui-pages-v32.json is the 32 tab fallback)
+#   --cmake-arg ARG  an extra argument of the CMake configure step of the plugin module, e.g. --cmake-arg -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25 (repeatable; no
+#                    spaces inside an argument). A CMake tree keeps the options of earlier runs in its cache: when one tree is used for several variants
+#                    (--build-dir), pass every option of the variant each time. Not applied to the --bench trees.
 #   --bench          also build synthyboy_bench and synthyboy_noteon_bench for each architecture (own CMake tree with SYNTHYBOY_BUILD_TESTS=ON, libstdc++
 #                    linked statically) into <out>/bench-<arch>/; they are measurement tools and not part of the plugin folder
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
@@ -41,6 +44,7 @@ skins_dir=""
 skin_layout="$repo_root/scripts/mpc-ui-pages.json"
 with_bench=0
 validate=1
+cmake_args=()
 image="${MPC_BUILD_IMAGE:-${ARMV7_IMAGE:-$IMAGE_DEFAULT}}"
 docker_cmd="${MPC_DOCKER:-docker}"
 
@@ -48,7 +52,7 @@ usage() { sed -n '/^# Usage/,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; 
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --arch|--out|--jobs|--build-dir|--skins|--skin-layout)
+        --arch|--out|--jobs|--build-dir|--skins|--skin-layout|--cmake-arg)
             [[ $# -ge 2 ]] || { echo "$me: $1 needs a value" >&2; exit 2; }
             case "$1" in
                 --arch) arch="$2" ;;
@@ -57,6 +61,15 @@ while [[ $# -gt 0 ]]; do
                 --build-dir) build_dir="$2" ;;
                 --skins) skins_dir="$2" ;;
                 --skin-layout) skin_layout="$2" ;;
+                --cmake-arg)
+                    case "$2" in
+                        -D?*|-U?*|-G?*|-T?*|-A?*) ;;
+                        *) echo "$me: --cmake-arg needs a CMake option (for example -DNAME=VALUE), got: $2" >&2; exit 2 ;;
+                    esac
+                    case "$2" in
+                        *[[:space:]]*) echo "$me: --cmake-arg: no spaces inside an argument: $2" >&2; exit 2 ;;
+                    esac
+                    cmake_args+=("$2") ;;
             esac
             shift 2 ;;
         --bench) with_bench=1; shift ;;
@@ -117,7 +130,7 @@ for a in "${archs[@]}"; do
     echo "$me: === building $a ==="
     "$docker_cmd" run --rm \
         -v "$repo_root":/src:ro -v "$build_dir/$a":/build -v "$build_dir/$a-bench":/build-bench -v "$out_dir":/out -v "$MPC_SDK":/mpc-sdk:ro \
-        -e ARCH="$a" -e JOBS="$jobs" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
+        -e ARCH="$a" -e JOBS="$jobs" -e CMAKE_EXTRA_ARGS="${cmake_args[*]:-}" -e WITH_BENCH="$with_bench" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e MPC_SDK_DIR=/mpc-sdk \
         "$image" bash /src/scripts/mpc-container-build.sh
 done
 
