@@ -147,6 +147,12 @@ def have_compiler():
     return any(shutil.which(c) for c in ("c++", "clang++", "g++"))
 
 
+def have_render_modules():
+    # the picture renderer is a development tool (the build copies committed PNGs); it needs numpy and Pillow
+    return all(importlib.util.find_spec(m) for m in ("numpy", "PIL"))
+
+
+@unittest.skipUnless(have_render_modules(), "numpy and Pillow not installed for this python3 (gen-mpc-wave-strips.py is a development tool)")
 class WaveStripsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
