@@ -3,7 +3,9 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import copy
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -20,6 +22,18 @@ BADGE = 40
 GRAPHIC_TABS = ("Env 1", "Env 2", "Env 3", "Env 4", "Osc 1", "Osc 2", "Osc 3")
 # sha256 of Q-Links.json as the build made it at 363083a (before the frame work): the frame work must not touch it
 Q_LINKS_SHA256 = "cbbb2a06f3810640deccfc05a8559fe7842863f1cfc7f69a5bee170aaff74fab"
+
+
+def _load(name):
+    spec = importlib.util.spec_from_file_location("t_" + name, base.REAL_EXTRAS / (name + ".py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+layout = _load("80_layout")
+SLOT_TYPES = layout.SLOT_TYPES
+AXIS = layout.AXIS
 
 
 def rect(component):
@@ -41,6 +55,7 @@ class FramesTest(unittest.TestCase):
         cls._tmp = tempfile.TemporaryDirectory()
         root = Path(cls._tmp.name)
         cls.skins = base.generate_skins(root)
+        cls.before = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))
         cls.code, cls.err = base.run_apply(cls.skins, base.REAL_EXTRAS)
         cls.root = root / "pf"
         cls.tui = json.loads((cls.skins / "TUI.json").read_text(encoding="utf-8"))
@@ -89,6 +104,82 @@ class FramesTest(unittest.TestCase):
                     hit = r[0] < zone[0] + zone[2] and zone[0] < r[0] + r[2] and r[1] < zone[1] + zone[3] and zone[1] < r[1] + r[3]
                     self.assertFalse(hit, "%s / %s" % (tab["tabName"], c["componentData"]["name"]))
 
+    def defs(self, tui):
+        return {d["key"]: d["value"] for d in tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+
+    def test_every_control_is_on_the_axis_of_its_frame(self):
+        for tab in self.tabs():
+            frames = frame_rects(tab)
+            for c in tab["componentDefinition"]["componentsData"]:
+                typ = c["componentData"]["type"]
+                if typ not in SLOT_TYPES:
+                    continue
+                x, y, w, h = rect(c)
+                column = [i for i, f in enumerate(frames) if inside_horizontally((x, y, w, h), f)]
+                self.assertEqual(len(column), 1, "%s / %s" % (tab["tabName"], c["componentData"]["name"]))
+                f = frames[column[0]]
+                self.assertLessEqual(abs(x + w / 2 - (f[0] + f[2] / 2)), 1, "%s / %s" % (tab["tabName"], c["componentData"]["name"]))
+                self.assertTrue(f[1] <= y and y + h <= f[1] + f[3], "%s / %s" % (tab["tabName"], c["componentData"]["name"]))
+
+    def test_contents_of_a_slot_are_symmetric(self):
+        for key, value in self.defs(self.tui).items():
+            if key not in SLOT_TYPES:
+                continue
+            w, h = (int(v) for v in _child_bounds(value, "focus")[2:])
+            self.assertEqual((w, h), (layout.SLOT_W, layout.slot_height(key)), key)
+            parts = [_rect_of(c) for c in value["componentsData"] if c["componentData"]["name"] != "focus"]
+            for r in parts:
+                self.assertTrue(0 <= r[0] and r[0] + r[2] <= w and 0 <= r[1] and r[1] + r[3] <= h, key)
+            if key in layout.ALIGNED or key in layout.FIT:
+                self.assertLessEqual(abs((min(r[0] for r in parts) + max(r[0] + r[2] for r in parts)) / 2 - AXIS), 1, key)
+            if key in layout.ALIGNED:
+                for r in parts:
+                    if key not in ("radio3", "radio4") or r[2] > 100:  # the radio buttons are checked as a group above
+                        self.assertLessEqual(abs(r[0] + r[2] / 2 - AXIS), 1, key)
+                names = [c for c in value["componentsData"] if c["componentData"]["name"] == "name"]
+                for c in names:
+                    self.assertEqual(c["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred", key)
+                    self.assertEqual(_rect_of(c)[2], 272, key)
+
+    def test_knob_stack_does_not_overlap(self):
+        for key in ("knobUni", "knobBi", "toggle", "faderUni", "faderBi"):
+            if key not in layout.ALIGNED:
+                continue
+            value = self.defs(self.tui)[key]
+            parts = sorted((_rect_of(c) for c in value["componentsData"] if c["componentData"]["name"] != "focus"), key=lambda r: r[1])
+            for a, b in zip(parts, parts[1:]):
+                self.assertLessEqual(a[1] + a[3], b[1], key)
+
+    def test_no_two_controls_overlap(self):
+        for tab in self.tabs():
+            items = [(c["componentData"]["name"], c["componentData"]["type"], rect(c)) for c in tab["componentDefinition"]["componentsData"]
+                     if not (c["componentData"]["type"] == "Label" and " seg " in c["componentData"]["name"])]
+            for i, (na, ta, ra) in enumerate(items):
+                for nb, tb, rb in items[i + 1:]:
+                    if ra == rb and ta == tb == "Image":
+                        continue   # the pictures of one element (one per choice) share their place
+                    hit = ra[0] < rb[0] + rb[2] and rb[0] < ra[0] + ra[2] and ra[1] < rb[1] + rb[3] and rb[1] < ra[1] + ra[3]
+                    self.assertFalse(hit, "%s: %s overlaps %s" % (tab["tabName"], na, nb))
+
+    def test_touch_and_focus_behaviour_is_the_generators(self):
+        def strip(o):
+            o = copy.deepcopy(o)
+            def walk(v):
+                if isinstance(v, dict):
+                    v.pop("bounds", None) if "boundsType" in v.get("bounds", {}) else None
+                    for k in [k for k in v if k == "textStyle"]:
+                        v[k] = None
+                    for x in v.values():
+                        walk(x)
+                elif isinstance(v, list):
+                    for x in v:
+                        walk(x)
+            walk(o)
+            return o
+        before, after = self.defs(self.before), self.defs(self.tui)
+        for key in SLOT_TYPES:
+            self.assertEqual(strip(after[key]), strip(before[key]), key)
+
     def test_q_links_json_is_unchanged(self):
         self.assertEqual(hashlib.sha256((self.skins / "Q-Links.json").read_bytes()).hexdigest(), Q_LINKS_SHA256)
 
@@ -109,6 +200,14 @@ class FramesTest(unittest.TestCase):
         report = res.stdout + res.stderr
         errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
         self.assertEqual(errors, [], report)
+
+
+def _rect_of(component):
+    return tuple(int(v) for v in component["bounds"]["bounds"].split())
+
+
+def _child_bounds(definition, name):
+    return _rect_of(next(c for c in definition["componentsData"] if c["componentData"]["name"] == name))
 
 
 if __name__ == "__main__":

@@ -98,8 +98,8 @@ class EnvSkinTest(unittest.TestCase):
             for c in knobs:
                 x, y, w, h = map(int, c["bounds"]["bounds"].split())
                 self.assertGreaterEqual(y, 301)  # below the envelope (it ends at y 296)
-                col = {23: 0, 343: 1, 663: 2, 983: 3}[x]
-                row = {346: 2, 497: 3}[y]
+                col = {21: 0, 341: 1, 661: 2, 981: 3}[x]
+                row = {343: 2, 483: 3}[y]
                 param = int(c["handle remapping"]["map"][0]["value"].split()[1])
                 self.assertEqual(qmap["Q-Link %d" % (4 * (3 - row) + col + 1)], param, c["componentData"]["name"])
             self.assertEqual(sorted(v for v in qmap.values() if v >= 0), sorted(int(c["handle remapping"]["map"][0]["value"].split()[1]) for c in knobs))

@@ -253,8 +253,11 @@ class LfoSkinModuleTest(unittest.TestCase):
         self.assertEqual(keep(self.tui), keep(self.orig))
 
     def test_the_lfo_tabs_are_the_same_with_all_modules(self):
+        # the layout and frame modules (80_layout.py, 90_frames.py) move things; names, types, handles and actions stay
+        def content(entries):
+            return [{k: v for k, v in c.items() if k != "bounds"} for c in entries]
         for title in ("LFO 1-2", "LFO 3-4"):
-            self.assertEqual(self.tab(self.tui_full, title), self.tab(self.tui, title))
+            self.assertEqual(content(self.tab(self.tui_full, title)), content(self.tab(self.tui, title)))
 
     def test_display_parameters_come_after_the_engine_parameters(self):
         # the cursor parameters are added by the shell after the list of docs/params.json: no engine parameter index moves
