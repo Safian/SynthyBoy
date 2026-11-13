@@ -76,9 +76,6 @@
 #define SYNTHYBOY_MPC_SPECTRUM_SELFTEST 0
 #endif
 #include "spectrum.h"
-#define SYNTHYBOY_MPC_SPECTRUM_SELFTEST_ON SYNTHYBOY_MPC_SPECTRUM_SELFTEST
-#else
-#define SYNTHYBOY_MPC_SPECTRUM_SELFTEST_ON 0
 #endif
 
 // Callback statistics (docs/MPC.md "LFO pictures"; diagnostics only, the source default is 0: with 0 nothing of it is compiled). Compile switch
@@ -345,7 +342,11 @@ struct PluginInstance
 #endif
             while (!liveStop.load (std::memory_order_relaxed))
             {
-                next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || SYNTHYBOY_MPC_SPECTRUM_SELFTEST_ON || anyActive ? active : idle;
+#if SYNTHYBOY_MPC_SPECTRUM
+                next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || SYNTHYBOY_MPC_SPECTRUM_SELFTEST || anyActive ? active : idle;
+#else
+                next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || anyActive ? active : idle;
+#endif
                 const auto now = std::chrono::steady_clock::now();
                 if (next < now)
                     next = now; // a tick that was late (the host call blocked): no catch-up burst of calls, one tick now and the grid goes on from here
@@ -714,28 +715,35 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_LFO_LIVE
         if (inst->isLive (index))
         {
+#if SYNTHYBOY_MPC_SPECTRUM
             const int n = index - static_cast<int> (synthyboy::paramCount());
             const int steps = PluginInstance::liveSteps (n);
             const int step = static_cast<int> (inst->liveRead (n) * static_cast<float> (steps) + 0.5f);
             if (opcode == effGetParamName)
             {
-#if SYNTHYBOY_MPC_SPECTRUM
                 if (n >= synthyboy_mpc::kLfoLiveCount)
                     std::snprintf (buf, 64, "Spectrum %d", n - synthyboy_mpc::kLfoLiveCount + 1);
                 else
-#endif
                     std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
             }
             else if (opcode == effGetParamLabel)
                 buf[0] = '\0';
             else if (step == 0)
-#if SYNTHYBOY_MPC_SPECTRUM
                 copyString (buf, 64, n < synthyboy_mpc::kLfoLiveCount ? "idle" : "0");
-#else
-                copyString (buf, 64, "idle");
-#endif
             else
                 std::snprintf (buf, 64, "%d/%d", step, steps);
+#else
+            const int n = index - static_cast<int> (synthyboy::paramCount());
+            const int step = static_cast<int> (inst->liveValue[n].load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::kLfoLiveSteps) + 0.5f);
+            if (opcode == effGetParamName)
+                std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
+            else if (opcode == effGetParamLabel)
+                buf[0] = '\0';
+            else if (step == 0)
+                copyString (buf, 64, "idle");
+            else
+                std::snprintf (buf, 64, "%d/%d", step, synthyboy_mpc::kLfoLiveSteps);
+#endif
             buf[63] = '\0';
             return 1;
         }
@@ -947,7 +955,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (inst->isLive (index))
         {
             std::memset(props, 0, sizeof(*props));
+#if SYNTHYBOY_MPC_SPECTRUM
             props->stepFloat = 1.0f / static_cast<float> (PluginInstance::liveSteps (index - static_cast<VstInt32> (synthyboy::paramCount())));
+#else
+            props->stepFloat = 1.0f / static_cast<float> (synthyboy_mpc::kLfoLiveSteps);
+#endif
             props->smallStepFloat = props->stepFloat;
             props->largeStepFloat = props->stepFloat;
             return 1;
@@ -1158,7 +1170,11 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
 
 #if SYNTHYBOY_MPC_LFO_LIVE
     if (inst->isLive (index))
+#if SYNTHYBOY_MPC_SPECTRUM
         return inst->liveRead (index - static_cast<VstInt32> (synthyboy::paramCount()));
+#else
+        return inst->liveValue[index - static_cast<VstInt32> (synthyboy::paramCount())].load (std::memory_order_relaxed);
+#endif
 #endif
     size_t paramCount = synthyboy::paramCount();
     if (static_cast<size_t>(index) >= paramCount)
@@ -1279,7 +1295,11 @@ extern "C"
         effect->numPrograms = static_cast<VstInt32>(inst->programs.size()) + 1;
         effect->numParams = static_cast<VstInt32>(synthyboy::paramCount());
 #if SYNTHYBOY_MPC_LFO_LIVE
+#if SYNTHYBOY_MPC_SPECTRUM
         effect->numParams += PluginInstance::kLiveParams;
+#else
+        effect->numParams += synthyboy_mpc::kLfoLiveCount;
+#endif
 #endif
         effect->numInputs = 0;
         effect->numOutputs = 2;
