@@ -110,6 +110,7 @@ private:
     uint32_t snapGen = 0;
     const OwnContent* snapContent = nullptr;
     bool snapValid = false;
+    uint32_t baseEpoch = 0;        // counts the rebuilds of the snapshot
     bool blockDirty = true;        // the snapshot of this block differs from the one of the previous block
     bool mixCached = false, latCached = false;
     uint32_t lastFxMask = 0;

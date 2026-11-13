@@ -821,6 +821,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         snapGen = gen;
         snapContent = contentNow;
         snapValid = true;
+        ++baseEpoch;
     }
     const ParamIndex& pi = paramIndex();
     globals.base = base.data();
@@ -873,6 +874,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.switchKey = switchKeySnap;
     globals.quality = qualityTier.load (std::memory_order_relaxed);
     globals.usedSources = matrix.sourceMask();
+    globals.baseEpoch = baseEpoch;
     globals.oversample = ultraRender.load (std::memory_order_relaxed) || (fxOversampleIndex >= 0 && base[static_cast<size_t> (fxOversampleIndex)] >= 0.5f);
     globals.spectralScratch = spectralScratch.get();
     globals.chokeLatest = &chokeLatest[0][0];

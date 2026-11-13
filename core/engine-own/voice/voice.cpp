@@ -191,6 +191,8 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
         st = SlotState();
     voiceAge = 0.0f;
     tickCount = 0;
+    envCacheValid = false;
+    vcCacheValid = false;
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
@@ -214,6 +216,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
 void Voice::legatoTo (const NoteStart& n) noexcept
 {
     sequence = n.sequence;
+    vcCacheValid = false;
     glideOffset = (lastSemis - n.tunedNote);
     glideElapsed = 0.0f;
     glideTime = -1.0f;
@@ -453,7 +456,13 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     const float noteSemis = tuneTrack + glideOffset + bend + tuneExpr + g.base[mi.transpose] + g.base[mi.tune] * 0.01f;
     lastSemis = tuneTrack + glideOffset;
 
-    evaluateVoiceControl (g);
+    if (g.baseEpoch == 0 || !vcCacheValid || vcCacheEpoch != g.baseEpoch || vcCacheSequence != sequence) // epoch 0: the caller gives no epoch, nothing is kept
+    {
+        evaluateVoiceControl (g);
+        vcCacheValid = true;
+        vcCacheEpoch = g.baseEpoch;
+        vcCacheSequence = sequence;
+    }
     auto envSettings = [&] (int e, EnvSettings& s, bool finalise)
     {
         const EnvIdx& ei = pi.env[e];
@@ -538,10 +547,17 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         g.matrix->evaluate (ctx);
     }
     // ---- envelopes (times read with last period's modulation)
+    const bool envFromCache = g.baseEpoch != 0 && envCacheValid && envCacheEpoch == g.baseEpoch && envCacheBpm == g.bpm && numTouched == 0 && !fresh;
     for (int e = 0; e < 6; ++e)
     {
         EnvSettings s;
-        envSettings (e, s, true);
+        if (envFromCache)
+            s = envCache[e];
+        else
+        {
+            envSettings (e, s, true);
+            envCache[e] = s;
+        }
         if (fresh && e == 0)
         {
             const float v0 = env[0].advance (s, 0.0); // the level at the note's first sample
@@ -549,6 +565,12 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         const float v = env[e].advance (s, dt);
         envOut[e] = v * v;
+    }
+    if (!envFromCache)
+    {
+        envCacheValid = numTouched == 0 && !fresh; // settings read with modulation are not the ones of the parameters alone
+        envCacheEpoch = g.baseEpoch;
+        envCacheBpm = g.bpm;
     }
     // ---- LFOs
     // Tier low (g.quality == 0, "economy"): an LFO that no slot reads only feeds the display, so it is evaluated every fourth period (staggered) over four periods' time
@@ -980,10 +1002,22 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     const float invP = 1.0f / static_cast<float> (kControlPeriod);
     float oscL[3][kControlPeriod], oscR[3][kControlPeriod];
     // the targets: 0 Main, 1 Bus 1, 2 Bus 2, 3 Direct; "E" = through the amplitude envelope (env 1 on), "N" = past it
-    float tE_L[4][kControlPeriod] = {}, tE_R[4][kControlPeriod] = {}, tN_L[4][kControlPeriod] = {}, tN_R[4][kControlPeriod] = {};
-    float fin_L[2][kControlPeriod] = {}, fin_R[2][kControlPeriod] = {};
+    // only the targets and filter inputs that something is added to are cleared (usedT / usedFin); the rest is never read
+    float tE_L[4][kControlPeriod], tE_R[4][kControlPeriod], tN_L[4][kControlPeriod], tN_R[4][kControlPeriod];
+    float fin_L[2][kControlPeriod], fin_R[2][kControlPeriod];
     float extNext[4][kControlPeriod] = {};
     float fout_L[2][kControlPeriod], fout_R[2][kControlPeriod];
+    bool usedT[2][4] = {}; // [through env 1][target]
+    bool usedFin[2] = {};
+    auto touchFin = [&] (int f)
+    {
+        if (!usedFin[f])
+        {
+            std::fill (fin_L[f], fin_L[f] + kControlPeriod, 0.0f);
+            std::fill (fin_R[f], fin_R[f] + kControlPeriod, 0.0f);
+            usedFin[f] = true;
+        }
+    };
 
     auto addScaled = [&] (float* dl, float* dr, const float* a, const float* b, float g)
     {
@@ -995,6 +1029,14 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     };
     auto toTarget = [&] (int target, bool env1, const float* a, const float* b, float g)
     {
+        if (!usedT[env1][target])
+        {
+            float* zl = env1 ? tE_L[target] : tN_L[target];
+            float* zr = env1 ? tE_R[target] : tN_R[target];
+            std::fill (zl, zl + kControlPeriod, 0.0f);
+            std::fill (zr, zr + kControlPeriod, 0.0f);
+            usedT[env1][target] = true;
+        }
         addScaled (env1 ? tE_L[target] : tN_L[target], env1 ? tE_R[target] : tN_R[target], a, b, g);
     };
     // a source: its destination (0 Filter 1, 1 Filter 2, 2 both, 3 Effects only, 4 Direct out, 5 Filter blend, 6 None) and its taps to the buses
@@ -1002,12 +1044,14 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         switch (dest)
         {
-            case 0: addScaled (fin_L[0], fin_R[0], a, b, 1.0f); break;
-            case 1: addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
-            case 2: addScaled (fin_L[0], fin_R[0], a, b, 1.0f); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
+            case 0: touchFin (0); addScaled (fin_L[0], fin_R[0], a, b, 1.0f); break;
+            case 1: touchFin (1); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
+            case 2: touchFin (0); touchFin (1); addScaled (fin_L[0], fin_R[0], a, b, 1.0f); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
             case 3: toTarget (0, env1, a, b, 1.0f); break;
             case 4: toTarget (3, env1, a, b, 1.0f); break;
             case 5: // filter blend: an equal power crossfade between the filters (0 = Filter 1 only)
+                touchFin (0);
+                touchFin (1);
                 addScaled (fin_L[0], fin_R[0], a, b, std::cos (blend * 1.5707963f));
                 addScaled (fin_L[1], fin_R[1], a, b, std::sin (blend * 1.5707963f));
                 break;
@@ -1144,6 +1188,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     // ---- filters (series routing feeds one into the other)
     auto runFilter = [&] (int f)
     {
+        touchFin (f);
         if (filtOn[f])
             filt[f].process (fin_L[f], fin_R[f], fout_L[f], fout_R[f], n, t0);
         else
@@ -1175,6 +1220,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     if (routing == 2) // series 2 -> 1
     {
         runFilter (1);
+        touchFin (0);
         for (int k = 0; k < n; ++k)
         {
             fin_L[0][k] += fout_L[1][k];
@@ -1187,6 +1233,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     else if (routing == 1) // series 1 -> 2
     {
         runFilter (0);
+        touchFin (1);
         for (int k = 0; k < n; ++k)
         {
             fin_L[1][k] += fout_L[0][k];
@@ -1209,22 +1256,27 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         std::copy (extNext[j], extNext[j] + n, extMono[j]);
         std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
     }
-    // ---- amplitude, velocity, declick, fade
+    // ---- amplitude, velocity, declick, fade (only the targets that received something are mixed: the others would add exact zeros)
     float lastL = 0.0f, lastR = 0.0f;
+    float ampK[kControlPeriod], vgK[kControlPeriod];
     for (int k = 0; k < n; ++k)
     {
         const float t = static_cast<float> (t0 + k + 1) * invP;
-        const float amp = lerp (ampPrev, ampCur, t);
-        const float vg = lerp (velGainPrev, velGain, t);
-        float mainL = 0.0f, mainR = 0.0f;
-        for (int tg = 0; tg < 4; ++tg)
+        ampK[k] = lerp (ampPrev, ampCur, t);
+        vgK[k] = lerp (velGainPrev, velGain, t);
+    }
+    for (int tg = 0; tg < 4; ++tg)
+    {
+        const bool ue = usedT[1][tg], un = usedT[0][tg];
+        if (tg != 0 && !ue && !un)
+            continue;
+        for (int k = 0; k < n; ++k)
         {
-            const float l = (tE_L[tg][k] * amp + tN_L[tg][k]) * vg;
-            const float r = (tE_R[tg][k] * amp + tN_R[tg][k]) * vg;
+            const float l = ((ue ? tE_L[tg][k] * ampK[k] : 0.0f) + (un ? tN_L[tg][k] : 0.0f)) * vgK[k];
+            const float r = ((ue ? tE_R[tg][k] * ampK[k] : 0.0f) + (un ? tN_R[tg][k] : 0.0f)) * vgK[k];
             if (tg == 0)
             {
-                mainL = l;
-                mainR = r;
+                float mainL = l, mainR = r;
                 if (declickPos > 0)
                 {
                     const float w = static_cast<float> (declickPos) * (1.0f / 64.0f);
@@ -1234,6 +1286,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
                 }
                 out.l[0][k] += mainL;
                 out.r[0][k] += mainR;
+                lastL = mainL;
+                lastR = mainR;
             }
             else
             {
@@ -1241,8 +1295,6 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
                 out.r[tg][k] += r;
             }
         }
-        lastL = mainL;
-        lastR = mainR;
     }
     outL = lastL;
     outR = lastR;

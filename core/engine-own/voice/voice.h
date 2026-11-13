@@ -46,6 +46,7 @@ struct TickGlobals
     int maxUnison = kMaxUnisonVoices;
     const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
+    uint32_t baseEpoch = 0;                  // changes whenever `base` was rebuilt from the parameters (a voice may keep what it derived from them while it is the same)
     uint64_t usedSources = ~uint64_t (0);    // bit k: some modulation slot (or custom shape point) reads source id k; the economy mode of tier low updates the LFOs nothing reads less often
     bool oversample = false;                 // ultra render / quality.oversample_4x: every wavetable oscillator runs 4x oversampled
     spectral::Scratch* spectralScratch = nullptr;
@@ -164,6 +165,11 @@ private:
     float envOut[6] = {};
     LfoCore lfoCore[10];
     float envLen[6][4] = {};
+    // what the voice derived from the parameters alone (no modulation touched): valid while the snapshot epoch, the note sequence and the tempo are the same
+    EnvSettings envCache[6];
+    uint32_t envCacheEpoch = 0, vcCacheEpoch = 0, vcCacheSequence = 0;
+    double envCacheBpm = 0.0;
+    bool envCacheValid = false, vcCacheValid = false;
     float lfoAge[10] = {}, lfoSmoothL[10] = {}, lfoSmoothR[10] = {};
     float lfoOutR[10] = {};
     float srcR[kNumSourceIds] = {};
