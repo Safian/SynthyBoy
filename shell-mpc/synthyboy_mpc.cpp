@@ -25,6 +25,40 @@
 #include "plugin_paths.h"
 #include "program_list.h"
 
+// Live LFO display (docs/MPC.md "LFO pictures"). Compile switch SYNTHYBOY_MPC_LFO_LIVE (CMake option of the same name; the source default is 0:
+// with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). When 1 the plugin has four display-only
+// parameters after the engine's list (index paramCount() + n - 1 for LFO n): the cursor of the LFO picture of the skin (lfo_live.h).
+// Never in the mirror, the state or a preset, not automatable. A low priority thread (not the audio thread) reads the engine's live values about
+// SYNTHYBOY_MPC_LFO_LIVE_HZ times a second and, when a cursor cell changed, tells the host with audioMasterAutomate (the host redraws only then).
+//   SYNTHYBOY_MPC_LFO_LIVE_HZ        refresh rate of that thread while a voice sounds (default 25); it checks every 100 ms when all four are idle
+//   SYNTHYBOY_MPC_LFO_LIVE_NOTIFY    1 (default): call audioMasterAutomate; 0: update the values only (the host never redraws: a CPU baseline)
+//   SYNTHYBOY_MPC_LFO_LIVE_SELFTEST  0 (default); 1: ignore the engine and sweep the four cursors at 0.25 / 0.5 / 1 / 2 cycles a second (measuring the host
+//                                    side - recording, modified flag, CPU - without playing a note)
+#ifndef SYNTHYBOY_MPC_LFO_LIVE
+#define SYNTHYBOY_MPC_LFO_LIVE 0
+#endif
+#if SYNTHYBOY_MPC_LFO_LIVE
+#ifndef SYNTHYBOY_MPC_LFO_LIVE_HZ
+#define SYNTHYBOY_MPC_LFO_LIVE_HZ 25
+#endif
+#ifndef SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
+#define SYNTHYBOY_MPC_LFO_LIVE_NOTIFY 1
+#endif
+#ifndef SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
+#define SYNTHYBOY_MPC_LFO_LIVE_SELFTEST 0
+#endif
+#include <chrono>
+#include <cstdio>
+#include <thread>
+#if defined(__linux__)
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+#include "lfo_live.h"
+#include "synthyboy/readout.h"
+#endif
+
 // ---------------------------------------------------------------------------
 // Denormal flush helpers (cross-platform)
 // ---------------------------------------------------------------------------
@@ -207,6 +241,86 @@ struct PluginInstance
     audioMasterCallback audioMaster = nullptr;
     synthyboy::TransportInfo transport { 120.0, 0.0, false };
 
+#if SYNTHYBOY_MPC_LFO_LIVE
+    std::atomic<float> liveValue[synthyboy_mpc::kLfoLiveCount] { { 0.0f }, { 0.0f }, { 0.0f }, { 0.0f } };
+    std::atomic<bool> liveStop { false };
+    std::thread liveThread;
+
+    bool isLive (VstInt32 index) const noexcept
+    {
+        const auto count = static_cast<VstInt32> (synthyboy::paramCount());
+        return index >= count && index < count + synthyboy_mpc::kLfoLiveCount;
+    }
+
+    void startLive (AEffect* e)
+    {
+        liveThread = std::thread ([this, e]
+        {
+#if defined(__linux__)
+            setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 10); // this thread only: the audio thread must never wait for it
+#endif
+            const int first = static_cast<int> (synthyboy::paramCount());
+            int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
+            for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
+            {
+                const std::string n = std::to_string (l + 1);
+                const synthyboy::ParamInfo* sync = synthyboy::findParamByKey (("lfo" + n + ".sync_type").c_str());
+                const synthyboy::ParamInfo* phase = synthyboy::findParamByKey (("lfo" + n + ".phase").c_str());
+                syncIdx[l] = sync ? synthyboy::findParamIndex (sync->id) : -1;
+                phaseIdx[l] = phase ? synthyboy::findParamIndex (phase->id) : -1;
+            }
+            const auto active = std::chrono::milliseconds (1000 / (SYNTHYBOY_MPC_LFO_LIVE_HZ > 0 ? SYNTHYBOY_MPC_LFO_LIVE_HZ : 1));
+            const auto idle = std::chrono::milliseconds (100);
+            const auto start = std::chrono::steady_clock::now();
+            auto next = start;
+            int last[synthyboy_mpc::kLfoLiveCount] = {};
+            bool anyActive = false;
+            while (!liveStop.load (std::memory_order_relaxed))
+            {
+                next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || anyActive ? active : idle;
+                std::this_thread::sleep_until (next);
+                if (liveStop.load (std::memory_order_relaxed))
+                    break;
+                int step[synthyboy_mpc::kLfoLiveCount] = {};
+#if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
+                const double t = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
+                for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
+                {
+                    const double cycles = t * 0.25 * static_cast<double> (1 << l);
+                    step[l] = 1 + static_cast<int> ((cycles - std::floor (cycles)) * synthyboy_mpc::kLfoLiveSteps);
+                }
+#else
+                synthyboy::LiveValues live;
+                if (engine && engine->copyReadout (live) && live.block != 0) // block 0: the engine wrote no values yet (they read 0, not -1)
+                    for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
+                    {
+                        const int sync = syncIdx[l] >= 0 ? static_cast<int> (paramMirror[syncIdx[l]].load (std::memory_order_relaxed) + 0.5f) : 0;
+                        const float phase = phaseIdx[l] >= 0 ? paramMirror[phaseIdx[l]].load (std::memory_order_relaxed) : 0.0f;
+                        step[l] = synthyboy_mpc::lfoLiveStep (live.lfoPhase[l], sync, phase);
+                    }
+#endif
+                anyActive = false;
+                for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
+                {
+                    anyActive = anyActive || step[l] != 0;
+                    if (step[l] == last[l])
+                        continue;
+                    last[l] = step[l];
+                    const float v = synthyboy_mpc::lfoLiveValue (step[l]);
+                    liveValue[l].store (v, std::memory_order_relaxed);
+#if SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
+                    if (audioMaster)
+                        audioMaster (e, audioMasterAutomate, first + l, 0, nullptr, v);
+#else
+                    (void) e;
+                    (void) first;
+#endif
+                }
+            }
+        });
+    }
+#endif
+
     PluginInstance()
     {
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
@@ -257,6 +371,11 @@ struct PluginInstance
 
     ~PluginInstance()
     {
+#if SYNTHYBOY_MPC_LFO_LIVE
+        liveStop.store (true, std::memory_order_relaxed);
+        if (liveThread.joinable())
+            liveThread.join();
+#endif
         if (engine)
             engine->setContentStore(nullptr);
     }
@@ -449,6 +568,23 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         char* buf = static_cast<char*>(ptr);
         if (!buf || index < 0) return 0;
 
+#if SYNTHYBOY_MPC_LFO_LIVE
+        if (inst->isLive (index))
+        {
+            const int n = index - static_cast<int> (synthyboy::paramCount());
+            const int step = static_cast<int> (inst->liveValue[n].load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::kLfoLiveSteps) + 0.5f);
+            if (opcode == effGetParamName)
+                std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
+            else if (opcode == effGetParamLabel)
+                buf[0] = '\0';
+            else if (step == 0)
+                copyString (buf, 64, "idle");
+            else
+                std::snprintf (buf, 64, "%d/%d", step, synthyboy_mpc::kLfoLiveSteps);
+            buf[63] = '\0';
+            return 1;
+        }
+#endif
         size_t paramCount = synthyboy::paramCount();
         if (static_cast<size_t>(index) >= paramCount) return 0;
 
@@ -550,6 +686,10 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
     case effCanBeAutomated:
     {
+#if SYNTHYBOY_MPC_LFO_LIVE
+        if (inst->isLive (index))
+            return 0;
+#endif
         // All parameters are automatable
         return 1;
     }
@@ -642,6 +782,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         VstParameterProperties* props = static_cast<VstParameterProperties*>(ptr);
         if (!props || index < 0) return 0;
 
+#if SYNTHYBOY_MPC_LFO_LIVE
+        if (inst->isLive (index))
+        {
+            std::memset(props, 0, sizeof(*props));
+            props->stepFloat = 1.0f / static_cast<float> (synthyboy_mpc::kLfoLiveSteps);
+            props->smallStepFloat = props->stepFloat;
+            props->largeStepFloat = props->stepFloat;
+            return 1;
+        }
+#endif
         size_t paramCount = synthyboy::paramCount();
         if (static_cast<size_t>(index) >= paramCount) return 0;
 
@@ -845,6 +995,10 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
     if (!inst || index < 0)
         return 0.0f;
 
+#if SYNTHYBOY_MPC_LFO_LIVE
+    if (inst->isLive (index))
+        return inst->liveValue[index - static_cast<VstInt32> (synthyboy::paramCount())].load (std::memory_order_relaxed);
+#endif
     size_t paramCount = synthyboy::paramCount();
     if (static_cast<size_t>(index) >= paramCount)
         return 0.0f;
@@ -949,6 +1103,9 @@ extern "C"
         effect->getParameter = pluginGetParameter;
         effect->numPrograms = static_cast<VstInt32>(inst->programs.size()) + 1;
         effect->numParams = static_cast<VstInt32>(synthyboy::paramCount());
+#if SYNTHYBOY_MPC_LFO_LIVE
+        effect->numParams += synthyboy_mpc::kLfoLiveCount;
+#endif
         effect->numInputs = 0;
         effect->numOutputs = 2;
         effect->flags = effFlagsCanReplacing | effFlagsIsSynth | effFlagsProgramChunks;
@@ -967,6 +1124,11 @@ extern "C"
         // Call the host callback to let the host identify itself
         if (audioMaster)
             audioMaster(effect, audioMasterVersion, 0, 0, nullptr, 0.0f);
+
+#if SYNTHYBOY_MPC_LFO_LIVE
+        try { inst->startLive (effect); }
+        catch (...) {} // no thread: the cursors stay idle
+#endif
 
         return effect;
     }

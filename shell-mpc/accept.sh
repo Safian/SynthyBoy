@@ -23,7 +23,8 @@ import json, sys
 d = json.load(open(sys.argv[1])); p = json.load(open(sys.argv[2]))
 a = [x["name"] for x in d["params"]]; b = [x["name"] for x in p["params"]]
 ok = True
-if len(a) != p["count"]: print(f"param count {len(a)} != {p['count']}"); ok = False
+extra = ["LFO %d Cursor" % n for n in (1, 2, 3, 4)]   # SYNTHYBOY_MPC_LFO_LIVE (default ON): four display-only parameters after the engine's list
+if len(a) != p["count"] + len(extra) or a[p["count"]:] != extra: print(f"param count {len(a)} != {p['count']} + 4 display parameters {a[p['count']:]}"); ok = False
 for i, (x, y) in enumerate(zip(a, b)):
     if x != y: print(f"param {i}: plugin '{x}' != docs '{y}'"); ok = False; break
 for k, v in (("name", "SynthyBoy"), ("vendor", "Safian"), ("uid", "SfSB"), ("isInstrument", True), ("numInputs", 0), ("numOutputs", 2)):
@@ -101,4 +102,32 @@ if grep -q "WARNING: ThreadSanitizer" $T/programs.log; then
     echo "ACCEPT FAIL: data races while changing programs (full report: $T/programs.log)"; exit 1
 fi
 grep -q "programs_host: OK" $T/programs.log || { grep -E "^FAIL|^      " $T/programs.log | head; echo "ACCEPT FAIL: tsan programs_host"; exit 1; }
+# Live LFO display (SYNTHYBOY_MPC_LFO_LIVE, default ON in this shell): the main build above has it. Four more builds with the own engine (the readout of the cursors
+# comes from it): OFF (nothing after the engine's parameters), ON (cursors follow a held note), SELFTEST (cursors sweep without a note), SELFTEST + NOTIFY=OFF
+# (no audioMasterAutomate). All four give the same state chunk. The ON build runs once more under ThreadSanitizer (the display thread reads the engine's atomics).
+LIVEINC="-I core/include -I shell-mpc -I $MPC_SDK/framework"
+live_build() { # name, cmake options...
+    n=$1; shift
+    cmake -S . -B build-mpc-live-$n -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "$@" > build-mpc-live-$n.configure.log 2>&1 && cmake --build build-mpc-live-$n --target synthyboy_mpc > build-mpc-live-$n.build.log 2>&1 || { tail -30 build-mpc-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
+}
+live_build off -DSYNTHYBOY_MPC_LFO_LIVE=OFF
+live_build on
+live_build self -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON
+live_build quiet -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=OFF
+c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: lfo_live_host build"; exit 1; }
+for v in off:off on:on self:selftest quiet:quiet; do
+    d=${v%%:*}; m=${v##*:}
+    $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m)"; exit 1; }
+done
+[ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-on.log)" ] && [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-self.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the LFO display variants"; exit 1; }
+TL=build-mpc-live-tsan
+cmake -S . -B $TL -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
+TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
+c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan lfo_live_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on > $TL/live.log 2>&1
+if grep -q "WARNING: ThreadSanitizer" $TL/live.log; then
+    grep -A14 "WARNING: ThreadSanitizer" $TL/live.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+    echo "ACCEPT FAIL: data races in the LFO display (full report: $TL/live.log)"; exit 1
+fi
+grep -q "^FAIL" $TL/live.log && { grep "^FAIL" $TL/live.log; echo "ACCEPT FAIL: tsan lfo_live_host"; exit 1; }
 echo "ACCEPT OK"

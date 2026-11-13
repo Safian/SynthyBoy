@@ -31,6 +31,27 @@ target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SY
 
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
+# Live LFO display (docs/MPC.md "LFO pictures"): four display-only cursor parameters after the engine's list, driven by a low priority thread.
+# The skin of scripts/mpc-skin-extras/30_lfo.py refers to them, so the MPC package needs the plugin built with this ON (the default of this shell).
+# SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
+option(SYNTHYBOY_MPC_LFO_LIVE "MPC shell: the live LFO display parameters" ON)
+set(SYNTHYBOY_MPC_LFO_LIVE_HZ 25 CACHE STRING "MPC shell: refresh rate of the LFO display thread while a voice sounds")
+option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "MPC shell: tell the host (audioMasterAutomate) when a cursor moves; OFF = CPU baseline, the host never redraws" ON)
+option(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST "MPC shell: sweep the four cursors without a voice (host-side measurements only)" OFF)
+if(SYNTHYBOY_MPC_LFO_LIVE)
+    find_package(Threads REQUIRED)
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE=1 SYNTHYBOY_MPC_LFO_LIVE_HZ=${SYNTHYBOY_MPC_LFO_LIVE_HZ})
+    if(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY)
+        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE_NOTIFY=1)
+    else()
+        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE_NOTIFY=0)
+    endif()
+    if(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST)
+        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_LFO_LIVE_SELFTEST=1)
+    endif()
+    target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
+endif()
+
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
 if(APPLE)
