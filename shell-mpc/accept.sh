@@ -115,15 +115,24 @@ live_build on
 live_build self -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON
 live_build quiet -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=OFF
 live_build hz25 -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
+live_build stats -DSYNTHYBOY_MPC_CALLBACK_STATS=ON
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: lfo_live_host build"; exit 1; }
 # the refresh rate: the default is 10 a second (at most 21 calls per cursor in 2 s), SYNTHYBOY_MPC_LFO_LIVE_HZ=25 still changes it (the checks scale with HZ)
 for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do
     d=${v%%:*}; r=${v#*:}; m=${r%%:*}; hz=${r##*:}
     $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m, $hz Hz)"; exit 1; }
 done
+# callback statistics (SYNTHYBOY_MPC_CALLBACK_STATS, diagnostics): off in the default build (no trace of it in the module), on in the stats variant
+STATSLIB="$(find build-mpc-live-stats -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+grep -q "synthyboy-callback-stats" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no statistics code"; exit 1; }
+for f in "$LIB" "$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"; do
+    grep -q "synthyboy-callback-stats" "$f" && { echo "ACCEPT FAIL: statistics code in a build without SYNTHYBOY_MPC_CALLBACK_STATS"; exit 1; }
+done
+c++ -std=c++17 -O1 -Wall -Wextra -I $MPC_SDK/framework -I shell-mpc -o $B/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: callback_stats_host build"; exit 1; }
+$B/callback_stats_host "$STATSLIB" $B/callback-stats.txt > $B/callback-stats.log 2>&1 || { grep -E "^FAIL" $B/callback-stats.log; echo "ACCEPT FAIL: callback_stats_host"; exit 1; }
 [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-on.log)" ] && [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-self.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the LFO display variants"; exit 1; }
 TL=build-mpc-live-tsan
-cmake -S . -B $TL -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
+cmake -S . -B $TL -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
 TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan lfo_live_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on > $TL/live.log 2>&1
@@ -132,4 +141,12 @@ if grep -q "WARNING: ThreadSanitizer" $TL/live.log; then
     echo "ACCEPT FAIL: data races in the LFO display (full report: $TL/live.log)"; exit 1
 fi
 grep -q "^FAIL" $TL/live.log && { grep "^FAIL" $TL/live.log; echo "ACCEPT FAIL: tsan lfo_live_host"; exit 1; }
+# the same ThreadSanitizer build has the statistics switched on: the display thread and the writer thread read what the audio thread writes
+c++ -std=c++17 -O1 -g -fsanitize=thread -I $MPC_SDK/framework -I shell-mpc -o $TL/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan callback_stats_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/callback_stats_host "$TLLIB" $TL/callback-stats.txt > $TL/stats.log 2>&1
+if grep -q "WARNING: ThreadSanitizer" $TL/stats.log; then
+    grep -A14 "WARNING: ThreadSanitizer" $TL/stats.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+    echo "ACCEPT FAIL: data races in the callback statistics (full report: $TL/stats.log)"; exit 1
+fi
+grep -q "^FAIL" $TL/stats.log && { grep "^FAIL" $TL/stats.log; echo "ACCEPT FAIL: tsan callback_stats_host"; exit 1; }
 echo "ACCEPT OK"

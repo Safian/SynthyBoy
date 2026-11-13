@@ -58,6 +58,19 @@
 #include "synthyboy/readout.h"
 #endif
 
+// Callback statistics (docs/MPC.md "LFO pictures"; diagnostics only, the source default is 0: with 0 nothing of it is compiled). Compile switch
+// SYNTHYBOY_MPC_CALLBACK_STATS (CMake option of the same name). The audio callback measures the time between two calls and its own duration into
+// preallocated atomics (callback_stats.h); a low priority thread writes a text file every 5 seconds and at shutdown.
+//   SYNTHYBOY_MPC_CALLBACK_STATS_FILE         environment variable: the file (default /tmp/synthyboy-callback-stats.txt; a second plugin instance
+//                                             writes <file>.2, a third <file>.3 ...)
+//   SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS  environment variable: pause between two writes (default 5000)
+#ifndef SYNTHYBOY_MPC_CALLBACK_STATS
+#define SYNTHYBOY_MPC_CALLBACK_STATS 0
+#endif
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+#include "callback_stats.h"
+#endif
+
 // ---------------------------------------------------------------------------
 // Denormal flush helpers (cross-platform)
 // ---------------------------------------------------------------------------
@@ -323,6 +336,47 @@ struct PluginInstance
     }
 #endif
 
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+    synthyboy_mpc::CallbackStats callbackStats;
+
+    /** The variant of this build, for the first lines of the statistics file. */
+    static std::string buildDescription()
+    {
+        std::string b;
+        size_t extraParams = 0;
+#if SYNTHYBOY_MPC_LFO_LIVE
+        extraParams = synthyboy_mpc::kLfoLiveCount;
+        b += "LFO_LIVE=ON LFO_LIVE_HZ=" + std::to_string (SYNTHYBOY_MPC_LFO_LIVE_HZ)
+           + " LFO_LIVE_NOTIFY=" + (SYNTHYBOY_MPC_LFO_LIVE_NOTIFY ? "ON" : "OFF")
+           + " LFO_LIVE_SELFTEST=" + (SYNTHYBOY_MPC_LFO_LIVE_SELFTEST ? "ON" : "OFF");
+#else
+        b += "LFO_LIVE=OFF";
+#endif
+        b += " params=" + std::to_string (synthyboy::paramCount() + extraParams);
+#if defined(__aarch64__)
+        b += " arch=arm64";
+#elif defined(__arm__)
+        b += " arch=arm32";
+#elif defined(__x86_64__)
+        b += " arch=x86_64";
+#endif
+        return b;
+    }
+
+    void startStats()
+    {
+        static std::atomic<int> instances { 0 };
+        const char* envPath = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_FILE");
+        std::string path = envPath != nullptr && *envPath != 0 ? envPath : "/tmp/synthyboy-callback-stats.txt";
+        const int n = ++instances;
+        if (n > 1)
+            path += "." + std::to_string (n);
+        const char* envMs = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS");
+        const int ms = envMs != nullptr ? std::atoi (envMs) : 0;
+        callbackStats.start (path, buildDescription(), ms > 0 ? ms : 5000);
+    }
+#endif
+
     PluginInstance()
     {
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
@@ -373,6 +427,9 @@ struct PluginInstance
 
     ~PluginInstance()
     {
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        callbackStats.stop(); // writes the file one last time
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         liveStop.store (true, std::memory_order_relaxed);
         if (liveThread.joinable())
@@ -634,6 +691,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         inst->mainsOn = (value != 0);
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        inst->callbackStats.restartGaps();
+#endif
         // Prepare when mains go on if sample rate or block size changed since last prepare
         if (inst->mainsOn && inst->engine)
         {
@@ -1031,6 +1091,17 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     if (sampleFrames <= 0)
         return;
 
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+    // Measures the gap to the previous call and, at the end of the scope, the time spent in this one (atomics only, see callback_stats.h)
+    struct StatsScope
+    {
+        synthyboy_mpc::CallbackStats& s;
+        uint64_t t0;
+        StatsScope (synthyboy_mpc::CallbackStats& stats, int frames, double rate) noexcept : s (stats), t0 (stats.begin (frames, rate)) {}
+        ~StatsScope() { s.end (t0); }
+    } statsScope (inst->callbackStats, sampleFrames, inst->sampleRate);
+#endif
+
     // Save and flush denormals
     uint32_t savedFz = flushDenormalsSave();
     flushDenormalsOn();
@@ -1130,6 +1201,10 @@ extern "C"
 #if SYNTHYBOY_MPC_LFO_LIVE
         try { inst->startLive (effect); }
         catch (...) {} // no thread: the cursors stay idle
+#endif
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        try { inst->startStats(); }
+        catch (...) {} // no file: the statistics are only collected
 #endif
 
         return effect;

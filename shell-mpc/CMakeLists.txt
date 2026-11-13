@@ -52,6 +52,15 @@ if(SYNTHYBOY_MPC_LFO_LIVE)
     target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
 endif()
 
+# Diagnostics: statistics of the audio callback (gap between two calls, time inside the call) written to a text file by a low priority thread
+# (docs/MPC.md "LFO pictures"). OFF = the plugin is byte for byte the one without this code. Not for the package.
+option(SYNTHYBOY_MPC_CALLBACK_STATS "MPC shell: measure the audio callback and write /tmp/synthyboy-callback-stats.txt (diagnostics only)" OFF)
+if(SYNTHYBOY_MPC_CALLBACK_STATS)
+    find_package(Threads REQUIRED)
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_CALLBACK_STATS=1)
+    target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
+endif()
+
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
 if(APPLE)

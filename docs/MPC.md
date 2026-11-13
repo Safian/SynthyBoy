@@ -206,9 +206,30 @@ Thread model of the display (the reason is the host: `audioMasterAutomate` runs 
 - The thread is a normal thread: `shell-mpc/thread_policy.h` sets, from inside the thread, policy `SCHED_OTHER` with priority 0, nice 0 and the affinity of all CPUs. Nothing is inherited from the thread that created the plugin: a real-time policy or a single-core affinity of the creator would otherwise carry over to a `std::thread`. Nice 0 (not lower) because the thread holds host locks while it is inside the host call, and a starved holder makes the host's own threads wait. The host test checks policy, nice and affinity of the new thread from a creator that is nice 5 and pinned to one CPU (Linux).
 - The audio thread (`pluginProcessReplacing`) does nothing for the display: no call to the host for it (its one host call is the transport query `audioMasterGetTime`, as before the display existed), no allocation, no lock. The only connection is that the engine writes its readout (`OwnEngine::writeReadout`, relaxed atomic stores) at the end of a block, and the display thread reads those atomics (`copyReadout`) and the parameter mirror. The cursor values the host reads (`getParameter`) are atomics too.
 
+Callback statistics (diagnostics, off by default). To find out on the device whether the display holds up the audio callback, the shell can measure its own callback: build with `-DSYNTHYBOY_MPC_CALLBACK_STATS=ON` (compile switch `SYNTHYBOY_MPC_CALLBACK_STATS`, default 0; with 0 the source preprocesses to exactly the text without the statistics code). In `processReplacing` it measures with the monotonic clock the time between two calls (the gap) against the nominal block time of the previous block (frames divided by the sample rate), and the time spent inside the call. On the audio thread this is arithmetic and relaxed atomic stores into storage that exists from the start: no allocation, no lock, no file access (`shell-mpc/callback_stats.h`). A low priority thread (nice 10) writes a text file every 5 seconds and when the plugin is closed, through a temporary file and rename. Environment variables of the host process: `SYNTHYBOY_MPC_CALLBACK_STATS_FILE` (default `/tmp/synthyboy-callback-stats.txt`; a second plugin instance writes `<file>.2`, and so on) and `SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS` (default 5000). The gap after mains off and on is not counted. The file:
+
+```
+synthyboy-callback-stats 1
+build: LFO_LIVE=ON LFO_LIVE_HZ=10 LFO_LIVE_NOTIFY=ON LFO_LIVE_SELFTEST=OFF params=2641 arch=arm64
+written: shutdown at_ms=722
+block_frames_last: 480
+nominal_block_us: 10000
+callbacks: 11
+gaps_counted: 10
+gap_max_us: 104863
+gap_buckets (gap / nominal block time): <1.5x=2 <2x=3 <4x=3 <8x=1 >=8x=1
+process_max_us: 7521
+process_avg_us: 699.397
+largest_gaps: 10
+  1 at_ms=367 gap_us=104863 ratio=10.49x block_frames=480
+  2 at_ms=262 gap_us=67531 ratio=6.75x block_frames=480
+```
+
+(The sample is from the host test, `shell-mpc/tests/callback_stats_host.cpp`, with calls spaced on purpose; "at_ms" is milliseconds since the plugin was created, the ten largest gaps are listed, largest first.) A healthy callback has nearly all gaps in the first bucket and a largest gap of about one block time. The variants for the comparison on the device are built with `scripts/build-mpc.sh --cmake-arg ...` (see its usage): `LFO_LIVE=OFF` (no display parameters), the default (10 a second), `LFO_LIVE_HZ=25`, and the self-test builds (`LFO_LIVE_SELFTEST=ON`, cursors move without a note) at 10, 25 and 50 a second. A variant without `LFO_LIVE` has 2637 parameters, one with it 2641 (the four cursors are indices 2637 to 2640): a skin that refers to those indices needs a build with `LFO_LIVE=ON`.
+
 Known limits of the cursor, from the engine's readout: swing and direction are not drawn; in free-run mode and for mono envelope LFOs the engine does not advance the voice's own position, so the cursor stays at the start; an envelope-type LFO that has finished jumps back to the start; with several voices only the voice played last is shown.
 
-The skin refers to the display parameters, so the MPC plugin must be built with them. Build options of the MPC shell (CMake): `SYNTHYBOY_MPC_LFO_LIVE` (default ON; OFF builds the plugin without the parameters, only for comparisons, because then the host hides the pictures), `SYNTHYBOY_MPC_LFO_LIVE_HZ` (default 10, ticks a second), `SYNTHYBOY_MPC_LFO_LIVE_NOTIFY` (default ON; OFF updates the values without telling the host, a baseline), `SYNTHYBOY_MPC_LFO_LIVE_SELFTEST` (default OFF; the cursors sweep without a note, for measuring on the host). The compile switch of the same names in the source defaults to 0, which makes the shell identical to one without the display. The acceptance script `shell-mpc/accept.sh` builds the variants (also HZ 25) and runs the ON build under ThreadSanitizer.
+The skin refers to the display parameters, so the MPC plugin must be built with them. Build options of the MPC shell (CMake): `SYNTHYBOY_MPC_LFO_LIVE` (default ON; OFF builds the plugin without the parameters, only for comparisons, because then the host hides the pictures), `SYNTHYBOY_MPC_LFO_LIVE_HZ` (default 10, ticks a second), `SYNTHYBOY_MPC_LFO_LIVE_NOTIFY` (default ON; OFF updates the values without telling the host, a baseline), `SYNTHYBOY_MPC_LFO_LIVE_SELFTEST` (default OFF; the cursors sweep without a note, for measuring on the host), `SYNTHYBOY_MPC_CALLBACK_STATS` (default OFF; the statistics above). The compile switch of the same names in the source defaults to 0, which makes the shell identical to one without the display. The acceptance script `shell-mpc/accept.sh` builds the variants (also HZ 25 and the statistics) and runs the ON build, with the statistics, under ThreadSanitizer.
 
 A `Plotter` bound to a parameter does not draw on this host (see the device observations), so the display is a film strip and not a plotted line.
 
