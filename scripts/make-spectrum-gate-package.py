@@ -13,6 +13,7 @@
 
 import argparse
 import importlib.util
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -22,7 +23,7 @@ spec = importlib.util.spec_from_file_location("apply_mpc_skin_extras", HERE / "a
 apply_extras = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(apply_extras)
 
-ENGINE_PARAMS = 2637   # docs/params.json "count"; the first display parameter is "LFO 1 Cursor"
+ENGINE_PARAMS = json.loads((HERE.parent / "docs" / "params.json").read_text(encoding="utf-8"))["count"]   # the first display parameter after them is "LFO 1 Cursor"
 
 
 def single_meter(tui_text):
@@ -43,7 +44,7 @@ def single_meter(tui_text):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(description="Assemble a gate package for measuring the MPC spectrum (skin and both binaries).")
     ap.add_argument("--package", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--single-meter", action="store_true")
