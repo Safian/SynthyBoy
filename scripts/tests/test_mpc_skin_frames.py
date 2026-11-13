@@ -145,7 +145,7 @@ class FramesTest(unittest.TestCase):
 
     def test_knob_stack_does_not_overlap(self):
         for key in ("knobUni", "knobBi", "toggle", "faderUni", "faderBi"):
-            if key not in layout.ALIGNED:
+            if key not in layout.ALIGNED or key not in self.defs(self.tui):
                 continue
             value = self.defs(self.tui)[key]
             parts = sorted((_rect_of(c) for c in value["componentsData"] if c["componentData"]["name"] != "focus"), key=lambda r: r[1])
@@ -181,6 +181,8 @@ class FramesTest(unittest.TestCase):
             return o
         before, after = self.defs(self.before), self.defs(self.tui)
         for key in SLOT_TYPES:
+            if key not in before:   # the generator writes only the definitions the skin uses (no unipolar fader: the levels of the skin are zero-centred dB)
+                continue
             was = copy.deepcopy(before[key])
             was["componentsData"] = [c for c in was["componentsData"] if c["componentData"]["name"] != "name"]   # 85_names.py: the name is a text on the tab
             self.assertEqual(strip(after[key]), strip(was), key)

@@ -53,6 +53,15 @@ BY_NAME = {p["name"]: p for p in PARAMS}
 KICK = {p["id"]: p for p in read(PAGES_JSON)["pages"]}
 
 
+def level_page(kid):
+    """The fader rule, independent of the generator: the page has continuous (not stepped) own-engine controls and all of them are level or mix like."""
+    names = []
+    for knob in KICK[kid]["knobs"]:
+        if knob and knob.get("key") in BY_KEY and BY_KEY[knob["key"]].get("ownEngine") and BY_KEY[knob["key"]]["scale"] != "stepped":
+            names.append(BY_KEY[knob["key"]]["name"].lower())
+    return bool(names) and all(any(w in n for w in ("level", "mix", "volume", "dry", "wet", "send")) for n in names)
+
+
 def expected_pages(layout):
     """The rule, written independently of the generator: per Kick page the knobs in order, without null knobs, unknown keys,
     parameters that are not ownEngine and parameters already placed; padded with "empty" to 8 slots; a second Kick page fills slots 8-15."""
@@ -131,12 +140,40 @@ class LayoutModeTests(unittest.TestCase):
         got = [(p["name"], [None if c == "empty" else c["param"] for c in p["controls"]]) for p in self.ui["pages"]]
         self.assertEqual(got, want)
 
-    def test_controls_keep_the_widget_rules_of_the_default_mode(self):
+    def test_widgets_follow_the_rules(self):
+        # written independently of the generator: stepped with 2-4 choices -> switch, 5 or more -> slider (menu selector), a continuous control is a
+        # fader only if the Kick page it comes from has continuous controls and all of them are levels or mixes, otherwise a knob
+        origin = {}
+        for page in self.layout["pages"]:
+            for kid in page["kick"]:
+                for knob in KICK[kid]["knobs"]:
+                    if knob and knob.get("key") in BY_KEY and BY_KEY[knob["key"]].get("ownEngine") and BY_KEY[knob["key"]]["name"] not in origin:
+                        origin[BY_KEY[knob["key"]]["name"]] = kid
         for p in self.ui["pages"]:
             for c in p["controls"]:
                 if c == "empty":
                     continue
-                self.assertEqual(c["widget"], gen._widget_for_param(BY_NAME[c["param"]]), c["param"])
+                param = BY_NAME[c["param"]]
+                n = len(param.get("choices") or [])
+                if param["scale"] == "stepped" and 2 <= n <= 4:
+                    want = "switch"
+                elif param["scale"] == "stepped" and n >= 5:
+                    want = "slider"
+                elif level_page(origin[c["param"]]):
+                    want = "fader"
+                else:
+                    want = "knob"
+                self.assertEqual(c["widget"], want, c["param"])
+
+    def test_faders_only_on_level_pages(self):
+        faders = {c["param"] for p in self.ui["pages"] for c in p["controls"] if c != "empty" and c["widget"] == "fader"}
+        self.assertEqual(faders, {"Bus 1 Level", "Bus 2 Level"} | {"%s Level" % m for m in
+                                                                   ("Chorus", "Compressor", "Delay", "Distortion", "EQ", "Flanger", "Phaser", "Reverb")})
+        for name in ("Osc 1 Level", "Osc 2 Level", "Osc 3 Level", "Noise Level", "Sub Level", "Master Volume", "Direct Level", "Osc 1 Pan"):
+            for p in self.ui["pages"]:
+                for c in p["controls"]:
+                    if c != "empty" and c["param"] == name:
+                        self.assertEqual(c["widget"], "knob", name)
 
     def test_omitted_count_is_printed(self):
         _, seen = expected_pages(self.layout)
@@ -161,6 +198,28 @@ class LayoutModeTests(unittest.TestCase):
                             "--ui", str(Path(self.tmp.name) / "ui.json"), "--out", str(skins), "--quiet"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue((skins / "TUI.json").exists())
+
+
+class FaderRuleUnitTests(unittest.TestCase):
+    def test_level_page_needs_a_continuous_control_and_only_levels(self):
+        by_key = {"a": {"key": "a", "name": "Bus 1 Level", "scale": "exp_skew", "ownEngine": True},
+                  "b": {"key": "b", "name": "Bus 1 Dest", "scale": "stepped", "choices": ["x", "y", "z"], "ownEngine": True},
+                  "c": {"key": "c", "name": "Osc 1 Pan", "scale": "linear", "ownEngine": True},
+                  "d": {"key": "d", "name": "Other Level", "scale": "linear", "ownEngine": False}}
+        page = lambda *keys: {"knobs": [{"key": k} for k in keys] + [None]}
+        self.assertTrue(gen._is_level_page(page("a", "b"), by_key))      # the stepped switch does not count
+        self.assertFalse(gen._is_level_page(page("a", "c"), by_key))     # a pan among the levels: knobs
+        self.assertFalse(gen._is_level_page(page("b"), by_key))          # no continuous control at all
+        self.assertTrue(gen._is_level_page(page("a", "d"), by_key))      # not an own-engine parameter: not looked at
+
+    def test_widget_for_param(self):
+        level = {"name": "Chorus Level", "scale": "linear"}
+        self.assertEqual(gen._widget_for_param(level, True), "fader")
+        self.assertEqual(gen._widget_for_param(level, False), "knob")
+        self.assertEqual(gen._widget_for_param({"name": "Master Volume", "scale": "linear"}), "knob")
+        self.assertEqual(gen._widget_for_param({"name": "X", "scale": "stepped", "choices": ["a", "b"]}, True), "switch")
+        self.assertEqual(gen._widget_for_param({"name": "X", "scale": "stepped", "choices": list("abcde")}, True), "slider")
+        self.assertEqual(gen._widget_for_param({"name": "Pan", "scale": "linear", "min": -1, "max": 1, "default": 0}), "knob")
 
 
 class LayoutErrorTests(unittest.TestCase):

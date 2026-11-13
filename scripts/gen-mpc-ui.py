@@ -54,8 +54,26 @@ def _normalize(p):
     return (d - mn) / (mx - mn)
 
 
-def _widget_for_param(p):
-    """Choose widget for a parameter based on the ui-guide table."""
+def _is_continuous(p):
+    """A parameter that is not stepped (a knob or a fader), as opposed to a switch or a selector."""
+    return p.get("scale", "linear") != "stepped"
+
+
+def _is_level_page(kick_page, params_by_key):
+    """True if the page of docs/kick-pages.json has a continuous own-engine control and every one of them is a level or a mix.
+
+    The fader rule: only on such a page do the continuous controls become faders. A level among knobs (Osc 1 Level) or a volume among
+    macros is a knob like its neighbours, so a page never has a lone fader between knobs."""
+    continuous = []
+    for knob in kick_page.get("knobs", []):
+        p = params_by_key.get(knob.get("key", "")) if knob else None
+        if p is not None and p.get("ownEngine") and _is_continuous(p):
+            continuous.append(p)
+    return bool(continuous) and all(_is_level_or_mix(p["name"]) for p in continuous)
+
+
+def _widget_for_param(p, level_page=False):
+    """Choose widget for a parameter based on the ui-guide table; level_page: the Kick page of the control is a level page (_is_level_page)."""
     choices = p.get("choices")
     n_choices = len(choices) if choices else 0
     scale = p.get("scale", "linear")
@@ -69,15 +87,11 @@ def _widget_for_param(p):
     if scale == "stepped" and n_choices >= 5:
         return "slider"
 
-    # level/mix → fader
-    if _is_level_or_mix(p["name"]):
+    # continuous control on a page of levels and mixes only → fader
+    if level_page and _is_continuous(p):
         return "fader"
 
-    # zero-centred → bipolar knob
-    if _is_zero_centred(p):
-        return "knob"
-
-    # default → knob
+    # zero-centred or any other continuous parameter → knob
     return "knob"
 
 
@@ -362,9 +376,9 @@ def _split_into_qlink_blocks(knobs, params_by_key):
     return blocks
 
 
-def _build_control_from_param(p, params_by_key):
+def _build_control_from_param(p, params_by_key, level_page=False):
     """Build a control dict from a parameter dict."""
-    widget = _widget_for_param(p)
+    widget = _widget_for_param(p, level_page)
     ctrl = {"param": p["name"], "widget": widget}
     if widget in ("knob", "fader") and _polarity_for_param(p) == "bipolar":
         ctrl["polarity"] = "bipolar"
@@ -373,7 +387,7 @@ def _build_control_from_param(p, params_by_key):
     return ctrl
 
 
-def _knob_to_control(knob, params_by_key, seen_params):
+def _knob_to_control(knob, params_by_key, seen_params, level_page=False):
     """Convert a knob dict to a control dict, or 'empty'.
     
     Deduplicates by parameter name. Skips unknown keys and 'empty' keys.
@@ -390,7 +404,7 @@ def _knob_to_control(knob, params_by_key, seen_params):
         return "empty"
     seen_params.add(param_name)
 
-    return _build_control_from_param(p, params_by_key)
+    return _build_control_from_param(p, params_by_key, level_page)
 
 
 def _write_hostsim(params_doc, out_dir):
@@ -498,7 +512,7 @@ def generate(params_path, pages_path, out_dir, page_ids=None):
                     if knob == "empty":
                         controls.append("empty")
                     else:
-                        ctrl = _knob_to_control(knob, params_by_key, dropped_keys)
+                        ctrl = _knob_to_control(knob, params_by_key, dropped_keys, _is_level_page(kick_page, params_by_key))
                         controls.append(ctrl)
 
             # Pad to 16 if needed
@@ -648,8 +662,10 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
         # Build 16 slots for this page
         slots = []
         name_entries, placed_keys = [], set()
+        fader_names = set()  # parameters taken from a level page (_is_level_page): their continuous controls are faders
         for kid in kick_ids:
             kick_page = kick_by_id[kid]
+            level_page = _is_level_page(kick_page, params_by_key)
             knob_params = []
             for knob in kick_page.get("knobs", []):
                 if knob is None:
@@ -666,6 +682,8 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
                     continue
                 all_seen_names.add(param_name)
                 placed_keys.add(key)
+                if level_page:
+                    fader_names.add(param_name)
                 knob_params.append(p)
             # Pad to 8 slots
             slots += [p["name"] for p in knob_params] + [None] * (8 - len(knob_params))
@@ -679,7 +697,7 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
                 controls.append("empty")
             else:
                 p = params_by_name[slot_name]
-                controls.append(_build_control_from_param(p, params_by_key))
+                controls.append(_build_control_from_param(p, params_by_key, slot_name in fader_names))
 
         ui_pages.append({"name": page_name, "controls": controls})
         try:
