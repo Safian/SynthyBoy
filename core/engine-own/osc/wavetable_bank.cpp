@@ -6,10 +6,12 @@
 #include "wavetable_bank.h"
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <complex>
 #include <memory>
 #include <mutex>
+#include <thread>
 
 #include "../dsp/util.h"
 #include "synthyboy/params.h"
@@ -22,10 +24,18 @@ namespace
 {
 constexpr int kHarm = Wavetable::kCycle / 2; // 1024 harmonics
 
-/** In place radix 2 FFT (forward when sign = -1, inverse unscaled when +1). Only used while a table is built. */
-void fft (std::vector<std::complex<double>>& a, int sign)
+/** The bit reversal and the twiddle factors of an FFT of one size and direction. The factors of a stage are the sequence w = 1, w *= wl, ... that the
+    butterfly loop used to compute for every block of the stage again: here it is computed once with the same recurrence, so every value (and the output)
+    is bit for bit the one of the plain loop. */
+struct FftPlan
 {
-    const size_t n = a.size();
+    std::vector<uint32_t> swapA, swapB;                 // the pairs (i, j) with i < j of the bit reversal
+    std::vector<std::complex<double>> twiddle;          // stage by stage: len / 2 factors of len = 2, 4, ..., n
+};
+
+FftPlan makePlan (size_t n, int sign)
+{
+    FftPlan plan;
     for (size_t i = 1, j = 0; i < n; ++i)
     {
         size_t bit = n >> 1;
@@ -33,23 +43,51 @@ void fft (std::vector<std::complex<double>>& a, int sign)
             j ^= bit;
         j ^= bit;
         if (i < j)
-            std::swap (a[i], a[j]);
+        {
+            plan.swapA.push_back (static_cast<uint32_t> (i));
+            plan.swapB.push_back (static_cast<uint32_t> (j));
+        }
     }
+    plan.twiddle.reserve (n);
     for (size_t len = 2; len <= n; len <<= 1)
     {
         const double ang = sign * kTwoPi / static_cast<double> (len);
         const std::complex<double> wl (std::cos (ang), std::sin (ang));
-        for (size_t i = 0; i < n; i += len)
+        std::complex<double> w (1.0, 0.0);
+        for (size_t k = 0; k < len / 2; ++k)
         {
-            std::complex<double> w (1.0, 0.0);
+            plan.twiddle.push_back (w);
+            w *= wl;
+        }
+    }
+    return plan;
+}
+
+/** In place radix 2 FFT (forward when sign = -1, inverse unscaled when +1). Only used while a table is built; n is a power of two <= 2^15. */
+void fft (std::vector<std::complex<double>>& a, int sign)
+{
+    const size_t n = a.size();
+    thread_local std::unique_ptr<FftPlan> plans[2][16];
+    int lg = 0;
+    while ((static_cast<size_t> (1) << lg) < n)
+        ++lg;
+    std::unique_ptr<FftPlan>& slot = plans[sign < 0 ? 0 : 1][lg];
+    if (!slot)
+        slot = std::make_unique<FftPlan> (makePlan (n, sign));
+    const FftPlan& plan = *slot;
+    for (size_t p = 0; p < plan.swapA.size(); ++p)
+        std::swap (a[plan.swapA[p]], a[plan.swapB[p]]);
+    const std::complex<double>* tw = plan.twiddle.data();
+    for (size_t len = 2; len <= n; len <<= 1)
+    {
+        for (size_t i = 0; i < n; i += len)
             for (size_t k = 0; k < len / 2; ++k)
             {
-                const auto u = a[i + k], v = a[i + k + len / 2] * w;
+                const auto u = a[i + k], v = a[i + k + len / 2] * tw[k];
                 a[i + k] = u + v;
                 a[i + k + len / 2] = u - v;
-                w *= wl;
             }
-        }
+        tw += len / 2;
     }
 }
 
@@ -309,22 +347,47 @@ struct Bank
 {
     std::array<std::unique_ptr<Wavetable>, kNumWavetableChoices + 1> tables;
 
+    static void buildOne (Bank& bank, int c)
+    {
+        const auto frames = makeFrames (c);
+        std::vector<std::vector<float>> cc, ss;
+        for (const auto& fr : frames)
+        {
+            cc.push_back (fr.c);
+            ss.push_back (fr.s);
+        }
+        bank.tables[static_cast<size_t> (c)] = std::make_unique<Wavetable>();
+        bank.tables[static_cast<size_t> (c)]->build (cc, ss);
+    }
+
+    /** The tables are independent of each other: they are built on a few helper threads (joined before the constructor returns; prepare () is not
+        the audio thread). Every table is computed by the same code on its own data, so the result does not depend on the number of threads. If a
+        thread cannot be created the calling thread does the rest. */
     Bank()
     {
-        for (int c = 0; c <= kNumWavetableChoices; ++c)
+        std::atomic<int> next { 0 };
+        auto work = [this, &next]
         {
-            if (c == kWavetablePresetTable)
-                continue;
-            const auto frames = makeFrames (c);
-            std::vector<std::vector<float>> cc, ss;
-            for (const auto& fr : frames)
+            for (int c = next.fetch_add (1); c <= kNumWavetableChoices; c = next.fetch_add (1))
+                if (c != kWavetablePresetTable)
+                    buildOne (*this, c);
+        };
+        const int helpers = static_cast<int> (std::min (3u, std::max (1u, std::thread::hardware_concurrency()) - 1u));
+        std::vector<std::thread> threads;
+        for (int i = 0; i < helpers; ++i)
+        {
+            try
             {
-                cc.push_back (fr.c);
-                ss.push_back (fr.s);
+                threads.emplace_back (work);
             }
-            tables[static_cast<size_t> (c)] = std::make_unique<Wavetable>();
-            tables[static_cast<size_t> (c)]->build (cc, ss);
+            catch (...)
+            {
+                break;
+            }
         }
+        work();
+        for (auto& t : threads)
+            t.join();
     }
 };
 } // namespace
