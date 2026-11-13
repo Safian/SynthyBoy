@@ -89,16 +89,20 @@ class GenerateTests(unittest.TestCase):
         mpc = gen_mpc.generate(PLUGIN)
         self.assertEqual(mpc["version"], PLUGIN["version"])
 
-    def test_description_author_license_copied(self):
+    def test_description_is_the_mpc_one(self):
         mpc = gen_mpc.generate(PLUGIN)
-        self.assertEqual(mpc["description"], PLUGIN["description"])
+        self.assertEqual(mpc["description"], "Wavetable synthesizer for MPC")
+        for word in ("CLAP", "VST3", "Vital"):
+            self.assertNotIn(word, mpc["description"])
+
+    def test_author_license_copied(self):
+        mpc = gen_mpc.generate(PLUGIN)
         self.assertEqual(mpc["author"], PLUGIN["author"])
         self.assertEqual(mpc["license"], PLUGIN["license"])
 
     def test_missing_optional_keys_use_empty_string(self):
         minimal = {"name": "Test", "version": "1.0.0"}
         mpc = gen_mpc.generate(minimal)
-        self.assertEqual(mpc["description"], "")
         self.assertEqual(mpc["author"], "")
         self.assertEqual(mpc["license"], "")
 

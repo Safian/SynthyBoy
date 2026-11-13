@@ -32,6 +32,10 @@ def folder_name(manufacturer, name):
     return "%s - VST - %s" % (cleaned, cleaned_name)
 
 
+# The MPC package is the own engine behind the VST2 ABI: the root manifest's description (CLAP / VST3, Vital-derived engine) is not true of it.
+MPC_DESCRIPTION = "Wavetable synthesizer for MPC"
+
+
 def generate(root_manifest):
     """Build the MPC plugin.json dict from the root manifest."""
     return {
@@ -45,7 +49,7 @@ def generate(root_manifest):
         "file32": "VST/synthyboy-arm32.so",
         "file64": "VST/synthyboy-arm64.so",
         "version": root_manifest["version"],
-        "description": root_manifest.get("description", ""),
+        "description": MPC_DESCRIPTION,
         "author": root_manifest.get("author", ""),
         "license": root_manifest.get("license", ""),
     }

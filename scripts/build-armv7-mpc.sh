@@ -120,6 +120,11 @@ docker run --rm \
         if [ -z "$exported" ]; then echo "build-armv7-mpc.sh: VSTPluginMain is not an exported symbol" >&2; exit 1; fi
         extra="$(arm-linux-gnueabihf-nm -D --defined-only "$so" | grep -v -w VSTPluginMain | grep -v "^$" || true)"
         if [ -n "$extra" ]; then echo "build-armv7-mpc.sh: unexpected exported symbols:" >&2; echo "$extra" >&2; exit 1; fi
+        # The package gets a stripped copy; the unstripped module stays in the build tree for profiling.
+        arm-linux-gnueabihf-strip --strip-unneeded -o /build/shell-mpc/synthyboy_mpc.stripped.so "$so"
+        left="$(arm-linux-gnueabihf-nm -D --defined-only /build/shell-mpc/synthyboy_mpc.stripped.so | awk "{print \$NF}" | tr "\n" " ")"
+        if [ "$left" != "VSTPluginMain " ]; then echo "build-armv7-mpc.sh: exports after strip: $left" >&2; exit 1; fi
+        ls -l "$so" /build/shell-mpc/synthyboy_mpc.stripped.so
         echo "build-armv7-mpc.sh: ARMv7 build OK"
     '
 
@@ -127,7 +132,7 @@ docker run --rm \
 PLUGIN_NAME="Safian - VST - SynthyBoy"
 plugin_folder="$out_dir/$PLUGIN_NAME"
 mkdir -p "$plugin_folder/VST"
-cp "$build_dir/shell-mpc/synthyboy_mpc.so" "$plugin_folder/VST/synthyboy-arm32.so"
+cp "$build_dir/shell-mpc/synthyboy_mpc.stripped.so" "$plugin_folder/VST/synthyboy-arm32.so"
 
 # Create Content/ folder (empty if nothing to put there)
 mkdir -p "$plugin_folder/Content"
