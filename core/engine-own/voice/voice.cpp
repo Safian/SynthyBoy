@@ -834,6 +834,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
             remapInit[o] = false;
         t.oversample = g.oversample;
+        t.lowCost = g.quality == 0;
         t.remap = nullptr;
         if (cs != nullptr)
         {

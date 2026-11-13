@@ -43,6 +43,7 @@ struct OscTick
     float morphAmount = 0.0f, morphSpread = 0.0f; // 0 .. 1, -1 .. 1
     bool oversample = false;              // run 4x oversampled even without a warp (ultra quality)
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
+    bool lowCost = false;                 // tier low: a warp runs 2x oversampled with a 32 tap decimator instead of 4x with 128 taps, the spectral morph is rebuilt every 512 samples
 };
 
 /** True if every field of the two ticks is equal (floats compared as values: a NaN is never equal, which only costs the shortcut). */
@@ -54,7 +55,7 @@ inline bool sameOscTick (const OscTick& a, const OscTick& b) noexcept
         && a.warpSrc[0] == b.warpSrc[0] && a.warpSrc[1] == b.warpSrc[1] && a.warpAmount[0] == b.warpAmount[0] && a.warpAmount[1] == b.warpAmount[1]
         && a.warpPhase[0] == b.warpPhase[0] && a.warpPhase[1] == b.warpPhase[1] && a.warpSpread[0] == b.warpSpread[0] && a.warpSpread[1] == b.warpSpread[1]
         && a.startPhase == b.startPhase && a.active == b.active && a.remap == b.remap && a.morphType == b.morphType && a.morphAmount == b.morphAmount
-        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth;
+        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth && a.lowCost == b.lowCost;
 }
 
 /** Hermite interpolation of the four samples x[-1], x[0], x[1], x[2] at x[0] + f. */
@@ -71,6 +72,7 @@ class WtOsc
 public:
     static constexpr int kMaxVoices = 16;
     static constexpr int kOversample = 4, kTaps = 128;
+    static constexpr int kOversampleLow = 2, kTapsLow = 32;
 
     /** Linear phase low pass of the 4x decimator (Kaiser window), computed once. */
     static const float* decimatorTaps() noexcept
@@ -102,6 +104,42 @@ public:
                     total += tmp[i];
                 }
                 for (int i = 0; i < kTaps; ++i)
+                    c[i] = static_cast<float> (tmp[i] / total);
+            }
+        } taps;
+        return taps.c;
+    }
+
+    /** The decimator of the low cost mode: 2x oversampling, 32 taps (the same Kaiser design, the band edge of the 4x one at 0.42 of the host rate). */
+    static const float* decimatorTaps2() noexcept
+    {
+        static const struct Taps
+        {
+            float c[kTapsLow];
+            Taps()
+            {
+                auto bessel0 = [] (double x)
+                {
+                    double sum = 1.0, term = 1.0;
+                    for (int k = 1; k < 30; ++k)
+                    {
+                        term *= (x / (2.0 * k)) * (x / (2.0 * k));
+                        sum += term;
+                    }
+                    return sum;
+                };
+                const double cutoff = 0.21, beta = 7.5; // in cycles per sample of the 2x signal
+                double total = 0.0;
+                double tmp[kTapsLow];
+                for (int i = 0; i < kTapsLow; ++i)
+                {
+                    const double x = i - 0.5 * (kTapsLow - 1);
+                    const double sinc = std::fabs (x) < 1.0e-9 ? 2.0 * cutoff : std::sin (2.0 * 3.14159265358979323846 * cutoff * x) / (3.14159265358979323846 * x);
+                    const double r = 2.0 * i / (kTapsLow - 1) - 1.0;
+                    tmp[i] = sinc * bessel0 (beta * std::sqrt (std::max (0.0, 1.0 - r * r))) / bessel0 (beta);
+                    total += tmp[i];
+                }
+                for (int i = 0; i < kTapsLow; ++i)
                     c[i] = static_cast<float> (tmp[i] / total);
             }
         } taps;
@@ -329,14 +367,14 @@ public:
         }
         if (firstOfNote)
             morphAge = kMorphRebuild; // build now, no cross-fade from stale data
-        if (morphAge >= kMorphRebuild)
+        if (morphAge >= (tick.lowCost ? 2 * kMorphRebuild : kMorphRebuild))
         {
             const Wavetable& wt = *tick.wt;
             const int pairs = (curCount + 1) / 2;
             const int groups = std::min (kMorphGroups, std::max (1, pairs));
             morphGroups = groups;
             const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
-            const float nyq = static_cast<float> (warped ? 3.2 * sampleRate : 0.5 * sampleRate);
+            const float nyq = static_cast<float> (warped ? (tick.lowCost ? 1.0 : 3.2) * sampleRate : 0.5 * sampleRate);
             float fmax = 1.0f, incMax = 0.0f;
             for (int v = 0; v < curCount; ++v)
             {
@@ -390,9 +428,10 @@ public:
             for (int w = 0; w < 2; ++w)
                 bw = std::max (bw, warpBandwidthFactor (tick.warp[w], tick.warpAmount[w]));
             const float fmax = std::max (curInc[v], prevInc[v]) * static_cast<float> (sampleRate) * bw;
-            const double rateI = sampleRate * (warped ? kOversample : 1);
+            const int os = tick.lowCost ? kOversampleLow : kOversample, nt = tick.lowCost ? kTapsLow : kTaps;
+            const double rateI = sampleRate * (warped ? os : 1);
             // band limit: the coarsest level that keeps the highest harmonic below Nyquist (of the rate the oscillator runs at)
-            const int level = Wavetable::levelFor (static_cast<float> (warped ? 3.2 * sampleRate : nyq) / std::max (fmax, 1.0f));
+            const int level = Wavetable::levelFor (static_cast<float> (warped ? (tick.lowCost ? 1.0 : 3.2) * sampleRate : nyq) / std::max (fmax, 1.0f));
             int N = Wavetable::size (level);
             // two cycles and the weight of the second one at the start / end of this chunk
             const float* cA = nullptr;
@@ -503,7 +542,28 @@ public:
                 return y;
             };
             uint32_t ph = phase[v];
-            if (!warped)
+            if (!warped && tick.warp[0] == 0 && tick.warp[1] == 0)
+            {
+                // the plain table read (no warp, no cross signal, no filter stage): the general sampleAt () below with its branches removed. p < 1, so the wrap of the
+                // phase (q -= floor (q)) and the window factor 1 change nothing; the weight of the second cycle is only needed where there is one.
+                const float pg = prevGainL[v], cgl = curGainL[v], pgr = prevGainR[v], cgr = curGainR[v];
+                const float pinc = prevInc[v], cinc = curInc[v];
+                for (int k = 0; k < n; ++k)
+                {
+                    const float t = static_cast<float> (t0 + k + 1) * invP;
+                    const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
+                    const float pos = p * fscale;
+                    const int idx = std::clamp (static_cast<int> (pos), 0, N);
+                    const float fr = pos - static_cast<float> (idx);
+                    float y = hermite (cA + idx, fr);
+                    if (cB != nullptr)
+                        y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
+                    L[k] += y * lerp (pg, cgl, t);
+                    R[k] += y * lerp (pgr, cgr, t);
+                    ph += static_cast<uint32_t> (static_cast<double> (lerp (pinc, cinc, t)) * 4294967296.0);
+                }
+            }
+            else if (!warped)
             {
                 for (int k = 0; k < n; ++k)
                 {
@@ -516,32 +576,32 @@ public:
             }
             else
             {
-                const float* taps = decimatorTaps();
-                float* hist = history[v]; // the last kTaps - 1 samples of the 4x signal, then this period's
+                const float* taps = tick.lowCost ? decimatorTaps2() : decimatorTaps();
+                float* hist = history[v]; // the last nt - 1 samples of the os x signal, then this period's
                 float buf[kTaps - 1 + kOversample * kControlPeriod];
-                std::copy (hist, hist + kTaps - 1, buf);
+                std::copy (hist, hist + nt - 1, buf);
                 for (int k = 0; k < n; ++k)
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
-                    const uint32_t inc4 = static_cast<uint32_t> (static_cast<double> (lerp (prevInc[v], curInc[v], t)) * (4294967296.0 / kOversample));
-                    for (int j = 0; j < kOversample; ++j)
+                    const uint32_t incO = static_cast<uint32_t> (static_cast<double> (lerp (prevInc[v], curInc[v], t)) * (4294967296.0 / os));
+                    for (int j = 0; j < os; ++j)
                     {
-                        buf[kTaps - 1 + k * kOversample + j] = sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / kOversample),
-                                                                         lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
-                        ph += inc4;
+                        buf[nt - 1 + k * os + j] = sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)),
+                                                             lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
+                        ph += incO;
                     }
                 }
                 for (int k = 0; k < n; ++k)
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
-                    const float* x = buf + k * kOversample + 1; // the newest sample of the group is x[kTaps - 1]
+                    const float* x = buf + k * os + 1; // the newest sample of the group is x[nt - 1]
                     float acc = 0.0f;
-                    for (int i = 0; i < kTaps; ++i)
-                        acc += taps[i] * x[kTaps - 1 - i];
+                    for (int i = 0; i < nt; ++i)
+                        acc += taps[i] * x[nt - 1 - i];
                     L[k] += acc * lerp (prevGainL[v], curGainL[v], t);
                     R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
                 }
-                std::copy (buf + n * kOversample, buf + n * kOversample + kTaps - 1, hist);
+                std::copy (buf + n * os, buf + n * os + nt - 1, hist);
             }
             phase[v] = ph;
         }
