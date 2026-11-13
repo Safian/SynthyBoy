@@ -233,12 +233,20 @@ endif()
 # Plugin
 # ---------------------------------------------------------------------------
 
+# Formats: VST3 everywhere; the Audio Unit (v2 component, macOS only) is added on Apple desktop builds. The AU uses the existing
+# PLUGIN_MANUFACTURER_CODE/PLUGIN_CODE (aumu Syby Safn) and the type follows IS_SYNTH (aumu = kAudioUnitType_MusicDevice); the MPC (VST2) and
+# CLAP builds are separate targets and do not see this.
+set(SYNTHYBOY_PLUGIN_FORMATS VST3)
+if(APPLE AND NOT IOS)
+    list(APPEND SYNTHYBOY_PLUGIN_FORMATS AU)
+endif()
+
 juce_add_plugin(SynthyBoy
     COMPANY_NAME                 "Safian"
     BUNDLE_ID                    "com.safian.synthyboy"
     PLUGIN_MANUFACTURER_CODE     Safn
     PLUGIN_CODE                  Syby
-    FORMATS                      VST3
+    FORMATS                      ${SYNTHYBOY_PLUGIN_FORMATS}
     PRODUCT_NAME                 "SynthyBoy"
     IS_SYNTH                     TRUE
     NEEDS_MIDI_INPUT             TRUE
@@ -246,7 +254,9 @@ juce_add_plugin(SynthyBoy
     IS_MIDI_EFFECT               FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS  FALSE
     COPY_PLUGIN_AFTER_BUILD      FALSE
-    VST3_CATEGORIES              Instrument Synth)
+    VST3_CATEGORIES              Instrument Synth
+    AU_MAIN_TYPE                 kAudioUnitType_MusicDevice
+    AU_EXPORT_PREFIX             SynthyBoyAU)
 
 # Adds the SynthyBoy_CLAP target (same sources, CLAP wrapper on top of the JUCE processor).
 clap_juce_extensions_plugin(
@@ -262,7 +272,11 @@ if(APPLE)
     # resources are added). Re-sign both as the last post-build step so they verify with `codesign`.
     # Use -DSYNTHYBOY_CODESIGN_IDENTITY="Developer ID Application: ..." to sign for real.
     set(SYNTHYBOY_CODESIGN_IDENTITY "-" CACHE STRING "codesign identity for the plugin bundles (- = ad hoc)")
-    foreach(bundle_target SynthyBoy_VST3 SynthyBoy_CLAP)
+    set(SYNTHYBOY_BUNDLE_TARGETS SynthyBoy_VST3 SynthyBoy_CLAP)
+    if(TARGET SynthyBoy_AU)
+        list(APPEND SYNTHYBOY_BUNDLE_TARGETS SynthyBoy_AU)
+    endif()
+    foreach(bundle_target ${SYNTHYBOY_BUNDLE_TARGETS})
         add_custom_command(TARGET ${bundle_target} POST_BUILD
             COMMAND codesign --force --sign "${SYNTHYBOY_CODESIGN_IDENTITY}" "$<TARGET_BUNDLE_DIR:${bundle_target}>"
             VERBATIM)

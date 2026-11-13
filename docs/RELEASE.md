@@ -73,6 +73,8 @@ scripts/make-local-release.sh --no-armv7      # without Docker
 scripts/make-local-release.sh --file-urls     # absolute file:// urls instead of urls relative to dist/plugin.json.release
 ```
 
+The macOS Audio Unit (`SynthyBoy.component`, `SynthyBoy_AU` target) is built by `scripts/build.sh` next to the VST3 and CLAP, but is not yet part of the release zips (`--with-juce` packs CLAP and VST3 only); it needs the same signing and notarisation as the other bundles. The MPC VST2 build is independent of it.
+
 Result in `dist/` (git-ignored): the zips, `plugin.json.release` (urls relative to it, so the folder can be copied to a USB stick or served with
 `python3 -m http.server`), `SHA256SUMS`. The script clears old zips in the output folder first, and finishes with `check-manifest.py --local`.
 Docker not usable: the script prints the exact commands for a Debian 12 / Ubuntu Linux host (`scripts/build-armv7-clap.sh --print-manual`) and warns loudly

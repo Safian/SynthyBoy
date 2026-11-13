@@ -1,6 +1,6 @@
 # SynthyBoy
 
-A minimal 8-voice polyphonic synthesizer, built as **VST3** and **CLAP** from a single JUCE code base.
+A minimal 8-voice polyphonic synthesizer, built as **VST3**, **CLAP** and (macOS only) **Audio Unit** from a single JUCE code base.
 
 > Status: version 0.1.0, in development (not released). The engine, the state format and the editor are on `develop`; nothing is signed or
 > published yet, and the editor has not been run inside a DAW window or on touch hardware.
@@ -60,10 +60,12 @@ The spike's description above is kept for orientation only; the plugin is now th
 |--------|----------------------|
 | VST3   | `build/SynthyBoy_artefacts/Release/VST3/SynthyBoy.vst3` |
 | CLAP   | `build/SynthyBoy_artefacts/Release/CLAP/SynthyBoy.clap` |
+| AU (macOS only, Audio Unit v2 instrument `aumu Syby Safn`) | `build/SynthyBoy_artefacts/Release/AU/SynthyBoy.component` |
 
-Both come from the same sources: JUCE builds the VST3, and
+All three come from the same sources: JUCE builds the VST3 and the AU (the AU wrapper is part of JUCE; target `SynthyBoy_AU`, added only on Apple desktop builds), and
 [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions) wraps the same
 `juce::AudioProcessor` into a CLAP (`SynthyBoy_CLAP` CMake target, created by `clap_juce_extensions_plugin(...)`).
+The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md)) is a separate build and does not depend on the AU.
 
 ## Repository layout
 
@@ -162,8 +164,11 @@ Copy the bundles to the usual plugin folders:
 | OS | VST3 | CLAP |
 |----|------|------|
 | macOS | `~/Library/Audio/Plug-Ins/VST3/` | `~/Library/Audio/Plug-Ins/CLAP/` |
+
 | Linux | `~/.vst3/` | `~/.clap/` |
 | Windows | `C:\Program Files\Common Files\VST3\` | `C:\Program Files\Common Files\CLAP\` |
+
+macOS only, the Audio Unit (`SynthyBoy.component`) goes to `~/Library/Audio/Plug-Ins/Components/`; validate it with `auval -v aumu Syby Safn`.
 
 ## Continuous integration
 
@@ -199,6 +204,7 @@ This program is free software: you can redistribute it and/or modify it under th
 - **JUCE** is used under its **AGPLv3** option (JUCE is dual-licensed AGPLv3 / commercial). Because
   the plugin links JUCE, the combined work is distributed under the AGPL: anyone who receives the
   binaries (or interacts with them over a network) must be able to get the corresponding source code.
+- The **Audio Unit** wrapper (macOS) is JUCE code (`juce_audio_plugin_client`, AGPLv3 option) and links the system `AudioUnit`/`CoreAudioKit` frameworks; no Apple AudioUnit SDK source is in this repository.
 - **clap-juce-extensions**, the CLAP SDK (`clap`, `clap-helpers`) and the bundled Steinberg VST3 SDK 3.8.0 are
   **MIT** licensed and compatible with the AGPL.
 
