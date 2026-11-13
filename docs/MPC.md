@@ -127,10 +127,10 @@ or `release`.
 - The eight knobs sit in the lower two rows and are Q-Link 1-8 (the generator's own Q-Link map of the tab is rewritten to match; the Q frames mark the lower two rows).
   `Env 1 Release` has a knob on this tab as well as on `Macros` (the generator places a parameter once; the module adds the second knob).
 - `scaleColour` is `0`: with a visible scale colour the host draws a column of scale lines at the right edge, far from the curve.
-- There is no full-screen envelope editor. Observed on the Key 61 (MPC 3.10.1.12): a skin whose `localComponentDefinitions` holds an
-  `EnvelopeOverlay` definition is dropped completely by the host (empty plugin page, no log message), even when nothing refers to it,
-  with the minimal key set, and with the structure of the generated `knob overlay`. A `Show Overlay` action on an existing overlay
-  definition loads fine. So the curve is edited on the tab itself, over the full width.
+- There is no full-screen envelope editor. Observed on the Key 61 (MPC 3.10.1.12): an `EnvelopeOverlay` definition in
+  `localComponentDefinitions` loads when its `envelopeType` is `ADSFR` or `Pitch` (copied from the factory Fabric XL skin), but with
+  `envelopeType` `DAHDSR` the host drops the whole skin (empty plugin page, no log message), even when nothing refers to it. The plain
+  `Envelope` element with `DAHDSR` on a tab works. So the curve is edited on the tab itself, over the full width.
 
 ## Sound differences at tier low
 
