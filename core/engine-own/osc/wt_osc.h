@@ -67,84 +67,51 @@ inline float hermite (const float* x, float f) noexcept
     return ((c3 * f + c2) * f + c1) * f + x[0];
 }
 
+/** Kaiser windowed sinc low pass of N taps, `cutoff` in cycles per sample of the oversampled signal, normalised to unity gain at DC. */
+template <int N>
+struct DecimatorTaps
+{
+    float c[N];
+    DecimatorTaps (double cutoff, double beta)
+    {
+        auto bessel0 = [] (double x)
+        {
+            double sum = 1.0, term = 1.0;
+            for (int k = 1; k < 30; ++k)
+            {
+                term *= (x / (2.0 * k)) * (x / (2.0 * k));
+                sum += term;
+            }
+            return sum;
+        };
+        double total = 0.0;
+        double tmp[N];
+        for (int i = 0; i < N; ++i)
+        {
+            const double x = i - 0.5 * (N - 1);
+            const double sinc = std::fabs (x) < 1.0e-9 ? 2.0 * cutoff : std::sin (2.0 * 3.14159265358979323846 * cutoff * x) / (3.14159265358979323846 * x);
+            const double r = 2.0 * i / (N - 1) - 1.0;
+            tmp[i] = sinc * bessel0 (beta * std::sqrt (std::max (0.0, 1.0 - r * r))) / bessel0 (beta);
+            total += tmp[i];
+        }
+        for (int i = 0; i < N; ++i)
+            c[i] = static_cast<float> (tmp[i] / total);
+    }
+};
+
 class WtOsc
 {
 public:
     static constexpr int kMaxVoices = 16;
     static constexpr int kOversample = 4, kTaps = 128;
     static constexpr int kOversampleLow = 2, kTapsLow = 32;
+    static inline const DecimatorTaps<128> kDecimator4 { 0.105, 7.5 }; // cycles per sample of the 4x signal
+    static inline const DecimatorTaps<32> kDecimator2 { 0.21, 7.5 };   // cycles per sample of the 2x signal
 
-    /** Linear phase low pass of the 4x decimator (Kaiser window), computed once. */
-    static const float* decimatorTaps() noexcept
-    {
-        static const struct Taps
-        {
-            float c[kTaps];
-            Taps()
-            {
-                auto bessel0 = [] (double x)
-                {
-                    double sum = 1.0, term = 1.0;
-                    for (int k = 1; k < 30; ++k)
-                    {
-                        term *= (x / (2.0 * k)) * (x / (2.0 * k));
-                        sum += term;
-                    }
-                    return sum;
-                };
-                const double cutoff = 0.105, beta = 7.5; // in cycles per sample of the 4x signal
-                double total = 0.0;
-                double tmp[kTaps];
-                for (int i = 0; i < kTaps; ++i)
-                {
-                    const double x = i - 0.5 * (kTaps - 1);
-                    const double sinc = std::fabs (x) < 1.0e-9 ? 2.0 * cutoff : std::sin (2.0 * 3.14159265358979323846 * cutoff * x) / (3.14159265358979323846 * x);
-                    const double r = 2.0 * i / (kTaps - 1) - 1.0;
-                    tmp[i] = sinc * bessel0 (beta * std::sqrt (std::max (0.0, 1.0 - r * r))) / bessel0 (beta);
-                    total += tmp[i];
-                }
-                for (int i = 0; i < kTaps; ++i)
-                    c[i] = static_cast<float> (tmp[i] / total);
-            }
-        } taps;
-        return taps.c;
-    }
-
-    /** The decimator of the low cost mode: 2x oversampling, 32 taps (the same Kaiser design, the band edge of the 4x one at 0.42 of the host rate). */
-    static const float* decimatorTaps2() noexcept
-    {
-        static const struct Taps
-        {
-            float c[kTapsLow];
-            Taps()
-            {
-                auto bessel0 = [] (double x)
-                {
-                    double sum = 1.0, term = 1.0;
-                    for (int k = 1; k < 30; ++k)
-                    {
-                        term *= (x / (2.0 * k)) * (x / (2.0 * k));
-                        sum += term;
-                    }
-                    return sum;
-                };
-                const double cutoff = 0.21, beta = 7.5; // in cycles per sample of the 2x signal
-                double total = 0.0;
-                double tmp[kTapsLow];
-                for (int i = 0; i < kTapsLow; ++i)
-                {
-                    const double x = i - 0.5 * (kTapsLow - 1);
-                    const double sinc = std::fabs (x) < 1.0e-9 ? 2.0 * cutoff : std::sin (2.0 * 3.14159265358979323846 * cutoff * x) / (3.14159265358979323846 * x);
-                    const double r = 2.0 * i / (kTapsLow - 1) - 1.0;
-                    tmp[i] = sinc * bessel0 (beta * std::sqrt (std::max (0.0, 1.0 - r * r))) / bessel0 (beta);
-                    total += tmp[i];
-                }
-                for (int i = 0; i < kTapsLow; ++i)
-                    c[i] = static_cast<float> (tmp[i] / total);
-            }
-        } taps;
-        return taps.c;
-    }
+    /** Linear phase low pass of the 4x decimator (Kaiser window), and the 32 tap one of the low cost mode (2x): built once at program start (namespace scope tables,
+        so the render path has no initialisation guard). */
+    static const float* decimatorTaps() noexcept { return kDecimator4.c; }
+    static const float* decimatorTaps2() noexcept { return kDecimator2.c; }
 
     void start (float startPhase, float randomPhase, Rng& rng) noexcept
     {
@@ -252,7 +219,19 @@ public:
         int n = 0;
         auto addVoice = [&] (float semis, float amp, float gainL, float gainR, float framePos) noexcept
         {
-            const double f = 440.0 * std::exp2 ((static_cast<double> (semis) - 69.0) / 12.0);
+            double f;
+            if (n < kMaxVoices && haveFreq[n] && freqSemis[n] == semis)
+                f = freqHz[n]; // the same pitch as this voice had in the previous full update: the same double
+            else
+            {
+                f = 440.0 * std::exp2 ((static_cast<double> (semis) - 69.0) / 12.0);
+                if (n < kMaxVoices)
+                {
+                    freqSemis[n] = semis;
+                    freqHz[n] = f;
+                    haveFreq[n] = true;
+                }
+            }
             curInc[n] = static_cast<float> (std::min (f, nyq) / sampleRate);
             curGainL[n] = amp * gainL * panL * t.level;
             curGainR[n] = amp * gainR * panR * t.level;
@@ -421,7 +400,12 @@ public:
             if (curGainL[v] == 0.0f && curGainR[v] == 0.0f && prevGainL[v] == 0.0f && prevGainR[v] == 0.0f)
             {
                 // silent voice: advance the phase only
-                phase[v] += static_cast<uint32_t> (static_cast<uint64_t> (static_cast<double> (curInc[v]) * 4294967296.0 * n));
+                {
+                    // the phase advance of n samples at the final increment, modulo 2^32, without a 64 bit conversion (a library call on ARM): the double product is exact
+                    const double adv = static_cast<double> (curInc[v]) * 4294967296.0 * n;
+                    const uint32_t wraps = static_cast<uint32_t> (adv * (1.0 / 4294967296.0));
+                    phase[v] += static_cast<uint32_t> (adv - static_cast<double> (wraps) * 4294967296.0);
+                }
                 continue;
             }
             float bw = 1.0f;
@@ -560,7 +544,7 @@ public:
                         y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
                     L[k] += y * lerp (pg, cgl, t);
                     R[k] += y * lerp (pgr, cgr, t);
-                    ph += static_cast<uint32_t> (static_cast<double> (lerp (pinc, cinc, t)) * 4294967296.0);
+                    ph += static_cast<uint32_t> (lerp (pinc, cinc, t) * 4294967296.0f); // x * 2^32 is exact in float: the same integer as the double product
                 }
             }
             else if (!warped)
@@ -571,7 +555,7 @@ public:
                     const float y = sampleAt (ph, k, 1.0f, lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
                     L[k] += y * lerp (prevGainL[v], curGainL[v], t);
                     R[k] += y * lerp (prevGainR[v], curGainR[v], t);
-                    ph += static_cast<uint32_t> (static_cast<double> (lerp (prevInc[v], curInc[v], t)) * 4294967296.0);
+                    ph += static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * 4294967296.0f);
                 }
             }
             else
@@ -583,7 +567,7 @@ public:
                 for (int k = 0; k < n; ++k)
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
-                    const uint32_t incO = static_cast<uint32_t> (static_cast<double> (lerp (prevInc[v], curInc[v], t)) * (4294967296.0 / os));
+                    const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
                     for (int j = 0; j < os; ++j)
                     {
                         buf[nt - 1 + k * os + j] = sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)),
@@ -639,6 +623,9 @@ private:
     float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
     bool havePrev = false;
+    float freqSemis[kMaxVoices] = {};   // the pitch of every voice at its last full update () and its frequency in Hz (the double exp2 is not repeated for a held pitch)
+    double freqHz[kMaxVoices] = {};
+    bool haveFreq[kMaxVoices] = {};
     bool haveLast = false;      // lastT / lastRate describe the inputs of the last full update ()
     OscTick lastT;
     double lastRate = 0.0;
