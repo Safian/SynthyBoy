@@ -43,13 +43,26 @@ Replacing a plugin: copy the new folder over the old one, then remove and re-add
 
 ## Known host behaviour
 
-The following facts were observed on an MPC Key 61 with firmware 3.10.1:
+### Observed on the device
 
-- The host runs plugins at 44.1 kHz with 128 frame blocks. According to the SDK the sample rate is fixed and the user can choose other block sizes (32, 64, 96, 192, 256, 512) in Preferences; the announced block size is a maximum and the plugin handles any smaller count.
+Seen on an MPC Key 61 with firmware 3.10.1:
+
+- The host runs plugins at 44.1 kHz with 128 frame blocks.
 - There is no plugin GUI. The screen pages come from Plugin Skins (`TUI.json`), and the hardware knobs are mapped from `Q-Links.json`.
 - A newly copied plugin appears only after the MPC application is restarted.
-- The plugin runs inside the MPC's process without crash protection (no sandbox). A crash in the plugin crashes the MPC. The shell wraps every dispatch call in `catch (...)` and returns 0 on any exception, so no exception may leave the plugin.
-- The host selects program 0 ("Init") after loading. The shell stores the current program number and name in the chunk: `effGetChunk` builds a JSON string starting with `{"mpcProgram":N,"mpcProgramName":"<escaped name>",` followed by the engine state. On `effSetChunk` the shell reads the program number and name from the chunk, then calls `resolveProgram` to map them to the current preset list. The name decides: the stored index is used only if the program at that index has that name (or to choose between programs of the same name), otherwise the first program of that name is taken, so a project still finds its program when a later package has a different preset list. A chunk from an older build that has only the number still loads. If the name is not in the list, `resolveProgram` returns -1 and the shell enters a "no program" state: the sound is the one stored in the chunk, the host is given index 0, the saved name is shown as the program name and written into the next chunk again. Because the host may select the saved program number again right after restoring the chunk, that one selection is ignored (the chunk wins); any other program selection or a parameter edit ends this protection, and it is never armed in the "no program" state.
+- The plugin runs inside the MPC's process. For that reason the shell wraps the instance creation and every dispatch call in `catch (...)` (no instance, or a result of 0), so no exception leaves the plugin.
+- A module built with Zig crashed when the host exited (see Build): the module is built with GCC.
+
+### Per the SDK documentation / not yet verified on the device
+
+These statements come from the SDK's documents (host-contract.md, install-and-test.md). Saving a project and loading it again has not been tried on the device yet, so the host side of the program handling below is unconfirmed.
+
+- The sample rate is fixed, and the user can choose other block sizes (32, 64, 96, 192, 256, 512) in Preferences; the announced block size is a maximum. The shell handles any smaller count.
+- The host has no crash protection for plugins: a crash in the plugin takes the MPC application down.
+- The host selects program 0 after loading and reads every program name by index.
+- The host saves the program number and the plugin's chunk in the project and restores both on load. In which order it does so, and whether it selects the saved program again after restoring the chunk, is not known.
+
+What the shell does with programs and the chunk is its own behaviour and is covered by the acceptance tests, whatever the host's order turns out to be. `effGetChunk` returns a JSON text starting with `{"mpcProgram":N,"mpcProgramName":"<escaped name>",` followed by the engine state. On `effSetChunk` the shell reads the program number and name and calls `resolveProgram` to map them to the current preset list. The name decides: the stored index is used only if the program at that index has that name (or to choose between programs of the same name), otherwise the first program of that name is taken, so a project still finds its program when a later package has a different preset list. A chunk from an older build that has only the number still loads. If the name is not in the list, `resolveProgram` returns -1 and the shell enters a "no program" state: the sound is the one stored in the chunk, the host is given index 0, the saved name is shown as the program name and written into the next chunk again. In case the host selects the saved program number again right after restoring the chunk, that one selection is ignored (the chunk wins); any other program selection or a parameter edit ends this protection, and it is never armed in the "no program" state.
 
 ## Sound differences at tier low
 

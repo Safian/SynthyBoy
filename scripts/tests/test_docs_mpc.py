@@ -55,6 +55,14 @@ class MpcDocTests(unittest.TestCase):
                 if word.startswith(tops) and "<" not in word and "*" not in word and "$" not in word:
                     self.assertTrue((ROOT / word).exists(), "path in backticks does not exist: %s" % word)
 
+    def test_host_behaviour_separates_observed_from_unverified(self):
+        body = section("Known host behaviour") or ""
+        subs = re.findall(r"^### (.+?)\s*$", body, re.M)
+        self.assertEqual(subs, ["Observed on the device", "Per the SDK documentation / not yet verified on the device"])
+        observed = body.split("### Per the SDK documentation")[0]
+        for claim in ("selects program 0", "saves the program number"):
+            self.assertNotIn(claim, observed, "a host-side program statement is not a device observation yet")
+
     def test_tier_low_section_lists_the_changes(self):
         body = section("Sound differences at tier low") or ""
         self.assertGreaterEqual(len(re.findall(r"^\s*[-*] ", body, re.M)), 5, "at least five list items")
