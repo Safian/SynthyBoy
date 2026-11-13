@@ -59,7 +59,7 @@ Seen on an MPC Key 61 with firmware 3.10.1:
 - A newly copied plugin appears only after the MPC application is restarted.
 - The plugin runs inside the MPC's process. For that reason the shell wraps the instance creation and every dispatch call in `catch (...)` (no instance, or a result of 0), so no exception leaves the plugin.
 - A module built with Zig crashed when the host exited (see Build): the module is built with GCC.
-- The packaged plugin loads in the stock MPC app; stepping through the presets works; the generated skin with its 30 pages works; the owner checked the sound by ear (it plays without crackling).
+- The packaged plugin loads in the stock MPC app; stepping through the presets works; the generated skin with its 30 pages works (the skin of that check had 30 pages; the current one has 32 tabs, and the Env and Osc tab layouts were not part of that check); the owner checked the sound by ear (it plays without crackling).
 
 Measured on 2026-11-13 with the bench on the device (MPC Key 61, 44.1 kHz, 128 frame blocks, so one block lasts 2.902 ms; tier low, own engine):
 

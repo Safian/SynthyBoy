@@ -107,23 +107,32 @@ class EnvSkinTest(unittest.TestCase):
                 self.assertIn(self.index["env%d.%s" % (n, key)], qmap.values())
 
     def test_other_tabs_qlinks_unchanged(self):
-        tabs = {t["fnKeyIndex"] + 1 for t in self.tui["pageData"]["tabs"] if t["tabName"].startswith("Env ")}
+        # the Osc tabs are rewritten by 20_osc.py (its own test checks them); every other tab must keep the generator's map
+        tabs = {t["fnKeyIndex"] + 1 for t in self.tui["pageData"]["tabs"] if t["tabName"].startswith(("Env ", "Osc"))}
         before = json.loads(self.before_q)["Screen Mode Q-Links"]["map"]
         after = self.qlinks
         self.assertEqual([m for m in after if m["Tab"] not in tabs], [m for m in before if m["Tab"] not in tabs])
 
     def test_bounds_version_2_has_its_extra_key(self):
-        # validate.py does not check this; the MPC drops the whole TUI.json when the key is missing
-        def walk(o):
+        # validate.py does not check this; the MPC drops the whole TUI.json when the key is missing.
+        # Everywhere in the skin the key must be a list (the Osc pictures list their IndexedEnabling handle in it);
+        # inside the Env tabs and definitions it is empty.
+        def walk(o, expect_empty):
             if isinstance(o, dict):
                 if o.get("version") == 2 and "boundsType" in o:
-                    self.assertEqual(o.get("additionalInvalidatingHandles"), [], o)
+                    handles = o.get("additionalInvalidatingHandles")
+                    self.assertIsInstance(handles, list, o)
+                    if expect_empty:
+                        self.assertEqual(handles, [], o)
                 for v in o.values():
-                    walk(v)
+                    walk(v, expect_empty)
             elif isinstance(o, list):
                 for v in o:
-                    walk(v)
-        walk(self.tui)
+                    walk(v, expect_empty)
+        walk(self.tui, False)
+        for n in (1, 2, 3, 4):
+            walk(self.tab(n), True)
+        walk({k: v for k, v in self.defs().items() if k.startswith("env")}, True)
 
     def test_validate_py_has_no_error(self):
         res = subprocess.run([sys.executable, "-I", str(base.SDK / "tools" / "validate.py"), str(self.root)], capture_output=True, text=True)
