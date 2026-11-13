@@ -91,9 +91,10 @@ public:
 
     struct Snapshot
     {
-        uint64_t callbacks = 0, gaps = 0, bucket[kBuckets] = {}, gapMax = 0, procMax = 0, procSum = 0, procCount = 0, nominalNs = 0;
+        using u64 = unsigned long long; // what the printf format wants on every platform (uint64_t is unsigned long on 64-bit Linux)
+        u64 callbacks = 0, gaps = 0, bucket[kBuckets] = {}, gapMax = 0, procMax = 0, procSum = 0, procCount = 0, nominalNs = 0;
         int frames = 0;
-        struct Top { uint64_t gap, at, nominal; int frames; } top[kTop] = {};
+        struct Top { u64 gap, at, nominal; int frames; } top[kTop] = {};
         int topCount = 0;
     };
 
@@ -164,7 +165,7 @@ public:
         buildLine = std::move (build);
         writer = std::thread ([this, intervalMs]
         {
-            useNormalScheduling (10);
+            useNormalScheduling (10, "sb-cb-stats");
             std::unique_lock<std::mutex> lock (stopMutex);
             while (! stopping)
             {

@@ -4,7 +4,7 @@
 //
 // Usage: lfo_live_host <plugin library> off|on|selftest|quiet [HZ]
 //   HZ is the refresh rate the plugin was built with (SYNTHYBOY_MPC_LFO_LIVE_HZ, default 10): the number of audioMasterAutomate calls per cursor and second is
-//   at most HZ (+1 for the first tick), and about HZ for a cursor that changes cell at every tick.
+//   at most HZ (the default build: <= 21 in 2 s), and about HZ for a cursor that changes cell at every tick.
 //   off:      built with SYNTHYBOY_MPC_LFO_LIVE=0: numParams is the engine's count, nothing exists after it.
 //   on:       built with it (default settings): four display-only parameters "LFO n Cursor" after the engine's list, idle (0, no audioMasterAutomate)
 //             while no voice sounds; with a note held they follow the LFO cycle and the plugin calls audioMasterAutomate for them (and for nothing else).
@@ -108,7 +108,9 @@ int main (int argc, char** argv)
     if (argc < 3) { std::fprintf (stderr, "usage: lfo_live_host <plugin> off|on|selftest|quiet\n"); return 2; }
     const std::string mode = argv[2];
     const int hz = argc > 3 ? std::max (1, std::atoi (argv[3])) : 10;
-    const int maxCalls = 2 * hz + 1;       // 2 s: one call per tick and parameter at the most
+    const auto started = std::chrono::steady_clock::now();
+    // one call per tick and parameter at the most, counted from the creation of the plugin (the display thread ticks from then on): HZ * elapsed seconds + 2
+    const auto maxCallsSince = [&] (std::chrono::steady_clock::time_point t, int extra) { return static_cast<int> (std::chrono::duration<double> (std::chrono::steady_clock::now() - t).count() * hz) + extra; };
     const int minFast = (2 * hz * 3) / 4;  // a cursor that changes cell at every tick: nearly all ticks call
 
     // the pure function first: the mapping of the engine's readout to a cursor step
@@ -138,38 +140,58 @@ int main (int argc, char** argv)
     const int n = static_cast<int> (synthyboy::paramCount());
     firstIndex.store (n);
 #if defined(__linux__)
-    // The plugin is created by a thread that is as unlike a normal thread as an unprivileged test can make it: nice 5 and pinned to one CPU. A helper thread
-    // of the plugin must not inherit that: policy SCHED_OTHER, nice 0, every CPU (the same code undoes an inherited SCHED_FIFO: the plugin sets its policy itself).
-    const auto threadIds = [] { std::set<int> ids; if (DIR* d = opendir ("/proc/self/task")) { while (dirent* de = readdir (d)) if (de->d_name[0] != '.') ids.insert (std::atoi (de->d_name)); closedir (d); } return ids; };
-    const std::set<int> before = threadIds();
+    // The plugin is created by a thread that is as unlike a normal thread as an unprivileged test can make it: nice 5 (when this process may lower it again,
+    // CAP_SYS_NICE or root; the MPC host runs as root) and pinned to one CPU. The display thread of the plugin ("sb-lfo-display") must not inherit that:
+    // policy SCHED_OTHER, nice 0, every CPU. (The same code undoes an inherited SCHED_FIFO: the plugin sets its policy itself.)
+    bool mayLowerNice = false;
+    std::thread probe ([&] { setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 5); mayLowerNice = setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 0) == 0; });
+    probe.join();
     AEffect* e = nullptr;
+    bool creatorFifo = false;
     std::thread creator ([&]
     {
-        setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 5);
+        if (mayLowerNice) setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 5);
         cpu_set_t one; CPU_ZERO (&one);
         cpu_set_t now; CPU_ZERO (&now);
         sched_getaffinity (0, sizeof (now), &now);
         for (int c = 0; c < CPU_SETSIZE; ++c) if (CPU_ISSET (c, &now)) { CPU_SET (c, &one); break; }
         sched_setaffinity (0, sizeof (one), &one);
+        if (mayLowerNice) { sched_param fifo {}; fifo.sched_priority = 1; if (sched_setscheduler (0, SCHED_FIFO, &fifo) == 0) creatorFifo = true; } // privileged: a real-time creator too
         e = entry (hostCallback);
     });
     creator.join();
-    std::set<int> added;
-    for (int id : threadIds()) if (! before.count (id)) added.insert (id);
     if (mode != "off")
     {
-        bool allNormal = ! added.empty();
+        // the thread sets its scheduling as its first act: poll up to 2 s for it to be there and to have been set
         const long cpusOnline = sysconf (_SC_NPROCESSORS_ONLN);
-        for (int id : added)
+        int found = 0; bool normal = false;
+        for (int attempt = 0; attempt < 200 && ! normal; ++attempt)
         {
-            cpu_set_t m; CPU_ZERO (&m);
-            const bool aff = sched_getaffinity (id, sizeof (m), &m) == 0 && (CPU_COUNT (&m) > 1 || cpusOnline == 1);
-            const bool policy = sched_getscheduler (id) == SCHED_OTHER;
-            const int nice = getpriority (PRIO_PROCESS, static_cast<id_t> (id));
-            std::printf ("INFO  helper thread %d: policy %d, nice %d, cpus %d\n", id, sched_getscheduler (id), nice, CPU_COUNT (&m));
-            allNormal = allNormal && aff && policy && nice == 0;
+            found = 0; normal = true;
+            if (DIR* d = opendir ("/proc/self/task"))
+            {
+                while (dirent* de = readdir (d))
+                {
+                    if (de->d_name[0] == '.') continue;
+                    const int id = std::atoi (de->d_name);
+                    char path[64]; std::snprintf (path, sizeof (path), "/proc/self/task/%d/comm", id);
+                    char comm[32] = {};
+                    if (FILE* f = std::fopen (path, "r")) { if (! std::fgets (comm, sizeof (comm), f)) comm[0] = 0; std::fclose (f); }
+                    if (std::strncmp (comm, "sb-lfo-display", 14) != 0) continue;
+                    ++found;
+                    cpu_set_t m; CPU_ZERO (&m);
+                    const bool aff = sched_getaffinity (id, sizeof (m), &m) == 0 && (CPU_COUNT (&m) > 1 || cpusOnline == 1);
+                    const bool policy = sched_getscheduler (id) == SCHED_OTHER;
+                    const int nice = getpriority (PRIO_PROCESS, static_cast<id_t> (id));
+                    normal = normal && aff && policy && (nice == 0 || ! mayLowerNice);
+                    if (attempt == 199 || normal) std::printf ("INFO  display thread %d: policy %d, nice %d, cpus %d (creator: nice %d, 1 cpu%s)\n", id, sched_getscheduler (id), nice, CPU_COUNT (&m), mayLowerNice ? 5 : 0, creatorFifo ? ", SCHED_FIFO" : "");
+                }
+                closedir (d);
+            }
+            if (found == 0) normal = false;
+            if (! normal) std::this_thread::sleep_for (std::chrono::milliseconds (10));
         }
-        check (allNormal, "threads: the helper thread is SCHED_OTHER, nice 0, on all CPUs although its creator is nice 5 on one CPU");
+        check (normal && found == 1, "threads: the display thread is SCHED_OTHER, nice 0, on all CPUs although its creator is nice 5 on one CPU");
     }
 #else
     AEffect* e = entry (hostCallback);
@@ -220,14 +242,16 @@ int main (int argc, char** argv)
         check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther == 0, "on: no audioMasterAutomate while idle");
         check (text (e, effGetParamDisplay, n) == "idle", "on: display text of an idle cursor");
         noteOn (e, 60);
+        const auto noteAt = std::chrono::steady_clock::now();
         Sweep s = run (e, n, 2000, true);
         std::printf ("INFO  note held 2 s: LFO 1 %zu distinct cursor values, automate calls %d %d %d %d, other %d\n", s.seen[0].size(), automate[0].load(),
                      automate[1].load(), automate[2].load(), automate[3].load(), automateOther.load());
         check (s.lo[0] > 0.0f && s.hi[0] <= 1.0f && static_cast<int> (s.seen[0].size()) >= std::min (minFast, 8), "on: LFO 1 cursor follows the cycle (several different cells in 2 s, never idle)");
+        const int maxCalls = maxCallsSince (noteAt, 1); // 21 for the default 10 a second (the note is held for 2 s)
         bool few = true;
         for (int k = 0; k < 4; ++k) few = few && automate[k].load() <= maxCalls;
-        check (few, "on: at most HZ calls a second (+1) for every cursor: <= 2 * HZ + 1 in 2 s");
-        check (automate[0].load() >= minFast && automate[0].load() <= maxCalls, "on: about HZ calls a second for a fast LFO (3/4 of the ticks .. 2 * HZ + 1 in 2 s)");
+        check (few, "on: at most HZ calls a second for every cursor: <= 21 per cursor in the 2 s of the default");
+        check (automate[0].load() >= minFast && automate[0].load() <= maxCalls, "on: about HZ calls a second for a fast LFO (3/4 of the ticks of 2 s up to the limit)");
         check (automateOther.load() == 0, "on: audioMasterAutomate only for the display parameters");
         check (text (e, effGetParamDisplay, n).find ('/') != std::string::npos, "on: display text of a cursor cell");
     }
@@ -245,9 +269,10 @@ int main (int argc, char** argv)
             check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther == 0, "quiet: audioMasterAutomate is never called");
         else
         {
+            const int maxCalls = maxCallsSince (started, 2);
             bool few = true;
             for (int k = 0; k < 4; ++k) few = few && automate[k].load() <= maxCalls;
-            check (few, "selftest: at most HZ calls a second (+1) for every cursor");
+            check (few, "selftest: at most HZ calls a second for every cursor (+2)");
             check (automate[0].load() >= std::min (8, minFast) && automate[3].load() >= minFast && automateOther.load() == 0, "selftest: audioMasterAutomate per changed cell, display parameters only");
         }
     }

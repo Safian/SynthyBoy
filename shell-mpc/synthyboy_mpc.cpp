@@ -270,7 +270,7 @@ struct PluginInstance
         {
             // Own scheduling, set here (not inherited): normal policy, nice 0, all CPUs. Not lower than normal: this thread holds host locks while it is inside
             // audioMasterAutomate, and a starved holder would make the host's own threads wait for it.
-            synthyboy_mpc::useNormalScheduling (0);
+            synthyboy_mpc::useNormalScheduling (0, "sb-lfo-display");
             const int first = static_cast<int> (synthyboy::paramCount());
             int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
             for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
