@@ -81,6 +81,6 @@ Not repeated in Phase 3.
 * Transferring to the MPC: an ARMv7 core of that class is several times slower than one performance core of this machine; no
   factor is assumed here. The tier voice limits for the Low tier (8 at the moment) must be decided from a measurement on the
   device (benchmark harness: `synthyboy_bench --engine vital --voices 8`); iOS gets the own engine by the owner's decision
-  (ARCHITECTURE 2.2). First measurement on an MPC and on a mid-range phone is still open (ARCHITECTURE section 9, Phase 2).
+  (ARCHITECTURE 2.2). The measurements on an MPC are in docs/MPC.md (own engine, tier low); the first measurement on a mid-range phone is still open (ARCHITECTURE section 9, Phase 2).
 * The CI job `linux-aarch64` prints the same benchmark for the Vital engine on GitHub's arm runner (informational, shared
   cloud machine).

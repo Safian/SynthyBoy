@@ -107,7 +107,7 @@ class MpcDocTests(unittest.TestCase):
         observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
         for value in ("`c3a2065`", "`4cd77ce`", "3.73 / 5.46 / 6.04", "4.16 / 5.43 / 5.67", "5.36 / 8.27 / 8.98", "5.97 / 9.00 / 9.62",
                       "4.64 / 5.52 / 5.66", "3.64 / 4.85 / 5.40", "0.559 / 0.781 / 1.016", "does not fit into the 2.902 ms block",
-                      "default of the unison cap is 3", "No decision has been made about a cap on the number of notes",
+                      "default of the unison cap is 3", "no cap on the number of notes is needed", "`878326f`", "4.42 ms",
                       "14 of the 112 factory presets", "2 oscillators with 7 unison voices each"):
             self.assertIn(value, observed)
 
@@ -129,6 +129,25 @@ class MpcDocTests(unittest.TestCase):
         self.assertEqual(len(affected), 14)
         for name in affected:
             self.assertIn(name, line)
+
+    def test_final_measurement_and_tier_low_list(self):
+        observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
+        unverified = (section("Known host behaviour") or "").split("### Per the SDK documentation")[-1]
+        for value in ("2026-11-13", "`91f2d75`", "`17d6e11`", "0.87 ms", "0.666 ms", "0.715 ms", "1.018", "0.359 to 0.201", "33.3", "Diffusor Cloud Pad 1.75 / 1.96 / 2.74",
+                      "`bc0f3ce`", "`e3abe08`", "`178316e`", "`e596f94`", "no new measurement of the heavy patch"):
+            self.assertIn(value, observed)
+        self.assertIn("nobody has listened", unverified)
+        body = section("Sound differences at tier low") or ""
+        for word in ("Unison cap", "Warps", "Spectral morph", "tanh", "sin and cos", "Moving filters", "Serum filters", "Economy modulators", "Chorus and phaser", "Noise",
+                     "Effect racks on silence", "Stolen voices", "Events", "Bypassed effects"):
+            self.assertIn("**%s" % word, body, "the tier low list lacks %s" % word)
+        self.assertIn("at most 3 unison voices", body)
+        self.assertNotIn("unison at 4 voices", body)
+
+    def test_benchmark_switches_documented(self):
+        body = section("Benchmark switches") or ""
+        for switch in ("--preset", "--preset-dir", "--csv", "--voices", "--sections", "--unison-cap", "--morph-spread", "--kill-fade"):
+            self.assertIn("`%s" % switch, body, switch)
 
     def test_no_placeholders(self):
         for word in ("TODO", "TBD", "FIXME", "lorem"):
