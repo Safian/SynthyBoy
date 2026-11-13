@@ -84,6 +84,9 @@
 //   SYNTHYBOY_MPC_CALLBACK_STATS_FILE         environment variable: the file (default /tmp/synthyboy-callback-stats.txt; a second plugin instance
 //                                             writes <file>.2, a third <file>.3 ...)
 //   SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS  environment variable: pause between two writes (default 5000)
+//   SYNTHYBOY_MPC_CALLBACK_STATS_RESET_FILE   environment variable: the file whose existence makes the writer thread zero the MIDI statistics before its next
+//                                             write and delete it (default /tmp/synthyboy-stats-reset)
+// The file also reports (format 2) the MIDI messages of effProcessEvents and what the host asks: effCanDo texts, dispatcher opcodes, our audioMaster calls.
 #ifndef SYNTHYBOY_MPC_CALLBACK_STATS
 #define SYNTHYBOY_MPC_CALLBACK_STATS 0
 #endif
@@ -271,6 +274,9 @@ struct PluginInstance
 
     // Host callback (for transport queries)
     audioMasterCallback audioMaster = nullptr;
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+    audioMasterCallback hostCallback = nullptr; // the host's own callback; `audioMaster` is the counting one in this build (see countingHostCallback)
+#endif
     synthyboy::TransportInfo transport { 120.0, 0.0, false };
 
 #if SYNTHYBOY_MPC_LFO_LIVE
@@ -458,6 +464,8 @@ struct PluginInstance
             path += "." + std::to_string (n);
         const char* envMs = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_INTERVAL_MS");
         const int ms = envMs != nullptr ? std::atoi (envMs) : 0;
+        const char* envReset = std::getenv ("SYNTHYBOY_MPC_CALLBACK_STATS_RESET_FILE");
+        callbackStats.setResetFile (envReset != nullptr && *envReset != 0 ? envReset : "/tmp/synthyboy-stats-reset");
         callbackStats.start (path, buildDescription(), ms > 0 ? ms : 5000);
     }
 #endif
@@ -534,6 +542,18 @@ static PluginInstance* getInstance(AEffect* e) noexcept
     return static_cast<PluginInstance*>(e->object);
 }
 
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+// What the plugin does towards the host is counted by opcode, then passed on unchanged (every call goes through inst->audioMaster).
+static VstIntPtr countingHostCallback(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
+{
+    PluginInstance* inst = e ? getInstance(e) : nullptr;
+    if (!inst || !inst->hostCallback)
+        return 0;
+    inst->callbackStats.hostCall(opcode);
+    return inst->hostCallback(e, opcode, index, value, ptr, opt);
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // Helper: current program name (handles the "no program" state)
 // ---------------------------------------------------------------------------
@@ -584,8 +604,46 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
     catch (...) { return 0; }
 }
 
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+static VstIntPtr dispatchHandled(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt);
+
+// What the host asks and sends, recorded (callback_stats.h) around the handling of every call; the handling itself is dispatchHandled, unchanged.
+static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
+{
+    PluginInstance* inst = e ? getInstance(e) : nullptr;
+    if (!inst)
+        return dispatchHandled(e, opcode, index, value, ptr, opt);
+    synthyboy_mpc::CallbackStats& stats = inst->callbackStats;
+    stats.dispatcherCall(opcode, index, value, opt, ptr != nullptr);
+    if (opcode == effProcessEvents && ptr)
+    {
+        const VstEvents* events = static_cast<const VstEvents*>(ptr);
+        for (VstInt32 i = 0; i < events->numEvents; ++i)
+        {
+            const VstEvent* ev = events->events[i];
+            if (!ev)
+                continue;
+            if (ev->type != kVstMidiType)
+            {
+                stats.otherEvent(ev->type);
+                continue;
+            }
+            const VstMidiEvent* m = reinterpret_cast<const VstMidiEvent*>(ev);
+            stats.midiMessage(static_cast<uint8_t>(m->midiData[0]), static_cast<uint8_t>(m->midiData[1]), static_cast<uint8_t>(m->midiData[2]), m->deltaFrames);
+        }
+    }
+    const VstIntPtr result = dispatchHandled(e, opcode, index, value, ptr, opt);
+    if (opcode == effCanDo && ptr)
+        stats.canDo(static_cast<const char*>(ptr), static_cast<int>(result));
+    return result;
+}
+
+static VstIntPtr dispatchHandled(AEffect* e, VstInt32 opcode, VstInt32 index,
+                                 VstIntPtr value, void* ptr, float opt)
+#else
 static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                           VstIntPtr value, void* ptr, float opt)
+#endif
 {
     if (opcode == effGetVstVersion)
         return 2400;
@@ -1314,7 +1372,13 @@ extern "C"
         effect->version = 1000;
 
         // Store the host callback for transport queries
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        inst->hostCallback = audioMaster;
+        inst->audioMaster = audioMaster ? countingHostCallback : nullptr;
+        audioMaster = inst->audioMaster; // the identification call below is counted as well
+#else
         inst->audioMaster = audioMaster;
+#endif
 
         // Call the host callback to let the host identify itself
         if (audioMaster)

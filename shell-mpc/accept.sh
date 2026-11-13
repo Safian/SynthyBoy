@@ -147,9 +147,11 @@ grep -q "Spectrum %d" "$(find build-mpc-live-on -name '*synthyboy_mpc*.so' -o -n
 grep -q "Spectrum %d" "$(find build-mpc-live-specoff -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" && { echo "ACCEPT FAIL: trace of the spectrum in the build with SYNTHYBOY_MPC_SPECTRUM=OFF"; exit 1; }
 # callback statistics (SYNTHYBOY_MPC_CALLBACK_STATS, diagnostics): off in the default build (no trace of it in the module), on in the stats variant
 STATSLIB="$(find build-mpc-live-stats -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+grep -q "dispatcher_opcodes:" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no host statistics (format 2)"; exit 1; }
 grep -q "synthyboy-callback-stats" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no statistics code"; exit 1; }
 for f in "$LIB" "$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"; do
     grep -q "synthyboy-callback-stats" "$f" && { echo "ACCEPT FAIL: statistics code in a build without SYNTHYBOY_MPC_CALLBACK_STATS"; exit 1; }
+    grep -q "dispatcher_opcodes:" "$f" && { echo "ACCEPT FAIL: host statistics (format 2) in a build without SYNTHYBOY_MPC_CALLBACK_STATS"; exit 1; }
 done
 c++ -std=c++17 -O1 -Wall -Wextra -I $MPC_SDK/framework -I shell-mpc -o $B/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: callback_stats_host build"; exit 1; }
 $B/callback_stats_host "$STATSLIB" $B/callback-stats.txt > $B/callback-stats.log 2>&1 || { grep -E "^FAIL" $B/callback-stats.log; echo "ACCEPT FAIL: callback_stats_host"; exit 1; }
