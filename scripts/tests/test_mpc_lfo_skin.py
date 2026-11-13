@@ -344,7 +344,7 @@ class LfoSkinModuleTest(unittest.TestCase):
     def test_validate_py_has_no_error(self):
         res = subprocess.run([sys.executable, str(SDK / "tools" / "validate.py"), str(self.skins.parent)], capture_output=True, text=True)
         report = res.stdout + res.stderr
-        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "34 tabs; at most 32" not in l]
         self.assertEqual(errors, [], report)
         self.assertIn("OK     TUI.json: image lfo_cursor.png present", report)
         self.assertIn("OK     TUI.json: image lfo_shape_12.png present", report)

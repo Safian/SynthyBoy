@@ -199,8 +199,28 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
                 data = label["componentData"]["data"]
                 style = data["textStyle"]
                 self.assertEqual((data["type"], data["handleName"]), ("Text", "Data"))
-                self.assertEqual((style["font"]["name"], style["font"]["style"], style["font"]["height"]), ("Titillium Web", "Bold", 22.0))
+                self.assertEqual((style["font"]["name"], style["font"]["style"], style["font"]["height"]), ("Titillium Web", "SemiBold", 22.0))
                 self.assertEqual((style["colour"], style["case"], style["justification"]), ("ff6a6a6c", "Upper Case", "horizontallyCentred verticallyCentred"))
+
+    def test_every_text_label_of_the_skin_is_bound_to_a_valid_parameter(self):
+        # Key 61: a Text label with an empty remap is not drawn at all; the remap must point at the parameter of the control the text belongs to
+        count = 0
+        for tab in self.tabs():
+            items = tab["componentDefinition"]["componentsData"]
+            controls = {c["componentData"]["name"]: c for c in items if c["componentData"]["type"] in names_mod.NAME_DY}
+            for c in items:
+                d = c["componentData"]
+                if d["type"] != "Label" or d["data"]["type"] != "Text":
+                    continue
+                count += 1
+                remap = c["handle remapping"]["map"]
+                self.assertEqual(len(remap), 1, (tab["tabName"], d["name"]))
+                self.assertEqual(remap[0]["key"], "Data")
+                index = int(remap[0]["value"].split()[1])
+                self.assertTrue(0 <= index < len(lay.PARAMS), (tab["tabName"], d["name"]))
+                owner = controls[d["name"].rsplit(" name", 1)[0] if d["name"].endswith(" name") else d["name"].rsplit(" seg ", 1)[0]]
+                self.assertEqual(remap, owner["handle remapping"]["map"], (tab["tabName"], d["name"]))
+        self.assertGreater(count, 300)
 
     def test_value_keeps_white_24(self):
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}

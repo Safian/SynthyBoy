@@ -105,9 +105,9 @@ class LayoutModeTests(unittest.TestCase):
     def test_one_page_per_layout_entry_in_order(self):
         self.assertEqual([p["name"] for p in self.ui["pages"]], [p["name"] for p in self.layout["pages"]])
 
-    def test_at_most_32_pages_names_at_most_8_and_unique(self):
+    def test_at_most_tab_limit_pages_names_at_most_8_and_unique(self):
         names = [p["name"] for p in self.ui["pages"]]
-        self.assertLessEqual(len(names), 32)
+        self.assertLessEqual(len(names), self.layout.get("tabLimit", 32))
         self.assertTrue(all(1 <= len(n) <= 8 for n in names), names)
         self.assertEqual(len(names), len(set(names)))
 
@@ -196,7 +196,7 @@ class LayoutModeTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("MPC_SDK"), "MPC_SDK is not set")
     def test_sdk_gen_ui_accepts_it(self):
         skins = Path(self.tmp.name) / "skins"
-        r = subprocess.run([sys.executable, str(Path(os.environ["MPC_SDK"]) / "tools" / "gen_ui.py"), "--params", str(Path(self.tmp.name) / "params-hostsim.json"),
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "run-gen-ui.py"), "--sdk", os.environ["MPC_SDK"], "--params", str(Path(self.tmp.name) / "params-hostsim.json"),
                             "--ui", str(Path(self.tmp.name) / "ui.json"), "--out", str(skins), "--quiet"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue((skins / "TUI.json").exists())

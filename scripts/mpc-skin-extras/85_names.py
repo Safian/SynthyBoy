@@ -6,15 +6,18 @@
 # name of a knob, toggle, fader or radio group from the parameter name (a Label of type Name in the shared component definition); this module removes that
 # child from the definitions and puts a fixed text (Label type Text) over every such control instead, at the place where the host drew the name. The names come
 # from skin-meta.json (scripts/gen-mpc-ui.py: Kick page shortLabel, scripts/mpc-short-names.json, prefix on a clash inside a tab); run with --meta.
-# Style: the weight of the headers the host draws over the selectors ("OSC 1 MORPH TYPE": upper case, bold, grey): Titillium Web Bold NAME_FONT px,
+# Style: the weight of the headers the host draws over the selectors ("OSC 1 MORPH TYPE": upper case, semi-bold, grey): Titillium Web SemiBold NAME_FONT px,
 # upper case, the grey of the skin (the SDK's "muted" colour ff6a6a6c); the value below keeps the white 24 px of 80_layout.py. A label of a control that
 # is only visible for some value of another parameter (bounds version 2, IndexedEnabling) carries the same additionalInvalidatingHandles.
 # The selectors (sliderWithFocus, sliderWithFocusMenu) have no name child: the SDK Slider draws the parameter name itself and has no key for another text.
 # The full parameter name stays where the host shows it by itself (the header of the knob and menu overlays).
+# Measured on the Key 61 (MPC 3.10.1.12): a Text label placed on the tab is drawn ONLY if its Data handle is bound to a valid parameter (an empty remap draws
+# nothing, although ui-reference 6.3 says the handle is ignored for Text). So every fixed text label of the skin, the names here and the captions of the radio
+# buttons (made by the SDK generator with an empty remap), is bound to the parameter of the control it belongs to. SemiBold was seen to draw there, Bold was not.
 # Runs after 80_layout.py (which places the slots) and before 90_frames.py.
 
 NAME_FONT = 22.0
-NAME_STYLE = "Bold"
+NAME_STYLE = "SemiBold"
 NAME_COLOUR = "ff6a6a6c"
 NAME_H = 26
 NAME_X, NAME_W = 3, 272          # inside the slot of 278 px: the inner width of the Q-Link frame
@@ -34,6 +37,7 @@ def _rect(component):
 
 
 def _label_entry(control, text):
+    data_handle = control["handle remapping"]["map"][0]["value"]
     x, y, w, h = _rect(control)
     bounds = control["bounds"]
     out = {"version": bounds["version"], "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always",
@@ -43,7 +47,7 @@ def _label_entry(control, text):
         out["additionalInvalidatingHandles"] = list(bounds["additionalInvalidatingHandles"])
     return {"version": 2,
             "componentData": {"version": 1, "name": control["componentData"]["name"] + " name", "type": "Label", "data": _label_data(text)},
-            "handle remapping": {"version": 1, "map": []}, "bounds": out}
+            "handle remapping": {"version": 1, "map": [{"key": "Data", "value": data_handle}]}, "bounds": out}
 
 
 def apply(tui, qlinks, ctx):
@@ -68,3 +72,8 @@ def apply(tui, qlinks, ctx):
                 raise ValueError("tab %r: no short name for %r (skin-meta.json)" % (tab["tabName"], key))
             out.append(_label_entry(c, tab_names[key]))
         items[:] = out
+        controls = {c["componentData"]["name"]: c for c in items if c["componentData"]["type"] in NAME_DY}
+        for c in items:   # the captions of the radio buttons: Text labels with an empty remap from the SDK generator
+            if c["componentData"]["type"] == "Label" and c["componentData"]["data"].get("type") == "Text" and not c["handle remapping"]["map"]:
+                owner = controls[c["componentData"]["name"].rsplit(" seg ", 1)[0]]
+                c["handle remapping"]["map"] = [{"key": "Data", "value": owner["handle remapping"]["map"][0]["value"]}]

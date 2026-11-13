@@ -13,8 +13,8 @@
 #   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder instead of generating it
 #                    (default: generated from the layout file with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py (through scripts/run-gen-ui.py),
 #                    then scripts/apply-mpc-skin-extras.py)
-#   --skin-layout F  the layout file of the generated skin (default: scripts/mpc-ui-pages.json, 32 tabs; scripts/mpc-ui-pages-v34.json is the variant
-#                    with 34 tabs that tries the sub-tabs beyond the limit of 32 tabs)
+#   --skin-layout F  the layout file of the generated skin (default: scripts/mpc-ui-pages.json, 34 tabs, which the Key 61 loads;
+#                    scripts/mpc-ui-pages-v32.json is the 32 tab fallback)
 #   --bench          also build synthyboy_bench and synthyboy_noteon_bench for each architecture (own CMake tree with SYNTHYBOY_BUILD_TESTS=ON, libstdc++
 #                    linked statically) into <out>/bench-<arch>/; they are measurement tools and not part of the plugin folder
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
@@ -159,6 +159,8 @@ python3 "$repo_root/scripts/gen-mpc-manifest.py" --plugin-dir "$plugin_folder"
 # Its schema lists both file32 and file64 as required, while docs/plugin-folder-format.md of the SDK says a 32-bit MPC uses only file32 and a 64-bit one
 # only file64. With both binaries built there is nothing to accept. A single-architecture build accepts exactly the one finding about the key of the
 # architecture that was not built; any other error fails the build.
+# Second accepted finding: the default skin has 34 tabs (sub-tabs included) and the validator reports exactly "34 tabs; at most 32 are supported". The Key 61
+# (MPC 3.10.1.12) loads such a skin (docs/MPC.md); the 32 tab fallback is scripts/mpc-ui-pages-v32.json (--skin-layout), which has no such finding.
 if [[ "$validate" == 1 ]]; then
     echo "$me: running SDK validator on $plugin_folder"
     report="$(python3 "$MPC_SDK/tools/validate.py" "$plugin_folder" 2>&1 || true)"
@@ -167,6 +169,7 @@ if [[ "$validate" == 1 ]]; then
     [[ "$arch" == arm32 ]] && expected_missing="file64"
     [[ "$arch" == arm64 ]] && expected_missing="file32"
     other="$(echo "$report" | grep '^ERROR' || true)"
+    other="$(echo "$other" | grep -v '^ERROR  TUI.json: 34 tabs; at most 32 are supported$' || true)"
     if [[ -n "$expected_missing" ]]; then other="$(echo "$other" | grep -v "plugin.json is missing required keys: $expected_missing\$" || true)"; fi
     if [[ -n "$other" ]] || ! echo "$report" | grep -q '^OK'; then echo "$me: SDK validator failed" >&2; exit 1; fi
     if [[ -n "$expected_missing" ]] && echo "$report" | grep -q '^ERROR'; then

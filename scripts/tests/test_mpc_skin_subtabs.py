@@ -29,10 +29,12 @@ def layout_doc(path):
 class LayoutFileTests(unittest.TestCase):
     """The layout files themselves (no SDK needed)."""
 
-    def test_default_layout_is_within_the_documented_limit(self):
-        doc = layout_doc(DEFAULT_LAYOUT)
-        self.assertLessEqual(len(doc["pages"]), 32)
-        self.assertNotIn("tabLimit", doc)
+    def test_default_layout_has_34_tabs_and_the_fallback_is_within_the_documented_limit(self):
+        doc = layout_doc(DEFAULT_LAYOUT)       # the Key 61 loads 34 tabs (docs/MPC.md)
+        self.assertEqual((len(doc["pages"]), doc["tabLimit"]), (34, 34))
+        fallback = layout_doc(ROOT / "scripts" / "mpc-ui-pages-v32.json")
+        self.assertEqual(len(fallback["pages"]), 32)
+        self.assertNotIn("tabLimit", fallback)
 
     def test_function_keys_follow_each_other_and_have_at_most_8_sub_tabs(self):
         for path in LAYOUTS:
@@ -172,7 +174,7 @@ class SubTabSkinTests(unittest.TestCase):
 
     def test_tab_count(self):
         counts = {name: len(tabs) for name, tabs, _ in self.each()}
-        self.assertLessEqual(counts["mpc-ui-pages.json"], 32)
+        self.assertEqual((counts["mpc-ui-pages.json"], counts["mpc-ui-pages-v32.json"]), (34, 32))
         for name, n in counts.items():
             self.assertEqual(n, len(layout_doc(ROOT / "scripts" / name)["pages"]), name)
 
@@ -232,12 +234,12 @@ class SubTabSkinTests(unittest.TestCase):
             res = subprocess.run([sys.executable, "-I", str(base.SDK / "tools" / "validate.py"), str(skins.parent)], capture_output=True, text=True)
             report = res.stdout + res.stderr
             errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
-            if name == "mpc-ui-pages.json":
+            if name == "mpc-ui-pages-v32.json":
                 self.assertEqual(errors, [], report)
             else:
-                # the variant above 32 tabs: the SDK validator rejects the number of tabs and nothing else
+                # the 34 tab skin: the SDK validator rejects the number of tabs and nothing else (the build accepts exactly this finding)
                 self.assertEqual([e for e in errors if "tabs; at most 32" not in e], [], report)
-                self.assertTrue(any("tabs; at most 32" in e for e in errors), report)
+                self.assertEqual([e for e in errors if "tabs; at most 32" in e], ["ERROR  TUI.json: 34 tabs; at most 32 are supported"], report)
 
     def test_module_without_meta_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -257,7 +259,7 @@ class RunGenUiTests(unittest.TestCase):
     def test_limit_is_lifted_only_for_more_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            code, out, err = lay.run(tmp / "ui", ROOT / "scripts" / "mpc-ui-pages.json")
+            code, out, err = lay.run(tmp / "ui", ROOT / "scripts" / "mpc-ui-pages-v32.json")
             self.assertEqual(code, 0, err)
             ok = subprocess.run([sys.executable, str(ROOT / "scripts" / "run-gen-ui.py"), "--sdk", str(base.SDK), "--params", str(tmp / "ui" / "params-hostsim.json"),
                                  "--ui", str(tmp / "ui" / "ui.json"), "--out", str(tmp / "a"), "--quiet"], capture_output=True, text=True)

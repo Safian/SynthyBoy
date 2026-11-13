@@ -1,7 +1,6 @@
 {
   "format": "synthyboy-mpc-ui-pages",
   "version": 2,
-  "tabLimit": 34,
   "pages": [
     {
       "name": "Macros",
@@ -177,17 +176,10 @@
       ]
     },
     {
-      "name": "FX Filt",
+      "name": "Flt+Dist",
       "fn": "FX",
       "kick": [
         "fx_filter_1",
-        "fx_filter_2"
-      ]
-    },
-    {
-      "name": "Distort",
-      "fn": "FX",
-      "kick": [
         "fx_distortion"
       ]
     },
@@ -200,11 +192,12 @@
       ]
     },
     {
-      "name": "Comp 2",
+      "name": "Cmp2+Lvl",
       "fn": "FX",
       "kick": [
         "fx_comp_mid",
-        "fx_comp_high"
+        "fx_comp_high",
+        "fx_levels"
       ]
     },
     {
@@ -237,13 +230,6 @@
       "kick": [
         "fx_phaser_1",
         "fx_phaser_2"
-      ]
-    },
-    {
-      "name": "FX Level",
-      "fn": "FX 2",
-      "kick": [
-        "fx_levels"
       ]
     },
     {

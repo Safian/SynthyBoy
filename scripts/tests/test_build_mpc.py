@@ -206,6 +206,15 @@ class BuildMpcTest(unittest.TestCase):
         r = self.build("--arch", "arm32", FAKE_VALIDATE="ERROR  plugin.json is missing required keys: file64\nERROR  something else\nOK     x")
         self.assertEqual(r.returncode, 1)
 
+    def test_validator_accepts_the_34_tab_finding_and_nothing_else_about_tabs(self):
+        tabs = "ERROR  TUI.json: 34 tabs; at most 32 are supported\nOK     x"
+        self.assertEqual(self.build("--arch", "all", FAKE_VALIDATE=tabs).returncode, 0)
+        r = self.build("--arch", "arm32", FAKE_VALIDATE="ERROR  plugin.json is missing required keys: file64\n" + tabs)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for bad in ("ERROR  TUI.json: 35 tabs; at most 32 are supported", "ERROR  TUI.json: 33 tabs; at most 32 are supported", "ERROR  TUI.json: tabs[1] and tabs[2] both use fnKeyIndex 0 / fnKeySubIndex 0"):
+            self.assertEqual(self.build("--arch", "all", FAKE_VALIDATE=bad + "\nOK     x").returncode, 1, bad)
+        self.assertEqual(self.build("--arch", "all", FAKE_VALIDATE=tabs + "\nERROR  something else").returncode, 1)
+
     def test_validator_without_ok_line_fails(self):
         self.assertEqual(self.build("--arch", "all", FAKE_VALIDATE="nothing useful").returncode, 1)
 

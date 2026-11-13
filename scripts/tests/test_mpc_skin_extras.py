@@ -166,7 +166,7 @@ class SkinExtrasTest(unittest.TestCase):
         res = subprocess.run([sys.executable, str(SDK / "tools" / "validate.py"), str(skins.parent)], capture_output=True, text=True)
         report = res.stdout + res.stderr
         # the folder holds only the skin files, so plugin.json is expected to be missing; every other finding fails
-        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
+        errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l and "34 tabs; at most 32" not in l]
         self.assertEqual(errors, [], report)
         self.assertIn("OK     TUI.json: image sample.png present", report)
 
