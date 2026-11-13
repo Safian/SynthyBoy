@@ -9,7 +9,8 @@
 // real-time factor (audio seconds / seconds spent in process()), the mean, the 99th percentile and the worst block time.
 // Patches: "default" = the table's defaults (one saw oscillator, filter 1, no effects); "heavy" = three oscillators with 7
 // unison voices, two filters in series, three LFOs, an envelope and a velocity routing in the modulation matrix, all nine effects.
-// The own engine ignores everything it does not implement, so its heavy patch is its default patch. No assertions: the numbers are
+// With --engine own the heavy patch is own_heavy_patch.h instead: the same idea with only parameters that engine-own implements (3 oscillators
+// x 7 unison with a morph and a warp, sub, noise, both filters, 4 LFOs and 7 matrix routes, the effects its tier allows). No assertions: the numbers are
 // for looking at, on the machine they were taken on (docs/PERFORMANCE.md).
 
 #include <algorithm>
@@ -24,6 +25,8 @@
 
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
+
+#include "own_heavy_patch.h"
 
 using namespace synthyboy;
 
@@ -113,7 +116,9 @@ void heavyPatch (IEngine& engine)
 Result run (const Options& o, int voices, const Quality& quality, bool heavy)
 {
     auto engine = createEngine (o.engine);
-    if (heavy)
+    if (heavy && o.engine == EngineKind::own)
+        bench::ownHeavyPatch (*engine);
+    else if (heavy)
         heavyPatch (*engine);
     else
         set (*engine, "master.polyphony", 32.0f);
@@ -236,7 +241,8 @@ int main (int argc, char** argv)
     {
         if ((heavy && ! o.heavyPatch) || (! heavy && ! o.defaultPatch))
             continue;
-        std::printf ("%s:\n", heavy ? "heavy patch (3 oscillators x 7 unison voices, 2 filters, 3 LFOs + matrix, all effects)"
+        std::printf ("%s:\n", heavy ? (o.engine == EngineKind::own ? "heavy patch of the own engine (3 oscillators x 7 unison voices with morph and warp, sub, noise, 2 filters, 4 LFOs + 7 matrix routes, effects)"
+                                                                   : "heavy patch (3 oscillators x 7 unison voices, 2 filters, 3 LFOs + matrix, all effects)")
                                      : "default patch (one saw oscillator, filter 12 kHz, no effects)");
         Quality requested;
         requested.maxVoices = o.voices;
