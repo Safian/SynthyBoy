@@ -36,7 +36,8 @@
 #include <unistd.h>
 #endif
 
-static std::atomic<int> automate[4], automateOther { 0 };
+static std::atomic<int> automate[4], automateOther { 0 }, automateSpectrum { 0 };   // the cursors; anything else; the spectrum columns (they follow the four cursors when the build has them)
+static std::atomic<int> spectrumColumns { 0 };
 static std::atomic<int> firstIndex { -1 };
 static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstIntPtr, void*, float)
 {
@@ -44,6 +45,7 @@ static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstInt
     {
         const int k = index - firstIndex.load();
         if (k >= 0 && k < 4) automate[k].fetch_add (1);
+        else if (k >= 4 && k < 4 + spectrumColumns.load()) automateSpectrum.fetch_add (1);
         else automateOther.fetch_add (1);
         return 1;
     }
@@ -218,10 +220,13 @@ int main (int argc, char** argv)
         return fails ? 1 : 0;
     }
 
-    check (e->numParams == n + 4, "numParams is the engine's count + 4");
+    const int extra = e->numParams - (n + 4);   // the spectrum columns of the build (shell-mpc/spectrum.h): none or 32 ("Spectrum 1" .. "Spectrum 32", spectrum_live_host checks them)
+    spectrumColumns.store (extra);
+    std::printf ("INFO  display parameters after the four cursors: %d\n", extra);
+    check (extra == 0 || extra == 32, "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them)");
     bool ok[5] = {};
     const std::string names[5] = { text (e, effGetParamName, n, ok), text (e, effGetParamName, n + 1, ok + 1), text (e, effGetParamName, n + 2, ok + 2),
-                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4, ok + 4) };
+                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4 + extra, ok + 4) };
     check (ok[0] && ok[1] && ok[2] && ok[3] && ! ok[4] && names[0] == "LFO 1 Cursor" && names[3] == "LFO 4 Cursor", "the four names, nothing after them");
     bool allOff = true, propsOk = true;
     VstParameterProperties props;
@@ -231,7 +236,7 @@ int main (int argc, char** argv)
         propsOk = propsOk && e->dispatcher (e, effGetParameterProperties, n + k, 0, &props, 0.0f) == 1;
     }
     check (allOff && e->dispatcher (e, effCanBeAutomated, 0, 0, nullptr, 0.0f) == 1, "display parameters are not automatable, engine parameters are");
-    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4, 0, &props, 0.0f) == 0, "parameter properties exist for the four only");
+    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4 + extra, 0, &props, 0.0f) == 0, "parameter properties exist for the four (and the spectrum columns) only");
 
     if (mode == "on")
     {
@@ -239,7 +244,7 @@ int main (int argc, char** argv)
         bool zero = true;
         for (int k = 0; k < 4; ++k) zero = zero && idle.hi[k] == 0.0f;
         check (zero, "on: idle (0) while no voice sounds");
-        check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther == 0, "on: no audioMasterAutomate while idle");
+        check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther + automateSpectrum == 0, "on: no audioMasterAutomate while idle");
         check (text (e, effGetParamDisplay, n) == "idle", "on: display text of an idle cursor");
         noteOn (e, 60);
         const auto noteAt = std::chrono::steady_clock::now();
@@ -252,7 +257,7 @@ int main (int argc, char** argv)
         for (int k = 0; k < 4; ++k) few = few && automate[k].load() <= maxCalls;
         check (few, "on: at most HZ calls a second for every cursor: <= 21 per cursor in the 2 s of the default");
         check (automate[0].load() >= minFast && automate[0].load() <= maxCalls, "on: about HZ calls a second for a fast LFO (3/4 of the ticks of 2 s up to the limit)");
-        check (automateOther.load() == 0, "on: audioMasterAutomate only for the display parameters");
+        check (automateOther.load() == 0, "on: audioMasterAutomate only for the display parameters");   // the spectrum columns are display parameters too
         check (text (e, effGetParamDisplay, n).find ('/') != std::string::npos, "on: display text of a cursor cell");
     }
     else
@@ -266,7 +271,7 @@ int main (int argc, char** argv)
         // at 10 ticks a second LFO 4 (64 cells a second) steps 6.4 cells per tick and shows few different cells (the cursor aliases): the call counts tell the speeds apart
         check (hz >= 25 ? s.seen[3].size() > s.seen[0].size() : automate[3].load() >= automate[0].load(), "selftest: LFO 4 is faster than LFO 1");
         if (mode == "quiet")
-            check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther == 0, "quiet: audioMasterAutomate is never called");
+            check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther + automateSpectrum == 0, "quiet: audioMasterAutomate is never called");
         else
         {
             const int maxCalls = maxCallsSince (started, 2);

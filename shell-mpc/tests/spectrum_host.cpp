@@ -109,7 +109,7 @@ int main()
         a2.tick (r2, kRate, q);
         const int t = top (q);
         check (q[t] > 0.5f * spectrumLevelFromDb (-6.02f), "smoothing: the first tick already covers more than half of the rise (fast attack)");
-        std::vector<float> z (4096, 0.0f);
+        std::vector<float> z (4410, 0.0f);
         r2.push (z.data(), z.data(), 4096);
         a2.tick (r2, kRate, q);
         const float first = q[t];

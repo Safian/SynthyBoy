@@ -61,6 +61,21 @@ if(SYNTHYBOY_MPC_CALLBACK_STATS)
     target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
 endif()
 
+# Live spectrum (docs/MPC.md "Spectrum"): 32 more display-only parameters "Spectrum 1" .. "Spectrum 32" after the four LFO cursors, written by the same display thread from an FFT of
+# the plugin's own output (the audio thread only copies samples into a lock-free ring). The skin of scripts/mpc-skin-extras/40_spectrum.py refers to them, so the MPC package needs
+# the plugin built with this ON (the default of this shell). The source default is 0; OFF builds the plugin byte for byte as it was without this code. Needs SYNTHYBOY_MPC_LFO_LIVE.
+option(SYNTHYBOY_MPC_SPECTRUM "MPC shell: the live spectrum display parameters (needs SYNTHYBOY_MPC_LFO_LIVE)" ON)
+option(SYNTHYBOY_MPC_SPECTRUM_SELFTEST "MPC shell: a travelling wave over the 32 columns without a sound (host-side measurements only)" OFF)
+if(SYNTHYBOY_MPC_SPECTRUM)
+    if(NOT SYNTHYBOY_MPC_LFO_LIVE)
+        message(FATAL_ERROR "SYNTHYBOY_MPC_SPECTRUM needs SYNTHYBOY_MPC_LFO_LIVE (the spectrum runs on the display thread)")
+    endif()
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_SPECTRUM=1)
+    if(SYNTHYBOY_MPC_SPECTRUM_SELFTEST)
+        target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_SPECTRUM_SELFTEST=1)
+    endif()
+endif()
+
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
 if(APPLE)
