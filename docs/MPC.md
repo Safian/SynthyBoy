@@ -2,22 +2,26 @@
 
 ## Build
 
-The MPC build is a 32-bit ARMv7 (hard-float, NEON) VST2 module for the Akai MPC Key 61. The build script is `scripts/build-armv7-mpc.sh`; the host needs Docker. The environment variable `MPC_SDK` must point at a checkout of the MPC plugin SDK (it is not part of this repository and must not be copied into it). The environment variable `ARMV7_IMAGE` selects the Docker image (default: the pinned Debian 12 image in the script); an image that already has the cross toolchain installed is faster because the script skips the `apt-get install` step inside the container.
+The MPC package holds two builds of the same VST2 module: a 32-bit ARMv7 hard-float build with NEON (`VST/synthyboy-arm32.so`, `file32`: the MPC Key 61 and the other 32-bit MPCs) and a 64-bit AArch64 build (`VST/synthyboy-arm64.so`, `file64`: the MPC XL and the other 64-bit MPCs). The MPC loads the one that matches its CPU. The build script is `scripts/build-mpc.sh`; the host needs Docker. The environment variable `MPC_SDK` must point at a checkout of the MPC plugin SDK (it is not part of this repository and must not be copied into it). The environment variable `MPC_BUILD_IMAGE` (or the older `ARMV7_IMAGE`) selects the Docker image (default: the pinned Debian 12 image in the script); an image that already has the cross toolchains installed is faster because the script skips the `apt-get install` step inside the container.
 
-The exact command line is `scripts/build-armv7-mpc.sh [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR]`. The script does the following, step by step:
+The exact command line is `scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--bench] [--no-validate]`; `--arch` defaults to `all`. `scripts/build-armv7-mpc.sh` is a thin wrapper for `scripts/build-mpc.sh --arch arm32` (output in `build-armv7-mpc/`) that keeps the old calls working. The script does the following, step by step:
 
-1. It runs a `docker run` container mounting the source tree read-only, the build directory, the output directory, and the SDK.
-2. Inside the container it installs missing packages (the cross compiler, `binutils-arm-linux-gnueabihf`, `cmake`, `file`, `git`, `ninja` or `make`).
-3. It runs `cmake` with the toolchain file `cmake/toolchains/armv7-linux-gnueabihf.cmake`, with `-DSYNTHYBOY_BUILD_PLUGIN=OFF`, `-DSYNTHYBOY_BUILD_TESTS=OFF`, `-DSYNTHYBOY_BUILD_MPC_SHELL=ON`, `-DSYNTHYBOY_WITH_VITAL=OFF`, and `-DSYNTHYBOY_SHELL_ENGINE=own`. The package is the own engine; Vital is not built.
+1. For each architecture it runs a `docker run` container (running `scripts/mpc-container-build.sh`) mounting the source tree read-only, the build tree of that architecture (`<build-dir>/arm32`, `<build-dir>/arm64`), the output directory, and the SDK.
+2. Inside the container it installs missing packages (the cross compiler, the matching `binutils`, `cmake`, `file`, `git`, `ninja` or `make`).
+3. It runs `cmake` with the toolchain file `cmake/toolchains/armv7-linux-gnueabihf.cmake` (`-march=armv7-a -mfpu=neon -mfloat-abi=hard`) or `cmake/toolchains/aarch64-linux-gnu.cmake` (`-march=armv8-a`), with `-DSYNTHYBOY_BUILD_PLUGIN=OFF`, `-DSYNTHYBOY_BUILD_TESTS=OFF`, `-DSYNTHYBOY_BUILD_MPC_SHELL=ON`, `-DSYNTHYBOY_WITH_VITAL=OFF`, and `-DSYNTHYBOY_SHELL_ENGINE=own`. The package is the own engine; Vital is not built.
 4. It builds the `synthyboy_mpc` target.
-5. It checks that the resulting `.so` is an ARMv7 hard-float ELF file (using `file` and `readelf`).
-6. It checks that the `.so` needs only `libc`, `libm`, `libdl`, `libpthread`, and `ld-linux-armhf` (no other shared libraries).
-7. It checks that `VSTPluginMain` is the only exported symbol (using `nm -D`).
-8. It produces a stripped copy (`synthyboy_mpc.stripped.so`) for the package; the unstripped module stays in the build tree for profiling.
-9. On the host it assembles the plugin folder `Safian - VST - SynthyBoy` with `VST/synthyboy-arm32.so` (the stripped copy) and `Content/presets` (a copy of `content/presets`).
-10. It generates the Plugin Skins from `scripts/mpc-ui-pages.json` (using `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`), unless `--skins DIR` is given.
-11. It generates `plugin.json` and `version.xml` via `scripts/gen-mpc-manifest.py`.
-12. It runs the SDK's `tools/validate.py` on the finished folder. The validator's schema lists `file64` as required, while the SDK's `plugin-folder-format.md` says a 32-bit MPC uses only `file32`; the build script accepts exactly that one finding and fails on any other error.
+5. It checks, with the same checks for both architectures, that the `.so` is an ELF file of the right class and machine (`file`; for arm32 also `readelf -A`: hard-float), that it needs only `libc`, `libm`, `libdl`, `libpthread`, and the dynamic loader (`ld-linux-armhf` / `ld-linux-aarch64`), that it references no GLIBC symbol version above 2.39 (the glibc of the MPC OS 3 firmware; Debian 12 has 2.36) and no dynamic `libstdc++`, and that `VSTPluginMain` is the only exported symbol (using `nm -D`).
+6. It produces a stripped copy (`synthyboy_mpc.stripped.so`) for the package, checks it again (same checks, and the exports after strip); the unstripped module stays in the build tree for profiling.
+7. On the host it assembles ONE plugin folder `Safian - VST - SynthyBoy` with `VST/synthyboy-arm32.so` and `VST/synthyboy-arm64.so` (the stripped copies of this run only; `VST/` is emptied first) and `Content/presets` (a copy of `content/presets`).
+8. It generates the Plugin Skins from `scripts/mpc-ui-pages.json` (using `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`, then `scripts/apply-mpc-skin-extras.py`), unless `--skins DIR` is given.
+9. It generates `plugin.json` and `version.xml` via `scripts/gen-mpc-manifest.py`.
+10. It runs the SDK's `tools/validate.py` on the finished folder. With `--arch all` the validator must report no error. The validator's schema lists `file32` and `file64` as required, while the SDK's `plugin-folder-format.md` says a 32-bit MPC uses only `file32` and a 64-bit one only `file64`; a single-architecture build (`--arch arm32` or `--arch arm64`) accepts exactly the one finding about the key of the architecture that was not built and fails on any other error.
+
+### MPC XL (64-bit, AArch64)
+
+The MPC XL has four Cortex-A55 and four Cortex-A76 cores and runs only the 64-bit loader (`/lib/ld-linux-aarch64.so.1`, libstdc++ 6.0.32). The arm64 module is built with the Debian 12 `g++-aarch64-linux-gnu` (glibc 2.36, below the 2.39 limit of the SDK validator), `-march=armv8-a` (no newer architecture level, no `-mcpu=native`, so it runs on the A55 and the A76 cores), `-static-libstdc++ -static-libgcc` and hidden visibility, the same link options as the arm32 module. `scripts/build-mpc.sh --arch arm64` builds only this one (the folder then has `file64` only).
+
+`--bench` also builds `synthyboy_bench` and `synthyboy_noteon_bench` with the same toolchain (a separate CMake tree `<build-dir>/<arch>-bench` with `-DSYNTHYBOY_BUILD_TESTS=ON`, libstdc++ linked statically) and puts them into `<out>/bench-arm32/` and `<out>/bench-arm64/`, outside the plugin folder; see Benchmark switches for what they do on the device.
 
 The module must be built with GCC, not with Zig: `--exclude-libs,ALL` is not understood by Zig's linker and a Zig-built module crashed at host exit on the device.
 
@@ -27,9 +31,10 @@ The native acceptance is `sh shell-mpc/accept.sh` with `MPC_SDK` set. It builds 
 
 The output folder is named `Safian - VST - SynthyBoy` and contains:
 
-- `plugin.json` — the MPC manifest. It has only `file32` (pointing to `VST/synthyboy-arm32.so`); there is no 64-bit build, so `file64` is absent. The SDK validator reports the missing `file64` and the build script accepts exactly that finding.
+- `plugin.json` — the MPC manifest with `file32` (`VST/synthyboy-arm32.so`) and `file64` (`VST/synthyboy-arm64.so`); a key is written only for a binary that exists.
 - `version.xml` — the content version of the package (the root manifest version with a fourth part) and, when `Plugin Skins` is present, the `uiversion` of the skins.
 - `VST/synthyboy-arm32.so` — the stripped 32-bit ARMv7 shared object that exports only `VSTPluginMain`.
+- `VST/synthyboy-arm64.so` — the stripped 64-bit AArch64 shared object that exports only `VSTPluginMain`.
 - `Content/presets` — the factory presets from `content/presets`, shown as programs in the MPC's preset browser.
 - `Plugin Skins` — the touch-screen UI and Q-Links knob mapping, generated from `scripts/mpc-ui-pages.json` via `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`.
 
@@ -131,7 +136,7 @@ Changes that do not alter the sound at any tier (they compute the same samples w
 
 ## Benchmark switches
 
-The benchmark `synthyboy_bench` (`bench/bench_engine.cpp`) and `synthyboy_noteon_bench` run on the device as they are (built by `cmake` for the armv7 toolchain with `-DSYNTHYBOY_BUILD_TESTS=ON`). The switches used for the measurements above:
+The benchmark `synthyboy_bench` (`bench/bench_engine.cpp`) and `synthyboy_noteon_bench` run on the device as they are (built by `scripts/build-mpc.sh --bench`, or by `cmake` for the armv7 / aarch64 toolchain with `-DSYNTHYBOY_BUILD_TESTS=ON`). The switches used for the measurements above:
 
 - `--preset FILE` and `--preset-dir DIR` play `.sbpreset` files through the same loading path as the shell (parameters by `setParam`, then the content); the directory mode prints one line per preset, the presets over the block budget in the worst block and the top 15 by average. `--csv FILE` writes name, average, 99th percentile and worst block of every preset.
 - `--voices K` plays K notes (default: the voices of the tier); `--tier low|medium|high`, `--seconds N`, `--sr 44100`, `--retrigger S`.
