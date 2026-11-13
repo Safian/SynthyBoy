@@ -28,10 +28,9 @@ PLAIN_ROWS = (44, 188, 332, 476)
 GRAPHIC_ROWS = {2: 343, 3: 483}  # tabs with a picture: only the lower two rows exist
 ROW_H = 138
 SLOT_TYPES = ("knobUni", "knobBi", "toggle", "faderUni", "faderBi", "radio3", "radio4", "sliderWithFocus", "sliderWithFocusMenu")
-ALIGNED = ("knobUni", "knobBi")  # definitions that get the centred "name / control / value" layout
+ALIGNED = ("knobUni", "knobBi", "toggle", "faderUni", "faderBi", "radio3", "radio4")  # definitions that get the centred layout
 SLOT_H = {"knobUni": ROW_H, "knobBi": ROW_H, "toggle": ROW_H, "faderUni": 100, "faderBi": 100, "radio3": 100, "radio4": 100,
           "sliderWithFocus": 100, "sliderWithFocusMenu": 100}
-GENERATOR_TOGGLE_H = 107         # a toggle keeps the generator's height until its definition is aligned
 NAME_FONT, VALUE_FONT = 18.0, 24.0
 CENTRED = "horizontallyCentred verticallyCentred"
 SEG_DY = 54                      # the text over a radio button: y of the buttons inside the radio slot
@@ -92,7 +91,7 @@ FIT = {"sliderWithFocus": _selector, "sliderWithFocusMenu": _selector}   # geome
 
 
 def slot_height(typ):
-    return SLOT_H[typ] if typ != "toggle" or typ in ALIGNED else GENERATOR_TOGGLE_H
+    return SLOT_H[typ]
 
 
 def _fit_definitions(ctx_defs):

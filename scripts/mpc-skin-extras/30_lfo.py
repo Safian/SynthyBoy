@@ -8,7 +8,8 @@
 # "LFO N Cursor" (index = number of entries of docs/params.json + N - 1, shell-mpc/lfo_live.h), so the same picture is the static shape picture
 # and the live display. The plugin must be built with SYNTHYBOY_MPC_LFO_LIVE (the default of shell-mpc): without those parameters the host hides the pictures.
 # The strips are rendered from the engine's own LFO code by scripts/gen-mpc-lfo-strips.py and committed in lfo-strips/ (the build copies them and needs no compiler). The existing controls and Q-Links.json are not touched.
-# Place: x 86, 208 x 38: inside the first column cell (right edge 294; the host's orange Q-Link frame has its right edge at about x 296), directly above the Shape selector.
+# Place: 208 x 38 directly above the Shape selector; 80_layout.py (runs later) centres it over the column of the selector (x 56, the axis of the first Q-Link frame)
+# and moves it with the selector.
 
 import importlib.util
 import json
