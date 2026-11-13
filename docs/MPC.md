@@ -114,6 +114,18 @@ These statements come from the SDK's documents (host-contract.md, install-and-te
 
 What the shell does with programs and the chunk is its own behaviour and is covered by the acceptance tests, whatever the host's order turns out to be. `effGetChunk` returns a JSON text starting with `{"mpcProgram":N,"mpcProgramName":"<escaped name>",` followed by the engine state. On `effSetChunk` the shell reads the program number and name and calls `resolveProgram` to map them to the current preset list. The name decides: the stored index is used only if the program at that index has that name (or to choose between programs of the same name), otherwise the first program of that name is taken, so a project still finds its program when a later package has a different preset list. A chunk from an older build that has only the number still loads. If the name is not in the list, `resolveProgram` returns -1 and the shell enters a "no program" state: the sound is the one stored in the chunk, the host is given index 0, the saved name is shown as the program name and written into the next chunk again. In case the host selects the saved program number again right after restoring the chunk, that one selection is ignored (the chunk wins); any other program selection or a parameter edit ends this protection, and it is never armed in the "no program" state.
 
+## Envelope tabs (Env 1 - Env 4)
+
+The generated skin has 32 tabs; the four envelopes have a tab each (`Env 1` .. `Env 4`). `scripts/mpc-skin-extras/10_env.py`
+(run after the SDK `gen_ui.py` by `scripts/apply-mpc-skin-extras.py`) puts a full-width editable curve (SDK `Envelope`,
+`envelopeType` `DAHDSR`) on the top two rows of each tab. Dragging a stage handle sets `envN.delay`, `attack`, `hold`, `decay`, `sustain`
+or `release`; double tap (or Enter) opens the curve full screen (`EnvelopeOverlay`).
+
+- The curve draws straight segments between the handles. The curvature parameters (`attack_curve`, `decay_curve`) stay knobs.
+- The time axis is linear over the whole parameter range (no skew or per-stage width key exists in the SDK `Envelope`), so short times are narrow.
+- The eight knobs sit in the lower two rows and are Q-Link 1-8 (the generator's own Q-Link map of the tab is rewritten to match).
+  `Env 1 Release` has a knob on this tab as well as on `Macros` (the generator places a parameter once; the module adds the second knob).
+
 ## Sound differences at tier low
 
 The MPC build runs the engine at `Tier::low` (`core/include/synthyboy/quality.h`). Everything below applies only at that tier; the other tiers and the offline render (which runs on an engine at the high tier) are not changed by it, and the stored parameter values and the saved state are never changed, so a preset keeps its shape and a project saved on the MPC sounds in full on a desktop. Error bounds are absolute for a signal whose full scale is 1, unless they are called relative.

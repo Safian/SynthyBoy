@@ -78,16 +78,26 @@
       ]
     },
     {
-      "name": "Env 1-2",
+      "name": "Env 1",
       "kick": [
-        "env1",
+        "env1"
+      ]
+    },
+    {
+      "name": "Env 2",
+      "kick": [
         "env2"
       ]
     },
     {
-      "name": "Env 3-4",
+      "name": "Env 3",
       "kick": [
-        "env3",
+        "env3"
+      ]
+    },
+    {
+      "name": "Env 4",
+      "kick": [
         "env4"
       ]
     },
