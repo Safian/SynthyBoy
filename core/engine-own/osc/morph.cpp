@@ -50,23 +50,24 @@ const Twiddles& tw()
     return t;
 }
 
-/** Unscaled inverse transform (positive exponent) of 2048 complex points, in place. */
-void inverseFft (float* re, float* im) noexcept
+/** Unscaled inverse transform (positive exponent) of n complex points (2048, or 1024 for the half size transform of the real signal), in place. */
+void inverseFft (float* re, float* im, int n = kN) noexcept
 {
     const Twiddles& t = tw();
-    for (int i = 0; i < kN; ++i)
+    const int shift = n == kN ? 0 : 1; // the 10 bit reversal of i < 1024 is the 11 bit one shifted down
+    for (int i = 0; i < n; ++i)
     {
-        const int j = t.rev[i];
+        const int j = t.rev[i] >> shift;
         if (i < j)
         {
             std::swap (re[i], re[j]);
             std::swap (im[i], im[j]);
         }
     }
-    for (int len = 2; len <= kN; len <<= 1)
+    for (int len = 2; len <= n; len <<= 1)
     {
         const int half = len >> 1, step = kN / len;
-        for (int i = 0; i < kN; i += len)
+        for (int i = 0; i < n; i += len)
             for (int k = 0; k < half; ++k)
             {
                 const float wr = t.cs[k * step], wi = t.sn[k * step];
@@ -82,7 +83,7 @@ void inverseFft (float* re, float* im) noexcept
 } // namespace
 
 void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int type, float m, int maxHarmonic, float phaseInc, double hostRate, float* out,
-                      MorphScratch& sc) noexcept
+                      MorphScratch& sc, bool fast) noexcept
 {
     const int frames = wt.numFrames();
     const int f0 = std::clamp (static_cast<int> (framePos), 0, std::max (frames - 1, 0));
@@ -284,10 +285,35 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
             break;
     }
     sc.re[0] = dc; // the mean of the frame is kept by every morph type
-    inverseFft (sc.re, sc.im);
     float* dst = out;
-    for (int i = 0; i < kN; ++i)
-        dst[i] = sc.re[i];
+    if (fast)
+    {
+        // the signal is real: x[2m] + j x[2m + 1] is the transform of half the size of Z[k] = E[k] + j O[k], with E[k] = X[k] + X[k + M] and
+        // O[k] = (X[k] - X[k + M]) e^{j 2 pi k / N}, M = N / 2
+        constexpr int kM = kN / 2;
+        const Twiddles& t = tw();
+        float zr[kM], zi[kM];
+        for (int k = 0; k < kM; ++k)
+        {
+            const float er = sc.re[k] + sc.re[k + kM], ei = sc.im[k] + sc.im[k + kM];
+            const float dr = sc.re[k] - sc.re[k + kM], di = sc.im[k] - sc.im[k + kM];
+            const float orr = dr * t.cs[k] - di * t.sn[k], oi = dr * t.sn[k] + di * t.cs[k];
+            zr[k] = er - oi; // E + j O
+            zi[k] = ei + orr;
+        }
+        inverseFft (zr, zi, kM);
+        for (int m = 0; m < kM; ++m)
+        {
+            dst[2 * m] = zr[m];
+            dst[2 * m + 1] = zi[m];
+        }
+    }
+    else
+    {
+        inverseFft (sc.re, sc.im);
+        for (int i = 0; i < kN; ++i)
+            dst[i] = sc.re[i];
+    }
     dst[-1] = dst[kN - 1];
     dst[kN] = dst[0];
     dst[kN + 1] = dst[1];

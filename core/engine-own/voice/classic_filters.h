@@ -331,7 +331,7 @@ private:
     // four saturating one pole stages with global feedback (zero delay feedback solved linearly); the output is a weighted sum of the input and the stage outputs (document 05, 2.1)
     struct LadderSetup
     {
-        float G = 0.0f, k = 0.0f, pre = 1.0f, post = 1.0f, c[5] = {};
+        float G = 0.0f, k = 0.0f, pre = 1.0f, post = 1.0f, invDen = 1.0f, c[5] = {};
     };
     LadderSetup lad;
     bool ladValid = false;
@@ -363,6 +363,7 @@ private:
         z.post = 1.0f / std::sqrt ((d - 1.0f) * (st5 == 1 ? 0.25f : 0.5f) + 1.0f);
         const float rr = st5 == 0 ? r : std::sin (kPif * 0.5f * r);
         z.k = lerp (0.001f, 4.1f, rr);
+        z.invDen = 1.0f / (1.0f + z.k * z.G * z.G * z.G * z.G);
         return z;
     }
     void ladder (const float* in, float* out, int n, float f, float r, float d, int style, float bRaw) noexcept
@@ -377,7 +378,7 @@ private:
         for (int i = 0; i < n; ++i)
         {
             const float S = G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3];
-            const float u = th ((pre * in[i] - k * S) / (1.0f + k * G * G * G * G) * 0.9f) * 1.1f;
+            const float u = th ((fastMath ? (pre * in[i] - k * S) * lad.invDen : (pre * in[i] - k * S) / (1.0f + k * G * G * G * G)) * 0.9f) * 1.1f;
             float x = u, st[4];
             for (int j = 0; j < 4; ++j)
             {
@@ -411,8 +412,8 @@ public:
         {
             const float Sa = za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3];
             const float Sb = zb.G * zb.G * zb.G * B.s[0] + zb.G * zb.G * B.s[1] + zb.G * B.s[2] + B.s[3];
-            const float ua = A.th ((za.pre * inA[i] - za.k * Sa) / (1.0f + za.k * za.G * za.G * za.G * za.G) * 0.9f) * 1.1f;
-            const float ub = B.th ((zb.pre * inB[i] - zb.k * Sb) / (1.0f + zb.k * zb.G * zb.G * zb.G * zb.G) * 0.9f) * 1.1f;
+            const float ua = A.th ((A.fastMath ? (za.pre * inA[i] - za.k * Sa) * za.invDen : (za.pre * inA[i] - za.k * Sa) / (1.0f + za.k * za.G * za.G * za.G * za.G)) * 0.9f) * 1.1f;
+            const float ub = B.th ((B.fastMath ? (zb.pre * inB[i] - zb.k * Sb) * zb.invDen : (zb.pre * inB[i] - zb.k * Sb) / (1.0f + zb.k * zb.G * zb.G * zb.G * zb.G)) * 0.9f) * 1.1f;
             float xa = ua, xb = ub, sta[4], stb[4];
             for (int j = 0; j < 4; ++j)
             {

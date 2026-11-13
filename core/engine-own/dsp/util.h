@@ -40,6 +40,15 @@ inline float clamp01 (float v) noexcept
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
+/** std::floor for floats: the same value for every input (zero keeps its sign, |x| >= 2^22 and NaN go to the library), without the library call that a 32 bit ARM makes for floorf. */
+inline float ffloor (float x) noexcept
+{
+    if (!(std::fabs (x) < 4194304.0f) || x == 0.0f)
+        return std::floor (x);
+    const int i = static_cast<int> (x); // truncates towards zero
+    return static_cast<float> (i - (x < static_cast<float> (i) ? 1 : 0));
+}
+
 inline float lerp (float a, float b, float t) noexcept
 {
     return a + (b - a) * t;

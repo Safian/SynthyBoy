@@ -177,7 +177,7 @@ public:
         for (int s = 0; s < n; ++s)
         {
             phase += p.rate / sr;
-            phase -= std::floor (phase);
+            phase -= ffloor (phase);
         }
     }
     void set (const Params& np) noexcept { p = np; }
@@ -193,7 +193,7 @@ public:
         for (int s = 0; s < n; ++s)
         {
             phase += p.rate / sr;
-            phase -= std::floor (phase);
+            phase -= ffloor (phase);
             const float in[2] = { l[s], r[s] };
             float acc[2] = { 0.0f, 0.0f };
             for (int i = 0; i < V; ++i)
@@ -204,7 +204,7 @@ public:
                     {
                         const int k = ((i * 2 + vi) * 2) + c;
                         float ph = phase + (c == 1 ? 0.25f : 0.0f) + (vi == 1 ? 0.5f : 0.0f) + 0.25f * static_cast<float> (i) / static_cast<float> (V);
-                        ph -= std::floor (ph);
+                        ph -= ffloor (ph);
                         const float mod = 1.0f + 0.5f * (fast ? fastmath::sinCycles (ph) : std::sin (kTwoPif * ph));
                         const float base = vi == 0 ? p.delay1 : p.delay2;
                         const float delay = mod * 0.03f * p.depth + lerp (base, avg, t);
@@ -247,7 +247,7 @@ public:
         for (int s = 0; s < n; ++s)
         {
             phase += p.rate / sr;
-            phase -= std::floor (phase);
+            phase -= ffloor (phase);
         }
     }
     void set (const Params& np) noexcept { p = np; }
@@ -262,12 +262,12 @@ public:
         for (int i = 0; i < n; ++i)
         {
             phase += p.rate / sr;
-            phase -= std::floor (phase);
+            phase -= ffloor (phase);
             for (int c = 0; c < 2; ++c)
             {
                 const float ph = phase - 0.5f * p.phaseOffset + (c == 1 ? p.phaseOffset : 0.0f);
                 const float x = ph + 0.75f;
-                const float tri = std::fabs (2.0f * (x - std::floor (x)) - 1.0f);
+                const float tri = std::fabs (2.0f * (x - ffloor (x)) - 1.0f);
                 const float mod = p.depth * (2.0f * tri - 1.0f) + 1.0f;
                 const float delay = std::max ((dc - 0.0005f) * mod + 0.0005f, 1.0f / 20000.0f);
                 const float period = std::clamp (delay * sr, 2.0f, 0.85f * sr);
@@ -301,7 +301,7 @@ public:
         for (int s = 0; s < n; ++s)
         {
             phase += p.rate / sr;
-            phase -= std::floor (phase);
+            phase -= ffloor (phase);
         }
     }
     void set (const Params& np) noexcept { p = np; }
@@ -319,11 +319,11 @@ public:
         for (int i = 0; i < n; ++i)
         {
             phase += p.rate / sr;
-            phase -= std::floor (phase);
+            phase -= ffloor (phase);
             for (int c = 0; c < 2; ++c)
             {
                 const float ph = phase + (c == 1 ? p.phaseOffset : -p.phaseOffset) * 0.5f;
-                const float x01 = ph - std::floor (ph);
+                const float x01 = ph - ffloor (ph);
                 const float v = 2.0f * std::fabs (2.0f * x01 - 1.0f) - 1.0f; // triangle -1 .. 1
                 const float e2 = (centreNote + p.depthSemis * v) * (1.0f / 12.0f);
                 const float hz = std::clamp (8.1757989f * (fast ? fastmath::exp2 (e2) : std::exp2 (e2)), 20.0f, 0.45f * sr);
@@ -424,8 +424,8 @@ private:
         {
             case 0: y = th (v); break;
             case 1: y = std::clamp (v, -1.0f, 1.0f); break;
-            case 2: { const float t = 0.25f * v + 0.75f; y = std::fabs (-4.0f * (t - std::floor (t)) + 2.0f) - 1.0f; break; }
-            case 3: { const float t = 0.5f - 0.25f * v; y = fast ? fastmath::sinCycles (t) : std::sin (kTwoPif * (t - std::floor (t))); break; }
+            case 2: { const float t = 0.25f * v + 0.75f; y = std::fabs (-4.0f * (t - ffloor (t)) + 2.0f) - 1.0f; break; }
+            case 3: { const float t = 0.5f - 0.25f * v; y = fast ? fastmath::sinCycles (t) : std::sin (kTwoPif * (t - ffloor (t))); break; }
             case 4: { const float q = std::clamp (u * u, 1.5e-8f, 1.0f); y = std::round (x / q) * q; break; }
             case 5:
             {

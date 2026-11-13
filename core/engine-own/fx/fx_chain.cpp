@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include "fx_chain.h"
+#include "../dsp/section_timing.h"
 
 #include <algorithm>
 #include <cstdarg>
@@ -301,6 +302,7 @@ void FxChain::buildPlan (const float*) noexcept
 
 void FxChain::update (const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask, bool inputsSame) noexcept
 {
+    SB_SECTION (sections::fxUpdate);
     if (inputsSame && idleSettled >= 2 && !active && (pool == nullptr || !pool->anyPending()))
     {
         configured = false; // nothing is on, nothing changed, and the bookkeeping below has already reached its fixed point
@@ -452,6 +454,7 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
 {
     if (m < kNumFxModules)
     {
+        SB_SECTION (static_cast<sections::Id> (sections::fxModule0 + m));
         if (fadeIn[m])
         {
             float dl[kControlPeriod], dr[kControlPeriod];
@@ -478,6 +481,7 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
         }
         return;
     }
+    SB_SECTION (sections::fxSplitters);
     switch (m)
     {
         case 13: // splitter L/H: the bands run through their racks (3 low, 4 high) and are summed again
@@ -525,6 +529,7 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
 /** A slot: a linear 10 ms crossfade between the outgoing and the incoming module (nullptr = the dry input), both fed with the same input. */
 void FxChain::runSlot (int s, float* l, float* r, int n, int t0) noexcept
 {
+    SB_SECTION (sections::fxPool);
     FxPool::Slot& sl = pool->slot (s);
     auto runOne = [&] (FxModule* m, float* a, float* b)
     {

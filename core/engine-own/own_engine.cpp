@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include "own_engine.h"
+#include "dsp/section_timing.h"
 
 #include <algorithm>
 #include <cmath>
@@ -798,6 +799,7 @@ void OwnEngine::controlTick() noexcept
 
 void OwnEngine::process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept
 {
+    SB_SECTION (sections::engineRest);
     if (left == nullptr || numFrames <= 0)
         return;
     std::fill (left, left + numFrames, 0.0f);

@@ -136,6 +136,15 @@ public:
 
 /** The engine written for this project (always built; the only engine on iOS). */
 std::unique_ptr<IEngine> createOwnEngine();
+/** Own engine, benchmark only: the time of a block by section. Available only in a build with SYNTHYBOY_SECTION_TIMING (otherwise ownSectionTimingAvailable () is false and the
+    totals stay zero). Totals are exclusive times in ms over all blocks since ownSectionReset (); read between blocks. ownSectionClockCostNs (): the measured cost of one scope. */
+bool ownSectionTimingAvailable() noexcept;
+int ownSectionCount() noexcept;
+const char* ownSectionName (int index) noexcept;
+void ownSectionReset() noexcept;
+void ownSectionRead (int index, double& totalMs, unsigned long long& calls) noexcept;
+double ownSectionClockCostNs() noexcept;
+
 /** Own engine only: the unison voices per oscillator at tier low (see OwnEngine::setLowTierUnisonCap; 0 = no cap, default 3). False if `engine` is not an own engine. */
 bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept;
 

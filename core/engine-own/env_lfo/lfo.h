@@ -24,8 +24,8 @@ inline float lfoShape (int shape, float p, uint32_t stepSeed) noexcept
         case 3: return 1.0f - 2.0f * p;                                         // saw down
         case 4: return p < 0.5f ? 1.0f : -1.0f;                                 // square
         case 5: return p < 0.25f ? 1.0f : -1.0f;                                // pulse 25 %
-        case 6: return 2.0f * std::floor (p * 4.0f) / 3.0f - 1.0f;             // 4 steps up
-        case 7: return 1.0f - 2.0f * std::floor (p * 4.0f) / 3.0f;             // 4 steps down
+        case 6: return 2.0f * ffloor (p * 4.0f) / 3.0f - 1.0f;             // 4 steps up
+        case 7: return 1.0f - 2.0f * ffloor (p * 4.0f) / 3.0f;             // 4 steps down
         case 8: // eight fixed levels over eighths of a cycle (docs/engine-spec/03-envelopes-lfos.md 3.2)
         {
             static const float kLevels[8] = { 0.2f, 0.9f, 0.5f, 1.0f, 0.1f, 0.7f, 0.35f, 0.8f };
@@ -61,7 +61,7 @@ inline float lfoSwing (float u, float sw) noexcept
         return u;
     const float b = 0.5f + 0.25f * std::min(sw, 1.0f);
     const float x = u * 4.0f;
-    const float k = std::floor (x);
+    const float k = ffloor (x);
     const float w = x - k;
     const float w2 = w < b ? 0.5f * w / b : 0.5f + 0.5f * (w - b) / (1.0f - b);
     return (k + w2) * 0.25f;
@@ -116,7 +116,7 @@ struct LfoCore
                 break;
             default:
                 offset += inc;
-                offset -= std::floor (offset);
+                offset -= ffloor (offset);
                 break;
         }
     }
@@ -127,7 +127,7 @@ struct LfoCore
         {
             case 2: return std::min (offset + knob, 1.0f);
             case 3: case 4: case 5: return std::min (offset, 1.0f);
-            default: { const float u = offset + knob; return u - std::floor (u); }
+            default: { const float u = offset + knob; return u - ffloor (u); }
         }
     }
 };

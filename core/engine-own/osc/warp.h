@@ -70,7 +70,7 @@ inline float warpBandwidthFactor (int type, float a) noexcept
 
 inline float frac (float x) noexcept
 {
-    return x - std::floor (x);
+    return x - ffloor (x);
 }
 
 /** True for the warps that can create content far above the pitch (they make the oscillator run oversampled). Odd/Even and the two filters are
@@ -94,7 +94,7 @@ inline float remapCurveAt (const float* curve, float u) noexcept
 inline float remapParts (const float* curve, float p, float a, int parts) noexcept
 {
     const float h = p * static_cast<float> (parts);
-    const float whole = std::floor (h);
+    const float whole = ffloor (h);
     const float u = h - whole;
     return (whole + u + a * (remapCurveAt (curve, u) - u)) / static_cast<float> (parts);
 }

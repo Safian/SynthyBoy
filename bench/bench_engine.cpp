@@ -139,6 +139,7 @@ struct Options
     std::string tier = "all"; // requested | low | medium | high | all
     bool ftz = false;
     int unisonCap = -1; // --unison-cap N: tier low unison voices per oscillator of the own engine (0 = none, -1 = the engine default)
+    bool sections = false; // --sections: the time of a block by section (a build with SYNTHYBOY_SECTION_TIMING=ON)
     bool idle = false; // --idle: no notes at all (the cost of an empty block)
 };
 
@@ -262,6 +263,8 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy)
             std::stable_sort (events.begin(), events.end(), [] (const Event& x, const Event& y) { return x.frame < y.frame; });
         }
 
+        if (b == warmupBlocks && o.sections)
+            ownSectionReset();
 #ifdef SB_BENCH_PROFILE
         Profiler::active = (o.profileFile != nullptr && b >= warmupBlocks) ? 1 : 0;
 #endif
@@ -277,6 +280,30 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy)
     }
     if (sink == 12345.678f)
         std::puts ("");
+
+    if (o.sections)
+    {
+        const double blocks = static_cast<double> (measuredBlocks);
+        double total = 0.0;
+        unsigned long long totalCalls = 0;
+        double ms[64] = {};
+        unsigned long long calls[64] = {};
+        const int count = std::min (ownSectionCount(), 64);
+        for (int i = 0; i < count; ++i)
+        {
+            ownSectionRead (i, ms[i], calls[i]);
+            total += ms[i];
+            totalCalls += calls[i];
+        }
+        const double clockNs = ownSectionClockCostNs();
+        std::printf ("    sections (exclusive time, %.0f blocks; one scope costs about %.0f ns, %.1f scopes per block = %.4f ms per block of the total)\n", blocks, clockNs,
+                     static_cast<double> (totalCalls) / blocks, clockNs * 1.0e-6 * static_cast<double> (totalCalls) / blocks);
+        std::printf ("    %-52s %12s %8s %12s\n", "section", "ms / block", "share", "calls / blk");
+        for (int i = 0; i < count; ++i)
+            if (calls[i] > 0)
+                std::printf ("    %-52s %12.4f %7.1f%% %12.1f\n", ownSectionName (i), ms[i] / blocks, total > 0.0 ? 100.0 * ms[i] / total : 0.0, static_cast<double> (calls[i]) / blocks);
+        std::printf ("    %-52s %12.4f %7.1f%%\n", "sum of the sections", total / blocks, 100.0);
+    }
 
     Result r;
     double sum = 0.0;
@@ -300,7 +327,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--unison-cap N] [--tier requested|low|medium|high|all]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--sections] [--unison-cap N] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -334,6 +361,7 @@ int main (int argc, char** argv)
         else if (a == "--profile")   o.profileFile = next();
         else if (a == "--ftz")       o.ftz = true;
         else if (a == "--idle")      o.idle = true;
+        else if (a == "--sections")  o.sections = true;
         else if (a == "--unison-cap") o.unisonCap = std::atoi (next());
         else if (a == "--tier")      o.tier = next();
         else usage ("unknown argument");
@@ -350,6 +378,11 @@ int main (int argc, char** argv)
     if (o.profileFile != nullptr)
         std::fprintf (stderr, "bench: --profile needs Linux ARM; ignored\n");
 #endif
+    if (o.sections && !ownSectionTimingAvailable())
+    {
+        std::fprintf (stderr, "bench: --sections needs a build with -DSYNTHYBOY_SECTION_TIMING=ON\n");
+        return 2;
+    }
     const char* error = nullptr;
     if (createEngine (o.engine, &error) == nullptr)
     {

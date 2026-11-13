@@ -170,7 +170,7 @@ TEST (unison_cap_follows_a_tier_change_while_playing)
         for (size_t i = 0; i < a.size(); ++i)
             if (a[i] != b[i])
             {
-                std::printf ("first difference at sample %zu (block %zu, %s): %g vs %g\n", i % 256, i / 256, (i % 256) < 128 ? "L" : "R", a[i], b[i]);
+                std::printf ("first difference at sample %zu (block %zu, %s): %.9g vs %.9g\n", i % 256, i / 256, (i % 256) < 128 ? "L" : "R", a[i], b[i]);
                 break;
             }
     CHECK (same (a, b));

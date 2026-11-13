@@ -11,6 +11,7 @@
 
 #include "../dsp/util.h"
 #include "../dsp/simd.h"
+#include "../dsp/section_timing.h"
 #include "morph.h"
 #include "warp.h"
 #include "wavetable_bank.h"
@@ -108,6 +109,38 @@ public:
     static constexpr int kOversampleLow = 2, kTapsLow = 32;
     static inline const DecimatorTaps<128> kDecimator4 { 0.105, 7.5 }; // cycles per sample of the 4x signal
     static inline const DecimatorTaps<32> kDecimator2 { 0.21, 7.5 };   // cycles per sample of the 2x signal
+    /** The taps of the 2x decimator in reversed order, so that the dot product with the newest samples runs forwards through memory. */
+    struct ReversedTaps
+    {
+        float c[kTapsLow];
+        ReversedTaps()
+        {
+            for (int i = 0; i < kTapsLow; ++i)
+                c[i] = kDecimator2.c[kTapsLow - 1 - i];
+        }
+    };
+    static inline const ReversedTaps kDecimator2Rev {};
+    /** sum of taps[i] * x[i] over the 32 taps of the low cost decimator, as four interleaved partial sums (lane j takes the taps 4k + j) added as (s0 + s1) + (s2 + s3): the
+        NEON and the scalar version do the same additions in the same order. */
+    static float dot32 (const float* x, const float* taps) noexcept
+    {
+#if SB_NEON
+        float32x4_t acc = vmulq_f32 (vld1q_f32 (x), vld1q_f32 (taps));
+        for (int k = 4; k < kTapsLow; k += 4)
+            acc = vaddq_f32 (acc, vmulq_f32 (vld1q_f32 (x + k), vld1q_f32 (taps + k)));
+        return (vgetq_lane_f32 (acc, 0) + vgetq_lane_f32 (acc, 1)) + (vgetq_lane_f32 (acc, 2) + vgetq_lane_f32 (acc, 3));
+#else
+        float s0 = taps[0] * x[0], s1 = taps[1] * x[1], s2 = taps[2] * x[2], s3 = taps[3] * x[3];
+        for (int k = 4; k < kTapsLow; k += 4)
+        {
+            s0 += taps[k] * x[k];
+            s1 += taps[k + 1] * x[k + 1];
+            s2 += taps[k + 2] * x[k + 2];
+            s3 += taps[k + 3] * x[k + 3];
+        }
+        return (s0 + s1) + (s2 + s3);
+#endif
+    }
 
     /** Linear phase low pass of the 4x decimator (Kaiser window), and the 32 tap one of the low cost mode (2x): built once at program start (namespace scope tables,
         so the render path has no initialisation guard). */
@@ -119,7 +152,7 @@ public:
         for (int i = 0; i < kMaxVoices; ++i)
         {
             const float p = startPhase + randomPhase * rng.uni();
-            phase[i] = static_cast<uint32_t> (static_cast<double> (p - std::floor (p)) * 4294967296.0);
+            phase[i] = static_cast<uint32_t> (static_cast<double> (p - ffloor (p)) * 4294967296.0);
         }
         havePrev = false;
         haveLast = false;
@@ -345,13 +378,14 @@ public:
             morphAge = 0;
             return;
         }
+        const int rebuildEvery = tick.lowCost ? 2 * kMorphRebuild : kMorphRebuild;
         if (firstOfNote)
-            morphAge = kMorphRebuild; // build now, no cross-fade from stale data
-        if (morphAge >= (tick.lowCost ? 2 * kMorphRebuild : kMorphRebuild))
+            morphAge = rebuildEvery; // build now, no cross-fade from stale data
+        if (morphAge >= rebuildEvery)
         {
             const Wavetable& wt = *tick.wt;
             const int pairs = (curCount + 1) / 2;
-            const int groups = std::min (kMorphGroups, std::max (1, pairs));
+            const int groups = tick.lowCost ? 1 : std::min (kMorphGroups, std::max (1, pairs)); // tier low: the unison voices share one morph cycle (no morph spread across them)
             morphGroups = groups;
             const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
             const float nyq = static_cast<float> (warped ? (tick.lowCost ? 1.0 : 3.2) * sampleRate : 0.5 * sampleRate);
@@ -370,7 +404,8 @@ public:
                     std::copy (b - 1, b - 1 + kMorphStride, a - 1); // the previous "new" buffer becomes the old one
                 const float spreadShift = groups > 1 ? tick.morphSpread * 2.0f * static_cast<float> (g) / static_cast<float> (groups - 1) : 0.0f;
                 const float framePos = tick.frame * static_cast<float> (std::max (wt.numFrames() - 1, 0));
-                buildMorphCycle (wt, framePos, true, tick.morphType, clamp01 (tick.morphAmount + spreadShift), K, incMax, sampleRate, b, *morphScratch);
+                SB_SECTION (sections::oscMorphBuild);
+                buildMorphCycle (wt, framePos, true, tick.morphType, clamp01 (tick.morphAmount + spreadShift), K, incMax, sampleRate, b, *morphScratch, tick.lowCost);
                 if (firstOfNote)
                     std::copy (b - 1, b - 1 + kMorphStride, a - 1);
             }
@@ -395,6 +430,7 @@ public:
         const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
         const int cs0 = tick.warpSrc[0], cs1 = tick.warpSrc[1];
         const bool morphing = morphActive;
+        SB_SECTION (warped ? sections::oscWarp : (morphing ? sections::oscMorph : sections::oscTable));
         const int morphPairs = std::max (1, (curCount + 1) / 2);
         for (int v = 0; v < count; ++v)
         {
@@ -495,7 +531,7 @@ public:
                 }
                 auto read = [&] (float q) noexcept
                 {
-                    q -= std::floor (q);
+                    q -= ffloor (q);
                     const float pos = q * fscale;
                     const int idx = std::clamp (static_cast<int> (pos), 0, N);
                     const float fr = pos - static_cast<float> (idx);
@@ -566,8 +602,11 @@ public:
                     const float t = static_cast<float> (t0 + k + 1) * invP;
                     const float* x = buf + k * os + 1; // the newest sample of the group is x[nt - 1]
                     float acc = 0.0f;
-                    for (int i = 0; i < nt; ++i)
-                        acc += taps[i] * x[nt - 1 - i];
+                    if (tick.lowCost)
+                        acc = dot32 (x, kDecimator2Rev.c); // tier low: the same taps, four partial sums (rounding differs from the sequential sum by about 1e-7 relative)
+                    else
+                        for (int i = 0; i < nt; ++i)
+                            acc += taps[i] * x[nt - 1 - i];
                     L[k] += acc * lerp (prevGainL[v], curGainL[v], t);
                     R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
                 }
@@ -667,7 +706,7 @@ public:
     void setPhase (float p) noexcept
     {
         for (auto& x : phase)
-            x = static_cast<uint32_t> (static_cast<double> (p - std::floor (p)) * 4294967296.0);
+            x = static_cast<uint32_t> (static_cast<double> (p - ffloor (p)) * 4294967296.0);
     }
 
 private:

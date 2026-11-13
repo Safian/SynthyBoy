@@ -6,6 +6,7 @@
 #include <cstdint>
 #include "voice.h"
 #include "../dsp/simd.h"
+#include "../dsp/section_timing.h"
 
 #include <cstring>
 
@@ -311,7 +312,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
         else
             clock = g.lfoPhase != nullptr ? g.lfoPhase[l] : lfoCore[l].offset;
         pos = clock + knob;
-        pos -= std::floor (pos);
+        pos -= ffloor (pos);
         pos0 = pos;
     }
     else
@@ -325,7 +326,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
             lfoCore[l].advance (syncType, knob, rate, delay, dt, !released);
             pos = lfoCore[l].position (syncType, knob);
         }
-        pos0 = syncType == 0 ? knob - std::floor (knob) : (syncType == 2 ? std::min (knob, 1.0f) : 0.0f);
+        pos0 = syncType == 0 ? knob - ffloor (knob) : (syncType == 2 ? std::min (knob, 1.0f) : 0.0f);
     }
     lfoAge[l] += dt;
     const bool smooth = P (li.smooth) >= 0.5f;
@@ -343,7 +344,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
     auto shapeAt = [&] (float u, bool wrap) -> float // 0 .. 1
     {
         if (wrap)
-            u -= std::floor (u);
+            u -= ffloor (u);
         else
             u = clamp01 (u);
         u = lfoSwing (u, swing);
@@ -410,6 +411,7 @@ void Voice::evaluateVoiceControl (const TickGlobals& g) noexcept
 
 void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
 {
+    SB_SECTION (sections::tickOther);
     gl = &g;
     index = voiceIndex;
     const ParamIndex& pi = paramIndex();
@@ -526,7 +528,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         ctx.dt = 0.0f;
         ctx.bpm = g.bpm;
         ctx.voiceAge = voiceAge;
-        g.matrix->evaluate (ctx);
+        { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
         // the control rate envelopes are evaluated for the same chunk as the note start: as sources they already have their value at the end of the first step
         for (int e = 0; e < 6; ++e)
         {
@@ -538,9 +540,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         std::copy (std::begin (src), std::end (src), std::begin (srcR));
         clearMod();
-        g.matrix->evaluate (ctx);
+        { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
     }
     // ---- envelopes (times read with last period's modulation)
+    {
+    SB_SECTION (sections::tickEnvLfo);
     const bool envFromCache = g.baseEpoch != 0 && envCacheValid && envCacheEpoch == g.baseEpoch && envCacheBpm == g.bpm && numTouched == 0 && !fresh;
     for (int e = 0; e < 6; ++e)
     {
@@ -598,6 +602,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
     }
 
+    }
     // ---- sources
     std::fill (std::begin (src), std::end (src), 0.0f);
     for (int e = 0; e < 6; ++e)
@@ -617,7 +622,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     src[kSrcLift] = released ? releaseVel : 0.5f;
     src[kSrcReleaseVelocity] = released ? releaseVel : 0.5f;
     src[kSrcSlide] = slide;
-    { const float n12 = (lastSemis + bend) * (1.0f / 12.0f); src[kSrcOctNote] = n12 - std::floor (n12); }
+    { const float n12 = (lastSemis + bend) * (1.0f / 12.0f); src[kSrcOctNote] = n12 - ffloor (n12); }
     src[kSrcPolyAftertouch] = polyPressure;
     src[kSrcVoiceIndex] = vc.index;
     src[kSrcVoiceMod1] = 0.5f + 0.5f * vc.mod1;
@@ -661,7 +666,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         ctx.dt = fdt;
         ctx.bpm = g.bpm;
         ctx.voiceAge = voiceAge;
-        g.matrix->evaluate (ctx);
+        { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
     }
 
     // ---- amplitude: envelope 1, velocity
@@ -731,9 +736,12 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         if (!oscOn[o])
         {
             t.level = 0.0f;
-            osc[o].update (t, g.sampleRate, rng);
-            pitchTapOn[o] = false;
-            lib[o].update (t, LibParams(), g.content, o);
+            {
+                SB_SECTION (sections::tickOscUpdate);
+                osc[o].update (t, g.sampleRate, rng);
+                pitchTapOn[o] = false;
+                lib[o].update (t, LibParams(), g.content, o);
+            }
             continue;
         }
         const ContentSet* cs = g.content;
@@ -749,7 +757,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const float coarse = P (oi.pitchCoarse);
         float coarseSemis = coarse;
         if (pmode == 1)
-            coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + std::floor (coarse)));
+            coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + ffloor (coarse)));
         else if (pmode == 2)
             coarseSemis = coarse >= 0.0f ? 12.0f * std::log2 (1.0f + coarse) : 12.0f * std::log2 (1.0f / (1.0f - coarse));
         if (pmode == 2)
@@ -840,6 +848,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         if (wtRuns)
         {
             // the cross modulation entries of the list name the other two oscillators in order
+            SB_SECTION (sections::tickOscUpdate);
             osc[o].update (t, g.sampleRate, rng);
             osc[o].updateMorph (g.sampleRate, fresh);
         }
@@ -868,6 +877,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             lp.scratch = g.spectralScratch;
             lp.chokeLatest = g.chokeLatest != nullptr ? g.chokeLatest + o * 256 : nullptr;
             lp.chokeCounter = g.chokeCounter != nullptr ? g.chokeCounter + o : nullptr;
+            SB_SECTION (sections::tickOscUpdate);
             lib[o].update (t, lp, cs, o);
         }
     }
@@ -995,6 +1005,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
 {
     if (!active)
         return;
+    SB_SECTION (sections::renderOther);
     const float invP = 1.0f / static_cast<float> (kControlPeriod);
     float oscL[3][kControlPeriod], oscR[3][kControlPeriod];
     // the targets: 0 Main, 1 Bus 1, 2 Bus 2, 3 Direct; "E" = through the amplitude envelope (env 1 on), "N" = past it
@@ -1094,7 +1105,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         if (lib[o].libraryRunning())
         {
             float tl[kControlPeriod], tr[kControlPeriod];
-            lib[o].render (t0, n, tl, tr, cross);
+            { SB_SECTION (sections::oscLib); lib[o].render (t0, n, tl, tr, cross); }
             for (int k = 0; k < n; ++k)
             {
                 oscL[o][k] += tl[k];
@@ -1108,7 +1119,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     if (subCh.on)
     {
         float sl[kControlPeriod], sr2[kControlPeriod];
-        sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate);
+        { SB_SECTION (sections::sub); sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate); }
         for (int k = 0; k < n; ++k)
             extNext[1][k] = 0.5f * (sl[k] + sr2[k]);
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
@@ -1116,6 +1127,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     }
     if (noiseCh.on && (noiseGain > 0.0f || noiseGainPrev > 0.0f))
     {
+        SB_SECTION (sections::noise);
         // noise.pitch: the generator played at another rate (down: the band shrinks, up: white but quieter) and noise.filter (docs/engine-spec/02 section 10)
         const float rate = std::exp2 (noisePitchSemis * (1.0f / 12.0f));
         const float oct = std::log2 (std::max (rate, 1.0e-3f));
@@ -1182,7 +1194,10 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         touchFin (f);
         if (filtOn[f])
+        {
+            SB_SECTION (f == 0 ? sections::filter1 : sections::filter2);
             filt[f].process (fin_L[f], fin_R[f], fout_L[f], fout_R[f], n, t0);
+        }
         else
         {
             std::copy (fin_L[f], fin_L[f] + n, fout_L[f]);

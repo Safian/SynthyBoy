@@ -35,12 +35,18 @@ add_library(synthyboy_core STATIC
     engine-own/osc/lib_osc.cpp
     engine-own/matrix/mod_matrix.cpp
     engine-own/voice/param_index.cpp
-    engine-own/voice/voice.cpp)
+    engine-own/voice/voice.cpp
+    engine-own/dsp/section_timing.cpp)
 
 target_include_directories(synthyboy_core
     PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}/include"
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
             "${CMAKE_CURRENT_SOURCE_DIR}/engine-own")
+
+option(SYNTHYBOY_SECTION_TIMING "Benchmark only: time the sections of the own engine (synthyboy_bench --sections)" OFF)
+if(SYNTHYBOY_SECTION_TIMING)
+    target_compile_definitions(synthyboy_core PUBLIC SB_SECTION_TIMING=1) # public: the engine headers that the tests include must be the same code
+endif()
 
 target_compile_features(synthyboy_core PUBLIC cxx_std_17)
 set_target_properties(synthyboy_core PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_EXTENSIONS OFF)
