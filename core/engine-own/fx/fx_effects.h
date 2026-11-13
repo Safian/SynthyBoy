@@ -200,6 +200,7 @@ public:
         // the band filter of every tap has the same coefficients (they come from the same parameters): computed once
         LoopBand coef;
         coef.set (p.cutoff, p.spread, sampleRate);
+        coefBand = coef;
         // what does not change from sample to sample is computed once: the spread of the voices over the unison (a division each) and the phase offset of every tap
         float tOf[kMaxPairs], phOff[kMaxPairs], baseOf[2];
         for (int i = 0; i < V; ++i)
@@ -235,12 +236,16 @@ public:
             {
                 const int k0 = i * 4;
                 float rd[4];
+#if SB_NEON
+                tapGroupNeon (k0, period + k0, in, fb, rd);
+#else
                 readGroup (k0, period + k0, rd);
                 float x[4];
                 for (int j = 0; j < 4; ++j)
                     x[j] = loopLimit (in[j & 1] + fb * rd[j]);
                 bandGroup (k0, x, coef);
                 pushGroup (k0, x);
+#endif
                 acc[0] += rd[0];
                 acc[1] += rd[1];
                 acc[0] += rd[2];
@@ -305,6 +310,67 @@ private:
         }
 #endif
     }
+#if SB_NEON
+    /** The whole work of four taps in vector registers: the cubic read (four values gathered per tap), the feedback, the limiter, the band pass and the write. */
+    void tapGroupNeon (int k0, const float* d, const float* in, float fb, float* rdOut) noexcept
+    {
+        const float32x4_t one = vdupq_n_f32 (1.0f);
+        const float32x4_t dd = vmaxq_f32 (vld1q_f32 (d), one);
+        const int32x4_t iv = vcvtq_s32_f32 (dd);
+        const float32x4_t tv = vsubq_f32 (dd, vcvtq_f32_s32 (iv));
+        const int32x4_t base = vsubq_s32 (vdupq_n_s32 (linePos), iv), mask = vdupq_n_s32 (lineMask);
+        const int32x4_t ix0 = vandq_s32 (vaddq_s32 (base, vdupq_n_s32 (1)), mask), ix1 = vandq_s32 (base, mask), ix2 = vandq_s32 (vsubq_s32 (base, vdupq_n_s32 (1)), mask),
+                        ix3 = vandq_s32 (vsubq_s32 (base, vdupq_n_s32 (2)), mask);
+        const float* b0 = store.data() + static_cast<size_t> (k0) * lineSize;
+        const size_t ls = static_cast<size_t> (lineSize);
+        float32x4_t y0 = vdupq_n_f32 (0.0f), y1 = y0, y2 = y0, y3 = y0;
+        y0 = vld1q_lane_f32 (b0 + vgetq_lane_s32 (ix0, 0), y0, 0);
+        y0 = vld1q_lane_f32 (b0 + ls + vgetq_lane_s32 (ix0, 1), y0, 1);
+        y0 = vld1q_lane_f32 (b0 + 2 * ls + vgetq_lane_s32 (ix0, 2), y0, 2);
+        y0 = vld1q_lane_f32 (b0 + 3 * ls + vgetq_lane_s32 (ix0, 3), y0, 3);
+        y1 = vld1q_lane_f32 (b0 + vgetq_lane_s32 (ix1, 0), y1, 0);
+        y1 = vld1q_lane_f32 (b0 + ls + vgetq_lane_s32 (ix1, 1), y1, 1);
+        y1 = vld1q_lane_f32 (b0 + 2 * ls + vgetq_lane_s32 (ix1, 2), y1, 2);
+        y1 = vld1q_lane_f32 (b0 + 3 * ls + vgetq_lane_s32 (ix1, 3), y1, 3);
+        y2 = vld1q_lane_f32 (b0 + vgetq_lane_s32 (ix2, 0), y2, 0);
+        y2 = vld1q_lane_f32 (b0 + ls + vgetq_lane_s32 (ix2, 1), y2, 1);
+        y2 = vld1q_lane_f32 (b0 + 2 * ls + vgetq_lane_s32 (ix2, 2), y2, 2);
+        y2 = vld1q_lane_f32 (b0 + 3 * ls + vgetq_lane_s32 (ix2, 3), y2, 3);
+        y3 = vld1q_lane_f32 (b0 + vgetq_lane_s32 (ix3, 0), y3, 0);
+        y3 = vld1q_lane_f32 (b0 + ls + vgetq_lane_s32 (ix3, 1), y3, 1);
+        y3 = vld1q_lane_f32 (b0 + 2 * ls + vgetq_lane_s32 (ix3, 2), y3, 2);
+        y3 = vld1q_lane_f32 (b0 + 3 * ls + vgetq_lane_s32 (ix3, 3), y3, 3);
+        const float32x4_t half = vdupq_n_f32 (0.5f);
+        const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (y2, y0));
+        float32x4_t c2 = vsubq_f32 (y0, vmulq_f32 (vdupq_n_f32 (2.5f), y1));
+        c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), y2));
+        c2 = vsubq_f32 (c2, vmulq_f32 (half, y3));
+        const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (y3, y0)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (y1, y2)));
+        const float32x4_t rd = vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, tv), c2), tv), c1), tv), y1);
+        vst1q_f32 (rdOut, rd);
+        // the feedback and the limiter: x = 8 * clamp ((in + fb * rd) / 8, -1, 1)
+        const float inArr[4] = { in[0], in[1], in[0], in[1] };
+        float32x4_t x = vaddq_f32 (vld1q_f32 (inArr), vmulq_f32 (vdupq_n_f32 (fb), rd));
+        x = vmulq_f32 (vminq_f32 (vmaxq_f32 (vmulq_f32 (x, vdupq_n_f32 (0.125f)), vdupq_n_f32 (-1.0f)), one), vdupq_n_f32 (8.0f));
+        // the band pass
+        const float32x4_t aHi = vdupq_n_f32 (coefBand.aHi), aLo = vdupq_n_f32 (coefBand.aLo), gain = vdupq_n_f32 (coefBand.gain), tiny = vdupq_n_f32 (1.0e-18f), zero = vdupq_n_f32 (0.0f);
+        float32x4_t hi = vld1q_f32 (hiY + k0), lo = vld1q_f32 (loY + k0);
+        hi = vaddq_f32 (hi, vmulq_f32 (aHi, vsubq_f32 (vmulq_f32 (x, gain), hi)));
+        hi = vbslq_f32 (vcltq_f32 (vabsq_f32 (hi), tiny), zero, hi);
+        lo = vaddq_f32 (lo, vmulq_f32 (aLo, vsubq_f32 (hi, lo)));
+        lo = vbslq_f32 (vcltq_f32 (vabsq_f32 (lo), tiny), zero, lo);
+        vst1q_f32 (hiY + k0, hi);
+        vst1q_f32 (loY + k0, lo);
+        // the write: lane j into the line of tap k0 + j at the next position
+        const int at = (linePos + 1) & lineMask;
+        const float32x4_t y = vsubq_f32 (hi, lo);
+        float* w = store.data() + static_cast<size_t> (k0) * ls + static_cast<size_t> (at);
+        vst1q_lane_f32 (w, y, 0);
+        vst1q_lane_f32 (w + ls, y, 1);
+        vst1q_lane_f32 (w + 2 * ls, y, 2);
+        vst1q_lane_f32 (w + 3 * ls, y, 3);
+    }
+#endif
     /** The loop band pass (LoopBand::process: two one pole low passes subtracted) of four taps, in place on x. */
     void bandGroup (int k0, float* x, const LoopBand& cf) noexcept
     {
@@ -343,6 +409,7 @@ private:
     Params p;
     double sampleRate = 48000.0;
     std::vector<float> store;         // the delay lines of the 16 taps, one after the other (all with the same length and the same write position)
+    LoopBand coefBand;                // the coefficients of the band filters of this block
     int lineSize = 16, lineMask = 15, linePos = 0;
     float hiY[kMaxPairs * 4] = {}, loY[kMaxPairs * 4] = {}; // the state of the band filters
     float phase = 0.0f;
