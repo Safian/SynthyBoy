@@ -51,20 +51,6 @@ else()
     target_compile_options(synthyboy_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# engine-own: no fused multiply-add contraction. The hot loops have NEON versions (engine-own/dsp/simd.h) that must give the samples of the scalar code to the last bit,
-# and the scalar code must not depend on whether the compiler fuses a*b+c (clang does by default on arm64, GCC on a VFPv4 target); the armv7 build of the MPC
-# (-mfpu=neon, no FMA) never fused.
-if(NOT MSVC)
-    get_target_property(SYNTHYBOY_CORE_SOURCES synthyboy_core SOURCES)
-    set(SYNTHYBOY_OWN_SOURCES "")
-    foreach(src IN LISTS SYNTHYBOY_CORE_SOURCES)
-        if(src MATCHES "^engine-own/")
-            list(APPEND SYNTHYBOY_OWN_SOURCES "${src}")
-        endif()
-    endforeach()
-    set_source_files_properties(${SYNTHYBOY_OWN_SOURCES} PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-endif()
-
 # Vital-derived code (docs/ARCHITECTURE.md 2.2) lives only in engine-vital/; with SYNTHYBOY_WITH_VITAL=OFF
 # (iOS) nothing of it is added to the build.
 if(SYNTHYBOY_WITH_VITAL)

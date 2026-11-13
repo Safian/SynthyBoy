@@ -1,6 +1,6 @@
-// SynthyBoy - own engine: NEON versions of the hot loops. Every vector function does, in each lane, the same operations in the same order as the scalar function
-// next to it (separate multiply and add: engine-own is compiled with -ffp-contract=off, no vfma, no reciprocal estimates), so the samples are identical to the last
-// bit; the scalar code is the fallback where there is no NEON (SB_NO_NEON forces it, the tests compare the two).
+// SynthyBoy - own engine: NEON versions of the hot loops, used on 32 bit ARM only (the MPC build). Every vector function does, in each lane, the same operations in the same
+// order as the scalar function next to it (separate multiply and add, no vfma, no reciprocal estimates), so the samples are identical to the last bit. Everywhere else
+// (arm64, x86) the scalar code is used, with whatever contraction the compiler applies to it as always. SB_NO_NEON forces the scalar code on ARM too (the two are compared).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -8,11 +8,17 @@
 #include <algorithm>
 #include <cstdint>
 
-#if (defined(__ARM_NEON) || defined(__aarch64__)) && !defined(SB_NO_NEON)
+#if defined(__arm__) && defined(__ARM_NEON) && !defined(SB_NO_NEON)
  #include <arm_neon.h>
  #define SB_NEON 1
 #else
  #define SB_NEON 0
+#endif
+
+// On 32 bit ARM the translation units that use these loops must not fuse a * b + c in their scalar code either (a build for a VFPv4 FPU, -mfpu=neon-vfpv4, would by
+// default under GCC): the pragma is honoured by GCC 12 (checked: the same expression gives vfma.f32 without it and the non fused vmla.f32 with it).
+#if defined(__arm__) && defined(__GNUC__) && !defined(__clang__)
+ #pragma GCC optimize ("fp-contract=off")
 #endif
 
 namespace synthyboy
