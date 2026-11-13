@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-#   tune-preset-levels.py --render build/tools/preset-render/synthyboy_preset_render [--target -29] [--max-peak -1.5] [--rounds 4]
+#   tune-preset-levels.py --render build/tools/preset-render/synthyboy_preset_render [--target -20] [--max-peak -1.5] [--rounds 4]
 #
 # Renders content/presets with synthyboy_preset_render (tier high), and moves master.volume of every preset so that the RMS of the
 # loudest 300 ms of its four-note chord (velocity 1.0, the measure printed as chordRms) is the target; a preset whose chord peak
@@ -36,7 +36,7 @@ def run_render(binary: str) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--render", required=True)
-    ap.add_argument("--target", type=float, default=-29.0)
+    ap.add_argument("--target", type=float, default=-20.0)
     ap.add_argument("--max-peak", type=float, default=-1.5)
     ap.add_argument("--rounds", type=int, default=4)
     args = ap.parse_args()
