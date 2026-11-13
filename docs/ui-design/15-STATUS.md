@@ -8,7 +8,7 @@ Branch `develop`, 129 commits ahead of `origin/develop`, NOT pushed. Build zero 
 - Vital import: renderer + importer + CLI (tools/vital-import) with C1-C3; real presets still needed for A/B (tests/vital-presets/, out of git).
 - Kick: 103 remote pages generated, all 1484 keys reachable.
 - UI: JUCE kit + 9 page groups (osc, wavetable editor, filters, env/LFO incl. shape editor, mod matrix, effects, voice/global, shell), 124-row gesture audit (47 closed, 7 GAP, 1 NOT DONE: no noise sample key).
-- Factory content: 112 presets state v3, macro wiring, levels -29 dBFS RMS, effects fixed.
+- Factory content: 112 presets state v3, macro wiring, levels -20 dBFS RMS, effects fixed.
 - Quality: ASan/UBSan, TSan, fuzz-smoke, preset-sanity in ctest and CI job.
 
 ## Open (needs you)
