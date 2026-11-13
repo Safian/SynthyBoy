@@ -122,7 +122,7 @@ def run(skins_dir, params_path, extras_dir=DEFAULT_EXTRAS):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description="Apply scripts/mpc-skin-extras/*.py modules to a generated MPC Plugin Skins folder.")
     ap.add_argument("--skins", required=True, help="the generated 'Plugin Skins' folder")
     ap.add_argument("--params", required=True, help="docs/params.json")
     ap.add_argument("--extras-dir", default=str(DEFAULT_EXTRAS), help="folder of modules (default scripts/mpc-skin-extras)")
