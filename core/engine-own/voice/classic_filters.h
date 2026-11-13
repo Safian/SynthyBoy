@@ -48,6 +48,7 @@ public:
     void prepare (double sampleRate)
     {
         sr = sampleRate;
+        memoValid = false;
         comb.prepare (static_cast<int> (sampleRate * 0.1));
         reset();
     }
@@ -72,6 +73,13 @@ public:
         host cuts the blocks. */
     void process (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
     {
+        if (sameParams (a, b) && a.cutoffHz >= 1.0f)
+        {
+            // nothing moves across the period: every 8 sample piece would get exactly b (pow (1, t) = 1, lerp (x, x, t) = x), and the sample loops
+            // carry their state from piece to piece, so one call gives the same samples
+            block (in, out, n, b);
+            return;
+        }
         for (int i = 0; i < n;)
         {
             const int pos = t0 + i;
@@ -88,23 +96,54 @@ public:
     }
 
 private:
+    static bool sameParams (const ClassicParams& a, const ClassicParams& b) noexcept
+    {
+        return a.model == b.model && a.style == b.style && a.cutoffHz == b.cutoffHz && a.res == b.res && a.driveDb == b.driveDb && a.blendRaw == b.blendRaw
+            && a.combOffset == b.combOffset && a.fx == b.fx && a.fy == b.fy && a.fres == b.fres && a.fspread == b.fspread && a.ftranspose == b.ftranspose;
+    }
     static float sat (float v) noexcept { return v - 0.9f * v * v * v / (v * v + 3.0f); }
     static float hardtanh (float v) noexcept
     {
         const float a = std::fabs (v);
         return a <= 0.66f ? v : std::copysign (0.66f + 0.34f * std::tanh ((a - 0.66f) / 0.34f), v);
     }
-    void block (const float* in, float* out, int n, const ClassicParams& p) noexcept
+    /** The values derived from the parameters (several pow / sqrt / tan) are kept while the parameters stay the same, as they do for most control periods. */
+    void remember (const ClassicParams& p) noexcept
     {
-        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
-        const float d = std::pow (10.0f, p.driveDb * 0.05f);
-        const float r = clamp01 (p.res);
-        const float braw = std::clamp (p.blendRaw, 0.0f, 2.0f);
+        if (memoValid && sameParams (p, memoP))
+            return;
+        memoP = p;
+        memoValid = true;
+        svfValid = false;
+        mf = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        md = std::pow (10.0f, p.driveDb * 0.05f);
+        mr = clamp01 (p.res);
+        mbraw = std::clamp (p.blendRaw, 0.0f, 2.0f);
+    }
+    /** The setup of the state variable models (0 Analog, 1 Dirty, 3 Digital) for the parameters last passed to remember (). */
+    void ensureSvf (const ClassicParams& p) noexcept
+    {
+        if (svfValid)
+            return;
+        const float f = mf, d = md, r = mr;
         switch (p.model)
         {
-            case 3: satLoop = false; svfModel (in, out, n, f, 0.5f + 15.5f * r * r * r, 1.0f, d, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), 3, p.style, p.blendRaw, true, r); break;
-            case 0: satLoop = false; svfModel (in, out, n, f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d, d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style != 0 ? kAn[5] : kAn[3]), 0, p.style, p.blendRaw, false, r); break;
-            case 1: satLoop = true; svfModel (in, out, n, f, 1.0f / std::max (1.8f - 1.87f * std::sqrt (r), 0.03f), kDirtyQ1, 2.0f * (d - 1.0f) + 1.0f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, 1, p.style, p.blendRaw, false, r); break;
+            case 3: svf = svfSetup (f, 0.5f + 15.5f * r * r * r, 1.0f, d, d / (2.0f * r * r * r + 1.0f), 1.0f / std::sqrt (d), 3, p.style, p.blendRaw, r); break;
+            case 0: svf = svfSetup (f * kAn[0], kAn[1] + kAn[2] * std::pow (2.0f * r, 5.1f), kAn[4], d, d / (2.0f * r + 1.0f), 1.0f / std::sqrt (d) * (p.style != 0 ? kAn[5] : kAn[3]), 0, p.style, p.blendRaw, r); break;
+            default: svf = svfSetup (f, 1.0f / std::max (1.8f - 1.87f * std::sqrt (r), 0.03f), kDirtyQ1, 2.0f * (d - 1.0f) + 1.0f, (2.0f * (d - 1.0f) + 1.0f) / (r + 1.0f), 1.0f / std::sqrt (d) * 1.05f, 1, p.style, p.blendRaw, r); break;
+        }
+        svfValid = true;
+    }
+
+    void block (const float* in, float* out, int n, const ClassicParams& p) noexcept
+    {
+        remember (p);
+        const float f = mf, d = md, r = mr, braw = mbraw;
+        switch (p.model)
+        {
+            case 3: satLoop = false; ensureSvf (p); svfModel (in, out, n, 3, true); break;
+            case 0: satLoop = false; ensureSvf (p); svfModel (in, out, n, 0, false); break;
+            case 1: satLoop = true; ensureSvf (p); svfModel (in, out, n, 1, false); break;
             case 2: ladder (in, out, n, f, r, d, p.style, braw - 1.0f); break;
             case 4: diode (in, out, n, f, r, d, p); break;
             case 5: formant (in, out, n, p); break;
@@ -113,6 +152,60 @@ private:
             default: std::copy (in, in + n, out); break;
         }
     }
+
+public:
+    /** Two channels of the state variable models with parameters that stay put across the period, in one loop: the two recurrences are independent, so they overlap
+        instead of running one after the other. The samples are those of two separate process () calls. False (nothing done) if the case does not apply. */
+    static bool processPair (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& aA, const ClassicParams& bA,
+                             const ClassicParams& aB, const ClassicParams& bB) noexcept
+    {
+        if (!(sameParams (aA, bA) && aA.cutoffHz >= 1.0f && sameParams (aB, bB) && aB.cutoffHz >= 1.0f))
+            return false;
+        const int model = bA.model;
+        if (bB.model != model || bB.style != bA.style || !(model == 0 || model == 1 || model == 3))
+            return false;
+        A.remember (bA);
+        B.remember (bB);
+        A.ensureSvf (bA);
+        B.ensureSvf (bB);
+        if (A.svf.shelf || B.svf.shelf || A.svf.two != B.svf.two)
+            return false;
+        A.satLoop = B.satLoop = model == 1;
+        const bool linearHard = model == 3;
+        const SvfSetup& za = A.svf;
+        const SvfSetup& zb = B.svf;
+        const bool two = za.two;
+        const bool sat = A.satLoop;
+        for (int i = 0; i < n; ++i)
+        {
+            float ua = inA[i] * za.dEff, ub = inB[i] * zb.dEff;
+            if (two)
+            {
+                float lpa, bpa, hpa, lpb, bpb, hpb;
+                A.tpt (0, ua, za.g, za.R1, model == 3 ? za.R : za.R1, lpa, bpa, hpa, false);
+                B.tpt (0, ub, zb.g, zb.R1, model == 3 ? zb.R : zb.R1, lpb, bpb, hpb, false);
+                const float y1a = za.wa.lp * lpa + za.wa.bp * bpa + za.wa.hp * hpa;
+                const float y1b = zb.wa.lp * lpb + zb.wa.bp * bpb + zb.wa.hp * hpb;
+                ua = linearHard ? hardtanh (y1a) : (model == 1 ? y1a : std::tanh (y1a * kMidSat) / kMidSat);
+                ub = linearHard ? hardtanh (y1b) : (model == 1 ? y1b : std::tanh (y1b * kMidSat) / kMidSat);
+            }
+            float lpa, bpa, hpa, lpb, bpb, hpb;
+            A.tpt (two ? 3 : 0, ua, za.g, za.R, za.R, lpa, bpa, hpa, sat);
+            B.tpt (two ? 3 : 0, ub, zb.g, zb.R, zb.R, lpb, bpb, hpb, sat);
+            float ya = za.wb.lp * lpa + za.wb.bp * bpa + za.wb.hp * hpa;
+            float yb = zb.wb.lp * lpb + zb.wb.bp * bpb + zb.wb.hp * hpb;
+            ya = linearHard ? hardtanh (ya) : ya;
+            yb = linearHard ? hardtanh (yb) : yb;
+            outA[i] = ya * za.post;
+            outB[i] = yb * zb.post;
+        }
+        return true;
+    }
+
+private:
+    ClassicParams memoP;
+    bool memoValid = false;
+    float mf = 0.0f, md = 1.0f, mr = 0.0f, mbraw = 0.0f;
 
     /** The weights of the sections for a style and the blend `b` in -1 .. 1 (document 05, 2.1). */
     struct Wt { float lp, bp, hp; };
@@ -130,21 +223,59 @@ private:
 
     // one or two (24 dB) state variable sections with the weights of the style (document 05, 2 and 2.1); the saturation of the Dirty model sits in the loop of the section
     // `dRaw` is the drive as set, `dComp` the drive compensated by the resonance of the model; the style blends them
-    void svfModel (const float* in, float* out, int n, float f, float Q, float Q1, float dRaw, float dComp, float postBase, int model, int style, float blendRaw, bool linearHard,
-                   float resKnob) noexcept
+    /** Everything an svfModel call derives from its arguments (tan, divisions, weights, square roots): computed when the parameters change. */
+    struct SvfSetup
     {
-        const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
-        const float R = 1.0f / std::max (Q, 0.3f), R1 = 1.0f / Q1;
-        const float b = std::clamp (blendRaw - 1.0f, -1.0f, 1.0f);
-        if (model == 3 && style == 5)
+        float g = 0.0f, R = 0.0f, R1 = 0.0f, dEff = 1.0f, post = 1.0f;
+        Wt wa {}, wb {};
+        bool two = false, shelf = false;
+    };
+    SvfSetup svf;
+    bool svfValid = false;
+
+    void svfModel (const float* in, float* out, int n, int model, bool linearHard) noexcept
+    {
+        if (svf.shelf)
         {
             std::copy (in, in + n, out); // the shelving mode at 0 dB: LP + HP + R BP = u exactly (document 05, 2.1)
             return;
         }
-        Wt wa, wb;
-        styleWeights (style == 5 ? 1 : style, b, wa, wb);
+        const float g = svf.g, R = svf.R, R1 = svf.R1, dEff = svf.dEff, post = svf.post;
+        const Wt wa = svf.wa, wb = svf.wb;
+        const bool two = svf.two;
+        for (int i = 0; i < n; ++i)
+        {
+            float u = in[i] * dEff;
+            if (two)
+            {
+                // the first section: R = 1 in the loop, the weights with the true R inside the high pass
+                float lp, bp, hp;
+                tpt (0, u, g, R1, model == 3 ? R : R1, lp, bp, hp, false);
+                float y1 = wa.lp * lp + wa.bp * bp + wa.hp * hp;
+                u = linearHard ? hardtanh (y1) : (model == 1 ? y1 : std::tanh (y1 * kMidSat) / kMidSat);
+            }
+            float lp, bp, hp;
+            tpt (two ? 3 : 0, u, g, R, R, lp, bp, hp, satLoop);
+            float y = wb.lp * lp + wb.bp * bp + wb.hp * hp;
+            y = linearHard ? hardtanh (y) : y;
+            out[i] = y * post;
+        }
+    }
+    SvfSetup svfSetup (float f, float Q, float Q1, float dRaw, float dComp, float postBase, int model, int style, float blendRaw, float resKnob) const noexcept
+    {
+        SvfSetup z;
+        z.g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
+        z.R = 1.0f / std::max (Q, 0.3f);
+        z.R1 = 1.0f / Q1;
+        const float b = std::clamp (blendRaw - 1.0f, -1.0f, 1.0f);
+        if (model == 3 && style == 5)
+        {
+            z.shelf = true;
+            return z;
+        }
+        styleWeights (style == 5 ? 1 : style, b, z.wa, z.wb);
         // the sections: the Digital model runs one for the styles 0 and 5, two for 1 .. 4; Analog and Dirty one for style 0, two for the others (style 3 the dual pair)
-        const bool two = style != 0;
+        z.two = style != 0;
         float w = 1.0f, dEff;
         switch (style)
         {
@@ -163,24 +294,10 @@ private:
         else if (model == 0)
             post = postBase * std::sqrt ((2.0f * resKnob + 1.0f) * dComp) / std::sqrt (std::max ((2.0f * resKnob + 1.0f) * dEff, 1.0e-6f)); // 1 / sqrt ((2 r + 1) d_eff)
         else
-            post = postBase * std::sqrt (std::max (dComp, 1.0e-6f) / std::max (dEff, 1.0e-6f)) * (style >= 2 ? 1.0f - 0.2f * wb.hp : 1.0f); // (measured: the high pass share of the Dirty styles sits about 2 dB low)
-        for (int i = 0; i < n; ++i)
-        {
-            float u = in[i] * dEff;
-            if (two)
-            {
-                // the first section: R = 1 in the loop, the weights with the true R inside the high pass
-                float lp, bp, hp;
-                tpt (0, u, g, R1, model == 3 ? R : R1, lp, bp, hp, false);
-                float y1 = wa.lp * lp + wa.bp * bp + wa.hp * hp;
-                u = linearHard ? hardtanh (y1) : (model == 1 ? y1 : std::tanh (y1 * kMidSat) / kMidSat);
-            }
-            float lp, bp, hp;
-            tpt (two ? 3 : 0, u, g, R, R, lp, bp, hp, satLoop);
-            float y = wb.lp * lp + wb.bp * bp + wb.hp * hp;
-            y = linearHard ? hardtanh (y) : y;
-            out[i] = y * post;
-        }
+            post = postBase * std::sqrt (std::max (dComp, 1.0e-6f) / std::max (dEff, 1.0e-6f)) * (style >= 2 ? 1.0f - 0.2f * z.wb.hp : 1.0f); // (measured: the high pass share of the Dirty styles sits about 2 dB low)
+        z.dEff = dEff;
+        z.post = post;
+        return z;
     }
     static inline float kMidSat = SB_MID_SAT;
     static inline float kDirtyQ1 = SB_DIRTY_Q1, kDirtySat = SB_DIRTY_SAT;

@@ -69,6 +69,14 @@ public:
     bool isPrepared() const noexcept { return prepared.load(); }
     void resetAll() noexcept;
     void retire (Slot& s, FxModule* m) noexcept;
+    /** True while a module that the message thread created waits to be taken over by the audio thread. */
+    bool anyPending() const noexcept
+    {
+        for (const Slot& s : slots)
+            if (s.pending.load (std::memory_order_acquire) != nullptr)
+                return true;
+        return false;
+    }
 
 private:
     std::array<Slot, kSlots> slots;
@@ -87,11 +95,14 @@ public:
     /** Which rack this chain is: 0 Main, 1 Bus 1, 2 Bus 2 (the modules whose `rack` key names it, and the band racks of the splitters that sit in it). */
     void setRack (int id) noexcept { rackId = id; }
     void setPool (FxPool* p) noexcept { pool = p; }
-    /** Reads the parameters (once per control period). `delta` is the global modulation in control units (may be zero). */
-    void update (const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask) noexcept;
+    /** Reads the parameters (once per control period). `delta` is the global modulation in control units (may be zero). `inputsSame`: the parameters, the
+        modulation and the mask are what the previous call saw; a chain with nothing on that has settled then does nothing (the call would redo the same bookkeeping). */
+    void update (const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask, bool inputsSame = false) noexcept;
     /** `t0`: the position of this call in the control period (the output trims and the EQ interpolate across the period). */
     void process (float* l, float* r, int n, int t0 = 0) noexcept;
     bool anyActive() const noexcept { return active; }
+    /** True if the last update () did the work (it did not return early): latency and plan may have changed. */
+    bool configuredNow() const noexcept { return configured; }
     /** The latency of rack `rack` (0 .. 9) in samples of the chain rate: the sum of the modules that are on in it, in series; a splitter adds the slowest of its bands
         (document 06, 11). `reported` leaves out what the host is not told about (a limiter with limit_latency_comp off). */
     int rackLatency (int rack, bool reported) const noexcept;
@@ -108,6 +119,8 @@ private:
 
     double sr = 48000.0;
     bool active = false;
+    bool configured = true;
+    int idleSettled = 0;            // consecutive updates with the same inputs that ended with nothing on
     int order[16] = {};
     bool on[16] = {};
     bool prevOn[16] = {};

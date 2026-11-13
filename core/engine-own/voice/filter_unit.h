@@ -152,8 +152,11 @@ public:
                 srcL = tmpL;
                 srcR = tmpR;
             }
-            cl[0].process (srcL, outL, n, prevP, curP, t0);
-            cl[1].process (srcR, outR, n, prevPR, curPR, t0);
+            if (!ClassicFilter::processPair (cl[0], cl[1], srcL, outL, srcR, outR, n, prevP, curP, prevPR, curPR))
+            {
+                cl[0].process (srcL, outL, n, prevP, curP, t0);
+                cl[1].process (srcR, outR, n, prevPR, curPR, t0);
+            }
             for (int k = 0; k < n; ++k)
             {
                 const float t = static_cast<float> (t0 + k + 1) * invP;

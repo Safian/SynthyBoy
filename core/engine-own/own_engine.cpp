@@ -95,6 +95,7 @@ void OwnEngine::setContent (const StateContent& content)
 {
     noteTuning.setContent (content.tuning);
     ownContent.publish (content);
+    paramGen.fetch_add (1u, std::memory_order_release);
     {
         std::lock_guard<std::mutex> lock (contentMutex);
         contentState = content;
@@ -124,6 +125,7 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
         return;
     const float v = constrainValue (paramTable()[i], plain);
     params[static_cast<size_t> (i)].store (v, std::memory_order_relaxed);
+    paramGen.fetch_add (1u, std::memory_order_release);
     for (int s = 0; s < kNumFxInstances; ++s)
         if (fxiTypeIndex[s] == i)
         {
@@ -215,6 +217,8 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
         fx[i].prepare (sampleRate, maxBlockFrames);
     }
     smoothedGain.reset (sampleRate, 0.02);
+    snapValid = false;
+    mixCached = latCached = false;
     prepared = true;
     reset();
 }
@@ -250,6 +254,7 @@ void OwnEngine::reset()
     for (auto& f : fx)
         f.reset();
     clearLatencyDelays();
+    mixCached = latCached = false;
     for (int c = 0; c < numChannels; ++c)
     {
         bendSemis[c] = modWheel[c] = aftertouch[c] = 0.0f;
@@ -743,6 +748,8 @@ void OwnEngine::controlTick() noexcept
         gsrc[srcMacro (m)] = globals.macro[m];
     for (int l = 0; l < 10; ++l)
     {
+        if (((matrix.globalSourceMask() >> srcLfo (l)) & 1u) == 0) // only a global slot reads these values
+            continue;
         const LfoIdx& li = pi.lfo[l];
         gsrc[srcLfo (l)] = 0.5f + 0.5f * lfoShape (static_cast<int> (base[static_cast<size_t> (li.shape)] + 0.5f), lfoPhase[l], 1u);
     }
@@ -802,11 +809,19 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     std::fill (rightOut, rightOut + numFrames, 0.0f);
 
     // ---- block snapshot
-    for (size_t i = 0; i < base.size(); ++i)
-        base[i] = params[i].load (std::memory_order_relaxed);
+    const uint32_t gen = paramGen.load (std::memory_order_acquire);
     contentNow = ownContent.get();
-    matrix.setContent (contentNow);
-    matrix.compile (base.data());
+    blockDirty = !snapValid || gen != snapGen || contentNow != snapContent;
+    if (blockDirty)
+    {
+        for (size_t i = 0; i < base.size(); ++i)
+            base[i] = params[i].load (std::memory_order_relaxed);
+        matrix.setContent (contentNow);
+        matrix.compile (base.data());
+        snapGen = gen;
+        snapContent = contentNow;
+        snapValid = true;
+    }
     const ParamIndex& pi = paramIndex();
     globals.base = base.data();
     globals.matrix = &matrix;
@@ -833,8 +848,9 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     }
     for (int m = 0; m < 8; ++m)
         globals.macro[m] = macroOverridden[m] ? macroOverride[m] : (pi.macro[m] >= 0 ? clamp01 (base[static_cast<size_t> (pi.macro[m])] * 0.01f) : 0.0f);
-    noteTuning.compute (tunedNotes, static_cast<int> (base[static_cast<size_t> (pi.master.tuningScale)] + 0.5f), base[static_cast<size_t> (pi.master.tuningA4)],
-                        base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f);
+    if (blockDirty || base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f) // a live MTS-ESP source is asked every block
+        noteTuning.compute (tunedNotes, static_cast<int> (base[static_cast<size_t> (pi.master.tuningScale)] + 0.5f), base[static_cast<size_t> (pi.master.tuningA4)],
+                            base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f);
     globals.tunedNotes = tunedNotes;
     globals.channelBendSemis = effBend;
     globals.channelModWheel = modWheel;
@@ -869,23 +885,30 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         if (controlPos == 0)
         {
             controlTick();
-            // master volume with the global modulation
-            const size_t vi = static_cast<size_t> (mi.volume);
-            float db = base[vi];
-            if (gdelta[vi] != 0.0f)
-                db = modulatedValue (paramTable()[vi], destLawOf (vi), db, gdelta[vi]);
-            smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
-            {
-                // master.stereo_routing (document 01, 8): 100 % leaves the channels alone, 0 % sums them to mono at -3 dB
-                const size_t ri = static_cast<size_t> (mi.stereoRouting);
-                float r = base[ri] * 0.01f;
-                if (gdelta[ri] != 0.0f)
-                    r = modulatedValue (paramTable()[ri], destLawOf (ri), base[ri], gdelta[ri]) * 0.01f;
-                const float phi = (1.0f - clamp01 (r)) * 0.78539816f;
-                routeCos = std::cos (phi);
-                routeSin = std::sin (phi);
-            }
+            // everything below that reads only parameters (and the global modulation) is redone only when one of them changed since the last period
             const uint32_t mask = effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f);
+            const bool inputsSame = !blockDirty && gnumTouched == 0 && mask == lastFxMask;
+            const bool mixSame = inputsSame && mixCached;
+            lastFxMask = mask;
+            // master volume with the global modulation
+            if (!mixSame)
+            {
+                const size_t vi = static_cast<size_t> (mi.volume);
+                float db = base[vi];
+                if (gdelta[vi] != 0.0f)
+                    db = modulatedValue (paramTable()[vi], destLawOf (vi), db, gdelta[vi]);
+                smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
+                {
+                    // master.stereo_routing (document 01, 8): 100 % leaves the channels alone, 0 % sums them to mono at -3 dB
+                    const size_t ri = static_cast<size_t> (mi.stereoRouting);
+                    float r = base[ri] * 0.01f;
+                    if (gdelta[ri] != 0.0f)
+                        r = modulatedValue (paramTable()[ri], destLawOf (ri), base[ri], gdelta[ri]) * 0.01f;
+                    const float phi = (1.0f - clamp01 (r)) * 0.78539816f;
+                    routeCos = std::cos (phi);
+                    routeSin = std::sin (phi);
+                }
+            }
             FxFrame frame;
             frame.bpm = globals.bpm;
             frame.period = kControlPeriod;
@@ -894,7 +917,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
             for (auto& f : fx)
-                f.update (base.data(), gdelta.data(), frame, mask);
+                f.update (base.data(), gdelta.data(), frame, mask, inputsSame);
             // the mixer: the levels of the buses and of the Direct output, their destinations and the rack bypasses
             auto levelOf = [&] (int idx) -> float
             {
@@ -908,15 +931,21 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             busGainPrev[1] = busGain[1];
             busGainPrev[2] = busGain[2];
             directGainPrev = directGain;
-            busGain[1] = levelOf (pi.bus1Level);
-            busGain[2] = levelOf (pi.bus2Level);
-            directGain = levelOf (pi.directLevel);
-            busDest[0] = pi.bus1Dest >= 0 ? static_cast<int> (base[static_cast<size_t> (pi.bus1Dest)] + 0.5f) : 0;
-            busDest[1] = pi.bus2Dest >= 0 ? static_cast<int> (base[static_cast<size_t> (pi.bus2Dest)] + 0.5f) : 0;
-            busBypass[0] = pi.bus1Bypass >= 0 && base[static_cast<size_t> (pi.bus1Bypass)] >= 0.5f;
-            busBypass[1] = pi.bus2Bypass >= 0 && base[static_cast<size_t> (pi.bus2Bypass)] >= 0.5f;
-            mainBypass = pi.mainBypass >= 0 && base[static_cast<size_t> (pi.mainBypass)] >= 0.5f;
-            // the latency of the racks (configuration only) and the delays that line the paths up (document 06, 11)
+            if (!mixSame)
+            {
+                busGain[1] = levelOf (pi.bus1Level);
+                busGain[2] = levelOf (pi.bus2Level);
+                directGain = levelOf (pi.directLevel);
+                busDest[0] = pi.bus1Dest >= 0 ? static_cast<int> (base[static_cast<size_t> (pi.bus1Dest)] + 0.5f) : 0;
+                busDest[1] = pi.bus2Dest >= 0 ? static_cast<int> (base[static_cast<size_t> (pi.bus2Dest)] + 0.5f) : 0;
+                busBypass[0] = pi.bus1Bypass >= 0 && base[static_cast<size_t> (pi.bus1Bypass)] >= 0.5f;
+                busBypass[1] = pi.bus2Bypass >= 0 && base[static_cast<size_t> (pi.bus2Bypass)] >= 0.5f;
+                mainBypass = pi.mainBypass >= 0 && base[static_cast<size_t> (pi.mainBypass)] >= 0.5f;
+                mixCached = gnumTouched == 0;
+            }
+            // the latency of the racks (configuration only) and the delays that line the paths up (document 06, 11): it changes only with the mixer settings or a chain
+            // that was configured in this period
+            if (!(mixSame && latCached && !fx[0].configuredNow() && !fx[1].configuredNow() && !fx[2].configuredNow()))
             {
                 const int dest[2] = { busDest[0], busDest[0] == 2 && busDest[1] == 2 ? 0 : busDest[1] };
                 const int lat[2] = { busBypass[0] ? 0 : fx[1].rackLatency (1, false), busBypass[1] ? 0 : fx[2].rackLatency (2, false) };
@@ -933,6 +962,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 const int latR[2] = { busBypass[0] ? 0 : fx[1].rackLatency (1, true), busBypass[1] ? 0 : fx[2].rackLatency (2, true) };
                 const LatencyPlan rep = LatencyPlan::compute (mainBypass ? 0 : fx[0].rackLatency (0, true), latR, dest);
                 reportedLatency.store (rep.total, std::memory_order_relaxed);
+                latCached = true;
             }
         }
         while (ei < numEvents && events[ei].frame <= pos)

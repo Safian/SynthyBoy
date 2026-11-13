@@ -187,6 +187,7 @@ void FxChain::reset() noexcept
     splitLh.reset();
     splitLmh.reset();
     splitMs.reset();
+    idleSettled = 0;
     for (int i = 0; i < 16; ++i)
     {
         levelGain[i] = levelGainPrev[i] = 1.0f;
@@ -298,8 +299,14 @@ void FxChain::buildPlan (const float*) noexcept
                 add (slotRack[s], true, s, slotOrder[s]);
 }
 
-void FxChain::update (const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask) noexcept
+void FxChain::update (const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask, bool inputsSame) noexcept
 {
+    if (inputsSame && idleSettled >= 2 && !active && (pool == nullptr || !pool->anyPending()))
+    {
+        configured = false; // nothing is on, nothing changed, and the bookkeeping below has already reached its fixed point
+        return;
+    }
+    configured = true;
     const FxIndex& f = fxIndex();
     period = frame.period;
     active = false;
@@ -399,6 +406,7 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         splitMs.setParams (p);
     }
     buildPlan (base);
+    idleSettled = (inputsSame && !active) ? idleSettled + 1 : 0;
 }
 
 int FxChain::rackLatency (int rack, bool reported) const noexcept

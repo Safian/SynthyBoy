@@ -41,7 +41,7 @@ public:
     void setReadoutTargets (const int* idx, int count) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
     int latencySamples() const noexcept override { return reportedLatency.load (std::memory_order_relaxed); }
-    void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); }
+    void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); paramGen.fetch_add (1u, std::memory_order_release); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
     bool copyReadout (LiveValues& out) const noexcept override;
@@ -104,6 +104,15 @@ private:
     std::vector<std::unique_ptr<Voice>> voices;
     std::vector<uint8_t> sustainPending;
     std::vector<float> base;       // snapshot of all parameters for the block
+    // The snapshot, the compiled matrix and the tuning table are rebuilt only when something they read changed: every writer (setParam, content, tuning source) bumps
+    // paramGen after its store, the audio thread compares it with the generation of its last snapshot.
+    std::atomic<uint32_t> paramGen { 1 };
+    uint32_t snapGen = 0;
+    const OwnContent* snapContent = nullptr;
+    bool snapValid = false;
+    bool blockDirty = true;        // the snapshot of this block differs from the one of the previous block
+    bool mixCached = false, latCached = false;
+    uint32_t lastFxMask = 0;
     std::vector<float> gdelta, gdeltaR;     // modulation of the global parameters
     std::vector<int> gtouched;
     int gnumTouched = 0;

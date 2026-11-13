@@ -238,6 +238,7 @@ void ModMatrix::compile (const float* base) noexcept
     const ParamIndex& pi = paramIndex();
     const ParamInfo* table = paramTable();
     count = 0;
+    srcMask = globalSrcMask = 0;
     EdgeList adj;
     for (int s = 0; s < kNumModSlots; ++s)
     {
@@ -290,6 +291,10 @@ void ModMatrix::compile (const float* base) noexcept
             c.amountSlot = owner - 100;
         }
         c.curve = (content != nullptr && content->modCurve[static_cast<size_t> (s)].present) ? &content->modCurve[static_cast<size_t> (s)] : nullptr;
+        const uint64_t bits = (uint64_t (1) << src) | (aux != 0 ? uint64_t (1) << aux : uint64_t (0));
+        srcMask |= bits;
+        if (c.global)
+            globalSrcMask |= bits;
     }
 }
 
