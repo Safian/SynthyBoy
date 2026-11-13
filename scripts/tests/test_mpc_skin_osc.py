@@ -79,7 +79,7 @@ class OscSkinTest(unittest.TestCase):
             for k in knobs:
                 x, y, w, h = k["bounds"]["bounds"].split()
                 self.assertIn(int(y), (346, 497), k["componentData"]["name"])
-            self.assertEqual(tab["qlinkBoundsData"], ["%s 336 %s 288" % (b.split()[0], b.split()[2]) for b in tab["qlinkBoundsData"]])
+            self.assertEqual(tab["qlinkBoundsData"], ["%s 301 %s 323" % (b.split()[0], b.split()[2]) for b in tab["qlinkBoundsData"]])
 
     def test_qlinks_follow_the_screen_rows(self):
         for n in (1, 2, 3):
@@ -115,7 +115,7 @@ class OscSkinTest(unittest.TestCase):
                 self.assertEqual(d["numFrames"], 1 if choice in SINGLE else MORPH_FRAMES)
                 self.assertEqual(e["handle remapping"]["map"], [{"key": "Data", "value": "Parameter %d" % self.index["osc%d.frame" % n]}])
                 b = e["bounds"]
-                self.assertEqual((b["version"], b["acceptsHWFocus"], b["bounds"]), (2, "No", "384 70 512 240"))
+                self.assertEqual((b["version"], b["acceptsHWFocus"], b["bounds"]), (2, "No", "384 30 512 240"))
                 self.assertEqual(b["additionalInvalidatingHandles"], ["IndexedEnabling/%d/15/Parameter %d" % (choice, self.index["osc%d.wavetable" % n])])
                 self.assertEqual(png_size(self.skins / d["image"]), (PICTURE_W, PICTURE_H * d["numFrames"]))
                 files.append(d["image"])

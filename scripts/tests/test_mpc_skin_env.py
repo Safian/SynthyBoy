@@ -97,7 +97,7 @@ class EnvSkinTest(unittest.TestCase):
             qmap = next(m for m in self.qlinks if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1)["Q-Links"]
             for c in knobs:
                 x, y, w, h = map(int, c["bounds"]["bounds"].split())
-                self.assertGreaterEqual(y, 336)  # below the envelope (it ends at y 335)
+                self.assertGreaterEqual(y, 301)  # below the envelope (it ends at y 296)
                 col = {23: 0, 343: 1, 663: 2, 983: 3}[x]
                 row = {346: 2, 497: 3}[y]
                 param = int(c["handle remapping"]["map"][0]["value"].split()[1])
