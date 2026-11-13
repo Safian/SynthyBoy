@@ -28,9 +28,12 @@
 // Live LFO display (docs/MPC.md "LFO pictures"). Compile switch SYNTHYBOY_MPC_LFO_LIVE (CMake option of the same name; the source default is 0:
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). When 1 the plugin has four display-only
 // parameters after the engine's list (index paramCount() + n - 1 for LFO n): the cursor of the LFO picture of the skin (lfo_live.h).
-// Never in the mirror, the state or a preset, not automatable. A low priority thread (not the audio thread) reads the engine's live values about
+// Never in the mirror, the state or a preset, not automatable. A helper thread (not the audio thread) reads the engine's live values about
 // SYNTHYBOY_MPC_LFO_LIVE_HZ times a second and, when a cursor cell changed, tells the host with audioMasterAutomate (the host redraws only then).
-//   SYNTHYBOY_MPC_LFO_LIVE_HZ        refresh rate of that thread while a voice sounds (default 25); it checks every 100 ms when all four are idle
+// Thread model: the thread is a normal SCHED_OTHER thread (nice 0, all CPUs; thread_policy.h sets that itself, whatever thread created it), one report
+// per changed cursor and tick, in index order, the position always read at the moment of the tick. The audio thread (processReplacing) does nothing
+// for the display: the engine's own relaxed atomic stores are all there is; this thread only reads them.
+//   SYNTHYBOY_MPC_LFO_LIVE_HZ        refresh rate of that thread (default 10 = a tick every 100 ms, the rate of the community wrapper Open MPC)
 //   SYNTHYBOY_MPC_LFO_LIVE_NOTIFY    1 (default): call audioMasterAutomate; 0: update the values only (the host never redraws: a CPU baseline)
 //   SYNTHYBOY_MPC_LFO_LIVE_SELFTEST  0 (default); 1: ignore the engine and sweep the four cursors at 0.25 / 0.5 / 1 / 2 cycles a second (measuring the host
 //                                    side - recording, modified flag, CPU - without playing a note)
@@ -39,7 +42,7 @@
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
 #ifndef SYNTHYBOY_MPC_LFO_LIVE_HZ
-#define SYNTHYBOY_MPC_LFO_LIVE_HZ 25
+#define SYNTHYBOY_MPC_LFO_LIVE_HZ 10
 #endif
 #ifndef SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
 #define SYNTHYBOY_MPC_LFO_LIVE_NOTIFY 1
@@ -50,12 +53,8 @@
 #include <chrono>
 #include <cstdio>
 #include <thread>
-#if defined(__linux__)
-#include <sys/resource.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-#endif
 #include "lfo_live.h"
+#include "thread_policy.h"
 #include "synthyboy/readout.h"
 #endif
 
@@ -256,9 +255,9 @@ struct PluginInstance
     {
         liveThread = std::thread ([this, e]
         {
-#if defined(__linux__)
-            setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 10); // this thread only: the audio thread must never wait for it
-#endif
+            // Own scheduling, set here (not inherited): normal policy, nice 0, all CPUs. Not lower than normal: this thread holds host locks while it is inside
+            // audioMasterAutomate, and a starved holder would make the host's own threads wait for it.
+            synthyboy_mpc::useNormalScheduling (0);
             const int first = static_cast<int> (synthyboy::paramCount());
             int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
             for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
@@ -270,7 +269,7 @@ struct PluginInstance
                 phaseIdx[l] = phase ? synthyboy::findParamIndex (phase->id) : -1;
             }
             const auto active = std::chrono::milliseconds (1000 / (SYNTHYBOY_MPC_LFO_LIVE_HZ > 0 ? SYNTHYBOY_MPC_LFO_LIVE_HZ : 1));
-            const auto idle = std::chrono::milliseconds (100);
+            const auto idle = std::chrono::milliseconds (100); // nothing sounds: a look ten times a second, no call to the host
             const auto start = std::chrono::steady_clock::now();
             auto next = start;
             int last[synthyboy_mpc::kLfoLiveCount] = {};
@@ -278,6 +277,9 @@ struct PluginInstance
             while (!liveStop.load (std::memory_order_relaxed))
             {
                 next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || anyActive ? active : idle;
+                const auto now = std::chrono::steady_clock::now();
+                if (next < now)
+                    next = now; // a tick that was late (the host call blocked): no catch-up burst of calls, one tick now and the grid goes on from here
                 std::this_thread::sleep_until (next);
                 if (liveStop.load (std::memory_order_relaxed))
                     break;

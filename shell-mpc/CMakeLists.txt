@@ -35,7 +35,7 @@ target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 # The skin of scripts/mpc-skin-extras/30_lfo.py refers to them, so the MPC package needs the plugin built with this ON (the default of this shell).
 # SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
 option(SYNTHYBOY_MPC_LFO_LIVE "MPC shell: the live LFO display parameters" ON)
-set(SYNTHYBOY_MPC_LFO_LIVE_HZ 25 CACHE STRING "MPC shell: refresh rate of the LFO display thread while a voice sounds")
+set(SYNTHYBOY_MPC_LFO_LIVE_HZ 10 CACHE STRING "MPC shell: refresh rate of the LFO display thread (ticks a second; 10 = every 100 ms)")
 option(SYNTHYBOY_MPC_LFO_LIVE_NOTIFY "MPC shell: tell the host (audioMasterAutomate) when a cursor moves; OFF = CPU baseline, the host never redraws" ON)
 option(SYNTHYBOY_MPC_LFO_LIVE_SELFTEST "MPC shell: sweep the four cursors without a voice (host-side measurements only)" OFF)
 if(SYNTHYBOY_MPC_LFO_LIVE)

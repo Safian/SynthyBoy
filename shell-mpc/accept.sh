@@ -114,10 +114,12 @@ live_build off -DSYNTHYBOY_MPC_LFO_LIVE=OFF
 live_build on
 live_build self -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON
 live_build quiet -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=OFF
+live_build hz25 -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: lfo_live_host build"; exit 1; }
-for v in off:off on:on self:selftest quiet:quiet; do
-    d=${v%%:*}; m=${v##*:}
-    $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m)"; exit 1; }
+# the refresh rate: the default is 10 a second (at most 21 calls per cursor in 2 s), SYNTHYBOY_MPC_LFO_LIVE_HZ=25 still changes it (the checks scale with HZ)
+for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do
+    d=${v%%:*}; r=${v#*:}; m=${r%%:*}; hz=${r##*:}
+    $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m, $hz Hz)"; exit 1; }
 done
 [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-on.log)" ] && [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-self.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the LFO display variants"; exit 1; }
 TL=build-mpc-live-tsan

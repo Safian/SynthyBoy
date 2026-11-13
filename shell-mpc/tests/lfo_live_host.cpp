@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Usage: lfo_live_host <plugin library> off|on|selftest|quiet
+// Usage: lfo_live_host <plugin library> off|on|selftest|quiet [HZ]
+//   HZ is the refresh rate the plugin was built with (SYNTHYBOY_MPC_LFO_LIVE_HZ, default 10): the number of audioMasterAutomate calls per cursor and second is
+//   at most HZ (+1 for the first tick), and about HZ for a cursor that changes cell at every tick.
 //   off:      built with SYNTHYBOY_MPC_LFO_LIVE=0: numParams is the engine's count, nothing exists after it.
 //   on:       built with it (default settings): four display-only parameters "LFO n Cursor" after the engine's list, idle (0, no audioMasterAutomate)
 //             while no voice sounds; with a note held they follow the LFO cycle and the plugin calls audioMasterAutomate for them (and for nothing else).
@@ -18,6 +20,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
@@ -25,6 +28,13 @@
 #include <string>
 #include <thread>
 #include <vector>
+#if defined(__linux__)
+#include <dirent.h>
+#include <sched.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
 static std::atomic<int> automate[4], automateOther { 0 };
 static std::atomic<int> firstIndex { -1 };
@@ -97,6 +107,9 @@ int main (int argc, char** argv)
 {
     if (argc < 3) { std::fprintf (stderr, "usage: lfo_live_host <plugin> off|on|selftest|quiet\n"); return 2; }
     const std::string mode = argv[2];
+    const int hz = argc > 3 ? std::max (1, std::atoi (argv[3])) : 10;
+    const int maxCalls = 2 * hz + 1;       // 2 s: one call per tick and parameter at the most
+    const int minFast = (2 * hz * 3) / 4;  // a cursor that changes cell at every tick: nearly all ticks call
 
     // the pure function first: the mapping of the engine's readout to a cursor step
     using synthyboy_mpc::lfoLiveStep;
@@ -124,7 +137,43 @@ int main (int argc, char** argv)
 
     const int n = static_cast<int> (synthyboy::paramCount());
     firstIndex.store (n);
+#if defined(__linux__)
+    // The plugin is created by a thread that is as unlike a normal thread as an unprivileged test can make it: nice 5 and pinned to one CPU. A helper thread
+    // of the plugin must not inherit that: policy SCHED_OTHER, nice 0, every CPU (the same code undoes an inherited SCHED_FIFO: the plugin sets its policy itself).
+    const auto threadIds = [] { std::set<int> ids; if (DIR* d = opendir ("/proc/self/task")) { while (dirent* de = readdir (d)) if (de->d_name[0] != '.') ids.insert (std::atoi (de->d_name)); closedir (d); } return ids; };
+    const std::set<int> before = threadIds();
+    AEffect* e = nullptr;
+    std::thread creator ([&]
+    {
+        setpriority (PRIO_PROCESS, static_cast<id_t> (syscall (SYS_gettid)), 5);
+        cpu_set_t one; CPU_ZERO (&one);
+        cpu_set_t now; CPU_ZERO (&now);
+        sched_getaffinity (0, sizeof (now), &now);
+        for (int c = 0; c < CPU_SETSIZE; ++c) if (CPU_ISSET (c, &now)) { CPU_SET (c, &one); break; }
+        sched_setaffinity (0, sizeof (one), &one);
+        e = entry (hostCallback);
+    });
+    creator.join();
+    std::set<int> added;
+    for (int id : threadIds()) if (! before.count (id)) added.insert (id);
+    if (mode != "off")
+    {
+        bool allNormal = ! added.empty();
+        const long cpusOnline = sysconf (_SC_NPROCESSORS_ONLN);
+        for (int id : added)
+        {
+            cpu_set_t m; CPU_ZERO (&m);
+            const bool aff = sched_getaffinity (id, sizeof (m), &m) == 0 && (CPU_COUNT (&m) > 1 || cpusOnline == 1);
+            const bool policy = sched_getscheduler (id) == SCHED_OTHER;
+            const int nice = getpriority (PRIO_PROCESS, static_cast<id_t> (id));
+            std::printf ("INFO  helper thread %d: policy %d, nice %d, cpus %d\n", id, sched_getscheduler (id), nice, CPU_COUNT (&m));
+            allNormal = allNormal && aff && policy && nice == 0;
+        }
+        check (allNormal, "threads: the helper thread is SCHED_OTHER, nice 0, on all CPUs although its creator is nice 5 on one CPU");
+    }
+#else
     AEffect* e = entry (hostCallback);
+#endif
     if (! e) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
     e->dispatcher (e, effOpen, 0, 0, nullptr, 0.0f);
     e->dispatcher (e, effSetSampleRate, 0, 0, nullptr, 44100.0f);
@@ -174,8 +223,11 @@ int main (int argc, char** argv)
         Sweep s = run (e, n, 2000, true);
         std::printf ("INFO  note held 2 s: LFO 1 %zu distinct cursor values, automate calls %d %d %d %d, other %d\n", s.seen[0].size(), automate[0].load(),
                      automate[1].load(), automate[2].load(), automate[3].load(), automateOther.load());
-        check (s.lo[0] > 0.0f && s.hi[0] <= 1.0f && s.seen[0].size() >= 20, "on: LFO 1 cursor follows the cycle (>= 20 different cells in 2 s, never idle)");
-        check (automate[0].load() >= 30 && automate[0].load() <= 65, "on: about 25 calls a second for a fast LFO (30 .. 65 in 2 s)");
+        check (s.lo[0] > 0.0f && s.hi[0] <= 1.0f && static_cast<int> (s.seen[0].size()) >= std::min (minFast, 8), "on: LFO 1 cursor follows the cycle (several different cells in 2 s, never idle)");
+        bool few = true;
+        for (int k = 0; k < 4; ++k) few = few && automate[k].load() <= maxCalls;
+        check (few, "on: at most HZ calls a second (+1) for every cursor: <= 2 * HZ + 1 in 2 s");
+        check (automate[0].load() >= minFast && automate[0].load() <= maxCalls, "on: about HZ calls a second for a fast LFO (3/4 of the ticks .. 2 * HZ + 1 in 2 s)");
         check (automateOther.load() == 0, "on: audioMasterAutomate only for the display parameters");
         check (text (e, effGetParamDisplay, n).find ('/') != std::string::npos, "on: display text of a cursor cell");
     }
@@ -185,14 +237,18 @@ int main (int argc, char** argv)
         std::printf ("INFO  selftest 2 s: distinct values %zu %zu %zu %zu, automate calls %d %d %d %d, other %d\n", s.seen[0].size(), s.seen[1].size(), s.seen[2].size(),
                      s.seen[3].size(), automate[0].load(), automate[1].load(), automate[2].load(), automate[3].load(), automateOther.load());
         bool sweeps = true;
-        for (int k = 0; k < 4; ++k) sweeps = sweeps && s.seen[k].size() >= 8 && s.lo[k] > 0.0f && s.hi[k] <= 1.0f;
+        for (int k = 0; k < 4; ++k) sweeps = sweeps && s.seen[k].size() >= (hz >= 25 ? 8u : 4u) && s.lo[k] > 0.0f && s.hi[k] <= 1.0f;
         check (sweeps, "selftest: all four cursors move within 1/32 .. 1");
-        check (s.seen[3].size() > s.seen[0].size(), "selftest: LFO 4 is faster than LFO 1");
+        // at 10 ticks a second LFO 4 (64 cells a second) steps 6.4 cells per tick and shows few different cells (the cursor aliases): the call counts tell the speeds apart
+        check (hz >= 25 ? s.seen[3].size() > s.seen[0].size() : automate[3].load() >= automate[0].load(), "selftest: LFO 4 is faster than LFO 1");
         if (mode == "quiet")
             check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther == 0, "quiet: audioMasterAutomate is never called");
         else
         {
-            check (automate[0].load() >= 8 && automate[3].load() >= 30 && automate[3].load() <= 65 && automateOther.load() == 0, "selftest: audioMasterAutomate per changed cell, display parameters only");
+            bool few = true;
+            for (int k = 0; k < 4; ++k) few = few && automate[k].load() <= maxCalls;
+            check (few, "selftest: at most HZ calls a second (+1) for every cursor");
+            check (automate[0].load() >= std::min (8, minFast) && automate[3].load() >= minFast && automateOther.load() == 0, "selftest: audioMasterAutomate per changed cell, display parameters only");
         }
     }
 
