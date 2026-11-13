@@ -138,6 +138,7 @@ struct Options
     const char* profileFile = nullptr;
     std::string tier = "all"; // requested | low | medium | high | all
     bool ftz = false;
+    int morphSpread = -1; // --morph-spread 0|1: keep the morph spread across the unison voices at tier low (-1 = the engine default)
     int unisonCap = -1; // --unison-cap N: tier low unison voices per oscillator of the own engine (0 = none, -1 = the engine default)
     bool sections = false; // --sections: the time of a block by section (a build with SYNTHYBOY_SECTION_TIMING=ON)
     bool idle = false; // --idle: no notes at all (the cost of an empty block)
@@ -225,6 +226,8 @@ Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy)
         set (*engine, "master.polyphony", 32.0f);
     if (o.unisonCap >= 0)
         setOwnLowTierUnisonCap (*engine, o.unisonCap);
+    if (o.morphSpread >= 0)
+        setOwnLowTierMorphSpread (*engine, o.morphSpread != 0);
     engine->prepare (o.sampleRate, o.block, quality);
 
     std::vector<float> left (static_cast<size_t> (o.block)), right (static_cast<size_t> (o.block));
@@ -327,7 +330,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--sections] [--unison-cap N] [--tier requested|low|medium|high|all]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -363,6 +366,7 @@ int main (int argc, char** argv)
         else if (a == "--idle")      o.idle = true;
         else if (a == "--sections")  o.sections = true;
         else if (a == "--unison-cap") o.unisonCap = std::atoi (next());
+        else if (a == "--morph-spread") o.morphSpread = std::atoi (next());
         else if (a == "--tier")      o.tier = next();
         else usage ("unknown argument");
     }

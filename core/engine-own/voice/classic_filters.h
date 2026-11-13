@@ -51,6 +51,7 @@ public:
     {
         sr = sampleRate;
         memoValid = false;
+        rampValid = false;
         comb.prepare (static_cast<int> (sampleRate * 0.1));
         reset();
     }
@@ -80,6 +81,11 @@ public:
             // nothing moves across the period: every 8 sample piece would get exactly b (pow (1, t) = 1, lerp (x, x, t) = x), and the sample loops
             // carry their state from piece to piece, so one call gives the same samples
             block (in, out, n, b);
+            return;
+        }
+        if (b.fast && b.model == 2 && a.model == 2 && a.style == b.style && a.fast)
+        {
+            ladderRamp (in, out, n, a, b, t0);
             return;
         }
         for (int i = 0; i < n;)
@@ -373,12 +379,16 @@ private:
             lad = ladderSetup (f, r, d, style, bRaw);
             ladValid = true;
         }
-        const float G = lad.G, k = lad.k, pre = lad.pre, post = lad.post;
-        const float c0 = lad.c[0], c1 = lad.c[1], c2 = lad.c[2], c3 = lad.c[3], c4 = lad.c[4];
+        ladderRun (lad, in, out, n);
+    }
+    void ladderRun (const LadderSetup& z, const float* in, float* out, int n) noexcept
+    {
+        const float G = z.G, k = z.k, pre = z.pre, post = z.post;
+        const float c0 = z.c[0], c1 = z.c[1], c2 = z.c[2], c3 = z.c[3], c4 = z.c[4];
         for (int i = 0; i < n; ++i)
         {
             const float S = G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3];
-            const float u = th ((fastMath ? (pre * in[i] - k * S) * lad.invDen : (pre * in[i] - k * S) / (1.0f + k * G * G * G * G)) * 0.9f) * 1.1f;
+            const float u = th ((fastMath ? (pre * in[i] - k * S) * z.invDen : (pre * in[i] - k * S) / (1.0f + k * G * G * G * G)) * 0.9f) * 1.1f;
             float x = u, st[4];
             for (int j = 0; j < 4; ++j)
             {
@@ -391,6 +401,45 @@ private:
             out[i] = (c0 * u + c1 * st[0] + c2 * st[1] + c3 * st[2] + c4 * st[3]) * post;
         }
     }
+    /** The Ladder setup of parameters p, without touching the memo of block (). */
+    LadderSetup ladderSetupFor (const ClassicParams& p) const noexcept
+    {
+        const float f = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
+        const float d = p.fast ? fastmath::pow10 (p.driveDb * 0.05f) : std::pow (10.0f, p.driveDb * 0.05f);
+        return ladderSetup (f, clamp01 (p.res), d, p.style, std::clamp (p.blendRaw, 0.0f, 2.0f) - 1.0f);
+    }
+    /** Tier low, Ladder with moving parameters: the setup (tan, sin, sqrt) is computed at the two ends of the period and its coefficients are interpolated linearly over the
+        four pieces of 8 samples, instead of the cutoff by a power and the whole setup again for every piece. The end of one period is the start of the next. */
+    void ladderRamp (const float* in, float* out, int n, const ClassicParams& a, const ClassicParams& b, int t0) noexcept
+    {
+        fastMath = true;
+        if (!rampValid || !sameParams (rampP, a))
+            rampA = ladderSetupFor (a);
+        else
+            rampA = rampB;
+        rampB = ladderSetupFor (b);
+        rampP = b;
+        rampValid = true;
+        for (int i = 0; i < n;)
+        {
+            const int pos = t0 + i;
+            const int m = std::min (8 - (pos % 8), n - i);
+            const float t = static_cast<float> ((pos / 8) * 8 + 8) / static_cast<float> (kControlPeriod);
+            LadderSetup z;
+            z.G = lerp (rampA.G, rampB.G, t);
+            z.k = lerp (rampA.k, rampB.k, t);
+            z.pre = lerp (rampA.pre, rampB.pre, t);
+            z.post = lerp (rampA.post, rampB.post, t);
+            z.invDen = lerp (rampA.invDen, rampB.invDen, t);
+            for (int j = 0; j < 5; ++j)
+                z.c[j] = lerp (rampA.c[j], rampB.c[j], t);
+            ladderRun (z, in + i, out + i, m);
+            i += m;
+        }
+    }
+    LadderSetup rampA, rampB;
+    ClassicParams rampP;
+    bool rampValid = false;
 public:
     /** Two channels of the Ladder model in one loop (see processPair). */
     static bool processPairLadder (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& bA, const ClassicParams& bB) noexcept

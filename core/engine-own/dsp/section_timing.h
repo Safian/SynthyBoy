@@ -33,6 +33,9 @@ enum Id : int
     fxModule0,            // 13 modules of the chain: Chorus, Compressor, Delay, Distortion, EQ, FX filter, Flanger, Phaser, Reverb, Hyper/Dim, Utility, Bode, Convolve
     fxSplitters = fxModule0 + 13, // the splitters (their bands are counted in the modules)
     fxPool,               // the instance pool slots
+    tickOscParams,        // Voice::tick: the parameters of the three oscillators (the reads and the modulated values), without the oscillator update
+    tickFilterParams,     // Voice::tick: the settings of the two filters
+    renderFinal,          // Voice::render: amplitude, velocity, declick and the add to the buses
     kCount
 };
 
@@ -42,7 +45,7 @@ inline const char* name (int id) noexcept
         "engine rest (snapshot, control tick, buses, master)", "voice tick: other", "voice tick: envelopes + LFOs", "voice tick: modulation matrix",
         "voice tick: oscillator update", "osc: morph cycle build", "voice render: routing / mix / output", "osc: wavetable read", "osc: morph read", "osc: warp + decimator",
         "osc: sample / granular / spectral", "sub oscillator", "noise", "filter 1", "filter 2", "fx: update", "fx: chorus", "fx: compressor", "fx: delay", "fx: distortion",
-        "fx: eq", "fx: fx filter", "fx: flanger", "fx: phaser", "fx: reverb", "fx: hyper / dimension", "fx: utility", "fx: bode", "fx: convolve", "fx: splitters", "fx: pool slots" };
+        "fx: eq", "fx: fx filter", "fx: flanger", "fx: phaser", "fx: reverb", "fx: hyper / dimension", "fx: utility", "fx: bode", "fx: convolve", "fx: splitters", "fx: pool slots", "voice tick: oscillator parameters", "voice tick: filter settings", "voice render: amplitude / velocity / output" };
     return id >= 0 && id < kCount ? kNames[id] : "?";
 }
 

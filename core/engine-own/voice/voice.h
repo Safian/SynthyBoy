@@ -46,6 +46,7 @@ struct TickGlobals
     int maxUnison = kMaxUnisonVoices;
     const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
+    bool lowShareMorph = false;              // tier low: the unison voices share one spectral morph cycle (OwnEngine::setLowTierMorphSpread (false))
     uint32_t baseEpoch = 0;                  // changes whenever `base` was rebuilt from the parameters (a voice may keep what it derived from them while it is the same)
     uint64_t usedSources = ~uint64_t (0);    // bit k: some modulation slot (or custom shape point) reads source id k; the economy mode of tier low updates the LFOs nothing reads less often
     bool oversample = false;                 // ultra render / quality.oversample_4x: every wavetable oscillator runs 4x oversampled
@@ -166,6 +167,7 @@ private:
     float vel = 1.0f, releaseVel = 0.0f, tuneExpr = 0.0f, polyPressure = 0.0f, slide = 0.0f, exprX = 0.0f;
     float glideOffset = 0.0f, glideTime = 0.0f, glideElapsed = 0.0f, glideSlope = 0.0f; // semitones left, seconds
     float lastSemis = 60.0f;
+    float tuneCoefDt = 0.0f, tuneCoef = 0.0f; // 1 - exp (-period / 20 ms) for the period tuneCoefDt
     Rng rng;
     float randomPerNote = 0.0f, rand2 = 0.0f, randDiscrete = 0.0f;
     int altParity = 0;

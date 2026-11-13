@@ -48,7 +48,7 @@ struct DestLaw
 const DestLaw& destLawOf (size_t paramIndex) noexcept;
 
 /** The plain value of the parameter after `delta` (in control units) was added in the control domain. */
-float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, float delta) noexcept;
+float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, float delta, bool fast = false) noexcept;
 
 struct CompiledSlot
 {

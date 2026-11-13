@@ -26,6 +26,8 @@ namespace own
 {
 /** The default of OwnEngine::setLowTierUnisonCap: the one place of the number. */
 constexpr int kDefaultLowTierUnisonCap = 3;
+/** The default of OwnEngine::setLowTierMorphSpread: keep the morph spread across the unison voices at tier low (two morph cycles instead of one shared one). */
+constexpr bool kDefaultLowTierMorphSpread = true;
 
 class OwnEngine final : public IEngine
 {
@@ -39,6 +41,9 @@ public:
         (detune width, spread, blend, level normalisation) is that of a patch that asks for the cap. 0 = no such cap. Never touches a parameter value, never applies at
         medium / high or to an offline render (that runs on a twin at the high tier). Any thread, lock free; read at the start of every block. */
     void setLowTierUnisonCap (int voices) noexcept { lowUnisonCap.store (std::max (0, voices), std::memory_order_relaxed); }
+    /** Tier low: true keeps the spectral morph spread across the unison voices (two morph cycles, as at medium / high), false shares one cycle between them (about half the
+        morph build cost, the morph spread knob then does nothing at tier low). Any thread, lock free. */
+    void setLowTierMorphSpread (bool keep) noexcept { lowKeepMorphSpread.store (keep, std::memory_order_relaxed); }
     int lowTierUnisonCap() const noexcept { return lowUnisonCap.load (std::memory_order_relaxed); }
     void reset() override;
     void setParam (uint32_t id, float plain) noexcept override;
@@ -85,6 +90,7 @@ private:
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> voiceCap { 8 }, unisonCap { kMaxUnisonVoices };
     std::atomic<int> lowUnisonCap { kDefaultLowTierUnisonCap };
+    std::atomic<bool> lowKeepMorphSpread { kDefaultLowTierMorphSpread };
     std::atomic<int> activeCount { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };

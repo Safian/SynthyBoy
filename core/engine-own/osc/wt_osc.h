@@ -45,6 +45,7 @@ struct OscTick
     float morphAmount = 0.0f, morphSpread = 0.0f; // 0 .. 1, -1 .. 1
     bool oversample = false;              // run 4x oversampled even without a warp (ultra quality)
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
+    bool shareMorph = false;              // tier low only: all unison voices share one morph cycle (no morph spread across them)
     bool lowCost = false;                 // tier low: a warp runs 2x oversampled with a 32 tap decimator instead of 4x with 128 taps, the spectral morph is rebuilt every 512 samples
 };
 
@@ -57,7 +58,7 @@ inline bool sameOscTick (const OscTick& a, const OscTick& b) noexcept
         && a.warpSrc[0] == b.warpSrc[0] && a.warpSrc[1] == b.warpSrc[1] && a.warpAmount[0] == b.warpAmount[0] && a.warpAmount[1] == b.warpAmount[1]
         && a.warpPhase[0] == b.warpPhase[0] && a.warpPhase[1] == b.warpPhase[1] && a.warpSpread[0] == b.warpSpread[0] && a.warpSpread[1] == b.warpSpread[1]
         && a.startPhase == b.startPhase && a.active == b.active && a.remap == b.remap && a.morphType == b.morphType && a.morphAmount == b.morphAmount
-        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth && a.lowCost == b.lowCost;
+        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth && a.lowCost == b.lowCost && a.shareMorph == b.shareMorph;
 }
 
 /** Hermite interpolation of the four samples x[-1], x[0], x[1], x[2] at x[0] + f. */
@@ -385,7 +386,7 @@ public:
         {
             const Wavetable& wt = *tick.wt;
             const int pairs = (curCount + 1) / 2;
-            const int groups = tick.lowCost ? 1 : std::min (kMorphGroups, std::max (1, pairs)); // tier low: the unison voices share one morph cycle (no morph spread across them)
+            const int groups = tick.lowCost && tick.shareMorph ? 1 : std::min (kMorphGroups, std::max (1, pairs)); // tier low: the unison voices share one morph cycle (no morph spread across them)
             morphGroups = groups;
             const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
             const float nyq = static_cast<float> (warped ? (tick.lowCost ? 1.0 : 3.2) * sampleRate : 0.5 * sampleRate);
@@ -586,14 +587,34 @@ public:
                 float* hist = history[v]; // the last nt - 1 samples of the os x signal, then this period's
                 float buf[kTaps - 1 + kOversample * kControlPeriod];
                 std::copy (hist, hist + nt - 1, buf);
+                // Sync and Sync Var alone (no second warp, no filter stage, no cross signal): the phase map is two operations, so the sample is read in place instead of through
+                // the general sampleAt () (which calls warpPhase (), the table read and warpSample () as functions, each with a switch); the same arithmetic as that path
+                const bool syncOnly = (tick.warp[0] == kWarpSync || tick.warp[0] == kWarpSyncVar) && tick.warp[1] == 0;
+                const float syncMul = 1.0f + a0 * 11.0f, syncAdd = tick.warp[0] == kWarpSyncVar ? tick.warpPhase[0] : 0.0f;
+                const bool syncVar = tick.warp[0] == kWarpSyncVar;
+                auto syncSample = [&] (uint32_t phx, float wBk) noexcept
+                {
+                    const float p = static_cast<float> (phx >> 8) * (1.0f / 16777216.0f);
+                    const float x = syncVar ? p * syncMul + syncAdd : p * syncMul;
+                    float q = x - ffloor (x); // warpPhase (): frac
+                    q -= ffloor (q);          // the read of the table wraps once more
+                    const float pos = q * fscale;
+                    const int idx = std::clamp (static_cast<int> (pos), 0, N);
+                    const float fr = pos - static_cast<float> (idx);
+                    float r = hermite (cA + idx, fr);
+                    if (cB != nullptr)
+                        r = lerp (r, hermite (cB + idx, fr), wBk);
+                    return r;
+                };
                 for (int k = 0; k < n; ++k)
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
                     const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
+                    const float wBk = cB != nullptr ? lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)) : 0.0f; // only a second cycle has a weight
                     for (int j = 0; j < os; ++j)
                     {
-                        buf[nt - 1 + k * os + j] = sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)),
-                                                             lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
+                        buf[nt - 1 + k * os + j] = syncOnly ? syncSample (ph, wBk)
+                                                            : sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk);
                         ph += incO;
                     }
                 }

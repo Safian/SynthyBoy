@@ -17,10 +17,21 @@ namespace own
 namespace
 {
 
-float noiseSample (int colour, float* s, Rng& r, float level) noexcept
+float noiseSample (int colour, float* s, Rng& r, float level, bool fast) noexcept
 {
     // approximately Gaussian white noise (sum of six uniform numbers), level matched to the reference engine by measurement
-    const float w = (r.uni() + r.uni() + r.uni() + r.uni() + r.uni() + r.uni() - 3.0f) * 0.78f; // in band density of the reference (its noise is band limited at the top: bands 20 .. 20 kHz measured +0.7 dB at equal total power)
+    float w;
+    if (fast)
+    {
+        // tier low: the six uniform numbers come from three draws of the generator (a 16 bit uniform number from each half of a draw): the same sum, half the generator work
+        const uint32_t x0 = r.next(), x1 = r.next(), x2 = r.next();
+        const float u = static_cast<float> (x0 >> 16) + static_cast<float> (x0 & 0xffffu) + static_cast<float> (x1 >> 16) + static_cast<float> (x1 & 0xffffu)
+                      + static_cast<float> (x2 >> 16) + static_cast<float> (x2 & 0xffffu);
+        w = (u * (1.0f / 65536.0f) - 3.0f) * 0.78f;
+    }
+    else
+        w = (r.uni() + r.uni() + r.uni() + r.uni() + r.uni() + r.uni() - 3.0f) * 0.78f;
+    // (the factor 0.78: in band density of the reference, its noise is band limited at the top: bands 20 .. 20 kHz measured +0.7 dB at equal total power)
     switch (colour)
     {
         case 1: // pink (three pole filter of white noise)
@@ -118,7 +129,7 @@ void Voice::clearMod() noexcept
 
 float Voice::modulatedSlow (int idx, float b, float d) const noexcept
 {
-    return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d);
+    return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d, gl->quality == 0);
 }
 
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
@@ -447,7 +458,14 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
         const float target = g.tunedNotes[keyNum & 127];
         if (target == target)
-            tuneTrack += (target - tuneTrack) * (1.0f - std::exp (-fdt / 0.02f));
+            {
+                if (tuneCoefDt != fdt)
+                {
+                    tuneCoefDt = fdt;
+                    tuneCoef = 1.0f - std::exp (-fdt / 0.02f); // the same value every period
+                }
+                tuneTrack += (target - tuneTrack) * tuneCoef;
+            }
     }
     const float noteSemis = tuneTrack + glideOffset + bend + tuneExpr + g.base[mi.transpose] + g.base[mi.tune] * 0.01f;
     lastSemis = tuneTrack + glideOffset;
@@ -712,6 +730,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     // a content set that replaced the one a sample-type player reads stops that player
     for (int o = 0; o < 3; ++o)
     {
+        SB_SECTION (sections::tickOscParams);
         const OscIdx& oi = pi.osc[o];
         const LibKeys& lk = libKeys (o);
         const int type = std::clamp (static_cast<int> (P (oi.type) + 0.5f), 0, 4);
@@ -837,6 +856,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             remapInit[o] = false;
         t.oversample = g.oversample;
         t.lowCost = g.quality == 0;
+        t.shareMorph = g.lowShareMorph;
         t.remap = nullptr;
         if (cs != nullptr)
         {
@@ -950,6 +970,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     routing = static_cast<int> (g.base[pi.filterRouting] + 0.5f);
     for (int f = 0; f < 2; ++f)
     {
+        SB_SECTION (sections::tickFilterParams);
         const FilterIdx& fi = pi.filter[f];
         filtOn[f] = P (fi.on) >= 0.5f;
         filtEnv1[f] = P (fi.env1) >= 0.5f;
@@ -1176,8 +1197,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         {
             const float t = static_cast<float> (t0 + k + 1) * invP;
             const float g = lerp (noiseGainPrev, noiseGain, t);
-            float a = noiseSample (noiseColour, noiseState[0], noiseRng, g);
-            float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g), noiseStereo) : a;
+            float a = noiseSample (noiseColour, noiseState[0], noiseRng, g, gl->quality == 0);
+            float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g, gl->quality == 0), noiseStereo) : a;
             if (noiseColour <= 3)
                 shapeNoise (a, b);
             nl[k] = a * g * 1.41421356f * gl2;
@@ -1256,6 +1277,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
     }
     // ---- amplitude, velocity, declick, fade (only the targets that received something are mixed: the others would add exact zeros)
+    SB_SECTION (sections::renderFinal);
     float lastL = 0.0f, lastR = 0.0f;
     float ampK[kControlPeriod], vgK[kControlPeriod];
     simd::rampLerp (ampK, ampPrev, ampCur, t0, n, invP);

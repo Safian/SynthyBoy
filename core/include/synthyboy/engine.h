@@ -147,6 +147,8 @@ double ownSectionClockCostNs() noexcept;
 
 /** Own engine only: the unison voices per oscillator at tier low (see OwnEngine::setLowTierUnisonCap; 0 = no cap, default 3). False if `engine` is not an own engine. */
 bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept;
+/** Own engine only: keep (default) or drop the spectral morph spread across the unison voices at tier low (see OwnEngine::setLowTierMorphSpread). */
+bool setOwnLowTierMorphSpread (IEngine& engine, bool keep) noexcept;
 
 enum class EngineKind
 {

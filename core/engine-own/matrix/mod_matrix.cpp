@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include "mod_matrix.h"
+#include "../dsp/fastmath.h"
 
 #include <cstring>
 #include <vector>
@@ -120,8 +121,11 @@ const DestLaw& destLawOf (size_t paramIndex) noexcept
     return laws[paramIndex < laws.size() ? paramIndex : 0];
 }
 
-float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, float delta) noexcept
+float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, float delta, bool fast) noexcept
 {
+    // tier low (fast): log2 / exp2 by the polynomials of dsp/fastmath.h (absolute error below 6e-8 in log2, below 1e-8 relative in exp2)
+    auto lg2 = [fast] (float x) noexcept { return fast ? fastmath::log2 (x) : std::log2 (x); };
+    auto ex2 = [fast] (float x) noexcept { return fast ? fastmath::exp2 (x) : std::exp2 (x); };
     switch (law.kind)
     {
         case DestKind::volume:
@@ -144,18 +148,18 @@ float modulatedValue (const ParamInfo& info, const DestLaw& law, float base, flo
         }
         case DestKind::log2Seconds:
         {
-            const float c = std::log2 (std::max (base, 1.0e-3f) * 0.001f) + delta;
-            return std::exp2 (std::clamp (c, -30.0f, 10.0f)) * 1000.0f;
+            const float c = lg2 (std::max (base, 1.0e-3f) * 0.001f) + delta;
+            return ex2 (std::clamp (c, -30.0f, 10.0f)) * 1000.0f;
         }
         case DestKind::log2Hz:
         {
-            const float c = std::log2 (std::max (base, 1.0e-4f)) + delta;
-            return std::exp2 (std::clamp (c, -14.0f, 14.0f));
+            const float c = lg2 (std::max (base, 1.0e-4f)) + delta;
+            return ex2 (std::clamp (c, -14.0f, 14.0f));
         }
         case DestKind::note:
         {
-            const float c = 12.0f * std::log2 (std::max (base, 1.0f) * (1.0f / 8.1757989156f)) + delta;
-            return 8.1757989156f * std::exp2 (std::clamp (c, 0.0f, 160.0f) * (1.0f / 12.0f));
+            const float c = 12.0f * lg2 (std::max (base, 1.0f) * (1.0f / 8.1757989156f)) + delta;
+            return 8.1757989156f * ex2 (std::clamp (c, 0.0f, 160.0f) * (1.0f / 12.0f));
         }
         default:
             return base + delta / law.scale;

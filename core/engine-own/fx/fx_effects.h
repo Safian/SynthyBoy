@@ -190,26 +190,38 @@ public:
         const float avg = 0.5f * (p.delay1 + p.delay2);
         for (int k = 0; k < kMaxPairs * 4; ++k)
             band[k].set (p.cutoff, p.spread, sampleRate);
+        // what does not change from sample to sample is computed once: the spread of the voices over the unison (a division each) and the phase offset of every tap
+        float tOf[kMaxPairs], phOff[kMaxPairs], baseOf[2];
+        for (int i = 0; i < V; ++i)
+        {
+            tOf[i] = (i > 0 && V > 1) ? static_cast<float> (i) / static_cast<float> (V - 1) : 0.0f;
+            phOff[i] = 0.25f * static_cast<float> (i) / static_cast<float> (V);
+        }
+        baseOf[0] = p.delay1;
+        baseOf[1] = p.delay2;
+        float period[kMaxPairs * 4] = {}; // the delay of every tap in samples; tier low holds it for four samples (the LFO moves it by a few thousandths of a sample in that time)
         for (int s = 0; s < n; ++s)
         {
             phase += p.rate / sr;
             phase -= ffloor (phase);
             const float in[2] = { l[s], r[s] };
             float acc[2] = { 0.0f, 0.0f };
+            const bool refresh = !fast || (s & 3) == 0;
             for (int i = 0; i < V; ++i)
             {
-                const float t = (i > 0 && V > 1) ? static_cast<float> (i) / static_cast<float> (V - 1) : 0.0f;
                 for (int vi = 0; vi < 2; ++vi)
                     for (int c = 0; c < 2; ++c)
                     {
                         const int k = ((i * 2 + vi) * 2) + c;
-                        float ph = phase + (c == 1 ? 0.25f : 0.0f) + (vi == 1 ? 0.5f : 0.0f) + 0.25f * static_cast<float> (i) / static_cast<float> (V);
-                        ph -= ffloor (ph);
-                        const float mod = 1.0f + 0.5f * (fast ? fastmath::sinCycles (ph) : std::sin (kTwoPif * ph));
-                        const float base = vi == 0 ? p.delay1 : p.delay2;
-                        const float delay = mod * 0.03f * p.depth + lerp (base, avg, t);
-                        const float period = std::clamp (delay * sr, 3.0f, 0.08f * sr);
-                        const float rd = line[k].readCubic (period);
+                        if (refresh)
+                        {
+                            float ph = phase + (c == 1 ? 0.25f : 0.0f) + (vi == 1 ? 0.5f : 0.0f) + phOff[i];
+                            ph -= ffloor (ph);
+                            const float mod = 1.0f + 0.5f * (fast ? fastmath::sinCycles (ph) : std::sin (kTwoPif * ph));
+                            const float delay = mod * 0.03f * p.depth + lerp (baseOf[vi], avg, tOf[i]);
+                            period[k] = std::clamp (delay * sr, 3.0f, 0.08f * sr);
+                        }
+                        const float rd = line[k].readCubic (period[k]);
                         line[k].push (band[k].process (loopLimit (in[c] + fb * rd)));
                         acc[c] += rd;
                     }
@@ -316,36 +328,44 @@ public:
         const float centreNote = 12.0f * std::log2 (std::max (p.centerHz, 1.0f) / 8.1757989f);
         const bool spread = std::fabs (p.depth2) > 1.0e-4f;
         float* io[2] = { l, r };
+        float hc1[2] = {}, hc2[2] = {}, hS[2][kStages] = {};
         for (int i = 0; i < n; ++i)
         {
             phase += p.rate / sr;
             phase -= ffloor (phase);
             for (int c = 0; c < 2; ++c)
             {
-                const float ph = phase + (c == 1 ? p.phaseOffset : -p.phaseOffset) * 0.5f;
-                const float x01 = ph - ffloor (ph);
-                const float v = 2.0f * std::fabs (2.0f * x01 - 1.0f) - 1.0f; // triangle -1 .. 1
-                const float e2 = (centreNote + p.depthSemis * v) * (1.0f / 12.0f);
-                const float hz = std::clamp (8.1757989f * (fast ? fastmath::exp2 (e2) : std::exp2 (e2)), 20.0f, 0.45f * sr);
-                const float c1 = OnePole::coefficient (hz / 20.0f, sampleRate), c2 = OnePole::coefficient (hz * 20.0f, sampleRate);
-                float aS[kStages];
-                if (spread)
+                // the cutoff of the stages, and the coefficients of the feedback band pass, follow the LFO: every sample, at tier low every eighth (the LFO moves the
+                // cutoff by a few thousandths of an octave in that time)
+                if (!fast || (i & 7) == 0)
                 {
-                    // depth 2: the stage cutoffs spread linearly in semitones over [-depth2 / 2, +depth2 / 2] around the centre (stage 0 lowest for a positive value)
-                    for (int s = 0; s < kStages; ++s)
+                    const float ph = phase + (c == 1 ? p.phaseOffset : -p.phaseOffset) * 0.5f;
+                    const float x01 = ph - ffloor (ph);
+                    const float v = 2.0f * std::fabs (2.0f * x01 - 1.0f) - 1.0f; // triangle -1 .. 1
+                    const float e2 = (centreNote + p.depthSemis * v) * (1.0f / 12.0f);
+                    const float hz = std::clamp (8.1757989f * (fast ? fastmath::exp2 (e2) : std::exp2 (e2)), 20.0f, 0.45f * sr);
+                    hc1[c] = OnePole::coefficient (hz / 20.0f, sampleRate);
+                    hc2[c] = OnePole::coefficient (hz * 20.0f, sampleRate);
+                    if (spread)
                     {
-                        const float hs = std::max (hz * std::exp2 (p.depth2 * (static_cast<float> (s) / 11.0f - 0.5f) * (1.0f / 12.0f)), 5.0f);
-                        const float g = phaserStageG (hs, sampleRate);
-                        aS[s] = g / (1.0f + g);
+                        // depth 2: the stage cutoffs spread linearly in semitones over [-depth2 / 2, +depth2 / 2] around the centre (stage 0 lowest for a positive value)
+                        for (int s = 0; s < kStages; ++s)
+                        {
+                            const float hs = std::max (hz * std::exp2 (p.depth2 * (static_cast<float> (s) / 11.0f - 0.5f) * (1.0f / 12.0f)), 5.0f);
+                            const float g = phaserStageG (hs, sampleRate);
+                            hS[c][s] = g / (1.0f + g);
+                        }
+                    }
+                    else
+                    {
+                        const float g = phaserStageG (hz, sampleRate);
+                        const float a0 = g / (1.0f + g);
+                        for (int s = 0; s < kStages; ++s)
+                            hS[c][s] = a0;
                     }
                 }
-                else
-                {
-                    const float g = phaserStageG (hz, sampleRate);
-                    const float a0 = g / (1.0f + g);
-                    for (int s = 0; s < kStages; ++s)
-                        aS[s] = a0;
-                }
+                const float c1 = hc1[c], c2 = hc2[c];
+                const float* aS = hS[c];
                 const float dry = io[c][i];
                 float x = dry * (1.0f + 0.5f * fbk) + fb[c];
                 float tap[3] = { 0.0f, 0.0f, 0.0f };

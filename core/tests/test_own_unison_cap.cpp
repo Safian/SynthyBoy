@@ -181,3 +181,23 @@ TEST (unison_cap_setter_is_for_the_own_engine)
     auto e = createEngine (EngineKind::own);
     CHECK (setOwnLowTierUnisonCap (*e, 5));
 }
+
+TEST (morph_spread_switch_of_tier_low)
+{
+    auto run = [] (Tier tier, int keep)
+    {
+        auto e = make (7, 4);
+        bench::ownSet (*e, "osc1.morph.spread", 80.0f);
+        if (keep >= 0)
+            setOwnLowTierMorphSpread (*e, keep != 0);
+        e->prepare (44100.0, 128, qualityForTier (tier));
+        std::vector<float> out;
+        play (*e, out);
+        return out;
+    };
+    const auto def = run (Tier::low, -1), keepOn = run (Tier::low, 1), keepOff = run (Tier::low, 0);
+    CHECK (finite (keepOff));
+    CHECK (same (def, keepOn));      // the default keeps the spread
+    CHECK (!same (keepOn, keepOff)); // sharing one cycle changes the sound of a patch with a morph spread
+    CHECK (same (run (Tier::high, 1), run (Tier::high, 0))); // medium / high never share
+}

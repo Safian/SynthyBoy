@@ -154,7 +154,7 @@ public:
     int moduleIndex() const noexcept override { return 1; }
     void prepare (double sr, int) override { fx.prepare (sr); }
     void reset() noexcept override { fx.reset(); }
-    void configure (const FxFrame&, const float* b, const float* d) noexcept override
+    void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         Compressor::Params p;
         p.mix = clamp01 (pct (b, d, mix));
@@ -172,6 +172,7 @@ public:
             p.band[i].upperRatio = b[band[i][3]] * 0.01f;
             p.band[i].gainDb = V (b, d, band[i][4]);
         }
+        fx.fast = f.lowCost;
         fx.set (p);
         reported = limitComp < 0 || b[limitComp] >= 0.5f;
     }

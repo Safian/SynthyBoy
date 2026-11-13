@@ -18,6 +18,7 @@ namespace own
 class Compressor
 {
 public:
+    bool fast = false; // tier low: the per sample powers by dsp/fastmath.h (relative error about 1e-6)
     struct Band { float lowerDb = -40, upperDb = -20, lowerRatio = 0, upperRatio = 0.5f, gainDb = 0; };
     /** mode 0 Compress, 1 Limit (look-ahead brickwall at the upper threshold), 2 Serum (peak compressor). */
     struct Params { float mix = 1.0f, attack = 0.5f, release = 0.5f, crossLow = 120.0f, crossHigh = 2500.0f; int bands = 0, mode = 0; Band band[3]; };
@@ -86,6 +87,24 @@ public:
         const float serumAtkTau = 0.37f * serumAtkMs * serumAtkMs / (serumAtkMs + 4.0f);
         const float serumAtkCo = 1.0f - std::exp (-1.0f / std::max (serumAtkTau * 0.001f * sr, 1.0e-3f)), serumRelCo = 1.0f - std::exp (-1.0f / std::max (serumRelMs * 0.001f * sr, 1.0f));
         const float peakDecay = std::exp (-1.0f / (0.001f * sr));
+        // per band (the same for every sample of the call): the thresholds, the make-up gain, the ceiling and the time constants of the two envelopes
+        struct BandConst { float thrUdb, thrLdb, thrU, thrL, makeup, ceilAmp, Na, Nr; };
+        BandConst bc[3];
+        for (int b = 0; b < 3; ++b)
+        {
+            const int tb = use[b];
+            const Band& bd = p.band[tb];
+            BandConst& k = bc[b];
+            k.thrUdb = std::clamp (bd.upperDb, -120.0f, 12.0f);
+            k.thrLdb = std::clamp (bd.lowerDb, -120.0f, 12.0f);
+            k.thrU = std::pow (10.0f, k.thrUdb * 0.1f);
+            k.thrL = std::pow (10.0f, k.thrLdb * 0.1f);
+            k.makeup = std::pow (10.0f, bd.gainDb * 0.05f);
+            k.ceilAmp = limitMode ? std::pow (10.0f, k.thrUdb * 0.05f) : 1.0f;
+            k.Na = std::max (5.0f, kAtk[tb] * sr * 0.001f * expoA);
+            k.Nr = std::max (5.0f, kRel[tb] * sr * 0.001f * expoR);
+        }
+        auto powG = [this] (float x, float y) noexcept { return fast ? (y == 0.0f ? 1.0f : fastmath::pow (x, y)) : std::pow (x, y); }; // tier low: exp2 / log2 forms
         for (int i = 0; i < n; ++i)
         {
             const float in[2] = { l[i], r[i] };
@@ -113,15 +132,15 @@ public:
                     continue;
                 const int tb = use[b];
                 const Band& bd = p.band[tb];
-                const float thrUdb = std::clamp (bd.upperDb, -120.0f, 12.0f), thrLdb = std::clamp (bd.lowerDb, -120.0f, 12.0f);
-                const float thrU = std::pow (10.0f, thrUdb * 0.1f), thrL = std::pow (10.0f, thrLdb * 0.1f);
+                const BandConst& k = bc[b];
+                const float thrUdb = k.thrUdb, thrU = k.thrU, thrL = k.thrL;
                 const float x2 = 0.5f * (sig[b][0] * sig[b][0] + sig[b][1] * sig[b][1]);
-                const float Na = std::max (5.0f, kAtk[tb] * sr * 0.001f * expoA), Nr = std::max (5.0f, kRel[tb] * sr * 0.001f * expoR);
+                const float Na = k.Na, Nr = k.Nr;
                 // the lower (upward) envelope: the same in all the modes
                 float& el = envLo[b];
                 el = std::min ((x2 + el * (x2 > el ? Na : Nr)) / ((x2 > el ? Na : Nr) + 1.0f), thrL);
                 el = flushDenormal (std::max (el, 1.0e-20f));
-                const float gLo = std::pow (thrL / el, std::clamp (bd.lowerRatio, -1.0f, 1.0f) * 0.5f);
+                const float gLo = powG (thrL / el, std::clamp (bd.lowerRatio, -1.0f, 1.0f) * 0.5f);
                 float gHi = 1.0f;
                 if (!limitMode && !serumMode)
                 {
@@ -129,7 +148,7 @@ public:
                     const float N = x2 > eh ? Na : Nr;
                     eh = std::max ((x2 + eh * N) / (N + 1.0f), thrU);
                     eh = flushDenormal (eh);
-                    gHi = std::pow (thrU / eh, clamp01 (bd.upperRatio) * 0.5f);
+                    gHi = powG (thrU / eh, clamp01 (bd.upperRatio) * 0.5f);
                 }
                 else if (serumMode)
                 {
@@ -143,15 +162,15 @@ public:
                     float& gr = serumGr[b];
                     gr += (target - gr) * (target > gr ? serumAtkCo : serumRelCo);
                     gr = flushDenormal (gr);
-                    gHi = std::pow (10.0f, -gr * 0.05f);
+                    gHi = fast ? fastmath::pow10 (-gr * 0.05f) : std::pow (10.0f, -gr * 0.05f);
                 }
                 const float gain = std::clamp (gHi * gLo, 0.0f, 32.0f);
-                const float makeup = std::pow (10.0f, bd.gainDb * 0.05f);
+                const float makeup = k.makeup;
                 if (limitMode)
                 {
                     // the look-ahead limiter at the ceiling thrU (the downward stage is replaced), stereo linked; the makeup comes after the limiter
-                    const float ceilAmp = std::pow (10.0f, thrUdb * 0.05f);
-                    const float relN = std::max (5.0f, kRel[tb] * sr * 0.001f * expoR);
+                    const float ceilAmp = k.ceilAmp;
+                    const float relN = k.Nr;
                     float lo[2];
                     lim[b].process (sig[b][0] * gLo, sig[b][1] * gLo, ceilAmp, 1.0f / relN, lookAhead, lo[0], lo[1]);
                     out[0] += lo[0] * makeup;
