@@ -23,6 +23,13 @@
 #include <string>
 #include <vector>
 
+#if defined(__linux__) && (defined(__arm__) || defined(__aarch64__))
+ #define SB_BENCH_PROFILE 1
+ #include <csignal>
+ #include <sys/time.h>
+ #include <ucontext.h>
+#endif
+
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
 
@@ -32,6 +39,93 @@ using namespace synthyboy;
 
 namespace
 {
+#ifdef SB_BENCH_PROFILE
+/** --profile FILE: a SIGPROF sampler (about 1000 Hz of CPU time) stores the interrupted program counter in a preallocated array; the file holds the load bases of
+    the executable and the raw addresses (scripts/symbolize-profile.py turns it into function names with the unstripped binary). */
+struct Profiler
+{
+    static constexpr size_t kMax = 1 << 20;
+    static inline unsigned long* pcs = nullptr;
+    static inline volatile size_t count = 0;
+    static inline volatile size_t dropped = 0;
+    static inline volatile sig_atomic_t active = 0; // samples are kept only while process () runs in the measured part
+
+    static void handler (int, siginfo_t*, void* ctx)
+    {
+        const ucontext_t* uc = static_cast<const ucontext_t*> (ctx);
+ #if defined(__arm__)
+        const unsigned long pc = uc->uc_mcontext.arm_pc;
+ #else
+        const unsigned long pc = uc->uc_mcontext.pc;
+ #endif
+        if (!active)
+            return;
+        if (count < kMax)
+            pcs[count++] = pc;
+        else
+            dropped = dropped + 1;
+    }
+    static void start()
+    {
+        pcs = static_cast<unsigned long*> (std::calloc (kMax, sizeof (unsigned long)));
+        struct sigaction sa;
+        std::memset (&sa, 0, sizeof (sa));
+        sa.sa_sigaction = &Profiler::handler;
+        sa.sa_flags = SA_SIGINFO | SA_RESTART;
+        sigaction (SIGPROF, &sa, nullptr);
+        itimerval it;
+        it.it_interval.tv_sec = 0;
+        it.it_interval.tv_usec = 1000;
+        it.it_value = it.it_interval;
+        setitimer (ITIMER_PROF, &it, nullptr);
+    }
+    static void stop (const char* file)
+    {
+        itimerval it;
+        std::memset (&it, 0, sizeof (it));
+        setitimer (ITIMER_PROF, &it, nullptr);
+        FILE* f = std::fopen (file, "w");
+        if (f == nullptr)
+            return;
+        // the mappings of the executable (and the libraries): "start end offset path"; the symbolizer picks the one that contains an address
+        std::fprintf (f, "# synthyboy profile v1, %zu samples, %zu dropped\n", static_cast<size_t> (count), static_cast<size_t> (dropped));
+        if (FILE* m = std::fopen ("/proc/self/maps", "r"))
+        {
+            char line[512];
+            while (std::fgets (line, sizeof (line), m) != nullptr)
+            {
+                unsigned long a = 0, b = 0, off = 0;
+                char perms[8] = {}, path[400] = {};
+                if (std::sscanf (line, "%lx-%lx %7s %lx %*s %*s %399s", &a, &b, perms, &off, path) >= 4 && perms[2] == 'x')
+                    std::fprintf (f, "map %lx %lx %lx %s\n", a, b, off, path);
+            }
+            std::fclose (m);
+        }
+        for (size_t i = 0; i < count; ++i)
+            std::fprintf (f, "%lx\n", pcs[i]);
+        std::fclose (f);
+    }
+};
+#endif
+
+/** Flush-to-zero like the MPC plugin (shell-mpc/synthyboy_mpc.cpp): ARM FPSCR bit 24. */
+void enableFtz()
+{
+#if defined(__arm__)
+    uint32_t fpscr;
+    __asm__ __volatile__("vmrs %0, fpscr" : "=r"(fpscr));
+    fpscr |= 0x01000000u;
+    __asm__ __volatile__("vmsr fpscr, %0" ::"r"(fpscr));
+#elif defined(__aarch64__)
+    uint64_t fpcr;
+    __asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
+    fpcr |= (1ull << 24);
+    __asm__ __volatile__("msr fpcr, %0" ::"r"(fpcr));
+#else
+    std::fprintf (stderr, "bench: --ftz is only implemented for ARM\n");
+#endif
+}
+
 struct Options
 {
     EngineKind engine = EngineKind::own;
@@ -41,6 +135,9 @@ struct Options
     double sampleRate = 48000.0;
     double retrigger = 1.0;
     bool defaultPatch = true, heavyPatch = true;
+    const char* profileFile = nullptr;
+    std::string tier = "all"; // requested | low | medium | high | all
+    bool ftz = false;
 };
 
 struct Result
@@ -160,9 +257,15 @@ Result run (const Options& o, int voices, const Quality& quality, bool heavy)
             std::stable_sort (events.begin(), events.end(), [] (const Event& x, const Event& y) { return x.frame < y.frame; });
         }
 
+#ifdef SB_BENCH_PROFILE
+        Profiler::active = (o.profileFile != nullptr && b >= warmupBlocks) ? 1 : 0;
+#endif
         const auto t0 = std::chrono::steady_clock::now();
         engine->process (events.data(), static_cast<int> (events.size()), left.data(), right.data(), o.block);
         const auto t1 = std::chrono::steady_clock::now();
+#ifdef SB_BENCH_PROFILE
+        Profiler::active = 0;
+#endif
         sink += left[static_cast<size_t> (o.block / 2)];
         if (b >= warmupBlocks)
             blockSeconds.push_back (std::chrono::duration<double> (t1 - t0).count());
@@ -192,7 +295,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -223,11 +326,23 @@ int main (int argc, char** argv)
         else if (a == "--voices")    o.voices = std::atoi (next());
         else if (a == "--sr")        o.sampleRate = std::atof (next());
         else if (a == "--retrigger") o.retrigger = std::atof (next());
+        else if (a == "--profile")   o.profileFile = next();
+        else if (a == "--ftz")       o.ftz = true;
+        else if (a == "--tier")      o.tier = next();
         else usage ("unknown argument");
     }
     if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.voices < 1 || o.voices > kMaxVoices || o.sampleRate < 8000.0)
         usage ("argument out of range");
 
+    if (o.ftz)
+        enableFtz();
+#ifdef SB_BENCH_PROFILE
+    if (o.profileFile != nullptr)
+        Profiler::start();
+#else
+    if (o.profileFile != nullptr)
+        std::fprintf (stderr, "bench: --profile needs Linux ARM; ignored\n");
+#endif
     const char* error = nullptr;
     if (createEngine (o.engine, &error) == nullptr)
     {
@@ -246,12 +361,19 @@ int main (int argc, char** argv)
                                      : "default patch (one saw oscillator, filter 12 kHz, no effects)");
         Quality requested;
         requested.maxVoices = o.voices;
-        print ("requested", o, o.voices, run (o, o.voices, requested, heavy));
+        if (o.tier == "all" || o.tier == "requested")
+            print ("requested", o, o.voices, run (o, o.voices, requested, heavy));
         for (const Tier tier : { Tier::low, Tier::medium, Tier::high })
         {
+            if (o.tier != "all" && o.tier != (tier == Tier::low ? "low" : (tier == Tier::medium ? "medium" : "high")))
+                continue;
             const Quality q = qualityForTier (tier);
             print (tier == Tier::low ? "tier low" : (tier == Tier::medium ? "tier medium" : "tier high"), o, q.maxVoices, run (o, q.maxVoices, q, heavy));
         }
     }
+#ifdef SB_BENCH_PROFILE
+    if (o.profileFile != nullptr)
+        Profiler::stop (o.profileFile);
+#endif
     return 0;
 }
