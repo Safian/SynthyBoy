@@ -138,6 +138,7 @@ struct Options
     const char* profileFile = nullptr;
     std::string tier = "all"; // requested | low | medium | high | all
     bool ftz = false;
+    bool idle = false; // --idle: no notes at all (the cost of an empty block)
 };
 
 struct Result
@@ -210,8 +211,9 @@ void heavyPatch (IEngine& engine)
     set (engine, "eq.mid.gain", 4.0f);
 }
 
-Result run (const Options& o, int voices, const Quality& quality, bool heavy)
+Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy)
 {
+    const int voices = o.idle ? 0 : voicesIn;
     auto engine = createEngine (o.engine);
     if (heavy && o.engine == EngineKind::own)
         bench::ownHeavyPatch (*engine);
@@ -295,7 +297,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--tier requested|low|medium|high|all]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -328,6 +330,7 @@ int main (int argc, char** argv)
         else if (a == "--retrigger") o.retrigger = std::atof (next());
         else if (a == "--profile")   o.profileFile = next();
         else if (a == "--ftz")       o.ftz = true;
+        else if (a == "--idle")      o.idle = true;
         else if (a == "--tier")      o.tier = next();
         else usage ("unknown argument");
     }
