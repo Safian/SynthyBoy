@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../dsp/util.h"
+#include "../dsp/simd.h"
 #include "morph.h"
 #include "warp.h"
 #include "wavetable_bank.h"
@@ -530,22 +531,7 @@ public:
             {
                 // the plain table read (no warp, no cross signal, no filter stage): the general sampleAt () below with its branches removed. p < 1, so the wrap of the
                 // phase (q -= floor (q)) and the window factor 1 change nothing; the weight of the second cycle is only needed where there is one.
-                const float pg = prevGainL[v], cgl = curGainL[v], pgr = prevGainR[v], cgr = curGainR[v];
-                const float pinc = prevInc[v], cinc = curInc[v];
-                for (int k = 0; k < n; ++k)
-                {
-                    const float t = static_cast<float> (t0 + k + 1) * invP;
-                    const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
-                    const float pos = p * fscale;
-                    const int idx = std::clamp (static_cast<int> (pos), 0, N);
-                    const float fr = pos - static_cast<float> (idx);
-                    float y = hermite (cA + idx, fr);
-                    if (cB != nullptr)
-                        y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
-                    L[k] += y * lerp (pg, cgl, t);
-                    R[k] += y * lerp (pgr, cgr, t);
-                    ph += static_cast<uint32_t> (lerp (pinc, cinc, t) * 4294967296.0f); // x * 2^32 is exact in float: the same integer as the double product
-                }
+                renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, prevGainL[v], curGainL[v], prevGainR[v], curGainR[v], prevInc[v], curInc[v], invP);
             }
             else if (!warped)
             {
@@ -596,6 +582,84 @@ public:
         // the morph age advances at the end of the period
         if (morphActive && t0 + n >= kControlPeriod)
             morphAge += kControlPeriod;
+    }
+
+    /** The plain table read of one voice over a chunk (no warp): `n` samples from `ph`, added to L / R. The NEON version does four samples at a time with the operations
+        of the scalar loop (the phases come from an integer prefix sum of the increments, the four table reads are four loads transposed into lanes). */
+    static void renderPlain (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
+                             float pgr, float cgr, float pinc, float cinc, float invP) noexcept
+    {
+        int k = 0;
+#if SB_NEON
+        const float32x4_t vinv = vdupq_n_f32 (1.0f / 16777216.0f), vscale = vdupq_n_f32 (fscale), vtwo32 = vdupq_n_f32 (4294967296.0f);
+        const float32x4_t vpinc = vdupq_n_f32 (pinc), vcinc = vdupq_n_f32 (cinc);
+        const float32x4_t vpg = vdupq_n_f32 (pg), vcgl = vdupq_n_f32 (cgl), vpgr = vdupq_n_f32 (pgr), vcgr = vdupq_n_f32 (cgr);
+        const int32x4_t vzero = vdupq_n_s32 (0), vN = vdupq_n_s32 (N);
+        auto hermite4 = [] (const float* const base[4], int32x4_t idx, float32x4_t fr)
+        {
+            // rows: [x[-1], x[0], x[1], x[2]] of each lane's position, transposed into x[-1], x[0], x[1], x[2] vectors
+            int32_t ii[4];
+            vst1q_s32 (ii, idx);
+            const float32x4_t r0 = vld1q_f32 (base[0] + ii[0] - 1), r1 = vld1q_f32 (base[1] + ii[1] - 1), r2 = vld1q_f32 (base[2] + ii[2] - 1), r3 = vld1q_f32 (base[3] + ii[3] - 1);
+            const float32x4x2_t t01 = vtrnq_f32 (r0, r1), t23 = vtrnq_f32 (r2, r3);
+            const float32x4_t xm1 = vcombine_f32 (vget_low_f32 (t01.val[0]), vget_low_f32 (t23.val[0]));
+            const float32x4_t x0 = vcombine_f32 (vget_low_f32 (t01.val[1]), vget_low_f32 (t23.val[1]));
+            const float32x4_t x1 = vcombine_f32 (vget_high_f32 (t01.val[0]), vget_high_f32 (t23.val[0]));
+            const float32x4_t x2 = vcombine_f32 (vget_high_f32 (t01.val[1]), vget_high_f32 (t23.val[1]));
+            const float32x4_t half = vdupq_n_f32 (0.5f);
+            const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (x1, xm1));
+            float32x4_t c2 = vsubq_f32 (xm1, vmulq_f32 (vdupq_n_f32 (2.5f), x0));
+            c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), x1));
+            c2 = vsubq_f32 (c2, vmulq_f32 (half, x2));
+            const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (x2, xm1)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (x0, x1)));
+            return vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, fr), c2), fr), c1), fr), x0);
+        };
+        for (; k + 4 <= n; k += 4)
+        {
+            const float32x4_t t = simd::ramp4 (t0, k, invP);
+            // the increments of the four samples and the phase before each of them
+            uint32_t inc[4], phs[4];
+            vst1q_u32 (inc, vcvtq_u32_f32 (vmulq_f32 (simd::lerp4 (vpinc, vcinc, t), vtwo32)));
+            uint32_t acc = ph;
+            for (int j = 0; j < 4; ++j)
+            {
+                phs[j] = acc;
+                acc += inc[j];
+            }
+            ph = acc;
+            const float32x4_t p = vmulq_f32 (vcvtq_f32_u32 (vshrq_n_u32 (vld1q_u32 (phs), 8)), vinv);
+            const float32x4_t pos = vmulq_f32 (p, vscale);
+            const int32x4_t idx = vminq_s32 (vmaxq_s32 (vcvtq_s32_f32 (pos), vzero), vN);
+            const float32x4_t fr = vsubq_f32 (pos, vcvtq_f32_s32 (idx));
+            const float* const bA[4] = { cA, cA, cA, cA };
+            float32x4_t y = hermite4 (bA, idx, fr);
+            if (cB != nullptr)
+            {
+                const float* const bB[4] = { cB, cB, cB, cB };
+                const float32x4_t yB = hermite4 (bB, idx, fr);
+                float wk[4];
+                for (int j = 0; j < 4; ++j)
+                    wk[j] = lerp (wB0, wB1, static_cast<float> (k + j + 1) / static_cast<float> (n));
+                y = simd::lerp4 (y, yB, vld1q_f32 (wk));
+            }
+            vst1q_f32 (L + k, vaddq_f32 (vld1q_f32 (L + k), vmulq_f32 (y, simd::lerp4 (vpg, vcgl, t))));
+            vst1q_f32 (R + k, vaddq_f32 (vld1q_f32 (R + k), vmulq_f32 (y, simd::lerp4 (vpgr, vcgr, t))));
+        }
+#endif
+        for (; k < n; ++k)
+        {
+            const float t = static_cast<float> (t0 + k + 1) * invP;
+            const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
+            const float pos = p * fscale;
+            const int idx = std::clamp (static_cast<int> (pos), 0, N);
+            const float fr = pos - static_cast<float> (idx);
+            float y = hermite (cA + idx, fr);
+            if (cB != nullptr)
+                y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
+            L[k] += y * lerp (pg, cgl, t);
+            R[k] += y * lerp (pgr, cgr, t);
+            ph += static_cast<uint32_t> (lerp (pinc, cinc, t) * 4294967296.0f); // x * 2^32 is exact in float: the same integer as the double product
+        }
     }
 
     /** Phase of the first voice in cycles (for the "osc" sources and the phase legato). */

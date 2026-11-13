@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include "voice.h"
+#include "../dsp/simd.h"
 
 #include <cstring>
 
@@ -1016,11 +1017,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
 
     auto addScaled = [&] (float* dl, float* dr, const float* a, const float* b, float g)
     {
-        for (int k = 0; k < n; ++k)
-        {
-            dl[k] += a[k] * g;
-            dr[k] += b[k] * g;
-        }
+        simd::addScaled (dl, a, g, n);
+        simd::addScaled (dr, b, g, n);
     };
     auto toTarget = [&] (int target, bool env1, const float* a, const float* b, float g)
     {
@@ -1103,8 +1101,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
                 oscR[o][k] += tr[k];
             }
         }
-        for (int k = 0; k < n; ++k)
-            oscMono[o][k] = 0.5f * (oscL[o][k] + oscR[o][k]);
+        simd::halfSum (oscMono[o], oscL[o], oscR[o], n);
         srcLevel[o] = oscMono[o][n - 1];
         route (oscDest[o], oscEnv1[o], oscL[o], oscR[o], oscBlend[o], oscSend[o][0], oscSend[o][1]);
     }
@@ -1191,15 +1188,13 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
             std::copy (fin_L[f], fin_L[f] + n, fout_L[f]);
             std::copy (fin_R[f], fin_R[f] + n, fout_R[f]);
         }
-        for (int k = 0; k < n; ++k)
         {
-            const float t = static_cast<float> (t0 + k + 1) * invP;
-            const float g = lerp (filtLevelPrev[f], filtLevel[f], t);
-            fout_L[f][k] *= g;
-            fout_R[f][k] *= g;
+            float gk[kControlPeriod];
+            simd::rampLerp (gk, filtLevelPrev[f], filtLevel[f], t0, n, invP);
+            simd::mulBy (fout_L[f], gk, n);
+            simd::mulBy (fout_R[f], gk, n);
         }
-        for (int k = 0; k < n; ++k)
-            extNext[2 + f][k] = 0.5f * (fout_L[f][k] + fout_R[f][k]);
+        simd::halfSum (extNext[2 + f], fout_L[f], fout_R[f], n);
         srcLevel[5 + f] = 0.5f * (fout_L[f][n - 1] + fout_R[f][n - 1]);
     };
     auto toMain = [&] (int f, bool suppress)
@@ -1216,11 +1211,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         runFilter (1);
         touchFin (0);
-        for (int k = 0; k < n; ++k)
-        {
-            fin_L[0][k] += fout_L[1][k];
-            fin_R[0][k] += fout_R[1][k];
-        }
+        simd::addTo (fin_L[0], fout_L[1], n);
+        simd::addTo (fin_R[0], fout_R[1], n);
         runFilter (0);
         toMain (0, false);
         toMain (1, true); // the output of the first filter went on into the second: only its taps stay
@@ -1229,11 +1221,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         runFilter (0);
         touchFin (1);
-        for (int k = 0; k < n; ++k)
-        {
-            fin_L[1][k] += fout_L[0][k];
-            fin_R[1][k] += fout_R[0][k];
-        }
+        simd::addTo (fin_L[1], fout_L[0], n);
+        simd::addTo (fin_R[1], fout_R[0], n);
         runFilter (1);
         toMain (1, false);
         toMain (0, true);
@@ -1254,42 +1243,47 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     // ---- amplitude, velocity, declick, fade (only the targets that received something are mixed: the others would add exact zeros)
     float lastL = 0.0f, lastR = 0.0f;
     float ampK[kControlPeriod], vgK[kControlPeriod];
-    for (int k = 0; k < n; ++k)
-    {
-        const float t = static_cast<float> (t0 + k + 1) * invP;
-        ampK[k] = lerp (ampPrev, ampCur, t);
-        vgK[k] = lerp (velGainPrev, velGain, t);
-    }
+    simd::rampLerp (ampK, ampPrev, ampCur, t0, n, invP);
+    simd::rampLerp (vgK, velGainPrev, velGain, t0, n, invP);
     for (int tg = 0; tg < 4; ++tg)
     {
         const bool ue = usedT[1][tg], un = usedT[0][tg];
         if (tg != 0 && !ue && !un)
             continue;
-        for (int k = 0; k < n; ++k)
+        // the sound of this target for the period: ((E * amp) + N) * velocity gain, left and right
+        float ml[kControlPeriod], mr[kControlPeriod];
+        auto mixLane = [&] (float* m, const float* e, const float* nn)
         {
-            const float l = ((ue ? tE_L[tg][k] * ampK[k] : 0.0f) + (un ? tN_L[tg][k] : 0.0f)) * vgK[k];
-            const float r = ((ue ? tE_R[tg][k] * ampK[k] : 0.0f) + (un ? tN_R[tg][k] : 0.0f)) * vgK[k];
-            if (tg == 0)
+            int k = 0;
+#if SB_NEON
+            const float32x4_t zero = vdupq_n_f32 (0.0f);
+            for (; k + 4 <= n; k += 4)
             {
-                float mainL = l, mainR = r;
-                if (declickPos > 0)
-                {
-                    const float w = static_cast<float> (declickPos) * (1.0f / 64.0f);
-                    mainL += declickL * w;
-                    mainR += declickR * w;
-                    --declickPos;
-                }
-                out.l[0][k] += mainL;
-                out.r[0][k] += mainR;
-                lastL = mainL;
-                lastR = mainR;
+                const float32x4_t ea = ue ? vmulq_f32 (vld1q_f32 (e + k), vld1q_f32 (ampK + k)) : zero;
+                const float32x4_t sum = vaddq_f32 (ea, un ? vld1q_f32 (nn + k) : zero);
+                vst1q_f32 (m + k, vmulq_f32 (sum, vld1q_f32 (vgK + k)));
             }
-            else
+#endif
+            for (; k < n; ++k)
+                m[k] = ((ue ? e[k] * ampK[k] : 0.0f) + (un ? nn[k] : 0.0f)) * vgK[k];
+        };
+        mixLane (ml, tE_L[tg], tN_L[tg]);
+        mixLane (mr, tE_R[tg], tN_R[tg]);
+        if (tg == 0)
+        {
+            // the declick tail of the note this voice played before fades out over the first samples
+            for (int k = 0; k < n && declickPos > 0; ++k)
             {
-                out.l[tg][k] += l;
-                out.r[tg][k] += r;
+                const float w = static_cast<float> (declickPos) * (1.0f / 64.0f);
+                ml[k] += declickL * w;
+                mr[k] += declickR * w;
+                --declickPos;
             }
+            lastL = ml[n - 1];
+            lastR = mr[n - 1];
         }
+        simd::addScaled (out.l[tg], ml, 1.0f, n); // d += m * 1.0f is d += m exactly
+        simd::addScaled (out.r[tg], mr, 1.0f, n);
     }
     outL = lastL;
     outR = lastR;

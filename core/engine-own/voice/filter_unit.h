@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include "../dsp/util.h"
+#include "../dsp/simd.h"
 #include "classic_filters.h"
 #include "synthyboy/filters/filter.h"
 
@@ -158,6 +159,13 @@ public:
             {
                 cl[0].process (srcL, outL, n, prevP, curP, t0);
                 cl[1].process (srcR, outR, n, prevPR, curPR, t0);
+            }
+            if (!cleaning && prevMix == 1.0f && curMix == 1.0f)
+            {
+                // no clean gain, no dry mix: the output is only limited (x * 1 = x; lerp (1, 1, t) = 1 so the mix branch is not taken)
+                simd::clampTo (outL, -16.0f, 16.0f, n);
+                simd::clampTo (outR, -16.0f, 16.0f, n);
+                return;
             }
             for (int k = 0; k < n; ++k)
             {
