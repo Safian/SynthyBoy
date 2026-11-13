@@ -127,10 +127,14 @@ or `release`.
 - The eight knobs sit in the lower two rows and are Q-Link 1-8 (the generator's own Q-Link map of the tab is rewritten to match; the Q frames mark the lower two rows).
   `Env 1 Release` has a knob on this tab as well as on `Macros` (the generator places a parameter once; the module adds the second knob).
 - `scaleColour` is `0`: with a visible scale colour the host draws a column of scale lines at the right edge, far from the curve.
-- There is no full-screen envelope editor. Observed on the Key 61 (MPC 3.10.1.12): an `EnvelopeOverlay` definition in
-  `localComponentDefinitions` loads when its `envelopeType` is `ADSFR` or `Pitch` (copied from the factory Fabric XL skin), but with
-  `envelopeType` `DAHDSR` the host drops the whole skin (empty plugin page, no log message), even when nothing refers to it. The plain
-  `Envelope` element with `DAHDSR` on a tab works. So the curve is edited on the tab itself, over the full width.
+- Double tap (or Enter) on the curve opens a full-screen editor (`EnvelopeOverlay`, definitions `envOverlayN`). Observed on the Key 61
+  (MPC 3.10.1.12): an `EnvelopeOverlay` definition in `localComponentDefinitions` is only loaded when it carries the complete key set of the
+  factory Sub Factory `DAHDSR` envelope, i.e. the three shape handles, `forceHideShapeHandles`, `forceCurveShape`,
+  `decayAndReleaseCurvesLinked` and `curveType`. With the minimal SDK-table key sets (`ADSR`, `AD`, `AHDS`, `Pumper`) the host drops the
+  whole skin (empty plugin page, no log message), even when nothing refers to the definition. The `Envelope` element on the tab carries the same key set.
+- The shape handles `AttackShape`, `DecayShape` and `ReleaseShape` are bound to `envN.attack_curve`, `decay_curve` and `release_curve`
+  (all three have the range -20..20, 0 in the middle, and the SDK shape value 0.5 is the straight line, so the middle of the range matches).
+  Whether the drawn curvature follows the engine's curve exactly is not verified on the device.
 
 ## Sound differences at tier low
 

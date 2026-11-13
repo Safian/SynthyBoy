@@ -57,17 +57,37 @@ class EnvSkinTest(unittest.TestCase):
         for n in (1, 2, 3, 4):
             comp = next(c for c in self.tab(n)["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "envDisplay%d" % n)
             remap = {m["key"]: m["value"] for m in comp["handle remapping"]["map"]}
-            self.assertEqual(remap, {s.capitalize(): "Parameter %d" % self.index["env%d.%s" % (n, s)] for s in STAGES})
+            self.assertEqual({k: remap[k] for k in remap if k in [s.capitalize() for s in STAGES]},
+                             {s.capitalize(): "Parameter %d" % self.index["env%d.%s" % (n, s)] for s in STAGES})
             envelope = defs["envDisplay%d" % n]["componentsData"][0]["componentData"]
             self.assertEqual(envelope["type"], "Envelope")
             self.assertEqual(envelope["data"]["envelopeType"], "DAHDSR")
             self.assertEqual([envelope["data"][h] for h in HANDLES], [s.capitalize() for s in STAGES])
 
-    def test_no_envelope_overlay_anywhere(self):
-        # an EnvelopeOverlay definition makes the MPC 3.10.1.12 host drop the whole TUI.json (docs/MPC.md)
-        self.assertNotIn("EnvelopeOverlay", json.dumps(self.tui))
-        self.assertEqual([k for k in self.defs() if k.startswith("envOverlay")], [])
-        self.assertEqual([d["actions"] for k, d in self.defs().items() if k.startswith("envDisplay")], [[]] * 4)
+    def test_overlay_has_the_complete_key_set_and_opens_on_double_tap(self):
+        # on the Key 61 (MPC 3.10.1.12) an EnvelopeOverlay without the shape/curve keys drops the whole TUI.json
+        defs = self.defs()
+        needed = ("attackShapeHandle", "decayShapeHandle", "releaseShapeHandle", "forceHideShapeHandles", "forceCurveShape",
+                  "decayAndReleaseCurvesLinked", "curveType")
+        for n in (1, 2, 3, 4):
+            for name, typ in (("envDisplay%d" % n, "Envelope"), ("envOverlay%d" % n, "EnvelopeOverlay")):
+                data = defs[name]["componentsData"][0]["componentData"]["data"]
+                self.assertEqual(defs[name]["componentsData"][0]["componentData"]["type"], typ)
+                for key in needed:
+                    self.assertIn(key, data, (name, key))
+            raw = base.apply_mod.load_json((self.skins / "TUI.json").read_text(encoding="utf-8"))  # keeps repeated keys
+            raw_defs = {d["key"]: d["value"] for d in raw["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
+            keys = list(raw_defs["envOverlay%d" % n]["componentsData"][0]["componentData"]["data"])
+            self.assertEqual(keys[:3], ["version", "version\x001", "actions"])
+            display_actions = {a["onAction"]: a["additionalData"] for a in defs["envDisplay%d" % n]["actions"]}
+            self.assertEqual(display_actions, {"Double Click": "envOverlay%d" % n, "Enter Pressed": "envOverlay%d" % n})
+
+    def test_shape_handles_are_bound_to_the_curve_parameters(self):
+        for n in (1, 2, 3, 4):
+            comp = next(c for c in self.tab(n)["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "envDisplay%d" % n)
+            remap = {m["key"]: m["value"] for m in comp["handle remapping"]["map"]}
+            for handle, key in (("AttackShape", "attack_curve"), ("DecayShape", "decay_curve"), ("ReleaseShape", "release_curve")):
+                self.assertEqual(remap[handle], "Parameter %d" % self.index["env%d.%s" % (n, key)])
 
     def test_knobs_and_qlinks_match(self):
         for n in (1, 2, 3, 4):
