@@ -49,6 +49,8 @@ int main (int argc, char** argv)
     check (same, "name / category / path are those of scanPresetDirectory");
     check (synthyboy_mpc::scanPrograms (std::string (argv[1]) + "/no-such-directory").empty(), "a missing directory gives an empty list");
     check (synthyboy_mpc::scanPrograms ("").empty(), "an empty path gives an empty list");
+    check (synthyboy_mpc::scanPrograms (std::string (argv[0])).empty(), "a path that is a file gives an empty list");
+    static_assert (noexcept (synthyboy_mpc::scanPrograms (std::string())), "scanPrograms must be noexcept");
 
     const std::string state = synthyboy::saveState (synthyboy::ParamValues::defaults());
     const std::string c = synthyboy_mpc::chunkWithProgram (state, 37);

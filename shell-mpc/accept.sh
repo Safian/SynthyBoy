@@ -55,6 +55,12 @@ c++ -std=c++17 -O1 -Wall -Wextra $INC -o $B/programs_host shell-mpc/tests/progra
 BARE=$(mktemp -d); cp "$LIB" "$BARE/"   # outside the repository: its root has a plugin.json (and content/ answers to Content/ on a case-insensitive disk)
 $B/programs_host "$BARE/$(basename "$LIB")" none > $B/programs-none.log 2>&1; nrc=$?; rm -rf "$BARE"
 [ $nrc -eq 0 ] || { grep -E "^FAIL|^      " $B/programs-none.log | head -12; echo "ACCEPT FAIL: programs_host (library outside a plugin folder)"; exit 1; }
+# a plugin folder without Content/, and one whose Content is a file: the plugin must load and offer "Init" only
+NC="$B/pkg-nocontent/Safian - VST - SynthyBoy"; rm -rf $B/pkg-nocontent; mkdir -p "$NC/VST"; cp "$LIB" "$NC/VST/"; echo '{}' > "$NC/plugin.json"
+$B/programs_host "$NC/VST/$(basename "$LIB")" none > $B/programs-nocontent.log 2>&1 || { grep -E "^FAIL|^      " $B/programs-nocontent.log | head -12; echo "ACCEPT FAIL: programs_host (plugin folder without Content)"; exit 1; }
+echo x > "$NC/Content"
+$B/programs_host "$NC/VST/$(basename "$LIB")" none > $B/programs-badcontent.log 2>&1 || { grep -E "^FAIL|^      " $B/programs-badcontent.log | head -12; echo "ACCEPT FAIL: programs_host (plugin folder whose Content is a file)"; exit 1; }
+grep -q "catch (...)" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: no exception barrier in the shell"; exit 1; }
 $B/programs_host "$PLIB" content/presets > $B/programs-pkg.log 2>&1 || { grep -E "^FAIL|^      " $B/programs-pkg.log | head -20; echo "ACCEPT FAIL: programs_host (library in a plugin folder with Content/presets)"; exit 1; }
 $B/host_sim "$PLIB" dump > $B/dump-pkg.json 2> $B/dump-pkg.err || { tail -20 $B/dump-pkg.err; echo "ACCEPT FAIL: host_sim dump of the packaged library"; exit 1; }
 python3 - $B/dump-pkg.json <<'PY' || { echo "ACCEPT FAIL: program list in the host_sim dump"; exit 1; }

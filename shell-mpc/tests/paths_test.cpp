@@ -47,6 +47,16 @@ int main()
     got = synthyboy_mpc::pluginFolderFor ("");
     check (got.empty(), "empty path gives an empty string", got);
 
+    // a path that does not exist at all, a bare file name, and the root
+    got = synthyboy_mpc::pluginFolderFor ((root / "gone" / "deeper" / "x.so").string());
+    check (got.empty(), "a path that does not exist gives an empty string", got);
+    got = synthyboy_mpc::pluginFolderFor ("x.so");
+    check (got.empty() || fs::exists (fs::path (got) / "plugin.json"), "a bare file name does not crash or loop", got);
+    got = synthyboy_mpc::pluginFolderFor ("/");
+    check (got.empty() || fs::exists (fs::path (got) / "plugin.json"), "the root path does not crash or loop", got);
+    static_assert (noexcept (synthyboy_mpc::pluginFolderFor (std::string())), "pluginFolderFor must be noexcept");
+    static_assert (noexcept (synthyboy_mpc::contentDirFor (std::string())), "contentDirFor must be noexcept");
+
     const std::string content = synthyboy_mpc::contentDirFor (plugin.string());
     check (fs::path (content) == plugin / "Content", "content directory is <plugin folder>/Content", content);
 

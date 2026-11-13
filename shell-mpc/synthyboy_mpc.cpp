@@ -221,9 +221,14 @@ struct PluginInstance
         if (!pluginFolder.empty())
         {
             contentDir = synthyboy_mpc::contentDirFor (pluginFolder);
-            contentStore = std::make_unique<synthyboy::UserContentStore> (contentDir);
-            contentStore->addPackRoot (contentDir + "/packs"); // installed content packs: <user directory>/packs/<pack>/<file>
-            if (engine)
+            // A content directory that is missing or cannot be used must not keep the plugin from loading: it then runs without a store.
+            try
+            {
+                contentStore = std::make_unique<synthyboy::UserContentStore> (contentDir);
+                contentStore->addPackRoot (contentDir + "/packs"); // installed content packs: <user directory>/packs/<pack>/<file>
+            }
+            catch (...) { contentStore.reset(); }
+            if (engine && contentStore)
                 engine->setContentStore (contentStore.get());
         }
 
@@ -283,8 +288,19 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
 // Dispatcher
 // ---------------------------------------------------------------------------
 
+static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt);
+
+// The entry the host calls. The plugin runs inside the MPC's own process (no sandbox) and the VST2 interface is a C ABI:
+// no exception may leave it. Whatever fails inside (allocation, file access, a parser) ends the call with 0.
 static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
                                    VstIntPtr value, void* ptr, float opt)
+{
+    try { return dispatch(e, opcode, index, value, ptr, opt); }
+    catch (...) { return 0; }
+}
+
+static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
+                          VstIntPtr value, void* ptr, float opt)
 {
     if (opcode == effGetVstVersion)
         return 2400;
@@ -871,10 +887,10 @@ extern "C"
 {
     MPC_PLUGIN_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
     {
-        // Create the plugin instance
-        PluginInstance* inst = new (std::nothrow) PluginInstance();
-        if (!inst)
-            return nullptr;
+        // Create the plugin instance. No exception may reach the host: a failure here means "no plugin".
+        PluginInstance* inst = nullptr;
+        try { inst = new PluginInstance(); }
+        catch (...) { return nullptr; }
 
         // Set up the AEffect struct
         AEffect* effect = new (std::nothrow) AEffect();

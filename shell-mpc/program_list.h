@@ -24,10 +24,14 @@ struct ProgramEntry
     std::string path;
 };
 
-inline std::vector<ProgramEntry> scanPrograms (const std::string& presetsDir)
+/** Never throws: a file system error or an allocation failure gives an empty list (the plugin then has only "Init"). */
+inline std::vector<ProgramEntry> scanPrograms (const std::string& presetsDir) noexcept
 {
     std::vector<ProgramEntry> result;
-    if (presetsDir.empty() || !std::filesystem::is_directory (presetsDir))
+    try
+    {
+    std::error_code ec;
+    if (presetsDir.empty() || ! std::filesystem::is_directory (presetsDir, ec) || ec)
         return result;
 
     const auto raw = synthyboy::scanPresetDirectory (presetsDir);
@@ -57,6 +61,8 @@ inline std::vector<ProgramEntry> scanPrograms (const std::string& presetsDir)
             return false;
         return a.path < b.path;
     });
+    }
+    catch (...) { result.clear(); }
 
     return result;
 }
