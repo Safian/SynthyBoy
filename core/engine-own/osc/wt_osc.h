@@ -280,9 +280,11 @@ public:
     /** Back to the state of a new oscillator (the morph buffers stay allocated). */
     void clearState() noexcept
     {
+        // In place: the same state as `*this = WtOsc()`, without building a 9 KB temporary and copying it over the object.
         auto mb = std::move (morphBuf);
         auto ms = std::move (morphScratch);
-        *this = WtOsc();
+        this->~WtOsc();
+        ::new (static_cast<void*> (this)) WtOsc();
         morphBuf = std::move (mb);
         morphScratch = std::move (ms);
     }

@@ -104,6 +104,7 @@ void LibOsc::prepare (double sampleRate)
 
 void LibOsc::stopAll() noexcept
 {
+    playersUsed = false;
     for (auto& v : sampleVoices)
         v.reset();
     for (auto& v : grainVoices)
@@ -119,7 +120,10 @@ void LibOsc::stopAll() noexcept
 
 void LibOsc::resetForNote() noexcept
 {
-    stopAll();
+    // The players (up to 68 per slot, the spectral ones with tens of KB of buffers each) are reset only if a library type has run on
+    // this slot since the last reset: a slot that plays wavetables never touches them, and a reset of an idle player is a no-op.
+    if (playersUsed)
+        stopAll();
     for (auto& s : noteStarted)
         s = false;
     cur = 0;
@@ -189,6 +193,7 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     }
     if (cur == 0 && from <= 0)
         return;
+    playersUsed = true;
     const float* v = lp.v;
     const ContentSet::Sample* smp = content != nullptr && oscIndex >= 0 && oscIndex < 3 ? &content->sample[oscIndex] : nullptr;
     const bool haveSample = smp != nullptr && smp->valid;

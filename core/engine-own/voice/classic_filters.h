@@ -58,7 +58,11 @@ public:
         for (auto& x : dv) x = 0.0f;
         dHp[0] = dHp[1] = dFb = dU = dPre = tilt = 0.0f;
         for (auto& f : fm) f.reset();
-        comb.reset();
+        if (combUsed) // the comb line (32 KB) is cleared only if the Comb model has written into it
+        {
+            comb.reset();
+            combUsed = false;
+        }
         for (auto& z : ap) z = 0.0f;
         fbState = 0.0f;
         lpA = lpB = 0.0f;
@@ -365,6 +369,7 @@ private:
         const float scale = 1.0f - 0.5f * fb * fb;
         const float loopHz = std::clamp (f * std::exp2 (p.combOffset / 12.0f), 20.0f, static_cast<float> (sr) * 0.45f);
         const float a = OnePole::coefficient (loopHz, sr);
+        combUsed = true;
         for (int i = 0; i < n; ++i)
         {
             const float v = scale * in[i] + fb * comb.read (T - 1.0f);
@@ -413,6 +418,7 @@ private:
     float s[6] = {};
     Svf fm[4];
     DelayLine comb;
+    bool combUsed = false;
     float ap[12] = {};
     float fbState = 0.0f, lpA = 0.0f, lpB = 0.0f;
 };

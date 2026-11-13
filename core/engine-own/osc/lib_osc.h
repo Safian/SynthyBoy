@@ -135,6 +135,7 @@ private:
     int cur = 0, from = -1;
     int fadePos = 0, fadeTotal = 480;
     bool anyPlaying = false;
+    bool playersUsed = false;       // a library type has run since the players were last reset (resetForNote skips the reset of idle players)
     const ContentSet* boundSet = nullptr;
     int oscIdx = 0;
     OscTick tick;

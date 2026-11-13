@@ -309,18 +309,25 @@ public:
     {
         buffer_.assign (maxSamples + 4, 0.0f);
         writeIndex_ = 0;
+        written_ = false;
     }
 
+    /** A line that was never written is all zero at index 0 already: only a written one is cleared (a voice resets its filters at every
+        note and most filter types never touch their delay lines). */
     void reset() noexcept
     {
+        if (!written_)
+            return;
         std::fill (buffer_.begin(), buffer_.end(), 0.0f);
         writeIndex_ = 0;
+        written_ = false;
     }
 
     void write (float in) noexcept
     {
         if (buffer_.empty())
             return;
+        written_ = true;
         buffer_[writeIndex_] = sanitize (in);
         writeIndex_ = (writeIndex_ + 1) % buffer_.size();
     }
@@ -345,6 +352,7 @@ public:
 private:
     std::vector<float> buffer_;
     size_t writeIndex_ = 0;
+    bool written_ = false;
 };
 
 /** Allpass filter diffuser stage with feedback. */
