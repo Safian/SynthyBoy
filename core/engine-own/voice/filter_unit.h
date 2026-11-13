@@ -18,6 +18,7 @@ struct FilterSettings
     int model = 3, style = 0;
     float cutoffHz = 12000.0f, resonance = 0.2f, drive = 0.0f, blend = 0.0f, mix = 1.0f, var = 0.5f;
     bool clean = false;
+    bool fast = false;                    // tier low: cheaper tanh in the classic models
     float cutoffHzR = -1.0f, level = 1.0f, driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
 };
 
@@ -94,6 +95,7 @@ public:
         curP.fres = s.formantRes;
         curP.fspread = s.formantSpread;
         curP.ftranspose = s.formantTranspose;
+        curP.fast = s.fast;
         curPR = curP;
         if (s.cutoffHzR > 0.0f)
             curPR.cutoffHz = s.cutoffHzR;

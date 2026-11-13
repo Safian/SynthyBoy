@@ -39,6 +39,7 @@ struct ClassicParams
     int model = 3, style = 0;
     float cutoffHz = 1000.0f, res = 0.2f, driveDb = 0.0f, blendRaw = 0.0f; // blendRaw 0 .. 2
     float combOffset = 42.0f, fx = 0.5f, fy = 0.5f, fres = 0.85f, fspread = 0.0f, ftranspose = 0.0f;
+    bool fast = false; // tier low: tanh by a rational approximation (error < 1e-4)
 };
 
 /** One channel of a classic model. process () takes the block's start and end parameters and interpolates the coefficients every 8 samples. */
@@ -99,22 +100,37 @@ private:
     static bool sameParams (const ClassicParams& a, const ClassicParams& b) noexcept
     {
         return a.model == b.model && a.style == b.style && a.cutoffHz == b.cutoffHz && a.res == b.res && a.driveDb == b.driveDb && a.blendRaw == b.blendRaw
-            && a.combOffset == b.combOffset && a.fx == b.fx && a.fy == b.fy && a.fres == b.fres && a.fspread == b.fspread && a.ftranspose == b.ftranspose;
+            && a.combOffset == b.combOffset && a.fx == b.fx && a.fy == b.fy && a.fres == b.fres && a.fspread == b.fspread && a.ftranspose == b.ftranspose && a.fast == b.fast;
     }
     static float sat (float v) noexcept { return v - 0.9f * v * v * v / (v * v + 3.0f); }
-    static float hardtanh (float v) noexcept
+    /** tanh: the library function, or at tier low a [7/6] Pade approximant (absolute error below 1e-4, clamped to +-1 beyond |x| = 4.972 where it reaches 1). */
+    float th (float x) const noexcept
+    {
+        if (!fastMath)
+            return std::tanh (x);
+        if (x >= 4.972f)
+            return 1.0f;
+        if (x <= -4.972f)
+            return -1.0f;
+        const float x2 = x * x;
+        return x * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2))) / (135135.0f + x2 * (62370.0f + x2 * (3150.0f + 28.0f * x2)));
+    }
+    float hardtanh (float v) const noexcept
     {
         const float a = std::fabs (v);
-        return a <= 0.66f ? v : std::copysign (0.66f + 0.34f * std::tanh ((a - 0.66f) / 0.34f), v);
+        return a <= 0.66f ? v : std::copysign (0.66f + 0.34f * th ((a - 0.66f) / 0.34f), v);
     }
+    bool fastMath = false;
     /** The values derived from the parameters (several pow / sqrt / tan) are kept while the parameters stay the same, as they do for most control periods. */
     void remember (const ClassicParams& p) noexcept
     {
         if (memoValid && sameParams (p, memoP))
             return;
         memoP = p;
+        fastMath = p.fast;
         memoValid = true;
         svfValid = false;
+        ladValid = false;
         mf = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
         md = std::pow (10.0f, p.driveDb * 0.05f);
         mr = clamp01 (p.res);
@@ -162,8 +178,10 @@ public:
         if (!(sameParams (aA, bA) && aA.cutoffHz >= 1.0f && sameParams (aB, bB) && aB.cutoffHz >= 1.0f))
             return false;
         const int model = bA.model;
-        if (bB.model != model || bB.style != bA.style || !(model == 0 || model == 1 || model == 3))
+        if (bB.model != model || bB.style != bA.style || !(model == 0 || model == 1 || model == 2 || model == 3))
             return false;
+        if (model == 2)
+            return processPairLadder (A, B, inA, outA, inB, outB, n, bA, bB);
         A.remember (bA);
         B.remember (bB);
         A.ensureSvf (bA);
@@ -186,16 +204,16 @@ public:
                 B.tpt (0, ub, zb.g, zb.R1, model == 3 ? zb.R : zb.R1, lpb, bpb, hpb, false);
                 const float y1a = za.wa.lp * lpa + za.wa.bp * bpa + za.wa.hp * hpa;
                 const float y1b = zb.wa.lp * lpb + zb.wa.bp * bpb + zb.wa.hp * hpb;
-                ua = linearHard ? hardtanh (y1a) : (model == 1 ? y1a : std::tanh (y1a * kMidSat) / kMidSat);
-                ub = linearHard ? hardtanh (y1b) : (model == 1 ? y1b : std::tanh (y1b * kMidSat) / kMidSat);
+                ua = linearHard ? A.hardtanh (y1a) : (model == 1 ? y1a : A.th (y1a * kMidSat) / kMidSat);
+                ub = linearHard ? B.hardtanh (y1b) : (model == 1 ? y1b : B.th (y1b * kMidSat) / kMidSat);
             }
             float lpa, bpa, hpa, lpb, bpb, hpb;
             A.tpt (two ? 3 : 0, ua, za.g, za.R, za.R, lpa, bpa, hpa, sat);
             B.tpt (two ? 3 : 0, ub, zb.g, zb.R, zb.R, lpb, bpb, hpb, sat);
             float ya = za.wb.lp * lpa + za.wb.bp * bpa + za.wb.hp * hpa;
             float yb = zb.wb.lp * lpb + zb.wb.bp * bpb + zb.wb.hp * hpb;
-            ya = linearHard ? hardtanh (ya) : ya;
-            yb = linearHard ? hardtanh (yb) : yb;
+            ya = linearHard ? A.hardtanh (ya) : ya;
+            yb = linearHard ? B.hardtanh (yb) : yb;
             outA[i] = ya * za.post;
             outB[i] = yb * zb.post;
         }
@@ -252,7 +270,7 @@ private:
                 float lp, bp, hp;
                 tpt (0, u, g, R1, model == 3 ? R : R1, lp, bp, hp, false);
                 float y1 = wa.lp * lp + wa.bp * bp + wa.hp * hp;
-                u = linearHard ? hardtanh (y1) : (model == 1 ? y1 : std::tanh (y1 * kMidSat) / kMidSat);
+                u = linearHard ? hardtanh (y1) : (model == 1 ? y1 : th (y1 * kMidSat) / kMidSat);
             }
             float lp, bp, hp;
             tpt (two ? 3 : 0, u, g, R, R, lp, bp, hp, satLoop);
@@ -309,7 +327,7 @@ private:
         const float v3 = u - ic2;
         const float v1 = (ic1 + g * v3) / (1.0f + g * Rloop + g * g);
         const float v2 = ic2 + g * v1;
-        ic1 = flushDenormal (2.0f * (saturate ? std::tanh (v1 * kDirtySat) / kDirtySat : v1) - ic1);
+        ic1 = flushDenormal (2.0f * (saturate ? th (v1 * kDirtySat) / kDirtySat : v1) - ic1);
         ic2 = flushDenormal (2.0f * v2 - ic2);
         lp = v2;
         bp = v1;
@@ -317,15 +335,24 @@ private:
     }
 
     // four saturating one pole stages with global feedback (zero delay feedback solved linearly); the output is a weighted sum of the input and the stage outputs (document 05, 2.1)
-    void ladder (const float* in, float* out, int n, float f, float r, float d, int style, float bRaw) noexcept
+    struct LadderSetup
     {
-        const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f)), G = g / (1.0f + g);
+        float G = 0.0f, k = 0.0f, pre = 1.0f, post = 1.0f, c[5] = {};
+    };
+    LadderSetup lad;
+    bool ladValid = false;
+
+    LadderSetup ladderSetup (float f, float r, float d, int style, float bRaw) const noexcept
+    {
+        LadderSetup z;
+        const float g = std::tan (kPif * std::min (f / static_cast<float> (sr), 0.499f));
+        z.G = g / (1.0f + g);
         const float b = std::clamp (bRaw, -1.0f, 1.0f);
         const float Lw = std::max (-b, 0.0f), Bw = std::sqrt (std::max (0.0f, 1.0f - b * b)), Hw = std::max (b, 0.0f);
         const float H = std::min (1.0f + b, 1.0f), L = std::min (1.0f - b, 1.0f);
         const float pn = std::min (b, 0.0f), m = std::sqrt (0.5f * Hw * Hw + 0.5f), q = m * (1.0f + pn), band = 2.0f * m * (1.0f + pn - b);
         const float ab = 1.0f - std::fabs (b);
-        float c[5];
+        float* c = z.c;
         switch (style)
         {
             case 1: c[0] = Hw; c[1] = -4.0f * Hw; c[2] = 6.0f * Hw - ab; c[3] = -4.0f * Hw + 2.0f * ab; c[4] = Lw + Hw - ab; break;
@@ -338,14 +365,25 @@ private:
         // drive: d (1 + r') faded to d as the blend goes to high pass; style 3 uses the raw drive, style 4 fades between d and that
         const float rp = st5 == 0 ? r : std::sin (r);
         const float dL = d * lerp (1.0f + rp, 1.0f, Hw);
-        const float pre = st5 == 3 ? d : (st5 == 4 ? lerp (d, dL, std::min (1.0f - b, 1.0f)) : dL);
-        const float post = 1.0f / std::sqrt ((d - 1.0f) * (st5 == 1 ? 0.25f : 0.5f) + 1.0f);
+        z.pre = st5 == 3 ? d : (st5 == 4 ? lerp (d, dL, std::min (1.0f - b, 1.0f)) : dL);
+        z.post = 1.0f / std::sqrt ((d - 1.0f) * (st5 == 1 ? 0.25f : 0.5f) + 1.0f);
         const float rr = st5 == 0 ? r : std::sin (kPif * 0.5f * r);
-        const float k = lerp (0.001f, 4.1f, rr);
+        z.k = lerp (0.001f, 4.1f, rr);
+        return z;
+    }
+    void ladder (const float* in, float* out, int n, float f, float r, float d, int style, float bRaw) noexcept
+    {
+        if (!ladValid)
+        {
+            lad = ladderSetup (f, r, d, style, bRaw);
+            ladValid = true;
+        }
+        const float G = lad.G, k = lad.k, pre = lad.pre, post = lad.post;
+        const float c0 = lad.c[0], c1 = lad.c[1], c2 = lad.c[2], c3 = lad.c[3], c4 = lad.c[4];
         for (int i = 0; i < n; ++i)
         {
             const float S = G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3];
-            const float u = std::tanh ((pre * in[i] - k * S) / (1.0f + k * G * G * G * G) * 0.9f) * 1.1f;
+            const float u = th ((pre * in[i] - k * S) / (1.0f + k * G * G * G * G) * 0.9f) * 1.1f;
             float x = u, st[4];
             for (int j = 0; j < 4; ++j)
             {
@@ -355,9 +393,50 @@ private:
                 st[j] = y;
                 x = sat (y);
             }
-            out[i] = (c[0] * u + c[1] * st[0] + c[2] * st[1] + c[3] * st[2] + c[4] * st[3]) * post;
+            out[i] = (c0 * u + c1 * st[0] + c2 * st[1] + c3 * st[2] + c4 * st[3]) * post;
         }
     }
+public:
+    /** Two channels of the Ladder model in one loop (see processPair). */
+    static bool processPairLadder (ClassicFilter& A, ClassicFilter& B, const float* inA, float* outA, const float* inB, float* outB, int n, const ClassicParams& bA, const ClassicParams& bB) noexcept
+    {
+        A.remember (bA);
+        B.remember (bB);
+        if (!A.ladValid)
+        {
+            A.lad = A.ladderSetup (A.mf, A.mr, A.md, bA.style, A.mbraw - 1.0f);
+            A.ladValid = true;
+        }
+        if (!B.ladValid)
+        {
+            B.lad = B.ladderSetup (B.mf, B.mr, B.md, bB.style, B.mbraw - 1.0f);
+            B.ladValid = true;
+        }
+        const LadderSetup za = A.lad, zb = B.lad;
+        for (int i = 0; i < n; ++i)
+        {
+            const float Sa = za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3];
+            const float Sb = zb.G * zb.G * zb.G * B.s[0] + zb.G * zb.G * B.s[1] + zb.G * B.s[2] + B.s[3];
+            const float ua = A.th ((za.pre * inA[i] - za.k * Sa) / (1.0f + za.k * za.G * za.G * za.G * za.G) * 0.9f) * 1.1f;
+            const float ub = B.th ((zb.pre * inB[i] - zb.k * Sb) / (1.0f + zb.k * zb.G * zb.G * zb.G * zb.G) * 0.9f) * 1.1f;
+            float xa = ua, xb = ub, sta[4], stb[4];
+            for (int j = 0; j < 4; ++j)
+            {
+                const float va = (xa - A.s[j]) * za.G, vb = (xb - B.s[j]) * zb.G;
+                const float ya = va + A.s[j], yb = vb + B.s[j];
+                A.s[j] = flushDenormal (ya + va);
+                B.s[j] = flushDenormal (yb + vb);
+                sta[j] = ya;
+                stb[j] = yb;
+                xa = sat (ya);
+                xb = sat (yb);
+            }
+            outA[i] = (za.c[0] * ua + za.c[1] * sta[0] + za.c[2] * sta[1] + za.c[3] * sta[2] + za.c[4] * sta[3]) * za.post;
+            outB[i] = (zb.c[0] * ub + zb.c[1] * stb[0] + zb.c[2] * stb[1] + zb.c[3] * stb[2] + zb.c[4] * stb[3]) * zb.post;
+        }
+        return true;
+    }
+private:
 
     /** The diode ladder (document 05, 6): a two pole high pass in front (cutoff by the blend), four stages that average with their neighbours, a feedback of the
         fourth stage through a fixed 20 Hz high pass, the input stage tanh (0.5 (d' hp - k s4)). The stage dynamics are solved with the trapezoidal rule as a tridiagonal
@@ -410,7 +489,7 @@ private:
                 dPre += gp / (1.0f + gp) * (xin - dPre);
                 xp = dPre;
             }
-            const float u = std::tanh (0.5f * (dIn * xp - k * kDiodeFb * fb)) * kDiodeGain;
+            const float u = th (0.5f * (dIn * xp - k * kDiodeFb * fb)) * kDiodeGain;
             // right hand side with the old states (the neighbours through the algebraic saturator)
             const float s0 = sat (dv[0]), s1 = sat (dv[1]), s2 = sat (dv[2]), s3 = sat (dv[3]);
             const float in0 = up * (dU + s1) + (1.0f - w) * dU, in1 = up * (s0 + s2) + (1.0f - w) * s0, in2 = up * (s1 + s3) + (1.0f - w) * s1,

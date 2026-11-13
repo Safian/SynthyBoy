@@ -959,6 +959,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
         {
             FilterSettings& s = filtSet[f];
+            s.fast = g.quality == 0;
             s.model = static_cast<int> (P (fi.model) + 0.5f);
             s.style = static_cast<int> (P (fi.style) + 0.5f);
             const float kt = semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
