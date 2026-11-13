@@ -75,6 +75,8 @@ void Voice::prepare (double sampleRate)
     sr = sampleRate;
     mod.assign (paramCount(), 0.0f);
     modR.assign (paramCount(), 0.0f);
+    modP = mod.data();
+    modRP = modR.data();
     filt[0].prepare (sampleRate);
     filt[1].prepare (sampleRate);
     for (int o = 0; o < 3; ++o)
@@ -112,18 +114,9 @@ void Voice::clearMod() noexcept
     numTouched = 0;
 }
 
-float Voice::PR (int idx) const noexcept
+float Voice::modulatedSlow (int idx, float b, float d) const noexcept
 {
-    const float b = gl->base[idx];
-    const float d = modR[static_cast<size_t> (idx)];
-    return d == 0.0f ? b : modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d);
-}
-
-float Voice::P (int idx) const noexcept
-{
-    const float b = gl->base[idx];
-    const float d = mod[static_cast<size_t> (idx)];
-    return d == 0.0f ? b : modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d);
+    return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d);
 }
 
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept

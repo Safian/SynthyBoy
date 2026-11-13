@@ -132,8 +132,18 @@ public:
     void render (const MixOut& out, int n, int t0) noexcept;
 
 private:
-    float P (int idx) const noexcept;
-    float PR (int idx) const noexcept; // the right lane (differs from P () where a slot has the stereo flag)
+    // the value of a parameter as this voice hears it: the knob, or the knob plus the modulation of the slots (inline fast path: most parameters are not modulated)
+    float P (int idx) const noexcept
+    {
+        const float d = modP[idx];
+        return d == 0.0f ? gl->base[idx] : modulatedSlow (idx, gl->base[idx], d);
+    }
+    float PR (int idx) const noexcept // the right lane (differs from P () where a slot has the stereo flag)
+    {
+        const float d = modRP[idx];
+        return d == 0.0f ? gl->base[idx] : modulatedSlow (idx, gl->base[idx], d);
+    }
+    float modulatedSlow (int idx, float base, float delta) const noexcept;
     void clearMod() noexcept;
     float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;
     float customShape (const CompiledShape& cs, float u) noexcept;
@@ -182,6 +192,8 @@ private:
     float lfoOut[10] = {};
 
     std::vector<float> mod, modR;
+    float* modP = nullptr;   // mod.data () / modR.data (): the vectors are sized in prepare () and never reallocated
+    float* modRP = nullptr;
     int touched[kNumModSlots] = {};
     int numTouched = 0;
     float src[kNumSourceIds] = {};
