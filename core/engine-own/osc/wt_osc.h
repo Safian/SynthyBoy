@@ -405,8 +405,17 @@ public:
                     std::copy (b - 1, b - 1 + kMorphStride, a - 1); // the previous "new" buffer becomes the old one
                 const float spreadShift = groups > 1 ? tick.morphSpread * 2.0f * static_cast<float> (g) / static_cast<float> (groups - 1) : 0.0f;
                 const float framePos = tick.frame * static_cast<float> (std::max (wt.numFrames() - 1, 0));
-                SB_SECTION (sections::oscMorphBuild);
-                buildMorphCycle (wt, framePos, true, tick.morphType, clamp01 (tick.morphAmount + spreadShift), K, incMax, sampleRate, b, *morphScratch, tick.lowCost);
+                if (g > 0 && spreadShift == 0.0f)
+                {
+                    // no morph spread: every group asks for the same cycle, so the first one is copied (the same samples, built once)
+                    const float* first = morphBuf.data() + kMorphStride + 1;
+                    std::copy (first - 1, first - 1 + kMorphStride, b - 1);
+                }
+                else
+                {
+                    SB_SECTION (sections::oscMorphBuild);
+                    buildMorphCycle (wt, framePos, true, tick.morphType, clamp01 (tick.morphAmount + spreadShift), K, incMax, sampleRate, b, *morphScratch, tick.lowCost);
+                }
                 if (firstOfNote)
                     std::copy (b - 1, b - 1 + kMorphStride, a - 1);
             }

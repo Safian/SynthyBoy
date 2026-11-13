@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S]
+//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--sr 48000] [--retrigger S]
 //
 // K notes are held and retriggered every S seconds (default 1). The first second is rendered but not measured. Prints,
 // for the requested configuration and then once per quality tier (the tier's quality: voices, unison, oversampling, ...), the
@@ -22,6 +22,8 @@
 #include <ctime>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <sstream>
 
 #if defined(__linux__) && (defined(__arm__) || defined(__aarch64__))
  #define SB_BENCH_PROFILE 1
@@ -32,6 +34,8 @@
 
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
+#include "synthyboy/preset.h"
+#include "synthyboy/state.h"
 
 #include "own_heavy_patch.h"
 
@@ -130,8 +134,12 @@ struct Options
 {
     EngineKind engine = EngineKind::own;
     double seconds = 10.0;
+    bool secondsGiven = false;
     int block = 128;
     int voices = 8;
+    bool voicesGiven = false; // --voices K: K notes are played (tier runs: at most the voices of the tier)
+    const char* presetFile = nullptr; // --preset FILE: a .sbpreset instead of the default / heavy patch
+    const char* presetDir = nullptr;  // --preset-dir DIR: every .sbpreset below DIR, one line each
     double sampleRate = 48000.0;
     double retrigger = 1.0;
     bool defaultPatch = true, heavyPatch = true;
@@ -214,11 +222,43 @@ void heavyPatch (IEngine& engine)
     set (engine, "eq.mid.gain", 4.0f);
 }
 
-Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy)
+/** A preset as the shell loads it: the parameter values go to the engine one by one (setParam) and the content section by setContent (shell-mpc, effSetChunk). */
+struct PresetData
+{
+    std::string name, path;
+    ParamValues values = ParamValues::defaults();
+    StateContent content;
+};
+
+bool loadPresetFile (const std::string& path, PresetData& out)
+{
+    std::ifstream in (path, std::ios::binary);
+    if (!in)
+        return false;
+    std::stringstream ss;
+    ss << in.rdbuf();
+    const std::string text = ss.str();
+    PresetMeta meta;
+    const LoadResult r = loadPreset (text.data(), text.size(), meta, out.values, out.content);
+    if (r.status != LoadStatus::ok && r.status != LoadStatus::newer_version)
+        return false;
+    out.path = path;
+    out.name = meta.name.empty() ? path : meta.name;
+    return true;
+}
+
+Result run (const Options& o, int voicesIn, const Quality& quality, bool heavy, const PresetData* preset = nullptr)
 {
     const int voices = o.idle ? 0 : voicesIn;
     auto engine = createEngine (o.engine);
-    if (heavy && o.engine == EngineKind::own)
+    if (preset != nullptr)
+    {
+        const auto* table = paramTable();
+        for (size_t i = 0; i < paramCount(); ++i)
+            engine->setParam (table[i].id, preset->values.plain[i]);
+        engine->setContent (preset->content);
+    }
+    else if (heavy && o.engine == EngineKind::own)
         bench::ownHeavyPatch (*engine);
     else if (heavy)
         heavyPatch (*engine);
@@ -356,9 +396,11 @@ int main (int argc, char** argv)
             else if (v == "heavy") o.defaultPatch = false;
             else if (v != "both") usage ("unknown patch");
         }
-        else if (a == "--seconds")   o.seconds = std::atof (next());
+        else if (a == "--seconds")   { o.seconds = std::atof (next()); o.secondsGiven = true; }
         else if (a == "--block")     o.block = std::atoi (next());
-        else if (a == "--voices")    o.voices = std::atoi (next());
+        else if (a == "--voices")    { o.voices = std::atoi (next()); o.voicesGiven = true; }
+        else if (a == "--preset")    o.presetFile = next();
+        else if (a == "--preset-dir") o.presetDir = next();
         else if (a == "--sr")        o.sampleRate = std::atof (next());
         else if (a == "--retrigger") o.retrigger = std::atof (next());
         else if (a == "--profile")   o.profileFile = next();
@@ -396,6 +438,50 @@ int main (int argc, char** argv)
 
     std::printf ("synthyboy_bench: engine %s, %.0f Hz, block %d, %.1f s per run, retrigger every %.1f s\n", engineName (o.engine), o.sampleRate,
                  o.block, o.seconds, o.retrigger);
+    if (o.presetFile != nullptr || o.presetDir != nullptr)
+    {
+        // presets: tier low (or --tier), the notes of --voices (default: the voices of the tier), --seconds (default 2 here)
+        std::vector<std::string> files;
+        if (o.presetFile != nullptr)
+            files.push_back (o.presetFile);
+        else
+            for (const auto& e : scanPresetDirectory (o.presetDir))
+                files.push_back (e.path);
+        std::sort (files.begin(), files.end());
+        if (!o.secondsGiven)
+            o.seconds = 2.0;
+        const Tier tier = o.tier == "medium" ? Tier::medium : (o.tier == "high" ? Tier::high : Tier::low);
+        const Quality q = qualityForTier (tier);
+        const int notes = o.voicesGiven ? std::min (o.voices, kMaxVoices) : q.maxVoices;
+        const double budgetMs = 1000.0 * o.block / o.sampleRate;
+        struct Row { std::string name; Result r; };
+        std::vector<Row> rows;
+        for (const auto& f : files)
+        {
+            PresetData pd;
+            if (!loadPresetFile (f, pd))
+            {
+                std::printf ("%-44s could not be loaded\n", f.c_str());
+                continue;
+            }
+            const Result r = run (o, notes, q, false, &pd);
+            rows.push_back ({ pd.name, r });
+            std::printf ("%-44s voices %2d: mean %.4f  p99 %.4f  worst %.4f ms%s\n", pd.name.c_str(), notes, r.meanMs, r.p99Ms, r.worstMs, r.worstMs > budgetMs ? "   OVER" : "");
+        }
+        std::printf ("\npresets over the block budget (%.3f ms) in the worst block:\n", budgetMs);
+        int over = 0;
+        for (const auto& r : rows)
+            if (r.r.worstMs > budgetMs)
+            {
+                std::printf ("  %-42s worst %.4f ms (mean %.4f)\n", r.name.c_str(), r.r.worstMs, r.r.meanMs);
+                ++over;
+            }
+        std::printf ("  %d of %zu\n\ntop 15 by mean:\n", over, rows.size());
+        std::sort (rows.begin(), rows.end(), [] (const Row& a, const Row& b) { return a.r.meanMs > b.r.meanMs; });
+        for (size_t i = 0; i < rows.size() && i < 15; ++i)
+            std::printf ("  %-42s mean %.4f  p99 %.4f  worst %.4f ms\n", rows[i].name.c_str(), rows[i].r.meanMs, rows[i].r.p99Ms, rows[i].r.worstMs);
+        return 0;
+    }
     for (const bool heavy : { false, true })
     {
         if ((heavy && ! o.heavyPatch) || (! heavy && ! o.defaultPatch))
@@ -412,7 +498,10 @@ int main (int argc, char** argv)
             if (o.tier != "all" && o.tier != (tier == Tier::low ? "low" : (tier == Tier::medium ? "medium" : "high")))
                 continue;
             const Quality q = qualityForTier (tier);
-            print (tier == Tier::low ? "tier low" : (tier == Tier::medium ? "tier medium" : "tier high"), o, q.maxVoices, run (o, q.maxVoices, q, heavy));
+            {
+                const int nv = o.voicesGiven ? std::min (o.voices, kMaxVoices) : q.maxVoices;
+                print (tier == Tier::low ? "tier low" : (tier == Tier::medium ? "tier medium" : "tier high"), o, nv, run (o, nv, q, heavy));
+            }
         }
     }
 #ifdef SB_BENCH_PROFILE
