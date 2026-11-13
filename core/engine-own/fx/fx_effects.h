@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "../dsp/fastmath.h"
 #include <algorithm>
 #include <cmath>
 #include <array>
@@ -153,6 +154,7 @@ private:
 class Chorus
 {
 public:
+    bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
     struct Params { float mix = 0.5f, rate = 0.4f, depth = 0.5f, feedback = 0.4f, delay1 = 0.002f, delay2 = 0.008f, cutoff = 260.0f, spread = 1.0f; int voices = 4; };
     static constexpr int kMaxPairs = 4;
     void prepare (double sr)
@@ -203,7 +205,7 @@ public:
                         const int k = ((i * 2 + vi) * 2) + c;
                         float ph = phase + (c == 1 ? 0.25f : 0.0f) + (vi == 1 ? 0.5f : 0.0f) + 0.25f * static_cast<float> (i) / static_cast<float> (V);
                         ph -= std::floor (ph);
-                        const float mod = 1.0f + 0.5f * std::sin (kTwoPif * ph);
+                        const float mod = 1.0f + 0.5f * (fast ? fastmath::sinCycles (ph) : std::sin (kTwoPif * ph));
                         const float base = vi == 0 ? p.delay1 : p.delay2;
                         const float delay = mod * 0.03f * p.depth + lerp (base, avg, t);
                         const float period = std::clamp (delay * sr, 3.0f, 0.08f * sr);
@@ -287,6 +289,7 @@ private:
 class Phaser
 {
 public:
+    bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
     static constexpr int kStages = 12;
     struct Params { float mix = 0.5f, feedback = 0.5f, rate = 0.12f, depthSemis = 24.0f, centerHz = 2000.0f, blend = 0.5f, phaseOffset = 120.0f / 360.0f, depth2 = 0.0f; };
     void prepare (double sr) { sampleRate = sr; reset(); }
@@ -322,7 +325,8 @@ public:
                 const float ph = phase + (c == 1 ? p.phaseOffset : -p.phaseOffset) * 0.5f;
                 const float x01 = ph - std::floor (ph);
                 const float v = 2.0f * std::fabs (2.0f * x01 - 1.0f) - 1.0f; // triangle -1 .. 1
-                const float hz = std::clamp (8.1757989f * std::exp2 ((centreNote + p.depthSemis * v) * (1.0f / 12.0f)), 20.0f, 0.45f * sr);
+                const float e2 = (centreNote + p.depthSemis * v) * (1.0f / 12.0f);
+                const float hz = std::clamp (8.1757989f * (fast ? fastmath::exp2 (e2) : std::exp2 (e2)), 20.0f, 0.45f * sr);
                 const float c1 = OnePole::coefficient (hz / 20.0f, sampleRate), c2 = OnePole::coefficient (hz * 20.0f, sampleRate);
                 float aS[kStages];
                 if (spread)
@@ -358,7 +362,7 @@ public:
                 const float ap = p1 * tap[0] + p3 * tap[1] + p5 * tap[2];
                 bpA[c] += c2 * (ap - bpA[c]);
                 bpB[c] += c1 * (bpA[c] - bpB[c]);
-                fb[c] = std::tanh (fbk * (bpA[c] - bpB[c]));
+                fb[c] = fast ? fastmath::tanh (fbk * (bpA[c] - bpB[c])) : std::tanh (fbk * (bpA[c] - bpB[c]));
                 const float wet = 0.5f * (dry + ap);
                 io[c][i] = dry * (1.0f - p.mix) + wet * p.mix; // linear crossfade (document 06, section 1)
             }
@@ -375,6 +379,7 @@ private:
 class Distortion
 {
 public:
+    bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
     struct Params { int type = 0; float driveDb = 0.0f, mix = 1.0f, cutoff = 4000.0f, resonance = 0.5f, blend = 0.0f; int order = 0; };
     void prepare (double sr) { sampleRate = sr; reset(); }
     void reset() noexcept { for (auto& s : svf) s.reset(); held[0] = held[1] = 0.0f; counter = 0; }
@@ -409,15 +414,18 @@ private:
     {
         // v = x * drive; the laws of docs/engine-spec/06-effects.md section 4
         const float u = clamp01 ((p.driveDb + 30.0f) / 60.0f);
-        const float d = std::pow (10.0f, std::clamp (p.driveDb, -30.0f, 30.0f) * 0.05f);
+        const float dExp = std::clamp (p.driveDb, -30.0f, 30.0f) * 0.05f;
+        const float d = fast ? fastmath::pow10 (dExp) : std::pow (10.0f, dExp);
+        auto th = [this] (float a) { return fast ? fastmath::tanh (a) : std::tanh (a); };
+        auto ex = [this] (float a) { return fast ? fastmath::exp (a) : std::exp (a); };
         const float x = d != 0.0f ? v / d : v; // the unscaled input
         float y;
         switch (p.type)
         {
-            case 0: y = std::tanh (v); break;
+            case 0: y = th (v); break;
             case 1: y = std::clamp (v, -1.0f, 1.0f); break;
             case 2: { const float t = 0.25f * v + 0.75f; y = std::fabs (-4.0f * (t - std::floor (t)) + 2.0f) - 1.0f; break; }
-            case 3: { const float t = 0.5f - 0.25f * v; y = std::sin (kTwoPif * (t - std::floor (t))); break; }
+            case 3: { const float t = 0.5f - 0.25f * v; y = fast ? fastmath::sinCycles (t) : std::sin (kTwoPif * (t - std::floor (t))); break; }
             case 4: { const float q = std::clamp (u * u, 1.5e-8f, 1.0f); y = std::round (x / q) * q; break; }
             case 5:
             {
@@ -427,11 +435,11 @@ private:
                 y = held[c];
                 break;
             }
-            case 6: y = std::tanh (v + 0.3f) - std::tanh (0.3f); break;
-            case 7: { const float vp = std::max (v, 0.0f), vn = std::min (v, 0.0f); y = (1.0f - std::exp (-vp)) - 0.5f * (1.0f - std::exp (2.0f * vn)); break; }
-            case 8: y = std::exp (std::min (v, 0.0f)) - std::exp (-std::max (v, 0.0f)); break;
-            case 9: y = std::tanh (32.0f * v); break;
-            case 10: y = std::tanh (std::max (v, 0.0f)) + std::max (std::min (v, 0.0f), -0.5f); break;
+            case 6: y = th (v + 0.3f) - th (0.3f); break;
+            case 7: { const float vp = std::max (v, 0.0f), vn = std::min (v, 0.0f); y = (1.0f - ex (-vp)) - 0.5f * (1.0f - ex (2.0f * vn)); break; }
+            case 8: y = ex (std::min (v, 0.0f)) - ex (-std::max (v, 0.0f)); break;
+            case 9: y = th (32.0f * v); break;
+            case 10: y = th (std::max (v, 0.0f)) + std::max (std::min (v, 0.0f), -0.5f); break;
             case 11: y = std::fabs (std::clamp (v, -1.0f, 1.0f)); break;
             case 12: y = std::clamp (v, -1.0f, 1.0f); break; // X-Shaper: the drawn curves default to the identity
             default: y = std::clamp (v, -1.0f, 1.0f); break;
@@ -439,7 +447,7 @@ private:
         const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
         if (asym) // 10 Hz DC blocker
         {
-            const float a = 1.0f - std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate));
+            const float a = 1.0f - (fast ? fastmath::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)) : std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)));
             dc[c] += a * (y - dc[c]);
             y -= dc[c];
         }

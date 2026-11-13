@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "../dsp/fastmath.h"
 #include <algorithm>
 #include <cmath>
 #include "../dsp/util.h"
@@ -100,14 +101,17 @@ inline float remapParts (const float* curve, float p, float a, int parts) noexce
 
 /** Phase domain stage. p = cycle phase 0 .. 1, a = amount 0 .. 1, ph = the phase knob 0 .. 1, m = signal of the other oscillator (-1 .. 1).
     Returns the phase to read the table at (0 .. 1) and sets `window` to a factor applied to the sample. */
-inline float warpPhase (int type, float p, float a, float ph, float m, float& window, const float* remap = nullptr) noexcept
+inline float warpPhase (int type, float p, float a, float ph, float m, float& window, const float* remap = nullptr, bool fast = false) noexcept
 {
+    // sine, cosine of a phase in cycles and tanh: the library functions, or at tier low (fast) the cheaper forms of dsp/fastmath.h
+    auto sn = [fast] (float cycles) noexcept { return fast ? fastmath::sinCycles (cycles) : std::sin (kTwoPif * cycles); };
+    auto cs = [fast] (float cycles) noexcept { return fast ? fastmath::sinCycles (cycles + 0.25f) : std::cos (kTwoPif * cycles); };
     window = 1.0f;
     switch (type)
     {
         case kWarpRemap1: return remapParts (remap, p, a, 1);
         case kWarpRemap2: return remapParts (remap, p, a, 2);
-        case kWarpRemap3: return p - a * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
+        case kWarpRemap3: return p - a * sn (p) * (1.0f / kTwoPif);
         case kWarpRemap4: return remapParts (remap, p, a, 4);
         case kWarpSync:
             return frac (p * (1.0f + a * 11.0f));
@@ -115,21 +119,21 @@ inline float warpPhase (int type, float p, float a, float ph, float m, float& wi
             return frac (p * (1.0f + a * 11.0f) + ph);
         case kWarpFormant:
         {
-            window = 0.5f - 0.5f * std::cos (kTwoPif * p); // raised cosine over the cycle keeps the seam closed
+            window = 0.5f - 0.5f * cs (p); // raised cosine over the cycle keeps the seam closed
             return frac (p * (1.0f + a * 7.0f) + ph - 0.5f);
         }
         case kWarpBend: case kWarpBendBoth: // smooth, periodic phase maps: the slope never jumps, so they create little high frequency content
-            return p - (a - 0.5f) * 1.9f * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
+            return p - (a - 0.5f) * 1.9f * sn (p) * (1.0f / kTwoPif);
         case kWarpBendPlus:
-            return p + a * 0.95f * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
+            return p + a * 0.95f * sn (p) * (1.0f / kTwoPif);
         case kWarpBendMinus:
-            return p - a * 0.95f * std::sin (kTwoPif * p) * (1.0f / kTwoPif);
+            return p - a * 0.95f * sn (p) * (1.0f / kTwoPif);
         case kWarpAsymPlus:
-            return p - a * 0.95f * (std::cos (kTwoPif * p) - 1.0f) * (1.0f / kTwoPif);
+            return p - a * 0.95f * (cs (p) - 1.0f) * (1.0f / kTwoPif);
         case kWarpAsymMinus:
-            return p + a * 0.95f * (std::cos (kTwoPif * p) - 1.0f) * (1.0f / kTwoPif);
+            return p + a * 0.95f * (cs (p) - 1.0f) * (1.0f / kTwoPif);
         case kWarpAsymBoth:
-            return p - (a - 0.5f) * 1.9f * (std::cos (kTwoPif * p) - 1.0f) * (1.0f / kTwoPif);
+            return p - (a - 0.5f) * 1.9f * (cs (p) - 1.0f) * (1.0f / kTwoPif);
         case kWarpFlip:
             return p < 0.5f ? p : lerp (p, 1.0f - p, a);
         case kWarpMirror:
@@ -151,15 +155,17 @@ inline float warpPhase (int type, float p, float a, float ph, float m, float& wi
         case kWarpPdA: case kWarpPdB:
             return frac (p + m * a * 0.25f * (1.0f - p));
         case kWarpPdSelf:
-            return frac (p + a * 0.25f * std::sin (kTwoPif * p));
+            return frac (p + a * 0.25f * sn (p));
         default:
             return p;
     }
 }
 
 /** Sample domain stage (after the table read). `m` is the other oscillator for the ring / amplitude modulation entries. */
-inline float warpSample (int type, float y, float a, float m) noexcept
+inline float warpSample (int type, float y, float a, float m, bool fast = false) noexcept
 {
+    auto th = [fast] (float v) noexcept { return fast ? fastmath::tanh (v) : std::tanh (v); };
+    auto sn = [fast] (float cycles) noexcept { return fast ? fastmath::sinCycles (cycles) : std::sin (kTwoPif * cycles); };
     switch (type)
     {
         case kWarpQuantize:
@@ -176,16 +182,16 @@ inline float warpSample (int type, float y, float a, float m) noexcept
         case kWarpDistTube:
         {
             const float g = 1.0f + 6.0f * a;
-            return std::tanh (g * y + 0.2f * a) - std::tanh (0.2f * a);
+            return th (g * y + 0.2f * a) - th (0.2f * a);
         }
         case kWarpDistSoftClip:
-            return std::tanh (y * (1.0f + 8.0f * a));
+            return th (y * (1.0f + 8.0f * a));
         case kWarpDistHardClip:
             return std::clamp (y * (1.0f + 8.0f * a), -1.0f, 1.0f);
         case kWarpDistDiode1:
         {
             const float v = y * (1.0f + 6.0f * a);
-            return v > 0.0f ? std::tanh (v) : 0.4f * std::tanh (v);
+            return v > 0.0f ? th (v) : 0.4f * th (v);
         }
         case kWarpDistDiode2:
         {
@@ -201,15 +207,15 @@ inline float warpSample (int type, float y, float a, float m) noexcept
             return v < 2.0f ? v - 1.0f : 3.0f - v;
         }
         case kWarpDistSineFold:
-            return std::sin (y * (1.0f + 5.0f * a) * kPif * 0.5f);
+            { const float rad = y * (1.0f + 5.0f * a) * kPif * 0.5f; return fast ? fastmath::sinCycles (rad * (1.0f / kTwoPif)) : std::sin (rad); }
         case kWarpDistZeroSquare:
             return lerp (y, y >= 0.0f ? 1.0f : -1.0f, a);
         case kWarpDistAsym:
-            return std::tanh ((y + 0.5f * a) * (1.0f + 3.0f * a)) - std::tanh (0.5f * a * (1.0f + 3.0f * a));
+            return th ((y + 0.5f * a) * (1.0f + 3.0f * a)) - th (0.5f * a * (1.0f + 3.0f * a));
         case kWarpDistRectify:
             return lerp (y, std::fabs (y) * 2.0f - 0.6366f, a);
         case kWarpDistSineShaper:
-            return lerp (y, std::sin (kTwoPif * y), a);
+            return lerp (y, sn (y), a);
         case kWarpDistStomp:
         {
             const float v = y * (1.0f + 10.0f * a);

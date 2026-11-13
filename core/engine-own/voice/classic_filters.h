@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "../dsp/util.h"
+#include "../dsp/fastmath.h"
 #include "../fx/fx_dsp.h"
 
 #ifndef SB_MID_SAT
@@ -106,14 +107,7 @@ private:
     /** tanh: the library function, or at tier low a [7/6] Pade approximant (absolute error below 1e-4, clamped to +-1 beyond |x| = 4.972 where it reaches 1). */
     float th (float x) const noexcept
     {
-        if (!fastMath)
-            return std::tanh (x);
-        if (x >= 4.972f)
-            return 1.0f;
-        if (x <= -4.972f)
-            return -1.0f;
-        const float x2 = x * x;
-        return x * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2))) / (135135.0f + x2 * (62370.0f + x2 * (3150.0f + 28.0f * x2)));
+        return fastMath ? fastmath::tanh (x) : std::tanh (x);
     }
     float hardtanh (float v) const noexcept
     {

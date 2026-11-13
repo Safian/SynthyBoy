@@ -919,6 +919,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.songBeats = globals.songBeats;
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
+            frame.lowCost = globals.quality == 0;
             for (auto& f : fx)
             {
                 f.setLowCost (globals.quality == 0);

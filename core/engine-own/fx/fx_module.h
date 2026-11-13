@@ -26,6 +26,7 @@ struct FxFrame
     float lastNote = 60.0f;
     double songBeats = 0.0;
     const ContentSet* content = nullptr; // the set this block reads (Convolve takes its impulse from it)
+    bool lowCost = false;                // tier low: the cheaper forms of dsp/fastmath.h in the per sample code
     bool realtime = false;               // Quality::realtime: the audio thread never waits for a helper thread
 };
 

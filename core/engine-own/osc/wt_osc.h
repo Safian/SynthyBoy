@@ -487,10 +487,10 @@ public:
                 const float m0 = cs0 >= 0 && cross != nullptr && cross[cs0] ? lerp (k > 0 ? cross[cs0][k - 1] : lastCross[cs0], cross[cs0][k], fk) : 0.0f;
                 const float m1 = cs1 >= 0 && cross != nullptr && cross[cs1] ? lerp (k > 0 ? cross[cs1][k - 1] : lastCross[cs1], cross[cs1][k], fk) : 0.0f;
                 if (tick.warp[0] != 0)
-                    pp = warpPhase (tick.warp[0], pp, a0, tick.warpPhase[0], m0, window, tick.remap);
+                    pp = warpPhase (tick.warp[0], pp, a0, tick.warpPhase[0], m0, window, tick.remap, tick.lowCost);
                 if (tick.warp[1] != 0)
                 {
-                    pp = warpPhase (tick.warp[1], pp, a1, tick.warpPhase[1], m1, w2, tick.remap);
+                    pp = warpPhase (tick.warp[1], pp, a1, tick.warpPhase[1], m1, w2, tick.remap, tick.lowCost);
                     window *= w2;
                 }
                 auto read = [&] (float q) noexcept
@@ -517,9 +517,9 @@ public:
                     }
                 y *= window;
                 if (tick.warp[0] != 0)
-                    y = warpSample (tick.warp[0], y, a0, m0);
+                    y = warpSample (tick.warp[0], y, a0, m0, tick.lowCost);
                 if (tick.warp[1] != 0)
-                    y = warpSample (tick.warp[1], y, a1, m1);
+                    y = warpSample (tick.warp[1], y, a1, m1, tick.lowCost);
                 if (filt0)
                     y = filterStage (0, tick.warp[0], a0, y);
                 if (filt1)

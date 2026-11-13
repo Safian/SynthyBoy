@@ -120,6 +120,7 @@ public:
         p.voices = choice (b, voices);
         p.cutoff = V (b, d, cutoff);
         p.spread = clamp01 (pct (b, d, spread));
+        fx.fast = f.lowCost;
         fx.set (p);
     }
     void idleAdvance (int n) noexcept override { fx.idle (n); }
@@ -254,6 +255,7 @@ public:
         p.cutoff = V (b, d, cutoff) * std::exp2 (kt * (f.lastNote - 60.0f) * (1.0f / 12.0f));
         p.resonance = clamp01 (pct (b, d, res));
         p.blend = clamp01 (pct (b, d, blend)) * 2.0f;
+        fx.fast = f.lowCost;
         fx.set (p);
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
@@ -408,6 +410,7 @@ public:
         p.blend = clamp01 (pct (b, d, blend));
         p.phaseOffset = V (b, d, phase) / 360.0f;
         p.depth2 = depth2 >= 0 ? V (b, d, depth2) : 0.0f;
+        fx.fast = f.lowCost;
         fx.set (p);
     }
     void idleAdvance (int n) noexcept override { fx.idle (n); }
