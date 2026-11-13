@@ -40,13 +40,21 @@ inline float softClip (float x) noexcept
 struct OnePoleTPT
 {
     float s = 0.0f;
+    float lastG = 0.0f, lastCoef = 0.0f; // g / (1 + g) for the g of the last call (a held or constant cutoff asks for the same g again and again)
+    bool haveCoef = false;
 
     void reset() noexcept { s = 0.0f; }
 
     void processLP (float in, float g, float& lp, float& hp) noexcept
     {
         s = sanitize (s);
-        const float G = g / (1.0f + g);
+        if (!(haveCoef && g == lastG))
+        {
+            lastCoef = g / (1.0f + g);
+            lastG = g;
+            haveCoef = true;
+        }
+        const float G = lastCoef;
         const float v = G * (in - s);
         lp = v + s;
         s = sanitize (v + lp);
@@ -75,6 +83,8 @@ struct SVFTPT
 {
     float s1 = 0.0f;
     float s2 = 0.0f;
+    float dG = 0.0f, dR = 0.0f, dCached = 1.0f; // the momentary division of process () for the last g and R (valid without FAT)
+    bool haveD = false;
 
     void reset() noexcept
     {
@@ -94,7 +104,21 @@ struct SVFTPT
         // FAT: the damping grows with the band-pass amplitude (a dissipative nonlinearity in the feedback path), so the resonance saturates instead
         // of growing; the earlier version clipped the integrator input, which broke the trapezoidal relation and ran away at high resonance
         const float damping = 2.0f * R * (1.0f + (fat > 0.001f ? std::min (4.0f * fat * s1 * s1, 30.0f) : 0.0f));
-        const float dEff = 1.0f / (1.0f + damping * gSafe + gSafe * gSafe); // the same linear filter with the momentary damping: stable for any damping > 0
+        float dEff;
+        if (fat > 0.001f)
+            dEff = 1.0f / (1.0f + damping * gSafe + gSafe * gSafe); // the same linear filter with the momentary damping: stable for any damping > 0
+        else
+        {
+            // without FAT the damping is a function of R alone: the division is redone only when g or R change
+            if (!(haveD && gSafe == dG && R == dR))
+            {
+                dCached = 1.0f / (1.0f + damping * gSafe + gSafe * gSafe);
+                dG = gSafe;
+                dR = R;
+                haveD = true;
+            }
+            dEff = dCached;
+        }
         const float hp_val = (in - (damping + gSafe) * s1 - s2) * dEff;
         (void) d;
         const float v1 = gSafe * hp_val;
