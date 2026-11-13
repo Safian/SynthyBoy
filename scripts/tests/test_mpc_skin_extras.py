@@ -110,11 +110,10 @@ class SkinExtrasTest(unittest.TestCase):
         self.assertEqual(run_apply(skins, extras), (0, ""))
         self.assertEqual(snapshot(skins), before)
 
-    def test_real_extras_dir_keeps_bytes(self):
+    def test_real_extras_dir_applies_cleanly(self):
+        # the real modules change the skin (10_env.py adds the envelope), so only success is asserted here
         skins, _ = self.fresh()
-        before = snapshot(skins)
         self.assertEqual(run_apply(skins, REAL_EXTRAS), (0, ""))
-        self.assertEqual(snapshot(skins), before)
 
     def test_module_without_change_keeps_bytes(self):
         skins, extras = self.fresh()
