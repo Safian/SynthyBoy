@@ -334,6 +334,13 @@ class LfoSkinModuleTest(unittest.TestCase):
         self.assertLess(total, MAX_DECODED)
         self.assertFalse(any(p.name.startswith("lfo_live_") for p in self.skins.iterdir()))   # the old 208 x 38 strips are gone
 
+    def test_decoded_size_of_the_whole_skin_is_the_documented_one(self):
+        total = sum(w * h * 4 for w, h in (png_size(p) for p in self.skins.glob("*.png")))
+        self.assertLessEqual(total, 105676768)
+        doc = (ROOT / "docs" / "MPC.md").read_text(encoding="utf-8")
+        self.assertIn("105 676 768", doc)     # the number of the documentation: it must follow the skin
+        self.assertEqual(total, 105676768)
+
     def test_validate_py_has_no_error(self):
         res = subprocess.run([sys.executable, str(SDK / "tools" / "validate.py"), str(self.skins.parent)], capture_output=True, text=True)
         report = res.stdout + res.stderr
