@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../dsp/fastmath.h"
+#include "../dsp/simd.h"
 #include <algorithm>
 #include <cmath>
 #include <array>
@@ -161,14 +162,20 @@ public:
     void prepare (double sr)
     {
         sampleRate = sr;
-        for (auto& d : line)
-            d.prepare (static_cast<int> (sr * 0.085));
+        int size = 16; // the length of a delay line: a power of two (the same rule as DelayLine::prepare)
+        while (size < static_cast<int> (sr * 0.085) + 4)
+            size <<= 1;
+        lineSize = size;
+        lineMask = size - 1;
+        store.assign (static_cast<size_t> (kMaxPairs * 4) * static_cast<size_t> (size), 0.0f);
         reset();
     }
     void reset() noexcept
     {
-        for (auto& d : line) d.reset();
-        for (auto& b : band) b.reset();
+        std::fill (store.begin(), store.end(), 0.0f);
+        linePos = 0;
+        for (int k = 0; k < kMaxPairs * 4; ++k)
+            hiY[k] = loY[k] = 0.0f;
         phase = 0.0f;
     }
     /** The LFO runs on while the module is skipped on silence (FxChain, tier low): the same per sample steps as process (). */
@@ -190,8 +197,9 @@ public:
         const int V = std::clamp (p.voices, 1, kMaxPairs);
         const float fb = std::clamp (p.feedback, -0.95f, 0.95f);
         const float avg = 0.5f * (p.delay1 + p.delay2);
-        for (int k = 0; k < kMaxPairs * 4; ++k)
-            band[k].set (p.cutoff, p.spread, sampleRate);
+        // the band filter of every tap has the same coefficients (they come from the same parameters): computed once
+        LoopBand coef;
+        coef.set (p.cutoff, p.spread, sampleRate);
         // what does not change from sample to sample is computed once: the spread of the voices over the unison (a division each) and the phase offset of every tap
         float tOf[kMaxPairs], phOff[kMaxPairs], baseOf[2];
         for (int i = 0; i < V; ++i)
@@ -209,35 +217,133 @@ public:
             const float in[2] = { l[s], r[s] };
             float acc[2] = { 0.0f, 0.0f };
             const bool refresh = !fast || (s & 3) == 0;
-            for (int i = 0; i < V; ++i)
-            {
-                for (int vi = 0; vi < 2; ++vi)
-                    for (int c = 0; c < 2; ++c)
-                    {
-                        const int k = ((i * 2 + vi) * 2) + c;
-                        if (refresh)
+            if (refresh)
+                for (int i = 0; i < V; ++i)
+                    for (int vi = 0; vi < 2; ++vi)
+                        for (int c = 0; c < 2; ++c)
                         {
                             float ph = phase + (c == 1 ? 0.25f : 0.0f) + (vi == 1 ? 0.5f : 0.0f) + phOff[i];
                             ph -= ffloor (ph);
                             const float mod = 1.0f + 0.5f * (fast ? fastmath::sinCycles (ph) : std::sin (kTwoPif * ph));
                             const float delay = mod * 0.03f * p.depth + lerp (baseOf[vi], avg, tOf[i]);
-                            period[k] = std::clamp (delay * sr, 3.0f, 0.08f * sr);
+                            period[((i * 2 + vi) * 2) + c] = std::clamp (delay * sr, 3.0f, 0.08f * sr);
                         }
-                        const float rd = line[k].readCubic (period[k]);
-                        line[k].push (band[k].process (loopLimit (in[c] + fb * rd)));
-                        acc[c] += rd;
-                    }
+            // the four taps of a voice pair (left / right of delay 1, left / right of delay 2) are one group: read the cubic, add the feedback, limit, band pass, write.
+            // A tap only touches its own delay line and its own filter state, so the groups (and the lanes of the NEON version) are independent; acc is summed in the order of
+            // the scalar loop (voice pair, delay, channel).
+            for (int i = 0; i < V; ++i)
+            {
+                const int k0 = i * 4;
+                float rd[4];
+                readGroup (k0, period + k0, rd);
+                float x[4];
+                for (int j = 0; j < 4; ++j)
+                    x[j] = loopLimit (in[j & 1] + fb * rd[j]);
+                bandGroup (k0, x, coef);
+                pushGroup (k0, x);
+                acc[0] += rd[0];
+                acc[1] += rd[1];
+                acc[0] += rd[2];
+                acc[1] += rd[3];
             }
+            linePos = (linePos + 1) & lineMask;
             l[s] = mg.apply (in[0], 0.53f * acc[0]);
             r[s] = mg.apply (in[1], 0.53f * acc[1]);
         }
     }
 
 private:
+    /** The cubic (Catmull-Rom) read of four taps, `d` samples back from the newest sample (the arithmetic of DelayLine::readCubic, lane by lane). */
+    void readGroup (int k0, const float* d, float* out) const noexcept
+    {
+        int idx[4][4];
+        float t[4];
+        for (int j = 0; j < 4; ++j)
+        {
+            const float dd = std::max (d[j], 1.0f);
+            const int i = static_cast<int> (dd);
+            t[j] = dd - static_cast<float> (i);
+            idx[j][0] = (linePos - i + 1) & lineMask;
+            idx[j][1] = (linePos - i) & lineMask;
+            idx[j][2] = (linePos - i - 1) & lineMask;
+            idx[j][3] = (linePos - i - 2) & lineMask;
+        }
+#if SB_NEON
+        float32x4_t y0 = vdupq_n_f32 (0.0f), y1 = y0, y2 = y0, y3 = y0;
+        const float* b0 = store.data() + static_cast<size_t> (k0) * lineSize;
+        const size_t ls = static_cast<size_t> (lineSize);
+        y0 = vld1q_lane_f32 (b0 + idx[0][0], y0, 0);
+        y0 = vld1q_lane_f32 (b0 + ls + idx[1][0], y0, 1);
+        y0 = vld1q_lane_f32 (b0 + 2 * ls + idx[2][0], y0, 2);
+        y0 = vld1q_lane_f32 (b0 + 3 * ls + idx[3][0], y0, 3);
+        y1 = vld1q_lane_f32 (b0 + idx[0][1], y1, 0);
+        y1 = vld1q_lane_f32 (b0 + ls + idx[1][1], y1, 1);
+        y1 = vld1q_lane_f32 (b0 + 2 * ls + idx[2][1], y1, 2);
+        y1 = vld1q_lane_f32 (b0 + 3 * ls + idx[3][1], y1, 3);
+        y2 = vld1q_lane_f32 (b0 + idx[0][2], y2, 0);
+        y2 = vld1q_lane_f32 (b0 + ls + idx[1][2], y2, 1);
+        y2 = vld1q_lane_f32 (b0 + 2 * ls + idx[2][2], y2, 2);
+        y2 = vld1q_lane_f32 (b0 + 3 * ls + idx[3][2], y2, 3);
+        y3 = vld1q_lane_f32 (b0 + idx[0][3], y3, 0);
+        y3 = vld1q_lane_f32 (b0 + ls + idx[1][3], y3, 1);
+        y3 = vld1q_lane_f32 (b0 + 2 * ls + idx[2][3], y3, 2);
+        y3 = vld1q_lane_f32 (b0 + 3 * ls + idx[3][3], y3, 3);
+        const float32x4_t tv = vld1q_f32 (t), half = vdupq_n_f32 (0.5f);
+        const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (y2, y0));
+        float32x4_t c2 = vsubq_f32 (y0, vmulq_f32 (vdupq_n_f32 (2.5f), y1));
+        c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), y2));
+        c2 = vsubq_f32 (c2, vmulq_f32 (half, y3));
+        const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (y3, y0)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (y1, y2)));
+        vst1q_f32 (out, vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, tv), c2), tv), c1), tv), y1));
+#else
+        for (int j = 0; j < 4; ++j)
+        {
+            const float* b = store.data() + static_cast<size_t> (k0 + j) * lineSize;
+            const float y0 = b[idx[j][0]], y1 = b[idx[j][1]], y2 = b[idx[j][2]], y3 = b[idx[j][3]];
+            const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+            out[j] = ((c3 * t[j] + c2) * t[j] + c1) * t[j] + y1;
+        }
+#endif
+    }
+    /** The loop band pass (LoopBand::process: two one pole low passes subtracted) of four taps, in place on x. */
+    void bandGroup (int k0, float* x, const LoopBand& cf) noexcept
+    {
+#if SB_NEON
+        const float32x4_t aHi = vdupq_n_f32 (cf.aHi), aLo = vdupq_n_f32 (cf.aLo), gain = vdupq_n_f32 (cf.gain), tiny = vdupq_n_f32 (1.0e-18f), zero = vdupq_n_f32 (0.0f);
+        float32x4_t hi = vld1q_f32 (hiY + k0), lo = vld1q_f32 (loY + k0);
+        const float32x4_t xg = vmulq_f32 (vld1q_f32 (x), gain);
+        hi = vaddq_f32 (hi, vmulq_f32 (aHi, vsubq_f32 (xg, hi)));
+        hi = vbslq_f32 (vcltq_f32 (vabsq_f32 (hi), tiny), zero, hi); // flushDenormal
+        lo = vaddq_f32 (lo, vmulq_f32 (aLo, vsubq_f32 (hi, lo)));
+        lo = vbslq_f32 (vcltq_f32 (vabsq_f32 (lo), tiny), zero, lo);
+        vst1q_f32 (hiY + k0, hi);
+        vst1q_f32 (loY + k0, lo);
+        vst1q_f32 (x, vsubq_f32 (hi, lo));
+#else
+        for (int j = 0; j < 4; ++j)
+        {
+            float& hy = hiY[k0 + j];
+            float& ly = loY[k0 + j];
+            hy += cf.aHi * (x[j] * cf.gain - hy);
+            hy = flushDenormal (hy);
+            ly += cf.aLo * (hy - ly);
+            ly = flushDenormal (ly);
+            x[j] = hy - ly;
+        }
+#endif
+    }
+    void pushGroup (int k0, const float* x) noexcept
+    {
+        const int at = (linePos + 1) & lineMask;
+        for (int j = 0; j < 4; ++j)
+            store[static_cast<size_t> (k0 + j) * lineSize + static_cast<size_t> (at)] = x[j];
+    }
+
     Params p;
     double sampleRate = 48000.0;
-    std::array<DelayLine, kMaxPairs * 4> line;
-    LoopBand band[kMaxPairs * 4];
+    std::vector<float> store;         // the delay lines of the 16 taps, one after the other (all with the same length and the same write position)
+    int lineSize = 16, lineMask = 15, linePos = 0;
+    float hiY[kMaxPairs * 4] = {}, loY[kMaxPairs * 4] = {}; // the state of the band filters
     float phase = 0.0f;
 };
 

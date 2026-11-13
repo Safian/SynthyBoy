@@ -163,9 +163,11 @@ public:
         for (auto& fs : filterState)
             for (auto& x : fs)
                 x = 0.0f;
-        for (auto& h : history)
-            for (auto& x : h)
-                x = 0.0f;
+        if (historyDirty) // the decimator history is written only by the oversampled path: a note that never ran it starts with the zeros that are already there
+        {
+            std::fill (history.begin(), history.end(), 0.0f);
+            historyDirty = false;
+        }
     }
 
     /** Computes the per voice frequencies, levels and pans of the period that ends now (call once per control period). The layout follows
@@ -354,10 +356,19 @@ public:
         // In place: the same state as `*this = WtOsc()`, without building a 9 KB temporary and copying it over the object.
         auto mb = std::move (morphBuf);
         auto ms = std::move (morphScratch);
+        auto hist = std::move (history);
+        const bool dirty = historyDirty;
         this->~WtOsc();
         ::new (static_cast<void*> (this)) WtOsc();
         morphBuf = std::move (mb);
         morphScratch = std::move (ms);
+        history = std::move (hist);
+        historyDirty = dirty;
+        if (historyDirty)
+        {
+            std::fill (history.begin(), history.end(), 0.0f);
+            historyDirty = false;
+        }
     }
 
     /** Prepares the buffers of the spectral morph (allocates; call from prepare ()). */
@@ -368,6 +379,8 @@ public:
             morphBuf.assign (static_cast<size_t> (kMorphGroups) * 2 * kMorphStride, 0.0f);
             morphScratch = std::make_unique<MorphScratch>();
         }
+        if (history.empty())
+            history.assign (static_cast<size_t> (kMaxVoices) * (kTaps - 1), 0.0f);
     }
 
     /** Called once per control period (after update ()): rebuilds the morphed cycles every kMorphRebuild samples. */
@@ -607,7 +620,7 @@ public:
             else
             {
                 const float* taps = tick.lowCost ? decimatorTaps2() : decimatorTaps();
-                float* hist = history[v]; // the last nt - 1 samples of the os x signal, then this period's
+                float* hist = history.data() + static_cast<size_t> (v) * (kTaps - 1); // the last nt - 1 samples of the os x signal, then this period's
                 float buf[kTaps - 1 + kOversample * kControlPeriod];
                 std::copy (hist, hist + nt - 1, buf);
                 // Sync and Sync Var alone (no second warp, no filter stage, no cross signal): the phase map is two operations, so the sample is read in place instead of through
@@ -655,6 +668,7 @@ public:
                     R[k] += acc * lerp (prevGainR[v], curGainR[v], t);
                 }
                 std::copy (buf + n * os, buf + n * os + nt - 1, hist);
+                historyDirty = true;
             }
             phase[v] = ph;
         }
@@ -763,7 +777,8 @@ private:
     int frameIdx[kMaxVoices] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     float filterState[kMaxVoices][4] = {};
     uint32_t phase[kMaxVoices] = {};
-    float history[kMaxVoices][kTaps - 1] = {};
+    std::vector<float> history;                  // [voice][kTaps - 1]: the oversampled path's last samples (allocated in prepareMorph ())
+    bool historyDirty = false;
     float prevInc[kMaxVoices] = {}, curInc[kMaxVoices] = {}, prevGainL[kMaxVoices] = {}, curGainL[kMaxVoices] = {}, prevGainR[kMaxVoices] = {},
           curGainR[kMaxVoices] = {}, curFrameOf[kMaxVoices] = {};
     float prevFrame = 0.0f, curFrame = 0.0f;

@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 
-#if defined(__arm__) && defined(__ARM_NEON) && !defined(SB_NO_NEON)
+#if ((defined(__arm__) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && !defined(SB_NO_NEON) // SB_TEST_NEON: the same intrinsics on arm64, to compare the two versions on a desktop
  #include <arm_neon.h>
  #define SB_NEON 1
 #else
