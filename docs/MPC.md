@@ -52,10 +52,20 @@ Seen on an MPC Key 61 with firmware 3.10.1:
 - A newly copied plugin appears only after the MPC application is restarted.
 - The plugin runs inside the MPC's process. For that reason the shell wraps the instance creation and every dispatch call in `catch (...)` (no instance, or a result of 0), so no exception leaves the plugin.
 - A module built with Zig crashed when the host exited (see Build): the module is built with GCC.
+- The packaged plugin loads in the stock MPC app; stepping through the presets works; the generated skin with its 30 pages works; the owner checked the sound by ear (it plays without crackling).
+
+Measured on 2026-11-13 with the bench on the device (MPC Key 61, 44.1 kHz, 128 frame blocks, so one block lasts 2.902 ms; tier low, own engine):
+
+- Basic patch, 8 notes held: block time average 0.535 ms, 99th percentile 0.789 ms, worst 1.405 ms.
+- Idle (no notes): 0.022 ms per block. Each additional note costs about 0.070 ms per block.
+- Note-on of 8 notes: average 0.97 ms, worst 1.34 ms.
+- Preparing the engine (prepare) takes 542 ms.
+- Heavy patch (3 oscillators with 7 unison voices each, 2 filters, effects, 8 notes): average 5.41 ms, 99th percentile 8.09 ms, worst 9.20 ms, which is longer than one block.
+- The bench option `--ftz` makes no difference to these times.
 
 ### Per the SDK documentation / not yet verified on the device
 
-These statements come from the SDK's documents (host-contract.md, install-and-test.md). Saving a project and loading it again has not been tried on the device yet, so the host side of the program handling below is unconfirmed.
+These statements come from the SDK's documents (host-contract.md, install-and-test.md). Two things are still not verified on the device: saving a project and loading it again (so the host side of the program handling below is unconfirmed), and the CPU load during playback in the MPC app.
 
 - The sample rate is fixed, and the user can choose other block sizes (32, 64, 96, 192, 256, 512) in Preferences; the announced block size is a maximum. The shell handles any smaller count.
 - The host has no crash protection for plugins: a crash in the plugin takes the MPC application down.

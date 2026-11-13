@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SynthyBoy - checks docs/MPC.md: required sections and terms, links and repository paths that exist, no measured numbers.
+# SynthyBoy - checks docs/MPC.md: required sections and terms, links and repository paths that exist, measured numbers only among the device observations.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -69,10 +69,27 @@ class MpcDocTests(unittest.TestCase):
         for word in ("oversampl", "tanh", "LFO", "silence", "reverb"):
             self.assertIn(word.lower(), body.lower(), "the tier low section does not mention '%s'" % word)
 
-    def test_no_measured_numbers(self):
-        # CPU / timing results come from the measurement on the device, not from this document
-        hits = re.findall(r"\b\d+(?:[.,]\d+)?\s*(?:ms\b|µs\b|us\b|%|dBFS\b|x faster\b|times faster\b)", TEXT)
-        self.assertEqual(hits, [], "measured numbers do not belong here")
+    def test_measured_numbers_only_in_the_device_observations(self):
+        # CPU / timing results come from the measurement on the device and are listed under "Observed on the device" only
+        body = section("Known host behaviour") or ""
+        observed = body.split("### Per the SDK documentation")[0]
+        rest = TEXT.replace(observed, "")
+        hits = re.findall(r"\b\d+(?:[.,]\d+)?\s*(?:ms\b|µs\b|us\b|%|dBFS\b|x faster\b|times faster\b)", rest)
+        self.assertEqual(hits, [], "measured numbers belong under 'Observed on the device'")
+
+    def test_device_measurement_of_2026_11_13(self):
+        body = section("Known host behaviour") or ""
+        observed = body.split("### Per the SDK documentation")[0]
+        unverified = body.split("### Per the SDK documentation")[-1]
+        for value in ("2026-11-13", "2.902 ms", "0.535", "0.789", "1.405", "0.022 ms", "0.070 ms", "0.97", "1.34", "542 ms", "5.41", "8.09", "9.20",
+                      "`--ftz`", "7 unison", "tier low", "own engine"):
+            self.assertIn(value, observed, "the device measurement lacks %s" % value)
+        self.assertNotIn(",", "".join(re.findall(r"\d,\d", observed)), "decimal point, not decimal comma")
+        low = observed.lower()
+        for phrase in ("stock mpc app", "30 pages", "by ear"):
+            self.assertIn(phrase, low, "the device observations do not say: %s" % phrase)
+        for phrase in ("saving a project", "during playback"):
+            self.assertIn(phrase, unverified.lower(), "still unverified and must be listed as such: %s" % phrase)
 
     def test_no_placeholders(self):
         for word in ("TODO", "TBD", "FIXME", "lorem"):
