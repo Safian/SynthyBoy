@@ -13,39 +13,39 @@
     {
       "name": "Osc 1",
       "kick": [
-        "osc1_main",
-        "osc1_unison"
+        "osc1_main"
       ]
     },
     {
       "name": "Osc1 Shp",
       "kick": [
+        "osc1_unison",
         "osc1_shaping"
       ]
     },
     {
       "name": "Osc 2",
       "kick": [
-        "osc2_main",
-        "osc2_unison"
+        "osc2_main"
       ]
     },
     {
       "name": "Osc2 Shp",
       "kick": [
+        "osc2_unison",
         "osc2_shaping"
       ]
     },
     {
       "name": "Osc 3",
       "kick": [
-        "osc3_main",
-        "osc3_unison"
+        "osc3_main"
       ]
     },
     {
       "name": "Osc3 Shp",
       "kick": [
+        "osc3_unison",
         "osc3_shaping"
       ]
     },

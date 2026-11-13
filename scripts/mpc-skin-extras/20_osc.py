@@ -1,78 +1,96 @@
-# SynthyBoy - MPC skin extras: oscillator wave pictures (GATE version, placeholder pictures).
+# SynthyBoy - MPC skin extra: the wavetable picture of the oscillators on the tabs Osc 1 .. Osc 3.
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Gate (plan 2-oszcillator.md points 1-2), to be replaced by the real strips of gen-mpc-wave-strips.py:
-#   (a) tab "Osc 1": a 15-frame Image film strip bound to osc1.wavetable, in the free slot (983 497 278 107);
-#   (b) tab "Osc 2": per-table film strips bound to osc2.frame, only the strip of the selected osc2.wavetable
-#       value is visible (bounds v2 additionalInvalidatingHandles, ui-reference 7.4), in the free slot too
-#       (Osc 1 has no second free slot, so (b) is on Osc 2 and uses tables 0 and 1).
-# Pictures here are simple labelled placeholders at the final size (278x107 per frame), drawn with PIL.
+# Per tab "Osc N": a large picture of the selected wavetable in the upper two rows of the 4 x 4 grid (PICTURE below), the 8 knobs of
+# osc N Main in rows 3-4, and the Q-Link map rewritten so that those knobs are Q-Link 1-8 (the lower two hardware rows): the rows seen on the
+# screen are the rows of the hardware (Bank Direction "Column": Q-Link 4*(3-row)+col+1, row 0 = top, col 0 = left). The unison and the
+# shaping knobs are on the tab "OscN Shp" (scripts/mpc-ui-pages.json).
+#
+# The picture: one Image film strip per wavetable choice (15), each valid only while oscN.wavetable has that choice (bounds version 2,
+# IndexedEnabling, ui-reference 7.4); the strip frame follows oscN.frame. The 15 PNGs are shared by the three oscillators (same file names),
+# they are rendered from the engine's tables by scripts/gen-mpc-wave-strips.py and committed in osc-wave-strips/. Morph and warp are not drawn
+# (the skin has no live curve): the picture is the table itself. Memory and frame count: docs/MPC.md "Oscillator wave pictures".
 
 import json
+import shutil
+import struct
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+HERE = Path(__file__).resolve().parent
+ASSETS = HERE / "osc-wave-strips"
+PARAMS_JSON = HERE.parent.parent / "docs" / "params.json"
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-BG, RED, GREY = (30, 29, 30, 255), (211, 17, 69, 255), (110, 110, 112, 255)
-FRAME_W, FRAME_H = 278, 107
-SLOT = "983 497 278 107"
-FRAME_STEPS = 11  # frame strips: 0, 10 ... 100 %
-
-
-def _font(size):
-    return ImageFont.load_default(size)
+COLS = (23, 343, 663, 983)
+ROWS = (45, 196, 346, 497)
+PICTURE = (384, 70, 512, 240)   # x y w h: centred in the 1238 x 290 area of rows 1-2 (the PNG frames are exactly 512 x 240)
+QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 336, 288
 
 
-def _table_names():
-    params = json.loads((ROOT / "docs" / "params.json").read_text(encoding="utf-8"))["params"]
+def file_name(choice):
+    return "osc_wt_%02d.png" % choice
+
+
+def png_size(path):
+    data = Path(path).read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("%s is not a PNG" % path)
+    return struct.unpack(">II", data[16:24])
+
+
+def _choices():
+    params = json.loads(PARAMS_JSON.read_text(encoding="utf-8"))["params"]
     return next(p for p in params if p["key"] == "osc1.wavetable")["choices"]
 
 
-def _strip(frames_text, extra=None):
-    img = Image.new("RGBA", (FRAME_W, FRAME_H * len(frames_text)), BG)
-    d = ImageDraw.Draw(img)
-    for i, text in enumerate(frames_text):
-        y = i * FRAME_H
-        d.rectangle([0, y, FRAME_W - 1, y + FRAME_H - 1], outline=GREY)
-        d.text((8, y + 6), text, font=_font(22), fill=RED)
-        d.text((FRAME_W - 40, y + FRAME_H - 24), str(i), font=_font(16), fill=GREY)
-        if extra:
-            extra(d, y, i)
-    return img
-
-
-def _entry(name, image, frames, param, enabling=None):
-    version = 2 if enabling else 1
-    bounds = {"version": version, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always",
-              "boundsType": "Absolute", "bounds": SLOT}
-    if enabling:
-        bounds["additionalInvalidatingHandles"] = [enabling]
+def _picture_entry(name, choice, count, frames, image, frame_param, wavetable_param):
     return {
         "version": 2,
         "componentData": {"version": 1, "name": name, "type": "Image", "data": {
             "version": 2, "imageType": "FilmStrip", "colour": "0", "image": image, "numFrames": frames, "handleName": "Data"}},
-        "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Parameter %d" % param}]},
-        "bounds": bounds,
+        "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Parameter %d" % frame_param}]},
+        "bounds": {"version": 2, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always",
+                   "boundsType": "Absolute", "bounds": "%d %d %d %d" % PICTURE,
+                   "additionalInvalidatingHandles": ["IndexedEnabling/%d/%d/Parameter %d" % (choice, count, wavetable_param)]},
     }
 
 
+def _move_knobs_down(tab, qlinks, ctx, n):
+    """Rows 1-2 -> rows 3-4 and Q-Link 1-8 for the 8 knobs of the tab; returns nothing."""
+    items = tab["componentDefinition"]["componentsData"]
+    row_map = next(m for m in qlinks["Screen Mode Q-Links"]["map"] if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1)
+    links = {"Q-Link %d" % i: -1 for i in range(1, 17)}
+    for e in items:
+        x, y, w, h = e["bounds"]["bounds"].split()
+        row, col = ROWS.index(int(y)), COLS.index(int(x))
+        if row > 1:
+            raise ValueError("tab 'Osc %d': a knob is already in row %d" % (n, row + 1))
+        row += 2
+        e["bounds"]["bounds"] = "%d %d %s %s" % (COLS[col], ROWS[row], w, h)
+        param = int(e["handle remapping"]["map"][0]["value"].split()[1])
+        links["Q-Link %d" % (4 * (3 - row) + col + 1)] = param
+    row_map["Q-Links"] = links
+    tab["qlinkBoundsData"] = ["%s %d %s %d" % (b.split()[0], QLINK_BOUNDS_Y, b.split()[2], QLINK_BOUNDS_H) for b in tab["qlinkBoundsData"]]
+
+
 def apply(tui, qlinks, ctx):
-    names = _table_names()
-    n = len(names)
-    # (a) table picture, one frame per table
-    _strip(["%d/%d %s" % (i + 1, n, names[i]) for i in range(n)]).save(ctx.skins_dir / "osc1_wavetable_strip.png")
-    ctx.tab("Osc 1")["componentDefinition"]["componentsData"].append(
-        _entry("Osc 1 Wave Picture", "osc1_wavetable_strip.png", n, ctx.param_index("osc1.wavetable")))
-    # (b) per-table frame strips, only the selected table's strip is valid/visible
-    tab2 = ctx.tab("Osc 2")["componentDefinition"]["componentsData"]
-    wt = ctx.param_index("osc2.wavetable")
-    for t in (0, 1):
-        def line(d, y, i, t=t):
-            x = 8 + i * 25
-            d.line([(8, y + 90), (x, y + 90)], fill=RED, width=3)
-        fn = "osc2_t%d_frame_strip.png" % t
-        _strip(["T%d %s F%d%%" % (t + 1, names[t], i * 100 // (FRAME_STEPS - 1)) for i in range(FRAME_STEPS)], line).save(ctx.skins_dir / fn)
-        tab2.append(_entry("Osc 2 Frame Picture T%d" % (t + 1), fn, FRAME_STEPS, ctx.param_index("osc2.frame"),
-                           "IndexedEnabling/%d/%d/Parameter %d" % (t, n, wt)))
+    choices = _choices()
+    count = len(choices)
+    frames = {}
+    for choice in range(count):
+        path = ASSETS / file_name(choice)
+        if not path.is_file():
+            raise ValueError("missing %s (run scripts/gen-mpc-wave-strips.py)" % path)
+        w, h = png_size(path)
+        if w != PICTURE[2] or h % PICTURE[3]:
+            raise ValueError("%s is %dx%d, not %d x a multiple of %d" % (path.name, w, h, PICTURE[2], PICTURE[3]))
+        frames[choice] = h // PICTURE[3]
+        shutil.copyfile(path, ctx.skins_dir / path.name)
+    for n in (1, 2, 3):
+        tab = ctx.tab("Osc %d" % n)
+        _move_knobs_down(tab, qlinks, ctx, n)
+        items = tab["componentDefinition"]["componentsData"]
+        frame_param, wavetable_param = ctx.param_index("osc%d.frame" % n), ctx.param_index("osc%d.wavetable" % n)
+        for choice in range(count):
+            items.append(_picture_entry("Osc %d Wave %s" % (n, choices[choice]), choice, count, frames[choice], file_name(choice),
+                                        frame_param, wavetable_param))
