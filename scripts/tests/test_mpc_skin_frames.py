@@ -136,10 +136,12 @@ class FramesTest(unittest.TestCase):
                 for r in parts:
                     if key not in ("radio3", "radio4") or r[2] > 100:  # the radio buttons are checked as a group above
                         self.assertLessEqual(abs(r[0] + r[2] / 2 - AXIS), 1, key)
-                names = [c for c in value["componentsData"] if c["componentData"]["name"] == "name"]
-                for c in names:
-                    self.assertEqual(c["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred", key)
-                    self.assertEqual(_rect_of(c)[2], 272, key)
+                # the name of the control is a text on the tab (85_names.py, test_mpc_skin_names.py): the definitions have no name child
+                self.assertEqual([c for c in value["componentsData"] if c["componentData"]["name"] == "name"], [], key)
+                for c in value["componentsData"]:
+                    if c["componentData"]["name"] == "value":
+                        self.assertEqual(c["componentData"]["data"]["textStyle"]["justification"], "horizontallyCentred verticallyCentred", key)
+                        self.assertEqual(_rect_of(c)[2], 272, key)
 
     def test_knob_stack_does_not_overlap(self):
         for key in ("knobUni", "knobBi", "toggle", "faderUni", "faderBi"):
@@ -153,7 +155,8 @@ class FramesTest(unittest.TestCase):
     def test_no_two_controls_overlap(self):
         for tab in self.tabs():
             items = [(c["componentData"]["name"], c["componentData"]["type"], rect(c)) for c in tab["componentDefinition"]["componentsData"]
-                     if not (c["componentData"]["type"] == "Label" and " seg " in c["componentData"]["name"])]
+                     if not (c["componentData"]["type"] == "Label" and (" seg " in c["componentData"]["name"]
+                                                                         or c["componentData"]["name"].endswith(" name")))]
             for i, (na, ta, ra) in enumerate(items):
                 for nb, tb, rb in items[i + 1:]:
                     if ra == rb and ta == tb == "Image":
@@ -178,7 +181,9 @@ class FramesTest(unittest.TestCase):
             return o
         before, after = self.defs(self.before), self.defs(self.tui)
         for key in SLOT_TYPES:
-            self.assertEqual(strip(after[key]), strip(before[key]), key)
+            was = copy.deepcopy(before[key])
+            was["componentsData"] = [c for c in was["componentsData"] if c["componentData"]["name"] != "name"]   # 85_names.py: the name is a text on the tab
+            self.assertEqual(strip(after[key]), strip(was), key)
 
     def test_q_links_json_is_unchanged(self):
         self.assertEqual(hashlib.sha256((self.skins / "Q-Links.json").read_bytes()).hexdigest(), Q_LINKS_SHA256)

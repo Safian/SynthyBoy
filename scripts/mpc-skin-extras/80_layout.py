@@ -5,12 +5,12 @@
 # The generator puts every control in a 278 x 107 slot of a 4 x 4 grid (x 23 + 320 c, y 45 / 196 / 346 / 497) and draws the knob at the left of
 # the slot with its name and value to the right. This module (it runs after the modules that move controls and pictures: 10_env, 20_osc, 30_lfo,
 # and before 90_frames, which owns the frames) puts every control on the vertical axis of its column frame (x = 160 + 320 c):
-#   - knob (knobUni, knobBi): name centred above (22 px), knob 90 x 90 in the middle, value centred below (26 px); slot 278 x 138;
-#   - toggle: name above, the switch in the middle, the state text below; slot 278 x 138;
-#   - fader: name above, the strip in the middle, value below; slot 278 x 100;
-#   - selectors (sliderWithFocus, sliderWithFocusMenu) and radio3 / radio4: slot 278 x 100, their contents are symmetric already (radio name is centred).
-# The names are one centred line over the inner width of the frame (272 px) in Titillium Web 18: the longest name of the skin
-# ("Voice Control Envelope Time Scaling", 35 characters) fits that width; the host has no shrink-to-fit key for labels (ui-reference 6.3).
+#   - knob (knobUni, knobBi): knob 90 x 90 in the middle (y 22), value centred below (26 px); slot 278 x 138;
+#   - toggle: the switch in the middle, the state text below; slot 278 x 138;
+#   - fader: the strip in the middle, value below; slot 278 x 100;
+#   - selectors (sliderWithFocus, sliderWithFocusMenu) and radio3 / radio4: slot 278 x 100, their contents are symmetric already.
+# The name of a control is not part of these definitions: 85_names.py (runs later) removes the host drawn "name" child and puts a short, upper
+# case, bold text over the slot instead (one centred line over the inner width of the frame, 272 px).
 # Slots: x = 21 + 320 c (the frame is x 16 .. 304, so 5 px on each side, centre 160 + 320 c).
 # Rows (tab coordinates, the tab is 628 high, the frame 624): plain tabs 44 / 188 / 332 / 476 (pitch 144, rows 138 high, the frame top badge
 # zone y < 40 stays empty); tabs with a picture above (frames from y 301, badge zone to y 341): rows 3 and 4 at 343 and 483 (end 621).
@@ -31,9 +31,10 @@ SLOT_TYPES = ("knobUni", "knobBi", "toggle", "faderUni", "faderBi", "radio3", "r
 ALIGNED = ("knobUni", "knobBi", "toggle", "faderUni", "faderBi", "radio3", "radio4")  # definitions that get the centred layout
 SLOT_H = {"knobUni": ROW_H, "knobBi": ROW_H, "toggle": ROW_H, "faderUni": 100, "faderBi": 100, "radio3": 100, "radio4": 100,
           "sliderWithFocus": 100, "sliderWithFocusMenu": 100}
-NAME_FONT, VALUE_FONT = 18.0, 24.0
+VALUE_FONT = 24.0
 CENTRED = "horizontallyCentred verticallyCentred"
 SEG_DY = 54                      # the text over a radio button: y of the buttons inside the radio slot
+RADIO4_DX = 2
 PICTURE_W = 208
 PICTURE_H = 38
 PICTURE_GAP = 2
@@ -58,28 +59,33 @@ def _label(definition, name, rect, font):
     style["font"]["height"] = font
 
 
-def _name_value(definition, name_rect, value_rect):
-    _label(definition, "name", name_rect, NAME_FONT)
+def _value(definition, value_rect):
     _label(definition, "value", value_rect, VALUE_FONT)
 
 
 def _knob(definition):
-    _name_value(definition, (3, 0, 272, 22), (3, 112, 272, 26))
+    _value(definition, (3, 112, 272, 26))
     _place(definition, "knob", (AXIS - 45, 22, 90, 90))
 
 
 def _toggle(definition):
-    _name_value(definition, (3, 0, 272, 22), (3, 112, 272, 26))
+    _value(definition, (3, 112, 272, 26))
     _place(definition, "toggle", (AXIS - 42, 33, 84, 68))
 
 
 def _fader(definition):
-    _name_value(definition, (3, 4, 272, 22), (3, 70, 272, 26))
+    _value(definition, (3, 70, 272, 26))
     _place(definition, "fader", (15, 32, 248, 36))
 
 
 def _radio(definition):
-    _label(definition, "name", (3, 6, 272, 24), NAME_FONT)
+    """The buttons of radio3 are symmetric already (x 15 .. 263); the four buttons of radio4 (x 15 .. 259) move 2 px to the right (axis 139).
+    The name is 85_names.py's (a text on the tab)."""
+    segs = [c for c in definition["componentsData"] if c["componentData"]["name"].startswith("seg ")]
+    if len(segs) == 4:
+        for c in segs:
+            x, y, w, h = _rect(c)
+            _set(c, (x + RADIO4_DX, y, w, h))
 
 
 def _selector(definition):
@@ -124,6 +130,7 @@ def apply(tui, qlinks, ctx):
         items = tab["componentDefinition"]["componentsData"]
         graphic = _graphic(tab)
         moved = {}   # name of a slot -> (old y, new y)
+        kinds = {}   # name of a slot -> its type
         for c in items:
             typ = c["componentData"]["type"]
             if typ not in SLOT_TYPES:
@@ -142,13 +149,15 @@ def apply(tui, qlinks, ctx):
             new_y = row_y + (ROW_H - slot_h) // 2
             _set(c, (SLOT_X[OLD_COLS.index(x)], new_y, SLOT_W, slot_h))
             moved[c["componentData"]["name"]] = (y, new_y)
+            kinds[c["componentData"]["name"]] = typ
         for c in items:
             name = c["componentData"]["name"]
             if c["componentData"]["type"] == "Label" and " seg " in name:   # the texts over the buttons of a radio group
                 owner = name.rsplit(" seg ", 1)[0]
                 old_y, new_y = moved[owner]
                 x, y, w, h = _rect(c)
-                _set(c, (x - (OLD_COLS[0] - SLOT_X[0]), y + new_y - old_y, w, h))
+                dx = RADIO4_DX if kinds[owner] == "radio4" else 0
+                _set(c, (x - (OLD_COLS[0] - SLOT_X[0]) + dx, y + new_y - old_y, w, h))
         for c in items:   # the LFO pictures: centred over the column of their selector, directly above it
             name = c["componentData"]["name"]
             if c["componentData"]["type"] == "Image" and name.startswith("LFO ") and " Picture" in name:

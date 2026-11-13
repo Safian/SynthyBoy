@@ -255,7 +255,8 @@ class LfoSkinModuleTest(unittest.TestCase):
     def test_the_lfo_tabs_are_the_same_with_all_modules(self):
         # the layout and frame modules (80_layout.py, 90_frames.py) move things; names, types, handles and actions stay
         def content(entries):
-            return [{k: v for k, v in c.items() if k != "bounds"} for c in entries]
+            return [{k: v for k, v in c.items() if k != "bounds"} for c in entries
+                    if not c["componentData"]["name"].endswith(" name")]   # the name labels of 85_names.py
         for title in ("LFO 1-2", "LFO 3-4"):
             self.assertEqual(content(self.tab(self.tui_full, title)), content(self.tab(self.tui, title)))
 

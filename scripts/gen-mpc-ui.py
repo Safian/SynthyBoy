@@ -223,6 +223,80 @@ def _unique_page_name(name, used_names):
 
 
 # ---------------------------------------------------------------------------
+# Names of the controls (MPC skin)
+# ---------------------------------------------------------------------------
+# The tab already says which module a control belongs to, so the name drawn over a control is the short name of the Kick page
+# (docs/kick-pages.json "shortLabel", "Detune" instead of "Osc 1 Unison Detune"), unless scripts/mpc-short-names.json overrides the key
+# (cut-off or ambiguous shortLabels). Two controls of one tab with the same name get the leading words of their full parameter names
+# that are not shared ("Osc 1 Filt Blend", "Osc 2 Filt Blend"): the longest common word suffix of the full names is dropped, what is left in front is the prefix.
+# The names are drawn upper case in a bold font (scripts/mpc-skin-extras/85_names.py); name_width() estimates the width.
+
+NAME_AREA_W = 272          # inner width of a Q-Link column frame (frame 288, 8 px each side)
+DEFAULT_SHORT_NAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mpc-short-names.json")
+# Advance widths in 1/1000 em of Arial Bold for the upper case characters (measured on the build machine, Arial Bold.ttf). Titillium Web Bold, the font
+# of the skin, is narrower for every one of these characters, so the sum is an upper bound of the width the host draws.
+ADVANCE = {
+    " ": 278, "A": 722, "B": 722, "C": 722, "D": 722, "E": 667, "F": 611, "G": 778, "H": 722, "I": 278, "J": 556, "K": 722, "L": 611,
+    "M": 833, "N": 722, "O": 778, "P": 667, "Q": 778, "R": 722, "S": 667, "T": 611, "U": 722, "V": 667, "W": 944, "X": 667, "Y": 667,
+    "Z": 611, "0": 556, "1": 556, "2": 556, "3": 556, "4": 556, "5": 556, "6": 556, "7": 556, "8": 556, "9": 556, "-": 333, "+": 584,
+    "/": 278, ".": 278, ",": 278, "(": 333, ")": 333, "&": 722, "'": 238,
+}
+
+
+def name_width(name, font_px):
+    """Upper bound of the width in pixels of `name` drawn upper case with a bold font of font_px pixels (ADVANCE; unknown character: error)."""
+    total = 0
+    for ch in name.upper():
+        if ch not in ADVANCE:
+            raise ValueError("character %r of the name %r has no entry in ADVANCE" % (ch, name))
+        total += ADVANCE[ch]
+    return total * font_px / 1000.0
+
+
+def load_short_names(path):
+    if not path:
+        return {}
+    with open(path, encoding="utf-8") as f:
+        doc = json.load(f)
+    if doc.get("format") != "synthyboy-mpc-short-names":
+        raise ValueError("%s: format is not 'synthyboy-mpc-short-names'" % path)
+    return dict(doc.get("names", {}))
+
+
+def resolve_tab_names(entries, placed, overrides):
+    """Names of the controls of one tab.
+
+    entries: [(key, full parameter name, shortLabel)] of every knob of the Kick pages of the tab (the first one wins for a repeated key);
+    placed:  the keys that really are controls of the tab (only these have to differ); overrides: key -> name.
+    Returns {key: name}. A clash between placed controls that the prefix rule cannot resolve raises ValueError."""
+    first = {}
+    for key, full, short in entries:
+        first.setdefault(key, (full, short))
+    out = {key: overrides.get(key, short) for key, (_, short) in first.items()}
+    groups = {}
+    for key in first:
+        if key in placed:
+            groups.setdefault(out[key], []).append(key)
+    for name, keys in sorted(groups.items()):
+        if len(keys) < 2:
+            continue
+        if any(k in overrides for k in keys):
+            raise ValueError("the keys %s of one tab all get the name %r and one of them is an override: give each its own override"
+                             % (", ".join(keys), name))
+        words = {k: first[k][0].split() for k in keys}
+        common = 0
+        while all(len(w) > common and w[-1 - common] == words[keys[0]][-1 - common] for w in words.values()):
+            common += 1
+        heads = {k: " ".join(words[k][:len(words[k]) - common]) for k in keys}
+        if common == 0 or any(not h for h in heads.values()) or len(set(heads.values())) != len(keys):
+            raise ValueError("the keys %s of one tab all get the name %r and the full names share no word suffix to tell them apart: add overrides to %s"
+                             % (", ".join(keys), name, os.path.basename(DEFAULT_SHORT_NAMES)))
+        for k in keys:
+            out[k] = heads[k] + " " + name
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Main logic
 # ---------------------------------------------------------------------------
 
@@ -462,7 +536,7 @@ def generate(params_path, pages_path, out_dir, page_ids=None):
     return 0
 
 
-def generate_layout(params_path, layout_path, pages_path, out_dir):
+def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DEFAULT_SHORT_NAMES):
     """Generate ui.json and params-hostsim.json from a layout file.
     
     The layout file specifies which Kick pages (from docs/kick-pages.json)
@@ -559,7 +633,13 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
     # ---- Build pages (rule 4) ----
     
     ui_pages = []
+    meta_tabs = []
     all_seen_names = set()  # Track all placed parameter names across pages
+    overrides = load_short_names(names_path)
+    for key in overrides:
+        if key not in params_by_key:
+            print("gen-mpc-ui: ERROR: %s: unknown parameter key '%s'" % (os.path.basename(names_path), key), file=sys.stderr)
+            return 2
 
     for page_entry in layout_pages:
         page_name = page_entry.get("name", "")
@@ -567,6 +647,7 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
 
         # Build 16 slots for this page
         slots = []
+        name_entries, placed_keys = [], set()
         for kid in kick_ids:
             kick_page = kick_by_id[kid]
             knob_params = []
@@ -579,10 +660,12 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
                 p = params_by_key[key]
                 if not p.get("ownEngine"):
                     continue
+                name_entries.append((key, p["name"], knob.get("shortLabel", "")))
                 param_name = p["name"]
                 if param_name in all_seen_names:
                     continue
                 all_seen_names.add(param_name)
+                placed_keys.add(key)
                 knob_params.append(p)
             # Pad to 8 slots
             slots += [p["name"] for p in knob_params] + [None] * (8 - len(knob_params))
@@ -599,6 +682,12 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
                 controls.append(_build_control_from_param(p, params_by_key))
 
         ui_pages.append({"name": page_name, "controls": controls})
+        try:
+            names = resolve_tab_names(name_entries, placed_keys, overrides)
+        except ValueError as e:
+            print("gen-mpc-ui: ERROR: page '%s': %s" % (page_name, e), file=sys.stderr)
+            return 2
+        meta_tabs.append({"name": page_name, "placed": sorted(placed_keys), "names": names})
 
     # i. after applying rule 4, no page with no control at all
     for page_entry in layout_pages:
@@ -617,6 +706,12 @@ def generate_layout(params_path, layout_path, pages_path, out_dir):
     ui_path = os.path.join(out_dir, "ui.json")
     with open(ui_path, "w", encoding="utf-8") as f:
         json.dump(ui_doc, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+    # skin-meta.json: what the MPC skin extras (scripts/mpc-skin-extras/) need to know that ui.json cannot carry
+    meta_path = os.path.join(out_dir, "skin-meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump({"format": "synthyboy-mpc-skin-meta", "version": 1, "tabs": meta_tabs}, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
     # Report omitted own-engine parameters
@@ -644,6 +739,8 @@ def main(argv=None):
                     help="Comma-separated list of page ids to emit in order (default: first pages)")
     ap.add_argument("--layout", default=None,
                     help="Layout file (synthyboy-mpc-ui-pages format) for own-engine MPC pages")
+    ap.add_argument("--short-names", default=DEFAULT_SHORT_NAMES,
+                    help="names of controls that override the Kick shortLabel (--layout mode; default scripts/mpc-short-names.json)")
     args = ap.parse_args(argv)
 
     # Validate: --layout and --page-ids are mutually exclusive
@@ -654,7 +751,7 @@ def main(argv=None):
     os.makedirs(args.out, exist_ok=True)
 
     if args.layout:
-        return generate_layout(args.params, args.layout, args.pages, args.out)
+        return generate_layout(args.params, args.layout, args.pages, args.out, args.short_names)
     else:
         # Parse page_ids if provided
         page_ids = None

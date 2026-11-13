@@ -63,13 +63,16 @@ def generate_skins(tmp):
     subprocess.run([sys.executable, str(SDK / "tools" / "gen_ui.py"), "--params", str(ui / "params-hostsim.json"),
                     "--ui", str(ui / "ui.json"), "--out", str(skins), "--quiet"], check=True, capture_output=True)
     (tmp / "pf" / "sample.png").write_bytes(PNG)
+    (tmp / "pf" / "skin-meta.json").write_bytes((ui / "skin-meta.json").read_bytes())   # next to the skins: run_apply passes it as --meta
     return skins
 
 
 def run_apply(skins, extras):
     out, err = io.StringIO(), io.StringIO()
+    meta = skins.parent / "skin-meta.json"
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = apply_mod.main(["--skins", str(skins), "--params", str(PARAMS_JSON), "--extras-dir", str(extras)])
+        code = apply_mod.main(["--skins", str(skins), "--params", str(PARAMS_JSON), "--extras-dir", str(extras)]
+                              + (["--meta", str(meta)] if meta.is_file() else []))
     return code, err.getvalue()
 
 
@@ -96,6 +99,7 @@ class SkinExtrasTest(unittest.TestCase):
         pf = root / "pf"
         pf.mkdir()
         (pf / "sample.png").write_bytes(PNG)
+        (pf / "skin-meta.json").write_bytes((self.skins_master.parent / "skin-meta.json").read_bytes())
         skins = pf / "Plugin Skins"
         skins.mkdir()
         for p in self.skins_master.iterdir():
