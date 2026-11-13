@@ -5,6 +5,7 @@
 # Usage:
 #   python3 scripts/gen-mpc-ui.py --params docs/params.json --pages docs/kick-pages.json --out <dir>
 #   python3 scripts/gen-mpc-ui.py --params docs/params.json --pages docs/kick-pages.json --out <dir> --page-ids osc1_main,filter1_main
+#   python3 scripts/gen-mpc-ui.py --params docs/params.json --pages docs/kick-pages.json --out <dir> --layout scripts/mpc-ui-pages.json
 #
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -60,7 +61,8 @@ def _widget_for_param(p):
     scale = p.get("scale", "linear")
 
     # bool / stepped with 2-4 choices → switch
-    if scale == "stepped" and n_choices <= 4:
+    # a stepped parameter without a choice list (e.g. a modulation source index) is a plain number for the SDK: "switch" needs choices
+    if scale == "stepped" and 2 <= n_choices <= 4:
         return "switch"
 
     # 5+ choices → slider + overlay menu
@@ -286,8 +288,22 @@ def _split_into_qlink_blocks(knobs, params_by_key):
     return blocks
 
 
+def _build_control_from_param(p, params_by_key):
+    """Build a control dict from a parameter dict."""
+    widget = _widget_for_param(p)
+    ctrl = {"param": p["name"], "widget": widget}
+    if widget in ("knob", "fader") and _polarity_for_param(p) == "bipolar":
+        ctrl["polarity"] = "bipolar"
+    if widget == "slider":
+        ctrl["overlay"] = "menu"
+    return ctrl
+
+
 def _knob_to_control(knob, params_by_key, seen_params):
-    """Convert a knob dict to a control dict, or 'empty'."""
+    """Convert a knob dict to a control dict, or 'empty'.
+    
+    Deduplicates by parameter name. Skips unknown keys and 'empty' keys.
+    """
     key = knob.get("key", "")
     if key == "empty" or key not in params_by_key:
         return "empty"
@@ -300,35 +316,11 @@ def _knob_to_control(knob, params_by_key, seen_params):
         return "empty"
     seen_params.add(param_name)
 
-    widget = _widget_for_param(p)
-
-    # Build control object
-    ctrl = {"param": param_name, "widget": widget}
-
-    # Add polarity for knob/fader if bipolar
-    if widget in ("knob", "fader") and _polarity_for_param(p) == "bipolar":
-        ctrl["polarity"] = "bipolar"
-
-    # Add overlay menu for slider widgets
-    if widget == "slider":
-        ctrl["overlay"] = "menu"
-
-    return ctrl
+    return _build_control_from_param(p, params_by_key)
 
 
-def generate(params_path, pages_path, out_dir, page_ids=None):
-    """Generate ui.json and params-hostsim.json."""
-    with open(params_path, encoding="utf-8") as f:
-        params_doc = json.load(f)
-
-    with open(pages_path, encoding="utf-8") as f:
-        pages_doc = json.load(f)
-
-    # Build a lookup from param key to param dict
-    params_by_key = {}
-    for p in params_doc.get("params", []):
-        params_by_key[p["key"]] = p
-
+def _write_hostsim(params_doc, out_dir):
+    """Write params-hostsim.json (every parameter, in table order). Returns (path, number of parameters)."""
     # Build host_sim params list (all params in order)
     hostsim_params = []
     for idx, p in enumerate(params_doc.get("params", [])):
@@ -360,6 +352,24 @@ def generate(params_path, pages_path, out_dir, page_ids=None):
     with open(hostsim_path, "w", encoding="utf-8") as f:
         json.dump(hostsim_doc, f, indent=2, ensure_ascii=False)
         f.write("\n")
+
+    return hostsim_path, len(hostsim_params)
+
+
+def generate(params_path, pages_path, out_dir, page_ids=None):
+    """Generate ui.json and params-hostsim.json."""
+    with open(params_path, encoding="utf-8") as f:
+        params_doc = json.load(f)
+
+    with open(pages_path, encoding="utf-8") as f:
+        pages_doc = json.load(f)
+
+    # Build a lookup from param key to param dict
+    params_by_key = {}
+    for p in params_doc.get("params", []):
+        params_by_key[p["key"]] = p
+
+    hostsim_path, hostsim_count = _write_hostsim(params_doc, out_dir)
 
     # Process kick-pages into ui.json pages
     kick_pages = pages_doc.get("pages", [])
@@ -447,7 +457,176 @@ def generate(params_path, pages_path, out_dir, page_ids=None):
 
     print("gen-mpc-ui: Wrote %d pages (%d controls/page max) to %s"
           % (len(ui_pages), MAX_CONTROLS_PER_PAGE, ui_path))
-    print("gen-mpc-ui: Wrote %d params to %s" % (len(hostsim_params), hostsim_path))
+    print("gen-mpc-ui: Wrote %d params to %s" % (hostsim_count, hostsim_path))
+
+    return 0
+
+
+def generate_layout(params_path, layout_path, pages_path, out_dir):
+    """Generate ui.json and params-hostsim.json from a layout file.
+    
+    The layout file specifies which Kick pages (from docs/kick-pages.json)
+    go on each MPC page, with the slot rule for parameter placement.
+    """
+    with open(params_path, encoding="utf-8") as f:
+        params_doc = json.load(f)
+
+    with open(layout_path, encoding="utf-8") as f:
+        layout_doc = json.load(f)
+
+    with open(pages_path, encoding="utf-8") as f:
+        pages_doc = json.load(f)
+
+    # Build a lookup from param key to param dict
+    params_by_key = {}
+    # Build a lookup from param name to param dict (for O(1) lookup)
+    params_by_name = {}
+    for p in params_doc.get("params", []):
+        params_by_key[p["key"]] = p
+        params_by_name[p["name"]] = p
+
+    # Build a lookup from kick page id to kick page dict
+    kick_by_id = {}
+    for kp in pages_doc.get("pages", []):
+        kick_by_id[kp["id"]] = kp
+
+    # ---- Validation (rules a-h) ----
+    
+    # a. format check
+    if layout_doc.get("format") != "synthyboy-mpc-ui-pages":
+        print("gen-mpc-ui: ERROR: format is not 'synthyboy-mpc-ui-pages'", file=sys.stderr)
+        return 2
+
+    layout_pages = layout_doc.get("pages", [])
+
+    # b. more than 32 pages
+    if len(layout_pages) > MAX_PAGES:
+        print("gen-mpc-ui: ERROR: more than 32 pages in layout", file=sys.stderr)
+        return 2
+
+    # c & d. page name validation (empty/long + duplicate)
+    seen_page_names = set()
+    for page_entry in layout_pages:
+        name = page_entry.get("name", "")
+        if not name or len(name) > MAX_PAGE_NAME:
+            print("gen-mpc-ui: ERROR: page name '%s' is invalid (must be 1-%d characters)"
+                  % (name, MAX_PAGE_NAME), file=sys.stderr)
+            return 2
+        if name in seen_page_names:
+            print("gen-mpc-ui: ERROR: duplicate page name '%s'" % name, file=sys.stderr)
+            return 2
+        seen_page_names.add(name)
+
+    # e. kick list must have one or two ids
+    for page_entry in layout_pages:
+        kick_ids = page_entry.get("kick", [])
+        if not isinstance(kick_ids, list) or len(kick_ids) < 1 or len(kick_ids) > 2:
+            print("gen-mpc-ui: ERROR: page '%s' kick must contain one or two ids"
+                  % page_entry.get("name", "?"), file=sys.stderr)
+            return 2
+
+    # f. each kick id must exist in kick-pages.json
+    for page_entry in layout_pages:
+        for kid in page_entry.get("kick", []):
+            if kid not in kick_by_id:
+                print("gen-mpc-ui: ERROR: kick page id '%s' not found in kick-pages.json" % kid,
+                      file=sys.stderr)
+                return 2
+
+    # g. each kick page id used at most once in the whole layout
+    all_kick_ids = []
+    for page_entry in layout_pages:
+        all_kick_ids.extend(page_entry.get("kick", []))
+    seen_kick_ids = set()
+    for kid in all_kick_ids:
+        if kid in seen_kick_ids:
+            print("gen-mpc-ui: ERROR: kick page id '%s' used more than once" % kid,
+                  file=sys.stderr)
+            return 2
+        seen_kick_ids.add(kid)
+
+    # h. two kick pages of one MPC page must have same section
+    for page_entry in layout_pages:
+        kick_ids = page_entry.get("kick", [])
+        if len(kick_ids) >= 2:
+            section0 = kick_by_id[kick_ids[0]].get("section", "")
+            section1 = kick_by_id[kick_ids[1]].get("section", "")
+            if section0 != section1:
+                print("gen-mpc-ui: ERROR: kick pages '%s' and '%s' have different sections"
+                      % (kick_ids[0], kick_ids[1]), file=sys.stderr)
+                return 2
+
+    # ---- Build pages (rule 4) ----
+    
+    ui_pages = []
+    all_seen_names = set()  # Track all placed parameter names across pages
+
+    for page_entry in layout_pages:
+        page_name = page_entry.get("name", "")
+        kick_ids = page_entry.get("kick", [])
+
+        # Build 16 slots for this page
+        slots = []
+        for kid in kick_ids:
+            kick_page = kick_by_id[kid]
+            knob_params = []
+            for knob in kick_page.get("knobs", []):
+                if knob is None:
+                    continue
+                key = knob.get("key", "")
+                if key not in params_by_key:
+                    continue
+                p = params_by_key[key]
+                if not p.get("ownEngine"):
+                    continue
+                param_name = p["name"]
+                if param_name in all_seen_names:
+                    continue
+                all_seen_names.add(param_name)
+                knob_params.append(p)
+            # Pad to 8 slots
+            slots += [p["name"] for p in knob_params] + [None] * (8 - len(knob_params))
+        # Pad to 16 slots total
+        slots += [None] * (16 - len(slots))
+
+        # Build controls from slots
+        controls = []
+        for slot_name in slots:
+            if slot_name is None:
+                controls.append("empty")
+            else:
+                p = params_by_name[slot_name]
+                controls.append(_build_control_from_param(p, params_by_key))
+
+        ui_pages.append({"name": page_name, "controls": controls})
+
+    # i. after applying rule 4, no page with no control at all
+    for page_entry in layout_pages:
+        page_name = page_entry.get("name", "")
+        page = next(p for p in ui_pages if p["name"] == page_name)
+        if all(c == "empty" for c in page["controls"]):
+            print("gen-mpc-ui: ERROR: page '%s' has no control" % page_name, file=sys.stderr)
+            return 2
+
+    # ---- Write output files ----
+    
+    hostsim_path, hostsim_count = _write_hostsim(params_doc, out_dir)
+
+    # Write ui.json
+    ui_doc = {"pages": ui_pages}
+    ui_path = os.path.join(out_dir, "ui.json")
+    with open(ui_path, "w", encoding="utf-8") as f:
+        json.dump(ui_doc, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+    # Report omitted own-engine parameters
+    own_engine_params = [p for p in params_doc.get("params", []) if p.get("ownEngine")]
+    omitted = sum(1 for p in own_engine_params if p["name"] not in all_seen_names)
+    print("gen-mpc-ui: omitted own-engine parameters: %d" % omitted)
+
+    print("gen-mpc-ui: Wrote %d pages (%d controls/page max) to %s"
+          % (len(ui_pages), MAX_CONTROLS_PER_PAGE, ui_path))
+    print("gen-mpc-ui: Wrote %d params to %s" % (hostsim_count, hostsim_path))
 
     return 0
 
@@ -463,16 +642,26 @@ def main(argv=None):
                     help="output directory")
     ap.add_argument("--page-ids", default=None,
                     help="Comma-separated list of page ids to emit in order (default: first pages)")
+    ap.add_argument("--layout", default=None,
+                    help="Layout file (synthyboy-mpc-ui-pages format) for own-engine MPC pages")
     args = ap.parse_args(argv)
 
-    # Parse page_ids if provided
-    page_ids = None
-    if args.page_ids:
-        page_ids = [pid.strip() for pid in args.page_ids.split(",")]
+    # Validate: --layout and --page-ids are mutually exclusive
+    if args.layout and args.page_ids:
+        print("gen-mpc-ui: ERROR: --layout and --page-ids are mutually exclusive", file=sys.stderr)
+        return 2
 
     os.makedirs(args.out, exist_ok=True)
-    result = generate(args.params, args.pages, args.out, page_ids)
-    return result
+
+    if args.layout:
+        return generate_layout(args.params, args.layout, args.pages, args.out)
+    else:
+        # Parse page_ids if provided
+        page_ids = None
+        if args.page_ids:
+            page_ids = [pid.strip() for pid in args.page_ids.split(",")]
+
+        return generate(args.params, args.pages, args.out, page_ids)
 
 
 if __name__ == "__main__":

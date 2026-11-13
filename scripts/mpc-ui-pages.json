@@ -1,0 +1,212 @@
+{
+  "format": "synthyboy-mpc-ui-pages",
+  "version": 1,
+  "comment": "MPC pages of the own engine, in signal-flow order. Each page takes one or two Kick pages (docs/kick-pages.json ids) of the same section; a Kick page fills two Q-Link rows (8 slots). Effects bypassed on the Low tier (reverb, flanger, Hyper/Dimension, Bode, Convolve) have no page.",
+  "pages": [
+    {
+      "name": "Macros",
+      "kick": [
+        "macros",
+        "macros_2"
+      ]
+    },
+    {
+      "name": "Osc 1",
+      "kick": [
+        "osc1_main",
+        "osc1_unison"
+      ]
+    },
+    {
+      "name": "Osc1 Shp",
+      "kick": [
+        "osc1_shaping"
+      ]
+    },
+    {
+      "name": "Osc 2",
+      "kick": [
+        "osc2_main",
+        "osc2_unison"
+      ]
+    },
+    {
+      "name": "Osc2 Shp",
+      "kick": [
+        "osc2_shaping"
+      ]
+    },
+    {
+      "name": "Osc 3",
+      "kick": [
+        "osc3_main",
+        "osc3_unison"
+      ]
+    },
+    {
+      "name": "Osc3 Shp",
+      "kick": [
+        "osc3_shaping"
+      ]
+    },
+    {
+      "name": "Sub/Nois",
+      "kick": [
+        "sub_main",
+        "noise"
+      ]
+    },
+    {
+      "name": "Mixer",
+      "kick": [
+        "mix_routing",
+        "mix_bus"
+      ]
+    },
+    {
+      "name": "Filter 1",
+      "kick": [
+        "filter1_main",
+        "filter1_model"
+      ]
+    },
+    {
+      "name": "Filter 2",
+      "kick": [
+        "filter2_main",
+        "filter2_model"
+      ]
+    },
+    {
+      "name": "Env 1-2",
+      "kick": [
+        "env1",
+        "env2"
+      ]
+    },
+    {
+      "name": "Env 3-4",
+      "kick": [
+        "env3",
+        "env4"
+      ]
+    },
+    {
+      "name": "LFO 1-2",
+      "kick": [
+        "lfo1",
+        "lfo2"
+      ]
+    },
+    {
+      "name": "LFO 3-4",
+      "kick": [
+        "lfo3",
+        "lfo4"
+      ]
+    },
+    {
+      "name": "Mod 1-2",
+      "kick": [
+        "mod_slot_1",
+        "mod_slot_2"
+      ]
+    },
+    {
+      "name": "Mod 3-4",
+      "kick": [
+        "mod_slot_3",
+        "mod_slot_4"
+      ]
+    },
+    {
+      "name": "Mod Amt",
+      "kick": [
+        "mod_amounts_1_8",
+        "mod_amounts_9_16"
+      ]
+    },
+    {
+      "name": "FX Chain",
+      "kick": [
+        "fx_order_1",
+        "fx_switches"
+      ]
+    },
+    {
+      "name": "FX Filt",
+      "kick": [
+        "fx_filter_1",
+        "fx_filter_2"
+      ]
+    },
+    {
+      "name": "Distort",
+      "kick": [
+        "fx_distortion"
+      ]
+    },
+    {
+      "name": "Comp 1",
+      "kick": [
+        "fx_comp_main",
+        "fx_comp_low"
+      ]
+    },
+    {
+      "name": "Comp 2",
+      "kick": [
+        "fx_comp_mid",
+        "fx_comp_high"
+      ]
+    },
+    {
+      "name": "EQ",
+      "kick": [
+        "fx_eq_low_mid",
+        "fx_eq_high"
+      ]
+    },
+    {
+      "name": "Chorus",
+      "kick": [
+        "fx_chorus_1",
+        "fx_chorus_2"
+      ]
+    },
+    {
+      "name": "Delay",
+      "kick": [
+        "fx_delay_1",
+        "fx_delay_2"
+      ]
+    },
+    {
+      "name": "Phaser",
+      "kick": [
+        "fx_phaser_1",
+        "fx_phaser_2"
+      ]
+    },
+    {
+      "name": "FX Level",
+      "kick": [
+        "fx_levels"
+      ]
+    },
+    {
+      "name": "Master",
+      "kick": [
+        "master_voicing",
+        "master_porta"
+      ]
+    },
+    {
+      "name": "Voice",
+      "kick": [
+        "voice_global",
+        "voicectl_main"
+      ]
+    }
+  ]
+}
