@@ -50,6 +50,8 @@ endif()
 option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
 option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
 option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" ON)
+option(SYNTHYBOY_BUILD_MPC_SHELL "Build the MPC VST2 shell (shell-mpc)" OFF)
+set(MPC_SDK_DIR "" CACHE PATH "Path to the MPC plugin SDK (for shell-mpc)")
 # SYNTHYBOY_BITMAP_GUI: the native CLAP module (shell-clap, synthyboy.clap) renders the editor of shell-juce/ui into a pixel buffer and offers it through the CLAP extension
 # com.safian.bitmap-gui/1 (docs/BITMAP-GUI-EXTENSION.md). It links its own JUCE (fetched, statically, hidden symbols), so it needs JUCE even when the JUCE plug-in is not built.
 # ON with the plug-in (desktop builds); OFF without it unless asked for (the ARMv7 module build, scripts/build-armv7-clap.sh, asks). Never part of the static library
@@ -196,6 +198,9 @@ if(SYNTHYBOY_NEEDS_JUCE)
     add_subdirectory(shell-juce/ui)
 endif()
 add_subdirectory(shell-clap)
+if(SYNTHYBOY_BUILD_MPC_SHELL)
+    add_subdirectory(shell-mpc)
+endif()
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(bench)
     add_subdirectory(tools/paramdump)
