@@ -639,6 +639,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
 
     }
     // ---- sources
+    {
+    SB_SECTION (sections::tickSources);
     std::fill (std::begin (src), std::end (src), 0.0f);
     for (int e = 0; e < 6; ++e)
         src[srcEnv (e)] = envOut[e];
@@ -677,6 +679,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     src[kSrcNoteOnRandDiscrete] = randDiscrete;
     src[kSrcExpressionX] = 0.5f + 0.5f * exprX;
     src[kSrcFixed] = 1.0f;
+    }
 
     // ---- matrix
     clearMod();
@@ -705,6 +708,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     }
 
     // ---- amplitude: envelope 1, velocity
+    {
+    SB_SECTION (sections::tickAmp);
     float killGain = 1.0f;
     if (killFading)
     {
@@ -737,6 +742,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
     }
 
+    }
     // ---- oscillators
     if (fresh)
     {
@@ -922,6 +928,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
 
     // ---- sub oscillator
     {
+        SB_SECTION (sections::tickSub);
         const SubIdx& si = pi.sub;
         subCh.on = P (si.on) >= 0.5f;
         subCh.dest = static_cast<int> (P (si.destination) + 0.5f);

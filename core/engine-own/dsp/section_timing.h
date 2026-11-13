@@ -35,6 +35,9 @@ enum Id : int
     fxPool,               // the instance pool slots
     tickOscParams,        // Voice::tick: the parameters of the three oscillators (the reads and the modulated values), without the oscillator update
     tickFilterParams,     // Voice::tick: the settings of the two filters
+    tickSources,          // Voice::tick: the modulation sources of the period (the values of the envelopes, LFOs, the note, the controllers)
+    tickSub,              // Voice::tick: the sub oscillator
+    tickAmp,              // Voice::tick: amplitude, velocity, the end of the note
     renderFinal,          // Voice::render: amplitude, velocity, declick and the add to the buses
     kCount
 };
@@ -45,7 +48,7 @@ inline const char* name (int id) noexcept
         "engine rest (snapshot, control tick, buses, master)", "voice tick: other", "voice tick: envelopes + LFOs", "voice tick: modulation matrix",
         "voice tick: oscillator update", "osc: morph cycle build", "voice render: routing / mix / output", "osc: wavetable read", "osc: morph read", "osc: warp + decimator",
         "osc: sample / granular / spectral", "sub oscillator", "noise", "filter 1", "filter 2", "fx: update", "fx: chorus", "fx: compressor", "fx: delay", "fx: distortion",
-        "fx: eq", "fx: fx filter", "fx: flanger", "fx: phaser", "fx: reverb", "fx: hyper / dimension", "fx: utility", "fx: bode", "fx: convolve", "fx: splitters", "fx: pool slots", "voice tick: oscillator parameters", "voice tick: filter settings", "voice render: amplitude / velocity / output" };
+        "fx: eq", "fx: fx filter", "fx: flanger", "fx: phaser", "fx: reverb", "fx: hyper / dimension", "fx: utility", "fx: bode", "fx: convolve", "fx: splitters", "fx: pool slots", "voice tick: oscillator parameters", "voice tick: filter settings", "voice tick: sources", "voice tick: sub", "voice tick: amplitude", "voice render: amplitude / velocity / output" };
     return id >= 0 && id < kCount ? kNames[id] : "?";
 }
 

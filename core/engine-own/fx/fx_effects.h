@@ -76,6 +76,7 @@ public:
     void set (const Params& np) noexcept { p = np; }
     void process (float* l, float* r, int n) noexcept
     {
+        const MixGains mg (p.mix);
         const float sr = static_cast<float> (sampleRate);
         // the target periods (seconds) of the two sides; Mid ping pong adds the right time to the left side
         float tL = p.timeL * p.offsetL, tR = (p.style == 0 ? p.timeL : p.timeR) * p.offsetR;
@@ -114,8 +115,8 @@ public:
                     outL = outR = rd[0] + rd[1];
                     line[0].push (band[0].process (wl));
                     line[1].push (band[1].process (wr));
-                    l[i] = mixLaw (xl, outL, p.mix);
-                    r[i] = mixLaw (xr, outR, p.mix);
+                    l[i] = mg.apply (xl, outL);
+                    r[i] = mg.apply (xr, outR);
                     continue;
                 }
                 case 2: // ping pong: the written values change the channel (the right lane feedback is 1, the left one the knob)
@@ -137,8 +138,8 @@ public:
                     line[1].push (band[1].process (wr));
                     break;
             }
-            l[i] = mixLaw (xl, rd[0], p.mix);
-            r[i] = mixLaw (xr, rd[1], p.mix);
+            l[i] = mg.apply (xl, rd[0]);
+            r[i] = mg.apply (xr, rd[1]);
         }
     }
 
@@ -184,6 +185,7 @@ public:
     /** `voices` pairs of two delay lines (A with delay 1, B with delay 2), each with a left and a right side (document 06, 2). */
     void process (float* l, float* r, int n) noexcept
     {
+        const MixGains mg (p.mix);
         const float sr = static_cast<float> (sampleRate);
         const int V = std::clamp (p.voices, 1, kMaxPairs);
         const float fb = std::clamp (p.feedback, -0.95f, 0.95f);
@@ -226,8 +228,8 @@ public:
                         acc[c] += rd;
                     }
             }
-            l[s] = mixLaw (in[0], 0.53f * acc[0], p.mix);
-            r[s] = mixLaw (in[1], 0.53f * acc[1], p.mix);
+            l[s] = mg.apply (in[0], 0.53f * acc[0]);
+            r[s] = mg.apply (in[1], 0.53f * acc[1]);
         }
     }
 

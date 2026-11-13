@@ -682,10 +682,11 @@ public:
         std::copy (l, l + n, wl);
         std::copy (r, r + n, wr);
         active->process (wl, wr, n);
+        const MixGains mg (live.mix);
         for (int i = 0; i < n; ++i)
         {
-            l[i] = mixLaw (l[i], wl[i], live.mix);
-            r[i] = mixLaw (r[i], wr[i], live.mix);
+            l[i] = mg.apply (l[i], wl[i]);
+            r[i] = mg.apply (r[i], wr[i]);
         }
     }
 

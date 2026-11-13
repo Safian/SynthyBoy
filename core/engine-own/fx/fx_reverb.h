@@ -20,6 +20,19 @@ inline float mixLaw (float dry, float wet, float mix) noexcept
     return dry * std::cos (a) + wet * std::sin (a);
 }
 
+/** mixLaw () for a mix that stays the same over a block: the cosine and the sine once (the same values, the same arithmetic per sample). */
+struct MixGains
+{
+    float dry, wet;
+    explicit MixGains (float mix) noexcept
+    {
+        const float a = clamp01 (mix) * (kPif * 0.5f);
+        dry = std::cos (a);
+        wet = std::sin (a);
+    }
+    float apply (float d, float w) const noexcept { return d * dry + w * wet; }
+};
+
 /** Schroeder all-pass of document 06 9.1: `w = in - c z; store w; out = z + c w` with z read `delay` samples back. */
 struct AllPassLine
 {
@@ -137,6 +150,7 @@ public:
 
     void process (float* l, float* r, int n) noexcept
     {
+        const MixGains mg (p.mix);
         const float sr = static_cast<float> (sampleRate);
         const float pdTarget = std::clamp (p.predelay, 0.0f, 0.3f) * sr;
         if (pdCur < 0.0f)
@@ -179,8 +193,8 @@ public:
             pre[0].push (xl);
             pre[1].push (xr);
             const float ol = pd > 0.5f ? pre[0].readCubic (pd) : xl, orr = pd > 0.5f ? pre[1].readCubic (pd) : xr;
-            l[i] = mixLaw (in[0], ol, p.mix);
-            r[i] = mixLaw (in[1], orr, p.mix);
+            l[i] = mg.apply (in[0], ol);
+            r[i] = mg.apply (in[1], orr);
         }
     }
 
