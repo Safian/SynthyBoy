@@ -111,9 +111,16 @@ class SkinExtrasTest(unittest.TestCase):
         self.assertEqual(snapshot(skins), before)
 
     def test_real_extras_dir_applies_cleanly(self):
-        # the real modules change the skin (10_env.py adds the envelope), so only success is asserted here
+        # the real modules (10_env, 20_osc, ...) change the skin on purpose; their own tests check the content.
+        # Here: the run succeeds, both JSON files stay valid and the generation is idempotent from the same start
         skins, _ = self.fresh()
         self.assertEqual(run_apply(skins, REAL_EXTRAS), (0, ""))
+        for name in ("TUI.json", "Q-Links.json"):
+            json.loads((skins / name).read_text(encoding="utf-8"))
+        first = snapshot(skins)
+        skins2, _ = self.fresh()
+        self.assertEqual(run_apply(skins2, REAL_EXTRAS), (0, ""))
+        self.assertEqual(snapshot(skins2), first)
 
     def test_module_without_change_keeps_bytes(self):
         skins, extras = self.fresh()
