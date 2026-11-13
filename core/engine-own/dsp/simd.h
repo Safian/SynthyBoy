@@ -1,6 +1,6 @@
-// SynthyBoy - own engine: NEON versions of the hot loops, used on 32 bit ARM only (the MPC build). Every vector function does, in each lane, the same operations in the same
-// order as the scalar function next to it (separate multiply and add, no vfma, no reciprocal estimates), so the samples are identical to the last bit. Everywhere else
-// (arm64, x86) the scalar code is used, with whatever contraction the compiler applies to it as always. SB_NO_NEON forces the scalar code on ARM too (the two are compared).
+// SynthyBoy - own engine: NEON versions of the hot loops, used on 32 bit and 64 bit ARM (the MPC builds: arm32 for the Key 61, arm64 for the XL). Every vector function does, in
+// each lane, the same operations in the same order as the scalar function next to it (separate multiply and add, no vfma, no reciprocal estimates), so the samples are identical
+// to the last bit. On x86 the scalar code is used, with whatever contraction the compiler applies to it as always. SB_NO_NEON forces the scalar code on ARM too (the two are compared).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -8,16 +8,24 @@
 #include <algorithm>
 #include <cstdint>
 
-#if ((defined(__arm__) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && !defined(SB_NO_NEON) // SB_TEST_NEON: the same intrinsics on arm64, to compare the two versions on a desktop
+// 32 bit ARM, and AArch64 on Linux (the MPC XL). Not Apple's arm64 (macOS, iOS): there the scalar code and its compiler contraction stay as they were.
+#if defined(__arm__) || (defined(__aarch64__) && defined(__linux__))
+ #define SB_ARM_LINUX_OR_32 1
+#else
+ #define SB_ARM_LINUX_OR_32 0
+#endif
+
+#if (((SB_ARM_LINUX_OR_32) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && !defined(SB_NO_NEON) // SB_TEST_NEON: the same intrinsics on a build that does not define __ARM_NEON
  #include <arm_neon.h>
  #define SB_NEON 1
 #else
  #define SB_NEON 0
 #endif
 
-// On 32 bit ARM the translation units that use these loops must not fuse a * b + c in their scalar code either (a build for a VFPv4 FPU, -mfpu=neon-vfpv4, would by
-// default under GCC): the pragma is honoured by GCC 12 (checked: the same expression gives vfma.f32 without it and the non fused vmla.f32 with it).
-#if defined(__arm__) && defined(__GNUC__) && !defined(__clang__)
+// On ARM the translation units that use these loops must not fuse a * b + c in their scalar code either (a build for a VFPv4 FPU, -mfpu=neon-vfpv4, would by
+// default under GCC, and AArch64 always has the fused multiply-add): the pragma is honoured by GCC 12 (checked: the same expression gives vfma.f32 without it and the non
+// fused vmla.f32 with it).
+#if SB_ARM_LINUX_OR_32 && defined(__GNUC__) && !defined(__clang__)
  #pragma GCC optimize ("fp-contract=off")
 #endif
 
