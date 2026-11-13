@@ -50,7 +50,7 @@ int main()
     check (spectrumLevelFromDb (-60.0f) == 0.0f && spectrumLevelFromDb (-90.0f) == 0.0f && spectrumLevelFromDb (-180.0f) == 0.0f, "level: -60 dB and below = 0 (the floor)");
     check (std::fabs (spectrumLevelFromDb (-30.0f) - 0.5f) < 1e-6f && std::fabs (spectrumLevelFromDb (-15.0f) - 0.75f) < 1e-6f, "level: linear in dB between the floor and 0 dBFS");
     check (spectrumLevelFromDb (std::nanf ("")) == 0.0f, "level: NaN = 0");
-    check (std::fabs (spectrumMagToDb (1.0f)) < 1e-6f && std::fabs (spectrumMagToDb (0.5f) + 6.0206f) < 1e-3f && spectrumMagToDb (0.0f) <= -150.0f, "magnitude to dB");
+    check (std::fabs (spectrumMagToDb (1.0f)) < 1e-6f && std::fabs (spectrumMagToDb (0.5f) + 6.0206f) < 1e-3f && spectrumMagToDb (0.0f) == -180.0f && spectrumMagToDb (-1.0f) == -180.0f && spectrumMagToDb (std::nanf ("")) == -180.0f, "magnitude to dB (zero, negative and NaN give -180)");
 
     // quantiser: 1/64 steps
     check (spectrumQuantize (0.0f) == 0.0f && spectrumQuantize (1.0f) == 1.0f && spectrumQuantize (-0.3f) == 0.0f && spectrumQuantize (1.7f) == 1.0f, "quantise: 0, 1, clamped");
