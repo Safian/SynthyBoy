@@ -56,8 +56,11 @@ def _envelope_data(n, overlay):
 
 
 def _bounds(rect, version=1, focus="No", show="Hide"):
-    return {"version": version, "acceptsHWFocus": focus, "showWhenDataModelInvalid": show, "whenVisible": "Always",
-            "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}
+    out = {"version": version, "acceptsHWFocus": focus, "showWhenDataModelInvalid": show, "whenVisible": "Always",
+           "boundsType": "Absolute", "bounds": "%d %d %d %d" % rect}
+    if version == 2:  # version 2 of the bounds object requires this key (ui-reference 3.x, "Bounds")
+        out["additionalInvalidatingHandles"] = []
+    return out
 
 
 def _entry(name, typ, data, remap, bounds):

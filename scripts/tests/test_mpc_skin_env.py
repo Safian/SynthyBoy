@@ -91,6 +91,19 @@ class EnvSkinTest(unittest.TestCase):
         after = self.qlinks
         self.assertEqual([m for m in after if m["Tab"] not in tabs], [m for m in before if m["Tab"] not in tabs])
 
+    def test_bounds_version_2_has_its_extra_key(self):
+        # validate.py does not check this; the MPC drops the whole TUI.json when the key is missing
+        def walk(o):
+            if isinstance(o, dict):
+                if o.get("version") == 2 and "boundsType" in o:
+                    self.assertEqual(o.get("additionalInvalidatingHandles"), [], o)
+                for v in o.values():
+                    walk(v)
+            elif isinstance(o, list):
+                for v in o:
+                    walk(v)
+        walk(self.tui)
+
     def test_validate_py_has_no_error(self):
         res = subprocess.run([sys.executable, "-I", str(base.SDK / "tools" / "validate.py"), str(self.root)], capture_output=True, text=True)
         report = res.stdout + res.stderr
