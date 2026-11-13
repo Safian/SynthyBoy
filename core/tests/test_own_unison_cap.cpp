@@ -239,3 +239,33 @@ TEST (kill_fade_of_a_stolen_voice_at_tier_low)
     CHECK (!same (def, slow));  // and it is a different sound from the 50 ms fade
     CHECK (same (run (Tier::high, 0.0f), run (Tier::high, 0.003f))); // medium / high keep the 50 ms
 }
+
+TEST (events_take_effect_on_the_control_period_grid_at_tier_low)
+{
+    auto run = [] (Tier tier, int spread)
+    {
+        auto e = make (1, 0);
+        e->prepare (44100.0, 128, qualityForTier (tier));
+        std::vector<float> out, l (128), r (128);
+        for (int b = 0; b < 12; ++b)
+        {
+            std::vector<Event> ev;
+            if (b == 1)
+                for (int k = 0; k < 8; ++k)
+                {
+                    Event n;
+                    n.type = Event::NoteOn;
+                    n.key = static_cast<int16_t> (40 + k * 3);
+                    n.value = 0.7f;
+                    n.frame = k * spread; // 0, 1, .. 7 samples (or all at 0): the same 32 sample period
+                    ev.push_back (n);
+                }
+            e->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 128);
+            out.insert (out.end(), l.begin(), l.end());
+            out.insert (out.end(), r.begin(), r.end());
+        }
+        return out;
+    };
+    CHECK (same (run (Tier::low, 1), run (Tier::low, 0)));     // tier low: notes inside one period start together, at its start
+    CHECK (!same (run (Tier::high, 1), run (Tier::high, 0)));  // medium / high stay sample accurate
+}

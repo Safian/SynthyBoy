@@ -1312,7 +1312,10 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         const bool ue = usedT[1][tg], un = usedT[0][tg];
         if (tg != 0 && !ue && !un)
+        {
+            lastBusL[tg] = lastBusR[tg] = 0.0f;
             continue;
+        }
         // the sound of this target for the period: ((E * amp) + N) * velocity gain, left and right
         float ml[kControlPeriod], mr[kControlPeriod];
         auto mixLane = [&] (float* m, const float* e, const float* nn)
@@ -1332,6 +1335,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         };
         mixLane (ml, tE_L[tg], tN_L[tg]);
         mixLane (mr, tE_R[tg], tN_R[tg]);
+        lastBusL[tg] = ml[n - 1];
+        lastBusR[tg] = mr[n - 1];
         if (tg == 0)
         {
             // the declick tail of the note this voice played before fades out over the first samples

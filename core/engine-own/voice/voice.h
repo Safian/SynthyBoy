@@ -97,6 +97,9 @@ public:
     int key() const noexcept { return keyNum; }
     int playedKey() const noexcept { return played; }
     bool killing() const noexcept { return killFading; }
+    /** The last sample this voice added to the Main / Bus 1 / Bus 2 / Direct buses (left, right): where the declick ramp of a voice that is stolen at tier low starts. */
+    float lastBusLeft (int target) const noexcept { return lastBusL[target]; }
+    float lastBusRight (int target) const noexcept { return lastBusR[target]; }
     /** Kill mode (document 01, 3.2): the envelopes fade to zero linearly in 50 ms, then the voice ends. */
     void startKill() noexcept { if (active && !killFading) { killFading = true; killElapsed = 0.0f; } }
     /** Poly legato: the envelopes continue at the stage, position and value of the held voice's envelopes. */
@@ -239,6 +242,7 @@ private:
     float ampPrev = 0.0f, ampCur = 0.0f, velGain = 1.0f, velGainPrev = 1.0f;
     float srcLevel[7] = {};
     float outL = 0.0f, outR = 0.0f, lastLevel = 0.0f;
+    float lastBusL[4] = {}, lastBusR[4] = {};
     float declickL = 0.0f, declickR = 0.0f;
     int declickPos = 0;
     bool fresh = true;

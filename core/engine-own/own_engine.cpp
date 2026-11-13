@@ -254,6 +254,8 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
 
 void OwnEngine::silence() noexcept
 {
+    for (auto& g : ghosts)
+        g.used = false;
     // the host transport stopped: notes and effect tails end at once, parameters, controllers and content stay
     for (auto& v : voices)
         v->kill();
@@ -278,6 +280,8 @@ void OwnEngine::clearLatencyDelays() noexcept
 
 void OwnEngine::reset()
 {
+    for (auto& g : ghosts)
+        g.used = false;
     for (auto& v : voices)
         v->kill();
     for (auto& f : fx)
@@ -385,6 +389,54 @@ Voice* OwnEngine::allocateVoice (bool legato) noexcept
     return victim != nullptr ? victim : (free != nullptr ? free : pickVictim (true));
 }
 
+void OwnEngine::ghostKill (Voice& v) noexcept
+{
+    Ghost* slot = nullptr;
+    for (auto& g : ghosts)
+        if (!g.used)
+        {
+            slot = &g;
+            break;
+        }
+    if (slot == nullptr)
+        slot = &ghosts[0]; // all busy (more than 16 steals within a few ms): the oldest ramp is replaced
+    for (int t = 0; t < 4; ++t)
+    {
+        slot->v[t][0] = v.lastBusLeft (t);
+        slot->v[t][1] = v.lastBusRight (t);
+    }
+    slot->age = 0;
+    slot->total = std::max (1, static_cast<int> (lowKillSeconds.load (std::memory_order_relaxed) * static_cast<float> (sampleRate)));
+    slot->used = true;
+    v.kill();
+}
+
+/** Adds the declick ramps of the stolen voices to the buses for n samples of the period; the ramp is linear in the sample count, so it does not depend on the block size. */
+void OwnEngine::addGhosts (int n) noexcept
+{
+    for (auto& g : ghosts)
+    {
+        if (!g.used)
+            continue;
+        const float inv = 1.0f / static_cast<float> (g.total);
+        for (int t = 0; t < 4; ++t)
+        {
+            const float l = g.v[t][0], r = g.v[t][1];
+            if (l == 0.0f && r == 0.0f)
+                continue;
+            for (int k = 0; k < n; ++k)
+            {
+                const float gain = std::max (0.0f, 1.0f - static_cast<float> (g.age + k + 1) * inv);
+                mixL[t][k] += l * gain;
+                mixR[t][k] += r * gain;
+            }
+        }
+        g.age += n;
+        if (g.age >= g.total)
+            g.used = false;
+    }
+}
+
 void OwnEngine::killExcess() noexcept
 {
     const int P = polyphonyLimit();
@@ -396,7 +448,10 @@ void OwnEngine::killExcess() noexcept
         Voice* v = pickVictim (false);
         if (v == nullptr)
             break;
-        v->startKill(); // the envelopes fade to zero in 50 ms
+        if (qualityTier.load (std::memory_order_relaxed) == 0)
+            ghostKill (*v); // tier low: the voice stops, a ramp of its last output fades on the buses
+        else
+            v->startKill(); // the envelopes fade to zero in 50 ms
         --n;
     }
 }
@@ -583,7 +638,12 @@ void OwnEngine::noteOff (const Event& e) noexcept
                 n.velocity = v.velocity();
                 startNote (n, true, &v);
                 if (base[static_cast<size_t> (mi.voiceOverride)] < 0.5f && base[static_cast<size_t> (mi.legato)] < 0.5f)
-                    v.startKill(); // Kill mode: the released voice fades out, a fresh voice plays the recalled note
+                {
+                    if (qualityTier.load (std::memory_order_relaxed) == 0)
+                        ghostKill (v);
+                    else
+                        v.startKill(); // Kill mode: the released voice fades out, a fresh voice plays the recalled note
+                }
                 recalled = true;
                 continue;
             }
@@ -924,6 +984,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     const MasterIdx& mi = pi.master;
     const int fxReverbForce = fxReverbForceIndex;
     int pos = 0, ei = 0;
+    const bool eventGrid = qualityTier.load (std::memory_order_relaxed) == 0;
     while (pos < numFrames)
     {
         if (controlPos == 0)
@@ -1013,11 +1074,20 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 latCached = true;
             }
         }
-        while (ei < numEvents && events[ei].frame <= pos)
-            handleEvent (events[ei++]);
         int end = std::min (numFrames, pos + (kControlPeriod - controlPos));
-        if (ei < numEvents)
-            end = std::min (end, std::max (events[ei].frame, pos + 1));
+        if (eventGrid)
+        {
+            // tier low: an event takes effect at the start of the control period that contains its frame (up to 0.73 ms early), so a block is never cut by events
+            while (ei < numEvents && events[ei].frame < end)
+                handleEvent (events[ei++]);
+        }
+        else
+        {
+            while (ei < numEvents && events[ei].frame <= pos)
+                handleEvent (events[ei++]);
+            if (ei < numEvents)
+                end = std::min (end, std::max (events[ei].frame, pos + 1));
+        }
         const int n = end - pos;
         // the voices add to Main, Bus 1, Bus 2 and Direct; the buses run through their racks and go to their destination, Main through the Main rack
         for (int t = 0; t < 4; ++t)
@@ -1034,6 +1104,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         for (auto& v : voices)
             if (v->isActive())
                 v->render (mo, n, controlPos);
+        addGhosts (n);
         dlVoices.process (mixL[0], mixR[0], n);
         dlDirect.process (mixL[3], mixR[3], n);
         dlBusIn[0].process (mixL[1], mixR[1], n); // a bus that is fed by the other waits for what the first sends into it
