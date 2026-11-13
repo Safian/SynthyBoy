@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_noteon_bench [--reps N] [--steady B] [--patch default|heavy] [--sr 44100] [--block 128]
+//   synthyboy_noteon_bench [--reps N] [--steady B] [--patch default|heavy] [--unison-cap N] [--sr 44100] [--block 128]
 //
 // Own engine, tier low, realtime = true. For chords of 1, 2, 4, 6, 8 simultaneous note-ons: a chord is struck at the start of a
 // block, held for B steady blocks, released (AllNotesOff) and rendered until the voices are gone; repeated N times. Prints the mean and
@@ -32,7 +32,7 @@ double ms (Clock::time_point a, Clock::time_point b) { return std::chrono::durat
 
 int main (int argc, char** argv)
 {
-    int reps = 200, steady = 12, block = 128;
+    int reps = 200, steady = 12, block = 128, unisonCap = -1; // --unison-cap N: tier low unison cap (0 = none, -1 = engine default)
     double sr = 44100.0;
     bool heavy = false;
     for (int i = 1; i < argc; ++i)
@@ -42,6 +42,7 @@ int main (int argc, char** argv)
         if (a == "--reps") reps = std::atoi (next());
         else if (a == "--steady") steady = std::atoi (next());
         else if (a == "--block") block = std::atoi (next());
+        else if (a == "--unison-cap") unisonCap = std::atoi (next());
         else if (a == "--sr") sr = std::atof (next());
         else if (a == "--patch") heavy = std::string (next()) == "heavy";
         else { std::fprintf (stderr, "unknown argument %s\n", a.c_str()); return 2; }
@@ -50,6 +51,8 @@ int main (int argc, char** argv)
     auto engine = createEngine (EngineKind::own);
     if (heavy)
         bench::ownHeavyPatch (*engine);
+    if (unisonCap >= 0)
+        setOwnLowTierUnisonCap (*engine, unisonCap);
     Quality q = qualityForTier (Tier::low);
     q.realtime = true;
     const auto p0 = Clock::now();

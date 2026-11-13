@@ -24,6 +24,9 @@ namespace synthyboy
 {
 namespace own
 {
+/** The default of OwnEngine::setLowTierUnisonCap: the one place of the number. */
+constexpr int kDefaultLowTierUnisonCap = 3;
+
 class OwnEngine final : public IEngine
 {
 public:
@@ -32,6 +35,11 @@ public:
 
     void prepare (double sampleRate, int maxBlockFrames, const Quality& quality) override;
     void setQuality (const Quality& newQuality) noexcept override;
+    /** The unison voices per oscillator at tier low (the MPC tier), on top of the cap of the quality: the voice count is min (patch value, cap), the rest of the unison law
+        (detune width, spread, blend, level normalisation) is that of a patch that asks for the cap. 0 = no such cap. Never touches a parameter value, never applies at
+        medium / high or to an offline render (that runs on a twin at the high tier). Any thread, lock free; read at the start of every block. */
+    void setLowTierUnisonCap (int voices) noexcept { lowUnisonCap.store (std::max (0, voices), std::memory_order_relaxed); }
+    int lowTierUnisonCap() const noexcept { return lowUnisonCap.load (std::memory_order_relaxed); }
     void reset() override;
     void setParam (uint32_t id, float plain) noexcept override;
     float getParam (uint32_t id) const noexcept override;
@@ -76,6 +84,7 @@ private:
 
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> voiceCap { 8 }, unisonCap { kMaxUnisonVoices };
+    std::atomic<int> lowUnisonCap { kDefaultLowTierUnisonCap };
     std::atomic<int> activeCount { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };

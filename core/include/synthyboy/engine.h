@@ -136,6 +136,8 @@ public:
 
 /** The engine written for this project (always built; the only engine on iOS). */
 std::unique_ptr<IEngine> createOwnEngine();
+/** Own engine only: the unison voices per oscillator at tier low (see OwnEngine::setLowTierUnisonCap; 0 = no cap, default 3). False if `engine` is not an own engine. */
+bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept;
 
 enum class EngineKind
 {

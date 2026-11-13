@@ -23,6 +23,15 @@ std::unique_ptr<IEngine> createOwnEngine()
     return std::make_unique<own::OwnEngine>();
 }
 
+bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept
+{
+    auto* own = dynamic_cast<own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return false;
+    own->setLowTierUnisonCap (voices);
+    return true;
+}
+
 namespace own
 {
 namespace
@@ -858,7 +867,13 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.channelAftertouch = aftertouch;
     globals.lfoPhase = lfoPhase;
     globals.rlfoValue = rlfoValue;
-    globals.maxUnison = unisonCap.load (std::memory_order_relaxed);
+    {
+        int mu = unisonCap.load (std::memory_order_relaxed);
+        const int lowCap = lowUnisonCap.load (std::memory_order_relaxed);
+        if (qualityTier.load (std::memory_order_relaxed) == 0 && lowCap > 0)
+            mu = std::min (mu, lowCap);
+        globals.maxUnison = mu;
+    }
     // announce the content set this block reads (hazard pointer: the message thread frees a set only when it is neither current nor announced)
     {
         const ContentSet* cs;
