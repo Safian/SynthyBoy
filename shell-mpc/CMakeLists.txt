@@ -19,9 +19,15 @@ set_target_properties(synthyboy_mpc PROPERTIES
     C_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON)
 
-# Engine selection follows SYNTHYBOY_HAS_VITAL from the core target (core/CMakeLists.txt ~66/69).
-# The core target defines SYNTHYBOY_HAS_VITAL as a PUBLIC compile definition;
-# the shell source selects the engine via #if SYNTHYBOY_HAS_VITAL.
+# Engine selection follows SYNTHYBOY_SHELL_ENGINE (same as the root CMakeLists.txt for the JUCE shell).
+# When SYNTHYBOY_SHELL_ENGINE is "vital" and Vital is in the build, SYNTHYBOY_MPC_ENGINE_VITAL=1;
+# otherwise SYNTHYBOY_MPC_ENGINE_VITAL=0. The source uses #if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL.
+if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
+    set(SYNTHYBOY_MPC_ENGINE_VITAL 1)
+else()
+    set(SYNTHYBOY_MPC_ENGINE_VITAL 0)
+endif()
+target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SYNTHYBOY_MPC_ENGINE_VITAL})
 
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
@@ -35,7 +41,9 @@ if(APPLE)
         "-Wl,-dead_strip")
 endif()
 
-# Linux: use version script + exclude-libs (no leading underscore)
+# Linux: use version script + exclude-libs (no leading underscore).
+# The ARM build for the MPC is made with GCC (scripts/build-armv7-mpc.sh);
+# --exclude-libs,ALL is not understood by zig's linker, and a zig-built module crashed at host exit on the device.
 if(UNIX AND NOT APPLE)
     set(VERSION_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/mpc_exports.map")
     file(WRITE ${VERSION_SCRIPT} "{

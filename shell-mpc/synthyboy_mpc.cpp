@@ -21,6 +21,7 @@
 #include "synthyboy/user_content.h"
 
 #include "mpc_vst2_abi.h"
+#include "plugin_paths.h"
 
 // ---------------------------------------------------------------------------
 // Denormal flush helpers (cross-platform)
@@ -83,6 +84,17 @@ static inline void flushDenormalsRestore(uint32_t saved) noexcept
 #endif
 }
 
+// Copy src into dst, at most dstSize-1 bytes, always NUL-terminating.
+// Replaces strncpy to avoid -Wstringop-truncation with GCC 12.
+static inline void copyString(char* dst, size_t dstSize, const char* src) noexcept
+{
+    if (dstSize == 0) return;
+    size_t i = 0;
+    for (; i < dstSize - 1 && src[i] != '\0'; ++i)
+        dst[i] = src[i];
+    dst[i] = '\0';
+}
+
 // ---------------------------------------------------------------------------
 // VSTPluginMain forward declaration (used for dladdr content path)
 // ---------------------------------------------------------------------------
@@ -107,11 +119,41 @@ struct EventBuffer
             slots[count++] = ev;
             return;
         }
-        // Full: replace only the last element; if this is a note-off give it
-        // the last element's frame so the list stays sorted.
+        // Buffer is full.
+        if (ev.type != synthyboy::Event::NoteOff)
+        {
+            // Not a note-off: it may replace the last element (newest value wins), but never a note-off,
+            // which would leave a note hanging; then the new event is the one that is dropped.
+            if (slots[count - 1].type != synthyboy::Event::NoteOff)
+            {
+                synthyboy::Event e = ev;
+                if (count >= 2 && e.frame < slots[count - 2].frame) e.frame = slots[count - 2].frame;
+                slots[count - 1] = e;
+            }
+            return;
+        }
+        // Note-off when full: search backwards for the last element that is NOT
+        // a note-off, remove it by shifting following elements down by one,
+        // then append this note-off at the end.
+        // If every element is a note-off, drop the new one.
+        int replaceIdx = -1;
+        for (int i = static_cast<int>(count) - 1; i >= 0; --i)
+        {
+            if (slots[static_cast<size_t>(i)].type != synthyboy::Event::NoteOff)
+            {
+                replaceIdx = i;
+                break;
+            }
+        }
+        if (replaceIdx < 0)
+            return;  // every element is a note-off: drop the new one
+        // Shift elements [replaceIdx+1 .. count-1] down by one
+        for (int i = replaceIdx + 1; i < static_cast<int>(count); ++i)
+            slots[static_cast<size_t>(i - 1)] = slots[static_cast<size_t>(i)];
+        // Append the note-off at the end; frame = max(ev.frame, slots[count-2].frame)
         synthyboy::Event e = ev;
-        if (e.type == synthyboy::Event::NoteOff && e.frame < slots[count - 1].frame)
-            e.frame = slots[count - 1].frame;
+        if (count >= 2 && e.frame < slots[count - 2].frame)
+            e.frame = slots[count - 2].frame;
         slots[count - 1] = e;
     }
 
@@ -142,7 +184,7 @@ struct PluginInstance
     std::vector<char> chunkBuffer;
 
     // User content store (for resolving content references)
-    std::unique_ptr<synthyboy::IContentStore> contentStore;
+    std::unique_ptr<synthyboy::UserContentStore> contentStore;
 
     // Thread-safe parameter mirror (single source of truth for all threads)
     std::atomic<float> paramMirror[synthyboy::kMaxParams];
@@ -153,36 +195,28 @@ struct PluginInstance
 
     PluginInstance()
     {
-        // Create engine based on SYNTHYBOY_HAS_VITAL (from core)
-#if SYNTHYBOY_HAS_VITAL
+        // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
+#if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL
         engine = synthyboy::createEngine(synthyboy::EngineKind::vital);
 #else
         engine = synthyboy::createEngine(synthyboy::EngineKind::own);
 #endif
 
-        // Build content store path: Content/ next to the plugin binary
+        // Build content store path: Content/ next to the plugin binary.
+        // UserContentStore keeps its files under <user directory>/content.
         Dl_info info;
+        std::string pluginFolder;
+        if (dladdr (reinterpret_cast<const void*>(&VSTPluginMain), &info) && info.dli_fname)
+            pluginFolder = synthyboy_mpc::pluginFolderFor (info.dli_fname);
+
         std::string contentDir;
-        if (dladdr(reinterpret_cast<const void*>(&VSTPluginMain), &info) && info.dli_fname)
+        if (!pluginFolder.empty())
         {
-            std::string binPath(info.dli_fname);
-            std::string binDir;
-            auto pos = binPath.find_last_of('/');
-            if (pos != std::string::npos)
-                binDir = binPath.substr(0, pos);
-            else
-                binDir = ".";
-            // If binary is in a VST subfolder, go up one more level
-            auto vstPos = binDir.find("/VST");
-            if (vstPos != std::string::npos)
-                binDir = binDir.substr(0, vstPos);
-            contentDir = binDir + "/Content";
-        }
-        if (!contentDir.empty())
-        {
-            contentStore = std::make_unique<synthyboy::UserContentStore>(contentDir);
+            contentDir = synthyboy_mpc::contentDirFor (pluginFolder);
+            contentStore = std::make_unique<synthyboy::UserContentStore> (contentDir);
+            contentStore->addPackRoot (contentDir + "/packs"); // installed content packs: <user directory>/packs/<pack>/<file>
             if (engine)
-                engine->setContentStore(contentStore.get());
+                engine->setContentStore (contentStore.get());
         }
 
         // Apply default values to engine and mirror
@@ -282,7 +316,7 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
             int prog = inst->currentProgram;
             if (prog < 0) prog = 0;
             if (prog >= PluginInstance::kNumPrograms) prog = PluginInstance::kNumPrograms - 1;
-            std::strncpy(name, PluginInstance::kProgramNames[prog], kVstMaxProgNameLen + 1);
+            copyString(name, kVstMaxProgNameLen + 1, PluginInstance::kProgramNames[prog]);
             name[kVstMaxProgNameLen] = '\0';
         }
         return 1;
@@ -293,7 +327,7 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
         char* name = static_cast<char*>(ptr);
         if (name && index >= 0 && index < PluginInstance::kNumPrograms)
         {
-            std::strncpy(name, PluginInstance::kProgramNames[index], kVstMaxProgNameLen + 1);
+            copyString(name, kVstMaxProgNameLen + 1, PluginInstance::kProgramNames[index]);
             name[kVstMaxProgNameLen] = '\0';
             return 1;
         }
@@ -318,13 +352,13 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
 
         if (opcode == effGetParamName)
         {
-            std::strncpy(buf, info->name, kMaxParamStr);
+            copyString(buf, kMaxParamStr, info->name);
             buf[kMaxParamStr - 1] = '\0';
         }
         else if (opcode == effGetParamLabel)
         {
             const char* unit = synthyboy::unitLabel(info->unit);
-            std::strncpy(buf, unit, kMaxParamStr);
+            copyString(buf, kMaxParamStr, unit);
             buf[kMaxParamStr - 1] = '\0';
         }
         else // effGetParamDisplay
@@ -480,7 +514,7 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
         std::memset(props, 0, sizeof(*props));
 
         // Fill basic info
-        std::strncpy(props->label, synthyboy::unitLabel(info->unit), sizeof(props->label));
+        copyString(props->label, sizeof(props->label), synthyboy::unitLabel(info->unit));
         props->stepFloat = info->interval > 0 ? info->interval : (info->max - info->min) / 1000.0f;
         props->smallStepFloat = info->interval > 0 ? info->interval : (info->max - info->min) / 10000.0f;
         props->largeStepFloat = info->interval > 0 ? info->interval : (info->max - info->min) / 100.0f;
@@ -502,7 +536,7 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
         char* name = static_cast<char*>(ptr);
         if (name)
         {
-            std::strncpy(name, "SynthyBoy", kVstMaxEffectNameLen + 1);
+            copyString(name, kVstMaxEffectNameLen + 1, "SynthyBoy");
             name[kVstMaxEffectNameLen] = '\0';
         }
         return 1;
@@ -513,7 +547,7 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
         char* vendor = static_cast<char*>(ptr);
         if (vendor)
         {
-            std::strncpy(vendor, "Safian", kVstMaxVendorStrLen + 1);
+            copyString(vendor, kVstMaxVendorStrLen + 1, "Safian");
             vendor[kVstMaxVendorStrLen] = '\0';
         }
         return 1;
@@ -524,7 +558,7 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
         char* product = static_cast<char*>(ptr);
         if (product)
         {
-            std::strncpy(product, "SynthyBoy", kVstMaxProductStrLen + 1);
+            copyString(product, kVstMaxProductStrLen + 1, "SynthyBoy");
             product[kVstMaxProductStrLen] = '\0';
         }
         return 1;
@@ -575,7 +609,7 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!props) return 0;
 
         std::memset(props, 0, sizeof(*props));
-        std::strncpy(props->label, "Out", sizeof(props->label));
+        copyString(props->label, sizeof(props->label), "Out");
         props->flags = kVstPinIsActive;
 
         if (opcode == effGetOutputProperties)

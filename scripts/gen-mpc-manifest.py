@@ -3,10 +3,15 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: python3 -I scripts/gen-mpc-manifest.py [--out DIR | --check FILE] [--manifest PATH]
+# Usage: python3 -I scripts/gen-mpc-manifest.py [--out DIR | --check FILE | --plugin-dir DIR] [--manifest PATH]
 #
-# Reads the repository root plugin.json and writes an MPC SDK-format plugin.json
-# (see docs/plugin-folder-format.md and schemas/plugin.schema.json in the MPC plugin SDK).
+# Modes:
+#   --out DIR          write plugin.json into DIR (from root manifest)
+#   --check FILE       compare generated output to FILE (no write)
+#   --plugin-dir DIR   fill a plugin folder that already holds binaries in DIR/VST/:
+#                      write plugin.json with file32/file64 only for existing .so files,
+#                      and version.xml with the root manifest version (+ ".0" as fourth part).
+#                      Exits 2 on error.
 
 import argparse
 import json
@@ -50,12 +55,16 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Generates an MPC plugin.json (see the header)")
     parser.add_argument("--out", help="write plugin.json into DIR")
     parser.add_argument("--check", help="compare generated output to FILE (no write)")
+    parser.add_argument("--plugin-dir", help="fill a plugin folder that already holds binaries in DIR/VST/")
     parser.add_argument("--manifest", default=None,
                         help="path to the root manifest (default: plugin.json next to this script)")
     args = parser.parse_args(argv)
 
-    if not args.out and not args.check:
-        parser.error("one of --out or --check is required")
+    modes = sum([bool(args.out), bool(args.check), bool(args.plugin_dir)])
+    if modes == 0:
+        parser.error("one of --out, --check, or --plugin-dir is required")
+    if modes > 1:
+        parser.error("only one of --out, --check, --plugin-dir may be specified")
 
     if args.manifest:
         manifest_path = Path(args.manifest)
@@ -68,6 +77,52 @@ def main(argv=None):
         print("gen-mpc-manifest: cannot read %s: %s" % (manifest_path, e), file=sys.stderr)
         return 1
 
+    # --plugin-dir mode
+    if args.plugin_dir:
+        plugin_dir = Path(args.plugin_dir)
+        if not plugin_dir.is_dir():
+            print("gen-mpc-manifest: %s is not a directory" % plugin_dir, file=sys.stderr)
+            return 2
+
+        vst_dir = plugin_dir / "VST"
+        has_32 = (vst_dir / "synthyboy-arm32.so").is_file()
+        has_64 = (vst_dir / "synthyboy-arm64.so").is_file()
+
+        if not has_32 and not has_64:
+            print("gen-mpc-manifest: no binary found in %s/VST/" % plugin_dir, file=sys.stderr)
+            return 2
+
+        # plugin.json with only the binaries that exist
+        mpc = generate(root)
+        if not has_32:
+            del mpc["file32"]
+        if not has_64:
+            del mpc["file64"]
+
+        plugin_json_path = plugin_dir / "plugin.json"
+        plugin_json_path.write_text(json.dumps(mpc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        # Build version.xml
+        version_parts = root["version"].split(".")
+        while len(version_parts) < 4:
+            version_parts.append("0")
+        version_text = ".".join(version_parts[:3]) + ".0"
+
+        has_skins = (plugin_dir / "Plugin Skins" / "TUI.json").is_file()
+
+        xml_lines = ['<?xml version="1.0" encoding="utf-8"?>']
+        xml_lines.append('<plugincontent>')
+        xml_lines.append('    <version>%s</version>' % version_text)
+        if has_skins:
+            xml_lines.append('    <uiversion>0.1.0.0</uiversion>')
+        xml_lines.append('</plugincontent>')
+        version_xml_path = plugin_dir / "version.xml"
+        version_xml_path.write_text("\n".join(xml_lines) + "\n", encoding="utf-8")
+
+        print("wrote %s and %s" % (plugin_json_path, version_xml_path))
+        return 0
+
+    # --out / --check modes (unchanged)
     mpc = generate(root)
     text = json.dumps(mpc, indent=2, ensure_ascii=False) + "\n"
 
