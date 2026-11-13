@@ -150,6 +150,8 @@ else
     python3 "$repo_root/scripts/gen-mpc-ui.py" --params "$repo_root/docs/params.json" --pages "$repo_root/docs/kick-pages.json" \
         --layout "$repo_root/scripts/mpc-ui-pages.json" --out "$ui_tmp"
     python3 "$MPC_SDK/tools/gen_ui.py" --params "$ui_tmp/params-hostsim.json" --ui "$ui_tmp/ui.json" --out "$plugin_folder/Plugin Skins" --quiet
+    # Graphical extras (scripts/mpc-skin-extras/*.py) on top of the generated skin; not for a given --skins directory
+    python3 "$repo_root/scripts/apply-mpc-skin-extras.py" --skins "$plugin_folder/Plugin Skins" --params "$repo_root/docs/params.json"
     rm -rf "$ui_tmp"
 fi
 
