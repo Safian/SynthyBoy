@@ -8,11 +8,11 @@ The drafts are ranked in descending order by the amount of debugging time they w
 
 ## Issue 1: EnvelopeOverlay drops entire skin silently when built with documented minimal key set; requires factory DAHDSR key set
 
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
+- **MPC Model & Firmware:** MPC Key 61, MPC 3.10.1.12
 - **What the docs / validator say:**
-  `docs/ui-reference.md` section 6.13 states: *"The key list is long and the set of stage handles present depends on `envelopeType`. The recommended, best-understood configuration is `ADSR`."* In the table, keys `forceHideShapeHandles`, `forceCurveShape`, `decayAndReleaseCurvesLinked`, and `curveType` are described as *"optional"*, and shape handles are described as: *"Shape (curve) handles for the corresponding stages; bind to 'Invalid' when the plugin has no shape parameters."* `tools/validate.py` performs no schema validation on `Envelope` or `EnvelopeOverlay` objects.
+  `docs/ui-reference.md` section 6.13 states: *"The key list is long and the set of stage handles present depends on `envelopeType`. The recommended, best-understood configuration is `ADSR`."* In the table, keys `forceHideShapeHandles`, `forceCurveShape`, `decayAndReleaseCurvesLinked`, and `curveType` are described as *"optional"*, and shape handles are described as: *"Shape (curve) handles for the corresponding stages; bind to \"Invalid\" when the plugin has no shape parameters."* `tools/validate.py` performs no schema validation on `Envelope` or `EnvelopeOverlay` objects.
 - **What was observed:**
-  On the MPC Key 61, an `EnvelopeOverlay` defined in `localComponentDefinitions` is loaded only when it contains the complete key set of the factory Sub Factory `DAHDSR` envelope: `attackShapeHandle`, `decayShapeHandle`, `releaseShapeHandle`, `forceHideShapeHandles`, `forceCurveShape`, `decayAndReleaseCurvesLinked`, and `curveType`. When built using the minimal key set documented in `ui-reference.md` (e.g. `ADSR`, `AD`, `AHDS`, `Pumper`), the host silently drops the entire skin, resulting in an empty plugin edit page with zero tabs and no error log line on device. This occurs even if no tab references the overlay definition.
+  On the MPC Key 61, an `EnvelopeOverlay` defined in `localComponentDefinitions` is loaded only when it contains the complete key set of the factory Sub Factory `DAHDSR` envelope: `attackShapeHandle`, `decayShapeHandle`, `releaseShapeHandle`, `forceHideShapeHandles`, `forceCurveShape`, `decayAndReleaseCurvesLinked`, and `curveType`. When built using the minimal key set documented in `ui-reference.md` (e.g. `ADSR`, `AD`, `AHDS`, `Pumper`), the host drops the entire skin, resulting in an empty plugin edit page with zero tabs and no error log line on device. This occurs even if no tab references the overlay definition.
 - **Minimal reproduction:**
 
 ```json
@@ -61,96 +61,9 @@ The drafts are ranked in descending order by the amount of debugging time they w
 
 ---
 
-## Issue 2: TUI.json with component schema errors is silently dropped with no log lines or validator detection
+## Issue 2: Label of type "Text" is not drawn unless Data handle is remapped to a valid parameter
 
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
-- **What the docs / validator say:**
-  `docs/troubleshooting.md` (section *"The plugin loads but the edit screen has no tabs"*) states: *"TUI.json failed to parse. Common causes: a version number the MPC does not accept, a missing required key, a trailing comma. tools/validate.py checks the generated skins; for hand-written ones compare against docs/ui-reference.md."*
-- **What was observed:**
-  `tools/validate.py` only validates top-level `pageData`, `tabs` array structure, parameter handle bounds, and image file presence; it does not validate child components or `localComponentDefinitions`. When `TUI.json` contains a missing mandatory key, unknown widget type, or malformed component definition, the MPC host drops the skin completely. The edit screen is displayed blank with no tabs or controls, and the host emits no diagnostics, warnings, or log messages anywhere on the device.
-- **Minimal reproduction:**
-
-```json
-{
-  "pageData": {
-    "version": 1,
-    "componentDefinitions": {
-      "version": 2,
-      "importFiles": [],
-      "localComponentDefinitions": [
-        {
-          "key": "badWidget",
-          "value": {
-            "version": 4,
-            "actions": [],
-            "backgroundData": {
-              "version": 1,
-              "focussed": {"version": 1, "colour": "0", "image": ""},
-              "unfocussed": {"version": 1, "colour": "0", "image": ""}
-            },
-            "ignoreMousePresses": false,
-            "disableCoarseDataWheel": false,
-            "repeats": 1,
-            "hideQLinkBounds": false,
-            "componentsData": [
-              {
-                "version": 2,
-                "componentData": {
-                  "version": 1,
-                  "name": "incomplete",
-                  "type": "Knob",
-                  "data": {"version": 1}
-                },
-                "handle remapping": {"version": 1, "map": []},
-                "bounds": {
-                  "version": 1,
-                  "acceptsHWFocus": "Yes",
-                  "showWhenDataModelInvalid": "Hide",
-                  "whenVisible": "Always",
-                  "boundsType": "Absolute",
-                  "bounds": "0 0 100 100"
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "tabs": [
-      {
-        "version": 1,
-        "tabName": "Main",
-        "fnKeyIndex": 0,
-        "fnKeySubIndex": 0,
-        "componentDefinition": {
-          "version": 4,
-          "actions": [],
-          "backgroundData": {
-            "version": 1,
-            "focussed": {"version": 1, "colour": "0", "image": ""},
-            "unfocussed": {"version": 1, "colour": "0", "image": ""}
-          },
-          "ignoreMousePresses": false,
-          "disableCoarseDataWheel": false,
-          "repeats": 1,
-          "hideQLinkBounds": false,
-          "componentsData": []
-        },
-        "qlinkBoundsData": []
-      }
-    ]
-  }
-}
-```
-
-- **Suggested doc or validator change:**
-  Add deep component validation to `tools/validate.py` covering all widget types and required properties. Document in `docs/troubleshooting.md` that hardware firmware produces no console or syslog output upon skin load failure.
-
----
-
-## Issue 3: Label of type "Text" is not drawn unless Data handle is remapped to a valid parameter
-
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
+- **MPC Model & Firmware:** MPC Key 61, MPC 3.10.1.12
 - **What the docs / validator say:**
   `docs/ui-reference.md` section 6.3 (*"Label"*) states in its key table:
   *"`handleName` | handle | `\"Data\"` | Ignored for `Text`, but must still be present (use `\"Invalid\"` or `\"Data\"`)."*
@@ -201,11 +114,11 @@ The drafts are ranked in descending order by the amount of debugging time they w
 
 ---
 
-## Issue 4: Host does not poll getParameter; UI controls redraw only upon audioMasterAutomate
+## Issue 3: Host does not poll getParameter; UI controls redraw only upon audioMasterAutomate
 
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
+- **MPC Model & Firmware:** MPC Key 61, MPC 3.10.1.12
 - **What the docs / validator say:**
-  `docs/ui-reference.md` section 6.15 (*"Meter"*) notes: *"the MPC has no audio-level feed from a VST plugin, so the only way to drive a `Meter` is from a **parameter** the plugin updates itself (write the level into a read-only parameter from the audio thread)."* `docs/host-contract.md` mentions parameter and UI handling but does not state that `audioMasterAutomate` is required for host display updates.
+  `docs/ui-reference.md` section 6.15 (*"Meter"*) notes: *"the MPC has no audio-level feed from a VST plugin, so the only way to drive a `Meter` is from a **parameter** the plugin updates itself (write the level into a read-only parameter from the audio thread)."* `docs/host-contract.md` mentions parameter and UI handling under *"Parameters"* and *"UI"*, but the documentation does not mention that `audioMasterAutomate` is required for host display updates.
 - **What was observed:**
   The MPC host never polls `getParameter` to refresh on-screen UI elements (knobs, faders, value text, film-strip images, or meters). A parameter updated by the plugin without calling `audioMasterAutomate` remains stuck at its previous on-screen display value indefinitely. On-screen controls redraw only when the plugin explicitly invokes `audioMasterAutomate(paramIndex, value)`.
 - **Minimal reproduction:**
@@ -220,9 +133,9 @@ The drafts are ranked in descending order by the amount of debugging time they w
     "data": {
       "version": 2,
       "imageType": "FilmStrip",
-      "filmStrip": "cursor_strip.png",
+      "colour": "0",
+      "image": "cursor_strip.png",
       "numFrames": 33,
-      "invert": false,
       "handleName": "Data"
     }
   },
@@ -254,9 +167,9 @@ audioMasterAutomate(100, normalizedValue);
 
 ---
 
-## Issue 5: Plotter widget bound to Parameter N displays nothing (remains empty grey box)
+## Issue 4: Plotter widget bound to Parameter N displays nothing (remains empty grey box)
 
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
+- **MPC Model & Firmware:** MPC Key 61, MPC 3.10.1.12
 - **What the docs / validator say:**
   `docs/ui-reference.md` section 6.16 (*"Plotter"*) documents the widget as functional: *"Draws a value as a line with optional history (a scrolling trace)."* The table lists `dataHandle` as a handle, and the section provides an example binding to a parameter: `"dataHandle": "Parameter 12"`.
 - **What was observed:**
@@ -304,39 +217,11 @@ audioMasterAutomate(100, normalizedValue);
 
 ---
 
-## Issue 6: Bounds object with "version": 2 requires explicit "additionalInvalidatingHandles" key
+## Issue 5: tools/validate.py rejects skins with >32 total tabs although firmware loads 34+ sub-tabs across <=32 function keys
 
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
+- **MPC Model & Firmware:** MPC Key 61, MPC 3.10.1.12
 - **What the docs / validator say:**
-  `docs/ui-reference.md` section 5.2 table lists `additionalInvalidatingHandles` as: *"yes (v2) | 2 | `[]`"*, suggesting that the empty array is a default. Section 5.1 states: *"Version 2 adds additionalInvalidatingHandles"*. `tools/validate.py` does not validate `bounds` object keys.
-- **What was observed:**
-  When a `bounds` object specifies `"version": 2`, the key `"additionalInvalidatingHandles"` must be explicitly present in the JSON object (e.g. `"additionalInvalidatingHandles": []`). If the key is omitted, the MPC firmware bounds parser fails, causing the host to discard the skin and display an empty plugin edit page.
-- **Minimal reproduction:**
-
-```json
-{
-  "version": 2,
-  "acceptsHWFocus": "Yes",
-  "showWhenDataModelInvalid": "Hide",
-  "whenVisible": "Always",
-  "boundsType": "Absolute",
-  "bounds": "343 45 278 107",
-  "additionalInvalidatingHandles": []
-}
-```
-
-*(Note: Omitting `"additionalInvalidatingHandles"` while keeping `"version": 2` drops the skin on device.)*
-
-- **Suggested doc or validator change:**
-  Clarify in `docs/ui-reference.md` section 5.2 that `"additionalInvalidatingHandles"` is mandatory when using `"version": 2` and is not defaulted by the host parser. Add a check in `tools/validate.py` to enforce that `"version": 2` bounds objects include this key.
-
----
-
-## Issue 7: tools/validate.py rejects skins with >32 total tabs although firmware loads 34+ sub-tabs across <=32 function keys
-
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
-- **What the docs / validator say:**
-  `docs/ui-reference.md` section 3.5 states: *"at most 32 tabs in total"*. `tools/validate.py` (lines 35, 456–457) enforces `MAX_TABS = 32`:
+  `docs/ui-reference.md` section 3.5 states: *"Limits: at most **32 tabs** in total and at most **8 sub-tabs** per function key. Tabs beyond those limits are not supported."* `tools/validate.py` (lines 35, 456–457) enforces `MAX_TABS = 32`:
   ```python
   if len(tabs) > MAX_TABS:
       rep.error("TUI.json: %d tabs; at most %d are supported" % (len(tabs), MAX_TABS))
@@ -378,13 +263,13 @@ audioMasterAutomate(100, normalizedValue);
 
 ---
 
-## Issue 8: Decoded film strips are unpacked into /var/tmp/filmstrips and persist until reboot
+## Issue 6: Decoded film strips are unpacked into /var/tmp/filmstrips on internal root filesystem
 
-- **MPC Model & Firmware:** MPC Key 61, MPC OS 3.10.1.12
+- **MPC Model & Firmware:** MPC Key 61, MPC 3.10.1.12
 - **What the docs / validator say:**
   `docs/ui-reference.md` section 1.6 describes film strip format (vertical PNGs) and section 6.4 covers `Knob` film strips. The documentation does not describe host image decoding behavior, caching directories, or disk consumption in temporary partitions.
 - **What was observed:**
-  On the MPC Key 61, the host unpacks every film strip PNG into uncompressed image files located in `/var/tmp/filmstrips/` on the internal root filesystem. For our plugin's skin, 174 files totaling 422 MB were written to `/var/tmp/filmstrips/`. Identical film strip files shared across multiple controls (such as LFO waveforms) are unpacked only once. However, these decoded files are not cleared when switching plugins or projects; they persist in `/var/tmp/filmstrips/` until the device is rebooted. Plugins using large or numerous film strips can risk exhausting root partition space.
+  On the MPC Key 61, the host unpacks every film strip PNG into uncompressed image files located in `/var/tmp/filmstrips/` on the internal root filesystem (decoded size counts: `width * height * frames * 4 bytes`). For our plugin's skin, 174 files totaling 422 MB were written to `/var/tmp/filmstrips/` (without the LFO pictures, 173 files totaling 417 MB). Identical film strip files shared across multiple controls (such as the four LFOs) are unpacked only once.
 - **Minimal reproduction:**
 
 ```json
@@ -399,17 +284,17 @@ audioMasterAutomate(100, normalizedValue);
 ```
 
 - **Suggested doc or validator change:**
-  Document in `docs/ui-reference.md` and `docs/troubleshooting.md` that the host caches unpacked film strips in `/var/tmp/filmstrips/` at decoded size (`width * height * frames * 4 bytes`), and that this cache is cleared only at boot. Recommend sharing film strip assets across controls and keeping total decoded asset footprint within safe limits.
+  Document in `docs/ui-reference.md` and `docs/troubleshooting.md` that the host caches unpacked film strips in `/var/tmp/filmstrips/` at decoded size (`width * height * frames * 4 bytes`). Recommend sharing film strip assets across controls and keeping total decoded asset footprint within safe limits.
 
 ---
 
-## Issue 9: Native Meter widget bound to parameter is fully functional on hardware (arm32 and arm64)
+## Issue 7: Native Meter widget bound to parameter is fully functional on hardware (arm32 and arm64)
 
-- **MPC Model & Firmware:** MPC Key 61 and MPC XL, MPC OS 3.10.1.12
+- **MPC Model & Firmware:** MPC Key 61 and MPC XL, MPC 3.10.1.12
 - **What the docs / validator say:**
-  `docs/ui-reference.md` section 6.15 categorizes `Meter` under *"(less tested)"* and cautions that third-party plugins have no direct audio feed, leaving parameter-driven meters uncertain.
+  `docs/ui-reference.md` section 6.15 categorizes `Meter` under *"(less tested)"* and cautions: *"Note for third-party plugins: the MPC has no audio-level feed from a VST plugin, so the only way to drive a `Meter` is from a **parameter** the plugin updates itself (write the level into a read-only parameter from the audio thread). `Hold/` (section 7) can provide the peak hold."*
 - **What was observed:**
-  On both 32-bit (MPC Key 61) and 64-bit (MPC XL) hardware, native `Meter` widgets bound to plugin parameters work reliably with both horizontal (`direction: "Right"`) and vertical (`direction: "Up"`) orientations. When configured with the complete version 3 key set (`version: 3`, `rmsImage: ""`, `rmsHandle: "Invalid"`, `peakHoldSize: 0`), up to 32 simultaneous meters refreshed at 25 Hz operated smoothly on screen. Measurements with `SYNTHYBOY_MPC_CALLBACK_STATS` confirmed that 32 live meters did not hold up the audio callback on either machine (all callback gaps remained below 1.5× the nominal block time; audio callback averaged ~68 µs on Key 61 and ~14 µs on XL).
+  On both 32-bit (MPC Key 61) and 64-bit (MPC XL) hardware, native `Meter` widgets bound to plugin parameters work reliably with both horizontal (`direction: "Right"`) and vertical (`direction: "Up"`) orientations. When configured with the complete version 3 key set (`version: 3`, `rmsImage: ""`, `rmsHandle: "Invalid"`, `peakHoldSize: 0`), up to 32 simultaneous meters refreshed at 25 Hz operated smoothly on screen. Measurements with our plugin's callback statistics diagnostics confirmed that 32 live meters did not hold up the audio callback on either machine (all callback gaps remained in the bucket below 1.5× the nominal block time; audio callback averaged ~68–70 µs on Key 61 and ~14 µs on XL).
 - **Minimal reproduction:**
 
 ```json
@@ -424,10 +309,10 @@ audioMasterAutomate(100, normalizedValue);
       "direction": "Up",
       "invert": false,
       "inactiveImage": "meter_off.png",
-      "rmsImage": "",
-      "rmsHandle": "Invalid",
       "peakImage": "meter_on.png",
+      "rmsImage": "",
       "peakHandle": "Data",
+      "rmsHandle": "Invalid",
       "peakHoldHandle": "Hold/Data",
       "peakHoldSize": 0,
       "peakHoldColour": "0"
@@ -455,7 +340,7 @@ audioMasterAutomate(100, normalizedValue);
 
 ## Not included (no measured statement found)
 
-The following expected topics were investigated against the measured hardware facts in `docs/MPC.md`, but no hardware measurements were found in the repository documentation:
+The following topics were investigated against the measured hardware facts in `docs/MPC.md`, but no hardware measurements were found in the repository documentation:
 
 1. **`XYPad` works:**
    While `XYPad` is listed in `docs/ui-reference.md` section 6.14, no empirical tests or measurements of `XYPad` on MPC hardware are documented in `docs/MPC.md`.
@@ -463,3 +348,11 @@ The following expected topics were investigated against the measured hardware fa
    Touch gesture tracking (pinch, pan, long-press) is implemented in our plugin's standalone desktop JUCE interface and described in `docs/BITMAP-GUI-EXTENSION.md`, but was not measured or documented for native MPC JSON skin widgets in `docs/MPC.md`.
 3. **Mouse wheel / right click / hover do nothing on skin widgets:**
    Mouse wheel, secondary click, and hover event handling are specified for the desktop bitmap GUI protocol (`docs/BITMAP-GUI-EXTENSION.md`), but no measured statements regarding mouse interactions on standalone MPC hardware appear in `docs/MPC.md`.
+4. **Pad MIDI velocity and polyphonic aftertouch behavior with FULL LEVEL on/off:**
+   The hypothesis that with FULL LEVEL on, pads send velocity 127 and no poly aftertouch to an external plugin, and with it off they send velocity and poly aftertouch but never X/Y, was checked against `docs/MPC.md`. No pad MIDI or FULL LEVEL measurements are documented in `docs/MPC.md`.
+5. **General component schema errors in `TUI.json` (untested widget types, malformed component definitions) silently dropping skin:**
+   While `docs/MPC.md` lines 163–164 documents that an `EnvelopeOverlay` with a minimal key set causes the host to drop the entire skin without an error log message, general component schema corruption (unknown widget types, missing required keys in arbitrary components) was not systematically tested or documented as measured on hardware in `docs/MPC.md`.
+6. **Bounds object version 2 requires explicit `"additionalInvalidatingHandles"` key:**
+   While `docs/MPC.md` lines 174, 215, and 311 reference bounds version 2 and the usage of `additionalInvalidatingHandles` for conditional visibility (`IndexedEnabling`), no hardware measurement or test documenting that omitting this key fails the firmware parser or drops the skin appears in `docs/MPC.md`.
+7. **Decoded film strip persistence until reboot:**
+   While `docs/MPC.md` line 113 measures that the host unpacks film strips into `/var/tmp/filmstrips/` (174 files totaling 422 MB) and unpacks shared strips only once, `docs/MPC.md` does not document tests regarding whether these files persist across project or plugin unloads until reboot, nor partition exhaustion measurements.
