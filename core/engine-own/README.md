@@ -69,5 +69,17 @@ convolver on a helper thread from the impulse of the content store. `fx_latency.
 code: an impulse through `own::FilterUnit`, set up by `own::fillFilterSettings` (`voice/filter_setup.h`), the same function `Voice::tick` uses; FFT with `wtedit::Radix2Fft`.
 The header comment is the how-to for a display: subscribe `FilterResponse::readoutIndices (n, idx)` (cutoff, resonance) with `IEngine::setReadoutTargets`, read
 `IEngine::copyReadout (live)` on the display timer (any thread; `live.target[]` is the modulated value in plain Hz / percent, the plain knob value when nothing modulates it),
-pass them as `Request::cutoffHz` / `resonancePercent` together with the `ParamValues` snapshot to `compute ()` (display thread, no allocation). Test:
-`core/tests/test_own_filter_response.cpp`; command line: `synthyboy_filter_response PRESET.sbpreset [--filter 2] [--points N]` (`tools/filter-response`).
+pass them as `Request::cutoffHz` / `resonancePercent` (`std::optional`: unset = the knob) together with the `ParamValues` snapshot to `compute ()` (display thread, no allocation). Without a
+sounding voice the readout of a subscribed knob follows the sources that have a value without a voice (macros, mod wheel, aftertouch, pitch wheel, last velocity and note). Tests:
+`core/tests/test_own_filter_response*.cpp`, answers to the independent review: `core/docs/filter-response-review-answers.md`; command line: `synthyboy_filter_response PRESET.sbpreset [--filter 2] [--points N]` (`tools/filter-response`).
+
+## LFO shape and oscillator cycle (for the LFO and oscillator displays)
+
+`synthyboy::LfoDisplay` (`core/include/synthyboy/lfo_display.h`) gives the shape of an LFO as the voice plays it: it calls `own::lfoShapeAt` (`env_lfo/lfo_eval.h`), the function
+`Voice::lfoValue` calls too (built-in shapes, custom shape with point modulation, swing, direction, phase offset, sync type, smoothing); the x axis is the time since the note
+started, `LiveValues::lfoPhase` is the cursor on it. `synthyboy::OscCycle` (`core/include/synthyboy/osc_cycle.h`) renders one cycle of the wavetable oscillator with the
+voice's own `own::WtOsc` (frame position with smooth / stepped reading and remap, warp 1 and 2, spectral morph, the oversampled path): the readout of
+`OscCycle::readoutIndices (n, idx)` carries the modulated frame, warp and morph amounts. `LiveValues::envFineStage / envFineFraction` give the envelope stage in six
+steps (delay, attack, hold, decay, sustain, release) with its progress. Tests: `core/tests/test_own_displays.cpp` (the LFO values against the engine's LFO source for every
+shape, the cycle against the output of the engine).
+
