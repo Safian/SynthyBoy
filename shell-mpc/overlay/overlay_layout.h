@@ -7,7 +7,7 @@
 namespace synthyboy_mpc { namespace overlay { namespace layout {
 struct Rect { int x, y, w, h; };
 struct Marker { Rect rect; unsigned rgb; unsigned cover; };   // cover: the colour of what lies under the marker (a transparent view paints it over the marker)
-constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3;
+constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3, kKindSpectrum = 4;
 struct View { const char* name; int kind; int index; Rect region; bool opaque; Marker markers[2]; Rect instance; };   // instance: the film strip image bound to the display parameter "Overlay Instance" (one frame = this size)
 constexpr int kScreenW = 1280;
 constexpr int kScreenH = 800;
@@ -19,7 +19,7 @@ constexpr int kInstanceSteps = 32;   // the parameter's value of frame f is f / 
 constexpr unsigned kInstanceSlotRgb[kMaxInstances] = { 0x1414d8, 0x3e14d8, 0x6814d8, 0x9214d8, 0x143ed8, 0x3e3ed8, 0x683ed8, 0x923ed8, 0x1468d8, 0x3e68d8, 0x6868d8, 0x9268d8, 0x1492d8, 0x3e92d8, 0x6892d8, 0x9292d8 };
 constexpr unsigned kInstanceNoneRgb = 0xc814d8;    // frame 17: an instance without a slot
 constexpr unsigned kInstanceBlankRgb = 0x14c8d8;   // frame 0 (nothing reported yet) and the frames after 17
-constexpr int kNumViews = 13;
+constexpr int kNumViews = 14;
 constexpr View kViews[kNumViews] = {
     { "filter1", 0, 1, { 56, 124, 1168, 232 }, true, { { { 66, 134, 6, 6 }, 0x103a2c, 0x1e1d1e }, { { 1208, 134, 6, 6 }, 0x3a1064, 0x1e1d1e } }, { 78, 134, 6, 6 } },   // tab "Filter 1"
     { "filter2", 0, 2, { 56, 124, 1168, 232 }, true, { { { 66, 134, 6, 6 }, 0x173a2c, 0x1e1d1e }, { { 1208, 134, 6, 6 }, 0x3a1764, 0x1e1d1e } }, { 78, 134, 6, 6 } },   // tab "Filter 2"
@@ -34,5 +34,6 @@ constexpr View kViews[kNumViews] = {
     { "env2", 3, 2, { 23, 178, 1230, 222 }, false, { { { 1180, 180, 4, 4 }, 0x563a2c, 0x1e1d1e }, { { 1200, 180, 4, 4 }, 0x3a5664, 0x1e1d1e } }, { 1190, 180, 4, 4 } },   // tab "Env 2"
     { "env3", 3, 3, { 23, 178, 1230, 222 }, false, { { { 1180, 180, 4, 4 }, 0x5d3a2c, 0x1e1d1e }, { { 1200, 180, 4, 4 }, 0x3a5d64, 0x1e1d1e } }, { 1190, 180, 4, 4 } },   // tab "Env 3"
     { "env4", 3, 4, { 23, 178, 1230, 222 }, false, { { { 1180, 180, 4, 4 }, 0x643a2c, 0x1e1d1e }, { { 1200, 180, 4, 4 }, 0x3a6464, 0x1e1d1e } }, { 1190, 180, 4, 4 } },   // tab "Env 4"
+    { "spectrum", 4, 1, { 36, 590, 1208, 136 }, true, { { { 67, 594, 6, 6 }, 0x6b3a2c, 0x1e1d1e }, { { 1207, 594, 6, 6 }, 0x3a6b64, 0x1e1d1e } }, { 105, 594, 6, 6 } },   // tab "Macros"
 };
 }}} // namespace synthyboy_mpc::overlay::layout

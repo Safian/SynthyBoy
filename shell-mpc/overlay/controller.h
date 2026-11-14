@@ -354,6 +354,7 @@ private:
             case layout::kKindLfo: return std::make_unique<LfoView> (v.index, fixedCost_);
             case layout::kKindOsc: return std::make_unique<OscView> (v.index, fixedCost_);
             case layout::kKindEnv: return std::make_unique<EnvView> (v.index, v);
+            case layout::kKindSpectrum: return std::make_unique<SpectrumView>();
             default: return std::make_unique<NullView> (v.name);
         }
     }

@@ -333,6 +333,9 @@ struct PluginInstance
             inst.overlayAsked.store (true, std::memory_order_release);
             inst.overlayReportDue.store (true, std::memory_order_release);
         }
+#if SYNTHYBOY_MPC_LFO_LIVE && SYNTHYBOY_MPC_SPECTRUM
+        const synthyboy_mpc::SpectrumRing* spectrumRing() const noexcept override { return &inst.spectrumRing; }   // the audio thread writes it; the spectrum view of the overlay thread reads it
+#endif
         PluginInstance& inst;
     };
     OverlayView overlayView { *this };

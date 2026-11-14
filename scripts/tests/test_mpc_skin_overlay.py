@@ -4,6 +4,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import importlib.util
 import json
 import re
 import shutil
@@ -68,7 +69,7 @@ def header_views():
     return out, origin, bg
 
 
-KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3}
+KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4}
 
 
 class SharedConstantsTests(unittest.TestCase):
@@ -110,8 +111,10 @@ class SharedConstantsTests(unittest.TestCase):
                 every.append((v["name"], int(m["rgb"], 16)))
             left, right = v["markers"]
             if v["opaque"]:
-                self.assertLess(left["x"] - c["x"], 30, "the left marker is near the left end of the region")
-                self.assertLess(c["x"] + c["w"] - right["x"] - right["w"], 30, "the right marker is near the right end")
+                # the spectrum view covers the row of the meters: its markers sit in the 8 px gap after the first and before the last meter column (one column pitch from the end)
+                near = 40 if v["kind"] == "spectrum" else 30
+                self.assertLess(left["x"] - c["x"], near, "the left marker is near the left end of the region")
+                self.assertLess(c["x"] + c["w"] - right["x"] - right["w"], near, "the right marker is near the right end")
             else:
                 # the transparent view (envelope marker): the two squares sit side by side in the empty top right corner of the widget, above its top line, 4 x 4 px
                 self.assertEqual((left["w"], left["h"], right["w"], right["h"]), (4, 4, 4, 4), v["name"])
@@ -144,6 +147,26 @@ class SharedConstantsTests(unittest.TestCase):
         self.assertEqual(len(set(names)), len(names))
         tabs = [v["tab"] for v in layout["views"]]
         self.assertEqual(len(set(tabs)), len(tabs), "one view per tab")
+
+    def test_the_spectrum_view_is_the_row_of_the_meters(self):
+        """The numbers of the meter row live in the shared JSON only (meterRow); 40_spectrum.py reads them and the spectrum view covers exactly that row."""
+        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
+        row = layout["meterRow"]
+        width = row["columns"] * row["columnW"] + (row["columns"] - 1) * row["gap"]
+        view = next(v for v in layout["views"] if v["kind"] == "spectrum")
+        self.assertEqual(view["region"], {"x": row["x"], "y": row["y"], "w": width, "h": row["h"]})
+        self.assertEqual(view["tab"], "Macros")
+        self.assertEqual(row["x"], (layout["screen"]["width"] - width) // 2, "the row is centred on the screen")
+        # every marker and the instance picture is in a gap between two columns (not over a meter: with the overlay off the meters are what is seen)
+        pitch = row["columnW"] + row["gap"]
+        gaps = [(row["x"] + k * pitch + row["columnW"], row["x"] + (k + 1) * pitch) for k in range(row["columns"] - 1)]
+        for r in list(view["markers"]) + [view["instance"]]:
+            self.assertTrue(any(a <= r["x"] and r["x"] + r["w"] <= b for a, b in gaps), "%r is inside a gap between two meters" % r)
+        # the module reads the same numbers
+        spec = importlib.util.spec_from_file_location("spectrum_module", ROOT / "scripts" / "mpc-skin-extras" / "40_spectrum.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.assertEqual((mod.COLUMNS, mod.COLUMN_W, mod.GAP, mod.X0, mod.Y, mod.COLUMN_H), (row["columns"], row["columnW"], row["gap"], row["x"], row["y"], row["h"]))
 
 
 class OverlayLayoutFileTests(unittest.TestCase):
@@ -183,6 +206,8 @@ class OverlaySkinTests(unittest.TestCase):
         shutil.copytree(REAL_EXTRAS, cls.extras_without, ignore=shutil.ignore_patterns("50_filter_overlay.py", "__pycache__"))
         (root / "tree" / "docs").mkdir()
         shutil.copyfile(PARAMS_JSON, root / "tree" / "docs" / "params.json")
+        (root / "tree" / "shell-mpc" / "overlay").mkdir(parents=True)   # 40_spectrum.py reads the geometry of the meter row from the shared layout file
+        shutil.copyfile(SHARED_JSON, root / "tree" / "shell-mpc" / "overlay" / "overlay_layout.json")
         cls.base = generate_skins(root / "q", PROD_LAYOUT)
         cls.base_code, cls.base_err = run_apply(cls.base, cls.extras_without)
         cls.params = json.loads(PARAMS_JSON.read_text(encoding="utf-8"))["params"]
@@ -315,6 +340,24 @@ class OverlaySkinTests(unittest.TestCase):
             order = [c["componentData"]["name"] for c in comps]
             for c in pictures:
                 self.assertLess(order.index(c["componentData"]["name"]), order.index("Overlay Marker %s left" % name.lower().replace(" ", "")), "the markers are above the pictures")
+
+    def test_the_macros_tab_keeps_its_32_meters_and_the_markers_are_in_the_gaps_above_them(self):
+        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
+        view = next(v for v in layout["views"] if v["kind"] == "spectrum")
+        comps = self.tab("Macros")["componentDefinition"]["componentsData"]
+        meters = [c for c in comps if c["componentData"]["type"] == "Meter"]
+        self.assertEqual(len(meters), 32)
+        order = [c["componentData"]["name"] for c in comps]
+        for name in ("Overlay Marker spectrum left", "Overlay Marker spectrum right", "Overlay Instance spectrum"):
+            self.assertGreater(order.index(name), max(order.index(m["componentData"]["name"]) for m in meters), "%s is drawn above the meters" % name)
+            c = comps[order.index(name)]
+            x, y, w, h = rect(c)
+            for m in meters:
+                mx, my, mw, mh = rect(m)
+                self.assertFalse(x < mx + mw and mx < x + w and y < my + mh and my < y + h, "%s does not overlap a meter" % name)
+        prod = {c["componentData"]["name"]: rect(c) for c in self.tab("Macros", self.p_tui)["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "Meter"}
+        self.assertEqual({c["componentData"]["name"]: rect(c) for c in meters}, prod, "the meters are the production meters, in the same places")
+        self.assertEqual(view["tab"], "Macros")
 
     def test_names_are_there(self):
         for n in (1, 2):

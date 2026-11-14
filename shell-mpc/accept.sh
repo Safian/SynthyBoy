@@ -152,8 +152,13 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 $B/gpu_scene_host > $B/gpu-scene-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-scene-host.log; echo "ACCEPT FAIL: gpu_scene_host (GPU scene protocol: seqlock, every view type as a scene)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_backend_host $OVSRC/gpu_backend_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_backend_host build"; exit 1; }
 $B/gpu_backend_host > $B/gpu-backend-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-backend-host.log; echo "ACCEPT FAIL: gpu_backend_host (GPU helper health state machine and fallback with a fake helper)"; exit 1; }
+# the spectrum curve (shell-mpc/overlay/spectrum_curve.h: FFT of the overlay thread from the ring, 256 points, attack / release) and the spectrum view with a fake instance, the picture of both renderers, the controller
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/spectrum_curve_host $OVSRC/spectrum_curve_host.cpp -lpthread || { echo "ACCEPT FAIL: spectrum_curve_host build"; exit 1; }
+$B/spectrum_curve_host > $B/spectrum-curve-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-curve-host.log; echo "ACCEPT FAIL: spectrum_curve_host (the spectrum curve: sine, two sines, noise, silence, timing)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/spectrum_view_host $OVSRC/spectrum_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: spectrum_view_host build"; exit 1; }
+$B/spectrum_view_host > $B/spectrum-view-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-view-host.log; echo "ACCEPT FAIL: spectrum_view_host (the spectrum view: scene = CPU picture, no redraw at rest, the controller)"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
-for t in controller_host views_host gpu_backend_host; do
+for t in controller_host views_host gpu_backend_host spectrum_view_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
@@ -244,6 +249,14 @@ for f in $TL/spectrum-host.log $TL/spectrum-live.log; do
     fi
     grep -q "^FAIL" $f && { grep "^FAIL" $f; echo "ACCEPT FAIL: tsan spectrum test ($f)"; exit 1; }
 done
+# the spectrum curve with the audio thread pushing into the ring while the overlay thread analyses (ThreadSanitizer)
+c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc/overlay -o $TL/spectrum_curve_host shell-mpc/overlay/tests/spectrum_curve_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan spectrum_curve_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/spectrum_curve_host > $TL/spectrum-curve.log 2>&1
+if grep -q "WARNING: ThreadSanitizer" $TL/spectrum-curve.log; then
+    grep -A14 "WARNING: ThreadSanitizer" $TL/spectrum-curve.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+    echo "ACCEPT FAIL: data races in the spectrum curve (full report: $TL/spectrum-curve.log)"; exit 1
+fi
+grep -q "^FAIL" $TL/spectrum-curve.log && { grep "^FAIL" $TL/spectrum-curve.log; echo "ACCEPT FAIL: tsan spectrum_curve_host"; exit 1; }
 # pad pressure under ThreadSanitizer (the settings are written by the host thread and read by the audio thread through the engine's atomic)
 c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/pad_pressure_host shell-mpc/tests/pad_pressure_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan pad_pressure_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/pad_pressure_host "$TLLIB" own overlay > $TL/pad-pressure.log 2>&1

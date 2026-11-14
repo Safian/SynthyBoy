@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the views. FilterView (the response curve of filter 1 / 2), LfoView (the shape of an LFO with the live cursor), OscView (one cycle of the
-// oscillator), EnvView (the live phase marker over the native envelope widget: env_view.h). Each reads its data through IInstanceView / the engine's readout, keeps its own
+// oscillator), EnvView (the live phase marker over the native envelope widget), SpectrumView (the curve of the plugin's output over the 32 meters of the Macros tab). Each reads its data through IInstanceView / the engine's readout, keeps its own
 // recompute budget, draws a whole picture with draw.h and reports its own counters.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -18,6 +18,7 @@
 #include "draw.h"
 #include "env_geometry.h"
 #include "renderer.h"
+#include "spectrum_curve.h"
 #include "synthyboy/lfo_display.h"
 #include "synthyboy/osc_cycle.h"
 #include "view.h"
@@ -721,6 +722,133 @@ private:
     bool verified_ = false;
     envgeom::Norm verifiedNorm_;
     int probeHits_ = 0, probeCount_ = 0;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+/** The spectrum of the plugin's own output as a smooth filled curve (Serum / EQ analyser style) over the row of the 32 meters of the Macros tab: 256 points on a log axis from 20 Hz to
+    20 kHz, the vertical scale the one of the meters (kSpectrumFloorDb at the bottom, kSpectrumCeilingDb at the top). The data is SpectrumCurve (FFT of the overlay thread from the ring the
+    audio thread writes). The picture is an opaque dark background (the meters do not show through), three faint grid lines at 100 Hz, 1 kHz and 10 kHz, a fill with a vertical gradient and a
+    2.5 pixel line in the accent colours of the skin. While the curve stands still (silence, or a steady tone) update () says "unchanged": no picture is drawn and no FFT is run for silence. */
+class SpectrumView final : public IView
+{
+public:
+    static constexpr double kTopMargin = 8.0;      // rows above the ceiling of the scale
+    static constexpr double kBottomMargin = 5.0;   // rows below the floor: the line at the floor is whole
+    static constexpr double kHalfWidth = 1.25;     // line 2.5 px
+    static constexpr double kMinStepMs = 16.0;     // the analyses are at least this far apart (30 a second is the rate of the pictures)
+    static constexpr double kGapResetMs = 600.0;   // the view was not updated for this long (another tab, a menu): the curve starts from the floor
+    static constexpr int kFillTopRgb = 0xff2e63, kFillBottomRgb = 0xd31145, kFillTopAlpha = 150, kFillBottomAlpha = 14;
+
+    SpectrumView() = default;
+
+    const char* name() const noexcept override { return "spectrum"; }
+    void targets (std::vector<int>&) const override {}
+    bool update (const ViewInput& in) override
+    {
+        ++counters_.updates;
+        const SpectrumRing* ring = in.instance != nullptr ? in.instance->spectrumRing() : nullptr;
+        if (ring == nullptr)
+        {
+            have_ = false;
+            return false;
+        }
+        double dt = lastMs_ < 0.0 ? 33.3 : in.nowMs - lastMs_;
+        if (have_ && dt < kMinStepMs)
+            return false;
+        if (lastMs_ >= 0.0 && dt > kGapResetMs)
+            curve_.reset();
+        lastMs_ = in.nowMs;
+        const auto t0 = std::chrono::steady_clock::now();
+        bool analysed = false;
+        bool changed = curve_.update (*ring, in.instance->sampleRate(), dt, &analysed);
+        if (analysed)
+        {
+            ++counters_.recomputes;
+            counters_.lastComputeMs = 0.8 * counters_.lastComputeMs + 0.2 * msSince (t0);
+        }
+        if (! have_)
+        {
+            have_ = true;
+            changed = true;
+        }
+        counters_.changes += changed;
+        return changed;
+    }
+    bool valid() const noexcept override { return have_; }
+
+    /** The row of a level (0 .. 1) on a canvas of height h. */
+    static double levelToY (double level, int h) noexcept { return (h - kBottomMargin) - level * (h - kBottomMargin - kTopMargin); }
+    static uint32_t gradientStraight (bool top) noexcept
+    {
+        const unsigned rgb = top ? kFillTopRgb : kFillBottomRgb;
+        return gpu::rgba8 ((rgb >> 16) & 255u, (rgb >> 8) & 255u, rgb & 255u, static_cast<uint32_t> (top ? kFillTopAlpha : kFillBottomAlpha));
+    }
+
+    void render (uint32_t* cv, int w, int h) override { renderLevels (curve_.level(), cv, w, h, ys_); }
+    bool describe (gpu::SceneBuilder& sb, int viewIndex, int w, int h) const override
+    {
+        if (! have_)
+            return false;
+        return describeLevels (curve_.level(), sb, viewIndex, w, h);
+    }
+
+    /** The picture of 256 levels (0 .. 1) on the CPU: the opaque background, the grid, the gradient fill, the line. `ys` is scratch memory. Static so that a tool can draw a dump of the levels. */
+    static void renderLevels (const float* levels, uint32_t* cv, int w, int h, std::vector<double>& ys)
+    {
+        const uint32_t bg = draw::opaque (layout::kBackgroundRgb);
+        draw::setRect (cv, w, h, 0, 0, w, h, bg);
+        if (w < 2 || h < 8)
+            return;
+        const double fs[3] = { 100.0, 1000.0, 10000.0 };
+        for (double f : fs)
+            draw::fillRect (cv, w, h, CpuCurveRenderer::gridX (f, w), 0, CpuCurveRenderer::gridX (f, w) + 1, h, draw::premultiplied (255, 255, 255, 40));
+        draw::sampleColumns (ys, levels, SpectrumCurve::kPoints, w, h, [h] (double v) { return levelToY (v, h); }, 4);
+        draw::fillToBaselineGradient (cv, w, h, ys, 4, h, draw::premultiplied (0xff, 0x2e, 0x63, kFillTopAlpha), draw::premultiplied (0xd3, 0x11, 0x45, kFillBottomAlpha), kTopMargin, h);
+        draw::strokeCurve (cv, w, h, ys, 4, kHalfWidth, draw::premultiplied (0xff, 0x2e, 0x63, 255));
+    }
+    /** The same picture as a scene for the GPU helper. */
+    static bool describeLevels (const float* levels, gpu::SceneBuilder& sb, int viewIndex, int w, int h)
+    {
+        if (w < 2 || h < 8)
+            return false;
+        sb.begin (gpu::kKindSpectrum, static_cast<uint32_t> (viewIndex), w, h);
+        sb.clear (gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
+        const double fs[3] = { 100.0, 1000.0, 10000.0 };
+        for (double f : fs)
+            sb.rect (static_cast<float> (CpuCurveRenderer::gridX (f, w)), 0.0f, static_cast<float> (CpuCurveRenderer::gridX (f, w) + 1), static_cast<float> (h), gpu::rgba8 (255, 255, 255, 40));
+        float rows[gpu::kMaxCurve];
+        for (int i = 0; i < SpectrumCurve::kPoints; ++i)
+            rows[i] = static_cast<float> (levelToY (static_cast<double> (levels[i]), h));
+        sb.polyline (rows, SpectrumCurve::kPoints);
+        sb.fillGradient (static_cast<float> (h), static_cast<float> (kTopMargin), static_cast<float> (h), gpu::rgba8 (0xff, 0x2e, 0x63, kFillTopAlpha), gpu::rgba8 (0xd3, 0x11, 0x45, kFillBottomAlpha));
+        sb.stroke (static_cast<float> (kHalfWidth), gpu::rgba8 (0xff, 0x2e, 0x63, 255));
+        return ! sb.overflow;
+    }
+    uint32_t hash() const noexcept override { return curve_.hash(); }
+    const SpectrumCurve& curve() const noexcept { return curve_; }
+    void writeStatus (std::ostream& o) const override
+    {
+        char hash[16];
+        std::snprintf (hash, sizeof hash, "%08x", curve_.hash());
+        int peak = 0;
+        for (int i = 1; i < SpectrumCurve::kPoints; ++i)
+            if (curve_.level()[i] > curve_.level()[peak])
+                peak = i;
+        o << "spectrum_hash: " << hash << "\nspectrum_settled: " << (curve_.settled() ? 1 : 0) << "\nspectrum_max_level: " << curve_.maxLevel() << "\nspectrum_peak_hz: " << SpectrumCurve::pointHz (peak)
+          << "\nspectrum_ffts_total: " << counters_.recomputes << "\nspectrum_analysis_ms: " << counters_.lastComputeMs << "\n";
+    }
+    void writeDump (std::ostream& o) const override
+    {
+        o << "# view spectrum: index hz level (0 = " << kSpectrumFloorDb << " dB .. 1 = " << kSpectrumCeilingDb << " dB), 256 points, log axis 20 Hz .. 20 kHz\n";
+        for (int i = 0; i < SpectrumCurve::kPoints; ++i)
+            o << i << " " << SpectrumCurve::pointHz (i) << " " << curve_.level()[i] << "\n";
+    }
+
+private:
+    SpectrumCurve curve_;
+    bool have_ = false;
+    double lastMs_ = -1.0;
+    std::vector<double> ys_;
 };
 
 /** A view without data (a kind that is not built yet): never valid, so the plane stays off. */

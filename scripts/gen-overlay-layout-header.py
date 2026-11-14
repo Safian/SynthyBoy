@@ -24,7 +24,7 @@ def rgb(text):
     return int(text, 16)
 
 
-KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3}
+KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4}
 
 
 def render(layout):
@@ -43,6 +43,11 @@ def render(layout):
                 if all(abs(((c >> s) & 255) - ((oc >> s) & 255)) <= 4 for s in (0, 8, 16)):
                     raise ValueError("marker colour %s of %r is within the detector's tolerance of the marker colour of %r" % (m["rgb"], v["name"], other))
             seen["%s/%s" % (v["name"], m["rgb"])] = c
+    row = layout["meterRow"]
+    row_w = row["columns"] * row["columnW"] + (row["columns"] - 1) * row["gap"]
+    for v in views:
+        if v["kind"] == "spectrum" and v["region"] != {"x": row["x"], "y": row["y"], "w": row_w, "h": row["h"]}:
+            raise ValueError("view %r: the region is not the bounding box of the row of the meters (meterRow)" % v["name"])
     inst = layout["instance"]
     if inst["slots"] != 16 or len(inst["slotColours"]) != inst["slots"] or inst["frames"] != inst["steps"] + 1 or inst["slots"] + 2 > inst["frames"]:
         raise ValueError("instance: 16 slot colours, frames = steps + 1, room for blank + 16 slots + none")
@@ -81,7 +86,7 @@ def render(layout):
         "namespace synthyboy_mpc { namespace overlay { namespace layout {",
         "struct Rect { int x, y, w, h; };",
         "struct Marker { Rect rect; unsigned rgb; unsigned cover; };   // cover: the colour of what lies under the marker (a transparent view paints it over the marker)",
-        "constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3;",
+        "constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3, kKindSpectrum = 4;",
         "struct View { const char* name; int kind; int index; Rect region; bool opaque; Marker markers[2]; Rect instance; };   // instance: the film strip image bound to the display parameter \"Overlay Instance\" (one frame = this size)",
         "constexpr int kScreenW = %d;" % layout["screen"]["width"],
         "constexpr int kScreenH = %d;" % layout["screen"]["height"],

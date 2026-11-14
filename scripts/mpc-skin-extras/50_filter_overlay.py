@@ -14,6 +14,9 @@
 # (ctx.param_index); Filter 2 has them already. Everything else the production tab has stays reachable: Blend and the six controls of the model / formant page go to the sub-tab
 # "F1 Model" / "F2 Model" of the same function key (the layout file gives it the Kick page filterN_model; Blend takes the place of Key Tracking, which moved to the main tab).
 #
+# Macros tab: the row of the 32 meters of 40_spectrum.py (the production spectrum) stays as it is; the view `spectrum` of the JSON (the spectrum curve) covers exactly that row and the markers
+# and the instance picture are drawn in the gaps between two meters. With the overlay off or disabled the meters are what the player sees.
+#
 # LFO and Osc tabs keep their pictures (the shape / wavetable strips of 30_lfo.py / 20_osc.py): the overlay covers them while it runs, they are what the player sees when it
 # is off. Only the marker pictures are added on top of them.
 #
@@ -221,6 +224,11 @@ def apply(tui, qlinks, ctx):
             if view["index"] not in FILTERS:
                 raise ValueError("filter view %r: no such filter" % view["name"])
             _arrange_filter(view["index"], view, ctx, qlinks, layout)
+        elif view["kind"] == "spectrum":
+            # the 32 meters of 40_spectrum.py stay where they are (the fallback when the overlay is off); only the markers and the instance picture are added, in the gaps between the columns
+            row = layout["meterRow"]
+            if view["region"] != {"x": row["x"], "y": row["y"], "w": row["columns"] * row["columnW"] + (row["columns"] - 1) * row["gap"], "h": row["h"]}:
+                raise ValueError("view %r: the region is not the row of the meters" % view["name"])
         elif view["kind"] not in ("lfo", "osc", "env"):
             raise ValueError("view %r: unknown kind %r" % (view["name"], view["kind"]))
         items = ctx.tab(view["tab"])["componentDefinition"]["componentsData"]

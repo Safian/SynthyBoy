@@ -284,6 +284,10 @@ public:
     const float* liveTargets() noexcept { if (! hasLive.load()) return nullptr; lt_[0] = liveCutoff.load(); lt_[1] = liveRes.load(); return lt_; }
     double bpm() const noexcept override { return bpmValue.load(); }
     void requestOverlayReport() noexcept override { reportRequests.fetch_add (1); }
+    /** The ring of the output (the spectrum view); only when `hasRing` is set, like a plugin built without the spectrum has none. */
+    const synthyboy_mpc::SpectrumRing* spectrumRing() const noexcept override { return hasRing.load() ? &ring : nullptr; }
+    synthyboy_mpc::SpectrumRing ring;
+    std::atomic<bool> hasRing { false };
     std::atomic<int> reportRequests { 0 };
     std::shared_ptr<const synthyboy::StateContent> content() const override { std::lock_guard<std::mutex> g (cmu); return contentPtr; }
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { std::lock_guard<std::mutex> g (cmu); contentPtr = std::move (c); }

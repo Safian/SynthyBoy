@@ -25,11 +25,16 @@ HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "spectrum-images"
 PARAMS_JSON = HERE.parent.parent / "docs" / "params.json"
 
+# The geometry of the row (columns, width, gap, x, y, height) is NOT written here: it is `meterRow` of shell-mpc/overlay/overlay_layout.json, the file the overlay skin and the plugin
+# share, because the spectrum curve of the overlay (the view `spectrum`) covers exactly this row. 32 columns of 30 px with 8 px between them are 1208 px, centred on the 1280 px
+# screen (x 36); y 480 .. 616 (the tab is 628 high). scripts/tests/test_mpc_skin_spectrum.py checks that the view's region is the bounding box of the row.
 TAB = "Macros"
-COLUMNS = 32
-COLUMN_W, GAP = 30, 8
-X0 = (1280 - (COLUMNS * COLUMN_W + (COLUMNS - 1) * GAP)) // 2   # 36
-Y, COLUMN_H = 480, 136                                           # y 480 .. 616 (the tab is 628 high)
+LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"
+_ROW = json.loads(LAYOUT_JSON.read_text(encoding="utf-8"))["meterRow"]
+COLUMNS = _ROW["columns"]
+COLUMN_W, GAP = _ROW["columnW"], _ROW["gap"]
+X0 = _ROW["x"]
+Y, COLUMN_H = _ROW["y"], _ROW["h"]
 FRAME_H = 474                                                    # the Q-Link frames end here (the 3rd row of controls ends at y 470 on the plain tabs)
 LFO_CURSORS = 4                                                  # display parameters before the spectrum (shell-mpc/lfo_live.h kLfoLiveCount)
 FILE_OFF, FILE_ON = "spectrum_off.png", "spectrum_on.png"

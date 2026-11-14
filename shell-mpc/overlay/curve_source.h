@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "../spectrum.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/filter_response.h"
@@ -52,6 +53,9 @@ public:
     /** Asks the instance to report its display parameter "Overlay Instance" to the host again (audioMasterAutomate) soon. Called from the overlay thread while the instance is registered; it must only
         set a flag (the instance's display thread makes the call, never the audio thread and never this one). */
     virtual void requestOverlayReport() noexcept {}
+    /** The ring of the instance's output (the audio thread writes it, the spectrum view reads it). null: this instance has none (the build without the spectrum): the spectrum view has no data
+        and the plane stays off, the 32 meters of the skin stay visible. */
+    virtual const SpectrumRing* spectrumRing() const noexcept { return nullptr; }
 };
 
 class CurveSource
