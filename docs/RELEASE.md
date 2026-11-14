@@ -114,7 +114,7 @@ On any verification failure, the script aborts with a descriptive error message 
 
 The output is `SynthyBoy-MPC-<version>.zip` holding exactly the single top-level plugin folder `Safian - VST - SynthyBoy/` with `INSTALL.txt` and `LICENSE` included inside the folder. The archive is reproducible (sorted entries, fixed timestamps, macOS metadata files such as `._*` and `.DS_Store` excluded) and accompanied by `<zip>.sha256`.
 
-`INSTALL.txt` explains installation to `VST2 Plugins` on an internal drive or external USB/SD storage, required MPC OS version (3.10.1 or later), enabling the enhancement switches under **Preferences → Enhancements (Beta)** (**Enable Enhancements** and **External Plugin Support**), how to load the instrument, removal, third-party plugin stability notes, and the AGPL-3.0-or-later license and source repository URL.
+`INSTALL.txt` explains installation to `VST2 Plugins` on an internal drive or external USB/SD storage, required MPC OS version (3.10.1 or later), enabling the enhancement switches under **Preferences → Enhancements (Beta)** (**Enable Enhancements** and **External Plugin Support**), how to load the instrument, removal, third-party plugin stability notes, the AGPL-3.0-or-later license and source repository URL, and the Akai / inMusic disclaimer.
 
 ## Pins and secrets
 
