@@ -62,7 +62,7 @@ int main()
         check (inside, nm + ": every leaf inside the screen and at least its minimum size");
         check (apart, nm + ": no two leaves overlap");
         check (! s.displayRect().empty() && area.contains (s.displayRect()) && ! s.displayRect().overlaps (s.bar.rect()) && ! s.displayRect().overlaps (s.panel.rect()) && ! s.displayRect().overlaps (s.tune.rect()), nm + ": the display area is reserved, and nothing else is on it");
-        check (s.displayRect().w * 100 / 1264 >= 62 && s.displayRect().w * 100 / 1264 <= 66 && s.bar.rect().y == s.displayRect().bottom() + kGap && s.bar.rect().x == s.displayRect().x && s.bar.rect().w == s.displayRect().w, nm + ": the display is about 64 percent of the width, the type bar directly under it");
+        check (s.displayRect().w * 100 / 1264 >= 62 && s.displayRect().w * 100 / 1264 <= 66 && s.barBlock().y == s.displayRect().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().w == s.displayRect().w && s.barBlock().contains (s.bar.rect()), nm + ": the display is about 64 percent of the width, the type bar (in its titled block) directly under it");
         check (s.tune.rect().x > s.displayRect().right() && s.panel.rect().y >= s.bar.rect().bottom() && s.close.rect().x < s.power.rect().x && s.route.rect().x > s.basic.rect().right() - 1, nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
         check (s.numGroups() >= 2 && s.activeGroup() == 0 && std::string (s.groupName (0)) == "Basic" && s.groups[0].active(), nm + ": the first group is Basic and active (" + std::to_string (s.numGroups()) + " groups)");
         for (int g = 0; g < s.numGroups(); ++g)
@@ -125,6 +125,62 @@ int main()
             for (int x = s.displayRect().x; x < s.displayRect().right(); ++x)
                 overDisplay += im.at (x, y) != backgroundPixel();
         check (overDisplay == 0, nm + ": nothing is drawn over the display area");
+        // every Q group has a visible outline with a title: the blocks of the panel, the type bar, the tuning column
+        auto hasText = [&] (const char* want)
+        {
+            for (uint32_t k = 0; k < sc.data->numOps; ++k)
+                if (sc.data->ops[k].op == gpu::kOpText)
+                {
+                    char chars[13];
+                    gpu::textOf (sc.data->ops[k], chars);
+                    if (std::string (chars) == want)
+                        return true;
+                }
+            return false;
+        };
+        auto edgeDrawn = [&] (const Rect& r) { return r.w > 4 && im.at (r.x + r.w / 2, r.y) != backgroundPixel() && im.at (r.x, r.y + r.h / 2) != backgroundPixel() && im.at (r.right() - 1, r.y + r.h / 2) != backgroundPixel() && im.at (r.x + r.w / 2, r.bottom() - 1) != backgroundPixel(); };
+        check (edgeDrawn (s.barBlock()) && hasText (sub ? "SUB" : noise ? "NOISE" : var.kind == OscKind::Wavetable ? "WAVETABLE" : var.kind == OscKind::Multisample ? "MULTISAMPLE" : "GRANULAR"), nm + ": the type bar is a bordered block with a title");
+        check (noise ? (s.tuneBlock().empty() && ! hasText ("TUNE")) : (edgeDrawn (s.tuneBlock()) && hasText ("TUNE") && s.tuneBlock().contains (s.tune.rect())), nm + (noise ? ": no tuning block (the tuning row is absent)" : ": the tuning column is a bordered block titled TUNE"));
+        check (edgeDrawn (s.basic.rect()) || s.groups[0].active(), nm + ": Basic has an outline (the coloured frame when active)");
+        const int wantBlocks = (sub || noise) ? 0 : var.kind == OscKind::Granular ? 3 : 2;
+        check (s.panel.numBlocks() == wantBlocks, nm + ": the bottom band has " + std::to_string (wantBlocks) + " blocks");
+        bool blocksOk = true;
+        for (int b = 0; b < s.panel.numBlocks(); ++b)
+        {
+            blocksOk = blocksOk && edgeDrawn (s.panel.blockRect (b)) && hasText (s.panel.blockTitle (b)) && s.panel.rect().contains (s.panel.blockRect (b));
+            if (b > 0)
+                blocksOk = blocksOk && s.panel.blockRect (b - 1).right() < s.panel.blockRect (b).x && s.panel.blockRect (b - 1).y == s.panel.blockRect (b).y;   // side by side, with a gap
+        }
+        check (blocksOk, nm + ": each panel block is a bordered block with its title, side by side with a gap");
+        // every group of the panel lies inside one block
+        bool inBlock = true;
+        for (int g = 3; g < s.numGroups(); ++g)
+        {
+            if (std::string (s.groupName (g)) == "Warp" || s.panel.numBlocks() == 0)
+                continue;
+            bool found = false;
+            for (int b = 0; b < s.panel.numBlocks(); ++b)
+                found = found || s.panel.blockRect (b).contains (s.groups[g].rect());
+            inBlock = inBlock && found;
+        }
+        check (inBlock, nm + ": every Q group of the panel is inside one titled block");
+        if (var.inst == OscInstance::A || var.inst == OscInstance::B || var.inst == OscInstance::C)
+        {
+            if (var.kind != OscKind::Granular)
+            {
+                const Rect u = s.panel.blockRect (0), w = s.panel.blockRect (1);
+                check (std::string (s.panel.blockTitle (0)) == "UNISON" && std::string (s.panel.blockTitle (1)) == "WARP" && u.right() <= w.x && u.w == w.w, nm + ": UNISON block left, WARP block right, side by side, equal halves");
+                const Component* k0 = s.panel.part (var.kind == OscKind::Wavetable ? PanelSlot::WtPos : PanelSlot::Timbre);
+                const Rect r0 = k0->rect(), r1 = s.panel.part (PanelSlot::Unison)->rect(), r2 = s.panel.part (PanelSlot::Detune)->rect(), r3 = s.panel.part (PanelSlot::Blend)->rect();
+                check (r0.y == r1.y && r1.y == r2.y && r2.y == r3.y && r0.h == r1.h && r1.h == r2.h && r2.h == r3.h && r1.x - r0.x == r2.x - r1.x && r2.x - r1.x == r3.x - r2.x && u.contains (r0) && u.contains (r3), nm + ": the four of the UNISON block on one evenly spaced row inside the block");
+                WarpPair& wp = *s.panel.warp();
+                check (wp.stacked() && w.contains (wp.rect()) && wp.first.rect().bottom() <= wp.second.rect().y && wp.first.rect().x == wp.second.rect().x && wp.first.amount.rect().x < wp.first.type.rect().x && wp.second.amount.rect().x < wp.second.type.rect().x, nm + ": the two warp slots stacked inside the WARP block, knobs on the same side");
+            }
+            else
+                check (std::string (s.panel.blockTitle (0)) == "GRAIN" && std::string (s.panel.blockTitle (1)) == "PLAYBACK" && std::string (s.panel.blockTitle (2)) == "RANDOM", nm + ": the blocks GRAIN, PLAYBACK, RANDOM");
+        }
+        if (tuneLeaves > 0 && ! sub && ! noise)
+            check (std::string (s.tune.track.state.label) == "TRACK" && hasText ("TRACK") && s.tune.track.sizeOk(), nm + ": the pitch tracking toggle has the label TRACK");
         writePng (outDir() + "/screen_" + std::to_string (v) + ".png", im, 1);
     }
     // the compact view: Basic is the same as in the full screen, members and ids
@@ -164,6 +220,15 @@ int main()
         check (c.displayRect().bottom() <= c.basic.rect().y && c.instances.rect().bottom() <= c.power.rect().y && ! c.displayRect().overlaps (c.basic.rect()), nm + ": instance selector, header, display, Basic: top to bottom");
         Scene sc (420, 700, kBackgroundRgba);
         c.draw (sc.builder());
+        {
+            const Image img = render (sc);
+            const uint32_t panelPx = ov::sceneColour (colour::rgba (colour::kPanel, 255));
+            int on = 0;
+            for (int y = c.full.rect().y; y < c.full.rect().bottom(); ++y)
+                for (int x = c.full.rect().x; x < c.full.rect().right(); ++x)
+                    on += img.at (x, y) != panelPx && img.at (x, y) != backgroundPixel();
+            check (c.displayRect().contains (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::kText, 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::kText, 20), nm + ": the full screen button is drawn over the display area (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
+        }
         check (! sc.overflow() && drawnOutside (render (sc), c.rect(), backgroundPixel()) == 0 && c.sizeOk(), nm + ": draws inside, fits one scene (" + std::to_string (sc.numOps()) + " ops)");
         writePng (outDir() + "/compact_" + std::to_string (v) + ".png", render (sc), 1);
         if (v == 1)

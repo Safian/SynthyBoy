@@ -237,6 +237,17 @@ public:
             px = x; py = y;
         }
     }
+    void iconExpand (float cx, float cy, uint32_t col)   // four corner brackets: "full screen"
+    {
+        const float a = 10.0f, l = 6.0f;
+        for (int sx = -1; sx <= 1; sx += 2)
+            for (int sy = -1; sy <= 1; sy += 2)
+            {
+                const float x = cx + static_cast<float> (sx) * a, y = cy + static_cast<float> (sy) * a;
+                line (x, y, x - static_cast<float> (sx) * l, y, 3.0f, col);
+                line (x, y, x, y - static_cast<float> (sy) * l, 3.0f, col);
+            }
+    }
     void iconEnvelope (float cx, float cy, uint32_t col)   // an ADSR outline
     {
         const float x[6] = { -13.0f, -8.0f, -3.0f, 3.0f, 8.0f, 13.0f }, y[6] = { 8.0f, -8.0f, -2.0f, -2.0f, 8.0f, 8.0f };

@@ -458,18 +458,23 @@ class ToggleIcon : public Component
 {
 public:
     enum class Icon : uint8_t { Power, PitchTrack, Generic };
-    struct State { bool on = false; Icon icon = Icon::Generic; };
+    struct State { bool on = false; Icon icon = Icon::Generic; char label[7] = {}; };   // label (<= 6 characters, optional): under the icon
     State state;
 
-    Size minSize() const override { return { 56, 56 }; }
+    ToggleIcon() = default;
+    void setLabel (const char* s) { setText (state.label, sizeof state.label, s); }
+    Size minSize() const override { return state.label[0] ? Size { 72, 56 } : Size { 56, 56 }; }
 
 protected:
     void drawBody (Pen& p) const override
     {
         const Rect b = rect_.inset (4);
         p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
-        const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f, cy = static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f;
-        const float s = static_cast<float> (std::min (b.w, b.h)) * 0.32f;
+        const int labelH = state.label[0] ? 2 * font::kGlyphH + 4 : 0;
+        const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f, cy = static_cast<float> (b.y) + static_cast<float> (b.h - labelH) * 0.5f;
+        const float s = static_cast<float> (std::min (b.w, b.h - labelH)) * 0.32f;
+        if (labelH > 0)
+            p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, state.label, 2, p.c (qFrame_ ? colour::kAccent : colour::kText, 200));
         const uint32_t col = state.on ? p.c (colour::kAccent, 255) : p.c (colour::kText, 110);
         switch (state.icon)
         {
@@ -508,7 +513,7 @@ private:
 class MenuButton : public Component
 {
 public:
-    enum class Icon : uint8_t { Down, Gear, None };   // None: the label only (BACK, CLOSE)
+    enum class Icon : uint8_t { Down, Gear, None, Expand };   // None: the label only (BACK, CLOSE); Expand: four corner brackets (full screen)
     struct State { char label[9] = {}; Icon icon = Icon::Down; };
     State state;
 
@@ -537,6 +542,8 @@ protected:
         const uint32_t col = p.c (colour::kText, 255);
         if (state.icon == Icon::Down)
             p.chevron (cx, cy, 14.0f, 3, 3.0f, col);
+        else if (state.icon == Icon::Expand)
+            p.iconExpand (cx, cy, col);
         else
             p.iconGear (cx, cy, col);
     }

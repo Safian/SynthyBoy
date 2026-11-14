@@ -22,6 +22,15 @@ struct PanelItem
     const char* label;
     uint8_t col, row, colSpan, rowSpan;
     bool bipolar;
+    uint8_t block = 0;   // in a preset with blocks: the block the cells belong to (the cells are those of the block's inner grid)
+};
+
+/** A titled, bordered block of a preset (one Q group): its cells in the outer grid of the preset and its own inner grid for the items. */
+struct PanelBlock
+{
+    const char* title;
+    uint8_t col, row, colSpan, rowSpan;
+    uint8_t innerCols, innerRows;
 };
 
 /** A preset: the grid, the column before which the separator stands (-1: none; the column after it is the separated one), and the parts. */
@@ -37,6 +46,8 @@ struct PanelPreset
     const QSpec* q = nullptr;   // the Q groups of the preset (a DetailPage activates them one at a time)
     int numQ = 0;
     int displayH = 0;           // a DetailPage: the height of the display area above the grid (0: none)
+    const PanelBlock* blocks = nullptr;   // the full screen's bottom band: blocks side by side, each with a title and a thin outline (the grid of the preset is the grid of the blocks)
+    int numBlocks = 0;
 };
 
 namespace presets
@@ -93,45 +104,47 @@ constexpr PanelItem kGrainDetailItems[] = {
 };
 constexpr QSpec kGrainDetailQ[] = { { { PanelSlot::Amount, PanelSlot::AmountRand, PanelSlot::Skew, PanelSlot::SkewRand } },
                                     { { PanelSlot::Shape, PanelSlot::Count, PanelSlot::Count, PanelSlot::Count } } };
-// The bottom band of the full screen of an oscillator (screen.h): PAN and LEVEL are in the top band there, the granular RAND knobs are a group of their own
+// The bottom band of the full screen of an oscillator (screen.h): PAN and LEVEL are in the top band there, the granular RAND knobs are a group of their own. Every Q group is a titled block.
+constexpr PanelBlock kWavetableBlocks[] = { { "UNISON", 0, 0, 1, 1, 4, 1 }, { "WARP", 1, 0, 1, 1, 1, 1 } };
 constexpr PanelItem kWavetableFullItems[] = {
-    { PartKind::Knob, PanelSlot::WtPos, "WT POS", 0, 0, 1, 1, false },
-    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false },
-    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 1, 4, 1, false },
+    { PartKind::Knob, PanelSlot::WtPos, "WT POS", 0, 0, 1, 1, false, 0 },
+    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false, 0 },
+    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 0, 1, 1, false, 1 },
 };
 constexpr QSpec kWavetableFullQ[] = { { { PanelSlot::WtPos, PanelSlot::Unison, PanelSlot::Detune, PanelSlot::Blend } } };
+constexpr PanelBlock kGranularBlocks[] = { { "GRAIN", 0, 0, 4, 1, 4, 1 }, { "PLAYBACK", 4, 0, 3, 1, 3, 1 }, { "RANDOM", 7, 0, 3, 1, 3, 1 } };
 constexpr PanelItem kGranularFullItems[] = {
-    { PartKind::Knob, PanelSlot::Scan, "SCAN", 0, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Dens, "DENS", 1, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Length, "LENGTH", 2, 0, 1, 1, false },
-    { PartKind::Menu, PanelSlot::WarpMenu, "WARP", 3, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Offset, "OFFSET", 0, 1, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Dir, "DIR", 1, 1, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Pitch, "PITCH", 2, 1, 1, 1, true },
-    { PartKind::Knob, PanelSlot::LengthRand, "LEN RAND", 0, 2, 1, 1, false },
-    { PartKind::Knob, PanelSlot::PanRand, "PAN RAND", 1, 2, 1, 1, false },
-    { PartKind::Knob, PanelSlot::LevelRand, "LVL RAND", 2, 2, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Scan, "SCAN", 0, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Dens, "DENS", 1, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Length, "LENGTH", 2, 0, 1, 1, false, 0 },
+    { PartKind::Menu, PanelSlot::WarpMenu, "WARP", 3, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Offset, "OFFSET", 0, 0, 1, 1, false, 1 },
+    { PartKind::Knob, PanelSlot::Dir, "DIR", 1, 0, 1, 1, false, 1 },
+    { PartKind::Knob, PanelSlot::Pitch, "PITCH", 2, 0, 1, 1, true, 1 },
+    { PartKind::Knob, PanelSlot::LengthRand, "LEN RAND", 0, 0, 1, 1, false, 2 },
+    { PartKind::Knob, PanelSlot::PanRand, "PAN RAND", 1, 0, 1, 1, false, 2 },
+    { PartKind::Knob, PanelSlot::LevelRand, "LVL RAND", 2, 0, 1, 1, false, 2 },
 };
 constexpr QSpec kGranularFullQ[] = { { { PanelSlot::Scan, PanelSlot::Dens, PanelSlot::Length, PanelSlot::WarpMenu } },
                                      { { PanelSlot::Offset, PanelSlot::Dir, PanelSlot::Pitch, PanelSlot::Count } },
                                      { { PanelSlot::LengthRand, PanelSlot::PanRand, PanelSlot::LevelRand, PanelSlot::Count } } };
 constexpr PanelItem kNoiseFullItems[] = { { PartKind::Knob, PanelSlot::Filter, "FILTER", 0, 0, 1, 1, false } };
 constexpr PanelItem kNoItems[] = { { PartKind::Knob, PanelSlot::Count, "", 0, 0, 1, 1, false } };
-constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 4, 2, -1, kWavetableFullItems, 5, kWavetableFullQ, 1, 0 };
-constexpr PanelPreset kGranularFull { "granular (full screen)", 4, 3, -1, kGranularFullItems, 10, kGranularFullQ, 3, 0 };
+constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 2, 1, -1, kWavetableFullItems, 5, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
+constexpr PanelPreset kGranularFull { "granular (full screen)", 10, 1, -1, kGranularFullItems, 10, kGranularFullQ, 3, 0, kGranularBlocks, 3 };
 constexpr PanelPreset kNoiseFull { "noise (full screen)", 4, 1, -1, kNoiseFullItems, 1, nullptr, 0, 0 };
 constexpr PanelPreset kEmptyFull { "none (full screen)", 4, 1, -1, kNoItems, 0, nullptr, 0, 0 };
 constexpr PanelItem kMultisampleFullItems[] = {
-    { PartKind::Knob, PanelSlot::Timbre, "TIMBRE", 0, 0, 1, 1, false },
-    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false },
-    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false },
-    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 1, 4, 1, false },
+    { PartKind::Knob, PanelSlot::Timbre, "TIMBRE", 0, 0, 1, 1, false, 0 },
+    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false, 0 },
+    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 0, 1, 1, false, 1 },
 };
 constexpr QSpec kMultisampleFullQ[] = { { { PanelSlot::Timbre, PanelSlot::Unison, PanelSlot::Detune, PanelSlot::Blend } } };
-constexpr PanelPreset kMultisampleFull { "multisample (full screen)", 4, 2, -1, kMultisampleFullItems, 5, kMultisampleFullQ, 1, 0 };
+constexpr PanelPreset kMultisampleFull { "multisample (full screen)", 2, 1, -1, kMultisampleFullItems, 5, kMultisampleFullQ, 1, 0, kWavetableBlocks, 2 };
 // the DetailPages of the unison settings of the three types, and the envelope of the multisample oscillator
 constexpr PanelItem kUnisonMsItems[] = {
     { PartKind::Stepper, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false }, { PartKind::Stepper, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false },
@@ -242,9 +255,15 @@ public:
             if (m.comp)
                 addKid (*m.comp);
         }
+        warp_.setStacked (p.numBlocks > 0);
         layout();
     }
     const PanelPreset* preset() const noexcept { return preset_; }
+    int numBlocks() const noexcept { return preset_ ? preset_->numBlocks : 0; }
+    /** The rectangle of block i (the titled outline of a Q group; empty without blocks). */
+    Rect blockRect (int i) const noexcept { return i >= 0 && i < numBlocks() && i < kMaxBlocks ? blocks_[i] : Rect {}; }
+    const char* blockTitle (int i) const noexcept { return i >= 0 && i < numBlocks() ? preset_->blocks[i].title : ""; }
+    static constexpr int kMaxBlocks = 4, kBlockTitleH = 22, kBlockPad = 6, kBlockGap = 8;
     int numParts() const noexcept { return nItems_; }
 
     /** The part of a slot (null when the preset has none). */
@@ -293,6 +312,8 @@ public:
     {
         if (! preset_)
             return {};
+        if (preset_->numBlocks > 0)
+            return blockMinSize();
         int colW = 0, rowH = 0;
         for (int i = 0; i < nItems_; ++i)
         {
@@ -318,6 +339,11 @@ protected:
         sepX_ = -1;
         if (! preset_)
             return;
+        if (preset_->numBlocks > 0)
+        {
+            layoutBlocks();
+            return;
+        }
         const PanelPreset& p = *preset_;
         const Rect in = rect_.inset (kMargin);
         const int extra = p.separatorBefore >= 0 ? kSeparatorGap - kGap : 0;
@@ -335,8 +361,66 @@ protected:
         if (p.separatorBefore >= 0)
             sepX_ = colX (p.separatorBefore) - (kGap + extra) / 2;
     }
+    /** The blocks: the outer grid (cols x rows) of the preset holds the titled blocks with kBlockGap between them; inside a block the items use the block's inner grid. */
+    void layoutBlocks()
+    {
+        const PanelPreset& p = *preset_;
+        const int nb = std::min (p.numBlocks, kMaxBlocks);
+        const int cw = std::max (0, (rect_.w - kBlockGap * (p.cols - 1)) / p.cols), ch = std::max (0, (rect_.h - kBlockGap * (p.rows - 1)) / p.rows);
+        for (int b = 0; b < nb; ++b)
+        {
+            const PanelBlock& bl = p.blocks[b];
+            const int x0 = rect_.x + bl.col * (cw + kBlockGap), y0 = rect_.y + bl.row * (ch + kBlockGap);
+            const int x1 = rect_.x + (bl.col + bl.colSpan - 1) * (cw + kBlockGap) + cw, y1 = rect_.y + (bl.row + bl.rowSpan - 1) * (ch + kBlockGap) + ch;
+            blocks_[b] = { x0, y0, x1 - x0, y1 - y0 };
+            const Rect in { x0 + kBlockPad, y0 + kBlockTitleH, std::max (0, x1 - x0 - 2 * kBlockPad), std::max (0, y1 - y0 - kBlockTitleH - kBlockPad) };
+            const int icw = std::max (0, (in.w - kGap * (bl.innerCols - 1)) / bl.innerCols), ich = std::max (0, (in.h - kGap * (bl.innerRows - 1)) / bl.innerRows);
+            for (int i = 0; i < nItems_; ++i)
+            {
+                const PanelItem& it = *items_[i].def;
+                if (it.block != b || ! items_[i].comp)
+                    continue;
+                const int ix0 = in.x + it.col * (icw + kGap), iy0 = in.y + it.row * (ich + kGap);
+                const int ix1 = in.x + (it.col + it.colSpan - 1) * (icw + kGap) + icw, iy1 = in.y + (it.row + it.rowSpan - 1) * (ich + kGap) + ich;
+                items_[i].comp->place ({ ix0, iy0, ix1 - ix0, iy1 - iy0 });
+            }
+        }
+    }
+    Size blockMinSize() const
+    {
+        const PanelPreset& p = *preset_;
+        const int nb = std::min (p.numBlocks, kMaxBlocks);
+        int colW = 0, rowH = 0;
+        for (int b = 0; b < nb; ++b)
+        {
+            const PanelBlock& bl = p.blocks[b];
+            int icw = 0, ich = 0;
+            for (int i = 0; i < nItems_; ++i)
+            {
+                const PanelItem& it = *items_[i].def;
+                if (it.block != b || ! items_[i].comp)
+                    continue;
+                const Size m = items_[i].comp->minSize();
+                icw = std::max (icw, (m.w - (it.colSpan - 1) * kGap + it.colSpan - 1) / it.colSpan);
+                ich = std::max (ich, (m.h - (it.rowSpan - 1) * kGap + it.rowSpan - 1) / it.rowSpan);
+            }
+            const int bw = bl.innerCols * icw + (bl.innerCols - 1) * kGap + 2 * kBlockPad, bh = bl.innerRows * ich + (bl.innerRows - 1) * kGap + kBlockTitleH + kBlockPad;
+            colW = std::max (colW, (bw - (bl.colSpan - 1) * kBlockGap + bl.colSpan - 1) / bl.colSpan);
+            rowH = std::max (rowH, (bh - (bl.rowSpan - 1) * kBlockGap + bl.rowSpan - 1) / bl.rowSpan);
+        }
+        return { colW * p.cols + kBlockGap * (p.cols - 1), rowH * p.rows + kBlockGap * (p.rows - 1) };
+    }
     void drawExtra (Pen& p) const override
     {
+        if (preset_ && preset_->numBlocks > 0)
+        {
+            for (int b = 0; b < std::min (preset_->numBlocks, kMaxBlocks); ++b)
+            {
+                p.frame (blocks_[b], 1, p.c (colour::kRest, 255));
+                p.textLeft ({ blocks_[b].x + kBlockPad, blocks_[b].y + 4, std::max (0, blocks_[b].w - 2 * kBlockPad), 14 }, preset_->blocks[b].title, 2, p.c (colour::kText, 150));
+            }
+            return;
+        }
         p.frame (rect_, 1, p.c (colour::kRest, 255));
         if (sepX_ >= 0)
             p.rect (sepX_, rect_.y + kMargin, sepX_ + 1, rect_.bottom() - kMargin, p.c (colour::kRest, 255));
@@ -345,6 +429,7 @@ protected:
     const PanelPreset* preset_ = nullptr;
     Item items_[kMaxItems];
     int nItems_ = 0, sepX_ = -1;
+    Rect blocks_[kMaxBlocks];
     Knob knobs_[kMaxKnobs];
     Stepper steppers_[kMaxSteppers];
     ToggleIcon toggles_[kMaxToggles];
@@ -458,6 +543,8 @@ public:
     Stepper addSource;
     MenuButton add { "ADD", MenuButton::Icon::None };
     int sourceIds[8] = {};
+    /** The Q group of the row touched last: [depth, polarity, bypass, -]; its frame is drawn around the three. A touch on a row makes it the active one (row 0 after `load`). */
+    QGroup group;
 
     ModulationsPage()
     {
@@ -492,7 +579,42 @@ public:
                 r.bypass.state.on = e.bypassed;
             }
         }
+        activeRow_ = nRows_ > 0 ? 0 : -1;
+        selectRow (activeRow_);
         layout();
+    }
+    int activeRow() const noexcept { return activeRow_; }
+    void selectRow (int i)
+    {
+        for (int k = 0; k < 4; ++k)
+            group.set (k, nullptr);
+        activeRow_ = i >= 0 && i < nRows_ ? i : -1;
+        if (activeRow_ < 0)
+        {
+            group.setActive (false);
+            return;
+        }
+        group.set (0, &rows[i].depth); group.set (1, &rows[i].polarity); group.set (2, &rows[i].bypass);
+        group.setActive (true);
+    }
+    /** The hardware knob of the active row's group. */
+    Change turnQ (int knobIndex, double delta) { return group.turn (knobIndex, delta); }
+    Change touchDown (int x, int y, double nowMs) override
+    {
+        const Change c = Composite::touchDown (x, y, nowMs);
+        if (cap_)
+            for (int i = 0; i < nRows_; ++i)
+                if (y >= rows[i].depth.rect().y && y < rows[i].depth.rect().bottom())
+                {
+                    selectRow (i);
+                    break;
+                }
+        return c;
+    }
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        Composite::draw (sb);
+        group.draw (sb);
     }
     void setRowIds (int row, int depth, int polarity, int bypass, int remove)
     {
@@ -544,7 +666,7 @@ protected:
             p.textLeft ({ rect_.x + 8, rect_.y + kBarH + 8 + i * kRowH, 120, kRowH }, rows[i].name, 3, p.c (colour::kText, 255));
     }
     char title_[13] = {};
-    int nRows_ = 0;
+    int nRows_ = 0, activeRow_ = -1;
 };
 
 }} // namespace synthyboy_mpc::ui

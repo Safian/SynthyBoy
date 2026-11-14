@@ -173,6 +173,25 @@ void testWarp()
     check (m.mirrored() && m.amount.rect().x > m.type.rect().x && leavesOk (m, m.rect(), why), "warp slot mirrored: the knob on the right" + why);
     m.setHasVar (true);
     check (m.var.rect().right() <= m.type.rect().x && leavesOk (m, m.rect(), why), "warp slot mirrored with the extra value: it sits left of the stepper" + why);
+    // the stacked variant (inside a titled block of the full screen)
+    {
+        WarpPair sp;
+        sp.setStacked (true);
+        sp.place ({ 10, 10, 560, 160 });
+        check (sp.stacked() && sp.first.rect().bottom() <= sp.second.rect().y && sp.first.rect().x == sp.second.rect().x && ! sp.second.mirrored() && leavesOk (sp, sp.rect(), why) && sp.minSize().h == 2 * 72 + kGap, "warp pair stacked: the first slot over the second, both with the knob on the left" + why);
+        drawChecks (sp, "warp pair stacked", { 10, 10, 560, 160 }, nullptr);
+    }
+    // the pitch tracking toggle has a label
+    {
+        ToggleIcon tg;
+        tg.setLabel ("TRACK");
+        tg.place ({ 10, 10, 72, 56 });
+        check (tg.sizeOk() && tg.minSize().w == 72, "toggle with a label: 72 x 56 at least");
+        tg.state.icon = ToggleIcon::Icon::PitchTrack;
+        drawChecks (tg, "toggle with the label TRACK", { 10, 10, 72, 56 }, "toggle_track.png");
+        TuneRow tr;
+        check (std::string (tr.track.state.label) == "TRACK", "tune row: the toggle is labelled TRACK");
+    }
     // the pair
     WarpPair p;
     p.place ({ 20, 20, p.minSize().w, 72 });
@@ -503,6 +522,29 @@ void testModulationsPage()
     c = tap (pg, pg.addSource.rect().right() - 10, cy (pg.addSource), 600.0);
     check (c.kind == ChangeKind::Index && c.id == 200 && c.index == 2, "modulations page: the add stepper over the sources of the owner: id 200");
     drawChecks (pg, "modulations page with the add row", { 56, 14, 1168, 600 }, nullptr);
+    // the Q group of the row touched last: [depth, polarity, bypass, -]
+    pg.load (m, "DETUNE");
+    m.numMods = 3;
+    pg.load (m, "DETUNE");
+    pg.place ({ 56, 14, 1168, 600 });
+    for (int i = 0; i < 3; ++i)
+        pg.setRowIds (i, 100 + 10 * i, 101 + 10 * i, 102 + 10 * i, 103 + 10 * i);
+    check (pg.activeRow() == 0 && pg.group.active() && pg.group.member (0) == &pg.rows[0].depth && pg.group.member (3) == nullptr, "modulations page: after the load the first row is the active Q group [depth, polarity, bypass, -]");
+    tap (pg, cx (pg.rows[2].polarity), cy (pg.rows[2].polarity), 1000.0);
+    check (pg.activeRow() == 2 && pg.group.member (0) == &pg.rows[2].depth && pg.group.member (1) == &pg.rows[2].polarity && pg.group.member (2) == &pg.rows[2].bypass && ! pg.rows[0].depth.qFrame() && pg.rows[2].depth.qIndex() == 1, "modulations page: a touch on a row makes it the active group (the previous row is unmarked)");
+    pg.rows[2].depth.state.value = 0.5;
+    c = pg.turnQ (0, 0.1);
+    check (c.kind == ChangeKind::Value && c.id == 120 && std::fabs (c.value - 0.6) < 1e-9, "modulations page: the first Q-Link turns the depth of the active row: id 120");
+    pg.rows[2].polarity.state.on = false;
+    c = pg.turnQ (1, 1);
+    check (c.kind == ChangeKind::Index && c.id == 121 && c.index == 1, "modulations page: the second Q-Link switches the polarity of the active row: id 121");
+    check (! pg.turnQ (3, 1), "modulations page: the fourth place of the group is empty");
+    Component* allLeaves[64];
+    const int nl = pg.collectLeaves (allLeaves, 0, 64);
+    check (pg.group.check (allLeaves, nl) == 0, "modulations page: the row's group is adjacent (the remove button and the other rows lie outside the union)");
+    Scene sgp (1280, 628, kBackgroundRgba);
+    pg.group.draw (sgp.builder());
+    check (sgp.numOps() == 2 && pg.group.rect().y == pg.rows[2].depth.rect().y, "modulations page: the group frame is drawn around the three controls of the active row");
     m.numMods = 0;
     pg.load (m, "EMPTY");
     check (pg.numRows() == 0, "modulations page: no entries: no rows");

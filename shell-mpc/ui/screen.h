@@ -21,7 +21,7 @@ public:
     ToggleIcon power;
     char name[9] = {};
     RouteButton route { "M" };
-    MenuButton full { "FULL", MenuButton::Icon::None };
+    MenuButton full { "", MenuButton::Icon::Expand };   // the "full screen" button: four corner brackets
     BasicControls basic;
 
     /** Outputs: the new instance index (an Index change of `instances`), "full screen requested" (the Request of `full`), the changes of the Basic group's parts, the route button's Request. */
@@ -64,15 +64,15 @@ protected:
         const int dy = hy + 64 + 8;
         const int by = rect_.bottom() - m - basicH;
         display_ = { rect_.x + m, dy, W, std::max (0, by - 8 - dy) };
-        full.place ({ display_.right() - 100 - 4, display_.y + 4, 100, 56 });
+        full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
         basic.place ({ rect_.x + m, by, W, basicH });
     }
-    void drawExtra (Pen& p) const override
+    void drawUnder (Pen& p) const override   // the display area under the buttons that sit on it
     {
-        p.textLeft (nameBox_, name, 4, p.c (colour::kWhite, 255));
         p.rect (display_, p.c (colour::kPanel, 255));
         p.frame (display_, 1, p.c (colour::kRest, 255));
     }
+    void drawExtra (Pen& p) const override { p.textLeft (nameBox_, name, 4, p.c (colour::kWhite, 255)); }
     Rect display_, nameBox_;
 };
 
@@ -127,6 +127,9 @@ public:
     OscKind kind() const noexcept { return kind_; }
     /** The rectangle reserved for the display (the picture is drawn by the overlay views). */
     Rect displayRect() const noexcept { return display_; }
+    /** The titled outlines (blocks) of the type bar and of the tuning column (empty when the tuning row is absent). The panel's own blocks are `panel.blockRect (i)`. */
+    Rect barBlock() const noexcept { return barBlock_; }
+    Rect tuneBlock() const noexcept { return tune_shown_ ? tuneBlock_ : Rect {}; }
     int numGroups() const noexcept { return nGroups_; }
     const char* groupName (int i) const noexcept { return i >= 0 && i < nGroups_ ? names_[i] : ""; }
     int activeGroup() const noexcept { return active_; }
@@ -176,10 +179,13 @@ protected:
         route.place ({ r[3].x, r[3].y + (topH - 64) / 2, r[3].w, 64 });
         const int midY = top.bottom() + m, midH = rect_.bottom() - m - bottomH - m - midY;
         const int leftW = (W - 2 * m) * 64 / 100, rightX = rect_.x + m + leftW + m;
-        const int barH = 56;
-        display_ = { rect_.x + m, midY, leftW, std::max (0, midH - barH - kGap) };
-        bar.place ({ rect_.x + m, display_.bottom() + kGap, leftW, barH });
-        tune.place ({ rightX, midY, rect_.right() - m - rightX, std::max (0, midH) });
+        constexpr int kTitleH = KnobPanel::kBlockTitleH, kPad = KnobPanel::kBlockPad;
+        const int barH = 56, barBlockH = kTitleH + barH + kPad;
+        display_ = { rect_.x + m, midY, leftW, std::max (0, midH - barBlockH - kGap) };
+        barBlock_ = { rect_.x + m, display_.bottom() + kGap, leftW, barBlockH };
+        bar.place ({ barBlock_.x + kPad, barBlock_.y + kTitleH, barBlock_.w - 2 * kPad, barH });
+        tuneBlock_ = { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
+        tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         panel.place ({ rect_.x + m, rect_.bottom() - m - bottomH, W - 2 * m, bottomH });
     }
     void buildGroups()
@@ -216,7 +222,25 @@ protected:
         active_ = -1;
         setActiveGroup (0);
     }
-    Rect display_;
+    void drawExtra (Pen& p) const override
+    {
+        // every Q group has a thin neutral outline (the active one also has the coloured frame of its QGroup): Basic, the type bar, the tuning column; the panel draws its own blocks
+        p.frame (basic.rect(), 1, p.c (colour::kRest, 255));
+        p.frame (barBlock_, 1, p.c (colour::kRest, 255));
+        p.textLeft ({ barBlock_.x + KnobPanel::kBlockPad, barBlock_.y + 4, std::max (0, barBlock_.w - 12), 14 }, barTitle (), 2, p.c (colour::kText, 150));
+        if (tune_shown_)
+        {
+            p.frame (tuneBlock_, 1, p.c (colour::kRest, 255));
+            p.textLeft ({ tuneBlock_.x + KnobPanel::kBlockPad, tuneBlock_.y + 4, std::max (0, tuneBlock_.w - 12), 14 }, "TUNE", 2, p.c (colour::kText, 150));
+        }
+    }
+    const char* barTitle() const noexcept
+    {
+        if (inst_ == OscInstance::Sub) return "SUB";
+        if (inst_ == OscInstance::Noise) return "NOISE";
+        return kind_ == OscKind::Wavetable ? "WAVETABLE" : kind_ == OscKind::Multisample ? "MULTISAMPLE" : "GRANULAR";
+    }
+    Rect display_, barBlock_, tuneBlock_;
     OscInstance inst_ = OscInstance::A;
     OscKind kind_ = OscKind::Wavetable;
     bool tune_shown_ = true;

@@ -50,10 +50,11 @@ public:
 
     void draw (gpu::SceneBuilder& sb) const override
     {
+        Pen pen (sb, enabled_);
+        drawUnder (pen);
         for (int i = 0; i < n_; ++i)
             if (shown_[i])
                 kids_[i]->draw (sb);
-        Pen pen (sb, enabled_);
         drawExtra (pen);
         if (qIndex_ > 0)
             pen.qBadge (rect_, qIndex_);   // a composite as the member of a Q group shows the index of its own
@@ -101,7 +102,8 @@ public:
 
 protected:
     virtual void layout() = 0;
-    virtual void drawExtra (Pen&) const {}
+    virtual void drawUnder (Pen&) const {}   // drawn before the children (backgrounds)
+    virtual void drawExtra (Pen&) const {}   // drawn after the children (outlines, captions)
     virtual void syncKids() { for (int i = 0; i < n_; ++i) kids_[i]->setEnabled (enabled_); }
     void drawBody (Pen&) const override {}
     void addKid (Component& c, bool shown = true) { if (n_ < kMaxKids) { kids_[n_] = &c; shown_[n_] = shown; ++n_; } }
@@ -135,6 +137,7 @@ public:
         crs.state.min = -48; crs.state.max = 48; crs.state.step = 0.01; crs.state.pxPerStep = 2;
         track.state.icon = ToggleIcon::Icon::PitchTrack;
         track.state.on = true;
+        track.setLabel ("TRACK");
         addKid (oct); addKid (sem); addKid (fin); addKid (crs); addKid (track);
         applyVariant();
     }
@@ -151,7 +154,7 @@ public:
     {
         if (vertical_)
             return crsOnly_ ? Size { 80, kRowH } : short_ ? Size { 80, 2 * kRowH + kGap } : Size { 80, 5 * kRowH + 4 * kGap };
-        return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 56 + 4 * kGap, 56 };
+        return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 72 + 4 * kGap, 56 };
     }
 
 protected:
@@ -174,7 +177,7 @@ protected:
             {
                 sem.place (row (1)); fin.place (row (2)); crs.place (row (3));
                 const Rect t = row (4);
-                track.place ({ t.x, t.y, std::min (56, t.w), t.h });
+                track.place ({ t.x, t.y, std::min (72, t.w), t.h });
             }
             return;
         }
@@ -186,7 +189,7 @@ protected:
         }
         else
         {
-            const int fixed[5] = { 0, 0, 0, 0, 56 }, weight[5] = { 1, 1, 1, 1, 0 };
+            const int fixed[5] = { 0, 0, 0, 0, 72 }, weight[5] = { 1, 1, 1, 1, 0 };
             layoutRow (rect_, fixed, weight, 5, kGap, r);
             oct.place (r[0]); sem.place (r[1]); fin.place (r[2]); crs.place (r[3]); track.place (r[4]);
         }
@@ -389,6 +392,7 @@ public:
     explicit WarpSlot (bool mirrored = false) : mirrored_ (mirrored) { addKid (amount); addKid (type); addKid (var, false); setPrimary (&amount); }
     void setTypeOff (bool off) { typeOff_ = off; type.state.dim = off; syncKids(); }
     void setHasVar (bool has) { hasVar_ = has; show (var, has); layout(); }
+    void setMirrored (bool m) { mirrored_ = m; layout(); }
     bool typeOff() const noexcept { return typeOff_; }
     bool hasVar() const noexcept { return hasVar_; }
     bool mirrored() const noexcept { return mirrored_; }
@@ -438,13 +442,28 @@ public:
     WarpSlot first { false }, second { true };
 
     WarpPair() { addKid (first); addKid (second); }
-    Size minSize() const override { const Size a = first.minSize(), b = second.minSize(); return { a.w + b.w + kCaptionW + 2 * kGap, std::max (a.h, b.h) }; }
+    /** The stacked variant (inside a titled block of the full screen: the block's title says WARP): the first slot over the second, no caption. */
+    void setStacked (bool s) { stacked_ = s; second.setMirrored (! s); layout(); }
+    bool stacked() const noexcept { return stacked_; }
+    Size minSize() const override
+    {
+        const Size a = first.minSize(), b = second.minSize();
+        return stacked_ ? Size { std::max (a.w, b.w), a.h + b.h + kGap } : Size { a.w + b.w + kCaptionW + 2 * kGap, std::max (a.h, b.h) };
+    }
     Rect captionBox() const noexcept { return caption_; }
 
 protected:
     static constexpr int kCaptionW = 64;
     void layout() override
     {
+        if (stacked_)
+        {
+            const int h = std::max (0, (rect_.h - kGap) / 2);
+            caption_ = {};
+            first.place ({ rect_.x, rect_.y, rect_.w, h });
+            second.place ({ rect_.x, rect_.y + h + kGap, rect_.w, std::max (0, rect_.h - h - kGap) });
+            return;
+        }
         Rect r[3];
         const int fixed[3] = { 0, kCaptionW, 0 }, weight[3] = { 1, 0, 1 };
         layoutRow (rect_, fixed, weight, 3, kGap, r);
@@ -452,8 +471,9 @@ protected:
         caption_ = r[1];
         second.place (r[2]);
     }
-    void drawExtra (Pen& p) const override { p.textCentered (caption_, "WARP", 2, p.c (colour::kText, 160)); }
+    void drawExtra (Pen& p) const override { if (! stacked_) p.textCentered (caption_, "WARP", 2, p.c (colour::kText, 160)); }
     Rect caption_;
+    bool stacked_ = false;
 };
 
 // ===============================================================================================================================================================
