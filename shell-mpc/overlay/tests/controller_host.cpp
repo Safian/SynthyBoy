@@ -197,6 +197,56 @@ int main()
         const double h = r.until ([&] { return ! r.on(); }, 3000);
         check (h >= 0 && h <= 1100, "... and the kill switch works at once (took " + std::to_string (h) + " ms)");
     }
+    // ---- the readout values a view is given: only when the engine's readout holds ALL of the view's targets (a view reads up to 12: the Play page's three oscillators) ----
+    {
+        synthyboy::LiveValues lv;
+        lv.numTargets = 20;
+        check (Controller::viewTargets (lv, 4, 12) == lv.target + 4, "the readout holds all 12 targets of a view at base 4: the values are given");
+        lv.numTargets = 10;
+        check (Controller::viewTargets (lv, 4, 12) == nullptr, "the readout is shorter than base + count (10 < 16): no values (the view would read past the engine's list)");
+        check (Controller::viewTargets (lv, 4, 6) == lv.target + 4, "... exactly base + count is enough");
+        check (Controller::viewTargets (lv, 4, 7) == nullptr, "... one more is not");
+        lv.numTargets = synthyboy::LiveValues::kMaxTargets;
+        check (Controller::viewTargets (lv, synthyboy::LiveValues::kMaxTargets - 4, 12) == nullptr, "a view whose targets end past the array (base + count > kMaxTargets): no values");
+        check (Controller::viewTargets (lv, -4, 4) == nullptr, "a negative base: no values");
+        check (Controller::viewTargets (lv, 0, 0) == nullptr, "a view without targets gets none");
+        std::vector<int> all;
+        Controller::readoutTargets (all);
+        check (! all.empty() && all.size() <= static_cast<size_t> (synthyboy::LiveValues::kMaxTargets), "the targets of all views together fit the engine's list (" + std::to_string (all.size()) + " of " + std::to_string (synthyboy::LiveValues::kMaxTargets) + ")");
+    }
+    // ---- a slot is given to a NEW instance: no view object of the earlier instance is reused, whatever page is on screen when the new one is first looked at ----
+    {
+        Rig r;
+        r.frame.setAll (true, 90);
+        check (r.until ([&] { return r.on(); }, 500) >= 0, "(slot reuse: shown)");
+        r.run (300);
+        const IView* before = r.ctl->currentView();
+        check (before != nullptr, "(slot reuse: the Filter 1 view is there)");
+        // the page changes to another view, then the instance closes and a new one gets slot 0 before the first view is looked at again
+        r.frame.setView (0, false, 90);
+        r.frame.setView (1, true, 90);
+        check (r.until ([&] { return r.ctl->currentView() != before && r.ctl->currentView() != nullptr; }, 500) >= 0, "(slot reuse: another view is on screen)");
+        r.ctl->detach (&r.inst);
+        FakeInstance successor;
+        successor.set ("filter1.cutoff", 1000.0f);
+        successor.set ("filter1.resonance", 30.0f);
+        check (r.ctl->attach (&successor) == 0, "(slot reuse: the successor got slot 0)");
+        r.frame.setView (1, false, 90);
+        r.frame.setView (0, true, 90);
+        check (r.until ([&] { return r.on() && r.ctl->currentView() != nullptr; }, 800) >= 0, "(slot reuse: the first view is on screen again)");
+        r.run (200);
+        check (r.ctl->currentView() != before, "a slot reused by a new instance gets a NEW view object (the cache of the earlier instance's page is not carried over)");
+        // and the same when the page stays on screen and the instance is replaced between two ticks
+        const IView* second = r.ctl->currentView();
+        r.ctl->detach (&successor);
+        FakeInstance third;
+        third.set ("filter1.cutoff", 1000.0f);
+        third.set ("filter1.resonance", 30.0f);
+        check (r.ctl->attach (&third) == 0, "(slot reuse: third instance, slot 0, no tick between)");
+        r.run (300);
+        check (r.ctl->currentView() != second, "... also when the replacement happens between two ticks with the same page on screen");
+        r.ctl->detach (&third);
+    }
     // ---- the slot table and the colour table ----
     {
         bool maps = true, tolerant = true, distinct = true;

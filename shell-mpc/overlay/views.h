@@ -643,25 +643,41 @@ public:
     }
 
 private:
-    /** Is the pixel under the point (screen coordinates) of the colour of the widget's line (2 per channel of tolerance for the anti-aliasing: 6)? */
-    bool lineUnder (const ViewInput& in, double x, double y) const
+    /** A hold on the framebuffer of the screen for as many reads as the caller wants: every begin () of the real source is a set of kernel calls (the CRTC, the framebuffer, a dma-buf
+        descriptor, the sync), so the many probes of one verification share one. */
+    struct FrameHold
     {
-        if (in.frames == nullptr)
-            return false;
-        int pw = 0, ph = 0;
-        if (! in.frames->begin (pw, ph))
+        explicit FrameHold (IFrameSource* f) : frames (f) { open = f != nullptr && f->begin (w, h); }
+        ~FrameHold() { if (open) frames->end(); }
+        FrameHold (const FrameHold&) = delete;
+        FrameHold& operator= (const FrameHold&) = delete;
+        IFrameSource* frames;
+        bool open = false;
+        int w = 0, h = 0;
+    };
+
+    /** Is the pixel under the point (screen coordinates) of the colour of the widget's line (2 per channel of tolerance for the anti-aliasing: 6)? The framebuffer is already held. */
+    static bool lineUnderHeld (const ViewInput& in, const FrameHold& hold, double x, double y)
+    {
+        if (! hold.open)
             return false;
         int px, py;
         uint32_t rgb = 0;
-        uiPointToPanel (in.rotation, static_cast<int> (std::lround (x)), static_cast<int> (std::lround (y)), pw, ph, px, py);
-        const bool ok = in.frames->pixel (px, py, rgb);
-        in.frames->end();
-        if (! ok)
+        uiPointToPanel (in.rotation, static_cast<int> (std::lround (x)), static_cast<int> (std::lround (y)), hold.w, hold.h, px, py);
+        if (! in.frames->pixel (px, py, rgb))
             return false;
         for (int s = 0; s <= 16; s += 8)
             if (std::abs (static_cast<int> ((rgb >> s) & 255u) - static_cast<int> ((envgeom::kLineRgb >> s) & 255u)) > 6)
                 return false;
         return true;
+    }
+    /** The same for one point: holds the framebuffer for this one read. */
+    bool lineUnder (const ViewInput& in, double x, double y) const
+    {
+        if (in.frames == nullptr)
+            return false;
+        const FrameHold hold (in.frames);
+        return lineUnderHeld (in, hold, x, y);
     }
 
     /** The widget draws the stage handles (circles) over the polyline, so the line is not visible at every point. The rule is verified on the middle stretches of the long
@@ -676,6 +692,9 @@ private:
         verifiedNorm_ = n;
         verifiedAtMs_ = nowMs;
         probeHits_ = probeCount_ = 0;
+        if (in.frames == nullptr)
+            return verified_ = false;
+        const FrameHold hold (in.frames);   // one hold for all the probes (up to 18 probes of 9 pixels)
         for (int st = 1; st <= 6; ++st)
         {
             const envgeom::Point a = envgeom::dotFor (n, st, 0.0), b = envgeom::dotFor (n, st, 1.0);
@@ -686,23 +705,23 @@ private:
                 if (std::hypot (hi.x - lo.x, hi.y - lo.y) < 60.0)
                     continue;
                 for (double f : { 0.25, 0.5, 0.75 })
-                    probe (in, lo.x + (hi.x - lo.x) * f, lo.y + (hi.y - lo.y) * f);
+                    probe (in, hold, lo.x + (hi.x - lo.x) * f, lo.y + (hi.y - lo.y) * f);
                 continue;
             }
             if (std::hypot (b.x - a.x, b.y - a.y) < 60.0)
                 continue;
             for (double f : { 0.25, 0.5, 0.75 })
-                probe (in, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
+                probe (in, hold, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
         }
         verified_ = probeHits_ >= 3 && probeHits_ * 100 >= probeCount_ * 35;
         return verified_;
     }
-    void probe (const ViewInput& in, double x, double y)
+    void probe (const ViewInput& in, const FrameHold& hold, double x, double y)
     {
         ++probeCount_;
         for (int dy = -1; dy <= 1; ++dy)
             for (int dx = -1; dx <= 1; ++dx)
-                if (lineUnder (in, x + dx, y + dy))
+                if (lineUnderHeld (in, hold, x + dx, y + dy))
                 {
                     ++probeHits_;
                     return;

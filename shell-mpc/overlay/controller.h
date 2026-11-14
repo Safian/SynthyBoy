@@ -84,6 +84,7 @@ public:
             views_.push_back (makeView (i));
             targetBase_[i] = static_cast<int> (targets_.size());
             views_.back()->targets (targets_);
+            targetCount_[i] = static_cast<int> (targets_.size()) - targetBase_[i];
         }
         detector_ = std::make_unique<PageDetector> (frames_, markers_, layout::kNumViews, instanceRects_);
         for (int& s : viewSlot_)
@@ -105,6 +106,15 @@ public:
             else if (v.kind == layout::kKindPlay)
                 PlayView (v.index, -1.0).targets (out);
         }
+    }
+
+    /** The readout values of a view whose targets start at `base` in the engine's list and number `count`: the pointer into `lv` only when ALL of them are in what the engine delivered
+        (numTargets) and inside the array; otherwise null, and the view draws without live values. */
+    static const float* viewTargets (const synthyboy::LiveValues& lv, int base, int count) noexcept
+    {
+        if (base < 0 || count <= 0 || count > synthyboy::LiveValues::kMaxTargets - base)
+            return nullptr;
+        return lv.numTargets >= base + count ? lv.target + base : nullptr;
     }
 
     // ---- instances (host threads; the lock is also held while the overlay thread uses an instance) ----
@@ -440,7 +450,7 @@ private:
         IInstanceView* v = slots_.at (activeSlot_);
         if (! v)
             return false;
-        if (viewSlot_[current_] != activeSlot_)
+        if (viewSlot_[current_] != activeSlot_ || viewGeneration_[current_] != slots_.generation (activeSlot_))
         {
             // the view last showed another instance (or none): its cached data (curves, cutoff history, smoothing, dot checks) is that one's. A new object starts from nothing.
             if (viewSlot_[current_] >= 0)
@@ -450,6 +460,7 @@ private:
                 views_[static_cast<size_t> (current_)] = std::move (fresh);
             }
             viewSlot_[current_] = activeSlot_;
+            viewGeneration_[current_] = slots_.generation (activeSlot_);
             needFrame_ = true;
         }
         IView& view = *views_[static_cast<size_t> (current_)];
@@ -459,7 +470,7 @@ private:
         in.instance = v;
         in.live = haveLive ? &lv : nullptr;
         const int base = targetBase_[current_];
-        in.targets = haveLive && lv.numTargets > base ? lv.target + base : nullptr;
+        in.targets = haveLive ? viewTargets (lv, base, targetCount_[current_]) : nullptr;
         in.nowMs = nowMs;
         in.frames = &frames_;
         in.rotation = rotation_;
@@ -911,6 +922,7 @@ private:
     Rect regions_[layout::kNumViews];
     Rect instanceRects_[layout::kNumViews];
     int targetBase_[layout::kNumViews] = {};
+    int targetCount_[layout::kNumViews] = {};
     std::vector<int> targets_;
     std::vector<std::unique_ptr<IView>> views_;
     struct ViewFrames { unsigned long frames = 0, changes = 0; };
@@ -921,6 +933,7 @@ private:
     std::mutex mu_;
     InstanceSlots slots_;                    // under mu_
     int viewSlot_[layout::kNumViews];        // the slot whose instance each view object last read (-1: none yet); overlay thread
+    unsigned long viewGeneration_[layout::kNumViews] = {};   // ... and which holder of that slot it was (InstanceSlots::generation): a slot given to a NEW instance is not the same instance
     int activeSlot_ = -1, seenSlot_ = kSlotUnknown;   // the instance of the visible view / what the last check read (the status file)
     uint32_t instanceSeen_ = 0xffffffffu;
     unsigned long rereports_ = 0;

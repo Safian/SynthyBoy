@@ -65,6 +65,7 @@ public:
             if (! slot_[s])
             {
                 slot_[s] = v;
+                ++generation_[s];
                 return s;
             }
         if (overflow_ < kMaxOverflow)
@@ -88,6 +89,9 @@ public:
             }
         return false;
     }
+    /** How many instances have been given this slot so far (0 = never): a number that changes with every new holder, so that what was cached for the earlier instance of a slot is
+        recognised as stale when the slot is reused (the slot number alone is the same). */
+    unsigned long generation (int slot) const noexcept { return slot >= 0 && slot < layout::kMaxInstances ? generation_[slot] : 0; }
     IInstanceView* at (int slot) const noexcept { return slot >= 0 && slot < layout::kMaxInstances ? slot_[slot] : nullptr; }
     int slotOf (const IInstanceView* v) const noexcept
     {
@@ -104,6 +108,7 @@ public:
 private:
     static constexpr int kMaxOverflow = 256;   // instances beyond the 16: only their number matters
     IInstanceView* slot_[layout::kMaxInstances] = {};
+    unsigned long generation_[layout::kMaxInstances] = {};
     const IInstanceView* overflowList_[kMaxOverflow] = {};
     int overflow_ = 0;
 };

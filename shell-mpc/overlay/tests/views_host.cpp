@@ -501,7 +501,10 @@ int main()
             lv.envFineStage[1] = 2.0f;
             lv.envFineFraction[1] = 1.0f;   // exactly at a corner: the pixel there is hidden by the handle
             const unsigned long ph = v.polylineHits();
+            const int beginsBefore = occluded.begins;
             v.update (oc);
+            // up to 18 probes of 9 pixels each are read: the framebuffer is taken hold of ONCE for all of them (every begin () is a set of kernel calls and a dma-buf descriptor on the device)
+            check (occluded.begins - beginsBefore <= 2, "the verification of the polyline reads the framebuffer in one go (" + std::to_string (occluded.begins - beginsBefore) + " begin calls for the update)");
             check (v.dotX() >= 0 && v.polylineHits() == ph + 1, "at a corner hidden by a handle: no line colour under the point, the polyline is verified on its visible stretches: the dot is drawn");
         }
         std::ostringstream st;
