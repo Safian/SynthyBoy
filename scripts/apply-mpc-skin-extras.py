@@ -65,13 +65,23 @@ class Context:
         self._tui = tui
         self._index = {p["key"]: i for i, p in enumerate(params["params"])}
         self._keys = [p["key"] for p in params["params"]]
+        self.param_count = len(self._keys)   # entries of params.json; the plugin's own parameters (display, pad pressure) follow them
+        self._extra = {}                     # index >= param_count -> key, registered by a module (add_param_key)
         self.skins_dir = Path(skins_dir)
         self.meta = meta   # skin-meta.json of gen-mpc-ui.py (names of the controls, tab structure) or None
 
     def param_key(self, index):
+        if index in self._extra:
+            return self._extra[index]
         if not 0 <= index < len(self._keys):
             raise ExtrasError("parameter index %r is not in params.json" % (index,))
         return self._keys[index]
+
+    def add_param_key(self, index, key):
+        """Names a parameter of the shell that params.json does not list (index >= param_count) so that the later modules (80_layout, 85_names) can treat a control bound to it like any other."""
+        if index < len(self._keys) or key in self._index or key in self._extra.values() or index in self._extra:
+            raise ExtrasError("cannot register parameter %r as %r: index inside params.json or already registered" % (index, key))
+        self._extra[index] = key
 
     def param_index(self, key):
         if key not in self._index:

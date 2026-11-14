@@ -114,7 +114,10 @@ class EnvSkinTest(unittest.TestCase):
         after = base.qlinks_by_tab_name(self.tui, self.qlinks)
         self.assertEqual(sorted(before), sorted(after))
         for name in before:
-            if not name.startswith(("Env ", "Osc ", "LFO ")) or name.endswith("Shp"):
+            if name == "Master":   # 45_pad_pressure.py puts the pad pressure toggle and amount on the free Q-Links 1 and 2 of the bottom row
+                self.assertEqual({k: v for k, v in after[name].items() if k not in ("Q-Link 1", "Q-Link 2")}, {k: v for k, v in before[name].items() if k not in ("Q-Link 1", "Q-Link 2")}, name)
+                self.assertEqual((before[name]["Q-Link 1"], before[name]["Q-Link 2"]), (-1, -1))
+            elif not name.startswith(("Env ", "Osc ", "LFO ")) or name.endswith("Shp"):
                 self.assertEqual(after[name], before[name], name)
 
     def test_bounds_version_2_has_its_extra_key(self):

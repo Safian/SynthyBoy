@@ -99,6 +99,8 @@ public:
     uint64_t sourceMask() const noexcept { return srcMask; }
     uint64_t globalSourceMask() const noexcept { return globalSrcMask; }
     void setContent (const OwnContent* c) noexcept { content = c; }
+    /** True when a compiled slot routes Poly Aftertouch (source or aux) to Filter 1 Cutoff. */
+    bool hasPolyAftertouchToFilter1Cutoff() const noexcept { return hasPolyAftertouchToCutoff; }
 
     /** Adds the modulation of every slot of the requested scope to delta[] (table index) and records the touched entries. */
     void evaluate (const EvalContext& ctx) const noexcept;
@@ -107,6 +109,7 @@ private:
     CompiledSlot slots[kNumModSlots];
     int count = 0;
     uint64_t srcMask = 0, globalSrcMask = 0;
+    bool hasPolyAftertouchToCutoff = false;
     const OwnContent* content = nullptr;
 };
 } // namespace own

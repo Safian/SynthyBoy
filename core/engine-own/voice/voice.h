@@ -23,6 +23,11 @@ namespace synthyboy
 {
 namespace own
 {
+/** Pad pressure to Filter 1 cutoff (MPC shell): the cutoff range of full pressure at depth 1 (semitones, the control domain of the cutoff) and the time constant of the
+    one pole smoothing of the pressure stream (seconds; the pad sends about 170 values a second per note). */
+constexpr float kPadPressureSemitones = 36.0f;
+constexpr float kPadPressureSeconds = 0.012f;
+
 /** What the engine hands to every voice at the start of a control period. */
 struct TickGlobals
 {
@@ -56,6 +61,7 @@ struct TickGlobals
     uint32_t* chokeLatest = nullptr;         // [3][256] choke groups of the multisample oscillators (engine wide per slot)
     uint32_t* chokeCounter = nullptr;        // [3]
     const int* switchKey = nullptr;          // [3] last key switch of the multisample instrument of each oscillator, -1 = default
+    float padPressureToCutoff = 0.0f;        // MPC shell: depth of the pad pressure to Filter 1 cutoff layer, 0 = off, 1 = kPadPressureSemitones at full pressure
 };
 
 struct NoteStart
@@ -169,7 +175,7 @@ private:
     void evaluateVoiceControl (const TickGlobals& g) noexcept;
     int32_t id = -1;
     uint32_t noteSerial = 0;
-    float vel = 1.0f, releaseVel = 0.0f, tuneExpr = 0.0f, polyPressure = 0.0f, slide = 0.0f, exprX = 0.0f;
+    float vel = 1.0f, releaseVel = 0.0f, tuneExpr = 0.0f, polyPressure = 0.0f, smoothedPressure = 0.0f, padCoefDt = 0.0f, padCoef = 0.0f, slide = 0.0f, exprX = 0.0f;
     float glideOffset = 0.0f, glideTime = 0.0f, glideElapsed = 0.0f, glideSlope = 0.0f; // semitones left, seconds
     float lastSemis = 60.0f;
     float tuneCoefDt = 0.0f, tuneCoef = 0.0f; // 1 - exp (-period / 20 ms) for the period tuneCoefDt
@@ -201,6 +207,8 @@ private:
     std::vector<float> mod, modR;
     float* modP = nullptr;   // mod.data () / modR.data (): the vectors are sized in prepare () and never reallocated
     float* modRP = nullptr;
+    int padCutIdx = -1;
+    bool padCutTouched = false;
     int touched[kNumModSlots] = {};
     int numTouched = 0;
     float src[kNumSourceIds] = {};

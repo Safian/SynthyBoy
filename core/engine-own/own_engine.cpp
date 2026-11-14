@@ -51,6 +51,15 @@ bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept
     return true;
 }
 
+bool setOwnPadPressureToCutoff (IEngine& engine, float amount01) noexcept
+{
+    auto* own = dynamic_cast<own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return false;
+    own->setPadPressureToCutoff (amount01);
+    return true;
+}
+
 namespace own
 {
 namespace
@@ -758,11 +767,8 @@ void OwnEngine::handleEvent (const Event& e) noexcept
         {
             const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
             aftertouch[channel] = std::isfinite (e.value) ? clamp01 (e.value) : 0.0f;
-            if (mpe && channel > 0) // the pressure of a member channel belongs to its notes (the Poly Aftertouch source) and is the Z axis
+            if (mpe && channel > 0) // the pressure of a member channel is the Z axis; the pad pressure layer reacts strictly to poly aftertouch (0xA0)
             {
-                for (auto& v : voices)
-                    if (v->isActive() && v->channel() == channel)
-                        v->setPressure (aftertouch[channel]);
                 applyAxes (channel, 2, aftertouch[channel]);
             }
             break;
@@ -980,6 +986,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.spectralScratch = spectralScratch.get();
     globals.chokeLatest = &chokeLatest[0][0];
     globals.chokeCounter = chokeCounter;
+    globals.padPressureToCutoff = padPressureToCutoff.load (std::memory_order_relaxed);
 
     const MasterIdx& mi = pi.master;
     const int fxReverbForce = fxReverbForceIndex;

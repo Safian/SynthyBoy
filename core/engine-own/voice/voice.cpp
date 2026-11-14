@@ -125,6 +125,12 @@ void Voice::clearMod() noexcept
         modR[static_cast<size_t> (touched[i])] = 0.0f;
     }
     numTouched = 0;
+    if (padCutTouched) // the pad pressure layer is kept out of `touched`: the envelope cache reads that list as "the patch is modulated"
+    {
+        mod[static_cast<size_t> (padCutIdx)] = 0.0f;
+        modR[static_cast<size_t> (padCutIdx)] = 0.0f;
+        padCutTouched = false;
+    }
 }
 
 float Voice::modulatedSlow (int idx, float b, float d) const noexcept
@@ -148,6 +154,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     releaseVel = 0.0f;
     tuneExpr = 0.0f;
     polyPressure = 0.0f;
+    smoothedPressure = 0.0f;
     slide = 0.0f;
     exprX = 0.0f;
     rng.seed (n.serial * 31u + static_cast<uint32_t> (n.key) * 7u + 1u);
@@ -246,6 +253,7 @@ void Voice::release (float velocity) noexcept
         return;
     released = true;
     releaseVel = velocity;
+    polyPressure = 0.0f;
     for (auto& e : env)
         e.noteOff();
     if (gl != nullptr)
@@ -705,6 +713,34 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         ctx.bpm = g.bpm;
         ctx.voiceAge = voiceAge;
         { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
+        // MPC shell: the poly aftertouch of a pad goes to the Filter 1 cutoff (a layer over the patch: the knob and the matrix slots are not touched). One pole smoothing
+        // (time constant kPadPressureSeconds) of the ~170 / s stream; the delta is in semitones, the control domain of the cutoff. Off: nothing is computed.
+        // If the preset's modulation matrix already has a Poly Aftertouch -> Filter 1 Cutoff route, the layer does not add to that voice (no doubling).
+        if (g.padPressureToCutoff > 0.0f)
+        {
+            if (fresh)
+                smoothedPressure = polyPressure;
+            else
+            {
+                if (padCoefDt != fdt)
+                {
+                    padCoefDt = fdt;
+                    padCoef = 1.0f - std::exp (-fdt / kPadPressureSeconds);
+                }
+                smoothedPressure += (polyPressure - smoothedPressure) * padCoef;
+            }
+            const bool matrixHandlesCutoff = g.matrix != nullptr && g.matrix->hasPolyAftertouchToFilter1Cutoff();
+            const float deltaCutoff = matrixHandlesCutoff ? 0.0f : g.padPressureToCutoff * smoothedPressure * kPadPressureSemitones;
+            padCutIdx = pi.filter[0].cutoff;
+            if (deltaCutoff != 0.0f && padCutIdx >= 0)
+            {
+                mod[static_cast<size_t> (padCutIdx)] += deltaCutoff;
+                modR[static_cast<size_t> (padCutIdx)] += deltaCutoff;
+                padCutTouched = true;
+            }
+        }
+        else
+            smoothedPressure = polyPressure;
     }
 
     // ---- amplitude: envelope 1, velocity

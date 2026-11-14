@@ -220,7 +220,8 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
                 self.assertEqual(label["componentData"]["type"], "Label")
                 self.assertEqual(label["componentData"]["name"], c["componentData"]["name"] + " name")
                 key = base_key(self.tui, c)
-                self.assertEqual(label["componentData"]["data"]["text"], self.names[tab["tabName"]][key], (tab["tabName"], key))
+                expected = SHELL_NAMES[key] if key in SHELL_NAMES else self.names[tab["tabName"]][key]   # the short names of the shell's own parameters are 45_pad_pressure.py's
+                self.assertEqual(label["componentData"]["data"]["text"], expected, (tab["tabName"], key))
         self.assertGreater(count, 250)
 
     def test_style_is_the_selector_header_weight(self):
@@ -247,7 +248,10 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
                 self.assertEqual(len(remap), 1, (tab["tabName"], d["name"]))
                 self.assertEqual(remap[0]["key"], "Data")
                 index = int(remap[0]["value"].split()[1])
-                self.assertTrue(0 <= index < len(lay.PARAMS), (tab["tabName"], d["name"]))
+                self.assertTrue(0 <= index < len(lay.PARAMS) or index in SHELL_KEYS, (tab["tabName"], d["name"]))
+                if d["name"].startswith("Pad Pressure hint "):   # 45_pad_pressure.py: the hint is bound to the toggle of the pad pressure
+                    self.assertEqual(index, len(lay.PARAMS) + 4 + 32, (tab["tabName"], d["name"]))
+                    continue
                 owner = controls[d["name"].rsplit(" name", 1)[0] if d["name"].endswith(" name") else d["name"].rsplit(" seg ", 1)[0]]
                 self.assertEqual(remap, owner["handle remapping"]["map"], (tab["tabName"], d["name"]))
         self.assertGreater(count, 300)
@@ -305,6 +309,8 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
             for c in t["componentDefinition"]["componentsData"]:
                 if c["componentData"]["type"] in names_mod.NAME_DY:
                     key = base_key(self.tui, c)
+                    if key in SHELL_KEYS.values():   # not in params.json: the plugin's own parameters (shell-mpc/pad_pressure.h)
+                        continue
                     self.assertIn(lay.BY_KEY[key]["name"], lay.BY_NAME)
 
     def test_env1_release_label_text(self):
@@ -324,8 +330,16 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
         self.assertEqual(macros_labels["Env 1 Release"], "Env 1 Release")
 
 
+SHELL_KEYS = {len(lay.PARAMS) + 4 + 32: "shell.pad_pressure", len(lay.PARAMS) + 4 + 32 + 1: "shell.pad_pressure_amount"}   # 45_pad_pressure.py: the plugin's own parameters at the end of the list
+
+
+SHELL_NAMES = {"shell.pad_pressure": "Pad Pressure", "shell.pad_pressure_amount": "Pressure Amount"}
+
+
 def base_key(tui, control):
     index = int(control["handle remapping"]["map"][0]["value"].split()[1])
+    if index in SHELL_KEYS:
+        return SHELL_KEYS[index]
     return lay.PARAMS[index]["key"]
 
 

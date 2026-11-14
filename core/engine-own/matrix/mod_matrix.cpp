@@ -243,6 +243,8 @@ void ModMatrix::compile (const float* base) noexcept
     const ParamInfo* table = paramTable();
     count = 0;
     srcMask = globalSrcMask = 0;
+    hasPolyAftertouchToCutoff = false;
+    const int cutIdx = pi.filter[0].cutoff;
     EdgeList adj;
     for (int s = 0; s < kNumModSlots; ++s)
     {
@@ -257,6 +259,8 @@ void ModMatrix::compile (const float* base) noexcept
         if (dest < 0)
             continue;
         const int aux = sp.auxSource >= 0 ? std::clamp (static_cast<int> (base[sp.auxSource] + 0.5f), 0, kNumSourceIds - 1) : 0;
+        if (dest == cutIdx && (src == kSrcPolyAftertouch || aux == kSrcPolyAftertouch))
+            hasPolyAftertouchToCutoff = true;
         // a connection that would close a loop is not wired (document 04, 6)
         const int owner = ownerNode (table[dest]);
         if (owner >= 0)

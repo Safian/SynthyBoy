@@ -85,6 +85,14 @@ if(SYNTHYBOY_MPC_SPECTRUM)
     endif()
 endif()
 
+# Pad pressure to Filter 1 cutoff (docs/MPC.md "Pad pressure"): two automatable parameters "Pad Pressure" and "Pad Pressure Amount" at the very end of the parameter list, saved in
+# the state chunk. The skin of scripts/mpc-skin-extras/45_pad_pressure.py refers to them, so the MPC package needs the plugin built with this ON (the default of this shell). The
+# source default is 0: OFF builds the plugin byte for byte as it was without this code. The layer itself is in the own engine (the engine of the MPC package).
+option(SYNTHYBOY_MPC_PAD_PRESSURE "MPC shell: pad pressure to Filter 1 cutoff (two parameters, state)" ON)
+if(SYNTHYBOY_MPC_PAD_PRESSURE)
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PAD_PRESSURE=1)
+endif()
+
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
 if(APPLE)
