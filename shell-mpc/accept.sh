@@ -188,6 +188,9 @@ $B/overlay_instance_host "$OVLON" > $B/overlay-instance.log 2>&1 || { grep -E "^
 # the Play page's parameters (shell-mpc/play_params.h, docs/MPC.md "Play page"): selectors, proxies, chunk, no feedback loop (the list, the order and the counts are checked there)
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_host shell-mpc/tests/play_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_host build"; exit 1; }
 $B/play_host "$OVLON" > $B/play.log 2>&1 || { grep -E "^FAIL" $B/play.log; echo "ACCEPT FAIL: play_host (the Play page's parameters)"; exit 1; }
+# the Play page's parameter table is built when the library is loaded, not by the first caller (the host may call getParameter / setParameter from the audio thread)
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -o $B/play_params_rt_host shell-mpc/tests/play_params_rt_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_params_rt_host build"; exit 1; }
+$B/play_params_rt_host > $B/play-params-rt.log 2>&1 || { grep -E "^FAIL" $B/play-params-rt.log; echo "ACCEPT FAIL: play_params_rt_host (the table of the Play proxies must exist before the first lookup, no allocation)"; exit 1; }
 # saving and reloading a project with the Play page (docs/MPC.md "Project save and reload"): the load orders a host could use (chunk only, write-back of every parameter before / after the chunk, program re-selection, the order seen on the Key 61), the restore window, the debug log
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_restore_host shell-mpc/tests/play_restore_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_restore_host build"; exit 1; }
 $B/play_restore_host "$OVLON" > $B/play-restore.log 2>&1 || { grep -E "^FAIL" $B/play-restore.log | cut -c1-400; echo "ACCEPT FAIL: play_restore_host (project save and reload of the Play page)"; exit 1; }
