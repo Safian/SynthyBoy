@@ -439,7 +439,8 @@ private:
     {
         play::SceneSink base (sb);
         play::ShiftSink<play::SceneSink> shifted (base, play::kOx, play::kOy);
-        paint (shifted, play::kPanelW, play::kPanelH);
+        if (osc_ == nullptr || osc_->isMain())
+            paint (shifted, play::kPanelW, play::kPanelH);   // the Env and LFO panels (not drawn while a full screen covers them)
         if (osc_ == nullptr)
             return;
         osc_->draw (sb);

@@ -138,6 +138,7 @@ public:
             return full_.displayRect();
         return {};
     }
+    bool isMain() const noexcept { return stackDepth_ == 0; }
     /** The instance (1 Sub .. 5 Noise) and the type of the oscillator it shows (0 wavetable, 1 sample, 2 granular, 3 spectral, 4 multisample; -1 for Sub and Noise). */
     int selection() const noexcept { return sel_; }
     int typeRaw() const noexcept { return sel_ == playosc::kSub || sel_ == playosc::kNoise ? -1 : typeRaw_; }
