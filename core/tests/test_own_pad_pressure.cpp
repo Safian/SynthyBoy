@@ -381,9 +381,7 @@ TEST (pad_pressure_mpe_pressure_lead_preset_audio_does_not_double)
     // Loads content/presets/Lead/mpe_pressure_lead.sbpreset
     // When rendered with padPressureToCutoff = 1.0f vs 0.0f, the output must be identical
     // because the preset already has Poly Aftertouch -> Filter 1 Cutoff in its mod matrix.
-    std::ifstream in ("content/presets/Lead/mpe_pressure_lead.sbpreset", std::ios::binary);
-    if (! in)
-        in.open ("../../content/presets/Lead/mpe_pressure_lead.sbpreset", std::ios::binary);
+    std::ifstream in (std::string (SYNTHYBOY_TEST_SOURCE_DIR) + "/content/presets/Lead/mpe_pressure_lead.sbpreset", std::ios::binary);
     CHECK (in.is_open());
     if (! in)
         return;
