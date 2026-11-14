@@ -34,13 +34,15 @@ private:
     int lastBarL = -1, lastBarR = -1; // what the bars show now (quantised), -1 before the first refresh
 };
 
-/** Preset name with prev / next (browsing is Kick's: the buttons only call UiHost::stepPreset), Undo/Redo, A/B compare, assign-mode toggle, menu. */
+/** Preset name with prev / next (the buttons call UiHost::stepPreset, a click on the name opens the preset menu of the editor), Undo/Redo, A/B compare, assign-mode toggle, menu. */
 class TopBar final : public juce::Component
 {
 public:
     explicit TopBar (UiContext& context);
 
     void setPresetName (const juce::String& name);
+    void setPresetModified (bool modified);
+    bool isPresetModified() const noexcept { return presetModified; }
     void setAbLabel (const juce::String& text) { ab.setButtonText (text); }
     void setAssignOpen (bool open) { assign.setToggleState (open, juce::dontSendNotification); }
     void updateUndoRedo (bool canUndo, bool canRedo);
@@ -48,10 +50,13 @@ public:
     void setVoiceBadge (int active, int cap);
     bool voiceBadgeShown() const noexcept { return voices.isVisible(); }
 
-    std::function<void()> onUndo, onRedo, onAbToggle, onAssignToggle, onMenu, onVoiceBadge;
+    std::function<void()> onUndo, onRedo, onAbToggle, onAssignToggle, onMenu, onVoiceBadge, onPresetNameClick;
 
     void resized() override;
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent& e) override;
+    void mouseMove (const juce::MouseEvent& e) override;
+    void mouseExit (const juce::MouseEvent& e) override;
 
     juce::TextButton prev { "<" }, next { ">" };
     juce::TextButton undo { "U" }, redo { "R" };
@@ -61,6 +66,7 @@ public:
 private:
     UiContext& ctx;
     juce::String presetName;
+    bool presetModified = false;
 };
 
 /** macro.1 .. macro.8 as compact knobs plus MAIN volume knob and stereo output meter. */

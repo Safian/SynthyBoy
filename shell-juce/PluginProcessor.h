@@ -69,11 +69,11 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override;
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
+    void changeProgramName (int index, const juce::String& newName) override;
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
@@ -92,8 +92,22 @@ public:
     synthyboy::Tier qualityTier() const noexcept override { return synthyboy::kDefaultTier; }
     juce::MidiKeyboardState& keyboardState() override { return keyboard; }
     synthyboy::ui::AbCompare& abCompare() override { return ab; }
-    void stepPreset (int direction) override { if (presetStepHandler) presetStepHandler (direction); }
-    juce::String presetName() const override { return presetNameText; }
+    void stepPreset (int direction) override;
+    juce::String presetName() const override
+    {
+        const std::lock_guard<std::mutex> lock (presetNameMutex);
+        return presetNameText;
+    }
+    void setPresetNameText (const juce::String& name)
+    {
+        const std::lock_guard<std::mutex> lock (presetNameMutex);
+        presetNameText = name;
+    }
+    int findProgramIndex (const juce::String& identifier) const;
+    std::vector<synthyboy::ui::PresetItem> presetList() const override;
+    void selectPreset (int index) override;
+    int currentPresetIndex() const override { return currentProgramIndex.load (std::memory_order_relaxed); }
+    bool isPresetModified() const override;
     float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
     float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
     void injectMidiMessage (const juce::MidiMessage& msg) override;
@@ -193,6 +207,12 @@ private:
     // what the host loaded last (or the defaults): "Revert to saved". Message thread, the content mutex covers hosts that do not.
     synthyboy::ParamValues savedValues = synthyboy::ParamValues::defaults();
     synthyboy::StateContent savedContent;
+    int savedProgramIndex = 0;
+    juce::String savedPresetName { "Init" };
+
+    // baseline for isPresetModified(): updated on loadPatch, initPatch, setStateInformation, revertToSaved
+    synthyboy::ParamValues presetBaselineValues = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent presetBaselineContent;
 
     // shell features (not parameters): the CC map is read and learned on the audio thread (atomics), the locks belong to the message thread
     synthyboy::MidiCcMap midiMap;
@@ -208,6 +228,7 @@ private:
     std::string userDir;
     synthyboy::ShellState shellState() const;       // takes contentMutex
     std::string stateText();                         // saveState + content + shell section (the host state and the user default)
+    void restoreProgram (const void* data, size_t size);
     void applyShell (const synthyboy::ShellState& shell);
     /** Parameters and content of a loaded patch; `respectLocks` keeps the locked modules of the current patch. */
     void applyPatch (synthyboy::ParamValues values, synthyboy::StateContent newContent, bool respectLocks);
@@ -235,6 +256,7 @@ private:
     // editor state that outlives the editor window
     juce::MidiKeyboardState keyboard; // notes of the on-screen keyboard, merged into the MIDI input of processBlock
     synthyboy::ui::AbCompare ab;
+    mutable std::mutex presetNameMutex;
     juce::String presetNameText { "Init" };
     std::function<void (int)> presetStepHandler;
     std::vector<synthyboy::Event> events;
@@ -248,6 +270,16 @@ private:
     std::atomic<uint32_t> scopeWrite { 0 };
     std::mutex uiMidiMutex;
     juce::MidiBuffer uiMidiBuffer;
+
+    struct DesktopProgram
+    {
+        std::string category;
+        std::string name;
+        const char* jsonText = nullptr;
+        size_t jsonSize = 0;
+    };
+    std::vector<DesktopProgram> programList;
+    std::atomic<int> currentProgramIndex { 0 }; // read by the host (any thread) and the editor
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SynthyBoyProcessor)
 };

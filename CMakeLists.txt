@@ -284,6 +284,32 @@ if(APPLE)
 endif()
 
 # The UI library itself was added above (shell-juce/ui). The adapters of the JUCE plug-in:
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+file(GLOB_RECURSE FACTORY_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/content/presets/*.sbpreset")
+
+set(EMBEDDED_PRESETS_H   "${CMAKE_CURRENT_BINARY_DIR}/EmbeddedPresets.h")
+set(EMBEDDED_PRESETS_CPP "${CMAKE_CURRENT_BINARY_DIR}/EmbeddedPresets.cpp")
+
+add_custom_command(
+    OUTPUT "${EMBEDDED_PRESETS_H}" "${EMBEDDED_PRESETS_CPP}"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/embed-presets.py"
+            --presets-dir "${CMAKE_CURRENT_SOURCE_DIR}/content/presets"
+            --out-h "${EMBEDDED_PRESETS_H}"
+            --out-cpp "${EMBEDDED_PRESETS_CPP}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/embed-presets.py" ${FACTORY_PRESET_FILES}
+    COMMENT "Generating embedded factory presets for desktop shell"
+    VERBATIM
+)
+
+add_library(synthyboy_desktop_presets STATIC
+    "${EMBEDDED_PRESETS_CPP}"
+    "${EMBEDDED_PRESETS_H}"
+)
+target_include_directories(synthyboy_desktop_presets PUBLIC "${CMAKE_CURRENT_BINARY_DIR}" shell-juce)
+target_link_libraries(synthyboy_desktop_presets PRIVATE synthyboy_core)
+target_link_libraries(synthyboy_ui INTERFACE synthyboy_desktop_presets)
+
 set(SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES
     shell-juce/ApvtsParameterStore.cpp
     shell-juce/ApvtsParameterStore.h
@@ -300,7 +326,7 @@ target_sources(SynthyBoy PRIVATE
 target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_CLAP_BRIDGE=1)
 target_include_directories(SynthyBoy PRIVATE shell-clap "${CLAP_INCLUDE_DIR}")
 
-target_include_directories(SynthyBoy PRIVATE shell-juce)
+target_include_directories(SynthyBoy PRIVATE shell-juce "${CMAKE_CURRENT_BINARY_DIR}")
 
 if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
     target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
@@ -319,6 +345,7 @@ target_link_libraries(SynthyBoy
     PRIVATE
         synthyboy_core
         synthyboy_ui
+        synthyboy_desktop_presets
         clap_juce_extensions
         juce::juce_audio_processors
         juce::juce_audio_utils
@@ -607,6 +634,28 @@ if(SYNTHYBOY_BUILD_TESTS)
         target_compile_definitions(synthyboy_test_ui_groupd PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
     else()
         target_compile_definitions(synthyboy_test_ui_groupd PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
+    endif()
+
+    synthyboy_add_test(synthyboy_test_desktop_presets
+        shell-juce/ui/tests/test_desktop_presets.cpp
+        shell-juce/PluginProcessor.cpp
+        ${SYNTHYBOY_SHELL_UI_ADAPTER_SOURCES}
+        LINK synthyboy_ui
+             synthyboy_desktop_presets
+             juce::juce_audio_processors
+             juce::juce_audio_utils
+             juce::juce_gui_basics
+             juce::juce_recommended_config_flags
+             juce::juce_recommended_warning_flags)
+    target_include_directories(synthyboy_test_desktop_presets PRIVATE shell-juce "${CMAKE_CURRENT_BINARY_DIR}")
+    target_compile_definitions(synthyboy_test_desktop_presets PRIVATE
+        JucePlugin_Name="SynthyBoy"
+        SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
+        JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
+        target_compile_definitions(synthyboy_test_desktop_presets PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
+    else()
+        target_compile_definitions(synthyboy_test_desktop_presets PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
     endif()
 endif()
 

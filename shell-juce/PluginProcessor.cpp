@@ -18,6 +18,7 @@
  */
 
 #include "PluginProcessor.h"
+#include "EmbeddedPresets.h"
 
 #include "synthyboy/midi_events.h"
 #include "EditorAdapter.h"
@@ -103,6 +104,23 @@ SynthyBoyProcessor::SynthyBoyProcessor()
     // the default MIDI CC map (S p.325) in a new instance, unless the default patch brought a map of its own
     if (midiMap.numMappings() == 0)
         applyMapOfPresetChange (nullptr);
+
+    // Program 0: Init
+    programList.push_back ({ "", "Init", nullptr, 0 });
+
+    // Programs 1..112: Factory Presets
+    size_t embeddedCount = 0;
+    const auto* embedded = synthyboy::desktop::getEmbeddedPresets (embeddedCount);
+    programList.reserve (1 + embeddedCount);
+    for (size_t i = 0; i < embeddedCount; ++i)
+    {
+        programList.push_back ({
+            embedded[i].category,
+            embedded[i].name,
+            embedded[i].jsonText,
+            embedded[i].jsonSize
+        });
+    }
 }
 
 void SynthyBoyProcessor::applyMapOfPresetChange (const synthyboy::ui::MidiMapBindings* presetMidiMap)
@@ -548,6 +566,155 @@ double SynthyBoyProcessor::getTailLengthSeconds() const
     return release + effects;
 }
 
+int SynthyBoyProcessor::getNumPrograms()
+{
+    return static_cast<int> (programList.size());
+}
+
+int SynthyBoyProcessor::getCurrentProgram()
+{
+    return currentProgramIndex;
+}
+
+const juce::String SynthyBoyProcessor::getProgramName (int index)
+{
+    if (index >= 0 && index < static_cast<int> (programList.size()))
+        return programList[static_cast<size_t> (index)].name;
+    return {};
+}
+
+void SynthyBoyProcessor::changeProgramName (int, const juce::String&)
+{
+    // Factory program names are fixed
+}
+
+int SynthyBoyProcessor::findProgramIndex (const juce::String& identifier) const
+{
+    const juce::String trimmed = identifier.trim();
+    if (trimmed.isEmpty())
+        return -1;
+
+    if (trimmed.equalsIgnoreCase ("Init"))
+        return 0;
+
+    if (trimmed.containsOnly ("0123456789"))
+    {
+        const int idx = trimmed.getIntValue();
+        if (idx >= 0 && idx < static_cast<int> (programList.size()))
+            return idx;
+    }
+
+    for (size_t i = 0; i < programList.size(); ++i)
+        if (trimmed.equalsIgnoreCase (juce::String (programList[i].name)))
+            return static_cast<int> (i);
+
+    for (size_t i = 1; i < programList.size(); ++i)
+    {
+        const juce::String catName = juce::String (programList[i].category) + "/" + programList[i].name;
+        if (trimmed.equalsIgnoreCase (catName))
+            return static_cast<int> (i);
+    }
+
+    if (trimmed.endsWithIgnoreCase (".sbpreset"))
+    {
+        juce::String stripped = trimmed.dropLastCharacters (9);
+        if (stripped.containsChar ('/') || stripped.containsChar ('\\'))
+        {
+            juce::String base = stripped.fromLastOccurrenceOf ("/", false, false).fromLastOccurrenceOf ("\\", false, false);
+            juce::String baseWithSpaces = base.replaceCharacter ('_', ' ');
+            for (size_t i = 0; i < programList.size(); ++i)
+                if (base.equalsIgnoreCase (juce::String (programList[i].name)) || baseWithSpaces.equalsIgnoreCase (juce::String (programList[i].name)))
+                    return static_cast<int> (i);
+        }
+        else
+        {
+            juce::String withSpaces = stripped.replaceCharacter ('_', ' ');
+            for (size_t i = 0; i < programList.size(); ++i)
+                if (stripped.equalsIgnoreCase (juce::String (programList[i].name)) || withSpaces.equalsIgnoreCase (juce::String (programList[i].name)))
+                    return static_cast<int> (i);
+        }
+    }
+
+    return -1;
+}
+
+void SynthyBoyProcessor::setCurrentProgram (int index)
+{
+    if (index < 0 || index >= static_cast<int> (programList.size()))
+        return;
+
+    if (index == 0)
+    {
+        initPatch();
+        return;
+    }
+
+    const auto& prog = programList[static_cast<size_t> (index)];
+    synthyboy::PresetMeta meta;
+    synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent content;
+    auto result = synthyboy::loadPreset (prog.jsonText, prog.jsonSize, meta, values, content);
+    if (result.status == synthyboy::LoadStatus::ok || result.status == synthyboy::LoadStatus::newer_version)
+    {
+        currentProgramIndex = index;
+        setPresetNameText (prog.name);
+        applyPatch (values, content, true);
+        applyMapOfPresetChange (nullptr);
+        {
+            const std::lock_guard<std::mutex> lock (contentMutex);
+            presetBaselineValues = currentValues();
+            presetBaselineContent = patchContent;
+        }
+        updateHostDisplay (ChangeDetails().withProgramChanged (true));
+    }
+}
+
+void SynthyBoyProcessor::stepPreset (int direction)
+{
+    if (presetStepHandler)
+    {
+        // Keeps backwards-compatibility with unit test mocks
+        presetStepHandler (direction);
+        return;
+    }
+
+    const int total = getNumPrograms();
+    if (total <= 1)
+        return;
+
+    int next = (currentProgramIndex + direction) % total;
+    if (next < 0)
+        next += total;
+
+    setCurrentProgram (next);
+}
+
+std::vector<synthyboy::ui::PresetItem> SynthyBoyProcessor::presetList() const
+{
+    std::vector<synthyboy::ui::PresetItem> list;
+    list.reserve (programList.size());
+    for (size_t i = 0; i < programList.size(); ++i)
+        list.push_back ({ static_cast<int> (i), programList[i].category, programList[i].name });
+    return list;
+}
+
+void SynthyBoyProcessor::selectPreset (int index)
+{
+    setCurrentProgram (index);
+}
+
+bool SynthyBoyProcessor::isPresetModified() const
+{
+    const auto current = currentValues();
+    const std::lock_guard<std::mutex> lock (contentMutex);
+    if (! (patchContent == presetBaselineContent))
+        return true;
+    for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+        if (std::abs (current.plain[i] - presetBaselineValues.plain[i]) > 0.001f)
+            return true;
+    return false;
+}
+
 bool SynthyBoyProcessor::dragFileOut (const juce::File& file, juce::Component& source)
 {
     return juce::DragAndDropContainer::performExternalDragDropOfFiles (juce::StringArray (file.getFullPathName()), false, &source);
@@ -669,7 +836,18 @@ void SynthyBoyProcessor::applyPatch (synthyboy::ParamValues values, synthyboy::S
 
 void SynthyBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    const std::string text = stateText();
+    std::string text = stateText();
+    // Additive top-level member (older loaders skip unknown members): which program the host had selected, so a project reload shows
+    // the same preset. Index and name are both stored; the name decides if the program list ever changes (see restoreProgram).
+    const size_t close = text.find_last_not_of (" \t\r\n");
+    if (close != std::string::npos && text[close] == '}')
+    {
+        juce::DynamicObject::Ptr program = new juce::DynamicObject();
+        program->setProperty ("index", currentProgramIndex.load());
+        program->setProperty ("name", presetName());
+        text.resize (close);
+        text += ",\"program\":" + juce::JSON::toString (juce::var (program.get()), true).toStdString() + "}";
+    }
     destData.replaceAll (text.data(), text.size());
 }
 
@@ -707,6 +885,22 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
         const std::lock_guard<std::mutex> lock (contentMutex);
         savedValues = currentValues();
         savedContent = patchContent;
+        presetBaselineValues = savedValues;
+        presetBaselineContent = savedContent;
+    }
+
+    if (session)
+        restoreProgram (data, static_cast<size_t> (sizeInBytes));
+    else
+    {
+        currentProgramIndex = 0;
+        setPresetNameText ("Init");
+    }
+
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        savedProgramIndex = currentProgramIndex.load();
+        savedPresetName = presetName();
     }
 
     // Values changed behind the host's back: the CLAP wrapper turns "program changed" into
@@ -714,17 +908,63 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
 }
 
+void SynthyBoyProcessor::restoreProgram (const void* data, size_t size)
+{
+    // Only the selection (index + name) comes from the document; the parameters and content were restored from the document itself, so the
+    // state is exact even if the preset list differs from the one the project was saved with. Absent member or unknown: reset to Init (program 0).
+    const auto parsed = juce::JSON::parse (juce::String::fromUTF8 (static_cast<const char*> (data), static_cast<int> (size)));
+    const auto program = parsed.getProperty ("program", juce::var());
+    if (! program.isObject())
+    {
+        currentProgramIndex = 0;
+        setPresetNameText ("Init");
+        return;
+    }
+
+    const int index = static_cast<int> (program.getProperty ("index", -1));
+    const juce::String name = program.getProperty ("name", juce::var()).toString();
+    const int count = static_cast<int> (programList.size());
+
+    int found = -1;
+    if (index >= 0 && index < count && programList[static_cast<size_t> (index)].name == name.toStdString())
+        found = index;
+    else
+        for (int i = 0; i < count && found < 0; ++i)
+            if (programList[static_cast<size_t> (i)].name == name.toStdString())
+                found = i;
+
+    if (found >= 0)
+    {
+        currentProgramIndex = found;
+        setPresetNameText (name);
+    }
+    else
+    {
+        currentProgramIndex = 0;
+        setPresetNameText ("Init");
+    }
+}
+
 bool SynthyBoyProcessor::revertToSaved()
 {
     synthyboy::ParamValues values;
     synthyboy::StateContent content;
+    int progIdx = 0;
+    juce::String progName;
     {
         const std::lock_guard<std::mutex> lock (contentMutex);
         values = savedValues;
         content = savedContent;
+        presetBaselineValues = savedValues;
+        presetBaselineContent = savedContent;
+        progIdx = savedProgramIndex;
+        progName = savedPresetName;
     }
+    currentProgramIndex = progIdx;
+    setPresetNameText (progName);
     applyValues (values);
     setContent (content);
+    updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }
 
@@ -818,6 +1058,13 @@ bool SynthyBoyProcessor::initPatch()
     synthyboy::loadUserDefault (userDir, values, initContent); // untouched (the factory init patch) when there is no default
     applyPatch (values, std::move (initContent), true);
     applyMapOfPresetChange (nullptr); // Init Preset loads the default MIDI map (S p.315)
+    currentProgramIndex = 0;
+    setPresetNameText ("Init");
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        presetBaselineValues = currentValues();
+        presetBaselineContent = patchContent;
+    }
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }
@@ -844,8 +1091,15 @@ bool SynthyBoyProcessor::loadPatch (const synthyboy::ParamValues& values, const 
 {
     if (! synthyboy::validateContent (newContent))
         return false;
+    currentProgramIndex = -1;
+    setPresetNameText ("Custom");
     applyPatch (values, newContent, true);
     applyMapOfPresetChange (presetMidiMap);
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        presetBaselineValues = currentValues();
+        presetBaselineContent = patchContent;
+    }
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }

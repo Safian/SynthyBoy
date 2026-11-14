@@ -15,6 +15,7 @@
 #include <mutex>
 
 #include "PluginProcessor.h"
+#include "synthyboy/preset.h"
 #include "synthyboy_content_service.h"
 
 namespace
@@ -116,6 +117,60 @@ public:
         }
         setContentHostResolver (resolve);
         return contentExtension();
+    }
+
+    bool supportsPresetLoad() const noexcept override
+    {
+        return true;
+    }
+
+    bool presetLoadFromLocation (uint32_t location_kind, const char* location,
+                                 const char* load_key) noexcept override
+    {
+        if (load_key != nullptr && load_key[0] != '\0')
+        {
+            const int idx = findProgramIndex (juce::String::fromUTF8 (load_key));
+            if (idx >= 0)
+            {
+                setCurrentProgram (idx);
+                return true;
+            }
+        }
+
+        if (location != nullptr && location[0] != '\0')
+        {
+            const juce::String locStr = juce::String::fromUTF8 (location);
+            const int idx = findProgramIndex (locStr);
+            if (idx >= 0)
+            {
+                setCurrentProgram (idx);
+                return true;
+            }
+
+            if (location_kind == 0 /* CLAP_PRESET_DISCOVERY_LOCATION_FILE */)
+            {
+                const juce::File f (locStr);
+                if (f.existsAsFile())
+                {
+                    juce::MemoryBlock mb;
+                    if (f.loadFileAsData (mb))
+                    {
+                        synthyboy::PresetMeta meta;
+                        synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
+                        synthyboy::StateContent content;
+                        auto res = synthyboy::loadPreset (mb.getData(), mb.getSize(), meta, values, content);
+                        if (res.status == synthyboy::LoadStatus::ok || res.status == synthyboy::LoadStatus::newer_version)
+                        {
+                            loadPatch (values, content, nullptr);
+                            setPresetNameText (f.getFileNameWithoutExtension());
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
 private:

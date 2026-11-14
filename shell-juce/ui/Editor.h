@@ -84,6 +84,7 @@ private:
     void timerCallback() override;
     void parameterGestureChanged (int index, bool starting) override;
     void showMenu();
+    void showPresetMenu();
     void updateAbLabel();
     ParamValues readLiveValues() const { return readAllValues (host.parameterStore()); }
     void applyValues (const ParamValues& values) { writeAllValues (host.parameterStore(), values); }
@@ -98,6 +99,7 @@ private:
     bool replayingHistory = false;
     ParamValues gestureStartValues;
     juce::String lastPresetName;
+    bool lastModifiedState = false;
 
     std::unique_ptr<TopBar> top;
     std::unique_ptr<MacroRow> macros;
