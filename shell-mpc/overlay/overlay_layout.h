@@ -13,7 +13,7 @@ constexpr int kScreenW = 1280;
 constexpr int kScreenH = 800;
 constexpr int kTabOriginY = 110;
 constexpr unsigned kBackgroundRgb = 0x1e1d1e;   // the colour of the dark picture of an opaque view
-constexpr int kNumViews = 9;
+constexpr int kNumViews = 13;
 constexpr View kViews[kNumViews] = {
     { "filter1", 0, 1, { 56, 124, 1168, 232 }, true, { { { 66, 134, 6, 6 }, 0x103a2c, 0x1e1d1e }, { { 1208, 134, 6, 6 }, 0x3a1064, 0x1e1d1e } } },   // tab "Filter 1"
     { "filter2", 0, 2, { 56, 124, 1168, 232 }, true, { { { 66, 134, 6, 6 }, 0x173a2c, 0x1e1d1e }, { { 1208, 134, 6, 6 }, 0x3a1764, 0x1e1d1e } } },   // tab "Filter 2"
@@ -24,5 +24,9 @@ constexpr View kViews[kNumViews] = {
     { "osc1", 2, 1, { 384, 140, 512, 240 }, true, { { { 394, 150, 6, 6 }, 0x3a3a2c, 0x1e1d1e }, { { 880, 150, 6, 6 }, 0x3a3a64, 0x1e1d1e } } },   // tab "Osc 1"
     { "osc2", 2, 2, { 384, 140, 512, 240 }, true, { { { 394, 150, 6, 6 }, 0x413a2c, 0x1e1d1e }, { { 880, 150, 6, 6 }, 0x3a4164, 0x1e1d1e } } },   // tab "Osc 2"
     { "osc3", 2, 3, { 384, 140, 512, 240 }, true, { { { 394, 150, 6, 6 }, 0x483a2c, 0x1e1d1e }, { { 880, 150, 6, 6 }, 0x3a4864, 0x1e1d1e } } },   // tab "Osc 3"
+    { "env1", 3, 1, { 23, 178, 1230, 222 }, false, { { { 1180, 180, 4, 4 }, 0x4f3a2c, 0x1e1d1e }, { { 1200, 180, 4, 4 }, 0x3a4f64, 0x1e1d1e } } },   // tab "Env 1"
+    { "env2", 3, 2, { 23, 178, 1230, 222 }, false, { { { 1180, 180, 4, 4 }, 0x563a2c, 0x1e1d1e }, { { 1200, 180, 4, 4 }, 0x3a5664, 0x1e1d1e } } },   // tab "Env 2"
+    { "env3", 3, 3, { 23, 178, 1230, 222 }, false, { { { 1180, 180, 4, 4 }, 0x5d3a2c, 0x1e1d1e }, { { 1200, 180, 4, 4 }, 0x3a5d64, 0x1e1d1e } } },   // tab "Env 3"
+    { "env4", 3, 4, { 23, 178, 1230, 222 }, false, { { { 1180, 180, 4, 4 }, 0x643a2c, 0x1e1d1e }, { { 1200, 180, 4, 4 }, 0x3a6464, 0x1e1d1e } } },   // tab "Env 4"
 };
 }}} // namespace synthyboy_mpc::overlay::layout

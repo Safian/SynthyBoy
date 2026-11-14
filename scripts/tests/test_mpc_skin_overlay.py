@@ -100,8 +100,13 @@ class SharedConstantsTests(unittest.TestCase):
                 self.assertGreaterEqual(m["h"], 4)
                 every.append((v["name"], int(m["rgb"], 16)))
             left, right = v["markers"]
-            self.assertLess(left["x"] - c["x"], 30, "the left marker is near the left end of the region")
-            self.assertLess(c["x"] + c["w"] - right["x"] - right["w"], 30, "the right marker is near the right end")
+            if v["opaque"]:
+                self.assertLess(left["x"] - c["x"], 30, "the left marker is near the left end of the region")
+                self.assertLess(c["x"] + c["w"] - right["x"] - right["w"], 30, "the right marker is near the right end")
+            else:
+                # the transparent view (envelope marker): the two squares sit side by side in the empty top right corner of the widget, above its top line, 4 x 4 px
+                self.assertEqual((left["w"], left["h"], right["w"], right["h"]), (4, 4, 4, 4), v["name"])
+                self.assertEqual(left["cover"], layout["background"], "painted over in the colour of the widget's background")
             self.assertNotEqual(layout["background"], left["rgb"])
         # no colour is within the detector's tolerance (2 per channel, so 4 apart can still be told apart: need > 4) of another view's colour
         for i, (na, ca) in enumerate(every):

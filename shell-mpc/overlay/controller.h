@@ -70,6 +70,7 @@ public:
                 case layout::kKindFilter: views_.push_back (std::make_unique<FilterView> (v.index, renderer_, fixedCost_)); break;
                 case layout::kKindLfo: views_.push_back (std::make_unique<LfoView> (v.index, fixedCost_)); break;
                 case layout::kKindOsc: views_.push_back (std::make_unique<OscView> (v.index, fixedCost_)); break;
+                case layout::kKindEnv: views_.push_back (std::make_unique<EnvView> (v.index, v)); break;
                 default: views_.push_back (std::make_unique<NullView> (v.name)); break;
             }
             targetBase_[i] = static_cast<int> (targets_.size());

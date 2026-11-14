@@ -111,13 +111,26 @@ inline void fillToBaseline (uint32_t* cv, int w, int h, const std::vector<double
         const double lo = std::min (ymid, baseY), hi = std::max (ymid, baseY);
         const int from = std::max (0, static_cast<int> (std::floor (lo)));
         const int to = std::min (h, static_cast<int> (std::ceil (hi)));
+        uint32_t memoIn = 0, memoOut = 0;   // most pixels of a column are the plain background: the blend of the last distinct value is reused
+        bool haveMemo = false;
         for (int y = from; y < to; ++y)
         {
             const double cov = std::clamp (std::min (y + 1.0, hi) - std::max (static_cast<double> (y), lo), 0.0, 1.0);
             if (cov <= 0.0)
                 continue;
             uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
-            d = over (d, fillC, static_cast<int> (cov * 255.0));
+            if (cov >= 1.0)
+            {
+                if (!haveMemo || d != memoIn)
+                {
+                    memoIn = d;
+                    memoOut = over (d, fillC, 255);
+                    haveMemo = true;
+                }
+                d = memoOut;
+            }
+            else
+                d = over (d, fillC, static_cast<int> (cov * 255.0));
         }
     }
 }

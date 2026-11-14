@@ -16,6 +16,7 @@
 
 #include "curve_source.h"
 #include "draw.h"
+#include "env_geometry.h"
 #include "renderer.h"
 #include "synthyboy/lfo_display.h"
 #include "synthyboy/osc_cycle.h"
@@ -418,6 +419,142 @@ private:
     synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other;
     bool have_ = false;
     std::vector<double> ys_;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+/** The live phase marker over the native envelope widget: a dot (and a soft vertical line) at the point of the curve where the playing voice is. The plane is transparent;
+    only the two marker squares are painted over (in the colour of the widget's background). The dot is drawn only when the pixel of the primary framebuffer under the computed
+    point has the colour of the widget's line (the widget is where the rule says it is); otherwise nothing is drawn and the miss is counted. */
+class EnvView final : public IView
+{
+public:
+    EnvView (int env, const layout::View& layoutView) : env_ (env), group_ ("env" + std::to_string (env) + "."), name_ ("env" + std::to_string (env)), view_ (layoutView) {}
+
+    const char* name() const noexcept override { return name_.c_str(); }
+    void targets (std::vector<int>&) const override {}
+    bool update (const ViewInput& in) override
+    {
+        ++counters_.updates;
+        group_.read (*in.instance);   // the knob values (what the widget draws), not the modulated ones
+        group_.accept();
+        bool changed = ! have_;
+        have_ = true;
+        stage_ = 0;
+        fraction_ = 0.0f;
+        if (in.live != nullptr)
+        {
+            stage_ = static_cast<int> (in.live->envFineStage[env_ - 1] + 0.5f);
+            fraction_ = in.live->envFineFraction[env_ - 1];
+        }
+        const envgeom::Norm norm = normOf();
+        envgeom::Point p = envgeom::dotFor (norm, stage_, static_cast<double> (fraction_));
+        bool draw = false;
+        if (p.valid)
+        {
+            ++attempts_;
+            draw = lineUnder (in, p.x, p.y);
+            if (draw)
+                ++hits_;
+            else
+                ++misses_;
+        }
+        const int px = draw ? static_cast<int> (std::lround (p.x)) : -1, py = draw ? static_cast<int> (std::lround (p.y)) : -1;
+        if (px != dotX_ || py != dotY_)
+        {
+            dotX_ = px;
+            dotY_ = py;
+            changed = true;
+        }
+        counters_.changes += changed;
+        return changed;
+    }
+    bool valid() const noexcept override { return have_; }
+
+    void render (uint32_t* cv, int w, int h) override
+    {
+        std::memset (cv, 0, static_cast<size_t> (w) * static_cast<size_t> (h) * 4);
+        // the marker squares: painted over in the colour of what is under them (the widget's background), one pixel larger than the square
+        for (int m = 0; m < 2; ++m)
+        {
+            const layout::Marker& mk = view_.markers[m];
+            draw::setRect (cv, w, h, mk.rect.x - view_.region.x - 1, mk.rect.y - view_.region.y - 1, mk.rect.x - view_.region.x + mk.rect.w + 1, mk.rect.y - view_.region.y + mk.rect.h + 1, draw::opaque (mk.cover));
+        }
+        if (dotX_ < 0)
+            return;
+        const double x = dotX_ - view_.region.x + 0.5, y = dotY_ - view_.region.y + 0.5;
+        draw::vline (cv, w, h, x, static_cast<int> (envgeom::kTopY - view_.region.y) - 4, static_cast<int> (envgeom::kBottomY - view_.region.y) + 5, 2.0, draw::premultiplied (255, 255, 255, 70));
+        draw::disc (cv, w, h, x, y, 8.0, draw::premultiplied (255, 255, 255, 255));
+        draw::disc (cv, w, h, x, y, 5.0, draw::premultiplied (0x1e, 0x1d, 0x1e, 255));
+        draw::disc (cv, w, h, x, y, 3.0, draw::premultiplied (255, 255, 255, 255));
+    }
+    uint32_t hash() const noexcept override { return fnv (fnv (2166136261u, dotX_), dotY_); }
+    envgeom::Norm normOf() const
+    {
+        const std::string p = "env" + std::to_string (env_) + ".";
+        auto n = [&] (const char* key)
+        {
+            const synthyboy::ParamInfo* info = synthyboy::findParamByKey ((p + key).c_str());
+            return info ? static_cast<double> (synthyboy::toNormalised (*info, group_.values().plain[synthyboy::findParamIndex (info->id)])) : 0.0;
+        };
+        envgeom::Norm out;
+        out.delay = n ("delay");
+        out.attack = n ("attack");
+        out.hold = n ("hold");
+        out.decay = n ("decay");
+        out.release = n ("release");
+        out.sustain = group_.value ((p + "sustain").c_str()) * 0.01;
+        return out;
+    }
+    int stage() const noexcept { return stage_; }
+    int dotX() const noexcept { return dotX_; }
+    int dotY() const noexcept { return dotY_; }
+    unsigned long hits() const noexcept { return hits_; }
+    unsigned long misses() const noexcept { return misses_; }
+    void writeStatus (std::ostream& o) const override
+    {
+        o << "env_stage: " << stage_ << "\nenv_fraction: " << fraction_ << "\nenv_dot: " << dotX_ << " " << dotY_ << "\nenv_selfcheck_hits: " << hits_ << "\nenv_selfcheck_misses: " << misses_
+          << "\nenv_selfcheck_attempts: " << attempts_ << "\n";
+    }
+    void writeDump (std::ostream& o) const override
+    {
+        const envgeom::Norm n = normOf();
+        double e[6];
+        envgeom::stageEnds (n, e);
+        o << "# view " << name_ << ": normalised delay attack hold decay sustain release " << n.delay << " " << n.attack << " " << n.hold << " " << n.decay << " " << n.sustain << " " << n.release << "\n";
+        o << "stage_ends_x " << e[0] << " " << e[1] << " " << e[2] << " " << e[3] << " " << e[4] << " " << e[5] << "\nsustain_y " << envgeom::sustainY (n) << "\n";
+        o << "dot " << dotX_ << " " << dotY_ << " stage " << stage_ << " fraction " << fraction_ << "\n";
+    }
+
+private:
+    /** Is the pixel under the point (screen coordinates) of the colour of the widget's line (2 per channel of tolerance for the anti-aliasing: 6)? */
+    bool lineUnder (const ViewInput& in, double x, double y) const
+    {
+        if (in.frames == nullptr)
+            return false;
+        int pw = 0, ph = 0;
+        if (! in.frames->begin (pw, ph))
+            return false;
+        int px, py;
+        uint32_t rgb = 0;
+        uiPointToPanel (in.rotation, static_cast<int> (std::lround (x)), static_cast<int> (std::lround (y)), pw, ph, px, py);
+        const bool ok = in.frames->pixel (px, py, rgb);
+        in.frames->end();
+        if (! ok)
+            return false;
+        for (int s = 0; s <= 16; s += 8)
+            if (std::abs (static_cast<int> ((rgb >> s) & 255u) - static_cast<int> ((envgeom::kLineRgb >> s) & 255u)) > 6)
+                return false;
+        return true;
+    }
+
+    int env_;
+    ParamGroup group_;
+    std::string name_;
+    layout::View view_;
+    bool have_ = false;
+    int stage_ = 0, dotX_ = -1, dotY_ = -1;
+    float fraction_ = 0.0f;
+    unsigned long hits_ = 0, misses_ = 0, attempts_ = 0;
 };
 
 /** A view without data (a kind that is not built yet): never valid, so the plane stays off. */

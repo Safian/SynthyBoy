@@ -287,6 +287,130 @@
           "cover": "1e1d1e"
         }
       ]
+    },
+    {
+      "name": "env1",
+      "kind": "env",
+      "index": 1,
+      "tab": "Env 1",
+      "region": {
+        "x": 23,
+        "y": 68,
+        "w": 1230,
+        "h": 222
+      },
+      "opaque": false,
+      "markers": [
+        {
+          "x": 1180,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "4f3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1200,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "3a4f64",
+          "cover": "1e1d1e"
+        }
+      ]
+    },
+    {
+      "name": "env2",
+      "kind": "env",
+      "index": 2,
+      "tab": "Env 2",
+      "region": {
+        "x": 23,
+        "y": 68,
+        "w": 1230,
+        "h": 222
+      },
+      "opaque": false,
+      "markers": [
+        {
+          "x": 1180,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "563a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1200,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "3a5664",
+          "cover": "1e1d1e"
+        }
+      ]
+    },
+    {
+      "name": "env3",
+      "kind": "env",
+      "index": 3,
+      "tab": "Env 3",
+      "region": {
+        "x": 23,
+        "y": 68,
+        "w": 1230,
+        "h": 222
+      },
+      "opaque": false,
+      "markers": [
+        {
+          "x": 1180,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "5d3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1200,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "3a5d64",
+          "cover": "1e1d1e"
+        }
+      ]
+    },
+    {
+      "name": "env4",
+      "kind": "env",
+      "index": 4,
+      "tab": "Env 4",
+      "region": {
+        "x": 23,
+        "y": 68,
+        "w": 1230,
+        "h": 222
+      },
+      "opaque": false,
+      "markers": [
+        {
+          "x": 1180,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "643a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1200,
+          "y": 70,
+          "w": 4,
+          "h": 4,
+          "rgb": "3a6464",
+          "cover": "1e1d1e"
+        }
+      ]
     }
   ]
 }

@@ -294,6 +294,156 @@ int main()
         p.inst.set ("osc1.frame", 77.0f);
         check (! v.update (input (p.inst, nullptr, nullptr, 3000.0)) && v.hash() == hh, "a parameter of another oscillator changes nothing");
     }
+    // ---- the envelope widget's geometry rule and the envelope view -----------------------------------------------------------------------------------------------------
+    {
+        using namespace envgeom;
+        // the rule against what was measured on the device (screenshots of the primary plane, defaults: delay 0, attack 5 ms, hold 0, decay 400 ms, sustain 100 %, release 200 ms):
+        // the A handle sits at x 65 on the top line, the R handle at x 401 on the bottom line, the top line at y 195.5, the bottom line at y 383.5
+        auto norm = [] (const char* key, float plain) { const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key); return static_cast<double> (synthyboy::toNormalised (*p, plain)); };
+        Norm n;
+        n.delay = norm ("env1.delay", 0.0f); n.attack = norm ("env1.attack", 5.0f); n.hold = norm ("env1.hold", 0.0f); n.decay = norm ("env1.decay", 400.0f); n.release = norm ("env1.release", 200.0f); n.sustain = 1.0;
+        double e[6];
+        stageEnds (n, e);
+        check (std::fabs (e[1] - 65.0) < 1.5, "default envelope: the attack ends at x " + std::to_string (e[1]) + " (the A handle of the screenshot: 65)");
+        check (std::fabs (e[5] - 401.0) < 2.5, "default envelope: the release ends at x " + std::to_string (e[5]) + " (the R handle of the screenshot: 401)");
+        check (std::fabs (dotFor (n, 2, 1.0).y - 195.5) < 0.01 && std::fabs (dotFor (n, 6, 1.0).y - 383.5) < 0.01, "the top line is y 195.5 (level 100 %), the bottom line y 383.5 (level 0)");
+        // the measured widths of the attack at 1330 ms and 10000 ms (the top line began at 170 and 260 behind the 16 px handle circle)
+        Norm a = n;
+        a.attack = norm ("env1.attack", 1330.4f);
+        stageEnds (a, e);
+        check (std::fabs (e[1] + 16.0 - 170.0) < 3.0, "attack 1330 ms: the corner is at x " + std::to_string (e[1]) + " (+16 handle radius = 170 in the screenshot)");
+        a.attack = norm ("env1.attack", 10000.0f);
+        stageEnds (a, e);
+        check (std::fabs (e[1] + 16.0 - 260.0) < 3.0, "attack 10000 ms: the corner is at x " + std::to_string (e[1]) + " (+16 = 260 in the screenshot)");
+        // a delay of 3990 ms with attack 10000 ms: the top line began at 459 (corner at 443)
+        a.delay = norm ("env1.delay", 3990.0f);
+        stageEnds (a, e);
+        check (std::fabs (e[1] + 16.0 - 459.0) < 4.0, "delay 3990 ms + attack 10000 ms: the corner is at x " + std::to_string (e[1]) + " (+16 = 459 in the screenshot)");
+        // the stages follow each other: x never goes back, the dot of every stage starts where the previous one ended
+        Norm m;
+        m.delay = 0.3; m.attack = 0.4; m.hold = 0.1; m.decay = 0.5; m.release = 0.6; m.sustain = 0.4;
+        bool ordered = true;
+        double last = -1.0;
+        for (int st = 1; st <= 6; ++st)
+            for (double f : { 0.0, 0.5, 1.0 })
+            {
+                const Point p = dotFor (m, st, f);
+                ordered = ordered && p.valid && p.x >= last - 1.0e-9;
+                last = p.x;
+            }
+        check (ordered, "the dot moves from left to right through the six stages in order");
+        const Point sus = dotFor (m, 5, 0.0), dEnd = dotFor (m, 4, 1.0), rStart = dotFor (m, 6, 0.0);
+        check (std::fabs (sus.y - sustainY (m)) < 1e-9 && std::fabs (dEnd.y - sustainY (m)) < 1e-9 && std::fabs (rStart.y - sustainY (m)) < 1e-9, "the decay ends and the release starts on the sustain level (the knob 40 %: y " + std::to_string (sustainY (m)) + ")");
+        check (! dotFor (m, 0, 0.5).valid && ! dotFor (m, 7, 0.5).valid, "no dot while idle or finished");
+        check (std::fabs (dotFor (m, 2, 0.5).y - 0.5 * (kBottomY + kTopY)) < 1e-9, "half way through the attack the dot is half way up");
+    }
+    {
+        Plain p;
+        FakeFrame frame;
+        const int ei = [] { for (int i = 0; i < layout::kNumViews; ++i) if (std::string (layout::kViews[i].name) == "env2") return i; return -1; }();
+        check (ei >= 0, "the layout has env2");
+        EnvView v (2, layout::kViews[ei]);
+        const layout::Rect& reg = layout::kViews[ei].region;
+        const int w = reg.w, h = reg.h;
+        std::vector<uint32_t> cv (static_cast<size_t> (w) * h);
+        auto input = [&] (const synthyboy::LiveValues* lv, double now)
+        {
+            ViewInput in;
+            in.instance = &p.inst;
+            in.live = lv;
+            in.nowMs = now;
+            in.frames = &frame;
+            in.rotation = 90;
+            return in;
+        };
+        // the widget's line under the dot: draw the polyline of the rule into the fake framebuffer
+        auto drawLine = [&] (const envgeom::Norm& n)
+        {
+            for (int st = 1; st <= 6; ++st)
+                for (int k = 0; k <= 400; ++k)
+                {
+                    const envgeom::Point pt = envgeom::dotFor (n, st, k / 400.0);
+                    for (int dx = -2; dx <= 2; ++dx)
+                        for (int dy = -2; dy <= 2; ++dy)
+                        {
+                            int px, py;
+                            uiPointToPanel (90, static_cast<int> (std::lround (pt.x)) + dx, static_cast<int> (std::lround (pt.y)) + dy, 800, 1280, px, py);
+                            frame.setPixel (px, py, envgeom::kLineRgb);
+                        }
+                }
+        };
+        p.inst.set ("env2.attack", 300.0f);
+        p.inst.set ("env2.decay", 800.0f);
+        p.inst.set ("env2.sustain", 60.0f);
+        p.inst.set ("env2.release", 900.0f);
+        drawLine (v.normOf());   // (normOf reads the group after the first update: do one update first)
+        v.update (input (nullptr, 0.0));
+        drawLine (v.normOf());
+        check (v.valid() && v.dotX() < 0, "no live values (no voice): no dot");
+        synthyboy::LiveValues lv;
+        p.inst.hasLive = true;
+        p.inst.live (lv);
+        lv.envFineStage[1] = 2.0f;      // attack, half way (env 2 is index 1)
+        lv.envFineFraction[1] = 0.5f;
+        check (v.update (input (&lv, 10.0)), "the voice is in the attack: the picture changes");
+        const envgeom::Point want = envgeom::dotFor (v.normOf(), 2, 0.5);
+        check (v.dotX() == std::lround (want.x) && v.dotY() == std::lround (want.y) && v.hits() >= 1, "the dot is at the point the rule gives (" + std::to_string (v.dotX()) + ", " + std::to_string (v.dotY()) + ") and the self check found the line colour under it");
+        v.render (cv.data(), w, h);
+        // transparent everywhere but the dot, its line and the two marker covers
+        int clear = 0, covered = 0;
+        for (uint32_t q : cv) clear += q == 0;
+        for (int m = 0; m < 2; ++m)
+        {
+            const layout::Marker& mk = layout::kViews[ei].markers[m];
+            covered += px (cv, w, mk.rect.x - reg.x + 1, mk.rect.y - reg.y + 1) == 0xff000000u + mk.cover;
+        }
+        check (covered == 2, "the two marker squares are painted over in the colour under them (the widget background)");
+        check (clear > static_cast<int> (cv.size()) * 95 / 100, "the plane is transparent except for the dot and the two squares (" + std::to_string (100 * clear / static_cast<int> (cv.size())) + " % clear)");
+        check (px (cv, w, v.dotX() - reg.x, v.dotY() - reg.y) != 0 && isWhite (px (cv, w, v.dotX() - reg.x + 6, v.dotY() - reg.y)), "the dot is drawn at its place");
+        // the same stage later: the dot moved right
+        const int x0 = v.dotX();
+        lv.envFineFraction[1] = 0.9f;
+        v.update (input (&lv, 20.0));
+        check (v.dotX() > x0, "the attack goes on: the dot moves to the right");
+        // every stage in turn
+        int lastX = -1;
+        bool seq = true;
+        for (float st : { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f })
+        {
+            lv.envFineStage[1] = st;
+            lv.envFineFraction[1] = 0.5f;
+            v.update (input (&lv, 30.0 + st));
+            seq = seq && v.dotX() >= lastX;
+            lastX = v.dotX();
+        }
+        check (seq && v.hits() >= 7 && v.misses() == 0, "stages 1 .. 6: the dot passes through them in order, the self check hit every time (" + std::to_string (v.hits()) + " hits, " + std::to_string (v.misses()) + " misses)");
+        // the widget is not where the rule says: the pixel under the dot is not the line colour: nothing is drawn, the miss is counted
+        FakeFrame empty;
+        ViewInput bad = input (&lv, 100.0);
+        bad.frames = &empty;
+        lv.envFineStage[1] = 3.0f;
+        v.update (bad);
+        check (v.dotX() < 0 && v.misses() == 1, "no line colour under the point: no dot, one miss counted");
+        v.render (cv.data(), w, h);
+        check (countIf (cv, isWhite) == 0, "... and nothing is drawn");
+        // the sustain: held note, the dot stands on the sustain segment
+        lv.envFineStage[1] = 5.0f;
+        lv.envFineFraction[1] = 0.0f;
+        v.update (input (&lv, 200.0));
+        check (v.dotX() >= 0 && std::abs (v.dotY() - std::lround (envgeom::sustainY (v.normOf()))) <= 1, "sustain: the dot is on the sustain level");
+        lv.envFineStage[1] = 7.0f;
+        v.update (input (&lv, 300.0));
+        check (v.dotX() < 0, "the envelope is finished: no dot");
+        // another envelope's stage does not move this view
+        lv.envFineStage[1] = 0.0f;
+        lv.envFineStage[0] = 4.0f;
+        lv.envFineFraction[0] = 0.5f;
+        v.update (input (&lv, 400.0));
+        check (v.dotX() < 0, "the stage of envelope 1 does not show on the view of envelope 2");
+        std::ostringstream st;
+        v.writeStatus (st);
+        check (st.str().find ("env_selfcheck_hits: ") != std::string::npos && st.str().find ("env_selfcheck_misses: 1") != std::string::npos, "the status has the self check counters");
+    }
     // ---- the controller with several views -------------------------------------------------------------------------------------------------------------------------------
     {
         TempDir dir;
