@@ -58,11 +58,14 @@ int main()
 {
     // ---- layout of the shared structures ----------------------------------------------------------------------------------------------------------------------
     check (sizeof (gpu::Msg) == 64 && sizeof (gpu::SceneOp) == 32 && sizeof (gpu::SceneData) == 32 + 32 * gpu::kMaxOps + 4 * gpu::kMaxCurve, "message, op and scene have the fixed sizes of the protocol");
-    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 1, "the shared block is word aligned, protocol version 1");
+    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 2, "the shared block is word aligned, protocol version 2");
     {
         auto* b = new gpu::SharedBlock;
         gpu::initBlock (b);
         check (gpu::blockValid (b) && b->seq == 0, "a fresh block is valid");
+        b->version = gpu::kProtocolVersion - 1;
+        check (! gpu::blockValid (b), "a block of the previous protocol version is refused");
+        b->version = gpu::kProtocolVersion;
         b->version = 99;
         check (! gpu::blockValid (b), "a block of another version is refused");
         gpu::initBlock (b);
@@ -88,6 +91,19 @@ int main()
         std::vector<float> many (gpu::kMaxCurve + 10, 1.0f);
         sb2.polyline (many.data(), static_cast<int> (many.size()));
         check (sb2.overflow && s2.numPoints == static_cast<uint32_t> (gpu::kMaxCurve), "a polyline longer than the scene holds is cut and overflow is set");
+    }
+    // ---- the gradient op (protocol 2): the colour at the two rows, the baseline, the second colour travels in the op ----------------------------------------------------
+    {
+        gpu::SceneData sd;
+        gpu::SceneBuilder sb (sd);
+        sb.fillGradient (120.0f, 8.0f, 120.0f, 0x11223344u, 0x55667788u);
+        check (sd.numOps == 1 && sd.ops[0].op == gpu::kOpFillGradient && sd.ops[0].rgba == 0x11223344u && sd.ops[0].rgba2 == 0x55667788u && sd.ops[0].f[0] == 120.0f && sd.ops[0].f[1] == 8.0f && sd.ops[0].f[2] == 120.0f,
+               "fillGradient: baseline, the two rows and both colours are in the op");
+        check (draw::gradientAt (draw::premultiplied (255, 0, 0, 200), draw::premultiplied (0, 0, 255, 20), 10.0, 110.0, 0) == draw::premultiplied (255, 0, 0, 200)
+               && draw::gradientAt (draw::premultiplied (255, 0, 0, 200), draw::premultiplied (0, 0, 255, 20), 10.0, 110.0, 120) == draw::premultiplied (0, 0, 255, 20), "the gradient is constant outside the two rows");
+        const uint32_t ca = draw::premultiplied (200, 100, 0, 200), mid = draw::gradientAt (ca, draw::premultiplied (0, 0, 0, 0), 0.0, 100.0, 49);   // the centre of row 49 is at 49.5: 49.5 % of the way
+        check (std::abs (static_cast<int> (mid >> 24) - static_cast<int> (std::lround (200 * (1.0 - 0.495)))) <= 1 && std::abs (static_cast<int> ((mid >> 16) & 255u) - static_cast<int> (std::lround (static_cast<double> ((ca >> 16) & 255u) * 0.505))) <= 1,
+               "row 49 of a gradient from row 0 to row 100: 49.5 % of the way in every premultiplied channel");
     }
     // ---- the seqlock ------------------------------------------------------------------------------------------------------------------------------------------
     {

@@ -135,6 +135,43 @@ inline void fillToBaseline (uint32_t* cv, int w, int h, const std::vector<double
     }
 }
 
+/** The colour of a vertical gradient at the centre of pixel row y: `a` (premultiplied) at row yA, `b` at row yB, linear in between (per channel, premultiplied), constant outside. */
+inline uint32_t gradientAt (uint32_t a, uint32_t b, double yA, double yB, int y) noexcept
+{
+    double t = yB != yA ? (y + 0.5 - yA) / (yB - yA) : 0.0;
+    t = std::clamp (t, 0.0, 1.0);
+    uint32_t out = 0;
+    for (int s = 0; s < 32; s += 8)
+    {
+        const double ca = static_cast<double> ((a >> s) & 255u), cb = static_cast<double> ((b >> s) & 255u);
+        out |= static_cast<uint32_t> (std::lround (ca + (cb - ca) * t)) << s;
+    }
+    return out;
+}
+
+/** fillToBaseline with a vertical gradient: row y gets gradientAt (colA, colB, yA, yB, y). */
+inline void fillToBaselineGradient (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double baseY, uint32_t colA, uint32_t colB, double yA, double yB)
+{
+    std::vector<uint32_t> rows (static_cast<size_t> (h));
+    for (int y = 0; y < h; ++y)
+        rows[static_cast<size_t> (y)] = gradientAt (colA, colB, yA, yB, y);
+    for (int x = 0; x < w; ++x)
+    {
+        const double ymid = ys[static_cast<size_t> (x) * static_cast<size_t> (subSamples + 1) + static_cast<size_t> (subSamples / 2)];
+        const double lo = std::min (ymid, baseY), hi = std::max (ymid, baseY);
+        const int from = std::max (0, static_cast<int> (std::floor (lo)));
+        const int to = std::min (h, static_cast<int> (std::ceil (hi)));
+        for (int y = from; y < to; ++y)
+        {
+            const double cov = std::clamp (std::min (y + 1.0, hi) - std::max (static_cast<double> (y), lo), 0.0, 1.0);
+            if (cov <= 0.0)
+                continue;
+            uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+            d = over (d, rows[static_cast<size_t> (y)], static_cast<int> (cov * 255.0));
+        }
+    }
+}
+
 /** The anti-aliased line (half width `half` px): coverage from the distance to the curve's vertical extent in the column, corrected by the slope. */
 inline void strokeCurve (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double half, uint32_t lineC) noexcept
 {

@@ -354,7 +354,18 @@ private:
 
     void cleanDisplay() noexcept
     {
-        plane_.forceDisablePlane();
+        // the plane is taken off only when the helper may have put something on it (it was told to show, or it has objects in the ledger): a helper that failed before that (a missing
+        // library, a protocol version of another build) leaves the plane to the CPU picture that may be on it
+        bool touched = shown_ || hiding_;
+        if (SharedBlock* b = tr_.block())
+            for (int i = 0; i < kMaxLedger; ++i)
+            {
+                uint32_t handle, fb;
+                ledgerGet (b, i, handle, fb);
+                touched = touched || handle || fb;
+            }
+        if (touched)
+            plane_.forceDisablePlane();
         if (SharedBlock* b = tr_.block())
             for (int i = 0; i < kMaxLedger; ++i)
             {

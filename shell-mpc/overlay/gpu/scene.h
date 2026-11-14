@@ -19,14 +19,14 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
 
-constexpr uint32_t kProtocolVersion = 1;
+constexpr uint32_t kProtocolVersion = 2;   // 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
 constexpr uint32_t kBlockMagic = 0x53424f56u;   // 'SBOV'
 constexpr uint32_t kMsgMagic = 0x4d534f56u;     // 'MSOV' ... the first word of every message
 constexpr int kMaxCurve = 512;                   // vertices of the polyline (the oscillator cycle has 512)
 constexpr int kMaxOps = 32;
 constexpr int kMaxLedger = 8;
 
-enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4 };
+enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4, kKindSpectrum = 5 };
 
 /** The display list. Drawn in order, source over, onto the cleared canvas.
     Clear   rgba: the whole canvas is set to this colour (replaces everything; alpha 0 = transparent)
@@ -35,14 +35,17 @@ enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindO
     Fill    f[0] = baseline row: the area between the polyline and the baseline (a baseline at or below the canvas height fills down to the bottom)
     Stroke  f[0] = half width: the polyline as an anti-aliased line of 2 * half width pixels
     Disc    f[0..2] = cx cy radius: an anti-aliased disc
+    FillGradient  f[0] = baseline row (as Fill), f[1] = row yA, f[2] = row yB: the same area as Fill, coloured by a vertical gradient: `rgba` at row yA, `rgba2` at row yB, linear
+            in between and constant outside (premultiplied colours are interpolated; evaluated at the centre of every pixel row)
     The polyline: SceneData::y[0 .. numPoints - 1] are rows, point i at x = i / (numPoints - 1) * (w - 1) + 0.5 (the first and the last continue horizontally to the canvas edges). */
-enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6 };
+enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7 };
 
 struct SceneOp
 {
     uint32_t op;
     uint32_t rgba;
-    float f[6];
+    uint32_t rgba2;   // the second colour of a gradient (0 for the other ops)
+    float f[5];
 };
 static_assert (sizeof (SceneOp) == 32, "SceneOp layout");
 
@@ -80,6 +83,7 @@ struct SceneBuilder
     void rect (float x0, float y0, float x1, float y1, uint32_t rgba) { if (SceneOp* o = add (kOpRect, rgba)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; } }
     void vline (float x, float y0, float y1, float width, uint32_t rgba) { if (SceneOp* o = add (kOpVLine, rgba)) { o->f[0] = x; o->f[1] = y0; o->f[2] = y1; o->f[3] = width; } }
     void fill (float baseRow, uint32_t rgba) { if (SceneOp* o = add (kOpFill, rgba)) o->f[0] = baseRow; }
+    void fillGradient (float baseRow, float yA, float yB, uint32_t rgbaA, uint32_t rgbaB) { if (SceneOp* o = add (kOpFillGradient, rgbaA)) { o->rgba2 = rgbaB; o->f[0] = baseRow; o->f[1] = yA; o->f[2] = yB; } }
     void stroke (float halfWidth, uint32_t rgba) { if (SceneOp* o = add (kOpStroke, rgba)) o->f[0] = halfWidth; }
     void disc (float cx, float cy, float r, uint32_t rgba) { if (SceneOp* o = add (kOpDisc, rgba)) { o->f[0] = cx; o->f[1] = cy; o->f[2] = r; } }
     /** The polyline rows (n <= kMaxCurve; more is a programming error: it is cut and `overflow` is set). */

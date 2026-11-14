@@ -44,6 +44,13 @@ inline void renderSceneReference (const synthyboy_mpc::overlay::gpu::SceneData& 
             case kOpVLine: draw::vline (cv.data(), w, h, o.f[0], static_cast<int> (o.f[1]), static_cast<int> (o.f[2]), o.f[3], c); break;
             case kOpDisc: draw::disc (cv.data(), w, h, o.f[0], o.f[1], o.f[2], c); break;
             case kOpFill: if (s.numPoints >= 2) { columns(); draw::fillToBaseline (cv.data(), w, h, ys, 4, o.f[0], c); } break;
+            case kOpFillGradient:
+                if (s.numPoints >= 2)
+                {
+                    columns();
+                    draw::fillToBaselineGradient (cv.data(), w, h, ys, 4, o.f[0], c, sceneColour (o.rgba2), static_cast<double> (o.f[1]), static_cast<double> (o.f[2]));
+                }
+                break;
             case kOpStroke: if (s.numPoints >= 2) { columns(); draw::strokeCurve (cv.data(), w, h, ys, 4, o.f[0], c); } break;
             default: break;
         }

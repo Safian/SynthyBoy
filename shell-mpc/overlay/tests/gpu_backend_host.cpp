@@ -21,6 +21,7 @@ public:
     ~FakeHelper() override { delete blk; }
 
     Mode mode = Healthy;
+    uint32_t protocol = gpu::kProtocolVersion;   // the protocol version this helper binary was built with (the real helper refuses a hello of another one with an error message and exits)
     bool failStart = false;
     int starts = 0, kills = 0, quits = 0, closes = 0, scenes = 0, frames = 0;
     bool running = false;
@@ -69,6 +70,13 @@ public:
     {
         if (! running)
             return;
+        if (protocol != gpu::kProtocolVersion && ! eof)
+        {
+            outbox.push_back (gpu::makeMsg (gpu::kMsgError, 0, 0, 0, 0, 0, 0, "protocol version mismatch"));
+            running = false;
+            eof = true;
+            return;
+        }
         if (! ready && mode != NoReady && *now >= readyAt)
         {
             outbox.push_back (gpu::makeMsg (gpu::kMsgReady, 50, 800, 1280, 0, 0, 0, "Fake GPU"));
@@ -355,6 +363,28 @@ int main()
         r.advance (20.0);
         check (std::string (r.backend.status().state) == "backoff" && r.backend.status().lastError.find ("injected GL failure") != std::string::npos, "an error message: back-off, the helper's text is the last error");
         check (clean (r.plane) && r.backend.planeFree(), "after an error: plane off, nothing left");
+    }
+    // ---- a helper of another protocol version (an old helper next to a new plugin, or the other way round): refused, the CPU draws, nothing is left --------------------
+    {
+        BackendRig r;
+        r.helper.protocol = gpu::kProtocolVersion - 1;
+        r.backend.request (r.now);
+        r.advance (100.0);
+        check (! r.backend.active() && std::string (r.backend.status().state) == "backoff" && r.backend.status().lastError.find ("protocol version mismatch") != std::string::npos,
+               "a helper of another protocol version answers with an error: no GPU drawing, back-off, the reason is kept (" + r.backend.status().lastError + ")");
+        check (clean (r.plane) && r.backend.planeFree(), "... and nothing is left on the display");
+        r.helper.protocol = gpu::kProtocolVersion + 1;
+        r.backend.request (r.now + 1.0e7);
+        r.advance (200.0);
+        check (! r.backend.active(), "a helper of a newer version is refused as well");
+    }
+    {
+        CRig r;
+        r.helper.protocol = gpu::kProtocolVersion - 1;
+        r.run (30000);
+        check (r.st ("renderer") == "cpu" && r.plane.planeOn && r.st ("gpu_state") == "exhausted" && r.st ("gpu_last_error").find ("protocol version mismatch") != std::string::npos,
+               "the controller with a helper of another version: the CPU draws all the time (the picture is on the plane), the status says why (" + r.st ("gpu_last_error") + ")");
+        check (r.plane.foreignFbs.empty() && r.helper.frames == 0, "nothing of the helper is on the display, it presented no picture");
     }
     // ---- slow: never ready; never acknowledges; never answers a hide -----------------------------------------------------------------------------------------
     {

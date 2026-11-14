@@ -61,8 +61,9 @@ constexpr int kSock = 3;
 struct Vtx { float x, y, d0, d1; };
 struct Draw
 {
-    int prim = 0, first = 0, count = 0, kind = 0;   // kind: 0 solid, 1 feathered line (d0 = signed distance), 2 disc (d0, d1 = offset from the centre)
+    int prim = 0, first = 0, count = 0, kind = 0;   // kind: 0 solid, 1 feathered line (d0 = signed distance), 2 disc (d0, d1 = offset from the centre), 3 vertical gradient (d0 = 0 .. 1 from colour to colour2)
     float colour[4] = {};                           // premultiplied
+    float colour2[4] = {};                          // premultiplied, the other end of a gradient
     float half = 0.0f;                              // half width of a line, radius of a disc
     bool clear = false;                             // a glClear with `colour`
 };
@@ -166,10 +167,11 @@ private:
     static constexpr const char* kVs =
         "attribute vec2 aPos; attribute vec2 aD; varying vec2 vD; uniform vec3 uRowX; uniform vec3 uRowY;\n"
         "void main() { vD = aD; gl_Position = vec4 (dot (uRowX.xy, aPos) + uRowX.z, dot (uRowY.xy, aPos) + uRowY.z, 0.0, 1.0); }\n";
-    // premultiplied output: kind 0 solid, kind 1 feathered line (coverage 1 px edge), kind 2 disc (coverage from the distance to the centre)
+    // premultiplied output: kind 0 solid, kind 1 feathered line (coverage 1 px edge), kind 2 disc (coverage from the distance to the centre), kind 3 vertical gradient (d0 runs 0 .. 1 over the rows)
     static constexpr const char* kFs =
-        "precision mediump float; varying vec2 vD; uniform float uKind; uniform vec4 uC0; uniform float uHalf;\n"
+        "precision mediump float; varying vec2 vD; uniform float uKind; uniform vec4 uC0; uniform vec4 uC1; uniform float uHalf;\n"
         "void main() {\n"
+        "  if (uKind > 2.5) { gl_FragColor = mix (uC0, uC1, clamp (vD.x, 0.0, 1.0)); return; }\n"
         "  float cov = 1.0;\n"
         "  if (uKind > 1.5) cov = clamp (uHalf + 0.5 - length (vD), 0.0, 1.0);\n"
         "  else if (uKind > 0.5) cov = clamp (uHalf + 0.5 - abs (vD.x), 0.0, 1.0);\n"
@@ -281,6 +283,7 @@ private:
         uRowY_ = api_.glGetUniformLocation (prog_, "uRowY");
         uKind_ = api_.glGetUniformLocation (prog_, "uKind");
         uC0_ = api_.glGetUniformLocation (prog_, "uC0");
+        uC1_ = api_.glGetUniformLocation (prog_, "uC1");
         uHalf_ = api_.glGetUniformLocation (prog_, "uHalf");
         api_.glGenBuffers (1, &vbo_);
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
@@ -550,24 +553,34 @@ private:
                     break;
                 }
                 case kOpFill:
+                case kOpFillGradient:
                     if (pts_.size() >= 2)
                     {
-                        begin (GL_TRIANGLES, 0, o.rgba, 0.0f);
+                        const bool grad = o.op == kOpFillGradient;
+                        Draw& d = begin (GL_TRIANGLES, grad ? 3 : 0, o.rgba, 0.0f);
+                        float yA = 0.0f, inv = 0.0f;
+                        if (grad)
+                        {
+                            premul (o.rgba2, d.colour2);
+                            yA = o.f[1];
+                            inv = o.f[2] != o.f[1] ? 1.0f / (o.f[2] - o.f[1]) : 0.0f;
+                        }
                         const float b = o.f[0];
+                        auto v = [&] (float x, float y) { add (x, y, grad ? (y - yA) * inv : 0.0f); };
                         for (size_t i = 0; i + 1 < pts_.size(); ++i)
                         {
                             const Pt a = pts_[i], c = pts_[i + 1];
                             const float da = a.y - b, dc = c.y - b;
                             if (da * dc >= 0.0f)
                             {
-                                add (a.x, a.y); add (a.x, b); add (c.x, c.y);
-                                add (a.x, b); add (c.x, c.y); add (c.x, b);
+                                v (a.x, a.y); v (a.x, b); v (c.x, c.y);
+                                v (a.x, b); v (c.x, c.y); v (c.x, b);
                             }
                             else
                             {
                                 const float t = da / (da - dc), xm = a.x + t * (c.x - a.x);   // the curve crosses the baseline at xm
-                                add (a.x, a.y); add (a.x, b); add (xm, b);
-                                add (xm, b); add (c.x, c.y); add (c.x, b);
+                                v (a.x, a.y); v (a.x, b); v (xm, b);
+                                v (xm, b); v (c.x, c.y); v (c.x, b);
                             }
                         }
                         end();
@@ -641,6 +654,7 @@ private:
             }
             api_.glUniform1f (uKind_, static_cast<float> (d.kind));
             api_.glUniform4f (uC0_, d.colour[0], d.colour[1], d.colour[2], d.colour[3]);
+            api_.glUniform4f (uC1_, d.colour2[0], d.colour2[1], d.colour2[2], d.colour2[3]);
             api_.glUniform1f (uHalf_, d.half);
             api_.glDrawArrays (static_cast<GLenum> (d.prim), d.first, d.count);
         }
@@ -862,7 +876,7 @@ private:
     EGLContext ctx_ = EGL_NO_CONTEXT;
     EGLSurface esurf_ = EGL_NO_SURFACE;
     GLuint prog_ = 0, vbo_ = 0;
-    GLint uRowX_ = -1, uRowY_ = -1, uKind_ = -1, uC0_ = -1, uHalf_ = -1;
+    GLint uRowX_ = -1, uRowY_ = -1, uKind_ = -1, uC0_ = -1, uC1_ = -1, uHalf_ = -1;
     Import imports_[kMaxLedger];
     std::vector<Vtx> verts_;
     std::vector<Draw> draws_;
