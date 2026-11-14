@@ -165,9 +165,9 @@ int main (int argc, char** argv)
         for (int g = 0; g < pl::kGroups; ++g)
         {
             std::memset (&props, 0, sizeof props);
-            ok = ok && a->dispatcher (a, effGetParameterProperties, sel0 + g, 0, &props, 0.0f) == 1 && props.minInteger == 1 && props.maxInteger == pl::kInstances[g] && (props.flags & kVstParameterUsesIntegerMinMax) != 0;
+            ok = ok && a->dispatcher (a, effGetParameterProperties, sel0 + g, 0, &props, 0.0f) == 1 && props.minInteger == 0 && props.maxInteger == pl::kInstances[g] - 1 && (props.flags & kVstParameterUsesIntegerMinMax) != 0;
         }
-        check (ok, "the selectors are stepped integers 1 .. n");
+        check (ok, "the selectors are stepped integers 0 .. n - 1 (displayed as 1 .. n)");
     }
     // the defaults of the selectors
     check (a->getParameter (a, sel0) == 0.0f && a->getParameter (a, sel0 + 1) == 0.0f && a->getParameter (a, sel0 + 2) == 0.0f && text (a, effGetParamDisplay, sel0 + 2) == "LFO 1", "the selectors start at 1 / 1 / 1");

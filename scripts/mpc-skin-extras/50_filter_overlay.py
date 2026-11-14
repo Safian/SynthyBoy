@@ -229,7 +229,7 @@ def apply(tui, qlinks, ctx):
             row = layout["meterRow"]
             if view["region"] != {"x": row["x"], "y": row["y"], "w": row["columns"] * row["columnW"] + (row["columns"] - 1) * row["gap"], "h": row["h"]}:
                 raise ValueError("view %r: the region is not the row of the meters" % view["name"])
-        elif view["kind"] not in ("lfo", "osc", "env"):
+        elif view["kind"] not in ("lfo", "osc", "env", "play"):
             raise ValueError("view %r: unknown kind %r" % (view["name"], view["kind"]))
         items = ctx.tab(view["tab"])["componentDefinition"]["componentsData"]
         _add_markers(view, ctx, items)

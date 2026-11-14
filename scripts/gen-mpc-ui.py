@@ -631,6 +631,11 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
     # e. kick list must have one to four ids (their controls must fit the 16 slots of the page, see the slot rule below)
     for page_entry in layout_pages:
         kick_ids = page_entry.get("kick", [])
+        if page_entry.get("custom"):   # a page whose controls a skin extras module makes (the Play page of the overlay variant: proxy parameters the Kick pages do not know): no Kick page, 16 empty slots
+            if kick_ids != []:
+                print("gen-mpc-ui: ERROR: page '%s' is custom: its kick list must be empty" % page_entry.get("name", "?"), file=sys.stderr)
+                return 2
+            continue
         if not isinstance(kick_ids, list) or len(kick_ids) < 1 or len(kick_ids) > MAX_KICK_PER_PAGE:
             print("gen-mpc-ui: ERROR: page '%s' kick must contain one to %d ids"
                   % (page_entry.get("name", "?"), MAX_KICK_PER_PAGE), file=sys.stderr)
@@ -759,7 +764,7 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
     for page_entry in layout_pages:
         page_name = page_entry.get("name", "")
         page = next(p for p in ui_pages if p["name"] == page_name)
-        if all(c == "empty" for c in page["controls"]):
+        if all(c == "empty" for c in page["controls"]) and not page_entry.get("custom"):
             print("gen-mpc-ui: ERROR: page '%s' has no control" % page_name, file=sys.stderr)
             return 2
 

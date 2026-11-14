@@ -185,6 +185,9 @@ $B/lfo_live_host "$OVLON" on overlay > $B/live-ovlon.log 2>&1 || { grep -E "^FAI
 # were checked with exact parameter counts without it (the tests take the word "overlay" for the one build that has the extra parameter and are exact in both cases).
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: overlay_instance_host build"; exit 1; }
 $B/overlay_instance_host "$OVLON" > $B/overlay-instance.log 2>&1 || { grep -E "^FAIL" $B/overlay-instance.log; echo "ACCEPT FAIL: overlay_instance_host (Overlay Instance parameter)"; exit 1; }
+# the Play page's parameters (shell-mpc/play_params.h, docs/MPC.md "Play page"): selectors, proxies, chunk, no feedback loop (the list, the order and the counts are checked there)
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_host shell-mpc/tests/play_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_host build"; exit 1; }
+$B/play_host "$OVLON" > $B/play.log 2>&1 || { grep -E "^FAIL" $B/play.log; echo "ACCEPT FAIL: play_host (the Play page's parameters)"; exit 1; }
 # the overlay builds without the parameter must not exist: a build that is not the overlay one has no trace of it (the parameter's name is in the overlay build only)
 for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
     grep -q "Overlay Instance" "$f" && { echo "ACCEPT FAIL: Overlay Instance in a build without SYNTHYBOY_MPC_OVERLAY"; exit 1; }
@@ -293,5 +296,10 @@ c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/overlay_instance_host "$TLLIB" > $TL/overlay-instance.log 2>&1
 grep -q "WARNING: ThreadSanitizer" $TL/overlay-instance.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/overlay-instance.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in Overlay Instance (full report: $TL/overlay-instance.log)"; exit 1; }
 grep -q "^FAIL" $TL/overlay-instance.log && { grep "^FAIL" $TL/overlay-instance.log; echo "ACCEPT FAIL: tsan overlay_instance_host"; exit 1; }
+# the Play page's selectors and proxies: host writes, the display thread's reports and the echoing host, under ThreadSanitizer
+c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK/framework -o $TL/play_host shell-mpc/tests/play_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan play_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/play_host "$TLLIB" > $TL/play.log 2>&1
+grep -q "WARNING: ThreadSanitizer" $TL/play.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/play.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Play page's parameters (full report: $TL/play.log)"; exit 1; }
+grep -q "^FAIL" $TL/play.log && { grep "^FAIL" $TL/play.log; echo "ACCEPT FAIL: tsan play_host"; exit 1; }
 grep -q "WARNING: ThreadSanitizer" $TL/live-ovl.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/live-ovl.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races with the overlay thread in the plugin (full report: $TL/live-ovl.log)"; exit 1; }
 echo "ACCEPT OK"

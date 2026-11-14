@@ -892,6 +892,7 @@ private:
     bool rotationAmbiguous_ = false, paceApplied_ = false;
     unsigned planeLosses_ = 0, planeRefreshes_ = 0;
     std::string planeNote_ = "not on yet";
+    static_assert (layout::kNumViews <= Detection::kMaxViews, "the detector and the status file hold kMaxViews views: raise it with the layout");
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
     Rect instanceRects_[layout::kNumViews];

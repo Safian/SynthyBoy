@@ -22,7 +22,7 @@ struct MarkerSpec
 
 struct Detection
 {
-    static constexpr int kMaxViews = 16;
+    static constexpr int kMaxViews = 24;
     bool readable = false;           // the framebuffer could be read
     int view = -1;                   // the first view whose two markers are both on screen, -1 when none
     int slot = kSlotUnknown;         // with a view: the instance the page belongs to (the colour of the view's instance picture): 0 .. 15, kSlotNone, or kSlotUnknown (blank or not a colour of the table)

@@ -1458,8 +1458,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 const int n = synthyboy_mpc::play::kInstances[g];
                 props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f / static_cast<float> (n - 1);
                 props->flags = kVstParameterUsesIntegerMinMax;
-                props->minInteger = 1;
-                props->maxInteger = n;
+                props->minInteger = 0;   // like every stepped parameter of the engine: 0 .. n - 1 (the host's radio buttons and menus count from 0; the display text says "Osc 1" for 0)
+                props->maxInteger = n - 1;
                 props->stepInteger = 1;
                 return 1;
             }

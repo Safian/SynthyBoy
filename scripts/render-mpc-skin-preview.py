@@ -98,7 +98,7 @@ class Sketch:
         remap = {m["key"]: m["value"] for m in entry["handle remapping"]["map"]}
         d = ImageDraw.Draw(img)
         if typ in self.defs:
-            pname = self.params[int(remap["Data"].split()[1])]["name"] if "Data" in remap else None
+            pname = (self.params[int(remap["Data"].split()[1])]["name"] if int(remap["Data"].split()[1]) < len(self.params) else "plugin parameter") if "Data" in remap else None   # an index past params.json: a parameter of the plugin itself (cursors, pad pressure, the overlay build's Play page)
             for child in self.defs[typ]["componentsData"]:
                 self.draw_entry(img, child, (x0, y0), pname)
         elif typ == "Label":

@@ -2,8 +2,26 @@
   "format": "synthyboy-mpc-ui-pages",
   "version": 2,
   "variant": "overlay",
-  "tabLimit": 36,
+  "tabLimit": 39,
   "pages": [
+    {
+      "name": "Play",
+      "fn": "Play",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "Play Env",
+      "fn": "Play",
+      "kick": [],
+      "custom": true
+    },
+    {
+      "name": "Play LFO",
+      "fn": "Play",
+      "kick": [],
+      "custom": true
+    },
     {
       "name": "Macros",
       "fn": "Macros",
