@@ -104,6 +104,92 @@ int main()
             s.setGainDb (-100.0f); check (s.gainDb() == -24.0f, "the gain is clamped to -24 dB");
             s.setGainDb (std::numeric_limits<float>::quiet_NaN()); check (s.gainDb() == 0.0f, "a NaN gain becomes 0 dB");
         }
+        { // 11 [KRITIKUS-1] large finite input + make-up gain does not produce NaN/inf
+            OutputStage s; s.prepare (sr); s.setGainDb (6.0f); s.reset(); // curGain is now ~1.995
+            std::vector<float> l { 2.0e38f, std::numeric_limits<float>::max() / 1.5f, 1.0e30f, 0.5f },
+                               r { 0.5f, 2.0e38f, -std::numeric_limits<float>::max() / 1.5f, 0.5f };
+            s.process (l.data(), r.data(), (int) l.size());
+            bool ok = true;
+            for (size_t i = 0; i < l.size(); ++i)
+                ok = ok && std::isfinite (l[i]) && std::isfinite (r[i]) && ! std::isnan (l[i]) && ! std::isnan (r[i])
+                        && std::fabs (l[i]) <= T + 1e-6f && std::fabs (r[i]) <= T + 1e-6f;
+            check (ok, "large finite inputs with positive make-up gain do not produce NaN or inf");
+            check (std::isfinite (s.gainReductionDb()), "gain reduction remains finite after huge inputs");
+        }
+        { // 12 [MAGAS-1] invalid sample rates in prepare() fall back to safe behaviour
+            for (double badSr : { 0.0, -44100.0, -1.0, std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity() })
+            {
+                OutputStage s; s.prepare (badSr); s.setGainDb (6.0f);
+                std::vector<float> l (128, 0.5f), r = l;
+                s.process (l.data(), r.data(), (int) l.size());
+                bool finite = true;
+                for (size_t i = 0; i < l.size(); ++i)
+                    finite = finite && std::isfinite (l[i]) && std::isfinite (r[i])
+                                    && std::fabs (l[i]) <= T + 1e-6f && std::fabs (r[i]) <= T + 1e-6f;
+                check (finite, "invalid sample rate does not blow up process()");
+            }
+        }
+        { // 13 [KÖZEPES-1] null or partial channel pointers and n <= 0 do not crash
+            OutputStage s; s.prepare (sr); s.setGainDb (6.0f);
+            s.process (nullptr, nullptr, 128); // must not crash
+            s.process (nullptr, nullptr, 0);
+            s.process (nullptr, nullptr, -10);
+            std::vector<float> mono (128, 0.8f);
+            s.process (mono.data(), nullptr, (int) mono.size()); // mono Left
+            bool okL = true;
+            for (float v : mono) okL = okL && std::isfinite (v) && std::fabs (v) <= T + 1e-6f;
+            check (okL, "mono left channel (r == nullptr) is limited safely");
+
+            std::vector<float> monoR (128, 0.8f);
+            s.process (nullptr, monoR.data(), (int) monoR.size()); // mono Right
+            bool okR = true;
+            for (float v : monoR) okR = okR && std::isfinite (v) && std::fabs (v) <= T + 1e-6f;
+            check (okR, "mono right channel (l == nullptr) is limited safely");
+        }
+        { // 14 [KÖZEPES-2] process() before prepare() uses safe default smoothing
+            OutputStage s; // no prepare() call
+            s.setGainDb (12.0f);
+            std::vector<float> l ((size_t) 128, 0.01f), r = l;
+            s.process (l.data(), r.data(), (int) l.size());
+            const float fin = 0.01f * std::pow (10.0f, 12.0f / 20.0f);
+            check (l[0] < 0.6f * fin, "process before prepare does not jump immediately to target gain");
+        }
+        { // 15 [KÖZEPES-3] gainReductionDb() is finite even under extreme reduction
+            OutputStage s; s.prepare (sr); s.setGainDb (24.0f);
+            std::vector<float> l (64, 1e20f), r = l;
+            s.process (l.data(), r.data(), (int) l.size());
+            const float gr = s.gainReductionDb();
+            check (std::isfinite (gr) && gr >= 0.0f && gr <= 200.0f, "gainReductionDb() stays finite under extreme reduction");
+        }
+        { // 16 stereo link works with right louder than left
+            OutputStage s; s.prepare (sr); s.setGainDb (6.0f);
+            auto l = sine (sec / 2, 0.09f, 300.0f, sr), r = sine (sec / 2, 0.9f, 300.0f, sr); auto il = l, ir = r; run (s, l, r);
+            bool linked = true;
+            for (size_t i = (size_t) (0.2 * sr); i < l.size(); ++i)
+                if (std::fabs (ir[i]) > 0.05f) linked = linked && std::fabs (l[i] / il[i] - r[i] / ir[i]) < 1e-3f;
+            check (linked, "stereo link reduces left channel when right channel is louder");
+        }
+        { // 17 block size invariance
+            OutputStage s1; s1.prepare (sr); s1.setGainDb (6.0f);
+            OutputStage s2; s2.prepare (sr); s2.setGainDb (6.0f);
+            auto in = sine (sec / 2, 0.7f, 440.0f, sr);
+            auto l1 = in, r1 = in, l2 = in, r2 = in;
+            s1.process (l1.data(), r1.data(), (int) l1.size()); // single block
+            const int blockSizes[] = { 1, 2, 7, 32, 64, 128, 17 };
+            size_t pos = 0; int bsIdx = 0;
+            while (pos < l2.size())
+            {
+                int b = blockSizes[bsIdx % 7];
+                int n = (int) std::min ((size_t) b, l2.size() - pos);
+                s2.process (l2.data() + pos, r2.data() + pos, n);
+                pos += (size_t) n;
+                ++bsIdx;
+            }
+            bool exact = true;
+            for (size_t i = 0; i < l1.size(); ++i)
+                exact = exact && (l1[i] == l2[i]) && (r1[i] == r2[i]);
+            check (exact, "varying block sizes (1, 2, 7, 32...) give bit-identical output");
+        }
     }
     std::printf ("%s  (%d failures)\n", failures == 0 ? "OK" : "FAILED", failures);
     return failures == 0 ? 0 : 1;
