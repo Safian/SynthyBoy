@@ -662,6 +662,24 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
             print("gen-mpc-ui: ERROR: function key '%s' has %d sub-tabs (at most %d)" % (k["name"], len(k["tabs"]), MAX_SUBTABS), file=sys.stderr)
             return 2
 
+    # e3. "label" on a page: the text the function key button shows while that page is the sub-tab on screen (the host draws the tabName of the current sub-tab on the button). The page keeps its
+    #     name (unique, what the extras modules, the overlay views and the tests refer to); the last extras module (95_subtabs.py) writes the label as the tabName of the finished skin. A label obeys the
+    #     rules of a name and must not be the name of ANOTHER page or the label of another page (the tab names of the finished skin are unique too).
+    labels = {}
+    for page_entry in layout_pages:
+        if "label" not in page_entry:
+            continue
+        label = page_entry["label"]
+        if not isinstance(label, str) or not label or len(label) > MAX_PAGE_NAME:
+            print("gen-mpc-ui: ERROR: the label '%s' of page '%s' is invalid (must be 1-%d characters)" % (label, page_entry["name"], MAX_PAGE_NAME), file=sys.stderr)
+            return 2
+        if label != page_entry["name"]:
+            labels[page_entry["name"]] = label
+    final_names = [labels.get(p["name"], p["name"]) for p in layout_pages]
+    for dup in sorted({n for n in final_names if final_names.count(n) > 1}):
+        print("gen-mpc-ui: ERROR: the tab name '%s' would be used twice after the labels are applied" % dup, file=sys.stderr)
+        return 2
+
     # f. each kick id must exist in kick-pages.json
     for page_entry in layout_pages:
         for kid in page_entry.get("kick", []):
@@ -783,6 +801,8 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
     meta_path = os.path.join(out_dir, "skin-meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:
         meta_doc = {"format": "synthyboy-mpc-skin-meta", "version": 1, "fnKeys": fn_keys, "tabs": meta_tabs}
+        if labels:   # only a layout that has labels writes them: the skin-meta.json of the others is as it was
+            meta_doc["labels"] = labels
         if "variant" in layout_doc:   # a layout file that names a skin variant (scripts/overlay-skin/mpc-ui-pages-overlay.json: "overlay"); the extras modules of that variant look at it
             meta_doc["variant"] = layout_doc["variant"]
         json.dump(meta_doc, f, indent=2, ensure_ascii=False)

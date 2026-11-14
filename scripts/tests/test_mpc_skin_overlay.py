@@ -180,7 +180,7 @@ class OverlayLayoutFileTests(unittest.TestCase):
         ovl = dict(ovl, pages=ovl["pages"][3:])   # the rest is checked as before
         names = [p["name"] for p in ovl["pages"]]
         self.assertEqual(names[names.index("Filter 1"):names.index("Filter 1") + 4], ["Filter 1", "F1 Model", "Filter 2", "F2 Model"])
-        rest = [p for p in ovl["pages"] if p["name"] not in ("Filter 1", "F1 Model", "Filter 2", "F2 Model")]
+        rest = [{k: v for k, v in p.items() if k != "label"} for p in ovl["pages"] if p["name"] not in ("Filter 1", "F1 Model", "Filter 2", "F2 Model")]   # (the labels of the function keys are the overlay's own)
         self.assertEqual(rest, [p for p in prod["pages"] if p["name"] not in ("Filter 1", "Filter 2")], "every other page is the production page")
         for n in (1, 2):
             pages = [p for p in ovl["pages"] if p["name"] in ("Filter %d" % n, "F%d Model" % n)]
@@ -222,8 +222,12 @@ class OverlaySkinTests(unittest.TestCase):
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
+    # the finished overlay skin carries the labels of the function keys as tabName (95_subtabs.py); the tests refer to a page by its internal name
+    LABELS = {p["name"]: p["label"] for p in json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))["pages"] if "label" in p}
+
     def tab(self, name, tui=None):
-        return next(t for t in (tui or self.o_tui)["pageData"]["tabs"] if t["tabName"] == name)
+        shown = name if tui is not None else self.LABELS.get(name, name)
+        return next(t for t in (tui or self.o_tui)["pageData"]["tabs"] if t["tabName"] == shown)
 
     def controls(self, tab):
         out = {}
@@ -325,8 +329,8 @@ class OverlaySkinTests(unittest.TestCase):
             if t["tabName"] in ("Filter 1", "Filter 2"):
                 continue
             o = self.tab(t["tabName"])
-            ot = {k: v for k, v in o.items() if k not in ("fnKeySubIndex", "fnKeyIndex")}
-            pt = {k: v for k, v in t.items() if k not in ("fnKeySubIndex", "fnKeyIndex")}
+            ot = {k: v for k, v in o.items() if k not in ("fnKeySubIndex", "fnKeyIndex", "tabName")}   # (the label of a function key is the overlay's tabName: test_function_key_labels...)
+            pt = {k: v for k, v in t.items() if k not in ("fnKeySubIndex", "fnKeyIndex", "tabName")}
             self.assertEqual(o["fnKeyIndex"], t["fnKeyIndex"] + 1, "%s: the Play key is the first, every other key moved one place" % t["tabName"])
             if t["tabName"] in with_markers:
                 comps = ot["componentDefinition"]["componentsData"]
@@ -455,6 +459,39 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertEqual(tabs[3]["fnKeyIndex"], 1)
         self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 11, "eleven function keys")
         self.assertFalse(any("Play" in t["tabName"] for t in self.p_tui["pageData"]["tabs"]), "the production skin has no Play tab")
+
+    def test_function_key_labels_are_the_short_names_and_the_other_sub_tabs_keep_theirs(self):
+        # the host draws the tabName of the current sub-tab on the function key: the first sub-tab of every key carries the short label
+        tabs = self.o_tui["pageData"]["tabs"]
+        first = [t["tabName"] for t in tabs if t["fnKeySubIndex"] == 0]
+        self.assertEqual(first, ["Play", "Macros", "Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "FX 2", "Master"])
+        later = [t["tabName"] for t in tabs if t["fnKeySubIndex"] > 0]
+        self.assertEqual(later, ["Play Env", "Play LFO", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Mixer", "F1 Model", "Filter 2", "F2 Model", "Env 2", "Env 3", "Env 4",
+                                 "LFO 2", "LFO 3", "LFO 4", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Delay", "Phaser", "FX Level", "Voice"])
+        names = [t["tabName"] for t in tabs]
+        self.assertEqual(len(names), len(set(names)), "the tab names of the finished skin are unique")
+        self.assertTrue(all(1 <= len(n) <= 8 for n in names))
+        # the Q-Link map follows the keys, not the names
+        ql = self.o_ql["Screen Mode Q-Links"]["map"]
+        self.assertEqual([(e["Tab"], e["SubTab"]) for e in ql], [(t["fnKeyIndex"] + 1, t["fnKeySubIndex"] + 1) for t in tabs])
+        # the internal names stay in skin-meta.json, labels only for the pages that have one; the production skin has none
+        meta = json.loads((self.ovl.parent / "skin-meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["labels"], self.LABELS)
+        self.assertEqual(sorted(meta["labels"].values()), sorted(["Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "FX 2"]))
+        self.assertNotIn("labels", json.loads((self.prod.parent / "skin-meta.json").read_text(encoding="utf-8")))
+        self.assertEqual([t["tabName"] for t in self.p_tui["pageData"]["tabs"] if t["fnKeySubIndex"] == 0][:4], ["Macros", "Osc 1", "Sub/Nois", "Filter 1"], "the production skin keeps its names")
+
+    def test_a_label_that_clashes_or_is_too_long_stops_the_generator(self):
+        import test_gen_mpc_ui_layout as lay
+        base = json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))
+        for page, label in (("Osc 1", "Osc 2"), ("Env 1", "Env 1 long"), ("Osc 1", "Mixer"), ("Env 1", "")):
+            doc = json.loads(json.dumps(base))
+            next(p for p in doc["pages"] if p["name"] == page)["label"] = label
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "layout.json"
+                path.write_text(json.dumps(doc), encoding="utf-8")
+                code, out, err = lay.run(tmp, path)
+                self.assertEqual(code, 2, (page, label, err))
 
     def test_play_controls_and_q_links(self):
         first = self.play_first()

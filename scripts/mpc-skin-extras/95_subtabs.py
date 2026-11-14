@@ -8,6 +8,10 @@
 # sub-tab, observed on the Key 61), puts the tab list in that order and renumbers Q-Links.json: Tab = fnKeyIndex + 1, SubTab = fnKeySubIndex + 1,
 # entries in the order of the tabs. Every module before this one finds its tab by name, and the Q-Link entry of a tab by the generator's numbering
 # (one key per page), which is why this module runs last (after 90_frames.py).
+# Labels: skin-meta.json may have "labels" ({page name: label}, from "label" in the layout file). The host draws the tabName of the current sub-tab on the function key, so the tab that is first under
+# its key gets the short label as its tabName (the first row of keys reads Play, Osc, Filter, Env, LFO, ...) while the other sub-tabs keep their longer names (which the key shows while they are
+# on screen). Every module before this one, the overlay views and the tests refer to the page by its unique INTERNAL name; only the finished skin carries the label. A skin-meta.json without
+# "labels" (the production skin) is not touched.
 
 SUB_LIMIT = 8   # SDK ui-reference 3.5: at most 8 sub-tabs per function key
 
@@ -40,3 +44,12 @@ def apply(tui, qlinks, ctx):
         raise ValueError("tabs %s are in no function key" % sorted(by_name))
     tabs[:] = ordered
     entries[:] = new_entries
+    labels = ctx.meta.get("labels", {})
+    unknown = sorted(set(labels) - {t["tabName"] for t in tabs})
+    if unknown:
+        raise ValueError("skin-meta.json has labels for pages the skin does not have: %s" % unknown)
+    for tab in tabs:
+        tab["tabName"] = labels.get(tab["tabName"], tab["tabName"])
+    shown = [t["tabName"] for t in tabs]
+    if len(set(shown)) != len(shown):
+        raise ValueError("tab names are not unique after the labels: %s" % sorted({n for n in shown if shown.count(n) > 1}))

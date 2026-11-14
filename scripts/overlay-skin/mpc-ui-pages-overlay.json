@@ -35,7 +35,8 @@
       "fn": "Osc",
       "kick": [
         "osc1_main"
-      ]
+      ],
+      "label": "Osc"
     },
     {
       "name": "Osc1 Shp",
@@ -81,7 +82,8 @@
       "kick": [
         "sub_main",
         "noise"
-      ]
+      ],
+      "label": "Mix"
     },
     {
       "name": "Mixer",
@@ -96,7 +98,8 @@
       "fn": "Filter",
       "kick": [
         "filter1_main"
-      ]
+      ],
+      "label": "Filter"
     },
     {
       "name": "F1 Model",
@@ -124,7 +127,8 @@
       "fn": "Env",
       "kick": [
         "env1"
-      ]
+      ],
+      "label": "Env"
     },
     {
       "name": "Env 2",
@@ -152,7 +156,8 @@
       "fn": "LFO",
       "kick": [
         "lfo1"
-      ]
+      ],
+      "label": "LFO"
     },
     {
       "name": "LFO 2",
@@ -181,7 +186,8 @@
       "kick": [
         "mod_slot_1",
         "mod_slot_2"
-      ]
+      ],
+      "label": "Mod"
     },
     {
       "name": "Mod 3-4",
@@ -205,7 +211,8 @@
       "kick": [
         "fx_order_1",
         "fx_switches"
-      ]
+      ],
+      "label": "FX"
     },
     {
       "name": "FX Filt",
@@ -252,7 +259,8 @@
       "kick": [
         "fx_chorus_1",
         "fx_chorus_2"
-      ]
+      ],
+      "label": "FX 2"
     },
     {
       "name": "Delay",
