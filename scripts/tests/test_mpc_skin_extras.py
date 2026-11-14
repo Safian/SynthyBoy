@@ -86,7 +86,7 @@ def qlinks_by_tab_name(tui, qlinks_map):
 
 
 def snapshot(skins):
-    return {p.name: p.read_bytes() for p in sorted(skins.iterdir())}
+    return {str(p.relative_to(skins)): p.read_bytes() for p in sorted(skins.rglob("*")) if p.is_file()}
 
 
 @unittest.skipUnless((SDK / "tools" / "gen_ui.py").is_file(), "MPC SDK not found (set MPC_SDK)")

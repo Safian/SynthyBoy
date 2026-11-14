@@ -165,6 +165,12 @@ else
     rm -rf "$ui_tmp"
 fi
 
+# Ensure browser artwork tile (Plugin Skins/browser_images/soundsmode.png) is in the package
+if [[ ! -f "$plugin_folder/Plugin Skins/browser_images/soundsmode.png" ]]; then
+    mkdir -p "$plugin_folder/Plugin Skins/browser_images"
+    cp "$repo_root/scripts/mpc-skin-extras/browser_images/soundsmode.png" "$plugin_folder/Plugin Skins/browser_images/soundsmode.png"
+fi
+
 # Generate plugin.json (file32 / file64 for the binaries that exist) and version.xml
 python3 "$repo_root/scripts/gen-mpc-manifest.py" --plugin-dir "$plugin_folder"
 

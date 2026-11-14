@@ -2,7 +2,7 @@
 
 Modules in this folder post-process the generated MPC skin (`Plugin Skins/TUI.json` and `Q-Links.json`).
 `scripts/apply-mpc-skin-extras.py` runs after the SDK `gen_ui.py` (see `scripts/build-mpc.sh`; `--meta skin-meta.json` is the file `scripts/gen-mpc-ui.py --layout` writes next to ui.json), loads every
-`*.py` file here in name order (`10_env.py`, `20_osc.py`, `30_lfo.py`, `45_pad_pressure.py`, `80_layout.py`, `85_names.py`, `90_frames.py`, `95_subtabs.py`, ...) and calls
+`*.py` file here in name order (`10_env.py`, `20_osc.py`, `30_lfo.py`, `40_spectrum.py`, `45_pad_pressure.py`, `80_layout.py`, `85_names.py`, `90_frames.py`, `95_subtabs.py`, `98_tile.py`, ...) and calls
 
     def apply(tui: dict, qlinks: dict, ctx) -> None
 
