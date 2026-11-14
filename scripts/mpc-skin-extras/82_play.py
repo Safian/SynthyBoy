@@ -104,7 +104,9 @@ def _controls_by_param(tui):
             continue
         for c in tab["componentDefinition"]["componentsData"]:
             if c["componentData"]["type"] in SLOT_H and c["handle remapping"]["map"]:
-                found.setdefault(_param_of(c), []).append((tab, c))   # a control may have variants (the LFO tab has three Division controls, each valid for one sync choice)
+                lst = found.setdefault(_param_of(c), [])
+                if not lst or lst[0][0] is tab:   # the controls of the FIRST tab that has one; a control may have variants there (the LFO tab has three Division controls, each valid for one sync choice)
+                    lst.append((tab, c))
     return found
 
 

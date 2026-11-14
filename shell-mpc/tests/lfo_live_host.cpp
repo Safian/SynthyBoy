@@ -218,7 +218,8 @@ int main (int argc, char** argv)
     // the two pad pressure parameters (shell-mpc/pad_pressure.h, default ON) follow the display parameters (only "Overlay Instance" of the overlay build is after them) and are no part of what is checked here
     const int ovl = overlayBuild ? 1 + 27 : 0;   // "Overlay Instance" and after it the Play page's 3 selectors and 24 proxies (shell-mpc/play_params.h)
     const int pad = text (e, effGetParamName, e->numParams - 2 - ovl) == "Pad Pressure" ? 2 : 0;
-    std::string chunk = getChunk (e);
+    const std::string chunkFull = getChunk (e);
+    std::string chunk = chunkFull;
     if (overlayBuild)
     {
         // the overlay build's chunk has the three Play selectors (shell-mpc/play_params.h) in addition; without them it is the chunk of every other build (compared by accept.sh)
@@ -315,7 +316,7 @@ int main (int argc, char** argv)
     const float before = e->getParameter (e, n);
     e->setParameter (e, n, 0.5f);
     if (extra > 0) e->setParameter (e, n + 4, 0.5f);
-    check (getChunk (e) == chunk, "writes to the display parameters do not change the state chunk");
+    check (getChunk (e) == chunkFull, "writes to the display parameters do not change the state chunk");
     (void) before;
     e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
     std::printf ("%s  (%d failures)\n", fails ? "FAIL" : "OK", fails);

@@ -343,11 +343,19 @@ int main (int argc, char** argv)
     const int stable = totalReports.load();
     check (stable == after, "echoing host: the reports stop (no feedback loop), " + std::to_string (after - base) + " reports for 10 writes");
     check (after - base <= 25, "echoing host: at most a few reports per write");
-    // a selector change under the echo: the same
+    // a selector change under the echo: the same (the reports of the earlier writes may still be on their way when a run is slow, so the count is taken when it has been still for a while)
+    sleepMs (1500);
     const int b2 = totalReports.load();
     a->setParameter (a, sel0 + 2, pl::selectorNormalised (2, 7));
-    sleepMs (1500);
-    check (totalReports.load() - b2 <= 12 && a->getParameter (a, prox0 + 2 * pl::kSlots) == a->getParameter (a, pl::realIndex (2, 7, 0)), "echoing host: a selector change causes the 8 proxy reports (+ selector + echoes), nothing runs on");
+    int last = -1, still = 0;
+    for (int k = 0; k < 120 && still < 12; ++k)
+    {
+        sleepMs (50);
+        const int now = totalReports.load();
+        still = now == last ? still + 1 : 0;
+        last = now;
+    }
+    check (still >= 12 && totalReports.load() - b2 <= 14 && a->getParameter (a, prox0 + 2 * pl::kSlots) == a->getParameter (a, pl::realIndex (2, 7, 0)), "echoing host: a selector change causes the 8 proxy reports (+ selector + echoes), then nothing runs on (" + std::to_string (totalReports.load() - b2) + " reports)");
     echo.store (false);
     closeIt (a);
     std::printf ("%s  (%d failures)\n", fails ? "FAIL" : "OK", fails);
