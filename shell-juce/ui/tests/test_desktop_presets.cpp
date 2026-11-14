@@ -319,9 +319,11 @@ TEST (test_old_state_without_program_member_still_loads)
     saved = saved.substr (0, at) + "}"; // what a build before the program list wrote
 
     SynthyBoyProcessor b;
+    b.setCurrentProgram (42); // started on a different program
     restore (b, saved);
     CHECK (sameValues (b.allValues(), a.allValues())); // parameters and content restored exactly
-    CHECK_EQ (b.getCurrentProgram(), 0);               // no selection information: Init, as before
+    CHECK_EQ (b.getCurrentProgram(), 0);               // no selection information: resets to Init
+    CHECK_EQ (b.presetName(), juce::String ("Init"));
 }
 
 TEST (test_state_program_resolved_by_name_when_the_list_moved)
@@ -351,8 +353,10 @@ TEST (test_state_with_unknown_program_is_ignored_gracefully)
     saved.replace (at, 9 + name.size() + 1, "\"name\": \"No Such Preset\"");
 
     SynthyBoyProcessor b;
+    b.setCurrentProgram (42); // started on a different program
     restore (b, saved);
     CHECK_EQ (b.getCurrentProgram(), 0);
+    CHECK_EQ (b.presetName(), juce::String ("Init"));
     CHECK (sameValues (b.allValues(), a.allValues()));
 }
 
@@ -424,32 +428,98 @@ TEST (test_preset_modified_indicator)
     const auto* info = synthyboy::findParamByKey ("filter1.cutoff");
     CHECK (info != nullptr);
     const int cutoffIdx = synthyboy::findParamIndex (info->id);
-    const float currentVal = proc.getValueTreeState().getRawParameterValue ("filter1.cutoff")->load();
-    const float tweakedVal = currentVal > 1000.0f ? 500.0f : 1500.0f;
+    const float origVal = proc.getValueTreeState().getRawParameterValue ("filter1.cutoff")->load();
+    const float origNorm = proc.parameterStore().toNormalised (cutoffIdx, origVal);
+    const float tweakedVal = origVal > 1000.0f ? 500.0f : 1500.0f;
     const float tweakedNorm = proc.parameterStore().toNormalised (cutoffIdx, tweakedVal);
     proc.parameterStore().setNormalised (cutoffIdx, tweakedNorm);
 
     CHECK (proc.isPresetModified());
 
-    // Reverting to saved clears modified state
-    proc.revertToSaved();
+    // Reset parameter back to original preset 1 value: modified indicator clears
+    proc.parameterStore().setNormalised (cutoffIdx, origNorm);
     CHECK (! proc.isPresetModified());
 
-    // Check Editor TopBar modified indication
+    // Modifying content (e.g. tuning scale) also triggers modified state
+    synthyboy::StateContent modifiedContent = proc.content();
+    modifiedContent.tuning.present = true;
+    modifiedContent.tuning.scl = "! 12-EDO\n12\n!\n100.0\n";
+    CHECK (proc.setContent (modifiedContent));
+    CHECK (proc.isPresetModified());
+
+    // Reverting to saved on an un-restored instance resets to Init defaults
+    proc.revertToSaved();
+    CHECK (! proc.isPresetModified());
+    CHECK_EQ (proc.getCurrentProgram(), 0);
+    CHECK_EQ (proc.presetName(), juce::String ("Init"));
+
+    // Check revertToSaved with state restored from DAW session
+    proc.setCurrentProgram (5);
+    const std::string sessionChunk = stateOf (proc);
+    SynthyBoyProcessor sessionProc;
+    restore (sessionProc, sessionChunk);
+    CHECK_EQ (sessionProc.getCurrentProgram(), 5);
+    CHECK (! sessionProc.isPresetModified());
+
+    // Switch to another preset and tweak
+    sessionProc.setCurrentProgram (10);
+    sessionProc.parameterStore().setNormalised (cutoffIdx, tweakedNorm);
+    CHECK (sessionProc.isPresetModified());
+
+    // Revert to saved must restore the state from session (program 5, not program 10 or Init)
+    sessionProc.revertToSaved();
+    CHECK_EQ (sessionProc.getCurrentProgram(), 5);
+    CHECK_EQ (sessionProc.presetName(), sessionProc.getProgramName (5));
+    CHECK (! sessionProc.isPresetModified());
+
+    // Check Editor TopBar modified indication with clean preset
+    proc.setCurrentProgram (1);
+    const float p1CutoffVal = proc.getValueTreeState().getRawParameterValue ("filter1.cutoff")->load();
+    const float p1CutoffNorm = proc.parameterStore().toNormalised (cutoffIdx, p1CutoffVal);
     std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
     auto* editor = synthyboy::ui::innerEditor (base.get());
     CHECK (editor != nullptr);
     CHECK (! editor->topBar().isPresetModified());
 
-    // When undo stack receives a change, TopBar reflects modified state
-    editor->undoStack().push (proc.allValues());
+    // Tweak parameter in proc: topBar reflects modified
+    proc.parameterStore().setNormalised (cutoffIdx, tweakedNorm);
     editor->updateUndoRedoButtons();
     CHECK (editor->topBar().isPresetModified());
 
+    // Even if undo stack has history, when parameters match baseline, modified indicator is NOT false-positive
+    proc.parameterStore().setNormalised (cutoffIdx, p1CutoffNorm);
+    editor->undoStack().push (proc.allValues());
+    editor->updateUndoRedoButtons();
+    CHECK (editor->undoStack().canUndo());
+    CHECK (! proc.isPresetModified());
+    CHECK (! editor->topBar().isPresetModified());
+
     // Selecting a new preset clears modified state
     proc.selectPreset (2);
-    // Editor receives preset name update on timer/select
     proc.revertToSaved();
     editor->topBar().setPresetModified (proc.isPresetModified());
     CHECK (! editor->topBar().isPresetModified());
+}
+
+TEST (test_find_program_index)
+{
+    SynthyBoyProcessor proc;
+    CHECK_EQ (proc.findProgramIndex ("Init"), 0);
+    CHECK_EQ (proc.findProgramIndex ("init"), 0);
+    CHECK_EQ (proc.findProgramIndex ("0"), 0);
+    CHECK_EQ (proc.findProgramIndex ("1"), 1);
+    CHECK_EQ (proc.findProgramIndex ("112"), 112);
+    CHECK_EQ (proc.findProgramIndex ("113"), -1);
+    CHECK_EQ (proc.findProgramIndex ("-1"), -1);
+
+    const auto prog1Name = proc.getProgramName (1);
+    CHECK_EQ (proc.findProgramIndex (prog1Name), 1);
+    CHECK_EQ (proc.findProgramIndex (prog1Name.toLowerCase()), 1);
+
+    const auto prog1Cat = proc.presetList()[1].category;
+    CHECK_EQ (proc.findProgramIndex (juce::String (prog1Cat) + "/" + prog1Name), 1);
+    CHECK_EQ (proc.findProgramIndex (juce::String (prog1Cat) + "/" + prog1Name + ".sbpreset"), 1);
+
+    CHECK_EQ (proc.findProgramIndex ("NoSuchPreset12345"), -1);
+    CHECK_EQ (proc.findProgramIndex (""), -1);
 }

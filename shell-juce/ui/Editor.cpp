@@ -147,7 +147,7 @@ void SynthyBoyEditor::timerCallback()
             checkMissingContent();
     }
     const auto currentName = host.presetName();
-    const bool isMod = host.isPresetModified() || undoHistory.canUndo();
+    const bool isMod = host.isPresetModified();
     if (currentName != lastPresetName || isMod != lastModifiedState)
     {
         if (currentName != lastPresetName)
@@ -223,7 +223,7 @@ void SynthyBoyEditor::performRedo()
 void SynthyBoyEditor::updateUndoRedoButtons()
 {
     top->updateUndoRedo (undoHistory.canUndo(), undoHistory.canRedo());
-    const bool isMod = host.isPresetModified() || undoHistory.canUndo();
+    const bool isMod = host.isPresetModified();
     lastModifiedState = isMod;
     top->setPresetModified (isMod);
 }

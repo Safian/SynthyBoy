@@ -93,7 +93,17 @@ public:
     juce::MidiKeyboardState& keyboardState() override { return keyboard; }
     synthyboy::ui::AbCompare& abCompare() override { return ab; }
     void stepPreset (int direction) override;
-    juce::String presetName() const override { return presetNameText; }
+    juce::String presetName() const override
+    {
+        const std::lock_guard<std::mutex> lock (presetNameMutex);
+        return presetNameText;
+    }
+    void setPresetNameText (const juce::String& name)
+    {
+        const std::lock_guard<std::mutex> lock (presetNameMutex);
+        presetNameText = name;
+    }
+    int findProgramIndex (const juce::String& identifier) const;
     std::vector<synthyboy::ui::PresetItem> presetList() const override;
     void selectPreset (int index) override;
     int currentPresetIndex() const override { return currentProgramIndex.load (std::memory_order_relaxed); }
@@ -197,6 +207,12 @@ private:
     // what the host loaded last (or the defaults): "Revert to saved". Message thread, the content mutex covers hosts that do not.
     synthyboy::ParamValues savedValues = synthyboy::ParamValues::defaults();
     synthyboy::StateContent savedContent;
+    int savedProgramIndex = 0;
+    juce::String savedPresetName { "Init" };
+
+    // baseline for isPresetModified(): updated on loadPatch, initPatch, setStateInformation, revertToSaved
+    synthyboy::ParamValues presetBaselineValues = synthyboy::ParamValues::defaults();
+    synthyboy::StateContent presetBaselineContent;
 
     // shell features (not parameters): the CC map is read and learned on the audio thread (atomics), the locks belong to the message thread
     synthyboy::MidiCcMap midiMap;
@@ -240,6 +256,7 @@ private:
     // editor state that outlives the editor window
     juce::MidiKeyboardState keyboard; // notes of the on-screen keyboard, merged into the MIDI input of processBlock
     synthyboy::ui::AbCompare ab;
+    mutable std::mutex presetNameMutex;
     juce::String presetNameText { "Init" };
     std::function<void (int)> presetStepHandler;
     std::vector<synthyboy::Event> events;
