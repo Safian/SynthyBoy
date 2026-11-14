@@ -18,12 +18,13 @@ SCRIPT = ROOT / "scripts" / "package-mpc-release.py"
 SOURCE_URL = "https://github.com/Safian/SynthyBoy"
 
 
-def fake_elf(bits, machine, flags=0):
+def fake_elf(bits, machine, flags=0, endian=1):
     """Generates minimal valid ELF headers for testing."""
-    ident = b"\x7fELF" + bytes([1 if bits == 32 else 2, 1, 1]) + bytes(9)
+    fmt = "<" if endian == 1 else ">"
+    ident = b"\x7fELF" + bytes([1 if bits == 32 else 2, endian, 1]) + bytes(9)
     if bits == 32:
-        return ident + struct.pack("<HHIIIII", 3, machine, 1, 0, 0, 0, flags) + bytes(64)
-    return ident + struct.pack("<HHIQQQI", 3, machine, 1, 0, 0, 0, flags) + bytes(64)
+        return ident + struct.pack(fmt + "HHIIIII", 3, machine, 1, 0, 0, 0, flags) + bytes(64)
+    return ident + struct.pack(fmt + "HHIQQQI", 3, machine, 1, 0, 0, 0, flags) + bytes(64)
 
 
 class TestPackageMpcRelease(unittest.TestCase):
@@ -43,8 +44,12 @@ class TestPackageMpcRelease(unittest.TestCase):
 
         vst_dir = folder / "VST"
         vst_dir.mkdir(parents=True, exist_ok=True)
-        (vst_dir / "synthyboy-arm32.so").write_bytes(fake_elf(32, 40))
-        (vst_dir / "synthyboy-arm64.so").write_bytes(fake_elf(64, 183))
+        bin32 = vst_dir / "synthyboy-arm32.so"
+        bin32.write_bytes(fake_elf(32, 40))
+        bin32.chmod(0o755)
+        bin64 = vst_dir / "synthyboy-arm64.so"
+        bin64.write_bytes(fake_elf(64, 183))
+        bin64.chmod(0o755)
 
         skins_dir = folder / "Plugin Skins"
         skins_dir.mkdir(parents=True, exist_ok=True)
@@ -230,6 +235,57 @@ class TestPackageMpcRelease(unittest.TestCase):
         self.assertEqual(proc2.returncode, 1)
         self.assertIn("wrong ELF class", proc2.stderr)
 
+    def test_failure_wrong_elf_machine(self):
+        # x86_64 machine (62) in arm32
+        (self.plugin_dir / "VST" / "synthyboy-arm32.so").write_bytes(fake_elf(32, 62))
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("wrong ELF machine", proc.stderr)
+
+        # ARM machine (40) in arm64
+        (self.plugin_dir / "VST" / "synthyboy-arm32.so").write_bytes(fake_elf(32, 40))
+        (self.plugin_dir / "VST" / "synthyboy-arm64.so").write_bytes(fake_elf(64, 40))
+        proc2 = self._run_packager()
+        self.assertEqual(proc2.returncode, 1)
+        self.assertIn("wrong ELF machine", proc2.stderr)
+
+    def test_failure_wrong_elf_endianness(self):
+        # Big-endian ELF for arm32
+        (self.plugin_dir / "VST" / "synthyboy-arm32.so").write_bytes(fake_elf(32, 40, endian=2))
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("wrong ELF endianness", proc.stderr)
+
+        # Big-endian ELF for arm64
+        (self.plugin_dir / "VST" / "synthyboy-arm32.so").write_bytes(fake_elf(32, 40, endian=1))
+        (self.plugin_dir / "VST" / "synthyboy-arm64.so").write_bytes(fake_elf(64, 183, endian=2))
+        proc2 = self._run_packager()
+        self.assertEqual(proc2.returncode, 1)
+        self.assertIn("wrong ELF endianness", proc2.stderr)
+
+    def test_failure_not_elf_or_truncated(self):
+        # Not an ELF file
+        (self.plugin_dir / "VST" / "synthyboy-arm32.so").write_bytes(b"not an elf binary file")
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("not an ELF binary", proc.stderr)
+
+        # Truncated ELF header (< 52 bytes)
+        (self.plugin_dir / "VST" / "synthyboy-arm32.so").write_bytes(b"\x7fELF" + bytes(20))
+        proc2 = self._run_packager()
+        self.assertEqual(proc2.returncode, 1)
+        self.assertIn("not an ELF binary", proc2.stderr)
+
+    def test_failure_plugin_json_without_file32(self):
+        manifest_path = self.plugin_dir / "plugin.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        del manifest["file32"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("file32", proc.stderr)
+
     def test_failure_plugin_json_without_file64(self):
         manifest_path = self.plugin_dir / "plugin.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -240,12 +296,56 @@ class TestPackageMpcRelease(unittest.TestCase):
         self.assertEqual(proc.returncode, 1)
         self.assertIn("file64", proc.stderr)
 
-    def test_failure_fewer_than_100_presets(self):
+    def test_failure_plugin_json_escaping_path(self):
+        manifest_path = self.plugin_dir / "plugin.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["file32"] = "/etc/passwd"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("relative path inside plugin folder", proc.stderr)
+
+    def test_failure_missing_or_invalid_plugin_json(self):
+        manifest_path = self.plugin_dir / "plugin.json"
+        manifest_path.unlink()
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("plugin.json missing", proc.stderr)
+
+        manifest_path.write_text("{invalid json", encoding="utf-8")
+        proc2 = self._run_packager()
+        self.assertEqual(proc2.returncode, 1)
+        self.assertIn("not valid JSON", proc2.stderr)
+
+    def test_failure_fewer_than_100_presets_and_boundary(self):
         presets_dir = self.plugin_dir / "Content" / "presets"
         shutil.rmtree(presets_dir)
         presets_dir.mkdir(parents=True)
-        for i in range(50):
+        # Exactly 99 presets: must fail
+        for i in range(99):
             (presets_dir / f"preset_{i:03d}.sbpreset").write_bytes(b"data")
+
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("fewer than 100 presets", proc.stderr)
+
+        # 100 presets: boundary case, must succeed
+        (presets_dir / "preset_099.sbpreset").write_bytes(b"data")
+        proc_ok = self._run_packager()
+        self.assertEqual(proc_ok.returncode, 0)
+
+    def test_apple_double_presets_in_subdirs_not_counted(self):
+        presets_dir = self.plugin_dir / "Content" / "presets"
+        shutil.rmtree(presets_dir)
+        presets_dir.mkdir(parents=True)
+        for i in range(99):
+            (presets_dir / f"preset_{i:03d}.sbpreset").write_bytes(b"data")
+
+        # 100th preset is inside an AppleDouble directory: must not be counted
+        hidden_dir = presets_dir / "._hidden_folder"
+        hidden_dir.mkdir()
+        (hidden_dir / "preset_099.sbpreset").write_bytes(b"data")
 
         proc = self._run_packager()
         self.assertEqual(proc.returncode, 1)
@@ -262,6 +362,117 @@ class TestPackageMpcRelease(unittest.TestCase):
         proc = self._run_packager()
         self.assertEqual(proc.returncode, 1)
         self.assertIn("TUI.json", proc.stderr)
+
+        (self.plugin_dir / "Plugin Skins" / "TUI.json").write_text("{}", encoding="utf-8")
+        (self.plugin_dir / "Plugin Skins" / "Q-Links.json").unlink()
+        proc2 = self._run_packager()
+        self.assertEqual(proc2.returncode, 1)
+        self.assertIn("Q-Links.json", proc2.stderr)
+
+    def test_failure_empty_source_url(self):
+        proc = self._run_packager("--source-url", "")
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("--source-url is required", proc.stderr)
+
+    def test_failure_out_dir_inside_plugin_dir(self):
+        inside_out = self.plugin_dir / "nested_out"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(SCRIPT),
+                "--plugin-dir",
+                str(self.plugin_dir),
+                "--out",
+                str(inside_out),
+                "--source-url",
+                SOURCE_URL,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("cannot be inside", proc.stderr)
+
+    def test_subfolder_install_and_license_preserved(self):
+        sub_dir = self.plugin_dir / "Content" / "presets" / "PackA"
+        sub_dir.mkdir(parents=True)
+        sub_license = sub_dir / "LICENSE"
+        sub_license.write_bytes(b"pack license")
+        sub_install = sub_dir / "INSTALL.txt"
+        sub_install.write_bytes(b"pack install")
+
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 0)
+
+        zip_path = self.out_dir / "SynthyBoy-MPC-0.1.0.zip"
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            namelist = zf.namelist()
+            self.assertIn("Safian - VST - SynthyBoy/Content/presets/PackA/LICENSE", namelist)
+            self.assertIn("Safian - VST - SynthyBoy/Content/presets/PackA/INSTALL.txt", namelist)
+            self.assertEqual(
+                zf.read("Safian - VST - SynthyBoy/Content/presets/PackA/LICENSE"), b"pack license"
+            )
+            self.assertEqual(
+                zf.read("Safian - VST - SynthyBoy/Content/presets/PackA/INSTALL.txt"), b"pack install"
+            )
+
+    def test_input_folder_not_modified(self):
+        def snapshot_dir(dir_path: Path):
+            res = {}
+            for p in dir_path.rglob("*"):
+                if p.is_file():
+                    st = p.stat()
+                    res[str(p.relative_to(dir_path))] = (st.st_size, st.st_mtime_ns, p.read_bytes())
+            return res
+
+        before = snapshot_dir(self.plugin_dir)
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 0)
+        after = snapshot_dir(self.plugin_dir)
+
+        self.assertEqual(before, after)
+
+    def test_zip_permissions_and_attributes(self):
+        # Set executable permissions on binary
+        bin32 = self.plugin_dir / "VST" / "synthyboy-arm32.so"
+        bin32.chmod(0o755)
+
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 0)
+
+        zip_path = self.out_dir / "SynthyBoy-MPC-0.1.0.zip"
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for info in zf.infolist():
+                self.assertEqual(info.create_system, 3, f"Non-unix create_system on {info.filename}")
+                self.assertEqual(info.date_time, (1980, 1, 1, 0, 0, 0))
+                mode = (info.external_attr >> 16) & 0o777
+                if info.filename.endswith(".so"):
+                    self.assertEqual(mode, 0o755, f"Expected 0755 for binary {info.filename}")
+                else:
+                    self.assertEqual(mode, 0o644, f"Expected 0644 for file {info.filename}")
+
+    def test_paths_with_spaces_in_parent_dir(self):
+        spaced_root = self.tmp / "folder with spaces" / "Safian - VST - SynthyBoy"
+        shutil.copytree(self.plugin_dir, spaced_root)
+        spaced_out = self.tmp / "out with spaces"
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(SCRIPT),
+                "--plugin-dir",
+                str(spaced_root),
+                "--out",
+                str(spaced_out),
+                "--source-url",
+                SOURCE_URL,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}")
+        self.assertTrue((spaced_out / "SynthyBoy-MPC-0.1.0.zip").is_file())
 
     def test_custom_version_flag(self):
         proc = self._run_packager("--version", "1.2.3")

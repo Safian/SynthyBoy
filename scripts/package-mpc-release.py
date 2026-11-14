@@ -103,8 +103,12 @@ def check_elf_binary(path: Path, expected_bits: int, expected_machine: int, arch
             f"{path}: wrong ELF class: expected {expected_bits}-bit for {arch_name}, got {class_str}"
         )
 
-    endian = "<" if head[5] == 1 else ">"
-    machine = struct.unpack_from(endian + "H", head, 18)[0]
+    if head[5] != 1:
+        raise PackageError(
+            f"{path}: wrong ELF endianness: expected little-endian for {arch_name}"
+        )
+
+    machine = struct.unpack_from("<H", head, 18)[0]
     if machine != expected_machine:
         raise PackageError(
             f"{path}: wrong ELF machine: expected {expected_machine} for {arch_name}, got {machine}"
@@ -128,27 +132,31 @@ def validate_plugin_folder(plugin_dir: Path) -> dict:
     if not isinstance(manifest, dict):
         raise PackageError(f"plugin.json in {plugin_dir} is not a JSON object")
 
-    if "file32" not in manifest or not manifest["file32"]:
-        raise PackageError(f"plugin.json without file32 in {manifest_path}")
-
-    if "file64" not in manifest or not manifest["file64"]:
-        raise PackageError(f"plugin.json without file64 in {manifest_path}")
-
-    bin32 = plugin_dir / manifest["file32"]
-    if not bin32.is_file():
-        raise PackageError(f"missing binary: 32-bit ARM binary not found at {bin32}")
-    check_elf_binary(bin32, 32, EM_ARM, "32-bit ARM")
-
-    bin64 = plugin_dir / manifest["file64"]
-    if not bin64.is_file():
-        raise PackageError(f"missing binary: 64-bit AArch64 binary not found at {bin64}")
-    check_elf_binary(bin64, 64, EM_AARCH64, "64-bit AArch64")
+    for key, expected_bits, expected_mach, name in [
+        ("file32", 32, EM_ARM, "32-bit ARM"),
+        ("file64", 64, EM_AARCH64, "64-bit AArch64"),
+    ]:
+        if key not in manifest or not isinstance(manifest[key], str) or not manifest[key].strip():
+            raise PackageError(f"plugin.json without {key} in {manifest_path}")
+        rel_str = manifest[key].strip()
+        rel_path = Path(rel_str)
+        if rel_path.is_absolute() or ".." in rel_path.parts:
+            raise PackageError(
+                f"plugin.json {key} must be a relative path inside plugin folder: {rel_str}"
+            )
+        bin_path = plugin_dir / rel_path
+        if not bin_path.is_file():
+            raise PackageError(f"missing binary: {name} binary not found at {bin_path}")
+        check_elf_binary(bin_path, expected_bits, expected_mach, name)
 
     version_xml = plugin_dir / "version.xml"
     if not version_xml.is_file():
         raise PackageError(f"version.xml missing from {plugin_dir}")
 
     skins_dir = plugin_dir / "Plugin Skins"
+    if not skins_dir.is_dir():
+        raise PackageError(f"Plugin Skins directory missing from {plugin_dir}")
+
     tui = skins_dir / "TUI.json"
     if not tui.is_file():
         raise PackageError(f"skin file TUI.json missing from {skins_dir}")
@@ -164,7 +172,11 @@ def validate_plugin_folder(plugin_dir: Path) -> dict:
     presets = [
         p
         for p in presets_dir.rglob("*.sbpreset")
-        if not (p.name.startswith("._") or p.name == ".DS_Store")
+        if p.is_file()
+        and not any(
+            part.startswith("._") or part == ".DS_Store"
+            for part in p.relative_to(plugin_dir).parts
+        )
     ]
     if len(presets) < 100:
         raise PackageError(
@@ -176,8 +188,7 @@ def validate_plugin_folder(plugin_dir: Path) -> dict:
 
 def generate_install_text(folder_name: str, source_url: str) -> str:
     """Renders INSTALL.txt with the folder name and source URL."""
-    text = INSTALL_TEMPLATE.format(folder=folder_name)
-    return text.replace("<SOURCE_URL>", source_url)
+    return INSTALL_TEMPLATE.replace("{folder}", folder_name).replace("<SOURCE_URL>", source_url)
 
 
 def package_mpc(
@@ -192,12 +203,23 @@ def package_mpc(
     plugin_dir = Path(str(plugin_dir).rstrip("/\\")).resolve()
     out_dir = Path(out_dir).resolve()
 
+    if not plugin_dir.exists():
+        raise PackageError(f"plugin directory not found: {plugin_dir}")
+
+    try:
+        out_dir.relative_to(plugin_dir)
+        raise PackageError(f"--out directory ({out_dir}) cannot be inside --plugin-dir ({plugin_dir})")
+    except ValueError:
+        pass
+
     manifest = validate_plugin_folder(plugin_dir)
 
     if not source_url or not source_url.strip():
         raise PackageError("--source-url is required and must not be empty")
     source_url = source_url.strip()
 
+    if version is not None and not str(version).strip():
+        version = None
     if not version:
         version = manifest.get("version")
         if not version:
@@ -210,6 +232,8 @@ def package_mpc(
     if not version:
         raise PackageError("version could not be determined; specify --version")
     version = str(version).strip()
+    if "/" in version or "\\" in version or "\0" in version:
+        raise PackageError(f"invalid version string: {version}")
 
     # Determine LICENSE
     if license_path:
@@ -227,24 +251,34 @@ def package_mpc(
     license_bytes = lic_file.read_bytes()
 
     folder_name = plugin_dir.name
+    if not folder_name or folder_name in (".", ".."):
+        raise PackageError(f"invalid plugin directory name: {plugin_dir}")
+    if folder_name.startswith("._") or folder_name == ".DS_Store":
+        raise PackageError(f"plugin directory name cannot be macOS metadata: {folder_name}")
+
     install_content = generate_install_text(folder_name=folder_name, source_url=source_url)
     install_bytes = install_content.encode("utf-8")
 
     entries = []
 
-    # Collect files from plugin_dir, excluding macOS metadata files and duplicates of INSTALL/LICENSE
+    # Collect files from plugin_dir, excluding macOS metadata files and root duplicates of INSTALL/LICENSE
     for dirpath, dirnames, filenames in os.walk(plugin_dir):
         dirnames[:] = [d for d in dirnames if not (d.startswith("._") or d == ".DS_Store")]
         dirnames.sort()
-        for f in sorted(filenames):
+        names_to_process = sorted(
+            filenames + [d for d in dirnames if (Path(dirpath) / d).is_symlink()]
+        )
+        for f in names_to_process:
             if f.startswith("._") or f == ".DS_Store":
                 continue
-            if f in ("INSTALL.txt", "LICENSE"):
+            if Path(dirpath) == plugin_dir and f in ("INSTALL.txt", "LICENSE"):
                 continue
             full = Path(dirpath) / f
             rel = full.relative_to(plugin_dir).as_posix()
             arcname = f"{folder_name}/{rel}"
-            mode = 0o755 if (full.stat().st_mode & 0o111) else 0o644
+            is_link = full.is_symlink()
+            st = full.lstat() if is_link else full.stat()
+            mode = 0o777 if is_link else (0o755 if (st.st_mode & 0o111) else 0o644)
             entries.append((arcname, full, mode))
 
     entries.append((f"{folder_name}/INSTALL.txt", install_bytes, 0o644))
@@ -263,17 +297,24 @@ def package_mpc(
             for arcname, item, mode in entries:
                 info = zipfile.ZipInfo(arcname, date_time=FIXED_DATE)
                 info.create_system = 3  # Unix
+                info.compress_type = zipfile.ZIP_DEFLATED
                 if isinstance(item, Path) and item.is_symlink():
                     info.external_attr = (stat.S_IFLNK | 0o777) << 16
-                    zf.writestr(info, os.readlink(item))
+                    zf.writestr(
+                        info,
+                        os.readlink(item),
+                        compress_type=zipfile.ZIP_DEFLATED,
+                        compresslevel=9,
+                    )
                     continue
                 info.external_attr = (stat.S_IFREG | mode) << 16
-                info.compress_type = zipfile.ZIP_DEFLATED
                 if isinstance(item, bytes):
                     zf.writestr(info, item, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
                 else:
                     with open(item, "rb") as sf:
-                        zf.writestr(info, sf.read(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+                        zf.writestr(
+                            info, sf.read(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9
+                        )
         os.replace(tmp, target)
     finally:
         if tmp.exists():
