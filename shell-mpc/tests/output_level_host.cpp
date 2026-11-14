@@ -109,12 +109,23 @@ int main (int argc, char** argv)
     check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
 
     // Suspend / resume cycle after limiting: must reset output stage transient state (MAGAS-2)
+    withGain->setParameter (withGain, 0, 0.35f);
+    plain->setParameter (plain, 0, 0.35f);
+    std::vector<float> dummyL (256), dummyR (256);
+    float* dummyOuts[2] = { dummyL.data(), dummyR.data() };
+    for (int b = 0; b < 44100 / 256; ++b)
+    {
+        withGain->processReplacing (withGain, nullptr, dummyOuts, 256);
+        plain->processReplacing (plain, nullptr, dummyOuts, 256);
+    }
+
     withGain->dispatcher (withGain, effMainsChanged, 0, 0, nullptr, 0.0f);
     withGain->dispatcher (withGain, effMainsChanged, 0, 1, nullptr, 0.0f);
     plain->dispatcher (plain, effMainsChanged, 0, 0, nullptr, 0.0f);
     plain->dispatcher (plain, effMainsChanged, 0, 1, nullptr, 0.0f);
 
-    const Level resumed = play (withGain, 0.35f, { 60 }, 40, 0.5);
+    const Level resumed = play (withGain, 0.35f, { 60 }, 40, 1.0);
+    std::printf ("resumed: peak %.2f dBFS rms %.2f dBFS; original quiet peak %.2f dBFS rms %.2f dBFS; diff %.2f dB\n", db (resumed.peak), db (resumed.rms), db (qg.peak), db (qg.rms), std::fabs (db (resumed.rms) - db (qg.rms)));
     check (std::fabs (db (resumed.rms) - db (qg.rms)) < 0.2, "resume resets output stage: quiet note after resume matches original quiet level");
 
     // Clean teardown
