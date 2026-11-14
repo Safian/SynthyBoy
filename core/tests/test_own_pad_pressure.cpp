@@ -220,6 +220,109 @@ TEST (pad_pressure_released_voice_returns_to_the_knob)
     CHECK (rig.v.modulatedParam (rig.cutIdx) == rig.baseCutoff);
 }
 
+TEST (pad_pressure_voice_note_off_clears_pressure_and_returns_to_knob)
+{
+    // Voice::release() (NoteOff) must clear polyPressure so a decaying voice
+    // does not keep its filter opened.
+    VoiceRig rig (60, 1.0f);
+    rig.v.setPressure (1.0f);
+    for (int t = 0; t < 400; ++t)
+        rig.v.tick (rig.g, 0);
+    CHECK (rig.semitones() > 30.0f);
+    // Real NoteOff release (not manual setPressure(0))
+    rig.v.release (0.0f);
+    for (int t = 0; t < 1000; ++t)
+        rig.v.tick (rig.g, 0);
+    CHECK (std::fabs (rig.semitones()) < 0.01f);
+    rig.g.padPressureToCutoff = 0.0f;
+    rig.v.tick (rig.g, 0);
+    CHECK (rig.v.modulatedParam (rig.cutIdx) == rig.baseCutoff);
+}
+
+TEST (pad_pressure_channel_aftertouch_0xD0_ignored_even_in_mpe)
+{
+    // The pad pressure layer reacts strictly to poly aftertouch (0xA0, Event::Pressure).
+    // Channel aftertouch (0xD0, Event::Aftertouch) must not open Filter 1 through the layer,
+    // neither on standard channel 0 nor on MPE member channels (channel > 0).
+    auto testChannel = [] (int chan, bool mpe)
+    {
+        auto makeTestEngine = [mpe] (float layerDepth)
+        {
+            auto e = createOwnEngine();
+            e->prepare (kSr, kBlock, qualityForTier (Tier::low));
+            setByKey (*e, "filter1.on", 1.0f);
+            setByKey (*e, "filter1.cutoff", 400.0f);
+            if (mpe)
+                setByKey (*e, "master.mpe.on", 1.0f);
+            CHECK (setOwnPadPressureToCutoff (*e, layerDepth));
+            return e;
+        };
+
+        // Compare layer ON vs layer OFF under 0xD0 Channel Aftertouch:
+        // Because the pad pressure layer ignores 0xD0, layer ON must be BIT-IDENTICAL to layer OFF!
+        auto eOn = makeTestEngine (1.0f);
+        auto eOff = makeTestEngine (0.0f);
+
+        std::vector<float> l (kBlock), r (kBlock);
+        Event on = sbtest::noteOn (0, 60, 1.0f);
+        on.channel = static_cast<int16_t> (chan);
+
+        Event at {};
+        at.frame = 10;
+        at.type = Event::Aftertouch;
+        at.channel = static_cast<int16_t> (chan);
+        at.value = 1.0f;
+
+        const Event evs[2] = { on, at };
+        eOn->process (evs, 2, l.data(), r.data(), kBlock);
+        std::vector<float> outOn (l.begin(), l.end());
+
+        eOff->process (evs, 2, l.data(), r.data(), kBlock);
+        std::vector<float> outOff (l.begin(), l.end());
+
+        for (int b = 0; b < 20; ++b)
+        {
+            eOn->process (nullptr, 0, l.data(), r.data(), kBlock);
+            outOn.insert (outOn.end(), l.begin(), l.end());
+
+            eOff->process (nullptr, 0, l.data(), r.data(), kBlock);
+            outOff.insert (outOff.end(), l.begin(), l.end());
+        }
+
+        CHECK_EQ (outOn.size(), outOff.size());
+        CHECK_EQ (std::memcmp (outOn.data(), outOff.data(), outOn.size() * sizeof (float)), 0);
+
+        // In contrast, Poly Aftertouch (0xA0, Event::Pressure) DOES engage the layer and opens the filter:
+        auto ePolyOn = makeTestEngine (1.0f);
+        auto ePolyOff = makeTestEngine (0.0f);
+
+        Event poly = pressureEvent (10, 60, 1.0f);
+        poly.channel = static_cast<int16_t> (chan);
+        const Event polyEvs[2] = { on, poly };
+
+        ePolyOn->process (polyEvs, 2, l.data(), r.data(), kBlock);
+        std::vector<float> outPolyOn (l.begin(), l.end());
+
+        ePolyOff->process (polyEvs, 2, l.data(), r.data(), kBlock);
+        std::vector<float> outPolyOff (l.begin(), l.end());
+
+        for (int b = 0; b < 20; ++b)
+        {
+            ePolyOn->process (nullptr, 0, l.data(), r.data(), kBlock);
+            outPolyOn.insert (outPolyOn.end(), l.begin(), l.end());
+
+            ePolyOff->process (nullptr, 0, l.data(), r.data(), kBlock);
+            outPolyOff.insert (outPolyOff.end(), l.begin(), l.end());
+        }
+
+        CHECK_EQ (outPolyOn.size(), outPolyOff.size());
+        CHECK (std::memcmp (outPolyOn.data(), outPolyOff.data(), outPolyOn.size() * sizeof (float)) != 0);
+    };
+
+    testChannel (0, false); // Standard channel 0, MPE off
+    testChannel (1, true);  // MPE member channel 1, MPE on
+}
+
 TEST (pad_pressure_preset_with_poly_aftertouch_to_cutoff_does_not_double)
 {
     // Case 1: Mod matrix has Poly Aftertouch -> Filter 1 Cutoff route.

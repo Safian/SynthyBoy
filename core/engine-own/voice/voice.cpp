@@ -253,6 +253,7 @@ void Voice::release (float velocity) noexcept
         return;
     released = true;
     releaseVel = velocity;
+    polyPressure = 0.0f;
     for (auto& e : env)
         e.noteOff();
     if (gl != nullptr)
