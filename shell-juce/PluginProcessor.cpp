@@ -771,7 +771,18 @@ void SynthyBoyProcessor::applyPatch (synthyboy::ParamValues values, synthyboy::S
 
 void SynthyBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    const std::string text = stateText();
+    std::string text = stateText();
+    // Additive top-level member (older loaders skip unknown members): which program the host had selected, so a project reload shows
+    // the same preset. Index and name are both stored; the name decides if the program list ever changes (see restoreProgram).
+    const size_t close = text.find_last_not_of (" \t\r\n");
+    if (close != std::string::npos && text[close] == '}')
+    {
+        juce::DynamicObject::Ptr program = new juce::DynamicObject();
+        program->setProperty ("index", currentProgramIndex.load());
+        program->setProperty ("name", presetNameText);
+        text.resize (close);
+        text += ",\"program\":" + juce::JSON::toString (juce::var (program.get()), true).toStdString() + "}";
+    }
     destData.replaceAll (text.data(), text.size());
 }
 
@@ -811,9 +822,40 @@ void SynthyBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
         savedContent = patchContent;
     }
 
+    if (session)
+        restoreProgram (data, static_cast<size_t> (sizeInBytes));
+
     // Values changed behind the host's back: the CLAP wrapper turns "program changed" into
     // params.rescan(VALUES), VST3 into a restartComponent (clap-validator state-reproducibility).
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
+}
+
+void SynthyBoyProcessor::restoreProgram (const void* data, size_t size)
+{
+    // Only the selection (index + name) comes from the document; the parameters and content were restored from the document itself, so the
+    // state is exact even if the preset list differs from the one the project was saved with. Absent member: the selection stays as it is.
+    const auto parsed = juce::JSON::parse (juce::String::fromUTF8 (static_cast<const char*> (data), static_cast<int> (size)));
+    const auto program = parsed.getProperty ("program", juce::var());
+    if (! program.isObject())
+        return;
+
+    const int index = static_cast<int> (program.getProperty ("index", -1));
+    const juce::String name = program.getProperty ("name", juce::var()).toString();
+    const int count = static_cast<int> (programList.size());
+
+    int found = -1;
+    if (index >= 0 && index < count && programList[static_cast<size_t> (index)].name == name.toStdString())
+        found = index;
+    else
+        for (int i = 0; i < count && found < 0; ++i)
+            if (programList[static_cast<size_t> (i)].name == name.toStdString())
+                found = i;
+
+    if (found >= 0)
+    {
+        currentProgramIndex = found;
+        presetNameText = name;
+    }
 }
 
 bool SynthyBoyProcessor::revertToSaved()

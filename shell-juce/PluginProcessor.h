@@ -96,6 +96,7 @@ public:
     juce::String presetName() const override { return presetNameText; }
     std::vector<synthyboy::ui::PresetItem> presetList() const override;
     void selectPreset (int index) override;
+    int currentPresetIndex() const override { return currentProgramIndex.load (std::memory_order_relaxed); }
     float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
     float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
     void injectMidiMessage (const juce::MidiMessage& msg) override;
@@ -210,6 +211,7 @@ private:
     std::string userDir;
     synthyboy::ShellState shellState() const;       // takes contentMutex
     std::string stateText();                         // saveState + content + shell section (the host state and the user default)
+    void restoreProgram (const void* data, size_t size);
     void applyShell (const synthyboy::ShellState& shell);
     /** Parameters and content of a loaded patch; `respectLocks` keeps the locked modules of the current patch. */
     void applyPatch (synthyboy::ParamValues values, synthyboy::StateContent newContent, bool respectLocks);
@@ -259,7 +261,7 @@ private:
         size_t jsonSize = 0;
     };
     std::vector<DesktopProgram> programList;
-    int currentProgramIndex = 0;
+    std::atomic<int> currentProgramIndex { 0 }; // read by the host (any thread) and the editor
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SynthyBoyProcessor)
 };

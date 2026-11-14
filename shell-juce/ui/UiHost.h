@@ -84,6 +84,8 @@ public:
     virtual juce::String presetName() const = 0;
     /** Available presets provided by the shell (index 0 is always "Init", followed by factory presets). */
     virtual std::vector<PresetItem> presetList() const { return {}; }
+    /** Index (in presetList) of the active preset, -1 if the shell has no list. */
+    virtual int currentPresetIndex() const { return -1; }
     /** Select a preset by index (0 .. presetList().size() - 1). */
     virtual void selectPreset (int /*index*/) {}
 

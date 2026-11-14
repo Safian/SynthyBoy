@@ -34,7 +34,7 @@ private:
     int lastBarL = -1, lastBarR = -1; // what the bars show now (quantised), -1 before the first refresh
 };
 
-/** Preset name with prev / next (browsing is Kick's: the buttons only call UiHost::stepPreset), Undo/Redo, A/B compare, assign-mode toggle, menu. */
+/** Preset name with prev / next (the buttons call UiHost::stepPreset, a click on the name opens the preset menu of the editor), Undo/Redo, A/B compare, assign-mode toggle, menu. */
 class TopBar final : public juce::Component
 {
 public:

@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "EmbeddedPresets.h"
+#include "EditorAdapter.h"
 #include "PluginProcessor.h"
+#include "ui/Editor.h"
 #include "synthyboy/preset.h"
 #include "test_runner.h"
 
@@ -207,4 +209,170 @@ TEST (test_clean_environment_headless)
     sbtest::unsetEnv ("SYNTHYBOY_USER_DIR");
     std::error_code ec;
     std::filesystem::remove_all (tempDir, ec);
+}
+
+namespace
+{
+std::string stateOf (SynthyBoyProcessor& proc)
+{
+    juce::MemoryBlock block;
+    proc.getStateInformation (block);
+    return std::string (static_cast<const char*> (block.getData()), block.getSize());
+}
+
+void restore (SynthyBoyProcessor& proc, const std::string& text)
+{
+    proc.setStateInformation (text.data(), static_cast<int> (text.size()));
+}
+
+bool sameValues (const synthyboy::ParamValues& a, const synthyboy::ParamValues& b)
+{
+    for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+        if (std::abs (a.plain[i] - b.plain[i]) > 0.001f)
+            return false;
+    return true;
+}
+} // namespace
+
+TEST (test_every_program_loads_like_the_mpc_shell)
+{
+    // the MPC shell does: loadPreset (file) -> values + content; here the same call on the embedded bytes must give the same parameters
+    SynthyBoyProcessor proc;
+    size_t count = 0;
+    const auto* presets = synthyboy::desktop::getEmbeddedPresets (count);
+    for (size_t i = 0; i < count; ++i)
+    {
+        synthyboy::PresetMeta meta;
+        synthyboy::ParamValues expected = synthyboy::ParamValues::defaults();
+        synthyboy::StateContent content;
+        const auto result = synthyboy::loadPreset (presets[i].jsonText, presets[i].jsonSize, meta, expected, content);
+        CHECK (result.status == synthyboy::LoadStatus::ok);
+
+        proc.setCurrentProgram (static_cast<int> (i) + 1);
+        CHECK_EQ (proc.getCurrentProgram(), static_cast<int> (i) + 1);
+        CHECK (sameValues (proc.allValues(), expected));
+    }
+}
+
+TEST (test_program_names_are_unique)
+{
+    SynthyBoyProcessor proc;
+    for (int i = 0; i < proc.getNumPrograms(); ++i)
+        for (int j = i + 1; j < proc.getNumPrograms(); ++j)
+            CHECK (proc.getProgramName (i) != proc.getProgramName (j));
+}
+
+TEST (test_out_of_range_program_is_ignored)
+{
+    SynthyBoyProcessor proc;
+    proc.setCurrentProgram (7);
+    proc.setCurrentProgram (-1);
+    proc.setCurrentProgram (113);
+    CHECK_EQ (proc.getCurrentProgram(), 7);
+    CHECK_EQ (proc.getProgramName (113), juce::String());
+}
+
+TEST (test_state_restores_selected_program)
+{
+    SynthyBoyProcessor a;
+    a.setCurrentProgram (42);
+    const std::string saved = stateOf (a);
+
+    SynthyBoyProcessor b;
+    CHECK_EQ (b.getCurrentProgram(), 0);
+    restore (b, saved);
+    CHECK_EQ (b.getCurrentProgram(), 42);
+    CHECK_EQ (b.presetName(), a.getProgramName (42));
+    CHECK (sameValues (b.allValues(), a.allValues()));
+}
+
+TEST (test_state_keeps_tweaks_made_after_the_preset)
+{
+    SynthyBoyProcessor a;
+    a.setCurrentProgram (3);
+    const auto* info = synthyboy::findParamByKey ("filter1.cutoff");
+    const int idx = synthyboy::findParamIndex (info->id);
+    a.parameterStore().setNormalised (idx, a.parameterStore().toNormalised (idx, 1234.0f));
+    const std::string saved = stateOf (a);
+
+    SynthyBoyProcessor b;
+    restore (b, saved);
+    CHECK_EQ (b.getCurrentProgram(), 3);
+    CHECK_NEAR (b.getValueTreeState().getRawParameterValue ("filter1.cutoff")->load(), 1234.0f, 2.0f);
+}
+
+TEST (test_old_state_without_program_member_still_loads)
+{
+    SynthyBoyProcessor a;
+    a.setCurrentProgram (9);
+    std::string saved = stateOf (a);
+    const auto at = saved.find (",\"program\":");
+    CHECK (at != std::string::npos);
+    saved = saved.substr (0, at) + "}"; // what a build before the program list wrote
+
+    SynthyBoyProcessor b;
+    restore (b, saved);
+    CHECK (sameValues (b.allValues(), a.allValues())); // parameters and content restored exactly
+    CHECK_EQ (b.getCurrentProgram(), 0);               // no selection information: Init, as before
+}
+
+TEST (test_state_program_resolved_by_name_when_the_list_moved)
+{
+    SynthyBoyProcessor a;
+    a.setCurrentProgram (20);
+    std::string saved = stateOf (a);
+    const auto at = saved.find ("\"index\"");
+    CHECK (at != std::string::npos);
+    const auto colon = saved.find (':', at);
+    const auto end = saved.find_first_of (",}", colon);
+    saved.replace (colon + 1, end - colon - 1, " 3"); // the index of an older list; the name still points to program 20
+
+    SynthyBoyProcessor b;
+    restore (b, saved);
+    CHECK_EQ (b.getCurrentProgram(), 20);
+}
+
+TEST (test_state_with_unknown_program_is_ignored_gracefully)
+{
+    SynthyBoyProcessor a;
+    a.setCurrentProgram (5);
+    std::string saved = stateOf (a);
+    const auto name = a.getProgramName (5).toStdString();
+    const auto at = saved.find ("\"name\": \"" + name + "\"");
+    CHECK (at != std::string::npos);
+    saved.replace (at, 9 + name.size() + 1, "\"name\": \"No Such Preset\"");
+
+    SynthyBoyProcessor b;
+    restore (b, saved);
+    CHECK_EQ (b.getCurrentProgram(), 0);
+    CHECK (sameValues (b.allValues(), a.allValues()));
+}
+
+TEST (test_editor_preset_browsing)
+{
+    juce::MessageManager::getInstance()->setCurrentThreadAsMessageThread();
+    SynthyBoyProcessor proc;
+    std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
+    auto* editor = synthyboy::ui::innerEditor (base.get());
+    CHECK (editor != nullptr);
+    editor->setSize (390, 844);
+
+    auto& top = editor->topBar();
+    CHECK (static_cast<bool> (top.onPresetNameClick));
+
+    const auto list = proc.presetList();
+    CHECK_EQ (static_cast<int> (list.size()), 113);
+    CHECK_EQ (proc.currentPresetIndex(), 0);
+
+    // the next / previous buttons of the strip drive the program list
+    top.next.onClick();
+    CHECK_EQ (proc.getCurrentProgram(), 1);
+    CHECK_EQ (proc.currentPresetIndex(), 1);
+    top.prev.onClick();
+    top.prev.onClick();
+    CHECK_EQ (proc.getCurrentProgram(), 112);
+
+    // the name opens the preset menu (shown asynchronously; it is dismissed again)
+    top.onPresetNameClick();
+    juce::PopupMenu::dismissAllActiveMenus();
 }

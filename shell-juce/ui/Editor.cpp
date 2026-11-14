@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "Editor.h"
-#include <map>
+#include <algorithm>
+#include <string>
+#include <vector>
 
 namespace synthyboy::ui
 {
@@ -390,6 +392,57 @@ LastNoteSheet* SynthyBoyEditor::showLastNoteSheet()
     note->onFinished = [this] { closeContentSheet(); };
     showSheet (std::move (note));
     return raw;
+}
+
+void SynthyBoyEditor::showPresetMenu()
+{
+    const auto presets = host.presetList();
+    if (presets.empty())
+        return;
+
+    // Item ids: presetBase + list index (juce menu ids must be non-zero). Categories become submenus in order of first appearance
+    // (the list is already sorted by category, then name); entries without a category (Init) sit at the top level.
+    constexpr int presetBase = 1000;
+    const int active = host.currentPresetIndex();
+    juce::PopupMenu menu;
+    std::vector<std::pair<std::string, juce::PopupMenu>> categories;
+    bool anyTopLevel = false;
+
+    for (const auto& p : presets)
+    {
+        const bool ticked = p.index == active;
+        if (p.category.empty())
+        {
+            menu.addItem (presetBase + p.index, p.name, true, ticked);
+            anyTopLevel = true;
+            continue;
+        }
+        auto it = std::find_if (categories.begin(), categories.end(), [&] (const auto& c) { return c.first == p.category; });
+        if (it == categories.end())
+        {
+            categories.emplace_back (p.category, juce::PopupMenu());
+            it = categories.end() - 1;
+        }
+        it->second.addItem (presetBase + p.index, p.name, true, ticked);
+    }
+    if (anyTopLevel && ! categories.empty())
+        menu.addSeparator();
+    for (auto& c : categories)
+    {
+        // a ticked item inside a submenu: tick the submenu title as well, so the current category is visible when closed
+        bool hasActive = false;
+        for (const auto& p : presets)
+            hasActive = hasActive || (p.index == active && p.category == c.first);
+        menu.addSubMenu (c.first, c.second, true, nullptr, hasActive);
+    }
+
+    menu.showMenuAsync (popupOptions (top.get()),
+                        [safe = juce::Component::SafePointer<SynthyBoyEditor> (this)] (int result)
+                        {
+                            if (safe == nullptr || result < presetBase)
+                                return;
+                            safe->host.selectPreset (result - presetBase);
+                        });
 }
 
 void SynthyBoyEditor::showMenu()
