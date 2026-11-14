@@ -567,14 +567,14 @@ The MPC pad sends polyphonic aftertouch for every held pad ("MPC XL pads"). The 
 
 The MPC shell passes the engine's output through an output stage (`shell-mpc/output_stage.h`) before it reaches the host:
 
-- a fixed make-up gain, `SYNTHYBOY_MPC_OUTPUT_GAIN_DB` (CMake cache entry of `shell-mpc`, default 6 dB, range -24 .. 24; 0 = no gain);
-- a stereo-linked peak limiter behind it with its ceiling 1 dB under full scale: the gain reduction falls at once to what keeps the louder channel at the ceiling (no look-ahead, no latency) and recovers with a time constant of 120 milliseconds. The limiter is always on.
+- a fixed make-up gain, `SYNTHYBOY_MPC_OUTPUT_GAIN_DB` (CMake cache entry of `shell-mpc`, default 18 dB, range -24 .. 24; 0 = no gain);
+- no limiter in the signal path: by default (`SYNTHYBOY_MPC_OUTPUT_LIMITER=OFF`), the output stage applies smoothed make-up gain only and does not restrict peaks; the output can exceed full scale, and the player can place a limiter insert on the track in the MPC if desired. Setting `SYNTHYBOY_MPC_OUTPUT_LIMITER=ON` restores the stereo-linked peak limiter with its ceiling 1 dB under full scale (120 milliseconds release).
 
-Why: the factory presets are levelled to a four-note chord whose RMS is 20 dB under full scale, with peaks near full scale. On the device that reads as quiet next to the stock instruments, and a preset cannot be raised further without clipping its attack. The gain raises everything; the limiter takes the attacks that would pass full scale.
+Why: the factory presets are levelled to a four-note chord whose RMS is 20 dB under full scale, with peaks near full scale. On the device that reads as quiet next to the stock instruments. The 18 dB gain brings the presets to commercial listening levels without squashing attacks or altering dynamic response; limiting is left to the user on the MPC channel strip.
 
 There is no separate parameter for it: the level control of the instrument is Master Volume (first knob of the second row of the Macros tab), which is saved with the project. The spectrum shows the signal after the output stage, that is what the host gets. The desktop plugin has no output stage.
 
-Tests: `shell-mpc/tests/run_output_stage_test.sh` (the stage alone) and `shell-mpc/tests/output_level_host.cpp` (the plugin against a build with 0 dB: a soft note is louder by the gain, a full chord never passes the ceiling); both run in `shell-mpc/accept.sh`.
+Tests: `shell-mpc/tests/run_output_stage_test.sh` (the stage alone) and `shell-mpc/tests/output_level_host.cpp` (the plugin against a build with 0 dB: quiet level, dynamics between velocity 100 and 127, peak above full scale; both limiter OFF and ON); both run in `shell-mpc/accept.sh`.
 
 ## Overlay (experimental)
 
