@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <cstdint>
 #include <cstring>
@@ -93,6 +94,16 @@
 #endif
 #if SYNTHYBOY_MPC_CALLBACK_STATS
 #include "callback_stats.h"
+#endif
+
+// Pad pressure to Filter 1 cutoff (docs/MPC.md "Pad pressure"). Compile switch SYNTHYBOY_MPC_PAD_PRESSURE (CMake option of the same name, ON in shell-mpc; the source
+// default is 0: with 0 nothing of it is compiled and the plugin is exactly the one without this code). Two automatable parameters "Pad Pressure" and "Pad Pressure Amount"
+// after the display parameters (the last two of the list), saved in the state chunk (pad_pressure.h). The own engine does the work (setOwnPadPressureToCutoff).
+#ifndef SYNTHYBOY_MPC_PAD_PRESSURE
+#define SYNTHYBOY_MPC_PAD_PRESSURE 0
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+#include "pad_pressure.h"
 #endif
 
 // Make-up gain of the output stage in dB (CMake cache entry of the same name, docs/MPC.md "Output level"). 0 = only the limiter.
@@ -434,6 +445,32 @@ struct PluginInstance
     }
 #endif
 
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+    std::atomic<bool> padPressure { synthyboy_mpc::kPadPressureDefaultOn };
+    std::atomic<float> padPressureAmount { synthyboy_mpc::kPadPressureDefaultPercent }; // percent, 0 .. 100
+
+    /** Hands the settings to the engine (any thread; a no-op for an engine that has no pad pressure layer). */
+    void updateEnginePadPressure() noexcept
+    {
+        if (engine)
+            synthyboy::setOwnPadPressureToCutoff (*engine, synthyboy_mpc::padPressureDepth (padPressure.load (std::memory_order_relaxed), padPressureAmount.load (std::memory_order_relaxed)));
+    }
+
+    /** Index of "Pad Pressure": after the engine's parameters and the display parameters (cursors, spectrum columns). */
+    static int padPressureBase() noexcept
+    {
+        return static_cast<int> (synthyboy::paramCount())
+#if SYNTHYBOY_MPC_LFO_LIVE
+             + kLiveParams
+#endif
+            ;
+    }
+    static bool isPadPressureParam (VstInt32 index) noexcept
+    {
+        return index >= padPressureBase() && index < padPressureBase() + synthyboy_mpc::kPadPressureParams;
+    }
+#endif
+
 #if SYNTHYBOY_MPC_CALLBACK_STATS
     synthyboy_mpc::CallbackStats callbackStats;
 
@@ -452,6 +489,12 @@ struct PluginInstance
 #endif
 #else
         b += "LFO_LIVE=OFF";
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+        extraParams += synthyboy_mpc::kPadPressureParams;
+        b += " PAD_PRESSURE=ON";
+#else
+        b += " PAD_PRESSURE=OFF";
 #endif
         b += " params=" + std::to_string (synthyboy::paramCount() + extraParams);
 #if defined(__aarch64__)
@@ -488,6 +531,9 @@ struct PluginInstance
         engine = synthyboy::createEngine(synthyboy::EngineKind::vital);
 #else
         engine = synthyboy::createEngine(synthyboy::EngineKind::own);
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+        updateEnginePadPressure();
 #endif
 
         // Build content store path: Content/ next to the plugin binary.
@@ -817,6 +863,22 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             return 1;
         }
 #endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+        if (PluginInstance::isPadPressureParam (index))
+        {
+            const bool amount = index == PluginInstance::padPressureBase() + 1;
+            if (opcode == effGetParamName)
+                copyString (buf, 64, amount ? "Pad Pressure Amount" : "Pad Pressure");
+            else if (opcode == effGetParamLabel)
+                copyString (buf, 64, amount ? "%" : "");
+            else if (amount)
+                std::snprintf (buf, 64, "%d", static_cast<int> (inst->padPressureAmount.load (std::memory_order_relaxed) + 0.5f));
+            else
+                copyString (buf, 64, inst->padPressure.load (std::memory_order_relaxed) ? "On" : "Off");
+            buf[63] = '\0';
+            return 1;
+        }
+#endif
         size_t paramCount = synthyboy::paramCount();
         if (static_cast<size_t>(index) >= paramCount) return 0;
 
@@ -944,6 +1006,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         std::string state = synthyboy::saveState(values, inst->content);
         int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
         std::string chunk = synthyboy_mpc::chunkWithProgram (state, prog, currentProgramName (inst));
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+        chunk = synthyboy_mpc::chunkWithPadPressure (std::move (chunk), inst->padPressure.load (std::memory_order_relaxed), inst->padPressureAmount.load (std::memory_order_relaxed));
+#endif
         // Reuse the plugin-owned chunk buffer (VST2: host does not free chunk memory)
         inst->chunkBuffer.resize(chunk.size());
         std::memcpy(inst->chunkBuffer.data(), chunk.data(), chunk.size());
@@ -971,6 +1036,19 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 int idx = synthyboy_mpc::programFromChunk(chunk, static_cast<size_t>(size));
 
                 applyState (inst, newValues, std::move(newContent));
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+                {
+                    // the player's pad setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is
+                    bool on = inst->padPressure.load (std::memory_order_relaxed);
+                    float percent = inst->padPressureAmount.load (std::memory_order_relaxed);
+                    if (synthyboy_mpc::padPressureFromChunk (chunk, static_cast<size_t>(size), on, percent))
+                    {
+                        inst->padPressure.store (on, std::memory_order_relaxed);
+                        inst->padPressureAmount.store (percent, std::memory_order_relaxed);
+                        inst->updateEnginePadPressure();
+                    }
+                }
+#endif
 
                 if (idx == -1)
                 {
@@ -1032,6 +1110,30 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #endif
             props->smallStepFloat = props->stepFloat;
             props->largeStepFloat = props->stepFloat;
+            return 1;
+        }
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+        if (PluginInstance::isPadPressureParam (index))
+        {
+            std::memset (props, 0, sizeof (*props));
+            if (index == PluginInstance::padPressureBase())
+            {
+                copyString (props->label, sizeof (props->label), "");
+                props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f;
+                props->flags = kVstParameterIsSwitch | kVstParameterUsesIntegerMinMax;
+                props->minInteger = 0;
+                props->maxInteger = 1;
+                props->stepInteger = 1;
+            }
+            else
+            {
+                copyString (props->label, sizeof (props->label), "%");
+                props->stepFloat = 0.01f;
+                props->smallStepFloat = 0.01f;
+                props->largeStepFloat = 0.1f;
+                props->flags = kVstParameterCanRamp;
+            }
             return 1;
         }
 #endif
@@ -1209,6 +1311,19 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
     if (!inst || index < 0)
         return;
 
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+    if (PluginInstance::isPadPressureParam (index))
+    {
+        // not a sound edit (no protection disarm): the pad setting is independent of the program
+        const float v = std::isfinite (parameter) ? std::min (std::max (parameter, 0.0f), 1.0f) : 0.0f;
+        if (index == PluginInstance::padPressureBase())
+            inst->padPressure.store (v >= 0.5f, std::memory_order_relaxed);
+        else
+            inst->padPressureAmount.store (v * 100.0f, std::memory_order_relaxed);
+        inst->updateEnginePadPressure();
+        return;
+    }
+#endif
     size_t paramCount = synthyboy::paramCount();
     if (static_cast<size_t>(index) >= paramCount)
         return;
@@ -1245,6 +1360,11 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
 #else
         return inst->liveValue[index - static_cast<VstInt32> (synthyboy::paramCount())].load (std::memory_order_relaxed);
 #endif
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+    if (PluginInstance::isPadPressureParam (index))
+        return index == PluginInstance::padPressureBase() ? (inst->padPressure.load (std::memory_order_relaxed) ? 1.0f : 0.0f)
+                                                          : inst->padPressureAmount.load (std::memory_order_relaxed) * 0.01f;
 #endif
     size_t paramCount = synthyboy::paramCount();
     if (static_cast<size_t>(index) >= paramCount)
@@ -1372,6 +1492,9 @@ extern "C"
 #else
         effect->numParams += synthyboy_mpc::kLfoLiveCount;
 #endif
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+        effect->numParams += synthyboy_mpc::kPadPressureParams;
 #endif
         effect->numInputs = 0;
         effect->numOutputs = 2;

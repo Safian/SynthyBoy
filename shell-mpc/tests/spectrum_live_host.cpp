@@ -4,7 +4,7 @@
 //
 // Usage: spectrum_live_host <plugin library> off|on|selftest [HZ]
 //   HZ is the refresh rate the plugin was built with (SYNTHYBOY_MPC_LFO_LIVE_HZ, default 10): the display thread ticks HZ times a second and reports at most 32 + 4 times a tick.
-//   off:      built with SYNTHYBOY_MPC_SPECTRUM=OFF: numParams is the engine's count + 4 (the LFO cursors), nothing exists after them.
+//   off:      built with SYNTHYBOY_MPC_SPECTRUM=OFF: numParams is the engine's count + 4 (the LFO cursors) (+ the two pad pressure parameters), no spectrum column.
 //   on:       built with it: 32 display-only parameters "Spectrum 1" .. "Spectrum 32" after the four cursors (index count + 4 + k). No sound: every column 0 and no
 //             audioMasterAutomate for them. A note held: columns rise, the loudest column is the one an offline analysis of the same output gives (+- 1), at most 36 calls a tick,
 //             nothing but display parameters is reported; after the note is released the columns fall to 0 and the reports stop.
@@ -119,24 +119,28 @@ int main (int argc, char** argv)
     e->dispatcher (e, effSetBlockSize, 0, 256, nullptr, 0.0f);
     e->dispatcher (e, effMainsChanged, 0, 1, nullptr, 0.0f);
 
+    // the two pad pressure parameters (shell-mpc/pad_pressure.h, default ON) are the last of the list, after the spectrum columns
+    char padName[64] = {};
+    e->dispatcher (e, effGetParamName, e->numParams - 2, 0, padName, 0.0f);
+    const int pad = std::string (padName) == "Pad Pressure" ? 2 : 0;
     const std::string chunk = getChunk (e);
     std::printf ("chunk %zu %zu\n", chunk.size(), std::hash<std::string>{} (chunk));
     check (! chunk.empty() && chunk.find ("Spectrum") == std::string::npos, "state chunk is available and has no spectrum parameter");
 
     if (mode == "off")
     {
-        check (e->numParams == n + 4, "off: numParams is the engine's count + 4, no spectrum column");
+        check (e->numParams == n + 4 + pad, "off: numParams is the engine's count + 4 (+ the two pad pressure parameters), no spectrum column");
         bool ok = true;
-        text (e, effGetParamName, n + 4, &ok);
-        check (! ok, "off: no parameter name after the four cursors");
-        check (e->getParameter (e, n + 4) == 0.0f, "off: getParameter past the list is 0");
+        text (e, effGetParamName, n + 4 + pad, &ok);
+        check (! ok, "off: no parameter name after the four cursors (and the pad pressure parameters)");
+        check (e->getParameter (e, n + 4 + pad) == 0.0f, "off: getParameter past the list is 0");
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
         std::printf ("%s  (%d failures)\n", fails ? "FAIL" : "OK", fails);
         return fails ? 1 : 0;
     }
 
     // the parameter list: indices stable (2637 engine + 4 cursors + 32 columns for the shipped table), names, properties, no automation
-    check (e->numParams == n + 4 + 32, "numParams is the engine's count + 4 cursors + 32 spectrum columns");
+    check (e->numParams == n + 4 + 32 + pad, "numParams is the engine's count + 4 cursors + 32 spectrum columns (+ 2 pad pressure parameters)");
     {
         bool names = true, notAuto = true, props = true, idle = true;
         VstParameterProperties p;
@@ -154,8 +158,8 @@ int main (int argc, char** argv)
         check (notAuto, "the spectrum columns are not automatable");
         check (props, "the spectrum columns have the parameter properties with a step of 1/64");
         bool afterEnd = true;
-        text (e, effGetParamName, n + 36, &afterEnd);
-        check (! afterEnd && e->dispatcher (e, effGetParameterProperties, n + 36, 0, &p, 0.0f) == 0, "nothing after the 32nd column");
+        text (e, effGetParamName, n + 36 + pad, &afterEnd);
+        check (! afterEnd && e->dispatcher (e, effGetParameterProperties, n + 36 + pad, 0, &p, 0.0f) == 0, "nothing after the 32nd column");
         check (idle, "at the start (nothing played) every column is 0");
         // writes are ignored
         const std::string before = getChunk (e);

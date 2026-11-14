@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.." || exit 1
 B=build-mpc
 # Every build below names every option of the display and the statistics itself: a build directory keeps the options of earlier runs in its CMake cache (a tree that was
 # configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
-BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=6"
+BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=6 -DSYNTHYBOY_MPC_PAD_PRESSURE=ON"
 cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
@@ -27,8 +27,8 @@ import json, sys
 d = json.load(open(sys.argv[1])); p = json.load(open(sys.argv[2]))
 a = [x["name"] for x in d["params"]]; b = [x["name"] for x in p["params"]]
 ok = True
-extra = ["LFO %d Cursor" % n for n in (1, 2, 3, 4)] + ["Spectrum %d" % n for n in range(1, 33)]   # SYNTHYBOY_MPC_LFO_LIVE and SYNTHYBOY_MPC_SPECTRUM (default ON): display-only parameters after the engine's list
-if len(a) != p["count"] + len(extra) or a[p["count"]:] != extra: print(f"param count {len(a)} != {p['count']} + 36 display parameters {a[p['count']:]}"); ok = False
+extra = ["LFO %d Cursor" % n for n in (1, 2, 3, 4)] + ["Spectrum %d" % n for n in range(1, 33)] + ["Pad Pressure", "Pad Pressure Amount"]   # SYNTHYBOY_MPC_LFO_LIVE and SYNTHYBOY_MPC_SPECTRUM (default ON): display-only parameters after the engine's list, then the two SYNTHYBOY_MPC_PAD_PRESSURE parameters
+if len(a) != p["count"] + len(extra) or a[p["count"]:] != extra: print(f"param count {len(a)} != {p['count']} + 38 extra parameters {a[p['count']:]}"); ok = False
 for i, (x, y) in enumerate(zip(a, b)):
     if x != y: print(f"param {i}: plugin '{x}' != docs '{y}'"); ok = False; break
 for k, v in (("name", "SynthyBoy"), ("vendor", "Safian"), ("uid", "SfSB"), ("isInstrument", True), ("numInputs", 0), ("numOutputs", 2)):
@@ -124,6 +124,7 @@ live_build specoff -DSYNTHYBOY_MPC_SPECTRUM=OFF
 live_build specself -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON
 live_build specself25 -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
 live_build gain0 -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=0
+live_build padoff -DSYNTHYBOY_MPC_PAD_PRESSURE=OFF
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -I $MPC_SDK/framework -o $B/output_level_host shell-mpc/tests/output_level_host.cpp || { echo "ACCEPT FAIL: output_level_host build"; exit 1; }
@@ -151,6 +152,17 @@ for d in specoff specself specself25; do
 done
 grep -q "Spectrum %d" "$(find build-mpc-live-on -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" || { echo "ACCEPT FAIL: the spectrum build has no spectrum code"; exit 1; }
 grep -q "Spectrum %d" "$(find build-mpc-live-specoff -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" && { echo "ACCEPT FAIL: trace of the spectrum in the build with SYNTHYBOY_MPC_SPECTRUM=OFF"; exit 1; }
+# pad pressure to Filter 1 cutoff (SYNTHYBOY_MPC_PAD_PRESSURE, default ON): pad_pressure.h and the plugin in the own engine (the pressure opens the filter), in the Vital engine
+# (the two parameters exist, the audio ignores them), without the display parameters, and switched off (no trace of it: no names, no chunk member)
+c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/pad_pressure_host shell-mpc/tests/pad_pressure_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: pad_pressure_host build"; exit 1; }
+pp_lib() { find build-mpc-live-$1 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1; }
+$B/pad_pressure_host "$(pp_lib on)" own > $B/pad-pressure-own.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-own.log; echo "ACCEPT FAIL: pad_pressure_host (own engine)"; exit 1; }
+grep -E "^INFO" $B/pad-pressure-own.log
+$B/pad_pressure_host "$(pp_lib off)" own 0 > $B/pad-pressure-nodisplay.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-nodisplay.log; echo "ACCEPT FAIL: pad_pressure_host (no display parameters)"; exit 1; }
+$B/pad_pressure_host "$LIB" vital > $B/pad-pressure-vital.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-vital.log; echo "ACCEPT FAIL: pad_pressure_host (Vital engine)"; exit 1; }
+$B/pad_pressure_host "$(pp_lib padoff)" own off > $B/pad-pressure-off.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-off.log; echo "ACCEPT FAIL: pad_pressure_host (switched off)"; exit 1; }
+grep -q "Pad Pressure Amount" "$(pp_lib on)" || { echo "ACCEPT FAIL: the pad pressure build has no pad pressure code"; exit 1; }
+grep -q "Pad Pressure Amount" "$(pp_lib padoff)" && { echo "ACCEPT FAIL: trace of the pad pressure in the build with SYNTHYBOY_MPC_PAD_PRESSURE=OFF"; exit 1; }
 # callback statistics (SYNTHYBOY_MPC_CALLBACK_STATS, diagnostics): off in the default build (no trace of it in the module), on in the stats variant
 STATSLIB="$(find build-mpc-live-stats -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 grep -q "dispatcher_opcodes:" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no host statistics (format 2)"; exit 1; }
@@ -184,6 +196,14 @@ for f in $TL/spectrum-host.log $TL/spectrum-live.log; do
     fi
     grep -q "^FAIL" $f && { grep "^FAIL" $f; echo "ACCEPT FAIL: tsan spectrum test ($f)"; exit 1; }
 done
+# pad pressure under ThreadSanitizer (the settings are written by the host thread and read by the audio thread through the engine's atomic)
+c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/pad_pressure_host shell-mpc/tests/pad_pressure_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan pad_pressure_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/pad_pressure_host "$TLLIB" own > $TL/pad-pressure.log 2>&1
+if grep -q "WARNING: ThreadSanitizer" $TL/pad-pressure.log; then
+    grep -A14 "WARNING: ThreadSanitizer" $TL/pad-pressure.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+    echo "ACCEPT FAIL: data races in the pad pressure (full report: $TL/pad-pressure.log)"; exit 1
+fi
+grep -q "^FAIL" $TL/pad-pressure.log && { grep "^FAIL" $TL/pad-pressure.log; echo "ACCEPT FAIL: tsan pad_pressure_host"; exit 1; }
 # the same ThreadSanitizer build has the statistics switched on: the display thread and the writer thread read what the audio thread writes
 c++ -std=c++17 -O1 -g -fsanitize=thread -I $MPC_SDK/framework -I shell-mpc -o $TL/callback_stats_host shell-mpc/tests/callback_stats_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan callback_stats_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/callback_stats_host "$TLLIB" $TL/callback-stats.txt > $TL/stats.log 2>&1
