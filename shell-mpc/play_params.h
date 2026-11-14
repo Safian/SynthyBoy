@@ -53,7 +53,7 @@ inline const char* realKey (int group, int instance, int slot, std::string& buf)
     if (group == 0 && (instance == playosc::kSub || instance == playosc::kNoise))
     {
         static const char* const kSubKeys[kSlots] = { "sub.waveform", "sub.octave", "sub.pan", "sub.level", nullptr, nullptr, nullptr, nullptr };
-        static const char* const kNoiseKeys[kSlots] = { "noise.type", "noise.filter", "noise.pan", "noise.level", nullptr, nullptr, nullptr, nullptr };
+        static const char* const kNoiseKeys[kSlots] = { "noise.sample", "noise.filter", "noise.pan", "noise.level", nullptr, nullptr, nullptr, nullptr };
         return (instance == playosc::kSub ? kSubKeys : kNoiseKeys)[slot];
     }
     const int n = group == 0 ? playosc::oscNumber (instance) : instance;

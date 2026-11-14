@@ -251,7 +251,7 @@ int main (int argc, char** argv)
         // the mapping of the oscillator selector: Sub, A, B, C, Noise; Sub and Noise name the four parameters of their Basic group in the first four slots (docs/MPC.md "Play page")
         auto idx = [] (const char* key) { const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key); return p ? synthyboy::findParamIndex (p->id) : -1; };
         const char* const sub[4] = { "sub.waveform", "sub.octave", "sub.pan", "sub.level" };
-        const char* const noise[4] = { "noise.type", "noise.filter", "noise.pan", "noise.level" };
+        const char* const noise[4] = { "noise.sample", "noise.filter", "noise.pan", "noise.level" };
         bool ok = true;
         for (int k = 0; k < 4; ++k)
             ok = ok && idx (sub[k]) >= 0 && idx (noise[k]) >= 0 && pl::realIndex (0, 1, k) == idx (sub[k]) && pl::realIndex (0, 5, k) == idx (noise[k]);
@@ -268,7 +268,7 @@ int main (int argc, char** argv)
         check (std::fabs (a->getParameter (a, idx ("sub.level")) - 0.25f) < 1e-6f && a->getParameter (a, idx ("osc1.level")) == osc1Level && text (a, effGetParamDisplay, prox0 + 3) == text (a, effGetParamDisplay, idx ("sub.level")), "Sub selected: the Level proxy is sub.level");
         a->setParameter (a, sel0, pl::selectorNormalised (0, 5));
         a->setParameter (a, prox0, 1.0f);
-        check (a->getParameter (a, idx ("noise.type")) == 1.0f && text (a, effGetParamDisplay, prox0) == "Sample", "Noise selected: the first proxy is noise.type");
+        check (a->getParameter (a, idx ("noise.sample")) == 1.0f && text (a, effGetParamDisplay, prox0) == text (a, effGetParamDisplay, idx ("noise.sample")), "Noise selected: the first proxy is noise.sample");
     }
     closeIt (a);
 
