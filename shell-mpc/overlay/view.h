@@ -11,6 +11,7 @@
 #include "drm_interfaces.h"
 #include "gpu/scene.h"
 #include "overlay_layout.h"
+#include "touch_decoder.h"
 #include "synthyboy/readout.h"
 #include "ui_stack.h"
 
@@ -25,6 +26,7 @@ struct ViewInput
     double nowMs = 0.0;
     IFrameSource* frames = nullptr;                // the application's primary framebuffer (the envelope view checks the line colour with it)
     int rotation = 90;
+    IInstanceView* io = nullptr;                   // the same instance, writable: the plugin-drawn pages write parameters through it (null in a test that has none)
     const UiStack* ui = nullptr;                   // the plugin-drawn pages of this instance (main / full / detail, ui_stack.h); null in a test that has none. The views of today ignore it.
 };
 
@@ -50,6 +52,17 @@ public:
     virtual void render (uint32_t* canvas, int w, int h) = 0;
     /** The same picture as a scene for the GPU helper (gpu/scene.h): a display list in canvas pixels of a region of w x h. false: this view cannot be described (the CPU draws it). */
     virtual bool describe (gpu::SceneBuilder&, int /*viewIndex*/, int /*w*/, int /*h*/) const { return false; }
+    /** The view wants another rectangle than the layout's (UI pixels of the screen, y from the top of the screen); false: the layout's. Constant for the life of the view. */
+    virtual bool regionOverride (Rect&) const { return false; }
+    /** A touch in UI pixels (screen coordinates). `stack` is the instance's UiStack (the caller holds its lock: the view may open and close pages), `io` the instance. true: the touch belongs to this
+        view's plugin-drawn pages (the application gets it as well: the screen cannot keep it from the host). */
+    virtual bool onTouch (const TouchEvent&, UiStack&, IInstanceView&, double /*nowMs*/) { return false; }
+    /** The clock while a finger is down (long press). */
+    virtual void onTick (UiStack&, IInstanceView&, double /*nowMs*/) {}
+    /** A finger is down on the plugin-drawn pages (the controller keeps its pace fast). */
+    virtual bool fingerDown() const noexcept { return false; }
+    /** The stack of the instance was closed from outside (the Play page left): a running gesture ends. */
+    virtual void dropGesture() noexcept {}
     /** Hash (FNV-1a) of what is drawn, for the status file. */
     virtual uint32_t hash() const noexcept = 0;
     /** `key: value` lines of this view's own numbers (the status file, one second). */

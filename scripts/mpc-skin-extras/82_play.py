@@ -152,6 +152,19 @@ def _copy_control(template, name, param, rect, rebind=None):
     return out, segs
 
 
+FULL_FRAME_LAST_VISIBLE = 18   # the host widgets of the Play page are visible while the "Overlay Instance" frame is 0 .. 18 (slots use 1 .. 17); the plugin takes frame 24 while a plugin-drawn full screen is open
+
+
+def _hide_while_full_screen(component, overlay_param):
+    """The component is hidden (and so is not touchable) while the plugin's full-screen page is open: the plugin reports the "Overlay Instance" frame 24, a frame the skin shows as blank (the instance
+    pictures read it as "not told yet"), and RangedEnabling/0/18/33 is valid for the frames 0 .. 18 only (docs/ui-reference.md 7.4: quantised to 33 steps, the film strip's 33 frames)."""
+    bounds = component["bounds"]
+    bounds["version"] = 2
+    handles = list(bounds.get("additionalInvalidatingHandles", []))
+    handles.append("RangedEnabling/0/%d/33/Parameter %d" % (FULL_FRAME_LAST_VISIBLE, overlay_param))
+    bounds["additionalInvalidatingHandles"] = handles
+
+
 def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
@@ -243,6 +256,8 @@ def apply(tui, qlinks, ctx):
             links["Q-Link %d" % (s + 1)] = proxy_idx[highlight][s]
         for i in range(Q_PROXIES):   # the four hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on)
             links["Q-Link %d" % (i + 1)] = q_idx[i]
+        for c in extra:
+            _hide_while_full_screen(c, first - OVERLAY_INSTANCE)
         items.extend(extra)
         # names over the controls (85_names.py): the meta of this tab
         tab_names = names[tab_name]["names"]

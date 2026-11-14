@@ -327,6 +327,16 @@ public:
             qGroup[i] = i < n && targets != nullptr ? targets[i] : -1;
     }
     int qGroup[4] = { -1, -1, -1, -1 }, qGroupN = 0, qGroupCalls = 0;   // the last Q group the UI set (the test thread only)
+    void writeParam (int i, float norm) noexcept override
+    {
+        const synthyboy::ParamInfo& p = synthyboy::paramTable()[i];
+        atom_[i].store (synthyboy::constrainValue (p, synthyboy::fromNormalised (p, norm)));
+        ++uiWrites;
+    }
+    void setPlaySelection (int g, int i) noexcept override { if (g >= 0 && g < 3) playSel[g].store (i); }
+    void setUiFullOpen (bool o) noexcept override { uiFullOpen.store (o); }
+    std::atomic<bool> uiFullOpen { false };
+    std::atomic<int> uiWrites { 0 };
     void requestOverlayReport() noexcept override { reportRequests.fetch_add (1); }
     /** The ring of the output (the spectrum view); only when `hasRing` is set, like a plugin built without the spectrum has none. */
     const synthyboy_mpc::SpectrumRing* spectrumRing() const noexcept override { return hasRing.load() ? &ring : nullptr; }

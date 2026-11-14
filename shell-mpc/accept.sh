@@ -162,8 +162,11 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/s
 $B/spectrum_curve_host > $B/spectrum-curve-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-curve-host.log; echo "ACCEPT FAIL: spectrum_curve_host (the spectrum curve: sine, two sines, noise, silence, timing)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/spectrum_view_host $OVSRC/spectrum_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: spectrum_view_host build"; exit 1; }
 $B/spectrum_view_host > $B/spectrum-view-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-view-host.log; echo "ACCEPT FAIL: spectrum_view_host (the spectrum view: scene = CPU picture, no redraw at rest, the controller)"; exit 1; }
+# the oscillator UI (shell-mpc/overlay/osc_ui.h: every control wired to its engine parameter, the pages, the Q group, the modulations; also under AddressSanitizer below)
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/osc_ui_host $OVSRC/osc_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_ui_host build"; exit 1; }
+$B/osc_ui_host > $B/osc-ui-host.log 2>&1 || { grep -E "^FAIL" $B/osc-ui-host.log; echo "ACCEPT FAIL: osc_ui_host (the oscillator UI: wiring, pages, Q group, modulations)"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
-for t in controller_host views_host gpu_backend_host spectrum_view_host display_host; do
+for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }

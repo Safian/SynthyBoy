@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <poll.h>
 
 #if defined(__linux__)
@@ -83,6 +84,7 @@ struct input_absinfo
 #endif
 
 #include "touch_decoder.h"
+#include "touch_input.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -395,5 +397,36 @@ private:
 };
 
 using TouchReader = LinuxTouchReader;
+
+/** The touch screen for the controller: the evdev reader (it finds the node itself, opens it read only and never grabs it), told the panel size and the rotation of the overlay's discovery every step. */
+class TouchInput final : public ITouchInput
+{
+public:
+    explicit TouchInput (ITouchSyscalls& sys) : reader_ (sys, 90) {}
+#if defined(__linux__)
+    TouchInput() : reader_ (90) {}
+#endif
+    void configure (int panelW, int panelH, int rotation) override
+    {
+        TouchDecoder& d = reader_.decoder();
+        if (d.panelW() != panelW || d.panelH() != panelH)
+            d.setPanelSize (panelW, panelH);
+        if (d.rotation() != TouchDecoder::normaliseRotation (rotation))
+            d.setRotation (rotation);
+    }
+    int poll (const std::function<void (const TouchEvent&)>& handler) override { return reader_.poll (0, handler); }
+    std::string describe() const override
+    {
+        const TouchDecoder& d = reader_.decoder();
+        char b[256];
+        std::snprintf (b, sizeof b, "touch_node: %s%d\ntouch_abs_range: x %d..%d y %d..%d\ntouch_panel: %dx%d\ntouch_rotation: %d\n", reader_.nodeIndex() >= 0 ? "/dev/input/event" : "none ", reader_.nodeIndex() >= 0 ? reader_.nodeIndex() : 0,
+                       d.minX(), d.maxX(), d.minY(), d.maxY(), d.panelW(), d.panelH(), d.rotation());
+        return b;
+    }
+    LinuxTouchReader& reader() noexcept { return reader_; }
+
+private:
+    LinuxTouchReader reader_;
+};
 
 }} // namespace synthyboy_mpc::overlay

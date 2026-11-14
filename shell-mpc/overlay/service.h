@@ -28,6 +28,7 @@
 #include "cpu_plan_linux.h"
 #include "drm_linux.h"
 #include "gpu/gpu_overlay.h"
+#include "touch_linux.h"
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
 #include "gpu/helper_transport_linux.h"
 #endif
@@ -142,7 +143,10 @@ private:
             gpu_ = std::make_unique<gpu::GpuHelperBackend> (*transport_, *backend_, cfg);
         }
 #endif
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get());
+#if defined(__linux__)
+        touch_ = std::make_unique<TouchInput>();   // the evdev node is found at run time (touch_linux.h); read only, never grabbed
+#endif
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get(), touch_.get());
 #if defined(__linux__)
         controller_->setExtraStatus ([this] { return cpuStatus(); });
 #endif
@@ -268,6 +272,7 @@ private:
     std::unique_ptr<ICurveRenderer> renderer_;
     std::unique_ptr<gpu::IHelperTransport> transport_;
     std::unique_ptr<gpu::IGpuOverlay> gpu_;
+    std::unique_ptr<ITouchInput> touch_;
     std::unique_ptr<Controller> controller_;
 };
 

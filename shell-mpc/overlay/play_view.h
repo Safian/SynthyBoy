@@ -9,7 +9,10 @@
 
 #include <memory>
 
+#include "../play_params.h"
+#include "osc_ui.h"
 #include "play_osc.h"
+#include "scene_cpu.h"
 #include "synthyboy/env_display.h"
 #include "views.h"
 
@@ -25,6 +28,9 @@ constexpr int kPanelW = 400, kPanelGap = 17;                    // 3 * 400 + 2 *
 constexpr int kTitleCell = 3;                                   // pixels per font pixel of the titles
 constexpr int kPlotX = 10, kPlotTop = 40, kPlotBottomMargin = 8, kPlotW = 380;
 constexpr int kEnvPoints = 256;
+constexpr int kOx = 23, kOy = 14, kPanelH = 190;                // the Env and LFO panels as they always were (tab coordinates of the old region)
+constexpr int kRegionW = 1280, kRegionH = 628, kTabY = 110;      // the region of the view now: the whole tab of the Play page (the compact oscillator view, the full screen, the Env and LFO panels)
+constexpr int kDisplayPoints = 256;                              // the points of a min / max overview (two polylines of this many vertices)
 constexpr uint32_t kPanelRgb = 0x262527, kFrameRgb = 0xff2e63, kRestFrameRgb = 0x3d3b3e;
 
 /** The title of panel p (0 oscillator, 1 envelope, 2 LFO) for the instance n (1 ..). */
@@ -62,6 +68,29 @@ struct CpuSink
     std::vector<double> ys;
 };
 
+/** Shifts everything a sink draws by (dx, dy): the Env and LFO panels keep their own coordinates (0, 0 = the top left of their old region) inside the bigger region. */
+template <class Sink>
+struct ShiftSink
+{
+    ShiftSink (Sink& s_, int dx_, int dy_) : s (s_), dx (dx_), dy (dy_) {}
+    void clear (uint32_t) {}
+    void rect (int x0, int y0, int x1, int y1, uint32_t c) { s.rect (x0 + dx, y0 + dy, x1 + dx, y1 + dy, c); }
+    void vline (double x, int y0, int y1, double width, uint32_t c) { s.vline (x + dx, y0 + dy, y1 + dy, width, c); }
+    void disc (double x, double y, double r, uint32_t c) { s.disc (x + dx, y + dy, r, c); }
+    void curve (const float* rows, int n, int x0, int width)
+    {
+        float shifted[gpu::kMaxCurve];
+        for (int i = 0; i < n && i < gpu::kMaxCurve; ++i)
+            shifted[i] = rows[i] + static_cast<float> (dy);
+        s.curve (shifted, std::min (n, static_cast<int> (gpu::kMaxCurve)), x0 + dx, width);
+    }
+    void fill (double baseRow, uint32_t c) { s.fill (baseRow + dy, c); }
+    void stroke (double half, uint32_t c) { s.stroke (half, c); }
+    void text (int x, int y, int cell, const char* str, uint32_t c) { s.text (x + dx, y + dy, cell, str, c); }
+    Sink& s;
+    int dx, dy;
+};
+
 /** The drawing target of the GPU helper: the display list of gpu/scene.h. */
 struct SceneSink
 {
@@ -81,7 +110,7 @@ struct SceneSink
 class PlayView final : public IView
 {
 public:
-    static constexpr int kW = play::kPanels * play::kPanelW + (play::kPanels - 1) * play::kPanelGap;
+    static constexpr int kW = play::kRegionW, kH = play::kRegionH;
 
     /** `highlight`: 1 oscillator panel, 2 envelope panel, 3 LFO panel (the sub-tab this view belongs to). */
     PlayView (int highlight, double fixedCostMs) : highlight_ (highlight), name_ ("play" + std::to_string (highlight))
@@ -89,6 +118,7 @@ public:
         for (ComputeBudget& b : budget_)
             b.fixedCostMs = fixedCostMs;
         cycle_.assign (synthyboy::OscCycle::kSamples, 0.0f);
+        cycleMax_.assign (synthyboy::OscCycle::kSamples, 0.0f);
         envY_.assign (play::kEnvPoints, 0.0f);
         lfoY_.assign (LfoView::kPoints, 0.0f);
         for (int o = 0; o < play::kOscs; ++o)
@@ -131,13 +161,19 @@ public:
         }
         if (! group_[0])
             return false;
-        // ---- oscillator (Sub and Noise have no cycle picture in this view: an empty panel with the grid, the plugin-drawn compact view shows them)
-        if (playosc::oscNumber (sel_[0]) == 0)
+        // ---- oscillator: the picture of the display rectangle of the plugin-drawn oscillator UI (the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the spectrum of a
+        // spectral one, the noise colour, the sub oscillator's waveform)
+        if (playosc::oscNumber (sel_[0]) == 0 && sel_[0] == playosc::kSub)
         {
-            if (! have_[0] || forced_[0])
+            const float wave = group_[0]->value ("sub.waveform"), phase = group_[0]->value ("sub.phase");
+            const bool data = group_[0]->read (*in.instance) || ! have_[0] || forced_[0];
+            if (data)
             {
-                std::fill (cycle_.begin(), cycle_.end(), 0.0f);
-                kind_ = synthyboy::OscCycle::Kind::off;
+                fillSub (static_cast<int> (std::lround (wave)), phase);
+                kind_ = synthyboy::OscCycle::Kind::wavetable;
+                res_ = synthyboy::OscCycle::Result();
+                res_.kind = kind_;
+                group_[0]->accept();
                 have_[0] = true;
                 forced_[0] = false;
                 changed = true;
@@ -147,28 +183,31 @@ public:
         {
             if (! oc_)
                 oc_ = std::make_unique<synthyboy::OscCycle>();
+            const int osc = sel_[0] == playosc::kNoise ? 4 : playosc::oscNumber (sel_[0]);
             float t[4] = { -1, -1, -1, -1 };
-            if (in.targets != nullptr)
+            if (in.targets != nullptr && osc <= play::kOscs)
                 for (int i = 0; i < 4; ++i)
-                    t[i] = std::round (in.targets[(playosc::oscNumber (sel_[0]) - 1) * 4 + i] * 100.0f) / 100.0f;
+                    t[i] = std::round (in.targets[(osc - 1) * 4 + i] * 100.0f) / 100.0f;
             const bool data = group_[0]->read (*in.instance) || newContent || std::memcmp (t, lastTargets_, sizeof t) != 0;
             if ((data || ! have_[0]) && (forced_[0] || ! have_[0] || budget_[0].due (in.nowMs)))
             {
                 const auto t0 = std::chrono::steady_clock::now();
                 if (newContent)
-                {
                     oc_->setContent (content != nullptr ? *content : synthyboy::StateContent {}, store);
-                }
                 synthyboy::OscCycle::Request req;
-                req.osc = playosc::oscNumber (sel_[0]);
-                if (in.targets != nullptr)
+                req.osc = osc;
+                req.bpm = bpm;
+                if (in.targets != nullptr && osc <= play::kOscs)
                 {
                     req.framePercent = t[0];
                     req.warpAmountPercent[0] = t[1];
                     req.warpAmountPercent[1] = t[2];
                     req.morphAmountPercent = t[3];
                 }
-                kind_ = oc_->compute (group_[0]->values(), req, cycle_.data());
+                const bool wt = osc != 4 && group_[0]->value ((std::string ("osc") + std::to_string (osc) + ".type").c_str()) < 0.5f;
+                displayPoints_ = wt ? synthyboy::OscCycle::kSamples : play::kDisplayPoints;
+                res_ = oc_->computeDisplay (group_[0]->values(), req, cycle_.data(), cycleMax_.data(), displayPoints_);
+                kind_ = res_.kind;
                 budget_[0].spent (in.nowMs, msSince (t0));
                 counters_.lastComputeMs = budget_[0].costMs;
                 ++counters_.recomputes;
@@ -246,23 +285,94 @@ public:
         content_ = content;
         store_ = store;
         bpm_ = bpm;
+        // ---- the plugin-drawn oscillator pages: they read their parameters and the Q group; what they draw changes the picture
+        if (in.io != nullptr && in.ui != nullptr)
+        {
+            if (! osc_)
+            {
+                osc_ = std::make_unique<OscUi>();
+                osc_->setCanvas (play::kRegionW, play::kRegionH);
+                scratch_ = std::make_unique<gpu::SceneData>();
+            }
+            osc_->update (*in.io, highlight_, *in.ui, in.nowMs, sel_[1], sel_[2]);
+            if (highlight_ != 1 && in.ui->isMain())
+                publishModuleGroup (*in.io);
+            const uint32_t h = oscUiHash();
+            if (h != uiHash_)
+            {
+                uiHash_ = h;
+                changed = true;
+            }
+        }
         counters_.changes += changed;
         return changed;
     }
     bool valid() const noexcept override { return have_[0] && have_[1] && have_[2]; }
 
+    bool regionOverride (Rect& ui) const override
+    {
+        ui = { 0, play::kTabY, play::kRegionW, play::kRegionH };
+        return true;
+    }
+    bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override { return osc_ != nullptr && osc_->touch (ev, stack, io, nowMs); }
+    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (osc_ != nullptr) osc_->tick (nowMs, stack, io); }
+    bool fingerDown() const noexcept override { return osc_ != nullptr && osc_->fingerDown(); }
+    void dropGesture() noexcept override { if (osc_ != nullptr) osc_->dropGesture(); }
+    OscUi* oscUi() noexcept { return osc_.get(); }
+
+    /** The Q group of the Env and LFO sub-tabs: the Q-Links 1 .. 4 of those pages are Q 1 .. Q 4 (the skin), so the first four knobs of the module are the group (they were Q-Link 1 .. 4 before). */
+    void publishModuleGroup (IInstanceView& io)
+    {
+        const int g = highlight_ == 2 ? 1 : 2;
+        int t[4];
+        for (int s = 0; s < 4; ++s)
+            t[s] = synthyboy_mpc::play::realIndex (g, sel_[g], s);
+        if (! moduleGroupSet_ || std::memcmp (t, moduleGroup_, sizeof t) != 0)
+        {
+            std::memcpy (moduleGroup_, t, sizeof t);
+            io.setQGroup (t, 4);
+            moduleGroupSet_ = true;
+        }
+    }
+    uint32_t oscUiHash()
+    {
+        gpu::SceneBuilder sb (*scratch_);
+        sb.begin (gpu::kKindPlay, 0, play::kRegionW, play::kRegionH);
+        osc_->draw (sb);
+        uint32_t h = 2166136261u;
+        for (uint32_t i = 0; i < scratch_->numOps; ++i)
+        {
+            const gpu::SceneOp& o = scratch_->ops[i];
+            h = fnv (h, static_cast<int32_t> (o.op));
+            h = fnv (h, static_cast<int32_t> (o.rgba));
+            h = fnv (h, static_cast<int32_t> (o.rgba2));
+            for (float f : o.f)
+            {
+                int32_t bits;
+                std::memcpy (&bits, &f, 4);   // the bits: a text op keeps its characters in two of them
+                h = fnv (h, bits);
+            }
+        }
+        return h ^ static_cast<uint32_t> (osc_->displayRect().x * 31 + osc_->displayRect().w);
+    }
     void render (uint32_t* cv, int w, int h) override
     {
-        play::CpuSink sink (cv, w, h);
-        paint (sink, w, h);
+        // the CPU draws the same scene the GPU helper gets (scene_cpu.h is the reference of its meaning): transparent where nothing is drawn
+        if (! scratch_)
+            scratch_ = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sb (*scratch_);
+        sb.begin (gpu::kKindPlay, 0, w, h);
+        build (sb);
+        std::vector<uint32_t> pixels;
+        renderScene (*scratch_, pixels);
+        std::memcpy (cv, pixels.data(), std::min (pixels.size(), static_cast<size_t> (w) * static_cast<size_t> (h)) * sizeof (uint32_t));
     }
     bool describe (gpu::SceneBuilder& sb, int viewIndex, int w, int h) const override
     {
-        if (! valid() || w != kW)
+        if (! valid() || w != kW || h != kH)
             return false;
         sb.begin (gpu::kKindPlay, static_cast<uint32_t> (viewIndex), w, h);
-        play::SceneSink sink (sb);
-        paint (sink, w, h);
+        build (sb);
         return ! sb.overflow;
     }
     uint32_t hash() const noexcept override
@@ -324,12 +434,120 @@ private:
         return top + (1.0 - v01) * (bottom - top);
     }
 
+    /** The whole picture of the view as a scene: the Env and LFO panels, then the plugin-drawn oscillator UI with the cycle picture in its display rectangle. */
+    void build (gpu::SceneBuilder& sb) const
+    {
+        play::SceneSink base (sb);
+        play::ShiftSink<play::SceneSink> shifted (base, play::kOx, play::kOy);
+        paint (shifted, play::kPanelW, play::kPanelH);
+        if (osc_ == nullptr)
+            return;
+        osc_->draw (sb);
+        const ui::Rect r = osc_->displayRect();
+        if (! r.empty())
+            drawPicture (sb, r);
+        osc_->drawOnDisplay (sb);
+    }
+
+    void fillSub (int wave, float phasePercent)
+    {
+        const int n = static_cast<int> (cycle_.size());
+        for (int i = 0; i < n; ++i)
+        {
+            const double t = std::fmod (static_cast<double> (i) / n + static_cast<double> (phasePercent) * 0.01, 1.0);
+            double v = 0.0;
+            switch (wave)
+            {
+                case 0: v = std::sin (2.0 * 3.14159265358979 * t); break;
+                case 1: v = std::tanh (3.0 * std::sin (2.0 * 3.14159265358979 * t)); break;
+                case 2: v = t < 0.25 ? 4.0 * t : (t < 0.75 ? 2.0 - 4.0 * t : 4.0 * t - 4.0); break;
+                case 3: v = 2.0 * t - 1.0; break;
+                case 4: v = t < 0.5 ? 1.0 : -1.0; break;
+                default: v = t < 0.25 ? 1.0 : -1.0; break;
+            }
+            cycle_[static_cast<size_t> (i)] = static_cast<float> (v);
+        }
+        displayPoints_ = n;
+    }
+
+    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"). */
+    void drawPicture (gpu::SceneBuilder& sb, const ui::Rect& r) const
+    {
+        using K = synthyboy::OscCycle::Kind;
+        if (r.w < 60 || r.h < 40)
+            return;
+        const ui::Rect in = r.inset (6);
+        const double top = in.y + 4.0, bottom = in.bottom() - 4.0;
+        auto row = [&] (double v01) { return top + (1.0 - std::clamp (v01, -0.2, 1.2)) * (bottom - top); };
+        const uint32_t line = gpu::rgba8 (0xff, 0x2e, 0x63, 255), area = gpu::rgba8 (0xd3, 0x11, 0x45, 64), grid = gpu::rgba8 (255, 255, 255, 70), grid2 = gpu::rgba8 (255, 255, 255, 30);
+        const int px = in.x, pw = in.w;
+        const bool envelopeKind = kind_ == K::sample || kind_ == K::multisample || kind_ == K::granular;
+        if (kind_ == K::wavetable || envelopeKind || kind_ == K::spectral)
+        {
+            if (kind_ != K::spectral)
+                sb.rect (static_cast<float> (px), static_cast<float> (row (0.5)), static_cast<float> (px + pw), static_cast<float> (row (0.5)) + 1.0f, grid);
+            for (int q = 1; q < 4; ++q)
+                sb.rect (static_cast<float> (px + (pw - 1) * q / 4), static_cast<float> (row (1.0)), static_cast<float> (px + (pw - 1) * q / 4 + 1), static_cast<float> (row (0.0)) + 1.0f, grid2);
+        }
+        float rows[gpu::kMaxCurve];
+        const int n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
+        if (kind_ == K::wavetable)
+        {
+            float peak = 1.0f;
+            for (int i = 0; i < n; ++i)
+                peak = std::max (peak, std::fabs (cycle_[static_cast<size_t> (i)]));
+            for (int i = 0; i < n; ++i)
+                rows[i] = static_cast<float> (row (0.5 + 0.5 * static_cast<double> (cycle_[static_cast<size_t> (i)] / peak)));
+            sb.curve (rows, n, px, pw);
+            sb.fill (row (0.5), area);
+            sb.stroke (2.0f, line);
+        }
+        else if (envelopeKind)
+        {
+            float peak = 0.05f;
+            for (int i = 0; i < n; ++i)
+                peak = std::max ({ peak, std::fabs (cycle_[static_cast<size_t> (i)]), std::fabs (cycleMax_[static_cast<size_t> (i)]) });
+            for (int pass = 0; pass < 2; ++pass)
+            {
+                const std::vector<float>& src = pass == 0 ? cycleMax_ : cycle_;
+                for (int i = 0; i < n; ++i)
+                    rows[i] = static_cast<float> (row (0.5 + 0.5 * static_cast<double> (src[static_cast<size_t> (i)] / peak)));
+                sb.curve (rows, n, px, pw);
+                sb.fill (row (0.5), area);
+                sb.stroke (2.0f, line);
+            }
+            if (res_.loopOn)
+                for (float m : { res_.loopStart, res_.loopEnd })
+                    sb.vline (static_cast<float> (px + m * static_cast<float> (pw - 1)), static_cast<float> (row (1.0)), static_cast<float> (row (0.0)), 2.0f, gpu::rgba8 (255, 255, 255, 150));
+            if (kind_ == K::granular && res_.grainSize > 0.0f)
+            {
+                const float x0 = static_cast<float> (px) + res_.grainPosition * static_cast<float> (pw - 1);
+                sb.rect (x0, static_cast<float> (row (1.0)), x0 + std::max (2.0f, res_.grainSize * static_cast<float> (pw - 1)), static_cast<float> (row (0.0)) + 1.0f, gpu::rgba8 (255, 255, 255, 40));
+            }
+        }
+        else if (kind_ == K::spectral)
+        {
+            for (int i = 0; i < n; ++i)
+                rows[i] = static_cast<float> (row ((static_cast<double> (cycle_[static_cast<size_t> (i)]) + 120.0) / 180.0));
+            sb.curve (rows, n, px, pw);
+            sb.fill (row (0.0), area);
+            sb.stroke (2.0f, line);
+        }
+        else
+        {
+            const char* msg = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
+            const int cell = 4, tw = static_cast<int> (std::strlen (msg)) * 6 * cell;
+            if (msg[0] != '\0')
+                sb.text (in.x + (in.w - tw) / 2, in.y + (in.h - 7 * cell) / 2, cell, msg, gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
+        }
+    }
+
     template <class Sink>
     void paint (Sink& s, int w, int h) const
     {
         using namespace play;
         s.clear (gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
-        for (int p = 0; p < kPanels; ++p)
+        for (int p = 1; p < kPanels; ++p)   // the oscillator panel is the plugin-drawn compact view now (osc_ui.h)
         {
             const int x0 = panelX (p);
             const bool hi = highlight_ == p + 1;
@@ -418,7 +636,14 @@ private:
     std::shared_ptr<const synthyboy::StateContent> content_;
     const synthyboy::IContentStore* store_ = nullptr;
     double bpm_ = 0.0;
-    std::vector<float> cycle_, envY_, lfoY_;
+    std::vector<float> cycle_, cycleMax_, envY_, lfoY_;
+    int displayPoints_ = synthyboy::OscCycle::kSamples;
+    synthyboy::OscCycle::Result res_;
+    std::unique_ptr<OscUi> osc_;
+    std::unique_ptr<gpu::SceneData> scratch_;
+    uint32_t uiHash_ = 0;
+    int moduleGroup_[4] = { -1, -1, -1, -1 };
+    bool moduleGroupSet_ = false;
     float lastTargets_[4] = { -1, -1, -1, -1 };
     float lastSources_[kSourceSlots] = {};
     synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other;

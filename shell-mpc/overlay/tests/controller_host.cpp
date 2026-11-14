@@ -19,9 +19,9 @@ struct Rig
     std::unique_ptr<Controller> ctl;
     double now = 0.0;
 
-    explicit Rig (bool attach = true, double cost = 10.0)
+    explicit Rig (bool attach = true, double cost = 10.0, ITouchInput* touch = nullptr)
     {
-        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), cost);
+        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), cost, nullptr, touch);
         inst.set ("filter1.cutoff", 1000.0f);
         inst.set ("filter1.resonance", 30.0f);
         if (attach)
@@ -622,6 +622,65 @@ int main()
         FakeInstance again;
         check (r.ctl->attach (&again) == 1 && r.ctl->uiState (1).isMain(), "a closed instance leaves no stack: the next instance in its slot starts in main");
         r.ctl->detach (&again);
+    }
+    // ---- the touch screen: events of the touch input go to the plugin-drawn pages of the Play page (the compact view's full-screen button opens the full screen, the close button closes it) ----
+    {
+        struct FakeTouch final : ITouchInput
+        {
+            std::vector<TouchEvent> queue;
+            int panelW = 0, panelH = 0, rotation = 0, configured = 0;
+            void configure (int w, int h, int r) override { panelW = w; panelH = h; rotation = r; ++configured; }
+            int poll (const std::function<void (const TouchEvent&)>& h) override { for (const TouchEvent& e : queue) h (e); const int n = static_cast<int> (queue.size()); queue.clear(); return n; }
+        } touch;
+        const int play1 = 14, filter1 = 0;
+        Rig r (true, 10.0, &touch);
+        r.inst.playSel[0].store (2);
+        r.frame.setView (play1, true, 90);
+        check (r.until ([&] { return r.on() && r.ctl->currentIndex() == play1; }, 800) >= 0, "(the Play page is on screen)");
+        r.run (100);
+        check (touch.configured > 0 && touch.panelW == 800 && touch.panelH == 1280 && touch.rotation == 90, "(" + std::to_string (touch.configured) + " " + std::to_string (touch.panelW) + "x" + std::to_string (touch.panelH) + " " + std::to_string (touch.rotation) + ") the touch input is told the panel and the rotation of the discovery, no number of its own");
+        auto* pv = static_cast<PlayView*> (const_cast<IView*> (r.ctl->viewByName ("play1")));
+        r.run (200);
+        check (pv != nullptr && pv->oscUi() != nullptr, "the Play view has the oscillator UI");
+        auto tap = [&] (int x, int y)
+        {
+            TouchEvent d; d.kind = TouchEvent::Down; d.x = x; d.y = y; d.timeUs = 1;
+            TouchEvent u = d; u.kind = TouchEvent::Up;
+            touch.queue.push_back (d);
+            r.run (60);
+            touch.queue.push_back (u);
+            r.run (200);
+        };
+        const synthyboy_mpc::ui::Rect fb = pv->oscUi()->compact().full.rect();
+        tap (fb.x + fb.w / 2, fb.y + fb.h / 2 + OscUi::kTabOriginY);
+        const int slot = r.ctl->slotOf (&r.inst);
+        check (r.ctl->uiState (slot).level() == UiStack::Level::full && r.inst.uiFullOpen.load(), "a tap on the full-screen button opens the full screen and tells the instance (the host widgets hide)");
+        check (r.ctl->touchEvents() == 2 && r.ctl->touchTaken() == 2, "the controller counted the two events, both taken");
+        r.run (1200);
+        const std::string st = r.dir.read ("status.txt");
+        check (line (st, "ui_state") == "full" && line (st, "touch_events") == "2", "the status file says full and counts the touch events");
+        // a knob drag on the full screen writes a parameter
+        const synthyboy_mpc::ui::Rect lv = pv->oscUi()->full().basic.level.rect();
+        const float before = r.inst.get ("osc1.level");
+        TouchEvent d; d.kind = TouchEvent::Down; d.x = lv.x + lv.w / 2; d.y = lv.y + lv.h / 2 + OscUi::kTabOriginY;
+        touch.queue.push_back (d);
+        r.run (30);
+        for (int i = 1; i <= 8; ++i) { TouchEvent m = d; m.kind = TouchEvent::Move; m.y -= i * 8; touch.queue.push_back (m); r.run (30); }
+        TouchEvent u = d; u.kind = TouchEvent::Up; u.y -= 64;
+        touch.queue.push_back (u);
+        r.run (200);
+        check (r.inst.get ("osc1.level") > before + 10.0f && r.inst.uiWrites.load() > 0, "a drag on LEVEL of the full screen wrote osc1.level through the instance");
+        // the blank instance frame the plugin reports while the full screen is open does not hide the view
+        r.frame.setViewInstanceRgb (play1, layout::kInstanceBlankRgb, true, 90);
+        r.run (500);
+        check (r.ctl->currentIndex() == play1 && r.ctl->uiState (slot).level() == UiStack::Level::full, "the full screen open: a blank instance picture (the frame the skin hides the host widgets at) keeps the view and the stack");
+        // navigating away closes it, a touch on another tab goes nowhere
+        r.frame.setView (play1, false, 90);
+        r.frame.setView (filter1, true, 90);
+        r.run (500);
+        const unsigned long taken = r.ctl->touchTaken();
+        tap (100, 300);
+        check (r.ctl->uiState (slot).isMain() && r.ctl->touchTaken() == taken, "another tab: the stack is closed and a touch is not taken by the plugin's pages");
     }
     // ---- the Q group a page sets reaches the instance (IInstanceView::setQGroup); the interface default does nothing ----
     {

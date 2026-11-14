@@ -35,6 +35,7 @@
 #include "page_detector.h"
 #include "presenter.h"
 #include "renderer.h"
+#include "touch_input.h"
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
@@ -72,8 +73,8 @@ class Controller
 public:
     /** `gpu`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. */
     Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0,
-                gpu::IGpuOverlay* gpuOverlay = nullptr)
-        : backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay)
+                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr)
+        : backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay), touchIn_ (touchInput)
     {
         for (int i = 0; i < layout::kNumViews; ++i)
         {
@@ -81,8 +82,9 @@ public:
             for (int m = 0; m < 2; ++m)
                 markers_[i * 2 + m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb };
             regions_[i] = { v.region.x, v.region.y, v.region.w, v.region.h };
-            instanceRects_[i] = { v.instance.x, v.instance.y, v.instance.w, v.instance.h };
             views_.push_back (makeView (i));
+            { Rect own; if (views_.back()->regionOverride (own)) regions_[i] = own; }
+            instanceRects_[i] = { v.instance.x, v.instance.y, v.instance.w, v.instance.h };
             targetBase_[i] = static_cast<int> (targets_.size());
             views_.back()->targets (targets_);
             targetCount_[i] = static_cast<int> (targets_.size()) - targetBase_[i];
@@ -158,6 +160,26 @@ public:
         return slot >= 0 && slot < layout::kMaxInstances ? ui_[slot] : UiStack();
     }
 
+    /** Touch events seen and the ones the plugin-drawn pages took (status file, tests). */
+    unsigned long touchEvents() const noexcept { return touchEvents_; }
+    unsigned long touchTaken() const noexcept { return touchTaken_; }
+    /** One touch event (upright UI pixels), as the touch input hands it over (tests call it directly). */
+    void touchEvent (const TouchEvent& ev, double nowMs)
+    {
+        ++touchEvents_;
+        std::lock_guard<std::mutex> g (mu_);
+        if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0)
+            return;
+        IInstanceView* v = slots_.at (activeSlot_);
+        if (v == nullptr)
+            return;
+        if (views_[static_cast<size_t> (current_)]->onTouch (ev, ui_[activeSlot_], *v, nowMs))
+        {
+            ++touchTaken_;
+            needFrame_ = true;
+        }
+    }
+
     /** Plane off, buffers freed (the overlay thread has stopped, or this is the thread). */
     void shutdown() noexcept
     {
@@ -203,7 +225,9 @@ public:
                 rebaseClock();   // the caller's clock began again (a thread that was started anew): the deadlines of the earlier run would never come
             lastNowMs_ = nowMs;
             const auto t0 = std::chrono::steady_clock::now();
-            const double wait = step (nowMs);
+            double wait = step (nowMs);
+            if (touchIn_ != nullptr && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0)
+                wait = std::min (wait, kTouchPollMs);   // the plugin-drawn pages are on screen: look at the touch screen often
             tickMaxMs_ = std::max (tickMaxMs_, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count());
             return wait;
         }
@@ -236,6 +260,7 @@ private:
         }
         if (gpu_)
             gpu_->poll (nowMs);
+        pollTouch (nowMs);
         // a GPU picture is on the plane: the next scene goes FIRST, before any call that can wait for the display's locks (the page detection below reads the CRTC, which waits while the helper's
         // plane update holds them for a vblank): the scenes then come at the rhythm of the pace grid, whatever the rest of the step takes
         double early = 0.0;
@@ -330,7 +355,11 @@ private:
             else
             {
                 std::lock_guard<std::mutex> g (mu_);
-                if (d.slot == kSlotUnknown)
+                if (d.slot == kSlotUnknown && activeSlot_ >= 0 && slots_.at (activeSlot_) != nullptr && ! ui_[activeSlot_].isMain() && isUiPage (view))
+                {
+                    slot = activeSlot_;   // the plugin-drawn full screen is open for this instance: the instance reports the frame the skin hides the host widgets at (a blank picture), by design
+                }
+                else if (d.slot == kSlotUnknown)
                 {
                     why = "instance of the page not identified";
                     askForReports (nowMs);   // the host may not have drawn the instance picture yet, or shows a stale frame until the parameter is reported
@@ -491,6 +520,22 @@ private:
         }
     }
 
+    /** The touch screen: only while a view of the Play page is on screen (the plugin-drawn pages are there); the events go to the view, a running finger gets the clock for the long press. */
+    void pollTouch (double nowMs)
+    {
+        if (touchIn_ == nullptr || current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0 || ! presenter_.opened())
+            return;
+        touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
+        touchIn_->poll ([this, nowMs] (const TouchEvent& ev) { touchEvent (ev, nowMs); });
+        std::lock_guard<std::mutex> g (mu_);
+        IInstanceView* v = slots_.at (activeSlot_);
+        if (v != nullptr && views_[static_cast<size_t> (current_)]->fingerDown())
+        {
+            views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);
+            needFrame_ = true;
+        }
+    }
+
     /** The part of a picture every renderer shares: the view reads its data from the instance of the slot on screen. false: that instance is gone. */
     bool updateView (double nowMs, bool& changed)
     {
@@ -523,6 +568,7 @@ private:
         in.nowMs = nowMs;
         in.frames = &frames_;
         in.rotation = rotation_;
+        in.io = v;
         in.ui = &ui_[activeSlot_];   // under mu_ (held here): the view reads it during update ()
         changed = view.update (in);
         ++updatesThisSecond_;
@@ -853,7 +899,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\n";
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -956,6 +1002,7 @@ private:
         std::rename (tmp.c_str(), path.c_str());
     }
 
+    static constexpr double kTouchPollMs = 12.0;     // the touch screen is read this often while the Play page is on screen
     static constexpr double kMinFrameGapMs = 5.0;    // never faster than this (a present waits for the vblank, 16.7 ms, anyway)
     static constexpr double kSlackMs = 3.0;
     IPlaneBackend& backend_;
@@ -978,6 +1025,8 @@ private:
     static_assert (layout::kNumViews <= Detection::kMaxViews, "the detector and the status file hold kMaxViews views: raise it with the layout");
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
+    ITouchInput* touchIn_ = nullptr;
+    unsigned long touchEvents_ = 0, touchTaken_ = 0;
     Rect instanceRects_[layout::kNumViews];
     int targetBase_[layout::kNumViews] = {};
     int targetCount_[layout::kNumViews] = {};

@@ -167,6 +167,12 @@ public:
         if (pageTop_ == kPageRoute)
             route_.draw (sb);
     }
+    /** What goes on top of the picture in the display rectangle (the full screen button of the compact view). */
+    void drawOnDisplay (gpu::SceneBuilder& sb) const
+    {
+        if (stackDepth_ == 0)
+            compact_.full.draw (sb);
+    }
     /** The touch hit this view's drawing (the main state: the oscillator third; any other state: everything). */
     bool covers (int x, int y) const noexcept
     {

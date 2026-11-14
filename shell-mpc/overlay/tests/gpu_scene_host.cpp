@@ -231,19 +231,24 @@ int main()
             lv.envFineFraction[2] = 0.4f;
             ViewInput in;
             in.instance = &inst;
+            in.io = &inst;
+            UiStack uiStack;
+            in.ui = &uiStack;
             in.live = &lv;
             in.nowMs = 0.0;
             v.update (in);
             const int vi = layout::kNumViews - 4 + idx;   // play1 .. play3 are the last three views of the layout
             check (std::string (layout::kViews[vi].name) == "play" + std::to_string (idx) && layout::kViews[vi].kind == layout::kKindPlay && layout::kViews[vi].index == idx, "the layout's last three views are play1 .. play3");
-            const layout::Rect& r = layout::kViews[vi].region;
-            check (v.valid() && r.w == PlayView::kW, "the Play view has data after one update, the region is as wide as the three panels");
+            Rect r;
+            check (v.regionOverride (r) && r.w == PlayView::kW && r.h == PlayView::kH && r.y == play::kTabY, "the Play view's region is the whole tab of the Play page");
+            check (v.valid(), "the Play view has data after one update");
             checkSameAsCpu ("play " + std::to_string (idx) + " (dot and cursor)", v, vi, r.w, r.h);
             gpu::SceneData sd;
             gpu::SceneBuilder sb (sd);
             v.describe (sb, vi, r.w, r.h);
             check (sd.kind == gpu::kKindPlay && sd.numOps < static_cast<uint32_t> (gpu::kMaxOps) && sd.numPoints <= static_cast<uint32_t> (gpu::kMaxCurve), "play: kind, op count and vertex count are inside the protocol (" + std::to_string (sd.numOps) + " ops, " + std::to_string (sd.numPoints) + " vertices)");
             int curves = 0, texts = 0;
+            bool envTitle = false, lfoTitle = false;
             for (uint32_t k = 0; k < sd.numOps; ++k)
             {
                 curves += sd.ops[k].op == gpu::kOpCurve;
@@ -252,21 +257,22 @@ int main()
                     char t[13];
                     gpu::textOf (sd.ops[k], t);
                     ++texts;
-                    check (std::string (t) == "OSC A" || std::string (t) == "ENV 3" || std::string (t) == "LFO 4", std::string ("a panel title with the selected instance: ") + t);
+                    envTitle = envTitle || std::string (t) == "ENV 3";
+                    lfoTitle = lfoTitle || std::string (t) == "LFO 4";
                 }
             }
-            check (curves == 3 && texts == 3, "play: three polylines (one per panel) and three titles");
+            check (curves == 3 && texts > 10 && envTitle && lfoTitle, "play: three polylines (the oscillator picture, the envelope, the LFO), the two panel titles and the texts of the oscillator UI");
             std::vector<uint32_t> cv (static_cast<size_t> (r.w) * static_cast<size_t> (r.h));
             v.render (cv.data(), r.w, r.h);
             // the frame of the panel of this sub-tab is the accent colour, the others have the quiet one
             bool frames = true;
-            for (int p = 0; p < 3; ++p)
+            for (int p = 1; p < 3; ++p)   // the oscillator panel is the plugin-drawn compact view: no frame of the old kind
             {
-                const uint32_t top = cv[static_cast<size_t> (1) * static_cast<size_t> (r.w) + static_cast<size_t> (p * (play::kPanelW + play::kPanelGap) + 100)];
+                const uint32_t top = cv[static_cast<size_t> (play::kOy + 1) * static_cast<size_t> (r.w) + static_cast<size_t> (play::kOx + p * (play::kPanelW + play::kPanelGap) + 100)];
                 const bool accent = ((top >> 16) & 255u) > 0xe0 && ((top >> 8) & 255u) < 0x60;
                 frames = frames && (accent == (p == idx - 1));
             }
-            check (frames, "play " + std::to_string (idx) + ": only panel " + std::to_string (idx) + " has the highlight frame");
+            check (frames, "play " + std::to_string (idx) + ": only the Env / LFO panel of the sub-tab has the highlight frame");
         }
         // the cursor / dot off (no voice): still the same picture on both renderers
         PlayView idle (2, 10.0);
@@ -274,7 +280,7 @@ int main()
         in.instance = &inst;
         in.nowMs = 0.0;
         idle.update (in);
-        checkSameAsCpu ("play (no voice)", idle, layout::kNumViews - 2, PlayView::kW, 190);
+        checkSameAsCpu ("play (no voice)", idle, layout::kNumViews - 2, PlayView::kW, PlayView::kH);
     }
     {   // the scene ops of protocol 4: a curve with its own span, and text; the reference reads them the way the helper does
         gpu::SceneData sd;

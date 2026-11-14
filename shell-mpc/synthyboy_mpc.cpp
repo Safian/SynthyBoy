@@ -271,6 +271,7 @@ struct EventBuffer
 
 #if SYNTHYBOY_MPC_OVERLAY
 struct PluginInstance;
+static void writeRealParam (PluginInstance* inst, size_t index, float parameter);
 static std::string buildStateChunk (PluginInstance* inst);   // the chunk effGetChunk returns (the debug dump of play_log.h writes it too)
 #endif
 
@@ -342,6 +343,14 @@ struct PluginInstance
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
         void setQGroup (const int* targets, int n) noexcept override { inst.qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount())); }
+        void writeParam (int tableIndex, float normalised) noexcept override { inst.uiWrite (tableIndex, normalised); }
+        void setPlaySelection (int group, int instance) noexcept override { if (group >= 0 && group < synthyboy_mpc::play::kGroups) inst.playSetSelector (group, instance); }
+        int playLastSelector() const noexcept override { return inst.playLastSel.load (std::memory_order_relaxed); }
+        void setUiFullOpen (bool open) noexcept override
+        {
+            if (inst.uiFullOpen.exchange (open, std::memory_order_relaxed) != open)
+                inst.overlayReportDue.store (true, std::memory_order_release);   // the display thread reports the frame at once
+        }
         std::shared_ptr<const synthyboy::StateContent> content() const override { return std::atomic_load (&inst.overlayContent); }
         const synthyboy::IContentStore* contentStore() const noexcept override { return inst.contentStore.get(); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
@@ -407,6 +416,36 @@ struct PluginInstance
         const std::string chunk = buildStateChunk (this);
         std::fprintf (f, "chunk %zu\n%s\n", chunk.size(), chunk.c_str());
         std::fclose (f);
+    }
+
+    // ---- the writes of the plugin-drawn pages (overlay/osc_ui.h): the same write as the host's own, then the display thread tells the host (audioMasterAutomate), so automation recording and the host's
+    // own widgets follow. The overlay thread sets the dirty bit, the display thread reports it (one value per parameter, the latest).
+    std::atomic<int> playLastSel { 0 };                          // 0 none, 1 envelope, 2 LFO: which of the two Play selectors was set last (the modulation source the UI calls "selected")
+    std::atomic<uint64_t> uiDirty[synthyboy::kMaxParams / 64] {};
+    void uiWrite (int tableIndex, float normalised) noexcept
+    {
+        if (tableIndex < 0 || tableIndex >= static_cast<int> (synthyboy::paramCount()))
+            return;
+        writeRealParam (this, static_cast<size_t> (tableIndex), normalised);
+        uiDirty[tableIndex >> 6].fetch_or (uint64_t { 1 } << (tableIndex & 63), std::memory_order_release);
+    }
+    void uiPoll (AEffect* e)
+    {
+        if (! audioMaster)
+            return;
+        for (size_t w = 0; w < synthyboy::kMaxParams / 64; ++w)
+        {
+            if (uiDirty[w].load (std::memory_order_relaxed) == 0)
+                continue;
+            uint64_t bits = uiDirty[w].exchange (0, std::memory_order_acq_rel);
+            while (bits != 0)
+            {
+                const int b = __builtin_ctzll (bits);
+                bits &= bits - 1;
+                const int idx = static_cast<int> (w) * 64 + b;
+                audioMaster (e, audioMasterAutomate, idx, 0, nullptr, qReadNorm (idx));
+            }
+        }
     }
 
     // ---- the Q proxies (q_router.h, docs/MPC.md "Q proxies"): "Q 1" .. "Q 4" after the last Play proxy; what the four knobs of the plugin's own full-screen pages are mapped to ----
@@ -484,6 +523,8 @@ struct PluginInstance
     void playSetSelector (int group, int instance) noexcept
     {
         instance = std::min (std::max (instance, 1), synthyboy_mpc::play::kInstances[group]);
+        if (group == 1 || group == 2)
+            playLastSel.store (group, std::memory_order_relaxed);
         if (playSel[group].exchange (instance, std::memory_order_relaxed) != instance)
             playGroupDue[group].store (true, std::memory_order_release);
     }
@@ -539,6 +580,7 @@ struct PluginInstance
     // when the display thread reports it (audioMasterAutomate): once after creation, when the value changes and whenever the overlay thread asks (requestOverlayReport).
     std::atomic<int> overlaySlot { -1 };                       // the slot the overlay service gave this instance (-1: none, the instance never shows the overlay)
     std::atomic<float> overlayValue { synthyboy_mpc::overlay::instanceParamValue (-1) };   // what getParameter says: slot, or what the debug file asks for
+    std::atomic<bool> uiFullOpen { false };                    // a plugin-drawn full screen page is open for this instance: the frame the skin hides the host widgets of the Play page at
     std::atomic<bool> overlayReportDue { false };              // set by any thread; the display thread makes the host call
     std::atomic<bool> overlayAsked { false };                  // set by the overlay thread only (requestOverlayReport): the debug mode "stale" ends with it
     bool overlayStaleReleased = false;                         // display thread only
@@ -549,7 +591,7 @@ struct PluginInstance
         overlay thread asks for a report and the real slot after that: what a host that shows an old picture until the parameter is reported looks like). Display thread and startOverlay. */
     float overlayWantedValue (bool asked = false)
     {
-        const float real = synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
+        const float real = uiFullOpen.load (std::memory_order_relaxed) ? synthyboy_mpc::overlay::fullScreenParamValue() : synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
         bool stale = false;
         if (FILE* f = std::fopen (kOverlayFakeSlotFile, "r"))
         {
@@ -726,6 +768,7 @@ struct PluginInstance
                 overlayPoll (e, PluginInstance::overlayParamIndex());   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
                 playPoll (e, PluginInstance::playBase());               // the Play page: the selectors and the proxies after it
                 qPoll (e);                                              // the Q proxies after them
+                uiPoll (e);                                             // what the plugin-drawn pages wrote
 #endif
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST

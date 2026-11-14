@@ -725,10 +725,10 @@ int main()
         const std::string st = o.str();
         check (st.find ("play_view: play2") != std::string::npos && st.find ("play_highlight: 2") != std::string::npos && st.find ("play_osc: 5") != std::string::npos && st.find ("play_env: 1") != std::string::npos
                && st.find ("play_lfo: 10") != std::string::npos && st.find ("play_env_hash:") != std::string::npos, "the status lines name the view, the highlight and the three selected instances, with a hash per panel");
-        // Sub and Noise have no cycle picture in this view (the panel is empty, kind off); A, B and C read their own oscillator's parameters and live readout
+        // Sub draws its waveform (analytic, kind wavetable), Noise the noise display; A, B and C read their own oscillator's parameters and live readout
         inst.playSel[0] = 1; step();
         std::ostringstream o1; v.writeStatus (o1);
-        check (v.selection (0) == 1 && o1.str().find ("play_osc_kind: off") != std::string::npos && play::title (0, 1) == "SUB" && play::title (0, 5) == "NOISE" && play::title (0, 2) == "OSC A" && play::title (0, 4) == "OSC C", "Sub and Noise: an empty oscillator panel with their titles; A .. C are OSC A .. OSC C");
+        check (v.selection (0) == 1 && o1.str().find ("play_osc_kind: wavetable") != std::string::npos && play::title (0, 1) == "SUB" && play::title (0, 5) == "NOISE" && play::title (0, 2) == "OSC A" && play::title (0, 4) == "OSC C", "Sub: its waveform picture; the titles are SUB, NOISE, OSC A .. OSC C");
         inst.set ("osc2.level", 33.0f);
         inst.playSel[0] = 3; step();
         const uint32_t oscB = v.panelHash (0);
