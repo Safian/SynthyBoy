@@ -72,10 +72,11 @@ constexpr int kSock = 3;
 struct Vtx { float x, y, d0, d1; };
 struct Draw
 {
-    int prim = 0, first = 0, count = 0, kind = 0;   // kind: 0 solid, 1 feathered line (d0 = signed distance), 2 disc (d0, d1 = offset from the centre), 3 vertical gradient (d0 = 0 .. 1 from colour to colour2)
+    int prim = 0, first = 0, count = 0, kind = 0;   // kind: 0 solid, 1 feathered line (d0 = signed distance), 2 disc (d0, d1 = offset from the centre), 3 vertical gradient (d0 = 0 .. 1 from colour to colour2), 4 / 5 / 6 ring segment of at most pi / more than pi / the whole ring (d0, d1 = offset from the centre)
     float colour[4] = {};                           // premultiplied
     float colour2[4] = {};                          // premultiplied, the other end of a gradient
-    float half = 0.0f;                              // half width of a line, radius of a disc
+    float half = 0.0f;                              // half width of a line, radius of a disc, half width of an arc
+    float arcR = 0.0f, arcU[4] = {};                // an arc (kinds 4, 5, 6): the radius and the unit directions of its two ends (u0x, u0y, u1x, u1y)
     bool clear = false;                             // a glClear with `colour`
 };
 
@@ -190,8 +191,16 @@ private:
         "void main() { vD = aD; gl_Position = vec4 (dot (uRowX.xy, aPos) + uRowX.z, dot (uRowY.xy, aPos) + uRowY.z, 0.0, 1.0); }\n";
     // premultiplied output: kind 0 solid, kind 1 feathered line (coverage 1 px edge), kind 2 disc (coverage from the distance to the centre), kind 3 vertical gradient (d0 runs 0 .. 1 over the rows)
     static constexpr const char* kFs =
-        "precision mediump float; varying vec2 vD; uniform float uKind; uniform vec4 uC0; uniform vec4 uC1; uniform float uHalf;\n"
+        "precision mediump float; varying vec2 vD; uniform float uKind; uniform vec4 uC0; uniform vec4 uC1; uniform float uHalf; uniform float uR; uniform vec4 uU;\n"
         "void main() {\n"
+        "  if (uKind > 3.5) {\n"   // the ring segment: the ring by the distance from the centre, the ends by cross products of the offset with the directions of the two ends (arcContains of scene.h)
+        "    float cov = clamp (uHalf + 0.5 - abs (length (vD) - uR), 0.0, 1.0);\n"
+        "    bool inside = true;\n"
+        "    if (uKind < 4.5) inside = uU.x * vD.y - uU.y * vD.x >= 0.0 && vD.x * uU.w - vD.y * uU.z >= 0.0;\n"
+        "    else if (uKind < 5.5) inside = ! (uU.z * vD.y - uU.w * vD.x > 0.0 && vD.x * uU.y - vD.y * uU.x > 0.0);\n"
+        "    gl_FragColor = inside ? uC0 * cov : vec4 (0.0);\n"
+        "    return;\n"
+        "  }\n"
         "  if (uKind > 2.5) { gl_FragColor = mix (uC0, uC1, clamp (vD.x, 0.0, 1.0)); return; }\n"
         "  float cov = 1.0;\n"
         "  if (uKind > 1.5) cov = clamp (uHalf + 0.5 - length (vD), 0.0, 1.0);\n"
@@ -390,6 +399,8 @@ private:
         uC0_ = api_.glGetUniformLocation (prog_, "uC0");
         uC1_ = api_.glGetUniformLocation (prog_, "uC1");
         uHalf_ = api_.glGetUniformLocation (prog_, "uHalf");
+        uR_ = api_.glGetUniformLocation (prog_, "uR");
+        uU_ = api_.glGetUniformLocation (prog_, "uU");
         api_.glGenBuffers (1, &vbo_);
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
         api_.glEnableVertexAttribArray (0);
@@ -671,6 +682,42 @@ private:
                     end();
                     break;
                 }
+                case kOpLine:
+                {
+                    LineGeom g;
+                    if (! lineGeom (o, g))   // shared memory: validated, a bad op is skipped
+                        break;
+                    const float dx = g.x1 - g.x0, dy = g.y1 - g.y0, l = std::sqrt (dx * dx + dy * dy), nx = -dy / l, ny = dx / l, e = g.half + 1.0f;
+                    begin (GL_TRIANGLES, 1, o.rgba, g.half);
+                    // the quad of the segment, d0 = signed distance from the axis on its two long sides
+                    add (g.x0 + nx * e, g.y0 + ny * e, e); add (g.x0 - nx * e, g.y0 - ny * e, -e); add (g.x1 + nx * e, g.y1 + ny * e, e);
+                    add (g.x1 + nx * e, g.y1 + ny * e, e); add (g.x0 - nx * e, g.y0 - ny * e, -e); add (g.x1 - nx * e, g.y1 - ny * e, -e);
+                    end();
+                    break;
+                }
+                case kOpArc:
+                {
+                    ArcGeom g;
+                    if (! arcGeom (o, g))
+                        break;
+                    const float e = g.r + g.half + 1.0f;
+                    Draw& d = begin (GL_TRIANGLES, 4 + g.mode, o.rgba, g.half);
+                    d.arcR = g.r;
+                    d.arcU[0] = g.u0x; d.arcU[1] = g.u0y; d.arcU[2] = g.u1x; d.arcU[3] = g.u1y;
+                    quad (g.cx - e, g.cy - e, g.cx + e, g.cy + e, -e, e, -e, e);
+                    end();
+                    break;
+                }
+                case kOpFrame:
+                {
+                    FrameGeom g;
+                    if (! frameGeom (o, g))
+                        break;
+                    begin (GL_TRIANGLES, 0, o.rgba, 0.0f);
+                    frameRects (g, [&] (int x0, int y0, int x1, int y1) { quad (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), 0, 0, 0, 0); });
+                    end();
+                    break;
+                }
                 case kOpCurve:
                     setCurve (o.f[0], o.f[1], o.f[2], o.f[3]);
                     break;
@@ -791,6 +838,11 @@ private:
             api_.glUniform4f (uC0_, d.colour[0], d.colour[1], d.colour[2], d.colour[3]);
             api_.glUniform4f (uC1_, d.colour2[0], d.colour2[1], d.colour2[2], d.colour2[3]);
             api_.glUniform1f (uHalf_, d.half);
+            if (d.kind >= 4)
+            {
+                api_.glUniform1f (uR_, d.arcR);
+                api_.glUniform4f (uU_, d.arcU[0], d.arcU[1], d.arcU[2], d.arcU[3]);
+            }
             api_.glDrawArrays (static_cast<GLenum> (d.prim), d.first, d.count);
         }
         api_.glFinish();    // the buffer must be finished before the display reads it
@@ -1083,7 +1135,7 @@ private:
     EGLContext ctx_ = EGL_NO_CONTEXT;
     EGLSurface esurf_ = EGL_NO_SURFACE;
     GLuint prog_ = 0, vbo_ = 0;
-    GLint uRowX_ = -1, uRowY_ = -1, uKind_ = -1, uC0_ = -1, uC1_ = -1, uHalf_ = -1;
+    GLint uRowX_ = -1, uRowY_ = -1, uKind_ = -1, uC0_ = -1, uC1_ = -1, uHalf_ = -1, uR_ = -1, uU_ = -1;
     Import imports_[kMaxLedger];
     std::vector<Vtx> verts_;
     std::vector<Draw> draws_;

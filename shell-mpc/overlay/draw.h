@@ -85,6 +85,53 @@ inline void vline (uint32_t* cv, int w, int h, double x, int y0, int y1, double 
     }
 }
 
+/** A straight segment of width `width` from (x0, y0) to (x1, y1), anti-aliased on its two long sides, flat ends at the end points: a pixel whose centre projects onto the segment (0 <= t <= length)
+    gets the coverage of the feathered line (half width + 0.5 - distance, 0 .. 1). The same rule as the helper's quad (scene.h, Line). */
+inline void line (uint32_t* cv, int w, int h, float x0, float y0, float x1, float y1, float width, uint32_t c) noexcept
+{
+    const double dx = static_cast<double> (x1) - x0, dy = static_cast<double> (y1) - y0, len = std::sqrt (dx * dx + dy * dy);
+    if (len < 1.0e-3)
+        return;
+    const double ux = dx / len, uy = dy / len, half = static_cast<double> (width) * 0.5, reach = half + 1.0;
+    const int xa = std::max (0, static_cast<int> (std::floor (std::min (x0, x1) - reach))), xb = std::min (w, static_cast<int> (std::ceil (std::max (x0, x1) + reach)));
+    const int ya = std::max (0, static_cast<int> (std::floor (std::min (y0, y1) - reach))), yb = std::min (h, static_cast<int> (std::ceil (std::max (y0, y1) + reach)));
+    for (int y = ya; y < yb; ++y)
+        for (int x = xa; x < xb; ++x)
+        {
+            const double px = x + 0.5 - x0, py = y + 0.5 - y0;
+            const double t = px * ux + py * uy, d = std::fabs (-px * uy + py * ux);
+            if (t < 0.0 || t > len)
+                continue;
+            const double cov = std::clamp (half + 0.5 - d, 0.0, 1.0);
+            if (cov > 0.0)
+            {
+                uint32_t& p = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+                p = over (p, c, static_cast<int> (cov * 255.0));
+            }
+        }
+}
+
+/** A ring segment (the Arc op of scene.h): radius r around (cx, cy), half width `half`, anti-aliased on the circular sides, cut along the radius at the ends; `inside (dx, dy)` says whether
+    the offset from the centre is inside the angular range. */
+template <class Inside>
+void arc (uint32_t* cv, int w, int h, float cx, float cy, float r, float half, Inside inside, uint32_t c) noexcept
+{
+    const double reach = static_cast<double> (r) + half + 1.0;
+    const int xa = std::max (0, static_cast<int> (std::floor (cx - reach))), xb = std::min (w, static_cast<int> (std::ceil (cx + reach)));
+    const int ya = std::max (0, static_cast<int> (std::floor (cy - reach))), yb = std::min (h, static_cast<int> (std::ceil (cy + reach)));
+    for (int y = ya; y < yb; ++y)
+        for (int x = xa; x < xb; ++x)
+        {
+            const float dx = static_cast<float> (x + 0.5 - cx), dy = static_cast<float> (y + 0.5 - cy);
+            const double cov = std::clamp (static_cast<double> (half) + 0.5 - std::fabs (std::sqrt (static_cast<double> (dx) * dx + static_cast<double> (dy) * dy) - r), 0.0, 1.0);
+            if (cov > 0.0 && inside (dx, dy))
+            {
+                uint32_t& p = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+                p = over (p, c, static_cast<int> (cov * 255.0));
+            }
+        }
+}
+
 /** The curve y positions (canvas rows) at N + 1 sub-samples of every pixel column: `v` has n values at x = i / (n - 1) over the canvas width; yOf (value) gives the row. */
 template <class YOf>
 void sampleColumns (std::vector<double>& ys, const float* v, int n, int w, int h, YOf yOf, int subSamples)

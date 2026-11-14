@@ -168,6 +168,16 @@ for t in controller_host views_host gpu_backend_host spectrum_view_host display_
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
 done
+# the UI component library (shell-mpc/ui/, header only: the black box components, their interface tests and the demonstration program): the tests under AddressSanitizer + UBSan, the demo
+# renders the oscillator pages and the detail pages into $B/ui-images (PNG, for a human; not compared)
+mkdir -p $B/ui-images
+for t in ui_base_host ui_composite_host; do
+    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
+    UI_OUT=$B/ui-images $B/${t}_asan > $B/$t.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t.log | head; echo "ACCEPT FAIL: $t (UI components: interface, drawing, Q groups)"; exit 1; }
+    grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
+done
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -o $B/ui_demo shell-mpc/ui/tests/ui_demo.cpp || { echo "ACCEPT FAIL: ui_demo build"; exit 1; }
+$B/ui_demo $B/ui-images > $B/ui-demo.log 2>&1 || { grep -E "^FAIL" $B/ui-demo.log; echo "ACCEPT FAIL: ui_demo (the demonstration pages)"; exit 1; }
 $B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 live_build padoff -DSYNTHYBOY_MPC_PAD_PRESSURE=OFF
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB

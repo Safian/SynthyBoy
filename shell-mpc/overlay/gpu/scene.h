@@ -20,11 +20,11 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
 
-constexpr uint32_t kProtocolVersion = 4;   // 4: kMaxOps 96, kMaxCurve 1088, kOpCurve (a polyline with its own span), kOpText, kKindPlay. 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
+constexpr uint32_t kProtocolVersion = 5;   // 5: kMaxOps 640 (a whole panel of the UI component library, shell-mpc/ui/), kOpLine, kOpArc, kOpFrame with their validation (lineGeom, arcGeom, frameGeom). 4: kMaxOps 96, kMaxCurve 1088, kOpCurve (a polyline with its own span), kOpText, kKindPlay. 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
 constexpr uint32_t kBlockMagic = 0x53424f56u;   // 'SBOV'
 constexpr uint32_t kMsgMagic = 0x4d534f56u;     // 'MSOV' ... the first word of every message
 constexpr int kMaxCurve = 1088;                  // vertices of all polylines of a scene together (the oscillator cycle has 512; the Play page: 512 + 256 + 300)
-constexpr int kMaxOps = 96;
+constexpr int kMaxOps = 640;
 constexpr int kMaxLedger = 8;
 
 /** The span of vertices of a Curve op: `firstF` and `nF` are floats of a shared block (written by the plugin, read by the helper: never trusted). true: first (>= 0) and n (>= 2) are whole
@@ -41,7 +41,7 @@ inline bool curveSpan (float firstF, float nF, int& first, int& n) noexcept
     return true;
 }
 
-enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4, kKindSpectrum = 5, kKindPlay = 6 };
+enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4, kKindSpectrum = 5, kKindPlay = 6, kKindUi = 7 };
 
 /** The display list. Drawn in order, source over, onto the cleared canvas.
     Clear   rgba: the whole canvas is set to this colour (replaces everything; alpha 0 = transparent)
@@ -54,16 +54,23 @@ enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindO
             in between and constant outside (premultiplied colours are interpolated; evaluated at the centre of every pixel row)
     Curve   f[0] = first vertex, f[1] = number of vertices n (>= 2), f[2] = x0, f[3] = width W: from here on the polyline is the vertices y[first .. first + n - 1], point i at
             x = x0 + i / (n - 1) * (W - 1) + 0.5, the first and the last continue horizontally to x0 and x0 + W (a Fill or Stroke of this curve is limited to those columns)
+    Line    f[0..3] = x0 y0 x1 y1 (the end points, canvas pixels), f[4] = width: a straight segment at any angle, anti-aliased on its two long sides, flat (butt) ends exactly at the end points:
+            a pixel is drawn when its centre projects onto the segment (0 <= t <= length), with the coverage of the feathered line (half width + 0.5 - distance, clamped to 0 .. 1)
+    Arc     f[0..2] = cx cy radius, f[3] = a0, f[4] = a1 (radians), the line width as the bits of a float in rgba2 (arcWidth): a ring segment, anti-aliased on its two circular sides. The angle
+            runs CLOCKWISE on the screen (y is down): the point of angle a is (cx + radius cos a, cy + radius sin a); the ring is drawn from a0 to a1 (a0 < a1; a sweep of 2 pi or more is the
+            whole ring), the two ends are flat and cut along the radius (a pixel is inside when its centre is, no feathering at the cut). The test is made with cross products of the
+            directions of the two ends, so the helper's shader needs no angle function (arcGeom, arcContains)
+    Frame   f[0..3] = x0 y0 x1 y1 (outer edges), f[4] = thickness (whole pixels, at least 1): the outline of a rectangle, inside the outer edges, four solid rectangles
     Text    f[0..1] = x y (top left, whole pixels), f[2] = pixels per font pixel (whole), rgba: the text of up to 12 characters (font5x7.h; solid squares): the first four characters are the bytes
             of rgba2 (first character in the least significant byte), the next four of the bits of f[3], the last four of f[4]; the text ends at the first zero byte
     The polyline: without a Curve op, SceneData::y[0 .. numPoints - 1] are rows, point i at x = i / (numPoints - 1) * (w - 1) + 0.5 (the first and the last continue horizontally to the canvas edges). */
-enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7, kOpCurve = 8, kOpText = 9 };
+enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7, kOpCurve = 8, kOpText = 9, kOpLine = 10, kOpArc = 11, kOpFrame = 12 };
 
 struct SceneOp
 {
     uint32_t op;
     uint32_t rgba;
-    uint32_t rgba2;   // the second colour of a gradient (0 for the other ops)
+    uint32_t rgba2;   // the second colour of a gradient, the characters of a text, the width of an arc (0 for the other ops)
     float f[5];
 };
 static_assert (sizeof (SceneOp) == 32, "SceneOp layout");
@@ -101,6 +108,14 @@ struct SceneBuilder
     void clear (uint32_t rgba) { add (kOpClear, rgba); }
     void rect (float x0, float y0, float x1, float y1, uint32_t rgba) { if (SceneOp* o = add (kOpRect, rgba)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; } }
     void vline (float x, float y0, float y1, float width, uint32_t rgba) { if (SceneOp* o = add (kOpVLine, rgba)) { o->f[0] = x; o->f[1] = y0; o->f[2] = y1; o->f[3] = width; } }
+    void line (float x0, float y0, float x1, float y1, float width, uint32_t rgba) { if (SceneOp* o = add (kOpLine, rgba)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; o->f[4] = width; } }
+    /** A ring segment from angle a0 to a1 (radians, clockwise on the screen, see the Arc op); a0 > a1 are swapped. */
+    void arc (float cx, float cy, float radius, float a0, float a1, float width, uint32_t rgba)
+    {
+        if (a0 > a1) { const float t = a0; a0 = a1; a1 = t; }
+        if (SceneOp* o = add (kOpArc, rgba)) { o->f[0] = cx; o->f[1] = cy; o->f[2] = radius; o->f[3] = a0; o->f[4] = a1; std::memcpy (&o->rgba2, &width, 4); }
+    }
+    void frame (float x0, float y0, float x1, float y1, float thickness, uint32_t rgba) { if (SceneOp* o = add (kOpFrame, rgba)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; o->f[4] = thickness; } }
     void fill (float baseRow, uint32_t rgba) { if (SceneOp* o = add (kOpFill, rgba)) o->f[0] = baseRow; }
     void fillGradient (float baseRow, float yA, float yB, uint32_t rgbaA, uint32_t rgbaB) { if (SceneOp* o = add (kOpFillGradient, rgbaA)) { o->rgba2 = rgbaB; o->f[0] = baseRow; o->f[1] = yA; o->f[2] = yB; } }
     void stroke (float halfWidth, uint32_t rgba) { if (SceneOp* o = add (kOpStroke, rgba)) o->f[0] = halfWidth; }
@@ -156,6 +171,93 @@ inline void textOf (const SceneOp& o, char out[13]) noexcept
     for (int i = 0; i < 12; ++i)
         out[i] = static_cast<char> ((w[i / 4] >> (8 * (i % 4))) & 255u);
     out[12] = '\0';
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The geometry of Line, Arc and Frame ops. The floats of a scene come from shared memory (the helper never trusts them): these functions are the ONE place that decides whether an op
+// is drawable and with which numbers; the helper and the CPU reference both use them. false: the op is not drawn (NaN, infinity, a coordinate beyond +- kMaxCoord, a width or a
+// radius outside its limit, an empty sweep).
+constexpr float kMaxCoord = 32768.0f;    // a coordinate of a Line, Arc or Frame op (the canvas is a few thousand pixels)
+constexpr float kMaxStroke = 1024.0f;    // the width of a line or an arc, the thickness of a frame
+constexpr float kMaxRadius = 8192.0f;
+constexpr float kMaxAngle = 1.0e4f;      // radians
+
+inline bool coordOk (float v) noexcept { return std::isfinite (v) && v >= -kMaxCoord && v <= kMaxCoord; }
+
+inline float arcWidth (const SceneOp& o) noexcept { float w; std::memcpy (&w, &o.rgba2, 4); return w; }
+inline void setArcWidth (SceneOp& o, float width) noexcept { std::memcpy (&o.rgba2, &width, 4); }
+
+struct LineGeom { float x0, y0, x1, y1, half; };
+inline bool lineGeom (const SceneOp& o, LineGeom& g) noexcept
+{
+    for (int i = 0; i < 4; ++i)
+        if (! coordOk (o.f[i]))
+            return false;
+    if (! std::isfinite (o.f[4]) || o.f[4] <= 0.0f || o.f[4] > kMaxStroke)
+        return false;
+    g.x0 = o.f[0]; g.y0 = o.f[1]; g.x1 = o.f[2]; g.y1 = o.f[3]; g.half = o.f[4] * 0.5f;
+    const float dx = g.x1 - g.x0, dy = g.y1 - g.y0;
+    return dx * dx + dy * dy > 1.0e-6f;    // a point has no direction
+}
+
+/** The ring segment in the form both drawing sides use: centre, radius, half width, the unit directions of the two ends and `mode`: 0 = the sweep is at most pi, 1 = more than pi, 2 = the whole ring. */
+struct ArcGeom { float cx, cy, r, half, u0x, u0y, u1x, u1y; int mode; };
+inline bool arcGeom (const SceneOp& o, ArcGeom& g) noexcept
+{
+    const float width = arcWidth (o);
+    if (! coordOk (o.f[0]) || ! coordOk (o.f[1]) || ! std::isfinite (o.f[2]) || o.f[2] <= 0.0f || o.f[2] > kMaxRadius)
+        return false;
+    if (! std::isfinite (o.f[3]) || ! std::isfinite (o.f[4]) || std::fabs (o.f[3]) > kMaxAngle || std::fabs (o.f[4]) > kMaxAngle)
+        return false;
+    if (! std::isfinite (width) || width <= 0.0f || width > kMaxStroke)
+        return false;
+    const double a0 = static_cast<double> (o.f[3]), sweep = static_cast<double> (o.f[4]) - a0;
+    if (sweep <= 0.0)
+        return false;
+    constexpr double kPi = 3.14159265358979323846;
+    g.cx = o.f[0]; g.cy = o.f[1]; g.r = o.f[2]; g.half = width * 0.5f;
+    g.u0x = static_cast<float> (std::cos (a0)); g.u0y = static_cast<float> (std::sin (a0));
+    g.u1x = static_cast<float> (std::cos (static_cast<double> (o.f[4]))); g.u1y = static_cast<float> (std::sin (static_cast<double> (o.f[4])));
+    g.mode = sweep >= 2.0 * kPi - 1.0e-6 ? 2 : (sweep > kPi ? 1 : 0);
+    return true;
+}
+/** Is the offset (dx, dy) from the centre inside the angular range of the arc (the ends belong to it)? Exactly the test of the helper's shader. */
+inline bool arcContains (const ArcGeom& g, float dx, float dy) noexcept
+{
+    if (g.mode == 2)
+        return true;
+    if (g.mode == 0)
+        return g.u0x * dy - g.u0y * dx >= 0.0f && dx * g.u1y - dy * g.u1x >= 0.0f;
+    return ! (g.u1x * dy - g.u1y * dx > 0.0f && dx * g.u0y - dy * g.u0x > 0.0f);   // not in the other, shorter, part of the circle
+}
+
+/** A frame: whole pixel edges and thickness, 1 <= t, the rectangle not empty. */
+struct FrameGeom { int x0, y0, x1, y1, t; };
+inline bool frameGeom (const SceneOp& o, FrameGeom& g) noexcept
+{
+    for (int i = 0; i < 4; ++i)
+        if (! coordOk (o.f[i]))
+            return false;
+    if (! std::isfinite (o.f[4]) || o.f[4] < 0.5f || o.f[4] > kMaxStroke)
+        return false;
+    g.x0 = static_cast<int> (o.f[0]); g.y0 = static_cast<int> (o.f[1]); g.x1 = static_cast<int> (o.f[2]); g.y1 = static_cast<int> (o.f[3]);
+    g.t = static_cast<int> (o.f[4] + 0.5f);
+    return g.x1 > g.x0 && g.y1 > g.y0;
+}
+/** The (up to four) solid rectangles of a frame: calls plot (x0, y0, x1, y1). Thicker than half the rectangle: it is solid. */
+template <class Plot>
+void frameRects (const FrameGeom& g, Plot plot)
+{
+    const int t = g.t;
+    if (2 * t >= g.x1 - g.x0 || 2 * t >= g.y1 - g.y0)
+    {
+        plot (g.x0, g.y0, g.x1, g.y1);
+        return;
+    }
+    plot (g.x0, g.y0, g.x1, g.y0 + t);
+    plot (g.x0, g.y1 - t, g.x1, g.y1);
+    plot (g.x0, g.y0 + t, g.x0 + t, g.y1 - t);
+    plot (g.x1 - t, g.y0 + t, g.x1, g.y1 - t);
 }
 
 /** The ledger: the GEM handles and framebuffer ids the helper has made on the shared display descriptor (PRIME import, ADDFB2). The helper writes an entry as soon as the object

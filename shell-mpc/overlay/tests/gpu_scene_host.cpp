@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <thread>
 
 #include "fakes.h"
@@ -59,7 +60,7 @@ int main()
 {
     // ---- layout of the shared structures ----------------------------------------------------------------------------------------------------------------------
     check (sizeof (gpu::Msg) == 64 && sizeof (gpu::SceneOp) == 32 && sizeof (gpu::SceneData) == 32 + 32 * gpu::kMaxOps + 4 * gpu::kMaxCurve, "message, op and scene have the fixed sizes of the protocol");
-    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 4, "the shared block is word aligned, protocol version 4");
+    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 5, "the shared block is word aligned, protocol version 5");
     {
         auto* b = new gpu::SharedBlock;
         gpu::initBlock (b);
@@ -418,6 +419,130 @@ int main()
         const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
         check (! gpu::curveSpan (nan, 4.0f, first, n) && ! gpu::curveSpan (0.0f, nan, first, n) && ! gpu::curveSpan (inf, 4.0f, first, n) && ! gpu::curveSpan (0.0f, inf, first, n), "NaN and infinity: refused (a conversion to int of those is undefined)");
         check (! gpu::curveSpan (2.0e9f, 2.0e9f, first, n) && ! gpu::curveSpan (3.0e9f, 4.0f, first, n) && ! gpu::curveSpan (1.0e30f, 1.0e30f, first, n), "sums and values that overflow int: refused");
+    }
+    // ---- the ops of the UI component library: Line, Arc, Frame (protocol 5): validation of the floats of the shared block, and what the CPU makes of them ----
+    {
+        const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+        gpu::SceneData sd;
+        gpu::SceneBuilder sb (sd);
+        sb.line (1.0f, 2.0f, 30.0f, 4.0f, 3.0f, 0xffffffffu);
+        sb.arc (20.0f, 20.0f, 10.0f, 0.0f, 1.5f, 4.0f, 0xffffffffu);
+        sb.frame (2.0f, 3.0f, 20.0f, 15.0f, 2.0f, 0xffffffffu);
+        check (sd.numOps == 3 && sd.ops[0].op == gpu::kOpLine && sd.ops[1].op == gpu::kOpArc && sd.ops[2].op == gpu::kOpFrame, "the builder writes the three new ops");
+        gpu::LineGeom lg;
+        gpu::ArcGeom ag;
+        gpu::FrameGeom fg;
+        check (gpu::lineGeom (sd.ops[0], lg) && lg.half == 1.5f && gpu::arcGeom (sd.ops[1], ag) && ag.half == 2.0f && ag.mode == 0 && gpu::frameGeom (sd.ops[2], fg) && fg.t == 2 && fg.x1 == 20, "ordinary ops are taken as they are");
+        gpu::SceneOp bad = sd.ops[0];
+        for (int i = 0; i < 5; ++i)
+            for (float v : { nan, inf, -inf, 1.0e9f })
+            {
+                bad = sd.ops[0];
+                bad.f[i] = v;
+                check (! gpu::lineGeom (bad, lg), "line: NaN, infinity and a huge value in f[" + std::to_string (i) + "] are refused");
+                bad = sd.ops[2];
+                bad.f[i] = v;
+                check (! gpu::frameGeom (bad, fg), "frame: NaN, infinity and a huge value in f[" + std::to_string (i) + "] are refused");
+                bad = sd.ops[1];
+                bad.f[i] = v;
+                check (! gpu::arcGeom (bad, ag), "arc: NaN, infinity and a huge value in f[" + std::to_string (i) + "] are refused");
+            }
+        for (float v : { nan, inf, 0.0f, -1.0f, 5000.0f })
+        {
+            bad = sd.ops[1];
+            gpu::setArcWidth (bad, v);
+            check (! gpu::arcGeom (bad, ag), "arc: the width in rgba2 (NaN, infinity, 0, negative, beyond the limit) is refused");
+        }
+        bad = sd.ops[1];
+        bad.f[2] = 0.0f;
+        check (! gpu::arcGeom (bad, ag), "arc: radius 0 refused");
+        bad = sd.ops[1];
+        bad.f[4] = bad.f[3];
+        check (! gpu::arcGeom (bad, ag), "arc: an empty sweep is refused");
+        bad = sd.ops[0];
+        bad.f[2] = bad.f[0];
+        bad.f[3] = bad.f[1];
+        check (! gpu::lineGeom (bad, lg), "line: a point (no direction) is refused");
+        bad = sd.ops[2];
+        bad.f[2] = bad.f[0];
+        check (! gpu::frameGeom (bad, fg), "frame: an empty rectangle is refused");
+        bad = sd.ops[2];
+        bad.f[4] = 0.0f;
+        check (! gpu::frameGeom (bad, fg), "frame: thickness 0 refused");
+        // a scene full of garbage ops must not draw outside the canvas, crash or hang
+        gpu::SceneData junk;
+        std::memset (&junk, 0xff, sizeof junk);
+        junk.w = 64;
+        junk.h = 32;
+        junk.numOps = gpu::kMaxOps;
+        junk.numPoints = 0;
+        for (uint32_t k = 0; k < junk.numOps; ++k)
+            junk.ops[k].op = gpu::kOpLine + k % 3;
+        std::vector<uint32_t> cv;
+        renderSceneReference (junk, cv);
+        check (cv.size() == 64u * 32u, "a scene of NaN ops is interpreted without a fault");
+    }
+    {
+        // the pictures: a line, an arc, a frame
+        auto render = [] (const std::function<void (gpu::SceneBuilder&)>& f, int w, int h, std::vector<uint32_t>& cv)
+        {
+            gpu::SceneData sd;
+            gpu::SceneBuilder sb (sd);
+            sb.begin (gpu::kKindUi, 0, w, h);
+            f (sb);
+            renderSceneReference (sd, cv);
+        };
+        auto alpha = [] (const std::vector<uint32_t>& cv, int w, int x, int y) { return static_cast<int> (cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)] >> 24); };
+        std::vector<uint32_t> cv;
+        render ([] (gpu::SceneBuilder& sb) { sb.line (4.0f, 10.0f, 28.0f, 10.0f, 4.0f, 0xffffffffu); }, 40, 20, cv);
+        check (alpha (cv, 40, 10, 8) == 255 && alpha (cv, 40, 10, 11) == 255 && alpha (cv, 40, 10, 7) == 0 && alpha (cv, 40, 10, 12) == 0, "line: a horizontal line of width 4 covers exactly the rows 8 .. 11");
+        check (alpha (cv, 40, 3, 10) == 0 && alpha (cv, 40, 4, 10) == 255 && alpha (cv, 40, 27, 10) == 255 && alpha (cv, 40, 28, 10) == 0, "line: flat ends exactly at the end points");
+        render ([] (gpu::SceneBuilder& sb) { sb.line (4.0f, 4.0f, 28.0f, 16.0f, 3.0f, 0xffffffffu); }, 40, 20, cv);
+        int sum = 0;
+        for (uint32_t p : cv)
+            sum += static_cast<int> (p >> 24);
+        const double expected = 3.0 * std::sqrt (24.0 * 24.0 + 12.0 * 12.0) * 255.0;   // the area of the segment
+        check (std::fabs (sum - expected) < 0.04 * expected, "line: a slanted line has about the area width * length (" + std::to_string (sum) + " against " + std::to_string (static_cast<int> (expected)) + ")");
+        // arc: a quarter at the right-below (angles 0 .. pi/2: clockwise from the right to the bottom)
+        render ([] (gpu::SceneBuilder& sb) { sb.arc (20.0f, 20.0f, 12.0f, 0.0f, 1.5707963f, 4.0f, 0xffffffffu); }, 40, 40, cv);
+        check (alpha (cv, 40, 31, 21) > 200 && alpha (cv, 40, 21, 31) > 200 && alpha (cv, 40, 29, 29) > 200, "arc: the quarter right-below is drawn (clockwise from the right)");
+        check (alpha (cv, 40, 8, 20) == 0 && alpha (cv, 40, 20, 8) == 0 && alpha (cv, 40, 8, 29) == 0 && alpha (cv, 40, 29, 8) == 0, "arc: nothing in the other three quarters");
+        check (alpha (cv, 40, 20, 20) == 0 && alpha (cv, 40, 36, 36) == 0, "arc: nothing in the middle or outside the ring");
+        // a sweep over pi (three quarters, angle 0.5 pi .. 2 pi: the bottom, left, top) and the whole ring
+        render ([] (gpu::SceneBuilder& sb) { sb.arc (20.0f, 20.0f, 12.0f, 1.5707963f, 6.2831853f, 4.0f, 0xffffffffu); }, 40, 40, cv);
+        check (alpha (cv, 40, 19, 31) > 200 && alpha (cv, 40, 8, 20) > 200 && alpha (cv, 40, 20, 8) > 200 && alpha (cv, 40, 28, 11) > 200 && alpha (cv, 40, 28, 28) == 0, "arc: a sweep of more than pi is drawn from the bottom over the left and the top to the right");
+        render ([] (gpu::SceneBuilder& sb) { sb.arc (20.0f, 20.0f, 12.0f, -1.0f, 9.0f, 4.0f, 0xffffffffu); }, 40, 40, cv);
+        check (alpha (cv, 40, 31, 21) > 200 && alpha (cv, 40, 8, 20) > 200 && alpha (cv, 40, 20, 8) > 200 && alpha (cv, 40, 20, 31) > 200, "arc: a sweep of 2 pi or more is the whole ring");
+        // frame
+        render ([] (gpu::SceneBuilder& sb) { sb.frame (2.0f, 3.0f, 20.0f, 15.0f, 2.0f, 0xffffffffu); }, 30, 20, cv);
+        check (alpha (cv, 30, 2, 3) == 255 && alpha (cv, 30, 19, 14) == 255 && alpha (cv, 30, 3, 8) == 255 && alpha (cv, 30, 10, 4) == 255 && alpha (cv, 30, 10, 5) == 0 && alpha (cv, 30, 4, 8) == 0 && alpha (cv, 30, 20, 8) == 0 && alpha (cv, 30, 1, 8) == 0, "frame: an outline of thickness 2 inside the outer edges");
+        // arcContains agrees with the angles
+        bool all = true;
+        for (int i = 0; i < 4000; ++i)
+        {
+            const double a0 = -3.0 + 0.0013 * i, sweep = 0.1 + 6.0 * ((i * 7919) % 1000) / 1000.0, ang = a0 + std::fmod (0.37 * i, 6.2831853);
+            gpu::SceneOp o {};
+            o.op = gpu::kOpArc; o.f[0] = 0.0f; o.f[1] = 0.0f; o.f[2] = 10.0f; o.f[3] = static_cast<float> (a0); o.f[4] = static_cast<float> (a0 + sweep);
+            gpu::setArcWidth (o, 2.0f);
+            gpu::ArcGeom g;
+            if (! gpu::arcGeom (o, g)) { all = false; break; }
+            double rel = std::fmod (ang - a0, 6.283185307179586);
+            if (rel < 0) rel += 6.283185307179586;
+            if (std::fabs (rel - sweep) < 1e-3 || rel < 1e-3 || rel > 6.2831 || sweep > 6.2831) continue;   // on a cut: either answer
+            const bool want = rel <= sweep;
+            if (gpu::arcContains (g, static_cast<float> (5.0 * std::cos (ang)), static_cast<float> (5.0 * std::sin (ang))) != want) { all = false; break; }
+        }
+        check (all, "arcContains (the cross product test, which the shader repeats) agrees with the angle comparison for 4000 arcs of 0.1 .. 6.1 radians");
+        // the seqlock carries the new ops unchanged
+        gpu::SceneData sd, out;
+        gpu::SceneBuilder sb (sd);
+        sb.line (1, 2, 3, 4, 5, 6u); sb.arc (1, 2, 3, 0.5f, 1.0f, 2.0f, 7u); sb.frame (1, 2, 3, 4, 1.0f, 8u);
+        auto* b = new gpu::SharedBlock;
+        gpu::initBlock (b);
+        gpu::writeScene (b, sd);
+        uint32_t seq = 0;
+        check (gpu::readScene (b, out, seq) && std::memcmp (&out, &sd, sizeof sd) == 0, "the scene with the new ops goes through the shared block unchanged");
+        delete b;
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

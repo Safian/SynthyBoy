@@ -1,0 +1,200 @@
+// SynthyBoy - MPC UI component library tests: the helpers every test file shares: the check, a canvas the scene is drawn into by the CPU renderer (overlay/scene_cpu.h), the "nothing outside
+// the rectangle" and "which pixels changed" tests, and a PNG writer for the pictures a human looks at.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#pragma once
+
+#include <cstdint>
+#include <cstdio>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "../ui.h"
+#include "../../overlay/scene_cpu.h"
+
+namespace uit {
+
+using namespace synthyboy_mpc::ui;
+namespace ov = synthyboy_mpc::overlay;
+
+inline int g_fails = 0;
+inline void check (bool ok, const std::string& what)
+{
+    std::printf ("%s  %s\n", ok ? "PASS" : "FAIL", what.c_str());
+    if (! ok)
+        ++g_fails;
+}
+
+/** A scene holder (the scene is big: on the heap). */
+struct Scene
+{
+    std::unique_ptr<gpu::SceneData> data { new gpu::SceneData() };
+    std::unique_ptr<gpu::SceneBuilder> sb;
+    Scene (int w, int h, uint32_t clearRgba = 0)
+    {
+        sb.reset (new gpu::SceneBuilder (*data));
+        sb->begin (gpu::kKindUi, 0, w, h);
+        if (clearRgba != 0)
+            sb->clear (clearRgba);
+    }
+    gpu::SceneBuilder& builder() { return *sb; }
+    bool overflow() const { return sb->overflow; }
+    uint32_t numOps() const { return data->numOps; }
+};
+
+struct Image
+{
+    int w = 0, h = 0;
+    std::vector<uint32_t> px;   // premultiplied ARGB
+    uint32_t at (int x, int y) const { return px[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)]; }
+};
+
+inline Image render (const Scene& s)
+{
+    Image im;
+    im.w = s.data->w;
+    im.h = s.data->h;
+    ov::renderScene (*s.data, im.px);
+    return im;
+}
+
+/** The number of pixels that differ from `background` outside `r` (a pixel is "drawn" when it is not the background). */
+inline int drawnOutside (const Image& im, const Rect& r, uint32_t background)
+{
+    int n = 0;
+    for (int y = 0; y < im.h; ++y)
+        for (int x = 0; x < im.w; ++x)
+            if (! r.contains (x, y) && im.at (x, y) != background)
+                ++n;
+    return n;
+}
+inline int drawnInside (const Image& im, const Rect& r, uint32_t background)
+{
+    int n = 0;
+    for (int y = std::max (0, r.y); y < std::min (im.h, r.bottom()); ++y)
+        for (int x = std::max (0, r.x); x < std::min (im.w, r.right()); ++x)
+            n += im.at (x, y) != background;
+    return n;
+}
+
+/** The colour (RGB, 0xRRGGBB) of the pixel, composed over black (the canvases of the tests are drawn over the background colour). */
+inline uint32_t rgbAt (const Image& im, int x, int y) { return im.at (x, y) & 0xffffffu; }
+inline int channelDistance (uint32_t a, uint32_t b)
+{
+    int m = 0;
+    for (int s = 0; s < 24; s += 8)
+        m = std::max (m, std::abs (static_cast<int> ((a >> s) & 255u) - static_cast<int> ((b >> s) & 255u)));
+    return m;
+}
+/** Is a pixel near (x, y) (within `r` pixels) of the colour `rgb` (within `tol` per channel)? */
+inline bool colourNear (const Image& im, float fx, float fy, int r, uint32_t rgb, int tol)
+{
+    for (int y = static_cast<int> (fy) - r; y <= static_cast<int> (fy) + r; ++y)
+        for (int x = static_cast<int> (fx) - r; x <= static_cast<int> (fx) + r; ++x)
+            if (x >= 0 && y >= 0 && x < im.w && y < im.h && im.at (x, y) >> 24 == 255 && channelDistance (rgbAt (im, x, y), rgb) <= tol)
+                return true;
+    return false;
+}
+
+// ---- PNG (stored deflate blocks: no library, readable by any viewer)
+inline uint32_t crc32 (const unsigned char* d, size_t n, uint32_t crc = 0)
+{
+    static uint32_t table[256];
+    static bool init = false;
+    if (! init)
+    {
+        for (uint32_t i = 0; i < 256; ++i)
+        {
+            uint32_t c = i;
+            for (int k = 0; k < 8; ++k)
+                c = (c & 1u) ? 0xedb88320u ^ (c >> 1) : c >> 1;
+            table[i] = c;
+        }
+        init = true;
+    }
+    crc = ~crc;
+    for (size_t i = 0; i < n; ++i)
+        crc = table[(crc ^ d[i]) & 255u] ^ (crc >> 8);
+    return ~crc;
+}
+inline void put32 (std::vector<unsigned char>& v, uint32_t x) { for (int s = 24; s >= 0; s -= 8) v.push_back (static_cast<unsigned char> (x >> s)); }
+inline void chunk (FILE* f, const char* type, const std::vector<unsigned char>& data)
+{
+    std::vector<unsigned char> b;
+    put32 (b, static_cast<uint32_t> (data.size()));
+    for (int i = 0; i < 4; ++i)
+        b.push_back (static_cast<unsigned char> (type[i]));
+    b.insert (b.end(), data.begin(), data.end());
+    std::vector<unsigned char> c (b.begin() + 4, b.end());
+    put32 (b, crc32 (c.data(), c.size()));
+    std::fwrite (b.data(), 1, b.size(), f);
+}
+/** Writes the image as an RGB PNG (premultiplied pixels are shown over black), scaled up `scale` times (whole pixels). */
+inline bool writePng (const std::string& path, const Image& im, int scale = 1)
+{
+    FILE* f = std::fopen (path.c_str(), "wb");
+    if (! f)
+        return false;
+    const int W = im.w * scale, H = im.h * scale;
+    std::vector<unsigned char> raw;
+    raw.reserve (static_cast<size_t> (H) * (static_cast<size_t> (W) * 3 + 1));
+    for (int y = 0; y < H; ++y)
+    {
+        raw.push_back (0);
+        for (int x = 0; x < W; ++x)
+        {
+            const uint32_t p = im.at (x / scale, y / scale);
+            raw.push_back (static_cast<unsigned char> ((p >> 16) & 255u));
+            raw.push_back (static_cast<unsigned char> ((p >> 8) & 255u));
+            raw.push_back (static_cast<unsigned char> (p & 255u));
+        }
+    }
+    std::vector<unsigned char> z { 0x78, 0x01 };
+    uint32_t a = 1, b = 0;
+    for (unsigned char c : raw)
+    {
+        a = (a + c) % 65521u;
+        b = (b + a) % 65521u;
+    }
+    for (size_t pos = 0; pos < raw.size();)
+    {
+        const size_t n = std::min<size_t> (65535, raw.size() - pos);
+        z.push_back (pos + n >= raw.size() ? 1 : 0);
+        z.push_back (static_cast<unsigned char> (n & 255)); z.push_back (static_cast<unsigned char> (n >> 8));
+        z.push_back (static_cast<unsigned char> (~n & 255)); z.push_back (static_cast<unsigned char> ((~n >> 8) & 255));
+        z.insert (z.end(), raw.begin() + static_cast<long> (pos), raw.begin() + static_cast<long> (pos + n));
+        pos += n;
+    }
+    put32 (z, (b << 16) | a);
+    const unsigned char sig[8] = { 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a };
+    std::fwrite (sig, 1, 8, f);
+    std::vector<unsigned char> ihdr;
+    put32 (ihdr, static_cast<uint32_t> (W)); put32 (ihdr, static_cast<uint32_t> (H));
+    ihdr.push_back (8); ihdr.push_back (2); ihdr.push_back (0); ihdr.push_back (0); ihdr.push_back (0);
+    chunk (f, "IHDR", ihdr);
+    chunk (f, "IDAT", z);
+    chunk (f, "IEND", {});
+    std::fclose (f);
+    return true;
+}
+
+/** The opaque background the pictures of the tests are drawn over (the colour of the overlay views). */
+constexpr uint32_t kBackgroundRgba = 0x1e1d1eff;
+inline uint32_t backgroundPixel() { return ov::sceneColour (kBackgroundRgba); }
+
+/** A canvas bigger than the component: the component is drawn at `r` inside it. */
+inline Image drawComponent (const Component& c, int canvasW, int canvasH)
+{
+    Scene s (canvasW, canvasH, kBackgroundRgba);
+    c.draw (s.builder());
+    return render (s);
+}
+
+inline std::string outDir()
+{
+    const char* d = std::getenv ("UI_OUT");
+    return d && *d ? d : ".";
+}
+
+} // namespace uit
