@@ -129,6 +129,11 @@ class SpectrumSkinTest(unittest.TestCase):
         self.assertIn("kSpectrumCount = kSpectrumBands", header)
         bands = (ROOT / "shell-mpc" / "spectrum_bands.h").read_text(encoding="utf-8")
         self.assertRegex(bands, r"kSpectrumBands\s*=\s*32\s*;")
+        self.assertRegex(bands, r"kSpectrumFloorDb\s*=\s*-60\.0f\s*;")
+        self.assertRegex(bands, r"kSpectrumCeilingDb\s*=\s*-12\.0f\s*;")
+        doc = (ROOT / "docs" / "MPC.md").read_text(encoding="utf-8")
+        self.assertIn("kSpectrumFloorDb", doc)
+        self.assertIn("kSpectrumCeilingDb", doc)
         self.assertRegex((ROOT / "shell-mpc" / "lfo_live.h").read_text(encoding="utf-8"), r"kLfoLiveCount\s*=\s*4\s*;")   # the 4 before the columns
         cmake = (ROOT / "shell-mpc" / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertRegex(cmake, r'option\(SYNTHYBOY_MPC_SPECTRUM [^\n]*\bON\)')
