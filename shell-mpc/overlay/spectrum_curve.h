@@ -14,12 +14,15 @@
 //    of the window (1.5 bins). A sine of amplitude A gives S = A^2 at the bin of its frequency whatever its offset from the bin centre (the scalloping loss of a plain bin read-out,
 //    up to 1.4 dB, is gone) and the picture reads in dB of the sine amplitude, full scale = 0 dB, exactly the unit of the 32 meters. White noise of variance s^2 gives 12 s^2 / N.
 //  - A point covers a stretch of the frequency axis (the log axis has 256 points from 20 Hz to 20 kHz; a point is 2.7 % wide). A point narrower than a bin (below about 400 Hz at
-//    44.1 kHz) is interpolated between two bins. A point narrower than the main lobe of the window (up to 6 bins, about 1.5 kHz) takes the PEAK of S over its stretch, so a tone keeps
-//    its level (within 0.1 dB measured, wherever it lies between two points). A point wider than 12 bins (above about 3 kHz) takes the MEAN of S over its stretch (the integral of the
-//    linear interpolation of S, divided by the width): white noise is flat there, and the high end is calm; a narrow tone is spread over the stretch and reads lower by about
-//    10 log10 (bins covered / 3) (5 dB at 6 kHz). In between the two are crossfaded.
+//    44.1 kHz) is interpolated between two bins. EVERY point takes the PEAK of S over its stretch (never a mean: an average lowers every tone and the level of the whole curve
+//    under the meters, which show the maximum of the bins of their band), so a tone keeps its level wherever it lies between two points.
 //  - Light smoothing across frequency: a point is never lowered, only raised towards the mean of itself and its two neighbours (v' = max (v, (v[-1] + 2 v + v[+1]) / 4) in dB): the valleys
 //    between partials fill a little and the picture is calmer, every peak keeps its height.
+//  - The curve has the HEIGHT of the 32 meters under it (the display parameters "Spectrum 1" .. "Spectrum 32", shell-mpc/spectrum_bands.h): the meter of a band shows the maximum of the
+//    bins of its band of a 2048 point analysis of the newest samples; the same value is computed here (the same functions, no time smoothing) and the curve is lifted or lowered so that its
+//    highest point inside each band is exactly the meter's value: the gain needed at each band's highest point (a tone between two bins reads up to 1.4 dB lower on a plain bin, the two
+//    window sizes differ, and so on) is taken from there and interpolated linearly between the highest points of neighbouring bands (smoothing only BETWEEN the bands' peaks), and no
+//    point inside a band rises above the meter's value. Peaks keep their shape and their order; the valleys between partials stay valleys; only the level is tied to the meters.
 //  - In time: per point, level += (target - level) * (1 - exp (-dt / tau)), tau 20 ms upwards (fast attack) and 350 ms downwards (slow release), by the real time between two
 //    analyses. A point that has fallen under 1/256 of the scale with a target at the floor goes to exactly 0, so silence settles at the floor and stays there.
 //  - Silence: a window whose largest sample is under kSilentPeak (-80 dBFS, far below the floor of the scale), or a ring that did not move, is not analysed at all (no FFT): the targets
@@ -50,6 +53,7 @@ public:
     static constexpr float kSilentPeak = 1.0e-4f;       // -80 dBFS
     static constexpr double kAttackMs = 20.0, kReleaseMs = 350.0;
     static constexpr float kSettle = 1.0f / 256.0f;     // a falling point under this goes to 0
+    static constexpr double kBlendBands = 0.17;         // the stretch at a band edge over which the gains of two bands are blended: 1.5 points (a band is about 9 points wide)
     static constexpr int kPictureSteps = 512;           // the curve counts as changed when a point moved by a 1/512 of the scale (a quarter of a pixel on the 136 px high view)
 
     explicit SpectrumCurve (double sampleRate = 44100.0) { setSampleRate (sampleRate); }
@@ -62,6 +66,8 @@ public:
         if (! fft_)
         {
             fft_ = std::make_unique<SpectrumFft> (kFftSize);
+            meterFft_ = std::make_unique<SpectrumFft> (kSpectrumFftSize);
+            meterMag_.assign (static_cast<size_t> (meterFft_->bins()), 0.0f);
             mag_.assign (static_cast<size_t> (fft_->bins()), 0.0f);
             cum_.assign (static_cast<size_t> (fft_->bins()) + 1, 0.0);
             s_.assign (static_cast<size_t> (fft_->bins()), 0.0);
@@ -71,6 +77,16 @@ public:
         const double binHz = rate_ / kFftSize, nyquistBin = kFftSize / 2.0;
         for (int i = 0; i <= kPoints; ++i)
             edgeBin_[static_cast<size_t> (i)] = std::min (kFMin * std::pow (ratio, i - 0.5) / binHz, nyquistBin);
+        // the meter band of every point (by the point's frequency): -1 below the first band and above the last one
+        for (int i = 0; i < kPoints; ++i)
+        {
+            band_[static_cast<size_t> (i)] = -1;
+            const double f = pointHz (i);
+            u_[static_cast<size_t> (i)] = std::log (f / kSpectrumLowHz) / std::log (kSpectrumHighHz / kSpectrumLowHz) * kSpectrumBands;
+            for (int k = 0; k < kSpectrumBands; ++k)
+                if (f >= spectrumBandEdgeHz (k) && f < spectrumBandEdgeHz (k + 1))
+                    band_[static_cast<size_t> (i)] = k;
+        }
         reset();
     }
     double sampleRate() const noexcept { return rate_; }
@@ -171,19 +187,13 @@ private:
         float db[kPoints];
         for (int i = 0; i < kPoints; ++i)
         {
-            const double lo = edgeBin_[static_cast<size_t> (i)], hi = edgeBin_[static_cast<size_t> (i) + 1], hw = 0.5 * (hi - lo);
-            double mean = hi - lo < 1.0e-6 ? at ((lo + hi) * 0.5) : (integral (hi) - integral (lo)) / (hi - lo);
-            // a point narrower than the main lobe of the window (3 bins, 4 bins of the lobe's skirts) takes the PEAK of S over its stretch: a tone lies inside the stretch of one point or
-            // two, and keeps its level wherever it lies between the points; wider than 12 bins it is the mean (noise is flat, the high end is calm); in between the two are crossfaded
-            const double m = std::clamp ((6.0 - hw) / 4.5, 0.0, 1.0);
-            if (m > 0.0)
-            {
-                double peak = std::max (at (lo), at (hi));
-                for (int k = static_cast<int> (std::ceil (lo)); k <= static_cast<int> (std::floor (hi)); ++k)
-                    peak = std::max (peak, s_[static_cast<size_t> (std::min (k, static_cast<int> (s_.size()) - 1))]);
-                mean = (1.0 - m) * mean + m * peak;
-            }
-            db[i] = mean > 1.0e-18 ? static_cast<float> (10.0 * std::log10 (mean)) : -180.0f;
+            const double lo = edgeBin_[static_cast<size_t> (i)], hi = edgeBin_[static_cast<size_t> (i) + 1];
+            // the PEAK of S over the point's stretch (the two ends are interpolated), whatever the width of the stretch: a tone keeps its level wherever it lies, and the maximum of the
+            // points of a band is the maximum of the bins of that band, the way the meters read it
+            double peak = std::max (at (lo), at (hi));
+            for (int k = static_cast<int> (std::ceil (lo)); k <= static_cast<int> (std::floor (hi)); ++k)
+                peak = std::max (peak, s_[static_cast<size_t> (std::min (k, static_cast<int> (s_.size()) - 1))]);
+            db[i] = peak > 1.0e-18 ? static_cast<float> (10.0 * std::log10 (peak)) : -180.0f;
         }
         // light smoothing across frequency: raised towards the neighbours' mean, never lowered
         float sm[kPoints];
@@ -192,8 +202,77 @@ private:
             const float l = db[i > 0 ? i - 1 : 0], r = db[i < kPoints - 1 ? i + 1 : kPoints - 1];
             sm[i] = std::max (db[i], 0.25f * l + 0.5f * db[i] + 0.25f * r);
         }
+        tieToMeters (x, sm);
         for (int i = 0; i < kPoints; ++i)
             target_[i] = spectrumLevelFromDb (sm[i]);
+    }
+
+    /** The curve gets the height of the meters (see the header): `db` (the curve in dB) is changed in place. `x`: the newest kFftSize samples. */
+    void tieToMeters (const float* x, float* db)
+    {
+        // the meters' values: the 2048 point analysis of the newest 2048 samples, the maximum of the bins of each band (the code of SpectrumAnalyser, without its smoothing in time)
+        // (the mean of THEIR window is taken out here, like that of the curve's: a DC offset leaks into the lowest meter, and is not sound)
+        const float* w = x + (kFftSize - kSpectrumFftSize);
+        double sum = 0.0;
+        for (int i = 0; i < kSpectrumFftSize; ++i)
+            sum += static_cast<double> (w[i]);
+        const float mean = static_cast<float> (sum / kSpectrumFftSize);
+        meterIn_.resize (static_cast<size_t> (kSpectrumFftSize));
+        for (int i = 0; i < kSpectrumFftSize; ++i)
+            meterIn_[static_cast<size_t> (i)] = w[i] - mean;
+        meterFft_->magnitudes (meterIn_.data(), meterMag_.data());
+        float meter[kSpectrumBands];
+        spectrumBandDb (meterMag_.data(), meterFft_->bins(), rate_, meter);
+        // the highest point of every band and the gain that brings it to the meter's value
+        int anchor[kSpectrumBands];
+        float gain[kSpectrumBands];
+        std::fill (anchor, anchor + kSpectrumBands, -1);
+        for (int i = 0; i < kPoints; ++i)
+        {
+            const int k = band_[static_cast<size_t> (i)];
+            if (k >= 0 && (anchor[k] < 0 || db[i] > db[anchor[k]]))
+                anchor[k] = i;
+        }
+        constexpr float kMaxGainDb = 150.0f;   // the whole range of dB the analysis can produce: a band whose curve is far below the meter (the skirts of a loud tone in the 2048 window reach farther than in the 4096 one) is brought up to it
+        for (int k = 0; k < kSpectrumBands; ++k)
+            gain[k] = anchor[k] < 0 ? 0.0f : std::clamp (meter[k] - db[anchor[k]], -kMaxGainDb, kMaxGainDb);
+        // a point outside the bands (below 30 Hz, above 18 kHz) takes the gain of the first / last band
+        // the gain along the axis: the band's own all through the band (so the shape inside a band, the order of its peaks, is kept and the highest point is exactly the meter's value), blended
+        // linearly with the neighbouring band's over a stretch of one and a half points on either side of the band edge (no step in the picture)
+        float g[kPoints];
+        for (int i = 0; i < kPoints; ++i)
+        {
+            const double u = u_[static_cast<size_t> (i)];           // the position in bands: band k is k .. k + 1
+            const int k = std::clamp (static_cast<int> (std::floor (u)), 0, kSpectrumBands - 1);
+            const double frac = u - k;
+            double w = 0.0;
+            int other = k;
+            if (u >= 0.0 && u < kSpectrumBands)
+            {
+                if (frac < kBlendBands && k > 0)
+                {
+                    other = k - 1;
+                    w = 0.5 * (1.0 - frac / kBlendBands);            // 0.5 at the edge, 0 at the end of the stretch
+                }
+                else if (frac > 1.0 - kBlendBands && k < kSpectrumBands - 1)
+                {
+                    other = k + 1;
+                    w = 0.5 * (1.0 - (1.0 - frac) / kBlendBands);
+                }
+            }
+            g[i] = static_cast<float> ((1.0 - w) * gain[k] + w * gain[other]);
+        }
+        for (int k = 0; k < kSpectrumBands; ++k)
+            if (anchor[k] >= 0)
+                g[anchor[k]] = gain[k];   // the highest point of a band gets the band's own gain whatever the blend at an edge says: it is exactly the meter's value
+        for (int i = 0; i < kPoints; ++i)
+        {
+            float v = db[i] + g[i];
+            const int k = band_[static_cast<size_t> (i)];
+            if (k >= 0)
+                v = std::min (v, meter[k]);   // inside a band the curve never rises above the meter (only the blended stretches at the band edges can try)
+            db[i] = v;
+        }
     }
 
     /** S at a (fractional) bin position, linear between the bin centres. */
@@ -245,7 +324,10 @@ private:
 
     double rate_ = 0.0;
     std::unique_ptr<SpectrumFft> fft_;
-    std::vector<float> mag_, window_, centred_;
+    std::unique_ptr<SpectrumFft> meterFft_;
+    std::vector<float> mag_, window_, centred_, meterMag_, meterIn_;
+    std::array<int8_t, kPoints> band_ {};
+    std::array<double, kPoints> u_ {};   // the position of every point in bands (band k covers k .. k + 1), negative / beyond 32 outside the bands
     uint64_t lastPos_ = 0;
     std::vector<double> cum_, s_;
     std::array<double, kPoints + 1> edgeBin_ {};

@@ -20,6 +20,7 @@ using namespace synthyboy_mpc::overlay;
 
 namespace
 {
+constexpr double SpectrumView_kMargins = 13.0;   // SpectrumView::kTopMargin + kBottomMargin (views.h): a level 0 .. 1 spans the canvas height minus these rows
 int g_fails = 0;
 void check (bool ok, const std::string& what)
 {
@@ -121,7 +122,7 @@ int main()
                 if (err > worst)
                     worst = err, worstHz = hz;
             }
-        check (worst <= 1.5, "a 0.1 amplitude sine at 120 frequencies around 600 Hz, 1 kHz and 1.4 kHz: the largest level error " + std::to_string (worst) + " dB (at " + std::to_string (worstHz) + " Hz)");
+        check (worst <= 2.5, "a 0.1 amplitude sine (the curve has the height of the meters, which read a tone up to 2 dB low where it lies between the bins of their band) at 120 frequencies around 600 Hz, 1 kHz and 1.4 kHz: the largest level error " + std::to_string (worst) + " dB (at " + std::to_string (worstHz) + " Hz)");
     }
     {   // a full scale sine is over the ceiling of the scale: the curve is at the top
         static SpectrumRing ring;
@@ -176,7 +177,7 @@ int main()
         for (int i = 0; i < 30; ++i)
             c.step (w.data(), kHopMs);
         const int p = peakOf (c.level());
-        check (std::abs (p - pointOf (1000.0)) <= 1 && std::fabs (dbOfLevel (c.level()[p]) + 20.0) <= 1.5 && c.level()[0] < 0.02f, "a 1 kHz tone of amplitude 0.1 on that offset: the same peak, and nothing at 20 Hz");
+        check (std::abs (p - pointOf (1000.0)) <= 1 && std::fabs (dbOfLevel (c.level()[p]) + 20.0) <= 2.5 && c.level()[0] < 0.02f, "a 1 kHz tone of amplitude 0.1 on that offset: the same peak, and nothing at 20 Hz");
     }
 
     // ---- white noise: flat after the per point averaging -------------------------------------------------------------------------------------------------------
@@ -207,7 +208,8 @@ int main()
         const double expectDb = 10.0 * std::log10 (12.0 * 0.03 / SpectrumCurve::kFftSize);
         char b[240];
         std::snprintf (b, sizeof b, "white noise 1 - 16 kHz: mean level %.2f dB (expected %.2f), the mean of every point within %.2f .. %.2f dB (flat), one picture's spread %.2f dB", avg, expectDb, lo, hi, std::sqrt (single));
-        check (std::fabs (avg - expectDb) <= 1.5 && hi - lo < 3.0 && std::sqrt (single) < 2.5, b);
+        // the curve reads like the meters: the highest of the bins of a band (a few dB over the mean of white noise), not the mean
+        check (avg - expectDb >= 0.0 && avg - expectDb <= 6.0 && hi - lo < 6.5 && std::sqrt (single) < 3.5, b);
     }
 
     // ---- silence: the floor, no analysis, no redraw ------------------------------------------------------------------------------------------------------------
@@ -342,6 +344,112 @@ int main()
         const int p = peakOf (c.level());
         bad = std::abs (p - pointOf (2000.0)) > 1;
         check (frames > 30 && bad == 0, "two threads: the audio thread pushes while the overlay thread analyses: the peak is at 2 kHz (point " + std::to_string (p) + ")");
+    }
+
+    // ---- the curve is as high as the 32 meters under it: in the frequency band of each meter the highest point of the curve is the meter's value (within one pixel) ---------------------
+    {
+        constexpr int kViewH = 136;                                   // the spectrum view's canvas height (layout): a level 0 .. 1 is (kViewH - 13) rows
+        constexpr double kPixel = 1.0 / (kViewH - SpectrumView_kMargins);
+        const double hzs[] = { 40.0, 55.0, 100.0, 262.0, 440.0, 1000.0, 1700.0, 3000.0, 5200.0, 8000.0, 12500.0, 16000.0 };
+        const double amps[] = { 0.7, 0.2, 0.05, 0.01 };               // -3, -14, -26, -40 dBFS
+        int cases = 0, bad = 0, badAnalyser = 0;
+        double worst = 0.0, worstHz = 0.0, worstAmp = 0.0, worstOld = 0.0;
+        for (double hz : hzs)
+            for (double amp : amps)
+            {
+                std::vector<float> w (static_cast<size_t> (SpectrumCurve::kFftSize));
+                for (size_t i = 0; i < w.size(); ++i)
+                    w[i] = static_cast<float> (amp * std::sin (2.0 * kPi * hz * static_cast<double> (i) / kRate));
+                SpectrumCurve c (kRate);
+                for (int i = 0; i < 80; ++i)
+                    c.step (w.data(), kHopMs);
+                // the meters' value: the 2048 point analysis of the newest samples, the maximum of the bins of the band (shell-mpc/spectrum_bands.h), before the time smoothing
+                SpectrumFft fft (kSpectrumFftSize);
+                std::vector<float> mag (static_cast<size_t> (fft.bins()));
+                fft.magnitudes (w.data() + (w.size() - kSpectrumFftSize), mag.data());
+                float db[kSpectrumBands];
+                spectrumBandDb (mag.data(), fft.bins(), kRate, db);
+                // the meters as the plugin shows them (smoothed in time, quantised to 1/64): the same signal, long enough to settle
+                SpectrumAnalyser an;
+                float q[kSpectrumBands] = {};
+                for (int i = 0; i < 80; ++i)
+                    an.tickSamples (w.data() + (w.size() - kSpectrumFftSize), kRate, q);
+                int band = -1;
+                for (int k = 0; k < kSpectrumBands; ++k)
+                    if (hz >= spectrumBandEdgeHz (k) && hz < spectrumBandEdgeHz (k + 1))
+                        band = k;
+                if (band < 0) { check (false, "the test frequency " + std::to_string (hz) + " is in a band"); continue; }
+                // the highest point of the curve among the points of each of the bands: the sine's band and the bands next to it (their meters show the window's skirt)
+                for (int k = std::max (0, band - 1); k <= std::min (kSpectrumBands - 1, band + 1); ++k)
+                {
+                    float top = -1.0f;
+                    for (int i = 0; i < SpectrumCurve::kPoints; ++i)
+                    {
+                        const double f = SpectrumCurve::pointHz (i);
+                        if (f >= spectrumBandEdgeHz (k) && f < spectrumBandEdgeHz (k + 1))
+                            top = std::max (top, c.level()[i]);
+                    }
+                    const double meter = spectrumLevelFromDb (db[k]);
+                    ++cases;
+                    const double diff = std::fabs (static_cast<double> (top) - meter);
+                    if (diff > kPixel)
+                    {
+                        ++bad;
+                        std::printf ("      %.0f Hz amplitude %.2f band %d: curve top %.4f, meter %.4f (%.2f rows apart)\n", hz, amp, k, top, meter, diff / kPixel);
+                    }
+                    if (k == band && diff > worst) { worst = diff; worstHz = hz; worstAmp = amp; }
+                    // the meters on the device are quantised to 1/64 (and at their time constants the same here): the curve is within one row plus half a step of them
+                    if (std::fabs (static_cast<double> (top) - q[k]) > kPixel + 0.5 / kSpectrumSteps + 1.0e-6)
+                        ++badAnalyser;
+                    (void) worstOld;
+                }
+            }
+        check (cases > 0 && bad == 0, "sines of 12 frequencies and 4 levels: in the band of the meter and the bands next to it the curve's highest point is the meter's value within one row (" + std::to_string (cases) + " bands, " + std::to_string (bad) + " off; worst in the sine's band " + std::to_string (worst / kPixel) + " rows at " + std::to_string (worstHz) + " Hz, amplitude " + std::to_string (worstAmp) + ")");
+        check (badAnalyser == 0, "... and the meters of the plugin as the host shows them (quantised to 1/64) are within one row plus half a step (" + std::to_string (badAnalyser) + " off)");
+    }
+    {   // a chord (several partials in one band): the curve keeps every peak and the highest one is the meter's value; the curve is never above the meter's value inside a band
+        std::vector<float> w (static_cast<size_t> (SpectrumCurve::kFftSize));
+        const double partials[][2] = { { 220.0, 0.2 }, { 440.0, 0.1 }, { 660.0, 0.12 }, { 880.0, 0.05 }, { 1320.0, 0.06 }, { 2640.0, 0.03 }, { 5280.0, 0.02 } };
+        for (size_t i = 0; i < w.size(); ++i)
+        {
+            double v = 0.0;
+            for (auto& pr : partials)
+                v += pr[1] * std::sin (2.0 * kPi * pr[0] * static_cast<double> (i) / kRate);
+            w[i] = static_cast<float> (v);
+        }
+        SpectrumCurve c (kRate);
+        for (int i = 0; i < 80; ++i)
+            c.step (w.data(), kHopMs);
+        SpectrumFft fft (kSpectrumFftSize);
+        std::vector<float> mag (static_cast<size_t> (fft.bins()));
+        {   // (the mean of the meters' window out: the sines of this chord do not fill whole periods, and a DC offset is not sound)
+            std::vector<float> m (w.end() - kSpectrumFftSize, w.end());
+            double sum = 0.0;
+            for (float v : m) sum += v;
+            for (float& v : m) v -= static_cast<float> (sum / kSpectrumFftSize);
+            fft.magnitudes (m.data(), mag.data());
+        }
+        float db[kSpectrumBands];
+        spectrumBandDb (mag.data(), fft.bins(), kRate, db);
+        int off = 0, above = 0;
+        for (int k = 0; k < kSpectrumBands; ++k)
+        {
+            float top = -1.0f;
+            for (int i = 0; i < SpectrumCurve::kPoints; ++i)
+            {
+                const double f = SpectrumCurve::pointHz (i);
+                if (f >= spectrumBandEdgeHz (k) && f < spectrumBandEdgeHz (k + 1))
+                    top = std::max (top, c.level()[i]);
+            }
+            const double meter = spectrumLevelFromDb (db[k]);
+            if (std::fabs (static_cast<double> (top) - meter) > 1.0 / (136 - SpectrumView_kMargins) || top > meter + 1.0e-4)
+                std::printf ("      band %d: curve top %.4f, meter %.4f\n", k, top, meter);
+            off += std::fabs (static_cast<double> (top) - meter) > 1.0 / (136 - SpectrumView_kMargins);
+            above += top > meter + 1.0e-4;
+        }
+        check (off == 0, "seven partials: in every one of the 32 bands the curve's highest point is the meter's value within one row (" + std::to_string (off) + " bands off)");
+        check (above == 0, "... and the curve never rises above the meter's value inside a band");
+        check (c.level()[pointOf (220.0)] > c.level()[pointOf (330.0)] + 0.1, "... while the valley between two partials stays a valley (the curve is not flattened to the band)");
     }
 
     std::printf ("%s: %d failure(s)\n", g_fails == 0 ? "spectrum_curve_host: OK" : "spectrum_curve_host: FAILED", g_fails);
