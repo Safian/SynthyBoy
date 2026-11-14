@@ -86,6 +86,9 @@ struct EvalContext
     float dt = 0.0f;                  // the control period in seconds
     double bpm = 120.0;
     float voiceAge = 0.0f;            // seconds since the note start
+    /** Bit k: source id k may be read; a slot that reads (as source or aux) a source outside the mask is skipped. The default reads everything; the display's
+        readout of an idle engine uses the sources that have a value without a voice (macros, wheels ...). */
+    uint64_t sourceMask = ~uint64_t (0);
 };
 
 class ModMatrix

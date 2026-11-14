@@ -325,6 +325,11 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
             amountDeltaL[i] = amountDeltaR[i] = 0.0f;
 
     const float* srcR = ctx.srcR != nullptr ? ctx.srcR : ctx.src;
+    auto allowed = [&] (const CompiledSlot& c)
+    {
+        const uint64_t bits = (uint64_t (1) << c.source) | (c.aux != 0 ? uint64_t (1) << c.aux : uint64_t (0));
+        return (bits & ~ctx.sourceMask) == 0;
+    };
     auto one = [&] (const CompiledSlot& c, float amountL, float amountR, float& outL, float& outR)
     {
         float xl = clamp01 (ctx.src[c.source]), xr = clamp01 (srcR[c.source]);
@@ -392,7 +397,7 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
         for (int i = 0; i < count; ++i)
         {
             const CompiledSlot& c = slots[i];
-            if (!c.amountDest || c.amount == 0.0f)
+            if (!c.amountDest || c.amount == 0.0f || !allowed (c))
                 continue;
             float dl, dr;
             one (c, c.amount, c.amount, dl, dr);
@@ -405,7 +410,7 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
         const CompiledSlot& c = slots[i];
         if (c.amountDest)
             continue;
-        if (c.global != ctx.global)
+        if (c.global != ctx.global || !allowed (c))
             continue;
         float amL = c.amount, amR = c.amount;
         if (anyAmountDest)

@@ -231,6 +231,9 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     gdelta.assign (paramCount(), 0.0f);
     gdeltaR.assign (paramCount(), 0.0f);
     gtouched.assign (static_cast<size_t> (kNumModSlots), 0);
+    pdelta.assign (paramCount(), 0.0f);
+    ptouched.assign (static_cast<size_t> (kNumModSlots), 0);
+    pnumTouched = 0;
     realtimeFlag = quality.realtime;
     {
         int types[kNumFxInstances];
@@ -319,6 +322,9 @@ void OwnEngine::reset()
         gdeltaR[static_cast<size_t> (gtouched[static_cast<size_t> (i)])] = 0.0f;
     }
     gnumTouched = 0;
+    for (int i = 0; i < pnumTouched; ++i)
+        pdelta[static_cast<size_t> (ptouched[static_cast<size_t> (i)])] = 0.0f;
+    pnumTouched = 0;
     smoothedGain.setCurrentAndTarget (dbToGain (readParam (kParamMasterVolume)) * (readParam (kParamMasterVolume) > -60.0f ? 1.0f : 0.0f));
     activeCount.store (0, std::memory_order_relaxed);
 }
@@ -873,7 +879,38 @@ void OwnEngine::controlTick() noexcept
         ctx.bpm = globals.bpm;
         matrix.evaluate (ctx);
     }
-
+    // The readout without a sounding voice: the voice parameters (filter, oscillators ...) that the sources an idle engine has (macros, mod wheel, aftertouch, pitch
+    // wheel, the last velocity / note, fixed) modulate, evaluated once per block like a voice would (audio output unchanged: only writeReadout reads pdelta).
+    for (int i = 0; i < pnumTouched; ++i)
+        pdelta[static_cast<size_t> (ptouched[static_cast<size_t> (i)])] = 0.0f;
+    pnumTouched = 0;
+    if (newest == nullptr && activeTargetCount > 0 && matrix.size() > 0)
+    {
+        float psrc[kNumSourceIds] = {};
+        for (int m = 0; m < 8; ++m)
+            psrc[srcMacro (m)] = globals.macro[m];
+        psrc[kSrcVelocity] = lastVelocity;
+        psrc[kSrcNote] = lastNoteSemis * (1.0f / 127.0f);
+        psrc[kSrcAftertouch] = at;
+        psrc[kSrcPitchWheel] = 0.5f + 0.5f * gsrc[kSrcPitchWheel];
+        psrc[kSrcModWheel] = mw;
+        psrc[kSrcFixed] = 1.0f;
+        uint64_t mask = (uint64_t (1) << kSrcVelocity) | (uint64_t (1) << kSrcNote) | (uint64_t (1) << kSrcAftertouch) | (uint64_t (1) << kSrcPitchWheel)
+                        | (uint64_t (1) << kSrcModWheel) | (uint64_t (1) << kSrcFixed);
+        for (int m = 0; m < 8; ++m)
+            mask |= uint64_t (1) << srcMacro (m);
+        EvalContext pc;
+        pc.src = psrc;
+        pc.global = false;
+        pc.delta = pdelta.data();
+        pc.touched = ptouched.data();
+        pc.numTouched = &pnumTouched;
+        pc.maxTouched = kNumModSlots;
+        pc.dt = fdt;
+        pc.bpm = globals.bpm;
+        pc.sourceMask = mask;
+        matrix.evaluate (pc);
+    }
 }
 
 void OwnEngine::process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept
@@ -1257,6 +1294,8 @@ void OwnEngine::writeReadout() noexcept
                 v = modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), v, gdelta[static_cast<size_t> (idx)]);
             else if (newest != nullptr)
                 v = newest->modulatedParam (idx);
+            else if (pdelta[static_cast<size_t> (idx)] != 0.0f)
+                v = modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), v, pdelta[static_cast<size_t> (idx)]);
         }
         liveTarget[i].store (v, std::memory_order_relaxed);
     }

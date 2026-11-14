@@ -137,6 +137,9 @@ private:
     std::vector<float> gdelta, gdeltaR;     // modulation of the global parameters
     std::vector<int> gtouched;
     int gnumTouched = 0;
+    std::vector<float> pdelta;              // modulation of the voice parameters by the sources an idle engine has (macros, wheels ...): the readout without a voice
+    std::vector<int> ptouched;
+    int pnumTouched = 0;
     ModMatrix matrix;
     FxChain fx[3];                 // the racks Main, Bus 1, Bus 2
     FxPool fxPool;                 // the 16 slots of the effect instance pool
