@@ -331,3 +331,25 @@ The skin groups its tabs under function keys. Several tabs with the same `fnKeyI
 - **Measured on the Key 61 (MPC 3.10.1.12): the host loads a skin with 34 tabs in 10 function keys** (also the 32 tab one), so the sub-tabs do not count in the "at most 32 tabs in total" of the SDK (ui-reference 3.5); the sub-tab dots show under the function keys (6 under Osc, 4 under Env, ...). The SDK validator (`tools/validate.py`) still reports `ERROR  TUI.json: 34 tabs; at most 32 are supported`. The build (`scripts/build-mpc.sh`) accepts exactly that one finding, like the `file64` one of a single architecture build (`scripts/tests/test_build_mpc.py`), and fails on every other validator error.
 - **The 32 tab fallback** (`scripts/mpc-ui-pages-v32.json`, build it with `--skin-layout`) merges two pairs of tabs: `FX Filt` + `Distort` into `Flt+Dist` (14 controls, both tone shaping stages) and `Comp 2` + `FX Level` into `Cmp2+Lvl` (16 controls: the mid and high band of the compressor and the eight effect levels), placed behind `Comp 1`; `FX` is then FX Chain, Flt+Dist, Comp 1, Cmp2+Lvl, EQ and `FX 2` is Chorus, Delay, Phaser. Every control of every Kick page stays in both layouts (a test compares with the parameters of the skin at `7a0d198` and checks that the layouts hold the same parameters). The validator has no finding for it.
 - **SDK tool limit**: `tools/gen_ui.py` refuses more than 32 pages. `scripts/run-gen-ui.py` runs it and lifts that limit only when the ui.json has more pages (34 tab variant); the build uses it for all skins. `scripts/build-mpc.sh --skin-layout FILE` picks the layout file (default `scripts/mpc-ui-pages.json`).
+
+## MPC XL pads
+
+The measurement was done on an MPC XL running MPC OS 3.10.1.12, using a diagnostic build of the plugin with callback statistics and MIDI counters (format 2). The owner pressed the pads by hand because pad input cannot be simulated remotely. The plugin was on a plugin track in the `Sbtest` project.
+
+| | Full Level on | Full Level off |
+|---|---|---|
+| note on / note off | 19 / 19, channel 1 | 16 / 16, channel 1 |
+| note-on velocity | always 127 | varied (96 and 127 seen) |
+| poly aftertouch | 0 | 112 messages, values 1..127, one stream per held pad (per note), about one message every 6 ms |
+| channel pressure | 0 | 0 |
+| pitch bend | 0 | 0 |
+| CC (including CC 74) | 0 | 0 |
+| channel | 1 | 1 |
+
+What this means: the host passes note, velocity and per-pad pressure (poly aftertouch) to an external plugin; the X/Y position of a pad does not arrive in any form (no pitch bend, no CC 74, no other CC) and there is no MPE channel rotation; with Full Level on neither velocity nor pressure passes.
+
+The host asked `effCanDo` only for `"bypass"` (answer 0) and `"receiveVstMidiEvent"` (answer 1), never for `"MPE"`, and made no `effVendorSpecific` call.
+
+Poly aftertouch drives the modulation source "Poly Aftertouch"; the factory preset "MPE Pressure Lead" routes it to Filter 1 Cutoff and Osc 1 Unison Detune, and on the device pressing harder audibly opened the filter (heard by the owner, not measured).
+
+Not measured: the MPCe Q-Link mode from a drum track to plugin parameters, 16 Levels, Note Repeat, pad lighting from a plugin.
