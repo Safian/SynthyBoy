@@ -11,6 +11,7 @@
 // Also checks the pure functions of pad_pressure.h. Links the core (paramCount, parameter table). Run the TSan build too.
 #include "mpc_vst2_abi.h"
 #include "pad_pressure.h"
+#include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 
 #include <cmath>
@@ -194,15 +195,20 @@ int main (int argc, char** argv)
     e->setParameter (e, pp, 1.0f);
     e->setParameter (e, pp + 1, 0.1f);
     check (setChunk (e, c1) && e->getParameter (e, pp) == 0.0f && std::fabs (e->getParameter (e, pp + 1) - 0.8f) < 1e-6f, "chunk: the settings come back");
+    check (getChunk (e) == c1, "chunk: chunk oda-vissza bajtazonos");
     std::string old = c1;
     const size_t cut = old.rfind (",\"mpcPadPressure\":");
     old.erase (cut, old.size() - 1 - cut);
     e->setParameter (e, pp, 1.0f);
+    e->setParameter (e, pp + 1, 0.35f);
+    check (old.find ("mpcPadPressure") == std::string::npos && setChunk (e, old) && e->getParameter (e, pp) == 1.0f && std::fabs (e->getParameter (e, pp + 1) - 0.35f) < 1e-6f,
+           "chunk: an older chunk without the members leaves ON setting as it is");
+    e->setParameter (e, pp, 0.0f);
     e->setParameter (e, pp + 1, 0.5f);
-    check (old.find ("mpcPadPressure") == std::string::npos && setChunk (e, old) && e->getParameter (e, pp) == 1.0f && std::fabs (e->getParameter (e, pp + 1) - 0.5f) < 1e-6f,
-           "chunk: an older chunk without the members leaves the settings as they are");
+    check (setChunk (e, old) && e->getParameter (e, pp) == 0.0f && std::fabs (e->getParameter (e, pp + 1) - 0.5f) < 1e-6f,
+           "chunk: an older chunk without the members leaves OFF setting as it is");
     e->dispatcher (e, effSetProgram, 0, 0, nullptr, 0.0f);
-    check (e->getParameter (e, pp) == 1.0f && std::fabs (e->getParameter (e, pp + 1) - 0.5f) < 1e-6f, "a program change leaves the pad settings alone");
+    check (e->getParameter (e, pp) == 0.0f && std::fabs (e->getParameter (e, pp + 1) - 0.5f) < 1e-6f, "a program change leaves the pad settings alone");
     check (getChunk (e).find ("\"mpcProgram\":0,") == 1, "chunk: the program prefix is still first");
     e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
 
@@ -247,7 +253,23 @@ int main (int argc, char** argv)
             if (k >= 60) for (int i = 1; i < 256; ++i) { en += double (l[size_t (i)]) * l[size_t (i)]; const double d = double (l[size_t (i)]) - l[size_t (i - 1)]; dn += d * d; }
         }
         check (en > 0.0 && dn / en < bFull * 0.5, "own engine: switched off during a note the filter closes again");
-        for (AEffect* x : { mid, full, idle, sw }) x->dispatcher (x, effClose, 0, 0, nullptr, 0.0f);
+
+        // when patch routes Poly Aftertouch to Filter 1 Cutoff in mod-matrix, pad pressure layer does not double the effect
+        AEffect* matOn = engine (true, 1.0f);
+        AEffect* matOff = engine (false, 1.0f);
+        const synthyboy::ParamInfo* cutInfo = synthyboy::findParamByKey ("filter1.cutoff");
+        const float cutChoice = static_cast<float> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (synthyboy::findParamIndex (cutInfo->id))));
+        for (AEffect* x : { matOn, matOff })
+        {
+            setEngineParam (x, "mod01.source", 38.0f); // Poly Aftertouch
+            setEngineParam (x, "mod01.destination", cutChoice);
+            setEngineParam (x, "mod01.amount", 50.0f);
+        }
+        const double bMatOn = brightness (matOn, 127);
+        const double bMatOff = brightness (matOff, 127);
+        check (std::fabs (bMatOn - bMatOff) < 1e-9 * (1.0 + bMatOff) || bMatOn == bMatOff,
+               "own engine: preset with Poly Aftertouch -> Cutoff route does not double the effect");
+        for (AEffect* x : { mid, full, idle, sw, matOn, matOff }) x->dispatcher (x, effClose, 0, 0, nullptr, 0.0f);
     }
     else
     {

@@ -4,11 +4,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <memory>
 #include <vector>
 
 #include "synthyboy/engine.h"
+#include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
+#include "synthyboy/preset.h"
 #include "voice/param_index.h"
 #include "voice/voice.h"
 #include "test_runner.h"
@@ -215,4 +218,98 @@ TEST (pad_pressure_released_voice_returns_to_the_knob)
     rig.g.padPressureToCutoff = 0.0f;
     rig.v.tick (rig.g, 0);
     CHECK (rig.v.modulatedParam (rig.cutIdx) == rig.baseCutoff);
+}
+
+TEST (pad_pressure_preset_with_poly_aftertouch_to_cutoff_does_not_double)
+{
+    // Case 1: Mod matrix has Poly Aftertouch -> Filter 1 Cutoff route.
+    // The pad pressure layer must NOT add its cutoff offset (no doubling).
+    VoiceRig rigWithRoute (60, 1.0f);
+    const int cutChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (rigWithRoute.cutIdx)));
+    const auto& slot0 = paramIndex().slot[0];
+    rigWithRoute.base[static_cast<size_t> (slot0.source)] = static_cast<float> (kSrcPolyAftertouch);
+    rigWithRoute.base[static_cast<size_t> (slot0.destination)] = static_cast<float> (cutChoice);
+    rigWithRoute.base[static_cast<size_t> (slot0.amount)] = 50.0f; // +50 %
+    rigWithRoute.matrix.compile (rigWithRoute.base.data());
+    CHECK (rigWithRoute.matrix.hasPolyAftertouchToFilter1Cutoff());
+
+    // Run voice with padPressureToCutoff = 1.0f and pressure = 1.0f
+    rigWithRoute.v.setPressure (1.0f);
+    for (int t = 0; t < 400; ++t)
+        rigWithRoute.v.tick (rigWithRoute.g, 0);
+    const float semisWithLayerOn = rigWithRoute.semitones();
+
+    // Now run with padPressureToCutoff = 0.0f (layer disabled)
+    VoiceRig rigLayerOff (60, 0.0f);
+    rigLayerOff.base[static_cast<size_t> (slot0.source)] = static_cast<float> (kSrcPolyAftertouch);
+    rigLayerOff.base[static_cast<size_t> (slot0.destination)] = static_cast<float> (cutChoice);
+    rigLayerOff.base[static_cast<size_t> (slot0.amount)] = 50.0f;
+    rigLayerOff.matrix.compile (rigLayerOff.base.data());
+    rigLayerOff.v.setPressure (1.0f);
+    for (int t = 0; t < 400; ++t)
+        rigLayerOff.v.tick (rigLayerOff.g, 0);
+    const float semisWithLayerOff = rigLayerOff.semitones();
+
+    // Semitones must be strictly positive (the matrix modulated cutoff) and IDENTICAL (layer added 0)
+    CHECK (semisWithLayerOff > 1.0f);
+    CHECK (std::fabs (semisWithLayerOn - semisWithLayerOff) < 1.0e-4f);
+
+    // Case 2: Mod matrix does NOT route Poly Aftertouch to Filter 1 Cutoff (e.g. routes to resonance instead).
+    // The pad pressure layer MUST add its cutoff offset normally.
+    const ParamInfo* resInfo = findParamByKey ("filter1.resonance");
+    CHECK (resInfo != nullptr);
+    const int resChoice = static_cast<int> (modDestinationChoiceOf (static_cast<size_t> (findParamIndex (resInfo->id))));
+    VoiceRig rigOtherDest (60, 1.0f);
+    rigOtherDest.base[static_cast<size_t> (slot0.source)] = static_cast<float> (kSrcPolyAftertouch);
+    rigOtherDest.base[static_cast<size_t> (slot0.destination)] = static_cast<float> (resChoice);
+    rigOtherDest.base[static_cast<size_t> (slot0.amount)] = 50.0f;
+    rigOtherDest.matrix.compile (rigOtherDest.base.data());
+    CHECK (! rigOtherDest.matrix.hasPolyAftertouchToFilter1Cutoff());
+
+    rigOtherDest.v.setPressure (1.0f);
+    for (int t = 0; t < 400; ++t)
+        rigOtherDest.v.tick (rigOtherDest.g, 0);
+    // Pad pressure layer opened cutoff by kPadPressureSemitones (36 semitones)
+    CHECK (std::fabs (rigOtherDest.semitones() - kPadPressureSemitones) < 0.1f);
+}
+
+TEST (pad_pressure_mpe_pressure_lead_preset_audio_does_not_double)
+{
+    // Loads content/presets/Lead/mpe_pressure_lead.sbpreset
+    // When rendered with padPressureToCutoff = 1.0f vs 0.0f, the output must be identical
+    // because the preset already has Poly Aftertouch -> Filter 1 Cutoff in its mod matrix.
+    std::ifstream in ("content/presets/Lead/mpe_pressure_lead.sbpreset", std::ios::binary);
+    if (! in)
+        in.open ("../../content/presets/Lead/mpe_pressure_lead.sbpreset", std::ios::binary);
+    CHECK (in.is_open());
+    if (! in)
+        return;
+    std::string data ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char>());
+    PresetMeta meta;
+    ParamValues vals = ParamValues::defaults();
+    StateContent content;
+    LoadResult r = loadPreset (data.data(), data.size(), meta, vals, content);
+    CHECK (r.status == LoadStatus::ok);
+
+    auto engineOn = createOwnEngine();
+    engineOn->prepare (kSr, kBlock, qualityForTier (Tier::low));
+    for (size_t i = 0; i < paramCount(); ++i)
+        engineOn->setParam (paramTable()[i].id, vals.plain[i]);
+    engineOn->setContent (content);
+    CHECK (setOwnPadPressureToCutoff (*engineOn, 1.0f));
+
+    auto engineOff = createOwnEngine();
+    engineOff->prepare (kSr, kBlock, qualityForTier (Tier::low));
+    for (size_t i = 0; i < paramCount(); ++i)
+        engineOff->setParam (paramTable()[i].id, vals.plain[i]);
+    engineOff->setContent (content);
+    CHECK (setOwnPadPressureToCutoff (*engineOff, 0.0f));
+
+    std::vector<float> outOn, outOff;
+    const double bOn = renderBrightness (*engineOn, 1.0f, &outOn);
+    const double bOff = renderBrightness (*engineOff, 1.0f, &outOff);
+    CHECK (bOn > 0.0);
+    CHECK_EQ (bOn, bOff);
+    CHECK_EQ (outOn.size(), outOff.size());
+    CHECK_EQ (std::memcmp (outOn.data(), outOff.data(), outOn.size() * sizeof (float)), 0);
 }

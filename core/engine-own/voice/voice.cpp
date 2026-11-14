@@ -714,6 +714,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
         // MPC shell: the poly aftertouch of a pad goes to the Filter 1 cutoff (a layer over the patch: the knob and the matrix slots are not touched). One pole smoothing
         // (time constant kPadPressureSeconds) of the ~170 / s stream; the delta is in semitones, the control domain of the cutoff. Off: nothing is computed.
+        // If the preset's modulation matrix already has a Poly Aftertouch -> Filter 1 Cutoff route, the layer does not add to that voice (no doubling).
         if (g.padPressureToCutoff > 0.0f)
         {
             if (fresh)
@@ -727,7 +728,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
                 }
                 smoothedPressure += (polyPressure - smoothedPressure) * padCoef;
             }
-            const float deltaCutoff = g.padPressureToCutoff * smoothedPressure * kPadPressureSemitones;
+            const bool matrixHandlesCutoff = g.matrix != nullptr && g.matrix->hasPolyAftertouchToFilter1Cutoff();
+            const float deltaCutoff = matrixHandlesCutoff ? 0.0f : g.padPressureToCutoff * smoothedPressure * kPadPressureSemitones;
             padCutIdx = pi.filter[0].cutoff;
             if (deltaCutoff != 0.0f && padCutIdx >= 0)
             {
