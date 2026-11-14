@@ -52,8 +52,14 @@
 #define ABS_MT_TRACKING_ID 0x39
 #endif
 
+#ifndef INPUT_PROP_POINTER
+#define INPUT_PROP_POINTER 0x00
+#endif
 #ifndef INPUT_PROP_DIRECT
 #define INPUT_PROP_DIRECT 0x01
+#endif
+#ifndef BTN_TOUCH
+#define BTN_TOUCH 0x14a
 #endif
 
 #ifndef O_CLOEXEC
@@ -210,18 +216,13 @@ public:
                 continue;
             }
 
-            // 2. Check INPUT_PROP_DIRECT property bit
+            // 2. The properties: INPUT_PROP_DIRECT marks a touch screen. The Key 61's ILI2117 driver sets NO property at all (/proc/bus/input/devices: PROP=0), so a node without any
+            //    property that has BTN_TOUCH counts as one too; a touch pad (INPUT_PROP_POINTER without DIRECT) and a node with neither are not. An ioctl that fails reads as no property.
             uint8_t propBits[4] = {0};
             if (syscalls_.ioctl (fd, EVIOCGPROP (sizeof(propBits)), propBits) < 0)
-            {
-                syscalls_.close (fd);
-                continue;
-            }
-            if (! (propBits[INPUT_PROP_DIRECT / 8] & (1u << (INPUT_PROP_DIRECT % 8))))
-            {
-                syscalls_.close (fd);
-                continue;
-            }
+                std::memset (propBits, 0, sizeof propBits);
+            const bool direct = (propBits[INPUT_PROP_DIRECT / 8] & (1u << (INPUT_PROP_DIRECT % 8))) != 0;
+            const bool pointer = (propBits[INPUT_PROP_POINTER / 8] & (1u << (INPUT_PROP_POINTER % 8))) != 0;
 
             // 3. Check ABS_MT_POSITION_X and ABS_MT_POSITION_Y bits
             uint8_t absBits[16] = {0};
@@ -236,6 +237,17 @@ public:
             {
                 syscalls_.close (fd);
                 continue;
+            }
+            if (! direct)
+            {
+                uint8_t keyBits[96] = {0};   // KEY_MAX 0x2ff
+                const bool haveKeys = syscalls_.ioctl (fd, EVIOCGBIT (EV_KEY, sizeof(keyBits)), keyBits) >= 0;
+                const bool btnTouch = haveKeys && (keyBits[BTN_TOUCH / 8] & (1u << (BTN_TOUCH % 8))) != 0;
+                if (pointer || ! btnTouch)
+                {
+                    syscalls_.close (fd);
+                    continue;
+                }
             }
 
             // 4. Read ABS ranges

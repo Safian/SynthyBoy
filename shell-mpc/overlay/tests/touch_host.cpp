@@ -544,6 +544,8 @@ public:
         bool exists = false;
         bool hasEvAbs = false;
         bool hasPropDirect = false;
+        bool hasPropPointer = false;   // a touch pad
+        bool hasBtnTouch = false;      // a touch screen of an older driver: no property, but BTN_TOUCH
         bool hasMtX = false;
         bool hasMtY = false;
         int minX = 0, maxX = 799;
@@ -654,6 +656,17 @@ public:
             auto* bits = static_cast<uint8_t*> (arg);
             if (n.hasPropDirect)
                 bits[INPUT_PROP_DIRECT / 8] |= static_cast<uint8_t> (1u << (INPUT_PROP_DIRECT % 8));
+            if (n.hasPropPointer)
+                bits[INPUT_PROP_POINTER / 8] |= static_cast<uint8_t> (1u << (INPUT_PROP_POINTER % 8));
+            return 0;
+        }
+
+        // Check EVIOCGBIT (EV_KEY, ...)
+        if ((request & ~0x1fff0000u) == (0x80004520u | EV_KEY))
+        {
+            auto* bits = static_cast<uint8_t*> (arg);
+            if (n.hasBtnTouch)
+                bits[BTN_TOUCH / 8] |= static_cast<uint8_t> (1u << (BTN_TOUCH % 8));
             return 0;
         }
 
@@ -773,6 +786,29 @@ static void testLinuxReaderDiscovery()
     const int expectedFlags = O_RDONLY | O_NONBLOCK | O_CLOEXEC;
     check ((fake.openFlagsSeen[3] & expectedFlags) == expectedFlags, "discovery: opened O_RDONLY | O_NONBLOCK | O_CLOEXEC");
     check (fake.grabIoctlsSeen == 0, "discovery: NEVER EVIOCGRAB");
+}
+
+static void testLinuxReaderLegacyTouchScreen()
+{
+    // The Key 61 (ILI2117): PROP=0, EV_KEY with BTN_TOUCH, ABS 0 .. 2048 on both axes. It must be found; a touch pad and a node with neither must not.
+    FakeTouchSyscalls fake;
+    fake.nodes[0].exists = true;
+    fake.nodes[0].hasEvAbs = true;                      // a touch pad: pointer property, no direct
+    fake.nodes[0].hasPropPointer = true;
+    fake.nodes[0].hasMtX = fake.nodes[0].hasMtY = true;
+    fake.nodes[0].hasBtnTouch = true;
+    fake.nodes[1].exists = true;                        // multitouch axes, no property and no BTN_TOUCH: not a touch screen
+    fake.nodes[1].hasEvAbs = true;
+    fake.nodes[1].hasMtX = fake.nodes[1].hasMtY = true;
+    fake.nodes[2].exists = true;                        // the Key 61's touch screen
+    fake.nodes[2].hasEvAbs = true;
+    fake.nodes[2].hasBtnTouch = true;
+    fake.nodes[2].hasMtX = fake.nodes[2].hasMtY = true;
+    fake.nodes[2].maxX = 2048;
+    fake.nodes[2].maxY = 2048;
+    LinuxTouchReader reader (fake, 90);
+    check (reader.nodeIndex() == 2, "legacy touch screen (no property, BTN_TOUCH): found; the touch pad and the node without BTN_TOUCH are skipped");
+    check (reader.decoder().maxX() == 2048 && reader.decoder().maxY() == 2048, "its ABS range 0 .. 2048 is read");
 }
 
 static void testLinuxReaderEagain()
@@ -916,6 +952,7 @@ int main()
 
     std::printf ("--- LinuxTouchReader Unit Tests (with Fake Syscalls) ---\n");
     testLinuxReaderDiscovery();
+    testLinuxReaderLegacyTouchScreen();
     testLinuxReaderEagain();
     testLinuxReaderDeviceRemovedAndRefound();
     testLinuxReaderPartialRecordRead();
