@@ -1,4 +1,4 @@
-// SynthyBoy - MPC overlay: drawing helpers on a landscape canvas of premultiplied ARGB8888 pixels (CPU only): blending, rectangles, an anti-aliased curve with a fill
+// SynthyBoy - MPC overlay: drawing helpers on a landscape canvas of premultiplied ARGB8888 pixels (the CPU drawing; the GPU helper has its own shaders for the same pictures): blending, rectangles, an anti-aliased curve with a fill
 // towards a baseline, a vertical line, a disc. Every view draws with these.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

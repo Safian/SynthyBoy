@@ -1,6 +1,6 @@
 // SynthyBoy - MPC overlay: the renderer. Draws the filter curve into a landscape canvas of premultiplied ARGB8888 pixels (an opaque dark background): faint vertical grid at
-// 100 Hz / 1 kHz / 10 kHz, the 0 dB line, a translucent fill from the curve down to the bottom, an anti-aliased 4 px line. CPU only; a GPU renderer would implement the same
-// interface later (Presenter and the controller do not care how the canvas is made).
+// 100 Hz / 1 kHz / 10 kHz, the 0 dB line, a translucent fill from the curve down to the bottom, an anti-aliased 4 px line. The CPU renderer, which is also the fallback of the GPU
+// drawing: with the GPU helper (gpu/) a view describes itself as a scene (IView::describe) and the helper process draws it with the same geometry.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
