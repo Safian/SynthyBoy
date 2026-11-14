@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 
 #include <dlfcn.h>
@@ -149,15 +150,49 @@ struct Api
     SB_GBM_FUNCS (SB_DECLARE)
 #undef SB_DECLARE
 
+    /** Opens one library: the loader's own search first (the soname, then the plain name), then the places a firmware keeps its Mesa libraries (the directory in
+        SYNTHYBOY_OVERLAY_GL_DIR first when it is set). `error` lists what was tried when nothing opens. */
+    static void* openLibrary (const char* soname, const char* plain, std::string& error)
+    {
+        static const char* const kDirs[] = { "/usr/lib/", "/usr/lib64/", "/lib/", "/usr/local/lib/", "/usr/lib/aarch64-linux-gnu/", "/usr/lib/arm-linux-gnueabihf/", "/lib/aarch64-linux-gnu/", "/lib/arm-linux-gnueabihf/" };
+        std::string tried;
+        auto attempt = [&] (const std::string& path) -> void*
+        {
+            void* h = dlopen (path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+            if (! h)
+                tried += (tried.empty() ? "" : "; ") + path;
+            return h;
+        };
+        if (const char* env = std::getenv ("SYNTHYBOY_OVERLAY_GL_DIR"))
+            if (*env)
+            {
+                const std::string dir = std::string (env) + "/";
+                if (void* h = attempt (dir + soname)) return h;
+                if (void* h = attempt (dir + plain)) return h;
+            }
+        if (void* h = attempt (soname)) return h;
+        if (void* h = attempt (plain)) return h;
+        for (const char* dir : kDirs)
+        {
+            if (void* h = attempt (std::string (dir) + soname)) return h;
+            if (void* h = attempt (std::string (dir) + plain)) return h;
+        }
+        error = std::string (soname) + " not found (tried " + tried + ")";
+        return nullptr;
+    }
+
     /** Opens the three libraries and looks every function up. false: `error` names the first thing that is missing. */
     bool load (std::string& error)
     {
-        void* egl = dlopen ("libEGL.so.1", RTLD_NOW | RTLD_GLOBAL);
-        void* gbm = dlopen ("libgbm.so.1", RTLD_NOW | RTLD_GLOBAL);
-        void* gles = dlopen ("libGLESv2.so.2", RTLD_NOW | RTLD_GLOBAL);
-        if (! egl) { error = std::string ("libEGL.so.1: ") + dlerror(); return false; }
-        if (! gbm) { error = std::string ("libgbm.so.1: ") + dlerror(); return false; }
-        if (! gles) { error = std::string ("libGLESv2.so.2: ") + dlerror(); return false; }
+        void* egl = openLibrary ("libEGL.so.1", "libEGL.so", error);
+        if (! egl)
+            return false;
+        void* gbm = openLibrary ("libgbm.so.1", "libgbm.so", error);
+        if (! gbm)
+            return false;
+        void* gles = openLibrary ("libGLESv2.so.2", "libGLESv2.so", error);
+        if (! gles)
+            return false;
 #define SB_LOAD(lib, ret, name, args) \
         name = reinterpret_cast<ret (*) args> (dlsym (lib, #name)); \
         if (! name && std::string (#name) != "eglGetPlatformDisplay") { error = std::string ("missing function ") + #name; return false; }

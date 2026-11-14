@@ -29,7 +29,7 @@ class IHelperTransport
 public:
     virtual ~IHelperTransport() = default;
     /** Creates the shared block and the socket pair, starts the helper and sends it the `hello` with the display descriptor and the block. false: `error` says why (nothing is left). */
-    virtual bool start (int displayFd, uint32_t crtc, uint32_t plane, uint32_t flags, std::string& error) = 0;
+    virtual bool start (int displayFd, const HelloParams& hello, std::string& error) = 0;
     /** The shared block of the running (or just killed) helper; nullptr when there is none. Valid until close (). */
     virtual SharedBlock* block() noexcept = 0;
     virtual int pid() const noexcept = 0;
@@ -59,6 +59,8 @@ struct GpuStatus
     unsigned long skippedVblanks = 0, lateSetPlanes = 0;
     std::string glRenderer;
     double startupMs = 0.0;
+    PaceBlock pace {};               // the helper's presentation intervals (shared block), valid when pace.count > 0 or the helper has run
+    bool paceKnown = false;
 };
 
 /** What the controller needs of the GPU path. */
@@ -84,12 +86,14 @@ public:
     virtual void setForceCpu (bool force, double nowMs) = 0;
     /** The helper is stopped, the plane is off, nothing of it is left. Safe at any time, also twice. */
     virtual void shutdown() noexcept = 0;
+    /** The plane was taken by another program: the helper is stopped and its framebuffers and handles removed, but the plane is NOT touched (it is not ours any more). A planned stop: no
+        failure; the helper starts again for the next picture with the plane the display backend names then. */
+    virtual void abandonPlane() noexcept = 0;
     virtual GpuStatus status() const = 0;
 };
 
 struct GpuConfig
 {
-    uint32_t crtc = 37, plane = 38;
     uint32_t flags = kFlagDump;
     double startTimeoutMs = 3000.0;     // spawn -> ready (the device needs about 100 ms)
     double ackTimeoutMs = 700.0;        // a scene (or a show) without a frame acknowledgement: the helper hangs
@@ -125,6 +129,8 @@ public:
             if (! handle (m, now))
                 return;
         }
+        if (SharedBlock* b = tr_.block())
+            readPace (b);
         if (! tr_.alive())
             return fail (now, "the helper process is gone");
         if (state_ == State::Starting && now - startedAt_ > cfg_.startTimeoutMs)
@@ -237,6 +243,16 @@ public:
             state_ = State::Idle;
     }
 
+    void abandonPlane() noexcept override
+    {
+        keepPlane_ = true;
+        stopHelper (0.0);
+        keepPlane_ = false;
+        if (state_ == State::Starting || state_ == State::Running)
+            state_ = State::Idle;
+        retryAt_ = 0.0;
+    }
+
     GpuStatus status() const override
     {
         GpuStatus s;
@@ -254,6 +270,8 @@ public:
         s.lateSetPlanes = late_;
         s.glRenderer = glRenderer_;
         s.startupMs = startupMs_;
+        s.pace = pace_;
+        s.paceKnown = paceKnown_;
         return s;
     }
 
@@ -264,6 +282,14 @@ private:
     {
         const int fd = plane_.displayFd();
         std::string error;
+        const PaceParams pp = plane_.paceParams();
+        HelloParams hello;
+        hello.crtc = plane_.crtcId();
+        hello.plane = plane_.planeId();
+        hello.flags = cfg_.flags | (pp.vblank ? kFlagVblank : 0u);
+        hello.pipe = static_cast<uint32_t> (pp.pipe);
+        hello.stride = static_cast<uint32_t> (pp.stride);
+        hello.periodUs = static_cast<uint32_t> (pp.periodMs * 1000.0 + 0.5);
         if (fd < 0)
         {
             lastError_ = "no display descriptor for the helper";
@@ -271,7 +297,7 @@ private:
             scheduleAfterFailure (now);
             return;
         }
-        if (! tr_.start (fd, cfg_.crtc, cfg_.plane, cfg_.flags, error))
+        if (! tr_.start (fd, hello, error))
         {
             lastError_ = "cannot start the helper: " + error;
             ++totalFailures_;
@@ -323,13 +349,45 @@ private:
                 return true;
             case kMsgError:
             {
-                fail (now, std::string ("the helper reports: ") + std::string (m.text, strnlen (m.text, sizeof m.text)));
+                const std::string text (m.text, strnlen (m.text, sizeof m.text));
+                if (text.compare (0, 8, "SETPLANE") == 0)
+                {
+                    // the plane may have been taken by another program: the next free one is used for the restart (the failure still counts)
+                    std::string why;
+                    tr_.kill();
+                    cleanDisplay (false);
+                    plane_.nextPlane (why);
+                    lastError_ = "the helper reports: " + text + "; " + why;
+                    ++totalFailures_;
+                    tr_.close();
+                    shown_ = hiding_ = unacked_ = false;
+                    scheduleAfterFailure (now);
+                    return false;
+                }
+                fail (now, "the helper reports: " + text);
                 return false;
             }
             default:
                 fail (now, "unknown message from the helper");
                 return false;
         }
+    }
+
+    void readPace (const SharedBlock* b) noexcept
+    {
+        PaceBlock p;
+        p.count = __atomic_load_n (&b->pace.count, __ATOMIC_RELAXED);
+        p.stride = __atomic_load_n (&b->pace.stride, __ATOMIC_RELAXED);
+        p.periodUs = __atomic_load_n (&b->pace.periodUs, __ATOMIC_RELAXED);
+        p.onGrid = __atomic_load_n (&b->pace.onGrid, __ATOMIC_RELAXED);
+        for (int i = 0; i < 10; ++i)
+            p.vb[i] = __atomic_load_n (&b->pace.vb[i], __ATOMIC_RELAXED);
+        for (int i = 0; i < 64; ++i)
+            p.ms[i] = __atomic_load_n (&b->pace.ms[i], __ATOMIC_RELAXED);
+        p.planeChecks = __atomic_load_n (&b->pace.planeChecks, __ATOMIC_RELAXED);
+        p.reserved = 0;
+        pace_ = p;
+        paceKnown_ = p.stride != 0;
     }
 
     /** Kills the helper (when there is one), cleans what it may have left on the display, closes the channel. */
@@ -347,12 +405,12 @@ private:
             else
                 tr_.kill();
         }
-        cleanDisplay();
+        cleanDisplay (! keepPlane_);
         tr_.close();
         shown_ = hiding_ = unacked_ = false;
     }
 
-    void cleanDisplay() noexcept
+    void cleanDisplay (bool planeOff = true) noexcept
     {
         // the plane is taken off only when the helper may have put something on it (it was told to show, or it has objects in the ledger): a helper that failed before that (a missing
         // library, a protocol version of another build) leaves the plane to the CPU picture that may be on it
@@ -364,7 +422,7 @@ private:
                 ledgerGet (b, i, handle, fb);
                 touched = touched || handle || fb;
             }
-        if (touched)
+        if (touched && planeOff)
             plane_.forceDisablePlane();
         if (SharedBlock* b = tr_.block())
             for (int i = 0; i < kMaxLedger; ++i)
@@ -384,7 +442,7 @@ private:
         lastError_ = why;
         ++totalFailures_;
         tr_.kill();     // first: nothing of the helper may touch the plane any more
-        cleanDisplay();
+        cleanDisplay (true);
         tr_.close();
         shown_ = hiding_ = unacked_ = false;
         scheduleAfterFailure (now);
@@ -417,7 +475,8 @@ private:
     IPlaneBackend& plane_;
     GpuConfig cfg_;
     State state_ = State::Idle;
-    bool forceCpu_ = false, shown_ = false, hiding_ = false, unacked_ = false;
+    bool forceCpu_ = false, shown_ = false, hiding_ = false, unacked_ = false, keepPlane_ = false, paceKnown_ = false;
+    PaceBlock pace_ {};
     double startedAt_ = 0.0, runningSince_ = 0.0, retryAt_ = 0.0, unackedSince_ = 0.0, hideAt_ = 0.0;
     uint32_t lastSeq_ = 0, acked_ = 0;
     int failures_ = 0, rotation_ = 90, viewIndex_ = -1;

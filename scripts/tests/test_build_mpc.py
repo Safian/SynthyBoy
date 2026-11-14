@@ -144,6 +144,23 @@ class BuildMpcTest(unittest.TestCase):
         self.assertIn("libEGL", text)   # the helper must not link the Mesa libraries
         self.assertIn('check_elf "$helper_dir/synthyboy-overlay-gpu.stripped" tool', text)
 
+    def test_container_script_holds_each_architecture_to_the_glibc_of_its_device_helper_included(self):
+        text = CONTAINER.read_text()
+        self.assertIn('GLIBC_MAX_ARM32="2.39"', text)
+        self.assertIn('GLIBC_MAX_ARM64="2.39"', text)
+        self.assertRegex(text, r'arm32\)(?:.|\n)*?GLIBC_MAX="\$GLIBC_MAX_ARM32"')
+        self.assertRegex(text, r'arm64\)(?:.|\n)*?GLIBC_MAX="\$GLIBC_MAX_ARM64"')
+        self.assertIn('"$TRIPLE-objdump" -T "$so"', text)   # the check every binary of the architecture passes, the helper too
+        # the helper is checked as a tool with the same check_elf as the plugin, and for BOTH architectures: the file class regex and the loader name come from the architecture
+        self.assertIn('check_elf "$helper_dir/synthyboy-overlay-gpu" tool', text)
+        self.assertIn("FILE_RE='ELF 64-bit LSB.*ARM aarch64'", text)
+
+    def test_container_script_finds_the_drm_uapi_headers_on_a_native_arm64_host(self):
+        text = CONTAINER.read_text()
+        self.assertIn("linux-libc-dev-armhf-cross", text)
+        self.assertIn("/opt/drm-uapi", text)
+        self.assertIn('printf \'#include <drm/drm.h>', text)
+
     def test_scripts_are_valid_bash(self):
         for script in (BUILD_MPC, BUILD_ARMV7, CONTAINER):
             self.assertEqual(subprocess.run(["bash", "-n", str(script)]).returncode, 0, script)

@@ -4,8 +4,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // The thread starts with the first instance and stops with the last one (the plane is off and the buffers are gone when detach () returns). An atexit handler does the same when the
-// process ends while an instance is still open. The thread runs with the same scheduling as the display thread (thread_policy.h: SCHED_OTHER, nice 0, cores 0-1 by the cpuset
-// of the system; never the isolated audio cores).
+// process ends while an instance is still open. The thread runs with the same scheduling as the display thread (thread_policy.h: SCHED_OTHER, nice 0) on the cores the discovery
+// leaves to it: never the isolated cores, never the cores the application's audio threads are pinned to (cpu_plan_linux.h; re-read every 10 seconds, the helper follows).
 #pragma once
 
 #include <atomic>
@@ -24,17 +24,11 @@
 #endif
 #include "../thread_policy.h"
 #include "controller.h"
+#include "cpu_plan_linux.h"
 #include "drm_linux.h"
 #include "gpu/gpu_overlay.h"
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
 #include "gpu/helper_transport_linux.h"
-#endif
-
-#ifndef SYNTHYBOY_MPC_OVERLAY_CRTC
-#define SYNTHYBOY_MPC_OVERLAY_CRTC 37
-#endif
-#ifndef SYNTHYBOY_MPC_OVERLAY_PLANE
-#define SYNTHYBOY_MPC_OVERLAY_PLANE 38
 #endif
 
 namespace synthyboy_mpc { namespace overlay {
@@ -58,45 +52,6 @@ public:
     bool pixel (int, int, uint32_t&) noexcept override { return false; }
     void end() noexcept override {}
 };
-#endif
-
-#if defined(__linux__)
-/** useNormalScheduling gives the thread every CPU of the system. The cores the kernel isolates for the audio threads (isolcpus, /sys/devices/system/cpu/isolated, "2-3" on the
-    Key 61) are taken out again: this thread never runs there. Best effort; nothing is changed when the file is missing or would leave no CPU. */
-inline void keepOffIsolatedCpus() noexcept
-{
-    FILE* f = std::fopen ("/sys/devices/system/cpu/isolated", "r");
-    if (! f)
-        return;
-    char text[128] = {};
-    const size_t n = std::fread (text, 1, sizeof text - 1, f);
-    std::fclose (f);
-    text[n] = 0;
-    cpu_set_t set;
-    if (sched_getaffinity (0, sizeof set, &set) != 0)
-        return;
-    cpu_set_t out = set;
-    for (const char* p = text; *p && *p != '\n';)
-    {
-        char* end = nullptr;
-        const long a = std::strtol (p, &end, 10);
-        if (end == p)
-            break;
-        long b = a;
-        if (*end == '-')
-        {
-            p = end + 1;
-            b = std::strtol (p, &end, 10);
-        }
-        for (long c = a; c <= b && c < CPU_SETSIZE; ++c)
-            CPU_CLR (static_cast<int> (c), &out);
-        p = *end == ',' ? end + 1 : end;
-        if (*end != ',')
-            break;
-    }
-    if (CPU_COUNT (&out) > 0 && ! CPU_EQUAL (&out, &set))
-        (void) sched_setaffinity (0, sizeof out, &out);
-}
 #endif
 
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
@@ -166,8 +121,9 @@ private:
         if (controller_)
             return;
 #if defined(__linux__)
-        backend_ = std::make_unique<LinuxPlaneBackend> (SYNTHYBOY_MPC_OVERLAY_CRTC, SYNTHYBOY_MPC_OVERLAY_PLANE);
-        frames_ = std::make_unique<LinuxFrameSource> (SYNTHYBOY_MPC_OVERLAY_CRTC);
+        display_ = std::make_shared<LinuxDisplay>();     // found at run time by the first use (discovery.h): the CRTC, the planes, the panel, the refresh
+        backend_ = std::make_unique<LinuxPlaneBackend> (display_);
+        frames_ = std::make_unique<LinuxFrameSource> (display_);
 #else
         backend_ = std::make_unique<UnsupportedPlaneBackend>();
         frames_ = std::make_unique<UnsupportedFrameSource>();
@@ -176,13 +132,14 @@ private:
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
         {
             gpu::GpuConfig cfg;
-            cfg.crtc = SYNTHYBOY_MPC_OVERLAY_CRTC;
-            cfg.plane = SYNTHYBOY_MPC_OVERLAY_PLANE;
             transport_ = std::make_unique<gpu::LinuxHelperTransport> (gpuHelperPath());
             gpu_ = std::make_unique<gpu::GpuHelperBackend> (*transport_, *backend_, cfg);
         }
 #endif
         controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get());
+#if defined(__linux__)
+        controller_->setExtraStatus ([this] { return cpuStatus(); });
+#endif
     }
 
     void stopThread()
@@ -210,7 +167,7 @@ private:
     {
         useNormalScheduling (0, "sb-overlay");
 #if defined(__linux__)
-        keepOffIsolatedCpus();
+        applyCpus (true);
 #endif
         controller_->setCpuClock ([]
         {
@@ -224,19 +181,77 @@ private:
         {
             lk.unlock();
             const double now = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count() + 1.0;
+#if defined(__linux__)
+            if (nowSteadyMs() >= nextCpuScanMs_)
+                applyCpus (false);
+#endif
+            const auto tickStart = std::chrono::steady_clock::now();
             const double wait = controller_->tick (now);
             lk.lock();
             if (stop_.load())
                 break;
-            wake_.wait_for (lk, std::chrono::microseconds (static_cast<long long> (wait * 1000.0)), [this] { return stop_.load(); });
+            // the next step is due `wait` after the START of this one (a step that had to wait for the display's locks does not push the rhythm of the scenes back)
+            wake_.wait_until (lk, tickStart + std::chrono::microseconds (static_cast<long long> (wait * 1000.0)), [this] { return stop_.load(); });
         }
     }
+
+#if defined(__linux__)
+    /** The cores for this thread (and the helper): every online core but the isolated ones and the ones the audio threads are pinned to. Re-read every 10 seconds (threads of the
+        application may start late); the helper, which inherited the cores at its start, is set again when they change. */
+    void applyCpus (bool first)
+    {
+        CpuState st = planOwnCpus();
+        std::lock_guard<std::mutex> g (cpuMu_);
+        nextCpuScanMs_ = nowSteadyMs() + 10000.0;
+        const bool changed = first || st.plan.allowed != cpu_.plan.allowed;
+        cpu_ = st;
+        if (st.plan.changed && changed)
+            setAffinity (0, st.plan.allowed);
+        if (gpu_ && st.plan.changed)
+        {
+            const int pid = gpu_->status().pid;
+            if (pid > 0 && pid != helperPidSet_)
+            {
+                setAffinity (pid, st.plan.allowed);
+                helperPidSet_ = pid;
+            }
+            else if (pid > 0 && changed)
+                setAffinity (pid, st.plan.allowed);
+        }
+        threadAffinity_ = affinityOf (0);
+        helperAffinity_ = gpu_ && gpu_->status().pid > 0 ? affinityOf (gpu_->status().pid) : "no helper";
+    }
+
+    static double nowSteadyMs()
+    {
+        return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
+    std::string cpuStatus()
+    {
+        std::lock_guard<std::mutex> g (cpuMu_);
+        std::string t = "cpus_online: " + formatCpuList (cpu_.online) + "\ncpus_isolated_by_kernel: " + formatCpuList (cpu_.isolated) + "\ncpus_overlay_allowed: " + formatCpuList (cpu_.plan.allowed)
+                        + "\ncpus_avoided: " + formatCpuList (cpu_.plan.avoided) + "\ncpus_overlay_thread_now: " + threadAffinity_ + "\ncpus_helper_now: " + helperAffinity_ + "\ncpus_audio_threads:";
+        for (const std::string& n : cpu_.plan.audioThreads)
+            t += " " + n;
+        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + "\n";
+    }
+
+    std::mutex cpuMu_;
+    CpuState cpu_;
+    double nextCpuScanMs_ = 0.0;
+    int helperPidSet_ = 0;
+    std::string threadAffinity_ = "unknown", helperAffinity_ = "no helper";
+#endif
 
     std::mutex lifeMu_, wakeMu_;
     std::condition_variable wake_;
     std::atomic<bool> stop_ { false };
     std::thread thread_;
     bool atexitRegistered_ = false;
+#if defined(__linux__)
+    std::shared_ptr<LinuxDisplay> display_;
+#endif
     std::unique_ptr<IPlaneBackend> backend_;
     std::unique_ptr<IFrameSource> frames_;
     std::unique_ptr<ICurveRenderer> renderer_;

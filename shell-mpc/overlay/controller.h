@@ -8,7 +8,7 @@
 // screen, the instance of the page on screen cannot be told / has no slot / is gone, no data yet), "visible" (the status file names the view and the instance slot: `view: lfo2`,
 // `instance_slot: 1`). With several instances the page on screen belongs to one of them: the skin shows its slot as a colour (instance_slots.h) and that instance's data is drawn. The files (all in /tmp by default, see Paths):
 //   synthyboy-overlay-off      exists -> hidden (checked once a second; removing the file brings the overlay back)
-//   synthyboy-overlay-rot      "90" or "270" (default 90), read once a second
+//   synthyboy-overlay-rot      "0", "90", "180" or "270": overrides the rotation the overlay finds itself (from its own markers, page_detector.h); read once a second
 //   synthyboy-overlay-nogpu    exists -> the CPU draws, the GPU helper is stopped (checked once a second, switches live in both directions; gpu/gpu_overlay.h)
 //   synthyboy-overlay-status.txt  rewritten once a second (temporary file + rename)
 //   synthyboy-overlay-dump     exists -> synthyboy-overlay-curve.txt is rewritten once a second with the data of the visible view (debug)
@@ -35,6 +35,7 @@
 #include "page_detector.h"
 #include "presenter.h"
 #include "renderer.h"
+#include "vblank_pacer.h"
 #include "view.h"
 #include "views.h"
 
@@ -59,6 +60,7 @@ struct Timing
     double detectEveryMs = 100.0;     // 10 checks a second
     double frameEveryMs = 33.3;       // at most 30 pictures a second (two vblanks of a 60 Hz panel)
     double gpuFrameEveryMs = SYNTHYBOY_MPC_OVERLAY_GPU_FRAME_MS;   // the GPU path: the helper draws, the thread only hands over scenes (33.3: 30 a second like the CPU path; 16.7 for 60)
+    bool followDisplayPace = true;    // once the display is known: the picture gap is the pace grid's (vblanks per picture x the measured period; scenes for the GPU 20 % faster than the grid)
     double switchesEveryMs = 1000.0;  // kill switch, rotation file, status file
     int unreadableLimit = 20;         // checks in a row (2 s) without a readable framebuffer -> disabled
 };
@@ -69,7 +71,7 @@ public:
     /** `gpu`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. */
     Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0,
                 gpu::IGpuOverlay* gpuOverlay = nullptr)
-        : presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay)
+        : backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay)
     {
         for (int i = 0; i < layout::kNumViews; ++i)
         {
@@ -153,13 +155,20 @@ public:
     unsigned long rereports() const noexcept { return rereports_; }
     /** Optional: the CPU time of the calling thread in ms (the status file shows the overlay thread's load). */
     void setCpuClock (std::function<double()> clock) { cpuClock_ = std::move (clock); }
+    /** Optional: extra "key: value" lines of the status file (the overlay thread's CPU plan, ...), asked for at every write. */
+    void setExtraStatus (std::function<std::string()> f) { extraStatus_ = std::move (f); }
+    /** The rotation is decided (found from the markers or named by the file). */
+    bool rotationKnown() const noexcept { return rotationOverride_ >= 0 || rotationFound_ >= 0; }
 
     /** One step. Returns after how many milliseconds the next one is due. Never throws. */
     double tick (double nowMs)
     {
         try
         {
-            return step (nowMs);
+            const auto t0 = std::chrono::steady_clock::now();
+            const double wait = step (nowMs);
+            tickMaxMs_ = std::max (tickMaxMs_, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count());
+            return wait;
         }
         catch (...)
         {
@@ -179,6 +188,20 @@ private:
         }
         if (gpu_)
             gpu_->poll (nowMs);
+        // a GPU picture is on the plane: the next scene goes FIRST, before any call that can wait for the display's locks (the page detection below reads the CRTC, which waits while the helper's
+        // plane update holds them for a vblank): the scenes then come at the rhythm of the pace grid, whatever the rest of the step takes
+        double early = 0.0;
+        bool kickedEarly = false;
+        int earlyView = -1, earlySlot = -1;
+        if (current_ >= 0 && gpu_ && usingGpu_ && gpuShown_ && ! noGpu_ && ! killed_)
+        {
+            earlyView = current_;
+            earlySlot = activeSlot_;
+            early = drawCurrent (nowMs);
+            kickedEarly = ! disabled();
+        }
+        if (disabled())
+            return 1000.0;
         if (statusDue_)
         {
             statusDue_ = false;
@@ -190,6 +213,8 @@ private:
             nextSwitchesMs_ = nowMs + timing_.switchesEveryMs;
             if (secondStartMs_ == 0.0) secondStartMs_ = nowMs;
             secondTick (nowMs);
+            if (disabled())
+                return 1000.0;
         }
         int count;
         {
@@ -212,12 +237,32 @@ private:
         if (nowMs >= nextDetectMs_)
         {
             nextDetectMs_ = nowMs + timing_.detectEveryMs;
-            const Detection d = detector_->check (rotation_);
+            Detection d;
+            if (rotationKnown())
+                d = detector_->check (rotation_);
+            else
+            {
+                // no rotation table: the marker pair of the view on screen is looked for under every rotation; exactly one of them may match
+                const RotationSearch rs = detector_->searchRotation();
+                d = rs.detection;
+                rotationAmbiguous_ = rs.matches > 1;
+                if (rs.rotation >= 0)
+                {
+                    rotationFound_ = rs.rotation;
+                    updateRotation (nowMs);
+                }
+            }
             for (int i = 0; i < d.count && i < Detection::kMaxViews; ++i)
                 for (int m = 0; m < 2; ++m)
                     seen_[i][m] = d.seen[i][m];
             if (! d.readable)
             {
+                const std::string fatal = frames_.fatalError();
+                if (! fatal.empty())
+                {
+                    disable (fatal);
+                    return 1000.0;
+                }
                 if (++unreadable_ >= timing_.unreadableLimit)
                 {
                     disable ("the framebuffer cannot be read");
@@ -231,7 +276,7 @@ private:
             int view = d.view, slot = -1;
             std::string why;
             if (view < 0)
-                why = d.readable ? "no view on screen" : "framebuffer not readable";
+                why = ! d.readable ? "framebuffer not readable" : (! rotationKnown() && rotationAmbiguous_ ? "rotation ambiguous (markers match under several rotations)" : "no view on screen");
             else
             {
                 std::lock_guard<std::mutex> g (mu_);
@@ -269,67 +314,77 @@ private:
         }
         if (current_ >= 0)
         {
-            {
-                std::lock_guard<std::mutex> g (mu_);
-                if (! slots_.at (activeSlot_))     // the instance whose page is on screen has closed since the last check
-                {
-                    current_ = -1;
-                    activeSlot_ = -1;
-                    needFrame_ = true;
-                }
-            }
-            if (current_ < 0)
-            {
-                presenter_.hide();
-                hideGpu (nowMs);
-                setState ("hidden: instance closed");
-                return timing_.detectEveryMs;
-            }
-            if (gpu_ && ! noGpu_)
-            {
-                if (! presenter_.open())     // the helper needs the display descriptor and the panel size
-                {
-                    disable (presenter_.reason());
-                    return 1000.0;
-                }
-                gpu_->request (nowMs);
-            }
-            const bool wantGpu = gpu_ && gpu_->active() && gpuSkipView_ != current_;
-            if (wantGpu)
-            {
-                if (presenter_.shown() || presenter_.planeOn())
-                {
-                    presenter_.hide();       // the CPU buffers go, the helper takes the plane
-                    needFrame_ = true;
-                }
-                nextWaitMs_ = timing_.gpuFrameEveryMs;
-                drawGpu (nowMs);
-                setRenderer (true);
-                return nextWaitMs_;
-            }
-            if (gpu_ && ! gpu_->planeFree())
-            {
-                // the helper has the plane (or is taking it off): the CPU path waits until it has answered, or until the clean-up of a failure
-                hideGpu (nowMs);
-                setRenderer (false);
-                return 5.0;
-            }
-            setRenderer (false);
-            if (! presenter_.show (regions_[current_], rotation_))
-            {
-                disable (presenter_.reason());
-                return 1000.0;
-            }
-            nextWaitMs_ = timing_.frameEveryMs;
-            drawIfChanged (nowMs);
-            if (presenter_.disabled())
-            {
-                disable (presenter_.reason());
-                return 1000.0;
-            }
-            return nextWaitMs_;
+            if (kickedEarly && current_ == earlyView && activeSlot_ == earlySlot && gpuShown_)
+                return early;
+            return drawCurrent (nowMs);
         }
         return timing_.detectEveryMs;
+    }
+
+    /** The picture of the view on screen (current_ >= 0): the GPU scene or the CPU drawing. Returns after how many milliseconds the next step is due. */
+    double drawCurrent (double nowMs)
+    {
+        {
+            std::lock_guard<std::mutex> g (mu_);
+            if (! slots_.at (activeSlot_))     // the instance whose page is on screen has closed since the last check
+            {
+                current_ = -1;
+                activeSlot_ = -1;
+                needFrame_ = true;
+            }
+        }
+        if (current_ < 0)
+        {
+            presenter_.hide();
+            hideGpu (nowMs);
+            setState ("hidden: instance closed");
+            return timing_.detectEveryMs;
+        }
+        if (gpu_ && ! noGpu_)
+        {
+            if (! presenter_.open())     // the helper needs the display descriptor and the panel size
+            {
+                disable (presenter_.reason());
+                return 1000.0;
+            }
+            applyPace();
+            gpu_->request (nowMs);
+        }
+        const bool wantGpu = gpu_ && gpu_->active() && gpuSkipView_ != current_;
+        if (wantGpu)
+        {
+            if (presenter_.shown() || presenter_.planeOn())
+            {
+                presenter_.hide();       // the CPU buffers go, the helper takes the plane
+                needFrame_ = true;
+            }
+            nextWaitMs_ = timing_.gpuFrameEveryMs;
+            drawGpu (nowMs);
+            setRenderer (true);
+            return nextWaitMs_;
+        }
+        if (gpu_ && ! gpu_->planeFree())
+        {
+            // the helper has the plane (or is taking it off): the CPU path waits until it has answered, or until the clean-up of a failure
+            hideGpu (nowMs);
+            setRenderer (false);
+            return 5.0;
+        }
+        setRenderer (false);
+        if (! presenter_.show (regions_[current_], rotation_))
+        {
+            disable (presenter_.reason());
+            return 1000.0;
+        }
+        applyPace();
+        nextWaitMs_ = timing_.frameEveryMs;
+        drawIfChanged (nowMs);
+        if (presenter_.disabled())
+        {
+            disable (presenter_.reason());
+            return 1000.0;
+        }
+        return nextWaitMs_;
     }
 
     /** Every instance registered with a slot is asked to report "Overlay Instance" again (the controller's lock is held; at most once per gap, which doubles while nothing valid is read). */
@@ -443,10 +498,15 @@ private:
         const auto t0 = std::chrono::steady_clock::now();
         if (! gpu_->show (ui, panel, rotation_, current_, views_[static_cast<size_t> (current_)]->name(), nowMs) || ! gpu_->submit (gpuScene_, nowMs))
             return;     // the helper failed: the next tick draws with the CPU
+        if (! gpuShown_)
+            gpuFramesAtShow_ = gpu_->status().frames;
         gpuShown_ = true;
         gpuView_ = current_;
         gpuRotation_ = rotation_;
         renderMs_ = 0.8 * renderMs_ + 0.2 * std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
+        if (lastKickMs_ > 0.0 && nowMs - lastKickMs_ < 1000.0)
+            kickGapMaxMs_ = std::max (kickGapMaxMs_, nowMs - lastKickMs_);
+        lastKickMs_ = nowMs;
         lastFrameMs_ = nowMs;
         needFrame_ = false;
         ++framesThisSecond_;
@@ -462,6 +522,23 @@ private:
         gpuShown_ = false;
         gpuView_ = -1;
         needFrame_ = true;
+    }
+
+    /** The display is known (discovery, measured refresh): the pace of the pictures is the pace grid's. */
+    void applyPace()
+    {
+        if (paceApplied_ || ! presenter_.opened())
+            return;
+        paceApplied_ = true;
+        if (! timing_.followDisplayPace)
+            return;
+        const PaceParams pp = backend_.paceParams();
+        const double grid = pp.stride * pp.periodMs;
+        if (grid >= 8.0 && grid <= 200.0)
+        {
+            timing_.frameEveryMs = grid;
+            timing_.gpuFrameEveryMs = 0.8 * grid;
+        }
     }
 
     void setRenderer (bool gpuNow)
@@ -562,11 +639,20 @@ private:
                 needFrame_ = true;
             }
         }
-        int rot = 90;
+        int over = -1;
         std::ifstream in (paths_.rotation);
         int v = 0;
-        if (in && (in >> v))
-            rot = normaliseRotation (v);
+        if (in && (in >> v) && (v == 0 || v == 90 || v == 180 || v == 270))
+            over = v;
+        rotationOverride_ = over;
+        updateRotation (nowMs);
+        dumpRequested_ = exists (paths_.dumpRequest);
+    }
+
+    /** The rotation in use: the file's, else the one found from the markers (cached for the life of the process), else the default while searching. */
+    void updateRotation (double nowMs)
+    {
+        const int rot = rotationOverride_ >= 0 ? rotationOverride_ : (rotationFound_ >= 0 ? rotationFound_ : rotation_);
         if (rot != rotation_)
         {
             presenter_.hide();   // set up again with the other orientation
@@ -574,11 +660,50 @@ private:
             rotation_ = rot;
             needFrame_ = true;
         }
-        dumpRequested_ = exists (paths_.dumpRequest);
+    }
+
+    /** Once a second while a picture is on the plane: the plane still reports our state. If another program took it, everything of ours is dropped without touching it and the next free
+        plane the discovery found is used (the picture comes back there); with none left the module disables itself. */
+    void verifyPlane (double nowMs)
+    {
+        // the CPU path only: the helper checks its own plane (a GETPLANE from this thread would wait for the lock that the helper's update holds while it waits for the vblank, and delay a scene)
+        if (! presenter_.planeOn())
+            return;
+        std::string why;
+        if (backend_.planeStillOurs (why))
+        {
+            planeNote_ = "verified";
+            if (backend_.planeWasSwitchedOff())
+            {
+                planeNote_ = "was switched off (a mode set of the application?): set again";
+                ++planeRefreshes_;
+                needFrame_ = true;       // the next step draws and presents the picture again, on the same plane
+            }
+            return;
+        }
+        planeNote_ = "lost: " + why;
+        ++planeLosses_;
+        presenter_.abandon();
+        if (gpu_)
+            gpu_->abandonPlane();
+        gpuShown_ = false;
+        gpuView_ = -1;
+        needFrame_ = true;
+        std::string next;
+        if (! backend_.nextPlane (next))
+        {
+            disable ("the overlay plane was taken by another program and " + next);
+            return;
+        }
+        planeNote_ += "; " + next;
+        (void) nowMs;
     }
 
     void secondTick (double nowMs)
     {
+        verifyPlane (nowMs);
+        if (disabled())
+            return;
         const double cpu = cpuClock_ ? cpuClock_() : 0.0;
         const double wall = nowMs - secondStartMs_;
         framesLast_ = framesThisSecond_;
@@ -593,6 +718,9 @@ private:
         updatesThisSecond_ = changesThisSecond_ = 0;
         cpuPercent_ = (cpuClock_ && wall > 100.0) ? 100.0 * (cpu - cpuAtSecond_) / wall : 0.0;
         cpuAtSecond_ = cpu;
+        tickMaxLast_ = tickMaxMs_;
+        kickGapMaxLast_ = kickGapMaxMs_;
+        tickMaxMs_ = kickGapMaxMs_ = 0.0;
         framesThisSecond_ = 0;
         secondStartMs_ = nowMs;
         writeStatus (false);
@@ -606,8 +734,26 @@ private:
         std::ostringstream o;
         o << "state: " << state_ << "\n";
         o << "view: " << (current_ >= 0 && state_ == "visible" ? views_[static_cast<size_t> (current_)]->name() : "none") << "\n";
-        o << "rotation: " << rotation_ << "\n";
+        if (rotationKnown())
+            o << "rotation: " << rotation_ << "\nrotation_source: " << (rotationOverride_ >= 0 ? "override file" : "found from the markers") << "\n";
+        else
+            o << "rotation: unknown\nrotation_source: " << (rotationAmbiguous_ ? "ambiguous (markers match under several rotations)" : "searching (no view of the skin on screen yet)") << "\n";
+        {
+            std::string disp;
+            backend_.describe (disp);
+            o << disp;
+            std::string note = planeNote_;
+            if (gpu_ && usingGpu_)
+            {
+                const gpu::GpuStatus g = gpu_->status();
+                note = "verified by the helper after its updates (" + std::to_string (g.pace.planeChecks) + " checks)";
+            }
+            o << "display_plane_state: " << note << "\ndisplay_plane_losses: " << planeLosses_ << "\ndisplay_plane_refreshes: " << planeRefreshes_ << "\n";
+        }
+        if (extraStatus_)
+            o << extraStatus_();
         writeGpuStatus (o);
+        writePaceStatus (o);
         int count, slotted;
         unsigned alive;
         {
@@ -626,6 +772,7 @@ private:
         o << "frames_total: " << framesTotal() << "\n";
         o << "curve_updates_last_second: " << updatesLast_ << "\ncurve_changes_last_second: " << changesLast_ << "\n";
         o << "overlay_thread_cpu_percent_of_one_core: " << cpuPercent_ << "\n";
+        o << "overlay_tick_max_ms_last_second: " << tickMaxLast_ << "\noverlay_scene_gap_max_ms_last_second: " << kickGapMaxLast_ << "\n";
         o << "work_peak_ms: " << workPeakMs_ << "\nrender_ms: " << renderMs_ << "\nrotate_ms: " << rotateMs_ << "\nsetplane_ms: " << setPlaneMs_ << "\n";
         if (current_ >= 0)
         {
@@ -665,6 +812,42 @@ private:
           << "\ngpu_helper_startup_ms: " << g.startupMs << "\ngpu_renderer: " << (g.glRenderer.empty() ? "none" : g.glRenderer) << "\n";
     }
 
+    /** The presentation intervals of the renderer in use: in vblanks and in 2 ms buckets (the pace grid is the point: the intervals of a picture a second are even when one bucket holds them all). */
+    void writePaceStatus (std::ostream& o) const
+    {
+        PaceStats ps;
+        bool have = false;
+        const char* who = "cpu";
+        if (gpu_ && usingGpu_)
+        {
+            const gpu::GpuStatus g = gpu_->status();
+            if (g.paceKnown)
+            {
+                ps.count = g.pace.count;
+                for (int i = 0; i < PaceStats::kVb; ++i) ps.vb[i] = g.pace.vb[i];
+                for (int i = 0; i < PaceStats::kMs; ++i) ps.ms[i] = g.pace.ms[i];
+                have = true;
+                who = "gpu";
+            }
+        }
+        else if (const PaceStats* p = backend_.paceStats())
+        {
+            ps = *p;
+            have = true;
+        }
+        if (! have)
+            return;
+        o << "pace_renderer: " << who << "\npace_intervals: " << ps.count << "\npace_interval_vblanks:";
+        for (int i = 0; i < PaceStats::kVb; ++i)
+            if (ps.vb[i])
+                o << " " << i << (i == PaceStats::kVb - 1 ? "+" : "") << "=" << ps.vb[i];
+        o << "\npace_interval_ms:";
+        for (int i = 0; i < PaceStats::kMs; ++i)
+            if (ps.ms[i])
+                o << " " << i * 2 << "-" << i * 2 + 2 << "=" << ps.ms[i];
+        o << "\n";
+    }
+
     void writeDump()
     {
         if (current_ < 0 || ! views_[static_cast<size_t> (current_)]->valid())
@@ -688,6 +871,7 @@ private:
 
     static constexpr double kMinFrameGapMs = 5.0;    // never faster than this (a present waits for the vblank, 16.7 ms, anyway)
     static constexpr double kSlackMs = 3.0;
+    IPlaneBackend& backend_;
     Presenter presenter_;
     IFrameSource& frames_;
     ICurveRenderer& renderer_;
@@ -698,7 +882,12 @@ private:
     gpu::SceneData gpuScene_ {};
     bool noGpu_ = false, gpuShown_ = false, usingGpu_ = false, statusDue_ = false;
     int gpuView_ = -1, gpuRotation_ = 0, gpuSkipView_ = -1;
-    unsigned long gpuFramesAtSecond_ = 0;
+    unsigned long gpuFramesAtSecond_ = 0, gpuFramesAtShow_ = 0;
+    std::function<std::string()> extraStatus_;
+    int rotationOverride_ = -1, rotationFound_ = -1;
+    bool rotationAmbiguous_ = false, paceApplied_ = false;
+    unsigned planeLosses_ = 0, planeRefreshes_ = 0;
+    std::string planeNote_ = "not on yet";
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
     Rect instanceRects_[layout::kNumViews];
@@ -727,6 +916,7 @@ private:
     uint32_t seen_[Detection::kMaxViews][2] = {};
     double nextSwitchesMs_ = 0.0, nextDetectMs_ = 0.0, lastFrameMs_ = -1000.0, secondStartMs_ = 0.0, cpuAtSecond_ = 0.0, cpuPercent_ = 0.0;
     unsigned framesThisSecond_ = 0, framesLast_ = 0, updatesThisSecond_ = 0, updatesLast_ = 0, changesThisSecond_ = 0, changesLast_ = 0;
+    double tickMaxMs_ = 0.0, tickMaxLast_ = 0.0, kickGapMaxMs_ = 0.0, kickGapMaxLast_ = 0.0, lastKickMs_ = 0.0;
     double nextWaitMs_ = 33.3, workPeakMs_ = 0.0, renderMs_ = 0.0, rotateMs_ = 0.0, setPlaneMs_ = 0.0;
     unsigned long fullThisSecond_ = 0, recomputesAtSecond_ = 0;
 };

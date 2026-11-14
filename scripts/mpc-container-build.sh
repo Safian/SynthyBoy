@@ -12,13 +12,16 @@
 # with WITH_BENCH=1, /out/bench-<ARCH>/synthyboy_bench and synthyboy_noteon_bench.
 #
 # The checks are the same for both architectures (see check_elf): ELF class and machine, DT_NEEDED limited to libc / libm / libdl / libpthread / the dynamic
-# loader, VSTPluginMain as the only exported symbol before and after strip, and the highest referenced GLIBC symbol version at most 2.39 (the glibc of the
-# MPC OS 3 firmware; Debian 12 itself has 2.36).
+# loader, VSTPluginMain as the only exported symbol before and after strip, and the highest referenced GLIBC symbol version at most the ceiling of the device of that architecture
+# (GLIBC_MAX below: read from the devices on 2026-11-14 with `/lib/libc.so.6`, MPC Key 61 arm32: 2.39, MPC XL arm64: 2.39; Debian 12 itself has 2.36). The GPU helper of the overlay
+# is held to the same ceiling as the plugin of its architecture.
 
 set -euo pipefail
 
 me="mpc-container-build.sh"
-GLIBC_MAX="2.39"
+# The glibc ceilings per architecture (the glibc of the MPC OS 3 firmware of that device): one place to change when a device's firmware moves.
+GLIBC_MAX_ARM32="2.39"   # MPC Key 61 (3.10.1.12): GNU C Library 2.39
+GLIBC_MAX_ARM64="2.39"   # MPC XL: GNU C Library 2.39 (/lib/libc.so.6, read only)
 
 case "${ARCH:-}" in
     arm32)
@@ -28,6 +31,7 @@ case "${ARCH:-}" in
         FILE_RE='ELF 32-bit LSB.*ARM, EABI5'
         PKGS=(g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf)
         LABEL="ARMv7"
+        GLIBC_MAX="$GLIBC_MAX_ARM32"
         ;;
     arm64)
         TRIPLE=aarch64-linux-gnu
@@ -36,6 +40,7 @@ case "${ARCH:-}" in
         FILE_RE='ELF 64-bit LSB.*ARM aarch64'
         PKGS=(g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu)
         LABEL="AArch64"
+        GLIBC_MAX="$GLIBC_MAX_ARM64"
         ;;
     *) echo "$me: ARCH must be arm32 or arm64 (got '${ARCH:-}')" >&2; exit 2 ;;
 esac
@@ -54,6 +59,16 @@ command -v ninja >/dev/null || command -v make >/dev/null || need+=(make)
 if [ "${#need[@]}" -gt 0 ]; then
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${need[@]}" ca-certificates
+fi
+# The overlay includes the kernel's DRM uapi headers (<drm/drm.h>). Debian's cross packages of each architecture ship them (linux-libc-dev-<arch>-cross), but a build on a host of the
+# target's own architecture (Docker on an arm64 computer building arm64) uses the native linux-libc-dev, which has no drm/ directory. The uapi headers do not depend on the architecture:
+# when the compiler of this target cannot find <drm/drm.h>, a copy of the armhf cross package's directory is put on the include path (a package that does not use them is not changed).
+if ! printf '#include <drm/drm.h>\n' | "$TRIPLE-gcc" -E -x c - >/dev/null 2>&1; then
+    command -v apt-get >/dev/null && { apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends linux-libc-dev-armhf-cross; }
+    [ -d /usr/arm-linux-gnueabihf/include/drm ] || { echo "$me: [$ARCH] no DRM uapi headers for the overlay (linux-libc-dev-armhf-cross)" >&2; exit 1; }
+    mkdir -p /opt/drm-uapi && rm -rf /opt/drm-uapi/drm && cp -R /usr/arm-linux-gnueabihf/include/drm /opt/drm-uapi/drm
+    export C_INCLUDE_PATH="/opt/drm-uapi${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}" CPLUS_INCLUDE_PATH="/opt/drm-uapi${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+    printf '#include <drm/drm.h>\n' | "$TRIPLE-gcc" -E -x c - >/dev/null || { echo "$me: [$ARCH] <drm/drm.h> is still not found" >&2; exit 1; }
 fi
 cmake --version | head -1
 "$TRIPLE-g++" --version | head -1

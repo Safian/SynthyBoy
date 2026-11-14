@@ -434,7 +434,7 @@ int main()
         check (line (r.dir.read ("status.txt"), "rotation") == "270", "the status file says 270");
         r.dir.write ("rot", "banana");
         r.run (1300);
-        check (r.ctl->rotation() == 90, "an unreadable rotation file means 90");
+        check (r.ctl->rotation() == 90, "an unreadable rotation file is no override: the rotation found from the markers (90, the first view) is back");
     }
     // ---- the curve dump on request ----
     {

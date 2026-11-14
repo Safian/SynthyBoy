@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <set>
@@ -80,6 +81,30 @@ public:
     // failure injection: the n-th call of a kind fails (1 = the first); 0 = never
     int failOpenAt = 0, failCreateAt = 0, failSetPlaneAt = 0;
     int panelW = 800, panelH = 1280;
+    // what the discovery of the real backend reports: the CRTC, the plane in use and the spares, the pace; planeStillOurs / nextPlane act on them
+    uint32_t crtc = 37, plane = 38;
+    std::vector<uint32_t> spares;
+    PaceParams pace;
+    bool stillOurs = true;
+    int nextPlaneCalls = 0;
+    uint32_t crtcId() const noexcept override { return crtc; }
+    uint32_t planeId() const noexcept override { return plane; }
+    PaceParams paceParams() const noexcept override { return pace; }
+    bool switchedOff = false;
+    bool planeWasSwitchedOff() noexcept override { const bool v = switchedOff; switchedOff = false; return v; }
+    bool planeStillOurs (std::string& why) override { log ("verify"); if (! stillOurs) why = "plane " + std::to_string (plane) + " reports crtc 0, fb 0"; return stillOurs; }
+    bool nextPlane (std::string& why) override
+    {
+        log ("nextplane");
+        ++nextPlaneCalls;
+        if (spares.empty()) { why = "no spare overlay plane left"; return false; }
+        plane = spares.front();
+        spares.erase (spares.begin());
+        stillOurs = true;
+        why = "switched to plane " + std::to_string (plane);
+        return true;
+    }
+    void describe (std::string& out) const override { out += "display_crtc: " + std::to_string (crtc) + "\ndisplay_overlay_plane: " + std::to_string (plane) + "\n"; }
 
     bool open (int& w, int& h, std::string& error) override
     {
@@ -164,9 +189,14 @@ class FakeFrame final : public IFrameSource
 public:
     int panelW = 800, panelH = 1280;
     bool readable = true;
+    std::string fatal;
+    std::string fatalError() const override { return fatal; }
 
+    std::function<void()> onBegin;   // a test hook: called at the start of every read of the framebuffer (a real one can wait for the display's locks)
     bool begin (int& w, int& h) override
     {
+        if (onBegin)
+            onBegin();
         mu_.lock();
         ++begins;
         if (! readable) { mu_.unlock(); return false; }

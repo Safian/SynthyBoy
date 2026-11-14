@@ -47,6 +47,52 @@ static void geometryTests()
     uiPointToPanel (270, 1279, 0, PW, PH, px, py);      check (px == 799 && py == 1279, "rot 270: UI top-right -> panel (799,1279)");
     uiPointToPanel (270, 0, 799, PW, PH, px, py);       check (px == 0 && py == 0, "rot 270: UI bottom-left -> panel (0,0)");
     uiPointToPanel (270, 1279, 799, PW, PH, px, py);    check (px == 0 && py == 1279, "rot 270: UI bottom-right -> panel (0,1279)");
+    // 0 and 180 (a landscape panel: the UI is not turned, or turned half way): the same checks on a 1280 x 800 panel
+    {
+        const int LW = 1280, LH = 800;
+        for (int rot : { 0, 180 })
+        {
+            bool round = true;
+            for (int x = 0; x < 1280 && round; x += 7)
+                for (int y = 0; y < 800; y += 5)
+                {
+                    int qx, qy, x2, y2;
+                    uiPointToPanel (rot, x, y, LW, LH, qx, qy);
+                    panelPointToUi (rot, qx, qy, LW, LH, x2, y2);
+                    if (qx < 0 || qy < 0 || qx >= LW || qy >= LH || x2 != x || y2 != y) { round = false; break; }
+                }
+            char name[96];
+            std::snprintf (name, sizeof name, "rotation %d: round trip on a landscape panel, every point inside it", rot);
+            check (round, name);
+        }
+        int qx, qy;
+        uiPointToPanel (0, 0, 0, LW, LH, qx, qy);          check (qx == 0 && qy == 0, "rot 0: UI top-left -> panel (0,0)");
+        uiPointToPanel (180, 0, 0, LW, LH, qx, qy);        check (qx == 1279 && qy == 799, "rot 180: UI top-left -> panel (1279,799)");
+        uiPointToPanel (180, 1279, 799, LW, LH, qx, qy);   check (qx == 0 && qy == 0, "rot 180: UI bottom-right -> panel (0,0)");
+        const Rect u { 100, 50, 300, 120 };
+        check (uiRectToPanel (0, u, LW, LH) == u && uiRectToPanel (180, u, LW, LH) == Rect { LW - 400, LH - 170, 300, 120 }, "rot 0 / 180: the rectangle keeps its size (no swap), 180 mirrors it");
+        check (! rotationSwapsSides (0) && ! rotationSwapsSides (180) && rotationSwapsSides (90) && rotationSwapsSides (270) && normaliseRotation (45) == 90 && normaliseRotation (180) == 180, "normaliseRotation / rotationSwapsSides");
+        for (int rot : { 0, 180 })
+        {
+            const int w = 37, h = 21;
+            std::vector<uint32_t> cv ((size_t) w * h), dst ((size_t) w * h + 16, 0xdeadbeefu);
+            for (int i = 0; i < w * h; ++i) cv[(size_t) i] = 0x01000000u + (uint32_t) i;
+            const Rect big { 100, 50, w, h };
+            const Rect pr = uiRectToPanel (rot, big, LW, LH);
+            rotateCanvasInto (rot, cv.data(), w, h, dst.data(), (size_t) pr.w * 4);
+            bool ok = true;
+            for (int cy = 0; cy < h && ok; ++cy)
+                for (int cx = 0; cx < w; ++cx)
+                {
+                    int ppx, ppy;
+                    uiPointToPanel (rot, big.x + cx, big.y + cy, LW, LH, ppx, ppy);
+                    if (dst[(size_t) (ppy - pr.y) * pr.w + (ppx - pr.x)] != cv[(size_t) cy * w + cx]) { ok = false; break; }
+                }
+            char name[96];
+            std::snprintf (name, sizeof name, "rotation %d: the rotate copy puts every canvas pixel where the point mapping says", rot);
+            check (ok && dst[(size_t) w * h] == 0xdeadbeefu, name);
+        }
+    }
     // rectangles: the curve area of the skin
     const Rect ui { layout::kViews[0].region.x, layout::kViews[0].region.y, layout::kViews[0].region.w, layout::kViews[0].region.h };
     const Rect r90 = uiRectToPanel (90, ui, PW, PH), r270 = uiRectToPanel (270, ui, PW, PH);

@@ -42,7 +42,7 @@ public:
         close();
     }
 
-    bool start (int displayFd, uint32_t crtc, uint32_t plane, uint32_t flags, std::string& error) override
+    bool start (int displayFd, const HelloParams& hello, std::string& error) override
     {
         close();
         if (path_.empty() || ::access (path_.c_str(), X_OK) != 0)
@@ -50,7 +50,7 @@ public:
             error = "the helper executable is missing or not executable: " + path_;
             return false;
         }
-        return startImpl (displayFd, crtc, plane, flags, error);
+        return startImpl (displayFd, hello, error);
     }
 
     SharedBlock* block() noexcept override { return block_; }
@@ -147,7 +147,7 @@ private:
         nanosleep (&ts, nullptr);
     }
 
-    bool startImpl (int displayFd, uint32_t crtc, uint32_t plane, uint32_t flags, std::string& error)
+    bool startImpl (int displayFd, const HelloParams& hp, std::string& error)
     {
         // the shared block
         int mfd = memfdCreate();
@@ -221,7 +221,7 @@ private:
         reaped_ = false;
         sock_ = sv[0];
         // hello + descriptors
-        const Msg hello = makeMsg (kMsgHello, kProtocolVersion, crtc, plane, flags);
+        const Msg hello = makeMsg (kMsgHello, kProtocolVersion, hp.crtc, hp.plane, hp.flags, (hp.pipe & 0xffu) | (hp.stride << 8), hp.periodUs);
         const int fds[2] = { displayFd, mfd };
         const bool sent = sendWithFds (hello, fds, 2);
         ::close (mfd);   // the helper has its own copy; the mapping stays

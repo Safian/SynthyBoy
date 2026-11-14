@@ -24,6 +24,7 @@ public:
     bool disabled() const noexcept { return disabled_; }
     const std::string& reason() const noexcept { return reason_; }
     bool shown() const noexcept { return shown_; }
+    bool opened() const noexcept { return opened_; }
     bool planeOn() const noexcept { return planeOn_; }
     int panelWidth() const noexcept { return panelW_; }
     int panelHeight() const noexcept { return panelH_; }
@@ -96,6 +97,15 @@ public:
         if (! shown_ && ! planeOn_)
             return;
         backend_.disablePlane();
+        backend_.destroyBuffers();
+        planeOn_ = false;
+        shown_ = false;
+    }
+
+    /** The plane was taken by another program (or lost in another way): everything of ours is forgotten WITHOUT touching the plane (it is not ours any more); the buffers are freed. The
+        next show () starts again, with the plane the backend names by then. */
+    void abandon() noexcept
+    {
         backend_.destroyBuffers();
         planeOn_ = false;
         shown_ = false;

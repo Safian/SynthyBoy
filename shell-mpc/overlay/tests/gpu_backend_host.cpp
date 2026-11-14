@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <deque>
 
+#include <cmath>
+
 #include "fakes.h"
 
 using namespace ovt;
@@ -16,20 +18,22 @@ namespace
 class FakeHelper final : public gpu::IHelperTransport
 {
 public:
-    enum Mode { Healthy, NoReady, NoAck, ErrorOnShow, IgnoreQuit, NoHidden };
+    enum Mode { Healthy, NoReady, NoAck, ErrorOnShow, IgnoreQuit, NoHidden, SetPlaneError };
     FakeHelper (FakePlane& p, const double* clock) : plane (p), now (clock) {}
     ~FakeHelper() override { delete blk; }
 
     Mode mode = Healthy;
     uint32_t protocol = gpu::kProtocolVersion;   // the protocol version this helper binary was built with (the real helper refuses a hello of another one with an error message and exits)
     bool failStart = false;
+    gpu::HelloParams lastHello;
     int starts = 0, kills = 0, quits = 0, closes = 0, scenes = 0, frames = 0;
     bool running = false;
     FakePlane& plane;
 
-    bool start (int fd, uint32_t, uint32_t, uint32_t, std::string& error) override
+    bool start (int fd, const gpu::HelloParams& hello, std::string& error) override
     {
         if (fd != 42) { error = "bad descriptor"; return false; }
+        lastHello = hello;
         if (failStart) { error = "injected spawn failure"; return false; }
         delete blk;
         blk = new gpu::SharedBlock;
@@ -88,6 +92,13 @@ public:
             inbox.pop_front();
             if (m.type == gpu::kMsgShow)
             {
+                if (mode == SetPlaneError)
+                {
+                    outbox.push_back (gpu::makeMsg (gpu::kMsgError, 0, 0, 0, 0, 0, 0, "SETPLANE: Invalid argument"));
+                    running = false;
+                    eof = true;
+                    return;
+                }
                 if (mode == ErrorOnShow)
                 {
                     outbox.push_back (gpu::makeMsg (gpu::kMsgError, 0, 0, 0, 0, 0, 0, "injected GL failure"));
@@ -283,6 +294,65 @@ int main()
         check (r.backend.planeFree() && clean (r.plane), "hidden: plane off, no framebuffer, no handle left");
         r.backend.shutdown();
         check (! r.helper.running && r.helper.quits == 1 && clean (r.plane) && std::string (r.backend.status().state) == "idle", "shutdown: the helper was told to quit and left, nothing is left behind");
+    }
+    // ---- what the plugin tells the helper about the display it found (plane, CRTC, pace) -----------------------------------------------------------------------
+    {
+        BackendRig r;
+        r.plane.crtc = 82;
+        r.plane.plane = 46;
+        r.plane.pace.periodMs = 17.711;
+        r.plane.pace.stride = 2;
+        r.plane.pace.vblank = true;
+        r.plane.pace.pipe = 0;
+        r.backend.request (r.now);
+        const gpu::HelloParams h = r.helper.lastHello;
+        check (h.crtc == 82 && h.plane == 46 && h.stride == 2 && h.pipe == 0 && h.periodUs == 17711 && (h.flags & gpu::kFlagVblank), "the hello carries the discovered CRTC, plane, pace stride, pipe and the measured period (XL numbers)");
+        BackendRig k;
+        k.plane.pace.vblank = false;
+        k.backend.request (k.now);
+        check (! (k.helper.lastHello.flags & gpu::kFlagVblank) && k.helper.lastHello.crtc == 37 && k.helper.lastHello.plane == 38, "a display whose vblank cannot be waited for: no vblank flag (the helper paces with the timer); the fake's own plane ids are passed on");
+    }
+    // ---- the helper's SETPLANE fails: the plane may have been taken: the next free plane is used for the restart, the plane that is not ours is not switched off --------------
+    {
+        BackendRig r;
+        r.plane.spares = { 52 };
+        r.backend.request (r.now);
+        r.advance (100.0);
+        r.helper.mode = FakeHelper::SetPlaneError;
+        r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now);
+        r.advance (30.0);
+        check (r.plane.nextPlaneCalls == 1 && r.plane.plane == 52, "a SETPLANE error of the helper moves the plane to the next free one");
+        check (r.plane.countOf ("forcedisable") == 0, "... without switching off the plane that another program may have");
+        check (std::string (r.backend.status().state) == "backoff" && r.backend.status().lastError.find ("SETPLANE") != std::string::npos && r.backend.status().lastError.find ("switched to plane 52") != std::string::npos, "... the failure counts and says why");
+        r.helper.mode = FakeHelper::Healthy;
+        r.advance (1100.0);
+        r.backend.request (r.now);
+        check (r.helper.starts == 2 && r.helper.lastHello.plane == 52, "the restarted helper is told the new plane");
+    }
+    // ---- abandonPlane: the plane is not ours any more ------------------------------------------------------------------------------------------------------------
+    {
+        BackendRig r;
+        check (r.startAndShow(), "a helper is running with a view shown");
+        r.advance (50.0);
+        const int forced = r.plane.countOf ("forcedisable");
+        r.backend.abandonPlane();
+        check (! r.helper.running && r.plane.countOf ("forcedisable") == forced && r.plane.foreignFbs.empty(), "abandonPlane: the helper is gone and its framebuffers are removed, the plane itself is left alone");
+        check (std::string (r.backend.status().state) == "idle" && r.backend.status().failures == 0, "... a planned stop: no failure");
+        r.backend.request (r.now);
+        check (r.helper.starts == 2, "... and the helper starts again for the next picture");
+    }
+    // ---- the helper's presentation statistics reach the status ---------------------------------------------------------------------------------------------------
+    {
+        BackendRig r;
+        check (r.startAndShow(), "a helper is running");
+        gpu::SharedBlock* b = r.helper.block();
+        b->pace.count = 40;
+        b->pace.stride = 2;
+        b->pace.vb[2] = 40;
+        b->pace.ms[17] = 40;
+        r.advance (20.0);
+        const gpu::GpuStatus st = r.backend.status();
+        check (st.paceKnown && st.pace.count == 40 && st.pace.vb[2] == 40 && st.pace.ms[17] == 40 && st.pace.stride == 2, "the pace block of the helper is read into the status");
     }
     // ---- the helper cannot be started -----------------------------------------------------------------------------------------------------------------------
     {
@@ -595,6 +665,42 @@ int main()
             r.frame.setViewInstance (0, 0, true, 90);
             check (r.until ([&] { return r.helper.isShown() && r.ctl->activeSlot() == 0; }, 1000) >= 0, "GPU path: slot 0 again: shown");
             r.ctl->detach (&second);
+        }
+        // ---- the scenes follow the pace grid of the display: 80 % of two vblanks, so that no slot of the grid finds no scene ----
+        {
+            CRig r;
+            r.plane.pace.periodMs = 17.711;
+            r.plane.pace.stride = 2;
+            r.plane.pace.vblank = true;
+            r.run (400);
+            double wait = 0.0;
+            for (int i = 0; i < 60; ++i)
+            {
+                r.now += 10.0;
+                r.helper.step();
+                r.inst.set ("filter1.cutoff", 400.0f + static_cast<float> (i * 131 % 4000));
+                wait = r.ctl->tick (r.now);
+            }
+            check (r.ctl->usingGpu() && std::fabs (wait - 0.8 * 2 * 17.711) < 0.5, "GPU path on a 56.46 Hz display: a scene every 28.3 ms (due in " + std::to_string (wait) + " ms)");
+            const std::string st = r.status();
+            check (r.st ("display_crtc") == "37" && r.st ("display_overlay_plane") == "38" && st.find ("pace_stride_vblanks") == std::string::npos, "the status file has the display lines of the backend (the fake's)");
+        }
+        // ---- the scene goes BEFORE the page detection of the same step (reading the CRTC can wait for the display's locks while the helper's plane update holds them) ----
+        {
+            CRig r;
+            r.run (400);
+            int kicksBeforeDetect = 0, detects = 0;
+            int scenesAtStart = 0;
+            r.frame.onBegin = [&] { ++detects; if (static_cast<int> (r.helper.block()->seq) > scenesAtStart) ++kicksBeforeDetect; };
+            for (int i = 0; i < 60; ++i)
+            {
+                r.now += 10.0;
+                r.helper.step();
+                r.inst.set ("filter1.cutoff", 400.0f + static_cast<float> (i * 131 % 4000));
+                scenesAtStart = static_cast<int> (r.helper.block()->seq);
+                r.ctl->tick (r.now);
+            }
+            check (r.ctl->usingGpu() && detects >= 5 && kicksBeforeDetect == detects, "GPU path: in every step that reads the framebuffer the scene was handed over first (" + std::to_string (kicksBeforeDetect) + " of " + std::to_string (detects) + ")");
         }
         // ---- without a backend the controller is the one of the CPU build ----
         {

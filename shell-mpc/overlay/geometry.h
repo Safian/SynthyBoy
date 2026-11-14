@@ -3,8 +3,11 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Rotation 90 (the default): the primary plane shows UI pixel (X, Y) at panel (Y, panelH - 1 - X): UI top = panel left, UI left = panel bottom (how the MPC app
-// rotates its UI, and how mpc-tools/shot.sh un-rotates a screenshot). Rotation 270 is the mirror image: UI pixel (X, Y) at panel (panelW - 1 - Y, X).
+// The panel of both devices is portrait (800 x 1280) and the UI landscape (1280 x 800), so the UI is turned by 90 or 270 degrees; 0 and 180 (UI and panel the same way up) are
+// kept for a panel that is landscape. Rotation 90: the primary plane shows UI pixel (X, Y) at panel (Y, panelH - 1 - X): UI top = panel left, UI left = panel bottom (how the MPC
+// Key 61 app rotates its UI, and how mpc-tools/shot.sh un-rotates a screenshot). Rotation 270 is the mirror image: UI pixel (X, Y) at panel (panelW - 1 - Y, X) (MPC XL).
+// 0: (X, Y) -> (X, Y); 180: (X, Y) -> (panelW - 1 - X, panelH - 1 - Y). The rotation is not a constant of a model: the overlay finds it from the markers of its own skin
+// (rotation_finder in page_detector.h) and the override file /tmp/synthyboy-overlay-rot names it.
 #pragma once
 
 #include <cstddef>
@@ -18,41 +21,77 @@ struct Rect
     bool operator== (const Rect& o) const noexcept { return x == o.x && y == o.y && w == o.w && h == o.h; }
 };
 
-/** 90 or 270; anything else is read as 90. */
-inline int normaliseRotation (int degrees) noexcept { return degrees == 270 ? 270 : 90; }
+/** 0, 90, 180 or 270; anything else is read as 90. */
+inline int normaliseRotation (int degrees) noexcept { return (degrees == 0 || degrees == 90 || degrees == 180 || degrees == 270) ? degrees : 90; }
+/** The landscape canvas and its buffer have swapped sides (the buffer is portrait): 90 and 270. */
+inline bool rotationSwapsSides (int rotation) noexcept { const int r = normaliseRotation (rotation); return r == 90 || r == 270; }
 
 /** The panel pixel that shows the UI pixel (x, y). */
 inline void uiPointToPanel (int rotation, int x, int y, int panelW, int panelH, int& px, int& py) noexcept
 {
-    if (normaliseRotation (rotation) == 90) { px = y; py = panelH - 1 - x; }
-    else                                    { px = panelW - 1 - y; py = x; }
+    switch (normaliseRotation (rotation))
+    {
+        case 0:   px = x; py = y; break;
+        case 180: px = panelW - 1 - x; py = panelH - 1 - y; break;
+        case 270: px = panelW - 1 - y; py = x; break;
+        default:  px = y; py = panelH - 1 - x; break;
+    }
 }
 
 /** The UI pixel shown at the panel pixel (px, py) (the inverse of uiPointToPanel). */
 inline void panelPointToUi (int rotation, int px, int py, int panelW, int panelH, int& x, int& y) noexcept
 {
-    if (normaliseRotation (rotation) == 90) { y = px; x = panelH - 1 - py; }
-    else                                    { y = panelW - 1 - px; x = py; }
+    switch (normaliseRotation (rotation))
+    {
+        case 0:   x = px; y = py; break;
+        case 180: x = panelW - 1 - px; y = panelH - 1 - py; break;
+        case 270: y = panelW - 1 - px; x = py; break;
+        default:  y = px; x = panelH - 1 - py; break;
+    }
 }
 
-/** The panel rectangle (w and h swapped) that shows the UI rectangle. */
+/** The panel rectangle (w and h swapped for 90 / 270) that shows the UI rectangle. */
 inline Rect uiRectToPanel (int rotation, const Rect& ui, int panelW, int panelH) noexcept
 {
     Rect r;
-    r.w = ui.h;
-    r.h = ui.w;
-    if (normaliseRotation (rotation) == 90) { r.x = ui.y; r.y = panelH - (ui.x + ui.w); }
-    else                                    { r.x = panelW - (ui.y + ui.h); r.y = ui.x; }
+    switch (normaliseRotation (rotation))
+    {
+        case 0:   r = ui; break;
+        case 180: r.w = ui.w; r.h = ui.h; r.x = panelW - (ui.x + ui.w); r.y = panelH - (ui.y + ui.h); break;
+        case 270: r.w = ui.h; r.h = ui.w; r.x = panelW - (ui.y + ui.h); r.y = ui.x; break;
+        default:  r.w = ui.h; r.h = ui.w; r.x = ui.y; r.y = panelH - (ui.x + ui.w); break;
+    }
     return r;
 }
 
-/** Copies the landscape canvas (w x h pixels, tightly packed) into a portrait buffer of h x w pixels (rows of `strideBytes`), writing the destination sequentially (it is
-    write-combined memory on the device). The pixel (cx, cy) of the canvas lands where uiPointToPanel puts it, relative to the panel rectangle of the canvas. */
+/** Copies the landscape canvas (w x h pixels, tightly packed) into the buffer of the plane (rows of `strideBytes`; h x w pixels for 90 / 270, w x h for 0 / 180), writing the
+    destination sequentially (it is write-combined memory on the device). The pixel (cx, cy) of the canvas lands where uiPointToPanel puts it, relative to the panel rectangle of the canvas. */
 inline void rotateCanvasInto (int rotation, const uint32_t* canvas, int w, int h, uint32_t* dst, size_t strideBytes) noexcept
 {
     const size_t stride = strideBytes / 4;
+    const int r = normaliseRotation (rotation);
+    if (r == 0 || r == 180)
+    {
+        for (int by = 0; by < h; ++by)
+        {
+            uint32_t* d = dst + static_cast<size_t> (by) * stride;
+            if (r == 0)
+            {
+                const uint32_t* s = canvas + static_cast<size_t> (by) * static_cast<size_t> (w);
+                for (int bx = 0; bx < w; ++bx)
+                    d[bx] = s[bx];
+            }
+            else
+            {
+                const uint32_t* s = canvas + static_cast<size_t> (h - 1 - by) * static_cast<size_t> (w);
+                for (int bx = 0; bx < w; ++bx)
+                    d[bx] = s[w - 1 - bx];
+            }
+        }
+        return;
+    }
     const int pw = h, ph = w;                 // the buffer: pw columns, ph rows
-    if (normaliseRotation (rotation) == 90)
+    if (r == 90)
         for (int by = 0; by < ph; ++by)
         {
             uint32_t* d = dst + static_cast<size_t> (by) * stride;

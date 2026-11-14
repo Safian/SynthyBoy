@@ -475,6 +475,35 @@ class TestPackageMpcRelease(unittest.TestCase):
         helper32.unlink()
         self.assertEqual(self._run_packager().returncode, 0, "a package without the helper (production) is still fine")
 
+    def test_both_gpu_helpers_are_packaged_and_the_arm64_one_is_held_to_its_architecture(self):
+        # the overlay build with --arch all has a helper per architecture: both go into the zip as executables; the 64-bit one must be an AArch64 ELF file
+        helper32 = self.plugin_dir / "VST" / "synthyboy-overlay-gpu-arm32"
+        helper64 = self.plugin_dir / "VST" / "synthyboy-overlay-gpu-arm64"
+        helper32.write_bytes(fake_elf(32, 40))
+        helper64.write_bytes(fake_elf(64, 183))
+        helper32.chmod(0o755)
+        helper64.chmod(0o755)
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        with zipfile.ZipFile(self.out_dir / "SynthyBoy-MPC-0.1.0.zip", "r") as zf:
+            for name in ("synthyboy-overlay-gpu-arm32", "synthyboy-overlay-gpu-arm64"):
+                info = zf.getinfo("Safian - VST - SynthyBoy/VST/" + name)
+                self.assertEqual((info.external_attr >> 16) & 0o777, 0o755, name)
+        helper64.write_bytes(fake_elf(32, 40))      # a 32-bit file under the 64-bit name
+        helper64.chmod(0o755)
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("wrong ELF class", proc.stderr)
+        helper64.write_bytes(fake_elf(64, 62))      # a 64-bit x86 file under the AArch64 name
+        helper64.chmod(0o755)
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        helper64.write_bytes(fake_elf(64, 183))
+        helper64.chmod(0o644)
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("not executable", proc.stderr)
+
     def test_paths_with_spaces_in_parent_dir(self):
         spaced_root = self.tmp / "folder with spaces" / "Safian - VST - SynthyBoy"
         shutil.copytree(self.plugin_dir, spaced_root)

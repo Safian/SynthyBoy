@@ -152,13 +152,16 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 $B/gpu_scene_host > $B/gpu-scene-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-scene-host.log; echo "ACCEPT FAIL: gpu_scene_host (GPU scene protocol: seqlock, every view type as a scene)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_backend_host $OVSRC/gpu_backend_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_backend_host build"; exit 1; }
 $B/gpu_backend_host > $B/gpu-backend-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-backend-host.log; echo "ACCEPT FAIL: gpu_backend_host (GPU helper health state machine and fallback with a fake helper)"; exit 1; }
+# run-time discovery (discovery.h: the plane tables of BOTH devices, a busy plane, no free plane, the cores), the rotation found from the markers, the pace grid with a fake vblank clock, a plane another program takes
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/display_host $OVSRC/display_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: display_host build"; exit 1; }
+$B/display_host > $B/display-host.log 2>&1 || { grep -E "^FAIL" $B/display-host.log; echo "ACCEPT FAIL: display_host (discovery of the display and the cores, rotation search, pace grid, lost plane)"; exit 1; }
 # the spectrum curve (shell-mpc/overlay/spectrum_curve.h: FFT of the overlay thread from the ring, 256 points, attack / release) and the spectrum view with a fake instance, the picture of both renderers, the controller
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/spectrum_curve_host $OVSRC/spectrum_curve_host.cpp -lpthread || { echo "ACCEPT FAIL: spectrum_curve_host build"; exit 1; }
 $B/spectrum_curve_host > $B/spectrum-curve-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-curve-host.log; echo "ACCEPT FAIL: spectrum_curve_host (the spectrum curve: sine, two sines, noise, silence, timing)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/spectrum_view_host $OVSRC/spectrum_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: spectrum_view_host build"; exit 1; }
 $B/spectrum_view_host > $B/spectrum-view-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-view-host.log; echo "ACCEPT FAIL: spectrum_view_host (the spectrum view: scene = CPU picture, no redraw at rest, the controller)"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
-for t in controller_host views_host gpu_backend_host spectrum_view_host; do
+for t in controller_host views_host gpu_backend_host spectrum_view_host display_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }

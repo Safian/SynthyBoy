@@ -11,6 +11,8 @@
 //   scene      the plugin wrote a scene under the seqlock: read it, draw it (the rotation is done in the vertex shader), glFinish, swap, take the finished buffer object, import it as a
 //              framebuffer on the display descriptor (PRIME_FD_TO_HANDLE + ADDFB2, cached per buffer object), legacy SETPLANE on plane 38 (it waits for the vblank), release the
 //              buffer that was on screen before, answer `frame` with the timings
+//   pacing     the update of the plane (SETPLANE) is made the moment the vblank of a slot of the pace grid is reached (vblank_pacer.h: every `stride` vblanks, measured and chosen by the
+//              plugin, sent in the hello): that is what makes the intervals even on a device whose plane update alternates between one and two vblanks when it is called at any time
 //   hide       plane off, framebuffers removed, GEM handles closed, surface destroyed; answer `hidden`
 //   quit / end of the socket / SIGTERM: the same clean-up, then exit
 // Every DRM object this process makes on the shared descriptor is in the ledger of the shared block, so that the plugin can remove it when this process is killed.
@@ -25,9 +27,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <algorithm>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/ioctl.h>
@@ -40,9 +45,14 @@
 #include <drm/drm_mode.h>
 
 #include "../gpu/scene.h"
+#include "../vblank_linux.h"
+#include "../vblank_pacer.h"
 #include "gl_api.h"
 
 using namespace synthyboy_mpc::overlay::gpu;
+using synthyboy_mpc::overlay::FramePacer;
+using synthyboy_mpc::overlay::LinuxVblankClock;
+using synthyboy_mpc::overlay::PaceStats;
 
 namespace {
 
@@ -86,7 +96,7 @@ public:
         char text[32];
         std::snprintf (text, sizeof text, "%s", reinterpret_cast<const char*> (api_.glGetString (GL_RENDERER)));
         send (makeMsg (kMsgReady, static_cast<uint32_t> (nowMs() - startMs_ + 0.5), 0, 0, 0, 0, 0, text));
-        std::fprintf (stderr, "helper %d: ready in %.1f ms, renderer %s, drm fd %d\n", static_cast<int> (getpid()), nowMs() - startMs_, text, drmFd_);
+        std::fprintf (stderr, "helper %d: ready in %.1f ms, renderer %s, render node %s, drm fd %d, crtc %u plane %u, pace stride %d vblanks (period %.3f ms, %s)\n", static_cast<int> (getpid()), nowMs() - startMs_, text, renderNode_.c_str(), drmFd_, crtc_, plane_, stride_, periodMs_, (flags_ & kFlagVblank) ? "vblank grid" : "timer");
         loop();
         std::fprintf (stderr, "helper %d: leaving (%s), %lu pictures, %lu late SETPLANE calls, %lu skipped vblanks\n", static_cast<int> (getpid()), g_stop ? "signal" : exitCode_ ? "error" : endReason_, frames_, late_, skipped_);
         cleanupAll();
@@ -146,6 +156,11 @@ private:
         crtc_ = m.b;
         plane_ = m.c;
         flags_ = m.d;
+        pipe_ = static_cast<int> (m.e & 0xffu);
+        stride_ = static_cast<int> ((m.e >> 8) & 0xffu);
+        if (stride_ < 1)
+            stride_ = 2;
+        periodMs_ = m.f > 0 ? m.f / 1000.0 : 16.67;
         void* mem = ::mmap (nullptr, sizeof (SharedBlock), PROT_READ | PROT_WRITE, MAP_SHARED, fds[1], 0);
         ::close (fds[1]);
         if (mem == MAP_FAILED)
@@ -159,6 +174,11 @@ private:
             sendError ("the shared block is not valid");
             return false;
         }
+        clock_ = std::make_unique<LinuxVblankClock> (drmFd_, pipe_);
+        pacer_ = std::make_unique<FramePacer> (*clock_, periodMs_, stride_, (flags_ & kFlagVblank) != 0);
+        __atomic_store_n (&block_->pace.stride, static_cast<uint32_t> (stride_), __ATOMIC_RELAXED);
+        __atomic_store_n (&block_->pace.periodUs, static_cast<uint32_t> (periodMs_ * 1000.0 + 0.5), __ATOMIC_RELAXED);
+        __atomic_store_n (&block_->pace.onGrid, (flags_ & kFlagVblank) ? 1u : 0u, __ATOMIC_RELAXED);
         return true;
     }
 
@@ -195,20 +215,43 @@ private:
         return s;
     }
 
-    bool initGl (std::string& error)
+    // ---------------------------------------------------------------------------------------------------------------------------------------------------------
+    // the render node: not "renderD128" by name but every /dev/dri/renderD* in turn (the GPU drivers first), the first one that gives a GBM device, an EGL display and an ES2 ARGB config
+    struct Node { std::string path; int rank; };
+
+    static int driverRank (const std::string& path)
     {
-        if (! api_.load (error))
-            return false;
-        gbmFd_ = ::open ("/dev/dri/renderD128", O_RDWR | O_CLOEXEC);
+        const int fd = ::open (path.c_str(), O_RDWR | O_CLOEXEC);
+        if (fd < 0)
+            return 99;
+        char name[64] = {};
+        drm_version v;
+        std::memset (&v, 0, sizeof v);
+        v.name = name;
+        v.name_len = sizeof name - 1;
+        const int rc = ioctl (fd, DRM_IOCTL_VERSION, &v);
+        ::close (fd);
+        if (rc < 0)
+            return 50;
+        const std::string n (name, v.name_len < sizeof name ? v.name_len : sizeof name - 1);
+        for (const char* gpu : { "panthor", "panfrost", "lima", "etnaviv", "v3d", "vc4" })
+            if (n.compare (0, std::strlen (gpu), gpu) == 0)
+                return 0;
+        return n.compare (0, 6, "vgem") == 0 ? 90 : 10;
+    }
+
+    bool tryNode (const std::string& path, std::string& error)
+    {
+        gbmFd_ = ::open (path.c_str(), O_RDWR | O_CLOEXEC);
         if (gbmFd_ < 0)
         {
-            error = std::string ("open renderD128: ") + std::strerror (errno);
+            error = "open " + path + ": " + std::strerror (errno);
             return false;
         }
         gbm_ = api_.gbm_create_device (gbmFd_);
         if (! gbm_)
         {
-            error = "gbm_create_device failed";
+            error = path + ": gbm_create_device failed";
             return false;
         }
         dpy_ = EGL_NO_DISPLAY;
@@ -219,7 +262,8 @@ private:
         EGLint major = 0, minor = 0;
         if (dpy_ == EGL_NO_DISPLAY || ! api_.eglInitialize (dpy_, &major, &minor))
         {
-            error = "eglInitialize failed";
+            error = path + ": eglInitialize failed";
+            dpy_ = EGL_NO_DISPLAY;
             return false;
         }
         api_.eglBindAPI (EGL_OPENGL_ES_API);
@@ -244,9 +288,69 @@ private:
         }
         if (! cfg_)
         {
-            error = "no EGL config (ES2, window, ARGB8888)";
+            error = path + ": no EGL config (ES2, window, ARGB8888)";
             return false;
         }
+        return true;
+    }
+
+    void dropNode()
+    {
+        if (dpy_ != EGL_NO_DISPLAY)
+            api_.eglTerminate (dpy_);
+        dpy_ = EGL_NO_DISPLAY;
+        if (gbm_)
+            api_.gbm_device_destroy (gbm_);
+        gbm_ = nullptr;
+        if (gbmFd_ >= 0)
+            ::close (gbmFd_);
+        gbmFd_ = -1;
+    }
+
+    bool openRenderNode (std::string& error)
+    {
+        std::vector<Node> nodes;
+        if (const char* env = std::getenv ("SYNTHYBOY_OVERLAY_RENDER_NODE"))
+            if (*env)
+                nodes.push_back ({ env, -1 });
+        if (DIR* d = opendir ("/dev/dri"))
+        {
+            while (dirent* e = readdir (d))
+                if (std::strncmp (e->d_name, "renderD", 7) == 0)
+                {
+                    const std::string path = std::string ("/dev/dri/") + e->d_name;
+                    nodes.push_back ({ path, driverRank (path) });
+                }
+            closedir (d);
+        }
+        std::sort (nodes.begin(), nodes.end(), [] (const Node& a, const Node& b) { return a.rank != b.rank ? a.rank < b.rank : a.path < b.path; });
+        if (nodes.empty())
+        {
+            error = "no render node in /dev/dri";
+            return false;
+        }
+        std::string all;
+        for (const Node& n : nodes)
+        {
+            std::string why;
+            if (tryNode (n.path, why))
+            {
+                renderNode_ = n.path;
+                return true;
+            }
+            all += (all.empty() ? "" : "; ") + why;
+            dropNode();
+        }
+        error = "no usable render node: " + all;
+        return false;
+    }
+
+    bool initGl (std::string& error)
+    {
+        if (! api_.load (error))
+            return false;
+        if (! openRenderNode (error))
+            return false;
         const EGLint ca[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
         ctx_ = api_.eglCreateContext (dpy_, cfg_, EGL_NO_CONTEXT, ca);
         if (ctx_ == EGL_NO_CONTEXT)
@@ -320,6 +424,7 @@ private:
     }
     void planeOff()
     {
+        curFb_ = 0;
         if (drmFd_ < 0)
             return;
         drm_mode_set_plane s;
@@ -461,15 +566,26 @@ private:
     void setTransform()
     {
         const float W = static_cast<float> (w_), H = static_cast<float> (h_);
-        if (rot_ == 90)         // buffer pixel (bx, by) = (y, W - x)
+        // the buffer pixel (bx, by) of the canvas pixel (x, y), memory row 0 = the top of the GL framebuffer: 90: (y, W - x); 270: (H - y, x); 0: (x, y); 180: (W - x, H - y)
+        if (rot_ == 90)
         {
             api_.glUniform3f (uRowX_, 0.0f, 2.0f / H, -1.0f);
             api_.glUniform3f (uRowY_, 2.0f / W, 0.0f, -1.0f);
         }
-        else                    // buffer pixel (bx, by) = (H - y, x)
+        else if (rot_ == 270)
         {
             api_.glUniform3f (uRowX_, 0.0f, -2.0f / H, 1.0f);
             api_.glUniform3f (uRowY_, -2.0f / W, 0.0f, 1.0f);
+        }
+        else if (rot_ == 0)
+        {
+            api_.glUniform3f (uRowX_, 2.0f / W, 0.0f, -1.0f);
+            api_.glUniform3f (uRowY_, 0.0f, -2.0f / H, 1.0f);
+        }
+        else
+        {
+            api_.glUniform3f (uRowX_, -2.0f / W, 0.0f, 1.0f);
+            api_.glUniform3f (uRowY_, 0.0f, 2.0f / H, -1.0f);
         }
     }
 
@@ -680,6 +796,8 @@ private:
             return false;
         }
         const double t1 = nowMs();
+        pacer_->waitSlot();     // the vblank of the next slot of the pace grid: the plane update follows at once (the intervals of the pictures are then even)
+        const double tCall = nowMs();
         if (! planeSet (fb))
         {
             sendError (std::string ("SETPLANE: ") + std::strerror (errno));
@@ -687,28 +805,78 @@ private:
             return false;
         }
         const double t2 = nowMs();
+        pacer_->done();
+        curFb_ = fb;
+        if (t2 - lastVerifyMs_ >= 1000.0 && ! verifyPlane (fb))      // the display says the plane shows our framebuffer on our CRTC (the plugin must not ask: a GETPLANE waits for the lock the update holds)
+        {
+            api_.gbm_surface_release_buffer (gsurf_, bo);
+            return false;
+        }
+        publishPace();
         if (prevBo_)
             api_.gbm_surface_release_buffer (gsurf_, prevBo_);   // the previous picture is off the screen now (SETPLANE waited for the vblank)
         prevBo_ = bo;
         ++frames_;
-        // statistics: SETPLANE longer than 20 ms is late; frames in a row (< 25 ms apart) are one vblank apart
-        if (t2 - t1 > 20.0)
+        // statistics: a SETPLANE longer than 1.5 vblanks is late; the vblanks beyond the stride between two pictures of a run are skipped ones
+        if (t2 - tCall > 1.5 * periodMs_)
             ++late_;
-        drm_wait_vblank vb;
-        std::memset (&vb, 0, sizeof vb);
-        vb.request.type = _DRM_VBLANK_RELATIVE;
-        if (ioctl (drmFd_, DRM_IOCTL_WAIT_VBLANK, &vb) == 0)
         {
-            const uint32_t vseq = vb.reply.sequence;
-            if (haveVblank_ && t2 - lastFrameMs_ < 25.0 && vseq - lastVblank_ > 1)
-                skipped_ += vseq - lastVblank_ - 1;
-            lastVblank_ = vseq;
-            haveVblank_ = true;
+            const PaceStats& ps = pacer_->stats();
+            skipped_ = 0;
+            for (int i = stride_ + 1; i < PaceStats::kVb; ++i)
+                skipped_ += static_cast<unsigned long> (ps.vb[i]) * static_cast<unsigned long> (i - stride_);
         }
         lastFrameMs_ = t2;
-        send (makeMsg (kMsgFrame, static_cast<uint32_t> (frames_), seq, static_cast<uint32_t> ((t1 - t0) * 1000.0), static_cast<uint32_t> ((t2 - t1) * 1000.0), static_cast<uint32_t> (skipped_),
+        renderBudgetMs_ = std::max (0.9 * renderBudgetMs_, t1 - t0);
+        send (makeMsg (kMsgFrame, static_cast<uint32_t> (frames_), seq, static_cast<uint32_t> ((t1 - t0) * 1000.0), static_cast<uint32_t> ((t2 - tCall) * 1000.0), static_cast<uint32_t> (skipped_),
                        static_cast<uint32_t> (late_)));
         return true;
+    }
+
+    /** Once a second, right after an update (when nothing of ours holds the display's locks): GETPLANE says our CRTC and our framebuffer. Anything else: another program took the plane; the plugin is
+        told with an error that starts with SETPLANE (it moves to the next free plane) and this process ends. */
+    bool verifyPlane (uint32_t fb)
+    {
+        lastVerifyMs_ = nowMs();
+        drm_mode_get_plane p;
+        std::memset (&p, 0, sizeof p);
+        p.plane_id = plane_;
+        if (ioctl (drmFd_, DRM_IOCTL_MODE_GETPLANE, &p) < 0)
+        {
+            sendError (std::string ("SETPLANE: GETPLANE of the plane after the update failed: ") + std::strerror (errno));
+            return false;
+        }
+        if (p.crtc_id == 0 && p.fb_id == 0)
+        {
+            // switched off, not taken (a mode set of the application switches off every plane it does not name): the same framebuffer goes on again
+            if (! planeSet (fb))
+            {
+                sendError (std::string ("SETPLANE: the plane was switched off and cannot be set again: ") + std::strerror (errno));
+                return false;
+            }
+            ++planeRefreshes_;
+            ++planeChecks_;
+            return true;
+        }
+        if (p.crtc_id != crtc_ || p.fb_id != fb)
+        {
+            sendError ("SETPLANE: plane " + std::to_string (plane_) + " reports crtc " + std::to_string (p.crtc_id) + " fb " + std::to_string (p.fb_id) + ", not ours (taken by another program)");
+            planeOn_ = false;   // not ours any more: the clean-up must not switch it off
+            return false;
+        }
+        ++planeChecks_;
+        return true;
+    }
+
+    void publishPace() noexcept
+    {
+        const PaceStats& ps = pacer_->stats();
+        for (int i = 0; i < PaceStats::kVb; ++i)
+            __atomic_store_n (&block_->pace.vb[i], ps.vb[i], __ATOMIC_RELAXED);
+        for (int i = 0; i < PaceStats::kMs; ++i)
+            __atomic_store_n (&block_->pace.ms[i], ps.ms[i], __ATOMIC_RELAXED);
+        __atomic_store_n (&block_->pace.count, ps.count, __ATOMIC_RELAXED);
+        __atomic_store_n (&block_->pace.planeChecks, planeChecks_, __ATOMIC_RELAXED);
     }
 
     /** Debug (flag from the hello): while /tmp/synthyboy-overlay-gpu-dump exists, the finished frame is read back (glReadPixels, rows as GL returns them: bottom up) and written to
@@ -754,9 +922,10 @@ private:
         h_ = h;
         panelX_ = px;
         panelY_ = py;
-        rot_ = rot == 270 ? 270 : 90;
-        bw_ = h;    // the panel is portrait: the buffer is the canvas turned
-        bh_ = w;
+        rot_ = (rot == 0 || rot == 180 || rot == 270) ? rot : 90;
+        const bool turned = rot_ == 90 || rot_ == 270;   // a portrait panel: the buffer is the canvas turned; a landscape one: as it is
+        bw_ = turned ? h : w;
+        bh_ = turned ? w : h;
         if (w < 2 || h < 2 || w > 2048 || h > 2048)
         {
             sendError ("region out of range");
@@ -777,7 +946,6 @@ private:
     {
         if (shown_)
             teardownSurface();
-        haveVblank_ = false;
         dirty_ = false;
         send (makeMsg (kMsgHidden, static_cast<uint32_t> (frames_)));
     }
@@ -818,8 +986,21 @@ private:
     {
         while (! g_stop && exitCode_ == 0)
         {
+            // a scene waits for its slot of the pace grid: the thread sleeps (and reads messages) until the picture can be drawn just in time, then draws, waits for the vblank of the
+            // slot (the pacer) and updates the plane at once
+            double wait = 1000.0;
+            if (dirty_ && shown_)
+            {
+                wait = pacer_->msUntilSlot() - renderBudgetMs_ - 1.5;
+                if (wait < 0.0)
+                    wait = 0.0;
+                if (wait > 100.0)
+                    wait = 100.0;
+                if (wait < 1.0)
+                    wait = 0.0;
+            }
             pollfd p { kSock, POLLIN, 0 };
-            const int rc = ::poll (&p, 1, dirty_ ? 5 : 1000);   // a scene that could not be read is tried again in 5 ms
+            const int rc = ::poll (&p, 1, static_cast<int> (wait));
             if (rc < 0 && errno != EINTR)
                 break;
             if (g_stop)
@@ -827,14 +1008,21 @@ private:
             if (rc > 0 && (p.revents & (POLLIN | POLLHUP | POLLERR)))
                 if (! drain())
                     break;
-            if (rc == 0 && shown_ && (flags_ & kFlagDump) && ::access ("/tmp/synthyboy-overlay-gpu-dump", F_OK) == 0)
+            if (rc == 0 && shown_ && ! dirty_ && (flags_ & kFlagDump) && ::access ("/tmp/synthyboy-overlay-gpu-dump", F_OK) == 0)
                 dirty_ = true;     // the debug file asks for the frame on disk: draw the same scene again (once a second at most, maybeDump)
+            // a picture that stays (nothing changes, nothing is updated) is checked too, once a second: another program may have taken the plane since the last update
+            if (shown_ && planeOn_ && curFb_ != 0 && ! dirty_ && nowMs() - lastVerifyMs_ >= 1000.0 && ! verifyPlane (curFb_))
+                break;
             if (dirty_ && shown_)
             {
+                if (pacer_->msUntilSlot() - renderBudgetMs_ - 1.5 >= 1.0)
+                    continue;      // not yet: sleep on
                 if (renderAndPresent())
                     dirty_ = false;
                 else if (exitCode_ != 0)
                     break;
+                else
+                    ::usleep (5000);   // the scene could not be read this time (the writer was busy): again in 5 ms
             }
         }
     }
@@ -882,12 +1070,18 @@ private:
     std::vector<Draw> draws_;
     std::vector<Pt> pts_;
     SceneData scene_ {};
-    bool shown_ = false, dirty_ = false, planeOn_ = false, haveVblank_ = false;
+    bool shown_ = false, dirty_ = false, planeOn_ = false;
     int w_ = 0, h_ = 0, bw_ = 0, bh_ = 0, panelX_ = 0, panelY_ = 0, rot_ = 90, exitCode_ = 0;
     char viewName_[32] = {};
     const char* endReason_ = "loop ended";
     unsigned long frames_ = 0, late_ = 0, skipped_ = 0;
-    uint32_t lastVblank_ = 0;
+    int pipe_ = 0, stride_ = 2;
+    uint32_t planeChecks_ = 0, curFb_ = 0, planeRefreshes_ = 0;
+    double lastVerifyMs_ = 0.0;
+    double periodMs_ = 16.67, renderBudgetMs_ = 4.0;
+    std::string renderNode_;
+    std::unique_ptr<LinuxVblankClock> clock_;
+    std::unique_ptr<FramePacer> pacer_;
     double startMs_ = 0.0, lastFrameMs_ = 0.0, lastDumpCheckMs_ = 0.0;
 };
 

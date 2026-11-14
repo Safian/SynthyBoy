@@ -19,7 +19,7 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
 
-constexpr uint32_t kProtocolVersion = 2;   // 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
+constexpr uint32_t kProtocolVersion = 3;   // 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
 constexpr uint32_t kBlockMagic = 0x53424f56u;   // 'SBOV'
 constexpr uint32_t kMsgMagic = 0x4d534f56u;     // 'MSOV' ... the first word of every message
 constexpr int kMaxCurve = 512;                   // vertices of the polyline (the oscillator cycle has 512)
@@ -108,6 +108,17 @@ struct Ledger
     uint32_t fb[kMaxLedger];
 };
 
+/** The helper's presentation statistics (written by the helper with relaxed atomic stores, read by the plugin for the status file): the intervals between two plane updates of a run,
+    in vblanks (index 0 .. 9, the last = 9 and more) and in 2 ms buckets (the last = 126 ms and more); `stride` and `periodUs` as the helper uses them, `onGrid` = 1 when it waits
+    for vblanks (0: timer). Same layout as PaceStats of vblank_pacer.h. */
+struct PaceBlock
+{
+    uint32_t count, stride, periodUs, onGrid;
+    uint32_t vb[10];
+    uint32_t ms[64];
+    uint32_t planeChecks, reserved;   // how often the helper has asked the display, right after an update, whether the plane shows our framebuffer on our CRTC (once a second)
+};
+
 struct SharedBlock
 {
     uint32_t magic;
@@ -117,6 +128,7 @@ struct SharedBlock
     uint32_t seq;                    // the seqlock: odd while the plugin writes
     uint32_t words[kSceneWords];     // SceneData, word by word (relaxed atomic accesses; the seqlock orders them)
     Ledger ledger;
+    PaceBlock pace;
 };
 
 inline void initBlock (SharedBlock* b) noexcept
@@ -181,7 +193,7 @@ inline void ledgerGet (const SharedBlock* b, int slot, uint32_t& handle, uint32_
 enum MsgType : uint32_t
 {
     // plugin -> helper
-    kMsgHello = 1,    // a = protocol version, b = crtc id, c = plane id, d = flags (kFlag...); carries two descriptors (SCM_RIGHTS): [0] the display, [1] the shared block
+    kMsgHello = 1,    // a = protocol version, b = crtc id, c = plane id, d = flags (kFlag...), e = vblank pipe | (pace stride << 8), f = measured vblank period in microseconds; carries two descriptors (SCM_RIGHTS): [0] the display, [1] the shared block
     kMsgShow = 2,     // a, b = canvas w, h (landscape); c, d = panel x, y of the plane; e = rotation (90 / 270); f = view index; text = view name
     kMsgScene = 3,    // a = sequence number of the scene just written (a kick: the helper reads the latest)
     kMsgHide = 4,     // the plane goes off, the buffers go
@@ -193,7 +205,15 @@ enum MsgType : uint32_t
     kMsgHidden = 104, // the plane is off and the framebuffers are gone (answer to a hide)
     kMsgError = 105   // text = what failed; the helper exits after it
 };
-constexpr uint32_t kFlagDump = 1u;   // the helper may write its finished frame to a file when /tmp/synthyboy-overlay-gpu-dump exists (debug)
+constexpr uint32_t kFlagDump = 1u;     // the helper may write its finished frame to a file when /tmp/synthyboy-overlay-gpu-dump exists (debug)
+constexpr uint32_t kFlagVblank = 2u;   // the vblank can be waited for on the display descriptor (else the helper paces with a timer)
+
+/** What the plugin tells the helper about the display it found. */
+struct HelloParams
+{
+    uint32_t crtc = 0, plane = 0, flags = 0;
+    uint32_t pipe = 0, stride = 2, periodUs = 16667;
+};
 
 struct Msg
 {

@@ -31,6 +31,15 @@ struct Detection
     int count = 0;                   // views checked
 };
 
+/** The result of looking for our own markers under every rotation. */
+struct RotationSearch
+{
+    bool readable = false;     // the framebuffer could be read
+    int rotation = -1;         // the one rotation under which a view's marker pair is on screen; -1 when none or ambiguous
+    int matches = 0;           // how many different rotations matched (more than one: the pictures cannot be told apart, nothing is decided)
+    Detection detection;       // the detection under the rotation found (a view, its instance), or an empty one
+};
+
 /** Looks for the marker pairs of all views (two markers each) in the primary framebuffer. The colours of the pairs differ from one another by more than the tolerance, so at most one
     view matches: the one whose tab is on screen. For that view it also reads the instance picture (a film strip frame of one solid colour, bound to the display parameter "Overlay
     Instance": the colour says which plugin instance the page on screen belongs to, instance_slots.h). */
@@ -85,6 +94,32 @@ public:
         }
         source_.end();
         return d;
+    }
+
+    /** The rotation of the UI on the panel, without a table: the marker pair of the view on screen is looked for under 90, 270, 0 and 180 degrees. The solid squares of OUR skin (colours no
+        other view uses) are at the places one rotation says and nowhere else: exactly one rotation may match, else nothing is decided (a second look follows at the next check). */
+    RotationSearch searchRotation()
+    {
+        RotationSearch r;
+        static const int kRotations[4] = { 90, 270, 0, 180 };
+        for (int rot : kRotations)
+        {
+            const Detection d = check (rot);
+            r.readable = r.readable || d.readable;
+            if (d.view >= 0)
+            {
+                ++r.matches;
+                r.rotation = rot;
+                r.detection = d;
+            }
+        }
+        if (r.matches != 1)
+        {
+            r.rotation = -1;
+            r.detection = Detection();
+            r.detection.readable = r.readable;
+        }
+        return r;
     }
 
 private:

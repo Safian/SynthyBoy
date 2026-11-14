@@ -88,19 +88,16 @@ endif()
 # Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"): the module shell-mpc/overlay/ draws the response of Filter 1 on an overlay plane above the MPC's
 # own UI, from a thread of its own, and shows it while the "Filter 1" tab of the overlay skin (scripts/overlay-skin/mpc-ui-pages-overlay.json) is on screen. EXPERIMENTAL and OFF by default: it uses
 # a display plane the MPC firmware does not offer to plugins (Key 61 only so far). OFF builds the plugin byte for byte as it was without this code.
-# SYNTHYBOY_MPC_OVERLAY_CRTC / SYNTHYBOY_MPC_OVERLAY_PLANE: the ids on the Key 61 (CRTC 37, free overlay plane 38).
+# No display constant of any model is compiled in: the CRTC, the planes, the panel, the refresh and the rotation are found at run time (shell-mpc/overlay/discovery.h).
 # The overlay build has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
 # reports it to the host, so the overlay needs SYNTHYBOY_MPC_LFO_LIVE.
-option(SYNTHYBOY_MPC_OVERLAY "MPC shell: the live filter curve on a free display plane (experimental, Key 61)" OFF)
-set(SYNTHYBOY_MPC_OVERLAY_CRTC 37 CACHE STRING "MPC shell overlay: id of the display CRTC")
-set(SYNTHYBOY_MPC_OVERLAY_PLANE 38 CACHE STRING "MPC shell overlay: id of the free overlay plane")
+option(SYNTHYBOY_MPC_OVERLAY "MPC shell: live pictures (filter, LFO, oscillator, envelope, spectrum) on a free display plane (experimental, Key 61 and MPC XL)" OFF)
 if(SYNTHYBOY_MPC_OVERLAY)
     if(NOT SYNTHYBOY_MPC_LFO_LIVE)
         message(FATAL_ERROR "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the parameter 'Overlay Instance' to the host)")
     endif()
     find_package(Threads REQUIRED)
-    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OVERLAY=1
-        SYNTHYBOY_MPC_OVERLAY_CRTC=${SYNTHYBOY_MPC_OVERLAY_CRTC} SYNTHYBOY_MPC_OVERLAY_PLANE=${SYNTHYBOY_MPC_OVERLAY_PLANE})
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OVERLAY=1)
     target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
 endif()
 

@@ -8,8 +8,18 @@
 #include <string>
 
 #include "geometry.h"
+#include "vblank_pacer.h"
 
 namespace synthyboy_mpc { namespace overlay {
+
+/** What the presenting side needs of the refresh: the measured period, the vblanks per picture, whether the vblank can be waited for, and the pipe of the CRTC. */
+struct PaceParams
+{
+    double periodMs = 16.67;
+    int stride = 2;
+    bool vblank = false;
+    int pipe = 0;
+};
 
 /** The overlay plane and its two ARGB buffers (panel orientation, portrait). Every method is called from the overlay thread only. */
 class IPlaneBackend
@@ -35,6 +45,21 @@ public:
     virtual void forceDisablePlane() noexcept {}
     /** Removes a framebuffer and a GEM handle that another process made on the shared descriptor (0 = none). */
     virtual void removeForeign (uint32_t /*fbId*/, uint32_t /*gemHandle*/) noexcept {}
+    // What run-time discovery found (valid after open ()); the defaults are the numbers of the tests' fakes.
+    virtual uint32_t crtcId() const noexcept { return 37; }
+    virtual uint32_t planeId() const noexcept { return 38; }
+    virtual PaceParams paceParams() const noexcept { return PaceParams(); }
+    /** The plane reports the state we put it in (our CRTC, a framebuffer). false: another program took it (`why`). Read only. */
+    virtual bool planeStillOurs (std::string& /*why*/) { return true; }
+    /** The last check found the plane SWITCHED OFF (no CRTC, no framebuffer: a mode set of the application does that to every plane it does not name), not taken: the picture has to be set again on the
+        same plane. Returns true once per such event. */
+    virtual bool planeWasSwitchedOff() noexcept { return false; }
+    /** The plane was lost: moves to the next free plane found by the discovery. false: no spare left. The next show () uses it. */
+    virtual bool nextPlane (std::string& /*why*/) { return false; }
+    /** Appends "key: value" lines about the discovery (device, CRTC, planes, refresh, how long it took) to the status file. */
+    virtual void describe (std::string& /*out*/) const {}
+    /** Statistics of the CPU path's presentation intervals (null: none). */
+    virtual const PaceStats* paceStats() const noexcept { return nullptr; }
 };
 
 /** A read-only view of the pixels the application's primary plane shows (the markers of the skin). begin / pixel / end are called from the overlay thread only. */
@@ -47,6 +72,8 @@ public:
     /** The 0xRRGGBB value of the panel pixel (px, py) of the framebuffer taken by begin (). false outside of it. */
     virtual bool pixel (int px, int py, uint32_t& rgb) noexcept = 0;
     virtual void end() noexcept = 0;
+    /** Non-empty: the source can never work (the display was not found, ...): the module disables itself at once with this reason. */
+    virtual std::string fatalError() const { return {}; }
 };
 
 }} // namespace synthyboy_mpc::overlay
