@@ -453,6 +453,28 @@ class TestPackageMpcRelease(unittest.TestCase):
                 else:
                     self.assertEqual(mode, 0o644, f"Expected 0644 for file {info.filename}")
 
+    def test_gpu_helper_is_packaged_executable_and_validated(self):
+        # the overlay build has an extra executable next to the plugin binaries: it goes into the zip with mode 0755, and a wrong one is refused
+        helper32 = self.plugin_dir / "VST" / "synthyboy-overlay-gpu-arm32"
+        helper32.write_bytes(fake_elf(32, 40))
+        helper32.chmod(0o755)
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        with zipfile.ZipFile(self.out_dir / "SynthyBoy-MPC-0.1.0.zip", "r") as zf:
+            info = zf.getinfo("Safian - VST - SynthyBoy/VST/synthyboy-overlay-gpu-arm32")
+            self.assertEqual((info.external_attr >> 16) & 0o777, 0o755)
+        helper32.write_bytes(fake_elf(64, 40))
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("wrong ELF class", proc.stderr)
+        helper32.write_bytes(fake_elf(32, 40))
+        helper32.chmod(0o644)
+        proc = self._run_packager()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("not executable", proc.stderr)
+        helper32.unlink()
+        self.assertEqual(self._run_packager().returncode, 0, "a package without the helper (production) is still fine")
+
     def test_paths_with_spaces_in_parent_dir(self):
         spaced_root = self.tmp / "folder with spaces" / "Safian - VST - SynthyBoy"
         shutil.copytree(self.plugin_dir, spaced_root)

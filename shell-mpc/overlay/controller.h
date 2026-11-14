@@ -523,7 +523,7 @@ private:
         }
         o << "instances: " << count << "\n";
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
-        o << "frames_total: " << presenter_.frames() << "\n";
+        o << "frames_total: " << framesTotal() << "\n";
         o << "curve_updates_last_second: " << updatesLast_ << "\ncurve_changes_last_second: " << changesLast_ << "\n";
         o << "overlay_thread_cpu_percent_of_one_core: " << cpuPercent_ << "\n";
         o << "work_peak_ms: " << workPeakMs_ << "\nrender_ms: " << renderMs_ << "\nrotate_ms: " << rotateMs_ << "\nsetplane_ms: " << setPlaneMs_ << "\n";

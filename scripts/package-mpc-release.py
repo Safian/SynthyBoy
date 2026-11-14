@@ -149,6 +149,18 @@ def validate_plugin_folder(plugin_dir: Path) -> dict:
             raise PackageError(f"missing binary: {name} binary not found at {bin_path}")
         check_elf_binary(bin_path, expected_bits, expected_mach, name)
 
+    # The overlay build (SYNTHYBOY_MPC_OVERLAY, docs/MPC.md "GPU drawing in a helper process") has an extra executable next to the plugin binaries. It is optional (the production
+    # package has none), but when it is there it has to be an ELF file of its architecture and executable, or the plugin could not start it.
+    for name, expected_bits, expected_mach, label in [
+        ("synthyboy-overlay-gpu-arm32", 32, EM_ARM, "32-bit ARM GPU helper"),
+        ("synthyboy-overlay-gpu-arm64", 64, EM_AARCH64, "64-bit AArch64 GPU helper"),
+    ]:
+        helper = plugin_dir / "VST" / name
+        if helper.is_file():
+            check_elf_binary(helper, expected_bits, expected_mach, label)
+            if not helper.stat().st_mode & 0o111:
+                raise PackageError(f"{helper}: the GPU helper is not executable")
+
     version_xml = plugin_dir / "version.xml"
     if not version_xml.is_file():
         raise PackageError(f"version.xml missing from {plugin_dir}")

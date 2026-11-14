@@ -41,6 +41,11 @@ STUB_DOCKER = textwrap.dedent('''\
     [ -n "${STUB_FAIL_ARCH:-}" ] && [ "$STUB_FAIL_ARCH" = "$arch" ] && exit 1
     mkdir -p "$build/shell-mpc"
     printf 'fake %s module' "$arch" > "$build/shell-mpc/synthyboy_mpc.stripped.so"
+    # the overlay build also makes the GPU helper (scripts/mpc-container-build.sh); the production build does not
+    if [ -n "${STUB_HELPER:-}" ]; then
+        mkdir -p "$build/shell-mpc/overlay/gpu-helper"
+        printf 'fake %s helper' "$arch" > "$build/shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu.stripped"
+    fi
 ''')
 
 VALIDATOR = textwrap.dedent('''\
@@ -117,6 +122,27 @@ class BuildMpcTest(unittest.TestCase):
         self.assertEqual(r.returncode, 3)
         self.assertIn("aarch64-linux-gnu.cmake", r.stderr)
         self.assertIn("armv7-linux-gnueabihf.cmake", r.stderr)
+
+    def test_gpu_helper_goes_into_vst_next_to_the_plugin_only_when_the_container_built_it(self):
+        r = self.build("--no-validate", "--arch", "arm32")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertEqual(sorted(p.name for p in (self.folder() / "VST").iterdir()), ["synthyboy-arm32.so"], "the production package has no helper")
+        shutil.rmtree(self.out)
+        r = self.build("--no-validate", "--arch", "all", STUB_HELPER="1")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        vst = self.folder() / "VST"
+        self.assertEqual(sorted(p.name for p in vst.iterdir()), ["synthyboy-arm32.so", "synthyboy-arm64.so", "synthyboy-overlay-gpu-arm32", "synthyboy-overlay-gpu-arm64"])
+        self.assertEqual((vst / "synthyboy-overlay-gpu-arm32").read_text(), "fake arm32 helper")
+        self.assertEqual((vst / "synthyboy-overlay-gpu-arm64").read_text(), "fake arm64 helper")
+        self.assertTrue(os.access(vst / "synthyboy-overlay-gpu-arm32", os.X_OK), "the helper is executable")
+        m = self.manifest()
+        self.assertEqual((m["file32"], m["file64"]), ("VST/synthyboy-arm32.so", "VST/synthyboy-arm64.so"), "the manifest lists the plugin binaries only")
+
+    def test_container_script_builds_the_helper_only_when_the_tree_has_the_target_and_checks_it(self):
+        text = CONTAINER.read_text()
+        self.assertIn("synthyboy_overlay_gpu", text)
+        self.assertIn("libEGL", text)   # the helper must not link the Mesa libraries
+        self.assertIn('check_elf "$helper_dir/synthyboy-overlay-gpu.stripped" tool', text)
 
     def test_scripts_are_valid_bash(self):
         for script in (BUILD_MPC, BUILD_ARMV7, CONTAINER):
