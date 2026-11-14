@@ -452,9 +452,17 @@ public:
         if (p.valid)
         {
             ++attempts_;
-            draw = lineUnder (in, p.x, p.y);
-            if (draw)
-                ++hits_;
+            if (lineUnder (in, p.x, p.y))
+            {
+                draw = true;
+                ++pointHits_;
+            }
+            else if (polylineVerified (in, norm, in.nowMs))
+            {
+                // the handle circles of the widget (and the stage's own corner) hide the line there: the polyline is where the rule says, verified on the stretches that are visible
+                draw = true;
+                ++polylineHits_;
+            }
             else
                 ++misses_;
         }
@@ -508,12 +516,15 @@ public:
     int stage() const noexcept { return stage_; }
     int dotX() const noexcept { return dotX_; }
     int dotY() const noexcept { return dotY_; }
-    unsigned long hits() const noexcept { return hits_; }
+    unsigned long hits() const noexcept { return pointHits_ + polylineHits_; }
+    unsigned long pointHits() const noexcept { return pointHits_; }
+    unsigned long polylineHits() const noexcept { return polylineHits_; }
     unsigned long misses() const noexcept { return misses_; }
     void writeStatus (std::ostream& o) const override
     {
-        o << "env_stage: " << stage_ << "\nenv_fraction: " << fraction_ << "\nenv_dot: " << dotX_ << " " << dotY_ << "\nenv_selfcheck_hits: " << hits_ << "\nenv_selfcheck_misses: " << misses_
-          << "\nenv_selfcheck_attempts: " << attempts_ << "\n";
+        o << "env_stage: " << stage_ << "\nenv_fraction: " << fraction_ << "\nenv_dot: " << dotX_ << " " << dotY_ << "\nenv_selfcheck_point_hits: " << pointHits_
+          << "\nenv_selfcheck_polyline_hits: " << polylineHits_ << "\nenv_selfcheck_misses: " << misses_ << "\nenv_selfcheck_attempts: " << attempts_
+          << "\nenv_polyline_probes: " << probeHits_ << " of " << probeCount_ << "\n";
     }
     void writeDump (std::ostream& o) const override
     {
@@ -547,6 +558,51 @@ private:
         return true;
     }
 
+    /** The widget draws the stage handles (circles) over the polyline, so the line is not visible at every point. The rule is verified on the middle stretches of the long
+        segments (the 25 %, 50 % and 75 % points of every segment that is at least 60 px long; one pixel of tolerance): at least three probes, and 35 % of them, must have the
+        colour of the line. Cached for the same parameters for one second. */
+    bool polylineVerified (const ViewInput& in, const envgeom::Norm& n, double nowMs)
+    {
+        const bool same = n.delay == verifiedNorm_.delay && n.attack == verifiedNorm_.attack && n.hold == verifiedNorm_.hold && n.decay == verifiedNorm_.decay
+                          && n.sustain == verifiedNorm_.sustain && n.release == verifiedNorm_.release;
+        if (same && nowMs - verifiedAtMs_ < 1000.0)
+            return verified_;
+        verifiedNorm_ = n;
+        verifiedAtMs_ = nowMs;
+        probeHits_ = probeCount_ = 0;
+        for (int st = 1; st <= 6; ++st)
+        {
+            const envgeom::Point a = envgeom::dotFor (n, st, 0.0), b = envgeom::dotFor (n, st, 1.0);
+            if (st == 5)
+            {
+                // the sustain segment: its two ends
+                const envgeom::Point lo = envgeom::dotFor (n, 4, 1.0), hi = envgeom::dotFor (n, 6, 0.0);
+                if (std::hypot (hi.x - lo.x, hi.y - lo.y) < 60.0)
+                    continue;
+                for (double f : { 0.25, 0.5, 0.75 })
+                    probe (in, lo.x + (hi.x - lo.x) * f, lo.y + (hi.y - lo.y) * f);
+                continue;
+            }
+            if (std::hypot (b.x - a.x, b.y - a.y) < 60.0)
+                continue;
+            for (double f : { 0.25, 0.5, 0.75 })
+                probe (in, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
+        }
+        verified_ = probeHits_ >= 3 && probeHits_ * 100 >= probeCount_ * 35;
+        return verified_;
+    }
+    void probe (const ViewInput& in, double x, double y)
+    {
+        ++probeCount_;
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx)
+                if (lineUnder (in, x + dx, y + dy))
+                {
+                    ++probeHits_;
+                    return;
+                }
+    }
+
     int env_;
     ParamGroup group_;
     std::string name_;
@@ -554,7 +610,12 @@ private:
     bool have_ = false;
     int stage_ = 0, dotX_ = -1, dotY_ = -1;
     float fraction_ = 0.0f;
-    unsigned long hits_ = 0, misses_ = 0, attempts_ = 0;
+    unsigned long pointHits_ = 0, polylineHits_ = 0, misses_ = 0, attempts_ = 0;
+    // the verification of the whole polyline (cached while the parameters stay and for a second at most)
+    double verifiedAtMs_ = -1.0e9;
+    bool verified_ = false;
+    envgeom::Norm verifiedNorm_;
+    int probeHits_ = 0, probeCount_ = 0;
 };
 
 /** A view without data (a kind that is not built yet): never valid, so the plane stays off. */

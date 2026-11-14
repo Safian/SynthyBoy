@@ -440,9 +440,42 @@ int main()
         lv.envFineFraction[0] = 0.5f;
         v.update (input (&lv, 400.0));
         check (v.dotX() < 0, "the stage of envelope 1 does not show on the view of envelope 2");
+        // the handle circles hide the line at the corners: the dot there is still drawn when the polyline is verified on its visible stretches
+        {
+            FakeFrame occluded;
+            const envgeom::Norm nn = v.normOf();
+            double ends[6];
+            envgeom::stageEnds (nn, ends);
+            const double hx[7] = { envgeom::kOriginX, ends[0], ends[1], ends[2], ends[3], ends[4], ends[5] };
+            const double hy[7] = { envgeom::kBottomY, envgeom::kBottomY, envgeom::kTopY, envgeom::kTopY, envgeom::sustainY (nn), envgeom::sustainY (nn), envgeom::kBottomY };
+            for (int st = 1; st <= 6; ++st)
+                for (int k = 0; k <= 400; ++k)
+                {
+                    const envgeom::Point pt = envgeom::dotFor (nn, st, k / 400.0);
+                    bool hidden = false;
+                    for (int i = 0; i < 7; ++i)
+                        hidden = hidden || std::hypot (pt.x - hx[i], pt.y - hy[i]) < 17.0;
+                    if (hidden)
+                        continue;
+                    for (int dx = -2; dx <= 2; ++dx)
+                        for (int dy = -2; dy <= 2; ++dy)
+                        {
+                            int qx, qy;
+                            uiPointToPanel (90, static_cast<int> (std::lround (pt.x)) + dx, static_cast<int> (std::lround (pt.y)) + dy, 800, 1280, qx, qy);
+                            occluded.setPixel (qx, qy, envgeom::kLineRgb);
+                        }
+                }
+            ViewInput oc = input (&lv, 3000.0);
+            oc.frames = &occluded;
+            lv.envFineStage[1] = 2.0f;
+            lv.envFineFraction[1] = 1.0f;   // exactly at a corner: the pixel there is hidden by the handle
+            const unsigned long ph = v.polylineHits();
+            v.update (oc);
+            check (v.dotX() >= 0 && v.polylineHits() == ph + 1, "at a corner hidden by a handle: no line colour under the point, the polyline is verified on its visible stretches: the dot is drawn");
+        }
         std::ostringstream st;
         v.writeStatus (st);
-        check (st.str().find ("env_selfcheck_hits: ") != std::string::npos && st.str().find ("env_selfcheck_misses: 1") != std::string::npos, "the status has the self check counters");
+        check (st.str().find ("env_selfcheck_point_hits: ") != std::string::npos && st.str().find ("env_selfcheck_misses: 1") != std::string::npos, "the status has the self check counters");
     }
     // ---- the controller with several views -------------------------------------------------------------------------------------------------------------------------------
     {
