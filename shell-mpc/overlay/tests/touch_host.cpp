@@ -386,6 +386,61 @@ static void testHandlerNeedsNoQueue()
     check (n == 41 && dec.available() == 0, "sink version: 1 Down + 40 Moves delivered, the queue stays empty");
 }
 
+static void testKey61Capture()
+{
+#ifdef TOUCH_FIXTURE
+    // A capture of /dev/input/event0 of the MPC Key 61 (ILI2117, ABS 0 .. 2048 on both axes, protocol B; `cat` of the node, read only, arm32 records of 16 bytes) while the tool mtouch injected, in this order:
+    // tap (300, 150), tap (1000, 200) held 200 ms, drag (200, 250) -> (600, 260) in 400 ms, tap (10, 10), tap (1279, 799), drag (400, 150) -> (380, 600) in 300 ms; the positions are upright UI pixels.
+    // The decoder (rotation 90, panel 800 x 1280, range 0 .. 2048) has to give them back within a pixel: down, moves, up, in this order, nothing else.
+    FILE* f = std::fopen (TOUCH_FIXTURE, "rb");
+    check (f != nullptr, "capture: the fixture file opens");
+    if (f == nullptr)
+        return;
+    TouchDecoder dec (800, 1280, 90);
+    dec.setRanges (0, 2048, 0, 2048);
+    std::vector<TouchEvent> out;
+    unsigned char rec[16];
+    int records = 0;
+    while (std::fread (rec, 1, sizeof rec, f) == sizeof rec)
+    {
+        // little endian: sec (4), usec (4), type (2), code (2), value (4)
+        auto u32 = [&] (int o) { return static_cast<uint32_t> (rec[o]) | static_cast<uint32_t> (rec[o + 1]) << 8 | static_cast<uint32_t> (rec[o + 2]) << 16 | static_cast<uint32_t> (rec[o + 3]) << 24; };
+        const uint64_t t = static_cast<uint64_t> (u32 (0)) * 1000000ULL + u32 (4);
+        const uint16_t type = static_cast<uint16_t> (rec[8] | rec[9] << 8), code = static_cast<uint16_t> (rec[10] | rec[11] << 8);
+        dec.feed (type, code, static_cast<int32_t> (u32 (12)), t, [&out] (const TouchEvent& e) { out.push_back (e); });
+        ++records;
+    }
+    std::fclose (f);
+    check (records == 240, "capture: 240 records read");
+    int downs = 0, ups = 0;
+    for (const auto& e : out) { downs += e.kind == TouchEvent::Down; ups += e.kind == TouchEvent::Up; }
+    check (downs == 6 && ups == 6, "capture: 6 gestures, each with one Down and one Up");
+    // the gestures
+    struct G { int x0, y0, x1, y1; } const g[6] = { { 300, 150, 300, 150 }, { 1000, 200, 1000, 200 }, { 200, 250, 600, 260 }, { 10, 10, 10, 10 }, { 1279, 799, 1279, 799 }, { 400, 150, 380, 600 } };
+    size_t at = 0;
+    bool ok = true;
+    for (int i = 0; i < 6 && ok; ++i)
+    {
+        ok = at < out.size() && out[at].kind == TouchEvent::Down && std::abs (out[at].x - g[i].x0) <= 1 && std::abs (out[at].y - g[i].y0) <= 1;
+        ++at;
+        while (ok && at < out.size() && out[at].kind == TouchEvent::Move)
+            ++at;
+        ok = ok && at < out.size() && out[at].kind == TouchEvent::Up && std::abs (out[at].x - g[i].x1) <= 1 && std::abs (out[at].y - g[i].y1) <= 1;
+        ++at;
+    }
+    check (ok && at == out.size(), "capture: every Down, the last position of every drag and every Up is the injected pixel within one");
+    // the first drag (the third gesture) moves rightwards only, in 20 steps
+    bool mono = true;
+    int gesture = 0, moves = 0, prev = 0;
+    for (const auto& e : out)
+    {
+        if (e.kind == TouchEvent::Down) { ++gesture; prev = e.x; }
+        else if (e.kind == TouchEvent::Move && gesture == 3) { mono = mono && e.x >= prev; prev = e.x; ++moves; }
+    }
+    check (mono && moves >= 15 && moves <= 20, "capture: the first drag moves rightwards only, in 15 to 20 steps");
+#endif
+}
+
 static void testTrackingIdReplaced()
 {
     // Prompt requirement: "a tracking id change without an Up" / "tracking id replaced"
@@ -853,6 +908,7 @@ int main()
     testScaledRanges();
     testGeometryAgreement();
     testOneFrameTap();
+    testKey61Capture();
     testHandlerNeedsNoQueue();
     testTrackingIdReplaced();
     testOutOfRangeClamp();
