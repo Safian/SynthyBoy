@@ -808,6 +808,8 @@ private:
             if (rc > 0 && (p.revents & (POLLIN | POLLHUP | POLLERR)))
                 if (! drain())
                     break;
+            if (rc == 0 && shown_ && (flags_ & kFlagDump) && ::access ("/tmp/synthyboy-overlay-gpu-dump", F_OK) == 0)
+                dirty_ = true;     // the debug file asks for the frame on disk: draw the same scene again (once a second at most, maybeDump)
             if (dirty_ && shown_)
             {
                 if (renderAndPresent())

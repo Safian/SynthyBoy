@@ -108,7 +108,8 @@ ls -l "$so" "$stripped"
 # A plain executable linked against libc only (the firmware's EGL / GBM / GLES libraries are opened at run time), the same ELF checks as the benchmarks; the stripped copy is packaged
 # next to the plugin (scripts/build-mpc.sh). A build without the target (the production package) does not even look at it.
 helper_dir=/build/shell-mpc/overlay/gpu-helper
-if cmake --build /build --target help 2>/dev/null | grep -q 'synthyboy_overlay_gpu'; then
+targets="$(cmake --build /build --target help 2>/dev/null || true)"   # (captured first: grep -q ending a pipe early would fail the pipeline under pipefail)
+if grep -q 'synthyboy_overlay_gpu' <<< "$targets"; then
     cmake --build /build --target synthyboy_overlay_gpu --parallel "$JOBS"
     check_elf "$helper_dir/synthyboy-overlay-gpu" tool
     [ -s "$helper_dir/synthyboy-overlay-gpu.stripped" ] || fail "the stripped GPU helper is missing"
