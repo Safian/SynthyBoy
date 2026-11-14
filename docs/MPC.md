@@ -381,3 +381,17 @@ Why: the factory presets are levelled to a four-note chord whose RMS is 20 dB un
 There is no separate parameter for it: the level control of the instrument is Master Volume (first knob of the second row of the Macros tab), which is saved with the project. The spectrum shows the signal after the output stage, that is what the host gets. The desktop plugin has no output stage.
 
 Tests: `shell-mpc/tests/run_output_stage_test.sh` (the stage alone) and `shell-mpc/tests/output_level_host.cpp` (the plugin against a build with 0 dB: a soft note is louder by the gain, a full chord never passes the ceiling); both run in `shell-mpc/accept.sh`.
+
+### Denormal warning in host simulator ("32 denormal samples")
+
+During SDK acceptance testing with `host_sim <plugin> test` on a build configured with the Vital engine (`SYNTHYBOY_MPC_ENGINE_VITAL=1`), the parameter sweep pass reports:
+```
+WARN  parameter sweep: 32 denormal samples (|x| < 1e-30) - flush tiny values to zero in feedback paths
+```
+With the own engine (`SYNTHYBOY_SHELL_ENGINE=own`), 0 denormals are reported.
+
+Numerical investigation confirmed:
+- **Threshold mismatch**: `host_sim` defines "denormal" as any non-zero sample with $|x| < 10^{-30}$. However, IEEE 754 32-bit single precision subnormal numbers only begin below `FLT_MIN` ($\approx 1.175494 \times 10^{-38}$). The range $[1.1755 \times 10^{-38}, 10^{-30})$ consists of standard, normalized IEEE 754 floating-point numbers with normal exponents ($-126 \dots -100$), which incur no CPU penalty on ARM Cortex-A or x86_64.
+- **Root cause in engine decay, not output stage**: When `host_sim` sweeps `osc1.map.key_low` past active notes, the Vital engine mutes oscillator 1. The internal IIR filter / decimator state decays exponentially from $\approx -5.11 \times 10^{-2}$ down to $-2.1 \times 10^{-38}$ across 78 samples before hardware Flush-to-Zero (`FTZ`) sets in at `FLT_MIN`. Exactly 16 samples per channel ($16 \times 2 = 32$ samples) fall in the $[1.1755 \times 10^{-38}, 10^{-30})$ window.
+- **OutputStage role**: The output limiter is inactive (`env == 1.0f`) during this tail; the 6 dB make-up gain simply scales the decaying samples by $\approx 1.995$, shifting sample $i=61$ above the $10^{-30}$ mark (from 34 down to 32 reported samples).
+- **No modification to engine**: Hardware FTZ is active in `synthyboy_mpc.cpp` and `vital_engine.cpp`. Adding artificial DC offsets or software zero-clamping would break bit-identical passthrough at 0 dB and introduce distortion. The Vital engine core is not modified.
