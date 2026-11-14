@@ -318,7 +318,10 @@ class LfoSkinModuleTest(unittest.TestCase):
         before = qlinks_by_tab_name(self.orig, self.orig_q)
         after = qlinks_by_tab_name(self.tui, self.qmap)
         for name in before:
-            if not name.startswith(("LFO", "Env", "Osc ")) or name.endswith("Shp"):
+            if name == "Master":   # 45_pad_pressure.py puts the pad pressure toggle and amount on the free Q-Links 1 and 2 of the bottom row
+                self.assertEqual({k: v for k, v in after[name].items() if k not in ("Q-Link 1", "Q-Link 2")}, {k: v for k, v in before[name].items() if k not in ("Q-Link 1", "Q-Link 2")}, name)
+                self.assertEqual((before[name]["Q-Link 1"], before[name]["Q-Link 2"]), (-1, -1))
+            elif not name.startswith(("LFO", "Env", "Osc ")) or name.endswith("Shp"):
                 self.assertEqual(after[name], before[name], name)
 
     def test_files_are_in_the_skin_and_the_decoded_size_is_inside_the_budget(self):

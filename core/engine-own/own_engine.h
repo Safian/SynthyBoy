@@ -43,6 +43,9 @@ public:
         (detune width, spread, blend, level normalisation) is that of a patch that asks for the cap. 0 = no such cap. Never touches a parameter value, never applies at
         medium / high or to an offline render (that runs on a twin at the high tier). Any thread, lock free; read at the start of every block. */
     void setLowTierUnisonCap (int voices) noexcept { lowUnisonCap.store (std::max (0, voices), std::memory_order_relaxed); }
+    /** Pad pressure to Filter 1 cutoff modulation depth (0 = off, 1 = +36 semitones at full pressure). Any thread, lock free. */
+    void setPadPressureToCutoff (float amount01) noexcept { padPressureToCutoff.store (std::clamp (amount01, 0.0f, 1.0f), std::memory_order_relaxed); }
+    float getPadPressureToCutoff() const noexcept { return padPressureToCutoff.load (std::memory_order_relaxed); }
     /** Tier low: true keeps the spectral morph spread across the unison voices (two morph cycles, as at medium / high), false shares one cycle between them (about half the
         morph build cost, the morph spread knob then does nothing at tier low). Any thread, lock free. */
     void setLowTierMorphSpread (bool keep) noexcept { lowKeepMorphSpread.store (keep, std::memory_order_relaxed); }
@@ -94,6 +97,7 @@ private:
     std::array<std::atomic<float>, kMaxParams> params;
     std::atomic<int> voiceCap { 8 }, unisonCap { kMaxUnisonVoices };
     std::atomic<int> lowUnisonCap { kDefaultLowTierUnisonCap };
+    std::atomic<float> padPressureToCutoff { 0.0f };
     std::atomic<float> lowKillSeconds { kDefaultLowTierKillSeconds };
     std::atomic<bool> lowKeepMorphSpread { kDefaultLowTierMorphSpread };
     std::atomic<int> activeCount { 0 };

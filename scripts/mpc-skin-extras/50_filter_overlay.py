@@ -23,7 +23,7 @@
 #
 # INSTANCE picture (several plugin instances): next to the two markers of every view the skin draws a tiny film strip image (`instance` of the view in the JSON, 6 x 6 px, the envelope
 # tabs 4 x 4) bound to the display-only parameter "Overlay Instance" (the LAST parameter of the overlay build: number of entries of docs/params.json + 4 LFO cursors + 32 spectrum
-# columns). Its 33 frames are solid colours (blank, slot 0 .. 15, none, blank ...; `instance` in the JSON): the host draws the frame of THIS instance's value, so the colour the plugin
+# columns + 2 pad pressure parameters). Its 33 frames are solid colours (blank, slot 0 .. 15, none, blank ...; `instance` in the JSON): the host draws the frame of THIS instance's value, so the colour the plugin
 # reads in the primary framebuffer says which instance's page is on screen. The strips are RGB PNGs with the settings of the marker pictures (no alpha), width = the picture, height =
 # 33 frames one under the other (like the cursor strip of 30_lfo.py).
 #
@@ -41,8 +41,7 @@ COLS = (23, 343, 663, 983)
 ROWS = (45, 196, 346, 497)
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
 BACKGROUND_FILE = "overlay_curve_bg.png"
-LFO_CURSORS, SPECTRUM_COLUMNS = 4, 32   # the display parameters before "Overlay Instance" (shell-mpc/lfo_live.h, shell-mpc/spectrum.h)
-PARAMS_JSON = HERE.parent.parent / "docs" / "params.json"
+LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2   # the parameters before "Overlay Instance" (shell-mpc/lfo_live.h, shell-mpc/spectrum.h, shell-mpc/pad_pressure.h; 45_pad_pressure.py)
 FILTERS = (1, 2)
 
 
@@ -214,8 +213,9 @@ def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
     layout = json.loads(LAYOUT_JSON.read_text(encoding="utf-8"))
-    # "Overlay Instance" is the last display parameter, after the engine's list, the four LFO cursors and the 32 spectrum columns
-    param_index = len(json.loads(PARAMS_JSON.read_text(encoding="utf-8"))["params"]) + LFO_CURSORS + SPECTRUM_COLUMNS
+    # "Overlay Instance" is the LAST parameter of the overlay build (docs/MPC.md "Parameter order"): after the engine's list, the four LFO cursors, the 32 spectrum columns and the two pad
+    # pressure parameters (the indexes of those do not move in any build)
+    param_index = ctx.param_count + LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS
     for view in layout["views"]:
         if view["kind"] == "filter":
             if view["index"] not in FILTERS:

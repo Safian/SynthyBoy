@@ -353,7 +353,7 @@ class OverlaySkinTests(unittest.TestCase):
         for k, c in enumerate(inst["slotColours"]):
             want[k + 1] = tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
         want[inst["slots"] + 1] = tuple(int(inst["none"][i:i + 2], 16) for i in (0, 2, 4))
-        index = len(self.params) + 4 + 32   # the engine's parameters, the 4 LFO cursors, the 32 spectrum columns: "Overlay Instance" is the next one
+        index = len(self.params) + 4 + 32 + 2   # the engine's parameters, the 4 LFO cursors, the 32 spectrum columns, the 2 pad pressure parameters: "Overlay Instance" is the next one (docs/MPC.md "Parameter order")
         self.assertEqual(want[0], want[-1])
         self.assertEqual(len({c for c in want[1:inst["slots"] + 2]}), inst["slots"] + 1, "16 slots + none: 17 different colours")
         for v in layout["views"]:

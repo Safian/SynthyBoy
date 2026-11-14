@@ -126,7 +126,9 @@ int main (int argc, char** argv)
     AEffect* a = make();
     if (! a) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
     const int idx = a->numParams - 1;   // the last parameter
-    check (idx == n + 4 + 32, "Overlay Instance is the last parameter, after the 4 cursors and 32 spectrum columns (index " + std::to_string (idx) + ")");
+    // parameter order (docs/MPC.md "Parameter order"): engine, 4 cursors, 32 spectrum columns, Pad Pressure, Pad Pressure Amount, Overlay Instance LAST
+    check (text (a, effGetParamName, idx - 2) == "Pad Pressure" && text (a, effGetParamName, idx - 1) == "Pad Pressure Amount", "the two pad pressure parameters come right before it (their indexes do not move in the overlay build)");
+    check (idx == n + 4 + 32 + 2, "Overlay Instance is the last parameter, after the 4 cursors, 32 spectrum columns and the 2 pad pressure parameters (index " + std::to_string (idx) + ")");
     bool have = false;
     check (text (a, effGetParamName, idx, &have) == "Overlay Instance" && have, "its name is Overlay Instance");
     bool beyond = true;

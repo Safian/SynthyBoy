@@ -7,7 +7,7 @@
 //            after creation with audioMasterAutomate (shell-mpc/tests/overlay_instance_host.cpp checks it); without the word every count is exact for a build without the overlay.
 //   HZ is the refresh rate the plugin was built with (SYNTHYBOY_MPC_LFO_LIVE_HZ, default 10): the number of audioMasterAutomate calls per cursor and second is
 //   at most HZ (the default build: <= 21 in 2 s), and about HZ for a cursor that changes cell at every tick.
-//   off:      built with SYNTHYBOY_MPC_LFO_LIVE=0: numParams is the engine's count, nothing exists after it.
+//   off:      built with SYNTHYBOY_MPC_LFO_LIVE=0: numParams is the engine's count (+ the two pad pressure parameters), no display parameter exists.
 //   on:       built with it (default settings): four display-only parameters "LFO n Cursor" after the engine's list, idle (0, no audioMasterAutomate)
 //             while no voice sounds; with a note held they follow the LFO cycle and the plugin calls audioMasterAutomate for them (and for nothing else).
 //   selftest: SYNTHYBOY_MPC_LFO_LIVE_SELFTEST=ON: all four sweep without a note, LFO n at 0.25 * 2^(n-1) cycles a second.
@@ -42,7 +42,7 @@ static bool overlayBuild = false;   // "overlay" on the command line
 static std::atomic<int> automateOverlay { 0 };   // the report of "Overlay Instance" (the last parameter of an overlay build)
 static std::atomic<int> automate[4], automateOther { 0 }, automateSpectrum { 0 };   // the cursors; anything else; the spectrum columns (they follow the four cursors when the build has them)
 static std::atomic<int> spectrumColumns { 0 };
-static std::atomic<int> firstIndex { -1 };
+static std::atomic<int> firstIndex { -1 }, lastIndex { -1 };   // lastIndex: the last parameter of the list (Overlay Instance in an overlay build, after the pad pressure parameters)
 static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstIntPtr, void*, float)
 {
     if (opcode == audioMasterAutomate)
@@ -50,7 +50,7 @@ static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstInt
         const int k = index - firstIndex.load();
         if (k >= 0 && k < 4) automate[k].fetch_add (1);
         else if (k >= 4 && k < 4 + spectrumColumns.load()) automateSpectrum.fetch_add (1);
-        else if (overlayBuild && k >= 4 + spectrumColumns.load()) automateOverlay.fetch_add (1);
+        else if (overlayBuild && index == lastIndex.load()) automateOverlay.fetch_add (1);
         else automateOther.fetch_add (1);
         return 1;
     }
@@ -209,35 +209,38 @@ int main (int argc, char** argv)
     AEffect* e = entry (hostCallback);
 #endif
     if (! e) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
+    lastIndex.store (e->numParams - 1);   // the display thread's first report comes a tick (>= 50 ms) after creation
     e->dispatcher (e, effOpen, 0, 0, nullptr, 0.0f);
     e->dispatcher (e, effSetSampleRate, 0, 0, nullptr, 44100.0f);
     e->dispatcher (e, effSetBlockSize, 0, 256, nullptr, 0.0f);
     e->dispatcher (e, effMainsChanged, 0, 1, nullptr, 0.0f);
 
+    // the two pad pressure parameters (shell-mpc/pad_pressure.h, default ON) follow the display parameters (only "Overlay Instance" of the overlay build is after them) and are no part of what is checked here
+    const int ovl = overlayBuild ? 1 : 0;       // "Overlay Instance", the very last parameter
+    const int pad = text (e, effGetParamName, e->numParams - 2 - ovl) == "Pad Pressure" ? 2 : 0;
     const std::string chunk = getChunk (e);
     std::printf ("chunk %zu %zu\n", chunk.size(), std::hash<std::string>{} (chunk));
     check (! chunk.empty() && chunk.find ("Cursor") == std::string::npos, "state chunk is available and has no display parameter");
 
     if (mode == "off")
     {
-        check (e->numParams == n, "off: numParams is the engine's count");
+        check (e->numParams == n + pad, "off: numParams is the engine's count (+ the two pad pressure parameters of the build)");
         bool ok = true;
-        text (e, effGetParamName, n, &ok);
-        check (! ok, "off: no parameter name after the engine's list");
-        check (e->getParameter (e, n) == 0.0f, "off: getParameter past the list is 0");
+        text (e, effGetParamName, n + pad, &ok);
+        check (! ok, "off: no display parameter name after the engine's list");
+        check (e->getParameter (e, n + pad) == 0.0f, "off: getParameter past the list is 0");
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
         std::printf ("%s  (%d failures)\n", fails ? "FAIL" : "OK", fails);
         return fails ? 1 : 0;
     }
 
-    const int ovl = overlayBuild ? 1 : 0;       // "Overlay Instance" after the spectrum columns
-    const int extra = e->numParams - (n + 4) - ovl;   // the spectrum columns of the build (shell-mpc/spectrum.h): none or 32 ("Spectrum 1" .. "Spectrum 32", spectrum_live_host checks them)
+    const int extra = e->numParams - pad - ovl - (n + 4);   // the spectrum columns of the build (shell-mpc/spectrum.h): none or 32 ("Spectrum 1" .. "Spectrum 32", spectrum_live_host checks them)
     spectrumColumns.store (extra);
     std::printf ("INFO  display parameters after the four cursors: %d\n", extra);
-    check (extra == 0 || extra == 32, overlayBuild ? "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them) + 1 (Overlay Instance)" : "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them)");
+    check (extra == 0 || extra == 32, overlayBuild ? "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them) (+ 2 pad pressure parameters) + 1 (Overlay Instance)" : "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them) (+ 2 pad pressure parameters)");
     bool ok[5] = {};
     const std::string names[5] = { text (e, effGetParamName, n, ok), text (e, effGetParamName, n + 1, ok + 1), text (e, effGetParamName, n + 2, ok + 2),
-                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4 + extra + ovl, ok + 4) };
+                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4 + extra + pad + ovl, ok + 4) };
     check (ok[0] && ok[1] && ok[2] && ok[3] && ! ok[4] && names[0] == "LFO 1 Cursor" && names[3] == "LFO 4 Cursor", "the four names, nothing after them");
     bool allOff = true, propsOk = true;
     VstParameterProperties props;
@@ -247,12 +250,12 @@ int main (int argc, char** argv)
         propsOk = propsOk && e->dispatcher (e, effGetParameterProperties, n + k, 0, &props, 0.0f) == 1;
     }
     check (allOff && e->dispatcher (e, effCanBeAutomated, 0, 0, nullptr, 0.0f) == 1, "display parameters are not automatable, engine parameters are");
-    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4 + extra + ovl, 0, &props, 0.0f) == 0, "parameter properties exist for the four (and the spectrum columns and Overlay Instance) only");
+    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4 + extra + pad + ovl, 0, &props, 0.0f) == 0, "parameter properties exist for the four (and the spectrum columns, the pad pressure parameters and Overlay Instance) only");
     if (overlayBuild)
     {
         bool have = false;
-        check (text (e, effGetParamName, n + 4 + extra, &have) == "Overlay Instance" && have, "the last parameter is Overlay Instance");
-        check (e->dispatcher (e, effCanBeAutomated, n + 4 + extra, 0, nullptr, 0.0f) == 0, "Overlay Instance is not automatable");
+        check (text (e, effGetParamName, n + 4 + extra + pad, &have) == "Overlay Instance" && have, "the last parameter is Overlay Instance, after the pad pressure parameters");
+        check (e->dispatcher (e, effCanBeAutomated, n + 4 + extra + pad, 0, nullptr, 0.0f) == 0, "Overlay Instance is not automatable");
     }
 
     if (mode == "on")
@@ -303,7 +306,7 @@ int main (int argc, char** argv)
 
     const float before = e->getParameter (e, n);
     e->setParameter (e, n, 0.5f);
-    e->setParameter (e, n + 4, 0.5f);
+    if (extra > 0) e->setParameter (e, n + 4, 0.5f);
     check (getChunk (e) == chunk, "writes to the display parameters do not change the state chunk");
     (void) before;
     e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);

@@ -27,6 +27,8 @@ namespace
 {
 bool rescanValues = false;     // plugin asked for params.rescan(VALUES)
 bool callbackRequested = false;
+bool presetLoadedReported = false;
+std::string lastLoadedKey;
 
 const clap_host_params_t hostParams = {
     [] (const clap_host_t*, clap_param_rescan_flags flags) { if (flags & CLAP_PARAM_RESCAN_VALUES) rescanValues = true; },
@@ -34,9 +36,21 @@ const clap_host_params_t hostParams = {
     [] (const clap_host_t*) {}
 };
 
+const clap_host_preset_load_t hostPresetLoad = {
+    [] (const clap_host_t*, uint32_t, const char*, const char*, int32_t, const char*) {},
+    [] (const clap_host_t*, uint32_t, const char*, const char* load_key) {
+        presetLoadedReported = true;
+        if (load_key != nullptr) lastLoadedKey = load_key;
+    }
+};
+
 const clap_host_t host = {
     CLAP_VERSION, nullptr, "clap-smoke", "SynthyBoy", nullptr, "0",
-    [] (const clap_host_t*, const char* id) -> const void* { return std::strcmp (id, CLAP_EXT_PARAMS) == 0 ? &hostParams : nullptr; },
+    [] (const clap_host_t*, const char* id) -> const void* {
+        if (std::strcmp (id, CLAP_EXT_PARAMS) == 0) return &hostParams;
+        if (std::strcmp (id, CLAP_EXT_PRESET_LOAD) == 0) return &hostPresetLoad;
+        return nullptr;
+    },
     [] (const clap_host_t*) {}, [] (const clap_host_t*) {}, [] (const clap_host_t*) { callbackRequested = true; }
 };
 
@@ -424,6 +438,84 @@ int main (int argc, char** argv)
         const auto blob2 = saveState (b);
         if (blob1 != blob2) { std::printf ("FAIL state-reproducibility-binary: state differs byte for byte (%zu vs %zu bytes)\n", blob1.size(), blob2.size()); ++failures; }
         destroyInstance (b);
+    }
+
+    // 3. CLAP preset-load extension verification
+    {
+        Instance c;
+        if (! createInstance (factory, id, c, true))
+        {
+            std::printf ("FAIL: cannot create instance for preset-load checks\n");
+            return 1;
+        }
+
+        const auto* presetLoad = static_cast<const clap_plugin_preset_load_t*> (
+            c.plugin->get_extension (c.plugin, CLAP_EXT_PRESET_LOAD));
+        if (! presetLoad || ! presetLoad->from_location)
+        {
+            std::printf ("FAIL: CLAP_EXT_PRESET_LOAD extension missing or invalid\n");
+            ++failures;
+        }
+        else
+        {
+            const auto initValues = getValues (c);
+
+            // Load factory preset by name
+            presetLoadedReported = false;
+            lastLoadedKey.clear();
+            if (! presetLoad->from_location (c.plugin, CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, "Acid Saw Reso"))
+            {
+                std::printf ("FAIL: CLAP preset-load from_location failed for 'Acid Saw Reso'\n");
+                ++failures;
+            }
+            else
+            {
+                if (callbackRequested) c.plugin->on_main_thread (c.plugin);
+                const auto loadedValues = getValues (c);
+                bool differFromInit = false;
+                for (size_t i = 0; i < loadedValues.size(); ++i)
+                    if (std::fabs (loadedValues[i] - initValues[i]) > 1e-4) { differFromInit = true; break; }
+                if (! differFromInit)
+                {
+                    std::printf ("FAIL: CLAP preset-load loaded 'Acid Saw Reso' but parameter values did not change from Init\n");
+                    ++failures;
+                }
+            }
+
+            // Load Init preset
+            if (! presetLoad->from_location (c.plugin, CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, "Init"))
+            {
+                std::printf ("FAIL: CLAP preset-load from_location failed for 'Init'\n");
+                ++failures;
+            }
+            else
+            {
+                if (callbackRequested) c.plugin->on_main_thread (c.plugin);
+                const auto afterInit = getValues (c);
+                for (size_t i = 0; i < afterInit.size(); ++i)
+                    if (std::fabs (afterInit[i] - initValues[i]) > 1e-4)
+                    {
+                        std::printf ("FAIL: CLAP preset-load 'Init' did not restore default value for %s\n", c.list[i].info.name);
+                        ++failures;
+                        break;
+                    }
+            }
+
+            // Test loading by index (e.g. "1")
+            if (! presetLoad->from_location (c.plugin, CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, "1"))
+            {
+                std::printf ("FAIL: CLAP preset-load from_location failed for index '1'\n");
+                ++failures;
+            }
+
+            // Test invalid preset returns false
+            if (presetLoad->from_location (c.plugin, CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, "NonExistentPreset12345"))
+            {
+                std::printf ("FAIL: CLAP preset-load from_location returned true for non-existent preset\n");
+                ++failures;
+            }
+        }
+        destroyInstance (c);
     }
 
     std::printf (failures ? "%d check(s) FAILED\n" : "all checks passed\n", failures);
