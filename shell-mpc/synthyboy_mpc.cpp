@@ -487,10 +487,27 @@ struct PluginInstance
         }
         qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount()));
     }
+    /** Debug / acceptance hook: while the file /tmp/synthyboy-q-fake-write exists (SYNTHYBOY_MPC_Q_FAKE_WRITE changes the path) its first line "q value" (q 1 .. 4, value 0 .. 1) is written to the Q
+        proxy through setParameter, as the host does when a Q-Link turns; the file is deleted. There is no way to turn a Q-Link from outside: this proves the path from the Q proxy to the target on
+        the device (not the host's mapping of the knob to the proxy). Display thread. */
+    void qFakeWrite (AEffect* e)
+    {
+        static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_Q_FAKE_WRITE"); return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-q-fake-write"); }();
+        std::ifstream f (path);
+        int q = 0;
+        double v = 0.0;
+        if (! f || ! (f >> q >> v))
+            return;
+        f.close();
+        std::remove (path.c_str());
+        if (q >= 1 && q <= synthyboy_mpc::QRouter::kCount && e != nullptr && e->setParameter != nullptr)
+            e->setParameter (e, qBase() + q - 1, static_cast<float> (v));
+    }
     /** The display thread, every tick: the host is told the Q values after a group change or a change of a target, and the real parameter a Q write changed. */
     void qPoll (AEffect* e)
     {
         qFakeGroup();
+        qFakeWrite (e);
         if (! audioMaster)
             return;
         const VstInt32 base = qBase();

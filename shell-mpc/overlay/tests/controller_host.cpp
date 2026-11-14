@@ -681,6 +681,7 @@ int main()
         const unsigned long taken = r.ctl->touchTaken();
         tap (100, 300);
         check (r.ctl->uiState (slot).isMain() && r.ctl->touchTaken() == taken, "another tab: the stack is closed and a touch is not taken by the plugin's pages");
+        check (! r.inst.uiFullOpen.load(), "the stack closed by the page leaving: the instance is told at once (it stops reporting the frame the host widgets are hidden at: coming back finds them)");
     }
     // ---- the Q group a page sets reaches the instance (IInstanceView::setQGroup); the interface default does nothing ----
     {

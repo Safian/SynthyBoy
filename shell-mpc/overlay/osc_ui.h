@@ -561,6 +561,16 @@ private:
         {
             if (gesture_ != nullptr && pageTop_ != top)
                 dropGesture();
+            if (top == kPageRoute && pageTop_ != kPageRoute)
+            {
+                savedGroup_ = full_.activeGroup();
+                full_.setActiveGroup (-1);      // the popup's group is the active one: the full screen's frame goes away while it is open
+            }
+            else if (top != kPageRoute && pageTop_ == kPageRoute && savedGroup_ >= 0)
+            {
+                full_.setActiveGroup (savedGroup_);
+                savedGroup_ = -1;
+            }
             pageTop_ = top;
             pageSig_ = sig;
             loadPage (inst);
@@ -599,6 +609,8 @@ private:
     void bindDetail()
     {
         detail_.back.setId (kDetailBack);
+        if (ui::ToggleIcon* t = detail_.panel.toggle (ui::PanelSlot::Override))
+            t->setLabel ("OVRIDE");
         bindPanel (page_, detail_.panel, kDetail, kindOfRaw (typeRaw_), true);
         // the detail page's ids are the panel slots' + kDetail (bindPanel gave base + slot)
         detail_.setActiveGroup (0);
@@ -639,7 +651,7 @@ private:
         modsAddOffer_ = n;
         // the rows' controls are bound for the Q group (the parameters of the slot of the row)
     }
-    int modsTargetParam_ = -1, modsAddOffer_ = 0;
+    int modsTargetParam_ = -1, modsAddOffer_ = 0, savedGroup_ = -1;
     static const char* sourceName (int choice) noexcept
     {
         const synthyboy::ModSourceInfo* t = synthyboy::modSourceTable();

@@ -412,6 +412,13 @@ public:
         }
         o << "play_osc_kind: " << (kind_ == synthyboy::OscCycle::Kind::wavetable ? "wavetable" : (kind_ == synthyboy::OscCycle::Kind::off ? "off" : "other")) << "\nplay_env_dot_x: "
           << (envDotPx_ < 0 ? -1.0 : envDotX_) << "\nplay_lfo_cursor_x: " << (lfoCursorPx_ < 0 ? -1.0f : lfoCursorX_) << "\nplay_recomputes_total: " << counters_.recomputes << "\n";
+        if (osc_ != nullptr)
+        {
+            o << "osc_ui_instance: " << osc_->selection() << "\nosc_ui_type: " << osc_->typeRaw() << "\nosc_ui_page: " << osc_->topPage() << "\nosc_ui_q_group: " << osc_->qGroupName() << "\nosc_ui_q_targets:";
+            for (int k = 0; k < 4; ++k)
+                o << " " << (osc_->qTargets()[k] >= 0 ? synthyboy::paramTable()[osc_->qTargets()[k]].key : "-");
+            o << "\n";
+        }
     }
     void writeDump (std::ostream& o) const override
     {

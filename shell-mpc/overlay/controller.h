@@ -489,7 +489,11 @@ private:
         const int keep = d.view >= 0 && isUiPage (d.view) ? d.slot : -1;
         for (int s = 0; s < layout::kMaxInstances; ++s)
             if (s != keep && ui_[s].closeAll())
+            {
                 ++uiAutoCloses_;
+                if (IInstanceView* v = slots_.at (s))
+                    v->setUiFullOpen (false);   // the host widgets of that instance's Play page come back (the instance stops reporting the frame they are hidden at)
+            }
     }
 
     /** Every instance registered with a slot is asked to report "Overlay Instance" again (the controller's lock is held; at most once per gap, which doubles while nothing valid is read). */
@@ -499,7 +503,10 @@ private:
             return;
         for (int s = 0; s < layout::kMaxInstances; ++s)
             if (IInstanceView* v = slots_.at (s))
+            {
+                v->setUiFullOpen (! ui_[s].isMain());   // what the controller knows is the truth: a stack that is closed never keeps the host widgets hidden
                 v->requestOverlayReport();
+            }
         ++rereports_;
         nextReportMs_ = nowMs + reportGapMs_;
         reportGapMs_ = std::min (reportGapMs_ * 2.0, kReportMaxGapMs);
