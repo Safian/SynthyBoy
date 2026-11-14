@@ -97,6 +97,7 @@ public:
     std::vector<synthyboy::ui::PresetItem> presetList() const override;
     void selectPreset (int index) override;
     int currentPresetIndex() const override { return currentProgramIndex.load (std::memory_order_relaxed); }
+    bool isPresetModified() const override;
     float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
     float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
     void injectMidiMessage (const juce::MidiMessage& msg) override;

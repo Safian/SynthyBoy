@@ -67,7 +67,9 @@ SynthyBoyEditor::SynthyBoyEditor (UiHost& h)
 
     setSize (1024, 768); // tablet landscape; the layout follows the width, so any host size works
     lastPresetName = host.presetName();
+    lastModifiedState = host.isPresetModified();
     top->setPresetName (lastPresetName);
+    top->setPresetModified (lastModifiedState);
     updateAbLabel();
     updateUndoRedoButtons();
     setWantsKeyboardFocus (true);
@@ -145,11 +147,17 @@ void SynthyBoyEditor::timerCallback()
             checkMissingContent();
     }
     const auto currentName = host.presetName();
-    if (currentName != lastPresetName)
+    const bool isMod = host.isPresetModified() || undoHistory.canUndo();
+    if (currentName != lastPresetName || isMod != lastModifiedState)
     {
-        lastPresetName = currentName;
+        if (currentName != lastPresetName)
+        {
+            lastPresetName = currentName;
+            undoHistory.clear();
+        }
+        lastModifiedState = isMod;
         top->setPresetName (currentName);
-        undoHistory.clear();
+        top->setPresetModified (isMod);
         updateUndoRedoButtons();
     }
     assign.refresh(); // host automation can move a mod slot
@@ -215,6 +223,9 @@ void SynthyBoyEditor::performRedo()
 void SynthyBoyEditor::updateUndoRedoButtons()
 {
     top->updateUndoRedo (undoHistory.canUndo(), undoHistory.canRedo());
+    const bool isMod = host.isPresetModified() || undoHistory.canUndo();
+    lastModifiedState = isMod;
+    top->setPresetModified (isMod);
 }
 
 bool SynthyBoyEditor::keyPressed (const juce::KeyPress& key)

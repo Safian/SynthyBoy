@@ -88,6 +88,8 @@ public:
     virtual int currentPresetIndex() const { return -1; }
     /** Select a preset by index (0 .. presetList().size() - 1). */
     virtual void selectPreset (int /*index*/) {}
+    /** True when the active patch differs from the loaded/saved preset. */
+    virtual bool isPresetModified() const { return false; }
 
     /** MIDI learn (G07, docs/ui-design/15-shell-features.md): the shell keeps a CC -> parameter table (any channel) and saves it in the state.
         startMidiLearn arms one key: the next learnable CC is mapped to it (the CC does not move the knob that first time). Message thread. */

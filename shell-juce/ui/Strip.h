@@ -41,6 +41,8 @@ public:
     explicit TopBar (UiContext& context);
 
     void setPresetName (const juce::String& name);
+    void setPresetModified (bool modified);
+    bool isPresetModified() const noexcept { return presetModified; }
     void setAbLabel (const juce::String& text) { ab.setButtonText (text); }
     void setAssignOpen (bool open) { assign.setToggleState (open, juce::dontSendNotification); }
     void updateUndoRedo (bool canUndo, bool canRedo);
@@ -64,6 +66,7 @@ public:
 private:
     UiContext& ctx;
     juce::String presetName;
+    bool presetModified = false;
 };
 
 /** macro.1 .. macro.8 as compact knobs plus MAIN volume knob and stereo output meter. */

@@ -99,6 +99,7 @@ private:
     bool replayingHistory = false;
     ParamValues gestureStartValues;
     juce::String lastPresetName;
+    bool lastModifiedState = false;
 
     std::unique_ptr<TopBar> top;
     std::unique_ptr<MacroRow> macros;

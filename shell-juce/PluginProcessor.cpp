@@ -650,6 +650,16 @@ void SynthyBoyProcessor::selectPreset (int index)
     setCurrentProgram (index);
 }
 
+bool SynthyBoyProcessor::isPresetModified() const
+{
+    const auto current = currentValues();
+    const std::lock_guard<std::mutex> lock (contentMutex);
+    for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+        if (std::abs (current.plain[i] - savedValues.plain[i]) > 0.001f)
+            return true;
+    return false;
+}
+
 bool SynthyBoyProcessor::dragFileOut (const juce::File& file, juce::Component& source)
 {
     return juce::DragAndDropContainer::performExternalDragDropOfFiles (juce::StringArray (file.getFullPathName()), false, &source);
@@ -964,6 +974,11 @@ bool SynthyBoyProcessor::initPatch()
     applyMapOfPresetChange (nullptr); // Init Preset loads the default MIDI map (S p.315)
     currentProgramIndex = 0;
     presetNameText = "Init";
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        savedValues = currentValues();
+        savedContent = patchContent;
+    }
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }
@@ -992,6 +1007,11 @@ bool SynthyBoyProcessor::loadPatch (const synthyboy::ParamValues& values, const 
         return false;
     applyPatch (values, newContent, true);
     applyMapOfPresetChange (presetMidiMap);
+    {
+        const std::lock_guard<std::mutex> lock (contentMutex);
+        savedValues = currentValues();
+        savedContent = patchContent;
+    }
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }

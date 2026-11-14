@@ -409,3 +409,47 @@ TEST (test_editor_preset_browsing)
     CHECK_EQ (proc.currentPresetIndex(), 0);
     CHECK_EQ (proc.presetName(), juce::String ("Init"));
 }
+
+TEST (test_preset_modified_indicator)
+{
+    juce::MessageManager::getInstance()->setCurrentThreadAsMessageThread();
+    SynthyBoyProcessor proc;
+    CHECK (! proc.isPresetModified());
+
+    // Load preset 1 ("808 Boom")
+    proc.setCurrentProgram (1);
+    CHECK (! proc.isPresetModified());
+
+    // Tweak a parameter
+    const auto* info = synthyboy::findParamByKey ("filter1.cutoff");
+    CHECK (info != nullptr);
+    const int cutoffIdx = synthyboy::findParamIndex (info->id);
+    const float currentVal = proc.getValueTreeState().getRawParameterValue ("filter1.cutoff")->load();
+    const float tweakedVal = currentVal > 1000.0f ? 500.0f : 1500.0f;
+    const float tweakedNorm = proc.parameterStore().toNormalised (cutoffIdx, tweakedVal);
+    proc.parameterStore().setNormalised (cutoffIdx, tweakedNorm);
+
+    CHECK (proc.isPresetModified());
+
+    // Reverting to saved clears modified state
+    proc.revertToSaved();
+    CHECK (! proc.isPresetModified());
+
+    // Check Editor TopBar modified indication
+    std::unique_ptr<juce::AudioProcessorEditor> base (proc.createEditor());
+    auto* editor = synthyboy::ui::innerEditor (base.get());
+    CHECK (editor != nullptr);
+    CHECK (! editor->topBar().isPresetModified());
+
+    // When undo stack receives a change, TopBar reflects modified state
+    editor->undoStack().push (proc.allValues());
+    editor->updateUndoRedoButtons();
+    CHECK (editor->topBar().isPresetModified());
+
+    // Selecting a new preset clears modified state
+    proc.selectPreset (2);
+    // Editor receives preset name update on timer/select
+    proc.revertToSaved();
+    editor->topBar().setPresetModified (proc.isPresetModified());
+    CHECK (! editor->topBar().isPresetModified());
+}

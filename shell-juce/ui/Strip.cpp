@@ -119,6 +119,15 @@ void TopBar::setPresetName (const juce::String& name)
     }
 }
 
+void TopBar::setPresetModified (bool modified)
+{
+    if (presetModified != modified)
+    {
+        presetModified = modified;
+        repaint();
+    }
+}
+
 void TopBar::updateUndoRedo (bool canUndo, bool canRedo)
 {
     undo.setEnabled (canUndo);
@@ -160,7 +169,8 @@ void TopBar::paint (juce::Graphics& g)
     auto nameArea = juce::Rectangle<int> (prev.getRight(), 0, juce::jmax (0, next.getX() - prev.getRight()), getHeight());
     g.setColour (t.colours.text);
     g.setFont (t.titleFont());
-    g.drawFittedText (presetName, nameArea.withHeight (juce::jmax (h, getHeight())), juce::Justification::centred, 1);
+    const auto displayName = presetModified ? (presetName + " *") : presetName;
+    g.drawFittedText (displayName, nameArea.withHeight (juce::jmax (h, getHeight())), juce::Justification::centred, 1);
 }
 
 void TopBar::mouseDown (const juce::MouseEvent& e)
