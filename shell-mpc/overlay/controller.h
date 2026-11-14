@@ -35,6 +35,7 @@
 #include "page_detector.h"
 #include "presenter.h"
 #include "renderer.h"
+#include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
 #include "play_view.h"
@@ -122,12 +123,18 @@ public:
     int attach (IInstanceView* view)
     {
         std::lock_guard<std::mutex> g (mu_);
-        return slots_.acquire (view);
+        const int slot = slots_.acquire (view);
+        if (slot >= 0)
+            ui_[slot] = UiStack();   // a new instance starts in main
+        return slot;
     }
     /** Returns the number of instances left. After it returns the overlay thread no longer touches `view` (the same lock guards every use of an instance). */
     size_t detach (IInstanceView* view)
     {
         std::lock_guard<std::mutex> g (mu_);
+        const int slot = slots_.slotOf (view);
+        if (slot >= 0)
+            ui_[slot] = UiStack();
         slots_.release (view);
         return static_cast<size_t> (slots_.total());
     }
@@ -136,6 +143,19 @@ public:
     {
         std::lock_guard<std::mutex> g (mu_);
         return slots_.slotOf (view);
+    }
+
+    // ---- the plugin-drawn pages of an instance (ui_stack.h): main -> full(element) -> detail(page) ... Per instance (slot), never saved. The UI (the overlay thread) calls these; the lock makes them safe
+    // against attach / detach. The whole stack of an instance closes when its page is no longer on screen (closeUiWhenLeft).
+    bool openFull (int slot, int element) { return withUi (slot, [&] (UiStack& u) { return u.openFull (element); }); }
+    bool openDetail (int slot, int page) { return withUi (slot, [&] (UiStack& u) { return u.openDetail (page); }); }
+    bool back (int slot) { return withUi (slot, [&] (UiStack& u) { return u.back(); }); }
+    bool closeAll (int slot) { return withUi (slot, [&] (UiStack& u) { return u.closeAll(); }); }
+    /** A copy of the state of the instance in `slot` (main for a slot out of range). */
+    UiStack uiState (int slot)
+    {
+        std::lock_guard<std::mutex> g (mu_);
+        return slot >= 0 && slot < layout::kMaxInstances ? ui_[slot] : UiStack();
     }
 
     /** Plane off, buffers freed (the overlay thread has stopped, or this is the thread). */
@@ -327,6 +347,7 @@ private:
                 }
             }
             seenSlot_ = d.slot;
+            closeUiWhenLeft (d, rotationKnown() || ! rotationAmbiguous_);
             if (slot < 0)
                 view = -1;
             if (view != current_ || slot != activeSlot_)
@@ -417,6 +438,31 @@ private:
         return nextWaitMs_;
     }
 
+    template <class F>
+    bool withUi (int slot, F&& f)
+    {
+        std::lock_guard<std::mutex> g (mu_);
+        return slot >= 0 && slot < layout::kMaxInstances && slots_.at (slot) != nullptr && f (ui_[slot]);
+    }
+
+    /** The views that belong to the Play page (and to the full-screen page of the plugin drawn over it): the stack of an instance lives while one of these is on screen for it. */
+    static bool isUiPage (int view) noexcept { return view >= 0 && view < layout::kNumViews && layout::kViews[view].kind == layout::kKindPlay; }
+
+    /** After a page check: the stack of every instance closes whose page is no longer on screen (the user pressed another function key, Mixer, ...). Only a READABLE check says so: a screen that
+        sleeps, an unreadable framebuffer, an ambiguous rotation and an instance picture that is not drawn yet (the page IS there, the instance is not told) change nothing. */
+    void closeUiWhenLeft (const Detection& d, bool rotationUsable)
+    {
+        if (! d.readable || ! rotationUsable)
+            return;
+        std::lock_guard<std::mutex> g (mu_);
+        if (d.view >= 0 && isUiPage (d.view) && (d.slot == kSlotUnknown || d.slot == kSlotNone))
+            return;
+        const int keep = d.view >= 0 && isUiPage (d.view) ? d.slot : -1;
+        for (int s = 0; s < layout::kMaxInstances; ++s)
+            if (s != keep && ui_[s].closeAll())
+                ++uiAutoCloses_;
+    }
+
     /** Every instance registered with a slot is asked to report "Overlay Instance" again (the controller's lock is held; at most once per gap, which doubles while nothing valid is read). */
     void askForReports (double nowMs)
     {
@@ -477,6 +523,7 @@ private:
         in.nowMs = nowMs;
         in.frames = &frames_;
         in.rotation = rotation_;
+        in.ui = &ui_[activeSlot_];   // under mu_ (held here): the view reads it during update ()
         changed = view.update (in);
         ++updatesThisSecond_;
         if (changed)
@@ -802,6 +849,12 @@ private:
                        current_ >= 0 && state_ == "visible" ? std::to_string (activeSlot_).c_str() : "none", instanceSeen_ & 0xffffff,
                        seenSlot_ == kSlotUnknown ? "unknown" : (seenSlot_ == kSlotNone ? "none" : std::to_string (seenSlot_).c_str()), rereports_);
         o << ib;
+        {
+            std::lock_guard<std::mutex> g (mu_);
+            const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
+            o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\n";
+        }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
         o << "curve_updates_last_second: " << updatesLast_ << "\ncurve_changes_last_second: " << changesLast_ << "\n";
@@ -937,6 +990,8 @@ private:
 
     std::mutex mu_;
     InstanceSlots slots_;                    // under mu_
+    UiStack ui_[layout::kMaxInstances];      // under mu_: the plugin-drawn pages of the instance in each slot
+    unsigned long uiAutoCloses_ = 0;         // stacks closed because the page left the screen (under mu_)
     int viewSlot_[layout::kNumViews];        // the slot whose instance each view object last read (-1: none yet); overlay thread
     unsigned long viewGeneration_[layout::kNumViews] = {};   // ... and which holder of that slot it was (InstanceSlots::generation): a slot given to a NEW instance is not the same instance
     int activeSlot_ = -1, seenSlot_ = kSlotUnknown;   // the instance of the visible view / what the last check read (the status file)

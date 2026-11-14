@@ -319,6 +319,14 @@ public:
     double bpm() const noexcept override { return bpmValue.load(); }
     int playSelection (int group) const noexcept override { return playSel[group].load(); }
     std::atomic<int> playSel[3] { { 1 }, { 1 }, { 1 } };   // the instances the Play page shows (oscillator, envelope, LFO)
+    void setQGroup (const int* targets, int n) noexcept override
+    {
+        ++qGroupCalls;
+        qGroupN = n;
+        for (int i = 0; i < 4; ++i)
+            qGroup[i] = i < n && targets != nullptr ? targets[i] : -1;
+    }
+    int qGroup[4] = { -1, -1, -1, -1 }, qGroupN = 0, qGroupCalls = 0;   // the last Q group the UI set (the test thread only)
     void requestOverlayReport() noexcept override { reportRequests.fetch_add (1); }
     /** The ring of the output (the spectrum view); only when `hasRing` is set, like a plugin built without the spectrum has none. */
     const synthyboy_mpc::SpectrumRing* spectrumRing() const noexcept override { return hasRing.load() ? &ring : nullptr; }
