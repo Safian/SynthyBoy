@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "section_timing.h"
 
-#include <ctime>
+#include <chrono>
 
 #include "synthyboy/engine.h"
 
@@ -21,9 +21,8 @@ Totals& totals() noexcept
 
 uint64_t nowNs() noexcept
 {
-    timespec ts;
-    clock_gettime (CLOCK_MONOTONIC, &ts);
-    return static_cast<uint64_t> (ts.tv_sec) * 1000000000ull + static_cast<uint64_t> (ts.tv_nsec);
+    // Portable (POSIX and Windows): a steady clock in nanoseconds.
+    return static_cast<uint64_t> (std::chrono::duration_cast<std::chrono::nanoseconds> (std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 } // namespace sections
 } // namespace own
