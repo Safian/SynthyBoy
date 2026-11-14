@@ -188,6 +188,12 @@ $B/overlay_instance_host "$OVLON" > $B/overlay-instance.log 2>&1 || { grep -E "^
 # the Play page's parameters (shell-mpc/play_params.h, docs/MPC.md "Play page"): selectors, proxies, chunk, no feedback loop (the list, the order and the counts are checked there)
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_host shell-mpc/tests/play_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_host build"; exit 1; }
 $B/play_host "$OVLON" > $B/play.log 2>&1 || { grep -E "^FAIL" $B/play.log; echo "ACCEPT FAIL: play_host (the Play page's parameters)"; exit 1; }
+# saving and reloading a project with the Play page (docs/MPC.md "Project save and reload"): the load orders a host could use (chunk only, write-back of every parameter before / after the chunk, program re-selection, the order seen on the Key 61), the restore window, the debug log
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_restore_host shell-mpc/tests/play_restore_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_restore_host build"; exit 1; }
+$B/play_restore_host "$OVLON" > $B/play-restore.log 2>&1 || { grep -E "^FAIL" $B/play-restore.log | cut -c1-400; echo "ACCEPT FAIL: play_restore_host (project save and reload of the Play page)"; exit 1; }
+# instances created and closed on three threads while the display thread reports (docs/MPC.md "Closing an instance"): the host is never called for an instance whose effClose returned
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/close_stress_host shell-mpc/tests/close_stress_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: close_stress_host build"; exit 1; }
+$B/close_stress_host "$OVLON" 120 > $B/close-stress.log 2>&1 || { grep -E "^FAIL" $B/close-stress.log; echo "ACCEPT FAIL: close_stress_host (host called after effClose)"; exit 1; }
 # the overlay builds without the parameter must not exist: a build that is not the overlay one has no trace of it (the parameter's name is in the overlay build only)
 for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
     grep -q "Overlay Instance" "$f" && { echo "ACCEPT FAIL: Overlay Instance in a build without SYNTHYBOY_MPC_OVERLAY"; exit 1; }
@@ -302,4 +308,17 @@ TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/play_host "$TLLIB" > $TL/play.log 
 grep -q "WARNING: ThreadSanitizer" $TL/play.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/play.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Play page's parameters (full report: $TL/play.log)"; exit 1; }
 grep -q "^FAIL" $TL/play.log && { grep "^FAIL" $TL/play.log; echo "ACCEPT FAIL: tsan play_host"; exit 1; }
 grep -q "WARNING: ThreadSanitizer" $TL/live-ovl.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/live-ovl.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races with the overlay thread in the plugin (full report: $TL/live-ovl.log)"; exit 1; }
+# the same stress test under ThreadSanitizer (the display thread, the overlay thread and the host's threads) and under AddressSanitizer + UndefinedBehaviorSanitizer (a member used after it was destroyed, a leaked or doubly freed instance)
+c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK/framework -o $TL/close_stress_host shell-mpc/tests/close_stress_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan close_stress_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/close_stress_host "$TLLIB" 40 > $TL/close-stress.log 2>&1
+grep -q "WARNING: ThreadSanitizer" $TL/close-stress.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/close-stress.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races when instances are closed (full report: $TL/close-stress.log)"; exit 1; }
+grep -q "^FAIL" $TL/close-stress.log && { grep "^FAIL" $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host"; exit 1; }
+grep -q "^OK" $TL/close-stress.log || { tail -5 $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host did not finish"; exit 1; }
+AL=build-mpc-live-asan
+cmake -S . -B $AL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
+ALIB="$(find $AL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+ASCORE=$(find $AL/core -name '*.a' | tr '\n' ' ')
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I core/include -I shell-mpc -I $MPC_SDK/framework -o $AL/close_stress_host shell-mpc/tests/close_stress_host.cpp $ASCORE -lpthread || { echo "ACCEPT FAIL: asan close_stress_host build"; exit 1; }
+ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/close_stress_host "$ALIB" 40 > $AL/close-stress.log 2>&1 || { tail -30 $AL/close-stress.log; echo "ACCEPT FAIL: asan close_stress_host (memory error when instances are closed)"; exit 1; }
+grep -q "^OK" $AL/close-stress.log || { tail -5 $AL/close-stress.log; echo "ACCEPT FAIL: asan close_stress_host did not finish"; exit 1; }
 echo "ACCEPT OK"

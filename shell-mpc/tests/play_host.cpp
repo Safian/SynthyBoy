@@ -298,6 +298,7 @@ int main (int argc, char** argv)
     check (old.find ("mpcPlay") == std::string::npos, "(an older chunk: the three members removed)");
     AEffect* c = make();
     check (setChunk (c, old) && c->getParameter (c, sel0) == 0.0f && c->getParameter (c, sel0 + 1) == 0.0f && c->getParameter (c, sel0 + 2) == 0.0f, "an old chunk loads and the selectors are 1 / 1 / 1");
+    b->setParameter (b, 3, 1.0f - b->getParameter (b, 3));   // a real edit ends the restore window of the chunk (docs/MPC.md "Project save and reload"): a selector write is ignored while it is open
     b->setParameter (b, sel0 + 1, pl::selectorNormalised (1, 2));
     check (setChunk (b, old) && text (b, effGetParamDisplay, sel0 + 1) == "Env 2", "an old chunk leaves the selectors as they are");
     // an out of range selector in a chunk is not taken

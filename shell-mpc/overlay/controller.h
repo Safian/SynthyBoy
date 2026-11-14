@@ -168,6 +168,9 @@ public:
     {
         try
         {
+            if (nowMs < lastNowMs_)
+                rebaseClock();   // the caller's clock began again (a thread that was started anew): the deadlines of the earlier run would never come
+            lastNowMs_ = nowMs;
             const auto t0 = std::chrono::steady_clock::now();
             const double wait = step (nowMs);
             tickMaxMs_ = std::max (tickMaxMs_, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count());
@@ -181,6 +184,17 @@ public:
     }
 
 private:
+    /** Every deadline and timestamp this object keeps against the caller's clock is forgotten (the clock went back). */
+    void rebaseClock() noexcept
+    {
+        nextReportMs_ = 0.0;
+        nextSwitchesMs_ = 0.0;
+        nextDetectMs_ = 0.0;
+        lastFrameMs_ = -1000.0;
+        secondStartMs_ = 0.0;
+        lastKickMs_ = 0.0;
+    }
+
     double step (double nowMs)
     {
         if (disabled())
@@ -910,7 +924,7 @@ private:
     int activeSlot_ = -1, seenSlot_ = kSlotUnknown;   // the instance of the visible view / what the last check read (the status file)
     uint32_t instanceSeen_ = 0xffffffffu;
     unsigned long rereports_ = 0;
-    double nextReportMs_ = 0.0, reportGapMs_ = 400.0;
+    double nextReportMs_ = 0.0, reportGapMs_ = 400.0, lastNowMs_ = 0.0;
     static constexpr double kReportFirstGapMs = 400.0, kReportMaxGapMs = 3200.0;
 
     std::string state_ = "hidden: starting";

@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <sched.h>
 #endif
+#include "../play_log.h"
 #include "../thread_policy.h"
 #include "controller.h"
 #include "cpu_plan_linux.h"
@@ -91,10 +92,12 @@ public:
         std::lock_guard<std::mutex> g (lifeMu_);
         ensureController();
         const int slot = controller_->attach (view);
+        synthyboy_mpc::PlayLog::line ("Service::attach slot %d, thread joinable %d", slot, thread_.joinable() ? 1 : 0);
         if (! thread_.joinable())
         {
             stop_.store (false);
             thread_ = std::thread ([this] { run(); });
+            synthyboy_mpc::PlayLog::line ("Service::attach started the overlay thread");
         }
         if (! atexitRegistered_)
         {
@@ -109,12 +112,15 @@ public:
         std::lock_guard<std::mutex> g (lifeMu_);
         if (! controller_)
             return;
-        if (controller_->detach (view) == 0)
+        const size_t left = controller_->detach (view);
+        synthyboy_mpc::PlayLog::line ("Service::detach, %zu instances left", left);
+        if (left == 0)
             stopThread();
     }
 
 private:
     Service() = default;
+    const std::chrono::steady_clock::time_point epoch_ = std::chrono::steady_clock::now();
 
     void ensureController()
     {
@@ -166,6 +172,7 @@ private:
     void run()
     {
         useNormalScheduling (0, "sb-overlay");
+        synthyboy_mpc::PlayLog::line ("Service::run entered");
 #if defined(__linux__)
         applyCpus (true);
 #endif
@@ -175,7 +182,10 @@ private:
             clock_gettime (CLOCK_THREAD_CPUTIME_ID, &ts);
             return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
         });
-        const auto start = std::chrono::steady_clock::now();
+        // The clock the controller's deadlines are kept against must not start again at zero when the thread is started again (the last instance closed and a new one came: the track's
+        // instrument was replaced, another project was loaded): the controller still holds the deadlines of the earlier run, which would lie minutes in the future of a new clock, and nothing
+        // would be detected, shown or written until the new clock caught up. The epoch is that of the service, set once.
+        const auto start = epoch_;
         std::unique_lock<std::mutex> lk (wakeMu_);
         while (! stop_.load())
         {
@@ -187,6 +197,7 @@ private:
 #endif
             const auto tickStart = std::chrono::steady_clock::now();
             const double wait = controller_->tick (now);
+            if (wait > 1500.0 || wait < 0.0) synthyboy_mpc::PlayLog::line ("Service::run: tick asks for a wait of %.1f ms", wait);
             lk.lock();
             if (stop_.load())
                 break;

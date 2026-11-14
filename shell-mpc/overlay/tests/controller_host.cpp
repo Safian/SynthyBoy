@@ -179,6 +179,24 @@ int main()
         const double s = r.until ([&] { return r.on(); }, 3000);
         check (s >= 0 && s <= 1200, "file removed: back within 1.2 s (took " + std::to_string (s) + " ms)");
     }
+    // ---- the thread is started again after the last instance closed: its clock begins at zero, the controller must not wait for the old deadlines (found on the Key 61: after a long run the overlay
+    //      of a re-created instance stayed dark for as long as the first run had lasted) ----
+    {
+        Rig r;
+        r.frame.setAll (true, 90);
+        check (r.until ([&] { return r.on(); }, 500) >= 0, "(first run: shown)");
+        r.run (120000, 50.0);   // two minutes
+        check (r.ctl->detach (&r.inst) == 0, "(the only instance closes)");
+        r.run (500);
+        check (! r.on() && r.ctl->state() == "hidden: no instance", "(no instance: plane off)");
+        r.now = 0.0;   // the thread starts again: a new clock
+        check (r.ctl->attach (&r.inst) == 0, "(a new instance: slot 0)");
+        const double t = r.until ([&] { return r.on(); }, 1500);
+        check (t >= 0 && t <= 1100, "a restarted clock (0 after 120 s): the overlay is shown within 1.1 s (took " + std::to_string (t) + " ms)");
+        r.dir.touch ("off");
+        const double h = r.until ([&] { return ! r.on(); }, 3000);
+        check (h >= 0 && h <= 1100, "... and the kill switch works at once (took " + std::to_string (h) + " ms)");
+    }
     // ---- the slot table and the colour table ----
     {
         bool maps = true, tolerant = true, distinct = true;

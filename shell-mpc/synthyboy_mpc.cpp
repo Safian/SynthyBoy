@@ -118,6 +118,8 @@
 #error "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
 #endif
 #include "overlay/service.h"
+#include <exception>
+#include "play_log.h"
 #include "play_params.h"
 #include "synthyboy/readout.h"
 #endif
@@ -263,6 +265,11 @@ struct EventBuffer
     void clear() noexcept { count = 0; }
 };
 
+#if SYNTHYBOY_MPC_OVERLAY
+struct PluginInstance;
+static std::string buildStateChunk (PluginInstance* inst);   // the chunk effGetChunk returns (the debug dump of play_log.h writes it too)
+#endif
+
 struct PluginInstance
 {
     // Core
@@ -303,6 +310,9 @@ struct PluginInstance
 
     // Thread-safe parameter mirror (single source of truth for all threads)
     std::atomic<float> paramMirror[synthyboy::kMaxParams];
+#if SYNTHYBOY_MPC_OVERLAY
+    std::atomic<float> paramUndo[synthyboy::kMaxParams];   // the value a parameter had before the host's last change of it (NaN: none): see writeRealParam
+#endif
 
     // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and the peak limiter behind it.
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
@@ -354,6 +364,46 @@ struct PluginInstance
     std::atomic<float> playLast[synthyboy_mpc::play::kProxies] {};                                      // the value of every proxy as the host last heard it (a host write or a report)
     bool playLastValid = false;                                                                         // display thread only
 
+    // The restore window (docs/MPC.md "Project save and reload"): from a successful effSetChunk until the first host write to a real parameter that is not an echo, a program that is really loaded (the protected re-selection of the saved program does not end it), or kRestoreWindowMs. The host may
+    // write every parameter back after it restored the chunk (values the plugin reported when the project was saved): in the window a write to a real parameter that equals what the plugin reports
+    // is an echo (changes nothing, disarms nothing, even when the float round trip differs in the last bit), and a write to a selector or a Play proxy is ignored (the chunk is the authority for
+    // the selectors, and a proxy write could only land on an instance other than the one it was saved for).
+    static constexpr long long kRestoreWindowMs = 2000;
+    static constexpr float kEchoTolerance = 1.0e-6f;
+    std::atomic<long long> restoreSinceMs { -1 };
+    static long long steadyMs() noexcept { return std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now().time_since_epoch()).count(); }
+    void restoreOpen() noexcept { restoreSinceMs.store (steadyMs(), std::memory_order_relaxed); }
+    void restoreClose() noexcept { restoreSinceMs.store (-1, std::memory_order_relaxed); }
+    bool restoreActive() noexcept
+    {
+        const long long since = restoreSinceMs.load (std::memory_order_relaxed);
+        if (since < 0)
+            return false;
+        if (steadyMs() - since > kRestoreWindowMs)
+        {
+            restoreClose();
+            return false;
+        }
+        return true;
+    }
+
+    /** The debug dump (play_log.h): the state of this instance, written when the request file exists. Display thread. */
+    void playDump()
+    {
+        namespace pl = synthyboy_mpc::play;
+        FILE* f = std::fopen (synthyboy_mpc::PlayLog::dumpPath().c_str(), "w");
+        if (f == nullptr)
+            return;
+        std::fprintf (f, "selectors %d %d %d\nprogram %d protected %d window %d\n", playSel[0].load(), playSel[1].load(), playSel[2].load(), currentProgram.load(), protectedProgram.load(), restoreSinceMs.load() >= 0 ? 1 : 0);
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+            std::fprintf (f, "p %zu %s %.9g\n", i, synthyboy::paramTable()[i].key, static_cast<double> (paramMirror[i].load (std::memory_order_relaxed)));
+        for (int p = 0; p < pl::kProxies; ++p)
+            std::fprintf (f, "proxy %d %.9g\n", p, static_cast<double> (playProxyValue (p)));
+        const std::string chunk = buildStateChunk (this);
+        std::fprintf (f, "chunk %zu\n%s\n", chunk.size(), chunk.c_str());
+        std::fclose (f);
+    }
+
     static VstInt32 playBase() noexcept { return overlayParamIndex() + 1; }   // "Play Osc"; "Play Env" and "Play LFO" follow, then the proxies
     static bool isPlayParam (VstInt32 index) noexcept { return index >= playBase() && index < playBase() + synthyboy_mpc::play::kParams; }
     static bool isPlaySelector (VstInt32 index) noexcept { return index >= playBase() && index < playBase() + synthyboy_mpc::play::kSelectors; }
@@ -390,6 +440,9 @@ struct PluginInstance
         if (! audioMaster)
             return;
         const VstInt32 base = firstParam;
+        synthyboy_mpc::PlayLog::refresh();
+        if (synthyboy_mpc::PlayLog::dumpRequested())
+            playDump();
         if (! playLastValid)
         {
             for (int p = 0; p < pl::kProxies; ++p)
@@ -765,6 +818,9 @@ struct PluginInstance
 
     PluginInstance()
     {
+#if SYNTHYBOY_MPC_OVERLAY
+        synthyboy_mpc::PlayLog::refresh();   // the debug log of the host's calls (play_log.h) is on from the first call when its switch file is there
+#endif
         outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
 #if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL
@@ -811,22 +867,36 @@ struct PluginInstance
             {
                 engine->setParam(table[i].id, table[i].def);
                 paramMirror[i].store(table[i].def, std::memory_order_relaxed);
+#if SYNTHYBOY_MPC_OVERLAY
+                paramUndo[i].store (std::nanf (""), std::memory_order_relaxed);
+#endif
             }
         }
     }
 
-    ~PluginInstance()
+    /** The end of this instance's life, in the order that keeps everything alive for whoever still uses it (effClose calls it, the destructor again, harmlessly):
+          1. the display thread stops and is JOINED: it is the only thread of ours that calls the host (audioMasterAutomate) or touches the instance's members besides the host's own threads,
+             so after this line no callback to the host happens for this instance, and it is the first thing that goes because it uses the overlay state below;
+          2. the overlay forgets the instance: its slot is freed and the overlay thread no longer holds the view (Service::detach waits for the controller's lock, so a poll that is running
+             has finished when it returns; the plane is off when it was the last instance);
+          3. only then the callback statistics stop and the members are destroyed (the destructor's own order). */
+    void shutdown() noexcept
     {
-#if SYNTHYBOY_MPC_OVERLAY
-        stopOverlay(); // the overlay thread stops using this instance (and the plane is gone when it was the last one) before anything below goes
-#endif
-#if SYNTHYBOY_MPC_CALLBACK_STATS
-        callbackStats.stop(); // writes the file one last time
-#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         liveStop.store (true, std::memory_order_relaxed);
         if (liveThread.joinable())
             liveThread.join();
+#endif
+#if SYNTHYBOY_MPC_OVERLAY
+        stopOverlay();
+#endif
+    }
+
+    ~PluginInstance()
+    {
+        shutdown();
+#if SYNTHYBOY_MPC_CALLBACK_STATS
+        callbackStats.stop(); // writes the file one last time
 #endif
         if (engine)
             engine->setContentStore(nullptr);
@@ -870,6 +940,29 @@ static std::string currentProgramName (PluginInstance* inst)
     return "Init";
 }
 
+/** The chunk of effGetChunk. */
+static std::string buildStateChunk (PluginInstance* inst)
+{
+    // Build ParamValues from the atomic mirror (thread-safe snapshot)
+    synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
+    for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+        values.plain[i] = inst->paramMirror[i].load(std::memory_order_relaxed);
+    std::string state = synthyboy::saveState(values, inst->content);
+    int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
+    std::string chunk = synthyboy_mpc::chunkWithProgram (state, prog, currentProgramName (inst));
+#if SYNTHYBOY_MPC_OVERLAY
+    {
+        // the three Play selectors ride in the chunk before the pad pressure members (which are read from the very end)
+        const int sel[3] = { inst->playSel[0].load (std::memory_order_relaxed), inst->playSel[1].load (std::memory_order_relaxed), inst->playSel[2].load (std::memory_order_relaxed) };
+        chunk = synthyboy_mpc::play::chunkWithPlay (std::move (chunk), sel);
+    }
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+    chunk = synthyboy_mpc::chunkWithPadPressure (std::move (chunk), inst->padPressure.load (std::memory_order_relaxed), inst->padPressureAmount.load (std::memory_order_relaxed));
+#endif
+    return chunk;
+}
+
 // ---------------------------------------------------------------------------
 // Apply a complete state to the engine and mirror
 // ---------------------------------------------------------------------------
@@ -881,6 +974,9 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
     for (size_t i = 0; i < count; ++i)
     {
         inst->paramMirror[i].store(values.plain[i], std::memory_order_relaxed);
+#if SYNTHYBOY_MPC_OVERLAY
+        inst->paramUndo[i].store (std::nanf (""), std::memory_order_relaxed);   // a whole new state: no "value before the last change" any more
+#endif
         if (inst->engine)
             inst->engine->setParam(table[i].id, values.plain[i]);
     }
@@ -988,8 +1084,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (inst)
         {
 #if SYNTHYBOY_MPC_OVERLAY
-            inst->stopOverlay(); // plane off, buffers freed, before the instance goes
+            synthyboy_mpc::PlayLog::line ("effClose: instance %p", static_cast<void*> (inst));
 #endif
+            inst->shutdown(); // the display thread joined (no host callback after this), the overlay has forgotten the instance and its slot, then the data goes
             delete inst;
             e->object = nullptr;
         }
@@ -1002,6 +1099,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!inst) return 0;
         // VST2: value is the program index, index is unused
         int prog = static_cast<int>(value);
+#if SYNTHYBOY_MPC_OVERLAY
+        synthyboy_mpc::PlayLog::line ("effSetProgram %d (protected %d, window %d)", prog, inst->protectedProgram.load (std::memory_order_relaxed), inst->restoreSinceMs.load (std::memory_order_relaxed) >= 0 ? 1 : 0);
+#endif
         int numProgs = static_cast<int> (inst->programs.size()) + 1;
         // Out of range: do nothing
         if (prog < 0 || prog >= numProgs) return 1;
@@ -1020,6 +1120,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             return 1;
         }
 
+#if SYNTHYBOY_MPC_OVERLAY
+        inst->restoreClose();   // a program that is really loaded ends the restore window (the protected re-selection of the saved program does not: the host may write the parameters back after it)
+#endif
         if (prog == 0)
         {
             // Program 0: Init (default values, empty content)
@@ -1322,22 +1425,13 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         // index: 0 = bank, 1 = program
-        // Build ParamValues from the atomic mirror (thread-safe snapshot)
-        synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
-        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
-            values.plain[i] = inst->paramMirror[i].load(std::memory_order_relaxed);
-        std::string state = synthyboy::saveState(values, inst->content);
-        int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
-        std::string chunk = synthyboy_mpc::chunkWithProgram (state, prog, currentProgramName (inst));
+        std::string chunk = buildStateChunk (inst);
 #if SYNTHYBOY_MPC_OVERLAY
+        if (synthyboy_mpc::PlayLog::enabled())
         {
-            // the three Play selectors ride in the chunk before the pad pressure members (which are read from the very end)
-            const int sel[3] = { inst->playSel[0].load (std::memory_order_relaxed), inst->playSel[1].load (std::memory_order_relaxed), inst->playSel[2].load (std::memory_order_relaxed) };
-            chunk = synthyboy_mpc::play::chunkWithPlay (std::move (chunk), sel);
+            synthyboy_mpc::PlayLog::line ("effGetChunk size=%zu hash=%08x", chunk.size(), synthyboy_mpc::PlayLog::hash (chunk.data(), chunk.size()));
+            if (FILE* f = std::fopen ((synthyboy_mpc::PlayLog::path() + "-chunk-get.json").c_str(), "wb")) { std::fwrite (chunk.data(), 1, chunk.size(), f); std::fclose (f); }
         }
-#endif
-#if SYNTHYBOY_MPC_PAD_PRESSURE
-        chunk = synthyboy_mpc::chunkWithPadPressure (std::move (chunk), inst->padPressure.load (std::memory_order_relaxed), inst->padPressureAmount.load (std::memory_order_relaxed));
 #endif
         // Reuse the plugin-owned chunk buffer (VST2: host does not free chunk memory)
         inst->chunkBuffer.resize(chunk.size());
@@ -1353,6 +1447,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         // index: 0 = bank, 1 = program
         const void* chunk = ptr;
         VstInt32 size = value;
+#if SYNTHYBOY_MPC_OVERLAY
+        if (synthyboy_mpc::PlayLog::enabled())
+        {
+            synthyboy_mpc::PlayLog::line ("effSetChunk size=%d hash=%08x index=%d", static_cast<int> (size), size > 0 && chunk ? synthyboy_mpc::PlayLog::hash (chunk, static_cast<size_t> (size)) : 0u, static_cast<int> (index));
+            if (size > 0 && chunk)
+                if (FILE* f = std::fopen ((synthyboy_mpc::PlayLog::path() + "-chunk-set.json").c_str(), "wb")) { std::fwrite (chunk, 1, static_cast<size_t> (size), f); std::fclose (f); }
+        }
+#endif
 
         if (size > 0 && chunk)
         {
@@ -1367,6 +1469,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
                 applyState (inst, newValues, std::move(newContent));
 #if SYNTHYBOY_MPC_OVERLAY
+                inst->restoreOpen();   // the restore window: the host's write-back of the saved parameter values is an echo (PluginInstance::restoreActive)
                 {
                     // the selectors of the project; a chunk without them (an older one) leaves them as they are. The display thread tells the host (the proxies' values follow the instances)
                     int sel[3] = { inst->playSel[0].load (std::memory_order_relaxed), inst->playSel[1].load (std::memory_order_relaxed), inst->playSel[2].load (std::memory_order_relaxed) };
@@ -1669,8 +1772,20 @@ static void writeRealParam (PluginInstance* inst, size_t index, float parameter)
 
     // Avoid redundant engine updates (e.g. parameter 0 toggle at every prepare)
     float oldPlain = inst->paramMirror[index].load(std::memory_order_relaxed);
+#if SYNTHYBOY_MPC_OVERLAY
+    {
+        // The MPC sets parameter 0 to 1.0 and then back to the value it had READ: the normalised round trip of a plain value is not exact (-12 dB comes back as -11.9999981), so the value written
+        // back is the one the parameter had before the toggle: take that one exactly (it equals what the host read), the saved state stays exactly what it was.
+        const float undo = inst->paramUndo[index].load (std::memory_order_relaxed);
+        if (std::isfinite (undo) && undo != oldPlain && synthyboy::toNormalised (*info, undo) == parameter)
+            plain = undo;
+    }
+#endif
     if (plain == oldPlain)
         return;
+#if SYNTHYBOY_MPC_OVERLAY
+    inst->paramUndo[index].store (oldPlain, std::memory_order_relaxed);
+#endif
 
     inst->paramMirror[index].store(plain, std::memory_order_relaxed);
 
@@ -1689,29 +1804,62 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         return;
 
 #if SYNTHYBOY_MPC_OVERLAY
-    if (PluginInstance::isPlayParam (index))
     {
-        namespace pl = synthyboy_mpc::play;
-        if (PluginInstance::isPlaySelector (index))
+        // the restore window (PluginInstance::restoreActive) and the log of play_log.h
+        const bool restoring = inst->restoreActive();
+        const bool logging = synthyboy_mpc::PlayLog::enabled();
+        if (PluginInstance::isPlayParam (index))
         {
-            // not a sound edit (no protection disarm): which instance the page shows is the player's view, not part of the sound
-            const int g = index - PluginInstance::playBase();
-            inst->playSetSelector (g, pl::selectorInstance (g, parameter));
+            namespace pl = synthyboy_mpc::play;
+            if (PluginInstance::isPlaySelector (index))
+            {
+                const int g = index - PluginInstance::playBase();
+                if (logging)
+                    synthyboy_mpc::PlayLog::line ("setParameter %d (Play selector %d) %.9g -> %s", static_cast<int> (index), g, static_cast<double> (parameter), restoring ? "ignored (restore window)" : "taken");
+                if (restoring)
+                    return;
+                // not a sound edit (no protection disarm): which instance the page shows is the player's view, not part of the sound
+                inst->playSetSelector (g, pl::selectorInstance (g, parameter));
+                return;
+            }
+            const int p = PluginInstance::playProxyOf (index);
+            const int real = inst->playRealOf (p);
+            if (real < 0)
+                return;
+            // the proxy IS the real parameter of the selected instance: the same write as the host's own write to that parameter, so the engine sees an ordinary change. The value the host
+            // sends back after a report (or the same value again) changes nothing and disarms nothing.
+            const float v = std::isfinite (parameter) ? std::min (std::max (parameter, 0.0f), 1.0f) : 0.0f;
+            const bool echo = std::fabs (v - inst->playProxyValue (p)) <= PluginInstance::kEchoTolerance;
+            if (logging)
+                synthyboy_mpc::PlayLog::line ("setParameter %d (Play proxy %d, real %d) %.9g -> %s", static_cast<int> (index), p, real, static_cast<double> (parameter), echo ? "echo, nothing changed" : (restoring ? "ignored (restore window)" : "written"));
+            if (echo || restoring)
+                return;
+            writeRealParam (inst, static_cast<size_t> (real), v);
+            inst->playLast[p].store (v, std::memory_order_relaxed);   // the host knows this value: the poll does not report it back
+            inst->playRealDue[p].store (true, std::memory_order_release);
             return;
         }
-        const int p = PluginInstance::playProxyOf (index);
-        const int real = inst->playRealOf (p);
-        if (real < 0)
-            return;
-        // the proxy IS the real parameter of the selected instance: the same write as the host's own write to that parameter, so the engine sees an ordinary change. The value the host
-        // sends back after a report (or the same value again) changes nothing and disarms nothing.
-        const float v = std::isfinite (parameter) ? std::min (std::max (parameter, 0.0f), 1.0f) : 0.0f;
-        if (std::fabs (v - inst->playProxyValue (p)) <= 1.0e-6f)
-            return;
-        writeRealParam (inst, static_cast<size_t> (real), v);
-        inst->playLast[p].store (v, std::memory_order_relaxed);   // the host knows this value: the poll does not report it back
-        inst->playRealDue[p].store (true, std::memory_order_release);
-        return;
+        if (static_cast<size_t> (index) < synthyboy::paramCount())
+        {
+            // a real parameter: in the restore window the value the plugin reports is an echo (the float round trip of a normalised value may differ in the last bit); anything else is an ordinary
+            // edit and ends the window
+            if (restoring)
+            {
+                const synthyboy::ParamInfo& info = synthyboy::paramTable()[index];
+                const float reported = synthyboy::toNormalised (info, inst->paramMirror[index].load (std::memory_order_relaxed));
+                if (std::isfinite (parameter) && std::fabs (parameter - reported) <= PluginInstance::kEchoTolerance)
+                {
+                    if (logging)
+                        synthyboy_mpc::PlayLog::line ("setParameter %d (real) %.9g -> echo (restore window), nothing changed", static_cast<int> (index), static_cast<double> (parameter));
+                    return;
+                }
+                inst->restoreClose();
+            }
+            if (logging)
+                synthyboy_mpc::PlayLog::line ("setParameter %d (real) %.9g -> written", static_cast<int> (index), static_cast<double> (parameter));
+        }
+        else if (logging)
+            synthyboy_mpc::PlayLog::line ("setParameter %d (display / pad pressure) %.9g", static_cast<int> (index), static_cast<double> (parameter));
     }
 #endif
 #if SYNTHYBOY_MPC_PAD_PRESSURE
@@ -1737,6 +1885,9 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
     PluginInstance* inst = getInstance(e);
     if (!inst || index < 0)
         return 0.0f;
+#if SYNTHYBOY_MPC_OVERLAY
+    synthyboy_mpc::PlayLog::countGet();
+#endif
 
 #if SYNTHYBOY_MPC_OVERLAY
     if (PluginInstance::isOverlayParam (index))
@@ -1930,8 +2081,9 @@ extern "C"
         catch (...) {} // no thread: the cursors stay idle
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
-        try { inst->startOverlay(); }
-        catch (...) {} // no overlay: the plugin works as without it
+        try { inst->startOverlay(); synthyboy_mpc::PlayLog::line ("VSTPluginMain: instance %p attached to the overlay, slot %d", static_cast<void*> (inst), inst->overlaySlot.load()); }
+        catch (const std::exception& ex) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw: %s", ex.what()); } // no overlay: the plugin works as without it
+        catch (...) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw"); }
 #endif
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         try { inst->startStats(); }
