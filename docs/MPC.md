@@ -39,7 +39,7 @@ The output folder is named `Safian - VST - SynthyBoy` and contains:
 - `VST/synthyboy-arm64.so` — the stripped 64-bit AArch64 shared object that exports only `VSTPluginMain`.
 - `VST/synthyboy-overlay-gpu-arm32` / `VST/synthyboy-overlay-gpu-arm64` — only in a package built with the overlay (`SYNTHYBOY_MPC_OVERLAY`, see "Overlay (experimental)"): the executable of the GPU helper, stripped, next to the plugin binary of its architecture. It is not in `plugin.json` (the host never loads it; the plugin starts it). The production package has no such file.
 - `Content/presets` — the factory presets from `content/presets`, shown as programs in the MPC's preset browser.
-- `Plugin Skins` — the touch-screen UI and Q-Links knob mapping, generated from `scripts/mpc-ui-pages.json` via `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`.
+- `Plugin Skins` — the touch-screen UI and Q-Links knob mapping, generated from `scripts/mpc-ui-pages.json` via `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`, including the browser artwork tile (`Plugin Skins/browser_images/soundsmode.png`) for Sounds > INSTRUMENTS.
 
 The plugin finds its own folder by walking up from the binary's path (obtained via `dladdr` on `VSTPluginMain`) to the first directory that contains a file named `plugin.json`. This logic is in `shell-mpc/plugin_paths.h`.
 
@@ -181,6 +181,15 @@ Overlay (section "Overlay (experimental)"), measured on the night of 2026-11-14 
 - **Function key labels, Key 61 (2026-11-14).** With the labels of the overlay skin ("Function keys and sub-tabs") the first row of keys reads PLAY, MACROS, OSC, MIX, FILTER with the sub-tab dots under each; after a second press of the Osc key the key reads OSC1 SHP: the key shows the `tabName` of the current sub-tab.
 - **Destroying and re-creating the plugin instance, Key 61 (3.10.1.12, arm32, 2026-11-14).** Deleting a track is only possible from Main mode, which cannot be reached by touch on this device; the substitute that goes through the same `effClose` is replacing the track's instrument in Sounds mode (left-edge handle panel with "Show Mode Shortcut Panel", switched on for the test and off again, the preference page left with its back arrow) and putting SynthyBoy back. 30 swaps (a stock instrument: Bassline, Mini D, Odyssey, Hype, Solina, Organ, in turn; SynthyBoy again; the overlay view on screen before the swap: Play, Macros (spectrum), Osc 1, Filter 1, Env 1; a note held through the swap): after every destroy the status file says `instances: 0` (0.1 to 0.7 s after the tap), the GPU helper is gone (no process), the plane is off, the MPC pid is the same; after every re-creation exactly one instance and one helper, `visible`, `renderer: gpu`; 0 failures, 0 new `dmesg` lines, no core file, no restart of the unit in the journal. 17 project switches through the Browser (handle panel, folder `SbtestSwitch` with copies of `Sbtest.xpj` and `Sbtest2.xpj`, Load, "Don't save"; the original `Sbtest.xpj` untouched, its modification time is of 2026-11-13) on Play, Macros, Osc 1, Filter 1 and Env 1: every load made one new instance (journal), the helper count never above 1 and 0 while no instance existed, same pid, `visible` and `renderer: gpu` afterwards (in 16 of 17 the polling saw `instances: 0` in between, once the gap was shorter than the polling step). 5 stops of the app with the overlay visible (`systemctl stop acvs`, 0.6 s each, the unit "Deactivated successfully"): no MPC and no helper process afterwards, plane off, 0 `dmesg` lines, no core file; the app started again with the overlay visible (`gpu`). A 5 minute soak on the final package: 300 s, 216 steps, 0 deviations, the same MPC pid, `gpu_failures 0`, `gpu_helper_restarts 0`.
 - **Bug found by that test (fixed): the overlay stayed dark after a re-creation that came after a long run.** The status file said `instances: 0` and the kill switch had no effect for as long as the earlier run of the overlay thread had lasted (the thread's clock started at zero again, the controller's deadlines did not); see "The overlay thread after the last instance closed".
+
+
+Browser artwork tile in Sounds > INSTRUMENTS, tried on the MPC XL on 2026-11-14 (MPC 3.10.1.12, trial image `tile-mock/tile-mock-270x110.png` copied to `Plugin Skins/browser_images/soundsmode.png`; the trial file did not stay on the machine):
+
+- The 270 x 110 PNG appears cleanly in the Sounds > INSTRUMENTS browser on the second page of instruments in place of the text tile, at the same size as the stock instrument tiles.
+- The 540 x 220 PNG (2x supersampled) is cropped to the top-left 270 x 110 pixels rather than scaled down by the host; larger resolutions offer no benefit.
+- The 270 x 110 PNG is drawn with 1:1 pixel accuracy on the XL screen without scaling blur; fine lines and small labels remain sharp and legible.
+- The host required restarting the application before the newly copied artwork tile was shown.
+- Tapping the tile to open the preset list (`.xpl`) was not measured (the package does not include `.xpl` presets; presets are exposed as VST2 programs). Appearance on the MPC Key 61 was not measured during this session.
 
 ### Per the SDK documentation / not yet verified on the device
 
@@ -572,3 +581,28 @@ The oscillator's "unison blend" has an exact counterpart; the engine's envelope 
 **The overlay thread after the last instance closed (found on the Key 61, fixed).** The overlay thread stops with the last instance and starts again with the next one (`Service`). Its clock (`now` for `Controller::tick`) began at zero at every start, but the controller keeps its deadlines (`nextSwitchesMs_`, `nextDetectMs_`, the report gaps, the second counter) between runs: after a run of N seconds a re-created instance stayed without overlay for N seconds (nothing detected, nothing written to the status file, the kill switch without effect). A first test after a swap of the track's instrument after minutes of running showed it (status `instances: 0` with a live instance and a live plugin page). Now the clock of the thread is the service's own (`Service::epoch_`, set once) and `Controller::tick` forgets its deadlines when the clock it is given goes back (`rebaseClock`); `shell-mpc/overlay/tests/controller_host.cpp` ("a restarted clock") fails without it.
 
 **Tests.** `shell-mpc/tests/close_stress_host.cpp` (closing instances, see above), `shell-mpc/tests/play_restore_host.cpp` (project save and reload, the debug log), `shell-mpc/tests/play_host.cpp` (parameter list and order, automation flags, every proxy of every instance in both directions, display text and properties, the selector re-report once, the chunk round trip and the old chunk, the preset change, the protection, no feedback loop with an echoing host; run under ThreadSanitizer too), `shell-mpc/overlay/tests/views_host.cpp` (the three data sources follow the selectors, one panel at a time; status lines), `shell-mpc/overlay/tests/gpu_scene_host.cpp` (the GPU scene of every sub-tab is the CPU picture within the tolerance of the other views; the new scene ops), `core/tests/test_own_displays.cpp` (`EnvDisplay` against the engine's envelope), `scripts/tests/test_mpc_skin_overlay.py` (controls, Q-Link maps and names of the three sub-tabs, markers, production skin unchanged).
+
+### Denormal warning in host simulator ("32 denormal samples")
+
+During SDK acceptance testing with `host_sim <plugin> test` on a build configured with the Vital engine (`SYNTHYBOY_MPC_ENGINE_VITAL=1`), the parameter sweep pass reports:
+```
+WARN  parameter sweep: 32 denormal samples (|x| < 1e-30) - flush tiny values to zero in feedback paths
+```
+With the own engine (`SYNTHYBOY_SHELL_ENGINE=own`), 0 denormals are reported.
+
+Numerical investigation confirmed:
+- **Threshold mismatch**: `host_sim` defines "denormal" as any non-zero sample with $|x| < 10^{-30}$. However, IEEE 754 32-bit single precision subnormal numbers only begin below `FLT_MIN` ($\approx 1.175494 \times 10^{-38}$). The range $[1.1755 \times 10^{-38}, 10^{-30})$ consists of standard, normalized IEEE 754 floating-point numbers with normal exponents ($-126 \dots -100$), which incur no CPU penalty on ARM Cortex-A or x86_64.
+- **Root cause in engine decay, not output stage**: When `host_sim` sweeps `osc1.map.key_low` past active notes, the Vital engine mutes oscillator 1. The internal IIR filter / decimator state decays exponentially from $\approx -5.11 \times 10^{-2}$ down to $-2.1 \times 10^{-38}$ across 78 samples before hardware Flush-to-Zero (`FTZ`) sets in at `FLT_MIN`. Exactly 16 samples per channel ($16 \times 2 = 32$ samples) fall in the $[1.1755 \times 10^{-38}, 10^{-30})$ window.
+- **OutputStage role**: The output limiter is inactive (`env == 1.0f`) during this tail; the 6 dB make-up gain simply scales the decaying samples by $\approx 1.995$, shifting sample $i=61$ above the $10^{-30}$ mark (from 34 down to 32 reported samples).
+- **No modification to engine**: Hardware FTZ is active in `synthyboy_mpc.cpp` and `vital_engine.cpp`. Adding artificial DC offsets or software zero-clamping would break bit-identical passthrough at 0 dB and introduce distortion. The Vital engine core is not modified.
+
+## Browser tile
+
+The host displays a graphic tile in the Sounds > INSTRUMENTS plugin selector when the package contains `Plugin Skins/browser_images/soundsmode.png`.
+
+- **Dimensions**: exactly 270 x 110 pixels PNG. The host does not downscale larger images; it crops them to the top-left 270 x 110 pixels.
+- **Design**: custom vector and gradient drawing with the SynthyBoy wordmark, analog hybrid synthesizer description, multi-layer glowing waveforms, and status indicators. It contains no third-party branding, stock elements, or vendor marks (no Akai, AIR, or NI trademarks).
+- **Generator**: `scripts/gen-mpc-tile.py` draws the tile at 4x supersampling using Pillow and downsamples with Lanczos filtering. It honors font licensing by defaulting to the repository's open font assets or Titillium Web OFL if present.
+- **Packaging**: `scripts/mpc-skin-extras/98_tile.py` copies the generated asset into the skin folder during skin generation. `scripts/build-mpc.sh` ensures the file is present in the final package.
+- **Tests**: `scripts/tests/test_mpc_tile.py` checks that the tile exists, matches the 270 x 110 PNG dimensions, contains valid non-empty procedural artwork, and is copied into the skin package.
+

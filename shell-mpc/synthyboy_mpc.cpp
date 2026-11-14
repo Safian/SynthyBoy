@@ -133,6 +133,7 @@
 // ---------------------------------------------------------------------------
 
 #if defined(__x86_64__) || defined(__i386__)
+#include <pmmintrin.h>
 #include <xmmintrin.h>
 #endif
 
@@ -150,6 +151,7 @@ static inline void flushDenormalsOn() noexcept
     __asm__ __volatile__("msr fpcr, %0" :: "r"(fpcr));
 #elif defined(__x86_64__) || defined(__i386__)
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #else
     (void)0;
 #endif
@@ -158,7 +160,7 @@ static inline void flushDenormalsOn() noexcept
 static inline uint32_t flushDenormalsSave() noexcept
 {
 #if defined(__x86_64__) || defined(__i386__)
-    return _MM_GET_FLUSH_ZERO_MODE();
+    return _mm_getcsr();
 #elif defined(__aarch64__)
     uint64_t fpcr;
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
@@ -175,7 +177,7 @@ static inline uint32_t flushDenormalsSave() noexcept
 static inline void flushDenormalsRestore(uint32_t saved) noexcept
 {
 #if defined(__x86_64__) || defined(__i386__)
-    _MM_SET_FLUSH_ZERO_MODE(saved);
+    _mm_setcsr(saved);
 #elif defined(__aarch64__)
     uint64_t fpcr;
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
@@ -821,7 +823,9 @@ struct PluginInstance
 #if SYNTHYBOY_MPC_OVERLAY
         synthyboy_mpc::PlayLog::refresh();   // the debug log of the host's calls (play_log.h) is on from the first call when its switch file is there
 #endif
+        outputStage.prepare (sampleRate > 0.0 ? sampleRate : 44100.0);
         outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
+        outputStage.reset();
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
 #if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL
         engine = synthyboy::createEngine(synthyboy::EngineKind::vital);
@@ -1328,13 +1332,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     case effSetSampleRate:
     {
         if (!inst) return 0;
-        inst->sampleRate = opt;
+        if (std::isfinite(opt) && opt > 0.0f)
+        {
+            inst->sampleRate = opt;
 #if SYNTHYBOY_MPC_OVERLAY
-        inst->overlayRate.store (opt, std::memory_order_relaxed);
+            inst->overlayRate.store (opt, std::memory_order_relaxed);
 #endif
 #if SYNTHYBOY_MPC_SPECTRUM
-        inst->spectrumRate.store (opt, std::memory_order_relaxed);
+            inst->spectrumRate.store (opt, std::memory_order_relaxed);
 #endif
+        }
         // Only store the rate; prepare is called in effMainsChanged
         return 1;
     }
@@ -1357,17 +1364,23 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         // Prepare when mains go on if sample rate or block size changed since last prepare
         if (inst->mainsOn && inst->engine)
         {
-            int sr = static_cast<int>(inst->sampleRate);
-            int bs = inst->maxBlockSize;
+            double safeSr = (std::isfinite(inst->sampleRate) && inst->sampleRate > 0.0) ? inst->sampleRate : 44100.0;
+            int sr = static_cast<int>(safeSr);
+            int bs = inst->maxBlockSize > 0 ? inst->maxBlockSize : 128;
             if (!inst->prepared || sr != inst->lastPreparedSampleRate || bs != inst->lastPreparedBlockSize)
             {
                 synthyboy::Quality quality = synthyboy::qualityForTier(synthyboy::Tier::low);
                 quality.realtime = true; // live: audio thread never waits for helper thread
-                inst->engine->prepare(inst->sampleRate, inst->maxBlockSize, quality);
-                inst->outputStage.prepare (inst->sampleRate);
+                inst->engine->prepare(safeSr, bs, quality);
+                inst->outputStage.prepare (safeSr);
                 inst->prepared = true;
                 inst->lastPreparedSampleRate = sr;
                 inst->lastPreparedBlockSize = bs;
+            }
+            else
+            {
+                // Resume without re-prepare: reset transient state of output stage
+                inst->outputStage.reset();
             }
         }
         return 1;
@@ -1748,9 +1761,13 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     }
 
     case effStartProcess:
+    {
+        if (inst) inst->outputStage.reset();
+        return 1;
+    }
+
     case effStopProcess:
     {
-        // Process start/stop
         return 1;
     }
 
@@ -1932,12 +1949,15 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
 static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outputs, VstInt32 sampleFrames)
 {
     PluginInstance* inst = getInstance(e);
-    if (!inst || !inst->engine)
+    if (!inst || !inst->engine || !outputs)
     {
         // Zero output
-        for (int i = 0; i < e->numOutputs; ++i)
-            if (outputs[i])
-                std::memset(outputs[i], 0, sizeof(float) * static_cast<size_t>(sampleFrames));
+        if (outputs && e)
+        {
+            for (int i = 0; i < e->numOutputs; ++i)
+                if (outputs[i])
+                    std::memset(outputs[i], 0, sizeof(float) * static_cast<size_t>(sampleFrames));
+        }
         return;
     }
 
@@ -1985,14 +2005,18 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
             inst->events.slots[i].frame = sampleFrames - 1;
     }
 
+    float* out0 = (e->numOutputs > 0) ? outputs[0] : nullptr;
+    float* out1 = (e->numOutputs > 1) ? outputs[1] : nullptr;
+
     // Pass events directly to the engine (no slicing, no copy)
     inst->engine->process(inst->events.count > 0 ? inst->events.slots : nullptr,
                           static_cast<int>(inst->events.count),
-                          outputs[0], outputs[1], sampleFrames);
+                          out0, out1, sampleFrames);
     // Make-up gain and peak limiter (output_stage.h): what leaves here is what the host gets, so the spectrum below shows the same signal.
-    inst->outputStage.process (outputs[0], outputs[1], sampleFrames);
+    inst->outputStage.process (out0, out1, sampleFrames);
 #if SYNTHYBOY_MPC_SPECTRUM
-    inst->spectrumRing.push (outputs[0], outputs[1], sampleFrames); // the only thing the audio thread does for the display: atomic stores into a preallocated ring
+    if (out0 != nullptr)
+        inst->spectrumRing.push (out0, out1, sampleFrames); // the only thing the audio thread does for the display: atomic stores into a preallocated ring
 #endif
 
     // Clear remaining events
