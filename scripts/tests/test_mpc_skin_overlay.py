@@ -498,7 +498,7 @@ class OverlaySkinTests(unittest.TestCase):
             self.assertEqual(tab["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"])
             # names: every knob has its short name over it, unique inside the tab
             names = [c["componentData"]["data"]["text"] for c in items if c["componentData"]["type"] == "Label" and c["componentData"]["name"].endswith(" name")]
-            self.assertEqual(len(names), 8, "eight knob names (the selector menus show the host's header)")
+            self.assertEqual(len(names), {"osc": 8, "env": 8, "lfo": 5}[prefix], "a name over every knob and toggle (the selectors, three of the LFO's eight controls, show the host's own header)")
             self.assertEqual(len(set(names)), len(names))
 
     def test_play_views_markers_and_the_fallback_picture(self):
