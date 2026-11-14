@@ -24,6 +24,7 @@ add_library(synthyboy_core STATIC
     src/shell_features.cpp
     src/preferences.cpp
     src/offline_render.cpp
+    src/filter_response.cpp
     src/wave_convert.cpp
     engine-own/own_engine.cpp
     engine-own/own_support.cpp

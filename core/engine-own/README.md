@@ -62,3 +62,12 @@ code. The reverb has its six algorithms (`fx_reverb.h`), the EQ both laws (`fx_e
 convolver on a helper thread from the impulse of the content store. `fx_latency.h` holds the compensation delays between the paths of the mixer (Bode, the limiter). The SVF styles
 2 .. 5 of the four SVF models are in `voice/classic_filters.h`, the envelope delay in chunks in `env_lfo/envelope.h`. The vectors of documents 03, 05 and 06 are tests in
 `core/tests/test_own_fx.cpp`; assumptions A714 .. A725 in `docs/ui-design/13-new-keys.md` 4.51, open points in `docs/engine-spec/QUESTIONS.md` (rows 9 .. 13).
+
+## Filter response (for the filter display)
+
+`synthyboy::FilterResponse` (`core/include/synthyboy/filter_response.h`, `core/src/filter_response.cpp`) measures the magnitude response of filter 1 or 2 on the real filter
+code: an impulse through `own::FilterUnit`, set up by `own::fillFilterSettings` (`voice/filter_setup.h`), the same function `Voice::tick` uses; FFT with `wtedit::Radix2Fft`.
+The header comment is the how-to for a display: subscribe `FilterResponse::readoutIndices (n, idx)` (cutoff, resonance) with `IEngine::setReadoutTargets`, read
+`IEngine::copyReadout (live)` on the display timer (any thread; `live.target[]` is the modulated value in plain Hz / percent, the plain knob value when nothing modulates it),
+pass them as `Request::cutoffHz` / `resonancePercent` together with the `ParamValues` snapshot to `compute ()` (display thread, no allocation). Test:
+`core/tests/test_own_filter_response.cpp`; command line: `synthyboy_filter_response PRESET.sbpreset [--filter 2] [--points N]` (`tools/filter-response`).
