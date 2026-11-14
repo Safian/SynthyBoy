@@ -603,7 +603,7 @@ void testPictogram()
     s.setEnabled (true);
     Rect z[8];
     check (s.touchTargets (z, 8) == 4, "pictogram selector: four touch targets (the enabled cells)");
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < pictogram::Count; ++i)
         check (pictogram::find (i) != nullptr && std::strlen (pictogram::find (i)->name) > 0, "pictogram table: row " + std::to_string (i) + " exists");
     checkDrawing (s, "pictogram selector", { 10, 10, m.w, m.h }, "pictogram_row.png");
     checkDrawing (s, "pictogram selector (large)", { 10, 10, 700, 100 }, nullptr);
@@ -612,14 +612,14 @@ void testPictogram()
         col.setItem (i, i, "ITEM");
     col.state.index = 3;
     col.place ({ 10, 10, 90, 5 * 56 });
-    check (col.vertical() && col.sizeOk() && col.minSize().w == 76 && col.minSize().h == 280 && col.cell (2).y == 10 + 2 * 56, "pictogram selector: a tall rectangle: a column of cells");
+    check (col.vertical() && col.sizeOk() && col.minSize().w == 56 && col.minSize().h == 280 && col.cell (2).y == 10 + 2 * 56, "pictogram selector: a tall rectangle: a column of cells");
     c = tap (col, 50, col.cell (1).y + 20, 0.0);
     check (c.kind == ChangeKind::Index && c.index == 1, "pictogram selector: column: a tap on the second cell");
     checkDrawing (col, "pictogram selector (column)", { 10, 10, 90, 5 * 56 }, "pictogram_column.png");
     // the pictograms differ from each other
     std::vector<uint32_t> first;
     bool allDifferent = true;
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < pictogram::Count; ++i)
     {
         PictogramSelector one;
         one.setItem (0, i, "");
@@ -631,7 +631,7 @@ void testPictogram()
             allDifferent = allDifferent && ! std::equal (im.px.begin(), im.px.end(), first.begin() + static_cast<long> (k * 72 * 56));
         first.insert (first.end(), im.px.begin(), im.px.end());
     }
-    check (allDifferent, "pictograms: the five drawings differ from each other");
+    check (allDifferent, "pictograms: the ten drawings (five oscillator types, six sub shapes minus the shared sine) differ from each other");
 }
 
 void testModulation()

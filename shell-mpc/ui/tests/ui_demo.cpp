@@ -3,7 +3,7 @@
 // the route panel and a sheet of knob states into PNG files in the directory given as the first argument.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
-#include "demo_page.h"
+#include "ui_test.h"
 
 using namespace uit;
 
@@ -24,21 +24,66 @@ void label (gpu::SceneBuilder& sb, int x, int y, const char* t) { sb.text (x, y,
 int main (int argc, char** argv)
 {
     const std::string dir = argc > 1 ? argv[1] : ".";
-    // the three oscillator pages
-    struct Case { const PanelPreset* p; const BarPreset* b; int type; bool tune; const char* file; };
-    const Case cases[] = { { &presets::kWavetable, &barpresets::kWavetable, 1, true, "oscillator_wavetable.png" },
-                           { &presets::kGranular, &barpresets::kGranular, 2, true, "oscillator_granular.png" },
-                           { &presets::kNoise, &barpresets::kNoise, 4, false, "oscillator_noise.png" } };
-    for (const Case& cs : cases)
+    // the compact view (a third of the width) of A (wavetable), Sub and Noise, on one sheet each
     {
-        OscPage pg;
-        pg.build (*cs.p, *cs.b, cs.type, { 56, 14, 1168, 600 }, cs.tune);
-        Scene s (1280, 628, kBackgroundRgba);
-        pg.draw (s.builder());
-        save (dir, cs.file, s);
-        Component* all[96];
-        const int n = pg.leaves (all, 96);
-        check (pg.q[0].check (all, n) == 0, std::string (cs.file) + ": the first Q group is adjacent");
+        struct C { OscInstance i; OscKind k; const char* file; };
+        const C cs[] = { { OscInstance::A, OscKind::Wavetable, "compact_A_wavetable.png" }, { OscInstance::Sub, OscKind::Wavetable, "compact_sub.png" }, { OscInstance::Noise, OscKind::Wavetable, "compact_noise.png" } };
+        for (const C& c : cs)
+        {
+            static OscillatorCompact oc;
+            oc.place ({ 10, 10, 420, 700 });
+            oc.setInstance (c.i, c.k);
+            oc.basic.source.stepper.state.count = 40; oc.basic.source.stepper.setItem ("BASIC SHAPES");
+            oc.basic.noiseType.state.count = 4; oc.basic.noiseType.setItem ("WHITE");
+            oc.basic.selector.state.index = c.i == OscInstance::Sub ? 3 : 0;
+            oc.basic.level.state.value = oc.basic.level.state.modValue = 0.8;
+            oc.basic.filter.state.value = oc.basic.filter.state.modValue = 0.6;
+            oc.route.state.segment[0] = true;
+            Scene s (440, 720, kBackgroundRgba);
+            oc.draw (s.builder());
+            s.builder().text (oc.displayRect().x + 130, oc.displayRect().y + oc.displayRect().h / 2, 2, "DISPLAY AREA", colour::rgba (colour::kText, 90));
+            save (dir, c.file, s);
+        }
+    }
+    // the full screens: Sub, A (wavetable, multisample, granular), Noise, with the Basic group active
+    {
+        struct F { OscInstance i; OscKind k; const char* file; };
+        const F fsx[] = { { OscInstance::Sub, OscKind::Wavetable, "fullscreen_sub.png" }, { OscInstance::A, OscKind::Wavetable, "fullscreen_A_wavetable.png" },
+                          { OscInstance::A, OscKind::Multisample, "fullscreen_A_multisample.png" }, { OscInstance::A, OscKind::Granular, "fullscreen_A_granular.png" },
+                          { OscInstance::Noise, OscKind::Wavetable, "fullscreen_noise.png" } };
+        for (const F& f : fsx)
+        {
+            static OscillatorFullScreen fs;
+            fs.place ({ 0, 0, 1280, 800 });
+            fs.setInstance (f.i, f.k);
+            fs.basic.source.stepper.state.count = 40; fs.basic.source.stepper.setItem ("BASIC SHAPES");
+            fs.basic.noiseType.state.count = 4; fs.basic.noiseType.setItem ("WHITE");
+            fs.basic.selector.state.index = f.i == OscInstance::Sub ? 3 : (f.k == OscKind::Wavetable ? 0 : f.k == OscKind::Multisample ? 1 : 2);
+            fs.basic.level.state.value = fs.basic.level.state.modValue = 0.8;
+            fs.basic.filter.state.value = fs.basic.filter.state.modValue = 0.6;
+            fs.route.state.segment[0] = true;
+            for (int k = 0; k < fs.bar.numSlots(); ++k)
+            {
+                Component* c = fs.bar.slot (k);
+                if (auto* nf = dynamic_cast<NumberField*> (c)) nf->state.value = nf->state.format == NumberField::Format::Degrees ? 180 : 40;
+                if (auto* st = dynamic_cast<Stepper*> (c)) { st->state.count = 3; st->setItem ("PER VOICE"); }
+                if (auto* db = dynamic_cast<DetailButton*> (c)) { db->state.value = db->state.integer ? 7 : 0.5; db->setValueText (db->state.integer ? "" : "50%"); }
+                if (auto* tn = dynamic_cast<ToggleNumber*> (c)) { tn->toggle.state.on = true; tn->amount.state.value = 60; }
+            }
+            double v = 0.15;
+            Component* pl[96];
+            const int np = fs.panel.collectLeaves (pl, 0, 96);
+            for (int i = 0; i < np; ++i)
+                if (auto* kn = dynamic_cast<Knob*> (pl[i])) { kn->state.value = kn->state.modValue = v; v += 0.11; if (v > 0.95) v = 0.1; }
+            if (WarpPair* w = fs.panel.warp()) { w->first.type.state.count = 12; w->first.type.setItem ("BEND +"); w->second.type.state.count = 12; w->second.type.setItem ("OFF"); w->second.setTypeOff (true); }
+            if (UnisonBox* u = fs.panel.unison()) u->count.state.value = 7;
+            fs.tune.sem.state.value = 2; fs.tune.fin.state.value = -12;
+            Scene s (1280, 800, kBackgroundRgba);
+            fs.draw (s.builder());
+            const Rect d = fs.displayRect();
+            s.builder().text (d.x + d.w / 2 - 70, d.y + d.h / 2 - 7, 2, "DISPLAY AREA", colour::rgba (colour::kText, 90));
+            save (dir, f.file, s);
+        }
     }
     // the type bar presets, one strip each, on one sheet
     {
@@ -60,47 +105,41 @@ int main (int argc, char** argv)
         }
         save (dir, "typebar_presets.png", s);
     }
-    // the detail pages
+    // the detail pages: every preset
     {
-        DetailPage pg;
-        pg.load (presets::kUnisonDetail, "UNISON");
-        pg.place ({ 56, 14, 1168, 600 });
-        pg.panel.stepper (PanelSlot::Mode)->state.count = 5; pg.panel.stepper (PanelSlot::Mode)->setItem ("LINEAR");
-        pg.panel.stepper (PanelSlot::Stack)->state.count = 5; pg.panel.stepper (PanelSlot::Stack)->setItem ("12+7");
-        double v = 0.2;
-        for (PanelSlot sl : { PanelSlot::Width, PanelSlot::Range, PanelSlot::WtSpread, PanelSlot::Warp1Spread, PanelSlot::Warp2Spread })
+        struct P { const PanelPreset* p; const char* title; const char* file; };
+        const P ps[] = { { &presets::kUnisonDetail, "UNISON", "detail_unison_wavetable.png" }, { &presets::kUnisonDetailMultisample, "UNISON", "detail_unison_multisample.png" },
+                         { &presets::kUnisonDetailGranular, "UNISON", "detail_unison_granular.png" }, { &presets::kGrainDetail, "GRAIN WINDOW", "detail_grain_window.png" },
+                         { &presets::kEnvelopeDetail, "ENVELOPE", "detail_multisample_envelope.png" } };
+        for (const P& pr : ps)
         {
-            pg.panel.knob (sl)->state.value = pg.panel.knob (sl)->state.modValue = v;
-            v += 0.15;
+            static DetailPage pg;
+            pg.load (*pr.p, pr.title);
+            pg.place ({ 56, 14, 1168, 600 });
+            for (PanelSlot sl : { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Shape })
+                if (Stepper* st = pg.panel.stepper (sl)) { st->state.count = 5; st->setItem (sl == PanelSlot::Mode ? "LINEAR" : sl == PanelSlot::Stack ? "12+7" : "HANN"); }
+            double v = 0.2;
+            Component* pl[32];
+            const int np = pg.panel.collectLeaves (pl, 0, 32);
+            for (int i = 0; i < np; ++i)
+                if (auto* kn = dynamic_cast<Knob*> (pl[i])) { kn->state.value = kn->state.modValue = v; v += 0.1; if (v > 0.9) v = 0.15; }
+            if (ToggleIcon* t = pg.panel.toggle (PanelSlot::Override)) t->state.on = true;
+            Scene s (1280, 628, kBackgroundRgba);
+            pg.draw (s.builder());
+            const Rect d = pg.displayRect();
+            if (! d.empty())
+            {
+                float rows[200];
+                for (int i = 0; i < 200; ++i)
+                {
+                    const float t = (static_cast<float> (i) / 199.0f - 0.5f) * 2.0f;
+                    rows[i] = static_cast<float> (d.bottom() - 10) - static_cast<float> (d.h - 24) * std::exp (-4.0f * t * t);
+                }
+                s.builder().curve (rows, 200, d.x + 8, d.w - 16);   // the owner's picture goes here: a stand-in curve
+                s.builder().stroke (2.0f, colour::rgba (colour::kAccent, 255));
+            }
+            save (dir, pr.file, s);
         }
-        Scene s (1280, 628, kBackgroundRgba);
-        pg.draw (s.builder());
-        save (dir, "detail_unison.png", s);
-    }
-    {
-        DetailPage pg;
-        pg.load (presets::kGrainDetail, "GRAIN WINDOW");
-        pg.place ({ 56, 14, 1168, 600 });
-        pg.panel.stepper (PanelSlot::Shape)->state.count = 4; pg.panel.stepper (PanelSlot::Shape)->setItem ("HANN");
-        double v = 0.3;
-        for (PanelSlot sl : { PanelSlot::Amount, PanelSlot::AmountRand, PanelSlot::Skew, PanelSlot::SkewRand })
-        {
-            pg.panel.knob (sl)->state.value = pg.panel.knob (sl)->state.modValue = v;
-            v += 0.13;
-        }
-        Scene s (1280, 628, kBackgroundRgba);
-        pg.draw (s.builder());
-        // the display area: a bell curve (the owner's drawing goes here; a stand-in for the picture)
-        const Rect d = pg.displayRect();
-        float rows[200];
-        for (int i = 0; i < 200; ++i)
-        {
-            const float t = (static_cast<float> (i) / 199.0f - 0.5f) * 2.0f;
-            rows[i] = static_cast<float> (d.bottom() - 10) - static_cast<float> (d.h - 24) * std::exp (-4.0f * t * t);
-        }
-        s.builder().curve (rows, 200, d.x + 8, d.w - 16);
-        s.builder().stroke (2.0f, colour::rgba (colour::kAccent, 255));
-        save (dir, "detail_grain_window.png", s);
     }
     {
         ModInput m;
@@ -115,7 +154,23 @@ int main (int argc, char** argv)
         pg.draw (s.builder());
         save (dir, "detail_modulations.png", s);
     }
-    // the route popup
+    // the route popup over a screen
+    {
+        static OscillatorFullScreen fs;
+        fs.place ({ 0, 0, 1280, 800 });
+        fs.setInstance (OscInstance::A, OscKind::Wavetable);
+        static RoutePanel rp;
+        rp.place ({ 300, 220, 640, 260 });
+        rp.setPopup (true, { 0, 0, 1280, 800 });
+        rp.target.state.count = 4; rp.target.setItem ("FILTER");
+        rp.bus1.state.value = rp.bus1.state.modValue = 0.3; rp.bus2.state.value = rp.bus2.state.modValue = 0.6;
+        rp.group.setActive (true);
+        Scene s (1280, 800, kBackgroundRgba);
+        fs.draw (s.builder());
+        rp.draw (s.builder());
+        save (dir, "route_popup.png", s);
+    }
+    // the route panel
     {
         RoutePanel r;
         r.place ({ 40, 40, 560, 200 });
@@ -186,6 +241,13 @@ int main (int argc, char** argv)
         label (s.builder(), 20, 20, "ROW (SAMPLE DISABLED)");
         label (s.builder(), 20 + 5 * 90 + 40, 20, "COLUMN");
         row.draw (s.builder()); col.draw (s.builder());
+        static PictogramSelector sub;
+        const int sid[6] = { pictogram::Sine, pictogram::HalfSine, pictogram::Triangle, pictogram::Saw, pictogram::Square, pictogram::Pulse };
+        const char* snm[6] = { "SINE", "HALF", "TRI", "SAW", "SQR", "PULSE" };
+        for (int i = 0; i < 6; ++i) sub.setItem (i, sid[i], snm[i]);
+        sub.place ({ 20, 140, 6 * 62, 56 });
+        label (s.builder(), 20, 120, "SUB SHAPES");
+        sub.draw (s.builder());
         save (dir, "pictogram_selector.png", s);
     }
     std::printf ("%s: %d images, %d failed\n", g_fails ? "FAIL" : "PASS", g_images, g_fails);

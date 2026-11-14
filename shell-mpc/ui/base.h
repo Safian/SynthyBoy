@@ -556,7 +556,7 @@ private:
 class DetailButton : public Component
 {
 public:
-    enum class Icon : uint8_t { None, Gear, Bell, Route };
+    enum class Icon : uint8_t { None, Gear, Bell, Route, Envelope };
     struct State
     {
         char label[9] = {};
@@ -588,6 +588,7 @@ protected:
             const uint32_t col = p.c (qFrame_ ? colour::kAccent : colour::kText, 255);
             if (state.icon == Icon::Gear) p.iconGear (cx, cy, col);
             else if (state.icon == Icon::Bell) p.iconBell (cx, cy, col);
+            else if (state.icon == Icon::Envelope) p.iconEnvelope (cx, cy, col);
             else p.iconRoute (cx, cy, col);
             rest = { rest.x + 34, rest.y, std::max (0, rest.w - 34), rest.h };
         }
@@ -689,7 +690,7 @@ protected:
     inside a box of about 28 x 24 pixels. */
 namespace pictogram
 {
-enum Id : int { Sine = 0, Wavetable, Granular, Multisample, Noise, Count };
+enum Id : int { Sine = 0, Wavetable, Granular, Multisample, Noise, HalfSine, Triangle, Saw, Square, Pulse, Count };
 
 inline float waveAt (int kind, float t) noexcept   // t 0 .. 1 over one cycle
 {
@@ -737,9 +738,30 @@ inline void drawNoise (Pen& p, float cx, float cy, uint32_t col)
     for (int i = 0; i < 10; ++i)
         p.line (cx - 14.0f + 2.8f * static_cast<float> (i), cy - 9.0f * r[i], cx - 14.0f + 2.8f * static_cast<float> (i + 1), cy - 9.0f * r[i + 1], 2.0f, col);
 }
+inline void shape (Pen& p, float cx, float cy, const float (*pts)[2], int n, uint32_t col)
+{
+    for (int i = 0; i + 1 < n; ++i)
+        p.line (cx + pts[i][0], cy + pts[i][1], cx + pts[i + 1][0], cy + pts[i + 1][1], 2.0f, col);
+}
+inline void drawHalfSine (Pen& p, float cx, float cy, uint32_t col)   // the rounded / half wave: one hump, then flat
+{
+    float px = cx - 14.0f, py = cy + 7.0f;
+    for (int i = 1; i <= 8; ++i)
+    {
+        const float t = static_cast<float> (i) / 8.0f, x = cx - 14.0f + 14.0f * t, y = cy + 7.0f - 14.0f * std::sin (kPi * t);
+        p.line (px, py, x, y, 2.0f, col);
+        px = x; py = y;
+    }
+    p.line (cx, cy + 7.0f, cx + 14.0f, cy + 7.0f, 2.0f, col);
+}
+inline void drawTriangle (Pen& p, float cx, float cy, uint32_t col) { static const float k[5][2] = { { -14, 0 }, { -7, -9 }, { 0, 0 }, { 7, 9 }, { 14, 0 } }; shape (p, cx, cy, k, 5, col); }
+inline void drawSaw (Pen& p, float cx, float cy, uint32_t col) { static const float k[6][2] = { { -14, 8 }, { -1, -8 }, { -1, 8 }, { 1, 8 }, { 1, -8 }, { 14, 8 } }; shape (p, cx, cy, k, 4, col); p.line (cx + 1.0f, cy + 8.0f, cx + 14.0f, cy - 8.0f, 2.0f, col); }
+inline void drawSquare (Pen& p, float cx, float cy, uint32_t col) { static const float k[6][2] = { { -14, 8 }, { -14, -8 }, { 0, -8 }, { 0, 8 }, { 14, 8 }, { 14, -8 } }; shape (p, cx, cy, k, 6, col); }
+inline void drawPulse (Pen& p, float cx, float cy, uint32_t col) { static const float k[7][2] = { { -14, 8 }, { -8, 8 }, { -8, -8 }, { -2, -8 }, { -2, 8 }, { 14, 8 }, { 14, 8 } }; shape (p, cx, cy, k, 6, col); }
 struct Def { int id; const char* name; void (*draw) (Pen&, float, float, uint32_t); };
 constexpr Def kTable[] = {
     { Sine, "sine", drawSine }, { Wavetable, "wavetable", drawWavetable }, { Granular, "granular", drawGranular }, { Multisample, "multisample", drawMultisample }, { Noise, "noise", drawNoise },
+    { HalfSine, "half sine", drawHalfSine }, { Triangle, "triangle", drawTriangle }, { Saw, "saw", drawSaw }, { Square, "square", drawSquare }, { Pulse, "pulse", drawPulse },
 };
 inline const Def* find (int id) noexcept
 {
@@ -756,7 +778,7 @@ inline const Def* find (int id) noexcept
 class PictogramSelector : public Component
 {
 public:
-    static constexpr int kMaxItems = 8, kCellW = 76, kCellH = 56;
+    static constexpr int kMaxItems = 8, kCellW = 76, kCellH = 56;   // kCellW: the cell for the longest label of 6 characters; shorter labels need less (cellMinW)
     struct Item { int pictogram = 0; char label[7] = {}; bool enabled = true; };
     struct State { int count = 0, index = 0; Item items[kMaxItems]; };
     State state;
@@ -780,10 +802,18 @@ public:
             return { rect_.x, rect_.y + rect_.h * i / n, rect_.w, rect_.h * (i + 1) / n - rect_.h * i / n };
         return { rect_.x + rect_.w * i / n, rect_.y, rect_.w * (i + 1) / n - rect_.w * i / n, rect_.h };
     }
+    /** The least width of a cell: the longest label at 2 pixels per font pixel and the frame (at least 56). */
+    int cellMinW() const noexcept
+    {
+        int longest = 0;
+        for (int i = 0; i < count(); ++i)
+            longest = std::max (longest, static_cast<int> (std::strlen (state.items[i].label)));
+        return std::max (56, font::textWidth (longest, 2) + 6);
+    }
     Size minSize() const override
     {
         const int n = std::max (1, count());
-        return vertical() ? Size { kCellW, n * kCellH } : Size { n * kCellW, kCellH };
+        return vertical() ? Size { cellMinW(), n * kCellH } : Size { n * cellMinW(), kCellH };
     }
     int touchTargets (Rect* out, int max) const override
     {
@@ -805,9 +835,14 @@ protected:
             p.rect (c, p.c (colour::kPanel, 255));
             p.frame (c, 1, p.c (cur ? colour::kAccent : colour::kRest, 255));
             const uint32_t col = p.c (cur ? colour::kAccent : colour::kText, it.enabled ? (cur ? 255 : 200) : 60);
+            const pictogram::Def* d = pictogram::find (it.pictogram);
+            if (! d)   // no pictogram: a text cell
+            {
+                p.textCentered (c.inset (2), it.label, 3, p.c (cur ? colour::kAccent : colour::kText, it.enabled ? 255 : 60));
+                continue;
+            }
             const int labelH = it.label[0] ? 2 * font::kGlyphH + 4 : 0;
-            if (const pictogram::Def* d = pictogram::find (it.pictogram))
-                d->draw (p, static_cast<float> (c.x) + static_cast<float> (c.w) * 0.5f, static_cast<float> (c.y) + static_cast<float> (c.h - labelH) * 0.5f, col);
+            d->draw (p, static_cast<float> (c.x) + static_cast<float> (c.w) * 0.5f, static_cast<float> (c.y) + static_cast<float> (c.h - labelH) * 0.5f, col);
             p.textCentered ({ c.x, c.bottom() - labelH, c.w, labelH }, it.label, 2, p.c (cur ? colour::kAccent : colour::kText, it.enabled ? 255 : 60));
         }
     }

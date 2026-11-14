@@ -53,7 +53,7 @@ struct Rect
 /** What a component hands back. Value: `value` is normalised 0 .. 1 (a knob). Index: `index` is a whole number (a list position, a switch 0 / 1, the number of steps from the minimum of a
     number field) and `value` is the same number as a double (a number field: the value in its own units, a whole number of steps). Request: the user asked for a menu / a panel; the owner
     opens whatever it wants. */
-enum class ChangeKind : uint8_t { None = 0, Value, Index, Request, Depth, ModsRequest };
+enum class ChangeKind : uint8_t { None = 0, Value, Index, Request, Depth, ModsRequest, AddRequest };
 struct Change
 {
     ChangeKind kind = ChangeKind::None;
@@ -64,6 +64,8 @@ struct Change
     /** Depth: the modulation depth (-1 .. +1, `value`) of the source `index` (its id) of a knob / number field changed (a drag that started on the tab). ModsRequest: a long press asks for the
         list of the modulations of the control. */
     static Change depth (int id, int source, double d) noexcept { Change c; c.kind = ChangeKind::Depth; c.id = id; c.index = source; c.value = d; return c; }
+    /** AddRequest: the owner is asked to add the modulation source `source` (the "add source" row of the modulations page). */
+    static Change addRequest (int id, int source) noexcept { Change c; c.kind = ChangeKind::AddRequest; c.id = id; c.index = source; return c; }
     static Change modsRequest (int id) noexcept { Change c; c.kind = ChangeKind::ModsRequest; c.id = id; return c; }
     static Change none() noexcept { return {}; }
     static Change normalised (int id, double v) noexcept { Change c; c.kind = ChangeKind::Value; c.id = id; c.value = v; return c; }
@@ -234,6 +236,12 @@ public:
             line (px, py, x, y, 2.0f, col);
             px = x; py = y;
         }
+    }
+    void iconEnvelope (float cx, float cy, uint32_t col)   // an ADSR outline
+    {
+        const float x[6] = { -13.0f, -8.0f, -3.0f, 3.0f, 8.0f, 13.0f }, y[6] = { 8.0f, -8.0f, -2.0f, -2.0f, 8.0f, 8.0f };
+        for (int i = 0; i < 5; ++i)
+            line (cx + x[i], cy + y[i], cx + x[i + 1], cy + y[i + 1], 2.0f, col);
     }
     void iconRoute (float cx, float cy, uint32_t col)
     {

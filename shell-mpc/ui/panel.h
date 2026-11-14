@@ -11,8 +11,8 @@ namespace synthyboy_mpc { namespace ui {
 // ===============================================================================================================================================================
 /** The place of a part in a preset: the owner finds a child by it (`KnobPanel::part (slot)`). */
 enum class PanelSlot : uint8_t { WtPos, Unison, Detune, Blend, Warp, Pan, Level, WarpMenu, Scan, Dens, Length, Offset, Dir, Pitch, Filter,
-                                 Mode, Stack, Width, Range, WtSpread, Warp1Spread, Warp2Spread, Amount, AmountRand, Skew, SkewRand, Shape, Count };
-enum class PartKind : uint8_t { Knob, RandPair, Unison, WarpPair, Menu, Stepper };
+                                 Mode, Stack, Width, Range, WtSpread, Warp1Spread, Warp2Spread, Amount, AmountRand, Skew, SkewRand, Shape, LengthRand, PanRand, LevelRand, Timbre, Start, Delay, Attack, Hold, Decay, Sustain, Release, Override, Count };
+enum class PartKind : uint8_t { Knob, RandPair, Unison, WarpPair, Menu, Stepper, Toggle };
 
 /** One part of a preset: what, which slot, its label, and the cells it covers in the grid. */
 struct PanelItem
@@ -93,6 +93,68 @@ constexpr PanelItem kGrainDetailItems[] = {
 };
 constexpr QSpec kGrainDetailQ[] = { { { PanelSlot::Amount, PanelSlot::AmountRand, PanelSlot::Skew, PanelSlot::SkewRand } },
                                     { { PanelSlot::Shape, PanelSlot::Count, PanelSlot::Count, PanelSlot::Count } } };
+// The bottom band of the full screen of an oscillator (screen.h): PAN and LEVEL are in the top band there, the granular RAND knobs are a group of their own
+constexpr PanelItem kWavetableFullItems[] = {
+    { PartKind::Knob, PanelSlot::WtPos, "WT POS", 0, 0, 1, 1, false },
+    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false },
+    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 1, 4, 1, false },
+};
+constexpr QSpec kWavetableFullQ[] = { { { PanelSlot::WtPos, PanelSlot::Unison, PanelSlot::Detune, PanelSlot::Blend } } };
+constexpr PanelItem kGranularFullItems[] = {
+    { PartKind::Knob, PanelSlot::Scan, "SCAN", 0, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Dens, "DENS", 1, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Length, "LENGTH", 2, 0, 1, 1, false },
+    { PartKind::Menu, PanelSlot::WarpMenu, "WARP", 3, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Offset, "OFFSET", 0, 1, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Dir, "DIR", 1, 1, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Pitch, "PITCH", 2, 1, 1, 1, true },
+    { PartKind::Knob, PanelSlot::LengthRand, "LEN RAND", 0, 2, 1, 1, false },
+    { PartKind::Knob, PanelSlot::PanRand, "PAN RAND", 1, 2, 1, 1, false },
+    { PartKind::Knob, PanelSlot::LevelRand, "LVL RAND", 2, 2, 1, 1, false },
+};
+constexpr QSpec kGranularFullQ[] = { { { PanelSlot::Scan, PanelSlot::Dens, PanelSlot::Length, PanelSlot::WarpMenu } },
+                                     { { PanelSlot::Offset, PanelSlot::Dir, PanelSlot::Pitch, PanelSlot::Count } },
+                                     { { PanelSlot::LengthRand, PanelSlot::PanRand, PanelSlot::LevelRand, PanelSlot::Count } } };
+constexpr PanelItem kNoiseFullItems[] = { { PartKind::Knob, PanelSlot::Filter, "FILTER", 0, 0, 1, 1, false } };
+constexpr PanelItem kNoItems[] = { { PartKind::Knob, PanelSlot::Count, "", 0, 0, 1, 1, false } };
+constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 4, 2, -1, kWavetableFullItems, 5, kWavetableFullQ, 1, 0 };
+constexpr PanelPreset kGranularFull { "granular (full screen)", 4, 3, -1, kGranularFullItems, 10, kGranularFullQ, 3, 0 };
+constexpr PanelPreset kNoiseFull { "noise (full screen)", 4, 1, -1, kNoiseFullItems, 1, nullptr, 0, 0 };
+constexpr PanelPreset kEmptyFull { "none (full screen)", 4, 1, -1, kNoItems, 0, nullptr, 0, 0 };
+constexpr PanelItem kMultisampleFullItems[] = {
+    { PartKind::Knob, PanelSlot::Timbre, "TIMBRE", 0, 0, 1, 1, false },
+    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false },
+    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 1, 4, 1, false },
+};
+constexpr QSpec kMultisampleFullQ[] = { { { PanelSlot::Timbre, PanelSlot::Unison, PanelSlot::Detune, PanelSlot::Blend } } };
+constexpr PanelPreset kMultisampleFull { "multisample (full screen)", 4, 2, -1, kMultisampleFullItems, 5, kMultisampleFullQ, 1, 0 };
+// the DetailPages of the unison settings of the three types, and the envelope of the multisample oscillator
+constexpr PanelItem kUnisonMsItems[] = {
+    { PartKind::Stepper, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false }, { PartKind::Stepper, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false }, { PartKind::Knob, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Warp1Spread, "WARP 1", 2, 0, 1, 1, false }, { PartKind::Knob, PanelSlot::Warp2Spread, "WARP 2", 3, 0, 1, 1, false },
+};
+constexpr QSpec kUnisonMsQ[] = { { { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Width, PanelSlot::Range } }, { { PanelSlot::Warp1Spread, PanelSlot::Warp2Spread, PanelSlot::Count, PanelSlot::Count } } };
+constexpr PanelItem kUnisonGrItems[] = {
+    { PartKind::Stepper, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false }, { PartKind::Stepper, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false }, { PartKind::Knob, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Start, "START", 2, 0, 1, 1, false },
+};
+constexpr QSpec kUnisonGrQ[] = { { { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Width, PanelSlot::Range } }, { { PanelSlot::Start, PanelSlot::Count, PanelSlot::Count, PanelSlot::Count } } };
+constexpr PanelItem kEnvelopeItems[] = {
+    { PartKind::Knob, PanelSlot::Delay, "DELAY", 0, 0, 1, 1, false }, { PartKind::Knob, PanelSlot::Attack, "A", 1, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Hold, "H", 2, 0, 1, 1, false }, { PartKind::Knob, PanelSlot::Decay, "D", 3, 0, 1, 1, false },
+    { PartKind::Knob, PanelSlot::Sustain, "S", 0, 1, 1, 1, false }, { PartKind::Knob, PanelSlot::Release, "R", 1, 1, 1, 1, false },
+    { PartKind::Toggle, PanelSlot::Override, "OVERRIDE", 2, 1, 1, 1, false },
+};
+constexpr QSpec kEnvelopeQ[] = { { { PanelSlot::Delay, PanelSlot::Attack, PanelSlot::Hold, PanelSlot::Decay } }, { { PanelSlot::Sustain, PanelSlot::Release, PanelSlot::Override, PanelSlot::Count } } };
+constexpr PanelPreset kUnisonDetailMultisample { "unison details (multisample)", 4, 2, -1, kUnisonMsItems, 6, kUnisonMsQ, 2, 0 };
+constexpr PanelPreset kUnisonDetailGranular { "unison details (granular)", 4, 2, -1, kUnisonGrItems, 5, kUnisonGrQ, 2, 0 };
+constexpr PanelPreset kEnvelopeDetail { "multisample envelope", 4, 2, -1, kEnvelopeItems, 7, kEnvelopeQ, 2, 140 };
 constexpr PanelPreset kUnisonDetail { "unison details", 4, 2, -1, kUnisonDetailItems, 7, kUnisonDetailQ, 2, 0 };
 constexpr PanelPreset kGrainDetail { "grain window", 4, 2, -1, kGrainDetailItems, 5, kGrainDetailQ, 2, 140 };
 }
@@ -102,7 +164,7 @@ constexpr PanelPreset kGrainDetail { "grain window", 4, 2, -1, kGrainDetailItems
 class KnobPanel : public Composite
 {
 public:
-    static constexpr int kMaxKnobs = 12, kMaxPairs = 3, kMaxItems = 12, kMaxSteppers = 4;
+    static constexpr int kMaxKnobs = 12, kMaxPairs = 3, kMaxItems = 12, kMaxSteppers = 4, kMaxToggles = 2;
     static constexpr int kSeparatorGap = 16;
 
     KnobPanel() = default;
@@ -113,7 +175,7 @@ public:
     {
         clearKids();
         preset_ = &p;
-        int nk = 0, np = 0, nm = 0, ns = 0;
+        int nk = 0, np = 0, nm = 0, ns = 0, nt = 0;
         nItems_ = 0;
         for (int i = 0; i < p.numItems && nItems_ < kMaxItems; ++i)
         {
@@ -157,6 +219,14 @@ public:
                         m.comp = &st;
                     }
                     break;
+                case PartKind::Toggle:
+                    if (nt < kMaxToggles)
+                    {
+                        ToggleIcon& t = toggles_[nt++];
+                        t.state = ToggleIcon::State {};
+                        m.comp = &t;
+                    }
+                    break;
                 case PartKind::Unison: m.comp = &unison_; break;
                 case PartKind::WarpPair: m.comp = &warp_; break;
                 case PartKind::Menu:
@@ -197,6 +267,13 @@ public:
         for (int i = 0; i < nItems_; ++i)
             if (items_[i].def->slot == s && items_[i].def->kind == PartKind::Stepper)
                 return static_cast<Stepper*> (items_[i].comp);
+        return nullptr;
+    }
+    ToggleIcon* toggle (PanelSlot s) const noexcept
+    {
+        for (int i = 0; i < nItems_; ++i)
+            if (items_[i].def->slot == s && items_[i].def->kind == PartKind::Toggle)
+                return static_cast<ToggleIcon*> (items_[i].comp);
         return nullptr;
     }
     KnobRandPair* pair (PanelSlot s) const noexcept
@@ -270,106 +347,12 @@ protected:
     int nItems_ = 0, sepX_ = -1;
     Knob knobs_[kMaxKnobs];
     Stepper steppers_[kMaxSteppers];
+    ToggleIcon toggles_[kMaxToggles];
     KnobRandPair pairs_[kMaxPairs];
     UnisonBox unison_;
     WarpPair warp_;
     MenuButton menu_;
 };
-
-// ===============================================================================================================================================================
-/** The four values of one Q-Link set (the four hardware knobs Q-Link 1 .. 4 control them at a time). Four slots, each a component (a leaf, or a composite whose turn goes to its primary
-    child); the rectangle of the group is the union of the members' rectangles. Active: the members get the accent frame colour and their index 1 .. 4 (setQ), the group draws ONE
-    frame around the union, and turn (knobIndex, delta) is routed to the member. Members must be adjacent in the layout: `check` reports every component of the layout that is not a
-    member (or a part of one) but lies in the union. */
-class QGroup
-{
-public:
-    static constexpr int kSlots = 4;
-    static constexpr int kMaxCheck = 64;
-
-    /** Puts a member into slot 0 .. 3 (null empties it). The frame of the group follows the members' rectangles when it is drawn. */
-    bool set (int slot, Component* c)
-    {
-        if (slot < 0 || slot >= kSlots)
-            return false;
-        if (active_ && slot_[slot])
-            slot_[slot]->setQ (false, 0);
-        slot_[slot] = c;
-        if (active_ && c)
-            c->setQ (true, slot + 1);
-        return true;
-    }
-    Component* member (int slot) const noexcept { return slot >= 0 && slot < kSlots ? slot_[slot] : nullptr; }
-    int numMembers() const noexcept { int n = 0; for (Component* c : slot_) n += c != nullptr; return n; }
-    bool active() const noexcept { return active_; }
-    void setActive (bool a)
-    {
-        active_ = a;
-        for (int i = 0; i < kSlots; ++i)
-            if (slot_[i])
-                slot_[i]->setQ (a, i + 1);
-    }
-    /** The union of the members' rectangles. */
-    Rect rect() const noexcept
-    {
-        Rect u;
-        for (Component* c : slot_)
-            if (c)
-                u = Rect::unite (u, c->rect());
-        return u;
-    }
-    /** The one frame around the whole group (nothing when not active), inside the union. */
-    void draw (gpu::SceneBuilder& sb) const
-    {
-        if (! active_)
-            return;
-        const Rect u = rect();
-        if (u.empty())
-            return;
-        Pen pen (sb, true);
-        pen.frame (u, 2, pen.c (colour::kAccent, 255));
-    }
-    /** The hardware knob `knobIndex` (0 .. 3) turned by delta: routed to the member of that slot; nothing when not active or the slot is empty. */
-    Change turn (int knobIndex, double delta)
-    {
-        Component* c = member (knobIndex);
-        return active_ && c ? c->turn (delta) : Change::none();
-    }
-    /** The adjacency check: how many components of `all` (the leaves of the layout) that are not members, and not parts of a member, overlap the union; `first` gets the first such one. */
-    int check (Component* const* all, int n, const Component** first = nullptr) const
-    {
-        const Rect u = rect();
-        Component* own[kSlots * kMaxCheck];
-        int nOwn = 0;
-        for (Component* c : slot_)
-            if (c)
-                nOwn = c->collectLeaves (own, nOwn, kSlots * kMaxCheck);
-        int bad = 0;
-        if (first)
-            *first = nullptr;
-        for (int i = 0; i < n; ++i)
-        {
-            const Component* c = all[i];
-            bool mine = false;
-            for (int j = 0; j < nOwn && ! mine; ++j)
-                mine = own[j] == c;
-            for (Component* m : slot_)
-                mine = mine || m == c;
-            if (! mine && c->rect().overlaps (u))
-            {
-                if (bad == 0 && first)
-                    *first = c;
-                ++bad;
-            }
-        }
-        return bad;
-    }
-
-private:
-    Component* slot_[kSlots] = {};
-    bool active_ = false;
-};
-
 
 /** The filled slots of a TypeBar as one Q group (empty slots take no Q-Link). */
 inline void fillGroup (QGroup& g, const TypeBar& bar)
@@ -460,7 +443,7 @@ protected:
 class ModulationsPage : public Composite
 {
 public:
-    static constexpr int kMaxRows = 8, kRowH = 64, kBarH = 64;
+    static constexpr int kMaxRows = 8, kRowH = 56, kBarH = 64;
     struct Row
     {
         Knob depth { "", true };
@@ -471,10 +454,15 @@ public:
     };
     MenuButton back { "BACK", MenuButton::Icon::None };
     Row rows[kMaxRows];
+    /** The last row, "add source": the stepper over the sources the owner offers (names of 6 characters; the owner sets `addSource.state` and `sourceIds`) and the add button. */
+    Stepper addSource;
+    MenuButton add { "ADD", MenuButton::Icon::None };
+    int sourceIds[8] = {};
 
     ModulationsPage()
     {
         addKid (back);
+        addKid (addSource); addKid (add);
         for (Row& r : rows)
         {
             r.depth.state.bipolar = true;
@@ -513,7 +501,21 @@ public:
         rows[row].depth.setId (depth); rows[row].polarity.setId (polarity); rows[row].bypass.setId (bypass); rows[row].remove.setId (remove);
     }
     int numRows() const noexcept { return nRows_; }
-    Size minSize() const override { return { 128 + 72 + 56 * 3 + 4 * kGap + 8, kBarH + 8 + std::max (1, nRows_) * kRowH }; }
+    Size minSize() const override { return { std::max (128 + 72 + 56 * 3 + 4 * kGap + 8, 128 + Stepper::kMinW + 56 + 2 * kGap + 8), kBarH + 8 + (nRows_ + 1) * kRowH }; }
+    Rect addRowRect() const noexcept { return { rect_.x + 4 + 128, rect_.y + kBarH + 8 + nRows_ * kRowH, rect_.w - 8 - 128, kRowH }; }
+
+    /** The add button comes out as an AddRequest { id of the button, source id of the current item of the add stepper }, the rest as it is. */
+    Change touchUp (int x, int y) override
+    {
+        const bool onAdd = cap_ == &add;
+        const Change c = Composite::touchUp (x, y);
+        if (onAdd && c.kind == ChangeKind::Request)
+        {
+            const int i = std::clamp (addSource.state.index, 0, 7);
+            return Change::addRequest (c.id, sourceIds[i]);
+        }
+        return c;
+    }
 
 protected:
     void layout() override
@@ -525,16 +527,21 @@ protected:
             const int y = rect_.y + kBarH + 8 + i * kRowH;
             Rect k[4];
             const int fixed[4] = { 0, 56, 56, 56 }, weight[4] = { 1, 0, 0, 0 };
-            layoutRow ({ rect_.x + 4 + 128, y, rect_.w - 8 - 128, kRowH - 4 }, fixed, weight, 4, kGap, k);
+            layoutRow ({ rect_.x + 4 + 128, y, rect_.w - 8 - 128, kRowH }, fixed, weight, 4, kGap, k);
             r.depth.place (k[0]); r.polarity.place (k[1]); r.bypass.place (k[2]); r.remove.place (k[3]);
         }
+        Rect a[2];
+        const int fx[2] = { 0, 96 }, wt[2] = { 1, 0 };
+        layoutRow (addRowRect(), fx, wt, 2, kGap, a);
+        addSource.place (a[0]); add.place (a[1]);
     }
     void drawExtra (Pen& p) const override
     {
         p.rect (rect_.x + 4, rect_.y + kBarH - 1, rect_.right() - 4, rect_.y + kBarH, p.c (colour::kRest, 255));
         p.textLeft ({ rect_.x + 140, rect_.y + 4, std::max (0, rect_.w - 150), kBarH - 8 }, title_, 3, p.c (colour::kWhite, 255));
+        p.textLeft ({ rect_.x + 8, addRowRect().y, 120, kRowH }, "ADD", 3, p.c (colour::kText, 150));
         for (int i = 0; i < nRows_; ++i)
-            p.textLeft ({ rect_.x + 8, rect_.y + kBarH + 8 + i * kRowH, 120, kRowH - 4 }, rows[i].name, 3, p.c (colour::kText, 255));
+            p.textLeft ({ rect_.x + 8, rect_.y + kBarH + 8 + i * kRowH, 120, kRowH }, rows[i].name, 3, p.c (colour::kText, 255));
     }
     char title_[13] = {};
     int nRows_ = 0;

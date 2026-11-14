@@ -7,6 +7,7 @@
 #pragma once
 
 #include "base.h"
+#include "qgroup.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -45,7 +46,7 @@ public:
 
     void place (const Rect& r) override { rect_ = r; layout(); }
     void setEnabled (bool e) override { enabled_ = e; cap_ = nullptr; syncKids(); }
-    void setQ (bool frame, int) override { qFrame_ = frame; qIndex_ = 0; for (int i = 0; i < n_; ++i) kids_[i]->setQ (frame, 0); }
+    void setQ (bool frame, int index) override { qFrame_ = frame; qIndex_ = frame ? index : 0; for (int i = 0; i < n_; ++i) kids_[i]->setQ (frame, 0); }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -54,6 +55,8 @@ public:
                 kids_[i]->draw (sb);
         Pen pen (sb, enabled_);
         drawExtra (pen);
+        if (qIndex_ > 0)
+            pen.qBadge (rect_, qIndex_);   // a composite as the member of a Q group shows the index of its own
     }
     Change touchDown (int x, int y, double nowMs) override
     {
@@ -136,14 +139,45 @@ public:
         applyVariant();
     }
     void setShort (bool s) { short_ = s; applyVariant(); layout(); }
+    /** The vertical variant (the full screen): the fields one under the other, each kRowH high, the toggle in a row of its own under CRS (short: OCT and CRS only). */
+    void setVertical (bool v) { vertical_ = v; layout(); }
+    bool isVertical() const noexcept { return vertical_; }
+    /** Only CRS (the full screen of the sub oscillator: its OCT is in the top band); vertical variant only. */
+    void setCrsOnly (bool b) { crsOnly_ = b; applyVariant(); layout(); }
+    bool isCrsOnly() const noexcept { return crsOnly_; }
+    static constexpr int kRowH = 56;
     bool isShort() const noexcept { return short_; }
-    Size minSize() const override { return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 56 + 4 * kGap, 56 }; }
+    Size minSize() const override
+    {
+        if (vertical_)
+            return crsOnly_ ? Size { 80, kRowH } : short_ ? Size { 80, 2 * kRowH + kGap } : Size { 80, 5 * kRowH + 4 * kGap };
+        return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 56 + 4 * kGap, 56 };
+    }
 
 protected:
-    void applyVariant() { show (sem, ! short_); show (fin, ! short_); show (track, ! short_); }
+    void applyVariant() { show (oct, ! crsOnly_); show (sem, ! short_ && ! crsOnly_); show (fin, ! short_ && ! crsOnly_); show (track, ! short_ && ! crsOnly_); }
     void layout() override
     {
         Rect r[5];
+        if (vertical_)
+        {
+            auto row = [&] (int i) { return Rect { rect_.x, rect_.y + i * (kRowH + kGap), rect_.w, std::min (kRowH, std::max (0, rect_.h - i * (kRowH + kGap))) }; };
+            if (crsOnly_)
+            {
+                crs.place (row (0));
+                return;
+            }
+            oct.place (row (0));
+            if (short_)
+                crs.place (row (1));
+            else
+            {
+                sem.place (row (1)); fin.place (row (2)); crs.place (row (3));
+                const Rect t = row (4);
+                track.place ({ t.x, t.y, std::min (56, t.w), t.h });
+            }
+            return;
+        }
         if (short_)
         {
             const int fixed[2] = { 0, 0 }, weight[2] = { 1, 1 };
@@ -158,6 +192,28 @@ protected:
         }
     }
     bool short_;
+    bool vertical_ = false, crsOnly_ = false;
+};
+
+// ===============================================================================================================================================================
+/** ToggleNumber: a switch and the amount it applies to (the VEL TRACK of the multisample oscillator): the toggle and a number field side by side. turn goes to the number field. */
+class ToggleNumber : public Composite
+{
+public:
+    ToggleIcon toggle;
+    NumberField amount { "AMOUNT", NumberField::Format::IntPlain };
+
+    ToggleNumber() { amount.state.max = 100; addKid (toggle); addKid (amount); setPrimary (&amount); }
+    Size minSize() const override { return { 56 + kGap + 80, 56 }; }
+
+protected:
+    void layout() override
+    {
+        Rect r[2];
+        const int fixed[2] = { 56, 0 }, weight[2] = { 0, 1 };
+        layoutRow (rect_, fixed, weight, 2, kGap, r);
+        toggle.place (r[0]); amount.place (r[1]);
+    }
 };
 
 // ===============================================================================================================================================================
@@ -165,7 +221,7 @@ protected:
     filled ones and form ONE Q group (`group`: the filled slots in order; empty slots draw nothing and take no Q-Link). The presets are DATA (a table of BarItem, the same mechanism as the
     KnobPanel's): wavetable (the frame number, the phase, RAND, the phase memory), granular (crossfade, grain window, loop mode, unison), sub (the phase), multisample (VEL TRACK toggle,
     its amount, RAND), noise (STEREO). The ids of the slots are given by the owner (`slot (i)->setId`). The former PhaseRow is the wavetable preset of this component. */
-enum class BarKind : uint8_t { Frame, Phase, Rand, Number, Stepper, GrainWindow, UnisonDetail, Toggle };
+enum class BarKind : uint8_t { Frame, Phase, Rand, Number, Stepper, GrainWindow, UnisonDetail, Toggle, Envelope, ToggleNumber };
 struct BarItem { BarKind kind; const char* label; uint8_t weight; };
 struct BarPreset { const char* name; const BarItem* items; int numItems; };
 
@@ -174,7 +230,7 @@ namespace barpresets
 constexpr BarItem kWavetableItems[] = { { BarKind::Frame, "", 2 }, { BarKind::Phase, "", 2 }, { BarKind::Rand, "RAND", 2 }, { BarKind::Stepper, "MEMORY", 3 } };
 constexpr BarItem kGranularItems[] = { { BarKind::Number, "XFADE", 2 }, { BarKind::GrainWindow, "AMOUNT", 3 }, { BarKind::Stepper, "LOOP", 3 }, { BarKind::UnisonDetail, "UNISON", 3 } };
 constexpr BarItem kSubItems[] = { { BarKind::Phase, "", 1 } };
-constexpr BarItem kMultisampleItems[] = { { BarKind::Toggle, "VEL TRACK", 1 }, { BarKind::Number, "AMOUNT", 2 }, { BarKind::Rand, "RAND", 2 } };
+constexpr BarItem kMultisampleItems[] = { { BarKind::Envelope, "ENV", 2 }, { BarKind::ToggleNumber, "VEL TRACK", 3 }, { BarKind::Rand, "RAND", 2 } };
 constexpr BarItem kNoiseItems[] = { { BarKind::Number, "STEREO", 1 } };
 constexpr BarPreset kWavetable { "wavetable", kWavetableItems, 4 }, kGranular { "granular", kGranularItems, 4 }, kSub { "sub", kSubItems, 1 },
                     kMultisample { "multisample", kMultisampleItems, 3 }, kNoise { "noise", kNoiseItems, 1 };
@@ -188,6 +244,7 @@ public:
     Stepper steppers[kMaxSlots];
     DetailButton details[kMaxSlots];
     ToggleIcon toggles[kMaxSlots];
+    ToggleNumber toggleNumbers[kMaxSlots];
 
     TypeBar() = default;
     explicit TypeBar (const BarPreset& p) { load (p); }
@@ -243,6 +300,19 @@ public:
                     details[i].state.min = 1; details[i].state.max = 16; details[i].state.value = 1; details[i].setLabel (it.label);
                     c = &details[i];
                     break;
+                case BarKind::Envelope:
+                    details[i].state = DetailButton::State {};
+                    details[i].state.icon = DetailButton::Icon::Envelope; details[i].setLabel (it.label);
+                    c = &details[i];
+                    break;
+                case BarKind::ToggleNumber:
+                    toggleNumbers[i].toggle.state = ToggleIcon::State {};
+                    toggleNumbers[i].toggle.state.icon = ToggleIcon::Icon::Generic;
+                    toggleNumbers[i].amount.state = NumberField::State {};
+                    toggleNumbers[i].amount.state.format = NumberField::Format::IntPlain; toggleNumbers[i].amount.state.max = 100;
+                    toggleNumbers[i].amount.setLabel ("AMOUNT");
+                    c = &toggleNumbers[i];
+                    break;
                 case BarKind::Toggle:
                     toggles[i].state = ToggleIcon::State {};
                     toggles[i].state.icon = ToggleIcon::Icon::Generic;
@@ -293,13 +363,13 @@ public:
     UpDownStepper count;
 
     UnisonBox() { count.state.min = 1; count.state.max = 16; count.state.value = 1; addKid (gear); addKid (count); setPrimary (&count); }
-    Size minSize() const override { return { 56 + kGap + 72, 112 }; }
+    Size minSize() const override { return { 72 + kGap + 72, 112 }; }
 
 protected:
     void layout() override
     {
         Rect r[2];
-        const int fixed[2] = { 56, 0 }, weight[2] = { 0, 1 };
+        const int fixed[2] = { 72, 0 }, weight[2] = { 0, 1 };
         layoutRow (rect_, fixed, weight, 2, kGap, r);
         gear.place (r[0]); count.place (r[1]);
     }
@@ -414,6 +484,136 @@ protected:
 
 
 // ===============================================================================================================================================================
+/** SourcePicker: the source stepper with its dropdown button (the list of all sources). turn goes to the stepper. A change of the stepper is an Index change, the dropdown a Request. */
+class SourcePicker : public Composite
+{
+public:
+    Stepper stepper;
+    MenuButton dropdown { "", MenuButton::Icon::Down };
+
+    SourcePicker() { addKid (stepper); addKid (dropdown); setPrimary (&stepper); }
+    Size minSize() const override { return { Stepper::kMinW + kGap + 56, 56 }; }
+
+protected:
+    void layout() override
+    {
+        Rect r[2];
+        const int fixed[2] = { 0, 56 }, weight[2] = { 1, 0 };
+        layoutRow (rect_, fixed, weight, 2, kGap, r);
+        stepper.place (r[0]); dropdown.place (r[1]);
+    }
+};
+
+// ===============================================================================================================================================================
+/** The five oscillator instances of the synth (engine keys sub, a, b, c, noise) and the types of A, B and C. Sub and Noise are instances with a fixed panel, not types. */
+enum class OscInstance : uint8_t { Sub, A, B, C, Noise };
+enum class OscKind : uint8_t { Wavetable, Multisample, Granular };   // the types of A / B / C: an extensible table (sample, spectral later)
+inline const char* instanceName (OscInstance i) noexcept { static const char* const n[5] = { "SUB", "A", "B", "C", "NOISE" }; return n[static_cast<int> (i)]; }
+
+/** BasicControls: the four values of the Q group "Basic" of an oscillator instance, one component for the compact view and for the top band of the full screen, so that both have the same members
+    and (with assignIds) the same ids. A, B, C: [type pictograms, source (stepper + dropdown), PAN, LEVEL]; Sub: [waveform pictograms (sine, half sine, triangle, saw, square, pulse), OCT, PAN,
+    LEVEL]; Noise: [noise type stepper, FILTER knob, PAN, LEVEL]. `stacked`: the compact arrangement (rows one under the other) instead of one row. The group is `group` (always one frame). */
+class BasicControls : public Composite
+{
+public:
+    PictogramSelector selector;
+    Stepper noiseType;
+    SourcePicker source;
+    NumberField oct { "OCT", NumberField::Format::IntSigned };
+    Knob filter { "FILTER" };
+    Knob pan { "PAN" }, level { "LEVEL" };
+    QGroup group;
+
+    BasicControls()
+    {
+        oct.state.min = -4; oct.state.max = 4;
+        pan.state.bipolar = true; pan.state.defaultValue = 0.5; pan.state.value = pan.state.modValue = 0.5;
+        addKid (selector); addKid (noiseType, false); addKid (source); addKid (oct, false); addKid (filter, false); addKid (pan); addKid (level);
+        configure (OscInstance::A, OscKind::Wavetable);
+    }
+    /** Chooses the members for an instance (and the type of A, B, C): the pictograms of the selector, the visible parts and the Q group. The states of the shown parts are the owner's. */
+    void configure (OscInstance inst, OscKind kind)
+    {
+        inst_ = inst;
+        kind_ = kind;
+        const bool sub = inst == OscInstance::Sub, noise = inst == OscInstance::Noise;
+        selector.state.count = 0;
+        if (sub)
+        {
+            static const int ids[6] = { pictogram::Sine, pictogram::HalfSine, pictogram::Triangle, pictogram::Saw, pictogram::Square, pictogram::Pulse };
+            static const char* const nm[6] = { "SINE", "HALF", "TRI", "SAW", "SQR", "PULSE" };
+            for (int i = 0; i < 6; ++i)
+                selector.setItem (i, ids[i], nm[i]);
+        }
+        else if (! noise)
+        {
+            selector.setItem (0, pictogram::Wavetable, "WAVE");
+            selector.setItem (1, pictogram::Multisample, "SAMPLE");
+            selector.setItem (2, pictogram::Granular, "GRAIN");
+            selector.state.index = kind == OscKind::Wavetable ? 0 : (kind == OscKind::Multisample ? 1 : 2);
+        }
+        show (selector, ! noise); show (noiseType, noise);
+        show (source, ! sub && ! noise); show (oct, sub); show (filter, noise);
+        for (int i = 0; i < 4; ++i)
+            group.set (i, nullptr);
+        group.set (0, noise ? static_cast<Component*> (&noiseType) : &selector);
+        group.set (1, noise ? static_cast<Component*> (&filter) : (sub ? static_cast<Component*> (&oct) : &source));
+        group.set (2, &pan);
+        group.set (3, &level);
+        layout();
+    }
+    OscInstance instance() const noexcept { return inst_; }
+    OscKind kind() const noexcept { return kind_; }
+    void setStacked (bool s) { stacked_ = s; layout(); }
+    bool stacked() const noexcept { return stacked_; }
+    /** The ids of the parts from base: selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = base .. base + 7 (the same call in every view gives the same ids). */
+    void assignIds (int base)
+    {
+        selector.setId (base); source.stepper.setId (base + 1); source.dropdown.setId (base + 2); oct.setId (base + 3);
+        filter.setId (base + 4); noiseType.setId (base + 5); pan.setId (base + 6); level.setId (base + 7);
+    }
+    Size minSize() const override
+    {
+        const Component* first = inst_ == OscInstance::Noise ? static_cast<const Component*> (&noiseType) : &selector;
+        const Component* second = inst_ == OscInstance::Noise ? static_cast<const Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const Component*> (&oct) : &source);
+        const Size a = first->minSize(), b = second->minSize(), p = pan.minSize();
+        if (stacked_)
+            return { std::max ({ a.w, b.w, 2 * p.w + kGap }), a.h + b.h + p.h + 2 * kGap };
+        return { a.w + b.w + 2 * p.w + 3 * kGap, std::max ({ a.h, b.h, p.h }) };
+    }
+    void setEnabled (bool e) override { Composite::setEnabled (e); }
+
+protected:
+    void layout() override
+    {
+        Component* first = inst_ == OscInstance::Noise ? static_cast<Component*> (&noiseType) : &selector;
+        Component* second = inst_ == OscInstance::Noise ? static_cast<Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<Component*> (&oct) : &source);
+        if (stacked_)
+        {
+            const int h1 = first->minSize().h, h2 = second->minSize().h, h3 = std::max (0, rect_.h - h1 - h2 - 2 * kGap);
+            first->place ({ rect_.x, rect_.y, rect_.w, h1 });
+            second->place ({ rect_.x, rect_.y + h1 + kGap, rect_.w, h2 });
+            Rect r[2];
+            const int fixed[2] = { 0, 0 }, weight[2] = { 1, 1 };
+            layoutRow ({ rect_.x, rect_.y + h1 + h2 + 2 * kGap, rect_.w, h3 }, fixed, weight, 2, kGap, r);
+            pan.place (r[0]); level.place (r[1]);
+            return;
+        }
+        Rect r[4];
+        const int fixed[4] = { 0, 0, 0, 0 };
+        const int weight[4] = { first->minSize().w, second->minSize().w, pan.minSize().w, level.minSize().w };
+        layoutRow (rect_, fixed, weight, 4, kGap, r);
+        const int h1 = std::min (rect_.h, first->minSize().h), h2 = std::min (rect_.h, second->minSize().h);
+        first->place ({ r[0].x, r[0].y + (rect_.h - h1) / 2, r[0].w, h1 });
+        second->place ({ r[1].x, r[1].y + (rect_.h - h2) / 2, r[1].w, h2 });
+        pan.place (r[2]); level.place (r[3]);
+    }
+    OscInstance inst_ = OscInstance::A;
+    OscKind kind_ = OscKind::Wavetable;
+    bool stacked_ = false;
+};
+
+// ===============================================================================================================================================================
 /** RoutePanel: the popup the RouteButton opens. The target Stepper (Filter / Main / Direct / None: the list is the owner's), the F1 <-> F2 balance Knob (bipolar; enabled only when the owner
     says the target is the filter: setTargetIsFilter), the BUS 1 and BUS 2 send Knobs and the close button (a Request change). turn goes to the target stepper. */
 class RoutePanel : public Composite
@@ -422,34 +622,89 @@ public:
     Stepper target;
     Knob balance { "F1 F2" }, bus1 { "BUS 1" }, bus2 { "BUS 2" };
     MenuButton close { "CLOSE", MenuButton::Icon::None };
+    QGroup group;   // its four values in one Q group: target, balance, BUS 1, BUS 2
 
     RoutePanel()
     {
         balance.state.bipolar = true; balance.state.defaultValue = 0.5; balance.state.value = balance.state.modValue = 0.5;
         addKid (target); addKid (close); addKid (balance); addKid (bus1); addKid (bus2);
         setPrimary (&target);
+        group.set (0, &target); group.set (1, &balance); group.set (2, &bus1); group.set (3, &bus2);
     }
     void setTargetIsFilter (bool f) { isFilter_ = f; syncKids(); }
     bool targetIsFilter() const noexcept { return isFilter_; }
-    Size minSize() const override { return { std::max (Stepper::kMinW + kGap + 112, 3 * 100 + 2 * kGap), 56 + kGap + 72 }; }
+    Size minSize() const override { return { std::max (Stepper::kMinW, 3 * 100 + 2 * kGap), 56 + kGap + 56 + kGap + 72 }; }
+
+    /** The popup variant: the panel is a framed box on a dimmed backdrop over `parent` (the rectangle of the screen below it). A tap outside the box (inside the parent) is a Request change with
+        the id of `setBackdropId`: "close requested". The box itself is the rectangle given by `place`; the backdrop is the only thing drawn outside it. */
+    void setPopup (bool popup, const Rect& parent) { popup_ = popup; parent_ = parent; backdropTap_ = false; }
+    bool popup() const noexcept { return popup_; }
+    void setBackdropId (int id) noexcept { backdropId_ = id; }
+    int backdropId() const noexcept { return backdropId_; }
+
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        if (popup_)
+        {
+            Pen pen (sb, true);
+            pen.rect (parent_, colour::rgba (0x000000u, 150));
+            pen.rect (rect_, pen.c (colour::kPanel, 255));
+        }
+        Composite::draw (sb);
+        if (popup_)
+            group.draw (sb);
+    }
+    Change touchDown (int x, int y, double nowMs) override
+    {
+        backdropTap_ = false;
+        if (popup_ && enabled_ && ! rect_.contains (x, y) && parent_.contains (x, y))
+        {
+            backdropTap_ = true;
+            tap_.down (x, y, nowMs);
+            cap_ = nullptr;
+            return Change::none();
+        }
+        return Composite::touchDown (x, y, nowMs);
+    }
+    Change touchMove (int x, int y) override
+    {
+        if (backdropTap_)
+        {
+            tap_.move (x, y);
+            return Change::none();
+        }
+        return Composite::touchMove (x, y);
+    }
+    Change touchUp (int x, int y) override
+    {
+        if (backdropTap_)
+        {
+            backdropTap_ = false;
+            return tap_.up() != 0 ? Change::request (backdropId_) : Change::none();
+        }
+        return Composite::touchUp (x, y);
+    }
 
 protected:
     void syncKids() override { for (int i = 0; i < n_; ++i) kids_[i]->setEnabled (enabled_); balance.setEnabled (enabled_ && isFilter_); }
     void layout() override
     {
-        const int topH = std::min (56, rect_.h / 2);
-        Rect r[2];
-        const int fixed[2] = { 0, 112 }, weight[2] = { 1, 0 };
-        layoutRow ({ rect_.x, rect_.y, rect_.w, topH }, fixed, weight, 2, kGap, r);
-        target.place (r[0]); close.place (r[1]);
+        // the close button in a row of its own at the top (so that the four values are one block), then the target stepper, then the three knobs
+        const int rowH = std::min (56, rect_.h / 3);
+        close.place ({ rect_.right() - 112, rect_.y, std::min (112, rect_.w), rowH });
+        target.place ({ rect_.x, rect_.y + rowH + kGap, rect_.w, rowH });
         Rect k[3];
         const int f3[3] = { 0, 0, 0 }, w3[3] = { 1, 1, 1 };
-        layoutRow ({ rect_.x, rect_.y + topH + kGap, rect_.w, std::max (0, rect_.h - topH - kGap) }, f3, w3, 3, kGap, k);
+        const int ky = rect_.y + 2 * (rowH + kGap);
+        layoutRow ({ rect_.x, ky, rect_.w, std::max (0, rect_.bottom() - ky) }, f3, w3, 3, kGap, k);
         balance.place (k[0]); bus1.place (k[1]); bus2.place (k[2]);
         syncKids();
     }
-    void drawExtra (Pen& p) const override { p.frame (rect_, 1, p.c (colour::kRest, 255)); }
-    bool isFilter_ = true;
+    void drawExtra (Pen& p) const override { p.frame (rect_, popup_ ? 2 : 1, p.c (popup_ ? colour::kAccent : colour::kRest, 255)); }
+    bool isFilter_ = true, popup_ = false, backdropTap_ = false;
+    Rect parent_;
+    int backdropId_ = 0;
+    TapGesture tap_;
 };
 
 }} // namespace synthyboy_mpc::ui

@@ -25,7 +25,7 @@ struct OscPage
 
     OscPage() { power.state.icon = ToggleIcon::Icon::Power; power.state.on = true; }
 
-    /** The page of a preset in `area` (the region of a tab: 1280 x 628 with a margin of 56 on the sides); typeIndex: sub 0, wavetable 1, granular 2, multisample 3, noise 4. */
+    /** The page of a preset in `area` (the region of a tab: 1280 x 628 with a margin of 56 on the sides); typeIndex: wavetable 0, multisample 1, granular 2. */
     void build (const PanelPreset& p, const BarPreset& bp, int typeIndex, Rect a, bool withTune)
     {
         area = a;
@@ -42,19 +42,20 @@ struct OscPage
         // the type selector and the source stepper over PAN and LEVEL: one block, the first Q group
         if (&p == &presets::kWavetable)
         {
-            type.place ({ pan.x, a.y, pan.w, 5 * 56 });
-            source.place ({ pan.x, a.y + 5 * 56 + 8, pan.w, 56 });
+            type.place ({ pan.x, a.y, pan.w, 3 * 56 });
+            source.place ({ pan.x, a.y + 3 * 56 + 8, pan.w, 56 });
         }
         else
         {
-            type.place ({ pan.x, a.y, pan.w, pan.w >= 5 * 76 ? 64 : 5 * 56 });
+            type.place ({ pan.x, a.y, pan.w, pan.w >= 3 * 76 ? 64 : 3 * 56 });
             source.place ({ level.x, a.y, level.w, 56 });
         }
         const int w = std::min (560, pan.x - a.x - 8);
         wave = { a.x, a.y + 72, w, panel.rect().y - 8 - 56 - 4 - (a.y + 72) };
         bar.place ({ a.x, wave.bottom() + 4, w, 56 });
-        for (int i = 0; i < 5; ++i)
-            type.setItem (i, i, i == 0 ? "SUB" : i == 1 ? "WAVE" : i == 2 ? "GRAIN" : i == 3 ? "SAMPLE" : "NOISE");
+        type.setItem (0, pictogram::Wavetable, "WAVE");
+        type.setItem (1, pictogram::Multisample, "SAMPLE");
+        type.setItem (2, pictogram::Granular, "GRAIN");
         type.state.index = typeIndex;
         typeName = "OSC 1";
         ids();

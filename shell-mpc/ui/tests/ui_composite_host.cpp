@@ -270,9 +270,14 @@ void testTypeBar()
     // multisample: the toggle
     TypeBar m (barpresets::kMultisample);
     m.place ({ 10, 10, 560, 56 });
-    m.slot (0)->setId (60);
-    c = tap (m, cx (*m.slot (0)), cy (*m.slot (0)), 0.0);
-    check (c.kind == ChangeKind::Index && c.id == 60 && c.index == 1, "type bar multisample: the VEL TRACK toggle: id 60");
+    auto& vel = static_cast<ToggleNumber&> (*m.slot (1));
+    vel.toggle.setId (60); vel.amount.setId (61);
+    c = tap (m, cx (vel.toggle), cy (vel.toggle), 0.0);
+    check (c.kind == ChangeKind::Index && c.id == 60 && c.index == 1, "type bar multisample: the VEL TRACK toggle (and its amount in the same slot): id 60");
+    c = m.slot (1)->turn (3);
+    check (c.kind == ChangeKind::Index && c.id == 61 && c.index == 3, "type bar multisample: turn on the slot goes to the amount: id 61");
+    auto& env = static_cast<DetailButton&> (*m.slot (0));
+    check (env.state.icon == DetailButton::Icon::Envelope && ! env.state.hasValue && tap (m, cx (env), cy (env), 500.0).kind == ChangeKind::Request, "type bar multisample: the envelope button (no main value): details requested");
     // reload replaces the slots
     w.load (barpresets::kNoise);
     w.place ({ 10, 10, 560, 56 });
@@ -316,14 +321,47 @@ void testRoutePanel()
     check (r.balance.enabled(), "route panel: enabled again, filter target: the balance knob is back");
     drawChecks (r, "route panel", { 10, 10, r.minSize().w, r.minSize().h }, "routepanel_min.png");
     drawChecks (r, "route panel (large)", { 10, 10, 700, 240 }, "routepanel.png");
+    // the popup variant
+    RoutePanel pp;
+    const Rect parent { 0, 0, 1280, 800 };
+    pp.place ({ 300, 250, 560, 200 });
+    pp.setPopup (true, parent);
+    pp.setBackdropId (77);
+    pp.target.setId (1); pp.close.setId (5);
+    check (pp.popup() && pp.group.numMembers() == 4 && pp.group.member (0) == &pp.target && pp.group.member (1) == &pp.balance && pp.group.member (2) == &pp.bus1 && pp.group.member (3) == &pp.bus2, "route panel popup: exactly four values = one Q group (target, balance, BUS 1, BUS 2)");
+    pp.group.setActive (true);
+    Component* pl[8];
+    const int np = pp.collectLeaves (pl, 0, 8);
+    check (pp.group.check (pl, np) == 0, "route panel popup: the Q group is adjacent (the close button is in a row of its own, outside the union)");
+    Scene sp (1280, 800, kBackgroundRgba);
+    pp.draw (sp.builder());
+    const Image ip = render (sp);
+    check (! sp.overflow() && drawnOutside (ip, parent, backgroundPixel()) == 0 && ip.at (50, 50) != backgroundPixel() && colourNear (ip, 301.0f, 300.0f, 0, colour::kAccent, 4), "route panel popup: a dimmed backdrop over the parent rectangle (changes the pixels), the framed box, nothing outside the parent");
+    c = tap (pp, 50, 50, 0.0);
+    check (c.kind == ChangeKind::Request && c.id == 77, "route panel popup: a tap outside the box (on the backdrop) = close requested: id 77");
+    pp.touchDown (50, 50, 100.0);
+    pp.touchMove (50, 300);
+    check (! pp.touchUp (50, 300), "route panel popup: a drag on the backdrop is not a tap");
+    check (! tap (pp, -5, -5, 200.0), "route panel popup: a touch outside the parent is ignored");
+    pp.target.state.count = 4;
+    c = tap (pp, pp.target.rect().right() - 10, cy (pp.target), 300.0);
+    check (c.kind == ChangeKind::Index && c.id == 1, "route panel popup: a tap inside the box reaches the children");
+    c = tap (pp, cx (pp.close), cy (pp.close), 400.0);
+    check (c.kind == ChangeKind::Request && c.id == 5, "route panel popup: the close button inside: id 5");
+    pp.setEnabled (false);
+    check (! tap (pp, 50, 50, 500.0), "route panel popup: disabled: no reaction");
+    writePng (outDir() + "/routepanel_popup.png", ip, 1);
 }
 
 void testDetailPage()
 {
     struct Case { const PanelPreset* p; const char* title; int parts, groups; bool display; };
-    const Case cases[] = { { &presets::kUnisonDetail, "UNISON", 7, 2, false }, { &presets::kGrainDetail, "GRAIN WINDOW", 5, 2, true } };
+    const Case cases[] = { { &presets::kUnisonDetail, "UNISON", 7, 2, false }, { &presets::kUnisonDetailMultisample, "UNISON", 6, 2, false }, { &presets::kUnisonDetailGranular, "UNISON", 5, 2, false },
+                           { &presets::kGrainDetail, "GRAIN WINDOW", 5, 2, true }, { &presets::kEnvelopeDetail, "ENVELOPE", 7, 2, true } };
+    int caseNo = 0;
     for (const Case& cs : cases)
     {
+        ++caseNo;
         DetailPage pg;
         pg.load (*cs.p, cs.title);
         const Rect area { 56, 14, 1168, 600 };
@@ -350,7 +388,7 @@ void testDetailPage()
         pg.setActiveGroup (1);
         check (pg.groups[1].active() && ! pg.groups[0].active(), nm + ": the second group can be activated, the first is off");
         check (! pg.turnQ (3, 1) || pg.groups[1].member (3) != nullptr, nm + ": an empty place of a group routes nothing");
-        drawChecks (pg, nm, area, (std::string ("detail_") + (cs.display ? "grain" : "unison") + ".png").c_str());
+        drawChecks (pg, nm, area, (std::string ("detail_") + std::to_string (caseNo) + ".png").c_str());
         drawChecks (pg, nm + " (large)", { 10, 10, 1900, 1000 }, nullptr);
     }
     {
@@ -366,9 +404,60 @@ void testDetailPage()
     }
     {
         DetailPage pg;
+        pg.load (presets::kUnisonDetailMultisample, "UNISON");
+        check (pg.groups[0].member (3) == pg.panel.knob (PanelSlot::Range) && pg.groups[1].member (0) == pg.panel.knob (PanelSlot::Warp1Spread) && pg.groups[1].member (1) == pg.panel.knob (PanelSlot::Warp2Spread) && pg.groups[1].member (2) == nullptr && ! pg.panel.knob (PanelSlot::WtSpread), "detail page multisample unison: [MODE, STACK, WIDTH, RANGE] and [WARP 1 spread, WARP 2 spread]");
+        pg.load (presets::kUnisonDetailGranular, "UNISON");
+        check (pg.groups[1].member (0) == pg.panel.knob (PanelSlot::Start) && pg.groups[1].member (1) == nullptr, "detail page granular unison: [MODE, STACK, WIDTH, RANGE] and [START]");
+        pg.load (presets::kUnisonDetail, "UNISON");
+        check (pg.groups[1].member (0) == pg.panel.knob (PanelSlot::WtSpread) && pg.groups[1].member (2) == pg.panel.knob (PanelSlot::Warp2Spread), "detail page wavetable unison: [MODE, STACK, WIDTH, RANGE] and [WT POS, WARP 1, WARP 2 spread]");
+        pg.load (presets::kEnvelopeDetail, "ENVELOPE");
+        pg.place ({ 56, 14, 1168, 600 });
+        check (pg.groups[0].member (0) == pg.panel.knob (PanelSlot::Delay) && pg.groups[0].member (1) == pg.panel.knob (PanelSlot::Attack) && pg.groups[0].member (2) == pg.panel.knob (PanelSlot::Hold) && pg.groups[0].member (3) == pg.panel.knob (PanelSlot::Decay)
+               && pg.groups[1].member (0) == pg.panel.knob (PanelSlot::Sustain) && pg.groups[1].member (1) == pg.panel.knob (PanelSlot::Release) && pg.groups[1].member (2) == pg.panel.toggle (PanelSlot::Override) && ! pg.displayRect().empty(), "detail page envelope: [DELAY, A, H, D] and [S, R, OVERRIDE], the display area reserved above");
+        pg.panel.toggle (PanelSlot::Override)->setId (90);
+        Change c = tap (pg, cx (*pg.panel.toggle (PanelSlot::Override)), cy (*pg.panel.toggle (PanelSlot::Override)), 0.0);
+        check (c.kind == ChangeKind::Index && c.id == 90 && c.index == 1, "detail page envelope: the OVERRIDE toggle: id 90");
         pg.load (presets::kGrainDetail, "GRAIN WINDOW");
         check (pg.panel.knob (PanelSlot::Amount) && pg.panel.knob (PanelSlot::AmountRand) && pg.panel.knob (PanelSlot::Skew) && pg.panel.knob (PanelSlot::SkewRand) && pg.panel.stepper (PanelSlot::Shape), "detail page grain window: AMOUNT, AMOUNT rand, SKEW, SKEW rand knobs and the SHAPE stepper");
     }
+}
+
+
+void testSourceAndVertical()
+{
+    SourcePicker sp;
+    sp.place ({ 10, 10, sp.minSize().w, 56 });
+    sp.stepper.setId (1); sp.dropdown.setId (2);
+    sp.stepper.state.count = 10; sp.stepper.state.index = 3; sp.stepper.setItem ("SAW");
+    std::string why;
+    check (sp.sizeOk() && leavesOk (sp, sp.rect(), why), "source picker: fits, stepper and dropdown inside, no overlap" + why);
+    Change c = tap (sp, sp.stepper.rect().right() - 10, cy (sp.stepper), 0.0);
+    check (c.kind == ChangeKind::Index && c.id == 1 && c.index == 4, "source picker: the stepper: next, id 1");
+    c = tap (sp, cx (sp.dropdown), cy (sp.dropdown), 100.0);
+    check (c.kind == ChangeKind::Request && c.id == 2, "source picker: the dropdown: request, id 2");
+    c = sp.turn (-1);
+    check (c.kind == ChangeKind::Index && c.id == 1 && c.index == 2, "source picker: turn goes to the stepper");
+    drawChecks (sp, "source picker", { 10, 10, sp.minSize().w, 56 }, nullptr);
+
+    TuneRow t;
+    t.setVertical (true);
+    t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
+    check (t.isVertical() && t.sizeOk(), "tune row vertical: fits its minimum size");
+    check (leavesOk (t, t.rect(), why) && t.oct.rect().bottom() <= t.sem.rect().y && t.sem.rect().bottom() <= t.fin.rect().y && t.fin.rect().bottom() <= t.crs.rect().y && t.crs.rect().bottom() <= t.track.rect().y, "tune row vertical: OCT, SEM, FIN, CRS and the toggle one under the other" + why);
+    t.oct.setId (1); t.crs.setId (4);
+    Change d = tap (t, cx (t.oct), cy (t.oct), 0.0);
+    d = tap (t, cx (t.oct), cy (t.oct), 100.0);
+    check (d.kind == ChangeKind::Index || ! d, "tune row vertical: a field reacts as before");
+    t.setShort (true);
+    t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
+    Component* l[8];
+    check (t.collectLeaves (l, 0, 8) == 2 && t.minSize().h == 2 * 56 + 4 && leavesOk (t, t.rect(), why), "tune row vertical short: OCT and CRS" + why);
+    t.setShort (false);
+    t.setCrsOnly (true);
+    t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
+    check (t.isCrsOnly() && t.collectLeaves (l, 0, 8) == 1 && l[0] == &t.crs && t.minSize().h == 56 && t.crs.rect().y == 10, "tune row vertical: CRS only (the sub oscillator's full screen)");
+    t.setCrsOnly (false);
+    drawChecks (t, "tune row vertical", { 10, 10, 400, 5 * 56 + 4 * 4 }, "tunerow_vertical.png");
 }
 
 void testModulationsPage()
@@ -404,6 +493,16 @@ void testModulationsPage()
     check (c.kind == ChangeKind::Request && c.id == 1, "modulations page: back");
     check (! tap (pg, pg.rect().x + 600, pg.rect().y + 400, 400.0), "modulations page: below the rows: nothing");
     drawChecks (pg, "modulations page", { 56, 14, 1168, 600 }, "modulations.png");
+    // the last row: add a source
+    pg.addSource.setId (200); pg.add.setId (201);
+    pg.addSource.state.count = 3; pg.addSource.state.index = 1; pg.addSource.setItem ("LFO 3");
+    pg.sourceIds[0] = 31; pg.sourceIds[1] = 32; pg.sourceIds[2] = 33;
+    check (pg.addRowRect().y == pg.rows[2].depth.rect().bottom() + 0 + 0 || pg.addRowRect().y >= pg.rows[2].depth.rect().bottom(), "modulations page: the add row is under the last entry");
+    c = tap (pg, cx (pg.add), cy (pg.add), 500.0);
+    check (c.kind == ChangeKind::AddRequest && c.id == 201 && c.index == 32, "modulations page: the add button: { add requested, source id 32 (the item the stepper shows) }");
+    c = tap (pg, pg.addSource.rect().right() - 10, cy (pg.addSource), 600.0);
+    check (c.kind == ChangeKind::Index && c.id == 200 && c.index == 2, "modulations page: the add stepper over the sources of the owner: id 200");
+    drawChecks (pg, "modulations page with the add row", { 56, 14, 1168, 600 }, nullptr);
     m.numMods = 0;
     pg.load (m, "EMPTY");
     check (pg.numRows() == 0, "modulations page: no entries: no rows");
@@ -501,7 +600,7 @@ void testPanels()
 void testQGroup()
 {
     OscPage pg;
-    pg.build (presets::kWavetable, barpresets::kWavetable, 1, { 56, 14, 1168, 600 }, true);
+    pg.build (presets::kWavetable, barpresets::kWavetable, 0, { 56, 14, 1168, 600 }, true);
     Component* all[96];
     const int n = pg.leaves (all, 96);
     check (n > 20 && n < 96, "q group: the demonstration page has " + std::to_string (n) + " leaves");
@@ -540,7 +639,7 @@ void testQGroup()
     const int n3 = pg.leaves (all, 96);
     (void) n3;
     Change c = pg.q[0].turn (0, 1);
-    check (c.kind == ChangeKind::Index && c.id == pg.type.id() && c.index == 2, "q group: turn (0, +1) goes to the first member (the type stepper): its id, next item");
+    check (c.kind == ChangeKind::Index && c.id == pg.type.id() && c.index == 1, "q group: turn (0, +1) goes to the first member (the type stepper): its id, next item");
     c = pg.q[0].turn (1, -3);
     check (c.kind == ChangeKind::Index && c.id == pg.source.id() && c.index == 4, "q group: turn (1, -3) goes to the second member (the source)");
     pg.panel.knob (PanelSlot::Pan)->state.value = 0.5;
@@ -588,7 +687,7 @@ void testQGroup()
 void testPage()
 {
     struct Case { const PanelPreset* p; const BarPreset* b; int type; bool tune; const char* file; };
-    const Case cases[] = { { &presets::kWavetable, &barpresets::kWavetable, 1, true, "wavetable" }, { &presets::kGranular, &barpresets::kGranular, 2, true, "granular" }, { &presets::kNoise, &barpresets::kNoise, 4, false, "noise" } };
+    const Case cases[] = { { &presets::kWavetable, &barpresets::kWavetable, 0, true, "wavetable" }, { &presets::kGranular, &barpresets::kGranular, 2, true, "granular" } };
     for (const Case& cs : cases)
     {
         OscPage pg;
@@ -612,6 +711,7 @@ int main()
     testRoutePanel();
     testDetailPage();
     testModulationsPage();
+    testSourceAndVertical();
     testUnisonBox();
     testWarp();
     testRandPair();
