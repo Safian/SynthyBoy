@@ -399,6 +399,8 @@ public:
     virtual int touchTargets (Rect* out, int max) const { if (max > 0) { out[0] = rect_; return 1; } return 0; }
     /** The leaves (base components) of this component, appended to out[n ..]; returns the new count (at most max). */
     virtual int collectLeaves (Component** out, int n, int max) { if (n < max) out[n++] = this; return n; }
+    /** The child a hardware knob turns when this component is a member of a Q group (null: the component itself; a composite: its primary child). */
+    virtual Component* primaryChild() const { return nullptr; }
 
 protected:
     virtual void drawBody (Pen& pen) const = 0;

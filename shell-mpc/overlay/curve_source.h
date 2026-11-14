@@ -61,6 +61,15 @@ public:
     /** The plugin-drawn pages set the targets of the four Q proxies ("Q 1" .. "Q 4", q_router.h): the first `n` (at most 4) of `targets`, each a parameter table index or -1 (none). Called from the overlay
         thread while the instance is registered; it must be lock free (the plugin's display thread tells the host the new values). */
     virtual void setQGroup (const int* /*targets*/, int /*n*/) noexcept {}
+    /** The plugin-drawn pages write a real parameter (table index) with a NORMALISED value (0 .. 1): the same write as the host's own (mirror, protection, engine), and the host is told afterwards
+        (the instance's display thread makes the call, audioMasterAutomate), so automation and the host's own widgets follow. Called from the overlay thread; lock free. */
+    virtual void writeParam (int /*tableIndex*/, float /*normalised*/) noexcept {}
+    /** The plugin-drawn compact view sets the oscillator selector of the Play page (1 .. 5: Sub, A, B, C, Noise) like the host's own widget (saved in the chunk, the proxies and the host follow). */
+    virtual void setPlaySelection (int /*group*/, int /*instance*/) noexcept {}
+    /** Which of the Play page's envelope / LFO selectors was touched last: 0 none yet, 1 envelope, 2 LFO (the modulation source the plugin-drawn pages treat as "selected"). */
+    virtual int playLastSelector() const noexcept { return 0; }
+    /** A plugin-drawn full screen page is open for this instance: the plugin hides the host widgets of the Play page (the display parameter "Overlay Instance" takes a frame the skin hides them at). */
+    virtual void setUiFullOpen (bool /*open*/) noexcept {}
 };
 
 class CurveSource

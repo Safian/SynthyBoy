@@ -123,6 +123,16 @@ public:
         layout();
         buildGroups();
     }
+    /** An oscillator type the library has no full screen for (the engine's Sample and Spectral types, only on the host's own pages): the type bar and the bottom band are empty (the owner draws the
+        type name), the other parts stay. Call after `setInstance`. */
+    void setUnsupportedType()
+    {
+        static const BarPreset kNoBar { "none", nullptr, 0 };
+        bar.load (kNoBar);
+        panel.load (presets::kEmptyFull);
+        layout();
+        buildGroups();
+    }
     OscInstance instance() const noexcept { return inst_; }
     OscKind kind() const noexcept { return kind_; }
     /** The rectangle reserved for the display (the picture is drawn by the overlay views). */

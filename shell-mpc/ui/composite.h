@@ -96,6 +96,9 @@ public:
                 n = kids_[i]->collectLeaves (out, n, max);
         return n;
     }
+    /** The primary child (the one a hardware knob turns), null when the composite has none. */
+    Component* primary() const noexcept { return primary_; }
+    Component* primaryChild() const override { return primary_; }
     int numChildren() const noexcept { return n_; }
     Component* child (int i) const noexcept { return kids_[i]; }
     bool childShown (int i) const noexcept { return shown_[i]; }
