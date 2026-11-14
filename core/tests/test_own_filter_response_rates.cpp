@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -228,9 +227,9 @@ TEST (own_filter_response_every_model_at_96000_is_finite_and_fast)
             {
                 ParamValues v = patch (m, st, 1500.0f, res);
                 std::vector<float> db (256);
-                const auto t0 = std::chrono::steady_clock::now();
-                const bool ok = fr.compute (v, {}, db.data(), 256);
-                const double ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
+                // the speed is the thread's own CPU time, the best of several runs: the wall clock of a test that runs in parallel with the whole suite measures the other tests too
+                bool ok = true;
+                const double ms = sbtest::bestCpuMs (5, [&] { ok = fr.compute (v, {}, db.data(), 256); });
                 CHECK (ok);
                 if (!CHECK (hasSignal (db)))
                     std::printf ("    96 kHz model %d style %d res %.0f: not finite / out of range\n", m, st, res);
@@ -239,7 +238,7 @@ TEST (own_filter_response_every_model_at_96000_is_finite_and_fast)
                 if (ms > worstMs)
                     worstMs = ms, worstModel = m, worstStyle = st;
             }
-    std::printf ("    96 kHz %d computes (%d samples, %.2f Hz per bin): mean %.3f ms, worst %.3f ms (model %d style %d)\n", runs, fr.impulseLength(), fr.binWidthHz(), sumMs / runs,
+    std::printf ("    96 kHz %d computes (%d samples, %.2f Hz per bin): mean %.3f ms, worst %.3f ms thread CPU, best of 5 (model %d style %d)\n", runs, fr.impulseLength(), fr.binWidthHz(), sumMs / runs,
                  worstMs, worstModel, worstStyle);
     if (!sbtest::instrumented())
         CHECK (worstMs < 5.0);

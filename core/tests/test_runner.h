@@ -6,9 +6,19 @@
 // test_main.cpp provides main(): runs all registered cases (optionally those whose name contains argv[1]).
 #pragma once
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+
+#ifdef _WIN32
+ #ifndef NOMINMAX
+  #define NOMINMAX
+ #endif
+ #include <windows.h>
+#else
+ #include <time.h>
+#endif
 
 // A build under a sanitizer is 5 to 20 times slower than a native one.
 #if defined (__SANITIZE_THREAD__) || defined (__SANITIZE_ADDRESS__)
@@ -33,6 +43,43 @@ inline bool instrumented()
         return SBTEST_SANITIZED != 0 || (env != nullptr && env[0] != '\0' && env[0] != '0');
     }();
     return value;
+}
+
+/** CPU time of the calling thread in milliseconds (the time this thread was running, not the time that passed: another process or another test thread taking the core does not
+    count). A speed check of a test that runs in parallel with the whole suite uses this and the best of several repetitions, never the wall clock. Falls back to the wall clock
+    where the platform has no per thread CPU clock. */
+inline double threadCpuMs()
+{
+#ifdef _WIN32
+    FILETIME creation, exitTime, kernel, user;
+    if (GetThreadTimes (GetCurrentThread(), &creation, &exitTime, &kernel, &user))
+    {
+        auto ticks = [] (const FILETIME& f) { return static_cast<double> ((static_cast<unsigned long long> (f.dwHighDateTime) << 32) | f.dwLowDateTime); };   // 100 ns units
+        return (ticks (kernel) + ticks (user)) / 1.0e4;
+    }
+#elif defined (CLOCK_THREAD_CPUTIME_ID)
+    timespec t;
+    if (clock_gettime (CLOCK_THREAD_CPUTIME_ID, &t) == 0)
+        return static_cast<double> (t.tv_sec) * 1.0e3 + static_cast<double> (t.tv_nsec) / 1.0e6;
+#endif
+    return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+/** Runs `fn` `repetitions` times and returns the smallest thread CPU time of one run in milliseconds (the best of several: a run that was slowed down, by a cache miss or a
+    frequency step, does not decide). */
+template <class Fn>
+double bestCpuMs (int repetitions, Fn&& fn)
+{
+    double best = 1.0e300;
+    for (int i = 0; i < (repetitions < 1 ? 1 : repetitions); ++i)
+    {
+        const double t0 = threadCpuMs();
+        fn();
+        const double ms = threadCpuMs() - t0;
+        if (ms < best)
+            best = ms;
+    }
+    return best;
 }
 
 /** The amount of work of a test: full natively, reduced (but never below 1) in an instrumented run. */
