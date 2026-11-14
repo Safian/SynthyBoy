@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: python3 scripts/embed-presets.py --presets-dir content/presets --out-h shell-juce/EmbeddedPresets.h --out-cpp shell-juce/EmbeddedPresets.cpp
+# Usage: python3 scripts/embed-presets.py --presets-dir content/presets --out-h <build>/EmbeddedPresets.h --out-cpp <build>/EmbeddedPresets.cpp
 
 import argparse
 import json
@@ -13,9 +13,11 @@ from pathlib import Path
 
 
 def escape_c_string(s: str) -> str:
-    """Escape a string for C++ string literal."""
+    """Escape a string for a C++ string literal. Non-ASCII goes out as the UTF-8 bytes in 3-digit octal escapes
+    (an octal escape ends after three digits, so a following digit can never be swallowed, unlike \\x)."""
     out = []
-    for c in s:
+    for b in s.encode('utf-8'):
+        c = chr(b)
         if c == '\\':
             out.append('\\\\')
         elif c == '"':
@@ -26,8 +28,10 @@ def escape_c_string(s: str) -> str:
             out.append('\\r')
         elif c == '\t':
             out.append('\\t')
-        elif ord(c) < 32 or ord(c) >= 127:
-            out.append(f'\\x{ord(c):02x}')
+        elif b < 32 or b >= 127:
+            out.append(f'\\{b:03o}')
+        elif c == '?':
+            out.append('\\?')  # no trigraphs
         else:
             out.append(c)
     return ''.join(out)
@@ -36,17 +40,17 @@ def escape_c_string(s: str) -> str:
 def collect_and_sort_presets(presets_dir: Path):
     presets = []
     for root, _, files in os.walk(presets_dir):
-        for f in sorted(files):
+        for f in files:
             if f.endswith('.sbpreset'):
                 full_path = Path(root) / f
-                with open(full_path, 'r', encoding='utf-8') as fp:
-                    content = fp.read()
+                # binary: the embedded bytes are the file bytes on every platform (no CRLF translation)
+                content = full_path.read_bytes()
                 try:
-                    data = json.loads(content)
+                    data = json.loads(content.decode('utf-8'))
                 except Exception as e:
                     raise RuntimeError(f"Failed to parse JSON in {full_path}: {e}")
 
-                meta = data.get('meta', {})
+                meta = data.get('meta', {}) if isinstance(data, dict) else {}
                 category = meta.get('category', '')
                 name = meta.get('name', '')
                 if not category or not name:
@@ -60,12 +64,10 @@ def collect_and_sort_presets(presets_dir: Path):
                     'content': content
                 })
 
-    # Canonical sorting algorithm:
-    # 1. Sort by category ascending (case-sensitive <)
-    # 2. Sort by name case-insensitively (ASCII tolower)
-    # 3. Sort by relative file path
+    # Canonical order (the same as shell-mpc/program_list.h):
+    # 1. category ascending (plain <), 2. name case-insensitively (ASCII tolower), 3. relative file path
     def sort_key(p):
-        return (p['category'], [c.lower() for c in p['name']], p['rel_path'])
+        return (p['category'].encode('utf-8'), p['name'].encode('utf-8').lower(), p['rel_path'])
 
     presets.sort(key=sort_key)
     return presets
@@ -102,12 +104,15 @@ def generate_cpp(out_cpp: Path, presets, header_include: str = "EmbeddedPresets.
     lines.append("namespace synthyboy::desktop")
     lines.append("{")
 
+    # Byte arrays, not string literals: no literal length limit (MSVC), no raw-string delimiter clash, no encoding or
+    # line-ending dependence. Values are signed decimals so they fit `char` whatever its signedness.
     for i, p in enumerate(presets):
         var_name = f"p{i + 1:03d}_json"
-        # We use R"sbpreset(...)sbpreset"
-        if ")sbpreset" in p['content']:
-            raise RuntimeError(f"Preset {p['rel_path']} contains ')sbpreset' raw string delimiter!")
-        lines.append(f'static const char {var_name}[] = R"sbpreset({p["content"]})sbpreset";')
+        vals = [str(b - 256 if b > 127 else b) for b in p['content']]
+        lines.append(f'static const char {var_name}[] = {{')
+        for k in range(0, len(vals), 32):
+            lines.append(','.join(vals[k:k + 32]) + ',')
+        lines.append('0 };')
 
     lines.append("")
     lines.append("static const EmbeddedPreset kEmbeddedPresets[] = {")

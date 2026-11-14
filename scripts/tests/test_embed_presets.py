@@ -69,7 +69,7 @@ class EmbedPresetsTest(unittest.TestCase):
 
         def sort_key(item):
             cat, name, rel = item
-            return (cat, [c.lower() for c in name], rel)
+            return (cat.encode(), name.encode().lower(), rel)
 
         expected = sorted(raw, key=sort_key)
 
@@ -122,6 +122,64 @@ class EmbedPresetsTest(unittest.TestCase):
 
             self.assertEqual(out_h1.read_bytes(), out_h2.read_bytes())
             self.assertEqual(out_cpp1.read_bytes(), out_cpp2.read_bytes())
+
+    def _run(self, presets_dir, tmpdir):
+        out_h = Path(tmpdir) / "EmbeddedPresets.h"
+        out_cpp = Path(tmpdir) / "EmbeddedPresets.cpp"
+        res = subprocess.run(
+            [sys.executable, str(SCRIPT), "--presets-dir", str(presets_dir), "--out-h", str(out_h), "--out-cpp", str(out_cpp)],
+            capture_output=True, text=True)
+        return res, out_h, out_cpp
+
+    def _arrays(self, cpp_text):
+        """name -> bytes of each `static const char pNNN_json[] = { ... 0 };` array."""
+        import re
+        result = {}
+        for m in re.finditer(r"static const char (p\d+_json)\[\] = \{(.*?)\};", cpp_text, re.S):
+            nums = [int(x) for x in m.group(2).replace("\n", "").split(",") if x.strip()]
+            result[m.group(1)] = bytes(n & 0xFF for n in nums[:-1])
+        return result
+
+    def test_embedded_bytes_are_the_file_bytes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            res, _, out_cpp = self._run(PRESETS_DIR, tmpdir)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            text = out_cpp.read_text(encoding="utf-8")
+            arrays = self._arrays(text)
+            self.assertEqual(len(arrays), 112)
+            embedded = sorted(arrays.values())
+            on_disk = sorted(p.read_bytes() for p in PRESETS_DIR.glob("*/*.sbpreset"))
+            self.assertEqual(embedded, on_disk)
+            # portable: nothing of the build machine (source path, temp path) in the generated source
+            self.assertNotIn(str(ROOT), text)
+            self.assertNotIn(str(tmpdir), text)
+
+    def test_synthetic_presets_crlf_utf8_and_quotes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = Path(tmpdir) / "presets" / "Lead"
+            src.mkdir(parents=True)
+            doc = '{\r\n"meta":{"name":"Caf\u00e9 \\"Q\\"? 1","category":"Lead"}}\r\n'
+            (src / "a.sbpreset").write_bytes(doc.encode("utf-8"))
+            (src / "b.sbpreset").write_bytes('{"meta":{"name":"alpha","category":"Lead"}}'.encode())
+            out = Path(tmpdir) / "out"
+            res, _, out_cpp = self._run(Path(tmpdir) / "presets", out)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            text = out_cpp.read_text(encoding="utf-8")
+            arrays = self._arrays(text)
+            self.assertIn(doc.encode("utf-8"), arrays.values())  # CRLF and UTF-8 bytes kept
+            # ASCII-case-insensitive order: "alpha" < "Caf\xc3\xa9..."
+            table = [l.strip() for l in text.splitlines() if l.strip().startswith('{ "Lead"')]
+            self.assertTrue(table[0].startswith('{ "Lead", "alpha"'))
+            self.assertIn('Caf\\303\\251 \\"Q\\"\\? 1', table[1])
+
+    def test_invalid_preset_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = Path(tmpdir) / "presets"
+            src.mkdir()
+            (src / "x.sbpreset").write_text("{not json", encoding="utf-8")
+            res, _, _ = self._run(src, Path(tmpdir) / "out")
+            self.assertNotEqual(res.returncode, 0)
+
 
     def test_missing_directory_fails(self):
         with tempfile.TemporaryDirectory() as tmpdir:
