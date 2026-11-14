@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_filter_response PRESET.sbpreset [--filter 1|2] [--points N] [--sr 48000] [--note 60] [--cutoff HZ] [--resonance PERCENT] [--fmin HZ] [--fmax HZ] [--level]
+//   synthyboy_filter_response PRESET.sbpreset [--filter 1|2] [--points N] [--sr 48000] [--note 60] [--cutoff HZ] [--resonance PERCENT] [--fmin HZ] [--fmax HZ] [--level] [--set KEY=VALUE]...
 //
 // Prints "frequency_hz,gain_db" lines (N log spaced points, default 256 from 20 Hz to 20 kHz); the comment line "# ..." in front names the preset and the filter settings.
 // The curve is measured on the real filter code (core/include/synthyboy/filter_response.h). Exit code 1: the preset does not load, 2: the filter is off, 3: bad arguments.
@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "synthyboy/filter_response.h"
@@ -33,6 +34,7 @@ int main (int argc, char** argv)
     FilterResponse::Request req;
     int points = 256;
     double sr = 48000.0;
+    std::vector<std::pair<std::string, float>> overrides;   // --set filter1.model=2: any parameter of the preset, applied after it is loaded
     for (int i = 2; i < argc; ++i)
     {
         const std::string a = argv[i];
@@ -46,6 +48,13 @@ int main (int argc, char** argv)
         else if (a == "--fmin") req.fMin = static_cast<float> (std::atof (next()));
         else if (a == "--fmax") req.fMax = static_cast<float> (std::atof (next()));
         else if (a == "--level") req.includeLevel = true;
+        else if (a == "--set")
+        {
+            const std::string kv = next();
+            const size_t eq = kv.find ('=');
+            if (eq == std::string::npos || findParamByKey (kv.substr (0, eq).c_str()) == nullptr) { std::fprintf (stderr, "--set needs KEY=VALUE with a known key, got %s\n", kv.c_str()); return 3; }
+            overrides.emplace_back (kv.substr (0, eq), static_cast<float> (std::atof (kv.c_str() + eq + 1)));
+        }
         else { std::fprintf (stderr, "unknown option %s\n", a.c_str()); return 3; }
     }
     if (points < 1 || points > 100000 || sr < 8000.0 || sr > 384000.0 || req.filter < 1 || req.filter > 2)
@@ -63,6 +72,8 @@ int main (int argc, char** argv)
         std::fprintf (stderr, "%s: does not load\n", path);
         return 1;
     }
+    for (const auto& o : overrides)
+        values.plain[findParamIndex (findParamByKey (o.first.c_str())->id)] = o.second;
     auto get = [&] (const char* fmt) { char key[64]; std::snprintf (key, sizeof key, fmt, req.filter); const ParamInfo* p = findParamByKey (key); return p != nullptr ? values.plain[findParamIndex (p->id)] : 0.0f; };
     FilterResponse fr (sr);
     std::vector<float> db (static_cast<size_t> (points));
