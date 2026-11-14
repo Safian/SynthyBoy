@@ -814,5 +814,123 @@ void SpectralVoice::process (const SpectralParams& p, float* left, float* right,
         ++outPos_;
     }
 }
+
+void computeMagnitudeSpectrum (const Analysis& an, const SpectralParams& p, double frame, float* om, Scratch& scratch) noexcept
+{
+    if (om == nullptr)
+        return;
+    std::fill (om, om + kBins, 0.0f);
+    if (!an.valid() || an.numFrames() <= 0)
+        return;
+
+    const int last = an.numFrames() - 1;
+    frame = std::max (0.0, std::min (static_cast<double> (last), frame));
+    const int i0 = std::min (static_cast<int> (frame), last);
+    const int i1 = std::min (i0 + 1, last);
+    const float fr = static_cast<float> (std::max (0.0, std::min (1.0, frame - std::floor (frame))));
+    const int near = std::max (0, std::min (last, static_cast<int> (std::lround (frame))));
+    const int src = 0;
+    const float* m0 = an.magnitude (src, i0);
+    const float* m1 = an.magnitude (src, i1);
+    const float* fq = an.frequency (src, near);
+    const float* ph = an.phase (src, near);
+    const double fileRate = an.fileRate();
+    const double hostRate = p.hostRate > 0.0 ? p.hostRate : 48000.0;
+    const double fileBinHz = fileRate / kFftSize, hostBinHz = hostRate / kFftSize;
+
+    float* mag_ = scratch.mag;
+    float* freq_ = scratch.freq;
+    float* theta_ = scratch.theta;
+    float* tm_ = scratch.tm;
+    float* tf_ = scratch.tf;
+    float* of_ = scratch.of;
+    float* oth_ = scratch.oth;
+
+    for (int k = 0; k < kBins; ++k)
+    {
+        mag_[k] = m0[k] + (m1[k] - m0[k]) * fr;
+        freq_[k] = fq[k];
+        theta_[k] = ph[k];
+    }
+    const auto band = [&] (float* m, double binHz)
+    {
+        const float lo = std::max (1.0f, p.freqLoHz), hi = std::max (lo, p.freqHiHz);
+        for (int k = 0; k < kBins; ++k)
+        {
+            const float f = static_cast<float> (k * binHz);
+            float g;
+            if (p.bandSmooth)
+            {
+                if (f <= 0.0f)
+                    g = 0.0f;
+                else
+                {
+                    const float a = lo / f, b = f / hi;
+                    const float a2 = a * a, a4 = a2 * a2, b2 = b * b, b4 = b2 * b2;
+                    g = 1.0f / std::sqrt ((1.0f + a4 * a4) * (1.0f + b4 * b4));
+                }
+            }
+            else
+                g = f >= lo && f <= hi ? 1.0f : 0.0f;
+            m[k] *= g;
+        }
+    };
+    if (p.filterGain != nullptr)
+        for (int k = 0; k < kBins; ++k)
+            mag_[k] *= p.filterGain[k];
+    if (! p.bandPostWarp)
+        band (mag_, fileBinHz);
+
+    float extra = 1.0f, twist = 0.0f;
+    float dummySmear[kBins] = {};
+    for (int w = 0; w < 2; ++w)
+        if (p.warpType[w] >= 0 && p.warpType[w] < kNumSpectralWarps && p.warpAmount[w] > 0.0f)
+        {
+            const float* ext = isExternalWarp (p.warpType[w]) ? p.external[externalSource (p.warpType[w])] : nullptr;
+            extra *= applyWarp (p.warpType[w], p.warpAmount[w], p.warpVar[w], mag_, freq_, tm_, tf_, ext, dummySmear, twist);
+        }
+
+    const double r = std::max (1.0 / 32.0, std::min (32.0, static_cast<double> (p.pitchRatio) * static_cast<double> (extra) * fileRate / hostRate));
+    const double shiftBins = static_cast<double> (p.freqShiftHz) / hostBinHz;
+    const float shiftRad = kTwoPi * p.freqShiftHz / static_cast<float> (hostRate);
+    std::fill (om, om + kBins, 0.0f);
+    std::fill (of_, of_ + kBins, 0.0f);
+    std::fill (oth_, oth_ + kBins, 0.0f);
+
+    int peaks[kBins / 2], numPeaks = 0;
+    for (int k = 2; k < kBins - 1; ++k)
+        if (mag_[k] > mag_[k - 1] && mag_[k] >= mag_[k + 1] && mag_[k] > 1.0e-5f)
+            peaks[numPeaks++] = k;
+    const auto place = [&] (int k, int offset)
+    {
+        const int j = k + offset;
+        if (j >= 1 && j < kBins && mag_[k] > om[j])
+        {
+            om[j] = mag_[k];
+            of_[j] = freq_[k] * static_cast<float> (r) + shiftRad;
+            oth_[j] = theta_[k];
+        }
+    };
+    for (int i = 0; i < numPeaks; ++i)
+    {
+        const int centre = peaks[i];
+        const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
+        const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
+        const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
+        for (int k = from; k <= to; ++k)
+            place (k, offset);
+    }
+    if (numPeaks == 0)
+    {
+        for (int k = 1; k < kBins; ++k)
+        {
+            const int j = static_cast<int> (std::lround (static_cast<double> (k) * r + shiftBins));
+            if (j >= 1 && j < kBins && mag_[k] > om[j])
+                om[j] = mag_[k];
+        }
+    }
+    if (p.bandPostWarp)
+        band (om, hostBinHz);
+}
 } // namespace spectral
 } // namespace synthyboy
