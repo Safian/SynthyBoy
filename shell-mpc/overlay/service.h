@@ -11,12 +11,16 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <memory>
 #include <mutex>
 #include <thread>
 
+#if defined(__linux__)
+#include <sched.h>
+#endif
 #include "../thread_policy.h"
 #include "controller.h"
 #include "drm_linux.h"
@@ -49,6 +53,45 @@ public:
     bool pixel (int, int, uint32_t&) noexcept override { return false; }
     void end() noexcept override {}
 };
+#endif
+
+#if defined(__linux__)
+/** useNormalScheduling gives the thread every CPU of the system. The cores the kernel isolates for the audio threads (isolcpus, /sys/devices/system/cpu/isolated, "2-3" on the
+    Key 61) are taken out again: this thread never runs there. Best effort; nothing is changed when the file is missing or would leave no CPU. */
+inline void keepOffIsolatedCpus() noexcept
+{
+    FILE* f = std::fopen ("/sys/devices/system/cpu/isolated", "r");
+    if (! f)
+        return;
+    char text[128] = {};
+    const size_t n = std::fread (text, 1, sizeof text - 1, f);
+    std::fclose (f);
+    text[n] = 0;
+    cpu_set_t set;
+    if (sched_getaffinity (0, sizeof set, &set) != 0)
+        return;
+    cpu_set_t out = set;
+    for (const char* p = text; *p && *p != '\n';)
+    {
+        char* end = nullptr;
+        const long a = std::strtol (p, &end, 10);
+        if (end == p)
+            break;
+        long b = a;
+        if (*end == '-')
+        {
+            p = end + 1;
+            b = std::strtol (p, &end, 10);
+        }
+        for (long c = a; c <= b && c < CPU_SETSIZE; ++c)
+            CPU_CLR (static_cast<int> (c), &out);
+        p = *end == ',' ? end + 1 : end;
+        if (*end != ',')
+            break;
+    }
+    if (CPU_COUNT (&out) > 0 && ! CPU_EQUAL (&out, &set))
+        (void) sched_setaffinity (0, sizeof out, &out);
+}
 #endif
 
 class Service
@@ -128,6 +171,9 @@ private:
     void run()
     {
         useNormalScheduling (0, "sb-overlay");
+#if defined(__linux__)
+        keepOffIsolatedCpus();
+#endif
         controller_->setCpuClock ([]
         {
             timespec ts;

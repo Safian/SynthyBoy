@@ -59,7 +59,7 @@ public:
         {
             while (dirent* e = readdir (d))
             {
-                char path[64], target[128];
+                char path[320], target[128];
                 std::snprintf (path, sizeof path, "/proc/self/fd/%s", e->d_name);
                 const ssize_t n = readlink (path, target, sizeof target - 1);
                 if (n <= 0)

@@ -80,6 +80,7 @@ public:
             cutoff = liveCut;
             resonance = liveRes;
         }
+        cutoff = std::clamp (cutoff, static_cast<float> (kFMin), static_cast<float> (kFMax));   // a modulated cutoff can go far beyond the knob (84 kHz seen); the voice's filter does not follow it above the audible range
         stats_.cutoffHz = cutoff;
         stats_.resonancePercent = resonance;
 

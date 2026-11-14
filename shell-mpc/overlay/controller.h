@@ -221,6 +221,9 @@ private:
             }
             const unsigned long before = curve_->stats().fullComputes;
             changed = curve_->update (*v, nowMs);
+            ++updatesThisSecond_;
+            if (changed)
+                ++changesThisSecond_;
             fullThisSecond_ += curve_->stats().fullComputes - before;
         }
         if (! curve_ || ! curve_->valid())
@@ -310,6 +313,9 @@ private:
         const double cpu = cpuClock_ ? cpuClock_() : 0.0;
         const double wall = nowMs - secondStartMs_;
         framesLast_ = framesThisSecond_;
+        updatesLast_ = updatesThisSecond_;
+        changesLast_ = changesThisSecond_;
+        updatesThisSecond_ = changesThisSecond_ = 0;
         fullLast_ = fullThisSecond_;
         cpuPercent_ = (cpuClock_ && wall > 100.0) ? 100.0 * (cpu - cpuAtSecond_) / wall : 0.0;
         cpuAtSecond_ = cpu;
@@ -334,6 +340,7 @@ private:
         o << "instances: " << count << "\n";
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << presenter_.frames() << "\n";
+        o << "curve_updates_last_second: " << updatesLast_ << "\ncurve_changes_last_second: " << changesLast_ << "\n";
         o << "full_recomputes_last_second: " << fullLast_ << "\n";
         o << "overlay_thread_cpu_percent_of_one_core: " << cpuPercent_ << "\n";
         o << "work_peak_ms: " << workPeakMs_ << "\nrender_ms: " << renderMs_ << "\nrotate_ms: " << rotateMs_ << "\nsetplane_ms: " << setPlaneMs_ << "\n";
@@ -411,7 +418,7 @@ private:
     int rotation_ = 90, unreadable_ = 0;
     uint32_t seen_[8] = { 0xffffffffu, 0xffffffffu, 0, 0, 0, 0, 0, 0 };
     double nextSwitchesMs_ = 0.0, nextDetectMs_ = 0.0, lastFrameMs_ = -1000.0, secondStartMs_ = 0.0, cpuAtSecond_ = 0.0, cpuPercent_ = 0.0;
-    unsigned framesThisSecond_ = 0, framesLast_ = 0;
+    unsigned framesThisSecond_ = 0, framesLast_ = 0, updatesThisSecond_ = 0, updatesLast_ = 0, changesThisSecond_ = 0, changesLast_ = 0;
     double nextWaitMs_ = 33.3, workPeakMs_ = 0.0, renderMs_ = 0.0, rotateMs_ = 0.0, setPlaneMs_ = 0.0;
     unsigned long fullThisSecond_ = 0, fullLast_ = 0;
 };

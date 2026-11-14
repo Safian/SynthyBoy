@@ -16,7 +16,7 @@ leaves everything alone; if no module changes anything the two JSON files are no
 | `ctx.param_index(key)` | 0-based parameter index of a `docs/params.json` key (the N of `Parameter N`). Unknown key: error naming the key. Never write indexes by hand. |
 | `ctx.tab(title)` | The tab object whose `tabName` is `title` (the dict inside `tui["pageData"]["tabs"]`). Unknown or ambiguous title: error listing the tab names. |
 | `ctx.param_key(index)` | The `docs/params.json` key of a parameter index (the inverse of `param_index`). |
-| `ctx.meta` | The parsed `skin-meta.json` (`fnKeys`: function keys and their tab names; `tabs`: per tab the short names of its controls) or `None` without `--meta`; `85_names.py` and `95_subtabs.py` raise without it. |
+| `ctx.meta` | The parsed `skin-meta.json` (`fnKeys`: function keys and their tab names; `tabs`: per tab the short names of its controls; `variant`: only when the layout file names a skin variant, e.g. `"overlay"`) or `None` without `--meta`; `85_names.py` and `95_subtabs.py` raise without it. A module of a variant (`50_filter_overlay.py`) returns at once unless `variant` is its own: the production skin stays byte for byte as it is. |
 | `ctx.skins_dir` | `pathlib.Path` of the `Plugin Skins` folder; put PNGs here, reference them by bare file name. |
 | `ctx.add_component_definition(name, obj)` | Appends `{"key": name, "value": obj}` to `pageData.componentDefinitions.localComponentDefinitions`. Name clash: error. |
 
