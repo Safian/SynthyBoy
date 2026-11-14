@@ -25,11 +25,13 @@ inline void renderSceneReference (const synthyboy_mpc::overlay::gpu::SceneData& 
     cv.assign (static_cast<size_t> (w) * static_cast<size_t> (h), 0u);
     std::vector<double> ys;
     bool haveColumns = false;
+    // the current polyline: without a Curve op the whole scene polyline over the full width; a Curve op selects vertices and a span of columns
+    int first = 0, count = static_cast<int> (s.numPoints), x0 = 0, cols = w;
     auto columns = [&]
     {
         if (! haveColumns)
         {
-            draw::sampleColumns (ys, s.y, static_cast<int> (s.numPoints), w, h, [] (double v) { return v; }, 4);
+            draw::sampleColumns (ys, s.y + first, count, cols, h, [] (double v) { return v; }, 4);
             haveColumns = true;
         }
     };
@@ -43,15 +45,26 @@ inline void renderSceneReference (const synthyboy_mpc::overlay::gpu::SceneData& 
             case kOpRect: draw::fillRect (cv.data(), w, h, static_cast<int> (o.f[0]), static_cast<int> (o.f[1]), static_cast<int> (o.f[2]), static_cast<int> (o.f[3]), c); break;
             case kOpVLine: draw::vline (cv.data(), w, h, o.f[0], static_cast<int> (o.f[1]), static_cast<int> (o.f[2]), o.f[3], c); break;
             case kOpDisc: draw::disc (cv.data(), w, h, o.f[0], o.f[1], o.f[2], c); break;
-            case kOpFill: if (s.numPoints >= 2) { columns(); draw::fillToBaseline (cv.data(), w, h, ys, 4, o.f[0], c); } break;
+            case kOpFill: if (count >= 2) { columns(); draw::fillToBaseline (cv.data(), w, h, ys, 4, o.f[0], c, x0, cols); } break;
             case kOpFillGradient:
-                if (s.numPoints >= 2)
+                if (count >= 2)
                 {
                     columns();
-                    draw::fillToBaselineGradient (cv.data(), w, h, ys, 4, o.f[0], c, sceneColour (o.rgba2), static_cast<double> (o.f[1]), static_cast<double> (o.f[2]));
+                    draw::fillToBaselineGradient (cv.data(), w, h, ys, 4, o.f[0], c, sceneColour (o.rgba2), static_cast<double> (o.f[1]), static_cast<double> (o.f[2]), x0, cols);
                 }
                 break;
-            case kOpStroke: if (s.numPoints >= 2) { columns(); draw::strokeCurve (cv.data(), w, h, ys, 4, o.f[0], c); } break;
+            case kOpStroke: if (count >= 2) { columns(); draw::strokeCurve (cv.data(), w, h, ys, 4, o.f[0], c, x0, cols); } break;
+            case kOpCurve:
+                first = static_cast<int> (o.f[0] + 0.5f); count = static_cast<int> (o.f[1] + 0.5f); x0 = static_cast<int> (o.f[2] + 0.5f); cols = static_cast<int> (o.f[3] + 0.5f);
+                haveColumns = false;
+                break;
+            case kOpText:
+            {
+                char chars[13];
+                textOf (o, chars);
+                draw::text (cv.data(), w, h, static_cast<int> (o.f[0]), static_cast<int> (o.f[1]), static_cast<int> (o.f[2] + 0.5f), chars, 12, c);
+                break;
+            }
             default: break;
         }
     }

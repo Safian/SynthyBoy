@@ -58,7 +58,7 @@ int main()
 {
     // ---- layout of the shared structures ----------------------------------------------------------------------------------------------------------------------
     check (sizeof (gpu::Msg) == 64 && sizeof (gpu::SceneOp) == 32 && sizeof (gpu::SceneData) == 32 + 32 * gpu::kMaxOps + 4 * gpu::kMaxCurve, "message, op and scene have the fixed sizes of the protocol");
-    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 3, "the shared block is word aligned, protocol version 3");
+    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 4, "the shared block is word aligned, protocol version 4");
     {
         auto* b = new gpu::SharedBlock;
         gpu::initBlock (b);
@@ -202,6 +202,103 @@ int main()
         gpu::SceneData s2;
         gpu::SceneBuilder sb2 (s2);
         check (! empty.describe (sb2, 0, r.w, r.h), "a filter view without data does not describe itself");
+    }
+    {   // the Play view: three panels, drawn once through a sink for the CPU and for the scene; every sub-tab's highlight; the selected instances
+        FakeInstance inst;
+        inst.set ("osc2.on", 1.0f);
+        inst.set ("osc2.wavetable", 3.0f);
+        inst.set ("osc2.frame", 40.0f);
+        inst.set ("env3.attack", 300.0f);
+        inst.set ("env3.decay", 900.0f);
+        inst.set ("env3.sustain", 40.0f);
+        inst.set ("env3.attack_curve", 8.0f);
+        inst.set ("env3.release_curve", -6.0f);
+        inst.set ("lfo4.shape", 3.0f);
+        inst.set ("lfo4.rate", 1.3f);
+        inst.playSel[0] = 2;
+        inst.playSel[1] = 3;
+        inst.playSel[2] = 4;
+        synthyboy::LiveValues lv;
+        inst.hasLive = true;
+        inst.live (lv);
+        for (int idx = 1; idx <= 3; ++idx)
+        {
+            PlayView v (idx, 10.0);
+            lv.lfoPhase[3] = 0.35f;
+            lv.envFineStage[2] = 4.0f;
+            lv.envFineFraction[2] = 0.4f;
+            ViewInput in;
+            in.instance = &inst;
+            in.live = &lv;
+            in.nowMs = 0.0;
+            v.update (in);
+            const int vi = layout::kNumViews - 4 + idx;   // play1 .. play3 are the last three views of the layout
+            check (std::string (layout::kViews[vi].name) == "play" + std::to_string (idx) && layout::kViews[vi].kind == layout::kKindPlay && layout::kViews[vi].index == idx, "the layout's last three views are play1 .. play3");
+            const layout::Rect& r = layout::kViews[vi].region;
+            check (v.valid() && r.w == PlayView::kW, "the Play view has data after one update, the region is as wide as the three panels");
+            checkSameAsCpu ("play " + std::to_string (idx) + " (dot and cursor)", v, vi, r.w, r.h);
+            gpu::SceneData sd;
+            gpu::SceneBuilder sb (sd);
+            v.describe (sb, vi, r.w, r.h);
+            check (sd.kind == gpu::kKindPlay && sd.numOps < static_cast<uint32_t> (gpu::kMaxOps) && sd.numPoints <= static_cast<uint32_t> (gpu::kMaxCurve), "play: kind, op count and vertex count are inside the protocol (" + std::to_string (sd.numOps) + " ops, " + std::to_string (sd.numPoints) + " vertices)");
+            int curves = 0, texts = 0;
+            for (uint32_t k = 0; k < sd.numOps; ++k)
+            {
+                curves += sd.ops[k].op == gpu::kOpCurve;
+                if (sd.ops[k].op == gpu::kOpText)
+                {
+                    char t[13];
+                    gpu::textOf (sd.ops[k], t);
+                    ++texts;
+                    check (std::string (t) == "OSC 2" || std::string (t) == "ENV 3" || std::string (t) == "LFO 4", std::string ("a panel title with the selected instance: ") + t);
+                }
+            }
+            check (curves == 3 && texts == 3, "play: three polylines (one per panel) and three titles");
+            std::vector<uint32_t> cv (static_cast<size_t> (r.w) * static_cast<size_t> (r.h));
+            v.render (cv.data(), r.w, r.h);
+            // the frame of the panel of this sub-tab is the accent colour, the others have the quiet one
+            bool frames = true;
+            for (int p = 0; p < 3; ++p)
+            {
+                const uint32_t top = cv[static_cast<size_t> (1) * static_cast<size_t> (r.w) + static_cast<size_t> (p * (play::kPanelW + play::kPanelGap) + 100)];
+                const bool accent = ((top >> 16) & 255u) > 0xe0 && ((top >> 8) & 255u) < 0x60;
+                frames = frames && (accent == (p == idx - 1));
+            }
+            check (frames, "play " + std::to_string (idx) + ": only panel " + std::to_string (idx) + " has the highlight frame");
+        }
+        // the cursor / dot off (no voice): still the same picture on both renderers
+        PlayView idle (2, 10.0);
+        ViewInput in;
+        in.instance = &inst;
+        in.nowMs = 0.0;
+        idle.update (in);
+        checkSameAsCpu ("play (no voice)", idle, layout::kNumViews - 2, PlayView::kW, 190);
+    }
+    {   // the scene ops of protocol 4: a curve with its own span, and text; the reference reads them the way the helper does
+        gpu::SceneData sd;
+        gpu::SceneBuilder sb (sd);
+        sb.begin (gpu::kKindPlay, 0, 200, 60);
+        sb.clear (0x000000ffu);
+        const float a[4] = { 10.0f, 50.0f, 10.0f, 50.0f }, b[3] = { 30.0f, 30.0f, 30.0f };
+        sb.curve (a, 4, 20, 100);
+        sb.stroke (2.0f, 0xffffffffu);
+        sb.curve (b, 3, 130, 50);
+        sb.fill (59.0f, 0xff0000ffu);
+        sb.text (4, 4, 2, "Osc 12", 0x00ff00ffu);
+        check (sd.numPoints == 7 && sd.ops[1].op == gpu::kOpCurve && sd.ops[1].f[0] == 0.0f && sd.ops[1].f[1] == 4.0f && sd.ops[1].f[2] == 20.0f && sd.ops[1].f[3] == 100.0f && sd.ops[3].f[0] == 4.0f, "curve ops carry the first vertex, the count and the span; the vertices are appended");
+        char t[13];
+        gpu::textOf (sd.ops[5], t);
+        check (sd.ops[5].op == gpu::kOpText && std::string (t) == "Osc 12", "a text op carries up to 12 characters");
+        std::vector<uint32_t> ref;
+        renderSceneReference (sd, ref);
+        auto at = [&] (int x, int y) { return ref[static_cast<size_t> (y) * 200u + static_cast<size_t> (x)]; };
+        check ((at (5, 30) >> 16 & 255u) == 0 && (at (21, 11) >> 8 & 255u) > 100, "the first curve is inside its span (x 20 .. 119) and nothing is drawn left of it");
+        check ((at (140, 45) >> 24) > 0 && (at (140, 45) >> 16 & 255u) > 0 && (at (200 - 1, 45) & 255u) == 0 && (at (100, 45) >> 16 & 255u) == 0, "the second curve's fill is inside its span (x 130 .. 179) only");
+        bool title = false;
+        for (int y = 4; y < 18 && ! title; ++y)
+            for (int x = 4; x < 4 + font::textWidth (6, 2) && ! title; ++x)
+                title = (at (x, y) >> 8 & 255u) > 200;
+        check (title, "the text is drawn at its place");
     }
     {   // an LFO with its cursor, and without
         FakeInstance inst;

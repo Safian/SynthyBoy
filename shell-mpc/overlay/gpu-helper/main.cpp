@@ -44,6 +44,7 @@
 #include <drm/drm_fourcc.h>
 #include <drm/drm_mode.h>
 
+#include "../font5x7.h"
 #include "../gpu/scene.h"
 #include "../vblank_linux.h"
 #include "../vblank_pacer.h"
@@ -623,17 +624,18 @@ private:
     {
         verts_.clear();
         draws_.clear();
-        // the polyline, continued horizontally to the two canvas edges
-        pts_.clear();
-        const int n = static_cast<int> (s.numPoints);
-        if (n >= 2)
+        // the current polyline (the whole width until a Curve op says otherwise), continued horizontally to the two edges of its span
+        auto setCurve = [&] (int first, int n, float x0, float width)
         {
-            const float W = static_cast<float> (s.w);
-            pts_.push_back ({ 0.0f, s.y[0] });
+            pts_.clear();
+            if (n < 2 || first < 0 || first + n > kMaxCurve)
+                return;
+            pts_.push_back ({ x0, s.y[first] });
             for (int i = 0; i < n; ++i)
-                pts_.push_back ({ static_cast<float> (i) / static_cast<float> (n - 1) * (W - 1.0f) + 0.5f, s.y[i] });
-            pts_.push_back ({ W, s.y[n - 1] });
-        }
+                pts_.push_back ({ x0 + static_cast<float> (i) / static_cast<float> (n - 1) * (width - 1.0f) + 0.5f, s.y[first + i] });
+            pts_.push_back ({ x0 + width, s.y[first + n - 1] });
+        };
+        setCurve (0, static_cast<int> (s.numPoints), 0.0f, static_cast<float> (s.w));
         for (uint32_t k = 0; k < s.numOps && k < static_cast<uint32_t> (kMaxOps); ++k)
         {
             const SceneOp& o = s.ops[k];
@@ -665,6 +667,22 @@ private:
                     const float r = o.f[2], e = r + 1.0f;
                     begin (GL_TRIANGLES, 2, o.rgba, r);
                     quad (o.f[0] - e, o.f[1] - e, o.f[0] + e, o.f[1] + e, -e, e, -e, e);
+                    end();
+                    break;
+                }
+                case kOpCurve:
+                    setCurve (static_cast<int> (o.f[0] + 0.5f), static_cast<int> (o.f[1] + 0.5f), o.f[2], o.f[3]);
+                    break;
+                case kOpText:
+                {
+                    char chars[13];
+                    textOf (o, chars);
+                    const int cell = std::max (1, static_cast<int> (o.f[2] + 0.5f));
+                    begin (GL_TRIANGLES, 0, o.rgba, 0.0f);
+                    synthyboy_mpc::overlay::font::forEachRect (static_cast<int> (o.f[0]), static_cast<int> (o.f[1]), cell, chars, 12, [&] (int x0, int y0, int x1, int y1)
+                    {
+                        quad (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), 0, 0, 0, 0);
+                    });
                     end();
                     break;
                 }

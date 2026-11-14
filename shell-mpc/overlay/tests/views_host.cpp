@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cmath>
 #include <cstring>
+#include <set>
+#include <sstream>
 
 #include "fakes.h"
 #include "synthyboy/filter_response.h"
@@ -98,14 +100,22 @@ int main()
         int f1[2], f2[2], o[4];
         synthyboy::FilterResponse::readoutIndices (1, f1);
         synthyboy::FilterResponse::readoutIndices (2, f2);
-        bool ok = t.size() == 2 + 2 + 3 * 4 && t[0] == f1[0] && t[1] == f1[1] && t[2] == f2[0] && t[3] == f2[1];
+        bool ok = t.size() == 2 + 2 + 3 * 4 + 3 * 12 && t[0] == f1[0] && t[1] == f1[1] && t[2] == f2[0] && t[3] == f2[1];
         for (int n = 1; n <= 3 && ok; ++n)
         {
             synthyboy::OscCycle::readoutIndices (n, o);
             for (int k = 0; k < 4; ++k)
                 ok = ok && t[static_cast<size_t> (4 + (n - 1) * 4 + k)] == o[k];
         }
-        check (ok, "readout targets: filter 1 (2), filter 2 (2), oscillator 1 .. 3 (4 each), as the views ask for them (" + std::to_string (t.size()) + " in all)");
+        // the three Play views (the last three of the layout) ask for the readout of all three oscillators each: the selected one is used
+        for (int v = 0; v < 3 && ok; ++v)
+            for (int n = 1; n <= 3 && ok; ++n)
+            {
+                synthyboy::OscCycle::readoutIndices (n, o);
+                for (int k = 0; k < 4; ++k)
+                    ok = ok && t[static_cast<size_t> (16 + v * 12 + (n - 1) * 4 + k)] == o[k];
+            }
+        check (ok, "readout targets: filter 1 (2), filter 2 (2), oscillator 1 .. 3 (4 each), the three Play views (oscillators 1 .. 3 each), as the views ask for them (" + std::to_string (t.size()) + " in all)");
     }
     // ---- the Filter 2 view ----------------------------------------------------------------------------------------------------------------------------------------
     {
@@ -659,6 +669,69 @@ int main()
         check (t.find ("instance_slot: 1") != std::string::npos && t.find ("view: lfo2") != std::string::npos && t.find ("instance_slots_alive: 0003") != std::string::npos, "the status file says view lfo2, instance_slot 1, slots alive 0003");
         ctl.detach (&a);
         ctl.detach (&b);
+    }
+    // ---- the Play view: its three data sources follow the selectors, one panel at a time --------------------------------------------------------------------------
+    {
+        FakeInstance inst;
+        for (int k = 1; k <= 3; ++k)
+        {
+            inst.set (("osc" + std::to_string (k) + ".on").c_str(), 1.0f);
+            inst.set (("osc" + std::to_string (k) + ".wavetable").c_str(), static_cast<float> (k));
+            inst.set (("osc" + std::to_string (k) + ".frame").c_str(), 10.0f * static_cast<float> (k));
+        }
+        for (int k = 1; k <= 6; ++k)
+        {
+            inst.set (("env" + std::to_string (k) + ".attack").c_str(), 40.0f * static_cast<float> (k));
+            inst.set (("env" + std::to_string (k) + ".sustain").c_str(), 100.0f - 12.0f * static_cast<float> (k));
+        }
+        for (int k = 1; k <= 10; ++k)
+        {
+            inst.set (("lfo" + std::to_string (k) + ".shape").c_str(), static_cast<float> (k % 8));
+            inst.set (("lfo" + std::to_string (k) + ".rate").c_str(), 0.5f + static_cast<float> (k));
+        }
+        PlayView v (2, -1.0);
+        double now = 0.0;
+        auto step = [&] { ViewInput in; in.instance = &inst; in.nowMs = (now += 500.0); return v.update (in); };
+        check (step() && v.valid() && v.selection (0) == 1 && v.selection (1) == 1 && v.selection (2) == 1, "the first update: all three panels have data, selection 1 / 1 / 1");
+        std::set<uint32_t> osc, env, lfo;
+        bool otherPanelsStill = true, changed = true;
+        uint32_t h[3] = { v.panelHash (0), v.panelHash (1), v.panelHash (2) };
+        osc.insert (h[0]); env.insert (h[1]); lfo.insert (h[2]);
+        for (int k = 2; k <= 3; ++k) { inst.playSel[0] = k; changed = step() && changed; osc.insert (v.panelHash (0)); otherPanelsStill = otherPanelsStill && v.panelHash (1) == h[1] && v.panelHash (2) == h[2] && v.selection (0) == k; }
+        for (int k = 2; k <= 6; ++k) { inst.playSel[1] = k; changed = step() && changed; env.insert (v.panelHash (1)); otherPanelsStill = otherPanelsStill && v.selection (1) == k; }
+        for (int k = 2; k <= 10; ++k) { inst.playSel[2] = k; changed = step() && changed; lfo.insert (v.panelHash (2)); otherPanelsStill = otherPanelsStill && v.selection (2) == k; }
+        check (changed, "every selector change makes the view ask for a new picture at once (no wait for the compute budget)");
+        check (osc.size() == 3 && env.size() == 6 && lfo.size() == 10, "the data hash of a panel is different for every instance: 3 oscillators, 6 envelopes, 10 LFOs (" + std::to_string (osc.size()) + " / " + std::to_string (env.size()) + " / " + std::to_string (lfo.size()) + ")");
+        check (otherPanelsStill, "a selector changes its own panel's selection (the other panels keep theirs)");
+        // a parameter of the selected instance moves the picture, a parameter of another instance does not
+        inst.playSel[1] = 3;
+        step();
+        const uint32_t e3 = v.panelHash (1);
+        inst.set ("env4.attack", 5000.0f);
+        step();
+        check (v.panelHash (1) == e3, "a parameter of an instance that is not selected does not move the picture");
+        inst.set ("env3.attack", 5000.0f);
+        check (step() && v.panelHash (1) != e3, "a parameter of the selected instance does");
+        // out of range selections are limited to what the engine has
+        inst.playSel[0] = 9; inst.playSel[1] = 0; inst.playSel[2] = 99;
+        step();
+        check (v.selection (0) == 3 && v.selection (1) == 1 && v.selection (2) == 10, "a selection outside the instances is limited to the first / last");
+        // the status file names the view and the three instances
+        std::ostringstream o;
+        v.writeStatus (o);
+        const std::string st = o.str();
+        check (st.find ("play_view: play2") != std::string::npos && st.find ("play_highlight: 2") != std::string::npos && st.find ("play_osc: 3") != std::string::npos && st.find ("play_env: 1") != std::string::npos
+               && st.find ("play_lfo: 10") != std::string::npos && st.find ("play_env_hash:") != std::string::npos, "the status lines name the view, the highlight and the three selected instances, with a hash per panel");
+        // the live dot and cursor move the picture
+        inst.playSel[1] = 2; inst.playSel[2] = 5; step();
+        const uint32_t before = v.hash();
+        synthyboy::LiveValues lv; inst.hasLive = true; inst.live (lv);
+        lv.lfoPhase[4] = 0.5f; lv.envFineStage[1] = 2.0f; lv.envFineFraction[1] = 0.5f;
+        ViewInput in; in.instance = &inst; in.live = &lv; in.nowMs = (now += 500.0);
+        check (v.update (in) && v.hash() == before, "a held note: the dot and the cursor change the picture but not the data hash (that is the data only)");
+        lv.lfoPhase[4] = 0.9f;
+        in.nowMs = (now += 500.0);
+        check (v.update (in), "the cursor moves on");
     }
     std::printf (g_fails ? "views_host: FAILED (%d)\n" : "views_host: OK\n", g_fails);
     return g_fails ? 1 : 0;

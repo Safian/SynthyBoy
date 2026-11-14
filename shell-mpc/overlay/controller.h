@@ -37,6 +37,7 @@
 #include "renderer.h"
 #include "vblank_pacer.h"
 #include "view.h"
+#include "play_view.h"
 #include "views.h"
 
 namespace synthyboy_mpc { namespace overlay {
@@ -101,6 +102,8 @@ public:
                 FilterView (v.index, stub, -1.0).targets (out);
             else if (v.kind == layout::kKindOsc)
                 OscView (v.index, -1.0).targets (out);
+            else if (v.kind == layout::kKindPlay)
+                PlayView (v.index, -1.0).targets (out);
         }
     }
 
@@ -410,6 +413,7 @@ private:
             case layout::kKindOsc: return std::make_unique<OscView> (v.index, fixedCost_);
             case layout::kKindEnv: return std::make_unique<EnvView> (v.index, v);
             case layout::kKindSpectrum: return std::make_unique<SpectrumView>();
+            case layout::kKindPlay: return std::make_unique<PlayView> (v.index, fixedCost_);
             default: return std::make_unique<NullView> (v.name);
         }
     }

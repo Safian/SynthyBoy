@@ -127,7 +127,7 @@ int main (int argc, char** argv)
     const bool off = ! rest.empty() && rest[0] == "off";
     const size_t dpos = off ? 1 : 0;
     const int display = rest.size() > dpos ? std::atoi (rest[dpos].c_str()) : 36;
-    const int ovl = overlay ? 1 : 0;   // "Overlay Instance" after the pad pressure parameters
+    const int ovl = overlay ? 1 + 27 : 0;   // "Overlay Instance" after the pad pressure parameters, then the Play page's 3 selectors and 24 proxies (shell-mpc/play_params.h)
 
     // ---- the pure functions and locale-independence
     {

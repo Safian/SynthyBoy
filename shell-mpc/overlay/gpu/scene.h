@@ -19,14 +19,14 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
 
-constexpr uint32_t kProtocolVersion = 3;   // 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
+constexpr uint32_t kProtocolVersion = 4;   // 4: kMaxOps 96, kMaxCurve 1088, kOpCurve (a polyline with its own span), kOpText, kKindPlay. 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
 constexpr uint32_t kBlockMagic = 0x53424f56u;   // 'SBOV'
 constexpr uint32_t kMsgMagic = 0x4d534f56u;     // 'MSOV' ... the first word of every message
-constexpr int kMaxCurve = 512;                   // vertices of the polyline (the oscillator cycle has 512)
-constexpr int kMaxOps = 32;
+constexpr int kMaxCurve = 1088;                  // vertices of all polylines of a scene together (the oscillator cycle has 512; the Play page: 512 + 256 + 300)
+constexpr int kMaxOps = 96;
 constexpr int kMaxLedger = 8;
 
-enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4, kKindSpectrum = 5 };
+enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4, kKindSpectrum = 5, kKindPlay = 6 };
 
 /** The display list. Drawn in order, source over, onto the cleared canvas.
     Clear   rgba: the whole canvas is set to this colour (replaces everything; alpha 0 = transparent)
@@ -37,8 +37,12 @@ enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindO
     Disc    f[0..2] = cx cy radius: an anti-aliased disc
     FillGradient  f[0] = baseline row (as Fill), f[1] = row yA, f[2] = row yB: the same area as Fill, coloured by a vertical gradient: `rgba` at row yA, `rgba2` at row yB, linear
             in between and constant outside (premultiplied colours are interpolated; evaluated at the centre of every pixel row)
-    The polyline: SceneData::y[0 .. numPoints - 1] are rows, point i at x = i / (numPoints - 1) * (w - 1) + 0.5 (the first and the last continue horizontally to the canvas edges). */
-enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7 };
+    Curve   f[0] = first vertex, f[1] = number of vertices n (>= 2), f[2] = x0, f[3] = width W: from here on the polyline is the vertices y[first .. first + n - 1], point i at
+            x = x0 + i / (n - 1) * (W - 1) + 0.5, the first and the last continue horizontally to x0 and x0 + W (a Fill or Stroke of this curve is limited to those columns)
+    Text    f[0..1] = x y (top left, whole pixels), f[2] = pixels per font pixel (whole), rgba: the text of up to 12 characters (font5x7.h; solid squares): the first four characters are the bytes
+            of rgba2 (first character in the least significant byte), the next four of the bits of f[3], the last four of f[4]; the text ends at the first zero byte
+    The polyline: without a Curve op, SceneData::y[0 .. numPoints - 1] are rows, point i at x = i / (numPoints - 1) * (w - 1) + 0.5 (the first and the last continue horizontally to the canvas edges). */
+enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7, kOpCurve = 8, kOpText = 9 };
 
 struct SceneOp
 {
@@ -86,7 +90,7 @@ struct SceneBuilder
     void fillGradient (float baseRow, float yA, float yB, uint32_t rgbaA, uint32_t rgbaB) { if (SceneOp* o = add (kOpFillGradient, rgbaA)) { o->rgba2 = rgbaB; o->f[0] = baseRow; o->f[1] = yA; o->f[2] = yB; } }
     void stroke (float halfWidth, uint32_t rgba) { if (SceneOp* o = add (kOpStroke, rgba)) o->f[0] = halfWidth; }
     void disc (float cx, float cy, float r, uint32_t rgba) { if (SceneOp* o = add (kOpDisc, rgba)) { o->f[0] = cx; o->f[1] = cy; o->f[2] = r; } }
-    /** The polyline rows (n <= kMaxCurve; more is a programming error: it is cut and `overflow` is set). */
+    /** The polyline rows (n <= kMaxCurve; more is a programming error: it is cut and `overflow` is set). The scene's one polyline over the whole width. */
     void polyline (const float* rows, int n)
     {
         if (n > kMaxCurve) { overflow = true; n = kMaxCurve; }
@@ -94,11 +98,50 @@ struct SceneBuilder
             s_.y[i] = rows[i];
         s_.numPoints = static_cast<uint32_t> (n < 0 ? 0 : n);
     }
+    /** Appends the rows as another polyline and makes it the current one (kOpCurve) over the columns x0 .. x0 + width - 1; the following Fill and Stroke ops draw it. */
+    void curve (const float* rows, int n, int x0, int width)
+    {
+        if (n < 2 || s_.numPoints + static_cast<uint32_t> (n) > static_cast<uint32_t> (kMaxCurve)) { overflow = true; return; }
+        const uint32_t first = s_.numPoints;
+        for (int i = 0; i < n; ++i)
+            s_.y[first + static_cast<uint32_t> (i)] = rows[i];
+        s_.numPoints += static_cast<uint32_t> (n);
+        if (SceneOp* o = add (kOpCurve, 0)) { o->f[0] = static_cast<float> (first); o->f[1] = static_cast<float> (n); o->f[2] = static_cast<float> (x0); o->f[3] = static_cast<float> (width); }
+    }
+    /** Text of at most 12 characters (more are cut) with its top left corner at (x, y), `cell` pixels per font pixel. */
+    void text (int x, int y, int cell, const char* str, uint32_t rgba)
+    {
+        if (SceneOp* o = add (kOpText, rgba))
+        {
+            unsigned char b[12] = {};
+            for (int i = 0; i < 12 && str[i] != '\0'; ++i)
+                b[i] = static_cast<unsigned char> (str[i]);
+            uint32_t w[3];
+            for (int k = 0; k < 3; ++k)
+                w[k] = static_cast<uint32_t> (b[4 * k]) | (static_cast<uint32_t> (b[4 * k + 1]) << 8) | (static_cast<uint32_t> (b[4 * k + 2]) << 16) | (static_cast<uint32_t> (b[4 * k + 3]) << 24);
+            o->rgba2 = w[0];
+            std::memcpy (&o->f[3], &w[1], 4);
+            std::memcpy (&o->f[4], &w[2], 4);
+            o->f[0] = static_cast<float> (x); o->f[1] = static_cast<float> (y); o->f[2] = static_cast<float> (cell);
+        }
+    }
     bool overflow = false;
 
 private:
     SceneData& s_;
 };
+
+/** The characters of a Text op (up to 12, zero terminated in `out[12]`). */
+inline void textOf (const SceneOp& o, char out[13]) noexcept
+{
+    uint32_t w[3];
+    w[0] = o.rgba2;
+    std::memcpy (&w[1], &o.f[3], 4);
+    std::memcpy (&w[2], &o.f[4], 4);
+    for (int i = 0; i < 12; ++i)
+        out[i] = static_cast<char> ((w[i / 4] >> (8 * (i % 4))) & 255u);
+    out[12] = '\0';
+}
 
 /** The ledger: the GEM handles and framebuffer ids the helper has made on the shared display descriptor (PRIME import, ADDFB2). The helper writes an entry as soon as the object
     exists and clears it when it has removed it; when the helper dies, the plugin (which owns the descriptor too) removes what is left. */

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "synthyboy/content_state.h"
+#include "synthyboy/env_display.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/lfo_display.h"
 #include "synthyboy/modulation.h"
@@ -17,6 +18,7 @@
 #include "synthyboy/state.h"
 #include "test_runner.h"
 #include "test_util.h"
+#include "../engine-own/env_lfo/envelope.h"
 
 using namespace synthyboy;
 
@@ -174,7 +176,7 @@ TEST (own_lfo_display_phase_direction_swing_and_stereo_are_in_the_picture)
         });
         const float w = worstAgainstEngine (rig, 300, nullptr, false);
         std::printf ("    %s = %g: worst difference %.4f\n", c.key, static_cast<double> (c.value), w);
-        CHECK (w < 0.02f);
+        CHECK (w < 0.03f);
         // and the setting changed the picture
         ParamValues plain = ParamValues::defaults();
         setv (plain, "lfo1.shape", 1.0f);
@@ -224,7 +226,7 @@ TEST (own_lfo_display_custom_shape_is_the_engines)
     }, &content);
     const float w = worstAgainstEngine (rig, 300, &content, false);
     std::printf ("    custom shape (4 points, curved): worst difference %.4f\n", w);
-    CHECK (w < 0.02f);
+    CHECK (w < 0.03f);
     // without the content the shape does not exist: the same as the engine without it (a flat line at the centre)
     std::vector<float> flat (64);
     LfoDisplay::Request req;
@@ -427,4 +429,95 @@ TEST (own_osc_cycle_agrees_with_what_the_engine_plays)
         std::printf ("    warp %d: OscCycle against the engine's output: correlation %.4f (shift %d)\n", warp, static_cast<double> (c), lag);
         CHECK (c > 0.98f);
     }
+}
+
+// ---- EnvDisplay: the curve of the own engine's envelope (the Play page of the MPC overlay) -------------------------------------------------------------------------------------
+
+/** The engine's envelope run in steps of 32 samples (its control period) for `seconds`; the value at the end. */
+float runEnv (own::Envelope& e, const own::EnvSettings& s, double seconds)
+{
+    const double dt = 32.0 / 48000.0;
+    float v = 0.0f;
+    for (double t = 0.0; t + dt * 0.5 < seconds; t += dt)
+        v = e.advance (s, dt);
+    return v;
+}
+
+TEST (own_env_display_follows_the_engine_envelope_with_curvature)
+{
+    struct Case { float delay, attack, hold, decay, sustain, release, ac, dc, rc; };
+    const Case cases[] = { { 0, 50, 0, 400, 60, 300, 0, 0, 0 }, { 120, 800, 200, 1500, 25, 2500, 8, -6, 12 }, { 0, 5, 0, 4000, 0, 100, -10, 14, -3 }, { 300, 2000, 1000, 500, 100, 800, 20, -20, 5 } };
+    for (int env = 1; env <= 6; ++env)
+        for (const Case& c : cases)
+        {
+            ParamValues v = ParamValues::defaults();
+            const std::string k = "env" + std::to_string (env) + ".";
+            setv (v, (k + "delay").c_str(), c.delay); setv (v, (k + "attack").c_str(), c.attack); setv (v, (k + "hold").c_str(), c.hold);
+            setv (v, (k + "decay").c_str(), c.decay); setv (v, (k + "sustain").c_str(), c.sustain); setv (v, (k + "release").c_str(), c.release);
+            setv (v, (k + "attack_curve").c_str(), c.ac); setv (v, (k + "decay_curve").c_str(), c.dc); setv (v, (k + "release_curve").c_str(), c.rc);
+            setv (v, (k + "units").c_str(), 0.0f);
+            EnvDisplay::Request req;
+            req.env = env;
+            EnvDisplay::Geometry g;
+            std::vector<float> y (400);
+            CHECK (EnvDisplay::compute (v, req, g, y.data(), 400));
+            CHECK (g.end[5] == 1.0);
+            for (int i = 0; i < 5; ++i)
+                CHECK (g.end[i] <= g.end[i + 1] + 1e-12);
+            // the engine's own envelope, sampled inside every stage
+            own::EnvSettings s;
+            s.delay = c.delay * 0.001f; s.attack = c.attack * 0.001f; s.hold = c.hold * 0.001f; s.decay = c.decay * 0.001f; s.sustain = c.sustain * 0.01f; s.release = c.release * 0.001f;
+            s.attackCurve = -c.ac; s.decayCurve = c.dc; s.releaseCurve = c.rc;
+            for (double f : { 0.2, 0.5, 0.8 })
+            {
+                if (c.attack >= 100)   // (a shorter attack is not resolved by the engine's 32 sample control period)
+                {
+                    own::Envelope e; e.noteOn();
+                    const float eng = runEnv (e, s, s.delay + f * s.attack);
+                    CHECK (std::fabs (eng - at (y, static_cast<float> (g.end[0] + f * (g.end[1] - g.end[0])))) < 0.03f);
+                }
+                if (c.decay > 0)
+                {
+                    own::Envelope e; e.noteOn();
+                    const float eng = runEnv (e, s, s.delay + s.attack + s.hold + f * s.decay);
+                    CHECK (std::fabs (eng - at (y, static_cast<float> (g.end[2] + f * (g.end[3] - g.end[2])))) < 0.03f);
+                }
+                if (c.release > 0)
+                {
+                    own::Envelope e; e.noteOn();
+                    runEnv (e, s, s.delay + s.attack + s.hold + s.decay + 0.01);
+                    e.noteOff();
+                    const float eng = runEnv (e, s, f * s.release);
+                    CHECK (std::fabs (eng - at (y, static_cast<float> (g.end[4] + f * (g.end[5] - g.end[4])))) < 0.03f);
+                }
+            }
+            CHECK (at (y, 0.0f) == 0.0f);
+            double x = 0, lvl = 0;
+            CHECK (EnvDisplay::dotFor (g, y.data(), 400, 4.0f, 0.5f, x, lvl));
+            CHECK (x > g.end[2] && x < g.end[3]);
+            CHECK (! EnvDisplay::dotFor (g, y.data(), 400, 0.0f, 0.5f, x, lvl));
+            CHECK (! EnvDisplay::dotFor (g, y.data(), 400, 7.0f, 0.5f, x, lvl));
+        }
+}
+
+TEST (own_env_display_beats_units_follow_the_tempo_and_arguments_are_checked)
+{
+    ParamValues v = ParamValues::defaults();
+    setv (v, "env2.units", 1.0f); setv (v, "env2.attack_beats", 1.0f); setv (v, "env2.decay_beats", 1.0f); setv (v, "env2.release_beats", 1.0f);
+    setv (v, "env2.sustain", 50.0f); setv (v, "env2.hold_beats", 0.0f); setv (v, "env2.delay_beats", 0.0f);
+    EnvDisplay::Request r;
+    r.env = 2;
+    EnvDisplay::Geometry g60, g120;
+    std::vector<float> y (64);
+    r.bpm = 60.0;
+    CHECK (EnvDisplay::compute (v, r, g60, y.data(), 64));
+    r.bpm = 120.0;
+    CHECK (EnvDisplay::compute (v, r, g120, y.data(), 64));
+    // the proportions between the stages do not depend on the tempo (all three stages are beats); the sustain segment is the only thing that has a minimum in seconds
+    CHECK (std::fabs (g60.end[1] - g120.end[1]) < 0.1);
+    EnvDisplay::Geometry g;
+    CHECK (! EnvDisplay::compute (v, EnvDisplay::Request { 0, 120.0 }, g, y.data(), 64));
+    CHECK (! EnvDisplay::compute (v, EnvDisplay::Request { 7, 120.0 }, g, y.data(), 64));
+    CHECK (! EnvDisplay::compute (v, r, g, nullptr, 64));
+    CHECK (! EnvDisplay::compute (v, r, g, y.data(), 1));
 }

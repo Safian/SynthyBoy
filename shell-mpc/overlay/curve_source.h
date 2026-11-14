@@ -56,6 +56,8 @@ public:
     /** The ring of the instance's output (the audio thread writes it, the spectrum view reads it). null: this instance has none (the build without the spectrum): the spectrum view has no data
         and the plane stays off, the 32 meters of the skin stay visible. */
     virtual const SpectrumRing* spectrumRing() const noexcept { return nullptr; }
+    /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 3, 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
+    virtual int playSelection (int /*group*/) const noexcept { return 1; }
 };
 
 class CurveSource

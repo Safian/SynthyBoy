@@ -26,6 +26,7 @@ add_library(synthyboy_core STATIC
     src/offline_render.cpp
     src/filter_response.cpp
     src/lfo_display.cpp
+    src/env_display.cpp
     src/osc_cycle.cpp
     src/wave_convert.cpp
     engine-own/own_engine.cpp

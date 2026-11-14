@@ -313,6 +313,8 @@ public:
     /** The live cutoff / resonance as the array a view gets (null while hasLive is false). */
     const float* liveTargets() noexcept { if (! hasLive.load()) return nullptr; lt_[0] = liveCutoff.load(); lt_[1] = liveRes.load(); return lt_; }
     double bpm() const noexcept override { return bpmValue.load(); }
+    int playSelection (int group) const noexcept override { return playSel[group].load(); }
+    std::atomic<int> playSel[3] { { 1 }, { 1 }, { 1 } };   // the instances the Play page shows (oscillator, envelope, LFO)
     void requestOverlayReport() noexcept override { reportRequests.fetch_add (1); }
     /** The ring of the output (the spectrum view); only when `hasRing` is set, like a plugin built without the spectrum has none. */
     const synthyboy_mpc::SpectrumRing* spectrumRing() const noexcept override { return hasRing.load() ? &ring : nullptr; }

@@ -118,6 +118,7 @@
 #error "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
 #endif
 #include "overlay/service.h"
+#include "play_params.h"
 #include "synthyboy/readout.h"
 #endif
 
@@ -325,6 +326,7 @@ struct PluginInstance
             return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
         }
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
+        int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
         std::shared_ptr<const synthyboy::StateContent> content() const override { return std::atomic_load (&inst.overlayContent); }
         const synthyboy::IContentStore* contentStore() const noexcept override { return inst.contentStore.get(); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
@@ -344,6 +346,84 @@ struct PluginInstance
     std::shared_ptr<const synthyboy::StateContent> overlayContent;   // a copy of `content` for the overlay thread (std::atomic_load / atomic_store): custom LFO shapes, user wavetables
     void publishOverlayContent() { std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content)); }
     bool overlayAttached = false;
+
+    // ---- the Play page (play_params.h, docs/MPC.md "Play page"): three selectors (saved in the chunk) and 24 proxy parameters (the real parameter of the selected instance) ----
+    std::atomic<int> playSel[synthyboy_mpc::play::kGroups] { { 1 }, { 1 }, { 1 } };
+    std::atomic<bool> playGroupDue[synthyboy_mpc::play::kGroups] { { false }, { false }, { false } };   // a selector changed (host, chunk): the display thread reports the group's proxies once
+    std::atomic<bool> playRealDue[synthyboy_mpc::play::kProxies] {};                                    // a proxy was written: the display thread tells the host the real parameter changed too
+    std::atomic<float> playLast[synthyboy_mpc::play::kProxies] {};                                      // the value of every proxy as the host last heard it (a host write or a report)
+    bool playLastValid = false;                                                                         // display thread only
+
+    static VstInt32 playBase() noexcept { return overlayParamIndex() + 1; }   // "Play Osc"; "Play Env" and "Play LFO" follow, then the proxies
+    static bool isPlayParam (VstInt32 index) noexcept { return index >= playBase() && index < playBase() + synthyboy_mpc::play::kParams; }
+    static bool isPlaySelector (VstInt32 index) noexcept { return index >= playBase() && index < playBase() + synthyboy_mpc::play::kSelectors; }
+    static int playProxyOf (VstInt32 index) noexcept { return index - playBase() - synthyboy_mpc::play::kSelectors; }   // 0 .. 23
+    static int playGroupOfProxy (int proxy) noexcept { return proxy / synthyboy_mpc::play::kSlots; }
+    static int playSlotOfProxy (int proxy) noexcept { return proxy % synthyboy_mpc::play::kSlots; }
+    /** Table index of the real parameter behind proxy p for the instance that is selected now. */
+    int playRealOf (int proxy) const noexcept
+    {
+        const int g = playGroupOfProxy (proxy);
+        return synthyboy_mpc::play::realIndex (g, playSel[g].load (std::memory_order_relaxed), playSlotOfProxy (proxy));
+    }
+    /** The value the host reads for proxy p: the normalised value of the selected instance's parameter. */
+    float playProxyValue (int proxy) const noexcept
+    {
+        const int real = playRealOf (proxy);
+        if (real < 0)
+            return 0.0f;
+        return synthyboy::toNormalised (synthyboy::paramTable()[real], paramMirror[real].load (std::memory_order_relaxed));
+    }
+    /** Sets a selector (any thread; the value is limited to the instances the engine has) and has the display thread report the group. */
+    void playSetSelector (int group, int instance) noexcept
+    {
+        instance = std::min (std::max (instance, 1), synthyboy_mpc::play::kInstances[group]);
+        if (playSel[group].exchange (instance, std::memory_order_relaxed) != instance)
+            playGroupDue[group].store (true, std::memory_order_release);
+    }
+    /** The display thread, every tick: the proxies follow their real parameters (a preset, the parameter's own tab, automation, a selector change) and the host is told. A selector change
+        re-reports ALL proxies of its group (and the selector) once; a proxy the host wrote makes the real parameter reported too. A value is reported only when it differs from what the host last
+        heard (so the host's own writes and its echoes are not reported back: no feedback). */
+    void playPoll (AEffect* e, VstInt32 firstParam)
+    {
+        namespace pl = synthyboy_mpc::play;
+        if (! audioMaster)
+            return;
+        const VstInt32 base = firstParam;
+        if (! playLastValid)
+        {
+            for (int p = 0; p < pl::kProxies; ++p)
+                playLast[p].store (playProxyValue (p), std::memory_order_relaxed);
+            playLastValid = true;
+        }
+        for (int g = 0; g < pl::kGroups; ++g)
+            if (playGroupDue[g].exchange (false, std::memory_order_acq_rel))
+            {
+                audioMaster (e, audioMasterAutomate, base + g, 0, nullptr, pl::selectorNormalised (g, playSel[g].load (std::memory_order_relaxed)));
+                for (int s = 0; s < pl::kSlots; ++s)
+                {
+                    const int p = g * pl::kSlots + s;
+                    const float v = playProxyValue (p);
+                    playLast[p].store (v, std::memory_order_relaxed);
+                    audioMaster (e, audioMasterAutomate, base + pl::kSelectors + p, 0, nullptr, v);
+                }
+            }
+        for (int p = 0; p < pl::kProxies; ++p)
+        {
+            const float v = playProxyValue (p);
+            if (std::fabs (v - playLast[p].load (std::memory_order_relaxed)) > 1.0e-6f)
+            {
+                playLast[p].store (v, std::memory_order_relaxed);
+                audioMaster (e, audioMasterAutomate, base + pl::kSelectors + p, 0, nullptr, v);
+            }
+            if (playRealDue[p].exchange (false, std::memory_order_acq_rel))
+            {
+                const int real = playRealOf (p);
+                if (real >= 0)
+                    audioMaster (e, audioMasterAutomate, real, 0, nullptr, synthyboy::toNormalised (synthyboy::paramTable()[real], paramMirror[real].load (std::memory_order_relaxed)));
+            }
+        }
+    }
 
     // The display-only parameter "Overlay Instance" (the last parameter of the list; not automatable, not in the chunk): the skin shows it as a film strip colour, so the overlay knows
     // WHICH instance's page is on screen (overlay/instance_slots.h). The value is the frame of this instance's slot / 32; the host reads it with getParameter and redraws the picture
@@ -534,7 +614,8 @@ struct PluginInstance
                 if (liveStop.load (std::memory_order_relaxed))
                     break;
 #if SYNTHYBOY_MPC_OVERLAY
-                overlayPoll (e, PluginInstance::overlayParamIndex());   // "Overlay Instance": the last parameter (after the spectrum columns and the pad pressure parameters)
+                overlayPoll (e, PluginInstance::overlayParamIndex());   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
+                playPoll (e, PluginInstance::playBase());               // the Play page: the selectors and the proxies after it
 #endif
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
@@ -653,7 +734,7 @@ struct PluginInstance
         b += " PAD_PRESSURE=OFF";
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
-        extraParams += 1; // "Overlay Instance", after everything else
+        extraParams += 1 + synthyboy_mpc::play::kParams; // "Overlay Instance", then the Play page's three selectors and 24 proxies, after everything else
 #endif
         b += " params=" + std::to_string (synthyboy::paramCount() + extraParams);
 #if defined(__aarch64__)
@@ -809,6 +890,24 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
 #if SYNTHYBOY_MPC_OVERLAY
     inst->publishOverlayContent();
 #endif
+}
+
+/** effGetParameterProperties of a parameter of the engine's table (also what a Play proxy reports for the instance that is selected). */
+static void fillParameterProperties (const synthyboy::ParamInfo& info, VstParameterProperties* props)
+{
+    std::memset(props, 0, sizeof(*props));
+    copyString(props->label, sizeof(props->label), synthyboy::unitLabel(info.unit));
+    props->stepFloat = info.interval > 0 ? info.interval : (info.max - info.min) / 1000.0f;
+    props->smallStepFloat = info.interval > 0 ? info.interval : (info.max - info.min) / 10000.0f;
+    props->largeStepFloat = info.interval > 0 ? info.interval : (info.max - info.min) / 100.0f;
+    props->flags = kVstParameterCanRamp;
+    if (info.flags & synthyboy::kParamStepped)
+    {
+        props->flags |= kVstParameterUsesIntegerMinMax;
+        props->minInteger = static_cast<VstInt32>(info.min);
+        props->maxInteger = static_cast<VstInt32>(info.max);
+        props->stepInteger = info.interval > 0 ? static_cast<VstInt32>(info.interval) : 1;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1014,6 +1113,36 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             return 1;
         }
 #endif
+#if SYNTHYBOY_MPC_OVERLAY
+        if (PluginInstance::isPlayParam (index))
+        {
+            namespace pl = synthyboy_mpc::play;
+            if (PluginInstance::isPlaySelector (index))
+            {
+                const int g = index - PluginInstance::playBase();
+                if (opcode == effGetParamName)
+                    copyString (buf, 64, pl::selectorName (g));
+                else if (opcode == effGetParamLabel)
+                    buf[0] = '\0';
+                else
+                    copyString (buf, 64, pl::selectorText (g, inst->playSel[g].load (std::memory_order_relaxed)).c_str());
+                buf[63] = '\0';
+                return 1;
+            }
+            const int p = PluginInstance::playProxyOf (index);
+            const int real = inst->playRealOf (p);
+            if (opcode == effGetParamName)
+                copyString (buf, 64, pl::slots (PluginInstance::playGroupOfProxy (p))[PluginInstance::playSlotOfProxy (p)].proxyName);
+            else if (real < 0)
+                buf[0] = '\0';
+            else if (opcode == effGetParamLabel)
+                copyString (buf, 64, synthyboy::unitLabel (synthyboy::paramTable()[real].unit));
+            else
+                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, 64);
+            buf[63] = '\0';
+            return 1;
+        }
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         if (inst->isLive (index))
         {
@@ -1178,7 +1307,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     case effCanBeAutomated:
     {
 #if SYNTHYBOY_MPC_OVERLAY
-        if (PluginInstance::isOverlayParam (index))
+        if (PluginInstance::isOverlayParam (index) || PluginInstance::isPlayParam (index))
             return 0;
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
@@ -1200,6 +1329,13 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         std::string state = synthyboy::saveState(values, inst->content);
         int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
         std::string chunk = synthyboy_mpc::chunkWithProgram (state, prog, currentProgramName (inst));
+#if SYNTHYBOY_MPC_OVERLAY
+        {
+            // the three Play selectors ride in the chunk before the pad pressure members (which are read from the very end)
+            const int sel[3] = { inst->playSel[0].load (std::memory_order_relaxed), inst->playSel[1].load (std::memory_order_relaxed), inst->playSel[2].load (std::memory_order_relaxed) };
+            chunk = synthyboy_mpc::play::chunkWithPlay (std::move (chunk), sel);
+        }
+#endif
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         chunk = synthyboy_mpc::chunkWithPadPressure (std::move (chunk), inst->padPressure.load (std::memory_order_relaxed), inst->padPressureAmount.load (std::memory_order_relaxed));
 #endif
@@ -1230,6 +1366,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 int idx = synthyboy_mpc::programFromChunk(chunk, static_cast<size_t>(size));
 
                 applyState (inst, newValues, std::move(newContent));
+#if SYNTHYBOY_MPC_OVERLAY
+                {
+                    // the selectors of the project; a chunk without them (an older one) leaves them as they are. The display thread tells the host (the proxies' values follow the instances)
+                    int sel[3] = { inst->playSel[0].load (std::memory_order_relaxed), inst->playSel[1].load (std::memory_order_relaxed), inst->playSel[2].load (std::memory_order_relaxed) };
+                    if (synthyboy_mpc::play::playFromChunk (chunk, static_cast<size_t>(size), sel))
+                        for (int g = 0; g < 3; ++g)
+                            inst->playSetSelector (g, sel[g]);
+                }
+#endif
 #if SYNTHYBOY_MPC_PAD_PRESSURE
                 {
                     // the player's pad setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is
@@ -1303,6 +1448,28 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             return 1;
         }
 #endif
+#if SYNTHYBOY_MPC_OVERLAY
+        if (PluginInstance::isPlayParam (index))
+        {
+            std::memset (props, 0, sizeof (*props));
+            if (PluginInstance::isPlaySelector (index))
+            {
+                const int g = index - PluginInstance::playBase();
+                const int n = synthyboy_mpc::play::kInstances[g];
+                props->stepFloat = props->smallStepFloat = props->largeStepFloat = 1.0f / static_cast<float> (n - 1);
+                props->flags = kVstParameterUsesIntegerMinMax;
+                props->minInteger = 1;
+                props->maxInteger = n;
+                props->stepInteger = 1;
+                return 1;
+            }
+            const int real = inst->playRealOf (PluginInstance::playProxyOf (index));
+            if (real < 0)
+                return 0;
+            fillParameterProperties (synthyboy::paramTable()[real], props);
+            return 1;
+        }
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         if (inst->isLive (index))
         {
@@ -1345,23 +1512,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (static_cast<size_t>(index) >= paramCount) return 0;
 
         const synthyboy::ParamInfo* info = synthyboy::paramTable() + index;
-        std::memset(props, 0, sizeof(*props));
-
-        // Fill basic info
-        copyString(props->label, sizeof(props->label), synthyboy::unitLabel(info->unit));
-        props->stepFloat = info->interval > 0 ? info->interval : (info->max - info->min) / 1000.0f;
-        props->smallStepFloat = info->interval > 0 ? info->interval : (info->max - info->min) / 10000.0f;
-        props->largeStepFloat = info->interval > 0 ? info->interval : (info->max - info->min) / 100.0f;
-        props->flags = kVstParameterCanRamp;
-
-        if (info->flags & synthyboy::kParamStepped)
-        {
-            props->flags |= kVstParameterUsesIntegerMinMax;
-            props->minInteger = static_cast<VstInt32>(info->min);
-            props->maxInteger = static_cast<VstInt32>(info->max);
-            props->stepInteger = info->interval > 0 ? static_cast<VstInt32>(info->interval) : 1;
-        }
-
+        fillParameterProperties (*info, props);
         return 1;
     }
 
@@ -1509,29 +1660,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 // Parameter access (normalized 0..1)
 // ---------------------------------------------------------------------------
 
-static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
+/** The host's write of a parameter of the engine's table (normalised value): mirror, protection, engine. Also the write a Play proxy makes for the instance it stands for. */
+static void writeRealParam (PluginInstance* inst, size_t index, float parameter)
 {
-    PluginInstance* inst = getInstance(e);
-    if (!inst || index < 0)
-        return;
-
-#if SYNTHYBOY_MPC_PAD_PRESSURE
-    if (PluginInstance::isPadPressureParam (index))
-    {
-        // not a sound edit (no protection disarm): the pad setting is independent of the program
-        const float v = std::isfinite (parameter) ? std::min (std::max (parameter, 0.0f), 1.0f) : 0.0f;
-        if (index == PluginInstance::padPressureBase())
-            inst->padPressure.store (v >= 0.5f, std::memory_order_relaxed);
-        else
-            inst->padPressureAmount.store (v * 100.0f, std::memory_order_relaxed);
-        inst->updateEnginePadPressure();
-        return;
-    }
-#endif
-    size_t paramCount = synthyboy::paramCount();
-    if (static_cast<size_t>(index) >= paramCount)
-        return;
-
     const synthyboy::ParamInfo* info = synthyboy::paramTable() + index;
     float plain = synthyboy::fromNormalised(*info, parameter);
     plain = synthyboy::constrainValue(*info, plain);
@@ -1551,6 +1682,56 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         inst->engine->setParam(info->id, plain);
 }
 
+static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
+{
+    PluginInstance* inst = getInstance(e);
+    if (!inst || index < 0)
+        return;
+
+#if SYNTHYBOY_MPC_OVERLAY
+    if (PluginInstance::isPlayParam (index))
+    {
+        namespace pl = synthyboy_mpc::play;
+        if (PluginInstance::isPlaySelector (index))
+        {
+            // not a sound edit (no protection disarm): which instance the page shows is the player's view, not part of the sound
+            const int g = index - PluginInstance::playBase();
+            inst->playSetSelector (g, pl::selectorInstance (g, parameter));
+            return;
+        }
+        const int p = PluginInstance::playProxyOf (index);
+        const int real = inst->playRealOf (p);
+        if (real < 0)
+            return;
+        // the proxy IS the real parameter of the selected instance: the same write as the host's own write to that parameter, so the engine sees an ordinary change. The value the host
+        // sends back after a report (or the same value again) changes nothing and disarms nothing.
+        const float v = std::isfinite (parameter) ? std::min (std::max (parameter, 0.0f), 1.0f) : 0.0f;
+        if (std::fabs (v - inst->playProxyValue (p)) <= 1.0e-6f)
+            return;
+        writeRealParam (inst, static_cast<size_t> (real), v);
+        inst->playLast[p].store (v, std::memory_order_relaxed);   // the host knows this value: the poll does not report it back
+        inst->playRealDue[p].store (true, std::memory_order_release);
+        return;
+    }
+#endif
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+    if (PluginInstance::isPadPressureParam (index))
+    {
+        // not a sound edit (no protection disarm): the pad setting is independent of the program
+        const float v = std::isfinite (parameter) ? std::min (std::max (parameter, 0.0f), 1.0f) : 0.0f;
+        if (index == PluginInstance::padPressureBase())
+            inst->padPressure.store (v >= 0.5f, std::memory_order_relaxed);
+        else
+            inst->padPressureAmount.store (v * 100.0f, std::memory_order_relaxed);
+        inst->updateEnginePadPressure();
+        return;
+    }
+#endif
+    if (static_cast<size_t>(index) >= synthyboy::paramCount())
+        return;
+    writeRealParam (inst, static_cast<size_t>(index), parameter);
+}
+
 static float pluginGetParameter(AEffect* e, VstInt32 index)
 {
     PluginInstance* inst = getInstance(e);
@@ -1560,6 +1741,15 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
 #if SYNTHYBOY_MPC_OVERLAY
     if (PluginInstance::isOverlayParam (index))
         return inst->overlayValue.load (std::memory_order_relaxed);
+    if (PluginInstance::isPlayParam (index))
+    {
+        if (PluginInstance::isPlaySelector (index))
+        {
+            const int g = index - PluginInstance::playBase();
+            return synthyboy_mpc::play::selectorNormalised (g, inst->playSel[g].load (std::memory_order_relaxed));
+        }
+        return inst->playProxyValue (PluginInstance::playProxyOf (index));
+    }
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
     if (inst->isLive (index))
@@ -1708,7 +1898,7 @@ extern "C"
         effect->numParams += synthyboy_mpc::kPadPressureParams;
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
-        effect->numParams += 1; // "Overlay Instance", the last one (after the pad pressure parameters)
+        effect->numParams += 1 + synthyboy_mpc::play::kParams; // "Overlay Instance" (after the pad pressure parameters), then the Play page's three selectors and the 24 proxies
 #endif
         effect->numInputs = 0;
         effect->numOutputs = 2;

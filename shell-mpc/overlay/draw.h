@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "font5x7.h"
+
 namespace synthyboy_mpc { namespace overlay { namespace draw {
 
 inline uint32_t premultiplied (int r, int g, int b, int a) noexcept
@@ -103,9 +105,11 @@ void sampleColumns (std::vector<double>& ys, const float* v, int n, int w, int h
 }
 
 /** The translucent fill between the curve and the row `baseY` (>= h: down to the bottom), anti-aliased on the curve's edge. `ys` from sampleColumns. */
-inline void fillToBaseline (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double baseY, uint32_t fillC) noexcept
+inline void fillToBaseline (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double baseY, uint32_t fillC, int x0 = 0, int cols = -1) noexcept
 {
-    for (int x = 0; x < w; ++x)
+    if (cols < 0)
+        cols = w;   // x0, cols: the curve covers the pixel columns x0 .. x0 + cols - 1 of the canvas (ys has `cols` columns)
+    for (int x = 0; x < cols; ++x)
     {
         const double ymid = ys[static_cast<size_t> (x) * static_cast<size_t> (subSamples + 1) + static_cast<size_t> (subSamples / 2)];
         const double lo = std::min (ymid, baseY), hi = std::max (ymid, baseY);
@@ -118,7 +122,7 @@ inline void fillToBaseline (uint32_t* cv, int w, int h, const std::vector<double
             const double cov = std::clamp (std::min (y + 1.0, hi) - std::max (static_cast<double> (y), lo), 0.0, 1.0);
             if (cov <= 0.0)
                 continue;
-            uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+            uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x0 + x)];
             if (cov >= 1.0)
             {
                 if (!haveMemo || d != memoIn)
@@ -150,12 +154,14 @@ inline uint32_t gradientAt (uint32_t a, uint32_t b, double yA, double yB, int y)
 }
 
 /** fillToBaseline with a vertical gradient: row y gets gradientAt (colA, colB, yA, yB, y). */
-inline void fillToBaselineGradient (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double baseY, uint32_t colA, uint32_t colB, double yA, double yB)
+inline void fillToBaselineGradient (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double baseY, uint32_t colA, uint32_t colB, double yA, double yB, int x0 = 0, int cols = -1)
 {
+    if (cols < 0)
+        cols = w;
     std::vector<uint32_t> rows (static_cast<size_t> (h));
     for (int y = 0; y < h; ++y)
         rows[static_cast<size_t> (y)] = gradientAt (colA, colB, yA, yB, y);
-    for (int x = 0; x < w; ++x)
+    for (int x = 0; x < cols; ++x)
     {
         const double ymid = ys[static_cast<size_t> (x) * static_cast<size_t> (subSamples + 1) + static_cast<size_t> (subSamples / 2)];
         const double lo = std::min (ymid, baseY), hi = std::max (ymid, baseY);
@@ -166,16 +172,18 @@ inline void fillToBaselineGradient (uint32_t* cv, int w, int h, const std::vecto
             const double cov = std::clamp (std::min (y + 1.0, hi) - std::max (static_cast<double> (y), lo), 0.0, 1.0);
             if (cov <= 0.0)
                 continue;
-            uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+            uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x0 + x)];
             d = over (d, rows[static_cast<size_t> (y)], static_cast<int> (cov * 255.0));
         }
     }
 }
 
 /** The anti-aliased line (half width `half` px): coverage from the distance to the curve's vertical extent in the column, corrected by the slope. */
-inline void strokeCurve (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double half, uint32_t lineC) noexcept
+inline void strokeCurve (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double half, uint32_t lineC, int x0 = 0, int cols = -1) noexcept
 {
-    for (int x = 0; x < w; ++x)
+    if (cols < 0)
+        cols = w;
+    for (int x = 0; x < cols; ++x)
     {
         const double* c = &ys[static_cast<size_t> (x) * static_cast<size_t> (subSamples + 1)];
         double ymin = c[0], ymax = c[0];
@@ -195,10 +203,16 @@ inline void strokeCurve (uint32_t* cv, int w, int h, const std::vector<double>& 
                 continue;
             if (cov > 1.0)
                 cov = 1.0;
-            uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+            uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x0 + x)];
             d = over (d, lineC, static_cast<int> (cov * 255.0));
         }
     }
+}
+
+/** The small text of font5x7.h: top left corner (x, y), `cell` pixels per font pixel, solid squares (no anti-aliasing: the scene's text op draws the same rectangles). */
+inline void text (uint32_t* cv, int w, int h, int x, int y, int cell, const char* s, int maxChars, uint32_t c) noexcept
+{
+    font::forEachRect (x, y, cell, s, maxChars, [&] (int x0, int y0, int x1, int y1) { fillRect (cv, w, h, x0, y0, x1, y1, c); });
 }
 
 }}} // namespace synthyboy_mpc::overlay::draw

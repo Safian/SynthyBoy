@@ -125,15 +125,16 @@ int main (int argc, char** argv)
 
     AEffect* a = make();
     if (! a) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
-    const int idx = a->numParams - 1;   // the last parameter
+    constexpr int kPlayParams = 27;   // the Play page's 3 selectors and 24 proxies after Overlay Instance (shell-mpc/play_params.h; play_host.cpp checks them)
+    const int idx = a->numParams - 1 - kPlayParams;   // Overlay Instance
     // parameter order (docs/MPC.md "Parameter order"): engine, 4 cursors, 32 spectrum columns, Pad Pressure, Pad Pressure Amount, Overlay Instance LAST
     check (text (a, effGetParamName, idx - 2) == "Pad Pressure" && text (a, effGetParamName, idx - 1) == "Pad Pressure Amount", "the two pad pressure parameters come right before it (their indexes do not move in the overlay build)");
-    check (idx == n + 4 + 32 + 2, "Overlay Instance is the last parameter, after the 4 cursors, 32 spectrum columns and the 2 pad pressure parameters (index " + std::to_string (idx) + ")");
+    check (idx == n + 4 + 32 + 2, "Overlay Instance is the first parameter of the overlay block, after the 4 cursors, 32 spectrum columns and the 2 pad pressure parameters (index " + std::to_string (idx) + ")");
     bool have = false;
     check (text (a, effGetParamName, idx, &have) == "Overlay Instance" && have, "its name is Overlay Instance");
     bool beyond = true;
-    text (a, effGetParamName, idx + 1, &beyond);
-    check (! beyond, "nothing after it");
+    text (a, effGetParamName, idx + 1 + kPlayParams, &beyond);
+    check (! beyond, "nothing after the Play page's parameters, which follow it");
     check (a->dispatcher (a, effCanBeAutomated, idx, 0, nullptr, 0.0f) == 0, "it is not automatable");
     VstParameterProperties props;
     check (a->dispatcher (a, effGetParameterProperties, idx, 0, &props, 0.0f) == 1 && std::fabs (props.stepFloat - 1.0f / 32.0f) < 1e-7f, "its parameter properties have a step of 1/32");

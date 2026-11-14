@@ -24,7 +24,7 @@ def rgb(text):
     return int(text, 16)
 
 
-KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4}
+KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4, "play": 5}
 
 
 def render(layout):
@@ -86,7 +86,7 @@ def render(layout):
         "namespace synthyboy_mpc { namespace overlay { namespace layout {",
         "struct Rect { int x, y, w, h; };",
         "struct Marker { Rect rect; unsigned rgb; unsigned cover; };   // cover: the colour of what lies under the marker (a transparent view paints it over the marker)",
-        "constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3, kKindSpectrum = 4;",
+        "constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3, kKindSpectrum = 4, kKindPlay = 5;",
         "struct View { const char* name; int kind; int index; Rect region; bool opaque; Marker markers[2]; Rect instance; };   // instance: the film strip image bound to the display parameter \"Overlay Instance\" (one frame = this size)",
         "constexpr int kScreenW = %d;" % layout["screen"]["width"],
         "constexpr int kScreenH = %d;" % layout["screen"]["height"],

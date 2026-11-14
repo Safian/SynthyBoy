@@ -209,14 +209,14 @@ int main (int argc, char** argv)
     AEffect* e = entry (hostCallback);
 #endif
     if (! e) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
-    lastIndex.store (e->numParams - 1);   // the display thread's first report comes a tick (>= 50 ms) after creation
+    lastIndex.store (e->numParams - 1 - (overlayBuild ? 27 : 0));   // the overlay build ends with the 27 parameters of the Play page (shell-mpc/play_params.h) after Overlay Instance;   // the display thread's first report comes a tick (>= 50 ms) after creation
     e->dispatcher (e, effOpen, 0, 0, nullptr, 0.0f);
     e->dispatcher (e, effSetSampleRate, 0, 0, nullptr, 44100.0f);
     e->dispatcher (e, effSetBlockSize, 0, 256, nullptr, 0.0f);
     e->dispatcher (e, effMainsChanged, 0, 1, nullptr, 0.0f);
 
     // the two pad pressure parameters (shell-mpc/pad_pressure.h, default ON) follow the display parameters (only "Overlay Instance" of the overlay build is after them) and are no part of what is checked here
-    const int ovl = overlayBuild ? 1 : 0;       // "Overlay Instance", the very last parameter
+    const int ovl = overlayBuild ? 1 + 27 : 0;   // "Overlay Instance" and after it the Play page's 3 selectors and 24 proxies (shell-mpc/play_params.h)
     const int pad = text (e, effGetParamName, e->numParams - 2 - ovl) == "Pad Pressure" ? 2 : 0;
     const std::string chunk = getChunk (e);
     std::printf ("chunk %zu %zu\n", chunk.size(), std::hash<std::string>{} (chunk));
