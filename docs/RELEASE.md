@@ -118,6 +118,46 @@ The output is `SynthyBoy-MPC-<version>.zip` holding exactly the single top-level
 
 `INSTALL.txt` explains installation to `VST2 Plugins` on an internal drive or external USB/SD storage, required MPC OS version (3.10.1 or later), enabling the enhancement switches under **Preferences → Enhancements (Beta)** (**Enable Enhancements** and **External Plugin Support**), how to load the instrument, removal, third-party plugin stability notes, the AGPL-3.0-or-later license and source repository URL, and the Akai / inMusic disclaimer.
 
+## MPC Plugin Program Presets (.xpl)
+
+The Akai MPC host stores instrument preset files in its proprietary Plugin Program (`.xpl`) format under the user preset directory:
+```
+MPC Documents/Plugin Presets/Instruments/Safian - VST - SynthyBoy/
+```
+(e.g. `/sdcard/MPC Documents/Plugin Presets/Instruments/Safian - VST - SynthyBoy/<Preset Name>.xpl` on internal storage or the equivalent path on external USB/SD drives). While the MPC shell already exposes the 112 factory presets through the VST2 program list, the host's "Load" preset browser only indexes `.xpl` files.
+
+### Generating .xpl files
+
+1. Build the native MPC shell and the chunk dumper helper:
+   ```bash
+   cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release \
+       -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF \
+       -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK"
+   cmake --build build-native --target dump_mpc_chunks synthyboy_mpc
+   ```
+2. Dump raw preset chunks from the built plugin:
+   ```bash
+   ./build-native/shell-mpc/dump_mpc_chunks ./build-native/shell-mpc/synthyboy_mpc.so content/presets /tmp/synthyboy_chunks
+   ```
+3. Generate `.xpl` files using a host-saved template:
+   ```bash
+   python3 scripts/gen-mpc-xpl.py \
+       --chunks /tmp/synthyboy_chunks \
+       --template /path/to/template.xpl \
+       --plugin-path "/sdcard/VST2 Plugins/Safian - VST - SynthyBoy/VST/synthyboy-arm32.so" \
+       --out dist/mpc-presets/
+   ```
+4. Inspect or verify any generated file:
+   ```bash
+   python3 scripts/gen-mpc-xpl.py --check dist/mpc-presets/"Acid Saw Reso.xpl"
+   ```
+
+> [!WARNING]
+> **Open questions (NOT yet verified on a live MPC device):**
+> * Whether the MPC host accepts and properly loads programmatically generated `.xpl` files without manual on-device save.
+> * Whether the absolute plugin binary path (`file="..."` in `<PLUGIN>`) must strictly match the binary path on the target device, or if the host falls back to matching by UID (`SfSB` / `53665342`) or plugin name.
+
+
 ## Pins and secrets
 
 All actions in `release.yml` are pinned by commit SHA (checkout, upload-artifact), everything else is the preinstalled `gh` CLI with the job's `GITHUB_TOKEN`
