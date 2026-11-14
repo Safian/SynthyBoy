@@ -214,6 +214,16 @@ int main()
         Controller::readoutTargets (all);
         check (! all.empty() && all.size() <= static_cast<size_t> (synthyboy::LiveValues::kMaxTargets), "the targets of all views together fit the engine's list (" + std::to_string (all.size()) + " of " + std::to_string (synthyboy::LiveValues::kMaxTargets) + ")");
     }
+    // ---- the last instance closes: the mappings and dma-buf descriptors of the host's framebuffers that the frame source kept are let go (they would hold the host's buffers until the process ends) ----
+    {
+        Rig r;
+        r.frame.setAll (true, 90);
+        check (r.until ([&] { return r.on(); }, 500) >= 0, "(release: shown)");
+        check (r.frame.releases == 0, "(release: nothing is let go while an instance lives)");
+        check (r.ctl->detach (&r.inst) == 0, "(release: the last instance closes)");
+        r.ctl->shutdown();
+        check (r.frame.releases >= 1, "the frame source is told to let go of its cached framebuffers when the overlay shuts down");
+    }
     // ---- a slot is given to a NEW instance: no view object of the earlier instance is reused, whatever page is on screen when the new one is first looked at ----
     {
         Rig r;

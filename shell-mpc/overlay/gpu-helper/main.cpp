@@ -625,17 +625,18 @@ private:
         verts_.clear();
         draws_.clear();
         // the current polyline (the whole width until a Curve op says otherwise), continued horizontally to the two edges of its span
-        auto setCurve = [&] (int first, int n, float x0, float width)
+        auto setCurve = [&] (float firstF, float nF, float x0, float width)
         {
             pts_.clear();
-            if (n < 2 || first < 0 || first + n > kMaxCurve)
+            int first = 0, n = 0;
+            if (! curveSpan (firstF, nF, first, n))   // the floats come from shared memory: NaN, a huge value or a sum that overflows must not reach the index
                 return;
             pts_.push_back ({ x0, s.y[first] });
             for (int i = 0; i < n; ++i)
                 pts_.push_back ({ x0 + static_cast<float> (i) / static_cast<float> (n - 1) * (width - 1.0f) + 0.5f, s.y[first + i] });
             pts_.push_back ({ x0 + width, s.y[first + n - 1] });
         };
-        setCurve (0, static_cast<int> (s.numPoints), 0.0f, static_cast<float> (s.w));
+        setCurve (0.0f, s.numPoints > static_cast<uint32_t> (kMaxCurve) ? -1.0f : static_cast<float> (s.numPoints), 0.0f, static_cast<float> (s.w));
         for (uint32_t k = 0; k < s.numOps && k < static_cast<uint32_t> (kMaxOps); ++k)
         {
             const SceneOp& o = s.ops[k];
@@ -671,7 +672,7 @@ private:
                     break;
                 }
                 case kOpCurve:
-                    setCurve (static_cast<int> (o.f[0] + 0.5f), static_cast<int> (o.f[1] + 0.5f), o.f[2], o.f[3]);
+                    setCurve (o.f[0], o.f[1], o.f[2], o.f[3]);
                     break;
                 case kOpText:
                 {

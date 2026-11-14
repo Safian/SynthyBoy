@@ -45,6 +45,8 @@ public:
     bool start (int displayFd, const HelloParams& hello, std::string& error) override
     {
         close();
+        trimLogFile (log_.c_str(), kMaxLogBytes);   // a helper that is started again does not add to a file that has grown for weeks
+        nextTrimMs_ = nowMs() + kTrimEveryMs;
         if (path_.empty() || ::access (path_.c_str(), X_OK) != 0)
         {
             error = "the helper executable is missing or not executable: " + path_;
@@ -80,16 +82,11 @@ public:
     {
         if (pid_ <= 0)
             return false;
-        int st = 0;
-        const pid_t r = ::waitpid (pid_, &st, WNOHANG);
-        if (r == pid_)
-        {
-            reaped_ = true;
-            return false;
-        }
-        if (r < 0 && errno == ECHILD)   // somebody else reaped it (a SIGCHLD handler of the application) or the signal is ignored: ask the kernel
-            return ::kill (pid_, 0) == 0;
-        return true;
+        trimLogIfDue();
+        if (pollChild (pid_) == ChildWait::Running)
+            return true;
+        reaped_ = true;   // exited, or gone without us (ECHILD: the number is no longer known to be the helper's): never signalled again
+        return false;
     }
 
     void kill() noexcept override
@@ -98,14 +95,15 @@ public:
             return;
         if (! reaped_)
         {
-            ::kill (pid_, SIGKILL);
-            for (int i = 0; i < 200; ++i)   // up to 2 s
+            ChildWait w = pollChild (pid_);
+            if (mayKill (w))
             {
-                int st = 0;
-                const pid_t r = ::waitpid (pid_, &st, WNOHANG);
-                if (r == pid_ || (r < 0 && errno == ECHILD && ::kill (pid_, 0) != 0))
-                    break;
-                sleepMs (10);
+                ::kill (pid_, SIGKILL);
+                for (int i = 0; i < 200 && mayKill (w); ++i)   // up to 2 s
+                {
+                    sleepMs (10);
+                    w = pollChild (pid_);
+                }
             }
         }
         reaped_ = true;
@@ -141,6 +139,30 @@ public:
     }
 
 private:
+    static ChildWait pollChild (pid_t pid) noexcept
+    {
+        int st = 0;
+        const pid_t r = ::waitpid (pid, &st, WNOHANG);
+        const int err = errno;   // read before anything else can change it
+        return classifyWait (pid, r, err);
+    }
+    static constexpr long long kMaxLogBytes = 128 * 1024;
+    static constexpr double kTrimEveryMs = 10000.0;
+    static double nowMs() noexcept
+    {
+        timespec t;
+        clock_gettime (CLOCK_MONOTONIC, &t);
+        return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
+    }
+    /** While the helper runs: its log is looked at every 10 seconds and emptied when it passed the limit (it appends, so it goes on at the new end). */
+    void trimLogIfDue() noexcept
+    {
+        const double now = nowMs();
+        if (now < nextTrimMs_)
+            return;
+        nextTrimMs_ = now + kTrimEveryMs;
+        trimLogFile (log_.c_str(), kMaxLogBytes);
+    }
     static void sleepMs (int ms) noexcept
     {
         timespec ts { 0, static_cast<long> (ms) * 1000000L };
@@ -270,6 +292,7 @@ private:
     int sock_ = -1;
     pid_t pid_ = 0;
     bool reaped_ = false;
+    double nextTrimMs_ = 0.0;
     SharedBlock* block_ = nullptr;
 };
 

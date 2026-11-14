@@ -481,6 +481,7 @@ public:
         return true;
     }
 
+    bool displayOn() noexcept override { return display_->crtcActive(); }
     uint32_t crtcId() const noexcept override { return display_->info().crtc; }
     uint32_t planeId() const noexcept override { return display_->plane(); }
     PaceParams paceParams() const noexcept override { return display_->pace(); }
@@ -670,6 +671,11 @@ public:
             return false;
         }
         struct stat st;
+        if (! frameLayoutReadable (f.width, f.height, f.pitches[0], f.offsets[0]))   // a layout we cannot trust: never mapped, never read
+        {
+            ::close (p.fd);
+            return false;
+        }
         if (fstat (p.fd, &st) < 0)
         {
             ::close (p.fd);
@@ -715,11 +721,22 @@ public:
         return true;
     }
 
+    void release() noexcept override
+    {
+        cur_ = nullptr;
+        for (Entry& e : cache_)
+            drop (e);
+        if (fd_ >= 0)
+            ::close (fd_);
+        fd_ = -1;
+    }
+
     bool pixel (int px, int py, uint32_t& rgb) noexcept override
     {
-        if (! cur_ || px < 0 || py < 0 || px >= static_cast<int> (cur_->width) || py >= static_cast<int> (cur_->height))
+        size_t at = 0;
+        if (! cur_ || ! framePixelOffset (cur_->width, cur_->height, cur_->pitch, cur_->offset, cur_->len, px, py, at))
             return false;
-        const uint32_t v = *reinterpret_cast<const volatile uint32_t*> (cur_->map + cur_->offset + static_cast<size_t> (py) * cur_->pitch + static_cast<size_t> (px) * 4);
+        const uint32_t v = *reinterpret_cast<const volatile uint32_t*> (cur_->map + at);
         rgb = v & 0xffffffu;
         return true;
     }

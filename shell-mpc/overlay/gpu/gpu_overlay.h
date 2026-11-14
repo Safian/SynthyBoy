@@ -14,14 +14,49 @@
 // are removed through the plugin's own descriptor, then the state moves on. All calls are made by the overlay thread (shutdown () by the thread that stopped it).
 #pragma once
 
+#include <cerrno>
 #include <cstdint>
 #include <string>
+
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "../drm_interfaces.h"
 #include "../geometry.h"
 #include "scene.h"
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
+
+/** Empties the file when it is larger than `maxBytes` (the helper's log lives in /tmp, which is memory on the device: Mesa warnings and restarts would fill it over weeks). A process that
+    has the file open for appending (the helper) goes on at the new end. true: the file was emptied. false: no such file, small enough, or the call failed. */
+inline bool trimLogFile (const char* path, long long maxBytes) noexcept
+{
+    if (path == nullptr || *path == 0)
+        return false;
+    struct stat st;
+    if (::stat (path, &st) != 0 || static_cast<long long> (st.st_size) <= maxBytes)
+        return false;
+    return ::truncate (path, 0) == 0;
+}
+
+/** What waitpid (pid, WNOHANG) said about the helper, as the transport must read it. */
+enum class ChildWait
+{
+    Running,    // 0, or an interrupted call: still there as far as we know
+    Exited,     // the pid itself: it exited and we reaped it (the number is free from now on)
+    NotOurs     // ECHILD: somebody else reaped it (a SIGCHLD handler of the application) or SIGCHLD is ignored: it is dead, and the number may be given to ANOTHER process any time
+};
+inline ChildWait classifyWait (pid_t pid, pid_t waitResult, int err) noexcept
+{
+    if (waitResult == pid)
+        return ChildWait::Exited;
+    if (waitResult < 0 && err == ECHILD)
+        return ChildWait::NotOurs;
+    return ChildWait::Running;
+}
+/** A signal may only go to a child that is known to be running: after Exited or NotOurs the number belongs to nobody we know (kill (pid, 0) cannot tell a stranger from the helper). */
+inline bool mayKill (ChildWait w) noexcept { return w == ChildWait::Running; }
 
 /** The helper process and the two channels to it. The real one is in helper_transport_linux.h; the tests have a fake. Not thread safe: the overlay thread only. */
 class IHelperTransport

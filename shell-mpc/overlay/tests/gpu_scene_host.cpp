@@ -2,6 +2,7 @@
 // serialisation of every view type: the scene of a view, interpreted by the reference interpreter, is the picture the CPU renderer makes of the same data.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <limits>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -405,6 +406,18 @@ int main()
         gpu::SceneData sd;
         gpu::SceneBuilder sb (sd);
         check (! n.describe (sb, 0, 10, 10), "a view without a scene description (the null view) is drawn by the CPU");
+    }
+    // ---- the polyline span of a Curve op comes from floats in shared memory: never trusted ----
+    {
+        int first = -1, n = -1;
+        check (gpu::curveSpan (0.0f, 512.0f, first, n) && first == 0 && n == 512, "an ordinary span is taken as it is");
+        check (gpu::curveSpan (512.4f, 255.6f, first, n) && first == 512 && n == 256, "the floats are rounded to the nearest vertex");
+        check (gpu::curveSpan (gpu::kMaxCurve - 2.0f, 2.0f, first, n) && first == gpu::kMaxCurve - 2 && n == 2, "a span that ends exactly at the end of the table");
+        check (! gpu::curveSpan (gpu::kMaxCurve - 1.0f, 2.0f, first, n), "one vertex past the end: refused");
+        check (! gpu::curveSpan (-1.0f, 4.0f, first, n) && ! gpu::curveSpan (0.0f, 1.0f, first, n) && ! gpu::curveSpan (0.0f, 0.0f, first, n), "a negative start and fewer than two vertices: refused");
+        const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+        check (! gpu::curveSpan (nan, 4.0f, first, n) && ! gpu::curveSpan (0.0f, nan, first, n) && ! gpu::curveSpan (inf, 4.0f, first, n) && ! gpu::curveSpan (0.0f, inf, first, n), "NaN and infinity: refused (a conversion to int of those is undefined)");
+        check (! gpu::curveSpan (2.0e9f, 2.0e9f, first, n) && ! gpu::curveSpan (3.0e9f, 4.0f, first, n) && ! gpu::curveSpan (1.0e30f, 1.0e30f, first, n), "sums and values that overflow int: refused");
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

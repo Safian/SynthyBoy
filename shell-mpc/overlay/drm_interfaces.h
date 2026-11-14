@@ -34,6 +34,9 @@ public:
     virtual uint32_t* buffer (int index, size_t& strideBytes) noexcept = 0;
     /** Shows buffer `index` on the plane at the panel rectangle (source rectangle = the whole buffer). Blocks until the next vblank on the device. */
     virtual bool setPlane (int index, const Rect& panel, std::string& error) = 0;
+    /** The display is on: the CRTC has a mode. false while the screen sleeps (DPMS: no mode, no framebuffer): a plane update then has nothing to wait for but a vblank that does not come, and the
+        framebuffer of the host cannot be read; neither is a failure of the overlay. Cheap (one read-only call). */
+    virtual bool displayOn() noexcept { return true; }
     /** Takes the plane off the CRTC (no framebuffer, no CRTC). Safe to call at any time, also twice. */
     virtual void disablePlane() noexcept = 0;
     /** Removes the framebuffers and frees the buffers. Safe to call at any time, also twice. */
@@ -62,6 +65,30 @@ public:
     virtual const PaceStats* paceStats() const noexcept { return nullptr; }
 };
 
+/** Can a framebuffer of this layout be mapped and read as 4 byte pixels: pixels at least a row wide, sane sizes, nothing that overflows 32 bits or maps more than 256 MB. The source checks
+    it before it maps a buffer the host made (a layout it cannot trust is refused, not read). */
+inline bool frameLayoutReadable (uint32_t width, uint32_t height, uint32_t pitch, uint32_t offset) noexcept
+{
+    constexpr uint64_t kMaxSide = 16384, kMaxBytes = 256ull << 20;
+    if (width == 0 || height == 0 || width > kMaxSide || height > kMaxSide)
+        return false;
+    if (static_cast<uint64_t> (pitch) < static_cast<uint64_t> (width) * 4)
+        return false;
+    return static_cast<uint64_t> (offset) + static_cast<uint64_t> (pitch) * height <= kMaxBytes;
+}
+/** The byte position of pixel (px, py) in a mapping of `mappedBytes`: false when the pixel is outside the picture, the layout is not readable, or the 4 bytes of the pixel are not all inside the
+    mapping. */
+inline bool framePixelOffset (uint32_t width, uint32_t height, uint32_t pitch, uint32_t offset, size_t mappedBytes, int px, int py, size_t& at) noexcept
+{
+    if (px < 0 || py < 0 || static_cast<uint32_t> (px) >= width || static_cast<uint32_t> (py) >= height || ! frameLayoutReadable (width, height, pitch, offset))
+        return false;
+    const uint64_t pos = static_cast<uint64_t> (offset) + static_cast<uint64_t> (py) * pitch + static_cast<uint64_t> (px) * 4;
+    if (pos + 4 > static_cast<uint64_t> (mappedBytes))
+        return false;
+    at = static_cast<size_t> (pos);
+    return true;
+}
+
 /** A read-only view of the pixels the application's primary plane shows (the markers of the skin). begin / pixel / end are called from the overlay thread only. */
 class IFrameSource
 {
@@ -72,6 +99,9 @@ public:
     /** The 0xRRGGBB value of the panel pixel (px, py) of the framebuffer taken by begin (). false outside of it. */
     virtual bool pixel (int px, int py, uint32_t& rgb) noexcept = 0;
     virtual void end() noexcept = 0;
+    /** Lets go of everything the source keeps between two reads (cached mappings of the host's framebuffers, descriptors): the overlay is shutting down (the last instance closed) and must
+        not hold the host's buffers any longer. Not in the middle of a read. The next begin () starts again. */
+    virtual void release() noexcept {}
     /** Non-empty: the source can never work (the display was not found, ...): the module disables itself at once with this reason. */
     virtual std::string fatalError() const { return {}; }
 };

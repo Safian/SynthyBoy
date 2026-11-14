@@ -144,6 +144,7 @@ public:
         if (gpu_)
             gpu_->shutdown();
         presenter_.hide();
+        frames_.release();   // the cached mappings / dma-buf descriptors of the host's framebuffers: not kept while no instance lives
         if (! disabled())
         {
             state_ = "hidden: no instance";
@@ -290,7 +291,9 @@ private:
                     disable (fatal);
                     return 1000.0;
                 }
-                if (++unreadable_ >= timing_.unreadableLimit)
+                if (! backend_.displayOn())
+                    unreadable_ = 0;   // the screen sleeps (no mode, no framebuffer): nothing to read, and nothing wrong
+                else if (++unreadable_ >= timing_.unreadableLimit)
                 {
                     disable ("the framebuffer cannot be read");
                     return 1000.0;
@@ -633,6 +636,8 @@ private:
             // waits for the vblank, which locks the pictures to every second one) instead of starting a full period after the return, which would miss it
             nextWaitMs_ = std::max (1.0, timing_.frameEveryMs - workPeakMs_ - kSlackMs);
         }
+        else if (presenter_.asleep())
+            nextWaitMs_ = std::max (nextWaitMs_, 250.0);   // the screen sleeps: look again in a quarter of a second, the picture stays wanted (needFrame_)
     }
 
     void disable (const std::string& why)

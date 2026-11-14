@@ -3,6 +3,7 @@
 // toggles live, the plugin closes while the helper runs. Every scenario ends with plane 38 off and none of the helper's framebuffers / GEM handles left.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <cerrno>
 #include <deque>
 
 #include <cmath>
@@ -717,6 +718,35 @@ int main()
             const std::string st = dir.read ("status.txt");
             check (plane.planeOn && ! ctl.usingGpu() && st.find ("renderer: cpu") != std::string::npos && st.find ("gpu_state: not built") != std::string::npos, "no GPU backend: the CPU draws, the status file says so");
         }
+    }
+    // ---- the helper's log file does not grow without bound (the file lives in /tmp, which is memory on the device) ----
+    {
+        TempDir dir;
+        const std::string log = dir.path + "/helper.log";
+        check (! gpu::trimLogFile (log.c_str(), 1000), "no file: nothing to trim");
+        dir.write ("helper.log", std::string (900, 'x'));
+        check (! gpu::trimLogFile (log.c_str(), 1000) && dir.read ("helper.log").size() == 900, "a log under the limit is kept");
+        dir.write ("helper.log", std::string (1500, 'y'));
+        check (gpu::trimLogFile (log.c_str(), 1000) && dir.read ("helper.log").empty(), "a log over the limit is emptied");
+        // a writer that has the file open for appending (the helper) goes on at the new end
+        FILE* w = std::fopen (log.c_str(), "a");
+        std::fputs (std::string (1200, 'z').c_str(), w);
+        std::fflush (w);
+        check (gpu::trimLogFile (log.c_str(), 1000), "a file written by a running helper is over the limit again");
+        std::fputs ("after", w);
+        std::fclose (w);
+        check (dir.read ("helper.log") == "after", "... and its next lines start at the beginning (no hole of zeros)");
+        check (! gpu::trimLogFile ("", 1000) && ! gpu::trimLogFile (nullptr, 1000), "no path: nothing happens");
+    }
+    // ---- what waitpid says about the helper: only its own exit counts; a child that is not ours (any more) is never signalled ----
+    {
+        using gpu::ChildWait;
+        check (gpu::classifyWait (1234, 0, 0) == ChildWait::Running, "waitpid returned 0: still running");
+        check (gpu::classifyWait (1234, 1234, 0) == ChildWait::Exited, "waitpid returned the pid: it exited and was reaped by us");
+        check (gpu::classifyWait (1234, -1, ECHILD) == ChildWait::NotOurs, "ECHILD: reaped by somebody else (or SIGCHLD ignored): it is gone, and the number may be given to another process by now");
+        check (gpu::classifyWait (1234, -1, EINTR) == ChildWait::Running, "an interrupted call tells nothing: not gone");
+        check (gpu::classifyWait (1234, 99, 0) == ChildWait::Running, "another child's pid is no news about this one");
+        check (gpu::mayKill (ChildWait::Running) && ! gpu::mayKill (ChildWait::Exited) && ! gpu::mayKill (ChildWait::NotOurs), "SIGKILL only for a child that is known to be running");
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

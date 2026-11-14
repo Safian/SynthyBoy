@@ -26,6 +26,8 @@ public:
     bool shown() const noexcept { return shown_; }
     bool opened() const noexcept { return opened_; }
     bool planeOn() const noexcept { return planeOn_; }
+    /** The last present () found the display asleep and did nothing. */
+    bool asleep() const noexcept { return asleep_; }
     int panelWidth() const noexcept { return panelW_; }
     int panelHeight() const noexcept { return panelH_; }
     const Rect& panelRect() const noexcept { return panelRect_; }
@@ -82,6 +84,9 @@ public:
     {
         if (! shown_ || disabled_)
             return false;
+        asleep_ = ! backend_.displayOn();
+        if (asleep_)
+            return false;   // the screen sleeps: no plane update (it would wait for a vblank that does not come); not a failure, the next present () tries again
         std::string error;
         if (! backend_.setPlane (back_, panelRect_, error))
             return fail ("setplane: " + error);
@@ -129,7 +134,7 @@ private:
     }
 
     IPlaneBackend& backend_;
-    bool opened_ = false, shown_ = false, planeOn_ = false, disabled_ = false;
+    bool opened_ = false, shown_ = false, planeOn_ = false, disabled_ = false, asleep_ = false;
     int panelW_ = 0, panelH_ = 0, rotation_ = 90, back_ = 0;
     Rect ui_, panelRect_;
     std::string reason_;

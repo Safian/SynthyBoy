@@ -91,6 +91,8 @@ public:
     uint32_t planeId() const noexcept override { return plane; }
     PaceParams paceParams() const noexcept override { return pace; }
     bool switchedOff = false;
+    std::atomic<bool> displayIsOn { true };   // a test switches the display off (the CRTC has no mode: the screen sleeps) and on again
+    bool displayOn() noexcept override { return displayIsOn.load(); }
     bool planeWasSwitchedOff() noexcept override { const bool v = switchedOff; switchedOff = false; return v; }
     bool planeStillOurs (std::string& why) override { log ("verify"); if (! stillOurs) why = "plane " + std::to_string (plane) + " reports crtc 0, fb 0"; return stillOurs; }
     bool nextPlane (std::string& why) override
@@ -213,6 +215,8 @@ public:
         return true;
     }
     void end() noexcept override { mu_.unlock(); }
+    int releases = 0;
+    void release() noexcept override { ++releases; }
 
     /** Draws marker m (0 left, 1 right) of view `view` (landscape UI rectangle, its colour or `colourOverride`) into the panel through the shared mapping, with rotation `rot`. */
     void setViewMarker (int view, int m, bool present, int rot, uint32_t colourOverride = 0)

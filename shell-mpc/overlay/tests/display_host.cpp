@@ -410,6 +410,60 @@ int main()
         check (std::fabs (fixed - fixed2) < 0.8, "... and with the display pace switched off both are the same constant");
     }
 
+    // ---- the display sleeps (DPMS: the CRTC has no mode, no framebuffer): nothing is sent to the plane, nothing is disabled for good, the picture is back when the display is ----
+    {
+        TempDir dir;
+        FakePlane fp;
+        FakeFrame frame;
+        CpuCurveRenderer renderer;
+        FakeInstance inst;
+        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0);
+        ctl.attach (&inst);
+        frame.setAll (true, 90);
+        double now = 0.0;
+        auto run = [&] (double ms) { const double end = now + ms; while (now < end) { now += 10.0; ctl.tick (now); } };
+        run (600);
+        check (fp.planeOn && ctl.state() == "visible", "(display sleep: shown)");
+        // the display goes off while the picture is on and the markers are still readable (the last frame): no plane update is made
+        fp.displayIsOn = false;
+        inst.set ("filter1.cutoff", 3000.0f);
+        const int sets = fp.countOf ("setplane");
+        run (600);
+        check (fp.countOf ("setplane") == sets, "while the display is off no plane update is made (it would wait for a vblank that does not come)");
+        check (ctl.state().compare (0, 8, "disabled") != 0, "... and the module is not disabled by it (" + ctl.state() + ")");
+        // the framebuffer is not readable while the display sleeps: far longer than the limit of unreadable checks
+        frame.readable = false;
+        run (8000);
+        check (ctl.state().compare (0, 8, "disabled") != 0, "an unreadable framebuffer while the display is off does not disable the module (" + ctl.state() + ")");
+        check (fp.countOf ("setplane") == sets, "... still no plane update");
+        frame.readable = true;
+        fp.displayIsOn = true;
+        run (1500);
+        check (fp.planeOn && ctl.state() == "visible", "the display is back: the picture is shown again (" + ctl.state() + ")");
+        check (fp.countOf ("setplane") > sets, "... through new plane updates");
+        // with the display on, an unreadable framebuffer still disables the module after the limit
+        frame.readable = false;
+        run (4000);
+        check (ctl.state().compare (0, 8, "disabled") == 0, "an unreadable framebuffer on a display that is on still disables the module (" + ctl.state() + ")");
+    }
+    // ---- the frame layout of the host's framebuffer: what may be mapped and read ----
+    {
+        check (frameLayoutReadable (800, 1280, 3200, 0), "an ordinary 800 x 1280 XRGB framebuffer is readable");
+        check (frameLayoutReadable (800, 1280, 3328, 0), "... also with a padded pitch (128 byte aligned)");
+        check (! frameLayoutReadable (800, 1280, 3000, 0), "a pitch shorter than a row of pixels is not readable (the last pixels of a row would be read from the next row, the last row past the mapping)");
+        check (! frameLayoutReadable (0, 1280, 3200, 0) && ! frameLayoutReadable (800, 0, 3200, 0), "an empty framebuffer is not readable");
+        check (! frameLayoutReadable (800, 1280, 0, 0), "a zero pitch is not readable");
+        check (! frameLayoutReadable (100000, 1280, 400000, 0), "an absurd width is not readable");
+        check (! frameLayoutReadable (800, 1280, 0xffffff00u, 0), "a pitch whose size overflows 32 bits is not readable");
+        check (! frameLayoutReadable (800, 1280, 3200, 0xffffff00u), "an offset past any sane buffer is not readable");
+        const size_t len = static_cast<size_t> (3328) * 1280 + 64;
+        size_t at = 0;
+        check (framePixelOffset (800, 1280, 3328, 64, len, 799, 1279, at) && at + 4 <= len && at == 64 + 3328u * 1279 + 799u * 4, "the last pixel is inside the mapping");
+        check (! framePixelOffset (800, 1280, 3328, 64, len, 800, 0, at) && ! framePixelOffset (800, 1280, 3328, 64, len, 0, 1280, at) && ! framePixelOffset (800, 1280, 3328, 64, len, -1, 0, at) && ! framePixelOffset (800, 1280, 3328, 64, len, 0, -1, at), "outside the width and height: no pixel");
+        check (! framePixelOffset (800, 1280, 3328, 64, len - 200, 799, 1279, at), "a mapping shorter than the layout says: the last pixel is refused instead of read past the mapping");
+        check (! framePixelOffset (800, 1280, 3000, 0, 4000000, 799, 1279, at), "a pitch shorter than a row: refused");
+    }
+
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "OK", g_fails);
     return g_fails ? 1 : 0;
 }

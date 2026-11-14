@@ -13,6 +13,7 @@
 // (rotation 90 / 270, geometry.h) in its vertex shader. Colours are straight (not premultiplied) 0xRRGGBBAA.
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -25,6 +26,20 @@ constexpr uint32_t kMsgMagic = 0x4d534f56u;     // 'MSOV' ... the first word of 
 constexpr int kMaxCurve = 1088;                  // vertices of all polylines of a scene together (the oscillator cycle has 512; the Play page: 512 + 256 + 300)
 constexpr int kMaxOps = 96;
 constexpr int kMaxLedger = 8;
+
+/** The span of vertices of a Curve op: `firstF` and `nF` are floats of a shared block (written by the plugin, read by the helper: never trusted). true: first (>= 0) and n (>= 2) are whole
+    numbers (rounded) with first + n <= kMaxCurve; false for NaN, infinity, a negative start, fewer than two vertices and anything that reaches past the table or does not fit an int. */
+inline bool curveSpan (float firstF, float nF, int& first, int& n) noexcept
+{
+    if (! std::isfinite (firstF) || ! std::isfinite (nF) || firstF < -0.5f || nF < 1.5f || firstF > static_cast<float> (kMaxCurve) || nF > static_cast<float> (kMaxCurve))
+        return false;
+    const int f = static_cast<int> (firstF + 0.5f), c = static_cast<int> (nF + 0.5f);
+    if (f < 0 || c < 2 || f + c > kMaxCurve)
+        return false;
+    first = f;
+    n = c;
+    return true;
+}
 
 enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindOsc = 3, kKindEnv = 4, kKindSpectrum = 5, kKindPlay = 6 };
 
