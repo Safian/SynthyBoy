@@ -19,6 +19,14 @@ namespace
 {
 juce::ScopedJuceInitialiser_GUI* juceInit = nullptr;
 SBTEST_STARTUP (juceInit, [] { juceInit = new juce::ScopedJuceInitialiser_GUI(); }, [] { delete juceInit; juceInit = nullptr; });
+
+juce::MouseEvent mouseAt (juce::Component& c, juce::Point<float> pos)
+{
+    const juce::MouseInputSource source = juce::Desktop::getInstance().getMainMouseSource();
+    return juce::MouseEvent (source, pos, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                             1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                             &c, &c, juce::Time::getCurrentTime(), pos, juce::Time::getCurrentTime(), 1, false);
+}
 } // namespace
 
 TEST (test_embedded_presets_table)
@@ -375,4 +383,29 @@ TEST (test_editor_preset_browsing)
     // the name opens the preset menu (shown asynchronously; it is dismissed again)
     top.onPresetNameClick();
     juce::PopupMenu::dismissAllActiveMenus();
+
+    // clicking the preset name area directly invokes onPresetNameClick
+    bool clicked = false;
+    top.onPresetNameClick = [&clicked] { clicked = true; };
+    const float clickX = static_cast<float> (top.prev.getRight() + top.next.getX()) * 0.5f;
+    const auto ev = mouseAt (top, { clickX, 10.0f });
+    top.mouseDown (ev);
+    CHECK (clicked);
+
+    // hovering over the preset name changes cursor to pointing hand; exit resets it
+    top.mouseMove (ev);
+    CHECK (top.getMouseCursor() == juce::MouseCursor::PointingHandCursor);
+    top.mouseExit (ev);
+    CHECK (top.getMouseCursor() == juce::MouseCursor::NormalCursor);
+
+    // direct selection via selectPreset
+    proc.selectPreset (42);
+    CHECK_EQ (proc.getCurrentProgram(), 42);
+    CHECK_EQ (proc.currentPresetIndex(), 42);
+    CHECK_EQ (proc.presetName(), proc.getProgramName (42));
+
+    proc.selectPreset (0);
+    CHECK_EQ (proc.getCurrentProgram(), 0);
+    CHECK_EQ (proc.currentPresetIndex(), 0);
+    CHECK_EQ (proc.presetName(), juce::String ("Init"));
 }
