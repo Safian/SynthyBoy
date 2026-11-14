@@ -241,7 +241,7 @@ class OverlaySkinTests(unittest.TestCase):
 
     # ---- the production skin is what it was ----
     def test_production_skin_is_byte_identical_without_the_overlay_module(self):
-        files = lambda d: sorted(p.name for p in d.iterdir())
+        files = lambda d: sorted(str(p.relative_to(d)) for p in d.rglob("*") if p.is_file())   # (the skin has a sub folder since the browser tile: browser_images/)
         self.assertEqual(files(self.prod), files(self.base))
         for name in files(self.prod):
             self.assertEqual((self.prod / name).read_bytes(), (self.base / name).read_bytes(), name)

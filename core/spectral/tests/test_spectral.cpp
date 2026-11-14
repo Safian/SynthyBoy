@@ -413,3 +413,55 @@ TEST (spectral_one_shot_ends_and_a_stereo_sample_keeps_two_channels)
     CHECK_NEAR (crossingHz (left, 4000, 18000), 500.0, 15.0);
     CHECK_NEAR (crossingHz (right, 4000, 18000), 1500.0, 40.0);
 }
+
+TEST (spectral_display_spectrum_is_what_the_voice_synthesizes)
+{
+    // computeMagnitudeSpectrum (the oscillator display) runs the very code the voice runs for a hop (shapeFrame): the output magnitudes of the display and the ones the voice left in its
+    // scratch memory after a hop at the same analysis frame are the same numbers, bit for bit, for every kind of setting that changes the picture
+    const Tone tone (rich (220.0, 1.0));
+    std::vector<float> gains (kBins, 1.0f);
+    for (int k = 0; k < kBins; ++k)
+        gains[static_cast<size_t> (k)] = 0.2f + 0.8f * static_cast<float> (k % 7) / 6.0f;
+    struct Case { const char* name; float pitch, shift, lo, hi; bool smooth, post; int warp; float amount; bool filter; };
+    const Case cases[] = {
+        { "plain", 1.0f, 0.0f, 20.0f, 20000.0f, false, false, -1, 0.0f, false },
+        { "pitch up a fifth", 1.4983f, 0.0f, 20.0f, 20000.0f, false, false, -1, 0.0f, false },
+        { "pitch down an octave and a shift", 0.5f, 150.0f, 20.0f, 20000.0f, false, false, -1, 0.0f, false },
+        { "band 300 .. 3000 Hz hard", 1.0f, 0.0f, 300.0f, 3000.0f, false, false, -1, 0.0f, false },
+        { "band 300 .. 3000 Hz smooth, after the warp", 1.3f, 0.0f, 300.0f, 3000.0f, true, true, -1, 0.0f, false },
+        { "the spectral filter", 1.0f, 0.0f, 20.0f, 20000.0f, false, false, -1, 0.0f, true },
+        { "a warp", 1.0f, 0.0f, 20.0f, 20000.0f, false, false, 0, 0.7f, false },
+        { "another warp with a pitch change", 1.2f, 40.0f, 100.0f, 9000.0f, true, false, 2, 0.5f, true },
+    };
+    for (const Case& c : cases)
+    {
+        SpectralParams p = frozen (0.5f);
+        p.pitchRatio = c.pitch;
+        p.freqShiftHz = c.shift;
+        p.freqLoHz = c.lo;
+        p.freqHiHz = c.hi;
+        p.bandSmooth = c.smooth;
+        p.bandPostWarp = c.post;
+        p.warpType[0] = c.warp;
+        p.warpAmount[0] = c.amount;
+        p.filterGain = c.filter ? gains.data() : nullptr;
+        SpectralVoice v;
+        v.prepare (kSr);
+        v.noteOn (&tone.analysis, p, 0.0f);
+        render (v, p, 4096);
+        static Scratch display;
+        float shown[kBins];
+        const double frame = 0.5 * static_cast<double> (tone.analysis.fileFrames()) / kHop;   // where the voice's head stands: the frozen position
+        computeMagnitudeSpectrum (tone.analysis, p, frame, shown, display);
+        bool same = true, any = false;
+        for (int k = 0; k < kBins; ++k)
+        {
+            same = same && shown[k] == gScratch.om[k];
+            any = any || shown[k] > 1.0e-4f;
+        }
+        CHECK (any);
+        if (! same)
+            std::printf ("  case '%s': the display's spectrum is not the voice's\n", c.name);
+        CHECK (same);
+    }
+}

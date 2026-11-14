@@ -122,6 +122,12 @@ struct SpectralParams
     gain) shifted along the axis by `shift` (-1 .. 1 = +- half the axis), mixed wet / dry. `binHz` = Hz of one bin. No points: flat. */
 void buildFilterGains (float* gains, const float* x, const float* y, int numPoints, float shift, float mix, double binHz) noexcept;
 
+/** Computes the output bin magnitudes of one frame without running a voice (for display).
+    `frame`: frame index in the analysis (0 .. an.numFrames() - 1).
+    `om`: output array of kBins floats.
+    `scratch`: scratch workspace. */
+void computeMagnitudeSpectrum (const Analysis& an, const SpectralParams& p, double frame, float* om, Scratch& scratch) noexcept;
+
 class SpectralVoice
 {
 public:

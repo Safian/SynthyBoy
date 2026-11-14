@@ -587,25 +587,24 @@ void SpectralVoice::advanceHead (const SpectralParams& p) noexcept
         head_ = l1 - std::fmod (l0 - head_, l1 - l0);
 }
 
-void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept
+/** The first half of a hop of one channel, shared by the voice and by the display (computeMagnitudeSpectrum): the analysis frame `frame` of channel `src` (interpolated between two analysis
+    frames), the spectral filter, the band, the warps and the pitch / frequency shift, down to the magnitudes (scratch.om), frequencies (scratch.of) and phases (scratch.oth) of the output bins.
+    `smear`: the per channel state of the smear warp (kBins values). `twist`: the phase twist the warps ask for. One code for both, so that the display shows what the voice plays. */
+static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, double frame, double hostRate, Scratch& scratch, float* smear, float& twist) noexcept
 {
-    const Analysis& an = *analysis_;
-    Channel& c = channel_[ch];
-    Scratch& scratch = *p.scratch;
-    float* const re_ = scratch.re; float* const im_ = scratch.im; float* const mag_ = scratch.mag; float* const freq_ = scratch.freq; float* const theta_ = scratch.theta;
+    float* const mag_ = scratch.mag; float* const freq_ = scratch.freq; float* const theta_ = scratch.theta;
     float* const om_ = scratch.om; float* const of_ = scratch.of; float* const oth_ = scratch.oth; float* const tm_ = scratch.tm; float* const tf_ = scratch.tf;
     const int last = an.numFrames() - 1;
     const int i0 = std::max (0, std::min (last, static_cast<int> (std::floor (frame))));
     const int i1 = std::min (last, i0 + 1);
     const float fr = static_cast<float> (std::max (0.0, std::min (1.0, frame - std::floor (frame))));
     const int near = std::max (0, std::min (last, static_cast<int> (std::lround (frame))));
-    const int src = std::min (ch, an.channels() - 1);
     const float* m0 = an.magnitude (src, i0);
     const float* m1 = an.magnitude (src, i1);
     const float* fq = an.frequency (src, near);
     const float* ph = an.phase (src, near);
     const double fileRate = an.fileRate();
-    const double fileBinHz = fileRate / kFftSize, hostBinHz = hostRate_ / kFftSize;
+    const double fileBinHz = fileRate / kFftSize, hostBinHz = hostRate / kFftSize;
 
     for (int k = 0; k < kBins; ++k)
     {
@@ -642,18 +641,19 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
     if (! p.bandPostWarp)
         band (mag_, fileBinHz);
 
-    float extra = 1.0f, twist = 0.0f;
+    float extra = 1.0f;
+    twist = 0.0f;
     for (int w = 0; w < 2; ++w)
         if (p.warpType[w] >= 0 && p.warpType[w] < kNumSpectralWarps && p.warpAmount[w] > 0.0f)
         {
             const float* ext = isExternalWarp (p.warpType[w]) ? p.external[externalSource (p.warpType[w])] : nullptr;
-            extra *= applyWarp (p.warpType[w], p.warpAmount[w], p.warpVar[w], mag_, freq_, tm_, tf_, ext, c.smear, twist);
+            extra *= applyWarp (p.warpType[w], p.warpAmount[w], p.warpVar[w], mag_, freq_, tm_, tf_, ext, smear, twist);
         }
 
     // the pitch: bin k goes to bin k * r (+ the frequency shift) with its frequency scaled the same way
-    const double r = std::max (1.0 / 32.0, std::min (32.0, static_cast<double> (p.pitchRatio) * static_cast<double> (extra) * fileRate / hostRate_));
+    const double r = std::max (1.0 / 32.0, std::min (32.0, static_cast<double> (p.pitchRatio) * static_cast<double> (extra) * fileRate / hostRate));
     const double shiftBins = static_cast<double> (p.freqShiftHz) / hostBinHz;
-    const float shiftRad = kTwoPi * p.freqShiftHz / static_cast<float> (hostRate_);
+    const float shiftRad = kTwoPi * p.freqShiftHz / static_cast<float> (hostRate);
     std::fill (om_, om_ + kBins, 0.0f);
     std::fill (of_, of_ + kBins, 0.0f);
     std::fill (oth_, oth_ + kBins, 0.0f);
@@ -690,6 +690,16 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
     }
     if (p.bandPostWarp)
         band (om_, hostBinHz);
+}
+
+void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept
+{
+    const Analysis& an = *analysis_;
+    Channel& c = channel_[ch];
+    Scratch& scratch = *p.scratch;
+    float* const re_ = scratch.re; float* const im_ = scratch.im; float* const om_ = scratch.om; float* const of_ = scratch.of; float* const oth_ = scratch.oth;
+    float twist = 0.0f;
+    shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist);
 
     // phases: advance by the frequency of the partial; after a transient (Transients) restart from the phases of the analysis; Phase Lock ties the bins around a peak to it
     if ((transientHit && p.transients) || ! phaseInit_[ch])
@@ -813,6 +823,22 @@ void SpectralVoice::process (const SpectralParams& p, float* left, float* right,
         right[i] = std::isfinite (r) ? std::max (-16.0f, std::min (16.0f, r)) : 0.0f;
         ++outPos_;
     }
+}
+
+void computeMagnitudeSpectrum (const Analysis& an, const SpectralParams& p, double frame, float* om, Scratch& scratch) noexcept
+{
+    if (om == nullptr)
+        return;
+    std::fill (om, om + kBins, 0.0f);
+    if (! an.valid() || an.numFrames() <= 0)
+        return;
+    // the very code the voice runs for one hop (shapeFrame), on channel 0, with a smear memory of its own that starts empty
+    float smear[kBins] = {};
+    float twist = 0.0f;
+    const int last = an.numFrames() - 1;
+    frame = std::max (0.0, std::min (static_cast<double> (last), frame));
+    shapeFrame (p, an, 0, frame, p.hostRate > 0.0 ? p.hostRate : 48000.0, scratch, smear, twist);
+    std::copy (scratch.om, scratch.om + kBins, om);
 }
 } // namespace spectral
 } // namespace synthyboy
