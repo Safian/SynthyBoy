@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.." || exit 1
 B=build-mpc
 # Every build below names every option of the display and the statistics itself: a build directory keeps the options of earlier runs in its CMake cache (a tree that was
 # configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
-BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=6 -DSYNTHYBOY_MPC_PAD_PRESSURE=ON"
+BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=18 -DSYNTHYBOY_MPC_OUTPUT_LIMITER=OFF -DSYNTHYBOY_MPC_PAD_PRESSURE=ON"
 cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc dump_mpc_chunks > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
@@ -126,6 +126,8 @@ live_build specoff -DSYNTHYBOY_MPC_SPECTRUM=OFF
 live_build specself -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON
 live_build specself25 -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
 live_build gain0 -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=0
+live_build limiteron -DSYNTHYBOY_MPC_OUTPUT_LIMITER=ON
+live_build limitergain0 -DSYNTHYBOY_MPC_OUTPUT_LIMITER=ON -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=0
 live_build ovlon -DSYNTHYBOY_MPC_OVERLAY=ON
 live_build ovloff -DSYNTHYBOY_MPC_OVERLAY=OFF
 # Overlay (SYNTHYBOY_MPC_OVERLAY, default OFF, shell-mpc/overlay/; BASE_OPTS does not name it on purpose: the builds above are the ones "without it", the ovloff variant names OFF): the switched-off build is byte for byte the build that does not name the option (and the same as the build of the commit
@@ -236,11 +238,15 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 $B/env_ui_demo $B/ui-images/env > $B/env-ui-demo.log 2>&1 || { grep -E "^FAIL" $B/env-ui-demo.log; echo "ACCEPT FAIL: env_ui_demo (the envelope pages)"; exit 1; }
 $B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 live_build padoff -DSYNTHYBOY_MPC_PAD_PRESSURE=OFF
-# output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB
+# output level (shell-mpc/output_stage.h): the stage alone, then the plugin in both limiter states:
+# 1. limiter OFF (default): make-up gain (18 dB) against gain 0 dB (intact dynamics, peaks over 0 dBFS)
+# 2. limiter ON: make-up gain (18 dB) against gain 0 dB (peaks held at -1 dBFS ceiling)
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -I $MPC_SDK/framework -o $B/output_level_host shell-mpc/tests/output_level_host.cpp || { echo "ACCEPT FAIL: output_level_host build"; exit 1; }
-$B/output_level_host "$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" "$(find build-mpc-live-gain0 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" 6 > $B/output-level.log 2>&1 || { grep -E "^FAIL|^quiet|^loud" $B/output-level.log; echo "ACCEPT FAIL: output_level_host"; exit 1; }
-grep -E "^quiet|^loud" $B/output-level.log
+$B/output_level_host "$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" "$(find build-mpc-live-gain0 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" 18 off > $B/output-level-off.log 2>&1 || { grep -E "^FAIL|^quiet|^loud|^dynamics" $B/output-level-off.log; echo "ACCEPT FAIL: output_level_host (limiter OFF)"; exit 1; }
+$B/output_level_host "$(find build-mpc-live-limiteron -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" "$(find build-mpc-live-limitergain0 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" 18 on > $B/output-level-on.log 2>&1 || { grep -E "^FAIL|^quiet|^loud" $B/output-level-on.log; echo "ACCEPT FAIL: output_level_host (limiter ON)"; exit 1; }
+cat $B/output-level-off.log $B/output-level-on.log > $B/output-level.log
+grep -E "^quiet|^loud|^dynamics" $B/output-level.log
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: lfo_live_host build"; exit 1; }
 # the refresh rate: the default is 10 a second (at most 21 calls per cursor in 2 s), SYNTHYBOY_MPC_LFO_LIVE_HZ=25 still changes it (the checks scale with HZ)
 for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do

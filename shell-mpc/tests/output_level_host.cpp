@@ -2,10 +2,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Usage: output_level_host <plugin built with the make-up gain> <plugin built with SYNTHYBOY_MPC_OUTPUT_GAIN_DB=0> <gain in dB>
-//   quiet: one soft note at a low Master Volume, peaks far under the ceiling in both: the first plugin is louder by the gain (RMS, +-0.3 dB), neither limits.
-//   loud:  a six-note chord at full velocity and the highest Master Volume: no sample of either plugin is above the ceiling (-1 dBFS), both reach it,
-//          and the first plugin is still the louder one (RMS).
+// Usage: output_level_host <plugin built with the make-up gain> <plugin built with SYNTHYBOY_MPC_OUTPUT_GAIN_DB=0> <gain in dB> [off|on]
+//   limiter OFF (default): quiet note louder by gain, velocity 100 vs 127 dynamic difference matches gain 0 build, peak exceeds 0 dBFS.
+//   limiter ON: quiet note louder by gain, loud chord kept at -1 dBFS ceiling, both reach ceiling.
 // Prints the measured levels. Exit 0 = every check passed.
 #include "mpc_vst2_abi.h"
 #include "output_stage.h"
@@ -44,6 +43,10 @@ struct Level { double peak = 0.0, rms = 0.0; };
 static Level play (AEffect* e, float masterNormalised, const std::vector<int>& notes, int velocity, double seconds)
 {
     e->setParameter (e, 0, masterNormalised);
+    std::vector<float> left (256), right (256);
+    float* outs[2] = { left.data(), right.data() };
+    for (int b = 0; b < 16; ++b) e->processReplacing (e, nullptr, outs, 256); // settle any parameter smoothing
+
     const int count = static_cast<int> (notes.size());
     std::vector<VstMidiEvent> midi (notes.size());
     std::vector<char> block (sizeof (VstEvents) + sizeof (VstEvent*) * notes.size());
@@ -61,8 +64,6 @@ static Level play (AEffect* e, float masterNormalised, const std::vector<int>& n
         }
         e->dispatcher (e, effProcessEvents, 0, 0, list, 0.0f);
     };
-    std::vector<float> left (256), right (256);
-    float* outs[2] = { left.data(), right.data() };
     Level v; double sum = 0.0; long n = 0;
     send (0x90, velocity);
     const int blocks = static_cast<int> (seconds * 44100.0 / 256.0);
@@ -85,10 +86,11 @@ static double db (double x) { return 20.0 * std::log10 (x > 1e-12 ? x : 1e-12); 
 
 int main (int argc, char** argv)
 {
-    if (argc < 4) { std::fprintf (stderr, "usage: output_level_host <plugin with gain> <plugin with gain 0> <gain dB>\n"); return 2; }
+    if (argc < 4) { std::fprintf (stderr, "usage: output_level_host <plugin with gain> <plugin with gain 0> <gain dB> [off|on]\n"); return 2; }
     AEffect* withGain = load (argv[1]);
     AEffect* plain = load (argv[2]);
     const double gain = std::atof (argv[3]);
+    const bool limiter = (argc >= 5 && std::strcmp (argv[4], "on") == 0);
     const double ceiling = static_cast<double> (synthyboy_mpc::OutputStage::kCeiling);
 
     char name[64] = {};
@@ -98,15 +100,40 @@ int main (int argc, char** argv)
     const Level qg = play (withGain, 0.35f, { 60 }, 40, 1.0), qp = play (plain, 0.35f, { 60 }, 40, 1.0);
     std::printf ("quiet: with gain peak %.2f dBFS rms %.2f dBFS; gain 0 peak %.2f dBFS rms %.2f dBFS; difference %.2f dB\n", db (qg.peak), db (qg.rms), db (qp.peak), db (qp.rms), db (qg.rms) - db (qp.rms));
     check (qp.rms > 1e-5, "quiet: the note sounds");
-    check (qg.peak < 0.5 * ceiling && qp.peak < 0.5 * ceiling, "quiet: both stay far under the ceiling (the limiter does nothing)");
+    if (limiter)
+        check (qg.peak < 0.5 * ceiling && qp.peak < 0.5 * ceiling, "quiet: both stay far under the ceiling (the limiter does nothing)");
     check (std::fabs ((db (qg.rms) - db (qp.rms)) - gain) < 0.3, "quiet: the plugin with the make-up gain is louder by the gain (+-0.3 dB)");
 
-    const std::vector<int> chord { 36, 43, 48, 52, 55, 60 };
-    const Level lg = play (withGain, 1.0f, chord, 127, 2.0), lp = play (plain, 1.0f, chord, 127, 2.0);
-    std::printf ("loud:  with gain peak %.2f dBFS rms %.2f dBFS; gain 0 peak %.2f dBFS rms %.2f dBFS; difference %.2f dB\n", db (lg.peak), db (lg.rms), db (lp.peak), db (lp.rms), db (lg.rms) - db (lp.rms));
-    check (lg.peak <= ceiling * 1.000001 && lp.peak <= ceiling * 1.000001, "loud: no sample of either plugin is above the ceiling (-1 dBFS)");
-    check (lg.peak > 0.99 * ceiling, "loud: the plugin with the make-up gain reaches the ceiling (the limiter works)");
-    check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
+    if (! limiter)
+    {
+        // Limiter OFF: dynamics between velocity 100 and 127 match the gain 0 build (dynamics intact)
+        const Level g100 = play (withGain, 0.8f, { 60 }, 100, 1.5), g127 = play (withGain, 0.8f, { 60 }, 127, 1.5);
+        const Level p100 = play (plain, 0.8f, { 60 }, 100, 1.5), p127 = play (plain, 0.8f, { 60 }, 127, 1.5);
+        const double diffGain = db (g127.rms) - db (g100.rms);
+        const double diffPlain = db (p127.rms) - db (p100.rms);
+        std::printf ("dynamics: with gain vel 100 -> 127 diff %.2f dB; plain diff %.2f dB; deviation %.4f dB\n",
+                     diffGain, diffPlain, std::fabs (diffGain - diffPlain));
+        check (std::fabs (diffGain - diffPlain) < 0.05, "dynamics: velocity 100 vs 127 difference matches plain build (dynamics intact)");
+
+        // Limiter OFF: peak can exceed 0 dBFS
+        const std::vector<int> chord { 36, 43, 48, 52, 55, 60 };
+        const Level lg = play (withGain, 1.0f, chord, 127, 2.0), lp = play (plain, 1.0f, chord, 127, 2.0);
+        std::printf ("loud:  with gain peak %.2f dBFS rms %.2f dBFS; gain 0 peak %.2f dBFS rms %.2f dBFS; difference %.2f dB\n",
+                     db (lg.peak), db (lg.rms), db (lp.peak), db (lp.rms), db (lg.rms) - db (lp.rms));
+        check (lg.peak > 1.0, "loud: peak exceeds 0 dBFS (no limiter in signal path)");
+        check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
+    }
+    else
+    {
+        // Limiter ON: peaks are kept at ceiling (-1 dBFS)
+        const std::vector<int> chord { 36, 43, 48, 52, 55, 60 };
+        const Level lg = play (withGain, 1.0f, chord, 127, 2.0), lp = play (plain, 1.0f, chord, 127, 2.0);
+        std::printf ("loud:  with gain peak %.2f dBFS rms %.2f dBFS; gain 0 peak %.2f dBFS rms %.2f dBFS; difference %.2f dB\n",
+                     db (lg.peak), db (lg.rms), db (lp.peak), db (lp.rms), db (lg.rms) - db (lp.rms));
+        check (lg.peak <= ceiling * 1.000001 && lp.peak <= ceiling * 1.000001, "loud: no sample of either plugin is above the ceiling (-1 dBFS)");
+        check (lg.peak > 0.99 * ceiling, "loud: the plugin with the make-up gain reaches the ceiling (the limiter works)");
+        check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
+    }
 
     // Suspend / resume cycle after limiting: must reset output stage transient state (MAGAS-2)
     withGain->setParameter (withGain, 0, 0.35f);
@@ -125,7 +152,8 @@ int main (int argc, char** argv)
     plain->dispatcher (plain, effMainsChanged, 0, 1, nullptr, 0.0f);
 
     const Level resumed = play (withGain, 0.35f, { 60 }, 40, 1.0);
-    std::printf ("resumed: peak %.2f dBFS rms %.2f dBFS; original quiet peak %.2f dBFS rms %.2f dBFS; diff %.2f dB\n", db (resumed.peak), db (resumed.rms), db (qg.peak), db (qg.rms), std::fabs (db (resumed.rms) - db (qg.rms)));
+    std::printf ("resumed: peak %.2f dBFS rms %.2f dBFS; original quiet peak %.2f dBFS rms %.2f dBFS; diff %.2f dB\n",
+                 db (resumed.peak), db (resumed.rms), db (qg.peak), db (qg.rms), std::fabs (db (resumed.rms) - db (qg.rms)));
     check (std::fabs (db (resumed.rms) - db (qg.rms)) < 0.2, "resume resets output stage: quiet note after resume matches original quiet level");
 
     // Clean teardown
