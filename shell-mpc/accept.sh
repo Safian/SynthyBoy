@@ -146,6 +146,8 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 $B/curve_host > $B/curve-host.log 2>&1 || { grep -E "^FAIL" $B/curve-host.log; echo "ACCEPT FAIL: curve_host (curve source)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/controller_host $OVSRC/controller_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: controller_host build"; exit 1; }
 $B/controller_host > $B/controller-host.log 2>&1 || { grep -E "^FAIL" $B/controller-host.log; echo "ACCEPT FAIL: controller_host (state machine)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/views_host $OVSRC/views_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: views_host build"; exit 1; }
+$B/views_host > $B/views-host.log 2>&1 || { grep -E "^FAIL" $B/views-host.log; echo "ACCEPT FAIL: views_host (the views: LFO, oscillator, envelope, filter 2, several views in the controller)"; exit 1; }
 $B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
