@@ -12,7 +12,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:  # the tile generator is a development tool (the build copies the committed PNG)
+    Image = None
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 GEN_SCRIPT = ROOT / "scripts" / "gen-mpc-tile.py"
@@ -37,6 +40,7 @@ class TestMpcTile(unittest.TestCase):
         self.assertEqual((w, h), (WIDTH, HEIGHT), f"Expected {WIDTH}x{HEIGHT}, got {w}x{h}")
         self.assertGreater(COMMITTED_TILE.stat().st_size, 1000, "Tile PNG file is suspiciously small")
 
+    @unittest.skipIf(Image is None, "Pillow not installed (gen-mpc-tile.py is a development tool)")
     def test_committed_tile_content_is_non_empty_and_own_artwork(self):
         """The tile must not be empty or a flat background, and must have valid own artwork components."""
         img = Image.open(COMMITTED_TILE)
@@ -69,6 +73,7 @@ class TestMpcTile(unittest.TestCase):
             self.assertLess(g, 40)
             self.assertLess(b, 50)
 
+    @unittest.skipIf(Image is None, "Pillow not installed (gen-mpc-tile.py is a development tool)")
     def test_generator_script_cli(self):
         """gen-mpc-tile.py can be executed via CLI to produce a 270x110 PNG and preview."""
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -122,6 +127,7 @@ class TestMpcTile(unittest.TestCase):
             self.assertEqual(tui, {"tui": True})
             self.assertEqual(qlinks, {"qlinks": True})
 
+    @unittest.skipIf(Image is None, "Pillow not installed (gen-mpc-tile.py is a development tool)")
     def test_skin_extra_rejects_missing_or_corrupt_asset(self):
         """98_tile.py raises appropriate errors when source asset is invalid."""
         spec = importlib.util.spec_from_file_location("extra_98_tile_err", TILE_EXTRA)
