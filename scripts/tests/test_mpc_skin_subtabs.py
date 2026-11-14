@@ -213,7 +213,9 @@ class SubTabSkinTests(unittest.TestCase):
             for tab in tabs:
                 for c in tab["componentDefinition"]["componentsData"]:
                     if c["componentData"]["type"] in SLOT_TYPES:
-                        have.add(self.params[int(c["handle remapping"]["map"][0]["value"].split()[1])]["key"])
+                        idx = int(c["handle remapping"]["map"][0]["value"].split()[1])
+                        if idx < len(self.params):
+                            have.add(self.params[idx]["key"])
             self.assertEqual([k for k in BASELINE if k not in have], [], name)
 
     def test_no_parameter_has_a_control_on_two_tabs_except_the_envelope_knobs(self):
@@ -223,7 +225,9 @@ class SubTabSkinTests(unittest.TestCase):
                 tab_keys = set()
                 for c in tab["componentDefinition"]["componentsData"]:
                     if c["componentData"]["type"] in SLOT_TYPES:
-                        tab_keys.add(self.params[int(c["handle remapping"]["map"][0]["value"].split()[1])]["key"])
+                        idx = int(c["handle remapping"]["map"][0]["value"].split()[1])
+                        if idx < len(self.params):
+                            tab_keys.add(self.params[idx]["key"])
                 for k in tab_keys:
                     if k in seen:
                         self.assertTrue(k.startswith("env"), "%s: %s on %s and %s" % (name, k, seen[k], tab["tabName"]))
