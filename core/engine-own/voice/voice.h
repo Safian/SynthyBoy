@@ -129,7 +129,7 @@ public:
         const float len = st == 1 ? envLen[e][0] : (st == 2 ? envLen[e][1] : (st == 3 ? envLen[e][2] : (st == 4 ? envLen[e][3] : 0.0f)));
         position = len > 0.0f ? clamp01 (static_cast<float> (env[e].stageSeconds()) / len) : 0.0f;
     }
-    float lfoReadout (int l) const noexcept { return lfoCore[l].offset - std::floor (lfoCore[l].offset); }
+    float lfoReadout (int l) const noexcept { return lfoReadPos[l] - std::floor (lfoReadPos[l]); }
     float modulatedParam (int idx) const noexcept { return gl != nullptr ? P (idx) : 0.0f; }
 
     /** Advances envelopes, LFOs and the matrix by one control period and computes the parameters of the period. */
@@ -188,6 +188,7 @@ private:
     double envCacheBpm = 0.0;
     bool envCacheValid = false, vcCacheValid = false;
     float lfoAge[10] = {}, lfoSmoothL[10] = {}, lfoSmoothR[10] = {};
+    float lfoReadPos[10] = {};            // the cycle position the display reads (lfoReadout): the offset of the LFO, or the clock of a free-running one
     float lfoOutR[10] = {};
     float srcR[kNumSourceIds] = {};
     SlotState slotState[kNumModSlots];

@@ -1,0 +1,430 @@
+// SynthyBoy - tests of the display data of the own engine: the LFO shape (LfoDisplay) and one cycle of the wavetable oscillator (OscCycle), checked against the engine.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "synthyboy/content_state.h"
+#include "synthyboy/engine.h"
+#include "synthyboy/lfo_display.h"
+#include "synthyboy/modulation.h"
+#include "synthyboy/osc_cycle.h"
+#include "synthyboy/readout.h"
+#include "synthyboy/state.h"
+#include "test_runner.h"
+#include "test_util.h"
+
+using namespace synthyboy;
+
+namespace
+{
+constexpr double kSr = 48000.0;
+
+void set (IEngine& e, const char* key, float v)
+{
+    const ParamInfo* p = findParamByKey (key);
+    if (CHECK (p != nullptr))
+        e.setParam (p->id, v);
+}
+
+void setv (ParamValues& v, const char* key, float x)
+{
+    const ParamInfo* p = findParamByKey (key);
+    if (CHECK (p != nullptr))
+        v.plain[findParamIndex (p->id)] = constrainValue (*p, x);
+}
+
+int indexOfKey (const char* key) { return findParamIndex (findParamByKey (key)->id); }
+
+float srcChoice (const char* key)
+{
+    for (size_t i = 0; i < modSourceCount(); ++i)
+        if (std::string (modSourceTable()[i].key) == key)
+            return static_cast<float> (i + 1);
+    return 0.0f;
+}
+
+/** The display curve at x (linear interpolation of the n points). */
+float at (const std::vector<float>& c, float x)
+{
+    const float pos = std::clamp (x, 0.0f, 1.0f) * static_cast<float> (c.size() - 1);
+    const size_t i = std::min (static_cast<size_t> (pos), c.size() - 2);
+    const float f = pos - static_cast<float> (i);
+    return c[i] * (1.0f - f) + c[i + 1] * f;
+}
+
+/** An engine with LFO 1 as the only thing that matters: a held note, the live sources read out. `setup` sets the LFO parameters. */
+struct LfoRig
+{
+    std::unique_ptr<IEngine> e;
+    std::vector<float> l = std::vector<float> (256), r = std::vector<float> (256);
+    ParamValues values = ParamValues::defaults();
+
+    template <class F>
+    explicit LfoRig (F&& setup, const StateContent* content = nullptr)
+    {
+        e = createOwnEngine();
+        e->prepare (kSr, 256, qualityForTier (Tier::high));
+        setup (*e, values);
+        if (content != nullptr)
+            e->setContent (*content);
+    }
+    void note() { Event on = sbtest::noteOn (0, 60, 0.8f); e->process (&on, 1, l.data(), r.data(), 256); }
+    LiveValues block()
+    {
+        e->process (nullptr, 0, l.data(), r.data(), 256);
+        LiveValues live;
+        CHECK (e->copyReadout (live));
+        return live;
+    }
+};
+
+void both (IEngine& e, ParamValues& v, const char* key, float x)
+{
+    set (e, key, x);
+    setv (v, key, x);
+}
+
+/** The largest difference between the LFO value the engine reports for a held note (source lfo1, left lane) and the display curve at the engine's own cursor position. */
+float worstAgainstEngine (LfoRig& rig, int blocks, const StateContent* content, bool skipFirstCycle, float* firstReadout = nullptr)
+{
+    const float lfoSrc = static_cast<float> (srcChoice ("lfo1"));
+    std::vector<float> y (2049);
+    LfoDisplay::Request req;
+    req.lfo = 1;
+    CHECK (LfoDisplay::compute (rig.values, content, req, y.data(), 2049));
+    rig.note();
+    float worst = 0.0f;
+    float lastX = -1.0f;
+    int cycles = 0;
+    for (int b = 0; b < blocks; ++b)
+    {
+        const LiveValues live = rig.block();
+        const float x = LfoDisplay::cursorX (live.lfoPhase[0]);
+        if (firstReadout != nullptr && b == 0)
+            *firstReadout = live.lfoPhase[0];
+        if (x < lastX)
+            ++cycles;
+        lastX = x;
+        if (skipFirstCycle && cycles < 1)
+            continue;
+        const float engine = live.source[static_cast<size_t> (lfoSrc) - 1];
+        worst = std::max (worst, std::fabs (engine - at (y, x)));
+    }
+    return worst;
+}
+} // namespace
+
+TEST (own_lfo_display_every_builtin_shape_matches_the_engine)
+{
+    for (int shape : { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 })
+    {
+        LfoRig rig ([&] (IEngine& e, ParamValues& v)
+        {
+            both (e, v, "lfo1.shape", static_cast<float> (shape));
+            both (e, v, "lfo1.rate", 3.0f);
+            both (e, v, "lfo1.smooth", 0.0f);
+        });
+        const float w = worstAgainstEngine (rig, 300, nullptr, false);
+        std::printf ("    shape %d: worst difference to the engine's LFO value %.4f\n", shape, w);
+        // the engine reads the shape once per control period (32 samples): at 3 Hz a step of the cursor is 0.002 cycles; a step shape may differ in the one sample at its edge
+        const bool stepped = shape != 0 && shape != 1 && shape != 11; // the others jump (the saws at the wrap, the steps at their edges)
+        CHECK (w < (stepped ? 2.0f : 0.02f));
+        if (stepped)
+        {
+            // a stepped shape: the picture matches except within one control period of an edge: count the readings that are far off
+            LfoRig again ([&] (IEngine& e, ParamValues& v)
+            {
+                both (e, v, "lfo1.shape", static_cast<float> (shape));
+                both (e, v, "lfo1.rate", 3.0f);
+                both (e, v, "lfo1.smooth", 0.0f);
+            });
+            std::vector<float> y (2049);
+            LfoDisplay::Request req;
+            CHECK (LfoDisplay::compute (again.values, nullptr, req, y.data(), 2049));
+            again.note();
+            int off = 0, total = 0;
+            for (int b = 0; b < 300; ++b)
+            {
+                const LiveValues live = again.block();
+                const float engine = live.source[static_cast<size_t> (srcChoice ("lfo1")) - 1];
+                off += std::fabs (engine - at (y, live.lfoPhase[0])) > 0.05f;
+                ++total;
+            }
+            CHECK (off * 20 <= total); // at most 5 % of the readings sit on an edge
+        }
+    }
+}
+
+TEST (own_lfo_display_phase_direction_swing_and_stereo_are_in_the_picture)
+{
+    struct Case { const char* key; float value; };
+    for (const Case c : { Case { "lfo1.phase", 90.0f }, Case { "lfo1.direction", 1.0f }, Case { "lfo1.direction", 2.0f }, Case { "lfo1.swing", 60.0f }, Case { "lfo1.stereo", 180.0f } })
+    {
+        LfoRig rig ([&] (IEngine& e, ParamValues& v)
+        {
+            both (e, v, "lfo1.shape", 1.0f); // triangle: asymmetric under every one of the above
+            both (e, v, "lfo1.rate", 2.0f);
+            both (e, v, "lfo1.smooth", 0.0f);
+            both (e, v, c.key, c.value);
+        });
+        const float w = worstAgainstEngine (rig, 300, nullptr, false);
+        std::printf ("    %s = %g: worst difference %.4f\n", c.key, static_cast<double> (c.value), w);
+        CHECK (w < 0.02f);
+        // and the setting changed the picture
+        ParamValues plain = ParamValues::defaults();
+        setv (plain, "lfo1.shape", 1.0f);
+        std::vector<float> a (256), b (256);
+        LfoDisplay::Request req;
+        CHECK (LfoDisplay::compute (plain, nullptr, req, a.data(), 256));
+        CHECK (LfoDisplay::compute (rig.values, nullptr, req, b.data(), 256));
+        CHECK (a != b);
+    }
+}
+
+TEST (own_lfo_display_smoothing_matches_the_engine_after_the_first_cycle)
+{
+    LfoRig rig ([&] (IEngine& e, ParamValues& v)
+    {
+        both (e, v, "lfo1.shape", 4.0f); // square: smoothing makes the exponential edges
+        both (e, v, "lfo1.rate", 2.0f);
+        both (e, v, "lfo1.smooth", 1.0f);
+        both (e, v, "lfo1.smooth_time", 80.0f);
+    });
+    const float w = worstAgainstEngine (rig, 800, nullptr, true);
+    std::printf("    smoothed square, 2 Hz, 80 ms: worst difference to the engine %.4f\n", w);
+    CHECK (w < 0.06f);
+    ParamValues raw = rig.values;
+    setv (raw, "lfo1.smooth", 0.0f);
+    std::vector<float> a (256), b (256);
+    LfoDisplay::Request req;
+    CHECK (LfoDisplay::compute (raw, nullptr, req, a.data(), 256));
+    CHECK (LfoDisplay::compute (rig.values, nullptr, req, b.data(), 256));
+    CHECK (a != b);
+    CHECK (b[1] > -0.99f && b[1] < 0.99f); // not the square's value: the smoothing rounds the edge
+}
+
+TEST (own_lfo_display_custom_shape_is_the_engines)
+{
+    StateContent content;
+    ContentLfoShape s;
+    s.lfo = 1;
+    s.smooth = true;
+    s.points = { ContentPoint (0.0f, 0.1f), ContentPoint (0.3f, 0.95f, 2.0f), ContentPoint (0.7f, 0.2f, -3.0f), ContentPoint (1.0f, 0.6f) };
+    content.lfoShapes.push_back (s);
+    LfoRig rig ([&] (IEngine& e, ParamValues& v)
+    {
+        both (e, v, "lfo1.shape", 12.0f);
+        both (e, v, "lfo1.rate", 2.0f);
+        both (e, v, "lfo1.smooth", 0.0f);
+    }, &content);
+    const float w = worstAgainstEngine (rig, 300, &content, false);
+    std::printf ("    custom shape (4 points, curved): worst difference %.4f\n", w);
+    CHECK (w < 0.02f);
+    // without the content the shape does not exist: the same as the engine without it (a flat line at the centre)
+    std::vector<float> flat (64);
+    LfoDisplay::Request req;
+    CHECK (LfoDisplay::compute (rig.values, nullptr, req, flat.data(), 64));
+    for (float x : flat)
+        CHECK (std::fabs (x) < 1.0e-6f);
+}
+
+TEST (own_lfo_display_free_running_cursor_moves_and_arguments_are_checked)
+{
+    LfoRig rig ([&] (IEngine& e, ParamValues& v)
+    {
+        both (e, v, "lfo1.rate", 2.0f);
+        both (e, v, "lfo1.sync_type", 1.0f); // free running
+    });
+    rig.note();
+    float lo = 2.0f, hi = -1.0f;
+    for (int b = 0; b < 100; ++b)
+    {
+        const float x = rig.block().lfoPhase[0];
+        lo = std::min (lo, x);
+        hi = std::max (hi, x);
+    }
+    CHECK (lo < 0.2f && hi > 0.8f); // the cursor of a free running LFO runs round (it stayed at 0 before the readout read the clock)
+    CHECK (LfoDisplay::cursorX (-1.0f) == -1.0f);
+    CHECK (LfoDisplay::cursorX (NAN) == -1.0f);
+    CHECK (LfoDisplay::cursorX (0.4f) == 0.4f);
+    float y[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
+    LfoDisplay::Request bad;
+    bad.lfo = 11;
+    CHECK (!LfoDisplay::compute (ParamValues::defaults(), nullptr, bad, y, 8));
+    CHECK (y[0] == 0.0f);
+    bad.lfo = 1;
+    CHECK (!LfoDisplay::compute (ParamValues::defaults(), nullptr, bad, nullptr, 8));
+    CHECK (!LfoDisplay::compute (ParamValues::defaults(), nullptr, bad, y, 1));
+    ParamValues nanv = ParamValues::defaults();
+    nanv.plain[indexOfKey ("lfo1.rate")] = NAN;
+    nanv.plain[indexOfKey ("lfo1.shape")] = INFINITY;
+    CHECK (LfoDisplay::compute (nanv, nullptr, bad, y, 8));
+    for (float x : y)
+        CHECK (std::isfinite (x));
+}
+
+// ---- the oscillator cycle ---------------------------------------------------------------------------------------------------------------------------------
+
+namespace
+{
+std::vector<float> cycleOf (OscCycle& c, const ParamValues& v, const OscCycle::Request& req = {}, OscCycle::Kind* kind = nullptr)
+{
+    std::vector<float> y (OscCycle::kSamples);
+    const OscCycle::Kind k = c.compute (v, req, y.data());
+    if (kind != nullptr)
+        *kind = k;
+    return y;
+}
+
+ParamValues oscPatch (int table, float frame, int warpType = 0, float warpAmount = 0.0f)
+{
+    ParamValues v = ParamValues::defaults();
+    setv (v, "osc1.on", 1.0f);
+    setv (v, "osc1.type", 0.0f);
+    setv (v, "osc1.wavetable", static_cast<float> (table));
+    setv (v, "osc1.frame", frame);
+    setv (v, "osc1.warp.type", static_cast<float> (warpType));
+    setv (v, "osc1.warp.amount", warpAmount);
+    return v;
+}
+
+float peak (const std::vector<float>& y) { float p = 0.0f; for (float x : y) p = std::max (p, std::fabs (x)); return p; }
+
+/** Normalised correlation of two cycles at the best circular shift within +-maxLag; the shift is returned. */
+float bestCorrelation (const std::vector<float>& a, const std::vector<float>& b, int maxLag, int& lagOut)
+{
+    const int n = static_cast<int> (a.size());
+    double ea = 0.0, eb = 0.0;
+    for (int i = 0; i < n; ++i)
+        ea += static_cast<double> (a[static_cast<size_t> (i)]) * a[static_cast<size_t> (i)], eb += static_cast<double> (b[static_cast<size_t> (i)]) * b[static_cast<size_t> (i)];
+    double best = -2.0;
+    for (int lag = -maxLag; lag <= maxLag; ++lag)
+    {
+        double s = 0.0;
+        for (int i = 0; i < n; ++i)
+            s += static_cast<double> (a[static_cast<size_t> (i)]) * b[static_cast<size_t> ((i + lag + n) % n)];
+        const double c = s / std::sqrt (std::max (ea * eb, 1.0e-30));
+        if (c > best)
+            best = c, lagOut = lag;
+    }
+    return static_cast<float> (best);
+}
+} // namespace
+
+TEST (own_osc_cycle_is_the_wavetable_cycle_and_follows_frame_and_warp)
+{
+    OscCycle oc;
+    OscCycle::Kind kind;
+    // a built-in single frame table: the saw. The cycle is the saw (a rising ramp that falls at the end), phase 0 at the start.
+    const auto saw = cycleOf (oc, oscPatch (kWavetableSaw, 0.0f), {}, &kind);
+    CHECK (kind == OscCycle::Kind::wavetable);
+    CHECK (peak (saw) > 0.7f && peak (saw) < 1.3f);
+    int lag = 0;
+    std::vector<float> ideal (OscCycle::kSamples);
+    for (int i = 0; i < OscCycle::kSamples; ++i)
+        ideal[static_cast<size_t> (i)] = 2.0f * static_cast<float> (i) / OscCycle::kSamples - 1.0f; // the saw of the table is rising, up to its sign
+    float c = bestCorrelation (ideal, saw, 8, lag);
+    std::printf ("    saw: correlation with an ideal ramp %.4f at shift %d\n", static_cast<double> (c), lag);
+    CHECK (std::fabs (c) > 0.97f);
+    CHECK (std::abs (lag) <= 1);
+    // determinism and no state between calls
+    CHECK (cycleOf (oc, oscPatch (kWavetableSaw, 0.0f)) == saw);
+    OscCycle other;
+    CHECK (cycleOf (other, oscPatch (kWavetableSaw, 0.0f)) == saw);
+    // a multi frame table: the frame position moves the picture; the live (modulated) value is the same as the knob at that value
+    int basic = -1;   // the first built-in table whose first and last frame differ
+    for (int t = 0; t < kNumBuiltinWavetables && basic < 0; ++t)
+        if (t != kWavetablePresetTable && cycleOf (oc, oscPatch (t, 0.0f)) != cycleOf (oc, oscPatch (t, 100.0f)))
+            basic = t;
+    CHECK (basic >= 0);
+    const auto f0 = cycleOf (oc, oscPatch (basic, 0.0f)), f1 = cycleOf (oc, oscPatch (basic, 100.0f)), f5 = cycleOf (oc, oscPatch (basic, 50.0f));
+    CHECK (f0 != f1);
+    CHECK (f5 != f0 && f5 != f1);
+    OscCycle::Request live;
+    live.framePercent = 100.0f;
+    CHECK (cycleOf (oc, oscPatch (basic, 0.0f), live) == f1);
+    // warp: a warp with amount 0 is the cycle itself (the oversampled path's delay is taken out); a warp with an amount changes it
+    for (int warp : { 4 /*Bend*/, 1 /*Sync*/ })
+    {
+        const auto w0 = cycleOf (oc, oscPatch (basic, 30.0f, warp, 0.0f));
+        const auto plain = cycleOf (oc, oscPatch (basic, 30.0f));
+        int l = 0;
+        const float cc = bestCorrelation (plain, w0, 8, l);
+        const auto w1 = cycleOf (oc, oscPatch (basic, 30.0f, warp, 70.0f));
+        std::printf ("    warp %d: amount 0 vs none: correlation %.5f at shift %d; amount 70 differs: %d\n", warp, static_cast<double> (cc), l, w1 != plain);
+        CHECK (cc > 0.98f); // the oversampled path band-limits a little differently (4x, 128 taps)
+        CHECK (l == 0);
+        CHECK (w1 != plain);
+        OscCycle::Request liveAmount;
+        liveAmount.warpAmountPercent[0] = 70.0f;
+        CHECK (cycleOf (oc, oscPatch (basic, 30.0f, warp, 0.0f), liveAmount) == w1);
+    }
+    // other kinds and bad input
+    ParamValues off = oscPatch (basic, 0.0f);
+    setv (off, "osc1.on", 0.0f);
+    cycleOf (oc, off, {}, &kind);
+    CHECK (kind == OscCycle::Kind::off);
+    ParamValues sample = oscPatch (basic, 0.0f);
+    setv (sample, "osc1.type", 1.0f);
+    const auto sy = cycleOf (oc, sample, {}, &kind);
+    CHECK (kind == OscCycle::Kind::other);
+    CHECK (peak (sy) == 0.0f);
+    OscCycle::Request badOsc;
+    badOsc.osc = 7;
+    cycleOf (oc, oscPatch (basic, 0.0f), badOsc, &kind);
+    CHECK (kind == OscCycle::Kind::other);
+    ParamValues nanv = oscPatch (basic, 0.0f);
+    nanv.plain[indexOfKey ("osc1.frame")] = NAN;
+    const auto ny = cycleOf (oc, nanv, {}, &kind);
+    for (float x : ny)
+        CHECK (std::isfinite (x));
+    int idx[4];
+    OscCycle::readoutIndices (2, idx);
+    CHECK (idx[0] == indexOfKey ("osc2.frame") && idx[1] == indexOfKey ("osc2.warp.amount") && idx[2] == indexOfKey ("osc2.warp2.amount") && idx[3] >= 0);
+    OscCycle::readoutIndices (9, idx);
+    CHECK (idx[0] == -1);
+}
+
+TEST (own_osc_cycle_agrees_with_what_the_engine_plays)
+{
+    // The engine, oscillator 1 only, a held note whose period is one display cycle (the engine at 56320 Hz, note 45 = 110 Hz = 512 samples): its output is the cycle
+    // up to the gain of the output stage and a delay of the voice; the cycle of OscCycle must be the same shape.
+    for (int warp : { 0, 4 })
+    {
+        const double rate = 512.0 * 110.0;
+        auto e = createOwnEngine();
+        e->prepare (rate, 256, qualityForTier (Tier::high));
+        ParamValues v = oscPatch (2, 35.0f, warp, warp != 0 ? 60.0f : 0.0f);
+        set (*e, "osc1.on", 1.0f);
+        set (*e, "osc1.wavetable", 2.0f);
+        set (*e, "osc1.frame", 35.0f);
+        set (*e, "osc1.warp.type", static_cast<float> (warp));
+        set (*e, "osc1.warp.amount", warp != 0 ? 60.0f : 0.0f);
+        set (*e, "osc2.on", 0.0f);
+        set (*e, "osc3.on", 0.0f);
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "env1.attack", 0.0f);
+        set (*e, "env1.sustain", 100.0f);
+        std::vector<float> l (256), r (256), all;
+        Event on = sbtest::noteOn (0, 45, 1.0f);
+        e->process (&on, 1, l.data(), r.data(), 256);
+        all.insert (all.end(), l.begin(), l.end());
+        for (int b = 0; b < 40; ++b)
+        {
+            e->process (nullptr, 0, l.data(), r.data(), 256);
+            all.insert (all.end(), l.begin(), l.end());
+        }
+        std::vector<float> engineCycle (all.end() - 512 - 1024, all.end() - 1024);
+        OscCycle oc;
+        const auto cyc = cycleOf (oc, v);
+        int lag = 0;
+        const float c = bestCorrelation (cyc, engineCycle, 256, lag);
+        std::printf ("    warp %d: OscCycle against the engine's output: correlation %.4f (shift %d)\n", warp, static_cast<double> (c), lag);
+        CHECK (c > 0.98f);
+    }
+}

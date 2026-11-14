@@ -62,26 +62,7 @@ public:
         {
             if (s.lfo < 1 || s.lfo > 10 || s.points.size() < 2)
                 continue;
-            CompiledShape& d = o->lfo[static_cast<size_t> (s.lfo - 1)];
-            d.present = true;
-            d.num = static_cast<int> (std::min<size_t> (s.points.size(), shapes::ShapeData::kMaxPoints));
-            for (int i = 0; i < d.num; ++i)
-            {
-                const ContentPoint& p = s.points[static_cast<size_t> (i)];
-                CompiledPoint& q = d.points[static_cast<size_t> (i)];
-                q.point.x = p.x;
-                q.point.y = p.y;
-                q.point.curve = p.power;
-                q.point.smooth = s.smooth;
-                q.x = resolve (p.modX);
-                q.y = resolve (p.modY);
-                q.curve = resolve (p.modCurve);
-                d.anyMod = d.anyMod || q.x.source != 0 || q.y.source != 0 || q.curve.source != 0;
-            }
-            d.fixed.numPoints = static_cast<size_t> (d.num);
-            for (int i = 0; i < d.num; ++i)
-                d.fixed.points[static_cast<size_t> (i)] = d.points[static_cast<size_t> (i)].point;
-            d.fixed.sanitize();
+            compileLfoShape (s, o->lfo[static_cast<size_t> (s.lfo - 1)]);
         }
         for (const auto& m : c.modCurves)
         {
@@ -103,6 +84,31 @@ public:
         const size_t slot = next++ % kRing;
         ring[slot] = std::move (o);
         current.store (ring[slot].get(), std::memory_order_release);
+    }
+
+    /** One custom LFO shape of the content as the voice reads it (also used by the LFO display). */
+    static void compileLfoShape (const ContentLfoShape& s, CompiledShape& d)
+    {
+        d = CompiledShape();
+        d.present = true;
+        d.num = static_cast<int> (std::min<size_t> (s.points.size(), shapes::ShapeData::kMaxPoints));
+        for (int i = 0; i < d.num; ++i)
+        {
+            const ContentPoint& p = s.points[static_cast<size_t> (i)];
+            CompiledPoint& q = d.points[static_cast<size_t> (i)];
+            q.point.x = p.x;
+            q.point.y = p.y;
+            q.point.curve = p.power;
+            q.point.smooth = s.smooth;
+            q.x = resolve (p.modX);
+            q.y = resolve (p.modY);
+            q.curve = resolve (p.modCurve);
+            d.anyMod = d.anyMod || q.x.source != 0 || q.y.source != 0 || q.curve.source != 0;
+        }
+        d.fixed.numPoints = static_cast<size_t> (d.num);
+        for (int i = 0; i < d.num; ++i)
+            d.fixed.points[static_cast<size_t> (i)] = d.points[static_cast<size_t> (i)].point;
+        d.fixed.sanitize();
     }
 
     const OwnContent* get() const noexcept { return current.load (std::memory_order_acquire); }

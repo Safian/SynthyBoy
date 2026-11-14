@@ -6,6 +6,7 @@
 #include <cstdint>
 #include "voice.h"
 #include "filter_setup.h"
+#include "../env_lfo/lfo_eval.h"
 #include "../dsp/simd.h"
 #include "../dsp/section_timing.h"
 
@@ -180,6 +181,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     {
         lfoCore[l].restart();
         lfoAge[l] = 0.0f;
+        lfoReadPos[l] = 0.0f;
         lfoSmoothL[l] = lfoSmoothR[l] = 0.0f;
     }
     for (auto& g : noiseState)
@@ -267,29 +269,7 @@ void Voice::kill() noexcept
 
 float Voice::customShape (const CompiledShape& cs, float u) noexcept
 {
-    if (!cs.anyMod)
-        return cs.fixed.evaluate (u);
-    // the points move by amount * source (y clamped to 0 .. 1, x between the neighbours, the end points keep x): 13-new-keys.md A45
-    auto srcValue = [&] (int choice)
-    {
-        const float v = src[std::clamp (choice, 0, kNumSourceIds - 1)];
-        const bool bipolar = (choice >= kSrcLfo1 && choice < kSrcLfo1 + 8) || (choice >= kSrcRlfo1 && choice < kSrcRlfo1 + 4) || choice == kSrcLfo9 || choice == kSrcLfo10;
-        return bipolar ? 2.0f * v - 1.0f : v;
-    };
-    scratchShape.numPoints = static_cast<size_t> (cs.num);
-    for (int i = 0; i < cs.num; ++i)
-    {
-        const CompiledPoint& p = cs.points[static_cast<size_t> (i)];
-        shapes::Point q = p.point;
-        if (p.y.source != 0)
-            q.y = clamp01 (q.y + p.y.amount * srcValue (p.y.source));
-        if (p.x.source != 0 && i > 0 && i + 1 < cs.num)
-            q.x = std::clamp (q.x + p.x.amount * srcValue (p.x.source), scratchShape.points[static_cast<size_t> (i - 1)].x, cs.points[static_cast<size_t> (i + 1)].point.x);
-        if (p.curve.source != 0)
-            q.curve = std::clamp (q.curve + 10.0f * p.curve.amount * srcValue (p.curve.source), -20.0f, 20.0f);
-        scratchShape.points[static_cast<size_t> (i)] = q;
-    }
-    return scratchShape.evaluate (u);
+    return evaluateCustomShape (cs, src, scratchShape, u);
 }
 
 float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps) noexcept
@@ -326,6 +306,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
         pos = clock + knob;
         pos -= ffloor (pos);
         pos0 = pos;
+        lfoReadPos[l] = clock; // display only: the free-running clock (the offset of the core does not move for it)
     }
     else
     {
@@ -339,6 +320,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
             pos = lfoCore[l].position (syncType, knob);
         }
         pos0 = syncType == 0 ? knob - ffloor (knob) : (syncType == 2 ? std::min (knob, 1.0f) : 0.0f);
+        lfoReadPos[l] = mono ? g.monoCore[l].offset : lfoCore[l].offset; // display only
     }
     lfoAge[l] += dt;
     const bool smooth = P (li.smooth) >= 0.5f;
@@ -355,18 +337,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
     const CompiledShape* custom = (shape == 12 && g.lfoContent != nullptr && g.lfoContent->lfo[static_cast<size_t> (l)].present) ? &g.lfoContent->lfo[static_cast<size_t> (l)] : nullptr;
     auto shapeAt = [&] (float u, bool wrap) -> float // 0 .. 1
     {
-        if (wrap)
-            u -= ffloor (u);
-        else
-            u = clamp01 (u);
-        u = lfoSwing (u, swing);
-        if (dir == 1)
-            u = 1.0f - u;
-        else if (dir == 2)
-            u = 1.0f - std::fabs (2.0f * u - 1.0f);
-        if (custom != nullptr)
-            return clamp01 (customShape (*custom, u));
-        return 0.5f + 0.5f * lfoShape (shape, u, noteSerial + static_cast<uint32_t> (l));
+        return lfoShapeAt (shape, u, wrap, swing, dir, custom, src, scratchShape, noteSerial + static_cast<uint32_t> (l));
     };
     const bool wrap = syncType <= 1;
     auto lane = [&] (float sign, float& smoothed) -> float
