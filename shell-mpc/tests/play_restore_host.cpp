@@ -231,7 +231,7 @@ int main (int argc, char** argv)
 
     const Saved s1 = makeProject (1, 2, 3, 4);
     const Saved s2 = makeProject (2, 3, 6, 10);
-    check (s1.chunk != s2.chunk && s1.chunk.find ("\"mpcPlayOsc\":2,\"mpcPlayEnv\":3,\"mpcPlayLfo\":4") != std::string::npos, "two different projects: edited sounds, Osc 2 / Env 3 / LFO 4 and Osc 3 / Env 6 / LFO 10");
+    check (s1.chunk != s2.chunk && s1.chunk.find ("\"mpcPlayOsc5\":2,\"mpcPlayEnv\":3,\"mpcPlayLfo\":4") != std::string::npos, "two different projects: edited sounds, Osc 2 / Env 3 / LFO 4 and Osc 3 / Env 6 / LFO 10");
     {
         // the project differs from the defaults in (nearly) every parameter, in the instances the selectors point to AND in the others
         AEffect* d = make();

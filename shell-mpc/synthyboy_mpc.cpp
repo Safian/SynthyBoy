@@ -6,6 +6,7 @@
 #include <cmath>
 #include <atomic>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
 #include <fstream>
@@ -121,6 +122,7 @@
 #include <exception>
 #include "play_log.h"
 #include "play_params.h"
+#include "q_router.h"
 #include "synthyboy/readout.h"
 #endif
 
@@ -339,6 +341,7 @@ struct PluginInstance
         }
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
+        void setQGroup (const int* targets, int n) noexcept override { inst.qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount())); }
         std::shared_ptr<const synthyboy::StateContent> content() const override { return std::atomic_load (&inst.overlayContent); }
         const synthyboy::IContentStore* contentStore() const noexcept override { return inst.contentStore.get(); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
@@ -404,6 +407,57 @@ struct PluginInstance
         const std::string chunk = buildStateChunk (this);
         std::fprintf (f, "chunk %zu\n%s\n", chunk.size(), chunk.c_str());
         std::fclose (f);
+    }
+
+    // ---- the Q proxies (q_router.h, docs/MPC.md "Q proxies"): "Q 1" .. "Q 4" after the last Play proxy; what the four knobs of the plugin's own full-screen pages are mapped to ----
+    synthyboy_mpc::QRouter qRouter;
+    static VstInt32 qBase() noexcept { return playBase() + synthyboy_mpc::play::kParams; }
+    static bool isQParam (VstInt32 index) noexcept { return index >= qBase() && index < qBase() + synthyboy_mpc::QRouter::kCount; }
+    /** The normalised value of a real parameter (table index) as the host reads it. */
+    float qReadNorm (int tableIndex) const noexcept { return synthyboy::toNormalised (synthyboy::paramTable()[tableIndex], paramMirror[tableIndex].load (std::memory_order_relaxed)); }
+    /** Debug / acceptance hook: while the file /tmp/synthyboy-q-fake-group exists (SYNTHYBOY_MPC_Q_FAKE_FILE changes the path) its first line, up to four table indices (-1: none), is the Q group of this
+        instance; applied when the line changes (the host tests of the Q proxies have no UI to set it). Display thread. */
+    std::string qFakeLast;
+    void qFakeGroup()
+    {
+        static const std::string path = [] { const char* e = std::getenv ("SYNTHYBOY_MPC_Q_FAKE_FILE"); return std::string (e != nullptr && *e != '\0' ? e : "/tmp/synthyboy-q-fake-group"); }();
+        std::ifstream f (path);
+        std::string line;
+        if (! f || ! std::getline (f, line))
+        {
+            qFakeLast.clear();
+            return;
+        }
+        if (line == qFakeLast)
+            return;
+        qFakeLast = line;
+        int targets[synthyboy_mpc::QRouter::kCount];
+        int n = 0;
+        for (size_t at = 0; n < synthyboy_mpc::QRouter::kCount;)
+        {
+            while (at < line.size() && line[at] == ' ')
+                ++at;
+            if (at >= line.size())
+                break;
+            char* end = nullptr;
+            targets[n++] = static_cast<int> (std::strtol (line.c_str() + at, &end, 10));
+            const size_t next = static_cast<size_t> (end - line.c_str());
+            if (next <= at)
+                break;
+            at = next;
+        }
+        qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount()));
+    }
+    /** The display thread, every tick: the host is told the Q values after a group change or a change of a target, and the real parameter a Q write changed. */
+    void qPoll (AEffect* e)
+    {
+        qFakeGroup();
+        if (! audioMaster)
+            return;
+        const VstInt32 base = qBase();
+        qRouter.poll ([this] (int t) noexcept { return qReadNorm (t); },
+                      [&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
+                      [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); });
     }
 
     static VstInt32 playBase() noexcept { return overlayParamIndex() + 1; }   // "Play Osc"; "Play Env" and "Play LFO" follow, then the proxies
@@ -671,6 +725,7 @@ struct PluginInstance
 #if SYNTHYBOY_MPC_OVERLAY
                 overlayPoll (e, PluginInstance::overlayParamIndex());   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
                 playPoll (e, PluginInstance::playBase());               // the Play page: the selectors and the proxies after it
+                qPoll (e);                                              // the Q proxies after them
 #endif
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
@@ -789,7 +844,7 @@ struct PluginInstance
         b += " PAD_PRESSURE=OFF";
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
-        extraParams += 1 + synthyboy_mpc::play::kParams; // "Overlay Instance", then the Play page's three selectors and 24 proxies, after everything else
+        extraParams += 1 + synthyboy_mpc::play::kParams + synthyboy_mpc::QRouter::kCount; // "Overlay Instance", then the Play page's three selectors and 24 proxies, then "Q 1" .. "Q 4", after everything else
 #endif
         b += " params=" + std::to_string (synthyboy::paramCount() + extraParams);
 #if defined(__aarch64__)
@@ -1221,6 +1276,21 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         }
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
+        if (PluginInstance::isQParam (index))
+        {
+            const int q = index - PluginInstance::qBase();
+            const int real = inst->qRouter.target (q);
+            if (opcode == effGetParamName)
+                std::snprintf (buf, 64, "Q %d", q + 1);
+            else if (real < 0)
+                buf[0] = '\0';
+            else if (opcode == effGetParamLabel)
+                copyString (buf, 64, synthyboy::unitLabel (synthyboy::paramTable()[real].unit));
+            else
+                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, 64);
+            buf[63] = '\0';
+            return 1;
+        }
         if (PluginInstance::isPlayParam (index))
         {
             namespace pl = synthyboy_mpc::play;
@@ -1423,7 +1493,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     case effCanBeAutomated:
     {
 #if SYNTHYBOY_MPC_OVERLAY
-        if (PluginInstance::isOverlayParam (index) || PluginInstance::isPlayParam (index))
+        if (PluginInstance::isOverlayParam (index) || PluginInstance::isPlayParam (index) || PluginInstance::isQParam (index))
             return 0;
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
@@ -1565,6 +1635,21 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         }
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
+        if (PluginInstance::isQParam (index))
+        {
+            // a Q proxy has the properties of its target; with none a plain 0 .. 1 knob
+            const int real = inst->qRouter.target (index - PluginInstance::qBase());
+            if (real >= 0)
+            {
+                fillParameterProperties (synthyboy::paramTable()[real], props);
+                return 1;
+            }
+            std::memset (props, 0, sizeof (*props));
+            props->stepFloat = 0.01f;
+            props->smallStepFloat = 0.001f;
+            props->largeStepFloat = 0.1f;
+            return 1;
+        }
         if (PluginInstance::isPlayParam (index))
         {
             std::memset (props, 0, sizeof (*props));
@@ -1825,6 +1910,18 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         // the restore window (PluginInstance::restoreActive) and the log of play_log.h
         const bool restoring = inst->restoreActive();
         const bool logging = synthyboy_mpc::PlayLog::enabled();
+        if (PluginInstance::isQParam (index))
+        {
+            const int q = index - PluginInstance::qBase();
+            const synthyboy_mpc::QRouter::Write w = inst->qRouter.hostWrite (q, parameter, restoring, [inst] (int t) noexcept { return inst->qReadNorm (t); },
+                                                                              [inst] (int t, float v) { writeRealParam (inst, static_cast<size_t> (t), v); });
+            if (logging)
+            {
+                static const char* const kOutcome[] = { "no target", "echo, nothing changed", "ignored (restore window)", "written" };
+                synthyboy_mpc::PlayLog::line ("setParameter %d (Q %d, real %d) %.9g -> %s", static_cast<int> (index), q + 1, inst->qRouter.target (q), static_cast<double> (parameter), kOutcome[static_cast<int> (w)]);
+            }
+            return;
+        }
         if (PluginInstance::isPlayParam (index))
         {
             namespace pl = synthyboy_mpc::play;
@@ -1909,6 +2006,8 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
 #if SYNTHYBOY_MPC_OVERLAY
     if (PluginInstance::isOverlayParam (index))
         return inst->overlayValue.load (std::memory_order_relaxed);
+    if (PluginInstance::isQParam (index))
+        return inst->qRouter.value (index - PluginInstance::qBase(), [inst] (int t) noexcept { return inst->qReadNorm (t); });
     if (PluginInstance::isPlayParam (index))
     {
         if (PluginInstance::isPlaySelector (index))
@@ -2073,7 +2172,7 @@ extern "C"
         effect->numParams += synthyboy_mpc::kPadPressureParams;
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
-        effect->numParams += 1 + synthyboy_mpc::play::kParams; // "Overlay Instance" (after the pad pressure parameters), then the Play page's three selectors and the 24 proxies
+        effect->numParams += 1 + synthyboy_mpc::play::kParams + synthyboy_mpc::QRouter::kCount; // "Overlay Instance" (after the pad pressure parameters), then the Play page's three selectors and the 24 proxies, then "Q 1" .. "Q 4"
 #endif
         effect->numInputs = 0;
         effect->numOutputs = 2;

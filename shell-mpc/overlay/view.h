@@ -12,6 +12,7 @@
 #include "gpu/scene.h"
 #include "overlay_layout.h"
 #include "synthyboy/readout.h"
+#include "ui_stack.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -24,6 +25,7 @@ struct ViewInput
     double nowMs = 0.0;
     IFrameSource* frames = nullptr;                // the application's primary framebuffer (the envelope view checks the line colour with it)
     int rotation = 90;
+    const UiStack* ui = nullptr;                   // the plugin-drawn pages of this instance (main / full / detail, ui_stack.h); null in a test that has none. The views of today ignore it.
 };
 
 /** Per view counters of the status file. */

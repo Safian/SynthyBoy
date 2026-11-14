@@ -252,7 +252,7 @@ int main()
                     char t[13];
                     gpu::textOf (sd.ops[k], t);
                     ++texts;
-                    check (std::string (t) == "OSC 2" || std::string (t) == "ENV 3" || std::string (t) == "LFO 4", std::string ("a panel title with the selected instance: ") + t);
+                    check (std::string (t) == "OSC A" || std::string (t) == "ENV 3" || std::string (t) == "LFO 4", std::string ("a panel title with the selected instance: ") + t);
                 }
             }
             check (curves == 3 && texts == 3, "play: three polylines (one per panel) and three titles");

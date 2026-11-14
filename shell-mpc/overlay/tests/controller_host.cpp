@@ -523,6 +523,113 @@ int main()
         const std::string d = r.dir.read ("curve.txt");
         check (d.find ("# view filter1: index shown_db exact_db") == 0 && std::count (d.begin(), d.end(), '\n') == 257, "the dump file has the 256 values");
     }
+    // ---- the plugin-drawn pages of an instance: main -> full(element) -> detail(page) ..., closed when the Play page is no longer on screen; per instance, never saved ----
+    {
+        const int play1 = 14, play2 = 15, filter1 = 0;
+        check (layout::kViews[play1].kind == layout::kKindPlay && layout::kViews[play2].kind == layout::kKindPlay && layout::kViews[filter1].kind == layout::kKindFilter, "(the view numbers of the test)");
+        {
+            UiStack u;
+            check (u.isMain() && u.level() == UiStack::Level::main && u.depth() == 0 && u.element() == -1 && u.top() == -1 && ! u.back() && ! u.closeAll(), "a stack starts in main; back and closeAll of main change nothing");
+            check (! u.openDetail (4) && ! u.openFull (-1) && u.changes() == 0, "a detail page needs a full page under it; a negative id is no page");
+            check (u.openFull (5) && u.level() == UiStack::Level::full && u.element() == 5 && u.depth() == 1, "openFull: full(5)");
+            check (u.openFull (5) && u.changes() == 1, "the same full page again changes nothing");
+            check (u.openDetail (11) && u.openDetail (12) && u.level() == UiStack::Level::detail && u.depth() == 3 && u.top() == 12 && u.id (0) == 5 && u.id (1) == 11 && u.id (2) == 12 && u.id (3) == -1, "detail pages stack on the full page and on each other");
+            check (u.back() && u.top() == 11 && u.back() && u.level() == UiStack::Level::full && u.back() && u.isMain() && ! u.back(), "back steps down one page at a time, full -> main");
+            u.openFull (1);
+            u.openDetail (2);
+            check (u.openFull (9) && u.depth() == 1 && u.element() == 9, "another full page replaces the whole stack");
+            u.openDetail (1);
+            check (u.closeAll() && u.isMain() && ! u.closeAll(), "closeAll goes to main at once");
+            bool ok = true;
+            u.openFull (0);
+            for (int i = 1; i < UiStack::kMaxDepth; ++i) ok = ok && u.openDetail (i);
+            check (ok && u.depth() == UiStack::kMaxDepth && ! u.openDetail (99), "the depth is limited: the page over the limit is refused and nothing breaks");
+        }
+        Rig r;
+        const int slot = r.ctl->slotOf (&r.inst);
+        check (r.ctl->uiState (slot).isMain() && ! r.ctl->openDetail (slot, 1) && ! r.ctl->openFull (-1, 1) && ! r.ctl->openFull (layout::kMaxInstances, 1) && ! r.ctl->openFull (5, 1), "a new instance is in main; no page for a slot that is not an instance");
+        r.frame.setView (play1, true, 90);
+        check (r.until ([&] { return r.on(); }, 500) >= 0 && r.ctl->currentIndex() == play1, "the Play page is on screen");
+        check (r.ctl->openFull (slot, 3) && r.ctl->openDetail (slot, 8), "openFull / openDetail through the controller");
+        r.run (1200);
+        std::string st = r.dir.read ("status.txt");
+        check (line (st, "ui_state") == "detail" && line (st, "ui_depth") == "2" && line (st, "ui_auto_closes") == "0", "the status file (the readout path) says detail, depth 2");
+        check (r.ctl->back (slot) && r.ctl->uiState (slot).level() == UiStack::Level::full, "back: full");
+        // the sub-tab of the Play page changes (the Play key pressed again): still the Play page, the stack stays
+        r.frame.setView (play1, false, 90);
+        r.frame.setView (play2, true, 90);
+        r.run (500);
+        check (r.ctl->currentIndex() == play2 && r.ctl->uiState (slot).level() == UiStack::Level::full && r.ctl->uiState (slot).element() == 3, "another sub-tab of the Play page: the stack stays");
+        // the instance picture goes blank (the host redraws): the page is there, the instance is not told: the stack stays
+        r.frame.setViewInstanceRgb (play2, layout::kInstanceBlankRgb, true, 90);
+        r.run (500);
+        check (r.ctl->uiState (slot).level() == UiStack::Level::full, "the instance picture is blank: the page did not leave, the stack stays");
+        r.frame.setViewInstance (play2, slot, true, 90);
+        r.run (300);
+        // the screen is not readable: nothing is known about the page, the stack stays
+        const bool wasReadable = r.frame.readable;
+        r.frame.readable = false;
+        r.run (500);
+        r.frame.readable = wasReadable;
+        r.run (300);
+        check (r.ctl->uiState (slot).level() == UiStack::Level::full && r.ctl->state() != "disabled", "an unreadable framebuffer for half a second: the stack stays");
+        // the user presses Mixer (any other tab): the whole stack closes, and coming back shows main
+        r.ctl->openDetail (slot, 4);
+        r.frame.setView (play2, false, 90);
+        r.frame.setView (filter1, true, 90);
+        r.run (500);
+        check (r.ctl->currentIndex() == filter1 && r.ctl->uiState (slot).isMain(), "another tab on screen: the stack is closed (main)");
+        r.run (1200);
+        st = r.dir.read ("status.txt");
+        check (line (st, "ui_auto_closes") == "1" && line (st, "ui_state") == "main", "... counted in the status file");
+        r.frame.setView (filter1, false, 90);
+        r.frame.setView (play1, true, 90);
+        r.run (500);
+        check (r.ctl->currentIndex() == play1 && r.ctl->uiState (slot).isMain(), "back on the Play page: main, nothing is remembered");
+        // no view of the skin on screen at all (a page without markers): closed too
+        r.ctl->openFull (slot, 2);
+        r.frame.setView (play1, false, 90);
+        r.run (500);
+        check (r.ctl->uiState (slot).isMain(), "no page of the skin on screen: closed");
+
+        // two instances: the stack belongs to the instance whose page it is
+        FakeInstance other;
+        check (r.ctl->attach (&other) == 1, "(a second instance, slot 1)");
+        r.frame.setView (play1, true, 90);
+        r.frame.setViewInstance (play1, 0, true, 90);
+        r.run (500);
+        r.ctl->openFull (0, 2);
+        r.ctl->openFull (1, 7);   // an instance whose page is not on screen: its stack does not live (the next check closes it)
+        r.run (300);
+        check (r.ctl->uiState (0).element() == 2 && r.ctl->uiState (1).isMain(), "instance 0's page is on screen: its stack stays, the one opened for instance 1 is closed by the next check");
+        r.frame.setViewInstance (play1, 1, true, 90);
+        r.run (300);
+        r.ctl->openFull (1, 7);
+        r.ctl->openDetail (1, 9);
+        r.run (300);
+        check (r.ctl->uiState (0).isMain() && r.ctl->uiState (1).depth() == 2 && r.ctl->uiState (1).element() == 7, "instance 1's Play page on screen: instance 0's stack is closed, instance 1's stays");
+        r.frame.setView (play1, false, 90);
+        r.frame.setView (filter1, true, 90);
+        r.run (500);
+        check (r.ctl->uiState (1).isMain(), "another tab: instance 1's stack is closed as well");
+        // not saved, not inherited: a slot given to a new instance starts in main
+        r.frame.setView (filter1, false, 90);
+        r.frame.setView (play1, true, 90);
+        r.frame.setViewInstance (play1, 1, true, 90);
+        r.run (300);
+        r.ctl->openFull (1, 4);
+        r.ctl->detach (&other);
+        FakeInstance again;
+        check (r.ctl->attach (&again) == 1 && r.ctl->uiState (1).isMain(), "a closed instance leaves no stack: the next instance in its slot starts in main");
+        r.ctl->detach (&again);
+    }
+    // ---- the Q group a page sets reaches the instance (IInstanceView::setQGroup); the interface default does nothing ----
+    {
+        FakeInstance f;
+        const int targets[4] = { 3, -1, 7, 11 };
+        f.setQGroup (targets, 4);
+        check (f.qGroupCalls == 1 && f.qGroup[0] == 3 && f.qGroup[1] == -1 && f.qGroup[2] == 7 && f.qGroup[3] == 11 && f.qGroupN == 4, "the Q group is handed to the instance as given");
+    }
     // ---- the same controller on a thread, with parameters, markers and instances changing under it (ThreadSanitizer) ----
     {
         Rig r;

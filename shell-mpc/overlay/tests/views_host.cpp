@@ -700,11 +700,11 @@ int main()
         bool otherPanelsStill = true, changed = true;
         uint32_t h[3] = { v.panelHash (0), v.panelHash (1), v.panelHash (2) };
         osc.insert (h[0]); env.insert (h[1]); lfo.insert (h[2]);
-        for (int k = 2; k <= 3; ++k) { inst.playSel[0] = k; changed = step() && changed; osc.insert (v.panelHash (0)); otherPanelsStill = otherPanelsStill && v.panelHash (1) == h[1] && v.panelHash (2) == h[2] && v.selection (0) == k; }
+        for (int k = 2; k <= 5; ++k) { inst.playSel[0] = k; changed = step() && changed; osc.insert (v.panelHash (0)); otherPanelsStill = otherPanelsStill && v.panelHash (1) == h[1] && v.panelHash (2) == h[2] && v.selection (0) == k; }
         for (int k = 2; k <= 6; ++k) { inst.playSel[1] = k; changed = step() && changed; env.insert (v.panelHash (1)); otherPanelsStill = otherPanelsStill && v.selection (1) == k; }
         for (int k = 2; k <= 10; ++k) { inst.playSel[2] = k; changed = step() && changed; lfo.insert (v.panelHash (2)); otherPanelsStill = otherPanelsStill && v.selection (2) == k; }
         check (changed, "every selector change makes the view ask for a new picture at once (no wait for the compute budget)");
-        check (osc.size() == 3 && env.size() == 6 && lfo.size() == 10, "the data hash of a panel is different for every instance: 3 oscillators, 6 envelopes, 10 LFOs (" + std::to_string (osc.size()) + " / " + std::to_string (env.size()) + " / " + std::to_string (lfo.size()) + ")");
+        check (osc.size() == 5 && env.size() == 6 && lfo.size() == 10, "the data hash of a panel is different for every instance: Sub, A, B, C, Noise, 6 envelopes, 10 LFOs (" + std::to_string (osc.size()) + " / " + std::to_string (env.size()) + " / " + std::to_string (lfo.size()) + ")");
         check (otherPanelsStill, "a selector changes its own panel's selection (the other panels keep theirs)");
         // a parameter of the selected instance moves the picture, a parameter of another instance does not
         inst.playSel[1] = 3;
@@ -718,13 +718,22 @@ int main()
         // out of range selections are limited to what the engine has
         inst.playSel[0] = 9; inst.playSel[1] = 0; inst.playSel[2] = 99;
         step();
-        check (v.selection (0) == 3 && v.selection (1) == 1 && v.selection (2) == 10, "a selection outside the instances is limited to the first / last");
+        check (v.selection (0) == 5 && v.selection (1) == 1 && v.selection (2) == 10, "a selection outside the instances is limited to the first / last");
         // the status file names the view and the three instances
         std::ostringstream o;
         v.writeStatus (o);
         const std::string st = o.str();
-        check (st.find ("play_view: play2") != std::string::npos && st.find ("play_highlight: 2") != std::string::npos && st.find ("play_osc: 3") != std::string::npos && st.find ("play_env: 1") != std::string::npos
+        check (st.find ("play_view: play2") != std::string::npos && st.find ("play_highlight: 2") != std::string::npos && st.find ("play_osc: 5") != std::string::npos && st.find ("play_env: 1") != std::string::npos
                && st.find ("play_lfo: 10") != std::string::npos && st.find ("play_env_hash:") != std::string::npos, "the status lines name the view, the highlight and the three selected instances, with a hash per panel");
+        // Sub and Noise have no cycle picture in this view (the panel is empty, kind off); A, B and C read their own oscillator's parameters and live readout
+        inst.playSel[0] = 1; step();
+        std::ostringstream o1; v.writeStatus (o1);
+        check (v.selection (0) == 1 && o1.str().find ("play_osc_kind: off") != std::string::npos && play::title (0, 1) == "SUB" && play::title (0, 5) == "NOISE" && play::title (0, 2) == "OSC A" && play::title (0, 4) == "OSC C", "Sub and Noise: an empty oscillator panel with their titles; A .. C are OSC A .. OSC C");
+        inst.set ("osc2.level", 33.0f);
+        inst.playSel[0] = 3; step();
+        const uint32_t oscB = v.panelHash (0);
+        inst.set ("osc1.level", 77.0f); step();
+        check (v.panelHash (0) == oscB, "instance 3 is oscillator B (osc2): a parameter of osc1 does not move its picture");
         // the live dot and cursor move the picture
         inst.playSel[1] = 2; inst.playSel[2] = 5; step();
         const uint32_t before = v.hash();

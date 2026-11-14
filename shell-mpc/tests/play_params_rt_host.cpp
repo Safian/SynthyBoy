@@ -39,7 +39,8 @@ int main()
                 found += pl::realIndex (g, n, s) >= 0;
     gCount = false;
     if (gAllocs.load() != 0) { std::printf ("FAIL: realIndex allocated %ld times on its first calls (the audio thread must never allocate)\n", gAllocs.load()); ++bad; }
-    if (found != 8 * (pl::kInstances[0] + pl::kInstances[1] + pl::kInstances[2])) { std::printf ("FAIL: %d real parameters found\n", found); ++bad; }
+    // Sub and Noise: four slots each; A, B, C, the envelopes and the LFOs: eight
+    if (found != 4 + 4 + 8 * (3 + pl::kInstances[1] + pl::kInstances[2])) { std::printf ("FAIL: %d real parameters found\n", found); ++bad; }
     std::string why;
     if (! pl::uniform (&why)) { std::printf ("FAIL: not uniform: %s\n", why.c_str()); ++bad; }
     std::printf (bad ? "FAILED\n" : "OK\n");

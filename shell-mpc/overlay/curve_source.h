@@ -56,8 +56,11 @@ public:
     /** The ring of the instance's output (the audio thread writes it, the spectrum view reads it). null: this instance has none (the build without the spectrum): the spectrum view has no data
         and the plane stays off, the 32 meters of the skin stay visible. */
     virtual const SpectrumRing* spectrumRing() const noexcept { return nullptr; }
-    /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 3, 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
+    /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 5: Sub, A, B, C, Noise (play_osc.h), 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
     virtual int playSelection (int /*group*/) const noexcept { return 1; }
+    /** The plugin-drawn pages set the targets of the four Q proxies ("Q 1" .. "Q 4", q_router.h): the first `n` (at most 4) of `targets`, each a parameter table index or -1 (none). Called from the overlay
+        thread while the instance is registered; it must be lock free (the plugin's display thread tells the host the new values). */
+    virtual void setQGroup (const int* /*targets*/, int /*n*/) noexcept {}
 };
 
 class CurveSource
