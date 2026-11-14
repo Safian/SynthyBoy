@@ -108,6 +108,22 @@ int main (int argc, char** argv)
     check (lg.peak > 0.99 * ceiling, "loud: the plugin with the make-up gain reaches the ceiling (the limiter works)");
     check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
 
+    // Suspend / resume cycle after limiting: must reset output stage transient state (MAGAS-2)
+    withGain->dispatcher (withGain, effMainsChanged, 0, 0, nullptr, 0.0f);
+    withGain->dispatcher (withGain, effMainsChanged, 0, 1, nullptr, 0.0f);
+    plain->dispatcher (plain, effMainsChanged, 0, 0, nullptr, 0.0f);
+    plain->dispatcher (plain, effMainsChanged, 0, 1, nullptr, 0.0f);
+
+    const Level resumed = play (withGain, 0.35f, { 60 }, 40, 0.5);
+    check (std::fabs (db (resumed.rms) - db (qg.rms)) < 0.2, "resume resets output stage: quiet note after resume matches original quiet level");
+
+    // Clean teardown
+    for (AEffect* e : { withGain, plain })
+    {
+        e->dispatcher (e, effMainsChanged, 0, 0, nullptr, 0.0f);
+        e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
+    }
+
     std::printf (fails == 0 ? "output_level_host: OK\n" : "output_level_host: %d FAILED\n", fails);
     return fails == 0 ? 0 : 1;
 }
