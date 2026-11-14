@@ -38,7 +38,7 @@ The output folder is named `Safian - VST - SynthyBoy` and contains:
 - `VST/synthyboy-arm32.so` — the stripped 32-bit ARMv7 shared object that exports only `VSTPluginMain`.
 - `VST/synthyboy-arm64.so` — the stripped 64-bit AArch64 shared object that exports only `VSTPluginMain`.
 - `Content/presets` — the factory presets from `content/presets`, shown as programs in the MPC's preset browser.
-- `Plugin Skins` — the touch-screen UI and Q-Links knob mapping, generated from `scripts/mpc-ui-pages.json` via `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`.
+- `Plugin Skins` — the touch-screen UI and Q-Links knob mapping, generated from `scripts/mpc-ui-pages.json` via `scripts/gen-mpc-ui.py` and the SDK's `tools/gen_ui.py`, including the browser artwork tile (`Plugin Skins/browser_images/soundsmode.png`) for Sounds > INSTRUMENTS.
 
 The plugin finds its own folder by walking up from the binary's path (obtained via `dladdr` on `VSTPluginMain`) to the first directory that contains a file named `plugin.json`. This logic is in `shell-mpc/plugin_paths.h`.
 
@@ -133,6 +133,15 @@ Spectrum display (section "Spectrum"), measured on the night of 2026-11-13 to 20
 - Key 61, a real six note chord with the normal spectrum (analyser on the output, 10 a second, no self-test): the statistics file was written 20 seconds after the plugin was created and counts 5761 callbacks (the file does not say how long the chord was held), every gap below 1.5 times the block time, largest gap 3421 microseconds (1.18 times), time in the callback 514 microseconds on average (the sounding voices: the self-test runs above are about 68), longest 2080 microseconds, which is below the 2.902 ms block.
 - MPC XL (arm64), the 32 Meters with the self-test wave at 25 steps a second, the surface with the meters visible: 13 623 callbacks, every gap below 1.5 times the block time, largest gap 3283 microseconds (1.13 times), callback average 13.7 and longest 110 microseconds.
 - Not measured yet: how the peak hold of the Meters looks on the screen (the element has `peakHoldSize 0`), the MPC XL with real sound in the test project, and the CPU cost of the FFT on its own (the statistics above do not contain it, it runs on the display thread).
+
+Browser artwork tile in Sounds > INSTRUMENTS, tried on the MPC XL on 2026-11-14 (MPC 3.10.1.12, trial image `tile-mock/tile-mock-270x110.png` copied to `Plugin Skins/browser_images/soundsmode.png`; the trial file did not stay on the machine):
+
+- The 270 x 110 PNG appears cleanly in the Sounds > INSTRUMENTS browser on the second page of instruments in place of the text tile, at the same size as the stock instrument tiles.
+- The 540 x 220 PNG (2x supersampled) is cropped to the top-left 270 x 110 pixels rather than scaled down by the host; larger resolutions offer no benefit.
+- The 270 x 110 PNG is drawn with 1:1 pixel accuracy on the XL screen without scaling blur; fine lines and small labels remain sharp and legible.
+- The host required restarting the application before the newly copied artwork tile was shown.
+- Tapping the tile to open the preset list (`.xpl`) was not measured (the package does not include `.xpl` presets; presets are exposed as VST2 programs). Appearance on the MPC Key 61 was not measured during this session.
+
 ### Per the SDK documentation / not yet verified on the device
 
 These statements come from the SDK's documents (host-contract.md, install-and-test.md). A project was saved and loaded once (see above), but in which order the host restores the program and the chunk was not observed, so the host side of the program handling below is unconfirmed. Still not verified on the device: the CPU load during playback in the MPC app, and the sound of the final build (shell commit `17d6e11`): it loads in the stock MPC app, but nobody has listened to it.
@@ -395,3 +404,14 @@ Numerical investigation confirmed:
 - **Root cause in engine decay, not output stage**: When `host_sim` sweeps `osc1.map.key_low` past active notes, the Vital engine mutes oscillator 1. The internal IIR filter / decimator state decays exponentially from $\approx -5.11 \times 10^{-2}$ down to $-2.1 \times 10^{-38}$ across 78 samples before hardware Flush-to-Zero (`FTZ`) sets in at `FLT_MIN`. Exactly 16 samples per channel ($16 \times 2 = 32$ samples) fall in the $[1.1755 \times 10^{-38}, 10^{-30})$ window.
 - **OutputStage role**: The output limiter is inactive (`env == 1.0f`) during this tail; the 6 dB make-up gain simply scales the decaying samples by $\approx 1.995$, shifting sample $i=61$ above the $10^{-30}$ mark (from 34 down to 32 reported samples).
 - **No modification to engine**: Hardware FTZ is active in `synthyboy_mpc.cpp` and `vital_engine.cpp`. Adding artificial DC offsets or software zero-clamping would break bit-identical passthrough at 0 dB and introduce distortion. The Vital engine core is not modified.
+
+## Browser tile
+
+The host displays a graphic tile in the Sounds > INSTRUMENTS plugin selector when the package contains `Plugin Skins/browser_images/soundsmode.png`.
+
+- **Dimensions**: exactly 270 x 110 pixels PNG. The host does not downscale larger images; it crops them to the top-left 270 x 110 pixels.
+- **Design**: custom vector and gradient drawing with the SynthyBoy wordmark, analog hybrid synthesizer description, multi-layer glowing waveforms, and status indicators. It contains no third-party branding, stock elements, or vendor marks (no Akai, AIR, or NI trademarks).
+- **Generator**: `scripts/gen-mpc-tile.py` draws the tile at 4x supersampling using Pillow and downsamples with Lanczos filtering. It honors font licensing by defaulting to the repository's open font assets or Titillium Web OFL if present.
+- **Packaging**: `scripts/mpc-skin-extras/98_tile.py` copies the generated asset into the skin folder during skin generation. `scripts/build-mpc.sh` ensures the file is present in the final package.
+- **Tests**: `scripts/tests/test_mpc_tile.py` checks that the tile exists, matches the 270 x 110 PNG dimensions, contains valid non-empty procedural artwork, and is copied into the skin package.
+
