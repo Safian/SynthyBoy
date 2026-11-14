@@ -497,13 +497,18 @@ class OverlaySkinTests(unittest.TestCase):
         first = self.play_first()
         sel = [first + g for g in range(3)]
         prox = [[first + 3 + g * 8 + s for s in range(8)] for g in range(3)]
+        q = [first + 3 + 24 + i for i in range(4)]
         for g, (tab_name, prefix, _) in enumerate(self.PLAY):
             tab = self.tab(tab_name)
             items = tab["componentDefinition"]["componentsData"]
             bound = lambda c: int(c["handle remapping"]["map"][0]["value"].split()[1]) if c["handle remapping"]["map"] else None
             slots = [c for c in items if c["componentData"]["type"] in SLOT_TYPES]
-            self.assertEqual(sorted(set(bound(c) for c in slots)), sorted(sel + prox[g]), "%s: the three selectors and the eight knobs of its module, nothing else (a knob may have variants valid for one choice of another one)" % tab_name)
-            # selectors: one under each panel, radio group for the oscillator, selector menus for the others
+            if g == 0:
+                # the oscillator third is the plugin's own drawing: no selector, no knob (the compact view and the full-screen page replace them)
+                self.assertEqual(slots[0:0] + [c for c in slots if bound(c) in sel[:1] + prox[0]], [], "the oscillator selector and the eight oscillator knobs are not host widgets")
+                self.assertEqual(sorted(set(bound(c) for c in slots)), sorted(sel[1:]), "the Play sub-tab has the Env and LFO selectors and nothing else")
+            else:
+                self.assertEqual(sorted(set(bound(c) for c in slots)), sorted(sel[1:] + prox[g]), "%s: the Env and LFO selectors and the eight knobs of its module, nothing else (a knob may have variants valid for one choice of another one)" % tab_name)
             kinds = {bound(c): c["componentData"]["type"] for c in slots}
             if tab_name == "Play LFO":
                 sync = prox[2][5]
@@ -511,32 +516,51 @@ class OverlaySkinTests(unittest.TestCase):
                 self.assertEqual(rate["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/0/5/Parameter %d" % sync], "the rate knob is valid when the PROXY of the sync has choice 0")
                 divs = [c for c in slots if bound(c) == prox[2][7]]
                 self.assertEqual(sorted(c["bounds"]["additionalInvalidatingHandles"][0] for c in divs), ["IndexedEnabling/%d/5/Parameter %d" % (n, sync) for n in (1, 2, 3)], "the division is valid for the three tempo syncs")
-            self.assertEqual([kinds[i] for i in sel], ["sliderWithFocusMenu"] * 3)
+            self.assertEqual([kinds[i] for i in sel[1:]], ["sliderWithFocusMenu"] * 2)
             view = next(v for v in json.loads(SHARED_JSON.read_text(encoding="utf-8"))["views"] if v["tab"] == tab_name)
             for p, i in enumerate(sel):
+                if p == 0:
+                    continue
                 c = next(c for c in slots if bound(c) == i)
                 x, y, w, h = rect(c)
                 centre = view["region"]["x"] + p * 417 + 200
                 self.assertTrue(abs(x + w // 2 - centre) <= 2 and y + h <= 301, "the selector %d is under its panel and above the Q-Link frames" % p)
-            # the knobs are copies of the control of instance 1 on its own tab (same widget), in the lower two rows, slot n = Q-Link n
-            for s, key in enumerate(self.SLOTS[prefix]):
+            # the knobs are copies of the control of instance 1 on its own tab (same widget), in the lower two rows, slot n = Q-Link n (Q-Link 1 .. 4 are the Q proxies, see below)
+            for s, key in enumerate(self.SLOTS[prefix] if g > 0 else ()):
                 c = next(c for c in slots if bound(c) == prox[g][s])
                 x, y, w, h = rect(c)
                 self.assertEqual(x, (21, 341, 661, 981)[s % 4])
                 self.assertTrue(y >= 343 and y + h <= 621, "%s inside the lower two rows" % c["componentData"]["name"])
                 self.assertEqual(y < 483, s >= 4, "slots 1 .. 4 are the bottom row, 5 .. 8 the row above")
                 real = next((t for t in self.p_tui["pageData"]["tabs"] for rc in t["componentDefinition"]["componentsData"]
-                             if rc["handle remapping"]["map"] and bound(rc) == next(i for i, q in enumerate(self.params) if q["key"] == "%s1.%s" % (prefix, key))), None)
+                             if rc["handle remapping"]["map"] and bound(rc) == next(i for i, q_ in enumerate(self.params) if q_["key"] == "%s1.%s" % (prefix, key))), None)
                 if real is not None:
-                    rc = next(rc for rc in real["componentDefinition"]["componentsData"] if rc["handle remapping"]["map"] and bound(rc) == next(i for i, q in enumerate(self.params) if q["key"] == "%s1.%s" % (prefix, key)))
+                    rc = next(rc for rc in real["componentDefinition"]["componentsData"] if rc["handle remapping"]["map"] and bound(rc) == next(i for i, q_ in enumerate(self.params) if q_["key"] == "%s1.%s" % (prefix, key)))
                     self.assertEqual(c["componentData"]["type"], rc["componentData"]["type"], "%s is the same widget as the real parameter's control" % c["componentData"]["name"])
             entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == tab["fnKeyIndex"] + 1 and e["SubTab"] == tab["fnKeySubIndex"] + 1)
-            self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], prox[g] + [-1] * 8, "%s: Q-Link 1 .. 8 are the eight proxies in the order of the table, the others free" % tab_name)
+            expected = q + ([prox[g][4], prox[g][5], prox[g][6], prox[g][7]] if g > 0 else [-1] * 4) + [-1] * 8
+            self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], expected,
+                             "%s: Q-Link 1 .. 4 are the Q proxies (the plugin sets what they act on), Q-Link 5 .. 8 the second row of the module's knobs (none on the oscillator sub-tab), the others free" % tab_name)
             self.assertEqual(tab["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"])
             # names: every knob has its short name over it, unique inside the tab
             names = [c["componentData"]["data"]["text"] for c in items if c["componentData"]["type"] == "Label" and c["componentData"]["name"].endswith(" name")]
-            self.assertEqual(len(names), {"osc": 8, "env": 8, "lfo": 5}[prefix], "a name over every knob and toggle (the selectors, three of the LFO's eight controls, show the host's own header)")
+            self.assertEqual(len(names), {"osc": 0, "env": 8, "lfo": 5}[prefix], "a name over every knob and toggle (the selectors, three of the LFO's eight controls, show the host's own header)")
             self.assertEqual(len(set(names)), len(names))
+
+    def test_the_oscillator_third_has_no_host_widget_and_the_others_are_as_they_were(self):
+        for tab_name, _, _ in self.PLAY:
+            items = {c["componentData"]["name"] for c in self.tab(tab_name)["componentDefinition"]["componentsData"]}
+            for gone in ("Play Panel 1", "Play Title 1", "Play Osc Select"):
+                self.assertNotIn(gone, items, "%s: %s is under the plugin-drawn oscillator view" % (tab_name, gone))
+            for kept in ("Play Background", "Play Panel 2", "Play Panel 3", "Play Title 2", "Play Title 3", "Play Env Select", "Play LFO Select"):
+                self.assertIn(kept, items, "%s: %s stays" % (tab_name, kept))
+            self.assertFalse([n for n in items if n.startswith("Play Osc ")], "%s: no oscillator control" % tab_name)
+
+    def test_there_is_no_page_only_the_overlay_can_reach_so_the_play_page_carries_the_full_screen_ui(self):
+        # the format: every tab sits on a function key and is reached by the key (ui-reference "fnKeyIndex" / "fnKeySubIndex"); a plugin has no call that selects a tab (docs/MPC.md "Q proxies").
+        names = [t["tabName"] for t in self.o_tui["pageData"]["tabs"]]
+        self.assertFalse([n for n in names if "Full" in n], "no blank page of its own: the full-screen page is drawn over the Play page")
+        self.assertEqual(len(names), 39, "the tab count of the overlay skin is unchanged")
 
     def test_play_views_markers_and_the_fallback_picture(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -549,10 +573,10 @@ class OverlaySkinTests(unittest.TestCase):
             self.assertIn("Overlay Marker %s left" % v["name"], items)
             self.assertIn("Overlay Marker %s right" % v["name"], items)
             self.assertEqual(rect(items["Play Background"]), (23, 14, 1234, 190), "the dark picture under the plane (the overlay off)")
-            titles = [items["Play Title %d" % k]["componentData"]["data"]["text"] for k in (1, 2, 3)]
-            self.assertEqual(titles, ["Oscillator", "Envelope", "LFO"])
+            titles = [items["Play Title %d" % k]["componentData"]["data"]["text"] for k in (2, 3)]
+            self.assertEqual(titles, ["Envelope", "LFO"])
             first = self.play_first()
-            for k in (1, 2, 3):
+            for k in (2, 3):
                 self.assertEqual(items["Play Title %d" % k]["handle remapping"]["map"][0]["value"], "Parameter %d" % (first + k - 1), "a fixed text is drawn only when bound to a valid parameter")
             order = [c["componentData"]["name"] for c in self.tab(v["tab"])["componentDefinition"]["componentsData"]]
             self.assertLess(order.index("Play Background"), order.index("Overlay Marker %s left" % v["name"]), "the picture is below the markers")

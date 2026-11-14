@@ -6,6 +6,10 @@
 # pad pressure ones are "Overlay Instance", the selectors "Play Osc", "Play Env", "Play LFO" and the 24 proxy parameters (shell-mpc/play_params.h, docs/MPC.md "Play page"):
 #   selectors  index = entries of docs/params.json + 4 LFO cursors + 32 spectrum columns + 2 pad pressure + 1 Overlay Instance + 0 .. 2
 #   proxies    after the selectors, group after group (oscillator, envelope, LFO), eight each
+#   Q proxies  "Q 1" .. "Q 4" after the last proxy (shell-mpc/q_router.h): what the four hardware knobs (Q-Link 1 .. 4) of EVERY Play sub-tab are mapped to
+# The OSCILLATOR third (the left panel) is drawn entirely by the plugin (the compact view and, over the whole page, the full-screen oscillator page; docs/MPC.md "Play page" and "Q proxies"): it has NO host
+# widget (no fallback panel picture, no title, no selector) and the Play (oscillator) sub-tab has no knob widgets at all: its Q-Links are Q 1 .. Q 4 and nothing else. The Env and LFO thirds are as they were
+# (panel picture, title, selector, the eight knobs of the Env / LFO sub-tab); their Q-Link 1 .. 4 are Q 1 .. Q 4 too (the plugin sets the group), Q-Link 5 .. 8 stay the knobs of slots 4 .. 7.
 # Every one of the three tabs has the same TOP (tab coordinates, 1280 x 628): the region of the overlay view (shell-mpc/overlay/overlay_layout.json "play1" .. "play3": the three live panels), with
 # the markers and the instance picture of the view; below it (y 197 ..) the three selectors, one under each panel; BOTTOM: the eight knobs of the module of the sub-tab in the lower two rows of the
 # grid (Q-Link 1 .. 8: the bottom row left to right is Q-Link 1 .. 4, the row above Q-Link 5 .. 8 = slots 0 .. 7 of the table in play_params.h).
@@ -27,6 +31,8 @@ TABS = ("Play", "Play Env", "Play LFO")
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS, OVERLAY_INSTANCE = 4, 32, 2, 1
 GROUPS = 3
 SLOTS = 8
+Q_PROXIES = 4              # "Q 1" .. "Q 4": the parameters after the last Play proxy
+PLUGIN_DRAWN_PANEL = 0     # the oscillator panel: no host widget under (or beside) the plugin's own drawing
 # (prefix, instances, [(key suffix of the real parameter, template suffix if the production skin has no control for it, short name)] x 8) ; the names are the ones of play_params.h
 TABLE = (
     ("osc", 3, [("frame", None, "WT Position"), ("unison.voices", None, "Unison"), ("unison.detune", None, "Detune"), ("unison.blend", None, "Blend"),
@@ -156,6 +162,9 @@ def apply(tui, qlinks, ctx):
     first = ctx.param_count + LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS + OVERLAY_INSTANCE
     sel_idx = [first + g for g in range(GROUPS)]
     proxy_idx = [[first + GROUPS + g * SLOTS + s for s in range(SLOTS)] for g in range(GROUPS)]
+    q_idx = [first + GROUPS + GROUPS * SLOTS + i for i in range(Q_PROXIES)]
+    for i, idx in enumerate(q_idx):
+        ctx.add_param_key(idx, "shell.q_%d" % (i + 1))
     proxy_keys = [[], [], []]
     for g, (prefix, instances, slots) in enumerate(TABLE):
         ctx.add_param_key(sel_idx[g], SELECTOR_KEYS[g])
@@ -184,14 +193,20 @@ def apply(tui, qlinks, ctx):
         # fallback picture (under everything): dark region, three panels, three titles
         under = [_image("Play Background", BACKGROUND_FILE, (region["x"], region["y"], region["w"], region["h"]))]
         for p in range(GROUPS):
+            if p == PLUGIN_DRAWN_PANEL:
+                continue
             x = region["x"] + p * (PANEL_W + PANEL_GAP)
             under.append(_image("Play Panel %d" % (p + 1), PANEL_FILE, (x, region["y"], PANEL_W, region["h"])))
         items[:0] = under
         for p in range(GROUPS):
+            if p == PLUGIN_DRAWN_PANEL:
+                continue
             x = region["x"] + p * (PANEL_W + PANEL_GAP)
             extra.append(_title("Play Title %d" % (p + 1), PANEL_TITLES[p], sel_idx[p], (x + 8, region["y"] + 8, PANEL_W - 16, 28)))
         # the selectors, one under each panel
         for p in range(GROUPS):
+            if p == PLUGIN_DRAWN_PANEL:
+                continue
             kind = SELECTOR_TEMPLATES[p]
             x = region["x"] + p * (PANEL_W + PANEL_GAP) + (PANEL_W - SLOT_W) // 2
             c, segs = _copy_control(selector_template[kind], "Play %s Select" % SELECTOR_SHORT[p], sel_idx[p], (x, SELECTOR_Y, SLOT_W, SLOT_H[kind]))
@@ -207,6 +222,8 @@ def apply(tui, qlinks, ctx):
         links = {"Q-Link %d" % i: -1 for i in range(1, 17)}
         rebind = {ctx.param_index("%s1.%s" % (prefix, suffix)): proxy_idx[highlight][s] for s, (suffix, _, _) in enumerate(slots)}   # real parameter of instance 1 -> its proxy
         for s, (suffix, fallback, short) in enumerate(slots):
+            if highlight == PLUGIN_DRAWN_PANEL:
+                break   # the oscillator sub-tab has no knob widgets: the compact view and the full-screen page are the plugin's own
             real = ctx.param_index("%s1.%s" % (prefix, suffix))
             templates = by_param.get(real)
             if templates is None and fallback is not None:
@@ -224,11 +241,14 @@ def apply(tui, qlinks, ctx):
                 extra.append(c)
                 extra.extend(segs)
             links["Q-Link %d" % (s + 1)] = proxy_idx[highlight][s]
+        for i in range(Q_PROXIES):   # the four hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on)
+            links["Q-Link %d" % (i + 1)] = q_idx[i]
         items.extend(extra)
         # names over the controls (85_names.py): the meta of this tab
         tab_names = names[tab_name]["names"]
         for s, (_, _, short) in enumerate(slots):
-            tab_names[proxy_keys[highlight][s]] = short
+            if highlight != PLUGIN_DRAWN_PANEL:
+                tab_names[proxy_keys[highlight][s]] = short
         entry = [m for m in qlinks["Screen Mode Q-Links"]["map"] if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1]
         if len(entry) != 1:
             raise ValueError("Q-Links.json has %d entries for the tab %r" % (len(entry), tab_name))
