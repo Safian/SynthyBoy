@@ -209,21 +209,21 @@ int main (int argc, char** argv)
     AEffect* e = entry (hostCallback);
 #endif
     if (! e) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
-    lastIndex.store (e->numParams - 1 - (overlayBuild ? 27 : 0));   // the overlay build ends with the 27 parameters of the Play page (shell-mpc/play_params.h) after Overlay Instance;   // the display thread's first report comes a tick (>= 50 ms) after creation
+    lastIndex.store (e->numParams - 1 - (overlayBuild ? 31 : 0));   // the overlay build ends with the 27 parameters of the Play page (shell-mpc/play_params.h) and the 4 Q proxies (shell-mpc/q_router.h) after Overlay Instance;   // the display thread's first report comes a tick (>= 50 ms) after creation
     e->dispatcher (e, effOpen, 0, 0, nullptr, 0.0f);
     e->dispatcher (e, effSetSampleRate, 0, 0, nullptr, 44100.0f);
     e->dispatcher (e, effSetBlockSize, 0, 256, nullptr, 0.0f);
     e->dispatcher (e, effMainsChanged, 0, 1, nullptr, 0.0f);
 
     // the two pad pressure parameters (shell-mpc/pad_pressure.h, default ON) follow the display parameters (only "Overlay Instance" of the overlay build is after them) and are no part of what is checked here
-    const int ovl = overlayBuild ? 1 + 27 : 0;   // "Overlay Instance" and after it the Play page's 3 selectors and 24 proxies (shell-mpc/play_params.h)
+    const int ovl = overlayBuild ? 1 + 27 + 4 : 0;   // "Overlay Instance" and after it the Play page's 3 selectors and 24 proxies (shell-mpc/play_params.h), then "Q 1" .. "Q 4" (shell-mpc/q_router.h)
     const int pad = text (e, effGetParamName, e->numParams - 2 - ovl) == "Pad Pressure" ? 2 : 0;
     const std::string chunkFull = getChunk (e);
     std::string chunk = chunkFull;
     if (overlayBuild)
     {
         // the overlay build's chunk has the three Play selectors (shell-mpc/play_params.h) in addition; without them it is the chunk of every other build (compared by accept.sh)
-        const size_t a = chunk.find (",\"mpcPlayOsc\":"), b = chunk.find (",\"mpcPadPressure\":");
+        const size_t a = chunk.find (",\"mpcPlayOsc5\":"), b = chunk.find (",\"mpcPadPressure\":");
         check (a != std::string::npos && b != std::string::npos && a < b, "the overlay build's chunk has the Play selectors before the pad pressure members");
         if (a != std::string::npos && b != std::string::npos && a < b)
             chunk.erase (a, b - a);

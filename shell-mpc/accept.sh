@@ -336,4 +336,11 @@ ASCORE=$(find $AL/core -name '*.a' | tr '\n' ' ')
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I core/include -I shell-mpc -I $MPC_SDK/framework -o $AL/close_stress_host shell-mpc/tests/close_stress_host.cpp $ASCORE -lpthread || { echo "ACCEPT FAIL: asan close_stress_host build"; exit 1; }
 ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/close_stress_host "$ALIB" 40 > $AL/close-stress.log 2>&1 || { tail -30 $AL/close-stress.log; echo "ACCEPT FAIL: asan close_stress_host (memory error when instances are closed)"; exit 1; }
 grep -q "^OK" $AL/close-stress.log || { tail -5 $AL/close-stress.log; echo "ACCEPT FAIL: asan close_stress_host did not finish"; exit 1; }
+# the Q proxies' router (shell-mpc/q_router.h): the logic alone (group, reads, writes, restore window, reports, no allocation), plainly and under ThreadSanitizer (audio, UI and display threads at once)
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/q_router_host shell-mpc/tests/q_router_host.cpp -lpthread || { echo "ACCEPT FAIL: q_router_host build"; exit 1; }
+$B/q_router_host > $B/q-router.log 2>&1 || { grep -E "^FAIL" $B/q-router.log; echo "ACCEPT FAIL: q_router_host (the Q proxies' router)"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/q_router_host shell-mpc/tests/q_router_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan q_router_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/q_router_host > $TL/q-router.log 2>&1
+grep -q "WARNING: ThreadSanitizer" $TL/q-router.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/q-router.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Q router (full report: $TL/q-router.log)"; exit 1; }
+grep -q "^FAIL" $TL/q-router.log && { grep "^FAIL" $TL/q-router.log; echo "ACCEPT FAIL: tsan q_router_host"; exit 1; }
 echo "ACCEPT OK"

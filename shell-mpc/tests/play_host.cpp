@@ -10,6 +10,7 @@
 // instances of every group, the uniformity of the kinds of parameter between the instances of a group. Run under ThreadSanitizer too.
 #include "mpc_vst2_abi.h"
 #include "play_params.h"
+#include "q_router.h"
 #include "synthyboy/params.h"
 
 #include <atomic>
@@ -24,6 +25,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 namespace pl = synthyboy_mpc::play;
@@ -100,6 +102,7 @@ static std::string text (AEffect* e, VstInt32 opcode, int index, bool* ok = null
     return buf;
 }
 
+static std::string qFake;   // the file that sets the Q group of the plugin (a debug hook, see PluginInstance::qFakeGroup)
 using Main = AEffect* (*) (audioMasterCallback);
 static Main entry = nullptr;
 
@@ -117,6 +120,9 @@ static void closeIt (AEffect* e) { e->dispatcher (e, effClose, 0, 0, nullptr, 0.
 int main (int argc, char** argv)
 {
     if (argc < 2) { std::fprintf (stderr, "usage: play_host <plugin>\n"); return 2; }
+    qFake = "/tmp/synthyboy-q-fake-group-playhost-" + std::to_string (static_cast<long> (getpid()));
+    setenv ("SYNTHYBOY_MPC_Q_FAKE_FILE", qFake.c_str(), 1);   // the plugin reads it when it first needs it (the Q proxies); removed at the end
+    std::remove (qFake.c_str());
     void* lib = dlopen (argv[1], RTLD_NOW | RTLD_LOCAL);
     if (! lib) { std::fprintf (stderr, "dlopen: %s\n", dlerror()); return 2; }
     entry = reinterpret_cast<Main> (dlsym (lib, "VSTPluginMain"));
@@ -136,7 +142,7 @@ int main (int argc, char** argv)
                 if (std::strcmp (k, ("lfo" + std::to_string (m) + ".rate").c_str()) == 0) lfo = std::max (lfo, m);
             }
         }
-        check (osc == pl::kInstances[0] && env == pl::kInstances[1] && lfo == pl::kInstances[2], "the engine has 3 oscillators, " + std::to_string (env) + " envelopes and " + std::to_string (lfo) + " LFOs: the selectors' ranges");
+        check (osc == 3 && pl::kInstances[0] == 5 && env == pl::kInstances[1] && lfo == pl::kInstances[2], "the engine has 3 wavetable oscillators (+ Sub and Noise = 5 selector instances), " + std::to_string (env) + " envelopes and " + std::to_string (lfo) + " LFOs: the selectors' ranges");
         std::string why;
         const bool uni = pl::uniform (&why);
         check (uni, "every instance of a group has the same kinds of parameter (range, steps, unit, choices): " + why);
@@ -146,13 +152,21 @@ int main (int argc, char** argv)
     if (! a) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
     const int ovl = n + 4 + 32 + 2;   // "Overlay Instance"
     const int sel0 = ovl + 1, prox0 = ovl + 1 + pl::kSelectors;
-    check (a->numParams == ovl + 1 + pl::kParams, "numParams is the engine's count + 4 + 32 + 2 + Overlay Instance + 3 selectors + 24 proxies (" + std::to_string (a->numParams) + ")");
+    const int q0 = ovl + 1 + pl::kParams;   // "Q 1"
+    check (a->numParams == q0 + synthyboy_mpc::QRouter::kCount && q0 == 2703 && a->numParams == 2707, "numParams is the engine's count + 4 + 32 + 2 + Overlay Instance + 3 selectors + 24 proxies + 4 Q proxies = 2707 (" + std::to_string (a->numParams) + ")");
+    {
+        bool qn = true;
+        for (int i = 0; i < 4; ++i)
+            qn = qn && text (a, effGetParamName, q0 + i) == "Q " + std::to_string (i + 1) && a->dispatcher (a, effCanBeAutomated, q0 + i, 0, nullptr, 0.0f) == 0;
+        check (qn && text (a, effGetParamName, q0 - 1) == pl::slots (2)[7].proxyName, "order: the last Play proxy, then Q 1 .. Q 4; the Q proxies are not automatable");
+    }
     check (text (a, effGetParamName, ovl) == "Overlay Instance" && text (a, effGetParamName, sel0) == "Play Osc" && text (a, effGetParamName, sel0 + 1) == "Play Env" && text (a, effGetParamName, sel0 + 2) == "Play LFO", "order: Overlay Instance, Play Osc, Play Env, Play LFO");
     bool names = true, automation = true;
     for (int g = 0; g < pl::kGroups; ++g)
         for (int s = 0; s < pl::kSlots; ++s)
             names = names && text (a, effGetParamName, prox0 + g * pl::kSlots + s) == pl::slots (g)[s].proxyName;
     check (names, "the 24 proxies are named as in the table, group after group");
+    check (text (a, effGetParamDisplay, sel0) == "Sub" && pl::selectorText (0, 2) == "Osc A" && pl::selectorText (0, 5) == "Noise" && pl::kInstances[0] == 5, "the oscillator selector has five instances: Sub, Osc A, Osc B, Osc C, Noise");
     bool past = true;
     text (a, effGetParamName, a->numParams, &past);
     check (! past, "nothing after the last proxy");
@@ -182,7 +196,18 @@ int main (int argc, char** argv)
             for (int s = 0; s < pl::kSlots; ++s)
             {
                 const int p = g * pl::kSlots + s, proxy = prox0 + p, real = pl::realIndex (g, inst, s);
-                if (real < 0) { ++bad; continue; }
+                if (real < 0)
+                {
+                    // Sub and Noise name four parameters (the first four slots); the other four slots have none: the proxy reads 0, shows nothing and ignores a write
+                    if (g != 0 || (inst != 1 && inst != 5) || s < 4) { ++bad; std::printf ("FAIL  no real parameter for %s instance %d\n", pl::slots (g)[s].proxyName, inst); continue; }
+                    a->setParameter (a, proxy, 0.6f);
+                    if (a->getParameter (a, proxy) != 0.0f || ! text (a, effGetParamDisplay, proxy).empty() || ! text (a, effGetParamLabel, proxy).empty()) { ++bad; std::printf ("FAIL  empty slot %s instance %d\n", pl::slots (g)[s].proxyName, inst); }
+                    VstParameterProperties ep;
+                    std::memset (&ep, 0, sizeof ep);
+                    if (a->dispatcher (a, effGetParameterProperties, proxy, 0, &ep, 0.0f) != 0) { ++bad; std::printf ("FAIL  properties of the empty slot %s instance %d\n", pl::slots (g)[s].proxyName, inst); }
+                    ++writes;
+                    continue;
+                }
                 // the proxy shows the real parameter: value, display text, label, properties
                 if (a->getParameter (a, proxy) != a->getParameter (a, real)) { ++bad; std::printf ("FAIL  value of %s for instance %d\n", pl::slots (g)[s].proxyName, inst); }
                 if (text (a, effGetParamDisplay, proxy) != text (a, effGetParamDisplay, real) || text (a, effGetParamLabel, proxy) != text (a, effGetParamLabel, real)) { ++bad; std::printf ("FAIL  text of %s for instance %d\n", pl::slots (g)[s].proxyName, inst); }
@@ -193,13 +218,15 @@ int main (int argc, char** argv)
                 // host sets the proxy: the REAL parameter of the selected instance changes, nothing else does
                 std::vector<float> before;
                 for (int other = 1; other <= pl::kInstances[g]; ++other)
-                    before.push_back (a->getParameter (a, pl::realIndex (g, other, s)));
+                    before.push_back (pl::realIndex (g, other, s) >= 0 ? a->getParameter (a, pl::realIndex (g, other, s)) : 0.0f);
                 const float target = std::fmod (0.31f + 0.173f * static_cast<float> (inst + s), 1.0f);
                 a->setParameter (a, proxy, target);
                 ++writes;
                 bool onlyThis = true;
                 for (int other = 1; other <= pl::kInstances[g]; ++other)
                 {
+                    if (pl::realIndex (g, other, s) < 0)
+                        continue;
                     const float now = a->getParameter (a, pl::realIndex (g, other, s));
                     onlyThis = onlyThis && (other == inst ? a->getParameter (a, proxy) == now : now == before[static_cast<size_t> (other - 1)]);
                 }
@@ -211,7 +238,7 @@ int main (int argc, char** argv)
                 if (a->getParameter (a, proxy) != a->getParameter (a, real)) { ++bad; std::printf ("FAIL  proxy %s does not follow the real parameter of instance %d\n", pl::slots (g)[s].proxyName, inst); }
                 // a write to a real parameter of ANOTHER instance does not move the proxy
                 const int otherInst = inst == 1 ? 2 : 1;
-                if (otherInst <= pl::kInstances[g])
+                if (otherInst <= pl::kInstances[g] && pl::realIndex (g, otherInst, s) >= 0)
                 {
                     const float pv = a->getParameter (a, proxy);
                     a->setParameter (a, pl::realIndex (g, otherInst, s), 0.77f);
@@ -220,6 +247,29 @@ int main (int argc, char** argv)
             }
         }
     check (bad == 0, "every proxy of every instance: value, text, label, properties are the real parameter's; a write reaches exactly that parameter; the proxy follows its own route (" + std::to_string (writes) + " writes)");
+    {
+        // the mapping of the oscillator selector: Sub, A, B, C, Noise; Sub and Noise name the four parameters of their Basic group in the first four slots (docs/MPC.md "Play page")
+        auto idx = [] (const char* key) { const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key); return p ? synthyboy::findParamIndex (p->id) : -1; };
+        const char* const sub[4] = { "sub.waveform", "sub.octave", "sub.pan", "sub.level" };
+        const char* const noise[4] = { "noise.type", "noise.filter", "noise.pan", "noise.level" };
+        bool ok = true;
+        for (int k = 0; k < 4; ++k)
+            ok = ok && idx (sub[k]) >= 0 && idx (noise[k]) >= 0 && pl::realIndex (0, 1, k) == idx (sub[k]) && pl::realIndex (0, 5, k) == idx (noise[k]);
+        for (int s = 4; s < pl::kSlots; ++s)
+            ok = ok && pl::realIndex (0, 1, s) == -1 && pl::realIndex (0, 5, s) == -1;
+        for (int o = 1; o <= 3; ++o)
+            for (int s = 0; s < pl::kSlots; ++s)
+                ok = ok && pl::realIndex (0, o + 1, s) == idx ((std::string ("osc") + std::to_string (o) + "." + pl::slots (0)[s].suffix).c_str());
+        check (ok, "Sub = [waveform, octave, pan, level], Noise = [type, filter, pan, level] in slots 1 .. 4, A / B / C = osc1 .. osc3 as before (instances 2 .. 4)");
+        // a write through the Sub proxies reaches sub.* and nothing of the oscillators
+        a->setParameter (a, sel0, pl::selectorNormalised (0, 1));
+        const float osc1Level = a->getParameter (a, idx ("osc1.level"));
+        a->setParameter (a, prox0 + 3, 0.25f);
+        check (std::fabs (a->getParameter (a, idx ("sub.level")) - 0.25f) < 1e-6f && a->getParameter (a, idx ("osc1.level")) == osc1Level && text (a, effGetParamDisplay, prox0 + 3) == text (a, effGetParamDisplay, idx ("sub.level")), "Sub selected: the Level proxy is sub.level");
+        a->setParameter (a, sel0, pl::selectorNormalised (0, 5));
+        a->setParameter (a, prox0, 1.0f);
+        check (a->getParameter (a, idx ("noise.type")) == 1.0f && text (a, effGetParamDisplay, prox0) == "Sample", "Noise selected: the first proxy is noise.type");
+    }
     closeIt (a);
 
     // ---- a selector change re-reports exactly the group's proxies, once
@@ -254,10 +304,10 @@ int main (int argc, char** argv)
     check (reportOf (a, prox0 + pl::kSlots).count <= 3 && reportOf (a, prox0 + pl::kSlots).last == a->getParameter (a, prox0 + pl::kSlots), "20 changes in a burst: a few coalesced reports, the last one is the current value");
 
     // ---- a host write of a proxy is reported on the real parameter (its own tab moves), not on the proxy; the real parameter written elsewhere is reported on the proxy
-    a->setParameter (a, sel0, pl::selectorNormalised (0, 2));
+    a->setParameter (a, sel0, pl::selectorNormalised (0, 3));
     sleepMs (300);
     resetReports (a);
-    const int real = pl::realIndex (0, 2, 7);
+    const int real = pl::realIndex (0, 3, 7);
     a->setParameter (a, prox0 + 7, 0.42f);
     check (waitFor (1500, [&] { return reportOf (a, real).count >= 1; }) && std::fabs (reportOf (a, real).last - a->getParameter (a, real)) < 1e-6f, "a proxy write: the host is told that Osc 2 Level changed (its own tab)");
     sleepMs (300);
@@ -273,7 +323,7 @@ int main (int argc, char** argv)
     const float proxyBefore = a->getParameter (a, prox0 + pl::kSlots);
     resetReports (a);
     a->dispatcher (a, effSetProgram, 0, 0, nullptr, 0.0f);   // Init: the engine's defaults
-    check (a->getParameter (a, sel0 + 1) == pl::selectorNormalised (1, 3) && a->getParameter (a, sel0) == pl::selectorNormalised (0, 2), "a preset change keeps the selectors");
+    check (a->getParameter (a, sel0 + 1) == pl::selectorNormalised (1, 3) && a->getParameter (a, sel0) == pl::selectorNormalised (0, 3), "a preset change keeps the selectors");
     const float def = synthyboy::toNormalised (synthyboy::paramTable()[pl::realIndex (1, 3, 0)], synthyboy::paramTable()[pl::realIndex (1, 3, 0)].def);
     check (std::fabs (proxyBefore - def) > 0.01f && std::fabs (a->getParameter (a, prox0 + pl::kSlots) - def) < 1e-6f, "... and the proxy has the value of the new sound");
     check (waitFor (1500, [&] { return reportOf (a, prox0 + pl::kSlots).count >= 1; }) && std::fabs (reportOf (a, prox0 + pl::kSlots).last - def) < 1e-6f, "... and the host is told");
@@ -283,16 +333,16 @@ int main (int argc, char** argv)
     a->setParameter (a, sel0 + 1, pl::selectorNormalised (1, 5));
     a->setParameter (a, sel0 + 2, pl::selectorNormalised (2, 9));
     const std::string chunk = getChunk (a);
-    check (chunk.find ("\"mpcPlayOsc\":3,\"mpcPlayEnv\":5,\"mpcPlayLfo\":9") != std::string::npos, "the chunk carries the three selectors");
+    check (chunk.find ("\"mpcPlayOsc5\":3,\"mpcPlayEnv\":5,\"mpcPlayLfo\":9") != std::string::npos && chunk.find ("\"mpcPlayOsc\":") == std::string::npos, "the chunk carries the three selectors (the oscillator one under its five-instance name mpcPlayOsc5)");
     check (chunk.find ("mpcPadPressure") != std::string::npos && chunk.rfind ("mpcPadPressure") > chunk.rfind ("mpcPlayOsc"), "... before the pad pressure members, which stay at the very end");
     AEffect* b = make();
     check (b->getParameter (b, sel0) == 0.0f && b->getParameter (b, sel0 + 1) == 0.0f && b->getParameter (b, sel0 + 2) == 0.0f, "a new instance starts at 1 / 1 / 1");
-    check (setChunk (b, chunk) && text (b, effGetParamDisplay, sel0) == "Osc 3" && text (b, effGetParamDisplay, sel0 + 1) == "Env 5" && text (b, effGetParamDisplay, sel0 + 2) == "LFO 9", "chunk round trip: Osc 3 / Env 5 / LFO 9");
+    check (setChunk (b, chunk) && text (b, effGetParamDisplay, sel0) == "Osc B" && text (b, effGetParamDisplay, sel0 + 1) == "Env 5" && text (b, effGetParamDisplay, sel0 + 2) == "LFO 9", "chunk round trip: Osc B / Env 5 / LFO 9");
     check (waitFor (1500, [&] { return reportOf (b, sel0 + 2).count >= 1; }), "the host is told about the selectors of a restored chunk");
     check (getChunk (b) == chunk, "the chunk of the restored instance is the same");
     // an older chunk (without the members) leaves the selectors as they are, and loads
     std::string old = chunk;
-    const size_t cut = old.find (",\"mpcPlayOsc\"");
+    const size_t cut = old.find (",\"mpcPlayOsc5\"");
     const size_t end = old.find ("\"mpcPlayLfo\":9") + std::strlen ("\"mpcPlayLfo\":9");
     old.erase (cut, end - cut);
     check (old.find ("mpcPlay") == std::string::npos, "(an older chunk: the three members removed)");
@@ -305,6 +355,49 @@ int main (int argc, char** argv)
     std::string bad2 = chunk;
     bad2.replace (bad2.find ("\"mpcPlayEnv\":5"), 14, "\"mpcPlayEnv\":9");
     check (setChunk (b, bad2) && text (b, effGetParamDisplay, sel0 + 1) == "Env 2", "a selector out of range (Env 9) in a chunk is ignored as a whole");
+    // the chunk of the build with THREE oscillator instances ("mpcPlayOsc" 1 .. 3 = A, B, C): the same oscillator after the migration (the selector's instances are now Sub, A, B, C, Noise)
+    {
+        const char* const expect[3] = { "Osc A", "Osc B", "Osc C" };
+        bool ok = true, resaved = true;
+        for (int k = 1; k <= 3; ++k)
+        {
+            std::string threeInst = chunk;
+            threeInst.replace (threeInst.find ("\"mpcPlayOsc5\":3"), std::strlen ("\"mpcPlayOsc5\":3"), "\"mpcPlayOsc\":" + std::to_string (k));
+            AEffect* m = make();
+            ok = ok && setChunk (m, threeInst) && text (m, effGetParamDisplay, sel0) == expect[k - 1] && m->getParameter (m, sel0) == pl::selectorNormalised (0, k + 1)
+                    && pl::realIndex (0, k + 1, 7) == synthyboy::findParamIndex (synthyboy::findParamByKey (("osc" + std::to_string (k) + ".level").c_str())->id);
+            const std::string again = getChunk (m);
+            resaved = resaved && again.find ("\"mpcPlayOsc5\":" + std::to_string (k + 1) + ",") != std::string::npos && again.find ("\"mpcPlayOsc\":") == std::string::npos;
+            closeIt (m);
+        }
+        check (ok, "a chunk of the three-instance build: old Osc 1 / 2 / 3 load as Osc A / B / C, the same oscillator as before");
+        check (resaved, "... and are saved again in the new form (mpcPlayOsc5 with the new number)");
+        std::string tooBig = chunk;
+        tooBig.replace (tooBig.find ("\"mpcPlayOsc5\":3"), std::strlen ("\"mpcPlayOsc5\":3"), "\"mpcPlayOsc\":4");   // 4 was never a value of the old build
+        AEffect* m = make();
+        check (setChunk (m, tooBig) && text (m, effGetParamDisplay, sel0) == "Sub" && text (m, effGetParamDisplay, sel0 + 1) == "Env 1", "an old-form value out of its 1 .. 3 is ignored as a whole (no new numbering is read from the old name)");
+        // the new numbering: Sub (1) and Noise (5) are values of mpcPlayOsc5
+        std::string noiseChunk = chunk, subChunk = chunk;
+        noiseChunk.replace (noiseChunk.find ("\"mpcPlayOsc5\":3"), std::strlen ("\"mpcPlayOsc5\":3"), "\"mpcPlayOsc5\":5");
+        subChunk.replace (subChunk.find ("\"mpcPlayOsc5\":3"), std::strlen ("\"mpcPlayOsc5\":3"), "\"mpcPlayOsc5\":1");
+        AEffect* m2 = make();
+        check (setChunk (m2, noiseChunk) && text (m2, effGetParamDisplay, sel0) == "Noise", "mpcPlayOsc5 = 5 is Noise");
+        closeIt (m2);
+        m2 = make();
+        m2->setParameter (m2, sel0, pl::selectorNormalised (0, 4));
+        check (setChunk (m2, subChunk) && text (m2, effGetParamDisplay, sel0) == "Sub", "mpcPlayOsc5 = 1 is Sub");
+        std::string beyond = chunk;
+        beyond.replace (beyond.find ("\"mpcPlayOsc5\":3"), std::strlen ("\"mpcPlayOsc5\":3"), "\"mpcPlayOsc5\":6");
+        check (setChunk (m2, beyond) && text (m2, effGetParamDisplay, sel0) == "Sub", "mpcPlayOsc5 = 6 is ignored as a whole");
+        closeIt (m2);
+        closeIt (m);
+        // the parser alone, on the exact tails
+        int sel[3] = { 0, 0, 0 };
+        const std::string tail3 = std::string (60, ' ') + "\"x\":1,\"mpcPlayOsc\":2,\"mpcPlayEnv\":3,\"mpcPlayLfo\":4}";
+        check (pl::playFromChunk (tail3.data(), tail3.size(), sel) && sel[0] == 3 && sel[1] == 3 && sel[2] == 4, "playFromChunk: old osc 2 (B) is instance 3");
+        const std::string tail5 = std::string (60, ' ') + "\"x\":1,\"mpcPlayOsc5\":5,\"mpcPlayEnv\":6,\"mpcPlayLfo\":10}";
+        check (pl::playFromChunk (tail5.data(), tail5.size(), sel) && sel[0] == 5 && sel[1] == 6 && sel[2] == 10, "playFromChunk: the new form");
+    }
     closeIt (b);
     closeIt (c);
 
@@ -326,6 +419,77 @@ int main (int argc, char** argv)
         check (std::fabs (q->getParameter (q, pl::realIndex (1, 2, 4)) - edited) > 0.01f, "(a second program selection loads the program: the protection was armed once)");
         echo.store (false);
         closeIt (q);
+    }
+
+    // ---- the Q proxies (shell-mpc/q_router.h): what the group the UI sets maps the four Q parameters to. The UI is not in this test: the debug file of the plugin sets the group (SYNTHYBOY_MPC_Q_FAKE_FILE)
+    {
+        auto idx = [] (const char* key) { const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key); return p ? synthyboy::findParamIndex (p->id) : -1; };
+        const int tLevel = idx ("osc1.level"), tPan = idx ("osc1.pan"), tSubLevel = idx ("sub.level"), tCut = idx ("filter1.cutoff");
+        auto writeGroup = [&] (const std::string& line) { if (FILE* f = std::fopen (qFake.c_str(), "w")) { std::fputs ((line + "\n").c_str(), f); std::fclose (f); } };
+        AEffect* qa = make();
+        sleepMs (400);
+        bool none = true;
+        for (int i = 0; i < 4; ++i)
+            none = none && qa->getParameter (qa, q0 + i) == 0.0f && text (qa, effGetParamDisplay, q0 + i).empty();
+        check (none, "with no group the four Q proxies read 0 and show nothing");
+        resetReports (qa);
+        writeGroup (std::to_string (tLevel) + " -1 " + std::to_string (tPan) + " " + std::to_string (tSubLevel));
+        check (waitFor (2000, [&] { for (int i = 0; i < 4; ++i) if (reportOf (qa, q0 + i).count < 1) return false; return true; }), "a group is set: the host is told the values of all four Q proxies");
+        sleepMs (400);
+        bool once = true;
+        for (int i = 0; i < 4; ++i)
+            once = once && reportOf (qa, q0 + i).count == 1 && reportOf (qa, q0 + i).last == qa->getParameter (qa, q0 + i);
+        check (once, "... once each, with the value the plugin reports on a read");
+        check (qa->getParameter (qa, q0) == qa->getParameter (qa, tLevel) && qa->getParameter (qa, q0 + 1) == 0.0f && qa->getParameter (qa, q0 + 2) == qa->getParameter (qa, tPan) && qa->getParameter (qa, q0 + 3) == qa->getParameter (qa, tSubLevel),
+              "getParameter on Q n is the target's value (0 for none)");
+        check (text (qa, effGetParamDisplay, q0) == text (qa, effGetParamDisplay, tLevel) && text (qa, effGetParamLabel, q0) == text (qa, effGetParamLabel, tLevel) && text (qa, effGetParamDisplay, q0 + 1).empty()
+               && text (qa, effGetParamName, q0 + 1) == "Q 2", "display text and label are the target's, a Q without a target shows nothing (the name stays Q n)");
+        {
+            VstParameterProperties qp, rp;
+            std::memset (&qp, 0, sizeof qp); std::memset (&rp, 0, sizeof rp);
+            check (qa->dispatcher (qa, effGetParameterProperties, q0, 0, &qp, 0.0f) == 1 && qa->dispatcher (qa, effGetParameterProperties, tLevel, 0, &rp, 0.0f) == 1 && std::memcmp (&qp, &rp, sizeof qp) == 0, "the properties of a Q are its target's");
+        }
+        // setParameter on Q 1 writes the target and tells the host about the REAL parameter, not about the Q that was written
+        resetReports (qa);
+        qa->setParameter (qa, q0, 0.42f);
+        const synthyboy::ParamInfo& li = synthyboy::paramTable()[tLevel];
+        const float expected = synthyboy::toNormalised (li, synthyboy::constrainValue (li, synthyboy::fromNormalised (li, 0.42f)));
+        check (std::fabs (qa->getParameter (qa, tLevel) - expected) < 1e-6f && qa->getParameter (qa, q0) == qa->getParameter (qa, tLevel), "setParameter on Q 1 writes the target (the same write as the host's own)");
+        check (waitFor (1500, [&] { return reportOf (qa, tLevel).count >= 1; }) && std::fabs (reportOf (qa, tLevel).last - expected) < 1e-6f, "the host is told that the real parameter changed (its own page follows)");
+        sleepMs (400);
+        check (reportOf (qa, q0).count == 0, "... and the Q is not reported back to the host that wrote it");
+        qa->setParameter (qa, q0, qa->getParameter (qa, q0));
+        qa->setParameter (qa, q0 + 1, 0.9f);
+        check (qa->getParameter (qa, q0 + 1) == 0.0f, "an echo writes nothing, a write to a Q without target is ignored");
+        // the real parameter changes by its own route: the Q follows
+        resetReports (qa);
+        qa->setParameter (qa, tPan, 0.9f);
+        check (waitFor (1500, [&] { return reportOf (qa, q0 + 2).count >= 1; }) && std::fabs (reportOf (qa, q0 + 2).last - 0.9f) < 1e-5f && qa->getParameter (qa, q0 + 2) == qa->getParameter (qa, tPan), "a write on the target's own page moves the Q (reported)");
+        // a new group: the host is told the four new values
+        resetReports (qa);
+        writeGroup (std::to_string (tCut) + " " + std::to_string (tLevel) + " -1 -1");
+        check (waitFor (2000, [&] { for (int i = 0; i < 4; ++i) if (reportOf (qa, q0 + i).count < 1) return false; return true; }) && reportOf (qa, q0).last == qa->getParameter (qa, tCut) && reportOf (qa, q0 + 2).last == 0.0f && reportOf (qa, q0 + 3).last == 0.0f,
+              "another group: the host is told the four new values (0 for the Qs without a target)");
+        // the Q proxies are not in the chunk and a group does not change it
+        const std::string withGroup = getChunk (qa);
+        writeGroup ("-1 -1 -1 -1");
+        sleepMs (400);
+        check (withGroup == getChunk (qa) && withGroup.find ("mpcQ") == std::string::npos && withGroup.find ("\"Q ") == std::string::npos, "the chunk does not hold the Q proxies or the group");
+        // the restore window: a write to a Q is ignored (the chunk wins), like a Play proxy
+        writeGroup (std::to_string (tLevel) + " -1 -1 -1");
+        sleepMs (400);
+        qa->setParameter (qa, tPan, 0.5f);   // an ordinary edit ends any window of an earlier chunk
+        const std::string project = getChunk (qa);
+        const float kept = qa->getParameter (qa, tLevel);
+        check (setChunk (qa, project), "(a chunk is restored: the window is open)");
+        qa->setParameter (qa, q0, std::fabs (kept - 0.6f) < 0.05f ? 0.2f : 0.6f);
+        check (qa->getParameter (qa, tLevel) == kept, "a write to a Q inside the restore window is ignored");
+        qa->setParameter (qa, q0, kept);
+        check (qa->getParameter (qa, tLevel) == kept, "... and its echo changes nothing");
+        // not automatable, and a restored chunk does not touch the group
+        check (qa->dispatcher (qa, effCanBeAutomated, q0, 0, nullptr, 0.0f) == 0, "a Q proxy is not offered for automation");
+        closeIt (qa);
+        std::remove (qFake.c_str());
     }
 
     // ---- no feedback loop: a host that echoes every report back

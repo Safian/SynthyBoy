@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "play_osc.h"
 #include "synthyboy/env_display.h"
 #include "views.h"
 
@@ -17,8 +18,9 @@ namespace synthyboy_mpc { namespace overlay {
 namespace play
 {
 constexpr int kPanels = 3;
-constexpr int kOscs = 3, kEnvs = 6, kLfos = 10;                 // the instances of the own engine (LiveValues::kNumEnvs / kNumLfos, three oscillators)
-constexpr int kInstancesOf[kPanels] = { kOscs, kEnvs, kLfos };
+constexpr int kOscs = 3, kEnvs = 6, kLfos = 10;                 // the instances of the own engine (LiveValues::kNumEnvs / kNumLfos, three wavetable oscillators)
+constexpr int kOscSelections = playosc::kInstances;            // the oscillator selector: Sub, A, B, C, Noise (play_osc.h); the picture exists for A, B, C only
+constexpr int kInstancesOf[kPanels] = { kOscSelections, kEnvs, kLfos };
 constexpr int kPanelW = 400, kPanelGap = 17;                    // 3 * 400 + 2 * 17 = 1234 px: the region of the view
 constexpr int kTitleCell = 3;                                   // pixels per font pixel of the titles
 constexpr int kPlotX = 10, kPlotTop = 40, kPlotBottomMargin = 8, kPlotW = 380;
@@ -28,6 +30,11 @@ constexpr uint32_t kPanelRgb = 0x262527, kFrameRgb = 0xff2e63, kRestFrameRgb = 0
 /** The title of panel p (0 oscillator, 1 envelope, 2 LFO) for the instance n (1 ..). */
 inline std::string title (int p, int n)
 {
+    if (p == 0)
+    {
+        static const char* const kOscTitles[kOscSelections] = { "SUB", "OSC A", "OSC B", "OSC C", "NOISE" };
+        return kOscTitles[std::clamp (n, 1, kOscSelections) - 1];
+    }
     static const char* const kNames[kPanels] = { "OSC ", "ENV ", "LFO " };
     return kNames[p] + std::to_string (n);
 }
@@ -101,7 +108,7 @@ public:
     {
         ++counters_.updates;
         bool changed = false;
-        const int want[play::kPanels] = { std::clamp (in.instance->playSelection (0), 1, play::kOscs), std::clamp (in.instance->playSelection (1), 1, play::kEnvs),
+        const int want[play::kPanels] = { std::clamp (in.instance->playSelection (0), 1, play::kOscSelections), std::clamp (in.instance->playSelection (1), 1, play::kEnvs),
                                            std::clamp (in.instance->playSelection (2), 1, play::kLfos) };
         std::shared_ptr<const synthyboy::StateContent> content = in.instance->content();
         const synthyboy::IContentStore* store = in.instance->contentStore();
@@ -113,7 +120,10 @@ public:
             {
                 sel_[p] = want[p];
                 const char* prefix[play::kPanels] = { "osc", "env", "lfo" };
-                group_[p] = std::make_unique<ParamGroup> (std::string (prefix[p]) + std::to_string (sel_[p]) + ".");
+                if (p == 0)
+                    group_[p] = std::make_unique<ParamGroup> (sel_[0] == playosc::kSub ? std::string ("sub.") : (sel_[0] == playosc::kNoise ? std::string ("noise.") : std::string ("osc") + std::to_string (playosc::oscNumber (sel_[0])) + "."));
+                else
+                    group_[p] = std::make_unique<ParamGroup> (std::string (prefix[p]) + std::to_string (sel_[p]) + ".");
                 forced_[p] = true;
                 have_[p] = false;
                 changed = true;
@@ -121,14 +131,26 @@ public:
         }
         if (! group_[0])
             return false;
-        // ---- oscillator
+        // ---- oscillator (Sub and Noise have no cycle picture in this view: an empty panel with the grid, the plugin-drawn compact view shows them)
+        if (playosc::oscNumber (sel_[0]) == 0)
+        {
+            if (! have_[0] || forced_[0])
+            {
+                std::fill (cycle_.begin(), cycle_.end(), 0.0f);
+                kind_ = synthyboy::OscCycle::Kind::off;
+                have_[0] = true;
+                forced_[0] = false;
+                changed = true;
+            }
+        }
+        else
         {
             if (! oc_)
                 oc_ = std::make_unique<synthyboy::OscCycle>();
             float t[4] = { -1, -1, -1, -1 };
             if (in.targets != nullptr)
                 for (int i = 0; i < 4; ++i)
-                    t[i] = std::round (in.targets[(sel_[0] - 1) * 4 + i] * 100.0f) / 100.0f;
+                    t[i] = std::round (in.targets[(playosc::oscNumber (sel_[0]) - 1) * 4 + i] * 100.0f) / 100.0f;
             const bool data = group_[0]->read (*in.instance) || newContent || std::memcmp (t, lastTargets_, sizeof t) != 0;
             if ((data || ! have_[0]) && (forced_[0] || ! have_[0] || budget_[0].due (in.nowMs)))
             {
@@ -138,7 +160,7 @@ public:
                     oc_->setContent (content != nullptr ? *content : synthyboy::StateContent {}, store);
                 }
                 synthyboy::OscCycle::Request req;
-                req.osc = sel_[0];
+                req.osc = playosc::oscNumber (sel_[0]);
                 if (in.targets != nullptr)
                 {
                     req.framePercent = t[0];
