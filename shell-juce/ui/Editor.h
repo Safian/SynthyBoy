@@ -84,6 +84,7 @@ private:
     void timerCallback() override;
     void parameterGestureChanged (int index, bool starting) override;
     void showMenu();
+    void showPresetMenu();
     void updateAbLabel();
     ParamValues readLiveValues() const { return readAllValues (host.parameterStore()); }
     void applyValues (const ParamValues& values) { writeAllValues (host.parameterStore(), values); }

@@ -163,6 +163,27 @@ void TopBar::paint (juce::Graphics& g)
     g.drawFittedText (presetName, nameArea.withHeight (juce::jmax (h, getHeight())), juce::Justification::centred, 1);
 }
 
+void TopBar::mouseDown (const juce::MouseEvent& e)
+{
+    const auto nameArea = juce::Rectangle<int> (prev.getRight(), 0, juce::jmax (0, next.getX() - prev.getRight()), getHeight());
+    if (nameArea.contains (e.getPosition()))
+    {
+        if (onPresetNameClick)
+            onPresetNameClick();
+    }
+}
+
+void TopBar::mouseMove (const juce::MouseEvent& e)
+{
+    const auto nameArea = juce::Rectangle<int> (prev.getRight(), 0, juce::jmax (0, next.getX() - prev.getRight()), getHeight());
+    setMouseCursor (nameArea.contains (e.getPosition()) ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+}
+
+void TopBar::mouseExit (const juce::MouseEvent&)
+{
+    setMouseCursor (juce::MouseCursor::NormalCursor);
+}
+
 // ---- MacroRow ---------------------------------------------------------------------------------------------------------------------
 
 MacroRow::MacroRow (UiContext& context) : ctx (context)

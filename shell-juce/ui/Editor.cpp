@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "Editor.h"
+#include <map>
 
 namespace synthyboy::ui
 {
@@ -36,6 +37,7 @@ SynthyBoyEditor::SynthyBoyEditor (UiHost& h)
     top->onAbToggle = [this] { toggleAb(); };
     top->onAssignToggle = [this] { setSourceBarOpen (! sourcesOpen); };
     top->onMenu = [this] { showMenu(); };
+    top->onPresetNameClick = [this] { showPresetMenu(); };
     top->onVoiceBadge = [this]
     {
         tabs->select (Page::glb, false);

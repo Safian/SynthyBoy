@@ -48,10 +48,13 @@ public:
     void setVoiceBadge (int active, int cap);
     bool voiceBadgeShown() const noexcept { return voices.isVisible(); }
 
-    std::function<void()> onUndo, onRedo, onAbToggle, onAssignToggle, onMenu, onVoiceBadge;
+    std::function<void()> onUndo, onRedo, onAbToggle, onAssignToggle, onMenu, onVoiceBadge, onPresetNameClick;
 
     void resized() override;
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent& e) override;
+    void mouseMove (const juce::MouseEvent& e) override;
+    void mouseExit (const juce::MouseEvent& e) override;
 
     juce::TextButton prev { "<" }, next { ">" };
     juce::TextButton undo { "U" }, redo { "R" };
