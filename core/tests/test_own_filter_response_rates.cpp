@@ -53,12 +53,22 @@ float hzAt (int i) { return kMin * std::pow (kMax / kMin, static_cast<float> (i)
 int indexOf (float hz) { return static_cast<int> (std::lround (std::log (hz / kMin) / std::log (kMax / kMin) * (kPoints - 1))); }
 float at (const std::vector<float>& c, float hz) { return c[static_cast<size_t> (indexOf (hz))]; }
 
-bool finiteAndSane (const std::vector<float>& c)
+bool inRange (const std::vector<float>& c)
 {
+    return std::all_of (c.begin(), c.end(), [] (float x) { return std::isfinite (x) && x >= -120.0f && x <= 60.0f; });
+}
+
+/** In range AND carrying a signal (compute () clamps to the range by construction: the range alone proves nothing; a filter that ran away shows -120 dB flat; a flat 0 dB is legal: a style a model does not have passes the signal). */
+bool hasSignal (const std::vector<float>& c)
+{
+    float hi = c[0];
     for (float x : c)
+    {
         if (!std::isfinite (x) || x < -120.0f || x > 60.0f)
             return false;
-    return true;
+        hi = std::max (hi, x);
+    }
+    return hi > -100.0f;
 }
 
 constexpr int kAnalog = 0, kNormal = 22, kComb = 6;
@@ -80,10 +90,15 @@ TEST (own_filter_response_analog_24_db_curves_agree_across_sample_rates)
     const auto c44 = curve (fr44, v);
     const auto c48 = curve (fr48, v);
     const auto c96 = curve (fr96, v);
-    CHECK (finiteAndSane (c44));
-    CHECK (finiteAndSane (c48));
-    CHECK (finiteAndSane (c96));
+    CHECK (hasSignal (c44));
+    CHECK (hasSignal (c48));
+    CHECK (hasSignal (c96));
 
+    // The filters are digital (a bilinear transform at the native rate, filters/classic_filters.h svfSetup: g = tan (pi fc / sr)); the same filter therefore has a slightly
+    // different response at different rates: a frequency f at rate sr acts like the warped frequency tan (pi f / sr) / tan (pi fc / sr). That is what the engine does and
+    // what the display must show. Measured: 1.13 dB at 4.97 kHz between 44.1 and 96 kHz (24 dB, cutoff 1 kHz). So:
+    //  1. the raw spread is bounded by what the warp predicts (1.3 dB, with margin) and is NOT zero (a zero would mean the display ignores the rate);
+    //  2. after undoing the warp analytically the curves agree to 0.05 dB (this is the check that the measurement method is sound).
     float maxDiff = 0.0f, worstHz = 0.0f;
     for (int i = 0; i < kPoints; ++i)
     {
@@ -98,7 +113,29 @@ TEST (own_filter_response_analog_24_db_curves_agree_across_sample_rates)
             maxDiff = d, worstHz = hz;
     }
     std::printf ("    analog 24 dB 1 kHz (20 Hz .. 5 kHz): worst spread across 44.1 / 48 / 96 kHz is %.3f dB at %.1f Hz\n", maxDiff, worstHz);
-    CHECK (maxDiff <= 1.0f);
+    CHECK (maxDiff <= 1.3f);
+    CHECK (maxDiff >= 0.8f);
+
+    const double fc = 1000.0;
+    const double t44 = std::tan (3.14159265358979323846 * fc / kSr44), t96 = std::tan (3.14159265358979323846 * fc / kSr96);
+    auto at96 = [&] (double hz) // c96 at a frequency, linear interpolation of dB on the log axis
+    {
+        const double pos = std::log (hz / kMin) / std::log (kMax / kMin) * (kPoints - 1);
+        const int k = std::clamp (static_cast<int> (pos), 0, kPoints - 2);
+        const double fr = pos - k;
+        return (1.0 - fr) * static_cast<double> (c96[static_cast<size_t> (k)]) + fr * static_cast<double> (c96[static_cast<size_t> (k + 1)]);
+    };
+    double worstWarped = 0.0;
+    for (int i = 0; i < kPoints; ++i)
+    {
+        const double hz = static_cast<double> (hzAt (i));
+        if (hz > 5000.0)
+            break;
+        const double mapped = kSr96 / 3.14159265358979323846 * std::atan (std::tan (3.14159265358979323846 * hz / kSr44) / t44 * t96);
+        worstWarped = std::max (worstWarped, std::fabs (static_cast<double> (c44[static_cast<size_t> (i)]) - at96 (mapped)));
+    }
+    std::printf ("    after the bilinear frequency warp of the 44.1 kHz curve onto 96 kHz: worst difference %.4f dB\n", worstWarped);
+    CHECK (worstWarped < 0.05);
 }
 
 TEST (own_filter_response_high_resonance_peak_agrees_across_sample_rates)
@@ -113,9 +150,9 @@ TEST (own_filter_response_high_resonance_peak_agrees_across_sample_rates)
         const auto c44 = curve (fr44, v);
         const auto c48 = curve (fr48, v);
         const auto c96 = curve (fr96, v);
-        CHECK (finiteAndSane (c44));
-        CHECK (finiteAndSane (c48));
-        CHECK (finiteAndSane (c96));
+        CHECK (hasSignal (c44));
+        CHECK (hasSignal (c48));
+        CHECK (hasSignal (c96));
 
         auto findPeak = [] (const std::vector<float>& c, float& peakDb, float& peakHz)
         {
@@ -164,7 +201,7 @@ TEST (own_filter_response_fmax_above_nyquist_at_44100_is_finite)
                 req.fMax = fMax;
                 std::vector<float> db (kPoints, -999.0f);
                 CHECK (fr44.compute (v, req, db.data(), kPoints));
-                CHECK (finiteAndSane (db));
+                CHECK (hasSignal (db));
 
                 // A request whose entire range sits at or above Nyquist clamps to the Nyquist bin.
                 FilterResponse::Request atNyq;
@@ -172,7 +209,7 @@ TEST (own_filter_response_fmax_above_nyquist_at_44100_is_finite)
                 atNyq.fMax = fMax;
                 std::vector<float> tail (32, -999.0f);
                 CHECK (fr44.compute (v, atNyq, tail.data(), 32));
-                CHECK (finiteAndSane (tail));
+                CHECK (inRange (tail)); // the Nyquist end of a low pass is legitimately quiet
                 for (float x : tail)
                     CHECK (std::fabs (x - db.back()) < 1.0e-5f);
             }
@@ -195,7 +232,7 @@ TEST (own_filter_response_every_model_at_96000_is_finite_and_fast)
                 const bool ok = fr.compute (v, {}, db.data(), 256);
                 const double ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
                 CHECK (ok);
-                if (!CHECK (finiteAndSane (db)))
+                if (!CHECK (hasSignal (db)))
                     std::printf ("    96 kHz model %d style %d res %.0f: not finite / out of range\n", m, st, res);
                 sumMs += ms;
                 ++runs;

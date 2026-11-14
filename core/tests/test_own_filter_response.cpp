@@ -57,21 +57,32 @@ float hzAt (int i) { return kMin * std::pow (kMax / kMin, static_cast<float> (i)
 int indexOf (float hz) { return static_cast<int> (std::lround (std::log (hz / kMin) / std::log (kMax / kMin) * (kPoints - 1))); }
 float at (const std::vector<float>& c, float hz) { return c[static_cast<size_t> (indexOf (hz))]; }
 
-/** The frequency (Hz) where the curve first falls to -12 dB or lower, searched from the passband upwards (linear interpolation on the log axis). */
+/** The frequency (Hz) where the curve first falls to -12 dB or lower, searched from the passband upwards (linear interpolation of dB on the log axis). */
 float crossing12 (const std::vector<float>& c)
 {
-    for (int i = indexOf (30.0f); i < kPoints; ++i)
+    for (int i = std::max (1, indexOf (30.0f)); i < kPoints; ++i)
         if (c[static_cast<size_t> (i)] <= -12.0f)
-            return hzAt (i);
+        {
+            const float a = c[static_cast<size_t> (i - 1)], b = c[static_cast<size_t> (i)];
+            const float t = a > b ? (a + 12.0f) / (a - b) : 1.0f; // a > -12 >= b, except where the curve starts below -12 dB
+            const float x = std::clamp (t, 0.0f, 1.0f);
+            return std::exp (std::log (hzAt (i - 1)) * (1.0f - x) + std::log (hzAt (i)) * x);
+        }
     return 0.0f;
 }
 
-bool finiteAndSane (const std::vector<float>& c)
+/** A curve a test can trust: the values are inside the clamp (compute () guarantees finite values and the range by construction, so that alone proves nothing) AND the
+    curve carries a signal: a filter that ran away (the engine zeroes a block that exceeds 200) or produced NaN everywhere would show -120 dB flat. (A flat 0 dB is legal: a style a model does not have passes the signal.) */
+bool hasSignal (const std::vector<float>& c)
 {
+    float hi = c[0];
     for (float x : c)
+    {
         if (!std::isfinite (x) || x < -120.0f || x > 60.0f)
             return false;
-    return true;
+        hi = std::max (hi, x);
+    }
+    return hi > -100.0f;
 }
 
 constexpr int kAnalog = 0, kNormal = 22, kComb = 6;
@@ -82,8 +93,8 @@ TEST (own_filter_response_analog_12_and_24_db_low_pass)
     FilterResponse fr (kSr);
     const auto c12 = curve (fr, patch (kAnalog, 0, 1000.0f));
     const auto c24 = curve (fr, patch (kAnalog, 1, 1000.0f));
-    CHECK (finiteAndSane (c12));
-    CHECK (finiteAndSane (c24));
+    CHECK (hasSignal (c12));
+    CHECK (hasSignal (c24));
     std::printf ("    analog 12 dB: 100 Hz %.2f dB, 1 kHz %.2f dB, 8 kHz %.2f dB; 24 dB: 100 Hz %.2f, 1 kHz %.2f, 8 kHz %.2f\n", at (c12, 100.0f), at (c12, 1000.0f), at (c12, 8000.0f),
                 at (c24, 100.0f), at (c24, 1000.0f), at (c24, 8000.0f));
     CHECK (std::fabs (at (c12, 100.0f)) < 1.5f);
@@ -106,7 +117,14 @@ TEST (own_filter_response_resonance_makes_a_peak_near_the_cutoff)
     std::printf ("    resonance 90 %%: passband %.2f dB, peak %.2f dB at %.0f Hz (without resonance %.2f dB at 1 kHz)\n", pass, peak, peakHz, at (flat, 1000.0f));
     CHECK (peak >= pass + 6.0f);
     CHECK (peakHz > 500.0f && peakHz < 2000.0f);
-    CHECK (finiteAndSane (res));
+    // the curve without resonance has no peak and sits well below the resonant one at the cutoff (a display that ignored the knob would fail here)
+    float flatPeak = -200.0f;
+    for (float x : flat)
+        flatPeak = std::max (flatPeak, x);
+    CHECK (flatPeak <= at (flat, 100.0f) + 0.5f);
+    CHECK (at (res, 1000.0f) > at (flat, 1000.0f) + 10.0f);
+    CHECK (hasSignal (flat));
+    CHECK (hasSignal (res));
 }
 
 TEST (own_filter_response_cutoff_octave_translates_the_curve)
@@ -135,11 +153,23 @@ TEST (own_filter_response_high_pass_and_band_pass_styles)
         CHECK (at (c, 100.0f) < -15.0f);
         CHECK (at (c, 8000.0f) > -3.0f);
     }
+    {
+        const auto hp12 = curve (fr, patch (kNormal, 4, 1000.0f)), hp24 = curve (fr, patch (kNormal, 5, 1000.0f));
+        CHECK (at (hp24, 100.0f) < at (hp12, 100.0f) - 15.0f); // 24 dB per octave is steeper than 12 on the way down
+    }
     for (int st : { 6, 7 })
     {
         const auto c = curve (fr, patch (kNormal, st, 1000.0f));
         CHECK (at (c, 100.0f) < at (c, 1000.0f) - 12.0f);
         CHECK (at (c, 10000.0f) < at (c, 1000.0f) - 12.0f);
+        const int top = static_cast<int> (std::max_element (c.begin(), c.end()) - c.begin());
+        CHECK (hzAt (top) > 900.0f && hzAt (top) < 1100.0f); // the band pass peaks at its cutoff ...
+        CHECK (c[static_cast<size_t> (top)] < -4.0f && c[static_cast<size_t> (top)] > -14.0f); // ... at -6 dB (12) / -12 dB (24), as this model is built
+    }
+    {
+        const auto bp12 = curve (fr, patch (kNormal, 6, 1000.0f)), bp24 = curve (fr, patch (kNormal, 7, 1000.0f));
+        CHECK (at (bp24, 100.0f) < at (bp12, 100.0f) - 10.0f);
+        CHECK (at (bp24, 10000.0f) < at (bp12, 10000.0f) - 10.0f);
     }
 }
 
@@ -185,7 +215,7 @@ TEST (own_filter_response_every_model_is_finite_and_fast)
                 const bool ok = fr.compute (v, {}, db.data(), 256);
                 const double ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
                 CHECK (ok);
-                if (!CHECK (finiteAndSane (db)))
+                if (!CHECK (hasSignal (db)))
                     std::printf ("    model %d style %d res %.0f: not finite / out of range\n", m, st, res);
                 sumMs += ms;
                 ++runs;
@@ -275,7 +305,10 @@ TEST (own_filter_response_switched_off_returns_false)
     for (float x : db)
         CHECK (x == 0.0f);
     r2.filter = 3;
+    std::fill (db.begin(), db.end(), 5.0f);
     CHECK (!fr.compute (v, r2, db.data(), 64));
+    for (float x : db)
+        CHECK (x == 0.0f);
 }
 
 namespace
@@ -407,6 +440,7 @@ TEST (own_filter_response_is_independent_of_a_running_engine)
         std::vector<float> l (256), r (256);
         Event on = sbtest::noteOn (0, 48, 0.9f);
         e->process (&on, 1, l.data(), r.data(), 256);
+        blocks.fetch_add (1);
         while (!stop.load())
         {
             e->process (nullptr, 0, l.data(), r.data(), 256);
@@ -416,6 +450,8 @@ TEST (own_filter_response_is_independent_of_a_running_engine)
     FilterResponse fr (kSr);
     ParamValues v = patch (3, 1, 2000.0f, 50.0f);
     const auto ref = curve (fr, v);
+    while (blocks.load() == 0) // the audio thread has started before the compute loop begins: the two really overlap
+        std::this_thread::yield();
     const int rounds = sbtest::scaled (60, 12);
     for (int i = 0; i < rounds; ++i)
     {
@@ -424,5 +460,5 @@ TEST (own_filter_response_is_independent_of_a_running_engine)
     }
     stop = true;
     audio.join();
-    CHECK (blocks.load() > 0);
+    CHECK (blocks.load() > 1);
 }

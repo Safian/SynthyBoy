@@ -455,8 +455,8 @@ private:
         z.post = post;
         return z;
     }
-    static inline float kMidSat = SB_MID_SAT;
-    static inline float kDirtyQ1 = SB_DIRTY_Q1, kDirtySat = SB_DIRTY_SAT;
+    static constexpr float kMidSat = SB_MID_SAT;
+    static constexpr float kDirtyQ1 = SB_DIRTY_Q1, kDirtySat = SB_DIRTY_SAT;
     bool satLoop = false;
     void tpt (int k, float u, float g, float Rloop, float Rhp, float& lp, float& bp, float& hp, bool saturate) noexcept
     {
@@ -665,7 +665,7 @@ private:
     /** The diode ladder (document 05, 6): a two pole high pass in front (cutoff by the blend), four stages that average with their neighbours, a feedback of the
         fourth stage through a fixed 20 Hz high pass, the input stage tanh (0.5 (d' hp - k s4)). The stage dynamics are solved with the trapezoidal rule as a tridiagonal
         system (zero delay feedback inside the ladder); the saturators act on the old states. The corner is on the scale of the measured responses (kDiodeCorner). */
-    static inline float kDiodeCorner = SB_DIODE_CORNER, kDiodeGain = SB_DIODE_GAIN, kDiodePre = 100.0f, kDiodeFb = SB_DIODE_FB, kDiodeW = 1.0f;
+    static constexpr float kDiodeCorner = SB_DIODE_CORNER, kDiodeGain = SB_DIODE_GAIN, kDiodePre = 100.0f, kDiodeFb = SB_DIODE_FB, kDiodeW = 1.0f;
     void diode (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p) noexcept
     {
         const float k = 0.7f + 16.3f * r * r * r;
@@ -849,7 +849,7 @@ private:
     }
 
     double sr = 48000.0;
-    static inline float kAn[6] = { 1.0f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
+    static constexpr float kAn[6] = { 1.0f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
     float s[6] = {};
     Svf fm[4];
     DelayLine comb;

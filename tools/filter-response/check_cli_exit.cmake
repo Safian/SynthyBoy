@@ -1,0 +1,12 @@
+# Runs synthyboy_filter_response with ARGS and expects the exit code EXPECT; for exit code 3 nothing may be printed to stdout (no half curve).
+separate_arguments(argList UNIX_COMMAND "${ARGS}")
+execute_process(COMMAND "${TOOL}" "${PRESET}" ${argList} RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT rc EQUAL ${EXPECT})
+    message(FATAL_ERROR "exit code ${rc}, expected ${EXPECT} (${err})")
+endif()
+if(EXPECT EQUAL 3 AND NOT "${out}" STREQUAL "")
+    message(FATAL_ERROR "stdout is not empty for bad arguments: ${out}")
+endif()
+if(NOT "${ERRRE}" STREQUAL "" AND NOT err MATCHES "${ERRRE}")
+    message(FATAL_ERROR "stderr does not say '${ERRRE}': ${err}")
+endif()
