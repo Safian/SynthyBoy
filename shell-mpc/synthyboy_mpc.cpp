@@ -22,6 +22,7 @@
 #include "synthyboy/user_content.h"
 
 #include "mpc_vst2_abi.h"
+#include "output_stage.h"
 #include "plugin_paths.h"
 #include "program_list.h"
 
@@ -92,6 +93,11 @@
 #endif
 #if SYNTHYBOY_MPC_CALLBACK_STATS
 #include "callback_stats.h"
+#endif
+
+// Make-up gain of the output stage in dB (CMake cache entry of the same name, docs/MPC.md "Output level"). 0 = only the limiter.
+#ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
+#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 6.0
 #endif
 
 // ---------------------------------------------------------------------------
@@ -271,6 +277,10 @@ struct PluginInstance
 
     // Thread-safe parameter mirror (single source of truth for all threads)
     std::atomic<float> paramMirror[synthyboy::kMaxParams];
+
+    // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and the peak limiter behind it.
+    // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
+    synthyboy_mpc::OutputStage outputStage;
 
     // Host callback (for transport queries)
     audioMasterCallback audioMaster = nullptr;
@@ -472,6 +482,7 @@ struct PluginInstance
 
     PluginInstance()
     {
+        outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
 #if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL
         engine = synthyboy::createEngine(synthyboy::EngineKind::vital);
@@ -869,6 +880,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 synthyboy::Quality quality = synthyboy::qualityForTier(synthyboy::Tier::low);
                 quality.realtime = true; // live: audio thread never waits for helper thread
                 inst->engine->prepare(inst->sampleRate, inst->maxBlockSize, quality);
+                inst->outputStage.prepare (inst->sampleRate);
                 inst->prepared = true;
                 inst->lastPreparedSampleRate = sr;
                 inst->lastPreparedBlockSize = bs;
@@ -1305,6 +1317,8 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     inst->engine->process(inst->events.count > 0 ? inst->events.slots : nullptr,
                           static_cast<int>(inst->events.count),
                           outputs[0], outputs[1], sampleFrames);
+    // Make-up gain and peak limiter (output_stage.h): what leaves here is what the host gets, so the spectrum below shows the same signal.
+    inst->outputStage.process (outputs[0], outputs[1], sampleFrames);
 #if SYNTHYBOY_MPC_SPECTRUM
     inst->spectrumRing.push (outputs[0], outputs[1], sampleFrames); // the only thing the audio thread does for the display: atomic stores into a preallocated ring
 #endif

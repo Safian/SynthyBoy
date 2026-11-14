@@ -353,3 +353,16 @@ The host asked `effCanDo` only for `"bypass"` (answer 0) and `"receiveVstMidiEve
 Poly aftertouch drives the modulation source "Poly Aftertouch"; the factory preset "MPE Pressure Lead" routes it to Filter 1 Cutoff and Osc 1 Unison Detune, and on the device pressing harder audibly opened the filter (heard by the owner, not measured).
 
 Not measured: the MPCe Q-Link mode from a drum track to plugin parameters, 16 Levels, Note Repeat, pad lighting from a plugin.
+
+## Output level
+
+The MPC shell passes the engine's output through an output stage (`shell-mpc/output_stage.h`) before it reaches the host:
+
+- a fixed make-up gain, `SYNTHYBOY_MPC_OUTPUT_GAIN_DB` (CMake cache entry of `shell-mpc`, default 6 dB, range -24 .. 24; 0 = no gain);
+- a stereo-linked peak limiter behind it with its ceiling 1 dB under full scale: the gain reduction falls at once to what keeps the louder channel at the ceiling (no look-ahead, no latency) and recovers with a time constant of 120 milliseconds. The limiter is always on.
+
+Why: the factory presets are levelled to a four-note chord whose RMS is 20 dB under full scale, with peaks near full scale. On the device that reads as quiet next to the stock instruments, and a preset cannot be raised further without clipping its attack. The gain raises everything; the limiter takes the attacks that would pass full scale.
+
+There is no separate parameter for it: the level control of the instrument is Master Volume (first knob of the second row of the Macros tab), which is saved with the project. The spectrum shows the signal after the output stage, that is what the host gets. The desktop plugin has no output stage.
+
+Tests: `shell-mpc/tests/run_output_stage_test.sh` (the stage alone) and `shell-mpc/tests/output_level_host.cpp` (the plugin against a build with 0 dB: a soft note is louder by the gain, a full chord never passes the ceiling); both run in `shell-mpc/accept.sh`.
