@@ -437,6 +437,7 @@ private:
     /** The whole picture of the view as a scene: the Env and LFO panels, then the plugin-drawn oscillator UI with the cycle picture in its display rectangle. */
     void build (gpu::SceneBuilder& sb) const
     {
+        sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
         play::SceneSink base (sb);
         play::ShiftSink<play::SceneSink> shifted (base, play::kOx, play::kOy);
         if (osc_ == nullptr || osc_->isMain())
