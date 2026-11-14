@@ -777,7 +777,10 @@ def generate_layout(params_path, layout_path, pages_path, out_dir, names_path=DE
     # skin-meta.json: what the MPC skin extras (scripts/mpc-skin-extras/) need to know that ui.json cannot carry
     meta_path = os.path.join(out_dir, "skin-meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump({"format": "synthyboy-mpc-skin-meta", "version": 1, "fnKeys": fn_keys, "tabs": meta_tabs}, f, indent=2, ensure_ascii=False)
+        meta_doc = {"format": "synthyboy-mpc-skin-meta", "version": 1, "fnKeys": fn_keys, "tabs": meta_tabs}
+        if "variant" in layout_doc:   # a layout file that names a skin variant (scripts/overlay-skin/mpc-ui-pages-overlay.json: "overlay"); the extras modules of that variant look at it
+            meta_doc["variant"] = layout_doc["variant"]
+        json.dump(meta_doc, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
     # Report omitted own-engine parameters
