@@ -31,6 +31,13 @@
 
 namespace synthyboy::ui
 {
+struct PresetItem
+{
+    int index = 0;
+    std::string category;
+    std::string name;
+};
+
 /** A MIDI CC map as the shell keeps it: (CC number, parameter key), ascending by CC. */
 using MidiMapBindings = std::vector<std::pair<int, std::string>>;
 
@@ -72,9 +79,13 @@ public:
     /** The two A/B snapshots live with the processor so they survive closing the editor. */
     virtual AbCompare& abCompare() = 0;
 
-    /** Preset browsing is Kick's job; the strip only has prev / next and a name. direction is -1 or +1. */
+    /** Preset browsing: stepPreset steps by direction (-1 or +1), presetName returns the active name. */
     virtual void stepPreset (int direction) = 0;
     virtual juce::String presetName() const = 0;
+    /** Available presets provided by the shell (index 0 is always "Init", followed by factory presets). */
+    virtual std::vector<PresetItem> presetList() const { return {}; }
+    /** Select a preset by index (0 .. presetList().size() - 1). */
+    virtual void selectPreset (int /*index*/) {}
 
     /** MIDI learn (G07, docs/ui-design/15-shell-features.md): the shell keeps a CC -> parameter table (any channel) and saves it in the state.
         startMidiLearn arms one key: the next learnable CC is mapped to it (the CC does not move the knob that first time). Message thread. */

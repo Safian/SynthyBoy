@@ -69,11 +69,11 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override;
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
-    void changeProgramName (int, const juce::String&) override {}
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
+    void changeProgramName (int index, const juce::String& newName) override;
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
@@ -92,8 +92,10 @@ public:
     synthyboy::Tier qualityTier() const noexcept override { return synthyboy::kDefaultTier; }
     juce::MidiKeyboardState& keyboardState() override { return keyboard; }
     synthyboy::ui::AbCompare& abCompare() override { return ab; }
-    void stepPreset (int direction) override { if (presetStepHandler) presetStepHandler (direction); }
+    void stepPreset (int direction) override;
     juce::String presetName() const override { return presetNameText; }
+    std::vector<synthyboy::ui::PresetItem> presetList() const override;
+    void selectPreset (int index) override;
     float outputPeakL() const noexcept override { return peakL.load (std::memory_order_relaxed); }
     float outputPeakR() const noexcept override { return peakR.load (std::memory_order_relaxed); }
     void injectMidiMessage (const juce::MidiMessage& msg) override;
@@ -248,6 +250,16 @@ private:
     std::atomic<uint32_t> scopeWrite { 0 };
     std::mutex uiMidiMutex;
     juce::MidiBuffer uiMidiBuffer;
+
+    struct DesktopProgram
+    {
+        std::string category;
+        std::string name;
+        const char* jsonText = nullptr;
+        size_t jsonSize = 0;
+    };
+    std::vector<DesktopProgram> programList;
+    int currentProgramIndex = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SynthyBoyProcessor)
 };

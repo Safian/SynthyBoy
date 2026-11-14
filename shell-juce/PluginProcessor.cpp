@@ -18,6 +18,7 @@
  */
 
 #include "PluginProcessor.h"
+#include "EmbeddedPresets.h"
 
 #include "synthyboy/midi_events.h"
 #include "EditorAdapter.h"
@@ -103,6 +104,23 @@ SynthyBoyProcessor::SynthyBoyProcessor()
     // the default MIDI CC map (S p.325) in a new instance, unless the default patch brought a map of its own
     if (midiMap.numMappings() == 0)
         applyMapOfPresetChange (nullptr);
+
+    // Program 0: Init
+    programList.push_back ({ "", "Init", nullptr, 0 });
+
+    // Programs 1..112: Factory Presets
+    size_t embeddedCount = 0;
+    const auto* embedded = synthyboy::desktop::getEmbeddedPresets (embeddedCount);
+    programList.reserve (1 + embeddedCount);
+    for (size_t i = 0; i < embeddedCount; ++i)
+    {
+        programList.push_back ({
+            embedded[i].category,
+            embedded[i].name,
+            embedded[i].jsonText,
+            embedded[i].jsonSize
+        });
+    }
 }
 
 void SynthyBoyProcessor::applyMapOfPresetChange (const synthyboy::ui::MidiMapBindings* presetMidiMap)
@@ -548,6 +566,90 @@ double SynthyBoyProcessor::getTailLengthSeconds() const
     return release + effects;
 }
 
+int SynthyBoyProcessor::getNumPrograms()
+{
+    return static_cast<int> (programList.size());
+}
+
+int SynthyBoyProcessor::getCurrentProgram()
+{
+    return currentProgramIndex;
+}
+
+const juce::String SynthyBoyProcessor::getProgramName (int index)
+{
+    if (index >= 0 && index < static_cast<int> (programList.size()))
+        return programList[static_cast<size_t> (index)].name;
+    return {};
+}
+
+void SynthyBoyProcessor::changeProgramName (int, const juce::String&)
+{
+    // Factory program names are fixed
+}
+
+void SynthyBoyProcessor::setCurrentProgram (int index)
+{
+    if (index < 0 || index >= static_cast<int> (programList.size()))
+        return;
+
+    if (index == 0)
+    {
+        initPatch();
+        currentProgramIndex = 0;
+        presetNameText = "Init";
+    }
+    else
+    {
+        const auto& prog = programList[static_cast<size_t> (index)];
+        synthyboy::PresetMeta meta;
+        synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
+        synthyboy::StateContent content;
+        auto result = synthyboy::loadPreset (prog.jsonText, prog.jsonSize, meta, values, content);
+        if (result.status == synthyboy::LoadStatus::ok || result.status == synthyboy::LoadStatus::newer_version)
+        {
+            loadPatch (values, content, nullptr);
+            currentProgramIndex = index;
+            presetNameText = prog.name;
+        }
+    }
+    updateHostDisplay (ChangeDetails().withProgramChanged (true));
+}
+
+void SynthyBoyProcessor::stepPreset (int direction)
+{
+    if (presetStepHandler)
+    {
+        // Keeps backwards-compatibility with unit test mocks
+        presetStepHandler (direction);
+        return;
+    }
+
+    const int total = getNumPrograms();
+    if (total <= 1)
+        return;
+
+    int next = (currentProgramIndex + direction) % total;
+    if (next < 0)
+        next += total;
+
+    setCurrentProgram (next);
+}
+
+std::vector<synthyboy::ui::PresetItem> SynthyBoyProcessor::presetList() const
+{
+    std::vector<synthyboy::ui::PresetItem> list;
+    list.reserve (programList.size());
+    for (size_t i = 0; i < programList.size(); ++i)
+        list.push_back ({ static_cast<int> (i), programList[i].category, programList[i].name });
+    return list;
+}
+
+void SynthyBoyProcessor::selectPreset (int index)
+{
+    setCurrentProgram (index);
+}
+
 bool SynthyBoyProcessor::dragFileOut (const juce::File& file, juce::Component& source)
 {
     return juce::DragAndDropContainer::performExternalDragDropOfFiles (juce::StringArray (file.getFullPathName()), false, &source);
@@ -818,6 +920,8 @@ bool SynthyBoyProcessor::initPatch()
     synthyboy::loadUserDefault (userDir, values, initContent); // untouched (the factory init patch) when there is no default
     applyPatch (values, std::move (initContent), true);
     applyMapOfPresetChange (nullptr); // Init Preset loads the default MIDI map (S p.315)
+    currentProgramIndex = 0;
+    presetNameText = "Init";
     updateHostDisplay (ChangeDetails().withProgramChanged (true));
     return true;
 }
