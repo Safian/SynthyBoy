@@ -48,11 +48,15 @@ struct Paths
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
 };
 
+#ifndef SYNTHYBOY_MPC_OVERLAY_GPU_FRAME_MS
+#define SYNTHYBOY_MPC_OVERLAY_GPU_FRAME_MS 33.3
+#endif
+
 struct Timing
 {
     double detectEveryMs = 100.0;     // 10 checks a second
     double frameEveryMs = 33.3;       // at most 30 pictures a second (two vblanks of a 60 Hz panel)
-    double gpuFrameEveryMs = 33.3;    // the GPU path: the helper draws, the thread only hands over scenes
+    double gpuFrameEveryMs = SYNTHYBOY_MPC_OVERLAY_GPU_FRAME_MS;   // the GPU path: the helper draws, the thread only hands over scenes (33.3: 30 a second like the CPU path; 16.7 for 60)
     double switchesEveryMs = 1000.0;  // kill switch, rotation file, status file
     int unreadableLimit = 20;         // checks in a row (2 s) without a readable framebuffer -> disabled
 };

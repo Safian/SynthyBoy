@@ -87,7 +87,9 @@ public:
         send (makeMsg (kMsgReady, static_cast<uint32_t> (nowMs() - startMs_ + 0.5), 0, 0, 0, 0, 0, text));
         std::fprintf (stderr, "helper %d: ready in %.1f ms, renderer %s, drm fd %d\n", static_cast<int> (getpid()), nowMs() - startMs_, text, drmFd_);
         loop();
+        std::fprintf (stderr, "helper %d: leaving (%s), %lu pictures, %lu late SETPLANE calls, %lu skipped vblanks\n", static_cast<int> (getpid()), g_stop ? "signal" : exitCode_ ? "error" : endReason_, frames_, late_, skipped_);
         cleanupAll();
+        std::fprintf (stderr, "helper %d: plane off, framebuffers and handles removed\n", static_cast<int> (getpid()));
         return exitCode_;
     }
 
@@ -774,7 +776,10 @@ private:
             Msg m;
             const ssize_t n = ::recv (kSock, &m, sizeof m, MSG_DONTWAIT);
             if (n == 0)
-                return false;   // the plugin (or the application) went away
+            {
+                endReason_ = "the socket closed: the plugin or the application went away";
+                return false;
+            }
             if (n < 0)
                 return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
             if (n != static_cast<ssize_t> (sizeof m) || m.magic != kMsgMagic)
@@ -787,7 +792,7 @@ private:
                 case kMsgShow: onShow (m); break;
                 case kMsgScene: dirty_ = true; break;
                 case kMsgHide: onHide(); break;
-                case kMsgQuit: return false;
+                case kMsgQuit: endReason_ = "quit"; return false;
                 default: break;
             }
             if (exitCode_ != 0)
@@ -866,6 +871,7 @@ private:
     bool shown_ = false, dirty_ = false, planeOn_ = false, haveVblank_ = false;
     int w_ = 0, h_ = 0, bw_ = 0, bh_ = 0, panelX_ = 0, panelY_ = 0, rot_ = 90, exitCode_ = 0;
     char viewName_[32] = {};
+    const char* endReason_ = "loop ended";
     unsigned long frames_ = 0, late_ = 0, skipped_ = 0;
     uint32_t lastVblank_ = 0;
     double startMs_ = 0.0, lastFrameMs_ = 0.0, lastDumpCheckMs_ = 0.0;
