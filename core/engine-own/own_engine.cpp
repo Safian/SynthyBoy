@@ -51,6 +51,15 @@ bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept
     return true;
 }
 
+bool setOwnPadPressureToCutoff (IEngine& engine, float amount01) noexcept
+{
+    auto* own = dynamic_cast<own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return false;
+    own->setPadPressureToCutoff (amount01);
+    return true;
+}
+
 namespace own
 {
 namespace
@@ -980,6 +989,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.spectralScratch = spectralScratch.get();
     globals.chokeLatest = &chokeLatest[0][0];
     globals.chokeCounter = chokeCounter;
+    globals.padPressureToCutoff = padPressureToCutoff.load (std::memory_order_relaxed);
 
     const MasterIdx& mi = pi.master;
     const int fxReverbForce = fxReverbForceIndex;
