@@ -68,6 +68,27 @@ class ResolveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             gen.name_width("a#b", 20)
 
+    def test_override_drops_module_prefix_when_tab_shares_it(self):
+        entries = [("e1.a", "Env 1 Attack", "Attack"), ("e1.r", "Env 1 Release", "Release")]
+        out = gen.resolve_tab_names(entries, {"e1.a", "e1.r"}, {"e1.r": "Env 1 Release"})
+        self.assertEqual(out, {"e1.a": "Attack", "e1.r": "Release"})
+
+    def test_override_drops_module_prefix_when_single_control_on_tab(self):
+        entries = [("e1.r", "Env 1 Release", "Release")]
+        out = gen.resolve_tab_names(entries, {"e1.r"}, {"e1.r": "Env 1 Release"})
+        self.assertEqual(out, {"e1.r": "Release"})
+
+    def test_override_keeps_module_prefix_when_tab_holds_multiple_modules(self):
+        entries = [("m.1", "Macro 1", "Macro 1"), ("e1.r", "Env 1 Release", "Release")]
+        out = gen.resolve_tab_names(entries, {"m.1", "e1.r"}, {"e1.r": "Env 1 Release"})
+        self.assertEqual(out, {"m.1": "Macro 1", "e1.r": "Env 1 Release"})
+
+    def test_override_keeps_module_prefix_when_dropping_causes_clash(self):
+        entries = [("e1.r", "Env 1 Release", "Release"), ("e1.r2", "Env 1 Alt", "Release")]
+        out = gen.resolve_tab_names(entries, {"e1.r", "e1.r2"}, {"e1.r": "Env 1 Release"})
+        self.assertEqual(out["e1.r"], "Env 1 Release")
+        self.assertEqual(out["e1.r2"], "Release")
+
 
 class NameRulesTests(unittest.TestCase):
     """The names the generator hands to the skin, for every layout file of scripts/ (the V32 one and its V34 variant)."""
@@ -129,7 +150,10 @@ class NameRulesTests(unittest.TestCase):
             for tab in meta["tabs"]:
                 for key, name in tab["names"].items():
                     if key in self.overrides:
-                        self.assertEqual(name, self.overrides[key])
+                        if tab["name"] == "Env 1" and key == "env1.release":
+                            self.assertEqual(name, "Release", "%s / %s" % (tab["name"], key))
+                        else:
+                            self.assertEqual(name, self.overrides[key], "%s / %s" % (tab["name"], key))
                     elif name in short[key]:
                         plain += 1
                     else:   # prefixed because of a clash inside the tab: the Kick label is the end of the name
@@ -143,6 +167,12 @@ class NameRulesTests(unittest.TestCase):
         self.assertEqual(tabs["Mixer"]["osc2.filter_blend"], "Osc 2 Filt Blend")
         self.assertEqual(tabs["Mod 1-2"]["mod01.source"], "Mod 01 Source")
         self.assertEqual(tabs["Mod 1-2"]["mod02.source"], "Mod 02 Source")
+
+    def test_env1_release_name_per_tab(self):
+        for layout, meta in self.metas.items():
+            tabs = {t["name"]: t["names"] for t in meta["tabs"]}
+            self.assertEqual(tabs["Env 1"]["env1.release"], "Release", "%s / Env 1" % layout)
+            self.assertEqual(tabs["Macros"]["env1.release"], "Env 1 Release", "%s / Macros" % layout)
 
 
 @unittest.skipUnless((base.SDK / "tools" / "gen_ui.py").is_file(), "MPC SDK not found (set MPC_SDK)")
@@ -276,6 +306,22 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
                 if c["componentData"]["type"] in names_mod.NAME_DY:
                     key = base_key(self.tui, c)
                     self.assertIn(lay.BY_KEY[key]["name"], lay.BY_NAME)
+
+    def test_env1_release_label_text(self):
+        env1_tab = next(t for t in self.tabs() if t["tabName"] == "Env 1")
+        env1_labels = {c["componentData"]["name"]: label["componentData"]["data"]["text"]
+                       for c, label in self.controls_and_labels(env1_tab)}
+        self.assertIn("Env 1 Release", env1_labels)
+        self.assertEqual(env1_labels["Env 1 Release"], "Release")
+        self.assertEqual(env1_labels["Env 1 Attack"], "Attack")
+        self.assertEqual(env1_labels["Env 1 Decay"], "Decay")
+        self.assertEqual(env1_labels["Env 1 Sustain"], "Sustain")
+
+        macros_tab = next(t for t in self.tabs() if t["tabName"] == "Macros")
+        macros_labels = {c["componentData"]["name"]: label["componentData"]["data"]["text"]
+                         for c, label in self.controls_and_labels(macros_tab)}
+        self.assertIn("Env 1 Release", macros_labels)
+        self.assertEqual(macros_labels["Env 1 Release"], "Env 1 Release")
 
 
 def base_key(tui, control):

@@ -14,7 +14,7 @@ TEXT = DOC.read_text(encoding="utf-8") if DOC.exists() else ""
 SECTIONS = ["Build", "Package layout", "Install on the MPC", "Known host behaviour", "Sound differences at tier low"]
 TERMS = ["scripts/build-armv7-mpc.sh", "MPC_SDK", "ARMV7_IMAGE", "VST2 Plugins", "Safian - VST - SynthyBoy", "plugin.json", "version.xml",
          "VST/synthyboy-arm32.so", "Content/presets", "Plugin Skins", "Enable Enhancements", "External Plugin Support", "44.1 kHz", "128",
-         "GCC", "Zig", "scripts/mpc-ui-pages.json", "shell-mpc/accept.sh", "file64"]
+         "GCC", "Zig", "scripts/mpc-ui-pages.json", "shell-mpc/accept.sh", "file64", "kSpectrumFloorDb", "kSpectrumCeilingDb"]
 
 
 def section(title):

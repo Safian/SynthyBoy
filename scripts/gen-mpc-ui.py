@@ -289,7 +289,22 @@ def resolve_tab_names(entries, placed, overrides):
     first = {}
     for key, full, short in entries:
         first.setdefault(key, (full, short))
-    out = {key: overrides.get(key, short) for key, (_, short) in first.items()}
+    out = {}
+    for key, (full, short) in first.items():
+        name = overrides.get(key, short)
+        if key in overrides and short:
+            prefix = None
+            if name.endswith(" " + short):
+                prefix = name[:-len(short)].strip()
+            elif full.endswith(short) and len(full) > len(short):
+                prefix = full[:-len(short)].strip()
+            if prefix and full.startswith(prefix + " ") and name.startswith(prefix + " "):
+                other_fulls = [f for k, (f, _) in first.items() if k != key]
+                if all(f.startswith(prefix + " ") for f in other_fulls):
+                    other_names = {overrides.get(k, s) for k, (_, s) in first.items() if k != key} | {s for k, (_, s) in first.items() if k != key}
+                    if short not in other_names:
+                        name = short
+        out[key] = name
     groups = {}
     for key in first:
         if key in placed:

@@ -8,6 +8,7 @@ Design background: [ARCHITECTURE.md](ARCHITECTURE.md) sections 6 (content packs)
 | Asset | Made by | Content |
 |-------|---------|---------|
 | `com.safian.synthyboy-<version>-<platform>.zip` for `linux-armv7`, `linux-aarch64`, `linux-x86_64`, `macos-universal`, `windows-x64` | `scripts/package-release.py` | `synthyboy.clap` (the native module: the file Kick loads. It contains the bitmap GUI, `plugin.json` "gui", and a private statically linked JUCE 8; no JUCE of its own is visible to the host), `juce/SynthyBoy.clap` and `juce/SynthyBoy.vst3` for DAWs (all platforms except linux-armv7, which has the native shell only), `LICENSE`, `NOTICE`, `THIRD_PARTY.md`, `README.txt` |
+| `SynthyBoy-MPC-<version>.zip` for Akai MPC hardware | `scripts/package-mpc-release.py` | `Safian - VST - SynthyBoy/` plugin directory containing `plugin.json`, `version.xml`, both 32-bit and 64-bit binaries in `VST/`, `Plugin Skins/`, `Content/presets`, `INSTALL.txt`, and `LICENSE` |
 | `<packid>-<packversion>.zip` for every entry of `contentPacks` | `tools/contentpack/contentpack.py build-all` | `contentpack.json` + the files, all SHA-256 verified |
 | `plugin.json.release` | `scripts/fill-manifest.py` | the copy of `plugin.json` with status `released`, urls, SHA-256, sizes, `entry_point`, `assets[]` |
 | `SHA256SUMS` | `scripts/fill-manifest.py --sums` | `<sha256>  <file>` for every asset and the manifest |
@@ -96,6 +97,26 @@ Declared today: `com.safian.synthyboy.factory-presets` (CC0, 112 presets, 0.9 MB
 Not declared, and why: there are no generated factory wavetables (the engine's built-in tables are computed at run time) and the factory multisample instruments
 (4.6 GB, morning question 91) exist only in a user library built from third party Serum factory files, which are not part of this repository and not
 redistributable; see `docs/ui-design/RELEASE-REPORT.md`.
+
+## Release package for the MPC
+
+The standalone Akai MPC plugin folder built by `scripts/build-mpc.sh` (`build-mpc/Safian - VST - SynthyBoy/`) is packaged for release with `scripts/package-mpc-release.py`:
+
+```bash
+scripts/package-mpc-release.py --plugin-dir "build-mpc/Safian - VST - SynthyBoy" --out dist/ --source-url "https://github.com/Safian/SynthyBoy" [--version <version>]
+```
+
+The packager performs strict verification of the plugin folder before creating the archive:
+* **Binaries**: both 32-bit ARM (`VST/synthyboy-arm32.so`) and 64-bit AArch64 (`VST/synthyboy-arm64.so`) shared libraries must exist and match ELF header requirements (ELF 32-bit ARM / ELF 64-bit AArch64).
+* **Manifest & Metadata**: `plugin.json` must be present and declare both `file32` and `file64`; `version.xml` must exist.
+* **Skins**: `Plugin Skins/` must contain `TUI.json` and `Q-Links.json`.
+* **Presets**: `Content/presets/` must contain at least 100 `*.sbpreset` files.
+
+On any verification failure, the script aborts with a descriptive error message and exit code 1.
+
+The output is `SynthyBoy-MPC-<version>.zip` holding exactly the single top-level plugin folder `Safian - VST - SynthyBoy/` with `INSTALL.txt` and `LICENSE` included inside the folder. The archive is reproducible (sorted entries, fixed timestamps, macOS metadata files such as `._*` and `.DS_Store` excluded) and accompanied by `<zip>.sha256`.
+
+`INSTALL.txt` explains installation to `VST2 Plugins` on an internal drive or external USB/SD storage, required MPC OS version (3.10.1 or later), enabling the enhancement switches under **Preferences → Enhancements (Beta)** (**Enable Enhancements** and **External Plugin Support**), how to load the instrument, removal, third-party plugin stability notes, the AGPL-3.0-or-later license and source repository URL, and the Akai / inMusic disclaimer.
 
 ## Pins and secrets
 

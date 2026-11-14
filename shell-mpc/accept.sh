@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.." || exit 1
 B=build-mpc
 # Every build below names every option of the display and the statistics itself: a build directory keeps the options of earlier runs in its CMake cache (a tree that was
 # configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
-BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF"
+BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=6"
 cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
@@ -123,6 +123,12 @@ live_build stats -DSYNTHYBOY_MPC_CALLBACK_STATS=ON
 live_build specoff -DSYNTHYBOY_MPC_SPECTRUM=OFF
 live_build specself -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON
 live_build specself25 -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
+live_build gain0 -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=0
+# output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB
+sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -I $MPC_SDK/framework -o $B/output_level_host shell-mpc/tests/output_level_host.cpp || { echo "ACCEPT FAIL: output_level_host build"; exit 1; }
+$B/output_level_host "$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" "$(find build-mpc-live-gain0 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" 6 > $B/output-level.log 2>&1 || { grep -E "^FAIL|^quiet|^loud" $B/output-level.log; echo "ACCEPT FAIL: output_level_host"; exit 1; }
+grep -E "^quiet|^loud" $B/output-level.log
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: lfo_live_host build"; exit 1; }
 # the refresh rate: the default is 10 a second (at most 21 calls per cursor in 2 s), SYNTHYBOY_MPC_LFO_LIVE_HZ=25 still changes it (the checks scale with HZ)
 for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do

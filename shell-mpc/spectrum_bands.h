@@ -13,6 +13,7 @@ constexpr int kSpectrumBands = 32;
 constexpr double kSpectrumLowHz = 30.0;
 constexpr double kSpectrumHighHz = 18000.0;
 constexpr float kSpectrumFloorDb = -60.0f;
+constexpr float kSpectrumCeilingDb = -12.0f;
 constexpr int kSpectrumSteps = 64;
 
 /** Edge k of the bands, k = 0 .. 32. k outside 0 .. 32 is clamped. */
@@ -33,16 +34,16 @@ inline float spectrumMagToDb (float mag) noexcept
     return 20.0f * std::log10 (static_cast<double> (mag));
 }
 
-/** Linear in dB from the floor to 0 dBFS. NaN gives 0. */
+/** Linear in dB from the floor (kSpectrumFloorDb) to the ceiling (kSpectrumCeilingDb). Clamped to 0..1; NaN gives 0. */
 inline float spectrumLevelFromDb (float db) noexcept
 {
     if (std::isnan (db))
         return 0.0f;
     if (db <= kSpectrumFloorDb)
         return 0.0f;
-    if (db >= 0.0f)
+    if (db >= kSpectrumCeilingDb)
         return 1.0f;
-    return (db - kSpectrumFloorDb) / (-kSpectrumFloorDb);
+    return (db - kSpectrumFloorDb) / (kSpectrumCeilingDb - kSpectrumFloorDb);
 }
 
 /** Rounds to the nearest multiple of 1/kSpectrumSteps (half rounds up). NaN, <= 0 give 0; >= 1 gives 1. */

@@ -31,6 +31,15 @@ target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SY
 
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
+# Output level (docs/MPC.md "Output level"): the shell adds a fixed make-up gain to the engine's output and limits the peaks at -1 dBFS (shell-mpc/output_stage.h).
+# The factory presets are levelled to a chord of -20 dBFS RMS with peaks near full scale; on the MPC that reads as quiet next to the stock instruments, and a preset
+# cannot be raised further without clipping. 0 = no gain, only the limiter (comparisons, shell-mpc/tests/output_level_host.cpp). Range -24 .. 24.
+set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB 6 CACHE STRING "MPC shell: make-up gain of the output stage in dB (the peak limiter at -1 dBFS is always on)")
+if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^-?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
+    message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
+endif()
+target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
+
 # Live LFO display (docs/MPC.md "LFO pictures"): four display-only cursor parameters after the engine's list, driven by a low priority thread.
 # The skin of scripts/mpc-skin-extras/30_lfo.py refers to them, so the MPC package needs the plugin built with this ON (the default of this shell).
 # SYNTHYBOY_MPC_LFO_LIVE=OFF builds the plugin as it was before the display existed (no extra parameter); it is for comparisons only.
