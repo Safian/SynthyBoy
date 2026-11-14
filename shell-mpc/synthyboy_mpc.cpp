@@ -96,6 +96,17 @@
 #endif
 
 // Make-up gain of the output stage in dB (CMake cache entry of the same name, docs/MPC.md "Output level"). 0 = only the limiter.
+// Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"). Compile switch SYNTHYBOY_MPC_OVERLAY (CMake option of the same name; the source default is 0:
+// with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). The module itself is shell-mpc/overlay/; the shell only tells it when an
+// instance exists (attach / detach) and answers its two questions (a parameter value, the live cutoff and resonance of filter 1). Needs a skin made with the overlay layout.
+#ifndef SYNTHYBOY_MPC_OVERLAY
+#define SYNTHYBOY_MPC_OVERLAY 0
+#endif
+#if SYNTHYBOY_MPC_OVERLAY
+#include "overlay/service.h"
+#include "synthyboy/readout.h"
+#endif
+
 #ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
 #define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 6.0
 #endif
@@ -288,6 +299,53 @@ struct PluginInstance
     audioMasterCallback hostCallback = nullptr; // the host's own callback; `audioMaster` is the counting one in this build (see countingHostCallback)
 #endif
     synthyboy::TransportInfo transport { 120.0, 0.0, false };
+
+#if SYNTHYBOY_MPC_OVERLAY
+    // What the overlay thread may ask of this instance: lock free reads of the parameter mirror and of the engine's readout.
+    struct OverlayView final : synthyboy_mpc::overlay::IInstanceView
+    {
+        explicit OverlayView (PluginInstance& owner) : inst (owner) {}
+        float param (int tableIndex) const noexcept override { return inst.paramMirror[tableIndex].load (std::memory_order_relaxed); }
+        bool live (float& cutoffHz, float& resonancePercent) const noexcept override
+        {
+            if (! inst.engine)
+                return false;
+            synthyboy::LiveValues lv;
+            if (! inst.engine->copyReadout (lv) || lv.block == 0 || lv.numTargets < 2)
+                return false;
+            cutoffHz = lv.target[0];
+            resonancePercent = lv.target[1];
+            return true;
+        }
+        double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
+        PluginInstance& inst;
+    };
+    OverlayView overlayView { *this };
+    std::atomic<double> overlayRate { 44100.0 };   // sampleRate for the overlay thread (sampleRate itself is the host thread's)
+    bool overlayAttached = false;
+
+    void startOverlay()
+    {
+        if (overlayAttached)
+            return;
+        if (engine)
+        {
+            int idx[2];
+            synthyboy::FilterResponse::readoutIndices (1, idx);
+            engine->setReadoutTargets (idx, 2); // the live cutoff and resonance of filter 1: the audio thread takes the list over at the end of its next block
+        }
+        synthyboy_mpc::overlay::Service::instance().attach (&overlayView);
+        overlayAttached = true;
+    }
+    void stopOverlay() noexcept
+    {
+        if (! overlayAttached)
+            return;
+        overlayAttached = false;
+        try { synthyboy_mpc::overlay::Service::instance().detach (&overlayView); }
+        catch (...) {}
+    }
+#endif
 
 #if SYNTHYBOY_MPC_LFO_LIVE
     std::atomic<float> liveValue[synthyboy_mpc::kLfoLiveCount] { { 0.0f }, { 0.0f }, { 0.0f }, { 0.0f } };
@@ -531,6 +589,9 @@ struct PluginInstance
 
     ~PluginInstance()
     {
+#if SYNTHYBOY_MPC_OVERLAY
+        stopOverlay(); // the overlay thread stops using this instance (and the plane is gone when it was the last one) before anything below goes
+#endif
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         callbackStats.stop(); // writes the file one last time
 #endif
@@ -677,6 +738,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         // Free both the instance and the AEffect struct
         if (inst)
         {
+#if SYNTHYBOY_MPC_OVERLAY
+            inst->stopOverlay(); // plane off, buffers freed, before the instance goes
+#endif
             delete inst;
             e->object = nullptr;
         }
@@ -848,6 +912,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         inst->sampleRate = opt;
+#if SYNTHYBOY_MPC_OVERLAY
+        inst->overlayRate.store (opt, std::memory_order_relaxed);
+#endif
 #if SYNTHYBOY_MPC_SPECTRUM
         inst->spectrumRate.store (opt, std::memory_order_relaxed);
 #endif
@@ -1401,6 +1468,10 @@ extern "C"
 #if SYNTHYBOY_MPC_LFO_LIVE
         try { inst->startLive (effect); }
         catch (...) {} // no thread: the cursors stay idle
+#endif
+#if SYNTHYBOY_MPC_OVERLAY
+        try { inst->startOverlay(); }
+        catch (...) {} // no overlay: the plugin works as without it
 #endif
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         try { inst->startStats(); }

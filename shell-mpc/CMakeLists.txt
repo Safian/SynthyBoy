@@ -85,6 +85,20 @@ if(SYNTHYBOY_MPC_SPECTRUM)
     endif()
 endif()
 
+# Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"): the module shell-mpc/overlay/ draws the response of Filter 1 on an overlay plane above the MPC's
+# own UI, from a thread of its own, and shows it while the "Filter 1" tab of the overlay skin (scripts/overlay-skin/mpc-ui-pages-overlay.json) is on screen. EXPERIMENTAL and OFF by default: it uses
+# a display plane the MPC firmware does not offer to plugins (Key 61 only so far). OFF builds the plugin byte for byte as it was without this code.
+# SYNTHYBOY_MPC_OVERLAY_CRTC / SYNTHYBOY_MPC_OVERLAY_PLANE: the ids on the Key 61 (CRTC 37, free overlay plane 38).
+option(SYNTHYBOY_MPC_OVERLAY "MPC shell: the live filter curve on a free display plane (experimental, Key 61)" OFF)
+set(SYNTHYBOY_MPC_OVERLAY_CRTC 37 CACHE STRING "MPC shell overlay: id of the display CRTC")
+set(SYNTHYBOY_MPC_OVERLAY_PLANE 38 CACHE STRING "MPC shell overlay: id of the free overlay plane")
+if(SYNTHYBOY_MPC_OVERLAY)
+    find_package(Threads REQUIRED)
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OVERLAY=1
+        SYNTHYBOY_MPC_OVERLAY_CRTC=${SYNTHYBOY_MPC_OVERLAY_CRTC} SYNTHYBOY_MPC_OVERLAY_PLANE=${SYNTHYBOY_MPC_OVERLAY_PLANE})
+    target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
+endif()
+
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
 if(APPLE)

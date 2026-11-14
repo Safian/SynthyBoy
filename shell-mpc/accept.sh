@@ -124,6 +124,29 @@ live_build specoff -DSYNTHYBOY_MPC_SPECTRUM=OFF
 live_build specself -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON
 live_build specself25 -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25
 live_build gain0 -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=0
+live_build ovlon -DSYNTHYBOY_MPC_OVERLAY=ON
+live_build ovloff -DSYNTHYBOY_MPC_OVERLAY=OFF
+# Overlay (SYNTHYBOY_MPC_OVERLAY, default OFF, shell-mpc/overlay/; BASE_OPTS does not name it on purpose: the builds above are the ones "without it", the ovloff variant names OFF): the switched-off build is byte for byte the build that does not name the option (and the same as the build of the commit
+# before the module existed: checked by hand when the module was added); the switched-on build has the module, the other builds have no trace of it. The unit tests run on the Mac with a fake
+# display backend and a fake framebuffer; the plugin built with it ON must still load, run and give the same state chunk (on the Mac the module finds no display and disables itself).
+python3 scripts/gen-overlay-layout-header.py --check || { echo "ACCEPT FAIL: shell-mpc/overlay/overlay_layout.h is not what scripts/gen-overlay-layout-header.py makes of overlay_layout.json"; exit 1; }
+OVLON="$(find build-mpc-live-ovlon -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+OVLOFF="$(find build-mpc-live-ovloff -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+OVLDEF="$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+cmp -s "$OVLOFF" "$OVLDEF" || { echo "ACCEPT FAIL: SYNTHYBOY_MPC_OVERLAY=OFF is not byte for byte the build that does not name the option"; exit 1; }
+grep -q "synthyboy-overlay-status" "$OVLON" || { echo "ACCEPT FAIL: the overlay build has no overlay code"; exit 1; }
+for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
+    grep -q "synthyboy-overlay" "$f" && { echo "ACCEPT FAIL: trace of the overlay in a build without SYNTHYBOY_MPC_OVERLAY"; exit 1; }
+done
+OVCORE=$(find $B/core -name '*.a' | tr '\n' ' ')
+OVSRC=shell-mpc/overlay/tests
+c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -o $B/geometry_render_host $OVSRC/geometry_render_host.cpp || { echo "ACCEPT FAIL: geometry_render_host build"; exit 1; }
+$B/geometry_render_host > $B/geometry-render.log 2>&1 || { grep -E "^FAIL|ERROR" $B/geometry-render.log | head; echo "ACCEPT FAIL: geometry_render_host (rotation mapping, renderer)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/curve_host $OVSRC/curve_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: curve_host build"; exit 1; }
+$B/curve_host > $B/curve-host.log 2>&1 || { grep -E "^FAIL" $B/curve-host.log; echo "ACCEPT FAIL: curve_host (curve source)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/controller_host $OVSRC/controller_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: controller_host build"; exit 1; }
+$B/controller_host > $B/controller-host.log 2>&1 || { grep -E "^FAIL" $B/controller-host.log; echo "ACCEPT FAIL: controller_host (state machine)"; exit 1; }
+$B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -I $MPC_SDK/framework -o $B/output_level_host shell-mpc/tests/output_level_host.cpp || { echo "ACCEPT FAIL: output_level_host build"; exit 1; }
@@ -135,6 +158,9 @@ for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do
     d=${v%%:*}; r=${v#*:}; m=${r%%:*}; hz=${r##*:}
     $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m, $hz Hz)"; exit 1; }
 done
+# the plugin with the overlay built in (on the Mac the module finds no display): the same chunk and the same LFO display as the build without it
+$B/lfo_live_host "$OVLON" on > $B/live-ovlon.log 2>&1 || { grep -E "^FAIL" $B/live-ovlon.log; echo "ACCEPT FAIL: lfo_live_host with the overlay built in"; exit 1; }
+[ "$(grep -h '^chunk ' $B/live-on.log)" = "$(grep -h '^chunk ' $B/live-ovlon.log)" ] || { echo "ACCEPT FAIL: the state chunk differs in the overlay build"; exit 1; }
 # live spectrum (SYNTHYBOY_MPC_SPECTRUM, default ON): the band mapping and the analyser on known signals, then the plugin in four variants (off, on, the self-test wave at 10 and 25 a second).
 # The switched-off build has no trace of it; the state chunk is the same in every variant.
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -o $B/spectrum_bands_host shell-mpc/tests/spectrum_bands_host.cpp || { echo "ACCEPT FAIL: spectrum_bands_host build"; exit 1; }
@@ -163,7 +189,7 @@ c++ -std=c++17 -O1 -Wall -Wextra -I $MPC_SDK/framework -I shell-mpc -o $B/callba
 $B/callback_stats_host "$STATSLIB" $B/callback-stats.txt > $B/callback-stats.log 2>&1 || { grep -E "^FAIL" $B/callback-stats.log; echo "ACCEPT FAIL: callback_stats_host"; exit 1; }
 [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-on.log)" ] && [ "$(grep -h '^chunk ' $B/live-off.log)" = "$(grep -h '^chunk ' $B/live-self.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the LFO display variants"; exit 1; }
 TL=build-mpc-live-tsan
-cmake -S . -B $TL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
+cmake -S . -B $TL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
 TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan lfo_live_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on > $TL/live.log 2>&1
@@ -192,4 +218,17 @@ if grep -q "WARNING: ThreadSanitizer" $TL/stats.log; then
     echo "ACCEPT FAIL: data races in the callback statistics (full report: $TL/stats.log)"; exit 1
 fi
 grep -q "^FAIL" $TL/stats.log && { grep "^FAIL" $TL/stats.log; echo "ACCEPT FAIL: tsan callback_stats_host"; exit 1; }
+# the overlay thread (the tsan build above has the module in: it runs next to the display thread and the statistics writer) and the controller on a real thread against changing parameters, markers and instances
+TSCORE=$(find $TL/core -name '*.a' | tr '\n' ' ')
+for t in controller_host curve_host; do
+    c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc/overlay -o $TL/$t shell-mpc/overlay/tests/$t.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan $t build"; exit 1; }
+    TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/$t > $TL/$t.log 2>&1
+    if grep -q "WARNING: ThreadSanitizer" $TL/$t.log; then
+        grep -A14 "WARNING: ThreadSanitizer" $TL/$t.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
+        echo "ACCEPT FAIL: data races in the overlay ($t; full report: $TL/$t.log)"; exit 1
+    fi
+    grep -q "^FAIL" $TL/$t.log && { grep "^FAIL" $TL/$t.log; echo "ACCEPT FAIL: tsan $t"; exit 1; }
+done
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on > $TL/live-ovl.log 2>&1
+grep -q "WARNING: ThreadSanitizer" $TL/live-ovl.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/live-ovl.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races with the overlay thread in the plugin (full report: $TL/live-ovl.log)"; exit 1; }
 echo "ACCEPT OK"
