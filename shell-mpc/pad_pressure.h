@@ -28,14 +28,87 @@ inline float padPressureDepth (bool on, float percent) noexcept
     return on ? std::min (std::max (percent, 0.0f), 100.0f) * 0.01f : 0.0f;
 }
 
-/** The chunk with the two members before the last closing brace (the program prefix is untouched). */
+/** Locale-independent JSON float parser (e.g. "35.00", "0", "100.0"). Accepts only '.' as decimal separator. */
+inline bool parseJsonFloatLocaleIndependent (const char* str, size_t maxLen, float& outVal, size_t& charsRead) noexcept
+{
+    if (str == nullptr || maxLen == 0)
+        return false;
+    size_t p = 0;
+    while (p < maxLen && (str[p] == ' ' || str[p] == '\t'))
+        ++p;
+    if (p >= maxLen)
+        return false;
+    bool neg = false;
+    if (str[p] == '-')
+    {
+        neg = true;
+        ++p;
+    }
+    else if (str[p] == '+')
+    {
+        ++p;
+    }
+    if (p >= maxLen)
+        return false;
+    bool hasDigits = false;
+    double val = 0.0;
+    while (p < maxLen && str[p] >= '0' && str[p] <= '9')
+    {
+        hasDigits = true;
+        val = val * 10.0 + static_cast<double> (str[p] - '0');
+        ++p;
+    }
+    if (p < maxLen && str[p] == '.')
+    {
+        ++p;
+        double frac = 0.1;
+        while (p < maxLen && str[p] >= '0' && str[p] <= '9')
+        {
+            hasDigits = true;
+            val += static_cast<double> (str[p] - '0') * frac;
+            frac *= 0.1;
+            ++p;
+        }
+    }
+    if (!hasDigits)
+        return false;
+    if (p < maxLen && (str[p] == 'e' || str[p] == 'E'))
+    {
+        size_t ep = p + 1;
+        bool expNeg = false;
+        if (ep < maxLen && str[ep] == '-') { expNeg = true; ++ep; }
+        else if (ep < maxLen && str[ep] == '+') { ++ep; }
+        int expVal = 0;
+        bool expDigits = false;
+        while (ep < maxLen && str[ep] >= '0' && str[ep] <= '9')
+        {
+            expDigits = true;
+            expVal = expVal * 10 + (str[ep] - '0');
+            ++ep;
+        }
+        if (!expDigits)
+            return false;
+        val *= std::pow (10.0, expNeg ? -expVal : expVal);
+        p = ep;
+    }
+    charsRead = p;
+    outVal = static_cast<float> (neg ? -val : val);
+    return std::isfinite (outVal);
+}
+
+/** The chunk with the two members before the last closing brace (the program prefix is untouched).
+    Uses integer division and modulo to guarantee a literal '.' decimal point regardless of the active C/C++ locale. */
 inline std::string chunkWithPadPressure (std::string chunk, bool on, float percent)
 {
     const size_t close = chunk.rfind ('}');
     if (close == std::string::npos)
         return chunk;
+    const double clamped = std::min (std::max (static_cast<double> (percent), 0.0), 100.0);
+    const int totalCent = static_cast<int> (std::round (clamped * 100.0));
+    const int whole = totalCent / 100;
+    const int frac = totalCent % 100;
     char buf[96];
-    std::snprintf (buf, sizeof (buf), ",\"mpcPadPressure\":%d,\"mpcPadPressureAmount\":%.2f", on ? 1 : 0, static_cast<double> (std::min (std::max (percent, 0.0f), 100.0f)));
+    std::snprintf (buf, sizeof (buf), ",\"mpcPadPressure\":%d,\"mpcPadPressureAmount\":%d.%02d", on ? 1 : 0, whole, frac);
     chunk.insert (close, buf);
     return chunk;
 }
@@ -60,9 +133,9 @@ inline bool padPressureFromChunk (const void* data, size_t size, bool& on, float
     if (tail.compare (p, sizeof (kAmount) - 1, kAmount) != 0)
         return false;
     p += sizeof (kAmount) - 1;
-    char* end = nullptr;
-    const float v = std::strtof (tail.c_str() + p, &end);
-    if (end == tail.c_str() + p || !std::isfinite (v))
+    float v = 0.0f;
+    size_t charsConsumed = 0;
+    if (!parseJsonFloatLocaleIndependent (tail.data() + p, tail.size() - p, v, charsConsumed) || charsConsumed == 0)
         return false;
     on = newOn;
     percent = std::min (std::max (v, 0.0f), 100.0f);

@@ -33,6 +33,7 @@ static void check (bool ok, const char* what)
     std::printf ("%s  %s\n", ok ? "PASS" : "FAIL", what);
     if (! ok) ++fails;
 }
+static void check (bool ok, const std::string& what) { check (ok, what.c_str()); }
 
 static std::string getChunk (AEffect* e)
 {
@@ -117,7 +118,7 @@ int main (int argc, char** argv)
     const bool off = argc > 3 && std::string (argv[3]) == "off";
     const int display = argc > (off ? 4 : 3) ? std::atoi (argv[off ? 4 : 3]) : 36;
 
-    // ---- the pure functions
+    // ---- the pure functions and locale-independence
     {
         using namespace synthyboy_mpc;
         check (padPressureDepth (true, 35.0f) == 0.35f && padPressureDepth (false, 35.0f) == 0.0f && padPressureDepth (true, 500.0f) == 1.0f && padPressureDepth (true, -3.0f) == 0.0f,
@@ -139,6 +140,26 @@ int main (int argc, char** argv)
         const std::string big = "{\"mpcProgram\":3,\"mpcProgramName\":\"A\",\"x\":{\"a\":1},\"mpcPadPressure\":1,\"mpcPadPressureAmount\":900.00}";
         check (padPressureFromChunk (big.data(), big.size(), on, pct) && pct == 100.0f, "chunk: the amount is clamped to 100");
         check (chunkWithPadPressure ("nothing", true, 1.0f) == "nothing", "chunk: a document without a closing brace is returned as it is");
+
+        // Locale independence: formatting and parsing under non-C locale (e.g. de_DE where comma is decimal separator)
+        const char* prevLocale = std::setlocale (LC_ALL, nullptr);
+        std::string origLoc = prevLocale ? prevLocale : "C";
+        for (const char* locName : { "de_DE.UTF-8", "de_DE", "fr_FR.UTF-8", "fr_FR" })
+        {
+            if (std::setlocale (LC_ALL, locName) != nullptr)
+            {
+                const std::string cLoc = chunkWithPadPressure (doc, true, 35.75f);
+                check (cLoc.find ("\"mpcPadPressureAmount\":35.75") != std::string::npos,
+                       "locale-independence: formatted string uses '.' even under locale " + std::string (locName));
+                check (cLoc.find (',', cLoc.find ("\"mpcPadPressureAmount\":")) == std::string::npos,
+                       "locale-independence: no comma inside float amount under locale " + std::string (locName));
+                bool locOn = false; float locPct = 0.0f;
+                check (padPressureFromChunk (cLoc.data(), cLoc.size(), locOn, locPct) && locOn && std::fabs (locPct - 35.75f) < 1e-4f,
+                       "locale-independence: read back correctly under locale " + std::string (locName));
+                break;
+            }
+        }
+        std::setlocale (LC_ALL, origLoc.c_str());
     }
 
     void* lib = dlopen (argv[1], RTLD_NOW | RTLD_LOCAL);
@@ -210,6 +231,21 @@ int main (int argc, char** argv)
     e->dispatcher (e, effSetProgram, 0, 0, nullptr, 0.0f);
     check (e->getParameter (e, pp) == 0.0f && std::fabs (e->getParameter (e, pp + 1) - 0.5f) < 1e-6f, "a program change leaves the pad settings alone");
     check (getChunk (e).find ("\"mpcProgram\":0,") == 1, "chunk: the program prefix is still first");
+
+    // Real preset (prog >= 1) with pad pressure ON and custom amount (e.g. 73 %)
+    e->setParameter (e, pp, 1.0f);
+    e->setParameter (e, pp + 1, 0.73f);
+    const int realProg = e->numPrograms > 1 ? 1 : 0;
+    e->dispatcher (e, effSetProgram, realProg, 0, nullptr, 0.0f);
+    check (e->getParameter (e, pp) == 1.0f && std::fabs (e->getParameter (e, pp + 1) - 0.73f) < 1e-6f,
+           "a program change to a real preset (prog>=1) leaves ON pad setting and amount intact");
+    const std::string cReal = getChunk (e);
+    check (cReal.find ("\"mpcPadPressure\":1,\"mpcPadPressureAmount\":73.00}") != std::string::npos,
+           "chunk: real preset chunk saves ON pad setting and amount");
+    check (setChunk (e, cReal) && getChunk (e) == cReal,
+           "chunk: chunk oda-vissza bajtazonos valodi preset eseten is");
+    check (e->getParameter (e, pp) == 1.0f && std::fabs (e->getParameter (e, pp + 1) - 0.73f) < 1e-6f,
+           "chunk: restoring real preset chunk keeps ON pad setting and amount intact");
     e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
 
     // ---- the audio: a pressed note, filter 1 closed down on a bright patch
@@ -239,6 +275,31 @@ int main (int argc, char** argv)
         std::printf ("INFO  brightness: off %.5f, 35 %% %.5f, 100 %% %.5f, 100 %% without pressure %.5f (no pressure, off %.5f)\n", bBase, bMid, bFull, bIdle, bQuiet);
         check (bMid > bBase * 1.5 && bFull > bMid * 1.5, "own engine: pressure opens the filter, more with the larger amount");
         check (std::fabs (bIdle - bQuiet) < 1e-9 * (1.0 + bQuiet) || bIdle == bQuiet, "own engine: a pad that sends no pressure leaves the sound as it is");
+
+        // channel aftertouch (0xD0) does not open the filter via pad pressure layer (only 0xA0 opens it)
+        AEffect* cat = engine (true, 1.0f);
+        std::vector<float> lCat (256), rCat (256);
+        float* outsCat[2] = { lCat.data(), rCat.data() };
+        double enAt = 0.0, dnAt = 0.0;
+        midi (cat, 0x90, 60, 127);
+        for (int b = 0; b < 200; ++b)
+        {
+            midi (cat, 0xD0, 127, 0); // Channel Aftertouch 0xD0
+            cat->processReplacing (cat, nullptr, outsCat, 256);
+            if (b >= 130)
+                for (int i = 1; i < 256; ++i)
+                {
+                    enAt += static_cast<double> (lCat[static_cast<size_t> (i)]) * lCat[static_cast<size_t> (i)];
+                    const double d = static_cast<double> (lCat[static_cast<size_t> (i)]) - lCat[static_cast<size_t> (i - 1)];
+                    dnAt += d * d;
+                }
+        }
+        midi (cat, 0x80, 60, 0);
+        for (int b = 0; b < 100; ++b) cat->processReplacing (cat, nullptr, outsCat, 256);
+        const double bChanAt = enAt > 0.0 ? dnAt / enAt : 0.0;
+        check (std::fabs (bChanAt - bIdle) < 1e-9 * (1.0 + bIdle) || bChanAt == bIdle,
+               "own engine: channel aftertouch (0xD0) does not open the filter (brightness matches idle/no-pressure)");
+        cat->dispatcher (cat, effClose, 0, 0, nullptr, 0.0f);
         // switching it off in mid-note returns the cutoff to the knob
         AEffect* sw = engine (true, 1.0f);
         std::vector<float> l (256), r (256);
