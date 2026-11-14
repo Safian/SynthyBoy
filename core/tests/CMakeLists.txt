@@ -46,6 +46,7 @@ target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURC
 synthyboy_add_test(synthyboy_test_own_unison_cap test_own_unison_cap.cpp)
 target_include_directories(synthyboy_test_own_unison_cap PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 synthyboy_add_test(synthyboy_test_own_filter_response test_own_filter_response.cpp)
+synthyboy_add_test(synthyboy_test_own_filter_response_rates test_own_filter_response_rates.cpp)
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete
 synthyboy_add_test(synthyboy_test_threads    test_threads.cpp)    # run under ThreadSanitizer in CI
 
