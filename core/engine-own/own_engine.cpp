@@ -1234,6 +1234,8 @@ bool OwnEngine::copyReadout (LiveValues& out) const noexcept
     {
         out.envStage[i] = liveEnvStage[i].load (std::memory_order_relaxed);
         out.envPosition[i] = liveEnvPos[i].load (std::memory_order_relaxed);
+        out.envFineStage[i] = liveEnvFine[i].load (std::memory_order_relaxed);
+        out.envFineFraction[i] = liveEnvFineFrac[i].load (std::memory_order_relaxed);
     }
     out.numTargets = liveNumTargets.load (std::memory_order_relaxed);
     for (int i = 0; i < out.numTargets; ++i)
@@ -1283,6 +1285,11 @@ void OwnEngine::writeReadout() noexcept
             newest->envReadout (e, st, ps);
         liveEnvStage[e].store (st, std::memory_order_relaxed);
         liveEnvPos[e].store (ps, std::memory_order_relaxed);
+        float fs = 0.0f, ff = 0.0f;
+        if (newest != nullptr)
+            newest->envReadoutFine (e, fs, ff);
+        liveEnvFine[e].store (fs, std::memory_order_relaxed);
+        liveEnvFineFrac[e].store (ff, std::memory_order_relaxed);
     }
     for (int i = 0; i < activeTargetCount; ++i)
     {

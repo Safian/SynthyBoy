@@ -129,6 +129,14 @@ public:
         const float len = st == 1 ? envLen[e][0] : (st == 2 ? envLen[e][1] : (st == 3 ? envLen[e][2] : (st == 4 ? envLen[e][3] : 0.0f)));
         position = len > 0.0f ? clamp01 (static_cast<float> (env[e].stageSeconds()) / len) : 0.0f;
     }
+    /** The finer read-out: stage 0 idle, 1 delay, 2 attack, 3 hold, 4 decay, 5 sustain, 6 release, 7 done and the fraction 0 .. 1 of that stage that has run. */
+    void envReadoutFine (int e, float& stage, float& fraction) const noexcept
+    {
+        const int st = env[e].fineStage();
+        stage = static_cast<float> (st);
+        const float len = st == 2 ? envLen[e][4] : (st == 3 ? envLen[e][1] : (st == 4 ? envLen[e][2] : (st == 6 ? envLen[e][3] : 0.0f)));
+        fraction = env[e].fineFraction (len);
+    }
     float lfoReadout (int l) const noexcept { return lfoReadPos[l] - std::floor (lfoReadPos[l]); }
     float modulatedParam (int idx) const noexcept { return gl != nullptr ? P (idx) : 0.0f; }
 
@@ -181,7 +189,7 @@ private:
     Envelope env[6];
     float envOut[6] = {};
     LfoCore lfoCore[10];
-    float envLen[6][4] = {};
+    float envLen[6][6] = {};              // attack + delay, hold, decay, release (envReadout), then attack and delay alone (envReadoutFine)
     // what the voice derived from the parameters alone (no modulation touched): valid while the snapshot epoch, the note sequence and the tempo are the same
     EnvSettings envCache[6];
     uint32_t envCacheEpoch = 0, vcCacheEpoch = 0, vcCacheSequence = 0;

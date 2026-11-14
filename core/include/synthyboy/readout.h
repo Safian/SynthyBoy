@@ -31,6 +31,10 @@ struct LiveValues
         stage (0 .. 1). */
     float envStage[kNumEnvs] = {};
     float envPosition[kNumEnvs] = {};
+    /** The same envelopes, finer (own engine only; zero from the Vital engine): stage 0 idle, 1 delay, 2 attack, 3 hold, 4 decay, 5 sustain, 6 release, 7 finished or killed, and the
+        fraction 0 .. 1 of that stage that has run (the sustain has none: 0). */
+    float envFineStage[kNumEnvs] = {};
+    float envFineFraction[kNumEnvs] = {};
     /** The modulated value of the subscribed knobs, in plain units of the parameter (the order of setReadoutTargets); the plain value itself for a knob nothing modulates. */
     /** GROUPC WP-13: the zone (index into the SFZ regions of oscillator n + 1) and the key of the last note of a multisample oscillator; -1 before one was played. */
     int multisampleZone[3] = { -1, -1, -1 };

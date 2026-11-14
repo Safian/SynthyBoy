@@ -1,0 +1,447 @@
+// SynthyBoy - MPC overlay: the views. FilterView (the response curve of filter 1 / 2), LfoView (the shape of an LFO with the live cursor), OscView (one cycle of the
+// oscillator), EnvView (the live phase marker over the native envelope widget: env_view.h). Each reads its data through IInstanceView / the engine's readout, keeps its own
+// recompute budget, draws a whole picture with draw.h and reports its own counters.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#pragma once
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "curve_source.h"
+#include "draw.h"
+#include "renderer.h"
+#include "synthyboy/lfo_display.h"
+#include "synthyboy/osc_cycle.h"
+#include "view.h"
+
+namespace synthyboy_mpc { namespace overlay {
+
+/** The share of one core a view's own computations may use while its data moves, and the least gap between two of them. */
+constexpr double kViewBudget = 0.08;
+constexpr double kViewMinGapMs = 15.0;
+constexpr int kSourceSlots = 64;   // source ids (the choice values of modNN.source) fit: LiveValues::kMaxSources
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+class FilterView final : public IView
+{
+public:
+    FilterView (int filter, ICurveRenderer& renderer, double fixedCostMs) : filter_ (filter), renderer_ (renderer), fixedCost_ (fixedCostMs), name_ (filter == 2 ? "filter2" : "filter1") {}
+
+    const char* name() const noexcept override { return name_; }
+    void targets (std::vector<int>& out) const override
+    {
+        int idx[2];
+        synthyboy::FilterResponse::readoutIndices (filter_, idx);
+        out.push_back (idx[0]);
+        out.push_back (idx[1]);
+    }
+    bool update (const ViewInput& in) override
+    {
+        if (! curve_ || in.instance->sampleRate() != rate_)
+        {
+            CurveSource::Config cfg;
+            cfg.sampleRate = in.instance->sampleRate();
+            cfg.fixedCostMs = fixedCost_;
+            cfg.filter = filter_;
+            curve_ = std::make_unique<CurveSource> (cfg);
+            rate_ = cfg.sampleRate;
+            fresh_ = true;
+        }
+        const unsigned long before = curve_->stats().fullComputes;
+        bool changed = curve_->update (*in.instance, in.targets, in.nowMs);
+        ++counters_.updates;
+        counters_.recomputes += curve_->stats().fullComputes - before;
+        counters_.lastComputeMs = curve_->stats().lastComputeMs;
+        if (fresh_ && curve_->valid())
+            changed = true, fresh_ = false;
+        counters_.changes += changed;
+        return changed;
+    }
+    bool valid() const noexcept override { return curve_ && curve_->valid(); }
+    void render (uint32_t* canvas, int w, int h) override { renderer_.render (curve_->curve(), curve_->points(), canvas, w, h, layout::kBackgroundRgb, nullptr, 0); }
+    uint32_t hash() const noexcept override { return curve_ ? curve_->hash() : 0u; }
+    void writeStatus (std::ostream& o) const override
+    {
+        if (! curve_)
+            return;
+        const CurveSource::Stats& s = curve_->stats();
+        o << "last_compute_ms: " << s.lastComputeMs << "\nfull_computes_total: " << s.fullComputes << "\ntranslations_total: " << s.translations << "\n";
+        o << "live_cutoff_hz: " << s.cutoffHz << "\nlive_resonance_percent: " << s.resonancePercent << "\n";
+        if (curve_->valid())
+        {
+            float lo, hi;
+            curve_->minMax (lo, hi);
+            char hash[16];
+            std::snprintf (hash, sizeof hash, "%08x", curve_->hash());
+            o << "curve_min_db: " << lo << "\ncurve_max_db: " << hi << "\ncurve_hash: " << hash << "\n";
+        }
+    }
+    void writeDump (std::ostream& o) const override
+    {
+        if (! valid())
+            return;
+        o << "# view " << name_ << ": index shown_db exact_db (point i = 20 Hz * 1000 ^ (i / 255)), cutoff_hz " << curve_->stats().cutoffHz << " resonance_percent " << curve_->stats().resonancePercent << "\n";
+        for (int i = 0; i < curve_->points(); ++i)
+            o << i << " " << curve_->curve()[i] << " " << curve_->exactCurve()[i] << "\n";
+    }
+    const CurveSource* curve() const noexcept { return curve_.get(); }
+
+private:
+    int filter_;
+    ICurveRenderer& renderer_;
+    double fixedCost_;
+    const char* name_;
+    std::unique_ptr<CurveSource> curve_;
+    double rate_ = 0.0;
+    bool fresh_ = false;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+/** What the LFO and the oscillator views share: the parameters of one group (every key that starts with `prefix`), their change detection and the budget of recomputes. */
+class ParamGroup
+{
+public:
+    explicit ParamGroup (const std::string& prefix)
+    {
+        const synthyboy::ParamInfo* table = synthyboy::paramTable();
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+            if (std::strncmp (table[i].key, prefix.c_str(), prefix.size()) == 0)
+                idx_.push_back (static_cast<int> (i));
+        values_ = synthyboy::ParamValues::defaults();
+        seen_.assign (idx_.size(), 0.0f);
+    }
+    /** Reads the group from the instance; true when any value differs from the one of the last accepted () call. */
+    bool read (const IInstanceView& v)
+    {
+        bool changed = ! accepted_;
+        for (size_t k = 0; k < idx_.size(); ++k)
+        {
+            const float x = v.param (idx_[k]);
+            values_.plain[idx_[k]] = x;
+            changed = changed || x != seen_[k];
+        }
+        return changed;
+    }
+    void accept() noexcept
+    {
+        for (size_t k = 0; k < idx_.size(); ++k)
+            seen_[k] = values_.plain[idx_[k]];
+        accepted_ = true;
+    }
+    const synthyboy::ParamValues& values() const noexcept { return values_; }
+    synthyboy::ParamValues& values() noexcept { return values_; }
+    float value (const char* key) const
+    {
+        const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key);
+        return p ? values_.plain[synthyboy::findParamIndex (p->id)] : 0.0f;
+    }
+
+private:
+    std::vector<int> idx_;
+    synthyboy::ParamValues values_;
+    std::vector<float> seen_;
+    bool accepted_ = false;
+};
+
+/** The gap rule of the full computations of a view: at least kViewMinGapMs and cost / kViewBudget after the last one. */
+struct ComputeBudget
+{
+    double costMs = 0.0, lastMs = -1.0e9, fixedCostMs = -1.0;
+    bool due (double nowMs) const noexcept { return nowMs - lastMs >= std::max (kViewMinGapMs, (fixedCostMs >= 0.0 ? fixedCostMs : costMs) / kViewBudget); }
+    void spent (double nowMs, double ms) noexcept { costMs = lastMs < -1.0e8 ? ms : 0.7 * costMs + 0.3 * ms; lastMs = nowMs; }
+};
+
+inline double msSince (std::chrono::steady_clock::time_point t0) { return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count(); }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+class LfoView final : public IView
+{
+public:
+    static constexpr int kPoints = 300;            // values of the shape (the region is 600 px wide)
+    static constexpr double kMargin = 16.0;        // px above +1 and below -1
+    LfoView (int lfo, double fixedCostMs) : lfo_ (lfo), group_ ("lfo" + std::to_string (lfo) + "."), name_ ("lfo" + std::to_string (lfo))
+    {
+        budget_.fixedCostMs = fixedCostMs;
+        shape_.assign (kPoints, 0.0f);
+    }
+
+    const char* name() const noexcept override { return name_.c_str(); }
+    void targets (std::vector<int>&) const override {}
+    bool update (const ViewInput& in) override
+    {
+        ++counters_.updates;
+        bool changed = false;
+        std::shared_ptr<const synthyboy::StateContent> content = in.instance->content();
+        const double bpm = std::round (in.instance->bpm() * 10.0) / 10.0;
+        bool dataChanged = group_.read (*in.instance) || content != content_ || bpm != bpm_;
+        // the sources a custom shape's points follow (point modulation): only that shape reads them
+        float sources[kSourceSlots] = {};
+        bool sourcesChanged = false;
+        if (static_cast<int> (group_.value ((name_ + ".shape").c_str()) + 0.5f) == 12 && in.live != nullptr)
+        {
+            for (int id = 1; id < kSourceSlots && id - 1 < synthyboy::LiveValues::kMaxSources; ++id)
+            {
+                const float v = in.live->source[id - 1];
+                const bool bipolar = (id >= 7 && id <= 14) || (id >= 15 && id <= 18) || id == 33 || id == 34;
+                sources[id] = bipolar ? 0.5f + 0.5f * v : v;
+            }
+            sourcesChanged = std::memcmp (sources, lastSources_, sizeof sources) != 0;
+        }
+        if ((dataChanged || sourcesChanged || ! have_) && (! have_ || budget_.due (in.nowMs)))
+        {
+            const auto t0 = std::chrono::steady_clock::now();
+            synthyboy::LfoDisplay::Request req;
+            req.lfo = lfo_;
+            req.bpm = bpm;
+            req.sources = in.live != nullptr ? sources : nullptr;
+            synthyboy::LfoDisplay::compute (group_.values(), content.get(), req, shape_.data(), kPoints);
+            budget_.spent (in.nowMs, msSince (t0));
+            counters_.lastComputeMs = budget_.costMs;
+            ++counters_.recomputes;
+            group_.accept();
+            content_ = content;
+            bpm_ = bpm;
+            std::memcpy (lastSources_, sources, sizeof sources);
+            have_ = true;
+            baseDirty_ = true;
+            changed = true;
+        }
+        const float x = in.live != nullptr ? synthyboy::LfoDisplay::cursorX (in.live->lfoPhase[lfo_ - 1]) : -1.0f;
+        const int px = x < 0.0f ? -1 : static_cast<int> (std::lround (x * 599.0f));
+        if (px != cursorPx_)
+        {
+            cursorPx_ = px;
+            cursorX_ = x;
+            changed = true;
+        }
+        counters_.changes += changed;
+        return changed;
+    }
+    bool valid() const noexcept override { return have_; }
+
+    static double valueToY (double v, int h) noexcept { return kMargin + (1.0 - v) * 0.5 * (h - 2.0 * kMargin); }
+
+    void render (uint32_t* cv, int w, int h) override
+    {
+        if (static_cast<int> (base_.size()) != w * h)
+            baseDirty_ = true;
+        if (baseDirty_)
+        {
+            base_.assign (static_cast<size_t> (w) * static_cast<size_t> (h), 0u);
+            draw::setRect (base_.data(), w, h, 0, 0, w, h, draw::opaque (layout::kBackgroundRgb));
+            const int zy = static_cast<int> (valueToY (0.0, h));
+            draw::fillRect (base_.data(), w, h, 0, zy, w, zy + 1, draw::premultiplied (255, 255, 255, 90));
+            for (int q = 1; q < 4; ++q)
+                draw::fillRect (base_.data(), w, h, (w - 1) * q / 4, 0, (w - 1) * q / 4 + 1, h, draw::premultiplied (255, 255, 255, 40));
+            draw::sampleColumns (ys_, shape_.data(), kPoints, w, h, [h] (double v) { return valueToY (v, h); }, 4);
+            draw::fillToBaseline (base_.data(), w, h, ys_, 4, valueToY (0.0, h), draw::premultiplied (0xd3, 0x11, 0x45, 64));
+            draw::strokeCurve (base_.data(), w, h, ys_, 4, 2.0, draw::premultiplied (0xff, 0x2e, 0x63, 255));
+            baseDirty_ = false;
+        }
+        std::memcpy (cv, base_.data(), static_cast<size_t> (w) * static_cast<size_t> (h) * 4);
+        if (cursorPx_ >= 0)
+        {
+            const double x = cursorX_ * (w - 1);
+            draw::vline (cv, w, h, x + 0.5, 0, h, 2.0, draw::premultiplied (255, 255, 255, 150));
+            const double pos = std::clamp (static_cast<double> (cursorX_), 0.0, 1.0) * (kPoints - 1);
+            const int i = std::min (static_cast<int> (pos), kPoints - 2);
+            const double v = shape_[static_cast<size_t> (i)] * (1.0 - (pos - i)) + shape_[static_cast<size_t> (i) + 1] * (pos - i);
+            draw::disc (cv, w, h, x + 0.5, valueToY (v, h), 7.0, draw::premultiplied (255, 255, 255, 255));
+            draw::disc (cv, w, h, x + 0.5, valueToY (v, h), 4.5, draw::premultiplied (0xff, 0x2e, 0x63, 255));
+        }
+    }
+    uint32_t hash() const noexcept override
+    {
+        uint32_t h = 2166136261u;
+        for (float v : shape_)
+            h = fnv (h, static_cast<int32_t> (std::lround (static_cast<double> (v) * 100.0)));
+        return h;
+    }
+    float cursor() const noexcept { return cursorX_; }
+    const std::vector<float>& shape() const noexcept { return shape_; }
+    void writeStatus (std::ostream& o) const override
+    {
+        char hash[16];
+        std::snprintf (hash, sizeof hash, "%08x", this->hash());
+        o << "lfo_shape_hash: " << hash << "\nlfo_cursor_x: " << (cursorPx_ < 0 ? -1.0f : cursorX_) << "\nlfo_recomputes_total: " << counters_.recomputes << "\nlfo_compute_ms: " << counters_.lastComputeMs << "\n";
+    }
+    void writeDump (std::ostream& o) const override
+    {
+        o << "# view " << name_ << ": index value (-1 .. 1, x = i / " << (kPoints - 1) << " cycles since the note start), cursor_x " << (cursorPx_ < 0 ? -1.0f : cursorX_) << "\n";
+        for (int i = 0; i < kPoints; ++i)
+            o << i << " " << shape_[static_cast<size_t> (i)] << "\n";
+    }
+
+private:
+    int lfo_;
+    ParamGroup group_;
+    std::string name_;
+    ComputeBudget budget_;
+    std::vector<float> shape_;
+    std::shared_ptr<const synthyboy::StateContent> content_;
+    double bpm_ = 0.0;
+    float lastSources_[kSourceSlots] = {};
+    bool have_ = false, baseDirty_ = true;
+    int cursorPx_ = -1;
+    float cursorX_ = -1.0f;
+    std::vector<uint32_t> base_;
+    std::vector<double> ys_;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+class OscView final : public IView
+{
+public:
+    static constexpr double kMargin = 16.0;
+    OscView (int osc, double fixedCostMs) : osc_ (osc), group_ ("osc" + std::to_string (osc) + "."), name_ ("osc" + std::to_string (osc))
+    {
+        budget_.fixedCostMs = fixedCostMs;
+        synthyboy::OscCycle::readoutIndices (osc, targetIdx_);
+        cycle_.assign (synthyboy::OscCycle::kSamples, 0.0f);
+    }
+
+    const char* name() const noexcept override { return name_.c_str(); }
+    void targets (std::vector<int>& out) const override { for (int i = 0; i < 4; ++i) out.push_back (targetIdx_[i]); }
+    bool update (const ViewInput& in) override
+    {
+        ++counters_.updates;
+        if (! oc_)
+            oc_ = std::make_unique<synthyboy::OscCycle>();   // allocates; the first update only
+        std::shared_ptr<const synthyboy::StateContent> content = in.instance->content();
+        const synthyboy::IContentStore* store = in.instance->contentStore();
+        const bool newContent = content != content_ || store != store_;
+        bool dataChanged = group_.read (*in.instance) || newContent;
+        float t[4] = { -1, -1, -1, -1 };
+        if (in.targets != nullptr)
+            for (int i = 0; i < 4; ++i)
+                t[i] = std::round (in.targets[i] * 100.0f) / 100.0f;
+        dataChanged = dataChanged || std::memcmp (t, lastTargets_, sizeof t) != 0;
+        bool changed = false;
+        if ((dataChanged || ! have_) && (! have_ || budget_.due (in.nowMs)))
+        {
+            const auto t0 = std::chrono::steady_clock::now();
+            if (newContent)
+            {
+                if (content != nullptr)
+                    oc_->setContent (*content, store);
+                else
+                    oc_->setContent (synthyboy::StateContent {}, store);
+                content_ = content;
+                store_ = store;
+            }
+            synthyboy::OscCycle::Request req;
+            req.osc = osc_;
+            if (in.targets != nullptr)
+            {
+                req.framePercent = t[0];
+                req.warpAmountPercent[0] = t[1];
+                req.warpAmountPercent[1] = t[2];
+                req.morphAmountPercent = t[3];
+            }
+            kind_ = oc_->compute (group_.values(), req, cycle_.data());
+            budget_.spent (in.nowMs, msSince (t0));
+            counters_.lastComputeMs = budget_.costMs;
+            ++counters_.recomputes;
+            group_.accept();
+            std::memcpy (lastTargets_, t, sizeof t);
+            have_ = true;
+            changed = true;
+        }
+        counters_.changes += changed;
+        return changed;
+    }
+    bool valid() const noexcept override { return have_; }
+
+    static double valueToY (double v, int h) noexcept { return kMargin + (1.0 - v) * 0.5 * (h - 2.0 * kMargin); }
+
+    void render (uint32_t* cv, int w, int h) override
+    {
+        draw::setRect (cv, w, h, 0, 0, w, h, draw::opaque (layout::kBackgroundRgb));
+        const int zy = static_cast<int> (valueToY (0.0, h));
+        draw::fillRect (cv, w, h, 0, zy, w, zy + 1, draw::premultiplied (255, 255, 255, 90));
+        for (int q = 1; q < 4; ++q)
+            draw::fillRect (cv, w, h, (w - 1) * q / 4, 0, (w - 1) * q / 4 + 1, h, draw::premultiplied (255, 255, 255, 40));
+        if (kind_ != synthyboy::OscCycle::Kind::wavetable)
+            return;   // a sample / granular / spectral / multisample oscillator has no single cycle, an oscillator that is off draws nothing: the neutral picture is the empty frame
+        float peak = 1.0f;
+        for (float v : cycle_)
+            peak = std::max (peak, std::fabs (v));
+        scaled_.resize (cycle_.size());
+        for (size_t i = 0; i < cycle_.size(); ++i)
+            scaled_[i] = cycle_[i] / peak;
+        draw::sampleColumns (ys_, scaled_.data(), static_cast<int> (scaled_.size()), w, h, [h] (double v) { return valueToY (v, h); }, 4);
+        draw::fillToBaseline (cv, w, h, ys_, 4, valueToY (0.0, h), draw::premultiplied (0xd3, 0x11, 0x45, 64));
+        draw::strokeCurve (cv, w, h, ys_, 4, 2.0, draw::premultiplied (0xff, 0x2e, 0x63, 255));
+    }
+    uint32_t hash() const noexcept override
+    {
+        uint32_t h = 2166136261u;
+        for (float v : cycle_)
+            h = fnv (h, static_cast<int32_t> (std::lround (static_cast<double> (v) * 1000.0)));
+        return h;
+    }
+    synthyboy::OscCycle::Kind kind() const noexcept { return kind_; }
+    const std::vector<float>& cycle() const noexcept { return cycle_; }
+    void writeStatus (std::ostream& o) const override
+    {
+        char hash[16];
+        std::snprintf (hash, sizeof hash, "%08x", this->hash());
+        o << "osc_kind: " << (kind_ == synthyboy::OscCycle::Kind::wavetable ? "wavetable" : (kind_ == synthyboy::OscCycle::Kind::off ? "off" : "other")) << "\nosc_cycle_hash: " << hash
+          << "\nosc_frame_percent: " << lastTargets_[0] << "\nosc_warp_percent: " << lastTargets_[1] << " " << lastTargets_[2] << "\nosc_recomputes_total: " << counters_.recomputes
+          << "\nosc_compute_ms: " << counters_.lastComputeMs << "\n";
+    }
+    void writeDump (std::ostream& o) const override
+    {
+        o << "# view " << name_ << ": index value (one cycle, " << cycle_.size() << " samples), kind " << (kind_ == synthyboy::OscCycle::Kind::wavetable ? "wavetable" : "other/off") << "\n";
+        for (size_t i = 0; i < cycle_.size(); ++i)
+            o << i << " " << cycle_[i] << "\n";
+    }
+
+private:
+    int osc_;
+    ParamGroup group_;
+    std::string name_;
+    ComputeBudget budget_;
+    int targetIdx_[4] = { -1, -1, -1, -1 };
+    std::unique_ptr<synthyboy::OscCycle> oc_;
+    std::shared_ptr<const synthyboy::StateContent> content_;
+    const synthyboy::IContentStore* store_ = nullptr;
+    std::vector<float> cycle_, scaled_;
+    float lastTargets_[4] = { -1, -1, -1, -1 };
+    synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other;
+    bool have_ = false;
+    std::vector<double> ys_;
+};
+
+/** A view without data (a kind that is not built yet): never valid, so the plane stays off. */
+class NullView final : public IView
+{
+public:
+    explicit NullView (const char* name) : name_ (name) {}
+    const char* name() const noexcept override { return name_; }
+    void targets (std::vector<int>&) const override {}
+    bool update (const ViewInput&) override { ++counters_.updates; return false; }
+    bool valid() const noexcept override { return false; }
+    void render (uint32_t*, int, int) override {}
+    uint32_t hash() const noexcept override { return 0; }
+    void writeStatus (std::ostream&) const override {}
+    void writeDump (std::ostream&) const override {}
+
+private:
+    const char* name_;
+};
+
+/** An ICurveRenderer that draws nothing: for the code that only asks a FilterView for its readout targets. */
+struct FilterRendererStub final : ICurveRenderer
+{
+    void render (const float*, int, uint32_t*, int, int, uint32_t, const Rect*, int) override {}
+};
+
+}} // namespace synthyboy_mpc::overlay

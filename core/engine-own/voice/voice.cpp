@@ -475,7 +475,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.decayCurve = P (ei.decayCurve);
         s.releaseCurve = P (ei.releaseCurve);
         if (finalise)
-            envLen[e][0] = s.attack + s.delay, envLen[e][1] = s.hold, envLen[e][2] = s.decay, envLen[e][3] = s.release;
+            envLen[e][0] = s.attack + s.delay, envLen[e][1] = s.hold, envLen[e][2] = s.decay, envLen[e][3] = s.release, envLen[e][4] = s.attack, envLen[e][5] = s.delay;
         s.delay *= vc.envFactor;
         s.attack *= vc.envFactor;
         s.hold *= vc.envFactor;

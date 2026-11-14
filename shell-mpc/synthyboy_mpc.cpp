@@ -306,22 +306,21 @@ struct PluginInstance
     {
         explicit OverlayView (PluginInstance& owner) : inst (owner) {}
         float param (int tableIndex) const noexcept override { return inst.paramMirror[tableIndex].load (std::memory_order_relaxed); }
-        bool live (float& cutoffHz, float& resonancePercent) const noexcept override
+        bool live (synthyboy::LiveValues& out) const noexcept override
         {
-            if (! inst.engine)
-                return false;
-            synthyboy::LiveValues lv;
-            if (! inst.engine->copyReadout (lv) || lv.block == 0 || lv.numTargets < 2)
-                return false;
-            cutoffHz = lv.target[0];
-            resonancePercent = lv.target[1];
-            return true;
+            return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
         }
+        double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
+        std::shared_ptr<const synthyboy::StateContent> content() const override { return std::atomic_load (&inst.overlayContent); }
+        const synthyboy::IContentStore* contentStore() const noexcept override { return inst.contentStore.get(); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
         PluginInstance& inst;
     };
     OverlayView overlayView { *this };
     std::atomic<double> overlayRate { 44100.0 };   // sampleRate for the overlay thread (sampleRate itself is the host thread's)
+    std::atomic<double> overlayBpm { 120.0 };      // the host's tempo for the overlay thread (the synced LFO rates)
+    std::shared_ptr<const synthyboy::StateContent> overlayContent;   // a copy of `content` for the overlay thread (std::atomic_load / atomic_store): custom LFO shapes, user wavetables
+    void publishOverlayContent() { std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content)); }
     bool overlayAttached = false;
 
     void startOverlay()
@@ -330,9 +329,10 @@ struct PluginInstance
             return;
         if (engine)
         {
-            int idx[2];
-            synthyboy::FilterResponse::readoutIndices (1, idx);
-            engine->setReadoutTargets (idx, 2); // the live cutoff and resonance of filter 1: the audio thread takes the list over at the end of its next block
+            std::vector<int> idx;
+            synthyboy_mpc::overlay::Controller::readoutTargets (idx);   // the knobs the views show live (the filters' cutoff and resonance, the oscillators' frame and warp): the audio thread takes the list over at the end of its next block
+            engine->setReadoutTargets (idx.data(), static_cast<int> (idx.size()));
+            publishOverlayContent();
         }
         synthyboy_mpc::overlay::Service::instance().attach (&overlayView);
         overlayAttached = true;
@@ -659,6 +659,9 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
     inst->content = std::move(content);
     if (inst->engine)
         inst->engine->setContent(inst->content);
+#if SYNTHYBOY_MPC_OVERLAY
+    inst->publishOverlayContent();
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -1366,6 +1369,9 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
         if (timeInfo)
         {
             inst->transport.bpm = timeInfo->tempo > 0 ? timeInfo->tempo : inst->transport.bpm;
+#if SYNTHYBOY_MPC_OVERLAY
+            inst->overlayBpm.store (inst->transport.bpm, std::memory_order_relaxed);
+#endif
             inst->transport.songPosBeats = timeInfo->ppqPos;
             inst->transport.playing = (timeInfo->flags & kVstTransportPlaying) != 0;
         }

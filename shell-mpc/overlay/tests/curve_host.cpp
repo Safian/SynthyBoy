@@ -17,7 +17,7 @@ int main()
     inst.set ("filter1.resonance", 30.0f);
     double now = 1000.0;
 
-    check (src.update (inst, now), "first update computes a curve");
+    check (src.update (inst, inst.liveTargets(), now), "first update computes a curve");
     check (src.valid() && src.stats().fullComputes == 1, "one full computation");
     const uint32_t h0 = src.hash();
     float lo, hi;
@@ -39,7 +39,7 @@ int main()
     for (int i = 0; i < 100; ++i)
     {
         now += 33.0;
-        if (src.update (inst, now)) { check (false, "nothing changed: update returned true"); break; }
+        if (src.update (inst, inst.liveTargets(), now)) { check (false, "nothing changed: update returned true"); break; }
     }
     check (src.stats().fullComputes == 1 && src.stats().translations == 0, "nothing changed: no recompute, no translation in 100 updates");
     check (src.hash() == h0, "nothing changed: same hash");
@@ -47,25 +47,25 @@ int main()
     // a parameter change (resonance) -> new curve (budget gap passed)
     now += 200.0;
     inst.set ("filter1.resonance", 60.0f);
-    check (src.update (inst, now), "resonance changed: update returns a new curve");
+    check (src.update (inst, inst.liveTargets(), now), "resonance changed: update returns a new curve");
     check (src.hash() != h0 && src.stats().fullComputes == 2, "resonance changed: new hash, one more full computation");
     const uint32_t h1 = src.hash();
 
     // model change -> new curve
     now += 200.0;
     inst.set ("filter1.model", 2.0f);
-    const bool changedModel = src.update (inst, now);
+    const bool changedModel = src.update (inst, inst.liveTargets(), now);
     check (changedModel && src.hash() != h1, "model changed: new hash");
 
     // cutoff only, inside the gap: a translated curve, no full computation; later the exact one
     now += 10.0;
     inst.hasLive = true; inst.liveCutoff = 1000.0f; inst.liveRes = 60.0f;
-    check (! src.update (inst, now), "live values equal to the knob state: nothing changes");
+    check (! src.update (inst, inst.liveTargets(), now), "live values equal to the knob state: nothing changes");
     const unsigned long fulls = src.stats().fullComputes;
     const uint32_t hBase = src.hash();
     now += 33.0;
     inst.liveCutoff = 1400.0f;
-    check (src.update (inst, now), "cutoff moved inside the budget gap: new picture");
+    check (src.update (inst, inst.liveTargets(), now), "cutoff moved inside the budget gap: new picture");
     check (src.stats().fullComputes == fulls && src.stats().translations == 1, "... made by translation (no full computation)");
     check (src.hash() != hBase, "... which differs from the base curve");
     // the translated curve against the exact one at the new cutoff: peak position error
@@ -73,10 +73,10 @@ int main()
     std::memcpy (transl, src.curve(), sizeof transl);
     now += 33.0;   // 76 ms after the last full computation: inside the 125 ms gap
     inst.liveCutoff = 1500.0f;
-    src.update (inst, now);           // still inside the gap: translated again
+    src.update (inst, inst.liveTargets(), now);           // still inside the gap: translated again
     check (src.stats().fullComputes == fulls, "a second move inside the gap: still no full computation");
     now += 300.0;                     // budget allows it now; the cutoff does not move any more
-    check (src.update (inst, now), "after the motion stops the exact curve follows");
+    check (src.update (inst, inst.liveTargets(), now), "after the motion stops the exact curve follows");
     check (src.stats().fullComputes == fulls + 1, "... by one full computation");
     {
         synthyboy::FilterResponse direct (48000.0);
@@ -108,13 +108,13 @@ int main()
 
     // after convergence nothing more happens
     const unsigned long fulls2 = src.stats().fullComputes;
-    for (int i = 0; i < 50; ++i) { now += 33.0; src.update (inst, now); }
+    for (int i = 0; i < 50; ++i) { now += 33.0; src.update (inst, inst.liveTargets(), now); }
     check (src.stats().fullComputes == fulls2, "converged: no further computation");
 
     // filter off: flat 0 dB, still a valid picture
     now += 300.0;
     inst.set ("filter1.on", 0.0f);
-    check (src.update (inst, now), "filter switched off: new picture");
+    check (src.update (inst, inst.liveTargets(), now), "filter switched off: new picture");
     src.minMax (lo, hi);
     check (lo == 0.0f && hi == 0.0f, "... flat at 0 dB");
 

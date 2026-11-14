@@ -52,7 +52,7 @@ static std::string line (const std::string& text, const std::string& key)
 
 int main()
 {
-    const Rect curveUi { layout::kCurve.x, layout::kCurve.y, layout::kCurve.w, layout::kCurve.h };
+    const Rect curveUi { layout::kViews[0].region.x, layout::kViews[0].region.y, layout::kViews[0].region.w, layout::kViews[0].region.h };
     // ---- the markers are there from the start: shown at the first check ----
     {
         Rig r;
@@ -66,7 +66,7 @@ int main()
         check (r.ctl->state() == "visible", "state: visible");
         r.run (1200);
         const std::string st = r.dir.read ("status.txt");
-        check (line (st, "state") == "visible" && ! line (st, "curve_hash").empty() && ! line (st, "markers_read").empty() && line (st, "rotation") == "90", "the status file says visible and has the hash, the marker values and the rotation");
+        check (line (st, "state") == "visible" && ! line (st, "curve_hash").empty() && ! line (st, "markers_read_filter1").empty() && line (st, "view") == "filter1" && line (st, "rotation") == "90", "the status file says visible and has the hash, the marker values and the rotation");
         {
             const Rect pr = uiRectToPanel (90, curveUi, 800, 1280);
             const std::string want = std::to_string (pr.w) + "x" + std::to_string (pr.h) + "+" + std::to_string (pr.x) + "+" + std::to_string (pr.y);
@@ -92,7 +92,7 @@ int main()
         Rig r;
         r.run (500);
         check (! r.on() && r.plane.countOf ("create") == 0, "no markers: no plane, no buffers");
-        check (r.ctl->state() == "hidden: page not on screen", "state: hidden: page not on screen");
+        check (r.ctl->state() == "hidden: no view on screen", "state: hidden: no view on screen");
         r.frame.setAll (true, 90);
         const double t = r.until ([&] { return r.on(); }, 500);
         check (t >= 0 && t <= 110, "the markers appear: shown within 110 ms (took " + std::to_string (t) + " ms)");
@@ -101,9 +101,9 @@ int main()
         check (h >= 0 && h <= 150, "one marker missing: hidden within 150 ms (took " + std::to_string (h) + " ms)");
         check (! r.plane.buffersAlive, "... and the buffers are freed");
         check (r.plane.calls() > 0 && r.plane.callLog().back() == "destroy", "... plane off first, then the buffers");
-        r.frame.setMarker (1, true, 90, layout::kMarkers[1].rgb + 2);   // +2 in blue
+        r.frame.setMarker (1, true, 90, layout::kViews[0].markers[1].rgb + 2);   // +2 in blue
         check (r.until ([&] { return r.on(); }, 300) >= 0, "a marker 2 off in one channel is accepted");
-        r.frame.setMarker (1, true, 90, layout::kMarkers[1].rgb + 3);
+        r.frame.setMarker (1, true, 90, layout::kViews[0].markers[1].rgb + 3);
         check (r.until ([&] { return ! r.on(); }, 300) >= 0, "a marker 3 off is not");
         r.frame.setMarker (1, true, 90);
         r.until ([&] { return r.on(); }, 300);
@@ -240,7 +240,7 @@ int main()
         r.dir.touch ("dump");
         r.run (2200);
         const std::string d = r.dir.read ("curve.txt");
-        check (d.find ("# index shown_db exact_db") == 0 && std::count (d.begin(), d.end(), '\n') == 257, "the dump file has the 256 values");
+        check (d.find ("# view filter1: index shown_db exact_db") == 0 && std::count (d.begin(), d.end(), '\n') == 257, "the dump file has the 256 values");
     }
     // ---- the same controller on a thread, with parameters, markers and instances changing under it (ThreadSanitizer) ----
     {

@@ -1,15 +1,15 @@
-// SynthyBoy - MPC overlay: the controller. One tick () of the overlay thread: switches, instance count, page detection, curve update, drawing, presenting, status file.
+// SynthyBoy - MPC overlay: the controller. One tick () of the overlay thread: switches, instance count, page detection (which VIEW is on screen), view update, drawing, presenting, status file.
 // Everything it touches from outside is behind an interface (IPlaneBackend, IFrameSource, ICurveRenderer, IInstanceView) and time is a parameter, so the tests drive it with
 // fakes and a fake clock; the thread and the real backends are in service.h / drm_linux.h.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// States: "disabled: <reason>" (an ioctl failed, the descriptor was not found: for the life of the process), "hidden: <reason>" (kill switch, several instances, no instance, the
-// page is not on screen, no curve yet), "visible". The files (all in /tmp by default, see Paths):
+// States: "disabled: <reason>" (an ioctl failed, the descriptor was not found: for the life of the process), "hidden: <reason>" (kill switch, several instances, no instance, no
+// view of the skin is on screen, no data yet), "visible" (the status file names the view: `view: lfo2`). The files (all in /tmp by default, see Paths):
 //   synthyboy-overlay-off      exists -> hidden (checked once a second; removing the file brings the overlay back)
 //   synthyboy-overlay-rot      "90" or "270" (default 90), read once a second
 //   synthyboy-overlay-status.txt  rewritten once a second (temporary file + rename)
-//   synthyboy-overlay-dump     exists -> synthyboy-overlay-curve.txt is rewritten once a second with the 256 values of the shown and of the exact curve (debug)
+//   synthyboy-overlay-dump     exists -> synthyboy-overlay-curve.txt is rewritten once a second with the data of the visible view (debug)
 #pragma once
 
 #include <algorithm>
@@ -31,6 +31,8 @@
 #include "page_detector.h"
 #include "presenter.h"
 #include "renderer.h"
+#include "view.h"
+#include "views.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -57,12 +59,38 @@ public:
     Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0)
         : presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs)
     {
-        for (int i = 0; i < layout::kNumMarkers; ++i)
-            markers_[i] = { { layout::kMarkers[i].rect.x, layout::kMarkers[i].rect.y, layout::kMarkers[i].rect.w, layout::kMarkers[i].rect.h }, layout::kMarkers[i].rgb };
-        detector_ = std::make_unique<PageDetector> (frames_, markers_, layout::kNumMarkers);
-        curveRect_ = { layout::kCurve.x, layout::kCurve.y, layout::kCurve.w, layout::kCurve.h };
-        for (int i = 0; i < layout::kNumMarkers; ++i)
-            covers_[i] = { markers_[i].rect.x - curveRect_.x, markers_[i].rect.y - curveRect_.y, markers_[i].rect.w, markers_[i].rect.h };
+        for (int i = 0; i < layout::kNumViews; ++i)
+        {
+            const layout::View& v = layout::kViews[i];
+            for (int m = 0; m < 2; ++m)
+                markers_[i * 2 + m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb };
+            regions_[i] = { v.region.x, v.region.y, v.region.w, v.region.h };
+            switch (v.kind)
+            {
+                case layout::kKindFilter: views_.push_back (std::make_unique<FilterView> (v.index, renderer_, fixedCost_)); break;
+                case layout::kKindLfo: views_.push_back (std::make_unique<LfoView> (v.index, fixedCost_)); break;
+                case layout::kKindOsc: views_.push_back (std::make_unique<OscView> (v.index, fixedCost_)); break;
+                default: views_.push_back (std::make_unique<NullView> (v.name)); break;
+            }
+            targetBase_[i] = static_cast<int> (targets_.size());
+            views_.back()->targets (targets_);
+        }
+        detector_ = std::make_unique<PageDetector> (frames_, markers_, layout::kNumViews);
+    }
+
+    /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). */
+    static void readoutTargets (std::vector<int>& out)
+    {
+        out.clear();
+        FilterRendererStub stub;
+        for (int i = 0; i < layout::kNumViews; ++i)
+        {
+            const layout::View& v = layout::kViews[i];
+            if (v.kind == layout::kKindFilter)
+                FilterView (v.index, stub, -1.0).targets (out);
+            else if (v.kind == layout::kKindOsc)
+                OscView (v.index, -1.0).targets (out);
+        }
     }
 
     // ---- instances (host threads; the lock is also held while the overlay thread uses an instance) ----
@@ -101,7 +129,10 @@ public:
     int rotation() const noexcept { return rotation_; }
     const Presenter& presenter() const noexcept { return presenter_; }
     unsigned long framesTotal() const noexcept { return presenter_.frames(); }
-    const CurveSource* curveSource() const noexcept { return curve_.get(); }
+    /** The visible view's object (tests), or null. */
+    const IView* currentView() const noexcept { return current_ >= 0 ? views_[static_cast<size_t> (current_)].get() : nullptr; }
+    const IView* viewByName (const std::string& name) const noexcept { for (const auto& v : views_) if (name == v->name()) return v.get(); return nullptr; }
+    int currentIndex() const noexcept { return current_; }
     /** Optional: the CPU time of the calling thread in ms (the status file shows the overlay thread's load). */
     void setCpuClock (std::function<double()> clock) { cpuClock_ = std::move (clock); }
 
@@ -155,8 +186,9 @@ private:
         {
             nextDetectMs_ = nowMs + timing_.detectEveryMs;
             const Detection d = detector_->check (rotation_);
-            for (int i = 0; i < d.count && i < 8; ++i)
-                seen_[i] = d.seen[i];
+            for (int i = 0; i < d.count && i < Detection::kMaxViews; ++i)
+                for (int m = 0; m < 2; ++m)
+                    seen_[i][m] = d.seen[i][m];
             if (! d.readable)
             {
                 if (++unreadable_ >= timing_.unreadableLimit)
@@ -167,16 +199,20 @@ private:
             }
             else
                 unreadable_ = 0;
-            pageVisible_ = d.visible;
-            if (! pageVisible_)
+            if (d.view != current_)
+            {
+                current_ = d.view;
+                needFrame_ = true;
+            }
+            if (current_ < 0)
             {
                 presenter_.hide();
-                setState (d.readable ? "hidden: page not on screen" : "hidden: framebuffer not readable");
+                setState (d.readable ? "hidden: no view on screen" : "hidden: framebuffer not readable");
             }
         }
-        if (pageVisible_)
+        if (current_ >= 0)
         {
-            if (! presenter_.show (curveRect_, rotation_))
+            if (! presenter_.show (regions_[current_], rotation_))
             {
                 disable (presenter_.reason());
                 return 1000.0;
@@ -197,38 +233,33 @@ private:
     {
         const auto workStart = std::chrono::steady_clock::now();
         bool changed = false;
+        IView& view = *views_[static_cast<size_t> (current_)];
         {
             std::lock_guard<std::mutex> g (mu_);
             if (instances_.size() != 1)
                 return;
             IInstanceView* v = instances_[0];
-            if (! curve_)
-            {
-                CurveSource::Config cfg;
-                cfg.sampleRate = v->sampleRate();
-                cfg.fixedCostMs = fixedCost_;
-                curve_ = std::make_unique<CurveSource> (cfg);
-                curveRate_ = cfg.sampleRate;
-            }
-            else if (v->sampleRate() != curveRate_)
-            {
-                CurveSource::Config cfg;
-                cfg.sampleRate = v->sampleRate();
-                cfg.fixedCostMs = fixedCost_;
-                curve_ = std::make_unique<CurveSource> (cfg);
-                curveRate_ = cfg.sampleRate;
-                needFrame_ = true;
-            }
-            const unsigned long before = curve_->stats().fullComputes;
-            changed = curve_->update (*v, nowMs);
+            synthyboy::LiveValues lv;
+            const bool haveLive = v->live (lv);
+            ViewInput in;
+            in.instance = v;
+            in.live = haveLive ? &lv : nullptr;
+            const int base = targetBase_[current_];
+            in.targets = haveLive && lv.numTargets > base ? lv.target + base : nullptr;
+            in.nowMs = nowMs;
+            in.frames = &frames_;
+            in.rotation = rotation_;
+            changed = view.update (in);
             ++updatesThisSecond_;
             if (changed)
                 ++changesThisSecond_;
-            fullThisSecond_ += curve_->stats().fullComputes - before;
+            if (changed)
+                ++viewFrames_[static_cast<size_t> (current_)].changes;
+            fullThisSecond_ = view.counters().recomputes;
         }
-        if (! curve_ || ! curve_->valid())
+        if (! view.valid())
         {
-            setState ("hidden: no curve yet");
+            setState ("hidden: no data yet");
             return;
         }
         if (! presenter_.planeOn())
@@ -245,10 +276,10 @@ private:
         }
         using Clock = std::chrono::steady_clock;
         const auto ms = [] (Clock::time_point a, Clock::time_point b) { return std::chrono::duration<double, std::milli> (b - a).count(); };
-        const int w = curveRect_.w, h = curveRect_.h;
+        const int w = regions_[current_].w, h = regions_[current_].h;
         canvas_.resize (static_cast<size_t> (w) * static_cast<size_t> (h));
         const auto t0 = Clock::now();
-        renderer_.render (curve_->curve(), curve_->points(), canvas_.data(), w, h, covers_, layout::kNumMarkers);
+        view.render (canvas_.data(), w, h);
         const auto t1 = Clock::now();
         size_t stride = 0;
         uint32_t* back = presenter_.backBuffer (stride);
@@ -268,6 +299,7 @@ private:
             lastFrameMs_ = nowMs;
             needFrame_ = false;
             ++framesThisSecond_;
+            ++viewFrames_[static_cast<size_t> (current_)].frames;
             setState ("visible");
             // SETPLANE returns right after a vblank. The next picture is due two vblanks later: start drawing early enough that it is ready (and SETPLANE then
             // waits for the vblank, which locks the pictures to every second one) instead of starting a full period after the return, which would miss it
@@ -316,13 +348,12 @@ private:
         updatesLast_ = updatesThisSecond_;
         changesLast_ = changesThisSecond_;
         updatesThisSecond_ = changesThisSecond_ = 0;
-        fullLast_ = fullThisSecond_;
         cpuPercent_ = (cpuClock_ && wall > 100.0) ? 100.0 * (cpu - cpuAtSecond_) / wall : 0.0;
         cpuAtSecond_ = cpu;
         framesThisSecond_ = 0;
-        fullThisSecond_ = 0;
         secondStartMs_ = nowMs;
         writeStatus (false);
+        recomputesAtSecond_ = current_ >= 0 ? views_[static_cast<size_t> (current_)]->counters().recomputes : 0;
         if (dumpRequested_)
             writeDump();
     }
@@ -331,6 +362,7 @@ private:
     {
         std::ostringstream o;
         o << "state: " << state_ << "\n";
+        o << "view: " << (current_ >= 0 && state_ == "visible" ? views_[static_cast<size_t> (current_)]->name() : "none") << "\n";
         o << "rotation: " << rotation_ << "\n";
         size_t count;
         {
@@ -341,29 +373,26 @@ private:
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << presenter_.frames() << "\n";
         o << "curve_updates_last_second: " << updatesLast_ << "\ncurve_changes_last_second: " << changesLast_ << "\n";
-        o << "full_recomputes_last_second: " << fullLast_ << "\n";
         o << "overlay_thread_cpu_percent_of_one_core: " << cpuPercent_ << "\n";
         o << "work_peak_ms: " << workPeakMs_ << "\nrender_ms: " << renderMs_ << "\nrotate_ms: " << rotateMs_ << "\nsetplane_ms: " << setPlaneMs_ << "\n";
-        if (curve_)
+        if (current_ >= 0)
         {
-            const CurveSource::Stats& s = curve_->stats();
-            o << "last_compute_ms: " << s.lastComputeMs << "\n";
-            o << "full_computes_total: " << s.fullComputes << "\n";
-            o << "translations_total: " << s.translations << "\n";
-            o << "live_cutoff_hz: " << s.cutoffHz << "\n";
-            o << "live_resonance_percent: " << s.resonancePercent << "\n";
-            if (curve_->valid())
-            {
-                float lo, hi;
-                curve_->minMax (lo, hi);
-                char hash[16];
-                std::snprintf (hash, sizeof hash, "%08x", curve_->hash());
-                o << "curve_min_db: " << lo << "\ncurve_max_db: " << hi << "\ncurve_hash: " << hash << "\n";
-            }
+            const IView& v = *views_[static_cast<size_t> (current_)];
+            o << "full_recomputes_last_second: " << (v.counters().recomputes - recomputesAtSecond_) << "\n";
+            v.writeStatus (o);
         }
-        char buf[160];
-        std::snprintf (buf, sizeof buf, "markers_read: left=%06x right=%06x (expected %06x %06x)\n", seen_[0] & 0xffffff, seen_[1] & 0xffffff, layout::kMarkers[0].rgb, layout::kMarkers[1].rgb);
-        o << buf;
+        for (int i = 0; i < layout::kNumViews; ++i)
+        {
+            const ViewCounters& c = views_[static_cast<size_t> (i)]->counters();
+            o << "view_" << layout::kViews[i].name << ": updates=" << c.updates << " changes=" << c.changes << " recomputes=" << c.recomputes << " frames=" << viewFrames_[static_cast<size_t> (i)].frames << "\n";
+        }
+        char buf[200];
+        for (int i = 0; i < layout::kNumViews; ++i)
+        {
+            std::snprintf (buf, sizeof buf, "markers_read_%s: left=%06x right=%06x (expected %06x %06x)\n", layout::kViews[i].name, seen_[i][0] & 0xffffff, seen_[i][1] & 0xffffff,
+                           layout::kViews[i].markers[0].rgb, layout::kViews[i].markers[1].rgb);
+            o << buf;
+        }
         o << "panel: " << presenter_.panelWidth() << "x" << presenter_.panelHeight() << "\n";
         if (presenter_.planeOn())
             o << "plane_rect: " << presenter_.panelRect().w << "x" << presenter_.panelRect().h << "+" << presenter_.panelRect().x << "+" << presenter_.panelRect().y << "\n";
@@ -372,12 +401,10 @@ private:
 
     void writeDump()
     {
-        if (! curve_ || ! curve_->valid())
+        if (current_ < 0 || ! views_[static_cast<size_t> (current_)]->valid())
             return;
         std::ostringstream o;
-        o << "# index shown_db exact_db (point i = 20 Hz * 1000 ^ (i / 255)), cutoff_hz " << curve_->stats().cutoffHz << " resonance_percent " << curve_->stats().resonancePercent << "\n";
-        for (int i = 0; i < curve_->points(); ++i)
-            o << i << " " << curve_->curve()[i] << " " << curve_->exactCurve()[i] << "\n";
+        views_[static_cast<size_t> (current_)]->writeDump (o);
         writeAtomically (paths_.dump, o.str());
     }
 
@@ -401,12 +428,14 @@ private:
     Paths paths_;
     Timing timing_;
     double fixedCost_;
-    MarkerSpec markers_[layout::kNumMarkers];
-    Rect covers_[layout::kNumMarkers];
-    Rect curveRect_;
+    MarkerSpec markers_[layout::kNumViews * 2];
+    Rect regions_[layout::kNumViews];
+    int targetBase_[layout::kNumViews] = {};
+    std::vector<int> targets_;
+    std::vector<std::unique_ptr<IView>> views_;
+    struct ViewFrames { unsigned long frames = 0, changes = 0; };
+    std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (layout::kNumViews);
     std::unique_ptr<PageDetector> detector_;
-    std::unique_ptr<CurveSource> curve_;
-    double curveRate_ = 0.0;
     std::vector<uint32_t> canvas_;
 
     std::mutex mu_;
@@ -414,13 +443,14 @@ private:
 
     std::string state_ = "hidden: starting";
     std::function<double()> cpuClock_;
-    bool killed_ = false, pageVisible_ = false, disabledHere_ = false, dumpRequested_ = false, needFrame_ = true;
+    bool killed_ = false, disabledHere_ = false, dumpRequested_ = false, needFrame_ = true;
+    int current_ = -1;
     int rotation_ = 90, unreadable_ = 0;
-    uint32_t seen_[8] = { 0xffffffffu, 0xffffffffu, 0, 0, 0, 0, 0, 0 };
+    uint32_t seen_[Detection::kMaxViews][2] = {};
     double nextSwitchesMs_ = 0.0, nextDetectMs_ = 0.0, lastFrameMs_ = -1000.0, secondStartMs_ = 0.0, cpuAtSecond_ = 0.0, cpuPercent_ = 0.0;
     unsigned framesThisSecond_ = 0, framesLast_ = 0, updatesThisSecond_ = 0, updatesLast_ = 0, changesThisSecond_ = 0, changesLast_ = 0;
     double nextWaitMs_ = 33.3, workPeakMs_ = 0.0, renderMs_ = 0.0, rotateMs_ = 0.0, setPlaneMs_ = 0.0;
-    unsigned long fullThisSecond_ = 0, fullLast_ = 0;
+    unsigned long fullThisSecond_ = 0, recomputesAtSecond_ = 0;
 };
 
 }} // namespace synthyboy_mpc::overlay

@@ -64,6 +64,18 @@ public:
         }
     }
     double stageSeconds() const noexcept { return pos; }
+    /** Read-out for displays (no effect on the sound): the stage as the enum above (idle 0, delay 1, attack 2, hold 3, decay 4, sustain 5, release 6, done 7) and the
+        fraction 0 .. 1 of that stage that has run (`len` = the length of the stage in seconds; the delay uses its own progress, the sustain has none). */
+    int fineStage() const noexcept { return static_cast<int> (stage); }
+    float fineFraction (float len) const noexcept
+    {
+        switch (stage)
+        {
+            case Stage::delay: return delayStarted ? static_cast<float> (std::min (delayProgress, 1.0)) : 0.0f;
+            case Stage::attack: case Stage::hold: case Stage::decay: case Stage::release: return len > 0.0f ? clamp01 (static_cast<float> (pos / len)) : 0.0f;
+            default: return 0.0f;
+        }
+    }
     float current() const noexcept { return value; }
 
     /** Advances `seconds` and returns the value at the end of the step. The delay stage follows document 03 1.3a: the delay time is read once per chunk (four steps of 32

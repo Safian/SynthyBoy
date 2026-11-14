@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Inputs, read through IInstanceView (the shell implements it with paramMirror and the engine's readout): the filter1.* parameters and the live cutoff (Hz) / resonance (percent)
-// of the voice that sounded last (the plain knob values when nothing sounds).
+// Inputs, read through IInstanceView (the shell implements it with paramMirror and the engine's readout): the filterN.* parameters and the live cutoff (Hz) / resonance (percent)
+// of the voice that sounded last (the plain knob values when nothing sounds; with no voice the engine reports what macros and wheels do to the knobs).
 //
 // What is recomputed, and when:
 //  - Nothing changed (the filter1.* parameters except the cutoff, the live resonance, the live cutoff) -> nothing: update () returns false, no new picture.
@@ -22,10 +22,14 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/filter_response.h"
 #include "synthyboy/params.h"
+#include "synthyboy/readout.h"
 #include "synthyboy/state.h"
 
 namespace synthyboy_mpc { namespace overlay {
@@ -36,10 +40,15 @@ class IInstanceView
 public:
     virtual ~IInstanceView() = default;
     virtual float param (int tableIndex) const noexcept = 0;
-    /** The modulated cutoff (Hz) and resonance (percent) of filter 1. false: the engine has not written live values yet (the knob values are used). */
-    virtual bool live (float& cutoffHz, float& resonancePercent) const noexcept = 0;
+    /** The live values of the engine (readout of the targets the overlay subscribed, the LFO phases, the envelope stages ...). false: the engine has not written any yet. */
+    virtual bool live (synthyboy::LiveValues& out) const noexcept = 0;
     /** The sample rate of the instance (Hz). */
     virtual double sampleRate() const noexcept = 0;
+    /** The tempo of the host (beats per minute) for the synced LFO rates. */
+    virtual double bpm() const noexcept { return 120.0; }
+    /** The content of the state (custom LFO shapes, user wavetables, remap curves): a snapshot that stays valid while the pointer is held; changes when the state changes. */
+    virtual std::shared_ptr<const synthyboy::StateContent> content() const { return nullptr; }
+    virtual const synthyboy::IContentStore* contentStore() const noexcept { return nullptr; }
 };
 
 class CurveSource
@@ -55,6 +64,7 @@ public:
     {
         double sampleRate = 48000.0;
         double fixedCostMs = -1.0;   // >= 0: use this as the cost of a full computation instead of measuring it (tests)
+        int filter = 1;              // 1 or 2
     };
 
     struct Stats
@@ -66,19 +76,19 @@ public:
 
     explicit CurveSource (const Config& config) : config_ (config) { findIndices(); }
 
-    /** Reads the inputs and refreshes the curve when it should change. Returns true when curve () is a new picture. `nowMs`: any monotonic clock in milliseconds. */
-    bool update (const IInstanceView& view, double nowMs)
+    /** Reads the inputs and refreshes the curve when it should change. Returns true when curve () is a new picture. `liveTargets`: the live (modulated) cutoff in Hz and resonance
+        in percent (the readout of FilterResponse::readoutIndices of this filter) or null when the engine has none (the knob values are used). `nowMs`: any monotonic clock in ms. */
+    bool update (const IInstanceView& view, const float* liveTargets, double nowMs)
     {
         if (! response_)
             response_ = std::make_unique<synthyboy::FilterResponse> (config_.sampleRate);   // allocates; first call only
         for (int idx : relevant_)
             values_.plain[idx] = view.param (idx);
         float cutoff = values_.plain[cutoffIdx_], resonance = values_.plain[resonanceIdx_];
-        float liveCut = 0.0f, liveRes = 0.0f;
-        if (view.live (liveCut, liveRes) && liveCut > 0.0f && liveRes >= 0.0f)
+        if (liveTargets != nullptr && std::isfinite (liveTargets[0]) && liveTargets[0] > 0.0f && std::isfinite (liveTargets[1]))
         {
-            cutoff = liveCut;
-            resonance = liveRes;
+            cutoff = liveTargets[0];
+            resonance = liveTargets[1];   // may be below 0 (a modulation pulled the knob under zero): the filter clamps, the curve of 0 % is what the voice plays
         }
         cutoff = std::clamp (cutoff, static_cast<float> (kFMin), static_cast<float> (kFMax));   // a modulated cutoff can go far beyond the knob (84 kHz seen); the voice's filter does not follow it above the audible range
         stats_.cutoffHz = cutoff;
@@ -142,11 +152,12 @@ private:
     {
         const synthyboy::ParamInfo* table = synthyboy::paramTable();
         const size_t count = synthyboy::paramCount();
+        const std::string prefix = "filter" + std::to_string (config_.filter == 2 ? 2 : 1) + ".";
         for (size_t i = 0; i < count; ++i)
-            if (std::strncmp (table[i].key, "filter1.", 8) == 0)
+            if (std::strncmp (table[i].key, prefix.c_str(), prefix.size()) == 0)
                 relevant_.push_back (static_cast<int> (i));
-        const synthyboy::ParamInfo* c = synthyboy::findParamByKey ("filter1.cutoff");
-        const synthyboy::ParamInfo* r = synthyboy::findParamByKey ("filter1.resonance");
+        const synthyboy::ParamInfo* c = synthyboy::findParamByKey ((prefix + "cutoff").c_str());
+        const synthyboy::ParamInfo* r = synthyboy::findParamByKey ((prefix + "resonance").c_str());
         cutoffIdx_ = c ? static_cast<int> (c - table) : 0;
         resonanceIdx_ = r ? static_cast<int> (r - table) : 0;
         values_ = synthyboy::ParamValues::defaults();
@@ -156,7 +167,7 @@ private:
     bool fullCompute (float cutoff, float resonance, double nowMs)
     {
         synthyboy::FilterResponse::Request req;
-        req.filter = 1;
+        req.filter = config_.filter == 2 ? 2 : 1;
         req.cutoffHz = cutoff;
         req.resonancePercent = resonance;
         req.fMin = static_cast<float> (kFMin);
