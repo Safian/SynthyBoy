@@ -156,6 +156,9 @@ private:
     gpu::SharedBlock* blk = nullptr;
     std::deque<gpu::Msg> inbox, outbox;
     bool eof = false, ready = false, shown = false;
+public:
+    bool isShown() const { return shown; }
+private:
     int pid_ = 0;
     double readyAt = 0.0;
 };
@@ -538,6 +541,30 @@ int main()
             const double t = r.until ([&] { return ! r.ctl->usingGpu() && r.plane.planeOn && r.plane.buffersAlive; }, 3000);
             check (t >= 0 && t <= 1000, "the helper hangs: the CPU draws within one second (" + std::to_string (t) + " ms)");
             check (r.helper.kills >= 1 && r.plane.foreignFbs.empty(), "the hung helper was killed and cleaned up");
+        }
+        // ---- two instances on the GPU path: the slot colour on screen picks the data, a colour that is nobody's takes the picture off ----
+        {
+            CRig r;
+            FakeInstance second;
+            second.set ("filter1.cutoff", 4000.0f);
+            second.set ("filter1.resonance", 70.0f);
+            r.ctl->attach (&second);
+            r.until ([&] { return r.ctl->usingGpu() && r.ctl->activeSlot() == 0; }, 2000);
+            r.run (300);
+            int scenes = r.helper.scenes;
+            r.frame.setViewInstance (0, 1, true, 90);
+            const double t = r.until ([&] { return r.ctl->activeSlot() == 1 && r.helper.scenes > scenes; }, 1000);
+            check (t >= 0 && t <= 200 && r.ctl->usingGpu(), "GPU path: the colour of slot 1 hands the helper instance 1's scene within 200 ms (" + std::to_string (t) + " ms)");
+            r.run (500);
+            scenes = r.helper.scenes;
+            r.run (1000);
+            check (r.helper.scenes == scenes, "... and nothing more while nothing changes");
+            r.frame.setViewInstance (0, 9, true, 90);   // nobody's slot
+            const double h = r.until ([&] { return ! r.helper.isShown(); }, 1000);
+            check (h >= 0 && h <= 300 && r.ctl->state() == "hidden: instance slot 9 is not alive", "GPU path: a slot nobody holds: the helper is told to hide (" + std::to_string (h) + " ms)");
+            r.frame.setViewInstance (0, 0, true, 90);
+            check (r.until ([&] { return r.helper.isShown() && r.ctl->activeSlot() == 0; }, 1000) >= 0, "GPU path: slot 0 again: shown");
+            r.ctl->detach (&second);
         }
         // ---- without a backend the controller is the one of the CPU build ----
         {

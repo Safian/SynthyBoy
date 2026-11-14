@@ -103,6 +103,9 @@
 #define SYNTHYBOY_MPC_OVERLAY 0
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
+#if !SYNTHYBOY_MPC_LFO_LIVE
+#error "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
+#endif
 #include "overlay/service.h"
 #include "synthyboy/readout.h"
 #endif
@@ -314,6 +317,11 @@ struct PluginInstance
         std::shared_ptr<const synthyboy::StateContent> content() const override { return std::atomic_load (&inst.overlayContent); }
         const synthyboy::IContentStore* contentStore() const noexcept override { return inst.contentStore.get(); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
+        void requestOverlayReport() noexcept override
+        {
+            inst.overlayAsked.store (true, std::memory_order_release);
+            inst.overlayReportDue.store (true, std::memory_order_release);
+        }
         PluginInstance& inst;
     };
     OverlayView overlayView { *this };
@@ -322,6 +330,73 @@ struct PluginInstance
     std::shared_ptr<const synthyboy::StateContent> overlayContent;   // a copy of `content` for the overlay thread (std::atomic_load / atomic_store): custom LFO shapes, user wavetables
     void publishOverlayContent() { std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content)); }
     bool overlayAttached = false;
+
+    // The display-only parameter "Overlay Instance" (the last parameter of the list; not automatable, not in the chunk): the skin shows it as a film strip colour, so the overlay knows
+    // WHICH instance's page is on screen (overlay/instance_slots.h). The value is the frame of this instance's slot / 32; the host reads it with getParameter and redraws the picture
+    // when the display thread reports it (audioMasterAutomate): once after creation, when the value changes and whenever the overlay thread asks (requestOverlayReport).
+    std::atomic<int> overlaySlot { -1 };                       // the slot the overlay service gave this instance (-1: none, the instance never shows the overlay)
+    std::atomic<float> overlayValue { synthyboy_mpc::overlay::instanceParamValue (-1) };   // what getParameter says: slot, or what the debug file asks for
+    std::atomic<bool> overlayReportDue { false };              // set by any thread; the display thread makes the host call
+    std::atomic<bool> overlayAsked { false };                  // set by the overlay thread only (requestOverlayReport): the debug mode "stale" ends with it
+    bool overlayStaleReleased = false;                         // display thread only
+    std::chrono::steady_clock::time_point overlayNextFileCheck {};   // display thread only
+    static constexpr const char* kOverlayFakeSlotFile = "/tmp/synthyboy-overlay-fake-slot";
+
+    /** The value for the real slot, or what the debug file says (a number 0 .. 15 = report that slot, any other number or "none" = the none colour, "blank" = frame 0, "stale" = frame 0 until the
+        overlay thread asks for a report and the real slot after that: what a host that shows an old picture until the parameter is reported looks like). Display thread and startOverlay. */
+    float overlayWantedValue (bool asked = false)
+    {
+        const float real = synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
+        bool stale = false;
+        if (FILE* f = std::fopen (kOverlayFakeSlotFile, "r"))
+        {
+            char text[32] = {};
+            const size_t n = std::fread (text, 1, sizeof text - 1, f);
+            std::fclose (f);
+            text[n] = '\0';
+            if (std::strncmp (text, "blank", 5) == 0)
+                return 0.0f;
+            if (std::strncmp (text, "none", 4) == 0)
+                return synthyboy_mpc::overlay::instanceParamValue (-1);
+            if (std::strncmp (text, "stale", 5) == 0)
+                stale = true;
+            else
+            {
+                char* end = nullptr;
+                const long v = std::strtol (text, &end, 10);
+                if (end != text)
+                    return synthyboy_mpc::overlay::instanceParamValue (static_cast<int> (v));
+            }
+        }
+        if (! stale)
+        {
+            overlayStaleReleased = false;
+            return real;
+        }
+        overlayStaleReleased = overlayStaleReleased || asked;
+        return overlayStaleReleased ? real : 0.0f;
+    }
+    /** The display thread, every tick: a due report is made with the value the slot (or the debug file) wants now; the debug file is looked at once a second as well (a changed value is
+        reported). The value is read AFTER the flag is taken, so a slot that startOverlay stored before it set the flag is never missed. */
+    void overlayPoll (AEffect* e, int paramIndex)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        bool report = overlayReportDue.exchange (false, std::memory_order_acq_rel);
+        const bool asked = overlayAsked.exchange (false, std::memory_order_acq_rel);
+        if (report || now >= overlayNextFileCheck)
+        {
+            if (now >= overlayNextFileCheck)
+                overlayNextFileCheck = now + std::chrono::seconds (1);
+            const float v = overlayWantedValue (asked);
+            if (v != overlayValue.load (std::memory_order_relaxed))
+            {
+                overlayValue.store (v, std::memory_order_relaxed);
+                report = true;
+            }
+        }
+        if (report && audioMaster)
+            audioMaster (e, audioMasterAutomate, paramIndex, 0, nullptr, overlayValue.load (std::memory_order_relaxed));
+    }
 
     void startOverlay()
     {
@@ -334,7 +409,10 @@ struct PluginInstance
             engine->setReadoutTargets (idx.data(), static_cast<int> (idx.size()));
             publishOverlayContent();
         }
-        synthyboy_mpc::overlay::Service::instance().attach (&overlayView);
+        const int slot = synthyboy_mpc::overlay::Service::instance().attach (&overlayView);   // the slot stays this instance's until effClose; -1: more than 16 instances
+        overlaySlot.store (slot, std::memory_order_relaxed);
+        overlayValue.store (synthyboy_mpc::overlay::instanceParamValue (slot), std::memory_order_relaxed);   // (the debug file is the display thread's business)
+        overlayReportDue.store (true, std::memory_order_release);   // the first report: the display thread makes it
         overlayAttached = true;
     }
     void stopOverlay() noexcept
@@ -386,6 +464,10 @@ struct PluginInstance
         const auto count = static_cast<VstInt32> (synthyboy::paramCount());
         return index >= count && index < count + kLiveParams;
     }
+#if SYNTHYBOY_MPC_OVERLAY
+    /** The last display parameter, "Overlay Instance" (only in a build with the overlay). */
+    static bool isOverlayParam (VstInt32 index) noexcept { return index == static_cast<VstInt32> (synthyboy::paramCount()) + kLiveParams; }
+#endif
 
     void startLive (AEffect* e)
     {
@@ -427,6 +509,9 @@ struct PluginInstance
                 std::this_thread::sleep_until (next);
                 if (liveStop.load (std::memory_order_relaxed))
                     break;
+#if SYNTHYBOY_MPC_OVERLAY
+                overlayPoll (e, first + kLiveParams);   // "Overlay Instance": the display parameter after the spectrum columns
+#endif
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
                 const double t = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
@@ -510,6 +595,9 @@ struct PluginInstance
 #endif
 #else
         b += "LFO_LIVE=OFF";
+#endif
+#if SYNTHYBOY_MPC_OVERLAY
+        extraParams += 1; // "Overlay Instance"
 #endif
         b += " params=" + std::to_string (synthyboy::paramCount() + extraParams);
 #if defined(__aarch64__)
@@ -848,6 +936,25 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         char* buf = static_cast<char*>(ptr);
         if (!buf || index < 0) return 0;
 
+#if SYNTHYBOY_MPC_OVERLAY
+        if (PluginInstance::isOverlayParam (index))
+        {
+            const int frame = static_cast<int> (inst->overlayValue.load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::overlay::layout::kInstanceSteps) + 0.5f);
+            const int slot = synthyboy_mpc::overlay::slotOfInstanceFrame (frame);
+            if (opcode == effGetParamName)
+                copyString (buf, 64, "Overlay Instance");
+            else if (opcode == effGetParamLabel)
+                buf[0] = '\0';
+            else if (slot == synthyboy_mpc::overlay::kSlotUnknown)
+                copyString (buf, 64, "blank");
+            else if (slot == synthyboy_mpc::overlay::kSlotNone)
+                copyString (buf, 64, "none");
+            else
+                std::snprintf (buf, 64, "slot %d", slot);
+            buf[63] = '\0';
+            return 1;
+        }
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         if (inst->isLive (index))
         {
@@ -995,6 +1102,10 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
     case effCanBeAutomated:
     {
+#if SYNTHYBOY_MPC_OVERLAY
+        if (PluginInstance::isOverlayParam (index))
+            return 0;
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         if (inst->isLive (index))
             return 0;
@@ -1091,6 +1202,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         VstParameterProperties* props = static_cast<VstParameterProperties*>(ptr);
         if (!props || index < 0) return 0;
 
+#if SYNTHYBOY_MPC_OVERLAY
+        if (PluginInstance::isOverlayParam (index))
+        {
+            std::memset(props, 0, sizeof(*props));
+            props->stepFloat = 1.0f / static_cast<float> (synthyboy_mpc::overlay::layout::kInstanceSteps);
+            props->smallStepFloat = props->stepFloat;
+            props->largeStepFloat = props->stepFloat;
+            return 1;
+        }
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
         if (inst->isLive (index))
         {
@@ -1308,6 +1429,10 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
     if (!inst || index < 0)
         return 0.0f;
 
+#if SYNTHYBOY_MPC_OVERLAY
+    if (PluginInstance::isOverlayParam (index))
+        return inst->overlayValue.load (std::memory_order_relaxed);
+#endif
 #if SYNTHYBOY_MPC_LFO_LIVE
     if (inst->isLive (index))
 #if SYNTHYBOY_MPC_SPECTRUM
@@ -1445,6 +1570,9 @@ extern "C"
 #else
         effect->numParams += synthyboy_mpc::kLfoLiveCount;
 #endif
+#endif
+#if SYNTHYBOY_MPC_OVERLAY
+        effect->numParams += 1; // "Overlay Instance", the last one
 #endif
         effect->numInputs = 0;
         effect->numOutputs = 2;

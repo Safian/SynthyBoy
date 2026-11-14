@@ -56,13 +56,13 @@ def rect(component):
 
 
 def header_views():
-    """The views of the generated header: (name, kind, index, region, opaque, [(x, y, w, h, rgb, cover)] * 2), screen coordinates."""
+    """The views of the generated header: (name, kind, index, region, opaque, [(x, y, w, h, rgb, cover)] * 2, instance rectangle), screen coordinates."""
     text = SHARED_HEADER.read_text(encoding="utf-8")
     out = []
-    for m in re.finditer(r'\{ "(\w+)", (\d+), (\d+), \{ (\d+), (\d+), (\d+), (\d+) \}, (true|false), \{ (.*?) \} \},', text):
+    for m in re.finditer(r'\{ "(\w+)", (\d+), (\d+), \{ (\d+), (\d+), (\d+), (\d+) \}, (true|false), \{ (.*?) \}, \{ (\d+), (\d+), (\d+), (\d+) \} \},', text):
         markers = [tuple(int(v) for v in mm.groups()[:4]) + (int(mm.group(5), 16), int(mm.group(6), 16))
                    for mm in re.finditer(r"\{ \{ (\d+), (\d+), (\d+), (\d+) \}, 0x([0-9a-f]{6}), 0x([0-9a-f]{6}) \}", m.group(9))]
-        out.append((m.group(1), int(m.group(2)), int(m.group(3)), tuple(int(v) for v in m.groups()[3:7]), m.group(8) == "true", markers))
+        out.append((m.group(1), int(m.group(2)), int(m.group(3)), tuple(int(v) for v in m.groups()[3:7]), m.group(8) == "true", markers, tuple(int(v) for v in m.groups()[9:13])))
     origin = int(re.search(r"kTabOriginY = (\d+);", text).group(1))
     bg = int(re.search(r"kBackgroundRgb = 0x([0-9a-f]{6});", text).group(1), 16)
     return out, origin, bg
@@ -82,11 +82,20 @@ class SharedConstantsTests(unittest.TestCase):
         self.assertEqual(origin, layout["tabOriginY"])
         self.assertEqual(bg, int(layout["background"], 16))
         self.assertEqual(len(views), len(layout["views"]))
-        for (name, kind, index, region, opaque, markers), v in zip(views, layout["views"]):
+        for (name, kind, index, region, opaque, markers, instance), v in zip(views, layout["views"]):
             r = v["region"]
             self.assertEqual((name, kind, index, opaque), (v["name"], KINDS[v["kind"]], v["index"], v["opaque"]))
             self.assertEqual(region, (r["x"], r["y"] + origin, r["w"], r["h"]), "screen coordinates = tab coordinates + the origin of the tab")
             self.assertEqual(markers, [(m["x"], m["y"] + origin, m["w"], m["h"], int(m["rgb"], 16), int(m["cover"], 16)) for m in v["markers"]])
+            i = v["instance"]
+            self.assertEqual(instance, (i["x"], i["y"] + origin, i["w"], i["h"]))
+        text = SHARED_HEADER.read_text(encoding="utf-8")
+        inst = layout["instance"]
+        self.assertEqual([int(c, 16) for c in re.search(r"kInstanceSlotRgb\[kMaxInstances\] = \{ (.*?) \};", text).group(1).replace("0x", "").split(", ")], [int(c, 16) for c in inst["slotColours"]])
+        self.assertEqual(int(re.search(r"kInstanceNoneRgb = 0x([0-9a-f]{6})", text).group(1), 16), int(inst["none"], 16))
+        self.assertEqual(int(re.search(r"kInstanceBlankRgb = 0x([0-9a-f]{6})", text).group(1), 16), int(inst["blank"], 16))
+        self.assertEqual((int(re.search(r"kMaxInstances = (\d+)", text).group(1)), int(re.search(r"kInstanceFrames = (\d+)", text).group(1)), int(re.search(r"kInstanceSteps = (\d+)", text).group(1))),
+                         (inst["slots"], inst["frames"], inst["steps"]))
 
     def test_the_markers_are_unusual_unique_and_inside_their_region(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -113,6 +122,24 @@ class SharedConstantsTests(unittest.TestCase):
             for nb, cb in every[i + 1:]:
                 near = all(abs(((ca >> s) & 255) - ((cb >> s) & 255)) <= 4 for s in (0, 8, 16))
                 self.assertFalse(near, "%s and %s have marker colours that the detector could confuse (%06x %06x)" % (na, nb, ca, cb))
+        # the instance picture: inside the region, not on a marker, and its colours are far from every marker colour, the background and each other
+        inst = layout["instance"]
+        table = [("slot%d" % k, int(c, 16)) for k, c in enumerate(inst["slotColours"])] + [("none", int(inst["none"], 16)), ("blank", int(inst["blank"], 16))]
+        self.assertEqual((inst["slots"], len(inst["slotColours"]), inst["frames"], inst["steps"]), (16, 16, 33, 32))
+        far = lambda a, b: max(abs(((a >> s) & 255) - ((b >> s) & 255)) for s in (0, 8, 16))
+        for v in layout["views"]:
+            c, i = v["region"], v["instance"]
+            self.assertTrue(c["x"] <= i["x"] and i["x"] + i["w"] <= c["x"] + c["w"] and c["y"] <= i["y"] and i["y"] + i["h"] <= c["y"] + c["h"], v["name"])
+            self.assertEqual((i["w"], i["h"]), (6, 6) if v["opaque"] else (4, 4), v["name"])
+            for m in v["markers"]:
+                self.assertTrue(i["x"] >= m["x"] + m["w"] or m["x"] >= i["x"] + i["w"] or i["y"] >= m["y"] + m["h"] or m["y"] >= i["y"] + i["h"], "%s: the instance picture does not overlap a marker" % v["name"])
+        for i, (na, ca) in enumerate(table):
+            for nb, cb in table[i + 1:]:
+                self.assertGreaterEqual(far(ca, cb), 24, "%s and %s" % (na, nb))
+            for nm, cm in every:
+                self.assertGreater(far(ca, cm), 8, "%s and the marker colour of %s" % (na, nm))
+            self.assertGreater(far(ca, int(layout["background"], 16)), 8, na)
+            self.assertNotEqual(ca, 0, na)
         names = [v["name"] for v in layout["views"]]
         self.assertEqual(len(set(names)), len(names))
         tabs = [v["tab"] for v in layout["views"]]
@@ -274,15 +301,16 @@ class OverlaySkinTests(unittest.TestCase):
             pt = {k: v for k, v in t.items() if k not in ("fnKeySubIndex",)}
             if t["tabName"] in with_markers:
                 comps = ot["componentDefinition"]["componentsData"]
-                self.assertEqual([c["componentData"]["name"] for c in comps[-2:]], ["Overlay Marker %s %s" % (next(v["name"] for v in layout["views"] if v["tab"] == t["tabName"]), s) for s in ("left", "right")])
+                vname = next(v["name"] for v in layout["views"] if v["tab"] == t["tabName"])
+                self.assertEqual([c["componentData"]["name"] for c in comps[-3:]], ["Overlay Marker %s %s" % (vname, s) for s in ("left", "right")] + ["Overlay Instance %s" % vname])
                 ot = json.loads(json.dumps(ot))
-                ot["componentDefinition"]["componentsData"] = comps[:-2]
+                ot["componentDefinition"]["componentsData"] = comps[:-3]
             self.assertEqual(ot, pt, t["tabName"])
 
     def test_the_pictures_of_the_lfo_and_osc_tabs_stay_under_the_views(self):
         for name in ("LFO 1", "LFO 4", "Osc 1", "Osc 3"):
             comps = self.tab(name)["componentDefinition"]["componentsData"]
-            pictures = [c for c in comps if c["componentData"]["type"] == "Image" and not c["componentData"]["name"].startswith("Overlay Marker")]
+            pictures = [c for c in comps if c["componentData"]["type"] == "Image" and not c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))]
             self.assertGreaterEqual(len(pictures), 10, name)
             order = [c["componentData"]["name"] for c in comps]
             for c in pictures:
@@ -318,9 +346,37 @@ class OverlaySkinTests(unittest.TestCase):
             else:
                 self.assertFalse(any(n.endswith("Curve Background") for n in items), "%s keeps its own picture, no extra dark one" % v["tab"])
 
+    def test_instance_pictures_are_film_strips_with_the_exact_colours_bound_to_the_last_parameter(self):
+        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
+        inst = layout["instance"]
+        want = [tuple(int(inst["blank"][i:i + 2], 16) for i in (0, 2, 4))] * inst["frames"]
+        for k, c in enumerate(inst["slotColours"]):
+            want[k + 1] = tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+        want[inst["slots"] + 1] = tuple(int(inst["none"][i:i + 2], 16) for i in (0, 2, 4))
+        index = len(self.params) + 4 + 32   # the engine's parameters, the 4 LFO cursors, the 32 spectrum columns: "Overlay Instance" is the next one
+        self.assertEqual(want[0], want[-1])
+        self.assertEqual(len({c for c in want[1:inst["slots"] + 2]}), inst["slots"] + 1, "16 slots + none: 17 different colours")
+        for v in layout["views"]:
+            items = {c["componentData"]["name"]: c for c in self.tab(v["tab"])["componentDefinition"]["componentsData"]}
+            c = items["Overlay Instance %s" % v["name"]]
+            i = v["instance"]
+            self.assertEqual((c["componentData"]["type"], c["componentData"]["data"]["imageType"], c["componentData"]["data"]["numFrames"], c["componentData"]["data"]["handleName"]), ("Image", "FilmStrip", 33, "Data"))
+            self.assertEqual(c["handle remapping"]["map"], [{"key": "Data", "value": "Parameter %d" % index}])
+            self.assertEqual(rect(c), (i["x"], i["y"], i["w"], i["h"]), "1:1 at the place of the shared JSON")
+            w, h, rows = decode_png(self.ovl / c["componentData"]["data"]["image"])
+            self.assertEqual((w, h), (i["w"], i["h"] * inst["frames"]), "one frame is the size of the picture, the frames lie one under the other")
+            for f in range(inst["frames"]):
+                got = {px for row in rows[f * i["h"]:(f + 1) * i["h"]] for px in row}
+                self.assertEqual(got, {want[f]}, "frame %d is exactly one colour #%02x%02x%02x" % ((f,) + want[f]))
+            png = (self.ovl / c["componentData"]["data"]["image"]).read_bytes()
+            self.assertEqual(png[24:29], bytes([8, 2, 0, 0, 0]), "8 bit RGB without alpha, no interlace: the settings of the marker pictures")
+        # the production skin has no instance picture and the overlay skin's parameter exists only in the overlay plugin
+        self.assertFalse(any("Overlay Instance" in json.dumps(t) for t in self.p_tui["pageData"]["tabs"]))
+
     def test_no_colour_of_the_rest_of_the_skin_equals_a_marker_colour(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
         markers = {int(m["rgb"], 16) for v in layout["views"] for m in v["markers"]}
+        markers |= {int(c, 16) for c in layout["instance"]["slotColours"]} | {int(layout["instance"]["none"], 16), int(layout["instance"]["blank"], 16)}   # the instance colours are as unusual
         for tui in (self.o_tui, self.p_tui):
             text = json.dumps(tui)
             for value in re.findall(r"\"(?:ff)?([0-9a-fA-F]{6})\"", text):
@@ -342,7 +398,7 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertEqual([e for e in errors if "tabs; at most 32" not in e], [], report)
         self.assertEqual([e for e in errors if "tabs; at most 32" in e], ["ERROR  TUI.json: 36 tabs; at most 32 are supported"], report)
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
-        names = ["overlay_curve_bg.png"] + ["overlay_marker_%s_%s.png" % (v["name"], s) for v in layout["views"] for s in ("left", "right")]
+        names = ["overlay_curve_bg.png", "overlay_instance_6x6.png", "overlay_instance_4x4.png"] + ["overlay_marker_%s_%s.png" % (v["name"], s) for v in layout["views"] for s in ("left", "right")]
         for name in names:
             self.assertIn("image %s present" % name, report)
 

@@ -9,6 +9,7 @@
 #include <cstdlib>
 
 #include "drm_interfaces.h"
+#include "instance_slots.h"
 #include "overlay_layout.h"
 
 namespace synthyboy_mpc { namespace overlay {
@@ -24,19 +25,23 @@ struct Detection
     static constexpr int kMaxViews = 16;
     bool readable = false;           // the framebuffer could be read
     int view = -1;                   // the first view whose two markers are both on screen, -1 when none
+    int slot = kSlotUnknown;         // with a view: the instance the page belongs to (the colour of the view's instance picture): 0 .. 15, kSlotNone, or kSlotUnknown (blank or not a colour of the table)
+    uint32_t instanceSeen = 0xffffffffu;   // the pixel at the centre of that picture (0xffffffff when it could not be read), for the status file
     uint32_t seen[kMaxViews][2] = {};   // the pixel at the centre of every marker (0xRRGGBB; 0xffffffff when it could not be read), for the status file
     int count = 0;                   // views checked
 };
 
 /** Looks for the marker pairs of all views (two markers each) in the primary framebuffer. The colours of the pairs differ from one another by more than the tolerance, so at most one
-    view matches: the one whose tab is on screen. */
+    view matches: the one whose tab is on screen. For that view it also reads the instance picture (a film strip frame of one solid colour, bound to the display parameter "Overlay
+    Instance": the colour says which plugin instance the page on screen belongs to, instance_slots.h). */
 class PageDetector
 {
 public:
     static constexpr int kTolerance = 2;   // per channel
 
-    PageDetector (IFrameSource& source, const MarkerSpec* markers, int numViews)
-        : source_ (source), markers_ (markers), count_ (numViews > Detection::kMaxViews ? Detection::kMaxViews : numViews) {}
+    /** `instances`: one rectangle per view (landscape UI pixels), null: the views have no instance picture (the slot then stays kSlotUnknown). */
+    PageDetector (IFrameSource& source, const MarkerSpec* markers, int numViews, const Rect* instances = nullptr)
+        : source_ (source), markers_ (markers), instances_ (instances), count_ (numViews > Detection::kMaxViews ? Detection::kMaxViews : numViews) {}
 
     /** Reads the sample pixels of every marker (the four corners of an inset square and the centre) through the shared UI -> panel mapping. */
     Detection check (int rotation)
@@ -72,13 +77,41 @@ public:
                 }
             }
             if (all && d.view < 0)
+            {
                 d.view = i;
+                if (instances_)
+                    readInstance (instances_[i], rotation, w, h, d);
+            }
         }
         source_.end();
         return d;
     }
 
 private:
+    /** The five sample pixels of the instance picture (the same pattern as a marker) must all be the same colour of the table. */
+    void readInstance (const Rect& r, int rotation, int w, int h, Detection& d)
+    {
+        const int ix = r.w > 3 ? 1 : 0, iy = r.h > 3 ? 1 : 0;
+        const int xs[5] = { r.x + ix, r.x + r.w - 1 - ix, r.x + ix, r.x + r.w - 1 - ix, r.x + r.w / 2 };
+        const int ys[5] = { r.y + iy, r.y + iy, r.y + r.h - 1 - iy, r.y + r.h - 1 - iy, r.y + r.h / 2 };
+        int slot = kSlotUnknown;
+        for (int k = 0; k < 5; ++k)
+        {
+            int px, py;
+            uint32_t v = 0;
+            uiPointToPanel (rotation, xs[k], ys[k], w, h, px, py);
+            const bool ok = source_.pixel (px, py, v);
+            if (k == 4)
+                d.instanceSeen = ok ? v : 0xffffffffu;
+            const int s = ok ? classifyInstanceRgb (v, kTolerance) : kSlotUnknown;
+            if (k == 0)
+                slot = s;
+            else if (s != slot)
+                slot = kSlotUnknown;
+        }
+        d.slot = slot;
+    }
+
     static bool close (uint32_t a, uint32_t b) noexcept
     {
         for (int shift = 0; shift <= 16; shift += 8)
@@ -89,6 +122,7 @@ private:
 
     IFrameSource& source_;
     const MarkerSpec* markers_;
+    const Rect* instances_;
     int count_;
 };
 

@@ -130,11 +130,12 @@ public:
         return *s;
     }
 
-    void attach (IInstanceView* view)
+    /** Returns the slot of the instance (0 .. 15, kept until detach; -1: more than 16 instances, this one never shows the overlay). */
+    int attach (IInstanceView* view)
     {
         std::lock_guard<std::mutex> g (lifeMu_);
         ensureController();
-        controller_->attach (view);
+        const int slot = controller_->attach (view);
         if (! thread_.joinable())
         {
             stop_.store (false);
@@ -145,6 +146,7 @@ public:
             atexitRegistered_ = true;
             std::atexit ([] { Service::instance().shutdownAtExit(); });
         }
+        return slot;
     }
 
     void detach (IInstanceView* view)

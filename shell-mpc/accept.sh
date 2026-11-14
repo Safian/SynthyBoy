@@ -152,6 +152,12 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 $B/gpu_scene_host > $B/gpu-scene-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-scene-host.log; echo "ACCEPT FAIL: gpu_scene_host (GPU scene protocol: seqlock, every view type as a scene)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_backend_host $OVSRC/gpu_backend_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_backend_host build"; exit 1; }
 $B/gpu_backend_host > $B/gpu-backend-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-backend-host.log; echo "ACCEPT FAIL: gpu_backend_host (GPU helper health state machine and fallback with a fake helper)"; exit 1; }
+# the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
+for t in controller_host views_host gpu_backend_host; do
+    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
+    $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
+    grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
+done
 $B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
@@ -165,7 +171,16 @@ for v in off:off:10 on:on:10 self:selftest:10 quiet:quiet:10 hz25:on:25; do
     $B/lfo_live_host "$(find build-mpc-live-$d -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" $m $hz > $B/live-$d.log 2>&1 || { grep -E "^FAIL" $B/live-$d.log; echo "ACCEPT FAIL: lfo_live_host ($m, $hz Hz)"; exit 1; }
 done
 # the plugin with the overlay built in (on the Mac the module finds no display): the same chunk and the same LFO display as the build without it
-$B/lfo_live_host "$OVLON" on > $B/live-ovlon.log 2>&1 || { grep -E "^FAIL" $B/live-ovlon.log; echo "ACCEPT FAIL: lfo_live_host with the overlay built in"; exit 1; }
+$B/lfo_live_host "$OVLON" on overlay > $B/live-ovlon.log 2>&1 || { grep -E "^FAIL" $B/live-ovlon.log; echo "ACCEPT FAIL: lfo_live_host with the overlay built in (one more display parameter, Overlay Instance)"; exit 1; }
+# the display parameter "Overlay Instance" (only in the overlay build): slots of several instances, the debug file, 17 instances, instances created and closed on several threads. The other builds above
+# were checked with exact parameter counts without it (the tests take the word "overlay" for the one build that has the extra parameter and are exact in both cases).
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: overlay_instance_host build"; exit 1; }
+$B/overlay_instance_host "$OVLON" > $B/overlay-instance.log 2>&1 || { grep -E "^FAIL" $B/overlay-instance.log; echo "ACCEPT FAIL: overlay_instance_host (Overlay Instance parameter)"; exit 1; }
+# the overlay builds without the parameter must not exist: a build that is not the overlay one has no trace of it (the parameter's name is in the overlay build only)
+for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
+    grep -q "Overlay Instance" "$f" && { echo "ACCEPT FAIL: Overlay Instance in a build without SYNTHYBOY_MPC_OVERLAY"; exit 1; }
+done
+grep -q "Overlay Instance" "$OVLON" || { echo "ACCEPT FAIL: the overlay build has no Overlay Instance parameter"; exit 1; }
 [ "$(grep -h '^chunk ' $B/live-on.log)" = "$(grep -h '^chunk ' $B/live-ovlon.log)" ] || { echo "ACCEPT FAIL: the state chunk differs in the overlay build"; exit 1; }
 # live spectrum (SYNTHYBOY_MPC_SPECTRUM, default ON): the band mapping and the analyser on known signals, then the plugin in four variants (off, on, the self-test wave at 10 and 25 a second).
 # The switched-off build has no trace of it; the state chunk is the same in every variant.
@@ -198,7 +213,7 @@ TL=build-mpc-live-tsan
 cmake -S . -B $TL -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_CALLBACK_STATS=ON -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=thread -g" "-DCMAKE_C_FLAGS=-fsanitize=thread -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=thread" > $TL.configure.log 2>&1 && cmake --build $TL --target synthyboy_mpc > $TL.build.log 2>&1 || { tail -30 $TL.build.log; echo "ACCEPT FAIL: ThreadSanitizer build of the LFO display"; exit 1; }
 TLLIB=$(find $TL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/lfo_live_host shell-mpc/tests/lfo_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan lfo_live_host build"; exit 1; }
-TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on > $TL/live.log 2>&1
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on overlay > $TL/live.log 2>&1
 if grep -q "WARNING: ThreadSanitizer" $TL/live.log; then
     grep -A14 "WARNING: ThreadSanitizer" $TL/live.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
     echo "ACCEPT FAIL: data races in the LFO display (full report: $TL/live.log)"; exit 1
@@ -208,7 +223,7 @@ grep -q "^FAIL" $TL/live.log && { grep "^FAIL" $TL/live.log; echo "ACCEPT FAIL: 
 c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/spectrum_host shell-mpc/tests/spectrum_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan spectrum_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/spectrum_host > $TL/spectrum-host.log 2>&1
 c++ -std=c++17 -O1 -g -fsanitize=thread $LIVEINC -o $TL/spectrum_live_host shell-mpc/tests/spectrum_live_host.cpp $TL/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: tsan spectrum_live_host build"; exit 1; }
-TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/spectrum_live_host "$TLLIB" on > $TL/spectrum-live.log 2>&1
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/spectrum_live_host "$TLLIB" on 10 overlay > $TL/spectrum-live.log 2>&1
 for f in $TL/spectrum-host.log $TL/spectrum-live.log; do
     if grep -q "WARNING: ThreadSanitizer" $f; then
         grep -A14 "WARNING: ThreadSanitizer" $f | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
@@ -235,6 +250,11 @@ for t in controller_host curve_host gpu_scene_host gpu_backend_host; do
     fi
     grep -q "^FAIL" $TL/$t.log && { grep "^FAIL" $TL/$t.log; echo "ACCEPT FAIL: tsan $t"; exit 1; }
 done
-TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on > $TL/live-ovl.log 2>&1
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on overlay > $TL/live-ovl.log 2>&1
+# instances created, closed and asked for their slot on several threads against the overlay thread, in the plugin under ThreadSanitizer
+c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK/framework -o $TL/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan overlay_instance_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/overlay_instance_host "$TLLIB" > $TL/overlay-instance.log 2>&1
+grep -q "WARNING: ThreadSanitizer" $TL/overlay-instance.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/overlay-instance.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in Overlay Instance (full report: $TL/overlay-instance.log)"; exit 1; }
+grep -q "^FAIL" $TL/overlay-instance.log && { grep "^FAIL" $TL/overlay-instance.log; echo "ACCEPT FAIL: tsan overlay_instance_host"; exit 1; }
 grep -q "WARNING: ThreadSanitizer" $TL/live-ovl.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/live-ovl.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races with the overlay thread in the plugin (full report: $TL/live-ovl.log)"; exit 1; }
 echo "ACCEPT OK"

@@ -560,6 +560,10 @@ public:
             const layout::Marker& mk = view_.markers[m];
             draw::setRect (cv, w, h, mk.rect.x - view_.region.x - 1, mk.rect.y - view_.region.y - 1, mk.rect.x - view_.region.x + mk.rect.w + 1, mk.rect.y - view_.region.y + mk.rect.h + 1, draw::opaque (mk.cover));
         }
+        {   // the instance picture of the skin (the colour that says whose page it is) is painted over in the same way
+            const layout::Rect& ir = view_.instance;
+            draw::setRect (cv, w, h, ir.x - view_.region.x - 1, ir.y - view_.region.y - 1, ir.x - view_.region.x + ir.w + 1, ir.y - view_.region.y + ir.h + 1, draw::opaque (view_.markers[0].cover));
+        }
         if (dotX_ < 0)
             return;
         const double x = dotX_ - view_.region.x + 0.5, y = dotY_ - view_.region.y + 0.5;
@@ -579,6 +583,11 @@ public:
             const layout::Marker& mk = view_.markers[m];
             sb.rect (static_cast<float> (mk.rect.x - view_.region.x - 1), static_cast<float> (mk.rect.y - view_.region.y - 1), static_cast<float> (mk.rect.x - view_.region.x + mk.rect.w + 1),
                      static_cast<float> (mk.rect.y - view_.region.y + mk.rect.h + 1), gpu::rgba8FromRgb (mk.cover, 255));
+        }
+        {
+            const layout::Rect& ir = view_.instance;
+            sb.rect (static_cast<float> (ir.x - view_.region.x - 1), static_cast<float> (ir.y - view_.region.y - 1), static_cast<float> (ir.x - view_.region.x + ir.w + 1),
+                     static_cast<float> (ir.y - view_.region.y + ir.h + 1), gpu::rgba8FromRgb (view_.markers[0].cover, 255));
         }
         if (dotX_ >= 0)
         {

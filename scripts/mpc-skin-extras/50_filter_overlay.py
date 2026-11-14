@@ -21,6 +21,12 @@
 # what the plugin's page detector looks for in the primary framebuffer; the plugin paints the dark picture over them, so the player sees only the dark area. The numbers are in
 # that JSON only (the plugin includes the header scripts/gen-overlay-layout-header.py makes of it).
 #
+# INSTANCE picture (several plugin instances): next to the two markers of every view the skin draws a tiny film strip image (`instance` of the view in the JSON, 6 x 6 px, the envelope
+# tabs 4 x 4) bound to the display-only parameter "Overlay Instance" (the LAST parameter of the overlay build: number of entries of docs/params.json + 4 LFO cursors + 32 spectrum
+# columns). Its 33 frames are solid colours (blank, slot 0 .. 15, none, blank ...; `instance` in the JSON): the host draws the frame of THIS instance's value, so the colour the plugin
+# reads in the primary framebuffer says which instance's page is on screen. The strips are RGB PNGs with the settings of the marker pictures (no alpha), width = the picture, height =
+# 33 frames one under the other (like the cursor strip of 30_lfo.py).
+#
 # Runs after 40_spectrum.py and before 80_layout.py, which places the slots, 85_names.py (names: this module adds them to the meta) and 90_frames.py.
 
 import copy
@@ -35,6 +41,8 @@ COLS = (23, 343, 663, 983)
 ROWS = (45, 196, 346, 497)
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
 BACKGROUND_FILE = "overlay_curve_bg.png"
+LFO_CURSORS, SPECTRUM_COLUMNS = 4, 32   # the display parameters before "Overlay Instance" (shell-mpc/lfo_live.h, shell-mpc/spectrum.h)
+PARAMS_JSON = HERE.parent.parent / "docs" / "params.json"
 FILTERS = (1, 2)
 
 
@@ -45,6 +53,29 @@ def png_solid(width, height, rgb):
     row = b"\x00" + bytes(rgb) * width
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(row * height, 9)) + chunk(b"IEND", b""))
+
+
+def png_filmstrip(width, frame_height, colours):
+    """An opaque RGB PNG of len(colours) frames one under the other, every frame one solid colour (stdlib only; the settings of png_solid)."""
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+    raw = b"".join((b"\x00" + bytes(c) * width) * frame_height for c in colours)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, frame_height * len(colours), 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+def instance_frames(layout):
+    """The colour of every frame of the instance strip: 0 blank, 1 .. slots the slot colours, then none, the rest blank."""
+    inst = layout["instance"]
+    frames = [rgb_of(inst["blank"])] * inst["frames"]
+    for k, c in enumerate(inst["slotColours"]):
+        frames[k + 1] = rgb_of(c)
+    frames[inst["slots"] + 1] = rgb_of(inst["none"])
+    return frames
+
+
+def instance_file(w, h):
+    return "overlay_instance_%dx%d.png" % (w, h)
 
 
 def rgb_of(text):
@@ -166,10 +197,25 @@ def _add_markers(view, ctx, items):
         items.append(_image("Overlay Marker %s %s" % (view["name"], side), marker_file(view, side), (m["x"], m["y"], m["w"], m["h"])))
 
 
+def _add_instance(view, ctx, items, layout, param_index):
+    inst, r = layout["instance"], view["instance"]
+    frames = instance_frames(layout)
+    name = instance_file(r["w"], r["h"])
+    (ctx.skins_dir / name).write_bytes(png_filmstrip(r["w"], r["h"], frames))
+    items.append({"version": 2,
+                  "componentData": {"version": 1, "name": "Overlay Instance %s" % view["name"], "type": "Image",
+                                    "data": {"version": 2, "imageType": "FilmStrip", "colour": "0", "image": name, "numFrames": inst["frames"], "handleName": "Data"}},
+                  "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Parameter %d" % param_index}]},
+                  "bounds": {"version": 1, "acceptsHWFocus": "No", "showWhenDataModelInvalid": "Hide", "whenVisible": "Always", "boundsType": "Absolute",
+                             "bounds": "%d %d %d %d" % (r["x"], r["y"], r["w"], r["h"])}})
+
+
 def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
     layout = json.loads(LAYOUT_JSON.read_text(encoding="utf-8"))
+    # "Overlay Instance" is the last display parameter, after the engine's list, the four LFO cursors and the 32 spectrum columns
+    param_index = len(json.loads(PARAMS_JSON.read_text(encoding="utf-8"))["params"]) + LFO_CURSORS + SPECTRUM_COLUMNS
     for view in layout["views"]:
         if view["kind"] == "filter":
             if view["index"] not in FILTERS:
@@ -177,4 +223,6 @@ def apply(tui, qlinks, ctx):
             _arrange_filter(view["index"], view, ctx, qlinks, layout)
         elif view["kind"] not in ("lfo", "osc", "env"):
             raise ValueError("view %r: unknown kind %r" % (view["name"], view["kind"]))
-        _add_markers(view, ctx, ctx.tab(view["tab"])["componentDefinition"]["componentsData"])
+        items = ctx.tab(view["tab"])["componentDefinition"]["componentsData"]
+        _add_markers(view, ctx, items)
+        _add_instance(view, ctx, items, layout, param_index)

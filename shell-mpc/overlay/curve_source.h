@@ -49,6 +49,9 @@ public:
     /** The content of the state (custom LFO shapes, user wavetables, remap curves): a snapshot that stays valid while the pointer is held; changes when the state changes. */
     virtual std::shared_ptr<const synthyboy::StateContent> content() const { return nullptr; }
     virtual const synthyboy::IContentStore* contentStore() const noexcept { return nullptr; }
+    /** Asks the instance to report its display parameter "Overlay Instance" to the host again (audioMasterAutomate) soon. Called from the overlay thread while the instance is registered; it must only
+        set a flag (the instance's display thread makes the call, never the audio thread and never this one). */
+    virtual void requestOverlayReport() noexcept {}
 };
 
 class CurveSource

@@ -55,6 +55,8 @@ public:
     /** The data of the picture as text (the dump switch). */
     virtual void writeDump (std::ostream& out) const = 0;
     const ViewCounters& counters() const noexcept { return counters_; }
+    /** A view made new for another instance carries on counting from the numbers of the one it replaces (the status file counts per view, not per instance). */
+    void adoptCounters (const ViewCounters& c) noexcept { counters_ = c; }
 
 protected:
     ViewCounters counters_;

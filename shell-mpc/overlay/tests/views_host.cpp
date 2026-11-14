@@ -76,6 +76,19 @@ int main()
             }
         }
         check (unique, "every marker colour differs from every other by more than twice the detector's tolerance (no view can be mistaken for another)");
+        bool instOk = true;
+        for (int i = 0; i < layout::kNumViews; ++i)
+        {
+            const layout::View& a = layout::kViews[i];
+            const layout::Rect& r = a.instance;
+            instOk = instOk && r.w >= 4 && r.h >= 4 && r.x >= a.region.x && r.y >= a.region.y && r.x + r.w <= a.region.x + a.region.w && r.y + r.h <= a.region.y + a.region.h;
+            for (int m = 0; m < 2; ++m)
+            {
+                const layout::Rect& mr = a.markers[m].rect;
+                instOk = instOk && (r.x >= mr.x + mr.w || mr.x >= r.x + r.w || r.y >= mr.y + mr.h || mr.y >= r.y + r.h);
+            }
+        }
+        check (instOk, "every view's instance picture is inside its region, at least 4 x 4, and does not overlap a marker");
         check (inside, "every region is on the screen below the host's header and holds its two marker squares");
     }
     // ---- the readout targets: the union of the views, in the order of the layout ---------------------------------------------------------------------------------
@@ -398,6 +411,14 @@ int main()
             covered += px (cv, w, mk.rect.x - reg.x + 1, mk.rect.y - reg.y + 1) == 0xff000000u + mk.cover;
         }
         check (covered == 2, "the two marker squares are painted over in the colour under them (the widget background)");
+        {
+            const layout::Rect& ir = layout::kViews[ei].instance;
+            bool all = true;
+            for (int y = 0; y < ir.h; ++y)
+                for (int x = 0; x < ir.w; ++x)
+                    all = all && px (cv, w, ir.x - reg.x + x, ir.y - reg.y + y) == 0xff000000u + layout::kViews[ei].markers[0].cover;
+            check (all, "the instance picture (the colour of the slot) is painted over as well: the player never sees it");
+        }
         check (clear > static_cast<int> (cv.size()) * 95 / 100, "the plane is transparent except for the dot and the two squares (" + std::to_string (100 * clear / static_cast<int> (cv.size())) + " % clear)");
         check (px (cv, w, v.dotX() - reg.x, v.dotY() - reg.y) != 0 && isWhite (px (cv, w, v.dotX() - reg.x + 6, v.dotY() - reg.y)), "the dot is drawn at its place");
         // the same stage later: the dot moved right
@@ -557,6 +578,87 @@ int main()
         dir.touch ("dump");
         run (1500);
         check (dir.read ("curve.txt").find ("# view filter2:") == 0, "the dump switch writes the data of the visible view (filter2)");
+    }
+    // ---- two instances with different settings: every view type shows the data of the instance whose slot colour is on screen ---------------------------------------------------
+    {
+        struct Shot { std::vector<uint32_t> picture; uint32_t hash = 0; };
+        auto viewIndex = [] (const char* name) { for (int i = 0; i < layout::kNumViews; ++i) if (std::string (layout::kViews[i].name) == name) return i; return -1; };
+        // the setups of the two instances; the reference is a controller with ONE instance of the same settings
+        auto setupA = [] (FakeInstance& i)
+        {
+            i.numTargets = 16;
+            i.set ("lfo2.shape", 0.0f); i.set ("lfo2.rate", 2.0f);
+            i.set ("osc3.on", 1.0f); i.set ("osc3.wavetable", 0.0f);
+            i.set ("filter2.on", 1.0f); i.set ("filter2.cutoff", 900.0f);
+            i.set ("env2.attack", 120.0f);
+        };
+        auto setupB = [] (FakeInstance& i)
+        {
+            i.numTargets = 16;
+            i.set ("lfo2.shape", 4.0f); i.set ("lfo2.rate", 5.0f); i.set ("lfo2.phase", 90.0f);
+            i.set ("osc3.on", 1.0f); i.set ("osc3.wavetable", 3.0f); i.set ("osc3.warp.amount", 60.0f);
+            i.set ("filter2.on", 1.0f); i.set ("filter2.cutoff", 4000.0f);
+            i.set ("env2.attack", 1500.0f);
+            i.hasLive = true; i.voices = 1; i.lfoPhase[1] = 0.3f;
+        };
+        auto shot = [&] (const char* view, auto setup)
+        {
+            TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance inst;
+            Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0);
+            setup (inst);
+            ctl.attach (&inst);
+            const int v = viewIndex (view);
+            frame.setView (v, true, 90);
+            double now = 0.0;
+            for (int i = 0; i < 80; ++i) { now += 10.0; ctl.tick (now); }
+            Shot s;
+            s.picture = plane.shownCopy;
+            s.hash = ctl.currentView() ? ctl.currentView()->hash() : 0u;
+            return s;
+        };
+        TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance a, b;
+        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0);
+        setupA (a); setupB (b);
+        check (ctl.attach (&a) == 0 && ctl.attach (&b) == 1, "two instances: slots 0 and 1");
+        double now = 0.0;
+        auto run = [&] (double ms) { const double end = now + ms; while (now < end) { now += 10.0; ctl.tick (now); } };
+        auto until = [&] (auto cond, double maxMs) { const double s0 = now; while (now - s0 < maxMs) { now += 10.0; ctl.tick (now); if (cond()) return now - s0; } return -1.0; };
+        for (const char* name : { "lfo2", "osc3", "filter2", "env2" })
+        {
+            const int v = viewIndex (name);
+            const Shot refA = shot (name, setupA), refB = shot (name, setupB);
+            frame.setView (v, true, 90);
+            frame.setViewInstance (v, 0, true, 90);
+            until ([&] { return plane.planeOn && ctl.currentIndex() == v && ctl.activeSlot() == 0; }, 600);
+            run (300);
+            const bool aOk = ctl.currentView() && ctl.currentView()->hash() == refA.hash && plane.shownCopy == refA.picture;
+            frame.setViewInstance (v, 1, true, 90);
+            const double t = until ([&] { return ctl.activeSlot() == 1 && ctl.currentView() && ctl.currentView()->hash() == refB.hash; }, 1000);
+            run (300);
+            const bool bOk = plane.shownCopy == refB.picture;
+            check (aOk, std::string (name) + ": slot 0 colour: the data and the picture of instance 0");
+            check (t >= 0 && t <= 200 && bOk, std::string (name) + ": slot 1 colour: instance 1's data and picture within 200 ms (took " + std::to_string (t) + " ms)");
+            check (refA.hash != refB.hash || std::string (name) == "env2" || refA.picture != refB.picture, std::string (name) + ": (the two instances really draw differently)");
+            frame.setView (v, false, 90);
+            until ([&] { return ! plane.planeOn; }, 500);
+        }
+        // the cursor of a voice that plays on instance 1 shows only while instance 1's colour is on screen
+        const int lfo2 = viewIndex ("lfo2");
+        frame.setView (lfo2, true, 90);
+        frame.setViewInstance (lfo2, 0, true, 90);
+        until ([&] { return plane.planeOn && ctl.activeSlot() == 0; }, 600);
+        run (200);
+        const std::vector<uint32_t> noCursor = plane.shownCopy;
+        frame.setViewInstance (lfo2, 1, true, 90);
+        until ([&] { return ctl.activeSlot() == 1; }, 600);
+        run (200);
+        check (plane.shownCopy != noCursor, "lfo2: the playing voice of instance 1 is drawn only on instance 1's page");
+        // the status file names the instance
+        run (1200);
+        const std::string t = dir.read ("status.txt");
+        check (t.find ("instance_slot: 1") != std::string::npos && t.find ("view: lfo2") != std::string::npos && t.find ("instance_slots_alive: 0003") != std::string::npos, "the status file says view lfo2, instance_slot 1, slots alive 0003");
+        ctl.detach (&a);
+        ctl.detach (&b);
     }
     std::printf (g_fails ? "views_host: FAILED (%d)\n" : "views_host: OK\n", g_fails);
     return g_fails ? 1 : 0;

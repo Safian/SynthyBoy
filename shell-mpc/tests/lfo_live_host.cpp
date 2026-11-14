@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Usage: lfo_live_host <plugin library> off|on|selftest|quiet [HZ]
+// Usage: lfo_live_host <plugin library> off|on|selftest|quiet [HZ] [overlay]
+//   overlay: the plugin was built with SYNTHYBOY_MPC_OVERLAY: ONE more display-only parameter "Overlay Instance" is the last of the list (numParams + 1, exact) and is reported once
+//            after creation with audioMasterAutomate (shell-mpc/tests/overlay_instance_host.cpp checks it); without the word every count is exact for a build without the overlay.
 //   HZ is the refresh rate the plugin was built with (SYNTHYBOY_MPC_LFO_LIVE_HZ, default 10): the number of audioMasterAutomate calls per cursor and second is
 //   at most HZ (the default build: <= 21 in 2 s), and about HZ for a cursor that changes cell at every tick.
 //   off:      built with SYNTHYBOY_MPC_LFO_LIVE=0: numParams is the engine's count, nothing exists after it.
@@ -36,6 +38,8 @@
 #include <unistd.h>
 #endif
 
+static bool overlayBuild = false;   // "overlay" on the command line
+static std::atomic<int> automateOverlay { 0 };   // the report of "Overlay Instance" (the last parameter of an overlay build)
 static std::atomic<int> automate[4], automateOther { 0 }, automateSpectrum { 0 };   // the cursors; anything else; the spectrum columns (they follow the four cursors when the build has them)
 static std::atomic<int> spectrumColumns { 0 };
 static std::atomic<int> firstIndex { -1 };
@@ -46,6 +50,7 @@ static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstInt
         const int k = index - firstIndex.load();
         if (k >= 0 && k < 4) automate[k].fetch_add (1);
         else if (k >= 4 && k < 4 + spectrumColumns.load()) automateSpectrum.fetch_add (1);
+        else if (overlayBuild && k >= 4 + spectrumColumns.load()) automateOverlay.fetch_add (1);
         else automateOther.fetch_add (1);
         return 1;
     }
@@ -109,7 +114,12 @@ int main (int argc, char** argv)
 {
     if (argc < 3) { std::fprintf (stderr, "usage: lfo_live_host <plugin> off|on|selftest|quiet\n"); return 2; }
     const std::string mode = argv[2];
-    const int hz = argc > 3 ? std::max (1, std::atoi (argv[3])) : 10;
+    int hz = 10;
+    for (int i = 3; i < argc; ++i)
+    {
+        if (std::string (argv[i]) == "overlay") overlayBuild = true;
+        else hz = std::max (1, std::atoi (argv[i]));
+    }
     const auto started = std::chrono::steady_clock::now();
     // one call per tick and parameter at the most, counted from the creation of the plugin (the display thread ticks from then on): HZ * elapsed seconds + 2
     const auto maxCallsSince = [&] (std::chrono::steady_clock::time_point t, int extra) { return static_cast<int> (std::chrono::duration<double> (std::chrono::steady_clock::now() - t).count() * hz) + extra; };
@@ -220,13 +230,14 @@ int main (int argc, char** argv)
         return fails ? 1 : 0;
     }
 
-    const int extra = e->numParams - (n + 4);   // the spectrum columns of the build (shell-mpc/spectrum.h): none or 32 ("Spectrum 1" .. "Spectrum 32", spectrum_live_host checks them)
+    const int ovl = overlayBuild ? 1 : 0;       // "Overlay Instance" after the spectrum columns
+    const int extra = e->numParams - (n + 4) - ovl;   // the spectrum columns of the build (shell-mpc/spectrum.h): none or 32 ("Spectrum 1" .. "Spectrum 32", spectrum_live_host checks them)
     spectrumColumns.store (extra);
     std::printf ("INFO  display parameters after the four cursors: %d\n", extra);
-    check (extra == 0 || extra == 32, "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them)");
+    check (extra == 0 || extra == 32, overlayBuild ? "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them) + 1 (Overlay Instance)" : "numParams is the engine's count + 4 (+ 32 spectrum columns when the build has them)");
     bool ok[5] = {};
     const std::string names[5] = { text (e, effGetParamName, n, ok), text (e, effGetParamName, n + 1, ok + 1), text (e, effGetParamName, n + 2, ok + 2),
-                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4 + extra, ok + 4) };
+                                   text (e, effGetParamName, n + 3, ok + 3), text (e, effGetParamName, n + 4 + extra + ovl, ok + 4) };
     check (ok[0] && ok[1] && ok[2] && ok[3] && ! ok[4] && names[0] == "LFO 1 Cursor" && names[3] == "LFO 4 Cursor", "the four names, nothing after them");
     bool allOff = true, propsOk = true;
     VstParameterProperties props;
@@ -236,7 +247,13 @@ int main (int argc, char** argv)
         propsOk = propsOk && e->dispatcher (e, effGetParameterProperties, n + k, 0, &props, 0.0f) == 1;
     }
     check (allOff && e->dispatcher (e, effCanBeAutomated, 0, 0, nullptr, 0.0f) == 1, "display parameters are not automatable, engine parameters are");
-    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4 + extra, 0, &props, 0.0f) == 0, "parameter properties exist for the four (and the spectrum columns) only");
+    check (propsOk && e->dispatcher (e, effGetParameterProperties, n + 4 + extra + ovl, 0, &props, 0.0f) == 0, "parameter properties exist for the four (and the spectrum columns and Overlay Instance) only");
+    if (overlayBuild)
+    {
+        bool have = false;
+        check (text (e, effGetParamName, n + 4 + extra, &have) == "Overlay Instance" && have, "the last parameter is Overlay Instance");
+        check (e->dispatcher (e, effCanBeAutomated, n + 4 + extra, 0, nullptr, 0.0f) == 0, "Overlay Instance is not automatable");
+    }
 
     if (mode == "on")
     {
@@ -245,6 +262,8 @@ int main (int argc, char** argv)
         for (int k = 0; k < 4; ++k) zero = zero && idle.hi[k] == 0.0f;
         check (zero, "on: idle (0) while no voice sounds");
         check (automate[0] + automate[1] + automate[2] + automate[3] + automateOther + automateSpectrum == 0, "on: no audioMasterAutomate while idle");
+        if (overlayBuild)
+            check (automateOverlay.load() >= 1 && automateOverlay.load() <= 2, "on: Overlay Instance was reported once after creation, nothing else while idle");
         check (text (e, effGetParamDisplay, n) == "idle", "on: display text of an idle cursor");
         noteOn (e, 60);
         const auto noteAt = std::chrono::steady_clock::now();

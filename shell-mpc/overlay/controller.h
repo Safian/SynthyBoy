@@ -4,8 +4,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// States: "disabled: <reason>" (an ioctl failed, the descriptor was not found: for the life of the process), "hidden: <reason>" (kill switch, several instances, no instance, no
-// view of the skin is on screen, no data yet), "visible" (the status file names the view: `view: lfo2`). The files (all in /tmp by default, see Paths):
+// States: "disabled: <reason>" (an ioctl failed, the descriptor was not found: for the life of the process), "hidden: <reason>" (kill switch, no instance, no view of the skin is on
+// screen, the instance of the page on screen cannot be told / has no slot / is gone, no data yet), "visible" (the status file names the view and the instance slot: `view: lfo2`,
+// `instance_slot: 1`). With several instances the page on screen belongs to one of them: the skin shows its slot as a colour (instance_slots.h) and that instance's data is drawn. The files (all in /tmp by default, see Paths):
 //   synthyboy-overlay-off      exists -> hidden (checked once a second; removing the file brings the overlay back)
 //   synthyboy-overlay-rot      "90" or "270" (default 90), read once a second
 //   synthyboy-overlay-nogpu    exists -> the CPU draws, the GPU helper is stopped (checked once a second, switches live in both directions; gpu/gpu_overlay.h)
@@ -29,6 +30,7 @@
 #include "curve_source.h"
 #include "drm_interfaces.h"
 #include "gpu/gpu_overlay.h"
+#include "instance_slots.h"
 #include "overlay_layout.h"
 #include "page_detector.h"
 #include "presenter.h"
@@ -75,18 +77,14 @@ public:
             for (int m = 0; m < 2; ++m)
                 markers_[i * 2 + m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb };
             regions_[i] = { v.region.x, v.region.y, v.region.w, v.region.h };
-            switch (v.kind)
-            {
-                case layout::kKindFilter: views_.push_back (std::make_unique<FilterView> (v.index, renderer_, fixedCost_)); break;
-                case layout::kKindLfo: views_.push_back (std::make_unique<LfoView> (v.index, fixedCost_)); break;
-                case layout::kKindOsc: views_.push_back (std::make_unique<OscView> (v.index, fixedCost_)); break;
-                case layout::kKindEnv: views_.push_back (std::make_unique<EnvView> (v.index, v)); break;
-                default: views_.push_back (std::make_unique<NullView> (v.name)); break;
-            }
+            instanceRects_[i] = { v.instance.x, v.instance.y, v.instance.w, v.instance.h };
+            views_.push_back (makeView (i));
             targetBase_[i] = static_cast<int> (targets_.size());
             views_.back()->targets (targets_);
         }
-        detector_ = std::make_unique<PageDetector> (frames_, markers_, layout::kNumViews);
+        detector_ = std::make_unique<PageDetector> (frames_, markers_, layout::kNumViews, instanceRects_);
+        for (int& s : viewSlot_)
+            s = -1;
     }
 
     /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). */
@@ -105,22 +103,24 @@ public:
     }
 
     // ---- instances (host threads; the lock is also held while the overlay thread uses an instance) ----
-    void attach (IInstanceView* view)
+    /** Registers an instance and returns its slot (0 .. 15: the lowest free one, kept until detach). -1: all 16 slots are taken; such an instance never shows the overlay. */
+    int attach (IInstanceView* view)
     {
         std::lock_guard<std::mutex> g (mu_);
-        instances_.push_back (view);
+        return slots_.acquire (view);
     }
-    /** Returns the number of instances left. */
+    /** Returns the number of instances left. After it returns the overlay thread no longer touches `view` (the same lock guards every use of an instance). */
     size_t detach (IInstanceView* view)
     {
         std::lock_guard<std::mutex> g (mu_);
-        for (size_t i = 0; i < instances_.size(); ++i)
-            if (instances_[i] == view)
-            {
-                instances_.erase (instances_.begin() + static_cast<std::ptrdiff_t> (i));
-                break;
-            }
-        return instances_.size();
+        slots_.release (view);
+        return static_cast<size_t> (slots_.total());
+    }
+    /** The slot of a registered instance, -1 when it has none (tests). */
+    int slotOf (const IInstanceView* view)
+    {
+        std::lock_guard<std::mutex> g (mu_);
+        return slots_.slotOf (view);
     }
 
     /** Plane off, buffers freed (the overlay thread has stopped, or this is the thread). */
@@ -148,6 +148,9 @@ public:
     const IView* currentView() const noexcept { return current_ >= 0 ? views_[static_cast<size_t> (current_)].get() : nullptr; }
     const IView* viewByName (const std::string& name) const noexcept { for (const auto& v : views_) if (name == v->name()) return v.get(); return nullptr; }
     int currentIndex() const noexcept { return current_; }
+    /** The slot whose instance the visible view shows (-1 when nothing is shown), and the number of times the instances were asked to report their slot again. */
+    int activeSlot() const noexcept { return activeSlot_; }
+    unsigned long rereports() const noexcept { return rereports_; }
     /** Optional: the CPU time of the calling thread in ms (the status file shows the overlay thread's load). */
     void setCpuClock (std::function<double()> clock) { cpuClock_ = std::move (clock); }
 
@@ -188,19 +191,20 @@ private:
             if (secondStartMs_ == 0.0) secondStartMs_ = nowMs;
             secondTick (nowMs);
         }
-        size_t count;
+        int count;
         {
             std::lock_guard<std::mutex> g (mu_);
-            count = instances_.size();
+            count = slots_.total();
         }
         std::string hiddenReason;
         if (killed_)            hiddenReason = "kill switch";
         else if (count == 0)    hiddenReason = "no instance";
-        else if (count > 1)     hiddenReason = "several instances";
         if (! hiddenReason.empty())
         {
             presenter_.hide();
             hideGpu (nowMs);
+            current_ = -1;
+            activeSlot_ = -1;
             setState ("hidden: " + hiddenReason);
             return timing_.detectEveryMs;
         }
@@ -222,20 +226,65 @@ private:
             }
             else
                 unreadable_ = 0;
-            if (d.view != current_)
+            instanceSeen_ = d.instanceSeen;
+            // which instance's page it is: the view's own markers are on screen, and the instance picture says whose page it is
+            int view = d.view, slot = -1;
+            std::string why;
+            if (view < 0)
+                why = d.readable ? "no view on screen" : "framebuffer not readable";
+            else
             {
-                current_ = d.view;
+                std::lock_guard<std::mutex> g (mu_);
+                if (d.slot == kSlotUnknown)
+                {
+                    why = "instance of the page not identified";
+                    askForReports (nowMs);   // the host may not have drawn the instance picture yet, or shows a stale frame until the parameter is reported
+                }
+                else
+                {
+                    reportGapMs_ = kReportFirstGapMs;
+                    if (d.slot == kSlotNone)
+                        why = "instance has no slot (more than 16 instances)";
+                    else if (! slots_.at (d.slot))
+                        why = "instance slot " + std::to_string (d.slot) + " is not alive";
+                    else
+                        slot = d.slot;
+                }
+            }
+            seenSlot_ = d.slot;
+            if (slot < 0)
+                view = -1;
+            if (view != current_ || slot != activeSlot_)
+            {
+                current_ = view;
+                activeSlot_ = slot;
                 needFrame_ = true;
             }
             if (current_ < 0)
             {
                 presenter_.hide();
                 hideGpu (nowMs);
-                setState (d.readable ? "hidden: no view on screen" : "hidden: framebuffer not readable");
+                setState ("hidden: " + why);
             }
         }
         if (current_ >= 0)
         {
+            {
+                std::lock_guard<std::mutex> g (mu_);
+                if (! slots_.at (activeSlot_))     // the instance whose page is on screen has closed since the last check
+                {
+                    current_ = -1;
+                    activeSlot_ = -1;
+                    needFrame_ = true;
+                }
+            }
+            if (current_ < 0)
+            {
+                presenter_.hide();
+                hideGpu (nowMs);
+                setState ("hidden: instance closed");
+                return timing_.detectEveryMs;
+            }
             if (gpu_ && ! noGpu_)
             {
                 if (! presenter_.open())     // the helper needs the display descriptor and the panel size
@@ -283,15 +332,53 @@ private:
         return timing_.detectEveryMs;
     }
 
-    /** The part of a picture every renderer shares: the view reads its data. false: not exactly one instance. */
+    /** Every instance registered with a slot is asked to report "Overlay Instance" again (the controller's lock is held; at most once per gap, which doubles while nothing valid is read). */
+    void askForReports (double nowMs)
+    {
+        if (nowMs < nextReportMs_)
+            return;
+        for (int s = 0; s < layout::kMaxInstances; ++s)
+            if (IInstanceView* v = slots_.at (s))
+                v->requestOverlayReport();
+        ++rereports_;
+        nextReportMs_ = nowMs + reportGapMs_;
+        reportGapMs_ = std::min (reportGapMs_ * 2.0, kReportMaxGapMs);
+    }
+
+    std::unique_ptr<IView> makeView (int i)
+    {
+        const layout::View& v = layout::kViews[i];
+        switch (v.kind)
+        {
+            case layout::kKindFilter: return std::make_unique<FilterView> (v.index, renderer_, fixedCost_);
+            case layout::kKindLfo: return std::make_unique<LfoView> (v.index, fixedCost_);
+            case layout::kKindOsc: return std::make_unique<OscView> (v.index, fixedCost_);
+            case layout::kKindEnv: return std::make_unique<EnvView> (v.index, v);
+            default: return std::make_unique<NullView> (v.name);
+        }
+    }
+
+    /** The part of a picture every renderer shares: the view reads its data from the instance of the slot on screen. false: that instance is gone. */
     bool updateView (double nowMs, bool& changed)
     {
         changed = false;
-        IView& view = *views_[static_cast<size_t> (current_)];
         std::lock_guard<std::mutex> g (mu_);
-        if (instances_.size() != 1)
+        IInstanceView* v = slots_.at (activeSlot_);
+        if (! v)
             return false;
-        IInstanceView* v = instances_[0];
+        if (viewSlot_[current_] != activeSlot_)
+        {
+            // the view last showed another instance (or none): its cached data (curves, cutoff history, smoothing, dot checks) is that one's. A new object starts from nothing.
+            if (viewSlot_[current_] >= 0)
+            {
+                std::unique_ptr<IView> fresh = makeView (current_);
+                fresh->adoptCounters (views_[static_cast<size_t> (current_)]->counters());
+                views_[static_cast<size_t> (current_)] = std::move (fresh);
+            }
+            viewSlot_[current_] = activeSlot_;
+            needFrame_ = true;
+        }
+        IView& view = *views_[static_cast<size_t> (current_)];
         synthyboy::LiveValues lv;
         const bool haveLive = v->live (lv);
         ViewInput in;
@@ -388,9 +475,9 @@ private:
     {
         const auto workStart = std::chrono::steady_clock::now();
         bool changed = false;
-        IView& view = *views_[static_cast<size_t> (current_)];
         if (! updateView (nowMs, changed))
             return;
+        IView& view = *views_[static_cast<size_t> (current_)];   // after updateView: it replaces the object when another instance's page came on screen
         if (! view.valid())
         {
             setState ("hidden: no data yet");
@@ -520,12 +607,20 @@ private:
         o << "view: " << (current_ >= 0 && state_ == "visible" ? views_[static_cast<size_t> (current_)]->name() : "none") << "\n";
         o << "rotation: " << rotation_ << "\n";
         writeGpuStatus (o);
-        size_t count;
+        int count, slotted;
+        unsigned alive;
         {
             std::lock_guard<std::mutex> g (mu_);
-            count = instances_.size();
+            count = slots_.total();
+            slotted = slots_.slotted();
+            alive = slots_.aliveMask();
         }
         o << "instances: " << count << "\n";
+        char ib[160];
+        std::snprintf (ib, sizeof ib, "instances_with_slot: %d\ninstance_slots_alive: %04x\ninstance_slot: %s\ninstance_pixel_read: %06x\ninstance_slot_read: %s\ninstance_rereports: %lu\n", slotted, alive,
+                       current_ >= 0 && state_ == "visible" ? std::to_string (activeSlot_).c_str() : "none", instanceSeen_ & 0xffffff,
+                       seenSlot_ == kSlotUnknown ? "unknown" : (seenSlot_ == kSlotNone ? "none" : std::to_string (seenSlot_).c_str()), rereports_);
+        o << ib;
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
         o << "curve_updates_last_second: " << updatesLast_ << "\ncurve_changes_last_second: " << changesLast_ << "\n";
@@ -605,6 +700,7 @@ private:
     unsigned long gpuFramesAtSecond_ = 0;
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
+    Rect instanceRects_[layout::kNumViews];
     int targetBase_[layout::kNumViews] = {};
     std::vector<int> targets_;
     std::vector<std::unique_ptr<IView>> views_;
@@ -614,7 +710,13 @@ private:
     std::vector<uint32_t> canvas_;
 
     std::mutex mu_;
-    std::vector<IInstanceView*> instances_;
+    InstanceSlots slots_;                    // under mu_
+    int viewSlot_[layout::kNumViews];        // the slot whose instance each view object last read (-1: none yet); overlay thread
+    int activeSlot_ = -1, seenSlot_ = kSlotUnknown;   // the instance of the visible view / what the last check read (the status file)
+    uint32_t instanceSeen_ = 0xffffffffu;
+    unsigned long rereports_ = 0;
+    double nextReportMs_ = 0.0, reportGapMs_ = 400.0;
+    static constexpr double kReportFirstGapMs = 400.0, kReportMaxGapMs = 3200.0;
 
     std::string state_ = "hidden: starting";
     std::function<double()> cpuClock_;

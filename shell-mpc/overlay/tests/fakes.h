@@ -200,7 +200,30 @@ public:
                     pix_.erase (py * panelW + px);
             }
     }
-    void setView (int view, bool present, int rot) { setViewMarker (view, 0, present, rot); setViewMarker (view, 1, present, rot); }
+    /** The instance picture of `view`: one solid colour (a film strip frame of the skin), the whole rectangle, through the shared mapping. */
+    void setViewInstanceRgb (int view, uint32_t rgb, bool present, int rot)
+    {
+        std::lock_guard<std::mutex> g (mu_);
+        const layout::Rect& r = layout::kViews[view].instance;
+        for (int y = 0; y < r.h; ++y)
+            for (int x = 0; x < r.w; ++x)
+            {
+                int px, py;
+                uiPointToPanel (rot, r.x + x, r.y + y, panelW, panelH, px, py);
+                if (present)
+                    pix_[py * panelW + px] = rgb;
+                else
+                    pix_.erase (py * panelW + px);
+            }
+    }
+    /** ... in the colour of `slot` (0 .. 15), kSlotNone (an instance without a slot) or kSlotUnknown (the blank frame). */
+    void setViewInstance (int view, int slot, bool present, int rot)
+    {
+        setViewInstanceRgb (view, instanceFrameRgb (slot == kSlotUnknown ? 0 : (slot == kSlotNone ? layout::kMaxInstances + 1 : slot + 1)), present, rot);
+    }
+    /** A view on screen: both markers and the instance picture (of `defaultSlot`: the first instance of a test has slot 0). */
+    void setView (int view, bool present, int rot) { setViewMarker (view, 0, present, rot); setViewMarker (view, 1, present, rot); setViewInstance (view, defaultSlot, present, rot); }
+    int defaultSlot = 0;
     /** The first view (filter 1): the helpers most tests use. */
     void setMarker (int m, bool present, int rot, uint32_t colourOverride = 0) { setViewMarker (0, m, present, rot, colourOverride); }
     void setAll (bool present, int rot) { setView (0, present, rot); }
@@ -260,6 +283,8 @@ public:
     /** The live cutoff / resonance as the array a view gets (null while hasLive is false). */
     const float* liveTargets() noexcept { if (! hasLive.load()) return nullptr; lt_[0] = liveCutoff.load(); lt_[1] = liveRes.load(); return lt_; }
     double bpm() const noexcept override { return bpmValue.load(); }
+    void requestOverlayReport() noexcept override { reportRequests.fetch_add (1); }
+    std::atomic<int> reportRequests { 0 };
     std::shared_ptr<const synthyboy::StateContent> content() const override { std::lock_guard<std::mutex> g (cmu); return contentPtr; }
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { std::lock_guard<std::mutex> g (cmu); contentPtr = std::move (c); }
     float lt_[2] = {};

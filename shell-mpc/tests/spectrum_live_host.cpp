@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Usage: spectrum_live_host <plugin library> off|on|selftest [HZ]
+// Usage: spectrum_live_host <plugin library> off|on|selftest [HZ] [overlay]
+//   overlay: the plugin was built with SYNTHYBOY_MPC_OVERLAY: ONE more display-only parameter "Overlay Instance" after the 32 columns (numParams + 1, exact); it is reported once with
+//            audioMasterAutomate after creation (shell-mpc/tests/overlay_instance_host.cpp checks it). Without the word every count is exact for a build without the overlay.
 //   HZ is the refresh rate the plugin was built with (SYNTHYBOY_MPC_LFO_LIVE_HZ, default 10): the display thread ticks HZ times a second and reports at most 32 + 4 times a tick.
 //   off:      built with SYNTHYBOY_MPC_SPECTRUM=OFF: numParams is the engine's count + 4 (the LFO cursors), nothing exists after them.
 //   on:       built with it: 32 display-only parameters "Spectrum 1" .. "Spectrum 32" after the four cursors (index count + 4 + k). No sound: every column 0 and no
@@ -28,7 +30,8 @@
 #include <thread>
 #include <vector>
 
-static std::atomic<int> firstSpectrum { -1 }, spectrumCalls[32], cursorCalls { 0 }, otherCalls { 0 };
+static std::atomic<int> firstSpectrum { -1 }, spectrumCalls[32], cursorCalls { 0 }, otherCalls { 0 }, overlayCalls { 0 };
+static bool overlayBuild = false;   // "overlay" on the command line: the parameter after the 32 columns is "Overlay Instance"
 static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstIntPtr, void*, float)
 {
     if (opcode == audioMasterAutomate)
@@ -36,6 +39,7 @@ static VstIntPtr hostCallback (AEffect*, VstInt32 opcode, VstInt32 index, VstInt
         const int k = index - firstSpectrum.load();
         if (k >= 0 && k < 32) spectrumCalls[k].fetch_add (1);
         else if (k >= -4 && k < 0) cursorCalls.fetch_add (1);
+        else if (overlayBuild && k == 32) overlayCalls.fetch_add (1);
         else otherCalls.fetch_add (1);
         return 1;
     }
@@ -103,7 +107,12 @@ int main (int argc, char** argv)
 {
     if (argc < 3) { std::fprintf (stderr, "usage: spectrum_live_host <plugin> off|on|selftest [HZ]\n"); return 2; }
     const std::string mode = argv[2];
-    const int hz = argc > 3 ? std::max (1, std::atoi (argv[3])) : 10;
+    int hz = 10;
+    for (int i = 3; i < argc; ++i)
+    {
+        if (std::string (argv[i]) == "overlay") overlayBuild = true;
+        else hz = std::max (1, std::atoi (argv[i]));
+    }
     void* lib = dlopen (argv[1], RTLD_NOW | RTLD_LOCAL);
     if (! lib) { std::fprintf (stderr, "dlopen: %s\n", dlerror()); return 2; }
     using Main = AEffect* (*) (audioMasterCallback);
@@ -136,7 +145,7 @@ int main (int argc, char** argv)
     }
 
     // the parameter list: indices stable (2637 engine + 4 cursors + 32 columns for the shipped table), names, properties, no automation
-    check (e->numParams == n + 4 + 32, "numParams is the engine's count + 4 cursors + 32 spectrum columns");
+    check (e->numParams == n + 4 + 32 + (overlayBuild ? 1 : 0), overlayBuild ? "numParams is the engine's count + 4 cursors + 32 spectrum columns + 1 (Overlay Instance)" : "numParams is the engine's count + 4 cursors + 32 spectrum columns");
     {
         bool names = true, notAuto = true, props = true, idle = true;
         VstParameterProperties p;
@@ -154,8 +163,14 @@ int main (int argc, char** argv)
         check (notAuto, "the spectrum columns are not automatable");
         check (props, "the spectrum columns have the parameter properties with a step of 1/64");
         bool afterEnd = true;
-        text (e, effGetParamName, n + 36, &afterEnd);
-        check (! afterEnd && e->dispatcher (e, effGetParameterProperties, n + 36, 0, &p, 0.0f) == 0, "nothing after the 32nd column");
+        const int afterColumns = n + 36 + (overlayBuild ? 1 : 0);
+        if (overlayBuild)
+        {
+            bool have = false;
+            check (text (e, effGetParamName, n + 36, &have) == "Overlay Instance" && have, "the parameter after the 32nd column is Overlay Instance");
+        }
+        text (e, effGetParamName, afterColumns, &afterEnd);
+        check (! afterEnd && e->dispatcher (e, effGetParameterProperties, afterColumns, 0, &p, 0.0f) == 0, overlayBuild ? "nothing after Overlay Instance" : "nothing after the 32nd column");
         check (idle, "at the start (nothing played) every column is 0");
         // writes are ignored
         const std::string before = getChunk (e);
