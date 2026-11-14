@@ -448,7 +448,7 @@ void SynthyBoyEditor::showPresetMenu()
     }
 
     menu.showMenuAsync (popupOptions (top.get()),
-                        [safe = juce::Component::SafePointer<SynthyBoyEditor> (this)] (int result)
+                        [safe = juce::Component::SafePointer<SynthyBoyEditor> (this), presetBase] (int result)
                         {
                             if (safe == nullptr || result < presetBase)
                                 return;
