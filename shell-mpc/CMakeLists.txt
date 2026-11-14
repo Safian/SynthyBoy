@@ -168,3 +168,16 @@ if(UNIX AND NOT APPLE)
         "-static-libstdc++"
         "-static-libgcc")
 endif()
+
+# Host helper tool for dumping factory preset chunks (native build only)
+if(NOT CMAKE_CROSSCOMPILING)
+    add_executable(dump_mpc_chunks tests/dump_chunks_host.cpp)
+    target_include_directories(dump_mpc_chunks PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${MPC_SDK_DIR}/framework"
+        "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(dump_mpc_chunks PRIVATE ${CMAKE_DL_LIBS})
+    target_compile_features(dump_mpc_chunks PRIVATE cxx_std_17)
+    target_compile_options(dump_mpc_chunks PRIVATE -Wall -Wextra)
+endif()
+
