@@ -340,7 +340,7 @@ The measurement was done on an MPC XL running MPC OS 3.10.1.12, using a diagnost
 |---|---|---|
 | note on / note off | 19 / 19, channel 1 | 16 / 16, channel 1 |
 | note-on velocity | always 127 | varied (96 and 127 seen) |
-| poly aftertouch | 0 | 112 messages, values 1..127, one stream per held pad (per note), about one message every 6 ms |
+| poly aftertouch | 0 | 112 messages, values 1..127, one stream per held pad (per note), about one message every 6 milliseconds |
 | channel pressure | 0 | 0 |
 | pitch bend | 0 | 0 |
 | CC (including CC 74) | 0 | 0 |

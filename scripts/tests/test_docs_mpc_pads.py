@@ -35,7 +35,7 @@ class PadsSection(unittest.TestCase):
             "channel 1", "pitch bend", "CC 74", "channel pressure",
             "X/Y", "receiveVstMidiEvent", "bypass", "effVendorSpecific",
             "MPE Pressure Lead", "Filter 1 Cutoff", "Osc 1 Unison Detune",
-            "6 ms",
+            "6 milliseconds",
         ]:
             self.assertIn(phrase, s, "missing in the pads section: " + phrase)
 
