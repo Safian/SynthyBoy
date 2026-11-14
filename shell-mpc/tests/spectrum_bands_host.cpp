@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <vector>
 
 #include "spectrum_bands.h"
@@ -45,9 +46,13 @@ int main()
     }
     check (spectrumBandEdgeHz (-3) == spectrumBandEdgeHz (0) && spectrumBandEdgeHz (99) == spectrumBandEdgeHz (32), "edges: k outside 0 .. 32 is clamped");
 
+    // constants: floor is -60 dBFS, ceiling is -12 dBFS
+    check (kSpectrumFloorDb == -60.0f && kSpectrumCeilingDb == -12.0f, "constants: floor is -60 dBFS, ceiling is -12 dBFS");
+
     // dB -> level
     check (spectrumLevelFromDb (kSpectrumCeilingDb) == 1.0f && spectrumLevelFromDb (kSpectrumCeilingDb + 6.0f) == 1.0f, "level: ceiling and above = 1");
     check (spectrumLevelFromDb (kSpectrumFloorDb) == 0.0f && spectrumLevelFromDb (kSpectrumFloorDb - 30.0f) == 0.0f && spectrumLevelFromDb (-180.0f) == 0.0f, "level: floor and below = 0");
+    check (spectrumLevelFromDb (-std::numeric_limits<float>::infinity()) == 0.0f, "level: -inf = 0");
     const float midDb = 0.5f * (kSpectrumFloorDb + kSpectrumCeilingDb);
     const float quarterDb = 0.25f * kSpectrumFloorDb + 0.75f * kSpectrumCeilingDb;
     check (std::fabs (spectrumLevelFromDb (midDb) - 0.5f) < 1e-6f && std::fabs (spectrumLevelFromDb (quarterDb) - 0.75f) < 1e-6f, "level: linear in dB between the floor and the ceiling");
@@ -110,6 +115,7 @@ int main()
     {
         const double freqs[] = { 100.0, 440.0, 5000.0, 15000.0 };
         const float amp = static_cast<float> (std::pow (10.0, static_cast<double> (kSpectrumCeilingDb - 6.0f) / 20.0));
+        const float expectedLevel = spectrumLevelFromDb (kSpectrumCeilingDb - 6.0f);
         bool ok = true;
         for (double f : freqs)
         {
@@ -125,9 +131,9 @@ int main()
             const bool inBand = spectrumBandEdgeHz (top) <= f && f < spectrumBandEdgeHz (top + 1);
             if (!inBand)
                 std::printf ("INFO  %.0f Hz: maximum in band %d (%.1f .. %.1f Hz), level %.3f\n", f, top, spectrumBandEdgeHz (top), spectrumBandEdgeHz (top + 1), lv[top]);
-            ok = ok && inBand && lv[top] > 0.8f;
+            ok = ok && inBand && lv[top] >= expectedLevel - 0.05f;
         }
-        check (ok, "sines at 100 Hz, 440 Hz, 5 kHz and 15 kHz: the maximum is in the band that contains the frequency and is above 0.8");
+        check (ok, "sines at 100 Hz, 440 Hz, 5 kHz and 15 kHz: the maximum is in the band that contains the frequency and within 0.05 of expected level");
     }
 
     // silence: every band at the floor

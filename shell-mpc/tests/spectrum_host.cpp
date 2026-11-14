@@ -42,6 +42,9 @@ static int top (const float* v)
 
 int main()
 {
+    // constants: floor is -60 dBFS, ceiling is -12 dBFS
+    check (kSpectrumFloorDb == -60.0f && kSpectrumCeilingDb == -12.0f, "constants: floor is -60 dBFS, ceiling is -12 dBFS");
+
     static SpectrumRing ring;
     SpectrumAnalyser an;
     float q[kSpectrumCount];
@@ -72,6 +75,25 @@ int main()
         for (float v : q)
             zero = zero && v == 0.0f;
         check (zero, "silence: all 32 columns are 0");
+    }
+
+    // 1 kHz sine 6 dB below ceiling: the largest column matches spectrumLevelFromDb
+    {
+        SpectrumRing r0;
+        size_t ph = 0;
+        const float sineDb = kSpectrumCeilingDb - 6.0f;
+        const float amp = static_cast<float> (std::pow (10.0, static_cast<double> (sineDb) / 20.0));
+        pushSine (r0, 1000.0, amp, ph, 4096);
+        SpectrumAnalyser a0;
+        a0.tick (r0, kRate, q);
+        for (int i = 0; i < 12; ++i)
+        {
+            pushSine (r0, 1000.0, amp, ph, 4410);
+            a0.tick (r0, kRate, q);
+        }
+        const int t = top (q);
+        check (spectrumBandEdgeHz (t) <= 1000.0 && 1000.0 < spectrumBandEdgeHz (t + 1), "sine 1 kHz below ceiling: the largest column is the band of 1 kHz");
+        check (std::fabs (q[t] - spectrumLevelFromDb (sineDb)) < 0.04f, "sine 1 kHz below ceiling: the largest column matches spectrumLevelFromDb");
     }
 
     // 1 kHz full-scale sine: the column that contains 1 kHz is the maximum (a full column), quantised, others lower
@@ -108,7 +130,7 @@ int main()
         pushSine (r2, 1000.0, 1.0f, ph, 4096);
         a2.tick (r2, kRate, q);
         const int t = top (q);
-        check (q[t] > 0.5f, "smoothing: the first tick already covers more than half of the rise (fast attack)");
+        check (q[t] > 0.5f * spectrumLevelFromDb (0.0f), "smoothing: the first tick already covers more than half of the rise (fast attack)");
         std::vector<float> z (4410, 0.0f);
         r2.push (z.data(), z.data(), 4096);
         a2.tick (r2, kRate, q);
