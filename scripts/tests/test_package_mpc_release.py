@@ -180,7 +180,8 @@ class TestPackageMpcRelease(unittest.TestCase):
         # Verify installation / removal
         self.assertIn('VST2 Plugins', install_txt)
         self.assertIn("Restart the MPC", install_txt)
-        self.assertIn("External Plugins", install_txt)
+        self.assertIn("Sounds > Instruments", install_txt)
+        self.assertNotIn("External Plugins", install_txt)
         self.assertIn("Delete the", install_txt)
 
         # Verify third-party warning and disclaimer

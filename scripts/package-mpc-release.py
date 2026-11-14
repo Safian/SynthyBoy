@@ -60,12 +60,12 @@ Installation:
 2. Restart the MPC (or reboot) so the host discovers the newly added plugin.
 
 Where the instrument appears:
-- The instrument appears in the plugin browser under "External Plugins".
+- The instrument appears in the instrument list of a plugin track as "SynthyBoy"
+  (on MPC OS 3.10.1: Sounds > Instruments, last page).
   Create a Plugin program on an instrument track and select SynthyBoy.
 
 How to remove:
 - Delete the "{folder}" folder from "VST2 Plugins".
-  Projects that used the plugin will open and load without it.
 
 Important notes and stability:
 - Third-party plugins are not supported by Akai and can crash the MPC.
