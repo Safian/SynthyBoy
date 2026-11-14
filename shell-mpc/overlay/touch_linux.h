@@ -262,6 +262,36 @@ public:
         Returns number of input_events successfully decoded, or < 0 on fatal read/poll error. */
     int poll (int timeoutMs = 0)
     {
+        return pollImpl (timeoutMs, [this] (uint16_t type, uint16_t code, int32_t value, uint64_t timeUs) { decoder_.feed (type, code, value, timeUs); });
+    }
+
+    /** Like poll, and hands every touch event to handler (const TouchEvent&) AS SOON AS it is decoded (the decoder's queue is not used: a long gap between polls cannot overflow it). */
+    template <typename Handler>
+    int poll (int timeoutMs, Handler&& handler)
+    {
+        const int ret = pollImpl (timeoutMs, [this, &handler] (uint16_t type, uint16_t code, int32_t value, uint64_t timeUs) { decoder_.feed (type, code, value, timeUs, handler); });
+        TouchEvent ev;
+        while (decoder_.pollEvent (ev))   // what the decoder queued itself: the Up of a finger that was down when the device went away
+            handler (ev);
+        return ret;
+    }
+
+    void closeNode() noexcept
+    {
+        if (fd_ >= 0)
+        {
+            syscalls_.close (fd_);
+            fd_ = -1;
+        }
+        nodeIndex_ = -1;
+        buffered_ = 0;
+        decoder_.reset (syscalls_.nowMs() * 1000ULL);
+    }
+
+private:
+    template <typename FeedFn>
+    int pollImpl (int timeoutMs, FeedFn&& feedFn)
+    {
         const uint64_t now = syscalls_.nowMs();
 
         // If not connected, check back-off of at least 1 second (1000 ms) before rediscovering
@@ -316,7 +346,7 @@ public:
 
                     const uint64_t timeUs = static_cast<uint64_t> (ev.time.tv_sec) * 1000000ULL +
                                             static_cast<uint64_t> (ev.time.tv_usec);
-                    decoder_.feed (ev.type, ev.code, ev.value, timeUs);
+                    feedFn (ev.type, ev.code, ev.value, timeUs);
                     ++eventsProcessed;
                 }
 
@@ -355,32 +385,6 @@ public:
         return static_cast<int> (eventsProcessed);
     }
 
-    /** Polls the device and passes each generated TouchEvent to handler(const TouchEvent&). */
-    template <typename Handler>
-    int poll (int timeoutMs, Handler&& handler)
-    {
-        const int ret = poll (timeoutMs);
-        TouchEvent ev;
-        while (decoder_.pollEvent (ev))
-        {
-            handler (ev);
-        }
-        return ret;
-    }
-
-    void closeNode() noexcept
-    {
-        if (fd_ >= 0)
-        {
-            syscalls_.close (fd_);
-            fd_ = -1;
-        }
-        nodeIndex_ = -1;
-        buffered_ = 0;
-        decoder_.reset (syscalls_.nowMs() * 1000ULL);
-    }
-
-private:
     ITouchSyscalls& syscalls_;
     TouchDecoder decoder_;
     int fd_ = -1;

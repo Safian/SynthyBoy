@@ -343,4 +343,6 @@ c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/q_router_host shell-
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/q_router_host > $TL/q-router.log 2>&1
 grep -q "WARNING: ThreadSanitizer" $TL/q-router.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/q-router.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Q router (full report: $TL/q-router.log)"; exit 1; }
 grep -q "^FAIL" $TL/q-router.log && { grep "^FAIL" $TL/q-router.log; echo "ACCEPT FAIL: tsan q_router_host"; exit 1; }
+# the touch decoder and the evdev reader (touch_decoder.h, touch_linux.h; fakes for the syscalls, a capture of the Key 61 as a fixture): plainly with -Werror and under AddressSanitizer + UBSan
+bash shell-mpc/overlay/tests/run_touch_tests.sh > $B/touch.log 2>&1 || { grep -E "FAIL|error" $B/touch.log | head -20; echo "ACCEPT FAIL: touch_host"; exit 1; }
 echo "ACCEPT OK"

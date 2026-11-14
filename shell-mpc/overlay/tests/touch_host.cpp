@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "../geometry.h"
 #include "../touch_decoder.h"
 #include "../touch_linux.h"
 
@@ -285,6 +286,13 @@ static void testSynDropped()
     check (! dec.isDown(), "syn_dropped: finger no longer down after drop");
     check (dec.trackedSlot() == -1, "syn_dropped: tracked slot reset to -1");
 
+    // the rest of the dropped packet (a half frame: a new finger's id and position) is discarded up to its SYN_REPORT
+    sendSlot (dec, 0, 1600);
+    sendTrackingId (dec, 10, 1600);
+    sendCoords (dec, 50, 60, 1600);
+    sendSyn (dec, 1600);
+    check (collectEvents (dec).empty() && ! dec.isDown(), "syn_dropped: the events of the dropped packet are discarded");
+
     // Next complete frame arrives
     sendTapDown (dec, 0, 11, 200, 300, 2000);
     auto e3 = collectEvents (dec);
@@ -299,6 +307,83 @@ static void testSynDropped()
     sendSynDropped (dec, 3000);
     auto e5 = collectEvents (dec);
     check (e5.empty(), "syn_dropped: no event when no finger was tracked");
+}
+
+static void testScaledRanges()
+{
+    // The Key 61's panel reports 0 .. 2048 on both axes for an 800 x 1280 panel: the ABS range is not the pixel range
+    TouchDecoder dec (800, 1280, 90);
+    dec.setRanges (0, 2048, 0, 2048);
+    int x = -1, y = -1;
+    dec.mapPanelToUi (0, 0, x, y);
+    check (x == 1279 && y == 0, "scaled range: top left of the device -> UI (1279, 0) under rotation 90");
+    dec.mapPanelToUi (2048, 2048, x, y);
+    check (x == 0 && y == 799, "scaled range: bottom right of the device -> UI (0, 799)");
+    dec.mapPanelToUi (1024, 1024, x, y);
+    check (x >= 639 && x <= 640 && y >= 399 && y <= 400, "scaled range: the middle is the middle");
+    // what mtouch writes for the upright pixel (X, Y): sx = Y, sy = 1279 - X, scaled by range / 799 and / 1279 -> back within one pixel
+    for (int X : { 0, 1, 100, 640, 1000, 1279 })
+        for (int Y : { 0, 3, 400, 799 })
+        {
+            const int sx = Y, sy = 1279 - X;
+            const int px = static_cast<int> (static_cast<long> (sx) * 2048 / 799), py = static_cast<int> (static_cast<long> (sy) * 2048 / 1279);
+            dec.mapPanelToUi (px, py, x, y);
+            char msg[96];
+            std::snprintf (msg, sizeof msg, "scaled range: injected UI (%d, %d) comes back as (%d, %d)", X, Y, x, y);
+            check (std::abs (x - X) <= 1 && std::abs (y - Y) <= 1, msg);
+        }
+}
+
+static void testGeometryAgreement()
+{
+    // the picture is placed by geometry.h; a touch must land on the pixel that picture shows: mapping a panel pixel back must give the UI pixel that uiPointToPanel put there
+    for (int rot : { 0, 90, 180, 270 })
+    {
+        const bool swap = rot == 90 || rot == 270;
+        const int uiW = swap ? 1280 : 800, uiH = swap ? 800 : 1280;
+        TouchDecoder dec (800, 1280, rot);
+        bool all = true;
+        for (int X = 0; X < uiW; X += 37)
+            for (int Y = 0; Y < uiH; Y += 29)
+            {
+                int px = 0, py = 0, bx = -1, by = -1;
+                synthyboy_mpc::overlay::uiPointToPanel (rot, X, Y, 800, 1280, px, py);
+                dec.mapPanelToUi (px, py, bx, by);
+                all = all && bx == X && by == Y;
+            }
+        check (all, "geometry.h agreement: panel pixel -> UI pixel inverts uiPointToPanel, rotation " + std::to_string (rot));
+    }
+}
+
+static void testOneFrameTap()
+{
+    TouchDecoder dec (800, 1280, 90);
+    sendSlot (dec, 0, 10);
+    sendTrackingId (dec, 7, 10);
+    sendCoords (dec, 100, 100, 10);
+    sendTrackingId (dec, -1, 10);
+    sendSyn (dec, 10);
+    check (collectEvents (dec).empty() && ! dec.isDown(), "a finger that came and went within one frame reports nothing (no Up without a Down)");
+    sendTapDown (dec, 0, 8, 100, 100, 20);
+    check (collectEvents (dec).size() == 1 && dec.isDown(), "the next finger is reported normally");
+}
+
+static void testHandlerNeedsNoQueue()
+{
+    // 40 events of a drag handed to the sink: nothing is queued, nothing is lost beyond the queue's 16
+    TouchDecoder dec (800, 1280, 90);
+    int n = 0;
+    auto sink = [&n] (const TouchEvent&) { ++n; };
+    dec.feed (TouchDecoder::kEvAbs, TouchDecoder::kAbsMtTrackingId, 1, 0, sink);
+    dec.feed (TouchDecoder::kEvAbs, TouchDecoder::kAbsMtPositionX, 10, 0, sink);
+    dec.feed (TouchDecoder::kEvAbs, TouchDecoder::kAbsMtPositionY, 10, 0, sink);
+    dec.feed (TouchDecoder::kEvSyn, TouchDecoder::kSynReport, 0, 0, sink);
+    for (int i = 0; i < 40; ++i)
+    {
+        dec.feed (TouchDecoder::kEvAbs, TouchDecoder::kAbsMtPositionX, 20 + i, 0, sink);
+        dec.feed (TouchDecoder::kEvSyn, TouchDecoder::kSynReport, 0, 0, sink);
+    }
+    check (n == 41 && dec.available() == 0, "sink version: 1 Down + 40 Moves delivered, the queue stays empty");
 }
 
 static void testTrackingIdReplaced()
@@ -765,6 +850,10 @@ int main()
     testTwoFingers();
     testAllRotationsWithCornerPoints();
     testSynDropped();
+    testScaledRanges();
+    testGeometryAgreement();
+    testOneFrameTap();
+    testHandlerNeedsNoQueue();
     testTrackingIdReplaced();
     testOutOfRangeClamp();
     testTimeStamps();

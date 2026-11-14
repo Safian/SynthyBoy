@@ -63,24 +63,20 @@ public:
     {
     }
 
+    /** The size of the panel in pixels (the framebuffer the touches are mapped onto), independent of the units of the touch device. */
     void setPanelSize (int w, int h) noexcept
     {
         panelW_ = w;
         panelH_ = h;
-        minX_ = 0;
-        maxX_ = w > 0 ? w - 1 : 0;
-        minY_ = 0;
-        maxY_ = h > 0 ? h - 1 : 0;
     }
 
+    /** The ABS ranges of the touch device (EVIOCGABS). They are NOT pixels: the Key 61's panel reports 0 .. 2048 on both axes for a 800 x 1280 panel, so the position is scaled onto the panel. */
     void setRanges (int minX, int maxX, int minY, int maxY) noexcept
     {
         minX_ = minX;
         maxX_ = maxX;
         minY_ = minY;
         maxY_ = maxY;
-        panelW_ = (maxX >= minX) ? (maxX - minX + 1) : 0;
-        panelH_ = (maxY >= minY) ? (maxY - minY + 1) : 0;
     }
 
     void setRotation (int degrees) noexcept
@@ -108,12 +104,11 @@ public:
         });
     }
 
-    /** Feed a raw evdev event and invoke sink (const TouchEvent&) for any emitted event. */
+    /** Feed a raw evdev event and invoke sink (const TouchEvent&) for any emitted event (the queue is not used: nothing can overflow). */
     template <typename Sink>
     void feed (uint16_t type, uint16_t code, int32_t value, uint64_t timeUs, Sink&& sink)
     {
         processEvent (type, code, value, timeUs, [&] (const TouchEvent& ev) {
-            enqueue (ev);
             sink (ev);
         });
     }
@@ -164,24 +159,27 @@ public:
         trackedReplaced_ = false;
         oldTrackingId_ = -1;
         trackedCoordsChanged_ = false;
+        dropping_ = false;
 
         for (int i = 0; i < kMaxSlots; ++i)
             slots_[i] = Slot{};
     }
 
-    /** Map panel coordinates (sx, sy) to upright UI pixels (uiX, uiY) under current rotation and clamp. */
+    /** Map a position of the touch device (sx, sy: ABS units) to upright UI pixels (uiX, uiY) under the current rotation: clamp to the ABS range, scale onto the panel's pixels, rotate
+        (the inverse of geometry.h's uiPointToPanel, which places the picture: the test compares the two). */
     void mapPanelToUi (int sx, int sy, int& uiX, int& uiY) const noexcept
     {
-        // Clamp to device ABS ranges
         if (sx < minX_) sx = minX_;
         if (sx > maxX_) sx = maxX_;
         if (sy < minY_) sy = minY_;
         if (sy > maxY_) sy = maxY_;
 
-        const int rx = sx - minX_;
-        const int ry = sy - minY_;
-        const int W = panelW_;
-        const int H = panelH_;
+        const int W = panelW_ > 0 ? panelW_ : 1;
+        const int H = panelH_ > 0 ? panelH_ : 1;
+        const int64_t spanX = static_cast<int64_t> (maxX_) - minX_;
+        const int64_t spanY = static_cast<int64_t> (maxY_) - minY_;
+        const int rx = spanX > 0 ? static_cast<int> (((static_cast<int64_t> (sx) - minX_) * (W - 1) * 2 + spanX) / (spanX * 2)) : 0;
+        const int ry = spanY > 0 ? static_cast<int> (((static_cast<int64_t> (sy) - minY_) * (H - 1) * 2 + spanY) / (spanY * 2)) : 0;
 
         switch (rotation_)
         {
@@ -190,16 +188,16 @@ public:
                 uiY = ry;
                 break;
             case 180:
-                uiX = (W > 0) ? (W - 1 - rx) : 0;
-                uiY = (H > 0) ? (H - 1 - ry) : 0;
+                uiX = W - 1 - rx;
+                uiY = H - 1 - ry;
                 break;
             case 270:
                 uiX = ry;
-                uiY = (W > 0) ? (W - 1 - rx) : 0;
+                uiY = W - 1 - rx;
                 break;
             case 90:
             default:
-                uiX = (H > 0) ? (H - 1 - ry) : 0;
+                uiX = H - 1 - ry;
                 uiY = rx;
                 break;
         }
@@ -223,10 +221,18 @@ private:
     template <typename EmitFn>
     void processEvent (uint16_t type, uint16_t code, int32_t value, uint64_t timeUs, EmitFn&& emit)
     {
+        // after SYN_DROPPED the kernel's events up to the next SYN_REPORT are an incomplete picture of the device: they are discarded
+        if (dropping_ && ! (type == kEvSyn && code == kSynDropped))
+        {
+            if (type == kEvSyn && code == kSynReport)
+                dropping_ = false;
+            return;
+        }
         if (type == kEvSyn)
         {
             if (code == kSynDropped)
             {
+                dropping_ = true;
                 // SYN_DROPPED: state is lost; emit Up if a finger was tracked and resynchronise from next complete frame
                 if (trackedSlot_ >= 0 && hasLastUiCoords_)
                 {
@@ -359,7 +365,15 @@ private:
                 else if (currentSlot_ == trackedSlot_)
                 {
                     // Tracked finger changed state
-                    if (value < 0)
+                    if (value < 0 && trackedDownPending_)
+                    {
+                        // the finger came and went within one frame: the Down was never reported, so there is no Up either
+                        trackedSlot_ = -1;
+                        trackedTrackingId_ = -1;
+                        trackedDownPending_ = false;
+                        trackedCoordsChanged_ = false;
+                    }
+                    else if (value < 0)
                     {
                         trackedUpPending_ = true;
                         trackedDownPending_ = false;
@@ -426,6 +440,7 @@ private:
 
     bool trackedDownPending_ = false;
     bool trackedUpPending_ = false;
+    bool dropping_ = false;
     bool trackedReplaced_ = false;
     int32_t oldTrackingId_ = -1;
     bool trackedCoordsChanged_ = false;
