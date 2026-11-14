@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include "voice.h"
+#include "filter_setup.h"
 #include "../dsp/simd.h"
 #include "../dsp/section_timing.h"
 
@@ -1014,27 +1015,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
         {
             FilterSettings& s = filtSet[f];
-            s.fast = g.quality == 0;
-            s.model = static_cast<int> (P (fi.model) + 0.5f);
-            s.style = static_cast<int> (P (fi.style) + 0.5f);
-            const float kt = semitonesToRatio ((static_cast<float> (keyNum) - 60.0f) * P (fi.keytrack) * 0.01f);
-            const float vcCut = semitonesToRatio (vc.cutoffSemis);
-            const float panShift = fi.pan >= 0 ? P (fi.pan) * 0.01f : 0.0f; // +-100 % = +-12 semitones, opposite in the two channels (document 05, 1.2)
-            s.cutoffHz = P (fi.cutoff) * kt * vcCut * std::exp2 (-panShift);
-            s.cutoffHzR = PR (fi.cutoff) * kt * vcCut * std::exp2 (panShift);
-            s.clean = fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f;
-            s.resonance = P (fi.resonance) * 0.01f;
-            s.drive = P (fi.drive) * (1.0f / 20.0f);
-            s.driveDb = P (fi.drive);
-            s.combOffset = P (fi.combOffset);
-            s.formantX = P (fi.formantX) * 0.01f;
-            s.formantY = P (fi.formantY) * 0.01f;
-            s.formantRes = P (fi.formantRes) * 0.01f;
-            s.formantSpread = P (fi.formantSpread) * 0.01f;
-            s.formantTranspose = P (fi.formantTranspose);
-            s.blend = P (fi.blend) * 0.01f;
-            s.mix = P (fi.mix) * 0.01f;
-            s.var = P (fi.var) * 0.01f;
+            fillFilterSettings (s, fi, [this] (int i) { return P (i); }, [this] (int i) { return PR (i); }, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
+                                keyNum, vc.cutoffSemis, g.quality == 0);
             filt[f].set (s);
             if (fresh)
                 filt[f].reset(); // the smoothers start at the targets of this note, not at the ones of the note this voice played before
