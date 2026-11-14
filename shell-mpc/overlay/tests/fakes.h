@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,7 @@ struct TempDir
         Paths p;
         p.killSwitch = path + "/off";
         p.rotation = path + "/rot";
+        p.noGpu = path + "/nogpu";
         p.status = path + "/status.txt";
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";
@@ -119,6 +121,17 @@ public:
     }
     void disablePlane() noexcept override { log ("disable"); planeOn = false; }
     void destroyBuffers() noexcept override { log ("destroy"); buffersAlive = false; }
+    // for the GPU helper: the descriptor, the forced plane off, the objects another process made on the shared descriptor (the fake helper of gpu_backend_host.cpp adds them)
+    int displayFd() const noexcept override { return 42; }
+    void forceDisablePlane() noexcept override { log ("forcedisable"); planeOn = false; }
+    void removeForeign (uint32_t fb, uint32_t handle) noexcept override
+    {
+        std::lock_guard<std::mutex> g (mu_);
+        log_.push_back ("removeforeign");
+        foreignFbs.erase (fb);
+        foreignHandles.erase (handle);
+    }
+    std::set<uint32_t> foreignFbs, foreignHandles;
 
     bool planeOn = false, buffersAlive = false;
     Rect lastRect;

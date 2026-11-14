@@ -143,6 +143,16 @@ for a in "${archs[@]}"; do
     cp "$build_dir/$a/shell-mpc/synthyboy_mpc.stripped.so" "$plugin_folder/VST/synthyboy-$a.so"
 done
 
+# The GPU helper of the overlay (built only with SYNTHYBOY_MPC_OVERLAY ON on ARM, scripts/mpc-container-build.sh): VST/synthyboy-overlay-gpu-<arch>, next to the plugin binary
+# (the plugin looks for it there). The production package has no such target, so its VST/ folder is unchanged.
+for a in "${archs[@]}"; do
+    helper="$build_dir/$a/shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu.stripped"
+    if [[ -f "$helper" ]]; then
+        cp "$helper" "$plugin_folder/VST/synthyboy-overlay-gpu-$a"
+        chmod 755 "$plugin_folder/VST/synthyboy-overlay-gpu-$a"
+    fi
+done
+
 # Create Content/ folder (empty if nothing to put there)
 mkdir -p "$plugin_folder/Content"
 

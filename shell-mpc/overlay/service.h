@@ -19,11 +19,16 @@
 #include <thread>
 
 #if defined(__linux__)
+#include <dlfcn.h>
 #include <sched.h>
 #endif
 #include "../thread_policy.h"
 #include "controller.h"
 #include "drm_linux.h"
+#include "gpu/gpu_overlay.h"
+#if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
+#include "gpu/helper_transport_linux.h"
+#endif
 
 #ifndef SYNTHYBOY_MPC_OVERLAY_CRTC
 #define SYNTHYBOY_MPC_OVERLAY_CRTC 37
@@ -94,6 +99,28 @@ inline void keepOffIsolatedCpus() noexcept
 }
 #endif
 
+#if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
+/** The helper executable next to the plugin binary: <folder of the .so>/synthyboy-overlay-gpu-<arch> (the package puts it into VST/ beside synthyboy-<arch>.so). Empty when the plugin's path is unknown. */
+inline std::string gpuHelperPath()
+{
+    Dl_info info;
+    if (! dladdr (reinterpret_cast<const void*> (&gpuHelperPath), &info) || ! info.dli_fname)
+        return {};
+    char real[4096];
+    const char* so = realpath (info.dli_fname, real) ? real : info.dli_fname;
+    std::string dir (so);
+    const size_t slash = dir.rfind ('/');
+    if (slash == std::string::npos)
+        return {};
+    dir.resize (slash);
+#if defined(__aarch64__)
+    return dir + "/synthyboy-overlay-gpu-arm64";
+#else
+    return dir + "/synthyboy-overlay-gpu-arm32";
+#endif
+}
+#endif
+
 class Service
 {
 public:
@@ -144,7 +171,16 @@ private:
         frames_ = std::make_unique<UnsupportedFrameSource>();
 #endif
         renderer_ = std::make_unique<CpuCurveRenderer>();
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths());
+#if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
+        {
+            gpu::GpuConfig cfg;
+            cfg.crtc = SYNTHYBOY_MPC_OVERLAY_CRTC;
+            cfg.plane = SYNTHYBOY_MPC_OVERLAY_PLANE;
+            transport_ = std::make_unique<gpu::LinuxHelperTransport> (gpuHelperPath());
+            gpu_ = std::make_unique<gpu::GpuHelperBackend> (*transport_, *backend_, cfg);
+        }
+#endif
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get());
     }
 
     void stopThread()
@@ -202,6 +238,8 @@ private:
     std::unique_ptr<IPlaneBackend> backend_;
     std::unique_ptr<IFrameSource> frames_;
     std::unique_ptr<ICurveRenderer> renderer_;
+    std::unique_ptr<gpu::IHelperTransport> transport_;
+    std::unique_ptr<gpu::IGpuOverlay> gpu_;
     std::unique_ptr<Controller> controller_;
 };
 

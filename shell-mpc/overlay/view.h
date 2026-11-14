@@ -9,6 +9,7 @@
 
 #include "curve_source.h"
 #include "drm_interfaces.h"
+#include "gpu/scene.h"
 #include "overlay_layout.h"
 #include "synthyboy/readout.h"
 
@@ -45,6 +46,8 @@ public:
     virtual bool valid() const noexcept = 0;
     /** Draws the whole picture into the canvas (the size of the region, premultiplied ARGB8888, tightly packed), opaque views with their dark background. */
     virtual void render (uint32_t* canvas, int w, int h) = 0;
+    /** The same picture as a scene for the GPU helper (gpu/scene.h): a display list in canvas pixels of a region of w x h. false: this view cannot be described (the CPU draws it). */
+    virtual bool describe (gpu::SceneBuilder&, int /*viewIndex*/, int /*w*/, int /*h*/) const { return false; }
     /** Hash (FNV-1a) of what is drawn, for the status file. */
     virtual uint32_t hash() const noexcept = 0;
     /** `key: value` lines of this view's own numbers (the status file, one second). */

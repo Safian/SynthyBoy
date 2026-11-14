@@ -29,6 +29,20 @@ public:
     int panelHeight() const noexcept { return panelH_; }
     const Rect& panelRect() const noexcept { return panelRect_; }
 
+    /** Opens the backend (once) and learns the panel size, without making any buffer: the GPU path needs the descriptor and the size before it shows anything. false when disabled. */
+    bool open()
+    {
+        if (disabled_)
+            return false;
+        if (opened_)
+            return true;
+        std::string error;
+        if (! backend_.open (panelW_, panelH_, error))
+            return fail ("open: " + error);
+        opened_ = true;
+        return true;
+    }
+
     /** Makes ready to show `ui` (landscape UI rectangle) with the given rotation: opens the backend once, creates the two buffers. The plane itself goes on with the first
         present (). Calling it again with the same arguments does nothing; with another rectangle or rotation the plane is taken off and set up again. false when disabled. */
     bool show (const Rect& ui, int rotation)
@@ -40,13 +54,9 @@ public:
             return true;
         if (shown_)
             hide();
+        if (! open())
+            return false;
         std::string error;
-        if (! opened_)
-        {
-            if (! backend_.open (panelW_, panelH_, error))
-                return fail ("open: " + error);
-            opened_ = true;
-        }
         const Rect panel = uiRectToPanel (rotation, ui, panelW_, panelH_);
         if (panel.x < 0 || panel.y < 0 || panel.x + panel.w > panelW_ || panel.y + panel.h > panelH_ || panel.w <= 0 || panel.h <= 0)
             return fail ("the region does not fit the panel");

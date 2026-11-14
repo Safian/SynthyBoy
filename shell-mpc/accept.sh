@@ -148,6 +148,10 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 $B/controller_host > $B/controller-host.log 2>&1 || { grep -E "^FAIL" $B/controller-host.log; echo "ACCEPT FAIL: controller_host (state machine)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/views_host $OVSRC/views_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: views_host build"; exit 1; }
 $B/views_host > $B/views-host.log 2>&1 || { grep -E "^FAIL" $B/views-host.log; echo "ACCEPT FAIL: views_host (the views: LFO, oscillator, envelope, filter 2, several views in the controller)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_scene_host $OVSRC/gpu_scene_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_scene_host build"; exit 1; }
+$B/gpu_scene_host > $B/gpu-scene-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-scene-host.log; echo "ACCEPT FAIL: gpu_scene_host (GPU scene protocol: seqlock, every view type as a scene)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_backend_host $OVSRC/gpu_backend_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_backend_host build"; exit 1; }
+$B/gpu_backend_host > $B/gpu-backend-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-backend-host.log; echo "ACCEPT FAIL: gpu_backend_host (GPU helper health state machine and fallback with a fake helper)"; exit 1; }
 $B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin with the make-up gain of the package (6 dB) against the one built with 0 dB
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
@@ -222,7 +226,7 @@ fi
 grep -q "^FAIL" $TL/stats.log && { grep "^FAIL" $TL/stats.log; echo "ACCEPT FAIL: tsan callback_stats_host"; exit 1; }
 # the overlay thread (the tsan build above has the module in: it runs next to the display thread and the statistics writer) and the controller on a real thread against changing parameters, markers and instances
 TSCORE=$(find $TL/core -name '*.a' | tr '\n' ' ')
-for t in controller_host curve_host; do
+for t in controller_host curve_host gpu_scene_host gpu_backend_host; do
     c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc/overlay -o $TL/$t shell-mpc/overlay/tests/$t.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan $t build"; exit 1; }
     TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/$t > $TL/$t.log 2>&1
     if grep -q "WARNING: ThreadSanitizer" $TL/$t.log; then

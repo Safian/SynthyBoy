@@ -28,6 +28,13 @@ public:
     virtual void disablePlane() noexcept = 0;
     /** Removes the framebuffers and frees the buffers. Safe to call at any time, also twice. */
     virtual void destroyBuffers() noexcept = 0;
+    // For the GPU helper (gpu/gpu_overlay.h), which draws on the same plane through a copy of this object's descriptor. The defaults do nothing (fakes that do not care).
+    /** The display descriptor (the application's, borrowed: never closed by the caller). -1 when there is none. Valid after open (). */
+    virtual int displayFd() const noexcept { return -1; }
+    /** Takes the plane off whatever put something on it (the helper may have). Safe at any time, also twice. */
+    virtual void forceDisablePlane() noexcept {}
+    /** Removes a framebuffer and a GEM handle that another process made on the shared descriptor (0 = none). */
+    virtual void removeForeign (uint32_t /*fbId*/, uint32_t /*gemHandle*/) noexcept {}
 };
 
 /** A read-only view of the pixels the application's primary plane shows (the markers of the skin). begin / pixel / end are called from the overlay thread only. */

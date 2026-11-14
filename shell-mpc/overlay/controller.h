@@ -8,6 +8,7 @@
 // view of the skin is on screen, no data yet), "visible" (the status file names the view: `view: lfo2`). The files (all in /tmp by default, see Paths):
 //   synthyboy-overlay-off      exists -> hidden (checked once a second; removing the file brings the overlay back)
 //   synthyboy-overlay-rot      "90" or "270" (default 90), read once a second
+//   synthyboy-overlay-nogpu    exists -> the CPU draws, the GPU helper is stopped (checked once a second, switches live in both directions; gpu/gpu_overlay.h)
 //   synthyboy-overlay-status.txt  rewritten once a second (temporary file + rename)
 //   synthyboy-overlay-dump     exists -> synthyboy-overlay-curve.txt is rewritten once a second with the data of the visible view (debug)
 #pragma once
@@ -27,6 +28,7 @@
 
 #include "curve_source.h"
 #include "drm_interfaces.h"
+#include "gpu/gpu_overlay.h"
 #include "overlay_layout.h"
 #include "page_detector.h"
 #include "presenter.h"
@@ -40,6 +42,7 @@ struct Paths
 {
     std::string killSwitch = "/tmp/synthyboy-overlay-off";
     std::string rotation = "/tmp/synthyboy-overlay-rot";
+    std::string noGpu = "/tmp/synthyboy-overlay-nogpu";
     std::string status = "/tmp/synthyboy-overlay-status.txt";
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
@@ -49,6 +52,7 @@ struct Timing
 {
     double detectEveryMs = 100.0;     // 10 checks a second
     double frameEveryMs = 33.3;       // at most 30 pictures a second (two vblanks of a 60 Hz panel)
+    double gpuFrameEveryMs = 33.3;    // the GPU path: the helper draws, the thread only hands over scenes
     double switchesEveryMs = 1000.0;  // kill switch, rotation file, status file
     int unreadableLimit = 20;         // checks in a row (2 s) without a readable framebuffer -> disabled
 };
@@ -56,8 +60,10 @@ struct Timing
 class Controller
 {
 public:
-    Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0)
-        : presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs)
+    /** `gpu`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. */
+    Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0,
+                gpu::IGpuOverlay* gpuOverlay = nullptr)
+        : presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay)
     {
         for (int i = 0; i < layout::kNumViews; ++i)
         {
@@ -116,6 +122,8 @@ public:
     /** Plane off, buffers freed (the overlay thread has stopped, or this is the thread). */
     void shutdown() noexcept
     {
+        if (gpu_)
+            gpu_->shutdown();
         presenter_.hide();
         if (! disabled())
         {
@@ -126,10 +134,12 @@ public:
 
     bool disabled() const noexcept { return presenter_.disabled() || disabledHere_; }
     const std::string& state() const noexcept { return state_; }
-    bool visible() const noexcept { return presenter_.planeOn(); }
+    bool visible() const noexcept { return presenter_.planeOn() || gpuShown_; }
+    /** The last picture was made by the helper (renderer: gpu in the status file). */
+    bool usingGpu() const noexcept { return usingGpu_; }
     int rotation() const noexcept { return rotation_; }
     const Presenter& presenter() const noexcept { return presenter_; }
-    unsigned long framesTotal() const noexcept { return presenter_.frames(); }
+    unsigned long framesTotal() const noexcept { return presenter_.frames() + (gpu_ ? gpu_->status().frames : 0); }
     /** The visible view's object (tests), or null. */
     const IView* currentView() const noexcept { return current_ >= 0 ? views_[static_cast<size_t> (current_)].get() : nullptr; }
     const IView* viewByName (const std::string& name) const noexcept { for (const auto& v : views_) if (name == v->name()) return v.get(); return nullptr; }
@@ -160,9 +170,16 @@ private:
                 disable (presenter_.reason());
             return 1000.0;
         }
+        if (gpu_)
+            gpu_->poll (nowMs);
+        if (statusDue_)
+        {
+            statusDue_ = false;
+            writeStatus (false);
+        }
         if (nextSwitchesMs_ == 0.0 || nowMs >= nextSwitchesMs_)
         {
-            readSwitches();
+            readSwitches (nowMs);
             nextSwitchesMs_ = nowMs + timing_.switchesEveryMs;
             if (secondStartMs_ == 0.0) secondStartMs_ = nowMs;
             secondTick (nowMs);
@@ -179,6 +196,7 @@ private:
         if (! hiddenReason.empty())
         {
             presenter_.hide();
+            hideGpu (nowMs);
             setState ("hidden: " + hiddenReason);
             return timing_.detectEveryMs;
         }
@@ -208,11 +226,42 @@ private:
             if (current_ < 0)
             {
                 presenter_.hide();
+                hideGpu (nowMs);
                 setState (d.readable ? "hidden: no view on screen" : "hidden: framebuffer not readable");
             }
         }
         if (current_ >= 0)
         {
+            if (gpu_ && ! noGpu_)
+            {
+                if (! presenter_.open())     // the helper needs the display descriptor and the panel size
+                {
+                    disable (presenter_.reason());
+                    return 1000.0;
+                }
+                gpu_->request (nowMs);
+            }
+            const bool wantGpu = gpu_ && gpu_->active() && gpuSkipView_ != current_;
+            if (wantGpu)
+            {
+                if (presenter_.shown() || presenter_.planeOn())
+                {
+                    presenter_.hide();       // the CPU buffers go, the helper takes the plane
+                    needFrame_ = true;
+                }
+                nextWaitMs_ = timing_.gpuFrameEveryMs;
+                drawGpu (nowMs);
+                setRenderer (true);
+                return nextWaitMs_;
+            }
+            if (gpu_ && ! gpu_->planeFree())
+            {
+                // the helper has the plane (or is taking it off): the CPU path waits until it has answered, or until the clean-up of a failure
+                hideGpu (nowMs);
+                setRenderer (false);
+                return 5.0;
+            }
+            setRenderer (false);
             if (! presenter_.show (regions_[current_], rotation_))
             {
                 disable (presenter_.reason());
@@ -230,34 +279,114 @@ private:
         return timing_.detectEveryMs;
     }
 
+    /** The part of a picture every renderer shares: the view reads its data. false: not exactly one instance. */
+    bool updateView (double nowMs, bool& changed)
+    {
+        changed = false;
+        IView& view = *views_[static_cast<size_t> (current_)];
+        std::lock_guard<std::mutex> g (mu_);
+        if (instances_.size() != 1)
+            return false;
+        IInstanceView* v = instances_[0];
+        synthyboy::LiveValues lv;
+        const bool haveLive = v->live (lv);
+        ViewInput in;
+        in.instance = v;
+        in.live = haveLive ? &lv : nullptr;
+        const int base = targetBase_[current_];
+        in.targets = haveLive && lv.numTargets > base ? lv.target + base : nullptr;
+        in.nowMs = nowMs;
+        in.frames = &frames_;
+        in.rotation = rotation_;
+        changed = view.update (in);
+        ++updatesThisSecond_;
+        if (changed)
+        {
+            ++changesThisSecond_;
+            ++viewFrames_[static_cast<size_t> (current_)].changes;
+        }
+        fullThisSecond_ = view.counters().recomputes;
+        return true;
+    }
+
+    /** The GPU path of a tick: update, describe, hand the scene over. The helper draws and presents; this thread never waits for the vblank. */
+    void drawGpu (double nowMs)
+    {
+        bool changed = false;
+        if (! updateView (nowMs, changed))
+            return;
+        IView& view = *views_[static_cast<size_t> (current_)];
+        if (! view.valid())
+        {
+            setState ("hidden: no data yet");
+            hideGpu (nowMs);
+            return;
+        }
+        const Rect& ui = regions_[current_];
+        const Rect panel = uiRectToPanel (rotation_, ui, presenter_.panelWidth(), presenter_.panelHeight());
+        if (panel.x < 0 || panel.y < 0 || panel.x + panel.w > presenter_.panelWidth() || panel.y + panel.h > presenter_.panelHeight() || panel.w <= 0 || panel.h <= 0)
+        {
+            disable ("the region does not fit the panel");
+            return;
+        }
+        if (! gpuShown_ || gpuView_ != current_ || gpuRotation_ != rotation_)
+            needFrame_ = true;
+        if (! changed && ! needFrame_)
+        {
+            setState ("visible");
+            return;
+        }
+        if (nowMs - lastFrameMs_ < kMinFrameGapMs && gpuShown_ && gpuView_ == current_)
+        {
+            needFrame_ = true;
+            return;
+        }
+        gpu::SceneBuilder sb (gpuScene_);
+        if (! view.describe (sb, current_, ui.w, ui.h))
+        {
+            gpuSkipView_ = current_;     // this view cannot be described: the CPU draws it
+            hideGpu (nowMs);
+            return;
+        }
+        const auto t0 = std::chrono::steady_clock::now();
+        if (! gpu_->show (ui, panel, rotation_, current_, views_[static_cast<size_t> (current_)]->name(), nowMs) || ! gpu_->submit (gpuScene_, nowMs))
+            return;     // the helper failed: the next tick draws with the CPU
+        gpuShown_ = true;
+        gpuView_ = current_;
+        gpuRotation_ = rotation_;
+        renderMs_ = 0.8 * renderMs_ + 0.2 * std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
+        lastFrameMs_ = nowMs;
+        needFrame_ = false;
+        ++framesThisSecond_;
+        ++viewFrames_[static_cast<size_t> (current_)].frames;
+        setState ("visible");
+    }
+
+    void hideGpu (double nowMs)
+    {
+        if (! gpu_)
+            return;
+        gpu_->hide (nowMs);
+        gpuShown_ = false;
+        gpuView_ = -1;
+        needFrame_ = true;
+    }
+
+    void setRenderer (bool gpuNow)
+    {
+        if (usingGpu_ == gpuNow)
+            return;
+        usingGpu_ = gpuNow;
+        statusDue_ = true;     // the status file says which one draws: right away, not at the next second
+    }
+
     void drawIfChanged (double nowMs)
     {
         const auto workStart = std::chrono::steady_clock::now();
         bool changed = false;
         IView& view = *views_[static_cast<size_t> (current_)];
-        {
-            std::lock_guard<std::mutex> g (mu_);
-            if (instances_.size() != 1)
-                return;
-            IInstanceView* v = instances_[0];
-            synthyboy::LiveValues lv;
-            const bool haveLive = v->live (lv);
-            ViewInput in;
-            in.instance = v;
-            in.live = haveLive ? &lv : nullptr;
-            const int base = targetBase_[current_];
-            in.targets = haveLive && lv.numTargets > base ? lv.target + base : nullptr;
-            in.nowMs = nowMs;
-            in.frames = &frames_;
-            in.rotation = rotation_;
-            changed = view.update (in);
-            ++updatesThisSecond_;
-            if (changed)
-                ++changesThisSecond_;
-            if (changed)
-                ++viewFrames_[static_cast<size_t> (current_)].changes;
-            fullThisSecond_ = view.counters().recomputes;
-        }
+        if (! updateView (nowMs, changed))
+            return;
         if (! view.valid())
         {
             setState ("hidden: no data yet");
@@ -311,6 +440,8 @@ private:
     void disable (const std::string& why)
     {
         disabledHere_ = true;
+        if (gpu_)
+            gpu_->shutdown();
         presenter_.hide();
         setState ("disabled: " + why);
         writeStatus (true);
@@ -324,9 +455,21 @@ private:
 
     static bool exists (const std::string& path) { return ::access (path.c_str(), F_OK) == 0; }
 
-    void readSwitches()
+    void readSwitches (double nowMs)
     {
         killed_ = exists (paths_.killSwitch);
+        const bool noGpu = exists (paths_.noGpu);
+        if (noGpu != noGpu_)
+        {
+            noGpu_ = noGpu;
+            if (gpu_)
+            {
+                if (noGpu)
+                    hideGpu (nowMs);
+                gpu_->setForceCpu (noGpu, nowMs);
+                needFrame_ = true;
+            }
+        }
         int rot = 90;
         std::ifstream in (paths_.rotation);
         int v = 0;
@@ -335,6 +478,7 @@ private:
         if (rot != rotation_)
         {
             presenter_.hide();   // set up again with the other orientation
+            hideGpu (nowMs);
             rotation_ = rot;
             needFrame_ = true;
         }
@@ -346,6 +490,12 @@ private:
         const double cpu = cpuClock_ ? cpuClock_() : 0.0;
         const double wall = nowMs - secondStartMs_;
         framesLast_ = framesThisSecond_;
+        if (gpu_)
+        {
+            const unsigned long f = gpu_->status().frames;     // what the helper has presented (not what was handed over)
+            framesLast_ = usingGpu_ ? static_cast<unsigned> (f - gpuFramesAtSecond_) : framesThisSecond_;
+            gpuFramesAtSecond_ = f;
+        }
         updatesLast_ = updatesThisSecond_;
         changesLast_ = changesThisSecond_;
         updatesThisSecond_ = changesThisSecond_ = 0;
@@ -365,6 +515,7 @@ private:
         o << "state: " << state_ << "\n";
         o << "view: " << (current_ >= 0 && state_ == "visible" ? views_[static_cast<size_t> (current_)]->name() : "none") << "\n";
         o << "rotation: " << rotation_ << "\n";
+        writeGpuStatus (o);
         size_t count;
         {
             std::lock_guard<std::mutex> g (mu_);
@@ -400,6 +551,20 @@ private:
         writeAtomically (paths_.status, o.str());
     }
 
+    void writeGpuStatus (std::ostream& o) const
+    {
+        if (! gpu_)
+        {
+            o << "renderer: cpu\ngpu_state: not built\n";
+            return;
+        }
+        const gpu::GpuStatus g = gpu_->status();
+        o << "renderer: " << (usingGpu_ && g.active ? "gpu" : "cpu") << "\ngpu_state: " << g.state << "\ngpu_helper_pid: " << g.pid << "\ngpu_helper_starts: " << g.starts << "\ngpu_helper_restarts: " << g.restarts
+          << "\ngpu_failures: " << g.failures << "\ngpu_last_error: " << (g.lastError.empty() ? "none" : g.lastError) << "\ngpu_helper_frames: " << g.frames
+          << "\ngpu_helper_render_ms: " << g.helperRenderMs << "\ngpu_helper_setplane_ms: " << g.helperSetPlaneMs << "\ngpu_helper_skipped_vblanks: " << g.skippedVblanks << "\ngpu_helper_late_setplanes: " << g.lateSetPlanes
+          << "\ngpu_helper_startup_ms: " << g.startupMs << "\ngpu_renderer: " << (g.glRenderer.empty() ? "none" : g.glRenderer) << "\n";
+    }
+
     void writeDump()
     {
         if (current_ < 0 || ! views_[static_cast<size_t> (current_)]->valid())
@@ -429,6 +594,11 @@ private:
     Paths paths_;
     Timing timing_;
     double fixedCost_;
+    gpu::IGpuOverlay* gpu_ = nullptr;
+    gpu::SceneData gpuScene_ {};
+    bool noGpu_ = false, gpuShown_ = false, usingGpu_ = false, statusDue_ = false;
+    int gpuView_ = -1, gpuRotation_ = 0, gpuSkipView_ = -1;
+    unsigned long gpuFramesAtSecond_ = 0;
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
     int targetBase_[layout::kNumViews] = {};

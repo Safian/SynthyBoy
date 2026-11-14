@@ -104,6 +104,21 @@ left="$("$TRIPLE-nm" -D --defined-only "$stripped" | awk '{print $NF}' | tr '\n'
 check_elf "$stripped" module
 ls -l "$so" "$stripped"
 
+# ---- the GPU helper of the overlay (only when the module's CMake tree has the target: SYNTHYBOY_MPC_OVERLAY ON, SYNTHYBOY_MPC_OVERLAY_GPU AUTO / ON for ARM) ------------------------
+# A plain executable linked against libc only (the firmware's EGL / GBM / GLES libraries are opened at run time), the same ELF checks as the benchmarks; the stripped copy is packaged
+# next to the plugin (scripts/build-mpc.sh). A build without the target (the production package) does not even look at it.
+helper_dir=/build/shell-mpc/overlay/gpu-helper
+if cmake --build /build --target help 2>/dev/null | grep -q 'synthyboy_overlay_gpu'; then
+    cmake --build /build --target synthyboy_overlay_gpu --parallel "$JOBS"
+    check_elf "$helper_dir/synthyboy-overlay-gpu" tool
+    [ -s "$helper_dir/synthyboy-overlay-gpu.stripped" ] || fail "the stripped GPU helper is missing"
+    check_elf "$helper_dir/synthyboy-overlay-gpu.stripped" tool
+    "$TRIPLE-readelf" -d "$helper_dir/synthyboy-overlay-gpu.stripped" | grep -q 'libEGL\|libgbm\|libGLES' && fail "the GPU helper must not link the Mesa libraries (it opens them at run time)"
+    ls -l "$helper_dir/synthyboy-overlay-gpu" "$helper_dir/synthyboy-overlay-gpu.stripped"
+else
+    rm -f "$helper_dir"/synthyboy-overlay-gpu "$helper_dir"/synthyboy-overlay-gpu.stripped   # no leftover of an earlier variant in this tree is ever packaged
+fi
+
 # ---- the benchmarks (same toolchain, tests switched on in a tree of their own so that the module above is built exactly as the package needs it) ----
 if [ "$WITH_BENCH" = 1 ]; then
     cmake -S /src -B /build-bench -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \

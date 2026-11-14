@@ -67,6 +67,27 @@ public:
     }
     bool valid() const noexcept override { return curve_ && curve_->valid(); }
     void render (uint32_t* canvas, int w, int h) override { renderer_.render (curve_->curve(), curve_->points(), canvas, w, h, layout::kBackgroundRgb, nullptr, 0); }
+    bool describe (gpu::SceneBuilder& sb, int viewIndex, int w, int h) const override
+    {
+        if (! valid() || w < 2 || h < 8)
+            return false;
+        using R = CpuCurveRenderer;
+        sb.begin (gpu::kKindFilter, static_cast<uint32_t> (viewIndex), w, h);
+        sb.clear (gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
+        const double fs[3] = { 100.0, 1000.0, 10000.0 };
+        for (double f : fs)
+            sb.rect (static_cast<float> (R::gridX (f, w)), 0.0f, static_cast<float> (R::gridX (f, w) + 1), static_cast<float> (h), gpu::rgba8 (255, 255, 255, 40));
+        const int zy = static_cast<int> (R::zeroLineY (h));
+        sb.rect (0.0f, static_cast<float> (zy), static_cast<float> (w), static_cast<float> (zy + 1), gpu::rgba8 (255, 255, 255, 90));
+        float rows[gpu::kMaxCurve];
+        const int n = std::min (curve_->points(), gpu::kMaxCurve);
+        for (int i = 0; i < n; ++i)
+            rows[i] = static_cast<float> (std::clamp (R::dbToY (static_cast<double> (curve_->curve()[i]), h), -60.0, h + 60.0));
+        sb.polyline (rows, n);
+        sb.fill (static_cast<float> (h), gpu::rgba8 (0xd3, 0x11, 0x45, 64));
+        sb.stroke (static_cast<float> (R::kHalfWidth), gpu::rgba8 (0xff, 0x2e, 0x63, 255));
+        return ! sb.overflow;
+    }
     uint32_t hash() const noexcept override { return curve_ ? curve_->hash() : 0u; }
     void writeStatus (std::ostream& o) const override
     {
@@ -258,6 +279,34 @@ public:
             draw::disc (cv, w, h, x + 0.5, valueToY (v, h), 4.5, draw::premultiplied (0xff, 0x2e, 0x63, 255));
         }
     }
+    bool describe (gpu::SceneBuilder& sb, int viewIndex, int w, int h) const override
+    {
+        if (! have_ || w < 2 || h < 8)
+            return false;
+        sb.begin (gpu::kKindLfo, static_cast<uint32_t> (viewIndex), w, h);
+        sb.clear (gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
+        const int zy = static_cast<int> (valueToY (0.0, h));
+        sb.rect (0.0f, static_cast<float> (zy), static_cast<float> (w), static_cast<float> (zy + 1), gpu::rgba8 (255, 255, 255, 90));
+        for (int q = 1; q < 4; ++q)
+            sb.rect (static_cast<float> ((w - 1) * q / 4), 0.0f, static_cast<float> ((w - 1) * q / 4 + 1), static_cast<float> (h), gpu::rgba8 (255, 255, 255, 40));
+        float rows[gpu::kMaxCurve];
+        for (int i = 0; i < kPoints; ++i)
+            rows[i] = static_cast<float> (std::clamp (valueToY (static_cast<double> (shape_[static_cast<size_t> (i)]), h), -60.0, h + 60.0));
+        sb.polyline (rows, kPoints);
+        sb.fill (static_cast<float> (valueToY (0.0, h)), gpu::rgba8 (0xd3, 0x11, 0x45, 64));
+        sb.stroke (2.0f, gpu::rgba8 (0xff, 0x2e, 0x63, 255));
+        if (cursorPx_ >= 0)
+        {
+            const double x = cursorX_ * (w - 1);
+            sb.vline (static_cast<float> (x + 0.5), 0.0f, static_cast<float> (h), 2.0f, gpu::rgba8 (255, 255, 255, 150));
+            const double pos = std::clamp (static_cast<double> (cursorX_), 0.0, 1.0) * (kPoints - 1);
+            const int i = std::min (static_cast<int> (pos), kPoints - 2);
+            const double v = shape_[static_cast<size_t> (i)] * (1.0 - (pos - i)) + shape_[static_cast<size_t> (i) + 1] * (pos - i);
+            sb.disc (static_cast<float> (x + 0.5), static_cast<float> (valueToY (v, h)), 7.0f, gpu::rgba8 (255, 255, 255, 255));
+            sb.disc (static_cast<float> (x + 0.5), static_cast<float> (valueToY (v, h)), 4.5f, gpu::rgba8 (0xff, 0x2e, 0x63, 255));
+        }
+        return ! sb.overflow;
+    }
     uint32_t hash() const noexcept override
     {
         uint32_t h = 2166136261u;
@@ -381,6 +430,30 @@ public:
         draw::fillToBaseline (cv, w, h, ys_, 4, valueToY (0.0, h), draw::premultiplied (0xd3, 0x11, 0x45, 64));
         draw::strokeCurve (cv, w, h, ys_, 4, 2.0, draw::premultiplied (0xff, 0x2e, 0x63, 255));
     }
+    bool describe (gpu::SceneBuilder& sb, int viewIndex, int w, int h) const override
+    {
+        if (! have_ || w < 2 || h < 8)
+            return false;
+        sb.begin (gpu::kKindOsc, static_cast<uint32_t> (viewIndex), w, h);
+        sb.clear (gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
+        const int zy = static_cast<int> (valueToY (0.0, h));
+        sb.rect (0.0f, static_cast<float> (zy), static_cast<float> (w), static_cast<float> (zy + 1), gpu::rgba8 (255, 255, 255, 90));
+        for (int q = 1; q < 4; ++q)
+            sb.rect (static_cast<float> ((w - 1) * q / 4), 0.0f, static_cast<float> ((w - 1) * q / 4 + 1), static_cast<float> (h), gpu::rgba8 (255, 255, 255, 40));
+        if (kind_ != synthyboy::OscCycle::Kind::wavetable)
+            return true;   // the empty frame
+        float peak = 1.0f;
+        for (float v : cycle_)
+            peak = std::max (peak, std::fabs (v));
+        const int n = std::min (static_cast<int> (cycle_.size()), gpu::kMaxCurve);
+        float rows[gpu::kMaxCurve];
+        for (int i = 0; i < n; ++i)
+            rows[i] = static_cast<float> (std::clamp (valueToY (static_cast<double> (cycle_[static_cast<size_t> (i)] / peak), h), -60.0, h + 60.0));
+        sb.polyline (rows, n);
+        sb.fill (static_cast<float> (valueToY (0.0, h)), gpu::rgba8 (0xd3, 0x11, 0x45, 64));
+        sb.stroke (2.0f, gpu::rgba8 (0xff, 0x2e, 0x63, 255));
+        return ! sb.overflow;
+    }
     uint32_t hash() const noexcept override
     {
         uint32_t h = 2166136261u;
@@ -494,6 +567,29 @@ public:
         draw::disc (cv, w, h, x, y, 8.0, draw::premultiplied (255, 255, 255, 255));
         draw::disc (cv, w, h, x, y, 5.0, draw::premultiplied (0x1e, 0x1d, 0x1e, 255));
         draw::disc (cv, w, h, x, y, 3.0, draw::premultiplied (255, 255, 255, 255));
+    }
+    bool describe (gpu::SceneBuilder& sb, int viewIndex, int w, int h) const override
+    {
+        if (! have_)
+            return false;
+        sb.begin (gpu::kKindEnv, static_cast<uint32_t> (viewIndex), w, h);
+        sb.clear (0u);   // transparent
+        for (int m = 0; m < 2; ++m)
+        {
+            const layout::Marker& mk = view_.markers[m];
+            sb.rect (static_cast<float> (mk.rect.x - view_.region.x - 1), static_cast<float> (mk.rect.y - view_.region.y - 1), static_cast<float> (mk.rect.x - view_.region.x + mk.rect.w + 1),
+                     static_cast<float> (mk.rect.y - view_.region.y + mk.rect.h + 1), gpu::rgba8FromRgb (mk.cover, 255));
+        }
+        if (dotX_ >= 0)
+        {
+            const double x = dotX_ - view_.region.x + 0.5, y = dotY_ - view_.region.y + 0.5;
+            sb.vline (static_cast<float> (x), static_cast<float> (static_cast<int> (envgeom::kTopY - view_.region.y) - 4), static_cast<float> (static_cast<int> (envgeom::kBottomY - view_.region.y) + 5), 2.0f,
+                      gpu::rgba8 (255, 255, 255, 70));
+            sb.disc (static_cast<float> (x), static_cast<float> (y), 8.0f, gpu::rgba8 (255, 255, 255, 255));
+            sb.disc (static_cast<float> (x), static_cast<float> (y), 5.0f, gpu::rgba8 (0x1e, 0x1d, 0x1e, 255));
+            sb.disc (static_cast<float> (x), static_cast<float> (y), 3.0f, gpu::rgba8 (255, 255, 255, 255));
+        }
+        return ! sb.overflow;
     }
     uint32_t hash() const noexcept override { return fnv (fnv (2166136261u, dotX_), dotY_); }
     envgeom::Norm normOf() const

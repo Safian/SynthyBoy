@@ -219,6 +219,37 @@ public:
         planeSet_ = false;
     }
 
+    int displayFd() const noexcept override { return fd_; }
+
+    void forceDisablePlane() noexcept override
+    {
+        if (fd_ < 0)
+            return;
+        drm_mode_set_plane s;
+        std::memset (&s, 0, sizeof s);
+        s.plane_id = plane_;
+        ioctl (fd_, DRM_IOCTL_MODE_SETPLANE, &s);
+        planeSet_ = false;
+    }
+
+    void removeForeign (uint32_t fbId, uint32_t gemHandle) noexcept override
+    {
+        if (fd_ < 0)
+            return;
+        if (fbId)
+        {
+            uint32_t id = fbId;
+            ioctl (fd_, DRM_IOCTL_MODE_RMFB, &id);
+        }
+        if (gemHandle)
+        {
+            drm_gem_close gc;
+            std::memset (&gc, 0, sizeof gc);
+            gc.handle = gemHandle;
+            ioctl (fd_, DRM_IOCTL_GEM_CLOSE, &gc);
+        }
+    }
+
     void destroyBuffers() noexcept override
     {
         for (Buf& b : buf_)

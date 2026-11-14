@@ -99,6 +99,34 @@ if(SYNTHYBOY_MPC_OVERLAY)
     target_link_libraries(synthyboy_mpc PRIVATE Threads::Threads)
 endif()
 
+# GPU drawing of the overlay in a helper process (docs/MPC.md "GPU drawing in a helper process"): the plugin starts the executable synthyboy-overlay-gpu (shell-mpc/overlay/gpu-helper/)
+# when a view first needs to be shown, hands it the display descriptor and the scenes, and falls back to the CPU drawing whenever the helper is missing, fails or is switched off
+# (/tmp/synthyboy-overlay-nogpu). AUTO (default) = ON for a cross build for ARM with SYNTHYBOY_MPC_OVERLAY ON, else OFF; ON / OFF force it (ON without the overlay is an error).
+# The helper is linked against libc and libdl only (it opens the firmware's EGL / GBM / GLES libraries at run time), so the build needs nothing but the cross compiler.
+# With SYNTHYBOY_MPC_OVERLAY OFF nothing of this exists: the plugin is byte for byte the one without the module.
+set(SYNTHYBOY_MPC_OVERLAY_GPU "AUTO" CACHE STRING "MPC shell overlay: GPU drawing in a helper process (AUTO, ON, OFF)")
+set_property(CACHE SYNTHYBOY_MPC_OVERLAY_GPU PROPERTY STRINGS AUTO ON OFF)
+set(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE OFF)
+if(SYNTHYBOY_MPC_OVERLAY)
+    if(SYNTHYBOY_MPC_OVERLAY_GPU STREQUAL "AUTO")
+        if(CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|aarch64)")
+            set(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE ON)
+        endif()
+    elseif(SYNTHYBOY_MPC_OVERLAY_GPU)
+        set(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE ON)
+    endif()
+elseif(NOT SYNTHYBOY_MPC_OVERLAY_GPU STREQUAL "AUTO" AND SYNTHYBOY_MPC_OVERLAY_GPU)
+    message(FATAL_ERROR "SYNTHYBOY_MPC_OVERLAY_GPU=ON needs SYNTHYBOY_MPC_OVERLAY=ON")
+endif()
+if(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(FATAL_ERROR "SYNTHYBOY_MPC_OVERLAY_GPU needs a Linux target (DRM, dlopen)")
+    endif()
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OVERLAY_GPU=1)
+    target_link_libraries(synthyboy_mpc PRIVATE ${CMAKE_DL_LIBS})
+    add_subdirectory(overlay/gpu-helper)
+endif()
+
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
 if(APPLE)
