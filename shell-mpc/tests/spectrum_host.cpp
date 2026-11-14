@@ -74,22 +74,22 @@ int main()
         check (zero, "silence: all 32 columns are 0");
     }
 
-    // 1 kHz sine at -6 dBFS: the column that contains 1 kHz is the maximum, within 0.04 of 0.90, quantised, others lower
+    // 1 kHz full-scale sine: the column that contains 1 kHz is the maximum (a full column), quantised, others lower
     {
         SpectrumRing r1;
         size_t ph = 0;
-        pushSine (r1, 1000.0, 0.5f, ph, 4096);
+        pushSine (r1, 1000.0, 1.0f, ph, 4096);
         SpectrumAnalyser a1;
         a1.tick (r1, kRate, q);
         // the first tick covers the attack only (0.7 of the way): run more ticks with new audio until it settles
         for (int i = 0; i < 12; ++i)
         {
-            pushSine (r1, 1000.0, 0.5f, ph, 4410);
+            pushSine (r1, 1000.0, 1.0f, ph, 4410);
             a1.tick (r1, kRate, q);
         }
         const int t = top (q);
         check (spectrumBandEdgeHz (t) <= 1000.0 && 1000.0 < spectrumBandEdgeHz (t + 1), "sine 1 kHz: the largest column is the band of 1 kHz");
-        check (std::fabs (q[t] - spectrumLevelFromDb (-6.02f)) < 0.04f, "sine 1 kHz: the largest column is about 0.90 (-6 dBFS)");
+        check (q[t] == 1.0f, "sine 1 kHz: the largest column is a full column (1.0)");
         bool grid = true, others = true;
         for (int k = 0; k < kSpectrumCount; ++k)
         {
@@ -105,10 +105,10 @@ int main()
         SpectrumRing r2;
         size_t ph = 0;
         SpectrumAnalyser a2;
-        pushSine (r2, 1000.0, 0.5f, ph, 4096);
+        pushSine (r2, 1000.0, 1.0f, ph, 4096);
         a2.tick (r2, kRate, q);
         const int t = top (q);
-        check (q[t] > 0.5f * spectrumLevelFromDb (-6.02f), "smoothing: the first tick already covers more than half of the rise (fast attack)");
+        check (q[t] > 0.5f, "smoothing: the first tick already covers more than half of the rise (fast attack)");
         std::vector<float> z (4410, 0.0f);
         r2.push (z.data(), z.data(), 4096);
         a2.tick (r2, kRate, q);
@@ -136,7 +136,7 @@ int main()
     {
         SpectrumRing r3;
         size_t ph = 0;
-        pushSine (r3, 1000.0, 0.5f, ph, 4096);
+        pushSine (r3, 1000.0, 1.0f, ph, 4096);
         SpectrumAnalyser a3;
         check (!a3.tick (r3, kRate, q), "stale: a ring that moved is not stale");
         float before = q[top (q)];

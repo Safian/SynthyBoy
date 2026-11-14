@@ -7,7 +7,7 @@
 //   SpectrumRing      single producer (the audio thread, push()), single consumer (the display thread, latest()). Samples are relaxed atomics (no data race, no lock, no
 //                     allocation, no call to the host); the write position is released after the samples, acquired before them.
 //   SpectrumAnalyser  display thread only. Takes the last 2048 samples, FFT with a Hann window (spectrum_fft.h), 32 logarithmic bands from about 30 Hz to 18 kHz
-//                     (spectrum_bands.h), dB to level (-60 dB floor = 0, 0 dBFS = 1), fast rise and slow fall smoothing, quantised to 1/64 so that a small flutter does not
+//                     (spectrum_bands.h), dB to level (kSpectrumFloorDb floor = 0, kSpectrumCeilingDb ceiling = 1), fast rise and slow fall smoothing, quantised to 1/64 so that a small flutter does not
 //                     make a report. A ring that did not move since the last tick (the host stopped calling) counts as silence.
 #pragma once
 

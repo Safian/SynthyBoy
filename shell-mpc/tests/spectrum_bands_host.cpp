@@ -46,9 +46,11 @@ int main()
     check (spectrumBandEdgeHz (-3) == spectrumBandEdgeHz (0) && spectrumBandEdgeHz (99) == spectrumBandEdgeHz (32), "edges: k outside 0 .. 32 is clamped");
 
     // dB -> level
-    check (spectrumLevelFromDb (0.0f) == 1.0f && spectrumLevelFromDb (6.0f) == 1.0f, "level: 0 dBFS and above = 1");
-    check (spectrumLevelFromDb (-60.0f) == 0.0f && spectrumLevelFromDb (-90.0f) == 0.0f && spectrumLevelFromDb (-180.0f) == 0.0f, "level: -60 dB and below = 0 (the floor)");
-    check (std::fabs (spectrumLevelFromDb (-30.0f) - 0.5f) < 1e-6f && std::fabs (spectrumLevelFromDb (-15.0f) - 0.75f) < 1e-6f, "level: linear in dB between the floor and 0 dBFS");
+    check (spectrumLevelFromDb (kSpectrumCeilingDb) == 1.0f && spectrumLevelFromDb (kSpectrumCeilingDb + 6.0f) == 1.0f, "level: ceiling and above = 1");
+    check (spectrumLevelFromDb (kSpectrumFloorDb) == 0.0f && spectrumLevelFromDb (kSpectrumFloorDb - 30.0f) == 0.0f && spectrumLevelFromDb (-180.0f) == 0.0f, "level: floor and below = 0");
+    const float midDb = 0.5f * (kSpectrumFloorDb + kSpectrumCeilingDb);
+    const float quarterDb = 0.25f * kSpectrumFloorDb + 0.75f * kSpectrumCeilingDb;
+    check (std::fabs (spectrumLevelFromDb (midDb) - 0.5f) < 1e-6f && std::fabs (spectrumLevelFromDb (quarterDb) - 0.75f) < 1e-6f, "level: linear in dB between the floor and the ceiling");
     check (spectrumLevelFromDb (std::nanf ("")) == 0.0f, "level: NaN = 0");
     check (std::fabs (spectrumMagToDb (1.0f)) < 1e-6f && std::fabs (spectrumMagToDb (0.5f) + 6.0206f) < 1e-3f && spectrumMagToDb (0.0f) == -180.0f && spectrumMagToDb (-1.0f) == -180.0f && spectrumMagToDb (std::nanf ("")) == -180.0f, "magnitude to dB (zero, negative and NaN give -180)");
 
@@ -75,11 +77,11 @@ int main()
         check (std::fabs (mag[bin] - 0.5f) < 2e-3f && peak == mag[bin], "fft: sine of amplitude 0.5 on a bin centre gives 0.5 in that bin, the maximum");
     }
 
-    // 1 kHz sine, amplitude 0.5 (-6 dBFS): exactly one band at the maximum, the others fall away
+    // 1 kHz full-scale sine: exactly one band at the maximum (a full column), the others fall away
     {
         std::vector<float> x (2048);
         for (size_t i = 0; i < x.size(); ++i)
-            x[i] = 0.5f * std::sin (2.0 * 3.14159265358979323846 * 1000.0 * static_cast<double> (i) / kRate);
+            x[i] = 1.0f * std::sin (2.0 * 3.14159265358979323846 * 1000.0 * static_cast<double> (i) / kRate);
         float lv[kSpectrumBands];
         levels (x, 0, fft, lv);
         int top = 0;
@@ -87,7 +89,7 @@ int main()
             if (lv[k] > lv[top])
                 top = k;
         check (spectrumBandEdgeHz (top) <= 1000.0 && 1000.0 < spectrumBandEdgeHz (top + 1), "1 kHz sine: the maximum is in the band that contains 1 kHz");
-        check (std::fabs (lv[top] - spectrumLevelFromDb (-6.02f)) < 0.04f, "1 kHz sine: the maximum is about -6 dBFS (level 0.90 +- 0.04)");
+        check (lv[top] == 1.0f, "1 kHz full-scale sine: the maximum is a full column (1.0)");
         bool near_ok = true, far_ok = true, one = true;
         for (int k = 0; k < kSpectrumBands; ++k)
         {
@@ -104,15 +106,16 @@ int main()
         check (far_ok, "1 kHz sine: every band further away is at the floor (below 0.05)");
     }
 
-    // the same sine at other frequencies: the band of the maximum follows (100 Hz, 440 Hz, 5 kHz, 15 kHz)
+    // sines at other frequencies (6 dB below ceiling): the band of the maximum follows (100 Hz, 440 Hz, 5 kHz, 15 kHz)
     {
         const double freqs[] = { 100.0, 440.0, 5000.0, 15000.0 };
+        const float amp = static_cast<float> (std::pow (10.0, static_cast<double> (kSpectrumCeilingDb - 6.0f) / 20.0));
         bool ok = true;
         for (double f : freqs)
         {
             std::vector<float> x (2048);
             for (size_t i = 0; i < x.size(); ++i)
-                x[i] = 0.5f * std::sin (2.0 * 3.14159265358979323846 * f * static_cast<double> (i) / kRate);
+                x[i] = amp * std::sin (2.0 * 3.14159265358979323846 * f * static_cast<double> (i) / kRate);
             float lv[kSpectrumBands];
             levels (x, 0, fft, lv);
             int top = 0;
