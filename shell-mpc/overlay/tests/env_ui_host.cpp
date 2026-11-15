@@ -193,13 +193,13 @@ void testKnobsAndFieldsWriteParameters()
     r.refresh();
     check (std::fabs (k.state.value - synthyboy::toNormalised (synthyboy::paramTable()[envIdx (1, "decay")], 1000.0f)) < 1.0e-6, "a parameter that changed behind the UI shows on the knob");
     check (std::string (k.state.valueText) == "1.00 s", "the knob says its value with the unit: " + std::string (k.state.valueText));
-    // the exact field of the sustain: a drag changes by whole percent
-    ui::NumberField& f = r.ui.full().fields[4];
+    // the sustain knob: a drag up raises the level
+    ui::Knob& sk = r.ui.full().sustain;
     r.inst.set ("env1.sustain", 50.0f);
     r.refresh();
-    const int fx = f.rect().x + f.rect().w / 2, fy = f.rect().y + f.rect().h / 2;
+    const int fx = sk.rect().x + sk.rect().w / 2, fy = sk.rect().y + sk.rect().h / 2;
     r.drag (fx, fy, fx, fy - 20);
-    check (r.inst.get ("env1.sustain") > 55.0f && r.inst.get ("env1.sustain") < 60.5f, "drag up by 20 px on the SUSTAIN field: +10 % (" + std::to_string (r.inst.get ("env1.sustain")) + ")");
+    check (r.inst.get ("env1.sustain") > 50.0f, "drag up on the SUSTAIN knob raises it (" + std::to_string (r.inst.get ("env1.sustain")) + ")");
     // the legato switch
     const float legato = r.inst.get ("env1.legato_inverted");
     r.tapC (r.ui.full().legato);
@@ -210,10 +210,9 @@ void testBeatsSwitch()
 {
     Rig r;
     r.openFull();
-    check (! r.ui.beats() && r.ui.full().fields[1].state.max > 5000.0, "milliseconds: the ATTACK field runs to 10000");
+    check (! r.ui.beats() && std::string (r.ui.full().attack.state.valueText).find ("ms") != std::string::npos, "milliseconds: the ATTACK knob says ms");
     r.tapC (r.ui.full().beats);
     check (r.inst.get ("env1.units") == 1.0f && r.ui.beats(), "the BEATS switch writes env1.units");
-    check (r.ui.full().fields[1].state.max <= 16.0 && r.ui.full().fields[1].state.format == ui::NumberField::Format::Decimal2, "beats: the ATTACK field runs to 16 beats with two decimals");
     ui::Knob& k = r.ui.full().attack;
     const int cx = k.rect().x + k.rect().w / 2, cy = k.rect().y + k.rect().h / 2;
     r.inst.lastWritten = -1;
@@ -354,6 +353,13 @@ void testModulatedKnobsShowTheirSource()
     check (k.state.numMods == 1 && k.state.selected() != nullptr && std::fabs (k.state.selected()->depth - 0.4) < 1.0e-6, "a slot with env1 on env1.release: the RELEASE knob has the depth arc of the selected source (env1)");
     r.refresh();
     check (r.ui.numTargets() == 1, "the envelope counts its targets: 1");
+    check (! r.ui.full().targetsBlock().empty(), "the full screen has the block of the targets when there is one");
+    {
+        Rig q;
+        q.openFull();
+        q.refresh();
+        check (q.ui.numTargets() == 0 && q.ui.full().targetsBlock().empty() && q.ui.full().graph.rect().w > 1200, "no target: no empty block, the graph takes the whole width (" + std::to_string (q.ui.full().graph.rect().w) + ")");
+    }
 }
 
 void testDotsFromTheVoices()

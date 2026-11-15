@@ -280,6 +280,13 @@ void testFullScreenLayout()
     f.drawLive (s.builder());
     const Image im = render (s);
     check (! s.overflow() && drawnOutside (im, { 0, 110 - 4, 1280, 628 + 8 }, backgroundPixel()) == 0, "full screen: drawn, and nothing outside the page");
+    // without a target the graph has the whole width: the curve has a row for EVERY pixel of it (a curve with fewer rows ends before the right edge)
+    check (f.graph.rect().w > 1200 && f.targetsBlock().empty(), "full screen: no target, no block, the graph takes the whole width");
+    uint32_t most = 0;
+    for (uint32_t k = 0; k < s.data->numOps; ++k)
+        if (s.data->ops[k].op == gpu::kOpCurve)
+            most = std::max (most, static_cast<uint32_t> (s.data->ops[k].f[1]));
+    check (most >= static_cast<uint32_t> (f.graph.rect().w - 60), "full screen: the curve of the wide graph has a row per pixel (" + std::to_string (most) + " rows, graph " + std::to_string (f.graph.rect().w) + " px)");
 }
 
 void testTargetsPage()

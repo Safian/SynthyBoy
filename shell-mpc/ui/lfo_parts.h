@@ -261,28 +261,26 @@ class InstanceBar : public Composite
 {
 public:
     PictogramSelector lfoCells, rndCells;
-    static constexpr int kLfoCells = 6, kRndCells = 4, kCellW = 56;
+    static constexpr int kLfoCells = 10, kRndCells = 4, kCellW = 42;   // all fourteen in one bar: 1 .. 10 and R1 .. R4, narrow cells (the labels are short)
 
     InstanceBar()
     {
+        static const char* const names[kLfoCells] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" };
         static const char* const rl[kRndCells] = { "R1", "R2", "R3", "R4" };
+        for (int i = 0; i < kLfoCells; ++i)
+            lfoCells.setItem (i, -1, names[i]);
         for (int i = 0; i < kRndCells; ++i)
             rndCells.setItem (i, -1, rl[i]);
-        configure (false, 1, 0);
+        lfoCells.narrowestCell = rndCells.narrowestCell = kCellW;
+        configure (false, 1);
         addKid (lfoCells); addKid (rndCells);
     }
-    /** `random`: a random LFO is shown (number 1 .. 4), else LFO 1 .. 10; `page` 0: the cells show 1 .. 5, 1: 6 .. 10. */
-    void configure (bool random, int number, int page)
+    /** `random`: a random LFO is shown (number 1 .. 4), else LFO 1 .. 10. */
+    void configure (bool random, int number)
     {
-        page_ = page != 0 ? 1 : 0;
-        static const char* const names[10] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" };
-        for (int i = 0; i < 5; ++i)
-            lfoCells.setItem (i, -1, names[page_ * 5 + i]);
-        lfoCells.setItem (5, -1, page_ == 0 ? "6-10" : "1-5");
-        lfoCells.state.index = ! random && number >= 1 + page_ * 5 && number <= 5 + page_ * 5 ? number - 1 - page_ * 5 : -1;
+        lfoCells.state.index = ! random && number >= 1 && number <= kLfoCells ? number - 1 : -1;
         rndCells.state.index = random ? std::clamp (number, 1, kRndCells) - 1 : -1;
     }
-    int page() const noexcept { return page_; }
     Size minSize() const override { return { (kLfoCells + kRndCells) * kCellW + kGap, 56 }; }
 
 protected:
@@ -293,7 +291,6 @@ protected:
         layoutRow (rect_, fixed, weight, 2, kGap, r);
         lfoCells.place (r[0]); rndCells.place (r[1]);
     }
-    int page_ = 0;
 };
 
 }} // namespace synthyboy_mpc::ui

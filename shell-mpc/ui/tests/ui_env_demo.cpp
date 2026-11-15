@@ -30,7 +30,7 @@ bool save (const std::string& dir, const char* name, const Scene& s)
 }
 }
 
-// a made up envelope: the graph, the knobs and the fields with the same numbers
+// a made up envelope: the graph and the knobs with the same numbers
 static void fillShape (EnvGraph& g, int env)
 {
     g.state.shape = envgraph::Shape();
@@ -71,16 +71,28 @@ static void renderAll (const std::string& dir)
         knob (f.attack, 0.12, "5.0 ms"); knob (f.decay, 0.38, "400 ms"); knob (f.sustain, 0.6, "60%"); knob (f.release, 0.3, "200 ms");
         knob (f.aCurve, 0.5, "+0.0"); knob (f.dCurve, 0.4, "-3.0"); knob (f.rCurve, 0.4, "-3.0"); knob (f.delay, 0.0, "0 ms"); knob (f.hold, 0.0, "0 ms");
         f.beats.state.on = false; f.legato.state.on = true;
-        const char* fv[6] = { "0", "5", "0", "400", "60", "200" };
-        const char* ls[6] = { "DELAY ms", "ATTACK ms", "HOLD ms", "DECAY ms", "SUSTAIN %", "RELEASE ms" };
-        for (int i = 0; i < 6; ++i) { f.fields[i].setLabel (ls[i]); f.fields[i].state.value = std::atof (fv[i]); f.fields[i].state.max = 10000; }
         f.targets.setValue ("3");
-        f.numTargets = 3; f.numTargetLines = 3;
+        f.setNumTargets (3); f.numTargetLines = 3;
         std::snprintf (f.targetLines[0].text, 40, "Filter 1 Cutoff   +35%%"); std::snprintf (f.targetLines[1].text, 40, "Osc A Level   +100%%"); std::snprintf (f.targetLines[2].text, 40, "Osc B Detune   -12%%");
         GScene s (1280, 628);
         f.draw (s.builder());
         f.drawLive (s.builder());
         save (dir, "fullscreen.png", s);
+    }
+    {   // an envelope that modulates nothing: the graph has the whole width, the TARGETS button alone says 0
+        static EnvFullScreen f;
+        f.place ({ 0, 0, 1280, 628 });
+        f.instances.state.index = 0;
+        fillShape (f.graph, 0);
+        f.graph.state.selected = envgraph::Attack;
+        knob (f.attack, 0.12, "5.0 ms"); knob (f.decay, 0.38, "400 ms"); knob (f.sustain, 0.6, "60%"); knob (f.release, 0.3, "200 ms");
+        knob (f.aCurve, 0.5, "+0.0"); knob (f.dCurve, 0.4, "-3.0"); knob (f.rCurve, 0.4, "-3.0"); knob (f.delay, 0.0, "0 ms"); knob (f.hold, 0.0, "0 ms");
+        f.targets.setValue ("0");
+        f.setNumTargets (0);
+        GScene s (1280, 628);
+        f.draw (s.builder());
+        f.drawLive (s.builder());
+        save (dir, "fullscreen_no_targets.png", s);
     }
     {
         static EnvGraph g;

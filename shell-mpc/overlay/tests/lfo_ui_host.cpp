@@ -255,7 +255,7 @@ void testWrites()
     R.tap (sw.mode.cell (2).x + 4, sw.mode.cell (2).y + 20);
     check (R.inst.get ("lfo1.sync") == 4.0f && R.ui.full().keyActive() && R.ui.full().keyTranspose.enabled(), "the KEY cell: key follow, the KEY block works");
     R.tap (sw.mode.cell (0).x + 4, sw.mode.cell (0).y + 20);
-    check (R.inst.get ("lfo1.sync") == 0.0f && ! R.ui.full().keyActive() && ! R.ui.full().keyTranspose.enabled(), "the HZ cell: free; the KEY block is dim");
+    check (R.inst.get ("lfo1.sync") == 0.0f && ! R.ui.full().keyActive() && ! R.ui.full().keyTranspose.enabled(), "the HZ cell: free; the KEY block is gone");
     // the shape picker of the full screen
     const ui::ShapePicker& pk = R.ui.full().picker;
     R.tap (pk.cell (4).x + 10, pk.cell (4).y + 10);
@@ -304,16 +304,14 @@ void testFullScreen()
     const ui::InstanceBar& bar = r.ui.full().bar;
     r.tap (bar.lfoCells.cell (2).x + 4, bar.lfoCells.cell (2).y + 20);
     check (r.inst.sel[2] == 3 && r.ui.selection() == 3, "the cell 3: Play LFO = 3");
-    r.tap (bar.lfoCells.cell (5).x + 4, bar.lfoCells.cell (5).y + 20);
-    check (r.ui.full().bar.page() == 1 && r.ui.full().bar.lfoCells.state.index == -1, "the page cell: LFO 6 .. 10");
-    r.tap (bar.lfoCells.cell (1).x + 4, bar.lfoCells.cell (1).y + 20);
-    check (r.inst.sel[2] == 7 && r.ui.selection() == 7, "the second cell of the second page: LFO 7");
+    r.tap (bar.lfoCells.cell (6).x + 4, bar.lfoCells.cell (6).y + 20);
+    check (r.inst.sel[2] == 7 && r.ui.selection() == 7 && bar.lfoCells.state.index == 6, "the seventh cell: LFO 7 (no pages: all ten LFOs are in the bar)");
     r.tap (bar.rndCells.cell (1).x + 4, bar.rndCells.cell (1).y + 20);
     check (r.ui.random() && r.ui.selection() == 2 && r.ui.full().random() && r.ui.full().numGroups() == 3, "RND 2: the random LFO, the full screen of the random LFO");
     check (r.inst.q[0] == paramIdx ("rlfo2.style") && r.inst.q[1] == paramIdx ("rlfo2.rate") && r.inst.q[2] == paramIdx ("rlfo2.sync") && r.inst.q[3] == paramIdx ("rlfo2.stereo"), "random full screen: the RANDOM group");
     r.tap (r.ui.full().picker.cell (3).x + 10, r.ui.full().picker.cell (3).y + 10);
     check (r.inst.get ("rlfo2.style") == 3.0f, "the style picker: Lorenz");
-    r.tap (bar.lfoCells.cell (0).x + 4, bar.lfoCells.cell (0).y + 20);
+    r.tap (bar.lfoCells.cell (5).x + 4, bar.lfoCells.cell (5).y + 20);
     check (! r.ui.random() && r.ui.selection() == 6, "back to LFO 6");
 }
 

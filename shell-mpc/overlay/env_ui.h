@@ -46,7 +46,6 @@ public:
     {
         kClose = 1, kFullButton, kInstances, kGraph, kTargets,
         kKnob = 100,                        // 100 + Knob: the knobs (the compact view and the full screen share the ids)
-        kField = 120,                       // 120 + 0 .. 5: DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE
         kBeats = 130, kLegato,
         kTargetsBack = 150, kTargetsPage, kTargetsAdd, kTargetsRow = 160,    // 160 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsBack = 600, kModsRow = 610, kModsAddStep = 660, kModsAdd,
@@ -326,10 +325,6 @@ private:
             if (ck[k.knob] != nullptr)
                 bind (kKnob + k.knob, ck[k.knob], T::Knob, k.key, k.beats, k.knob);
         }
-        // the six exact fields: DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE
-        static const char* const kFieldKey[6] = { "delay", "attack", "hold", "decay", "sustain", "release" };
-        for (int i = 0; i < 6; ++i)
-            bind (kField + i, &full_.fields[i], T::Field, kFieldKey[i], i == 4 ? "" : std::string (kFieldKey[i]) + "_beats", i);
         bind (kBeats, &full_.beats, T::Toggle, "units");
         bind (kLegato, &full_.legato, T::Toggle, "legato_inverted");
         pageTop_ = 0;
@@ -527,7 +522,7 @@ private:
         numTargets_ = uibind::slotsOfSource (v, selectedSource_, slots, uibind::kMaxTargetSlots);
         for (int i = 0; i < 3; ++i)
             full_.targetLines[i].text[0] = '\0';
-        full_.numTargets = numTargets_;
+        full_.setNumTargets (numTargets_);
         full_.numTargetLines = std::min (3, numTargets_);
         for (int i = 0; i < full_.numTargetLines; ++i)
         {

@@ -247,7 +247,7 @@ protected:
             for (int i = 1; i < 6; ++i)
                 sb.line (static_cast<float> (g.x[i]), static_cast<float> (g.yTop), static_cast<float> (g.x[i]), static_cast<float> (g.yBot), T.hair, theme::rgba (T.grid, i == 4 ? 220 : 110));
         // ---- the ghost: another envelope behind this one (a thin faint line)
-        constexpr int kMaxN = 1024;
+        constexpr int kMaxN = gpu::kMaxCurve;   // one row per pixel of the plot: the graph of the full width (no side column) is about 1250 pixels
         float rows[kMaxN], rowsGhost[kMaxN];
         const int n = std::min (pl.w, kMaxN);
         if (state.ghost && ! reduced)

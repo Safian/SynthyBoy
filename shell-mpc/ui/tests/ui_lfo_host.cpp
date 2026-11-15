@@ -167,11 +167,11 @@ void testParts()
     check (rc.childShown (0) && ! rc.rate.enabled() && rc.primary() == &rc.rate, "rate control: the knob dim in the key follow mode");
 
     InstanceBar ib;
-    ib.place ({ 0, 0, 570, 56 });
+    ib.place ({ 0, 0, 624, 56 });
     ib.lfoCells.setId (1); ib.rndCells.setId (2);
-    ib.configure (false, 7, 1);
-    check (ib.lfoCells.state.index == 1 && ib.rndCells.state.index == -1 && ib.page() == 1, "instance bar: LFO 7 is the second cell of the second page");
-    ib.configure (true, 3, 1);
+    ib.configure (false, 7);
+    check (ib.lfoCells.state.index == 6 && ib.rndCells.state.index == -1, "instance bar: LFO 7 is the seventh cell (all ten LFOs are in the bar)");
+    ib.configure (true, 3);
     check (ib.lfoCells.state.index == -1 && ib.rndCells.state.index == 2, "instance bar: RND 3 is the third random cell");
     check (ib.sizeOk(), "instance bar: its minimum size");
 }
@@ -265,7 +265,7 @@ void testViews()
             f.touchDown (cx (f.keyTune), cy (f.keyTune), 0.0);
             f.touchUp (cx (f.keyTune), cy (f.keyTune));
             check ((variant == 1) == (f.activeGroup() == 3), nm + ": the KEY group is only active in the key follow sync");
-            check (f.keyTranspose.enabled() == (variant == 1) && f.hostK.enabled() == (variant == 1), nm + ": the KEY block works in the key follow sync only");
+            check (f.keyTranspose.enabled() == (variant == 1) && f.numBlocks() == (variant == 1 ? 4 : 3), nm + ": the KEY block is there in the key follow sync only (the others take its place)");
         }
         Change t = f.turnQ (0, 1.0);
         (void) t;

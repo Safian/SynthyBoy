@@ -123,7 +123,6 @@ public:
     ToggleIcon monoQ, stereoToggle;
     // Q group KEY
     NumberField keyTranspose { "TRANSPOSE", NumberField::Format::IntSigned }, keyTune { "TUNE", NumberField::Format::IntSigned };
-    ToggleIcon hostK, smoothK;
     QGroup groups[kMaxGroups];
 
     LfoFullScreen()
@@ -133,8 +132,6 @@ public:
         stereoToggle.state.icon = ToggleIcon::Icon::Generic; stereoToggle.setLabel ("STEREO"); stereoToggle.state.showState = true;
         smoothPick.state.icon = ToggleIcon::Icon::Generic; smoothPick.setLabel ("SMOOTH");
         hostPick.state.icon = ToggleIcon::Icon::Generic; hostPick.setLabel ("HOST");
-        hostK.state.icon = ToggleIcon::Icon::Generic; hostK.setLabel ("HOST");
-        smoothK.state.icon = ToggleIcon::Icon::Generic; smoothK.setLabel ("SMOOTH");
         shape.setCaption ("SHAPE"); shape.listable = true; shape.state.wrap = true;
         style.setCaption ("STYLE"); style.listable = true; style.state.wrap = true;
         sync.setCaption ("SYNC"); sync.listable = true; sync.state.wrap = true;
@@ -148,7 +145,7 @@ public:
         addKid (shape); addKid (style, false); addKid (rate); addKid (rise); addKid (smoothTime);
         addKid (sync); addKid (mode); addKid (phase); addKid (delay);
         addKid (direction); addKid (swing); addKid (stereo); addKid (monoQ); addKid (stereoToggle, false);
-        addKid (keyTranspose); addKid (keyTune); addKid (hostK); addKid (smoothK);
+        addKid (keyTranspose); addKid (keyTune);
         configure (false);
         setKeyActive (false);
     }
@@ -161,7 +158,7 @@ public:
         show (smoothPick, ! random); show (hostPick, ! random); show (edit, ! random); show (monoTop, ! random);
         show (shape, ! random); show (rise, ! random); show (smoothTime, ! random); show (style, random);
         show (phase, ! random); show (delay, ! random); show (direction, ! random); show (swing, ! random); show (stereo, ! random); show (monoQ, ! random); show (stereoToggle, random);
-        show (hostK, ! random); show (smoothK, ! random); show (mode, true); show (sync, true);
+        show (mode, true); show (sync, true);
         for (QGroup& g : groups)
             for (int i = 0; i < 4; ++i)
                 g.set (i, nullptr);
@@ -176,7 +173,7 @@ public:
             QGroup& mo = next ("Motion");
             mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
             QGroup& k = next ("Key");
-            k.set (0, &keyTranspose); k.set (1, &keyTune); k.set (2, &hostK); k.set (3, &smoothK);
+            k.set (0, &keyTranspose); k.set (1, &keyTune);
         }
         else
         {
@@ -192,14 +189,17 @@ public:
         setActiveGroup (0);
     }
     bool random() const noexcept { return random_; }
-    /** The key follow sync: only then the KEY block works (the others are dim). */
+    /** The key follow sync: only then the KEY block is there (its place goes to the other blocks otherwise: nothing dim and idle on the page). */
     void setKeyActive (bool on)
     {
+        const bool changed = on != keyActive_;
         keyActive_ = on;
+        show (keyTranspose, on); show (keyTune, on);
         keyTranspose.setEnabled (enabled_ && on); keyTune.setEnabled (enabled_ && on);
-        hostK.setEnabled (enabled_ && on); smoothK.setEnabled (enabled_ && on);
         if (! on && active_ == keyGroup())
             setActiveGroup (0);
+        if (changed && rect_.w > 0)
+            layout();
     }
     bool keyActive() const noexcept { return keyActive_; }
     int keyGroup() const noexcept { return nGroups_ - 1; }
@@ -235,7 +235,8 @@ public:
     {
         Composite::draw (sb);
         for (int i = 0; i < nGroups_; ++i)
-            groups[i].draw (sb);
+            if (i != keyGroup() || keyActive_)
+                groups[i].draw (sb);
     }
     /** The page of its own tab (the plugin draws the whole tab): there is nothing to close. */
     void setPageMode (bool page)
@@ -252,14 +253,13 @@ protected:
     {
         Composite::syncKids();
         keyTranspose.setEnabled (enabled_ && keyActive_); keyTune.setEnabled (enabled_ && keyActive_);
-        hostK.setEnabled (enabled_ && keyActive_); smoothK.setEnabled (enabled_ && keyActive_);
     }
     void layout() override
     {
         const int W = rect_.w, m = 8;
         const Rect top { rect_.x + m, rect_.y + m, W - 2 * m, kTopH };
         Rect r[5];
-        const int fixed[5] = { pageMode_ ? 0 : 84, 10 * 56 + kGap, 3 * 56 + 2 * 72 + 2 * kGap, 72, 0 }, weight[5] = { 0, 0, 0, 0, 1 };
+        const int fixed[5] = { pageMode_ ? 0 : 84, (InstanceBar::kLfoCells + InstanceBar::kRndCells) * InstanceBar::kCellW + kGap, 3 * 56 + 2 * 72 + 2 * kGap, 72, 0 }, weight[5] = { 0, 0, 0, 0, 1 };
         layoutRow (top, fixed, weight, 5, kGap, r);
         close.place ({ r[0].x, top.y + (kTopH - 56) / 2, r[0].w, 56 });
         bar.place ({ r[1].x, top.y + (kTopH - 56) / 2, r[1].w, 56 });
@@ -280,9 +280,9 @@ protected:
         }
         edit.place ({ display_.right() - 4 - 104, display_.y + 4, 104, 56 });
         // the blocks of the bottom band
-        const int n = random_ ? 3 : 4;
+        const int n = (random_ ? 3 : 4) - (keyActive_ ? 0 : 1);
         nBlocks_ = n;
-        static const int wShape[4] = { 1, 1, 1, 1 }, wRandom[3] = { 2, 1, 1 };
+        static const int wShape[4] = { 3, 3, 3, 2 }, wRandom[3] = { 4, 2, 2 };   // without the KEY block the others take its place
         const int* wt = random_ ? wRandom : wShape;
         int sum = 0;
         for (int i = 0; i < n; ++i) sum += wt[i];
@@ -298,33 +298,31 @@ protected:
         const int pad = 6, titleH = 22, rowH = 56, rateH = 72;
         auto inner = [&] (int i) { return Rect { blocks_[i].x + pad, blocks_[i].y + titleH + kQLane, blocks_[i].w - 2 * pad, blocks_[i].h - titleH - kQLane - pad }; };
         auto pair = [&] (const Rect& cell, Component& a, Component& b) { const int cw = (cell.w - kGap) / 2; a.place ({ cell.x, cell.y, cw, cell.h }); b.place ({ cell.x + cw + kGap, cell.y, cell.w - cw - kGap, cell.h }); };
-        auto knobH = [&] (const Rect& in, int used2) { return std::max (72, in.h - used2); };
+        auto stack2 = [&] (const Rect& cell, Component& a, Component& b)   // two fields one above the other, as tall as the block lets them be (at most 96)
+        {
+            const int h = std::min (96, (cell.h - kQLane) / 2);
+            a.place ({ cell.x, cell.y, cell.w, h });
+            b.place ({ cell.x, cell.y + h + kQLane, cell.w, h });
+        };
+        // one size of knob on the page: every pair of knobs gets the height the tightest block (RATE: a row, the rate control, the pair) leaves, bottom aligned
+        const int kH = std::max (72, inner (0).h - rowH - rateH - 2 * kQLane);
+        auto knobs = [&] (const Rect& in, Component& a, Component& b) { pair ({ in.x, in.bottom() - kH, in.w, kH }, a, b); };
         if (! random_)
         {
             Rect in = inner (0);
             shape.place ({ in.x, in.y, in.w, rowH });
             rate.place ({ in.x, in.y + rowH + kQLane, in.w, rateH });
-            {
-                const int y = in.y + rowH + rateH + 2 * kQLane;
-                pair ({ in.x, y, in.w, knobH (in, y - in.y) }, rise, smoothTime);
-            }
+            knobs (in, rise, smoothTime);
             in = inner (1);
             sync.place ({ in.x, in.y, in.w, rowH });
             mode.place ({ in.x, in.y + rowH + kQLane, in.w, rowH });
-            {
-                const int y = in.y + 2 * rowH + 2 * kQLane;
-                pair ({ in.x, y, in.w, knobH (in, y - in.y) }, phase, delay);
-            }
+            knobs (in, phase, delay);
             in = inner (2);
             direction.place ({ in.x, in.y, in.w, rowH });
-            {
-                const int y = in.y + rowH + kQLane;
-                pair ({ in.x, y, in.w, knobH (in, y - in.y + rowH + kQLane) }, swing, stereo);
-                monoQ.place ({ in.x, y + knobH (in, y - in.y + rowH + kQLane) + kQLane, in.w, rowH });
-            }
-            in = inner (3);
-            pair ({ in.x, in.y, in.w, rowH }, keyTranspose, keyTune);
-            pair ({ in.x, in.y + rowH + kQLane, in.w, rowH }, hostK, smoothK);
+            knobs ({ in.x, in.y, in.w, in.h - rowH - kQLane }, swing, stereo);
+            monoQ.place ({ in.x, in.bottom() - rowH, in.w, rowH });
+            if (keyActive_)
+                stack2 (inner (3), keyTranspose, keyTune);
         }
         else
         {
@@ -333,8 +331,8 @@ protected:
             pair ({ in.x, in.y + rowH + kQLane, in.w, rateH }, rate, stereoToggle);
             in = inner (1);
             mode.place ({ in.x, in.y, in.w, rowH });
-            in = inner (2);
-            pair ({ in.x, in.y, in.w, rowH }, keyTranspose, keyTune);
+            if (keyActive_)
+                stack2 (inner (2), keyTranspose, keyTune);
         }
     }
     void drawUnder (Pen& p) const override
@@ -349,7 +347,7 @@ protected:
         static const char* const kShape[4] = { "RATE", "TIMING", "MOTION", "KEY FOLLOW" }, * const kRandom[3] = { "RANDOM", "TRIGGER", "KEY FOLLOW" };
         for (int i = 0; i < nBlocks_; ++i)
         {
-            const bool dim = (random_ ? i == 2 : i == 3) && ! keyActive_;
+            const bool dim = false;
             p.textLeft ({ blocks_[i].x + 10, blocks_[i].y + 4, std::max (0, blocks_[i].w - 20), 18 }, random_ ? kRandom[i] : kShape[i], T.fLabel - 2.0f, p.c (T.textDim, dim ? 110 : 255), T.fMin);
         }
     }

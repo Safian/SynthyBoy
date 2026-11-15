@@ -2,8 +2,8 @@
 // the Play page's tab is 1280 x 628 at y 110). Same contract as every component (core.h).
 //  - EnvCompact: the third of the width (400 x 620) in the middle of the Play page: the instance selector (ENV 1 .. 6), the envelope graph with the "full screen" button in its top right corner (the handles
 //    can be dragged here too), and under it the ADSR Q group (ATTACK, DECAY, SUSTAIN, RELEASE) in one frame.
-//  - EnvFullScreen: the top bar (close, the instance selector, the targets button), the big graph at the left, the six exact fields (DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE) and the list of what the
-//    envelope modulates at the right, and the bottom band of three Q groups, each a titled block: ADSR [ATTACK, DECAY, SUSTAIN, RELEASE], SHAPE [A CURVE, D CURVE, R CURVE], TIME [DELAY, HOLD, BEATS, LEGATO].
+//  - EnvFullScreen: the top bar (close, the instance selector, the targets button), the big graph (the whole width; the times stand under it and on the knobs, so there are no second boxes for them), the
+//    list of what the envelope modulates at its right (only when it modulates something: otherwise the TARGETS button is enough), and the bottom band of three Q groups, each a titled block: ADSR [ATTACK, DECAY, SUSTAIN, RELEASE], SHAPE [A CURVE, D CURVE, R CURVE], TIME [DELAY, HOLD, BEATS, LEGATO].
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -124,12 +124,11 @@ protected:
 class EnvFullScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 3, kBottomH = 176, kTopH = 72, kFields = 6;
+    static constexpr int kMaxGroups = 3, kBottomH = 176, kTopH = 72;
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     EnvSelector instances;
     MenuButton targets { "TARGETS", MenuButton::Icon::None };
     EnvGraph graph;
-    NumberField fields[kFields];                                   // DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE
     Knob attack { "ATTACK" }, decay { "DECAY" }, sustain { "SUSTAIN" }, release { "RELEASE" };
     Knob aCurve { "A CURVE" }, dCurve { "D CURVE" }, rCurve { "R CURVE" };
     Knob delay { "DELAY" }, hold { "HOLD" };
@@ -140,21 +139,22 @@ public:
     struct TargetLine { char text[40] = {}; };
     TargetLine targetLines[3];
     int numTargetLines = 0, numTargets = 0;
+    /** How many targets the envelope has: the list block takes its place at the right of the graph only when there is at least one (the layout is redone when that changes). */
+    void setNumTargets (int n)
+    {
+        const bool had = numTargets > 0;
+        numTargets = n;
+        if (had != (n > 0) && rect_.w > 0)
+            layout();
+    }
 
     EnvFullScreen()
     {
-        static const char* const kField[kFields] = { "DELAY", "ATTACK", "HOLD", "DECAY", "SUSTAIN", "RELEASE" };
-        for (int i = 0; i < kFields; ++i)
-        {
-            fields[i].setLabel (kField[i]);
-            fields[i].state.format = NumberField::Format::IntPlain;
-        }
-        beats.state.icon = ToggleIcon::Icon::Generic; beats.setLabel ("BEATS"); beats.state.showState = false;
-        legato.state.icon = ToggleIcon::Icon::Generic; legato.setLabel ("LEGATO");
+        beats.state.icon = ToggleIcon::Icon::Generic; beats.setLabel ("BEATS"); beats.state.showState = false; beats.state.knobLike = true;   // in the row of the knobs: the cell of a knob, the names in one line
+        legato.state.icon = ToggleIcon::Icon::Generic; legato.setLabel ("LEGATO"); legato.state.knobLike = true;
         for (Knob* k : { &aCurve, &dCurve, &rCurve })
             k->state.bipolar = true;
         addKid (close); addKid (instances); addKid (targets); addKid (graph);
-        for (NumberField& f : fields) addKid (f);
         for (Knob* k : { &attack, &decay, &sustain, &release, &aCurve, &dCurve, &rCurve, &delay, &hold })
             addKid (*k);
         addKid (beats); addKid (legato);
@@ -235,30 +235,25 @@ protected:
             for (int i = 0; i < cnt; ++i)
             {
                 Component* k = c[i];
-                const int h = k == &beats || k == &legato ? std::min (in.h, 96) : in.h;
-                k->place ({ in.x + i * (cw + kGap), in.y + (in.h - h) / 2, i == n - 1 ? in.w - i * (cw + kGap) : cw, h });
+                k->place ({ in.x + i * (cw + kGap), in.y, i == n - 1 ? in.w - i * (cw + kGap) : cw, in.h });
             }
         };
         Component* adsr[4] = { &attack, &decay, &sustain, &release };
         Component* shape[3] = { &aCurve, &dCurve, &rCurve };
         Component* time[4] = { &delay, &hold, &beats, &legato };
         inner (0, 4, adsr, 4); inner (1, 3, shape, 3); inner (2, 4, time, 4);
-        // ---- the middle: the graph (about two thirds of the width) and the right column
+        // ---- the middle: the graph (the whole width; a column of the targets at its right only when there are targets)
         const int midY = top.bottom() + m, midH = bandY - m - midY;
-        const int gw = (W - m) * 64 / 100;
+        const int gw = numTargets > 0 ? (W - m) * 70 / 100 : W;
         graph.place ({ rect_.x + m, midY, gw, std::max (0, midH) });
-        const int rx = rect_.x + m + gw + m, rw = rect_.right() - m - rx;
-        const int fw = (rw - kGap) / 2, fh = 56;
-        for (int i = 0; i < kFields; ++i)
-            fields[i].place ({ rx + (i % 2) * (fw + kGap), midY + (i / 2) * (fh + kGap), i % 2 == 0 ? fw : rw - fw - kGap, fh });
-        const int ty = midY + 3 * (fh + kGap) + 4;
-        targetsBlock_ = { rx, ty, rw, std::max (0, midY + midH - ty) };
+        targetsBlock_ = numTargets > 0 ? Rect { rect_.x + m + gw + m, midY, W - gw - m, std::max (0, midH) } : Rect {};
     }
     void drawUnder (Pen& p) const override
     {
         for (int i = 0; i < kMaxGroups; ++i)
             p.block (blocks_[i]);
-        p.block (targetsBlock_);
+        if (! targetsBlock_.empty())
+            p.block (targetsBlock_);
     }
     void drawExtra (Pen& p) const override
     {
@@ -267,16 +262,11 @@ protected:
             p.textLeft ({ blocks_[i].x + KnobPanel::kBlockPad + 4, blocks_[i].y + 3, std::max (0, blocks_[i].w - 16), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         // what the envelope modulates: the first lines of the list (the TARGETS button opens all of it)
         const Rect t = targetsBlock_;
-        if (t.h < 40)
+        if (t.h < 40 || numTargets <= 0)
             return;
         char head[32];
         std::snprintf (head, sizeof head, numTargets == 1 ? "MODULATES %d TARGET" : "MODULATES %d TARGETS", numTargets);
         p.textLeft ({ t.x + 12, t.y + 4, std::max (0, t.w - 24), 24 }, head, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        if (numTargets == 0)
-        {
-            p.textLeft ({ t.x + 12, t.y + 32, std::max (0, t.w - 24), 28 }, "NOTHING YET", T.fValue - 4.0f, p.c (T.textFaint, 255), T.fMin);
-            return;
-        }
         for (int i = 0; i < numTargetLines; ++i)
         {
             const Rect line { t.x + 12, t.y + 30 + i * 34, std::max (0, t.w - 24), 30 };

@@ -50,7 +50,7 @@ public:
     enum Id : int
     {
         kClose = 1, kFullButton, kInstance, kLfoCells, kRndCells, kSyncMode, kSyncTrip, kSyncDot, kMonoTop, kTargets, kPicker, kSmoothPick, kHostPick, kEdit,
-        kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kHost, kSmooth,
+        kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune,
         kEdBack = 200, kEdTools, kEdUndo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGrid,
         kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kList = 400, kListBackdrop, kListHeader,
@@ -142,7 +142,6 @@ public:
             page_ = true;
             lfoNum_ = std::clamp (in.instance, 1, kLfos);
             rnd_ = 0;
-            barPage_ = (lfoNum_ - 1) / 5;
             full_.setPageMode (true);
             configured_ = false;
         }
@@ -405,8 +404,6 @@ private:
         bind (kStereoToggle, &full_.stereoToggle, T::Toggle, rnd ? "stereo" : "");
         bind (kKeyTranspose, &full_.keyTranspose, T::Number, "keytrack_transpose");
         bind (kKeyTune, &full_.keyTune, T::Number, "keytrack_tune");
-        bind (kHost, &full_.hostK, T::Toggle, rnd ? "" : "host");
-        bind (kSmooth, &full_.smoothK, T::Toggle, rnd ? "" : "smooth");
         // ---- the ranges of the knobs and fields come from the parameters
         for (Item& it : items_)
         {
@@ -427,7 +424,7 @@ private:
         }
         compact_.configure (rnd);
         full_.configure (rnd);
-        full_.bar.configure (rnd, rnd ? rnd_ : lfoNum_, barPage_);
+        full_.bar.configure (rnd, rnd ? rnd_ : lfoNum_);
         // the parameters of the display
         values_ = synthyboy::ParamValues::defaults();
         dispIdx_.clear();
@@ -599,12 +596,11 @@ private:
         {
             rnd_ = 0;
             lfoNum_ = s + 1;
-            barPage_ = s / 5;
             if (! page_)
                 v.setPlaySelection (2, s + 1);   // the host follows (the Play LFO selector); the next update () reads the same number
         }
         configure (v);
-        full_.bar.configure (rnd_ != 0, selection(), barPage_);
+        full_.bar.configure (rnd_ != 0, selection());
     }
 
     // ---- the modulations page of one control (a long press on a knob or a field)
@@ -802,7 +798,7 @@ private:
         const int shapeP = paramOf (rnd_ != 0 ? "style" : "shape");
         shapeIdx_ = shapeP >= 0 ? static_cast<int> (std::lround (v.param (shapeP))) : 0;
         full_.edit.setEnabled (rnd_ == 0);
-        full_.bar.configure (rnd_ != 0, selection(), barPage_);
+        full_.bar.configure (rnd_ != 0, selection());
         if (stackDepth_ > 0 && pageTop_ == kPageEditor)
             editor_.sync();
         // the instance stepper of the compact view and the nameplate
@@ -1238,13 +1234,8 @@ private:
         {
             if (id == kRndCells)
                 selectSlot (kLfos + c.index, v);
-            else if (c.index == 5)
-            {
-                barPage_ = 1 - barPage_;
-                full_.bar.configure (rnd_ != 0, selection(), barPage_);
-            }
             else
-                selectSlot (barPage_ * 5 + c.index, v);
+                selectSlot (c.index, v);
             return;
         }
         // ---- the sync switch: the mode and the two switches make one parameter
@@ -1447,7 +1438,7 @@ private:
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false, configured_ = false, modsDirty_ = true, qSet_ = false, shapeDirty_ = false, haveCurve_ = false, displayHot_ = false;
     bool page_ = false;   // the page of an LFO tab
-    int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, barPage_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
+    int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
     int targetsPageIndex_ = 0, syncType_ = 0, shapeIdx_ = 0;
     int scratchSlots_[uibind::kMaxTargetSlots] = {};
     int grid_[kLfos] = {};               // the grid of the editor of every LFO (0: not chosen yet: the grid the shape was drawn on)
