@@ -329,7 +329,7 @@ public:
 
     MasterScreen()
     {
-        volume.state.large = true; spread.state.large = true; tune.state.large = true; portaTime.state.large = true; portaSlope.state.large = true;
+        volume.state.large = true; spread.state.large = true;   // the only large knobs of the page; every other knob has the common size (140)
         tune.state.bipolar = true;
         portaSlope.state.bipolar = true;
 
@@ -341,6 +341,7 @@ public:
         bendDown.setLabel ("BEND DOWN");
         bendLink.setLabel ("LINK");
         bendLink.state.showState = true;
+        bendLink.state.knobLike = true;   // the fourth cell of the row of PITCH has the size of a knob
         polyphony.state.format = NumberField::Format::IntPlain;
         polyphony.setLabel ("POLY");
         legato.setLabel ("LEGATO"); legato.state.showState = true;
@@ -503,15 +504,17 @@ protected:
             stereoRouting.place ({ sx, top + lane, sw, sh });
             voiceOverride.place ({ sx, top + 2 * lane + sh + g, sw, sh });
         }
-        {   // PITCH: TUNE big, the three number fields in a column, LINK at the right in the size of a number field
+        {   // PITCH: the cell grid of VOICES (four columns of equal width, the same gaps): TUNE (a knob of the common size) in the first column over the whole height, TRANSPOSE across two cells,
+            // BEND UP and BEND DOWN under it (one cell each), LINK in the last column over the whole height; the rows are the block's height, each with its lane for the chips
             const Rect in = inner (1);
-            tune.place ({ in.x, in.y, 150, in.h });
-            const int nx = in.x + 150 + g, nw = 290, rowH = (in.h - 3 * lane - 2 * g) / 3;
-            transpose.place ({ nx, in.y + lane, nw, rowH });
-            bendUp.place ({ nx, in.y + 2 * lane + rowH + g, nw, rowH });
-            bendDown.place ({ nx, in.y + 3 * lane + 2 * rowH + 2 * g, nw, rowH });
-            const int lx = nx + nw + g * 2;
-            bendLink.place ({ lx, in.y + 2 * lane + rowH + g, in.right() - lx, rowH });
+            const int cw = (in.w - 3 * g) / 4, rowH = (in.h - 2 * lane - g) / 2;
+            auto col = [&] (int c) { return in.x + c * (cw + g); };
+            const int y0 = in.y + lane, y1 = in.y + 2 * lane + rowH + g;
+            tune.place ({ col (0), in.y, cw, in.h });
+            transpose.place ({ col (1), y0, 2 * cw + g, rowH });
+            bendUp.place ({ col (1), y1, cw, rowH });
+            bendDown.place ({ col (2), y1, cw, rowH });
+            bendLink.place ({ col (3), in.y, in.right() - col (3), in.h });   // the cell of a knob (knobLike): the icon where the dial is
         }
         {   // VOICES: ONE grid of equal cells, rows of 64 pixels: POLY, LEGATO, POLY LEG, SAME NOTE (the Q group, four cells); STEAL and PHASE LEG (two cells each); the voice meter across the width
             const Rect in = inner (2);
@@ -526,15 +529,15 @@ protected:
             const Rect mc = cell (0, 2, 4);
             voiceMeter.place ({ mc.x, mc.y, mc.w, std::min (ch, std::max (40, in.bottom() - mc.y)) });
         }
-        {   // GLIDE: the two knobs, ALWAYS / SCALED stacked (the height of the other switches), the curve at the right
+        {   // GLIDE: the same cell grid again: the two knobs (the common size) in the first two columns over the whole height, ALWAYS and SCALED stacked in the third (the rows of PITCH), the curve in the fourth
             const Rect in = inner (3);
-            portaTime.place ({ in.x, in.y, 150, in.h });
-            portaSlope.place ({ in.x + 150 + g, in.y, 150, in.h });
-            const int tx = in.x + 300 + 2 * g, tw = 130, th = 64, free = in.h - 2 * th - 2 * lane, y1 = in.y + lane + free / 3;
-            portaAlways.place ({ tx, y1, tw, th });
-            portaScaled.place ({ tx, y1 + th + lane + free / 3, tw, th });
-            const int cx = tx + tw + 2 * g;
-            portaCurve.place ({ cx, in.y + 4, in.right() - cx, in.h - 8 });
+            const int cw = (in.w - 3 * g) / 4, rowH = (in.h - 2 * lane - g) / 2;
+            auto col = [&] (int c) { return in.x + c * (cw + g); };
+            portaTime.place ({ col (0), in.y, cw, in.h });
+            portaSlope.place ({ col (1), in.y, cw, in.h });
+            portaAlways.place ({ col (2), in.y + lane, cw, rowH });
+            portaScaled.place ({ col (2), in.y + 2 * lane + rowH + g, cw, rowH });
+            portaCurve.place ({ col (3), in.y + 4, in.right() - col (3), in.h - 8 });
         }
         // ---- side TUNING & MPE
         {   // SCALE: the three steppers in a row, the big keyboard under them

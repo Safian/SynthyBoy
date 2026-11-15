@@ -80,6 +80,21 @@ void testMasterSidesAndBlocks()
     check (inside, "the Q group of OUTPUT, PITCH, VOICES and GLIDE lies in its block and nothing else is in its frame");
     check (filled, "the groups fill their blocks (>= 140 px high, reaching the lower part)");
     check (m.volume.rect().h >= 200 && m.volume.rect().w >= 140, "the VOLUME is a big knob (" + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
+    // one knob family: only VOLUME and SPREAD are large; PITCH and GLIDE use the cell grid of VOICES (four equal columns) and fill their block to the right edge (no empty third)
+    check (m.volume.state.large && m.spread.state.large && ! m.tune.state.large && ! m.portaTime.state.large && ! m.portaSlope.state.large, "only VOLUME and SPREAD are large knobs");
+    {
+        // the blocks of the right column are the same width as those of the left (to a pixel); the columns are measured from the left edge of each block's inner rectangle
+        const int cw = m.polyphony.rect().w;
+        const ui::Rect pi = m.inner (1), gi = m.inner (3), vi = m.inner (2);
+        auto near = [] (int a, int b) { return std::abs (a - b) <= 1; };
+        check (near (m.tune.rect().w, cw) && near (m.bendUp.rect().w, cw) && near (m.bendDown.rect().w, cw) && m.transpose.rect().right() == m.bendDown.rect().right() && m.transpose.rect().x == m.bendUp.rect().x && near (m.portaTime.rect().w, cw) && near (m.portaSlope.rect().w, cw)
+                   && near (m.portaAlways.rect().w, cw) && near (m.portaScaled.rect().w, cw),
+               "PITCH and GLIDE cells are the cells of the VOICES grid (" + std::to_string (cw) + " px)");
+        check (m.tune.rect().x == pi.x && m.portaTime.rect().x == gi.x && near (m.bendLink.rect().x - pi.x, m.sameNote.rect().x - vi.x) && near (m.portaCurve.rect().x - gi.x, m.sameNote.rect().x - vi.x)
+                   && m.bendLink.rect().right() == pi.right() && m.portaCurve.rect().right() == gi.right(),
+               "PITCH and GLIDE reach the right edge of their block on the columns of VOICES");
+        check (m.bendLink.rect().h >= 120 && m.bendLink.state.knobLike && m.bendUp.rect().bottom() >= pi.bottom() - 2 && m.portaScaled.rect().bottom() >= gi.bottom() - 2, "PITCH and GLIDE use the whole height of their block");
+    }
     // the second side
     r.tap (m.sideTuning);
     check (m.side() == ui::MasterScreen::SideTuning && m.activeGroup() == 4, "TUNING & MPE shows the second side, SCALE is the Q group");
