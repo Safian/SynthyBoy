@@ -33,7 +33,7 @@ GROUPS = 3
 SLOTS = 8
 # The Key 61 has one column of four knobs; Bank Direction "Column" banks the 4 x 4 grid (Q-Links.json 8.2 / 8.3 of the SDK's ui-reference.md) by columns read TOP TO BOTTOM: bank 0 = Q-Link 13, 9, 5, 1, bank 1 = 14, 10, 6, 2.
 # The Play pages' first bank is the four Q proxies: the top knob is Q 1, the bottom one Q 4 (measured on the device: the panel showed Q 1 at the bottom for Q-Link 1).
-# The oscillator sub-tab (the first sub-tab of the first tab) is the exception, measured on the device with injected knob turns: the host honours only the bottom row (Q-Link 1 .. 4) there and fills the rows above with its own assignments (Macro 1, Master Volume, Macro 5 ...) whatever this file says; so that sub-tab uses Bank Direction "Row", bank 0 = Q-Link 1, 2, 3, 4 = top knob .. bottom knob. The cause is not known.
+# The oscillator sub-tab (the first sub-tab of the first tab) is the exception, measured on the device with injected knob turns: the host honours only the bottom row (Q-Link 1 .. 4) there and fills the rows above with its own assignments (Macro 1, Master Volume, Macro 5 ...) whatever this file says; so that sub-tab uses Bank Direction "Row", bank 0 = Q-Link 1, 2, 3, 4 = top knob .. bottom knob. The cause: the host keeps a SNAPSHOT of the Q-Links.json the track was made with in the project and it wins over this file where it has an entry (docs/MPC.md "The host keeps a Q-Link map per track"); in a new project the whole file is honoured.
 QLINK_COLUMN_0 = (13, 9, 5, 1)
 QLINK_COLUMN_1 = (14, 10, 6, 2)
 Q_PROXIES = 4              # "Q 1" .. "Q 4": the parameters after the last Play proxy
