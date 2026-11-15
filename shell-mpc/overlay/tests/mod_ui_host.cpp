@@ -506,6 +506,13 @@ void testMacrosView()
     // a tap on the knob of the first row makes it the group again
     r.tapC (r.ui.view().cards[2].knob);
     check (r.ui.bank() == 0, "a tap on a card of the top row makes bank 1 the Q group");
+    // a bank left from an earlier visit does not survive the arrival: the page shows BANK 1 and the knobs write macro 1 .. 4 (the group and the picture cannot disagree)
+    r.tapC (r.ui.view().bank2Btn);
+    r.refresh();
+    check (r.ui.bank() == 1 && r.inst.q[0] == FakeInst::idx ("macro.5"), "the bank is set to 2 before the page is left");
+    r.ui.forgetQGroup();   // the page is shown again (PageView::onShown)
+    r.refresh();
+    check (r.ui.bank() == 0 && r.inst.q[0] == FakeInst::idx ("macro.1") && r.inst.q[3] == FakeInst::idx ("macro.4"), "on arrival the page is on BANK 1 and the group is macro.1 .. macro.4");
     // the Q frame of a bank holds its four knobs and nothing else
     ui::Component* leaves[96];
     const int n = r.ui.view().collectLeaves (leaves, 0, 96);

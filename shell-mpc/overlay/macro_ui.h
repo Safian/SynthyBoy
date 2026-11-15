@@ -169,7 +169,8 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
-    void forgetQGroup() noexcept { qSet_ = false; }
+    /** The page comes on screen again (another view was shown): it starts on BANK 1 (macros 1 .. 4) every time, so what the page shows and what the knobs write on arrival never depend on a bank left from an earlier visit; the group is published again. */
+    void forgetQGroup() noexcept { view_.setBank (0); qSet_ = false; }
 
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
