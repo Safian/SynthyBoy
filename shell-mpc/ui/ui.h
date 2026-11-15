@@ -7,3 +7,6 @@
 #include "list.h"
 #include "panel.h"
 #include "screen.h"
+#include "voice_grid.h"
+#include "voice_master.h"
+#include "voice_screen.h"

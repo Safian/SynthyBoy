@@ -11,7 +11,9 @@
 
 #include "../play_params.h"
 #include "../ui/display.h"
+#include "master_ui.h"
 #include "osc_ui.h"
+#include "voice_ui.h"
 #include "page_detector.h"
 #include "play_osc.h"
 #include "scene_cpu.h"
@@ -332,6 +334,8 @@ public:
     bool fingerDown() const noexcept override { return osc_ != nullptr && osc_->fingerDown(); }
     void dropGesture() noexcept override { if (osc_ != nullptr) osc_->dropGesture(); }
     OscUi* oscUi() noexcept { return osc_.get(); }
+    MasterUi* masterUi() noexcept { return master_.get(); }
+    VoiceUi* voiceUi() noexcept { return voice_.get(); }
 
     /** The Q group of the Env and LFO sub-tabs: the Q-Links 1 .. 4 of those pages are Q 1 .. Q 4 (the skin), so the first four knobs of the module are the group (they were Q-Link 1 .. 4 before). */
     void publishModuleGroup (IInstanceView& io)
@@ -667,6 +671,8 @@ private:
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
     std::unique_ptr<OscUi> osc_;
+    std::unique_ptr<MasterUi> master_;
+    std::unique_ptr<VoiceUi> voice_;
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t uiHash_ = 0;
     bool qlinkPanel_ = false;
