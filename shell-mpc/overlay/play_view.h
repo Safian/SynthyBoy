@@ -184,15 +184,35 @@ public:
                 changed = true;
             }
         }
-        // ---- the read head of a sample oscillator (live: the voice that is heard; -1 = not playing / another type)
+        // ---- the live read-outs of the engine: the read heads of the newest voices (sample, multisample, the scan of a granular cloud), the grains that sound, the phases of the sub, the read head of a sample noise
         {
-            float head = -1.0f;
+            Live nl;
             const int o = playosc::oscNumber (sel_[0]);
-            if (in.live != nullptr && o >= 1 && o <= play::kOscs && kind_ == synthyboy::OscCycle::Kind::sample)
-                head = in.live->sampleHead[o - 1];
-            if (std::fabs (head - playhead_) > 0.003f || (head < 0.0f) != (playhead_ < 0.0f))
+            if (in.live != nullptr)
             {
-                playhead_ = head;
+                if (o >= 1 && o <= play::kOscs && (kind_ == synthyboy::OscCycle::Kind::sample || kind_ == synthyboy::OscCycle::Kind::multisample || kind_ == synthyboy::OscCycle::Kind::granular))
+                {
+                    for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
+                        nl.heads[v] = in.live->voicePos[o - 1][v];
+                    if (kind_ == synthyboy::OscCycle::Kind::granular)
+                    {
+                        nl.numGrains = std::min (in.live->numGrains[o - 1], static_cast<int> (ui::display::Data::kMaxGrains));
+                        for (int g = 0; g < nl.numGrains; ++g)
+                        {
+                            nl.grainPos[g] = in.live->grainPos[o - 1][g];
+                            nl.grainLife[g] = in.live->grainLife[o - 1][g];
+                        }
+                    }
+                }
+                if (sel_[0] == playosc::kSub)
+                    for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
+                        nl.phases[v] = in.live->subPhase[v];
+                if (sel_[0] == playosc::kNoise && kind_ == synthyboy::OscCycle::Kind::noise)
+                    nl.noise = in.live->noisePos;
+            }
+            if (nl.differs (live_))
+            {
+                live_ = nl;
                 changed = true;
             }
         }
@@ -518,6 +538,9 @@ private:
                 d.spectrum = spectrum_.data();
                 d.numSpectrum = static_cast<int> (spectrum_.size());
             }
+            else
+                for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)   // the sub oscillator: the phase of every voice on the wave
+                    d.phases[v] = live_.phases[v];
         }
         else if (kind_ == K::sample || kind_ == K::multisample || kind_ == K::granular)
         {
@@ -530,13 +553,21 @@ private:
             d.grain = kind_ == K::granular && res_.grainSize > 0.0f;
             d.grainPos = res_.grainPosition;
             d.grainSize = res_.grainSize;
-            d.playhead = kind_ == K::sample ? playhead_ : -1.0f;   // live: where the voice that is heard reads the sample
+            for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)   // live: where the newest voices read their file (the grains that sound and the scan of a cloud included)
+                d.heads[v] = live_.heads[v];
+            d.numGrainsLive = live_.numGrains;
+            for (int g = 0; g < live_.numGrains; ++g)
+            {
+                d.liveGrainPos[g] = live_.grainPos[g];
+                d.liveGrainLife[g] = live_.grainLife[g];
+            }
         }
         else if (kind_ == K::spectral)
             d.kind = ui::display::Data::Kind::Spectrum;
         else
         {
             d.kind = ui::display::Data::Kind::Message;
+            d.noiseHead = live_.noise;
             d.message = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
         }
         ui::display::draw (sb, r, d);
@@ -569,6 +600,27 @@ private:
         }
     }
 
+    /** The live read-outs shown in the display (a change of one pixel or of a grain's step is a change of the picture). */
+    struct Live
+    {
+        float heads[ui::display::Data::kMaxHeads], phases[ui::display::Data::kMaxHeads], grainPos[ui::display::Data::kMaxGrains], grainLife[ui::display::Data::kMaxGrains], noise = -1.0f;
+        int numGrains = 0;
+        Live() { std::fill (heads, heads + ui::display::Data::kMaxHeads, -1.0f); std::fill (phases, phases + ui::display::Data::kMaxHeads, -1.0f); std::fill (grainPos, grainPos + ui::display::Data::kMaxGrains, 0.0f); std::fill (grainLife, grainLife + ui::display::Data::kMaxGrains, 0.0f); }
+        static bool far (float a, float b, float tol) noexcept { return (a < 0.0f) != (b < 0.0f) || std::fabs (a - b) > tol; }
+        bool differs (const Live& o) const noexcept
+        {
+            for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
+                if (far (heads[v], o.heads[v], 0.0025f) || far (phases[v], o.phases[v], 0.0025f))
+                    return true;
+            if (numGrains != o.numGrains || far (noise, o.noise, 0.0025f))
+                return true;
+            for (int g = 0; g < numGrains; ++g)
+                if (far (grainPos[g], o.grainPos[g], 0.0025f) || far (grainLife[g], o.grainLife[g], 0.04f))
+                    return true;
+            return false;
+        }
+    };
+    Live live_;
     int highlight_;
     std::string name_;
     int sel_[play::kPanels] = { 0, 0, 0 };
@@ -584,7 +636,6 @@ private:
     std::vector<float> cycle_, cycleMax_, envY_, lfoY_, spectrum_;
     std::vector<std::vector<float>> stack_;
     int stackN_ = 0, detailSeen_ = 1;
-    float playhead_ = -1.0f;
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
     std::unique_ptr<OscUi> osc_;

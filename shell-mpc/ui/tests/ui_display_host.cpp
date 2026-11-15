@@ -84,6 +84,22 @@ int main()
         display::draw (sa.builder(), r, a);
         display::draw (sb.builder(), r, b);
         check (render (sa).px != render (sb).px, nm + "moving the wavetable position changes the picture (the highlight runs along the stack)");
+        // the live read-outs: a head per voice, the grains (position and life), the phases of the sub, the read head of a sample noise: each changes the picture and stays inside the display
+        {
+            display::Data base = make (2), h = make (2), g = make (2), w = make (0), pw = make (0), nz = make (4), nz2 = make (4);
+            h.heads[0] = 0.25f; h.heads[1] = 0.6f;
+            g.grain = false; g.numGrainsLive = 3; g.liveGrainPos[0] = 0.2f; g.liveGrainLife[0] = 0.5f; g.liveGrainPos[1] = 0.5f; g.liveGrainLife[1] = 0.1f; g.liveGrainPos[2] = 0.8f; g.liveGrainLife[2] = 0.9f;
+            pw.phases[0] = 0.3f; pw.phases[1] = 0.7f;
+            nz2.noiseHead = 0.4f;
+            const uint32_t bg = ov::sceneColour (theme::rgba (theme::L().bg0, 255));
+            auto pic = [&] (const display::Data& d) { Scene s (680, 360, theme::rgba (theme::L().bg0, 255)); display::draw (s.builder(), r, d); return std::make_pair (render (s), s.overflow()); };
+            const auto pb = pic (base), ph = pic (h), pg = pic (g), pww = pic (w), ppw = pic (pw), pn = pic (nz), pn2 = pic (nz2);
+            const float hx0 = static_cast<float> (r.x + 8) + 0.25f * static_cast<float> (r.w - 16 - 1);
+            check (pb.first.px != ph.first.px && colourNear (ph.first, hx0, 150.0f, 2, 0xffffff, 40) && ! ph.second && drawnOutside (ph.first, r, bg) == 0, nm + "live read-outs: a read head line per voice, white at its position");
+            check (pb.first.px != pg.first.px && ! pg.second && drawnOutside (pg.first, r, bg) == 0, nm + "live read-outs: the grains that sound are drawn inside the display");
+            check (pww.first.px != ppw.first.px && ! ppw.second && drawnOutside (ppw.first, r, bg) == 0, nm + "live read-outs: the phase of the sub's voices are dots on the wave");
+            check (pn.first.px != pn2.first.px && ! pn2.second && drawnOutside (pn2.first, r, bg) == 0, nm + "live read-outs: the read head of a sample noise is drawn");
+        }
         // the module panels
         std::vector<float> v (256);
         for (int i = 0; i < 256; ++i) v[static_cast<size_t> (i)] = 0.5f + 0.4f * std::sin (static_cast<float> (i) * 0.05f);

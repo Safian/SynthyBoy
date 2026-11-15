@@ -32,6 +32,14 @@ struct Data
     bool grain = false;
     float grainPos = 0.0f, grainSize = 0.0f;
     float playhead = -1.0f;          // 0 .. 1 over the sample, < 0 = not playing / not known
+    // the live read-outs of the engine (all optional, < 0 / 0 = none): the read heads of the newest voices over the file (sample, multisample, the scan of a granular cloud), the grains that sound (position
+    // over the file and how far each has run), the phases of the sub oscillator's voices on the wave (0 .. 1), the read head of a sample noise
+    static constexpr int kMaxHeads = 8, kMaxGrains = 32;
+    float heads[kMaxHeads] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+    int numGrainsLive = 0;
+    float liveGrainPos[kMaxGrains] = {}, liveGrainLife[kMaxGrains] = {};
+    float phases[kMaxHeads] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+    float noiseHead = -1.0f;
     // the faint spectrum under a wave (magnitudes 0 .. 1)
     const float* spectrum = nullptr;
     int numSpectrum = 0;
@@ -115,11 +123,12 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     if (wave && n >= 2)
     {
         const bool stacked = d.numStack >= 2 && theme::D().stackFrames >= 2;
-        const float scale = stacked ? 0.78f : 0.92f;
+        const float scale = stacked ? 0.74f : 0.86f;
+        // the rows of a cycle: clamped a little beyond +-1 (the overshoot of a band limited saw at its edge stays inside the plot, it does not stick out above the curve)
         auto rowsOf = [&] (const float* src, float* dst, float yOff, float k)
         {
             for (int i = 0; i < n; ++i)
-                dst[i] = mid + yOff - std::min (1.4f, std::max (-1.4f, src[i])) * amp * scale * k;
+                dst[i] = mid + yOff - std::min (1.06f, std::max (-1.06f, src[i])) * amp * scale * k;
         };
         int litFirst[kMaxStack], litX[kMaxStack], litW[kMaxStack], numLit = 0;
         float litAmount[kMaxStack];
@@ -160,7 +169,8 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             sb.paintOff();
             sb.style (1.0f, false);
         }
-        // the unison voices: hairlines around the main curve, spread in time by the detune, as strong as the blend
+        // the unison voices: hairlines around the main curve, a fan that opens with the detune and is as strong as the blend. They share the x grid of the main curve (not shifted in x: a shifted copy of a
+        // wave with a steep edge makes stripes at the edges of the display), so a hairline differs from the main curve in height only
         if (d.voices > 1)
         {
             const int v = std::min (std::min (d.voices, 7) - 1, theme::D().unisonHairs);
@@ -168,10 +178,9 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             for (int k = 1; k <= v; ++k)
             {
                 const float side = (k % 2 == 1 ? 1.0f : -1.0f) * static_cast<float> ((k + 1) / 2) / static_cast<float> ((v + 1) / 2);
-                const float shift = side * d.detune * static_cast<float> (in.w) * 0.05f;
-                rowsOf (d.cycle, rows, 0.0f, 1.0f - 0.03f * static_cast<float> (k));
-                const int sh = static_cast<int> (std::lround (std::min (std::fabs (shift), 6.0f)));   // a hairline is shifted by a few pixels at most, and stays inside
-                sb.curve (rows, n, ix + (shift > 0.0f ? sh : 0), iw - sh);
+                const float spread = side * (0.012f + 0.07f * d.detune);
+                rowsOf (d.cycle, rows, 0.0f, 1.0f + spread);
+                sb.curve (rows, n, ix, iw);
                 dt::paintLine (sb, x0, x1, st, 255);
                 sb.style (1.0f, false);
                 sb.stroke (T.curveBack * 0.45f, static_cast<uint32_t> (alpha));
@@ -184,6 +193,18 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         sb.fillGradient (mid, mid - amp * scale, mid, dt::a (d.colour, 70), dt::a (d.colour, 0));
         dt::glowLine (sb, x0, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
         sb.paintOff();
+        // the phases of the sub oscillator's voices: a dot per voice on the curve (the newest voice the brightest)
+        for (int v = 0; v < Data::kMaxHeads; ++v)
+            if (d.phases[v] >= 0.0f)
+            {
+                const float ph = std::min (1.0f, d.phases[v]);
+                const float fi = ph * static_cast<float> (n - 1);
+                const int i0 = std::min (n - 2, static_cast<int> (fi));
+                const float py = rows[i0] + (rows[i0 + 1] - rows[i0]) * (fi - static_cast<float> (i0)), pxx = x0 + ph * static_cast<float> (iw - 1);
+                sb.style (1.0f, false);
+                sb.disc (pxx, py, v == 0 ? 3.6f : 2.6f, dt::a (d.colour, v == 0 ? 255 : 160));
+                sb.disc (pxx, py, v == 0 ? 1.8f : 1.2f, dt::a (0xffffff, v == 0 ? 255 : 200));
+            }
         // the light: the main curve and the lit frames drawn into the bloom layer (a quarter of the size), blurred, added over the picture inside the display: one cheap pass for all the lines
         if (T.backGlow > 0.0f && theme::D().glow && mainFirst >= 0)
         {
@@ -253,6 +274,24 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             sb.style (1.0f, false);
             sb.rrect (static_cast<float> (g.x), static_cast<float> (g.y), static_cast<float> (g.right()), static_cast<float> (g.bottom()), T.rChip, dt::a (T.flow[2], 255), 1.4f);
         }
+        // the grains that sound (the real ones: where each reads and how far it has run; the window shape shows as the brightness)
+        for (int g = 0; g < std::min (d.numGrainsLive, static_cast<int> (Data::kMaxGrains)); ++g)
+        {
+            const float life = std::min (1.0f, std::max (0.0f, d.liveGrainLife[g]));
+            const float env = std::sin (kPi * life);
+            const float gx = x0 + std::min (1.0f, std::max (0.0f, d.liveGrainPos[g])) * static_cast<float> (iw - 1), hh = (bottom - top) * (0.16f + 0.30f * env);
+            sb.style (1.0f, true);
+            sb.line (gx, mid - hh, gx, mid + hh, 2.0f, dt::a (T.flow[2], static_cast<int> (70.0f + 185.0f * env)));
+        }
+        // the read heads: one line per voice (the newest voice the brightest)
+        for (int v = 0; v < Data::kMaxHeads; ++v)
+        {
+            if (d.heads[v] < 0.0f)
+                continue;
+            const float px = x0 + std::min (1.0f, d.heads[v]) * static_cast<float>(iw - 1);
+            sb.style (1.0f, false);
+            sb.line (px, top, px, bottom, v == 0 ? 1.6f : 1.1f, dt::a (0xffffff, v == 0 ? 255 : 150 - 12 * v));
+        }
         if (d.playhead >= 0.0f)
         {
             const float px = x0 + d.playhead * static_cast<float> (iw - 1);
@@ -274,6 +313,13 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     {
         const float size = 28.0f;
         sb.text (x0 + 0.5f * (static_cast<float> (iw) - sdf::textWidth (d.message, size)), sdf::baselineForCentre (0.5f * (top + bottom), size), size, d.message, dt::a (T.textDim, 255));
+        if (d.noiseHead >= 0.0f)   // a noise whose source is a sample: its read head along a thin line
+        {
+            const float ly = mid + 0.5f * size + 14.0f, hx = x0 + std::min (1.0f, d.noiseHead) * static_cast<float> (iw - 1);
+            sb.style (1.0f, true);
+            sb.line (x0, ly, x1, ly, 1.0f, dt::a (T.grid, 255));
+            sb.disc (hx, ly, 3.4f, dt::a (d.colour, 255));
+        }
     }
     sb.style (1.0f, false);
     sb.paintOff();

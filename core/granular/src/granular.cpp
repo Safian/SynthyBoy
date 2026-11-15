@@ -128,6 +128,26 @@ int GranularVoice::activeGrains() const noexcept
     return n;
 }
 
+int GranularVoice::snapshot (float* pos, float* life, int maxN) const noexcept
+{
+    int n = 0;
+    if (sample_ == nullptr || sample_->numFrames < 2)
+        return 0;
+    const double frames = static_cast<double> (sample_->numFrames);
+    for (const Grain& g : grains_)
+    {
+        if (n >= maxN)
+            break;
+        if (! g.active || g.delay > 0)
+            continue;
+        const double p = g.pos / frames;
+        pos[n] = static_cast<float> (p < 0.0 ? 0.0 : (p > 1.0 ? 1.0 : p));
+        life[n] = static_cast<float> (g.age) / static_cast<float> (g.length > 0 ? g.length : 1);
+        ++n;
+    }
+    return n;
+}
+
 float GranularVoice::random01() noexcept
 {
     rng_ ^= rng_ << 13;

@@ -98,6 +98,12 @@ public:
     int multisampleZone (int osc) const noexcept { return lib[osc].lastZone(); }
     int multisampleKey (int osc) const noexcept { return lib[osc].lastKey(); }
     float sampleHead (int osc) const noexcept { return lib[osc].sampleHead(); }
+    /** The read-outs of the display for this voice (called by the audio thread at the end of a block): the read position of oscillator osc (sample, multisample, granular play head; -1 none), the
+        grains of its first cloud, the phase of the sub oscillator (0 .. 1) and the read head of the noise when its source is a sample (-1 otherwise). */
+    float readPosition (int osc) const noexcept { return lib[osc].readPosition(); }
+    int readGrains (int osc, float* pos, float* life, int maxN) const noexcept { return lib[osc].readGrains (pos, life, maxN); }
+    float subPhase() const noexcept { return sub.firstPhase(); }
+    float noisePosition() const noexcept { return noiseUseSample ? noiseSv.playheadFraction() : -1.0f; }
 
     bool isActive() const noexcept { return active; }
     bool isReleased() const noexcept { return released; }

@@ -37,6 +37,28 @@ int main()
     l.touchDown (r2.x + 20, r2.y + 20, 400.0);
     c = l.touchUp (r2.x + 20, r2.y + 20);
     check (c.kind == ChangeKind::Index && c.index == 17, "after scrolling the tap selects the row under the finger (17)");
+    // the scroll zone: the thumb is dragged (absolute: it follows the finger), the track pages, a touch there selects nothing
+    {
+        l.touchDown (500, 300, 450.0); l.touchMove (500, 3000); l.touchUp (500, 3000);   // the top
+        check (l.firstRow() == 0 && l.scrolls() && l.zoneRect().w >= 44, "scroll zone: 44 px wide, the list scrolls");
+        Rect th = l.thumbRect();
+        const int gx = th.x + th.w / 2, gy = th.y + th.h / 2;
+        l.touchDown (gx, gy, 460.0);
+        l.touchMove (gx, gy + 20);
+        const int mid = l.firstRow();
+        check (mid > 0, "scroll zone: dragging the thumb scrolls (first row " + std::to_string (mid) + ")");
+        l.touchMove (gx, 5000);
+        check (l.firstRow() == 15, "scroll zone: dragged to the end of the track: the last window");
+        check (! l.touchUp (gx, 5000), "scroll zone: a drag of the thumb selects nothing");
+        l.touchMove (gx, gy);
+        th = l.thumbRect();
+        l.touchDown (gx, l.zoneRect().y + 4, 470.0);   // the track above the thumb: a page up
+        check (l.firstRow() == 15 - (l.visibleRows() - 1) && ! l.touchUp (gx, l.zoneRect().y + 4), "scroll zone: a touch on the track above the thumb pages up by a window less one row");
+        l.touchDown (gx, l.zoneRect().bottom() - 4, 480.0);
+        check (l.firstRow() == 15 && ! l.touchUp (gx, l.zoneRect().bottom() - 4), "scroll zone: a touch on the track below the thumb pages down");
+        const Rect row = l.rowRect (l.firstRow());
+        check (row.right() <= l.zoneRect().x, "scroll zone: the rows end where the zone starts");
+    }
     // the backdrop
     l.touchDown (50, 50, 500.0);
     c = l.touchUp (50, 50);

@@ -56,8 +56,6 @@ public:
             if (shown_[i])
                 kids_[i]->draw (sb);
         drawExtra (pen);
-        if (qIndex_ > 0)
-            pen.qBadge (rect_, qIndex_);   // a composite as the member of a Q group shows the index of its own
     }
     Change touchDown (int x, int y, double nowMs) override
     {
@@ -145,7 +143,7 @@ public:
         applyVariant();
     }
     void setShort (bool s) { short_ = s; applyVariant(); layout(); }
-    /** The vertical variant (the full screen): the fields one under the other, each kRowH high, the toggle in a row of its own under CRS (short: OCT and CRS only). */
+    /** The vertical variant (the full screen): one column of five equal rows (OCT, SEM, FIN, CRS, TRACK) that fill the height (short: OCT and CRS only). */
     void setVertical (bool v) { vertical_ = v; layout(); }
     bool isVertical() const noexcept { return vertical_; }
     /** Only CRS (the full screen of the sub oscillator: its OCT is in the top band); vertical variant only. */
@@ -156,7 +154,7 @@ public:
     Size minSize() const override
     {
         if (vertical_)
-            return crsOnly_ ? Size { 80, kRowH } : short_ ? Size { 80, 2 * kRowH + kGap } : Size { 2 * 80 + kGap, 3 * kRowH + 2 * kGap };
+            return crsOnly_ ? Size { 80, kRowH } : short_ ? Size { 80, 2 * kRowH + kGap } : Size { 2 * 80 + kGap, 5 * kRowH + 4 * kGap };
         return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 72 + 4 * kGap, 56 };
     }
 
@@ -180,12 +178,10 @@ protected:
             }
             else
             {
-                // a 2 x 2 grid (OCT SEM / FIN CRS) and the toggle under it: a short number needs a short field, not the width of the column
-                const int cw = std::max (0, (rect_.w - kGap) / 2);
-                auto cell = [&] (int rowIdx, int col) { const Rect q = row (rowIdx); return Rect { q.x + col * (cw + kGap), q.y, col == 0 ? cw : q.w - cw - kGap, q.h }; };
-                oct.place (cell (0, 0)); sem.place (cell (0, 1)); fin.place (cell (1, 0)); crs.place (cell (1, 1));
-                const Rect t = row (2);
-                track.place ({ t.x, t.y, std::min (72, t.w), t.h });
+                // ONE column of five equal rows (OCT, SEM, FIN, CRS, TRACK) that fill the height of the block: the row height follows the block, never below kRowH
+                const int H = std::max (5 * kRowH, rect_.h - 4 * kGap);   // the height of the five rows together
+                auto cell = [&] (int i) { const int y0 = rect_.y + i * H / 5 + i * kGap, y1 = rect_.y + (i + 1) * H / 5 + i * kGap; return Rect { rect_.x, y0, rect_.w, std::max (0, std::min (y1, rect_.bottom()) - y0) }; };
+                oct.place (cell (0)); sem.place (cell (1)); fin.place (cell (2)); crs.place (cell (3)); track.place (cell (4));
             }
             return;
         }
@@ -404,32 +400,35 @@ public:
     bool typeOff() const noexcept { return typeOff_; }
     bool hasVar() const noexcept { return hasVar_; }
     bool mirrored() const noexcept { return mirrored_; }
-    Size minSize() const override { return { 100 + kGap + Stepper::kMinW + (hasVar_ ? kGap + 80 : 0), 72 }; }
+    Size minSize() const override { return { 100 + kGap + Stepper::kMinW + (hasVar_ ? kGap + kVarW : 0), 72 }; }
+    static constexpr int kStepperMaxW = 300, kVarW = 64;   // the name field and the VAR knob are as wide as their content needs, the slot is centred in the room it gets
 
 protected:
     void syncKids() override { amount.setEnabled (enabled_ && ! typeOff_); var.setEnabled (enabled_ && ! typeOff_); type.setEnabled (enabled_); }
     void layout() override
     {
-        // order of the pieces from the left: knob, stepper, var; mirrored: var, stepper, knob
+        // order of the pieces from the left: knob, stepper, var; mirrored: var, stepper, knob. The stepper has a largest width and the VAR knob a small one: the slot is centred in its rectangle
+        const int contentW = 100 + kGap + kStepperMaxW + (hasVar_ ? kGap + kVarW : 0);
+        const Rect area = rect_.w > contentW ? Rect { rect_.x + (rect_.w - contentW) / 2, rect_.y, contentW, rect_.h } : rect_;
         Rect r[3];
-        const int fixed[3] = { 100, 0, 80 }, weight[3] = { 0, 1, 0 };
+        const int fixed[3] = { 100, 0, kVarW }, weight[3] = { 0, 1, 0 };
         const int n = hasVar_ ? 3 : 2;
-        layoutRow (rect_, fixed, weight, n, kGap, r);
+        layoutRow (area, fixed, weight, n, kGap, r);
         Rect kr = r[0], sr = r[1], vr = hasVar_ ? r[2] : Rect {};
         if (mirrored_)
         {
             // the same pieces, from the right: build from the mirrored positions
             Rect m[3];
-            const int mf[3] = { 80, 0, 100 }, mw[3] = { 0, 1, 0 };
+            const int mf[3] = { kVarW, 0, 100 }, mw[3] = { 0, 1, 0 };
             if (hasVar_)
             {
-                layoutRow (rect_, mf, mw, 3, kGap, m);
+                layoutRow (area, mf, mw, 3, kGap, m);
                 vr = m[0]; sr = m[1]; kr = m[2];
             }
             else
             {
                 const int f2[2] = { 0, 100 }, w2[2] = { 1, 0 };
-                layoutRow (rect_, f2, w2, 2, kGap, m);
+                layoutRow (area, f2, w2, 2, kGap, m);
                 sr = m[0]; kr = m[1];
             }
         }
@@ -437,7 +436,7 @@ protected:
         amount.place (kr);
         type.place ({ sr.x, sr.y + (sr.h - sh) / 2, sr.w, sh });
         if (hasVar_)
-            var.place (vr);
+            var.place ({ vr.x, vr.y + std::max (0, (vr.h - 64) / 2), vr.w, std::min (vr.h, 64) });
         syncKids();
     }
     bool mirrored_, typeOff_ = false, hasVar_ = false;

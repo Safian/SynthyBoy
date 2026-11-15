@@ -162,9 +162,21 @@ inline bool depthArc (const ModInput& m, double v, double& from, double& to) noe
     to = std::clamp (b, 0.0, 1.0);
     return true;
 }
-/** The tab and the rectangle that starts a depth gesture. */
-inline Rect tabRect (const Rect& r) noexcept { return { r.x + 3, r.y + 3, 14, 8 }; }
-inline Rect tabHitRect (const Rect& r) noexcept { return { r.x, r.y, std::min (r.w, 32), std::min (r.h, 28) }; }
+/** The name on the tab: the selected source when it is among the entries, else the first entry (the source that modulates the control, so the tab always says WHAT it is). */
+inline const char* tabName (const ModInput& m) noexcept
+{
+    if (const ModEntry* e = m.selected())
+        return e->name;
+    return m.numMods > 0 ? m.mods[0].name : "";
+}
+/** The tab (a labelled chip with the name of the source at the top left of the control) and the rectangle that starts a depth gesture: 56 x 52 pixels where the control allows it. */
+inline Rect tabRect (const Rect& r, const char* name = "") noexcept
+{
+    const float tw = name[0] != '\0' ? sdf::textWidth (name, 11.0f) : 24.0f;
+    const int w = std::clamp (static_cast<int> (std::ceil (tw)) + 10, 36, 56);
+    return { r.x + 2, r.y + 2, std::min (w, std::max (0, r.w - 4)), std::min (18, std::max (0, r.h - 4)) };
+}
+inline Rect tabHitRect (const Rect& r) noexcept { return { r.x, r.y, std::min (r.w, 56), std::min (r.h, 52) }; }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 /** The drawing pen of a component: scene ops with the colours of a disabled component dimmed. The component draws through it and keeps inside its rectangle by construction (tests check). */
@@ -325,23 +337,38 @@ public:
         disc (cx + 10.0f, cy - 7.0f, 2.5f, col);
         disc (cx + 10.0f, cy + 7.0f, 2.5f, col);
     }
-    /** The modulation tab at the top left of `r` for a tab state (nothing when absent), in the colour of the selected source (grey: the keyline colour). */
-    void modTab (const Rect& r, TabState st, uint32_t srcColour)
+    /** The modulation tab at the top left of `r` for a tab state (nothing when absent): a chip with the name of the source, in the colour of the selected source (grey: the keyline colour). */
+    void modTab (const Rect& r, TabState st, uint32_t srcColour, const char* name = "")
     {
         if (st == TabState::Absent)
             return;
-        const Rect t = tabRect (r);
+        const Rect t = tabRect (r, name);
+        if (t.w < 12 || t.h < 10)
+            return;
+        const theme::Look& T = theme::L();
         if (st == TabState::Hollow)
-            rrect (t, 3.0f, c (colour::rgba (srcColour, 255)), 1.6f);
+            rrect (t, 4.0f, c (colour::rgba (srcColour, 255)), 1.6f);
         else
-            rrect (t, 3.0f, c (colour::rgba (st == TabState::Coloured ? srcColour : theme::L().keylineHi, 255)));
+            rrect (t, 4.0f, c (colour::rgba (st == TabState::Coloured ? srcColour : T.keylineHi, 255)));
+        const uint32_t tc = st == TabState::Coloured ? T.onBright : (st == TabState::Hollow ? srcColour : T.textDim);
+        textCentered ({ t.x + 2, t.y, std::max (0, t.w - 4), t.h }, name, 11.0f, c (colour::rgba (tc, 255)), 9.0f);
     }
-    /** The small index badge of a Q-Link group member (1 .. 4) in the top right corner of `r`. */
+    /** The small index badge (1 .. 4) of a Q-Link group member inside the top right corner of its rectangle: only for a member that has another member right above it (a column of fields, the second row of a pair), where there is no room on the frame. */
     void qBadge (const Rect& r, int index)
     {
         if (index < 1 || index > 4 || r.w < 24 || r.h < 24)
             return;
-        const Rect b { r.right() - 18, r.y + 2, 16, 18 };
+        qChip ({ r.right() - 20, r.y + 3, 16, 18 }, index);
+    }
+    /** The index of a member as a tab on the top edge of the group's frame, above the member (its centre `cx`, the edge `edgeY` of the frame): the tab sits on the frame line, over nothing. */
+    void qTab (float cx, int edgeY, int index)
+    {
+        if (index < 1 || index > 4)
+            return;
+        qChip ({ static_cast<int> (std::lround (cx)) - 9, std::max (0, edgeY - 15), 18, 17 }, index);
+    }
+    void qChip (const Rect& b, int index)
+    {
         rrect (b, 5.0f, c (colour::rgba (theme::L().q, 255)));
         char d[2] = { static_cast<char> ('0' + index), '\0' };
         textCentered (b, d, 13.0f, c (colour::rgba (theme::L().onBright, 255)), 8.0f);
@@ -428,9 +455,7 @@ public:
     virtual void draw (gpu::SceneBuilder& sb) const
     {
         Pen pen (sb, enabled_);
-        drawBody (pen);
-        if (qIndex_ > 0)
-            pen.qBadge (rect_, qIndex_);
+        drawBody (pen);   // the index of a Q group member is drawn by its group (QGroup::draw), on the frame
     }
 
     // ---- the output: the changes

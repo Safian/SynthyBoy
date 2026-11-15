@@ -117,6 +117,11 @@ private:
     std::atomic<int> qualityTier { 2 };
     std::atomic<bool> ultraRender { false };
     std::atomic<float> liveSampleHead[3];         // the read head of the sample oscillators (the voice that is heard), -1 = none
+    std::atomic<float> liveVoicePos[3][LiveValues::kReadVoices];   // the read positions of the newest voices (newest first), -1 = none
+    std::atomic<int> liveNumGrains[3];
+    std::atomic<float> liveGrainPos[3][LiveValues::kReadGrains], liveGrainLife[3][LiveValues::kReadGrains];
+    std::atomic<float> liveSubPhase[LiveValues::kReadVoices];
+    std::atomic<float> liveNoisePos;
     std::atomic<int> multiZone[3], multiKey[3];   // the zone and key of the last multisample note (read-out)
     std::atomic<uint32_t> blockCounter { 0 };
     // the live read-out (written at the end of a block, read by the display)

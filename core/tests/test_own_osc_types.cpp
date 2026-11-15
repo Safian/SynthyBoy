@@ -219,6 +219,93 @@ TEST (own_osc_sample_type_read_head_is_live)
     CHECK (live.sampleHead[0] < 0.0f);              // a wavetable oscillator has no read head
 }
 
+// the display's read-outs of the voices: the sample type reports the read head of every one of the newest voices (up to 8), -1 for the others; the sub oscillator reports its phase per voice
+TEST (own_osc_read_outs_per_voice_and_the_sub_phase)
+{
+    Rig r (true, "osc1.type", 1.0f);
+    set (*r.e, "osc1.sample.loop_mode", 0.0f);
+    set (*r.e, "sub.on", 1.0f);
+    set (*r.e, "sub.level", 100.0f);
+    LiveValues live;
+    std::vector<float> l (256), rr (256);
+    Event on = sbtest::noteOn (0, 69, 1.0f);
+    r.e->process (&on, 1, l.data(), rr.data(), 256);
+    for (int i = 0; i < 10; ++i)
+        r.e->process (nullptr, 0, l.data(), rr.data(), 256);
+    Event on2 = sbtest::noteOn (0, 72, 1.0f);
+    r.e->process (&on2, 1, l.data(), rr.data(), 256);
+    CHECK (r.e->copyReadout (live));
+    std::printf("    voices: newest %.4f, older %.4f, third %.4f; sub phase %.3f %.3f\n", live.voicePos[0][0], live.voicePos[0][1], live.voicePos[0][2], live.subPhase[0], live.subPhase[1]);
+    CHECK (live.voicePos[0][0] >= 0.0f && live.voicePos[0][1] > live.voicePos[0][0] + 0.02f);   // the older voice is further along the file
+    CHECK (live.voicePos[0][2] < 0.0f && live.voicePos[0][7] < 0.0f);                              // no third voice
+    CHECK (live.voicePos[1][0] < 0.0f && live.voicePos[2][0] < 0.0f);                              // the other oscillators are not of a sample type
+    CHECK (live.subPhase[0] >= 0.0f && live.subPhase[0] <= 1.0f && live.subPhase[1] >= 0.0f && live.subPhase[2] < 0.0f);
+    CHECK (live.noisePos < 0.0f);
+    const float ph0 = live.subPhase[0];
+    r.e->process (nullptr, 0, l.data(), rr.data(), 256);
+    CHECK (r.e->copyReadout (live));
+    CHECK (std::fabs (live.subPhase[0] - ph0) > 1.0e-4f);   // the phase moves with the block
+}
+
+// the granular oscillator reports where its grains read and how far they have run (up to 32), and the scan position of the cloud
+TEST (own_osc_granular_read_out_has_the_grains)
+{
+    Rig r (true, "osc1.type", 2.0f);
+    set (*r.e, "osc1.gran.density", 80.0f);
+    LiveValues live;
+    std::vector<float> l (256), rr (256);
+    CHECK (r.e->copyReadout (live));
+    CHECK (live.numGrains[0] == 0);
+    Event on = sbtest::noteOn (0, 69, 1.0f);
+    r.e->process (&on, 1, l.data(), rr.data(), 256);
+    for (int i = 0; i < 30; ++i)
+        r.e->process (nullptr, 0, l.data(), rr.data(), 256);
+    CHECK (r.e->copyReadout (live));
+    std::printf ("    granular: %d grains, first at %.3f life %.3f, scan %.3f\n", live.numGrains[0], live.grainPos[0][0], live.grainLife[0][0], live.voicePos[0][0]);
+    CHECK (live.numGrains[0] >= 2 && live.numGrains[0] <= LiveValues::kReadGrains);
+    bool ok = true;
+    for (int g = 0; g < live.numGrains[0]; ++g)
+        ok = ok && live.grainPos[0][g] >= 0.0f && live.grainPos[0][g] <= 1.0f && live.grainLife[0][g] >= 0.0f && live.grainLife[0][g] <= 1.0f;
+    CHECK (ok);
+    CHECK (live.voicePos[0][0] >= 0.0f && live.voicePos[0][0] <= 1.0f);
+    CHECK (live.numGrains[1] == 0 && live.numGrains[2] == 0);
+}
+
+// the multisample oscillator reports where the zone's file is being read, per voice
+TEST (own_osc_multisample_read_out_has_the_position)
+{
+    MemoryContentStore store;
+    store.add ("o", "inst/p.wav", sineWav (440.0, 0.8, 44100, 2.0));
+    const std::string sfz = "<region> sample=p.wav lokey=0 hikey=127 pitch_keycenter=69 loop_mode=one_shot\n";
+    store.add ("o", "inst/p.sfz", std::vector<uint8_t> (sfz.begin(), sfz.end()));
+    StateContent c;
+    ContentFileRef i;
+    i.pack = "o";
+    i.file = "inst/p.sfz";
+    attachInstrument (c, 1, i, 1);
+    auto e = createOwnEngine();
+    e->setParam (kParamMasterPolyphony, 8.0f);
+    e->prepare (kSr, 256, qualityForTier (Tier::high));
+    set (*e, "filter1.on", 0.0f);
+    set (*e, "master.volume", 0.0f);
+    set (*e, "env1.attack", 0.0f);
+    set (*e, "osc1.level", 100.0f);
+    set (*e, "osc1.type", 4.0f);
+    e->setContentStore (&store);
+    e->setContent (c);
+    LiveValues live;
+    std::vector<float> l (256), rr (256);
+    Event on = sbtest::noteOn (0, 69, 1.0f);
+    e->process (&on, 1, l.data(), rr.data(), 256);
+    CHECK (e->copyReadout (live));
+    const float first = live.voicePos[0][0];
+    for (int k = 0; k < 40; ++k)
+        e->process (nullptr, 0, l.data(), rr.data(), 256);
+    CHECK (e->copyReadout (live));
+    std::printf ("    multisample position %.4f -> %.4f\n", first, live.voicePos[0][0]);
+    CHECK (first >= 0.0f && first < 0.05f && live.voicePos[0][0] > first + 0.08f && live.voicePos[0][0] <= 1.0f);
+}
+
 // S4: granular and spectral types play the same sample at the same pitch and at a level in the range of the Sample type
 TEST (own_osc_granular_and_spectral_types_play_the_sample)
 {

@@ -816,6 +816,14 @@ private:
                 {
                     auto* k = static_cast<ui::Knob*> (it.c);
                     k->state.value = k->state.modValue = normOf (it.param, plain);
+                    if (it.c == &compact_.basic.pan || it.c == &compact_.basic.level)   // the compact view has room for the value under the two knobs
+                    {
+                        const int whole = static_cast<int> (std::lround (plain));
+                        if (it.c == &compact_.basic.pan)
+                            std::snprintf (k->state.valueText, sizeof k->state.valueText, whole == 0 ? "C" : (whole < 0 ? "L %d" : "R %d"), std::abs (whole));
+                        else
+                            std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.1f", static_cast<double> (plain));
+                    }
                     break;
                 }
                 case T::Number: case T::NumberRead:

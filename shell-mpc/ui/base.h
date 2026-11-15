@@ -23,6 +23,7 @@ public:
     struct State : ModInput
     {
         char label[24] = {};
+        char valueText[16] = {};   // optional: the value written under the label (the owner formats it)
         double value = 0.0, modValue = 0.0, defaultValue = 0.0;
         bool bipolar = false, small = false;
     };
@@ -37,14 +38,15 @@ public:
     Size minSize() const override { return state.small ? Size { 72, 56 } : Size { 100, 72 }; }
 
     /** The geometry of the dial inside the rectangle (public so that the tests can find the markers). */
-    struct Geom { float cx, cy, radius, stroke, track; Rect labelBox; float labelSize; };
+    struct Geom { float cx, cy, radius, stroke, track; Rect labelBox, valueBox; float labelSize; };
     Geom geom() const noexcept
     {
         const theme::Look& T = theme::L();
         Geom g {};
         g.labelSize = state.label[0] != '\0' ? Pen::fitSize (state.label, static_cast<float> (rect_.w - 4), 20.0f, T.fLabel, T.fMin) : 0.0f;
         const int labelH = g.labelSize > 0.0f ? static_cast<int> (std::ceil (g.labelSize * 0.89f)) + 7 : 0;
-        const int dialH = rect_.h - labelH;
+        const int valueH = state.valueText[0] != '\0' ? 20 : 0;
+        const int dialH = rect_.h - labelH - valueH;
         float d = static_cast<float> (std::min (rect_.w - 8, dialH - 8));
         if (state.small)
             d *= 0.8f;
@@ -55,7 +57,8 @@ public:
         g.radius = d * 0.5f - g.stroke * 0.5f - 3.0f;
         g.cx = static_cast<float> (rect_.x) + static_cast<float> (rect_.w) * 0.5f;
         g.cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f;
-        g.labelBox = { rect_.x + 2, rect_.bottom() - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) };
+        g.labelBox = { rect_.x + 2, rect_.bottom() - valueH - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) };
+        g.valueBox = { rect_.x + 2, rect_.bottom() - valueH, rect_.w - 4, valueH };
         return g;
     }
     static float angleOf (double v) noexcept { return kStartAngle + static_cast<float> (std::clamp (v, 0.0, 1.0)) * kSweep; }
@@ -116,9 +119,11 @@ protected:
         p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (T.text, 255));
         if (state.small)
             p.disc (cx, cy, std::max (2.0f, R * 0.18f), p.c (T.flow[2], 255));
-        p.modTab (rect_, tab(), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline);
+        p.modTab (rect_, tab(), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline, tabName (state));
         if (g.labelSize > 0.0f)
             p.textCentered (g.labelBox, state.label, g.labelSize, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+        if (g.valueBox.h > 0)
+            p.textCentered (g.valueBox, state.valueText, T.fLabel, p.c (T.text, 255), T.fMin);
     }
 
     Change onDown (int x, int y, double now) override
@@ -178,7 +183,7 @@ private:
 
 // ===============================================================================================================================================================
 /** 2. NumberField. In: a label (<= 8 characters) OR an icon (phase, rand), value, min, max, step, format, the default value, notSet (drawn as "-"), readOnly (drawn normally, no reaction;
-    the frame number). Format: IntSigned "+2" / "-3" / "0", Decimal2 "-64.00", Degrees "180^" (the glyph ^ is the degree sign), IntPlain "17".
+    the frame number). Format: IntSigned "+2" / "-3" / "0", Decimal2 "-64.00", Degrees "180°" (UTF-8 degree sign, which the font has), IntPlain "17".
     Out: Index changes: `index` = the number of steps from min (0 .. (max - min) / step), `value` = min + index * step. Gestures: a vertical drag (up = more; pxPerStep pixels per
     step, from the value at touch down, after the finger left the tap square), turn (delta) = delta steps (rounded), a double tap = the default. */
 class NumberField : public Component
@@ -216,7 +221,7 @@ public:
         {
             case Format::IntSigned: { const long n = std::lround (v); if (n == 0) std::snprintf (out, 16, "0"); else std::snprintf (out, 16, "%+ld", n); break; }
             case Format::Decimal2: std::snprintf (out, 16, "%.2f", v == 0.0 ? 0.0 : v); break;
-            case Format::Degrees: std::snprintf (out, 16, "%ld^", std::lround (v)); break;
+            case Format::Degrees: std::snprintf (out, 16, "%ld\xc2\xb0", std::lround (v)); break;
             case Format::IntPlain: std::snprintf (out, 16, "%ld", std::lround (v)); break;
         }
     }
@@ -254,7 +259,7 @@ protected:
         formatValue (state, t);
         p.textCentered (valueBox, t, T.fValue, p.c (T.text, 255), T.fMin);
         // the modulation: the tab, and an underline bar instead of an arc: the depth segment of the selected source around the position of the value on the bar
-        p.modTab (rect_, tabState (state), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline);
+        p.modTab (rect_, tabState (state), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline, tabName (state));
         double from, to;
         const double span = state.max - state.min, pos = span > 0.0 ? (state.value - state.min) / span : 0.0;
         if (depthArc (state, pos, from, to))
@@ -380,8 +385,8 @@ protected:
         const bool canPrev = state.count > 1 && (state.wrap || state.index > 0), canNext = state.count > 1 && (state.wrap || state.index < state.count - 1);
         const float cy = static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f;
         p.style (1.0f, true);
-        p.chevron (static_cast<float> (b.x + kZone / 2), cy, 12.0f, 0, 2.0f, p.c (T.flow[0], canPrev ? 255 : 60));
-        p.chevron (static_cast<float> (b.right() - kZone / 2), cy, 12.0f, 1, 2.0f, p.c (T.flow[3], canNext ? 255 : 60));
+        p.chevron (static_cast<float> (b.x + kZone / 2), cy, 12.0f, 0, 2.0f, p.c (T.textDim, canPrev ? 255 : 60));   // one colour for both arrows: the colour of a label (the gradient means position and value only)
+        p.chevron (static_cast<float> (b.right() - kZone / 2), cy, 12.0f, 1, 2.0f, p.c (T.textDim, canNext ? 255 : 60));
         p.plain();
         p.textCentered ({ b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) }, state.text, T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
     }
@@ -455,8 +460,8 @@ protected:
         p.textCentered ({ b.x + 2, b.y + 2, std::max (0, b.w - colW - 2), std::max (0, b.h - 4) }, t, T.fValue, p.c (T.text, 255), T.fMin);
         const float cx = static_cast<float> (b.right() - colW / 2);
         p.style (1.0f, true);
-        p.chevron (cx, static_cast<float> (b.y + b.h / 4), 12.0f, 2, 2.0f, p.c (T.flow[0], state.value < state.max ? 255 : 60));
-        p.chevron (cx, static_cast<float> (b.y + b.h * 3 / 4), 12.0f, 3, 2.0f, p.c (T.flow[3], state.value > state.min ? 255 : 60));
+        p.chevron (cx, static_cast<float> (b.y + b.h / 4), 12.0f, 2, 2.0f, p.c (T.textDim, state.value < state.max ? 255 : 60));
+        p.chevron (cx, static_cast<float> (b.y + b.h * 3 / 4), 12.0f, 3, 2.0f, p.c (T.textDim, state.value > state.min ? 255 : 60));
         p.plain();
         p.rect (b.right() - colW, b.y + b.h / 2, b.right() - 6, b.y + b.h / 2 + 1, p.c (T.keyline, 255));
     }
@@ -504,9 +509,16 @@ protected:
         const theme::Look& T = theme::L();
         const Rect b = rect_.inset (4);
         p.control (b, qFrame_);
-        const int labelH = state.label[0] ? 18 : 0;
-        const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f, cy = static_cast<float> (b.y) + static_cast<float> (b.h - labelH) * 0.5f;
-        const float s = static_cast<float> (std::min (b.w, b.h - labelH)) * 0.32f;
+        const bool wide = state.label[0] && b.w >= 2 * b.h;   // a wide row (the tuning column): the icon at the left, the label beside it
+        const int labelH = state.label[0] && ! wide ? 18 : 0;
+        float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f, cy = static_cast<float> (b.y) + static_cast<float> (b.h - labelH) * 0.5f;
+        const float s = static_cast<float> (std::min (wide ? b.h : b.w, b.h - labelH)) * 0.32f;
+        if (wide)
+        {
+            const int iconW = b.h;
+            cx = static_cast<float> (b.x) + static_cast<float> (iconW) * 0.5f + 8.0f;
+            p.textLeft ({ b.x + iconW + 14, b.y + 2, std::max (0, b.w - iconW - 20), std::max (0, b.h - 4) }, state.label, T.fValue - 4.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+        }
         if (labelH > 0)
             p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, state.label, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (T.textFaint, 255);
@@ -578,7 +590,7 @@ protected:
         const uint32_t col = p.c (T.flow[0], 255);
         p.style (1.0f, true);
         if (state.icon == Icon::Down)
-            p.chevron (cx, cy, 12.0f, 3, 2.2f, col);
+            p.chevron (cx, cy, 12.0f, 3, 2.2f, p.c (T.textDim, 255));
         else if (state.icon == Icon::Expand)
             p.iconExpand (cx, cy, col);
         else

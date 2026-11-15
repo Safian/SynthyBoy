@@ -138,6 +138,10 @@ public:
     int lastKey() const noexcept { return lastKey_; }
     /** The read head of the first unison player of a sample oscillator as a fraction (0 .. 1) of the file; -1 when nothing plays (the read-out of the display). Written by the audio thread. */
     float sampleHead() const noexcept { return headFrac_; }
+    /** The read-outs of the display, read by the audio thread at the end of a block (the voice state is the audio thread's): where this oscillator reads its file (sample type: the first player; multisample:
+        the first layer that plays; granular: the play head of the first cloud; -1 = nothing plays), the grains of the first cloud (fixed size copy) and whether the oscillator is of that type. */
+    float readPosition() const noexcept;
+    int readGrains (float* pos, float* life, int maxN) const noexcept;
 
 private:
     struct Unison

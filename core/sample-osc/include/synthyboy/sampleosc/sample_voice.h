@@ -5,6 +5,7 @@
 
 #include "synthyboy/sampleosc/sample_types.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace synthyboy
@@ -102,6 +103,8 @@ public:
     bool isReleasing() const noexcept { return stopping_; }
     int getKey() const noexcept { return midiKey_; }
     double getPlayheadPosition() const noexcept { return playhead_; }
+    /** The read head as a fraction (0 .. 1) of the file; -1 when the voice has no sample or does not play (the read-out of the display). */
+    float playheadFraction() const noexcept { return active_ && sample_ != nullptr && sample_->numFrames > 1 ? static_cast<float> (std::min (1.0, std::max (0.0, playhead_ / static_cast<double> (sample_->numFrames)))) : -1.0f; }
     double getPitchRatio() const noexcept { return pitchRatio_; }
 
     /**

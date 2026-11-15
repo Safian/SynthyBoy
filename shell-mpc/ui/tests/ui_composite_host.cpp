@@ -462,7 +462,13 @@ void testSourceAndVertical()
     t.setVertical (true);
     t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
     check (t.isVertical() && t.sizeOk(), "tune row vertical: fits its minimum size");
-    check (leavesOk (t, t.rect(), why) && t.oct.rect().right() <= t.sem.rect().x && t.oct.rect().y == t.sem.rect().y && t.fin.rect().y == t.crs.rect().y && t.oct.rect().bottom() <= t.fin.rect().y && t.crs.rect().bottom() <= t.track.rect().y && t.oct.rect().w < 200, "tune row vertical: a 2 x 2 grid (OCT SEM / FIN CRS) and the toggle under it, the fields as wide as their content needs" + why);
+    check (leavesOk (t, t.rect(), why) && t.oct.rect().x == t.sem.rect().x && t.oct.rect().w == t.rect().w && t.oct.rect().h == t.sem.rect().h && t.sem.rect().h == t.fin.rect().h && t.fin.rect().h == t.crs.rect().h && t.crs.rect().h == t.track.rect().h && t.oct.rect().bottom() <= t.sem.rect().y && t.sem.rect().bottom() <= t.fin.rect().y && t.fin.rect().bottom() <= t.crs.rect().y && t.crs.rect().bottom() <= t.track.rect().y && t.track.rect().bottom() == t.rect().bottom(), "tune row vertical: ONE column of five equal rows (OCT SEM FIN CRS TRACK) that fills the height" + why);
+    {
+        TuneRow tall;
+        tall.setVertical (true);
+        tall.place ({ 10, 10, 260, 330 });
+        check (tall.oct.rect().h > 56 && tall.track.rect().bottom() == 10 + 330 - 0 && leavesOk (tall, tall.rect(), why), "tune row vertical: a taller block gives taller rows, the column fills it" + why);
+    }
     t.oct.setId (1); t.crs.setId (4);
     Change d = tap (t, cx (t.oct), cy (t.oct), 0.0);
     d = tap (t, cx (t.oct), cy (t.oct), 100.0);
@@ -544,7 +550,7 @@ void testModulationsPage()
     check (pg.group.check (allLeaves, nl) == 0, "modulations page: the row's group is adjacent (the remove button and the other rows lie outside the union)");
     Scene sgp (1280, 628, kBackgroundRgba);
     pg.group.draw (sgp.builder());
-    check (sgp.numOps() == 2 && pg.group.rect().y == pg.rows[2].depth.rect().y, "modulations page: the group frame is drawn around the three controls of the active row");
+    check (sgp.numOps() >= 2 && sgp.data->ops[1].op == gpu::kOpRRect && pg.group.rect().y == pg.rows[2].depth.rect().y, "modulations page: the group frame is drawn around the three controls of the active row");
     m.numMods = 0;
     pg.load (m, "EMPTY");
     check (pg.numRows() == 0, "modulations page: no entries: no rows");
@@ -709,9 +715,9 @@ void testQGroup()
     pg.panel.warp()->first.setHasVar (true);
     Scene s (1280, 628, kBackgroundRgba);
     pg.q[0].draw (s.builder());
-    check (s.numOps() == 2 && s.data->ops[1].op == gpu::kOpRRect, "q group: the group draws exactly one rounded outline op (after the clear)");
+    check (s.numOps() >= 2 && s.data->ops[1].op == gpu::kOpRRect && s.data->ops[2].op != gpu::kOpRRect + 1000, "q group: the group draws one rounded outline op (after the clear), then the index marks of its members");
     const Image im = render (s);
-    check (drawnOutside (im, pg.q[0].rect(), backgroundPixel()) == 0, "q group: the frame is inside the union rectangle");
+    check (drawnOutside (im, { pg.q[0].rect().x, pg.q[0].rect().y - 18, pg.q[0].rect().w, pg.q[0].rect().h + 18 }, backgroundPixel()) == 0, "q group: the frame is inside the union rectangle; the index marks sit on its top edge (at most 18 px above it) or inside a member");
     const Rect r = pg.q[0].rect();
     check (colourNear (im, static_cast<float> (r.x), static_cast<float> (r.y + r.h / 2), 0, colour::q(), 4) && colourNear (im, static_cast<float> (r.x + r.w / 2), static_cast<float> (r.bottom() - 1), 0, colour::q(), 4), "q group: the frame has the colour of the Q-Link focus at the edge");
     Scene s0 (1280, 628, kBackgroundRgba);

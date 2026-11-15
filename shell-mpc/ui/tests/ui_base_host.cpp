@@ -147,7 +147,7 @@ void testNumberField()
     s.value = 0; NumberField::formatValue (s, t); check (std::string (t) == "0", "number field: integer with sign: 0 without a sign");
     s.format = NumberField::Format::Decimal2; s.value = -64; NumberField::formatValue (s, t); check (std::string (t) == "-64.00", "number field: two decimals: -64.00");
     s.value = 0.005; NumberField::formatValue (s, t); check (std::string (t) == "0.01" || std::string (t) == "0.00", "number field: two decimals: rounded");
-    s.format = NumberField::Format::Degrees; s.value = 180; NumberField::formatValue (s, t); check (std::string (t) == "180^", "number field: degrees: 180 and the degree glyph");
+    s.format = NumberField::Format::Degrees; s.value = 180; NumberField::formatValue (s, t); check (std::string (t) == "180\xc2\xb0", "number field: degrees: 180 and the degree sign (UTF-8, in the font)");
     s.format = NumberField::Format::IntPlain; s.value = 17; NumberField::formatValue (s, t); check (std::string (t) == "17", "number field: plain integer");
     s.notSet = true; NumberField::formatValue (s, t); check (std::string (t) == "-", "number field: not set: a dash");
     check (f.numSteps() == 8 && f.indexOf (-4) == 0 && f.indexOf (4) == 8 && f.indexOf (100) == 8, "number field: steps and index of a value (clamped)");
@@ -681,8 +681,8 @@ void testModulation()
         return k;
     };
     auto pic = [] (const Knob& k) { Scene s (160, 120, kBackgroundRgba); k.draw (s.builder()); return render (s); };
-    const Rect t = tabRect ({ 0, 0, 160, 120 });
-    const float tx = static_cast<float> (t.x + 7), ty = static_cast<float> (t.y + 4);
+    const Rect t = tabRect ({ 0, 0, 160, 120 }, "LFO 2");
+    const float tx = static_cast<float> (t.x + 3), ty = static_cast<float> (t.y + 9);   // inside the chip, left of its text
     {
         auto k = knobWith (none, 0.5);
         check (! colourNear (pic (*k), tx, ty, 1, colour::accent(), 8) && ! colourNear (pic (*k), tx, ty, 1, colour::rest(), 8), "knob tab: absent: nothing at the tab");
@@ -805,8 +805,8 @@ void testModulation()
     c = f.touchMove (15, 14 - 20);
     check (c.kind == ChangeKind::Depth && c.id == 4 && c.index == 7 && near (c.value, 0.7), "number field: a drag from the tab changes the depth { id 4, source 7, 0.7 }");
     f.touchUp (15, -6);
-    f.touchDown (60, 50, 100.0);
-    check (f.touchMove (60, 26).kind == ChangeKind::Index, "number field: a drag elsewhere changes the value");
+    f.touchDown (100, 55, 100.0);
+    check (f.touchMove (100, 31).kind == ChangeKind::Index, "number field: a drag elsewhere changes the value");
     f.touchUp (60, 26);
     f.touchDown (60, 50, 1000.0);
     check (f.tick (1700.0).kind == ChangeKind::ModsRequest && ! f.touchUp (60, 50), "number field: the long press asks for the modulations");
@@ -842,6 +842,19 @@ int main()
     testModulation();
     testKnobDrawing();
     testOtherDrawing();
+    // the special signs of the screens are in the font (none of them draws as the question mark)
+    {
+        const uint32_t signs[] = { 0xb0, 0xb1, 0xb7, 0x2013, 0x2014, 0x2026, 0x2190, 0x2191, 0x2192, 0x2193, 0x25b2, 0x25b6, 0x25bc, 0x25c0, 0xc1, 0xc9, 0xcd, 0xd3, 0xd6, 0x150, 0xda, 0xdc, 0x170, 0xe1, 0xe9, 0xed, 0xf3, 0xf6, 0x151, 0xfa, 0xfc, 0x171 };
+        bool all = true;
+        for (uint32_t cp : signs)
+            all = all && sdf::find (cp) != nullptr;
+        check (all, "font: the degree sign, the arrows, the dashes, the ellipsis and the Hungarian letters have glyphs");
+        char t[16];
+        NumberField::State s;
+        s.format = NumberField::Format::Degrees; s.value = 0;
+        NumberField::formatValue (s, t);
+        check (std::string (t) == "0\xc2\xb0", "font: the phase field says 0 and the degree sign");
+    }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;
 }

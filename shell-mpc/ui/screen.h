@@ -44,6 +44,7 @@ public:
     }
     Rect displayRect() const noexcept { return display_; }
     QGroup& group() noexcept { return basic.group; }
+    static constexpr int kKnobH = 124, kTabGap = 20;
     Size minSize() const override { return { 420, 700 }; }
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -55,7 +56,7 @@ protected:
     void layout() override
     {
         const int m = 6, W = rect_.w - 2 * m;
-        const int basicH = basic.minSize().h + 16;
+        const int basicH = basic.minSize().h - basic.pan.minSize().h + kKnobH + 2 * kGap;   // the two knobs get the room a third of the width allows (kKnobH), with their value under them
         instances.place ({ rect_.x + m, rect_.y + m, W, 56 });
         const int hy = rect_.y + m + 56 + 8;
         power.place ({ rect_.x + m, hy, 64, 64 });
@@ -63,7 +64,7 @@ protected:
         nameBox_ = { rect_.x + m + 64 + 12, hy, std::max (0, W - 2 * 64 - 24), 64 };
         const int dy = hy + 64 + 8;
         const int by = rect_.bottom() - m - basicH;
-        display_ = { rect_.x + m, dy, W, std::max (0, by - 8 - dy) };
+        display_ = { rect_.x + m, dy, W, std::max (0, by - kTabGap - dy) };   // kTabGap: the index tabs of the Q frame sit on its top edge
         full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
         basic.place ({ rect_.x + m, by, W, basicH });
     }
@@ -177,8 +178,9 @@ protected:
     void layout() override
     {
         const int W = rect_.w, H = rect_.h, m = 8;
-        const int topH = H * 12 / 100, bottomH = H * 31 / 100;
-        const Rect top { rect_.x + m, rect_.y + m, W - 2 * m, topH };
+        const int topH = H * 12 / 100 + 16, bottomH = H * 31 / 100;
+        const int tabH = 16;   // the index tabs of a group on the top band sit on its frame: room above it
+        const Rect top { rect_.x + m, rect_.y + m + tabH, W - 2 * m, topH - tabH };
         Rect r[4];
         const int fixed[4] = { 84, 64, 0, 72 }, weight[4] = { 0, 0, 1, 0 };
         layoutRow (top, fixed, weight, 4, kGap, r);

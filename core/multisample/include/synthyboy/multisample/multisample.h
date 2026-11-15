@@ -144,6 +144,8 @@ public:
     void noteOff (bool fast) noexcept;
     bool isActive() const noexcept { return active_; }
     int zoneIndex() const noexcept { return zone_; }
+    /** Where the zone's sample is being read, as a fraction (0 .. 1) of its file; -1 when the layer does not play (the read-out of the display). */
+    float headFraction() const noexcept { return active_ ? voice_.playheadFraction() : -1.0f; }
     int offBy() const noexcept { return offBy_; }
     bool offFast() const noexcept { return offMode_ == 0; }
     int group() const noexcept { return group_; }

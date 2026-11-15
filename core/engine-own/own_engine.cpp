@@ -90,8 +90,19 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     {
         multiZone[o].store (-1, std::memory_order_relaxed);
         liveSampleHead[o].store (-1.0f, std::memory_order_relaxed);
+        liveNumGrains[o].store (0, std::memory_order_relaxed);
+        for (int v = 0; v < LiveValues::kReadVoices; ++v)
+            liveVoicePos[o][v].store (-1.0f, std::memory_order_relaxed);
+        for (int g = 0; g < LiveValues::kReadGrains; ++g)
+        {
+            liveGrainPos[o][g].store (0.0f, std::memory_order_relaxed);
+            liveGrainLife[o][g].store (0.0f, std::memory_order_relaxed);
+        }
         multiKey[o].store (-1, std::memory_order_relaxed);
     }
+    for (int v = 0; v < LiveValues::kReadVoices; ++v)
+        liveSubPhase[v].store (-1.0f, std::memory_order_relaxed);
+    liveNoisePos.store (-1.0f, std::memory_order_relaxed);
     spectralScratch = std::make_unique<spectral::Scratch>();
     publishContent (ContentSet::build (StateContent {}, nullptr));
 }
@@ -1248,9 +1259,20 @@ bool OwnEngine::copyReadout (LiveValues& out) const noexcept
     out.numTargets = liveNumTargets.load (std::memory_order_relaxed);
     for (int i = 0; i < out.numTargets; ++i)
         out.target[i] = liveTarget[i].load (std::memory_order_relaxed);
+    for (int v = 0; v < LiveValues::kReadVoices; ++v)
+        out.subPhase[v] = liveSubPhase[v].load (std::memory_order_relaxed);
+    out.noisePos = liveNoisePos.load (std::memory_order_relaxed);
     for (int o = 0; o < 3; ++o)
     {
         out.sampleHead[o] = liveSampleHead[o].load (std::memory_order_relaxed);
+        for (int v = 0; v < LiveValues::kReadVoices; ++v)
+            out.voicePos[o][v] = liveVoicePos[o][v].load (std::memory_order_relaxed);
+        out.numGrains[o] = std::clamp (liveNumGrains[o].load (std::memory_order_relaxed), 0, static_cast<int> (LiveValues::kReadGrains));
+        for (int g = 0; g < out.numGrains[o]; ++g)
+        {
+            out.grainPos[o][g] = liveGrainPos[o][g].load (std::memory_order_relaxed);
+            out.grainLife[o][g] = liveGrainLife[o][g].load (std::memory_order_relaxed);
+        }
         out.multisampleZone[o] = multiZone[o].load (std::memory_order_relaxed);
         out.multisampleKey[o] = multiKey[o].load (std::memory_order_relaxed);
     }
@@ -1287,6 +1309,41 @@ void OwnEngine::writeReadout() noexcept
     }
     for (int o = 0; o < 3; ++o)
         liveSampleHead[o].store (newest != nullptr ? newest->sampleHead (o) : -1.0f, std::memory_order_relaxed);
+    // the newest active voices (newest first, at most kReadVoices): the read positions of the sample based oscillators, the phase of the sub; the grains of the voice that is heard
+    {
+        const Voice* order[LiveValues::kReadVoices] = {};
+        uint32_t bound = 0xffffffffu;
+        int found = 0;
+        for (; found < LiveValues::kReadVoices; ++found)
+        {
+            const Voice* best = nullptr;
+            for (const auto& v : voices)
+                if (v->isActive() && v->serial() < bound && (best == nullptr || v->serial() > best->serial()))
+                    best = v.get();
+            if (best == nullptr)
+                break;
+            order[found] = best;
+            bound = best->serial();
+        }
+        for (int i = 0; i < LiveValues::kReadVoices; ++i)
+        {
+            for (int o = 0; o < 3; ++o)
+                liveVoicePos[o][i].store (i < found ? order[i]->readPosition (o) : -1.0f, std::memory_order_relaxed);
+            liveSubPhase[i].store (i < found ? order[i]->subPhase() : -1.0f, std::memory_order_relaxed);
+        }
+        float gp[LiveValues::kReadGrains], gl[LiveValues::kReadGrains];
+        for (int o = 0; o < 3; ++o)
+        {
+            const int n = newest != nullptr ? newest->readGrains (o, gp, gl, LiveValues::kReadGrains) : 0;
+            for (int g = 0; g < n; ++g)
+            {
+                liveGrainPos[o][g].store (gp[g], std::memory_order_relaxed);
+                liveGrainLife[o][g].store (gl[g], std::memory_order_relaxed);
+            }
+            liveNumGrains[o].store (n, std::memory_order_relaxed);
+        }
+        liveNoisePos.store (newest != nullptr ? newest->noisePosition() : -1.0f, std::memory_order_relaxed);
+    }
     for (int l = 0; l < LiveValues::kNumLfos; ++l)
         liveLfo[l].store (newest != nullptr ? newest->lfoReadout (l) : -1.0f, std::memory_order_relaxed);
     for (int e = 0; e < LiveValues::kNumEnvs; ++e)

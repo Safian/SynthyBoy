@@ -41,6 +41,17 @@ struct LiveValues
     int multisampleKey[3] = { -1, -1, -1 };
     /** The read head (0 .. 1 of the file) of the sample oscillator n + 1 for the voice that is heard; -1 when no voice plays it or the oscillator is of another type. Own engine only. */
     float sampleHead[3] = { -1.0f, -1.0f, -1.0f };
+    /** The read-outs of the sample based oscillators and the sub (own engine only; fixed size, written without locks by the audio thread at the end of a block). Voices are the newest active ones (at most
+        kReadVoices, newest first). voicePos[n][v]: where the oscillator n + 1 reads its file in voice v (sample type: the read head; multisample: the head of the zone being played; granular: the play head of
+        the cloud), 0 .. 1; -1 = that voice does not play it. The grains (granular oscillator n + 1, the voice that is heard: its first cloud, at most kReadGrains): where each reads (0 .. 1 of the file) and how
+        far it has run (0 .. 1 of its length). subPhase[v]: the phase of the sub oscillator of voice v (0 .. 1), -1 = no voice. noisePos: the read head of the noise when its source is a sample, else -1. */
+    static constexpr int kReadVoices = 8, kReadGrains = 32;
+    float voicePos[3][kReadVoices] = {};
+    int numGrains[3] = {};
+    float grainPos[3][kReadGrains] = {};
+    float grainLife[3][kReadGrains] = {};
+    float subPhase[kReadVoices] = {};
+    float noisePos = -1.0f;
     int numTargets = 0;
     float target[kMaxTargets] = {};
 };

@@ -579,6 +579,30 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     anyPlaying = true;
 }
 
+float LibOsc::readPosition() const noexcept
+{
+    const int t = cur;
+    if (t == kOscTypeSample && ! sampleVoices.empty())
+        return sampleVoices[0].playheadFraction();
+    if (t == kOscTypeGranular && ! grainVoices.empty())
+        return grainVoices[0].isActive() ? static_cast<float> (std::min (1.0, std::max (0.0, grainVoices[0].playhead()))) : -1.0f;
+    if (t == kOscTypeMultisample)
+    {
+        for (const Layer& l : layers)
+            if (l.voice.isActive())
+                return l.voice.headFraction();
+    }
+    return -1.0f;
+}
+
+int LibOsc::readGrains (float* pos, float* life, int maxN) const noexcept
+{
+    const int t = cur;
+    if (t != kOscTypeGranular || grainVoices.empty() || ! grainVoices[0].isActive())
+        return 0;
+    return grainVoices[0].snapshot (pos, life, maxN);
+}
+
 void LibOsc::beginType (int type) noexcept
 {
     headFrac_ = -1.0f;

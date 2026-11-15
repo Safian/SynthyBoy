@@ -501,6 +501,23 @@ static void renderAll (const std::string& dir)
     }
 }
 
+/** Every special sign the screens use (degree, plus minus, middle dot, dashes, ellipsis, the arrows and triangles, the Hungarian accents) at a small and a large size: nothing may fall back to the question mark. */
+void glyphImage (const std::string& dir)
+{
+    GScene s (900, 300);
+    const char* rows[] = { "\xc2\xb0  \xc2\xb1  \xc2\xb7  \xe2\x80\x93  \xe2\x80\x94  \xe2\x80\xa6  0\xc2\xb0 180\xc2\xb0 360\xc2\xb0  +12 -7",
+                           "\xe2\x86\x90 \xe2\x86\x91 \xe2\x86\x92 \xe2\x86\x93  \xe2\x96\xb2 \xe2\x96\xb6 \xe2\x96\xbc \xe2\x97\x80",
+                           "\xc3\x81\xc3\x89\xc3\x8d\xc3\x93\xc3\x96\xc5\x90\xc3\x9a\xc3\x9c\xc5\xb0  \xc3\xa1\xc3\xa9\xc3\xad\xc3\xb3\xc3\xb6\xc5\x91\xc3\xba\xc3\xbc\xc5\xb1" };
+    float y = 50.0f;
+    for (const char* r : rows)
+    {
+        s.builder().text (20.0f, y, 36.0f, r, theme::rgba (theme::L().text));
+        s.builder().text (20.0f, y + 40.0f, 14.0f, r, theme::rgba (theme::L().textDim));
+        y += 90.0f;
+    }
+    saveImage (dir, "glyphs.png", render (s));
+}
+
 int main (int argc, char** argv)
 {
     const std::string base = argc > 1 ? argv[1] : ".";
@@ -511,6 +528,7 @@ int main (int argc, char** argv)
         mkdir (base.c_str(), 0755);
         mkdir (dir.c_str(), 0755);
         renderAll (dir);
+        glyphImage (dir);
     }
     theme::setLook (1);
     std::printf ("%s: %d images, %d failed\n", g_fails ? "FAIL" : "PASS", g_images, g_fails);

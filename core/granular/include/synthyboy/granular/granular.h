@@ -96,6 +96,8 @@ public:
     bool isActive() const noexcept { return active_; }
     int activeGrains() const noexcept;
     double playhead() const noexcept { return head_; }
+    /** The grains that sound now (at most `maxN`): where each reads (0 .. 1 of the file) and how far it has run (0 .. 1 of its length). A fixed size copy for the display's read-out: no allocation, no lock. */
+    int snapshot (float* pos, float* life, int maxN) const noexcept;
 
 private:
     struct Grain
