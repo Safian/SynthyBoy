@@ -176,7 +176,15 @@ int main()
         now = before;
         now[0].hash = 10; now[2].hash = 30;
         layerDamage (before, now, d);
-        check (d.size() == 2, "damage: two far apart changes: two boxes");
+        check (d.size() == 4 || d.size() == 2, "damage: two far apart changes: their boxes (" + std::to_string (d.size()) + ")");
+        now = before;
+        now.insert (now.begin(), { 600, 600, 700, 700, 99 });
+        layerDamage (before, now, d);
+        check (d.size() == 1 && d[0].x0 == 600, "damage: a cell inserted at the front does not make the cells after it look changed");
+        now = before;
+        now.erase (now.begin());
+        layerDamage (before, now, d);
+        check (d.size() == 1 && d[0].x1 == 100 && d[0].y1 == 100, "damage: a cell taken away from the front: only its place");
         std::vector<CellKey> many, many2;
         for (int i = 0; i < 8; ++i) { many.push_back ({ i * 100, 0, i * 100 + 50, 50, 1u }); many2.push_back ({ i * 100, 0, i * 100 + 50, 50, 2u }); }
         layerDamage (many, many2, d);

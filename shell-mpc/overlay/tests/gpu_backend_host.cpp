@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cerrno>
 #include <deque>
+#include <fstream>
 
 #include <cmath>
 
@@ -26,6 +27,8 @@ public:
     Mode mode = Healthy;
     uint32_t protocol = gpu::kProtocolVersion;   // the protocol version this helper binary was built with (the real helper refuses a hello of another one with an error message and exits)
     bool failStart = false;
+    std::string rendererName = "Fake GPU";
+    int strideSeen = 0;
     gpu::HelloParams lastHello;
     int starts = 0, kills = 0, quits = 0, closes = 0, scenes = 0, frames = 0;
     bool running = false;
@@ -84,7 +87,7 @@ public:
         }
         if (! ready && mode != NoReady && *now >= readyAt)
         {
-            outbox.push_back (gpu::makeMsg (gpu::kMsgReady, 50, 800, 1280, 0, 0, 0, "Fake GPU"));
+            outbox.push_back (gpu::makeMsg (gpu::kMsgReady, 50, 800, 1280, 0, 0, 0, rendererName.c_str()));
             ready = true;
         }
         while (! inbox.empty() && running)
@@ -110,6 +113,8 @@ public:
                 shown = true;
                 outbox.push_back (gpu::makeMsg (gpu::kMsgShown));
             }
+            else if (m.type == gpu::kMsgStride)
+                strideSeen = static_cast<int> (m.a);
             else if (m.type == gpu::kMsgScene)
             {
                 ++scenes;
@@ -273,6 +278,25 @@ struct CRig
 int main()
 {
     // ---- healthy: start, show, scene, acknowledgement, hide ------------------------------------------------------------------------------------------------
+    // ---- the rate of the pictures: a GPU of the Mali-T series keeps the grid of two vblanks (30 a second); another one is asked for one picture per vblank (60), the file says what it says
+    {
+        CRig r;
+        r.run (3500);
+        check (r.helper.strideSeen == 1 && r.st ("gpu_rate_stride") == "1", "rate: a GPU that is not a Mali-T is asked for a picture per vblank (stride 1)");
+        CRig m;
+        m.helper.rendererName = "Mali-T760 (Panfrost)";
+        m.run (3500);
+        check (m.helper.strideSeen == 0 && m.st ("gpu_rate_stride") == "2", "rate: a Mali-T keeps the grid of two vblanks (" + m.st ("gpu_rate_source") + ")");
+        CRig f;
+        std::ofstream (f.dir.paths().rate) << "30\n";
+        f.run (3500);
+        check (f.helper.strideSeen == 0 && f.st ("gpu_rate_stride") == "2", "rate: the file says 30: the grid of two vblanks");
+        CRig g;
+        g.helper.rendererName = "Mali-T760 (Panfrost)";
+        std::ofstream (g.dir.paths().rate) << "60\n";
+        g.run (3500);
+        check (g.helper.strideSeen == 1, "rate: the file says 60: asked for it on a Mali-T too");
+    }
     {
         BackendRig r;
         check (! r.backend.active() && r.backend.planeFree() && std::string (r.backend.status().state) == "idle", "before anything is wanted: idle, no helper");

@@ -28,6 +28,7 @@
 #include <cstring>
 #include <ctime>
 #include <algorithm>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -1395,6 +1396,15 @@ private:
     void benchReport()
     {
         benchReported_ = true;
+        if (FILE* f = std::fopen ("/tmp/sb-pace-trace.txt", "w"))
+        {
+            std::fprintf (f, "# id=%s stride=%d noslot=%d; ms since the first picture: render start, render end, SETPLANE call, SETPLANE return, vblank counter at the return\n", benchCfg_.id.c_str(), stride_, noSlot_ ? 1 : 0);
+            const double b = benchTrace_.empty() ? 0.0 : benchTrace_[0][0];
+            for (const auto& r : benchTrace_)
+                std::fprintf (f, "%.2f %.2f %.2f %.2f %.0f\n", r[0] - b, r[1] - b, r[2] - b, r[3] - b, r[4]);
+            std::fclose (f);
+        }
+        benchTrace_.clear();
         const double secs = std::max (0.001, (nowMs() - benchWindowStart_) / 1000.0);
         double avg = 0.0, avgSet = 0.0, avgInt = 0.0;
         for (float v : benchRender_) avg += v;
@@ -1514,6 +1524,7 @@ private:
             sb.text (12.0f + static_cast<float> ((t * 71) % std::max (1, w_ - 200)), 30.0f + static_cast<float> ((t * 29) % std::max (1, h_ - 40)), 14.0f + static_cast<float> (t % 5) * 4.0f, "Wavetable Position 1.25 Hz", rgba8 (0xe6, 0xe6, 0xf2, 230));
     }
     BenchCfg benchCfg_;
+    std::vector<std::array<double, 5>> benchTrace_;
     bool benchActive_ = false, benchReported_ = true;
     double benchLastPoll_ = 0.0, benchWindowStart_ = 0.0, benchLastFrameMs_ = 0.0;
     time_t benchMtime_ = 0;
@@ -1754,6 +1765,7 @@ private:
     bool renderAndPresent()
     {
         const double t0 = nowMs();
+        noSlot_ = true;   // stride 1: the plane update follows the render at once
         SceneData& s = scene_;
         uint32_t seq = 0;
 #ifdef SYNTHYBOY_OVERLAY_BENCH
@@ -1847,7 +1859,8 @@ private:
         }
         const double t1 = nowMs();
         publishRender (t0, tGen, tBuilt, tSubmitted, tFinished, t1, s);
-        pacer_->waitSlot();     // the vblank of the next slot of the pace grid: the plane update follows at once (the intervals of the pictures are then even)
+        if (! (stride_ == 1 && noSlot_))
+            pacer_->waitSlot();     // the vblank of the next slot of the pace grid: the plane update follows at once (the intervals of the pictures are then even)
         const double tCall = nowMs();
         if (! planeSet (fb))
         {
@@ -1878,6 +1891,12 @@ private:
                 skipped_ += static_cast<unsigned long> (ps.vb[i]) * static_cast<unsigned long> (i - stride_);
         }
 #ifdef SYNTHYBOY_OVERLAY_BENCH
+        if (benchActive_ && benchTrace_.size() < 120 && nowMs() >= benchWindowStart_)
+        {
+            synthyboy_mpc::overlay::VblankStamp vs;
+            clock_->last (vs);
+            benchTrace_.push_back ({ t0, t1, tCall, t2, static_cast<double> (vs.seq) });
+        }
         benchRecord (t1 - t0, t2 - tCall, benchLastFrameMs_ > 0.0 ? t2 - benchLastFrameMs_ : 0.0);
         if (benchActive_ && ! benchReported_ && nowMs() >= benchWindowStart_ && benchGen_.size() < 20000)
         {
@@ -2052,6 +2071,18 @@ private:
         send (makeMsg (kMsgShown, static_cast<uint32_t> (frames_)));
     }
 
+    /** The plugin chose another number of vblanks per picture. 1: the plane update follows the render at once (no slot wait): on a panel whose plane update lands on the next vblank wherever in the period it is called
+        that is a picture per vblank; 2 and more: the pace grid. */
+    void setStride (int s)
+    {
+        s = std::clamp (s, 1, 4);
+        if (s == stride_ || ! clock_)
+            return;
+        stride_ = s;
+        pacer_ = std::make_unique<FramePacer> (*clock_, periodMs_, stride_, (flags_ & kFlagVblank) != 0);
+        __atomic_store_n (&block_->pace.stride, static_cast<uint32_t> (stride_), __ATOMIC_RELAXED);
+    }
+
     void onHide()
     {
         if (shown_)
@@ -2084,6 +2115,7 @@ private:
                 case kMsgShow: onShow (m); break;
                 case kMsgScene: dirty_ = true; break;
                 case kMsgHide: onHide(); break;
+                case kMsgStride: setStride (static_cast<int> (m.a)); break;
                 case kMsgQuit: endReason_ = "quit"; return false;
                 default: break;
             }
@@ -2192,6 +2224,7 @@ private:
     int histCount_ = 0;
     uint32_t lastPaintedPx_ = 0;
     int lastClip_[4] = {};
+    bool noSlot_ = true;                         // stride 1 without the slot wait
     bool partialOk_ = true;                      // switched off by /tmp/synthyboy-overlay-nopartial (diagnostics)   // where the picture of the ops being built goes: -1 the window, 2 / 3 a cached layer
     uint32_t lastCached_ = 0, lastRedrawn_ = 0;
     GLuint prog_[kPrograms] = {}, vbo_ = 0, atlasTex_ = 0, feedbackTex_ = 0, glowTex_[2] = {}, glowFbo_[2] = {};

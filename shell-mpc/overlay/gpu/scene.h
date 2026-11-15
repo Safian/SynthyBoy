@@ -732,6 +732,7 @@ enum MsgType : uint32_t
     kMsgScene = 3,    // a = sequence number of the scene just written (a kick: the helper reads the latest)
     kMsgHide = 4,     // the plane goes off, the buffers go
     kMsgQuit = 5,
+    kMsgStride = 6,   // a = the vblanks per picture (1 .. 4): 1 = a picture per vblank (60 a second on a 60 Hz panel), the plane update at once after the render with no slot wait; 2 = the pace grid of the hello
     // helper -> plugin
     kMsgReady = 101,  // a = start-up time in ms, b = panel width, c = panel height; text = GL_RENDERER
     kMsgShown = 102,  // the surface for the region exists (answer to a show)

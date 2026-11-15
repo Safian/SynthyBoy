@@ -284,6 +284,11 @@ void testDisabledControls()
 
 void testRoutePopup()
 {
+    {
+        Rig c;   // the route button of the compact view opens the full screen and the popup over it
+        c.tapC (c.ui.compact().route);
+        check (c.stack.depth() == 2 && c.stack.top() == OscUi::kPageRoute, "the route button of the compact view opens the full screen and the route popup");
+    }
     Rig r;
     r.openFull();
     r.tapC (r.ui.full().route);

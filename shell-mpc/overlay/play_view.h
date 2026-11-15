@@ -127,6 +127,7 @@ public:
                 have_[0] = true;
                 forced_[0] = false;
                 changed = true;
+                displayDataMs_ = in.nowMs;
             }
         }
         else
@@ -182,6 +183,7 @@ public:
                 have_[0] = true;
                 forced_[0] = false;
                 changed = true;
+                displayDataMs_ = in.nowMs;
             }
         }
         // ---- the live read-outs of the engine: the read heads of the newest voices (sample, multisample, the scan of a granular cloud), the grains that sound, the phases of the sub, the read head of a sample noise
@@ -305,6 +307,14 @@ public:
             {
                 uiHash_ = h;
                 changed = true;
+            }
+        }
+        {
+            const bool hot = in.nowMs - displayDataMs_ < 350.0;
+            if (hot != displayHot_)
+            {
+                displayHot_ = hot;
+                changed = true;   // the picture is described again (cached cell or not)
             }
         }
         counters_.changes += changed;
@@ -583,7 +593,7 @@ private:
         if (live)
             ui::display::drawLive (sb, r, d);
         else
-            ui::display::draw (sb, r, d);
+            ui::display::draw (sb, r, d, ! displayHot_);   // while the data changes every picture (a knob dragged along the wavetable) it is drawn with the picture, not into a layer
     }
 
     /** The Env and LFO panels in the language of the look (ui/display.h drawModule): a block each, the curve as a line of light, the running dot / cursor. */
@@ -637,6 +647,8 @@ private:
         }
     };
     Live live_;
+    double displayDataMs_ = -1.0e9;   // when the data of the display last changed
+    bool displayHot_ = false;          // it changed within the last third of a second: drawn uncached
     int highlight_;
     std::string name_;
     int sel_[play::kPanels] = { 0, 0, 0 };

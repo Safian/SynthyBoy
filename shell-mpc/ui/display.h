@@ -6,6 +6,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <optional>
+
 #include "core.h"
 
 namespace synthyboy_mpc { namespace ui { namespace display {
@@ -73,8 +75,10 @@ inline void glowLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t 
 }
 }
 
-/** Draws the picture inside `r` (the display rectangle). The ground (the block) is the caller's. */
-inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
+/** Draws the picture inside `r` (the display rectangle): the block (the ground: a gradient, the keyline, the grid) as a cached cell of its own, then the data (the curves, the fills, the light). `cached`: the data
+    is one cached cell too (it is drawn again only when the data changes; the live read-outs come after it, drawLive); false: the data is drawn with the picture every time (a display whose data changes every
+    picture, a knob dragged along a wavetable: nothing gains by caching it, and it would draw the layers under it again each time). */
+inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cached = true)
 {
     namespace dt = detail;
     const theme::Look& T = theme::L();
@@ -89,15 +93,13 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     const bool wave = d.kind == Data::Kind::Wave, minmax = d.kind == Data::Kind::MinMax, spec = d.kind == Data::Kind::Spectrum;
     if (d.kind == Data::Kind::None)
         return;
-    Cell cell (sb, r);   // the picture of the data is one cached cell: it is drawn again only when the data changes (the live read-outs are drawn after it, drawLive)
+    {
+    Cell ground (sb, r);
     // ---- the block under the picture: a vertical gradient, the keyline
     sb.paintY (static_cast<float> (r.y), static_cast<float> (r.bottom()), dt::a (T.panel0, 255), dt::a (T.panel0, 255), dt::a (T.panel1, 255), dt::a (T.panel1, 255));
     sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, 0xffffffffu);
     sb.paintOff();
     sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, dt::a (T.keyline, 255), T.frame);
-    // ---- the afterglow: the previous picture of this rectangle, faded, under the new one (the GPU's feedback; the CPU reference does not draw it)
-    if (T.afterglow > 0.0f && theme::D().afterglow && (d.kind == Data::Kind::Wave || d.kind == Data::Kind::MinMax))
-        sb.feedback (static_cast<float> (r.x + 1), static_cast<float> (r.y + 1), static_cast<float> (r.right() - 1), static_cast<float> (r.bottom() - 1), T.afterglow);
     // ---- the grid: a centre line and quarters, hairlines
     if (wave || minmax)
     {
@@ -109,6 +111,13 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             sb.line (x, top, x, bottom, T.hair, gridCol);
         }
     }
+    }
+    // ---- the afterglow: the previous picture of this rectangle, faded, under the new one (the GPU's feedback; the CPU reference does not draw it)
+    if (T.afterglow > 0.0f && theme::D().afterglow && (d.kind == Data::Kind::Wave || d.kind == Data::Kind::MinMax))
+        sb.feedback (static_cast<float> (r.x + 1), static_cast<float> (r.y + 1), static_cast<float> (r.right() - 1), static_cast<float> (r.bottom() - 1), T.afterglow);
+    std::optional<Cell> dataCell;
+    if (cached && ! (T.afterglow > 0.0f && theme::D().afterglow))
+        dataCell.emplace (sb, r);
     float rows[kMaxPoints], rows2[kMaxPoints];
     const int n = std::min (d.n, static_cast<int> (kMaxPoints));
     // ---- the faint spectrum along the bottom of the wave
@@ -181,7 +190,8 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
                 const float side = (k % 2 == 1 ? 1.0f : -1.0f) * static_cast<float> ((k + 1) / 2) / static_cast<float> ((v + 1) / 2);
                 const float spread = side * (0.012f + 0.07f * d.detune);
                 rowsOf (d.cycle, rows, 0.0f, 1.0f + spread);
-                sb.curve (rows, n, ix, iw);
+                const int cut = std::max (2, n / 24), cw = static_cast<int> (std::lround (static_cast<float> (iw) * static_cast<float> (n - 2 * cut) / static_cast<float> (n)));   // not the first and the last 4 %: the ringing at the edge of a band limited wave would make a bundle of stripes there
+                sb.curve (rows + cut, n - 2 * cut, ix + static_cast<int> (std::lround (static_cast<float> (iw) * static_cast<float> (cut) / static_cast<float> (n))), cw);
                 dt::paintLine (sb, x0, x1, st, 255);
                 sb.style (1.0f, false);
                 sb.stroke (T.curveBack * 0.45f, static_cast<uint32_t> (alpha));

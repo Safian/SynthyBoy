@@ -14,6 +14,7 @@
 // are removed through the plugin's own descriptor, then the state moves on. All calls are made by the overlay thread (shutdown () by the thread that stopped it).
 #pragma once
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdint>
 #include <string>
@@ -118,6 +119,8 @@ public:
     virtual bool submit (const SceneData& scene, double nowMs) = 0;
     /** The plane goes off (the helper takes it off and answers `hidden`). planeFree () becomes true with the answer, or after the clean-up when the helper does not answer. */
     virtual void hide (double nowMs) = 0;
+    /** The vblanks per picture the helper paces with (1 .. 4; the hello has the first one). Sent at once when the helper runs, and again after a restart. */
+    virtual void setStride (int /*vblanks*/) {}
     /** The file switch: true = never the helper (it is stopped), false = it may be used again. */
     virtual void setForceCpu (bool force, double nowMs) = 0;
     /** The helper is stopped, the plane is off, nothing of it is left. Safe at any time, also twice. */
@@ -242,6 +245,13 @@ public:
         return true;
     }
 
+    void setStride (int vblanks) override
+    {
+        wantStride_ = std::clamp (vblanks, 1, 4);
+        if (state_ == State::Running)
+            tr_.send (makeMsg (kMsgStride, static_cast<uint32_t> (wantStride_)));
+    }
+
     void hide (double now) override
     {
         if (! shown_)
@@ -361,6 +371,8 @@ private:
                     runningSince_ = now;
                     startupMs_ = m.a;
                     glRenderer_.assign (m.text, strnlen (m.text, sizeof m.text));
+                    if (wantStride_ > 0)
+                        tr_.send (makeMsg (kMsgStride, static_cast<uint32_t> (wantStride_)));   // a restarted helper paces the way the plugin chose
                 }
                 return true;
             case kMsgShown:
@@ -521,6 +533,7 @@ private:
     bool forceCpu_ = false, shown_ = false, hiding_ = false, unacked_ = false, keepPlane_ = false, paceKnown_ = false;
     PaceBlock pace_ {};
     RenderBlock render_ {};
+    int wantStride_ = 0;   // 0: the hello's
     double startedAt_ = 0.0, runningSince_ = 0.0, retryAt_ = 0.0, unackedSince_ = 0.0, hideAt_ = 0.0;
     uint32_t lastSeq_ = 0, acked_ = 0;
     int failures_ = 0, rotation_ = 90, viewIndex_ = -1;

@@ -146,21 +146,29 @@ inline void framePaint (const std::vector<DamageRect>& now, const std::vector<Da
     mergeBoxes (out, maxBoxes);
 }
 
-/** The rectangles to draw again in a layer: the cells at the same place in the list whose key differs (both the old and the new rectangle), the cells that came or went; the overlapping boxes are merged,
+/** The rectangles to draw again in a layer: the cells whose rectangle and hash were not in the layer before, and the cells of the layer that are not in the scene any more; the overlapping boxes are merged,
     and when more than `maxBoxes` are left they become one. Empty: nothing changed. */
 inline void layerDamage (const std::vector<CellKey>& before, const std::vector<CellKey>& now, std::vector<DamageRect>& out, size_t maxBoxes = 4)
 {
     out.clear();
-    for (size_t i = 0; i < std::max (before.size(), now.size()); ++i)
+    // a cell is the same when a cell with the same rectangle and hash was in the layer before (each old cell once): a cell that was inserted or taken away does not make the cells after it look changed.
+    // The cells keep their order in a scene, so what is unchanged keeps its place over / under what is.
+    std::vector<char> used (before.size(), 0);
+    for (const CellKey& k : now)
     {
-        const bool haveOld = i < before.size(), haveNew = i < now.size();
-        if (haveOld && haveNew && before[i] == now[i])
-            continue;
-        if (haveOld)
-            out.push_back ({ before[i].x0, before[i].y0, before[i].x1, before[i].y1 });
-        if (haveNew)
-            out.push_back ({ now[i].x0, now[i].y0, now[i].x1, now[i].y1 });
+        bool found = false;
+        for (size_t j = 0; j < before.size() && ! found; ++j)
+            if (! used[j] && before[j] == k)
+            {
+                used[j] = 1;
+                found = true;
+            }
+        if (! found)
+            out.push_back ({ k.x0, k.y0, k.x1, k.y1 });
     }
+    for (size_t j = 0; j < before.size(); ++j)
+        if (! used[j])
+            out.push_back ({ before[j].x0, before[j].y0, before[j].x1, before[j].y1 });
     mergeBoxes (out, maxBoxes);
 }
 

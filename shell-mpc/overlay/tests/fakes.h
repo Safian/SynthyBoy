@@ -54,6 +54,8 @@ struct TempDir
         p.noGpu = path + "/nogpu";
         p.look = path + "/look";
         p.detail = path + "/detail";
+        p.rate = path + "/rate";
+        p.gpuClock = path + "/gpuclock";
         p.status = path + "/status.txt";
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";

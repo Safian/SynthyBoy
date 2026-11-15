@@ -30,6 +30,7 @@
 #include "curve_source.h"
 #include "drm_interfaces.h"
 #include "gpu/gpu_overlay.h"
+#include "gpu_clock.h"
 #include "instance_slots.h"
 #include "overlay_layout.h"
 #include "page_detector.h"
@@ -51,6 +52,8 @@ struct Paths
     std::string noGpu = "/tmp/synthyboy-overlay-nogpu";
     std::string status = "/tmp/synthyboy-overlay-status.txt";
     std::string detail = "/tmp/synthyboy-overlay-detail";   // 1 / full, 2 / reduced: the level of detail of the UI (ui/theme.h Detail); without the file (or "auto") the plugin chooses from the measured frame time
+    std::string gpuClock = "/tmp/synthyboy-overlay-gpuclock";   // "off": the clock of the GPU is left to its governor; otherwise it is raised while the picture moves (gpu_clock.h)
+    std::string rate = "/tmp/synthyboy-overlay-fps";   // 30 or 60: the pictures a second the GPU path aims at; without the file (or "auto") 30 on a GPU of the Mali-T series (the Key 61), 60 (tried, kept when it is reached) on the others
     std::string look = "/tmp/synthyboy-overlay-look";   // a number 1 .. 3: the look of the UI (ui/theme.h); without the file look 1
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
@@ -815,6 +818,7 @@ private:
             }
         }
         chooseDetail();
+        chooseRate (nowMs);
         updateRotation (nowMs);
         dumpRequested_ = exists (paths_.dumpRequest);
     }
@@ -853,6 +857,103 @@ private:
             ui::theme::setDetail (want);   // no frame is asked for: the Play view sees the new level at its next update and says it changed
             statusDue_ = true;
         }
+    }
+
+    /** The rate of the pictures (once a second, GPU path): 30 a second is the pace grid of two vblanks; 60 is one picture per vblank (the helper's stride 1: the plane update follows the render at once).
+        The file `rate` says 30 or 60; without it the GPUs of the Mali-T series (the Key 61: its frame time at the lowest clock does not fit a sixtieth of a second) keep 30, the others try 60 and keep it
+        when the helper really presents 45 or more pictures a second while the picture moves (else back to 30 for two minutes; the plane update of a panel may land one vblank late at random). */
+    void chooseRate (double nowMs)
+    {
+        if (gpu_ == nullptr || ! usingGpu_ || ! gpuShown_)
+        {
+            clock_.boost (false);
+            return;
+        }
+        const gpu::GpuStatus g = gpu_->status();
+        if (! g.active)
+        {
+            clock_.boost (false);
+            return;
+        }
+        int want = 0;
+        {
+            std::ifstream in (paths_.rate);
+            int v = 0;
+            std::string w;
+            if (in && (in >> w))
+                want = (w == "60") ? 60 : (w == "30" ? 30 : 0);
+            (void) v;
+        }
+        const bool slowGpu = g.glRenderer.compare (0, 6, "Mali-T") == 0 || g.glRenderer.empty();
+        if (want == 0)
+            want = slowGpu ? 30 : 60;
+        const double dt = nowMs - rateAtMs_;
+        const unsigned long pics = g.frames >= rateFrames_ ? g.frames - rateFrames_ : 0;
+        rateFrames_ = g.frames;
+        rateAtMs_ = nowMs;
+        const double fps = dt > 100.0 ? 1000.0 * static_cast<double> (pics) / dt : 0.0;
+        // the clock of the GPU: while the picture moves and a picture costs something, the lowest clock the governor may use is raised (gpu_clock.h); it is put back when the picture has rested for three seconds
+        {
+            const uint32_t dCount = g.render.count - rcCount_, dTotal = g.render.totalUs - rcTotal_;
+            rcCount_ = g.render.count;
+            rcTotal_ = g.render.totalUs;
+            const double meanMs = dCount > 0 ? static_cast<double> (dTotal) / static_cast<double> (dCount) / 1000.0 : 0.0;
+            if (std::ifstream off (paths_.gpuClock); off && [&] { std::string w; return static_cast<bool> (off >> w) && w == "off"; }())
+                clock_.boost (false);
+            else if (fps >= 8.0 && meanMs >= 3.0)
+            {
+                clock_.boost (true);
+                clockIdleMs_ = 0.0;
+            }
+            else if (fps < 2.0)
+            {
+                if (clockIdleMs_ <= 0.0)
+                    clockIdleMs_ = nowMs;
+                else if (nowMs - clockIdleMs_ >= 3000.0)
+                    clock_.boost (false);
+            }
+        }
+        rateSource_ = want == 30 ? (slowGpu ? "auto: Mali-T" : "file") : (paths_.rate.empty() ? "auto" : "auto / file");
+        if (want == 30 || nowMs < rateRetryMs_)
+        {
+            if (rateStride_ != 2)
+                applyStride (2);
+            return;
+        }
+        if (rateStride_ != 1)
+        {
+            applyStride (1);
+            rateTrialMs_ = nowMs;
+            rateConfirmed_ = false;
+            return;
+        }
+        if (! rateConfirmed_ && fps >= 20.0)   // the picture moves: is it presented faster than the grid of two vblanks could?
+        {
+            if (fps >= 45.0)
+                rateConfirmed_ = true;
+            else if (nowMs - rateTrialMs_ >= 4000.0)
+            {
+                applyStride (2);
+                rateRetryMs_ = nowMs + 120000.0;
+                rateSource_ = "60 not reached: 30";
+            }
+        }
+        else if (rateConfirmed_ && fps >= 20.0 && fps < 36.0 && detailMeanMs_ > 11.0)
+        {
+            applyStride (2);   // it cannot keep up any more (the pictures cost more than a vblank)
+            rateRetryMs_ = nowMs + 30000.0;
+            rateSource_ = "60 too slow: 30";
+        }
+    }
+    void applyStride (int s)
+    {
+        rateStride_ = s;
+        gpu_->setStride (s);
+        const gpu::GpuStatus g = gpu_->status();
+        const double period = g.paceKnown && g.pace.periodUs > 0 ? g.pace.periodUs / 1000.0 : 16.67;
+        timing_.gpuFrameEveryMs = 0.8 * s * period;   // the scenes follow the grid: a scene a little before each picture
+        timing_.frameEveryMs = s * period;
+        statusDue_ = true;
     }
 
     /** The rotation in use: the file's, else the one found from the markers (cached for the life of the process), else the default while searching. */
@@ -978,7 +1079,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (qlinkPanel_ ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\ngpu_clock_boost: " << (clock_.boosted() ? "yes" : "no") << "\ngpu_rate_stride: " << rateStride_ << "\ngpu_rate_source: " << rateSource_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (qlinkPanel_ ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -1114,6 +1215,14 @@ private:
     ITouchInput* touchIn_ = nullptr;
     bool qlinkPanel_ = false, autoReduced_ = false;
     double renderAcc_ = 0.0, detailMeanMs_ = 0.0;
+    GpuClock clock_;                                      // the lowest clock the GPU's governor may use, raised while the picture moves
+    uint32_t rcCount_ = 0, rcTotal_ = 0;
+    double clockIdleMs_ = 0.0;
+    unsigned long rateFrames_ = 0;                       // the rate of the pictures (chooseRate): the helper's picture count and the time of the last look, the stride in use, the trial of 60 a second
+    double rateAtMs_ = 0.0, rateTrialMs_ = 0.0, rateRetryMs_ = 0.0;
+    int rateStride_ = 2;
+    bool rateConfirmed_ = false;
+    const char* rateSource_ = "auto";
     int renderN_ = 0, overBudget_ = 0;
     unsigned long detailFrames_ = 0;
     const char* detailSource_ = "auto";

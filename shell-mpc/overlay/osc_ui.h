@@ -1021,7 +1021,11 @@ private:
             {
                 case kFullButton: stack.openFull (kElementOsc); return;
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
-                case kRoute: stack.openDetail (kPageRoute); return;
+                case kRoute:
+                    if (stack.depth() == 0)
+                        stack.openFull (kElementOsc);   // the route popup lies over the full screen: from the compact view that opens first
+                    stack.openDetail (kPageRoute);
+                    return;
                 case kListBackdrop: stack.back(); return;
                 case kBasic + 1: case kBasic + 2:
                 {

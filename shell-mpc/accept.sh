@@ -168,8 +168,16 @@ $B/page_detector_host > $B/page-detector-host.log 2>&1 || { grep -E "^FAIL" $B/p
 # the oscillator UI (shell-mpc/overlay/osc_ui.h: every control wired to its engine parameter, the pages, the Q group, the modulations; also under AddressSanitizer below)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/osc_ui_host $OVSRC/osc_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_ui_host build"; exit 1; }
 $B/osc_ui_host > $B/osc-ui-host.log 2>&1 || { grep -E "^FAIL" $B/osc-ui-host.log; echo "ACCEPT FAIL: osc_ui_host (the oscillator UI: wiring, pages, Q group, modulations)"; exit 1; }
+# the cached cells of the scene protocol (gpu/scene.h CellBegin, gpu/cell_plan.h): the hash, the plan of the layers, the damage between two pictures, the part to paint for the age of the back buffer, the CPU reference
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -I shell-mpc -o $B/cell_plan_host $OVSRC/cell_plan_host.cpp || { echo "ACCEPT FAIL: cell_plan_host build"; exit 1; }
+$B/cell_plan_host > $B/cell-plan-host.log 2>&1 || { grep -E "^FAIL" $B/cell-plan-host.log; echo "ACCEPT FAIL: cell_plan_host (cached cells: hash, plan, damage, paint boxes)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/gpu_clock_host $OVSRC/gpu_clock_host.cpp || { echo "ACCEPT FAIL: gpu_clock_host build"; exit 1; }
+$B/gpu_clock_host > $B/gpu-clock-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-clock-host.log; echo "ACCEPT FAIL: gpu_clock_host (the GPU clock hint)"; exit 1; }
+# the function tour table of the oscillator UI (the Key 61 script reads it): it must build and list every control
+c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I shell-mpc/overlay -o $B/tour_dump $OVSRC/tour_dump.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: tour_dump build"; exit 1; }
+[ "$($B/tour_dump | wc -l)" -gt 800 ] || { echo "ACCEPT FAIL: tour_dump lists too few controls"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
-for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host; do
+for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host cell_plan_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
