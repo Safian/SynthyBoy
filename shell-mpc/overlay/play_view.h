@@ -447,6 +447,12 @@ private:
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
         play::SceneSink base (sb);
         play::ShiftSink<play::SceneSink> shifted (base, play::kOx, play::kOy);
+        if (osc_ != nullptr)
+        {
+            // opaque under the plugin's own pages: the whole region for a full screen, a detail page and the popup's backdrop; the oscillator third in main (the host's panel picture, its Q-Link focus frame)
+            const float w = osc_->isMain() ? 432.0f : static_cast<float> (play::kRegionW);
+            sb.rect (0.0f, 0.0f, w, static_cast<float> (play::kRegionH), gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
+        }
         if (osc_ == nullptr || osc_->isMain())
             paint (shifted, play::kPanelW, play::kPanelH);   // the Env and LFO panels (not drawn while a full screen covers them)
         if (osc_ == nullptr)

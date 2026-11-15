@@ -259,7 +259,7 @@ void testDisabledControls()
     check (mem != nullptr && ! mem->c->enabled() && mem->alwaysOff, "wavetable: the phase memory stepper is disabled (no voice of the own engine reads osc.phase_memory)");
     check (r.ui.full().panel.warp()->first.hasVar() && ! r.ui.full().panel.warp()->first.var.enabled() && ! r.ui.full().panel.warp()->second.var.enabled(), "WARP Var is drawn disabled (there is no parameter)");
     const OscUi::Item* drop = r.ui.item (OscUi::kBasic + 2);
-    check (drop != nullptr && ! drop->c->enabled(), "the source dropdown is disabled");
+    check (drop != nullptr && ! drop->c->enabled(), "the source dropdown of the compact view is disabled (the list opens from the full screen)");
     // the source stepper of multisample is disabled
     r.inst.set ("osc1.type", 4.0f);
     r.refresh();
@@ -446,7 +446,7 @@ void testQGroupFollowsTheActiveGroup()
     check (r.inst.qCalls == c2, "an unchanged group is not handed over again");
     r.tapC (*r.ui.full().panel.part (ui::PanelSlot::WtPos));
     check (r.inst.q[0] == Inst::idx ("osc1.frame") && r.inst.q[1] == Inst::idx ("osc1.unison.voices") && r.inst.q[2] == Inst::idx ("osc1.unison.detune") && r.inst.q[3] == Inst::idx ("osc1.unison.blend"), "the Unison group: frame, voices, detune, blend");
-    r.tapC (r.ui.full().panel.warp()->first.type);
+    r.tapC (r.ui.full().panel.warp()->first.amount);
     check (r.inst.q[0] == Inst::idx ("osc1.warp.type") && r.inst.q[1] == Inst::idx ("osc1.warp.amount") && r.inst.q[2] == Inst::idx ("osc1.warp2.type") && r.inst.q[3] == Inst::idx ("osc1.warp2.amount"), "the Warp group");
     // on the Env sub-tab the compact view does not own the group
     Rig e;
@@ -454,6 +454,47 @@ void testQGroupFollowsTheActiveGroup()
     e.inst.sel = 3;
     e.refresh (2);
     check (e.inst.qCalls == c0, "on the Env sub-tab the oscillator UI does not set the Q group in main");
+}
+
+void testSourceAndWarpLists()
+{
+    Rig r;
+    r.openFull();
+    // the source dropdown opens the list of the wavetables; the stepper's name does too, its outer quarters step
+    ui::MenuButton& drop = r.ui.full().basic.source.dropdown;
+    check (drop.enabled() && ! r.ui.compact().basic.source.dropdown.enabled(), "the source dropdown is enabled on the full screen (wavetable type), not on the compact view");
+    r.tapC (drop);
+    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 15, "the dropdown opens the list of the 15 wavetables");
+    const ui::Rect row = r.ui.list().rowRect (r.ui.list().firstRow());
+    r.tap (row.x + 30, row.y + 20);
+    check (r.inst.get ("osc1.wavetable") == static_cast<float> (r.ui.list().firstRow()) && r.stack.depth() == 1, "a tap on a row writes osc1.wavetable");
+    ui::Stepper& st = r.ui.full().basic.source.stepper;
+    const ui::Rect sr = st.rect();
+    r.tap (sr.x + sr.w / 2, sr.y + sr.h / 2);
+    check (r.stack.top() == OscUi::kPageList, "a tap on the name of the source stepper opens the list as well");
+    r.tap (20, 20);
+    const float w0 = r.inst.get ("osc1.wavetable");
+    r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
+    check (r.inst.get ("osc1.wavetable") == w0 + 1.0f && r.stack.depth() == 1, "the right quarter still steps to the next wavetable");
+    // the warp type steppers of the wavetable panel: the name opens the list
+    ui::WarpPair* wp = r.ui.full().panel.warp();
+    const ui::Rect wr = wp->first.type.rect();
+    r.tap (wr.x + wr.w / 2, wr.y + wr.h / 2);
+    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 99, "the name of a warp type stepper opens the list of the warp types");
+    r.tap (20, 20);
+    // the other types have no source list
+    r.inst.set ("osc1.type", 4.0f);
+    r.refresh();
+    check (! r.ui.full().basic.source.dropdown.enabled(), "multisample: the source list is not offered (content, not a parameter)");
+    // drawing with the list open
+    r.inst.set ("osc1.type", 0.0f);
+    r.refresh();
+    r.tapC (r.ui.full().basic.source.dropdown);
+    auto data = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder sb (*data);
+    sb.begin (gpu::kKindPlay, 0, 1280, 628);
+    r.ui.draw (sb);
+    check (! sb.overflow && data->numOps < 640, "the full screen with the list open is one scene (" + std::to_string (data->numOps) + " ops)");
 }
 
 void testGranularAndSubAndNoise()
@@ -468,11 +509,20 @@ void testGranularAndSubAndNoise()
     check (p.knob (ui::PanelSlot::Pitch)->state.value > 0.2, "PITCH reads osc1.gran.rand_pitch");
     check (r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::Scan))->param == Inst::idx ("osc1.gran.position"), "SCAN = osc1.gran.position");
     check (r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::Offset))->param == Inst::idx ("osc1.gran.rand_offset") && r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::Dir))->param == Inst::idx ("osc1.gran.rand_dir"), "OFFSET and DIR = gran.rand_offset, gran.rand_dir");
-    // the warp menu steps the warp type
+    // the warp menu opens the list of the warp types; a tap on a row writes it
     r.inst.set ("osc1.warp.type", 3.0f);
     r.refresh();
     r.tapC (*p.menu());
-    check (r.inst.get ("osc1.warp.type") == 4.0f, "the WARP menu button steps through osc1.warp.type");
+    check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList, "the WARP menu button opens the list popup");
+    check (r.ui.list().state.count == 99 && r.ui.list().state.current == 3 && r.ui.list().state.items != nullptr, "the list holds the 99 warp types of the engine, the current one is 3");
+    {
+        const ui::Rect row = r.ui.list().rowRect (r.ui.list().firstRow() + 1);
+        r.tap (row.x + 30, row.y + 20);
+    }
+    check (r.inst.get ("osc1.warp.type") == static_cast<float> (r.ui.list().firstRow() + 1) && r.stack.depth() == 1, "a tap on a row writes osc1.warp.type and closes the list");
+    r.tapC (*p.menu());
+    r.tap (20, 20);
+    check (r.stack.depth() == 1, "a tap on the backdrop closes the list without a write");
     // sub
     Rig s;
     s.inst.sel = 1;
@@ -528,6 +578,7 @@ int main()
     testDrawsOneSceneInsideTheCanvas();
     testQGroupFollowsTheActiveGroup();
     testGranularAndSubAndNoise();
+    testSourceAndWarpLists();
     std::printf (g_fails ? "osc_ui_host: FAILED (%d)\n" : "osc_ui_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }

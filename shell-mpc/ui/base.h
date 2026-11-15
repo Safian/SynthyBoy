@@ -368,10 +368,16 @@ protected:
     {
         tap_.down (x, y, now);
         prevHalf_ = x < rect_.x + rect_.w / 2;
+        centre_ = listable && x >= rect_.x + rect_.w / 4 && x < rect_.right() - rect_.w / 4;
         return Change::none();
     }
     Change onMove (int x, int y) override { tap_.move (x, y); return Change::none(); }
-    Change onUp (int, int) override { return tap_.up() != 0 ? step (prevHalf_ ? -1 : 1) : Change::none(); }
+    Change onUp (int, int) override
+    {
+        if (tap_.up() == 0)
+            return Change::none();
+        return centre_ ? Change::request (id_) : step (prevHalf_ ? -1 : 1);
+    }
     Change onTurn (double delta) override
     {
         const long d = std::lround (delta);
@@ -391,7 +397,11 @@ private:
         return n == state.index ? Change::none() : Change::indexed (id_, n, n);
     }
     TapGesture tap_;
-    bool prevHalf_ = false;
+    bool prevHalf_ = false, centre_ = false;
+
+public:
+    /** A tap on the middle half (the name) is a Request change (the owner opens the list of all choices, ListPopup); the outer quarters still step. */
+    bool listable = false;
 };
 
 // ===============================================================================================================================================================

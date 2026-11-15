@@ -170,6 +170,22 @@ int main (int argc, char** argv)
         rp.draw (s.builder());
         save (dir, "route_popup.png", s);
     }
+    // the list popup (the source list, the warp types) over a screen
+    {
+        static const char* const names[] = { "Sine", "Saw", "Square", "Triangle", "Pulse", "Noise", "Organ", "Bell", "Vocal", "Pad", "Bass", "Lead" };
+        static OscillatorFullScreen fs;
+        fs.place ({ 0, 0, 1280, 628 });
+        fs.setInstance (OscInstance::A, OscKind::Wavetable);
+        static ListPopup lp;
+        lp.state.items = names; lp.state.count = 12; lp.state.current = 1;
+        lp.place ({ 330, 40, 620, 400 });
+        lp.setPopup ({ 0, 0, 1280, 628 });
+        lp.showCurrent();
+        Scene s (1280, 628, kBackgroundRgba);
+        fs.draw (s.builder());
+        lp.draw (s.builder());
+        save (dir, "list_popup_screen.png", s);
+    }
     // the route panel
     {
         RoutePanel r;

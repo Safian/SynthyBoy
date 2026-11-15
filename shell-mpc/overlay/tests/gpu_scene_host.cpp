@@ -274,6 +274,26 @@ int main()
             }
             check (frames, "play " + std::to_string (idx) + ": only the Env / LFO panel of the sub-tab has the highlight frame");
         }
+        {   // under a full screen / detail page / popup every pixel of the region is opaque (the host's Env / LFO picture and its Q-Link frame must not show through); in main the oscillator third is
+            for (int depth = 0; depth < 3; ++depth)
+            {
+                PlayView pv (1, 10.0);
+                UiStack st;
+                if (depth >= 1) st.openFull (1);
+                if (depth == 2) st.openDetail (13);
+                ViewInput in;
+                in.instance = &inst; in.io = &inst; in.ui = &st; in.nowMs = 0.0;
+                pv.update (in);
+                in.nowMs = 500.0; pv.update (in);
+                std::vector<uint32_t> cv (static_cast<size_t> (PlayView::kW) * PlayView::kH);
+                pv.render (cv.data(), PlayView::kW, PlayView::kH);
+                int transparent = 0;
+                for (int y = 0; y < PlayView::kH; ++y)
+                    for (int x = 0; x < (depth == 0 ? 430 : PlayView::kW); ++x)
+                        transparent += (cv[static_cast<size_t> (y) * PlayView::kW + static_cast<size_t> (x)] >> 24) != 255u;
+                check (transparent == 0, std::string (depth == 0 ? "main: the oscillator third" : (depth == 1 ? "full screen: the whole region" : "popup: the whole region")) + " is opaque (" + std::to_string (transparent) + " transparent pixels)");
+            }
+        }
         // the cursor / dot off (no voice): still the same picture on both renderers
         PlayView idle (2, 10.0);
         ViewInput in;

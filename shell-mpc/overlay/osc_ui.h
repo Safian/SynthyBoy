@@ -36,7 +36,7 @@ class OscUi
 public:
     // ---- the pages (UiStack ids)
     static constexpr int kElementOsc = 1;                                     // the full screen of the oscillator
-    enum Page { kPageUnison = 10, kPageGrain = 11, kPageEnvelope = 12, kPageRoute = 13, kPageMods = 14 };
+    enum Page { kPageUnison = 10, kPageGrain = 11, kPageEnvelope = 12, kPageRoute = 13, kPageMods = 14, kPageList = 15 };
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
     enum Id : int
@@ -51,6 +51,7 @@ public:
         kWarp1Type = 250, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 260, kUnisonCount,
         kDetailBack = 399, kDetail = 400,   // 400 + PanelSlot: the parts of a detail page
         kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2, kRouteClose, kRouteBackdrop,
+        kList = 700, kListBackdrop,         // the list popup (source, warp types)
         kModsBack = 600, kModsRow = 610,    // 610 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsAddStep = 660, kModsAdd
     };
@@ -100,6 +101,10 @@ public:
         popupBox_ = { w / 2 - 340, h / 2 - 110, 680, 220 };
         route_.place (popupBox_);
         route_.setPopup (true, { 0, 0, w, h });
+        list_.place ({ 340, 20, 600, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup ({ 0, 0, w, h });
+        list_.setId (kList);
+        list_.setBackdropId (kListBackdrop);
         detail_.place ({ 0, 0, w, h });
         mods_.place ({ 0, 0, w, h });
     }
@@ -126,6 +131,8 @@ public:
         }
         pull (inst, main_);
         pull (inst, page_);
+        if (pageTop_ == kPageList && listParam_ >= 0)
+            list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
         inst.setUiFullOpen (! stack.isMain());
         publishQGroup (inst);
     }
@@ -135,7 +142,7 @@ public:
     {
         if (stackDepth_ == 0)
             return compact_.displayRect();
-        if (stackDepth_ == 1 || pageTop_ == kPageRoute)
+        if (stackDepth_ == 1 || pageTop_ == kPageRoute || pageTop_ == kPageList)
             return full_.displayRect();
         return {};
     }
@@ -168,6 +175,8 @@ public:
         full_.draw (sb);
         if (pageTop_ == kPageRoute)
             route_.draw (sb);
+        else if (pageTop_ == kPageList)
+            list_.draw (sb);
     }
     /** What goes on top of the picture in the display rectangle (the full screen button of the compact view). */
     void drawOnDisplay (gpu::SceneBuilder& sb) const
@@ -226,6 +235,7 @@ public:
     ui::DetailPage& detail() noexcept { return detail_; }
     ui::ModulationsPage& modsPage() noexcept { return mods_; }
     ui::RoutePanel& routePanel() noexcept { return route_; }
+    ui::ListPopup& list() noexcept { return list_; }
     const std::vector<Item>& items() const noexcept { return main_; }
     const std::vector<Item>& pageItems() const noexcept { return page_; }
     int topPage() const noexcept { return pageTop_; }
@@ -340,7 +350,9 @@ private:
             if (abc)
             {
                 bind (main_, kBasic + 1, &b->source.stepper, T::Stepper, kind == ui::OscKind::Wavetable && ! otherType ? "wavetable" : "", kind != ui::OscKind::Wavetable || otherType);   // the source of the other types is content, not a parameter
-                bind (main_, kBasic + 2, &b->source.dropdown, T::Inert, "", true);                                         // the list of all sources: the stepper covers every choice
+                const bool listOk = b == &full_.basic && kind == ui::OscKind::Wavetable && ! otherType;   // the list of all sources: on the full screen, for the wavetable type (the source of the others is content)
+                bind (main_, kBasic + 2, &b->source.dropdown, T::Inert, "", ! listOk);
+                b->source.stepper.listable = listOk;
             }
             if (sub)
                 bind (main_, kBasic + 3, &b->oct, T::Number, "octave");
@@ -437,6 +449,7 @@ private:
                 case ui::PartKind::WarpPair:
                 {
                     auto* w = static_cast<ui::WarpPair*> (c);
+                    w->first.type.listable = w->second.type.listable = true;
                     bind (list, kWarp1Type, &w->first.type, T::Stepper, "warp.type");
                     bind (list, kWarp1Amount, &w->first.amount, T::Knob, "warp.amount");
                     bind (list, kWarp1Var, &w->first.var, T::Knob, "", true);     // WARP Var: no parameter in the engine
@@ -601,6 +614,15 @@ private:
                 route_.group.setActive (true);
                 break;
             case kPageMods: loadMods (inst); break;
+            case kPageList:
+                if (listParam_ >= 0)
+                {
+                    list_.state.items = info (listParam_).choices;
+                    list_.state.count = info (listParam_).numChoices;
+                    list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
+                    list_.showCurrent();
+                }
+                break;
             default: break;
         }
         configureNumberRanges (page_);
@@ -912,6 +934,8 @@ private:
             return &mods_;
         if (pageTop_ == kPageRoute)
             return &route_;
+        if (pageTop_ == kPageList)
+            return &list_;
         return &full_;
     }
 
@@ -929,6 +953,9 @@ private:
                 case kFullButton: stack.openFull (kElementOsc); return;
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
                 case kRoute: stack.openDetail (kPageRoute); return;
+                case kListBackdrop: stack.back(); return;
+                case kBasic + 1: case kBasic + 2: openList (item (kBasic + 1), stack); return;
+                case kWarp1Type: case kWarp2Type: openList (item (id), stack); return;
                 default: break;
             }
             if (id == kUnisonGear) { stack.openDetail (kPageUnison); return; }
@@ -942,9 +969,7 @@ private:
             }
             if (id == kPanel + static_cast<int> (ui::PanelSlot::WarpMenu) && it != nullptr && it->param >= 0)
             {
-                const synthyboy::ParamInfo& pi = info (it->param);
-                const int cur = static_cast<int> (std::lround (v.param (it->param)));
-                writePlain (v, it->param, (cur + 1) % std::max (1, static_cast<int> (pi.max) + 1));
+                openList (it, stack);
                 return;
             }
             if (id >= kModsRow && id < kModsRow + 4 * ui::ModulationsPage::kMaxRows && (id - kModsRow) % 4 == 3)
@@ -969,6 +994,13 @@ private:
         if (c.kind == K::AddRequest)
         {
             addModulation (v, c.index);
+            return;
+        }
+        if (id == kList && c.kind == K::Index)
+        {
+            if (listParam_ >= 0)
+                writePlain (v, listParam_, info (listParam_).min + c.index);
+            stack.back();
             return;
         }
         // ---- the instance selector of the compact view
@@ -1013,6 +1045,15 @@ private:
             return;
         }
         write (*it, c, v);
+    }
+
+    /** The list popup of a choice parameter (the owner's item: its parameter): over the full screen. */
+    void openList (const Item* it, UiStack& stack)
+    {
+        if (it == nullptr || it->param < 0 || it->alwaysOff || info (it->param).choices == nullptr || info (it->param).numChoices < 2)
+            return;
+        listParam_ = it->param;
+        stack.openDetail (kPageList);
     }
 
     void addModulation (IInstanceView& v, int source)
@@ -1142,6 +1183,10 @@ private:
             }
             g = nullptr;
         }
+        else if (pageTop_ == kPageList)
+        {
+            name = "List";
+        }
         else if (pageTop_ == kPageRoute)
         {
             g = &route_.group;
@@ -1173,6 +1218,8 @@ private:
     ui::DetailPage detail_;
     ui::ModulationsPage mods_;
     ui::RoutePanel route_;
+    ui::ListPopup list_;
+    int listParam_ = -1;
     ui::Rect popupBox_;
     std::vector<Item> main_, page_;
     ui::Component* gesture_ = nullptr;
