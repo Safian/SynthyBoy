@@ -8,9 +8,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
-#include "font5x7.h"
+#include "sdf_font.h"
 
 namespace synthyboy_mpc { namespace overlay { namespace draw {
 
@@ -102,7 +103,7 @@ inline void line (uint32_t* cv, int w, int h, float x0, float y0, float x1, floa
             const double t = px * ux + py * uy, d = std::fabs (-px * uy + py * ux);
             if (t < 0.0 || t > len)
                 continue;
-            const double cov = std::clamp (half + 0.5 - d, 0.0, 1.0);
+            const double cov = std::min (std::clamp (half + 0.5 - d, 0.0, 1.0), 2.0 * half);
             if (cov > 0.0)
             {
                 uint32_t& p = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
@@ -123,7 +124,7 @@ void arc (uint32_t* cv, int w, int h, float cx, float cy, float r, float half, I
         for (int x = xa; x < xb; ++x)
         {
             const float dx = static_cast<float> (x + 0.5 - cx), dy = static_cast<float> (y + 0.5 - cy);
-            const double cov = std::clamp (static_cast<double> (half) + 0.5 - std::fabs (std::sqrt (static_cast<double> (dx) * dx + static_cast<double> (dy) * dy) - r), 0.0, 1.0);
+            const double cov = std::min (std::clamp (static_cast<double> (half) + 0.5 - std::fabs (std::sqrt (static_cast<double> (dx) * dx + static_cast<double> (dy) * dy) - r), 0.0, 1.0), 2.0 * static_cast<double> (half));
             if (cov > 0.0 && inside (dx, dy))
             {
                 uint32_t& p = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
@@ -253,16 +254,53 @@ inline void strokeCurve (uint32_t* cv, int w, int h, const std::vector<double>& 
                 continue;
             if (cov > 1.0)
                 cov = 1.0;
+            cov = std::min (cov, 2.0 * half);
             uint32_t& d = cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x0 + x)];
             d = over (d, lineC, static_cast<int> (cov * 255.0));
         }
     }
 }
 
-/** The small text of font5x7.h: top left corner (x, y), `cell` pixels per font pixel, solid squares (no anti-aliasing: the scene's text op draws the same rectangles). */
-inline void text (uint32_t* cv, int w, int h, int x, int y, int cell, const char* s, int maxChars, uint32_t c) noexcept
+/** The premultiplied float colour packed into a premultiplied ARGB8888 pixel. */
+inline uint32_t packPremul (const float c[4]) noexcept
 {
-    font::forEachRect (x, y, cell, s, maxChars, [&] (int x0, int y0, int x1, int y1) { fillRect (cv, w, h, x0, y0, x1, y1, c); });
+    auto q = [] (float v) { return static_cast<uint32_t> (std::min (std::max (v, 0.0f), 1.0f) * 255.0f + 0.5f); };
+    return (q (c[3]) << 24) | (q (c[0]) << 16) | (q (c[1]) << 8) | q (c[2]);
+}
+
+/** A string from the signed distance field font (sdf_font.h): the pen starts at (x, baseline), `size` pixels per em. `colourAt (px, py, out)` gives the premultiplied colour of a pixel centre. */
+template <class ColourAt>
+void text (uint32_t* cv, int w, int h, float x, float baseline, float size, const char* s, int n, float tracking, ColourAt colourAt) noexcept
+{
+    namespace sd = synthyboy_mpc::overlay::sdf;
+    const float k = size / static_cast<float> (sd::kEm);
+    sd::layout (s, n, x, baseline, size, tracking, [&] (const sd::Quad& q)
+    {
+        const int xa = std::max (0, static_cast<int> (std::floor (q.x0))), xb = std::min (w, static_cast<int> (std::ceil (q.x1)));
+        const int ya = std::max (0, static_cast<int> (std::floor (q.y0))), yb = std::min (h, static_cast<int> (std::ceil (q.y1)));
+        for (int py = ya; py < yb; ++py)
+            for (int px = xa; px < xb; ++px)
+            {
+                const float u = q.u0 + (static_cast<float> (px) + 0.5f - q.x0) / k, v = q.v0 + (static_cast<float> (py) + 0.5f - q.y0) / k;
+                if (u < q.u0 || u > q.u1 || v < q.v0 || v > q.v1)
+                    continue;
+                const float cov = sd::coverage (sd::atlasSample (u, v), size);
+                if (cov <= 0.0f)
+                    continue;
+                float c[4];
+                colourAt (static_cast<float> (px) + 0.5f, static_cast<float> (py) + 0.5f, c);
+                uint32_t& d = cv[static_cast<size_t> (py) * static_cast<size_t> (w) + static_cast<size_t> (px)];
+                d = over (d, packPremul (c), static_cast<int> (cov * 255.0f));
+            }
+    });
+}
+/** The same in one solid premultiplied colour. */
+inline void text (uint32_t* cv, int w, int h, float x, float baseline, float size, const char* s, uint32_t premul) noexcept
+{
+    text (cv, w, h, x, baseline, size, s, static_cast<int> (std::strlen (s)), 0.0f, [premul] (float, float, float* out)
+    {
+        out[3] = static_cast<float> (premul >> 24) / 255.0f; out[0] = static_cast<float> ((premul >> 16) & 255u) / 255.0f; out[1] = static_cast<float> ((premul >> 8) & 255u) / 255.0f; out[2] = static_cast<float> (premul & 255u) / 255.0f;
+    });
 }
 
 }}} // namespace synthyboy_mpc::overlay::draw

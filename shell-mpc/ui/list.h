@@ -37,7 +37,7 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen pen (sb, enabled_);
-        pen.rect (parent_, colour::rgba (0x000000u, 150));
+        pen.rect (parent_, colour::rgba (theme::L().bg1, 190));
         drawBody (pen);
     }
     Change touchDown (int x, int y, double nowMs) override
@@ -79,24 +79,33 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
-        p.rect (rect_, p.c (colour::kPanel, 255));
-        p.frame (rect_, 2, p.c (colour::kAccent, 255));
+        const theme::Look& T = theme::L();
+        p.block (rect_, true);
+        p.rrect (rect_, T.rBlock, p.c (T.flow[0], 255), 1.6f);
         const int n = std::max (0, state.count), f = firstRow(), last = std::min (n, f + visibleRows());
         for (int i = f; i < last; ++i)
         {
             const Rect r = rowRect (i);
             const bool cur = i == state.current;
-            p.rect (r.inset (1), p.c (cur ? colour::kAccentDark : colour::kBackground, cur ? 200 : 255));
             if (cur)
-                p.frame (r.inset (1), 1, p.c (colour::kAccent, 255));
+            {
+                p.paintX2 (static_cast<float> (r.x), static_cast<float> (r.right()), T.flow[0], T.flow[2], 60);
+                p.rrect (r.inset (1), T.rControl, 255);
+                p.paintOff();
+                p.paintX2 (static_cast<float> (r.x), static_cast<float> (r.right()), T.flow[0], T.flow[2], 255);
+                p.rrect (r.inset (1), T.rControl, 255, 1.5f);
+                p.plain();
+            }
             const char* name = state.items != nullptr && state.items[i] != nullptr ? state.items[i] : "";
-            p.textLeft ({ r.x + 12, r.y + 4, std::max (0, r.w - 20), r.h - 8 }, name, 3, p.c (cur ? colour::kWhite : colour::kText, 255));
+            p.textLeft ({ r.x + 12, r.y + 4, std::max (0, r.w - 20), r.h - 8 }, name, T.fItem, p.c (cur ? T.text : T.textDim, 255), T.fMin);
         }
         if (n > visibleRows())
         {
             const int trackH = rect_.h - 2 * kPad, thumbH = std::max (12, trackH * visibleRows() / n), thumbY = (trackH - thumbH) * f / std::max (1, n - visibleRows());
-            p.rect (rect_.right() - kPad - kBarW, rect_.y + kPad, rect_.right() - kPad, rect_.bottom() - kPad, p.c (colour::kRest, 120));
-            p.rect (rect_.right() - kPad - kBarW, rect_.y + kPad + thumbY, rect_.right() - kPad, rect_.y + kPad + thumbY + thumbH, p.c (colour::kAccent, 255));
+            p.rrect ({ rect_.right() - kPad - kBarW, rect_.y + kPad, kBarW, rect_.h - 2 * kPad }, 3.0f, p.c (T.track, 255));
+            p.paintY2 (static_cast<float> (rect_.y + kPad + thumbY), static_cast<float> (rect_.y + kPad + thumbY + thumbH), T.flow[0], T.flow[3], 255);
+            p.rrect ({ rect_.right() - kPad - kBarW, rect_.y + kPad + thumbY, kBarW, thumbH }, 3.0f, 255);
+            p.paintOff();
         }
     }
     Change onDown (int x, int y, double nowMs) override

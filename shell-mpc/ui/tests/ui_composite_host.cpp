@@ -355,7 +355,7 @@ void testRoutePanel()
     Scene sp (1280, 800, kBackgroundRgba);
     pp.draw (sp.builder());
     const Image ip = render (sp);
-    check (! sp.overflow() && drawnOutside (ip, parent, backgroundPixel()) == 0 && ip.at (50, 50) != backgroundPixel() && colourNear (ip, 301.0f, 300.0f, 0, colour::kAccent, 4), "route panel popup: a dimmed backdrop over the parent rectangle (changes the pixels), the framed box, nothing outside the parent");
+    check (! sp.overflow() && drawnOutside (ip, parent, backgroundPixel()) == 0 && ip.at (50, 50) != backgroundPixel() && colourNear (ip, 300.0f, 300.0f, 0, colour::accent(), 4), "route panel popup: a dimmed backdrop over the parent rectangle (changes the pixels), the framed box, nothing outside the parent");
     c = tap (pp, 50, 50, 0.0);
     check (c.kind == ChangeKind::Request && c.id == 77, "route panel popup: a tap outside the box (on the backdrop) = close requested: id 77");
     pp.touchDown (50, 50, 100.0);
@@ -709,11 +709,11 @@ void testQGroup()
     pg.panel.warp()->first.setHasVar (true);
     Scene s (1280, 628, kBackgroundRgba);
     pg.q[0].draw (s.builder());
-    check (s.numOps() == 2 && s.data->ops[1].op == gpu::kOpFrame, "q group: the group draws exactly one frame op (after the clear)");
+    check (s.numOps() == 2 && s.data->ops[1].op == gpu::kOpRRect, "q group: the group draws exactly one rounded outline op (after the clear)");
     const Image im = render (s);
     check (drawnOutside (im, pg.q[0].rect(), backgroundPixel()) == 0, "q group: the frame is inside the union rectangle");
     const Rect r = pg.q[0].rect();
-    check (colourNear (im, static_cast<float> (r.x), static_cast<float> (r.y + r.h / 2), 0, colour::kAccent, 4) && colourNear (im, static_cast<float> (r.right() - 1), static_cast<float> (r.bottom() - 1), 0, colour::kAccent, 4), "q group: the frame has the accent colour at the edge");
+    check (colourNear (im, static_cast<float> (r.x), static_cast<float> (r.y + r.h / 2), 0, colour::q(), 4) && colourNear (im, static_cast<float> (r.x + r.w / 2), static_cast<float> (r.bottom() - 1), 0, colour::q(), 4), "q group: the frame has the colour of the Q-Link focus at the edge");
     Scene s0 (1280, 628, kBackgroundRgba);
     pg.q[2].draw (s0.builder());
     pg.q[2].setActive (false);

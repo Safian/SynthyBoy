@@ -69,6 +69,21 @@ typedef ptrdiff_t GLsizeiptr;
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
 #define GL_RENDERER 0x1F01
+#define GL_EXTENSIONS 0x1F03
+#define GL_TEXTURE_2D 0x0DE1
+#define GL_TEXTURE_MIN_FILTER 0x2801
+#define GL_TEXTURE_MAG_FILTER 0x2800
+#define GL_TEXTURE_WRAP_S 0x2802
+#define GL_TEXTURE_WRAP_T 0x2803
+#define GL_LINEAR 0x2601
+#define GL_CLAMP_TO_EDGE 0x812F
+#define GL_ALPHA 0x1906
+#define GL_TEXTURE0 0x84C0
+#define GL_FRAMEBUFFER 0x8D40
+#define GL_COLOR_ATTACHMENT0 0x8CE0
+#define GL_FRAMEBUFFER_COMPLETE 0x8CD5
+#define GL_UNPACK_ALIGNMENT 0x0CF5
+#define GL_SAMPLES 0x80A9
 
 // ---- GBM (Mesa gbm.h)
 struct gbm_device;
@@ -131,7 +146,23 @@ struct Api
     X (void, glBlendFunc, (GLenum s, GLenum d)) \
     X (void, glDrawArrays, (GLenum mode, GLint first, GLsizei count)) \
     X (void, glFinish, (void)) \
-    X (void, glReadPixels, (GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, GLenum type, void* data))
+    X (void, glReadPixels, (GLint x, GLint y, GLsizei w, GLsizei h, GLenum fmt, GLenum type, void* data)) \
+    X (void, glGenTextures, (GLsizei n, GLuint* t)) \
+    X (void, glDeleteTextures, (GLsizei n, const GLuint* t)) \
+    X (void, glBindTexture, (GLenum target, GLuint t)) \
+    X (void, glTexImage2D, (GLenum target, GLint level, GLint internalFormat, GLsizei w, GLsizei h, GLint border, GLenum format, GLenum type, const void* data)) \
+    X (void, glTexParameteri, (GLenum target, GLenum pname, GLint param)) \
+    X (void, glActiveTexture, (GLenum unit)) \
+    X (void, glUniform1i, (GLint loc, GLint v)) \
+    X (void, glUniform2f, (GLint loc, GLfloat a, GLfloat b)) \
+    X (void, glCopyTexSubImage2D, (GLenum target, GLint level, GLint xoff, GLint yoff, GLint x, GLint y, GLsizei w, GLsizei h)) \
+    X (void, glGenFramebuffers, (GLsizei n, GLuint* f)) \
+    X (void, glDeleteFramebuffers, (GLsizei n, const GLuint* f)) \
+    X (void, glBindFramebuffer, (GLenum target, GLuint f)) \
+    X (void, glFramebufferTexture2D, (GLenum target, GLenum attachment, GLenum textarget, GLuint tex, GLint level)) \
+    X (GLenum, glCheckFramebufferStatus, (GLenum target)) \
+    X (void, glPixelStorei, (GLenum pname, GLint param)) \
+    X (void, glGetIntegerv, (GLenum pname, GLint* v))
 #define SB_GBM_FUNCS(X) \
     X (struct gbm_device*, gbm_create_device, (int fd)) \
     X (void, gbm_device_destroy, (struct gbm_device* g)) \

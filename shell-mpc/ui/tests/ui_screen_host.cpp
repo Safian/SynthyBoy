@@ -131,9 +131,7 @@ int main()
             for (uint32_t k = 0; k < sc.data->numOps; ++k)
                 if (sc.data->ops[k].op == gpu::kOpText)
                 {
-                    char chars[13];
-                    gpu::textOf (sc.data->ops[k], chars);
-                    if (std::string (chars) == want)
+                    if (gpu::textString (*sc.data, sc.data->ops[k]) == want)
                         return true;
                 }
             return false;
@@ -222,12 +220,12 @@ int main()
         c.draw (sc.builder());
         {
             const Image img = render (sc);
-            const uint32_t panelPx = ov::sceneColour (colour::rgba (colour::kPanel, 255));
+            const uint32_t panelPx = ov::sceneColour (colour::rgba (colour::panel(), 255));
             int on = 0;
             for (int y = c.full.rect().y; y < c.full.rect().bottom(); ++y)
                 for (int x = c.full.rect().x; x < c.full.rect().right(); ++x)
                     on += img.at (x, y) != panelPx && img.at (x, y) != backgroundPixel();
-            check (c.displayRect().contains (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::kText, 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::kText, 20), nm + ": the full screen button is drawn over the display area (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
+            check (c.displayRect().contains (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::accent(), 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::accent(), 20), nm + ": the full screen button is drawn over the display area (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
         }
         check (! sc.overflow() && drawnOutside (render (sc), c.rect(), backgroundPixel()) == 0 && c.sizeOk(), nm + ": draws inside, fits one scene (" + std::to_string (sc.numOps()) + " ops)");
         writePng (outDir() + "/compact_" + std::to_string (v) + ".png", render (sc), 1);

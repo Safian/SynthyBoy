@@ -44,7 +44,7 @@
 #include <drm/drm_fourcc.h>
 #include <drm/drm_mode.h>
 
-#include "../font5x7.h"
+#include "../sdf_font.h"
 #include "../gpu/scene.h"
 #include "../vblank_linux.h"
 #include "../vblank_pacer.h"
@@ -70,14 +70,30 @@ double nowMs()
 constexpr int kSock = 3;
 
 struct Vtx { float x, y, d0, d1; };
+struct PaintU { float mode = 0.0f, a = 0.0f, inv = 1.0f; float c[4][4] = {}; };   // the paint: premultiplied colours, mode 0 none / 1 x / 2 y / 3 arc angle
+/** One GL draw (or a state change of the frame). kind: 0 solid, 1 feathered line (d0 = signed distance from the axis, d1 = distance along it), 2 disc (d0, d1 = offset from the centre), 3 vertical
+    gradient (d0 = 0 .. 1 from colour to colour2), 4 / 5 / 6 ring segment of at most pi / more than pi / the whole ring (d0, d1 = offset from the centre), 7 text (d0, d1 = atlas coordinates),
+    8 rounded rectangle (d0, d1 = offset from the centre), 9 band (d0 = coverage), 10 a texture times colour, 12 / 13 the blur of the glow layer (horizontal / vertical). */
 struct Draw
 {
-    int prim = 0, first = 0, count = 0, kind = 0;   // kind: 0 solid, 1 feathered line (d0 = signed distance), 2 disc (d0, d1 = offset from the centre), 3 vertical gradient (d0 = 0 .. 1 from colour to colour2), 4 / 5 / 6 ring segment of at most pi / more than pi / the whole ring (d0, d1 = offset from the centre)
+    int type = 0;                                   // 0 draw, 1 clear (colour), 2 glow begin (the layer is cleared), 3 nothing (a marker of the end of the glow)
+    int prim = 0, first = 0, count = 0, kind = 0;
+    int target = -1;                                // -1 the picture, 0 / 1 the two glow layers
+    int tex = 0;                                    // 0 the font atlas, 1 / 2 the glow layers, 3 the previous picture
+    bool additive = false;                          // blend ONE, ONE (the bloom is added)
     float colour[4] = {};                           // premultiplied
     float colour2[4] = {};                          // premultiplied, the other end of a gradient
     float half = 0.0f;                              // half width of a line, radius of a disc, half width of an arc
-    float arcR = 0.0f, arcU[4] = {};                // an arc (kinds 4, 5, 6): the radius and the unit directions of its two ends (u0x, u0y, u1x, u1y)
-    bool clear = false;                             // a glClear with `colour`
+    float soft = 1.0f;                              // the feather (px)
+    float arcR = 0.0f, arcU[4] = {}, arcE[4] = {};  // an arc: the radius, the unit directions of its two ends (u0x, u0y, u1x, u1y) and the centres of its round caps (offsets from the centre)
+    float arcA0 = 0.0f, arcInv = 0.0f;              // the angle of the first end and 1 / sweep
+    float round = 0.0f;                             // round caps of an arc / a line
+    float len = 0.0f;                               // length of a line
+    float textK = 0.0f;                             // 2 * kSpread * size / kEm
+    float rr[4] = {};                               // rounded rectangle: hx - r, hy - r, r, outline width
+    float texel[2] = {};
+    PaintU pt;
+    int divisor = 4;
 };
 
 class Helper
@@ -187,25 +203,61 @@ private:
     // ---------------------------------------------------------------------------------------------------------------------------------------------------------
     // GL
     static constexpr const char* kVs =
-        "attribute vec2 aPos; attribute vec2 aD; varying vec2 vD; uniform vec3 uRowX; uniform vec3 uRowY;\n"
-        "void main() { vD = aD; gl_Position = vec4 (dot (uRowX.xy, aPos) + uRowX.z, dot (uRowY.xy, aPos) + uRowY.z, 0.0, 1.0); }\n";
-    // premultiplied output: kind 0 solid, kind 1 feathered line (coverage 1 px edge), kind 2 disc (coverage from the distance to the centre), kind 3 vertical gradient (d0 runs 0 .. 1 over the rows)
+        "attribute vec2 aPos; attribute vec2 aD; varying vec2 vD; varying vec2 vP; varying vec2 vC; uniform vec3 uRowX; uniform vec3 uRowY;\n"
+        "void main() { vD = aD; vP = aPos; gl_Position = vec4 (dot (uRowX.xy, aPos) + uRowX.z, dot (uRowY.xy, aPos) + uRowY.z, 0.0, 1.0); vC = gl_Position.xy * 0.5 + 0.5; }\n";
+    // premultiplied output. kinds: see struct Draw. The coverage functions are the ones of scene.h (edgeCoverage, lineCoverage, rrectCoverage, arcContains, arcParam) and sdf_font.h (coverage).
     static constexpr const char* kFs =
-        "precision mediump float; varying vec2 vD; uniform float uKind; uniform vec4 uC0; uniform vec4 uC1; uniform float uHalf; uniform float uR; uniform vec4 uU;\n"
+        "precision highp float;\n"
+        "varying vec2 vD; varying vec2 vP; varying vec2 vC;\n"
+        "uniform float uKind; uniform vec4 uC0; uniform vec4 uC1; uniform float uHalf; uniform float uR; uniform vec4 uU; uniform float uSoft;\n"
+        "uniform vec4 uE; uniform vec4 uA; uniform float uLen; uniform float uTextK; uniform vec4 uRR; uniform vec2 uTexel;\n"
+        "uniform vec3 uPm; uniform vec4 uP0; uniform vec4 uP1; uniform vec4 uP2; uniform vec4 uP3; uniform sampler2D uTex;\n"
+        "float edge (float x) { float c = clamp (0.5 + x / uSoft, 0.0, 1.0); return uSoft > 1.0 ? c * c * (3.0 - 2.0 * c) : c; }\n"
+        "float lineCov (float d) { float c = edge (uHalf - d); return uSoft > 1.0 ? c : min (c, 2.0 * uHalf); }\n"
+        "vec4 pal (float t) { t = clamp (t, 0.0, 1.0) * 3.0; if (t < 1.0) return mix (uP0, uP1, t); if (t < 2.0) return mix (uP1, uP2, t - 1.0); return mix (uP2, uP3, t - 2.0); }\n"
+        "vec4 ink (float t) {\n"
+        "  if (uPm.x < 0.5) return uC0;\n"
+        "  if (uPm.x < 1.5) t = (vP.x - uPm.y) * uPm.z; else if (uPm.x < 2.5) t = (vP.y - uPm.y) * uPm.z;\n"
+        "  return pal (t) * uC0.a;\n"
+        "}\n"
         "void main() {\n"
-        "  if (uKind > 3.5) {\n"   // the ring segment: the ring by the distance from the centre, the ends by cross products of the offset with the directions of the two ends (arcContains of scene.h)
-        "    float cov = clamp (uHalf + 0.5 - abs (length (vD) - uR), 0.0, 1.0);\n"
+        "  if (uKind < 0.5) { gl_FragColor = ink (0.0); return; }\n"
+        "  if (uKind < 1.5) {\n"
+        "    float d = abs (vD.x);\n"
+        "    if (uA.z > 0.5) d = length (vec2 (vD.x, max (max (-vD.y, vD.y - uLen), 0.0)));\n"
+        "    gl_FragColor = ink (0.0) * lineCov (d); return;\n"
+        "  }\n"
+        "  if (uKind < 2.5) { gl_FragColor = ink (0.0) * edge (uHalf - length (vD)); return; }\n"
+        "  if (uKind < 3.5) { gl_FragColor = mix (uC0, uC1, clamp (vD.x, 0.0, 1.0)); return; }\n"
+        "  if (uKind < 6.5) {\n"   // the ring segment: the ring by the distance from the centre, the ends by cross products of the offset with the directions of the two ends (arcContains of scene.h)
+        "    float cov = lineCov (abs (length (vD) - uR));\n"
         "    bool inside = true;\n"
         "    if (uKind < 4.5) inside = uU.x * vD.y - uU.y * vD.x >= 0.0 && vD.x * uU.w - vD.y * uU.z >= 0.0;\n"
         "    else if (uKind < 5.5) inside = ! (uU.z * vD.y - uU.w * vD.x > 0.0 && vD.x * uU.y - vD.y * uU.x > 0.0);\n"
-        "    gl_FragColor = inside ? uC0 * cov : vec4 (0.0);\n"
-        "    return;\n"
+        "    cov = inside ? cov : 0.0;\n"
+        "    if (uA.z > 0.5 && uKind < 5.5) { cov = max (cov, lineCov (length (vD - uE.xy))); cov = max (cov, lineCov (length (vD - uE.zw))); }\n"
+        "    float t = 0.0;\n"
+        "    if (uPm.x > 2.5) { float a = atan (vD.y, vD.x) - uA.x; a -= 6.28318530718 * floor (a / 6.28318530718); t = a * uA.y; }\n"
+        "    gl_FragColor = ink (t) * cov; return;\n"
         "  }\n"
-        "  if (uKind > 2.5) { gl_FragColor = mix (uC0, uC1, clamp (vD.x, 0.0, 1.0)); return; }\n"
-        "  float cov = 1.0;\n"
-        "  if (uKind > 1.5) cov = clamp (uHalf + 0.5 - length (vD), 0.0, 1.0);\n"
-        "  else if (uKind > 0.5) cov = clamp (uHalf + 0.5 - abs (vD.x), 0.0, 1.0);\n"
-        "  gl_FragColor = uC0 * cov;\n"
+        "  if (uKind < 7.5) {\n"
+        "    float v = texture2D (uTex, vD).a;\n"
+        "    gl_FragColor = ink (0.0) * clamp (0.5 + (v - 0.5) * uTextK, 0.0, 1.0); return;\n"
+        "  }\n"
+        "  if (uKind < 8.5) {\n"
+        "    vec2 q = abs (vD) - uRR.xy;\n"
+        "    float d = length (max (q, 0.0)) + min (max (q.x, q.y), 0.0) - uRR.z;\n"
+        "    float cov = edge (-d);\n"
+        "    if (uRR.w > 0.0) cov = max (cov - edge (-d - uRR.w), 0.0);\n"
+        "    gl_FragColor = ink (0.0) * cov; return;\n"
+        "  }\n"
+        "  if (uKind < 9.5) { gl_FragColor = ink (0.0) * clamp (vD.x, 0.0, 1.0); return; }\n"
+        "  if (uKind < 10.5) { gl_FragColor = texture2D (uTex, vC) * uC0; return; }\n"
+        "  vec2 st = uKind < 12.5 ? vec2 (uTexel.x, 0.0) : vec2 (0.0, uTexel.y);\n"   // the blur: 9 taps from 5 linear samples
+        "  vec4 s = texture2D (uTex, vC) * 0.2270270270;\n"
+        "  s += (texture2D (uTex, vC + st * 1.3846153846) + texture2D (uTex, vC - st * 1.3846153846)) * 0.3162162162;\n"
+        "  s += (texture2D (uTex, vC + st * 3.2307692308) + texture2D (uTex, vC - st * 3.2307692308)) * 0.0702702703;\n"
+        "  gl_FragColor = s;\n"
         "}\n";
 
     GLuint compile (GLenum type, const char* src, std::string& error)
@@ -293,7 +345,7 @@ private:
             api_.eglGetConfigAttrib (dpy_, all[static_cast<size_t> (i)], EGL_ALPHA_SIZE, &a);
             api_.eglGetConfigAttrib (dpy_, all[static_cast<size_t> (i)], EGL_SAMPLES, &s);
             api_.eglGetConfigAttrib (dpy_, all[static_cast<size_t> (i)], EGL_NATIVE_VISUAL_ID, &vis);
-            if ((rt & EGL_OPENGL_ES2_BIT) && (st & EGL_WINDOW_BIT) && r == 8 && g == 8 && b == 8 && a == 8 && s == 0 && static_cast<uint32_t> (vis) == GBM_FORMAT_ARGB8888)
+            if ((rt & EGL_OPENGL_ES2_BIT) && (st & EGL_WINDOW_BIT) && r == 8 && g == 8 && b == 8 && a == 8 && s == wantSamples_ && static_cast<uint32_t> (vis) == GBM_FORMAT_ARGB8888)
                 cfg_ = all[static_cast<size_t> (i)];
         }
         if (! cfg_)
@@ -357,6 +409,8 @@ private:
 
     bool initGl (std::string& error)
     {
+        if (const char* ms = std::getenv ("SYNTHYBOY_OVERLAY_MSAA"))   // a measurement switch: an EGL configuration with this many samples (0 = none, the default)
+            wantSamples_ = std::atoi (ms);
         if (! api_.load (error))
             return false;
         if (! openRenderNode (error))
@@ -393,14 +447,17 @@ private:
             return false;
         }
         api_.glUseProgram (prog_);
-        uRowX_ = api_.glGetUniformLocation (prog_, "uRowX");
-        uRowY_ = api_.glGetUniformLocation (prog_, "uRowY");
-        uKind_ = api_.glGetUniformLocation (prog_, "uKind");
-        uC0_ = api_.glGetUniformLocation (prog_, "uC0");
-        uC1_ = api_.glGetUniformLocation (prog_, "uC1");
-        uHalf_ = api_.glGetUniformLocation (prog_, "uHalf");
-        uR_ = api_.glGetUniformLocation (prog_, "uR");
-        uU_ = api_.glGetUniformLocation (prog_, "uU");
+        auto loc = [&] (const char* name) { return api_.glGetUniformLocation (prog_, name); };
+        u_.rowX = loc ("uRowX"); u_.rowY = loc ("uRowY"); u_.kind = loc ("uKind"); u_.c0 = loc ("uC0"); u_.c1 = loc ("uC1"); u_.half = loc ("uHalf"); u_.r = loc ("uR"); u_.u = loc ("uU");
+        u_.soft = loc ("uSoft"); u_.e = loc ("uE"); u_.a = loc ("uA"); u_.len = loc ("uLen"); u_.textK = loc ("uTextK"); u_.rr = loc ("uRR"); u_.texel = loc ("uTexel"); u_.pm = loc ("uPm");
+        u_.p0 = loc ("uP0"); u_.p1 = loc ("uP1"); u_.p2 = loc ("uP2"); u_.p3 = loc ("uP3"); u_.tex = loc ("uTex");
+        api_.glUniform1i (u_.tex, 0);
+        // the font atlas (alpha, bilinear): the signed distance field of sdf_font_data.h
+        api_.glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+        api_.glGenTextures (1, &atlasTex_);
+        api_.glBindTexture (GL_TEXTURE_2D, atlasTex_);
+        api_.glTexImage2D (GL_TEXTURE_2D, 0, GL_ALPHA, synthyboy_mpc::overlay::sdf::kAtlasW, synthyboy_mpc::overlay::sdf::kAtlasH, 0, GL_ALPHA, GL_UNSIGNED_BYTE, synthyboy_mpc::overlay::sdf::kAtlas);
+        setTexParams();
         api_.glGenBuffers (1, &vbo_);
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
         api_.glEnableVertexAttribArray (0);
@@ -552,6 +609,9 @@ private:
         }
         api_.eglSwapInterval (dpy_, 0);
         api_.glViewport (0, 0, bw_, bh_);
+        feedbackTex_ = makeTexture (bw_, bh_);      // the previous picture, for the Feedback op (copied after every picture that needs it)
+        api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
+        prevFeedback_ = false;
         return true;
     }
 
@@ -564,6 +624,13 @@ private:
         if (prevBo_ && gsurf_)
             api_.gbm_surface_release_buffer (gsurf_, prevBo_);
         prevBo_ = nullptr;
+        if (feedbackTex_ && esurf_ != EGL_NO_SURFACE)
+        {
+            api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
+            api_.glDeleteTextures (1, &feedbackTex_);
+            dropGlow();
+        }
+        feedbackTex_ = 0;
         if (dpy_ != EGL_NO_DISPLAY)
             api_.eglMakeCurrent (dpy_, EGL_NO_SURFACE, EGL_NO_SURFACE, ctx_);
         if (esurf_ != EGL_NO_SURFACE)
@@ -581,23 +648,23 @@ private:
         // the buffer pixel (bx, by) of the canvas pixel (x, y), memory row 0 = the top of the GL framebuffer: 90: (y, W - x); 270: (H - y, x); 0: (x, y); 180: (W - x, H - y)
         if (rot_ == 90)
         {
-            api_.glUniform3f (uRowX_, 0.0f, 2.0f / H, -1.0f);
-            api_.glUniform3f (uRowY_, 2.0f / W, 0.0f, -1.0f);
+            api_.glUniform3f (u_.rowX, 0.0f, 2.0f / H, -1.0f);
+            api_.glUniform3f (u_.rowY, 2.0f / W, 0.0f, -1.0f);
         }
         else if (rot_ == 270)
         {
-            api_.glUniform3f (uRowX_, 0.0f, -2.0f / H, 1.0f);
-            api_.glUniform3f (uRowY_, -2.0f / W, 0.0f, 1.0f);
+            api_.glUniform3f (u_.rowX, 0.0f, -2.0f / H, 1.0f);
+            api_.glUniform3f (u_.rowY, -2.0f / W, 0.0f, 1.0f);
         }
         else if (rot_ == 0)
         {
-            api_.glUniform3f (uRowX_, 2.0f / W, 0.0f, -1.0f);
-            api_.glUniform3f (uRowY_, 0.0f, -2.0f / H, 1.0f);
+            api_.glUniform3f (u_.rowX, 2.0f / W, 0.0f, -1.0f);
+            api_.glUniform3f (u_.rowY, 0.0f, -2.0f / H, 1.0f);
         }
         else
         {
-            api_.glUniform3f (uRowX_, -2.0f / W, 0.0f, 1.0f);
-            api_.glUniform3f (uRowY_, 0.0f, 2.0f / H, -1.0f);
+            api_.glUniform3f (u_.rowX, -2.0f / W, 0.0f, 1.0f);
+            api_.glUniform3f (u_.rowY, 0.0f, 2.0f / H, -1.0f);
         }
     }
 
@@ -631,10 +698,37 @@ private:
         add (x1, y0, d0b, d1a); add (x1, y1, d0b, d1b); add (x0, y1, d0a, d1b);
     }
 
+    static void premulStyle (uint32_t rgba, float* c) { premul (rgba, c); }
+
+    void setPaintU (PaintU& u, const PaintState& p)
+    {
+        u.mode = static_cast<float> (p.mode);
+        u.a = p.a;
+        u.inv = p.b != p.a ? 1.0f / (p.b - p.a) : 1.0f;
+        for (int i = 0; i < 4; ++i)
+            premul (p.c[i], u.c[i]);
+    }
+
+    /** A new draw with the current state (style, paint, target). `paint`: whether the op takes its colour from the paint. */
+    Draw& beginDraw (int prim, int kind, uint32_t rgba, float half, bool paint)
+    {
+        Draw& d = begin (prim, kind, rgba, half);
+        d.soft = style_.soft;
+        d.target = buildTarget_;
+        d.tex = 0;
+        if (paint)
+            setPaintU (d.pt, paint_);
+        return d;
+    }
+
     void buildScene (const SceneData& s)
     {
         verts_.clear();
         draws_.clear();
+        style_ = StyleState();
+        paint_ = PaintState();
+        buildTarget_ = -1;
+        sceneFeedback_ = false;
         // the current polyline (the whole width until a Curve op says otherwise), continued horizontally to the two edges of its span
         auto setCurve = [&] (float firstF, float nF, float x0, float width)
         {
@@ -647,37 +741,53 @@ private:
                 pts_.push_back ({ x0 + static_cast<float> (i) / static_cast<float> (n - 1) * (width - 1.0f) + 0.5f, s.y[first + i] });
             pts_.push_back ({ x0 + width, s.y[first + n - 1] });
         };
-        setCurve (0.0f, s.numPoints > static_cast<uint32_t> (kMaxCurve) ? -1.0f : static_cast<float> (s.numPoints), 0.0f, static_cast<float> (s.w));
+        // the two rows of a band, continued the same way
+        auto rowsOf = [&] (int first, int n, float x0, float width, std::vector<Pt>& out)
+        {
+            out.clear();
+            out.push_back ({ x0, s.y[first] });
+            for (int i = 0; i < n; ++i)
+                out.push_back ({ x0 + static_cast<float> (i) / static_cast<float> (n - 1) * (width - 1.0f) + 0.5f, s.y[first + i] });
+            out.push_back ({ x0 + width, s.y[first + n - 1] });
+        };
+        setCurve (0.0f, static_cast<float> (s.numDefault), 0.0f, static_cast<float> (s.w));
         for (uint32_t k = 0; k < s.numOps && k < static_cast<uint32_t> (kMaxOps); ++k)
         {
             const SceneOp& o = s.ops[k];
             switch (o.op)
             {
+                case kOpStyle: applyStyle (o, style_); break;
+                case kOpPaint: applyPaint (o, paint_); break;
                 case kOpClear:
                 {
-                    draws_.emplace_back();
-                    Draw& d = draws_.back();
-                    d.clear = true;
+                    Draw d;
+                    d.type = 1;
+                    d.target = buildTarget_;
                     premul (o.rgba, d.colour);
+                    draws_.push_back (d);
                     break;
                 }
                 case kOpRect:
-                    begin (GL_TRIANGLES, 0, o.rgba, 0.0f);
+                    beginDraw (GL_TRIANGLES, 0, o.rgba, 0.0f, false);
                     quad (o.f[0], o.f[1], o.f[2], o.f[3], 0, 0, 0, 0);
                     end();
                     break;
                 case kOpVLine:
                 {
-                    const float half = o.f[3] * 0.5f, e = half + 1.0f;
-                    begin (GL_TRIANGLES, 1, o.rgba, half);
+                    if (! coordOk (o.f[0]) || ! coordOk (o.f[1]) || ! coordOk (o.f[2]) || ! std::isfinite (o.f[3]) || o.f[3] <= 0.0f || o.f[3] > kMaxStroke)
+                        break;
+                    const float half = o.f[3] * 0.5f, e = half + style_.soft * 0.5f + 1.0f;
+                    beginDraw (GL_TRIANGLES, 1, o.rgba, half, false);
                     quad (o.f[0] - e, o.f[1], o.f[0] + e, o.f[2], -e, e, 0, 0);
                     end();
                     break;
                 }
                 case kOpDisc:
                 {
-                    const float r = o.f[2], e = r + 1.0f;
-                    begin (GL_TRIANGLES, 2, o.rgba, r);
+                    if (! coordOk (o.f[0]) || ! coordOk (o.f[1]) || ! std::isfinite (o.f[2]) || o.f[2] <= 0.0f || o.f[2] > kMaxRadius)
+                        break;
+                    const float r = o.f[2], e = r + style_.soft * 0.5f + 1.0f;
+                    beginDraw (GL_TRIANGLES, 2, o.rgba, r, true);
                     quad (o.f[0] - e, o.f[1] - e, o.f[0] + e, o.f[1] + e, -e, e, -e, e);
                     end();
                     break;
@@ -687,11 +797,15 @@ private:
                     LineGeom g;
                     if (! lineGeom (o, g))   // shared memory: validated, a bad op is skipped
                         break;
-                    const float dx = g.x1 - g.x0, dy = g.y1 - g.y0, l = std::sqrt (dx * dx + dy * dy), nx = -dy / l, ny = dx / l, e = g.half + 1.0f;
-                    begin (GL_TRIANGLES, 1, o.rgba, g.half);
-                    // the quad of the segment, d0 = signed distance from the axis on its two long sides
-                    add (g.x0 + nx * e, g.y0 + ny * e, e); add (g.x0 - nx * e, g.y0 - ny * e, -e); add (g.x1 + nx * e, g.y1 + ny * e, e);
-                    add (g.x1 + nx * e, g.y1 + ny * e, e); add (g.x0 - nx * e, g.y0 - ny * e, -e); add (g.x1 - nx * e, g.y1 - ny * e, -e);
+                    const float dx = g.x1 - g.x0, dy = g.y1 - g.y0, l = std::sqrt (dx * dx + dy * dy), ux = dx / l, uy = dy / l, nx = -uy, ny = ux, e = g.half + style_.soft * 0.5f + 1.0f;
+                    const float cap = style_.round ? e : 0.0f;   // round caps: the quad reaches past the ends
+                    Draw& d = beginDraw (GL_TRIANGLES, 1, o.rgba, g.half, true);
+                    d.len = l;
+                    d.round = style_.round ? 1.0f : 0.0f;
+                    const float ax = g.x0 - ux * cap, ay = g.y0 - uy * cap, bx = g.x1 + ux * cap, by = g.y1 + uy * cap, ta = -cap, tb = l + cap;
+                    // d0 = signed distance from the axis, d1 = the position along it
+                    add (ax + nx * e, ay + ny * e, e, ta); add (ax - nx * e, ay - ny * e, -e, ta); add (bx + nx * e, by + ny * e, e, tb);
+                    add (bx + nx * e, by + ny * e, e, tb); add (ax - nx * e, ay - ny * e, -e, ta); add (bx - nx * e, by - ny * e, -e, tb);
                     end();
                     break;
                 }
@@ -700,10 +814,14 @@ private:
                     ArcGeom g;
                     if (! arcGeom (o, g))
                         break;
-                    const float e = g.r + g.half + 1.0f;
-                    Draw& d = begin (GL_TRIANGLES, 4 + g.mode, o.rgba, g.half);
+                    const float e = g.r + g.half + style_.soft * 0.5f + 1.0f;
+                    Draw& d = beginDraw (GL_TRIANGLES, 4 + g.mode, o.rgba, g.half, true);
                     d.arcR = g.r;
                     d.arcU[0] = g.u0x; d.arcU[1] = g.u0y; d.arcU[2] = g.u1x; d.arcU[3] = g.u1y;
+                    d.arcE[0] = g.r * g.u0x; d.arcE[1] = g.r * g.u0y; d.arcE[2] = g.r * g.u1x; d.arcE[3] = g.r * g.u1y;
+                    d.arcA0 = g.a0;
+                    d.arcInv = g.sweep > 0.0f ? 1.0f / g.sweep : 0.0f;
+                    d.round = style_.round && g.mode != 2 ? 1.0f : 0.0f;
                     quad (g.cx - e, g.cy - e, g.cx + e, g.cy + e, -e, e, -e, e);
                     end();
                     break;
@@ -713,8 +831,50 @@ private:
                     FrameGeom g;
                     if (! frameGeom (o, g))
                         break;
-                    begin (GL_TRIANGLES, 0, o.rgba, 0.0f);
+                    beginDraw (GL_TRIANGLES, 0, o.rgba, 0.0f, false);
                     frameRects (g, [&] (int x0, int y0, int x1, int y1) { quad (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), 0, 0, 0, 0); });
+                    end();
+                    break;
+                }
+                case kOpRRect:
+                {
+                    RRectGeom g;
+                    if (! rrectGeom (o, g))
+                        break;
+                    const float e = style_.soft * 0.5f + 1.0f, hx = 0.5f * (g.x1 - g.x0), hy = 0.5f * (g.y1 - g.y0);
+                    Draw& d = beginDraw (GL_TRIANGLES, 8, o.rgba, 0.0f, true);
+                    d.rr[0] = hx - g.r; d.rr[1] = hy - g.r; d.rr[2] = g.r; d.rr[3] = g.width;
+                    quad (g.x0 - e, g.y0 - e, g.x1 + e, g.y1 + e, -hx - e, hx + e, -hy - e, hy + e);
+                    end();
+                    break;
+                }
+                case kOpBand:
+                {
+                    BandGeom g;
+                    if (! bandGeom (o, g))
+                        break;
+                    rowsOf (g.firstA, g.n, g.x0, g.width, bandA_);
+                    rowsOf (g.firstB, g.n, g.x0, g.width, bandB_);
+                    beginDraw (GL_TRIANGLES, 9, o.rgba, 0.0f, true);
+                    // four rows of vertices per column: the coverage ramps up over the first pixel, is flat inside, ramps down over the last (the exact coverage of the strip by a pixel row)
+                    auto profile = [] (const Pt& a, const Pt& b, float y[4], float cv[4])
+                    {
+                        const float lo = std::min (a.y, b.y), hi = std::max (a.y, b.y), half = 0.5f * (hi - lo), c = 0.5f * (hi + lo), inner = std::fabs (half - 0.5f);
+                        y[0] = c - half - 0.5f; y[1] = c - inner; y[2] = c + inner; y[3] = c + half + 0.5f;
+                        cv[0] = 0.0f; cv[1] = cv[2] = std::min (1.0f, hi - lo); cv[3] = 0.0f;
+                    };
+                    for (size_t i = 0; i + 1 < bandA_.size(); ++i)
+                    {
+                        float y0[4], c0[4], y1[4], c1[4];
+                        profile (bandA_[i], bandB_[i], y0, c0);
+                        profile (bandA_[i + 1], bandB_[i + 1], y1, c1);
+                        const float xa = bandA_[i].x, xb = bandA_[i + 1].x;
+                        for (int r = 0; r < 3; ++r)
+                        {
+                            add (xa, y0[r], c0[r]); add (xb, y1[r], c1[r]); add (xa, y0[r + 1], c0[r + 1]);
+                            add (xb, y1[r], c1[r]); add (xb, y1[r + 1], c1[r + 1]); add (xa, y0[r + 1], c0[r + 1]);
+                        }
+                    }
                     end();
                     break;
                 }
@@ -723,13 +883,21 @@ private:
                     break;
                 case kOpText:
                 {
-                    char chars[13];
-                    textOf (o, chars);
-                    const int cell = std::max (1, static_cast<int> (o.f[2] + 0.5f));
-                    begin (GL_TRIANGLES, 0, o.rgba, 0.0f);
-                    synthyboy_mpc::overlay::font::forEachRect (static_cast<int> (o.f[0]), static_cast<int> (o.f[1]), cell, chars, 12, [&] (int x0, int y0, int x1, int y1)
+                    TextGeom g;
+                    if (! textGeom (o, g))
+                        break;
+                    const int n = std::min (g.length, static_cast<int> (s.numText) - g.offset);
+                    if (n <= 0)
+                        break;
+                    namespace sd = synthyboy_mpc::overlay::sdf;
+                    Draw& d = beginDraw (GL_TRIANGLES, 7, o.rgba, 0.0f, true);
+                    d.tex = 0;
+                    d.textK = 2.0f * static_cast<float> (sd::kSpread) * g.size / static_cast<float> (sd::kEm);
+                    const float iw = 1.0f / static_cast<float> (sd::kAtlasW), ih = 1.0f / static_cast<float> (sd::kAtlasH);
+                    sd::layout (s.text + g.offset, n, g.x, g.baseline, g.size, g.tracking, [&] (const sd::Quad& q)
                     {
-                        quad (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), 0, 0, 0, 0);
+                        add (q.x0, q.y0, q.u0 * iw, q.v0 * ih); add (q.x1, q.y0, q.u1 * iw, q.v0 * ih); add (q.x0, q.y1, q.u0 * iw, q.v1 * ih);
+                        add (q.x1, q.y0, q.u1 * iw, q.v0 * ih); add (q.x1, q.y1, q.u1 * iw, q.v1 * ih); add (q.x0, q.y1, q.u0 * iw, q.v1 * ih);
                     });
                     end();
                     break;
@@ -739,7 +907,7 @@ private:
                     if (pts_.size() >= 2)
                     {
                         const bool grad = o.op == kOpFillGradient;
-                        Draw& d = begin (GL_TRIANGLES, grad ? 3 : 0, o.rgba, 0.0f);
+                        Draw& d = beginDraw (GL_TRIANGLES, grad ? 3 : 0, o.rgba, 0.0f, ! grad);
                         float yA = 0.0f, inv = 0.0f;
                         if (grad)
                         {
@@ -769,10 +937,10 @@ private:
                     }
                     break;
                 case kOpStroke:
-                    if (pts_.size() >= 2)
+                    if (pts_.size() >= 2 && std::isfinite (o.f[0]) && o.f[0] > 0.0f && o.f[0] <= kMaxStroke)
                     {
-                        const float half = o.f[0], ext = half + 1.0f;
-                        begin (GL_TRIANGLE_STRIP, 1, o.rgba, half);
+                        const float half = o.f[0], ext = half + style_.soft * 0.5f + 1.0f;
+                        beginDraw (GL_TRIANGLE_STRIP, 1, o.rgba, half, true);
                         const int m = static_cast<int> (pts_.size());
                         for (int i = 0; i < m; ++i)
                         {
@@ -805,11 +973,404 @@ private:
                         end();
                     }
                     break;
+                case kOpFeedback:
+                {
+                    FeedbackGeom g;
+                    if (! feedbackGeom (o, g))
+                        break;
+                    sceneFeedback_ = true;
+                    Draw& d = beginDraw (GL_TRIANGLES, 10, 0, 0.0f, false);
+                    d.tex = 3;
+                    d.colour[0] = d.colour[1] = d.colour[2] = d.colour[3] = g.gain;
+                    quad (g.x0, g.y0, g.x1, g.y1, 0, 0, 0, 0);
+                    end();
+                    break;
+                }
+                case kOpGlowBegin:
+                {
+                    int div = 0;
+                    if (! glowBeginGeom (o, div) || buildTarget_ == 0)
+                        break;
+                    Draw d;
+                    d.type = 2;
+                    d.divisor = div;
+                    d.target = 0;
+                    draws_.push_back (d);
+                    buildTarget_ = 0;
+                    glowDivisor_ = div;
+                    break;
+                }
+                case kOpGlowEnd:
+                {
+                    GlowGeom g;
+                    if (buildTarget_ != 0 || ! glowEndGeom (o, g))
+                    {
+                        buildTarget_ = -1;
+                        break;
+                    }
+                    buildTarget_ = -1;
+                    const float W = static_cast<float> (s.w), H = static_cast<float> (s.h);
+                    const int gw = std::max (1, (bw_ + glowDivisor_ - 1) / glowDivisor_), gh = std::max (1, (bh_ + glowDivisor_ - 1) / glowDivisor_);
+                    // blur horizontally layer 0 -> 1, vertically 1 -> 0, then add layer 0 to the picture; each a full screen quad
+                    for (int pass = 0; pass < 3; ++pass)
+                    {
+                        Draw& d = beginDraw (GL_TRIANGLES, pass == 0 ? 12 : (pass == 1 ? 13 : 10), 0, 0.0f, false);
+                        d.target = pass == 0 ? 1 : (pass == 1 ? 0 : -1);
+                        d.tex = pass == 0 ? 1 : (pass == 1 ? 2 : 1);
+                        d.texel[0] = g.blur / static_cast<float> (gw);
+                        d.texel[1] = g.blur / static_cast<float> (gh);
+                        if (pass == 2)
+                        {
+                            premul (o.rgba, d.colour);
+                            for (int c = 0; c < 4; ++c)
+                                d.colour[c] *= g.gain;
+                            d.additive = true;
+                        }
+                        quad (0.0f, 0.0f, W, H, 0, 0, 0, 0);
+                        end();
+                    }
+                    break;
+                }
                 default:
                     break;
             }
         }
     }
+
+    void setTexParams()
+    {
+        api_.glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        api_.glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        api_.glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        api_.glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+
+    GLuint makeTexture (int w, int h)
+    {
+        GLuint t = 0;
+        api_.glGenTextures (1, &t);
+        api_.glBindTexture (GL_TEXTURE_2D, t);
+        std::vector<uint8_t> zero (static_cast<size_t> (w) * static_cast<size_t> (h) * 4, 0);
+        api_.glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, zero.data());
+        setTexParams();
+        curTex_ = -1;
+        return t;
+    }
+
+    /** The two layers of the bloom (1 / divisor of the picture), made when first needed and again when the size changes. false: they cannot be made (the glow is skipped). */
+    bool ensureGlow (int divisor)
+    {
+        const int gw = std::max (1, (bw_ + divisor - 1) / divisor), gh = std::max (1, (bh_ + divisor - 1) / divisor);
+        if (glowTex_[0] && gw == glowW_ && gh == glowH_)
+            return true;
+        dropGlow();
+        for (int i = 0; i < 2; ++i)
+        {
+            glowTex_[i] = makeTexture (gw, gh);
+            api_.glGenFramebuffers (1, &glowFbo_[i]);
+            api_.glBindFramebuffer (GL_FRAMEBUFFER, glowFbo_[i]);
+            api_.glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, glowTex_[i], 0);
+            if (api_.glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            {
+                api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
+                dropGlow();
+                return false;
+            }
+        }
+        api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
+        glowW_ = gw;
+        glowH_ = gh;
+        buildTarget_ = -2;
+        return true;
+    }
+    void dropGlow()
+    {
+        for (int i = 0; i < 2; ++i)
+        {
+            if (glowFbo_[i]) api_.glDeleteFramebuffers (1, &glowFbo_[i]);
+            if (glowTex_[i]) api_.glDeleteTextures (1, &glowTex_[i]);
+            glowFbo_[i] = 0;
+            glowTex_[i] = 0;
+        }
+        glowW_ = glowH_ = 0;
+    }
+
+    void bindTarget (int target)
+    {
+        if (target == buildTarget_)
+            return;
+        buildTarget_ = target;
+        if (target < 0)
+        {
+            api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
+            api_.glViewport (0, 0, bw_, bh_);
+        }
+        else
+        {
+            api_.glBindFramebuffer (GL_FRAMEBUFFER, glowFbo_[target]);
+            api_.glViewport (0, 0, glowW_, glowH_);
+        }
+    }
+
+    /** The uniforms of a draw; only what differs from the draw before is sent (hundreds of draws of a frame share most of their state). */
+    void applyUniforms (const Draw& d)
+    {
+        const Draw& l = last_;
+        const bool f = ! haveLast_;
+        auto same4 = [] (const float* a, const float* b) { return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]; };
+        const int want = d.tex;
+        if (want != curTex_)
+        {
+            api_.glBindTexture (GL_TEXTURE_2D, want == 0 ? atlasTex_ : (want == 3 ? feedbackTex_ : glowTex_[want - 1]));
+            curTex_ = want;
+        }
+        if (f || d.additive != l.additive)
+            api_.glBlendFunc (GL_ONE, d.additive ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+        if (f || d.kind != l.kind) api_.glUniform1f (u_.kind, static_cast<float> (d.kind));
+        if (f || ! same4 (d.colour, l.colour)) api_.glUniform4f (u_.c0, d.colour[0], d.colour[1], d.colour[2], d.colour[3]);
+        if (d.kind == 3) api_.glUniform4f (u_.c1, d.colour2[0], d.colour2[1], d.colour2[2], d.colour2[3]);
+        if (f || d.half != l.half) api_.glUniform1f (u_.half, d.half);
+        if (f || d.soft != l.soft) api_.glUniform1f (u_.soft, d.soft);
+        if (d.kind == 1)
+        {
+            api_.glUniform1f (u_.len, d.len);
+            api_.glUniform4f (u_.a, d.arcA0, d.arcInv, d.round, 0.0f);
+        }
+        if (d.kind >= 4 && d.kind <= 6)
+        {
+            api_.glUniform1f (u_.r, d.arcR);
+            api_.glUniform4f (u_.u, d.arcU[0], d.arcU[1], d.arcU[2], d.arcU[3]);
+            api_.glUniform4f (u_.e, d.arcE[0], d.arcE[1], d.arcE[2], d.arcE[3]);
+            api_.glUniform4f (u_.a, d.arcA0, d.arcInv, d.round, 0.0f);
+        }
+        if (d.kind == 7) api_.glUniform1f (u_.textK, d.textK);
+        if (d.kind == 8) api_.glUniform4f (u_.rr, d.rr[0], d.rr[1], d.rr[2], d.rr[3]);
+        if (d.kind >= 12) api_.glUniform2f (u_.texel, d.texel[0], d.texel[1]);
+        const bool paintSame = ! f && std::memcmp (&d.pt, &l.pt, sizeof d.pt) == 0;
+        if (! paintSame)
+        {
+            api_.glUniform3f (u_.pm, d.pt.mode, d.pt.a, d.pt.inv);
+            if (d.pt.mode > 0.5f)
+            {
+                api_.glUniform4f (u_.p0, d.pt.c[0][0], d.pt.c[0][1], d.pt.c[0][2], d.pt.c[0][3]);
+                api_.glUniform4f (u_.p1, d.pt.c[1][0], d.pt.c[1][1], d.pt.c[1][2], d.pt.c[1][3]);
+                api_.glUniform4f (u_.p2, d.pt.c[2][0], d.pt.c[2][1], d.pt.c[2][2], d.pt.c[2][3]);
+                api_.glUniform4f (u_.p3, d.pt.c[3][0], d.pt.c[3][1], d.pt.c[3][2], d.pt.c[3][3]);
+            }
+        }
+        last_ = d;
+        haveLast_ = true;
+    }
+
+#ifdef SYNTHYBOY_OVERLAY_BENCH
+    // ---------------------------------------------------------------------------------------------------------------------------------------------------------
+    // THE MEASURING SCENE (a debug build only: SYNTHYBOY_MPC_OVERLAY_BENCH, never in the product). The helper draws a scene of its own instead of the plugin's, as fast as the pace grid allows, and writes
+    // the statistics of every configuration to /tmp/sb-bench-stats.txt. The configuration is the file /tmp/sb-bench.conf (key=value lines, read again when it changes):
+    //   id=name  curves=N  points=P (200 .. 1600)  half=0.5 (half width, px)  soft=1  layers=N (full region translucent gradient layers)  glow=0|1|2 (none | a wide faint extra pass per curve | a bloom layer)
+    //   feedback=0|1  text=N (strings)  rrects=N  bands=N  stride=1|2 (vblanks per picture)  window=seconds
+    struct BenchCfg
+    {
+        std::string id = "idle";
+        int curves = 0, points = 800, layers = 0, glow = 0, feedback = 0, text = 0, rrects = 0, bands = 0, stride = 0;
+        float half = 0.5f, soft = 1.0f, window = 6.0f;
+    };
+    static std::string benchValue (const std::string& text, const char* key, const std::string& def)
+    {
+        const std::string k = std::string (key) + "=";
+        size_t at = 0;
+        while ((at = text.find (k, at)) != std::string::npos)
+        {
+            if (at == 0 || text[at - 1] == '\n' || text[at - 1] == ' ')
+            {
+                size_t e = text.find_first_of ("\n ", at);
+                return text.substr (at + k.size(), (e == std::string::npos ? text.size() : e) - at - k.size());
+            }
+            ++at;
+        }
+        return def;
+    }
+    void benchPoll()
+    {
+        const double t = nowMs();
+        if (t - benchLastPoll_ < 400.0)
+            return;
+        benchLastPoll_ = t;
+        struct stat st;
+        if (::stat ("/tmp/sb-bench.conf", &st) != 0 || (st.st_mtime == benchMtime_ && st.st_mtim.tv_nsec == benchMtimeNs_))
+        {
+            if (benchActive_ && t - benchWindowStart_ >= benchCfg_.window * 1000.0 && ! benchReported_)
+                benchReport();
+            return;
+        }
+        benchMtime_ = st.st_mtime;
+        benchMtimeNs_ = st.st_mtim.tv_nsec;
+        std::string text;
+        if (FILE* f = std::fopen ("/tmp/sb-bench.conf", "r"))
+        {
+            char buf[1024];
+            size_t n;
+            while ((n = std::fread (buf, 1, sizeof buf, f)) > 0)
+                text.append (buf, n);
+            std::fclose (f);
+        }
+        if (benchActive_ && ! benchReported_)
+            benchReport();
+        BenchCfg c;
+        c.id = benchValue (text, "id", "run");
+        c.curves = std::atoi (benchValue (text, "curves", "0").c_str());
+        c.points = std::min (kMaxCurve, std::max (2, std::atoi (benchValue (text, "points", "800").c_str())));
+        c.half = static_cast<float> (std::atof (benchValue (text, "half", "0.5").c_str()));
+        c.soft = static_cast<float> (std::atof (benchValue (text, "soft", "1").c_str()));
+        c.layers = std::atoi (benchValue (text, "layers", "0").c_str());
+        c.glow = std::atoi (benchValue (text, "glow", "0").c_str());
+        c.feedback = std::atoi (benchValue (text, "feedback", "0").c_str());
+        c.text = std::atoi (benchValue (text, "text", "0").c_str());
+        c.rrects = std::atoi (benchValue (text, "rrects", "0").c_str());
+        c.bands = std::atoi (benchValue (text, "bands", "0").c_str());
+        c.stride = std::atoi (benchValue (text, "stride", "0").c_str());
+        c.window = static_cast<float> (std::atof (benchValue (text, "window", "6").c_str()));
+        benchCfg_ = c;
+        if (c.stride >= 1 && c.stride <= 4 && c.stride != stride_)
+        {
+            stride_ = c.stride;
+            pacer_ = std::make_unique<FramePacer> (*clock_, periodMs_, stride_, (flags_ & kFlagVblank) != 0);
+        }
+        benchActive_ = true;
+        benchReported_ = false;
+        benchWindowStart_ = nowMs() + 700.0;   // the first 0.7 s (the new scene's first pictures, the pace grid settling) are not counted
+        benchRender_.clear();
+        benchSet_.clear();
+        benchInterval_.clear();
+        benchSkippedStart_ = skipped_;
+        benchLateStart_ = late_;
+        benchFramesStart_ = frames_;
+        benchPhase_ = 0.0f;
+    }
+    static double benchPercentile (std::vector<float>& v, double q)
+    {
+        if (v.empty()) return 0.0;
+        std::sort (v.begin(), v.end());
+        return v[std::min (v.size() - 1, static_cast<size_t> (q * static_cast<double> (v.size())))];
+    }
+    void benchReport()
+    {
+        benchReported_ = true;
+        const double secs = std::max (0.001, (nowMs() - benchWindowStart_) / 1000.0);
+        double avg = 0.0, avgSet = 0.0, avgInt = 0.0;
+        for (float v : benchRender_) avg += v;
+        for (float v : benchSet_) avgSet += v;
+        for (float v : benchInterval_) avgInt += v;
+        const size_t n = benchRender_.size();
+        if (n) { avg /= static_cast<double> (n); avgSet /= static_cast<double> (n); }
+        if (! benchInterval_.empty()) avgInt /= static_cast<double> (benchInterval_.size());
+        const double p99 = benchPercentile (benchRender_, 0.99), mx = benchRender_.empty() ? 0.0 : benchRender_.back();
+        const double ip99 = benchPercentile (benchInterval_, 0.99);
+        if (FILE* f = std::fopen ("/tmp/sb-bench-stats.txt", "a"))
+        {
+            std::fprintf (f, "id=%s frames=%zu seconds=%.2f fps=%.2f render_avg_ms=%.3f render_p99_ms=%.3f render_max_ms=%.3f setplane_avg_ms=%.3f interval_avg_ms=%.3f interval_p99_ms=%.3f skipped_vblanks=%lu late_setplane=%lu stride=%d verts=%zu draws=%zu msaa=%d\n",
+                          benchCfg_.id.c_str(), n, secs, static_cast<double> (n) / secs, avg, p99, mx, avgSet, avgInt, ip99, skipped_ - benchSkippedStart_, late_ - benchLateStart_, stride_, verts_.size(), draws_.size(), wantSamples_);
+            std::fclose (f);
+        }
+    }
+    void benchRecord (double renderMs, double setMs, double intervalMs)
+    {
+        if (! benchActive_ || benchReported_ || nowMs() < benchWindowStart_)
+            return;
+        if (benchRender_.size() < 20000)
+        {
+            benchRender_.push_back (static_cast<float> (renderMs));
+            benchSet_.push_back (static_cast<float> (setMs));
+            benchInterval_.push_back (static_cast<float> (intervalMs));
+        }
+    }
+    void benchScene (SceneData& sd)
+    {
+        const BenchCfg& c = benchCfg_;
+        SceneBuilder sb (sd);
+        sb.begin (kKindUi, 0, w_, h_);
+        sb.clear (rgba8 (0x0b, 0x10, 0x26, 255));
+        benchPhase_ += 0.07f;
+        const float W = static_cast<float> (std::min (w_, 800)), x0 = static_cast<float> ((w_ - static_cast<int> (W)) / 2), H = static_cast<float> (h_);
+        std::vector<float> rows (static_cast<size_t> (c.points)), rows2 (static_cast<size_t> (c.points));
+        for (int l = 0; l < c.layers; ++l)
+        {
+            const float flat[2] = { 0.0f, 0.0f };
+            sb.curve (flat, 2, 0, w_);
+            sb.fillGradient (H, 0.0f, H, rgba8 (0x2e, 0xe6, 0xf0, 18), rgba8 (0xb4, 0x5c, 0xff, 18));
+        }
+        if (c.feedback)
+        {
+            sb.rect (x0, 0.0f, x0 + W, H, rgba8 (0x0b, 0x10, 0x26, 255));
+            sb.feedback (x0, 0.0f, x0 + W, H, 0.82f);
+        }
+        for (int r = 0; r < c.rrects; ++r)
+        {
+            const float rx = 8.0f + static_cast<float> ((r * 37) % std::max (1, w_ - 120)), ry = 8.0f + static_cast<float> ((r * 53) % std::max (1, h_ - 60));
+            sb.rrect (rx, ry, rx + 100.0f, ry + 44.0f, 10.0f, rgba8 (0x14, 0x1a, 0x38, 200));
+            sb.rrect (rx, ry, rx + 100.0f, ry + 44.0f, 10.0f, rgba8 (0x6c, 0x7b, 0xff, 255), 1.5f);
+        }
+        auto build = [&] (int i)
+        {
+            for (int k = 0; k < c.points; ++k)
+            {
+                const float t = static_cast<float> (k) / static_cast<float> (c.points - 1);
+                const float amp = 0.30f * H / static_cast<float> (1 + (i % 4)), cy = 0.5f * H + (static_cast<float> (i % 7) - 3.0f) * 0.04f * H;
+                rows[static_cast<size_t> (k)] = cy + amp * std::sin (6.2832f * (t * static_cast<float> (2 + i % 5) + benchPhase_ * 0.1f * static_cast<float> (1 + i % 3))) * (0.6f + 0.4f * std::sin (13.0f * t + benchPhase_ + static_cast<float> (i)));
+                rows2[static_cast<size_t> (k)] = rows[static_cast<size_t> (k)] + 6.0f + 4.0f * std::sin (9.0f * t + static_cast<float> (i));
+            }
+        };
+        auto drawCurves = [&] (bool glowSource)
+        {
+            for (int i = 0; i < c.curves; ++i)
+            {
+                build (i);
+                sb.curve (rows.data(), c.points, static_cast<int> (x0), static_cast<int> (W));
+                sb.paintX (x0, x0 + W, rgba8 (0x2e, 0xe6, 0xf0, 255), rgba8 (0x6c, 0x7b, 0xff, 255), rgba8 (0xb4, 0x5c, 0xff, 255), rgba8 (0xff, 0x4f, 0xc3, 255));
+                if (glowSource)
+                {
+                    sb.style (1.0f, false);
+                    sb.stroke (std::max (c.half, 1.5f), 255);
+                }
+                else
+                {
+                    if (c.glow == 1)
+                    {
+                        sb.style (8.0f, false);
+                        sb.stroke (3.0f, 60);
+                    }
+                    sb.style (c.soft, false);
+                    sb.stroke (c.half, 255);
+                }
+            }
+            sb.paintOff();
+            sb.style (1.0f, false);
+        };
+        for (int i = 0; i < c.bands; ++i)
+        {
+            build (i);
+            sb.paintY (0.0f, H, rgba8 (0x2e, 0xe6, 0xf0, 255), rgba8 (0x6c, 0x7b, 0xff, 255), rgba8 (0xb4, 0x5c, 0xff, 255), rgba8 (0xff, 0x4f, 0xc3, 255));
+            sb.band (rows.data(), rows2.data(), c.points, static_cast<int> (x0), static_cast<int> (W), 140);
+            sb.paintOff();
+        }
+        if (c.glow == 2 && c.curves > 0)
+        {
+            sb.glowBegin (4);
+            drawCurves (true);
+            sb.glowEnd (1.6f, 1.0f);
+        }
+        drawCurves (false);
+        for (int t = 0; t < c.text; ++t)
+            sb.text (12.0f + static_cast<float> ((t * 71) % std::max (1, w_ - 200)), 30.0f + static_cast<float> ((t * 29) % std::max (1, h_ - 40)), 14.0f + static_cast<float> (t % 5) * 4.0f, "Wavetable Position 1.25 Hz", rgba8 (0xe6, 0xe6, 0xf2, 230));
+    }
+    BenchCfg benchCfg_;
+    bool benchActive_ = false, benchReported_ = true;
+    double benchLastPoll_ = 0.0, benchWindowStart_ = 0.0, benchLastFrameMs_ = 0.0;
+    time_t benchMtime_ = 0;
+    long benchMtimeNs_ = 0;
+    std::vector<float> benchRender_, benchSet_, benchInterval_;
+    unsigned long benchSkippedStart_ = 0, benchLateStart_ = 0, benchFramesStart_ = 0;
+    float benchPhase_ = 0.0f;
+#endif
 
     // ---------------------------------------------------------------------------------------------------------------------------------------------------------
     // one picture
@@ -818,33 +1379,65 @@ private:
         const double t0 = nowMs();
         SceneData& s = scene_;
         uint32_t seq = 0;
-        if (! readScene (block_, s, seq))
-            return false;    // the writer was busy for a whole round of retries: the next kick
-        if (s.w != w_ || s.h != h_)
-            return false;    // a scene of the region before this one: the right one is on its way
+#ifdef SYNTHYBOY_OVERLAY_BENCH
+        benchPoll();
+        if (benchActive_)
+        {
+            benchScene (s);
+            seq = static_cast<uint32_t> (frames_ * 2 + 2);
+        }
+        else
+#endif
+        {
+            if (! readScene (block_, s, seq))
+                return false;    // the writer was busy for a whole round of retries: the next kick
+            if (s.w != w_ || s.h != h_)
+                return false;    // a scene of the region before this one: the right one is on its way
+        }
         buildScene (s);
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
         api_.glBufferData (GL_ARRAY_BUFFER, static_cast<GLsizeiptr> (verts_.size() * sizeof (Vtx)), verts_.data(), GL_DYNAMIC_DRAW);
         setTransform();
+        curTarget_ = -2;
+        curTex_ = -1;
+        haveLast_ = false;
+        bool glowActive = false;
         for (const Draw& d : draws_)
         {
-            if (d.clear)
+            if (d.type == 2)
+            {
+                glowActive = ensureGlow (d.divisor);
+                if (glowActive)
+                {
+                    bindTarget (0);
+                    api_.glClearColor (0.0f, 0.0f, 0.0f, 0.0f);
+                    api_.glClear (GL_COLOR_BUFFER_BIT);
+                }
+                continue;
+            }
+            const bool glowPass = d.kind == 12 || d.kind == 13 || (d.kind == 10 && d.tex != 3);
+            if ((d.target >= 0 || glowPass) && ! glowActive)
+                continue;                       // the glow layer could not be made: its ops and passes are not drawn
+            bindTarget (d.target);
+            if (d.type == 1)
             {
                 api_.glClearColor (d.colour[0], d.colour[1], d.colour[2], d.colour[3]);
                 api_.glClear (GL_COLOR_BUFFER_BIT);
                 continue;
             }
-            api_.glUniform1f (uKind_, static_cast<float> (d.kind));
-            api_.glUniform4f (uC0_, d.colour[0], d.colour[1], d.colour[2], d.colour[3]);
-            api_.glUniform4f (uC1_, d.colour2[0], d.colour2[1], d.colour2[2], d.colour2[3]);
-            api_.glUniform1f (uHalf_, d.half);
-            if (d.kind >= 4)
-            {
-                api_.glUniform1f (uR_, d.arcR);
-                api_.glUniform4f (uU_, d.arcU[0], d.arcU[1], d.arcU[2], d.arcU[3]);
-            }
+            applyUniforms (d);
             api_.glDrawArrays (static_cast<GLenum> (d.prim), d.first, d.count);
+            if (d.kind == 10 && d.tex != 3)
+                glowActive = false;             // the last pass of a glow
         }
+        bindTarget (-1);
+        if (sceneFeedback_ || prevFeedback_)
+        {
+            api_.glBindTexture (GL_TEXTURE_2D, feedbackTex_);
+            curTex_ = 3;
+            api_.glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, bw_, bh_);
+        }
+        prevFeedback_ = sceneFeedback_;
         api_.glFinish();    // the buffer must be finished before the display reads it
         maybeDump (s, seq);
         if (! api_.eglSwapBuffers (dpy_, esurf_))
@@ -897,6 +1490,10 @@ private:
             for (int i = stride_ + 1; i < PaceStats::kVb; ++i)
                 skipped_ += static_cast<unsigned long> (ps.vb[i]) * static_cast<unsigned long> (i - stride_);
         }
+#ifdef SYNTHYBOY_OVERLAY_BENCH
+        benchRecord (t1 - t0, t2 - tCall, benchLastFrameMs_ > 0.0 ? t2 - benchLastFrameMs_ : 0.0);
+        benchLastFrameMs_ = t2;
+#endif
         lastFrameMs_ = t2;
         renderBudgetMs_ = std::max (0.9 * renderBudgetMs_, t1 - t0);
         send (makeMsg (kMsgFrame, static_cast<uint32_t> (frames_), seq, static_cast<uint32_t> ((t1 - t0) * 1000.0), static_cast<uint32_t> ((t2 - tCall) * 1000.0), static_cast<uint32_t> (skipped_),
@@ -1057,6 +1654,14 @@ private:
     {
         while (! g_stop && exitCode_ == 0)
         {
+#ifdef SYNTHYBOY_OVERLAY_BENCH
+            if (shown_)
+            {
+                benchPoll();
+                if (benchActive_)
+                    dirty_ = true;
+            }
+#endif
             // a scene waits for its slot of the pace grid: the thread sleeps (and reads messages) until the picture can be drawn just in time, then draws, waits for the vblank of the
             // slot (the pacer) and updates the plane at once
             double wait = 1000.0;
@@ -1134,12 +1739,19 @@ private:
     EGLConfig cfg_ = nullptr;
     EGLContext ctx_ = EGL_NO_CONTEXT;
     EGLSurface esurf_ = EGL_NO_SURFACE;
-    GLuint prog_ = 0, vbo_ = 0;
-    GLint uRowX_ = -1, uRowY_ = -1, uKind_ = -1, uC0_ = -1, uC1_ = -1, uHalf_ = -1, uR_ = -1, uU_ = -1;
+    GLuint prog_ = 0, vbo_ = 0, atlasTex_ = 0, feedbackTex_ = 0, glowTex_[2] = {}, glowFbo_[2] = {};
+    int glowW_ = 0, glowH_ = 0, curTarget_ = -2, curTex_ = -1;
+    bool sceneFeedback_ = false, prevFeedback_ = false;
+    struct Locs { GLint rowX = -1, rowY = -1, kind = -1, c0 = -1, c1 = -1, half = -1, r = -1, u = -1, soft = -1, e = -1, a = -1, len = -1, textK = -1, rr = -1, texel = -1, pm = -1, p0 = -1, p1 = -1, p2 = -1, p3 = -1, tex = -1; } u_;
+    Draw last_;
+    bool haveLast_ = false;
     Import imports_[kMaxLedger];
     std::vector<Vtx> verts_;
     std::vector<Draw> draws_;
-    std::vector<Pt> pts_;
+    std::vector<Pt> pts_, bandA_, bandB_;
+    StyleState style_;
+    PaintState paint_;
+    int glowDivisor_ = 4, buildTarget_ = -1, wantSamples_ = 0;
     SceneData scene_ {};
     bool shown_ = false, dirty_ = false, planeOn_ = false;
     int w_ = 0, h_ = 0, bw_ = 0, bh_ = 0, panelX_ = 0, panelY_ = 0, rot_ = 90, exitCode_ = 0;

@@ -410,20 +410,28 @@ protected:
         }
         return { colW * p.cols + kBlockGap * (p.cols - 1), rowH * p.rows + kBlockGap * (p.rows - 1) };
     }
+    void drawUnder (Pen& p) const override
+    {
+        if (preset_ && preset_->numBlocks > 0)
+        {
+            for (int b = 0; b < std::min (preset_->numBlocks, kMaxBlocks); ++b)
+                p.block (blocks_[b]);
+            return;
+        }
+        p.block (rect_);
+    }
     void drawExtra (Pen& p) const override
     {
         if (preset_ && preset_->numBlocks > 0)
         {
             for (int b = 0; b < std::min (preset_->numBlocks, kMaxBlocks); ++b)
             {
-                p.frame (blocks_[b], 1, p.c (colour::kRest, 255));
-                p.textLeft ({ blocks_[b].x + kBlockPad, blocks_[b].y + 4, std::max (0, blocks_[b].w - 2 * kBlockPad), 14 }, preset_->blocks[b].title, 2, p.c (colour::kText, 150));
+                p.textLeft ({ blocks_[b].x + kBlockPad + 4, blocks_[b].y + 3, std::max (0, blocks_[b].w - 2 * kBlockPad - 4), 16 }, preset_->blocks[b].title, theme::L().fLabel - 2.0f, p.c (theme::L().textDim, 255), theme::L().fMin);
             }
             return;
         }
-        p.frame (rect_, 1, p.c (colour::kRest, 255));
         if (sepX_ >= 0)
-            p.rect (sepX_, rect_.y + kMargin, sepX_ + 1, rect_.bottom() - kMargin, p.c (colour::kRest, 255));
+            p.rect (sepX_, rect_.y + kMargin, sepX_ + 1, rect_.bottom() - kMargin, p.c (theme::L().keyline, 255));
     }
 
     const PanelPreset* preset_ = nullptr;
@@ -506,15 +514,15 @@ protected:
     }
     void drawExtra (Pen& p) const override
     {
-        p.rect (rect_.x + 4, rect_.y + kBarH - 1, rect_.right() - 4, rect_.y + kBarH, p.c (colour::kRest, 255));
-        p.textLeft ({ rect_.x + 140, rect_.y + 4, std::max (0, rect_.w - 150), kBarH - 8 }, title_, 4, p.c (colour::kWhite, 255));
-        if (! display_.empty())
-        {
-            p.rect (display_, p.c (colour::kPanel, 255));
-            p.frame (display_, 1, p.c (colour::kRest, 255));
-        }
+        p.rect (rect_.x + 4, rect_.y + kBarH - 1, rect_.right() - 4, rect_.y + kBarH, p.c (theme::L().keyline, 255));
+        p.textLeft ({ rect_.x + 140, rect_.y + 4, std::max (0, rect_.w - 150), kBarH - 8 }, title_, theme::L().fTitle, p.c (theme::L().text, 255), theme::L().fMin);
     }
-    char title_[13] = {};
+    void drawUnder (Pen& p) const override
+    {
+        if (! display_.empty())
+            p.block (display_);
+    }
+    char title_[32] = {};
     Rect display_;
     int nGroups_ = 0, active_ = -1;
 };
@@ -659,13 +667,14 @@ protected:
     }
     void drawExtra (Pen& p) const override
     {
-        p.rect (rect_.x + 4, rect_.y + kBarH - 1, rect_.right() - 4, rect_.y + kBarH, p.c (colour::kRest, 255));
-        p.textLeft ({ rect_.x + 140, rect_.y + 4, std::max (0, rect_.w - 150), kBarH - 8 }, title_, 3, p.c (colour::kWhite, 255));
-        p.textLeft ({ rect_.x + 8, addRowRect().y, 120, kRowH }, "ADD", 3, p.c (colour::kText, 150));
+        const theme::Look& T = theme::L();
+        p.rect (rect_.x + 4, rect_.y + kBarH - 1, rect_.right() - 4, rect_.y + kBarH, p.c (T.keyline, 255));
+        p.textLeft ({ rect_.x + 140, rect_.y + 4, std::max (0, rect_.w - 150), kBarH - 8 }, title_, T.fValue + 2.0f, p.c (T.text, 255), T.fMin);
+        p.textLeft ({ rect_.x + 8, addRowRect().y, 120, kRowH }, "ADD", T.fValue, p.c (T.textDim, 255), T.fMin);
         for (int i = 0; i < nRows_; ++i)
-            p.textLeft ({ rect_.x + 8, rect_.y + kBarH + 8 + i * kRowH, 120, kRowH }, rows[i].name, 3, p.c (colour::kText, 255));
+            p.textLeft ({ rect_.x + 8, rect_.y + kBarH + 8 + i * kRowH, 120, kRowH }, rows[i].name, T.fValue, p.c (theme::sourceColour (rows[i].name), 255), T.fMin);
     }
-    char title_[13] = {};
+    char title_[32] = {};
     int nRows_ = 0, activeRow_ = -1;
 };
 

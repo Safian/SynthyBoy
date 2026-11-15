@@ -69,10 +69,9 @@ protected:
     }
     void drawUnder (Pen& p) const override   // the display area under the buttons that sit on it
     {
-        p.rect (display_, p.c (colour::kPanel, 255));
-        p.frame (display_, 1, p.c (colour::kRest, 255));
+        p.block (display_);
     }
-    void drawExtra (Pen& p) const override { p.textLeft (nameBox_, name, 4, p.c (colour::kWhite, 255)); }
+    void drawExtra (Pen& p) const override { p.textLeft (nameBox_, name, theme::L().fTitle, p.c (theme::L().text, 255), theme::L().fMin); }
     Rect display_, nameBox_;
 };
 
@@ -232,16 +231,21 @@ protected:
         active_ = -1;
         setActiveGroup (0);
     }
+    void drawUnder (Pen& p) const override
+    {
+        // every Q group has a block of its own (the active one also has the coloured frame of its QGroup): Basic, the type bar, the tuning column; the panel draws its own blocks
+        p.block (basic.rect());
+        p.block (barBlock_);
+        if (tune_shown_)
+            p.block (tuneBlock_);
+    }
     void drawExtra (Pen& p) const override
     {
-        // every Q group has a thin neutral outline (the active one also has the coloured frame of its QGroup): Basic, the type bar, the tuning column; the panel draws its own blocks
-        p.frame (basic.rect(), 1, p.c (colour::kRest, 255));
-        p.frame (barBlock_, 1, p.c (colour::kRest, 255));
-        p.textLeft ({ barBlock_.x + KnobPanel::kBlockPad, barBlock_.y + 4, std::max (0, barBlock_.w - 12), 14 }, barTitle (), 2, p.c (colour::kText, 150));
+        const theme::Look& T = theme::L();
+        p.textLeft ({ barBlock_.x + KnobPanel::kBlockPad + 4, barBlock_.y + 3, std::max (0, barBlock_.w - 16), 16 }, barTitle (), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         if (tune_shown_)
         {
-            p.frame (tuneBlock_, 1, p.c (colour::kRest, 255));
-            p.textLeft ({ tuneBlock_.x + KnobPanel::kBlockPad, tuneBlock_.y + 4, std::max (0, tuneBlock_.w - 12), 14 }, "TUNE", 2, p.c (colour::kText, 150));
+            p.textLeft ({ tuneBlock_.x + KnobPanel::kBlockPad + 4, tuneBlock_.y + 3, std::max (0, tuneBlock_.w - 16), 16 }, "TUNE", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         }
     }
     const char* barTitle() const noexcept
@@ -255,7 +259,7 @@ protected:
     OscKind kind_ = OscKind::Wavetable;
     bool tune_shown_ = true;
     int nGroups_ = 0, active_ = -1;
-    char names_[kMaxGroups][10] = {};
+    char names_[kMaxGroups][20] = {};
 };
 
 }} // namespace synthyboy_mpc::ui

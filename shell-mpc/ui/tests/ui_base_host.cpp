@@ -395,7 +395,7 @@ void testKnobDrawing()
             k.setLabel ("WIDESTLB");
             check (k.sizeOk() == false, "knob: a knob without a rectangle is not at its minimum size");
             k.place ({ 0, 0, m.w, m.h });
-            check (k.sizeOk() && k.geom().labelCell == 2, "knob: at the minimum size an 8 character label is 2 pixels per font pixel");
+            check (k.sizeOk() && k.geom().labelSize >= theme::L().fMin, "knob: at the minimum size an 8 character label is drawn legibly (at least the minimum font size)");
         }
         const std::string nm = small ? "knob small" : "knob";
         checkDrawing (k, nm + " (minimum size)", { 12, 12, m.w, m.h }, small ? "knob_small_min.png" : "knob_min.png");
@@ -418,7 +418,7 @@ void testKnobDrawing()
             if (a < Knob::kStartAngle - 0.01) a += 2.0 * kPi;
             mono = mono && a > lastAngle - 1.0e-6;
             lastAngle = a;
-            painted = painted && colourNear (im, x, y, 1, colour::kWhite, 8);
+            painted = painted && colourNear (im, x, y, 1, colour::white(), 8);
         }
         check (mono, nm + ": the value marker moves monotonically with the value (21 steps)");
         check (painted, nm + ": the value marker is drawn at valuePoint () in every one of them");
@@ -431,7 +431,7 @@ void testKnobDrawing()
         k.valuePoint (vx, vy);
         k.modPoint (mx, my);
         check (k.modulated() && std::hypot (vx - mx, vy - my) > 6.0, nm + ": the modulated marker is somewhere else than the value marker");
-        check (colourNear (im, mx, my, 1, colour::kText, 12), nm + ": the modulated marker is drawn at modPoint ()");
+        check (colourNear (im, mx, my, 1, colour::white(), 12), nm + ": the modulated marker is drawn at modPoint ()");
         k.state.modValue = k.state.value;
         Scene sn (400, 300, kBackgroundRgba);
         k.draw (sn.builder());
@@ -443,7 +443,7 @@ void testKnobDrawing()
         b2.state.add (1, "LFO 1", 0.4); b2.state.selectedSource = 1;
         Scene s1 (200, 150, kBackgroundRgba), s2 (200, 150, kBackgroundRgba);
         a2.draw (s1.builder()); b2.draw (s2.builder());
-        check (render (s1).px != render (s2).px && colourNear (render (s2), 5, 5, 2, colour::kAccent, 6), nm + ": the modulation tab at the top left");
+        check (render (s1).px != render (s2).px && colourNear (render (s2), 5, 5, 2, theme::sourceColour ("LFO 1"), 6), nm + ": the modulation tab at the top left");
         b2.state = a2.state; b2.state.bipolar = true;
         Scene s3 (200, 150, kBackgroundRgba);
         b2.draw (s3.builder());
@@ -573,9 +573,9 @@ void testPictogram()
     s.state.index = 1;
     s.setId (9);
     const Size m = s.minSize();
-    check (m.w == 5 * 76 && m.h == 56, "pictogram selector: minimum size of five items in a row: 380 x 56");
+    check (m.w == 5 * s.cellMinW() && s.cellMinW() >= 56 && m.h == 56, "pictogram selector: minimum size of five items in a row: five cells of the width of the longest label");
     s.place ({ 10, 10, m.w, m.h });
-    check (s.sizeOk() && ! s.vertical() && s.cell (0).w == 76 && s.cell (4).x == 10 + 4 * 76, "pictogram selector: a wide rectangle: a row of cells");
+    check (s.sizeOk() && ! s.vertical() && s.cell (0).w == s.cellMinW() && s.cell (4).x == 10 + 4 * s.cellMinW(), "pictogram selector: a wide rectangle: a row of cells");
     Change c = tap (s, s.cell (2).x + 10, 30, 0.0);
     check (c.kind == ChangeKind::Index && c.id == 9 && c.index == 2 && near (c.value, 2), "pictogram selector: a tap on a cell = { id 9, its index }");
     check (! tap (s, s.cell (3).x + 10, 30, 100.0), "pictogram selector: a tap on a disabled cell is ignored");
@@ -685,17 +685,17 @@ void testModulation()
     const float tx = static_cast<float> (t.x + 7), ty = static_cast<float> (t.y + 4);
     {
         auto k = knobWith (none, 0.5);
-        check (! colourNear (pic (*k), tx, ty, 1, colour::kAccent, 8) && ! colourNear (pic (*k), tx, ty, 1, colour::kRest, 8), "knob tab: absent: nothing at the tab");
+        check (! colourNear (pic (*k), tx, ty, 1, colour::accent(), 8) && ! colourNear (pic (*k), tx, ty, 1, colour::rest(), 8), "knob tab: absent: nothing at the tab");
         m.selectedSource = kNoSource;
         k = knobWith (m, 0.5);
-        check (colourNear (pic (*k), tx, ty, 0, colour::kRest, 8), "knob tab: grey");
+        check (colourNear (pic (*k), tx, ty, 0, theme::L().keylineHi, 8), "knob tab: grey");
         m.selectedSource = 7;
         k = knobWith (m, 0.5);
-        check (colourNear (pic (*k), tx, ty, 0, colour::kAccent, 8), "knob tab: coloured");
+        check (colourNear (pic (*k), tx, ty, 0, theme::sourceColour ("LFO 2"), 8), "knob tab: coloured");
         m.selectedSource = 11;
         k = knobWith (m, 0.5);
         const Image im = pic (*k);
-        check (! colourNear (im, tx, ty, 0, colour::kAccent, 8) && colourNear (im, static_cast<float> (t.x), ty, 0, colour::kAccent, 8), "knob tab: hollow (the middle empty, the edge drawn)");
+        check (! colourNear (im, tx, ty, 0, theme::sourceColour ("OFF"), 8) && colourNear (im, static_cast<float> (t.x), ty, 0, theme::sourceColour ("OFF"), 8), "knob tab: hollow (the middle empty, the edge drawn)");
     }
     {
         // the depth arc is drawn between the angles of its ends: a pixel on the inner arc at the middle of the span has the arc colour; outside of the span it does not
@@ -706,12 +706,12 @@ void testModulation()
         auto at = [&] (double v) { const float an = Knob::angleOf (v); return std::make_pair (g.cx + rm * std::cos (an), g.cy + rm * std::sin (an)); };
         const Image im = pic (*k);
         const auto in = at (0.35), out = at (0.7);
-        check (colourNear (im, in.first, in.second, 0, 0xe6e6e6, 70) && ! colourNear (im, out.first, out.second, 0, 0xe6e6e6, 40), "knob arc: the positive depth arc (0.2 .. 0.5) is there at 0.35 and not at 0.7");
+        check (colourNear (im, in.first, in.second, 0, theme::sourceColour ("LFO 2"), 20) && ! colourNear (im, out.first, out.second, 0, theme::sourceColour ("LFO 2"), 20), "knob arc: the positive depth arc (0.2 .. 0.5) is there at 0.35 and not at 0.7");
         m.selectedSource = 8;
         k = knobWith (m, 0.5);
         const Image neg = pic (*k);
         const auto lo = at (0.35);
-        check (colourNear (neg, lo.first, lo.second, 0, colour::kAccentDark, 24), "knob arc: the negative depth arc (0.2 .. 0.5) is in the darker shade");
+        check (colourNear (neg, lo.first, lo.second, 0, colour::accentDark(), 24), "knob arc: the negative depth arc (0.2 .. 0.5) is in the darker shade");
         m.selectedSource = 11;
         k = knobWith (m, 0.5);
         Scene s1 (160, 120, kBackgroundRgba), s2 (160, 120, kBackgroundRgba);

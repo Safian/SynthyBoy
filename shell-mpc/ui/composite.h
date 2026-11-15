@@ -474,7 +474,7 @@ protected:
         caption_ = r[1];
         second.place (r[2]);
     }
-    void drawExtra (Pen& p) const override { if (! stacked_) p.textCentered (caption_, "WARP", 2, p.c (colour::kText, 160)); }
+    void drawExtra (Pen& p) const override { if (! stacked_) p.textCentered (caption_, "WARP", theme::L().fLabel - 2.0f, p.c (theme::L().textDim, 255), theme::L().fMin); }
     Rect caption_;
     bool stacked_ = false;
 };
@@ -501,7 +501,7 @@ protected:
     void drawExtra (Pen& p) const override
     {
         const float cx = static_cast<float> (rect_.x) + static_cast<float> (rect_.w) * 0.5f;
-        p.line (cx, static_cast<float> (main.rect().bottom() - 2), cx, static_cast<float> (rand.rect().y + 6), 2.0f, p.c (colour::kRest, 255));
+        p.line (cx, static_cast<float> (main.rect().bottom() - 2), cx, static_cast<float> (rand.rect().y + 6), 1.5f, p.c (theme::L().keyline, 255));
     }
 };
 
@@ -670,8 +670,8 @@ public:
         if (popup_)
         {
             Pen pen (sb, true);
-            pen.rect (parent_, colour::rgba (0x000000u, 150));
-            pen.rect (rect_, pen.c (colour::kPanel, 255));
+            pen.rect (parent_, colour::rgba (theme::L().bg1, 190));
+            pen.block (rect_, true);
         }
         Composite::draw (sb);
         if (popup_)
@@ -723,7 +723,7 @@ protected:
         balance.place (k[0]); bus1.place (k[1]); bus2.place (k[2]);
         syncKids();
     }
-    void drawExtra (Pen& p) const override { p.frame (rect_, popup_ ? 2 : 1, p.c (popup_ ? colour::kAccent : colour::kRest, 255)); }
+    void drawExtra (Pen& p) const override { if (popup_) p.rrect (rect_, theme::L().rBlock, p.c (theme::L().flow[0], 255), 1.6f); }
     bool isFilter_ = true, popup_ = false, backdropTap_ = false;
     Rect parent_;
     int backdropId_ = 0;

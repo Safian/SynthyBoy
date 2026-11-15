@@ -8,7 +8,7 @@
 // component that got a touch down keeps the gesture until the touch up, even when the finger leaves its rectangle. Each call returns a Change (kind None: nothing happened).
 // `id` is an opaque integer the OWNER of the component gave to the value (setId): the component never knows what a parameter is.
 // Drawing: draw (SceneBuilder&) emits ops only inside the rectangle: no allocation, no locks, no I/O, the same state gives the same ops.
-// The style is the palette of the overlay views (views.h, play_view.h): the dark background 1e1d1e, the panel 262527, the rest grey 3d3b3e, the accent ff2e63 / d31145, white / light grey.
+// The style comes from theme.h: every colour, line width, font size, radius and spacing is a number of the active look (three tables); the components never carry one of their own.
 #pragma once
 
 #include <algorithm>
@@ -18,13 +18,14 @@
 #include <cstring>
 #include <cstdint>
 
-#include "../overlay/font5x7.h"
 #include "../overlay/gpu/scene.h"
+#include "../overlay/sdf_font.h"
+#include "theme.h"
 
 namespace synthyboy_mpc { namespace ui {
 
 namespace gpu = synthyboy_mpc::overlay::gpu;
-namespace font = synthyboy_mpc::overlay::font;
+namespace sdf = synthyboy_mpc::overlay::sdf;
 
 constexpr float kPi = 3.14159265358979323846f;
 
@@ -76,7 +77,15 @@ struct Change
 namespace colour
 {
 constexpr uint32_t rgba (uint32_t rgb, uint32_t a = 255) noexcept { return (rgb << 8) | a; }
-constexpr uint32_t kBackground = 0x1e1d1eu, kPanel = 0x262527u, kRest = 0x3d3b3eu, kAccent = 0xff2e63u, kAccentDark = 0xd31145u, kText = 0xe6e6e6u, kWhite = 0xffffffu;
+// the colours of the components, from the active look (theme.h): the names the components and the tests use
+inline uint32_t background() noexcept { return theme::L().bg1; }
+inline uint32_t panel() noexcept { return theme::L().panel1; }
+inline uint32_t rest() noexcept { return theme::L().keyline; }
+inline uint32_t accent() noexcept { return theme::L().flow[0]; }
+inline uint32_t accentDark() noexcept { return theme::L().negative; }
+inline uint32_t text() noexcept { return theme::L().textDim; }
+inline uint32_t white() noexcept { return theme::L().text; }
+inline uint32_t q() noexcept { return theme::L().q; }
 }
 
 /** Copies up to cap - 1 characters (zero terminated). */
@@ -174,33 +183,89 @@ public:
     void line (float x0, float y0, float x1, float y1, float width, uint32_t col) { sb_.line (x0, y0, x1, y1, width, col); }
     void arc (float cx, float cy, float radius, float a0, float a1, float width, uint32_t col) { if (a1 - a0 > 0.004f || a0 - a1 > 0.004f) sb_.arc (cx, cy, radius, a0, a1, width, col); }
     void disc (float cx, float cy, float r, uint32_t col) { sb_.disc (cx, cy, r, col); }
-    void text (int x, int y, int cell, const char* s, uint32_t col) { if (s[0] != '\0' && cell > 0) sb_.text (x, y, cell, s, col); }
 
-    /** The largest cell (pixels per font pixel, at most maxCell) at which `n` characters fit into maxW x maxH; 0 when not even one pixel per font pixel fits. */
-    static int fitCell (int n, int maxW, int maxH, int maxCell) noexcept
+    // ---- the look: the state ops of the scene (feather, caps, gradient paint) and the shapes made with them. Every function that sets a state puts it back.
+    const theme::Look& look() const noexcept { return theme::L(); }
+    /** The feather (pixels; 1 = plain) and the caps of the following line-like ops. */
+    void style (float soft, bool roundCaps) { sb_.style (soft, roundCaps); }
+    void plain() { sb_.style (1.0f, false); sb_.paintOff(); }
+    void paintOff() { sb_.paintOff(); }
+    /** A four colour gradient (equal stops, 0xRRGGBB and one alpha) along x between the columns x0 .. x1, along y between the rows, or along the angle of the next arc. */
+    void paintX (float x0, float x1, const uint32_t rgb[4], int alpha) { sb_.paintX (x0, x1, c (rgb[0], alpha), c (rgb[1], alpha), c (rgb[2], alpha), c (rgb[3], alpha)); }
+    void paintY (float y0, float y1, const uint32_t rgb[4], int alpha) { sb_.paintY (y0, y1, c (rgb[0], alpha), c (rgb[1], alpha), c (rgb[2], alpha), c (rgb[3], alpha)); }
+    void paintArc (const uint32_t rgb[4], int alpha) { sb_.paintArc (c (rgb[0], alpha), c (rgb[1], alpha), c (rgb[2], alpha), c (rgb[3], alpha)); }
+    /** A two colour gradient (the colours repeated into four stops). */
+    void paintY2 (float y0, float y1, uint32_t a, uint32_t b, int alpha) { sb_.paintY (y0, y1, c (a, alpha), c (a, alpha), c (b, alpha), c (b, alpha)); }
+    void paintX2 (float x0, float x1, uint32_t a, uint32_t b, int alpha) { sb_.paintX (x0, x1, c (a, alpha), c (a, alpha), c (b, alpha), c (b, alpha)); }
+    void rrect (const Rect& r, float radius, uint32_t col, float outline = 0.0f) { if (! r.empty()) sb_.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), radius, col, outline); }
+    /** A glowing version of a line / arc / disc is the same op drawn before with a soft style; `glow` says whether the look has any light (the first look: yes). */
+    float glowAlpha() const noexcept { return theme::L().glowAlpha; }
+    /** A block (panel): rounded, a vertical gradient fill, a keyline; `hi` = the keyline of a focused block. */
+    void block (const Rect& r, bool hi = false)
     {
-        for (int cell = maxCell; cell >= 1; --cell)
-            if (font::textWidth (n, cell) <= maxW && font::kGlyphH * cell <= maxH)
-                return cell;
-        return 0;
+        const theme::Look& t = theme::L();
+        paintY2 (static_cast<float> (r.y), static_cast<float> (r.bottom()), t.panel0, t.panel1, 255);
+        rrect (r, t.rBlock, c (colour::rgba (t.panel1, 255)));
+        sb_.paintOff();
+        rrect (r, t.rBlock, c (colour::rgba (hi ? t.keylineHi : t.keyline, 255)), t.frame);
     }
-    /** The text centred in the box (both ways) at the largest cell <= maxCell that fits; the cell used (0: it does not fit, nothing is drawn). */
-    int textCentered (const Rect& box, const char* s, int maxCell, uint32_t col)
+    /** A control: smaller radius, the panel colour, a keyline (the colour of the Q-Link frame when `q`). */
+    void control (const Rect& r, bool q = false, bool hi = false)
     {
-        const int n = static_cast<int> (std::min<size_t> (std::strlen (s), 12));
-        const int cell = fitCell (n, box.w, box.h, maxCell);
-        if (cell > 0 && n > 0)
-            text (box.x + (box.w - font::textWidth (n, cell)) / 2, box.y + (box.h - font::kGlyphH * cell) / 2, cell, s, col);
-        return cell;
+        const theme::Look& t = theme::L();
+        paintY2 (static_cast<float> (r.y), static_cast<float> (r.bottom()), t.panel0, t.panel1, 255);
+        rrect (r, t.rControl, c (colour::rgba (t.panel1, 255)));
+        sb_.paintOff();
+        rrect (r, t.rControl, c (colour::rgba (q ? t.q : (hi ? t.keylineHi : t.keyline), 255)), q ? 1.6f : t.frame);
+    }
+    /** A string with the pen at (x, baseline), `size` pixels per em (the font of sdf_font.h; any length, UTF-8). */
+    void text (float x, float baseline, float size, const char* s, uint32_t col, float tracking = 0.0f) { if (s[0] != '\0' && size > 0.0f) sb_.text (x, baseline, size, s, col, tracking); }
+    static float textWidth (const char* s, float size) noexcept { return sdf::textWidth (s, size); }
+
+    /** The size (pixels per em) at which `s` fits into maxW x maxH: the largest <= maxSize whose width and height fit; the height of the text is that of the capitals and the lower tails (0.89 em).
+        Below minSize the size stays minSize (the text is then cut with an ellipsis by the drawing functions). 0 when not even minSize fits the HEIGHT. */
+    static float fitSize (const char* s, float maxW, float maxH, float maxSize, float minSize) noexcept
+    {
+        float size = std::min (maxSize, maxH / 0.89f);
+        if (size < minSize)
+            return 0.0f;
+        const float w = sdf::textWidth (s, size);
+        if (w > maxW && w > 0.0f)
+            size = std::max (minSize, size * maxW / w);
+        return size;
+    }
+    /** The text centred in the box (both ways, the capitals centred) at the largest size <= maxSize that fits (never below minSize: then the end is cut with "..."); the size used (0: nothing is drawn). */
+    float textCentered (const Rect& box, const char* s, float maxSize, uint32_t col, float minSize = 8.0f)
+    {
+        const float size = fitSize (s, static_cast<float> (box.w), static_cast<float> (box.h), maxSize, minSize);
+        if (size <= 0.0f || s[0] == '\0')
+            return 0.0f;
+        char buf[96];
+        const float w = sdf::fitText (s, size, static_cast<float> (box.w), buf, static_cast<int> (sizeof buf));
+        text (static_cast<float> (box.x) + (static_cast<float> (box.w) - w) * 0.5f, std::round (sdf::baselineForCentre (static_cast<float> (box.y) + static_cast<float> (box.h) * 0.5f, size)), size, buf, col);
+        return size;
     }
     /** The text at the left edge of the box, vertically centred. */
-    int textLeft (const Rect& box, const char* s, int maxCell, uint32_t col)
+    float textLeft (const Rect& box, const char* s, float maxSize, uint32_t col, float minSize = 8.0f)
     {
-        const int n = static_cast<int> (std::min<size_t> (std::strlen (s), 12));
-        const int cell = fitCell (n, box.w, box.h, maxCell);
-        if (cell > 0 && n > 0)
-            text (box.x, box.y + (box.h - font::kGlyphH * cell) / 2, cell, s, col);
-        return cell;
+        const float size = fitSize (s, static_cast<float> (box.w), static_cast<float> (box.h), maxSize, minSize);
+        if (size <= 0.0f || s[0] == '\0')
+            return 0.0f;
+        char buf[96];
+        sdf::fitText (s, size, static_cast<float> (box.w), buf, static_cast<int> (sizeof buf));
+        text (static_cast<float> (box.x), std::round (sdf::baselineForCentre (static_cast<float> (box.y) + static_cast<float> (box.h) * 0.5f, size)), size, buf, col);
+        return size;
+    }
+    /** The text at the right edge of the box. */
+    float textRight (const Rect& box, const char* s, float maxSize, uint32_t col, float minSize = 8.0f)
+    {
+        const float size = fitSize (s, static_cast<float> (box.w), static_cast<float> (box.h), maxSize, minSize);
+        if (size <= 0.0f || s[0] == '\0')
+            return 0.0f;
+        char buf[96];
+        const float w = sdf::fitText (s, size, static_cast<float> (box.w), buf, static_cast<int> (sizeof buf));
+        text (static_cast<float> (box.right()) - w, std::round (sdf::baselineForCentre (static_cast<float> (box.y) + static_cast<float> (box.h) * 0.5f, size)), size, buf, col);
+        return size;
     }
     /** A chevron (a "<" ">" "^" "v" made of two lines) in a box of `s` pixels around (cx, cy): dir 0 = left, 1 = right, 2 = up, 3 = down. */
     void chevron (float cx, float cy, float s, int dir, float width, uint32_t col)
@@ -262,16 +327,16 @@ public:
         disc (cx + 10.0f, cy - 7.0f, 2.5f, col);
         disc (cx + 10.0f, cy + 7.0f, 2.5f, col);
     }
-    /** The modulation tab at the top left of `r` for a tab state (nothing when absent). */
-    void modTab (const Rect& r, TabState st)
+    /** The modulation tab at the top left of `r` for a tab state (nothing when absent), in the colour of the selected source (grey: the keyline colour). */
+    void modTab (const Rect& r, TabState st, uint32_t srcColour)
     {
         if (st == TabState::Absent)
             return;
         const Rect t = tabRect (r);
         if (st == TabState::Hollow)
-            frame (t, 2, c (colour::kAccent, 255));
+            rrect (t, 3.0f, c (colour::rgba (srcColour, 255)), 1.6f);
         else
-            rect (t, c (st == TabState::Coloured ? colour::kAccent : colour::kRest, 255));
+            rrect (t, 3.0f, c (colour::rgba (st == TabState::Coloured ? srcColour : theme::L().keylineHi, 255)));
     }
     /** The small index badge of a Q-Link group member (1 .. 4) in the top right corner of `r`. */
     void qBadge (const Rect& r, int index)
@@ -279,9 +344,9 @@ public:
         if (index < 1 || index > 4 || r.w < 24 || r.h < 24)
             return;
         const Rect b { r.right() - 18, r.y + 2, 16, 18 };
-        rect (b, c (colour::kAccent, 255));
+        rrect (b, 5.0f, c (colour::rgba (theme::L().q, 255)));
         char d[2] = { static_cast<char> ('0' + index), '\0' };
-        text (b.x + 3, b.y + 2, 2, d, c (colour::kBackground, 255));
+        textCentered (b, d, 13.0f, c (colour::rgba (theme::L().onBright, 255)), 8.0f);
     }
 
 private:
@@ -415,6 +480,6 @@ protected:
 };
 
 /** The colour of a label: the accent in an active Q group, else the light grey. */
-inline uint32_t labelColour (bool qFrame) noexcept { return colour::rgba (qFrame ? colour::kAccent : colour::kText, 255); }
+inline uint32_t labelColour (bool qFrame) noexcept { return colour::rgba (qFrame ? colour::q() : colour::text(), 255); }
 
 }} // namespace synthyboy_mpc::ui

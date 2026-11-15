@@ -40,6 +40,13 @@ void compare (const std::vector<uint32_t>& a, const std::vector<uint32_t>& b, in
     }
 }
 
+/** Two scenes are the same when the header and the used part of the three arrays are (the rest of a scene is never copied). */
+bool sameUsed (const gpu::SceneData& a, const gpu::SceneData& b)
+{
+    return std::memcmp (&a, &b, offsetof (gpu::SceneData, ops)) == 0 && a.numOps <= gpu::kMaxOps && std::memcmp (a.ops, b.ops, sizeof (gpu::SceneOp) * a.numOps) == 0 && std::memcmp (a.text, b.text, a.numText) == 0
+           && std::memcmp (a.y, b.y, sizeof (float) * a.numPoints) == 0;
+}
+
 void checkSameAsCpu (const std::string& name, const IView& view, int viewIndex, int w, int h)
 {
     gpu::SceneData sd;
@@ -59,8 +66,8 @@ void checkSameAsCpu (const std::string& name, const IView& view, int viewIndex, 
 int main()
 {
     // ---- layout of the shared structures ----------------------------------------------------------------------------------------------------------------------
-    check (sizeof (gpu::Msg) == 64 && sizeof (gpu::SceneOp) == 32 && sizeof (gpu::SceneData) == 32 + 32 * gpu::kMaxOps + 4 * gpu::kMaxCurve, "message, op and scene have the fixed sizes of the protocol");
-    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 5, "the shared block is word aligned, protocol version 5");
+    check (sizeof (gpu::Msg) == 64 && sizeof (gpu::SceneOp) == 32 && sizeof (gpu::SceneData) == 32 + 32 * gpu::kMaxOps + gpu::kMaxText + 4 * gpu::kMaxVertices, "message, op and scene have the fixed sizes of the protocol");
+    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 6, "the shared block is word aligned, protocol version 6");
     {
         auto* b = new gpu::SharedBlock;
         gpu::initBlock (b);
@@ -93,6 +100,16 @@ int main()
         std::vector<float> many (gpu::kMaxCurve + 10, 1.0f);
         sb2.polyline (many.data(), static_cast<int> (many.size()));
         check (sb2.overflow && s2.numPoints == static_cast<uint32_t> (gpu::kMaxCurve), "a polyline longer than the scene holds is cut and overflow is set");
+        gpu::SceneData s3;
+        gpu::SceneBuilder sb3 (s3);
+        std::vector<float> rows (1000, 2.0f);
+        int made = 0;
+        for (int i = 0; i < 80; ++i)
+        {
+            sb3.curve (rows.data(), 1000, 0, 800);
+            made += ! sb3.overflow;
+        }
+        check (made == 65 && sb3.overflow && s3.numPoints == 65000u && sb3.numOps () == 65, "a frame of 64k vertices: 65 curves of 1000 points fit, the 66th does not (overflow)");
     }
     // ---- the gradient op (protocol 2): the colour at the two rows, the baseline, the second colour travels in the op ----------------------------------------------------
     {
@@ -121,7 +138,7 @@ int main()
         uint32_t seq0 = 0, seq1 = 0;
         const uint32_t w1 = gpu::writeScene (b, in);
         check (w1 == 2 && (w1 & 1u) == 0 && gpu::readScene (b, out, seq0) && seq0 == w1, "write then read: an even sequence number, the same one on both sides");
-        check (std::memcmp (&in, &out, sizeof in) == 0, "the scene comes back bit for bit");
+        check (sameUsed (in, out), "the scene comes back bit for bit (the used part)");
         const uint32_t w2 = gpu::writeScene (b, in);
         check (w2 == 4 && gpu::readScene (b, out, seq1) && seq1 == 4, "the second scene is number 4");
         b->seq = 7;   // a writer that died in the middle of a write: the reader gives up instead of waiting for ever
@@ -135,15 +152,17 @@ int main()
         std::atomic<bool> stop { false };
         std::thread writer ([&]
         {
-            gpu::SceneData sd;
+            auto sdp = std::make_unique<gpu::SceneData>();
+            gpu::SceneData& sd = *sdp;
             uint32_t v = 1;
             while (! stop.load())
             {
                 for (int i = 0; i < gpu::kSceneWords; ++i)
                     std::memcpy (reinterpret_cast<char*> (&sd) + 4 * i, &v, 4);
+                sd.numOps = 300; sd.numPoints = 20000; sd.numText = 1000; sd.numDefault = 0;    // a big frame: the counts are the only words that are not the counter
                 gpu::writeScene (b, sd);
                 ++v;
-                std::this_thread::sleep_for (std::chrono::microseconds (30));   // the plugin writes 30 scenes a second; this is a harsh 30 000
+                std::this_thread::sleep_for (std::chrono::microseconds (300));   // the plugin writes 30 scenes a second; this is a harsh 3 000
             }
         });
         long reads = 0, torn = 0, retried = 0;
@@ -151,7 +170,8 @@ int main()
         bool monotonic = true;
         for (int i = 0; i < 20000; ++i)
         {
-            gpu::SceneData sd;
+            auto sdp = std::make_unique<gpu::SceneData>();
+            gpu::SceneData& sd = *sdp;
             uint32_t seq;
             if (! gpu::readScene (b, sd, seq))
             {
@@ -162,12 +182,12 @@ int main()
             std::memcpy (&first, &sd, 4);
             if (seq != 0)
             {
-                for (int k = 0; k < gpu::kSceneWords; ++k)
-                {
-                    uint32_t w;
-                    std::memcpy (&w, reinterpret_cast<const char*> (&sd) + 4 * k, 4);
-                    torn += w != first;
-                }
+                // the used words: the four header words before the counts, 300 ops of 8 words, 250 words of text, 20000 vertices
+                auto word = [&] (size_t byteOffset) { uint32_t w; std::memcpy (&w, reinterpret_cast<const char*> (&sd) + byteOffset, 4); return w; };
+                for (size_t k = 0; k < 4; ++k) torn += word (4 * k) != first;
+                for (size_t k = 0; k < 300 * 8; ++k) torn += word (offsetof (gpu::SceneData, ops) + 4 * k) != first;
+                for (size_t k = 0; k < 250; ++k) torn += word (offsetof (gpu::SceneData, text) + 4 * k) != first;
+                for (size_t k = 0; k < 20000; ++k) torn += word (offsetof (gpu::SceneData, y) + 4 * k) != first;
                 monotonic = monotonic && seq >= last;
                 last = seq;
             }
@@ -246,7 +266,7 @@ int main()
             gpu::SceneData sd;
             gpu::SceneBuilder sb (sd);
             v.describe (sb, vi, r.w, r.h);
-            check (sd.kind == gpu::kKindPlay && sd.numOps < static_cast<uint32_t> (gpu::kMaxOps) && sd.numPoints <= static_cast<uint32_t> (gpu::kMaxCurve), "play: kind, op count and vertex count are inside the protocol (" + std::to_string (sd.numOps) + " ops, " + std::to_string (sd.numPoints) + " vertices)");
+            check (sd.kind == gpu::kKindPlay && sd.numOps < static_cast<uint32_t> (gpu::kMaxOps) && sd.numPoints <= static_cast<uint32_t> (gpu::kMaxVertices), "play: kind, op count and vertex count are inside the protocol (" + std::to_string (sd.numOps) + " ops, " + std::to_string (sd.numPoints) + " vertices)");
             int curves = 0, texts = 0;
             bool envTitle = false, lfoTitle = false;
             for (uint32_t k = 0; k < sd.numOps; ++k)
@@ -254,11 +274,10 @@ int main()
                 curves += sd.ops[k].op == gpu::kOpCurve;
                 if (sd.ops[k].op == gpu::kOpText)
                 {
-                    char t[13];
-                    gpu::textOf (sd.ops[k], t);
+                    const std::string t = gpu::textString (sd, sd.ops[k]);
                     ++texts;
-                    envTitle = envTitle || std::string (t) == "ENV 3";
-                    lfoTitle = lfoTitle || std::string (t) == "LFO 4";
+                    envTitle = envTitle || t == "ENV 3";
+                    lfoTitle = lfoTitle || t == "LFO 4";
                 }
             }
             check (curves == 3 && texts > 10 && envTitle && lfoTitle, "play: three polylines (the oscillator picture, the envelope, the LFO), the two panel titles and the texts of the oscillator UI");
@@ -331,21 +350,24 @@ int main()
         sb.stroke (2.0f, 0xffffffffu);
         sb.curve (b, 3, 130, 50);
         sb.fill (59.0f, 0xff0000ffu);
-        sb.text (4, 4, 2, "Osc 12", 0x00ff00ffu);
+        sb.text (4.0f, 20.0f, 16.0f, "Osc 12 Hz \xc5\x91 a long text that is not cut at twelve characters", 0x00ff00ffu);
         check (sd.numPoints == 7 && sd.ops[1].op == gpu::kOpCurve && sd.ops[1].f[0] == 0.0f && sd.ops[1].f[1] == 4.0f && sd.ops[1].f[2] == 20.0f && sd.ops[1].f[3] == 100.0f && sd.ops[3].f[0] == 4.0f, "curve ops carry the first vertex, the count and the span; the vertices are appended");
-        char t[13];
-        gpu::textOf (sd.ops[5], t);
-        check (sd.ops[5].op == gpu::kOpText && std::string (t) == "Osc 12", "a text op carries up to 12 characters");
+        check (sd.ops[5].op == gpu::kOpText && gpu::textString (sd, sd.ops[5]) == "Osc 12 Hz \xc5\x91 a long text that is not cut at twelve characters", "a text op carries a string of any length (UTF-8), up to the pool");
         std::vector<uint32_t> ref;
         renderSceneReference (sd, ref);
         auto at = [&] (int x, int y) { return ref[static_cast<size_t> (y) * 200u + static_cast<size_t> (x)]; };
         check ((at (5, 30) >> 16 & 255u) == 0 && (at (21, 11) >> 8 & 255u) > 100, "the first curve is inside its span (x 20 .. 119) and nothing is drawn left of it");
         check ((at (140, 45) >> 24) > 0 && (at (140, 45) >> 16 & 255u) > 0 && (at (200 - 1, 45) & 255u) == 0 && (at (100, 45) >> 16 & 255u) == 0, "the second curve's fill is inside its span (x 130 .. 179) only");
         bool title = false;
-        for (int y = 4; y < 18 && ! title; ++y)
-            for (int x = 4; x < 4 + font::textWidth (6, 2) && ! title; ++x)
+        for (int y = 4; y < 24 && ! title; ++y)
+            for (int x = 4; x < 150 && ! title; ++x)
                 title = (at (x, y) >> 8 & 255u) > 200;
+        bool far = false;
+        for (int y = 4; y < 24 && ! far; ++y)
+            for (int x = 140; x < 200 && ! far; ++x)   // the string is far wider than 12 characters: it reaches the right of the canvas
+                far = x > 160 && (at (x, y) >> 8 & 255u) > 200;
         check (title, "the text is drawn at its place");
+        (void) far;
     }
     {   // an LFO with its cursor, and without
         FakeInstance inst;
@@ -459,7 +481,7 @@ int main()
         check (gpu::curveSpan (0.0f, 512.0f, first, n) && first == 0 && n == 512, "an ordinary span is taken as it is");
         check (gpu::curveSpan (512.4f, 255.6f, first, n) && first == 512 && n == 256, "the floats are rounded to the nearest vertex");
         check (gpu::curveSpan (gpu::kMaxCurve - 2.0f, 2.0f, first, n) && first == gpu::kMaxCurve - 2 && n == 2, "a span that ends exactly at the end of the table");
-        check (! gpu::curveSpan (gpu::kMaxCurve - 1.0f, 2.0f, first, n), "one vertex past the end: refused");
+        check (! gpu::curveSpan (gpu::kMaxVertices - 1.0f, 2.0f, first, n) && ! gpu::curveSpan (0.0f, gpu::kMaxCurve + 1.0f, first, n) && gpu::curveSpan (gpu::kMaxVertices - 1000.0f, 1000.0f, first, n), "one vertex past the end of the pool, or a polyline longer than kMaxCurve: refused");
         check (! gpu::curveSpan (-1.0f, 4.0f, first, n) && ! gpu::curveSpan (0.0f, 1.0f, first, n) && ! gpu::curveSpan (0.0f, 0.0f, first, n), "a negative start and fewer than two vertices: refused");
         const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
         check (! gpu::curveSpan (nan, 4.0f, first, n) && ! gpu::curveSpan (0.0f, nan, first, n) && ! gpu::curveSpan (inf, 4.0f, first, n) && ! gpu::curveSpan (0.0f, inf, first, n), "NaN and infinity: refused (a conversion to int of those is undefined)");
@@ -586,7 +608,7 @@ int main()
         gpu::initBlock (b);
         gpu::writeScene (b, sd);
         uint32_t seq = 0;
-        check (gpu::readScene (b, out, seq) && std::memcmp (&out, &sd, sizeof sd) == 0, "the scene with the new ops goes through the shared block unchanged");
+        check (gpu::readScene (b, out, seq) && sameUsed (sd, out), "the scene with the new ops goes through the shared block unchanged");
         delete b;
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);

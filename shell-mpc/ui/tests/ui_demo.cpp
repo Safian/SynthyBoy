@@ -18,7 +18,7 @@ bool save (const std::string& dir, const char* name, const Scene& s, int scale =
     g_images += ok;
     return ok;
 }
-void label (gpu::SceneBuilder& sb, int x, int y, const char* t) { sb.text (x, y, 2, t, colour::rgba (colour::kText, 150)); }
+void label (gpu::SceneBuilder& sb, int x, int y, const char* t) { sb.text (x, y, 2, t, colour::rgba (colour::text(), 150)); }
 }
 
 int main (int argc, char** argv)
@@ -41,7 +41,7 @@ int main (int argc, char** argv)
             oc.route.state.segment[0] = true;
             Scene s (440, 720, kBackgroundRgba);
             oc.draw (s.builder());
-            s.builder().text (oc.displayRect().x + 130, oc.displayRect().y + oc.displayRect().h / 2, 2, "DISPLAY AREA", colour::rgba (colour::kText, 90));
+            s.builder().text (oc.displayRect().x + 130, oc.displayRect().y + oc.displayRect().h / 2, 2, "DISPLAY AREA", colour::rgba (colour::text(), 90));
             save (dir, c.file, s);
         }
     }
@@ -81,7 +81,7 @@ int main (int argc, char** argv)
             Scene s (1280, 800, kBackgroundRgba);
             fs.draw (s.builder());
             const Rect d = fs.displayRect();
-            s.builder().text (d.x + d.w / 2 - 70, d.y + d.h / 2 - 7, 2, "DISPLAY AREA", colour::rgba (colour::kText, 90));
+            s.builder().text (d.x + d.w / 2 - 70, d.y + d.h / 2 - 7, 2, "DISPLAY AREA", colour::rgba (colour::text(), 90));
             save (dir, f.file, s);
         }
     }
@@ -136,7 +136,7 @@ int main (int argc, char** argv)
                     rows[i] = static_cast<float> (d.bottom() - 10) - static_cast<float> (d.h - 24) * std::exp (-4.0f * t * t);
                 }
                 s.builder().curve (rows, 200, d.x + 8, d.w - 16);   // the owner's picture goes here: a stand-in curve
-                s.builder().stroke (2.0f, colour::rgba (colour::kAccent, 255));
+                s.builder().stroke (2.0f, colour::rgba (colour::accent(), 255));
             }
             save (dir, pr.file, s);
         }

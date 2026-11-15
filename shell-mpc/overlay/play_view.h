@@ -26,7 +26,7 @@ constexpr int kOscs = 3, kEnvs = 6, kLfos = 10;                 // the instances
 constexpr int kOscSelections = playosc::kInstances;            // the oscillator selector: Sub, A, B, C, Noise (play_osc.h); the picture exists for A, B, C only
 constexpr int kInstancesOf[kPanels] = { kOscSelections, kEnvs, kLfos };
 constexpr int kPanelW = 400, kPanelGap = 17;                    // 3 * 400 + 2 * 17 = 1234 px: the region of the view
-constexpr int kTitleCell = 3;                                   // pixels per font pixel of the titles
+constexpr float kTitleSize = 24.0f;                              // pixels per em of the titles
 constexpr int kPlotX = 10, kPlotTop = 40, kPlotBottomMargin = 8, kPlotW = 380;
 constexpr int kEnvPoints = 256;
 constexpr int kOx = 23, kOy = 14, kPanelH = 190;                // the Env and LFO panels as they always were (tab coordinates of the old region)
@@ -63,7 +63,7 @@ struct CpuSink
     }
     void fill (double baseRow, uint32_t c) { draw::fillToBaseline (cv, w, h, ys, 4, baseRow, pm (c), x0, cols); }
     void stroke (double half, uint32_t c) { draw::strokeCurve (cv, w, h, ys, 4, half, pm (c), x0, cols); }
-    void text (int x, int y, int cell, const char* s, uint32_t c) { draw::text (cv, w, h, x, y, cell, s, 12, pm (c)); }
+    void text (float x, float baseline, float size, const char* s, uint32_t c) { draw::text (cv, w, h, x, baseline, size, s, pm (c)); }
     uint32_t* cv;
     int w, h, x0 = 0, cols = 0;
     std::vector<double> ys;
@@ -87,7 +87,7 @@ struct ShiftSink
     }
     void fill (double baseRow, uint32_t c) { s.fill (baseRow + dy, c); }
     void stroke (double half, uint32_t c) { s.stroke (half, c); }
-    void text (int x, int y, int cell, const char* str, uint32_t c) { s.text (x + dx, y + dy, cell, str, c); }
+    void text (float x, float baseline, float size, const char* str, uint32_t c) { s.text (x + static_cast<float> (dx), baseline + static_cast<float> (dy), size, str, c); }
     Sink& s;
     int dx, dy;
 };
@@ -103,7 +103,7 @@ struct SceneSink
     void curve (const float* rows, int n, int x0, int width) { sb.curve (rows, n, x0, width); }
     void fill (double baseRow, uint32_t c) { sb.fill (static_cast<float> (baseRow), c); }
     void stroke (double half, uint32_t c) { sb.stroke (static_cast<float> (half), c); }
-    void text (int x, int y, int cell, const char* s, uint32_t c) { sb.text (x, y, cell, s, c); }
+    void text (float x, float baseline, float size, const char* s, uint32_t c) { sb.text (x, baseline, size, s, c); }
     gpu::SceneBuilder& sb;
 };
 } // namespace play
@@ -479,13 +479,13 @@ private:
     void drawLfoSelector (gpu::SceneBuilder& sb) const
     {
         const int cx = 1057, y0 = play::kTabY + 217;
-        sb.text (cx - 48, y0 - 4, 2, "PLAY LFO", gpu::rgba8 (0x8c, 0x8c, 0x8c, 255));
+        sb.text (static_cast<float> (cx) - 0.5f * sdf::textWidth ("PLAY LFO", 14.0f), static_cast<float> (y0 + 10), 14.0f, "PLAY LFO", gpu::rgba8 (0x8c, 0x8c, 0x8c, 255));
         const int bx = 995, by = play::kTabY + 233, bw = 124, bh = 23;
         sb.frame (static_cast<float> (bx), static_cast<float> (by), static_cast<float> (bx + bw), static_cast<float> (by + bh), 1.0f, gpu::rgba8 (0x6e, 0x6e, 0x70, 255));
         const int fillW = 4 + (bw - 6) * (std::clamp (sel_[2], 1, play::kLfos) - 1) / (play::kLfos - 1);
         sb.rect (static_cast<float> (bx + 1), static_cast<float> (by + 1), static_cast<float> (bx + 1 + fillW), static_cast<float> (by + bh - 1), gpu::rgba8 (0xd3, 0x11, 0x45, 255));
         const std::string t = "LFO " + std::to_string (sel_[2]);
-        sb.text (cx - static_cast<int> (t.size()) * 9, by + bh + 7, 3, t.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
+        sb.text (static_cast<float> (cx) - 0.5f * sdf::textWidth (t.c_str(), 22.0f), static_cast<float> (by + bh + 27), 22.0f, t.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
     }
 
     void fillSub (int wave, float phasePercent)
@@ -575,9 +575,8 @@ private:
         else
         {
             const char* msg = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
-            const int cell = 4, tw = static_cast<int> (std::strlen (msg)) * 6 * cell;
             if (msg[0] != '\0')
-                sb.text (in.x + (in.w - tw) / 2, in.y + (in.h - 7 * cell) / 2, cell, msg, gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
+                sb.text (static_cast<float> (in.x) + 0.5f * (static_cast<float> (in.w) - sdf::textWidth (msg, 28.0f)), sdf::baselineForCentre (static_cast<float> (in.y) + 0.5f * static_cast<float> (in.h), 28.0f), 28.0f, msg, gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
         }
     }
 
@@ -598,7 +597,7 @@ private:
             s.rect (x0, t, x0 + t, h - t, frame);
             s.rect (x0 + kPanelW - t, t, x0 + kPanelW, h - t, frame);
             const std::string tt = title (p, sel_[p]);
-            s.text (x0 + 12, 9, kTitleCell, tt.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
+            s.text (static_cast<float> (x0 + 12), 30.0f, kTitleSize, tt.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
             const int px = x0 + kPlotX;
             // the grid: the zero line (the envelope's is its bottom) and the quarters
             const double zero = p == 1 ? plotY (0.0, h, 6.0) : plotY (0.5, h, 6.0);

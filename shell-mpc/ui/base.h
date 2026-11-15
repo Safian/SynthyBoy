@@ -22,7 +22,7 @@ class Knob : public Component
 public:
     struct State : ModInput
     {
-        char label[9] = {};
+        char label[24] = {};
         double value = 0.0, modValue = 0.0, defaultValue = 0.0;
         bool bipolar = false, small = false;
     };
@@ -37,21 +37,22 @@ public:
     Size minSize() const override { return state.small ? Size { 72, 56 } : Size { 100, 72 }; }
 
     /** The geometry of the dial inside the rectangle (public so that the tests can find the markers). */
-    struct Geom { float cx, cy, radius, stroke; Rect labelBox; int labelCell; };
+    struct Geom { float cx, cy, radius, stroke, track; Rect labelBox; float labelSize; };
     Geom geom() const noexcept
     {
+        const theme::Look& T = theme::L();
         Geom g {};
-        const int n = static_cast<int> (std::min<size_t> (std::strlen (state.label), 8));
-        g.labelCell = n > 0 ? std::max (1, Pen::fitCell (n, rect_.w - 4, 14, 2)) : 0;
-        const int labelH = n > 0 ? font::kGlyphH * g.labelCell + 6 : 0;
+        g.labelSize = state.label[0] != '\0' ? Pen::fitSize (state.label, static_cast<float> (rect_.w - 4), 20.0f, T.fLabel, T.fMin) : 0.0f;
+        const int labelH = g.labelSize > 0.0f ? static_cast<int> (std::ceil (g.labelSize * 0.89f)) + 7 : 0;
         const int dialH = rect_.h - labelH;
         float d = static_cast<float> (std::min (rect_.w - 8, dialH - 8));
         if (state.small)
             d *= 0.8f;
         d = std::min (d, 140.0f);
         d = std::max (d, 6.0f);
-        g.stroke = std::max (3.0f, std::floor (d / 12.0f));
-        g.radius = d * 0.5f - g.stroke * 0.5f - 2.0f;
+        g.stroke = std::max (2.4f, d * T.arcValue);
+        g.track = std::max (2.0f, d * T.arcTrack);
+        g.radius = d * 0.5f - g.stroke * 0.5f - 2.0f - std::min (6.0f, T.glowSoft * 0.5f);
         g.cx = static_cast<float> (rect_.x) + static_cast<float> (rect_.w) * 0.5f;
         g.cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f;
         g.labelBox = { rect_.x + 2, rect_.bottom() - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) };
@@ -77,32 +78,58 @@ protected:
 
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Geom g = geom();
         const float cx = g.cx, cy = g.cy, R = g.radius, tw = g.stroke;
         const float a0 = angleOf (0.0), a1 = angleOf (1.0), av = angleOf (state.value), am = angleOf (0.5);
-        p.arc (cx, cy, R, a0, a1, tw, p.c (colour::kRest, 255));
-        p.arc (cx, cy, R, state.bipolar ? am : a0, av, tw, p.c (colour::kAccent, 255));
+        const float from = state.bipolar ? am : a0;
+        // the track (a thin quiet ring), the value as a streak of light along the ring: a soft wide pass first, the crisp line over it
+        p.style (1.0f, true);
+        p.arc (cx, cy, R, a0, a1, g.track, p.c (T.track, 255));
+        if (std::fabs (av - from) > 0.004f)
+        {
+            p.style (T.glowSoft, true);
+            p.paintArc (T.flow, static_cast<int> (T.glowAlpha * 255.0f));
+            p.arc (cx, cy, R, std::min (from, av), std::max (from, av), tw + 3.0f, 255);
+            p.style (1.0f, true);
+            p.paintArc (T.flow, 255);
+            p.arc (cx, cy, R, std::min (from, av), std::max (from, av), tw, 255);
+            p.plain();
+        }
         if (state.bipolar)
-            p.line (cx + (R - tw * 0.5f) * std::cos (am), cy + (R - tw * 0.5f) * std::sin (am), cx + (R + tw * 0.5f + 1.0f) * std::cos (am), cy + (R + tw * 0.5f + 1.0f) * std::sin (am), 2.0f, p.c (colour::kText, 220));
+            p.line (cx + (R - tw * 0.5f - 2.0f) * std::cos (am), cy + (R - tw * 0.5f - 2.0f) * std::sin (am), cx + (R + tw * 0.5f + 2.0f) * std::cos (am), cy + (R + tw * 0.5f + 2.0f) * std::sin (am), 1.5f, p.c (T.textDim, 200));
         const float rm = R - tw - 1.0f, wm = std::max (2.0f, tw * 0.6f);
-        double from, to;
-        if (depthArc (state, state.value, from, to))
-            p.arc (cx, cy, rm, angleOf (from), angleOf (to), wm, state.selected()->depth < 0.0 ? p.c (colour::kAccentDark, 255) : p.c (colour::kText, 200));
+        double dfrom, dto;
+        if (depthArc (state, state.value, dfrom, dto))
+        {
+            const uint32_t sc = state.selected()->depth < 0.0 ? T.negative : theme::sourceColour (state.selected()->name);
+            p.style (1.0f, true);
+            p.arc (cx, cy, rm, angleOf (dfrom), angleOf (dto), wm, p.c (sc, 255));
+            p.plain();
+        }
         if (modulated())
         {
             float mx, my;
             modPoint (mx, my);
-            p.disc (mx, my, std::max (2.0f, tw * 0.7f), p.c (colour::kText, 255));
+            const ModEntry* e = state.selected();
+            const uint32_t mc = e ? theme::sourceColour (e->name) : T.text;
+            p.style (T.glowSoft * 0.7f, false);
+            p.disc (mx, my, std::max (2.0f, tw * 0.7f) + 2.0f, p.c (mc, static_cast<int> (T.glowAlpha * 255.0f)));
+            p.plain();
+            p.disc (mx, my, std::max (2.0f, tw * 0.7f), p.c (T.text, 255));
         }
-        p.line (cx + R * 0.25f * std::cos (av), cy + R * 0.25f * std::sin (av), cx + R * 0.6f * std::cos (av), cy + R * 0.6f * std::sin (av), 2.0f, p.c (colour::kText, 255));
+        p.line (cx + R * 0.25f * std::cos (av), cy + R * 0.25f * std::sin (av), cx + R * 0.6f * std::cos (av), cy + R * 0.6f * std::sin (av), 1.6f, p.c (T.text, 235));
         float vx, vy;
         valuePoint (vx, vy);
-        p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (colour::kWhite, 255));
+        p.style (T.glowSoft * 0.7f, false);
+        p.disc (vx, vy, std::max (2.5f, tw * 0.9f) + 2.0f, p.c (T.flow[3], static_cast<int> (T.glowAlpha * 255.0f)));
+        p.plain();
+        p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (T.text, 255));
         if (state.small)
-            p.disc (cx, cy, std::max (2.0f, R * 0.18f), p.c (colour::kAccentDark, 255));
-        p.modTab (rect_, tab());
-        if (g.labelCell > 0)
-            p.textCentered (g.labelBox, state.label, g.labelCell, p.c (qFrame_ ? colour::kAccent : colour::kText, 255));
+            p.disc (cx, cy, std::max (2.0f, R * 0.18f), p.c (T.flow[2], 255));
+        p.modTab (rect_, tab(), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline);
+        if (g.labelSize > 0.0f)
+            p.textCentered (g.labelBox, state.label, g.labelSize, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
     }
 
     Change onDown (int x, int y, double now) override
@@ -172,7 +199,7 @@ public:
     enum class Icon : uint8_t { None, Phase, Rand };
     struct State : ModInput
     {
-        char label[9] = {};
+        char label[24] = {};
         Icon icon = Icon::None;
         double value = 0.0, min = 0.0, max = 1.0, step = 1.0, defaultValue = 0.0;
         Format format = Format::IntSigned;
@@ -213,45 +240,47 @@ protected:
 
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Rect b = box();
-        p.rect (b, p.c (colour::kPanel, 255));
-        p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
-        const Rect in = b.inset (2);
+        p.control (b, qFrame_);
+        const Rect in = b.inset (3);
         const bool head = state.label[0] != '\0' || state.icon != Icon::None;
         Rect valueBox = in;
+        const uint32_t headCol = p.c (qFrame_ ? T.q : T.textDim, 255);
         if (head)
         {
             const Rect headBox { in.x, in.y + 1, in.w, 16 };
             if (state.icon == Icon::None)
-                p.textCentered (headBox, state.label, 2, p.c (qFrame_ ? colour::kAccent : colour::kText, 170));
+                p.textCentered (headBox, state.label, T.fLabel - 2.0f, headCol, T.fMin);
             else if (state.label[0] == '\0')
                 drawIcon (p, headBox);
             else
             {
                 drawIcon (p, { headBox.x, headBox.y, 20, headBox.h });   // the icon and the label side by side
-                p.textCentered ({ headBox.x + 20, headBox.y, std::max (0, headBox.w - 20), headBox.h }, state.label, 2, p.c (qFrame_ ? colour::kAccent : colour::kText, 170));
+                p.textCentered ({ headBox.x + 20, headBox.y, std::max (0, headBox.w - 20), headBox.h }, state.label, T.fLabel - 2.0f, headCol, T.fMin);
             }
             valueBox = { in.x, in.y + 17, in.w, std::max (0, in.h - 17) };
         }
         char t[16];
         formatValue (state, t);
-        p.textCentered (valueBox, t, 3, p.c (colour::kWhite, 255));
+        p.textCentered (valueBox, t, T.fValue, p.c (T.text, 255), T.fMin);
         // the modulation: the tab, and an underline bar instead of an arc: the depth segment of the selected source around the position of the value on the bar
-        p.modTab (rect_, tabState (state));
+        p.modTab (rect_, tabState (state), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline);
         double from, to;
         const double span = state.max - state.min, pos = span > 0.0 ? (state.value - state.min) / span : 0.0;
         if (depthArc (state, pos, from, to))
         {
-            const Rect bar { in.x + 2, in.bottom() - 4, std::max (0, in.w - 4), 3 };
-            p.rect (bar, p.c (colour::kRest, 255));
+            const Rect bar { in.x + 4, in.bottom() - 4, std::max (0, in.w - 8), 3 };
+            p.rrect (bar, 1.5f, p.c (T.track, 255));
             const int x0 = bar.x + static_cast<int> (std::lround (from * bar.w)), x1 = bar.x + static_cast<int> (std::lround (to * bar.w));
-            p.rect (x0, bar.y, std::max (x1, x0 + 1), bar.bottom(), state.selected()->depth < 0.0 ? p.c (colour::kAccentDark, 255) : p.c (colour::kText, 220));
+            p.rrect ({ x0, bar.y, std::max (x1, x0 + 2) - x0, bar.h }, 1.5f, p.c (state.selected()->depth < 0.0 ? T.negative : theme::sourceColour (state.selected()->name), 255));
         }
     }
     void drawIcon (Pen& p, const Rect& head) const
     {
         const float cx = static_cast<float> (head.x) + static_cast<float> (head.w) * 0.5f, cy = static_cast<float> (head.y) + static_cast<float> (head.h) * 0.5f;
-        const uint32_t col = p.c (qFrame_ ? colour::kAccent : colour::kText, 200);
+        const uint32_t col = p.c (qFrame_ ? colour::q() : colour::text(), 200);
+        p.style (1.0f, true);
         if (state.icon == Icon::Phase)
         {
             p.arc (cx, cy, 5.0f, 0.0f, 2.0f * kPi, 2.0f, col);     // a circle with the pointer of the start phase
@@ -263,6 +292,7 @@ protected:
             p.disc (cx - 2.5f, cy - 2.5f, 1.2f, col);
             p.disc (cx + 2.5f, cy + 2.5f, 1.2f, col);
         }
+        p.plain();
     }
 
     Change onDown (int x, int y, double now) override
@@ -336,11 +366,11 @@ private:
 class Stepper : public Component
 {
 public:
-    struct State { int count = 0, index = 0; char text[13] = {}; bool dim = false, wrap = false; };
+    struct State { int count = 0, index = 0; char text[48] = {}; bool dim = false, wrap = false; };
     State state;
 
     Size minSize() const override { return { kMinW, 56 }; }
-    static constexpr int kMinW = 208;   // two 28 px zones, 12 characters at 2 pixels per font pixel (142 px) and the frame
+    static constexpr int kMinW = 208;   // two 28 px zones, a text of about 14 characters at 22 pixels and the frame
     void setItem (const char* text) { setText (state.text, sizeof state.text, text); }
 
     int touchTargets (Rect* out, int max) const override
@@ -355,14 +385,16 @@ protected:
     static constexpr int kZone = 28;
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Rect b = rect_.inset (2);
-        p.rect (b, p.c (colour::kPanel, 255));
-        p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
+        p.control (b, qFrame_);
         const bool canPrev = state.count > 1 && (state.wrap || state.index > 0), canNext = state.count > 1 && (state.wrap || state.index < state.count - 1);
         const float cy = static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f;
-        p.chevron (static_cast<float> (b.x + kZone / 2), cy, 14.0f, 0, 3.0f, p.c (colour::kText, canPrev ? 255 : 70));
-        p.chevron (static_cast<float> (b.right() - kZone / 2), cy, 14.0f, 1, 3.0f, p.c (colour::kText, canNext ? 255 : 70));
-        p.textCentered ({ b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) }, state.text, 3, p.c (colour::kWhite, state.dim ? 90 : 255));
+        p.style (1.0f, true);
+        p.chevron (static_cast<float> (b.x + kZone / 2), cy, 12.0f, 0, 2.0f, p.c (T.flow[0], canPrev ? 255 : 60));
+        p.chevron (static_cast<float> (b.right() - kZone / 2), cy, 12.0f, 1, 2.0f, p.c (T.flow[3], canNext ? 255 : 60));
+        p.plain();
+        p.textCentered ({ b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) }, state.text, T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
     }
     Change onDown (int x, int y, double now) override
     {
@@ -425,17 +457,19 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Rect b = rect_.inset (2);
-        p.rect (b, p.c (colour::kPanel, 255));
-        p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
+        p.control (b, qFrame_);
         const int colW = std::max (28, b.w * 2 / 5);
         char t[16];
         std::snprintf (t, sizeof t, "%d", state.value);
-        p.textCentered ({ b.x + 2, b.y + 2, std::max (0, b.w - colW - 2), std::max (0, b.h - 4) }, t, 3, p.c (colour::kWhite, 255));
+        p.textCentered ({ b.x + 2, b.y + 2, std::max (0, b.w - colW - 2), std::max (0, b.h - 4) }, t, T.fValue, p.c (T.text, 255), T.fMin);
         const float cx = static_cast<float> (b.right() - colW / 2);
-        p.chevron (cx, static_cast<float> (b.y + b.h / 4), 14.0f, 2, 3.0f, p.c (colour::kText, state.value < state.max ? 255 : 70));
-        p.chevron (cx, static_cast<float> (b.y + b.h * 3 / 4), 14.0f, 3, 3.0f, p.c (colour::kText, state.value > state.min ? 255 : 70));
-        p.rect (b.right() - colW, b.y + b.h / 2, b.right() - 2, b.y + b.h / 2 + 1, p.c (colour::kRest, 255));
+        p.style (1.0f, true);
+        p.chevron (cx, static_cast<float> (b.y + b.h / 4), 12.0f, 2, 2.0f, p.c (T.flow[0], state.value < state.max ? 255 : 60));
+        p.chevron (cx, static_cast<float> (b.y + b.h * 3 / 4), 12.0f, 3, 2.0f, p.c (T.flow[3], state.value > state.min ? 255 : 60));
+        p.plain();
+        p.rect (b.right() - colW, b.y + b.h / 2, b.right() - 6, b.y + b.h / 2 + 1, p.c (T.keyline, 255));
     }
     Change onDown (int x, int y, double now) override
     {
@@ -468,7 +502,7 @@ class ToggleIcon : public Component
 {
 public:
     enum class Icon : uint8_t { Power, PitchTrack, Generic };
-    struct State { bool on = false; Icon icon = Icon::Generic; char label[7] = {}; };   // label (<= 6 characters, optional): under the icon
+    struct State { bool on = false; Icon icon = Icon::Generic; char label[16] = {}; };   // label (<= 6 characters, optional): under the icon
     State state;
 
     ToggleIcon() = default;
@@ -478,34 +512,45 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Rect b = rect_.inset (4);
-        p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
-        const int labelH = state.label[0] ? 2 * font::kGlyphH + 4 : 0;
+        p.control (b, qFrame_);
+        const int labelH = state.label[0] ? 18 : 0;
         const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f, cy = static_cast<float> (b.y) + static_cast<float> (b.h - labelH) * 0.5f;
         const float s = static_cast<float> (std::min (b.w, b.h - labelH)) * 0.32f;
         if (labelH > 0)
-            p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, state.label, 2, p.c (qFrame_ ? colour::kAccent : colour::kText, 200));
-        const uint32_t col = state.on ? p.c (colour::kAccent, 255) : p.c (colour::kText, 110);
+            p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, state.label, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+        const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (T.textFaint, 255);
+        p.style (state.on ? T.glowSoft * 0.6f : 1.0f, true);
+        if (state.on)
+            drawIconGlow (p, cx, cy, s);
+        p.style (1.0f, true);
         switch (state.icon)
         {
             case Icon::Power:
             {
                 const float a0 = 1.5f * kPi + 0.6f;
-                p.arc (cx, cy, s, a0, a0 + 2.0f * kPi - 1.2f, 3.0f, col);
-                p.line (cx, cy - s - 1.0f, cx, cy - 1.0f, 3.0f, col);
+                p.arc (cx, cy, s, a0, a0 + 2.0f * kPi - 1.2f, 2.4f, col);
+                p.line (cx, cy - s - 1.0f, cx, cy - 1.0f, 2.4f, col);
                 break;
             }
             case Icon::PitchTrack:
-                p.arc (cx, cy + s * 0.5f, s * 1.1f, kPi, 2.0f * kPi, 3.0f, col);   // the arc over the top, from the left to the right
-                p.disc (cx + s * 1.1f, cy + s * 0.5f, 3.0f, col);
+                p.arc (cx, cy + s * 0.5f, s * 1.1f, kPi, 2.0f * kPi, 2.4f, col);   // the arc over the top, from the left to the right
+                p.disc (cx + s * 1.1f, cy + s * 0.5f, 2.8f, col);
                 break;
             case Icon::Generic:
                 if (state.on)
-                    p.disc (cx, cy, s, col);
+                    p.disc (cx, cy, s * 0.9f, col);
                 else
-                    p.arc (cx, cy, s, 0.0f, 2.0f * kPi, 3.0f, col);
+                    p.arc (cx, cy, s, 0.0f, 2.0f * kPi, 2.4f, col);
                 break;
         }
+        p.plain();
+    }
+    /** The soft light under the icon of a switched on toggle. */
+    void drawIconGlow (Pen& p, float cx, float cy, float s) const
+    {
+        p.disc (cx, cy, s + 3.0f, p.c (theme::L().flow[0], static_cast<int> (theme::L().glowAlpha * 200.0f)));
     }
     Change onDown (int x, int y, double now) override { tap_.down (x, y, now); return Change::none(); }
     Change onMove (int x, int y) override { tap_.move (x, y); return Change::none(); }
@@ -524,7 +569,7 @@ class MenuButton : public Component
 {
 public:
     enum class Icon : uint8_t { Down, Gear, None, Expand };   // None: the label only (BACK, CLOSE); Expand: four corner brackets (full screen)
-    struct State { char label[9] = {}; Icon icon = Icon::Down; };
+    struct State { char label[24] = {}; Icon icon = Icon::Down; };
     State state;
 
     MenuButton() = default;
@@ -536,26 +581,28 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Rect b = rect_.inset (3);
-        p.rect (b, p.c (colour::kPanel, 255));
-        p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
+        p.control (b, qFrame_);
         Rect iconBox = b;
         if (state.label[0] != '\0')
         {
             const int iw = state.icon == Icon::None ? 0 : 28;
             iconBox = { b.right() - iw, b.y, iw, b.h };
-            p.textCentered ({ b.x + 2, b.y + 2, std::max (0, b.w - iw - 2), std::max (0, b.h - 4) }, state.label, 2, p.c (qFrame_ ? colour::kAccent : colour::kText, 255));
+            p.textCentered ({ b.x + 2, b.y + 2, std::max (0, b.w - iw - 2), std::max (0, b.h - 4) }, state.label, T.fLabel + 2.0f, p.c (qFrame_ ? T.q : T.text, 255), T.fMin);
         }
         if (state.icon == Icon::None)
             return;
         const float cx = static_cast<float> (iconBox.x) + static_cast<float> (iconBox.w) * 0.5f, cy = static_cast<float> (iconBox.y) + static_cast<float> (iconBox.h) * 0.5f;
-        const uint32_t col = p.c (colour::kText, 255);
+        const uint32_t col = p.c (T.flow[0], 255);
+        p.style (1.0f, true);
         if (state.icon == Icon::Down)
-            p.chevron (cx, cy, 14.0f, 3, 3.0f, col);
+            p.chevron (cx, cy, 12.0f, 3, 2.2f, col);
         else if (state.icon == Icon::Expand)
             p.iconExpand (cx, cy, col);
         else
             p.iconGear (cx, cy, col);
+        p.plain();
     }
     Change onDown (int x, int y, double now) override { tap_.down (x, y, now); return Change::none(); }
     Change onMove (int x, int y) override { tap_.move (x, y); return Change::none(); }
@@ -576,10 +623,10 @@ public:
     enum class Icon : uint8_t { None, Gear, Bell, Route, Envelope };
     struct State
     {
-        char label[9] = {};
+        char label[24] = {};
         Icon icon = Icon::None;
         bool hasValue = false, integer = false;
-        char text[7] = {};
+        char text[16] = {};
         double value = 0.0, min = 0.0, max = 1.0;
         int pxPerStep = 8;
     };
@@ -595,18 +642,20 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Rect b = rect_.inset (3);
-        p.rect (b, p.c (colour::kPanel, 255));
-        p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
+        p.control (b, qFrame_);
         Rect rest = b.inset (2);
         if (state.icon != Icon::None)
         {
             const float cx = static_cast<float> (rest.x + 16), cy = static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f;
-            const uint32_t col = p.c (qFrame_ ? colour::kAccent : colour::kText, 255);
+            const uint32_t col = p.c (qFrame_ ? T.q : T.flow[0], 255);
+            p.style (1.0f, true);
             if (state.icon == Icon::Gear) p.iconGear (cx, cy, col);
             else if (state.icon == Icon::Bell) p.iconBell (cx, cy, col);
             else if (state.icon == Icon::Envelope) p.iconEnvelope (cx, cy, col);
             else p.iconRoute (cx, cy, col);
+            p.plain();
             rest = { rest.x + 34, rest.y, std::max (0, rest.w - 34), rest.h };
         }
         char t[16];
@@ -620,13 +669,13 @@ protected:
         if (lab && val)
         {
             const int hh = rest.h / 2;
-            p.textCentered ({ rest.x, rest.y, rest.w, hh }, state.label, 2, p.c (qFrame_ ? colour::kAccent : colour::kText, 170));
-            p.textCentered ({ rest.x, rest.y + hh, rest.w, rest.h - hh }, vt, 2, p.c (colour::kWhite, 255));
+            p.textCentered ({ rest.x, rest.y, rest.w, hh }, state.label, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+            p.textCentered ({ rest.x, rest.y + hh, rest.w, rest.h - hh }, vt, T.fLabel + 2.0f, p.c (T.text, 255), T.fMin);
         }
         else if (lab)
-            p.textCentered (rest, state.label, 2, p.c (qFrame_ ? colour::kAccent : colour::kText, 255));
+            p.textCentered (rest, state.label, T.fLabel + 2.0f, p.c (qFrame_ ? T.q : T.text, 255), T.fMin);
         else if (val)
-            p.textCentered (rest, vt, 3, p.c (colour::kWhite, 255));
+            p.textCentered (rest, vt, T.fValue, p.c (T.text, 255), T.fMin);
     }
     Change onDown (int x, int y, double now) override
     {
@@ -679,7 +728,7 @@ private:
 class RouteButton : public DetailButton
 {
 public:
-    struct State { char target[4] = {}; bool segment[2] = { false, false }; };
+    struct State { char target[8] = {}; bool segment[2] = { false, false }; };
     State state;
 
     RouteButton() = default;
@@ -691,14 +740,14 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
+        const theme::Look& T = theme::L();
         const Rect strip { rect_.x + 4, rect_.y + 3, rect_.w - 8, 8 };
         const int half = strip.w / 2;
-        p.rect (strip.x, strip.y, strip.x + half - 2, strip.bottom(), p.c (state.segment[0] ? colour::kAccent : colour::kRest, 255));
-        p.rect (strip.x + half + 2, strip.y, strip.right(), strip.bottom(), p.c (state.segment[1] ? colour::kAccent : colour::kRest, 255));
+        p.rrect ({ strip.x, strip.y, half - 2, strip.h }, 3.0f, p.c (state.segment[0] ? T.flow[0] : T.track, 255));
+        p.rrect ({ strip.x + half + 2, strip.y, strip.w - half - 2, strip.h }, 3.0f, p.c (state.segment[1] ? T.flow[3] : T.track, 255));
         const Rect b { rect_.x + 3, rect_.y + 14, rect_.w - 6, rect_.h - 17 };
-        p.rect (b, p.c (colour::kPanel, 255));
-        p.frame (b, 1, p.c (qFrame_ ? colour::kAccent : colour::kRest, 255));
-        p.textCentered (b.inset (2), state.target, 3, p.c (colour::kWhite, 255));
+        p.control (b, qFrame_);
+        p.textCentered (b.inset (2), state.target, T.fValue, p.c (T.text, 255), T.fMin);
     }
 };
 
@@ -796,7 +845,7 @@ class PictogramSelector : public Component
 {
 public:
     static constexpr int kMaxItems = 8, kCellW = 76, kCellH = 56;   // kCellW: the cell for the longest label of 6 characters; shorter labels need less (cellMinW)
-    struct Item { int pictogram = 0; char label[7] = {}; bool enabled = true; };
+    struct Item { int pictogram = 0; char label[16] = {}; bool enabled = true; };
     struct State { int count = 0, index = 0; Item items[kMaxItems]; };
     State state;
 
@@ -825,7 +874,7 @@ public:
         int longest = 0;
         for (int i = 0; i < count(); ++i)
             longest = std::max (longest, static_cast<int> (std::strlen (state.items[i].label)));
-        return std::max (56, font::textWidth (longest, 2) + 6);
+        return std::max (56, static_cast<int> (std::ceil (sdf::textWidth ("MMMMMMMMMMMMMMMM", theme::L().fLabel - 2.0f) * static_cast<float> (longest) / 16.0f)) + 10);
     }
     Size minSize() const override
     {
@@ -847,20 +896,24 @@ protected:
         for (int i = 0; i < count(); ++i)
         {
             const Item& it = state.items[i];
+            const theme::Look& T = theme::L();
             const Rect c = cell (i).inset (2);
             const bool cur = i == state.index;
-            p.rect (c, p.c (colour::kPanel, 255));
-            p.frame (c, 1, p.c (cur ? colour::kAccent : colour::kRest, 255));
-            const uint32_t col = p.c (cur ? colour::kAccent : colour::kText, it.enabled ? (cur ? 255 : 200) : 60);
+            p.control (c, false, cur);
+            if (cur)
+                p.rrect (c, T.rControl, p.c (T.flow[0], 255), 1.6f);
+            const uint32_t col = p.c (cur ? T.flow[0] : T.textDim, it.enabled ? 255 : 60);
             const pictogram::Def* d = pictogram::find (it.pictogram);
             if (! d)   // no pictogram: a text cell
             {
-                p.textCentered (c.inset (2), it.label, 3, p.c (cur ? colour::kAccent : colour::kText, it.enabled ? 255 : 60));
+                p.textCentered (c.inset (2), it.label, T.fValue, p.c (cur ? T.text : T.textDim, it.enabled ? 255 : 60), T.fMin);
                 continue;
             }
-            const int labelH = it.label[0] ? 2 * font::kGlyphH + 4 : 0;
+            const int labelH = it.label[0] ? 18 : 0;
+            p.style (1.0f, true);
             d->draw (p, static_cast<float> (c.x) + static_cast<float> (c.w) * 0.5f, static_cast<float> (c.y) + static_cast<float> (c.h - labelH) * 0.5f, col);
-            p.textCentered ({ c.x, c.bottom() - labelH, c.w, labelH }, it.label, 2, p.c (cur ? colour::kAccent : colour::kText, it.enabled ? 255 : 60));
+            p.plain();
+            p.textCentered ({ c.x, c.bottom() - labelH, c.w, labelH }, it.label, T.fLabel - 2.0f, p.c (cur ? T.text : T.textDim, it.enabled ? 255 : 60), T.fMin);
         }
     }
     int cellAt (int x, int y) const noexcept

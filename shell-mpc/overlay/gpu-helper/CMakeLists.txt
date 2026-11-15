@@ -10,3 +10,9 @@ target_link_options(synthyboy_overlay_gpu PRIVATE -static-libstdc++ -static-libg
 add_custom_command(TARGET synthyboy_overlay_gpu POST_BUILD
     COMMAND ${CMAKE_STRIP} --strip-unneeded -o $<TARGET_FILE:synthyboy_overlay_gpu>.stripped $<TARGET_FILE:synthyboy_overlay_gpu>
     COMMENT "stripped copy of the GPU helper")
+
+# The measuring scene (docs/MPC.md "Observed on the device", D plan trial 17): a debug build only, never the product. OFF by default.
+option(SYNTHYBOY_MPC_OVERLAY_BENCH "MPC overlay GPU helper: draw a measuring scene of its own (/tmp/sb-bench.conf) and write /tmp/sb-bench-stats.txt (diagnostics only)" OFF)
+if(SYNTHYBOY_MPC_OVERLAY_BENCH)
+    target_compile_definitions(synthyboy_overlay_gpu PRIVATE SYNTHYBOY_OVERLAY_BENCH=1)
+endif()

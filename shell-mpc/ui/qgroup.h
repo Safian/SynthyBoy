@@ -57,7 +57,7 @@ public:
         if (u.empty())
             return;
         Pen pen (sb, true);
-        pen.frame (u, 2, pen.c (colour::kAccent, 255));
+        pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
     }
     /** The hardware knob `knobIndex` (0 .. 3) turned by delta: routed to the member of that slot; nothing when not active or the slot is empty. */
     Change turn (int knobIndex, double delta)
