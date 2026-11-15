@@ -57,7 +57,6 @@ struct TempDir
         p.rate = path + "/rate";
         p.gpuClock = path + "/gpuclock";
         p.status = path + "/status.txt";
-        p.noPanelHold = path + "/nopanelhold";
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";
         return p;

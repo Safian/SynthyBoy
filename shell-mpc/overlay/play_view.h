@@ -287,9 +287,9 @@ public:
         content_ = content;
         store_ = store;
         bpm_ = bpm;
-        if (in.qlinkPanel != qlinkPanel_)
+        if (in.panelEdgeX != edgeX_)
         {
-            qlinkPanel_ = in.qlinkPanel;
+            edgeX_ = in.panelEdgeX;
             changed = true;
         }
         // ---- the plugin-drawn oscillator pages: they read their parameters and the Q group; what they draw changes the picture
@@ -521,8 +521,8 @@ private:
     {
         const ui::theme::Look& T = ui::theme::L();
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
-        if (qlinkPanel_)   // the host's Q-Link panel is up over the right edge: nothing of ours is drawn there (it stays transparent, the panel shows as on every other page)
-            sb.clip (0.0f, 0.0f, static_cast<float> (PageDetector::kPanelLineX), static_cast<float> (play::kRegionH));
+        if (edgeX_ < play::kRegionW)   // the host draws over the right part of the tab (its Q-Link panel): nothing of ours right of its left edge, the picture is the host's there
+            sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (play::kRegionH));
         auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages (a gradient fill: no distance field): a cached cell
         {
             ui::Cell cell (sb, { static_cast<int> (x0), static_cast<int> (y0), static_cast<int> (x1 - x0), static_cast<int> (y1 - y0) }, 0);
@@ -702,8 +702,6 @@ private:
                     lfo_->drawCompact (sb);
                 continue;
             }
-            if (qlinkPanel_ && p == 2)
-                continue;   // the LFO panel lies under the host's Q-Link panel: not drawn while it is up
             ui::display::Module m;
             const int x0 = kOx + panelX (p), y0 = kOy + kTabY;
             m.rect = { x0, y0, kPanelW, kPanelH };
@@ -772,7 +770,7 @@ private:
     int openElement_ = 0;    // the element whose full screen is open (0: none)
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t uiHash_ = 0;
-    bool qlinkPanel_ = false;
+    int edgeX_ = 1280;   // the key (ViewInput::panelEdgeX)
     int moduleGroup_[4] = { -1, -1, -1, -1 };
     bool moduleGroupSet_ = false;
     float lastTargets_[4] = { -1, -1, -1, -1 };

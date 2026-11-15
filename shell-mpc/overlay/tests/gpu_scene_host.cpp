@@ -319,7 +319,7 @@ int main()
                 UiStack st;
                 if (depth == 1) st.openFull (1);
                 ViewInput in;
-                in.instance = &inst; in.io = &inst; in.ui = &st; in.nowMs = 0.0; in.qlinkPanel = true;
+                in.instance = &inst; in.io = &inst; in.ui = &st; in.nowMs = 0.0; in.panelEdgeX = 1024;
                 pv.update (in);
                 in.nowMs = 500.0; pv.update (in);
                 std::vector<uint32_t> cv (static_cast<size_t> (PlayView::kW) * PlayView::kH);

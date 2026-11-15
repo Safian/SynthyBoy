@@ -99,14 +99,14 @@ int main()
         const double t = r.until ([&] { return r.on(); }, 500);
         check (t >= 0 && t <= 110, "the markers appear: shown within 110 ms (took " + std::to_string (t) + " ms)");
         r.frame.setMarker (1, false, 90);
-        const double h = r.until ([&] { return ! r.on(); }, 800);
-        check (h >= 350 && h <= 650, "the right marker missing (the left one there): kept for the panel's slide, 400 ms, then hidden (took " + std::to_string (h) + " ms)");
+        const double h = r.until ([&] { return ! r.on(); }, 500);
+        check (h >= 0 && h <= 150, "one marker missing: hidden within 150 ms (took " + std::to_string (h) + " ms)");
         check (! r.plane.buffersAlive, "... and the buffers are freed");
         check (r.plane.calls() > 0 && r.plane.callLog().back() == "destroy", "... plane off first, then the buffers");
         r.frame.setMarker (1, true, 90, legacy::kViews[0].markers[1].rgb + 2);   // +2 in blue
         check (r.until ([&] { return r.on(); }, 300) >= 0, "a marker 2 off in one channel is accepted");
         r.frame.setMarker (1, true, 90, legacy::kViews[0].markers[1].rgb + 3);
-        check (r.until ([&] { return ! r.on(); }, 700) >= 0, "a marker 3 off is not (the page is kept for the panel's 400 ms first)");
+        check (r.until ([&] { return ! r.on(); }, 300) >= 0, "a marker 3 off is not");
         r.frame.setMarker (1, true, 90);
         r.until ([&] { return r.on(); }, 300);
         // the framebuffer cannot be read for one check: hidden, and it comes back
@@ -115,66 +115,91 @@ int main()
         r.frame.readable = true;
         check (r.until ([&] { return r.on(); }, 300) >= 0, "readable again: back");
     }
-    // ---- the host's Q-Link panel slides in and out (the right marker is covered first and uncovered last, the panel is not recognised meanwhile) and a knob turn is announced by the plugin ----
+    // ---- the key of the host's Q-Link panel (panel_key.h): the host's picture under the page is taken once, every tick the strip is compared with it, the picture is cut at the left edge of what the host drew ----
     {
         Rig r;
+        auto paintBand = [&] (int left, uint32_t fill)   // the panel: a black line (2 px) at `left`, the fill right of it, over the tab's height (the sampled rows and all between them)
+        {
+            for (int y = 112; y < 740; ++y)
+                for (int x = left; x < 1280; ++x)
+                {
+                    int px, py;
+                    uiPointToPanel (90, x, y, 800, 1280, px, py);
+                    r.frame.setPixel (px, py, x < left + 2 ? 0x000000u : fill);
+                }
+        };
+        auto clearBand = [&]
+        {
+            for (int y = 112; y < 740; ++y)
+                for (int x = 840; x < 1280; ++x)
+                {
+                    int px, py;
+                    uiPointToPanel (90, x, y, 800, 1280, px, py);
+                    r.frame.setPixel (px, py, 0x202020u);
+                }
+            r.frame.setMarker (1, true, 90);   // the marker the band covered
+        };
         r.frame.setAll (true, 90);
         check (r.until ([&] { return r.on(); }, 500) >= 0, "the page is on");
-        r.run (300);
-        check (! r.ctl->qlinkPanelUp(), "no panel, no knob: the flag is down");
-        // the slide: right marker gone for 250 ms, then back: the page never goes away, the panel counts as up meanwhile
-        r.frame.setMarker (1, false, 90);
-        bool always = true, panelSeen = false;
-        for (int i = 0; i < 25; ++i)
+        check (r.ctl->keyEdge() == PanelKey::kNoKey, "no panel: not cut");
+        r.run (1500);   // settled: the reference is taken
+        check (line (r.dir.read ("status.txt"), "key_reference_taken") == "1", "the page was whole and still: the reference of the strip was taken once (" + line (r.dir.read ("status.txt"), "key_reference_taken") + ")");
+        // the panel slides in: the line at three places, then in; the page never goes, the cut follows the line at the very next tick
+        bool always = true;
+        const int places[4] = { 1250, 1150, 1050, 1024 };
+        for (int left : places)
         {
-            r.run (10);
+            paintBand (left, 0x1e1d1eu);
+            r.run (40);
             always = always && r.on();
-            panelSeen = panelSeen || r.ctl->qlinkPanelUp();
+            const int e = r.ctl->keyEdge();
+            check (e >= left - 4 && e <= left, "the panel's line at x " + std::to_string (left) + ": the cut is at " + std::to_string (e) + " (the line's column less the grown edge)");
         }
-        check (always && panelSeen, "the right marker covered for 250 ms: the page stays on and the panel flag is up (the picture is clipped at the panel's edge)");
-        r.frame.setMarker (1, true, 90);
-        for (int i = 0; i < 40; ++i)
+        check (always, "the page stayed on through the slide (the right marker covered, the key says the band is there)");
+        // out again
+        for (int i = 3; i >= 0; --i)
         {
-            r.run (10);
+            clearBand();
+            if (i > 0) paintBand (places[i - 1] + 40 * (3 - i), 0x1e1d1eu);
+            r.run (40);
             always = always && r.on();
         }
-        check (always && ! r.ctl->qlinkPanelUp(), "the marker back: still on, the flag down again, the page never blinked");
-        // a knob turn: the first write raises the flag before the detector has seen anything, steady writes keep it, 700 ms after the last one it falls
-        const unsigned long ch0 = r.ctl->qlinkPanelChangeCount();
-        r.inst.qWrites++;
-        r.run (20);
-        check (r.ctl->qlinkPanelUp(), "a host write to a Q proxy raises the panel flag at once (the panel is about to be drawn)");
-        for (int i = 0; i < 40; ++i)
-        {
-            r.run (50);
-            r.inst.qWrites++;
-        }
-        check (r.ctl->qlinkPanelUp() && r.ctl->qlinkPanelChangeCount() == ch0 + 1, "two seconds of turning: the flag stays up, it changed once (" + std::to_string (r.ctl->qlinkPanelChangeCount() - ch0) + ")");
-        r.run (600);
-        check (r.ctl->qlinkPanelUp(), "600 ms after the last write: still up");
+        clearBand();
         r.run (200);
-        check (! r.ctl->qlinkPanelUp() && r.ctl->qlinkPanelChangeCount() == ch0 + 2, "800 ms after the last write: down, one change in all");
-        r.run (1200);
-        const std::string st = r.dir.read ("status.txt");
-        check (! line (st, "qlink_panel_detect_lag_ms").empty() && ! line (st, "view_hides").empty(), "the status file has the lag between a knob's first write and the panel's first sight, and the count of pages that went off the screen");
-        check (line (st, "view_hides") == "0", "the slide and the turns hid the page not once (view_hides " + line (st, "view_hides") + ")");
-        check (! line (st, "qlink_panel_bridged").empty() && ! line (st, "qlink_panel_anticipated").empty() && line (st, "qlink_panel") == "no", "the status file has the counters of the bridged frames and of the announced turns");
-    }
-    // ---- the diagnostics file "nopanelhold": the behaviour before the rules (the page goes with its right marker, a knob's writes announce nothing) ----
-    {
-        Rig r;
-        r.dir.touch ("nopanelhold");
-        r.frame.setAll (true, 90);
-        check (r.until ([&] { return r.on(); }, 500) >= 0, "the page is on");
-        r.run (1200);
-        r.inst.qWrites++;
+        check (always && r.on() && r.ctl->keyEdge() == PanelKey::kNoKey, "the panel gone: not cut, the page never blinked");
+        check (line (r.dir.read ("status.txt"), "view_hides") == "0" || r.ctl->state() == "visible", "no hide on the way");
+        // a host rectangle that is no band (a popup in the middle of the tab): not keyed (the page's markers decide)
+        for (int y = 300; y < 450; ++y)
+            for (int x = 900; x < 1100; ++x)
+            {
+                int px, py;
+                uiPointToPanel (90, x, y, 800, 1280, px, py);
+                r.frame.setPixel (px, py, 0x808080u);
+            }
         r.run (100);
-        check (! r.ctl->qlinkPanelUp(), "with the file: a host write to a Q proxy raises nothing");
-        r.frame.setMarker (1, false, 90);
-        const double h = r.until ([&] { return ! r.on(); }, 500);
-        check (h >= 0 && h <= 150, "with the file: the right marker missing hides the page within 150 ms (took " + std::to_string (h) + " ms)");
-        r.run (1200);
-        check (line (r.dir.read ("status.txt"), "view_hides") == "1", "... and that was counted as one hide");
+        check (r.ctl->keyEdge() == PanelKey::kNoKey, "a popup in the middle (not a band over most of the strip's height): not keyed");
+        // the reference is not the picture under us any more (another host page, both markers whole and still): taken again
+        for (int y = 112; y < 740; ++y)
+            for (int x = 840; x < 1280; ++x)
+            {
+                int px, py;
+                uiPointToPanel (90, x, y, 800, 1280, px, py);
+                r.frame.setPixel (px, py, 0x404040u);
+            }
+        r.frame.setMarker (1, true, 90);
+        r.run (300);
+        check (r.ctl->keyEdge() == PanelKey::kNoKey, "the strip changed completely (a band from the strip's left end): no cut");
+        r.run (1500);
+        check (line (r.dir.read ("status.txt"), "key_reference_retakes") != "0", "... the reference was dropped (key_reference_retakes " + line (r.dir.read ("status.txt"), "key_reference_retakes") + ")");
+        check (line (r.dir.read ("status.txt"), "key_reference_taken") == "2", "... and it was taken again (" + line (r.dir.read ("status.txt"), "key_reference_taken") + ")");
+        // another tab: the reference goes with the view
+        r.frame.setAll (false, 90);
+        r.run (300);
+        r.frame.setAll (true, 90);
+        r.run (1500);
+        check (line (r.dir.read ("status.txt"), "key_reference_taken") == "3", "the view came back: its reference is taken again (" + line (r.dir.read ("status.txt"), "key_reference_taken") + ")");
+        const std::string st = r.dir.read ("status.txt");
+        check (! line (st, "key_cost_ms").empty() && ! line (st, "key_pixels").empty() && ! line (st, "key_active").empty(), "the status file has key_active, key_pixels and key_cost_ms");
     }
     // ---- failures disable for good, without a retry storm ----
     {

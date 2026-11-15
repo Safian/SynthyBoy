@@ -26,7 +26,7 @@ struct ViewInput
     double nowMs = 0.0;
     IFrameSource* frames = nullptr;                // the application's primary framebuffer (the envelope view checks the line colour with it)
     int rotation = 90;
-    bool qlinkPanel = false;                       // the host's Q-Link panel is drawn over the right edge (a hardware knob is being turned): a view must not draw there
+    int panelEdgeX = 1280;                         // the x the picture is cut at: right of it the host shows through (its Q-Link panel, which slides in and out; panel_key.h); 1280: nothing of the host over the tab
     IInstanceView* io = nullptr;                   // the same instance, writable: the plugin-drawn pages write parameters through it (null in a test that has none)
     const UiStack* ui = nullptr;                   // the plugin-drawn pages of this instance (main / full / detail, ui_stack.h); null in a test that has none. The views of today ignore it.
 };

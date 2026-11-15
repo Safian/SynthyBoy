@@ -90,9 +90,9 @@ public:
         pi.targets = in.targets;
         pi.instance = instance_;
         ui_.update (*in.io, *in.ui, in.nowMs, pi);
-        if (in.qlinkPanel != qlinkPanel_)
+        if (in.panelEdgeX != edgeX_)
         {
-            qlinkPanel_ = in.qlinkPanel;
+            edgeX_ = in.panelEdgeX;
             changed = true;
         }
         if (! scratch_)
@@ -162,8 +162,8 @@ private:
     void buildPicture (gpu::SceneBuilder& sb) const
     {
         sb.clear (0u);
-        if (qlinkPanel_)   // the host's Q-Link panel is up over the right edge: nothing of ours is drawn there
-            sb.clip (0.0f, 0.0f, static_cast<float> (PageDetector::kPanelLineX), static_cast<float> (page::kH));
+        if (edgeX_ < page::kW)   // the host draws over the right part of the tab (its Q-Link panel): nothing of ours right of its left edge
+            sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (page::kH));
         page::ground (sb);
         ui_.draw (sb);
     }
@@ -174,7 +174,8 @@ private:
     Ui ui_;
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t hash_ = 0;
-    bool have_ = false, qlinkPanel_ = false;
+    bool have_ = false;
+    int edgeX_ = 1280;   // the key (ViewInput::panelEdgeX)
 };
 
 }} // namespace synthyboy_mpc::overlay
