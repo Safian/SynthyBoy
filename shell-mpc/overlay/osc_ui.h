@@ -159,6 +159,12 @@ public:
 
     void draw (gpu::SceneBuilder& sb) const
     {
+        drawPage (sb);
+        drawPopup (sb);
+    }
+    /** The page without its popups (the picture of the oscillator goes on it, then the popups). */
+    void drawPage (gpu::SceneBuilder& sb) const
+    {
         if (stackDepth_ == 0)
         {
             compact_.draw (sb);
@@ -175,6 +181,12 @@ public:
             return;
         }
         full_.draw (sb);
+    }
+    /** The route popup and the list popup (over the page and over the picture). */
+    void drawPopup (gpu::SceneBuilder& sb) const
+    {
+        if (stackDepth_ == 0 || pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods)
+            return;
         if (pageTop_ == kPageRoute)
             route_.draw (sb);
         else if (pageTop_ == kPageList)

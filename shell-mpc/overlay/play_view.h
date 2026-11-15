@@ -435,11 +435,12 @@ private:
             drawLfoSelector (sb);   // the host's LFO selector lies under the covered strip: its state is drawn here while the panel is up
         if (osc_ == nullptr)
             return;
-        osc_->draw (sb);
+        osc_->drawPage (sb);
         const ui::Rect r = osc_->displayRect();
         if (! r.empty())
             drawPicture (sb, r);
         osc_->drawOnDisplay (sb);
+        osc_->drawPopup (sb);   // the popups lie over the picture
     }
 
     /** The look of the host's "PLAY LFO" selector (slider and its value text under the LFO panel) for the selected LFO. */
