@@ -7,3 +7,7 @@
 #include "list.h"
 #include "panel.h"
 #include "screen.h"
+#if __has_include("synthyboy/fx_types.h")
+#include "mixer_screen.h"
+#include "fx_screen.h"
+#endif
