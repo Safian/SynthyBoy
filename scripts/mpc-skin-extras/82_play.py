@@ -31,6 +31,10 @@ TABS = ("Play", "Play Env", "Play LFO")
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS, OVERLAY_INSTANCE = 4, 32, 2, 1
 GROUPS = 3
 SLOTS = 8
+# The Key 61 has one column of four knobs; Bank Direction "Column" banks the 4 x 4 grid (Q-Links.json 8.2 / 8.3 of the SDK's ui-reference.md) by columns read TOP TO BOTTOM: bank 0 = Q-Link 13, 9, 5, 1, bank 1 = 14, 10, 6, 2.
+# The Play pages' first bank is the four Q proxies: the top knob is Q 1, the bottom one Q 4 (measured on the device: the panel showed Q 1 at the bottom for Q-Link 1).
+QLINK_COLUMN_0 = (13, 9, 5, 1)
+QLINK_COLUMN_1 = (14, 10, 6, 2)
 Q_PROXIES = 4              # "Q 1" .. "Q 4": the parameters after the last Play proxy
 PLUGIN_DRAWN_PANEL = 0     # the oscillator panel: no host widget under (or beside) the plugin's own drawing
 # (prefix, instances, [(key suffix of the real parameter, template suffix if the production skin has no control for it, short name)] x 8) ; the names are the ones of play_params.h
@@ -253,9 +257,10 @@ def apply(tui, qlinks, ctx):
                 c, segs = _copy_control(template, "Play %s %s%s" % (prefix.capitalize(), short, "" if v == 0 else " %d" % (v + 1)), proxy_idx[highlight][s], (COLS[col], y, SLOT_W, SLOT_H[kind]), rebind)
                 extra.append(c)
                 extra.extend(segs)
-            links["Q-Link %d" % (s + 1)] = proxy_idx[highlight][s]
+            if s >= 4:   # the second row of the module's knobs: the second Q-Link bank (column 1), read top to bottom: slots 5, 6, 7, 8
+                links["Q-Link %d" % QLINK_COLUMN_1[s - 4]] = proxy_idx[highlight][s]
         for i in range(Q_PROXIES):   # the four hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on)
-            links["Q-Link %d" % (i + 1)] = q_idx[i]
+            links["Q-Link %d" % QLINK_COLUMN_0[i]] = q_idx[i]
         for c in extra:
             _hide_while_full_screen(c, first - OVERLAY_INSTANCE)
         items.extend(extra)

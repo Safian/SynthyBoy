@@ -347,6 +347,12 @@ private:
             else
                 unreadable_ = 0;
             instanceSeen_ = d.instanceSeen;
+            if (qlinkPanel_ != (d.view >= 0 && d.qlinkPanel))
+            {
+                qlinkPanel_ = d.view >= 0 && d.qlinkPanel;
+                needFrame_ = true;
+                ++qlinkPanelChanges_;
+            }
             // which instance's page it is: the view's own markers are on screen, and the instance picture says whose page it is
             int view = d.view, slot = -1;
             std::string why;
@@ -575,6 +581,7 @@ private:
         in.nowMs = nowMs;
         in.frames = &frames_;
         in.rotation = rotation_;
+        in.qlinkPanel = qlinkPanel_;
         in.io = v;
         in.ui = &ui_[activeSlot_];   // under mu_ (held here): the view reads it during update ()
         changed = view.update (in);
@@ -906,7 +913,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\nqlink_panel: " << (qlinkPanel_ ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -1033,6 +1040,8 @@ private:
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
     ITouchInput* touchIn_ = nullptr;
+    bool qlinkPanel_ = false;
+    unsigned long qlinkPanelChanges_ = 0;
     unsigned long touchEvents_ = 0, touchTaken_ = 0;
     Rect instanceRects_[layout::kNumViews];
     int targetBase_[layout::kNumViews] = {};

@@ -89,24 +89,26 @@ public:
         int row = -1;              // a control of the modulations page: the row
     };
 
-    OscUi() { setCanvas (1280, 628); configure (nullptr, 2, true); }
+    OscUi() { setCanvas (kCanvasW, kCanvasH); configure (nullptr, 2, true); }
 
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    /** The size of the canvas (the region of the Play view: 1280 x 628) and the place of the oscillator third. */
+    /** The canvas is the whole screen (1280 x 800: the Play view's region, so that it can cover the host's Q-Link panel over the right edge); the pages live in the tab (y kTabY .. kTabY + kTabH). */
+    static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     void setCanvas (int w, int h)
     {
         w_ = w; h_ = h;
-        compact_.place ({ 8, 4, 420, h - 8 });
-        full_.place ({ 0, 0, w, h });
-        popupBox_ = { w / 2 - 340, h / 2 - 110, 680, 220 };
+        const ui::Rect tab { 0, kTabY, w, kTabH };
+        compact_.place ({ 8, kTabY + 4, 420, kTabH - 8 });
+        full_.place (tab);
+        popupBox_ = { w / 2 - 340, kTabY + kTabH / 2 - 110, 680, 220 };
         route_.place (popupBox_);
-        route_.setPopup (true, { 0, 0, w, h });
-        list_.place ({ 340, 20, 600, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        list_.setPopup ({ 0, 0, w, h });
+        route_.setPopup (true, tab);
+        list_.place ({ 340, kTabY + 20, 600, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (tab);
         list_.setId (kList);
         list_.setBackdropId (kListBackdrop);
-        detail_.place ({ 0, 0, w, h });
-        mods_.place ({ 0, 0, w, h });
+        detail_.place (tab);
+        mods_.place (tab);
     }
 
     /** Reads the instance: the selected oscillator, the type of A, B, C, every value of the visible controls, the modulations of the knobs, the pages of the stack, the Q group. */
@@ -187,15 +189,14 @@ public:
     /** The touch hit this view's drawing (the main state: the oscillator third; any other state: everything). */
     bool covers (int x, int y) const noexcept
     {
-        return stackDepth_ > 0 || ui::Rect { 8, 4, 420, h_ - 8 }.contains (x, y - kTabOriginY);
+        return stackDepth_ > 0 ? ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y) : ui::Rect { 8, kTabY + 4, 420, kTabH - 8 }.contains (x, y);
     }
-    static constexpr int kTabOriginY = 110;
 
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
     /** One touch event in UI pixels (the whole screen), `stack` is the instance's stack (the caller holds its lock). Returns true when the touch belongs to the plugin-drawn pages. */
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
-        const int x = ev.x, y = ev.y - kTabOriginY;
+        const int x = ev.x, y = ev.y;
         ui::Component* top = topComponent();
         if (ev.kind == TouchEvent::Down)
         {

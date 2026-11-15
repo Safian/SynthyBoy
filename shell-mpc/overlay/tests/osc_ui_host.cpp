@@ -58,7 +58,7 @@ private:
 };
 
 TouchEvent ev (TouchEvent::Kind k, int x, int y) { TouchEvent e; e.kind = k; e.x = x; e.y = y; return e; }
-constexpr int kOY = OscUi::kTabOriginY;
+constexpr int kOY = 0;   // the canvas is the screen: the rectangles of the components are in screen pixels
 
 struct Rig
 {
@@ -286,7 +286,7 @@ void testRoutePopup()
     r.tap (t.x + t.w - 10, t.y + t.h / 2);
     check (r.inst.get ("osc1.destination") == 6.0f, "the right half of the target stepper selects the next destination");
     // a tap outside the popup closes it
-    r.tap (20, 20);
+    r.tap (20, 130);
     check (r.stack.depth() == 1, "a tap on the backdrop closes the popup");
     r.tapC (r.ui.full().route);
     r.tapC (r.ui.routePanel().close);
@@ -422,12 +422,12 @@ void testDrawsOneSceneInsideTheCanvas()
             auto data = std::make_unique<gpu::SceneData>();
             std::memset (data.get(), 0, sizeof (gpu::SceneData));
             gpu::SceneBuilder sb (*data);
-            sb.begin (gpu::kKindPlay, 0, 1280, 628);
+            sb.begin (gpu::kKindPlay, 0, 1280, 800);
             r.ui.draw (sb);
             check (! sb.overflow && data->numOps > 20, "draw depth " + std::to_string (depth) + " instance " + std::to_string (sel) + ": one scene (" + std::to_string (data->numOps) + " ops)");
             std::vector<uint32_t> cv;
             renderScene (*data, cv);
-            check (cv.size() == 1280u * 628u, "the CPU renderer draws it");
+            check (cv.size() == 1280u * 800u, "the CPU renderer draws it");
         }
 }
 
@@ -472,7 +472,7 @@ void testSourceAndWarpLists()
     const ui::Rect sr = st.rect();
     r.tap (sr.x + sr.w / 2, sr.y + sr.h / 2);
     check (r.stack.top() == OscUi::kPageList, "a tap on the name of the source stepper opens the list as well");
-    r.tap (20, 20);
+    r.tap (20, 130);
     const float w0 = r.inst.get ("osc1.wavetable");
     r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
     check (r.inst.get ("osc1.wavetable") == w0 + 1.0f && r.stack.depth() == 1, "the right quarter still steps to the next wavetable");
@@ -481,7 +481,7 @@ void testSourceAndWarpLists()
     const ui::Rect wr = wp->first.type.rect();
     r.tap (wr.x + wr.w / 2, wr.y + wr.h / 2);
     check (r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 99, "the name of a warp type stepper opens the list of the warp types");
-    r.tap (20, 20);
+    r.tap (20, 130);
     // the other types have no source list
     r.inst.set ("osc1.type", 4.0f);
     r.refresh();
@@ -492,7 +492,7 @@ void testSourceAndWarpLists()
     r.tapC (r.ui.full().basic.source.dropdown);
     auto data = std::make_unique<gpu::SceneData>();
     gpu::SceneBuilder sb (*data);
-    sb.begin (gpu::kKindPlay, 0, 1280, 628);
+    sb.begin (gpu::kKindPlay, 0, 1280, 800);
     r.ui.draw (sb);
     check (! sb.overflow && data->numOps < 640, "the full screen with the list open is one scene (" + std::to_string (data->numOps) + " ops)");
 }
@@ -521,7 +521,7 @@ void testGranularAndSubAndNoise()
     }
     check (r.inst.get ("osc1.warp.type") == static_cast<float> (r.ui.list().firstRow() + 1) && r.stack.depth() == 1, "a tap on a row writes osc1.warp.type and closes the list");
     r.tapC (*p.menu());
-    r.tap (20, 20);
+    r.tap (20, 130);
     check (r.stack.depth() == 1, "a tap on the backdrop closes the list without a write");
     // sub
     Rig s;

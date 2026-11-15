@@ -240,7 +240,7 @@ int main()
             const int vi = layout::kNumViews - 4 + idx;   // play1 .. play3 are the last three views of the layout
             check (std::string (layout::kViews[vi].name) == "play" + std::to_string (idx) && layout::kViews[vi].kind == layout::kKindPlay && layout::kViews[vi].index == idx, "the layout's last three views are play1 .. play3");
             Rect r;
-            check (v.regionOverride (r) && r.w == PlayView::kW && r.h == PlayView::kH && r.y == play::kTabY, "the Play view's region is the whole tab of the Play page");
+            check (v.regionOverride (r) && r.w == PlayView::kW && r.h == PlayView::kH && r.y == 0 && r.w == 1280 && r.h == 800, "the Play view's region is the whole screen");
             check (v.valid(), "the Play view has data after one update");
             checkSameAsCpu ("play " + std::to_string (idx) + " (dot and cursor)", v, vi, r.w, r.h);
             gpu::SceneData sd;
@@ -268,7 +268,7 @@ int main()
             bool frames = true;
             for (int p = 1; p < 3; ++p)   // the oscillator panel is the plugin-drawn compact view: no frame of the old kind
             {
-                const uint32_t top = cv[static_cast<size_t> (play::kOy + 1) * static_cast<size_t> (r.w) + static_cast<size_t> (play::kOx + p * (play::kPanelW + play::kPanelGap) + 100)];
+                const uint32_t top = cv[static_cast<size_t> (play::kTabY + play::kOy + 1) * static_cast<size_t> (r.w) + static_cast<size_t> (play::kOx + p * (play::kPanelW + play::kPanelGap) + 100)];
                 const bool accent = ((top >> 16) & 255u) > 0xe0 && ((top >> 8) & 255u) < 0x60;
                 frames = frames && (accent == (p == idx - 1));
             }
@@ -288,10 +288,29 @@ int main()
                 std::vector<uint32_t> cv (static_cast<size_t> (PlayView::kW) * PlayView::kH);
                 pv.render (cv.data(), PlayView::kW, PlayView::kH);
                 int transparent = 0;
-                for (int y = 0; y < PlayView::kH; ++y)
+                for (int y = play::kTabY; y < play::kTabY + play::kTabH; ++y)
                     for (int x = 0; x < (depth == 0 ? 430 : PlayView::kW); ++x)
                         transparent += (cv[static_cast<size_t> (y) * PlayView::kW + static_cast<size_t> (x)] >> 24) != 255u;
                 check (transparent == 0, std::string (depth == 0 ? "main: the oscillator third" : (depth == 1 ? "full screen: the whole region" : "popup: the whole region")) + " is opaque (" + std::to_string (transparent) + " transparent pixels)");
+            }
+        }
+        {   // the host's Q-Link panel is up: our picture covers the strip x >= 1024 over the whole height (header and tab bar included), in main and under a full screen
+            for (int depth = 0; depth < 2; ++depth)
+            {
+                PlayView pv (1, 10.0);
+                UiStack st;
+                if (depth == 1) st.openFull (1);
+                ViewInput in;
+                in.instance = &inst; in.io = &inst; in.ui = &st; in.nowMs = 0.0; in.qlinkPanel = true;
+                pv.update (in);
+                in.nowMs = 500.0; pv.update (in);
+                std::vector<uint32_t> cv (static_cast<size_t> (PlayView::kW) * PlayView::kH);
+                pv.render (cv.data(), PlayView::kW, PlayView::kH);
+                int transparent = 0;
+                for (int y = 0; y < PlayView::kH; ++y)
+                    for (int x = 1024; x < PlayView::kW; ++x)
+                        transparent += (cv[static_cast<size_t> (y) * PlayView::kW + static_cast<size_t> (x)] >> 24) != 255u;
+                check (transparent == 0, std::string ("Q-Link panel up, ") + (depth ? "full screen" : "main") + ": the strip x >= 1024 is covered over the whole screen height (" + std::to_string (transparent) + " transparent pixels)");
             }
         }
         // the cursor / dot off (no voice): still the same picture on both renderers

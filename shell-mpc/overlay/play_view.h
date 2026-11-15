@@ -11,6 +11,7 @@
 
 #include "../play_params.h"
 #include "osc_ui.h"
+#include "page_detector.h"
 #include "play_osc.h"
 #include "scene_cpu.h"
 #include "synthyboy/env_display.h"
@@ -29,7 +30,7 @@ constexpr int kTitleCell = 3;                                   // pixels per fo
 constexpr int kPlotX = 10, kPlotTop = 40, kPlotBottomMargin = 8, kPlotW = 380;
 constexpr int kEnvPoints = 256;
 constexpr int kOx = 23, kOy = 14, kPanelH = 190;                // the Env and LFO panels as they always were (tab coordinates of the old region)
-constexpr int kRegionW = 1280, kRegionH = 628, kTabY = 110;      // the region of the view now: the whole tab of the Play page (the compact oscillator view, the full screen, the Env and LFO panels)
+constexpr int kRegionW = 1280, kRegionH = 800, kTabY = 110, kTabH = 628;   // the region of the view: the whole screen (so that it can cover the host's Q-Link panel over the right edge); the Play tab (the compact oscillator view, the full screen, the Env and LFO panels) is its rows kTabY .. kTabY + kTabH
 constexpr int kDisplayPoints = 256;                              // the points of a min / max overview (two polylines of this many vertices)
 constexpr uint32_t kPanelRgb = 0x262527, kFrameRgb = 0xff2e63, kRestFrameRgb = 0x3d3b3e;
 
@@ -285,6 +286,11 @@ public:
         content_ = content;
         store_ = store;
         bpm_ = bpm;
+        if (in.qlinkPanel != qlinkPanel_)
+        {
+            qlinkPanel_ = in.qlinkPanel;
+            changed = true;
+        }
         // ---- the plugin-drawn oscillator pages: they read their parameters and the Q group; what they draw changes the picture
         if (in.io != nullptr && in.ui != nullptr)
         {
@@ -311,7 +317,7 @@ public:
 
     bool regionOverride (Rect& ui) const override
     {
-        ui = { 0, play::kTabY, play::kRegionW, play::kRegionH };
+        ui = { 0, 0, play::kRegionW, play::kRegionH };
         return true;
     }
     bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override { return osc_ != nullptr && osc_->touch (ev, stack, io, nowMs); }
@@ -446,15 +452,20 @@ private:
     {
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
         play::SceneSink base (sb);
-        play::ShiftSink<play::SceneSink> shifted (base, play::kOx, play::kOy);
+        play::ShiftSink<play::SceneSink> shifted (base, play::kOx, play::kOy + play::kTabY);
+        const uint32_t dark = gpu::rgba8FromRgb (layout::kBackgroundRgb, 255);
         if (osc_ != nullptr)
         {
-            // opaque under the plugin's own pages: the whole region for a full screen, a detail page and the popup's backdrop; the oscillator third in main (the host's panel picture, its Q-Link focus frame)
+            // opaque under the plugin's own pages: the whole tab for a full screen, a detail page and the popup's backdrop; the oscillator third in main (the host's panel picture, its Q-Link focus frame)
             const float w = osc_->isMain() ? 432.0f : static_cast<float> (play::kRegionW);
-            sb.rect (0.0f, 0.0f, w, static_cast<float> (play::kRegionH), gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
+            sb.rect (0.0f, static_cast<float> (play::kTabY), w, static_cast<float> (play::kTabY + play::kTabH), dark);
         }
+        if (qlinkPanel_)   // the host's Q-Link panel (while a hardware knob is turned): covered over the whole height of the screen, the header and the tab bar included
+            sb.rect (static_cast<float> (PageDetector::kPanelLineX), 0.0f, static_cast<float> (play::kRegionW), static_cast<float> (play::kRegionH), dark);
         if (osc_ == nullptr || osc_->isMain())
             paint (shifted, play::kPanelW, play::kPanelH);   // the Env and LFO panels (not drawn while a full screen covers them)
+        if (qlinkPanel_ && (osc_ == nullptr || osc_->isMain()))
+            drawLfoSelector (sb);   // the host's LFO selector lies under the covered strip: its state is drawn here while the panel is up
         if (osc_ == nullptr)
             return;
         osc_->draw (sb);
@@ -462,6 +473,19 @@ private:
         if (! r.empty())
             drawPicture (sb, r);
         osc_->drawOnDisplay (sb);
+    }
+
+    /** The look of the host's "PLAY LFO" selector (slider and its value text under the LFO panel) for the selected LFO. */
+    void drawLfoSelector (gpu::SceneBuilder& sb) const
+    {
+        const int cx = 1057, y0 = play::kTabY + 217;
+        sb.text (cx - 48, y0 - 4, 2, "PLAY LFO", gpu::rgba8 (0x8c, 0x8c, 0x8c, 255));
+        const int bx = 995, by = play::kTabY + 233, bw = 124, bh = 23;
+        sb.frame (static_cast<float> (bx), static_cast<float> (by), static_cast<float> (bx + bw), static_cast<float> (by + bh), 1.0f, gpu::rgba8 (0x6e, 0x6e, 0x70, 255));
+        const int fillW = 4 + (bw - 6) * (std::clamp (sel_[2], 1, play::kLfos) - 1) / (play::kLfos - 1);
+        sb.rect (static_cast<float> (bx + 1), static_cast<float> (by + 1), static_cast<float> (bx + 1 + fillW), static_cast<float> (by + bh - 1), gpu::rgba8 (0xd3, 0x11, 0x45, 255));
+        const std::string t = "LFO " + std::to_string (sel_[2]);
+        sb.text (cx - static_cast<int> (t.size()) * 9, by + bh + 7, 3, t.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
     }
 
     void fillSub (int wave, float phasePercent)
@@ -657,6 +681,7 @@ private:
     std::unique_ptr<OscUi> osc_;
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t uiHash_ = 0;
+    bool qlinkPanel_ = false;
     int moduleGroup_[4] = { -1, -1, -1, -1 };
     bool moduleGroupSet_ = false;
     float lastTargets_[4] = { -1, -1, -1, -1 };

@@ -162,6 +162,9 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/s
 $B/spectrum_curve_host > $B/spectrum-curve-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-curve-host.log; echo "ACCEPT FAIL: spectrum_curve_host (the spectrum curve: sine, two sines, noise, silence, timing)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/spectrum_view_host $OVSRC/spectrum_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: spectrum_view_host build"; exit 1; }
 $B/spectrum_view_host > $B/spectrum-view-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-view-host.log; echo "ACCEPT FAIL: spectrum_view_host (the spectrum view: scene = CPU picture, no redraw at rest, the controller)"; exit 1; }
+# the page detector with real pictures of the Key 61 (the host's Q-Link panel over the right edge covers the right marker of the Play tab)
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -DQLINK_FIXTURE=\"shell-mpc/overlay/tests/fixtures/qlink_panel_fixtures.bin\" -o $B/page_detector_host $OVSRC/page_detector_host.cpp || { echo "ACCEPT FAIL: page_detector_host build"; exit 1; }
+$B/page_detector_host > $B/page-detector-host.log 2>&1 || { grep -E "^FAIL" $B/page-detector-host.log; echo "ACCEPT FAIL: page_detector_host (the Play tab under the host's Q-Link panel)"; exit 1; }
 # the oscillator UI (shell-mpc/overlay/osc_ui.h: every control wired to its engine parameter, the pages, the Q group, the modulations; also under AddressSanitizer below)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/osc_ui_host $OVSRC/osc_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_ui_host build"; exit 1; }
 $B/osc_ui_host > $B/osc-ui-host.log 2>&1 || { grep -E "^FAIL" $B/osc-ui-host.log; echo "ACCEPT FAIL: osc_ui_host (the oscillator UI: wiring, pages, Q group, modulations)"; exit 1; }

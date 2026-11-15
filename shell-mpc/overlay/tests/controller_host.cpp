@@ -652,7 +652,7 @@ int main()
             r.run (200);
         };
         const synthyboy_mpc::ui::Rect fb = pv->oscUi()->compact().full.rect();
-        tap (fb.x + fb.w / 2, fb.y + fb.h / 2 + OscUi::kTabOriginY);
+        tap (fb.x + fb.w / 2, fb.y + fb.h / 2);
         const int slot = r.ctl->slotOf (&r.inst);
         check (r.ctl->uiState (slot).level() == UiStack::Level::full && r.inst.uiFullOpen.load(), "a tap on the full-screen button opens the full screen and tells the instance (the host widgets hide)");
         check (r.ctl->touchEvents() == 2 && r.ctl->touchTaken() == 2, "the controller counted the two events, both taken");
@@ -662,7 +662,7 @@ int main()
         // a knob drag on the full screen writes a parameter
         const synthyboy_mpc::ui::Rect lv = pv->oscUi()->full().basic.level.rect();
         const float before = r.inst.get ("osc1.level");
-        TouchEvent d; d.kind = TouchEvent::Down; d.x = lv.x + lv.w / 2; d.y = lv.y + lv.h / 2 + OscUi::kTabOriginY;
+        TouchEvent d; d.kind = TouchEvent::Down; d.x = lv.x + lv.w / 2; d.y = lv.y + lv.h / 2;
         touch.queue.push_back (d);
         r.run (30);
         for (int i = 1; i <= 8; ++i) { TouchEvent m = d; m.kind = TouchEvent::Move; m.y -= i * 8; touch.queue.push_back (m); r.run (30); }

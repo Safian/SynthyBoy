@@ -28,6 +28,7 @@ struct Detection
     int slot = kSlotUnknown;         // with a view: the instance the page belongs to (the colour of the view's instance picture): 0 .. 15, kSlotNone, or kSlotUnknown (blank or not a colour of the table)
     uint32_t instanceSeen = 0xffffffffu;   // the pixel at the centre of that picture (0xffffffff when it could not be read), for the status file
     uint32_t seen[kMaxViews][2] = {};   // the pixel at the centre of every marker (0xRRGGBB; 0xffffffff when it could not be read), for the status file
+    bool qlinkPanel = false;         // the host's Q-Link side panel is drawn over the right edge (while a hardware knob is turned); it covers the right marker of a page, the view is still on screen
     int count = 0;                   // views checked
 };
 
@@ -47,6 +48,10 @@ class PageDetector
 {
 public:
     static constexpr int kTolerance = 2;   // per channel
+    /** The host draws a Q-Link panel over the right edge of the screen while a knob is turned (docs/ui-reference.md 1.4: "roughly x >= 1025"): a 2 pixel black line at x 1024 and 1025 over the whole
+        height, and to the right of it the dark fill 1e1d1e. Measured on the Key 61 (.hw-local/mpc-perf/overlay-pkgs/ov14-osc-ui-results, tests/fixtures/qlink_panel_fixtures.bin). */
+    static constexpr int kPanelLineX = 1024, kPanelFillRgb = 0x1e1d1e;
+    static constexpr int kPanelRows[6] = { 20, 120, 250, 400, 560, 700 };   // above the tab bar (it is black at the bottom of the screen)
 
     /** `instances`: one rectangle per view (landscape UI pixels), null: the views have no instance picture (the slot then stays kSlotUnknown). */
     PageDetector (IFrameSource& source, const MarkerSpec* markers, int numViews, const Rect* instances = nullptr)
@@ -65,10 +70,11 @@ public:
         d.readable = true;
         for (int i = 0; i < count_; ++i)
         {
-            bool all = true;
+            bool all = true, rightOnlyMissing = true;
             for (int m = 0; m < 2; ++m)
             {
                 const MarkerSpec& spec = markers_[i * 2 + m];
+                bool markerOk = true;
                 const Rect& r = spec.rect;
                 const int ix = r.w > 3 ? 1 : 0, iy = r.h > 3 ? 1 : 0;
                 const int xs[5] = { r.x + ix, r.x + r.w - 1 - ix, r.x + ix, r.x + r.w - 1 - ix, r.x + r.w / 2 };
@@ -82,8 +88,21 @@ public:
                     if (k == 4)
                         d.seen[i][m] = ok ? v : 0xffffffffu;
                     if (! ok || ! close (v, spec.rgb))
-                        all = false;
+                        markerOk = false;
                 }
+                if (! markerOk)
+                {
+                    all = false;
+                    if (m == 0)
+                        rightOnlyMissing = false;
+                }
+            }
+            // the right marker lies under the host's Q-Link panel and the view's instance picture does not (the pages of the Play tab): the left marker and the panel's own look say the page is still there
+            if (! all && rightOnlyMissing && instances_ && markers_[i * 2 + 1].rect.x >= kPanelLineX + 2 && instances_[i].x + instances_[i].w < kPanelLineX && qlinkPanelOnScreen (rotation, w, h))
+            {
+                all = true;
+                if (d.view < 0)
+                    d.qlinkPanel = true;
             }
             if (all && d.view < 0)
             {
@@ -123,6 +142,31 @@ public:
     }
 
 private:
+    /** The panel's signature in the framebuffer: on every sample row the black line (x 1024 and 1025), not black just left of it, the fill colour at three columns right of it. */
+    bool qlinkPanelOnScreen (int rotation, int w, int h)
+    {
+        for (int y : kPanelRows)
+        {
+            const int xs[6] = { kPanelLineX - 2, kPanelLineX, kPanelLineX + 1, kPanelLineX + 6, kPanelLineX + 60, 1270 };
+            for (int k = 0; k < 6; ++k)
+            {
+                int px, py;
+                uint32_t v = 0;
+                uiPointToPanel (rotation, xs[k], y, w, h, px, py);
+                if (! source_.pixel (px, py, v))
+                    return false;
+                const bool wantBlack = k == 1 || k == 2, wantFill = k >= 3;
+                if (wantBlack && ! close (v, 0x000000u))
+                    return false;
+                if (wantFill && ! close (v, static_cast<uint32_t> (kPanelFillRgb)))
+                    return false;
+                if (k == 0 && close (v, 0x000000u))
+                    return false;
+            }
+        }
+        return true;
+    }
+
     /** The five sample pixels of the instance picture (the same pattern as a marker) must all be the same colour of the table. */
     void readInstance (const Rect& r, int rotation, int w, int h, Detection& d)
     {
