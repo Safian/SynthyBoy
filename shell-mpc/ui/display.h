@@ -199,12 +199,12 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             for (int i = 0; i < numLit; ++i)
             {
                 sb.curveAt (litFirst[i], n, litX[i], litW[i]);
-                sb.stroke (T.curve * 0.5f + 0.8f, static_cast<uint32_t> (230.0f * litAmount[i]));
+                sb.stroke (T.curve * 0.5f + 0.5f, static_cast<uint32_t> (140.0f * litAmount[i]));
             }
             sb.curveAt (mainFirst, n, ix, iw);
-            sb.stroke (T.curve * 0.5f + 1.0f, 255);
+            sb.stroke (T.curve * 0.5f + 0.6f, 200);
             sb.paintOff();
-            sb.glowEnd (0.8f + 2.0f * T.glowAlpha, 1.0f, 0xffffffffu, r.x, r.y, r.right(), r.bottom());
+            sb.glowEnd (0.45f + 1.0f * T.glowAlpha, 0.8f, 0xffffffffu, r.x, r.y, r.right(), r.bottom());
         }
         sb.style (1.0f, false);
     }
@@ -342,9 +342,9 @@ inline void drawModule (gpu::SceneBuilder& sb, const Module& m)
         sb.glowBegin (4);
         sb.paintX (px, pxe, cs[0], cs[1], cs[2], cs[3]);
         sb.curveAt (first, n, m.plot.x, m.plot.w);
-        sb.stroke (T.curve * 0.5f + 1.0f, 255);
+        sb.stroke (T.curve * 0.5f + 0.6f, 200);
         sb.paintOff();
-        sb.glowEnd (0.8f + 2.0f * T.glowAlpha, 1.0f, 0xffffffffu, m.plot.x - 6, m.plot.y - 6, m.plot.right() + 6, m.plot.bottom() + 6);
+        sb.glowEnd (0.45f + 1.0f * T.glowAlpha, 0.8f, 0xffffffffu, m.plot.x - 6, m.plot.y - 6, m.plot.right() + 6, m.plot.bottom() + 6);
     }
     if (m.dot >= 0.0f)
     {

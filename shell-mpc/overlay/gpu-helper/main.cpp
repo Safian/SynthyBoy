@@ -1479,8 +1479,10 @@ private:
                 glowActive = ensureGlow (d.divisor);
                 if (glowActive)
                 {
-                    bindTarget (0);
                     api_.glClearColor (0.0f, 0.0f, 0.0f, 0.0f);
+                    bindTarget (1);          // both layers start empty: a blur limited to a rectangle reads the edges of the second one
+                    api_.glClear (GL_COLOR_BUFFER_BIT);
+                    bindTarget (0);
                     api_.glClear (GL_COLOR_BUFFER_BIT);
                 }
                 continue;
