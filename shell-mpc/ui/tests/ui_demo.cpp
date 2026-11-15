@@ -3,6 +3,8 @@
 // the route panel and a sheet of knob states into PNG files in the directory given as the first argument.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <sys/stat.h>
+
 #include "ui_test.h"
 
 using namespace uit;
@@ -18,12 +20,116 @@ bool save (const std::string& dir, const char* name, const Scene& s, int scale =
     g_images += ok;
     return ok;
 }
-void label (gpu::SceneBuilder& sb, int x, int y, const char* t) { sb.text (x, y, 2, t, colour::rgba (colour::text(), 150)); }
+bool saveImage (const std::string& dir, const char* name, const Image& im)
+{
+    const bool ok = writePng (dir + "/" + name, im, 1);
+    check (ok, std::string (name) + ": written");
+    g_images += ok;
+    return ok;
+}
+/** A scene on the ground of the look (the vertical gradient of the screens). */
+struct GScene : Scene
+{
+    GScene (int w, int h) : Scene (w, h, theme::rgba (theme::L().bg0, 255))
+    {
+        const theme::Look& T = theme::L();
+        builder().paintY (0.0f, static_cast<float> (h), theme::rgba (T.bg0), theme::rgba (T.bg0), theme::rgba (T.bg1), theme::rgba (T.bg1));
+        builder().rrect (0.0f, 0.0f, static_cast<float> (w), static_cast<float> (h), 0.0f, 0xffffffffu);
+        builder().paintOff();
+    }
+};
+void label (gpu::SceneBuilder& sb, int x, int y, const char* t) { sb.text (static_cast<float> (x), static_cast<float> (y + 14), 14.0f, t, theme::rgba (theme::L().textDim)); }
+
+// ---- synthetic data for the displays (the engine is not here: shapes that look like what it gives)
+constexpr int kN = 512;
+void waveFrame (std::vector<float>& v, float pos, float phase = 0.0f)
+{
+    v.assign (kN, 0.0f);
+    for (int i = 0; i < kN; ++i)
+    {
+        const float t = static_cast<float> (i) / kN + phase;
+        const float saw = 2.0f * (t - std::floor (t)) - 1.0f, sine = std::sin (2.0f * kPi * t), tri = 2.0f * std::fabs (saw) - 1.0f;
+        const float sq = std::tanh (4.0f * std::sin (2.0f * kPi * t));
+        v[static_cast<size_t> (i)] = pos < 0.5f ? sine + (saw - sine) * pos * 2.0f : saw + (sq - saw) * (pos - 0.5f) * 2.0f - 0.0f * tri;
+        v[static_cast<size_t> (i)] *= 0.9f;
+    }
+}
+struct DemoDisplay
+{
+    std::vector<float> cyc, mn, mx, stack[7], spec;
+    display::Data data;
+    void wave (float pos, int voices, uint32_t colour, bool stacked = true)
+    {
+        waveFrame (cyc, pos);
+        for (int k = 0; k < 7; ++k)
+            waveFrame (stack[k], static_cast<float> (k) / 6.0f);
+        spec.assign (display::kMaxSpectrum, 0.0f);
+        for (int k = 1; k <= display::kMaxSpectrum; ++k)
+        {
+            double re = 0, im = 0;
+            for (int i = 0; i < kN; ++i)
+            {
+                const double a = 2.0 * 3.14159265358979 * k * i / kN;
+                re += cyc[static_cast<size_t> (i)] * std::cos (a);
+                im -= cyc[static_cast<size_t> (i)] * std::sin (a);
+            }
+            spec[static_cast<size_t> (k - 1)] = static_cast<float> (std::sqrt (std::min (1.0, std::sqrt (re * re + im * im) / (0.5 * kN))));
+        }
+        data = display::Data();
+        data.kind = display::Data::Kind::Wave;
+        data.cycle = cyc.data();
+        data.n = kN;
+        data.pos = pos;
+        data.voices = voices;
+        data.detune = 0.45f;
+        data.blend = 0.7f;
+        data.colour = colour;
+        data.spectrum = spec.data();
+        data.numSpectrum = display::kMaxSpectrum;
+        if (stacked)
+        {
+            data.numStack = 7;
+            for (int k = 0; k < 7; ++k)
+                data.stack[k] = stack[k].data();
+        }
+    }
+    void minmax (uint32_t colour, bool granular, float playhead = 0.4f)
+    {
+        mn.assign (kN, 0.0f);
+        mx.assign (kN, 0.0f);
+        unsigned r = 12345;
+        for (int i = 0; i < kN; ++i)
+        {
+            r = r * 1664525u + 1013904223u;
+            const float env = std::exp (-2.2f * static_cast<float> (i) / kN) * (0.55f + 0.45f * std::sin (static_cast<float> (i) * 0.07f)), j = static_cast<float> (r >> 16 & 255u) / 255.0f;
+            mx[static_cast<size_t> (i)] = env * (0.45f + 0.55f * j);
+            mn[static_cast<size_t> (i)] = -env * (0.45f + 0.55f * (1.0f - j));
+        }
+        data = display::Data();
+        data.kind = display::Data::Kind::MinMax;
+        data.cycle = mn.data();
+        data.cycleMax = mx.data();
+        data.n = kN;
+        data.colour = colour;
+        data.loopOn = ! granular;
+        data.loopStart = 0.18f;
+        data.loopEnd = 0.74f;
+        data.grain = granular;
+        data.grainPos = 0.33f;
+        data.grainSize = 0.12f;
+        data.playhead = playhead;
+    }
+};
+/** The display block with the picture in it: what the screens show in their display rectangle. */
+void showDisplay (gpu::SceneBuilder& sb, const Rect& r, const display::Data& d, bool block = false)
+{
+    (void) block;
+    display::draw (sb, r, d);
+}
 }
 
-int main (int argc, char** argv)
+static void renderAll (const std::string& dir)
 {
-    const std::string dir = argc > 1 ? argv[1] : ".";
     // the compact view (a third of the width) of A (wavetable), Sub and Noise, on one sheet each
     {
         struct C { OscInstance i; OscKind k; const char* file; };
@@ -39,9 +145,13 @@ int main (int argc, char** argv)
             oc.basic.level.state.value = oc.basic.level.state.modValue = 0.8;
             oc.basic.filter.state.value = oc.basic.filter.state.modValue = 0.6;
             oc.route.state.segment[0] = true;
-            Scene s (440, 720, kBackgroundRgba);
+            GScene s (440, 720);
             oc.draw (s.builder());
-            s.builder().text (oc.displayRect().x + 130, oc.displayRect().y + oc.displayRect().h / 2, 2, "DISPLAY AREA", colour::rgba (colour::text(), 90));
+            static DemoDisplay dd;
+            if (c.i == OscInstance::Noise) { dd.data = display::Data(); dd.data.kind = display::Data::Kind::Message; dd.data.message = "NOISE"; }
+            else dd.wave (0.42f, c.i == OscInstance::Sub ? 1 : 7, theme::instanceColour (c.i == OscInstance::Sub ? 0 : c.i == OscInstance::A ? 1 : 2), c.i != OscInstance::Sub);
+            showDisplay (s.builder(), oc.displayRect(), dd.data);
+            oc.full.draw (s.builder());
             save (dir, c.file, s);
         }
     }
@@ -78,16 +188,20 @@ int main (int argc, char** argv)
             if (WarpPair* w = fs.panel.warp()) { w->first.type.state.count = 12; w->first.type.setItem ("BEND +"); w->second.type.state.count = 12; w->second.type.setItem ("OFF"); w->second.setTypeOff (true); }
             if (UnisonBox* u = fs.panel.unison()) u->count.state.value = 7;
             fs.tune.sem.state.value = 2; fs.tune.fin.state.value = -12;
-            Scene s (1280, 800, kBackgroundRgba);
+            GScene s (1280, 800);
             fs.draw (s.builder());
             const Rect d = fs.displayRect();
-            s.builder().text (d.x + d.w / 2 - 70, d.y + d.h / 2 - 7, 2, "DISPLAY AREA", colour::rgba (colour::text(), 90));
+            static DemoDisplay dd;
+            if (f.i == OscInstance::Noise) { dd.data = display::Data(); dd.data.kind = display::Data::Kind::Message; dd.data.message = "NOISE"; }
+            else if (f.k == OscKind::Wavetable) dd.wave (0.42f, f.i == OscInstance::Sub ? 1 : 7, theme::instanceColour (f.i == OscInstance::Sub ? 0 : 1), f.i != OscInstance::Sub);
+            else dd.minmax (theme::instanceColour (2), f.k == OscKind::Granular);
+            showDisplay (s.builder(), d, dd.data);
             save (dir, f.file, s);
         }
     }
     // the type bar presets, one strip each, on one sheet
     {
-        Scene s (640, 430, kBackgroundRgba);
+        GScene s (640, 430);
         const BarPreset* ps[5] = { &barpresets::kWavetable, &barpresets::kGranular, &barpresets::kSub, &barpresets::kMultisample, &barpresets::kNoise };
         static TypeBar bars[5];
         for (int i = 0; i < 5; ++i)
@@ -124,19 +238,16 @@ int main (int argc, char** argv)
             for (int i = 0; i < np; ++i)
                 if (auto* kn = dynamic_cast<Knob*> (pl[i])) { kn->state.value = kn->state.modValue = v; v += 0.1; if (v > 0.9) v = 0.15; }
             if (ToggleIcon* t = pg.panel.toggle (PanelSlot::Override)) t->state.on = true;
-            Scene s (1280, 628, kBackgroundRgba);
+            GScene s (1280, 628);
             pg.draw (s.builder());
             const Rect d = pg.displayRect();
             if (! d.empty())
             {
-                float rows[200];
-                for (int i = 0; i < 200; ++i)
-                {
-                    const float t = (static_cast<float> (i) / 199.0f - 0.5f) * 2.0f;
-                    rows[i] = static_cast<float> (d.bottom() - 10) - static_cast<float> (d.h - 24) * std::exp (-4.0f * t * t);
-                }
-                s.builder().curve (rows, 200, d.x + 8, d.w - 16);   // the owner's picture goes here: a stand-in curve
-                s.builder().stroke (2.0f, colour::rgba (colour::accent(), 255));
+                static DemoDisplay dd;
+                if (pr.p == &presets::kGrainDetail) dd.minmax (theme::instanceColour (3), true);
+                else if (pr.p == &presets::kEnvelopeDetail) dd.minmax (theme::instanceColour (2), false);
+                else dd.wave (0.6f, 7, theme::instanceColour (1));
+                showDisplay (s.builder(), d, dd.data);
             }
             save (dir, pr.file, s);
         }
@@ -150,7 +261,7 @@ int main (int argc, char** argv)
         ModulationsPage pg;
         pg.load (m, "DETUNE");
         pg.place ({ 56, 14, 1168, 600 });
-        Scene s (1280, 628, kBackgroundRgba);
+        GScene s (1280, 628);
         pg.draw (s.builder());
         save (dir, "detail_modulations.png", s);
     }
@@ -165,7 +276,7 @@ int main (int argc, char** argv)
         rp.target.state.count = 4; rp.target.setItem ("FILTER");
         rp.bus1.state.value = rp.bus1.state.modValue = 0.3; rp.bus2.state.value = rp.bus2.state.modValue = 0.6;
         rp.group.setActive (true);
-        Scene s (1280, 800, kBackgroundRgba);
+        GScene s (1280, 800);
         fs.draw (s.builder());
         rp.draw (s.builder());
         save (dir, "route_popup.png", s);
@@ -181,7 +292,7 @@ int main (int argc, char** argv)
         lp.place ({ 330, 40, 620, 400 });
         lp.setPopup ({ 0, 0, 1280, 628 });
         lp.showCurrent();
-        Scene s (1280, 628, kBackgroundRgba);
+        GScene s (1280, 628);
         fs.draw (s.builder());
         lp.draw (s.builder());
         save (dir, "list_popup_screen.png", s);
@@ -196,7 +307,7 @@ int main (int argc, char** argv)
         off.place ({ 640, 40, 560, 200 });
         off.target.state.count = 4; off.target.state.index = 1; off.target.setItem ("MAIN");
         off.setTargetIsFilter (false);
-        Scene s (1280, 280, kBackgroundRgba);
+        GScene s (1280, 280);
         label (s.builder(), 40, 20, "TARGET FILTER");
         label (s.builder(), 640, 20, "TARGET MAIN: BALANCE DIM");
         r.draw (s.builder());
@@ -205,7 +316,7 @@ int main (int argc, char** argv)
     }
     // the knob in every modulation state
     {
-        Scene s (1280, 360, kBackgroundRgba);
+        GScene s (1280, 360);
         struct K { const char* name; int mode; };
         static Knob knobs[12];
         const char* names[12] = { "NO MODS", "GREY", "COLOURED", "BYPASSED", "NEG DEPTH", "BIDIR", "CLAMPED", "BIPOLAR", "LIVE MOD", "SMALL", "PLAIN", "NUMBER" };
@@ -247,7 +358,7 @@ int main (int argc, char** argv)
     }
     // pictogram selectors
     {
-        Scene s (640, 460, kBackgroundRgba);
+        GScene s (640, 460);
         static PictogramSelector row, col;
         const char* nm[5] = { "SUB", "WAVE", "GRAIN", "SAMPLE", "NOISE" };
         for (int i = 0; i < 5; ++i) { row.setItem (i, i, nm[i], i != 3); col.setItem (i, i, nm[i]); }
@@ -266,6 +377,98 @@ int main (int argc, char** argv)
         sub.draw (s.builder());
         save (dir, "pictogram_selector.png", s);
     }
+    // ---- the displays: the four kinds side by side, the wavetable with its position moving (the stack lights up one frame after the other), the module panels with the running point
+    {
+        static DemoDisplay a, b, c, d;
+        a.wave (0.35f, 1, theme::instanceColour (1), false);
+        b.wave (0.62f, 7, theme::instanceColour (2), true);
+        c.minmax (theme::instanceColour (3), false);
+        d.minmax (theme::instanceColour (4), true);
+        GScene s (1280, 700);
+        showDisplay (s.builder(), { 16, 16, 612, 320 }, a.data, true);
+        showDisplay (s.builder(), { 652, 16, 612, 320 }, b.data, true);
+        showDisplay (s.builder(), { 16, 352, 612, 320 }, c.data, true);
+        showDisplay (s.builder(), { 652, 352, 612, 320 }, d.data, true);
+        label (s.builder(), 24, 20, "WAVE, ONE VOICE");
+        label (s.builder(), 660, 20, "WAVETABLE, STACK + UNISON");
+        label (s.builder(), 24, 356, "MULTISAMPLE: MIN / MAX, LOOP, PLAYHEAD");
+        label (s.builder(), 660, 356, "GRANULAR: GRAIN WINDOW");
+        save (dir, "display_kinds.png", s);
+    }
+    {
+        // 8 frames of the wavetable position moving 0.05 .. 0.95: the lit frames of the stack run along the table
+        constexpr int W = 420, H = 240;
+        Image strip;
+        strip.w = 4 * W;
+        strip.h = 2 * H;
+        strip.px.assign (static_cast<size_t> (strip.w) * static_cast<size_t> (strip.h), 0u);
+        for (int f = 0; f < 8; ++f)
+        {
+            static DemoDisplay dd;
+            dd.wave (0.05f + 0.9f * static_cast<float> (f) / 7.0f, 7, theme::instanceColour (2));
+            GScene s (W, H);
+            showDisplay (s.builder(), { 6, 6, W - 12, H - 12 }, dd.data, true);
+            const Image im = render (s);
+            for (int y = 0; y < H; ++y)
+                for (int x = 0; x < W; ++x)
+                    strip.px[static_cast<size_t> ((f / 4) * H + y) * static_cast<size_t> (strip.w) + static_cast<size_t> ((f % 4) * W + x)] = im.at (x, y);
+        }
+        saveImage (dir, "motion_wavetable_position.png", strip);
+    }
+    {
+        // the envelope and LFO panels (the compact view), the running point in eight places
+        constexpr int W = 420, H = 210;
+        Image strip;
+        strip.w = 4 * W;
+        strip.h = 4 * H;
+        strip.px.assign (static_cast<size_t> (strip.w) * static_cast<size_t> (strip.h), 0u);
+        std::vector<float> env (256), lfo (300);
+        for (int i = 0; i < 256; ++i)
+        {
+            const float t = static_cast<float> (i) / 255.0f;
+            env[static_cast<size_t> (i)] = t < 0.12f ? t / 0.12f : (t < 0.4f ? 1.0f - 0.35f * (t - 0.12f) / 0.28f : (t < 0.75f ? 0.65f : 0.65f * (1.0f - (t - 0.75f) / 0.25f)));
+        }
+        for (int i = 0; i < 300; ++i)
+            lfo[static_cast<size_t> (i)] = 0.5f + 0.42f * std::sin (6.2832f * static_cast<float> (i) / 299.0f * 2.0f) * (0.7f + 0.3f * std::sin (6.2832f * static_cast<float> (i) / 299.0f * 5.0f));
+        for (int f = 0; f < 8; ++f)
+        {
+            GScene s (W, H);
+            display::Module m;
+            m.rect = { 10, 10, W - 20, H - 20 };
+            m.plot = { 20, 56, W - 40, H - 84 };
+            const float pos = static_cast<float> (f) / 7.0f;
+            for (int k = 0; k < 2; ++k)
+            {
+                m.env = k == 0;
+                m.highlighted = k == 0;
+                m.title = k == 0 ? "ENV 3" : "LFO 4";
+                m.v = k == 0 ? env.data() : lfo.data();
+                m.n = k == 0 ? 256 : 300;
+                m.dot = pos;
+                GScene t (W, H);
+                display::drawModule (t.builder(), m);
+                const Image im = render (t);
+                for (int y = 0; y < H; ++y)
+                    for (int x = 0; x < W; ++x)
+                        strip.px[static_cast<size_t> ((k * 2 + f / 4) * H + y) * static_cast<size_t> (strip.w) + static_cast<size_t> ((f % 4) * W + x)] = im.at (x, y);
+            }
+        }
+        saveImage (dir, "motion_env_lfo.png", strip);
+    }
+}
+
+int main (int argc, char** argv)
+{
+    const std::string base = argc > 1 ? argv[1] : ".";
+    for (int look = 1; look <= 3; ++look)
+    {
+        theme::setLook (look);
+        const std::string dir = base + "/look-" + std::to_string (look);
+        mkdir (base.c_str(), 0755);
+        mkdir (dir.c_str(), 0755);
+        renderAll (dir);
+    }
+    theme::setLook (1);
     std::printf ("%s: %d images, %d failed\n", g_fails ? "FAIL" : "PASS", g_images, g_fails);
     return g_fails ? 1 : 0;
 }

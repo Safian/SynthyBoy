@@ -411,6 +411,15 @@ private:
     {
         if (const char* ms = std::getenv ("SYNTHYBOY_OVERLAY_MSAA"))   // a measurement switch: an EGL configuration with this many samples (0 = none, the default)
             wantSamples_ = std::atoi (ms);
+#ifdef SYNTHYBOY_OVERLAY_BENCH
+        if (FILE* f = std::fopen ("/tmp/sb-bench-msaa", "r"))   // the measuring build: the file names the number of samples (the helper is restarted to change it)
+        {
+            int n = 0;
+            if (std::fscanf (f, "%d", &n) == 1)
+                wantSamples_ = n;
+            std::fclose (f);
+        }
+#endif
         if (! api_.load (error))
             return false;
         if (! openRenderNode (error))

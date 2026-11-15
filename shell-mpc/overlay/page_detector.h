@@ -115,6 +115,17 @@ public:
         return d;
     }
 
+    /** Only the panel's signature (36 pixels): is the host's Q-Link panel on screen? false also when the framebuffer cannot be read. */
+    bool panelPresent (int rotation)
+    {
+        int w = 0, h = 0;
+        if (! source_.begin (w, h))
+            return false;
+        const bool on = qlinkPanelOnScreen (rotation, w, h);
+        source_.end();
+        return on;
+    }
+
     /** The rotation of the UI on the panel, without a table: the marker pair of the view on screen is looked for under 90, 270, 0 and 180 degrees. The solid squares of OUR skin (colours no
         other view uses) are at the places one rotation says and nowhere else: exactly one rotation may match, else nothing is decided (a second look follows at the next check). */
     RotationSearch searchRotation()

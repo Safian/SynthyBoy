@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "../play_params.h"
+#include "../ui/display.h"
 #include "osc_ui.h"
 #include "page_detector.h"
 #include "play_osc.h"
@@ -32,7 +33,6 @@ constexpr int kEnvPoints = 256;
 constexpr int kOx = 23, kOy = 14, kPanelH = 190;                // the Env and LFO panels as they always were (tab coordinates of the old region)
 constexpr int kRegionW = 1280, kRegionH = 800, kTabY = 110, kTabH = 628;   // the region of the view: the whole screen (so that it can cover the host's Q-Link panel over the right edge); the Play tab (the compact oscillator view, the full screen, the Env and LFO panels) is its rows kTabY .. kTabY + kTabH
 constexpr int kDisplayPoints = 256;                              // the points of a min / max overview (two polylines of this many vertices)
-constexpr uint32_t kPanelRgb = 0x262527, kFrameRgb = 0xff2e63, kRestFrameRgb = 0x3d3b3e;
 
 /** The title of panel p (0 oscillator, 1 envelope, 2 LFO) for the instance n (1 ..). */
 inline std::string title (int p, int n)
@@ -46,66 +46,6 @@ inline std::string title (int p, int n)
     return kNames[p] + std::to_string (n);
 }
 
-/** The drawing target of the CPU: straight 0xRRGGBBAA colours as in the scene, premultiplied on the canvas. */
-struct CpuSink
-{
-    CpuSink (uint32_t* cv_, int w_, int h_) : cv (cv_), w (w_), h (h_) {}
-    static uint32_t pm (uint32_t c) { return draw::premultiplied (static_cast<int> ((c >> 24) & 255u), static_cast<int> ((c >> 16) & 255u), static_cast<int> ((c >> 8) & 255u), static_cast<int> (c & 255u)); }
-    void clear (uint32_t rgba) { draw::setRect (cv, w, h, 0, 0, w, h, pm (rgba)); }
-    void rect (int x0, int y0, int x1, int y1, uint32_t c) { draw::fillRect (cv, w, h, x0, y0, x1, y1, pm (c)); }
-    void vline (double x, int y0, int y1, double width, uint32_t c) { draw::vline (cv, w, h, x, y0, y1, width, pm (c)); }
-    void disc (double x, double y, double r, uint32_t c) { draw::disc (cv, w, h, x, y, r, pm (c)); }
-    void curve (const float* rows, int n, int x0_, int width)
-    {
-        x0 = x0_;
-        cols = width;
-        draw::sampleColumns (ys, rows, n, width, h, [] (double v) { return v; }, 4);
-    }
-    void fill (double baseRow, uint32_t c) { draw::fillToBaseline (cv, w, h, ys, 4, baseRow, pm (c), x0, cols); }
-    void stroke (double half, uint32_t c) { draw::strokeCurve (cv, w, h, ys, 4, half, pm (c), x0, cols); }
-    void text (float x, float baseline, float size, const char* s, uint32_t c) { draw::text (cv, w, h, x, baseline, size, s, pm (c)); }
-    uint32_t* cv;
-    int w, h, x0 = 0, cols = 0;
-    std::vector<double> ys;
-};
-
-/** Shifts everything a sink draws by (dx, dy): the Env and LFO panels keep their own coordinates (0, 0 = the top left of their old region) inside the bigger region. */
-template <class Sink>
-struct ShiftSink
-{
-    ShiftSink (Sink& s_, int dx_, int dy_) : s (s_), dx (dx_), dy (dy_) {}
-    void clear (uint32_t) {}
-    void rect (int x0, int y0, int x1, int y1, uint32_t c) { s.rect (x0 + dx, y0 + dy, x1 + dx, y1 + dy, c); }
-    void vline (double x, int y0, int y1, double width, uint32_t c) { s.vline (x + dx, y0 + dy, y1 + dy, width, c); }
-    void disc (double x, double y, double r, uint32_t c) { s.disc (x + dx, y + dy, r, c); }
-    void curve (const float* rows, int n, int x0, int width)
-    {
-        float shifted[gpu::kMaxCurve];
-        for (int i = 0; i < n && i < gpu::kMaxCurve; ++i)
-            shifted[i] = rows[i] + static_cast<float> (dy);
-        s.curve (shifted, std::min (n, static_cast<int> (gpu::kMaxCurve)), x0 + dx, width);
-    }
-    void fill (double baseRow, uint32_t c) { s.fill (baseRow + dy, c); }
-    void stroke (double half, uint32_t c) { s.stroke (half, c); }
-    void text (float x, float baseline, float size, const char* str, uint32_t c) { s.text (x + static_cast<float> (dx), baseline + static_cast<float> (dy), size, str, c); }
-    Sink& s;
-    int dx, dy;
-};
-
-/** The drawing target of the GPU helper: the display list of gpu/scene.h. */
-struct SceneSink
-{
-    explicit SceneSink (gpu::SceneBuilder& b) : sb (b) {}
-    void clear (uint32_t rgba) { sb.clear (rgba); }
-    void rect (int x0, int y0, int x1, int y1, uint32_t c) { sb.rect (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), c); }
-    void vline (double x, int y0, int y1, double width, uint32_t c) { sb.vline (static_cast<float> (x), static_cast<float> (y0), static_cast<float> (y1), static_cast<float> (width), c); }
-    void disc (double x, double y, double r, uint32_t c) { sb.disc (static_cast<float> (x), static_cast<float> (y), static_cast<float> (r), c); }
-    void curve (const float* rows, int n, int x0, int width) { sb.curve (rows, n, x0, width); }
-    void fill (double baseRow, uint32_t c) { sb.fill (static_cast<float> (baseRow), c); }
-    void stroke (double half, uint32_t c) { sb.stroke (static_cast<float> (half), c); }
-    void text (float x, float baseline, float size, const char* s, uint32_t c) { sb.text (x, baseline, size, s, c); }
-    gpu::SceneBuilder& sb;
-};
 } // namespace play
 
 class PlayView final : public IView
@@ -171,6 +111,8 @@ public:
             if (data)
             {
                 fillSub (static_cast<int> (std::lround (wave)), phase);
+                stackN_ = 0;
+                computeSpectrum();
                 kind_ = synthyboy::OscCycle::Kind::wavetable;
                 res_ = synthyboy::OscCycle::Result();
                 res_.kind = kind_;
@@ -209,6 +151,22 @@ public:
                 displayPoints_ = wt ? synthyboy::OscCycle::kSamples : play::kDisplayPoints;
                 res_ = oc_->computeDisplay (group_[0]->values(), req, cycle_.data(), cycleMax_.data(), displayPoints_);
                 kind_ = res_.kind;
+                // the wavetable's frames behind the current one (fixed positions along the table) and a faint spectrum of the cycle
+                stackN_ = 0;
+                if (wt && kind_ == synthyboy::OscCycle::Kind::wavetable)
+                {
+                    constexpr int kStackFrames = 7;
+                    if (stack_.size() != static_cast<size_t> (kStackFrames))
+                        stack_.assign (static_cast<size_t> (kStackFrames), std::vector<float> (static_cast<size_t> (synthyboy::OscCycle::kSamples), 0.0f));
+                    for (int k = 0; k < kStackFrames; ++k)
+                    {
+                        synthyboy::OscCycle::Request rq = req;
+                        rq.framePercent = 100.0f * static_cast<float> (k) / static_cast<float> (kStackFrames - 1);
+                        oc_->computeDisplay (group_[0]->values(), rq, stack_[static_cast<size_t> (k)].data(), cycleMax_.data(), displayPoints_);
+                    }
+                    stackN_ = kStackFrames;
+                }
+                computeSpectrum();
                 budget_[0].spent (in.nowMs, msSince (t0));
                 counters_.lastComputeMs = budget_[0].costMs;
                 ++counters_.recomputes;
@@ -450,20 +408,24 @@ private:
     /** The whole picture of the view as a scene: the Env and LFO panels, then the plugin-drawn oscillator UI with the cycle picture in its display rectangle. */
     void build (gpu::SceneBuilder& sb) const
     {
+        const ui::theme::Look& T = ui::theme::L();
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
-        play::SceneSink base (sb);
-        play::ShiftSink<play::SceneSink> shifted (base, play::kOx, play::kOy + play::kTabY);
-        const uint32_t dark = gpu::rgba8FromRgb (layout::kBackgroundRgb, 255);
+        auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages
+        {
+            sb.paintY (y0, y1, ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg1), ui::theme::rgba (T.bg1));
+            sb.rrect (x0, y0, x1, y1, 0.0f, 0xffffffffu);
+            sb.paintOff();
+        };
         if (osc_ != nullptr)
         {
             // opaque under the plugin's own pages: the whole tab for a full screen, a detail page and the popup's backdrop; the oscillator third in main (the host's panel picture, its Q-Link focus frame)
             const float w = osc_->isMain() ? 432.0f : static_cast<float> (play::kRegionW);
-            sb.rect (0.0f, static_cast<float> (play::kTabY), w, static_cast<float> (play::kTabY + play::kTabH), dark);
+            ground (0.0f, static_cast<float> (play::kTabY), w, static_cast<float> (play::kTabY + play::kTabH));
         }
         if (qlinkPanel_)   // the host's Q-Link panel (while a hardware knob is turned): covered over the whole height of the screen, the header and the tab bar included
-            sb.rect (static_cast<float> (PageDetector::kPanelLineX), 0.0f, static_cast<float> (play::kRegionW), static_cast<float> (play::kRegionH), dark);
+            ground (static_cast<float> (PageDetector::kPanelLineX), 0.0f, static_cast<float> (play::kRegionW), static_cast<float> (play::kRegionH));
         if (osc_ == nullptr || osc_->isMain())
-            paint (shifted, play::kPanelW, play::kPanelH);   // the Env and LFO panels (not drawn while a full screen covers them)
+            paintPanels (sb);   // the Env and LFO panels (not drawn while a full screen covers them)
         if (qlinkPanel_ && (osc_ == nullptr || osc_->isMain()))
             drawLfoSelector (sb);   // the host's LFO selector lies under the covered strip: its state is drawn here while the panel is up
         if (osc_ == nullptr)
@@ -488,6 +450,26 @@ private:
         sb.text (static_cast<float> (cx) - 0.5f * sdf::textWidth (t.c_str(), 22.0f), static_cast<float> (by + bh + 27), 22.0f, t.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
     }
 
+    /** The magnitudes of the first harmonics of the cycle (0 .. 1, a square root so that the weak ones show): the faint spectrum under the wave. */
+    void computeSpectrum()
+    {
+        const int n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
+        spectrum_.assign (static_cast<size_t> (ui::display::kMaxSpectrum), 0.0f);
+        if (n < 64 || kind_ == synthyboy::OscCycle::Kind::off)
+            return;
+        for (int k = 1; k <= ui::display::kMaxSpectrum; ++k)
+        {
+            double re = 0.0, im = 0.0;
+            for (int i = 0; i < n; ++i)
+            {
+                const double a = 6.283185307179586 * static_cast<double> (k) * static_cast<double> (i) / static_cast<double> (n);
+                re += static_cast<double> (cycle_[static_cast<size_t> (i)]) * std::cos (a);
+                im -= static_cast<double> (cycle_[static_cast<size_t> (i)]) * std::sin (a);
+            }
+            spectrum_[static_cast<size_t> (k - 1)] = static_cast<float> (std::sqrt (std::min (1.0, std::sqrt (re * re + im * im) / (0.5 * n))));
+        }
+    }
+
     void fillSub (int wave, float phasePercent)
     {
         const int n = static_cast<int> (cycle_.size());
@@ -509,157 +491,76 @@ private:
         displayPoints_ = n;
     }
 
-    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"). */
+    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"), drawn by ui/display.h. */
     void drawPicture (gpu::SceneBuilder& sb, const ui::Rect& r) const
     {
         using K = synthyboy::OscCycle::Kind;
-        if (r.w < 60 || r.h < 40)
-            return;
-        const ui::Rect in = r.inset (6);
-        const double top = in.y + 4.0, bottom = in.bottom() - 4.0;
-        auto row = [&] (double v01) { return top + (1.0 - std::clamp (v01, -0.2, 1.2)) * (bottom - top); };
-        const uint32_t line = gpu::rgba8 (0xff, 0x2e, 0x63, 255), area = gpu::rgba8 (0xd3, 0x11, 0x45, 64), grid = gpu::rgba8 (255, 255, 255, 70), grid2 = gpu::rgba8 (255, 255, 255, 30);
-        const int px = in.x, pw = in.w;
-        const bool envelopeKind = kind_ == K::sample || kind_ == K::multisample || kind_ == K::granular;
-        if (kind_ == K::wavetable || envelopeKind || kind_ == K::spectral)
-        {
-            if (kind_ != K::spectral)
-                sb.rect (static_cast<float> (px), static_cast<float> (row (0.5)), static_cast<float> (px + pw), static_cast<float> (row (0.5)) + 1.0f, grid);
-            for (int q = 1; q < 4; ++q)
-                sb.rect (static_cast<float> (px + (pw - 1) * q / 4), static_cast<float> (row (1.0)), static_cast<float> (px + (pw - 1) * q / 4 + 1), static_cast<float> (row (0.0)) + 1.0f, grid2);
-        }
-        float rows[gpu::kMaxCurve];
-        const int n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
+        ui::display::Data d;
+        d.colour = ui::theme::instanceColour (sel_[0] - 1);
+        d.n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
+        d.cycle = cycle_.data();
         if (kind_ == K::wavetable)
         {
-            float peak = 1.0f;
-            for (int i = 0; i < n; ++i)
-                peak = std::max (peak, std::fabs (cycle_[static_cast<size_t> (i)]));
-            for (int i = 0; i < n; ++i)
-                rows[i] = static_cast<float> (row (0.5 + 0.5 * static_cast<double> (cycle_[static_cast<size_t> (i)] / peak)));
-            sb.curve (rows, n, px, pw);
-            sb.fill (row (0.5), area);
-            sb.stroke (2.0f, line);
+            d.kind = ui::display::Data::Kind::Wave;
+            if (sel_[0] != playosc::kSub)
+            {
+                const std::string base = "osc" + std::to_string (playosc::oscNumber (sel_[0])) + ".unison.";
+                d.voices = std::clamp (static_cast<int> (group_[0]->value ((base + "voices").c_str()) + 0.5f), 1, 16);
+                d.detune = std::clamp (group_[0]->value ((base + "detune").c_str()) / 100.0f, 0.0f, 1.0f);
+                d.blend = std::clamp (group_[0]->value ((base + "blend").c_str()) / 100.0f, 0.0f, 1.0f);
+                d.pos = std::clamp (lastTargets_[0] / 100.0f, 0.0f, 1.0f);
+                d.numStack = stackN_;
+                for (int i = 0; i < stackN_; ++i)
+                    d.stack[i] = stack_[static_cast<size_t> (i)].data();
+                d.spectrum = spectrum_.data();
+                d.numSpectrum = static_cast<int> (spectrum_.size());
+            }
         }
-        else if (envelopeKind)
+        else if (kind_ == K::sample || kind_ == K::multisample || kind_ == K::granular)
         {
-            float peak = 0.05f;
-            for (int i = 0; i < n; ++i)
-                peak = std::max ({ peak, std::fabs (cycle_[static_cast<size_t> (i)]), std::fabs (cycleMax_[static_cast<size_t> (i)]) });
-            for (int pass = 0; pass < 2; ++pass)
-            {
-                const std::vector<float>& src = pass == 0 ? cycleMax_ : cycle_;
-                for (int i = 0; i < n; ++i)
-                    rows[i] = static_cast<float> (row (0.5 + 0.5 * static_cast<double> (src[static_cast<size_t> (i)] / peak)));
-                sb.curve (rows, n, px, pw);
-                sb.fill (row (0.5), area);
-                sb.stroke (2.0f, line);
-            }
-            if (res_.loopOn)
-                for (float m : { res_.loopStart, res_.loopEnd })
-                    sb.vline (static_cast<float> (px + m * static_cast<float> (pw - 1)), static_cast<float> (row (1.0)), static_cast<float> (row (0.0)), 2.0f, gpu::rgba8 (255, 255, 255, 150));
-            if (kind_ == K::granular && res_.grainSize > 0.0f)
-            {
-                const float x0 = static_cast<float> (px) + res_.grainPosition * static_cast<float> (pw - 1);
-                sb.rect (x0, static_cast<float> (row (1.0)), x0 + std::max (2.0f, res_.grainSize * static_cast<float> (pw - 1)), static_cast<float> (row (0.0)) + 1.0f, gpu::rgba8 (255, 255, 255, 40));
-            }
+            d.kind = ui::display::Data::Kind::MinMax;
+            d.cycle = cycle_.data();
+            d.cycleMax = cycleMax_.data();
+            d.loopOn = res_.loopOn;
+            d.loopStart = res_.loopStart;
+            d.loopEnd = res_.loopEnd;
+            d.grain = kind_ == K::granular && res_.grainSize > 0.0f;
+            d.grainPos = res_.grainPosition;
+            d.grainSize = res_.grainSize;
         }
         else if (kind_ == K::spectral)
-        {
-            for (int i = 0; i < n; ++i)
-                rows[i] = static_cast<float> (row ((static_cast<double> (cycle_[static_cast<size_t> (i)]) + 120.0) / 180.0));
-            sb.curve (rows, n, px, pw);
-            sb.fill (row (0.0), area);
-            sb.stroke (2.0f, line);
-        }
+            d.kind = ui::display::Data::Kind::Spectrum;
         else
         {
-            const char* msg = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
-            if (msg[0] != '\0')
-                sb.text (static_cast<float> (in.x) + 0.5f * (static_cast<float> (in.w) - sdf::textWidth (msg, 28.0f)), sdf::baselineForCentre (static_cast<float> (in.y) + 0.5f * static_cast<float> (in.h), 28.0f), 28.0f, msg, gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
+            d.kind = ui::display::Data::Kind::Message;
+            d.message = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
         }
+        ui::display::draw (sb, r, d);
     }
 
-    template <class Sink>
-    void paint (Sink& s, int w, int h) const
+    /** The Env and LFO panels in the language of the look (ui/display.h drawModule): a block each, the curve as a line of light, the running dot / cursor. */
+    void paintPanels (gpu::SceneBuilder& sb) const
     {
         using namespace play;
-        s.clear (gpu::rgba8FromRgb (layout::kBackgroundRgb, 255));
+        float v[kEnvPoints > LfoView::kPoints ? kEnvPoints : LfoView::kPoints];
         for (int p = 1; p < kPanels; ++p)   // the oscillator panel is the plugin-drawn compact view now (osc_ui.h)
         {
-            const int x0 = panelX (p);
-            const bool hi = highlight_ == p + 1;
-            const uint32_t frame = gpu::rgba8FromRgb (hi ? kFrameRgb : kRestFrameRgb, 255);
-            const int t = hi ? 3 : 1;
-            s.rect (x0, 0, x0 + kPanelW, h, gpu::rgba8FromRgb (kPanelRgb, 255));
-            s.rect (x0, 0, x0 + kPanelW, t, frame);
-            s.rect (x0, h - t, x0 + kPanelW, h, frame);
-            s.rect (x0, t, x0 + t, h - t, frame);
-            s.rect (x0 + kPanelW - t, t, x0 + kPanelW, h - t, frame);
+            ui::display::Module m;
+            const int x0 = kOx + panelX (p), y0 = kOy + kTabY;
+            m.rect = { x0, y0, kPanelW, kPanelH };
+            const int top = y0 + static_cast<int> (std::lround (plotY (1.0, kPanelH, 6.0))), bottom = y0 + static_cast<int> (std::lround (plotY (0.0, kPanelH, 6.0)));
+            m.plot = { x0 + kPlotX, top, kPlotW, bottom - top };
+            m.env = p == 1;
+            m.highlighted = highlight_ == p + 1;
             const std::string tt = title (p, sel_[p]);
-            s.text (static_cast<float> (x0 + 12), 30.0f, kTitleSize, tt.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
-            const int px = x0 + kPlotX;
-            // the grid: the zero line (the envelope's is its bottom) and the quarters
-            const double zero = p == 1 ? plotY (0.0, h, 6.0) : plotY (0.5, h, 6.0);
-            s.rect (px, static_cast<int> (zero), px + kPlotW, static_cast<int> (zero) + 1, gpu::rgba8 (255, 255, 255, 70));
-            for (int q = 1; q < 4; ++q)
-                s.rect (px + (kPlotW - 1) * q / 4, static_cast<int> (plotY (1.0, h, 6.0)), px + (kPlotW - 1) * q / 4 + 1, static_cast<int> (plotY (0.0, h, 6.0)) + 1, gpu::rgba8 (255, 255, 255, 30));
-            float rows[gpu::kMaxCurve];
-            const uint32_t line = gpu::rgba8 (0xff, 0x2e, 0x63, 255), area = gpu::rgba8 (0xd3, 0x11, 0x45, 64);
-            if (p == 0)
-            {
-                if (kind_ == synthyboy::OscCycle::Kind::wavetable)
-                {
-                    float peak = 1.0f;
-                    for (float v : cycle_)
-                        peak = std::max (peak, std::fabs (v));
-                    const int n = static_cast<int> (cycle_.size());
-                    for (int i = 0; i < n; ++i)
-                        rows[i] = static_cast<float> (std::clamp (plotY (0.5 + 0.5 * static_cast<double> (cycle_[static_cast<size_t> (i)] / peak), h, 6.0), -60.0, h + 60.0));
-                    s.curve (rows, n, px, kPlotW);
-                    s.fill (zero, area);
-                    s.stroke (2.0, line);
-                }
-            }
-            else if (p == 1)
-            {
-                for (int i = 0; i < kEnvPoints; ++i)
-                    rows[i] = static_cast<float> (plotY (static_cast<double> (envY_[static_cast<size_t> (i)]), h, 6.0));
-                s.curve (rows, kEnvPoints, px, kPlotW);
-                s.fill (zero, area);
-                s.stroke (2.0, line);
-                if (envDotPx_ >= 0)
-                {
-                    const double dx = px + envDotX_ * (kPlotW - 1) + 0.5;
-                    const double pos = std::clamp (envDotX_, 0.0, 1.0) * (kEnvPoints - 1);
-                    const int i = std::min (static_cast<int> (pos), kEnvPoints - 2);
-                    const double v = envY_[static_cast<size_t> (i)] * (1.0 - (pos - i)) + envY_[static_cast<size_t> (i) + 1] * (pos - i);
-                    s.disc (dx, plotY (v, h, 6.0), 7.0, gpu::rgba8 (255, 255, 255, 255));
-                    s.disc (dx, plotY (v, h, 6.0), 4.5, line);
-                }
-            }
-            else
-            {
-                const int n = LfoView::kPoints;
-                for (int i = 0; i < n; ++i)
-                    rows[i] = static_cast<float> (std::clamp (plotY (0.5 + 0.5 * static_cast<double> (lfoY_[static_cast<size_t> (i)]), h, 6.0), -60.0, h + 60.0));
-                s.curve (rows, n, px, kPlotW);
-                s.fill (zero, area);
-                s.stroke (2.0, line);
-                if (lfoCursorPx_ >= 0)
-                {
-                    const double cx = px + lfoCursorX_ * (kPlotW - 1) + 0.5;
-                    s.vline (cx, static_cast<int> (plotY (1.0, h, 6.0)), static_cast<int> (plotY (0.0, h, 6.0)) + 1, 2.0, gpu::rgba8 (255, 255, 255, 150));
-                    const double pos = std::clamp (static_cast<double> (lfoCursorX_), 0.0, 1.0) * (n - 1);
-                    const int i = std::min (static_cast<int> (pos), n - 2);
-                    const double v = lfoY_[static_cast<size_t> (i)] * (1.0 - (pos - i)) + lfoY_[static_cast<size_t> (i) + 1] * (pos - i);
-                    const double cy = plotY (0.5 + 0.5 * v, h, 6.0);
-                    s.disc (cx, cy, 7.0, gpu::rgba8 (255, 255, 255, 255));
-                    s.disc (cx, cy, 4.5, line);
-                }
-            }
+            m.title = tt.c_str();
+            m.n = p == 1 ? kEnvPoints : LfoView::kPoints;
+            for (int i = 0; i < m.n; ++i)
+                v[i] = p == 1 ? envY_[static_cast<size_t> (i)] : 0.5f + 0.5f * lfoY_[static_cast<size_t> (i)];
+            m.v = v;
+            m.dot = p == 1 ? (envDotPx_ >= 0 ? static_cast<float> (envDotX_) : -1.0f) : (lfoCursorPx_ >= 0 ? lfoCursorX_ : -1.0f);
+            ui::display::drawModule (sb, m);
         }
-        (void) w;
     }
 
     int highlight_;
@@ -674,7 +575,9 @@ private:
     std::shared_ptr<const synthyboy::StateContent> content_;
     const synthyboy::IContentStore* store_ = nullptr;
     double bpm_ = 0.0;
-    std::vector<float> cycle_, cycleMax_, envY_, lfoY_;
+    std::vector<float> cycle_, cycleMax_, envY_, lfoY_, spectrum_;
+    std::vector<std::vector<float>> stack_;
+    int stackN_ = 0;
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
     std::unique_ptr<OscUi> osc_;

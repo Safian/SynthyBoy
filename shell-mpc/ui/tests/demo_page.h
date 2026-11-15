@@ -150,8 +150,8 @@ struct OscPage
         Pen pen (sb, true);
         pen.rect (wave, pen.c (colour::panel(), 255));
         pen.frame (wave, 1, pen.c (colour::rest(), 255));
-        pen.textCentered (wave, "WAVE DISPLAY", 2, pen.c (colour::text(), 90));
-        pen.text (area.x + 72, area.y + 18, 4, typeName, pen.c (colour::white(), 255));
+        pen.textCentered (wave, "WAVE DISPLAY", 20.0f, pen.c (colour::text(), 90));
+        pen.text (static_cast<float> (area.x + 72), static_cast<float> (area.y + 40), 28.0f, typeName, pen.c (colour::white(), 255));
         power.draw (sb);
         route.draw (sb);
         type.draw (sb);

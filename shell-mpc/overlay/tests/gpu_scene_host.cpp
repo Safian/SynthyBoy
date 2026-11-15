@@ -280,17 +280,14 @@ int main()
                     lfoTitle = lfoTitle || t == "LFO 4";
                 }
             }
-            check (curves == 3 && texts > 10 && envTitle && lfoTitle, "play: three polylines (the oscillator picture, the envelope, the LFO), the two panel titles and the texts of the oscillator UI");
+            check (curves >= 3 && texts > 10 && envTitle && lfoTitle, "play: three polylines (the oscillator picture, the envelope, the LFO), the two panel titles and the texts of the oscillator UI");
             std::vector<uint32_t> cv (static_cast<size_t> (r.w) * static_cast<size_t> (r.h));
             v.render (cv.data(), r.w, r.h);
-            // the frame of the panel of this sub-tab is the accent colour, the others have the quiet one
-            bool frames = true;
-            for (int p = 1; p < 3; ++p)   // the oscillator panel is the plugin-drawn compact view: no frame of the old kind
-            {
-                const uint32_t top = cv[static_cast<size_t> (play::kTabY + play::kOy + 1) * static_cast<size_t> (r.w) + static_cast<size_t> (play::kOx + p * (play::kPanelW + play::kPanelGap) + 100)];
-                const bool accent = ((top >> 16) & 255u) > 0xe0 && ((top >> 8) & 255u) < 0x60;
-                frames = frames && (accent == (p == idx - 1));
-            }
+            // the outline of the panel of this sub-tab is lit (the colour of the module), the other one has the quiet keyline
+            auto topPixel = [&] (int p) { return cv[static_cast<size_t> (play::kTabY + play::kOy + 1) * static_cast<size_t> (r.w) + static_cast<size_t> (play::kOx + p * (play::kPanelW + play::kPanelGap) + 100)]; };
+            auto bright = [] (uint32_t px) { return static_cast<int> ((px >> 16) & 255u) + static_cast<int> ((px >> 8) & 255u) + static_cast<int> (px & 255u); };
+            const int lit = idx - 1, other = lit == 1 ? 2 : 1;
+            const bool frames = idx == 1 ? std::abs (bright (topPixel (1)) - bright (topPixel (2))) < 40 : bright (topPixel (lit)) > bright (topPixel (other)) + 60;
             check (frames, "play " + std::to_string (idx) + ": only the Env / LFO panel of the sub-tab has the highlight frame");
         }
         {   // under a full screen / detail page / popup every pixel of the region is opaque (the host's Env / LFO picture and its Q-Link frame must not show through); in main the oscillator third is
@@ -610,6 +607,147 @@ int main()
         uint32_t seq = 0;
         check (gpu::readScene (b, out, seq) && sameUsed (sd, out), "the scene with the new ops goes through the shared block unchanged");
         delete b;
+    }
+    // ---- protocol 6: the style (feather, caps), the paint (a gradient of four colours), rounded rectangles, bands, text, glow ------------------------------------------------------------
+    {
+        auto alphaAt = [] (const std::vector<uint32_t>& cv, int w, int x, int y) { return static_cast<int> (cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)] >> 24); };
+        auto redAt = [] (const std::vector<uint32_t>& cv, int w, int x, int y) { return static_cast<int> ((cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)] >> 16) & 255u); };
+        auto blueAt = [] (const std::vector<uint32_t>& cv, int w, int x, int y) { return static_cast<int> (cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)] & 255u); };
+        std::vector<uint32_t> cv;
+        {   // a hairline is fainter, not wider; a soft edge spreads the light
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 120, 40);
+            sb.clear (0u);
+            sb.line (5.0f, 10.5f, 55.0f, 10.5f, 0.5f, 0xffffffffu);        // 0.5 px wide
+            sb.line (5.0f, 20.5f, 55.0f, 20.5f, 1.0f, 0xffffffffu);
+            sb.style (8.0f, false);
+            sb.line (65.0f, 20.5f, 115.0f, 20.5f, 2.0f, 0xffffffffu);
+            renderSceneReference (*sd, cv);
+            const int thin = alphaAt (cv, 120, 30, 10), one = alphaAt (cv, 120, 30, 20);
+            check (thin > 100 && thin < 150 && one == 255 && alphaAt (cv, 120, 30, 9) == 0, "a 0.5 px line is half as strong as a 1 px line (128 of 255), and not wider");
+            check (alphaAt (cv, 120, 90, 20) > 60 && alphaAt (cv, 120, 90, 20) < 255 && alphaAt (cv, 120, 90, 16) > 0 && alphaAt (cv, 120, 90, 16) < alphaAt (cv, 120, 90, 20) && alphaAt (cv, 120, 90, 6) == 0, "a soft style (8 px) spreads a line into a glow that falls off smoothly");
+        }
+        {   // the paint along x: the colour of a stroke follows the four stops; the alpha of the op is a factor
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 200, 40);
+            sb.clear (0u);
+            const float rows[2] = { 20.0f, 20.0f };
+            sb.curve (rows, 2, 0, 200);
+            sb.paintX (0.0f, 200.0f, 0xff0000ffu, 0x00ff00ffu, 0x0000ffffu, 0xffffffffu);
+            sb.stroke (3.0f, 0xffffff80u);
+            renderSceneReference (*sd, cv);
+            check (redAt (cv, 200, 2, 20) > 100 && blueAt (cv, 200, 2, 20) < 20 && blueAt (cv, 200, 135, 20) > 90 && redAt (cv, 200, 135, 20) < 30 && redAt (cv, 200, 197, 20) > 100 && blueAt (cv, 200, 197, 20) > 100, "paint along x: red, then green, blue, white (the op's alpha 0.5 scales every stop)");
+            check (alphaAt (cv, 200, 100, 20) > 120 && alphaAt (cv, 200, 100, 20) < 135, "the alpha of the op is a factor of the paint (128 of 255)");
+        }
+        {   // rounded rectangles: the corner is cut, the outline is a ring inside the edges
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 100, 60);
+            sb.clear (0u);
+            sb.rrect (5.0f, 5.0f, 45.0f, 45.0f, 12.0f, 0xffffffffu);
+            sb.rrect (55.0f, 5.0f, 95.0f, 45.0f, 12.0f, 0xffffffffu, 3.0f);
+            renderSceneReference (*sd, cv);
+            check (alphaAt (cv, 100, 25, 25) == 255 && alphaAt (cv, 100, 5, 5) == 0 && alphaAt (cv, 100, 25, 5) == 255 && alphaAt (cv, 100, 44, 25) == 255 && alphaAt (cv, 100, 5, 25) == 255, "rrect: filled inside, the corner cut, straight edges full");
+            check (alphaAt (cv, 100, 75, 25) == 0 && alphaAt (cv, 100, 75, 6) == 255 && alphaAt (cv, 100, 75, 9) == 0 && alphaAt (cv, 100, 56, 25) == 255, "rrect outline: a ring of 3 px inside the edges, the middle empty");
+        }
+        {   // a band: the exact coverage of a strip by a pixel row
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 60, 40);
+            sb.clear (0u);
+            std::vector<float> top (60, 10.0f), bottom (60, 10.5f), t2 (60, 20.25f), b2 (60, 30.5f);
+            sb.band (top.data(), bottom.data(), 60, 0, 60, 0xffffffffu);
+            sb.band (t2.data(), b2.data(), 60, 0, 60, 0xffffffffu);
+            renderSceneReference (*sd, cv);
+            check (std::abs (alphaAt (cv, 60, 30, 10) - 128) <= 2 && alphaAt (cv, 60, 30, 9) == 0 && alphaAt (cv, 60, 30, 11) == 0, "band: a strip of half a pixel is half a pixel's coverage in its row");
+            check (std::abs (alphaAt (cv, 60, 30, 20) - 191) <= 2 && alphaAt (cv, 60, 30, 25) == 255 && std::abs (alphaAt (cv, 60, 30, 30) - 128) <= 2 && alphaAt (cv, 60, 30, 31) == 0, "band: the end rows are covered by their fractions (0.75, 1, 0.5)");
+            gpu::SceneOp bad {};
+            bad.op = gpu::kOpBand; bad.f[0] = 0.0f; bad.f[1] = 10.0f; bad.f[2] = 0.0f; bad.f[3] = 10.0f; bad.f[4] = static_cast<float> (gpu::kMaxVertices);
+            gpu::BandGeom bg;
+            check (! gpu::bandGeom (bad, bg), "band: a second row set that reaches past the pool is refused");
+        }
+        {   // text: a string of any length, UTF-8, the baseline, the metrics
+            namespace sd_ = synthyboy_mpc::overlay::sdf;
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 700, 60);
+            sb.clear (0u);
+            const std::string t = "Wavetable \xc5\x91\xc5\xb1 \xc3\xa1\xc3\xa9 180\xc2\xb0 position with a really long name";
+            sb.text (10.0f, 40.0f, 24.0f, t.c_str(), 0xffffffffu);
+            renderSceneReference (*sd, cv);
+            int minRow = 99, maxRow = -1, maxCol = 0;
+            for (int y = 0; y < 60; ++y)
+                for (int x = 0; x < 700; ++x)
+                    if (alphaAt (cv, 700, x, y) > 128) { minRow = std::min (minRow, y); maxRow = std::max (maxRow, y); maxCol = std::max (maxCol, x); }
+            check (maxRow >= 40 && maxRow <= 47 && minRow >= 40 - 22 && minRow <= 40 - 15, "text: the capitals sit on the baseline (row 40) and reach up by the cap height of the font (0.685 em)");
+            check (maxCol > 400 && maxCol < 700, "text: a string far longer than 12 characters is drawn whole (the width follows the metrics)");
+            const float w = sd_::textWidth (t.c_str(), 24.0f);
+            check (std::abs (static_cast<float> (maxCol) - (10.0f + w)) < 6.0f, "text: the drawn width is the measured width");
+            check (sd_::textWidth ("iiii", 20.0f) < sd_::textWidth ("MMMM", 20.0f) * 0.6f && sd_::textWidth ("\xc5\x91", 20.0f) > 5.0f, "the font is proportional (i is narrower than M) and has the Hungarian letters");
+            char buf[64];
+            const float fw = sd_::fitText ("Basic Shapes and More Shapes", 20.0f, 120.0f, buf, 64);
+            check (fw <= 120.0f && std::strlen (buf) > 4 && std::string (buf).size() >= 3 && std::string (buf).compare (std::string (buf).size() - 3, 3, "\xe2\x80\xa6") == 0, "fitText cuts a long text at a letter and ends it with an ellipsis within the width");
+            const float fw2 = sd_::fitText ("Short", 20.0f, 120.0f, buf, 64);
+            check (std::string (buf) == "Short" && fw2 < 120.0f, "fitText keeps a text that fits");
+            gpu::SceneOp bad {};
+            bad.op = gpu::kOpText; bad.f[0] = 1.0f; bad.f[1] = 2.0f; bad.f[2] = 12.0f; bad.f[3] = static_cast<float> (gpu::kMaxText - 1); bad.f[4] = 10.0f;
+            gpu::TextGeom tg;
+            check (! gpu::textGeom (bad, tg), "text: bytes that reach past the pool are refused");
+            bad.f[3] = 0.0f; bad.f[2] = std::numeric_limits<float>::quiet_NaN();
+            check (! gpu::textGeom (bad, tg), "text: a NaN size is refused");
+            gpu::SceneData big;
+            gpu::SceneBuilder sbb (big);
+            const std::string chunk (1000, 'a');
+            int ok = 0;
+            for (int i = 0; i < 10; ++i)
+                ok += sbb.text (0.0f, 10.0f, 12.0f, chunk.c_str(), 0xffffffffu);
+            check (ok == 8 && sbb.overflow, "text pool: 8 strings of 1000 bytes fit, the next are refused with overflow");
+        }
+        {   // the glow layer and the feedback are the GPU's: the CPU reference draws nothing between GlowBegin and GlowEnd
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 60, 40);
+            sb.clear (0u);
+            sb.glowBegin (4);
+            sb.rect (0.0f, 0.0f, 60.0f, 40.0f, 0xffffffffu);
+            sb.glowEnd (1.0f, 1.0f);
+            sb.feedback (0.0f, 0.0f, 60.0f, 40.0f, 0.5f);
+            sb.rect (10.0f, 10.0f, 20.0f, 20.0f, 0xff0000ffu);
+            renderSceneReference (*sd, cv);
+            check (alphaAt (cv, 60, 40, 30) == 0 && alphaAt (cv, 60, 15, 15) == 255, "glow layer and feedback: not drawn by the CPU reference, the ops around them are");
+            int d = 0;
+            gpu::SceneOp g {};
+            g.f[0] = 3.0f;
+            check (! gpu::glowBeginGeom (g, d), "glow: a divisor of 3 is refused");
+            g.f[0] = 4.0f;
+            check (gpu::glowBeginGeom (g, d) && d == 4, "glow: a divisor of 4 is accepted");
+        }
+        {   // a big frame: 128 curves of 500 points (64000 vertices) go through the shared block and the CPU reference
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 800, 200);
+            sb.clear (0u);
+            std::vector<float> rows (500);
+            for (int c = 0; c < 128; ++c)
+            {
+                for (int i = 0; i < 500; ++i)
+                    rows[static_cast<size_t> (i)] = 100.0f + 60.0f * std::sin (static_cast<float> (i) * 0.05f + static_cast<float> (c) * 0.2f);
+                sb.curve (rows.data(), 500, 0, 800);
+                sb.stroke (0.5f, 0xffffff40u);
+            }
+            check (! sb.overflow && sd->numPoints == 64000u && sd->numOps == 1u + 256u, "a frame of 128 curves of 500 points (64000 vertices, 257 ops) fits the scene");
+            auto* blk = new gpu::SharedBlock;
+            gpu::initBlock (blk);
+            gpu::writeScene (blk, *sd);
+            auto out = std::make_unique<gpu::SceneData>();
+            uint32_t seq = 0;
+            check (gpu::readScene (blk, *out, seq) && sameUsed (*sd, *out), "the big frame goes through the shared block unchanged");
+            delete blk;
+            renderSceneReference (*out, cv);
+            check (alphaAt (cv, 800, 400, 100) > 0, "and the CPU reference draws it");
+        }
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

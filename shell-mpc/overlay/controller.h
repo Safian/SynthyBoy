@@ -307,6 +307,20 @@ private:
             return timing_.detectEveryMs;
         }
 
+        // the host's Q-Link panel appears and goes within a frame or two: while a Play view is on screen only its few sample pixels are read at every step (about every 33 ms, the GPU scene rhythm),
+        // so that our cover of the panel comes and goes with it (the full page check below is every 100 ms)
+        panelFast_ = false;
+        if (current_ >= 0 && current_ < layout::kNumViews && layout::kViews[current_].kind == layout::kKindPlay && rotationKnown() && nowMs < nextDetectMs_)
+        {
+            panelFast_ = true;
+            const bool on = detector_->panelPresent (rotation_);
+            if (on != qlinkPanel_)
+            {
+                qlinkPanel_ = on;
+                needFrame_ = true;
+                ++qlinkPanelChanges_;
+            }
+        }
         if (nowMs >= nextDetectMs_)
         {
             nextDetectMs_ = nowMs + timing_.detectEveryMs;
@@ -347,9 +361,11 @@ private:
             else
                 unreadable_ = 0;
             instanceSeen_ = d.instanceSeen;
-            if (qlinkPanel_ != (d.view >= 0 && d.qlinkPanel))
+            const bool playOnScreen = d.view >= 0 && d.view < layout::kNumViews && layout::kViews[d.view].kind == layout::kKindPlay && rotationKnown();
+            const bool panelNow = playOnScreen ? detector_->panelPresent (rotation_) : (d.view >= 0 && d.qlinkPanel);   // on a Play view the signature itself decides (the same pixels as the fast check)
+            if (qlinkPanel_ != panelNow)
             {
-                qlinkPanel_ = d.view >= 0 && d.qlinkPanel;
+                qlinkPanel_ = panelNow;
                 needFrame_ = true;
                 ++qlinkPanelChanges_;
             }
@@ -1040,7 +1056,7 @@ private:
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
     ITouchInput* touchIn_ = nullptr;
-    bool qlinkPanel_ = false;
+    bool qlinkPanel_ = false, panelFast_ = false;
     unsigned long qlinkPanelChanges_ = 0;
     unsigned long touchEvents_ = 0, touchTaken_ = 0;
     Rect instanceRects_[layout::kNumViews];
