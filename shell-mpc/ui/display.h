@@ -144,11 +144,13 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
                 rowsOf (d.stack[i], rows, yOff, 1.0f);
                 sb.curve (rows, n, ix + static_cast<int> (std::lround (xOff)), iw - static_cast<int> (std::lround (xOff)));
                 const int alpha = static_cast<int> (40.0f + 70.0f * (1.0f - depth) + 110.0f * lit);
+                const uint32_t dc = theme::mix (T.flow[0], T.flow[3], depth);                       // the far frames are the end colour of the look, the near ones the start
+                const uint32_t ds[4] = { dc, dc, dc, dc }, lit4[4] = { st[0], st[1], st[2], st[3] };
                 if (lit > 0.01f)
-                    dt::glowLine (sb, x0, x1, st, T.curveBack * 0.5f + 0.5f * lit * T.curve, alpha);
+                    dt::glowLine (sb, x0, x1, lit > 0.5f ? lit4 : ds, T.curveBack * 0.5f + 0.5f * lit * T.curve, alpha);
                 else
                 {
-                    dt::paintLine (sb, x0, x1, st, 255);
+                    dt::paintLine (sb, x0, x1, ds, 255);
                     sb.style (1.0f, false);
                     sb.stroke (T.curveBack * 0.5f, static_cast<uint32_t> (alpha));
                 }
@@ -192,21 +194,35 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             rows[i] = mid - d.cycleMax[i] / peak * amp * 0.92f;
             rows2[i] = mid - d.cycle[i] / peak * amp * 0.92f;
         }
-        // the loop: the part outside is dimmed
-        sb.paintY (top, bottom, dt::a (st[0], 170), dt::a (st[1], 150), dt::a (st[2], 120), dt::a (st[3], 90));
+        const bool granular = d.grain && d.grainSize > 0.0f;
+        const int bandAlpha = granular ? 70 : 175;
+        const uint32_t bs[4] = { st[1], st[1], st[2], st[3] };   // the colour itself, not its light start
+        sb.paintX (x0, x1, dt::a (bs[0], bandAlpha), dt::a (bs[1], bandAlpha), dt::a (bs[2], bandAlpha), dt::a (bs[3], bandAlpha));
         sb.band (rows, rows2, n, ix, iw, 255);
         sb.paintOff();
         sb.curve (rows, n, ix, iw);
-        dt::glowLine (sb, x0, x1, st, T.curveBack * 0.5f + 0.25f, 255);
+        dt::glowLine (sb, x0, x1, st, T.curveBack * 0.5f + 0.2f, granular ? 90 : 255);
         sb.curve (rows2, n, ix, iw);
-        dt::glowLine (sb, x0, x1, st, T.curveBack * 0.5f + 0.25f, 255);
+        dt::glowLine (sb, x0, x1, st, T.curveBack * 0.5f + 0.2f, granular ? 90 : 255);
         sb.paintOff();
         sb.style (1.0f, false);
+        if (granular)
+        {
+            // the grains: the part of the sample under the window lights up
+            const int c0 = std::max (0, static_cast<int> (d.grainPos * static_cast<float> (n - 1))), c1 = std::min (n - 1, static_cast<int> ((d.grainPos + d.grainSize) * static_cast<float> (n - 1)));
+            if (c1 - c0 >= 2)
+            {
+                const float wx0 = x0 + static_cast<float> (c0) / static_cast<float> (n - 1) * static_cast<float> (iw - 1);
+                const int wn = c1 - c0 + 1;
+                sb.paintX (wx0, x1, dt::a (bs[0], 235), dt::a (bs[1], 235), dt::a (bs[2], 235), dt::a (bs[3], 235));
+                sb.band (rows + c0, rows2 + c0, wn, static_cast<int> (wx0), static_cast<int> (static_cast<float> (c1 - c0) / static_cast<float> (n - 1) * static_cast<float> (iw - 1)) + 1, 255);
+                sb.paintOff();
+            }
+        }
         if (d.loopOn)
         {
-            const float xs = x0 + d.loopStart * static_cast<float>(iw - 1), xe = x0 + d.loopEnd * static_cast<float>(iw - 1);
-            sb.rect (x0, top, std::max (x0, xs), bottom, dt::a (T.bg1, 150));
-            sb.rect (std::min (x1, xe), top, x1, bottom, dt::a (T.bg1, 150));
+            const float xs = x0 + d.loopStart * static_cast<float> (iw - 1), xe = x0 + d.loopEnd * static_cast<float> (iw - 1);
+            sb.rect (xs, top, std::max (xs, xe), bottom, dt::a (T.q, 16));
             for (float x : { xs, xe })
             {
                 sb.style (T.glowSoft * 0.6f, false);
