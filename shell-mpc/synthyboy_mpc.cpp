@@ -429,8 +429,24 @@ struct PluginInstance
         writeRealParam (this, static_cast<size_t> (tableIndex), normalised);
         uiDirty[tableIndex >> 6].fetch_or (uint64_t { 1 } << (tableIndex & 63), std::memory_order_release);
     }
+    /** Debug / acceptance hook: while the file /tmp/synthyboy-ui-fake-write exists (SYNTHYBOY_MPC_UI_FAKE_WRITE changes the path) its first line "key plainvalue" is written through uiWrite, the path the
+        plugin-drawn pages use (so the host's reaction can be looked at while ANOTHER page is on screen); the file is deleted. Display thread. */
+    void uiFakeWrite()
+    {
+        static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_UI_FAKE_WRITE"); return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-ui-fake-write"); }();
+        std::ifstream f (path);
+        std::string key;
+        double v = 0.0;
+        if (! f || ! (f >> key >> v))
+            return;
+        f.close();
+        std::remove (path.c_str());
+        if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key.c_str()))
+            uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (v))));
+    }
     void uiPoll (AEffect* e)
     {
+        uiFakeWrite();
         if (! audioMaster)
             return;
         for (size_t w = 0; w < synthyboy::kMaxParams / 64; ++w)
