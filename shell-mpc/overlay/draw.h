@@ -225,6 +225,9 @@ inline void fillToBaselineGradient (uint32_t* cv, int w, int h, const std::vecto
     }
 }
 
+/** A steep edge (a saw's flank, a warped cycle) must not stretch the line's reach by the slope: the column's own extent [ymin, ymax] already holds the edge; unbounded it drew a vertical line across the canvas. */
+constexpr double kMaxSlopeNorm = 2.5;
+
 /** The anti-aliased line (half width `half` px): coverage from the distance to the curve's vertical extent in the column, corrected by the slope. */
 inline void strokeCurve (uint32_t* cv, int w, int h, const std::vector<double>& ys, int subSamples, double half, uint32_t lineC, int x0 = 0, int cols = -1) noexcept
 {
@@ -239,7 +242,7 @@ inline void strokeCurve (uint32_t* cv, int w, int h, const std::vector<double>& 
             ymin = std::min (ymin, c[k]);
             ymax = std::max (ymax, c[k]);
         }
-        const double slope = c[subSamples] - c[0], norm = std::sqrt (1.0 + slope * slope), reach = half * norm + 1.0;
+        const double slope = c[subSamples] - c[0], norm = std::min (std::sqrt (1.0 + slope * slope), kMaxSlopeNorm), reach = half * norm + 1.0;
         const int y0 = std::max (static_cast<int> (std::floor (ymin - reach)), 0), y1 = std::min (static_cast<int> (std::ceil (ymax + reach)), h);
         for (int y = y0; y < y1; ++y)
         {

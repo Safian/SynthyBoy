@@ -14,6 +14,7 @@
 #pragma once
 
 #include <atomic>
+#include <algorithm>
 #include <cmath>
 
 namespace synthyboy_mpc {
@@ -26,6 +27,32 @@ public:
     static constexpr float kTolerance = 1.0e-6f;   // an echo / a change smaller than this is none (one millionth: as for the Play proxies)
 
     enum class Write { none, echo, restoring, written };
+
+    // A target is a table index, optionally with a VIEW of it in the bits above 16: a Q knob that is not the parameter itself. kOct: the octaves (steps of 12) of a transpose parameter -48 .. +48
+    // (Q 1 of the Tune group), kSem: what is left inside the octave (Q 2). transpose = 12 * oct + sem; the two knobs no longer do the same thing.
+    static constexpr int kModeShift = 16, kIndexMask = 0xffff;
+    static constexpr int kPlain = 0, kOct = 1, kSem = 2;
+    static constexpr int encode (int tableIndex, int mode) noexcept { return tableIndex < 0 ? kNone : (tableIndex | (mode << kModeShift)); }
+    static int indexOf (int encoded) noexcept { return encoded < 0 ? kNone : (encoded & kIndexMask); }
+    static int modeOf (int encoded) noexcept { return encoded < 0 ? kPlain : (encoded >> kModeShift); }
+    static constexpr float kTransposeRange = 96.0f;   // -48 .. +48
+    static int octOfTranspose (int t) noexcept { return t / 12; }
+    static int semOfTranspose (int t) noexcept { return t - 12 * (t / 12); }
+    /** The normalised value a view shows for the normalised transpose n. */
+    static float viewValue (int mode, float n) noexcept
+    {
+        if (mode == kPlain) return n;
+        const int t = static_cast<int> (std::lround (n * kTransposeRange - 48.0f));
+        return mode == kOct ? static_cast<float> (octOfTranspose (t) + 4) / 8.0f : static_cast<float> (semOfTranspose (t) + 11) / 22.0f;
+    }
+    /** The normalised transpose after the view was written with v (the part the view does not show is kept). */
+    static float viewWrite (int mode, float v, float n) noexcept
+    {
+        if (mode == kPlain) return v;
+        const int t = static_cast<int> (std::lround (n * kTransposeRange - 48.0f));
+        const int nt = mode == kOct ? static_cast<int> (std::lround (v * 8.0f - 4.0f)) * 12 + semOfTranspose (t) : octOfTranspose (t) * 12 + static_cast<int> (std::lround (v * 22.0f - 11.0f));
+        return static_cast<float> (std::clamp (nt, -48, 48) + 48) / kTransposeRange;
+    }
 
     QRouter() noexcept
     {
@@ -43,7 +70,7 @@ public:
         bool changed = false;
         for (int q = 0; q < kCount; ++q)
         {
-            const int t = (targets != nullptr && q < n && targets[q] >= 0 && targets[q] < paramCount) ? targets[q] : kNone;
+            const int t = (targets != nullptr && q < n && targets[q] >= 0 && indexOf (targets[q]) < paramCount) ? targets[q] : kNone;
             changed = target_[q].exchange (t, std::memory_order_relaxed) != t || changed;
         }
         if (changed)
@@ -51,14 +78,16 @@ public:
     }
 
     /** The table index of the target of Q q (0 .. 3), kNone when it has none. */
-    int target (int q) const noexcept { return q >= 0 && q < kCount ? target_[q].load (std::memory_order_relaxed) : kNone; }
+    int target (int q) const noexcept { return indexOf (encoded (q)); }
+    int mode (int q) const noexcept { return modeOf (encoded (q)); }
+    int encoded (int q) const noexcept { return q >= 0 && q < kCount ? target_[q].load (std::memory_order_relaxed) : kNone; }
 
     /** What the host reads from Q q: the normalised value of the target (readNorm (tableIndex)), 0 when none. */
     template <class Read>
     float value (int q, Read&& readNorm) const noexcept
     {
         const int t = target (q);
-        return t == kNone ? 0.0f : readNorm (t);
+        return t == kNone ? 0.0f : viewValue (mode (q), readNorm (t));
     }
 
     /** The host writes Q q. The write goes to the target through write (tableIndex, normalised) unless the target is none, the value is the target's own (echo) or the restore window is open. */
@@ -69,12 +98,14 @@ public:
         if (t == kNone)
             return Write::none;
         const float v = std::isfinite (host) ? (host < 0.0f ? 0.0f : (host > 1.0f ? 1.0f : host)) : 0.0f;
-        if (std::fabs (v - readNorm (t)) <= kTolerance)
+        const float cur = readNorm (t);
+        if (std::fabs (v - viewValue (mode (q), cur)) <= kTolerance)
             return Write::echo;
         if (restoring)
             return Write::restoring;
-        write (t, v);
-        last_[q].store (v, std::memory_order_relaxed);   // the host knows this value: the poll does not report it back
+        const float nv = viewWrite (mode (q), v, cur);
+        write (t, nv);
+        last_[q].store (value (q, readNorm), std::memory_order_relaxed);   // the host knows this value: the poll does not report it back
         realDue_[q].store (t, std::memory_order_release);
         return Write::written;
     }

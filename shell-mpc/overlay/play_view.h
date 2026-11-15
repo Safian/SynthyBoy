@@ -416,7 +416,7 @@ public:
         {
             o << "osc_ui_instance: " << osc_->selection() << "\nosc_ui_type: " << osc_->typeRaw() << "\nosc_ui_page: " << osc_->topPage() << "\nosc_ui_q_group: " << osc_->qGroupName() << "\nosc_ui_q_targets:";
             for (int k = 0; k < 4; ++k)
-                o << " " << (osc_->qTargets()[k] >= 0 ? synthyboy::paramTable()[osc_->qTargets()[k]].key : "-");
+                o << " " << (osc_->qTargets()[k] >= 0 ? synthyboy::paramTable()[QRouter::indexOf (osc_->qTargets()[k])].key : "-");
             o << "\n";
         }
     }

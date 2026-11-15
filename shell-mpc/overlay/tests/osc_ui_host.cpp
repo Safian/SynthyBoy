@@ -438,7 +438,7 @@ void testQGroupFollowsTheActiveGroup()
     const int calls = r.inst.qCalls;
     // tap the first tune field: the Tune group becomes active
     r.tapC (r.ui.full().tune.fin);
-    check (r.inst.q[0] == Inst::idx ("osc1.transpose") && r.inst.q[2] == Inst::idx ("osc1.tune") && r.inst.q[3] == Inst::idx ("osc1.pitch_coarse"), "a touch on FIN makes the Tune group active: OCT, SEM (both transpose), FIN, CRS");
+    check (r.inst.q[0] == QRouter::encode (Inst::idx ("osc1.transpose"), QRouter::kOct) && r.inst.q[1] == QRouter::encode (Inst::idx ("osc1.transpose"), QRouter::kSem) && r.inst.q[2] == Inst::idx ("osc1.tune") && r.inst.q[3] == Inst::idx ("osc1.pitch_coarse"), "a touch on FIN makes the Tune group active: OCT, SEM (both transpose), FIN, CRS");
     check (r.inst.qCalls > calls, "the group was handed to the instance");
     const int c2 = r.inst.qCalls;
     r.refresh();
@@ -488,8 +488,30 @@ void testGranularAndSubAndNoise()
 }
 }   // namespace
 
+void testSteepEdgeNoLongLine()
+{
+    // a saw polyline (steep flanks) in a 300 x 200 canvas: nothing is drawn far above or below the polyline's own extent (the CPU renderer used to stretch the line's reach by the slope)
+    auto data = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder sb (*data);
+    sb.begin (gpu::kKindPlay, 0, 300, 200);
+    float rows[512];
+    for (int i = 0; i < 512; ++i)
+        rows[i] = 80.0f + 40.0f * (1.0f - 2.0f * static_cast<float> ((i * 6) % 512) / 512.0f);   // six teeth between rows 40 and 120
+    sb.curve (rows, 512, 10, 280);
+    sb.stroke (2.0f, 0xffffffffu);
+    std::vector<uint32_t> cv;
+    renderScene (*data, cv);
+    int outside = 0;
+    for (int y = 0; y < 200; ++y)
+        for (int x = 0; x < 300; ++x)
+            if (cv[static_cast<size_t> (y) * 300 + x] != 0 && (y < 34 || y > 126))
+                ++outside;
+    check (outside == 0, "a steep polyline draws nothing outside its own extent (" + std::to_string (outside) + " pixels)");
+}
+
 int main()
 {
+    testSteepEdgeNoLongLine();
     testEveryControlHasAParameterOrIsDisabled();
     testNoiseBasicQ1IsNoiseSample();
     testBasicGroupsAndSelection();

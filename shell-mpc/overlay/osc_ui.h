@@ -22,6 +22,7 @@
 
 #include "../ui/ui.h"
 #include "curve_source.h"
+#include "../q_router.h"
 #include "play_osc.h"
 #include "touch_decoder.h"
 #include "ui_stack.h"
@@ -1107,6 +1108,10 @@ private:
             return -1;
         if (it.type == T::NumberRead)
             return -1;
+        if (it.type == T::NumberOct && it.param >= 0)
+            return QRouter::encode (it.param, QRouter::kOct);   // Q 1 of the Tune group: the octaves of the transpose
+        if (it.type == T::NumberSem && it.param >= 0)
+            return QRouter::encode (it.param, QRouter::kSem);   // Q 2: what is left inside the octave
         return it.param;
     }
     void publishQGroup (IInstanceView& v)

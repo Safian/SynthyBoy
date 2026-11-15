@@ -59,6 +59,27 @@ int main()
     for (int i = 0; i < kParams; ++i)
         wr (i, 0.05f * static_cast<float> (i));
 
+    {   // the views of a transpose: Q 1 = octaves (steps of 12), Q 2 = what is left inside the octave; transpose = 12 * OCT + SEM
+        QRouter r;
+        const int t[4] = { QRouter::encode (3, QRouter::kOct), QRouter::encode (3, QRouter::kSem), 5, QRouter::kNone };
+        r.setGroup (t, 4, kParams);
+        auto tr = [] (int semis) { return static_cast<float> (semis + 48) / 96.0f; };
+        wr (3, tr (19));
+        check (r.target (0) == 3 && r.mode (0) == QRouter::kOct && r.mode (1) == QRouter::kSem && r.mode (2) == QRouter::kPlain, "a view keeps the table index and says which view it is");
+        check (std::fabs (r.value (0, rd) - 5.0f / 8.0f) < 1e-6f && std::fabs (r.value (1, rd) - 18.0f / 22.0f) < 1e-6f, "transpose 19: OCT 1 (5/8), SEM 7 (18/22)");
+        r.hostWrite (0, 3.0f / 8.0f, false, rd, wr);   // OCT -1
+        check (std::fabs (rd (3) - tr (-5)) < 1e-6f, "Q 1 to octave -1 keeps the remainder: 19 -> -5");
+        wr (3, tr (19));
+        r.hostWrite (1, 14.0f / 22.0f, false, rd, wr);   // SEM 3
+        check (std::fabs (rd (3) - tr (15)) < 1e-6f, "Q 2 to SEM 3 keeps the octave: 19 -> 15");
+        wr (3, tr (40));
+        r.hostWrite (1, 1.0f, false, rd, wr);   // SEM 11 on octave 3
+        check (std::fabs (rd (3) - tr (47)) < 1e-6f, "OCT 3 + SEM 11 = 47");
+        check (r.hostWrite (1, r.value (1, rd), false, rd, wr) == QRouter::Write::echo, "a view's own value is an echo");
+        check (QRouter::octOfTranspose (-5) == 0 && QRouter::semOfTranspose (-5) == -5 && 12 * QRouter::octOfTranspose (-30) + QRouter::semOfTranspose (-30) == -30, "transpose = 12 * OCT + SEM, also below zero");
+        for (int i = 0; i < kParams; ++i)
+            wr (i, 0.05f * static_cast<float> (i));
+    }
     {
         QRouter r;
         bool allNone = true;
